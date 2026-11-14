@@ -91,10 +91,21 @@ describe("i18n", () => {
 
   it("keeps brand, model and command names in Latin in every language", () => {
     for (const l of LANGS) {
-      for (const k of ["onb.sessions.body", "update.thenMixed", "acc.headerLine", "gate.text", "cmp.skillHint"] as Key[]) {
+      for (const k of ["omh.pop.body", "update.thenMixed", "acc.headerLine", "gate.text", "cmp.skillHint"] as Key[]) {
         for (const name of DICT.en[k].match(/Claude Code|Codex|Hermes|oh-my-hermes|omher|OmO|pi\b/g) ?? []) expect(DICT[l][k], `${l} ${k}`).toContain(name);
       }
     }
+  });
+
+  it("the terminal's contrast hints promise 4.5:1 for text colours and say dim text can stay below it", () => {
+    for (const l of LANGS) {
+      for (const k of ["term.contrastAutoHint", "term.contrastHighHint"] as Key[]) {
+        expect(DICT[l][k], `${l} ${k}`).toContain("4.5:1");
+        expect(DICT[l][k], `${l} ${k}`).toMatch(/dim/i);
+      }
+      expect(DICT[l]["term.contrastThemeHint"], l).not.toMatch(/dim|4\.5/i);
+    }
+    expect(DICT.en["term.contrastHighHint"]).toBe("Text colours are lifted to 4.5:1 on every background. Dim text can stay below that.");
   });
 
   it("writes Simplified, not Traditional, Chinese", () => {

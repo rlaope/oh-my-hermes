@@ -8,7 +8,7 @@ provider's own list leaves out, comes first, so the session's model is always
 a row), the position of the highlight once the list scrolls (`Model
 (12/162)`), and returns the one picked; its last row is the filter
 (`session_picker.filter_line`), where the composer is drawn while no picker is
-open. It holds no IO: the app sends the
+open. The picker holds no IO: the app sends the
 pick as `config.set model` with `<name> --provider <slug> --session`
 (`gateway_contract.model_switch_value`), so the switch is Hermes' and lasts
 for this session only. A name or slug that is not one plain word
@@ -28,14 +28,19 @@ closes it, so the list that comes later opens nothing.
 from __future__ import annotations
 
 from collections.abc import Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+from pathlib import Path
 
 from .escapes import strip_escapes
+from .fuzzy import subsequence_tail
 from .gateway_contract import MODEL_PROVIDER_FLAG, MODEL_SESSION_FLAG, model_switch_value, plain_word
+from ..system.local_store import atomic_write_json, read_json_object_result
 from .keys import BACKSPACE, CHAR, DOWN, ENTER, ESCAPE, PAGE_DOWN, PAGE_UP, UP, Key, Paste, list_nav_step
+from .prompts import CHOICE_MARK
 from .session_picker import picker_frame, picker_row
 from .style import Line, Span
 from .theme import Theme
+from .width import cell_width
 
 PICK = "pick"
 CLOSE = "close"
@@ -46,6 +51,11 @@ TITLE_AT = " Model ({at}/{count})"  # once the list has more rows than it shows
 TITLE_LOADING = " Model"
 LOADING = " waiting for Hermes…"  # the row while the list is on its way (the app's `LIST_WAIT_LINE`)
 CURRENT_MARK = "●"
+# The recent list: the last switches Hermes confirmed, newest first, kept under the OMH home.
+RECENT_SCHEMA = "omh_tui_recent_models/v1"
+RECENT_LIMIT = 5
+RECENT_GROUP = "Recent"
+ALL_GROUP = "All models"  # heads the whole list under the recent rows; with no recent row there is no heading
 
 
 @dataclass(frozen=True)
@@ -96,6 +106,41 @@ def typed_switch_value(arg: str) -> str:
     return model_switch_value(model, provider, session)
 
 
+def recent_path(omh_home: Path) -> Path:
+    """Where the recent switches are kept: under the OMH home, beside the TUI's other choices."""
+    return Path(omh_home) / "tui" / "recent-models.json"
+
+
+def read_recent(omh_home: Path) -> list[tuple[str, str]]:
+    """The (model, provider) pairs last switched to, newest first; [] when the file is missing, unreadable, or not
+    this module's. An entry that is not two plain words is skipped."""
+    record, _error = read_json_object_result(recent_path(omh_home))
+    entries = record.get("models") if record is not None and record.get("schema_version") == RECENT_SCHEMA else None
+    pairs: list[tuple[str, str]] = []
+    for entry in entries if isinstance(entries, list) else []:
+        if isinstance(entry, dict):
+            pair = (plain_word(entry.get("model")), plain_word(entry.get("provider")))
+            if all(pair) and pair not in pairs:
+                pairs.append(pair)
+    return pairs[:RECENT_LIMIT]
+
+
+def record_recent(omh_home: Path, model: str, provider: str) -> bool:
+    """Put `model` on `provider` at the front of the recent list, dropping its older place and anything past
+    `RECENT_LIMIT`; whether it was written (a pair that is not two plain words, or a home that cannot be written,
+    writes nothing)."""
+    pair = (plain_word(model), plain_word(provider))
+    if not all(pair):
+        return False
+    pairs = [pair, *(kept for kept in read_recent(omh_home) if kept != pair)][:RECENT_LIMIT]
+    record = {"schema_version": RECENT_SCHEMA, "models": [{"model": m, "provider": p} for m, p in pairs]}
+    try:
+        atomic_write_json(recent_path(omh_home), record)
+    except OSError:
+        return False
+    return True
+
+
 def model_rows(result: Mapping[str, object]) -> list[ModelRow]:
     """Every provider's models in a `model.options` answer, in Hermes' order; a malformed or unsafe one is skipped.
 
@@ -138,16 +183,27 @@ class ModelPicker:
     page: int = 1  # rows the last render showed; PageUp/PageDown move by this many
     caret: tuple[int, int] | None = None  # the last render's caret, at the end of its filter row
     loading: bool = False  # opened before Hermes' list came: no rows yet, the filter already takes what is typed
+    recent: list[tuple[str, str]] = field(default_factory=list)  # `read_recent`'s pairs, newest first
 
     def __post_init__(self) -> None:
         if self.index < 0:
-            self.index = next((number for number, row in enumerate(self.rows) if row.current), 0)
+            self.index = next((number for number, row in enumerate(self.visible()) if row.current), 0)
+
+    def recent_rows(self) -> list[ModelRow]:
+        """The rows of the recent pairs Hermes still lists, newest first; none while a filter is typed."""
+        if self.query:
+            return []
+        listed = {}
+        for row in self.rows:
+            listed.setdefault((row.model, row.provider), row)
+        return [listed[pair] for pair in self.recent if pair in listed]
 
     def visible(self) -> list[ModelRow]:
-        needle = self.query.casefold()
-        if not needle:
-            return list(self.rows)
-        return [row for row in self.rows if needle in f"{row.model}\n{row.provider}\n{row.provider_name}".casefold()]
+        """The rows Enter can pick, in order: the recent ones, then every row; with a filter, the rows it keeps
+        (`fuzzy.subsequence_tail`: the ones holding it as typed, then the ones holding its letters in order)."""
+        if not self.query:
+            return [*self.recent_rows(), *self.rows]
+        return subsequence_tail(self.rows, self.query, lambda row: (row.model, row.provider, row.provider_name))
 
     def handle_key(self, event: Key | Paste) -> ModelAction | None:
         """Apply one key; a `ModelAction` when the person picked a model or closed the picker."""
@@ -177,9 +233,14 @@ class ModelPicker:
 
     def lines(self, width: int, theme: Theme, max_rows: int) -> list[Line]:
         """A header row naming the current model, and the highlight's place once the rows scroll, the filtered
-        rows scrolled so the highlighted one shows, the filter row."""
+        rows scrolled so the highlighted one shows (the recent ones first, under their heading), the filter row."""
         shown = self.visible()
         self.index = min(self.index, max(len(shown) - 1, 0))
+        recent = len(self.recent_rows())
+        entries: list[ModelRow | str] = (
+            [RECENT_GROUP, *shown[:recent], ALL_GROUP, *shown[recent:]] if recent else list(shown)
+        )
+        highlighted = self.index + (0 if not recent else 1 if self.index < recent else 2)
         scrolls = max_rows > 2 and len(shown) > max_rows - 2  # the header and the filter row take two
         if self.loading:
             title = TITLE_LOADING
@@ -192,13 +253,21 @@ class ModelPicker:
             Span(f"  now {self.current}" if self.current else "", theme.text),
         )
         frame = picker_frame(
-            head, len(shown), self.index,
-            lambda number: self._row(shown[number], number == self.index, width, theme),
+            head, len(entries), highlighted,
+            lambda number: self._entry(entries[number], number == highlighted, width, theme),
             LOADING if self.loading else " no model matches the filter; /model <name> --provider <slug> names any",
             self.query, width, theme, max_rows,
+            lambda number: isinstance(entries[number], str),
         )
         self.page, self.caret = frame.page, frame.caret
         return frame.lines
+
+    def _entry(self, entry: ModelRow | str, highlighted: bool, width: int, theme: Theme) -> Line:
+        """A group's heading, muted where the model names start, or a model's row."""
+        if isinstance(entry, str):
+            inset = cell_width(CHOICE_MARK) + cell_width(f"{CURRENT_MARK} ")
+            return (Span(" " * inset, theme.muted), Span(entry, theme.muted))
+        return self._row(entry, highlighted, width, theme)
 
     def _row(self, row: ModelRow, highlighted: bool, width: int, theme: Theme) -> Line:
         return picker_row(highlighted, f"{CURRENT_MARK if row.current else ' '} ", row.model, row.provider_name, width,

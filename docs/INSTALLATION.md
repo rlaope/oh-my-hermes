@@ -864,9 +864,9 @@ run and approval decision stays Hermes'; the screen is OMH's.
   mouse to the terminal, and the next key or paste takes it back, so a drag
   copies clean again. The wheel down does nothing on the main screen while
   the OMH TUI holds the mouse. Ctrl+O still opens the transcript view. A row the OMH TUI did not print in this screen (the shell's
-  output above the session, the rows from before a Ctrl+Z) selects nothing:
-  dragging from there opens the transcript view instead (the open question,
-  while one is asked), and with nothing to show it opens nothing. While the
+  output above the session, the rows from before a Ctrl+Z) selects nothing,
+  and dragging from there opens nothing: the mouse never opens a view over
+  the screen, only Ctrl+O does. While the
   window is being resized the mouse is the terminal's, and a selection is
   dropped; on a terminal that ignores the erase of its scrollback (`CSI 3 J`)
   rows reflowed into the scrollback with a selection on them can keep it
@@ -1046,7 +1046,10 @@ run and approval decision stays Hermes'; the screen is OMH's.
   timeout, 300 s by default), and a turn that ran 10 s or more ends with the
   terminal's own notification: OSC 9 in iTerm2, WezTerm and Ghostty, OSC 777
   in foot and rxvt, the bell elsewhere (tmux among them, which flags the
-  window); `OMH_TUI_BELL=0` keeps all of it quiet.
+  window); `OMH_TUI_BELL=0` keeps all of it quiet. The notification waits
+  for a window that is not in front: once the terminal has reported focus
+  (it answers the TUI's focus reporting) and has it, only the bell rings;
+  a terminal that never reports focus gets both, as before.
 - Each launch look has a living wallpaper: the TUI sets the terminal's
   background to the look's own colour (OSC 11) while it runs and keeps a
   scene moving in the screen's blank cells, drawn as pixel art in the
@@ -1105,7 +1108,9 @@ run and approval decision stays Hermes'; the screen is OMH's.
   calls: its state's mark (below), its name, and what it ran on (a path, a
   command, a query) in parentheses, cut with `…` where the row is too narrow
   (`┃ ● terminal(rm -rf ./tmp-cache)  1.9s`). Under it (`  ⎿  `) it shows the first three lines of what the tool
-  printed and counts the rest (`… +5 lines · ctrl+o shows all`). A read says
+  printed and counts the rest (`… +5 lines · ctrl+o shows all`); a successful
+  `terminal` or `execute_code` run, and any failed call, shows the last three
+  instead, the count above them, since a run's summary or error comes last. A read says
   in one line what it read instead: `Read 715 lines` for
   `read_file`, `12 matches` for
   `search_files` (`3 files` when it listed files, `50+ matches` when Hermes
@@ -1137,7 +1142,11 @@ run and approval decision stays Hermes'; the screen is OMH's.
   `/resume`, a switch) are drawn the same way, two blank rows between two,
   with a grey `●` on a grey rail, since Hermes' record of them keeps no
   outcome, and an edit's diff under it where Hermes kept the one it showed.
-  Ctrl+O opens the whole transcript with every detail
+  A turn Hermes started on its own in that session (a background process or
+  a delegated agent finishing, its own notice, a turn it resumed after a
+  restart, a model switch) is one dim `↳` row with Hermes' title for it,
+  such as `↳ Subagent Tasks Completed: …`, never a `❯` prompt as if you had
+  sent it. Ctrl+O opens the whole transcript with every detail
   (thinking, tool output, whole diffs) in the pager, at its end.
 - While a turn runs, the working row reads as Claude Code's does,
   `✶ Synthesizing… (1m 24s · ↓4.2k tokens · thinking with high effort · esc
@@ -1337,7 +1346,12 @@ run and approval decision stays Hermes'; the screen is OMH's.
   count in columns of their own. Type to filter (what you type shows on
   the list's last row, where the composer was, with the caret, and only the
   headings with a match stay), Up/Down or PageUp/PageDown to move from
-  session to session, Enter to switch, Esc to close. Each alias runs
+  session to session, Enter to switch, Esc to close. Ctrl+R renames the
+  highlighted session (the last row becomes its title: Enter renames, Esc
+  cancels) and Ctrl+D deletes it once a second Ctrl+D confirms; the session
+  you are in is not deleted from there. Hermes' own terminal entry renames
+  only a session it has open, so there a stored session's rename may be
+  refused, and the row says Hermes' reason. Each alias runs
   exactly as `/sessions` does, and the `/` menu offers `/resume` under its
   own name once what you type starts it: `/res` and `/resu` complete to
   `/resume`.
@@ -1396,6 +1410,7 @@ Esc closes it):
 | Space | On a clarify question that takes several choices, ticks or unticks the highlighted one; Enter sends the ticked ones, or the highlighted one when none is ticked, and a digit ticks its choice |
 | Esc, Ctrl+C | On a question Hermes asked, decline it (an approval is denied and the running turn stops); Ctrl+C first clears an answer being typed |
 | ↑ / ↓, PageUp / PageDown, Enter, Esc | In the `/sessions`, `/rewind` or `/model` list, move, take the highlighted row (switch to that session, put that prompt in the composer to send again, or switch this session to that model), or close it; typing filters the list |
+| Ctrl+R, Ctrl+D | In the `/sessions` list, rename or delete the highlighted session: Ctrl+R makes the list's last row its title (Enter renames it, Esc cancels, an empty title is refused); Ctrl+D asks on the row and a second Ctrl+D deletes it, any other key keeps it; the session you are in is not deleted, and what Hermes refuses is said on the row |
 | ↑ / ↓, Enter, Esc, ←, q, Ctrl+C | In the agent list, move, open the highlighted agent's log (on main, only leave), or go back; any other key does nothing there |
 | x, s | In the agent list, on an agent: x twice interrupts it; s steers it with the next line you send (Esc cancels) |
 | ↑ / ↓ or a click, Enter, Esc | In the `/theme` picker, preview a launch look (spectrum, violet, gold, graphite, sakura, moonlit, aurora, ember, kanagawa-wave) on the logo, the card and the chrome, keep it, or put the one in use back; `/theme <look>` keeps one at once |
@@ -1760,7 +1775,9 @@ image), `/theme`, `/wallpaper`, `/omh-model`, `/rewind`, `/todos` (the session's
 plan), `/whats-new` (this version's What's new, also `/whatsnew`), `/model` (alone, a picker of the models Hermes offers this session,
 from Hermes' `model.options`, opened on the session's model, marked `●`, which
 comes first when no provider lists it, and with the highlight's place in the
-header, `Model (12/162)`, once the list scrolls; the one you pick is sent as Hermes' own
+header, `Model (12/162)`, once the list scrolls; with nothing typed, the last five models
+Hermes switched to (kept in `~/.omh/tui/recent-models.json`) head the list under
+`Recent`, the whole list following under `All models`; the one you pick is sent as Hermes' own
 `/model <name> --provider <slug> --session`, so it lasts for this session;
 `/model <name>` goes to Hermes as typed), `/export` (Hermes' export writes a
 profile archive, not the transcript, so the first `/export` says so and the
@@ -1803,6 +1820,10 @@ prints the help of Hermes' skills command here instead of opening the skills
 hub. The command list is read again for each session
 the TUI opens, so a project's own skills are listed in its workspace, and
 completion also matches a part of a name: `/uml` finds `/omh-codebase-uml`.
+Names whose letters only appear in order come last, so `/rld` offers
+`/reload-skills` after every name that starts with or contains `rld`. The
+`/model`, `/sessions` and `/rewind` filters rank the same way: rows that
+contain what you type first, then rows holding its letters in order.
 
 The bot board (Ctrl+S or `/bots`) shows this machine's Hermes bots, full
 screen, and changes nothing. Every region on it is a rounded box, in the
@@ -2649,19 +2670,33 @@ The shipped catalog is editorial policy, not benchmark output:
 
 Chain customization is a config edit, not a source edit — bare
 `omh model-chains` (or `omh model`) opens an arrow-key picker on a terminal:
-one row per category, up/down to move (stopping at the first and the last
-row), left/right to step the head model through the aliases chains name
-today, `-`/`+` to step its effort, `d` to restore the shipped default, Enter
-to save and Esc (or `q`) to leave the file alone;
-inside the OMH TUI, `/omh-model` opens the same picker over the
-transcript (Hermes' own `/model` picks the session model and keeps its name;
-the two edit different things); `omh model-chains show` prints the current
-per-category state, `omh model-chains interview` walks every category with
-numbered choices — the
-interactive `omh setup` offers that walk right after its provider question,
-default No, and a "no" leaves the seeded defaults in effect — and
-`omh model-chains set <category> "model[:effort], ..."` is the scriptable
-write (agents included).
+one row per built-in category and one row per validated custom identity. Built-in
+rows keep the shipped/default versus override model-chain controls. Custom
+identity rows are labelled `Custom identity`, keep their prompt untouched, and
+use the same left/right and `-`/`+` controls for their model chain; `space`
+toggles a custom identity between active and disabled. Disabled custom
+identities remain visible so they can be restored, but routing, prompt
+injection, and fanout reject them until re-enabled. Up/down moves through both
+sections, Enter saves and Esc (or `q`) leaves the files alone;
+inside the OMH TUI, `/omh-model` opens the same picker over the transcript
+(Hermes' own `/model` picks the session model and keeps its name; the two edit
+different things); `omh model-chains show` prints the current per-category
+state, `omh model-chains interview` walks every built-in category with numbered
+choices, and `omh model-chains set <category> "model[:effort], ..."` remains the
+scriptable category write (agents included).
+
+The custom-identity discovery catalog is main-agent-only and is frozen when
+Hermes builds the session system prompt. Start a new session after editing
+identities to refresh discovery. It contains complete bounded entries; overflow
+is explicitly counted, and `routing/identities.json` under the active OMH home
+is the full directory (readable with `read_file`). Route explicitly with
+`omh_delegate_route(identity=NAME)` before `delegate_task`; the GOAL marker
+selects prompt guidance, not the model chain. No automatic routing hook runs.
+
+Picker saves validate both documents before writing. Each file replacement is
+atomic, but the pair is not a transaction: if identity I/O fails after category
+save, CLI/TUI report the saved categories and unsaved identities. Existing
+operator writers share no global lock; concurrent edits are not isolated.
 
 ![Bare omh model-chains on a fresh OMH home: one row per category with its shipped head model, effort bar and state; the cursor row shows the left/right and -/+ handles, and the key row ends with esc cancel](../assets/model-chain-picker-cli.png)
 
@@ -6338,6 +6373,36 @@ Remove OMH-managed local state and Hermes integration files:
 ```sh
 omh uninstall
 ```
+
+### Removing with the installer, when `omh` is not on PATH
+
+The installer can run the removal for you. It looks for the installed command on
+PATH first, then where it puts the command itself (`OMH_BIN_DIR`, the `current`
+generation's venv under the managed root, the installer's venv), and runs
+`omh uninstall` with it:
+
+```sh
+curl -fsSL https://omher.app/install | sh -s -- --uninstall
+curl -fsSL https://omher.app/install | sh -s -- --uninstall --dry-run   # preview, writes nothing
+curl -fsSL https://omher.app/install | sh -s -- --uninstall --purge     # omh uninstall --all
+```
+
+```powershell
+& ([scriptblock]::Create((irm https://raw.githubusercontent.com/rlaope/oh-my-hermes/main/install.ps1))) --uninstall
+```
+
+`--purge` and `--dry-run` are accepted only with `--uninstall`, and `--uninstall`
+cannot be combined with `omher@beta`; any other argument prints the usage and
+exits 2 without writing anything. `OMH_LANG` is passed on as `--language`.
+
+What it does not do: it downloads and installs nothing, deletes no file itself,
+and adds no removal rules of its own, so everything below (the manifest-owned
+files, the shared-store guards, the nonzero exit when a guard holds something
+back) is `omh uninstall` speaking, and its output and exit code are shown
+unchanged. It never passes `--force`. If no `omh` command is found it names the
+places it looked, says the OMH home and the Hermes registration may still be
+there, and exits nonzero; it does not reinstall to uninstall. Remove those by
+hand with the steps in this section.
 
 From the primary Hermes home this unregisters managed skill directories,
 reverses recorded config changes, and removes manifest-owned plugin, team and

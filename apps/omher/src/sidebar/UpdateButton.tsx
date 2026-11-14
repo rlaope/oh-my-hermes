@@ -1,17 +1,16 @@
 // The update control in the sidebar's user row. Hidden until a newer signed release exists; then one
 // small button ("Update to 0.1.2") asks first (omher will restart; chats, panels and sessions pick up where they
 // were), then downloads and installs it, shows the progress, saves what is open and restarts omher.
-// A failed check stays quiet (the next one runs in 6 hours); a failed install says why in one line.
+// A failed check stays quiet and is tried again within minutes; coming back to the window checks too when the
+// last good check is half an hour old (`watchForUpdates`). A failed install says why in one line.
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Spinner } from "../ui";
 import { t } from "../i18n";
-import { percent, shortError, updateHost, type PendingUpdate } from "./updater";
+import { percent, shortError, updateHost, watchForUpdates, type PendingUpdate } from "./updater";
 import { runningLine, UpdateConfirm } from "./UpdateConfirm";
 import { getSessions } from "../sessions/sessions";
-import { agentDef } from "../sessions/agents";
+import { sessionMode } from "../sessions/agents";
 import { saveResumeNow } from "../app/resumeBoot";
-
-const EVERY_MS = 6 * 60 * 60 * 1000;
 
 type State =
   | { kind: "none" }
@@ -36,22 +35,11 @@ export function UpdateButton() {
   useEffect(() => {
     const host = updateHost();
     if (!host) return;
-    let live = true;
-    const run = async () => {
-      if (busy.current) return;
-      try {
-        const u = await host.check();
-        if (live && !busy.current) setSt(u ? { kind: "ready", update: u } : { kind: "none" });
-      } catch {
-        /* offline or the endpoint is down: try again on the next tick */
-      }
-    };
-    void run();
-    const t = window.setInterval(run, EVERY_MS);
-    return () => {
-      live = false;
-      window.clearInterval(t);
-    };
+    return watchForUpdates(
+      host,
+      (u) => setSt(u ? { kind: "ready", update: u } : { kind: "none" }),
+      () => busy.current,
+    );
   }, []);
 
   const install = useCallback(async (update: PendingUpdate) => {
@@ -109,7 +97,7 @@ export function UpdateButton() {
       {asking && ss && (
         <UpdateConfirm
           version={update.version}
-          running={runningLine(ss.list, (r) => ss.agents?.find((a) => a.id === r.agent)?.mode ?? agentDef(r.agent).mode)}
+          running={runningLine(ss.list, (r) => sessionMode(ss.agents, r))}
           onCancel={close}
           onConfirm={() => {
             setAsking(false);

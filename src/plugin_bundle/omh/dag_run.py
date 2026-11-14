@@ -148,7 +148,7 @@ CHILD_FAILURE_STOPS: Final = frozenset({"failed", "error", "timeout", "interrupt
 HANDOFF_NOT_CHECKED: Final = "handoff not checked"
 EXTERNAL_OWNERS: Final = ("claude-code", "codex")
 NODE_FIELDS: Final = frozenset({"id", "label", "category", "prompt", "depends_on", "write_scope", "role", "owner",
-                                "local"})
+                                "local", "read_only"})
 # What a node is for, as the parent declares it (``build`` when it names none). A ``build`` node with a write scope is a
 # producer; baseline, verify and review nodes stay native whoever builds, and only a ``verify`` node verifies the goal.
 ROLES: Final = ("build", "baseline", "verify", "review")
@@ -394,8 +394,8 @@ def valid_id(value: object, reason: str, say: str) -> str:
 def _validated_node(raw: object) -> dict[str, Any]:
     if not isinstance(raw, Mapping) or set(raw) - NODE_FIELDS:
         raise DagRefusal("invalid_node",
-                         "Each node takes only id, label, category, prompt, depends_on, write_scope, role, owner and "
-                         "local.")
+                         "Each node takes only id, label, category, prompt, depends_on, write_scope, role, owner, "
+                         "local and read_only.")
     node_id = valid_id(raw.get("id"), "invalid_node_id", "Each node needs a short lowercase id (a-z, 0-9, -).")
     label = _plain(raw.get("label"), MAX_LABEL_CHARS, "invalid_label", f"Node {node_id} needs a short label.")
     # Either lane's reader also takes a marker that opens a goal (one handed out before an update), so a label holding
@@ -459,6 +459,17 @@ def _validated_node(raw: object) -> dict[str, Any]:
                              f"Node {node_id}: a local node runs only on a local model, so it cannot name an owner.")
         if raw["local"]:
             validated["local"] = True
+    if "read_only" in raw:
+        # A node whose child changes no file in the workspace but its handoff (`dag_scope_guard`). Stored only when
+        # true, so a node sent with `read_only: false` keeps the digest it had before the field existed.
+        if not isinstance(raw["read_only"], bool):
+            raise DagRefusal("invalid_read_only", f"Node {node_id}: read_only is true or false.")
+        if raw["read_only"] and validated["write_scope"]:
+            raise DagRefusal("read_only_with_write_scope",
+                             f"Node {node_id}: a read_only node writes no file, so it cannot declare a write_scope; "
+                             "drop one of the two.")
+        if raw["read_only"]:
+            validated["read_only"] = True
     return validated
 
 

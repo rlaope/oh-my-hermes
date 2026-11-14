@@ -22,7 +22,7 @@ test.beforeEach(async () => {
   await mock("mock.reset");
 });
 
-const ALL = ["claude", "codex", "omo", "dsh", "omh", "pi", "omp", "grok", "opencode"];
+const ALL = ["claude", "codex", "omo", "dsh", "omh", "pi", "omp", "grok", "opencode", "kilo", "gemini", "qwen", "kimi", "copilot", "cline"];
 
 async function open(page: Page, height: number) {
   await page.setViewportSize({ width: 1280, height });
@@ -34,15 +34,21 @@ async function open(page: Page, height: number) {
   await page.goto("/");
   await expect(page.getByTestId("bot-kami")).toHaveAttribute("aria-current", "true");
   await page.getByTestId("session-new").click();
+  await expect(page.getByTestId("session-more")).toHaveAttribute("aria-expanded", "false");
+  await page.getByTestId("session-more").click();
   await expect(page.getByTestId("session-agent-grok")).toBeAttached();
+  await page.keyboard.press("Home");
   // the pop-in animation scales the box: measure once it has settled
   await page.waitForFunction(() => document.querySelector(".ss-pop")?.getAnimations().every((a) => a.playState !== "running"));
 }
 
 const box = (page: Page, sel: string) =>
   page.evaluate((s) => {
-    const r = document.querySelector(s)!.getBoundingClientRect();
-    return { top: r.top, bottom: r.bottom, left: r.left, right: r.right };
+    const el = document.querySelector(s)!;
+    const r = el.getBoundingClientRect();
+    // a menu opened upward keeps a band of the sidebar's colour above its edge (its air): it covers what lies there
+    const band = parseFloat(getComputedStyle(el, "::before").height) || 0;
+    return { top: r.top - band, bottom: r.bottom, left: r.left, right: r.right };
   }, sel);
 
 for (const height of [600, 720, 820]) {
@@ -66,14 +72,16 @@ for (const height of [600, 720, 820]) {
         .map((r) => [r.top, r.bottom]);
     }, pop);
     expect(cut).toEqual([]);
-    // every agent is listed, the installed ones first
-    const ids = await page.getByTestId("session-menu").locator("[role=menuitem]").evaluateAll((els) => els.map((e) => e.getAttribute("data-testid")!.replace("session-agent-", "")));
+    // every agent is listed, the installed ones first (then the "Continue a conversation" rows)
+    const all = await page.getByTestId("session-menu").locator("[role=menuitem]").evaluateAll((els) => els.map((e) => e.getAttribute("data-testid")!));
+    const ids = all.filter((t) => t.startsWith("session-agent-")).map((t) => t.replace("session-agent-", ""));
     expect([...ids].sort()).toEqual([...ALL].sort());
     expect(ids.slice(0, 4)).toEqual(["claude", "codex", "omh", "opencode"]);
+    expect(all.filter((id) => !id.startsWith("session-agent-") && id !== "session-more")).toEqual(["session-past-claude", "session-past-codex"]);
     // each row can be reached: scrolled into the menu's own box it is wholly inside the window
     const list = await box(page, "[data-testid=session-menu]");
-    for (const id of ids) {
-      const row = page.getByTestId(`session-agent-${id}`);
+    for (const id of all) {
+      const row = page.getByTestId(id);
       await row.evaluate((e) => e.scrollIntoView({ block: "nearest" }));
       const r = await row.boundingBox();
       expect(r!.y).toBeGreaterThanOrEqual(list.top - 0.5);
@@ -86,20 +94,21 @@ test("arrow keys scroll the focused row into view, End reaches the last agent, H
   await open(page, 600);
   const list = await box(page, "[data-testid=session-menu]");
   const inView = async (id: string) => {
-    const r = await page.getByTestId(`session-agent-${id}`).boundingBox();
+    const r = await page.getByTestId(id).boundingBox();
     return r!.y >= list.top - 0.5 && r!.y + r!.height <= list.bottom + 0.5;
   };
   await expect(page.getByTestId("session-agent-claude")).toBeFocused();
-  const ids = await page.getByTestId("session-menu").locator("[role=menuitem]").evaluateAll((els) => els.map((e) => e.getAttribute("data-testid")!.replace("session-agent-", "")));
+  // every row of the menu: the agents, then "Continue a conversation"
+  const ids = await page.getByTestId("session-menu").locator("[role=menuitem]").evaluateAll((els) => els.map((e) => e.getAttribute("data-testid")!));
   for (const id of ids.slice(1)) {
     await page.keyboard.press("ArrowDown");
-    await expect(page.getByTestId(`session-agent-${id}`)).toBeFocused();
+    await expect(page.getByTestId(id)).toBeFocused();
     expect(await inView(id)).toBe(true);
   }
   await page.keyboard.press("Home");
   await expect(page.getByTestId("session-agent-claude")).toBeFocused();
-  expect(await inView("claude")).toBe(true);
+  expect(await inView("session-agent-claude")).toBe(true);
   await page.keyboard.press("End");
-  await expect(page.getByTestId(`session-agent-${ids.at(-1)}`)).toBeFocused();
+  await expect(page.getByTestId(ids.at(-1)!)).toBeFocused();
   expect(await inView(ids.at(-1)!)).toBe(true);
 });

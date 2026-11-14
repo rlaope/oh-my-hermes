@@ -6,7 +6,7 @@ import { t } from "../i18n";
 // `mode` says how a new session opens: `chat` = the agent's structured mode shown as an omher chat,
 // `hermes` = a Hermes chat in the folder (oh-my-hermes, through the bridge), `terminal` = its own TUI.
 
-export type AgentId = "claude" | "codex" | "omo" | "dsh" | "omh" | "pi" | "omp" | "grok" | "opencode";
+export type AgentId = "claude" | "codex" | "omo" | "dsh" | "omh" | "pi" | "omp" | "grok" | "opencode" | "kilo" | "gemini" | "qwen" | "kimi" | "copilot" | "cline";
 
 export type AgentMode = "chat" | "hermes" | "terminal";
 
@@ -28,6 +28,12 @@ export const AGENTS: readonly AgentDef[] = [
   { id: "omp", program: "omp", label: "oh-my-pi", mode: "chat" },
   { id: "grok", program: "grok", label: "Grok", mode: "terminal" },
   { id: "opencode", program: "opencode", label: "OpenCode", mode: "chat" },
+  { id: "kilo", program: "kilo", label: "Kilo Code", mode: "chat" },
+  { id: "gemini", program: "gemini", label: "Gemini CLI", mode: "chat" },
+  { id: "qwen", program: "qwen", label: "Qwen Code", mode: "chat" },
+  { id: "kimi", program: "kimi", label: "Kimi Code", mode: "chat" },
+  { id: "copilot", program: "copilot", label: "Copilot CLI", mode: "chat" },
+  { id: "cline", program: "cline", label: "Cline", mode: "chat" },
 ];
 
 /** Tooltip on the session header's Terminal toggle: whether the terminal view continues the same
@@ -41,7 +47,8 @@ export function terminalNote(agent: AgentId): string {
 /** The install line for an agent's CLI, shown as text in the new-session menu's "Not installed" tooltip (omher
  *  never runs it), each as that product's own docs give it: pi's npm package moved to @earendil-works (its README's
  *  npm line), oh-my-pi's npm build needs Bun so its line is the installer from its README, Grok's is the one-line
- *  installer from docs.x.ai. Codex also notes that the copy inside the ChatGPT (or Codex) desktop app on macOS is
+ *  installer from docs.x.ai; the six Agent Client Protocol agents (Kilo Code, Gemini CLI, Qwen Code, Kimi Code, Copilot CLI,
+ *  Cline) take the npm line of their own READMEs. Codex also notes that the copy inside the ChatGPT (or Codex) desktop app on macOS is
  *  detected. The lines of the agents with an install layout are repeated in `LAYOUTS` (src-tauri/src/sessions.rs),
  *  which names them when the program found does not look like the agent; a Rust test keeps the two the same. */
 export const INSTALL: Record<AgentId, string> = {
@@ -54,6 +61,12 @@ export const INSTALL: Record<AgentId, string> = {
   omp: "curl -fsSL https://omp.sh/install | sh",
   grok: "curl -fsSL https://x.ai/cli/install.sh | bash",
   opencode: "npm install -g opencode-ai",
+  kilo: "npm install -g @kilocode/cli",
+  gemini: "npm install -g @google/gemini-cli",
+  qwen: "npm install -g @qwen-code/qwen-code@latest",
+  kimi: "npm install -g @moonshot-ai/kimi-code",
+  copilot: "npm install -g @github/copilot",
+  cline: "npm install -g cline",
 };
 
 /** Tooltip of an agent that is not installed: what is missing, then how to install it. DSH names DeepSeek Harness
@@ -67,11 +80,18 @@ export const isAgentId = (v: unknown): v is AgentId => typeof v === "string" && 
 
 /** Agents whose Restart (and Resume) continues the conversation, all of them chats: Claude Code `--resume`, Codex
  *  `thread/resume`, OmO `--session`, DSH `--session-id` (DeepSeek Harness's own session),
- *  OpenCode `session/resume`. pi, oh-my-pi and Grok (a
+ *  OpenCode and the other Agent Client Protocol agents `session/resume` (or `session/load`). pi, oh-my-pi and Grok (a
  *  terminal) start a new one. */
-export const CONTINUES: readonly AgentId[] = ["claude", "codex", "omo", "dsh", "opencode"];
+export const CONTINUES: readonly AgentId[] = ["claude", "codex", "omo", "dsh", "opencode", "kilo", "gemini", "qwen", "kimi", "copilot", "cline"];
 
 export const agentDef = (id: AgentId): AgentDef => AGENTS.find((a) => a.id === id)!;
+
+/** Agents whose own Stop, sent with no turn running, stops the work still running in the background: Claude Code's
+ *  `interrupt` stops its background subagents and withdraws their asks, and its `stop_task` stops a background
+ *  command (claude-13-late-ask-stop, claude-14-background-stop.jsonl). OmO's `abort` with no turn touches none of
+ *  the background commands it counts, and Codex, ACP agents and DSH refuse a Stop with no turn and count no
+ *  background work, so they get no such Stop. */
+export const STOPS_BACKGROUND: readonly AgentId[] = ["claude"];
 
 /** One allow-listed agent as found on this computer (`path: null` = not installed). */
 export interface AgentInfo {
@@ -80,6 +100,23 @@ export interface AgentInfo {
   /** Missing from older shells: the UI list's mode then applies. */
   mode?: AgentMode;
   path: string | null;
+  /** `hermes`: the oh-my-hermes row of a person who has Hermes but not `omh`. Its session is the same Hermes chat in
+   *  the folder, `path` is where Hermes was found, and it has no terminal view (that would start `omh`). */
+  via?: "hermes";
+}
+
+/** The oh-my-hermes row's name when only Hermes is there (the shell's `HERMES_LABEL`). */
+export const HERMES_LABEL = "Hermes";
+
+/** Hermes is there and `omh` is not: the + menu's oh-my-hermes row opens a Hermes chat named "Hermes", and the app
+ *  offers to add oh-my-hermes. False until the look-up answers. */
+export function hermesOnly(agents: AgentInfo[] | null | undefined): boolean {
+  return !!agents?.some((a) => a.id === "omh" && a.via === "hermes" && !!a.path);
+}
+
+/** How an agent is named on this computer: "Hermes" for the oh-my-hermes row of a person without `omh`. */
+export function agentLabel(id: AgentId, agents: AgentInfo[] | null | undefined): string {
+  return id === "omh" && hermesOnly(agents) ? HERMES_LABEL : agentDef(id).label;
 }
 
 /** The last folder segment of a macOS/Linux or Windows path: `/a/b/` -> `b`, `C:\\x\\y` -> `y`, `/` -> `/`. */
@@ -107,6 +144,52 @@ export function tildePath(path: string, home: string | null): string {
   return path;
 }
 
+/** How a session opens: as omher's chat, or as the agent's own terminal. The person picks it in a New session. */
+export type OpenAs = "chat" | "terminal";
+
+/** What the person picked per agent last time (`omher.sessions.open`). */
+export type Opens = Partial<Record<AgentId, OpenAs>>;
+
+export const OPEN_KEY = "omher.sessions.open";
+
+/** Saved picks, defensively: anything malformed is dropped. */
+export function parseOpens(raw: string | null): Opens {
+  try {
+    const v = raw ? JSON.parse(raw) : {};
+    if (!v || typeof v !== "object" || Array.isArray(v)) return {};
+    const out: Opens = {};
+    for (const [k, w] of Object.entries(v)) if (isAgentId(k) && (w === "chat" || w === "terminal")) out[k] = w;
+    return out;
+  } catch {
+    return {};
+  }
+}
+
+/** Which ways `agent` can open: omher's chat and/or its own terminal. oh-my-hermes has a terminal (`omh`) but, for a
+ *  person who has Hermes and no `omh`, only the Hermes chat; DSH has no terminal here; Grok has no chat here. */
+export function opensAs(agent: AgentId, agents?: AgentInfo[] | null): Record<OpenAs, boolean> {
+  if (agent === "dsh") return { chat: true, terminal: false };
+  if (agent === "grok") return { chat: false, terminal: true };
+  if (agent === "omh" && hermesOnly(agents)) return { chat: true, terminal: false };
+  return { chat: true, terminal: true };
+}
+
+/** The way a New session opens: the one remembered for the agent if it still has it, else Chat, else the terminal
+ *  (an agent with only one way). */
+export function draftOpen(agent: AgentId, agents: AgentInfo[] | null | undefined, remembered?: Opens): OpenAs {
+  const has = opensAs(agent, agents);
+  const w = remembered?.[agent];
+  if (w && has[w]) return w;
+  return has.chat ? "chat" : "terminal";
+}
+
+/** Whether a session runs as a chat, a Hermes chat or a terminal: a session opened as a terminal is one whatever
+ *  its agent usually does; any other is as its agent opens (the shell's list, else this app's). */
+export function sessionMode(agents: AgentInfo[] | null | undefined, rec: Pick<SessionRec, "agent" | "open">): AgentMode {
+  if (rec.open === "terminal") return "terminal";
+  return agents?.find((a) => a.id === rec.agent)?.mode ?? agentDef(rec.agent).mode;
+}
+
 /** `draft` = a New session chat whose agent and folder can still change: nothing runs until its first message
  *  (or Start, for an agent that opens in its terminal). */
 export type SessionStatus = "draft" | "starting" | "running" | "exited" | "failed";
@@ -123,6 +206,9 @@ export interface SessionRec {
   error?: string;
   /** What the main column shows: the chat or the terminal. */
   view: "chat" | "terminal";
+  /** `terminal` = the person opened it as the agent's own terminal (it has no chat, whatever the agent usually
+   *  does). None = as the agent opens. */
+  open?: OpenAs;
   /** The chat's own session id (Claude Code session, Codex thread, pi session), when the agent said. */
   agentSession?: string;
   /** The chat's model, when known. */
@@ -159,12 +245,24 @@ export interface ChatLive {
   turn: boolean;
   /** an approval or question waits for the person */
   needsYou: boolean;
+  /** its last turn stopped on an error and no turn has run since */
+  failed?: boolean;
 }
+
+/** What a session did while the person was not looking at it, kept on its row until they open it: its terminal rang
+ *  its bell, or it finished (a turn, or the program itself). */
+export type Unseen = "bell" | "end";
+
+/** The state a row shows in the time's place, as a sign and a word: it waits for the person, it stopped on an error,
+ *  or it finished something the person has not seen. */
+export type RowMark = "needs" | "error" | "done";
 
 /** The other rows a row is told apart from: every session's folder, and the home folder for `~`. */
 export interface RowContext {
   cwds: string[];
   home: string | null;
+  /** The agents found on this computer (names the oh-my-hermes row "Hermes" without `omh`). */
+  agents?: AgentInfo[] | null;
 }
 
 /** What one sidebar row shows. Line 1 is the session's name ([pickTitle]: the person's, the agent's, a summary of
@@ -176,6 +274,7 @@ export function rowModel(
   s: SessionRec,
   chat?: ChatLive,
   ctx?: RowContext,
+  unseen?: Unseen,
 ): {
   title: string;
   titleSource: TitleSource;
@@ -184,9 +283,13 @@ export function rowModel(
   sub: string;
   live: boolean;
   needsYou: boolean;
+  /** the state the row shows, if any */
+  mark: RowMark | null;
+  /** nothing runs in it (ended, could not start, or waiting for Resume): the row steps back */
+  over: boolean;
   ts: number;
 } {
-  const label = agentDef(s.agent).label;
+  const label = agentLabel(s.agent, ctx?.agents);
   // a draft: "New session" over the folder it will start in; it has no name yet and nothing runs, so nothing is live
   if (s.status === "draft")
     return {
@@ -196,24 +299,33 @@ export function rowModel(
       sub: s.cwd ? tildePath(s.cwd, ctx?.home ?? null) : label,
       live: false,
       needsYou: false,
+      mark: null,
+      over: false,
       ts: s.startedAt / 1000,
     };
   const alive = s.status === "running" || s.status === "starting";
   const needsYou = alive && !!chat?.needsYou;
+  // an error: it could not start, its program ended with an error or a non-zero exit, or its last turn failed
+  const failedTurn = s.status === "running" && !!chat?.failed;
+  const broke =
+    s.status === "failed" || failedTurn || (s.status === "exited" && !s.paused && (!!s.error || (typeof s.exitCode === "number" && s.exitCode !== 0)));
+  const mark: RowMark | null = needsYou || (alive && unseen === "bell") ? "needs" : broke ? "error" : unseen === "end" ? "done" : null;
   // While running the ring (chat) or the live dot (terminal) says it, and while it waits on the person "waiting" and
   // the amber dot say it, so the line is just the agent.
-  const state =
-    needsYou || s.status === "running"
+  // The state's sign and word (waiting, error, done) stand in the time's place on line 1, so line 2 is as before.
+  const state = needsYou
+    ? ""
+    : s.status === "running"
       ? ""
       : s.paused
         ? t("ss.paused")
         : s.status === "starting"
-        ? t("ss.starting")
-        : s.status === "failed"
-          ? t("ss.couldNotStart")
-          : s.exitCode === 0 || s.exitCode === null || s.exitCode === undefined
-            ? t("ss.ended")
-            : t("ss.endedExit", { code: s.exitCode });
+          ? t("ss.starting")
+          : s.status === "failed"
+            ? t("ss.couldNotStart")
+            : s.exitCode === 0 || s.exitCode === null || s.exitCode === undefined
+              ? t("ss.ended")
+              : t("ss.endedExit", { code: s.exitCode });
   // A chat is live while a turn runs; a terminal while its program runs.
   const live = s.view === "chat" && chat ? alive && chat.turn : alive;
   const folder = folderName(s.cwd);
@@ -230,6 +342,8 @@ export function rowModel(
     sub: `${place}${agent}`,
     live,
     needsYou,
+    mark,
+    over: !alive,
     ts: s.startedAt / 1000,
   };
 }
@@ -288,6 +402,15 @@ export function menuOrder(agents: AgentInfo[], list: Recent[]): AgentInfo[] {
   const rank = (a: AgentInfo) => (a.path ? (a.id === last ? 0 : 1) : 2);
   const at = (a: AgentInfo) => AGENTS.findIndex((d) => d.id === a.id);
   return agents.filter((a) => isAgentId(a.id)).sort((a, b) => rank(a) - rank(b) || at(a) - at(b));
+}
+
+/** The + menu in two parts: the rows it always shows (the installed agents, in [menuOrder]), and the agents that are
+ *  not installed, folded behind one "More agents" row that opens them with their install lines. With nothing
+ *  installed yet every agent shows, so the menu is never just that one row. */
+export function menuParts(agents: AgentInfo[], list: Recent[]): { shown: AgentInfo[]; more: AgentInfo[] } {
+  const all = menuOrder(agents, list);
+  const shown = all.filter((a) => !!a.path);
+  return shown.length ? { shown, more: all.filter((a) => !a.path) } : { shown: all, more: [] };
 }
 
 /** The agent a New session chat starts on: the last one used if it is installed, else the first installed (menu

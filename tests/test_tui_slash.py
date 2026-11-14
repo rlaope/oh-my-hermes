@@ -147,17 +147,18 @@ class CompletionTests(unittest.TestCase):
 
     def test_names_starting_with_the_prefix_lead_and_names_only_containing_it_follow(self) -> None:
         names = [c.name for c in slash.completions("mo", slash.catalog_pairs(self.CATALOG))]
-        self.assertEqual(names, ["model", "moa", "omh-model"])
+        self.assertEqual(names[:3], ["model", "moa", "omh-model"])  # then names holding the letters in order only
 
     def test_a_prefix_in_any_case_offers_the_same_names(self) -> None:
         names = [c.name for c in slash.completions("MO", slash.catalog_pairs(self.CATALOG))]
-        self.assertEqual(names, ["model", "moa", "omh-model"])
+        self.assertEqual(names, [c.name for c in slash.completions("mo", slash.catalog_pairs(self.CATALOG))])
+        self.assertEqual(names[:3], ["model", "moa", "omh-model"])
 
     def test_part_of_a_skill_name_finds_the_skill(self) -> None:
         # Every OMH skill is `omh-*` or `ulw-*`, so a prefix alone never reaches one by its own word.
         catalog = [("/omh-codebase-uml", "Draw UML from the code"), ("/ulw-umbrella", "Umbrella"), ("/uml-sketch", "x")]
         names = [c.name for c in slash.completions("uml", catalog)]
-        self.assertEqual(names, ["uml-sketch", "omh-codebase-uml"])
+        self.assertEqual(names, ["uml-sketch", "omh-codebase-uml", "ulw-umbrella"])  # `ulw-umbrella` only in order
         self.assertEqual([c.name for c in slash.completions("", catalog)][-3:], ["omh-codebase-uml", "ulw-umbrella", "uml-sketch"])
 
     def test_catalog_commands_routed_elsewhere_are_not_offered_twice_or_at_all(self) -> None:

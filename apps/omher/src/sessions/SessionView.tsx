@@ -6,9 +6,8 @@
 // read-only too. A chat agent's composer takes files as the bot chat's does (paste, the + menu, a drop on the chat),
 // in a draft too; a file dropped or pasted on a terminal is saved and its path typed at the prompt.
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import type { ITheme } from "@xterm/xterm";
 import { selectAsks, useStore, type OutFile } from "../state/store";
-import { resolveTheme } from "../app/theme";
+import { useResolvedTheme } from "../app/theme";
 import { Timeline } from "../chat/parts/Timeline";
 import { Composer } from "../chat/parts/Composer";
 import { CheckIcon } from "../chat/model/CheckIcon";
@@ -17,72 +16,30 @@ import "../chat/model/model.css";
 import { ArrowUp, ChatIcon, ChevronDown, ModelIcon, Popover, SearchIcon, TerminalIcon } from "../ui";
 import { composing } from "../lib/ime";
 import { levelLabel, levelOptions, modeHint, modeLabel, modesOf, usageText } from "./controls";
+import { ownSetting } from "./ownSetting";
 import type { Bot } from "../lib/protocol";
 import { AgentMark } from "./AgentMark";
 import { SessionFace } from "./SessionFace";
-import { agentDef, CONTINUES, folderChoices, folderName, missingNote, parentPath, terminalNote, tildePath, type AgentId, type SessionRec } from "./agents";
+import { agentDef, agentLabel, CONTINUES, STOPS_BACKGROUND, draftOpen, folderChoices, folderName, hermesOnly, missingNote, opensAs, parentPath, sessionMode, terminalNote, tildePath, type AgentId, type OpenAs, type SessionRec } from "./agents";
 import { pickTitle } from "./titles";
-import { t as tr, type Key } from "../i18n";
+import { t as tr, tx, type Key } from "../i18n";
+import { windowWatched } from "../lib/notify";
 import { getSessions, useSessions, type ModelOption } from "./sessions";
+import { FindBar } from "./term/find-bar";
+import { FIND_EVENT, type FindRequest } from "./term/engine-find";
 import { sessionAccountSuffix } from "./SessionsSection";
 import { PanelToggle } from "../chat/parts/PanelButton";
 import { workingSubagents } from "./SessionPlans";
+import { waitingSubs } from "../chat/activity/Subagents";
+import { subagentEnded } from "../state/store";
 import { useAccounts } from "../settings/accounts/useAccounts";
 import { t } from "../i18n";
 
-// Matched to omher's tokens (--bg, --body, --ink) so the terminal reads as part of the page.
-const DARK: ITheme = {
-  background: "#0b090d",
-  foreground: "#dcd6de",
-  cursor: "#f3eff4",
-  cursorAccent: "#0b090d",
-  selectionBackground: "#3d364066",
-  selectionInactiveBackground: "#3d364044",
-  black: "#1b181e",
-  red: "#f08a8a",
-  green: "#7fd6a4",
-  yellow: "#eaaf55",
-  blue: "#8cbcff",
-  magenta: "#e48fd0",
-  cyan: "#7fd1d6",
-  white: "#dcd6de",
-  brightBlack: "#6f6872",
-  brightRed: "#ffa3a3",
-  brightGreen: "#9be6b9",
-  brightYellow: "#f5c779",
-  brightBlue: "#a9ccff",
-  brightMagenta: "#f0a8de",
-  brightCyan: "#9de2e6",
-  brightWhite: "#f3eff4",
-};
-const LIGHT: ITheme = {
-  background: "#ffffff",
-  foreground: "#2c2630",
-  cursor: "#19151b",
-  cursorAccent: "#ffffff",
-  selectionBackground: "#cbc4cf88",
-  selectionInactiveBackground: "#cbc4cf55",
-  black: "#19151b",
-  red: "#c0392b",
-  green: "#1f8a52",
-  yellow: "#a86a00",
-  blue: "#1d5fd1",
-  magenta: "#a8327a",
-  cyan: "#0f7f86",
-  white: "#e9e5eb",
-  brightBlack: "#756d7a",
-  brightRed: "#d9534f",
-  brightGreen: "#28a065",
-  brightYellow: "#c08000",
-  brightBlue: "#3a78e0",
-  brightMagenta: "#c4367f",
-  brightCyan: "#1b97a0",
-  brightWhite: "#ffffff",
-};
-
-export const termTheme = (mode: "dark" | "light") => (mode === "light" ? LIGHT : DARK);
-
 const STATUS: Record<string, Key> = { starting: "ss.starting", running: "ss.running", exited: "ss.ended", failed: "ss.couldNotStart" };
+
+/** Agents whose count of what is left in the background holds their background subagents (Claude Code's
+ *  `background_tasks_changed` lists them beside its background commands). OmO counts commands only. */
+const COUNTS_BACKGROUND_SUBAGENTS: readonly AgentId[] = ["claude"];
 
 const isWindows = () => typeof navigator !== "undefined" && /^Win/.test(navigator.platform);
 
@@ -93,7 +50,16 @@ function TerminalPane({ rec }: { rec: SessionRec }) {
   const s = useStore();
   const box = useRef<HTMLDivElement>(null);
   const wrap = useRef<HTMLDivElement>(null);
-  const mode = resolveTheme(s.ui.theme);
+  const mode = useResolvedTheme(s.ui.theme);
+  // Cmd/Ctrl+F in this terminal: the engine says so with an event, the bar opens for that terminal only
+  const [find, setFind] = useState<FindRequest | null>(null);
+  useEffect(() => {
+    const el = wrap.current;
+    if (!el) return;
+    const on = (e: Event) => setFind((e as CustomEvent<FindRequest>).detail);
+    el.addEventListener(FIND_EVENT, on);
+    return () => el.removeEventListener(FIND_EVENT, on);
+  }, []);
   // A file dropped on the terminal, or a picture pasted there, is saved and its path typed at the prompt (as a
   // system terminal types a dropped file's path). Plain text pastes stay xterm's own.
   useEffect(() => {
@@ -131,16 +97,17 @@ function TerminalPane({ rec }: { rec: SessionRec }) {
   }, [rec.id]);
   useEffect(() => {
     if (!box.current) return;
-    return getSessions().attach(rec.id, box.current, termTheme(mode));
-    // re-attach only when the session changes; theme changes go through setTheme below
+    return getSessions().attach(rec.id, box.current, mode);
+    // re-attach only when the session changes; theme changes go through setLook below
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [rec.id]);
   useEffect(() => {
-    getSessions().setTheme(termTheme(mode));
+    getSessions().setLook(mode);
   }, [mode]);
   return (
     <div className="term-wrap" ref={wrap} data-testid="terminal" data-session={rec.id}>
       <div className="term-box" ref={box} />
+      {find && <FindBar req={find} onClose={() => setFind(null)} />}
     </div>
   );
 }
@@ -151,7 +118,7 @@ function ChatPane({ rec, chatKey }: { rec: SessionRec; chatKey: string }) {
   const chat = s.chats[chatKey];
   // files go to a chat agent; an oh-my-hermes session's chat is Hermes', which takes files in a bot's main chat only
   const takesFiles = (ss.agents?.find((a) => a.id === rec.agent)?.mode ?? agentDef(rec.agent).mode) === "chat";
-  const label = agentDef(rec.agent).label;
+  const label = agentLabel(rec.agent, ss.agents);
   const ended = isEnded(rec);
   // The bot chat's parts take a Bot: this session's chat stands in for one. An agent that ended before it named a
   // model (an old version that never answered in chat mode) gets no "pick a model" hint: its end says why.
@@ -177,7 +144,12 @@ function ChatPane({ rec, chatKey }: { rec: SessionRec; chatKey: string }) {
   const face = useMemo(() => <SessionFace chatKey={chatKey} size={28} />, [chatKey]);
   return (
     <div className="pane ss-chat" data-pane={chatKey} data-testid="session-chat">
-      <Timeline bot={bot} face={face} />
+      <Timeline
+        bot={bot}
+        face={face}
+        connectionNotice={false}
+        onEditLast={ss.live[rec.id]?.rewind && rec.status === "running" && !chat?.turn ? () => void getSessions().rewind(rec.id) : undefined}
+      />
       {rec.paused ? <Paused rec={rec} /> : ended && <Ended rec={rec} />}
       <Composer
         key={chatKey}
@@ -216,10 +188,60 @@ const FolderIcon = ({ size = 13 }: { size?: number }) => (
 
 /** The session's agent in the composer row, read-only (a draft's agent is changed from the SESSIONS + menu). */
 function AgentFixed({ agent }: { agent: AgentId }) {
+  const label = agentLabel(agent, useSessions().agents);
   return (
-    <span className="ss-pick ro" title={agentDef(agent).label} data-testid="session-agent-fixed">
+    <span className="ss-pick ro" title={label} data-testid="session-agent-fixed">
       <AgentMark agent={agent} size={14} />
-      <span className="ss-pick-n">{agentDef(agent).label}</span>
+      <span className="ss-pick-n">{label}</span>
+    </span>
+  );
+}
+
+/** How a New session opens, a quiet two-word choice beside the agent: Chat (omher's own chat) or Terminal (the agent's
+ *  own program in a terminal). The picked word is gray, the other plain; one the agent does not have is dimmed and its
+ *  tooltip says why. The pick is remembered per agent. */
+function OpenPick({ rec, way }: { rec: SessionRec; way: OpenAs }) {
+  const ss = useSessions();
+  const has = opensAs(rec.agent, ss.agents);
+  const label = agentLabel(rec.agent, ss.agents);
+  const tip = (w: OpenAs): string =>
+    has[w]
+      ? w === "chat"
+        ? t("ss.open.chatTip")
+        : t("ss.open.terminalTip", { agent: label })
+      : w === "terminal"
+        ? t(rec.agent === "dsh" ? "ss.open.noTermDsh" : "ss.open.noTermHermes")
+        : t("ss.open.noChat", { agent: label });
+  return (
+    <span className="ss-way" role="radiogroup" aria-label={t("ss.open.label")} data-testid="session-way">
+      {(["chat", "terminal"] as const).map((w) => (
+        <button
+          key={w}
+          type="button"
+          role="radio"
+          className={`ss-way-o${way === w ? " on" : ""}`}
+          aria-checked={way === w}
+          aria-disabled={!has[w] || undefined}
+          // one Tab stop for the pair; the arrow keys move between the two, as in any radio group
+          tabIndex={way === w ? 0 : -1}
+          title={tip(w)}
+          onClick={() => {
+            if (has[w]) getSessions().setOpen(rec.id, w);
+          }}
+          onKeyDown={(e) => {
+            if (!["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"].includes(e.key)) return;
+            e.preventDefault();
+            const other = w === "chat" ? "terminal" : "chat";
+            // the focus moves even to a way the agent lacks, so its reason can be read; only one it has is picked
+            // (picking Chat then hands the focus to the box, as a click on Chat does)
+            e.currentTarget.parentElement?.querySelector<HTMLButtonElement>(`[data-testid=session-way-${other}]`)?.focus();
+            if (has[other]) getSessions().setOpen(rec.id, other);
+          }}
+          data-testid={`session-way-${w}`}
+        >
+          {t(w === "chat" ? "ss.open.chat" : "ss.open.terminal")}
+        </button>
+      ))}
     </span>
   );
 }
@@ -341,6 +363,9 @@ function SessionMode({ rec }: { rec: SessionRec }) {
   const [open, setOpen] = useState(false);
   const live = rec.status === "running";
   const cur = ss.live[rec.id]?.mode ?? rec.mode;
+  // the agent's own setting, when it asks for nothing or reaches the whole disk: said where the mode is
+  const own = ownSetting({ ...ss.live[rec.id], mode: cur });
+  const from = t("ctl.own.from", { agent: agentDef(rec.agent).label });
   const pick = (m: string) => {
     setOpen(false);
     if (m !== cur) void getSessions().setMode(rec.id, m);
@@ -349,22 +374,28 @@ function SessionMode({ rec }: { rec: SessionRec }) {
     <span className="ss-pick-w">
       <button
         type="button"
-        className={`ss-pick ss-mode${cur && cur !== "default" && cur !== "ask" ? " set" : ""}`}
-        title={t("ctl.mode")}
-        aria-label={`${t("ctl.mode")}: ${modeLabel(cur)}`}
+        className={`ss-pick ss-mode${cur && cur !== "default" && cur !== "ask" ? " set" : ""}${own ? " own" : ""}`}
+        title={own ? `${own} · ${from}` : t("ctl.mode")}
+        aria-label={`${t("ctl.mode")}: ${own ? `${own} · ${from}` : modeLabel(cur)}`}
         aria-haspopup="dialog"
         aria-expanded={open}
         disabled={!live}
         onClick={() => setOpen((v) => !v)}
         data-testid="session-mode"
         data-mode={cur ?? ""}
+        {...(own ? { "data-own": "unguarded" } : {})}
       >
-        <span className="ss-pick-n">{modeLabel(cur)}</span>
+        <span className="ss-pick-n">{own ?? modeLabel(cur)}</span>
         <ChevronDown />
       </button>
       <Popover open={open} onClose={() => setOpen(false)} side="top" align="right" width={264} label={t("ctl.mode")} className="ss-dpop">
         <div data-testid="session-mode-menu">
           <div className="ss-h ss-h-plain">{t("ctl.mode")}</div>
+          {own && (
+            <div className="ss-mode-own" data-testid="session-mode-own">
+              {own} · {from}
+            </div>
+          )}
           {modesOf(rec.agent).map((m) => {
             const on = m === cur;
             return (
@@ -388,8 +419,8 @@ function SessionMode({ rec }: { rec: SessionRec }) {
 function DraftPane({ rec }: { rec: SessionRec }) {
   const ss = useSessions();
   const accounts = useAccounts();
-  const def = agentDef(rec.agent);
-  const mode = ss.agents?.find((a) => a.id === rec.agent)?.mode ?? def.mode;
+  const way = draftOpen(rec.agent, ss.agents, ss.opens);
+  const mode = sessionMode(ss.agents, { agent: rec.agent, open: way });
   const terminal = mode === "terminal";
   // until the look-up answers, the agent counts as there (a flash of "not found" would be wrong more often)
   const installed = ss.agents === null || !!ss.agents.find((a) => a.id === rec.agent)?.path;
@@ -399,7 +430,8 @@ function DraftPane({ rec }: { rec: SessionRec }) {
   // the session chat's own key: unsent text is kept under it (the resume snapshot saves it) and is still there
   // in the chat once it starts
   const key = `agent:${rec.id}`;
-  const bot: Bot = { name: key, display_name: def.label, is_default: false, model: "", provider: "", description: "", status: "online", running: false };
+  const label = agentLabel(rec.agent, ss.agents);
+  const bot: Bot = { name: key, display_name: label, is_default: false, model: "", provider: "", description: "", status: "online", running: false };
   const start = (text?: string) => void getSessions().start(rec.id, text, account || undefined);
   /** The first message with files: they are saved before the agent starts; a file that cannot be keeps the draft
    *  (and the chips) as they were. */
@@ -419,7 +451,7 @@ function DraftPane({ rec }: { rec: SessionRec }) {
             ? t("sessions.findingHome")
             : !installed
               ? missingNote(rec.agent)
-              : t(terminal ? "sessions.firstStart" : "sessions.firstSend", { agent: def.label, folder })}
+              : t(terminal ? "sessions.firstStart" : "sessions.firstSend", { agent: label, folder })}
         </div>
       </div>
       <Composer
@@ -427,11 +459,17 @@ function DraftPane({ rec }: { rec: SessionRec }) {
         bot={bot}
         running={false}
         offline={!ready || terminal}
-        offlineText={!ready ? (!rec.cwd ? t("sessions.findingHome") : missingNote(rec.agent)) : t("sessions.pressStart", { agent: def.label })}
+        offlineText={!ready ? (!rec.cwd ? t("sessions.findingHome") : missingNote(rec.agent)) : t("sessions.pressStart", { agent: label })}
         onSend={(text) => start(text)}
         onSendFiles={mode === "chat" ? startWithFiles : undefined}
         onStop={() => undefined}
-        tools={<AgentFixed agent={rec.agent} />}
+        heldNote={terminal && !!rec.cwd ? t("ss.open.withheld") : undefined}
+        tools={
+          <>
+            <AgentFixed agent={rec.agent} />
+            <OpenPick rec={rec} way={way} />
+          </>
+        }
         action={
           terminal ? (
             <button type="button" className="ss-go" disabled={!ready} onClick={() => start()} data-testid="session-go">
@@ -458,12 +496,20 @@ function againTip(rec: SessionRec): string {
  *  and account. */
 function Ended({ rec }: { rec: SessionRec }) {
   const why = rec.error ? rec.error.trim().split("\n").pop() : "";
+  // an agent that is not signed in: its line says what to run (the command as inline code), and the person's own
+  // terminal opens in the folder
+  const signin = useSessions().live[rec.id]?.signin;
   return (
     <div className="ss-ended" role="status" data-testid="session-ended">
       <span className="ss-ended-t" title={why || undefined}>
-        {rec.status === "failed" ? tr("ss.couldNotStart") : tr("ss.ended")}
-        {why ? ` · ${why}` : ""}
+        {signin ? tx("ss.signedOut", { agent: agentDef(rec.agent).label, cmd: <code>{signin}</code> }) : rec.status === "failed" ? tr("ss.couldNotStart") : tr("ss.ended")}
+        {!signin && why ? ` · ${why}` : ""}
       </span>
+      {signin && rec.cwd && (
+        <button type="button" className="ss-restart" onClick={() => void getSessions().openTerminal(rec.id)} data-testid="session-signin-terminal">
+          {tr("ss.menu.terminal")}
+        </button>
+      )}
       <button type="button" className="ss-restart" onClick={() => void getSessions().restart(rec.id)} title={againTip(rec)} data-testid="session-restart">
         {tr("ss.restart")}
       </button>
@@ -691,6 +737,23 @@ export function SessionView() {
   const s = useStore();
   const ss = useSessions();
   const rec = ss.list.find((r) => r.id === s.ui.session) ?? null;
+  // looking at a session sees what its row carried for the person (it rang, it finished): at once when it is opened,
+  // and when the window comes back to it
+  const shown = rec?.id ?? null;
+  const unseen = shown ? ss.unseen[shown] : undefined;
+  useEffect(() => {
+    if (!shown) return;
+    const see = () => {
+      if (windowWatched()) getSessions().seen(shown);
+    };
+    see();
+    window.addEventListener("focus", see);
+    document.addEventListener("visibilitychange", see);
+    return () => {
+      window.removeEventListener("focus", see);
+      document.removeEventListener("visibilitychange", see);
+    };
+  }, [shown, unseen]);
   if (!rec) {
     return (
       <div className="chat-empty" data-testid="session-gone">
@@ -698,7 +761,6 @@ export function SessionView() {
       </div>
     );
   }
-  const def = agentDef(rec.agent);
   if (rec.status === "draft") {
     return (
       <>
@@ -716,14 +778,37 @@ export function SessionView() {
   }
   const name = pickTitle(rec, folderName(rec.cwd)).title;
   const chatKey = getSessions().chatKey(rec.id);
-  const mode = ss.agents?.find((a) => a.id === rec.agent)?.mode ?? def.mode;
-  // DeepSeek Harness ships no terminal profile: a DSH chat has no Terminal view (and its model is set in its own app)
-  const canToggle = mode !== "terminal" && rec.agent !== "dsh";
-  const showChat = rec.view === "chat" && !!chatKey;
+  // a session opened as a terminal is one whatever its agent usually does: it has no chat, no model and no toggle
+  const mode = sessionMode(ss.agents, rec);
+  const label = agentLabel(rec.agent, ss.agents);
+  // DeepSeek Harness ships no terminal profile: a DSH chat has no Terminal view (and its model is set in its own app).
+  // A Hermes chat without oh-my-hermes has none either: that view starts `omh`, which is not there.
+  const noTerminal = rec.agent === "dsh" || (rec.agent === "omh" && hermesOnly(ss.agents));
+  const canToggle = mode !== "terminal" && !noTerminal;
+  // the header's right side (model, panel) shows for every chat; only the Terminal toggle depends on canToggle
+  const showRight = mode !== "terminal" && (canToggle || rec.agent === "omh");
+  // a session with no terminal view is its chat (one saved in its terminal while `omh` was still there included)
+  const showChat = (rec.view === "chat" || noTerminal) && !!chatKey;
   const c = chatKey ? s.chats[chatKey] : undefined;
   const turn = !!c?.turn;
   // an approval or question of this chat is still open (the Needs-you model: answered, expired or its turn over closes it)
   const needs = !!chatKey && selectAsks(s).some((a) => a.bot === chatKey);
+  // What the agent says is left in the background. Its count can hold a command, which has no row, so nothing is
+  // guessed about which task waits: the header says "waiting" only when the background subagents omher has rows
+  // for are as many as the agent counts and each one's approval or question is open. Otherwise "running".
+  const bg = showChat ? (rec.background ?? 0) : 0;
+  const bgSubs = (c?.items ?? []).flatMap((i) =>
+    i.kind === "activity"
+      ? (i.turn.fanouts ?? [])
+          .flatMap((f) => f.subs)
+          // a background subagent: still out though its turn is over, or though the call that started it has
+          // returned (Claude Code's Agent call returns at once for one it runs in the background)
+          .filter((x) => !subagentEnded(x) && (i.turn.endedAt !== undefined || i.turn.steps.some((st) => st.id === x.id && st.endedAt !== undefined)))
+      : [],
+  );
+  const asked = waitingSubs(c?.items);
+  const bgWaits = bg > 0 && COUNTS_BACKGROUND_SUBAGENTS.includes(rec.agent) && bgSubs.length === bg && bgSubs.every((x) => asked.has(x.id));
+  const bgText = tr(bgWaits ? (bg === 1 ? "ss.backgroundWaiting1" : "ss.backgroundWaitingN") : bg === 1 ? "ss.background1" : "ss.backgroundN", { n: bg });
   const status = rec.paused
     ? t("resume.pausedShort")
     : rec.view === "terminal" && canToggle
@@ -745,40 +830,68 @@ export function SessionView() {
         <span className="ss-head-mark">
           <AgentMark agent={rec.agent} size={18} />
         </span>
-        <span className="head-title" data-testid="session-title" title={name}>
-          {name}
-        </span>
-        {/* the same order as the row's second line: where, then which agent */}
-        <span className="ss-head-path" title={rec.cwd}>
-          <span data-testid="session-cwd">{tildePath(rec.cwd, ss.home)}</span>
-          {" · "}
-          <span data-testid="session-agent">{def.label}</span>
-        </span>
-        <span
-          className={`ss-head-st ${rec.view === "terminal" && canToggle ? "mode" : rec.status}${showChat && !turn ? " idle" : ""}${showChat && needs ? " needs" : ""}`}
-          data-testid="session-status"
-        >
-          {status}
-        </span>
-        {showChat && !!rec.background && (
-          <span className="ss-head-bg" data-testid="session-background" title={tr(rec.background === 1 ? "ss.background1" : "ss.backgroundN", { n: rec.background })}>
-            {tr(rec.background === 1 ? "ss.background1" : "ss.backgroundN", { n: rec.background })}
+        {/* two boxes that are not there on a wide header (display: contents): on a narrow one with background work
+            they let the status, the label and its Stop go under the name (sessions.css) */}
+        <span className={`ss-head-id${bg ? " bg" : ""}`}>
+          <span className="head-title" data-testid="session-title" title={name}>
+            {name}
           </span>
-        )}
-        {canToggle && (
-          <div className="head-right ss-head-right" data-testid="head-right">
-            <button
-              type="button"
-              className={`ss-toggle${rec.view === "terminal" ? " on" : ""}`}
-              aria-pressed={rec.view === "terminal"}
-              aria-label={rec.view === "terminal" ? tr("ss.backToChat") : tr("ss.openTerminal")}
-              title={rec.view === "terminal" ? tr("ss.backToChat") : tr("ss.openTerminal")}
-              aria-description={rec.view === "terminal" ? undefined : terminalNote(rec.agent)}
-              onClick={() => void getSessions().setView(rec.id, rec.view === "terminal" ? "chat" : "terminal")}
-              data-testid="session-terminal-toggle"
+          {/* the same order as the row's second line: where, then which agent */}
+          <span className="ss-head-path" title={rec.cwd}>
+            <span data-testid="session-cwd">{tildePath(rec.cwd, ss.home)}</span>
+            {" · "}
+            <span data-testid="session-agent">{label}</span>
+          </span>
+          <span className="ss-head-now">
+            <span
+              className={`ss-head-st ${rec.view === "terminal" && canToggle ? "mode" : rec.status}${showChat && !turn ? " idle" : ""}${showChat && needs ? " needs" : ""}`}
+              title={status}
+              data-testid="session-status"
             >
-              {rec.view === "terminal" ? <ChatIcon /> : <TerminalIcon />}
-            </button>
+              {status}
+            </span>
+            {bg > 0 && (
+              <>
+                <span className="ss-head-bg" data-testid="session-background" title={bgText}>
+                  {bgText}
+                </span>
+                {/* the same in fewer words, shown in its place when the line is tight */}
+                <span className="ss-head-bg short" data-testid="session-background-short" title={bgText}>
+                  {tr(bgWaits ? "ss.backgroundWaitingShort" : "ss.backgroundShort", { n: bg })}
+                </span>
+              </>
+            )}
+            {/* no turn runs, so the composer offers Send: the background work's own Stop sits beside the words that
+                say it is there, and sends the agent's own interrupt (Esc keeps stopping a running turn only) */}
+            {bg > 0 && !turn && rec.status === "running" && STOPS_BACKGROUND.includes(rec.agent) && (
+              <button
+                type="button"
+                className="ss-head-stop"
+                title={tr(bgWaits ? "ss.stopBackgroundWaiting" : "ss.stopBackground")}
+                onClick={() => void getSessions().interrupt(rec.id)}
+                data-testid="session-background-stop"
+              >
+                {tr("ss.stopBackgroundShort")}
+              </button>
+            )}
+          </span>
+        </span>
+        {showRight && (
+          <div className="head-right ss-head-right" data-testid="head-right">
+            {canToggle && (
+              <button
+                type="button"
+                className={`ss-toggle${rec.view === "terminal" ? " on" : ""}`}
+                aria-pressed={rec.view === "terminal"}
+                aria-label={rec.view === "terminal" ? tr("ss.backToChat") : tr("ss.openTerminal")}
+                title={rec.view === "terminal" ? tr("ss.backToChat") : tr("ss.openTerminal")}
+                aria-description={rec.view === "terminal" ? undefined : terminalNote(rec.agent)}
+                onClick={() => void getSessions().setView(rec.id, rec.view === "terminal" ? "chat" : "terminal")}
+                data-testid="session-terminal-toggle"
+              >
+                {rec.view === "terminal" ? <ChatIcon /> : <TerminalIcon />}
+              </button>
+            )}
             {showChat && <SessionModel rec={rec} options={ss.models[rec.id]} note={ss.notes[rec.id]} />}
             {showChat && <PanelToggle working={workingSubagents(c)} />}
           </div>
@@ -792,7 +905,7 @@ export function SessionView() {
         // a Hermes folder chat between its first message and the bridge's chat id: not a reason to start a terminal
         <div className="pane ss-chat" data-testid="session-chat">
           <div className="thread" data-testid="timeline">
-            <div className="day">{rec.status === "failed" ? (rec.error ? tr("ss.couldNotStartWhy", { agent: def.label, error: rec.error }) : tr("ss.agentCouldNotStart", { agent: def.label })) : tr("ss.startingAgent", { agent: def.label })}</div>
+            <div className="day">{rec.status === "failed" ? (rec.error ? tr("ss.couldNotStartWhy", { agent: label, error: rec.error }) : tr("ss.agentCouldNotStart", { agent: label })) : tr("ss.startingAgent", { agent: label })}</div>
           </div>
         </div>
       ) : (

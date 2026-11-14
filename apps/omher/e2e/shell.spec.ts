@@ -60,11 +60,11 @@ test("sidebar lists the mock bots and search filters them", async ({ page }) => 
   for (const id of ["nav-automations", "nav-plugins"]) await expect(side.getByTestId(id)).toBeEnabled();
   // Kami starts running in the mock -> live ring around its face
   await expect(page.getByTestId("bot-kami").getByTestId("live-ring")).toBeVisible();
-  await page.getByLabel("Search bots").fill("fri");
+  await page.getByLabel("Search bots and sessions").fill("fri");
   await expect(page.getByTestId("bot-friren")).toBeVisible();
   await expect(page.getByTestId("bot-kami")).toHaveCount(0);
   await expect(page.getByTestId("bot-default")).toHaveCount(0);
-  await page.getByLabel("Search bots").fill("");
+  await page.getByLabel("Search bots and sessions").fill("");
   await expect(page.getByTestId("bot-default")).toBeVisible();
 });
 
@@ -121,7 +121,8 @@ test("Stop interrupts the running turn", async ({ page }) => {
   expect(ops).toContain("chat.interrupt");
 });
 
-test("slash shows the skill hint", async ({ page }) => {
+test("slash shows the skill hint when the bot has no skill list", async ({ page }) => {
+  await mock("mock.noSkills", { bot: "kami" });
   await open(page);
   await page.getByTestId("composer").fill("/pl");
   await expect(page.getByTestId("skill-hint")).toBeVisible();

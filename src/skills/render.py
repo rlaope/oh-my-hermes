@@ -56,6 +56,8 @@ from .expert_question_rendering import (
     expert_question_reference_lines,
     expert_questions_markdown,
 )
+from .frontend_editorial_layout_reference import editorial_layout_reference
+from .frontend_mobile_density_reference import mobile_density_gate_reference
 from .procedure_rendering import (
     copy_procedure_check_payloads,
     copy_procedure_step_payloads,
@@ -4801,6 +4803,57 @@ OMH checks none of these; it reports the gap it can see as `unavailable` with `m
 ## Boundary
 
 A prepared request is not dispatch, acceptance, review, CI, or merge. No native `kanban_dispatch` tool exists: dispatch stays `unavailable`, and an operator claim is the observed path.
+"""
+
+
+INSTINCT_LEDGER_REFERENCE_PATH = "references/refixed-commits.md"
+
+
+def instinct_ledger_reference_templates() -> list[SkillReferenceTemplate]:
+    return [SkillReferenceTemplate("instinct-ledger", INSTINCT_LEDGER_REFERENCE_PATH, _instinct_ledger_reference())]
+
+
+def _instinct_ledger_reference() -> str:
+    """How git history becomes instinct observations: find re-fixed commits, count them once a day."""
+    return """# Instinct Ledger: Lessons From Re-Fixed Commits
+
+Load this when the evidence for an instinct is a repository's git history: a fix that came soon after another change to the same lines. The method idea of mining re-fixed commits is taken from `yetone/magpie` (MIT, commit `5e933e153a87c4017a19502e1d2e87aa714572b9`), concept only and written fresh for this skill.
+
+## 1. What a re-fix is
+
+A re-fix is a fix commit that replaces lines a different pull request landed shortly before. The first change was not enough, and the fix is the repository's own record of what the first author missed.
+
+1. List the non-merge fix commits in the window that are reachable from the default branch (subjects that start with `fix` or `hotfix`; `git log --no-merges` without `--first-parent`, because on a merge-commit history the first-parent line holds only the merges and lists none).
+2. For each fix, find the lines it removes or changes, then blame exactly those lines in the fix's parent: `git blame --porcelain -L <start>,<end> <fix>^ -- <path>`. The blame names the commit that last wrote each line.
+3. Split by how the blamed commit reached the branch: follow the first-parent merges only here, to decide which pull request brought each commit in. When it came in through the same first-parent merge as the fix, it is a review fixup before merge and not a signal. When it came in through another merge, the pair is a signal: one pull request left a fault that a later one repaired.
+4. Keep the pairs where the blamed commit is recent (the window is the person's to choose, such as 48 hours) and discard pairs where only whitespace, comments, or generated files changed.
+
+## 2. The count is an upper bound
+
+Ordinary follow-up work also replaces recent lines: a feature built in two steps, a rename, a planned second half. Read each pair, both diffs and both pull request descriptions, and keep only the pairs where the first change had a defect the fix removed. Report how many pairs the search returned and how many were kept; the first number alone proves nothing.
+
+## 3. One observation per pair, one per day
+
+A kept pair is one observation, with the two commit ids as its evidence refs. Two pairs from the same day count once, the skill's own "one session counts once" rule applied to days: one busy day with one cause is one anecdote. The confidence thresholds are unchanged: 1 is an anecdote, 2 is tentative, 3 or more with no contradicting observation is a promotion candidate.
+
+## 4. The ledger line
+
+Each line carries four things and nothing else:
+
+- the rule, as one sentence a reviewer can apply to a diff;
+- why, naming the fault the pair showed;
+- the two commits, the one that left the fault and the one that fixed it;
+- the days seen, one date per counted observation.
+
+Example shape: `rule: a fix reaches every place of the same shape | why: the same lookup fault was fixed for one agent and left in six others | commits: <first>, <fix> | days: <date>`.
+
+## 5. Where a promoted rule goes
+
+A rule with three or more days becomes a rule candidate for `rules-distill`, with the destination the repository's own review instructions (`REVIEW.md`, or the review section of its agent guidance). It stays in `instinct_candidate/v1` until that store route accepts it; do not edit the review instructions from this skill.
+
+## Boundary
+
+The search reads history and writes nothing. A blame result is evidence of which commit wrote a line, not of why, and a listed pair is a candidate until someone has read both changes.
 """
 
 
@@ -12618,6 +12671,16 @@ def _frontend_design_reference_templates_cached() -> tuple[SkillReferenceTemplat
             "references/forms-and-input.md",
             _forms_and_input_reference(),
         ),
+        SkillReferenceTemplate(
+            "frontend",
+            "references/mobile-density-gate.md",
+            mobile_density_gate_reference(),
+        ),
+        SkillReferenceTemplate(
+            "frontend",
+            "references/editorial-layout.md",
+            editorial_layout_reference(),
+        ),
     )
 
 
@@ -13898,6 +13961,50 @@ no rendered evidence.
   code but not in `DESIGN.md` is drift: either the contract or the code is
   wrong, and one of them gets fixed.
 
+## Rules the build holds
+
+A rule that lives only in this document is re-broken by whoever did not read
+it, person or agent. The rules below are how a contract gets held by the
+project's own build instead of by memory. The mechanism is fixed here; the
+rules are the project's: which rules a project holds, and their values, come
+from its own contract.
+
+- **A rule judged from source alone becomes a test.** A contract may hold
+  rules that reading source alone can judge, for example corner values outside
+  its set, durations or easings outside the motion profiles, more than one
+  colour per meaning (success, warning, danger), or emoji used as icons. Each
+  such rule the contract holds becomes a check in the project's own test or
+  lint step and runs in its build. A rule that needs a rendered page stays
+  with the visual-QA owner.
+- **One escape marker.** Where a rule has legitimate exceptions, the
+  exception is declared with one named attribute or comment on the element,
+  and the check skips only that element. An exception limited to certain
+  files lists those files inside the check itself. Two ways to opt out
+  means the second one is never audited.
+- **Closed sets, each step tied to a role.** Corners, control heights,
+  durations, easings and heading steps each have a fixed count, and each step
+  names what it is used for. There is no in-between value. Map the
+  framework's size names onto the steps, so a new name cannot create a new
+  value. This complements the one radius knob in Shapes: the knob moves the
+  whole scale, the set decides how many steps the scale has.
+- **Each rule carries its history.** Record the date, what the user asked
+  for, and what went wrong before the rule existed. A rule with no history
+  gets relaxed by the next person who cannot see why it is there.
+- **Decided and open are separate lists.** A variant not yet chosen is not
+  the source of truth, and both variants are not shipped as product options
+  to avoid the choice. The open list names who decides and by when.
+- **Components are the source of truth.** Reuse the control. Re-drawing it by
+  copying classes matches the colour and drifts on corner and height, and
+  the next token change then misses the copy.
+- **A styleguide page built from the real components.** It uses the real
+  components and tokens, so it changes with the code, and each state (data,
+  loading, empty, error) can be opened directly, by address or parameter, for
+  capture. A failed fetch is shown as an error, never as an empty result.
+- **A check counts only when it ran.** Same rule as lint above: a source
+  check that was run, with its findings in hand, is observed evidence; one
+  that was not run is `not_observed`, and reading the code never turns it
+  into a pass.
+
 ## Boundary
 
 `DESIGN.md` is a prepared contract, not rendered evidence: implementation,
@@ -14279,6 +14386,48 @@ Korean, Japanese, and Chinese copy takes the same checks in its own
 register; translate the meaning of an action name, and keep it identical
 across the flow in every locale.
 
+## Screen copy: what the page says about itself
+
+Interface copy covers the controls. This section covers the sentences, numbers,
+and labels a page uses to describe itself; review them against the captured
+screen, not the source.
+
+Review prompts - a stated reason keeps each one:
+
+- **A hero sentence that introduces the product** - does it tell a visitor
+  something they could not infer from the name and the first image, or does it
+  restate them?
+- **A one-line description under every section title** - the section-level
+  version of the eyebrow, title, and description prompt above. Which sections
+  need it to be understood?
+- **A contrast headline of the "not X but Y" shape** - is X something a visitor
+  believed before arriving? A denial of a position nobody held spends the
+  headline on nothing.
+- **A paragraph narrating how a decision was reached** - does the visitor need
+  the history, or only the result? The history belongs in a changelog or a case
+  study.
+
+Reject on sight:
+
+- 01 / 02 / 03 numbering on content that has no order. Numbers promise a
+  sequence; use them only when the reader must take the items in that order.
+- An outcome number with no source.
+
+The test for any number on the page is: "what is this number trying to prove?"
+
+- A comparison measured on the same basis stays, with the basis visible.
+- A configuration or limit value that explains behaviour stays, because it
+  tells the reader what to expect.
+- A boast about improvement goes, or gets its source beside it.
+
+When there is no real content, do not invent sentences, roles, or experience.
+Leave the title and the image slot in place and ask what goes there. An invented
+testimonial or team bio is a claim about real people that nobody made.
+
+After the build, read every string on the captured screen. Components fill in
+numbers and copy on their own, and the placeholder a component ships with is
+easy to leave in.
+
 ## Boundary
 
 Taste guidance shapes the prepared direction and contract. It never
@@ -14475,7 +14624,10 @@ work lands.
    counterpart of the TUI's 80x24 and 120x40; add the widths the
    product actually targets. Capture each in every theme the contract
    defines, and once with `prefers-reduced-motion: reduce` for any surface
-   that animates.
+   that animates. Take the 375 capture with touch and mobile-user-agent
+   emulation on when the session can set them; a width-only capture is
+   named as such. A surface people use on a phone also goes through
+   `references/mobile-density-gate.md`.
 3. Compare each capture against the comparison target, side by side.
 4. List every difference — spacing, weight, color, alignment,
    truncation, state treatment — however small. A difference you did
@@ -14585,6 +14737,34 @@ selected, and only its recorded findings enter the contract.
   the visual-fidelity review perspective comparing the rendered result
   against it side by side — and verify the implementation is a reusable
   design-system build, not a screenshot-matched one-off.
+
+## Skeleton versus brand
+
+A reference carries two layers: a skeleton (layout, spacing rhythm,
+component anatomy, motion) and a brand (colour and type). They are taken
+separately.
+
+- **A project that already has a brand or design system** takes skeleton and
+  motion from the reference, and colour and type from its own brand. Taking
+  the reference's colour and type as well would replace the brand with the
+  reference.
+- **Colour and type are extracted too** when no brand exists yet, or when the
+  user asked to match the reference. Record which of the two applied in the
+  Research Log.
+- **Several references** are rebuilt on one spacing unit, one grid and one
+  type scale, with one transition treatment across all borrowed sections.
+  Stacked as they came, they read as several sites on one page.
+- **Drop what only meant something for the reference's owner**: its mascot,
+  its seasonal banner, its menu names.
+
+## Remove traces before it leaves the team
+
+Before a result goes outside the team, search it for traces of the
+reference: its name in titles, comments and metadata, redrawn copies of its
+artwork, and working notes that name it. The search is a command whose
+output is in hand; reading the files does not count. The result's own copy
+does not name the reference either. Keep the Research Log, which stays with
+the team, as the one place the reference is named.
 
 ## Boundary
 

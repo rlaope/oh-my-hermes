@@ -251,8 +251,11 @@ test("Install: inspect, see what it adds and for which bot, then install that pi
   const ink = await sheet.getByTestId("sheet-install").evaluate((el) => getComputedStyle(el).backgroundImage);
   expect(ink).toBe("none");
   await sheet.getByTestId("sheet-install").click();
-  await expect(sheet.getByTestId("sheet-done")).toContainText("babysit is installed and on.");
-  await expect(sheet.getByTestId("sheet-done")).toContainText("Its hooks load after Kami's gateway restarts.");
+  // the title says it is installed; the body starts with what is new, never the same words again
+  await expect(sheet.getByTestId("sheet-title")).toHaveText("babysit is installed");
+  await expect(sheet.getByTestId("sheet-done")).not.toContainText("installed");
+  // Hermes reloaded the bot's gateway itself: no restart is named (restarting one bot would not load it anyway)
+  await expect(sheet.getByTestId("sheet-done")).toContainText("Ready in Kami's next conversation.");
   const inspect = (await calls("plugins.inspect"))[0].params;
   const install = (await calls("plugins.install"))[0].params;
   expect(inspect).toEqual({ bot: "kami", catalog_name: "babysit" });

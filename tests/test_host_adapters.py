@@ -32,9 +32,14 @@ TAMPERING = (
 )
 
 
-def tamper(case, clone, mutation):
-    path = clone / "agent-skills/ulw-work/SKILL.md"
-    inventory = clone / "agent-skills/.omh-agent-skills-manifest.json"
+def pack_dir(host):
+    """The committed pack `host`'s installers copy (Claude Code has its own copy)."""
+    return json.loads((ROOT / f".{host}/manifest.json").read_bytes())["source"]
+
+
+def tamper(case, clone, mutation, pack="agent-skills"):
+    path = clone / pack / "ulw-work/SKILL.md"
+    inventory = clone / pack / ".omh-agent-skills-manifest.json"
     text = inventory.read_text(encoding="utf-8")
     lines = text.splitlines(keepends=True)
     first = next(index for index, line in enumerate(lines) if line.startswith('    "'))
@@ -67,10 +72,10 @@ def tamper(case, clone, mutation):
     elif mutation == "row_outside_files":
         text = text.replace('  "schema_version"', f'  "{FOREIGN}": "{digest}",\n  "schema_version"')
     elif mutation == "row_parent_escape":
-        readme = clone / "README.md"
+        readme = (clone / pack).parent / "README.md"
         readme.write_bytes(b"outside the pack\n")
         target = row("omh-ask/SKILL.md")
-        (clone / "agent-skills/omh-ask/SKILL.md").unlink()
+        (clone / pack / "omh-ask/SKILL.md").unlink()
         text = text.replace(target, f'    "../README.md": "{hashlib.sha256(readme.read_bytes()).hexdigest()}",\n')
     elif mutation == "row_dot_alias":
         text = text.replace('    "omh-ask/SKILL.md": ', '    "omh-ask/./SKILL.md": ')
@@ -162,10 +167,15 @@ class HostAdapterTests(unittest.TestCase):
 
     def _install_equality(self, shell):
         from omh.install.agent_skills_projection import MANIFEST_NAME, agent_skill_files, agent_skills_manifest
-        expected = tree(ROOT / "agent-skills")
-        skills = {p.split("/")[0] for p in expected if p != MANIFEST_NAME}
-        expected[MANIFEST_NAME] = (json.dumps(agent_skills_manifest(agent_skill_files()), indent=2, sort_keys=True) + "\n").encode()
+        from omh.skills.host_adapters import host_pack_files
         for host in HOSTS:
+            # Each host installs its own committed pack, receipt included.
+            expected = tree(ROOT / pack_dir(host))
+            skills = {p.split("/")[0] for p in expected if p != MANIFEST_NAME}
+            files = host_pack_files(host, agent_skill_files())
+            self.assertEqual(expected.pop(MANIFEST_NAME),
+                             (json.dumps(agent_skills_manifest(files), indent=2, sort_keys=True) + "\n").encode())
+            expected[MANIFEST_NAME] = (json.dumps(agent_skills_manifest(files), indent=2, sort_keys=True) + "\n").encode()
             for user in (False, True):
                 with self.subTest(host=host, user=user), tempfile.TemporaryDirectory(prefix="omh adapter ") as tmp:
                     root = Path(tmp).resolve()
@@ -248,14 +258,14 @@ class HostAdapterTests(unittest.TestCase):
         from omh.install.agent_skills_projection import MANIFEST_NAME
         from omh.skills.host_adapters import HOST_ADAPTERS, checksum_inventory, source_digest
         self.assertEqual(tuple(adapter.host for adapter in HOST_ADAPTERS), HOSTS)
-        expected = tree(ROOT / "agent-skills")
-        receipt = expected.pop(MANIFEST_NAME)
-        hashes = {path: hashlib.sha256(content).hexdigest() for path, content in expected.items()}
-        # The committed inventory lists exactly the pack's bytes, and its digest
-        # keeps the pre-inventory definition so stored discovery receipts compare.
-        self.assertEqual(json.loads(receipt)["files"], hashes)
-        self.assertEqual(source_digest(hashes), hashlib.sha256(checksum_inventory(hashes).encode()).hexdigest())
         for host in HOSTS:
+            expected = tree(ROOT / pack_dir(host))
+            receipt = expected.pop(MANIFEST_NAME)
+            hashes = {path: hashlib.sha256(content).hexdigest() for path, content in expected.items()}
+            # The committed inventory lists exactly the pack's bytes, and its digest
+            # keeps the pre-inventory definition so stored discovery receipts compare.
+            self.assertEqual(json.loads(receipt)["files"], hashes)
+            self.assertEqual(source_digest(hashes), hashlib.sha256(checksum_inventory(hashes).encode()).hexdigest())
             manifest = json.loads((ROOT / f".{host}/manifest.json").read_bytes())
             # Nothing per-host moves when a skill body changes.
             self.assertEqual(manifest["inventory"], MANIFEST_NAME)
@@ -263,6 +273,7 @@ class HostAdapterTests(unittest.TestCase):
             for name in ("install.sh", "install.ps1", "manifest.json"):
                 self.assertIsNone(re.search(rb"[0-9a-f]{64}", (ROOT / f".{host}" / name).read_bytes()), name)
             self.assertEqual(manifest["transform"], "copy-only")
+            self.assertEqual(manifest["source"], "agent-skills" if host != "claude" else ".claude/agent-skills")
             self.assertEqual(manifest["evidence"], "docs/AGENT-SKILLS.md#host-support-matrix")
             for scope in ("repo", "user"):
                 with self.subTest(host=host, scope=scope), tempfile.TemporaryDirectory() as tmp:
@@ -366,7 +377,7 @@ class HostAdapterTests(unittest.TestCase):
                     repo.mkdir()
                     shutil.copytree(ROOT / "agent-skills", clone / "agent-skills")
                     shutil.copytree(ROOT / f".{host}", clone / f".{host}", ignore=shutil.ignore_patterns("skills"))
-                    tamper(self, clone, mutation)
+                    tamper(self, clone, mutation, pack_dir(host))
                     result = subprocess.run(command(clone, host), cwd=repo,
                                             capture_output=True, text=True, timeout=60)
                     self.assertNotEqual(result.returncode, 0, result.stdout)
@@ -452,8 +463,10 @@ class HostAdapterTests(unittest.TestCase):
                 self.assertIn("Warning: ", results[1].stderr)
                 self.assertRegex(results[1].stderr, rf"[\\/]{other} also holds OMH Agent Skills")
                 self.assertIn("docs/AGENT-SKILLS.md#duplicate-copies", results[1].stderr)
-                # The skill list on stdout stays parseable.
-                self.assertEqual(results[0].stdout.splitlines()[1:], results[1].stdout.splitlines()[1:])
+                # The skill list on stdout stays parseable: each names its own pack's skills.
+                for host, result in zip((first, second), results):
+                    listed = {p.name for p in (ROOT / pack_dir(host)).iterdir() if p.is_dir()}
+                    self.assertEqual(set(result.stdout.splitlines()[1:]), listed)
 
     def test_cli_warns_when_both_pack_roots_hold_the_pack(self):
         from contextlib import chdir
@@ -522,9 +535,7 @@ class HostAdapterTests(unittest.TestCase):
 
     @unittest.skipUnless(os.name != "nt" and shutil.which("sh"), "POSIX symlink/hash fallback test")
     def test_no_python_or_git_hash_fallback_and_preservation(self):
-        from omh.install.agent_skills_projection import MANIFEST_NAME, agent_skill_files, agent_skills_manifest
-        expected = tree(ROOT / "agent-skills")
-        expected[MANIFEST_NAME] = (json.dumps(agent_skills_manifest(agent_skill_files()), indent=2, sort_keys=True) + "\n").encode()
+        expected = tree(ROOT / ".claude/agent-skills")
         for hasher in ("sha256sum", "shasum"):
             if not shutil.which(hasher):
                 continue  # Only the installed platform checksum utilities can be exercised.

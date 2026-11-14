@@ -10,6 +10,7 @@ import shlex
 import shutil
 import subprocess
 import sys
+import threading
 import time
 from typing import Any, NamedTuple, cast
 import unicodedata
@@ -401,6 +402,13 @@ RESTART_FLAGS = frozenset({"--restart-gateway", "--no-restart-gateway"})
 # "rollback", never "update complete".
 SELF_UPDATE_ROLLBACK_ENV = "OMH_UPDATE_ROLLBACK_RESTORE"
 SELF_UPDATE_SKIP_ENV = "OMH_SKIP_COMMAND_PACKAGE_UPDATE"
+# The package manager step of `omh update` is stopped after this many seconds (#2793); the variable, a positive
+# whole number of seconds, overrides it. A line says the step is still running every STILL_RUNNING seconds.
+PACKAGE_UPDATE_TIMEOUT_ENV = "OMH_UPDATE_PACKAGE_TIMEOUT"
+PACKAGE_UPDATE_TIMEOUT_SECONDS: float = 900
+# One day. Above about 2.1 million seconds the wait itself raises OverflowError, so a larger override is held here.
+PACKAGE_UPDATE_TIMEOUT_MAX_SECONDS = 86_400
+PACKAGE_UPDATE_STILL_RUNNING_SECONDS: float = 30
 ANSI_ESCAPE_RE = re.compile(r"\x1b\[[0-?]*[ -/]*[@-~]")
 
 
@@ -1867,12 +1875,29 @@ def _run_package_manager_self_update(
         "Updating omh command package",
         detail=update_instruction,
     )
-    completed = subprocess.run(
-        update_command,
-        text=True,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-    )
+    timeout = _package_update_timeout_seconds()
+    finished = threading.Event()
+    reporter = threading.Thread(target=_report_still_running, args=(progress, finished), daemon=True)
+    if progress.enabled:
+        reporter.start()
+    try:
+        # `subprocess.run` kills and reaps the package manager itself when the timeout expires.
+        completed = subprocess.run(
+            update_command,
+            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            timeout=timeout,
+        )
+    except subprocess.TimeoutExpired:
+        raise OmhError(
+            f"command package update failed: {package_manager} did not finish within {timeout} seconds "
+            f"and was stopped. Run `{update_instruction}` yourself, then rerun `omh update`."
+        ) from None
+    finally:
+        finished.set()
+        if reporter.is_alive():
+            reporter.join()
     if completed.returncode != 0:
         detail = _bounded_command_error(
             completed.stderr
@@ -1888,6 +1913,22 @@ def _run_package_manager_self_update(
     env[SELF_UPDATE_REENTRY_ENV] = "1"
     rerun = subprocess.run([*reentry_command, *argv], env=env)
     return _offer_gateway_restart(args, int(rerun.returncode))
+
+
+def _package_update_timeout_seconds() -> float:
+    try:
+        seconds = int(os.environ.get(PACKAGE_UPDATE_TIMEOUT_ENV, ""))
+    except ValueError:
+        return PACKAGE_UPDATE_TIMEOUT_SECONDS
+    if seconds <= 0:
+        return PACKAGE_UPDATE_TIMEOUT_SECONDS
+    return min(seconds, PACKAGE_UPDATE_TIMEOUT_MAX_SECONDS)
+
+
+def _report_still_running(progress: _HumanProgress, finished: threading.Event) -> None:
+    started = time.monotonic()
+    while not finished.wait(PACKAGE_UPDATE_STILL_RUNNING_SECONDS):
+        progress.still_running(int(time.monotonic() - started))
 
 
 def _validated_command_package_launcher(
@@ -5314,6 +5355,11 @@ class _HumanProgress:
             return
         print(f"      {_color('[skip]', '1;33', self.use_color)} {message}", flush=True)
         self._brief_tty_pause()
+
+    def still_running(self, elapsed_seconds: int) -> None:
+        if not self.enabled:
+            return
+        print(f"      still running ({elapsed_seconds}s elapsed)", flush=True)
 
     @staticmethod
     def _brief_tty_pause() -> None:

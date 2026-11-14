@@ -343,7 +343,20 @@ reimplements the paste-query mechanism of MemPalace's `query_sanitizer.py`, and
 the origin pointer in `src/plugin_bundle/omh/memory_origin.py` takes its idea
 from MemPalace's closet-to-drawer pointers; both follow `MemPalace/mempalace`
 at `84582fb055a6429261f9c779da86c0561ec80adc` (MIT) and are reimplemented, not
-copied.
+copied. The lessons file `docs/LESSONS.md` with its three-separate-days promotion
+rule into `REVIEW.md`, and the stop list for fork pull requests in
+`docs/REVIEW-SWEEP.md`, take their idea from `yetone/magpie` at
+`5e933e153a87c4017a19502e1d2e87aa714572b9` (MIT): concept only, written fresh
+against this repository's own history, nothing copied or translated. Four more
+changes take an idea from that same commit, each concept only and reimplemented
+against this repository's own code: the re-fixed-commit reference of
+`instinct-ledger` (`references/refixed-commits.md`, produced by
+`_instinct_ledger_reference()` in `src/skills/render.py`), the two `code-review`
+quality-bar rules beside it (a fix reaches every place of the same shape; a
+failed read means unknown), omher's reset-first account choice in
+`apps/omher/src/settings/accounts/rules.ts` (spend the quota that resets soonest
+first), and removal through the install one-liner (`install.sh --uninstall`,
+`install.ps1 --uninstall`).
 
 ## Candidate rows (researched, not yet shipped)
 

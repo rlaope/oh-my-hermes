@@ -19,7 +19,7 @@
 use std::collections::HashMap;
 use std::ffi::OsString;
 use std::io::{Read, Write};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
 use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use std::sync::mpsc::{self, SyncSender, TrySendError};
@@ -30,10 +30,10 @@ use std::time::{Duration, Instant};
 use serde::Deserialize;
 use serde_json::{json, Map, Value};
 
-use crate::acp_chat::{acp_agent, is_acp_session_id, Acp, RuleProbe, NO_RULES};
+use crate::acp_chat::{acp_agent, is_acp_session_id, no_rules, Acp, RuleProbe};
 use crate::dsh_chat::DshChat;
 use crate::session_files;
-use crate::sessions::{agent, chat_args, coalesce, is_uuid, launch_for, layout, resume_args, signal_group, unrecognized_program, Mode, ProcessTree, COALESCE_BYTES, COALESCE_WINDOW, INPUT_QUEUE};
+use crate::sessions::{agent, chat_args, cmd_path_arg, coalesce, is_uuid, launch_for, layout, resume_args, signal_group, unrecognized_program, Mode, ProcessTree, COALESCE_BYTES, COALESCE_WINDOW, INPUT_QUEUE};
 
 /// What the person did in the chat. Mirrors `ChatInput` in src/sessions/host.ts. A message's `images` are the
 /// saved copies (`session_files`) of the pictures the person attached, for the agent's own image input; any other
@@ -53,6 +53,9 @@ pub enum Input {
     Mode { mode: String },
     /// Reasoning effort, one of the levels the agent itself reported (`session.efforts`).
     Effort { effort: String },
+    /// Take back the person's last message and what came after it, through the agent's own rewind (Claude Code
+    /// `rewind_conversation`, Codex `thread/revert`); the UI then offers its text again. Files stay as they are.
+    Rewind,
 }
 
 /// The permission modes a person can pick for agent `id`: Claude Code's own `default` (ask), `plan` and
@@ -217,9 +220,10 @@ pub trait Adapter: Send {
     fn on_input(&mut self, input: Input) -> Result<Step, String>;
     /// Whether a turn is running (so an exit mid-turn ends it as an error).
     fn in_turn(&self) -> bool;
-    /// The line to show for an exit reason (the program's stderr), e.g. a missing login in plain words.
+    /// The line to show for an exit reason, from the useful lines of the program's stderr ([`exit_why`]): a missing
+    /// login in plain words, else the last line.
     fn explain(&self, err: &str) -> String {
-        err.to_string()
+        last_line(err).to_string()
     }
     /// The agent's name in a sentence ("Claude Code did not answer …").
     fn name(&self) -> &str {
@@ -389,6 +393,11 @@ impl Subagents {
     fn step(&self, st: &mut Step, id: &str, tool: &str, step: &str) {
         st.events.extend(self.event(id, "running", json!({"tool": tool, "step": clip(step, 120)})));
     }
+    /// A file edit the subagent runs now, with its change per file (`tool.diff`'s shape): the row's step opens to it.
+    /// Said again with the same step when the edit has run, so the change shown is what it finally was.
+    fn edit(&self, st: &mut Step, id: &str, step: &str, files: Vec<Value>) {
+        st.events.extend(self.event(id, "running", json!({"tool": "patch", "step": clip(step, 120), "diff": files})));
+    }
     /// Ends `id` once: done (its answer, else its last message), failed (the error) or cancelled.
     fn end(&mut self, st: &mut Step, id: &str, state: &str, answer: &str, secs: Option<f64>) {
         let Some(s) = self.subs.get_mut(id) else { return };
@@ -472,6 +481,139 @@ fn edit_detail(files: &[(String, u64, u64)]) -> String {
     clip(&parts.join(", "), 160)
 }
 
+/// How many lines of one file's change the diff view gets, and how long one line may be. The rest is counted
+/// (`more`), never sent.
+const DIFF_LINES: usize = 400;
+const DIFF_LINE_CHARS: usize = 2000;
+
+/// The text's lines (a trailing newline ends the last line, it does not start an empty one).
+fn text_lines(t: &str) -> Vec<&str> {
+    if t.is_empty() {
+        return vec![];
+    }
+    t.strip_suffix('\n').unwrap_or(t).split('\n').map(|l| l.strip_suffix('\r').unwrap_or(l)).collect()
+}
+
+/// One file's change for the diff view (`tool.diff`), in one agent-neutral shape: `lines` start with `+`, `-`,
+/// ` ` (context) or `@@` (a hunk), at most [`DIFF_LINES`] of them; `added` / `removed` count every line.
+pub(crate) fn diff_file(path: &str, kind: &str, lines: Vec<String>) -> Value {
+    let added = lines.iter().filter(|l| l.starts_with('+')).count();
+    let removed = lines.iter().filter(|l| l.starts_with('-')).count();
+    let more = lines.len().saturating_sub(DIFF_LINES);
+    let kept: Vec<String> = lines.into_iter().take(DIFF_LINES).map(|l| if l.chars().count() > DIFF_LINE_CHARS { l.chars().take(DIFF_LINE_CHARS).collect() } else { l }).collect();
+    let mut f = json!({"path": path, "kind": kind, "lines": kept, "added": added, "removed": removed});
+    if more > 0 {
+        f["more"] = json!(more);
+    }
+    f
+}
+
+/// `prefix` before every line of `t`.
+fn marked(prefix: char, t: &str) -> Vec<String> {
+    text_lines(t).into_iter().map(|l| format!("{prefix}{l}")).collect()
+}
+
+/// The change a file tool call asks for, from its input alone: Claude Code `Write {file_path, content}` /
+/// `Edit {file_path, old_string, new_string}` / `MultiEdit {file_path, edits}`, pi `write {path, content}` /
+/// `edit {path, edits:[{oldText,newText}]}`. `None` for anything else (oh-my-pi's hashline edit has no plain text).
+pub(crate) fn input_diff(name: &str, input: &Value, cwd: &str) -> Option<Value> {
+    if tool_kind(name) != "patch" {
+        return None;
+    }
+    let path = ["file_path", "path", "notebook_path"].iter().map(|k| s(input, k)).find(|p| !p.is_empty())?;
+    let mut lines = Vec::new();
+    let mut kind = "update";
+    if let Some(c) = input.get("content").and_then(Value::as_str) {
+        kind = "add";
+        lines.extend(marked('+', c));
+    }
+    let pair = |old: &str, new: &str, lines: &mut Vec<String>| {
+        if !lines.is_empty() {
+            lines.push("@@".into());
+        }
+        lines.extend(marked('-', old));
+        lines.extend(marked('+', new));
+    };
+    if input.get("old_string").is_some() || input.get("new_string").is_some() {
+        pair(&s(input, "old_string"), &s(input, "new_string"), &mut lines);
+    }
+    for e in input.get("edits").and_then(Value::as_array).into_iter().flatten() {
+        let old = if e.get("old_string").is_some() { s(e, "old_string") } else { s(e, "oldText") };
+        let new = if e.get("new_string").is_some() { s(e, "new_string") } else { s(e, "newText") };
+        pair(&old, &new, &mut lines);
+    }
+    if lines.is_empty() {
+        return None;
+    }
+    Some(diff_file(&rel(&path, cwd), kind, lines))
+}
+
+/// The change Claude Code made, from its tool result (`structuredPatch` hunks with context, or a new file's
+/// content): what the diff view shows once the edit ran.
+fn claude_result_diff(tur: &Value, cwd: &str) -> Option<Value> {
+    let path = s(tur, "filePath");
+    if path.is_empty() {
+        return None;
+    }
+    let hunks = tur.get("structuredPatch").and_then(Value::as_array).filter(|h| !h.is_empty());
+    if let Some(hunks) = hunks {
+        let mut lines = Vec::new();
+        for h in hunks {
+            let n = |k: &str| h.get(k).and_then(Value::as_u64).unwrap_or(0);
+            lines.push(format!("@@ -{},{} +{},{} @@", n("oldStart"), n("oldLines"), n("newStart"), n("newLines")));
+            lines.extend(h.get("lines").and_then(Value::as_array).into_iter().flatten().filter_map(Value::as_str).map(String::from));
+        }
+        return Some(diff_file(&rel(&path, cwd), if s(tur, "type") == "create" { "add" } else { "update" }, lines));
+    }
+    if s(tur, "type") == "create" {
+        return Some(diff_file(&rel(&path, cwd), "add", marked('+', &s(tur, "content"))));
+    }
+    None
+}
+
+/// The files of a Codex `fileChange` item: an added file's diff is its content, a deleted one's its old content,
+/// an update's a unified diff (its `---` / `+++` headers dropped).
+fn codex_diff(item: &Value, cwd: &str) -> Vec<Value> {
+    item.get("changes")
+        .and_then(Value::as_array)
+        .into_iter()
+        .flatten()
+        .filter(|c| !s(c, "path").is_empty())
+        .map(|c| {
+            let diff = s(c, "diff");
+            let kind = c.get("kind").map(|k| s(k, "type")).unwrap_or_default();
+            let (kind, lines) = match kind.as_str() {
+                "add" => ("add", marked('+', &diff)),
+                "delete" => ("delete", marked('-', &diff)),
+                _ => (
+                    "update",
+                    text_lines(&diff)
+                        .into_iter()
+                        .filter(|l| !(l.starts_with("+++") || l.starts_with("---") || l.starts_with("diff --git") || l.starts_with("index ")))
+                        .map(String::from)
+                        .collect(),
+                ),
+            };
+            diff_file(&rel(&s(c, "path"), cwd), kind, lines)
+        })
+        .collect()
+}
+
+/// A `plan` event: the agent's own todo list as it stands now, `status` pending | in_progress | completed.
+pub(crate) fn plan_event(items: &[(String, String)]) -> Event {
+    let items: Vec<Value> = items.iter().filter(|(t, _)| !t.trim().is_empty()).map(|(t, st)| json!({"text": clip(t, 200), "status": st})).collect();
+    ev("plan", json!({"items": items}))
+}
+
+/// A `thinking` event, with the text the agent sent (none when it sends only a marker).
+pub(crate) fn thinking_event(text: &str) -> Event {
+    if text.is_empty() {
+        ev("thinking", json!({}))
+    } else {
+        ev("thinking", json!({"text": text}))
+    }
+}
+
 /// The command a shell wrapper runs: `/bin/zsh -lc 'mkdir -p d1'` -> `mkdir -p d1` (Codex reports the
 /// wrapped form). Anything else comes back as it is.
 fn unwrap_shell(cmd: &str) -> String {
@@ -506,17 +648,45 @@ pub(crate) fn exit_turn_end(code: Option<i32>, err: &str) -> Value {
     ev("turn.end", json!({"outcome": "error", "error": e}))
 }
 
-/// The first useful line of what a program wrote to stderr: colour codes removed, warnings dropped (`Warning: …`,
-/// a `WARN`/`INFO` log line, Codex's "ignoring 1 unrecognized configuration setting"), then the first line that
-/// is not a log line (`2026-11-10T05:09:59Z ERROR …`), else the last log line, else nothing.
-pub(crate) fn exit_reason(tail: &str) -> String {
+/// The useful lines of what a program wrote to stderr, in order: colour codes removed; warnings dropped
+/// (`Warning: …`, `note: …`, a `WARN`/`INFO` log line, Codex's "ignoring 1 unrecognized configuration setting"), and
+/// so are indented lines (the file a start-up warning names under it, a stack's frames, a list under a heading) and
+/// help text (`Usage: …`, "For more information …", a heading ending in `:`). Each is at most 200 characters.
+fn exit_lines(tail: &str) -> Vec<String> {
     let is_log = |l: &str| l.len() > 11 && l.as_bytes()[..4].iter().all(u8::is_ascii_digit) && l.as_bytes()[4] == b'-' && l.as_bytes()[10] == b'T';
-    let warning = |l: &str| {
+    let skip = |l: &str| {
         let low = l.to_ascii_lowercase();
-        low.starts_with("warning:") || low.starts_with("warn:") || (is_log(l) && [" WARN ", " INFO ", " DEBUG ", " TRACE "].iter().any(|w| l.contains(w))) || low.contains("unrecognized configuration setting")
+        low.starts_with("warning:")
+            || low.starts_with("warn:")
+            || low.starts_with("note:")
+            || (is_log(l) && [" WARN ", " INFO ", " DEBUG ", " TRACE "].iter().any(|w| l.contains(w)))
+            || low.contains("unrecognized configuration setting")
+            || low.starts_with("usage:")
+            || low.starts_with("for more information")
+            || l.ends_with(':')
     };
-    let lines: Vec<String> = tail.lines().map(|l| strip_ansi(l).trim().to_string()).filter(|l| !l.is_empty() && !warning(l)).collect();
-    lines.iter().find(|l| !is_log(l)).or(lines.last()).map(|l| clip(l, 200)).unwrap_or_default()
+    tail.lines().map(strip_ansi).filter(|l| !l.starts_with([' ', '\t'])).map(|l| l.trim().to_string()).filter(|l| !l.is_empty() && !skip(l)).map(|l| clip(&l, 200)).collect()
+}
+
+/// The reason in a program's stderr: its last useful line ([`exit_lines`]), else nothing.
+pub(crate) fn exit_reason(tail: &str) -> String {
+    exit_lines(tail).pop().unwrap_or_default()
+}
+
+/// What an exit's stderr says about why the program failed, for [`Adapter::explain`]: every useful line, so a
+/// sign-in hint anywhere in it is found (the reason shown is the last one). Nothing when the program ended with
+/// code 0: an orderly close, where a warning it printed at start is not why it ended.
+pub(crate) fn exit_why(code: Option<i32>, tail: &str) -> String {
+    if code == Some(0) {
+        String::new()
+    } else {
+        exit_lines(tail).join("\n")
+    }
+}
+
+/// The last non-empty line of `text`.
+pub(crate) fn last_line(text: &str) -> &str {
+    text.lines().rev().map(str::trim).find(|l| !l.is_empty()).unwrap_or("")
 }
 
 /// The protocol messages on one line of an agent's stdout, in order: a leading byte-order mark is dropped, and a line
@@ -584,17 +754,29 @@ fn strip_ansi(text: &str) -> String {
 /// What a tool call is about, for the progress line and the approval card: the command, path, pattern,
 /// query or URL from its arguments, else a short JSON.
 fn tool_detail(input: &Value) -> String {
+    if let Some(d) = known_detail(input) {
+        return d;
+    }
+    match input {
+        Value::Object(m) if m.is_empty() => String::new(),
+        Value::Null => String::new(),
+        other => clip(&other.to_string(), 160),
+    }
+}
+
+/// The command, path, pattern, query or URL a tool call's arguments name, when they name one.
+fn known_detail(input: &Value) -> Option<String> {
     for k in ["command", "cmd", "file_path", "path", "notebook_path", "pattern", "query", "url", "code", "description", "prompt"] {
         if let Some(v) = input.get(k) {
             if let Some(t) = v.as_str() {
                 if !t.trim().is_empty() {
-                    return clip(t, 160);
+                    return Some(clip(t, 160));
                 }
             }
             if let Some(a) = v.as_array() {
                 let parts: Vec<String> = a.iter().filter_map(|x| x.as_str().map(String::from)).collect();
                 if !parts.is_empty() {
-                    return clip(&parts.join(" "), 160);
+                    return Some(clip(&parts.join(" "), 160));
                 }
             }
         }
@@ -604,14 +786,44 @@ fn tool_detail(input: &Value) -> String {
         let first = t.lines().find(|l| !l.trim().is_empty()).unwrap_or("").trim();
         let first = first.trim_start_matches('[').split('#').next().unwrap_or(first).trim_end_matches(']');
         if !first.is_empty() {
-            return clip(first, 160);
+            return Some(clip(first, 160));
         }
     }
-    match input {
-        Value::Object(m) if m.is_empty() => String::new(),
-        Value::Null => String::new(),
-        other => clip(&other.to_string(), 160),
+    None
+}
+
+/// How much of a plan (`ExitPlanMode`) the approval card gets; a longer one is cut there.
+const PLAN_CHARS: usize = 20_000;
+
+/// The line an approval card shows for a tool that is neither a command nor a file edit: the skill's name (and
+/// its arguments) for `Skill`, the command / path / query when the input has one ([`tool_detail`]'s keys), else each
+/// top-level field as `name: value`, joined with ` · ` (a nested value as compact JSON), never the whole input as
+/// one JSON string.
+fn ask_detail(name: &str, input: &Value) -> String {
+    if name == "Skill" {
+        let line = [s(input, "skill"), s(input, "args")].into_iter().filter(|x| !x.trim().is_empty()).collect::<Vec<_>>().join(" ");
+        if !line.is_empty() {
+            return clip(&line, 160);
+        }
     }
+    if let Some(d) = known_detail(input) {
+        return d;
+    }
+    let Value::Object(m) = input else { return tool_detail(input) };
+    let parts: Vec<String> = m
+        .iter()
+        .filter_map(|(k, v)| {
+            let t = match v {
+                Value::Null => return None,
+                Value::String(t) if t.trim().is_empty() => return None,
+                Value::String(t) => t.clone(),
+                Value::Array(a) if a.iter().all(Value::is_string) => a.iter().filter_map(Value::as_str).collect::<Vec<_>>().join(", "),
+                other => other.to_string(),
+            };
+            Some(format!("{k}: {t}"))
+        })
+        .collect();
+    clip(&parts.join(" · "), 160)
 }
 
 /// The bot chat's tool names for the verbs on the progress line ("Running", "Reading", "Editing" …).
@@ -743,6 +955,8 @@ pub struct Claude {
     /// the running turn was started by Claude Code itself (a background task finished), not by the person
     auto_turn: bool,
     pending: HashMap<String, ClaudeAsk>,
+    /// the subagent (tool_use id of its Agent call) that asked each pending request, when one did
+    ask_subs: HashMap<String, String>,
     model: String,
     /// a model the person picked while a turn ran: Claude Code uses it from the next turn on, whose init confirms it
     model_next: String,
@@ -760,10 +974,23 @@ pub struct Claude {
     agent_ids: HashMap<String, String>,
     /// background tasks Claude Code says are still running (`background_tasks_changed`)
     background: usize,
+    /// the background commands among them (`task_type` `local_bash`), by task id: Stop with no turn running asks
+    /// Claude Code to stop each (`stop_task`); its `interrupt` alone stops the subagents at once but a command only
+    /// about ten seconds later (claude-14-background-stop.jsonl)
+    bg_commands: Vec<String>,
     /// subagents that run in the background: their task notification ends them (a foreground one ends with its
     /// tool result, which carries its own words and model)
     bg_subs: std::collections::HashSet<String>,
+    /// the uuids of the person's messages Claude Code echoed back in this process, oldest first: what a rewind
+    /// takes back (the last one)
+    sent_uuids: Vec<String>,
+    /// its own todo list (TaskCreate / TaskUpdate, or TodoWrite): (task id or the call's id until it has one, text,
+    /// status)
+    tasks: Vec<(String, String, String)>,
 }
+
+/// Claude Code's todo tools: shown as the turn's checklist (`plan`), never as steps.
+const CLAUDE_TODO_TOOLS: [&str; 5] = ["TodoWrite", "TaskCreate", "TaskUpdate", "TaskList", "TaskGet"];
 
 impl Claude {
     pub fn new(cwd: &str) -> Claude {
@@ -823,6 +1050,55 @@ impl Claude {
     fn label(&self, model: &str) -> String {
         self.labels.get(model).cloned().unwrap_or_else(|| model.to_string())
     }
+    fn plan(&self) -> Event {
+        let items: Vec<(String, String)> = self.tasks.iter().map(|(_, t, st)| (t.clone(), st.clone())).collect();
+        plan_event(&items)
+    }
+    /// A todo tool call: the list as it will stand (TodoWrite names it whole; TaskCreate adds one, TaskUpdate
+    /// changes one). Whether the list changed.
+    fn todo_call(&mut self, name: &str, id: &str, input: &Value) -> bool {
+        match name {
+            "TodoWrite" => {
+                self.tasks = input
+                    .get("todos")
+                    .and_then(Value::as_array)
+                    .into_iter()
+                    .flatten()
+                    .enumerate()
+                    .map(|(i, t)| (format!("todo-{i}"), s(t, "content"), s(t, "status")))
+                    .filter(|t| !t.1.trim().is_empty())
+                    .collect();
+                true
+            }
+            "TaskCreate" => {
+                let text = s(input, "subject");
+                if text.trim().is_empty() {
+                    return false;
+                }
+                self.tasks.push((id.to_string(), text, "pending".into()));
+                true
+            }
+            "TaskUpdate" => {
+                let key = s(input, "taskId");
+                let Some(at) = self.tasks.iter().position(|t| t.0 == key) else { return false };
+                let status = s(input, "status");
+                if status == "deleted" {
+                    self.tasks.remove(at);
+                    return true;
+                }
+                let subject = s(input, "subject");
+                let t = &mut self.tasks[at];
+                if !status.is_empty() {
+                    t.2 = status;
+                }
+                if !subject.trim().is_empty() {
+                    t.1 = subject;
+                }
+                true
+            }
+            _ => false,
+        }
+    }
     fn begin(&mut self, step: &mut Step, auto: bool) {
         if !self.turn {
             self.turn = true;
@@ -834,7 +1110,11 @@ impl Claude {
         if self.turn {
             self.turn = false;
             self.auto_turn = false;
-            self.pending.clear();
+            // an ask of a background subagent still running outlives the turn: Claude Code keeps waiting for its
+            // answer after `result` (claude-13-late-ask-inside.jsonl); every other ask ends with the turn
+            let keep: Vec<String> = self.ask_subs.iter().filter(|(_, id)| self.bg_subs.contains(*id) && self.subs.open().contains(id)).map(|(r, _)| r.clone()).collect();
+            self.pending.retain(|r, _| keep.contains(r));
+            self.ask_subs.retain(|r, _| keep.contains(r));
             // a foreground subagent lives inside the turn: a turn that ends without its hand-back ended it too
             // (Stop, an error); one in the background goes on and ends by its own task notification
             if outcome != "done" {
@@ -933,10 +1213,20 @@ impl Adapter for Claude {
                     };
                     let secs = v.get("usage").and_then(|u| u.get("duration_ms")).and_then(Value::as_u64).map(|ms| ms as f64 / 1000.0);
                     self.subs.end(&mut st, &id, state, &s(&v, "summary"), secs);
+                    // what it asked and never got answered is no longer waited for
+                    let gone: Vec<String> = self.ask_subs.iter().filter(|(_, x)| **x == id).map(|(r, _)| r.clone()).collect();
+                    for r in gone {
+                        self.ask_subs.remove(&r);
+                        if self.pending.remove(&r).is_some() {
+                            st.emit(ev("prompt.expired", json!({"request_id": r, "reason": "cancelled"})));
+                        }
+                    }
                 }
             }
             "system" if s(&v, "subtype") == "background_tasks_changed" => {
-                let n = v.get("tasks").and_then(Value::as_array).map(Vec::len).unwrap_or(0);
+                let tasks = v.get("tasks").and_then(Value::as_array).cloned().unwrap_or_default();
+                self.bg_commands = tasks.iter().filter(|t| s(t, "task_type") == "local_bash").map(|t| s(t, "task_id")).filter(|id| !id.is_empty()).collect();
+                let n = tasks.len();
                 if n != self.background {
                     self.background = n;
                     st.emit(ev("session.info", json!({"background": n})));
@@ -1045,6 +1335,17 @@ impl Adapter for Claude {
                         let what = if id.starts_with("omher-mode-") { "Mode" } else { "Effort" };
                         st.emit(ev("session.error", json!({"message": format!("{what} not changed: {}", s(r, "error"))})));
                     }
+                } else if id.starts_with("omher-rewind-") {
+                    // the conversation is back to before the person's last message: the chat takes that message
+                    // back and offers its text again
+                    if s(r, "subtype") == "success" && body.get("rewound").and_then(Value::as_bool) == Some(true) {
+                        self.sent_uuids.pop();
+                        st.emit(ev("rewound", json!({"text": s(body, "prefillText")})));
+                    } else {
+                        let why = if s(r, "error").is_empty() { s(body, "error") } else { s(r, "error") };
+                        st.emit(ev("session.error", json!({"message": clip(&format!("Not taken back: {}", if why.is_empty() { "Claude Code refused" } else { &why }), 200)})));
+                    }
+                    st.emit(ev("session.info", json!({"rewind": !self.sent_uuids.is_empty()})));
                 } else if id.starts_with("omher-model-") {
                     if s(r, "subtype") == "success" {
                         let m = s(body, "model");
@@ -1093,26 +1394,37 @@ impl Adapter for Claude {
                                 let name = self.subs.subs.get(&id).map(|x| if x.goal.is_empty() { x.name.clone() } else { x.goal.clone() }).unwrap_or_default();
                                 let n = st.events.len() - 1;
                                 tag_asks(&mut st, n, &id, &name);
+                                self.ask_subs.insert(rid.clone(), id);
                             }
                             return st;
                         }
                     }
                     let shown = if s(req, "display_name").is_empty() { name.clone() } else { s(req, "display_name") };
+                    // plan mode's end: the plan the agent wrote (markdown, whole), asked as one yes or no; Claude Code
+                    // offers no rule to keep for it, so there is no "for session"
+                    let plan = if name == "ExitPlanMode" { input.get("plan").and_then(Value::as_str).map(|p| p.chars().take(PLAN_CHARS).collect::<String>()) } else { None };
                     let (title, command) = match tool_kind(&name) {
+                        _ if plan.is_some() => ("Start working on this plan?".to_string(), String::new()),
                         "terminal" => ("Run this command?".to_string(), tool_detail(&input)),
                         "patch" => {
                             let path = ["file_path", "path", "notebook_path"].iter().map(|k| s(&input, k)).find(|p| !p.is_empty()).unwrap_or_default();
                             (format!("Allow {shown} to change {}?", if path.is_empty() { "files".to_string() } else { rel(&path, &self.cwd) }), String::new())
                         }
-                        _ => (format!("Allow {shown}?"), tool_detail(&input)),
+                        _ => (format!("Allow {shown}?"), ask_detail(&name, &input)),
                     };
                     self.pending.insert(rid.clone(), ClaudeAsk::Tool(name, input, req.get("permission_suggestions").cloned().unwrap_or(Value::Null)));
-                    st.emit(ev("approval.request", with_cwd(json!({"request_id": rid, "title": title, "command": command, "choices": CHOICES}), &self.cwd)));
+                    let mut f = json!({"request_id": rid, "title": title, "command": command, "choices": CHOICES});
+                    if let Some(p) = plan {
+                        f["plan"] = Value::String(p);
+                        f["choices"] = json!(["deny", "once"]);
+                    }
+                    st.emit(ev("approval.request", with_cwd(f, &self.cwd)));
                     // asked inside a subagent (`agent_id`): the card says which one
                     if let Some(id) = self.sub_of(req) {
                         let name = self.subs.subs.get(&id).map(|x| if x.goal.is_empty() { x.name.clone() } else { x.goal.clone() }).unwrap_or_default();
                         let n = st.events.len() - 1;
                         tag_asks(&mut st, n, &id, &name);
+                        self.ask_subs.insert(rid.clone(), id);
                     }
                 } else {
                     // hooks, MCP messages …: omher registers none of them
@@ -1122,6 +1434,7 @@ impl Adapter for Claude {
             // Stop (or Claude Code itself) withdrew a permission request it had asked
             "control_cancel_request" => {
                 let rid = s(&v, "request_id");
+                self.ask_subs.remove(&rid);
                 if self.pending.remove(&rid).is_some() {
                     st.emit(ev("prompt.expired", json!({"request_id": rid, "reason": "cancelled"})));
                 }
@@ -1140,7 +1453,7 @@ impl Adapter for Claude {
                         }
                         "thinking_delta" => {
                             self.begin(&mut st, true);
-                            st.emit(ev("thinking", json!({})));
+                            st.emit(thinking_event(&s(d, "thinking")));
                         }
                         _ => {}
                     }
@@ -1171,7 +1484,18 @@ impl Adapter for Claude {
                                 continue; // it shows as the question card
                             }
                             self.begin(&mut st, true);
+                            // its todo list: one checklist that changes in place, not a step per update
+                            if CLAUDE_TODO_TOOLS.contains(&name.as_str()) {
+                                if self.todo_call(&name, &s(b, "id"), &input) {
+                                    st.emit(self.plan());
+                                }
+                                continue;
+                            }
                             st.emit(ev("tool.start", json!({"tool_id": s(b, "id"), "name": tool_kind(&name), "detail": call_detail(&name, &input, &self.cwd)})));
+                            // a file edit: the change it asks for, until its result says what it did
+                            if let Some(f) = input_diff(&name, &input, &self.cwd) {
+                                st.emit(ev("tool.diff", json!({"tool_id": s(b, "id"), "files": [f]})));
+                            }
                             // a subagent: one Agent/Task call; the calls of one message start together (one fan-out)
                             if tool_kind(&name) == "delegate_task" {
                                 let id = s(b, "id");
@@ -1196,6 +1520,13 @@ impl Adapter for Claude {
             }
             // Claude Code took a message the person sent (`--replay-user-messages`): a queued one is not waiting now
             "user" if !sub && v.get("isReplay").and_then(Value::as_bool) == Some(true) => {
+                let uuid = s(&v, "uuid");
+                if !uuid.is_empty() {
+                    self.sent_uuids.push(uuid);
+                    if self.sent_uuids.len() == 1 {
+                        st.emit(ev("session.info", json!({"rewind": true})));
+                    }
+                }
                 self.waiting.take(&mut st);
                 // a message queued behind a stopped turn starts its own
                 self.begin(&mut st, false);
@@ -1206,11 +1537,31 @@ impl Adapter for Claude {
                     if s(b, "type") == "tool_result" {
                         let ok = !b.get("is_error").and_then(Value::as_bool).unwrap_or(false);
                         let tid = s(b, "tool_use_id");
+                        // a task Claude Code created: from now on its own id names it (TaskUpdate's taskId)
+                        let task_id = tur.get("task").map(|t| s(t, "id")).unwrap_or_default();
+                        if let Some(t) = self.tasks.iter_mut().find(|t| t.0 == tid) {
+                            if !task_id.is_empty() {
+                                t.0 = task_id;
+                            }
+                            continue;
+                        }
+                        // the change the edit made, with the lines around it
+                        if ok {
+                            if let Some(f) = claude_result_diff(&tur, &self.cwd) {
+                                st.emit(ev("tool.diff", json!({"tool_id": tid, "files": [f]})));
+                            }
+                        }
                         st.emit(ev("tool.end", json!({"tool_id": tid, "name": "", "ok": ok, "ms": 0})));
                         // a subagent's hand-back: its own words (`tool_use_result.content`), not the frame around them;
                         // a background one only launched here and ends with its task notification
                         if self.subs.has(&tid) && matches!(s(&tur, "status").as_str(), "async_launched" | "teammate_spawned") {
                             self.bg_subs.insert(tid.clone());
+                            // its launch names the model it runs on (a foreground one names it in its hand-back)
+                            let model = s(&tur, "resolvedModel");
+                            if let Some(x) = self.subs.subs.get_mut(&tid).filter(|x| !model.is_empty() && x.model != model) {
+                                x.model = model;
+                                st.events.extend(self.subs.event(&tid, "running", json!({})));
+                            }
                         } else if self.subs.has(&tid) {
                             let answer = claude_answer(&tur, b);
                             let secs = tur.get("totalDurationMs").and_then(Value::as_u64).map(|ms| ms as f64 / 1000.0);
@@ -1281,9 +1632,19 @@ impl Adapter for Claude {
                 st.out(json!({"type": "user", "session_id": "", "parent_tool_use_id": null,
                               "message": {"role": "user", "content": content}}));
             }
-            Input::Interrupt => self.control(&mut st, "interrupt", json!({"subtype": "interrupt"})),
+            Input::Interrupt => {
+                self.control(&mut st, "interrupt", json!({"subtype": "interrupt"}));
+                // no turn runs: what is left is background work, and Stop is meant for it (the header's Stop beside
+                // "1 still running in the background"); a background command stops at once only by its own stop_task
+                if !self.turn {
+                    for id in self.bg_commands.clone() {
+                        self.control(&mut st, "stoptask", json!({"subtype": "stop_task", "task_id": id}));
+                    }
+                }
+            }
             Input::Approve { request_id, choice } => {
                 let Some(ClaudeAsk::Tool(name, input, suggestions)) = self.pending.remove(&request_id) else { return Err("no such request".into()) };
+                self.ask_subs.remove(&request_id);
                 let response = match choice.as_str() {
                     "deny" => json!({"behavior": "deny", "message": "The person denied this in omher."}),
                     "once" => json!({"behavior": "allow", "updatedInput": input}),
@@ -1312,6 +1673,7 @@ impl Adapter for Claude {
             }
             Input::Clarify { request_id, answer } => {
                 let Some(ClaudeAsk::Question(mut input, ids)) = self.pending.remove(&request_id) else { return Err("no such question".into()) };
+                self.ask_subs.remove(&request_id);
                 let qids: Vec<String> = ids.iter().map(|(q, _)| q.clone()).collect();
                 let mut answers = Map::new();
                 for (qid, a) in answers_by_qid(&answer, &qids) {
@@ -1328,6 +1690,14 @@ impl Adapter for Claude {
                 st.out(json!({"type": "control_response", "response": {"subtype": "success", "request_id": request_id, "response": response}}));
             }
             Input::Model { model } => self.control(&mut st, "model", json!({"subtype": "set_model", "model": model})),
+            // Claude Code's own rewind: the conversation goes back to before the last message it took
+            Input::Rewind => {
+                if self.turn {
+                    return Err("wait until the turn ends".into());
+                }
+                let Some(uuid) = self.sent_uuids.last().cloned() else { return Err("nothing to take back".into()) };
+                self.control(&mut st, "rewind", json!({"subtype": "rewind_conversation", "target_message_uuid": uuid}));
+            }
             // Claude Code's own switch; it answers with a status line carrying the new mode
             Input::Mode { mode } => {
                 if !modes_for("claude").contains(&mode.as_str()) {
@@ -1375,6 +1745,8 @@ pub struct Codex {
     queued: Vec<(String, Vec<Picture>, String)>,
     /// open approvals and questions by our request id
     pending: HashMap<String, CodexAsk>,
+    /// the sub-agent thread that asked each pending request, when one did
+    ask_helpers: HashMap<String, String>,
     /// diff summaries of fileChange items, shown on their approval card
     changes: HashMap<String, String>,
     /// the last error notification was a 401 (not signed in)
@@ -1392,6 +1764,10 @@ pub struct Codex {
     /// Codex's sub-agents by their own thread id. The app-server streams their threads on this connection; their
     /// events become `subagent` events and never touch the person's turn, its answer or its Stop.
     helpers: Subagents,
+    /// the person's turns Codex named in this process, oldest first: a rewind reverts the thread to before the last
+    turns: Vec<String>,
+    /// reasoning items that streamed a summary: their raw text is not shown as well
+    summarized: std::collections::HashSet<String>,
 }
 
 const CODEX_SIGNED_OUT: &str = "Codex is not signed in. Sign in from Settings › Accounts (or run `codex login`), then Restart.";
@@ -1411,6 +1787,7 @@ impl Codex {
             labels: HashMap::new(),
             queued: vec![],
             pending: HashMap::new(),
+            ask_helpers: HashMap::new(),
             changes: HashMap::new(),
             unauthorized: false,
             stop_asked: false,
@@ -1420,6 +1797,8 @@ impl Codex {
             skills: HashMap::new(),
             waiting: Waiting::default(),
             helpers: Subagents::new("codex"),
+            turns: Vec::new(),
+            summarized: Default::default(),
         }
     }
     fn call(&mut self, st: &mut Step, method: &'static str, params: Value) {
@@ -1466,6 +1845,12 @@ impl Codex {
     /// Codex named the running turn: a Stop pressed before that interrupts it now.
     fn named(&mut self, st: &mut Step, turn: &str) {
         self.turn_id = Some(turn.into());
+        if self.turns.last().map(String::as_str) != Some(turn) {
+            self.turns.push(turn.into());
+            if self.turns.len() == 1 {
+                st.emit(ev("session.info", json!({"rewind": true})));
+            }
+        }
         if std::mem::take(&mut self.stop_asked) && self.turn {
             let thread = self.thread.clone().unwrap_or_default();
             self.call(st, "turn/interrupt", json!({"threadId": thread, "turnId": turn}));
@@ -1476,8 +1861,12 @@ impl Codex {
         if self.turn {
             self.turn = false;
             self.turn_id = None;
-            // approvals die with the turn; a question asked in a message is answered with the next turn
-            self.pending.retain(|_, a| matches!(a, CodexAsk::Message));
+            // approvals die with the turn, except a sub-agent's that still runs (its ask follows it, as Claude Code's
+            // background subagents' do); a question asked in a message is answered with the next turn
+            let open = self.helpers.open();
+            let keep: Vec<String> = self.ask_helpers.iter().filter(|(_, t)| open.contains(t)).map(|(r, _)| r.clone()).collect();
+            self.pending.retain(|r, a| matches!(a, CodexAsk::Message) || keep.contains(r));
+            self.ask_helpers.retain(|r, _| keep.contains(r));
             let mut f = json!({"outcome": outcome});
             if let Some(e) = error.filter(|e| !e.is_empty()) {
                 f["error"] = Value::String(e);
@@ -1554,10 +1943,24 @@ impl Codex {
                     return self.helper_activity(st, &item, false);
                 }
                 if let Some((tool, step)) = self.item_step(&item) {
-                    self.helpers.step(st, thread, &tool, &step);
+                    // its file change carries the patch, as the session's own does: the step opens to it
+                    let files = if s(&item, "type") == "fileChange" { codex_diff(&item, &self.cwd) } else { vec![] };
+                    if files.is_empty() {
+                        self.helpers.step(st, thread, &tool, &step);
+                    } else {
+                        self.helpers.edit(st, thread, &step, files);
+                    }
                 }
             }
             "item/completed" => match s(&item, "type").as_str() {
+                // what the change finally was (it may differ from what it asked)
+                "fileChange" => {
+                    let files = codex_diff(&item, &self.cwd);
+                    if !files.is_empty() {
+                        let step = self.file_changes(&item);
+                        self.helpers.edit(st, thread, &step, files);
+                    }
+                }
                 "agentMessage" => {
                     let t = s(&item, "text");
                     if !t.trim().is_empty() {
@@ -1658,6 +2061,8 @@ impl Adapter for Codex {
                     st.emit(ev("session.note", json!({"kind": "new_conversation", "text": clip(&format!("The earlier Codex conversation was not found ({msg}); a new one started."), 240)})));
                     let cwd = self.cwd.clone();
                     self.call(&mut st, "thread/start", json!({"cwd": cwd}));
+                } else if what == "thread/revert" {
+                    st.emit(ev("session.error", json!({"message": clip(&format!("Not taken back: {msg}"), 200)})));
                 } else if what == "turn/start" {
                     self.end(&mut st, "error", Some(clip(&msg, 200)));
                 } else if what == "turn/interrupt" && self.turn {
@@ -1727,6 +2132,12 @@ impl Adapter for Codex {
                     if let Some(t) = r["turn"].get("id").and_then(Value::as_str) {
                         self.named(&mut st, t);
                     }
+                }
+                // the thread is back to before the person's last turn (its files stay as they are)
+                "thread/revert" => {
+                    self.turns.pop();
+                    st.emit(ev("rewound", json!({})));
+                    st.emit(ev("session.info", json!({"rewind": !self.turns.is_empty()})));
                 }
                 "model/list" => {
                     let list: Vec<&Value> = r.get("data").and_then(Value::as_array).into_iter().flatten().filter(|m| !m.get("hidden").and_then(Value::as_bool).unwrap_or(false)).collect();
@@ -1811,6 +2222,7 @@ impl Adapter for Codex {
             if self.is_helper(&thread) {
                 let name = self.helper(&thread, "", "").name.clone();
                 tag_asks(&mut st, n, &thread, &name);
+                self.ask_helpers.insert(key, thread.clone());
             }
             return st;
         }
@@ -1850,7 +2262,41 @@ impl Adapter for Codex {
                     st.emit(ev("delta", json!({"text": t})));
                 }
             }
-            "item/reasoning/textDelta" | "item/reasoning/summaryTextDelta" => st.emit(ev("thinking", json!({}))),
+            // its reasoning: the summary when Codex writes one, else the raw text
+            "item/reasoning/summaryTextDelta" => {
+                self.summarized.insert(s(&p, "itemId"));
+                st.emit(thinking_event(&s(&p, "delta")));
+            }
+            "item/reasoning/summaryPartAdded" => st.emit(thinking_event("\n\n")),
+            "item/reasoning/textDelta" => {
+                let t = if self.summarized.contains(&s(&p, "itemId")) { String::new() } else { s(&p, "delta") };
+                st.emit(thinking_event(&t));
+            }
+            // its plan: the whole list each time, one checklist that changes in place
+            "turn/plan/updated" if self.turn => {
+                let items: Vec<(String, String)> = p
+                    .get("plan")
+                    .and_then(Value::as_array)
+                    .into_iter()
+                    .flatten()
+                    .map(|x| {
+                        let st = match s(x, "status").as_str() {
+                            "inProgress" => "in_progress",
+                            "completed" => "completed",
+                            _ => "pending",
+                        };
+                        (s(x, "step"), st.to_string())
+                    })
+                    .collect();
+                st.emit(plan_event(&items));
+            }
+            // a file change's patch moved before it ran (Codex reworked it): the diff view follows
+            "item/fileChange/patchUpdated" => {
+                let files = codex_diff(&json!({"changes": p.get("changes").cloned().unwrap_or(Value::Null)}), &self.cwd);
+                if !files.is_empty() {
+                    st.emit(ev("tool.diff", json!({"tool_id": s(&p, "itemId"), "files": files})));
+                }
+            }
             "item/started" => {
                 match s(&item, "type").as_str() {
                     // Codex recorded a message the person sent (our id as its clientId)
@@ -1864,6 +2310,13 @@ impl Adapter for Codex {
                     _ => {
                         if let Some((name, detail)) = self.item_step(&item) {
                             st.emit(ev("tool.start", json!({"tool_id": s(&item, "id"), "name": name, "detail": detail})));
+                            // a file change carries its patch: the diff view shows it
+                            if s(&item, "type") == "fileChange" {
+                                let files = codex_diff(&item, &self.cwd);
+                                if !files.is_empty() {
+                                    st.emit(ev("tool.diff", json!({"tool_id": s(&item, "id"), "files": files})));
+                                }
+                            }
                         }
                     }
                 }
@@ -1897,6 +2350,13 @@ impl Adapter for Codex {
                         }
                     }
                     "commandExecution" | "fileChange" | "mcpToolCall" | "dynamicToolCall" | "webSearch" | "imageView" | "sleep" => {
+                        // what the change finally was (it may differ from what it asked)
+                        if s(&item, "type") == "fileChange" {
+                            let files = codex_diff(&item, &self.cwd);
+                            if !files.is_empty() {
+                                st.emit(ev("tool.diff", json!({"tool_id": iid, "files": files})));
+                            }
+                        }
                         let status = s(&item, "status");
                         let ok = !matches!(status.as_str(), "failed" | "declined");
                         st.emit(ev("tool.end", json!({"tool_id": iid, "name": "", "ok": ok, "ms": item.get("durationMs").and_then(Value::as_u64).unwrap_or(0)})));
@@ -2035,6 +2495,14 @@ impl Adapter for Codex {
                 self.mode = Some(m);
                 st.emit(ev("session.info", json!({"mode": mode})));
             }
+            // Codex's own revert: the thread goes back to before the person's last turn
+            Input::Rewind => {
+                if self.turn {
+                    return Err("wait until the turn ends".into());
+                }
+                let (Some(thread), Some(turn)) = (self.thread.clone(), self.turns.last().cloned()) else { return Err("nothing to take back".into()) };
+                self.call(&mut st, "thread/revert", json!({"threadId": thread, "beforeTurnId": turn}));
+            }
             Input::Effort { effort } => {
                 let model = self.model.clone().unwrap_or_else(|| self.model_id.clone());
                 let known = self.efforts.get(&model).and_then(Value::as_array).is_some_and(|l| l.iter().any(|e| e == effort.as_str()));
@@ -2085,6 +2553,15 @@ pub struct Pi {
     calls_subs: HashMap<String, Vec<String>>,
     /// background work OmO says is still running (`session_lifecycle.waitingOn.background`)
     background: usize,
+    /// OmO's own folder (`~/.omo`): its record of each subagent, read when a `task` result names no answer
+    omo_home: Option<PathBuf>,
+    /// the conversation OmO reported (`get_state`): a subagent record must belong to it
+    session: String,
+    /// OmO `todo` calls in flight: their list is the turn's checklist, not a step
+    todo_calls: std::collections::HashSet<String>,
+    /// OmO ended a run with `failure`: the turn's end waits for what OmO says next, a retry of its own
+    /// (`auto_retry_start`) or its last word on it (`auto_retry_end`, or the run settling)
+    held: bool,
 }
 
 /// oh-my-pi's tool approval as a select (`Allow tool: bash\nCommand: ls -la` with Approve / Approve bash for this
@@ -2108,6 +2585,48 @@ fn pi_approval(title: &str, options: &[String]) -> Option<(String, String, PiAsk
     Some((title, command, PiAsk::Approve { once, session, deny }))
 }
 
+/// OmO's own folder: `~/.omo`.
+fn omo_home_dir() -> Option<PathBuf> {
+    std::env::var_os("HOME").or_else(|| std::env::var_os("USERPROFILE")).filter(|h| !h.is_empty()).map(|h| PathBuf::from(h).join(".omo"))
+}
+
+/// Seconds since the epoch of an ISO time as OmO writes it (`2026-11-12T15:53:23.423Z`, UTC).
+fn iso_secs(t: &str) -> Option<f64> {
+    let t = t.strip_suffix('Z')?;
+    let (date, time) = t.split_once('T')?;
+    let d: Vec<i64> = date.split('-').map(|x| x.parse().ok()).collect::<Option<_>>()?;
+    let (hms, frac) = time.split_once('.').unwrap_or((time, "0"));
+    let h: Vec<i64> = hms.split(':').map(|x| x.parse().ok()).collect::<Option<_>>()?;
+    if d.len() != 3 || h.len() != 3 {
+        return None;
+    }
+    let (y, m) = if d[1] <= 2 { (d[0] - 1, d[1] + 9) } else { (d[0], d[1] - 3) };
+    let era = y.div_euclid(400);
+    let yoe = y - era * 400;
+    let doy = (153 * m + 2) / 5 + d[2] - 1;
+    let days = era * 146097 + yoe * 365 + yoe / 4 - yoe / 100 + doy - 719468;
+    Some((days * 86400 + h[0] * 3600 + h[1] * 60 + h[2]) as f64 + format!("0.{frac}").parse::<f64>().ok()?)
+}
+
+/// OmO's todo list as its `todo` result states it (`details.phases[].tasks[] {content, status}`), in order.
+fn omo_todo(d: &Value) -> Option<Vec<(String, String)>> {
+    let phases = d.get("phases")?.as_array()?;
+    Some(
+        phases
+            .iter()
+            .flat_map(|p| p.get("tasks").and_then(Value::as_array).into_iter().flatten())
+            .map(|t| {
+                let st = match s(t, "status").as_str() {
+                    "in_progress" => "in_progress",
+                    "completed" => "completed",
+                    _ => "pending",
+                };
+                (s(t, "content"), st.to_string())
+            })
+            .collect(),
+    )
+}
+
 impl Pi {
     pub fn new(cwd: &str, label: &str) -> Pi {
         let agent = match label {
@@ -2115,7 +2634,42 @@ impl Pi {
             "oh-my-pi" => "omp",
             _ => "pi",
         };
-        Pi { cwd: cwd.into(), label: label.into(), subs: Subagents::new(agent), ..Pi::default() }
+        let omo_home = if agent == "omo" { omo_home_dir() } else { None };
+        Pi { cwd: cwd.into(), label: label.into(), subs: Subagents::new(agent), omo_home, ..Pi::default() }
+    }
+    /// OmO's own record of subagent `task_id` (`st_…`), read-only: the same `senpi-task/tasks/st_*.json` files the
+    /// Plans reader reads (BOUNDARY rule 16), under `<omo>/agent/projects/*/` or this session's own folder's `.omo`,
+    /// never through a link, and only a record of this session. `None` when there is none or it does not parse.
+    fn omo_record(&self, task_id: &str) -> Option<Value> {
+        let ok = task_id.len() <= 67 && task_id.strip_prefix("st_").is_some_and(|r| !r.is_empty() && r.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'_' || b == b'-'));
+        if !ok {
+            return None;
+        }
+        let file = format!("{task_id}.json");
+        let mut stores: Vec<PathBuf> = vec![];
+        let real_dir = |p: &Path| std::fs::symlink_metadata(p).is_ok_and(|m| m.is_dir());
+        if !self.cwd.is_empty() {
+            let dot = Path::new(&self.cwd).join(".omo");
+            if real_dir(&dot) && real_dir(&dot.join("senpi-task")) {
+                stores.push(dot.join("senpi-task").join("tasks"));
+            }
+        }
+        if let Some(root) = self.omo_home.as_ref().map(|h| h.join("agent").join("projects")).filter(|r| real_dir(r)) {
+            for e in std::fs::read_dir(&root).ok()?.flatten() {
+                if e.file_type().is_ok_and(|t| t.is_dir()) {
+                    stores.push(e.path().join("senpi-task").join("tasks"));
+                }
+            }
+        }
+        stores.into_iter().filter(|d| real_dir(d)).find_map(|d| {
+            let p = d.join(&file);
+            let m = std::fs::symlink_metadata(&p).ok()?;
+            if !m.is_file() || m.len() > 1 << 20 {
+                return None;
+            }
+            let rec: Value = serde_json::from_str(&std::fs::read_to_string(&p).ok()?).ok()?;
+            (s(&rec, "task_id") == task_id && (self.session.is_empty() || s(&rec, "root_session_id") == self.session)).then_some(rec)
+        })
     }
     /// A `task` call: one subagent per entry of `tasks` (or the call itself with one task), one fan-out per call.
     fn task_start(&mut self, st: &mut Step, call: &str, args: &Value) {
@@ -2146,19 +2700,39 @@ impl Pi {
             if !tid.is_empty() {
                 self.task_ids.insert(tid, id.clone());
             }
-            let model = it.get("resolved_model").map(|m| s(m, "model_id")).unwrap_or_default();
+            let status = s(&it, "status");
+            // a foreground result (OmO 5.1.56) names no answer: OmO's own record of that task id has it, with the
+            // model it ran on and its times, as Plans reads them
+            let own = if status == "completed" { "final_response" } else { "error" };
+            let rec = if !failed && matches!(status.as_str(), "completed" | "failed" | "error") && s(&it, own).is_empty() { self.omo_record(&s(&it, "task_id")) } else { None };
+            let rec = rec.filter(|r| s(r, "status") == status);
+            let mut model = it.get("resolved_model").map(|m| s(m, "model_id")).unwrap_or_default();
+            let mut secs = None;
+            if let Some(r) = &rec {
+                let m = r.get("effective_model").map(|m| s(m, "model_id")).filter(|m| !m.is_empty()).unwrap_or_else(|| s(r, "model"));
+                if !m.is_empty() {
+                    model = m.rsplit('/').next().unwrap_or(&m).to_string();
+                }
+                if let (Some(a), Some(b)) = (iso_secs(&s(r, "started_at")), iso_secs(&s(r, "terminal_at"))) {
+                    secs = (b >= a).then_some(b - a);
+                }
+            }
             if let Some(x) = self.subs.subs.get_mut(id) {
                 if !model.is_empty() {
                     x.model = model;
                 }
             }
-            match s(&it, "status").as_str() {
+            let answer = |k: &str| if s(&it, k).is_empty() { rec.as_ref().map(|r| s(r, k)).unwrap_or_default() } else { s(&it, k) };
+            match status.as_str() {
                 _ if failed => {
                     let e = v["result"]["content"].as_array().and_then(|a| a.first()).map(|b| s(b, "text")).unwrap_or_default();
                     self.subs.end(st, id, "failed", if e.is_empty() { "failed" } else { &e }, None)
                 }
-                "completed" => self.subs.end(st, id, "done", &s(&it, "final_response"), None),
-                "failed" | "error" => self.subs.end(st, id, "failed", &s(&it, "error"), None),
+                "completed" => self.subs.end(st, id, "done", &answer("final_response"), secs),
+                "failed" | "error" => {
+                    let e = answer("error");
+                    self.subs.end(st, id, "failed", if e.is_empty() { "failed" } else { &e }, secs)
+                }
                 "cancelled" | "aborted" => self.subs.end(st, id, "cancelled", "", None),
                 _ => st.events.extend(self.subs.event(id, "running", json!({}))),
             }
@@ -2207,6 +2781,7 @@ impl Pi {
         st.out(fields);
     }
     fn end(&mut self, st: &mut Step) {
+        self.held = false;
         if self.turn {
             self.turn = false;
             self.streaming = false;
@@ -2229,14 +2804,57 @@ impl Pi {
         self.last_stop.clear();
         self.last_error.clear();
     }
-    /// A calm line for an error: a missing login names where to sign in, anything else its first line.
+    /// A calm line for an error: a missing login names where to sign in, a provider's raw reply
+    /// (`400 {"type":"error","error":{"message":…}}`) its message, anything else its first line.
     fn friendly(&self, err: &str) -> String {
         let who = if self.label.is_empty() { "pi" } else { &self.label };
         if err.contains("No API key") || err.contains("/login") || err.contains("No default model") {
             return format!("{who} is not signed in. Open Terminal and run /login, then Restart.");
         }
-        clip(err.lines().find(|l| !l.trim().is_empty()).unwrap_or(err), 200)
+        let line = last_line(err);
+        clip(&provider_message(line).unwrap_or_else(|| line.to_string()), 200)
     }
+    /// What OmO said after a run that ended with `failure`, while its end waits (`held`). True when the line was
+    /// taken here (a retry starts, or its last word ends the turn).
+    fn after_failure(&mut self, st: &mut Step, v: &Value) -> bool {
+        match s(v, "type").as_str() {
+            // OmO tries again by itself: the same turn goes on, and its line says which try this is
+            "auto_retry_start" => {
+                self.held = false;
+                self.last_stop.clear();
+                self.last_error.clear();
+                let n = v.get("attempt").and_then(Value::as_u64).unwrap_or(1);
+                let max = v.get("maxAttempts").and_then(Value::as_u64).unwrap_or(0);
+                st.emit(ev("status", json!({"text": format!("Retrying {n} of {max}"), "retry": {"attempt": n, "max": max}})));
+                true
+            }
+            // the retries are over: the turn ends once, with OmO's own words for why
+            "auto_retry_end" => {
+                self.held = false;
+                let why = s(v, "finalError");
+                if v.get("success").and_then(Value::as_bool) != Some(true) && !why.is_empty() {
+                    self.last_stop = "error".into();
+                    self.last_error = why;
+                }
+                self.end(st);
+                true
+            }
+            // no retry came: the run settled (or the next one starts) on that failure
+            "agent_settled" | "agent_idle" | "agent_start" | "model_config_error" | "prompt_result" => {
+                self.held = false;
+                self.end(st);
+                false
+            }
+            _ => false,
+        }
+    }
+}
+
+/// The message of a provider's raw error reply, `400 {"type":"error","error":{"message":"…"}}`.
+fn provider_message(line: &str) -> Option<String> {
+    let body: Value = serde_json::from_str(line[line.find('{')?..].trim()).ok()?;
+    let m = body.get("error").map(|e| if e.is_string() { e.as_str().unwrap_or_default().to_string() } else { s(e, "message") }).unwrap_or_else(|| s(&body, "message"));
+    (!m.trim().is_empty()).then_some(m)
 }
 
 /// `session.usage` from an rpc `contextUsage` (`{tokens, contextWindow}`), when it has both.
@@ -2299,6 +2917,9 @@ impl Adapter for Pi {
     fn on_line(&mut self, line: &str) -> Step {
         let mut st = Step::default();
         let Ok(v) = serde_json::from_str::<Value>(line) else { return st };
+        if self.held && self.after_failure(&mut st, &v) {
+            return st;
+        }
         match s(&v, "type").as_str() {
             "response" => {
                 let what = self.calls.remove(&s(&v, "id")).unwrap_or("");
@@ -2319,6 +2940,7 @@ impl Adapter for Pi {
                 match what {
                     "get_state" => {
                         let model = d.get("model").map(|m| s(m, "name")).filter(|n| !n.is_empty() && n != "unknown").or_else(|| d.get("model").map(|m| s(m, "id")).filter(|n| n != "unknown")).unwrap_or_default();
+                        self.session = s(d, "sessionId");
                         let mut f = json!({"agent_session": s(d, "sessionId"), "model": model});
                         let level = s(d, "thinkingLevel");
                         if !level.is_empty() {
@@ -2373,7 +2995,8 @@ impl Adapter for Pi {
                             st.emit(ev("delta", json!({"text": t})));
                         }
                     }
-                    "thinking_delta" | "thinking_start" => st.emit(ev("thinking", json!({}))),
+                    "thinking_delta" => st.emit(thinking_event(&s(e, "delta"))),
+                    "thinking_start" => st.emit(thinking_event("")),
                     _ => {}
                 }
             }
@@ -2405,7 +3028,10 @@ impl Adapter for Pi {
                 let name = s(&v, "toolName");
                 let args = v.get("args").cloned().unwrap_or(Value::Null);
                 let call = s(&v, "toolCallId");
-                if name == "task" {
+                if name == "todo" && self.label == "OmO" {
+                    // OmO's todo list: the turn's checklist once its result says how the list stands, never a step
+                    self.todo_calls.insert(call);
+                } else if name == "task" {
                     // the step names its subagents, never the call's raw JSON; each one gets its own row
                     let names: Vec<String> = args.get("tasks").and_then(Value::as_array).into_iter().flatten().map(|t| s(t, "name")).filter(|n| !n.is_empty()).collect();
                     let detail = if names.is_empty() { tool_detail(&args) } else { names.join(", ") };
@@ -2413,11 +3039,21 @@ impl Adapter for Pi {
                     self.task_start(&mut st, &call, &args);
                 } else {
                     st.emit(ev("tool.start", json!({"tool_id": call, "name": tool_kind(&name), "detail": call_detail(&name, &args, &self.cwd)})));
+                    // pi's write / edit name the text they change: the diff view shows it
+                    if let Some(f) = input_diff(&name, &args, &self.cwd) {
+                        st.emit(ev("tool.diff", json!({"tool_id": call, "files": [f]})));
+                    }
                 }
             }
             "tool_execution_end" => {
                 let ok = !v.get("isError").and_then(Value::as_bool).unwrap_or(false);
                 let call = s(&v, "toolCallId");
+                if self.todo_calls.remove(&call) {
+                    if let Some(items) = omo_todo(&v["result"]["details"]) {
+                        st.emit(plan_event(&items));
+                    }
+                    return st;
+                }
                 st.emit(ev("tool.end", json!({"tool_id": call, "name": "", "ok": ok, "ms": 0})));
                 self.task_end(&mut st, &call, &v);
             }
@@ -2439,10 +3075,19 @@ impl Adapter for Pi {
                 // says the run was aborted
                 if v.get("aborted").and_then(Value::as_bool) == Some(true) {
                     self.last_stop = "aborted".into();
+                } else if self.turn && v.get("failure").is_some_and(Value::is_object) {
+                    // OmO may retry this by itself (`auto_retry_start` comes after agent_end, whatever its
+                    // `willRetry` says): one message stays one turn until OmO says how it went
+                    self.held = true;
+                    return st;
                 }
                 self.end(&mut st)
             }
             "prompt_result" if v.get("agentInvoked").and_then(Value::as_bool) == Some(false) => self.end(&mut st),
+            // OmO's own retry worked (it says so before that run's agent_end): the line stops saying it retries
+            "auto_retry_end" if self.turn && v.get("success").and_then(Value::as_bool) == Some(true) => {
+                st.emit(ev("status", json!({"text": ""})));
+            }
             "extension_ui_request" => {
                 let id = s(&v, "id");
                 let method = s(&v, "method");
@@ -2547,6 +3192,7 @@ impl Adapter for Pi {
                 self.read(&mut st, "get_available_thinking_levels");
             }
             Input::Mode { mode } => return Err(format!("{} has no permission mode here ({mode})", self.label)),
+            Input::Rewind => return Err(format!("{} cannot take a message back here", self.label)),
             Input::Effort { effort } => {
                 if !self.levels.contains(&effort) {
                     return Err(format!("unknown thinking level {effort}"));
@@ -2619,11 +3265,12 @@ fn write_lines(stdin: &ChatInputQueue, lines: &[String]) -> Result<(), String> {
 
 /// Adjacent `delta` events of one read window become one, so a fast token stream is a few UI messages.
 fn merge_deltas(events: Vec<Event>) -> Vec<Event> {
-    let is_delta = |e: &Event| e.as_object().is_some_and(|m| m.len() == 2 && s(e, "event") == "delta" && m.get("text").is_some_and(Value::is_string));
+    // streamed answer text, and streamed thinking text, each joined with the piece right before it of its own kind
+    let joinable = |e: &Event| e.as_object().is_some_and(|m| m.len() == 2 && matches!(s(e, "event").as_str(), "delta" | "thinking") && m.get("text").is_some_and(Value::is_string));
     let mut out: Vec<Event> = Vec::with_capacity(events.len());
     for e in events {
         if let Some(last) = out.last_mut() {
-            if is_delta(last) && is_delta(&e) {
+            if joinable(last) && joinable(&e) && s(last, "event") == s(&e, "event") {
                 let joined = s(last, "text") + &s(&e, "text");
                 last["text"] = Value::String(joined);
                 continue;
@@ -2675,6 +3322,20 @@ fn command_for(argv: &[OsString], cwd: &Path, path_env: Option<OsString>, accoun
     Ok(cmd)
 }
 
+/// `--add-dir <dir>` with `dir` as one argument. A Windows `.cmd` shim runs through `cmd.exe /c`, which parses the
+/// line itself: there the folder goes in as [`cmd_path_arg`] allows it, and a folder it refuses adds nothing (the
+/// person then answers a card per read, as before).
+fn add_dir_args(program: &OsString, dir: &Path) -> Vec<OsString> {
+    let dir = dir.as_os_str().to_owned();
+    if program == "cmd.exe" {
+        return match cmd_path_arg(&dir.to_string_lossy()) {
+            Ok(d) => vec!["--add-dir".into(), d.into()],
+            Err(_) => vec![],
+        };
+    }
+    vec!["--add-dir".into(), dir]
+}
+
 /// How long an agent's rule listing ([`RuleProbe`]) may take before the chat is refused.
 const RULES_DEADLINE: Duration = Duration::from_secs(30);
 
@@ -2682,13 +3343,13 @@ const RULES_DEADLINE: Duration = Duration::from_secs(30);
 /// pipes with no input, with the same `PATH` and account variable the chat gets; `probe.build` turns its output into
 /// the value, and a second listing with the value set must satisfy `probe.kept`. Any doubt (the variable already set
 /// in omher's own environment, a failed or slow listing, output it cannot read, rules that did not hold) is
-/// [`NO_RULES`], and the chat does not start.
-fn agent_rules(probe: &RuleProbe, argv: &[OsString], cwd: &Path, path_env: &OsString, account_env: &[(String, String)]) -> Result<(String, String), String> {
+/// [`no_rules`] (with the agent's name, `label`), and the chat does not start.
+fn agent_rules(probe: &RuleProbe, label: &str, argv: &[OsString], cwd: &Path, path_env: &OsString, account_env: &[(String, String)]) -> Result<(String, String), String> {
     if !cwd.is_absolute() || !cwd.is_dir() {
         return Err(format!("not a folder: {}", cwd.display()));
     }
     if std::env::var_os(probe.var).is_some() {
-        return Err(NO_RULES.into());
+        return Err(no_rules(label));
     }
     let mut argv = argv.to_vec();
     argv.extend(probe.args.iter().map(OsString::from));
@@ -2712,12 +3373,13 @@ fn agent_rules(probe: &RuleProbe, argv: &[OsString], cwd: &Path, path_env: &OsSt
             _ => None,
         }
     };
-    let value = list(account_env).and_then(|l| (probe.build)(&l)).ok_or(NO_RULES)?;
+    let first = list(account_env).ok_or_else(|| no_rules(label))?;
+    let value = (probe.build)(&first).ok_or_else(|| no_rules(label))?;
     let mut env = account_env.to_vec();
     env.push((probe.var.to_string(), value.clone()));
     match list(&env) {
-        Some(again) if (probe.kept)(&value, &again) => Ok((probe.var.to_string(), value)),
-        _ => Err(NO_RULES.into()),
+        Some(again) if (probe.kept)(&first, &value, &again) => Ok((probe.var.to_string(), value)),
+        _ => Err(no_rules(label)),
     }
 }
 
@@ -2730,7 +3392,7 @@ impl ChatSessions {
     /// continues that conversation. `account_env` is `accounts::session_env` for that agent, as for a terminal session:
     /// the chosen account's home variable, or nothing. Anything not on the allow-list, or without a chat
     /// mode, is refused before a process exists.
-    pub fn start_agent<F>(&self, agent_id: &str, cwd: &Path, resume: Option<&str>, account_env: &[(String, String)], sink: F) -> Result<u32, String>
+    pub fn start_agent<F>(&self, agent_id: &str, cwd: &Path, resume: Option<&str>, account_env: &[(String, String)], files: Option<&Path>, sink: F) -> Result<u32, String>
     where
         F: FnMut(ChatOut) + Send + 'static,
     {
@@ -2767,11 +3429,18 @@ impl ChatSessions {
         if let Some(r) = resume.filter(|_| thread.is_none()) {
             argv.extend(resume_args(agent_id, r)?);
         }
-        // an agent whose own default runs tools unasked (OpenCode) gets ask rules built from its own resolved rules,
-        // so nothing the person allows runs unasked and nothing they deny becomes askable; or it does not start
+        // Claude Code reads the files the person attached without a card: the session's own attachment folder
+        // (`session_files::session_dir`, made before the start; a folder made later is not honoured) is its one
+        // extra working directory, as one argument. Reads anywhere else outside `cwd` still ask.
+        if let Some(dir) = files.filter(|_| agent_id == "claude") {
+            argv.extend(add_dir_args(&argv[0], dir));
+        }
+        // an agent whose own default runs tools unasked (OpenCode, Kilo Code) gets ask rules built from its own
+        // resolved rules, so nothing the person allows runs unasked and nothing they deny becomes askable; or it does
+        // not start
         let mut env = account_env.to_vec();
-        if let Some(probe) = acp.and_then(|a| a.rules.as_ref()) {
-            env.push(agent_rules(probe, &program, cwd, &path_env, account_env)?);
+        if let Some((probe, label)) = acp.and_then(|a| a.rules.as_ref().map(|r| (r, a.label))) {
+            env.push(agent_rules(probe, label, &program, cwd, &path_env, account_env)?);
         }
         self.spawn(argv, cwd, Some(path_env), &env, adapter, sink)
     }
@@ -2942,11 +3611,14 @@ impl ChatSessions {
                 }
                 let (mid_turn, err, said) = {
                     let a = adapter.lock().unwrap();
-                    let raw = exit_reason(&tail.lock().unwrap());
+                    // code 0 is an orderly close: what it printed at start (a config warning) is no reason
+                    let raw = exit_why(code, &tail.lock().unwrap());
                     match verdict.lock().unwrap().take() {
                         // the start deadline ended it, and already said so
                         Some(why) => (a.in_turn(), why, true),
                         // it never spoke its protocol and refused omher's chat-mode arguments: an old version
+                        // an orderly close (code 0) failed nothing: no reason, whatever it printed
+                        None if code == Some(0) => (a.in_turn(), String::new(), true),
                         None if !answered.load(Ordering::SeqCst) && !a.unrecognized() && refused_chat_mode(&raw) => (a.in_turn(), no_chat_mode(a.name()), false),
                         None => (a.in_turn(), a.explain(&raw), true),
                     }
@@ -3061,13 +3733,13 @@ mod tests {
         fn build(l: &str) -> Option<String> {
             l.strip_prefix("rules:").map(|r| r.trim().to_string())
         }
-        fn kept(rules: &str, again: &str) -> bool {
+        fn kept(_first: &str, rules: &str, again: &str) -> bool {
             again.trim() == format!("kept {rules}")
         }
         let probe = RuleProbe { args: &[], var: "OMHER_TEST_RULES_VAR", build, kept };
         let tmp = std::env::temp_dir().canonicalize().unwrap();
         let argv: Vec<OsString> = vec!["/bin/sh".into(), "-c".into(), script.into()];
-        agent_rules(&probe, &argv, &tmp, &std::env::var_os("PATH").unwrap(), &[])
+        agent_rules(&probe, "OpenCode", &argv, &tmp, &std::env::var_os("PATH").unwrap(), &[])
     }
 
     #[test]
@@ -3082,8 +3754,36 @@ mod tests {
             r#"if [ -n "$OMHER_TEST_RULES_VAR" ]; then echo "kept other"; else echo "rules: R1"; fi"#, // not kept
             r#"if [ -n "$OMHER_TEST_RULES_VAR" ]; then exit 1; else echo "rules: R1"; fi"#,           // second listing failed
         ] {
-            assert_eq!(rules_with(bad), Err(NO_RULES.to_string()), "{bad}");
+            assert_eq!(rules_with(bad), Err(crate::acp_chat::NO_RULES.to_string()), "{bad}");
         }
+    }
+
+    /// A listed pattern or agent name is not trusted config text: no second listing with a file/env token that
+    /// the CLI would substitute before the preservation proof can run.
+    #[test]
+    #[cfg(unix)]
+    fn a_config_token_refuses_before_the_second_listing() {
+        let dir = std::env::temp_dir().join(format!("omher-token-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let absent = dir.join("not-a-file.txt");
+        assert!(!absent.exists());
+        for id in ["kilo", "opencode"] {
+            let row = acp_agent(id).unwrap();
+            let probe = row.rules.as_ref().unwrap();
+            let primary = if id == "kilo" { "code" } else { "build" };
+            for token in [format!("${{file:{}}}", absent.display()), format!("{{file:{}}}", absent.display()), "${env:HOME}".into(), "{env:HOME}".into()] {
+                let first = format!("{primary} (primary)\n{}\n", json!([{"permission":"bash", "pattern":token, "action":"deny"}]));
+                // /bin/sh is a listing stand-in only: the marker would be written before the second listing's
+                // config was parsed. No file named by the token exists, and no second process is started.
+                let marker = dir.join("listed-again");
+                let script = format!("if [ -n \"${}\" ]; then printf again > '{}'; exit 1; fi; printf '%s' '{}'", probe.var, marker.display(), first);
+                let argv = ["/bin/sh".into(), "-c".into(), script.into()];
+                assert_eq!(agent_rules(probe, row.label, &argv, &dir, &std::env::var_os("PATH").unwrap(), &[]), Err(no_rules(row.label)));
+                assert!(!marker.exists(), "{id}: second listing ran for {token}");
+                assert!(!absent.exists());
+            }
+        }
+        std::fs::remove_dir_all(dir).unwrap();
     }
 
     impl Input {
@@ -3363,9 +4063,40 @@ mod tests {
         assert_eq!((s(&m, "provider"), s(&m, "modelId")), ("anthropic".into(), "claude-x".into()));
     }
 
+    /// H10, recorded from the real Claude Code started with `--add-dir` on the session's attachment folder (made before
+    /// the start): reading the attached copy needs no card; reading a file in another folder still asks.
+    #[test]
+    fn claude_reads_an_attached_file_without_a_card_and_asks_for_anything_else() {
+        let mut c = claude_up();
+        let lines = real("claude-12-attach-read.jsonl");
+        let second = lines.iter().rposition(|l| l.contains("\"subtype\":\"init\"")).unwrap();
+        c.on_input(Input::send("first line of the attached file?")).unwrap();
+        let one = run(&mut c, &lines[..second]);
+        assert!(!names(&one.events).contains(&"approval.request".to_string()), "{:?}", one.events);
+        assert!(one.events.iter().any(|e| s(e, "event") == "tool.start" && s(e, "detail").ends_with("/.omher/session-files/s1/1-meeting notes.txt")));
+        assert!(one.events.iter().any(|e| s(e, "event") == "message" && s(e, "text") == "PERIWINKLE is the first line"));
+        c.on_input(Input::send("read /w/elsewhere/plan.txt")).unwrap();
+        let two = run(&mut c, &lines[second..]);
+        let asks: Vec<&Event> = two.events.iter().filter(|e| s(e, "event") == "approval.request").collect();
+        assert_eq!(asks.len(), 1, "{:?}", two.events);
+        assert!(serde_json::to_string(asks[0]).unwrap().contains("/w/elsewhere/plan.txt"));
+    }
+
+    #[test]
+    fn the_attachment_folder_is_one_add_dir_argument() {
+        // one argv element, spaces and all, exactly the folder given: never split, never a parent
+        let dir = Path::new("/Users/me/.omher/session-files/s12");
+        assert_eq!(add_dir_args(&OsString::from("/opt/bin/claude"), dir), [OsString::from("--add-dir"), OsString::from("/Users/me/.omher/session-files/s12")]);
+        let spaced = Path::new("/Users/Jane Doe/.omher/session-files/s3");
+        assert_eq!(add_dir_args(&OsString::from("/opt/bin/claude"), spaced), [OsString::from("--add-dir"), OsString::from("/Users/Jane Doe/.omher/session-files/s3")]);
+        // through `cmd.exe /c` (a Windows .cmd shim) the folder goes as cmd allows it, or not at all
+        assert_eq!(add_dir_args(&OsString::from("cmd.exe"), Path::new(r"C:\Users\a&b\.omher\session-files\s1")), [OsString::from("--add-dir"), OsString::from(r"C:\Users\a^&b\.omher\session-files\s1")]);
+        assert!(add_dir_args(&OsString::from("cmd.exe"), Path::new(r"C:\Users\50%\.omher\session-files\s1")).is_empty());
+    }
+
     #[test]
     fn only_chat_agents_have_adapters() {
-        for id in ["claude", "codex", "omo", "pi", "omp", "opencode"] {
+        for id in ["claude", "codex", "omo", "pi", "omp", "opencode", "kilo", "gemini", "qwen", "kimi", "copilot", "cline"] {
             assert!(adapter_for(id, "/w", None).is_some(), "{id}");
         }
         // DSH has no adapter: its chat is a run per message (dsh_chat)
@@ -3374,12 +4105,12 @@ mod tests {
         }
         let c = ChatSessions::default();
         let tmp = std::env::temp_dir();
-        assert!(c.start_agent("dsh", &tmp, Some("eee5079a-c52e-4526-b633-f3d8cb7d6394"), &[], |_| {}).is_err());
+        assert!(c.start_agent("dsh", &tmp, Some("eee5079a-c52e-4526-b633-f3d8cb7d6394"), &[], None, |_| {}).is_err());
         for bad in ["omh", "grok", "/bin/sh", "claude -p"] {
-            assert!(c.start_agent(bad, &tmp, None, &[], |_| {}).is_err(), "{bad}");
+            assert!(c.start_agent(bad, &tmp, None, &[], None, |_| {}).is_err(), "{bad}");
         }
-        assert!(c.start_agent("claude", &tmp, Some("--dangerously-skip-permissions"), &[], |_| {}).is_err());
-        assert!(c.start_agent("opencode", &tmp, Some("ses_x --yolo"), &[], |_| {}).is_err());
+        assert!(c.start_agent("claude", &tmp, Some("--dangerously-skip-permissions"), &[], None, |_| {}).is_err());
+        assert!(c.start_agent("opencode", &tmp, Some("ses_x --yolo"), &[], None, |_| {}).is_err());
         assert_eq!(c.count(), 0);
     }
 
@@ -3603,7 +4334,7 @@ mod tests {
             let c = ChatSessions::default();
             let out = Arc::new(Mutex::new(Vec::new()));
             let o = out.clone();
-            let id = c.start_agent("omo", &dir, resume, &[], move |x| o.lock().unwrap().push(x)).unwrap();
+            let id = c.start_agent("omo", &dir, resume, &[], None, move |x| o.lock().unwrap().push(x)).unwrap();
             c.input(id, Input::send(text)).unwrap();
             let deadline = Instant::now() + Duration::from_secs(150);
             while Instant::now() < deadline && !out.lock().unwrap().iter().any(|x| matches!(x, ChatOut::Event(e) if s(e, "event") == "turn.end")) {
@@ -3640,7 +4371,7 @@ mod tests {
             let c = ChatSessions::default();
             let out = Arc::new(Mutex::new(Vec::new()));
             let o = out.clone();
-            let id = c.start_agent(agent, &dir, None, &[], move |x| o.lock().unwrap().push(x)).unwrap();
+            let id = c.start_agent(agent, &dir, None, &[], None, move |x| o.lock().unwrap().push(x)).unwrap();
             if agent == "omo" {
                 // OmO's own default can be a model its provider refuses on this machine: pick one it serves
                 thread::sleep(Duration::from_secs(3));
@@ -3707,7 +4438,7 @@ mod tests {
         let (o, c2, me) = (out.clone(), c.clone(), Arc::new(Mutex::new(0u32)));
         let me2 = me.clone();
         let id = c
-            .start_agent(&agent, &dir, None, &[], move |x| {
+            .start_agent(&agent, &dir, None, &[], None, move |x| {
                 if let ChatOut::Event(e) = &x {
                     if s(e, "event") == "approval.request" {
                         println!("approval {} {}", s(e, "title"), s(e, "command"));
@@ -3736,6 +4467,78 @@ mod tests {
         assert!(all.contains("marigold") && all.contains("cobalt-42"), "{got:?}");
     }
 
+    /// The real check for a session's transcript: the agent (OMHER_REAL_AGENT, default claude) in a temp folder through
+    /// omher's own start, asked for a two-file edit with its todo list; prints what the chat got (each edit's change,
+    /// the todo list, the thinking text), then takes the message back with the agent's own rewind and asks whether it
+    /// remembers it. Approvals for files inside the folder are answered `once`. Spends two short turns:
+    /// `cargo test real_agent_shows_its_work -- --ignored --nocapture`.
+    #[test]
+    #[ignore]
+    fn real_agent_shows_its_work() {
+        let agent = std::env::var("OMHER_REAL_AGENT").unwrap_or_else(|_| "claude".into());
+        let base = std::env::var("OMHER_REAL_DIR").map(std::path::PathBuf::from).unwrap_or_else(|_| std::env::temp_dir().join(format!("omher-real-work-{agent}-{}", std::process::id())));
+        let dir = base.join("proj");
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join("calc.py"), "def add(a, b):\n    return a + b\n\n\ndef sub(a, b):\n    return a - b\n").unwrap();
+        std::fs::write(dir.join("README.md"), "# calc\n\nTiny math helpers.\n").unwrap();
+        let dir = dir.canonicalize().unwrap();
+        let c = Arc::new(ChatSessions::default());
+        let out = Arc::new(Mutex::new(Vec::<ChatOut>::new()));
+        let (o, c2, me) = (out.clone(), c.clone(), Arc::new(Mutex::new(0u32)));
+        let me2 = me.clone();
+        let inside = dir.to_string_lossy().into_owned();
+        let id = c
+            .start_agent(&agent, &dir, None, &[], None, move |x| {
+                if let ChatOut::Event(e) = &x {
+                    if s(e, "event") == "approval.request" {
+                        let ok = s(e, "title").contains("calc.py") || s(e, "title").contains("README.md") || s(e, "command").contains(&inside);
+                        let (c3, rid, id) = (c2.clone(), s(e, "request_id"), *me2.lock().unwrap());
+                        thread::spawn(move || {
+                            let _ = c3.input(id, Input::Approve { request_id: rid, choice: if ok { "once".into() } else { "deny".into() } });
+                        });
+                    }
+                }
+                o.lock().unwrap().push(x);
+            })
+            .unwrap();
+        *me.lock().unwrap() = id;
+        let ends = |out: &Arc<Mutex<Vec<ChatOut>>>| out.lock().unwrap().iter().filter(|x| matches!(x, ChatOut::Event(e) if s(e, "event") == "turn.end")).count();
+        let wait = |n: usize| {
+            let deadline = Instant::now() + Duration::from_secs(300);
+            while Instant::now() < deadline && ends(&out) < n {
+                thread::sleep(Duration::from_millis(200));
+            }
+        };
+        let text = "Make a 3-item todo list with your task tools first, then do it, updating each item as you go: in calc.py add a mul(a, b) function and give add a one-line docstring; in README.md add a line listing the functions. Think briefly first.";
+        c.input(id, Input::Send { text: text.into(), images: vec![], id: "local-1".into() }).unwrap();
+        wait(1);
+        thread::sleep(Duration::from_millis(500));
+        // the rewind, then a question about the message it took back
+        let r = c.input(id, Input::Rewind);
+        let deadline = Instant::now() + Duration::from_secs(60);
+        while Instant::now() < deadline && !out.lock().unwrap().iter().any(|x| matches!(x, ChatOut::Event(e) if s(e, "event") == "rewound" || s(e, "event") == "session.error")) {
+            thread::sleep(Duration::from_millis(200));
+        }
+        c.input(id, Input::Send { text: "Did I ask you for anything earlier in this conversation? Answer yes or no, then say what in five words.".into(), images: vec![], id: "local-2".into() }).unwrap();
+        wait(2);
+        let got: Vec<Value> = out.lock().unwrap().iter().filter_map(|x| match x { ChatOut::Event(e) => Some(e.clone()), _ => None }).collect();
+        c.close(id);
+        let dump = base.join("events.jsonl");
+        std::fs::write(&dump, got.iter().map(|e| e.to_string() + "\n").collect::<String>()).unwrap();
+        println!("rewind input: {r:?}; events: {}", dump.display());
+        for e in &got {
+            match s(e, "event").as_str() {
+                "tool.diff" => println!("DIFF {}", e["files"]),
+                "plan" => println!("PLAN {}", e["items"]),
+                "rewound" | "message" | "turn.end" | "session.error" => println!("{e}"),
+                _ => {}
+            }
+        }
+        let thinking: String = got.iter().filter(|e| s(e, "event") == "thinking").map(|e| s(e, "text")).collect();
+        println!("THINKING {thinking:?}");
+        assert!(got.iter().any(|e| s(e, "event") == "tool.diff"), "no diff");
+    }
+
     /// The real check: Claude Code in its chat mode in a temp folder, "reply with the word ok", through the
     /// same allow-list, adapter and pipes a session uses. Needs claude installed and signed in, and spends a
     /// tiny turn: `cargo test real_claude_chat_replies_ok -- --ignored --nocapture`.
@@ -3748,7 +4551,7 @@ mod tests {
         let out = Arc::new(Mutex::new(Vec::new()));
         let o = out.clone();
         let id = c
-            .start_agent("claude", &dir.canonicalize().unwrap(), None, &[], move |x| {
+            .start_agent("claude", &dir.canonicalize().unwrap(), None, &[], None, move |x| {
                 if let ChatOut::Event(e) = &x {
                     if s(e, "event") != "session.models" {
                         println!("event {e}");
@@ -3846,8 +4649,17 @@ mod tests {
         x
     }
 
+    /// The OmO records recorded with the omo-13 streams (never the person's own `~/.omo`).
+    fn fixture_omo_home() -> Option<PathBuf> {
+        Some(Path::new(env!("CARGO_MANIFEST_DIR")).join("tests").join("fixtures").join("omo-home"))
+    }
+
+    fn omo_pi() -> Pi {
+        Pi { omo_home: fixture_omo_home(), ..Pi::new("/w/proj", "OmO") }
+    }
+
     fn pi_up(label: &str, init: &[&str]) -> Pi {
-        let mut p = Pi::new("/w/proj", label);
+        let mut p = if label == "OmO" { omo_pi() } else { Pi::new("/w/proj", label) };
         p.start();
         for f in init {
             run(&mut p, &real(f));
@@ -3924,6 +4736,107 @@ mod tests {
         );
         assert!(of(&st.events, "approval.request").is_empty(), "acceptEdits (set by the earlier session answer) asks nothing");
         assert_eq!(ends(&st.events), [("done".into(), "".into())]);
+    }
+
+    #[test]
+    fn real_claude_late_subagent_ask_after_the_turn_is_answered_with_no_turn_running() {
+        // claude-13-late-ask.jsonl (Claude Code 2.1.322): `result` ends the turn, then the background subagent asks
+        let mut c = claude_up();
+        let lines = real("claude-13-late-ask.jsonl");
+        c.on_input(Input::send("start one")).unwrap();
+        let st = run(&mut c, &lines[..15]);
+        let end = st.events.iter().position(|e| s(e, "event") == "turn.end").unwrap();
+        let ask = st.events.iter().position(|e| s(e, "event") == "approval.request").unwrap();
+        assert!(end < ask, "the ask comes after the turn's end");
+        assert!(!c.in_turn());
+        let card = &st.events[ask];
+        assert_eq!(s(card, "command"), "echo gamma > c.txt");
+        assert_eq!(card["subagent"]["name"], "Write gamma to c.txt");
+        // the person's answer, with no turn running, is written to Claude Code as its control_response
+        let ans = written(&c.on_input(Input::Approve { request_id: s(card, "request_id"), choice: "once".into() }).unwrap());
+        assert_eq!(ans[0]["type"], "control_response");
+        assert_eq!(ans[0]["response"]["request_id"], card["request_id"]);
+        assert_eq!(ans[0]["response"]["response"]["behavior"], "allow");
+        // the subagent runs on and ends with its answer; Claude Code's own turn tells of it
+        let rest = run(&mut c, &lines[15..]);
+        let sub = of(&rest.events, "subagent").into_iter().find(|e| s(e, "state") == "done").unwrap();
+        assert_eq!(s(sub, "summary"), "WROTE");
+        assert_eq!(ends(&rest.events), [("done".into(), "".into())]);
+    }
+
+    #[test]
+    fn real_claude_ask_a_background_subagent_left_open_at_the_turns_end_can_still_be_answered() {
+        // claude-13-late-ask-inside.jsonl: the subagent asks during the turn, `result` comes with the ask open, and
+        // Claude Code still waits: it took the person's answer 15 s later and the subagent wrote d.txt
+        let mut c = claude_up();
+        let lines = real("claude-13-late-ask-inside.jsonl");
+        c.on_input(Input::send("two things")).unwrap();
+        let st = run(&mut c, &lines[..21]);
+        let ask = st.events.iter().position(|e| s(e, "event") == "approval.request").unwrap();
+        let end = st.events.iter().position(|e| s(e, "event") == "turn.end").unwrap();
+        assert!(ask < end, "asked inside the turn");
+        assert!(of(&st.events, "prompt.expired").is_empty(), "the turn's end does not withdraw a background subagent's ask");
+        let rid = s(&st.events[ask], "request_id");
+        let ans = written(&c.on_input(Input::Approve { request_id: rid.clone(), choice: "once".into() }).unwrap());
+        assert_eq!(ans[0]["response"]["request_id"], rid.as_str());
+        let rest = run(&mut c, &lines[21..]);
+        assert_eq!(of(&rest.events, "subagent").iter().find(|e| s(e, "state") == "done").map(|e| s(e, "summary")).as_deref(), Some("WROTE"));
+    }
+
+    #[test]
+    fn real_claude_late_subagent_ask_is_withdrawn_by_stop_and_by_the_subagents_end() {
+        // claude-13-late-ask-stop.jsonl: Stop with no turn running; Claude Code cancels the ask and stops the subagent
+        let mut c = claude_up();
+        let lines = real("claude-13-late-ask-stop.jsonl");
+        c.on_input(Input::send("start one")).unwrap();
+        let st = run(&mut c, &lines[..15]);
+        let rid = s(of(&st.events, "approval.request")[0], "request_id");
+        assert_eq!(written(&c.on_input(Input::Interrupt).unwrap())[0]["request"]["subtype"], "interrupt");
+        let rest = run(&mut c, &lines[15..]);
+        assert_eq!(of(&rest.events, "prompt.expired")[0]["request_id"], rid.as_str());
+        assert_eq!(of(&rest.events, "subagent").iter().map(|e| s(e, "state")).collect::<Vec<_>>(), ["cancelled"]);
+        assert!(c.on_input(Input::Approve { request_id: rid, choice: "once".into() }).is_err());
+        // a subagent that ends with its ask unanswered takes the ask with it (no cancel came: the notification did)
+        let mut c = claude_up();
+        c.on_input(Input::send("start one")).unwrap();
+        run(&mut c, &lines[..15]);
+        let rest = run(&mut c, &lines[16..21]);
+        assert_eq!(of(&rest.events, "prompt.expired")[0]["request_id"], rid_of(&lines[14]).as_str());
+    }
+
+    #[test]
+    fn real_claude_stop_after_the_turn_stops_its_background_command() {
+        // claude-14-background-stop.jsonl (Claude Code 2.1.323): `sleep 45; …` runs in the background, the turn ends,
+        // then Stop: Claude Code's own interrupt plus its stop_task for that command; the command ends at once
+        let mut c = claude_up();
+        let lines = real("claude-14-background-stop.jsonl");
+        c.on_input(Input::send("start it")).unwrap();
+        let st = run(&mut c, &lines[..35]);
+        assert_eq!(ends(&st.events), [("done".into(), "".into())]);
+        assert!(st.events.iter().any(|e| s(e, "event") == "session.info" && e["background"] == 1));
+        let w = written(&c.on_input(Input::Interrupt).unwrap());
+        assert_eq!(w.iter().map(|x| x["request"].clone()).collect::<Vec<_>>(), [json!({"subtype": "interrupt"}), json!({"subtype": "stop_task", "task_id": "be81yjkbr"})]);
+        let rest = run(&mut c, &lines[35..]);
+        assert_eq!(rest.events, [json!({"event": "session.info", "background": 0})]);
+        assert!(!c.in_turn());
+        // while a turn runs, Stop is that turn's interrupt only
+        c.on_input(Input::send("again")).unwrap();
+        assert_eq!(written(&c.on_input(Input::Interrupt).unwrap()).len(), 1);
+    }
+
+    #[test]
+    fn real_claude_background_subagent_row_names_its_model() {
+        // claude-13-late-ask-stop.jsonl: the Agent call's launch result says `resolvedModel` (a foreground subagent's
+        // hand-back says it too); the row carries it from then on
+        let mut c = claude_up();
+        c.on_input(Input::send("start one")).unwrap();
+        let st = run(&mut c, &real("claude-13-late-ask-stop.jsonl")[..15]);
+        let rows = of(&st.events, "subagent");
+        assert_eq!(s(rows.last().unwrap(), "model"), "claude-opus-5-5", "{rows:?}");
+    }
+
+    fn rid_of(line: &str) -> String {
+        s(&serde_json::from_str::<Value>(line).unwrap(), "request_id")
     }
 
     #[test]
@@ -4957,8 +5870,14 @@ mod tests {
         Send,
         Stop,
         Model(&'static str),
+        /// the person takes the last message back (edit and resend)
+        Rewind,
         /// the program exits: the watcher's `turn.end` when it was mid-turn
         Exit,
+        /// lines `from..to` of a file with its approvals left open (the person answers later, [`Do::Answer`])
+        Held(&'static str, usize, usize),
+        /// the person answers the approvals left open, once each
+        Answer,
     }
 
     /// Each sequence: a name, the adapter, then its steps. Every file in tests/fixtures/real/ is in one of them.
@@ -4972,12 +5891,29 @@ mod tests {
         // the recording finishes a turn, then the person asks for a slow command and presses Stop
         out.push(("claude-4-stop.jsonl", "claude", vec![Send, Head("claude-4-stop.jsonl"), Send, Tail("claude-4-stop.jsonl"), Stop, File("claude-4-stopped.jsonl")]));
         out.push(("claude-7-model.jsonl", "claude", vec![Model("haiku"), File("claude-7-model.jsonl")]));
+        // a two-file edit with its todo list (TaskCreate/TaskUpdate), and one with thinking text (Claude Code 2.1.322)
+        out.push(("claude-12-work.jsonl", "claude", turn("claude-12-work.jsonl")));
+        out.push(("claude-12-thinking.jsonl", "claude", turn("claude-12-thinking.jsonl")));
+        // a turn, then edit and resend: Claude Code's own rewind, then the next message
+        out.push(("claude-12-rewind.jsonl", "claude", vec![Send, Lines("claude-12-rewind.jsonl", 0, 5), Rewind, Lines("claude-12-rewind.jsonl", 5, 6), Send, Lines("claude-12-rewind.jsonl", 6, 11)]));
         // a model picked between turns, then one picked right after the next message went out (QA H7)
         out.push(("claude-11-model-mid-turn.jsonl", "claude", vec![Model("haiku"), Lines("claude-11-model-mid-turn.jsonl", 0, 1), Send, Model("sonnet"), Lines("claude-11-model-mid-turn.jsonl", 1, 6), Send, Tail("claude-11-model-mid-turn.jsonl")]));
+        // H10: started with `--add-dir <the session's attachment folder>`; turn 1 reads the attached copy, turn 2 a file elsewhere
+        out.push(("claude-12-attach-read.jsonl", "claude", vec![Model("haiku"), Lines("claude-12-attach-read.jsonl", 0, 1), Send, Head("claude-12-attach-read.jsonl"), Send, Tail("claude-12-attach-read.jsonl")]));
         // a resumed conversation: an old background task's empty result, then the person's answer
         out.push(("claude-8-resume.jsonl", "claude", vec![Send, File("claude-8-resume.jsonl"), Head("claude-4-stop.jsonl")]));
         // omher closed the chat mid-command: the exit watcher ends the turn
         out.push(("claude-10-close.jsonl", "claude", vec![Send, File("claude-10-close.jsonl"), Exit]));
+        // a background subagent asks after the turn ended; the person answers with no turn running, the subagent
+        // finishes and Claude Code's own turn tells of it (Claude Code 2.1.322)
+        out.push(("claude-13-late-ask.jsonl", "claude", vec![Send, Held("claude-13-late-ask.jsonl", 0, 15), Answer, Lines("claude-13-late-ask.jsonl", 15, 29)]));
+        // the background subagent asks during the turn and the turn ends with the ask open: Claude Code still waits
+        // for it, and takes the answer 15 s after its `result`
+        out.push(("claude-13-late-ask-inside.jsonl", "claude", vec![Send, Held("claude-13-late-ask-inside.jsonl", 0, 21), Answer, Lines("claude-13-late-ask-inside.jsonl", 21, 31)]));
+        // a late ask, then Stop with no turn running: Claude Code withdraws the ask and stops the subagent
+        out.push(("claude-13-late-ask-stop.jsonl", "claude", vec![Send, Held("claude-13-late-ask-stop.jsonl", 0, 15), Stop, Lines("claude-13-late-ask-stop.jsonl", 15, 21)]));
+        // a background command still runs after the turn; Stop with no turn running stops it (Claude Code 2.1.323)
+        out.push(("claude-14-background-stop.jsonl", "claude", vec![Send, Lines("claude-14-background-stop.jsonl", 0, 35), Stop, Lines("claude-14-background-stop.jsonl", 35, 40)]));
         for f in ["codex-1-plain.jsonl", "codex-2-approvals.jsonl", "codex-3-edit.jsonl", "codex-5-question.jsonl", "codex-6-error.jsonl", "codex-signed-out.jsonl"] {
             out.push((f, "codex", turn(f)));
         }
@@ -5010,6 +5946,21 @@ mod tests {
         out.push(("claude-9-queued.jsonl", "claude", turn("claude-9-queued.jsonl")));
         out.push(("omo-9-controls.jsonl", "omo", vec![File("omo-9-controls.jsonl")]));
         out.push(("omo-9-queued.jsonl", "omo", turn("omo-9-queued.jsonl")));
+        // OmO 5.1.56 (audit O5): a run fails, OmO retries it once by itself, the retry fails too
+        out.push(("omo-12-retry.jsonl", "omo", turn("omo-12-retry.jsonl")));
+        // OmO 5.1.56: a foreground `task` with two subagents in one call (a batch), with a todo list; then a single
+        // foreground `task`. Neither result names an answer: OmO's own records (tests/fixtures/omo-home) do
+        out.push(("omo-13-batch.jsonl", "omo-batch", turn("omo-13-batch.jsonl")));
+        out.push(("omo-13-single.jsonl", "omo-single", turn("omo-13-single.jsonl")));
+        // Codex 0.167 (audit O11/O13): its own config runs without approvals and with full disk access; Stop during
+        // `sleep 40`, the next turn, then the stopped command's end 37 s after Stop
+        out.push(("codex-12-late-step.jsonl", "codex-late", vec![Send, File("codex-12-late-step.jsonl"), Stop, File("codex-12-late-step-stopped.jsonl"), Send, File("codex-12-late-step-after.jsonl")]));
+        // Claude Code 2.1.323 in plan mode: the plan's approval (ExitPlanMode), denied (Claude asks what to change) and
+        // allowed (plan mode ends; the edits after it are approved here)
+        out.push(("claude-14-plan-deny.jsonl", "claude", turn("claude-14-plan-deny.jsonl")));
+        out.push(("claude-14-plan-allow.jsonl", "claude", turn("claude-14-plan-allow.jsonl")));
+        // Codex 0.167: the edit handed to a sub-agent, whose own thread carries the patch
+        out.push(("codex-15-sub-edit.jsonl", "codex-sub-edit", turn("codex-15-sub-edit.jsonl")));
         out
     }
 
@@ -5022,7 +5973,11 @@ mod tests {
             "codex-resume-gone" => (Box::new(Codex::new("/w/proj", Some("0badbeef-0000-4000-8000-000000000000"))), vec![]),
             "codex-helpers" => (Box::new(Codex::new("/w/proj", None)), vec!["codex-9-helpers-init.jsonl"]),
             "codex-helper-stop" => (Box::new(Codex::new("/w/proj", None)), vec!["codex-10-helper-stop-init.jsonl"]),
-            "omo" => (Box::new(Pi::new("/w/proj", "OmO")), vec!["omo-init.jsonl"]),
+            "codex-late" => (Box::new(Codex::new("/w/proj", Some("01a1ca24-1047-7ee0-aac2-faf093d44dbe"))), vec!["codex-12-late-step-init.jsonl"]),
+            "codex-sub-edit" => (Box::new(Codex::new("/w/proj", None)), vec!["codex-15-sub-edit-init.jsonl"]),
+            "omo" => (Box::new(omo_pi()), vec!["omo-init.jsonl"]),
+            "omo-batch" => (Box::new(omo_pi()), vec!["omo-13-batch-init.jsonl"]),
+            "omo-single" => (Box::new(omo_pi()), vec!["omo-13-single-init.jsonl"]),
             "omp" => (Box::new(Pi::new("/w/proj", "oh-my-pi")), vec!["omp-ready.jsonl", "omp-init.jsonl"]),
             "pi" => (Box::new(Pi::new("/w/proj", "pi")), vec!["pi-init.jsonl"]),
             "pi-noauth" => (Box::new(Pi::new("/w/proj", "pi")), vec![]),
@@ -5046,7 +6001,9 @@ mod tests {
         };
         let mut last_write: Vec<String> = Vec::new();
         let mut exited = false;
+        let mut held: Vec<String> = Vec::new();
         for step in steps {
+            let mut hold = false;
             let lines: Vec<String> = match step {
                 Do::Send => {
                     events.extend(a.on_input(Input::Send { text: "go".into(), images: vec![], id: String::new() }).unwrap().events);
@@ -5062,12 +6019,29 @@ mod tests {
                     events.extend(st.events);
                     continue;
                 }
+                Do::Rewind => {
+                    let st = a.on_input(Input::Rewind).unwrap();
+                    last_write = st.write.clone();
+                    events.extend(st.events);
+                    continue;
+                }
                 Do::Exit => {
                     if a.in_turn() {
                         events.push(exit_turn_end(Some(0), ""));
                     }
                     exited = true;
                     continue;
+                }
+                Do::Answer => {
+                    for rid in std::mem::take(&mut held) {
+                        events.extend(a.on_input(Input::Approve { request_id: rid, choice: "once".into() }).unwrap().events);
+                    }
+                    continue;
+                }
+                Do::Held(f, from, to) => {
+                    used.insert((*f).into());
+                    hold = true;
+                    real(f)[*from..*to].to_vec()
                 }
                 Do::File(f) => {
                     used.insert((*f).into());
@@ -5085,7 +6059,9 @@ mod tests {
                 }
                 Do::Lines(f, from, to) => {
                     used.insert((*f).into());
-                    real(f)[*from..*to].to_vec()
+                    // a recorded answer to a request this replay sent names that request
+                    let id = last_write.first().and_then(|w| serde_json::from_str::<Value>(w).ok()).map(|w| s(&w, "request_id")).unwrap_or_default();
+                    real(f)[*from..*to].iter().map(|l| if id.is_empty() { l.clone() } else { l.replace("omher-rewind-REQ", &id) }).collect()
                 }
             };
             for l in lines {
@@ -5093,7 +6069,9 @@ mod tests {
                     let ask = s(&e, "event") == "approval.request";
                     let rid = s(&e, "request_id");
                     events.push(e);
-                    if ask {
+                    if ask && hold {
+                        held.push(rid);
+                    } else if ask {
                         events.extend(a.on_input(Input::Approve { request_id: rid, choice: "once".into() }).unwrap().events);
                     }
                 }
@@ -5115,12 +6093,31 @@ mod tests {
             let (events, running) = replay_sequence(kind, &steps, &mut used);
             assert!(!running, "{name}: the adapter still thinks a turn runs");
             let mut open = false;
+            // steps still running when a turn was stopped: the agent may say later that one ended (Codex runs a
+            // command on after Stop), and the reducer gives that end to the stopped step
+            let (mut steps, mut stopped) = (std::collections::BTreeSet::new(), std::collections::BTreeSet::new());
             for e in &events {
                 match s(e, "event").as_str() {
                     "turn.start" => open = true,
-                    "turn.end" => open = false,
+                    "turn.end" => {
+                        open = false;
+                        if s(e, "outcome") == "interrupted" {
+                            stopped.append(&mut steps);
+                        }
+                        steps.clear();
+                    }
+                    "tool.end" if !open => assert!(stopped.remove(&s(e, "tool_id")), "{name}: {e} outside a turn"),
                     "status" | "thinking" | "tool.start" | "tool.end" | "delta" | "skill" => {
                         assert!(open, "{name}: {e} outside a turn");
+                        match s(e, "event").as_str() {
+                            "tool.start" => {
+                                steps.insert(s(e, "tool_id"));
+                            }
+                            "tool.end" => {
+                                steps.remove(&s(e, "tool_id"));
+                            }
+                            _ => {}
+                        }
                     }
                     _ => {}
                 }
@@ -5267,6 +6264,66 @@ mod tests {
         assert_eq!(s(done[0], "model"), "claude-haiku-5-5");
     }
 
+    /// The rows a recorded OmO 5.1.56 turn ends with: (name, state, summary, model, seconds).
+    fn omo_rows(p: &mut Pi, file: &str) -> (Step, Vec<(String, String, String, String, Value)>) {
+        p.on_input(Input::send("go")).unwrap();
+        let st = run(p, &real(file));
+        let rows = st.events.iter().filter(|e| s(e, "event") == "subagent" && s(e, "state") != "queued" && s(e, "state") != "running").map(|e| (s(e, "name"), s(e, "state"), s(e, "summary"), s(e, "model"), e["seconds"].clone())).collect();
+        (st, rows)
+    }
+
+    #[test]
+    fn an_omo_foreground_batch_ends_each_row_with_its_own_answer_and_model() {
+        // omo-13-batch (OmO 5.1.56, a real run): one foreground `task` with two subagents. Its result's items carry
+        // only {task_id, name, status}; each answer, model and time is in OmO's own record of that task id
+        let mut p = pi_up("OmO", &["omo-13-batch-init.jsonl"]);
+        let (st, rows) = omo_rows(&mut p, "omo-13-batch.jsonl");
+        assert_eq!(rows, [
+            ("helper-a-first-line".into(), "done".into(), "FIRST_LINE: alpha line".into(), "claude-haiku-5-5".into(), json!(19.9)),
+            ("helper-b-line-count".into(), "done".into(), "LINE_COUNT: 3".into(), "claude-haiku-5-5".into(), json!(28.6)),
+        ]);
+        assert_eq!(st.events.iter().filter(|e| s(e, "event") == "turn.end").count(), 1);
+    }
+
+    #[test]
+    fn an_omo_single_foreground_task_ends_with_its_answer() {
+        // omo-13-single (OmO 5.1.56, a real run): one task, no `tasks` array; the result names its model, no answer
+        let mut p = pi_up("OmO", &["omo-13-single-init.jsonl"]);
+        let (_, rows) = omo_rows(&mut p, "omo-13-single.jsonl");
+        assert_eq!(rows, [("helper-single".into(), "done".into(), "FIRST_LINE: alpha line".into(), "claude-haiku-5-5".into(), json!(23.0))]);
+    }
+
+    #[test]
+    fn an_omo_row_without_its_own_record_ends_with_no_answer_never_another_ones() {
+        // no record to read: the rows end done with no answer, and the turn still ends
+        let mut p = pi_up("OmO", &["omo-13-batch-init.jsonl"]);
+        p.omo_home = Some(Path::new(env!("CARGO_MANIFEST_DIR")).join("tests").join("fixtures").join("no-such-home"));
+        let (st, rows) = omo_rows(&mut p, "omo-13-batch.jsonl");
+        assert_eq!(rows.iter().map(|r| (r.1.as_str(), r.2.as_str())).collect::<Vec<_>>(), [("done", ""), ("done", "")]);
+        assert_eq!(st.events.iter().filter(|e| s(e, "event") == "turn.end").count(), 1);
+        // records of another conversation (the single run's session) are never taken for this one's rows
+        let mut p = pi_up("OmO", &["omo-13-single-init.jsonl"]);
+        let (_, rows) = omo_rows(&mut p, "omo-13-batch.jsonl");
+        assert_eq!(rows.iter().map(|r| r.2.as_str()).collect::<Vec<_>>(), ["", ""]);
+        // a task id that is not OmO's shape is never looked up
+        let p = pi_up("OmO", &["omo-13-batch-init.jsonl"]);
+        for bad in ["../st_01a1d076", "st_01a1d076/..", "st_", "x_01a1d076", "st_01a1d076.json"] {
+            assert!(p.omo_record(bad).is_none(), "{bad}");
+        }
+        assert_eq!(s(&p.omo_record("st_01a1d076").unwrap(), "final_response"), "FIRST_LINE: alpha line");
+    }
+
+    #[test]
+    fn omos_todo_list_is_the_turns_checklist_never_a_step_with_its_json() {
+        // omo-13-batch: OmO's `todo` init and two `done` calls
+        let mut p = pi_up("OmO", &["omo-13-batch-init.jsonl"]);
+        let (st, _) = omo_rows(&mut p, "omo-13-batch.jsonl");
+        assert!(!st.events.iter().any(|e| s(e, "event") == "tool.start" && (s(e, "name") == "todo" || s(e, "detail").contains("{\""))), "a todo step");
+        let plans: Vec<Vec<(String, String)>> = st.events.iter().filter(|e| s(e, "event") == "plan").map(|e| e["items"].as_array().unwrap().iter().map(|i| (s(i, "text"), s(i, "status"))).collect()).collect();
+        assert_eq!(plans.first().unwrap(), &[("Spawn foreground batch of two helper tasks".to_string(), "in_progress".to_string()), ("Give one-line summary of batch results".into(), "pending".into())]);
+        assert!(plans.last().unwrap().iter().all(|(_, st)| st == "completed"));
+    }
+
     #[test]
     fn omo_says_what_still_runs_in_the_background() {
         // omo-B: session_lifecycle waiting_background with one bash (audit O10); subagents are not counted here
@@ -5381,6 +6438,24 @@ mod tests {
         // an ask on the session's own thread names no helper
         let st = x.on_line(r#"{"id":92,"method":"item/commandExecution/requestApproval","params":{"threadId":"01a1ca24-1047-7ee0-aac2-faf093d44dbe","turnId":"t","itemId":"exec-2","command":"ls"}}"#);
         assert!(st.events[0].get("subagent").is_none());
+    }
+
+    #[test]
+    fn a_codex_helpers_ask_outlives_the_persons_turn_while_the_helper_runs() {
+        // not observed on this Mac (its Codex runs with approval: never): a helper still running when the person's
+        // turn completes keeps its approval answerable, as Claude Code's background subagents do; the turn's own
+        // approval does not
+        let mut x = codex_helpers_up();
+        x.on_input(Input::Send { text: "go".into(), images: vec![], id: String::new() }).unwrap();
+        let lines = real("codex-9-helpers.jsonl");
+        let spawned = lines.iter().position(|l| l.contains("\"subAgentActivity\"") && l.contains("write_one")).unwrap();
+        run(&mut x, &lines[..=spawned]);
+        x.on_line(r#"{"id":91,"method":"item/commandExecution/requestApproval","params":{"threadId":"01a1ca24-539f-7e51-ad88-e39bedaf4545","turnId":"01a1ca24-53f9-72c0-a436-7edf958315cf","itemId":"exec-1","command":"rm one.txt","cwd":"/w/proj"}}"#);
+        x.on_line(r#"{"id":92,"method":"item/commandExecution/requestApproval","params":{"threadId":"01a1ca24-1047-7ee0-aac2-faf093d44dbe","turnId":"t","itemId":"exec-2","command":"ls"}}"#);
+        let st = x.on_line(r#"{"method":"turn/completed","params":{"threadId":"01a1ca24-1047-7ee0-aac2-faf093d44dbe","turn":{"id":"t","status":"completed","items":[]}}}"#);
+        assert_eq!(ends(&st.events), [("done".into(), "".into())]);
+        assert_eq!(written(&x.on_input(Input::Approve { request_id: "codex-91".into(), choice: "once".into() }).unwrap())[0], json!({"id": 91, "result": {"decision": "accept"}}));
+        assert!(x.on_input(Input::Approve { request_id: "codex-92".into(), choice: "once".into() }).is_err());
     }
 
     #[test]
@@ -5511,6 +6586,124 @@ mod tests {
         assert_eq!(exit_turn_end(Some(0), &exit_reason(omo)), json!({"event": "turn.end", "outcome": "ended"}));
     }
 
+    /// Codex 0.167's stderr at start (recorded with codex-15): a coloured config warning and, indented under it,
+    /// the file it names. An orderly close (code 0) has no reason; a failure gives its last line, not that warning.
+    const CODEX_START_WARNING: &str = "\u{1b}[2m2026-11-13T01:15:36.955056Z\u{1b}[0m \u{1b}[31mERROR\u{1b}[0m \u{1b}[2mcodex_app_server\u{1b}[0m\u{1b}[2m:\u{1b}[0m Codex is ignoring 1 unrecognized configuration setting. Check for typos or deprecated settings.\n  user (/Users/me/.codex/config.toml): `mcp_servers.playwright.type` is ignored.\n";
+
+    #[test]
+    fn a_start_up_warning_is_not_why_a_session_ended() {
+        // before: the indented line under the warning came through as the reason of a clean close
+        assert_eq!(exit_reason(CODEX_START_WARNING), "");
+        assert_eq!(exit_why(Some(0), CODEX_START_WARNING), "");
+        assert_eq!(exit_why(Some(0), &format!("{CODEX_START_WARNING}Error: boom")), "", "code 0 failed nothing");
+        // a real failure: its last line, not the warning at the top
+        let failed = format!("{CODEX_START_WARNING}2026-11-13T01:16:00Z ERROR codex_api: failed to connect\nError: stream disconnected before completion");
+        assert_eq!(exit_reason(&failed), "Error: stream disconnected before completion");
+        assert_eq!(Codex::new("/w", None).explain(&exit_why(Some(1), &failed)), "Error: stream disconnected before completion");
+        // help text after the reason is not the reason (clap: error, blank, Usage, For more information)
+        assert_eq!(exit_reason("error: unexpected argument 'app-server' found\n\nUsage: codex [OPTIONS]\n\nFor more information, try '--help'."), "error: unexpected argument 'app-server' found");
+        // a sign-in hint above other lines is still found: oh-my-pi's signed-out exit (code 1)
+        let omp = "No default model selected. Use /login, set an API key environment variable, or select a local model with /model or --model.\n\nSet an API key environment variable:\n  ANTHROPIC_API_KEY, OPENAI_API_KEY, GEMINI_API_KEY, etc.\n\nOr create /Users/me/.omp/agent/models.yml";
+        assert_eq!(Pi::new("/w", "oh-my-pi").explain(&exit_why(Some(1), omp)), "oh-my-pi is not signed in. Open Terminal and run /login, then Restart.");
+    }
+
+    /// claude-14-plan-*: Claude Code 2.1.323 in plan mode ends its plan with `ExitPlanMode {plan, planFilePath}` and
+    /// no rule to keep. The card asks in plain words, carries the plan's markdown whole, and offers Deny and Allow once.
+    #[test]
+    fn the_plan_approval_shows_the_plan_as_text() {
+        let mut c = Claude::new("/w/proj");
+        let st = replay(&mut c, &["claude-14-plan-deny.jsonl"], &["deny"]);
+        let card = of(&st.events, "approval.request")[0];
+        assert_eq!(s(card, "title"), "Start working on this plan?");
+        assert_eq!(s(card, "command"), "", "no JSON string on the card");
+        let plan = s(card, "plan");
+        assert!(plan.starts_with("# Plan: calc.py에 mul(a, b) 추가\n\n1. `calc.py`"), "{plan}");
+        assert!(plan.contains("\n2. `README.md`"), "the whole plan, line breaks kept: {plan}");
+        assert_eq!(card["choices"], json!(["deny", "once"]));
+        // denied: Claude Code asks what to change (a question card), the turn ends done
+        assert_eq!(of(&st.events, "clarify.request").len(), 1);
+        assert_eq!(ends(&st.events), [("done".into(), "".into())]);
+        // allowed: the plan goes back as Claude Code sent it, plan mode ends
+        let mut c = Claude::new("/w/proj");
+        let lines = real("claude-14-plan-allow.jsonl");
+        let at = lines.iter().position(|l| l.contains("\"ExitPlanMode\"") && l.contains("can_use_tool")).unwrap();
+        let st = run(&mut c, &lines[..=at]);
+        let card = of(&st.events, "approval.request")[0].clone();
+        let w = c.on_input(Input::Approve { request_id: s(&card, "request_id"), choice: "once".into() }).unwrap();
+        let sent: Value = serde_json::from_str(&w.write[0]).unwrap();
+        let input: Value = serde_json::from_str(&lines[at]).unwrap();
+        assert_eq!(sent["response"]["response"], json!({"behavior": "allow", "updatedInput": input["request"]["input"]}));
+        let st = run(&mut c, &lines[at + 1..]);
+        assert!(st.events.iter().any(|e| s(e, "event") == "session.info" && s(e, "mode") == "default"), "plan mode ended");
+    }
+
+    /// A tool that is neither a command nor a file edit gets one readable line on its card, never its input as JSON.
+    #[test]
+    fn other_tools_ask_in_readable_lines() {
+        let card = |name: &str, input: Value| {
+            let mut c = Claude::new("/w/proj");
+            let req = json!({"type": "control_request", "request_id": "r1", "request": {"subtype": "can_use_tool", "tool_name": name, "input": input}});
+            let st = c.on_line(&req.to_string());
+            let e = of(&st.events, "approval.request")[0].clone();
+            (s(&e, "title"), s(&e, "command"))
+        };
+        assert_eq!(card("Skill", json!({"skill": "omh-plan", "args": "a todo app"})), ("Allow Skill?".into(), "omh-plan a todo app".into()));
+        assert_eq!(card("WebFetch", json!({"url": "https://example.com", "prompt": "title"})), ("Allow WebFetch?".into(), "https://example.com".into()));
+        assert_eq!(card("EnterWorktree", json!({"name": "fix-a"})), ("Allow EnterWorktree?".into(), "name: fix-a".into()));
+        assert_eq!(card("CronCreate", json!({"cron": "0 9 * * *", "recurring": true})), ("Allow CronCreate?".into(), "cron: 0 9 * * * · recurring: true".into()));
+        assert_eq!(card("mcp__x__y", json!({"ids": [1, 2], "opts": {"a": 1}})), ("Allow mcp__x__y?".into(), "ids: [1,2] · opts: {\"a\":1}".into()));
+    }
+
+    /// codex-15-sub-edit: Codex 0.167 hands the edit to a sub-agent; the main thread has no file change, the
+    /// sub-agent's thread has one with its patch. The sub-agent's row gets that step with its change per file.
+    #[test]
+    fn an_edit_codex_hands_to_its_subagent_has_its_diff() {
+        let (mut a, init) = adapter_up("codex-sub-edit");
+        for f in init {
+            run(a.as_mut(), &real(f));
+        }
+        a.on_input(Input::send("go")).unwrap();
+        let st = run(a.as_mut(), &real("codex-15-sub-edit.jsonl"));
+        assert!(of(&st.events, "tool.diff").is_empty(), "the main thread edited nothing");
+        let edits: Vec<&Event> = of(&st.events, "subagent").into_iter().filter(|e| s(e, "tool") == "patch").collect();
+        assert!(!edits.is_empty());
+        let last = edits.last().unwrap();
+        assert_eq!(s(last, "step"), "README.md +2, calc.py +4");
+        let files = last["diff"].as_array().unwrap();
+        let paths: Vec<String> = files.iter().map(|f| s(f, "path")).collect();
+        assert_eq!(paths, ["README.md", "calc.py"]);
+        assert_eq!(files[1]["lines"], json!(["@@ -6 +6,5 @@", "     return a - b", "+", "+", "+def mul(a, b):", "+    return a * b"]));
+        assert_eq!((files[1]["added"].as_u64(), files[1]["removed"].as_u64()), (Some(4), Some(0)));
+        assert!(edits.iter().all(|e| e["diff"].is_array()), "every edit step carries its change");
+        assert_eq!(ends(&st.events), [("done".into(), "".into())]);
+    }
+
+    /// The same through the real exit path, for every chat agent's adapter: a program that printed a start-up warning
+    /// and closed in order ends with no reason; one that failed ends with its last line.
+    #[cfg(unix)]
+    #[test]
+    fn every_chat_agent_ends_a_clean_close_without_a_reason() {
+        let tmp = std::env::temp_dir().canonicalize().unwrap();
+        let warn = "printf '\\033[31mERROR\\033[0m Codex is ignoring 1 unrecognized configuration setting.\\n  user (~/.codex/config.toml): `mcp_servers.playwright.type` is ignored.\\n' >&2";
+        let adapters: Vec<(&str, fn() -> Box<dyn Adapter>)> = vec![
+            ("claude", || Box::new(Claude::new("/w"))),
+            ("codex", || Box::new(Codex::new("/w", None))),
+            ("omo", || Box::new(Pi::new("/w", "OmO"))),
+            ("pi", || Box::new(Pi::new("/w", "pi"))),
+            ("opencode", || adapter_for("opencode", "/w", None).unwrap()),
+        ];
+        for (name, make) in adapters {
+            for (script, code, want) in [(format!("{warn}; exit 0"), 0, String::new()), (format!("{warn}; echo 'Error: it broke' >&2; exit 3"), 3, "Error: it broke".to_string())] {
+                let c = ChatSessions::default();
+                let (out, sink) = collect();
+                c.spawn(vec!["/bin/sh".into(), "-c".into(), script.into()], &tmp, None, &[], make(), sink).unwrap();
+                assert!(wait_for(|| out.lock().unwrap().iter().any(|o| matches!(o, ChatOut::Exit(..))), 10), "{name}");
+                let got = out.lock().unwrap().clone();
+                assert!(got.iter().any(|o| matches!(o, ChatOut::Exit(Some(c), e) if *c == code && *e == want)), "{name} exit {code}: {got:?}");
+            }
+        }
+    }
+
     #[test]
     fn omo_stop_during_a_command_ends_interrupted() {
         // omo (audit O4): the abort hit the tool, so the last message ended with stopReason "toolUse"; agent_end
@@ -5529,13 +6722,73 @@ mod tests {
     }
 
     #[test]
+    fn omo_retry_of_its_own_is_one_turn_that_ends_once_with_omos_reason() {
+        // omo-12-retry (audit O5, OmO 5.1.56): agent_end with `failure`, auto_retry_start, a second run, agent_end,
+        // auto_retry_end {finalError}, model_config_error. One message: one turn, one end, OmO's words, no raw JSON
+        let mut p = pi_up("OmO", &["omo-init.jsonl"]);
+        let mut events = p.on_input(Input::send("which model?")).unwrap().events;
+        events.extend(run(&mut p, &real("omo-12-retry.jsonl")).events);
+        let kinds: Vec<String> = events.iter().map(|e| s(e, "event")).filter(|k| k.starts_with("turn.")).collect();
+        assert_eq!(kinds, ["turn.start", "turn.end"], "{events:?}");
+        let why = "Anthropic rejected this conversation's request format, even after retrying without web search replay data. Run /compact or start a new session to continue, and report it if it happens again.";
+        assert_eq!(ends(&events), [("error".into(), why.into())]);
+        // while OmO retried, the line said so, from OmO's own numbers
+        let retry: Vec<&Event> = events.iter().filter(|e| s(e, "event") == "status" && e.get("retry").is_some()).collect();
+        assert_eq!(retry.len(), 1);
+        assert_eq!((retry[0]["retry"]["attempt"].as_u64(), retry[0]["retry"]["max"].as_u64()), (Some(1), Some(5)));
+        assert!(!p.in_turn());
+    }
+
+    #[test]
+    fn omo_failure_with_no_retry_ends_once_with_the_providers_message() {
+        // the same recorded lines without OmO's retry: the run's end waits for OmO's next word, then ends once; the
+        // raw `400 {"type":"error",…}` reads as the provider's message
+        let lines = real("omo-12-retry.jsonl");
+        let first_end = lines.iter().position(|l| l.contains("\"type\":\"agent_end\"")).unwrap();
+        let mut p = pi_up("OmO", &["omo-init.jsonl"]);
+        let mut events = p.on_input(Input::send("which model?")).unwrap().events;
+        let held = run(&mut p, &lines[..=first_end]).events;
+        assert!(held.iter().all(|e| s(e, "event") != "turn.end"), "{held:?}");
+        assert!(p.in_turn());
+        events.extend(held);
+        let rest: Vec<String> = lines[first_end + 1..].iter().filter(|l| l.contains("model_config_error") || l.contains("agent_settled")).cloned().collect();
+        events.extend(run(&mut p, &rest).events);
+        assert_eq!(ends(&events), [("error".into(), "unknown provider for model claude-haiku-4-5".into())]);
+        // a retry that works clears the retry line and the turn goes on to its answer
+        let mut p = pi_up("OmO", &["omo-init.jsonl"]);
+        p.on_input(Input::send("again")).unwrap();
+        run(&mut p, &lines[..=first_end + 2]);
+        let st = p.on_line(r#"{"type":"auto_retry_end","success":true,"attempt":1}"#);
+        assert_eq!(st.events, [json!({"event": "status", "text": ""})]);
+        assert!(p.in_turn());
+    }
+
+    #[test]
+    fn codex_stop_leaves_the_command_running_and_its_late_end_comes_after_the_turn() {
+        // codex-12-late-step (audit O11/O13, Codex 0.167): Stop during `sleep 40; echo late`; Codex ends the turn
+        // at once and reports the command's end 37 s later, after the next turn. The adapter passes that end on.
+        let steps = &sequences().into_iter().find(|x| x.0 == "codex-12-late-step.jsonl").unwrap().2;
+        let (events, running) = replay_sequence("codex-late", steps, &mut Default::default());
+        assert!(!running);
+        let info = events.iter().find(|e| s(e, "event") == "session.info" && e.get("approval").is_some()).unwrap();
+        assert_eq!((s(info, "approval"), s(info, "sandbox"), s(info, "mode")), ("never".into(), "dangerFullAccess".into(), "".into()));
+        let id = "exec-54fee470-b15c-41fa-bca7-76d78c82fc5c";
+        let at = |pred: &dyn Fn(&Event) -> bool| events.iter().position(|e| pred(e)).unwrap();
+        let stop = at(&|e| s(e, "event") == "turn.end" && s(e, "outcome") == "interrupted");
+        let late = at(&|e| s(e, "event") == "tool.end" && s(e, "tool_id") == id);
+        let next_end = events.iter().rposition(|e| s(e, "event") == "turn.end").unwrap();
+        assert!(stop < next_end && next_end < late, "the command's end comes after both turns");
+        assert_eq!((events[late]["ok"].as_bool(), events[late]["ms"].as_u64()), (Some(true), Some(39887)));
+    }
+
+    #[test]
     fn codex_resume_takes_only_a_thread_uuid() {
         let c = ChatSessions::default();
         let tmp = std::env::temp_dir();
         for bad in ["x", "--yolo", "01a1c3b9-4b7f-7542-900c-c5f4dc80eef", "../01a1c3b9-4b7f-7542-900c-c5f4dc80eefa"] {
-            assert!(c.start_agent("codex", &tmp, Some(bad), &[], |_| {}).is_err(), "{bad}");
+            assert!(c.start_agent("codex", &tmp, Some(bad), &[], None, |_| {}).is_err(), "{bad}");
         }
-        assert!(c.start_agent("pi", &tmp, Some("01a1c3b9-4b7f-7542-900c-c5f4dc80eefa"), &[], |_| {}).is_err());
+        assert!(c.start_agent("pi", &tmp, Some("01a1c3b9-4b7f-7542-900c-c5f4dc80eefa"), &[], None, |_| {}).is_err());
         assert_eq!(c.count(), 0);
     }
 
@@ -5627,5 +6880,161 @@ mod tests {
         // other inputs carry no files
         assert!(Input::Interrupt.resolve(&home).is_ok());
         let _ = std::fs::remove_dir_all(&home);
+    }
+
+    // ---- what a session shows of the agent's work: diffs, its todo list, thinking, edit and resend ----
+
+    fn of_kind<'a>(events: &'a [Event], name: &str) -> Vec<&'a Event> {
+        events.iter().filter(|e| s(e, "event") == name).collect()
+    }
+
+    #[test]
+    fn claude_two_file_edit_shows_each_change_and_one_todo_list_that_updates_in_place() {
+        // claude-12-work: Claude Code 2.1.322 (sonnet), TaskCreate x3, then per item TaskUpdate in_progress, an Edit,
+        // TaskUpdate completed; calc.py twice and README.md once
+        let mut c = claude_up();
+        c.on_input(Input::send("go")).unwrap();
+        let st = run(&mut c, &real("claude-12-work.jsonl"));
+        // the todo tools are the checklist, never steps
+        let steps: Vec<String> = of_kind(&st.events, "tool.start").iter().map(|e| s(e, "name")).collect();
+        assert!(!steps.iter().any(|n| n.starts_with("Task") || n.starts_with("Todo")), "{steps:?}");
+        let plans = of_kind(&st.events, "plan");
+        assert_eq!(plans.len(), 3 + 6, "one plan event per change of the list");
+        let last = &plans.last().unwrap()["items"];
+        let rows: Vec<(String, String)> = last.as_array().unwrap().iter().map(|i| (s(i, "text"), s(i, "status"))).collect();
+        assert_eq!(rows.len(), 3);
+        assert!(rows.iter().all(|r| r.1 == "completed"), "{rows:?}");
+        assert_eq!(rows[1].0, "Add mul(a, b) function to calc.py");
+        // midway the second is in progress and the first done
+        let mid: Vec<String> = plans[5]["items"].as_array().unwrap().iter().map(|i| s(i, "status")).collect();
+        assert_eq!(mid, ["completed", "in_progress", "pending"]);
+        // every edit carries its change, the input's first and the result's (hunks with context) last
+        let diffs = of_kind(&st.events, "tool.diff");
+        let edits = of_kind(&st.events, "tool.start").into_iter().filter(|e| s(e, "name") == "patch").count();
+        assert_eq!(edits, 3);
+        assert_eq!(diffs.len(), 6);
+        let files: Vec<String> = diffs.iter().map(|d| s(&d["files"][0], "path")).collect();
+        assert_eq!(files, ["calc.py", "calc.py", "calc.py", "calc.py", "README.md", "README.md"]);
+        let mul = &diffs[3]["files"][0];
+        let lines: Vec<String> = mul["lines"].as_array().unwrap().iter().map(|l| l.as_str().unwrap().to_string()).collect();
+        assert_eq!(lines[0], "@@ -5,3 +5,7 @@");
+        assert!(lines.contains(&"+def mul(a, b):".to_string()) && lines.contains(&" def sub(a, b):".to_string()), "{lines:?}");
+        assert_eq!((mul["added"].as_u64(), mul["removed"].as_u64()), (Some(4), Some(0)));
+    }
+
+    #[test]
+    fn claude_thinking_text_is_kept_and_a_marker_without_text_stays_empty() {
+        // claude-12-thinking: Claude Code 2.1.322 (fable) streams its thinking as text deltas
+        let mut c = claude_up();
+        c.on_input(Input::send("go")).unwrap();
+        let st = run(&mut c, &real("claude-12-thinking.jsonl"));
+        let text: String = of_kind(&st.events, "thinking").iter().map(|e| s(e, "text")).collect();
+        assert!(text.starts_with("No todo tool is available, so I'll track the three steps inline"), "{text}");
+        // claude-3-edit: an older recording with the thinking text stripped; the events say only that it thinks
+        let mut c = claude_up();
+        c.on_input(Input::send("go")).unwrap();
+        let st = run(&mut c, &real("claude-3-edit.jsonl"));
+        let t = of_kind(&st.events, "thinking");
+        assert!(!t.is_empty() && t.iter().all(|e| e.get("text").is_none()));
+        // joined in delivery like answer text, never across kinds
+        let got = merge_deltas(vec![thinking_event("a"), thinking_event("b"), ev("delta", json!({"text": "c"})), thinking_event("d")]);
+        assert_eq!(got, vec![thinking_event("ab"), ev("delta", json!({"text": "c"})), thinking_event("d")]);
+    }
+
+    #[test]
+    fn claude_rewind_takes_back_the_last_message_through_its_own_rewind_conversation() {
+        // claude-12-rewind: a real turn, then `rewind_conversation` to its message (Claude Code answered rewound:true
+        // and the next turn had no memory of it: "NONE")
+        let mut c = claude_up();
+        assert!(c.on_input(Input::Rewind).is_err(), "nothing sent yet");
+        c.on_input(Input::send("Remember the word ORCHID. Reply only: ok")).unwrap();
+        let lines = real("claude-12-rewind.jsonl");
+        run(&mut c, &lines[..5]);
+        let st = c.on_input(Input::Rewind).unwrap();
+        let w = written(&st);
+        assert_eq!(w[0]["request"], json!({"subtype": "rewind_conversation", "target_message_uuid": "de0a73ab-5879-4e81-b093-fb2cdb29704a"}));
+        let rid = s(&w[0], "request_id");
+        let st = c.on_line(&lines[5].replace("omher-rewind-REQ", &rid));
+        assert_eq!(st.events[0], json!({"event": "rewound", "text": "Remember the word ORCHID. Reply only: ok"}));
+        assert_eq!(st.events[1], json!({"event": "session.info", "rewind": false}));
+        // a refusal says so and keeps the message
+        c.on_input(Input::send("again")).unwrap();
+        run(&mut c, &lines[6..]);
+        let st = c.on_input(Input::Rewind).unwrap();
+        let rid = s(&written(&st)[0], "request_id");
+        let st = c.on_line(&format!(r#"{{"type":"control_response","response":{{"subtype":"error","request_id":"{rid}","error":"turn running"}}}}"#));
+        assert_eq!(names(&st.events), ["session.error", "session.info"]);
+        assert_eq!(st.events[1]["rewind"], json!(true));
+        // never while a turn runs
+        c.on_input(Input::send("x")).unwrap();
+        assert!(c.on_input(Input::Rewind).is_err());
+    }
+
+    #[test]
+    fn codex_plan_reasoning_and_file_changes_come_out_in_the_same_shapes() {
+        // shapes from codex-rs app-server-protocol v2 (codex 0.167 `generate-ts`): turn/plan/updated, reasoning
+        // summary and raw deltas, a fileChange update with a unified diff; Codex has no credit on this Mac, so the
+        // turn is built from the schema, the item/started of a real fileChange (codex-3-edit) is real
+        let mut x = codex_up();
+        x.on_input(Input::send("go")).unwrap();
+        let t = r#"{"method":"turn/started","params":{"threadId":"01a1c3b9-4b7f-7542-900c-c5f4dc80eefa","turn":{"id":"t9","items":[],"status":"inProgress"}}}"#;
+        let plan = r#"{"method":"turn/plan/updated","params":{"threadId":"01a1c3b9-4b7f-7542-900c-c5f4dc80eefa","turnId":"t9","explanation":null,"plan":[{"step":"Add mul to calc.py","status":"completed"},{"step":"List functions in README.md","status":"inProgress"},{"step":"Run a check","status":"pending"}]}}"#;
+        let sum = r#"{"method":"item/reasoning/summaryTextDelta","params":{"threadId":"01a1c3b9-4b7f-7542-900c-c5f4dc80eefa","turnId":"t9","itemId":"rs1","delta":"Two files to touch.","summaryIndex":0}}"#;
+        let raw = r#"{"method":"item/reasoning/textDelta","params":{"threadId":"01a1c3b9-4b7f-7542-900c-c5f4dc80eefa","turnId":"t9","itemId":"rs1","delta":"raw","contentIndex":0}}"#;
+        let raw2 = r#"{"method":"item/reasoning/textDelta","params":{"threadId":"01a1c3b9-4b7f-7542-900c-c5f4dc80eefa","turnId":"t9","itemId":"rs2","delta":"only raw","contentIndex":0}}"#;
+        let fc = r##"{"method":"item/started","params":{"threadId":"01a1c3b9-4b7f-7542-900c-c5f4dc80eefa","turnId":"t9","item":{"type":"fileChange","id":"fc1","status":"inProgress","changes":[{"path":"/w/proj/calc.py","kind":{"type":"update","move_path":null},"diff":"--- a/calc.py\n+++ b/calc.py\n@@ -5,2 +5,5 @@\n def sub(a, b):\n     return a - b\n+\n+def mul(a, b):\n+    return a * b\n"},{"path":"/w/proj/README.md","kind":{"type":"add"},"diff":"# calc\nFunctions: add, sub, mul\n"}]}}}"##;
+        let st = run(&mut x, &[t.into(), plan.into(), sum.into(), raw.into(), raw2.into(), fc.into()]);
+        let p = of_kind(&st.events, "plan");
+        assert_eq!(p[0]["items"], json!([{"text": "Add mul to calc.py", "status": "completed"}, {"text": "List functions in README.md", "status": "in_progress"}, {"text": "Run a check", "status": "pending"}]));
+        let th: Vec<String> = of_kind(&st.events, "thinking").iter().map(|e| s(e, "text")).collect();
+        assert_eq!(th, ["Two files to touch.", "", "only raw"], "a summarized item's raw text is not shown twice");
+        let d = of_kind(&st.events, "tool.diff");
+        assert_eq!(s(d[0], "tool_id"), "fc1");
+        let f = d[0]["files"].as_array().unwrap();
+        assert_eq!((s(&f[0], "path"), s(&f[0], "kind")), ("calc.py".into(), "update".into()));
+        assert_eq!(f[0]["lines"][0], "@@ -5,2 +5,5 @@");
+        assert_eq!((f[0]["added"].as_u64(), f[0]["removed"].as_u64()), (Some(3), Some(0)));
+        assert_eq!((s(&f[1], "kind"), f[1]["lines"].clone()), ("add".into(), json!(["+# calc", "+Functions: add, sub, mul"])));
+        // a real recording (codex-3-edit): the new file's content is its change
+        let mut x = codex_up();
+        x.on_input(Input::send("go")).unwrap();
+        let st = run(&mut x, &real("codex-3-edit.jsonl"));
+        let d = of_kind(&st.events, "tool.diff");
+        assert!(!d.is_empty());
+        assert_eq!(d[0]["files"][0]["lines"], json!(["+hello from qa"]));
+    }
+
+    #[test]
+    fn codex_rewind_reverts_the_thread_before_the_last_turn() {
+        // thread/revert {threadId, beforeTurnId} answered and followed by thread/reverted, as Codex 0.167 did in a
+        // scratch thread (two failed turns, no credit; the revert itself needs none)
+        let mut x = codex_up();
+        assert!(x.on_input(Input::Rewind).is_err());
+        x.on_input(Input::send("go")).unwrap();
+        run(&mut x, &real("codex-1-plain.jsonl"));
+        let st = x.on_input(Input::Rewind).unwrap();
+        let w = written(&st);
+        assert_eq!(s(&w[0], "method"), "thread/revert");
+        assert_eq!(w[0]["params"]["threadId"], json!("01a1c3b9-4b7f-7542-900c-c5f4dc80eefa"));
+        assert!(!s(&w[0]["params"], "beforeTurnId").is_empty());
+        let id = w[0]["id"].as_u64().unwrap();
+        let st = x.on_line(&format!(r#"{{"id":{id},"result":{{"thread":{{"id":"01a1c3b9-4b7f-7542-900c-c5f4dc80eefa"}},"turnsBackwardsCursor":null,"itemsBackwardsCursor":null}}}}"#));
+        assert_eq!(st.events, vec![json!({"event": "rewound"}), json!({"event": "session.info", "rewind": false})]);
+        assert!(x.on_input(Input::Rewind).is_err(), "nothing left to take back");
+    }
+
+    #[test]
+    fn diff_lines_are_capped_and_counted() {
+        let big: String = (0..450).map(|i| format!("line {i}\n")).collect();
+        let f = input_diff("Write", &json!({"file_path": "/w/proj/big.txt", "content": big}), "/w/proj").unwrap();
+        assert_eq!(f["lines"].as_array().unwrap().len(), DIFF_LINES);
+        assert_eq!((f["added"].as_u64(), f["more"].as_u64()), (Some(450), Some(50)));
+        assert_eq!(s(&f, "path"), "big.txt");
+        // MultiEdit: one hunk per edit; a non-file tool has none
+        let m = input_diff("MultiEdit", &json!({"file_path": "/w/proj/a.ts", "edits": [{"old_string": "a", "new_string": "b"}, {"old_string": "c", "new_string": "d"}]}), "/w/proj").unwrap();
+        assert_eq!(m["lines"], json!(["-a", "+b", "@@", "-c", "+d"]));
+        assert!(input_diff("Bash", &json!({"command": "ls"}), "/w/proj").is_none());
+        // the rpc and acp agents have no rewind; DSH neither
+        assert!(Pi::new("/w/proj", "OmO").on_input(Input::Rewind).is_err());
     }
 }

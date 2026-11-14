@@ -189,16 +189,73 @@ describe("reducer: a full turn", () => {
     expect(s.chats.kami.messages.at(-1)).toMatchObject({ role: "assistant", text: "partial answer" });
   });
 
-  it("closes open steps when a turn is interrupted", () => {
+  it("a step still running when the turn is stopped reads as stopped, not finished (a bot's turn too)", () => {
+    // audit O11: the bot chat shares this reducer; a step Stop cut short is not ok, and is marked stopped
     const s = run(initialState(), [
       { event: "turn.start", bot: "kami" },
       { event: "tool.start", bot: "kami", tool_id: "a", name: "terminal", detail: "sleep 9" },
+      { event: "tool.start", bot: "kami", tool_id: "b", name: "read_file", detail: "a.txt" },
+      { event: "tool.end", bot: "kami", tool_id: "b", name: "", ok: true, ms: 10 },
       { event: "turn.end", bot: "kami", outcome: "interrupted" },
     ]);
     const t = s.chats.kami.lastTurn!;
     expect(t.outcome).toBe("interrupted");
+    expect(t.steps[0]).toMatchObject({ ok: false, stopped: true });
     expect(t.steps[0].endedAt).toBeDefined();
-    expect(t.steps[0].ok).toBeUndefined();
+    // a step that had ended before Stop keeps its own end
+    expect(t.steps[1]).toMatchObject({ ok: true });
+    expect(t.steps[1].stopped).toBeUndefined();
+  });
+
+  it("a stopped turn's time is from its start to the Stop, on the recorded stream's clock (codex-B: 6.1 s)", () => {
+    // audit O11 follow-up: "Stopped after 0s" beside a step that ran on. codex-B.events.jsonl: turn.start at 8.684 s,
+    // tool.start (sleep 40) at 11.712 s, turn.end interrupted at 14.784 s
+    let s = run(initialState(), [{ event: "turn.start", bot: "agent:s1" }], 8_684);
+    s = run(s, [{ event: "tool.start", bot: "agent:s1", tool_id: "a", name: "terminal", detail: "sleep 40; echo late" }], 11_712);
+    s = run(s, [{ event: "turn.end", bot: "agent:s1", outcome: "interrupted" }], 14_784);
+    const t = s.chats["agent:s1"].lastTurn!;
+    expect(t.endedAt! - t.startedAt).toBe(6_100);
+    expect(t.steps[0].endedAt! - t.steps[0].startedAt).toBe(3_072);
+  });
+
+  it("a turn that ends on its own leaves no step marked stopped", () => {
+    for (const outcome of ["done", "ended", "error"] as const) {
+      const s = run(initialState(), [
+        { event: "turn.start", bot: "kami" },
+        { event: "tool.start", bot: "kami", tool_id: "a", name: "terminal", detail: "sleep 9" },
+        { event: "turn.end", bot: "kami", outcome },
+      ]);
+      expect(s.chats.kami.lastTurn!.steps[0].stopped, outcome).toBeUndefined();
+      expect(s.chats.kami.lastTurn!.steps[0].ok, outcome).toBeUndefined();
+    }
+  });
+
+  it("the end of a stopped step reported after its turn goes to that step; any other late end is dropped", () => {
+    const s0 = run(initialState(), [
+      { event: "turn.start", bot: "kami" },
+      { event: "tool.start", bot: "kami", tool_id: "a", name: "terminal", detail: "sleep 40; echo late" },
+      { event: "turn.end", bot: "kami", outcome: "interrupted" },
+      { event: "turn.start", bot: "kami" },
+      { event: "turn.end", bot: "kami", outcome: "done" },
+    ]);
+    const s = run(s0, [{ event: "tool.end", bot: "kami", tool_id: "a", name: "", ok: true, ms: 39_887 }], T0 + 60_000);
+    const acts = s.chats.kami.items.filter((i) => i.kind === "activity");
+    expect(acts).toHaveLength(2);
+    const step = acts[0].kind === "activity" ? acts[0].turn.steps[0] : null;
+    expect(step).toMatchObject({ ok: false, stopped: true, late: { ok: true, ms: 39_887, endedAt: T0 + 60_000 } });
+    // nothing else moved: no new turn, the later turn untouched
+    expect(s.chats.kami.turn).toBeNull();
+    expect(acts[1].kind === "activity" && acts[1].turn.steps).toEqual([]);
+    // an unknown step's end outside a turn changes nothing
+    expect(run(s, [{ event: "tool.end", bot: "kami", tool_id: "zz", name: "", ok: true, ms: 1 }], T0 + 61_000).chats.kami).toBe(s.chats.kami);
+  });
+
+  it("the agent's own retry shows on the live line as which try it is", () => {
+    const s = run(initialState(), [
+      { event: "turn.start", bot: "agent:s1" },
+      { event: "status", bot: "agent:s1", text: "Retrying 1 of 5", retry: { attempt: 1, max: 5 } },
+    ]);
+    expect(s.chats["agent:s1"].turn!.status).toBe("Retrying 1 of 5");
   });
 
   it("a second turn gets its own activity row", () => {
@@ -304,6 +361,19 @@ describe("chat.opened merging", () => {
     expect(s.chats.kami.turn).toBeNull();
     expect(s.chats.kami.lastTurn).not.toBeNull();
   });
+
+  it("a chat.open reply older than a live turn changes nothing about it (runs.spec flake: the reply ended a turn that started after it was asked)", () => {
+    const ev = (e: Record<string, unknown>, now: number) => ({ type: "event" as const, ev: { bot: "kami", ...e } as never, now });
+    // asked at T0; the turn starts at T0+50 and its step comes in; the reply (running:false, read at T0) lands at T0+300
+    let s = reduce(initialState(), ev({ event: "turn.start" }, T0 + 50));
+    s = reduce(s, ev({ event: "tool.start", tool_id: "d1", name: "delegate_task", detail: "x" }, T0 + 60));
+    s = reduce(s, { type: "chat.opened", bot: "kami", res: opened({ running: false }), now: T0 + 300, since: T0 });
+    expect(s.chats.kami.turn?.steps.map((x) => x.endedAt)).toEqual([undefined]);
+    // and a reply that said running about a turn that ended after the ask does not start a ghost turn
+    s = reduce(s, ev({ event: "turn.end", outcome: "done" }, T0 + 400));
+    s = reduce(s, { type: "chat.opened", bot: "kami", res: opened({ running: true }), now: T0 + 500, since: T0 + 350 });
+    expect(s.chats.kami.turn).toBeNull();
+  });
 });
 
 // ---- store (reducer + a fake bridge) ----------------------------------------------------------
@@ -390,15 +460,15 @@ describe("store", () => {
     const f = fakeBridge();
     const store = createStore(f.bridge, { now: () => T0 });
     await store.actions.init();
-    await store.actions.send("before the list ./plan"); // names not read yet: sent as typed
+    await store.actions.send("before the list $plan"); // names not read yet: sent as typed
     expect(await store.actions.skills("kami")).toHaveLength(2);
     await store.actions.skills("kami");
     expect(f.calls.filter((c) => c.op === "skills.list")).toHaveLength(1); // read once per bot
-    await store.actions.send(" fix ./review this ./plan now ");
+    await store.actions.send(" fix $review this $plan now ");
     const sends = f.calls.filter((c) => c.op === "chat.send").map((c) => c.params.text);
-    expect(sends).toEqual(["before the list ./plan", "/review /plan fix this now"]);
+    expect(sends).toEqual(["before the list $plan", "/review /plan fix this now"]);
     const row = () => store.getState().chats.kami.items.filter((i) => i.kind === "user").at(-1)!;
-    expect(row()).toMatchObject({ text: "fix ./review this ./plan now", sent: "/review /plan fix this now" });
+    expect(row()).toMatchObject({ text: "fix $review this $plan now", sent: "/review /plan fix this now", skills: ["review", "plan"] });
 
     f.setHistory([{ id: "h9", role: "user", text: "/review /plan fix this now", ts: T0 / 1000 }]);
     f.status("closed");
@@ -406,7 +476,14 @@ describe("store", () => {
     await new Promise((r) => setTimeout(r, 0));
     const users = store.getState().chats.kami.items.filter((i) => i.kind === "user");
     expect(users.filter((i) => "sent" in i && i.sent === "/review /plan fix this now")).toHaveLength(1);
-    expect(users.find((i) => i.id === "h9")).toMatchObject({ text: "fix ./review this ./plan now" });
+    expect(users.find((i) => i.id === "h9")).toMatchObject({ text: "fix $review this $plan now", skills: ["review", "plan"] });
+
+    // /name anywhere, ./name and Hermes' own commands go out byte for byte, with no pill
+    for (const t of ["say ./plan out loud", "fix /plan now", "/plan fix it", "/new"]) {
+      await store.actions.send(t);
+      expect(row()).not.toHaveProperty("skills");
+    }
+    expect(f.calls.filter((c) => c.op === "chat.send").map((c) => c.params.text).slice(-4)).toEqual(["say ./plan out loud", "fix /plan now", "/plan fix it", "/new"]);
 
     // a bridge without the op: an empty list, no error, asked again next time
     expect(await store.actions.skills("friren")).toEqual([]);
@@ -692,5 +769,21 @@ describe("subagent events: one fan-out per delegate_task, one row per subagent",
   it("a subagent event with no turn to take it (chat opened afterwards) changes nothing", () => {
     const s0 = run(initialState(), [{ event: "message", bot, id: "m0", text: "hi" }]);
     expect(run(s0, [sub("sa-9", 0, "x", "running", d)])).toBe(s0);
+  });
+
+  it("a subagent's file edit keeps its change per file; said again when it ran, it takes the final change", () => {
+    const file = (lines: string[]) => ({ path: "calc.py", kind: "update" as const, lines, added: lines.filter((l) => l[0] === "+").length, removed: 0 });
+    const asked = file(["@@ -6 +6,3 @@", "     return a - b", "+def mul(a, b):"]);
+    const ran = file(["@@ -6 +6,5 @@", "     return a - b", "+", "+", "+def mul(a, b):", "+    return a * b"]);
+    const s = run(initialState(), [
+      ...turn.slice(0, 9),
+      sub("sa-1", 1, g1, "running", { ...d, tool: "patch", step: "calc.py +4", diff: [asked] }),
+      sub("sa-1", 1, g1, "running", { ...d, tool: "patch", step: "calc.py +4", diff: [ran] }),
+    ]);
+    const steps = fanouts(s)[0].subs[1].steps ?? [];
+    expect(steps.map((x) => [x.text, x.diff?.[0]?.lines.length])).toEqual([
+      ["uname -s", undefined],
+      ["calc.py +4", 6],
+    ]);
   });
 });

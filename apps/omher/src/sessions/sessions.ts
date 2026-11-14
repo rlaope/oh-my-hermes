@@ -23,13 +23,17 @@
 // message by its saved copy's path. An oh-my-hermes session takes no files: the bridge attaches files to a bot's
 // main chat only.
 import { useSyncExternalStore } from "react";
-import type { ITheme, Terminal } from "@xterm/xterm";
+import type { Terminal } from "@xterm/xterm";
 import type { FitAddon } from "@xterm/addon-fit";
-import { agentDef, CONTINUES, draftAgent, draftFolder, INSTALL, parseRecent, pushRecent, RECENT_KEY, type AgentId, type AgentInfo, type Recent, type SessionRec } from "./agents";
+import { afterOpen, feed, onVisible } from "./term/engine";
+import { applyLook, termOptions } from "./term/look";
+import { onTermSettings, readTermSettings } from "./term/settings";
+import { termTheme } from "./term/themes";
+import { agentDef, agentLabel, CONTINUES, draftAgent, draftFolder, draftOpen, hermesOnly, INSTALL, OPEN_KEY, opensAs, parseOpens, parseRecent, pushRecent, RECENT_KEY, sessionMode, type AgentId, type AgentInfo, type OpenAs, type Unseen, type Opens, type Recent, type SessionRec } from "./agents";
 import { NAME_MAX, parseTitles, promptTitle, putTitle, TITLES_KEY } from "./titles";
 import { setDraft as setUnsent } from "../app/drafts";
-import { getHost, type ChatEvent, type ChatInput, type SessionHost } from "./host";
-import { folderKey, getStore, notifySessionEvent, onBridgeEvent, setChatRoute, setSessionKeyLookup, type OutFile, type SentFile, type Store } from "../state/store";
+import { getHost, type ChatEvent, type ChatInput, type PastChat, type SessionHost } from "./host";
+import { folderKey, getStore, notifySessionEvent, notifySessionNote, onBridgeEvent, selectAsks, setChatRoute, setSessionKeyLookup, type OutFile, type SentFile, type Store } from "../state/store";
 import { blobType, bytesOf, inlinePicture, parseSentFiles, putSentFiles, SENT_FILES_KEY, shellQuote, wireText, type SavedFile, type SentFilesBook } from "./attach";
 import type { AccountCli, AccountGroup, ApprovalChoice, BridgeEvent, ClarifyAnswers, Msg } from "../lib/protocol";
 import { continuesItself, type SavedSession } from "../app/resume";
@@ -37,6 +41,7 @@ import { accountGroups } from "../settings/accounts/useAccounts";
 import { modesOf } from "./controls";
 import { parseCommands, type AgentCommand } from "../chat/parts/commands";
 import { t as tr } from "../i18n";
+import { windowWatched, type SessionNote } from "../lib/notify";
 
 /** The Accounts CLI a session of `agent` signs in as (mirrors `session_cli` in src-tauri/src/accounts.rs). */
 const ACCOUNT_CLI: Partial<Record<AgentId, AccountCli>> = { claude: "claude", codex: "codex", grok: "grok" };
@@ -63,18 +68,26 @@ export interface SessionsState {
   home: string | null;
   list: SessionRec[];
   recent: Recent[];
+  /** How the person last opened each agent (Chat or Terminal), kept on this computer. */
+  opens: Opens;
   /** models a chat session can switch to, by session id */
   models: Record<string, ModelOption[]>;
   /** last problem a chat reported that is not a turn's own error (model refused, …), by session id */
   notes: Record<string, string>;
   /** what each chat's agent reported about itself, by session id */
   live: Record<string, AgentLive>;
+  /** what a session did while the person was not looking at it, by session id (gone once they open it) */
+  unseen: Record<string, Unseen>;
 }
 
 /** What a chat's agent said about its controls (agent_chat.rs events). Nothing here is estimated. */
 export interface AgentLive {
   /** the permission mode in force ("" = one omher does not offer, the agent's own) */
   mode?: string;
+  /** what the agent itself reported it runs with: its approval policy and sandbox (Codex `never`,
+   *  `dangerFullAccess`; Claude Code's permission mode), shown when it means no approvals or full disk access */
+  approval?: string;
+  sandbox?: string;
   /** the reasoning effort in force */
   effort?: string;
   /** the reasoning levels it takes; none = it has no effort control */
@@ -85,6 +98,10 @@ export interface AgentLive {
   usage?: { used: number; max: number };
   /** the git branch of its folder ("" = not a repository) */
   branch?: string;
+  /** the agent can take back the person's last message (its own rewind; Claude Code and Codex) */
+  rewind?: boolean;
+  /** it ended because it is not signed in: the command that signs it in, run by the person in a terminal */
+  signin?: string;
 }
 
 interface Term {
@@ -94,7 +111,22 @@ interface Term {
   el: HTMLDivElement;
   hostId: number | null;
   closed: boolean;
+  /** Undoes what the engine attached after the terminal opened (its renderer, add-ons). */
+  undo: () => void;
+  /** Bytes drawn before the shell's id for the session was known: acknowledged once it is. */
+  owed: number;
+  /** The size the program was last told (when it started, then each resize sent). */
+  told: { cols: number; rows: number } | null;
+  /** A changed size waiting to be sent (`RESIZE_SETTLE_MS`). */
+  settle: ReturnType<typeof setTimeout> | null;
 }
+
+/** A terminal's new size goes to its program once it has stopped changing for this long. Dragging a window gives
+ *  one size per frame (16.7 ms at 60 Hz), so a wait of one frame or less collapses nothing; two frames does, and
+ *  the program redraws once for the size the drag ended on instead of once per frame. */
+export const RESIZE_SETTLE_MS = 32;
+
+const utf8 = new TextEncoder();
 
 type Xterm = [typeof import("@xterm/xterm"), typeof import("@xterm/addon-fit")];
 let xtermLoad: Promise<Xterm> | null = null;
@@ -117,6 +149,8 @@ interface ChatProc {
   stopping?: boolean;
   /** the program never spoke its chat protocol (an old version, a hung start): the reason its turn and exit carry */
   noChat?: string;
+  /** it is not signed in (an Agent Client Protocol agent's `-32000`): omher ends it with `noChat` as the reason */
+  signedOut?: boolean;
 }
 
 const readRecent = () => {
@@ -149,23 +183,42 @@ const titleKey = (r: SessionRec) => (r.agentSession ? `${r.agent}:${r.agentSessi
 /** Agents whose own session files carry a conversation title the bridge can read (`cli.title`). */
 const TITLED: readonly AgentId[] = ["claude", "codex"];
 
-/** The shell's own words when it will not start OpenCode (`NO_RULES` in acp_chat.rs, kept equal by a test). */
+/** The shell's own words when it will not start OpenCode (`NO_RULES` in acp_chat.rs, kept equal by a test); for Kilo
+ *  Code the same sentence names Kilo Code (`no_rules`). */
 export const NO_RULES = "OpenCode did not start because omher could not confirm it would keep your own OpenCode permission rules.";
 
-const errText = (e: unknown) =>
-  typeof e === "string"
-    ? e
-    : e instanceof Error
-      ? e.message
-      : typeof e === "object" && e && "message" in e
-        ? String((e as { message: unknown }).message)
-        : String(e);
+/** The shell's own sentence for an Agent Client Protocol agent that is not signed in (`signed_out` in acp_chat.rs,
+ *  the command between backticks; a test keeps the two equal). */
+const SIGNED_OUT = /^(.+) is not signed in\. Run `([^`]+)` in a terminal and sign in\.$/;
 
-/** How an agent opens, from the shell's list (or the UI list for an older shell). */
-const modeOf = (agents: AgentInfo[] | null, id: AgentId) => agents?.find((a) => a.id === id)?.mode ?? agentDef(id).mode;
+/** `text` as a person reads it: the shell's not-signed-in sentence is said in their language with the command as
+ *  plain words (no backticks); anything else is returned as it is. */
+export const signedOutSaid = (text: string): string => {
+  const m = SIGNED_OUT.exec(text.trim());
+  return m ? tr("ss.signedOut", { agent: m[1], cmd: m[2] }) : text;
+};
+
+const errText = (e: unknown) =>
+  signedOutSaid(
+    typeof e === "string"
+      ? e
+      : e instanceof Error
+        ? e.message
+        : typeof e === "object" && e && "message" in e
+          ? String((e as { message: unknown }).message)
+          : String(e),
+  );
+
+const readOpens = () => {
+  try {
+    return parseOpens(typeof localStorage !== "undefined" ? localStorage.getItem(OPEN_KEY) : null);
+  } catch {
+    return {};
+  }
+};
 
 export function createSessions(host: SessionHost, store: () => Store = getStore, accounts: () => AccountGroup[] | null = () => null) {
-  let state: SessionsState = { agents: null, home: null, list: [], recent: readRecent(), models: {}, notes: {}, live: {} };
+  let state: SessionsState = { agents: null, home: null, list: [], recent: readRecent(), opens: readOpens(), models: {}, notes: {}, live: {}, unseen: {} };
   const listeners = new Set<() => void>();
   const terms = new Map<string, Term>();
   const procs = new Map<string, ChatProc>();
@@ -182,12 +235,46 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
   /** drafts whose agent / folder the person picked: a late agent or home look-up no longer moves them */
   const picked = new Map<string, { agent?: boolean; cwd?: boolean }>();
   let notify: ((ev: BridgeEvent) => void) | null = null;
+  let notifyState: ((id: string, n: SessionNote) => void) | null = null;
 
   const set = (patch: Partial<SessionsState>) => {
     state = { ...state, ...patch };
     for (const l of [...listeners]) l();
   };
   const rec = (id: string) => state.list.find((s) => s.id === id);
+
+  // ---- what a session did while the person looked elsewhere --------------------------------
+
+  /** The person sees session `id` right now: the window has focus and shows it. */
+  const watching = (id: string) => {
+    const ui = store().getState().ui;
+    return windowWatched() && ui.view === "session" && ui.session === id;
+  };
+  /** `web-app · Claude Code`, as its notifications and its Needs-you row name it. */
+  const nameOf = (r: SessionRec) => `${r.cwd.split(/[\\/]/).filter(Boolean).pop() ?? r.cwd} · ${agentLabel(r.agent, state.agents)}`;
+  /** Session `id` did something the person did not see: its row carries it until they open the session. True when
+   *  this is news (they are not watching, and the row does not say it already). */
+  const flag = (id: string, what: Unseen): boolean => {
+    if (!rec(id) || watching(id) || state.unseen[id] === what) return false;
+    set({ unseen: { ...state.unseen, [id]: what } });
+    return true;
+  };
+  /** The person opened session `id`: what its row carried for them is seen. */
+  const seen = (id: string) => {
+    if (!(id in state.unseen)) return;
+    const unseen = { ...state.unseen };
+    delete unseen[id];
+    set({ unseen });
+  };
+  /** Session `id`'s program ended or could not start while the person was elsewhere: its row says so and a
+   *  notification goes out. */
+  const tellEnd = (id: string, kind: "ended" | "failed", detail: { code?: number | null; error?: string }, told = false) => {
+    const r = rec(id);
+    if (!r || watching(id)) return;
+    flag(id, "end");
+    // `told`: the turn that failed with it already raised a notification with the same reason
+    if (!told) notifyState?.(id, { kind, name: nameOf(r), ...detail });
+  };
   const patchRec = (id: string, p: Partial<SessionRec>) => set({ list: state.list.map((s) => (s.id === id ? { ...s, ...p } : s)) });
   let titles = readTitles();
   const saveTitles = (next: Record<string, string>) => {
@@ -284,8 +371,27 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
    *  stopped it, so its last events are dropped). */
   const endLiveTurn = (id: string, outcome: "interrupted" | "ended") => {
     const key = keys.get(id);
-    if (!key || !store().getState().chats[key]?.turn) return;
-    store().dispatch({ type: "event", ev: { event: "turn.end", bot: key, outcome } as BridgeEvent, now: Date.now() });
+    if (!key) return;
+    if (store().getState().chats[key]?.turn) store().dispatch({ type: "event", ev: { event: "turn.end", bot: key, outcome } as BridgeEvent, now: Date.now() });
+    // nobody is left to take an answer: an ask still open (a background subagent's, which outlives its turn) reads
+    // "Not answered"
+    for (const a of selectAsks(store().getState()).filter((x) => x.bot === key))
+      store().dispatch({ type: "event", ev: { event: "prompt.expired", bot: key, request_id: a.item.request_id, reason: "cancelled" } as BridgeEvent, now: Date.now() });
+  };
+
+  /** An agent that is not signed in: omher stops it and the session ends with that one line (`proc.noChat`), said once
+   *  beside Restart; the turn it failed keeps no second copy. */
+  const endSignedOut = (id: string, proc: ChatProc) => {
+    if (procs.get(id) !== proc) return;
+    const error = proc.noChat ?? "";
+    proc.stopping = true;
+    procs.delete(id);
+    endLiveTurn(id, "ended");
+    if (proc.hostId !== undefined) void host.chatClose(proc.hostId).catch(() => undefined);
+    patchRec(id, { status: "exited", exitCode: null, error });
+    const key = keys.get(id);
+    if (key) store().dispatch({ type: "turn.reasonMoved", bot: key, error });
+    tellEnd(id, "ended", { code: null, error });
   };
 
   const onAgentEvent = (id: string, proc: ChatProc) => (ev: ChatEvent) => {
@@ -303,7 +409,10 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
         if (typeof ev.background === "number") p.background = ev.background;
         patchRec(id, p);
         const l: Partial<AgentLive> = {};
+        if (typeof ev.rewind === "boolean") l.rewind = ev.rewind;
         if (typeof ev.mode === "string") l.mode = ev.mode;
+        if (typeof ev.approval === "string") l.approval = ev.approval;
+        if (typeof ev.sandbox === "string") l.sandbox = ev.sandbox;
         if (typeof ev.effort === "string" && ev.effort) l.effort = ev.effort;
         if (Object.keys(l).length) patchLive(id, l);
         if (fresh) {
@@ -331,13 +440,25 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
         if (typeof ev.used === "number" && typeof ev.max === "number" && ev.max > 0) patchLive(id, { usage: { used: ev.used, max: ev.max } });
         return;
       case "session.error":
+        if (ev.kind === "signed_out") {
+          // not signed in: one line in the person's words with the agent's own sign-in command (its row in
+          // acp_chat.rs), then the session ends; a turn already started fails with it first
+          const agent = rec(id)?.agent ?? "claude";
+          const login = typeof ev.login === "string" ? ev.login : "";
+          proc.noChat = tr("ss.signedOut", { agent: agentDef(agent).label, cmd: login });
+          proc.signedOut = true;
+          patchLive(id, { signin: login });
+          const key = keys.get(id);
+          if (!key || !store().getState().chats[key]?.turn) endSignedOut(id, proc);
+          return;
+        }
         if (ev.kind === "no_chat_mode") {
           // the shell ends this session: say why in the person's words, with the line that updates the agent
           const agent = rec(id)?.agent ?? "claude";
           proc.noChat = tr("ss.noChatMode", { agent: agentDef(agent).label, install: INSTALL[agent] });
           return;
         }
-        note(id, String(ev.message ?? ""));
+        note(id, signedOutSaid(String(ev.message ?? "")));
         return;
       case "session.note":
         // something the agent's side did on its own that the person should know (Codex: a new conversation in place
@@ -352,15 +473,43 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
         if (proc.stopping) return;
         endLiveTurn(id, "ended");
         const code = typeof ev.code === "number" ? ev.code : null;
-        const error = proc.noChat ?? (typeof ev.error === "string" ? ev.error.trim() : "");
+        // code 0 is an orderly close: whatever the program printed (a start-up warning) is not why it ended
+        const error = proc.noChat ?? (code !== 0 && typeof ev.error === "string" ? signedOutSaid(ev.error.trim()) : "");
         patchRec(id, { status: "exited", exitCode: code, ...(error ? { error } : {}) });
+        // the turn the exit failed says "Failed after 0s"; its reason is the Ended line's, said once beside Restart
+        const key = keys.get(id);
+        if (key && error) store().dispatch({ type: "turn.reasonMoved", bot: key, error });
+        const last = key ? store().getState().chats[key]?.lastTurn : null;
+        tellEnd(id, "ended", { code, error }, !!last && last.outcome === "error" && Date.now() - (last.endedAt ?? 0) < 3000);
+        return;
+      }
+      case "rewound": {
+        // the agent took the person's last message back: the chat drops it and what came after, and the box offers
+        // its text again (the text the person typed; the agent's own copy when omher has none)
+        const key = keys.get(id);
+        const items = key ? (store().getState().chats[key]?.items ?? []) : [];
+        const last = [...items].reverse().find((i) => i.kind === "user");
+        const text = last && last.kind === "user" ? last.text : typeof ev.text === "string" ? ev.text : "";
+        dispatchChat(id, ev);
+        if (key && text) store().dispatch({ type: "ui.draft", bot: key, text });
         return;
       }
       default:
+        // a turn that failed because the agent is not signed in (a model that needs its account): the shell's
+        // sentence, said in the person's language
+        if (ev.event === "turn.end" && typeof ev.error === "string") ev = { ...ev, error: signedOutSaid(ev.error) };
         if (ev.event === "turn.end" && proc.noChat && ev.outcome === "error") ev = { ...ev, error: proc.noChat };
         dispatchChat(id, ev);
+        if (ev.event === "turn.end" && proc.signedOut) {
+          endSignedOut(id, proc);
+          return;
+        }
         // the agent may have titled the conversation during the turn
+        // a new turn: the finished one its row still showed is behind it
+        if (ev.event === "turn.start" && state.unseen[id] === "end") seen(id);
         if (ev.event === "turn.end") {
+          // an answer the person did not watch arrive: the row says it finished until they open it
+          if (ev.outcome === "done") flag(id, "end");
           void readAgentTitle(id);
           void readBranch(id);
         }
@@ -384,8 +533,15 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
     const r = rec(id)!;
     const proc: ChatProc = { kind: "agent" };
     procs.set(id, proc);
+    // a new process can take back only what it was sent itself (its own rewind)
+    if (state.live[id]?.rewind) patchLive(id, { rewind: false });
     try {
-      proc.hostId = await host.chatStart(r.agent, r.cwd, onAgentEvent(id, proc), resume, accountOf(r));
+      proc.hostId = await host.chatStart(r.agent, r.cwd, onAgentEvent(id, proc), resume, accountOf(r), id);
+      // it said it is not signed in before omher knew its id: it is ended already, so only the process goes
+      if (proc.signedOut) {
+        void host.chatClose(proc.hostId).catch(() => undefined);
+        return;
+      }
       if (procs.get(id) !== proc) {
         // closed while starting
         void host.chatClose(proc.hostId).catch(() => undefined);
@@ -401,7 +557,10 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
       if (procs.get(id) === proc) procs.delete(id);
       // the shell's refusal to start an agent whose ask rules it could not prove (acp_chat.rs NO_RULES), translated
       const why = errText(e);
-      patchRec(id, { status: "failed", error: why === NO_RULES ? tr("ss.noRules") : why });
+      const label = agentDef(r.agent).label;
+      const error = why === NO_RULES ? tr("ss.noRules") : why === NO_RULES.replaceAll("OpenCode", label) ? tr("ss.noRulesAgent", { agent: label }) : why;
+      patchRec(id, { status: "failed", error });
+      tellEnd(id, "failed", { error });
     }
   };
 
@@ -434,7 +593,9 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
       void loadHermesModels(id, bot);
     } catch (e) {
       if (procs.get(id) === proc) procs.delete(id);
-      patchRec(id, { status: "failed", error: errText(e) });
+      const error = errText(e);
+      patchRec(id, { status: "failed", error });
+      tellEnd(id, "failed", { error });
     }
   };
 
@@ -585,7 +746,7 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
     const r = rec(id);
     setChatRoute(key, {
       // folder first: it tells sessions apart, and a narrow Needs-you row keeps it when the name is cut
-      label: r ? `${r.cwd.split(/[\\/]/).filter(Boolean).pop() ?? r.cwd} · ${agentDef(r.agent).label}` : tr("ss.session"),
+      label: r ? `${r.cwd.split(/[\\/]/).filter(Boolean).pop() ?? r.cwd} · ${agentLabel(r.agent, state.agents)}` : tr("ss.session"),
       open: () => store().actions.openSession(id),
       send: (text) => send(id, text),
       interrupt: () => input(id, { kind: "interrupt" }),
@@ -606,8 +767,21 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
     for (const [id, p] of procs) {
       if (p.kind === "folder" && p.bot === ev.bot && p.fid === ev.session) {
         procs.delete(id);
-        patchRec(id, { status: "exited", exitCode: null, error: ev.reason || tr("ss.hermesClosed") });
+        const error = ev.reason || tr("ss.hermesClosed");
+        patchRec(id, { status: "exited", exitCode: null, error });
+        tellEnd(id, "ended", { code: null, error });
       }
+    }
+  });
+
+  // A Hermes folder chat's turns come over the bridge: an answer the person did not watch arrive marks its row, and
+  // the next turn puts it behind.
+  onBridgeEvent((ev) => {
+    if (!ev.session || (ev.event !== "turn.start" && !(ev.event === "turn.end" && ev.outcome === "done"))) return;
+    for (const [id, p] of procs) {
+      if (p.kind !== "folder" || p.bot !== ev.bot || p.fid !== ev.session) continue;
+      if (ev.event === "turn.end") flag(id, "end");
+      else if (state.unseen[id] === "end") seen(id);
     }
   });
 
@@ -641,6 +815,85 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
     return id;
   };
 
+  /** New session here: a draft with session `id`'s agent and folder (an open draft takes them instead). */
+  const draftHere = (id: string): string | null => {
+    const r = rec(id);
+    if (!r) return null;
+    const d = draft(r.agent);
+    if (r.cwd) setDraft(d, { agent: r.agent, cwd: r.cwd });
+    return d;
+  };
+
+  /**
+   * Continue a conversation Claude Code or Codex keeps for a folder (made in its CLI, or anywhere else): a session in
+   * that folder whose chat shows the conversation's last messages, and whose agent continues it (Claude Code
+   * `--resume`, Codex `thread/resume`). A session that already runs that conversation is opened instead.
+   */
+  const continuePast = async (chat: PastChat): Promise<string> => {
+    const there = state.list.find((r) => r.agent === chat.agent && r.agentSession === chat.id && r.status !== "draft");
+    if (there) {
+      store().actions.openSession(there.id);
+      if (there.status === "exited" || there.status === "failed") void restart(there.id);
+      return there.id;
+    }
+    const id = `s${++seq}`;
+    const startedAt = Date.now();
+    const r: SessionRec = {
+      id,
+      agent: chat.agent,
+      cwd: chat.cwd,
+      startedAt,
+      status: "starting",
+      view: "chat",
+      agentSession: chat.id,
+      ...(chat.named ? { agentTitle: chat.title } : { promptTitle: chat.title }),
+    };
+    const recent = pushRecent(state.recent, { agent: chat.agent, cwd: chat.cwd, at: startedAt });
+    try {
+      localStorage.setItem(RECENT_KEY, JSON.stringify(recent));
+    } catch {
+      /* no storage */
+    }
+    set({ list: [r, ...state.list], recent });
+    keys.set(id, `agent:${id}`);
+    registerRoute(id);
+    store().actions.openSession(id);
+    await ready();
+    let msgs: Msg[] = [];
+    try {
+      msgs = (await host.pastMessages(chat.agent, chat.id, chat.cwd)).map((m, i) => ({ id: `p-${i}`, role: m.role, text: m.text, ts: m.ts }));
+    } catch {
+      /* the conversation continues all the same; only its earlier messages are not shown */
+    }
+    if (!rec(id)) return id; // closed meanwhile
+    openChat(id, "", msgs);
+    onAgentSession(id);
+    await startAgentChat(id, chat.id);
+    return id;
+  };
+
+  /** Show session `id`'s folder in the file manager; a failure is said under its chat. */
+  const revealFolder = async (id: string) => {
+    const r = rec(id);
+    if (!r?.cwd) return;
+    try {
+      await host.reveal(r.cwd);
+    } catch (e) {
+      note(id, errText(e));
+    }
+  };
+
+  /** Open the person's own system terminal in session `id`'s folder; a failure is said under its chat. */
+  const openTerminal = async (id: string) => {
+    const r = rec(id);
+    if (!r?.cwd) return;
+    try {
+      await host.openTerminal(r.cwd);
+    } catch (e) {
+      note(id, errText(e));
+    }
+  };
+
   /** Change a draft's agent or folder (refused once it has started). */
   const setDraft = (id: string, p: { agent?: AgentId; cwd?: string }) => {
     const r = rec(id);
@@ -661,9 +914,23 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
     return folder;
   };
 
+  /** Pick how a draft opens, Chat or Terminal (one the agent has; remembered for the agent on this computer). */
+  const setOpen = (id: string, way: OpenAs) => {
+    const r = rec(id);
+    if (!r || r.status !== "draft" || !opensAs(r.agent, state.agents)[way]) return;
+    const opens = { ...state.opens, [r.agent]: way };
+    try {
+      localStorage.setItem(OPEN_KEY, JSON.stringify(opens));
+    } catch {
+      /* no storage */
+    }
+    set({ opens });
+  };
+
   /**
    * Start a draft: its agent in its folder, `first` as the agent's first prompt (a chat agent; the bubble shows at
-   * once). A terminal agent starts in the folder and is sent nothing. From here the agent and folder are fixed.
+   * once). A draft opened as a terminal (the agent's own, or the person's pick) starts the program in the folder and
+   * is sent nothing. From here the agent, folder and way of opening are fixed.
    */
   const start = async (id: string, first?: string, startedAs?: string, files: OutFile[] = []): Promise<boolean> => {
     const r0 = rec(id);
@@ -671,7 +938,8 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
     await ready();
     const r = rec(id);
     if (!r || r.status !== "draft") return false; // closed or started meanwhile
-    const mode = modeOf(state.agents, r.agent);
+    const open = draftOpen(r.agent, state.agents, state.opens);
+    const mode = sessionMode(state.agents, { agent: r.agent, open });
     const text = first?.trim() ?? "";
     // the first message's files are saved before anything starts: one that cannot be leaves the draft as it was
     // (its chips stay)
@@ -701,13 +969,16 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
       startedAt,
       status: "starting",
       view: mode === "terminal" ? "terminal" : "chat",
+      // only a way the agent does not open by itself is kept on the session
+      ...(open === "terminal" && sessionMode(state.agents, { agent: r.agent }) !== "terminal" ? { open } : {}),
       ...(account ? { account } : {}),
       ...(startedAs ? { startedAs } : {}),
       // oh-my-hermes runs on the bot you were looking at (else the first bot)
       ...(mode === "hermes" ? { bot: app.selectedBot ?? app.bots[0]?.name } : {}),
     });
     // the message is sent: the draft view goes before its composer clears its own unsent text, so clear it here
-    if (text || files.length) setUnsent(`agent:${id}`, "");
+    // (a terminal starts without the text and files the draft held)
+    if (text || files.length || mode === "terminal") setUnsent(`agent:${id}`, "");
     // the first message names the session (as a later one would in send) until the agent or the person does
     const pt = text ? promptTitle(text) : "";
     if (pt) patchRec(id, { promptTitle: pt });
@@ -737,6 +1008,9 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
     return true;
   };
 
+  /** The app theme in force, as the terminal views last reported it. */
+  let look: "dark" | "light" = "dark";
+
   /** How many times session `id`'s terminal was started again (Restart): the view keys its terminal on it. */
   const termRuns = new Map<string, number>();
 
@@ -744,19 +1018,31 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
     const r = rec(id);
     if (!r) return;
     // the terminal view of a chat session does not decide the session's status; the chat does
-    const ofChat = modeOf(state.agents, r.agent) !== "terminal";
+    const ofChat = sessionMode(state.agents, r) !== "terminal";
     // Claude Code's terminal continues the chat's conversation
     const resume = r.agentSession && ofChat && r.agent === "claude" ? r.agentSession : undefined;
+    const { cols, rows } = t.term;
     try {
       const hostId = await host.start(
         r.agent,
         r.cwd,
-        t.term.cols,
-        t.term.rows,
-        (d) => t.term.write(d),
+        cols,
+        rows,
+        (d) => {
+          // every message is acknowledged once the terminal has taken it, in order: the shell reads the program
+          // no further ahead of the page than its credit allows
+          const bytes = typeof d === "string" ? utf8.encode(d).length : d.byteLength;
+          feed(t.term, d, () => {
+            if (t.hostId === null) t.owed += bytes;
+            else host.ack(t.hostId, bytes);
+          });
+        },
         (code) => {
           t.closed = true;
-          if (!ofChat) patchRec(id, { status: "exited", exitCode: code });
+          if (!ofChat) {
+            patchRec(id, { status: "exited", exitCode: code });
+            tellEnd(id, "ended", { code });
+          }
           t.term.write(`\r\n\x1b[2m[${code ? tr("ss.termEndedExit", { agent: agentDef(r.agent).label, code }) : tr("ss.termEnded", { agent: agentDef(r.agent).label })}]\x1b[0m\r\n`);
         },
         resume,
@@ -768,13 +1054,31 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
         void host.close(hostId);
         return;
       }
+      if (t.owed) host.ack(hostId, t.owed);
+      t.owed = 0;
+      // the program started at this size; one that changed while it started is sent now
+      t.told = { cols, rows };
+      if (t.settle === null) tellSize(t);
       if (!ofChat) patchRec(id, { status: "running" });
     } catch (e) {
       t.closed = true;
       const error = errText(e);
-      if (!ofChat) patchRec(id, { status: "failed", error });
+      if (!ofChat) {
+        patchRec(id, { status: "failed", error });
+        tellEnd(id, "failed", { error });
+      }
       t.term.write(`\x1b[31m${error}\x1b[0m\r\n`);
     }
+  };
+
+  /** Tell the program its terminal's size, if it is not the one it was last told. */
+  const tellSize = (t: Term) => {
+    t.settle = null;
+    if (t.hostId === null || t.closed) return;
+    const { cols, rows } = t.term;
+    if (t.told?.cols === cols && t.told.rows === rows) return;
+    t.told = { cols, rows };
+    void host.resize(t.hostId, cols, rows).catch(() => undefined);
   };
 
   const disposeTerm = (id: string) => {
@@ -782,18 +1086,21 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
     if (!t) return;
     if (t.hostId !== null && !t.closed) void host.close(t.hostId).catch(() => undefined);
     t.closed = true;
+    if (t.settle !== null) clearTimeout(t.settle);
+    t.undo();
     t.term.dispose();
     t.el.remove();
     terms.delete(id);
   };
 
   /** Mount session `id`'s terminal into `container` (creating and starting it the first time). */
-  const attach = (id: string, container: HTMLElement, theme: ITheme): (() => void) => {
-    if (xtermMods) return mount(xtermMods, id, container, theme);
+  const attach = (id: string, container: HTMLElement, mode: "dark" | "light"): (() => void) => {
+    look = mode;
+    if (xtermMods) return mount(xtermMods, id, container);
     let detach: (() => void) | null = null;
     let gone = false;
     void loadXterm().then((m) => {
-      if (!gone) detach = mount(m, id, container, theme);
+      if (!gone) detach = mount(m, id, container);
     });
     return () => {
       gone = true;
@@ -801,40 +1108,54 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
     };
   };
 
-  const mount = ([{ Terminal }, { FitAddon }]: Xterm, id: string, container: HTMLElement, theme: ITheme): (() => void) => {
+  const mount = ([{ Terminal }, { FitAddon }]: Xterm, id: string, container: HTMLElement): (() => void) => {
+    const settings = readTermSettings();
+    const theme = termTheme(look, settings);
     let t = terms.get(id);
     const fresh = !t;
     if (!t) {
       const el = document.createElement("div");
       el.className = "term-host";
-      const term = new Terminal({
-        fontFamily: getComputedStyle(document.documentElement).getPropertyValue("--mono").trim() || "monospace",
-        fontSize: 12.5,
-        lineHeight: 1.2,
-        cursorBlink: true,
-        allowProposedApi: false,
-        scrollback: 5000,
-        // dim text (agents use it a lot) stays readable on the light background
-        minimumContrastRatio: 4.5,
-        macOptionIsMeta: true,
-        theme,
-      });
+      const term = new Terminal(termOptions(theme, settings));
       const fit = new FitAddon();
       term.loadAddon(fit);
-      t = { term, fit, el, hostId: null, closed: false };
+      t = { term, fit, el, hostId: null, closed: false, undo: () => undefined, owed: 0, told: null, settle: null };
       terms.set(id, t);
       const tt = t;
       term.onData((d) => {
         if (tt.hostId !== null && !tt.closed) void host.write(tt.hostId, d).catch(() => undefined);
       });
-      term.onResize(({ cols, rows }) => {
-        if (tt.hostId !== null && !tt.closed) void host.resize(tt.hostId, cols, rows).catch(() => undefined);
+      term.onResize(() => {
+        // the size it ends on is sent, once (a drag gives one size per frame)
+        if (tt.settle !== null) clearTimeout(tt.settle);
+        tt.settle = setTimeout(() => tellSize(tt), RESIZE_SETTLE_MS);
+      });
+      // The program rang the terminal's bell, as agents do when they wait for the person. omher reads nothing the
+      // program prints: the bell is the one thing a terminal tells it. The row says so and a notification goes
+      // out, once, until the person comes back to the session.
+      const ring = () => {
+        const r = rec(id);
+        if (r && !tt.closed && flag(id, "bell")) notifyState?.(id, { kind: "bell", name: nameOf(r) });
+      };
+      term.onBell(ring);
+      // The notification escapes agents send instead of a bell count as a ring too: OSC 9 with a message (not a
+      // `9;<number>` report such as the 9;4 progress bar) and OSC 777 `notify`. Their text is never shown or kept.
+      term.parser.registerOscHandler(9, (d) => {
+        if (!/^\d+(;|$)/.test(d)) ring();
+        return false; // not consumed: another handler may want the escape
+      });
+      term.parser.registerOscHandler(777, (d) => {
+        if (d.startsWith("notify;")) ring();
+        return false;
       });
     }
     const tt = t;
     container.appendChild(tt.el);
-    if (fresh) tt.term.open(tt.el);
-    tt.term.options.theme = theme;
+    if (fresh) {
+      tt.term.open(tt.el);
+      tt.undo = afterOpen(tt.term, tt.el, settings);
+    }
+    applyLook(tt.term, theme, settings);
     const refit = () => {
       if (!tt.el.isConnected || tt.el.clientWidth === 0) return;
       try {
@@ -847,9 +1168,11 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
     if (fresh) void ready().then(() => startTerm(id, tt));
     const ro = new ResizeObserver(refit);
     ro.observe(container);
+    onVisible(tt.term, true);
     tt.term.focus();
     return () => {
       ro.disconnect();
+      onVisible(tt.term, false);
       if (tt.el.parentElement === container) container.removeChild(tt.el);
     };
   };
@@ -895,7 +1218,9 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
    */
   const setView = async (id: string, view: "chat" | "terminal") => {
     const r = rec(id);
-    if (!r || r.view === view || modeOf(state.agents, r.agent) === "terminal") return;
+    if (!r || r.view === view || sessionMode(state.agents, r) === "terminal") return;
+    // a Hermes chat without oh-my-hermes has no terminal view: that view would start `omh`
+    if (view === "terminal" && r.agent === "omh" && hermesOnly(state.agents)) return;
     if (r.agent === "claude" && r.agentSession) {
       if (view === "terminal") {
         await stopChat(id);
@@ -913,15 +1238,30 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
     patchRec(id, { view });
   };
 
+  /** A session opened as a terminal whose agent has no terminal on this computer any more (oh-my-hermes was removed
+   *  and only Hermes is left) goes on as its agent opens by itself, instead of starting a program that is not there. */
+  const lostTerminal = (id: string) => {
+    const r = rec(id);
+    if (!r || r.open !== "terminal" || state.agents === null || opensAs(r.agent, state.agents).terminal) return;
+    const t = terms.get(id);
+    if (t && !t.closed) return; // its program still runs: leave it be
+    disposeTerm(id);
+    // a Hermes chat runs on a bot: the one in view (else the first), as a New session picks it
+    const app = store().getState();
+    const bot = agentDef(r.agent).mode === "hermes" && !r.bot ? (app.selectedBot ?? app.bots[0]?.name) : undefined;
+    patchRec(id, { open: undefined, view: "chat", ...(bot ? { bot } : {}) });
+  };
+
   /**
    * Start an ended session's agent again: a chat agent in the same chat, a terminal agent in a fresh terminal, in
    * the same folder and account. Agents in `CONTINUES` continue their conversation (Claude Code `--resume`, Codex
    * `thread/resume`, OmO `--session`, DSH `--session-id`); the others (pi, oh-my-pi, Grok's terminal) start a new one.
    */
   const restart = async (id: string) => {
+    lostTerminal(id);
     const r = rec(id);
     if (!r || (r.status !== "exited" && r.status !== "failed")) return;
-    if (modeOf(state.agents, r.agent) === "terminal") {
+    if (sessionMode(state.agents, r) === "terminal") {
       // a fresh terminal: the view mounts it and starts the program (continuing the conversation, as startTerm says)
       const t = terms.get(id);
       if (t && !t.closed) return;
@@ -930,9 +1270,10 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
       patchRec(id, { status: "starting", error: undefined, exitCode: null, view: "terminal", paused: undefined });
       return;
     }
-    if (procs.has(id) || modeOf(state.agents, r.agent) !== "chat") return;
+    if (procs.has(id) || sessionMode(state.agents, r) !== "chat") return;
     const resume = CONTINUES.includes(r.agent) && r.agentSession ? r.agentSession : undefined;
     patchRec(id, { status: "starting", error: undefined, exitCode: null, view: "chat", paused: undefined });
+    patchLive(id, { signin: undefined });
     note(id, null);
     await startAgentChat(id, resume);
   };
@@ -942,9 +1283,10 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
    * oh-my-hermes, a chat whose conversation id was never reported), in the same folder and account. Once only.
    */
   const resume = async (id: string) => {
+    lostTerminal(id);
     const r = rec(id);
     if (!r?.paused || procs.has(id) || terms.has(id)) return;
-    const mode = modeOf(state.agents, r.agent);
+    const mode = sessionMode(state.agents, r);
     if (mode === "chat") return restart(id);
     if (mode === "terminal") {
       // the terminal view starts the program when it mounts
@@ -986,7 +1328,7 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
         seq = Math.max(seq, Number(s.id.slice(1)) || 0);
         continue;
       }
-      const mode = modeOf(state.agents, s.agent);
+      const mode = sessionMode(state.agents, s);
       if (s.agent === "dsh" && s.view === "terminal") {
         // omher 0.2.4's DSH ran deepseek-bot's terminal (its id is a deepseek-bot conversation): it comes back ended
         // with a plain line and never starts deepseek-bot; Restart starts DeepSeek Harness in the folder
@@ -1005,6 +1347,7 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
         startedAt: s.startedAt,
         // a chat agent comes back as its chat (its terminal view would start the program on sight)
         view: mode === "terminal" ? "terminal" : "chat",
+        ...(s.open === "terminal" ? { open: s.open } : {}),
         status: auto ? "starting" : s.failed ? "failed" : "exited",
         exitCode: s.running ? null : (s.exitCode ?? null),
         ...(s.error && !s.running ? { error: s.error } : {}),
@@ -1064,7 +1407,9 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
     delete notes[id];
     const live = { ...state.live };
     delete live[id];
-    set({ list, models, notes, live });
+    const unseen = { ...state.unseen };
+    delete unseen[id];
+    set({ list, models, notes, live, unseen });
     const ui = store().getState().ui;
     if (ui.view === "session" && ui.session === id) {
       const next = list[Math.min(idx, list.length - 1)];
@@ -1127,9 +1472,27 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
     }
   };
 
-  const setTheme = (theme: ITheme) => {
-    for (const t of terms.values()) t.term.options.theme = theme;
+  /** Every open terminal takes the look again: the app theme changed, or a terminal setting did. */
+  const relook = () => {
+    const settings = readTermSettings();
+    const theme = termTheme(look, settings);
+    for (const t of terms.values()) {
+      applyLook(t.term, theme, settings);
+      // a changed font or line height changes how many cells fit
+      if (t.el.isConnected && t.el.clientWidth > 0) {
+        try {
+          t.fit.fit();
+        } catch {
+          /* not measurable yet */
+        }
+      }
+    }
   };
+  const setLook = (mode: "dark" | "light") => {
+    look = mode;
+    relook();
+  };
+  onTermSettings(relook);
 
   return {
     getState: () => state,
@@ -1141,12 +1504,17 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
     reset: ready,
     loadAgents,
     draft,
+    draftHere,
+    continuePast,
+    revealFolder,
+    openTerminal,
     setDraft,
+    setOpen,
     chooseFolder,
     start,
     attach,
     close,
-    setTheme,
+    setLook,
     setView,
     setModel,
     setMode,
@@ -1160,6 +1528,14 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
     dropOnTerminal,
     /** Esc / Stop: the agent's own interrupt. */
     interrupt: (id: string) => input(id, { kind: "interrupt" }).catch(() => undefined),
+    /** Edit and resend: the agent takes back the last message (its own rewind), then the box holds its text. */
+    rewind: async (id: string) => {
+      try {
+        await input(id, { kind: "rewind" });
+      } catch (e) {
+        note(id, errText(e));
+      }
+    },
     /** Session `id` has a terminal in this page load (an ended one keeps its output until it is closed). */
     hasTerm: (id: string) => terms.has(id),
     /** Changes each time Restart starts session `id`'s terminal program again. */
@@ -1175,6 +1551,12 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
     setNotify(fn: ((ev: BridgeEvent) => void) | null) {
       notify = fn;
     },
+    /** The person opened session `id`: what its row carried for them is seen. */
+    seen,
+    /** Hook for system notifications of what a session did outside its chat (the app sets it). */
+    setNotifyState(fn: ((id: string, n: SessionNote) => void) | null) {
+      notifyState = fn;
+    },
   };
 }
 
@@ -1187,6 +1569,7 @@ export function getSessions(): SessionsStore {
     singleton = s;
     setSessionKeyLookup((id) => s.chatKey(id));
     s.setNotify((ev) => notifySessionEvent(ev, getStore().getState()));
+    s.setNotifyState((id, n) => notifySessionNote(id, n, getStore().getState()));
   }
   return singleton;
 }

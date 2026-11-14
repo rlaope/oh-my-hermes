@@ -18,6 +18,24 @@ export interface Bot {
   avatar_rev?: number | null;
 }
 
+/** When a plugin change takes effect for the bot, from Hermes' own answer. live: its next conversation. reload: the
+ *  bot's gateway did not reload; one press asks it again (`plugins.reload`). restart: only a restart of
+ *  `restart_bot` (the host gateway, unless the bot runs its own) loads it. */
+export interface PluginLoad {
+  load?: "live" | "reload" | "restart";
+  restart_bot?: string;
+}
+
+/** One live unit Hermes named when it refused: what it is, its name when Hermes gave one, how long it has run, and
+ *  whose it is (a chat by its session key, a scheduled job by the bot that holds it; null when Hermes did not say). */
+export type WorkUnit = { kind: "chat" | "cron" | "task" | "run" | "work"; name: string | null; secs: number | null; bot: string | null };
+export type RestartResult =
+  | { outcome: "ok"; bots?: string[] }
+  | { outcome: "refused"; work: WorkUnit[] }
+  | { outcome: "failed"; line: string };
+/** The gateway process that serves a bot (named by the profile that owns it) and every bot on it, it included. */
+export type RestartScope = { gateway: string; bots: { name: string; display_name: string }[] };
+
 /** What a bot has done, for its page: sessions per place (slack, discord, cron…), skills, routines. */
 export interface BotInfo {
   places: Record<string, number>;
@@ -145,6 +163,8 @@ export interface PluginRow {
   catalog_name: string | null;
   tools: number;
   hooks: number;
+  /** Tools the plugin registered in the running gateway (an older bridge leaves it out). */
+  live_tools?: number;
   update_available: boolean;
   /** Secret settings the plugin needs that are not set yet (env names); it stays off until they are. */
   needs_env: string[];
@@ -273,10 +293,20 @@ export interface OpMap {
   "plugins.inspect": { params: { bot: string; catalog_name: string }; result: InspectResult };
   "plugins.install": {
     params: { bot: string; catalog_name: string; inspected_sha: string };
-    result: { name: string; enabled: boolean; restart_required: boolean; warnings: string[]; missing_env: string[] };
+    result: { name: string; enabled: boolean; restart_required: boolean; warnings: string[]; missing_env: string[] } & PluginLoad;
   };
-  "plugins.toggle": { params: { bot: string; key: string; enable: boolean }; result: { name: string; restart_required: boolean } };
-  "plugins.update": { params: { bot: string; name: string }; result: { name: string; unchanged: boolean; restart_required: boolean } };
+  "plugins.toggle": { params: { bot: string; key: string; enable: boolean }; result: { name: string; restart_required: boolean } & PluginLoad };
+  "plugins.update": {
+    params: { bot: string; name: string };
+    result: { name: string; unchanged: boolean; restart_required: boolean } & PluginLoad;
+  };
+  /** Hermes' own `reload-plugins` on the bot's gateway: restarts nothing, interrupts nothing. */
+  "plugins.reload": { params: { bot: string; name?: string }; result: { load: "live" | "restart" | "failed"; line?: string; missing?: string[]; restart_bot?: string } };
+  /** Hermes' own `hermes -p <gateway> gateway restart` of the process that serves `bot` (`--yes` only with
+   *  `interrupt`, right after a refusal); ok names every bot that went down with it. */
+  "bots.restart": { params: { bot: string; interrupt?: boolean }; result: RestartResult };
+  /** Which gateway process serves `bot` and every bot that restarts with it. */
+  "bots.restart_scope": { params: { bot: string }; result: RestartScope };
   "plugins.remove": { params: { bot: string; name: string }; result: { name: string } };
   "models.options": { params: { bot: string }; result: ModelOptions };
   "chat.set_model": {
@@ -493,8 +523,10 @@ export type AskSubagent = { id: string; name: string };
 
 export type BridgeEvent =
   | (EventBase & { event: "turn.start" })
-  | (EventBase & { event: "status"; text: string })
-  | (EventBase & { event: "thinking" })
+  /** `retry`: the agent tries the turn again by itself (OmO's `auto_retry_start`); the line says which try. */
+  | (EventBase & { event: "status"; text: string; retry?: { attempt: number; max: number } })
+  /** The agent is thinking; `text` is what it thought, when the agent sends it (SESSIONS agents). */
+  | (EventBase & { event: "thinking"; text?: string })
   | (EventBase & {
       event: "tool.start";
       tool_id: string;
@@ -525,6 +557,8 @@ export type BridgeEvent =
       /** The tool it is running and that tool's line, or its batched progress. */
       tool?: string;
       step?: string;
+      /** A file edit step's change per file (as `tool.diff` gives it for the session's own edits). */
+      diff?: DiffFile[];
       /** Its result line (done) or error (failed). */
       summary?: string;
       seconds?: number;
@@ -546,6 +580,8 @@ export type BridgeEvent =
       cwd?: string;
       /** Seconds the gateway waits before giving up on it, when it says. */
       timeout_s?: number;
+      /** The plan the agent asks to start on (Claude Code's plan mode), as the markdown it wrote. */
+      plan?: string;
     })
   | (EventBase & {
       event: "clarify.request";
@@ -565,6 +601,8 @@ export type BridgeEvent =
   | (EventBase & { event: "bot.status"; status: BotStatus; running: boolean })
   | (EventBase & { event: "elsewhere.update" })
   | (EventBase & { event: "bots.update" })
+  /** After `bots.restart` said ok: the bot is attached again (`ok`), or did not come back in time. */
+  | (EventBase & { event: "bot.restarted"; ok: boolean })
   /** omher accounts changed (added, removed, made active); the Accounts views re-read accounts.list. */
   | (EventBase & { event: "accounts.update" })
   | (EventBase & { event: "folder.closed"; reason?: string })
@@ -592,7 +630,30 @@ export type BridgeEvent =
   | (EventBase & { event: "plugin.added"; name: string; title: string; tools: number; hooks: number; ts: number })
   | (EventBase & { event: "plugins.update" })
   // a SESSIONS chat: a message sent while a turn ran waits until the agent takes it (or Stop drops it)
-  | (EventBase & { event: "message.queued" | "message.taken" | "message.dropped"; id: string });
+  | (EventBase & { event: "message.queued" | "message.taken" | "message.dropped"; id: string })
+  /** A SESSIONS file edit's change, per file (replaces what an earlier `tool.diff` of the same step said). */
+  | (EventBase & { event: "tool.diff"; tool_id: string; files: DiffFile[] })
+  /** A SESSIONS agent's own todo list or plan as it stands now (the whole list each time). */
+  | (EventBase & { event: "plan"; items: PlanItem[] })
+  /** A SESSIONS agent took back the person's last message and what came after it (its own rewind); `text` is
+   *  that message as the agent read it, when it says. */
+  | (EventBase & { event: "rewound"; text?: string });
+
+/** One file's change in the diff view. `lines` start with `+`, `-`, ` ` or `@@`; `more` lines were not sent. */
+export interface DiffFile {
+  path: string;
+  kind: "add" | "delete" | "update";
+  lines: string[];
+  added: number;
+  removed: number;
+  more?: number;
+}
+
+/** One row of an agent's todo list. */
+export interface PlanItem {
+  text: string;
+  status: "pending" | "in_progress" | "completed";
+}
 
 export type EventName = BridgeEvent["event"];
 export type EventOf<K extends EventName> = Extract<BridgeEvent, { event: K }>;

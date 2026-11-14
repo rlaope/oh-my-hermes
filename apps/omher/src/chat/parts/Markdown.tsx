@@ -4,6 +4,7 @@ import remarkGfm from "remark-gfm";
 import { MentionLink, useMentions } from "./Mention";
 import { remarkMentions } from "./remarkMentions";
 import { isBare, LinkChip } from "./LinkChip";
+import { CopyButton } from "./Copy";
 
 const plain = [remarkGfm];
 
@@ -38,6 +39,13 @@ export const Markdown = memo(function Markdown({ text }: { text: string }) {
           const bot = (p as Record<string, unknown>)["data-mention"];
           return typeof bot === "string" ? <MentionLink bot={bot}>{p.children}</MentionLink> : <span {...p} />;
         },
+        // a code block: its own copy control in the corner, shown on hover
+        pre: ({ node: _n, children, ...p }) => (
+          <div className="md-pre">
+            <pre {...p}>{children}</pre>
+            <CopyButton className="md-pre-copy" text={() => textOf(children).replace(/\n$/, "")} testId="copy-code" />
+          </div>
+        ),
         // Hangul has no italic face; a synthetic slant reads as broken, so emphasis there is weight instead
         em: ({ node: _n, children, ...p }) => (
           <em {...p} className={HANGUL.test(textOf(children)) ? "hangul" : undefined}>

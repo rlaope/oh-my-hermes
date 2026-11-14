@@ -815,9 +815,15 @@
   font-size: 12.5px;
   color: var(--muted);
 }
-.pl-sheet-res b {
-  color: var(--ink);
-  font-weight: 600;
+.pl-sheet-res .pl-load {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 14px; /* the sheet's own gap (.pl-sheet), between its sentence and its press */
+  font-size: 12.5px;
+}
+.pl-sheet-res .pl-load .rs-line {
+  margin: 0;
 }
 .pl-facts {
   display: grid;

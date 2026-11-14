@@ -566,6 +566,21 @@ class AgentBoard:
             entry.reason = "awaiting_correlated_result"
             return True
 
+    def would_begin(self, request_id: str, *, host: HostIdentity, tool_name: str,
+                    arguments: Mapping[str, object]) -> bool:
+        """Whether `begin` would reserve this call now, changing nothing: read before a person is asked, so a call
+        `begin` would refuse is refused at once instead of after their yes, and nothing is reserved for a call they
+        may still turn down."""
+        with self._lock:
+            entry = self._requests.get(request_id)
+            return bool(
+                entry is not None and entry.state == "prepared" and entry.call_ref is None
+                and entry.scope_ref == host.scope_ref
+                and (entry.expected is None or entry.expected == self.observation_ref)
+                and not self._needs_reconciliation(entry) and self._matches(entry, tool_name, arguments)
+                and not any(other.call_ref == host.call_ref for other in self._requests.values())
+            )
+
     def _needs_reconciliation(self, entry: _Request) -> bool:
         if entry.operation in {"show", "attachments", "research"}:
             return False

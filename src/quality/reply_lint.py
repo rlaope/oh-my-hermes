@@ -299,6 +299,7 @@ _AWARENESS_TAGS: tuple[str, ...] = (
     "[OMH Console Choices]",
     "[OMH Context Budget]",
     "[OMH continuation claim]",
+    "[OMH Custom Identity Catalog]",
     "[OMH dag]",
     "[OMH Degraded]",
     "[OMH delegation]",

@@ -51,6 +51,7 @@ from collections.abc import Iterable, Mapping
 from dataclasses import dataclass, field
 import re
 
+from .fuzzy import subsequence_score
 from .gateway_contract import REASONING_LEVELS
 from .style import Span, Style
 
@@ -355,7 +356,14 @@ def completions(prefix: str, catalog_pairs: Iterable[tuple[str, str]] = ()) -> l
     inner = [
         completion for completion in offered if key in completion.name.lower() and not completion.name.lower().startswith(key)
     ]
-    return leading + inner
+    near = {completion.name for completion in leading + inner}
+    scattered = [
+        (score, completion)
+        for completion in offered
+        if completion.name not in near and (score := subsequence_score(key, completion.name)) is not None
+    ]
+    scattered.sort(key=lambda item: (-item[0], item[1].name))
+    return leading + inner + [completion for _, completion in scattered]
 
 
 # A `/name` token: whitespace or the line's edge on both sides, so a path (`/Users/x`) or `a/b` is none.

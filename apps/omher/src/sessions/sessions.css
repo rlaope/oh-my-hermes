@@ -9,6 +9,11 @@
   display: flex;
   flex-direction: column;
 }
+/* A search that leaves BOTS with only its "No bot named …" line: that line's height, SESSIONS right under it. */
+.side-sec.side-sec-fit {
+  flex-grow: 0;
+  min-height: 0;
+}
 .side-sec + .side-sec {
   margin-top: 6px;
   padding-top: 10px;
@@ -52,10 +57,35 @@
 .side-sh-row .ss-pop.ui-pop-top {
   bottom: calc(100% + 4px);
 }
+/* ...and keeps a few px of air under the sidebar row above it (MENU_AIR in SessionsSection.tsx): a band of the
+   sidebar's colour over the strip between, so the empty top of the next row (rows stand 2px apart) never shows.
+   fitMenu makes it taller (--ss-air) when a list that fits whole would otherwise end part-way down a row */
+.side-sh-row .ss-pop.ui-pop-top::before {
+  content: "";
+  position: absolute;
+  left: -1px;
+  right: -1px;
+  bottom: calc(100% + 1px);
+  height: var(--ss-air, 6px);
+  background: var(--side);
+}
 /* the list scrolls inside the menu when the window is too short for every agent (fitMenu sets its max height) */
 .ss-scroll {
   overflow-y: auto;
   overscroll-behavior: contain;
+}
+/* more agents below the cut: the last rows fade out, so the list reads as one that scrolls; gone at the end */
+.ss-scroll.more {
+  mask-image: linear-gradient(to bottom, #000 calc(100% - 28px), transparent);
+  -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 28px), transparent);
+}
+/* A folded list can end on More agents: keep that entry at full contrast. A persistent thin scrollbar, rather
+   than a fade over its text, says there are more rows below. The expanded list keeps the edge fade. */
+.ss-scroll.more:has(.ss-more[aria-expanded="false"]) {
+  mask-image: none;
+  -webkit-mask-image: none;
+  scrollbar-width: thin;
+  scrollbar-color: var(--muted) transparent;
 }
 /* the first frame, before the menu knows where it fits, is not shown */
 .ss-pop-measuring {
@@ -160,6 +190,17 @@
   background: none;
   padding: 0;
 }
+/* the + menu's one quiet line for a person with Hermes but not oh-my-hermes: a plain muted row, no border or fill */
+.ss-add-omh {
+  margin-top: 2px;
+}
+.ss-add-omh-b {
+  color: var(--muted);
+}
+.ss-add-omh-b:hover,
+.ss-add-omh-b:focus-visible {
+  color: var(--ink);
+}
 .ss-missing {
   font-size: 10.5px;
   color: var(--muted);
@@ -175,10 +216,80 @@
   text-overflow: ellipsis;
   flex: none;
 }
+/* "More agents": a plain row like the agents, its chevron in the mark's place and the count at its end */
+.ss-more {
+  color: var(--muted);
+}
+.ss-more:hover,
+.ss-more:focus-visible {
+  color: var(--ink);
+}
+.ss-more-ic {
+  font-size: 13px;
+  line-height: 1;
+}
+/* a missing agent's row: its name with "Not installed" (or "Copied") at the line's end, and under them the install
+   line, the text that is copied, small and quiet. The line is never cut: it takes as many lines as it needs, and
+   the row grows with it. A word of it (a package name, a flag) stays on one line unless it is longer than the row */
+.ss-head {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  width: 100%;
+  min-width: 0;
+}
+.ss-head .ss-l {
+  flex: 1;
+  min-width: 0;
+}
+.ss-item:has(.ss-install) {
+  height: auto;
+  min-height: 40px;
+  padding-top: 3px;
+  padding-bottom: 3px;
+}
+.ss-item:has(.ss-install) > .ss-ic {
+  /* beside the name, not the middle of a row of several lines */
+  align-self: flex-start;
+  margin-top: 2px;
+}
+.ss-as.ss-install {
+  font-family: var(--mono);
+  font-size: 10.5px;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  overflow: visible;
+}
+.ss-tok {
+  display: inline-block;
+  max-width: 100%;
+}
 .ss-sep {
   height: 1px;
   background: var(--line);
   margin: 6px 0 4px;
+}
+/* the + menu's "Continue a conversation" rows end with a quiet chevron; the list they open starts with ‹ back */
+.ss-chev {
+  color: var(--muted);
+  font-size: 13px;
+  flex: none;
+}
+.ss-past-back {
+  color: var(--body);
+  font-weight: 500;
+}
+.ss-past-back > .ss-ic:first-child {
+  width: 10px;
+  color: var(--muted);
+  font-size: 14px;
+}
+/* a past conversation: its title over its folder and age, each one line */
+.ss-past {
+  max-height: 260px;
+}
+.ss-past-row {
+  height: 40px;
 }
 /* step 2 of the menu: ← and the agent picked, over its folder choices */
 .ss-agent {
@@ -413,12 +524,16 @@
 .ss-head-st.failed {
   color: var(--danger);
 }
+/* The space around a terminal and its colour come from Settings > Terminal (term/look.ts sets both on this box):
+   --term-pad is the left side, and the top, right and bottom keep the proportions of the 14 6 8 16 it always had;
+   --term-bg is the picked theme's background, so the space is the terminal's colour and not the page's. */
 .term-wrap {
+  --term-pad: 16px;
   flex: 1;
   min-height: 0;
   display: flex;
-  padding: 14px 6px 8px 16px;
-  background: var(--bg);
+  padding: calc(var(--term-pad) * 0.875) calc(var(--term-pad) * 0.375) calc(var(--term-pad) * 0.5) var(--term-pad);
+  background: var(--term-bg, var(--bg));
 }
 .term-box {
   flex: 1;
@@ -488,6 +603,11 @@
   text-overflow: ellipsis;
   min-width: 0;
 }
+/* the command to run, as inline code the way an answer shows one */
+.ss-ended-t code {
+  font-size: 11px;
+  background: color-mix(in srgb, var(--ink) 9%, transparent);
+}
 .ss-restart {
   flex: none;
   font: inherit;
@@ -513,6 +633,69 @@
    sidebar and on the selected row in both themes */
 .ss-row .bot-p {
   color: var(--muted);
+}
+/* the mark for the view a row opens to (chat or terminal): at the end of line 2, under the time, in the colour of
+   the line it ends. The terminal's is solid with the prompt cut out in the row's own background, the chat's an
+   outline. The close button takes its place on hover, as it takes the time's. */
+.ss-view {
+  --ss-cut: var(--side);
+  flex: none;
+  margin-left: auto;
+  padding-left: 8px;
+  display: grid;
+  place-items: center;
+  height: 17px;
+  color: var(--muted);
+}
+.ss-row.active .ss-view {
+  --ss-cut: var(--active-row);
+}
+/* a solid shape weighs more than an outline of the same colour: the terminal's takes the quieter gray, so a list of
+   terminals is not a column of chips beside the names */
+.ss-view[data-view="terminal"] {
+  color: var(--quiet);
+}
+.ss-row:hover .ss-view {
+  visibility: hidden;
+}
+/* a session's state stands in the time's place as a sign and a word, in one colour: a yellow warning triangle (it
+   waits for you), a red exclamation mark (it stopped on an error), a green check (it finished). No dots. */
+.ss-row .ss-sign {
+  display: inline-block;
+  margin-right: 4px;
+  line-height: 0;
+  vertical-align: -1.5px;
+}
+/* the triangle is the yellow of a warning sign in both themes; its word keeps the amber that reads at 11px */
+.ss-row .ss-sign.needs {
+  color: #e9a23b;
+}
+.ss-row .bot-t.err {
+  color: var(--danger);
+}
+.ss-row .bot-t.ok {
+  color: var(--ok);
+}
+/* 11px green on the light sidebar: a deeper shade, as the amber has */
+[data-theme="light"] .ss-row .bot-t.ok {
+  color: #17693f;
+}
+/* the close button takes the time's place on hover, but a state stays: it moves left of the button */
+.ss-row:hover .bot-t.wait,
+.ss-row:hover .bot-t.err,
+.ss-row:hover .bot-t.ok {
+  visibility: visible;
+  margin-right: 22px;
+}
+/* a session nothing runs in steps back: its agent mark fades and its name is muted, so the running ones lead */
+.ss-row.over .ss-av > * {
+  opacity: 0.5;
+}
+.ss-row.over .bot-n {
+  color: var(--muted);
+}
+.ss-row.over .ss-view {
+  opacity: 0.55;
 }
 /* typing dots end the agent name like they end a bot's live step */
 .ss-row .bot-p.live {
@@ -608,6 +791,45 @@
   cursor: default;
   color: var(--quiet);
 }
+/* New session: Chat | Terminal beside the agent. Plain words; the picked one is gray, a way the agent lacks is dimmed */
+.ss-way {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  flex: none;
+}
+.ss-way-o {
+  height: 30px;
+  padding: 0 8px;
+  border-radius: var(--r);
+  color: var(--muted);
+  font-size: 12px;
+  white-space: nowrap;
+}
+.ss-way-o:hover {
+  color: var(--ink);
+}
+.ss-way-o.on {
+  background: var(--raise2);
+  color: var(--ink);
+  font-weight: 500;
+}
+/* the composer is nearly white in the light theme: the picked word needs a darker gray to read as picked */
+[data-theme="light"] .ss-way-o.on {
+  background: color-mix(in srgb, var(--ink) 11%, transparent);
+}
+.ss-way-o[aria-disabled="true"] {
+  opacity: 0.45;
+  cursor: default;
+}
+.ss-way-o[aria-disabled="true"]:hover {
+  color: var(--muted);
+}
+.cmp-held {
+  padding: 6px 1px 0;
+  font-size: 11.5px;
+  color: var(--muted);
+}
 .ss-ctx {
   display: flex;
   align-items: center;
@@ -692,6 +914,26 @@
 .ss-mode.set {
   color: var(--ink);
 }
+/* the agent's own setting asks for nothing or reaches the whole disk: said in the warning text colour, no box */
+.ss-mode.own,
+.ss-mode-own {
+  color: var(--needs);
+}
+/* the sentence is the point: it is never cut to "full disk a…"; the message field gives way */
+.ss-mode.own {
+  max-width: none;
+  flex-shrink: 0;
+}
+.ss-pick-w:has(> .ss-mode.own) {
+  flex-shrink: 0;
+}
+.ss-mode.own .ss-pick-n {
+  overflow: visible;
+}
+.ss-mode-own {
+  padding: 2px 6px 6px;
+  font-size: 12px;
+}
 .ss-dpop .ss-h.ss-h-plain {
   padding-left: 6px;
 }
@@ -762,7 +1004,8 @@
   filter: brightness(1.08);
 }
 
-/* "1 still running in the background": a quiet label after the status, never a button or a chip */
+/* "1 still running in the background" (or "1 waiting in the background"): a quiet label after the status, never a
+   button or a chip */
 .ss-head-bg {
   flex: 0 1 auto;
   min-width: 0;
@@ -771,6 +1014,94 @@
   white-space: nowrap;
   font-size: 11.5px;
   color: var(--muted);
+}
+/* its Stop: a quiet word after the label, set apart by colour and an underline, never a boxed button */
+.ss-head-stop {
+  flex: none;
+  padding: 0 2px;
+  margin-left: -4px;
+  border: 0;
+  background: none;
+  font-size: 11.5px;
+  font-weight: 500;
+  color: var(--body);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  text-decoration-color: var(--line-strong);
+  cursor: pointer;
+}
+.ss-head-stop:hover {
+  color: var(--ink);
+  text-decoration-color: currentColor;
+}
+/* The name, the path, the status, the label and its Stop sit in two boxes that are not there on a wide header, so
+   that line is laid out as it always was. With background work a narrower header gives way in steps, by its own
+   width (the `chathead` container, elsewhere.css), so that the name, the count, Stop and the model's name stay whole:
+   - under 780px the label says it in fewer words ("1 waiting"; the whole sentence is its tooltip) and the first box
+     takes what the controls leave (basis 0, so it never presses on them: the model's name is as long as without
+     background work). It wraps: when the name and the status do not fit side by side, the status, the label and
+     Stop go under the name. The path takes only what its line has left.
+   - under 680px the path goes (it would be a few letters) and the name may take the whole line.
+   - under 470px the agent's mark goes (the composer names the agent), and under 430px the status is its dot
+     alone (its word is the dot's tooltip). */
+.ss-head-id,
+.ss-head-now {
+  display: contents;
+}
+.ss-head-bg.short {
+  display: none;
+}
+@container chathead (max-width: 779px) {
+  .ss-head-bg:not(.short) {
+    display: none;
+  }
+  .ss-head-bg.short {
+    display: block;
+  }
+  .ss-head-id.bg {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    align-content: center;
+    gap: 2px 10px;
+    flex: 1 1 0;
+    min-width: 0;
+    line-height: 1.3;
+  }
+  .ss-head-id.bg > .ss-head-path {
+    flex: 1 1 0;
+    max-width: max-content;
+  }
+  .ss-head-id.bg > .ss-head-now {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-width: 0;
+    max-width: 100%;
+  }
+  .ss-head-id.bg .ss-head-st {
+    margin-left: 0;
+  }
+}
+@container chathead (max-width: 679px) {
+  .ss-head-id.bg > .head-title[data-testid="session-title"] {
+    max-width: 100%;
+  }
+  .ss-head-id.bg > .ss-head-path {
+    display: none;
+  }
+}
+@container chathead (max-width: 469px) {
+  .head:has(> .ss-head-id.bg) > .ss-head-mark {
+    display: none;
+  }
+}
+@container chathead (max-width: 429px) {
+  /* the word is still read out, and is the dot's tooltip */
+  .ss-head-id.bg .ss-head-st.running {
+    font-size: 0;
+    gap: 0;
+  }
 }
 .ss-plans-rows {
   padding: 4px 2px;

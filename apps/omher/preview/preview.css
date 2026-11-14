@@ -19,20 +19,14 @@
 html .window.panel-open:has(.pn-wide[data-tab="runs"]) {
   --panel-w: 552px;
 }
-/* In that 400px chat the header holds the bot, the places chip, the model control and the panel button. From 0.2.5
-   the panel button sits there too and cannot shrink, so "1 other place" left the model 40px ("Opus…") and
-   "2 other places" 16px ("O…"). The places chip gives way instead: in a narrow chat header it shows only its app
-   marks (the chip's tooltip still says where the bot is), and the model, its effort and the panel button stay whole.
-   A wider chat (the panel on another tab, or closed) shows the chip's words again. */
-.head[data-testid="header"] {
-  container: chathead / inline-size;
+/* A session's Plans (0.2.6) is a list of its subagents, not the graph, and shares the class: at 552px a session draft's
+   composer (agent, Chat | Terminal, send) left its text box 0-30px wide. It takes the tool tabs' 400px, so the
+   session chat gets 552px. */
+html .window.panel-open:has(.ss-view):has(.pn-wide[data-tab="runs"]) {
+  --panel-w: 400px;
 }
-@container chathead (max-width: 470px) {
-  .ew-places > [data-testid="places-label"] {
-    display: none;
-  }
-}
-/* That leaves the subagent card's head ~290px in the 400px chat: a running card's line ("2 subagents running · 1 of 2
+/* In that 400px chat the places chip gives way to the model name by the app's own rule (elsewhere.css). */
+/* That leaves the subagent card's head ~290px in the 400px chat: a running card's line ("Running · 1 of 2 done
    · 2m 48s") and its run name fit side by side with a slightly tighter gap. */
 .sa-head {
   gap: 5px;

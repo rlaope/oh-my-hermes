@@ -9,6 +9,7 @@ import { Fragment, useCallback, useEffect, useRef, useState, type ReactNode } fr
 import mark from "../assets/omher-mark.png";
 import "./gate.css";
 import { t } from "../i18n";
+import { omhInstalled } from "../onboarding/omhPrompt";
 
 export type BridgeState = { state: "ready" | "starting" | "failed"; error?: string; missing?: "hermes" };
 export type InstallEvent = { kind: "line"; text: string } | { kind: "exit"; code: number | null };
@@ -40,6 +41,49 @@ async function tauriShell(): Promise<GateShell> {
 function testShell(): GateShell | null {
   if (typeof window === "undefined") return null;
   return (window as unknown as { __OMHER_GATE__?: GateShell }).__OMHER_GATE__ ?? null;
+}
+
+/** The shell's commands (or the e2e stand-in); `null` outside Tauri with no stand-in (browser dev): nothing can install. */
+export async function gateShell(): Promise<GateShell | null> {
+  return testShell() ?? (inTauri() ? await tauriShell() : null);
+}
+
+/** The installer's output as the setup screen shows it: one line each, `[failed]` lines in the danger colour, the
+ *  newest at the bottom. Also used by the offer to add oh-my-hermes (the + menu line and the first-run card). */
+export function InstallLog({ lines, compact, testId = "setup-log" }: { lines: string[]; compact?: boolean; testId?: string }) {
+  const ref = useRef<HTMLPreElement | null>(null);
+  useEffect(() => {
+    const el = ref.current;
+    if (el) el.scrollTop = el.scrollHeight;
+  }, [lines]);
+  if (!lines.length) return null;
+  return (
+    <pre className={`gate-log${compact ? " gate-log-sm" : ""}`} data-testid={testId} ref={ref} aria-live="polite">
+      {lines.map((line, i) => (
+        <span key={i} className={`gate-line gate-line--${lineTone(line)}`}>
+          {compact ? slashBreaks(line) : line}
+        </span>
+      ))}
+    </pre>
+  );
+}
+
+/** A line with a break chance (`<wbr>`) after each "/" inside a path (a word starting with `/`, `~/`, `./` or holding
+ *  `://`), so the small log wraps a path between its parts and never inside a word; other words break only at spaces. */
+export function slashBreaks(line: string): ReactNode[] {
+  const out: ReactNode[] = [];
+  let k = 0;
+  for (const word of line.split(/(\s+)/)) {
+    if (!/^(~|\.{1,2})?\/|:\/\//.test(word)) {
+      out.push(word);
+      continue;
+    }
+    word.split(/(?<=\/)(?=[^/])/).forEach((part, i) => {
+      if (i) out.push(<wbr key={`w${k++}`} />);
+      out.push(part);
+    });
+  }
+  return out;
 }
 
 const hasShell = () => inTauri() || testShell() !== null;
@@ -74,7 +118,6 @@ export function BridgeGate({ children }: { children: ReactNode }) {
   const [exitCode, setExitCode] = useState<number | null>(null);
   const [installError, setInstallError] = useState<string | null>(null);
   const shellRef = useRef<GateShell | null>(null);
-  const logRef = useRef<HTMLPreElement | null>(null);
   const installRef = useRef<HTMLButtonElement | null>(null);
 
   const shell = useCallback(async () => {
@@ -111,11 +154,6 @@ export function BridgeGate({ children }: { children: ReactNode }) {
       .then(setCommand, () => {});
   }, [needsHermes, command, shell]);
 
-  useEffect(() => {
-    const el = logRef.current;
-    if (el) el.scrollTop = el.scrollHeight;
-  }, [lines]);
-
   const retry = useCallback(async () => {
     setRetrying(true);
     setInstall("idle");
@@ -149,6 +187,7 @@ export function BridgeGate({ children }: { children: ReactNode }) {
         // The shell starts the bridge again after a clean install; poll it from "starting".
         setInstall("idle");
         setStatus({ state: "starting" });
+        omhInstalled();
       } else {
         setInstall("failed");
       }
@@ -204,15 +243,7 @@ export function BridgeGate({ children }: { children: ReactNode }) {
               </button>
             </div>
           )}
-          {lines.length > 0 && (
-            <pre className="gate-log" data-testid="setup-log" ref={logRef} aria-live="polite">
-              {lines.map((line, i) => (
-                <span key={i} className={`gate-line gate-line--${lineTone(line)}`}>
-                  {line}
-                </span>
-              ))}
-            </pre>
-          )}
+          <InstallLog lines={lines} />
           {install === "failed" && (
             <p className="gate-error gate-error--bad" data-testid="setup-failed">
               {installError

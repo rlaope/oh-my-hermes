@@ -87,7 +87,8 @@ person sends from the composer is appended to Hermes' own input history
 (`history.py`), never an answer to a question Hermes asked. The other files
 the TUI writes are metadata: that session file, what OMH's HUD reader (`panels.HudPoller`, its fan-out cache
 under `<omh_home>/runtime/`) and the model-chain picker (`/omh-model`'s saved
-chains) write under the OMH home, and an empty fallback marker at the path
+chains) write under the OMH home, the models last switched to
+(`model_picker.record_recent`), and an empty fallback marker at the path
 `omh` named, which `omh` removes. An attached image is a file the
 gateway resolves and stages itself (`image.attach`, `clipboard.paste`,
 `input.detect_drop`); the TUI reads its bytes into memory once, has Hermes
@@ -232,7 +233,7 @@ from .modes import (
 from .pager import ALT_SCREEN_OFF, ALT_SCREEN_ON, ROW_END, HistoryPager, Pager, Selection, forget_cells, reversed_cells
 from .model_picker import KEYS as MODEL_PICKER_KEYS
 from .model_picker import PICK as MODEL_PICK
-from .model_picker import ModelPicker, model_rows, typed_switch_value
+from .model_picker import ModelPicker, model_rows, read_recent, record_recent, typed_switch_value
 from . import dag_block
 from .dag_tree import TreeState
 from .turn_ends import TURN_DONE, TURN_INTERRUPTED, TURN_OPEN, TURN_STOPPED, read_turn_end, record_turn_end
@@ -268,8 +269,8 @@ from .screen import (
     LiveRegion,
     cursor_up,
 )
-from .session_picker import KEYS as SESSION_PICKER_KEYS
-from .session_picker import PICK, SessionPicker, SessionRow, pointer, session_rows
+from .session_picker import DELETE as SESSION_DELETE
+from .session_picker import PICK, RENAME, PickerAction, SessionPicker, SessionRow, pointer, session_rows
 from .rewind_picker import KEYS as REWIND_PICKER_KEYS
 from .rewind_picker import PICK as REWIND_PICK
 from .rewind_picker import RewindPicker, rewind_rows
@@ -517,6 +518,8 @@ MODEL_CONFIRM_QID = "confirm"
 MODEL_KEEP_CHOICE = "Keep {current}"
 MODEL_SWITCH_CHOICE = "Switch to {model} anyway"
 MODEL_KEPT_NOTICE = "Model not switched: this session stays on {current}."
+# The `session.info` routes kept for an outstanding /model switch to read its provider from (`info_routes`).
+INFO_ROUTES_KEPT = 16
 MODEL_CONFIRM_STALE_NOTICE = "Model not switched: the session changed before the confirmation landed; run /model again."
 # A question the TUI asks itself goes through the slot like Hermes' own; its answer stays here (`_respond`).
 LOCAL_QUESTION_PREFIX = "omh-local-"
@@ -575,10 +578,16 @@ QUESTION_VIEW_TITLE = "the open question (q goes back to it)"  # Ctrl+O's pager 
 # `/compress` (and `/compact`, its alias) while it runs: Hermes summarizes the older turns with a model call.
 COMPRESS_COMMANDS = frozenset({"compress", "compact"})
 COMPRESS_PREVIEW_FLAGS = frozenset({"--preview", "--dry-run"})
-COMPRESS_STARTED_NOTICE = "Compressing: Hermes summarizes the older turns with a model call, so this can take a while."
-# The working row's verb while a `/compress` is out and no turn runs (`App._compressing_since`). It offers no Esc:
-# with no turn running Esc arms the rewind and sends no interrupt, so it does not stop a compression.
-COMPRESSING_VERB = "Compressing"
+# The working row's verb while a `/compress` is out and no turn runs (`App._compressing_since`), as Claude Code words
+# it; no notice under the echo repeats it (the owner, 2026-11-14). It offers no Esc: with no turn running Esc arms the
+# rewind and sends no interrupt, so it does not stop a compression.
+COMPRESSING_VERB = "Compacting conversation"
+# The gauge on that row. Hermes reports no progress for a compression, so the gauge is a clock, not a measure: it eases
+# toward COMPRESS_GAUGE_CEILING of its cells (`1 - e^(-t/COMPRESS_GAUGE_SECONDS)`), never full, and says no percent;
+# the answer closes the row and Hermes' own report (`✓ Compressed: …`) says what changed.
+COMPRESS_GAUGE_CELLS = 20
+COMPRESS_GAUGE_SECONDS = 30.0
+COMPRESS_GAUGE_CEILING = 0.9
 # Between turns, while something the session waits on still runs (a background process Hermes will wake it for, a
 # delegated child or dag-ulw node that wakes the parent as it ends), the working row says so, as it says a turn runs
 # (the owner, 2026-11-05: "걍 Musing마냥 … 계속 나오게"): `✻ Waiting… (33m 47s · 1 agent · terminal)`.
@@ -1152,6 +1161,13 @@ SESSIONS_EMPTY_NOTICE = (
     "sessions."
 )
 SESSIONS_REFUSED_NOTICE = "Hermes did not list the stored sessions: {reason}."
+# A rename or delete from the session picker answered once the picker had closed: said beside what runs.
+SESSION_RENAMED_NOTICE = "Renamed session {session} to {title}."
+SESSION_DELETED_NOTICE = "Deleted session {session}."
+# On the picker's row when Hermes answered a rename or delete with nothing that says it was done.
+SESSION_EDIT_UNCONFIRMED = "Hermes did not say it was done"
+SESSION_EDIT_UNANSWERED = "Hermes did not answer in {seconds:g} s"
+SESSION_EDIT_NOT_SENT = "the OMH TUI did not send it"
 SESSIONS_UNANSWERED_NOTICE = "Hermes did not answer the session list in {seconds:g} s; /resume asks again."
 # While a switch (`/sessions <id>`, a pick, `/new`) waits on Hermes, under the queued prompts: a prompt sent then
 # waits for the session it goes to (`App.switch_held`) and is sent there once it is live.
@@ -1273,6 +1289,8 @@ CALL_FAILED_PHRASES = {
     "slash.exec": "run the command",
     "command.dispatch": "run the command",
     "session.list": "list the stored sessions",
+    "session.title": "rename the session",
+    "session.delete": "delete the session",
 }
 
 
@@ -1559,6 +1577,43 @@ def refusal_sentence(error: Mapping[str, Any]) -> str:
     data = error.get("data")
     detail = as_text(data.get("detail")).strip() if isinstance(data, Mapping) else ""
     return f"{sentence} {plain_sentence(detail)}" if sentence and detail else sentence
+
+
+# A resumed session's user rows Hermes wrote itself, not the person (`session_history.py` types them by
+# `display_kind`): a background process or a delegation finishing, its own internal notice, a turn it resumed after a
+# restart, a model or personality switch. Each is drawn as one dim row with Hermes' title for it
+# (`display_metadata.display_text`) or the label here, as Hermes' own TUI draws them (`ui-tui` `domain/messages.ts`),
+# never as a `❯` prompt the person sent.
+MACHINE_ROW_LABELS = {
+    "process_complete": "background process finished",
+    "async_delegation_complete": "background agent work finished",
+    "internal_notification": "Hermes notice",
+    "auto_continue": "resumed interrupted turn",
+    "model_switch": "model changed",
+    "personality_switch": "personality changed",
+}
+
+
+# A row persisted before Hermes typed it (a turn killed mid-run never reached the stamp) keeps only its opening:
+# these are Hermes' exact openings for the two (`conversation_compression_scaffolding`, `process_registry_notifications`).
+MACHINE_ROW_OPENINGS = {
+    "[IMPORTANT: Background process ": "process_complete",
+    "[ASYNC DELEGATION BATCH COMPLETE — ": "async_delegation_complete",
+}
+
+
+def machine_row_line(message: Mapping[str, Any]) -> str:
+    """The dim row a resumed user row Hermes wrote (`MACHINE_ROW_LABELS`) is drawn as; "" for the person's own."""
+    kind = as_text(message.get("display_kind"))
+    if not kind:
+        text = as_text(message.get("text")).lstrip()
+        kind = next((found for opening, found in MACHINE_ROW_OPENINGS.items() if text.startswith(opening)), "")
+    label = MACHINE_ROW_LABELS.get(kind)
+    if label is None:
+        return ""
+    meta = message.get("display_metadata")
+    title = clean_text(as_text(meta.get("display_text"))).strip() if isinstance(meta, Mapping) else ""
+    return f"↳ {title or label}"
 
 
 def side_answer_line(kind: str, payload: Mapping[str, Any], text: str) -> str:
@@ -2133,10 +2188,16 @@ def run_model_chain_picker(
     result = apply_picker_changes(omh_home, changes, hermes_home=hermes_home, contract_option=contract_effort_option)
     if "error" in result:
         return f"/omh-model did not save: {result['error']}"
-    count = len(result["changed"])
+    category_count = len(result.get("categories_changed", []))
+    identity_count = len(result.get("identities_changed", []))
+    parts = []
+    if category_count:
+        parts.append(f"{category_count} categor{'y' if category_count == 1 else 'ies'} to {result['path']}")
+    if identity_count:
+        parts.append(f"{identity_count} custom identit{'y' if identity_count == 1 else 'ies'}")
     warning = f" Warning: {result['warning']}." if result.get("warning") else ""
     return (
-        f"Saved {count} categor{'y' if count == 1 else 'ies'} to {result['path']}. "
+        f"Saved {' and '.join(parts)}. "
         f"New delegations use this order; running children keep theirs.{warning}"
     )
 
@@ -2216,6 +2277,12 @@ class App(ModesMixin, AgentViewMixin):
         # The model a switch was deferred to (Hermes makes it as the next turn starts) and `turns_ended` then; None
         # once it is over. A drop Hermes reports names it (`_model_switch_dropped`).
         self.model_deferred: tuple[str, int] | None = None
+        # Every (model, provider) a `session.info` named, in arrival order, and how many came before the first one
+        # kept; Hermes' stdio entry says a switched route there before it answers `config.set`, whose answer names no
+        # provider. Each switch reads only the routes said after it went out (`_switch_model` notes the count), so a
+        # second /model sent while the first is out cannot take the first one's route away.
+        self.info_routes: list[tuple[str, str]] = []
+        self.info_routes_dropped = 0
         # Hermes' configured default model and provider (a sessionless `model.options`) when last read, and the
         # config file's mtime then; None until read. A default that moves is switched to (`_check_default`).
         self.default_route: tuple[str, str] | None = None
@@ -2363,11 +2430,9 @@ class App(ModesMixin, AgentViewMixin):
         self.copy_noted_at: float | None = None  # when the pager's footer or `copy_note` started saying what a copy did
         self.copy_note: Notification | None = None  # what a copy on the main screen did, on the notice row meanwhile
         # The main screen's selection, by the rows the live region printed (`LiveRegion.doc_row`), each selected row's
-        # line as the screen showed it when the mouse last moved it (`_keep_selection_true`), and whether the button is
-        # down after a press on a row no selection can start on (one the region did not print).
+        # line as the screen showed it when the mouse last moved it (`_keep_selection_true`).
         self.selection = Selection()
         self.selected_lines: dict[int, Line] = {}
-        self.unmapped_press = False
         self.button_held = False  # a press on the main screen or in a pager whose release has not come
         self.copied_at: float | None = None  # when the last drag on the main screen copied, on `clock`
         self.report_at: float | None = None  # when the last mouse report was decoded, on `clock`
@@ -2704,7 +2769,8 @@ class App(ModesMixin, AgentViewMixin):
     def _draw_history(self, messages: object) -> None:
         """A resumed session's earlier turns as transcript blocks: prompts, replies, and each tool call one row as
         a live call draws it (`Transcript.add_recorded_tools`); the calls between two messages with words are one
-        group, with no row between them.
+        group, with no row between them. A user row Hermes wrote itself (`machine_row_line`) is one dim row, not
+        a prompt.
 
         Only the last `REDRAW_TAIL_ROWS` rows of them are printed; /history shows the rest.
         """
@@ -2724,7 +2790,10 @@ class App(ModesMixin, AgentViewMixin):
             if tools:
                 self.transcript.add_recorded_tools(tools)
                 tools = []
-            if role == "user":
+            machine = machine_row_line(message) if role == "user" else ""
+            if machine:
+                self.transcript.add_aside(NoticeBlock(machine, one_line=True))
+            elif role == "user":
                 self.transcript.add_user(text, known=self.known_slash, recorded=True)
                 # Its `[Image #N]` labels are taken: the next image this run attaches is numbered past them.
                 self.image_count = max([self.image_count, *map(int, IMAGE_LABEL_NUMBERS.findall(text))])
@@ -3321,6 +3390,7 @@ class App(ModesMixin, AgentViewMixin):
             elif call.method not in QUIET_EXPIRY_METHODS:
                 self._say_unanswered(call.command, call.method, call.seconds)
             self._command_call_done(call)
+            self._compression_settled(call)
         self._settle_switch_held()
 
     def _say_unanswered(self, command: CommandBlock | None, method: str, seconds: float) -> None:
@@ -4094,6 +4164,7 @@ class App(ModesMixin, AgentViewMixin):
             self._command_call_done(pending)
             self._settle_switch_held()
             self._drain_after_queued_command()
+            self._compression_settled(pending)
 
     def _answer_call(self, pending: _Pending, response: Response) -> None:
         if response.error is None:
@@ -4261,13 +4332,20 @@ class App(ModesMixin, AgentViewMixin):
         if self.environ.get(BELL_ENV) == BELL_OFF:
             return
         signal = attention_sequence(self.environ, truncate(slot.attention(), QUESTION_ALERT_CHARS))
-        self.terminal.write(BELL if signal == BELL else BELL + signal)
+        self.terminal.write(BELL if signal == BELL or self._window_focused() else BELL + signal)
 
     def _alert_turn_end(self, seconds: float) -> None:
         """A turn of `TURN_ALERT_SECONDS` or more ends with the terminal's attention signal, unless OMH_TUI_BELL=0."""
         if seconds < TURN_ALERT_SECONDS or self.environ.get(BELL_ENV) == BELL_OFF:
             return
-        self.terminal.write(attention_sequence(self.environ, TURN_ALERT_TEXT.format(elapsed=elapsed_text(seconds))))
+        signal = attention_sequence(self.environ, TURN_ALERT_TEXT.format(elapsed=elapsed_text(seconds)))
+        self.terminal.write(BELL if self._window_focused() else signal)
+
+    def _window_focused(self) -> bool:
+        """Whether the terminal said it has focus (a focus report arrived and none since took it away): then a desktop
+        notification (OSC 9 or 777) would only repeat what the person sees, and the bell alone is rung. Never reported
+        is unknown, not focused: the full signal, as before."""
+        return self.decoder.focus_seen and self.decoder.unfocused_at is None
 
     def _write_title(self) -> None:
         """The terminal title, `<session title> · <state>`, written only when it changed (the first one pushes the old)."""
@@ -4343,6 +4421,12 @@ class App(ModesMixin, AgentViewMixin):
         self._take_skills(payload)
         self._take_title(payload)
         self.model = as_text(payload.get("model")) or self.model
+        route = (as_text(payload.get("model")).strip(), as_text(payload.get("provider")).strip())
+        if all(route):
+            self.info_routes.append(route)
+            if len(self.info_routes) > INFO_ROUTES_KEPT:
+                del self.info_routes[0]
+                self.info_routes_dropped += 1
         self._take_usage(payload.get("usage"))
         self._take_session_state(payload)
         # `running` is not read: the previous turn's closing `running: false` arrives after
@@ -5334,14 +5418,17 @@ class App(ModesMixin, AgentViewMixin):
             with self._for_command(echo):
                 self.transcript.add_notice(CALL_EXPIRED_NOTICE.format(method="config.set", seconds=seconds), NOTICE_WARN)
 
+        # An info said before this switch went out names the route being left, not the one Hermes confirms for it.
+        since = self.info_routes_dropped + len(self.info_routes)
         sent = self._request(
-            "config.set", params, lambda result: (settled(), self._on_model_switched(sid, value, confirmed, result)),
+            "config.set", params,
+            lambda result: (settled(), self._on_model_switched(sid, value, confirmed, result, since)),
             lambda _error: bool(settled()), unanswered,
         )
         if sent is not None and echo is not None and not echo.done:
             self.transcript.add_notice(line)  # under the echo until the answer takes its place
 
-    def _on_model_switched(self, sid: str, value: str, confirmed: bool, result: dict[str, Any]) -> None:
+    def _on_model_switched(self, sid: str, value: str, confirmed: bool, result: dict[str, Any], since: int = -1) -> None:
         """A `config.set model` answer: switched (for this session, or as Hermes' default too), switched at the next
         turn, or not until the person confirms."""
         if result.get("confirm_required"):
@@ -5368,11 +5455,29 @@ class App(ModesMixin, AgentViewMixin):
         self.model = model
         self.model_deferred = None
         self.dirty = True
+        self._remember_model(model, as_text(result.get("provider")).strip(), value, since)
         global_scope = result.get("scope") == MODEL_GLOBAL_SCOPE
         self.transcript.add_notice((MODEL_SWITCHED_GLOBAL_NOTICE if global_scope else MODEL_SWITCHED_NOTICE).format(model=model))
         warning = as_text(result.get("warning")).strip()
         if warning:
             self.transcript.add_notice(warning, NOTICE_WARN)
+
+    def _remember_model(self, model: str, provider: str, value: str, since: int = -1) -> None:
+        """A switch Hermes made to `model`, the model its answer named (an alias sent resolves to it), goes to the front
+        of the OMH home's recent list (`model_picker.record_recent`), which bare /model shows first.
+
+        The provider is Hermes' too: its answer's (the attach adapter passes the shared owner's), else the one the
+        `session.info` said after this switch went out (`since`, a count of infos) named with that model (the stdio
+        entry's), else the one `value` sent, which Hermes switched on. A switch none of them names a provider for, or
+        a launch without an OMH home, records nothing.
+        """
+        home = self._omh_home()
+        if not provider and since >= 0:
+            heard = self.info_routes[max(since - self.info_routes_dropped, 0):]
+            provider = next((said for named, said in reversed(heard) if named == model), "")
+        provider = provider or (contract.model_switch_parts(value) or ("", ""))[1]
+        if home is not None and provider:
+            record_recent(home, model, provider)
 
     def _confirm_model(
         self, result: Mapping[str, Any], intro: str, model: str, current: str,
@@ -5659,7 +5764,9 @@ class App(ModesMixin, AgentViewMixin):
             return
         if self._picker_taken("/model"):
             return
-        self.model_picker = ModelPicker(model_rows(result), current=as_text(result.get("model")) or self.model)
+        home = self._omh_home()
+        self.model_picker = ModelPicker(model_rows(result), current=as_text(result.get("model")) or self.model,
+                                        recent=read_recent(home) if home is not None else [])
         if query:
             self.model_picker.query = query
             self.model_picker.index = 0
@@ -6060,7 +6167,10 @@ class App(ModesMixin, AgentViewMixin):
             self.transcript.add_notice(NO_SESSION_NOTICE, NOTICE_WARN)
             self._keep_images(images, "A prompt with no session")
             return
-        if self._queue_waits():
+        if self._queue_waits() or self._compression_left() is not None:
+            # A prompt sent while a `/compress` is out waits in the queue, never steering (no turn runs to steer), and
+            # goes by itself once the compression settles (`_compression_settled`), on either gateway entry: the
+            # stdio one would refuse it as busy, and the shared one would hold it unseen behind the compression.
             self.queued.append(QueuedLine(text, shown, typed, chips=chips, notice=notice, images=images))
             return
         # The prompt of a command the queue ran goes as the queue's lines go; from here the turn it starts holds the
@@ -6618,7 +6728,7 @@ class App(ModesMixin, AgentViewMixin):
             self.switch_drain_due = True
             return
         if self.queued and self.sid and not self.queue_held and self.starting is None \
-                and not self._queued_command_out():
+                and not self._queued_command_out() and self._compression_left() is None:
             line = self.queued.popleft()
             self.auto_continues = 0  # a line the person queued
             if line.shell:
@@ -7130,8 +7240,6 @@ class App(ModesMixin, AgentViewMixin):
         else:
             compressing = invocation.name.lower() in COMPRESS_COMMANDS
             preview = bool(COMPRESS_PREVIEW_FLAGS & {word.lower() for word in invocation.arg.split()})
-            if compressing and not preview and not self._busy():
-                self.transcript.add_notice(COMPRESS_STARTED_NOTICE)  # under the echo, until Hermes' report
             held = not compressing and self._compression_left() is not None
             if held and self.shared_gateway:  # the stdio entry refuses a turn-back as busy instead
                 self.transcript.add_notice(COMPRESSION_HELD_NOTICE.format(name=invocation.name))
@@ -7161,6 +7269,12 @@ class App(ModesMixin, AgentViewMixin):
         dropped while Hermes acts on it anyway."""
         ends = [call.expires_at for call in self.pending.values() if call.compressing]
         return float(math.ceil(max(0.0, max(ends) - self.clock()))) if ends else None
+
+    def _compression_settled(self, call: _Pending) -> None:
+        """A `/compress` call was answered (or refused, or given up on): once no other is out, the prompts queued
+        while it ran go on by themselves, the oldest first, as after a turn."""
+        if call.compressing and self._compression_left() is None:
+            self._drain_unless_busy()
 
     def _compressing_since(self) -> float | None:
         """When the earliest `/compress` this TUI still waits on was sent, while no turn runs; None otherwise.
@@ -7662,10 +7776,59 @@ class App(ModesMixin, AgentViewMixin):
         action = self.picker.handle_key(event)
         if action is None:
             return
+        if action.kind in (RENAME, SESSION_DELETE):  # the picker stays open, its row saying how the call went
+            self._edit_session(self.picker, action)
+            return
         rows, self.picker = self.picker.rows, None
         if action.kind == PICK:
             label = next((row.label for row in rows if row.id == action.session_id), "")
             self._switch_session(action.session_id, label=label)
+
+    def _edit_session(self, picker: SessionPicker, action: PickerAction) -> None:
+        """A rename (`session.title`) or a delete (`session.delete`) the person asked for in the session picker, on
+        their keys only. The session this TUI is in is renamed by its live id, which Hermes' stdio entry needs; any
+        other by its stored id, which that entry refuses for a session not open there, and the refusal is said on
+        the row: the TUI does not open a session to rename it. Attached to a shared gateway, the gateway child sends
+        either as the owner's revision-fenced `session.mutate`. The answer updates the row, removes it, or says
+        Hermes' refusal on it; with the picker closed meanwhile, a notice says it instead."""
+        target = action.session_id
+        renaming = action.kind == RENAME
+        sent = self.sid if target == self.stored_id and self.sid else target
+        method, params = (("session.title", {"session_id": sent, "title": action.title}) if renaming
+                          else ("session.delete", {"session_id": sent}))
+
+        def done(result: dict[str, Any]) -> None:
+            title = " ".join(clean_text(as_text(result.get("title"))).split())
+            confirmed = bool(title) if renaming else as_text(result.get("deleted")) == sent  # as Ink reads `deleted`
+            if not confirmed:
+                if not self._edit_refused(picker, target, SESSION_EDIT_UNCONFIRMED):
+                    self.transcript.add_aside(NoticeBlock(
+                        f"Hermes did not {CALL_FAILED_PHRASES[method]}: {SESSION_EDIT_UNCONFIRMED}.", NOTICE_WARN))
+                return
+            if renaming and target == self.stored_id:
+                self.session_title = title
+            shown = picker is self.picker and (picker.renamed(target, title) if renaming else picker.deleted(target))
+            if not shown:
+                said = (SESSION_RENAMED_NOTICE.format(session=target, title=title) if renaming
+                        else SESSION_DELETED_NOTICE.format(session=target))
+                self.transcript.add_aside(NoticeBlock(said))
+
+        def refused(error: dict[str, Any]) -> bool:
+            message = (refusal_sentence(error) or plain_sentence(as_text(error.get("message")))).rstrip(".")
+            return self._edit_refused(picker, target, message)
+
+        def unanswered(seconds: float) -> None:
+            if not self._edit_refused(picker, target, SESSION_EDIT_UNANSWERED.format(seconds=seconds)):
+                self._say_unanswered(None, method, seconds)
+
+        if self._request(method, params, done, refused, unanswered) is not None:
+            picker.asked(action)
+        else:
+            picker.refused(target, SESSION_EDIT_NOT_SENT)
+
+    def _edit_refused(self, picker: SessionPicker, target: str, message: str) -> bool:
+        """`message` on `target`'s row while that picker is open; False when it closed (the caller says it)."""
+        return picker is self.picker and picker.refused(target, message)
 
     def _switch_session(
         self, target: str, notice: str = "", by_title: bool = False, label: str = "", seq: int | None = None,
@@ -7997,9 +8160,9 @@ class App(ModesMixin, AgentViewMixin):
     def _redraw(self, arg: str) -> None:
         self._full_redraw()
 
-    def _history(self, arg: str, quiet: bool = False) -> None:
+    def _history(self, arg: str) -> None:
         """The blocks held now in a pager that renders each one, details shown, only when a page reaches it; with
-        nothing to show, a notice, or with `quiet` nothing at all."""
+        nothing to show, a notice."""
         transcript = self.transcript
         blocks, dropped = transcript.shown_blocks(), transcript.dropped  # what the pager holds, as it opens
 
@@ -8012,15 +8175,13 @@ class App(ModesMixin, AgentViewMixin):
         # Stops at the first block with rows, the first one but for a reply that was only a line break, and
         # keeps what it rendered for the first frame.
         if pager.shows_nothing(self.size[0], self.theme):
-            if not quiet:
-                transcript.add_notice("Nothing in this session's transcript yet.")
+            transcript.add_notice("Nothing in this session's transcript yet.")
             return
         self._show_pager(pager)
 
-    def _details_view(self, quiet: bool = False) -> None:
-        """The whole transcript with every detail (thinking, tool output, whole diffs) in the pager, at its end; `quiet`
-        as `_history` takes it."""
-        self._history("", quiet)
+    def _details_view(self) -> None:
+        """The whole transcript with every detail (thinking, tool output, whole diffs) in the pager, at its end."""
+        self._history("")
         if isinstance(self.pager, HistoryPager):
             self.pager.handle_key(Key(END), self.size[1])
 
@@ -8138,8 +8299,8 @@ class App(ModesMixin, AgentViewMixin):
         the notice row says what the copy did. Rows are read only where
         `LiveRegion.doc_row` is certain of them, never guessed: a press on a
         row it is not (the shell's output above the session, an earlier
-        region's after Ctrl+Z) selects nothing, and moving the held button
-        from there opens the transcript view instead; a drag carried over such
+        region's after Ctrl+Z) selects nothing and opens nothing (only Ctrl+O
+        opens the transcript view); a drag carried over such
         a row stops at the nearest row it is certain of, and one under the
         region's last row is on that row. Nothing happens while the screen is
         being redrawn for a new size, a pager is open or the TUI does not
@@ -8164,22 +8325,16 @@ class App(ModesMixin, AgentViewMixin):
         stable = self._last_stable_doc()
         if event.button == BUTTON_LEFT and event.pressed and not event.motion:
             doc = self.region.doc_row(row, rows)
-            self.unmapped_press = doc is None
             if doc is not None and doc > stable:
                 doc = None  # a live row that changes on its own (the working row, the info line): nothing to select
             self._copied(selection.press(None if doc is None else (doc, event.x - 1), now, self._printed_line))
         elif event.motion and event.pressed:
-            if self.unmapped_press:
-                self.unmapped_press = False
-                self._transcript_view()  # nothing certain to select there: the transcript view, where all of it is
-                return
             doc = next((found for at in range(row, last + 1) if (found := self.region.doc_row(at, rows)) is not None),
                        None)
             if doc is not None:
                 # Over a live row that changes on its own, the drag runs to the end of the last row that does not.
                 selection.move((doc, event.x - 1) if doc <= stable else (stable, ROW_END))
         elif not event.pressed:
-            self.unmapped_press = False
             self._copied(selection.release(now, self._printed_line))
         self._note_selected_lines()
         self.dirty = True
@@ -8196,16 +8351,6 @@ class App(ModesMixin, AgentViewMixin):
         if working:
             limit = min(limit, budget.tail + budget.pad - working)
         return first + limit - 1
-
-    def _transcript_view(self) -> bool:
-        """What a drag from a row the region did not print opens: Ctrl+O's view, the open question while one is asked,
-        else the whole transcript at its end; nothing, and no notice, when the transcript has no rows to show. True
-        when a view opened."""
-        if self.slot is not None:
-            self._question_view()
-        else:
-            self._details_view(quiet=True)
-        return self.pager is not None
 
     def _note_selected_lines(self) -> None:
         """Keep each selected row's text as the screen shows it now, to tell later whether the row still shows it."""
@@ -8673,7 +8818,6 @@ class App(ModesMixin, AgentViewMixin):
         # The terminal reflowed the rows a selection was painted on; the full redraw erases them.
         self.selection.forget()
         self.selected_lines = {}
-        self.unmapped_press = False
         self.region.forget_marks()
         self._take_size()
         self.dirty = True
@@ -8712,7 +8856,6 @@ class App(ModesMixin, AgentViewMixin):
         # frame's synchronized update, so the blank screen never shows.
         self.region = self._new_region(at_top=True, lead=CLEAR_SCREEN_AND_SCROLLBACK)
         self.selection.forget()  # its rows were the old region's, which the clear erases with the highlight on them
-        self.unmapped_press = False
         self.rows_ground = self._ground()
         self.transcript.retake_tail(self.size[0], self.theme, REDRAW_TAIL_ROWS)
         if self.banner_record is not None:
@@ -8810,7 +8953,7 @@ class App(ModesMixin, AgentViewMixin):
         if self.environ.get(BELL_ENV) == BELL_OFF:
             return
         signal = attention_sequence(self.environ, truncate(f"{tool_call(process)} finished", QUESTION_ALERT_CHARS))
-        self.terminal.write(BELL if signal == BELL else BELL + signal)
+        self.terminal.write(BELL if signal == BELL or self._window_focused() else BELL + signal)
 
     def _report_background(self) -> None:
         """Enter on an empty composer while the row says a process finished: the one prompt that tells the session, and
@@ -9467,7 +9610,7 @@ class App(ModesMixin, AgentViewMixin):
         if picker is self.launch_picker:
             return LAUNCH_PICKER_KEYS
         if picker is self.picker:
-            return SESSION_PICKER_KEYS
+            return self.picker.keys()
         if picker is self.search:
             return SEARCH_HINTS
         return REWIND_PICKER_KEYS if picker is self.rewind_picker else MODEL_PICKER_KEYS
@@ -9593,12 +9736,10 @@ class App(ModesMixin, AgentViewMixin):
             if tip is not None:
                 lines.append(tip)
         elif compressing is not None:
-            # A `/compress` out with no turn running: the spinner and its clock, so the wait reads as alive.
-            frame = self._spinner_frame()
-            row = (Span(WORKING_GLYPHS[frame % len(WORKING_GLYPHS)], self.theme.accent), Span(" "),
-                   *working_spans(f"{COMPRESSING_VERB}…", frame, self.theme),
-                   Span(f" ({elapsed_text(now - compressing)})", self.theme.muted))
-            lines.append(truncate_line(row, cols))
+            # A `/compress` out with no turn running: the spinner, a gauge and its clock, so the wait reads as alive,
+            # then a blank row so it does not sit on the composer's rule (the owner, 2026-11-14).
+            lines.append(self._compress_row(now - compressing, cols))
+            lines.append(())
         elif alert is not None:
             # What the session waits on: the working row's spinner and words, the longest wait's clock, then how many
             # agents and terminals. The spinner holds while the window is unfocused (#2542); the clock counts on.
@@ -9650,12 +9791,31 @@ class App(ModesMixin, AgentViewMixin):
             return None
         return max(times, default=0.0), agents, terminals
 
+    def _compress_row(self, waited: float, cols: int) -> Line:
+        """`✻ Compacting conversation… ━━━━━━────── (11s)`: the gauge is the time waited eased toward
+        COMPRESS_GAUGE_CEILING, never a measure Hermes gave. A narrow row drops the gauge first, then the clock."""
+        frame = self._spinner_frame()
+        lead = (Span(WORKING_GLYPHS[frame % len(WORKING_GLYPHS)], self.theme.accent), Span(" "),
+                *working_spans(f"{COMPRESSING_VERB}…", frame, self.theme))
+        part = COMPRESS_GAUGE_CEILING * (1.0 - math.exp(-max(waited, 0.0) / COMPRESS_GAUGE_SECONDS))
+        filled = min(COMPRESS_GAUGE_CELLS - 1, int(part * COMPRESS_GAUGE_CELLS))
+        gauge = (Span(" "), Span(CONTEXT_GAUGE_FILLED * filled, self.theme.accent),
+                 Span(CONTEXT_GAUGE_EMPTY * (COMPRESS_GAUGE_CELLS - filled), self.theme.dim))
+        clock = (Span(f" ({elapsed_text(waited)})", self.theme.muted),)
+        for candidate in ((*lead, *gauge, *clock), (*lead, *clock), lead):
+            row = tuple(span for span in candidate if span.text)
+            if line_width(row) <= cols:
+                return row
+        return truncate_line(lead, cols)
+
     def _working_rows(self) -> int:
         """The tail's last rows that say a turn runs, as `_tail` draws them: the working (or waiting, or
         interrupting) row, and the tip under the working row from TIP_MIN_ROWS rows. The agent view leaves the tail
         these (`layout.allocate`'s `tail_floor`), so a short terminal never loses the row saying a turn runs."""
-        if not self._busy():  # the compression's row, or the wait's, with no tip
-            return int(self._compressing_since() is not None or self._pending_wait() is not None)
+        if not self._busy():  # the compression's row and the blank row under it, or the wait's row, with no tip
+            if self._compressing_since() is not None:
+                return 2
+            return int(self._pending_wait() is not None)
         if self._framed_wait():
             return 0  # `_tail` draws no row: the framed question's key row carries the wait's clock
         return 1 + int(self.size[1] >= TIP_MIN_ROWS and self.waiting_since is None and not self.interrupting)

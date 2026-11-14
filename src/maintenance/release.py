@@ -425,7 +425,12 @@ SKILL_INDEX_LINE_CHAR_LIMIT = 100
 # result reported" under the word list. Measured by
 # per_turn_context.plugin_tool_schema_chars_by_tool() against base d00be3a6e.
 # No headroom.
-PLUGIN_TOOL_SCHEMA_CHAR_LIMIT = 72895
+# 72895 -> 72940: omh_dag nodes gain an optional `read_only` boolean (its
+# child writes nothing in the workspace but its handoff), named in the
+# description's node field list (+45, 3504 -> 3549). Measured by
+# per_turn_context.plugin_tool_schema_chars_by_tool() against base 55c802b39.
+# No headroom.
+PLUGIN_TOOL_SCHEMA_CHAR_LIMIT = 72940
 # PRE_LLM_CALL_CONTEXT_CHAR_LIMIT, PRE_LLM_CALL_CONTEXT_FALLBACK_CHAR_LIMIT: moved with
 # their history to src/plugin_bundle/omh/turn_budget.py; imported at the top of this file.
 # 340000 -> 349637: three capability-skill sections were added by the domain
@@ -1051,7 +1056,10 @@ PLUGIN_TOOL_SCHEMA_CHAR_LIMIT = 72895
 # 545272 -> 545582 (2026-11-10): dag-ulw's split quality bar says to split for work that can run side by side,
 # keep a small follow-on step in the node it follows, and still run a graph when nothing runs side by side (+310,
 # only the dag-ulw row, 4454 -> 4764); measured from the producer against main 7fb251ab6. No headroom.
-FULL_CAPABILITY_SKILL_SECTION_CHAR_LIMIT = 545582
+# 545582 -> 545712 (2026-11-12): design-orchestration's quality bar had three items, so its new fourth line
+# (direction options shown as rendered images) enters the capability row's first-four slice (+130, only that
+# row, 3915 -> 4045); measured from the producer against main 2fcbef29f. No headroom.
+FULL_CAPABILITY_SKILL_SECTION_CHAR_LIMIT = 545712
 FULL_CAPABILITY_SKILL_ITEM_CHAR_LIMIT = 9000
 # 100000 -> 102070: the same three domain workflows each add one standalone
 # capability row, again measured on the merged tree; warranted growth for three

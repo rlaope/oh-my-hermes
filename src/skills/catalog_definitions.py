@@ -4434,6 +4434,8 @@ _DEFINITIONS = [
             "Make the design job, context boundary, direction, downstream lane ownership, and visual evidence requirements readable before handoff.",
             "Reject generic default drift by naming hierarchy, palette, typography, layout, signature element, and avoid patterns deliberately — the direction vocabulary and anti-slop patterns live in the frontend skill's `omh-frontend/references/taste-foundations.md`; prepared directions inherit its named bar (technically clean but flat fails).",
             "Require the selected executor and fresh visual evidence separately before any implementation or quality completion claim.",
+            "The options in `design_direction_set/v1` are shown as rendered images; an option described only in words is not yet an option.",
+            "Running to the end without asking is for runs nobody can answer (scheduled, batch) or when the user handed the choice over.",
         ),
         why_this_exists=(
             "`design-orchestration` lets Hermes users say that they want design handled without making them manually compose four specialist lanes or confusing preparation with completed visual work."
@@ -4843,6 +4845,8 @@ _DEFINITIONS = [
             "A 3D or canvas scene (WebGL, a three.js-style engine, a voxel world) is judged on its first frame: load `references/rendered-scene-craft.md`, boot on the view the scene's own title and copy promise, light it with a warm-or-cool key, a sky fill, explicit tone mapping, shadows, and fog, and make every small animated object read as what it is. A clean console is not a finished scene.",
             "For first-time UI creation, name the initial generation branch, reference direction, reusable primitives, state coverage, and required visual QA path.",
             "Cover responsive layout, empty/loading/error states, hover/focus/active states, CJK text, accessibility, and performance expectations.",
+            "For a new page or a redesign, load `references/editorial-layout.md` before choosing the layout.",
+            "For a surface people use on a phone, load `references/mobile-density-gate.md`; measure with `toolkit/scripts/phone_check.py` when a browser is available, otherwise the measurement is `not_observed`.",
             "When the surface reads or writes remote data, load the `frontend-refactor` skill's `omh-frontend-refactor/references/state-discipline.md` (sections 1 and 4-6) before writing the component: server state lives in a query cache, each mutation names the query keys it invalidates, and an optimistic write ships with its rollback.",
             "When the surface has a form, a text composer, or a dialog, load `references/forms-and-input.md` before writing it: labelled controls, errors shown after the user commits a value, server field errors mapped onto their fields, one submit in flight, an Enter-to-send that waits for IME composition, and focus returned when a dialog closes.",
             "Check the browser-support target before using a newer platform feature: a feature newer than the target (by default, anything only Baseline Newly available) needs feature detection plus a fallback, or a deliberate target change; suggest recording the target in the repository's agent instruction file (`omh-agent-instructions` owns that file).",
@@ -5653,6 +5657,7 @@ _DEFINITIONS = [
             "Score a round from the captured image itself, never from an auxiliary model's `analysis` text, which is what the capture tool returns when the session has no native vision.",
             f"On Hermes, for the session's own captures, set each required viewport with `browser_cdp` `Emulation.setDeviceMetricsOverride` when {native_tool_presence_clause('browser_cdp', code=True)} (Hermes offers it only with a CDP endpoint the user configured), then read the width back through `browser_console` (`window.innerWidth`) before the capture: each `browser_cdp` call opens its own connection, so the override may not hold, and a width that reads back other than the one requested is not that viewport. Without that tool, a width the browser does not already report is a named blocker for the session's own captures, and a capture of that width from the wrapper, executor, or user still counts.",
             f"On Hermes, when {native_tool_presence_clause('browser_console', code=True)}, read it after every navigation and every interaction in scope and record its errors in console_network_health/v1; a clean console read is console evidence only, never network, accessibility, or visual evidence.",
+            "For a phone-viewport capture, record in render_capture_manifest/v1 whether touch and mobile user-agent emulation was on; a width-only capture is named as width-only and does not show `(hover: none)`, `(pointer: coarse)` or user-agent branches. Phone-used surfaces also go through the `frontend` skill's `references/mobile-density-gate.md`.",
             "Exploratory bug-hunting goes to Hermes' bundled `dogfood` skill when it is available: its issues and screenshots enter this verdict only as observed findings bound to the target lineage, and a report with no issues is not a PASS.",
         ),
         why_this_exists=(
@@ -5718,10 +5723,11 @@ _DEFINITIONS = [
                 "Set a viewport only through a tool that can, and read the width back before the capture; a width that reads back other than the one requested is not that viewport, and a width nothing could set is a named blocker unless a capture of it is supplied.",
             "For animated or simulated output, verify motion continuity through `references/motion-continuity.md`: check entry/spawn position against the declared origin, per-frame displacement against the declared speed, force direction against observed motion (knockback sign), monotonic HP/resource bars, and re-run the full deploy/travel/engage flow in an independent simulation/replay with frames sampled per phase — never infer flow from cost/clear numbers, and record frame indices/timestamps as evidence; a technical pass (build/tests/metrics) is never visual approval.",
                 "Read the browser console after every navigation and every interaction in scope; a clean console read is console evidence only, never network, accessibility, or visual evidence.",
+                "For a phone-viewport capture, record in render_capture_manifest/v1 whether touch and mobile user-agent emulation was on; a width-only capture is named as width-only and does not show `(hover: none)`, `(pointer: coarse)` or user-agent branches. Phone-used surfaces also go through `omh-frontend/references/mobile-density-gate.md`.",
             ),
         },
         portable_override_shadows={
-            "quality_bar": "6703db9e8afbc07fcb1d7730a10cf83a9f6affe23160d2e07bf8e32f8a1b9e5d",
+            "quality_bar": "e0d897cd189f1b6915deb7aa67ee170e4e0f39e7858c2c6419a565e28aa75938",
         },
     ),
     SkillDefinition(
@@ -7996,6 +8002,8 @@ _DEFINITIONS = [
             "Report each finding with `priority` (`P0`-`P3`), `confidence`, `evidence`, `path`, and `line_range`, then close with one verdict of `ship` or `no_ship` plus its own `confidence`; a finding without a path and line range is an open question, not a finding.",
             "`REVIEW.md` in the reviewed repository defines what blocks: map its blocking definitions onto `P0`/`P1` and let a `no_ship` verdict follow from that file rather than from reviewer preference. When the repository has no such file, say which blocking definition was used instead.",
             "Review on two axes and report them side by side, never re-ranked against each other: the correctness/risk axis judges the code as it is, and the spec axis judges the diff against the dispatch's Claim and Requirements pointer. A clean diff that does not do what was asked is a spec-axis finding; when no Claim or spec pointer was supplied, report the spec axis as `not_assessed` with that reason instead of staying silent.",
+            "A fix reaches every place of the same shape: grep the diff's pattern across the other agents, subcommands, callers, and branches of the same operation, and ask which of them the change left alone; a fix to one of six identical faults leaves five.",
+            "A read, parse, or hash that failed means unknown, never empty, none, or equal: keep what was read before, and a list that guards access fails closed, so a failed read of an allowlist denies instead of allowing.",
             "Judge maintainability findings against the named baseline in `omh-code-review/references/smell-baseline.md`: a baseline smell is a judgement call to argue from evidence, never an automatic finding, and the reviewed repository's own standards override the baseline wherever they conflict.",
             "Close with two lists beside the verdict: what was checked and found clean, and what could not be assessed with the reason. An absent finding is evidence only when the closing says the surface was actually checked.",
             "Require structured `spec_axis`, `could_not_assess` (empty allowed), and unranked `verification_gaps` (empty allowed) under the dispatch schema; gaps carry `path`, `line_range`, and `evidence`, never finding priority or confidence. Check actual reads, revision, bounds, ordered ranges, and claim truth separately from shape.",

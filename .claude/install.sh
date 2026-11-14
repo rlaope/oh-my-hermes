@@ -16,7 +16,7 @@ if [ "$scope" = user ]; then
 else
     target="$base/.claude/skills"
 fi
-source="$(dirname -- "$0")/../agent-skills"
+source="$(dirname -- "$0")/agent-skills"
 [ ! -L "$source" ] || fail 'Symlink source root'
 source=$(CDPATH= cd -- "$source" && pwd -P)
 if command -v sha256sum >/dev/null 2>&1; then

@@ -120,6 +120,9 @@ class ParityTests(unittest.TestCase):
         # Catalog sync 2026-11-11: recognized, priced, and provider-mapped
         # ahead of any chain placement.
         "gemini-4-carbon": ("google", "gemini", "openrouter"),
+        # Catalog sync 2026-11-13: recognized, priced, and provider-mapped
+        # ahead of any chain placement.
+        "gemini-4-hydrogen": ("google", "gemini", "openrouter"),
     }
     # Provider families whose last catalog member retired, kept in the
     # vocabulary by name. The entitlement parser is strict and atomic, so

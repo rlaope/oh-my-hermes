@@ -2,7 +2,7 @@
 
 omher is a desktop app for your Hermes bots, on macOS, Windows and Linux. Each Hermes profile is one bot. Each bot has one main
 chat, and the app shows what that bot is doing in its other sessions (Slack, Discord, Telegram, cron)
-read-only. Under the bots, SESSIONS starts a terminal agent (Claude Code, Codex, OpenCode, oh-my-hermes, pi, oh-my-pi) in a
+read-only. Under the bots, SESSIONS starts a coding agent (Claude Code, Codex, OpenCode, Gemini CLI, Kilo Code and more, oh-my-hermes, pi) in a
 folder you pick and runs it inside the window, as if you had typed `claude` or `codex` in a terminal. It is part of
 this repository but is not part of the `omh` Python package.
 
@@ -44,13 +44,23 @@ machine and finds Hermes' Python on its own (see "Where omher looks for Hermes" 
 first launch offers to install it, as described above.
 
 **macOS (11 or later).** Download `omher-<version>-macos-arm64.dmg` (Apple Silicon) or `-macos-x64.dmg` (Intel),
-open it and drag omher into Applications. The app is ad-hoc signed, not notarized, so the first launch needs
-one extra step: right-click omher in Applications, choose **Open**, then **Open** again. After that it opens
-normally. If macOS still says the app "is damaged", clear the download flag once:
+open it and drag omher into Applications. The app is ad-hoc signed, not notarized, so macOS stops the first
+launch of a copy downloaded in a browser with a warning that it cannot check the app. Allow it once:
+
+- **macOS 15 (Sequoia) or later:** close the warning, open **System Settings › Privacy & Security**, scroll down
+  to Security and click **Open Anyway** next to omher, then **Open** when the warning comes back. Right-click ›
+  Open no longer gets past the warning on these versions.
+- **macOS 14 or earlier:** right-click omher in Applications, choose **Open**, then **Open** again.
+
+After that it opens normally. The same thing in one Terminal line, which also helps when macOS says the app
+"is damaged":
 
 ```sh
 xattr -dr com.apple.quarantine /Applications/omher.app
 ```
+
+The one-line installer above needs neither step: it downloads the same `.dmg` with `curl`, which sets no
+download flag.
 
 **Windows 10/11 (x64).** Download `omher-<version>-windows-x64-setup.exe` (installs for your user, no admin) or
 the `.msi`. The installer is not code-signed, so SmartScreen may say "Windows protected your PC": choose
@@ -91,10 +101,18 @@ UI (React in a Tauri window)  ⇄  bridge (Python, loopback WebSocket)  ⇄  the
   installed ones first, the last one used on top, the missing ones dimmed with their install line. Picking one
   opens its New session chat at once; its composer names the agent, and the folder chip under it picks the folder
   (the last one used, else home; recent folders, Choose folder… or home). Nothing runs until the first message, which
-  becomes the agent's first prompt; a terminal agent starts on Start. DSH is DeepSeek Harness only (the CLI inside its
+  becomes the agent's first prompt; a terminal agent starts on Start. Beside the agent, Chat | Terminal picks how the
+  session opens (Chat by default, the last pick remembered per agent): Terminal runs the agent's own program, with no
+  arguments, in the pseudo-terminal, and a session opened that way ends with its program and comes back after a
+  restart waiting for Resume. DSH is DeepSeek Harness only (the CLI inside its
   app, or the npm package `@deepseek-ai/dsh`; any other `dsh` on PATH is skipped) and opens as a chat: one
   `dsh --profile headless --json` run per message, continued with the harness's `--session-id`. The program runs in a pseudo-terminal (`portable-pty`: a Unix PTY on macOS, ConPTY on
-  Windows) drawn with xterm.js. The UI sends only an agent id (`claude`, `codex`, `omo`, `dsh`, `omh`, `pi`, `omp`, `grok`, `opencode`); the shell
+  Windows) drawn with xterm.js. Settings › Terminal picks how every session terminal looks: a theme for the dark app
+  theme and one for the light (omher's own two, plus 36 carried over from Orca with their licences in
+  `THIRD_PARTY_NOTICES.md`), font, size, line height, cursor, scrollback, contrast and padding, kept on this
+  computer (`src/sessions/term/`). In a terminal, Cmd/Ctrl+F finds in the scrollback and Cmd/Ctrl+click opens a web
+  link in the browser. The shell reads a program only as far ahead of the terminal as the terminal has drawn (2 MiB
+  at most), so a runaway program holds memory flat and Ctrl+C is answered at once. The UI sends only an agent id (`claude`, `codex`, `omo`, `dsh`, `omh`, `pi`, `omp`, `grok`, `opencode`, `kilo`, `gemini`, `qwen`, `kimi`, `copilot`, `cline`); the shell
   refuses anything else and never takes a command line or arguments. Closing a session or quitting the app stops
   the program. In a plain browser (dev, e2e) a mock host echoes what you type instead. A chat session's approvals
   and questions are asks like a bot's: they join the Needs-you strip and ⌘J (named by folder and agent), and the
@@ -109,7 +127,15 @@ UI (React in a Tauri window)  ⇄  bridge (Python, loopback WebSocket)  ⇄  the
   approval cards with Deny and Allow once (OpenCode's "Always allow" saves a project rule, so omher does not
   offer it). Before OpenCode starts, omher reads its resolved rules (`opencode agent list`) and starts it with
   ask rules built from them: what you allow asks first, what you deny stays denied. If omher cannot confirm OpenCode
-  kept them, it does not start OpenCode.
+  kept them, it does not start OpenCode. Kilo Code (`kilo acp`) gets the same from `kilo agent list`, for `bash`,
+  `edit` and `write`. Gemini CLI (`gemini --acp`), Qwen Code (`qwen --acp`), Kimi Code (`kimi acp`), Copilot CLI
+  (`copilot --acp`) and Cline (`cline --acp`) use their own approval requests, with no permission override from
+  omher. Their signed-in turns have not been tested. An agent that is not signed in
+  ends its session with one line naming its own sign-in command (`gemini`, `kimi login`, `cline auth`, ...) and
+  Open in Terminal; omher never signs in for it and never takes a key.
+- **The + menu stays short.** It lists the agents installed on this computer; the rest fold under one More agents
+  row, each with its whole install line (a click copies it). Continue a conversation stays under that row, there as
+  the menu first opens.
 
 Rules the code keeps:
 
@@ -121,7 +147,7 @@ Rules the code keeps:
 - **Loopback only.** The bridge listens on 127.0.0.1 and talks to the gateway Hermes itself runs on this machine.
 - **No model calls of its own.** Every model call is Hermes'. omher has no API key and no HTTP client.
 - **Sessions run only allow-listed agents.** Only when you start one, only `claude`, `codex`, `omo`, `dsh`, `omh`, `pi`,
-  `omp`, `grok` or `opencode`, with no arguments besides the fixed chat mode and a conversation id to continue, in the folder you
+  `omp`, `grok`, `opencode`, `kilo`, `gemini`, `qwen`, `kimi`, `copilot` or `cline`, with no arguments besides the fixed chat mode and a conversation id to continue, in the folder you
   picked; stopped when the session is closed or the app quits.
 - **Automations and plugins change only through the bot.** The Automations page reads each profile's
   `cron/jobs.json` and changes a job only with that bot's `cron.manage` (add, pause, resume, remove); Run now and

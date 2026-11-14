@@ -237,13 +237,19 @@ test("the + menu: installed agents first (the last one used on top), missing one
   await expect(menu).toHaveAttribute("role", "menu");
   // no chat opens until an agent is picked
   await expect(page.getByTestId("session-chat")).toHaveCount(0);
-  const items = menu.locator("[role=menuitem]");
+  // The missing agents stay folded until requested; Enter still picks the recent installed one.
+  await expect(menu.locator("[data-testid^=session-agent-]")).toHaveCount(4);
+  await expect(menu.getByTestId("session-agent-dsh")).toBeFocused();
+  await menu.getByTestId("session-more").click();
+  await page.keyboard.press("Home");
+  // the agent rows ("Continue a conversation" follows them)
+  const items = menu.locator("[role=menuitem][data-testid^=session-agent-]");
   // the first row has the focus, so Enter picks the agent on top
   await expect(menu.getByTestId("session-agent-dsh")).toBeFocused();
   expect(await items.evaluateAll((els) => els.map((e) => e.getAttribute("data-testid")))).toEqual(
-    ["dsh", "claude", "codex", "omo", "omh", "pi", "omp", "grok", "opencode"].map((a) => `session-agent-${a}`),
+    ["dsh", "claude", "codex", "omo", "omh", "pi", "omp", "grok", "opencode", "kilo", "gemini", "qwen", "kimi", "copilot", "cline"].map((a) => `session-agent-${a}`),
   );
-  expect(await items.locator(".ss-l").allTextContents()).toEqual(["DSH", "Claude Code", "Codex", "OmO", "oh-my-hermes", "pi", "oh-my-pi", "Grok", "OpenCode"]);
+  expect(await items.locator(".ss-l").allTextContents()).toEqual(["DSH", "Claude Code", "Codex", "OmO", "oh-my-hermes", "pi", "oh-my-pi", "Grok", "OpenCode", "Kilo Code", "Gemini CLI", "Qwen Code", "Kimi Code", "Copilot CLI", "Cline"]);
   // each with its official mark, never a letter
   for (const a of ["omo", "omp", "omh"]) await expect(menu.getByTestId(`session-agent-${a}`).locator(`img[data-mark="${a}"]`)).toHaveCount(1);
   // DeepSeek Harness's own mark (its whale), drawn in the text colour
@@ -284,7 +290,11 @@ test("the + menu: installed agents first (the last one used on top), missing one
   await expect(menu.getByTestId("session-agent-claude")).toBeFocused();
   await page.keyboard.press("ArrowUp");
   await page.keyboard.press("ArrowUp");
-  await expect(menu.getByTestId("session-agent-opencode")).toBeFocused();
+  // up from the top wraps to the menu's last row: "Continue a conversation" with Codex, under the agents
+  await expect(menu.getByTestId("session-past-codex")).toBeFocused();
+  await page.keyboard.press("ArrowUp");
+  await page.keyboard.press("ArrowUp");
+  await expect(menu.getByTestId("session-agent-cline")).toBeFocused();
   await page.keyboard.press("Escape");
   await expect(menu).toHaveCount(0);
   await expect(plus).toBeFocused();

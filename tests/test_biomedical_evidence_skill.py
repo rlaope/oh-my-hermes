@@ -16,7 +16,7 @@ from unittest.mock import patch
 
 import _local_package  # noqa: F401
 from _toolkit_path_guard import (POSIX_ONLY, assert_alias_does_not_exempt_links_below,
-                                 assert_only_system_aliases_trusted)
+                                 assert_only_system_aliases_trusted, assert_unsearchable_directory_is_refused)
 
 ROOT = Path(__file__).resolve().parents[1]
 SCRIPT = ROOT / "src/skills/biomedical_evidence_toolkit/scripts/reconcile.py"
@@ -268,6 +268,9 @@ class ReconcileTests(unittest.TestCase):
     @POSIX_ONLY
     def test_a_trusted_alias_does_not_exempt_a_link_below_it(self):
         assert_alias_does_not_exempt_links_below(self, self.api["safe_path"], "symlinks and traversal")
+
+    def test_an_unsearchable_directory_is_refused(self):
+        assert_unsearchable_directory_is_refused(self, self.api["safe_path"], self.root)
 
     def test_help_is_dependency_free(self):
         result = subprocess.run([sys.executable, "-I", str(SCRIPT), "--help"], capture_output=True, text=True, timeout=10)

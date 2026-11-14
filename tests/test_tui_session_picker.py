@@ -9,7 +9,8 @@ from _tui_lines import line_text
 from omh.tui.frame import RULE
 from omh.tui.keys import BACKSPACE, CHAR, DOWN, ENTER, ESCAPE, PAGE_DOWN, PAGE_UP, UP, Key, Paste
 from omh.tui.session_picker import (
-    CLOSE, DAY_GROUPS, PICK, PickerAction, SessionPicker, SessionRow, age_text, day_group, session_rows,
+    CLOSE, CURRENT_NOT_DELETED, DAY_GROUPS, DELETE, DELETE_CONFIRM, DELETING, EMPTY_TITLE, KEYS, PICK, RENAME,
+    RENAME_KEYS, PickerAction, SessionPicker, SessionRow, age_text, day_group, session_rows,
 )
 from omh.tui.style import Span
 from omh.tui.theme import DEFAULT_THEME
@@ -290,3 +291,139 @@ class FrameTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+CTRL_R = Key(CHAR, "r", ctrl=True)
+CTRL_D = Key(CHAR, "d", ctrl=True)
+
+
+def typed(chooser: SessionPicker, text: str) -> list[PickerAction | None]:
+    return [chooser.handle_key(Key(CHAR, char)) for char in text]
+
+
+def shown(chooser: SessionPicker, width: int = 100, rows: int = 12) -> str:
+    return "\n".join(line_text(line) for line in chooser.lines(width, DEFAULT_THEME, rows, NOW))
+
+
+class RenameTests(unittest.TestCase):
+    """Ctrl+R: the filter row becomes the highlighted session's title (opencode `session.rename`, ctrl+r)."""
+
+    def renaming(self) -> SessionPicker:
+        chooser = picker()
+        shown(chooser)  # the day groups order the rows: the current one first, then the 2 h old one
+        chooser.handle_key(Key(DOWN))
+        self.assertIsNone(chooser.handle_key(CTRL_R))
+        return chooser
+
+    def test_ctrl_r_opens_the_title_field_and_enter_asks_for_the_rename(self) -> None:
+        chooser = self.renaming()
+        self.assertEqual((chooser.renaming, chooser.title), ("20261012_090000_aaaaaa", ""))  # untitled: an empty field
+        self.assertEqual(chooser.keys(), RENAME_KEYS)
+        drawn = shown(chooser)
+        self.assertIn("Rename Refactor the router", drawn)
+        self.assertIn("type the session's new title", drawn)
+        self.assertEqual(typed(chooser, "Router split"), [None] * len("Router split"))
+        self.assertTrue(shown(chooser).splitlines()[-1].endswith("Router split"))
+        self.assertEqual(chooser.query, "")  # typing went to the title, not the filter
+        action = chooser.handle_key(Key(ENTER))
+        self.assertEqual(action, PickerAction(RENAME, "20261012_090000_aaaaaa", "Router split"))
+        self.assertEqual(chooser.renaming, "")
+        self.assertEqual(chooser.keys(), KEYS)
+        self.assertIn("renaming…", shown(chooser))
+
+    def test_the_field_is_prefilled_with_the_title_the_row_has(self) -> None:
+        chooser = picker()
+        chooser.handle_key(CTRL_R)  # the current session, titled "Reply with ok"
+        self.assertEqual(chooser.title, "Reply with ok")
+        chooser.handle_key(Key(BACKSPACE))
+        chooser.handle_key(Key(BACKSPACE))
+        typed(chooser, "OK")
+        self.assertEqual(chooser.handle_key(Key(ENTER)), PickerAction(RENAME, "20261013_115656_e709ea", "Reply with OK"))
+
+    def test_esc_cancels_and_puts_the_filter_back(self) -> None:
+        for key in (Key(ESCAPE), Key(CHAR, "c", ctrl=True)):
+            with self.subTest(key=key):
+                chooser = picker(query="re")
+                chooser.handle_key(CTRL_R)
+                typed(chooser, "x")
+                self.assertIsNone(chooser.handle_key(key))  # no action: the picker stays open, nothing is sent
+                self.assertEqual((chooser.renaming, chooser.title, chooser.query), ("", "", "re"))
+                self.assertTrue(shown(chooser).splitlines()[-1].endswith("re"))
+
+    def test_an_empty_title_is_refused_here(self) -> None:
+        chooser = self.renaming()
+        typed(chooser, "   ")
+        self.assertIsNone(chooser.handle_key(Key(ENTER)))
+        self.assertEqual(chooser.renaming, "20261012_090000_aaaaaa")  # still the field
+        self.assertIn(EMPTY_TITLE, shown(chooser))
+
+    def test_a_rename_answered_updates_the_row_and_a_refusal_is_said_on_it_until_the_next_key(self) -> None:
+        chooser = self.renaming()
+        typed(chooser, "Router split")
+        chooser.asked(chooser.handle_key(Key(ENTER)))  # type: ignore[arg-type]
+        self.assertTrue(chooser.renamed("20261012_090000_aaaaaa", "Router split"))
+        self.assertIn("Router split", shown(chooser))
+        self.assertNotIn("Refactor the router", shown(chooser))
+        self.assertFalse(chooser.renamed("no-such-row", "x"))
+        self.assertTrue(chooser.refused("20261001_090000_bbbbbb", "session not found"))
+        self.assertIn("session not found", shown(chooser))
+        chooser.handle_key(Key(DOWN))
+        self.assertNotIn("session not found", shown(chooser))
+
+
+class DeleteTests(unittest.TestCase):
+    """Ctrl+D: the row asks, a second Ctrl+D deletes (opencode `session.delete`, ctrl+d)."""
+
+    def armed(self) -> SessionPicker:
+        chooser = picker()
+        shown(chooser)
+        chooser.handle_key(Key(DOWN))
+        self.assertIsNone(chooser.handle_key(CTRL_D))
+        return chooser
+
+    def test_ctrl_d_asks_on_the_row_and_a_second_one_deletes(self) -> None:
+        chooser = self.armed()
+        self.assertIn(DELETE_CONFIRM, shown(chooser))
+        self.assertEqual(chooser.handle_key(CTRL_D), PickerAction(DELETE, "20261012_090000_aaaaaa"))
+        self.assertNotIn(DELETE_CONFIRM, shown(chooser))
+
+    def test_any_other_key_takes_the_first_press_back_and_does_nothing_more(self) -> None:
+        for key in (Key(DOWN), Key(CHAR, "x"), Key(ENTER), Key(ESCAPE), Paste("y")):
+            with self.subTest(key=key):
+                chooser = self.armed()
+                self.assertIsNone(chooser.handle_key(key))
+                self.assertEqual((chooser.arming, chooser.index, chooser.query), ("", 1, ""))
+                self.assertNotIn(DELETE_CONFIRM, shown(chooser))
+                self.assertIsNone(chooser.handle_key(CTRL_D))  # a new first press, not a delete
+                self.assertEqual(chooser.arming, "20261012_090000_aaaaaa")
+
+    def test_the_current_session_is_never_deleted_and_its_row_says_so(self) -> None:
+        chooser = picker()
+        shown(chooser)
+        self.assertIsNone(chooser.handle_key(CTRL_D))  # the current session heads the list
+        self.assertEqual(chooser.arming, "")
+        self.assertIn(CURRENT_NOT_DELETED, shown(chooser))
+        self.assertIsNone(chooser.handle_key(CTRL_D))
+        self.assertIn(CURRENT_NOT_DELETED, shown(chooser))
+
+    def test_a_delete_answered_removes_the_row_and_one_out_takes_no_second_ask(self) -> None:
+        chooser = self.armed()
+        action = chooser.handle_key(CTRL_D)
+        chooser.asked(action)  # type: ignore[arg-type]
+        self.assertIn(DELETING, shown(chooser))
+        self.assertIsNone(chooser.handle_key(CTRL_D))  # its call is out: no new ask
+        self.assertEqual(chooser.arming, "")
+        self.assertTrue(chooser.deleted("20261012_090000_aaaaaa"))
+        self.assertEqual([row.id for row in chooser.rows], ["20261013_115656_e709ea", "20261001_090000_bbbbbb"])
+        self.assertIn("Sessions (2)", shown(chooser))
+        self.assertFalse(chooser.deleted("20261012_090000_aaaaaa"))
+
+    def test_ctrl_r_and_ctrl_d_with_alt_or_with_nothing_listed_do_nothing(self) -> None:
+        chooser = picker(query="zzz")  # nothing matches
+        self.assertIsNone(chooser.handle_key(CTRL_R))
+        self.assertIsNone(chooser.handle_key(CTRL_D))
+        self.assertEqual((chooser.renaming, chooser.arming), ("", ""))
+        chooser = picker()
+        chooser.handle_key(Key(CHAR, "d", ctrl=True, alt=True))
+        chooser.handle_key(Key(CHAR, "r", ctrl=True, alt=True))
+        self.assertEqual((chooser.renaming, chooser.arming), ("", ""))

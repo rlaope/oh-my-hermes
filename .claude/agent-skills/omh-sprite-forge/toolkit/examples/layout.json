@@ -1,0 +1,11 @@
+{
+  "command": "process",
+  "input": "sheet.png",
+  "rows": 2,
+  "cols": 3,
+  "key": "FF00FF",
+  "tolerance": 30,
+  "target_height": 128,
+  "output": "new-output-dir",
+  "note": "Text example of the layout/arguments, not an executable fixture. The output must be a new directory; rows x cols must divide the sheet exactly; 1xN strip layouts are refused."
+}

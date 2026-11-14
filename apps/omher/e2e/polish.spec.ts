@@ -328,7 +328,7 @@ test("text fields take one calm focus: a 1px edge in --muted, the sidebar search
     const muted = await token(page, "--muted");
     const side = page.locator(".search");
     const before = await side.evaluate((e) => getComputedStyle(e).boxShadow);
-    await page.getByRole("searchbox", { name: "Search bots" }).focus();
+    await page.getByRole("searchbox", { name: "Search bots and sessions" }).focus();
     const sideFocus = await side.evaluate((e) => ({ shadow: getComputedStyle(e).boxShadow, outline: getComputedStyle(e).outlineStyle }));
     expect(sideFocus.shadow).not.toBe(before);
     expect(sideFocus.shadow).toBe(`${muted} 0px 0px 0px 1px inset`);

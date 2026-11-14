@@ -1,4 +1,5 @@
 import { useCallback, useState } from "react";
+import { getRestarts } from "./restart";
 import "./sidebar.css";
 import logo from "../assets/omher-mark.png";
 import { selectAsks, selectSidebarBots, useStore } from "../state/store";
@@ -9,14 +10,20 @@ import { Usage } from "./Usage";
 import { AccountsWatcher } from "../settings/accounts/useAccounts";
 import "../sessions/sessions.css";
 import { SessionList, SessionsHeader } from "../sessions/SessionsSection";
+import { SessionBackgroundMenu } from "../sessions/SessionBackgroundMenu";
 import { HiddenList, NeedsStrip } from "./Needs";
 import { UpdateButton } from "./UpdateButton";
 import { FirstRunHint } from "../onboarding/FirstRun";
+import { OmhNotice } from "./OmhNotice";
 import { t } from "../i18n";
+
+const sessionBackground = (target: EventTarget) => target instanceof Element && !target.closest(".ss-row, button, input, textarea, select, a, [contenteditable], [role=menu], [role=menuitem]");
 
 export function Sidebar() {
   const s = useStore();
   const [q, setQ] = useState("");
+  const [sessionMenu, setSessionMenu] = useState<{ x: number; y: number; focus: HTMLElement } | null>(null);
+  const closeSessionMenu = useCallback(() => setSessionMenu(null), []);
   const [adding, setAdding] = useState(false);
   const [showHidden, setShowHidden] = useState(false);
   const closeHidden = useCallback(() => setShowHidden(false), []);
@@ -40,6 +47,7 @@ export function Sidebar() {
           <b>omher</b>
         </div>
         <div className="side-add">
+          <OmhNotice />
           <IconButton label={t("nav.addBot")} onClick={() => AddBot && setAdding((v) => !v)} aria-expanded={adding} disabled={!AddBot}>
             <PlusIcon />
           </IconButton>
@@ -59,7 +67,7 @@ export function Sidebar() {
         />
       </label>
       <NeedsStrip asks={asks} />
-      <section className="side-sec" data-testid="side-bots">
+      <section className={`side-sec${needle && bots.length === 0 ? " side-sec-fit" : ""}`} data-testid="side-bots">
         <div className="side-sh">{t("nav.bots")}</div>
         <nav className="bot-list" aria-label={t("nav.bots")}>
           {bots.map((b) => {
@@ -78,6 +86,8 @@ export function Sidebar() {
                 pinned,
                 onPin: () => s.pinBot(b.name, !pinned),
                 onEdit: () => s.openSettings(`bot:${b.name}`),
+                onRestart: () => void getRestarts().press(b.name),
+                offline: b.status === "offline",
                 onHide: () => s.hideBot(b.name, true),
                 onShowHidden: hiddenCount ? () => setShowHidden(true) : undefined,
               }}
@@ -94,9 +104,26 @@ export function Sidebar() {
           {showHidden && hiddenCount > 0 && <HiddenList onClose={closeHidden} />}
         </nav>
       </section>
-      <section className="side-sec" data-testid="side-sessions">
+      <section
+        className="side-sec"
+        data-testid="side-sessions"
+        tabIndex={-1}
+        onPointerDown={(e) => {
+          // Keep the previous focus available for Escape, before the right press can blur it.
+          if (e.button === 2 && sessionBackground(e.target)) e.preventDefault();
+        }}
+        onContextMenu={(e) => {
+          // Rows own their menu; controls and text fields keep their native context menu.
+          if (!sessionBackground(e.target)) return;
+          e.preventDefault();
+          const focus = document.activeElement instanceof HTMLElement && document.activeElement !== document.body ? document.activeElement : e.currentTarget;
+          const box = e.currentTarget.getBoundingClientRect();
+          setSessionMenu({ x: e.clientX || box.left + 8, y: e.clientY || box.top + 8, focus });
+        }}
+      >
         <SessionsHeader />
-        <SessionList />
+        <SessionList needle={needle} query={q.trim()} />
+        {sessionMenu && <SessionBackgroundMenu at={sessionMenu} onClose={closeSessionMenu} />}
       </section>
       <div className="side-foot">
         <button

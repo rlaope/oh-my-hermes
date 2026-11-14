@@ -22,7 +22,7 @@ use std::time::{Duration, Instant};
 
 use serde_json::{json, Value};
 
-use crate::agent_chat::{call_detail, clip, ev, exit_reason, exit_turn_end, s, tool_kind, ChatOut, Event, Input, Picture};
+use crate::agent_chat::{call_detail, clip, ev, exit_turn_end, exit_why, last_line, s, tool_kind, ChatOut, Event, Input, Picture};
 use crate::sessions::{dsh_patch_path, dsh_turn_args, launch_for, resume_args, DSH_HEADLESS_PATCH};
 
 /// The harness's `--json` run events for one DSH chat, across its messages. Pure: lines in, events out.
@@ -100,7 +100,7 @@ impl Dsh {
                 self.session = id.clone();
                 vec![ev("session.info", json!({"agent_session": id}))]
             }
-            "thinking" => vec![ev("thinking", json!({}))],
+            "thinking" => vec![crate::agent_chat::thinking_event(&s(&v, "text"))],
             "text" => {
                 let t = s(&v, "text");
                 if t.trim().is_empty() {
@@ -196,7 +196,7 @@ pub fn friendly(err: &str) -> String {
     if e.contains("MISSING_CREDENTIAL") || e.contains("no credential for provider") {
         return "DeepSeek Harness has no key for its model. Add one in the DeepSeek Harness app (Models), then send again.".into();
     }
-    clip(e.lines().find(|l| !l.trim().is_empty()).unwrap_or(e), 200)
+    clip(last_line(e), 200)
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -300,6 +300,7 @@ impl DshChat {
             Input::Approve { .. } | Input::Clarify { .. } => Err("DeepSeek Harness asks nothing in this chat".into()),
             Input::Model { .. } => Err("DeepSeek Harness uses the model set in its own app".into()),
             Input::Mode { .. } | Input::Effort { .. } => Err("DeepSeek Harness uses the mode and effort set in its own app".into()),
+            Input::Rewind => Err("DeepSeek Harness cannot take a message back here".into()),
         }
     }
 
@@ -399,7 +400,8 @@ impl DshChat {
                 while !read_done.load(Ordering::SeqCst) && Instant::now() < deadline {
                     thread::sleep(Duration::from_millis(10));
                 }
-                let err = exit_reason(&tail.lock().unwrap());
+                // code 0 is an orderly end: what it printed on the way is no reason
+                let err = exit_why(code, &tail.lock().unwrap());
                 let (events, again) = {
                     let mut st = me.0.state.lock().unwrap();
                     let events = st.finish(code, &err);

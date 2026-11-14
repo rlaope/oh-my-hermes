@@ -185,8 +185,11 @@ class AiJobSearchContextBudgetTests(unittest.TestCase):
             # 542200 -> 542510 and the digest re-derived: the dag-ulw row's split quality bar says to split for work
             # that can run side by side and keep a small follow-on step in the node it follows (+310, at
             # FULL_CAPABILITY_SKILL_SECTION_CHAR_LIMIT); no other row moved, and the pin before it was 935a86d2...a5b7.
-            (skill_capabilities, 542510, FULL_ROW_DELTA_CAP,
-             'd09dd42e0005c7d3db4f02e745284225b2030ada33466aac495cfd7901cd786f',
+            # 542510 -> 542640 and the digest re-derived: design-orchestration's new fourth quality-bar line (direction
+            # options shown as rendered images) enters its row's first-four slice (+130, at
+            # FULL_CAPABILITY_SKILL_SECTION_CHAR_LIMIT); no other row moved, and the pin before it was d09dd42e...786f.
+            (skill_capabilities, 542640, FULL_ROW_DELTA_CAP,
+             '2da9f59b7e4b16895d47821a7169d55c47d3e515818908e237da55bc5ac1f6c9',
              release.FULL_CAPABILITY_SKILL_SECTION_CHAR_LIMIT),
             (standalone_skill_capability_items, 145483, STANDALONE_ROW_DELTA_CAP,
              '57ef3e89e97c4ed9dc45338c18f01ce384842bad7cfa16b37fb9a4e5a7d0794e',
@@ -496,7 +499,13 @@ class AiJobSearchContextBudgetTests(unittest.TestCase):
         # in the node it follows; only dag-ulw moves, and the pin before it was 1f3c01fa...fbf4.
         # model-setup's chain sentence then names Fable 5.2 ahead of Opus 5.5 in visual-engineering; only
         # model-setup moves, and the pin before it was 5518142e...68d0.
-        self.assertEqual(_digest(legacy_hashes), '3a23f50656c683878e5b27ebcffeeafa71d8edbc43a5ae8e9446a7a3fc0127cf')
+        # The design-skills run then adds the mobile density and editorial layout lines to frontend, a capture line to
+        # visual-qa and two direction lines to design-orchestration; only those three move, and the pin before it was
+        # 3a23f506...27cf.
+        # instinct-ledger's checklist then names the re-fixed-commits reference and code-review's quality bar
+        # gains two rules (same shape everywhere; a failed read is unknown); only those two bodies move, and
+        # the pin before it (with the design-skills lines) was 11dd6034...72d9.
+        self.assertEqual(_digest(legacy_hashes), '9ec3df67098de3646035cded40b1fae9a08276bd7cbbb6c55bb277969e7356b2')
         legacy = _skill_context_cost_profile('full', legacy_templates, refs)
         current = _skill_context_cost_profile('full', templates, refs)
         # Main's search guidance adds 305; repro-audit's mandatory rails 1,943.
@@ -546,7 +555,7 @@ class AiJobSearchContextBudgetTests(unittest.TestCase):
         from omh.maintenance.drift import budget_metrics
         expected = {
             'skill_index_line_max_chars': 100,
-            'plugin_tool_schema_chars': 72895,  # Parked DAG waits (+429), delegation backends (+245), six routing-recipe categories (+213), opt-in omh-lsp tools (+2187), opt-in lsp_diagnostics (+396), identity argument (+143), dag node role (+85), dag node owner (+70), dag node local (+37) less the route fallback sentence (-1), then the ultrabrain head in the route example (+5), then omh_dag goal criteria (+226), then the criteria parameter's keep-the-condition description (+95), said in the positive form (+8).
+            'plugin_tool_schema_chars': 72940,  # Parked DAG waits (+429), delegation backends (+245), six routing-recipe categories (+213), opt-in omh-lsp tools (+2187), opt-in lsp_diagnostics (+396), identity argument (+143), dag node role (+85), dag node owner (+70), dag node local (+37) less the route fallback sentence (-1), then the ultrabrain head in the route example (+5), then omh_dag goal criteria (+226), then the criteria parameter's keep-the-condition description (+95), said in the positive form (+8), then dag node read_only (+45).
             'pre_llm_call_context_chars_max': 5977,  # The pi-family runtime rename (+6), the route-hint dedup (-154), then the console choices line (+409).
             'pre_llm_call_context_fallback_chars_max': 7529,  # The same rename (+6), the human-voice primer sentence (+116), the route-hint dedup (-154), then the console choices line (+409).
             'awareness_primer_markdown_chars': 4051,  # Human-voice reply sentence (+110), full skill names in the checkpoint (+55), then loadable labels there (+49), on the card and cue lines (+239) and in the lane keys (+78).

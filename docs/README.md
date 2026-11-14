@@ -166,6 +166,7 @@ findable only by knowing its filename.
 | Bounded retry/replan/stop/escalate decisions for an observed error | [Failure Mender](failure-mender.md) |
 | What the OMH TUI and its gateway child send, answer, write, and may import | [OMH TUI Boundary](OMH-TUI-BOUNDARY.md) |
 | What the omher desktop app and its bridge send, write, and may import | [omher Boundary](OMHER-BOUNDARY.md) |
+| What fix commits that replaced another pull request's recent lines taught, and which of it became a review rule | [Lessons from re-fixed commits](LESSONS.md) |
 
 ## Documentation Checks
 

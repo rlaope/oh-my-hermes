@@ -40,10 +40,10 @@
       "copyright": "Copyright (c) 2026 oh-my-hermes contributors",
       "license": "MIT",
       "local_path": "scripts/dock.py",
-      "local_sha256": "e27d15c921543849de47023bf21417efa73d94620d54cb158378fab998c65f41",
+      "local_sha256": "565ace096097bbc103dc8d1d4f75e8a08f79d5ea5ff79699ceff022d3b7ce362",
       "modification_notice": "Original standalone direct Vina helper and guidance; no upstream code, molecular inputs or result files copied",
       "source_path": "src/skills/molecular_docking_toolkit/scripts/dock.py",
-      "source_sha256": "e27d15c921543849de47023bf21417efa73d94620d54cb158378fab998c65f41",
+      "source_sha256": "565ace096097bbc103dc8d1d4f75e8a08f79d5ea5ff79699ceff022d3b7ce362",
       "upstream": []
     }
   },

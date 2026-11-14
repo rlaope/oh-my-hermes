@@ -1618,7 +1618,9 @@ def count_metrics() -> tuple[CountMetric, ...]:
             # model-compression review round: GGUF and 4-bit Korean quantization, 70B-to-8B distillation in
             # both languages, and a llama model slimmed in Korean reach the skill (+8).
             # Its second review round drops the Korean 4-bit case, which falls back to main (-1).
-            expected=1299,
+            # Korean design routing: thirty frontend-design requests, whole-request redesigns and phone-viewport
+            # faults that reach frontend, and the look-alikes that keep their verdict (+30).
+            expected=1329,
             # The one reviewed test pin. Every other test compares its payload
             # against build_routing_precision_demo() rather than a literal.
             sites=("tests/test_routing_precision.py",),

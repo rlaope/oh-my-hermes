@@ -21,6 +21,108 @@
 }
 .side-add {
   position: relative;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+/* the "!" (oh-my-hermes is not installed): the + button's size and quiet colour, no fill at rest; open, the gray
+   pressed look the SESSIONS + has while its menu is open */
+.omh-note {
+  position: relative;
+}
+.omh-note-b[aria-expanded="true"] {
+  background: var(--raise2);
+  color: var(--ink);
+}
+/* right under the top row, as wide as the sidebar's rows plus the live ring a row draws past its edge (OmhNotice
+   measures both), so nothing of a row shows beside it. Its own height (it has a border, so it may end partway down a
+   row), the text scrolling inside when the window is short. The same 12px all round and 10px between its parts. */
+.omh-note .ui-pop.omh-pop {
+  top: var(--omh-pop-t, calc(100% + 6px));
+  left: var(--omh-pop-l, auto);
+  right: auto;
+  padding: 12px;
+  border-radius: var(--r);
+  cursor: default;
+  -webkit-app-region: no-drag;
+}
+.omh-pop-in {
+  display: flex;
+  flex-direction: column;
+}
+.omh-pop-c {
+  flex: 0 1 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-height: 0;
+  overflow-y: auto;
+  padding-bottom: 10px;
+}
+.omh-pop-t {
+  display: block;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 18px;
+  color: var(--ink);
+}
+.omh-pop-p {
+  margin: 0;
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--body);
+}
+/* the output takes the popover's whole inner width, so a line wraps only when it is longer than that */
+.omh-pop .gate-log {
+  flex: none;
+  width: 100%;
+  margin: 0;
+}
+.omh-pop-err {
+  margin: 0;
+  font: 12px/18px var(--mono);
+  color: var(--danger);
+  overflow-wrap: anywhere;
+}
+/* the actions wrap under each other when the popover is too narrow for both (Install again + Don't show again) */
+.omh-pop-a {
+  flex: none;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 10px;
+}
+/* the app's quiet outlined action (transparent at rest, a thin border, 12px), never the brightest thing here */
+.omh-pop-go {
+  display: inline-flex;
+  align-items: center;
+  height: 26px;
+  padding: 0 10px;
+  border: 1px solid color-mix(in srgb, var(--quiet) 90%, var(--pop));
+  border-radius: var(--r-sm);
+  background: transparent;
+  color: var(--ink);
+  font-size: 12px;
+  font-weight: 500;
+  white-space: nowrap;
+  transition: background 0.12s;
+}
+.omh-pop-go:hover:not(:disabled) {
+  background: var(--raise);
+}
+/* running: the same outlined box in the same place, only lower contrast */
+.omh-pop-go:disabled {
+  color: var(--muted);
+  border-color: color-mix(in srgb, var(--quiet) 55%, var(--pop));
+  cursor: default;
+}
+.omh-pop-hide {
+  font-size: 12px;
+  color: var(--muted);
+  white-space: nowrap;
+}
+.omh-pop-hide:hover:not(:disabled) {
+  color: var(--ink);
 }
 .side-add .ui-ib:disabled {
   opacity: 0.5;
@@ -650,14 +752,20 @@ button.upd:hover {
 }
 
 /* ---- Needs you: approvals and questions waiting on the person ------------------------------------
-   Amber, so it never reads as an unread count (the accent badge). Selected rows stay gray. */
-.side {
+   Amber, so it never reads as an unread count (the accent badge). Selected rows stay gray. A subagent row in the
+   chat that waits on the person (.sa-row) says "waiting" in the same amber, and so does its card's head when every
+   row still out waits (.sa-head). */
+.side,
+.sa-row,
+.sa-head {
   --needs: #e9a23b;
   --needs-ink: #1b1204;
   --needs-soft: rgba(233, 162, 59, 0.12);
   --needs-text: #e9a23b;
 }
-[data-theme="light"] .side {
+[data-theme="light"] .side,
+[data-theme="light"] .sa-row,
+[data-theme="light"] .sa-head {
   --needs: #e39a2a;
   --needs-ink: #1b1204;
   --needs-soft: rgba(227, 154, 42, 0.14);
@@ -743,6 +851,10 @@ button.upd:hover {
 .needs-who {
   font-weight: 400;
   color: var(--body);
+}
+/* " · " and the word after it: one box, so a cut line never ends on a lone separator */
+.needs-sep {
+  display: inline-block;
 }
 .needs-k {
   font-size: 10.5px;
@@ -954,6 +1066,24 @@ button.upd:hover {
   color: var(--ink);
   outline: 0;
 }
+/* Restart on a bot that shares its gateway: the second, dim line names who restarts with it */
+.row-mi.two {
+  height: auto;
+  padding: 4px 8px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  line-height: 16px;
+}
+.row-mi-sub {
+  font-size: 11px;
+  line-height: 14px;
+  color: var(--muted);
+  max-width: 100%;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
 .row-mi.sep {
   margin-top: 4px;
   position: relative;
@@ -1007,4 +1137,106 @@ button.upd:hover {
 .bot-unhide {
   text-align: left;
   text-decoration: underline;
+}
+
+/* ---- restart one bot (restart.ts): 12px lines, Cancel first and quiet, the press that goes ahead outlined ----- */
+.rs-line {
+  margin: 0 8px 6px 52px;
+  font-size: 12px;
+  line-height: 17px;
+  color: var(--body);
+}
+.rs-t,
+.rs-why {
+  margin: 0;
+}
+.rs-why {
+  color: var(--muted);
+  overflow-wrap: anywhere;
+  margin-top: 2px;
+}
+.rs-work {
+  margin: 4px 0 0;
+  padding: 0;
+  list-style: none;
+  color: var(--muted);
+  font-size: 12px;
+}
+/* one line per unit, never broken mid-word: an ellipsis when it does not fit (the full line is its title) */
+.rs-work li {
+  display: flex;
+  gap: 8px;
+  margin-top: 2px;
+  white-space: nowrap;
+}
+.rs-what {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.rs-for {
+  flex: none;
+  margin-left: auto;
+  font-variant-numeric: tabular-nums;
+}
+.rs-acts {
+  display: flex;
+  gap: 12px;
+  margin-top: 4px;
+}
+.rs-act {
+  font-size: 12px;
+  line-height: 18px;
+  padding: 0 2px;
+  margin: 0 -2px;
+  border-radius: var(--r-sm);
+  background: none;
+  border: 0;
+  color: var(--ink);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  text-decoration-color: var(--line-strong);
+  cursor: pointer;
+}
+.rs-act:hover {
+  text-decoration-color: currentColor;
+}
+/* the press that goes ahead: the app's quiet outlined button, never filled or coloured */
+.rs-act.go {
+  text-decoration: none;
+  border: 1px solid var(--line-strong);
+  padding: 0 7px;
+  margin: 0;
+  line-height: 18px;
+}
+.rs-act.go:hover {
+  background: var(--raise2);
+}
+/* under a bot row: the menu's own surface, at the row's width, so it belongs to that bot */
+.rs-line.rs-pop {
+  margin: 2px 6px 6px;
+  padding: 8px 10px;
+  background: var(--pop);
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  box-shadow: var(--pop-shadow);
+  animation: pop 0.14s ease both;
+}
+.rs-act:focus-visible {
+  outline: 1px solid var(--line-strong);
+  outline-offset: 1px;
+}
+.rs-wait {
+  font-size: 12px;
+  color: var(--muted);
+}
+.rs-note .rs-line,
+.pl-load .rs-line {
+  margin: 6px 0 0;
+  text-align: left;
+}
+.pl-load {
+  font-size: 12px;
+  color: var(--body);
 }

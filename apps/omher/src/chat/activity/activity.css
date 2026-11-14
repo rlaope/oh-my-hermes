@@ -128,6 +128,12 @@
   text-overflow: ellipsis;
   color: var(--muted);
 }
+/* a failed turn's reason ends with what to do: it wraps instead of being cut */
+.act-sum.wrap {
+  white-space: normal;
+  text-align: left;
+  overflow-wrap: anywhere;
+}
 .act-el {
   color: var(--quiet);
   font-size: 11px;
@@ -191,6 +197,17 @@
 .act-step.fail .s {
   color: var(--danger);
 }
+/* stopped by the person: not a failure; its own mark and verb, the time in words */
+.act-step.stopped .k,
+.act-step.stopped .s {
+  color: var(--muted);
+}
+.act-step .act-ic {
+  align-self: center;
+  font-size: 8px;
+  width: 8px;
+  margin-right: -4px;
+}
 
 @media (prefers-reduced-motion: reduce) {
   .act-tick-t.in,
@@ -200,7 +217,8 @@
   .act-tick-t.out {
     display: none;
   }
-  .act-chev {
+  .act-chev,
+  .sa-chev {
     transition: none;
   }
 }
@@ -208,7 +226,8 @@
 /* fan-out card: one per delegate_task, one row per subagent. No fill, a 1px line, 6px corners. */
 .sa-card {
   margin: 4px 0 2px;
-  max-width: 560px;
+  /* the approval card's width (cards.css .card): a subagent's ask under its card ends at the same right edge */
+  max-width: 76%;
   border: 1px solid var(--line-soft);
   border-radius: 6px;
   padding: 6px 10px 7px;
@@ -230,6 +249,13 @@
 }
 .sa-ic.failed {
   background: var(--danger);
+}
+/* every row still out waits on the person: the rows' own amber */
+.sa-ic.waiting {
+  background: var(--needs);
+}
+.sa-sum.waiting {
+  color: var(--needs-text);
 }
 .sa-sum {
   flex: 1;
@@ -317,6 +343,33 @@
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
+/* a subagent's file edit: a borderless row that opens to its diff, its chevron turning as an activity step's does */
+.sa-edit {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  align-self: flex-start;
+  max-width: 100%;
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.sa-edit:hover code {
+  color: var(--ink);
+}
+.sa-chev {
+  display: inline-flex;
+  color: var(--quiet);
+  flex: none;
+  transition: transform 0.2s;
+}
+.sa-edit.open .sa-chev {
+  transform: rotate(90deg);
+}
 .sa-ans {
   color: var(--body);
   white-space: pre-wrap;
@@ -349,6 +402,10 @@
 .sa-st.stopped,
 .sa-st.queued {
   color: var(--quiet);
+}
+/* its approval or question waits on the person: the sidebar's amber for a waiting session */
+.sa-st.waiting {
+  color: var(--needs-text);
 }
 .sa-t {
   flex: none;

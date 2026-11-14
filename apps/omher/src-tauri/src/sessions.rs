@@ -1,5 +1,5 @@
 //! Agent sessions: omher starts one agent program from a FIXED list (`claude`, `codex`, `omo`, `dsh`, `omh`,
-//! `pi`, `omp`, `grok`, `opencode`) in a pseudo-terminal (its own terminal UI) or, for a chat, through [`crate::agent_chat`], in a folder the person picked, and stops it when the session is closed or
+//! `pi`, `omp`, `grok`, `opencode`, `kilo`, `gemini`, `qwen`, `kimi`, `copilot`, `cline`) in a pseudo-terminal (its own terminal UI) or, for a chat, through [`crate::agent_chat`], in a folder the person picked, and stops it when the session is closed or
 //! the app quits.
 //!
 //! The UI only ever names an agent id. The program, its path and its arguments are decided here: an id that
@@ -13,7 +13,7 @@ use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use std::sync::mpsc::{self, Receiver, RecvTimeoutError, SyncSender, TrySendError};
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Condvar, Mutex};
 use std::thread;
 use std::time::{Duration, Instant};
 
@@ -48,7 +48,7 @@ pub enum Mode {
 }
 
 /// The whole allow-list. Adding a program here is a boundary change (docs/OMHER-BOUNDARY.md rule 11).
-pub const AGENTS: [Agent; 9] = [
+pub const AGENTS: [Agent; 15] = [
     Agent { id: "claude", program: "claude", label: "Claude Code", mode: Mode::Chat },
     Agent { id: "codex", program: "codex", label: "Codex", mode: Mode::Chat },
     // OmO (`omo-ai`, oh-my-openagent on the senpi engine) speaks pi's RPC: `omo --mode rpc`, checked against omo
@@ -66,6 +66,14 @@ pub const AGENTS: [Agent; 9] = [
     Agent { id: "grok", program: "grok", label: "Grok", mode: Mode::Terminal },
     // OpenCode (`opencode-ai`) speaks the Agent Client Protocol (`opencode acp`, crate::acp_chat), checked against 1.19.5.
     Agent { id: "opencode", program: "opencode", label: "OpenCode", mode: Mode::Chat },
+    // Six more Agent Client Protocol agents on the same adapter (crate::acp_chat): Kilo Code 7.8.27 (`kilo acp`, an
+    // OpenCode fork), Gemini CLI 0.68.0, Qwen Code 0.27.2, Kimi Code 2.6.0, Copilot CLI 1.0.110 and Cline 3.0.74.
+    Agent { id: "kilo", program: "kilo", label: "Kilo Code", mode: Mode::Chat },
+    Agent { id: "gemini", program: "gemini", label: "Gemini CLI", mode: Mode::Chat },
+    Agent { id: "qwen", program: "qwen", label: "Qwen Code", mode: Mode::Chat },
+    Agent { id: "kimi", program: "kimi", label: "Kimi Code", mode: Mode::Chat },
+    Agent { id: "copilot", program: "copilot", label: "Copilot CLI", mode: Mode::Chat },
+    Agent { id: "cline", program: "cline", label: "Cline", mode: Mode::Chat },
 ];
 
 /// Claude Code's structured mode: one long-lived `-p` process reading and writing stream-json, with tool
@@ -93,7 +101,8 @@ pub fn chat_args(id: &str) -> Option<&'static [&'static str]> {
             "claude" => &CLAUDE_CHAT_ARGS[..],
             "codex" => &["app-server"][..],
             "pi" | "omp" | "omo" => &["--mode", "rpc"][..],
-            "opencode" => &["acp"][..],
+            "opencode" | "kilo" | "kimi" => &["acp"][..],
+            "gemini" | "qwen" | "copilot" | "cline" => &["--acp"][..],
             _ => return None,
         }),
         _ => None,
@@ -525,18 +534,41 @@ pub struct AgentInfo {
     pub mode: Mode,
     /// Where the program was found, or `None` when it is not installed.
     pub path: Option<String>,
+    /// `hermes`: the oh-my-hermes row of a person who has Hermes but not `omh`. Its session is the same Hermes chat
+    /// in the folder (through the bridge, no program), `path` is where Hermes was found, and it has no terminal view.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub via: Option<&'static str>,
 }
+
+/// What the oh-my-hermes row says the person has. Its session never runs `omh`: it is a Hermes chat in the folder
+/// through the bridge, so Hermes alone is enough to open one. `omh` found: the row as always ("oh-my-hermes", its
+/// path; the terminal view starts `omh`). Only Hermes (`hermes`, its Python): the row reads "Hermes" and is `via`
+/// Hermes. Neither: not installed.
+pub fn hermes_row(omh: Option<PathBuf>, hermes: Option<PathBuf>) -> AgentInfo {
+    let a = agent("omh").expect("omh is on the allow-list");
+    let info = |label, path: Option<PathBuf>, via| AgentInfo { id: a.id, label, mode: a.mode, path: path.map(|p| p.to_string_lossy().into_owned()), via };
+    match (omh, hermes) {
+        (Some(p), _) => info(a.label, Some(p), None),
+        (None, Some(h)) => info(HERMES_LABEL, Some(h), Some("hermes")),
+        (None, None) => info(a.label, None, None),
+    }
+}
+
+/// The oh-my-hermes row's name when only Hermes is there.
+pub const HERMES_LABEL: &str = "Hermes";
 
 /// Every allow-listed agent with where it was found on this machine.
 pub fn agents_on_this_machine() -> Vec<AgentInfo> {
     let dirs = host_dirs();
     AGENTS
         .iter()
-        .map(|a| AgentInfo {
-            id: a.id,
-            label: a.label,
-            mode: a.mode,
-            path: find_agent(a, &dirs).map(|p| p.to_string_lossy().into_owned()),
+        .map(|a| {
+            let found = find_agent(a, &dirs);
+            if a.id == "omh" {
+                // Hermes as the bridge finds it (the same look-up the first-run screen keys on)
+                return hermes_row(found, crate::bridge::discover_python(host_env, |p| p.is_file()).ok());
+            }
+            AgentInfo { id: a.id, label: a.label, mode: a.mode, path: found.map(|p| p.to_string_lossy().into_owned()), via: None }
         })
         .collect()
 }
@@ -580,6 +612,8 @@ struct Live {
     killer: Box<dyn ChildKiller + Send + Sync>,
     pid: Option<u32>,
     exited: Arc<AtomicBool>,
+    /// Its output on the way to the page.
+    out: Arc<Out>,
 }
 
 /// Pending writes per session (keystrokes or whole pastes). A program that stops reading fills it, and
@@ -591,11 +625,34 @@ pub(crate) const COALESCE_BYTES: usize = 64 * 1024;
 /// ...collected for at most this long after the first byte arrives (keeps typing echo prompt).
 pub(crate) const COALESCE_WINDOW: Duration = Duration::from_millis(4);
 
+/// Output the page was handed and has not yet said it drew ([`Sessions::ack`]). At [`FLOW_HIGH`] the session's
+/// reader stops reading the PTY, so the kernel holds the program back as a real terminal does, and at
+/// [`FLOW_LOW`] it reads again. What a session can have undrawn is at most `FLOW_HIGH` plus two messages and one
+/// read (the message that crossed the mark, the one being built, the read under way).
+///
+/// The pair is the smallest in `bench/pty/sweep.json` that feeds a fast page within 0.2% of what no limit does.
+/// Measured under `yes` into a page model that draws 100 MB/s in slices of 12 ms and acknowledges once per slice,
+/// as xterm does: 75.5 MB/s here against 75.7 with no limit, 72.9 at 2 MiB / 512 KiB, 71.3 at 1 MiB / 256 KiB,
+/// 38.5 at 256 KiB / 64 KiB. One slice of that page is 1.2 MB, which is the likely reason: a high mark that holds less
+/// than a slice, or a low mark more than a slice under the high one, leaves the page waiting for the reader.
+/// What the size costs is what a page still has to draw after Ctrl+C: 1.0 to 1.7 MB here (six runs) against
+/// 0.4 MB at 1 MiB / 256 KiB and 6.5 MB at 8 MiB / 2 MiB (220 MB with no limit). How long that takes is the
+/// page's speed (`bench/pty/README.md`).
+pub(crate) const FLOW_HIGH: u64 = 2 * 1024 * 1024;
+pub(crate) const FLOW_LOW: u64 = 1024 * 1024;
+
 /// Every running session of this app. Dropped sessions are stopped; [`Sessions::close_all`] runs on exit.
-#[derive(Default)]
 pub struct Sessions {
     live: Mutex<HashMap<u32, Live>>,
     next: AtomicU32,
+    /// (high, low) of each new session's output credit
+    marks: (u64, u64),
+}
+
+impl Default for Sessions {
+    fn default() -> Sessions {
+        Sessions { live: Mutex::default(), next: AtomicU32::new(0), marks: (FLOW_HIGH, FLOW_LOW) }
+    }
 }
 
 fn clamp_size(cols: u16, rows: u16) -> PtySize {
@@ -605,6 +662,12 @@ fn clamp_size(cols: u16, rows: u16) -> PtySize {
 impl Sessions {
     pub fn new() -> Arc<Sessions> {
         Arc::new(Sessions::default())
+    }
+
+    /// Sessions whose readers hold off at `high` and read again at `low` (the bench's sweep).
+    #[cfg(all(test, unix))]
+    pub(crate) fn with_marks(high: u64, low: u64) -> Arc<Sessions> {
+        Arc::new(Sessions { marks: (high, low), ..Sessions::default() })
     }
 
     /// Start `argv` in a new pseudo-terminal in `cwd`. Crate-internal: the app reaches it only through
@@ -637,7 +700,8 @@ impl Sessions {
         let sink: Sink = Arc::new(Mutex::new(Box::new(sink)));
 
         let id = self.next.fetch_add(1, Ordering::SeqCst) + 1;
-        spawn_reader(reader, sink.clone());
+        let out = Out::new(self.marks);
+        spawn_reader(reader, sink.clone(), out.clone());
         let (input, queued) = mpsc::sync_channel::<Vec<u8>>(INPUT_QUEUE);
         let writer_done = Arc::new(AtomicBool::new(false));
         {
@@ -653,21 +717,21 @@ impl Sessions {
             });
         }
         {
-            let exited = exited.clone();
+            let (exited, out) = (exited.clone(), out.clone());
             thread::spawn(move || {
                 let code = match child.wait() {
                     Ok(st) if st.signal().is_none() => Some(st.exit_code()),
                     _ => None,
                 };
                 exited.store(true, Ordering::SeqCst);
-                // let the reader drain what the program printed last
-                thread::sleep(Duration::from_millis(120));
+                // what the program printed last is handed on before its exit is, whatever the page has drawn
+                out.flow.drain(Duration::from_millis(120));
                 if let Ok(mut f) = sink.lock() {
                     f(Output::Exit(code));
                 }
             });
         }
-        self.live.lock().unwrap().insert(id, Live { master: pair.master, input, writer_done, killer, pid, exited });
+        self.live.lock().unwrap().insert(id, Live { master: pair.master, input, writer_done, killer, pid, exited, out });
         Ok(id)
     }
 
@@ -709,6 +773,14 @@ impl Sessions {
         }
     }
 
+    /// The page has drawn `bytes` more of session `id`'s output: credit for its reader ([`FLOW_HIGH`]). A session
+    /// that is gone takes none.
+    pub fn ack(&self, id: u32, bytes: u64) {
+        if let Some(s) = self.live.lock().unwrap().get(&id) {
+            s.out.flow.ack(bytes);
+        }
+    }
+
     pub fn resize(&self, id: u32, cols: u16, rows: u16) -> Result<(), String> {
         let g = self.live.lock().unwrap();
         let s = g.get(&id).ok_or("no such session")?;
@@ -736,6 +808,12 @@ impl Sessions {
     pub fn count(&self) -> usize {
         self.live.lock().unwrap().len()
     }
+
+    /// Bytes session `id`'s page was handed and has not acknowledged.
+    #[cfg(all(test, unix))]
+    pub(crate) fn unacked(&self, id: u32) -> Option<u64> {
+        self.live.lock().unwrap().get(&id).map(|s| s.out.flow.state.lock().unwrap().unacked)
+    }
 }
 
 /// The command a session runs: `argv` in `cwd`, with the terminal variables, the child `PATH`, and the chosen
@@ -761,33 +839,241 @@ fn command_for(argv: Vec<OsString>, cwd: &Path, path_env: Option<OsString>, acco
     cmd
 }
 
-/// One thread reads the PTY (macOS hands out at most 1 KB per read); another merges what arrives into
-/// one message per [`COALESCE_WINDOW`] / [`COALESCE_BYTES`], so a big dump is a few dozen Channel sends
-/// instead of one per KB.
-fn spawn_reader(mut reader: Box<dyn Read + Send>, sink: Sink) {
-    let (tx, rx) = mpsc::channel::<Vec<u8>>();
-    thread::spawn(move || {
-        let mut buf = [0u8; 16 * 1024];
-        loop {
-            match reader.read(&mut buf) {
-                Ok(0) | Err(_) => break,
-                Ok(n) => {
-                    if tx.send(buf[..n].to_vec()).is_err() {
-                        break;
+/// Bytes every session's reader has taken from its PTY, for the bench (`pty_bench.rs`): read minus what the page
+/// has drawn is what waits somewhere on the way.
+#[cfg(all(test, unix))]
+pub(crate) static PTY_READ_BYTES: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+
+/// One thread reads the PTY (macOS hands out at most 1 KB per read) into the session's [`Pipe`]; another takes one
+/// message per [`COALESCE_WINDOW`] / [`COALESCE_BYTES`] out of it and hands it to the sink, so a big dump is a few
+/// dozen Channel sends instead of one per KB. The reader holds off while the page is behind ([`Flow`]).
+fn spawn_reader(mut reader: Box<dyn Read + Send>, sink: Sink, out: Arc<Out>) {
+    {
+        let out = out.clone();
+        thread::spawn(move || {
+            let mut buf = [0u8; 16 * 1024];
+            // Once the session is closed, what is left is read and dropped instead of handed on: closing a
+            // pseudo-terminal can wait until its output has been read (ConPTY, documented for ClosePseudoConsole).
+            let mut forward = true;
+            loop {
+                forward = forward && out.flow.may_read();
+                match reader.read(&mut buf) {
+                    Ok(0) | Err(_) => break,
+                    Ok(n) => {
+                        #[cfg(all(test, unix))]
+                        PTY_READ_BYTES.fetch_add(n as u64, Ordering::SeqCst);
+                        forward = forward && out.pipe.push(&buf[..n]);
                     }
                 }
             }
-        }
-    });
+            out.pipe.end();
+        });
+    }
     thread::spawn(move || {
-        coalesce(rx, COALESCE_BYTES, COALESCE_WINDOW, |b| {
+        while let Some(b) = out.pipe.take(COALESCE_WINDOW) {
+            // counted before the sink has it: the acknowledgement may come back while the sink still runs
+            out.flow.sent(b.len());
             if let Ok(mut f) = sink.lock() {
                 f(Output::Data(b));
             }
-        })
+        }
+        out.flow.finished();
     });
 }
 
+/// One session's output on its way to the page: what was read and not yet handed on ([`Pipe`]), and how much the
+/// page still has to draw ([`Flow`]).
+struct Out {
+    pipe: Pipe,
+    flow: Flow,
+}
+
+impl Out {
+    fn new(marks: (u64, u64)) -> Arc<Out> {
+        Arc::new(Out { pipe: Pipe::new(COALESCE_BYTES), flow: Flow::new(marks) })
+    }
+
+    /// The session is closed: nothing more is handed on, and nothing holds the reader back.
+    fn close(&self) {
+        self.pipe.close();
+        self.flow.close();
+    }
+}
+
+/// Bytes on their way from the thread that reads the PTY to the thread that hands messages to the sink. At most
+/// `cap` of them wait here: a reader that is ahead waits for room, so nothing piles up between the two, and a read
+/// costs no allocation (its bytes are copied once, into the message being built).
+pub(crate) struct Pipe {
+    cap: usize,
+    state: Mutex<PipeState>,
+    /// a first byte came, the pipe filled up, or nothing more will come
+    filled: Condvar,
+    /// a message was taken: there is room again
+    room: Condvar,
+}
+
+#[derive(Default)]
+struct PipeState {
+    buf: Vec<u8>,
+    /// the reading side is done: what is here is the last of it
+    ended: bool,
+    /// the session is closed: nothing more is taken
+    closed: bool,
+}
+
+impl Pipe {
+    pub(crate) fn new(cap: usize) -> Pipe {
+        Pipe { cap, state: Mutex::default(), filled: Condvar::new(), room: Condvar::new() }
+    }
+
+    /// Add `data`, in order, waiting while the pipe is full. False once the pipe is closed (the bytes are dropped).
+    pub(crate) fn push(&self, mut data: &[u8]) -> bool {
+        let mut s = self.state.lock().unwrap();
+        while !data.is_empty() {
+            while s.buf.len() >= self.cap && !s.closed {
+                s = self.room.wait(s).unwrap();
+            }
+            if s.closed {
+                return false;
+            }
+            let first = s.buf.is_empty();
+            let n = data.len().min(self.cap - s.buf.len());
+            s.buf.extend_from_slice(&data[..n]);
+            data = &data[n..];
+            if first || s.buf.len() >= self.cap {
+                self.filled.notify_one();
+            }
+        }
+        true
+    }
+
+    /// The reading side is done.
+    pub(crate) fn end(&self) {
+        self.state.lock().unwrap().ended = true;
+        self.filled.notify_one();
+    }
+
+    pub(crate) fn close(&self) {
+        let mut s = self.state.lock().unwrap();
+        s.closed = true;
+        s.buf = Vec::new();
+        self.filled.notify_all();
+        self.room.notify_all();
+    }
+
+    /// The next message: waits for a first byte, then up to `window` while more arrive, and takes everything that
+    /// is here (never more than `cap`). `None` when the reading side is done and nothing is left, or once closed.
+    pub(crate) fn take(&self, window: Duration) -> Option<Vec<u8>> {
+        let mut s = self.state.lock().unwrap();
+        while s.buf.is_empty() && !s.ended && !s.closed {
+            s = self.filled.wait(s).unwrap();
+        }
+        let deadline = Instant::now() + window;
+        while s.buf.len() < self.cap && !s.ended && !s.closed {
+            let left = deadline.saturating_duration_since(Instant::now());
+            if left.is_zero() {
+                break;
+            }
+            s = self.filled.wait_timeout(s, left).unwrap().0;
+        }
+        if s.closed || s.buf.is_empty() {
+            return None;
+        }
+        // a flood's next message gets its full room at once; a keystroke's stays small
+        let next = Vec::with_capacity(s.buf.len());
+        let message = std::mem::replace(&mut s.buf, next);
+        self.room.notify_one();
+        Some(message)
+    }
+}
+
+/// A session's credit with the page: bytes handed to the sink minus bytes the page acknowledged.
+struct Flow {
+    high: u64,
+    low: u64,
+    state: Mutex<FlowState>,
+    changed: Condvar,
+}
+
+#[derive(Default)]
+struct FlowState {
+    unacked: u64,
+    /// set at `high`, cleared at `low`: the reader holds off while it is set
+    paused: bool,
+    /// the program has just ended: its last output is read whatever the page has drawn
+    draining: bool,
+    /// the session is closed
+    closed: bool,
+    /// the end of the program's output was read and all of it handed on
+    done: bool,
+}
+
+impl Flow {
+    fn new((high, low): (u64, u64)) -> Flow {
+        Flow { high, low, state: Mutex::default(), changed: Condvar::new() }
+    }
+
+    /// `n` more bytes are on their way to the page.
+    fn sent(&self, n: usize) {
+        let mut s = self.state.lock().unwrap();
+        s.unacked += n as u64;
+        if s.unacked >= self.high {
+            s.paused = true;
+        }
+    }
+
+    /// The page drew `n` bytes.
+    fn ack(&self, n: u64) {
+        let mut s = self.state.lock().unwrap();
+        s.unacked = s.unacked.saturating_sub(n);
+        if s.paused && s.unacked <= self.low {
+            s.paused = false;
+            self.changed.notify_all();
+        }
+    }
+
+    /// The reader asks before every read, and waits here while the page is behind. False once the session is
+    /// closed: the reader then reads on to the end without handing anything on.
+    fn may_read(&self) -> bool {
+        let mut s = self.state.lock().unwrap();
+        while s.paused && !s.draining && !s.closed {
+            s = self.changed.wait(s).unwrap();
+        }
+        !s.closed
+    }
+
+    fn close(&self) {
+        self.state.lock().unwrap().closed = true;
+        self.changed.notify_all();
+    }
+
+    /// The end of the output was read and all of it handed to the sink.
+    fn finished(&self) {
+        self.state.lock().unwrap().done = true;
+        self.changed.notify_all();
+    }
+
+    /// The program has ended: until all its output is handed on, and for `limit` at most (something it started
+    /// may still hold the terminal), the reader is not held back.
+    fn drain(&self, limit: Duration) {
+        let mut s = self.state.lock().unwrap();
+        s.draining = true;
+        self.changed.notify_all();
+        let deadline = Instant::now() + limit;
+        while !s.done {
+            let left = deadline.saturating_duration_since(Instant::now());
+            if left.is_zero() {
+                break;
+            }
+            s = self.changed.wait_timeout(s, left).unwrap().0;
+        }
+        s.draining = false;
+    }
+}
+
+/// A chat session's stdout (crate::agent_chat, on pipes) is merged with this; a terminal session's PTY goes through
+/// [`Pipe`] instead.
+///
 /// Wait for a chunk, then keep taking chunks until `max` bytes or `window` after that first chunk, and
 /// emit them as one buffer. Returns when the sender is gone and everything was emitted.
 pub(crate) fn coalesce(rx: Receiver<Vec<u8>>, max: usize, window: Duration, mut emit: impl FnMut(Vec<u8>)) {
@@ -816,6 +1102,7 @@ pub(crate) fn coalesce(rx: Receiver<Vec<u8>>, max: usize, window: Duration, mut 
 /// closes the terminal, which hangs up anything still attached to it. A writer thread stuck on a full PTY
 /// is waited for only briefly: it ends once the terminal is gone, and nothing here waits on it for long.
 fn stop(mut s: Live, grace: Duration) {
+    s.out.close();
     // A program that already ended is not signalled: its pid may belong to someone else by now.
     if !s.exited.load(Ordering::SeqCst) {
         signal_group(s.pid, false);
@@ -988,10 +1275,32 @@ mod tests {
         move |p| set.contains(p)
     }
 
+    /// A person with Hermes and no `omh` gets a usable "Hermes" row; with both, the row is as it always was; with
+    /// neither, it is not installed. The row never names a program to start: `launch_for("omh")` still needs `omh`.
     #[test]
-    fn allow_list_is_exactly_the_nine_agents() {
+    fn the_hermes_row_without_omh_with_both_and_with_neither() {
+        let omh = PathBuf::from("/Users/k/.local/bin/omh");
+        let py = PathBuf::from("/Users/k/.hermes/hermes-agent/venv/bin/python");
+        let only = hermes_row(None, Some(py.clone()));
+        assert_eq!((only.id, only.label, only.mode, only.via), ("omh", "Hermes", Mode::Hermes, Some("hermes")));
+        assert_eq!(only.path.as_deref(), Some(py.to_str().unwrap()));
+        let both = hermes_row(Some(omh.clone()), Some(py));
+        assert_eq!((both.label, both.via, both.path.as_deref()), ("oh-my-hermes", None, Some(omh.to_str().unwrap())));
+        let neither = hermes_row(None, None);
+        assert_eq!((neither.label, neither.via, neither.path), ("oh-my-hermes", None, None));
+        // the shell's JSON: `via` only on the Hermes row
+        assert_eq!(serde_json::to_value(&only).unwrap()["via"], "hermes");
+        assert!(serde_json::to_value(&both).unwrap().get("via").is_none());
+        // `omh` on a dir list is found as before; nothing named `hermes` is ever looked up as a session program
+        let dirs = [PathBuf::from("/Users/k/.local/bin")];
+        assert_eq!(find_in_layouts("omh", "omh", &dirs, &env_of(&[]), fs_of(&[&omh]), |p: &Path| p.to_path_buf(), Os::Unix), Some(omh));
+        assert!(AGENTS.iter().all(|a| a.program != "hermes"));
+    }
+
+    #[test]
+    fn allow_list_is_exactly_the_fifteen_agents() {
         let ids: Vec<&str> = AGENTS.iter().map(|a| a.id).collect();
-        assert_eq!(ids, ["claude", "codex", "omo", "dsh", "omh", "pi", "omp", "grok", "opencode"]);
+        assert_eq!(ids, ["claude", "codex", "omo", "dsh", "omh", "pi", "omp", "grok", "opencode", "kilo", "gemini", "qwen", "kimi", "copilot", "cline"]);
         for a in &AGENTS {
             assert_eq!(a.id, a.program, "the id is the program name; nothing else is ever run");
         }
@@ -1011,7 +1320,13 @@ mod tests {
                 ("pi", Mode::Chat),
                 ("omp", Mode::Chat),
                 ("grok", Mode::Terminal),
-                ("opencode", Mode::Chat)
+                ("opencode", Mode::Chat),
+                ("kilo", Mode::Chat),
+                ("gemini", Mode::Chat),
+                ("qwen", Mode::Chat),
+                ("kimi", Mode::Chat),
+                ("copilot", Mode::Chat),
+                ("cline", Mode::Chat)
             ]
         );
         assert_eq!(
@@ -1023,6 +1338,11 @@ mod tests {
         assert_eq!(chat_args("omp").unwrap(), ["--mode", "rpc"]);
         assert_eq!(chat_args("omo").unwrap(), ["--mode", "rpc"]);
         assert_eq!(chat_args("opencode").unwrap(), ["acp"]);
+        // the six more ACP agents, each with the one argument that starts its ACP server (Gemini's
+        // `--experimental-acp` is deprecated)
+        for (id, arg) in [("kilo", "acp"), ("gemini", "--acp"), ("qwen", "--acp"), ("kimi", "acp"), ("copilot", "--acp"), ("cline", "--acp")] {
+            assert_eq!(chat_args(id).unwrap(), [arg], "{id}");
+        }
         // DSH's chat takes its arguments per message (dsh_turn_args), not here
         for none in ["omh", "grok", "dsh", "sh", "", "claude -p"] {
             assert!(chat_args(none).is_none(), "{none}");
@@ -1069,7 +1389,7 @@ mod tests {
             }
         }
         // OpenCode continues over its protocol (session/resume), never by an argument
-        for agent in ["pi", "omp", "grok", "omh", "opencode"] {
+        for agent in ["pi", "omp", "grok", "omh", "opencode", "kilo", "gemini", "qwen", "kimi", "copilot", "cline"] {
             assert!(resume_args(agent, id).is_err(), "{agent}");
         }
         let s = Sessions::default();
@@ -1141,6 +1461,24 @@ mod tests {
             assert!(agent(bad).is_none(), "{bad:?} must be refused");
             assert!(launch_for(bad).is_err(), "{bad:?} must not launch");
         }
+    }
+
+    /// A New session may open any agent as its terminal (the person picks Chat or Terminal), so `start_agent` takes
+    /// every allow-listed id except `dsh` (DeepSeek Harness ships no terminal profile). The folder is relative, so
+    /// `spawn` refuses it after the program is resolved and no process ever starts, installed or not.
+    #[test]
+    fn start_agent_accepts_every_allow_listed_agent_for_a_terminal_except_dsh() {
+        let s = Sessions::default();
+        for a in AGENTS.iter() {
+            let err = s.start_agent(a.id, Path::new("relative/dir"), None, &[], 80, 24, |_| {}).unwrap_err();
+            if a.id == "dsh" {
+                assert!(err.contains("no terminal view"), "{err}");
+            } else {
+                assert!(!err.contains("unknown agent") && !err.contains("no terminal view"), "{}: {err}", a.id);
+                assert!(err.contains("not installed") || err.contains("not a folder"), "{}: {err}", a.id);
+            }
+        }
+        assert_eq!(s.count(), 0);
     }
 
     #[test]
@@ -1370,6 +1708,88 @@ mod tests {
     }
 
     #[test]
+    fn the_pipe_merges_reads_up_to_the_size_cap() {
+        let pipe = Arc::new(Pipe::new(64 * 1024));
+        let p = pipe.clone();
+        let t = thread::spawn(move || {
+            for _ in 0..200 {
+                assert!(p.push(&[b'a'; 1024]));
+            }
+            p.end();
+        });
+        let mut out = Vec::new();
+        while let Some(b) = pipe.take(Duration::from_secs(5)) {
+            out.push(b.len());
+        }
+        t.join().unwrap();
+        assert_eq!(out.iter().sum::<usize>(), 200 * 1024);
+        assert_eq!(out, [64 * 1024, 64 * 1024, 64 * 1024, 8 * 1024]);
+    }
+
+    #[test]
+    fn the_pipe_hands_on_a_lone_keystroke_after_the_window() {
+        let pipe = Arc::new(Pipe::new(COALESCE_BYTES));
+        let (got_tx, got) = mpsc::channel();
+        let p = pipe.clone();
+        let t = thread::spawn(move || {
+            while let Some(b) = p.take(COALESCE_WINDOW) {
+                got_tx.send((b, Instant::now())).unwrap();
+            }
+        });
+        let sent = Instant::now();
+        assert!(pipe.push(b"k"));
+        let (b, at) = got.recv_timeout(Duration::from_secs(2)).expect("a lone chunk must not wait for more");
+        assert_eq!(b, b"k");
+        assert!(at - sent < Duration::from_millis(100), "{:?}", at - sent);
+        pipe.end();
+        t.join().unwrap();
+    }
+
+    /// 50 MB of a counter (every 8 bytes are their own position) through the bounded pipe, pushed in reads of
+    /// every size up to 16 KB while the taking side now and then falls behind: every byte arrives once and in
+    /// order, and never more than the cap waits.
+    #[test]
+    fn the_pipe_never_drops_or_reorders_bytes() {
+        use std::hash::Hasher;
+        const TOTAL: usize = 50 * 1024 * 1024;
+        const CAP: usize = 64 * 1024;
+        let pipe = Arc::new(Pipe::new(CAP));
+        let p = pipe.clone();
+        let producer = thread::spawn(move || {
+            let mut sent = std::collections::hash_map::DefaultHasher::new();
+            let mut buf = vec![0u8; 16 * 1024];
+            let (mut at, mut k) = (0usize, 0usize);
+            while at < TOTAL {
+                let n = (1 + (k * 7919) % buf.len()).min(TOTAL - at);
+                for (i, b) in buf[..n].iter_mut().enumerate() {
+                    *b = (((at + i) / 8) as u64).to_le_bytes()[(at + i) % 8];
+                }
+                sent.write(&buf[..n]);
+                assert!(p.push(&buf[..n]));
+                at += n;
+                k += 1;
+            }
+            p.end();
+            sent.finish()
+        });
+        let mut got = std::collections::hash_map::DefaultHasher::new();
+        let (mut total, mut messages, mut full) = (0usize, 0usize, 0usize);
+        while let Some(b) = pipe.take(Duration::from_micros(200)) {
+            assert!(!b.is_empty() && b.len() <= CAP, "{}", b.len());
+            got.write(&b);
+            total += b.len();
+            messages += 1;
+            full += (b.len() == CAP) as usize;
+            if messages % 64 == 0 {
+                thread::sleep(Duration::from_millis(1)); // the producer runs into the cap and waits
+            }
+        }
+        assert_eq!(total, TOTAL);
+        assert_eq!(got.finish(), producer.join().unwrap(), "bytes were dropped, repeated or reordered");
+        assert!(full > 0, "the pipe never filled, so its limit was not exercised");
+    }
+
+    #[test]
     fn empty_env_still_has_system_folders() {
         let dirs = search_dirs(&env_of(&[]), Os::Unix);
         assert!(dirs.contains(&PathBuf::from("/opt/homebrew/bin")));
@@ -1526,6 +1946,218 @@ mod tests {
         assert!(ev.len() < 64, "{} messages for {total} bytes", ev.len());
     }
 
+    /// What the sink of a flow test was handed. It acknowledges nothing by itself.
+    #[cfg(unix)]
+    #[derive(Default)]
+    struct Seen {
+        bytes: std::sync::atomic::AtomicU64,
+        exit: AtomicBool,
+    }
+
+    #[cfg(unix)]
+    fn flood(s: &Sessions, argv: &[&str]) -> (u32, Arc<Seen>) {
+        let seen = Arc::new(Seen::default());
+        let w = seen.clone();
+        let id = s
+            .spawn(argv.iter().map(OsString::from).collect(), &std::env::temp_dir().canonicalize().unwrap(), None, &[], 80, 24, move |ev| match ev {
+                Output::Data(b) => {
+                    w.bytes.fetch_add(b.len() as u64, Ordering::SeqCst);
+                }
+                Output::Exit(_) => w.exit.store(true, Ordering::SeqCst),
+            })
+            .unwrap();
+        (id, seen)
+    }
+
+    /// Wait until the sink has been handed at least `least` bytes and then nothing more for 300 ms; the count then.
+    #[cfg(unix)]
+    fn held_at(seen: &Seen, least: u64) -> u64 {
+        assert!(wait_for(|| seen.bytes.load(Ordering::SeqCst) >= least), "only {} of {least} bytes came", seen.bytes.load(Ordering::SeqCst));
+        let deadline = Instant::now() + Duration::from_secs(10);
+        loop {
+            let before = seen.bytes.load(Ordering::SeqCst);
+            thread::sleep(Duration::from_millis(300));
+            if seen.bytes.load(Ordering::SeqCst) == before {
+                return before;
+            }
+            assert!(Instant::now() < deadline, "the output never stopped");
+        }
+    }
+
+    /// What can still reach the page once the high mark is crossed: the message that crossed it, the one being
+    /// built, and the read under way.
+    #[cfg(unix)]
+    const OVER_HIGH: u64 = 2 * COALESCE_BYTES as u64 + 16 * 1024;
+
+    #[cfg(unix)]
+    #[test]
+    fn the_reader_pauses_above_the_high_mark_and_resumes_below_the_low_mark() {
+        let s = Sessions::default();
+        let (id, seen) = flood(&s, &["/usr/bin/yes"]);
+        // nothing is acknowledged: the page is handed the high mark and what was already on its way, no more
+        let first = held_at(&seen, FLOW_HIGH);
+        assert!(first < FLOW_HIGH + OVER_HIGH, "{first}");
+        assert_eq!(s.unacked(id), Some(first));
+        assert!(!seen.exit.load(Ordering::SeqCst), "the program is held back, not ended");
+        // one byte above the low mark: still held
+        s.ack(id, first - FLOW_LOW - 1);
+        assert_eq!(s.unacked(id), Some(FLOW_LOW + 1));
+        assert_eq!(held_at(&seen, first), first);
+        // at the low mark it reads again, up to the high mark
+        s.ack(id, 1);
+        assert!(wait_for(|| seen.bytes.load(Ordering::SeqCst) > first), "did not read again at the low mark");
+        let second = held_at(&seen, first + FLOW_HIGH - FLOW_LOW);
+        let unacked = s.unacked(id).unwrap();
+        assert_eq!(unacked, FLOW_LOW + (second - first));
+        assert!((FLOW_HIGH..FLOW_HIGH + OVER_HIGH).contains(&unacked), "{unacked}");
+        assert!(!seen.exit.load(Ordering::SeqCst));
+        s.close_all();
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn close_stops_a_program_whose_page_never_acknowledged() {
+        let s = Sessions::default();
+        // held at the high mark, the program blocked in its write
+        let (id, seen) = flood(&s, &["/usr/bin/yes"]);
+        held_at(&seen, FLOW_HIGH);
+        let t = Instant::now();
+        s.close(id);
+        assert!(wait_for(|| seen.exit.load(Ordering::SeqCst)), "close did not stop it");
+        // inside close's grace (1.5 s): the hang-up reached it, no hard kill was needed
+        assert!(t.elapsed() < Duration::from_millis(1500), "the hang-up took {:?}", t.elapsed());
+        // one that ignores the hang-up goes when the grace is over, no later
+        let (id, seen) = flood(&s, &["/bin/sh", "-c", "trap '' HUP; exec /usr/bin/yes"]);
+        held_at(&seen, FLOW_HIGH);
+        let t = Instant::now();
+        s.close(id);
+        assert!(wait_for(|| seen.exit.load(Ordering::SeqCst)), "close did not stop the one that ignores the hang-up");
+        assert!(t.elapsed() < Duration::from_millis(1500 + 1500), "{:?}", t.elapsed());
+        assert_eq!(s.count(), 0);
+    }
+
+    /// The app quits, or the page was loaded again (`session_close_all`), while a session waits for a page that
+    /// never acknowledged: it stops at once, and the session the page starts next has its own full credit.
+    #[cfg(unix)]
+    #[test]
+    fn close_all_stops_a_program_whose_page_never_acknowledged_and_the_next_session_starts_clean() {
+        let s = Sessions::default();
+        let (old, seen) = flood(&s, &["/usr/bin/yes"]);
+        held_at(&seen, FLOW_HIGH);
+        let t = Instant::now();
+        s.close_all();
+        assert!(t.elapsed() < Duration::from_secs(2), "close_all took {:?}", t.elapsed());
+        assert_eq!(s.count(), 0);
+        assert!(wait_for(|| seen.exit.load(Ordering::SeqCst)), "the held program survived close_all");
+        let (id, out, exit) = collect(&s, &["/bin/sh", "-c", "echo fresh"], 80, 24);
+        assert!(wait_for(|| exit.lock().unwrap().is_some()), "no exit");
+        assert!(String::from_utf8_lossy(&out.lock().unwrap()).contains("fresh"));
+        // an acknowledgement still on its way for the session that is gone changes nothing
+        s.ack(old, u64::MAX);
+        assert_eq!(s.unacked(old), None);
+        assert_eq!(s.unacked(id), Some(out.lock().unwrap().len() as u64));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_lone_keystroke_still_echoes_within_the_window() {
+        let s = Sessions::default();
+        let (tx, rx) = mpsc::channel();
+        let id = s
+            .spawn(
+                ["/bin/sh", "-c", "stty raw -echo; echo ready; exec /bin/cat"].iter().map(OsString::from).collect(),
+                &std::env::temp_dir().canonicalize().unwrap(),
+                None,
+                &[],
+                80,
+                24,
+                move |ev| {
+                    if let Output::Data(b) = ev {
+                        let _ = tx.send((b, Instant::now()));
+                    }
+                },
+            )
+            .unwrap();
+        let mut text = Vec::new();
+        while !text.windows(5).any(|w| w == b"ready") {
+            text.extend(rx.recv_timeout(Duration::from_secs(10)).expect("the program did not start").0);
+        }
+        thread::sleep(Duration::from_millis(300));
+        while rx.try_recv().is_ok() {}
+        let mut fastest = Duration::MAX;
+        for key in *b"abcde" {
+            let sent = Instant::now();
+            s.write(id, &[key]).unwrap();
+            let (b, at) = rx.recv_timeout(Duration::from_secs(2)).expect("no echo");
+            assert_eq!(b, [key], "a keystroke's echo is its own message");
+            fastest = fastest.min(at - sent);
+            thread::sleep(Duration::from_millis(40));
+        }
+        // nothing but the window (4 ms) holds an echo back; the rest of this bound is the machine's own scheduling
+        assert!(fastest < Duration::from_millis(100), "{fastest:?}");
+        s.close_all();
+    }
+
+    /// Six high marks of output through a real session whose page acknowledges only when the output has stopped:
+    /// the reader pauses and reads again several times, and every byte still arrives once and in order.
+    #[cfg(unix)]
+    #[test]
+    fn output_arrives_whole_and_in_order_across_pauses() {
+        use std::fmt::Write as _;
+        // a counter in decimal with no newline in it (the terminal would add a byte to each)
+        let total = 6 * FLOW_HIGH as usize;
+        let mut want = String::with_capacity(total + 16);
+        let mut n = 0u64;
+        while want.len() < total {
+            write!(want, "{n:08} ").unwrap();
+            n += 1;
+        }
+        let file = std::env::temp_dir().canonicalize().unwrap().join(format!("omher-flow-{}.txt", std::process::id()));
+        std::fs::write(&file, &want).unwrap();
+        let s = Sessions::default();
+        let (id, out, exit) = collect(&s, &["/bin/cat", file.to_str().unwrap()], 80, 24);
+        let mut pauses = 0;
+        let mut last = (0usize, Instant::now());
+        let deadline = Instant::now() + Duration::from_secs(60);
+        while out.lock().unwrap().len() < want.len() {
+            assert!(Instant::now() < deadline, "stuck with {} of {} bytes", out.lock().unwrap().len(), want.len());
+            thread::sleep(Duration::from_millis(5));
+            let len = out.lock().unwrap().len();
+            if len != last.0 {
+                last = (len, Instant::now());
+            } else if last.1.elapsed() > Duration::from_millis(100) {
+                // nothing for 100 ms: the reader is held (or the machine was busy); the page draws all it has
+                let owed = s.unacked(id).unwrap();
+                pauses += (owed >= FLOW_HIGH) as usize;
+                s.ack(id, owed);
+                last.1 = Instant::now();
+            }
+        }
+        assert!(wait_for(|| exit.lock().unwrap().is_some()), "no exit");
+        let _ = std::fs::remove_file(&file);
+        let got = out.lock().unwrap();
+        assert_eq!(got.len(), want.len());
+        assert!(*got == want.as_bytes(), "bytes were dropped, repeated or reordered");
+        assert!(pauses >= 3, "only {pauses} pauses: the credit was not exercised");
+    }
+
+    /// The page sends one size once a drag has settled (sessions.ts); whatever sizes came before it, the program
+    /// has the last one.
+    #[cfg(unix)]
+    #[test]
+    fn a_burst_of_resizes_leaves_the_program_with_the_last_size() {
+        let s = Sessions::default();
+        let (id, out, exit) = collect(&s, &["/bin/sh", "-c", "echo ready; read x; stty size"], 80, 24);
+        assert!(wait_for(|| String::from_utf8_lossy(&out.lock().unwrap()).contains("ready")));
+        for (cols, rows) in [(100, 30), (61, 17), (132, 43), (90, 20), (117, 38)] {
+            s.resize(id, cols, rows).unwrap();
+        }
+        s.write(id, b"\r").unwrap();
+        assert!(wait_for(|| exit.lock().unwrap().is_some()), "no exit");
+        let text = String::from_utf8_lossy(&out.lock().unwrap()).to_string();
+        assert!(text.contains("38 117"), "{text:?}");
+    }
+
     #[test]
     fn refuses_a_cwd_that_is_not_a_folder() {
         let s = Sessions::default();
@@ -1589,6 +2221,18 @@ mod tests {
         let work = home.join(".omher").join("accounts").join("claude").join("work");
         assert!(text.contains(&format!("cfg={}", work.display())), "{text:?}");
         let _ = std::fs::remove_dir_all(home);
+    }
+
+    /// The rows this machine's shell would send. Ignored by default (reads the real machine): a machine without
+    /// `omh` is simulated with `env -i HOME=<scratch home> PATH=/usr/bin:/bin OMHER_HERMES_PYTHON=<hermes python>`,
+    /// `cargo test real_rows_without_omh -- --ignored --nocapture`.
+    #[test]
+    #[ignore]
+    fn real_rows_without_omh() {
+        let row = agents_on_this_machine().into_iter().find(|a| a.id == "omh").unwrap();
+        println!("omh row: {row:?}");
+        assert_eq!((row.label, row.via), ("Hermes", Some("hermes")));
+        assert!(launch_for("omh").is_err(), "no `omh` program to start");
     }
 
     /// The real check on a developer machine: `claude --version` / `codex --version` through the same

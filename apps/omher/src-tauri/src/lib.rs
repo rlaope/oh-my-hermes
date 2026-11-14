@@ -4,8 +4,12 @@ mod agent_chat;
 mod appimage;
 mod bridge;
 mod dsh_chat;
+mod folder_open;
 mod git_branch;
 mod hermes_auth;
+mod past_chats;
+#[cfg(all(test, unix))]
+mod pty_bench;
 mod session_files;
 mod sessions;
 mod setup;
@@ -207,6 +211,14 @@ async fn account_status(cli: String, id: String) -> Result<Option<accounts::Logi
     tauri::async_runtime::spawn_blocking(move || accounts::status(&home, &cli, &id)).await.map_err(|e| e.to_string())?
 }
 
+/// The CLI's version through its fixed `--version` (Claude Code, Codex); only the version token comes back,
+/// `null` for other CLIs or output with no version in it.
+#[tauri::command]
+async fn account_version(cli: String) -> Result<Option<String>, String> {
+    let home = user_home()?;
+    tauri::async_runtime::spawn_blocking(move || accounts::version(&home, &cli)).await.map_err(|e| e.to_string())?
+}
+
 /// Start the CLI's own sign-in (`claude auth login`, `codex login`) with omher account `id` as its home. The
 /// browser part happens in the CLI; its plain output lines and then its exit arrive on `on_event`.
 #[tauri::command]
@@ -277,6 +289,15 @@ async fn session_write(shell: State<'_, Shell>, id: u32, data: String) -> Result
     shell.sessions.write(id, data.as_bytes())
 }
 
+/// The terminal view has drawn `bytes` more of session `id`'s output. The session's reader stops reading its
+/// program while the page is behind and reads again as this credit comes back (`FLOW_HIGH` / `FLOW_LOW` in
+/// sessions.rs). Two numbers only; nothing is read or written.
+#[tauri::command]
+async fn session_ack(shell: State<'_, Shell>, id: u32, bytes: u64) -> Result<(), String> {
+    shell.sessions.ack(id, bytes);
+    Ok(())
+}
+
 #[tauri::command]
 async fn session_resize(shell: State<'_, Shell>, id: u32, cols: u16, rows: u16) -> Result<(), String> {
     shell.sessions.resize(id, cols, rows)
@@ -299,15 +320,22 @@ async fn session_close_all(shell: State<'_, Shell>) -> Result<(), String> {
 
 /// Start allow-listed agent `agent` in folder `cwd` as a chat: its structured mode (the fixed arguments in
 /// the allow-list), with events for the chat view on `on_event` and, once, `{event:"exit", code, error}`.
-/// Only an agent id, a folder, optionally a Claude Code session id or Codex thread id, and optionally the account a
-/// restarted session ran with cross from the UI.
+/// Only an agent id, a folder, optionally a Claude Code session id or Codex thread id, optionally the account a
+/// restarted session ran with, and the SESSIONS id (`s<digits>`, whose attachment folder a Claude Code chat may
+/// read) cross from the UI.
 #[tauri::command]
-async fn chat_start(shell: State<'_, Shell>, agent: String, cwd: String, resume: Option<String>, account: Option<String>, on_event: Channel<serde_json::Value>) -> Result<u32, String> {
+async fn chat_start(shell: State<'_, Shell>, agent: String, cwd: String, resume: Option<String>, account: Option<String>, session: Option<String>, on_event: Channel<serde_json::Value>) -> Result<u32, String> {
     let chats = shell.chats.clone();
     tauri::async_runtime::spawn_blocking(move || {
         // The same account as a terminal session of this agent: its home variable, or nothing ("This computer").
         let account_env = user_home().map(|h| accounts::session_env_for(&h, &agent, account.as_deref())).unwrap_or_default();
-        chats.start_agent(&agent, std::path::Path::new(&cwd), resume.as_deref(), &account_env, move |out| {
+        // Claude Code: the session's attachment folder (`s<digits>` under ~/.omher/session-files), made now so its
+        // copies are readable without a card; no folder (a bad id, a link) only means a card per read
+        let files = match (agent.as_str(), session.as_deref()) {
+            ("claude", Some(s)) => user_home().and_then(|h| session_files::session_dir(&h, s)).ok(),
+            _ => None,
+        };
+        chats.start_agent(&agent, std::path::Path::new(&cwd), resume.as_deref(), &account_env, files.as_deref(), move |out| {
             let _ = on_event.send(match out {
                 ChatOut::Event(e) => e,
                 ChatOut::Exit(code, error) => serde_json::json!({"event": "exit", "code": code, "error": error}),
@@ -428,6 +456,63 @@ async fn open_hermes_auth(provider: String) -> Result<(), String> {
     tauri::async_runtime::spawn_blocking(move || hermes_auth::open(&provider)).await.map_err(|e| e.to_string())?
 }
 
+/// A SESSIONS row's "Reveal": show the session's folder in the file manager (rule 30). Only an absolute path to a
+/// folder that exists crosses from the page.
+#[tauri::command]
+async fn session_reveal(cwd: String) -> Result<(), String> {
+    tauri::async_runtime::spawn_blocking(move || folder_open::reveal(&cwd)).await.map_err(|e| e.to_string())?
+}
+
+/// A SESSIONS row's "Open in Terminal": the person's own system terminal, in the session's folder, running their
+/// shell with nothing typed into it (rule 30).
+#[tauri::command]
+async fn session_open_terminal(cwd: String) -> Result<(), String> {
+    tauri::async_runtime::spawn_blocking(move || folder_open::open_terminal(&cwd)).await.map_err(|e| e.to_string())?
+}
+
+/// The home a new session of `agent` reads its conversations from: the account picked for new sessions, else the
+/// CLI's own (rule 30).
+fn past_home(agent: &str) -> Result<PathBuf, String> {
+    if !past_chats::lists(agent) {
+        return Err(format!("{agent} conversations are not listed"));
+    }
+    let home = user_home()?;
+    let env = accounts::session_env(&home, agent);
+    past_chats::cli_home(&home, agent, &env, &|k| std::env::var(k).ok()).ok_or_else(|| "no home".to_string())
+}
+
+/// The recent conversations Claude Code or Codex keeps for `cwds` (the + menu's folders), read-only (rule 30).
+#[tauri::command]
+async fn past_chats_list(agent: String, cwds: Vec<String>) -> Result<Vec<past_chats::PastChat>, String> {
+    tauri::async_runtime::spawn_blocking(move || past_chats::list(&past_home(&agent)?, &agent, &cwds)).await.map_err(|e| e.to_string())?
+}
+
+/// The last messages of one of those conversations, shown before the agent continues it (rule 30).
+#[tauri::command]
+async fn past_chat_messages(agent: String, id: String, cwd: String) -> Result<Vec<past_chats::PastMsg>, String> {
+    tauri::async_runtime::spawn_blocking(move || past_chats::messages(&past_home(&agent)?, &agent, &id, &cwd)).await.map_err(|e| e.to_string())?
+}
+
+/// How many asks wait on the person, on the Dock icon (macOS) or the launcher entry (Linux desktops that show
+/// counts); Windows has no count, so its taskbar button gets a small amber dot. 0 clears it.
+#[tauri::command]
+async fn asks_badge(window: tauri::WebviewWindow, count: u32) -> Result<(), String> {
+    #[cfg(windows)]
+    {
+        let icon = if count > 0 {
+            let (rgba, n) = folder_open::overlay_dot();
+            Some(tauri::image::Image::new_owned(rgba, n, n))
+        } else {
+            None
+        };
+        window.set_overlay_icon(icon).map_err(|e| e.to_string())
+    }
+    #[cfg(not(windows))]
+    {
+        window.set_badge_count(if count > 0 { Some(i64::from(count)) } else { None }).map_err(|e| e.to_string())
+    }
+}
+
 /// Start the bridge again (the Retry button on the failed screen).
 #[tauri::command]
 async fn bridge_retry(shell: State<'_, Shell>) -> Result<(), String> {
@@ -454,11 +539,13 @@ pub fn run() {
             account_env,
             account_clis,
             account_status,
+            account_version,
             account_login_start,
             account_login_cancel,
             sessions_agents,
             session_start,
             session_write,
+            session_ack,
             session_resize,
             session_close,
             session_close_all,
@@ -472,7 +559,12 @@ pub fn run() {
             session_branch,
             chat_close_all,
             open_media,
-            open_hermes_auth
+            open_hermes_auth,
+            session_reveal,
+            session_open_terminal,
+            past_chats_list,
+            past_chat_messages,
+            asks_badge
         ])
         .setup(|app| {
             let bridge = Bridge::new();
