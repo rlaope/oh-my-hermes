@@ -75,6 +75,11 @@ RULES = (
     "an unknown mode refuses, but an unchanged custom agent is allowed.",
     "refuses before the second listing, so the trusted config channel cannot cause the CLI to read a project-named file or variable.",
     "Gemini CLI, Qwen Code, Kimi Code, Copilot CLI and Cline get no extra variable and no rule check:",
+    "Besides the fixed list, omher starts a program the person added on the Agents page (Settings › Agents) and confirmed,"
+    " exactly with the arguments shown on the card, through ACP on pipes: the confirm card that shows that exact command is the only way an entry is written,",
+    "into one file in omher's own folder, `~/.omher/custom-agents.json`, never a CLI's config;",
+    "skips and never runs an entry that fails, starts it with no shell (a Windows `.cmd` or `.bat` shim is refused),"
+    " adds no variable and no rule check, continues its conversation only inside the protocol, and refuses `opencode` and `kilo`.",
     "and tells the agent at `initialize` that omher offers no file reading or writing and no terminal,",
     "OpenCode also gets one environment variable, `OPENCODE_CONFIG_CONTENT`, holding ask rules for its `bash` and `edit` tools",
     "right before the chat, the shell runs `opencode agent list` (that one fixed argument, in the same folder, with the same environment, on pipes, nothing on stdin, at most 30 seconds)",
@@ -835,6 +840,113 @@ class AccountsNeverCarryAToken(unittest.TestCase):
         # system terminal for `hermes auth add` (rule 23); dsh_chat.rs runs DeepSeek Harness's headless profile (rule 11);
         # folder_open.rs opens the system terminal in a session's folder with no command (rule 30).
         self.assertEqual(spawns, {"accounts.rs": 2, "agent_chat.rs": 1, "bridge.rs": 1, "dsh_chat.rs": 1, "folder_open.rs": 1, "hermes_auth.rs": 1, "setup.rs": 1})
+
+
+
+class CustomAgentsOnlyAfterTheCard(unittest.TestCase):
+    """Rule 11's custom-agent sentence: the one file in omher's folder, the checks on every read, a start with no shell
+    and nothing but the stored arguments, and the confirm commands as the file's only writers."""
+
+    def setUp(self) -> None:
+        text = (SHELL / "custom_agents.rs").read_text(encoding="utf-8")
+        # the code only: doc comments name what is refused (`cmd.exe`) and are not code
+        self.prod = "\n".join(l for l in text.split("#[cfg(test)]\nmod tests", 1)[0].splitlines() if not l.lstrip().startswith("//"))
+        self.lib = (SHELL / "lib.rs").read_text(encoding="utf-8")
+        self.chat = (SHELL / "agent_chat.rs").read_text(encoding="utf-8").split("#[cfg(test)]\nmod tests", 1)[0]
+
+    def fn(self, name: str) -> str:
+        return self.prod.split(f"fn {name}", 1)[1].split("\n}\n", 1)[0]
+
+    def test_the_file_is_one_json_file_in_omhers_own_folder(self) -> None:
+        self.assertIn('home.join(".omher").join("custom-agents.json")', self.fn("store_path"))
+        # no other path is read or written: one file, its temporary sibling, the folder
+        self.assertEqual(re.findall(r'"([^"]*\.json[^"]*)"', self.prod), ["custom-agents.json", "custom-agents.json.tmp"])
+        for banned in (".claude", ".codex", ".gemini", ".cursor", "config.toml", "settings.json", "auth", "token", "env::set_var"):
+            self.assertNotIn(banned, self.prod)
+
+    def test_every_entry_is_checked_on_every_read(self) -> None:
+        load = self.fn("load<")
+        self.assertIn("check(&c, os, &is_program)", load)
+        self.assertIn("out.broken.push(", load)
+        self.assertIn("broken: vec![Broken { id: String::new(), why: Why::File }], unreadable: true", load)
+        # the start reads the file again, checks it again, and only then resolves
+        self.assertIn("load_here().agents.into_iter().find(|c| c.id == id)", self.fn("lookup"))
+        self.assertIn("check(c, os, &is_program)", self.fn("launch<"))
+
+    def test_the_validation_patterns(self) -> None:
+        # ^[a-z0-9][a-z0-9-]{0,31}$ and never a built-in's (or Kilo Code's)
+        self.assertIn("(1..=32).contains(&b.len()) && (b[0].is_ascii_lowercase() || b[0].is_ascii_digit()) && b.iter().all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || *c == b'-')", self.fn("id_ok"))
+        self.assertIn('id == "kilo" || crate::sessions::AGENTS.iter().any(|a| a.id == id) || crate::acp_agents::entry(id).is_some()', self.fn("reserved"))
+        # a bare ^[A-Za-z0-9._-]{1,64}$ program name
+        self.assertIn("(1..=64).contains(&p.len()) && p.bytes().all(|c| c.is_ascii_alphanumeric() || matches!(c, b'.' | b'_' | b'-'))", self.fn("bare_ok"))
+        # each argument ^[A-Za-z0-9._=/:-]{1,64}$, at most eight
+        self.assertIn("(1..=64).contains(&a.len()) && a.bytes().all(|c| c.is_ascii_alphanumeric() || matches!(c, b'.' | b'_' | b'=' | b'/' | b':' | b'-'))", self.fn("arg_ok"))
+        self.assertIn("pub const MAX_ARGS: usize = 8;", self.prod)
+        self.assertIn("if c.args.len() > MAX_ARGS || !c.args.iter().all(|a| arg_ok(a)) {", self.fn("check<"))
+        # an absolute path must be an executable file now; OpenCode and Kilo Code are refused by name
+        check = self.fn("check<")
+        self.assertIn("if !is_program(Path::new(&c.program)) {", check)
+        self.assertIn('"opencode" => return Err(Why::Opencode),', check)
+        self.assertIn('"kilo" | "kilocode" => return Err(Why::Kilo),', check)
+        meta = re.search(r"pub const SHELL_META: &\[char\] = &\[(.*?)\];", self.prod).group(1)
+        for c in ("`", "$", ";", "|", "&", "<", ">", "(", ")", '"', "\\'", "*", "?", "~", "%", "\\n"):
+            self.assertIn(f"'{c}'", meta)
+
+    def test_the_start_runs_the_program_and_the_stored_arguments_with_no_shell(self) -> None:
+        launch = self.fn("launch<")
+        self.assertIn("let mut argv = vec![path.into_os_string()];", launch)
+        self.assertIn("argv.extend(c.args.iter().map(OsString::from));", launch)
+        self.assertNotIn("argv_for", launch)  # no cmd.exe /c for a shim
+        self.assertIn('return Err(format!("{} cannot start without a shell", c.label));', launch)
+        names = self.fn("names")
+        self.assertIn('vec![format!("{program}.exe")]', names)
+        self.assertNotIn("cmd", names.replace("Os::Unix", ""))
+        for banned in ("Command::new", "/bin/sh", "cmd.exe", "powershell", '"-c"', '"/c"', "spawn_command"):
+            self.assertNotIn(banned, self.prod)
+        # the chat entry: the generic ACP adapter, argv from launch_here, the generic agents' env, no rule variable
+        start = self.chat.split("fn start_custom<F>", 1)[1].split("\n    }\n", 1)[0]
+        self.assertIn("Box::new(Acp::new(crate::custom_agents::adapter_row(c), &cwd.to_string_lossy(), thread))", start)
+        self.assertIn("let (argv, path_env) = crate::custom_agents::launch_here(c, dirs)?;", start)
+        self.assertIn("self.spawn(argv, cwd, Some(path_env), account_env, adapter, sink)", start)
+        for banned in ("agent_rules", "env.push", "resume_args", ".arg("):
+            self.assertNotIn(banned, start)
+        self.assertIn("Some(r) if is_acp_session_id(r) => Some(r),", start)
+        self.assertIn("rules: None", self.fn("adapter_row"))
+        # reached only for an id that is not on the fixed list
+        entry = self.chat.split("pub fn start_agent", 1)[1].split("\n    }\n", 1)[0]
+        self.assertIn("if agent(agent_id).is_none() {\n            if let Some(c) = crate::custom_agents::lookup(agent_id) {", entry)
+
+    def test_only_the_confirm_commands_write_the_file(self) -> None:
+        # one writer, one write, through no link
+        self.assertEqual(self.prod.count("std::fs::write("), 1)
+        self.assertEqual(self.prod.count("std::fs::rename("), 1)
+        for banned in ("File::create", "OpenOptions", "remove_file", "fs::copy"):
+            self.assertNotIn(banned, self.prod)
+        save = self.fn("save(")
+        self.assertIn("std::fs::write(&tmp", save)
+        self.assertIn("if path.is_symlink() {", save)
+        self.assertEqual(re.findall(r"\bsave\(home, ", self.prod), ["save(home, ", "save(home, "])
+        self.assertIn("save(home, raw)", self.fn("confirm_add<"))
+        self.assertIn("save(home, kept)", self.fn("confirm_remove("))
+        self.assertNotIn("save(", self.fn("draft<"))
+        self.assertNotIn("save(", self.fn("preview_here("))
+        # in the app: confirm_add only in custom_agent_confirm, confirm_remove only in custom_agent_remove
+        self.assertEqual(self.lib.count("custom_agents::confirm_add("), 1)
+        self.assertEqual(self.lib.count("custom_agents::confirm_remove("), 1)
+        confirm = self.lib.split("async fn custom_agent_confirm(", 1)[1].split("\n}\n", 1)[0]
+        self.assertIn("custom_agents::confirm_add(&home, &entry, Os::current(), sessions::is_program_file)", confirm)
+        remove = self.lib.split("async fn custom_agent_remove(", 1)[1].split("\n}\n", 1)[0]
+        self.assertIn("custom_agents::confirm_remove(&home, &id)", remove)
+        preview = self.lib.split("async fn custom_agent_preview(", 1)[1].split("\n}\n", 1)[0]
+        self.assertNotIn("confirm", preview)
+        # in the UI: customConfirm is called from the card's Add only
+        page = (UI_SRC / "settings" / "agents" / "AgentsPage.tsx").read_text(encoding="utf-8")
+        self.assertEqual(page.count("customConfirm("), 1)
+        add = page.split("const add = async () => {", 1)[1].split("\n  };\n", 1)[0]
+        self.assertIn("await getHost().customConfirm(card.entry);", add)
+        self.assertIn('onClick={() => void add()} data-testid="agent-confirm-add"', page)
+        host = (UI_SRC / "sessions" / "host.ts").read_text(encoding="utf-8")
+        self.assertIn('await invoke("custom_agent_confirm", { entry });', host)
 
 
 class SessionsStartOnlyAllowListedAgents(unittest.TestCase):

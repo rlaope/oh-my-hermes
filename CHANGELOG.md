@@ -236,6 +236,13 @@ All notable changes will be documented here.
   startable; OpenCode and its rule check stay. A Kilo Code session saved
   before this comes back ended with its chat and one line, "Kilo Code is no
   longer offered in omher", and no Restart.
+- **Add your own ACP agent in omher, after a confirm card.** Settings › Agents
+  lists the agents SESSIONS offers with their tier and whether each is
+  installed, then yours. Add agent asks for a name, the program and its ACP
+  arguments; Save shows the exact command omher will run, and nothing is
+  saved until you press Add. It then opens from the SESSIONS + menu as a
+  session chat on the same ACP adapter, with no shell and no rule rewriting.
+  Entries live in `~/.omher/custom-agents.json` and are checked on every read.
 - **Claude Fable 5.2 now leads the `visual-engineering` chain.** Frontend and
   visual lanes routed through Hermes try Fable 5.2 first, then Claude Opus
   5.5, Gemini 4 Argon and Kimi K3.1 Pro, all at `high` (before, Opus 5.5 came

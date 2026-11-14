@@ -133,6 +133,13 @@ UI (React in a Tauri window)  ⇄  bridge (Python, loopback WebSocket)  ⇄  the
   to the UI; they use their own approval requests, with no permission override from omher. Their signed-in turns have not been tested. An agent that is not signed in
   ends its session with one line naming its own sign-in command (`gemini`, `kimi login`, `cline auth`, ...) and
   Open in Terminal; omher never signs in for it and never takes a key.
+- **Your own ACP agents** (Settings › Agents, `src-tauri/src/custom_agents.rs`): the page lists every offered
+  agent read-only with its tier (Main / ACP / Built-in) and whether it is installed, then yours. Add agent takes a
+  name, a program (a name on the search path or a full path), its ACP arguments (default `acp`) and an optional
+  install line, never a key. Save opens a card with the exact command omher will run, resolved now; only its Add
+  writes `~/.omher/custom-agents.json`. The shell checks every entry each time it reads that file and never runs one
+  that fails; it starts yours with no shell, through the same ACP adapter, with no rule rewriting, and its session
+  says that approvals follow the agent's own settings. Remove ends its open sessions.
 - **The + menu stays short.** It lists the agents installed on this computer, Claude Code, Codex and OmO (the main
   agents) first, then the other built-ins, then the list's ACP agents; the rest fold under one More agents row, each with its whole install line (a click copies it). Continue a conversation stays under that row, there as
   the menu first opens.
