@@ -155,34 +155,3 @@ export function NeedsStrip({ asks }: { asks: Ask[] }) {
     </div>
   );
 }
-
-/** Bots hidden from the sidebar, each with Show. Opened from a row menu's "Show hidden…". */
-export function HiddenList({ onClose }: { onClose: () => void }) {
-  const s = useStore();
-  const ref = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    const onDown = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) onClose();
-    };
-    document.addEventListener("mousedown", onDown);
-    return () => document.removeEventListener("mousedown", onDown);
-  }, [onClose]);
-  const hidden = s.ui.hidden.map((n) => s.bots.find((b) => b.name === n)).filter((b) => !!b);
-  useEffect(() => {
-    if (!hidden.length) onClose();
-  }, [hidden.length, onClose]);
-  return (
-    <div className="hidden-list" ref={ref} role="dialog" aria-label={t("needs.hidden")} data-testid="hidden-list">
-      <div className="hidden-h">{t("needs.hidden")}</div>
-      {hidden.map((b) => (
-        <div key={b.name} className="hidden-row">
-          <Avatar bot={b.name} size={20} />
-          <span className="hidden-n">{b.display_name}</span>
-          <button type="button" className="hidden-show" onClick={() => s.hideBot(b.name, false)} aria-label={t("needs.showOf", { name: b.display_name })}>
-            {t("needs.show")}
-          </button>
-        </div>
-      ))}
-    </div>
-  );
-}

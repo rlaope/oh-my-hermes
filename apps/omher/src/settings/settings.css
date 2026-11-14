@@ -471,6 +471,38 @@
   color: var(--quiet);
   padding: 8px 2px;
 }
+.bot-card-w {
+  position: relative;
+  min-width: 0;
+  display: flex;
+}
+.bot-card-w > .bot-card {
+  flex: 1;
+}
+/* "Add to list" / "In list": the sidebar roster state, a small line in the card's top-right corner */
+.bc-list {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  height: 20px;
+  padding: 0 7px;
+  border-radius: var(--r-sm);
+  font-size: 11px;
+  color: var(--ink);
+  box-shadow: inset 0 0 0 1px var(--line-strong);
+}
+.bc-list:hover {
+  background: var(--raise2);
+}
+.bot-card-w .bc-top {
+  padding-right: 72px;
+}
+.bc-list.in {
+  display: inline-flex;
+  align-items: center;
+  color: var(--quiet);
+  box-shadow: none;
+}
 .bot-card {
   display: flex;
   flex-direction: column;

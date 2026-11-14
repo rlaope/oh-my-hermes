@@ -1,6 +1,6 @@
-// Needs you: open asks across bots, expiry, interview answers, ⌘J order, pinned/hidden sidebar order.
+// Needs you: open asks across bots, expiry, interview answers, ⌘J order, the roster and pinned sidebar order.
 import { describe, expect, it } from "vitest";
-import { askFrom, askOpen, askText, folderKey, initialState, reduce, selectAsks, selectSidebarBots, setChatRoute, type Action, type AppState } from "./store";
+import { askFrom, askOpen, askText, folderKey, initialState, reduce, seedRoster, selectAsks, selectSidebarBots, selectUnlisted, setChatRoute, type Action, type AppState } from "./store";
 import type { Bot, BridgeEvent } from "../lib/protocol";
 import { answerOf } from "../chat/cards/answers";
 import { nextAsk, shortcutFor } from "../app/shortcuts";
@@ -206,16 +206,37 @@ describe("⌘J", () => {
 });
 
 describe("sidebar order", () => {
-  it("pinned bots come first in pin order; hidden bots are left out", () => {
-    let s = reduce(initialState(), { type: "bots", bots: ["kami", "friren", "default"].map(bot) });
-    expect(selectSidebarBots(s).map((b) => b.name)).toEqual(["kami", "friren", "default"]);
-    s = reduce(s, { type: "ui.pin", bot: "default", on: true });
-    s = reduce(s, { type: "ui.pin", bot: "friren", on: true });
-    expect(selectSidebarBots(s).map((b) => b.name)).toEqual(["default", "friren", "kami"]);
-    s = reduce(s, { type: "ui.hide", bot: "friren", on: true });
+  it("lists only roster bots Hermes still reports, pinned first in pin order, then in the order they joined", () => {
+    let s = reduce(initialState(), { type: "bots", bots: ["kami", "friren", "default", "omh-tui"].map(bot) });
+    // no roster yet: nothing listed, everything offered under +
+    expect(selectSidebarBots(s)).toEqual([]);
+    expect(selectUnlisted(s).map((b) => b.name)).toEqual(["kami", "friren", "default", "omh-tui"]);
+    s = reduce(s, { type: "ui.roster", roster: ["default", "kami", "gone"] });
     expect(selectSidebarBots(s).map((b) => b.name)).toEqual(["default", "kami"]);
-    s = reduce(s, { type: "ui.pin", bot: "default", on: false });
-    s = reduce(s, { type: "ui.hide", bot: "friren", on: false });
-    expect(selectSidebarBots(s).map((b) => b.name)).toEqual(["friren", "kami", "default"]);
+    expect(selectUnlisted(s).map((b) => b.name)).toEqual(["friren", "omh-tui"]);
+    s = reduce(s, { type: "ui.roster", roster: ["default", "kami", "gone", "friren"] });
+    s = reduce(s, { type: "ui.pin", bot: "friren", on: true });
+    s = reduce(s, { type: "ui.pin", bot: "omh-tui", on: true }); // pinned but not listed: not shown
+    expect(selectSidebarBots(s).map((b) => b.name)).toEqual(["friren", "default", "kami"]);
+    s = reduce(s, { type: "ui.roster", roster: ["default", "kami"] });
+    expect(selectSidebarBots(s).map((b) => b.name)).toEqual(["default", "kami"]);
+  });
+});
+
+describe("the first roster", () => {
+  const bots = ["kami", "friren", "default", "omh-tui"].map(bot).map((b) => (b.name === "default" ? { ...b, is_default: true } : b));
+  it("fresh install: the default profile alone (else the first bot)", () => {
+    expect(seedRoster(bots, null, [], [])).toEqual(["default"]);
+    expect(seedRoster(bots.filter((b) => b.name !== "default"), null, [], [])).toEqual(["kami"]);
+    expect(seedRoster([], null, [], [])).toEqual([]);
+  });
+  it("a person who used omher: the bot saved for resume, then pinned bots that still exist; hidden ones never", () => {
+    expect(seedRoster(bots, "kami", [], [])).toEqual(["kami"]);
+    expect(seedRoster(bots, "kami", ["friren", "gone", "kami"], [])).toEqual(["kami", "friren"]);
+    expect(seedRoster(bots, "gone", ["omh-tui"], [])).toEqual(["omh-tui"]);
+    expect(seedRoster(bots, "kami", ["friren"], ["kami"])).toEqual(["friren"]);
+    // everything saved is hidden or gone: one bot, the default, as on a fresh install
+    expect(seedRoster(bots, "gone", [], [])).toEqual(["default"]);
+    expect(seedRoster(bots, "kami", [], ["kami", "default"])).toEqual(["friren"]);
   });
 });

@@ -11,7 +11,7 @@ import { AccountsWatcher } from "../settings/accounts/useAccounts";
 import "../sessions/sessions.css";
 import { SessionList, SessionsHeader } from "../sessions/SessionsSection";
 import { SessionBackgroundMenu } from "../sessions/SessionBackgroundMenu";
-import { HiddenList, NeedsStrip } from "./Needs";
+import { NeedsStrip } from "./Needs";
 import { UpdateButton } from "./UpdateButton";
 import { FirstRunHint } from "../onboarding/FirstRun";
 import { OmhNotice } from "./OmhNotice";
@@ -25,8 +25,6 @@ export function Sidebar() {
   const [sessionMenu, setSessionMenu] = useState<{ x: number; y: number; focus: HTMLElement } | null>(null);
   const closeSessionMenu = useCallback(() => setSessionMenu(null), []);
   const [adding, setAdding] = useState(false);
-  const [showHidden, setShowHidden] = useState(false);
-  const closeHidden = useCallback(() => setShowHidden(false), []);
   const AddBot = slots.addBot;
   const needle = q.trim().toLowerCase();
   const listed = selectSidebarBots(s);
@@ -34,7 +32,6 @@ export function Sidebar() {
     ? listed.filter((b) => b.display_name.toLowerCase().includes(needle) || b.name.toLowerCase().includes(needle))
     : listed;
   const asks = selectAsks(s);
-  const hiddenCount = s.ui.hidden.filter((n) => s.bots.some((b) => b.name === n)).length;
   const inSettings = s.ui.view === "settings";
   const automations = s.automations?.length ?? 0;
   const inChat = s.ui.view === "chat";
@@ -88,20 +85,13 @@ export function Sidebar() {
                 onEdit: () => s.openSettings(`bot:${b.name}`),
                 onRestart: () => void getRestarts().press(b.name),
                 offline: b.status === "offline",
-                onHide: () => s.hideBot(b.name, true),
-                onShowHidden: hiddenCount ? () => setShowHidden(true) : undefined,
+                onRemove: listed.length > 1 ? () => s.listBot(b.name, false) : undefined,
               }}
             />
             );
           })}
           {needle && bots.length === 0 && <div className="bot-empty">{t("side.noBot", { q: q.trim() })}</div>}
-          {!needle && bots.length === 0 && hiddenCount > 0 && (
-            <button type="button" className="bot-empty bot-unhide" onClick={() => setShowHidden(true)}>
-              {t("side.showHidden", { n: hiddenCount })}
-            </button>
-          )}
           {!needle && listed.length === 0 && <FirstRunHint text={t("onb.botsHint")} testId="onb-hint-bots" />}
-          {showHidden && hiddenCount > 0 && <HiddenList onClose={closeHidden} />}
         </nav>
       </section>
       <section

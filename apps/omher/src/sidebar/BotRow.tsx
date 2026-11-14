@@ -70,14 +70,14 @@ export interface RowMenu {
   onRestart: () => void;
   /** The bot is offline: the row reads "Start". */
   offline?: boolean;
-  onHide: () => void;
-  /** Present when some bots are hidden: opens the list of them. */
-  onShowHidden?: () => void;
+  /** Take the bot out of the sidebar list (the profile stays; it is offered under + again). Absent for the last
+   *  listed bot: the item shows disabled, with a tooltip saying why. */
+  onRemove?: () => void;
 }
 
-/** Right-click or ⋯ menu of a bot row: Pin to top, Edit bot, Restart (Start when offline), Hide from sidebar, Show
- *  hidden… Nothing that would create, stop or delete a Hermes profile, no "restart all", and no "New thread" (one
- *  chat per bot). */
+/** Right-click or ⋯ menu of a bot row: Pin to top, Edit bot, Restart (Start when offline), Remove from list.
+ *  Nothing that would create, stop or delete a Hermes profile, no "restart all", and no "New thread" (one chat per
+ *  bot). */
 function Menu({ menu, onClose, name, bot, at }: { menu: RowMenu; onClose: () => void; name: string; bot: string; at: { x: number; y: number } }) {
   const ref = useRef<HTMLDivElement>(null);
   // Restart restarts the gateway process that serves this bot: say who else goes down with it, before the press
@@ -94,12 +94,11 @@ function Menu({ menu, onClose, name, bot, at }: { menu: RowMenu; onClose: () => 
     onClose();
     fn();
   };
-  const items: [string, () => void][] = [
+  const items: [string, (() => void) | undefined][] = [
     [menu.pinned ? t("row.unpin") : t("row.pin"), menu.onPin],
     [t("row.edit"), menu.onEdit],
     [menu.offline ? t("row.start") : t("row.restart"), menu.onRestart],
-    [t("row.hide"), menu.onHide],
-    ...(menu.onShowHidden ? ([[t("row.showHidden"), menu.onShowHidden]] as [string, () => void][]) : []),
+    [t("row.remove"), menu.onRemove],
   ];
   return (
     <div
@@ -117,13 +116,13 @@ function Menu({ menu, onClose, name, bot, at }: { menu: RowMenu; onClose: () => 
         }
         if (e.key !== "ArrowDown" && e.key !== "ArrowUp") return;
         e.preventDefault();
-        const btns = [...(ref.current?.querySelectorAll<HTMLButtonElement>("button") ?? [])];
+        const btns = [...(ref.current?.querySelectorAll<HTMLButtonElement>("button:not([aria-disabled])") ?? [])];
         const at = btns.indexOf(document.activeElement as HTMLButtonElement);
         btns[(at + (e.key === "ArrowDown" ? 1 : btns.length - 1)) % btns.length]?.focus();
       }}
     >
       {items.map(([label, fn], i) =>
-        i === 2 && mates.length ? (
+        i === 2 && mates.length && fn ? (
           <button key={label} type="button" role="menuitem" className="row-mi two" onClick={run(fn)} data-testid="row-restart">
             {label}
             <span className="row-mi-sub" data-testid="row-restart-with">
@@ -131,7 +130,16 @@ function Menu({ menu, onClose, name, bot, at }: { menu: RowMenu; onClose: () => 
             </span>
           </button>
         ) : (
-          <button key={label} type="button" role="menuitem" className={`row-mi${i === 4 ? " sep" : ""}`} onClick={run(fn)} data-testid={i === 2 ? "row-restart" : undefined}>
+          <button
+            key={label}
+            type="button"
+            role="menuitem"
+            className="row-mi"
+            onClick={fn ? run(fn) : undefined}
+            aria-disabled={!fn || undefined}
+            title={!fn && i === 3 ? t("row.removeLast") : undefined}
+            data-testid={i === 2 ? "row-restart" : i === 3 ? "row-remove" : undefined}
+          >
             {label}
           </button>
         ),

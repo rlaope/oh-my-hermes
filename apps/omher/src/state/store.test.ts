@@ -433,17 +433,50 @@ function fakeBridge() {
 }
 
 describe("store", () => {
-  it("init loads bots, selects the first, and loads its chat", async () => {
+  it("init loads bots, lists one (the first, no default here), selects it and loads only its chat", async () => {
     const f = fakeBridge();
     const store = createStore(f.bridge, { now: () => T0 });
     await store.actions.init();
     const s = store.getState();
     expect(s.bots.map((b) => b.name)).toEqual(["kami", "friren"]);
+    expect(s.ui.roster).toEqual(["kami"]);
     expect(s.selectedBot).toBe("kami");
     expect(s.chats.kami.loaded).toBe(true);
-    expect(s.chats.friren.loaded).toBe(true);
+    // a profile outside the list is not opened (opening it would make its Bot Chat)
+    expect(s.chats.friren).toBeUndefined();
+    expect(f.calls.filter((c) => c.op === "chat.open").map((c) => c.params.bot)).toEqual(["kami"]);
     expect(s.elsewhere.kami).toHaveLength(1);
     expect(s.models.kami.current.model).toBe("Opus 5.5");
+  });
+
+  it("roster: the bot saved for resume starts alone; list, open, remove; the last one stays", async () => {
+    const f = fakeBridge();
+    const resume = { v: 1 as const, at: T0, bot: "friren", view: "chat" as const, session: null, panelOpen: false, panelTab: "details" as const, runsFull: false, runId: null, drafts: {}, sessions: [] };
+    const store = createStore(f.bridge, { now: () => T0, resume: () => resume, hiddenBots: () => [] });
+    await store.actions.init();
+    expect(store.getState().ui.roster).toEqual(["friren"]);
+    expect(store.getState().selectedBot).toBe("friren");
+    // the last listed bot cannot be removed
+    store.actions.listBot("friren", false);
+    expect(store.getState().ui.roster).toEqual(["friren"]);
+    // opening a bot outside the list (Needs you, an @mention) brings it in
+    await store.actions.selectBot("kami");
+    expect(store.getState().ui.roster).toEqual(["friren", "kami"]);
+    // removing the open bot opens the first one left; its pin goes with it
+    store.actions.pinBot("kami", true);
+    store.actions.listBot("kami", false);
+    const s = store.getState();
+    expect(s.ui.roster).toEqual(["friren"]);
+    expect(s.ui.pinned).toEqual([]);
+    expect(s.selectedBot).toBe("friren");
+  });
+
+  it("roster: bots hidden before the roster never enter it", async () => {
+    const f = fakeBridge();
+    const store = createStore(f.bridge, { now: () => T0, hiddenBots: () => ["kami"] });
+    await store.actions.init();
+    expect(store.getState().ui.roster).toEqual(["friren"]);
+    expect(store.getState().selectedBot).toBe("friren");
   });
 
   it("send adds the user row and calls chat.send with bot + text only", async () => {
