@@ -8,6 +8,7 @@ import { SentFiles } from "./Attach";
 import { SkillText } from "./Skills";
 import { CopyButton } from "./Copy";
 import { PeerChips } from "../../peers/PeerChip";
+import { AgentChips } from "./AgentChip";
 import { t } from "../../i18n";
 
 /** Messenger bubble, filled on both sides. Bot text renders markdown; user text stays plain. Files the bot
@@ -105,6 +106,8 @@ export const Bubble = memo(function Bubble({
         {bot && !streaming && paths.length > 0 && <MediaList bot={bot} paths={paths} />}
         {/* an `omher-peer` draft in a finished reply: its Connect over SSH chip (a bot's main chat only) */}
         {bot && !streaming && <PeerChips chatKey={bot} text={text} />}
+        {/* an `omher-agent` draft in a finished reply: its Add agent chip (main and folder chats only; `bot` is the chat) */}
+        {bot && !streaming && <AgentChips chatKey={bot} text={text} />}
       </div>
     </div>
   );

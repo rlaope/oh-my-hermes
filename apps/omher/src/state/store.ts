@@ -307,9 +307,11 @@ export interface Ui {
   /** The UI language (Settings › General › Language), saved as `omher.lang`. */
   lang: Lang;
   settingsPage: string;
-  /** Sidebar: bots pinned to the top (in pin order) and bots hidden from the list. Saved on this computer. */
+  /** Sidebar: bots pinned to the top (in pin order). Saved on this computer. */
   pinned: string[];
-  hidden: string[];
+  /** The roster: the bots the sidebar lists, in the order they joined (`omher.roster`). null until the first run of
+   *  this build has chosen it (seedRoster). Other profiles on this computer join from the sidebar `+`. */
+  roster: string[] | null;
   /** The ask card to scroll to and focus (set by the Needs-you strip and ⌘J); `seq` re-triggers the same one. */
   focusAsk: FocusAsk | null;
   session: string | null;
@@ -438,6 +440,30 @@ function readList(key: string): string[] {
   }
 }
 
+/** The saved roster, or null when this computer has none yet (a fresh install, or omher before the roster). */
+function readRoster(): string[] | null {
+  try {
+    if (typeof localStorage === "undefined" || localStorage.getItem(ROSTER_KEY) === null) return null;
+  } catch {
+    return null;
+  }
+  return readList(ROSTER_KEY);
+}
+
+export const ROSTER_KEY = "omher.roster";
+
+/** The first roster (no `omher.roster` yet): the bot saved for resume, then the pinned bots that still exist; with
+ *  neither, the default profile (else the first bot). Bots the person hid from the old sidebar never enter it. */
+export function seedRoster(bots: readonly Bot[], resumeBot: string | null, pinned: readonly string[], hidden: readonly string[]): string[] {
+  const ok = (n: string | null): n is string => !!n && !hidden.includes(n) && bots.some((b) => b.name === n);
+  const out: string[] = [];
+  for (const n of [resumeBot, ...pinned]) if (ok(n) && !out.includes(n)) out.push(n);
+  if (out.length) return out;
+  const shown = bots.filter((b) => !hidden.includes(b.name));
+  const first = shown.find((b) => b.is_default) ?? shown.find((b) => b.name === "default") ?? shown[0] ?? bots[0];
+  return first ? [first.name] : [];
+}
+
 function saveList(key: string, v: string[]): void {
   try {
     if (typeof localStorage !== "undefined") localStorage.setItem(key, JSON.stringify(v));
@@ -482,7 +508,7 @@ export function initialState(): AppState {
       view: "chat",
       settingsPage: "general",
       pinned: readList("omher.pinned"),
-      hidden: readList("omher.hidden"),
+      roster: readRoster(),
       focusAsk: null,
       session: null,
       automation: null,
@@ -768,7 +794,7 @@ export type Action =
   | { type: "ui.closeSettings" }
   | { type: "system.note"; bot: string; text: string; now: number }
   | { type: "ui.pin"; bot: string; on: boolean }
-  | { type: "ui.hide"; bot: string; on: boolean }
+  | { type: "ui.roster"; roster: string[] }
   | { type: "ui.focusAsk"; bot: string; id: string }
   | { type: "ui.session"; id: string | null }
   /** After a restart: the panel, Plans view and open session as they were (resume.ts). */
@@ -1191,10 +1217,8 @@ export function reduce(state: AppState, a: Action): AppState {
       const rest = state.ui.pinned.filter((b) => b !== a.bot);
       return { ...state, ui: { ...state.ui, pinned: a.on ? [...rest, a.bot] : rest } };
     }
-    case "ui.hide": {
-      const rest = state.ui.hidden.filter((b) => b !== a.bot);
-      return { ...state, ui: { ...state.ui, hidden: a.on ? [...rest, a.bot] : rest } };
-    }
+    case "ui.roster":
+      return { ...state, ui: { ...state.ui, roster: a.roster } };
     case "ui.focusAsk":
       return { ...state, ui: { ...state.ui, focusAsk: { bot: a.bot, id: a.id, seq: (state.ui.focusAsk?.seq ?? 0) + 1 } } };
     case "turn.reasonMoved": {
@@ -1298,19 +1322,25 @@ export function askText(it: ApprovalItem | ClarifyItem): string {
   return n > 1 ? tr("ask.questions", { n, first: it.questions![0].question }) : it.question;
 }
 
-let sideCache: { bots: Bot[]; pinned: string[]; hidden: string[]; out: Bot[] } | null = null;
+let sideCache: { bots: Bot[]; pinned: string[]; roster: string[] | null; out: Bot[] } | null = null;
 
-/** The sidebar's bot order: pinned bots first (in pin order), then the rest as Hermes lists them; hidden bots
- *  are left out. ⌘1…⌘9 follow this order too. Memoised. */
+/** The sidebar's bots: the roster's bots that Hermes still lists, pinned ones first (in pin order), then the rest
+ *  in the order they joined. ⌘1…⌘9 follow this order too. Memoised. */
 export function selectSidebarBots(state: AppState): Bot[] {
   const { bots } = state;
-  const { pinned, hidden } = state.ui;
-  if (sideCache && sideCache.bots === bots && sideCache.pinned === pinned && sideCache.hidden === hidden) return sideCache.out;
-  const shown = bots.filter((b) => !hidden.includes(b.name));
-  const pins = pinned.map((n) => shown.find((b) => b.name === n)).filter((b): b is Bot => !!b);
-  const out = [...pins, ...shown.filter((b) => !pinned.includes(b.name))];
-  sideCache = { bots, pinned, hidden, out };
+  const { pinned, roster } = state.ui;
+  if (sideCache && sideCache.bots === bots && sideCache.pinned === pinned && sideCache.roster === roster) return sideCache.out;
+  const listed = (roster ?? []).map((n) => bots.find((b) => b.name === n)).filter((b): b is Bot => !!b);
+  const pins = pinned.map((n) => listed.find((b) => b.name === n)).filter((b): b is Bot => !!b);
+  const out = [...pins, ...listed.filter((b) => !pinned.includes(b.name))];
+  sideCache = { bots, pinned, roster, out };
   return out;
+}
+
+/** Profiles on this computer that are not in the roster: what the sidebar `+` offers, as Hermes lists them. */
+export function selectUnlisted(state: AppState): Bot[] {
+  const roster = state.ui.roster ?? [];
+  return state.bots.filter((b) => !roster.includes(b.name));
 }
 
 export function selectUnreadTotal(state: AppState): number {
@@ -1376,9 +1406,11 @@ export interface Actions {
   setLook(look: Partial<Look>): void;
   openSettings(page?: string): void;
   closeSettings(): void;
-  /** Sidebar row menu: pin to top / hide from the list (saved on this computer). */
+  /** Sidebar row menu: pin to top (saved on this computer). */
   pinBot(bot: string, on: boolean): void;
-  hideBot(bot: string, on: boolean): void;
+  /** Put a bot in the roster (the sidebar list) or take it out ("Remove from list"; the profile stays). The last
+   *  listed bot is never taken out; taking out the open bot opens the first one left. Saved on this computer. */
+  listBot(bot: string, on: boolean): void;
   /** Open the bot's chat and scroll to / focus one of its ask cards. */
   jumpToAsk(bot: string, id: string): Promise<void>;
   /** Show terminal session `id` in the main column; null goes back to the selected bot's chat. */
@@ -1474,6 +1506,8 @@ export interface StoreOptions {
   onSettled?: () => void;
   /** The snapshot saved before omher last closed (resume.ts), read once the bot list is known. */
   resume?: () => ResumeSnap | null;
+  /** Bots hidden from the sidebar before the roster (`omher.hidden`): read once, when the first roster is chosen. */
+  hiddenBots?: () => string[];
 }
 
 /** Every bridge event, after the store applied it (SESSIONS listens for `folder.closed`). */
@@ -1521,6 +1555,26 @@ export function createStore(bridge: BridgeLike, opts: StoreOptions = {}): Store 
     }
     dispatch({ type: "chat.opened", bot, res, now: now(), since });
   };
+  /** A bot outside the sidebar list: ask its existing Bot Chat for the prompts waiting on the person. The bridge
+   *  replays them as approval/clarify events, which reach Needs you; the chat itself is not kept, the bot is not
+   *  listed, and a bot with no Bot Chat yet gets none (`existing_only`; it answers not_found, which is fine).
+   *  One peek per bot at a time. */
+  const peeking = new Set<string>();
+  const peekAsks = async (bot: string) => {
+    if (peeking.has(bot)) return;
+    peeking.add(bot);
+    try {
+      await bridge.request("chat.open", { bot, existing_only: true });
+    } catch {
+      /* no Bot Chat, or it cannot start: nothing can be waiting in it */
+    } finally {
+      peeking.delete(bot);
+    }
+  };
+  /** Every bot outside the list whose chat is not loaded: asked at start, after a reconnect (events were missed),
+   *  and when the bot list changes (a new profile). bots.list reads offline for any profile not attached yet, so
+   *  this does not filter by status. */
+  const peekUnlisted = () => selectUnlisted(state).filter((b) => !state.chats[b.name]?.loaded).map((b) => peekAsks(b.name));
   const loadElsewhere = async (bot?: string) => {
     const b = botArg(bot);
     if (!b) return;
@@ -1560,7 +1614,39 @@ export function createStore(bridge: BridgeLike, opts: StoreOptions = {}): Store 
 
   const online = (b: Bot) => b.status !== "offline";
 
+  const setRoster = (roster: string[]) => {
+    dispatch({ type: "ui.roster", roster });
+    saveList(ROSTER_KEY, roster);
+  };
+  const listBot = (bot: string, on: boolean) => {
+    const roster = state.ui.roster ?? [];
+    if (on) {
+      if (!roster.includes(bot)) setRoster([...roster, bot]);
+      return;
+    }
+    const shown = selectSidebarBots(state).map((b) => b.name);
+    if (!shown.includes(bot) || shown.length <= 1) return;
+    setRoster(roster.filter((b) => b !== bot));
+    if (state.ui.pinned.includes(bot)) {
+      dispatch({ type: "ui.pin", bot, on: false });
+      saveList("omher.pinned", state.ui.pinned);
+    }
+    if (state.selectedBot === bot) void selectBot(selectSidebarBots(state)[0].name);
+  };
+
+  /** The roster is chosen once, on the first run of this build that sees a bot (seedRoster); when none of its
+   *  bots is on this computer any more, it gets one again the same way. */
+  const ensureRoster = (resumeBot: string | null = null) => {
+    const { bots } = state;
+    const { roster } = state.ui;
+    if (!bots.length || (roster !== null && selectSidebarBots(state).length > 0)) return;
+    const seed = seedRoster(bots, resumeBot, state.ui.pinned, roster === null ? (opts.hiddenBots?.() ?? []) : []);
+    setRoster([...(roster ?? []), ...seed.filter((n) => !roster?.includes(n))]);
+  };
+
   const selectBot = async (bot: string) => {
+    // the open chat always has its row: a bot opened from Needs you, an @mention or Settings joins the list
+    if (state.ui.roster && state.bots.some((b) => b.name === bot)) listBot(bot, true);
     dispatch({ type: "select", bot });
     const jobs: Promise<unknown>[] = [loadElsewhere(bot), loadRoutines(bot), loadModels(bot)];
     if (!state.chats[bot]?.loaded) jobs.push(loadChat(bot).catch(fail));
@@ -1569,24 +1655,32 @@ export function createStore(bridge: BridgeLike, opts: StoreOptions = {}): Store 
 
   const reloadBots = async () => {
     try {
+      const before = new Set(state.bots.map((b) => b.name));
       const r = await bridge.request("bots.list", {});
       dispatch({ type: "bots", bots: r.bots });
+      ensureRoster();
+      // a profile that appeared since: ask it too (only new names, so a bots.update storm asks nobody twice)
+      await Promise.allSettled(
+        selectUnlisted(state).filter((b) => !before.has(b.name) && !state.chats[b.name]?.loaded).map((b) => peekAsks(b.name)),
+      );
     } catch (e) {
       fail(e);
     }
   };
 
-  /** After a reconnect: events were missed, so re-read the lists and every loaded chat. */
+  /** After a reconnect: events were missed, so re-read the lists and every loaded chat, and ask the bots outside
+   *  the list again for the prompts that may have arrived meanwhile. */
   const resync = async () => {
     try {
       const r = await bridge.request("bots.list", {});
       dispatch({ type: "bots", bots: r.bots });
+      ensureRoster();
     } catch (e) {
       return fail(e);
     }
     const names = new Set(state.bots.map((b) => b.name));
     const loaded = Object.entries(state.chats).filter(([n, c]) => c.loaded && names.has(n)).map(([n]) => n);
-    await Promise.allSettled([...loaded.map(loadChat), loadElsewhere(), loadRoutines(), loadAutomations()]);
+    await Promise.allSettled([...loaded.map(loadChat), ...peekUnlisted(), loadElsewhere(), loadRoutines(), loadAutomations()]);
   };
 
   const actions: Actions = {
@@ -1612,8 +1706,12 @@ export function createStore(bridge: BridgeLike, opts: StoreOptions = {}): Store 
         if (ev.event === "routine.ran") void loadRoutines(ev.bot);
         if (ev.event === "routine.ran" || ev.event === "routines.update" || ev.event === "routine.added") void loadAutomations();
         if (ev.event === "bots.update") void reloadBots();
-        // a restarted bot is attached again: its chat re-reads itself, as after a reconnect
-        if (ev.event === "bot.restarted" && ev.ok && state.chats[ev.bot]?.loaded) void loadChat(ev.bot).catch(() => {});
+        // a restarted bot is attached again: its chat re-reads itself, as after a reconnect; a bot outside the list
+        // is asked again, because the restart dropped the bridge's link to its Bot Chat
+        if (ev.event === "bot.restarted" && ev.ok) {
+          if (state.chats[ev.bot]?.loaded) void loadChat(ev.bot).catch(() => {});
+          else if (selectUnlisted(state).some((b) => b.name === ev.bot)) void peekAsks(ev.bot);
+        }
       });
       await bridge.connect();
       try {
@@ -1624,21 +1722,33 @@ export function createStore(bridge: BridgeLike, opts: StoreOptions = {}): Store 
         // is gone takes them with it)
         const saved = opts.resume?.();
         const back = saved ? forBots(saved, bots.map((b) => b.name)) : null;
+        ensureRoster(back?.bot ?? null);
+        const listed = selectSidebarBots(state).map((b) => b.name);
         const first =
-          state.selectedBot && bots.some((b) => b.name === state.selectedBot) ? state.selectedBot : (back?.bot ?? bots[0]?.name);
+          state.selectedBot && bots.some((b) => b.name === state.selectedBot)
+            ? state.selectedBot
+            : back?.bot && listed.includes(back.bot)
+              ? back.bot
+              : listed[0];
         void loadAutomations();
         // the panel and view come back as the bot is selected, before its chat and lists load: put back only once
         // those reads ended, a click on the panel in the meantime (the places chip, ⌘.) was undone by it
         const loading = first ? selectBot(first) : Promise.resolve();
-        if (back?.bot) {
+        if (back?.bot && back.bot === first) {
           const { panelOpen, panelTab, runsFull, runId, session } = back;
           dispatch({ type: "ui.restore", ui: { panelOpen, panelTab, runsFull, runId, session } });
         } else if (back?.session) dispatch({ type: "ui.session", id: back.session });
         await loading;
-        // Load the other chats too, so the sidebar can show previews and unread counts.
-        await Promise.allSettled(
-          bots.filter((b) => b.name !== first && online(b)).map((b) => loadChat(b.name)),
-        );
+        // Load the other listed chats too, so the sidebar can show previews and unread counts. A profile outside
+        // the list is not opened as a chat (that would make its Bot Chat, and list it): it is only asked for the
+        // prompts its existing Bot Chat holds, so an approval or question it is waiting on still reaches Needs you.
+        await Promise.allSettled([
+          ...selectSidebarBots(state).filter((b) => b.name !== first && online(b)).map((b) => loadChat(b.name)),
+          // every bot outside the list, not only `online` ones: bots.list reads offline for any profile the bridge
+          // has not attached yet, which is every one of these at start; chat.open attaches on demand, and one that
+          // cannot start just fails and is skipped
+          ...selectUnlisted(state).map((b) => peekAsks(b.name)),
+        ]);
       } catch (e) {
         fail(e);
       }
@@ -1831,10 +1941,7 @@ export function createStore(bridge: BridgeLike, opts: StoreOptions = {}): Store 
       dispatch({ type: "ui.pin", bot, on });
       saveList("omher.pinned", state.ui.pinned);
     },
-    hideBot(bot, on) {
-      dispatch({ type: "ui.hide", bot, on });
-      saveList("omher.hidden", state.ui.hidden);
-    },
+    listBot,
     async jumpToAsk(bot, id) {
       dispatch({ type: "ui.focusAsk", bot, id });
       // a SESSIONS chat's ask opens that session; a bot's opens the bot's chat
@@ -1981,6 +2088,7 @@ export function getStore(): Store {
         return null;
       }
     },
+    hiddenBots: () => readList("omher.hidden"),
   }));
 }
 

@@ -1,7 +1,9 @@
 // The chat's connect block: one quiet line in the bot's timeline when Hermes says the bot cannot answer
 // (`bots.ready`, ready.ts), with a short row of sign-ins. Each opens the person's own system terminal running exactly
 // `hermes auth add <id>` (src-tauri hermes_auth.rs, BOUNDARY rule 23), where Hermes runs that provider's sign-in; "API
-// key…" opens Settings › Providers, whose Add key menu is the `--type api-key` form. omher sees nothing typed there.
+// key…" opens Settings › Providers, whose Add key menu is the `--type api-key` form (an Anthropic key goes there).
+// There is no Claude sign-in: Hermes' Anthropic OAuth answers only on Claude Max with purchased extra-usage credits,
+// so most people who picked it got a 400 "out of extra usage". omher sees nothing typed in the terminal.
 // After a pick the line says to finish in the terminal and the bot is asked again until it can answer; then the
 // block goes and the composer gets focus. The composer stays usable the whole time.
 import { useEffect, useRef, useState } from "react";
@@ -12,9 +14,8 @@ import { signInHost } from "../../settings/providers/authHost";
 import { SIGN_IN, getReady, useBotReady, type SignIn } from "./ready";
 import "./connect.css";
 
-const LABEL: Record<SignIn, "cn.codex" | "cn.claude" | "cn.nous"> = {
+const LABEL: Record<SignIn, "cn.codex" | "cn.nous"> = {
   "openai-codex": "cn.codex",
-  anthropic: "cn.claude",
   nous: "cn.nous",
 };
 

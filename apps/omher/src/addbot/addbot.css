@@ -6,21 +6,27 @@
   letter-spacing: 0.07em;
   padding: 4px 6px 0;
 }
-.ab-sub {
-  font-size: 11.5px;
-  color: var(--quiet);
-  padding: 2px 6px 6px;
-  margin: 0;
-}
 .ab-list {
   display: flex;
   flex-direction: column;
   gap: 1px;
 }
 .ab-empty {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
   font-size: 12px;
-  color: var(--quiet);
+  color: var(--muted);
   padding: 6px;
+}
+.ab-hint {
+  font-size: 11px;
+  color: var(--quiet);
+}
+.ab-hint code {
+  font-family: var(--mono);
+  font-size: 10.5px;
+  color: var(--muted);
 }
 .ab-row {
   display: flex;
@@ -45,33 +51,12 @@
   color: var(--ink);
 }
 .ab-s {
-  display: flex;
-  align-items: center;
-  gap: 5px;
-  font-size: 11px;
   color: var(--muted);
   white-space: nowrap;
   overflow: hidden;
-}
-.ab-p {
-  color: var(--quiet);
+  text-overflow: ellipsis;
   font-family: var(--mono);
   font-size: 10.5px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.ab-dot {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: var(--quiet);
-  flex: none;
-}
-.ab-dot.online {
-  background: var(--ok);
-}
-.ab-dot.starting {
-  background: var(--w4);
 }
 .ab-btn {
   height: 24px;
@@ -93,36 +78,28 @@
   background: var(--line);
   margin: 6px 0;
 }
-.ab-new {
+.ab-ssh {
   display: flex;
   align-items: center;
+  gap: 8px;
   width: 100%;
   padding: 6px;
   border-radius: var(--r-sm);
-  font-size: 12.5px;
-  color: var(--muted);
+  color: var(--ink);
   text-align: left;
 }
-.ab-new:disabled {
-  opacity: 0.7;
-}
-.ab-soon {
-  margin-left: auto;
-  font-size: 10px;
-  color: var(--quiet);
-  border: 1px solid var(--line);
-  border-radius: 3px;
-  padding: 0 4px;
-}
-.ab-new.ab-ssh {
-  gap: 8px;
-  color: var(--ink);
-}
-.ab-new.ab-ssh:hover {
+.ab-ssh:hover {
   background: var(--hover);
 }
-.ab-new.ab-ssh .ssh-ic {
+.ab-ssh .ssh-ic {
   flex: none;
   width: 22px;
   color: var(--muted);
+}
+.ab-ssh .ab-s {
+  font-family: inherit;
+  font-size: 11px;
+}
+.ab-n .ssh-mark {
+  margin-left: 5px;
 }

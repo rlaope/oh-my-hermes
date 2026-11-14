@@ -2,11 +2,21 @@ import { pickTitle, type TitleSource } from "./titles";
 import { t } from "../i18n";
 
 // The agent programs a session can run, and the pure helpers the sidebar and the session views share.
-// The list is fixed and mirrors `AGENTS` in src-tauri/src/sessions.rs (the shell refuses anything else).
+// Two kinds, both decided by the shell (it refuses anything else):
+// - the built-ins, listed here and mirroring `AGENTS` in src-tauri/src/sessions.rs. The first three are the main
+//   tier (`main`): Claude Code, Codex and OmO, each with its own adapter; the menu lists them first.
+// - the generic Agent Client Protocol agents: rows of the shell's `ACP_LIST` (src-tauri/src/acp_agents.rs), which
+//   reach the UI with the agent look-up (`AgentInfo.acp`). This file keeps no copy of them: a session of one is
+//   named, marked and offered from the row the shell sent ([`registerAcp`]).
+// - the person's own ACP agents (Settings › Agents, src-tauri/src/custom_agents.rs): the same row shape, marked
+//   `custom`, sent with the same look-up after the shell has read and checked omher's own file.
 // `mode` says how a new session opens: `chat` = the agent's structured mode shown as an omher chat,
 // `hermes` = a Hermes chat in the folder (oh-my-hermes, through the bridge), `terminal` = its own TUI.
 
-export type AgentId = "claude" | "codex" | "omo" | "dsh" | "omh" | "pi" | "omp" | "grok" | "opencode" | "kilo" | "gemini" | "qwen" | "kimi" | "copilot" | "cline";
+export type BuiltinId = "claude" | "codex" | "omo" | "dsh" | "omh" | "pi" | "omp" | "grok" | "opencode";
+
+/** A built-in id, or a generic ACP agent's id from the shell's list (any other text is refused by [`isAgentId`]). */
+export type AgentId = BuiltinId | (string & {});
 
 export type AgentMode = "chat" | "hermes" | "terminal";
 
@@ -16,25 +26,83 @@ export interface AgentDef {
   program: string;
   label: string;
   mode: AgentMode;
+  /** The main tier: listed first in the + menu, before every other agent. */
+  main?: boolean;
+}
+
+/** One generic Agent Client Protocol agent as the shell describes it (`AcpEntry` in src-tauri/src/acp_agents.rs).
+ *  The seam a later, person-confirmed entry takes too. */
+export interface AcpRow {
+  id: string;
+  label: string;
+  program: string;
+  /** Its structured-mode argument, `["acp"]` or `["--acp"]` (the shell runs it; shown only). */
+  args: string[];
+  /** The command a person runs in a terminal to sign it in (omher never runs it). */
+  login: string;
+  /** The install line the menu shows (omher never runs it). */
+  install: string;
+  /** Its mark: a file in src/assets/agents. */
+  mark: string;
+  /** Restart (and a restart of omher) continues its conversation. */
+  continues: boolean;
+  /** One the person added on Settings › Agents (its approvals follow the agent's own settings). */
+  custom?: boolean;
 }
 
 export const AGENTS: readonly AgentDef[] = [
-  { id: "claude", program: "claude", label: "Claude Code", mode: "chat" },
-  { id: "codex", program: "codex", label: "Codex", mode: "chat" },
-  { id: "omo", program: "omo", label: "OmO", mode: "chat" },
+  { id: "claude", program: "claude", label: "Claude Code", mode: "chat", main: true },
+  { id: "codex", program: "codex", label: "Codex", mode: "chat", main: true },
+  { id: "omo", program: "omo", label: "OmO", mode: "chat", main: true },
   { id: "dsh", program: "dsh", label: "DSH", mode: "chat" },
   { id: "omh", program: "omh", label: "oh-my-hermes", mode: "hermes" },
   { id: "pi", program: "pi", label: "pi", mode: "chat" },
   { id: "omp", program: "omp", label: "oh-my-pi", mode: "chat" },
   { id: "grok", program: "grok", label: "Grok", mode: "terminal" },
   { id: "opencode", program: "opencode", label: "OpenCode", mode: "chat" },
-  { id: "kilo", program: "kilo", label: "Kilo Code", mode: "chat" },
-  { id: "gemini", program: "gemini", label: "Gemini CLI", mode: "chat" },
-  { id: "qwen", program: "qwen", label: "Qwen Code", mode: "chat" },
-  { id: "kimi", program: "kimi", label: "Kimi Code", mode: "chat" },
-  { id: "copilot", program: "copilot", label: "Copilot CLI", mode: "chat" },
-  { id: "cline", program: "cline", label: "Cline", mode: "chat" },
 ];
+
+/** The generic ACP agents the shell has described so far (its look-up, or a restored session's saved row). */
+const acpRows = new Map<string, AcpRow>();
+
+/** An ACP row as the shell sent it, or null when it is not one (anything malformed is dropped). */
+export function parseAcpRow(v: unknown): AcpRow | null {
+  if (!v || typeof v !== "object") return null;
+  const r = v as Record<string, unknown>;
+  const str = (k: string) => (typeof r[k] === "string" && (r[k] as string).length > 0 && (r[k] as string).length <= 200 ? (r[k] as string) : null);
+  const id = str("id");
+  const label = str("label");
+  const program = str("program");
+  const login = str("login");
+  // a person's own agent has no mark file and may have no install line
+  const custom = r.custom === true;
+  const install = custom && r.install === "" ? "" : str("install");
+  const mark = custom && r.mark === "" ? "" : str("mark");
+  const args = Array.isArray(r.args) && r.args.every((a) => typeof a === "string") ? (r.args as string[]) : null;
+  if (!id || !ID.test(id) || !label || !program || !login || install === null || mark === null || !args) return null;
+  if (AGENTS.some((a) => a.id === id) || typeof r.continues !== "boolean") return null;
+  return { id, label, program, args, login, install, mark, continues: r.continues, ...(custom ? { custom } : {}) };
+}
+
+/** The shape of a generic or custom agent's id (`^[a-z0-9][a-z0-9-]{0,31}$`, as the shell checks it). */
+const ID = /^[a-z0-9][a-z0-9-]{0,31}$/;
+
+/** Learn the generic ACP agents from the shell's look-up: each `acp` row is remembered by its id. A person's own
+ *  agent the look-up no longer sends (removed on Settings › Agents) is forgotten. */
+export function registerAcp(agents: readonly { acp?: unknown }[] | null | undefined): void {
+  const rows = (agents ?? []).map((a) => parseAcpRow(a.acp)).filter((r): r is AcpRow => !!r);
+  for (const [id, r] of acpRows) if (r.custom && !rows.some((x) => x.id === id)) acpRows.delete(id);
+  for (const row of rows) acpRows.set(row.id, row);
+}
+
+/** Whether `id` is an agent the person added on Settings › Agents. */
+export const isCustom = (id: string): boolean => !!acpRows.get(id)?.custom;
+
+/** The generic ACP agent `id`'s row, when the shell has described it. */
+export const acpRow = (id: string): AcpRow | undefined => acpRows.get(id);
+
+/** Agents omher no longer offers, and the line a saved session of one shows when it comes back (`ss.gone`). */
+export const GONE: Readonly<Record<string, string>> = { kilo: "Kilo Code" };
 
 /** Tooltip on the session header's Terminal toggle: whether the terminal view continues the same
  *  conversation or starts the agent's own terminal UI fresh. */
@@ -44,14 +112,14 @@ export function terminalNote(agent: AgentId): string {
   return t("ss.termFresh", { agent: agentDef(agent).label });
 }
 
-/** The install line for an agent's CLI, shown as text in the new-session menu's "Not installed" tooltip (omher
- *  never runs it), each as that product's own docs give it: pi's npm package moved to @earendil-works (its README's
- *  npm line), oh-my-pi's npm build needs Bun so its line is the installer from its README, Grok's is the one-line
- *  installer from docs.x.ai; the six Agent Client Protocol agents (Kilo Code, Gemini CLI, Qwen Code, Kimi Code, Copilot CLI,
- *  Cline) take the npm line of their own READMEs. Codex also notes that the copy inside the ChatGPT (or Codex) desktop app on macOS is
- *  detected. The lines of the agents with an install layout are repeated in `LAYOUTS` (src-tauri/src/sessions.rs),
- *  which names them when the program found does not look like the agent; a Rust test keeps the two the same. */
-export const INSTALL: Record<AgentId, string> = {
+/** The install line for a built-in agent's CLI, shown as text in the new-session menu's "Not installed" tooltip
+ *  (omher never runs it), each as that product's own docs give it: pi's npm package moved to @earendil-works (its
+ *  README's npm line), oh-my-pi's npm build needs Bun so its line is the installer from its README, Grok's is the
+ *  one-line installer from docs.x.ai. Codex also notes that the copy inside the ChatGPT (or Codex) desktop app on
+ *  macOS is detected. The lines of the agents with an install layout are repeated in `LAYOUTS`
+ *  (src-tauri/src/sessions.rs), which names them when the program found does not look like the agent; a Rust test
+ *  keeps the two the same. A generic ACP agent's line is its row's ([`installLine`]). */
+export const INSTALL: Record<BuiltinId, string> = {
   claude: "npm i -g @anthropic-ai/claude-code",
   codex: "npm i -g @openai/codex",
   omo: "npm i -g omo-ai",
@@ -61,30 +129,50 @@ export const INSTALL: Record<AgentId, string> = {
   omp: "curl -fsSL https://omp.sh/install | sh",
   grok: "curl -fsSL https://x.ai/cli/install.sh | bash",
   opencode: "npm install -g opencode-ai",
-  kilo: "npm install -g @kilocode/cli",
-  gemini: "npm install -g @google/gemini-cli",
-  qwen: "npm install -g @qwen-code/qwen-code@latest",
-  kimi: "npm install -g @moonshot-ai/kimi-code",
-  copilot: "npm install -g @github/copilot",
-  cline: "npm install -g cline",
 };
+
+/** An agent's install line: a built-in's from [`INSTALL`], a generic ACP agent's from its row ("" when unknown). */
+export function installLine(agent: AgentId): string {
+  return isBuiltin(agent) ? INSTALL[agent] : (acpRow(agent)?.install ?? "");
+}
 
 /** Tooltip of an agent that is not installed: what is missing, then how to install it. DSH names DeepSeek Harness
  *  (another `dsh` on PATH, such as deepseek-bot's, does not count) and its desktop app, which carries the CLI. */
 export function missingNote(agent: AgentId): string {
-  const install = t("ss.installHow", { cmd: INSTALL[agent] }) + (agent === "codex" ? t("ss.codexBundled") : agent === "dsh" ? t("ss.dshApp") : "");
+  // a person's own agent without an install line: only what is missing
+  if (!installLine(agent)) return t("ss.missingOnly", { program: agentDef(agent).program });
+  const install = t("ss.installHow", { cmd: installLine(agent) }) + (agent === "codex" ? t("ss.codexBundled") : agent === "dsh" ? t("ss.dshApp") : "");
   return t("ss.missing", { program: agent === "dsh" ? "DeepSeek Harness (dsh)" : agentDef(agent).program, how: install });
 }
 
-export const isAgentId = (v: unknown): v is AgentId => typeof v === "string" && AGENTS.some((a) => a.id === v);
+export const isBuiltin = (v: string): v is BuiltinId => AGENTS.some((a) => a.id === v);
 
-/** Agents whose Restart (and Resume) continues the conversation, all of them chats: Claude Code `--resume`, Codex
- *  `thread/resume`, OmO `--session`, DSH `--session-id` (DeepSeek Harness's own session),
- *  OpenCode and the other Agent Client Protocol agents `session/resume` (or `session/load`). pi, oh-my-pi and Grok (a
- *  terminal) start a new one. */
-export const CONTINUES: readonly AgentId[] = ["claude", "codex", "omo", "dsh", "opencode", "kilo", "gemini", "qwen", "kimi", "copilot", "cline"];
+/** A built-in id, a generic ACP agent the shell described, or (for a saved session or a recent) the id of a generic
+ *  agent or one omher no longer offers ([`GONE`]): the shape of an id, never a path or a command line. Whether it
+ *  may RUN is the shell's decision alone. */
+export const isAgentId = (v: unknown): v is AgentId => typeof v === "string" && (isBuiltin(v) || acpRows.has(v) || ID.test(v));
 
-export const agentDef = (id: AgentId): AgentDef => AGENTS.find((a) => a.id === id)!;
+/** Built-ins whose Restart (and Resume) continues the conversation, all of them chats: Claude Code `--resume`, Codex
+ *  `thread/resume`, OmO `--session`, DSH `--session-id` (DeepSeek Harness's own session), OpenCode
+ *  `session/resume` (or `session/load`). pi, oh-my-pi and Grok (a terminal) start a new one. A generic ACP agent
+ *  continues when its row says so ([`continues`]). */
+export const CONTINUES: readonly BuiltinId[] = ["claude", "codex", "omo", "dsh", "opencode"];
+
+/** Whether `agent`'s Restart (and a restart of omher) continues its conversation. */
+export const continues = (agent: AgentId): boolean => (isBuiltin(agent) ? CONTINUES.includes(agent) : !!acpRow(agent)?.continues);
+
+/** A built-in's definition, a generic ACP agent's from its row, else (an agent omher no longer offers, or one the
+ *  shell has not described yet) its id as a name with no way to run. */
+export const agentDef = (id: AgentId): AgentDef => {
+  const b = AGENTS.find((a) => a.id === id);
+  if (b) return b;
+  const row = acpRow(id);
+  if (row) return { id, program: row.program, label: row.label, mode: "chat" };
+  return { id, program: id, label: GONE[id] ?? id, mode: "chat" };
+};
+
+/** Whether omher no longer offers `agent` (a saved session of one shows [`GONE`]'s line and no Restart). */
+export const isGone = (agent: AgentId): boolean => agent in GONE && !isBuiltin(agent) && !acpRow(agent);
 
 /** Agents whose own Stop, sent with no turn running, stops the work still running in the background: Claude Code's
  *  `interrupt` stops its background subagents and withdraws their asks, and its `stop_task` stops a background
@@ -103,6 +191,8 @@ export interface AgentInfo {
   /** `hermes`: the oh-my-hermes row of a person who has Hermes but not `omh`. Its session is the same Hermes chat in
    *  the folder, `path` is where Hermes was found, and it has no terminal view (that would start `omh`). */
   via?: "hermes";
+  /** A generic ACP agent: its row from the shell's list (the only copy the UI has). */
+  acp?: AcpRow;
 }
 
 /** The oh-my-hermes row's name when only Hermes is there (the shell's `HERMES_LABEL`). */
@@ -366,7 +456,7 @@ export function parseRecent(raw: string | null): Recent[] {
     const v = raw ? JSON.parse(raw) : [];
     if (!Array.isArray(v)) return [];
     return v
-      .filter((r) => r && isAgentId(r.agent) && typeof r.cwd === "string" && r.cwd && typeof r.at === "number")
+      .filter((r) => r && isAgentId(r.agent) && !isGone(r.agent) && typeof r.cwd === "string" && r.cwd && typeof r.at === "number")
       .slice(0, RECENT_MAX)
       .map((r) => ({ agent: r.agent, cwd: r.cwd, at: r.at }));
   } catch {
@@ -395,13 +485,33 @@ export function lastAgent(list: Recent[]): AgentId | null {
   return best ? best.agent : null;
 }
 
-/** The SESSIONS + menu's order: the installed agents first, the last one used on top of them, then the rest in
- *  list order; the agents that are not installed after those, in list order. */
+/** Where an agent stands in the menu's tiers: the main tier (`main`), then the other built-ins, then the generic ACP
+ *  agents, then the person's own (Settings › Agents), each in the shell's order. */
+function tierAt(a: AgentInfo, agents: AgentInfo[]): number {
+  const i = AGENTS.findIndex((d) => d.id === a.id);
+  if (i >= 0) return (AGENTS[i].main ? 0 : 1000) + i;
+  return (parseAcpRow(a.acp)?.custom ? 3000 : 2000) + agents.findIndex((x) => x.id === a.id);
+}
+
+/** The SESSIONS + menu's order: the installed agents first, then the ones that are not installed. Within each, the
+ *  tiers always hold: Claude Code, Codex and OmO, then the other built-ins, then the generic ACP agents, then the
+ *  person's own. The last one used goes to the top of its OWN tier only (it never jumps the main tier) and takes the
+ *  menu's first focus ([menuFocus]). Only agents the shell offers are listed. */
 export function menuOrder(agents: AgentInfo[], list: Recent[]): AgentInfo[] {
   const last = lastAgent(list);
-  const rank = (a: AgentInfo) => (a.path ? (a.id === last ? 0 : 1) : 2);
-  const at = (a: AgentInfo) => AGENTS.findIndex((d) => d.id === a.id);
-  return agents.filter((a) => isAgentId(a.id)).sort((a, b) => rank(a) - rank(b) || at(a) - at(b));
+  const installed = (a: AgentInfo) => (a.path ? 0 : 1);
+  const group = (a: AgentInfo) => Math.floor(tierAt(a, agents) / 1000);
+  const recent = (a: AgentInfo) => (a.path && a.id === last ? 0 : 1);
+  const offered = agents.filter((a) => isBuiltin(a.id) || !!parseAcpRow(a.acp));
+  return offered.sort(
+    (a, b) => installed(a) - installed(b) || group(a) - group(b) || recent(a) - recent(b) || tierAt(a, agents) - tierAt(b, agents),
+  );
+}
+
+/** The row the + menu focuses first, so Enter picks it: the last one used when it is installed, else the first row. */
+export function menuFocus(shown: AgentInfo[], list: Recent[]): AgentId | null {
+  const last = lastAgent(list);
+  return shown.find((a) => a.id === last && !!a.path)?.id ?? shown[0]?.id ?? null;
 }
 
 /** The + menu in two parts: the rows it always shows (the installed agents, in [menuOrder]), and the agents that are
@@ -420,7 +530,7 @@ export function draftAgent(list: Recent[], agents: AgentInfo[] | null): AgentId 
   if (!agents) return last ?? AGENTS[0].id;
   const installed = (id: AgentId) => agents.some((a) => a.id === id && !!a.path);
   if (last && installed(last)) return last;
-  const first = AGENTS.find((a) => installed(a.id));
+  const first = menuOrder(agents, []).find((a) => !!a.path);
   return first ? first.id : (last ?? AGENTS[0].id);
 }
 

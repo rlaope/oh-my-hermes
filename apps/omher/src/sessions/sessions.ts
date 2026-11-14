@@ -29,7 +29,7 @@ import { afterOpen, feed, onVisible } from "./term/engine";
 import { applyLook, termOptions } from "./term/look";
 import { onTermSettings, readTermSettings } from "./term/settings";
 import { termTheme } from "./term/themes";
-import { agentDef, agentLabel, CONTINUES, draftAgent, draftFolder, draftOpen, hermesOnly, INSTALL, OPEN_KEY, opensAs, parseOpens, parseRecent, pushRecent, RECENT_KEY, sessionMode, type AgentId, type AgentInfo, type OpenAs, type Unseen, type Opens, type Recent, type SessionRec } from "./agents";
+import { acpRow, agentDef, agentLabel, continues, draftAgent, draftFolder, draftOpen, hermesOnly, installLine, isBuiltin, isGone, OPEN_KEY, opensAs, parseOpens, parseRecent, pushRecent, RECENT_KEY, registerAcp, sessionMode, type AgentId, type AgentInfo, type OpenAs, type Unseen, type Opens, type Recent, type SessionRec } from "./agents";
 import { NAME_MAX, parseTitles, promptTitle, putTitle, TITLES_KEY } from "./titles";
 import { setDraft as setUnsent } from "../app/drafts";
 import { getHost, type ChatEvent, type ChatInput, type PastChat, type SessionHost } from "./host";
@@ -331,6 +331,8 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
   const loadAgents = async () => {
     try {
       const [agents, home] = await Promise.all([host.agents(), state.home ? Promise.resolve(state.home) : host.home()]);
+      // the generic ACP agents are rows the shell sends with the look-up: learn them before anything names one
+      registerAcp(agents);
       set({ agents, home });
       refreshDrafts();
     } catch {
@@ -456,7 +458,7 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
         if (ev.kind === "no_chat_mode") {
           // the shell ends this session: say why in the person's words, with the line that updates the agent
           const agent = rec(id)?.agent ?? "claude";
-          proc.noChat = tr("ss.noChatMode", { agent: agentDef(agent).label, install: INSTALL[agent] });
+          proc.noChat = tr("ss.noChatMode", { agent: agentDef(agent).label, install: installLine(agent) });
           return;
         }
         note(id, signedOutSaid(String(ev.message ?? "")));
@@ -820,6 +822,12 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
   const draftHere = (id: string): string | null => {
     const r = rec(id);
     if (!r) return null;
+    // an agent omher no longer offers: a New session on the usual agent, in the same folder
+    if (isGone(r.agent)) {
+      const d = draft();
+      if (r.cwd) setDraft(d, { cwd: r.cwd });
+      return d;
+    }
     const d = draft(r.agent);
     if (r.cwd) setDraft(d, { agent: r.agent, cwd: r.cwd });
     return d;
@@ -1262,7 +1270,7 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
   const restart = async (id: string) => {
     lostTerminal(id);
     const r = rec(id);
-    if (!r || (r.status !== "exited" && r.status !== "failed")) return;
+    if (!r || (r.status !== "exited" && r.status !== "failed") || isGone(r.agent)) return;
     if (sessionMode(state.agents, r) === "terminal") {
       // a fresh terminal: the view mounts it and starts the program (continuing the conversation, as startTerm says)
       const t = terms.get(id);
@@ -1273,7 +1281,7 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
       return;
     }
     if (procs.has(id) || sessionMode(state.agents, r) !== "chat") return;
-    const resume = CONTINUES.includes(r.agent) && r.agentSession ? r.agentSession : undefined;
+    const resume = continues(r.agent) && r.agentSession ? r.agentSession : undefined;
     patchRec(id, { status: "starting", error: undefined, exitCode: null, view: "chat", paused: undefined });
     patchLive(id, { signin: undefined });
     note(id, null);
@@ -1322,7 +1330,27 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
     }
     const list: SessionRec[] = [];
     const again: { id: string; resume: string }[] = [];
+    // generic ACP agents the shell has not described yet (it answers after this): whether they continue by themselves
+    // is known once it has
+    const later: string[] = [];
     for (const s of saved) {
+      if (isGone(s.agent) && s.draft) {
+        // a New session never started on an agent omher no longer offers: a draft again, on the usual agent
+        list.push({ id: s.id, agent: draftAgent(state.recent, state.agents), cwd: s.cwd, startedAt: s.startedAt, view: "chat", status: "draft" });
+        picked.set(s.id, { cwd: true });
+        seq = Math.max(seq, Number(s.id.slice(1)) || 0);
+        continue;
+      }
+      if (isGone(s.agent)) {
+        // an agent omher no longer offers (Kilo Code): ended, with its chat as it was, one plain line and no Restart
+        // (SessionView's Ended); nothing is started, now or on Resume
+        list.push({ id: s.id, agent: s.agent, cwd: s.cwd, startedAt: s.startedAt, view: "chat", status: "exited", exitCode: null, ...(s.title ? { title: s.title } : {}), ...(s.agentTitle ? { agentTitle: s.agentTitle } : {}), ...(s.promptTitle ? { promptTitle: s.promptTitle } : {}) });
+        fromBefore.add(s.id);
+        seq = Math.max(seq, Number(s.id.slice(1)) || 0);
+        keys.set(s.id, `agent:${s.id}`);
+        openChat(s.id, s.model ?? "", (s.messages ?? []).map((m) => ({ id: `r-${m.id}`, role: m.role, text: m.text, ts: m.ts })));
+        continue;
+      }
       if (s.draft) {
         // a New session chat that never started: a draft again, with its agent and folder fixed by the person
         list.push({ id: s.id, agent: s.agent, cwd: s.cwd, startedAt: s.startedAt, view: "chat", status: "draft" });
@@ -1376,6 +1404,7 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
         else openChat(s.id, s.model ?? "", msgs);
       }
       if (auto) again.push({ id: s.id, resume: s.agentSession! });
+      else if (s.running && s.agentSession && !isBuiltin(s.agent) && !acpRow(s.agent)) later.push(s.id);
     }
     set({ list: [...list, ...state.list] });
     for (const r of list) if (keys.has(r.id)) registerRoute(r.id);
@@ -1384,8 +1413,14 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
     void ready().then(() => host.pruneFiles(ids).catch(() => undefined));
     saveSentFiles(Object.fromEntries(Object.entries(sentFiles).filter(([sid]) => ids.includes(sid))));
 
-    // the home folder (for `~/…` paths) and each agent's mode, as a first launch would read them
-    void loadAgents();
+    // the home folder (for `~/…` paths) and each agent's mode, as a first launch would read them; then the generic ACP
+    // agents' chats whose row says they continue go on by themselves, as the others did
+    void loadAgents().then(() => {
+      for (const id of later) {
+        const r = rec(id);
+        if (r?.paused && continues(r.agent) && sessionMode(state.agents, r) === "chat") void resume(id);
+      }
+    });
     if (again.length) void ready().then(() => Promise.all(again.map(({ id, resume: rid }) => (procs.has(id) ? undefined : startAgentChat(id, rid)))));
   };
 
@@ -1417,6 +1452,29 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
       const next = list[Math.min(idx, list.length - 1)];
       store().actions.openSession(next ? next.id : null);
     }
+  };
+
+  /** A person's own agent was removed on Settings › Agents: each open session of it ends cleanly (its program is
+   *  stopped, its chat stays as it was, it says it ended), its drafts move to the usual agent, and the + menu forgets it. */
+  const endAgent = async (agent: AgentId) => {
+    for (const r of state.list.filter((x) => x.agent === agent)) {
+      if (r.status === "draft") {
+        picked.delete(r.id);
+        patchRec(r.id, { agent: draftAgent(state.recent, (state.agents ?? []).filter((a) => a.id !== agent)) });
+        continue;
+      }
+      disposeTerm(r.id);
+      if (procs.has(r.id)) await stopChat(r.id);
+      if (r.status === "running" || r.status === "starting" || r.paused) patchRec(r.id, { status: "exited", exitCode: null, paused: undefined });
+    }
+    const recent = state.recent.filter((x) => x.agent !== agent);
+    set({ recent });
+    try {
+      localStorage.setItem(RECENT_KEY, JSON.stringify(recent));
+    } catch {
+      // storage refused: the recents are only this page's until it loads again
+    }
+    await loadAgents();
   };
 
   /** Name a session (Rename). Empty or null = back to the automatic name. Kept on this computer under the agent's
@@ -1505,6 +1563,7 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
     /** Stop whatever an earlier load of this page left running (called once at startup). */
     reset: ready,
     loadAgents,
+    endAgent,
     draft,
     draftHere,
     continuePast,

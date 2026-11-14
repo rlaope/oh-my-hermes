@@ -12,6 +12,7 @@ import { Spinner } from "../ui";
 import { failKey, getPeersHost, type CheckResult, type Failure } from "./host";
 import { labelFor, validHost, validLabel } from "./draft";
 import { SshIcon } from "./SshMarker";
+import { markFresh } from "./links";
 import { CopyButton } from "../chat/parts/Copy";
 
 /** The command as the card shows it: one option per line (`\` continuations), so it never breaks inside a word. */
@@ -145,7 +146,8 @@ export function AttachCard({ seed, onClose, onDone }: { seed: AttachSeed; onClos
     if (step.at !== "found") return;
     setStep({ at: "connecting" });
     try {
-      await getPeersHost().add(shownLabel, h, seed.port, step.check.check);
+      const st = await getPeersHost().add(shownLabel, h, seed.port, step.check.check);
+      markFresh(st.id);
       checkId.current = null;
       onDone?.();
       onClose();

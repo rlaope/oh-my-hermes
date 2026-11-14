@@ -41,7 +41,7 @@ from http import HTTPStatus
 from pathlib import Path
 from urllib.parse import parse_qs, urlsplit
 
-VERSION = "0.2.8"
+VERSION = "0.2.9"
 BOT_CHAT_TITLE = "Bot Chat"
 FOLDER_CHAT_PREFIX = "omher · "
 MAX_FOLDER_CHATS = 16
@@ -4416,13 +4416,17 @@ class Bridge:
 
     # ------------------------------------------------------------ main chat
 
-    async def _ensure_main(self, conn: Conn) -> dict:
-        """Find (or create) the bot's ``Bot Chat`` and attach to it. Returns the session snapshot."""
+    async def _ensure_main(self, conn: Conn, existing_only: bool = False) -> dict:
+        """Find (or create) the bot's ``Bot Chat`` and attach to it. Returns the session snapshot. With
+        ``existing_only`` a bot that has no Bot Chat yet gets none and the op answers ``not_found``: a bot outside
+        the sidebar list is asked for its waiting prompts this way, and asking must not make its Bot Chat."""
         rows = (await self._call(conn, "session.list", title=BOT_CHAT_TITLE, include_hidden=True, limit=5)).get("sessions") or []
         if rows:
             stored = rows[0].get("resolved_id") or rows[0]["id"]
             snap = await self._call(conn, "session.resume", session_id=stored)
             snap.setdefault("stored_session_id", stored)
+        elif existing_only:
+            raise BridgeError("not_found", "this bot has no Bot Chat yet")
         else:
             snap = await self._call(conn, "session.create", title=BOT_CHAT_TITLE, hidden=True, follow_profile_config=True)
             try:  # materialise the row now, like Hermes' own desktop, so a second open finds it
@@ -4444,7 +4448,7 @@ class Bridge:
 
     async def op_chat_open(self, p) -> Reply:
         conn = await self._conn(p.get("bot"))
-        snap = await self._ensure_main(conn)
+        snap = await self._ensure_main(conn, existing_only=p.get("existing_only") is True)
         info = snap.get("info") if isinstance(snap.get("info"), dict) else {}
         bot = conn.bot
         running = bool(snap.get("running") if snap.get("running") is not None else info.get("running"))

@@ -4,8 +4,8 @@
 //
 // After the person picks a sign-in in the block (a system terminal runs `hermes auth add <id>`), the bot is asked
 // again every 3 s for up to 10 min, and at once when the window comes back to the front. `hermes auth add` stores the
-// login only: it writes no model, and for `anthropic` it does not make the provider the active one either, so the
-// bot's own check can still say no. Then the strict check for that provider (`bots.ready {provider}`) tells whether the
+// login only: it writes no model, and it does not always make the provider the active one either, so the bot's own
+// check can still say no. Then the strict check for that provider (`bots.ready {provider}`) tells whether the
 // sign-in itself landed; when it did, the main chat gets that provider and its first model from the bot's own
 // `models.options` list that is not an Opus or Fable tier (Hermes' own cost-safe pick), through `chat.set_model`, the
 // same path as the model menu. Nothing here writes config.
@@ -14,7 +14,7 @@ import type { BotReady, ModelOptions } from "../../lib/protocol";
 import { getStore } from "../../state/store";
 
 /** The providers whose own sign-in the block opens (src-tauri hermes_auth.rs SIGN_IN). */
-export const SIGN_IN = ["openai-codex", "anthropic", "nous"] as const;
+export const SIGN_IN = ["openai-codex", "nous"] as const;
 export type SignIn = (typeof SIGN_IN)[number];
 export const isSignIn = (p: string): p is SignIn => (SIGN_IN as readonly string[]).includes(p);
 

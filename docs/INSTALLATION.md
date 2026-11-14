@@ -551,7 +551,10 @@ run and approval decision stays Hermes'; the screen is OMH's.
   then, while the session owns a process Hermes runs in the background, its
   row: `✳ background  terminal(<command>)  8s`, its clock ticking each second,
   and after the turn who will be told when it ends (`🔔 will ping you when
-  done`, or `🔕 Hermes won't be pinged · OMH is watching it`); once one ends
+  done`, or `🔕 Hermes won't be pinged · OMH is watching it`); who will be
+  told is what Hermes' `terminal` result said as it started the process,
+  since Hermes writes its process record before it arms the notification and
+  that record keeps saying no one will be told; once one ends
   unreported, `✓ background  terminal(<command>)  finished 0:12 ago  ↵ report
   result`, and Enter on an empty composer asks the session for the results.
   A question, a picker or the history search hides the row while it has the
@@ -976,7 +979,12 @@ run and approval decision stays Hermes'; the screen is OMH's.
   and paste chips) when the question closes, or when the last of several
   questions Hermes asked one after another does. While another question waits
   behind the open one, the open one says so after its first words
-  (`· 1 more question waiting`). An approval offers deny,
+  (`· 1 more question waiting`). When the model asked a clarify question
+  without writing any reply first and put its explanation only in its
+  reasoning (which Hermes does not send while `display.show_reasoning` is
+  off), the question shows that reasoning dim above it, at most three rows
+  (Ctrl+O shows the rest), so it never opens with nothing to say what it is
+  about. An approval offers deny,
   allow once, allow this session, always allow when Hermes offers it, and
   last no, and tell Hermes what to do instead, one per row in that order,
   with deny highlighted; allowing takes the arrows (Down or Right) and then

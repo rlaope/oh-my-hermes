@@ -104,7 +104,9 @@ test("sidebar + → Connect over SSH: suggestions, Check, the exact command, Can
   expect((await calls()).map((c) => c.op).filter((op) => op.startsWith("peers."))).toEqual(["peers.probe"]);
   await card.getByTestId("peer-connect").click();
   await expect(card).toHaveCount(0);
+  // the new computer's bots join the sidebar list and the first one opens
   await expect(page.getByTestId("bot-mac-mini:mini")).toBeVisible();
+  await expect(page.getByTestId("head-ssh")).toContainText("SSH · Mac mini");
   const attach = (await calls()).filter((c) => c.op === "peers.attach");
   expect(attach.map((c) => [c.params.peer, c.params.label, c.params.host])).toEqual([["mac-mini", "Mac mini", "sionic@10.1.145.204"]]);
 });
@@ -246,4 +248,19 @@ test("ko: the card and the marker read in Korean", async ({ page }) => {
   await page.getByTestId("addbot-ssh").click();
   await expect(page.getByTestId("peer-card")).toContainText("다른 컴퓨터의 Hermes");
   await expect(page.getByTestId("peer-card")).not.toContainText("peer.");
+});
+
+test("a saved computer comes back on the next start without changing the list the person keeps", async ({ page }) => {
+  await open(page);
+  await attachMini(page);
+  // take its bot off the list, then start again: the link reattaches, the bot stays off the list (the + offers it)
+  await page.getByTestId("bot-mac-mini:mini").click({ button: "right" });
+  await page.getByTestId("row-remove").click();
+  await expect(page.getByTestId("bot-mac-mini:mini")).toHaveCount(0);
+  await page.reload();
+  await expect(page.getByTestId("bot-kami")).toBeVisible();
+  await expect.poll(async () => (await calls()).filter((c) => c.op === "peers.attach").length).toBe(2);
+  await expect(page.getByTestId("bot-mac-mini:mini")).toHaveCount(0);
+  await page.getByRole("button", { name: "Add a bot" }).click();
+  await expect(page.getByTestId("addbot-mac-mini:mini")).toContainText("SSH");
 });

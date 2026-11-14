@@ -43,14 +43,10 @@ describe("opensAs", () => {
       omp: { chat: true, terminal: true },
       grok: { chat: false, terminal: true },
       opencode: { chat: true, terminal: true },
-      kilo: { chat: true, terminal: true },
-      gemini: { chat: true, terminal: true },
-      qwen: { chat: true, terminal: true },
-      kimi: { chat: true, terminal: true },
-      copilot: { chat: true, terminal: true },
-      cline: { chat: true, terminal: true },
     });
     expect(opensAs("claude")).toEqual({ chat: true, terminal: true });
+    // a generic ACP agent opens either way
+    for (const id of ["gemini", "qwen", "kimi", "copilot", "cline"]) expect(opensAs(id)).toEqual({ chat: true, terminal: true });
   });
 
   it("gives oh-my-hermes the Hermes chat only for a person who has Hermes and no omh", () => {
@@ -77,7 +73,7 @@ describe("the remembered pick", () => {
     expect(parseOpens(null)).toEqual({});
     expect(parseOpens("not json")).toEqual({});
     expect(parseOpens("[1]")).toEqual({});
-    expect(parseOpens(JSON.stringify({ claude: "terminal", dsh: "terminal", nope: "chat", codex: "x", pi: "chat" }))).toEqual({ claude: "terminal", dsh: "terminal", pi: "chat" });
+    expect(parseOpens(JSON.stringify({ claude: "terminal", dsh: "terminal", "no pe": "chat", codex: "x", pi: "chat" }))).toEqual({ claude: "terminal", dsh: "terminal", pi: "chat" });
   });
 });
 

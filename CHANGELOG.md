@@ -13,13 +13,6 @@ All notable changes will be documented here.
   with key login only and never asks for a password; on the other computer it writes only `~/.omher/peer/`. Settings
   › Remote machines lists them, with Remove.
 
-- **omher's + in the message box: one way to add files, and the bot's plugins beside it.** The menu with "Photos &
-  videos", "Files" and "Paste from clipboard" is gone. In a bot's chat the + now has two rows, "Add photos and files"
-  (one system picker for any kind of file, also ⌘O / Ctrl+O) and "Plugins ›", whose submenu lists the bot's enabled
-  plugins (a colour tile and the name, the description as the tooltip) and Manage plugins; picking a plugin puts
-  "Use <plugin>: " at the start of the message, without sending it. In a session the + opens the file picker
-  straight away. Pasting into the box and dropping on the chat attach files as before. (#2870)
-
 - **The OMH TUI shows a compression as one gauge row, and a prompt typed meanwhile goes on by itself.** `/compact`
   (or `/compress`) no longer prints the long "Compressing: Hermes summarizes the older turns…" notice above a second
   spinner row. One row now reads `✻ Compacting conversation… ━━━━━━──── (30s)`, with a blank row between it and
@@ -241,6 +234,30 @@ All notable changes will be documented here.
   means unknown, never empty, none or equal. The idea of mining re-fixed commits
   comes from `yetone/magpie` (MIT), concept only, reimplemented here.
 
+- **omher's SESSIONS menu lists its agents in two tiers, and Kilo Code is gone.**
+  Claude Code, Codex and OmO, the main agents with their own adapters, come
+  first in the + menu (installed agents still before the rest), then the
+  other built-ins, then the generic ACP agents. Gemini CLI, Qwen Code, Kimi
+  Code, Copilot CLI and Cline now come from one list in the shell (program,
+  `acp` or `--acp`, sign-in and install lines, mark) that the agent look-up
+  hands to the UI, and behave as in 0.2.8: the same install lines, signed-out
+  line, Open in Terminal and Restart. Kilo Code is no longer offered or
+  startable; OpenCode and its rule check stay. A Kilo Code session saved
+  before this comes back ended with its chat and one line, "Kilo Code is no
+  longer offered in omher", and no Restart.
+- **Add your own ACP agent in omher, after a confirm card.** Settings › Agents
+  lists the agents SESSIONS offers with their tier and whether each is
+  installed, then yours. Add agent asks for a name, the program and its ACP
+  arguments; Save shows the exact command omher will run, and nothing is
+  saved until you press Add. It then opens from the SESSIONS + menu as a
+  session chat on the same ACP adapter, with no shell and no rule rewriting.
+  Entries live in `~/.omher/custom-agents.json` and are checked on every read.
+- **A bot can draft an ACP agent for you in omher; you still confirm it.** An
+  ```` ```omher-agent ```` block in a bot's reply (name, program, args,
+  install) gets an "Add agent" chip that opens the same confirm card, with
+  "Proposed by <bot>"; nothing is saved until Add. A shell or interpreter as
+  the program is refused for bot drafts. "Ask the bot" on Settings › Agents
+  puts the request in the bot's message box without sending it.
 - **Claude Fable 5.2 now leads the `visual-engineering` chain.** Frontend and
   visual lanes routed through Hermes try Fable 5.2 first, then Claude Opus
   5.5, Gemini 4 Argon and Kimi K3.1 Pro, all at `high` (before, Opus 5.5 came
@@ -289,6 +306,22 @@ All notable changes will be documented here.
   refused; a plain-HTTP ask never goes through `HTTP_PROXY`, so the key is not
   sent in clear to a proxy; and `typesafe_model` never applies to TypeSafe's
   own host however it is spelled. Thanks @brentkearney. (#2716)
+- **omher 0.2.9.** A new bot without an AI account signs in from its own chat, the + in the message box has one
+  way to add files and the bot's plugins beside it, and an empty part of the Sessions list starts a new session.
+  - **A new bot that cannot answer yet says so and signs in from its chat.** When Hermes' readiness check says a
+    bot has no AI account, its chat shows one line with ChatGPT / Codex, Claude, Nous Portal and API key…. A
+    sign-in opens the system terminal running exactly `hermes auth add openai-codex`, `anthropic` or `nous`; the
+    line asks again every 3 seconds for up to 10 minutes and when omher comes back to the front, and goes away once
+    the bot can answer. API key… opens Settings › Providers. The first install of Hermes from the app lands in the
+    default bot's chat, and with no bots the empty window points at the + menu. (#2874)
+  - **One way to add files, and the bot's plugins under the same +.** The menu with "Photos & videos", "Files" and
+    "Paste from clipboard" is gone. In a bot's chat the + has two rows: "Add photos and files" (one system picker
+    for any kind of file, also ⌘O / Ctrl+O) and "Plugins ›", whose submenu lists the bot's enabled Hermes plugins
+    and Manage plugins; picking one puts "Use <plugin>: " at the start of the message without sending it. In a
+    session the + opens the file picker straight away. Paste and drop attach files as before. (#2870)
+  - **Right-click an empty part of the Sessions list to start a new session.** It opens the agent picker without
+    starting a process; the chat and terminal marks beside session rows are smaller. (#2869)
+
 - **omher 0.2.8.** Six more coding agents in SESSIONS, update checks that
   recover after a failed request or sleep, and a session header that says
   when background work is waiting for you, with clearer terminal find.
@@ -1011,12 +1044,6 @@ All notable changes will be documented here.
   credential-shaped `model` value are still refused. Reported in #2863 by
   @MarinWasAsleep; first fixed by @SHURIKA6 in #2867.
 
-- **Right-click an empty part of omher's Sessions list to start a new session.**
-  The menu opens the existing agent picker without starting a process; each
-  session's own right-click menu still offers a fresh conversation in its
-  folder. Chat and terminal view marks beside the session rows are smaller,
-  while their targets and the messages' type and spacing stay unchanged.
-
 - **The OMH TUI's `/sessions` picker no longer loses older conversations
   behind newer ones, and orders sessions by when they were last active.**
   Attached to Hermes' shared gateway, the gateway child asked both the live
@@ -1039,16 +1066,6 @@ All notable changes will be documented here.
   without `session.transcript` answers that read with a notice, never a lost
   session. Contributed by @DanRioDev (#2865).
 
-- **omher: a new bot that has no AI account says so in its chat and signs in from there.** When Hermes' own readiness
-  check (`setup.runtime_check`) says a bot cannot answer, its chat shows one quiet line, "<Bot> needs an AI account to
-  answer.", with ChatGPT / Codex, Claude, Nous Portal and API key…. A sign-in opens the system terminal running exactly
-  `hermes auth add openai-codex`, `anthropic` or `nous` (the desktop shell allows only those three); the line then says
-  to finish there, asks the bot again every 3 seconds for up to 10 minutes and whenever omher comes back to the front,
-  gives the chat that provider's first non-Opus model when Hermes left it without one, and goes away with the message
-  box focused. API key… opens Settings › Providers. The first install of Hermes from the app now lands in the default
-  bot's chat, and the oh-my-hermes model-setup line waits until the bot can answer. With no bots, the empty window says
-  so in one line and points at the + menu instead of `hermes profile create`. A bot that can answer looks as before
-  and costs one readiness read when it is opened.
 - **`/resume` in the OMH TUI looks like Claude Code's resume picker.** It takes most of the screen, headed
   `Resume session (2 of 12)` with a rounded search box under it (the caret typed in it), and each session is a card:
   its name on one row and `2 days ago · 14 messages · tui` muted under it, a blank row between two cards, under the
@@ -1057,6 +1074,29 @@ All notable changes will be documented here.
   are listed under the cards, wrapped between two keys, as Claude Code lists its own. Ctrl+R turns the search box
   into the title field and Ctrl+D asks on the card's facts row, as before. Closing it gives every row back to the
   transcript, with no band of blank rows left above the composer. On a terminal too short for two cards and the keys, or under 30 columns, it stays the one-row list.
+- **omher starts with one bot; the other bots on this computer join from + in one click.** The sidebar no longer
+  lists every Hermes profile. A new install starts with the default bot alone; someone who already used omher starts
+  with the bot they last had open (plus any they had pinned). `+` is now "Add a bot": it lists the profiles that are
+  not in the sidebar yet, each with one Add that brings the bot in, connects it and opens its chat. Right-click
+  "Hide from sidebar" is now "Remove from list": the profile stays and shows under `+` again, and the last bot in the
+  list cannot be removed. Settings › All bots still shows every profile, each marked "In list" or with "Add to list".
+  An approval or question from a bot outside the list still shows in Needs you, and opening it adds that bot. The
+  connect block for a bot with no AI account no longer offers a Claude sign-in: Hermes' Claude sign-in works only on
+  Claude Max with purchased extra-usage credits, so most people who picked it hit "out of extra usage". ChatGPT /
+  Codex, Nous Portal and API key… stay; an Anthropic key goes in through API key….
+- **The OMH TUI's `✳ Waiting… (… · terminal)` row shows while a `notify=true` background process runs.** Hermes
+  writes its process record at the spawn, before it arms the completion notice, and does not rewrite it until the
+  process exits, so the record said nobody would be told for the whole run. The TUI read it that way: no waiting
+  row between turns, and the info line said `🔕 Hermes won't be pinged`. The TUI now takes who will be told from
+  the `terminal` result Hermes sent back as it started the process (`notify_on_complete`, or watch patterns), so
+  the waiting row stands and the line says `🔔 will ping you when done`. A result that says no one will be told
+  (a subagent, a session that cannot take a completion) changes nothing.
+- **An OMH TUI question never opens with nothing above it.** Some models write the explanation that should come
+  before a clarify question only into their reasoning and send no reply text, so with Hermes'
+  `display.show_reasoning` off the picker appeared alone and the person could not tell what to pick. The question
+  now reads that turn's row from the session's `state.db` (read-only, matched by the clarify's own call id) and
+  shows the reasoning dim above the asked sentence, at most three rows, Ctrl+O for the rest. A turn that wrote a
+  reply, an older turn's row, or a store that cannot be read draws the question exactly as before.
 
 ## 4.0.7 - 2026-11-09
 

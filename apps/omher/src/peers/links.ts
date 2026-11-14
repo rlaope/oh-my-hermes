@@ -11,6 +11,19 @@ type Listener = () => void;
 let peers: PeerStatus[] = [];
 const listeners = new Set<Listener>();
 const attached = new Map<string, string>(); // peer id -> the url attached to the bridge
+const fresh = new Set<string>(); // peers the person just pressed Connect for: their bots join the sidebar list once
+
+/** The confirm card's Connect added `id`: when its bots arrive they join the sidebar (a reattach on a later start
+ *  leaves the list as the person keeps it). */
+export function markFresh(id: string): void {
+  fresh.add(id);
+  // the link may have come up before Connect returned: list its bots now
+  const st = peers.find((p) => p.id === id);
+  if (st?.state === "connected" && attached.has(id)) {
+    attached.delete(id);
+    void sync(st);
+  }
+}
 let started = false;
 
 function emit() {
@@ -33,7 +46,13 @@ async function sync(st: PeerStatus) {
     if (attached.get(st.id) === st.url) return;
     attached.set(st.id, st.url);
     try {
-      await withBridge((b) => b.request("peers.attach", { peer: st.id, label: st.label, host: st.host, url: st.url! }));
+      const r = await withBridge((b) => b.request("peers.attach", { peer: st.id, label: st.label, host: st.host, url: st.url! }));
+      if (fresh.delete(st.id)) {
+        await getStore().actions.reloadBots();
+        for (const b of r.bots) getStore().actions.listBot(b.name, true);
+        if (r.bots[0]) void getStore().actions.selectBot(r.bots[0].name);
+        return;
+      }
     } catch {
       attached.delete(st.id);
     }

@@ -1,5 +1,5 @@
 // The chat's connect block: when Hermes says a bot cannot answer (`bots.ready` -> its `setup.runtime_check`), the
-// bot's timeline shows one quiet line with ChatGPT / Codex, Claude, Nous Portal and "API key…". A sign-in opens the
+// bot's timeline shows one quiet line with ChatGPT / Codex, Nous Portal and "API key…" (no Claude). A sign-in opens the
 // system terminal with exactly `hermes auth add <id>` (`__omherSignInHost` stands in for the shell here); the block
 // then says to finish there, asks the bot again every 3 s and on focus, sets the provider's cost-safe model through
 // chat.set_model once the strict check for it passes, and goes away. A ready bot (the existing user) shows nothing
@@ -71,8 +71,9 @@ test("a bot with no AI account shows one quiet line; sign in clears it and focus
   const block = page.getByTestId("connect-block");
   await expect(block).toBeVisible();
   await expect(page.getByTestId("connect-text")).toHaveText("Kami needs an AI account to answer.");
-  await expect(block.getByRole("button")).toHaveText(["ChatGPT / Codex", "Claude", "Nous Portal", "API key…"]);
-  await expect(page.getByTestId("connect-anthropic")).toHaveAttribute("title", "hermes auth add anthropic");
+  await expect(block.getByRole("button")).toHaveText(["ChatGPT / Codex", "Nous Portal", "API key…"]);
+  await expect(page.getByTestId("connect-nous")).toHaveAttribute("title", "hermes auth add nous");
+  await expect(page.getByTestId("connect-anthropic")).toHaveCount(0);
   // quiet: no filled card
   const bg = await block.evaluate((e) => getComputedStyle(e).backgroundColor);
   expect(bg === "rgba(0, 0, 0, 0)" || bg === "transparent").toBe(true);
@@ -81,19 +82,19 @@ test("a bot with no AI account shows one quiet line; sign in clears it and focus
   // the no-model note does not stack under it
   await expect(page.getByTestId("chat-no-model")).toHaveCount(0);
 
-  await page.getByTestId("connect-anthropic").click();
-  expect(await page.evaluate(() => (window as any).__signIns)).toEqual(["anthropic"]);
+  await page.getByTestId("connect-nous").click();
+  expect(await page.evaluate(() => (window as any).__signIns)).toEqual(["nous"]);
   await expect(page.getByTestId("connect-text")).toHaveText("Finish signing in in the terminal window.");
   await page.getByTestId("composer").blur();
 
-  // the terminal finished `hermes auth add anthropic`: the strict check passes, no model is set yet
-  await mock("mock.ready", { bot: "kami", ok: false, signIn: "anthropic" });
+  // the terminal finished `hermes auth add nous`: the strict check passes, no model is set yet
+  await mock("mock.ready", { bot: "kami", ok: false, signIn: "nous" });
   await expect(block).toHaveCount(0, { timeout: 8_000 });
   await expect(page.getByTestId("composer")).toBeFocused();
-  // the main chat got anthropic's first model that is not an Opus tier, through the model menu's own op
+  // the main chat got nous' first model that is not an Opus or Fable tier, through the model menu's own op
   const sets = await calls("chat.set_model");
-  expect(sets).toEqual([{ bot: "kami", provider: "anthropic", model: "claude-sonnet-5" }]);
-  expect((await calls("bots.ready")).some((p) => p.provider === "anthropic")).toBe(true);
+  expect(sets).toEqual([{ bot: "kami", provider: "nous", model: "moonshotai/kimi-k3" }]);
+  expect((await calls("bots.ready")).some((p) => p.provider === "nous")).toBe(true);
 });
 
 test("window focus asks a waiting sign-in at once", async ({ page }) => {
@@ -189,7 +190,7 @@ for (const [lang, needs, finish] of [
     await mock("mock.ready", { bot: "kami", ok: false });
     await open(page, lang);
     await expect(page.getByTestId("connect-text")).toHaveText(needs);
-    await page.getByTestId("connect-anthropic").click();
+    await page.getByTestId("connect-nous").click();
     await expect(page.getByTestId("connect-text")).toHaveText(finish);
   });
 }

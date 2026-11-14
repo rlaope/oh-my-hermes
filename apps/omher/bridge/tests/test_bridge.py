@@ -333,6 +333,26 @@ class BotsAndChat(BridgeCase):
             self.assertEqual(kami["status"], "online")
             self.assertEqual(kami["display_name"], "Kami!")  # live profiles.list wins once a gateway is attached
 
+    async def test_chat_open_existing_only_never_creates_a_bot_chat(self):
+        # a bot outside the sidebar list is asked for its waiting prompts; asking must not make its Bot Chat
+        async with Env(bot_chat=False) as env:
+            s = await self.open(env)
+            r = await s.req("chat.open", bot="kami", existing_only=True)
+            self.assertFalse(r["ok"], r)
+            self.assertEqual(r["error"]["code"], "not_found")
+            c = env.clients["kami"]
+            self.assertEqual(c.find("session.create"), [])
+            self.assertEqual(c.find("session.title"), [])
+
+    async def test_chat_open_existing_only_resumes_an_existing_bot_chat(self):
+        async with Env() as env:
+            s = await self.open(env)
+            r = await s.req("chat.open", bot="kami", existing_only=True)
+            self.assertTrue(r["ok"], r)
+            c = env.clients["kami"]
+            self.assertEqual(c.find("session.resume"), [{"session_id": MAIN_STORED}])
+            self.assertEqual(c.find("session.create"), [])
+
     async def test_chat_open_creates_missing_bot_chat(self):
         async with Env(bot_chat=False) as env:
             s = await self.open(env)
