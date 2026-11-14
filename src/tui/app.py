@@ -1161,6 +1161,8 @@ SESSION_DELETED_NOTICE = "Deleted session {session}."
 # On the picker's row when Hermes answered a rename or delete with nothing that says it was done.
 SESSION_EDIT_UNCONFIRMED = "Hermes did not say it was done"
 SESSION_EDIT_READ_ONLY = "another runtime owns this session; its history is read-only here"
+# Under a message of a read-only session's history that Hermes cut to its start (`truncated` on the row).
+TRANSCRIPT_ROW_CUT = "… (Hermes sent only the start of this message)"
 SESSION_EDIT_UNANSWERED = "Hermes did not answer in {seconds:g} s"
 SESSION_EDIT_NOT_SENT = "the OMH TUI did not send it"
 SESSIONS_UNANSWERED_NOTICE = "Hermes did not answer the session list in {seconds:g} s; /resume asks again."
@@ -7782,7 +7784,7 @@ class App(ModesMixin, AgentViewMixin):
         stored transcript read-only, so no agent is built and no session is taken over. It is how a session another
         runtime persisted open stays listable here; resuming it is that runtime's to allow."""
         def done(result: dict[str, Any]) -> None:
-            messages = result.get("rows", result.get("messages"))
+            messages = result.get(contract.TRANSCRIPT_ROWS)
             lines: list[Line] = []
             for message in messages if isinstance(messages, list) else []:
                 if not isinstance(message, dict):
@@ -7799,7 +7801,9 @@ class App(ModesMixin, AgentViewMixin):
                         lines.append(())
                     lines.append((Span(f"{role}: ", style="bold"), Span(content[0])))
                     lines.extend((Span(line),) for line in content[1:])
-            if result.get("next_cursor") or result.get("truncated"):
+                    if message.get(contract.TRANSCRIPT_ROW_TRUNCATED) is True:
+                        lines.append((Span(TRANSCRIPT_ROW_CUT),))
+            if result.get(contract.TRANSCRIPT_NEXT_CURSOR):
                 lines.append((Span("Newest transcript page shown; older history remains on the server."),))
             if not lines:
                 self.transcript.add_aside(NoticeBlock(f"No messages stored for {row.label}."))

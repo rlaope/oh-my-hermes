@@ -973,6 +973,28 @@ All notable changes will be documented here.
   presence the same way, so a name inside another root key's flow mapping is
   no longer reported as OMH's own. Reported by @PabloJustDevelops in #2829.
 
+- **The OMH TUI's `/sessions` picker no longer loses older conversations
+  behind newer ones, and orders sessions by when they were last active.**
+  Attached to Hermes' shared gateway, the gateway child asked both the live
+  and the stored listing for only the picker's limit, kept the live rows
+  first, and cut the joined list there, so a session held open and its own
+  stored history could take two rows while a conversation you resumed
+  yesterday fell off the page. It now asks each listing for up to 200 rows,
+  merges a live session and the stored row of the same conversation into one
+  row (by id, resolved id or lineage root), orders the result by the
+  conversation's latest activity (`last_active_at`, which current Hermes
+  answers when asked for its picker fields), and applies the limit last; a
+  title lookup is forwarded unchanged. The day headings and ages follow the
+  same last activity. A row Hermes marks `resumable: false` /
+  `owner_runtime: "other"` (a session another runtime holds open) opens
+  read-only: Enter shows its newest messages through `session.transcript`
+  in a pager instead of resuming it, and Ctrl+R and Ctrl+D are refused on
+  its row. Only a Hermes with the companion listing change
+  (DanRioDev/hermes-agent@01ba3239b, not yet in upstream Hermes) lists such
+  rows; against stock Hermes every row resumes as before, and a Hermes
+  without `session.transcript` answers that read with a notice, never a lost
+  session. Contributed by @DanRioDev (#2865).
+
 ## 4.0.7 - 2026-11-09
 
 - **Bare `omh` opens on a Hermes runtime of the TUI's own by default, with

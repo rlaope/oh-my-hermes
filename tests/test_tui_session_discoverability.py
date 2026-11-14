@@ -125,3 +125,120 @@ class ListingTests(unittest.TestCase):
         ]}))
         [(_, answer)] = adapter.from_owner(_answer(stored["id"], {"sessions": []}))
         self.assertEqual([row["id"] for row in answer["result"]["sessions"]], ["millis", "seconds"])
+
+
+# What a stock Hermes answers today (NousResearch/hermes-agent 3b42157858): live rows by start, stored rows with the
+# picker's `last_active_at` when asked `picker: true`, and never `activity_at`, `resumable` or `owner_runtime`.
+STOCK_LIVE = {"sessions": [{"id": "tip", "session_id": "tip", "title": "", "started_at": 500.0, "message_count": 1,
+                            "running": False}], "scope": "live"}
+STOCK_STORED = {"sessions": [
+    {"id": "root", "session_id": "tip", "resolved_id": "tip", "title": "Release notes", "started_at": 100.0,
+     "message_count": 9, "running": False, "preview": "ship it", "last_active_at": 900.0},
+    {"id": "other", "session_id": "other", "resolved_id": "other", "title": "Older", "started_at": 300.0,
+     "message_count": 2, "running": False, "last_active_at": 400.0},
+], "scope": "stored"}
+
+
+class StockHermesTests(unittest.TestCase):
+    """Against a Hermes without the companion change the listing still works and every row resumes as before."""
+
+    def test_a_stock_listing_merges_orders_by_last_activity_and_every_row_resumes(self) -> None:
+        adapter = _adapter(["session-transcript-v1", "session-list-picker-v1"])
+        live, _ = _list(adapter, {"limit": 50})
+        [(_, stored)] = adapter.from_owner(_answer(live["id"], STOCK_LIVE))
+        [(_, answer)] = adapter.from_owner(_answer(stored["id"], STOCK_STORED))
+        rows = session_rows(answer["result"])
+        self.assertEqual([(row.id, row.title, row.activity_at, row.read_only) for row in rows],
+                         [("tip", "Release notes", 900.0, False), ("other", "Older", 400.0, False)])
+
+    def test_a_stored_row_alone_is_timed_by_the_pickers_last_active_at(self) -> None:
+        [row] = session_rows({"sessions": [{"id": "a", "started_at": 100.0, "last_active_at": 900.0}]})
+        self.assertEqual(row.activity_at, 900.0)
+        [row] = session_rows({"sessions": [{"id": "a", "started_at": 100.0}]})
+        self.assertEqual(row.activity_at, 100.0)
+
+    def test_the_tui_itself_never_sends_a_scope_or_picker_key(self) -> None:
+        from omh.tui import gateway_contract as contract
+
+        self.assertEqual(contract.call_problem("session.list", {"limit": 50}), "")
+        for key in ("scope", "picker"):
+            with self.subTest(key=key):
+                self.assertIn(key, contract.call_problem("session.list", {"limit": 50, key: "stored"}))
+
+
+class ReadOnlyRowTests(unittest.TestCase):
+    """A row Hermes lists as not resumable is read with `session.transcript`, never resumed, renamed or deleted."""
+
+    LISTED = {"sessions": [
+        {"id": "elsewhere", "title": "Held by another runtime", "started_at": 1_791_900_000.0, "message_count": 4,
+         "resumable": False, "owner_runtime": "other"},
+        {"id": "mine", "title": "Mine", "started_at": 1_791_800_000.0, "message_count": 2},
+    ]}
+
+    def opened(self):
+        from test_tui_modes import drawn, make_app
+        from test_tui_resume_feedback import reply, resume
+
+        app, client = make_app()
+        resume(app)
+        reply(app, client, self.LISTED)
+        assert app.picker is not None
+        drawn(app)
+        return app, client
+
+    def test_enter_on_a_read_only_row_reads_its_transcript_in_a_pager(self) -> None:
+        from _tui_lines import line_text
+        from omh.tui.app import TRANSCRIPT_ROW_CUT
+        from omh.tui.gateway import Response
+        from omh.tui.keys import ENTER, Key
+
+        app, client = self.opened()
+        before = (app.sid, app.stored_id)
+        app._on_input(Key(ENTER))
+        self.assertEqual(client.calls[-1],
+                         ("session.transcript", {"session_id": "elsewhere", "order": "latest", "limit": 500}))
+        self.assertNotIn("session.resume", [method for method, _params in client.calls])
+        app._on_response(Response(len(client.calls), {"session_id": "elsewhere", "rows": [
+            {"role": "user", "text": "hello", "row_kind": "message"},
+            {"role": "assistant", "text": "a long head", "row_kind": "message", "truncated": True},
+        ], "next_cursor": None, "reset": True}, None))
+        assert app.pager is not None
+        text = [line_text(line) for line in app.pager.lines]
+        self.assertEqual(text, ["user: hello", "", "assistant: a long head", TRANSCRIPT_ROW_CUT])
+        self.assertEqual(before, (app.sid, app.stored_id))
+
+    def test_a_hermes_without_session_transcript_says_so_and_the_session_goes_on(self) -> None:
+        from test_tui_modes import notices
+        from omh.tui.gateway import Response
+        from omh.tui.keys import ENTER, Key
+
+        app, client = self.opened()
+        app._on_input(Key(ENTER))
+        app._on_response(Response(len(client.calls), None, {"code": -32601, "message": "unknown method"}))
+        self.assertIsNone(app.exit_code)
+        self.assertIsNone(app.pager)
+        self.assertTrue(any("did not show Held by another runtime" in notice for notice in notices(app)))
+
+    def test_ctrl_r_and_ctrl_d_on_a_read_only_row_send_nothing_and_say_why(self) -> None:
+        from test_tui_modes import drawn
+        from omh.tui.keys import CHAR, ENTER, Key
+
+        app, client = self.opened()
+        sent = len(client.calls)
+        app._on_input(Key(CHAR, "d", ctrl=True))
+        app._on_input(Key(CHAR, "d", ctrl=True))
+        self.assertEqual(len(client.calls), sent)
+        self.assertTrue(any("another runtime owns this session" in line for line in drawn(app)))
+        app._on_input(Key(CHAR, "r", ctrl=True))
+        app._on_input(Key(CHAR, "x"))
+        app._on_input(Key(ENTER))
+        self.assertEqual(len(client.calls), sent)
+
+    def test_enter_on_a_resumable_row_still_resumes_it(self) -> None:
+        from omh.tui.keys import DOWN, ENTER, Key
+
+        app, client = self.opened()
+        app._on_input(Key(DOWN))
+        app._on_input(Key(ENTER))
+        self.assertEqual(client.calls[-1][0], "session.resume")
+        self.assertEqual(client.calls[-1][1].get("session_id"), "mine")

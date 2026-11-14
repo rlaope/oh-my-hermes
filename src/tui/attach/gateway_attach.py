@@ -886,7 +886,7 @@ class Adapter:
             asked["picker"] = True
 
         def on_live(live: dict[str, Any]) -> list[Action]:
-            if not isinstance(live.get("result"), dict) or "title" in params:
+            if not isinstance(live.get("result"), dict):
                 return [(TO_CLIENT, {**live, "id": request_id})]
             rows = [row for row in live["result"].get("sessions") or [] if isinstance(row, dict)]
 
@@ -896,7 +896,7 @@ class Adapter:
                     if isinstance(row, dict):
                         rows.append(row)
                 kept = _same_conversations(rows)
-                kept = kept[:limit] if isinstance(limit, int) and limit > 0 else kept
+                kept = kept[:limit] if _whole(limit) and limit > 0 else kept
                 return [_reply(request_id, {"sessions": kept})]
 
             return [self._call("session.list", {**asked, "scope": "stored"}, on_stored)]

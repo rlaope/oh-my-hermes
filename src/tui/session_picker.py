@@ -155,9 +155,10 @@ def session_rows(result: Mapping[str, object]) -> list[SessionRow]:
                 preview=preview if isinstance(preview, str) else "",
                 started_at=_seconds(entry.get("started_at")),
                 message_count=int(_number(entry.get("message_count"))),
-                # An owner that fills its picker names the activity; one that does not is timed by its listing order,
-                # which the start stands in for.
-                activity_at=_seconds(entry.get("activity_at")) or _seconds(entry.get("started_at")),
+                # The activity the gateway child merged (`activity_at`), else a shared gateway's own picker field
+                # (`last_active_at`, what a stock Hermes answers `picker: true` with), else the start.
+                activity_at=_seconds(entry.get("activity_at")) or _seconds(entry.get("last_active_at"))
+                or _seconds(entry.get("started_at")),
                 resumable=entry.get("resumable") is not False,
                 owner_runtime=entry["owner_runtime"] if isinstance(entry.get("owner_runtime"), str) else "",
             )
