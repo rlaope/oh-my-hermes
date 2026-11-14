@@ -20,7 +20,7 @@ import { ownSetting } from "./ownSetting";
 import type { Bot } from "../lib/protocol";
 import { AgentMark } from "./AgentMark";
 import { SessionFace } from "./SessionFace";
-import { agentDef, agentLabel, continues, GONE, isGone, STOPS_BACKGROUND, draftOpen, folderChoices, folderName, hermesOnly, missingNote, opensAs, parentPath, sessionMode, terminalNote, tildePath, type AgentId, type OpenAs, type SessionRec } from "./agents";
+import { agentDef, agentLabel, continues, GONE, isCustom, isGone, STOPS_BACKGROUND, draftOpen, folderChoices, folderName, hermesOnly, missingNote, opensAs, parentPath, sessionMode, terminalNote, tildePath, type AgentId, type OpenAs, type SessionRec } from "./agents";
 import { pickTitle } from "./titles";
 import { t as tr, tx, type Key } from "../i18n";
 import { windowWatched } from "../lib/notify";
@@ -151,6 +151,7 @@ function ChatPane({ rec, chatKey }: { rec: SessionRec; chatKey: string }) {
         onEditLast={ss.live[rec.id]?.rewind && rec.status === "running" && !chat?.turn ? () => void getSessions().rewind(rec.id) : undefined}
       />
       {rec.paused ? <Paused rec={rec} /> : ended && <Ended rec={rec} />}
+      <OwnApprovals agent={rec.agent} />
       <Composer
         key={chatKey}
         bot={bot}
@@ -185,6 +186,18 @@ const FolderIcon = ({ size = 13 }: { size?: number }) => (
     <path d="M3 7.5A1.5 1.5 0 0 1 4.5 6h4.4l2 2h8.6A1.5 1.5 0 0 1 21 9.5v8a1.5 1.5 0 0 1-1.5 1.5h-15A1.5 1.5 0 0 1 3 17.5z" />
   </svg>
 );
+
+/** A person's own agent (Settings › Agents): one quiet line, once per session view, that its approval cards are the
+ *  ones the agent itself asks for. omher cannot add asks to an agent it does not know. */
+function OwnApprovals({ agent }: { agent: AgentId }) {
+  useSessions(); // a row the look-up sends later shows the line then
+  if (!isCustom(agent)) return null;
+  return (
+    <div className="ss-own" role="note" data-testid="session-own-approvals">
+      {tr("ss.ownApprovals")}
+    </div>
+  );
+}
 
 /** The session's agent in the composer row, read-only (a draft's agent is changed from the SESSIONS + menu). */
 function AgentFixed({ agent }: { agent: AgentId }) {
@@ -454,6 +467,7 @@ function DraftPane({ rec }: { rec: SessionRec }) {
               : t(terminal ? "sessions.firstStart" : "sessions.firstSend", { agent: label, folder })}
         </div>
       </div>
+      <OwnApprovals agent={rec.agent} />
       <Composer
         key={key}
         bot={bot}

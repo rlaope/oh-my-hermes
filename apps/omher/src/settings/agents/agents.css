@@ -1,0 +1,156 @@
+/* Settings › Agents: the same groups as Settings › General (one bordered group per heading, rows inside), one
+   form group for Add agent, and one confirm card over the page. */
+.ag-row .st-kt {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.ag-meta {
+  gap: 10px;
+  align-items: center;
+  font-size: 11.5px;
+}
+.ag-tier {
+  padding: 1px 7px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  color: var(--body);
+  font-size: 11px;
+}
+.ag-tier.main {
+  color: var(--ink);
+  border-color: var(--line-strong);
+}
+.ag-state {
+  color: var(--quiet);
+  min-width: 82px;
+  text-align: right;
+}
+.ag-state.on {
+  color: var(--body);
+}
+.ag-cmd {
+  font-family: var(--mono);
+  font-size: 11px !important;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 460px;
+}
+.ag-empty {
+  color: var(--quiet);
+  font-size: 12px;
+}
+.ag-addrow {
+  justify-content: flex-start;
+}
+.ag-in {
+  height: 28px;
+  width: 280px;
+  max-width: 100%;
+  padding: 0 8px;
+  border-radius: var(--r-sm);
+  border: 1px solid var(--line);
+  background: var(--bg);
+  color: var(--ink);
+  font-size: 12px;
+}
+.ag-in.mono {
+  font-family: var(--mono);
+  font-size: 11.5px;
+}
+.ag-in:focus {
+  outline: none;
+  border-color: var(--line-strong);
+}
+.ag-formfoot {
+  gap: 12px;
+}
+.ag-quiet {
+  color: var(--quiet);
+  font-size: 11.5px;
+  margin: 0;
+}
+.ag-acts {
+  display: flex;
+  gap: 8px;
+  flex: none;
+}
+/* the one primary action of a card: the neutral ink fill */
+.st-btn.ag-primary {
+  background: var(--ink);
+  color: var(--bg);
+}
+.st-btn.ag-primary:hover:not(:disabled) {
+  background: var(--ink);
+  opacity: 0.9;
+}
+.st-btn.ag-danger {
+  color: var(--danger);
+}
+.ag-err {
+  margin: 8px 2px 0;
+  font-size: 12px;
+  color: var(--danger);
+}
+.ag-confirm {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+  padding: 8px 10px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r);
+  font-size: 12px;
+  color: var(--body);
+}
+.ag-confirm > span {
+  flex: 1;
+  min-width: 0;
+}
+.ag-scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: grid;
+  place-items: center;
+  background: color-mix(in srgb, var(--bg) 55%, transparent);
+}
+.ag-card {
+  width: min(480px, calc(100vw - 48px));
+  padding: 18px 18px 14px;
+  border-radius: var(--r-lg, 12px);
+  border: 1px solid var(--line-strong);
+  background: var(--raise, var(--bg));
+  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.28);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  color: var(--body);
+  font-size: 12.5px;
+}
+.ag-card > b {
+  color: var(--ink);
+  font-size: 14px;
+  font-weight: 600;
+}
+.ag-card p {
+  margin: 0;
+}
+.ag-card-cmd {
+  display: block;
+  padding: 8px 10px;
+  border-radius: var(--r-sm);
+  background: var(--raise2);
+  color: var(--ink);
+  font-family: var(--mono);
+  font-size: 12px;
+  word-break: break-all;
+}
+.ag-card-cmd.missing {
+  color: var(--quiet);
+}
+.ag-card .ag-acts {
+  justify-content: flex-end;
+  margin-top: 6px;
+}

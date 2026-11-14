@@ -1452,6 +1452,29 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
     }
   };
 
+  /** A person's own agent was removed on Settings › Agents: each open session of it ends cleanly (its program is
+   *  stopped, its chat stays as it was, it says it ended), its drafts move to the usual agent, and the + menu forgets it. */
+  const endAgent = async (agent: AgentId) => {
+    for (const r of state.list.filter((x) => x.agent === agent)) {
+      if (r.status === "draft") {
+        picked.delete(r.id);
+        patchRec(r.id, { agent: draftAgent(state.recent, (state.agents ?? []).filter((a) => a.id !== agent)) });
+        continue;
+      }
+      disposeTerm(r.id);
+      if (procs.has(r.id)) await stopChat(r.id);
+      if (r.status === "running" || r.status === "starting" || r.paused) patchRec(r.id, { status: "exited", exitCode: null, paused: undefined });
+    }
+    const recent = state.recent.filter((x) => x.agent !== agent);
+    set({ recent });
+    try {
+      localStorage.setItem(RECENT_KEY, JSON.stringify(recent));
+    } catch {
+      // storage refused: the recents are only this page's until it loads again
+    }
+    await loadAgents();
+  };
+
   /** Name a session (Rename). Empty or null = back to the automatic name. Kept on this computer under the agent's
    *  own conversation id, so the name follows the conversation when it is resumed. */
   const rename = (id: string, title: string | null) => {
@@ -1538,6 +1561,7 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
     /** Stop whatever an earlier load of this page left running (called once at startup). */
     reset: ready,
     loadAgents,
+    endAgent,
     draft,
     draftHere,
     continuePast,

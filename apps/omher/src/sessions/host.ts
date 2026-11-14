@@ -4,6 +4,7 @@
 // so a mock host echoes terminal typing and a mock agent answers chats with the same events.
 import { AGENTS, acpRow, agentDef, HERMES_LABEL, type AcpRow, type AgentId, type AgentInfo } from "./agents";
 import mockAcpAgents from "./mockAcpAgents.json";
+import { mockCheck, mockNewId, type CustomEntry, type CustomList, type CustomPreview, type CustomWhy } from "./custom";
 import type { ApprovalChoice, ClarifyAnswers } from "../lib/protocol";
 import { t } from "../i18n";
 
@@ -101,6 +102,16 @@ export interface SessionHost {
   pastMessages(agent: "claude" | "codex", id: string, cwd: string): Promise<PastMsg[]>;
   /** How many asks wait: a Dock / launcher count, or a dot on the Windows taskbar button. 0 clears it. */
   badge(count: number): Promise<void>;
+  /** Settings › Agents: the person's own agents, read and checked by the shell from omher's own file, and the broken
+   *  entries. */
+  customList(): Promise<CustomList>;
+  /** The confirm card for the Add agent form: the checked entry and the exact command omher will run. Writes nothing.
+   *  A refusal rejects with `why:<code>`. */
+  customPreview(label: string, program: string, args: string, install: string): Promise<CustomPreview>;
+  /** The card's Add: the only call that writes an entry. */
+  customConfirm(entry: CustomEntry): Promise<void>;
+  /** The remove confirm: agent `id` leaves the file. */
+  customRemove(id: string): Promise<void>;
 }
 
 // ---- Tauri ----------------------------------------------------------------------------------
@@ -191,6 +202,22 @@ export class TauriHost implements SessionHost {
     const { invoke } = await this.core();
     await invoke("asks_badge", { count });
   }
+  async customList() {
+    const { invoke } = await this.core();
+    return invoke<CustomList>("custom_agents_list");
+  }
+  async customPreview(label: string, program: string, args: string, install: string) {
+    const { invoke } = await this.core();
+    return invoke<CustomPreview>("custom_agent_preview", { label, program, args, install });
+  }
+  async customConfirm(entry: CustomEntry) {
+    const { invoke } = await this.core();
+    await invoke("custom_agent_confirm", { entry });
+  }
+  async customRemove(id: string) {
+    const { invoke } = await this.core();
+    await invoke("custom_agent_remove", { id });
+  }
   async write(id: number, data: string) {
     const { invoke } = await this.core();
     await invoke("session_write", { id, data });
@@ -247,7 +274,10 @@ export interface MockCall {
     | "file.remove"
     | "file.prune"
     | "reveal"
-    | "terminal";
+    | "terminal"
+    | "custom.preview"
+    | "custom.confirm"
+    | "custom.remove";
   id?: number;
   /** ack: how many drawn bytes it acknowledges */
   bytes?: number;
@@ -325,7 +355,16 @@ type MockGlobals = {
   __omherPastReads?: { op: "list" | "read"; agent: string; cwds?: string[]; id?: string; cwd?: string }[];
   /** e2e: the Dock / taskbar count omher last set */
   __omherBadge?: number;
+  /** e2e: the mock's copy of omher's custom-agents file (`agents` of `~/.omher/custom-agents.json`, as written) */
+  __omherCustomFile?: unknown[];
+  /** e2e: programs the mock finds on the search path, bare name -> where (absolute paths: any of the values) */
+  __omherMockPrograms?: Record<string, string>;
+  /** e2e: custom agents the mock treats as signed out (the others answer) */
+  __omherMockCustomSignedOut?: AgentId[];
 };
+
+/** The programs the mock host finds unless a test says otherwise. */
+const MOCK_PROGRAMS: Record<string, string> = { "cursor-agent": "/opt/homebrew/bin/cursor-agent", "stub-acp": "/usr/local/bin/stub-acp" };
 
 /** The mock's past conversations: two Claude Code and one Codex conversation in the e2e folders. */
 const MOCK_PAST: PastChat[] = [
@@ -365,7 +404,66 @@ export class MockHost implements SessionHost {
         : { id: a.id, label: a.label, mode: a.mode, path: installed.includes(a.id) ? `/usr/local/bin/${a.program}` : null },
     );
     const acp: AgentInfo[] = MOCK_ACP.map((r) => ({ id: r.id, label: r.label, mode: "chat", path: installed.includes(r.id) ? `/usr/local/bin/${r.program}` : null, acp: r }));
-    return [...builtins, ...acp];
+    return [...builtins, ...acp, ...this.customInfos()];
+  }
+
+  // ---- the person's own agents: the shell's checks over the mock's file (custom_agents.rs) --------------------
+  private programs() {
+    return this.g.__omherMockPrograms ?? MOCK_PROGRAMS;
+  }
+  /** Where `program` is: an absolute path the mock knows, or a bare name it finds. */
+  private findProgram(program: string): string | null {
+    const p = this.programs();
+    if (program.startsWith("/")) return Object.values(p).includes(program) ? program : null;
+    return p[program] ?? null;
+  }
+  /** The file, read and checked as the shell reads it: the agents that may run and the broken entries. */
+  private loadCustom(): { agents: CustomEntry[]; broken: { id: string; why: CustomWhy }[] } {
+    const agents: CustomEntry[] = [];
+    const broken: { id: string; why: CustomWhy }[] = [];
+    for (const v of this.g.__omherCustomFile ?? []) {
+      const raw = v && typeof v === "object" ? (v as Record<string, unknown>) : {};
+      const id = typeof raw.id === "string" && /^[a-z0-9-]{1,64}$/.test(raw.id) ? raw.id : "";
+      const why = mockCheck(v, (p) => Object.values(this.programs()).includes(p));
+      if (why) broken.push({ id, why });
+      else if (agents.some((a) => a.id === id)) broken.push({ id, why: "dup" });
+      else agents.push({ ...(v as CustomEntry), install: (v as CustomEntry).install ?? "" });
+    }
+    return { agents, broken };
+  }
+  private customInfos(): AgentInfo[] {
+    return this.loadCustom().agents.map((c) => ({
+      id: c.id,
+      label: c.label,
+      mode: "chat" as const,
+      path: this.findProgram(c.program),
+      acp: { id: c.id, label: c.label, program: c.program, args: c.args, login: c.program, install: c.install, mark: "", continues: true, custom: true },
+    }));
+  }
+  async customList(): Promise<CustomList> {
+    return { agents: this.customInfos(), broken: this.loadCustom().broken };
+  }
+  async customPreview(label: string, program: string, args: string, install: string): Promise<CustomPreview> {
+    this.log({ op: "custom.preview", name: label, path: program, data: args });
+    const taken = (this.g.__omherCustomFile ?? []).map((v) => (v && typeof v === "object" ? String((v as { id?: unknown }).id ?? "") : "")).filter(Boolean);
+    const entry: CustomEntry = { id: mockNewId(label.trim(), program.trim(), taken), label: label.trim(), program: program.trim(), args: args.split(/\s+/).filter(Boolean), install: install.trim() };
+    const why = mockCheck(entry, (p) => Object.values(this.programs()).includes(p));
+    if (why) throw new Error(`why:${why}`);
+    if (taken.length >= 32) throw new Error("why:many");
+    const found = this.findProgram(entry.program);
+    return { entry, command: found ? [found, ...entry.args].join(" ") : null };
+  }
+  async customConfirm(entry: CustomEntry) {
+    this.log({ op: "custom.confirm", agent: entry.id });
+    const why = mockCheck(entry, (p) => Object.values(this.programs()).includes(p));
+    if (why) throw new Error(`why:${why}`);
+    const file = this.g.__omherCustomFile ?? [];
+    if (file.some((v) => (v as { id?: unknown })?.id === entry.id)) throw new Error("why:dup");
+    this.g.__omherCustomFile = [...file, { ...entry }];
+  }
+  async customRemove(id: string) {
+    this.log({ op: "custom.remove", agent: id });
+    this.g.__omherCustomFile = (this.g.__omherCustomFile ?? []).filter((v) => (v as { id?: unknown })?.id !== id);
   }
   async home() {
     return "/Users/you";
@@ -459,8 +557,9 @@ export class MockHost implements SessionHost {
     this.log({ op: "chat.start", id, agent, cwd, ...(resume ? { resume } : {}), ...(account ? { account } : {}), ...(session ? { session } : {}) });
     const c = new MockChat(agent, onEvent, resume, cwd, {
       noChat: !!this.g.__omherMockNoChat?.includes(agent),
-      // the generic ACP agents are signed out on the mock host unless a test signs them in, as on a fresh Mac
-      signedOut: !!acpRow(agent) && !this.g.__omherMockSignedIn?.includes(agent),
+      // the generic ACP agents are signed out on the mock host unless a test signs them in, as on a fresh Mac; a
+      // person's own agent answers unless a test signs it out
+      signedOut: acpRow(agent)?.custom ? !!this.g.__omherMockCustomSignedOut?.includes(agent) : !!acpRow(agent) && !this.g.__omherMockSignedIn?.includes(agent),
       gone: agent === "codex" && !!resume && !!this.g.__omherMockGoneThreads,
       unguarded: agent === "codex" && !!this.g.__omherMockCodexUnguarded,
     });

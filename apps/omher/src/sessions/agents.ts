@@ -8,6 +8,8 @@ import { t } from "../i18n";
 // - the generic Agent Client Protocol agents: rows of the shell's `ACP_LIST` (src-tauri/src/acp_agents.rs), which
 //   reach the UI with the agent look-up (`AgentInfo.acp`). This file keeps no copy of them: a session of one is
 //   named, marked and offered from the row the shell sent ([`registerAcp`]).
+// - the person's own ACP agents (Settings › Agents, src-tauri/src/custom_agents.rs): the same row shape, marked
+//   `custom`, sent with the same look-up after the shell has read and checked omher's own file.
 // `mode` says how a new session opens: `chat` = the agent's structured mode shown as an omher chat,
 // `hermes` = a Hermes chat in the folder (oh-my-hermes, through the bridge), `terminal` = its own TUI.
 
@@ -44,6 +46,8 @@ export interface AcpRow {
   mark: string;
   /** Restart (and a restart of omher) continues its conversation. */
   continues: boolean;
+  /** One the person added on Settings › Agents (its approvals follow the agent's own settings). */
+  custom?: boolean;
 }
 
 export const AGENTS: readonly AgentDef[] = [
@@ -70,21 +74,29 @@ export function parseAcpRow(v: unknown): AcpRow | null {
   const label = str("label");
   const program = str("program");
   const login = str("login");
-  const install = str("install");
-  const mark = str("mark");
+  // a person's own agent has no mark file and may have no install line
+  const custom = r.custom === true;
+  const install = custom && r.install === "" ? "" : str("install");
+  const mark = custom && r.mark === "" ? "" : str("mark");
   const args = Array.isArray(r.args) && r.args.every((a) => typeof a === "string") ? (r.args as string[]) : null;
-  if (!id || !/^[a-z][a-z0-9-]{0,31}$/.test(id) || !label || !program || !login || !install || !mark || !args) return null;
+  if (!id || !ID.test(id) || !label || !program || !login || install === null || mark === null || !args) return null;
   if (AGENTS.some((a) => a.id === id) || typeof r.continues !== "boolean") return null;
-  return { id, label, program, args, login, install, mark, continues: r.continues };
+  return { id, label, program, args, login, install, mark, continues: r.continues, ...(custom ? { custom } : {}) };
 }
 
-/** Learn the generic ACP agents from the shell's look-up: each `acp` row is remembered by its id. */
+/** The shape of a generic or custom agent's id (`^[a-z0-9][a-z0-9-]{0,31}$`, as the shell checks it). */
+const ID = /^[a-z0-9][a-z0-9-]{0,31}$/;
+
+/** Learn the generic ACP agents from the shell's look-up: each `acp` row is remembered by its id. A person's own
+ *  agent the look-up no longer sends (removed on Settings › Agents) is forgotten. */
 export function registerAcp(agents: readonly { acp?: unknown }[] | null | undefined): void {
-  for (const a of agents ?? []) {
-    const row = parseAcpRow(a.acp);
-    if (row) acpRows.set(row.id, row);
-  }
+  const rows = (agents ?? []).map((a) => parseAcpRow(a.acp)).filter((r): r is AcpRow => !!r);
+  for (const [id, r] of acpRows) if (r.custom && !rows.some((x) => x.id === id)) acpRows.delete(id);
+  for (const row of rows) acpRows.set(row.id, row);
 }
+
+/** Whether `id` is an agent the person added on Settings › Agents. */
+export const isCustom = (id: string): boolean => !!acpRows.get(id)?.custom;
 
 /** The generic ACP agent `id`'s row, when the shell has described it. */
 export const acpRow = (id: string): AcpRow | undefined => acpRows.get(id);
@@ -127,6 +139,8 @@ export function installLine(agent: AgentId): string {
 /** Tooltip of an agent that is not installed: what is missing, then how to install it. DSH names DeepSeek Harness
  *  (another `dsh` on PATH, such as deepseek-bot's, does not count) and its desktop app, which carries the CLI. */
 export function missingNote(agent: AgentId): string {
+  // a person's own agent without an install line: only what is missing
+  if (!installLine(agent)) return t("ss.missingOnly", { program: agentDef(agent).program });
   const install = t("ss.installHow", { cmd: installLine(agent) }) + (agent === "codex" ? t("ss.codexBundled") : agent === "dsh" ? t("ss.dshApp") : "");
   return t("ss.missing", { program: agent === "dsh" ? "DeepSeek Harness (dsh)" : agentDef(agent).program, how: install });
 }
@@ -136,7 +150,7 @@ export const isBuiltin = (v: string): v is BuiltinId => AGENTS.some((a) => a.id 
 /** A built-in id, a generic ACP agent the shell described, or (for a saved session or a recent) the id of a generic
  *  agent or one omher no longer offers ([`GONE`]): the shape of an id, never a path or a command line. Whether it
  *  may RUN is the shell's decision alone. */
-export const isAgentId = (v: unknown): v is AgentId => typeof v === "string" && (isBuiltin(v) || acpRows.has(v) || /^[a-z][a-z0-9-]{0,31}$/.test(v));
+export const isAgentId = (v: unknown): v is AgentId => typeof v === "string" && (isBuiltin(v) || acpRows.has(v) || ID.test(v));
 
 /** Built-ins whose Restart (and Resume) continues the conversation, all of them chats: Claude Code `--resume`, Codex
  *  `thread/resume`, OmO `--session`, DSH `--session-id` (DeepSeek Harness's own session), OpenCode
@@ -472,15 +486,15 @@ export function lastAgent(list: Recent[]): AgentId | null {
 }
 
 /** Where an agent stands in the menu's tiers: the main tier (`main`), then the other built-ins, then the generic ACP
- *  agents, each in the shell's order. */
+ *  agents, then the person's own (Settings › Agents), each in the shell's order. */
 function tierAt(a: AgentInfo, agents: AgentInfo[]): number {
   const i = AGENTS.findIndex((d) => d.id === a.id);
   if (i >= 0) return (AGENTS[i].main ? 0 : 1000) + i;
-  return 2000 + agents.findIndex((x) => x.id === a.id);
+  return (parseAcpRow(a.acp)?.custom ? 3000 : 2000) + agents.findIndex((x) => x.id === a.id);
 }
 
 /** The SESSIONS + menu's order: the installed agents first, the last one used on top of them, then the rest by tier
- *  (Claude Code, Codex, OmO, then the other built-ins, then the generic ACP agents); the agents that are not
+ *  (Claude Code, Codex, OmO, then the other built-ins, then the generic ACP agents, then the person's own); the agents that are not
  *  installed after those, by tier too. Only agents the shell offers are listed. */
 export function menuOrder(agents: AgentInfo[], list: Recent[]): AgentInfo[] {
   const last = lastAgent(list);
