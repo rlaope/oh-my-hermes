@@ -1606,7 +1606,7 @@ _SKILL_POLICIES = {
             "passed tests, or completed review."
         ),
         wrapper_guidance=(
-            "Prepare paired_run_decision/v1; retain not_observed until authenticated persisted receipt evidence exists."
+            "Prepare paired_run_decision/v2; retain not_observed until authenticated persisted receipt evidence exists."
         ),
     ),
     "rules-distill": RecommendationPolicy(

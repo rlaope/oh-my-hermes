@@ -108,7 +108,7 @@ class PairedRunExecutionFanInTests(unittest.TestCase):
             second = build_paired_run_execution_decision(
                 _request(parallel), parallel, parallel_home
             )
-        self.assertEqual(first.schema_version, "paired_run_decision/v1")
+        self.assertEqual(first.schema_version, "paired_run_decision/v2")
         self.assertEqual(first.outcome, "baseline_dominates")
         self.assertEqual(first.to_json(), second.to_json())
 

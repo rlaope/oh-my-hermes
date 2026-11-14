@@ -10,6 +10,7 @@ from .paired_run_model import (
     AggregationScope,
     ArmRole,
     ArmSpec,
+    DECISION_SCHEMA_V2,
     InfrastructureStatus,
     PairedRunDecision,
     PairedRunRequest,
@@ -30,7 +31,8 @@ from .paired_run_values import (
     task_set_digest,
 )
 
-SCHEMA_VERSION: Final = "paired_run_decision/v1"
+# New decisions are always built as v2; v1 documents still parse.
+SCHEMA_VERSION: Final = DECISION_SCHEMA_V2
 CLAIM_BOUNDARY: Final = "behavior_from_signed_local_omh_dispatch_observation"
 
 
@@ -45,6 +47,7 @@ def _recorded(result: RunResultInput) -> RecordedResult:
         receipt.run_id if receipt is not None else None,
         receipt.observed_at if receipt is not None else None,
         receipt.status if receipt is not None else None,
+        receipt.elapsed_seconds if receipt is not None else None,
     )
 
 

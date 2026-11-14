@@ -8,7 +8,12 @@ from ..coding.hermes_child_receipts import (
     ReceiptVerificationError,
     load_hermes_child_receipt,
 )
-from .paired_run_model import ArmRole, InfrastructureStatus, PairedRunDecision
+from .paired_run_model import (
+    ArmRole,
+    DECISION_SCHEMA_V1,
+    InfrastructureStatus,
+    PairedRunDecision,
+)
 from .paired_run_receipt_binding import (
     ExpectedEvaluationBinding,
     evaluation_binding_errors,
@@ -56,6 +61,10 @@ def receipt_provenance_errors(
             or receipt.run_id != row.receipt_run_id
             or receipt.status != row.receipt_status
             or receipt.observed_at != row.receipt_observed_at
+            or (
+                decision.schema_version != DECISION_SCHEMA_V1
+                and receipt.elapsed_seconds != row.receipt_elapsed_seconds
+            )
         ):
             return ("receipt provenance does not match persisted observation",)
         task = tasks[row.task_id]

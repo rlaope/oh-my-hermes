@@ -2985,10 +2985,10 @@ class RouterContentTests(unittest.TestCase):
                 "category": "operations",
                 "phase": "agent-evaluation",
                 "quality_tier": "agent-eval-gated",
-                "output": "paired_run_decision/v1",
+                "output": "paired_run_decision/v2",
                 "ladder": "selection_recommendation_recorded",
                 "action": "prepare_agent_evaluation",
-                "template": "paired_run_decision/v1",
+                "template": "paired_run_decision/v2",
             },
             "rules-distill": {
                 "category": "knowledge",
@@ -3102,7 +3102,7 @@ class RouterContentTests(unittest.TestCase):
 
         agent_evaluation = harnesses["agent-evaluation"]
         self.assertNotIn("scorecard_prepared", agent_evaluation.evidence_ladder)
-        self.assertEqual(agent_evaluation.expected_outputs, ("paired_run_decision/v1",))
+        self.assertEqual(agent_evaluation.expected_outputs, ("paired_run_decision/v2",))
 
     def test_paper_learning_contract_surfaces_stay_in_sync(self) -> None:
         definitions = {definition.name: definition for definition in builtin_definitions()}

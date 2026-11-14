@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 from typing import Final, TypeAlias
 
 from .paired_run_model import (
@@ -29,13 +30,20 @@ _RESULT_KEYS: Final = {
     "receipt_observed_at",
     "receipt_status",
 }
+_TIMED_RESULT_KEYS: Final = {*_RESULT_KEYS, "receipt_elapsed_seconds"}
 
 
 def parse_result_records(
     value: JsonValue,
     errors: list[str],
+    *,
+    timed: bool = False,
 ) -> tuple[RecordedResult, ...]:
-    """Parse result rows while collecting every boundary error."""
+    """Parse result rows while collecting every boundary error.
+
+    ``timed`` rows (``paired_run_decision/v2``) also carry the signed
+    ``receipt_elapsed_seconds``; v1 rows have no such key and parse to None.
+    """
     if not isinstance(value, list):
         errors.append("results must be a list")
         return ()
@@ -46,10 +54,25 @@ def parse_result_records(
             continue
         if closure_error := closed_shape_error(
             item,
-            _RESULT_KEYS,
+            _TIMED_RESULT_KEYS if timed else _RESULT_KEYS,
             f"results[{index}]",
         ):
             errors.append(closure_error)
+        elapsed = item.get("receipt_elapsed_seconds")
+        if elapsed is not None and (
+            isinstance(elapsed, bool)
+            or not isinstance(elapsed, (int, float))
+            or not math.isfinite(elapsed)
+            or elapsed < 0
+        ):
+            errors.append(
+                f"results[{index}].receipt_elapsed_seconds must be non-negative seconds or null"
+            )
+            elapsed = None
+        elif elapsed is not None and item.get("receipt_ref") is None:
+            errors.append(
+                f"results[{index}] receipt_elapsed_seconds requires receipt provenance"
+            )
         try:
             role = ArmRole(item.get("arm"))
             status = InfrastructureStatus(item.get("infrastructure_status"))
@@ -137,6 +160,7 @@ def parse_result_records(
                     normalized_run_id,
                     normalized_observed_at,
                     normalized_status,
+                    float(elapsed) if elapsed is not None else None,
                 )
             )
     return tuple(results)

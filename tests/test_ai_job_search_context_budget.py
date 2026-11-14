@@ -188,8 +188,10 @@ class AiJobSearchContextBudgetTests(unittest.TestCase):
             # 542510 -> 542640 and the digest re-derived: design-orchestration's new fourth quality-bar line (direction
             # options shown as rendered images) enters its row's first-four slice (+130, at
             # FULL_CAPABILITY_SKILL_SECTION_CHAR_LIMIT); no other row moved, and the pin before it was d09dd42e...786f.
+            # Digest re-derived at the same size: agent-evaluation's row names paired_run_decision/v2 where it named
+            # v1; no other row moved, and the pin before it was 2da9f59b...f6c9.
             (skill_capabilities, 542640, FULL_ROW_DELTA_CAP,
-             '2da9f59b7e4b16895d47821a7169d55c47d3e515818908e237da55bc5ac1f6c9',
+             'bc66d6c09d24ee56ed41248e0a613be24079be3310898968b0c8be3e67adeb7d',
              release.FULL_CAPABILITY_SKILL_SECTION_CHAR_LIMIT),
             (standalone_skill_capability_items, 145483, STANDALONE_ROW_DELTA_CAP,
              '57ef3e89e97c4ed9dc45338c18f01ce384842bad7cfa16b37fb9a4e5a7d0794e',
@@ -505,7 +507,9 @@ class AiJobSearchContextBudgetTests(unittest.TestCase):
         # instinct-ledger's checklist then names the re-fixed-commits reference and code-review's quality bar
         # gains two rules (same shape everywhere; a failed read is unknown); only those two bodies move, and
         # the pin before it (with the design-skills lines) was 11dd6034...72d9.
-        self.assertEqual(_digest(legacy_hashes), '9ec3df67098de3646035cded40b1fae9a08276bd7cbbb6c55bb277969e7356b2')
+        # agent-evaluation's body then names paired_run_decision/v2 and its speed-at-equal-quality verdict; only
+        # agent-evaluation moves, and the pin before it was 9ec3df67...56b2.
+        self.assertEqual(_digest(legacy_hashes), 'e5dfad8f37cfb39e2d7468d7146552d282dcc31e277ccf36b9f8b8b3362e8749')
         legacy = _skill_context_cost_profile('full', legacy_templates, refs)
         current = _skill_context_cost_profile('full', templates, refs)
         # Main's search guidance adds 305; repro-audit's mandatory rails 1,943.

@@ -154,6 +154,10 @@ class HermesChildObservation:
     evaluation_context: HermesChildEvaluationContext | None
     request_model: str
     timeout_seconds: float
+    # Wall-clock seconds from the moment the child process was spawned to the
+    # terminal event, on the dispatcher's monotonic clock. None for prepared
+    # and running events, and for a terminal event no process ever started.
+    elapsed_seconds: float | None
     _authority: object
 
     def has_dispatch_authority(self) -> bool:
@@ -305,8 +309,16 @@ def _dispatch_guarded(
     notify = observe or (lambda _item: None)
     observer_error: BaseException | None = None
 
+    spawned_at: float | None = None
+
     def emit(status: str, pid: int | None = None) -> None:
         nonlocal observer_error
+        terminal = status in {"completed", "failed", "timed_out", "cancelled"}
+        elapsed = (
+            max(0.0, time.monotonic() - spawned_at)
+            if terminal and spawned_at is not None
+            else None
+        )
         try:
             notify(HermesChildObservation(
                 status,
@@ -321,6 +333,7 @@ def _dispatch_guarded(
                 request.evaluation_context,
                 request.model,
                 request.timeout_seconds,
+                elapsed,
                 _DISPATCH_OBSERVATION_AUTHORITY,
             ))
         except RuntimeError as exc:
@@ -392,6 +405,7 @@ def _dispatch_guarded(
                             text=False, close_fds=True, **_process_group_options(),
                         )
                     process = spawn() if launch is None else launch(spawn)
+                    spawned_at = time.monotonic()
                     drainers = _start_pipe_drainers(process)
                     stdin_thread = _write_stdin_and_close(process, request.prompt)
             if process is None:

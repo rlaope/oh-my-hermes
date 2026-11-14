@@ -1097,6 +1097,16 @@ All notable changes will be documented here.
   now reads that turn's row from the session's `state.db` (read-only, matched by the clarify's own call id) and
   shows the reasoning dim above the asked sentence, at most three rows, Ctrl+O for the rest. A turn that wrote a
   reply, an older turn's row, or a store that cannot be read draws the question exactly as before.
+- **A paired run now measures how long each cell took and says whether the variant was faster at equal quality.**
+  The Hermes-child dispatcher times every spawned child from spawn to exit on its own clock and signs those seconds
+  into the cell's receipt; a hand-edited figure no longer verifies. New `paired_run_decision/v2` decisions carry the
+  signed seconds on every result row and a `speed_at_equal_quality` block recomputed from the rows: the quality gate
+  regresses if any task went from a baseline pass to a variant fail, and then no speed is claimed at all; timing
+  covers only tasks both arms passed with seconds on both sides, and every other task is counted under a named
+  exclusion (one arm failed, both failed, missing seconds, infra error, not observed). A missing figure stays
+  unmeasured, never zero, and the share of timed tasks the variant won carries its denominator. `v1` decisions and
+  store history still parse (timing reads as unmeasured), and a `v1` decision can be superseded by `v2`. No speed
+  figure has been measured with it yet.
 
 ## 4.0.7 - 2026-11-09
 
