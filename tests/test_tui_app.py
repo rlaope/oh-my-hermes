@@ -2665,7 +2665,8 @@ class SessionSwitchTests(AppTestCase):
         startup, listing = run.calls("session.list")  # the fresh session's last-session lookup, then /sessions
         self.assertEqual((startup["params"], listing["params"]), ({"limit": 3}, {"limit": 50}))
         picker = "\n".join(terminal.captures["picker"])
-        self.assertIn("● Reply with ok", picker)
+        self.assertIn("Reply with ok", picker)  # the `/resume` card: its name, then `● this session · …`
+        self.assertIn("● this session", picker)
         self.assertIn("2 messages", picker)
         methods = [frame.get("method") for frame in run.frames]
         (resume,) = run.calls("session.resume")
