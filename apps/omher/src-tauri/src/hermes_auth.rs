@@ -3,6 +3,9 @@
 //! and stores it itself; omher never asks for, accepts, reads or shows it, and never types into the window
 //! (that is why this is not one of omher's own pseudo-terminals).
 //!
+//! The chat's connect block opens the same terminal with the second fixed form, `hermes auth add <id>` (no
+//! `--type`: Hermes runs that provider's own sign-in), only for the ids in `SIGN_IN`; any other id is refused.
+//!
 //! The provider id is checked with `^[a-z0-9][a-z0-9_-]{0,40}$` and is always one argument; nothing from the
 //! page becomes a shell string. On macOS the terminal is opened through LaunchServices with a one-off
 //! `.command` file (no Apple Events permission needed) that is written from the shell-quoted `hermes` path
@@ -51,21 +54,47 @@ pub fn auth_args(provider: &str) -> Result<[String; 5], String> {
     Ok(["auth".into(), "add".into(), provider.into(), "--type".into(), "api-key".into()])
 }
 
+/// The only providers whose own sign-in the chat's connect block may open: ChatGPT / Codex, Claude, Nous Portal.
+pub const SIGN_IN: [&str; 3] = ["openai-codex", "anthropic", "nous"];
+
+/// The arguments after `hermes` for a sign-in: `auth add <id>`, the id one of `SIGN_IN`.
+pub fn sign_in_args(provider: &str) -> Result<[String; 3], String> {
+    if !SIGN_IN.contains(&provider) {
+        return Err("not a sign-in provider".into());
+    }
+    Ok(["auth".into(), "add".into(), provider.into()])
+}
+
+/// Which of the two fixed argv forms: Settings' "Add key", or the connect block's sign-in.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Form {
+    ApiKey,
+    SignIn,
+}
+
+/// The arguments after `hermes` for one form.
+pub fn form_args(form: Form, provider: &str) -> Result<Vec<String>, String> {
+    match form {
+        Form::ApiKey => auth_args(provider).map(Vec::from),
+        Form::SignIn => sign_in_args(provider).map(Vec::from),
+    }
+}
+
 /// `'…'` for a POSIX shell: the only special character inside single quotes is `'` itself.
 pub fn sh_quote(s: &str) -> String {
     format!("'{}'", s.replace('\'', r"'\''"))
 }
 
-/// The body of the macOS `.command` file: remove itself, then exec `hermes auth add <id> --type api-key`.
-pub fn command_file(hermes: &Path, provider: &str) -> Result<String, String> {
-    let args = auth_args(provider)?;
+/// The body of the macOS `.command` file: remove itself, then exec `hermes auth add <id>` in the form's argv.
+pub fn command_file(hermes: &Path, form: Form, provider: &str) -> Result<String, String> {
+    let args = form_args(form, provider)?;
     let line: Vec<String> = std::iter::once(sh_quote(&hermes.to_string_lossy())).chain(args.iter().map(|a| sh_quote(a))).collect();
     Ok(format!("#!/bin/sh\nrm -f \"$0\"\nexec {}\n", line.join(" ")))
 }
 
 /// Terminal programs to try, in order, as (program, argv). `file` is the macOS `.command` path.
-pub fn launchers(desk: Desk, hermes: &Path, provider: &str, file: Option<&Path>) -> Result<Vec<(String, Vec<OsString>)>, String> {
-    let args = auth_args(provider)?;
+pub fn launchers(desk: Desk, hermes: &Path, form: Form, provider: &str, file: Option<&Path>) -> Result<Vec<(String, Vec<OsString>)>, String> {
+    let args = form_args(form, provider)?;
     let tail = || -> Vec<OsString> { std::iter::once(hermes.as_os_str().to_owned()).chain(args.iter().map(OsString::from)).collect() };
     let with = |head: &[&str]| -> Vec<OsString> { head.iter().map(OsString::from).chain(tail()).collect() };
     Ok(match desk {
@@ -118,17 +147,17 @@ fn write_command_file(_body: &str) -> Result<PathBuf, String> {
     Err("no command file on this system".into())
 }
 
-/// Open the system terminal running `hermes auth add <provider> --type api-key`. Returns once the terminal
-/// program has handed the window off (or exited).
-pub fn open(provider: &str) -> Result<(), String> {
-    auth_args(provider)?;
+/// Open the system terminal running the form's `hermes auth add …`. Returns once the terminal program has
+/// handed the window off (or exited).
+pub fn open(form: Form, provider: &str) -> Result<(), String> {
+    form_args(form, provider)?;
     let os = Os::current();
     let dirs = search_dirs(&host_env, os);
     let hermes = resolve("hermes", &dirs, is_program, os).ok_or("Hermes is not on this computer")?;
     let desk = Desk::current();
-    let file = if desk == Desk::Mac { Some(write_command_file(&command_file(&hermes, provider)?)?) } else { None };
+    let file = if desk == Desk::Mac { Some(write_command_file(&command_file(&hermes, form, provider)?)?) } else { None };
     let mut last = String::from("no terminal program found");
-    for (program, argv) in launchers(desk, &hermes, provider, file.as_deref())? {
+    for (program, argv) in launchers(desk, &hermes, form, provider, file.as_deref())? {
         let exe = if desk == Desk::Linux {
             match resolve(&program, &dirs, is_program, os) {
                 Some(p) => p,
@@ -180,8 +209,8 @@ mod tests {
         ] {
             assert!(!valid_provider(bad), "{bad:?}");
             assert!(auth_args(bad).is_err());
-            assert!(launchers(Desk::Linux, Path::new("/h/hermes"), bad, None).is_err());
-            assert!(command_file(Path::new("/h/hermes"), bad).is_err());
+            assert!(launchers(Desk::Linux, Path::new("/h/hermes"), Form::ApiKey, bad, None).is_err());
+            assert!(command_file(Path::new("/h/hermes"), Form::ApiKey, bad).is_err());
         }
     }
 
@@ -191,9 +220,9 @@ mod tests {
         let h = Path::new("/usr/local/bin/hermes");
         let tail = ["/usr/local/bin/hermes", "auth", "add", "nous", "--type", "api-key"];
         let os = |v: &[&str]| v.iter().map(OsString::from).collect::<Vec<_>>();
-        let win = launchers(Desk::Windows, h, "nous", None).unwrap();
+        let win = launchers(Desk::Windows, h, Form::ApiKey, "nous", None).unwrap();
         assert_eq!(win, vec![("cmd".to_string(), os(&[&["/c", "start", "", "cmd", "/k"][..], &tail].concat()))]);
-        let lin = launchers(Desk::Linux, h, "nous", None).unwrap();
+        let lin = launchers(Desk::Linux, h, Form::ApiKey, "nous", None).unwrap();
         assert_eq!(lin[0], ("x-terminal-emulator".to_string(), os(&[&["-e"][..], &tail].concat())));
         assert_eq!(lin[1], ("gnome-terminal".to_string(), os(&[&["--"][..], &tail].concat())));
         assert_eq!(lin.iter().map(|l| l.0.as_str()).collect::<Vec<_>>(), ["x-terminal-emulator", "gnome-terminal", "konsole", "xfce4-terminal", "xterm"]);
@@ -201,18 +230,71 @@ mod tests {
         for (_, argv) in &lin {
             assert_eq!(&argv[argv.len() - 6..], os(&tail).as_slice());
         }
-        let mac = launchers(Desk::Mac, h, "nous", Some(Path::new("/tmp/x.command"))).unwrap();
+        let mac = launchers(Desk::Mac, h, Form::ApiKey, "nous", Some(Path::new("/tmp/x.command"))).unwrap();
         assert_eq!(mac, vec![("open".to_string(), os(&["-a", "Terminal", "/tmp/x.command"]))]);
-        assert!(launchers(Desk::Mac, h, "nous", None).is_err());
+        assert!(launchers(Desk::Mac, h, Form::ApiKey, "nous", None).is_err());
     }
 
     #[test]
     fn the_command_file_quotes_the_path_and_runs_only_hermes_auth_add() {
-        let body = command_file(Path::new("/Users/k k/it's/.local/bin/hermes"), "openrouter").unwrap();
+        let body = command_file(Path::new("/Users/k k/it's/.local/bin/hermes"), Form::ApiKey, "openrouter").unwrap();
         assert_eq!(
             body,
             "#!/bin/sh\nrm -f \"$0\"\nexec '/Users/k k/it'\\''s/.local/bin/hermes' 'auth' 'add' 'openrouter' '--type' 'api-key'\n"
         );
         assert_eq!(body.lines().count(), 3);
+    }
+
+    #[test]
+    fn sign_in_takes_only_the_three_ids() {
+        for id in SIGN_IN {
+            assert_eq!(sign_in_args(id).unwrap(), ["auth", "add", id]);
+            assert_eq!(form_args(Form::SignIn, id).unwrap(), ["auth", "add", id]);
+        }
+        assert_eq!(SIGN_IN, ["openai-codex", "anthropic", "nous"]);
+        // valid provider ids that are not on the list, look-alikes and injections are all refused
+        for bad in [
+            "openrouter",
+            "openai",
+            "claude-proxy",
+            "og",
+            "xai-oauth",
+            "qwen-oauth",
+            "Anthropic",
+            "anthropic ",
+            " nous",
+            "nous\n",
+            "openai-codex --type api-key",
+            "anthropic; rm -rf ~",
+            "$(id)",
+            "",
+        ] {
+            assert!(sign_in_args(bad).is_err(), "{bad:?}");
+            assert!(form_args(Form::SignIn, bad).is_err(), "{bad:?}");
+            assert!(launchers(Desk::Linux, Path::new("/h/hermes"), Form::SignIn, bad, None).is_err(), "{bad:?}");
+            assert!(launchers(Desk::Windows, Path::new("/h/hermes"), Form::SignIn, bad, None).is_err(), "{bad:?}");
+            assert!(command_file(Path::new("/h/hermes"), Form::SignIn, bad).is_err(), "{bad:?}");
+        }
+        // the api-key form still takes any well-formed id, the sign-in form never adds `--type`
+        assert!(form_args(Form::ApiKey, "openrouter").is_ok());
+        assert!(!form_args(Form::SignIn, "anthropic").unwrap().iter().any(|a| a.starts_with("--")));
+    }
+
+    #[test]
+    fn sign_in_uses_the_same_launchers_with_the_short_argv() {
+        let h = Path::new("/usr/local/bin/hermes");
+        let os = |v: &[&str]| v.iter().map(OsString::from).collect::<Vec<_>>();
+        let tail = ["/usr/local/bin/hermes", "auth", "add", "anthropic"];
+        let win = launchers(Desk::Windows, h, Form::SignIn, "anthropic", None).unwrap();
+        assert_eq!(win, vec![("cmd".to_string(), os(&[&["/c", "start", "", "cmd", "/k"][..], &tail].concat()))]);
+        let lin = launchers(Desk::Linux, h, Form::SignIn, "anthropic", None).unwrap();
+        assert_eq!(lin.iter().map(|l| l.0.as_str()).collect::<Vec<_>>(), ["x-terminal-emulator", "gnome-terminal", "konsole", "xfce4-terminal", "xterm"]);
+        for (_, argv) in &lin {
+            assert_eq!(&argv[argv.len() - 4..], os(&tail).as_slice());
+        }
+        let mac = launchers(Desk::Mac, h, Form::SignIn, "anthropic", Some(Path::new("/tmp/x.command"))).unwrap();
+        assert_eq!(mac, vec![("open".to_string(), os(&["-a", "Terminal", "/tmp/x.command"]))]);
+        let body = command_file(Path::new("/Users/k k/.local/bin/hermes"), Form::SignIn, "openai-codex").unwrap();
+        assert_eq!(body, "#!/bin/sh\nrm -f \"$0\"\nexec '/Users/k k/.local/bin/hermes' 'auth' 'add' 'openai-codex'\n");
     }
 }

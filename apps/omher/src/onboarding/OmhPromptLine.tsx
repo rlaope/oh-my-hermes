@@ -3,6 +3,8 @@
 // x; under it, when the bot's running gateway has not loaded oh-my-hermes' plugin, one more quiet line that says the
 // bot does not have its tools yet; or, when the bot's skills never showed the command, only that. Neither names a
 // command; the action that loads oh-my-hermes into the bot attaches at OmhLoadAction (slot 14).
+// While Hermes says the bot cannot answer (the chat's connect block shows) the line waits: its action would put a
+// request in front of a bot that cannot answer it. It shows once the bot can.
 import { useEffect, useLayoutEffect, useRef } from "react";
 import type { Bot } from "../lib/protocol";
 import { getStore } from "../state/store";
@@ -10,15 +12,19 @@ import { CloseIcon } from "../ui";
 import { t } from "../i18n";
 import { getOmhPrompt, promptText, useOmhPrompt } from "./omhPrompt";
 import { OmhLoadAction } from "./OmhLoadAction";
+import { useBotReady } from "../chat/connect/ready";
 import "./firstrun.css";
 
 export function OmhPromptLine({ bot }: { bot: Bot }) {
   const p = useOmhPrompt();
+  const notReady = useBotReady(bot.name).status === "not";
   const ref = useRef<HTMLDivElement | null>(null);
   useEffect(() => {
-    if (p.phase === "pending") void getOmhPrompt().check(bot.name);
-  }, [p.phase, bot.name]);
-  const shown = (p.phase === "ready" || p.phase === "restart") && p.bot === bot.name;
+    // after the first-run install the check runs in the default bot's chat (the app lands there; another bot's chat
+    // may show for a moment while the bots load)
+    if (p.phase === "pending" && (p.want !== "default" || bot.is_default)) void getOmhPrompt().check(bot.name);
+  }, [p.phase, p.want, bot.name, bot.is_default]);
+  const shown = (p.phase === "ready" || p.phase === "restart") && p.bot === bot.name && !notReady;
   // The line takes its own row above the composer: a thread that sat at its end stays at its end, so the line never
   // hides the last message.
   useLayoutEffect(() => {

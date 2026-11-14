@@ -18,15 +18,19 @@ function make(lists: Skill[][], init: Record<string, string> = {}, plugins: Plug
   const storage = mem(init);
   let reads = 0;
   let shown = 0;
+  const wants: ("default" | null)[] = [];
   const p = createOmhPrompt({
     storage,
     skills: async () => lists[Math.min(reads++, lists.length - 1)],
     plugins: async () => plugins,
     sleep: async () => {},
-    showChat: () => void (shown += 1),
+    showChat: (want) => {
+      shown += 1;
+      wants.push(want);
+    },
     delays: [0, 1, 1, 1],
   });
-  return { p, storage, reads: () => reads, shown: () => shown };
+  return { p, storage, reads: () => reads, shown: () => shown, wants };
 }
 
 describe("the model-setup command", () => {
@@ -45,6 +49,16 @@ describe("the model-setup command", () => {
 });
 
 describe("the one-time line", () => {
+  it("after the first-run install of Hermes asks for the default bot's chat", async () => {
+    const { p, wants } = make([sk("omh-model-setup")]);
+    p.installed("default");
+    expect(p.getState()).toMatchObject({ phase: "pending", want: "default" });
+    p.installed(); // the + menu's install of oh-my-hermes alone keeps the bot in view
+    expect(wants).toEqual(["default", null]);
+    await p.check("default");
+    expect(p.getState()).toMatchObject({ phase: "ready", bot: "default", want: null });
+  });
+
   it("is off for a person who never installed through omher", () => {
     const { p } = make([sk("omh-model-setup")]);
     expect(p.getState().phase).toBe("off");
@@ -57,7 +71,7 @@ describe("the one-time line", () => {
     expect(storage.m.get(PROMPT_KEY)).toBe("pending");
     expect(shown()).toBe(1);
     await p.check("kami");
-    expect(p.getState()).toEqual({ phase: "ready", bot: "kami", command: "/omh-model-setup", restart: false });
+    expect(p.getState()).toEqual({ phase: "ready", bot: "kami", command: "/omh-model-setup", restart: false, want: null });
   });
 
   it("asks again, then gives the restart line when the command never shows", async () => {

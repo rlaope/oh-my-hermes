@@ -1041,6 +1041,16 @@ All notable changes will be documented here.
   without `session.transcript` answers that read with a notice, never a lost
   session. Contributed by @DanRioDev (#2865).
 
+- **omher: a new bot that has no AI account says so in its chat and signs in from there.** When Hermes' own readiness
+  check (`setup.runtime_check`) says a bot cannot answer, its chat shows one quiet line, "<Bot> needs an AI account to
+  answer.", with ChatGPT / Codex, Claude, Nous Portal and API key…. A sign-in opens the system terminal running exactly
+  `hermes auth add openai-codex`, `anthropic` or `nous` (the desktop shell allows only those three); the line then says
+  to finish there, asks the bot again every 3 seconds for up to 10 minutes and whenever omher comes back to the front,
+  gives the chat that provider's first non-Opus model when Hermes left it without one, and goes away with the message
+  box focused. API key… opens Settings › Providers. The first install of Hermes from the app now lands in the default
+  bot's chat, and the oh-my-hermes model-setup line waits until the bot can answer. With no bots, the empty window says
+  so in one line and points at the + menu instead of `hermes profile create`. A bot that can answer looks as before
+  and costs one readiness read when it is opened.
 - **`/resume` in the OMH TUI looks like Claude Code's resume picker.** It takes most of the screen, headed
   `Resume session (2 of 12)` with a rounded search box under it (the caret typed in it), and each session is a card:
   its name on one row and `2 days ago · 14 messages · tui` muted under it, a blank row between two cards, under the

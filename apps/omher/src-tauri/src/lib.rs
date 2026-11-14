@@ -509,7 +509,15 @@ pub(crate) fn media_target<S: Fn(&str) -> bool>(path: &str, served: S) -> Result
 /// takes only the provider id, checked by `hermes_auth::valid_provider`, and never sees the key.
 #[tauri::command]
 async fn open_hermes_auth(provider: String) -> Result<(), String> {
-    tauri::async_runtime::spawn_blocking(move || hermes_auth::open(&provider)).await.map_err(|e| e.to_string())?
+    tauri::async_runtime::spawn_blocking(move || hermes_auth::open(hermes_auth::Form::ApiKey, &provider)).await.map_err(|e| e.to_string())?
+}
+
+/// The chat's connect block: open the person's own system terminal running exactly `hermes auth add <id>` (rule
+/// 23), Hermes' own sign-in for that provider. Only `openai-codex`, `anthropic` and `nous` pass
+/// (`hermes_auth::SIGN_IN`); omher never sees what the person types there.
+#[tauri::command]
+async fn open_hermes_sign_in(provider: String) -> Result<(), String> {
+    tauri::async_runtime::spawn_blocking(move || hermes_auth::open(hermes_auth::Form::SignIn, &provider)).await.map_err(|e| e.to_string())?
 }
 
 /// A SESSIONS row's "Reveal": show the session's folder in the file manager (rule 30). Only an absolute path to a
@@ -620,6 +628,7 @@ pub fn run() {
             chat_close_all,
             open_media,
             open_hermes_auth,
+            open_hermes_sign_in,
             session_reveal,
             session_open_terminal,
             past_chats_list,

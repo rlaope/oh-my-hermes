@@ -23,7 +23,6 @@ const ALLOWED = new Set([
   "$plan",
   "dag ulw",
   "/v1/responses",
-  "hermes profile create <name>",
   // key names
   "Ctrl+J",
   "Ctrl+.",

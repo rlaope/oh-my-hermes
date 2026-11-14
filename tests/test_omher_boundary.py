@@ -151,7 +151,12 @@ RULES = (
     "How terminals look and behave (themes, font, cursor, scrollback, renderer, those two clipboard switches) is one"
     " record in this computer's storage for the app (`omher.term`); omher reads no other program's terminal settings or theme files.",
     "Settings › Providers \"Add key\" may open the person's own system terminal running exactly"
-    " `hermes auth add <provider> --type api-key`, and nothing else, only when the person picks a provider.",
+    " `hermes auth add <provider> --type api-key`, only when the person picks a provider.",
+    "The chat's connect block may open the same terminal running exactly `hermes auth add <id>` (no `--type`: Hermes"
+    " runs that provider's own sign-in) for three ids only, `openai-codex`, `anthropic` and `nous`, a fixed list the"
+    " desktop shell checks, only when the person picks one; any other id is refused, and the terminal runs nothing else.",
+    "asks whether the bot can answer through Hermes' read-only `setup.runtime_check` on that bot's gateway (`bots.ready`).",
+    "sets it through the same `chat.set_model` the model menu uses; it writes no config itself.",
     "The provider id is checked against `^[a-z0-9][a-z0-9_-]{0,40}$` and passed as one argument;",
     "Hermes asks for the key in that terminal and stores it itself: omher never sees the key.",
     "never runs this in its own pseudo-terminal, so no keystroke passes through omher.",
@@ -1241,8 +1246,9 @@ class SessionsStartOnlyAllowListedAgents(unittest.TestCase):
 
 
 class AddKeyOpensOnlyHermesAuthAdd(unittest.TestCase):
-    """Rule 23: "Add key" opens the system terminal with `hermes auth add <id> --type api-key`; omher never
-    sees the key."""
+    """Rule 23: "Add key" opens the system terminal with `hermes auth add <id> --type api-key`, the connect block with
+    `hermes auth add <id>` for openai-codex, anthropic or nous only; omher never sees the key or the login. Readiness
+    is Hermes' read-only `setup.runtime_check`."""
 
     HERMES_AUTH = SHELL / "hermes_auth.rs"
     UI = UI_SRC / "settings" / "providers"
@@ -1266,9 +1272,53 @@ class AddKeyOpensOnlyHermesAuthAdd(unittest.TestCase):
         # `open` checks the id before anything else, and every launcher argv comes from `launchers`
         open_fn = self.prod[self.prod.index("pub fn open("):]
         open_fn = open_fn[: open_fn.index("\n}\n")]
-        self.assertTrue(open_fn.split("{\n", 1)[1].lstrip().startswith("auth_args(provider)?;"))
+        self.assertTrue(open_fn.split("{\n", 1)[1].lstrip().startswith("form_args(form, provider)?;"))
         self.assertEqual(self.prod.count("Command::new("), 1)
-        self.assertIn("for (program, argv) in launchers(desk, &hermes, provider, file.as_deref())?", open_fn)
+        self.assertIn("for (program, argv) in launchers(desk, &hermes, form, provider, file.as_deref())?", open_fn)
+        # both argv forms come from form_args, nowhere else
+        form = self.prod[self.prod.index("pub fn form_args"):]
+        form = form[: form.index("\n}\n")]
+        self.assertIn("Form::ApiKey => auth_args(provider)", form)
+        self.assertIn("Form::SignIn => sign_in_args(provider)", form)
+        self.assertEqual(self.prod.count("auth_args(provider)"), 1)
+        self.assertEqual(self.prod.count("sign_in_args(provider)"), 1)
+
+    def test_the_sign_in_argv_is_fixed_to_three_ids(self) -> None:
+        self.assertIn('pub const SIGN_IN: [&str; 3] = ["openai-codex", "anthropic", "nous"];', self.prod)
+        args = self.prod[self.prod.index("pub fn sign_in_args"):]
+        args = args[: args.index("\n}\n")]
+        self.assertIn("if !SIGN_IN.contains(&provider)", args)
+        self.assertEqual(re.findall(r'"([^"]*)"\.into\(\)', args), ["not a sign-in provider", "auth", "add"])
+        self.assertIn('["auth".into(), "add".into(), provider.into()]', args)
+        sig = re.search(r"async fn open_hermes_sign_in\((.*?)\) -> ", self.lib, re.S)
+        self.assertIsNotNone(sig)
+        self.assertEqual(sig.group(1).strip(), "provider: String")
+        self.assertIn("hermes_auth::open(hermes_auth::Form::SignIn, &provider)", self.lib)
+        # the page's list is the shell's list, and its stand-in in a browser is e2e's only
+        ready = (UI_SRC / "chat" / "connect" / "ready.ts").read_text(encoding="utf-8")
+        self.assertIn('export const SIGN_IN = ["openai-codex", "anthropic", "nous"] as const;', ready)
+        host = (self.UI / "authHost.ts").read_text(encoding="utf-8")
+        self.assertIn('invoke("open_hermes_sign_in", { provider })', host)
+        for path in sorted((UI_SRC / "chat" / "connect").glob("*.ts*")):
+            text = path.read_text(encoding="utf-8")
+            for bad in ('type="password"', "api_key", "apiKey", "clipboard.read", "session_write", "localStorage", "<input"):
+                self.assertNotIn(bad, text, f"{path.name}: {bad}")
+
+    def test_readiness_is_one_read_only_gateway_call(self) -> None:
+        tree = ast.parse(BRIDGE.read_text(encoding="utf-8"))
+        owners: dict[str, set[str]] = {}
+        for fn in ast.walk(tree):
+            if isinstance(fn, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                for c in ast.walk(fn):
+                    if isinstance(c, ast.Constant) and isinstance(c.value, str) and c.value.startswith("setup."):
+                        owners.setdefault(c.value, set()).add(fn.name)
+        # Hermes' readiness probe only, from one op; never setup.status writes, onboarding or free-tier provisioning
+        self.assertEqual(owners, {"setup.runtime_check": {"op_bots_ready"}})
+        body = ast.unparse(next(f for f in ast.walk(tree) if isinstance(f, ast.AsyncFunctionDef) and f.name == "op_bots_ready"))
+        self.assertEqual(re.findall(r"_call\(conn, '([a-z._]+)'", body), ["setup.runtime_check"])
+        # the probe's provider is a checked id; which ids may open a terminal is the shell's SIGN_IN list
+        self.assertIn("PROVIDER_ID.fullmatch(provider)", body)
+        self.assertIn('PROVIDER_ID = re.compile(\'^[a-z0-9][a-z0-9_-]{0,40}$\')', ast.unparse(tree))
         self.assertNotIn("osascript", self.prod.replace("// ", ""))
 
     def test_no_pty_no_stdin_and_the_command_takes_only_a_provider(self) -> None:
@@ -1278,7 +1328,7 @@ class AddKeyOpensOnlyHermesAuthAdd(unittest.TestCase):
         sig = re.search(r"async fn open_hermes_auth\((.*?)\) -> ", self.lib, re.S)
         self.assertIsNotNone(sig)
         self.assertEqual(sig.group(1).strip(), "provider: String")
-        self.assertIn("hermes_auth::open(&provider)", self.lib)
+        self.assertIn("hermes_auth::open(hermes_auth::Form::ApiKey, &provider)", self.lib)
 
     def test_the_page_never_takes_a_key(self) -> None:
         for path in sorted(self.UI.glob("*.ts*")):

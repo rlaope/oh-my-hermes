@@ -13,6 +13,7 @@ import type {
   LinkPlaces,
   ApprovalChoice,
   Bot,
+  BotReady,
   BridgeEvent,
   EventOf,
   ChatOpenResult,
@@ -1358,7 +1359,10 @@ export interface Actions {
   setLanguage(lang: Lang): void;
   loadModels(bot?: string): Promise<void>;
   peek(sessionId: string, limit?: number, bot?: string): Promise<void>;
-  setModel(change: { model?: string; provider?: string; reasoning?: string }): Promise<void>;
+  /** Change the main chat's model (the selected bot's, or `bot`'s). */
+  setModel(change: { model?: string; provider?: string; reasoning?: string }, bot?: string): Promise<void>;
+  /** Hermes' own readiness probe for a bot (`bots.ready`); never cached in the store (chat/connect/ready.ts keeps it). */
+  botReady(bot: string, provider?: string): Promise<BotReady>;
   togglePanel(open?: boolean): void;
   /** Open the side panel on one tab (Details, Terminal, Schedule, Worktrees, Diff). */
   setPanelTab(tab: PanelTabId): void;
@@ -1784,8 +1788,8 @@ export function createStore(bridge: BridgeLike, opts: StoreOptions = {}): Store 
         dispatch({ type: "peek.failed", id: sessionId, error: errText(e) });
       }
     },
-    async setModel(change) {
-      const bot = state.selectedBot;
+    async setModel(change, which) {
+      const bot = which ?? state.selectedBot;
       if (!bot) return;
       try {
         const current = await bridge.request("chat.set_model", { bot, ...change });
@@ -1794,6 +1798,7 @@ export function createStore(bridge: BridgeLike, opts: StoreOptions = {}): Store 
         fail(e);
       }
     },
+    botReady: (bot, provider) => bridge.request("bots.ready", provider ? { bot, provider } : { bot }),
     togglePanel: (open) => dispatch({ type: "ui.panel", open }),
     setPanelTab: (tab) => dispatch({ type: "ui.panelTab", tab }),
     openRun: (run) => dispatch({ type: "ui.run", run }),
