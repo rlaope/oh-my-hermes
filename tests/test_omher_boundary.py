@@ -1868,4 +1868,3 @@ class SshPeersOnlyOverTheOwnSsh(unittest.TestCase):
         self.assertEqual(sorted(set(re.findall(r'call\("([a-z.]+)"', probe))), ["bots.list", "hello"])
         # the peer URL is the forwarded loopback port only
         self.assertIn(r'PEER_URL = re.compile(r"ws://127\.0\.0\.1:[0-9]{1,5}/\?token=[0-9a-f]{32}")', self.bridge)
-
