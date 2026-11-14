@@ -4664,13 +4664,20 @@ class Bridge:
             providers.append({"slug": str(pr.get("slug") or ""), "name": str(pr.get("name") or pr.get("slug") or ""),
                               "models": [m for m in models if m]})
         reasoning = conn.bot["reasoning"]
+        sess_model = sess_provider = ""
         if conn.main_id:
             with contextlib.suppress(Exception):
                 snap = await self._call(conn, "session.resume", session_id=conn.main_id)
-                reasoning = str((snap.get("info") or {}).get("reasoning_effort") or reasoning)
+                info = snap.get("info") or {}
+                reasoning = str(info.get("reasoning_effort") or reasoning)
+                # The picker's "current" must be the session's live model: ``model.options`` reports the
+                # profile default, which a session-level switch does not change.
+                sess_model = str(info.get("model") or "")
+                sess_provider = str(info.get("provider") or "")
         return {"providers": providers,
-                "current": {"model": str(res.get("model") or conn.bot["model"]),
-                            "provider": str(res.get("provider") or conn.bot["provider"]), "reasoning": reasoning},
+                "current": {"model": sess_model or str(res.get("model") or conn.bot["model"]),
+                            "provider": sess_provider or str(res.get("provider") or conn.bot["provider"]),
+                            "reasoning": reasoning},
                 "reasoning_levels": list(REASONING_LEVELS)}
 
     async def op_set_model(self, p) -> dict:
@@ -4694,9 +4701,28 @@ class Bridge:
                                     expected_generation=snap.get("execution_generation", 0),
                                     operation=operation, payload=payload) or {}
         if model is not None:
-            res = await mutate("model", {"model": model, **({"provider": provider} if provider else {})})
+            payload = {"model": model, **({"provider": provider} if provider else {})}
+            # One snapshot for both attempts: the confirm token is bound to this exact revision, so a
+            # second session.resume would bump the revision and stale the token.
+            snap0 = await self._call(conn, "session.resume", session_id=main)
+            rev, gen = snap0.get("revision", 0), snap0.get("execution_generation", 0)
+
+            async def mutate_model(pl: dict):
+                return await self._call(conn, "session.mutate", session_id=main, request_id=uuid.uuid4().hex,
+                                        expected_revision=rev, expected_generation=gen,
+                                        operation="model", payload=pl) or {}
+            res = await mutate_model(payload)
             if res.get("status") == "confirmation_required":
-                raise BridgeError("confirmation_required", str(res.get("confirm_message") or "this model needs a confirmation"))
+                # Hermes' selection guard (large-context switch, cost, data policy) refuses with a
+                # ``confirm`` token bound to this exact target. The picker has no dialog for it, so
+                # the user's explicit selection is the confirmation: re-send the same mutation with
+                # the token once. A stale token still yields a fresh refusal, never a silent apply.
+                token = res.get("confirm")
+                if not token:
+                    raise BridgeError("confirmation_required", str(res.get("confirm_message") or "this model needs a confirmation"))
+                res = await mutate_model({**payload, "confirm": token})
+                if res.get("status") == "confirmation_required":
+                    raise BridgeError("confirmation_required", str(res.get("confirm_message") or "this model needs a confirmation"))
         if reasoning is not None:
             await mutate("reasoning", {"effort": reasoning})
         snap = await self._call(conn, "session.resume", session_id=main)
