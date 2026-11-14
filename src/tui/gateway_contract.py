@@ -44,10 +44,12 @@ DRIFT_ERROR_CODES = frozenset({PARAM_REJECTED, METHOD_NOT_FOUND})
 # `model.options` only fills `/model`'s picker and reads Hermes' configured default model, while
 # `/model <name>` still switches. `image.render` only draws a preview under the prompt: a Hermes without it answers
 # METHOD_NOT_FOUND, the TUI keeps the label row, and the session goes on. `session.title` and `session.delete` only
-# rename or delete a row of the session picker: a Hermes without them says so on the row.
+# rename or delete a row of the session picker: a Hermes without them says so on the row. `session.transcript` only
+# reads a picker row Hermes lists as not resumable (another runtime holds it open): a Hermes without it says so in a
+# notice, and no stock Hermes lists such a row.
 OPTIONAL_METHODS = frozenset({
     "commands.catalog", "config.get", "image.render", "model.options", "session.delete", "session.list",
-    "session.title", "skills.reload",
+    "session.title", "session.transcript", "skills.reload",
 })
 
 # Methods the TUI calls, with the only keys it ever sends. Sending a key outside
@@ -74,6 +76,7 @@ CLIENT_METHODS: dict[str, frozenset[str]] = {
     "config.set": frozenset({"key", "value", "session_id", "confirm_expensive_model"}),
     # `title`: an exact-title lookup, which `/sessions <title>` asks after a shared gateway refused the title as an id;
     # a gateway that does not know it answers with its normal listing, which the TUI scans the same way.
+    # The gateway child, not the TUI, adds a shared gateway's own `scope` and `picker` (`gateway_attach._list`).
     "session.list": frozenset({"limit", "title"}),
     # The session picker's Ctrl+R and second Ctrl+D, on the person's keys only (docs/OMH-TUI-BOUNDARY.md). The
     # stdio entry renames a session by its live id and deletes a stored one it does not hold open; attached to a
@@ -97,6 +100,9 @@ CLIENT_METHODS: dict[str, frozenset[str]] = {
     "prompt.submit": frozenset({"session_id", "text", "queued", "truncate_before_row_id", "confirm_truncate"}),
     # The durable display transcript with row ids: what the rewind picker lists and redraws from.
     "session.history": frozenset({"session_id"}),
+    # Read-only history of a session no runtime holds open (`owner_runtime: "other"`, `resumable: false`): the
+    # newest messages, which the picker shows in a pager instead of resuming the session. It writes nothing.
+    "session.transcript": frozenset({"session_id", "order", "limit"}),
     # Attachments: the gateway resolves and stages the file the TUI names by its path; the TUI then reads the bytes
     # of the file Hermes staged and has it let go of it (`image.detach`), until a prompt stages them again below.
     "image.attach": frozenset({"session_id", "path"}),
@@ -328,6 +334,14 @@ SESSION_TITLE = "title"
 TAIL_AVAILABLE = "available"
 TAIL_TEXT = "text"
 TAIL_TRUNCATED = "truncated"
+
+# `session.transcript`'s result (`contracts/canonical_stored_reads.py` `StoredTranscriptResult`), read for a picker
+# row Hermes lists as not resumable: `rows` oldest first, each a display row (`role`, `text`); `next_cursor` is
+# non-null while older rows remain (order `latest`). A row too large for a page keeps only the head of its text and
+# carries `truncated`; the result itself has no such field.
+TRANSCRIPT_ROWS = "rows"
+TRANSCRIPT_NEXT_CURSOR = "next_cursor"
+TRANSCRIPT_ROW_TRUNCATED = "truncated"
 
 # `session.redirect`'s and `session.steer`'s `status` (`contracts/sessions.py` `CorrectionStatus`;
 # `tui_gateway/methods_session_interrupt.py`, `agent/interrupt_control.py`). `redirected` is `session.redirect`'s
