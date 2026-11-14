@@ -4,6 +4,13 @@ All notable changes will be documented here.
 
 ## Unreleased
 
+- **The OMH TUI shows a compression as one gauge row, and a prompt typed meanwhile goes on by itself.** `/compact`
+  (or `/compress`) no longer prints the long "Compressing: Hermes summarizes the older turns…" notice above a second
+  spinner row. One row now reads `✻ Compacting conversation… ━━━━━━──── (30s)`, with a blank row between it and
+  the composer. Hermes sends no progress for a compression, so the gauge follows the time waited, never fills on its
+  own and shows no percent; Hermes' `✓ Compressed: …` report closes it. A prompt sent during the compression waits in
+  the `⧗` queue (Ctrl+Enter has no turn to steer, so it queues too) and is sent by itself, oldest first, once the
+  compression is answered, refused or given up on.
 - **omher.app shows the bot faces as a moving scene under the desktop app.** Between the omher block and the
   OMH hero there is now a band with nine soft 3D characters in the style of omher's built-in bot faces, bouncing
   and blinking on a 4-second loop, with one line of copy in English, Korean, Japanese and Chinese and one
@@ -972,6 +979,12 @@ All notable changes will be documented here.
   route's own `skills:` list now gets its first block. The uninstall report reads its `section.key`
   presence the same way, so a name inside another root key's flow mapping is
   no longer reported as OMH's own. Reported by @PabloJustDevelops in #2829.
+
+- **Right-click an empty part of omher's Sessions list to start a new session.**
+  The menu opens the existing agent picker without starting a process; each
+  session's own right-click menu still offers a fresh conversation in its
+  folder. Chat and terminal view marks beside the session rows are smaller,
+  while their targets and the messages' type and spacing stay unchanged.
 
 - **The OMH TUI's `/sessions` picker no longer loses older conversations
   behind newer ones, and orders sessions by when they were last active.**
