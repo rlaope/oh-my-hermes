@@ -316,6 +316,11 @@ def parse_hermes_model_aliases(text: str) -> tuple[dict[str, str], str]:
     them the same way: both halves of every entry go through
     `require_opaque_metadata_ref`, so a credential cannot arrive as an alias
     target. A second parser would be a second place for that screen to lapse.
+
+    Entries are the flat `alias: target` form or the nested mapping Hermes
+    writes (`alias:` with `model:`, `provider:`, `base_url:`, `key_env:` ...
+    children, one level deep). A nested entry's target is its `model` child;
+    every other child is read past, and its value is never kept or returned.
     """
     if "\t" in text or "\x00" in text:
         return {}, "config contains unsupported tab indentation or NUL bytes"
@@ -332,32 +337,21 @@ def parse_hermes_model_aliases(text: str) -> tuple[dict[str, str], str]:
     entry_indent = -1
     child_indent = -1
 
-    def _finalize_pending(alias: str, children: dict[str, str], had_children: bool) -> tuple[str | None, str | None]:
-        # Returns (error, target). error None on success.
-        if "model" in children:
-            model_val = children["model"]
-            try:
-                safe_target = require_opaque_metadata_ref(model_val, field="model alias target")
-            except ValueError:
-                return "model alias entry is malformed or unsafe", None
-            return None, safe_target
-        if had_children:
-            return "model alias entry shape is unsupported", None
-        # Empty target with no nested children: treat as the original malformed case.
-        return "model alias entry is malformed or unsafe", None
-
     def _flush_pending() -> str | None:
         # Commit a pending nested alias entry (or report why it is invalid) and
         # reset the entry state. Returns the error message, or None on success.
+        # The `model` child was already screened when it was read.
         nonlocal pending_alias, pending_children, pending_had_children
         nonlocal entry_indent, child_indent
         if pending_alias is not None:
-            err, target = _finalize_pending(pending_alias, pending_children, pending_had_children)
-            if err:
+            if "model" in pending_children:
+                aliases[pending_alias] = pending_children["model"]
+            elif pending_had_children:
                 # Leave the pending state untouched: the caller aborts on error.
-                return err
-            if target is not None:
-                aliases[pending_alias] = target
+                return "model alias entry shape is unsupported"
+            else:
+                # `alias:` with no value and no children.
+                return "model alias entry is malformed or unsafe"
         pending_alias = None
         pending_children = {}
         pending_had_children = False
@@ -383,7 +377,11 @@ def parse_hermes_model_aliases(text: str) -> tuple[dict[str, str], str]:
                 in_aliases = True
                 aliases_indent = 0
             continue
-        if in_model and indent > model_indent and stripped.startswith("aliases:"):
+        # Inside the alias block an `aliases:` line is an entry's child key,
+        # not the block's own header; re-entering here would read that
+        # child's sub-block as top-level aliases.
+        inside_alias_block = in_aliases and indent > aliases_indent
+        if in_model and not inside_alias_block and indent > model_indent and stripped.startswith("aliases:"):
             err = _flush_pending()
             if err:
                 return {}, err
