@@ -1055,6 +1055,12 @@ All notable changes will be documented here.
   the `terminal` result Hermes sent back as it started the process (`notify_on_complete`, or watch patterns), so
   the waiting row stands and the line says `🔔 will ping you when done`. A result that says no one will be told
   (a subagent, a session that cannot take a completion) changes nothing.
+- **An OMH TUI question never opens with nothing above it.** Some models write the explanation that should come
+  before a clarify question only into their reasoning and send no reply text, so with Hermes'
+  `display.show_reasoning` off the picker appeared alone and the person could not tell what to pick. The question
+  now reads that turn's row from the session's `state.db` (read-only, matched by the clarify's own call id) and
+  shows the reasoning dim above the asked sentence, at most three rows, Ctrl+O for the rest. A turn that wrote a
+  reply, an older turn's row, or a store that cannot be read draws the question exactly as before.
 
 ## 4.0.7 - 2026-11-09
 

@@ -275,6 +275,7 @@ from .rewind_picker import KEYS as REWIND_PICKER_KEYS
 from .rewind_picker import PICK as REWIND_PICK
 from .rewind_picker import RewindPicker, rewind_rows
 from .shortcuts import shortcut_lines
+from .silent_lead import read_silent_lead
 from .launch_card import Facts as LaunchFacts
 from .launch_card import Paint as LaunchPaint
 from .launch_card import (
@@ -2448,6 +2449,8 @@ class App(ModesMixin, AgentViewMixin):
         # and paused while the board is closed, so a read stuck on a stalled file system never adds a thread.
         self.board_reader: BoardReader | None = None
         self.make_board_reader: Callable[..., BoardReader] | None = None  # `bot_board.BoardReader` when None
+        # What a clarify question shows above it when the model wrote its explanation only as reasoning; a test seam.
+        self.read_silent_lead: Callable[[str, str, str], str] = read_silent_lead
         self.redraw_after_pager = False  # a full redraw the main screen is owed once the pager is left
         # The wheel turned up on the main screen: reports are off, so the terminal scrolls its own scrollback as in any
         # shell, until the next key or paste takes them back (`_take_main_mouse`).
@@ -4576,6 +4579,10 @@ class App(ModesMixin, AgentViewMixin):
         if self.chains_open:
             self.chains_closing = True  # the picker cancels at its next read; the question shows once it has closed
         self.slot = opened
+        if opened.method == "clarify":
+            # Once, as it opens: the reasoning the model wrote in place of a reply before this call (`silent_lead`).
+            opened.silent_lead = self.read_silent_lead(
+                self.environ.get("HERMES_HOME", ""), self.stored_id, self.transcript.running_clarify_id())
         self.slot_opened_at = self.clock()
         if self.waiting_since is None:
             self.waiting_since = self.slot_opened_at
