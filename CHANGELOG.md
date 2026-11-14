@@ -4,15 +4,6 @@ All notable changes will be documented here.
 
 ## Unreleased
 
-- **`/resume` in the OMH TUI looks like Claude Code's resume picker.** It takes most of the screen, headed
-  `Resume session (2 of 12)` with a rounded search box under it (the caret typed in it), and each session is a card:
-  its name on one row and `2 days ago · 14 messages · tui` muted under it, a blank row between two cards, under the
-  same Current / Today / Yesterday / Previous 7 days / Earlier headings. `↑` and `↓` in the pointer's column say
-  more cards sit above or below. A long name or its facts wrap onto a second row (cut there with `…`), and the keys
-  are listed under the cards, wrapped between two keys, as Claude Code lists its own. Ctrl+R turns the search box
-  into the title field and Ctrl+D asks on the card's facts row, as before. Closing it gives every row back to the transcript, with no band of blank rows left above
-  the composer. On a terminal too short for two cards and the keys, or under 30 columns, it stays the one-row list.
-
 - **The OMH TUI shows a compression as one gauge row, and a prompt typed meanwhile goes on by itself.** `/compact`
   (or `/compress`) no longer prints the long "Compressing: Hermes summarizes the older turns…" notice above a second
   spinner row. One row now reads `✻ Compacting conversation… ━━━━━━──── (30s)`, with a blank row between it and
@@ -1009,6 +1000,15 @@ All notable changes will be documented here.
   session's own right-click menu still offers a fresh conversation in its
   folder. Chat and terminal view marks beside the session rows are smaller,
   while their targets and the messages' type and spacing stay unchanged.
+
+- **`/resume` in the OMH TUI looks like Claude Code's resume picker.** It takes most of the screen, headed
+  `Resume session (2 of 12)` with a rounded search box under it (the caret typed in it), and each session is a card:
+  its name on one row and `2 days ago · 14 messages · tui` muted under it, a blank row between two cards, under the
+  same Current / Today / Yesterday / Previous 7 days / Earlier headings. `↑` and `↓` in the pointer's column say
+  more cards sit above or below. A long name or its facts wrap onto a second row (cut there with `…`), and the keys
+  are listed under the cards, wrapped between two keys, as Claude Code lists its own. Ctrl+R turns the search box
+  into the title field and Ctrl+D asks on the card's facts row, as before. Closing it gives every row back to the
+  transcript, with no band of blank rows left above the composer. On a terminal too short for two cards and the keys, or under 30 columns, it stays the one-row list.
 
 ## 4.0.7 - 2026-11-09
 
