@@ -1,12 +1,19 @@
-// Six more coding agents on the Agent Client Protocol adapter (Kilo Code, Gemini CLI, Qwen Code, Kimi Code, Copilot
-// CLI, Cline), on the mock host (the browser build's MockHost sends what acp_chat.rs sends for the real CLIs: signed
-// out for the five without a free model). The + menu shows the installed agents and folds the rest behind one "More
+// The generic coding agents on the Agent Client Protocol adapter (Gemini CLI, Qwen Code, Kimi Code, Copilot CLI,
+// Cline: rows of the shell's list), on the mock host (the browser build's MockHost sends what acp_chat.rs sends for the
+// real CLIs: signed out, as none has a free model). Kilo Code is no longer offered. The + menu shows the installed agents and folds the rest behind one "More
 // agents" row, with "Continue a conversation" under it from the first view; folded or opened it stays inside a
 // 900x600 window (its list scrolls there) and at 1280x820 the first view needs no scrolling. A missing agent's row
 // gives its whole install line as copyable text. An installed agent that is not signed in ends in one plain line
 // with its own sign-in command and Open in Terminal, never a raw error or a field that takes a key.
 import { expect, test, type Page } from "@playwright/test";
-import { INSTALL, type AgentId } from "../src/sessions/agents";
+import { readFileSync } from "node:fs";
+import { INSTALL } from "../src/sessions/agents";
+
+/** The shell's generic ACP agents as the mock host serves them (a Rust test pins this copy to `ACP_LIST`). */
+const shellList: { id: string; install: string }[] = JSON.parse(readFileSync(new URL("../src/sessions/mockAcpAgents.json", import.meta.url), "utf8"));
+
+/** An agent's install line: a built-in's, or its row's in the shell's list (0.2.8's text for the five). */
+const install = (a: string) => (INSTALL as Record<string, string>)[a] ?? shellList.find((r) => r.id === a)!.install;
 
 const MOCK = Number(process.env.OMHER_MOCK_PORT || 5308);
 
@@ -30,7 +37,7 @@ test.beforeEach(async () => {
 type Call = { op: string; agent?: string; cwd?: string; input?: { kind: string; [k: string]: unknown } };
 const calls = (page: Page) => page.evaluate(() => ((window as unknown as { __omherSessionCalls?: Call[] }).__omherSessionCalls ?? []));
 
-const SIX = ["kilo", "gemini", "qwen", "kimi", "copilot", "cline"];
+const FIVE = ["gemini", "qwen", "kimi", "copilot", "cline"];
 
 async function open(page: Page, installed: string[], theme = "dark", signedIn: string[] = []) {
   await page.addInitScript(
@@ -85,25 +92,25 @@ const geometry = (page: Page) =>
   });
 
 /** The agents that are not installed in these tests' usual set. */
-const MISSING: AgentId[] = ["omo", "dsh", "pi", "omp", "grok", "qwen", "kimi", "copilot", "cline"];
+const MISSING: string[] = ["dsh", "pi", "omp", "grok", "qwen", "kimi", "copilot", "cline"];
 const PAST = ["session-past-claude", "session-past-codex"];
 
 for (const theme of ["dark", "light"]) {
   test(`the + menu at 900x600: installed agents, one More agents row, then Continue a conversation, in the window (${theme})`, async ({ page }) => {
     await page.setViewportSize({ width: 900, height: 600 });
-    await open(page, ["claude", "codex", "omh", "opencode", "kilo", "gemini"], theme);
+    await open(page, ["claude", "codex", "omo", "omh", "opencode", "gemini"], theme);
     await plus(page);
     const menu = page.getByTestId("session-menu");
     const agents = menu.locator("[role=menuitem][data-testid^=session-agent-]");
-    // six installed rows, then More agents; the nine others are folded away
-    expect(await agents.evaluateAll((els) => els.map((e) => e.getAttribute("data-testid")!.replace("session-agent-", "")))).toEqual(["claude", "codex", "omh", "opencode", "kilo", "gemini"]);
+    // six installed rows (the main tier first), then More agents; the eight others are folded away
+    expect(await agents.evaluateAll((els) => els.map((e) => e.getAttribute("data-testid")!.replace("session-agent-", "")))).toEqual(["claude", "codex", "omo", "omh", "opencode", "gemini"]);
     const more = menu.getByTestId("session-more");
     await expect(more).toContainText("More agents");
-    await expect(more).toContainText("9");
+    await expect(more).toContainText("8");
     await expect(more).toHaveAttribute("aria-expanded", "false");
-    for (const a of ["qwen", "kimi", "copilot", "cline", "pi"]) await expect(menu.getByTestId(`session-agent-${a}`)).toHaveCount(0);
-    // the new rows carry their own marks, never a letter
-    for (const a of ["kilo", "gemini"]) await expect(menu.getByTestId(`session-agent-${a}`).locator('svg[data-agent]:not([data-agent="letter"])')).toHaveCount(1);
+    for (const a of ["qwen", "kimi", "copilot", "cline", "pi", "kilo"]) await expect(menu.getByTestId(`session-agent-${a}`)).toHaveCount(0);
+    // the generic agent's row carries the mark its shell row names, never a letter
+    await expect(menu.getByTestId("session-agent-gemini").locator('svg[data-agent]:not([data-agent="letter"])')).toHaveCount(1);
     // "Continue a conversation" is in the menu as first opened, under More agents, which stays closed
     await expect(menu.locator(".ss-h").last()).toHaveText("Continue a conversation");
     expect(await menu.locator("[role=menuitem]").evaluateAll((els) => els.slice(-3).map((e) => e.getAttribute("data-testid")))).toEqual(["session-more", ...PAST]);
@@ -131,7 +138,7 @@ for (const theme of ["dark", "light"]) {
       expect(cs.opacity).toBe("1");
       expect(cs.mask).toBe("none");
     }
-    expect(g.inView.slice(0, 6)).toEqual(["claude", "codex", "omh", "opencode", "kilo", "gemini"].map((a) => `session-agent-${a}`));
+    expect(g.inView.slice(0, 6)).toEqual(["claude", "codex", "omo", "omh", "opencode", "gemini"].map((a) => `session-agent-${a}`));
     // End reaches the last past-conversation row without More agents being opened
     await page.keyboard.press("End");
     await expect(menu.getByTestId("session-past-codex")).toBeFocused();
@@ -152,7 +159,7 @@ for (const theme of ["dark", "light"]) {
 
   test(`the + menu at 1280x820 as first opened: More agents and both Continue a conversation rows, no scrolling (${theme})`, async ({ page }) => {
     await page.setViewportSize({ width: 1280, height: 820 });
-    await open(page, ["claude", "codex", "omh", "opencode", "kilo", "gemini"], theme);
+    await open(page, ["claude", "codex", "omo", "omh", "opencode", "gemini"], theme);
     await plus(page);
     const menu = page.getByTestId("session-menu");
     await expect(menu.getByTestId("session-more")).toHaveAttribute("aria-expanded", "false");
@@ -188,7 +195,7 @@ for (const theme of ["dark", "light"]) {
   ] as const) {
     test(`every missing agent shows its whole install line, none cut and no two alike, at ${width}x${height} (${theme})`, async ({ page }) => {
       await page.setViewportSize({ width, height });
-      await open(page, ["claude", "codex", "omh", "opencode", "kilo", "gemini"], theme);
+      await open(page, ["claude", "codex", "omo", "omh", "opencode", "gemini"], theme);
       await plus(page);
       const menu = page.getByTestId("session-menu");
       await menu.getByTestId("session-more").click();
@@ -197,7 +204,7 @@ for (const theme of ["dark", "light"]) {
       for (const a of MISSING) {
         const line = menu.getByTestId(`session-install-${a}`);
         await line.evaluate((e) => e.scrollIntoView({ block: "nearest" }));
-        await expect(line).toHaveText(INSTALL[a]);
+        await expect(line).toHaveText(install(a));
         const m = await line.evaluate((e) => {
           const el = e as HTMLElement;
           const cs = getComputedStyle(el);
@@ -205,7 +212,7 @@ for (const theme of ["dark", "light"]) {
         });
         // nothing of the line lies outside its box, and what is drawn is the line itself (no ellipsis)
         expect(m.scrollWidth, `${a}: ${m.shown}`).toBeLessThanOrEqual(m.clientWidth);
-        expect(m.shown, a).toBe(INSTALL[a]);
+        expect(m.shown, a).toBe(install(a));
         expect(m.shown).not.toContain("…");
         seen.push(m.shown);
         colours.add(`${m.colour} ${m.opacity}`);
@@ -224,12 +231,12 @@ for (const theme of ["dark", "light"]) {
 
   test(`More agents opens the missing ones with their install lines, and the menu still fits at 900x600 (${theme})`, async ({ page }) => {
     await page.setViewportSize({ width: 900, height: 600 });
-    await open(page, ["claude", "codex", "omh", "opencode", "kilo", "gemini"], theme);
+    await open(page, ["claude", "codex", "omo", "omh", "opencode", "gemini"], theme);
     await plus(page);
     const menu = page.getByTestId("session-menu");
     await menu.getByTestId("session-more").click();
     await expect(menu.getByTestId("session-more")).toHaveAttribute("aria-expanded", "true");
-    for (const a of ["omo", "dsh", "pi", "omp", "grok", "qwen", "kimi", "copilot", "cline"]) {
+    for (const a of MISSING) {
       const row = menu.getByTestId(`session-agent-${a}`);
       await expect(row).toHaveAttribute("aria-disabled", "true");
       await expect(row).toContainText("Not installed");
@@ -276,7 +283,8 @@ test("with nothing installed every agent shows, with no More agents row", async 
   const menu = page.getByTestId("session-menu");
   await expect(menu.getByTestId("session-agent-cline")).toBeAttached();
   await expect(menu.getByTestId("session-more")).toHaveCount(0);
-  expect(await menu.locator("[data-testid^=session-agent-]").count()).toBe(15);
+  expect(await menu.locator("[data-testid^=session-agent-]").count()).toBe(14);
+  await expect(menu.getByTestId("session-agent-kilo")).toHaveCount(0);
 });
 
 for (const [id, label, cmd] of [
@@ -347,34 +355,51 @@ for (const [lang, line] of [
   });
 }
 
-test("Kilo Code signed in (its free models need no account): a chat with its long model list searchable", async ({ page }) => {
-  await open(page, ["claude", "kilo"], "dark", ["kilo"]);
+test("a generic ACP agent signed in: a chat whose card offers Deny and Allow once only", async ({ page }) => {
+  await open(page, ["claude", "qwen"], "dark", ["qwen"]);
   await plus(page);
-  await page.getByTestId("session-agent-kilo").click();
+  await page.getByTestId("session-agent-qwen").click();
   await page.getByTestId("session-folder").click();
   await page.getByTestId("session-choose").click();
-  await page.getByTestId("composer").fill("Add a dark mode toggle");
-  await page.keyboard.press("Enter");
-  await expect(page.getByTestId("bubble-bot").last()).toContainText("You said: Add a dark mode toggle");
-  await page.getByTestId("model-pill").click();
-  const search = page.getByTestId("model-search");
-  await expect(search).toBeFocused();
-  await search.fill("free");
-  await expect(page.getByTestId("model-opt")).toHaveCount(2);
-  await page.keyboard.press("Enter");
-  await expect(page.getByTestId("model-label")).toHaveText("Kilo Gateway/Auto Free");
-  // the card offers Deny and Allow once only
   await page.getByTestId("composer").fill("/approve clean the build folder");
   await page.keyboard.press("Enter");
   const card = page.getByTestId("card-approval");
   await expect(card).toBeVisible();
   expect(await card.locator(".card-btn").allInnerTexts()).toEqual(["Deny", "Allow once"]);
-  expect((await calls(page)).find((c) => c.op === "chat.start")!.agent).toBe("kilo");
+  expect((await calls(page)).find((c) => c.op === "chat.start")!.agent).toBe("qwen");
 });
 
-test("each of the six starts only as its own id: the UI sends no command line", async ({ page }) => {
-  await open(page, ["claude", ...SIX], "dark", SIX);
-  for (const a of SIX) {
+test("a Kilo Code session saved before this comes back ended: one plain line, its chat, no Restart, nothing started", async ({ page }) => {
+  await page.addInitScript(() => {
+    const at = Date.now();
+    localStorage.setItem(
+      "omher.resume",
+      JSON.stringify({
+        v: 1, at, bot: null, view: "session", session: "s3", panelOpen: false, panelTab: "details", runsFull: false, runId: null, drafts: {},
+        sessions: [{ id: "s3", agent: "kilo", cwd: "/Users/you/code/web-app", startedAt: at - 60_000, view: "chat", running: true, agentSession: "ses_e2d9961a8ffe6pwTlM4aAUbsu1", title: "fix login", messages: [{ id: "m1", role: "user", text: "fix the login form", ts: at - 50_000 }] }],
+      }),
+    );
+  });
+  await page.addInitScript(() => ((window as unknown as { __omherMockAgents: string[] }).__omherMockAgents = ["claude"]));
+  await page.goto("/");
+  // the app opens on the saved session, as it was
+  const row = page.locator("[data-testid=session-list] .ss-row").first();
+  await expect(row).toContainText("fix login");
+  const ended = page.getByTestId("session-ended");
+  await expect(ended).toBeVisible();
+  await expect(ended.getByTestId("session-gone")).toHaveText("Kilo Code is no longer offered in omher");
+  await expect(ended.getByTestId("session-restart")).toHaveCount(0);
+  await expect(page.getByTestId("session-resume")).toHaveCount(0);
+  await expect(page.getByTestId("session-chat")).toContainText("fix the login form");
+  // its row names it and steps back like any ended session; its mark is a letter, never another agent's
+  await expect(row).toContainText("Kilo Code");
+  await expect(row.locator('[data-agent="letter"]')).toHaveCount(1);
+  expect((await calls(page)).filter((c) => c.op === "chat.start" || c.op === "start")).toEqual([]);
+});
+
+test("each of the five starts only as its own id: the UI sends no command line", async ({ page }) => {
+  await open(page, ["claude", ...FIVE], "dark", FIVE);
+  for (const a of FIVE) {
     await plus(page);
     await page.getByTestId(`session-agent-${a}`).click();
     await page.getByTestId("composer").fill("hi");
@@ -382,6 +407,6 @@ test("each of the six starts only as its own id: the UI sends no command line", 
     await expect(page.getByTestId("bubble-bot").last()).toContainText("You said: hi");
   }
   const starts = (await calls(page)).filter((c) => c.op === "chat.start");
-  expect(starts.map((c) => c.agent)).toEqual(SIX);
+  expect(starts.map((c) => c.agent)).toEqual(FIVE);
   for (const c of starts) expect(Object.keys(c).sort()).toEqual(["agent", "cwd", "id", "op", "session"].sort());
 });

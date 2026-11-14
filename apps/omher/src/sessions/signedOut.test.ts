@@ -7,9 +7,12 @@ import { createSessions, signedOutSaid } from "./sessions";
 import { createStore, type BridgeLike } from "../state/store";
 import { DICT, LANGS } from "../i18n";
 import type { ChatEvent, ChatInput, SessionHost } from "./host";
+import shellList from "./mockAcpAgents.json";
 
-const SHELL = "Kilo Code is not signed in. Run `kilo auth login` in a terminal and sign in.";
-const SAID = "Kilo Code is not signed in. Run kilo auth login in a terminal and sign in.";
+const GEMINI = shellList[0];
+
+const SHELL = "Gemini CLI is not signed in. Run `gemini` in a terminal and sign in.";
+const SAID = "Gemini CLI is not signed in. Run gemini in a terminal and sign in.";
 
 test("the shell's sentence is the one this file reads", () => {
   const rs = readFileSync(new URL("../../src-tauri/src/acp_chat.rs", import.meta.url), "utf8");
@@ -30,7 +33,7 @@ test("a turn that fails because the agent is not signed in says so without backt
   const host = {
     kind: "mock",
     reset: async () => {},
-    agents: async () => [{ id: "kilo", label: "Kilo Code", mode: "chat", path: "/bin/kilo" }],
+    agents: async () => [{ id: "gemini", label: "Gemini CLI", mode: "chat", path: "/bin/gemini", acp: GEMINI }],
     home: async () => "/w",
     pickFolder: async () => null,
     chatStart: async (_a: string, _c: string, on: (e: ChatEvent) => void) => {
@@ -38,18 +41,18 @@ test("a turn that fails because the agent is not signed in says so without backt
       on({ event: "session.info", agent_session: "ses_1", model: "Auto Free" });
       return 1;
     },
-    // Kilo Code answers a prompt to a model that needs its account: the shell ends the turn with its sentence
+    // the agent answers a prompt to a model that needs its account: the shell ends the turn with its sentence
     chatInput: async (_id: number, i: ChatInput) => {
       if (i.kind !== "send") return;
       sink({ event: "turn.start" });
-      sink({ event: "turn.end", outcome: "error", error: SHELL, signed_out: true, login: "kilo auth login" });
+      sink({ event: "turn.end", outcome: "error", error: SHELL, signed_out: true, login: "gemini" });
     },
     chatClose: async () => {},
   } as unknown as SessionHost;
   const store = createStore(bridge);
   const ss = createSessions(host, () => store);
   await ss.loadAgents();
-  const id = ss.draft("kilo");
+  const id = ss.draft("gemini");
   ss.setDraft(id, { cwd: "/w/proj" });
   await ss.start(id, "hi");
   const last = store.getState().chats[ss.chatKey(id)!]!.lastTurn!;

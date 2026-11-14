@@ -7,6 +7,7 @@ import { splitMedia } from "./mediaLines";
 import { SentFiles } from "./Attach";
 import { SkillText } from "./Skills";
 import { CopyButton } from "./Copy";
+import { AgentChips } from "./AgentChip";
 import { t } from "../../i18n";
 
 /** Messenger bubble, filled on both sides. Bot text renders markdown; user text stays plain. Files the bot
@@ -102,6 +103,8 @@ export const Bubble = memo(function Bubble({
           </div>
         )}
         {bot && !streaming && paths.length > 0 && <MediaList bot={bot} paths={paths} />}
+        {/* an `omher-agent` draft in a finished reply: its Add agent chip (main and folder chats only; `bot` is the chat) */}
+        {bot && !streaming && <AgentChips chatKey={bot} text={text} />}
       </div>
     </div>
   );

@@ -71,7 +71,7 @@ describe("resume snapshot", () => {
       view: "session",
       sessions: [
         good.sessions[0],
-        { ...good.sessions[1], agent: "bash" }, // not on the allow-list
+        { ...good.sessions[1], agent: "/bin/bash" }, // a path, never an agent id
         { ...good.sessions[2], id: "../x" },
         { ...good.sessions[2], cwd: "" },
         good.sessions[0], // the same id twice
