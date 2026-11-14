@@ -470,5 +470,44 @@ class DecisionSpeedContractTests(unittest.TestCase):
         self.assertIn("downgrade the schema version", raised.exception.reason)
 
 
+class StandardLibraryShadowingTests(unittest.TestCase):
+    """The aggregation module must import under a shadowed `statistics`.
+
+    The documentation-claim probe imports the CLI (and so this module) in a
+    spawned child that inherits the parent's sys.path. Benchmark tests put
+    `benchmarks/live-model-tools/v1/lib` there, whose `statistics.py` has no
+    `median`; a stdlib import made the release-readiness gate flaky in CI.
+    """
+
+    def test_module_imports_when_a_path_entry_shadows_statistics(self) -> None:
+        import subprocess
+
+        tests_dir = Path(__file__).resolve().parent
+        with TemporaryDirectory() as tmp:
+            (Path(tmp) / "statistics.py").write_text("MEAN = None\n", encoding="utf-8")
+            script = textwrap.dedent(f"""
+                import sys
+                sys.path[:0] = [{tmp!r}, {str(tests_dir)!r}]
+                import statistics
+                assert not hasattr(statistics, "median"), statistics.__file__
+                from _local_package import load_local_package
+                load_local_package()
+                from omh.quality.paired_run_aggregation import _median
+                print(_median([3.0, 1.0, 2.0]), _median([4.0, 1.0, 2.0, 3.0]))
+            """)
+            completed = subprocess.run(
+                [sys.executable, "-c", script],
+                capture_output=True, text=True, check=False, timeout=120,
+            )
+        self.assertEqual(completed.returncode, 0, completed.stderr)
+        self.assertEqual(completed.stdout.split(), ["2.0", "2.5"])
+
+    def test_median_rejects_an_empty_sequence(self) -> None:
+        from omh.quality.paired_run_aggregation import _median
+
+        with self.assertRaises(ValueError):
+            _median([])
+
+
 if __name__ == "__main__":
     unittest.main()

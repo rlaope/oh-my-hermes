@@ -3,8 +3,7 @@
 from __future__ import annotations
 
 import math
-from statistics import median
-from typing import Sequence, TypeVar
+from typing import Iterable, Sequence, TypeVar
 
 from .paired_run_model import (
     Aggregate,
@@ -25,6 +24,20 @@ from .paired_run_values import is_digest
 from .reported_rate import reported_rate, reported_rate_shape_errors
 
 _AggregateValue = TypeVar("_AggregateValue")
+
+
+def _median(values: Iterable[float]) -> float:
+    # Kept local rather than `statistics.median`: the documentation-claim
+    # probe imports this module in a spawned child that inherits the parent's
+    # sys.path, and a checkout directory carrying its own `statistics.py`
+    # (benchmarks/live-model-tools/v1/lib) shadows the standard library there.
+    ordered = sorted(values)
+    if not ordered:
+        raise ValueError("median of no values")
+    middle = len(ordered) // 2
+    if len(ordered) % 2:
+        return ordered[middle]
+    return (ordered[middle - 1] + ordered[middle]) / 2
 
 
 def aggregate_results(
@@ -162,8 +175,8 @@ def speed_at_equal_quality(
         counts,
         baseline_total,
         variant_total,
-        round(median(item[0] for item in pairs), 3),
-        round(median(item[1] for item in pairs), 3),
+        round(_median(item[0] for item in pairs), 3),
+        round(_median(item[1] for item in pairs), 3),
         reported_rate(
             numerator=variant_faster,
             denominator=len(pairs),
