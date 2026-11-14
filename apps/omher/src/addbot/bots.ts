@@ -1,5 +1,6 @@
 // The store has no "re-read bots" action, so the add-bot popover asks the bridge itself over a short-lived
-// second connection (same URL resolution as the app's client) and hands the result to the store.
+// second connection (same URL resolution as the app's client) and hands the result to the store. addToList is the
+// one "bring this bot in" action: the sidebar `+` and Settings › All bots both use it.
 import { BridgeClient } from "../lib/bridge";
 import type { Bot } from "../lib/protocol";
 import type { Store } from "../state/store";
@@ -41,4 +42,14 @@ export async function connectProfile(store: Store, name: string): Promise<Bot | 
     if (err && bot?.status !== "online") throw err;
     return bot;
   });
+}
+
+/**
+ * One click from `+` (or Settings › All bots): the bot joins the sidebar list, its chat opens (Settings passes
+ * `open: false` and stays on its page), and its gateway is attached as Connect did. A profile that cannot start
+ * still joins; its chat shows the usual offline line.
+ */
+export async function addToList(store: Store, name: string, { open = true }: { open?: boolean } = {}): Promise<void> {
+  store.actions.listBot(name, true);
+  await Promise.all([open ? store.actions.selectBot(name) : undefined, connectProfile(store, name).catch(() => undefined)]);
 }

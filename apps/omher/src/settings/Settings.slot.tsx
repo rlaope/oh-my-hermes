@@ -5,7 +5,8 @@ import { useEffect, useState } from "react";
 import "./settings.css";
 import type { SlotProps } from "../features";
 import type { Bot, ModelOptions } from "../lib/protocol";
-import { notifyEnabled, setNotifyEnabled, useStore } from "../state/store";
+import { getStore, notifyEnabled, setNotifyEnabled, useStore } from "../state/store";
+import { addToList } from "../addbot/bots";
 import { appSounds, setSoundsEnabled, soundsEnabled } from "../lib/sounds";
 import { LANG_NAMES, LANGS, t, type Key, type Lang } from "../i18n";
 import { Avatar, GridIcon, ModelIcon, SourceIcon } from "../ui";
@@ -245,7 +246,8 @@ function BotPage({ bot }: { bot: Bot }) {
   );
 }
 
-/** Every bot at a glance: picture, name, status, what it is doing and where it works. */
+/** Every bot at a glance: picture, name, status, what it is doing and where it works. It lists every profile on
+ *  this computer (management, not the sidebar list); each card says whether the bot is in the sidebar, or adds it. */
 function BotsPage() {
   const s = useStore();
   const [q, setQ] = useState("");
@@ -292,7 +294,9 @@ function BotCard({ bot }: { bot: Bot }) {
   const info = useBotInfo(bot);
   const places = info ? Object.entries(info.places).slice(0, 3) : [];
   const live = bot.running || !!s.chats[bot.name]?.turn;
+  const listed = (s.ui.roster ?? []).includes(bot.name);
   return (
+    <div className="bot-card-w">
     <button
       type="button"
       className="bot-card"
@@ -324,6 +328,22 @@ function BotCard({ bot }: { bot: Bot }) {
         ))}
       </span>
     </button>
+      {listed ? (
+        <span className="bc-list in" data-testid={`bot-inlist-${bot.name}`}>
+          {t("set.inList")}
+        </span>
+      ) : (
+        <button
+          type="button"
+          className="bc-list"
+          onClick={() => void addToList(getStore(), bot.name, { open: false })}
+          aria-label={t("ab.addOf", { name: bot.display_name })}
+          data-testid={`bot-addlist-${bot.name}`}
+        >
+          {t("set.addToList")}
+        </button>
+      )}
+    </div>
   );
 }
 

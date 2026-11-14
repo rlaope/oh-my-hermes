@@ -384,6 +384,8 @@ function fakeBridge() {
   const calls: { op: string; params: Record<string, unknown> }[] = [];
   let history = [{ id: "h1", role: "user" as const, text: "hi", ts: T0 / 1000 - 10 }];
   const offline = new Set<string>();
+  // bots.list status per bot (default online); the real bridge reads "offline" for any profile not yet attached
+  const listed = new Map<string, string>();
   let running = false;
   const bridge: BridgeLike = {
     connect: async () => {
@@ -399,7 +401,7 @@ function fakeBridge() {
         case "bots.list":
           return {
             bots: ["kami", "friren"].map((name) => ({
-              name, display_name: name, is_default: false, model: "m", provider: "p", description: "", status: "online", running: false,
+              name, display_name: name, is_default: false, model: "m", provider: "p", description: "", status: listed.get(name) ?? "online", running: false,
             })),
           };
         case "chat.open":
@@ -428,22 +430,70 @@ function fakeBridge() {
     status: (s: BridgeStatus) => statusH!(s),
     setHistory: (h: typeof history) => (history = h),
     setOffline: (bot: string) => offline.add(bot),
+    setListedStatus: (bot: string, status: string) => listed.set(bot, status),
     setRunning: (r: boolean) => (running = r),
   };
 }
 
 describe("store", () => {
-  it("init loads bots, selects the first, and loads its chat", async () => {
+  it("init loads bots, lists one (the first, no default here), selects it and loads only its chat", async () => {
     const f = fakeBridge();
     const store = createStore(f.bridge, { now: () => T0 });
     await store.actions.init();
     const s = store.getState();
     expect(s.bots.map((b) => b.name)).toEqual(["kami", "friren"]);
+    expect(s.ui.roster).toEqual(["kami"]);
     expect(s.selectedBot).toBe("kami");
     expect(s.chats.kami.loaded).toBe(true);
-    expect(s.chats.friren.loaded).toBe(true);
+    // a profile outside the list is not opened as a chat (that would make its Bot Chat); it is only asked for the
+    // prompts its existing Bot Chat holds
+    expect(s.chats.friren).toBeUndefined();
+    const opens = f.calls.filter((c) => c.op === "chat.open");
+    expect(opens.filter((c) => c.params.existing_only !== true).map((c) => c.params.bot)).toEqual(["kami"]);
+    expect(opens.filter((c) => c.params.existing_only === true).map((c) => c.params.bot)).toEqual(["friren"]);
     expect(s.elsewhere.kami).toHaveLength(1);
     expect(s.models.kami.current.model).toBe("Opus 5.5");
+  });
+
+  it("a bot outside the list that bots.list reads offline (not attached yet) is still asked for its waiting prompts", async () => {
+    const f = fakeBridge();
+    f.setListedStatus("friren", "offline");
+    const store = createStore(f.bridge, { now: () => T0 });
+    await store.actions.init();
+    expect(store.getState().ui.roster).toEqual(["kami"]);
+    const peeks = f.calls.filter((c) => c.op === "chat.open" && c.params.existing_only === true).map((c) => c.params.bot);
+    expect(peeks).toEqual(["friren"]);
+    expect(store.getState().chats.friren).toBeUndefined();
+  });
+
+  it("roster: the bot saved for resume starts alone; list, open, remove; the last one stays", async () => {
+    const f = fakeBridge();
+    const resume = { v: 1 as const, at: T0, bot: "friren", view: "chat" as const, session: null, panelOpen: false, panelTab: "details" as const, runsFull: false, runId: null, drafts: {}, sessions: [] };
+    const store = createStore(f.bridge, { now: () => T0, resume: () => resume, hiddenBots: () => [] });
+    await store.actions.init();
+    expect(store.getState().ui.roster).toEqual(["friren"]);
+    expect(store.getState().selectedBot).toBe("friren");
+    // the last listed bot cannot be removed
+    store.actions.listBot("friren", false);
+    expect(store.getState().ui.roster).toEqual(["friren"]);
+    // opening a bot outside the list (Needs you, an @mention) brings it in
+    await store.actions.selectBot("kami");
+    expect(store.getState().ui.roster).toEqual(["friren", "kami"]);
+    // removing the open bot opens the first one left; its pin goes with it
+    store.actions.pinBot("kami", true);
+    store.actions.listBot("kami", false);
+    const s = store.getState();
+    expect(s.ui.roster).toEqual(["friren"]);
+    expect(s.ui.pinned).toEqual([]);
+    expect(s.selectedBot).toBe("friren");
+  });
+
+  it("roster: bots hidden before the roster never enter it", async () => {
+    const f = fakeBridge();
+    const store = createStore(f.bridge, { now: () => T0, hiddenBots: () => ["kami"] });
+    await store.actions.init();
+    expect(store.getState().ui.roster).toEqual(["friren"]);
+    expect(store.getState().selectedBot).toBe("friren");
   });
 
   it("send adds the user row and calls chat.send with bot + text only", async () => {

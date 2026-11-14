@@ -1065,6 +1065,16 @@ All notable changes will be documented here.
   are listed under the cards, wrapped between two keys, as Claude Code lists its own. Ctrl+R turns the search box
   into the title field and Ctrl+D asks on the card's facts row, as before. Closing it gives every row back to the
   transcript, with no band of blank rows left above the composer. On a terminal too short for two cards and the keys, or under 30 columns, it stays the one-row list.
+- **omher starts with one bot; the other bots on this computer join from + in one click.** The sidebar no longer
+  lists every Hermes profile. A new install starts with the default bot alone; someone who already used omher starts
+  with the bot they last had open (plus any they had pinned). `+` is now "Add a bot": it lists the profiles that are
+  not in the sidebar yet, each with one Add that brings the bot in, connects it and opens its chat. Right-click
+  "Hide from sidebar" is now "Remove from list": the profile stays and shows under `+` again, and the last bot in the
+  list cannot be removed. Settings › All bots still shows every profile, each marked "In list" or with "Add to list".
+  An approval or question from a bot outside the list still shows in Needs you, and opening it adds that bot. The
+  connect block for a bot with no AI account no longer offers a Claude sign-in: Hermes' Claude sign-in works only on
+  Claude Max with purchased extra-usage credits, so most people who picked it hit "out of extra usage". ChatGPT /
+  Codex, Nous Portal and API key… stay; an Anthropic key goes in through API key….
 - **The OMH TUI's `✳ Waiting… (… · terminal)` row shows while a `notify=true` background process runs.** Hermes
   writes its process record at the spawn, before it arms the completion notice, and does not rewrite it until the
   process exits, so the record said nobody would be told for the whole run. The TUI read it that way: no waiting

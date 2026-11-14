@@ -168,8 +168,13 @@ test("settings opens and closes; theme Light sets data-theme; bot and provider p
   await expect(page.getByTestId("settings-view")).toHaveCount(0);
 });
 
-test("add bot: lists profiles with status; Connect re-reads bots.list; create is disabled", async ({ page }) => {
-  // Show the default profile as not connected until something attaches it (a models.options read).
+test("add bot: lists the profiles not in the list; Add attaches one, re-reads bots.list and opens it", async ({ page }) => {
+  // Kami alone in the list; the default profile shows as not connected until something attaches it (models.options).
+  await page.addInitScript(() => {
+    if (sessionStorage.getItem("addbot-e2e")) return;
+    sessionStorage.setItem("addbot-e2e", "1");
+    localStorage.setItem("omher.roster", JSON.stringify(["kami"]));
+  });
   let attached = false;
   await page.routeWebSocket(/127\.0\.0\.1/, (ws) => {
     const server = ws.connectToServer();
@@ -195,26 +200,21 @@ test("add bot: lists profiles with status; Connect re-reads bots.list; create is
   await page.getByRole("button", { name: "Add a bot" }).click();
   const pop = page.getByTestId("addbot");
   await expect(pop).toBeVisible();
-  await expect(pop.getByText("Connect a Hermes profile")).toBeVisible();
-  for (const name of ["Kami", "Friren", "Hermes"]) await expect(pop.getByText(name, { exact: true })).toBeVisible();
-  await expect(page.getByTestId("addbot-kami")).toContainText("Connected");
-  const hermes = page.getByTestId("addbot-default");
-  await expect(hermes).toContainText("Not connected");
-  await expect(page.getByTestId("addbot-kami").getByRole("button", { name: "Connect" })).toHaveCount(0);
-  const create = page.getByTestId("addbot-create");
-  await expect(create).toBeDisabled();
-  await expect(create).toContainText("Soon");
+  await expect(pop.locator(".ab-h")).toHaveText("Add a bot");
+  for (const name of ["Friren", "Hermes", "OMH TUI"]) await expect(pop.getByText(name, { exact: true })).toBeVisible();
+  // Kami is in the list already: not offered; no "Create a new bot (soon)" row
+  await expect(page.getByTestId("addbot-kami")).toHaveCount(0);
+  await expect(page.getByTestId("addbot-create")).toHaveCount(0);
+  await expect(page.getByTestId("addbot-default")).toContainText("Haiku 5");
 
-  await hermes.getByRole("button", { name: "Connect" }).click();
-  await expect(hermes).toContainText("Connected");
-  await expect(hermes.getByRole("button", { name: "Connect" })).toHaveCount(0);
-  expect((await callsOf("bots.list")).length).toBeGreaterThan(before);
-  // no file copied, no chat touched: only read ops were sent
+  await page.getByTestId("addbot-default").getByRole("button", { name: "Add" }).click();
+  await expect(pop).toHaveCount(0);
+  await expect(page.getByTestId("bot-default")).toHaveAttribute("aria-current", "true");
+  await expect.poll(() => attached).toBe(true);
+  await expect.poll(async () => (await callsOf("bots.list")).length).toBeGreaterThan(before);
+  // no file copied, no chat written: only reads were sent
   const ops = new Set(((await mock("mock.calls")).calls as { op: string }[]).map((c) => c.op));
   for (const op of ["chat.send", "chat.set_model"]) expect(ops.has(op)).toBe(false);
-
-  await page.keyboard.press("Escape");
-  await expect(pop).toHaveCount(0);
 });
 
 test("screenshots: settings in dark and light", async ({ page }) => {
