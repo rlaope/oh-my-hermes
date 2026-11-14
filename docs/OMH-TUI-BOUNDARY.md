@@ -64,8 +64,10 @@ sessions (`client.capabilities`, `session.create`, `session.resume`,
 `session.close`), sends only what this bullet names below, plus
 `session.history` again when Hermes refuses a rewind; in the `/sessions`
 picker, only on the person's keys, `session.title` (the highlighted session's
-new title, after Ctrl+R and Enter) and `session.delete` (after a second
-Ctrl+D; never the session it is in), which the gateway child sends to a
+new title, after Ctrl+R and Enter), `session.delete` (after a second
+Ctrl+D; never the session it is in) and `session.transcript` (after Enter on
+a row Hermes lists as not resumable, a read that writes nothing), the first
+two of which the gateway child sends to a
 shared gateway as the owner's revision-fenced `session.mutate rename` and
 `delete`, reading the revision first with `session.resume`; when no turn runs, a
 steer Hermes refused as an ordinary prompt; and, at once, the decline frame for

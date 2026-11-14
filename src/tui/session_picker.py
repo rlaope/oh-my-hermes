@@ -114,6 +114,7 @@ CARDS_MIN_COLS = 30
 # none): while the search box filters, and while it holds a new title (Ctrl+R).
 CARD_KEYS = ("↑↓ to move", "Enter to switch", "Ctrl+R to rename", "Ctrl+D to delete", "Type to search", "Esc to cancel")
 CARD_RENAME_KEYS = ("Enter to rename", "Esc to cancel")
+READ_ONLY_META = "read-only"  # a card's facts for a session another runtime holds open (`SessionRow.read_only`)
 
 
 @dataclass(frozen=True)
@@ -123,12 +124,24 @@ class SessionRow:
     preview: str
     started_at: float
     message_count: int
+    # The conversation's latest activity, which orders the rows: a listed session is as new as its last message,
+    # not as its start.
+    activity_at: float = 0.0
+    # False for a session persisted open by a runtime that no longer holds it: its history can be read, but nothing
+    # here may resume, rename or delete it.
+    resumable: bool = True
+    owner_runtime: str = ""
     source: str = ""  # where it was started (`tui`, `cli`, a messaging platform), as `session.list` names it
 
     @property
     def label(self) -> str:
         """What the row is called: the title, else the first prompt, else the id."""
         return (self.title or self.preview or self.id).strip().split("\n", 1)[0]
+
+    @property
+    def read_only(self) -> bool:
+        """Whether the row opens its history in a pager instead of resuming the session."""
+        return not self.resumable or self.owner_runtime == "other"
 
 
 @dataclass(frozen=True)
@@ -175,6 +188,12 @@ def session_rows(result: Mapping[str, object]) -> list[SessionRow]:
                 preview=preview if isinstance(preview, str) else "",
                 started_at=_seconds(entry.get("started_at")),
                 message_count=int(_number(entry.get("message_count"))),
+                # The activity the gateway child merged (`activity_at`), else a shared gateway's own picker field
+                # (`last_active_at`, what a stock Hermes answers `picker: true` with), else the start.
+                activity_at=_seconds(entry.get("activity_at")) or _seconds(entry.get("last_active_at"))
+                or _seconds(entry.get("started_at")),
+                resumable=entry.get("resumable") is not False,
+                owner_runtime=entry["owner_runtime"] if isinstance(entry.get("owner_runtime"), str) else "",
                 source=" ".join(source.split())[:24] if isinstance(source, str) else "",
             )
         )
@@ -341,10 +360,10 @@ class SessionPicker:
         return sorted(kept, key=self._rank) if self.now > 0 else kept
 
     def _rank(self, row: SessionRow) -> int:
-        return -1 if row.id == self.current else day_group(row.started_at, self.now)
+        return -1 if row.id == self.current else day_group(row.activity_at or row.started_at, self.now)
 
     def _group(self, row: SessionRow) -> str:
-        return CURRENT_GROUP if row.id == self.current else DAY_GROUPS[day_group(row.started_at, self.now)]
+        return CURRENT_GROUP if row.id == self.current else DAY_GROUPS[day_group(row.activity_at or row.started_at, self.now)]
 
     def handle_key(self, event: Key | Paste) -> PickerAction | None:
         """Apply one key; a `PickerAction` when the person picked a row, closed the picker, or asked for a rename or
@@ -462,7 +481,7 @@ class SessionPicker:
             if group not in entries:
                 entries.append(group)
             entries.append(row)
-        ages = max((cell_width(age_text(row.started_at, now)) for row in shown), default=0)
+        ages = max((cell_width(age_text(row.activity_at or row.started_at, now)) for row in shown), default=0)
         digits = max((len(str(row.message_count)) for row in shown), default=1)
         title = f" Sessions ({len(shown)}/{len(self.rows)})" if self.query else f" Sessions ({len(self.rows)})"
         renamed = next((row for row in self.rows if row.id == self.renaming), None)
@@ -497,7 +516,7 @@ class SessionPicker:
             note = truncate(note, max(int(width * NOTE_SHARE), 1))
             style = theme.warn if entry.id == self.arming or entry.id not in self.out else theme.muted
             return picker_row(highlighted, lead, label, note, width, theme, style)
-        age = f"{age_text(entry.started_at, now):>{ages}}{COLUMN_GAP}" if ages else ""
+        age = f"{age_text(entry.activity_at or entry.started_at, now):>{ages}}{COLUMN_GAP}" if ages else ""
         meta = age + _messages(entry.message_count, digits)
         return picker_row(highlighted, lead, label, meta, width, theme)
 
@@ -630,7 +649,7 @@ class SessionPicker:
             style = theme.warn if row.id == self.arming or row.id not in self.out else theme.muted
             return _wrapped(note, style, width)
         count = f"{row.message_count} message{'' if row.message_count == 1 else 's'}"
-        parts = [age_words(row.started_at, now), count, row.source]
+        parts = [age_words(row.activity_at or row.started_at, now), count, row.source, READ_ONLY_META if row.read_only else ""]
         if row.id == self.current:
             parts.insert(0, f"{CURRENT_MARK} {CURRENT_LABEL}")
         return _wrapped(META_SEPARATOR.join(part for part in parts if part), theme.muted, width)

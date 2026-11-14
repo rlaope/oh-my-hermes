@@ -1345,14 +1345,21 @@ run and approval decision stays Hermes'; the screen is OMH's.
   its name on one row and `2 days ago · 14 messages · tui` under it. The
   one you are in heads the list under `Current` (`this session` until it
   has a title, and `● this session` on its card), and the rest sit under a
-  heading for the day each started (Today, Yesterday, Previous 7 days,
-  Earlier); `↑` and `↓` in the pointer's column say more cards sit above or
-  below. A long name wraps onto a second row, and the keys are listed under
-  the cards, wrapped between two keys, in place of the info line's. On a
-  terminal too short or narrow for the cards it is the one-row
-  list it was, each session's age and message count in columns of their
-  own and the filter on its last row. Type to filter (what you type shows
-  in the search box, with the caret, and only the
+  heading for the day each was last active (Today, Yesterday, Previous 7
+  days, Earlier), the age on each card counting from then; `↑` and `↓` in
+  the pointer's column say more cards sit above or below. A long name
+  wraps onto a second row, and the keys are listed under the cards,
+  wrapped between two keys, in place of the info line's. On a terminal too
+  short or narrow for the cards it is the one-row list it was, each
+  session's age and message count in columns of their own and the filter
+  on its last row. Attached to Hermes' shared gateway, a session it holds
+  open and the stored history of that same conversation are one row, and
+  older sessions you were active in lately are not pushed off the list by
+  newer ones. A session Hermes lists as held open by another runtime (a
+  Hermes with that support only) says `read-only` on its card and opens
+  read-only: Enter shows its newest messages in a pager without taking the
+  session over, and Ctrl+R and Ctrl+D are refused on its row. Type to
+  filter (what you type shows in the search box, with the caret, and only the
   headings with a match stay), Up/Down or PageUp/PageDown to move from
   session to session, Enter to switch, Esc to close. Ctrl+R renames the
   highlighted session (the search box becomes its title: Enter renames, Esc

@@ -202,7 +202,7 @@ class WrapTests(unittest.TestCase):
     LONG = "PR 2867 캐리 리뷰 하고 TUI resume 피커를 클로드 코드처럼 개편하면서 줄바꿈까지 맞추는 아주 긴 세션 제목"
 
     def test_a_long_name_wraps_onto_a_second_row_and_is_cut_after_it(self) -> None:
-        chooser = SessionPicker([SessionRow("a", self.LONG, "", NOW - 60, 3, "tui"),
+        chooser = SessionPicker([SessionRow("a", self.LONG, "", NOW - 60, 3, source="tui"),
                                  SessionRow("b", "short", "", NOW - 120, 1)], current="")
         for width, rows in ((100, 2), (60, 2)):
             with self.subTest(width=width):
@@ -225,6 +225,23 @@ class WrapTests(unittest.TestCase):
                 self.assertTrue(all(not key.endswith("·") for key in keys))  # broken only between two keys
                 self.assertTrue(all(cell_width(text.rstrip()) <= width - 2 for text in cards(shown) + shown[-2:]))
         self.assertEqual(len([text for text in texts(picker(), width=200, rows=24)[-2:] if text.strip()]), 1)
+
+
+class ActivityTests(unittest.TestCase):
+    """The cards read the listing's last activity and its read-only rows (#2872, carry of #2865)."""
+
+    def test_a_card_counts_its_age_from_the_last_activity_and_says_read_only(self) -> None:
+        rows = session_rows({"sessions": [
+            {"id": "old", "title": "Started long ago", "started_at": NOW - 40 * 86400, "last_active_at": NOW - 120,
+             "message_count": 5, "source": "tui"},
+            {"id": "held", "title": "Held elsewhere", "started_at": NOW - 3600, "message_count": 2,
+             "resumable": False, "owner_runtime": "other"},
+        ]})
+        listed = cards(texts(SessionPicker(rows, current=""), rows=24))
+        self.assertIn("    2 minutes ago · 5 messages · tui", [text.rstrip() for text in listed])  # not 1 month ago
+        self.assertEqual(listed[0].strip(), "Today")  # its heading follows the activity too
+        held = next(number for number, text in enumerate(listed) if "Held elsewhere" in text)
+        self.assertEqual(listed[held + 1].rstrip(), "    1 hour ago · 2 messages · read-only")
 
 
 class LayoutTests(unittest.TestCase):
