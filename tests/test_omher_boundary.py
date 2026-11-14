@@ -15,8 +15,12 @@ DOC = ROOT / "docs" / "OMHER-BOUNDARY.md"
 BRIDGE = ROOT / "apps" / "omher" / "bridge" / "omher_bridge.py"
 SHELL = ROOT / "apps" / "omher" / "src-tauri" / "src"
 UI_AGENTS = ROOT / "apps" / "omher" / "src" / "sessions" / "agents.ts"
-SESSION_AGENTS = ("claude", "codex", "omo", "dsh", "omh", "pi", "omp", "grok", "opencode", "kilo", "gemini", "qwen", "kimi", "copilot", "cline")
-SESSION_MODES = ("Chat", "Chat", "Chat", "Chat", "Hermes", "Chat", "Chat", "Terminal", "Chat", "Chat", "Chat", "Chat", "Chat", "Chat", "Chat")
+# Rule 11's allow-list: the built-ins (sessions.rs AGENTS) and the generic ACP agents (acp_agents.rs ACP_LIST, one
+# structured-mode argument each). Kilo Code is no longer on it.
+BUILTIN_AGENTS = ("claude", "codex", "omo", "dsh", "omh", "pi", "omp", "grok", "opencode")
+BUILTIN_MODES = ("Chat", "Chat", "Chat", "Chat", "Hermes", "Chat", "Chat", "Terminal", "Chat")
+ACP_LIST_ARGS = (("gemini", "--acp"), ("qwen", "--acp"), ("kimi", "acp"), ("copilot", "--acp"), ("cline", "--acp"))
+SESSION_AGENTS = BUILTIN_AGENTS + tuple(a for a, _ in ACP_LIST_ARGS)
 CLAUDE_CHAT_ARGS = ("-p", "--input-format", "stream-json", "--output-format", "stream-json", "--verbose",
                     "--include-partial-messages", "--permission-prompt-tool", "stdio", "--replay-user-messages")
 CONTEXT = ROOT / "CONTEXT.md"
@@ -60,14 +64,13 @@ RULES = (
     " task id but not its answer, it reads that one record (`st_<task id>.json`, from the same folders and under the"
     " same rules, read-only, and only a record of that session)",
     "omher starts a terminal program only when the person asks for a session (SESSIONS `+`), and only one of a"
-    " fixed allow-list: `claude`, `codex`, `omo`, `dsh`, `omh`, `pi`, `omp`, `grok`, `opencode`, `kilo`, `gemini`, `qwen`, `kimi`, `copilot`, `cline`, with no arguments,",
+    " fixed allow-list: `claude`, `codex`, `omo`, `dsh`, `omh`, `pi`, `omp`, `grok`, `opencode`, `gemini`, `qwen`, `kimi`, `copilot`, `cline`, with no arguments,",
     "A chat session starts the same program with its fixed structured-mode arguments from the allow-list",
     "(`claude -p --input-format stream-json --output-format stream-json --verbose --include-partial-messages"
-    " --permission-prompt-tool stdio --replay-user-messages`, `codex app-server`, `omo --mode rpc`, `pi --mode rpc`, `omp --mode rpc`, `opencode acp`, `kilo acp`, `gemini --acp`, `qwen --acp`, `kimi acp`, `copilot --acp`, `cline --acp`) on pipes;",
-    "An Agent Client Protocol agent (the seven `acp` rows) gets no such argument: omher sends the conversation id it reported",
+    " --permission-prompt-tool stdio --replay-user-messages`, `codex app-server`, `omo --mode rpc`, `pi --mode rpc`, `omp --mode rpc`, `opencode acp`, `gemini --acp`, `qwen --acp`, `kimi acp`, `copilot --acp`, `cline --acp`) on pipes;",
+    "The last five are the generic Agent Client Protocol agents: each is one fixed row of the shell's own list (`acp_agents.rs`:",
+    "An Agent Client Protocol agent (OpenCode and those five) gets no such argument: omher sends the conversation id it reported",
     "omher never sends the protocol's `authenticate` (Cline's opens a browser by itself) and never asks for, takes or shows a key.",
-    "Kilo Code gets the same in `KILO_CONFIG_CONTENT`, ask rules for its `bash`, `edit` and `write` tools under each tool's own key,",
-    "else Kilo is not started and the chat says so in one sentence naming Kilo Code.",
     "These rules are read when the session starts; a deny added later applies from the next session.",
     "an unknown mode refuses, but an unchanged custom agent is allowed.",
     "refuses before the second listing, so the trusted config channel cannot cause the CLI to read a project-named file or variable.",
@@ -843,23 +846,43 @@ class SessionsStartOnlyAllowListedAgents(unittest.TestCase):
         self.prod = self.sessions.split("#[cfg(test)]\nmod tests", 1)[0]
         self.chat = (SHELL / "agent_chat.rs").read_text(encoding="utf-8").split("#[cfg(test)]\nmod tests", 1)[0]
 
-    def test_rust_allow_list_is_the_eight_agents_and_each_id_is_its_program(self) -> None:
+    def test_rust_allow_list_is_the_built_ins_and_the_acp_list_and_each_id_is_its_program(self) -> None:
         block = re.search(r"pub const AGENTS: \[Agent; (\d+)\] = \[(.*?)\];", self.prod, re.S)
         self.assertIsNotNone(block)
         rows = re.findall(r'Agent \{ id: "([^"]+)", program: "([^"]+)", label: "[^"]+", mode: Mode::(\w+) \}', block.group(2))
-        self.assertEqual(int(block.group(1)), len(SESSION_AGENTS))
-        self.assertEqual([r[0] for r in rows], list(SESSION_AGENTS))
-        self.assertEqual([r[1] for r in rows], list(SESSION_AGENTS))
-        self.assertEqual(tuple(r[2] for r in rows), SESSION_MODES)
+        self.assertEqual(int(block.group(1)), len(BUILTIN_AGENTS))
+        self.assertEqual([r[0] for r in rows], list(BUILTIN_AGENTS))
+        self.assertEqual([r[1] for r in rows], list(BUILTIN_AGENTS))
+        self.assertEqual(tuple(r[2] for r in rows), BUILTIN_MODES)
+        # the generic ACP agents: one `generic(id, …)` row each, id = program (the constructor sets both), always a chat
+        acp = (SHELL / "acp_agents.rs").read_text(encoding="utf-8").split("#[cfg(test)]\nmod tests", 1)[0]
+        lst = re.search(r"pub const ACP_LIST: \[AcpEntry; (\d+)\] = \[(.*?)\];", acp, re.S)
+        self.assertIsNotNone(lst)
+        generic = re.findall(r'generic\("([^"]+)", "[^"]+", &\["([^"]+)"\], ', lst.group(2))
+        self.assertEqual(int(lst.group(1)), len(ACP_LIST_ARGS))
+        self.assertEqual(tuple(generic), ACP_LIST_ARGS)
+        self.assertIn("agent: Agent { id, program: id, label, mode: Mode::Chat },", acp)
+        self.assertIn("acp: AcpAgent { id, label, login, skill_tool: None, rules: None },", acp)
+        # the allow-list look-up is exactly those two lists; Kilo Code is on neither
+        self.assertIn("AGENTS.iter().find(|a| a.id == id).or_else(|| acp_agents::entry(id).map(|e| &e.agent))", self.prod)
+        for src in (self.prod, acp, (SHELL / "acp_chat.rs").read_text(encoding="utf-8").split("#[cfg(test)]\nmod tests", 1)[0]):
+            self.assertNotIn('"kilo"', src)
+            self.assertNotIn("KILO_CONFIG_CONTENT", src)
         # the Hermes-only row (no `omh`) opens the same Hermes chat: `hermes` is never a session program
         self.assertNotIn('"hermes"', block.group(2))
         self.assertNotIn('program: "hermes"', self.prod)
 
     def test_ui_list_matches_the_rust_allow_list(self) -> None:
         ui = UI_AGENTS.read_text(encoding="utf-8")
-        rows = re.findall(r'\{ id: "([^"]+)", program: "\1", label: "[^"]+", mode: "(\w+)" \}', ui)
-        self.assertEqual(tuple(r[0] for r in rows), SESSION_AGENTS)
-        self.assertEqual(tuple(r[1].capitalize() for r in rows), SESSION_MODES)
+        rows = re.findall(r'\{ id: "([^"]+)", program: "\1", label: "[^"]+", mode: "(\w+)"(?:, main: true)? \}', ui)
+        self.assertEqual(tuple(r[0] for r in rows), BUILTIN_AGENTS)
+        self.assertEqual(tuple(r[1].capitalize() for r in rows), BUILTIN_MODES)
+        # the main tier is named once, on the first three; the generic ACP agents have no row in the UI (the shell
+        # sends them), and nothing in it names Kilo Code but the line a saved session of it shows
+        self.assertEqual(re.findall(r'\{ id: "([^"]+)"[^}]*main: true \}', ui), ["claude", "codex", "omo"])
+        for gid, _ in ACP_LIST_ARGS:
+            self.assertNotIn(f'"{gid}"', ui)
+        self.assertEqual(re.findall(r"\bkilo\b", ui), ["kilo"])
 
     def test_chat_arguments_are_fixed_in_the_allow_list(self) -> None:
         """The structured-mode argv per agent is part of the allow-list (rule 11) and nothing else adds one."""
@@ -869,8 +892,9 @@ class SessionsStartOnlyAllowListedAgents(unittest.TestCase):
         chat = self.prod.split("pub fn chat_args", 1)[1].split("\n}\n", 1)[0]
         arms = re.findall(r'^\s+(.+?) => (&.+?\[\.\.\]),?$', chat, re.M)
         self.assertEqual(arms, [('"claude"', "&CLAUDE_CHAT_ARGS[..]"), ('"codex"', '&["app-server"][..]'),
-                                ('"pi" | "omp" | "omo"', '&["--mode", "rpc"][..]'), ('"opencode" | "kilo" | "kimi"', '&["acp"][..]'),
-                                ('"gemini" | "qwen" | "copilot" | "cline"', '&["--acp"][..]')])
+                                ('"pi" | "omp" | "omo"', '&["--mode", "rpc"][..]'), ('"opencode"', '&["acp"][..]')])
+        # a generic ACP agent's argument is its list row's, one of the two (pinned row by row above)
+        self.assertIn("if let Some(e) = acp_agents::entry(id) {\n        return Some(e.args);\n    }", chat)
         resume = self.prod.split("pub fn resume_args", 1)[1].split("\n}\n", 1)[0]
         # exactly two flags, each for named agents only; every other agent is refused
         self.assertEqual(re.findall(r'^\s+(.+?) => ("--[a-z-]+"|return Err)', resume, re.M),
@@ -924,18 +948,18 @@ class SessionsStartOnlyAllowListedAgents(unittest.TestCase):
         self.assertIn("(1..=128).contains(&id.len())", acp)
         rows = re.search(r"pub const ACP_AGENTS: \[AcpAgent; (\d+)\] = \[(.*?)\];", acp, re.S)
         self.assertIsNotNone(rows)
-        self.assertEqual(re.findall(r'id: "([^"]+)"', rows.group(2)), ["opencode", "kilo", "gemini", "qwen", "kimi", "copilot", "cline"])
-        # OpenCode's and Kilo's one variable carries ask rules built from their own `agent list`: allow -> ask, deny
-        # stays deny; the other five rows add no variable
+        self.assertEqual(re.findall(r'id: "([^"]+)"', rows.group(2)), ["opencode"])
+        # OpenCode's one variable carries ask rules built from its own `agent list`: allow -> ask, deny stays deny;
+        # the generic rows add no variable (their constructor fixes `rules: None`)
         self.assertEqual(re.findall(r'rules: (Some\(RuleProbe \{.*?\}\)|None)', rows.group(2)),
-                         ['Some(RuleProbe { args: &["agent", "list"], var: "OPENCODE_CONFIG_CONTENT", build: opencode_ask, kept: opencode_kept })',
-                          'Some(RuleProbe { args: &["agent", "list"], var: "KILO_CONFIG_CONTENT", build: kilo_ask, kept: kilo_kept })',
-                          "None", "None", "None", "None", "None"])
+                         ['Some(RuleProbe { args: &["agent", "list"], var: "OPENCODE_CONFIG_CONTENT", build: opencode_ask, kept: opencode_kept })'])
         # each row's sign-in line is the agent's own command, run by the person; omher never sends `authenticate`
-        self.assertEqual(re.findall(r'login: "([^"]+)"', rows.group(2)),
-                         ["opencode auth login", "kilo auth login", "gemini", "qwen", "kimi login", "copilot login", "cline auth"])
+        self.assertEqual(re.findall(r'login: "([^"]+)"', rows.group(2)), ["opencode auth login"])
+        lst = (SHELL / "acp_agents.rs").read_text(encoding="utf-8").split("#[cfg(test)]\nmod tests", 1)[0]
+        self.assertEqual(re.findall(r'generic\("[^"]+", "[^"]+", &\["[^"]+"\], "([^"]+)", ', lst),
+                         ["gemini", "qwen", "kimi login", "copilot login", "cline auth"])
         self.assertNotIn('"authenticate"', acp)
-        self.assertIn('const KILO_ASKED: [(&str, &str); 3] = [("bash", "bash"), ("edit", "edit"), ("write", "write")];', acp)
+        self.assertNotIn("KILO_ASKED", acp)
         self.assertNotIn("OPENCODE_PERMISSION", acp)
         self.assertIn('if a == "deny" { "deny" } else { "ask" }', acp)
         self.assertIn('const ASKED: [(&str, &str); 2] = [("bash", "bash *"), ("edit", "edit *")];', acp)

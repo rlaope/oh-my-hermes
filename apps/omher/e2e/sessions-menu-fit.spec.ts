@@ -22,7 +22,7 @@ test.beforeEach(async () => {
   await mock("mock.reset");
 });
 
-const ALL = ["claude", "codex", "omo", "dsh", "omh", "pi", "omp", "grok", "opencode", "kilo", "gemini", "qwen", "kimi", "copilot", "cline"];
+const ALL = ["claude", "codex", "omo", "dsh", "omh", "pi", "omp", "grok", "opencode", "gemini", "qwen", "kimi", "copilot", "cline"];
 
 async function open(page: Page, height: number) {
   await page.setViewportSize({ width: 1280, height });

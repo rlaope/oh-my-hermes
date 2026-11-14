@@ -218,6 +218,17 @@ All notable changes will be documented here.
   means unknown, never empty, none or equal. The idea of mining re-fixed commits
   comes from `yetone/magpie` (MIT), concept only, reimplemented here.
 
+- **omher's SESSIONS menu lists its agents in two tiers, and Kilo Code is gone.**
+  Claude Code, Codex and OmO, the main agents with their own adapters, come
+  first in the + menu (installed agents still before the rest), then the
+  other built-ins, then the generic ACP agents. Gemini CLI, Qwen Code, Kimi
+  Code, Copilot CLI and Cline now come from one list in the shell (program,
+  `acp` or `--acp`, sign-in and install lines, mark) that the agent look-up
+  hands to the UI, and behave as in 0.2.8: the same install lines, signed-out
+  line, Open in Terminal and Restart. Kilo Code is no longer offered or
+  startable; OpenCode and its rule check stay. A Kilo Code session saved
+  before this comes back ended with its chat and one line, "Kilo Code is no
+  longer offered in omher", and no Restart.
 - **Claude Fable 5.2 now leads the `visual-engineering` chain.** Frontend and
   visual lanes routed through Hermes try Fable 5.2 first, then Claude Opus
   5.5, Gemini 4 Argon and Kimi K3.1 Pro, all at `high` (before, Opus 5.5 came
