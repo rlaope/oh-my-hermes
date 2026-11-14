@@ -1166,6 +1166,9 @@ SESSION_RENAMED_NOTICE = "Renamed session {session} to {title}."
 SESSION_DELETED_NOTICE = "Deleted session {session}."
 # On the picker's row when Hermes answered a rename or delete with nothing that says it was done.
 SESSION_EDIT_UNCONFIRMED = "Hermes did not say it was done"
+SESSION_EDIT_READ_ONLY = "another runtime owns this session; its history is read-only here"
+# Under a message of a read-only session's history that Hermes cut to its start (`truncated` on the row).
+TRANSCRIPT_ROW_CUT = "… (Hermes sent only the start of this message)"
 SESSION_EDIT_UNANSWERED = "Hermes did not answer in {seconds:g} s"
 SESSION_EDIT_NOT_SENT = "the OMH TUI did not send it"
 SESSIONS_UNANSWERED_NOTICE = "Hermes did not answer the session list in {seconds:g} s; /resume asks again."
@@ -7777,12 +7780,65 @@ class App(ModesMixin, AgentViewMixin):
         if action is None:
             return
         if action.kind in (RENAME, SESSION_DELETE):  # the picker stays open, its row saying how the call went
+            row = next((row for row in self.picker.rows if row.id == action.session_id), None)
+            if row is not None and row.read_only:
+                self._edit_refused(self.picker, row.id, SESSION_EDIT_READ_ONLY)
+                return
             self._edit_session(self.picker, action)
             return
         rows, self.picker = self.picker.rows, None
         if action.kind == PICK:
-            label = next((row.label for row in rows if row.id == action.session_id), "")
-            self._switch_session(action.session_id, label=label)
+            row = next((row for row in rows if row.id == action.session_id), None)
+            if row is not None and row.read_only:  # its owner is another runtime: its history is read, not resumed
+                self._read_session(row)
+                return
+            self._switch_session(action.session_id, label=row.label if row is not None else "")
+
+    def _read_session(self, row: SessionRow) -> None:
+        """`row`'s history in a pager, read from its owner without resuming it: `session.transcript` mounts the
+        stored transcript read-only, so no agent is built and no session is taken over. It is how a session another
+        runtime persisted open stays listable here; resuming it is that runtime's to allow."""
+        def done(result: dict[str, Any]) -> None:
+            messages = result.get(contract.TRANSCRIPT_ROWS)
+            lines: list[Line] = []
+            for message in messages if isinstance(messages, list) else []:
+                if not isinstance(message, dict):
+                    continue
+                role = as_text(message.get("role")) or "?"
+                content = [clean_text(line).rstrip() for line in as_text(
+                    message.get("text", message.get("content"))).splitlines()]
+                while content and not content[0]:
+                    content.pop(0)
+                while content and not content[-1]:
+                    content.pop()
+                if content:
+                    if lines:
+                        lines.append(())
+                    lines.append((Span(f"{role}: ", style="bold"), Span(content[0])))
+                    lines.extend((Span(line),) for line in content[1:])
+                    if message.get(contract.TRANSCRIPT_ROW_TRUNCATED) is True:
+                        lines.append((Span(TRANSCRIPT_ROW_CUT),))
+            if result.get(contract.TRANSCRIPT_NEXT_CURSOR):
+                lines.append((Span("Newest transcript page shown; older history remains on the server."),))
+            if not lines:
+                self.transcript.add_aside(NoticeBlock(f"No messages stored for {row.label}."))
+                return
+            self._open_pager(f"Read-only · {row.label}", lines)
+
+        def refused(error: dict[str, Any]) -> bool:
+            self.transcript.add_notice(
+                f"Hermes did not show {row.label}: {error.get('message') or error.get('code') or 'refused'}.",
+                NOTICE_ERROR,
+            )
+            return True
+
+        self._request(
+            "session.transcript",
+            {"session_id": row.id, "order": "latest", "limit": 500},
+            done,
+            refused,
+            seconds=CALL_ANSWER_SECONDS,
+        )
 
     def _edit_session(self, picker: SessionPicker, action: PickerAction) -> None:
         """A rename (`session.title`) or a delete (`session.delete`) the person asked for in the session picker, on
@@ -7930,7 +7986,11 @@ class App(ModesMixin, AgentViewMixin):
         titled = [row for row in rows if target in (row.get("title"), row.get("root_title"))]
         found = as_text(titled[0].get("resolved_id")) or as_text(titled[0].get("id")) if len(titled) == 1 else ""
         if found:
-            self._switch_session(found, notice, label=target, seq=seq)
+            projected = session_rows({"sessions": titled})
+            if projected and projected[0].read_only:
+                self._read_session(projected[0])
+            else:
+                self._switch_session(found, notice, label=target, seq=seq)
         else:
             self._scan_titles(target, error, notice, seq)
 
@@ -7968,7 +8028,10 @@ class App(ModesMixin, AgentViewMixin):
             row for row in rows if row.title.casefold() == title.casefold()
         ]
         if len(matched) == 1:
-            self._switch_session(matched[0].id, notice, label=matched[0].label, seq=seq)
+            if matched[0].read_only:
+                self._read_session(matched[0])
+            else:
+                self._switch_session(matched[0].id, notice, label=matched[0].label, seq=seq)
             return
         if not matched and SESSION_ID_SHAPE.fullmatch(title):
             self._on_resume_refused(title, error)

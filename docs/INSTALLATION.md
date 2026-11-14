@@ -1341,9 +1341,15 @@ run and approval decision stays Hermes'; the screen is OMH's.
 - `/sessions` (also `/resume`, `/switch`, `/session`) lists your stored
   sessions in the slot, most recently active first: the one you are in
   heads the list under `Current` (`this session` until it has a title),
-  and the rest sit under a heading for the day each started (Today,
-  Yesterday, Previous 7 days, Earlier), each session's age and message
-  count in columns of their own. Type to filter (what you type shows on
+  and the rest sit under a heading for the day each was last active
+  (Today, Yesterday, Previous 7 days, Earlier), each session's age since
+  then and message count in columns of their own. Attached to Hermes'
+  shared gateway, a session it holds open and the stored history of that
+  same conversation are one row, and older sessions you were active in
+  lately are not pushed off the list by newer ones. A session Hermes lists
+  as held open by another runtime (a Hermes with that support only) opens
+  read-only: Enter shows its newest messages in a pager without taking
+  the session over, and Ctrl+R and Ctrl+D are refused on its row. Type to filter (what you type shows on
   the list's last row, where the composer was, with the caret, and only the
   headings with a match stay), Up/Down or PageUp/PageDown to move from
   session to session, Enter to switch, Esc to close. Ctrl+R renames the

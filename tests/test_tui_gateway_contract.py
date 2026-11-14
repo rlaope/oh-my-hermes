@@ -141,8 +141,10 @@ class ClientMethodTests(unittest.TestCase):
 
     def test_only_the_calls_a_session_does_without_are_optional(self) -> None:
         optional = {"commands.catalog", "config.get", "image.render", "model.options", "session.list", "skills.reload",
-                    "session.title", "session.delete"}  # the last two only rename or delete a picker row
+                    "session.title", "session.delete",  # these two only rename or delete a picker row
+                    "session.transcript"}  # only reads a picker row Hermes lists as not resumable
         self.assertEqual(contract.OPTIONAL_METHODS, optional)
+        self.assertEqual(contract.CLIENT_METHODS["session.transcript"], {"session_id", "order", "limit"})
         self.assertEqual(contract.CLIENT_METHODS["session.title"], {"session_id", "title"})
         self.assertEqual(contract.CLIENT_METHODS["session.delete"], {"session_id"})
         self.assertLessEqual(contract.OPTIONAL_METHODS, set(contract.CLIENT_METHODS))
