@@ -1327,7 +1327,7 @@ _HARNESSES = [
             "observed run artifacts when available",
         ),
         (
-            "paired_run_decision/v1",
+            "paired_run_decision/v2",
         ),
         (
             "candidate set and tasks are explicit",
@@ -1336,12 +1336,12 @@ _HARNESSES = [
             "recommendation is scenario-specific with confidence and caveats",
         ),
         (
-            "validate paired_run_decision/v1",
+            "validate paired_run_decision/v2",
             "check same inputs and acceptance criteria across candidates",
             "check observed run provenance before comparison",
-            "verify paired_run_decision/v1 does not claim universal superiority",
+            "verify paired_run_decision/v2 does not claim universal superiority",
         ),
-        "If no observed runs exist, prepare paired_run_decision/v1 and keep every result not_observed.",
+        "If no observed runs exist, prepare paired_run_decision/v2 and keep every result not_observed.",
         (
             "agent_eval_scope_recorded",
             "task_benchmark_set_prepared",
@@ -1375,8 +1375,8 @@ _HARNESSES = [
             "show_status",
         ),
         overclaim_guards=(
-            "A prepared paired_run_decision/v1 design is not proof that any executor ran, edited code, used tools, incurred cost, passed tests, or completed review.",
-            "A paired_run_decision/v1 without authenticated comparable runs remains a prepared design, not an evidence-backed comparison.",
+            "A prepared paired_run_decision/v2 design is not proof that any executor ran, edited code, used tools, incurred cost, passed tests, or completed review.",
+            "A paired_run_decision/v2 without authenticated comparable runs remains a prepared design, not an evidence-backed comparison.",
         ),
     ),
     HarnessDefinition(

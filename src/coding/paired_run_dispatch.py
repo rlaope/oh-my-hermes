@@ -1,7 +1,7 @@
 """Stable facade for pure, approval-gated paired-run dispatch planning.
 
 The facade intentionally has no runner.  It consumes only an existing
-``paired_run_decision/v1`` through its established parser and returns prepared
+``paired_run_decision`` (v2, or v1 history) through its established parser and returns prepared
 metadata for a separately approved execution surface.
 """
 

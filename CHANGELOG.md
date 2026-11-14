@@ -1048,6 +1048,16 @@ All notable changes will be documented here.
   are listed under the cards, wrapped between two keys, as Claude Code lists its own. Ctrl+R turns the search box
   into the title field and Ctrl+D asks on the card's facts row, as before. Closing it gives every row back to the
   transcript, with no band of blank rows left above the composer. On a terminal too short for two cards and the keys, or under 30 columns, it stays the one-row list.
+- **A paired run now measures how long each cell took and says whether the variant was faster at equal quality.**
+  The Hermes-child dispatcher times every spawned child from spawn to exit on its own clock and signs those seconds
+  into the cell's receipt; a hand-edited figure no longer verifies. New `paired_run_decision/v2` decisions carry the
+  signed seconds on every result row and a `speed_at_equal_quality` block recomputed from the rows: the quality gate
+  regresses if any task went from a baseline pass to a variant fail, and then no speed is claimed at all; timing
+  covers only tasks both arms passed with seconds on both sides, and every other task is counted under a named
+  exclusion (one arm failed, both failed, missing seconds, infra error, not observed). A missing figure stays
+  unmeasured, never zero, and the share of timed tasks the variant won carries its denominator. `v1` decisions and
+  store history still parse (timing reads as unmeasured), and a `v1` decision can be superseded by `v2`. No speed
+  figure has been measured with it yet.
 
 ## 4.0.7 - 2026-11-09
 
