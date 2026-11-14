@@ -1339,21 +1339,30 @@ run and approval decision stays Hermes'; the screen is OMH's.
   Esc twice with text clears it, keeping it in this session's input history
   (not in Hermes' history file, since it was never sent).
 - `/sessions` (also `/resume`, `/switch`, `/session`) lists your stored
-  sessions in the slot, most recently active first: the one you are in
-  heads the list under `Current` (`this session` until it has a title),
-  and the rest sit under a heading for the day each was last active
-  (Today, Yesterday, Previous 7 days, Earlier), each session's age since
-  then and message count in columns of their own. Attached to Hermes'
-  shared gateway, a session it holds open and the stored history of that
-  same conversation are one row, and older sessions you were active in
-  lately are not pushed off the list by newer ones. A session Hermes lists
-  as held open by another runtime (a Hermes with that support only) opens
-  read-only: Enter shows its newest messages in a pager without taking
-  the session over, and Ctrl+R and Ctrl+D are refused on its row. Type to filter (what you type shows on
-  the list's last row, where the composer was, with the caret, and only the
+  sessions, most recently active first, as Claude Code's resume picker
+  does: it takes most of the screen, headed `Resume session (2 of 12)`
+  with a rounded search box under it, and shows each session as a card,
+  its name on one row and `2 days ago · 14 messages · tui` under it. The
+  one you are in heads the list under `Current` (`this session` until it
+  has a title, and `● this session` on its card), and the rest sit under a
+  heading for the day each was last active (Today, Yesterday, Previous 7
+  days, Earlier), the age on each card counting from then; `↑` and `↓` in
+  the pointer's column say more cards sit above or below. A long name
+  wraps onto a second row, and the keys are listed under the cards,
+  wrapped between two keys, in place of the info line's. On a terminal too
+  short or narrow for the cards it is the one-row list it was, each
+  session's age and message count in columns of their own and the filter
+  on its last row. Attached to Hermes' shared gateway, a session it holds
+  open and the stored history of that same conversation are one row, and
+  older sessions you were active in lately are not pushed off the list by
+  newer ones. A session Hermes lists as held open by another runtime (a
+  Hermes with that support only) says `read-only` on its card and opens
+  read-only: Enter shows its newest messages in a pager without taking the
+  session over, and Ctrl+R and Ctrl+D are refused on its row. Type to
+  filter (what you type shows in the search box, with the caret, and only the
   headings with a match stay), Up/Down or PageUp/PageDown to move from
   session to session, Enter to switch, Esc to close. Ctrl+R renames the
-  highlighted session (the last row becomes its title: Enter renames, Esc
+  highlighted session (the search box becomes its title: Enter renames, Esc
   cancels) and Ctrl+D deletes it once a second Ctrl+D confirms; the session
   you are in is not deleted from there. Hermes' own terminal entry renames
   only a session it has open, so there a stored session's rename may be
@@ -1416,7 +1425,7 @@ Esc closes it):
 | Space | On a clarify question that takes several choices, ticks or unticks the highlighted one; Enter sends the ticked ones, or the highlighted one when none is ticked, and a digit ticks its choice |
 | Esc, Ctrl+C | On a question Hermes asked, decline it (an approval is denied and the running turn stops); Ctrl+C first clears an answer being typed |
 | ↑ / ↓, PageUp / PageDown, Enter, Esc | In the `/sessions`, `/rewind` or `/model` list, move, take the highlighted row (switch to that session, put that prompt in the composer to send again, or switch this session to that model), or close it; typing filters the list |
-| Ctrl+R, Ctrl+D | In the `/sessions` list, rename or delete the highlighted session: Ctrl+R makes the list's last row its title (Enter renames it, Esc cancels, an empty title is refused); Ctrl+D asks on the row and a second Ctrl+D deletes it, any other key keeps it; the session you are in is not deleted, and what Hermes refuses is said on the row |
+| Ctrl+R, Ctrl+D | In the `/sessions` list, rename or delete the highlighted session: Ctrl+R makes the search box (the list's last row on a short terminal) its title (Enter renames it, Esc cancels, an empty title is refused); Ctrl+D asks on the row and a second Ctrl+D deletes it, any other key keeps it; the session you are in is not deleted, and what Hermes refuses is said on the row |
 | ↑ / ↓, Enter, Esc, ←, q, Ctrl+C | In the agent list, move, open the highlighted agent's log (on main, only leave), or go back; any other key does nothing there |
 | x, s | In the agent list, on an agent: x twice interrupts it; s steers it with the next line you send (Esc cancels) |
 | ↑ / ↓ or a click, Enter, Esc | In the `/theme` picker, preview a launch look (spectrum, violet, gold, graphite, sakura, moonlit, aurora, ember, kanagawa-wave) on the logo, the card and the chrome, keep it, or put the one in use back; `/theme <look>` keeps one at once |
