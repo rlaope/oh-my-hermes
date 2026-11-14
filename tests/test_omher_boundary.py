@@ -953,7 +953,7 @@ class CustomAgentsOnlyAfterTheCard(unittest.TestCase):
         # form (AgentsPage.tsx) and a bot draft's chip (AgentChip.tsx), both through AgentConfirmCard
         page = (UI_SRC / "settings" / "agents" / "AgentsPage.tsx").read_text(encoding="utf-8")
         chip = (UI_SRC / "chat" / "parts" / "AgentChip.tsx").read_text(encoding="utf-8")
-        callers = {str(p.relative_to(UI_SRC)): p.read_text(encoding="utf-8").count("customConfirm(") for p in UI_SRC.rglob("*.ts*") if not p.name.endswith((".test.ts", ".test.tsx"))}
+        callers = {p.relative_to(UI_SRC).as_posix(): p.read_text(encoding="utf-8").count("customConfirm(") for p in UI_SRC.rglob("*.ts*") if not p.name.endswith((".test.ts", ".test.tsx"))}
         self.assertEqual({k: v for k, v in callers.items() if v and k != "sessions/host.ts"}, {"settings/agents/AgentsPage.tsx": 1, "chat/parts/AgentChip.tsx": 1})
         for src in (page, chip):
             add = src.split("const add = async () => {", 1)[1].split("\n  };\n", 1)[0]
@@ -983,11 +983,11 @@ class BotDraftsOnlyOpenTheCard(unittest.TestCase):
         self.assertIn("draftsAllowed(chatKey) &&", self.chip)
         # the only reader is the bot bubble of a finished reply; no tool, activity, elsewhere or session view reads them
         self.assertIn("{bot && !streaming && <AgentChips chatKey={bot} text={text} />}", self.bubble)
-        users = sorted(str(p.relative_to(UI_SRC)) for p in UI_SRC.rglob("*.tsx") if "<AgentChips" in p.read_text(encoding="utf-8"))
+        users = sorted(p.relative_to(UI_SRC).as_posix() for p in UI_SRC.rglob("*.tsx") if "<AgentChips" in p.read_text(encoding="utf-8"))
         self.assertEqual(users, ["chat/parts/Bubble.tsx"])
         self.assertLess(self.bubble.index('if (item.kind === "user")'), self.bubble.index("<AgentChips"))
         for f in ("parseDrafts(", "AgentChips"):
-            readers = sorted(str(p.relative_to(UI_SRC)) for p in UI_SRC.rglob("*.ts*") if f in p.read_text(encoding="utf-8") and not p.name.endswith((".test.ts", ".test.tsx")))
+            readers = sorted(p.relative_to(UI_SRC).as_posix() for p in UI_SRC.rglob("*.ts*") if f in p.read_text(encoding="utf-8") and not p.name.endswith((".test.ts", ".test.tsx")))
             self.assertTrue(set(readers) <= {"chat/parts/agentDraft.ts", "chat/parts/AgentChip.tsx", "chat/parts/Bubble.tsx"}, readers)
 
     def test_the_chip_only_previews_and_the_shell_checks_it_again_stricter(self) -> None:
