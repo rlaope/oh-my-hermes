@@ -198,6 +198,10 @@ class HermesChildCliTests(unittest.TestCase):
                 self.assertEqual(status, expected_code, stderr)
                 payload = json.loads(stdout)
                 self.assertEqual(payload["status"], expected_status)
+                # Every terminal event of a spawned child carries the
+                # dispatcher's own wall-clock seconds, signed into the receipt.
+                self.assertIsInstance(payload["elapsed_seconds"], float)
+                self.assertGreaterEqual(payload["elapsed_seconds"], 0.0)
                 if expected_status != "timed_out":
                     # The child's spend reaches the observation from the
                     # `sessions` row of its disposable state.db, with the
@@ -245,6 +249,7 @@ class HermesChildCliTests(unittest.TestCase):
         self.assertEqual(status, 0, stderr)
         self.assertIn("AUDIENCE agent/maintainer", stdout)
         self.assertIn("STATE status prepared", stdout)
+        self.assertNotIn("elapsed", stdout)
 
         with self.assertRaises(SystemExit) as raised:
             run_cli(["coding", "hermes-child", "--help"])

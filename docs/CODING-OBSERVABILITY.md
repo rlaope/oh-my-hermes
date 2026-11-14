@@ -1160,7 +1160,8 @@ omh coding paired-run dispatch --decision decision.json --confirm-dispatch \
   --task-file task-a=task-a.txt --repo . --provider <provider>
 ```
 
-`--dry-run` parses a committed `paired_run_decision/v1` document, builds the
+`--dry-run` parses a committed `paired_run_decision/v2` document (a `v1` one
+still parses), builds the
 plan, prints it, and launches nothing. Without `--dry-run`, dispatch refuses
 unless `--confirm-dispatch` is typed. A confirmed Hermes matrix then reuses the
 already-sanctioned Hermes-child process boundary; it is not a third subprocess
@@ -1209,7 +1210,7 @@ command line. What the payload states:
   touch.
 - **The boundary itself.** `local_runner_boundary` records that a confirmed
   dispatch uses an explicit confirmed adapter, that the built-in Hermes adapter
-  reuses the sanctioned child bridge, and that `paired_run_decision/v1`
+  reuses the sanctioned child bridge, and that `paired_run_decision/v2`
   carries no raw task content.
 
 Evidence closes the loop in one direction only. An execution matrix becomes an
@@ -1220,6 +1221,47 @@ rate-limited, and cleanup-failed cells each block the fan-in rather than
 degrading it to a weaker result. Behavioral verdicts stay explicit request
 values: an exit code, a process status, or anything the child printed never
 decides behavior.
+
+### Speed at equal quality
+
+A paired run answers whether the variant finishes the same frozen tasks faster
+than the baseline, and it may say so only when correctness did not drop.
+
+Time comes from one place. The Hermes-child dispatcher reads its monotonic
+clock right after the child process is spawned and again at the terminal event
+(completed, failed, timed out, or cancelled), and signs the difference, rounded
+to the millisecond, into the receipt's `elapsed_seconds`. Prepared and running
+events, and a cell cancelled before any process started, carry `null`. A
+caller cannot supply the figure, and editing it breaks the receipt signature.
+Each `paired_run_decision/v2` result row repeats it as
+`receipt_elapsed_seconds`, and parsing re-reads the signed receipt and refuses
+a row whose seconds differ.
+
+The aggregate's `speed_at_equal_quality` block is recomputed from the rows on
+every parse, so a hand-edited verdict or total does not survive either:
+
+- **`quality_gate`** is `held` when at least one task was observed on both arms
+  and none went from a baseline pass to a variant fail, `regressed` when any
+  did (`regressed_task_count` says how many), and `unmeasured` when no task was
+  observed on both arms. A variant that fixes a task the baseline failed does
+  not regress it.
+- **Timing** covers only tasks that both arms passed with seconds on both
+  sides (`timed_task_count`). Every other task is counted in `excluded` under
+  exactly one class: `one_arm_failed`, `both_failed`, `missing_elapsed`,
+  `infra_error`, or `not_observed`.
+- **`verdict`** is `variant_faster`, `variant_slower`, or `no_difference`
+  (comparing the two arms' total seconds over the timed tasks) only when the
+  gate held and at least one task was timed. A regressed gate gives
+  `quality_regressed` and every timing field is `null`, even when the variant
+  was faster. Anything else is `unmeasured`, again with `null` fields, never 0.
+- Beside the totals sit both arms' median seconds and `variant_faster_rate`,
+  the share of timed tasks the variant finished faster, in the
+  `omh_reported_rate/v1` shape with its denominator and exclusions.
+
+All of it is observed only from signed local receipts; the block states what
+those receipts recorded and makes no claim beyond the decision's task set. A
+`v1` decision has no timing: it still parses, reads as `unmeasured`, and may be
+superseded by a `v2` decision for the same pair, never the reverse.
 
 ## Showing the shape of one prepared artifact
 

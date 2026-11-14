@@ -147,7 +147,7 @@ def _plan_payload(plan: PairedRunDispatchPlan, config: PairedRunDispatchConfig) 
         "isolation": _isolation_payload(plan, config.shared_resource_mode),
         "local_runner_boundary": (
             "explicit_confirmed_adapter; hermes reuses the sanctioned child boundary; "
-            "paired_run_decision/v1 contains no raw task content"
+            "paired_run_decision/v2 contains no raw task content"
         ),
         "cells": [
             {
@@ -197,7 +197,7 @@ def add_coding_paired_run_command(coding_sub: argparse._SubParsersAction[argpars
         "dispatch",
         help="Dispatch through the sanctioned Hermes adapter or a caller-injected extension; --dry-run launches nothing.",
     )
-    dispatch.add_argument("--decision", required=True, help="Path to a paired_run_decision/v1 document.")
+    dispatch.add_argument("--decision", required=True, help="Path to a paired_run_decision/v2 (or v1) document.")
     dispatch.add_argument("--dry-run", action="store_true", help="Build and print the inert plan without launching any runner.")
     dispatch.add_argument(
         "--confirm-dispatch",

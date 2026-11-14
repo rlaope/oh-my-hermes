@@ -32,7 +32,7 @@ class PairedRunSecurityTests(unittest.TestCase):
                 receipt = load_hermes_child_receipt(home, "run-1")
                 record = build_paired_run_decision(_request(home), home)
         self.assertEqual(receipt.claim, "observed")
-        self.assertEqual(record.schema_version, "paired_run_decision/v1")
+        self.assertEqual(record.schema_version, "paired_run_decision/v2")
 
     def test_parser_rejects_resource_exhaustion_before_recursive_validation(self) -> None:
         with TemporaryDirectory(prefix="omh-paired-limits-") as raw:

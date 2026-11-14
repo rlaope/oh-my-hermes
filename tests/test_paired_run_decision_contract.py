@@ -74,7 +74,7 @@ class PairedRunDecisionContractTests(unittest.TestCase):
             parsed = parse_paired_run_decision(record.to_json(), home)
             payload = json.loads(record.to_json())
         # Then
-        self.assertEqual(SCHEMA_VERSION, "paired_run_decision/v1")
+        self.assertEqual(SCHEMA_VERSION, "paired_run_decision/v2")
         self.assertEqual(parsed.task_set_digest, payload["task_set_digest"])
         self.assertEqual(payload["outcome"], "baseline_dominates")
         self.assertEqual(len(payload["results"]), 2)

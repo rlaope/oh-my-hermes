@@ -63,6 +63,7 @@ def write_observed_receipt(
     observed_at: str = "2026-08-27T00:00:00Z",
     *,
     evaluation_binding: dict[str, str | int] | None = None,
+    elapsed_seconds: float | None = None,
 ) -> Path:
     root = omh_home / "coding" / "hermes-child"
     run_dir = root / run_id
@@ -81,6 +82,8 @@ def write_observed_receipt(
         run_id=run_id,
     )
     observation["observed_at"] = observed_at
+    if elapsed_seconds is not None:
+        observation["elapsed_seconds"] = elapsed_seconds
     if evaluation_binding is not None:
         observation["evaluation_binding"] = evaluation_binding
     canonical = json.dumps(

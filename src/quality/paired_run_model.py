@@ -5,10 +5,18 @@ from __future__ import annotations
 from dataclasses import dataclass
 from enum import StrEnum
 import json
-from typing import NewType, TypedDict
+from typing import Final, NewType, NotRequired, TypedDict
 
 from ..coding.hermes_child_receipts import VerifiedHermesChildReceipt, is_verified_receipt
 from .paired_run_values import exposure_digest
+from .reported_rate import ReportedRate
+
+# v1 carries pass/fail only. v2 adds the signed per-cell elapsed seconds to
+# every result row and the speed-at-equal-quality block to the aggregate.
+# Both parse; only v2 is built.
+DECISION_SCHEMA_V1: Final = "paired_run_decision/v1"
+DECISION_SCHEMA_V2: Final = "paired_run_decision/v2"
+DECISION_SCHEMA_VERSIONS: Final = (DECISION_SCHEMA_V1, DECISION_SCHEMA_V2)
 
 DecisionId = NewType("DecisionId", str)
 TaskId = NewType("TaskId", str)
@@ -30,6 +38,31 @@ class BehaviorVerdict(StrEnum):
     NOT_OBSERVED = "not_observed"
     PASS = "pass"
     FAIL = "fail"
+
+
+class QualityGate(StrEnum):
+    HELD = "held"
+    REGRESSED = "regressed"
+    UNMEASURED = "unmeasured"
+
+
+class SpeedVerdict(StrEnum):
+    VARIANT_FASTER = "variant_faster"
+    VARIANT_SLOWER = "variant_slower"
+    NO_DIFFERENCE = "no_difference"
+    QUALITY_REGRESSED = "quality_regressed"
+    UNMEASURED = "unmeasured"
+
+
+# Every task the timing leaves out lands in exactly one of these classes, in
+# this order of precedence for tasks that are not comparable.
+SPEED_EXCLUSION_CLASSES: Final = (
+    "one_arm_failed",
+    "both_failed",
+    "missing_elapsed",
+    "infra_error",
+    "not_observed",
+)
 
 
 class ParetoOutcome(StrEnum):
@@ -102,6 +135,7 @@ class RecordedResult:
     receipt_run_id: str | None
     receipt_observed_at: str | None
     receipt_status: str | None
+    receipt_elapsed_seconds: float | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -134,6 +168,40 @@ class AggregationScope:
 
 
 @dataclass(frozen=True, slots=True)
+class SpeedAtEqualQuality:
+    """Wall-clock comparison that counts only when quality held."""
+
+    quality_gate: QualityGate
+    regressed_task_count: int
+    timed_task_count: int
+    excluded: tuple[tuple[str, int], ...]
+    baseline_total_seconds: float | None
+    variant_total_seconds: float | None
+    baseline_median_seconds: float | None
+    variant_median_seconds: float | None
+    variant_faster_rate: ReportedRate | None
+    verdict: SpeedVerdict
+
+    def to_record(self) -> dict[str, object]:
+        return {
+            "quality_gate": self.quality_gate.value,
+            "regressed_task_count": self.regressed_task_count,
+            "timed_task_count": self.timed_task_count,
+            "excluded": dict(self.excluded),
+            "baseline_total_seconds": self.baseline_total_seconds,
+            "variant_total_seconds": self.variant_total_seconds,
+            "baseline_median_seconds": self.baseline_median_seconds,
+            "variant_median_seconds": self.variant_median_seconds,
+            "variant_faster_rate": (
+                None
+                if self.variant_faster_rate is None
+                else self.variant_faster_rate.to_payload()
+            ),
+            "verdict": self.verdict.value,
+        }
+
+
+@dataclass(frozen=True, slots=True)
 class Aggregate:
     baseline: ArmAggregate
     variant: ArmAggregate
@@ -142,6 +210,7 @@ class Aggregate:
     baseline_exposure_digest: str
     variant_exposure_digest: str
     outcome: str
+    speed_at_equal_quality: SpeedAtEqualQuality
 
 
 class ArmRecord(TypedDict):
@@ -167,6 +236,7 @@ class ResultRecord(TypedDict):
     receipt_run_id: str | None
     receipt_observed_at: str | None
     receipt_status: str | None
+    receipt_elapsed_seconds: NotRequired[float | None]
 
 
 class ArmAggregateRecord(TypedDict):
@@ -183,6 +253,7 @@ class AggregateRecord(TypedDict):
     task_set_digest: str
     baseline_exposure_digest: str
     variant_exposure_digest: str
+    speed_at_equal_quality: NotRequired[dict[str, object]]
 
 
 class DecisionRecord(TypedDict):
@@ -244,25 +315,10 @@ class PairedRunDecision:
             "max_dispatch_seconds": self.max_dispatch_seconds,
             "execution_revision": self.execution_revision,
             "recorded_at": self.recorded_at,
-            "results": [_result_record(item) for item in self.results],
-            "aggregate": {
-                "baseline": {
-                    "observed_pass": self.aggregate.baseline.observed_pass,
-                    "observed_fail": self.aggregate.baseline.observed_fail,
-                    "infra_error": self.aggregate.baseline.infra_error,
-                    "not_observed": self.aggregate.baseline.not_observed,
-                },
-                "variant": {
-                    "observed_pass": self.aggregate.variant.observed_pass,
-                    "observed_fail": self.aggregate.variant.observed_fail,
-                    "infra_error": self.aggregate.variant.infra_error,
-                    "not_observed": self.aggregate.variant.not_observed,
-                },
-                "comparable_task_count": self.aggregate.comparable_task_count,
-                "task_set_digest": self.aggregate.task_set_digest,
-                "baseline_exposure_digest": self.aggregate.baseline_exposure_digest,
-                "variant_exposure_digest": self.aggregate.variant_exposure_digest,
-            },
+            "results": [
+                _result_record(item, self.schema_version) for item in self.results
+            ],
+            "aggregate": aggregate_record(self.aggregate, self.schema_version),
             "outcome": self.outcome,
             "claim_boundary": self.claim_boundary,
         }
@@ -282,8 +338,33 @@ def _arm_record(arm: ArmSpec) -> ArmRecord:
     }
 
 
-def _result_record(result: RecordedResult) -> ResultRecord:
-    return {
+def aggregate_record(aggregate: Aggregate, schema_version: str) -> AggregateRecord:
+    """Project an aggregate into the closed shape its schema version names."""
+    record: AggregateRecord = {
+        "baseline": {
+            "observed_pass": aggregate.baseline.observed_pass,
+            "observed_fail": aggregate.baseline.observed_fail,
+            "infra_error": aggregate.baseline.infra_error,
+            "not_observed": aggregate.baseline.not_observed,
+        },
+        "variant": {
+            "observed_pass": aggregate.variant.observed_pass,
+            "observed_fail": aggregate.variant.observed_fail,
+            "infra_error": aggregate.variant.infra_error,
+            "not_observed": aggregate.variant.not_observed,
+        },
+        "comparable_task_count": aggregate.comparable_task_count,
+        "task_set_digest": aggregate.task_set_digest,
+        "baseline_exposure_digest": aggregate.baseline_exposure_digest,
+        "variant_exposure_digest": aggregate.variant_exposure_digest,
+    }
+    if schema_version != DECISION_SCHEMA_V1:
+        record["speed_at_equal_quality"] = aggregate.speed_at_equal_quality.to_record()
+    return record
+
+
+def _result_record(result: RecordedResult, schema_version: str) -> ResultRecord:
+    record: ResultRecord = {
         "task_id": result.task_id,
         "arm": result.arm.value,
         "infrastructure_status": result.infrastructure_status.value,
@@ -293,3 +374,6 @@ def _result_record(result: RecordedResult) -> ResultRecord:
         "receipt_observed_at": result.receipt_observed_at,
         "receipt_status": result.receipt_status,
     }
+    if schema_version != DECISION_SCHEMA_V1:
+        record["receipt_elapsed_seconds"] = result.receipt_elapsed_seconds
+    return record

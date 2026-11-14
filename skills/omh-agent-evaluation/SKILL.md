@@ -33,7 +33,7 @@ This is a Hermes-native `agent-evaluation` workflow skill.
 Good example:
 
 - Prompt: agent-evaluation Codex와 Claude Code를 같은 버그 수정 태스크로 비교해서 어떤 런타임을 기본으로 둘지 판단해줘.
-- Expected behavior: Prepare paired_run_decision/v1 requirements and a scenario-specific recommendation.
+- Expected behavior: Prepare paired_run_decision/v2 requirements and a scenario-specific recommendation.
 - Why: The request compares executor choices and needs fair evaluation boundaries.
 
 Bad example:
@@ -50,8 +50,8 @@ Bad example:
 
 ## Recovery Notes
 
-- Receipts: `omh coding paired-run dispatch --decision <paired_run_decision/v1 file> --dry-run` prints the plan; the built-in receipt-capable adapter runs only `hermes` arms and refuses Codex, Claude Code, and generic arms before any child starts. For those arms the comparison can be designed and the runs supplied as observed artifacts, but the result stays ungrounded until a caller adapter returns the authenticated receipt: give a per-scenario recommendation labelled ungrounded, never a ranking.
-- If observed_at lacks receipt-authenticated provenance, retain the task set, rubric, and input digests, mark the comparison not_observed, and hand back paired_run_decision/v1 with the provenance gap rather than a pass or fail.
+- Receipts: `omh coding paired-run dispatch --decision <paired_run_decision/v2 file> --dry-run` prints the plan; the built-in receipt-capable adapter runs only `hermes` arms and refuses Codex, Claude Code, and generic arms before any child starts. For those arms the comparison can be designed and the runs supplied as observed artifacts, but the result stays ungrounded until a caller adapter returns the authenticated receipt: give a per-scenario recommendation labelled ungrounded, never a ranking.
+- If observed_at lacks receipt-authenticated provenance, retain the task set, rubric, and input digests, mark the comparison not_observed, and hand back paired_run_decision/v2 with the provenance gap rather than a pass or fail.
 - If candidate inputs or success criteria differ outside the variable under test, retain the observed runs, mark executor selection tentative, and hand back the mismatched digests or criteria and a matched rerun budget.
 - If a judge has no measured agreement against human labels, retain the prewritten rubric and observed executable checks, mark judgment unresolved and unqualified, and hand back the missing agreement measurements instead of a correctness claim.
 
@@ -101,12 +101,12 @@ Required inputs:
 
 Expected outputs:
 
-- paired_run_decision/v1
+- paired_run_decision/v2
 - not-evidence boundary
 
 Artifact expectations:
 
-- paired_run_decision/v1 with per-task input digests, explicit criteria, baseline and variant exposure, attempted-run and per-dispatch time budgets, signed observed_at receipt provenance, and a scoped Pareto outcome
+- paired_run_decision/v2 with per-task input digests, explicit criteria, baseline and variant exposure, attempted-run and per-dispatch time budgets, signed observed_at and elapsed-seconds receipt provenance, a scoped Pareto outcome, and a speed-at-equal-quality verdict that claims speed only when quality held
 
 Safety rules:
 

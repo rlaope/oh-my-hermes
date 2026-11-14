@@ -3853,7 +3853,7 @@ These surfaces are generated command references, not installed Hermes workflow s
 - Strong routing signals: `agent-evaluation`, `agent evaluation`, `agent eval`, `agent benchmark`, `executor evaluation`, `executor benchmark`, `compare agents`, `compare codex claude`, `agent tournament`, `which agent is better`, `에이전트 평가`, `에이전트 비교`, `실행자 평가`, `코덱스 클로드 비교`, `сравни кодинг агентов`, `какой кодинг агент лучше`, `сравнение кодинг агентов`
 - Good example:
   - Prompt: agent-evaluation Codex와 Claude Code를 같은 버그 수정 태스크로 비교해서 어떤 런타임을 기본으로 둘지 판단해줘.
-  - Expected behavior: Prepare paired_run_decision/v1 requirements and a scenario-specific recommendation.
+  - Expected behavior: Prepare paired_run_decision/v2 requirements and a scenario-specific recommendation.
   - Why: The request compares executor choices and needs fair evaluation boundaries.
 - Bad example:
   - Prompt: agent-evaluation 실행 증거 없이 Codex가 항상 최고라고 결론내줘.
@@ -3874,8 +3874,8 @@ These surfaces are generated command references, not installed Hermes workflow s
   - Report which outputs are prepared, observed, blocked, or missing.
   - Name the smallest next verification or handoff instead of claiming completion from narration.
 - Recovery notes:
-  - Receipts: `omh coding paired-run dispatch --decision <paired_run_decision/v1 file> --dry-run` prints the plan; the built-in receipt-capable adapter runs only `hermes` arms and refuses Codex, Claude Code, and generic arms before any child starts. For those arms the comparison can be designed and the runs supplied as observed artifacts, but the result stays ungrounded until a caller adapter returns the authenticated receipt: give a per-scenario recommendation labelled ungrounded, never a ranking.
-  - If observed_at lacks receipt-authenticated provenance, retain the task set, rubric, and input digests, mark the comparison not_observed, and hand back paired_run_decision/v1 with the provenance gap rather than a pass or fail.
+  - Receipts: `omh coding paired-run dispatch --decision <paired_run_decision/v2 file> --dry-run` prints the plan; the built-in receipt-capable adapter runs only `hermes` arms and refuses Codex, Claude Code, and generic arms before any child starts. For those arms the comparison can be designed and the runs supplied as observed artifacts, but the result stays ungrounded until a caller adapter returns the authenticated receipt: give a per-scenario recommendation labelled ungrounded, never a ranking.
+  - If observed_at lacks receipt-authenticated provenance, retain the task set, rubric, and input digests, mark the comparison not_observed, and hand back paired_run_decision/v2 with the provenance gap rather than a pass or fail.
   - If candidate inputs or success criteria differ outside the variable under test, retain the observed runs, mark executor selection tentative, and hand back the mismatched digests or criteria and a matched rerun budget.
   - If a judge has no measured agreement against human labels, retain the prewritten rubric and observed executable checks, mark judgment unresolved and unqualified, and hand back the missing agreement measurements instead of a correctness claim.
 - Required inputs:
@@ -3885,10 +3885,10 @@ These surfaces are generated command references, not installed Hermes workflow s
   - allowed tools, budget, timebox, and isolation policy
   - observed run artifacts when comparing completed attempts
 - Expected outputs:
-  - paired_run_decision/v1
+  - paired_run_decision/v2
   - not-evidence boundary
 - Artifact expectations:
-  - paired_run_decision/v1 with per-task input digests, explicit criteria, baseline and variant exposure, attempted-run and per-dispatch time budgets, signed observed_at receipt provenance, and a scoped Pareto outcome
+  - paired_run_decision/v2 with per-task input digests, explicit criteria, baseline and variant exposure, attempted-run and per-dispatch time budgets, signed observed_at and elapsed-seconds receipt provenance, a scoped Pareto outcome, and a speed-at-equal-quality verdict that claims speed only when quality held
 - Safety rules:
   - Do not claim an executor is better from anecdotes, brand names, or unobserved runs.
   - Do not send secrets, credentials, private data, or production tasks into evaluation without explicit authority.
@@ -13659,17 +13659,17 @@ Compare executor or agent choices on reproducible tasks using quality, cost, tim
   - allowed tools, budget, timebox, and isolation policy
   - observed run artifacts when available
 - Outputs:
-  - paired_run_decision/v1
+  - paired_run_decision/v2
 - Stop conditions:
   - candidate set and tasks are explicit
   - rubric, budget, and isolation are fair
   - run results are observed or marked not_observed
   - recommendation is scenario-specific with confidence and caveats
 - Verification:
-  - validate paired_run_decision/v1
+  - validate paired_run_decision/v2
   - check same inputs and acceptance criteria across candidates
   - check observed run provenance before comparison
-  - verify paired_run_decision/v1 does not claim universal superiority
+  - verify paired_run_decision/v2 does not claim universal superiority
 - Evidence ladder:
   - `agent_eval_scope_recorded`
   - `task_benchmark_set_prepared`
@@ -13694,9 +13694,9 @@ Compare executor or agent choices on reproducible tasks using quality, cost, tim
 - Delegation expectation: Record agent-evaluation as Hermes-retained evaluation design and synthesis; record executor runs, costs, timings, code edits, verification, and reviews only from observed artifacts.
 - Privacy default: `metadata_only`
 - Overclaim guards:
-  - A prepared paired_run_decision/v1 design is not proof that any executor ran, edited code, used tools, incurred cost, passed tests, or completed review.
-  - A paired_run_decision/v1 without authenticated comparable runs remains a prepared design, not an evidence-backed comparison.
-- Fallback: If no observed runs exist, prepare paired_run_decision/v1 and keep every result not_observed.
+  - A prepared paired_run_decision/v2 design is not proof that any executor ran, edited code, used tools, incurred cost, passed tests, or completed review.
+  - A paired_run_decision/v2 without authenticated comparable runs remains a prepared design, not an evidence-backed comparison.
+- Fallback: If no observed runs exist, prepare paired_run_decision/v2 and keep every result not_observed.
 
 ### rules-distill
 

@@ -123,8 +123,8 @@ def cmd_hermes_child_dispatch(args: argparse.Namespace) -> int:
     observation = _result_payload(args, result.status, usage)
     if terminal_event is None:
         raise OmhError("Hermes child dispatch produced no sealed terminal observation")
-    _write_observation(args, observation, terminal_event)
-    _emit(args, observation)
+    signed = _write_observation(args, observation, terminal_event)
+    _emit(args, signed)
     return 0 if result.status == "completed" else 1
 
 
@@ -235,9 +235,9 @@ def _write_observation(
     args: argparse.Namespace,
     observation: dict[str, JsonValue],
     dispatch_observation: HermesChildObservation | None = None,
-) -> None:
+) -> dict[str, JsonValue]:
     try:
-        write_signed_observation(_run_dir(args), observation, dispatch_observation)
+        return write_signed_observation(_run_dir(args), observation, dispatch_observation)
     except ReceiptVerificationError as exc:
         raise OmhError(str(exc)) from exc
 
