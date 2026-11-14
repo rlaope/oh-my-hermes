@@ -258,7 +258,7 @@ export interface FolderOpenResult {
 export interface OpMap {
   hello: { params: Record<string, never>; result: HelloResult };
   "bots.list": { params: Record<string, never>; result: { bots: Bot[] } };
-  "chat.open": { params: { bot: string }; result: ChatOpenResult };
+  "chat.open": { params: { bot: string; existing_only?: boolean }; result: ChatOpenResult };
   /** `reply_to` = an elsewhere session id: the bridge adds that thread as context for the bot.
    *  omher posts nothing. */
   "chat.send": { params: { bot: string; text: string; session?: string; reply_to?: string }; result: { input_id: string } };

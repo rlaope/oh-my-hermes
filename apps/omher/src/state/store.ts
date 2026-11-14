@@ -1555,6 +1555,16 @@ export function createStore(bridge: BridgeLike, opts: StoreOptions = {}): Store 
     }
     dispatch({ type: "chat.opened", bot, res, now: now(), since });
   };
+  /** A bot outside the sidebar list: ask its existing Bot Chat for the prompts waiting on the person. The bridge
+   *  replays them as approval/clarify events, which reach Needs you; the chat itself is not kept, the bot is not
+   *  listed, and a bot with no Bot Chat yet gets none (`existing_only`; it answers not_found, which is fine). */
+  const peekAsks = async (bot: string) => {
+    try {
+      await bridge.request("chat.open", { bot, existing_only: true });
+    } catch {
+      /* no Bot Chat, or offline: nothing can be waiting in it */
+    }
+  };
   const loadElsewhere = async (bot?: string) => {
     const b = botArg(bot);
     if (!b) return;
@@ -1710,10 +1720,12 @@ export function createStore(bridge: BridgeLike, opts: StoreOptions = {}): Store 
         } else if (back?.session) dispatch({ type: "ui.session", id: back.session });
         await loading;
         // Load the other listed chats too, so the sidebar can show previews and unread counts. A profile outside
-        // the list is not opened (that would make its Bot Chat); its asks still reach Needs you once it runs here.
-        await Promise.allSettled(
-          selectSidebarBots(state).filter((b) => b.name !== first && online(b)).map((b) => loadChat(b.name)),
-        );
+        // the list is not opened as a chat (that would make its Bot Chat, and list it): it is only asked for the
+        // prompts its existing Bot Chat holds, so an approval or question it is waiting on still reaches Needs you.
+        await Promise.allSettled([
+          ...selectSidebarBots(state).filter((b) => b.name !== first && online(b)).map((b) => loadChat(b.name)),
+          ...selectUnlisted(state).filter(online).map((b) => peekAsks(b.name)),
+        ]);
       } catch (e) {
         fail(e);
       }

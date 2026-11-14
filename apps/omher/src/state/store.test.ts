@@ -442,9 +442,12 @@ describe("store", () => {
     expect(s.ui.roster).toEqual(["kami"]);
     expect(s.selectedBot).toBe("kami");
     expect(s.chats.kami.loaded).toBe(true);
-    // a profile outside the list is not opened (opening it would make its Bot Chat)
+    // a profile outside the list is not opened as a chat (that would make its Bot Chat); it is only asked for the
+    // prompts its existing Bot Chat holds
     expect(s.chats.friren).toBeUndefined();
-    expect(f.calls.filter((c) => c.op === "chat.open").map((c) => c.params.bot)).toEqual(["kami"]);
+    const opens = f.calls.filter((c) => c.op === "chat.open");
+    expect(opens.filter((c) => c.params.existing_only !== true).map((c) => c.params.bot)).toEqual(["kami"]);
+    expect(opens.filter((c) => c.params.existing_only === true).map((c) => c.params.bot)).toEqual(["friren"]);
     expect(s.elsewhere.kami).toHaveLength(1);
     expect(s.models.kami.current.model).toBe("Opus 5.5");
   });

@@ -46,8 +46,11 @@ test("fresh start: only the default bot; + lists the others; Add brings Friren i
   await expect(page.getByTestId("bot-default")).toHaveAttribute("aria-current", "true");
   expect(await listed(page)).toEqual(["bot-default"]);
   expect(await roster(page)).toEqual(["default"]);
-  // the profiles outside the list were not opened: no Bot Chat made for them
-  expect((await calls("chat.open")).map((c: any) => c.bot)).toEqual(["default"]);
+  // the profiles outside the list were not opened as chats (no Bot Chat made for them); they were only asked for
+  // the prompts an existing Bot Chat holds (existing_only)
+  const opens = await calls("chat.open");
+  expect(opens.filter((c: any) => c.existing_only !== true).map((c: any) => c.bot)).toEqual(["default"]);
+  expect(opens.filter((c: any) => c.existing_only === true).every((c: any) => c.bot !== "default")).toBe(true);
 
   await page.getByRole("button", { name: "Add a bot" }).click();
   const pop = page.getByTestId("addbot");
@@ -163,4 +166,19 @@ test("the connect block offers no Claude sign-in", async ({ page }) => {
   await expect(block.getByRole("button")).toHaveText(["ChatGPT / Codex", "Nous Portal", "API key…"]);
   await expect(page.getByTestId("connect-anthropic")).toHaveCount(0);
   await expect(block).not.toContainText("Claude");
+});
+
+test("an ask that was already waiting before omher opened reaches Needs you from a bot outside the list", async ({ page }) => {
+  // the ask is raised while no app is connected: only the replay of the bot's existing Bot Chat can bring it
+  await mock("mock.ask", { bot: "friren", kind: "approval" });
+  await mock("mock.noBotChat", { bot: "omh-tui" });
+  await page.goto("/");
+  await expect(page.getByTestId("bot-default")).toHaveAttribute("aria-current", "true");
+  await expect(page.getByTestId("needs-line")).toContainText("Friren");
+  // asked without listing it, and without making a Bot Chat for a bot that has none
+  expect(await listed(page)).toEqual(["bot-default"]);
+  const peeks = (await calls("chat.open")).filter((c: any) => c.existing_only === true).map((c: any) => c.bot).sort();
+  expect(peeks).toContain("friren");
+  expect(peeks).toContain("omh-tui");
+  expect((await calls("chat.open")).filter((c: any) => c.bot === "omh-tui" && c.existing_only !== true)).toEqual([]);
 });

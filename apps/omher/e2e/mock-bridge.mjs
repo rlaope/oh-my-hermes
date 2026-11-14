@@ -564,6 +564,8 @@ const gatewayBots = (gw) => Object.values(bots).filter((x) => gatewayOf(x.name) 
 const restartTimers = new Set();
 // Every ask event sent, by request id: chat.open sends the ones still pending again, as the bridge does.
 let asked;
+// Bots that have no Bot Chat yet (mock.noBotChat): chat.open with existing_only answers not_found for them.
+let noBotChat = new Set();
 /** Timers of subagents still reporting after their turn ended (cleared by mock.reset). */
 const subTimers = new Set();
 // Bots whose turns the test drives by hand (mock.manual).
@@ -723,6 +725,7 @@ function reset() {
   pluginLoadNext = null;
   pending = new Map();
   asked = new Map();
+  noBotChat = new Set();
   manual = new Set();
   noSkills = new Set();
   notReady = new Map(); // bot -> the sign-in provider that now passes its strict check ("" = none)
@@ -932,6 +935,8 @@ const OPS = {
   "bots.list": () => ({ bots: Object.values(bots).map(publicBot) }),
   "chat.open": (p) => {
     const b = needBot(p);
+    // existing_only: a bot outside the sidebar list asked for its waiting prompts; one with no Bot Chat makes none
+    if (p.existing_only === true && noBotChat.has(b.name)) throw new OpError("not_found", "this bot has no Bot Chat yet");
     const m = models[b.name];
     // asks still waiting on the person go out again after the reply (the bridge's replay)
     const waiting = [...pending.keys()].map((id) => asked.get(id)).filter((e) => e && e.bot === b.name && !e.session);
@@ -1565,6 +1570,10 @@ const OPS = {
   // a bot whose main chat has no messages yet (first run)
   "mock.clearHistory": (p) => {
     history[needBot(p).name] = [];
+    return {};
+  },
+  "mock.noBotChat": (p) => {
+    noBotChat.add(needBot(p).name);
     return {};
   },
   "mock.ask": (p) => {
