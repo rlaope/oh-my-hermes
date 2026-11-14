@@ -22,7 +22,7 @@ test.beforeEach(async () => {
   await mock("mock.reset");
 });
 
-const ALL = ["claude", "codex", "omo", "dsh", "omh", "pi", "omp", "grok", "opencode"];
+const ALL = ["claude", "codex", "omo", "dsh", "omh", "pi", "omp", "grok", "opencode", "kilo", "gemini", "qwen", "kimi", "copilot", "cline"];
 
 async function open(page: Page, height: number) {
   await page.setViewportSize({ width: 1280, height });
@@ -34,7 +34,10 @@ async function open(page: Page, height: number) {
   await page.goto("/");
   await expect(page.getByTestId("bot-kami")).toHaveAttribute("aria-current", "true");
   await page.getByTestId("session-new").click();
+  await expect(page.getByTestId("session-more")).toHaveAttribute("aria-expanded", "false");
+  await page.getByTestId("session-more").click();
   await expect(page.getByTestId("session-agent-grok")).toBeAttached();
+  await page.keyboard.press("Home");
   // the pop-in animation scales the box: measure once it has settled
   await page.waitForFunction(() => document.querySelector(".ss-pop")?.getAnimations().every((a) => a.playState !== "running"));
 }
@@ -74,7 +77,7 @@ for (const height of [600, 720, 820]) {
     const ids = all.filter((t) => t.startsWith("session-agent-")).map((t) => t.replace("session-agent-", ""));
     expect([...ids].sort()).toEqual([...ALL].sort());
     expect(ids.slice(0, 4)).toEqual(["claude", "codex", "omh", "opencode"]);
-    expect(all.slice(ids.length)).toEqual(["session-past-claude", "session-past-codex"]);
+    expect(all.filter((id) => !id.startsWith("session-agent-") && id !== "session-more")).toEqual(["session-past-claude", "session-past-codex"]);
     // each row can be reached: scrolled into the menu's own box it is wholly inside the window
     const list = await box(page, "[data-testid=session-menu]");
     for (const id of all) {

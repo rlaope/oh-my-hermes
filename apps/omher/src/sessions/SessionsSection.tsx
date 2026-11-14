@@ -12,7 +12,7 @@
 // dot. A session that no longer runs steps back.
 // Line 1 is the session's name (the person's, the agent's own title, a summary of the first message, else the
 // folder) and line 2 the folder and the agent. Double-click the name, or right-click › Rename, to name it.
-import { useEffect, useLayoutEffect, useRef, useState, type RefObject } from "react";
+import { Fragment, useEffect, useLayoutEffect, useRef, useState, type RefObject } from "react";
 import { selectAsks, useStore, type AppState } from "../state/store";
 import { CloseIcon, LiveRing, PlusIcon, Popover, TypingDots } from "../ui";
 import { busyFor, shortTime } from "../app/time";
@@ -20,7 +20,7 @@ import { useNow } from "../elsewhere/useNow";
 import { t } from "../i18n";
 import { composing } from "../lib/ime";
 import { AgentMark } from "./AgentMark";
-import { agentDef, agentLabel, draftOpen, folderChoices, folderName, hermesOnly, menuOrder, missingNote, rowModel, tildePath, type AgentId, type ChatLive, type RowContext, type RowMark, type SessionRec, type Unseen } from "./agents";
+import { agentDef, agentLabel, draftOpen, folderChoices, folderName, hermesOnly, INSTALL, menuParts, missingNote, rowModel, tildePath, type AgentId, type ChatLive, type RowContext, type RowMark, type SessionRec, type Unseen } from "./agents";
 import { getHost, type PastChat } from "./host";
 import { getSessions, useSessions } from "./sessions";
 import { pickTitle } from "./titles";
@@ -82,45 +82,56 @@ const MENU_W = "min(240px, calc(var(--side-w) - 16px))";
 const MENU_GAP = 6;
 /** Space kept between the menu's edge and a sidebar row it stops at. */
 const ROW_CLEAR = 2;
-/** Opened above its row, the menu keeps this much air under the row above it: a band of the sidebar's own colour
- *  (`.ss-pop.ui-pop-top::before`, the same height) covers what lies there. Sidebar rows stand 2px apart, so the air
- *  reaches into the next row's empty top padding, which the band hides; no row shows half. */
+/** Opened above its row, the menu keeps at least this much air under the row above it: a band of the sidebar's own
+ *  colour (`.ss-pop.ui-pop-top::before`, the same height) covers what lies there. Sidebar rows stand 2px apart, so the
+ *  air reaches into the next row's empty top padding, which the band hides; no row shows half. */
 export const MENU_AIR = 6;
 
-/** Where the + menu goes and how tall it may be in all (`max`). It opens under its row when the whole list fits above the sidebar's
- *  bottom rows (Automations, Plugins, Settings, You), else on the side with more room, scrolling inside. The edge
- *  that lies over the sidebar stops on a row boundary, so no row shows half under it. */
+/** Where the + menu goes, how tall it may be in all (`max`) and, opened above its row, how tall the band of air over
+ *  it is (`air`). It opens under its row when the whole list fits above the sidebar's bottom rows (Automations,
+ *  Plugins, Settings, You), else on the side with more room. A list that fits whole above its row is never cut: the
+ *  sidebar row its top edge would cross is hidden whole by the band instead. A list that does not fit scrolls
+ *  inside, and its edge stops on a row boundary. Either way no row shows half. */
 export function fitMenu(
   anchor: { top: number; bottom: number },
   natural: number,
   gap: number,
   limits: { top: number; bottom: number },
   rows: { top: number; bottom: number }[],
-): { side: "top" | "bottom"; max: number } {
+): { side: "top" | "bottom"; max: number; air: number } {
   const below = limits.bottom - (anchor.bottom + gap);
   const above = anchor.top - gap - limits.top;
   if (natural <= below || below >= above) {
     let end = Math.min(anchor.bottom + gap + natural, limits.bottom);
     // pull the edge back past every row it would cross (moving it can reach the row before)
     for (let cut; (cut = rows.find((r) => r.top < end + ROW_CLEAR && r.bottom > end && r.top >= anchor.bottom)); ) end = cut.top - ROW_CLEAR;
-    return { side: "bottom", max: Math.max(0, end - anchor.bottom - gap) };
+    return { side: "bottom", max: Math.max(0, end - anchor.bottom - gap), air: 0 };
   }
-  let start = Math.max(anchor.top - gap - natural, limits.top);
+  const whole = anchor.top - gap - natural;
+  if (whole >= limits.top) {
+    // the band grows up to the top of each row it would cross (rows stand 2px apart: it ends 1px under the row
+    // before); never over the sidebar's own top rows, where the list is cut as below
+    let air = MENU_AIR;
+    for (let cut; (cut = rows.find((r) => r.top < whole - air + 1 && r.bottom > whole - air - 1 && r.bottom <= anchor.top)); ) air = whole - cut.top + 1;
+    if (whole - air >= limits.top - MENU_GAP) return { side: "top", max: natural, air };
+  }
+  let start = Math.max(whole, limits.top);
   // a row that begins above the band must end above it; one that begins in the band is hidden by it and the menu. The
   // edge lands within a px of `start` (offsets round), so a row within 1px of the band counts as in it, and the menu
   // then stops 1px further down; with rows 2px apart that never reaches the next row's top.
   for (let cut; (cut = rows.find((r) => r.top < start - MENU_AIR + 1 && r.bottom > start - MENU_AIR - 1 && r.bottom <= anchor.top)); ) start = cut.bottom + MENU_AIR + 1;
-  return { side: "top", max: Math.max(0, anchor.top - gap - start) };
+  return { side: "top", max: Math.max(0, anchor.top - gap - start), air: MENU_AIR };
 }
 
-/** Measure the open menu `box` (its list scrolls in `.ss-scroll`) against the sidebar, and again on resize. */
-function useMenuFit(box: RefObject<HTMLDivElement | null>, ready: boolean) {
+/** Measure the open menu `box` (its list scrolls in `.ss-scroll`) against the sidebar, and again on resize and
+ *  whenever `shape` changes (the folded agents opened or closed). */
+function useMenuFit(box: RefObject<HTMLDivElement | null>, ready: boolean, shape = "") {
   const [fit, setFit] = useState<{ side: "top" | "bottom"; max: number } | null>(null);
   useLayoutEffect(() => {
     if (!ready) return;
+    const pop = box.current?.closest<HTMLElement>(".ss-pop");
     const measure = () => {
       const menu = box.current;
-      const pop = menu?.closest<HTMLElement>(".ss-pop");
       const list = menu?.querySelector<HTMLElement>(".ss-scroll");
       // the row the menu is placed against (its positioned container)
       const anchor = pop?.offsetParent;
@@ -136,19 +147,25 @@ function useMenuFit(box: RefObject<HTMLDivElement | null>, ready: boolean) {
       const gap = Math.max(0, pop.classList.contains("ui-pop-bottom") ? pop.offsetTop - anchor.offsetHeight : -pop.offsetTop - pop.offsetHeight);
       const rows = [...(side?.querySelectorAll(".bot-list > *, .ss-list > *, .side-sec > .side-sh, .side > :not(.side-sec)") ?? [])].map((r) => r.getBoundingClientRect());
       const f = fitMenu(a, natural, gap, { top: Math.max(top, 0) + MENU_GAP, bottom: Math.min(foot, innerHeight) - MENU_GAP }, rows);
+      // the band above an upward menu (`.ss-pop.ui-pop-top::before`) is as tall as the air it keeps
+      pop.style.setProperty("--ss-air", `${f.air}px`);
       // whole px down: a fraction up would set the menu's edge into the row it stops at
       setFit({ side: f.side, max: Math.max(0, Math.floor(f.max - chrome)) });
     };
     measure();
     addEventListener("resize", measure);
-    return () => removeEventListener("resize", measure);
+    return () => {
+      removeEventListener("resize", measure);
+      // the next thing shown in this box (an agent's past conversations) keeps the plain band
+      pop?.style.removeProperty("--ss-air");
+    };
     // measured again once placed on its side: the gap to the row differs above and below
-  }, [box, ready, fit?.side]);
+  }, [box, ready, fit?.side, shape]);
   return fit;
 }
 
 /** Whether the list `el` has more below what it shows: its bottom edge then fades, saying it scrolls. */
-function useMoreBelow(el: RefObject<HTMLDivElement | null>, on: boolean) {
+function useMoreBelow(el: RefObject<HTMLDivElement | null>, on: boolean, shape: boolean) {
   const [more, setMore] = useState(false);
   useLayoutEffect(() => {
     const list = el.current;
@@ -162,13 +179,15 @@ function useMoreBelow(el: RefObject<HTMLDivElement | null>, on: boolean) {
       list.removeEventListener("scroll", read);
       ro.disconnect();
     };
-  }, [el, on]);
+  }, [el, on, shape]);
   return more;
 }
 
-/** The SESSIONS + menu: every agent with its mark and name, the installed ones first (the last one used on top),
- *  the missing ones dimmed with their install line in the tooltip. Picking one opens its New session chat at once
- *  (the folder is the chip under that chat's composer). Arrow keys move, Enter picks, Esc closes. */
+/** The SESSIONS + menu: the installed agents with their mark and name (the last one used on top), then one "More
+ *  agents" row that opens the agents that are not installed, dimmed, each with its install line as text (picking one
+ *  copies that line; omher installs nothing), then "Continue a conversation", there as the menu first opens. Picking
+ *  an installed agent opens its New session chat at once (the folder is the chip under that chat's composer). Arrow
+ *  keys move, Enter picks, Esc closes. */
 function NewSessionMenu({ onClose, trigger }: { onClose: () => void; trigger: RefObject<HTMLButtonElement | null> }) {
   const ss = useSessions();
   const accounts = useAccounts();
@@ -176,14 +195,20 @@ function NewSessionMenu({ onClose, trigger }: { onClose: () => void; trigger: Re
   useEffect(() => {
     if (ss.agents === null) void getSessions().loadAgents();
   }, [ss.agents]);
-  const agents = ss.agents ? menuOrder(ss.agents, ss.recent) : null;
+  const parts = ss.agents ? menuParts(ss.agents, ss.recent) : null;
+  const agents = parts ? [...parts.shown, ...parts.more] : null;
+  // the agents that are not installed stay folded until the person opens them
+  const [unfold, setUnfold] = useState(false);
+  const [copied, setCopied] = useState<AgentId | null>(null);
   // the first row takes the focus once the list is there (installed first, so it is the one Enter should pick)
   const ready = agents !== null;
-  const fit = useMenuFit(box, ready);
+  // the second step: one agent's past conversations (its own list: this menu is not measured while it shows)
+  const [past, setPast] = useState<PastAgent | null>(null);
+  const fit = useMenuFit(box, ready && !past, unfold ? "open" : "folded");
   // once placed (a hidden menu cannot take focus)
   const placed = fit !== null;
   const list = useRef<HTMLDivElement>(null);
-  const more = useMoreBelow(list, placed);
+  const more = useMoreBelow(list, placed, unfold);
   useEffect(() => {
     if (placed) box.current?.querySelector<HTMLButtonElement>("[role=menuitem]")?.focus({ preventScroll: true });
   }, [placed]);
@@ -195,8 +220,61 @@ function NewSessionMenu({ onClose, trigger }: { onClose: () => void; trigger: Re
     close("pick");
     getSessions().draft(id);
   };
-  // the second step: one agent's past conversations
-  const [past, setPast] = useState<PastAgent | null>(null);
+  // an agent that is not installed: its install line goes to the clipboard, as text (omher runs nothing)
+  const copyInstall = (id: AgentId) => {
+    void navigator.clipboard?.writeText(INSTALL[id]).then(
+      () => setCopied(id),
+      () => undefined,
+    );
+  };
+  const row = (a: NonNullable<typeof agents>[number]) => {
+    const label = agentLabel(a.id, ss.agents);
+    const account = sessionAccountSuffix(accounts.groups, a.id);
+    const missing = !a.path;
+    return (
+      <button
+        key={a.id}
+        type="button"
+        role="menuitem"
+        className={`ss-item${missing ? " off" : ""}`}
+        aria-disabled={missing || undefined}
+        title={a.path ?? missingNote(a.id)}
+        onClick={() => (missing ? copyInstall(a.id) : pick(a.id))}
+        data-testid={`session-agent-${a.id}`}
+      >
+        <span className="ss-ic">
+          <AgentMark agent={a.id} />
+        </span>
+        <span className="ss-n ss-n-as" title={account ? `${label} ${account}` : label}>
+          {missing ? (
+            // the state word shares the name's line, so the install line under them has the whole width
+            <span className="ss-head">
+              <span className="ss-l">{label}</span>
+              <span className="ss-missing">{copied === a.id ? t("ss.copiedInstall") : t("sessions.notInstalled")}</span>
+            </span>
+          ) : (
+            <span className="ss-l">{label}</span>
+          )}
+          {account && !missing && (
+            <span className="ss-as" data-testid={`session-account-${a.id}`}>
+              {account}
+            </span>
+          )}
+          {missing && (
+            // whole, on as many lines as it needs; it breaks between its words before it breaks inside one
+            <span className="ss-as ss-install" data-testid={`session-install-${a.id}`}>
+              {INSTALL[a.id].split(" ").map((word, i) => (
+                <Fragment key={i}>
+                  {i > 0 && " "}
+                  <span className="ss-tok">{word}</span>
+                </Fragment>
+              ))}
+            </span>
+          )}
+        </span>
+      </button>
+    );
+  };
   const keeps = (agents ?? []).filter((a) => a.path && PAST_AGENTS.includes(a.id as PastAgent)).map((a) => a.id as PastAgent);
   if (past)
     return (
@@ -225,38 +303,24 @@ function NewSessionMenu({ onClose, trigger }: { onClose: () => void; trigger: Re
         <div className="ss-h">{t("sessions.new")}</div>
         {agents === null && <div className="ss-empty">{t("ss.lookingAgents")}</div>}
         <div ref={list} className={`ss-scroll${more ? " more" : ""}`} style={fit ? { maxHeight: fit.max } : undefined} data-testid="session-menu-list">
-        {(agents ?? []).map((a) => {
-          const label = agentLabel(a.id, ss.agents);
-          const account = sessionAccountSuffix(accounts.groups, a.id);
-          const missing = !a.path;
-          return (
-            <button
-              key={a.id}
-              type="button"
-              role="menuitem"
-              className={`ss-item${missing ? " off" : ""}`}
-              aria-disabled={missing || undefined}
-              title={a.path ?? missingNote(a.id)}
-              onClick={() => {
-                if (!missing) pick(a.id);
-              }}
-              data-testid={`session-agent-${a.id}`}
-            >
-              <span className="ss-ic">
-                <AgentMark agent={a.id} />
-              </span>
-              <span className="ss-n ss-n-as" title={account ? `${label} ${account}` : label}>
-                <span className="ss-l">{label}</span>
-                {account && (
-                  <span className="ss-as" data-testid={`session-account-${a.id}`}>
-                    {account}
-                  </span>
-                )}
-              </span>
-              {missing && <span className="ss-missing">{t("sessions.notInstalled")}</span>}
-            </button>
-          );
-        })}
+        {(parts?.shown ?? []).map(row)}
+        {parts && parts.more.length > 0 && (
+          <button
+            type="button"
+            role="menuitem"
+            className="ss-item ss-more"
+            aria-expanded={unfold}
+            onClick={() => setUnfold((v) => !v)}
+            data-testid="session-more"
+          >
+            <span className="ss-ic ss-more-ic" aria-hidden="true">
+              {unfold ? "⌄" : "›"}
+            </span>
+            <span className="ss-n">{t("ss.moreAgents")}</span>
+            <span className="ss-missing">{parts.more.length}</span>
+          </button>
+        )}
+        {unfold && parts?.more.map(row)}
         {keeps.length > 0 && (
           <>
             <div className="ss-sep" />
@@ -414,7 +478,7 @@ function AddOmhLine({ onPick }: { onPick: () => void }) {
 }
 
 /** The coding agents the New session tooltip names: the CLIs a person launches to code with (omh stays in the + menu). */
-const CODING: AgentId[] = ["claude", "codex", "omo", "dsh", "pi", "omp", "grok", "opencode"];
+const CODING: AgentId[] = ["claude", "codex", "omo", "dsh", "pi", "omp", "grok", "opencode", "kilo", "gemini", "qwen", "kimi", "copilot", "cline"];
 
 /** The empty section: one "New session" row built like the sidebar's nav rows, opening the same + menu under it.
  *  What it does and the installed coding agents sit in its tooltip; nothing else shows, nothing is centred or boxed. */

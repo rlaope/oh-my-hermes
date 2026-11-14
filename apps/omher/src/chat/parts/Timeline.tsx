@@ -25,7 +25,7 @@ const botSpoke = (it?: TimelineItem) => it?.kind === "assistant" || it?.kind ===
 
 /** `face` stands in for the bot's picture beside its bubbles and the typing bubble (a SESSIONS chat: its
  *  agent's mark). Pass a stable element (useMemo): the bubbles are memoized on it. */
-export function Timeline({ bot, face, onEditLast }: { bot: Bot; face?: ReactNode; onEditLast?: () => void }) {
+export function Timeline({ bot, face, onEditLast, connectionNotice = true }: { bot: Bot; face?: ReactNode; onEditLast?: () => void; connectionNotice?: boolean }) {
   const s = useStore();
   const items = selectTimeline(s, bot.name);
   const chat = s.chats[bot.name];
@@ -121,7 +121,7 @@ export function Timeline({ bot, face, onEditLast }: { bot: Bot; face?: ReactNode
           {t("tl.unreachable", { bot: bot.display_name, error: chat.openError })}
         </div>
       )}
-      {bot.status === "offline" && (
+      {connectionNotice && bot.status === "offline" && (
         <div className="day note rs-note" data-testid="chat-offline">
           <span>{t("tl.offline", { bot: bot.display_name })}</span> <RestartAction bot={bot} start testId="chat-start" />
           <RestartLine bot={bot} testId="chat-restart-line" />

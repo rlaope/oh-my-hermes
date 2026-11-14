@@ -58,14 +58,15 @@
   bottom: calc(100% + 4px);
 }
 /* ...and keeps a few px of air under the sidebar row above it (MENU_AIR in SessionsSection.tsx): a band of the
-   sidebar's colour over the strip between, so the empty top of the next row (rows stand 2px apart) never shows */
+   sidebar's colour over the strip between, so the empty top of the next row (rows stand 2px apart) never shows.
+   fitMenu makes it taller (--ss-air) when a list that fits whole would otherwise end part-way down a row */
 .side-sh-row .ss-pop.ui-pop-top::before {
   content: "";
   position: absolute;
   left: -1px;
   right: -1px;
   bottom: calc(100% + 1px);
-  height: 6px;
+  height: var(--ss-air, 6px);
   background: var(--side);
 }
 /* the list scrolls inside the menu when the window is too short for every agent (fitMenu sets its max height) */
@@ -77,6 +78,14 @@
 .ss-scroll.more {
   mask-image: linear-gradient(to bottom, #000 calc(100% - 28px), transparent);
   -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 28px), transparent);
+}
+/* A folded list can end on More agents: keep that entry at full contrast. A persistent thin scrollbar, rather
+   than a fade over its text, says there are more rows below. The expanded list keeps the edge fade. */
+.ss-scroll.more:has(.ss-more[aria-expanded="false"]) {
+  mask-image: none;
+  -webkit-mask-image: none;
+  scrollbar-width: thin;
+  scrollbar-color: var(--muted) transparent;
 }
 /* the first frame, before the menu knows where it fits, is not shown */
 .ss-pop-measuring {
@@ -206,6 +215,54 @@
   overflow: hidden;
   text-overflow: ellipsis;
   flex: none;
+}
+/* "More agents": a plain row like the agents, its chevron in the mark's place and the count at its end */
+.ss-more {
+  color: var(--muted);
+}
+.ss-more:hover,
+.ss-more:focus-visible {
+  color: var(--ink);
+}
+.ss-more-ic {
+  font-size: 13px;
+  line-height: 1;
+}
+/* a missing agent's row: its name with "Not installed" (or "Copied") at the line's end, and under them the install
+   line, the text that is copied, small and quiet. The line is never cut: it takes as many lines as it needs, and
+   the row grows with it. A word of it (a package name, a flag) stays on one line unless it is longer than the row */
+.ss-head {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  width: 100%;
+  min-width: 0;
+}
+.ss-head .ss-l {
+  flex: 1;
+  min-width: 0;
+}
+.ss-item:has(.ss-install) {
+  height: auto;
+  min-height: 40px;
+  padding-top: 3px;
+  padding-bottom: 3px;
+}
+.ss-item:has(.ss-install) > .ss-ic {
+  /* beside the name, not the middle of a row of several lines */
+  align-self: flex-start;
+  margin-top: 2px;
+}
+.ss-as.ss-install {
+  font-family: var(--mono);
+  font-size: 10.5px;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  overflow: visible;
+}
+.ss-tok {
+  display: inline-block;
+  max-width: 100%;
 }
 .ss-sep {
   height: 1px;
@@ -545,6 +602,11 @@
   overflow: hidden;
   text-overflow: ellipsis;
   min-width: 0;
+}
+/* the command to run, as inline code the way an answer shows one */
+.ss-ended-t code {
+  font-size: 11px;
+  background: color-mix(in srgb, var(--ink) 9%, transparent);
 }
 .ss-restart {
   flex: none;
