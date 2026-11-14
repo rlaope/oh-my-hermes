@@ -1,8 +1,10 @@
 mod accounts;
+mod acp_agents;
 mod acp_chat;
 mod agent_chat;
 mod appimage;
 mod bridge;
+mod custom_agents;
 mod dsh_chat;
 mod folder_open;
 mod git_branch;
@@ -242,9 +244,73 @@ async fn account_login_cancel(shell: State<'_, Shell>, login: u32) -> Result<(),
 
 /// The allow-listed agent programs (claude, codex, omo, dsh, omh, pi, omp, grok), how each opens and where each
 /// was found, if anywhere.
+/// One row of the agent look-up: an allow-listed agent, or one the person added on Settings › Agents.
+#[derive(serde::Serialize)]
+#[serde(untagged)]
+enum AnyAgent {
+    Listed(AgentInfo),
+    Custom(custom_agents::CustomInfo),
+}
+
 #[tauri::command]
-async fn sessions_agents() -> Result<Vec<AgentInfo>, String> {
-    Ok(tauri::async_runtime::spawn_blocking(sessions::agents_on_this_machine).await.map_err(|e| e.to_string())?)
+async fn sessions_agents() -> Result<Vec<AnyAgent>, String> {
+    tauri::async_runtime::spawn_blocking(|| {
+        let mut all: Vec<AnyAgent> = sessions::agents_on_this_machine().into_iter().map(AnyAgent::Listed).collect();
+        // then the person's own agents, each checked as the file is read now (a broken entry is not listed here)
+        all.extend(custom_agents::list_here().agents.into_iter().map(AnyAgent::Custom));
+        all
+    })
+    .await
+    .map_err(|e| e.to_string())
+}
+
+/// Settings › Agents: the person's own agents (where each program is now) and the entries of the file that are
+/// broken (skipped, never run). Reads omher's own file only.
+#[tauri::command]
+async fn custom_agents_list() -> Result<custom_agents::CustomList, String> {
+    tauri::async_runtime::spawn_blocking(custom_agents::list_here).await.map_err(|e| e.to_string())
+}
+
+/// The confirm card for the Add agent form: the entry the four fields make, checked, and the exact command omher
+/// would run (the program as found now, then the arguments; none when it is not found). Writes nothing. A refusal is
+/// `why:<code>`.
+#[tauri::command]
+async fn custom_agent_preview(label: String, program: String, args: String, install: String) -> Result<custom_agents::Preview, String> {
+    tauri::async_runtime::spawn_blocking(move || custom_agents::preview_here(&label, &program, &args, &install).map_err(|w| format!("why:{}", w.code())))
+        .await
+        .map_err(|e| e.to_string())?
+}
+
+/// The card's Add, the only way an entry is written: `entry` is checked again and added to omher's own file.
+#[tauri::command]
+async fn custom_agent_confirm(entry: custom_agents::CustomAgent) -> Result<(), String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let home = custom_agents::home().ok_or("no home folder")?;
+        custom_agents::confirm_add(&home, &entry, Os::current(), sessions::is_program_file).map_err(|w| format!("why:{}", w.code()))
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
+/// The confirm card for a bot's draft (an `omher-agent` block in its reply, read by the UI): the same check as the
+/// form's preview and stricter (no shell, interpreter or built-in program), the arguments as the draft's own list.
+/// Writes nothing; only the card's Add (`custom_agent_confirm`) does. A refusal is `why:<code>`.
+#[tauri::command]
+async fn custom_agent_bot_preview(label: String, program: String, args: Vec<String>, install: String) -> Result<custom_agents::Preview, String> {
+    tauri::async_runtime::spawn_blocking(move || custom_agents::bot_preview_here(&label, &program, &args, &install).map_err(|w| format!("why:{}", w.code())))
+        .await
+        .map_err(|e| e.to_string())?
+}
+
+/// The remove confirm: agent `id` leaves omher's own file (a broken entry too).
+#[tauri::command]
+async fn custom_agent_remove(id: String) -> Result<(), String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let home = custom_agents::home().ok_or("no home folder")?;
+        custom_agents::confirm_remove(&home, &id).map_err(|w| format!("why:{}", w.code()))
+    })
+    .await
+    .map_err(|e| e.to_string())?
 }
 
 /// Start allow-listed agent `agent` in folder `cwd` in a new pseudo-terminal (its own terminal UI). Only an
@@ -551,6 +617,11 @@ pub fn run() {
             account_login_start,
             account_login_cancel,
             sessions_agents,
+            custom_agents_list,
+            custom_agent_preview,
+            custom_agent_bot_preview,
+            custom_agent_confirm,
+            custom_agent_remove,
             session_start,
             session_write,
             session_ack,

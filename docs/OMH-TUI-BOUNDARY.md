@@ -274,6 +274,18 @@ memory (`/proc/<pid>/statm`, or `proc_pidinfo`, which answers only for this
 user's processes); it sends no other signal, and nothing to the gateway. It reads on one thread for the session, never on the render path,
 and reads nothing while the board is closed.
 
+## The reasoning before a silent question
+
+When Hermes opens a clarify question, the TUI reads its own session's newest
+assistant row from the session's `state.db` (`src/tui/silent_lead.py`),
+opened `mode=ro` (immutable when no connection has it open, as the bot board
+opens it), once per question, waiting at most a quarter second on a writer.
+Only when that row made the very clarify call being opened (matched by its
+call id), wrote no reply text and carries reasoning does the question show
+that reasoning, dim, above itself. It writes nothing, sends nothing to the
+gateway, keeps the text only while the question is open, and draws nothing
+when anything is missing or the read fails.
+
 ## Sessions it refuses, and what it writes
 
 It never attaches to a session another runtime owns: when the launcher sets

@@ -153,14 +153,28 @@ for (const theme of ["dark", "light"] as const) {
   });
 }
 
-/** The header once the panel has stopped sliding (two reads 80ms apart agree). */
+/** The header once the panel has stopped sliding (the `settled()` of session-background-header.spec.ts): nothing of
+ *  the window or the panel is moving or about to, and the measured parts agree across two reads two frames apart.
+ *  Two equal reads 80 ms apart were not enough: a slide started by the resize or the shortcut can sit pending with its
+ *  start value, and the slow macOS runner then measured the header mid-slide (ko and ja at 900px, panel closed). */
 async function settledHeader(page: Page) {
-  const read = () => page.evaluate(() => document.querySelector('[data-testid="header"]')!.getBoundingClientRect().right);
+  const read = () =>
+    page.evaluate(async () => {
+      await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+      const moving = [".window", '[data-testid="details"]'].some((sel) =>
+        [...(document.querySelector(sel)?.getAnimations() ?? [])].some((a) => a.pending || a.playState === "running"),
+      );
+      const boxes = ["header", "who", "places", "model-label", "model-pill", "panel-button"].map((id) => {
+        const el = document.querySelector(`[data-testid="${id}"]`) as HTMLElement | null;
+        return el ? [el.getBoundingClientRect().toJSON(), el.clientWidth, el.scrollWidth, getComputedStyle(el).display] : null;
+      });
+      return { moving, boxes };
+    });
   await expect
     .poll(async () => {
       const a = await read();
-      await page.waitForTimeout(80);
-      return a === (await read());
+      const b = await read();
+      return !a.moving && !b.moving && JSON.stringify(a.boxes) === JSON.stringify(b.boxes);
     })
     .toBe(true);
 }

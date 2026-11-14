@@ -1,5 +1,5 @@
 // Settings view (main column while `ui.view === "settings"`). Left list: You (Accounts), Bots (one page per bot: Profile,
-// Model, Work) and App (General, Terminal, Providers, Computer). Pages are `bot:<name>` and the App page names; the
+// Model, Work) and App (General, Terminal, Agents, Providers, Computer). Pages are `bot:<name>` and the App page names; the
 // page lives in the store (`ui.settingsPage`) so the model popover can deep-link to a bot.
 import { useEffect, useState } from "react";
 import "./settings.css";
@@ -16,6 +16,7 @@ import { Appearance } from "./Appearance";
 import { AccountsPage } from "./accounts/AccountsPage";
 import { ProvidersPage } from "./providers/ProvidersPage";
 import { TerminalPage } from "./terminal/TerminalPage";
+import { AgentsPage } from "./agents/AgentsPage";
 import { AvatarEditor, BotFacts, NameEditor, PictureActions, placeName, useBotInfo, usePictureEditor } from "./BotIdentity";
 
 export const slot = "settings";
@@ -23,6 +24,7 @@ export const slot = "settings";
 const APP_PAGES: { id: string; label: Key }[] = [
   { id: "general", label: "set.general" },
   { id: "terminal", label: "set.terminal" },
+  { id: "agents", label: "set.agents" },
   { id: "providers", label: "set.providers" },
   { id: "computer", label: "set.computer" },
 ];
@@ -77,6 +79,8 @@ export default function Settings({ page }: SlotProps["settings"]) {
           <BotsPage />
         ) : current === "terminal" ? (
           <TerminalPage />
+        ) : current === "agents" ? (
+          <AgentsPage />
         ) : current === "providers" ? (
           <ProvidersPage />
         ) : current === "computer" ? (

@@ -8,5 +8,5 @@ export { Popover } from "./Popover";
 export * from "./icons";
 export { SourceIcon, MARKED } from "./SourceIcon";
 export { ModelIcon, markFor } from "./ModelIcon";
-export { AgentIcon, agentIcon, AGENT_IDS } from "./AgentIcon";
+export { AgentIcon, agentIcon, fileMark, AGENT_IDS } from "./AgentIcon";
 export { PrIcon, PR_PATHS } from "./PrIcon";

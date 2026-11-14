@@ -1,4 +1,4 @@
-// Shots for the six ACP agents (Kilo Code, Gemini CLI, Qwen Code, Kimi Code, Copilot CLI, Cline) at a 900x600
+// Shots for the generic ACP agents (Gemini CLI, Qwen Code, Kimi Code, Copilot CLI, Cline) at a 900x600
 // window, dark and light: the SESSIONS + menu folded, the same menu with the agents that are not installed opened,
 // and an installed agent that is not signed in. Run with OMHER_SHOTS=<dir> OMHER_SHOT_TAG=before|after (skipped
 // otherwise). On the base commit there is no fold and no Gemini CLI: "more" scrolls the menu to its end and "signin"
@@ -37,7 +37,7 @@ async function open(page: Page, theme: string) {
     localStorage.removeItem("omher.sessions.recent");
     const w = window as unknown as { __omherPickFolder: string; __omherMockAgents: string[] };
     w.__omherPickFolder = "/Users/you/code/web-app";
-    w.__omherMockAgents = ["claude", "codex", "omh", "opencode", "kilo", "gemini"];
+    w.__omherMockAgents = ["claude", "codex", "omo", "omh", "opencode", "gemini"];
   }, theme);
   await page.goto("/");
   await expect(page.getByTestId("bot-kami")).toHaveAttribute("aria-current", "true");

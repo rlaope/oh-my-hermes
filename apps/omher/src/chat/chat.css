@@ -717,3 +717,41 @@
   background: var(--g-accent);
   box-shadow: 0 0 0 1.5px var(--bg);
 }
+
+/* a bot reply's agent drafts (AgentChip.tsx): compact chips under the bubble, the reply chips' look */
+.agent-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 6px;
+}
+.agent-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 100%;
+  padding: 3px 9px 3px 7px;
+  border-radius: var(--r);
+  background: var(--raise2);
+  font-size: 11.5px;
+  color: var(--body);
+}
+.agent-chip:not(:disabled):hover {
+  background: var(--seg-on);
+  color: var(--ink);
+}
+.agent-chip:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+.agent-chip-t {
+  color: var(--ink);
+  white-space: nowrap;
+}
+.agent-chip-k {
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}

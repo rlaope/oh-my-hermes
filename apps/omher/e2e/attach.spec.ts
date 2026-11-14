@@ -38,7 +38,7 @@ async function openFriren(page: Page) {
   await expect(page.getByTestId("composer")).toBeEnabled();
 }
 
-/** Picks files through the + menu's "Files" item and the system file chooser. */
+/** Picks files through the + menu's one "Add photos and files" item and the system file chooser. */
 async function pickFiles(page: Page, files: { name: string; mimeType: string; buffer: Buffer }[]) {
   await page.getByTestId("attach").click();
   const chooser = page.waitForEvent("filechooser");
@@ -86,7 +86,7 @@ test("the + sits at the composer's left edge, level with Send, always there", as
   expect(style).toEqual({ radius: "6px", border: "solid", bg: "none" }); // gray outline, never the brand gradient
 });
 
-test("menu sits above the composer; file chooser adds chips; × removes one; a drop adds one", async ({ page }) => {
+test("the + menu has one file item and Plugins ›, the plugins open beside it; the picker adds chips; × removes one; a drop adds one", async ({ page }) => {
   await openFriren(page);
   await pickFiles(page, [
     { name: "one.png", mimeType: "image/png", buffer: PNG },
@@ -100,16 +100,48 @@ test("menu sits above the composer; file chooser adds chips; × removes one; a d
   await expect(chips.nth(0).getByTestId("attach-chip-note")).toHaveText(`${(PNG.length / 1024).toFixed(1)} KB`);
   expect(Math.round((await chips.nth(0).locator(".att-thumb").boundingBox())!.width)).toBe(24);
 
-  // the menu opens ENTIRELY above the composer (chips included), from its left edge
+  // the menu: two rows, ONE file item for every kind of file and "Plugins ›"; it opens entirely above the composer,
+  // from its left edge
   await page.getByTestId("attach").click();
   const menu = page.getByTestId("attach-menu");
   await expect(menu).toBeVisible();
-  await expect(menu.getByRole("menuitem")).toHaveText([/Photos & videos.*⇧A/, /Files.*O/, /Paste from clipboard.*V/]);
+  await expect(menu.locator(":scope > [role=menuitem]")).toHaveText([/^Add photos and files.*O$/, /^Plugins›$/]);
+  await expect(menu.getByText(/Photos & videos|Paste from clipboard/)).toHaveCount(0);
+  expect(await page.getByTestId("attach-file-input").getAttribute("accept")).toBeNull(); // pictures, videos, documents alike
+  // the menu slides in 3px: measure once it has settled
+  const settled = () => page.waitForFunction(() => document.querySelector("[data-testid=attach-menu]")?.getAnimations().every((x) => x.playState !== "running"));
+  await settled();
   const m = (await menu.boundingBox())!;
   const c = (await page.getByTestId("composer-box").boundingBox())!;
   expect(m.y + m.height).toBeLessThanOrEqual(c.y);
   expect(Math.abs(m.x - c.x)).toBeLessThanOrEqual(2);
-  expect(await menu.evaluate((e) => getComputedStyle(e).borderRadius)).toBe("6px");
+  expect(Math.round(m.width)).toBe(224);
+  await expect(page.getByTestId("attach-sub")).toHaveCount(0);
+  // the plugins open beside it, bottom edges level, with no overlap: Friren's two enabled plugins (by name, the
+  // description as the tooltip), a line, Manage plugins
+  await page.getByTestId("attach-plugins").hover();
+  const sub = page.getByTestId("attach-sub");
+  await expect(sub).toBeVisible();
+  await expect(page.getByTestId("attach-plugins")).toHaveAttribute("aria-expanded", "true");
+  // "Plugins ›" stays lit while its submenu is open: its fill differs from the menu's
+  const lit = await page.evaluate(() => {
+    const bg = (sel: string) => getComputedStyle(document.querySelector(sel)!).backgroundColor;
+    return [bg("[data-testid=attach-plugins]"), bg("[data-testid=attach-menu]")];
+  });
+  expect(lit[0]).not.toBe(lit[1]);
+  expect(lit[0]).not.toBe("rgba(0, 0, 0, 0)");
+  const plugins = sub.getByTestId("attach-plugin");
+  await expect(plugins.locator(".att-n")).toHaveText(["Fal", "Holographic"]);
+  await expect(plugins.first()).toHaveAttribute("title", "Image generation through fal.ai.");
+  await expect(sub.getByTestId("attach-manage")).toHaveText("Manage plugins");
+  await settled();
+  const [sb, mb] = [(await sub.boundingBox())!, (await menu.boundingBox())!];
+  expect(sb.x).toBeGreaterThanOrEqual(mb.x + mb.width);
+  expect(Math.abs(sb.y + sb.height - (mb.y + mb.height))).toBeLessThanOrEqual(2);
+  for (const row of await plugins.all()) expect(await row.evaluate((e) => e.getBoundingClientRect().height)).toBe(32);
+  // back on the file row the submenu closes; Escape closes everything
+  await page.getByTestId("attach-files").hover();
+  await expect(sub).toHaveCount(0);
   await page.keyboard.press("Escape");
   await expect(menu).toHaveCount(0);
 
@@ -120,6 +152,33 @@ test("menu sits above the composer; file chooser adds chips; × removes one; a d
   await expect(chips.nth(2)).toHaveAttribute("data-name", "notes.txt");
   await expect(chips.nth(2).locator(".att-badge")).toHaveText("TXT");
   expect(await sendOps()).toEqual([]); // nothing goes until Send
+});
+
+test("a plugin picked in the + menu is named at the start of the message; Manage opens Plugins", async ({ page }) => {
+  await openFriren(page);
+  await page.getByTestId("composer").fill("make a cover image");
+  await page.getByTestId("attach").click();
+  await page.getByTestId("attach-plugins").click();
+  await page.getByTestId("attach-plugin").filter({ hasText: "Fal" }).click();
+  await expect(page.getByTestId("attach-menu")).toHaveCount(0);
+  await expect(page.getByTestId("composer")).toHaveValue("Use Fal: make a cover image");
+  await expect(page.getByTestId("composer")).toBeFocused();
+  expect(await sendOps()).toEqual([]); // nothing is sent by picking
+  await page.getByTestId("attach").click();
+  await page.getByTestId("attach-plugins").hover();
+  await page.getByTestId("attach-manage").click();
+  await expect(page.getByText("Friren's plugins")).toBeVisible();
+});
+
+test("the + menu works from the keyboard: → opens the plugins, ← comes back", async ({ page }) => {
+  await openFriren(page);
+  await page.getByTestId("attach").click();
+  await page.getByTestId("attach-plugins").focus();
+  await page.keyboard.press("ArrowRight");
+  await expect(page.getByTestId("attach-plugin").first()).toBeFocused();
+  await page.keyboard.press("ArrowLeft");
+  await expect(page.getByTestId("attach-sub")).toHaveCount(0);
+  await expect(page.getByTestId("attach-plugins")).toBeFocused();
 });
 
 test("send attaches each chip in order, then sends; the bubble shows the files", async ({ page }) => {
@@ -224,13 +283,15 @@ test("screenshots: chips and the + menu, dark and light", async ({ page }) => {
   await dropFiles(page, [{ name: "huge.mov", type: "video/quicktime", size: 100 * 1024 * 1024 + 1 }]);
   await page.getByTestId("composer").fill("What changed since last week?");
   await page.getByTestId("attach").click();
-  await expect(page.getByTestId("attach-menu")).toBeVisible();
+  await page.getByTestId("attach-plugins").hover();
+  await expect(page.getByTestId("attach-plugin").first()).toBeVisible();
   await page.waitForTimeout(250); // the menu fades in
   await page.screenshot({ path: join(SHOTS, "T2-attach-dark.png") });
   await page.keyboard.press("Escape");
   await page.emulateMedia({ colorScheme: "light" });
   await expect(page.locator("html")).toHaveAttribute("data-theme", "light");
   await page.getByTestId("attach").click();
+  await page.getByTestId("attach-plugins").hover();
   await page.waitForTimeout(400); // let the theme transition finish
   await page.screenshot({ path: join(SHOTS, "T2-attach-light.png") });
   await page.keyboard.press("Escape");

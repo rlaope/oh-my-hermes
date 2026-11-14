@@ -49,6 +49,7 @@ export function Chat() {
           offline={bot.status === "offline" || away}
           offlineText={away ? t("chat.connecting") : undefined}
           skills
+          plugins
           onSend={(text) => void s.send(text)}
           onSendFiles={(text, files) => s.sendWithFiles(text, files)}
           onStop={() => void s.interrupt()}

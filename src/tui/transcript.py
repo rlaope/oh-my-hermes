@@ -1980,6 +1980,12 @@ class Transcript:
             return last
         return None
 
+    def running_clarify_id(self) -> str:
+        """The call id of the last `clarify` still running in the live tool group (the question being opened), or ""."""
+        group = self._live(ToolGroup)
+        rows = [row for row in group.tools if row.name == CLARIFY_TOOL and row.status == TOOL_RUNNING] if group else []
+        return rows[-1].tool_id if rows else ""
+
     def _open_command(self) -> CommandBlock | None:
         """`command` while its echo is open and this transcript's; None otherwise."""
         block = self.command
