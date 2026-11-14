@@ -11,7 +11,7 @@ load_local_package()
 
 from _cli_harness import run_cli  # noqa: E402
 
-from omh.maintenance.advisory import build_model_routing_status  # noqa: E402
+from omh.maintenance.advisory import build_model_routing_status, parse_hermes_model_aliases  # noqa: E402
 from omh.paths import resolve_paths  # noqa: E402
 from omh.routing.owner_preference import (  # noqa: E402
     empty_owner_preference_state,
@@ -126,6 +126,44 @@ class ModelRoutingStatusTests(unittest.TestCase):
             self.assertEqual(corrupt["owner_learning"]["status"], "corrupt")
             self.assertIn("repair", corrupt["next_action"].lower())
 
+    def test_nested_hermes_aliases_are_not_reported_corrupt(self) -> None:
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            paths = resolve_paths(root / ".omh", root / ".hermes")
+            _write(
+                paths.hermes_config_path,
+                "model:\n  aliases:\n    main:\n      model: kimi-coding/kimi-k3.1-pro\n    cheap:\n      model: zai/glm-5.2\n",
+            )
+            status = build_model_routing_status(paths, discovery_home=root / "empty-home")
+        self.assertEqual(status["hermes"]["status"], "configured")
+        self.assertEqual(status["hermes"]["aliases"]["main"], "kimi-coding/kimi-k3.1-pro")
+        self.assertEqual(status["hermes"]["aliases"]["cheap"], "zai/glm-5.2")
+
+    def test_top_level_model_aliases_form_is_accepted(self) -> None:
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            paths = resolve_paths(root / ".omh", root / ".hermes")
+            _write(
+                paths.hermes_config_path,
+                "model_aliases:\n  a:\n    model: x/y\n  b: z/w\n",
+            )
+            status = build_model_routing_status(paths, discovery_home=root / "empty-home")
+        self.assertEqual(status["hermes"]["status"], "configured")
+        self.assertEqual(status["hermes"]["aliases"], {"a": "x/y", "b": "z/w"})
+
+    def test_malformed_nested_aliases_are_reported_corrupt(self) -> None:
+        cases = [
+            "model:\n  aliases:\n    main:\n      model: first\n      model: second\n",
+            "model:\n  aliases:\n    main:\n      model: safe\n        model: secret\n",
+        ]
+        for text in cases:
+            with TemporaryDirectory() as tmp:
+                root = Path(tmp)
+                paths = resolve_paths(root / ".omh", root / ".hermes")
+                _write(paths.hermes_config_path, text)
+                status = build_model_routing_status(paths, discovery_home=root / "empty-home")
+            self.assertEqual(status["hermes"]["status"], "corrupt", text)
+
     def test_cli_json_surface_is_compact_and_offline(self) -> None:
         with TemporaryDirectory() as tmp:
             root = Path(tmp)
@@ -233,6 +271,83 @@ class ModelIdSummaryTests(unittest.TestCase):
         from omh.commands.coding import _model_id_summary
 
         self.assertEqual(_model_id_summary([]), "none")
+
+
+class HermesModelAliasesParserTests(unittest.TestCase):
+    def test_nested_and_flat_mixed(self) -> None:
+        text = (
+            "model:\n"
+            "  aliases:\n"
+            "    flat: a/b\n"
+            "    nested:\n"
+            "      model: c/d\n"
+            "    another_flat: e/f\n"
+        )
+        aliases, err = parse_hermes_model_aliases(text)
+        self.assertEqual(err, "")
+        self.assertEqual(aliases, {"another_flat": "e/f", "flat": "a/b", "nested": "c/d"})
+
+    def test_indent_two_and_four_spaces(self) -> None:
+        for indent in ("  ", "    "):
+            text = (
+                "model:\n"
+                f"{indent}aliases:\n"
+                f"{indent}{indent}x:\n"
+                f"{indent}{indent}{indent}model: p/q\n"
+            )
+            aliases, err = parse_hermes_model_aliases(text)
+            self.assertEqual(err, "", indent)
+            self.assertEqual(aliases, {"x": "p/q"}, indent)
+
+    def test_child_model_does_not_overwrite_parent_case_a3(self) -> None:
+        text = (
+            "model:\n"
+            "  aliases:\n"
+            "    main:\n"
+            "      model: safe/target\n"
+            "        model: secret/target\n"
+        )
+        aliases, err = parse_hermes_model_aliases(text)
+        self.assertNotEqual(err, "")
+        self.assertEqual(aliases, {})
+
+    def test_duplicate_model_lines_rejected_case_a2(self) -> None:
+        text = (
+            "model:\n"
+            "  aliases:\n"
+            "    main:\n"
+            "      model: first/target\n"
+            "      model: second/target\n"
+        )
+        aliases, err = parse_hermes_model_aliases(text)
+        self.assertNotEqual(err, "")
+        self.assertEqual(aliases, {})
+
+    def test_secret_in_unknown_child_does_not_leak(self) -> None:
+        secret = "SUPERSECRETVALUE"
+        text = (
+            "model:\n"
+            "  aliases:\n"
+            "    main:\n"
+            "      model: safe/target\n"
+            f"      api_key: {secret}\n"
+        )
+        aliases, err = parse_hermes_model_aliases(text)
+        self.assertEqual(err, "")
+        self.assertEqual(aliases, {"main": "safe/target"})
+        self.assertNotIn(secret, repr(aliases))
+        self.assertNotIn(secret, err)
+
+    def test_top_level_model_aliases_nested_and_flat(self) -> None:
+        text = (
+            "model_aliases:\n"
+            "  a:\n"
+            "    model: x/y\n"
+            "  b: z/w\n"
+        )
+        aliases, err = parse_hermes_model_aliases(text)
+        self.assertEqual(err, "")
+        self.assertEqual(aliases, {"a": "x/y", "b": "z/w"})
 
 
 if __name__ == "__main__":

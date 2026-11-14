@@ -979,6 +979,21 @@ All notable changes will be documented here.
   route's own `skills:` list now gets its first block. The uninstall report reads its `section.key`
   presence the same way, so a name inside another root key's flow mapping is
   no longer reported as OMH's own. Reported by @PabloJustDevelops in #2829.
+- **`omh coding model-routing status` and the setup profile pack now read
+  the model aliases Hermes itself writes.** `hermes config set
+  model_aliases.<name>.model <model>` stores each alias as a mapping with
+  `model`, `provider`, `base_url` and `key_env` children, under the root
+  `model_aliases` key or `model.aliases`. The shared alias parser read only
+  the flat `alias: target` form, so such a config showed `Hermes aliases
+  (corrupt)`, an empty alias map and a "Repair the Hermes config" action in
+  `omh doctor`. A nested entry's target is now its `model` child. The other
+  children are read past, and their values are never kept or returned. The flat
+  form is unchanged. A nested entry with no `model` child now names its
+  error as `model alias entry shape is unsupported` instead of a malformed
+  entry. A duplicate `model` child,
+  a deeper or misaligned child, a child key named `aliases`, and a
+  credential-shaped `model` value are still refused. Reported in #2863 by
+  @MarinWasAsleep; first fixed by @SHURIKA6 in #2867.
 
 - **Right-click an empty part of omher's Sessions list to start a new session.**
   The menu opens the existing agent picker without starting a process; each
