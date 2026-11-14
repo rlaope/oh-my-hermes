@@ -1724,7 +1724,10 @@ export function createStore(bridge: BridgeLike, opts: StoreOptions = {}): Store 
         // prompts its existing Bot Chat holds, so an approval or question it is waiting on still reaches Needs you.
         await Promise.allSettled([
           ...selectSidebarBots(state).filter((b) => b.name !== first && online(b)).map((b) => loadChat(b.name)),
-          ...selectUnlisted(state).filter(online).map((b) => peekAsks(b.name)),
+          // every bot outside the list, not only `online` ones: bots.list reads offline for any profile the bridge
+          // has not attached yet, which is every one of these at start; chat.open attaches on demand, and one that
+          // cannot start just fails and is skipped
+          ...selectUnlisted(state).map((b) => peekAsks(b.name)),
         ]);
       } catch (e) {
         fail(e);

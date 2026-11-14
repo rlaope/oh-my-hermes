@@ -384,6 +384,8 @@ function fakeBridge() {
   const calls: { op: string; params: Record<string, unknown> }[] = [];
   let history = [{ id: "h1", role: "user" as const, text: "hi", ts: T0 / 1000 - 10 }];
   const offline = new Set<string>();
+  // bots.list status per bot (default online); the real bridge reads "offline" for any profile not yet attached
+  const listed = new Map<string, string>();
   let running = false;
   const bridge: BridgeLike = {
     connect: async () => {
@@ -399,7 +401,7 @@ function fakeBridge() {
         case "bots.list":
           return {
             bots: ["kami", "friren"].map((name) => ({
-              name, display_name: name, is_default: false, model: "m", provider: "p", description: "", status: "online", running: false,
+              name, display_name: name, is_default: false, model: "m", provider: "p", description: "", status: listed.get(name) ?? "online", running: false,
             })),
           };
         case "chat.open":
@@ -428,6 +430,7 @@ function fakeBridge() {
     status: (s: BridgeStatus) => statusH!(s),
     setHistory: (h: typeof history) => (history = h),
     setOffline: (bot: string) => offline.add(bot),
+    setListedStatus: (bot: string, status: string) => listed.set(bot, status),
     setRunning: (r: boolean) => (running = r),
   };
 }
@@ -450,6 +453,17 @@ describe("store", () => {
     expect(opens.filter((c) => c.params.existing_only === true).map((c) => c.params.bot)).toEqual(["friren"]);
     expect(s.elsewhere.kami).toHaveLength(1);
     expect(s.models.kami.current.model).toBe("Opus 5.5");
+  });
+
+  it("a bot outside the list that bots.list reads offline (not attached yet) is still asked for its waiting prompts", async () => {
+    const f = fakeBridge();
+    f.setListedStatus("friren", "offline");
+    const store = createStore(f.bridge, { now: () => T0 });
+    await store.actions.init();
+    expect(store.getState().ui.roster).toEqual(["kami"]);
+    const peeks = f.calls.filter((c) => c.op === "chat.open" && c.params.existing_only === true).map((c) => c.params.bot);
+    expect(peeks).toEqual(["friren"]);
+    expect(store.getState().chats.friren).toBeUndefined();
   });
 
   it("roster: the bot saved for resume starts alone; list, open, remove; the last one stays", async () => {
