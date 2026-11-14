@@ -162,7 +162,8 @@ test("a first run takes the language from the system; an install that already ra
   const fresh = await browser.newContext({ locale: "zh-CN", colorScheme: "dark", storageState: { cookies: [], origins: [] } });
   const p1 = await fresh.newPage();
   await p1.goto("/");
-  await expect(p1.getByTestId("bot-kami")).toBeVisible();
+  // a fresh install lists the default bot alone
+  await expect(p1.getByTestId("bot-default")).toBeVisible();
   expect(await p1.evaluate(() => document.documentElement.lang)).toBe("zh-CN");
   await expect(p1.getByTestId("nav-settings")).toContainText("设置");
   expect(await p1.evaluate(() => localStorage.getItem("omher.lang"))).toBe("zh");

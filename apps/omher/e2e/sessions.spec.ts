@@ -109,6 +109,11 @@ test("thirteen bots beside an empty SESSIONS use the room: the list does not sto
       ws.send(raw);
     });
   });
+  // all thirteen in the sidebar list
+  await page.addInitScript(() => {
+    const extra = Array.from({ length: 9 }, (_, i) => `extra${i}`);
+    localStorage.setItem("omher.roster", JSON.stringify(["kami", "friren", "default", "omh-tui", ...extra]));
+  });
   await open(page);
   await expect(page.locator("[data-testid=side-bots] .bot")).toHaveCount(13);
   const geo = await page.evaluate(() => {

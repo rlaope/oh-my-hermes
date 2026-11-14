@@ -1,6 +1,6 @@
-// First run (no `omher.onboarded` in localStorage, a fresh install): there is no first-run panel. An empty chat shows
-// just the chat (its timeline and composer), a chat with history shows its history, and the empty Sessions section
-// stays one New session row with its hint in the tooltip.
+// First run (no `omher.onboarded` in localStorage, a fresh install): there is no first-run panel. The sidebar lists
+// one bot, the default profile. An empty chat shows just the chat (its timeline and composer), a chat with history
+// shows its history, and the empty Sessions section stays one New session row with its hint in the tooltip.
 import { expect, test } from "@playwright/test";
 
 const MOCK = Number(process.env.OMHER_MOCK_PORT || 5308);
@@ -28,11 +28,15 @@ test("first run: an empty chat shows just the chat, with no first-run panel over
   await page.addInitScript(() => localStorage.removeItem("omher.sessions.recent"));
   await mock("mock.clearHistory", { bot: "friren" });
   await page.goto("/");
-  await expect(page.getByTestId("bot-kami")).toHaveAttribute("aria-current", "true");
-  await expect(page.getByTestId("timeline")).toContainText("Ping me when the retry fix is up.");
+  // a fresh install starts with the default bot alone; its chat has history
+  await expect(page.getByTestId("bot-default")).toHaveAttribute("aria-current", "true");
+  expect(await page.locator(".bot-list button.bot").count()).toBe(1);
+  await expect(page.getByTestId("timeline")).toContainText("Hi, I'm Hermes.");
   await expect(page.getByTestId("session-none")).toHaveText("New session");
   await expect(page.getByTestId("session-start")).toHaveAttribute("title", /^Run a coding agent in a folder, as a chat\./);
-  await page.getByTestId("bot-friren").click();
+  // another bot comes in from + in one click; its empty chat is just the chat
+  await page.getByRole("button", { name: "Add a bot" }).click();
+  await page.getByTestId("addbot-friren").getByRole("button", { name: "Add" }).click();
   await expect(page.getByTestId("bot-friren")).toHaveAttribute("aria-current", "true");
   const pane = page.locator('[data-pane="friren"]');
   await expect(pane.getByTestId("composer")).toBeVisible();
