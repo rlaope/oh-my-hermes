@@ -25,6 +25,7 @@ from .paired_run_validation import _parse_structural_paired_run_decision
 from .paired_run_model import (
     ArmSpec,
     BehaviorVerdict,
+    DECISION_SCHEMA_V1,
     InfrastructureStatus,
     PairedRunDecision,
     PairedRunValidationError,
@@ -189,6 +190,13 @@ def _pair_identity(
 def _validate_transition(prior: PairedRunDecision, candidate: PairedRunDecision) -> None:
     if _pair_identity(prior) != _pair_identity(candidate):
         raise PairedRunStoreError("superseding decisions must preserve pair identity")
+    # v1 history may be superseded by v2, which adds timing; a v2 decision is
+    # never superseded by v1, which would silently drop it.
+    if (
+        prior.schema_version != DECISION_SCHEMA_V1
+        and candidate.schema_version == DECISION_SCHEMA_V1
+    ):
+        raise PairedRunStoreError("superseding decisions must not downgrade the schema version")
     prior_rows = {(item.task_id, item.arm): item for item in prior.results}
     candidate_rows = {(item.task_id, item.arm): item for item in candidate.results}
     for key, prior_row in prior_rows.items():

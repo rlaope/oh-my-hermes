@@ -12,10 +12,13 @@ from .paired_run_model import (
     AggregationScope,
     ArmRole,
     ArmSpec,
+    DECISION_SCHEMA_V1,
+    DECISION_SCHEMA_VERSIONS,
     InfrastructureStatus,
     PairedRunDecision,
     PairedRunValidationError,
     TaskSpec,
+    aggregate_record,
 )
 from .paired_run_provenance import receipt_provenance_errors
 from .paired_run_result_parsing import parse_result_records
@@ -75,8 +78,10 @@ def _parse_structural_paired_run_decision(document: str) -> PairedRunDecision:
         _banned_keys(payload, errors)
     except RecursionError as exc:
         raise PairedRunValidationError(("document exceeds the nesting limit",)) from exc
-    if payload.get("schema_version") != "paired_run_decision/v1":
+    schema_version = payload.get("schema_version")
+    if schema_version not in DECISION_SCHEMA_VERSIONS:
         errors.append("schema_version is invalid")
+    timed = schema_version != DECISION_SCHEMA_V1
     for field in ("decision_id", "execution_revision"):
         _safe_ref(payload.get(field), field, errors)
     for field in ("outcome", "claim_boundary"):
@@ -102,9 +107,9 @@ def _parse_structural_paired_run_decision(document: str) -> PairedRunDecision:
     baseline = _arm(payload.get("baseline"), "baseline", errors)
     variant = _arm(payload.get("variant"), "variant", errors)
     tasks = _tasks(payload.get("tasks"), errors)
-    results = parse_result_records(payload.get("results"), errors)
+    results = parse_result_records(payload.get("results"), errors, timed=timed)
     aggregate_payload = payload.get("aggregate")
-    errors.extend(aggregate_shape_errors(aggregate_payload))
+    errors.extend(aggregate_shape_errors(aggregate_payload, with_speed=timed))
     if errors:
         raise PairedRunValidationError(tuple(errors))
     if baseline is None or variant is None:
@@ -152,24 +157,9 @@ def _parse_structural_paired_run_decision(document: str) -> PairedRunDecision:
     computed = aggregate_results(results, AggregationScope(
         computed_task_digest, baseline_digest, variant_digest,
     ))
-    expected_aggregate = {
-        "baseline": {
-            "observed_pass": computed.baseline.observed_pass,
-            "observed_fail": computed.baseline.observed_fail,
-            "infra_error": computed.baseline.infra_error,
-            "not_observed": computed.baseline.not_observed,
-        },
-        "variant": {
-            "observed_pass": computed.variant.observed_pass,
-            "observed_fail": computed.variant.observed_fail,
-            "infra_error": computed.variant.infra_error,
-            "not_observed": computed.variant.not_observed,
-        },
-        "comparable_task_count": computed.comparable_task_count,
-        "task_set_digest": computed.task_set_digest,
-        "baseline_exposure_digest": computed.baseline_exposure_digest,
-        "variant_exposure_digest": computed.variant_exposure_digest,
-    }
+    # The speed block is recomputed from the rows like every other aggregate
+    # field, so a hand-edited verdict or total never survives a parse.
+    expected_aggregate = json.loads(json.dumps(aggregate_record(computed, schema_version)))
     if aggregate_payload != expected_aggregate:
         errors.append("aggregate does not match results")
     if payload["outcome"] != computed.outcome:
