@@ -494,20 +494,20 @@ fn host_env(k: &str) -> Option<String> {
 }
 
 #[cfg(unix)]
-fn is_program_file(p: &Path) -> bool {
+pub(crate) fn is_program_file(p: &Path) -> bool {
     use std::os::unix::fs::PermissionsExt;
     std::fs::metadata(p).map(|m| m.is_file() && m.permissions().mode() & 0o111 != 0).unwrap_or(false)
 }
 
 #[cfg(not(unix))]
-fn is_program_file(p: &Path) -> bool {
+pub(crate) fn is_program_file(p: &Path) -> bool {
     p.is_file()
 }
 
 /// `search_dirs` on this machine plus the newest nvm Node (`~/.nvm/versions/node/<v>/bin`), which npm
 /// globals such as Codex live in when Node came from nvm. The nvm folders go before the app-bundle tail, so
 /// an npm install still wins over the ChatGPT app's copy.
-fn host_dirs() -> Vec<PathBuf> {
+pub(crate) fn host_dirs() -> Vec<PathBuf> {
     let os = Os::current();
     let mut dirs = search_dirs(&host_env, os);
     if os == Os::Unix {

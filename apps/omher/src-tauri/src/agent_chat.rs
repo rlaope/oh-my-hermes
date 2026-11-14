@@ -3396,6 +3396,12 @@ impl ChatSessions {
     where
         F: FnMut(ChatOut) + Send + 'static,
     {
+        // an agent the person added on Settings › Agents and confirmed on its card: read and checked again now
+        if agent(agent_id).is_none() {
+            if let Some(c) = crate::custom_agents::lookup(agent_id) {
+                return self.start_custom(&c, &crate::sessions::host_dirs(), cwd, resume, account_env, sink);
+            }
+        }
         let a = agent(agent_id).ok_or_else(|| format!("unknown agent \"{agent_id}\""))?;
         if a.mode != Mode::Chat {
             return Err(format!("{} has no chat mode", a.label));
@@ -3443,6 +3449,25 @@ impl ChatSessions {
             env.push(agent_rules(probe, label, &program, cwd, &path_env, account_env)?);
         }
         self.spawn(argv, cwd, Some(path_env), &env, adapter, sink)
+    }
+
+    /// Start custom agent `c` (Settings › Agents, confirmed on its card) as a chat through the generic ACP adapter:
+    /// its program resolved now, then exactly its stored arguments ([`crate::custom_agents::launch_here`]), on pipes,
+    /// through no shell, with the environment a generic ACP agent gets (`account_env`, which is empty for any agent
+    /// but Claude Code, Codex and Grok) and nothing more: no rule variable, no rule check. A conversation continues
+    /// only inside the protocol (`session/resume`, else `session/load`), never by an argument.
+    fn start_custom<F>(&self, c: &crate::custom_agents::CustomAgent, dirs: &[PathBuf], cwd: &Path, resume: Option<&str>, account_env: &[(String, String)], sink: F) -> Result<u32, String>
+    where
+        F: FnMut(ChatOut) + Send + 'static,
+    {
+        let thread = match resume {
+            Some(r) if is_acp_session_id(r) => Some(r),
+            Some(_) => return Err("not a conversation id".into()),
+            None => None,
+        };
+        let adapter: Box<dyn Adapter> = Box::new(Acp::new(crate::custom_agents::adapter_row(c), &cwd.to_string_lossy(), thread));
+        let (argv, path_env) = crate::custom_agents::launch_here(c, dirs)?;
+        self.spawn(argv, cwd, Some(path_env), account_env, adapter, sink)
     }
 
     /// Start `argv` on pipes in `cwd` with `adapter`. Crate-internal: the app reaches it only through
@@ -4166,6 +4191,46 @@ mod tests {
         assert!(wait_for(|| out.lock().unwrap().iter().any(|o| matches!(o, ChatOut::Exit(..))), 10), "close did not stop a HUP-ignoring agent");
         assert!(c.input(id, Input::Interrupt).is_err());
         let _ = std::fs::remove_file(mark);
+    }
+
+    /// A custom agent (Settings › Agents) starts as exactly its program and its stored arguments, through no shell:
+    /// a stub program records the argv it got and the first line omher wrote (the ACP `initialize`, with files and
+    /// terminal off); a conversation id goes only into the protocol, and anything else is refused before a process.
+    #[cfg(unix)]
+    #[test]
+    fn a_custom_agent_runs_exactly_its_program_and_arguments_with_no_shell() {
+        use std::os::unix::fs::PermissionsExt;
+        let dir = std::env::temp_dir().canonicalize().unwrap().join(format!("omher-custom-start-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(dir.join("bin")).unwrap();
+        let rec = dir.join("argv.txt");
+        let first = dir.join("stdin.txt");
+        let stub = dir.join("bin").join("stub-agent");
+        std::fs::write(&stub, format!("#!/bin/sh\nfor a in \"$0\" \"$@\"; do printf '%s\\n' \"$a\"; done > '{}'\nread l; printf '%s\\n' \"$l\" > '{}'\nexit 0\n", rec.display(), first.display())).unwrap();
+        std::fs::set_permissions(&stub, std::fs::Permissions::from_mode(0o755)).unwrap();
+        let c = crate::custom_agents::CustomAgent { id: "stub".into(), label: "Stub".into(), program: "stub-agent".into(), args: vec!["acp".into(), "--model=x:y".into(), "a/b=c".into()], install: String::new() };
+        let chats = ChatSessions::default();
+        let (out, sink) = collect();
+        chats.start_custom(&c, &[dir.join("bin")], &dir, None, &[], sink).unwrap();
+        assert!(wait_for(|| out.lock().unwrap().iter().any(|o| matches!(o, ChatOut::Exit(..))), 10));
+        let argv: Vec<String> = std::fs::read_to_string(&rec).unwrap().lines().map(String::from).collect();
+        assert_eq!(argv, [stub.to_string_lossy().as_ref(), "acp", "--model=x:y", "a/b=c"]);
+        let init: Value = serde_json::from_str(std::fs::read_to_string(&first).unwrap().trim()).unwrap();
+        assert_eq!(init["method"], "initialize");
+        assert_eq!(init["params"]["clientCapabilities"], json!({"fs": {"readTextFile": false, "writeTextFile": false}, "terminal": false}));
+        // a conversation continues inside the protocol only: a checked id is accepted, anything else refused first
+        let (_o, sink) = collect();
+        assert_eq!(chats.start_custom(&c, &[dir.join("bin")], &dir, Some("ses 1; rm"), &[], sink).unwrap_err(), "not a conversation id");
+        // not found on the folders given: refused, nothing runs
+        let (_o, sink) = collect();
+        assert!(chats.start_custom(&c, &[dir.join("nowhere")], &dir, None, &[], sink).unwrap_err().contains("not installed"));
+        // an entry that fails a check never starts, even handed in directly
+        let bad = crate::custom_agents::CustomAgent { args: vec!["-c".into(), "touch x".into()], ..c.clone() };
+        let (_o, sink) = collect();
+        assert!(chats.start_custom(&bad, &[dir.join("bin")], &dir, None, &[], sink).is_err());
+        // a custom id the file does not hold is an unknown agent
+        assert_eq!(chats.start_agent("stub-not-there", &dir, None, &[], None, |_| {}).unwrap_err(), "unknown agent \"stub-not-there\"");
+        let _ = std::fs::remove_dir_all(dir);
     }
 
     #[cfg(unix)]
