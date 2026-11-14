@@ -446,7 +446,7 @@ class BotsReady(BridgeCase):
                 self.assertTrue((await s.req("bots.ready", bot="kami", provider=pid))["ok"])
             self.assertEqual(env.clients["kami"].find("setup.runtime_check"),
                              [{"provider": "openai-codex"}, {"provider": "anthropic"}, {"provider": "nous"}])
-            for bad in ("openrouter", "claude-proxy", "", 3, "anthropic --x"):
+            for bad in ("", 3, "anthropic --x", "Nous", "-x", "a/b", "$(id)"):
                 r = await s.req("bots.ready", bot="kami", provider=bad)
                 self.assertEqual(r["error"]["code"], "bad_request", bad)
             self.assertEqual((await s.req("bots.ready", bot="ghost"))["error"]["code"], "unknown_bot")

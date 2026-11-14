@@ -1180,13 +1180,9 @@ class AddKeyOpensOnlyHermesAuthAdd(unittest.TestCase):
         self.assertEqual(owners, {"setup.runtime_check": {"op_bots_ready"}})
         body = ast.unparse(next(f for f in ast.walk(tree) if isinstance(f, ast.AsyncFunctionDef) and f.name == "op_bots_ready"))
         self.assertEqual(re.findall(r"_call\(conn, '([a-z._]+)'", body), ["setup.runtime_check"])
-        self.assertIn("if provider is not None and provider not in SIGN_IN_PROVIDERS:", body)
-        for node in tree.body:
-            if isinstance(node, ast.Assign) and any(isinstance(t, ast.Name) and t.id == "SIGN_IN_PROVIDERS" for t in node.targets):
-                self.assertEqual(ast.literal_eval(node.value.args[0]), {"openai-codex", "anthropic", "nous"})
-                break
-        else:
-            self.fail("SIGN_IN_PROVIDERS")
+        # the probe's provider is a checked id; which ids may open a terminal is the shell's SIGN_IN list
+        self.assertIn("PROVIDER_ID.fullmatch(provider)", body)
+        self.assertIn('PROVIDER_ID = re.compile(\'^[a-z0-9][a-z0-9_-]{0,40}$\')', ast.unparse(tree))
         self.assertNotIn("osascript", self.prod.replace("// ", ""))
 
     def test_no_pty_no_stdin_and_the_command_takes_only_a_provider(self) -> None:

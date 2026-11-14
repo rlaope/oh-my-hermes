@@ -47,8 +47,9 @@ FOLDER_CHAT_PREFIX = "omher · "
 MAX_FOLDER_CHATS = 16
 LOCAL_SOURCES = frozenset({"tui", "cli", "local", "desktop", "acp", "api_server", "omher"})
 REASONING_LEVELS = ["none", "low", "medium", "high", "xhigh"]
-# The connect block's sign-in providers (src-tauri hermes_auth.rs SIGN_IN): `bots.ready` takes only these as `provider`.
-SIGN_IN_PROVIDERS = frozenset({"openai-codex", "anthropic", "nous"})
+# `bots.ready {provider}`: a Hermes provider id, the shell's `valid_provider` pattern (the three sign-in ids the desktop
+# shell allows pass it; the strict check is a read either way).
+PROVIDER_ID = re.compile(r"^[a-z0-9][a-z0-9_-]{0,40}$")
 # setup.runtime_check answers a retryable error while its probe still runs: waits before asking again (None: give up).
 READY_RETRY = (0.5, 1.0, None)
 RUNNING_STATUSES = frozenset({"working", "streaming", "waiting", "starting"})
@@ -4542,12 +4543,12 @@ class Bridge:
 
     async def op_bots_ready(self, p) -> dict:
         """Can this bot answer? Hermes' own read-only readiness probe on the bot's gateway (``setup.runtime_check``):
-        the resolver session creation runs (model pin, then the fallback chain). With ``provider`` (one of the
-        connect block's sign-in ids) the strict single-provider check, to tell a sign-in that just finished.
+        the resolver session creation runs (model pin, then the fallback chain). With ``provider`` (the connect block
+        sends its sign-in's id) the strict single-provider check, to tell a sign-in that just finished.
         ``online`` in bots.list is only the socket; this is whether a message would get an answer."""
         provider = p.get("provider")
-        if provider is not None and provider not in SIGN_IN_PROVIDERS:
-            raise BridgeError("bad_request", "provider must be one of " + ", ".join(sorted(SIGN_IN_PROVIDERS)))
+        if provider is not None and not (isinstance(provider, str) and PROVIDER_ID.fullmatch(provider)):
+            raise BridgeError("bad_request", "provider must be a Hermes provider id")
         conn = await self._conn(p.get("bot"))
         params = {"provider": provider} if provider else {}
         for wait in READY_RETRY:

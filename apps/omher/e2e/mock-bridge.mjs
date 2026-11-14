@@ -535,9 +535,8 @@ const PROVIDERS = [
   },
   { slug: "ollama", name: "Ollama", models: ["llama-4-maverick", "my-local-model"] },
 ];
-// bots.ready: the connect block's sign-in ids, Hermes' sentence for a bot with no AI account, and each sign-in's models as
+// bots.ready: Hermes' sentence for a bot with no AI account, and each sign-in's models as
 // models.options lists them once signed in (the first is an Opus tier, so the cost-safe pick is the second).
-const SIGN_IN = ["openai-codex", "anthropic", "nous"];
 const NOT_CONNECTED = "Hermes is not connected to any AI provider yet. Run `hermes model` to pick one, type `/login` in chat, or add a key with `hermes auth add <provider>`.";
 const SIGN_IN_MODELS = {
   anthropic: { slug: "anthropic", name: "Anthropic", models: ["claude-opus-5-5", "claude-sonnet-5", "claude-haiku-4-5"] },
@@ -1280,7 +1279,7 @@ const OPS = {
   },
   "bots.ready": (p) => {
     const b = needBot(p);
-    if (p.provider !== undefined && !SIGN_IN.includes(p.provider)) throw new OpError("bad_request", "provider must be one of " + SIGN_IN.join(", "));
+    if (p.provider !== undefined && !(typeof p.provider === "string" && /^[a-z0-9][a-z0-9_-]{0,40}$/.test(p.provider))) throw new OpError("bad_request", "provider must be a Hermes provider id");
     if (!notReady.has(b.name)) return { ok: true, provider: models[b.name].provider, model: models[b.name].model, error: "" };
     const signed = notReady.get(b.name);
     // the strict check for the provider the person signed in to passes; the bot's own check passes once its chat
