@@ -292,6 +292,16 @@ async fn custom_agent_confirm(entry: custom_agents::CustomAgent) -> Result<(), S
     .map_err(|e| e.to_string())?
 }
 
+/// The confirm card for a bot's draft (an `omher-agent` block in its reply, read by the UI): the same check as the
+/// form's preview and stricter (no shell, interpreter or built-in program), the arguments as the draft's own list.
+/// Writes nothing; only the card's Add (`custom_agent_confirm`) does. A refusal is `why:<code>`.
+#[tauri::command]
+async fn custom_agent_bot_preview(label: String, program: String, args: Vec<String>, install: String) -> Result<custom_agents::Preview, String> {
+    tauri::async_runtime::spawn_blocking(move || custom_agents::bot_preview_here(&label, &program, &args, &install).map_err(|w| format!("why:{}", w.code())))
+        .await
+        .map_err(|e| e.to_string())?
+}
+
 /// The remove confirm: agent `id` leaves omher's own file (a broken entry too).
 #[tauri::command]
 async fn custom_agent_remove(id: String) -> Result<(), String> {
@@ -609,6 +619,7 @@ pub fn run() {
             sessions_agents,
             custom_agents_list,
             custom_agent_preview,
+            custom_agent_bot_preview,
             custom_agent_confirm,
             custom_agent_remove,
             session_start,

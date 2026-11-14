@@ -16,9 +16,9 @@ export interface CustomEntry {
 }
 
 /** Why the shell refused an entry (`Why` in custom_agents.rs); the UI shows `ag.why.<code>`. */
-export type CustomWhy = "id" | "builtin" | "label" | "program" | "path" | "shim" | "args" | "install" | "opencode" | "kilo" | "dup" | "many" | "shape" | "file";
+export type CustomWhy = "id" | "builtin" | "label" | "program" | "path" | "shim" | "args" | "install" | "opencode" | "kilo" | "dup" | "many" | "shape" | "file" | "interp" | "json";
 
-export const WHYS: readonly CustomWhy[] = ["id", "builtin", "label", "program", "path", "shim", "args", "install", "opencode", "kilo", "dup", "many", "shape", "file"];
+export const WHYS: readonly CustomWhy[] = ["id", "builtin", "label", "program", "path", "shim", "args", "install", "opencode", "kilo", "dup", "many", "shape", "file", "interp", "json"];
 
 /** An entry of the file that failed its check: skipped, never run, shown so the person can remove it. */
 export interface CustomBroken {
@@ -42,10 +42,12 @@ export interface CustomForm {
 
 export const EMPTY_FORM: CustomForm = { label: "", program: "", args: "acp", install: "" };
 
-/** The confirm card: the checked entry, and the exact command omher will run (`null`: not found on the search path). */
+/** The confirm card: the checked entry, and the exact command omher will run (`null`: not found on the search path).
+ *  `by`: the display name of the bot whose reply proposed it (an `omher-agent` draft), shown as one quiet line. */
 export interface CustomPreview {
   entry: CustomEntry;
   command: string | null;
+  by?: string;
 }
 
 /** A refusal the shell sent as `why:<code>`, else null. */
@@ -145,6 +147,30 @@ export function mockCheck(c: unknown, found: (path: string) => boolean): CustomW
   }
   if (e.args.length > 8 || !e.args.every((a) => typeof a === "string" && ARG.test(a))) return "args";
   if (typeof (e.install ?? "") !== "string" || !INSTALL.test(e.install ?? "") || (e.install ?? "").trim() !== (e.install ?? "")) return "install";
+  return null;
+}
+
+/** Shells, interpreters and launchers a bot's draft may not name (custom_agents.rs `INTERPRETERS`); a person may
+ *  still type one in the form. */
+export const INTERPRETERS: readonly string[] = [
+  "sh", "bash", "zsh", "fish", "dash", "ksh", "csh", "tcsh", "cmd", "powershell", "pwsh", "python", "python3", "node", "deno", "bun", "ruby", "perl",
+  "php", "osascript", "env", "sudo", "doas", "open", "xargs",
+];
+
+/** The program's file name without folder or `.exe`, lower-cased (custom_agents.rs `base_name`). */
+export function programBase(p: string): string {
+  const name = (p.trim().split(/[/\\]/).pop() ?? "").toLowerCase();
+  return name.endsWith(".exe") ? name.slice(0, -4) : name;
+}
+
+/** What a bot's draft adds to the form's checks (custom_agents.rs `bot_draft`): no shell or interpreter, OpenCode
+ *  and Kilo Code by name, and no built-in agent's program. */
+export function botRefusal(program: string): CustomWhy | null {
+  const base = programBase(program);
+  if (INTERPRETERS.includes(base)) return "interp";
+  if (base === "opencode") return "opencode";
+  if (base === "kilo" || base === "kilocode") return "kilo";
+  if (AGENTS.some((a) => a.id === base || a.program === base) || mockAcpAgents.some((r) => r.id === base || r.program === base)) return "builtin";
   return null;
 }
 

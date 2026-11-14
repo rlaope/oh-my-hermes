@@ -41,6 +41,13 @@ const FILE_MAX: u64 = 64 * 1024;
 /// Characters a shell gives a meaning to. None of them may appear in any field of an entry.
 pub const SHELL_META: &[char] = &['`', '$', ';', '|', '&', '<', '>', '(', ')', '"', '\'', '*', '?', '[', ']', '{', '}', '!', '#', '~', '%', '^', '\n', '\r', '\t'];
 
+/// Programs a bot's draft may not name (any case, with or without `.exe`): shells, interpreters and launchers that
+/// run what their arguments say. The form keeps the person's own choice; the card shows it either way.
+pub const INTERPRETERS: &[&str] = &[
+    "sh", "bash", "zsh", "fish", "dash", "ksh", "csh", "tcsh", "cmd", "powershell", "pwsh", "python", "python3", "node", "deno", "bun", "ruby", "perl",
+    "php", "osascript", "env", "sudo", "doas", "open", "xargs",
+];
+
 /// One agent a person added: the name it shows, the program (a bare name looked up like a built-in's, or an absolute
 /// path to an executable file), its ACP arguments, and an optional install line shown when it is missing.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -85,6 +92,9 @@ pub enum Why {
     Shape,
     /// the file could not be read (it is left as it is)
     File,
+    /// a bot's draft names a shell or an interpreter as its program ([`INTERPRETERS`]); a person may type one in the
+    /// form, a bot may not propose one
+    Interp,
 }
 
 impl Why {
@@ -311,9 +321,31 @@ fn new_id(label: &str, program: &str, taken: &[String]) -> String {
 /// What the form's fields make, checked, with its id chosen; writes nothing. The arguments are one line split on
 /// spaces (no shell).
 pub fn draft<X: Fn(&Path) -> bool>(home: &Path, label: &str, program: &str, args: &str, install: &str, os: Os, is_program: X) -> Result<CustomAgent, Why> {
+    draft_of(home, label, program, args.split_whitespace().map(str::to_string).collect(), install, os, is_program)
+}
+
+/// A bot's draft (an `omher-agent` block in its reply): the same entry as the form's, checked the same way, and
+/// stricter: its program may not be a shell or an interpreter ([`INTERPRETERS`]) or a built-in agent's program. The
+/// arguments come as the draft's own list, never split again. Writes nothing; only the card's Add does.
+pub fn bot_draft<X: Fn(&Path) -> bool>(home: &Path, label: &str, program: &str, args: &[String], install: &str, os: Os, is_program: X) -> Result<CustomAgent, Why> {
+    let base = base_name(program.trim());
+    if INTERPRETERS.contains(&base.as_str()) {
+        return Err(Why::Interp);
+    }
+    match base.as_str() {
+        "opencode" => return Err(Why::Opencode),
+        "kilo" | "kilocode" => return Err(Why::Kilo),
+        _ => {}
+    }
+    if crate::sessions::AGENTS.iter().any(|a| a.program == base || a.id == base) || crate::acp_agents::entry(&base).is_some() {
+        return Err(Why::Builtin);
+    }
+    draft_of(home, label, program, args.to_vec(), install, os, is_program)
+}
+
+fn draft_of<X: Fn(&Path) -> bool>(home: &Path, label: &str, program: &str, args: Vec<String>, install: &str, os: Os, is_program: X) -> Result<CustomAgent, Why> {
     let label = label.trim();
     let program = program.trim();
-    let args: Vec<String> = args.split_whitespace().map(str::to_string).collect();
     let taken: Vec<String> = match read_raw(home) {
         Ok(raw) => raw.iter().map(readable_id).filter(|s| !s.is_empty()).collect(),
         Err(()) => return Err(Why::File),
@@ -496,6 +528,14 @@ pub struct Preview {
 pub fn preview_here(label: &str, program: &str, args: &str, install: &str) -> Result<Preview, Why> {
     let h = home().ok_or(Why::File)?;
     let entry = draft(&h, label, program, args, install, Os::current(), crate::sessions::is_program_file)?;
+    let command = command(&entry, &crate::sessions::host_dirs(), crate::sessions::is_program_file, Os::current());
+    Ok(Preview { entry, command })
+}
+
+/// The confirm card for a bot's draft: [`bot_draft`], then the same resolved command as [`preview_here`]. Writes nothing.
+pub fn bot_preview_here(label: &str, program: &str, args: &[String], install: &str) -> Result<Preview, Why> {
+    let h = home().ok_or(Why::File)?;
+    let entry = bot_draft(&h, label, program, args, install, Os::current(), crate::sessions::is_program_file)?;
     let command = command(&entry, &crate::sessions::host_dirs(), crate::sessions::is_program_file, Os::current());
     Ok(Preview { entry, command })
 }
@@ -738,5 +778,30 @@ mod tests {
         let row = serde_json::to_value(info(&c, None)).unwrap();
         assert_eq!(row["acp"], json!({"id": "cursor", "label": "Cursor Agent", "program": "cursor-agent", "args": ["acp"], "login": "cursor-agent", "install": "", "mark": "", "continues": true, "custom": true}));
         assert_eq!(row["mode"], "chat");
+    }
+    /// A bot's draft: what the form takes, and never a shell, an interpreter or a built-in's program (any case, with or
+    /// without `.exe`, bare or as a path); its arguments are its own list, so one holding a space is refused, not split.
+    #[test]
+    fn a_bots_draft_is_stricter_than_the_form() {
+        let home = tmp("bot");
+        let s = |v: &[&str]| v.iter().map(|x| x.to_string()).collect::<Vec<_>>();
+        let c = bot_draft(&home, "Cursor Agent", "cursor-agent", &s(&["acp"]), "", Os::Unix, ANY).unwrap();
+        assert_eq!(c, CustomAgent { id: "cursor-agent".into(), label: "Cursor Agent".into(), program: "cursor-agent".into(), args: s(&["acp"]), install: String::new() });
+        for p in ["sh", "BASH", "/bin/zsh", "/usr/bin/env", "python3", "Node.exe", "pwsh", "osascript", "sudo", "open", "xargs", "/opt/homebrew/bin/deno"] {
+            assert_eq!(bot_draft(&home, "X", p, &s(&["acp"]), "", Os::Unix, ANY), Err(Why::Interp), "{p}");
+            // the form keeps the person's own choice
+            assert!(draft(&home, "X", p, "acp", "", Os::Unix, ANY).is_ok(), "{p}");
+        }
+        assert_eq!(bot_draft(&home, "X", "opencode", &s(&["acp"]), "", Os::Unix, ANY), Err(Why::Opencode));
+        assert_eq!(bot_draft(&home, "X", "/usr/local/bin/kilo", &s(&["acp"]), "", Os::Unix, ANY), Err(Why::Kilo));
+        for p in ["claude", "codex", "gemini", "/opt/homebrew/bin/cline"] {
+            assert_eq!(bot_draft(&home, "X", p, &s(&["acp"]), "", Os::Unix, ANY), Err(Why::Builtin), "{p}");
+        }
+        assert_eq!(bot_draft(&home, "X", "cursor-agent", &s(&["acp", "a b"]), "", Os::Unix, ANY), Err(Why::Args));
+        assert_eq!(bot_draft(&home, "X", "cursor-agent", &s(&["$(id)"]), "", Os::Unix, ANY), Err(Why::Args));
+        assert_eq!(bot_draft(&home, "X; rm", "cursor-agent", &s(&["acp"]), "", Os::Unix, ANY), Err(Why::Label));
+        // nothing was written
+        assert!(!store_path(&home).exists());
+        assert_eq!(Why::Interp.code(), "interp");
     }
 }

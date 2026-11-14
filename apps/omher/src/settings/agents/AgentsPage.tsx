@@ -2,7 +2,8 @@
 // person's own Agent Client Protocol agents, which they add and remove here. Nothing is saved from the form: Save
 // opens a confirm card that shows the exact command omher will run (the shell resolves it now), Cancel first and Add
 // second, and only Add asks the shell to write the entry (src-tauri/src/custom_agents.rs). Removing asks once, then
-// each open session of that agent ends.
+// each open session of that agent ends. "Ask the bot" only puts a request in the current bot's composer; the bot's
+// reply can hold a draft whose chip opens this same card (AgentConfirmCard).
 import { useEffect, useState } from "react";
 import "./agents.css";
 import { AgentMark } from "../../sessions/AgentMark";
@@ -11,6 +12,7 @@ import { getSessions, useSessions } from "../../sessions/sessions";
 import { agentsPageModel, cardCommand, EMPTY_FORM, whyText, type CustomForm, type CustomList, type CustomPreview, type Tier } from "../../sessions/custom";
 import { t, tx, type Key } from "../../i18n";
 import { holdImeEnter } from "../../lib/ime";
+import { getStore } from "../../state/store";
 
 const TIER: Record<Tier, Key> = { main: "ag.tierMain", acp: "ag.tierAcp", builtin: "ag.tierBuiltin" };
 
@@ -169,6 +171,10 @@ export function AgentsPage() {
             <button type="button" className="st-btn" onClick={() => (setForm({ ...EMPTY_FORM }), setErr(""))} data-testid="agents-add">
               {t("ag.add")}
             </button>
+            {/* the bot drafts one: the request lands in the current bot's composer, nothing is sent */}
+            <button type="button" className="st-btn" title={t("graph.prefill")} onClick={() => getStore().actions.prefill(t("ag.askText"))} data-testid="agents-ask-bot">
+              {t("ag.ask")}
+            </button>
           </div>
         )}
       </div>
@@ -223,35 +229,47 @@ export function AgentsPage() {
         </p>
       )}
 
-      {card && (
-        <div className="ag-scrim" onClick={() => setCard(null)}>
-          <div
-            className="ag-card"
-            role="alertdialog"
-            aria-modal="true"
-            aria-labelledby="ag-card-t"
-            data-testid="agent-confirm"
-            onClick={(e) => e.stopPropagation()}
-            onKeyDown={(e) => e.key === "Escape" && setCard(null)}
-          >
-            <b id="ag-card-t">{t("ag.cardTitle", { name: card.entry.label })}</b>
-            <p>{t("ag.cardRuns")}</p>
-            <code className={`ag-card-cmd${card.command ? "" : " missing"}`} data-testid="agent-confirm-command">
-              {cardCommand(card)}
-            </code>
-            <p className="ag-quiet">{t("ag.cardFolder")}</p>
-            <p className="ag-quiet">{t("ag.cardApprovals")}</p>
-            <div className="ag-acts">
-              <button type="button" className="st-btn" autoFocus onClick={() => setCard(null)} data-testid="agent-confirm-cancel">
-                {t("ag.cancel")}
-              </button>
-              <button type="button" className="st-btn ag-primary" disabled={busy} onClick={() => void add()} data-testid="agent-confirm-add">
-                {t("ag.addBtn")}
-              </button>
-            </div>
-          </div>
+      {card && <AgentConfirmCard card={card} busy={busy} onCancel={() => setCard(null)} onAdd={() => void add()} />}
+    </div>
+  );
+}
+
+/** The confirm card: the exact command omher will run, Cancel first and Add second. The same card opens from the Add
+ *  agent form and from a bot's draft in the chat (chat/parts/AgentChip.tsx); a draft's card names the bot that
+ *  proposed it. The card writes nothing itself: its Add is the caller's one call to `customConfirm`. */
+export function AgentConfirmCard({ card, busy, onCancel, onAdd }: { card: CustomPreview; busy: boolean; onCancel: () => void; onAdd: () => void }) {
+  return (
+    <div className="ag-scrim" onClick={onCancel}>
+      <div
+        className="ag-card"
+        role="alertdialog"
+        aria-modal="true"
+        aria-labelledby="ag-card-t"
+        data-testid="agent-confirm"
+        onClick={(e) => e.stopPropagation()}
+        onKeyDown={(e) => e.key === "Escape" && onCancel()}
+      >
+        <b id="ag-card-t">{t("ag.cardTitle", { name: card.entry.label })}</b>
+        {card.by && (
+          <p className="ag-quiet" data-testid="agent-confirm-by">
+            {t("ag.cardBy", { bot: card.by })}
+          </p>
+        )}
+        <p>{t("ag.cardRuns")}</p>
+        <code className={`ag-card-cmd${card.command ? "" : " missing"}`} data-testid="agent-confirm-command">
+          {cardCommand(card)}
+        </code>
+        <p className="ag-quiet">{t("ag.cardFolder")}</p>
+        <p className="ag-quiet">{t("ag.cardApprovals")}</p>
+        <div className="ag-acts">
+          <button type="button" className="st-btn" autoFocus onClick={onCancel} data-testid="agent-confirm-cancel">
+            {t("ag.cancel")}
+          </button>
+          <button type="button" className="st-btn ag-primary" disabled={busy} onClick={onAdd} data-testid="agent-confirm-add">
+            {t("ag.addBtn")}
+          </button>
         </div>
-      )}
+      </div>
     </div>
   );
 }

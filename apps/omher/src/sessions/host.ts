@@ -4,7 +4,7 @@
 // so a mock host echoes terminal typing and a mock agent answers chats with the same events.
 import { AGENTS, acpRow, agentDef, HERMES_LABEL, type AcpRow, type AgentId, type AgentInfo } from "./agents";
 import mockAcpAgents from "./mockAcpAgents.json";
-import { mockCheck, mockNewId, type CustomEntry, type CustomList, type CustomPreview, type CustomWhy } from "./custom";
+import { botRefusal, mockCheck, mockNewId, type CustomEntry, type CustomList, type CustomPreview, type CustomWhy } from "./custom";
 import type { ApprovalChoice, ClarifyAnswers } from "../lib/protocol";
 import { t } from "../i18n";
 
@@ -108,6 +108,9 @@ export interface SessionHost {
   /** The confirm card for the Add agent form: the checked entry and the exact command omher will run. Writes nothing.
    *  A refusal rejects with `why:<code>`. */
   customPreview(label: string, program: string, args: string, install: string): Promise<CustomPreview>;
+  /** The same card for a bot's `omher-agent` draft: the form's checks and stricter (no shell, interpreter or built-in
+   *  program), the arguments as the draft's own list. Writes nothing. A refusal rejects with `why:<code>`. */
+  customBotPreview(label: string, program: string, args: string[], install: string): Promise<CustomPreview>;
   /** The card's Add: the only call that writes an entry. */
   customConfirm(entry: CustomEntry): Promise<void>;
   /** The remove confirm: agent `id` leaves the file. */
@@ -210,6 +213,10 @@ export class TauriHost implements SessionHost {
     const { invoke } = await this.core();
     return invoke<CustomPreview>("custom_agent_preview", { label, program, args, install });
   }
+  async customBotPreview(label: string, program: string, args: string[], install: string) {
+    const { invoke } = await this.core();
+    return invoke<CustomPreview>("custom_agent_bot_preview", { label, program, args, install });
+  }
   async customConfirm(entry: CustomEntry) {
     const { invoke } = await this.core();
     await invoke("custom_agent_confirm", { entry });
@@ -276,6 +283,7 @@ export interface MockCall {
     | "reveal"
     | "terminal"
     | "custom.preview"
+    | "custom.botPreview"
     | "custom.confirm"
     | "custom.remove";
   id?: number;
@@ -452,6 +460,13 @@ export class MockHost implements SessionHost {
     if (taken.length >= 32) throw new Error("why:many");
     const found = this.findProgram(entry.program);
     return { entry, command: found ? [found, ...entry.args].join(" ") : null };
+  }
+  async customBotPreview(label: string, program: string, args: string[], install: string): Promise<CustomPreview> {
+    this.log({ op: "custom.botPreview", name: label, path: program, data: args.join(" ") });
+    const why = botRefusal(program);
+    if (why) throw new Error(`why:${why}`);
+    if (!args.every((a) => /^[A-Za-z0-9._=/:-]{1,64}$/.test(a))) throw new Error("why:args");
+    return this.customPreview(label, program, args.join(" "), install);
   }
   async customConfirm(entry: CustomEntry) {
     this.log({ op: "custom.confirm", agent: entry.id });
