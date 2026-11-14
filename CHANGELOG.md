@@ -4,13 +4,6 @@ All notable changes will be documented here.
 
 ## Unreleased
 
-- **omher's + in the message box: one way to add files, and the bot's plugins beside it.** The menu with "Photos &
-  videos", "Files" and "Paste from clipboard" is gone. In a bot's chat the + now has two rows, "Add photos and files"
-  (one system picker for any kind of file, also ⌘O / Ctrl+O) and "Plugins ›", whose submenu lists the bot's enabled
-  plugins (a colour tile and the name, the description as the tooltip) and Manage plugins; picking a plugin puts
-  "Use <plugin>: " at the start of the message, without sending it. In a session the + opens the file picker
-  straight away. Pasting into the box and dropping on the chat attach files as before. (#2870)
-
 - **The OMH TUI shows a compression as one gauge row, and a prompt typed meanwhile goes on by itself.** `/compact`
   (or `/compress`) no longer prints the long "Compressing: Hermes summarizes the older turns…" notice above a second
   spinner row. One row now reads `✻ Compacting conversation… ━━━━━━──── (30s)`, with a blank row between it and
@@ -304,6 +297,22 @@ All notable changes will be documented here.
   refused; a plain-HTTP ask never goes through `HTTP_PROXY`, so the key is not
   sent in clear to a proxy; and `typesafe_model` never applies to TypeSafe's
   own host however it is spelled. Thanks @brentkearney. (#2716)
+- **omher 0.2.9.** A new bot without an AI account signs in from its own chat, the + in the message box has one
+  way to add files and the bot's plugins beside it, and an empty part of the Sessions list starts a new session.
+  - **A new bot that cannot answer yet says so and signs in from its chat.** When Hermes' readiness check says a
+    bot has no AI account, its chat shows one line with ChatGPT / Codex, Claude, Nous Portal and API key…. A
+    sign-in opens the system terminal running exactly `hermes auth add openai-codex`, `anthropic` or `nous`; the
+    line asks again every 3 seconds for up to 10 minutes and when omher comes back to the front, and goes away once
+    the bot can answer. API key… opens Settings › Providers. The first install of Hermes from the app lands in the
+    default bot's chat, and with no bots the empty window points at the + menu. (#2874)
+  - **One way to add files, and the bot's plugins under the same +.** The menu with "Photos & videos", "Files" and
+    "Paste from clipboard" is gone. In a bot's chat the + has two rows: "Add photos and files" (one system picker
+    for any kind of file, also ⌘O / Ctrl+O) and "Plugins ›", whose submenu lists the bot's enabled Hermes plugins
+    and Manage plugins; picking one puts "Use <plugin>: " at the start of the message without sending it. In a
+    session the + opens the file picker straight away. Paste and drop attach files as before. (#2870)
+  - **Right-click an empty part of the Sessions list to start a new session.** It opens the agent picker without
+    starting a process; the chat and terminal marks beside session rows are smaller. (#2869)
+
 - **omher 0.2.8.** Six more coding agents in SESSIONS, update checks that
   recover after a failed request or sleep, and a session header that says
   when background work is waiting for you, with clearer terminal find.
@@ -1026,12 +1035,6 @@ All notable changes will be documented here.
   credential-shaped `model` value are still refused. Reported in #2863 by
   @MarinWasAsleep; first fixed by @SHURIKA6 in #2867.
 
-- **Right-click an empty part of omher's Sessions list to start a new session.**
-  The menu opens the existing agent picker without starting a process; each
-  session's own right-click menu still offers a fresh conversation in its
-  folder. Chat and terminal view marks beside the session rows are smaller,
-  while their targets and the messages' type and spacing stay unchanged.
-
 - **The OMH TUI's `/sessions` picker no longer loses older conversations
   behind newer ones, and orders sessions by when they were last active.**
   Attached to Hermes' shared gateway, the gateway child asked both the live
@@ -1054,16 +1057,6 @@ All notable changes will be documented here.
   without `session.transcript` answers that read with a notice, never a lost
   session. Contributed by @DanRioDev (#2865).
 
-- **omher: a new bot that has no AI account says so in its chat and signs in from there.** When Hermes' own readiness
-  check (`setup.runtime_check`) says a bot cannot answer, its chat shows one quiet line, "<Bot> needs an AI account to
-  answer.", with ChatGPT / Codex, Claude, Nous Portal and API key…. A sign-in opens the system terminal running exactly
-  `hermes auth add openai-codex`, `anthropic` or `nous` (the desktop shell allows only those three); the line then says
-  to finish there, asks the bot again every 3 seconds for up to 10 minutes and whenever omher comes back to the front,
-  gives the chat that provider's first non-Opus model when Hermes left it without one, and goes away with the message
-  box focused. API key… opens Settings › Providers. The first install of Hermes from the app now lands in the default
-  bot's chat, and the oh-my-hermes model-setup line waits until the bot can answer. With no bots, the empty window says
-  so in one line and points at the + menu instead of `hermes profile create`. A bot that can answer looks as before
-  and costs one readiness read when it is opened.
 - **`/resume` in the OMH TUI looks like Claude Code's resume picker.** It takes most of the screen, headed
   `Resume session (2 of 12)` with a rounded search box under it (the caret typed in it), and each session is a card:
   its name on one row and `2 days ago · 14 messages · tui` muted under it, a blank row between two cards, under the
