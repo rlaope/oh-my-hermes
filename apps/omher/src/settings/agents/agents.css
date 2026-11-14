@@ -30,6 +30,8 @@
   color: var(--body);
 }
 .ag-cmd {
+  /* under the name, past the 16px mark and its gap */
+  padding-left: 24px;
   font-family: var(--mono);
   font-size: 11px !important;
   overflow: hidden;
