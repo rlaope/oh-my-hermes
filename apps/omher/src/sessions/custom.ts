@@ -78,8 +78,10 @@ export interface BuiltinRow {
 export interface MineRow {
   id: string;
   label: string;
-  /** The command it runs now (the program found, then its arguments), or null when its program is not found. */
-  command: string | null;
+  /** The program (its found path, else as typed) and EVERY stored argument: never hides one while it is missing. */
+  command: string;
+  /** whether the program is on the search path now */
+  found: boolean;
   program: string;
   args: string[];
 }
@@ -108,14 +110,17 @@ export function agentsPageModel(agents: AgentInfo[] | null, custom: CustomList |
     label: a.label,
     program: a.acp?.program ?? a.id,
     args: a.acp?.args ?? [],
-    command: a.path ? [a.path, ...(a.acp?.args ?? [])].join(" ") : null,
+    command: [a.path ?? a.acp?.program ?? a.id, ...(a.acp?.args ?? [])].join(" "),
+    found: !!a.path,
   }));
   return { builtins, mine, broken: custom?.broken ?? [] };
 }
 
-/** The command line the confirm card shows: exactly what the shell will run, or the not-found line. */
+/** The command line the confirm card shows: exactly what the shell will run. When the program is not on the search
+ *  path yet it is the program as typed with EVERY stored argument (the card adds the not-found line beside it), so the
+ *  card never hides an argument omher would pass once the program is installed. */
 export function cardCommand(p: CustomPreview): string {
-  return p.command ?? t("ag.notFound", { program: p.entry.program });
+  return p.command ?? [p.entry.program, ...p.entry.args].join(" ");
 }
 
 // ---- the mock host's file (a browser has no shell) ---------------------------------------------

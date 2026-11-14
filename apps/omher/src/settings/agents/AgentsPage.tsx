@@ -139,9 +139,10 @@ export function AgentsPage() {
                 <AgentMark agent={a.id} size={16} />
                 {a.label}
               </b>
-              <span className="ag-cmd" title={a.command ?? undefined}>
-                {a.command ?? t("ag.notFound", { program: a.program })}
+              <span className="ag-cmd" title={a.command}>
+                {a.command}
               </span>
+              {!a.found && <span className="ag-quiet">{t("ag.notFound", { program: a.program })}</span>}
             </div>
             <div className="st-v">
               <button type="button" className="st-btn" disabled={busy} onClick={() => setRemoving({ id: a.id, label: a.label })} data-testid={`agents-remove-${a.id}`}>
@@ -259,6 +260,11 @@ export function AgentConfirmCard({ card, busy, onCancel, onAdd }: { card: Custom
         <code className={`ag-card-cmd${card.command ? "" : " missing"}`} data-testid="agent-confirm-command">
           {cardCommand(card)}
         </code>
+        {!card.command && (
+          <p className="ag-quiet" data-testid="agent-confirm-missing">
+            {t("ag.notFound", { program: card.entry.program })}
+          </p>
+        )}
         <p className="ag-quiet">{t("ag.cardFolder")}</p>
         <p className="ag-quiet">{t("ag.cardApprovals")}</p>
         <div className="ag-acts">

@@ -97,6 +97,17 @@ test("a bot reply with a draft: chip -> the same card, filled and naming the bot
   expect(items.indexOf("session-agent-stub-acp")).toBe(items.indexOf("session-agent-gemini") + 1);
 });
 
+test("a draft whose program is not installed yet: the card still shows every argument, and says it is missing", async ({ page }) => {
+  await open(page);
+  await reply(`Try this:\n\n${fence({ name: "X", program: "not-here", args: ["--unshown"] })}`, "bc-missing");
+  await page.getByTestId("bubble-bot").last().getByTestId("agent-chip").click();
+  await expect(page.getByTestId("agent-confirm")).toBeVisible();
+  await expect(page.getByTestId("agent-confirm-command")).toHaveText("not-here --unshown");
+  await expect(page.getByTestId("agent-confirm-missing")).toHaveText("not-here: not found on the search path");
+  await page.getByTestId("agent-confirm-cancel").click();
+  expect(await file(page)).toBeNull();
+});
+
 test("Cancel writes nothing; two blocks make two chips; a refused draft's chip is disabled with its reason", async ({ page }) => {
   await open(page);
   await reply(

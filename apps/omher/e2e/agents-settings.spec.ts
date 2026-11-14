@@ -109,10 +109,12 @@ test("Save opens the confirm card with the exact command; Cancel writes nothing"
   await expect(card).toHaveCount(0);
   expect(await file(page)).toBeNull();
   expect((await calls(page)).filter((c) => c.op === "custom.confirm")).toEqual([]);
-  // a program that is not on the search path: the card says so instead of a path
+  // a program that is not on the search path: the card shows it as typed with every argument, and says it is missing
   await page.getByTestId("agent-form-program").fill("not-here");
+  await page.getByTestId("agent-form-args").fill("--unshown");
   await page.getByTestId("agent-form-save").click();
-  await expect(page.getByTestId("agent-confirm-command")).toHaveText("not-here: not found on the search path");
+  await expect(page.getByTestId("agent-confirm-command")).toHaveText("not-here --unshown");
+  await expect(page.getByTestId("agent-confirm-missing")).toHaveText("not-here: not found on the search path");
   await page.getByTestId("agent-confirm-cancel").click();
   // OpenCode and Kilo Code are refused with one line, no card
   for (const [program, line] of [["opencode", "Use the built-in OpenCode."], ["kilo", "Kilo Code is not offered."], ["cursor-agent; rm -rf ~", "Give a program name on your search path or a full path, with no shell characters."]]) {

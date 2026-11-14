@@ -42,10 +42,10 @@ describe("the Agents page model", () => {
       ["copilot", "acp", false],
       ["cline", "acp", false],
     ]);
-    // the person's own: the command it runs now, or not found; the broken entries are listed, never as agents
+    // the person's own: the command with every argument, found or not; the broken entries are listed, never as agents
     expect(m.mine).toEqual([
-      { id: "cursor", label: "Cursor", program: "cursor-agent", args: ["acp"], command: "/opt/homebrew/bin/cursor-agent acp" },
-      { id: "missing", label: "Missing", program: "not-here", args: ["acp"], command: null },
+      { id: "cursor", label: "Cursor", program: "cursor-agent", args: ["acp"], command: "/opt/homebrew/bin/cursor-agent acp", found: true },
+      { id: "missing", label: "Missing", program: "not-here", args: ["acp"], command: "not-here acp", found: false },
     ]);
     expect(m.broken).toEqual([
       { id: "evil", why: "args" },
@@ -91,8 +91,9 @@ describe("the confirm card", () => {
     // the card's text is the command, word for word: the program found, then the arguments the entry stores
     expect(cardCommand(p)).toBe("/opt/homebrew/bin/cursor-agent acp --model=x");
     expect(cardCommand(p)).toBe([p.command!.split(" ")[0], ...p.entry.args].join(" "));
-    const missing: CustomPreview = { entry: { ...p.entry, program: "not-here" }, command: null };
-    expect(cardCommand(missing)).toBe("not-here: not found on the search path");
+    // not on the search path yet: the card still shows every argument it would pass once installed
+    const missing: CustomPreview = { entry: { ...p.entry, program: "not-here", args: ["--unshown"] }, command: null };
+    expect(cardCommand(missing)).toBe("not-here --unshown");
     // the preview wrote nothing
     expect(g.__omherCustomFile).toBeUndefined();
     await expect(host.customPreview("x", "opencode", "acp", "")).rejects.toThrow("why:opencode");
