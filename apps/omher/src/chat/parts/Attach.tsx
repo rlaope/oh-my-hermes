@@ -1,4 +1,4 @@
-// Attaching files in the composer: the + button and its menu, the chips row, the drop overlay on the chat,
+// Attaching files in the composer: the + button (one file picker), the chips row, the drop overlay on the chat,
 // and the files in the person's own sent bubble. Sending lives in the store (`sendWithFiles`).
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
@@ -45,55 +45,18 @@ export function chipsFor(files: File[], have: number): Chip[] {
   });
 }
 
-const mod = () => (isMac() ? "⌘" : "Ctrl+");
+/** The + at the composer's left edge: one file picker for every kind of file (pictures, videos, documents).
+ *  Pasting into the box and dropping on the chat add files the same way; there is no separate menu. */
+export function AttachButton({ disabled, onFiles }: { disabled: boolean; onFiles: (files: File[]) => void }) {
+  const input = useRef<HTMLInputElement>(null);
 
-/** The + at the composer's left edge and the menu above the composer. */
-export function AttachButton({
-  disabled,
-  onFiles,
-  onError,
-}: {
-  disabled: boolean;
-  onFiles: (files: File[]) => void;
-  onError: (msg: string) => void;
-}) {
-  const [open, setOpen] = useState(false);
-  const media = useRef<HTMLInputElement>(null);
-  const any = useRef<HTMLInputElement>(null);
-  const wrap = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (!open) return;
-    const down = (e: MouseEvent) => {
-      if (!wrap.current?.contains(e.target as Node)) setOpen(false);
-    };
-    const key = (e: KeyboardEvent) => {
-      if (e.key === "Escape") {
-        e.preventDefault();
-        setOpen(false);
-      }
-    };
-    document.addEventListener("mousedown", down);
-    document.addEventListener("keydown", key);
-    return () => {
-      document.removeEventListener("mousedown", down);
-      document.removeEventListener("keydown", key);
-    };
-  }, [open]);
-
-  // ⌘⇧A photos & videos, ⌘O files (Ctrl on Windows/Linux) while this chat is open.
+  // ⌘O (Ctrl+O on Windows/Linux) opens the same picker while this chat is open.
   useEffect(() => {
     const key = (e: KeyboardEvent) => {
       const m = isMac() ? e.metaKey && !e.ctrlKey : e.ctrlKey && !e.metaKey;
-      if (!m || e.altKey || disabled) return;
-      const k = e.key.toLowerCase();
-      if (k === "a" && e.shiftKey) {
-        e.preventDefault();
-        media.current?.click();
-      } else if (k === "o" && !e.shiftKey) {
-        e.preventDefault();
-        any.current?.click();
-      }
+      if (!m || e.altKey || e.shiftKey || disabled || e.key.toLowerCase() !== "o") return;
+      e.preventDefault();
+      input.current?.click();
     };
     window.addEventListener("keydown", key);
     return () => window.removeEventListener("keydown", key);
@@ -105,62 +68,20 @@ export function AttachButton({
     if (files.length) onFiles(files);
   };
 
-  const paste = async () => {
-    setOpen(false);
-    try {
-      const items = await navigator.clipboard.read();
-      const files: File[] = [];
-      for (const it of items) {
-        const type = it.types.find((t) => !t.startsWith("text/"));
-        if (!type) continue;
-        const blob = await it.getType(type);
-        files.push(new File([blob], `pasted.${type.split("/")[1]?.split("+")[0] || "bin"}`, { type }));
-      }
-      if (files.length) onFiles(files);
-      else onError(t("att.clipEmpty"));
-    } catch {
-      onError(t("att.clipFailed"));
-    }
-  };
-
-  const pick = (input: HTMLInputElement | null) => {
-    setOpen(false);
-    input?.click();
-  };
-
   return (
-    <div className="att-wrap" ref={wrap}>
+    <div className="att-wrap">
       <button
         type="button"
         className="att-plus"
         aria-label={t("att.attach")}
-        title={t("att.attach")}
-        aria-haspopup="menu"
-        aria-expanded={open}
+        title={`${t("att.attach")} (${isMac() ? "⌘" : "Ctrl+"}O)`}
         disabled={disabled}
-        onClick={() => setOpen((o) => !o)}
+        onClick={() => input.current?.click()}
         data-testid="attach"
       >
         <PlusIcon size={14} />
       </button>
-      <input ref={media} type="file" accept="image/*,video/*" multiple hidden onChange={picked} data-testid="attach-media-input" />
-      <input ref={any} type="file" multiple hidden onChange={picked} data-testid="attach-file-input" />
-      {open && (
-        <div className="att-menu" role="menu" data-testid="attach-menu">
-          <button type="button" role="menuitem" onClick={() => pick(media.current)} data-testid="attach-media">
-            <span>{t("att.media")}</span>
-            <kbd>{mod()}⇧A</kbd>
-          </button>
-          <button type="button" role="menuitem" onClick={() => pick(any.current)} data-testid="attach-files">
-            <span>{t("att.files")}</span>
-            <kbd>{mod()}O</kbd>
-          </button>
-          <button type="button" role="menuitem" onClick={() => void paste()} data-testid="attach-paste">
-            <span>{t("att.paste")}</span>
-            <kbd>{mod()}V</kbd>
-          </button>
-        </div>
-      )}
+      <input ref={input} type="file" multiple hidden onChange={picked} data-testid="attach-file-input" />
     </div>
   );
 }

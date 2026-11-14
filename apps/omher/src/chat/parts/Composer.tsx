@@ -306,7 +306,7 @@ export function Composer({
           </span>
         )}
         <div className="composer-row">
-          {onSendFiles && <AttachButton disabled={offline || sending} onFiles={add} onError={setErr} />}
+          {onSendFiles && <AttachButton disabled={offline || sending} onFiles={add} />}
           <div className="cm-field">
             <div className="cm-mirror" ref={mirror} aria-hidden="true" data-testid="composer-mirror">
               {tokens.length || picking ? mirrorText(text, tokens, picking && frag ? frag.start : null, anchor) : null}

@@ -741,9 +741,6 @@ export const zh: Record<Key, string> = {
   "cmp.stop": "停止",
   "cmp.send": "发送",
   "att.attach": "添加附件",
-  "att.media": "照片和视频",
-  "att.files": "文件",
-  "att.paste": "从剪贴板粘贴",
   "att.removeOf": "移除 {name}",
   "att.drop": "拖放到此处添加附件",
   "att.tooMany": "超过 {n} 个文件",
@@ -1087,8 +1084,6 @@ export const zh: Record<Key, string> = {
   "card.notTaken": "桥接没有接收",
   "card.answeredWith": "已回答：{answer}",
   "att.readFailed": "无法读取文件",
-  "att.clipEmpty": "剪贴板里没有可添加的内容",
-  "att.clipFailed": "无法读取剪贴板",
   // session transcript: copy, diff, todo list, thinking, edit and resend
   "copy.copy": "复制",
   "copy.done": "已复制",

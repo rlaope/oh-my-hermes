@@ -743,9 +743,6 @@ export const en = {
   "cmp.stop": "Stop",
   "cmp.send": "Send",
   "att.attach": "Attach",
-  "att.media": "Photos & videos",
-  "att.files": "Files",
-  "att.paste": "Paste from clipboard",
   "att.removeOf": "Remove {name}",
   "att.drop": "Drop to attach",
   "att.tooMany": "Over {n} files",
@@ -1089,8 +1086,6 @@ export const en = {
   "card.notTaken": "the bridge did not take it",
   "card.answeredWith": "Answered: {answer}",
   "att.readFailed": "could not read the file",
-  "att.clipEmpty": "Nothing to attach on the clipboard",
-  "att.clipFailed": "Couldn't read the clipboard",
   // session transcript: copy, diff, todo list, thinking, edit and resend
   "copy.copy": "Copy",
   "copy.done": "Copied",

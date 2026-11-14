@@ -741,9 +741,6 @@ export const ja: Record<Key, string> = {
   "cmp.stop": "停止",
   "cmp.send": "送信",
   "att.attach": "添付",
-  "att.media": "写真とビデオ",
-  "att.files": "ファイル",
-  "att.paste": "クリップボードから貼り付け",
   "att.removeOf": "{name} を外す",
   "att.drop": "ドロップして添付",
   "att.tooMany": "{n} 個を超えています",
@@ -1087,8 +1084,6 @@ export const ja: Record<Key, string> = {
   "card.notTaken": "ブリッジが受け付けませんでした",
   "card.answeredWith": "回答済み: {answer}",
   "att.readFailed": "ファイルを読み込めませんでした",
-  "att.clipEmpty": "クリップボードに添付できるものがありません",
-  "att.clipFailed": "クリップボードを読み込めませんでした",
   // session transcript: copy, diff, todo list, thinking, edit and resend
   "copy.copy": "コピー",
   "copy.done": "コピーしました",

@@ -1,4 +1,4 @@
-/* Attaching files: the + at the composer's left edge, its menu, chips, the drop overlay, sent files. */
+/* Attaching files: the + at the composer's left edge, chips, the drop overlay, sent files. */
 .att-wrap {
   position: static;
   flex: none;
@@ -18,49 +18,12 @@
   place-items: center;
   transition: background 0.15s, color 0.15s;
 }
-.att-plus:not(:disabled):hover,
-.att-plus[aria-expanded="true"] {
+.att-plus:not(:disabled):hover {
   background: var(--raise2);
   color: var(--ink);
 }
 .att-plus:disabled {
   opacity: 0.5;
-}
-
-/* menu: above the whole composer, from the composer's left edge */
-.att-menu {
-  position: absolute;
-  left: 0;
-  bottom: calc(100% + 6px);
-  z-index: 20;
-  min-width: 228px;
-  padding: 4px;
-  background: var(--pop);
-  border: 1px solid var(--line);
-  border-radius: var(--r);
-  box-shadow: var(--pop-shadow);
-  animation: pop 0.14s ease both;
-}
-.att-menu button {
-  width: 100%;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  padding: 6px 8px;
-  border-radius: var(--r-sm);
-  font-size: 12.5px;
-  color: var(--body);
-  text-align: left;
-}
-.att-menu button:hover {
-  background: var(--raise2);
-  color: var(--ink);
-}
-.att-menu kbd {
-  font-family: inherit;
-  font-size: 11px;
-  color: var(--quiet);
 }
 
 /* chips row above the input */

@@ -79,9 +79,8 @@ async function drop(page: Page, target: string, files: { name: string; type: str
 }
 
 async function pick(page: Page, files: { name: string; mimeType: string; buffer: Buffer }[]) {
-  await page.getByTestId("attach").click();
   const chooser = page.waitForEvent("filechooser");
-  await page.getByTestId("attach-files").click();
+  await page.getByTestId("attach").click();
   await (await chooser).setFiles(files);
 }
 

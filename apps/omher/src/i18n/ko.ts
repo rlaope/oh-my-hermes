@@ -741,9 +741,6 @@ export const ko: Record<Key, string> = {
   "cmp.stop": "멈추기",
   "cmp.send": "보내기",
   "att.attach": "첨부",
-  "att.media": "사진과 동영상",
-  "att.files": "파일",
-  "att.paste": "클립보드에서 붙여넣기",
   "att.removeOf": "{name} 빼기",
   "att.drop": "놓아서 첨부",
   "att.tooMany": "{n}개 초과",
@@ -1087,8 +1084,6 @@ export const ko: Record<Key, string> = {
   "card.notTaken": "브리지가 받지 않았어요",
   "card.answeredWith": "답함: {answer}",
   "att.readFailed": "파일을 읽지 못했어요",
-  "att.clipEmpty": "클립보드에 첨부할 게 없어요",
-  "att.clipFailed": "클립보드를 읽지 못했어요",
   // session transcript: copy, diff, todo list, thinking, edit and resend
   "copy.copy": "복사",
   "copy.done": "복사됨",

@@ -38,11 +38,10 @@ async function openFriren(page: Page) {
   await expect(page.getByTestId("composer")).toBeEnabled();
 }
 
-/** Picks files through the + menu's "Files" item and the system file chooser. */
+/** Picks files through the + (one file picker, no menu) and the system file chooser. */
 async function pickFiles(page: Page, files: { name: string; mimeType: string; buffer: Buffer }[]) {
-  await page.getByTestId("attach").click();
   const chooser = page.waitForEvent("filechooser");
-  await page.getByTestId("attach-files").click();
+  await page.getByTestId("attach").click();
   await (await chooser).setFiles(files);
 }
 
@@ -86,7 +85,7 @@ test("the + sits at the composer's left edge, level with Send, always there", as
   expect(style).toEqual({ radius: "6px", border: "solid", bg: "none" }); // gray outline, never the brand gradient
 });
 
-test("menu sits above the composer; file chooser adds chips; × removes one; a drop adds one", async ({ page }) => {
+test("the + opens one file picker (no menu); it adds chips; × removes one; a drop adds one", async ({ page }) => {
   await openFriren(page);
   await pickFiles(page, [
     { name: "one.png", mimeType: "image/png", buffer: PNG },
@@ -100,18 +99,14 @@ test("menu sits above the composer; file chooser adds chips; × removes one; a d
   await expect(chips.nth(0).getByTestId("attach-chip-note")).toHaveText(`${(PNG.length / 1024).toFixed(1)} KB`);
   expect(Math.round((await chips.nth(0).locator(".att-thumb").boundingBox())!.width)).toBe(24);
 
-  // the menu opens ENTIRELY above the composer (chips included), from its left edge
+  // one picker for every kind of file: the + opens it straight away, with no menu of kinds in between
+  const chooser = page.waitForEvent("filechooser");
   await page.getByTestId("attach").click();
-  const menu = page.getByTestId("attach-menu");
-  await expect(menu).toBeVisible();
-  await expect(menu.getByRole("menuitem")).toHaveText([/Photos & videos.*⇧A/, /Files.*O/, /Paste from clipboard.*V/]);
-  const m = (await menu.boundingBox())!;
-  const c = (await page.getByTestId("composer-box").boundingBox())!;
-  expect(m.y + m.height).toBeLessThanOrEqual(c.y);
-  expect(Math.abs(m.x - c.x)).toBeLessThanOrEqual(2);
-  expect(await menu.evaluate((e) => getComputedStyle(e).borderRadius)).toBe("6px");
-  await page.keyboard.press("Escape");
-  await expect(menu).toHaveCount(0);
+  const fc = await chooser;
+  expect(fc.isMultiple()).toBe(true);
+  expect(await page.getByTestId("attach-file-input").getAttribute("accept")).toBeNull(); // pictures, videos and documents alike
+  await expect(page.locator('[role="menu"]')).toHaveCount(0);
+  await fc.setFiles([]);
 
   await chips.filter({ hasText: "two.png" }).getByTestId("attach-remove").click();
   await expect(chips).toHaveCount(2);
@@ -223,17 +218,11 @@ test("screenshots: chips and the + menu, dark and light", async ({ page }) => {
   ]);
   await dropFiles(page, [{ name: "huge.mov", type: "video/quicktime", size: 100 * 1024 * 1024 + 1 }]);
   await page.getByTestId("composer").fill("What changed since last week?");
-  await page.getByTestId("attach").click();
-  await expect(page.getByTestId("attach-menu")).toBeVisible();
-  await page.waitForTimeout(250); // the menu fades in
   await page.screenshot({ path: join(SHOTS, "T2-attach-dark.png") });
-  await page.keyboard.press("Escape");
   await page.emulateMedia({ colorScheme: "light" });
   await expect(page.locator("html")).toHaveAttribute("data-theme", "light");
-  await page.getByTestId("attach").click();
   await page.waitForTimeout(400); // let the theme transition finish
   await page.screenshot({ path: join(SHOTS, "T2-attach-light.png") });
-  await page.keyboard.press("Escape");
   await page.getByTestId("attach-chip").filter({ hasText: "huge.mov" }).getByTestId("attach-remove").click();
   await page.getByTestId("send").click();
   await expect(page.getByTestId("timeline").getByTestId("sent-files")).toBeVisible();
