@@ -1,4 +1,4 @@
-/* Attaching files: the + at the composer's left edge, its menu, chips, the drop overlay, sent files. */
+/* Attaching files: the + at the composer's left edge, chips, the drop overlay, sent files. */
 .att-wrap {
   position: static;
   flex: none;
@@ -27,40 +27,100 @@
   opacity: 0.5;
 }
 
-/* menu: above the whole composer, from the composer's left edge */
+/* the + menu (a bot's chat): two rows, "Add photos and files" and "Plugins ›"; the plugins open in a submenu beside
+   it, bottom edges level. Above the whole composer, from its left edge. */
+.att-menu,
+.att-sub {
+  padding: 5px;
+  background: var(--pop);
+  border: 1px solid var(--line-strong);
+  border-radius: 8px;
+  box-shadow: var(--pop-shadow);
+}
 .att-menu {
   position: absolute;
   left: 0;
   bottom: calc(100% + 6px);
   z-index: 20;
-  min-width: 228px;
-  padding: 4px;
-  background: var(--pop);
-  border: 1px solid var(--line);
-  border-radius: var(--r);
-  box-shadow: var(--pop-shadow);
+  width: 224px;
   animation: pop 0.14s ease both;
 }
-.att-menu button {
+.att-sub {
+  position: absolute;
+  left: calc(100% + 4px);
+  bottom: -1px;
+  width: 232px;
+  max-height: min(340px, 60vh);
+  overflow-y: auto;
+}
+.att-row {
   width: 100%;
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  padding: 6px 8px;
-  border-radius: var(--r-sm);
-  font-size: 12.5px;
+  gap: 10px;
+  height: 32px;
+  padding: 0 8px;
+  border-radius: var(--r);
+  font-size: 13px;
   color: var(--body);
   text-align: left;
+  white-space: nowrap;
 }
-.att-menu button:hover {
-  background: var(--raise2);
+/* the menu sits on --pop, which is lighter than --raise2 in the dark theme: a hovered row is the ink at low alpha */
+.att-row:hover,
+.att-row:focus-visible,
+.att-row.on {
+  background: color-mix(in srgb, var(--ink) 9%, transparent);
   color: var(--ink);
+  outline: none;
 }
-.att-menu kbd {
-  font-family: inherit;
+.att-ic {
+  width: 20px;
+  flex: none;
+  display: grid;
+  place-items: center;
+  color: var(--muted);
+}
+.att-tile {
+  width: 20px;
+  height: 20px;
+  flex: none;
+  border-radius: 5px;
+  display: grid;
+  place-items: center;
   font-size: 11px;
+  font-weight: 600;
+  color: #fff;
+}
+.att-n {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.att-row kbd,
+.att-chev {
+  margin-left: auto;
+  font-family: inherit;
+  font-size: 11.5px;
+  color: var(--muted);
+}
+.att-chev {
+  font-size: 15px;
+  line-height: 1;
+}
+.att-sep {
+  height: 1px;
+  margin: 5px 4px;
+  background: var(--line-strong);
+}
+.att-empty {
+  padding: 7px 8px;
+  font-size: 12.5px;
   color: var(--quiet);
+}
+.att-manage {
+  color: var(--body);
 }
 
 /* chips row above the input */

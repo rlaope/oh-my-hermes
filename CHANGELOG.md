@@ -4,6 +4,13 @@ All notable changes will be documented here.
 
 ## Unreleased
 
+- **omher's + in the message box: one way to add files, and the bot's plugins beside it.** The menu with "Photos &
+  videos", "Files" and "Paste from clipboard" is gone. In a bot's chat the + now has two rows, "Add photos and files"
+  (one system picker for any kind of file, also ⌘O / Ctrl+O) and "Plugins ›", whose submenu lists the bot's enabled
+  plugins (a colour tile and the name, the description as the tooltip) and Manage plugins; picking a plugin puts
+  "Use <plugin>: " at the start of the message, without sending it. In a session the + opens the file picker
+  straight away. Pasting into the box and dropping on the chat attach files as before. (#2870)
+
 - **The OMH TUI shows a compression as one gauge row, and a prompt typed meanwhile goes on by itself.** `/compact`
   (or `/compress`) no longer prints the long "Compressing: Hermes summarizes the older turns…" notice above a second
   spinner row. One row now reads `✻ Compacting conversation… ━━━━━━──── (30s)`, with a blank row between it and

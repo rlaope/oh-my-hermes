@@ -1,8 +1,10 @@
-// Attaching files in the composer: the + button and its menu, the chips row, the drop overlay on the chat,
+// Attaching files in the composer: the + button (one file picker, plus the bot's plugins in its chat), the chips row, the drop overlay on the chat,
 // and the files in the person's own sent bubble. Sending lives in the store (`sendWithFiles`).
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import type { OutFile, SentFile } from "../../state/store";
+import type { PluginRow } from "../../lib/protocol";
+import { PlugIcon } from "../../pages/icons";
 import { isMac } from "../../app/shortcuts";
 import { PlusIcon } from "../../ui";
 import { attachKind, badgeFor, limitReason, previewKind } from "./attachFiles";
@@ -47,20 +49,53 @@ export function chipsFor(files: File[], have: number): Chip[] {
 
 const mod = () => (isMac() ? "⌘" : "Ctrl+");
 
-/** The + at the composer's left edge and the menu above the composer. */
+/** The + at the composer's left edge. In a bot's chat it opens a two-row menu: "Add photos and files" (one picker
+ *  for every kind of file) and "Plugins ›", whose submenu beside it lists the bot's enabled plugins (a colour tile and
+ *  the name; the description is the tooltip) and Manage plugins. Picking a plugin names it at the start of the
+ *  message. Where there are no plugins (a SESSIONS agent) the + opens the picker straight away. Pasting into the box
+ *  and dropping on the chat add files too. */
 export function AttachButton({
   disabled,
   onFiles,
-  onError,
+  plugins,
+  onPlugin,
+  onManage,
 }: {
   disabled: boolean;
   onFiles: (files: File[]) => void;
-  onError: (msg: string) => void;
+  /** Reads the bot's plugins when the menu opens (a bot's chat only). */
+  plugins?: () => Promise<PluginRow[]>;
+  onPlugin?: (p: PluginRow) => void;
+  onManage?: () => void;
 }) {
-  const [open, setOpen] = useState(false);
-  const media = useRef<HTMLInputElement>(null);
-  const any = useRef<HTMLInputElement>(null);
+  const input = useRef<HTMLInputElement>(null);
   const wrap = useRef<HTMLDivElement>(null);
+  const [open, setOpen] = useState(false);
+  const [sub, setSub] = useState(false);
+  const [rows, setRows] = useState<PluginRow[] | null>(null);
+  useEffect(() => {
+    if (!open) setSub(false);
+  }, [open]);
+  // → or Enter on "Plugins ›": the first row of the submenu takes the focus once the plugins have been read
+  const focusSub = useRef(false);
+  useEffect(() => {
+    if (!sub || rows === null || !focusSub.current) return;
+    focusSub.current = false;
+    wrap.current?.querySelector<HTMLButtonElement>(".att-sub .att-row")?.focus();
+  }, [sub, rows]);
+
+  // ⌘O (Ctrl+O on Windows/Linux) opens the picker while this chat is open.
+  useEffect(() => {
+    const key = (e: KeyboardEvent) => {
+      const m = isMac() ? e.metaKey && !e.ctrlKey : e.ctrlKey && !e.metaKey;
+      if (!m || e.altKey || e.shiftKey || disabled || e.key.toLowerCase() !== "o") return;
+      e.preventDefault();
+      setOpen(false);
+      input.current?.click();
+    };
+    window.addEventListener("keydown", key);
+    return () => window.removeEventListener("keydown", key);
+  }, [disabled]);
 
   useEffect(() => {
     if (!open) return;
@@ -81,51 +116,26 @@ export function AttachButton({
     };
   }, [open]);
 
-  // ⌘⇧A photos & videos, ⌘O files (Ctrl on Windows/Linux) while this chat is open.
   useEffect(() => {
-    const key = (e: KeyboardEvent) => {
-      const m = isMac() ? e.metaKey && !e.ctrlKey : e.ctrlKey && !e.metaKey;
-      if (!m || e.altKey || disabled) return;
-      const k = e.key.toLowerCase();
-      if (k === "a" && e.shiftKey) {
-        e.preventDefault();
-        media.current?.click();
-      } else if (k === "o" && !e.shiftKey) {
-        e.preventDefault();
-        any.current?.click();
-      }
+    if (!open || !plugins) return;
+    let live = true;
+    plugins().then(
+      (list) => live && setRows(list.filter((p) => p.enabled)),
+      () => live && setRows([]),
+    );
+    return () => {
+      live = false;
     };
-    window.addEventListener("keydown", key);
-    return () => window.removeEventListener("keydown", key);
-  }, [disabled]);
+  }, [open, plugins]);
 
   const picked = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = [...(e.target.files ?? [])];
     e.target.value = "";
     if (files.length) onFiles(files);
   };
-
-  const paste = async () => {
+  const pickFiles = () => {
     setOpen(false);
-    try {
-      const items = await navigator.clipboard.read();
-      const files: File[] = [];
-      for (const it of items) {
-        const type = it.types.find((t) => !t.startsWith("text/"));
-        if (!type) continue;
-        const blob = await it.getType(type);
-        files.push(new File([blob], `pasted.${type.split("/")[1]?.split("+")[0] || "bin"}`, { type }));
-      }
-      if (files.length) onFiles(files);
-      else onError(t("att.clipEmpty"));
-    } catch {
-      onError(t("att.clipFailed"));
-    }
-  };
-
-  const pick = (input: HTMLInputElement | null) => {
-    setOpen(false);
-    input?.click();
+    input.current?.click();
   };
 
   return (
@@ -135,35 +145,144 @@ export function AttachButton({
         className="att-plus"
         aria-label={t("att.attach")}
         title={t("att.attach")}
-        aria-haspopup="menu"
-        aria-expanded={open}
+        aria-haspopup={plugins ? "menu" : undefined}
+        aria-expanded={plugins ? open : undefined}
         disabled={disabled}
-        onClick={() => setOpen((o) => !o)}
+        onClick={() => (plugins ? setOpen((o) => !o) : input.current?.click())}
         data-testid="attach"
       >
         <PlusIcon size={14} />
       </button>
-      <input ref={media} type="file" accept="image/*,video/*" multiple hidden onChange={picked} data-testid="attach-media-input" />
-      <input ref={any} type="file" multiple hidden onChange={picked} data-testid="attach-file-input" />
+      <input ref={input} type="file" multiple hidden onChange={picked} data-testid="attach-file-input" />
       {open && (
         <div className="att-menu" role="menu" data-testid="attach-menu">
-          <button type="button" role="menuitem" onClick={() => pick(media.current)} data-testid="attach-media">
-            <span>{t("att.media")}</span>
-            <kbd>{mod()}⇧A</kbd>
-          </button>
-          <button type="button" role="menuitem" onClick={() => pick(any.current)} data-testid="attach-files">
-            <span>{t("att.files")}</span>
+          <button type="button" role="menuitem" className="att-row" onClick={pickFiles} onMouseEnter={() => setSub(false)} data-testid="attach-files">
+            <span className="att-ic">
+              <ClipIcon />
+            </span>
+            <span className="att-n">{t("att.addFiles")}</span>
             <kbd>{mod()}O</kbd>
           </button>
-          <button type="button" role="menuitem" onClick={() => void paste()} data-testid="attach-paste">
-            <span>{t("att.paste")}</span>
-            <kbd>{mod()}V</kbd>
+          <button
+            type="button"
+            role="menuitem"
+            className={`att-row att-more${sub ? " on" : ""}`}
+            aria-haspopup="menu"
+            aria-expanded={sub}
+            onMouseEnter={() => setSub(true)}
+            onClick={() => setSub(true)}
+            onKeyDown={(e) => {
+              if (e.key === "ArrowRight" || e.key === "Enter") {
+                e.preventDefault();
+                focusSub.current = true;
+                setSub(true);
+              }
+            }}
+            data-testid="attach-plugins"
+          >
+            <span className="att-ic">
+              <PlugIcon size={15} />
+            </span>
+            <span className="att-n">{t("att.plugins")}</span>
+            <span className="att-chev" aria-hidden="true">
+              ›
+            </span>
           </button>
+          {sub && (
+            <div
+              className="att-sub"
+              role="menu"
+              onKeyDown={(e) => {
+                if (e.key === "ArrowLeft") {
+                  e.preventDefault();
+                  setSub(false);
+                  wrap.current?.querySelector<HTMLButtonElement>("[data-testid=attach-plugins]")?.focus();
+                }
+              }}
+              data-testid="attach-sub"
+            >
+              {rows === null ? (
+                <div className="att-empty">{t("att.pluginsLoading")}</div>
+              ) : (
+                rows.map((p) => (
+                  <button
+                    key={p.key}
+                    type="button"
+                    role="menuitem"
+                    className="att-row"
+                    title={p.description || pluginName(p)}
+                    onClick={() => {
+                      setOpen(false);
+                      onPlugin?.(p);
+                    }}
+                    data-testid="attach-plugin"
+                    data-name={p.name}
+                  >
+                    <PluginTile p={p} />
+                    <span className="att-n">{pluginName(p)}</span>
+                  </button>
+                ))
+              )}
+              {!!rows?.length && <div className="att-sep" />}
+              <button
+                type="button"
+                role="menuitem"
+                className="att-row att-manage"
+                onClick={() => {
+                  setOpen(false);
+                  onManage?.();
+                }}
+                data-testid="attach-manage"
+              >
+                <span className="att-ic">
+                  <GearIcon />
+                </span>
+                <span className="att-n">{rows && !rows.length ? t("att.pluginsNone") : t("att.pluginsManage")}</span>
+              </button>
+            </div>
+          )}
         </div>
       )}
     </div>
   );
 }
+
+/** A plugin's name for people: the catalog title, else its folder name with the dashes spaced and a capital. */
+export function pluginName(p: Pick<PluginRow, "title" | "name">): string {
+  if (p.title) return p.title;
+  const n = p.name.replace(/[-_]+/g, " ").trim();
+  return n ? n[0].toUpperCase() + n.slice(1) : p.name;
+}
+
+/** A colour per plugin, the same every time: the logo's violet, coral, amber and pink with green, teal, blue and indigo
+ *  between them, so neighbouring hues differ. */
+const TILE = ["#b83fa8", "#e0595e", "#c98a2b", "#6f9a2e", "#2fa37a", "#2a8fc4", "#7c5cff", "#d33c8d"];
+export function tileColor(name: string): string {
+  let h = 0;
+  for (const ch of name) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
+  return TILE[h % TILE.length];
+}
+
+function PluginTile({ p }: { p: PluginRow }) {
+  return (
+    <span className="att-tile" style={{ background: tileColor(p.name) }} aria-hidden="true">
+      {pluginName(p).charAt(0).toUpperCase()}
+    </span>
+  );
+}
+
+const GearIcon = () => (
+  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <circle cx="12" cy="12" r="3" />
+    <path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z" />
+  </svg>
+);
+
+const ClipIcon = () => (
+  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <path d="M20 11.5 12.4 19a5 5 0 0 1-7.1-7.1l7.6-7.6a3.3 3.3 0 0 1 4.7 4.7l-7.6 7.6a1.7 1.7 0 0 1-2.4-2.4l7-7" />
+  </svg>
+);
 
 /** The chips row above the input. */
 export function Chips({ chips, onRemove }: { chips: Chip[]; onRemove: (id: string) => void }) {
