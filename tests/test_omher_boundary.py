@@ -79,7 +79,10 @@ RULES = (
     " exactly with the arguments shown on the card, through ACP on pipes: the confirm card that shows that exact command is the only way an entry is written,",
     "into one file in omher's own folder, `~/.omher/custom-agents.json`, never a CLI's config;",
     "skips and never runs an entry that fails, starts it with no shell (a Windows `.cmd` or `.bat` shim is refused),"
-    " adds no variable and no rule check, continues its conversation only inside the protocol, and refuses `opencode` and `kilo`.",
+    " adds no variable and no rule check, continues its conversation only inside the protocol, and refuses `opencode` and `kilo`;",
+    "a bot may propose such an agent only as an `omher-agent` block in its own reply in its main chat or a Hermes folder chat"
+    " (never tool output, a Slack or Discord session, or a SESSIONS agent's chat), which becomes a chip that opens the same card,"
+    " checked again by the shell and stricter (no shell, interpreter or built-in program), so a bot never writes the file or starts the program itself.",
     "and tells the agent at `initialize` that omher offers no file reading or writing and no terminal,",
     "OpenCode also gets one environment variable, `OPENCODE_CONFIG_CONTENT`, holding ask rules for its `bash` and `edit` tools",
     "right before the chat, the shell runs `opencode agent list` (that one fixed argument, in the same folder, with the same environment, on pipes, nothing on stdin, at most 30 seconds)",
@@ -906,8 +909,10 @@ class CustomAgentsOnlyAfterTheCard(unittest.TestCase):
         names = self.fn("names")
         self.assertIn('vec![format!("{program}.exe")]', names)
         self.assertNotIn("cmd", names.replace("Os::Unix", ""))
+        # the bot drafts' refusal list names shells only to refuse them (pinned word for word in BotDraftsOnlyOpenTheCard)
+        code = re.sub(r"pub const INTERPRETERS: &\[&str\] = &\[.*?\];", "", self.prod, flags=re.S)
         for banned in ("Command::new", "/bin/sh", "cmd.exe", "powershell", '"-c"', '"/c"', "spawn_command"):
-            self.assertNotIn(banned, self.prod)
+            self.assertNotIn(banned, code)
         # the chat entry: the generic ACP adapter, argv from launch_here, the generic agents' env, no rule variable
         start = self.chat.split("fn start_custom<F>", 1)[1].split("\n    }\n", 1)[0]
         self.assertIn("Box::new(Acp::new(crate::custom_agents::adapter_row(c), &cwd.to_string_lossy(), thread))", start)
@@ -944,15 +949,64 @@ class CustomAgentsOnlyAfterTheCard(unittest.TestCase):
         self.assertIn("custom_agents::confirm_remove(&home, &id)", remove)
         preview = self.lib.split("async fn custom_agent_preview(", 1)[1].split("\n}\n", 1)[0]
         self.assertNotIn("confirm", preview)
-        # in the UI: customConfirm is called from the card's Add only
+        # in the UI: customConfirm is called from the one confirm card's Add only, in exactly two places: the Add agent
+        # form (AgentsPage.tsx) and a bot draft's chip (AgentChip.tsx), both through AgentConfirmCard
         page = (UI_SRC / "settings" / "agents" / "AgentsPage.tsx").read_text(encoding="utf-8")
-        self.assertEqual(page.count("customConfirm("), 1)
-        add = page.split("const add = async () => {", 1)[1].split("\n  };\n", 1)[0]
-        self.assertIn("await getHost().customConfirm(card.entry);", add)
-        self.assertIn('onClick={() => void add()} data-testid="agent-confirm-add"', page)
+        chip = (UI_SRC / "chat" / "parts" / "AgentChip.tsx").read_text(encoding="utf-8")
+        callers = {str(p.relative_to(UI_SRC)): p.read_text(encoding="utf-8").count("customConfirm(") for p in UI_SRC.rglob("*.ts*") if not p.name.endswith((".test.ts", ".test.tsx"))}
+        self.assertEqual({k: v for k, v in callers.items() if v and k != "sessions/host.ts"}, {"settings/agents/AgentsPage.tsx": 1, "chat/parts/AgentChip.tsx": 1})
+        for src in (page, chip):
+            add = src.split("const add = async () => {", 1)[1].split("\n  };\n", 1)[0]
+            self.assertIn("await getHost().customConfirm(card.entry);", add)
+            self.assertIn("onAdd={() => void add()} />", src)
+        self.assertIn('onClick={onAdd} data-testid="agent-confirm-add"', page)
+        self.assertEqual(chip.count("<AgentConfirmCard "), 1)
         host = (UI_SRC / "sessions" / "host.ts").read_text(encoding="utf-8")
         self.assertIn('await invoke("custom_agent_confirm", { entry });', host)
 
+
+
+class BotDraftsOnlyOpenTheCard(unittest.TestCase):
+    """Rule 11's bot sentence: a bot's `omher-agent` draft is read only from its own replies in its main chat or a
+    folder chat, becomes a chip that opens the same card, and is checked again by the shell, stricter than the form."""
+
+    def setUp(self) -> None:
+        self.draft = (UI_SRC / "chat" / "parts" / "agentDraft.ts").read_text(encoding="utf-8")
+        self.chip = (UI_SRC / "chat" / "parts" / "AgentChip.tsx").read_text(encoding="utf-8")
+        self.bubble = (UI_SRC / "chat" / "parts" / "Bubble.tsx").read_text(encoding="utf-8")
+        text = (SHELL / "custom_agents.rs").read_text(encoding="utf-8")
+        self.prod = text.split("#[cfg(test)]\nmod tests", 1)[0]
+        self.lib = (SHELL / "lib.rs").read_text(encoding="utf-8")
+
+    def test_drafts_come_only_from_bot_replies_in_main_and_folder_chats(self) -> None:
+        self.assertIn('export const draftsAllowed = (chatKey: string): boolean => chatKey.startsWith("fold:") || !chatKey.includes(":");', self.draft)
+        self.assertIn("draftsAllowed(chatKey) &&", self.chip)
+        # the only reader is the bot bubble of a finished reply; no tool, activity, elsewhere or session view reads them
+        self.assertIn("{bot && !streaming && <AgentChips chatKey={bot} text={text} />}", self.bubble)
+        users = sorted(str(p.relative_to(UI_SRC)) for p in UI_SRC.rglob("*.tsx") if "<AgentChips" in p.read_text(encoding="utf-8"))
+        self.assertEqual(users, ["chat/parts/Bubble.tsx"])
+        self.assertLess(self.bubble.index('if (item.kind === "user")'), self.bubble.index("<AgentChips"))
+        for f in ("parseDrafts(", "AgentChips"):
+            readers = sorted(str(p.relative_to(UI_SRC)) for p in UI_SRC.rglob("*.ts*") if f in p.read_text(encoding="utf-8") and not p.name.endswith((".test.ts", ".test.tsx")))
+            self.assertTrue(set(readers) <= {"chat/parts/agentDraft.ts", "chat/parts/AgentChip.tsx", "chat/parts/Bubble.tsx"}, readers)
+
+    def test_the_chip_only_previews_and_the_shell_checks_it_again_stricter(self) -> None:
+        preview = self.chip.split("const preview = async () => {", 1)[1].split("\n  };\n", 1)[0]
+        self.assertIn("await getHost().customBotPreview(d.name, d.program, d.args, d.install);", preview)
+        self.assertNotIn("customConfirm", preview)
+        cmd = self.lib.split("async fn custom_agent_bot_preview(", 1)[1].split("\n}\n", 1)[0]
+        self.assertIn("custom_agents::bot_preview_here(&label, &program, &args, &install)", cmd)
+        self.assertNotIn("confirm", cmd)
+        bot = self.prod.split("pub fn bot_draft<", 1)[1].split("\n}\n", 1)[0]
+        self.assertIn("if INTERPRETERS.contains(&base.as_str()) {", bot)
+        self.assertIn("return Err(Why::Builtin);", bot)
+        self.assertIn("draft_of(home, label, program, args.to_vec(), install, os, is_program)", bot)
+        self.assertNotIn("save(", self.prod.split("pub fn bot_preview_here(", 1)[1].split("\n}\n", 1)[0])
+        names = re.search(r"pub const INTERPRETERS: &\[&str\] = &\[(.*?)\];", self.prod, re.S).group(1)
+        want = "sh bash zsh fish dash ksh csh tcsh cmd powershell pwsh python python3 node deno bun ruby perl php osascript env sudo doas open xargs".split()
+        self.assertEqual(re.findall(r'"([a-z0-9]+)"', names), want)
+        ui = re.search(r"export const INTERPRETERS: readonly string\[\] = \[(.*?)\];", (UI_SRC / "sessions" / "custom.ts").read_text(encoding="utf-8"), re.S).group(1)
+        self.assertEqual(re.findall(r'"([a-z0-9]+)"', ui), want)
 
 class SessionsStartOnlyAllowListedAgents(unittest.TestCase):
     """Rule 11: the Rust shell's allow-list, the commands that start a program, and the UI's list."""

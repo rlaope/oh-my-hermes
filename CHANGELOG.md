@@ -243,6 +243,12 @@ All notable changes will be documented here.
   saved until you press Add. It then opens from the SESSIONS + menu as a
   session chat on the same ACP adapter, with no shell and no rule rewriting.
   Entries live in `~/.omher/custom-agents.json` and are checked on every read.
+- **A bot can draft an ACP agent for you in omher; you still confirm it.** An
+  ```` ```omher-agent ```` block in a bot's reply (name, program, args,
+  install) gets an "Add agent" chip that opens the same confirm card, with
+  "Proposed by <bot>"; nothing is saved until Add. A shell or interpreter as
+  the program is refused for bot drafts. "Ask the bot" on Settings › Agents
+  puts the request in the bot's message box without sending it.
 - **Claude Fable 5.2 now leads the `visual-engineering` chain.** Frontend and
   visual lanes routed through Hermes try Fable 5.2 first, then Claude Opus
   5.5, Gemini 4 Argon and Kimi K3.1 Pro, all at `high` (before, Opus 5.5 came

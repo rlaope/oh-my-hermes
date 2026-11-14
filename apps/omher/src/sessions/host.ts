@@ -1138,6 +1138,12 @@ class MockChat {
         this.lateStep = "exec-late";
         return;
       }
+      if (text.startsWith("/draft")) {
+        // an agent's reply holding an omher-agent draft: a session chat shows no Add agent chip for it
+        this.say('Here is one:\n\n```omher-agent\n{"name": "Stub ACP", "program": "stub-acp", "args": ["acp"]}\n```', 80);
+        this.at(200, () => this.end("done"));
+        return;
+      }
       if (text.startsWith("/background")) {
         // the turn ends with a command still running in the background (Claude background_tasks_changed, OmO
         // waiting_background): the header says so until it ends. "hold": it runs on until Stop; "busy": the turn

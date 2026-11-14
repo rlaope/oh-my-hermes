@@ -140,6 +140,22 @@ UI (React in a Tauri window)  ⇄  bridge (Python, loopback WebSocket)  ⇄  the
   writes `~/.omher/custom-agents.json`. The shell checks every entry each time it reads that file and never runs one
   that fails; it starts yours with no shell, through the same ACP adapter, with no rule rewriting, and its session
   says that approvals follow the agent's own settings. Remove ends its open sessions.
+- **A bot can draft one; you confirm it.** "Ask the bot" on Settings › Agents only puts a request in the current
+  bot's composer. A bot proposes an agent with one fenced block in its reply, which still shows as a code block:
+
+  ````
+  ```omher-agent
+  {"name": "Cursor Agent", "program": "cursor-agent", "args": ["acp"], "install": "npm install -g @cursor/agent"}
+  ```
+  ````
+
+  One JSON object; unknown keys are ignored; `args` is a list (default none) and is never split again. Each block
+  gets one "Add agent" chip under the reply that opens the same confirm card, with "Proposed by <bot>"; the shell
+  checks the draft again (`custom_agent_bot_preview`, no write) and only the card's Add saves it. Bot drafts are
+  stricter than the form: a shell, interpreter or launcher program (`sh`, `bash`, `python`, `node`, `env`, `sudo`,
+  `open`, `xargs`, ...) or a built-in agent's program is refused, and the chip shows disabled with the reason. Drafts
+  are read only from the bot's replies in its main chat and Hermes folder chats, never from tool output, Slack or
+  Discord sessions, or a SESSIONS agent's chat.
 - **The + menu stays short.** It lists the agents installed on this computer, Claude Code, Codex and OmO (the main
   agents) first, then the other built-ins, then the list's ACP agents; the rest fold under one More agents row, each with its whole install line (a click copies it). Continue a conversation stays under that row, there as
   the menu first opens.
