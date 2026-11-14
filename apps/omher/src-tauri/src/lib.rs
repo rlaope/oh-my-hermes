@@ -457,7 +457,7 @@ async fn open_hermes_auth(provider: String) -> Result<(), String> {
 }
 
 /// The chat's connect block: open the person's own system terminal running exactly `hermes auth add <id>` (rule
-/// 23), Hermes' own sign-in for that provider. Only `openai-codex`, `anthropic` and `nous` pass
+/// 23), Hermes' own sign-in for that provider. Only `openai-codex` and `nous` pass
 /// (`hermes_auth::SIGN_IN`); omher never sees what the person types there.
 #[tauri::command]
 async fn open_hermes_sign_in(provider: String) -> Result<(), String> {

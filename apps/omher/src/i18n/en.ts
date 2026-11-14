@@ -767,7 +767,6 @@ export const en = {
   "cn.needs": "{bot} needs an AI account to answer.",
   "cn.finish": "Finish signing in in the terminal window.",
   "cn.codex": "ChatGPT / Codex",
-  "cn.claude": "Claude",
   "cn.nous": "Nous Portal",
   "cn.key": "API key…",
   "cn.manual": "Run {cmd} in a terminal.",

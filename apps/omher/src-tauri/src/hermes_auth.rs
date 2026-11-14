@@ -54,8 +54,10 @@ pub fn auth_args(provider: &str) -> Result<[String; 5], String> {
     Ok(["auth".into(), "add".into(), provider.into(), "--type".into(), "api-key".into()])
 }
 
-/// The only providers whose own sign-in the chat's connect block may open: ChatGPT / Codex, Claude, Nous Portal.
-pub const SIGN_IN: [&str; 3] = ["openai-codex", "anthropic", "nous"];
+/// The only providers whose own sign-in the chat's connect block may open: ChatGPT / Codex and Nous Portal. Not
+/// `anthropic`: Hermes' Claude OAuth works only on Claude Max with purchased extra-usage credits; an Anthropic key
+/// still goes through the `--type api-key` form.
+pub const SIGN_IN: [&str; 2] = ["openai-codex", "nous"];
 
 /// The arguments after `hermes` for a sign-in: `auth add <id>`, the id one of `SIGN_IN`.
 pub fn sign_in_args(provider: &str) -> Result<[String; 3], String> {
@@ -246,14 +248,16 @@ mod tests {
     }
 
     #[test]
-    fn sign_in_takes_only_the_three_ids() {
+    fn sign_in_takes_only_the_two_ids() {
         for id in SIGN_IN {
             assert_eq!(sign_in_args(id).unwrap(), ["auth", "add", id]);
             assert_eq!(form_args(Form::SignIn, id).unwrap(), ["auth", "add", id]);
         }
-        assert_eq!(SIGN_IN, ["openai-codex", "anthropic", "nous"]);
-        // valid provider ids that are not on the list, look-alikes and injections are all refused
+        assert_eq!(SIGN_IN, ["openai-codex", "nous"]);
+        // valid provider ids that are not on the list, look-alikes and injections are all refused; `anthropic` too
+        // (no Claude sign-in), while its `--type api-key` form stays allowed
         for bad in [
+            "anthropic",
             "openrouter",
             "openai",
             "claude-proxy",
@@ -277,22 +281,23 @@ mod tests {
         }
         // the api-key form still takes any well-formed id, the sign-in form never adds `--type`
         assert!(form_args(Form::ApiKey, "openrouter").is_ok());
-        assert!(!form_args(Form::SignIn, "anthropic").unwrap().iter().any(|a| a.starts_with("--")));
+        assert_eq!(form_args(Form::ApiKey, "anthropic").unwrap(), ["auth", "add", "anthropic", "--type", "api-key"]);
+        assert!(!form_args(Form::SignIn, "nous").unwrap().iter().any(|a| a.starts_with("--")));
     }
 
     #[test]
     fn sign_in_uses_the_same_launchers_with_the_short_argv() {
         let h = Path::new("/usr/local/bin/hermes");
         let os = |v: &[&str]| v.iter().map(OsString::from).collect::<Vec<_>>();
-        let tail = ["/usr/local/bin/hermes", "auth", "add", "anthropic"];
-        let win = launchers(Desk::Windows, h, Form::SignIn, "anthropic", None).unwrap();
+        let tail = ["/usr/local/bin/hermes", "auth", "add", "nous"];
+        let win = launchers(Desk::Windows, h, Form::SignIn, "nous", None).unwrap();
         assert_eq!(win, vec![("cmd".to_string(), os(&[&["/c", "start", "", "cmd", "/k"][..], &tail].concat()))]);
-        let lin = launchers(Desk::Linux, h, Form::SignIn, "anthropic", None).unwrap();
+        let lin = launchers(Desk::Linux, h, Form::SignIn, "nous", None).unwrap();
         assert_eq!(lin.iter().map(|l| l.0.as_str()).collect::<Vec<_>>(), ["x-terminal-emulator", "gnome-terminal", "konsole", "xfce4-terminal", "xterm"]);
         for (_, argv) in &lin {
             assert_eq!(&argv[argv.len() - 4..], os(&tail).as_slice());
         }
-        let mac = launchers(Desk::Mac, h, Form::SignIn, "anthropic", Some(Path::new("/tmp/x.command"))).unwrap();
+        let mac = launchers(Desk::Mac, h, Form::SignIn, "nous", Some(Path::new("/tmp/x.command"))).unwrap();
         assert_eq!(mac, vec![("open".to_string(), os(&["-a", "Terminal", "/tmp/x.command"]))]);
         let body = command_file(Path::new("/Users/k k/.local/bin/hermes"), Form::SignIn, "openai-codex").unwrap();
         assert_eq!(body, "#!/bin/sh\nrm -f \"$0\"\nexec '/Users/k k/.local/bin/hermes' 'auth' 'add' 'openai-codex'\n");

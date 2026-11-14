@@ -145,8 +145,10 @@ RULES = (
     "Settings › Providers \"Add key\" may open the person's own system terminal running exactly"
     " `hermes auth add <provider> --type api-key`, only when the person picks a provider.",
     "The chat's connect block may open the same terminal running exactly `hermes auth add <id>` (no `--type`: Hermes"
-    " runs that provider's own sign-in) for three ids only, `openai-codex`, `anthropic` and `nous`, a fixed list the"
-    " desktop shell checks, only when the person picks one; any other id is refused, and the terminal runs nothing else.",
+    " runs that provider's own sign-in) for two ids only, `openai-codex` and `nous`, a fixed list the desktop shell"
+    " checks, only when the person picks one; any other id is refused (`anthropic` too: Hermes' Claude sign-in answers"
+    " only on Claude Max with purchased extra-usage credits, so an Anthropic key goes through \"Add key\"), and the"
+    " terminal runs nothing else.",
     "asks whether the bot can answer through Hermes' read-only `setup.runtime_check` on that bot's gateway (`bots.ready`).",
     "sets it through the same `chat.set_model` the model menu uses; it writes no config itself.",
     "The provider id is checked against `^[a-z0-9][a-z0-9_-]{0,40}$` and passed as one argument;",
@@ -1111,7 +1113,7 @@ class SessionsStartOnlyAllowListedAgents(unittest.TestCase):
 
 class AddKeyOpensOnlyHermesAuthAdd(unittest.TestCase):
     """Rule 23: "Add key" opens the system terminal with `hermes auth add <id> --type api-key`, the connect block with
-    `hermes auth add <id>` for openai-codex, anthropic or nous only; omher never sees the key or the login. Readiness
+    `hermes auth add <id>` for openai-codex or nous only (no Claude sign-in); omher never sees the key or the login. Readiness
     is Hermes' read-only `setup.runtime_check`."""
 
     HERMES_AUTH = SHELL / "hermes_auth.rs"
@@ -1147,8 +1149,8 @@ class AddKeyOpensOnlyHermesAuthAdd(unittest.TestCase):
         self.assertEqual(self.prod.count("auth_args(provider)"), 1)
         self.assertEqual(self.prod.count("sign_in_args(provider)"), 1)
 
-    def test_the_sign_in_argv_is_fixed_to_three_ids(self) -> None:
-        self.assertIn('pub const SIGN_IN: [&str; 3] = ["openai-codex", "anthropic", "nous"];', self.prod)
+    def test_the_sign_in_argv_is_fixed_to_two_ids(self) -> None:
+        self.assertIn('pub const SIGN_IN: [&str; 2] = ["openai-codex", "nous"];', self.prod)
         args = self.prod[self.prod.index("pub fn sign_in_args"):]
         args = args[: args.index("\n}\n")]
         self.assertIn("if !SIGN_IN.contains(&provider)", args)
@@ -1160,7 +1162,13 @@ class AddKeyOpensOnlyHermesAuthAdd(unittest.TestCase):
         self.assertIn("hermes_auth::open(hermes_auth::Form::SignIn, &provider)", self.lib)
         # the page's list is the shell's list, and its stand-in in a browser is e2e's only
         ready = (UI_SRC / "chat" / "connect" / "ready.ts").read_text(encoding="utf-8")
-        self.assertIn('export const SIGN_IN = ["openai-codex", "anthropic", "nous"] as const;', ready)
+        self.assertIn('export const SIGN_IN = ["openai-codex", "nous"] as const;', ready)
+        # no Claude sign-in anywhere in the block: not in the list, no label, no string for it
+        block = (UI_SRC / "chat" / "connect" / "ConnectBlock.tsx").read_text(encoding="utf-8")
+        self.assertNotIn("anthropic", block)
+        self.assertNotIn("cn.claude", block)
+        for lang in ("en", "ko", "ja", "zh"):
+            self.assertNotIn('"cn.claude"', (UI_SRC / "i18n" / f"{lang}.ts").read_text(encoding="utf-8"))
         host = (self.UI / "authHost.ts").read_text(encoding="utf-8")
         self.assertIn('invoke("open_hermes_sign_in", { provider })', host)
         for path in sorted((UI_SRC / "chat" / "connect").glob("*.ts*")):

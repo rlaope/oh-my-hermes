@@ -765,7 +765,6 @@ export const zh: Record<Key, string> = {
   "cn.needs": "{bot} 需要一个 AI 账户才能回答。",
   "cn.finish": "请在终端里完成登录。",
   "cn.codex": "ChatGPT / Codex",
-  "cn.claude": "Claude",
   "cn.nous": "Nous Portal",
   "cn.key": "API 密钥…",
   "cn.manual": "请在终端中运行 {cmd}。",

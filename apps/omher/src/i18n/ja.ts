@@ -765,7 +765,6 @@ export const ja: Record<Key, string> = {
   "cn.needs": "{bot} が答えるには AI アカウントが必要です。",
   "cn.finish": "ターミナルのウィンドウでサインインを完了してください。",
   "cn.codex": "ChatGPT / Codex",
-  "cn.claude": "Claude",
   "cn.nous": "Nous Portal",
   "cn.key": "API キー…",
   "cn.manual": "ターミナルで {cmd} を実行してください。",
