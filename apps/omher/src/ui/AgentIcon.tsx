@@ -105,6 +105,30 @@ const ALIASES: Record<string, string> = {
   kami: "omh",
 };
 
+/** Every mark file in src/assets/agents by its name: an agent described as data (a generic ACP agent's row) names
+ *  its mark by file instead of by an id here. */
+const FILES_RAW = import.meta.glob<string>("../assets/agents/*.svg", { query: "?raw", import: "default", eager: true });
+const FILES_URL = import.meta.glob<string>("../assets/agents/*.png", { import: "default", eager: true });
+const byFile = new Map<string, AgentMark>();
+
+/** The mark in `file` (a name in src/assets/agents, no folder), titled `title`; a letter mark when there is no such
+ *  file. */
+export function fileMark(file: string, title: string): AgentMark {
+  const key = `${file}\u0000${title}`;
+  const hit = byFile.get(key);
+  if (hit) return hit;
+  const stem = file.replace(/\.[a-z]+$/i, "");
+  const raw = /^[\w.-]+$/.test(file) ? FILES_RAW[`../assets/agents/${file}`] : undefined;
+  const src = /^[\w.-]+$/.test(file) ? FILES_URL[`../assets/agents/${file}`] : undefined;
+  const mark: AgentMark = raw
+    ? parse(stem, title, raw)
+    : src
+      ? { kind: "img", id: stem, title, src }
+      : { kind: "letter", id: null, title, letter: (title.match(/[a-z0-9]/i)?.[0] ?? "?").toUpperCase() };
+  byFile.set(key, mark);
+  return mark;
+}
+
 /** The mark for an agent id (case-insensitive, aliases allowed); unknown ids get a letter mark. */
 export function agentIcon(id: string | null | undefined): AgentMark {
   const key = (id ?? "").trim().toLowerCase();
@@ -116,16 +140,19 @@ export function agentIcon(id: string | null | undefined): AgentMark {
 
 export function AgentIcon({
   id,
+  file,
   size = 16,
   style,
   className,
 }: {
   id: string | null | undefined;
+  /** Draw the mark in this file of src/assets/agents instead ([`fileMark`], titled by `id`). */
+  file?: string;
   size?: number;
   style?: CSSProperties;
   className?: string;
 }) {
-  const mark = agentIcon(id);
+  const mark = file ? fileMark(file, id ?? "") : agentIcon(id);
   const cls = `agent-ic${className ? ` ${className}` : ""}`;
   if (mark.kind === "img") {
     return (

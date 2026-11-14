@@ -2,7 +2,7 @@
 
 omher is a desktop app for your Hermes bots, on macOS, Windows and Linux. Each Hermes profile is one bot. Each bot has one main
 chat, and the app shows what that bot is doing in its other sessions (Slack, Discord, Telegram, cron)
-read-only. Under the bots, SESSIONS starts a coding agent (Claude Code, Codex, OpenCode, Gemini CLI, Kilo Code and more, oh-my-hermes, pi) in a
+read-only. Under the bots, SESSIONS starts a coding agent (Claude Code, Codex, OmO, OpenCode, Gemini CLI and more, oh-my-hermes, pi) in a
 folder you pick and runs it inside the window, as if you had typed `claude` or `codex` in a terminal. It is part of
 this repository but is not part of the `omh` Python package.
 
@@ -112,7 +112,7 @@ UI (React in a Tauri window)  ⇄  bridge (Python, loopback WebSocket)  ⇄  the
   `THIRD_PARTY_NOTICES.md`), font, size, line height, cursor, scrollback, contrast and padding, kept on this
   computer (`src/sessions/term/`). In a terminal, Cmd/Ctrl+F finds in the scrollback and Cmd/Ctrl+click opens a web
   link in the browser. The shell reads a program only as far ahead of the terminal as the terminal has drawn (2 MiB
-  at most), so a runaway program holds memory flat and Ctrl+C is answered at once. The UI sends only an agent id (`claude`, `codex`, `omo`, `dsh`, `omh`, `pi`, `omp`, `grok`, `opencode`, `kilo`, `gemini`, `qwen`, `kimi`, `copilot`, `cline`); the shell
+  at most), so a runaway program holds memory flat and Ctrl+C is answered at once. The UI sends only an agent id (`claude`, `codex`, `omo`, `dsh`, `omh`, `pi`, `omp`, `grok`, `opencode`, `gemini`, `qwen`, `kimi`, `copilot`, `cline`); the shell
   refuses anything else and never takes a command line or arguments. Closing a session or quitting the app stops
   the program. In a plain browser (dev, e2e) a mock host echoes what you type instead. A chat session's approvals
   and questions are asks like a bot's: they join the Needs-you strip and ⌘J (named by folder and agent), and the
@@ -127,14 +127,37 @@ UI (React in a Tauri window)  ⇄  bridge (Python, loopback WebSocket)  ⇄  the
   approval cards with Deny and Allow once (OpenCode's "Always allow" saves a project rule, so omher does not
   offer it). Before OpenCode starts, omher reads its resolved rules (`opencode agent list`) and starts it with
   ask rules built from them: what you allow asks first, what you deny stays denied. If omher cannot confirm OpenCode
-  kept them, it does not start OpenCode. Kilo Code (`kilo acp`) gets the same from `kilo agent list`, for `bash`,
-  `edit` and `write`. Gemini CLI (`gemini --acp`), Qwen Code (`qwen --acp`), Kimi Code (`kimi acp`), Copilot CLI
-  (`copilot --acp`) and Cline (`cline --acp`) use their own approval requests, with no permission override from
-  omher. Their signed-in turns have not been tested. An agent that is not signed in
+  kept them, it does not start OpenCode. Gemini CLI (`gemini --acp`), Qwen Code (`qwen --acp`), Kimi Code
+  (`kimi acp`), Copilot CLI (`copilot --acp`) and Cline (`cline --acp`) are rows of one list in the shell
+  (`src-tauri/src/acp_agents.rs`: program, argument, sign-in and install lines, mark), which the agent look-up hands
+  to the UI; they use their own approval requests, with no permission override from omher. Their signed-in turns have not been tested. An agent that is not signed in
   ends its session with one line naming its own sign-in command (`gemini`, `kimi login`, `cline auth`, ...) and
   Open in Terminal; omher never signs in for it and never takes a key.
-- **The + menu stays short.** It lists the agents installed on this computer; the rest fold under one More agents
-  row, each with its whole install line (a click copies it). Continue a conversation stays under that row, there as
+- **Your own ACP agents** (Settings › Agents, `src-tauri/src/custom_agents.rs`): the page lists every offered
+  agent read-only with its tier (Main / ACP / Built-in) and whether it is installed, then yours. Add agent takes a
+  name, a program (a name on the search path or a full path), its ACP arguments (default `acp`) and an optional
+  install line, never a key. Save opens a card with the exact command omher will run, resolved now; only its Add
+  writes `~/.omher/custom-agents.json`. The shell checks every entry each time it reads that file and never runs one
+  that fails; it starts yours with no shell, through the same ACP adapter, with no rule rewriting, and its session
+  says that approvals follow the agent's own settings. Remove ends its open sessions.
+- **A bot can draft one; you confirm it.** "Ask the bot" on Settings › Agents only puts a request in the current
+  bot's composer. A bot proposes an agent with one fenced block in its reply, which still shows as a code block:
+
+  ````
+  ```omher-agent
+  {"name": "Cursor Agent", "program": "cursor-agent", "args": ["acp"], "install": "npm install -g @cursor/agent"}
+  ```
+  ````
+
+  One JSON object; unknown keys are ignored; `args` is a list (default none) and is never split again. Each block
+  gets one "Add agent" chip under the reply that opens the same confirm card, with "Proposed by <bot>"; the shell
+  checks the draft again (`custom_agent_bot_preview`, no write) and only the card's Add saves it. Bot drafts are
+  stricter than the form: a shell, interpreter or launcher program (`sh`, `bash`, `python`, `node`, `env`, `sudo`,
+  `open`, `xargs`, ...) or a built-in agent's program is refused, and the chip shows disabled with the reason. Drafts
+  are read only from the bot's replies in its main chat and Hermes folder chats, never from tool output, Slack or
+  Discord sessions, or a SESSIONS agent's chat.
+- **The + menu stays short.** It lists the agents installed on this computer, Claude Code, Codex and OmO (the main
+  agents) first, then the other built-ins, then the list's ACP agents; the rest fold under one More agents row, each with its whole install line (a click copies it). Continue a conversation stays under that row, there as
   the menu first opens.
 
 Rules the code keeps:
@@ -147,7 +170,7 @@ Rules the code keeps:
 - **Loopback only.** The bridge listens on 127.0.0.1 and talks to the gateway Hermes itself runs on this machine.
 - **No model calls of its own.** Every model call is Hermes'. omher has no API key and no HTTP client.
 - **Sessions run only allow-listed agents.** Only when you start one, only `claude`, `codex`, `omo`, `dsh`, `omh`, `pi`,
-  `omp`, `grok`, `opencode`, `kilo`, `gemini`, `qwen`, `kimi`, `copilot` or `cline`, with no arguments besides the fixed chat mode and a conversation id to continue, in the folder you
+  `omp`, `grok`, `opencode`, `gemini`, `qwen`, `kimi`, `copilot` or `cline`, with no arguments besides the fixed chat mode and a conversation id to continue, in the folder you
   picked; stopped when the session is closed or the app quits.
 - **Automations and plugins change only through the bot.** The Automations page reads each profile's
   `cron/jobs.json` and changes a job only with that bot's `cron.manage` (add, pause, resume, remove); Run now and

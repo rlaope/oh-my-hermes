@@ -1,0 +1,62 @@
+[
+  {
+    "id": "gemini",
+    "label": "Gemini CLI",
+    "program": "gemini",
+    "args": [
+      "--acp"
+    ],
+    "login": "gemini",
+    "install": "npm install -g @google/gemini-cli",
+    "mark": "geminicli-color.svg",
+    "continues": true
+  },
+  {
+    "id": "qwen",
+    "label": "Qwen Code",
+    "program": "qwen",
+    "args": [
+      "--acp"
+    ],
+    "login": "qwen",
+    "install": "npm install -g @qwen-code/qwen-code@latest",
+    "mark": "qwen-color.svg",
+    "continues": true
+  },
+  {
+    "id": "kimi",
+    "label": "Kimi Code",
+    "program": "kimi",
+    "args": [
+      "acp"
+    ],
+    "login": "kimi login",
+    "install": "npm install -g @moonshot-ai/kimi-code",
+    "mark": "kimi-code.png",
+    "continues": true
+  },
+  {
+    "id": "copilot",
+    "label": "Copilot CLI",
+    "program": "copilot",
+    "args": [
+      "--acp"
+    ],
+    "login": "copilot login",
+    "install": "npm install -g @github/copilot",
+    "mark": "githubcopilot.svg",
+    "continues": true
+  },
+  {
+    "id": "cline",
+    "label": "Cline",
+    "program": "cline",
+    "args": [
+      "--acp"
+    ],
+    "login": "cline auth",
+    "install": "npm install -g cline",
+    "mark": "cline.svg",
+    "continues": true
+  }
+]

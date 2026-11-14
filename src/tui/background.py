@@ -60,6 +60,13 @@ decides whether the running row shows, and the process is never said to
 have finished (`askable`): a row gone may be one another writer dropped. A
 host process whose row another writer drops before the first read is never
 seen at all.
+
+Who will be told: the checkpoint's `notify_on_complete` and `watch_patterns`
+are written at the spawn, before `spawn_background_process` sets them, and not
+again until the process exits, so a `notify=true` process reads as one nobody
+will be told about for its whole run. The `terminal` result Hermes sends back
+(`tool.complete`) carries the flags as armed; the app takes them from there
+(`App._take_waking`) over what the checkpoint says.
 """
 
 from __future__ import annotations

@@ -225,6 +225,30 @@ All notable changes will be documented here.
   means unknown, never empty, none or equal. The idea of mining re-fixed commits
   comes from `yetone/magpie` (MIT), concept only, reimplemented here.
 
+- **omher's SESSIONS menu lists its agents in two tiers, and Kilo Code is gone.**
+  Claude Code, Codex and OmO, the main agents with their own adapters, come
+  first in the + menu (installed agents still before the rest), then the
+  other built-ins, then the generic ACP agents. Gemini CLI, Qwen Code, Kimi
+  Code, Copilot CLI and Cline now come from one list in the shell (program,
+  `acp` or `--acp`, sign-in and install lines, mark) that the agent look-up
+  hands to the UI, and behave as in 0.2.8: the same install lines, signed-out
+  line, Open in Terminal and Restart. Kilo Code is no longer offered or
+  startable; OpenCode and its rule check stay. A Kilo Code session saved
+  before this comes back ended with its chat and one line, "Kilo Code is no
+  longer offered in omher", and no Restart.
+- **Add your own ACP agent in omher, after a confirm card.** Settings › Agents
+  lists the agents SESSIONS offers with their tier and whether each is
+  installed, then yours. Add agent asks for a name, the program and its ACP
+  arguments; Save shows the exact command omher will run, and nothing is
+  saved until you press Add. It then opens from the SESSIONS + menu as a
+  session chat on the same ACP adapter, with no shell and no rule rewriting.
+  Entries live in `~/.omher/custom-agents.json` and are checked on every read.
+- **A bot can draft an ACP agent for you in omher; you still confirm it.** An
+  ```` ```omher-agent ```` block in a bot's reply (name, program, args,
+  install) gets an "Add agent" chip that opens the same confirm card, with
+  "Proposed by <bot>"; nothing is saved until Add. A shell or interpreter as
+  the program is refused for bot drafts. "Ask the bot" on Settings › Agents
+  puts the request in the bot's message box without sending it.
 - **Claude Fable 5.2 now leads the `visual-engineering` chain.** Frontend and
   visual lanes routed through Hermes try Fable 5.2 first, then Claude Opus
   5.5, Gemini 4 Argon and Kimi K3.1 Pro, all at `high` (before, Opus 5.5 came
@@ -1041,6 +1065,29 @@ All notable changes will be documented here.
   are listed under the cards, wrapped between two keys, as Claude Code lists its own. Ctrl+R turns the search box
   into the title field and Ctrl+D asks on the card's facts row, as before. Closing it gives every row back to the
   transcript, with no band of blank rows left above the composer. On a terminal too short for two cards and the keys, or under 30 columns, it stays the one-row list.
+- **omher starts with one bot; the other bots on this computer join from + in one click.** The sidebar no longer
+  lists every Hermes profile. A new install starts with the default bot alone; someone who already used omher starts
+  with the bot they last had open (plus any they had pinned). `+` is now "Add a bot": it lists the profiles that are
+  not in the sidebar yet, each with one Add that brings the bot in, connects it and opens its chat. Right-click
+  "Hide from sidebar" is now "Remove from list": the profile stays and shows under `+` again, and the last bot in the
+  list cannot be removed. Settings › All bots still shows every profile, each marked "In list" or with "Add to list".
+  An approval or question from a bot outside the list still shows in Needs you, and opening it adds that bot. The
+  connect block for a bot with no AI account no longer offers a Claude sign-in: Hermes' Claude sign-in works only on
+  Claude Max with purchased extra-usage credits, so most people who picked it hit "out of extra usage". ChatGPT /
+  Codex, Nous Portal and API key… stay; an Anthropic key goes in through API key….
+- **The OMH TUI's `✳ Waiting… (… · terminal)` row shows while a `notify=true` background process runs.** Hermes
+  writes its process record at the spawn, before it arms the completion notice, and does not rewrite it until the
+  process exits, so the record said nobody would be told for the whole run. The TUI read it that way: no waiting
+  row between turns, and the info line said `🔕 Hermes won't be pinged`. The TUI now takes who will be told from
+  the `terminal` result Hermes sent back as it started the process (`notify_on_complete`, or watch patterns), so
+  the waiting row stands and the line says `🔔 will ping you when done`. A result that says no one will be told
+  (a subagent, a session that cannot take a completion) changes nothing.
+- **An OMH TUI question never opens with nothing above it.** Some models write the explanation that should come
+  before a clarify question only into their reasoning and send no reply text, so with Hermes'
+  `display.show_reasoning` off the picker appeared alone and the person could not tell what to pick. The question
+  now reads that turn's row from the session's `state.db` (read-only, matched by the clarify's own call id) and
+  shows the reasoning dim above the asked sentence, at most three rows, Ctrl+O for the rest. A turn that wrote a
+  reply, an older turn's row, or a store that cannot be read draws the question exactly as before.
 - **A paired run now measures how long each cell took and says whether the variant was faster at equal quality.**
   The Hermes-child dispatcher times every spawned child from spawn to exit on its own clock and signs those seconds
   into the cell's receipt; a hand-edited figure no longer verifies. New `paired_run_decision/v2` decisions carry the

@@ -80,7 +80,7 @@ for (const theme of ["dark", "light"] as const) {
     await expect(menu.getByTestId("row-restart-with")).toHaveText("with Kami and Hermes");
     await expect(items.nth(2)).toHaveText(/^Restart/);
     await expect(items.nth(0)).toHaveText("Pin to top");
-    await expect(items.nth(3)).toHaveText("Hide from sidebar");
+    await expect(items.nth(3)).toHaveText("Remove from list");
     const sub = await menu.getByTestId("row-restart-with").evaluate((el) => {
       const s = getComputedStyle(el);
       const main = getComputedStyle(el.parentElement!);

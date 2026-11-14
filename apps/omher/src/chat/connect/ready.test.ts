@@ -116,18 +116,18 @@ describe("bot readiness", () => {
   it("after a sign-in: polls every 3 s, sets the provider's cost-safe model once its strict check passes, clears", async () => {
     let signed = false;
     const f = make(
-      (provider) => (provider ? (signed && provider === "anthropic" ? ok("anthropic", "z-ai/glm-5.3") : no()) : no()),
-      () => opts({ provider: "", model: "" }, signed ? [{ slug: "anthropic", models: ["claude-opus-5-5", "claude-sonnet-5"] }] : []),
+      (provider) => (provider ? (signed && provider === "nous" ? ok("nous", "z-ai/glm-5.3") : no()) : no()),
+      () => opts({ provider: "", model: "" }, signed ? [{ slug: "nous", models: ["claude-opus-5-5", "claude-sonnet-5"] }] : []),
     );
     await f.r.ensure("kami");
-    f.r.waitFor("kami", "anthropic");
-    expect(f.r.get("kami")).toMatchObject({ status: "not", waiting: "anthropic" });
+    f.r.waitFor("kami", "nous");
+    expect(f.r.get("kami")).toMatchObject({ status: "not", waiting: "nous" });
     await f.tick();
-    expect(f.r.get("kami").waiting).toBe("anthropic");
+    expect(f.r.get("kami").waiting).toBe("nous");
     expect(f.sets).toEqual([]);
     signed = true;
     await f.tick();
-    expect(f.sets).toEqual([{ bot: "kami", provider: "anthropic", model: "claude-sonnet-5" }]);
+    expect(f.sets).toEqual([{ bot: "kami", provider: "nous", model: "claude-sonnet-5" }]);
     expect(f.r.get("kami")).toMatchObject({ status: "ready", waiting: null });
     expect(f.pollers()).toBe(0);
   });
@@ -165,9 +165,9 @@ describe("bot readiness", () => {
 
   it("a focus asks a waiting sign-in at once", async () => {
     let signed = false;
-    const f = make((p) => (signed && p === "anthropic" ? ok("anthropic") : no()), () => opts({ provider: "", model: "" }, [{ slug: "anthropic", models: ["claude-sonnet-5"] }]));
+    const f = make((p) => (signed && p === "nous" ? ok("nous") : no()), () => opts({ provider: "", model: "" }, [{ slug: "nous", models: ["claude-sonnet-5"] }]));
     await f.r.ensure("kami");
-    f.r.waitFor("kami", "anthropic");
+    f.r.waitFor("kami", "nous");
     signed = true;
     f.r.focused();
     await flush();
@@ -178,20 +178,20 @@ describe("bot readiness", () => {
   it("stops waiting after 10 minutes; the block stays and offers the sign-ins again", async () => {
     const f = make(() => no());
     await f.r.ensure("kami");
-    f.r.waitFor("kami", "anthropic");
+    f.r.waitFor("kami", "nous");
     await f.tick(WAIT_MS + 1);
     expect(f.r.get("kami")).toMatchObject({ status: "not", waiting: null });
     expect(f.pollers()).toBe(0);
   });
 
   it("a bot whose chat already runs on a signed-in provider is ready when that provider's strict check passes", async () => {
-    // e.g. the app opened again after a sign-in: the bot's own check says no (anthropic is not Hermes' active
-    // provider), but its chat runs on anthropic with a model anthropic lists
-    const on = () => opts({ provider: "anthropic", model: "claude-sonnet-5" }, [{ slug: "anthropic", models: ["claude-sonnet-5"] }]);
-    const f = make((p) => (p === "anthropic" ? ok("anthropic") : no()), on, "anthropic");
+    // e.g. the app opened again after a sign-in: the bot's own check says no (nous is not Hermes' active
+    // provider), but its chat runs on nous with a model nous lists
+    const on = () => opts({ provider: "nous", model: "claude-sonnet-5" }, [{ slug: "nous", models: ["claude-sonnet-5"] }]);
+    const f = make((p) => (p === "nous" ? ok("nous") : no()), on, "nous");
     await f.r.ensure("kami");
     expect(f.r.get("kami").status).toBe("ready");
-    expect(f.asks).toEqual([undefined, "anthropic"]);
+    expect(f.asks).toEqual([undefined, "nous"]);
     expect(f.sets).toEqual([]); // already on a model the provider lists: nothing is changed
     // a chat on a provider that is not one of the sign-ins is not second-guessed
     const g = make(() => no(), () => opts({ provider: "claude-proxy", model: "Opus 5.5" }), "claude-proxy");

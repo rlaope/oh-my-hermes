@@ -253,6 +253,9 @@ class PromptSlot:
     draft_sent: str = ""
     # The field's words before the composer's caret, as `draft` shows them: where the caret stands on the field's row.
     draft_before: str = ""
+    # What the model wrote only into its reasoning before asking a clarify with no reply text (`silent_lead`),
+    # drawn dim above the first question as its context; "" when the reply said it, or nothing could be read.
+    silent_lead: str = ""
     # Where the open text field's caret is drawn, (row, col) within the slot's last rows (`_framed_lines`); None when
     # no field is open on a framed question's row, or its row was cut.
     caret: tuple[int, int] | None = field(default=None, init=False, repr=False, compare=False)
@@ -911,12 +914,21 @@ class PromptSlot:
             return []
         total = len(self._questions())
         counter = f" ({self.question_index + 1}/{total})" if total > 1 else ""
-        head: list[Line] = list(
-            wrap_line((Span("? ", theme.user), Span(str(question.get("question", "")) + counter, theme.text), *queued),
-                      width)
-        )
+        lead_rows = [row for part in self._with_silent_lead("").splitlines() if part.strip()
+                     for row in wrap_line((Span(part.strip(), theme.muted),), width)]
+        if len(lead_rows) > LEAD_ROWS:
+            lead_rows = [*lead_rows[: LEAD_ROWS - 1], _ends_with_more(lead_rows[LEAD_ROWS - 1], width, theme)]
+        head: list[Line] = [*lead_rows, *wrap_line(
+            (Span("? ", theme.user), Span(str(question.get("question", "")) + counter, theme.text), *queued), width)]
         return _keep_ends([*head, (Span("  type an answer and press enter · esc cancels", theme.hint),)], max_rows,
                           width, theme)
+
+    def _with_silent_lead(self, lead: str) -> str:
+        """`lead` (the context Hermes wrote before the asked sentence) after the reasoning the model wrote in place of
+        a reply (`silent_lead`), on the first question only: the later ones follow from the first."""
+        if not self.silent_lead.strip() or self.question_index != 0:
+            return lead
+        return f"{self.silent_lead.strip()}\n{lead}" if lead.strip() else self.silent_lead.strip()
 
     def _framed_lines(
         self, width: int, theme: Theme, max_rows: int, queued: Line, whole: bool, waited: str,
@@ -941,6 +953,7 @@ class PromptSlot:
         counter = f" ({self.question_index + 1}/{total})" if total > 1 else ""
         note: Line = (Span(MULTI_NOTE, theme.muted),) if self._multi() else ()
         lead, asked = question_parts(text)
+        lead = self._with_silent_lead(lead)
         lead_rows = [row for part in lead.splitlines() if part.strip()
                      for row in wrap_line((Span(part.strip(), theme.muted),), inner)]
         if not whole and len(lead_rows) > LEAD_ROWS:

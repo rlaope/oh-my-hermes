@@ -585,6 +585,15 @@
   animation: none;
   background: var(--ok);
 }
+/* a person's own agent: its approvals are the agent's own (one quiet line above the composer) */
+.ss-own {
+  width: min(var(--thread-w), calc(100% - 56px));
+  margin: 0 auto 6px;
+  font-size: 11px;
+  color: var(--quiet);
+  text-align: center;
+  flex: none;
+}
 .ss-ended {
   width: min(var(--thread-w), calc(100% - 56px));
   margin: 0 auto 8px;

@@ -2,13 +2,20 @@
 // that the first message becomes the agent's first prompt in the folder chosen, and that closing a draft starts
 // nothing.
 import { describe, expect, it } from "vitest";
-import { AGENTS, draftAgent, draftFolder, folderChoices, INSTALL, lastAgent, menuOrder, menuParts, missingNote, rowModel, type AgentInfo, type Recent, type SessionRec } from "./agents";
+import { AGENTS, draftAgent, draftFolder, folderChoices, INSTALL, installLine, lastAgent, menuOrder, menuParts, missingNote, registerAcp, rowModel, type AcpRow, type AgentInfo, type Recent, type SessionRec } from "./agents";
+import shellList from "./mockAcpAgents.json";
 import { MockHost, type MockCall } from "./host";
 import { createSessions } from "./sessions";
 import { createStore, type BridgeLike } from "../state/store";
 import { getDraft, setDraft as setUnsent } from "../app/drafts";
 
-const info = (installed: string[]): AgentInfo[] => AGENTS.map((a) => ({ id: a.id, label: a.label, mode: a.mode, path: installed.includes(a.id) ? `/bin/${a.id}` : null }));
+/** The shell's look-up: the built-ins, then the generic ACP agents with their rows (the copy a Rust test pins). */
+const ACP: AcpRow[] = shellList;
+const info = (installed: string[]): AgentInfo[] => [
+  ...AGENTS.map((a) => ({ id: a.id, label: a.label, mode: a.mode, path: installed.includes(a.id) ? `/bin/${a.id}` : null })),
+  ...ACP.map((r) => ({ id: r.id, label: r.label, mode: "chat" as const, path: installed.includes(r.id) ? `/bin/${r.id}` : null, acp: r })),
+];
+registerAcp(info([]));
 const rec = (agent: Recent["agent"], cwd: string, at: number): Recent => ({ agent, cwd, at });
 
 describe("draft defaults", () => {
@@ -28,13 +35,13 @@ describe("draft defaults", () => {
     expect(draftAgent([], null)).toBe("claude");
   });
 
-  it("the + menu: installed agents first with the last one used on top, then the missing ones, in list order", () => {
+  it("the + menu: installed agents first by tier (the last one used leads its own tier), then the missing ones", () => {
     const ids = (l: AgentInfo[]) => l.map((a) => a.id);
     const all = info(["claude", "codex", "omo", "dsh"]);
-    expect(ids(menuOrder(all, []))).toEqual(["claude", "codex", "omo", "dsh", "omh", "pi", "omp", "grok", "opencode", "kilo", "gemini", "qwen", "kimi", "copilot", "cline"]);
-    expect(ids(menuOrder(all, [rec("claude", "/a", 1), rec("dsh", "/b", 3)]))).toEqual(["dsh", "claude", "codex", "omo", "omh", "pi", "omp", "grok", "opencode", "kilo", "gemini", "qwen", "kimi", "copilot", "cline"]);
+    expect(ids(menuOrder(all, []))).toEqual(["claude", "codex", "omo", "dsh", "omh", "pi", "omp", "grok", "opencode", "gemini", "qwen", "kimi", "copilot", "cline"]);
+    expect(ids(menuOrder(all, [rec("claude", "/a", 1), rec("omo", "/b", 3)]))).toEqual(["omo", "claude", "codex", "dsh", "omh", "pi", "omp", "grok", "opencode", "gemini", "qwen", "kimi", "copilot", "cline"]);
     // the last one used is no longer installed: it stays with the missing ones
-    expect(ids(menuOrder(info(["codex", "grok"]), [rec("pi", "/a", 1)]))).toEqual(["codex", "grok", "claude", "omo", "dsh", "omh", "pi", "omp", "opencode", "kilo", "gemini", "qwen", "kimi", "copilot", "cline"]);
+    expect(ids(menuOrder(info(["codex", "grok"]), [rec("pi", "/a", 1)]))).toEqual(["codex", "grok", "claude", "omo", "dsh", "omh", "pi", "omp", "opencode", "gemini", "qwen", "kimi", "copilot", "cline"]);
     // the install lines of the two new harnesses
     expect(INSTALL.omo).toBe("npm i -g omo-ai");
     expect(missingNote("omo")).toBe("omo was not found on this computer · install: npm i -g omo-ai");
@@ -46,19 +53,18 @@ describe("draft defaults", () => {
 
   it("the + menu folds the agents that are not installed behind one row, and shows every agent when none is", () => {
     const ids = (l: AgentInfo[]) => l.map((a) => a.id);
-    // four installed, eleven folded: the menu shows the four (last used on top), the rest in list order behind "More"
-    const p = menuParts(info(["claude", "codex", "omh", "kilo"]), [rec("kilo", "/a", 2)]);
-    expect(ids(p.shown)).toEqual(["kilo", "claude", "codex", "omh"]);
-    expect(ids(p.more)).toEqual(["omo", "dsh", "pi", "omp", "grok", "opencode", "gemini", "qwen", "kimi", "copilot", "cline"]);
+    // four installed, ten folded: the menu shows the four by tier (the last one used stays in its tier), the rest behind "More"
+    const p = menuParts(info(["claude", "codex", "omh", "gemini"]), [rec("gemini", "/a", 2)]);
+    expect(ids(p.shown)).toEqual(["claude", "codex", "omh", "gemini"]);
+    expect(ids(p.more)).toEqual(["omo", "dsh", "pi", "omp", "grok", "opencode", "qwen", "kimi", "copilot", "cline"]);
     // a new agent that gets installed moves up out of the fold
     expect(ids(menuParts(info(["claude", "gemini"]), []).shown)).toEqual(["claude", "gemini"]);
     // nothing installed: nothing to fold behind, every agent shows with its install line
     const none = menuParts(info([]), []);
-    expect(none.shown).toHaveLength(15);
+    expect(none.shown).toHaveLength(14);
     expect(none.more).toEqual([]);
-    // the six ACP agents' install lines are their own READMEs' npm lines
-    expect([INSTALL.kilo, INSTALL.gemini, INSTALL.qwen, INSTALL.kimi, INSTALL.copilot, INSTALL.cline]).toEqual([
-      "npm install -g @kilocode/cli",
+    // the five generic ACP agents' install lines come from the shell's rows and are 0.2.8's, word for word
+    expect(["gemini", "qwen", "kimi", "copilot", "cline"].map(installLine)).toEqual([
       "npm install -g @google/gemini-cli",
       "npm install -g @qwen-code/qwen-code@latest",
       "npm install -g @moonshot-ai/kimi-code",
