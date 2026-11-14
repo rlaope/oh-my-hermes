@@ -61,6 +61,9 @@ between the turn's done line and the composer (the owner's report of 2026-10-28;
   bottom rule, and the slot stands right above the info line, taking up to
   `choice_cap` rows: its own cap and the rows a one-row composer frame takes
   at that size. The info line keeps its row, and the agent view its rows.
+  A picker that wants the screen (`/resume`'s session cards) passes
+  `slot_limit` up to `tall_cap`: every row but the info line's and a few of
+  transcript above it.
 - While the agent list under the info line has the keys the composer frame
   keeps its rows and the frame draws them blank (`frame.build_frame`'s
   `composer_blank`), so nothing above or below it moves while the list is
@@ -80,6 +83,8 @@ MIN_COLS = 20
 BOTTOM_RULE_MIN_ROWS = 7
 # The agent view's usual most rows: main and six agents (or main, five and a `+N` row), as the agent list had.
 AGENT_VIEW_ROWS = 7
+# The transcript rows a picker that takes the screen (`tall_cap`) leaves above itself.
+TALL_CONTEXT_ROWS = 2
 
 BLANK: Line = ()
 
@@ -166,6 +171,13 @@ def choice_cap(rows: int, cols: int) -> int:
     return slot_cap(rows, cols) + frame
 
 
+def tall_cap(rows: int, cols: int) -> int:
+    """The most rows a picker that wants the screen may take (the `/resume` session cards): every row but the info
+    line's and `TALL_CONTEXT_ROWS` of transcript above it, so the last output stays in sight. None on a tiny
+    terminal."""
+    return 0 if is_tiny(rows, cols) else max(max_height(rows) - 1 - TALL_CONTEXT_ROWS, 0)
+
+
 def agent_view_cap(rows: int, cols: int, keep: int = 0) -> int:
     """The most rows the agent view under the info line may take; its producer sizes the view to this.
 
@@ -197,8 +209,10 @@ def allocate(
     tail_floor: int = 0,
     gaps: tuple[bool, bool] = (False, False),
     gap_reserve: int = 0,
+    slot_limit: int = 0,
 ) -> Budget:
-    """Rows for each part of the region (see the module docstring for the rules)."""
+    """Rows for each part of the region (see the module docstring for the rules). `slot_limit`, with the composer
+    hidden, raises the slot's cap past `choice_cap` for a picker that takes the screen (`tall_cap`)."""
     room = max_height(rows)
     composer = min(max(composer_rows, 1), composer_cap(rows))
     info = min(1, room - composer)
@@ -209,7 +223,7 @@ def allocate(
     rule = slot = tail = below = agents = 0
     spaced = (0, 0)
     if composer_hidden:
-        slot = min(max(slot_rows, 0), choice_cap(rows, cols), left)
+        slot = min(max(slot_rows, 0), max(choice_cap(rows, cols), slot_limit), left)
         left -= slot
     elif text_question and is_tiny(rows, cols):
         slot = min(max(slot_rows, 0), 1, left)

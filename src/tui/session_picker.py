@@ -25,6 +25,18 @@ this TUI is in is never deleted from here, and its row says so. The app sends
 the call and tells the picker how it went (`renamed`, `deleted`, `refused`):
 a refusal stays on the row until the next key, as opencode's session list
 does (`packages/tui/src/component/dialog-session-list.tsx`).
+
+`/resume` draws it as Claude Code draws its own resume picker (`lines(...,
+cards=True)`, where the app gives it most of the screen, `layout.tall_cap`):
+an inset rule, `Resume session (3 of 12)`, the filter in a rounded search box
+with the caret in it, then one card per session, its name on one row and
+`2 days ago · 14 messages · tui` muted under it (each wrapped onto a second
+row when long, `CARD_WRAP_ROWS`), a blank row between two cards, under the
+same day headings, and its keys wrapped under the list (`CARD_KEYS`, which
+the info line then leaves out). `↑` and `↓` stand in the pointer's column of
+the first and last card shown while more sit above or below. Where the cards
+do not fit (`fits_cards`: two cards and the keys, `CARDS_MIN_COLS` columns)
+it falls back to the one-row list over the filter row above.
 """
 
 from __future__ import annotations
@@ -41,7 +53,7 @@ from .keys import BACKSPACE, CHAR, DOWN, ENTER, ESCAPE, PAGE_DOWN, PAGE_UP, UP, 
 from .prompts import CHOICE_MARK
 from .style import Line, Span, Style
 from .theme import Theme
-from .width import cell_width, truncate, truncate_line
+from .width import cell_width, truncate, truncate_line, wrap
 
 PICK = "pick"
 CLOSE = "close"
@@ -84,6 +96,24 @@ RULED_MIN_ROWS = 3
 RULE_INSET = " "
 # Between a session row's age column and its message-count column.
 COLUMN_GAP = "   "
+# The card layout (`lines(..., cards=True)`), Claude Code's resume picker: its header, the search box's glyph and
+# placeholder (and the rename's), the cards' indent, and the least room it is drawn in.
+CARDS_TITLE = "Resume session"
+SEARCH_GLYPH = "⌕ "
+SEARCH_PLACEHOLDER = "Search…"
+RENAME_GLYPH = "✎ "
+CARD_INDENT = "  "
+MORE_ABOVE = "↑ "
+MORE_BELOW = "↓ "
+META_SEPARATOR = " · "
+CARDS_HEAD_ROWS = 6  # the rule, the header, the box's three rows and the blank row under it
+CARDS_TWO_ROWS = 5  # two cards and the blank row between them: the least list the cards are drawn with
+CARD_WRAP_ROWS = 2  # the rows a card's name, and then its facts, wrap onto before the rest is cut with `…`
+CARDS_MIN_COLS = 30
+# The cards' keys, wrapped at the separators under the list as Claude Code wraps its own (the info line then says
+# none): while the search box filters, and while it holds a new title (Ctrl+R).
+CARD_KEYS = ("↑↓ to move", "Enter to switch", "Ctrl+R to rename", "Ctrl+D to delete", "Type to search", "Esc to cancel")
+CARD_RENAME_KEYS = ("Enter to rename", "Esc to cancel")
 
 
 @dataclass(frozen=True)
@@ -93,6 +123,7 @@ class SessionRow:
     preview: str
     started_at: float
     message_count: int
+    source: str = ""  # where it was started (`tui`, `cli`, a messaging platform), as `session.list` names it
 
     @property
     def label(self) -> str:
@@ -136,6 +167,7 @@ def session_rows(result: Mapping[str, object]) -> list[SessionRow]:
             continue
         title = entry.get("title")
         preview = entry.get("preview")
+        source = entry.get("source")
         rows.append(
             SessionRow(
                 id=entry["id"],
@@ -143,6 +175,7 @@ def session_rows(result: Mapping[str, object]) -> list[SessionRow]:
                 preview=preview if isinstance(preview, str) else "",
                 started_at=_seconds(entry.get("started_at")),
                 message_count=int(_number(entry.get("message_count"))),
+                source=" ".join(source.split())[:24] if isinstance(source, str) else "",
             )
         )
     return rows
@@ -167,6 +200,20 @@ def age_text(started_at: float, now: float) -> str:
     for size, suffix in ((86400, "d"), (3600, "h"), (60, "m")):
         if seconds >= size:
             return f"{seconds // size}{suffix} ago"
+    return "just now"
+
+
+def age_words(started_at: float, now: float) -> str:
+    """The card's age, in words as Claude Code's picker says it: `just now`, `5 minutes ago`, `1 hour ago`, `3 days
+    ago`, `2 weeks ago`, `4 months ago`, `1 year ago`; "" when the start time is unknown."""
+    if not math.isfinite(started_at) or started_at <= 0:
+        return ""
+    seconds = max(0, int(now - started_at))
+    days = seconds // 86400
+    for count, unit in ((days // 365, "year"), (days // 30, "month"), (days // 7 if days >= 7 else 0, "week"),
+                        (days, "day"), (seconds // 3600, "hour"), (seconds // 60, "minute")):
+        if count >= 1:
+            return f"{count} {unit}{'' if count == 1 else 's'} ago"
     return "just now"
 
 
@@ -285,6 +332,7 @@ class SessionPicker:
     arming: str = ""  # the id a first Ctrl+D asked about; a second deletes it
     notes: dict[str, str] = field(default_factory=dict)  # id -> what its row says until the next key
     out: dict[str, str] = field(default_factory=dict)  # id -> RENAMING or DELETING while its call is out
+    card_height: int = 0  # the tallest the cards have been drawn (`card_lines`), which they keep while open
 
     def visible(self) -> list[SessionRow]:
         """The rows the filter keeps: the current session first, then a day group after another (`day_group`), in
@@ -452,3 +500,151 @@ class SessionPicker:
         age = f"{age_text(entry.started_at, now):>{ages}}{COLUMN_GAP}" if ages else ""
         meta = age + _messages(entry.message_count, digits)
         return picker_row(highlighted, lead, label, meta, width, theme)
+
+    def fits_cards(self, width: int, max_rows: int) -> bool:
+        """Whether the card layout (`card_lines`) has room: `CARDS_MIN_COLS` columns, its head, two cards and its
+        wrapped keys in `max_rows`, and the picker taking the keys (one waiting for typing to stop sits over the
+        composer, so it stays a list)."""
+        if self.waiting or width < CARDS_MIN_COLS:
+            return False
+        return max_rows >= CARDS_HEAD_ROWS + CARDS_TWO_ROWS + 1 + len(self._key_rows(width))
+
+    def _key_rows(self, width: int) -> list[str]:
+        """The cards' keys (`CARD_KEYS`, `CARD_RENAME_KEYS`) wrapped into rows of the card's width, broken only
+        between two keys; a key wider than a row is cut."""
+        room = _card_room(width)
+        rows: list[str] = []
+        for key in CARD_RENAME_KEYS if self.renaming else CARD_KEYS:
+            joined = f"{rows[-1]}{META_SEPARATOR}{key}" if rows else key
+            if rows and cell_width(joined) <= room:
+                rows[-1] = joined
+            else:
+                rows.append(truncate(key, room))
+        return rows
+
+    def card_lines(self, width: int, theme: Theme, max_rows: int, now: float) -> list[Line]:
+        """Claude Code's resume picker: an inset rule, `Resume session (n of m)`, the filter in a rounded search box
+        with the caret in it, then a card per session under its day heading, scrolled so the highlighted card
+        shows; as tall as what it holds, never past `max_rows`. The list (`lines`) where it does not fit."""
+        if not self.fits_cards(width, max_rows):
+            return self.lines(width, theme, max_rows, now)
+        self.now = now
+        shown = self.visible()
+        self.index = min(self.index, max(len(shown) - 1, 0))
+        renamed = next((row for row in self.rows if row.id == self.renaming), None)
+        edge = theme.rule if theme.rule.fg else theme.muted  # the look's edge colour, the composer's rules' own
+        rule = (Span(RULE_INSET + RULE * max(width - 2 * cell_width(RULE_INSET), 0), edge),)
+        if renamed is not None:
+            name = renamed.label if renamed.title or renamed.id != self.current else CURRENT_LABEL
+            header: Line = (Span(CARD_INDENT), Span("Rename ", theme.heading), Span(name, theme.text))
+        else:
+            count = f" ({self.index + 1} of {len(shown)})" if shown else f" (0 of {len(self.rows)})"
+            header = (Span(CARD_INDENT), Span(CARDS_TITLE, theme.heading), Span(count, theme.muted))
+        box, caret_col = self._search_box(width, theme, renamed is not None)
+        head = [truncate_line(rule, width), truncate_line(header, width), *box]
+        # The body: (mark, rest) rows, the mark the two cells where the pointer, `↑` or `↓` goes.
+        body: list[tuple[str, Line]] = []
+        spans: list[tuple[int, int]] = []  # each session's (first row, end row) in `body`, heading included
+        group = ""
+        for number, row in enumerate(shown):
+            if body:
+                body.append(("", ()))  # a blank row between two cards
+            first = len(body)  # the card's top, its heading's row when it opens a group
+            heading = self._group(row) if self.now > 0 else ""
+            if heading and heading != group:
+                group = heading
+                body.append(("", (Span(heading, theme.muted),)))
+            highlighted = number == self.index
+            title = self._card_title(row, highlighted, width, theme)
+            body.append((CHOICE_MARK if highlighted else "", title[0]))
+            body.extend(("", part) for part in (*title[1:], *self._card_meta(row, width, theme, now)))
+            spans.append((first, len(body)))
+        if not shown:
+            empty = " no session matches the filter" if self.rows else " Hermes listed no stored sessions"
+            body.append(("", (Span(empty.strip(), theme.muted),)))
+        keys = self._key_rows(width)
+        # The list's rows: what the head (and the blank row under the box) and the keys (and the blank over them)
+        # leave.
+        room = max(max_rows - len(head) - 1 - 1 - len(keys), 1)
+        start = 0
+        if spans:
+            top, end = spans[self.index]
+            start = min(max(end - room, 0), top)
+        window = body[start:start + room]
+        while len(window) > 1 and not window[-1][1]:  # never end on the blank row between two cards
+            window.pop()
+        more_below = start + len(window) < len(body)
+        self.page = max(room // 3, 1)
+        lines: list[Line] = [*head, ()]
+        for number, (mark, rest) in enumerate(window):
+            if not mark and number == 0 and start > 0:
+                mark = MORE_ABOVE
+            elif not mark and number == len(window) - 1 and more_below:
+                mark = MORE_BELOW
+            style = theme.menu_current if mark == CHOICE_MARK else theme.muted
+            lead = (Span(CARD_INDENT), Span(mark or " " * cell_width(CHOICE_MARK), style)) if rest or mark else ()
+            lines.append(truncate_line((*lead, *rest), width) if lead else ())
+        # As tall as the tallest it has been, so the search box stays where it was while a filter narrows the list
+        # (Claude Code's picker holds its height too); never past `max_rows`. The keys stay under the list's room.
+        self.card_height = min(max(self.card_height, len(lines)), max_rows - 1 - len(keys))
+        lines += [()] * (self.card_height - len(lines))
+        indent = Span(CARD_INDENT + " " * cell_width(CHOICE_MARK))
+        lines += [(), *((indent, Span(row, theme.muted)) for row in keys)]
+        self.caret = (3, min(caret_col, max(width - 1, 0)))
+        return lines
+
+    def _search_box(self, width: int, theme: Theme, renaming: bool) -> tuple[list[Line], int]:
+        """The rounded box the filter (or, on Ctrl+R, the new title) is typed in, and the caret's column in it: the
+        end of what was typed, its head cut with `…` when it is wider than the box."""
+        edge = theme.dim
+        inner = max(width - 2 * cell_width(CARD_INDENT) - 2, 4)  # between the box's side edges
+        glyph = RENAME_GLYPH if renaming else SEARCH_GLYPH
+        typed = self.title if renaming else self.query
+        placeholder = RENAME_PLACEHOLDER if renaming else (WAITING_PLACEHOLDER if self.waiting else SEARCH_PLACEHOLDER)
+        room = max(inner - 2 - cell_width(glyph), 1)  # a space inside either edge
+        text = typed
+        while text and cell_width(text) > room - 1:  # the caret's cell stays inside the box
+            text = text[1:]
+        if text != typed:
+            text = "…" + text[1:] if len(text) > 1 else "…"
+        words = Span(text, theme.text) if typed else Span(truncate(placeholder, room), theme.muted)
+        fill = " " * max(inner - 2 - cell_width(glyph) - cell_width(words.text), 0)
+        top = (Span(CARD_INDENT), Span("╭" + "─" * inner + "╮", edge))
+        middle = (Span(CARD_INDENT), Span("│", edge), Span(" "), Span(glyph, theme.muted), words, Span(fill + " "),
+                  Span("│", edge))
+        bottom = (Span(CARD_INDENT), Span("╰" + "─" * inner + "╯", edge))
+        caret = cell_width(CARD_INDENT) + 2 + cell_width(glyph) + (cell_width(text) if typed else 0)
+        return [top, middle, bottom], caret
+
+    def _card_title(self, row: SessionRow, highlighted: bool, width: int, theme: Theme) -> list[Line]:
+        """A card's name, wrapped onto a second row when it is wider than the card (cut there with `…` past
+        `CARD_WRAP_ROWS`), in the accent while highlighted."""
+        label = CURRENT_LABEL if row.id == self.current and not row.title.strip() else row.label
+        return _wrapped(label, theme.menu_current if highlighted else theme.menu, width)
+
+    def _card_meta(self, row: SessionRow, width: int, theme: Theme, now: float) -> list[Line]:
+        """A card's facts, muted: `● this session · 2 days ago · 14 messages · tui`, wrapped as the name is, or what
+        the row says until the next key (a delete's first press, a call out, a refusal) in its own colour."""
+        note = self.notes.get(row.id) or (DELETE_CONFIRM if row.id == self.arming else self.out.get(row.id, ""))
+        if note:
+            style = theme.warn if row.id == self.arming or row.id not in self.out else theme.muted
+            return _wrapped(note, style, width)
+        count = f"{row.message_count} message{'' if row.message_count == 1 else 's'}"
+        parts = [age_words(row.started_at, now), count, row.source]
+        if row.id == self.current:
+            parts.insert(0, f"{CURRENT_MARK} {CURRENT_LABEL}")
+        return _wrapped(META_SEPARATOR.join(part for part in parts if part), theme.muted, width)
+
+
+def _card_room(width: int) -> int:
+    """The cells a card's text has: the width less the indent on both sides and the pointer's column."""
+    return max(width - 2 * cell_width(CARD_INDENT) - cell_width(CHOICE_MARK), 1)
+
+
+def _wrapped(text: str, style: Style, width: int) -> list[Line]:
+    """`text` wrapped to a card's room in at most `CARD_WRAP_ROWS` rows, the last cut with `…` when more is left."""
+    room = _card_room(width)
+    rows = wrap(text, room) or [""]
+    if len(rows) > CARD_WRAP_ROWS:
+        rows = [*rows[: CARD_WRAP_ROWS - 1], truncate(" ".join(rows[CARD_WRAP_ROWS - 1:]), room)]
+    return [(Span(part, style),) for part in rows]

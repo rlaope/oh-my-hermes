@@ -46,6 +46,22 @@ def info_row(screen: list[str]) -> int:
     return info_row_index(screen)
 
 
+SEARCH_ROW = "  │ ⌕ "  # how the `/resume` cards' search box row starts (`SessionPicker.card_lines`)
+
+
+def filter_spot(screen: list[str]) -> tuple[int, int]:
+    """Where a picker's typing goes: the `/resume` cards' search box row and the column after its glyph, else the
+    filter row right above the info line and the column after its `❯ `."""
+    boxed = [index for index, row in enumerate(screen) if row.startswith(SEARCH_ROW)]
+    return (boxed[0], len(SEARCH_ROW)) if boxed else (info_row(screen) - 1, 2)
+
+
+def typed_in(screen: list[str]) -> str:
+    """What the picker's filter row or search box shows, its placeholder included, without its glyph."""
+    row, col = filter_spot(screen)
+    return screen[row][col:].rstrip(" │")
+
+
 def rule_rows(screen: list[str]) -> list[int]:
     """The rows of the composer's top and bottom rules."""
     return [index for index, line in enumerate(screen) if line.startswith(RULE_ROW)]
@@ -205,14 +221,14 @@ class HiddenComposerTests(unittest.TestCase):
         app.transcript.add_notice("something to view")
         app._open_session_picker(SESSIONS)
         screen = drawn(app)
-        filter_row = info_row(screen) - 1
+        spot = filter_spot(screen)
         press(app, Key(CHAR, "o", ctrl=True))  # the details view, over the picker
         self.assertIsNotNone(app.pager)
         press(app, Key(CHAR, "q"))
         self.assertIsNone(app.pager)
         self.assertTrue(app.terminal.screen.cursor_visible)  # type: ignore[attr-defined]
         drawn(app)
-        self.assertEqual(app.terminal.screen.cursor, (filter_row, 2))  # type: ignore[attr-defined]
+        self.assertEqual(app.terminal.screen.cursor, spot)  # type: ignore[attr-defined]
 
     def test_a_question_arriving_over_a_view_closes_it_and_hides_the_caret(self) -> None:
         app, _client = make_app(busy=True)
@@ -428,12 +444,15 @@ class PickerTests(unittest.TestCase):
                 opener(app)  # type: ignore[operator]
                 screen = drawn(app)
                 self.assertEqual(rule_rows(screen), [], screen)
-                info = info_row(screen)
-                self.assertEqual(screen[info - 1], "❯ type to filter")  # right above the info line
-                self.assertEqual(app.terminal.screen.cursor, (info - 1, 2))  # type: ignore[attr-defined]  # the caret on it
+                spot = filter_spot(screen)
+                if name == "sessions":  # the `/resume` cards: a search box under their header (Claude Code's look)
+                    self.assertEqual(typed_in(screen), "Search…")
+                else:
+                    self.assertEqual(screen[spot[0]], "❯ type to filter")  # right above the info line
+                self.assertEqual(app.terminal.screen.cursor, spot)  # type: ignore[attr-defined]  # the caret on it
                 type_text(app, "s")
                 screen = drawn(app)
-                self.assertEqual(screen[info_row(screen) - 1], "❯ s")  # the list shrank: the row moved with it
+                self.assertEqual(typed_in(screen), "s")  # where the list shrank, the row moved with it
                 self.assertEqual(held(app), draft)  # the filter is the picker's, not the draft's
                 press(app, Key(ESCAPE))
                 self.assertTrue(composer_drawn(app, drawn(app)))
@@ -449,6 +468,12 @@ class PickerTests(unittest.TestCase):
                 opener(app)  # type: ignore[operator]
                 screen = drawn(app)
                 info = screen[info_row(screen)]
+                if name == "sessions":
+                    # The `/resume` cards wrap their keys under the list, Claude Code's way; the info line says none.
+                    self.assertNotIn("esc closes", info)
+                    self.assertTrue(any(row.strip().startswith("↑↓ to move · Enter to switch") for row in screen))
+                    press(app, Key(ESCAPE))
+                    continue
                 self.assertIn(keys[name], info)
                 self.assertNotIn("shortcuts", info)
                 self.assertEqual([row for row in screen if "esc closes" in row], [info])  # not in the header too
@@ -465,13 +490,13 @@ class PickerTests(unittest.TestCase):
                 type_text(app, "a draft")
                 opener(app)  # type: ignore[operator]
                 screen = drawn(app)
-                row = info_row(screen) - 1
-                self.assertEqual(screen[row], "❯ type to filter")
+                row, col = filter_spot(screen)
+                self.assertEqual(typed_in(screen), "Search…" if name == "sessions" else "type to filter")
                 self.assertTrue(app.terminal.screen.cursor_visible)  # type: ignore[attr-defined]
-                self.assertEqual(app.terminal.screen.cursor, (row, 2))  # type: ignore[attr-defined]
+                self.assertEqual(app.terminal.screen.cursor, (row, col))  # type: ignore[attr-defined]
                 type_text(app, "s")
                 screen = drawn(app)
-                self.assertEqual(app.terminal.screen.cursor, (info_row(screen) - 1, 3))  # type: ignore[attr-defined]
+                self.assertEqual(app.terminal.screen.cursor, (filter_spot(screen)[0], col + 1))  # type: ignore[attr-defined]
                 press(app, Key(ESCAPE))
                 screen = drawn(app)
                 self.assertEqual(app.terminal.screen.cursor[0], next(i for i, line in enumerate(screen) if line.startswith("❯ a draft")))  # type: ignore[attr-defined]
@@ -483,9 +508,9 @@ class PickerTests(unittest.TestCase):
         type_text(app, "re")
         screen = drawn(app)
         self.assertTrue(any("Working…" in line for line in screen), screen)
-        row = info_row(screen) - 1
-        self.assertEqual(screen[row], "❯ re")
-        self.assertEqual(app.terminal.screen.cursor, (row, 4))  # type: ignore[attr-defined]
+        row, col = filter_spot(screen)
+        self.assertEqual(typed_in(screen), "re")
+        self.assertEqual(app.terminal.screen.cursor, (row, col + 2))  # type: ignore[attr-defined]
 
     def test_an_approval_over_a_picker_shows_no_caret_and_the_pickers_comes_back_after(self) -> None:
         app, client = make_app(busy=True)
@@ -498,9 +523,9 @@ class PickerTests(unittest.TestCase):
         press(app, Key(ESCAPE))
         self.assertEqual(answered(client, "srq-1"), [{"result": {"choice": "deny"}}])
         screen = drawn(app)
-        filter_row = info_row(screen) - 1  # the answer is printed above the region, which moves down under it
-        self.assertEqual(screen[filter_row], "❯ type to filter")
-        self.assertEqual(app.terminal.screen.cursor, (filter_row, 2))  # type: ignore[attr-defined]
+        spot = filter_spot(screen)  # the answer is printed above the region, which moves down under it
+        self.assertEqual(typed_in(screen), "Search…")
+        self.assertEqual(app.terminal.screen.cursor, spot)  # type: ignore[attr-defined]
 
     def test_a_view_left_over_a_picker_without_a_filter_row_keeps_the_caret_hidden(self) -> None:
         # Five rows give a picker one row, its highlighted one, so no filter row and no caret.

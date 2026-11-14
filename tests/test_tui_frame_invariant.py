@@ -593,8 +593,12 @@ class AppBottomRowsTests(unittest.TestCase):
                 # The freed rows stay above the composer; the approval's withdrawal notice is printed into them, and
                 # the agent list's rows came out of the turn's tail, so neither leaves more blank rows than before.
                 self.assertGreaterEqual(self.gap(after), self.gap(before))
-                if name in ("a picker", "a completion menu"):
+                if name == "a completion menu":
                     self.assertGreater(self.gap(after), self.gap(before))
+                if name == "a picker":
+                    # The `/resume` cards took most of the screen: closing gives those rows back to the transcript,
+                    # painted down over them, so no band of blank rows is left (`App._render`, `frame_tall`).
+                    self.assertEqual(after, before)
 
     def test_an_approval_answered_mid_turn_leaves_the_live_calls_under_the_transcript(self) -> None:
         # The owner's report (2026-10-25): after an approval in a long turn, 10 to 15 blank rows stood between the
