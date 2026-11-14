@@ -1,5 +1,5 @@
-//! Agent sessions: omher starts one agent program from a FIXED list (`claude`, `codex`, `omo`, `dsh`, `omh`,
-//! `pi`, `omp`, `grok`, `opencode`, `kilo`, `gemini`, `qwen`, `kimi`, `copilot`, `cline`) in a pseudo-terminal (its own terminal UI) or, for a chat, through [`crate::agent_chat`], in a folder the person picked, and stops it when the session is closed or
+//! Agent sessions: omher starts one agent program from a FIXED list (the built-ins `claude`, `codex`, `omo`, `dsh`,
+//! `omh`, `pi`, `omp`, `grok`, `opencode`, and the generic ACP agents of [`crate::acp_agents::ACP_LIST`]) in a pseudo-terminal (its own terminal UI) or, for a chat, through [`crate::agent_chat`], in a folder the person picked, and stops it when the session is closed or
 //! the app quits.
 //!
 //! The UI only ever names an agent id. The program, its path and its arguments are decided here: an id that
@@ -20,6 +20,7 @@ use std::time::{Duration, Instant};
 use portable_pty::{native_pty_system, ChildKiller, CommandBuilder, MasterPty, PtySize};
 use serde::Serialize;
 
+use crate::acp_agents::{self, AcpEntry};
 use crate::bridge::Os;
 
 /// One agent program omher may start.
@@ -47,8 +48,10 @@ pub enum Mode {
     Terminal,
 }
 
-/// The whole allow-list. Adding a program here is a boundary change (docs/OMHER-BOUNDARY.md rule 11).
-pub const AGENTS: [Agent; 15] = [
+/// The built-in agents. With [`crate::acp_agents::ACP_LIST`] this is the whole allow-list ([`agent`]); adding a
+/// program to either is a boundary change (docs/OMHER-BOUNDARY.md rule 11). Claude Code, Codex and OmO are the main
+/// agents (their own adapters); the UI names that tier (`main` in src/sessions/agents.ts).
+pub const AGENTS: [Agent; 9] = [
     Agent { id: "claude", program: "claude", label: "Claude Code", mode: Mode::Chat },
     Agent { id: "codex", program: "codex", label: "Codex", mode: Mode::Chat },
     // OmO (`omo-ai`, oh-my-openagent on the senpi engine) speaks pi's RPC: `omo --mode rpc`, checked against omo
@@ -66,14 +69,6 @@ pub const AGENTS: [Agent; 15] = [
     Agent { id: "grok", program: "grok", label: "Grok", mode: Mode::Terminal },
     // OpenCode (`opencode-ai`) speaks the Agent Client Protocol (`opencode acp`, crate::acp_chat), checked against 1.19.5.
     Agent { id: "opencode", program: "opencode", label: "OpenCode", mode: Mode::Chat },
-    // Six more Agent Client Protocol agents on the same adapter (crate::acp_chat): Kilo Code 7.8.27 (`kilo acp`, an
-    // OpenCode fork), Gemini CLI 0.68.0, Qwen Code 0.27.2, Kimi Code 2.6.0, Copilot CLI 1.0.110 and Cline 3.0.74.
-    Agent { id: "kilo", program: "kilo", label: "Kilo Code", mode: Mode::Chat },
-    Agent { id: "gemini", program: "gemini", label: "Gemini CLI", mode: Mode::Chat },
-    Agent { id: "qwen", program: "qwen", label: "Qwen Code", mode: Mode::Chat },
-    Agent { id: "kimi", program: "kimi", label: "Kimi Code", mode: Mode::Chat },
-    Agent { id: "copilot", program: "copilot", label: "Copilot CLI", mode: Mode::Chat },
-    Agent { id: "cline", program: "cline", label: "Cline", mode: Mode::Chat },
 ];
 
 /// Claude Code's structured mode: one long-lived `-p` process reading and writing stream-json, with tool
@@ -94,15 +89,18 @@ pub const CLAUDE_CHAT_ARGS: [&str; 10] = [
 ];
 
 /// The fixed arguments that start agent `id` in its structured mode, or `None` when it has none here. These
-/// are the only arguments omher ever adds besides a conversation id ([`resume_args`]).
+/// are the only arguments omher ever adds besides a conversation id ([`resume_args`]). A generic ACP agent's are
+/// its row in [`crate::acp_agents::ACP_LIST`] (`acp` or `--acp`).
 pub fn chat_args(id: &str) -> Option<&'static [&'static str]> {
+    if let Some(e) = acp_agents::entry(id) {
+        return Some(e.args);
+    }
     match agent(id)?.mode {
         Mode::Chat => Some(match id {
             "claude" => &CLAUDE_CHAT_ARGS[..],
             "codex" => &["app-server"][..],
             "pi" | "omp" | "omo" => &["--mode", "rpc"][..],
-            "opencode" | "kilo" | "kimi" => &["acp"][..],
-            "gemini" | "qwen" | "copilot" | "cline" => &["--acp"][..],
+            "opencode" => &["acp"][..],
             _ => return None,
         }),
         _ => None,
@@ -157,9 +155,10 @@ pub fn is_uuid(s: &str) -> bool {
         && parts.iter().zip([8, 4, 4, 4, 12]).all(|(p, n)| p.len() == n && p.chars().all(|c| c.is_ascii_hexdigit()))
 }
 
-/// The allow-list entry for `id`, or `None` for anything else (paths, command lines, other programs).
+/// The allow-list entry for `id` (a built-in, else a generic ACP agent's row), or `None` for anything else (paths,
+/// command lines, other programs, an agent omher no longer offers).
 pub fn agent(id: &str) -> Option<&'static Agent> {
-    AGENTS.iter().find(|a| a.id == id)
+    AGENTS.iter().find(|a| a.id == id).or_else(|| acp_agents::entry(id).map(|e| &e.agent))
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -538,6 +537,10 @@ pub struct AgentInfo {
     /// in the folder (through the bridge, no program), `path` is where Hermes was found, and it has no terminal view.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub via: Option<&'static str>,
+    /// A generic ACP agent's row ([`crate::acp_agents::ACP_LIST`]): the UI's only copy of its arguments, sign-in and
+    /// install lines, mark and whether it continues a conversation.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub acp: Option<&'static AcpEntry>,
 }
 
 /// What the oh-my-hermes row says the person has. Its session never runs `omh`: it is a Hermes chat in the folder
@@ -546,7 +549,7 @@ pub struct AgentInfo {
 /// Hermes. Neither: not installed.
 pub fn hermes_row(omh: Option<PathBuf>, hermes: Option<PathBuf>) -> AgentInfo {
     let a = agent("omh").expect("omh is on the allow-list");
-    let info = |label, path: Option<PathBuf>, via| AgentInfo { id: a.id, label, mode: a.mode, path: path.map(|p| p.to_string_lossy().into_owned()), via };
+    let info = |label, path: Option<PathBuf>, via| AgentInfo { id: a.id, label, mode: a.mode, path: path.map(|p| p.to_string_lossy().into_owned()), via, acp: None };
     match (omh, hermes) {
         (Some(p), _) => info(a.label, Some(p), None),
         (None, Some(h)) => info(HERMES_LABEL, Some(h), Some("hermes")),
@@ -557,20 +560,20 @@ pub fn hermes_row(omh: Option<PathBuf>, hermes: Option<PathBuf>) -> AgentInfo {
 /// The oh-my-hermes row's name when only Hermes is there.
 pub const HERMES_LABEL: &str = "Hermes";
 
-/// Every allow-listed agent with where it was found on this machine.
+/// Every allow-listed agent with where it was found on this machine: the built-ins, then the generic ACP agents,
+/// each with its list row.
 pub fn agents_on_this_machine() -> Vec<AgentInfo> {
     let dirs = host_dirs();
-    AGENTS
-        .iter()
-        .map(|a| {
-            let found = find_agent(a, &dirs);
-            if a.id == "omh" {
-                // Hermes as the bridge finds it (the same look-up the first-run screen keys on)
-                return hermes_row(found, crate::bridge::discover_python(host_env, |p| p.is_file()).ok());
-            }
-            AgentInfo { id: a.id, label: a.label, mode: a.mode, path: found.map(|p| p.to_string_lossy().into_owned()), via: None }
-        })
-        .collect()
+    let rows = AGENTS.iter().map(|a| (a, None)).chain(acp_agents::ACP_LIST.iter().map(|e| (&e.agent, Some(e))));
+    rows.map(|(a, acp)| {
+        let found = find_agent(a, &dirs);
+        if a.id == "omh" {
+            // Hermes as the bridge finds it (the same look-up the first-run screen keys on)
+            return hermes_row(found, crate::bridge::discover_python(host_env, |p| p.is_file()).ok());
+        }
+        AgentInfo { id: a.id, label: a.label, mode: a.mode, path: found.map(|p| p.to_string_lossy().into_owned()), via: None, acp }
+    })
+    .collect()
 }
 
 /// What omher runs for agent `id`: the allow-list entry resolved on this machine, as argv, plus the
@@ -1298,12 +1301,17 @@ mod tests {
     }
 
     #[test]
-    fn allow_list_is_exactly_the_fifteen_agents() {
+    fn allow_list_is_the_nine_built_ins_and_the_acp_list() {
         let ids: Vec<&str> = AGENTS.iter().map(|a| a.id).collect();
-        assert_eq!(ids, ["claude", "codex", "omo", "dsh", "omh", "pi", "omp", "grok", "opencode", "kilo", "gemini", "qwen", "kimi", "copilot", "cline"]);
-        for a in &AGENTS {
+        assert_eq!(ids, ["claude", "codex", "omo", "dsh", "omh", "pi", "omp", "grok", "opencode"]);
+        let generic: Vec<&str> = crate::acp_agents::ACP_LIST.iter().map(|e| e.agent.id).collect();
+        assert_eq!(generic, ["gemini", "qwen", "kimi", "copilot", "cline"]);
+        for a in AGENTS.iter().chain(crate::acp_agents::ACP_LIST.iter().map(|e| &e.agent)) {
             assert_eq!(a.id, a.program, "the id is the program name; nothing else is ever run");
+            assert_eq!(agent(a.id), Some(a), "{}", a.id);
         }
+        // Kilo Code is no longer offered
+        assert!(agent("kilo").is_none() && chat_args("kilo").is_none());
     }
 
     #[test]
@@ -1320,13 +1328,7 @@ mod tests {
                 ("pi", Mode::Chat),
                 ("omp", Mode::Chat),
                 ("grok", Mode::Terminal),
-                ("opencode", Mode::Chat),
-                ("kilo", Mode::Chat),
-                ("gemini", Mode::Chat),
-                ("qwen", Mode::Chat),
-                ("kimi", Mode::Chat),
-                ("copilot", Mode::Chat),
-                ("cline", Mode::Chat)
+                ("opencode", Mode::Chat)
             ]
         );
         assert_eq!(
@@ -1338,13 +1340,16 @@ mod tests {
         assert_eq!(chat_args("omp").unwrap(), ["--mode", "rpc"]);
         assert_eq!(chat_args("omo").unwrap(), ["--mode", "rpc"]);
         assert_eq!(chat_args("opencode").unwrap(), ["acp"]);
-        // the six more ACP agents, each with the one argument that starts its ACP server (Gemini's
-        // `--experimental-acp` is deprecated)
-        for (id, arg) in [("kilo", "acp"), ("gemini", "--acp"), ("qwen", "--acp"), ("kimi", "acp"), ("copilot", "--acp"), ("cline", "--acp")] {
+        // the generic ACP agents: the list drives both the allow-list row and the one argument that starts its ACP
+        // server, as 0.2.8 had them (Gemini's `--experimental-acp` is deprecated)
+        for (id, arg) in [("gemini", "--acp"), ("qwen", "--acp"), ("kimi", "acp"), ("copilot", "--acp"), ("cline", "--acp")] {
+            let e = crate::acp_agents::entry(id).unwrap();
             assert_eq!(chat_args(id).unwrap(), [arg], "{id}");
+            assert_eq!(chat_args(id).unwrap(), e.args, "{id}");
+            assert_eq!(agent(id).map(|a| (a.label, a.mode)), Some((e.agent.label, Mode::Chat)), "{id}");
         }
-        // DSH's chat takes its arguments per message (dsh_turn_args), not here
-        for none in ["omh", "grok", "dsh", "sh", "", "claude -p"] {
+        // DSH's chat takes its arguments per message (dsh_turn_args), not here; Kilo Code is gone
+        for none in ["omh", "grok", "dsh", "sh", "", "claude -p", "kilo"] {
             assert!(chat_args(none).is_none(), "{none}");
         }
         let p = Path::new("/h/.omher/dsh/headless.patch.yml");
@@ -1363,7 +1368,7 @@ mod tests {
             assert!(!a.contains("permission") && !a.contains("approval") && !a.contains("plugin") && !a.contains("default-profile"), "{a}");
         }
         // no allow-listed argument can run a shell, skip permissions or load extra config
-        for a in AGENTS.iter().filter_map(|a| chat_args(a.id)).flatten() {
+        for a in AGENTS.iter().chain(crate::acp_agents::ACP_LIST.iter().map(|e| &e.agent)).filter_map(|a| chat_args(a.id)).flatten() {
             assert!(!a.contains("dangerously") && !a.contains("bypass") && !a.contains("config") && !a.contains("mcp"), "{a}");
         }
     }
@@ -1457,7 +1462,7 @@ mod tests {
     #[test]
     fn refuses_anything_not_on_the_allow_list() {
         assert!(agent("claude").is_some());
-        for bad in ["", "sh", "bash", "/bin/sh", "claude --dangerously-skip-permissions", "claude;rm -rf ~", "CLAUDE", " claude", "../claude", "codex.cmd"] {
+        for bad in ["", "sh", "bash", "/bin/sh", "claude --dangerously-skip-permissions", "claude;rm -rf ~", "CLAUDE", " claude", "../claude", "codex.cmd", "kilo", "gemini --acp"] {
             assert!(agent(bad).is_none(), "{bad:?} must be refused");
             assert!(launch_for(bad).is_err(), "{bad:?} must not launch");
         }
@@ -1469,7 +1474,7 @@ mod tests {
     #[test]
     fn start_agent_accepts_every_allow_listed_agent_for_a_terminal_except_dsh() {
         let s = Sessions::default();
-        for a in AGENTS.iter() {
+        for a in AGENTS.iter().chain(crate::acp_agents::ACP_LIST.iter().map(|e| &e.agent)) {
             let err = s.start_agent(a.id, Path::new("relative/dir"), None, &[], 80, 24, |_| {}).unwrap_err();
             if a.id == "dsh" {
                 assert!(err.contains("no terminal view"), "{err}");
@@ -1485,8 +1490,10 @@ mod tests {
     fn start_agent_refuses_an_unknown_id_before_any_process() {
         let s = Sessions::default();
         let tmp = std::env::temp_dir();
-        let err = s.start_agent("/bin/sh", &tmp, None, &[], 80, 24, |_| {}).unwrap_err();
-        assert!(err.contains("unknown agent"), "{err}");
+        for bad in ["/bin/sh", "kilo"] {
+            let err = s.start_agent(bad, &tmp, None, &[], 80, 24, |_| {}).unwrap_err();
+            assert_eq!(err, format!("unknown agent \"{bad}\""));
+        }
         assert_eq!(s.count(), 0);
     }
 

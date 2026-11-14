@@ -1,4 +1,5 @@
 mod accounts;
+mod acp_agents;
 mod acp_chat;
 mod agent_chat;
 mod appimage;

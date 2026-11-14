@@ -3435,7 +3435,7 @@ impl ChatSessions {
         if let Some(dir) = files.filter(|_| agent_id == "claude") {
             argv.extend(add_dir_args(&argv[0], dir));
         }
-        // an agent whose own default runs tools unasked (OpenCode, Kilo Code) gets ask rules built from its own
+        // an agent whose own default runs tools unasked (OpenCode) gets ask rules built from its own
         // resolved rules, so nothing the person allows runs unasked and nothing they deny becomes askable; or it does
         // not start
         let mut env = account_env.to_vec();
@@ -3767,10 +3767,10 @@ mod tests {
         std::fs::create_dir_all(&dir).unwrap();
         let absent = dir.join("not-a-file.txt");
         assert!(!absent.exists());
-        for id in ["kilo", "opencode"] {
+        for id in ["opencode"] {
             let row = acp_agent(id).unwrap();
             let probe = row.rules.as_ref().unwrap();
-            let primary = if id == "kilo" { "code" } else { "build" };
+            let primary = "build";
             for token in [format!("${{file:{}}}", absent.display()), format!("{{file:{}}}", absent.display()), "${env:HOME}".into(), "{env:HOME}".into()] {
                 let first = format!("{primary} (primary)\n{}\n", json!([{"permission":"bash", "pattern":token, "action":"deny"}]));
                 // /bin/sh is a listing stand-in only: the marker would be written before the second listing's
@@ -4096,11 +4096,12 @@ mod tests {
 
     #[test]
     fn only_chat_agents_have_adapters() {
-        for id in ["claude", "codex", "omo", "pi", "omp", "opencode", "kilo", "gemini", "qwen", "kimi", "copilot", "cline"] {
+        let generic = crate::acp_agents::ACP_LIST.iter().map(|e| e.agent.id);
+        for id in ["claude", "codex", "omo", "pi", "omp", "opencode"].into_iter().chain(generic) {
             assert!(adapter_for(id, "/w", None).is_some(), "{id}");
         }
-        // DSH has no adapter: its chat is a run per message (dsh_chat)
-        for id in ["omh", "grok", "dsh", "sh", ""] {
+        // DSH has no adapter: its chat is a run per message (dsh_chat); Kilo Code is no longer offered
+        for id in ["omh", "grok", "dsh", "sh", "", "kilo"] {
             assert!(adapter_for(id, "/w", None).is_none(), "{id}");
         }
         let c = ChatSessions::default();
@@ -4108,6 +4109,10 @@ mod tests {
         assert!(c.start_agent("dsh", &tmp, Some("eee5079a-c52e-4526-b633-f3d8cb7d6394"), &[], None, |_| {}).is_err());
         for bad in ["omh", "grok", "/bin/sh", "claude -p"] {
             assert!(c.start_agent(bad, &tmp, None, &[], None, |_| {}).is_err(), "{bad}");
+        }
+        // Kilo Code and any other id are refused as unknown, before a program is looked up
+        for gone in ["kilo", "kilo acp", "Gemini", "gemini --yolo"] {
+            assert_eq!(c.start_agent(gone, &tmp, None, &[], None, |_| {}).unwrap_err(), format!("unknown agent \"{gone}\""));
         }
         assert!(c.start_agent("claude", &tmp, Some("--dangerously-skip-permissions"), &[], None, |_| {}).is_err());
         assert!(c.start_agent("opencode", &tmp, Some("ses_x --yolo"), &[], None, |_| {}).is_err());
