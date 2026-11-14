@@ -1,6 +1,9 @@
 /* The connect block (ConnectBlock.tsx): plain text in the timeline between two thin lines, no card, no fill. */
-.thread > .cn {
-  margin: 10px auto 2px;
+.cn {
+  width: min(var(--thread-w), calc(100% - 56px));
+  flex: none;
+  box-sizing: border-box;
+  margin: 0 auto 8px;
   padding: 10px 2px;
   border-top: 1px solid var(--line);
   border-bottom: 1px solid var(--line);

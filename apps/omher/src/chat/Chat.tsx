@@ -5,6 +5,7 @@ import { Timeline } from "./parts/Timeline";
 import { Composer } from "./parts/Composer";
 import { RunsFull } from "../runs/RunsTab";
 import { OmhPromptLine } from "../onboarding/OmhPromptLine";
+import { ConnectBlock } from "./connect/ConnectBlock";
 import { t } from "../i18n";
 
 /** The selected bot's one main chat: header, timeline, composer. */
@@ -36,6 +37,9 @@ export function Chat() {
       <div className={`pane${s.ui.runsFull ? " has-full" : ""}`} data-pane={bot.name}>
         <Timeline bot={bot} />
         {s.ui.runsFull && <RunsFull bot={bot} />}
+        {/* Hermes says the bot cannot answer (no AI account): one quiet block above the composer, so a long chat
+            that loses its account still shows it without scrolling */}
+        <ConnectBlock bot={bot} />
         <OmhPromptLine bot={bot} />
         <Composer
           key={bot.name}

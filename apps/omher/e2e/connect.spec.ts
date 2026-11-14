@@ -193,3 +193,23 @@ for (const [lang, needs, finish] of [
     await expect(page.getByTestId("connect-text")).toHaveText(finish);
   });
 }
+
+test("in a long chat the block sits above the composer, visible without scrolling", async ({ page }) => {
+  await mock("mock.ready", { bot: "kami", ok: false });
+  await open(page);
+  const block = page.getByTestId("connect-block");
+  await expect(block).toBeVisible();
+  const events = Array.from({ length: 40 }, (_, i) => ({
+    event: "message", bot: "kami", id: `long-${i}`, text: `Line ${i}: ${"a long answer ".repeat(12)}`,
+  }));
+  await mock("mock.emit", { events });
+  await expect(page.locator(".thread").first().getByText("Line 39:", { exact: false })).toBeVisible();
+  // the thread really scrolls: its content is taller than its box
+  expect(await page.locator(".thread").first().evaluate((e) => e.scrollHeight > e.clientHeight + 200)).toBe(true);
+  await expect(block).toBeInViewport();
+  const b = await block.boundingBox();
+  const c = await page.getByTestId("composer").boundingBox();
+  expect(b && c && b.y + b.height <= c.y + 1).toBe(true);
+  // not inside the scrolling thread
+  expect(await block.evaluate((e) => !!e.closest(".thread"))).toBe(false);
+});
