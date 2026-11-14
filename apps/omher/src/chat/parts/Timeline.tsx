@@ -10,6 +10,8 @@ import { liveFaceRow } from "./liveFace";
 import { ActivityFallback, CardFallback, ElsewhereFallback, RoutineFallback } from "./fallbacks";
 import { PluginAddedCard, RoutineAddedCard } from "../../pages/ChatCards";
 import { t } from "../../i18n";
+import { ConnectBlock } from "../connect/ConnectBlock";
+import { useBotReady } from "../connect/ready";
 
 /** A time label goes in when the day changes, or after a quiet gap within the same day. */
 const GAP = 30 * 60;
@@ -29,6 +31,7 @@ export function Timeline({ bot, face, onEditLast, connectionNotice = true }: { b
   const s = useStore();
   const items = selectTimeline(s, bot.name);
   const chat = s.chats[bot.name];
+  const notReady = useBotReady(bot.name).status === "not";
   const streaming = chat?.turn?.streaming ?? "";
   const typing = awaitingFirstToken(chat);
   // the one row of the live run that carries the bot's ringed face
@@ -129,7 +132,9 @@ export function Timeline({ bot, face, onEditLast, connectionNotice = true }: { b
       )}
       {/* A Hermes installed from the setup screen has no model yet: the first chat screen says where to pick one,
           never a terminal command. */}
-      {chat?.loaded && !chat.openError && !(chat.model || bot.model) && (
+      {/* Hermes says the bot cannot answer (no AI account): the connect block, in place of the no-model note */}
+      {connectionNotice && <ConnectBlock bot={bot} />}
+      {chat?.loaded && !chat.openError && !(chat.model || bot.model) && !(connectionNotice && notReady) && (
         <div className="day note" data-testid="chat-no-model">
           {t("tl.noModel", { bot: bot.display_name })}
         </div>

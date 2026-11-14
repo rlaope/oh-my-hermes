@@ -12,17 +12,12 @@ export function Chat() {
   const s = useStore();
   const bot = s.bots.find((b) => b.name === s.selectedBot) ?? null;
   if (!bot) {
-    // no bot at all: say what a bot is and how to get one, not only that none was found
+    // no bot at all: one line that says Hermes has none yet and where to connect one (the + menu), no command
     const none = s.conn === "open" && s.bots.length === 0;
     return (
       <div className="chat-empty" data-testid="chat-empty">
         {none ? (
-          <>
-            <b>{t("chat.noBots")}</b>
-            <span>
-              {t("chat.noBotsHint")} <code>hermes profile create &lt;name&gt;</code>
-            </span>
-          </>
+          <span>{t("chat.noBotsHint")}</span>
         ) : s.conn === "open" ? (
           t("chat.pick")
         ) : (

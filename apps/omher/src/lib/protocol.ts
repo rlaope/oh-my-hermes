@@ -210,6 +210,16 @@ export interface ModelCurrent {
   reasoning: string;
 }
 
+/** `bots.ready`: Hermes' own readiness probe for a bot (`setup.runtime_check`). `unknown`: the gateway could not say
+ *  (an older Hermes, or still checking), which the chat treats as ready. */
+export interface BotReady {
+  ok: boolean;
+  provider: string;
+  model: string;
+  error: string;
+  unknown?: boolean;
+}
+
 export interface ModelOptions {
   providers: ModelProvider[];
   current: ModelCurrent;
@@ -309,6 +319,8 @@ export interface OpMap {
   "bots.restart_scope": { params: { bot: string }; result: RestartScope };
   "plugins.remove": { params: { bot: string; name: string }; result: { name: string } };
   "models.options": { params: { bot: string }; result: ModelOptions };
+  /** Can the bot answer (read-only)? With `provider` (openai-codex, anthropic or nous) the strict check for it. */
+  "bots.ready": { params: { bot: string; provider?: string }; result: BotReady };
   "chat.set_model": {
     params: { bot: string; model?: string; provider?: string; reasoning?: string; session?: string };
     result: ModelCurrent;

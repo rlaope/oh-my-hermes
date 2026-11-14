@@ -73,8 +73,7 @@ export const ko: Record<Key, string> = {
   "plans.graph": "계획 그래프",
 
   // chat (the chat column's own words)
-  "chat.noBots": "아직 봇이 없습니다",
-  "chat.noBotsHint": "봇은 Hermes 프로필입니다. 왼쪽 위 +로 추가하거나 새로 만드세요:",
+  "chat.noBotsHint": "Hermes에 아직 봇이 없어요. 왼쪽 위 + 메뉴에서 연결하세요.",
   "chat.pick": "봇을 선택하세요",
   "chat.connecting": "Hermes에 연결하는 중…",
 
@@ -763,6 +762,14 @@ export const ko: Record<Key, string> = {
   "tl.loading": "불러오는 중…",
   "tl.unreachable": "{bot}에 연결할 수 없어요 ({error}). 이 프로필의 Hermes를 켠 뒤 다시 골라 주세요.",
   "tl.noModel": "{bot}에 아직 모델이 없어요. 오른쪽 위 모델 메뉴에서 골라 시작하세요.",
+  "cn.needs": "{bot}이(가) 답하려면 AI 계정이 필요해요.",
+  "cn.finish": "터미널 창에서 로그인을 마치세요.",
+  "cn.codex": "ChatGPT / Codex",
+  "cn.claude": "Claude",
+  "cn.nous": "Nous Portal",
+  "cn.key": "API 키…",
+  "cn.manual": "터미널에서 {cmd}를 실행하세요.",
+  "cn.openFailed": "터미널을 열지 못했어요 ({error}). {cmd}를 직접 실행하세요.",
   "tl.sayHi": "{bot}에게 인사해 보세요",
   "ty.writing": "{name}가 쓰는 중",
   "ui.working": "작업 중",

@@ -46,7 +46,7 @@ test("the first-run screen is drawn in the person's theme: light, though the app
   expect(Math.min(r, g, b)).toBeGreaterThan(200); // a light page, not the dark default
 });
 
-test("no bots: the empty pane says what a bot is and how to get one", async ({ page }) => {
+test("no bots: the empty pane says, in one line, that Hermes has no bot and where to connect one", async ({ page }) => {
   await page.routeWebSocket(/127\.0\.0\.1/, (ws) => {
     const server = ws.connectToServer();
     const ops = new Map<string, string>();
@@ -67,9 +67,10 @@ test("no bots: the empty pane says what a bot is and how to get one", async ({ p
   });
   await page.goto("/");
   const empty = page.getByTestId("chat-empty");
-  await expect(empty).toContainText("No bots yet");
-  await expect(empty).toContainText("Add one with + at the top left");
-  await expect(empty.locator("code")).toHaveText("hermes profile create <name>");
+  await expect(empty).toHaveText("Hermes has no bot yet. Connect one from the + menu at the top left.");
+  // no terminal command any more
+  await expect(empty.locator("code")).toHaveCount(0);
+  await expect(empty).not.toContainText("hermes profile create");
   // readable: the hint is not in the faintest gray
   const [hint, faint] = await empty.evaluate((e) => {
     const probe = document.createElement("i");
