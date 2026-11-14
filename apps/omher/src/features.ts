@@ -68,6 +68,8 @@ export interface SettingsSlotProps {
 /** Popover from the sidebar `+`. Rendered only while open, inside a `position: relative` wrapper. */
 export interface AddBotSlotProps {
   onClose: () => void;
+  /** Connect over SSH was picked: the popover closes and the sidebar opens the confirm card (it outlives the popover). */
+  onSsh?: () => void;
 }
 
 export interface SlotProps {

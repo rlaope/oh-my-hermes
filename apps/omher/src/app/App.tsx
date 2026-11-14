@@ -15,6 +15,7 @@ import { PluginsPage } from "../pages/Plugins";
 import { useLookAttributes, useThemeAttribute } from "./theme";
 import { useShortcuts } from "./shortcuts";
 import { useAsksBadge } from "./badge";
+import { startPeers } from "../peers/links";
 
 // The terminal view (and xterm with it) loads when a session is first opened.
 const SessionView = lazy(() => import("../sessions/SessionView").then((m) => ({ default: m.SessionView })));
@@ -28,6 +29,7 @@ export function App() {
   useAsksBadge();
   useEffect(() => {
     void s.init();
+    void startPeers();
     // init is idempotent in the store; run once on mount
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);

@@ -114,3 +114,15 @@
   border-radius: 3px;
   padding: 0 4px;
 }
+.ab-new.ab-ssh {
+  gap: 8px;
+  color: var(--ink);
+}
+.ab-new.ab-ssh:hover {
+  background: var(--hover);
+}
+.ab-new.ab-ssh .ssh-ic {
+  flex: none;
+  width: 22px;
+  color: var(--muted);
+}

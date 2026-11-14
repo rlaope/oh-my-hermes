@@ -6,6 +6,7 @@ import { selectAsks, selectSidebarBots, useStore } from "../state/store";
 import { slots } from "../features";
 import { CalendarIcon, GearIcon, GridIcon, IconButton, PlusIcon, SearchIcon } from "../ui";
 import { BotRow } from "./BotRow";
+import { AttachCard } from "../peers/AttachCard";
 import { Usage } from "./Usage";
 import { AccountsWatcher } from "../settings/accounts/useAccounts";
 import "../sessions/sessions.css";
@@ -25,6 +26,7 @@ export function Sidebar() {
   const [sessionMenu, setSessionMenu] = useState<{ x: number; y: number; focus: HTMLElement } | null>(null);
   const closeSessionMenu = useCallback(() => setSessionMenu(null), []);
   const [adding, setAdding] = useState(false);
+  const [ssh, setSsh] = useState(false);
   const [showHidden, setShowHidden] = useState(false);
   const closeHidden = useCallback(() => setShowHidden(false), []);
   const AddBot = slots.addBot;
@@ -51,7 +53,8 @@ export function Sidebar() {
           <IconButton label={t("nav.addBot")} onClick={() => AddBot && setAdding((v) => !v)} aria-expanded={adding} disabled={!AddBot}>
             <PlusIcon />
           </IconButton>
-          {AddBot && adding && <AddBot onClose={() => setAdding(false)} />}
+          {AddBot && adding && <AddBot onClose={() => setAdding(false)} onSsh={() => setSsh(true)} />}
+          {ssh && <AttachCard seed={{}} onClose={() => setSsh(false)} />}
         </div>
       </div>
       <label className="search">

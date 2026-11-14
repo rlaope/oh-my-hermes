@@ -15,6 +15,8 @@ import { Appearance } from "./Appearance";
 import { AccountsPage } from "./accounts/AccountsPage";
 import { ProvidersPage } from "./providers/ProvidersPage";
 import { TerminalPage } from "./terminal/TerminalPage";
+import { SshMarker } from "../peers/SshMarker";
+import { RemoteMachines } from "../peers/RemoteMachines";
 import { AvatarEditor, BotFacts, NameEditor, PictureActions, placeName, useBotInfo, usePictureEditor } from "./BotIdentity";
 
 export const slot = "settings";
@@ -176,6 +178,7 @@ function BotPage({ bot }: { bot: Bot }) {
           <span className="be-sub">
             <i className={`st-dot ${live ? "working" : bot.status}`} aria-hidden="true" />
             {live ? t("bot.working") : statusText(bot.status)}
+            {bot.host && <SshMarker bot={bot} full testId="page-ssh" />}
           </span>
           {bot.description && <p className="be-desc">{bot.description}</p>}
           <div className="be-acts">
@@ -302,7 +305,7 @@ function BotCard({ bot }: { bot: Bot }) {
           <span>
             <i className={`st-dot ${live ? "working" : bot.status}`} aria-hidden="true" />
             {live ? t("bot.working") : statusText(bot.status)}
-            {bot.name !== bot.display_name.toLowerCase() && <code>{bot.name}</code>}
+            {bot.host ? <SshMarker bot={bot} testId={`card-ssh-${bot.name}`} /> : bot.name !== bot.display_name.toLowerCase() && <code>{bot.name}</code>}
           </span>
         </span>
       </span>
@@ -431,6 +434,7 @@ function GeneralPage() {
           </Value>
         </Row>
       </div>
+      <RemoteMachines />
     </div>
   );
 }

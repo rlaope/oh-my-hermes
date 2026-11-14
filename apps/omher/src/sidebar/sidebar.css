@@ -241,6 +241,11 @@
   overflow: hidden;
   text-overflow: ellipsis;
 }
+.bot-nt {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
 .bot-t {
   color: var(--quiet);
   font-size: 11px;

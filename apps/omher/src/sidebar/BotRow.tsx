@@ -11,6 +11,7 @@ import { WORKING } from "../state/store";
 import { useRestart } from "./restart";
 import { RestartLine } from "./RestartLine";
 import { useMates } from "./restart";
+import { SshMarker } from "../peers/SshMarker";
 
 /** The live step the activity line shows ("Reading gateway.log", "Running pnpm test"); "Thinking…" until there
  *  is one ("Working…" is only the placeholder of a turn found running on open). */
@@ -201,7 +202,8 @@ export function BotRow({
         <span className="bot-m">
           <span className="bot-r1">
             <span className="bot-n">
-              {bot.display_name}
+              <span className="bot-nt">{bot.display_name}</span>
+              {bot.host && <SshMarker bot={bot} testId={`ssh-mark-${bot.name}`} />}
               {pinned && <span className="bot-pin" data-testid="pinned" aria-label={t("row.pinned")} title={t("row.pinned")} />}
             </span>
             {restarting ? (

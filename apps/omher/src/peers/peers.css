@@ -1,0 +1,358 @@
+/* SSH peers: the marker, the confirm card, the draft chip and Settings › Remote machines. Small radius, 11-13px type,
+   gray states; the card reuses the update dialog's veil, box and buttons (.upd-*). */
+
+/* the marker: `[>_] SSH · Mac mini` */
+.ssh-mark {
+  box-shadow: inset 0 0 0 1px var(--line-strong);
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  min-width: 0;
+  max-width: 100%;
+  height: 16px;
+  padding: 0 5px;
+  border-radius: 4px;
+  background: var(--raise2);
+  color: var(--body);
+  font-size: 10.5px;
+  font-weight: 500;
+  line-height: 16px;
+  white-space: nowrap;
+  vertical-align: middle;
+}
+.ssh-mark .ssh-ic {
+  flex: none;
+}
+.ssh-k {
+  font-family: var(--mono);
+  font-size: 9.5px;
+  letter-spacing: 0.04em;
+  color: var(--body);
+}
+.ssh-sep {
+  color: var(--quiet);
+  white-space: pre;
+  margin: 0 -2px;
+}
+.ssh-l {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+.ssh-st::before {
+  content: "· ";
+  color: var(--quiet);
+}
+.ssh-st {
+  margin-left: 3px;
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.ssh-mark.reconnecting .ssh-ic,
+.ssh-mark.connecting .ssh-ic {
+  color: var(--w4);
+}
+.ssh-mark.failed .ssh-ic,
+.ssh-mark.failed .ssh-st {
+  color: var(--danger);
+}
+
+/* placements */
+.bot-r1 .bot-n {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 5px;
+  min-width: 0;
+}
+.bot-n .ssh-mark {
+  flex: 0 1 auto;
+  height: 15px;
+  line-height: 15px;
+  font-weight: 500;
+}
+.head .ssh-mark {
+  margin-left: 2px;
+  flex: 0 1 auto;
+}
+.bc-id .ssh-mark,
+.be-sub .ssh-mark {
+  margin-left: 4px;
+}
+
+/* the confirm card */
+.peer-card {
+  width: min(460px, calc(100vw - 48px));
+}
+.peer-t {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.peer-by {
+  margin: 0 0 4px;
+  font-size: 11.5px;
+  color: var(--muted);
+}
+.peer-sub {
+  margin: 0 0 10px;
+  font-size: 11.5px;
+  color: var(--muted);
+}
+.peer-form {
+  display: grid;
+  gap: 8px;
+}
+.peer-f {
+  display: grid;
+  gap: 3px;
+  font-size: 11px;
+  color: var(--muted);
+}
+.peer-f input {
+  height: 28px;
+  padding: 0 8px;
+  border-radius: var(--r-sm);
+  border: 1px solid var(--line-strong);
+  background: var(--bg);
+  color: var(--ink);
+  font-size: 12.5px;
+}
+.peer-f input:focus {
+  outline: none;
+  border-color: var(--muted);
+}
+.peer-f input[aria-invalid="true"] {
+  border-color: var(--danger);
+}
+.peer-sugg {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  color: var(--quiet);
+}
+.peer-sugg-b {
+  height: 20px;
+  padding: 0 7px;
+  border-radius: 4px;
+  background: var(--raise2);
+  color: var(--body);
+  font-family: var(--mono);
+  font-size: 10.5px;
+}
+.peer-sugg-b:hover {
+  background: var(--seg-on);
+  color: var(--ink);
+}
+.peer-warn {
+  margin: 6px 0 0;
+  font-size: 11.5px;
+  color: var(--danger);
+}
+.peer-wait {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin-top: 12px;
+  font-size: 12px;
+  color: var(--muted);
+}
+.peer-fail {
+  display: grid;
+  gap: 6px;
+  margin-top: 12px;
+  padding: 9px 10px;
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--danger) 12%, var(--pop));
+  border-left: 2px solid var(--danger);
+  font-size: 12px;
+}
+.peer-fail b {
+  font-weight: 500;
+  color: var(--ink);
+}
+.peer-line {
+  font-family: var(--mono);
+  font-size: 10.5px;
+  color: var(--muted);
+  word-break: break-word;
+}
+.peer-found {
+  display: grid;
+  gap: 4px;
+  margin-top: 12px;
+}
+.peer-k {
+  margin-top: 6px;
+  font-size: 11px;
+  color: var(--muted);
+}
+.peer-k:first-child {
+  margin-top: 0;
+}
+.peer-v {
+  display: grid;
+  gap: 1px;
+  font-size: 12px;
+  color: var(--body);
+}
+.peer-path {
+  font-family: var(--mono);
+  font-size: 10.5px;
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+.peer-cmd-w {
+  position: relative;
+}
+.peer-cmd-w .peer-copy {
+  position: absolute;
+  top: 3px;
+  right: 3px;
+  opacity: 1;
+  color: var(--muted);
+}
+.peer-cmd-w .peer-cmd {
+  padding-right: 30px;
+}
+.peer-cmd {
+  display: block;
+  padding: 6px 8px;
+  border-radius: var(--r-sm);
+  background: var(--bg);
+  border: 1px solid var(--line);
+  font-family: var(--mono);
+  font-size: 10.5px;
+  line-height: 1.5;
+  color: var(--body);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  user-select: text;
+}
+.peer-cmd.sm {
+  display: inline-block;
+  margin-top: 4px;
+  padding: 2px 6px;
+}
+.peer-bots {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 2px;
+}
+.peer-bots li {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  font-size: 12px;
+}
+.peer-bots b {
+  font-weight: 560;
+  color: var(--ink);
+}
+.peer-bots code {
+  font-family: var(--mono);
+  font-size: 10.5px;
+  color: var(--quiet);
+}
+.peer-none {
+  color: var(--muted);
+}
+.peer-note {
+  margin: 8px 0 0;
+  font-size: 11px;
+  color: var(--muted);
+}
+
+/* the draft chip under a bot's reply */
+.peer-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 6px;
+}
+.peer-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 100%;
+  min-height: 24px;
+  padding: 3px 9px 3px 7px;
+  border-radius: var(--r);
+  background: var(--raise2);
+  box-shadow: inset 0 0 0 1px var(--line-strong);
+  font-size: 11.5px;
+  color: var(--body);
+}
+.peer-chip:not(:disabled):hover {
+  background: var(--seg-on);
+  color: var(--ink);
+}
+.peer-chip:disabled {
+  cursor: default;
+}
+.peer-chip:disabled .peer-chip-t,
+.peer-chip:disabled .peer-chip-k,
+.peer-chip:disabled .ssh-ic {
+  opacity: 0.6;
+}
+.peer-chip-t {
+  color: var(--ink);
+  white-space: nowrap;
+}
+.peer-chip-k::before {
+  content: "· ";
+  color: var(--quiet);
+}
+.peer-chip-k {
+  color: var(--body);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+.peer-chip-why {
+  color: var(--danger);
+  white-space: nowrap;
+}
+
+/* Settings › Remote machines */
+.peer-row-h {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.peer-row-h code {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--muted);
+}
+.peer-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--ok);
+  flex: none;
+}
+.peer-dot.connecting,
+.peer-dot.reconnecting {
+  background: var(--w4);
+}
+.peer-dot.failed {
+  background: var(--danger);
+}
+.peer-acts {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.peer-ask {
+  font-size: 11.5px;
+  color: var(--muted);
+}
+.st-btn.peer-danger {
+  color: var(--danger);
+}

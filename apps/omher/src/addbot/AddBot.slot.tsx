@@ -10,14 +10,17 @@ import { Avatar, Popover, Spinner } from "../ui";
 import { connectProfile, refreshBots } from "./bots";
 import { t } from "../i18n";
 import { statusText } from "../settings/Settings.slot";
+import { SshIcon } from "../peers/SshMarker";
+import { isRemote } from "../peers/peerKey";
 
 export const slot = "addBot";
 
 
-export default function AddBot({ onClose }: SlotProps["addBot"]) {
+export default function AddBot({ onClose, onSsh }: SlotProps["addBot"]) {
   const s = useStore();
   const [busy, setBusy] = useState<string | null>(null);
   const [failed, setFailed] = useState<Record<string, string>>({});
+  const local = s.bots.filter((b) => !isRemote(b));
 
   useEffect(() => {
     void refreshBots(getStore()).catch(() => undefined);
@@ -43,8 +46,8 @@ export default function AddBot({ onClose }: SlotProps["addBot"]) {
         <div className="ab-h">{t("ab.title")}</div>
         <p className="ab-sub">{t("ab.sub")}</p>
         <div className="ab-list" data-testid="addbot-list">
-          {s.bots.length === 0 && <div className="ab-empty">{t("ab.none")}</div>}
-          {s.bots.map((b) => {
+          {local.length === 0 && <div className="ab-empty">{t("ab.none")}</div>}
+          {local.map((b) => {
             const err = failed[b.name];
             return (
               <div key={b.name} className="ab-row" data-testid={`addbot-${b.name}`}>
@@ -75,6 +78,14 @@ export default function AddBot({ onClose }: SlotProps["addBot"]) {
           })}
         </div>
         <div className="ab-sep" />
+        {/* a Hermes on another computer: the same confirm card a bot's draft opens */}
+        <button type="button" className="ab-new ab-ssh" onClick={() => (onClose(), onSsh?.())} data-testid="addbot-ssh">
+          <SshIcon size={12} />
+          <span className="ab-m">
+            <span className="ab-n">{t("ab.ssh")}</span>
+            <span className="ab-s">{t("ab.sshSub")}</span>
+          </span>
+        </button>
         <button type="button" className="ab-new" disabled title={t("ab.later")} data-testid="addbot-create">
           {t("ab.create")}
           <span className="ab-soon">{t("set.soon")}</span>
