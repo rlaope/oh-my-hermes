@@ -5,6 +5,7 @@ import { Timeline } from "./parts/Timeline";
 import { Composer } from "./parts/Composer";
 import { RunsFull } from "../runs/RunsTab";
 import { OmhPromptLine } from "../onboarding/OmhPromptLine";
+import { ConnectBlock } from "./connect/ConnectBlock";
 import { t } from "../i18n";
 
 /** The selected bot's one main chat: header, timeline, composer. */
@@ -12,17 +13,12 @@ export function Chat() {
   const s = useStore();
   const bot = s.bots.find((b) => b.name === s.selectedBot) ?? null;
   if (!bot) {
-    // no bot at all: say what a bot is and how to get one, not only that none was found
+    // no bot at all: one line that says Hermes has none yet and where to connect one (the + menu), no command
     const none = s.conn === "open" && s.bots.length === 0;
     return (
       <div className="chat-empty" data-testid="chat-empty">
         {none ? (
-          <>
-            <b>{t("chat.noBots")}</b>
-            <span>
-              {t("chat.noBotsHint")} <code>hermes profile create &lt;name&gt;</code>
-            </span>
-          </>
+          <span>{t("chat.noBotsHint")}</span>
         ) : s.conn === "open" ? (
           t("chat.pick")
         ) : (
@@ -41,6 +37,9 @@ export function Chat() {
       <div className={`pane${s.ui.runsFull ? " has-full" : ""}`} data-pane={bot.name}>
         <Timeline bot={bot} />
         {s.ui.runsFull && <RunsFull bot={bot} />}
+        {/* Hermes says the bot cannot answer (no AI account): one quiet block above the composer, so a long chat
+            that loses its account still shows it without scrolling */}
+        <ConnectBlock bot={bot} />
         <OmhPromptLine bot={bot} />
         <Composer
           key={bot.name}

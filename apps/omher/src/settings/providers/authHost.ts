@@ -2,6 +2,8 @@
 // `hermes auth add <provider> --type api-key` (src-tauri/src/hermes_auth.rs, BOUNDARY rule 23). Hermes asks
 // for the key in that terminal; omher never sees it. In a plain browser (dev, e2e) e2e injects a stand-in as
 // `window.__omherAuthHost`; without one the page only shows the command to run.
+// The chat's connect block opens the same terminal with `hermes auth add <id>` (signInHost: only openai-codex,
+// anthropic, nous; the shell checks the same list); e2e's stand-in is `window.__omherSignInHost`.
 
 /** Same check as the shell's `valid_provider`. */
 export const PROVIDER_ID = /^[a-z0-9][a-z0-9_-]{0,40}$/;
@@ -16,6 +18,7 @@ export interface AuthHost {
 declare global {
   interface Window {
     __omherAuthHost?: AuthHost;
+    __omherSignInHost?: AuthHost;
   }
 }
 
@@ -25,6 +28,20 @@ const tauriHost: AuthHost = {
     await invoke("open_hermes_auth", { provider });
   },
 };
+
+const tauriSignIn: AuthHost = {
+  async open(provider) {
+    const { invoke } = await import("@tauri-apps/api/core");
+    await invoke("open_hermes_sign_in", { provider });
+  },
+};
+
+/** The connect block's sign-in: the terminal runs `hermes auth add <provider>`, no `--type`. */
+export function signInHost(): AuthHost | null {
+  if (typeof window === "undefined") return null;
+  if (window.__omherSignInHost) return window.__omherSignInHost;
+  return "__TAURI_INTERNALS__" in window ? tauriSignIn : null;
+}
 
 export function authHost(): AuthHost | null {
   if (typeof window === "undefined") return null;

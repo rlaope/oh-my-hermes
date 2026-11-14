@@ -73,8 +73,7 @@ export const ja: Record<Key, string> = {
   "plans.graph": "計画グラフ",
 
   // chat (the chat column's own words)
-  "chat.noBots": "ボットはまだありません",
-  "chat.noBotsHint": "ボットは Hermes のプロファイルです。左上の + で追加するか、新しく作成します:",
+  "chat.noBotsHint": "Hermes にはまだボットがありません。左上の + メニューから接続してください。",
   "chat.pick": "ボットを選択してください",
   "chat.connecting": "Hermes に接続中…",
 
@@ -766,6 +765,14 @@ export const ja: Record<Key, string> = {
   "tl.loading": "読み込み中…",
   "tl.unreachable": "{bot} に接続できません（{error}）。このプロファイルの Hermes を起動してから、もう一度選んでください。",
   "tl.noModel": "{bot} にはまだモデルがありません。右上のモデルメニューから選んで始めてください。",
+  "cn.needs": "{bot} が答えるには AI アカウントが必要です。",
+  "cn.finish": "ターミナルのウィンドウでサインインを完了してください。",
+  "cn.codex": "ChatGPT / Codex",
+  "cn.claude": "Claude",
+  "cn.nous": "Nous Portal",
+  "cn.key": "API キー…",
+  "cn.manual": "ターミナルで {cmd} を実行してください。",
+  "cn.openFailed": "ターミナルを開けませんでした（{error}）。{cmd} を自分で実行してください。",
   "tl.sayHi": "{bot} にあいさつしてみましょう",
   "ty.writing": "{name} が入力中",
   "ui.working": "作業中",

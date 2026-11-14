@@ -1,0 +1,54 @@
+/* The connect block (ConnectBlock.tsx): plain text in the timeline between two thin lines, no card, no fill. */
+.cn {
+  width: min(var(--thread-w), calc(100% - 56px));
+  flex: none;
+  box-sizing: border-box;
+  margin: 0 auto 8px;
+  padding: 10px 2px;
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 12.5px;
+  line-height: 1.45;
+  color: var(--muted);
+}
+.cn-t {
+  color: var(--body);
+}
+.cn-sub {
+  color: var(--muted);
+}
+.cn-sub code {
+  font-family: var(--mono);
+  font-size: 11.5px;
+}
+.cn-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+}
+.cn-go {
+  padding: 1px 4px;
+  margin-left: -4px;
+  border: 0;
+  border-radius: 4px;
+  background: none;
+  color: var(--ink);
+  font: inherit;
+  text-decoration: underline;
+  text-decoration-color: var(--line-strong);
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+.cn-go:hover {
+  background: var(--hover);
+}
+.cn-go.on {
+  text-decoration-color: currentColor;
+}
+.cn-go:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}

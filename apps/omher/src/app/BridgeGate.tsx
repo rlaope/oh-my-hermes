@@ -187,7 +187,9 @@ export function BridgeGate({ children }: { children: ReactNode }) {
         // The shell starts the bridge again after a clean install; poll it from "starting".
         setInstall("idle");
         setStatus({ state: "starting" });
-        omhInstalled();
+        // the installer's own default profile is the new person's bot: land in its chat (the connect block shows
+        // there when it has no AI account yet)
+        omhInstalled("default");
       } else {
         setInstall("failed");
       }

@@ -1008,6 +1008,47 @@ All notable changes will be documented here.
   folder. Chat and terminal view marks beside the session rows are smaller,
   while their targets and the messages' type and spacing stay unchanged.
 
+- **The OMH TUI's `/sessions` picker no longer loses older conversations
+  behind newer ones, and orders sessions by when they were last active.**
+  Attached to Hermes' shared gateway, the gateway child asked both the live
+  and the stored listing for only the picker's limit, kept the live rows
+  first, and cut the joined list there, so a session held open and its own
+  stored history could take two rows while a conversation you resumed
+  yesterday fell off the page. It now asks each listing for up to 200 rows,
+  merges a live session and the stored row of the same conversation into one
+  row (by id, resolved id or lineage root), orders the result by the
+  conversation's latest activity (`last_active_at`, which current Hermes
+  answers when asked for its picker fields), and applies the limit last; a
+  title lookup is forwarded unchanged. The day headings and ages follow the
+  same last activity. A row Hermes marks `resumable: false` /
+  `owner_runtime: "other"` (a session another runtime holds open) opens
+  read-only: Enter shows its newest messages through `session.transcript`
+  in a pager instead of resuming it, and Ctrl+R and Ctrl+D are refused on
+  its row. Only a Hermes with the companion listing change
+  (DanRioDev/hermes-agent@01ba3239b, not yet in upstream Hermes) lists such
+  rows; against stock Hermes every row resumes as before, and a Hermes
+  without `session.transcript` answers that read with a notice, never a lost
+  session. Contributed by @DanRioDev (#2865).
+
+- **omher: a new bot that has no AI account says so in its chat and signs in from there.** When Hermes' own readiness
+  check (`setup.runtime_check`) says a bot cannot answer, its chat shows one quiet line, "<Bot> needs an AI account to
+  answer.", with ChatGPT / Codex, Claude, Nous Portal and API key…. A sign-in opens the system terminal running exactly
+  `hermes auth add openai-codex`, `anthropic` or `nous` (the desktop shell allows only those three); the line then says
+  to finish there, asks the bot again every 3 seconds for up to 10 minutes and whenever omher comes back to the front,
+  gives the chat that provider's first non-Opus model when Hermes left it without one, and goes away with the message
+  box focused. API key… opens Settings › Providers. The first install of Hermes from the app now lands in the default
+  bot's chat, and the oh-my-hermes model-setup line waits until the bot can answer. With no bots, the empty window says
+  so in one line and points at the + menu instead of `hermes profile create`. A bot that can answer looks as before
+  and costs one readiness read when it is opened.
+- **`/resume` in the OMH TUI looks like Claude Code's resume picker.** It takes most of the screen, headed
+  `Resume session (2 of 12)` with a rounded search box under it (the caret typed in it), and each session is a card:
+  its name on one row and `2 days ago · 14 messages · tui` muted under it, a blank row between two cards, under the
+  same Current / Today / Yesterday / Previous 7 days / Earlier headings. `↑` and `↓` in the pointer's column say
+  more cards sit above or below. A long name or its facts wrap onto a second row (cut there with `…`), and the keys
+  are listed under the cards, wrapped between two keys, as Claude Code lists its own. Ctrl+R turns the search box
+  into the title field and Ctrl+D asks on the card's facts row, as before. Closing it gives every row back to the
+  transcript, with no band of blank rows left above the composer. On a terminal too short for two cards and the keys, or under 30 columns, it stays the one-row list.
+
 ## 4.0.7 - 2026-11-09
 
 - **Bare `omh` opens on a Hermes runtime of the TUI's own by default, with

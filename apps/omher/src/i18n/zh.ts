@@ -73,8 +73,7 @@ export const zh: Record<Key, string> = {
   "plans.graph": "计划图",
 
   // chat (the chat column's own words)
-  "chat.noBots": "还没有机器人",
-  "chat.noBotsHint": "机器人就是一个 Hermes 配置档。用左上角的 + 添加，或新建一个：",
+  "chat.noBotsHint": "Hermes 还没有机器人。请从左上角的 + 菜单连接一个。",
   "chat.pick": "选择一个机器人",
   "chat.connecting": "正在连接 Hermes…",
 
@@ -766,6 +765,14 @@ export const zh: Record<Key, string> = {
   "tl.loading": "加载中…",
   "tl.unreachable": "无法连接 {bot}（{error}）。请启动这个配置档的 Hermes，然后重新选择。",
   "tl.noModel": "{bot} 还没有模型。请在右上角的模型菜单中选择一个后开始。",
+  "cn.needs": "{bot} 需要一个 AI 账户才能回答。",
+  "cn.finish": "请在终端里完成登录。",
+  "cn.codex": "ChatGPT / Codex",
+  "cn.claude": "Claude",
+  "cn.nous": "Nous Portal",
+  "cn.key": "API 密钥…",
+  "cn.manual": "请在终端中运行 {cmd}。",
+  "cn.openFailed": "无法打开终端（{error}）。请自行运行 {cmd}。",
   "tl.sayHi": "和 {bot} 打个招呼吧",
   "ty.writing": "{name} 正在输入",
   "ui.working": "处理中",
