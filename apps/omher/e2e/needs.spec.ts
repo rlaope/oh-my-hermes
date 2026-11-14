@@ -1,6 +1,6 @@
 // Needs you: approvals and questions from bots you are not looking at. A plain amber dot on the bot row (no
 // number, so it never reads as unread), a "N need you" strip above BOTS that expands in place and jumps to the card, 1/2/3 on a focused approval card only, a 3-question
-// interview answered with one clarify.respond, timeout clears the dot, and the row menu (pin / hide).
+// interview answered with one clarify.respond, timeout clears the dot, and the row menu (pin / remove from list).
 import { expect, test, type Page } from "@playwright/test";
 import { join } from "node:path";
 
@@ -40,12 +40,12 @@ async function open(page: Page, theme: "dark" | "light" = "dark") {
 
 test.beforeEach(async ({ page }) => {
   await mock("mock.reset");
-  // start each test with nothing pinned or hidden (once per tab, so a reload keeps what the test set)
+  // start each test with nothing pinned and all four bots listed (once per tab, so a reload keeps what the test set)
   await page.addInitScript(() => {
     if (sessionStorage.getItem("needs-e2e")) return;
     sessionStorage.setItem("needs-e2e", "1");
     localStorage.removeItem("omher.pinned");
-    localStorage.removeItem("omher.hidden");
+    localStorage.setItem("omher.roster", JSON.stringify(["kami", "friren", "default", "omh-tui"]));
   });
 });
 
@@ -303,7 +303,7 @@ test("a timed-out ask shows Timed out and the dot clears", async ({ page }) => {
   expect(await calls("approval.respond")).toEqual([]);
 });
 
-test("row menu: pin moves a bot to the top (and ⌘1 follows), hide removes it, Show hidden brings it back", async ({ page }) => {
+test("row menu: pin moves a bot to the top (and ⌘1 follows), Remove from list takes it out, + brings it back", async ({ page }) => {
   await open(page);
   const order = () => page.locator(".bot-list button.bot").evaluateAll((els) => els.map((e) => e.getAttribute("data-testid")));
   expect(await order()).toEqual(["bot-kami", "bot-friren", "bot-default", "bot-omh-tui"]);
@@ -312,7 +312,7 @@ test("row menu: pin moves a bot to the top (and ⌘1 follows), hide removes it, 
   await page.getByTestId("bot-default").click({ button: "right" });
   const menu = page.getByTestId("row-menu");
   // Restart (slot 14) restarts the gateway that serves the bot, and names the bots that share it
-  await expect(menu.getByRole("menuitem")).toHaveText(["Pin to top", "Edit bot", /^Restart/, "Hide from sidebar"]);
+  await expect(menu.getByRole("menuitem")).toHaveText(["Pin to top", "Edit bot", /^Restart/, "Remove from list"]);
   await page.screenshot({ path: join(SHOTS, "T12-menu-dark.png"), animations: "disabled" });
   await menu.getByRole("menuitem", { name: "Pin to top" }).click();
   expect(await order()).toEqual(["bot-default", "bot-kami", "bot-friren", "bot-omh-tui"]);
@@ -320,22 +320,23 @@ test("row menu: pin moves a bot to the top (and ⌘1 follows), hide removes it, 
   await page.keyboard.press(`${await mod(page)}+1`);
   await expect(page.getByTestId("bot-default")).toHaveAttribute("aria-current", "true");
 
-  // the ⋯ button opens the same menu; hide survives a reload
+  // the ⋯ button opens the same menu; Remove from list survives a reload
   await page.getByTestId("bot-friren").hover();
   await page.getByTestId("bot-more-friren").click();
-  await page.getByTestId("row-menu").getByRole("menuitem", { name: "Hide from sidebar" }).click();
+  await page.getByTestId("row-menu").getByRole("menuitem", { name: "Remove from list" }).click();
   expect(await order()).toEqual(["bot-default", "bot-kami", "bot-omh-tui"]);
   await page.reload();
   await expect(page.getByTestId("bot-kami")).toBeVisible();
   expect(await order()).toEqual(["bot-default", "bot-kami", "bot-omh-tui"]);
 
+  // there is no hidden-bots list any more: the bot is under + again, and Add brings it back (at the end)
   await page.getByTestId("bot-kami").click({ button: "right" });
-  await page.getByTestId("row-menu").getByRole("menuitem", { name: "Show hidden…" }).click();
-  const hidden = page.getByTestId("hidden-list");
-  await expect(hidden).toContainText("Friren");
-  await hidden.getByRole("button", { name: "Show Friren" }).click();
-  await expect(hidden).toHaveCount(0);
-  expect(await order()).toEqual(["bot-default", "bot-kami", "bot-friren", "bot-omh-tui"]);
+  await expect(page.getByTestId("row-menu").getByRole("menuitem", { name: "Show hidden…" })).toHaveCount(0);
+  await page.keyboard.press("Escape");
+  await page.getByRole("button", { name: "Add a bot" }).click();
+  await page.getByTestId("addbot-friren").getByRole("button", { name: "Add" }).click();
+  await expect(page.getByTestId("bot-friren")).toHaveAttribute("aria-current", "true");
+  expect(await order()).toEqual(["bot-default", "bot-kami", "bot-omh-tui", "bot-friren"]);
 
   // Edit bot opens that bot's page in Settings
   await page.getByTestId("bot-friren").click({ button: "right" });
