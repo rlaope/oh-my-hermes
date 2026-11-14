@@ -973,6 +973,17 @@ All notable changes will be documented here.
   presence the same way, so a name inside another root key's flow mapping is
   no longer reported as OMH's own. Reported by @PabloJustDevelops in #2829.
 
+- **omher: a new bot that has no AI account says so in its chat and signs in from there.** When Hermes' own readiness
+  check (`setup.runtime_check`) says a bot cannot answer, its chat shows one quiet line, "<Bot> needs an AI account to
+  answer.", with ChatGPT / Codex, Claude, Nous Portal and API key…. A sign-in opens the system terminal running exactly
+  `hermes auth add openai-codex`, `anthropic` or `nous` (the desktop shell allows only those three); the line then says
+  to finish there, asks the bot again every 3 seconds for up to 10 minutes and whenever omher comes back to the front,
+  gives the chat that provider's first non-Opus model when Hermes left it without one, and goes away with the message
+  box focused. API key… opens Settings › Providers. The first install of Hermes from the app now lands in the default
+  bot's chat, and the oh-my-hermes model-setup line waits until the bot can answer. With no bots, the empty window says
+  so in one line and points at the + menu instead of `hermes profile create`. A bot that can answer looks as before
+  and costs one readiness read when it is opened.
+
 ## 4.0.7 - 2026-11-09
 
 - **Bare `omh` opens on a Hermes runtime of the TUI's own by default, with
