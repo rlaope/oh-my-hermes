@@ -35,11 +35,11 @@ describe("draft defaults", () => {
     expect(draftAgent([], null)).toBe("claude");
   });
 
-  it("the + menu: installed agents first with the last one used on top, then the missing ones, by tier", () => {
+  it("the + menu: installed agents first by tier (the last one used leads its own tier), then the missing ones", () => {
     const ids = (l: AgentInfo[]) => l.map((a) => a.id);
     const all = info(["claude", "codex", "omo", "dsh"]);
     expect(ids(menuOrder(all, []))).toEqual(["claude", "codex", "omo", "dsh", "omh", "pi", "omp", "grok", "opencode", "gemini", "qwen", "kimi", "copilot", "cline"]);
-    expect(ids(menuOrder(all, [rec("claude", "/a", 1), rec("dsh", "/b", 3)]))).toEqual(["dsh", "claude", "codex", "omo", "omh", "pi", "omp", "grok", "opencode", "gemini", "qwen", "kimi", "copilot", "cline"]);
+    expect(ids(menuOrder(all, [rec("claude", "/a", 1), rec("omo", "/b", 3)]))).toEqual(["omo", "claude", "codex", "dsh", "omh", "pi", "omp", "grok", "opencode", "gemini", "qwen", "kimi", "copilot", "cline"]);
     // the last one used is no longer installed: it stays with the missing ones
     expect(ids(menuOrder(info(["codex", "grok"]), [rec("pi", "/a", 1)]))).toEqual(["codex", "grok", "claude", "omo", "dsh", "omh", "pi", "omp", "opencode", "gemini", "qwen", "kimi", "copilot", "cline"]);
     // the install lines of the two new harnesses
@@ -53,9 +53,9 @@ describe("draft defaults", () => {
 
   it("the + menu folds the agents that are not installed behind one row, and shows every agent when none is", () => {
     const ids = (l: AgentInfo[]) => l.map((a) => a.id);
-    // four installed, ten folded: the menu shows the four (last used on top), the rest by tier behind "More"
+    // four installed, ten folded: the menu shows the four by tier (the last one used stays in its tier), the rest behind "More"
     const p = menuParts(info(["claude", "codex", "omh", "gemini"]), [rec("gemini", "/a", 2)]);
-    expect(ids(p.shown)).toEqual(["gemini", "claude", "codex", "omh"]);
+    expect(ids(p.shown)).toEqual(["claude", "codex", "omh", "gemini"]);
     expect(ids(p.more)).toEqual(["omo", "dsh", "pi", "omp", "grok", "opencode", "qwen", "kimi", "copilot", "cline"]);
     // a new agent that gets installed moves up out of the fold
     expect(ids(menuParts(info(["claude", "gemini"]), []).shown)).toEqual(["claude", "gemini"]);

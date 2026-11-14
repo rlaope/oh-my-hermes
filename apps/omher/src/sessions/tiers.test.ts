@@ -3,7 +3,7 @@
 // sign-in lines come from that description and are 0.2.8's word for word; and a session of Kilo Code (no longer
 // offered) saved before this comes back ended with one plain line, its chat as it was, and nothing starts.
 import { describe, expect, it } from "vitest";
-import { acpRow, agentDef, AGENTS, continues, installLine, isGone, menuOrder, menuParts, missingNote, parseAcpRow, parseRecent, registerAcp, type AcpRow, type AgentInfo } from "./agents";
+import { acpRow, agentDef, AGENTS, continues, installLine, isGone, menuFocus, menuOrder, menuParts, missingNote, parseAcpRow, parseRecent, registerAcp, type AcpRow, type AgentInfo } from "./agents";
 import { MockHost, type MockCall } from "./host";
 import { createSessions } from "./sessions";
 import { createStore, type BridgeLike } from "../state/store";
@@ -26,8 +26,14 @@ describe("the + menu's tiers", () => {
     expect(ids(menuOrder(shuffled, []))).toEqual(["claude", "codex", "omo", "dsh", "omh", "pi", "omp", "grok", "opencode", "gemini", "qwen", "kimi", "copilot", "cline"]);
     // installed first as before, by tier inside: OmO installed with pi and Gemini CLI comes before both
     expect(ids(menuParts(info(["gemini", "pi", "omo"]), []).shown)).toEqual(["omo", "pi", "gemini"]);
-    // the last one used still goes on top
-    expect(ids(menuParts(info(["gemini", "pi", "omo"]), [{ agent: "gemini", cwd: "/a", at: 1 }]).shown)).toEqual(["gemini", "omo", "pi"]);
+    // the last one used never jumps the main tier: it leads only its own tier, and takes the first focus
+    expect(ids(menuParts(info(["gemini", "pi", "omo"]), [{ agent: "gemini", cwd: "/a", at: 1 }]).shown)).toEqual(["omo", "pi", "gemini"]);
+    const four = info(["claude", "codex", "omo", "gemini"]);
+    const usedGemini = [{ agent: "gemini" as const, cwd: "/a", at: 1 }];
+    expect(ids(menuParts(four, usedGemini).shown)).toEqual(["claude", "codex", "omo", "gemini"]);
+    expect(menuFocus(menuParts(four, usedGemini).shown, usedGemini)).toBe("gemini");
+    expect(ids(menuParts(four, [{ agent: "codex", cwd: "/a", at: 1 }]).shown)).toEqual(["codex", "claude", "omo", "gemini"]);
+    expect(menuFocus(menuParts(four, []).shown, [])).toBe("claude");
     expect(ids(menuParts(info(["gemini", "pi", "omo"]), []).more).slice(0, 3)).toEqual(["claude", "codex", "dsh"]);
   });
 

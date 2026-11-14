@@ -20,7 +20,7 @@ import { useNow } from "../elsewhere/useNow";
 import { t } from "../i18n";
 import { composing } from "../lib/ime";
 import { AgentMark } from "./AgentMark";
-import { agentDef, agentLabel, draftOpen, folderChoices, folderName, hermesOnly, installLine, menuOrder, menuParts, missingNote, rowModel, tildePath, type AgentId, type AgentInfo, type ChatLive, type RowContext, type RowMark, type SessionRec, type Unseen } from "./agents";
+import { agentDef, agentLabel, draftOpen, folderChoices, folderName, hermesOnly, installLine, menuFocus, menuOrder, menuParts, missingNote, rowModel, tildePath, type AgentId, type AgentInfo, type ChatLive, type RowContext, type RowMark, type SessionRec, type Unseen } from "./agents";
 import { getHost, type PastChat } from "./host";
 import { getSessions, useSessions } from "./sessions";
 import { pickTitle } from "./titles";
@@ -183,7 +183,7 @@ function useMoreBelow(el: RefObject<HTMLDivElement | null>, on: boolean, shape: 
   return more;
 }
 
-/** The SESSIONS + menu: the installed agents with their mark and name (the last one used on top), then one "More
+/** The SESSIONS + menu: the installed agents with their mark and name (by tier; the last one used has the focus), then one "More
  *  agents" row that opens the agents that are not installed, dimmed, each with its install line as text (picking one
  *  copies that line; omher installs nothing), then "Continue a conversation", there as the menu first opens. Picking
  *  an installed agent opens its New session chat at once (the folder is the chip under that chat's composer). Arrow
@@ -209,8 +209,13 @@ function NewSessionMenu({ onClose, trigger }: { onClose: () => void; trigger: Re
   const placed = fit !== null;
   const list = useRef<HTMLDivElement>(null);
   const more = useMoreBelow(list, placed, unfold);
+  const first = parts ? menuFocus(parts.shown, ss.recent) : null;
   useEffect(() => {
-    if (placed) box.current?.querySelector<HTMLButtonElement>("[role=menuitem]")?.focus({ preventScroll: true });
+    if (!placed) return;
+    const row = first ? box.current?.querySelector<HTMLButtonElement>(`[data-testid="session-agent-${first}"]`) : null;
+    (row ?? box.current?.querySelector<HTMLButtonElement>("[role=menuitem]"))?.focus({ preventScroll: true });
+    // focus once, when the menu is placed
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [placed]);
   const close = (why: "escape" | "outside" | "pick") => {
     onClose();

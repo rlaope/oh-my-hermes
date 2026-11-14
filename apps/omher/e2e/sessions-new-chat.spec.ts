@@ -1,4 +1,4 @@
-// SESSIONS + opens a small menu of the agents anchored to it (installed first, the last one used on top; missing
+// SESSIONS + opens a small menu of the agents anchored to it (installed first by tier, the last one used focused; missing
 // ones dimmed with their install line). Picking one opens its New session chat at once: the agent read-only in the
 // composer row, the folder in the chip under the composer (the last folder used, else home). Nothing starts until
 // the first message, which goes to the agent as its first prompt, in the folder shown. A draft closes without
@@ -228,7 +228,7 @@ test("closing a draft starts nothing; + while a draft is open reuses it", async 
   expect((await calls(page)).filter((c) => c.op === "file.remove")).toEqual([expect.objectContaining({ session: "s1" })]);
 });
 
-test("the + menu: installed agents first (the last one used on top), missing ones dimmed with their install line; keys work", async ({ page }) => {
+test("the + menu: installed agents first by tier (the last one used has the focus), missing ones dimmed with their install line; keys work", async ({ page }) => {
   await open(page, { installed: ["claude", "codex", "omo", "dsh"], recent: [{ agent: "dsh", cwd: "/Users/you/code/bot", at: 1 }] });
   const plus = page.getByTestId("session-new");
   await plus.click();
@@ -237,19 +237,19 @@ test("the + menu: installed agents first (the last one used on top), missing one
   await expect(menu).toHaveAttribute("role", "menu");
   // no chat opens until an agent is picked
   await expect(page.getByTestId("session-chat")).toHaveCount(0);
-  // The missing agents stay folded until requested; Enter still picks the recent installed one.
+  // The missing agents stay folded until requested; Enter still picks the recent installed one (DSH keeps its tier
+  // below Claude Code, Codex and OmO, but has the first focus).
   await expect(menu.locator("[data-testid^=session-agent-]")).toHaveCount(4);
   await expect(menu.getByTestId("session-agent-dsh")).toBeFocused();
   await menu.getByTestId("session-more").click();
   await page.keyboard.press("Home");
-  // the agent rows ("Continue a conversation" follows them)
+  // the agent rows ("Continue a conversation" follows them): the tiers hold even though DSH was used last
   const items = menu.locator("[role=menuitem][data-testid^=session-agent-]");
-  // the first row has the focus, so Enter picks the agent on top
-  await expect(menu.getByTestId("session-agent-dsh")).toBeFocused();
+  await expect(menu.getByTestId("session-agent-claude")).toBeFocused();
   expect(await items.evaluateAll((els) => els.map((e) => e.getAttribute("data-testid")))).toEqual(
-    ["dsh", "claude", "codex", "omo", "omh", "pi", "omp", "grok", "opencode", "gemini", "qwen", "kimi", "copilot", "cline"].map((a) => `session-agent-${a}`),
+    ["claude", "codex", "omo", "dsh", "omh", "pi", "omp", "grok", "opencode", "gemini", "qwen", "kimi", "copilot", "cline"].map((a) => `session-agent-${a}`),
   );
-  expect(await items.locator(".ss-l").allTextContents()).toEqual(["DSH", "Claude Code", "Codex", "OmO", "oh-my-hermes", "pi", "oh-my-pi", "Grok", "OpenCode", "Gemini CLI", "Qwen Code", "Kimi Code", "Copilot CLI", "Cline"]);
+  expect(await items.locator(".ss-l").allTextContents()).toEqual(["Claude Code", "Codex", "OmO", "DSH", "oh-my-hermes", "pi", "oh-my-pi", "Grok", "OpenCode", "Gemini CLI", "Qwen Code", "Kimi Code", "Copilot CLI", "Cline"]);
   // each with its official mark, never a letter
   for (const a of ["omo", "omp", "omh"]) await expect(menu.getByTestId(`session-agent-${a}`).locator(`img[data-mark="${a}"]`)).toHaveCount(1);
   // DeepSeek Harness's own mark (its whale), drawn in the text colour
@@ -285,9 +285,9 @@ test("the + menu: installed agents first (the last one used on top), missing one
   expect(pop.x + pop.width).toBeLessThanOrEqual(side.x + side.width);
   // keys: Home goes to the top, arrows move (and wrap), Esc closes and gives the focus back to +
   await page.keyboard.press("Home");
-  await expect(menu.getByTestId("session-agent-dsh")).toBeFocused();
-  await page.keyboard.press("ArrowDown");
   await expect(menu.getByTestId("session-agent-claude")).toBeFocused();
+  await page.keyboard.press("ArrowDown");
+  await expect(menu.getByTestId("session-agent-codex")).toBeFocused();
   await page.keyboard.press("ArrowUp");
   await page.keyboard.press("ArrowUp");
   // up from the top wraps to the menu's last row: "Continue a conversation" with Codex, under the agents
@@ -299,9 +299,10 @@ test("the + menu: installed agents first (the last one used on top), missing one
   await expect(menu).toHaveCount(0);
   await expect(plus).toBeFocused();
   await expect(page.getByTestId("session-chat")).toHaveCount(0);
-  // ArrowDown twice from the top, then Enter: Codex's New session chat opens at once
+  // Home, ArrowDown, then Enter: Codex's New session chat opens at once (the menu opens on DSH, the last one used)
   await plus.click();
-  await page.keyboard.press("ArrowDown");
+  await expect(menu.getByTestId("session-agent-dsh")).toBeFocused();
+  await page.keyboard.press("Home");
   await page.keyboard.press("ArrowDown");
   await expect(menu.getByTestId("session-agent-codex")).toBeFocused();
   await page.keyboard.press("Enter");

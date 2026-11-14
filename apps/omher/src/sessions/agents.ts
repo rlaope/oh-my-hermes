@@ -493,14 +493,25 @@ function tierAt(a: AgentInfo, agents: AgentInfo[]): number {
   return (parseAcpRow(a.acp)?.custom ? 3000 : 2000) + agents.findIndex((x) => x.id === a.id);
 }
 
-/** The SESSIONS + menu's order: the installed agents first, the last one used on top of them, then the rest by tier
- *  (Claude Code, Codex, OmO, then the other built-ins, then the generic ACP agents, then the person's own); the agents that are not
- *  installed after those, by tier too. Only agents the shell offers are listed. */
+/** The SESSIONS + menu's order: the installed agents first, then the ones that are not installed. Within each, the
+ *  tiers always hold: Claude Code, Codex and OmO, then the other built-ins, then the generic ACP agents, then the
+ *  person's own. The last one used goes to the top of its OWN tier only (it never jumps the main tier) and takes the
+ *  menu's first focus ([menuFocus]). Only agents the shell offers are listed. */
 export function menuOrder(agents: AgentInfo[], list: Recent[]): AgentInfo[] {
   const last = lastAgent(list);
-  const rank = (a: AgentInfo) => (a.path ? (a.id === last ? 0 : 1) : 2);
+  const installed = (a: AgentInfo) => (a.path ? 0 : 1);
+  const group = (a: AgentInfo) => Math.floor(tierAt(a, agents) / 1000);
+  const recent = (a: AgentInfo) => (a.path && a.id === last ? 0 : 1);
   const offered = agents.filter((a) => isBuiltin(a.id) || !!parseAcpRow(a.acp));
-  return offered.sort((a, b) => rank(a) - rank(b) || tierAt(a, agents) - tierAt(b, agents));
+  return offered.sort(
+    (a, b) => installed(a) - installed(b) || group(a) - group(b) || recent(a) - recent(b) || tierAt(a, agents) - tierAt(b, agents),
+  );
+}
+
+/** The row the + menu focuses first, so Enter picks it: the last one used when it is installed, else the first row. */
+export function menuFocus(shown: AgentInfo[], list: Recent[]): AgentId | null {
+  const last = lastAgent(list);
+  return shown.find((a) => a.id === last && !!a.path)?.id ?? shown[0]?.id ?? null;
 }
 
 /** The + menu in two parts: the rows it always shows (the installed agents, in [menuOrder]), and the agents that are
