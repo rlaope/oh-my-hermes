@@ -750,8 +750,10 @@ mod tests {
         let at = |want: &'static str| move |p: &Path| p == Path::new(want);
         let c = agent("cursor", "cursor-agent", &["acp", "--model=x"]);
         let argv = launch(&c, &dirs, at("/opt/homebrew/bin/cursor-agent"), Os::Unix).unwrap();
-        assert_eq!(argv, ["/opt/homebrew/bin/cursor-agent", "acp", "--model=x"].map(OsString::from));
-        assert_eq!(command(&c, &dirs, at("/opt/homebrew/bin/cursor-agent"), Os::Unix).as_deref(), Some("/opt/homebrew/bin/cursor-agent acp --model=x"));
+        // the found path is `dir.join(name)`, so its separator is the host's (a `\` on the Windows CI runner)
+        let found = Path::new("/opt/homebrew/bin").join("cursor-agent");
+        assert_eq!(argv, [found.clone().into_os_string(), "acp".into(), "--model=x".into()]);
+        assert_eq!(command(&c, &dirs, at("/opt/homebrew/bin/cursor-agent"), Os::Unix), Some(format!("{} acp --model=x", found.display())));
         assert_eq!(command(&c, &dirs, NONE, Os::Unix), None);
         assert!(launch(&c, &dirs, NONE, Os::Unix).unwrap_err().contains("not installed"));
         let abs = agent("cursor", "/x/cursor-agent", &["acp"]);
