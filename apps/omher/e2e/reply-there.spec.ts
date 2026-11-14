@@ -38,6 +38,8 @@ const ALLOWED = new Set([
   "bots.list",
   "bots.avatar",
   "bots.info",
+  // Hermes' read-only readiness probe for the bot in view (setup.runtime_check)
+  "bots.ready",
   "chat.open",
   "chat.send",
   "elsewhere.list",
