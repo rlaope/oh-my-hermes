@@ -2,7 +2,8 @@
 // in a pseudo-terminal (src-tauri/src/sessions.rs) or in its structured chat mode on pipes
 // (src-tauri/src/agent_chat.rs). In a plain browser (dev, e2e against the mock bridge) there is no shell,
 // so a mock host echoes terminal typing and a mock agent answers chats with the same events.
-import { AGENTS, agentDef, HERMES_LABEL, type AgentId, type AgentInfo } from "./agents";
+import { AGENTS, acpRow, agentDef, HERMES_LABEL, type AcpRow, type AgentId, type AgentInfo } from "./agents";
+import mockAcpAgents from "./mockAcpAgents.json";
 import type { ApprovalChoice, ClarifyAnswers } from "../lib/protocol";
 import { t } from "../i18n";
 
@@ -265,7 +266,7 @@ export interface MockCall {
   keep?: string[];
 }
 
-const BANNER: Record<AgentId, string> = {
+const BANNER: Record<string, string> = {
   claude: "\x1b[38;2;217;119;87m✻\x1b[0m \x1b[1mClaude Code\x1b[0m \x1b[2m(mock)\x1b[0m",
   codex: "\x1b[1m>_ Codex\x1b[0m \x1b[2m(mock)\x1b[0m",
   omo: "\x1b[1mOmO\x1b[0m \x1b[2m(mock)\x1b[0m",
@@ -275,13 +276,13 @@ const BANNER: Record<AgentId, string> = {
   omp: "\x1b[1mπ oh-my-pi\x1b[0m \x1b[2m(mock)\x1b[0m",
   grok: "\x1b[1m𝕏 Grok\x1b[0m \x1b[2m(mock)\x1b[0m",
   opencode: "\x1b[1mopencode\x1b[0m \x1b[2m(mock)\x1b[0m",
-  kilo: "\x1b[1mkilo\x1b[0m \x1b[2m(mock)\x1b[0m",
-  gemini: "\x1b[1mgemini\x1b[0m \x1b[2m(mock)\x1b[0m",
-  qwen: "\x1b[1mqwen\x1b[0m \x1b[2m(mock)\x1b[0m",
-  kimi: "\x1b[1mkimi\x1b[0m \x1b[2m(mock)\x1b[0m",
-  copilot: "\x1b[1mcopilot\x1b[0m \x1b[2m(mock)\x1b[0m",
-  cline: "\x1b[1mcline\x1b[0m \x1b[2m(mock)\x1b[0m",
 };
+/** A generic ACP agent's banner: its program's name, as the built-ins without art show theirs. */
+const banner = (agent: AgentId) => BANNER[agent] ?? `\x1b[1m${agentDef(agent).program}\x1b[0m \x1b[2m(mock)\x1b[0m`;
+
+/** The shell's generic ACP agents as `sessions_agents` sends them (src-tauri/src/acp_agents.rs `ACP_LIST`; a Rust
+ *  test keeps this copy equal), for the mock host only: a browser has no shell to ask. */
+const MOCK_ACP: readonly AcpRow[] = mockAcpAgents;
 const PROMPT = "\x1b[2m›\x1b[0m ";
 
 /** One step of a mock terminal's output: a message handed to the terminal (`feed`), or its acknowledgement. */
@@ -358,11 +359,13 @@ export class MockHost implements SessionHost {
   async agents(): Promise<AgentInfo[]> {
     const installed = this.g.__omherMockAgents ?? ["claude", "codex", "omh"];
     const noOmh = !!this.g.__omherMockNoOmh;
-    return AGENTS.map((a) =>
+    const builtins: AgentInfo[] = AGENTS.map((a) =>
       a.id === "omh" && noOmh
         ? { id: a.id, label: HERMES_LABEL, mode: a.mode, path: "/Users/you/.hermes/hermes-agent/venv/bin/python", via: "hermes" as const }
         : { id: a.id, label: a.label, mode: a.mode, path: installed.includes(a.id) ? `/usr/local/bin/${a.program}` : null },
     );
+    const acp: AgentInfo[] = MOCK_ACP.map((r) => ({ id: r.id, label: r.label, mode: "chat", path: installed.includes(r.id) ? `/usr/local/bin/${r.program}` : null, acp: r }));
+    return [...builtins, ...acp];
   }
   async home() {
     return "/Users/you";
@@ -380,7 +383,7 @@ export class MockHost implements SessionHost {
     };
     this.live.set(id, { line: "", out, exit: onExit });
     setTimeout(() => {
-      out(`${BANNER[agent]}\r\n\x1b[2m  ${agentDef(agent).program} in ${cwd}\x1b[0m\r\n\r\n${PROMPT}`);
+      out(`${banner(agent)}\r\n\x1b[2m  ${agentDef(agent).program} in ${cwd}\x1b[0m\r\n\r\n${PROMPT}`);
     }, 30);
     return id;
   }
@@ -456,8 +459,8 @@ export class MockHost implements SessionHost {
     this.log({ op: "chat.start", id, agent, cwd, ...(resume ? { resume } : {}), ...(account ? { account } : {}), ...(session ? { session } : {}) });
     const c = new MockChat(agent, onEvent, resume, cwd, {
       noChat: !!this.g.__omherMockNoChat?.includes(agent),
-      // the six more ACP agents are signed out on the mock host unless a test signs them in, as on a fresh Mac
-      signedOut: MOCK_SIGNED_OUT.includes(agent) && !this.g.__omherMockSignedIn?.includes(agent),
+      // the generic ACP agents are signed out on the mock host unless a test signs them in, as on a fresh Mac
+      signedOut: !!acpRow(agent) && !this.g.__omherMockSignedIn?.includes(agent),
       gone: agent === "codex" && !!resume && !!this.g.__omherMockGoneThreads,
       unguarded: agent === "codex" && !!this.g.__omherMockCodexUnguarded,
     });
@@ -553,20 +556,13 @@ const MOCK_MODELS: Record<string, { id: string; label: string; provider?: string
     { id: "opencode/big-pickle", label: "OpenCode/Big Pickle" },
     { id: "opencode/beam-free", label: "OpenCode/Beam Free" },
   ],
-  // the shape of Kilo Code 7.8.27's list (407 models through its own gateway, flat, "Kilo Gateway/<vendor>: <name>")
-  kilo: [
-    { id: "kilo/kilo-auto/free", label: "Kilo Gateway/Auto Free" },
-    ...Array.from({ length: 60 }, (_, i) => ({ id: `kilo/vendor-${i}/model-${i}`, label: `Kilo Gateway/Vendor ${i}: Model ${i}` })),
-    { id: "kilo/reflection/beam-free", label: "Kilo Gateway/Reflection: Beam 1.0 (Free)" },
-  ],
 };
 
-/** The agents on the Agent Client Protocol adapter: their cards offer Deny and Allow once only. */
-const ACP_IDS: AgentId[] = ["opencode", "kilo", "gemini", "qwen", "kimi", "copilot", "cline"];
-/** The ACP agents with no free model: what a real one answers on a Mac where nobody signed it in (acp_chat.rs). */
-const MOCK_SIGNED_OUT: AgentId[] = ["gemini", "qwen", "kimi", "copilot", "cline"];
-/** Each one's sign-in command, as its acp_chat.rs row has it. */
-const MOCK_LOGIN: Partial<Record<AgentId, string>> = { gemini: "gemini", qwen: "qwen", kimi: "kimi login", copilot: "copilot login", cline: "cline auth" };
+/** The agents on the Agent Client Protocol adapter (OpenCode and the generic list): their cards offer Deny and Allow
+ *  once only. */
+const isAcp = (agent: AgentId) => agent === "opencode" || !!acpRow(agent);
+/** A generic ACP agent's sign-in command, from its row (acp_chat.rs's `signed_out` names the same). */
+const loginOf = (agent: AgentId) => acpRow(agent)?.login ?? "";
 
 /** What each mock agent reports about its controls, as the real CLIs do (see agent_chat.rs). */
 const MOCK_CONTROLS: Partial<Record<AgentId, { mode?: string; efforts: string[]; effort: string; commands: { name: string; description: string; hint: string; kind: "command" | "skill"; prefix: "/" | "$" }[]; max: number }>> = {
@@ -714,11 +710,11 @@ class MockChat {
     if (this.how.signedOut) {
       // `session/new` answered -32000: acp_chat.rs says so once, with the row's sign-in command; omher ends it
       this.at(40, () => {
-        const why = `${agentDef(this.agent).label} is not signed in. Run \`${MOCK_LOGIN[this.agent]}\` in a terminal and sign in.`;
-        this.emit({ event: "session.error", kind: "signed_out", message: why, login: MOCK_LOGIN[this.agent] ?? "" });
+        const why = `${agentDef(this.agent).label} is not signed in. Run \`${loginOf(this.agent)}\` in a terminal and sign in.`;
+        this.emit({ event: "session.error", kind: "signed_out", message: why, login: loginOf(this.agent) });
         if (this.turn) {
           this.turn = false;
-          this.emit({ event: "turn.end", outcome: "error", error: why, signed_out: true, login: MOCK_LOGIN[this.agent] ?? "" });
+          this.emit({ event: "turn.end", outcome: "error", error: why, signed_out: true, login: loginOf(this.agent) });
         }
         this.dead = true;
       });
@@ -863,7 +859,7 @@ class MockChat {
         this.at(140, () => {
           this.waiting = rid;
           // an ACP agent (OpenCode) offers Deny and Allow once only: its "always" is a saved project rule
-          const choices = ACP_IDS.includes(this.agent) ? ["deny", "once"] : ["deny", "once", "session"];
+          const choices = isAcp(this.agent) ? ["deny", "once"] : ["deny", "once", "session"];
           this.emit({ event: "approval.request", request_id: rid, title: "Run this command?", command: "rm -rf ./build", cwd: this.cwd, choices });
         });
         return;

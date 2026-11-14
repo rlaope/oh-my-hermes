@@ -20,7 +20,7 @@ import { useNow } from "../elsewhere/useNow";
 import { t } from "../i18n";
 import { composing } from "../lib/ime";
 import { AgentMark } from "./AgentMark";
-import { agentDef, agentLabel, draftOpen, folderChoices, folderName, hermesOnly, INSTALL, menuParts, missingNote, rowModel, tildePath, type AgentId, type ChatLive, type RowContext, type RowMark, type SessionRec, type Unseen } from "./agents";
+import { agentDef, agentLabel, draftOpen, folderChoices, folderName, hermesOnly, installLine, menuOrder, menuParts, missingNote, rowModel, tildePath, type AgentId, type AgentInfo, type ChatLive, type RowContext, type RowMark, type SessionRec, type Unseen } from "./agents";
 import { getHost, type PastChat } from "./host";
 import { getSessions, useSessions } from "./sessions";
 import { pickTitle } from "./titles";
@@ -222,7 +222,7 @@ function NewSessionMenu({ onClose, trigger }: { onClose: () => void; trigger: Re
   };
   // an agent that is not installed: its install line goes to the clipboard, as text (omher runs nothing)
   const copyInstall = (id: AgentId) => {
-    void navigator.clipboard?.writeText(INSTALL[id]).then(
+    void navigator.clipboard?.writeText(installLine(id)).then(
       () => setCopied(id),
       () => undefined,
     );
@@ -263,7 +263,7 @@ function NewSessionMenu({ onClose, trigger }: { onClose: () => void; trigger: Re
           {missing && (
             // whole, on as many lines as it needs; it breaks between its words before it breaks inside one
             <span className="ss-as ss-install" data-testid={`session-install-${a.id}`}>
-              {INSTALL[a.id].split(" ").map((word, i) => (
+              {installLine(a.id).split(" ").map((word, i) => (
                 <Fragment key={i}>
                   {i > 0 && " "}
                   <span className="ss-tok">{word}</span>
@@ -477,8 +477,9 @@ function AddOmhLine({ onPick }: { onPick: () => void }) {
   );
 }
 
-/** The coding agents the New session tooltip names: the CLIs a person launches to code with (omh stays in the + menu). */
-const CODING: AgentId[] = ["claude", "codex", "omo", "dsh", "pi", "omp", "grok", "opencode", "kilo", "gemini", "qwen", "kimi", "copilot", "cline"];
+/** The coding agents the New session tooltip names: every agent the shell offers (in menu order) but oh-my-hermes,
+ *  which stays in the + menu. */
+const coding = (a: AgentInfo) => a.id !== "omh";
 
 /** The empty section: one "New session" row built like the sidebar's nav rows, opening the same + menu under it.
  *  What it does and the installed coding agents sit in its tooltip; nothing else shows, nothing is centred or boxed. */
@@ -489,8 +490,8 @@ function SessionStart() {
   useEffect(() => {
     if (ss.agents === null) void getSessions().loadAgents();
   }, [ss.agents]);
-  const names = (ss.agents ?? [])
-    .filter((a) => a.path && CODING.includes(a.id))
+  const names = menuOrder(ss.agents ?? [], [])
+    .filter((a) => a.path && coding(a))
     .map((a) => agentDef(a.id).label)
     .join(", ");
   const tip = names ? `${t("onb.sessionsHint")} ${names}` : t("onb.sessionsHint");

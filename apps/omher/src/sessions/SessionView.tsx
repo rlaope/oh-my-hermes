@@ -20,7 +20,7 @@ import { ownSetting } from "./ownSetting";
 import type { Bot } from "../lib/protocol";
 import { AgentMark } from "./AgentMark";
 import { SessionFace } from "./SessionFace";
-import { agentDef, agentLabel, CONTINUES, STOPS_BACKGROUND, draftOpen, folderChoices, folderName, hermesOnly, missingNote, opensAs, parentPath, sessionMode, terminalNote, tildePath, type AgentId, type OpenAs, type SessionRec } from "./agents";
+import { agentDef, agentLabel, continues, GONE, isGone, STOPS_BACKGROUND, draftOpen, folderChoices, folderName, hermesOnly, missingNote, opensAs, parentPath, sessionMode, terminalNote, tildePath, type AgentId, type OpenAs, type SessionRec } from "./agents";
 import { pickTitle } from "./titles";
 import { t as tr, tx, type Key } from "../i18n";
 import { windowWatched } from "../lib/notify";
@@ -489,12 +489,20 @@ const isEnded = (rec: SessionRec) => rec.status === "exited" || rec.status === "
 /** Restart's (and Resume's) tooltip: whether the agent continues this conversation or starts a new one. */
 function againTip(rec: SessionRec): string {
   const agent = agentDef(rec.agent).label;
-  return CONTINUES.includes(rec.agent) && rec.agentSession ? tr("ss.restartContinue", { agent }) : tr("ss.restartFolder", { agent });
+  return continues(rec.agent) && rec.agentSession ? tr("ss.restartContinue", { agent }) : tr("ss.restartFolder", { agent });
 }
 
 /** An ended session (chat or terminal): one quiet line, and Restart, which starts its agent again in the same folder
- *  and account. */
+ *  and account. A session of an agent omher no longer offers (Kilo Code) says only that, with no Restart. */
 function Ended({ rec }: { rec: SessionRec }) {
+  if (isGone(rec.agent))
+    return (
+      <div className="ss-ended" role="status" data-testid="session-ended">
+        <span className="ss-ended-t" data-testid="session-gone">
+          {tr("ss.gone", { agent: GONE[rec.agent] })}
+        </span>
+      </div>
+    );
   const why = rec.error ? rec.error.trim().split("\n").pop() : "";
   // an agent that is not signed in: its line says what to run (the command as inline code), and the person's own
   // terminal opens in the folder
