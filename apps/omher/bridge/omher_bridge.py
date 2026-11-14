@@ -47,6 +47,10 @@ FOLDER_CHAT_PREFIX = "omher · "
 MAX_FOLDER_CHATS = 16
 LOCAL_SOURCES = frozenset({"tui", "cli", "local", "desktop", "acp", "api_server", "omher"})
 REASONING_LEVELS = ["none", "low", "medium", "high", "xhigh"]
+# The connect block's sign-in providers (src-tauri hermes_auth.rs SIGN_IN): `bots.ready` takes only these as `provider`.
+SIGN_IN_PROVIDERS = frozenset({"openai-codex", "anthropic", "nous"})
+# setup.runtime_check answers a retryable error while its probe still runs: waits before asking again (None: give up).
+READY_RETRY = (0.5, 1.0, None)
 RUNNING_STATUSES = frozenset({"working", "streaming", "waiting", "starting"})
 MAX_ELSEWHERE = 20
 MAX_OPEN_MESSAGES = 200
@@ -3764,7 +3768,7 @@ class Bridge:
             "approval.respond": self.op_approval_respond, "clarify.respond": self.op_clarify_respond,
             "elsewhere.list": self.op_elsewhere_list, "elsewhere.peek": self.op_elsewhere_peek,
             "routines.list": self.op_routines_list, "models.options": self.op_models_options,
-            "chat.set_model": self.op_set_model,
+            "chat.set_model": self.op_set_model, "bots.ready": self.op_bots_ready,
             "bots.rename": self.op_bots_rename, "bots.avatar": self.op_bots_avatar,
             "bots.set_avatar": self.op_bots_set_avatar, "bots.info": self.op_bots_info,
             "skills.list": self.op_skills_list, "links.places": self.op_links_places,
@@ -4535,6 +4539,33 @@ class Bridge:
                          "status": status, "running": bool(conn and conn.in_turn),
                          "avatar_rev": avatar_rev(b["path"])})
         return {"bots": bots}
+
+    async def op_bots_ready(self, p) -> dict:
+        """Can this bot answer? Hermes' own read-only readiness probe on the bot's gateway (``setup.runtime_check``):
+        the resolver session creation runs (model pin, then the fallback chain). With ``provider`` (one of the
+        connect block's sign-in ids) the strict single-provider check, to tell a sign-in that just finished.
+        ``online`` in bots.list is only the socket; this is whether a message would get an answer."""
+        provider = p.get("provider")
+        if provider is not None and provider not in SIGN_IN_PROVIDERS:
+            raise BridgeError("bad_request", "provider must be one of " + ", ".join(sorted(SIGN_IN_PROVIDERS)))
+        conn = await self._conn(p.get("bot"))
+        params = {"provider": provider} if provider else {}
+        for wait in READY_RETRY:
+            try:
+                res = await self._call(conn, "setup.runtime_check", **params) or {}
+                break
+            except BridgeError:
+                raise
+            except Exception as e:
+                # an older gateway without the probe: say nothing either way (the chat shows no block)
+                if _named(e, "GatewayRPCError") and str(e) == "unknown_method":
+                    return {"ok": True, "provider": "", "model": "", "error": "", "unknown": True}
+                # Hermes' retryable "still checking" (5097): ask again shortly, then report it as not known
+                if not _named(e, "GatewayRPCError") or wait is None:
+                    return {"ok": True, "provider": "", "model": "", "error": "", "unknown": True}
+                await asyncio.sleep(wait)
+        return {"ok": bool(res.get("ok")), "provider": str(res.get("provider") or ""),
+                "model": str(res.get("model") or ""), "error": str(res.get("error") or "")}
 
     # ------------------------------------------------------------ bot profile: name, picture, facts
     # The only writes omher makes to a profile. Both are presentation-only in Hermes: the profile id,
