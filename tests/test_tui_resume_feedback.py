@@ -66,7 +66,7 @@ class ResumeFeedbackTests(unittest.TestCase):
         reply(app, client, LISTED)
         self.assertIsNotNone(app.picker)
         self.assertEqual([row.id for row in app.picker.rows], ["stored-2", "stored-3"])
-        self.assertTrue(any("Sessions (2)" in line for line in drawn(app)))
+        self.assertTrue(any("Resume session (1 of 2)" in line for line in drawn(app)))
 
     def test_none_listed_says_so(self) -> None:
         app, client = make_app()
@@ -667,7 +667,7 @@ class PickerEditTests(unittest.TestCase):
         app._on_response(Response(self.last(client), {"deleted": "stored-2"}, None))
         assert app.picker is not None
         self.assertEqual([row.id for row in app.picker.rows], ["stored-3"])
-        self.assertTrue(any("Sessions (1)" in line for line in drawn(app)))
+        self.assertTrue(any("Resume session (1 of 1)" in line for line in drawn(app)))
 
     def test_ctrl_d_then_down_sends_nothing_and_the_current_session_is_refused_here(self) -> None:
         app, client = self.opened()

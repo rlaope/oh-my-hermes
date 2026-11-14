@@ -132,8 +132,8 @@ SHORTCUTS: tuple[tuple[str, str], ...] = (
                                              "row (switch to that session, put that prompt in the composer to send "
                                              "again, or switch this session to that model), or close it; typing "
                                              "filters the list"),
-    ("Ctrl+R, Ctrl+D", "In the /sessions list, rename or delete the highlighted session: Ctrl+R makes the list's last "
-                       "row its title (Enter renames it, Esc cancels, an empty title is refused); Ctrl+D asks on the "
+    ("Ctrl+R, Ctrl+D", "In the /sessions list, rename or delete the highlighted session: Ctrl+R makes the search box "
+                       "(the list's last row on a short terminal) its title (Enter renames it, Esc cancels, an empty title is refused); Ctrl+D asks on the "
                        "row and a second Ctrl+D deletes it, any other key keeps it; the session you are in is not "
                        "deleted, and what Hermes refuses is said on the row"),
     ("↑ / ↓, Enter, Esc, ←, q, Ctrl+C", "In the agent list, move, open the highlighted agent's log (on main, "

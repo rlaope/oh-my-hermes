@@ -113,6 +113,7 @@ def build_frame(
     gaps: tuple[bool, bool] = (False, False),
     gap_reserve: int = 0,
     tail_spacer: bool = False,
+    slot_limit: int = 0,
 ) -> Frame:
     """The region for one repaint; `min_height` rows at least, pad rows under the live block making up the rest.
 
@@ -140,6 +141,8 @@ def build_frame(
     it (`layout.allocate` gives each only from spare rows, past `gap_reserve`).
     `tail_spacer` says the tail's row right above its `tail_floor` rows is the
     blank one over the working row: it goes when the tail does not fit whole.
+    `slot_limit`, with no composer, lets the slot take more rows than
+    `layout.choice_cap` (a picker that takes the screen, `layout.tall_cap`).
     """
     cap = composer_cap(rows)
     composer_lines: list[Line] = []
@@ -177,6 +180,7 @@ def build_frame(
             tail_floor=tail_floor,
             gaps=(gaps[0] and bool(tail) and bool(tail[-1]), gaps[1]),  # a tail that ends blank is its own gap
             gap_reserve=gap_reserve,
+            slot_limit=slot_limit if composer is None else 0,
         )
 
     budget = fit(tail)

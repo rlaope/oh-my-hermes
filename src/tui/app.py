@@ -215,7 +215,7 @@ from .launch import (
 )
 from .agent_view import AGENT_STEER_LEFT_UNANSWERED_NOTICE, STEER_SAY, TAIL_ANSWER_SECONDS, AgentViewMixin
 from .aura import aura_ranges
-from .layout import Budget, choice_cap, is_tiny, slot_cap
+from .layout import Budget, choice_cap, is_tiny, slot_cap, tall_cap
 from .markdown import clean_text
 from .modes import (
     HERMES_OWN_CYCLE,
@@ -2564,6 +2564,7 @@ class App(ModesMixin, AgentViewMixin):
         # The cells a click opens, as last drawn: rows above the region's last row → the entries on that row.
         self.clickable: dict[int, tuple[Hit, ...]] = {}
         self.frame_budget: Budget | None = None  # the rows the last frame gave each part of the region
+        self.frame_tall = False  # the last frame drew the `/resume` cards past an ordinary slot's cap (`tall_cap`)
         self.frame_busy = False  # the last frame was drawn while a turn ran
         # The rows the agent view wanted, the rows it got and the tail's working rows in the last frame drawn while a
         # turn ran (`_held_view_rows`).
@@ -9423,6 +9424,7 @@ class App(ModesMixin, AgentViewMixin):
             aura_depth=self.color_depth,
             text_question=self.slot is not None and not self.slot.picking,
             slot_caret=self._slot_caret(),  # read after `_slot_lines` drew the picker it comes from
+            slot_limit=tall_cap(rows, cols) if self._picker_cards() else 0,
             theme=self.theme,
             mode=self._display_mode(),
             placeholder=(TELL_PLACEHOLDER if self.tell_draft is not None else PLACEHOLDER)
@@ -9464,6 +9466,17 @@ class App(ModesMixin, AgentViewMixin):
             shrunk = smaller()
             if self.region.can_lower(rows, max(self.region.height - len(stable) - shrunk.height, 0)):
                 padded, build, frame = build, smaller, shrunk
+        # The `/resume` cards closed (or fell back to the list) on the bottom rows: the rows they took past an
+        # ordinary slot are given back the same way, the transcript painted down over them, so closing the picker
+        # never leaves a band of blank rows between the transcript and the composer.
+        tall = bool(build.keywords.get("slot_limit"))
+        if (pinned and padded is None and self.frame_tall and not tall and self.frame_budget is not None
+                and frame.budget.slot < self.frame_budget.slot):
+            given = self.frame_budget.slot - frame.budget.slot
+            smaller = partial(build, min_height=max(min_height - given, 0))
+            shrunk = smaller()
+            if self.region.can_lower(rows, max(self.region.height - len(stable) - shrunk.height, 0)):
+                padded, build, frame = build, smaller, shrunk
         if self.card_state == CARD_LIVE and self.launch_layout and min_height > 0:
             # The card goes at the region's top, under what is flushed above it (and the spacer the tail opens with
             # after a notice), and blank rows take the rest down to the composer, so the region still reaches the
@@ -9488,6 +9501,7 @@ class App(ModesMixin, AgentViewMixin):
                            ambient_above=True, marks=self._selection_marks(), lower=lower)
         self.ambient_at = self.clock()
         self.frame_budget = frame.budget
+        self.frame_tall = tall
         self.bg_row_shown = self.bg_on_info and frame.budget.info > 0  # the row is on the info line (`_info_line`)
         self.frame_busy = busy
         if busy:
@@ -9576,6 +9590,8 @@ class App(ModesMixin, AgentViewMixin):
             # when the slot has the rows for it; on a shorter one the info line says them, as for any question.
             framed_keys = self.slot.framed and self._slot_cap(cols, self.size[1]) >= FRAMED_FOOTER_MIN_ROWS
             say = "" if framed_keys else self.slot.keys_while(self._busy())
+        elif self._picker_cards():
+            say = ""  # the `/resume` cards wrap their keys under the list, as Claude Code's picker does
         elif picker_keys:
             say = picker_keys
         elif self.list_selected is not None:
@@ -9912,9 +9928,19 @@ class App(ModesMixin, AgentViewMixin):
         """The rows the slot may take; with the composer hidden it has the composer frame's rows too
         (`layout.choice_cap`)."""
         cap = choice_cap(rows, cols) if self._composer_hidden() else slot_cap(rows, cols)
+        if self._picker_cards():
+            cap = max(cap, tall_cap(rows, cols))
         if self.slot is not None:
             cap = max(cap, 1)  # on a tiny terminal a question answered with text keeps a row for its label (`allocate`)
         return cap
+
+    def _picker_cards(self) -> bool:
+        """Whether the session picker is drawn as Claude Code's resume picker (`SessionPicker.card_lines`), taking
+        most of the screen (`layout.tall_cap`): it has the keys, no question is over it, and the cards fit."""
+        if self.slot is not None or self.picker is None or self._front_picker() is not self.picker:
+            return False
+        cols, rows = self.size
+        return self.picker.fits_cards(cols, tall_cap(rows, cols))
 
     def _slot_lines(self, cols: int, rows: int) -> list[Line]:
         """The slot's rows, at most `_slot_cap`."""
@@ -9936,6 +9962,8 @@ class App(ModesMixin, AgentViewMixin):
             shown = [] if self.card_state == CARD_LIVE else self._launch_preview(cols)
             return self.launch_picker.lines(cols, self.theme, cap, self._launch_swatches(), shown)
         if self.picker is not None and (front is self.picker or front is None):  # one waiting is drawn too
+            if self._picker_cards():
+                return self.picker.card_lines(cols, self.theme, cap, self.wall_clock())
             return self.picker.lines(cols, self.theme, cap, self.wall_clock())
         if front is not None and front is self.search:
             return self.search.lines(cols, self.theme, cap)
