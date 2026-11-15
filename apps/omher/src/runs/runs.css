@@ -258,8 +258,28 @@
   background: var(--quiet);
 }
 .ph-dot.running {
-  background: rgb(var(--rn-pink));
-  animation: ph-pulse 2.4s ease-in-out infinite;
+  /* a running plan: a spinner, an arc turning on a faint track, so the header visibly moves while the run works */
+  width: 11px;
+  height: 11px;
+  margin-right: 6px;
+  background: transparent;
+  border-radius: 50%;
+  border: 2px solid rgba(var(--rn-pink), 0.2);
+  border-top-color: rgb(var(--rn-pink));
+  border-right-color: rgb(var(--rn-pink));
+  animation: spin 0.9s linear infinite;
+}
+/* a node at work: the arc of its status icon turns around the dot */
+.bx-ic[data-icon="dot"] .bx-spin {
+  transform-box: view-box;
+  transform-origin: 12px 12px;
+  animation: spin 0.9s linear infinite;
+}
+/* the ticking time keeps its width per digit, so the line does not jitter every second */
+.ph-time,
+.rn-n,
+.bx-t {
+  font-variant-numeric: tabular-nums;
 }
 .ph-dot.done {
   background: rgb(var(--rn-green));
@@ -267,13 +287,9 @@
 .ph-dot.failed {
   background: var(--danger);
 }
-@keyframes ph-pulse {
-  50% {
-    opacity: 0.35;
-  }
-}
 @media (prefers-reduced-motion: reduce) {
-  .ph-dot.running {
+  .ph-dot.running,
+  .bx-ic[data-icon="dot"] .bx-spin {
     animation: none;
   }
 }

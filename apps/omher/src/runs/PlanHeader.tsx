@@ -8,7 +8,7 @@
 // a start time) and offers Start now / Edit as text; like "Ask in chat" they only put a request in the message box.
 import type { ReactNode } from "react";
 import type { Bot } from "../lib/protocol";
-import { cliName, isRepaired, span, type AgentRun, type AgentRunSummary } from "../lib/runs";
+import { cliName, isRepaired, lengthOf, span, type AgentRun, type AgentRunSummary } from "../lib/runs";
 import { getStore, selectAsks, useStore } from "../state/store";
 import { t } from "../i18n";
 import { AgentIcon, ModelIcon } from "../ui";
@@ -76,7 +76,7 @@ export function PlanHeader({
         {c.failed > 0 && <span className="ph-w failed"> · {t("graph.nfailed", { n: c.failed })}</span>}
         {repaired > 0 && <span className="ph-w repaired"> · {t("graph.nrepaired", { n: repaired })}</span>}
         {summary.state === "running" && !stale && waiting > 0 && <span> · {t("graph.nwaiting", { n: waiting })}</span>}
-        {started && !stale && <span data-testid="run-plan-time"> · {span((summary.ended ?? nowS) - summary.started)}</span>}
+        {started && !stale && <span className="ph-time" data-testid="run-plan-time"> · {lengthOf(summary.started, summary.ended, nowS)}</span>}
         {newest && (
           <span>
             {" · "}
