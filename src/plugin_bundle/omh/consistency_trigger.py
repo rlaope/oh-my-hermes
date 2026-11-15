@@ -20,6 +20,10 @@ deterministically and from the disk alone, whether such a thing exists:
      or a delegated child's edit) is marked as having no turn-start text.
    - No index is taken for a session whose platform never gets the check (``note_turn_posture``, from
      ``pre_llm_call``), or for a root whose last index ran over budget within ``OVER_BUDGET_SECONDS``.
+   - No walk ever starts at the user's home directory or above it (`_covers_home`): such a root reaches
+     macOS privacy-protected folders (``~/Desktop``, ``~/Documents``, ``~/Downloads``, ...), and from a
+     background gateway ``open()`` on one can block in the kernel with no deadline check able to end it.
+     The root is treated as over budget, as one too large to walk would be.
    - Residual: Hermes blocks a tool call whose ``pre_tool_call`` times out, so no call this hook
      missed that way runs, and an index missed at one call is taken at the next. The one gap is a
      host-internal exception in ``_dispatch_pre_tool_call_hooks``, which never blocks the call. If it
@@ -824,6 +828,8 @@ def _walk(root: str, suffixes: tuple[str, ...], deadline: float):
     directories). Raises `_Budget` past ``MAX_SCAN_ENTRIES`` entries visited or past ``deadline``, and
     `_OutsideLink` for a Python file or a directory that is a symlink leaving the root: what it points at
     is never read, and a reference could sit there."""
+    if _covers_home(root):
+        raise _Budget("home")
     visited = 0
     for dirpath, dirnames, filenames in os.walk(root):
         if time.monotonic() >= deadline:
@@ -850,6 +856,18 @@ def _walk(root: str, suffixes: tuple[str, ...], deadline: float):
                 continue
             if os.path.isfile(path):
                 yield path
+
+
+def _covers_home(root: str) -> bool:
+    """Whether ``root`` is the user's home directory or one of its ancestors. A walk from there visits
+    the home's privacy-protected folders, where a background process's ``open()`` can wait forever on
+    a permission prompt no one sees; the walk's deadline is checked between entries, never inside one."""
+    home = os.path.expanduser("~")
+    if not home or home == "~":
+        return False
+    home = os.path.realpath(home)
+    real_root = os.path.realpath(root)
+    return real_root == home or home.startswith(real_root.rstrip(os.sep) + os.sep)
 
 
 def _build_output(dirpath: str, name: str) -> bool:

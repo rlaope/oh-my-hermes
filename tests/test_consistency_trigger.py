@@ -550,6 +550,29 @@ class IndexCostTest(_Workspace):
             self.first_call()
         walks.assert_called_once()
 
+    def test_a_root_that_is_the_home_directory_is_never_walked(self):
+        self.write("src/app/a.py", "def a():\n    return 1\n")
+        with mock.patch.dict(os.environ, {"HOME": str(self.root)}), \
+                mock.patch.object(ct.os, "walk", side_effect=AssertionError("walked")) as walk:
+            self.first_call()
+        walk.assert_not_called()
+        self.assertIsNone(ct._sessions[SESSION]["index"])
+        self.assertEqual(ct._sessions[SESSION]["unindexed"], ("index_budget", "home"))
+
+    def test_a_root_above_the_home_directory_is_never_walked(self):
+        self.write("src/app/a.py", "def a():\n    return 1\n")
+        with mock.patch.dict(os.environ, {"HOME": str(self.root / "Users" / "me")}), \
+                mock.patch.object(ct.os, "walk", side_effect=AssertionError("walked")) as walk:
+            self.first_call()
+        walk.assert_not_called()
+        self.assertEqual(ct._sessions[SESSION]["unindexed"], ("index_budget", "home"))
+
+    def test_a_root_inside_the_home_directory_is_walked(self):
+        self.write("src/app/a.py", "def a():\n    return 1\n")
+        with mock.patch.dict(os.environ, {"HOME": str(self.root.parent)}):
+            self.first_call()
+        self.assertIn(str(self.root / "src" / "app" / "a.py"), ct._sessions[SESSION]["index"])
+
     def test_a_session_on_a_no_check_platform_takes_no_index(self):
         from omh.plugin_bundle.omh.hooks.verify_hooks import _NO_CHECKLIST_PLATFORMS
 
