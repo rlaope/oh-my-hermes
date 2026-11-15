@@ -1004,9 +1004,9 @@ run and approval decision stays Hermes'; the screen is OMH's.
   with what you typed there. Esc there
   sends nothing more, since the deny already went: your draft comes back, and
   what you typed stays in this session's history. The
-  highlight stops at either end, so Up then Enter still denies, no number
-  picks a choice, `d` or `n` denies, and Enter on an untouched approval
-  denies. Every deny (Esc, Ctrl+C, `d`, `n`, Enter on deny) also stops the
+  highlight stops at either end, an approval opens on allow once (so Enter
+  alone allows that one command and Up then Enter denies), no number
+  picks a choice, `d` or `n` denies. Every deny (Esc, Ctrl+C, `d`, `n`, Enter on deny) also stops the
   running turn, as Esc does in Claude Code, which is what the info line's
   `esc denies and stops` says: the deny goes first, so the waiting tool ends
   denied, then the interrupt, and with no turn running only the deny goes,
@@ -1427,7 +1427,7 @@ Esc closes it):
 | Ctrl+Z | Suspends the OMH TUI to the shell, as Ctrl+Z does in any terminal program (Hermes stops with it); fg brings it back |
 | Ctrl+C | Clears the composer, else interrupts a running turn; a second press within 2 s exits, mid-turn too; a prompt held for its pasted image comes back to the composer |
 | Ctrl+D | On an empty composer, exits; with text, deletes the character ahead |
-| ↑ / ↓ or ← / → then Enter | On an approval, highlight allow once, allow this session or (when Hermes offers it) always allow, and allow it, or the last row to deny and tell Hermes what to do instead; Enter alone denies and stops the running turn |
+| ↑ / ↓ or ← / → then Enter | On an approval, highlight allow once, allow this session or (when Hermes offers it) always allow, and allow it, or the last row to deny and tell Hermes what to do instead; Enter alone allows once, and ↑ then Enter denies and stops the running turn |
 | `d`, `n` | On an approval, deny and stop the running turn |
 | 1 to 9 | On a clarify question's list, pick that choice, or the last number opens the field for your own answer; ↑ / ↓ then Enter picks too, and any other character starts your own answer |
 | Space | On a clarify question that takes several choices, ticks or unticks the highlighted one; Enter sends the ticked ones, or the highlighted one when none is ticked, and a digit ticks its choice |

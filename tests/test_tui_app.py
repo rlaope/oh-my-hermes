@@ -1096,8 +1096,8 @@ class PromptSlotTests(AppTestCase):
         self.assert_denied(run)
 
     def test_up_then_enter_on_an_armed_approval_still_denies(self) -> None:
-        # Up then Enter is the composer's recall-and-resend. On an approval Up moves nothing,
-        # so the Enter answers the default deny; the replay accepts only the deny.
+        # Up then Enter is the composer's recall-and-resend. On an approval Up moves from allow once, where it
+        # opens, to deny, the first row, so the Enter answers deny; the replay accepts only the deny.
         run = self.approval_run()
         run.terminal.script(
             self.submit(run, "Run rm -rf ./omh-m0-probe-dir"),

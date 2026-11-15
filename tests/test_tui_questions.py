@@ -52,7 +52,7 @@ class QuestionViewTests(unittest.TestCase):
         app, client = make_app(busy=True, rows=12, cols=60)
         app._on_server_request(LONG_APPROVAL)
         armed(app)
-        press(app, Key(DOWN))
+        press(app, Key(UP))  # off allow once, where it opened, to deny
         self.assertIn("▌   echo line 1", drawn(app))  # the slot shows the command's head and the marker
         self.assertTrue([row for row in drawn(app) if "ctrl+o shows all" in row])
         press(app, CTRL_O)
@@ -60,13 +60,13 @@ class QuestionViewTests(unittest.TestCase):
         self.assertIs(app.pager, app.question_view)
         text = paged(app)
         self.assertEqual([row for row in text if "echo line" in row], [f"▌   echo line {n}" for n in range(1, 21)])
-        self.assertIn("▌ ❯ ✓ allow once", text)
+        self.assertIn("▌ ❯ ✗ deny", text)
         self.assertEqual(client.answers, [])
         press(app, Key(CHAR, "q"))
         self.assertIsNone(app.pager)
         self.assertIs(app.slot.request_id, "srq-1")  # type: ignore[union-attr]
-        self.assertEqual(app.slot.selected, 1)  # type: ignore[union-attr]
-        self.assertIn("▌ ❯ ✓ allow once", drawn(app))
+        self.assertEqual(app.slot.selected, 0)  # type: ignore[union-attr]
+        self.assertIn("▌ ❯ ✗ deny", drawn(app))
         self.assertEqual(client.answers, [])
 
     def test_esc_in_the_pager_leaves_it_and_denies_nothing(self) -> None:
@@ -364,7 +364,7 @@ class QuestionOutcomeTests(unittest.TestCase):
             "command": "rm -rf ./x", "description": "recursive delete", "choices": ["once", "session", "always", "deny"],
         }))
         self.assertIn("▌   ★ always allow recursive delete (Hermes saves it)", drawn(app))
-        press(app, Key(DOWN), Key(DOWN), Key(DOWN), Key(ENTER))
+        press(app, Key(DOWN), Key(DOWN), Key(ENTER))  # from allow once: this session, then always
         self.assertEqual(client.answers, [("srq-1", {"result": {"choice": "always"}})])
         # The TUI sent the choice; that Hermes saved it is not something it saw.
         self.assertEqual(outcome_rows(app), [("always allow sent (Hermes saves it) · rm -rf ./x", NOTICE_OK)])
@@ -846,8 +846,9 @@ class DenyStopsTests(unittest.TestCase):
     def test_every_deny_key_sends_the_deny_then_the_interrupt(self) -> None:
         keys = {
             "esc": [Key(ESCAPE)], "ctrl+c": [Key(CHAR, "c", ctrl=True)], "d": [Key(CHAR, "d")], "n": [Key(CHAR, "n")],
-            "D": [Key(CHAR, "D")], "enter on deny": [Key(ENTER)], "up then enter typed ahead": [Key(UP), Key(ENTER)],
-            "down, up, enter": [Key(DOWN), Key(UP), Key(ENTER)],
+            "D": [Key(CHAR, "D")], "enter on deny": [Key(UP), Key(ENTER)],
+            "up, up then enter": [Key(UP), Key(UP), Key(ENTER)],
+            "down, up, up, enter": [Key(DOWN), Key(UP), Key(UP), Key(ENTER)],
         }
         for name, presses in keys.items():
             with self.subTest(keys=name):
@@ -858,7 +859,7 @@ class DenyStopsTests(unittest.TestCase):
                 self.assertIsNone(app.slot)
 
     def test_with_no_turn_running_the_deny_goes_alone(self) -> None:
-        for presses in ([Key(ESCAPE)], [Key(CHAR, "d")], [Key(ENTER)]):
+        for presses in ([Key(ESCAPE)], [Key(CHAR, "d")], [Key(UP), Key(ENTER)]):
             with self.subTest(presses=presses):
                 app, client = self.wired(busy=False)
                 press(app, *presses)
@@ -874,7 +875,7 @@ class DenyStopsTests(unittest.TestCase):
 
     def test_allowing_stops_nothing(self) -> None:
         app, client = self.wired()
-        press(app, Key(DOWN), Key(ENTER))
+        press(app, Key(ENTER))  # Enter alone: allow once, where the approval opens
         self.assertEqual(client.wire, [("answer", "srq-1", json.dumps({"result": {"choice": "once"}}))])
 
     def test_the_tuis_own_declines_stop_nothing(self) -> None:

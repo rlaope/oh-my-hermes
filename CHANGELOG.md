@@ -1109,6 +1109,10 @@ All notable changes will be documented here.
   Settings › Keyboard lists both. On Windows and Linux Ctrl+T is left to the program (a terminal's transpose), so
   only Ctrl+N opens it there. ⌘N and ⌘T also work with a non-Latin layout active (Korean, Japanese, Russian), by
   the key's position.
+- **An OMH TUI approval opens on allow once, not deny.** Enter alone now allows that one command; ↑ then Enter, `d`,
+  `n`, Esc or Ctrl+C still deny and stop the running turn. Keys typed for the composer as the approval appears still
+  land nowhere, since every question ignores keys for a moment after it opens, and a request that does not offer
+  allow once still opens on deny.
 
 ## 4.0.7 - 2026-11-09
 
