@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { HARNESSES, harness, harnessByName, harnessOf } from "./registry";
-import { chatPieces, stepDetail } from "./session";
+import { chatPieces, resultText, stepDetail } from "./session";
 
 const ASSETS = join(__dirname, "..", "assets", "agents");
 
@@ -108,6 +108,13 @@ describe("session view mapping", () => {
     expect(pieces[6]).toMatchObject({ kind: "assistant", text: "Done.", last: true });
     expect(pieces[1]).toMatchObject({ last: false });
     expect(pieces[5]).toMatchObject({ kind: "child", ref: "hermes:abc", sub: { goal: "Count lines", model: "glm-5", state: "done" } });
+  });
+
+  it("a Hermes tool result reads as its text, a failed exit code after it", () => {
+    expect(resultText('{"output": "a\\nb", "exit_code": 0}')).toBe("a\nb");
+    expect(resultText('{"output": "x", "exit_code": 2}')).toBe("x\n(exit 2)");
+    expect(resultText('{"content": "1|hi"}')).toBe("1|hi");
+    expect(resultText("plain")).toBe("plain");
   });
 
   it("a step's one line: the command, path or query; plain text as its first words", () => {

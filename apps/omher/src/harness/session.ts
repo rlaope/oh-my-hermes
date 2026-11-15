@@ -69,6 +69,27 @@ export function stepDetail(tool: string, input: string): string {
   return oneLine(input);
 }
 
+/** A tool result as a person reads it: a Hermes tool's `{"output": …}` / `{"content": …}` JSON as its text (with a
+ *  non-zero exit code after it), other JSON pretty-printed, plain text as it came. */
+export function resultText(result: string): string {
+  let v: unknown = null;
+  try {
+    v = JSON.parse(result);
+  } catch {
+    return result;
+  }
+  if (v && typeof v === "object" && !Array.isArray(v)) {
+    const o = v as Record<string, unknown>;
+    const body = typeof o.output === "string" ? o.output : typeof o.content === "string" ? o.content : null;
+    if (body !== null) {
+      const code = typeof o.exit_code === "number" && o.exit_code !== 0 ? `\n(exit ${o.exit_code})` : "";
+      const err = typeof o.error === "string" && o.error ? `\n${o.error}` : "";
+      return `${body}${code}${err}`;
+    }
+  }
+  return JSON.stringify(v, null, 2);
+}
+
 const oneLine = (s: string, n = 160) => {
   const t = s.replace(/\s+/g, " ").trim();
   return t.length <= n ? t : `${t.slice(0, n - 1)}…`;
@@ -123,7 +144,7 @@ export function chatPieces(s: Pick<NodeSession, "items">): ChatPiece[] {
         endedAt: Math.max(at, end),
         ok: it.ok,
         input: it.input,
-        result: it.result,
+        result: resultText(it.result),
       };
       const prev = out[out.length - 1];
       if (prev?.kind === "steps") prev.steps.push(step);

@@ -106,9 +106,10 @@ button.ac-crumb:hover {
   gap: 3px;
   margin: 0 0 0 38px;
 }
-.ac-child {
+.ac-tl .ac-child {
   display: block;
-  margin-left: 38px;
+  margin: 0 0 0 38px;
+  max-width: min(100% - 38px, 760px);
   padding: 6px 8px;
   border: 1px solid var(--line);
   border-radius: 6px;
@@ -128,8 +129,13 @@ button.ac-crumb:hover {
 .ac-none.bad {
   color: var(--danger);
 }
+/* the whole view: one centred chat column, the width of the main chat */
+.ac.full .ac-head,
 .ac.full .ac-body {
+  width: 100%;
   max-width: 920px;
+  margin-left: auto;
+  margin-right: auto;
 }
 
 /* the drawer's Session section; "Open as chat" lays it over the whole Plans view */
