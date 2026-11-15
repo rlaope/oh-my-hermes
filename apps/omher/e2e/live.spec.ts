@@ -296,6 +296,10 @@ test("chat: a typing bubble with the ringed face waits for the first delta, whic
   await expect(tl.getByTestId("typing")).toHaveCount(0);
 
   await emit(ev("kami", "delta", { text: "Found it: the" }));
+  // a line still being typed does not show; a whole one does
+  await expect(tl.locator("[data-testid=activity][data-state=live]")).toHaveCount(1);
+  await expect(tl.getByTestId("bubble-streaming")).toHaveCount(0);
+  await emit(ev("kami", "delta", { text: " retry cap.\n" }));
   await expect(tl.getByTestId("bubble-streaming")).toContainText("Found it");
   await expect(tl.getByTestId("typing")).toHaveCount(0);
 
@@ -311,6 +315,10 @@ test("chat: an answer with no tool: the typing bubble alone, then the first toke
   await expect(tl.getByTestId("typing")).toBeVisible();
   await expect(tl.locator("[data-testid=activity][data-state=live]")).toHaveCount(0);
   await emit(ev("kami", "delta", { text: "Short answer" }));
+  // the typing bubble stays until a whole line can show
+  await expect(tl.getByTestId("typing")).toBeVisible();
+  await expect(tl.getByTestId("bubble-streaming")).toHaveCount(0);
+  await emit(ev("kami", "delta", { text: ".\n" }));
   await expect(tl.getByTestId("bubble-streaming")).toContainText("Short answer");
   await expect(tl.getByTestId("typing")).toHaveCount(0);
   await emit(ev("kami", "message", { id: "k-a2", text: "Short answer." }), ev("kami", "turn.end", { outcome: "done" }));
@@ -419,4 +427,29 @@ for (const theme of ["dark", "light"] as const) {
     await emit(ev("kami", "turn.end", { outcome: "done" }), ev("friren", "turn.end", { outcome: "done" }));
   });
 }
+});
+
+test("chat: a message sent while the answer is written goes under that answer, which stays where it was", async ({ page }) => {
+  await open(page);
+  const tl = page.getByTestId("timeline");
+  await mock("mock.manual", { bot: "kami" });
+  await page.getByTestId("composer").fill("first question");
+  await page.keyboard.press("Enter");
+  await emit(ev("kami", "turn.start"), ev("kami", "delta", { text: "Line one.\nline tw" }));
+  const writing = tl.getByTestId("bubble-streaming");
+  await expect(writing).toContainText("Line one.");
+  const before = (await writing.boundingBox())!.y;
+  await page.getByTestId("composer").fill("sent mid-answer");
+  await page.keyboard.press("Enter");
+  const sent = tl.getByTestId("bubble-user").filter({ hasText: "sent mid-answer" });
+  await expect(sent).toBeVisible();
+  // the answer being written is still above the new message, and did not jump
+  expect((await sent.boundingBox())!.y).toBeGreaterThan((await writing.boundingBox())!.y);
+  const kinds = () => tl.locator(":scope > .row").evaluateAll((rs) => rs.slice(-2).map((r) => r.getAttribute("data-kind")));
+  await expect.poll(kinds).toEqual(["streaming", "user"]);
+  await emit(ev("kami", "message", { id: "mid-a1", text: "Line one.\nline two." }), ev("kami", "turn.end", { outcome: "done" }));
+  await expect(tl.getByTestId("bubble-streaming")).toHaveCount(0);
+  await expect.poll(kinds).toEqual(["assistant", "user"]);
+  await expect(tl.getByTestId("bubble-bot").last()).toContainText("line two.");
+  void before;
 });

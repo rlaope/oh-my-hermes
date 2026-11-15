@@ -3656,12 +3656,36 @@ def _row_text(row: dict) -> str:
     return ""
 
 
-def chat_messages(rows) -> list[dict]:
+def _turn_answers(rows, running: bool = False) -> set[int]:
+    """The index of each turn's answer: its last assistant row with text. Hermes stores the commentary it writes
+    beside its tool calls ("Now I'll run the tests") as assistant rows of their own; the live chat never shows them
+    as bubbles (the activity line stands for that work), so a reopened chat does not either: one bubble per turn.
+    A turn still `running` has no answer yet: its rows so far are all commentary."""
+    keep: set[int] = set()
+    last = None
+    for i, row in enumerate(rows or []):
+        if not isinstance(row, dict):
+            continue
+        if row.get("role") == "user":
+            if last is not None:
+                keep.add(last)
+            last = None
+        elif row.get("role") == "assistant" and row.get("display_kind") != "hidden" and _row_text(row):
+            last = i
+    if last is not None and not running:
+        keep.add(last)
+    return keep
+
+
+def chat_messages(rows, running: bool = False) -> list[dict]:
     out = []
+    answers = _turn_answers(rows, running)
     for i, row in enumerate(rows or []):
         if not isinstance(row, dict) or row.get("role") not in ("user", "assistant"):
             continue
         if row.get("display_kind") == "hidden":
+            continue
+        if row["role"] == "assistant" and i not in answers:
             continue
         text = _row_text(row)
         if not text:
@@ -4453,7 +4477,7 @@ class Bridge:
         bot = conn.bot
         running = bool(snap.get("running") if snap.get("running") is not None else info.get("running"))
         conn.in_turn = running
-        result = {"session_id": conn.main_id, "messages": chat_messages(snap.get("messages")), "running": running,
+        result = {"session_id": conn.main_id, "messages": chat_messages(snap.get("messages"), running), "running": running,
                   "model": str(info.get("model") or bot["model"]), "provider": str(info.get("provider") or bot["provider"]),
                   "reasoning": str(info.get("reasoning_effort") or bot["reasoning"])}
         prompts = [x for x in (snap.get("prompts") or []) if isinstance(x, dict) and x.get("prompt_id")]
