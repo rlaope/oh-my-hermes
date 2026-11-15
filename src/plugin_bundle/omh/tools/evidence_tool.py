@@ -19,8 +19,12 @@ from ..host_observation import OBSERVATION_SCHEMA, attach_public_observation, ob
 OMH_EVIDENCE_SCHEMA = {
     "name": "omh_gather_evidence",
     "description": (
-        "Run bounded allowlisted local verification probes and return structured evidence. "
-        "This is explicit verification evidence only, not executor dispatch or coding execution."
+        # The first sentence is the whole line Hermes' deferred-tool catalog
+        # shows a model (it clips at 80 characters), so it names tests and the
+        # call shape: a model looking for a test runner can call the tool from
+        # the listing instead of searching and describing it first.
+        'Run tests or allowlisted checks: commands=["python3 -m unittest tests.test_x"]. '
+        "Each probe is explicit verification evidence only, not executor dispatch or coding execution."
     ),
     "parameters": {
         "type": "object",
@@ -28,7 +32,7 @@ OMH_EVIDENCE_SCHEMA = {
             "commands": {
                 "type": "array",
                 "items": {"type": "string"},
-                "description": "Commands to run. Each command must match an allowlisted token prefix.",
+                "description": "Commands to run. Each command must match an allowlisted prefix.",
             },
             "project_root": {
                 "type": "string",

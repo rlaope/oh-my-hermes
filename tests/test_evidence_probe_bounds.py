@@ -604,6 +604,28 @@ class EvidenceProbeBoundsTests(unittest.TestCase):
                                 self.assertTrue(resolved.is_relative_to(self.host_cwd))
         self.assertGreater(admitted, 100)
 
+    def test_the_catalog_line_names_tests_and_a_call_the_allowlist_admits(self) -> None:
+        """Hermes defers plugin tools behind tool_search and lists each by its first
+        sentence, clipped at 80 characters (`_short_desc` in tools/tool_search_catalog.py).
+        That line is all the child sees before it pays a search and a describe, so it
+        names tests and carries a whole call; the call it shows must be one this tool runs.
+        """
+        description = evidence_tool.OMH_EVIDENCE_SCHEMA["description"]
+        first_sentence = description[: description.index(". ") + 1]
+        self.assertLessEqual(len(first_sentence), 80, first_sentence)
+        self.assertTrue(first_sentence.startswith("Run tests"), first_sentence)
+        shown = first_sentence[first_sentence.index("commands=") + len("commands="):].rstrip(".")
+        commands = json.loads(shown)
+        self.assertEqual(commands, ["python3 -m unittest tests.test_x"])
+        tests = self.host_cwd / "tests"
+        tests.mkdir()
+        (tests / "__init__.py").write_text("", encoding="utf-8")
+        (tests / "test_x.py").write_text("import unittest\n", encoding="utf-8")
+        self.assertEqual(self.assert_admitted(commands[0]), shlex.split(commands[0]))
+        # The words a model searching for this tool used in the measured runs stay in it.
+        for word in ("tests", "allowlisted", "probe", "verification", "evidence"):
+            self.assertIn(word, description)
+
     def test_every_shipped_prefix_has_a_reviewed_suffix_verdict(self) -> None:
         """A prefix keeps a free suffix only when none of its options opens a path."""
         unbounded = {
