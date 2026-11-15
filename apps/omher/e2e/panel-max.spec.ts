@@ -295,6 +295,7 @@ async function escUntil(page: Page, x: number, y: number, want: "bare" | "contro
 // background, never a control: still maximises, 10 of 10. The chosen trade-off, next test: a press that lands on a
 // header control (the model pill) after the row left is the control's, and that double-click does not toggle.
 test("restore-slide double-click whose second press lands on bare header background maximises 10 of 10", async ({ page }) => {
+  test.setTimeout(60_000); // up to 20 slide rounds
   await page.setViewportSize({ width: 1440, height: 900 });
   await openPanel(page, "runs");
   await recordPresses(page);
@@ -318,6 +319,7 @@ test("restore-slide double-click whose second press lands on bare header backgro
 });
 
 test("trade-off: where the model pill slid over the row's old free space, the pill wins and the double-click does not toggle", async ({ page }) => {
+  test.setTimeout(60_000); // up to 20 slide rounds
   await page.setViewportSize({ width: 1440, height: 900 });
   await openPanel(page, "runs");
   await recordPresses(page);
@@ -347,6 +349,7 @@ test("trade-off: where the model pill slid over the row's old free space, the pi
 // Where the second press lands on a header control the slide brought under the pointer (the model pill), the control
 // wins and the pair does not toggle (the chosen trade-off, below); every other round maximises, 10 of 10.
 test("a person's double-click on the tab row during the restore slide still maximises, 10 of 10 (real mouse)", async ({ page }) => {
+  test.setTimeout(60_000); // up to 20 slide rounds
   await page.setViewportSize({ width: 1440, height: 900 });
   await openPanel(page, "runs");
   await recordPresses(page);
