@@ -684,6 +684,45 @@ class ModelSetupFlowTests(unittest.TestCase):
         self.assertEqual((status, stderr), (0, ""))
         self.assertEqual(events, ["preview", "confirm"])
 
+    def test_next_actions_send_a_providers_entry_to_its_key_not_a_login(self) -> None:
+        # Given: issue #2882's machine, `mistral` under Hermes `providers:` with
+        # its key unobservable, next to an unconfigured provider.
+        inspection = HermesModelConfigInspection(
+            hermes="hermes",
+            config_path=Path("config.yaml"),
+            config_digest="before-digest",
+            config_check_ok=True,
+            model_aliases={},
+            model_dot_aliases={},
+            providers=(
+                ProviderPresence(
+                    "mistral", False, True, False,
+                    provider_entry=True, credential_env="MISTRAL_API_KEY",
+                ),
+                ProviderPresence("google", False, True, False),
+            ),
+            commands=(),
+        )
+
+        # When: both are confirmed.
+        actions = provider_next_actions({"mistral/large", "google/gemini"}, inspection)
+
+        # Then: the providers: entry is never sent to `hermes auth login`, which
+        # answers Unknown provider for it; the unconfigured one still is.
+        self.assertEqual(
+            actions,
+            [
+                {"provider": "google", "status": "auth_missing",
+                 "next_action": "hermes auth login google"},
+                {
+                    "provider": "mistral",
+                    "status": "credential_not_observable",
+                    "next_action": "set MISTRAL_API_KEY in the environment omh runs in, "
+                    "or add a pool with `hermes auth add mistral`",
+                },
+            ],
+        )
+
     def test_next_actions_name_the_custom_provider_instead_of_a_bare_custom_login(self) -> None:
         # Given: issue #1998's custom-pool machine, where the configured name
         # carries the pool auth and bare `custom` carries none.

@@ -690,6 +690,23 @@ def _env_var_present(env: Mapping[str, str] | None, name: str | None) -> bool:
     return bool(str(source.get(name) or "").strip())
 
 
+def providers_entry_remedy(presence: ProviderPresence) -> str:
+    """What makes a `providers:` entry's credential observable, as one clause.
+
+    Shared by the preview refusal and model setup's `provider_next_actions`, so
+    both name the same route. The variable is echoed only in conventional
+    UPPER_SNAKE shape: a key pasted into `key_env` by mistake is
+    identifier-shaped too and must never reach the text.
+    """
+    if presence.credential_env and _ECHOABLE_ENV_NAME_RE.fullmatch(presence.credential_env):
+        remedy = f"set {presence.credential_env} in the environment omh runs in"
+    elif presence.credential_env:
+        remedy = "set the variable its key_env names in the environment omh runs in"
+    else:
+        remedy = "name the variable holding its key with key_env"
+    return f"{remedy}, or add a pool with `hermes auth add {presence.provider_id}`"
+
+
 def _missing_auth_message(
     inspection: HermesModelConfigInspection, target: str, provider_id: str
 ) -> str:
@@ -698,18 +715,10 @@ def _missing_auth_message(
     )
     if _safe_metadata(target) and presence is not None and not presence.auth_present:
         if presence.provider_entry:
-            # Echo the variable name only in conventional UPPER_SNAKE shape: a key pasted into
-            # `key_env` by mistake is identifier-shaped too and must never reach the message.
-            if presence.credential_env and _ECHOABLE_ENV_NAME_RE.fullmatch(presence.credential_env):
-                remedy = f"set {presence.credential_env} in the environment omh runs in"
-            elif presence.credential_env:
-                remedy = "set the variable its key_env names in the environment omh runs in"
-            else:
-                remedy = "name the variable holding its key with key_env"
             return (
                 f"Hermes model target {target!r} names provider {provider_id!r}, which is "
                 "configured under providers: but no credential is observable: "
-                f"{remedy}, or add a pool with `hermes auth add {provider_id}`"
+                f"{providers_entry_remedy(presence)}"
             )
         if presence.plugin_present:
             return (
