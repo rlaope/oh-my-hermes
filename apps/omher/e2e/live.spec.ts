@@ -452,4 +452,31 @@ test("chat: a message sent while the answer is written goes under that answer, w
   await expect.poll(kinds).toEqual(["assistant", "user"]);
   await expect(tl.getByTestId("bubble-bot").last()).toContainText("line two.");
   void before;
+test("chat: an answer to several messages quotes each one's first line; a click shows that message; one message gets none", async ({ page }) => {
+  await open(page);
+  const tl = page.getByTestId("timeline");
+  await mock("mock.manual", { bot: "kami" });
+  for (const text of ["the spinner looks stuck\nalso count seconds", "and too many bubbles per answer"]) {
+    await page.getByTestId("composer").fill(text);
+    await page.keyboard.press("Enter");
+  }
+  await emit(ev("kami", "turn.start"), ev("kami", "message", { id: "q-a1", text: "Fixed both." }), ev("kami", "turn.end", { outcome: "done" }));
+  const quote = tl.getByTestId("bubble-quote");
+  await expect(quote).toHaveCount(1);
+  await expect(quote.getByTestId("bubble-quote-line")).toHaveText(["the spinner looks stuck also count seconds", "and too many bubbles per answer"]);
+  await expect(quote.getByTestId("bubble-quote-head")).toHaveText("Replied to 2 of your messages");
+  // above the answer, in its column: the quote's left edge is the bubble's
+  const q = (await quote.boundingBox())!;
+  const b = (await tl.getByTestId("bubble-bot").last().locator(".b").boundingBox())!;
+  expect(Math.abs(q.x - b.x)).toBeLessThan(1);
+  expect(q.y + q.height).toBeLessThanOrEqual(b.y);
+  await quote.getByTestId("bubble-quote-line").first().click();
+  await expect(tl.locator(".row-user.lit")).toContainText("the spinner looks stuck");
+
+  // one message, one answer right under it: plain, no quote
+  await page.getByTestId("composer").fill("thanks");
+  await page.keyboard.press("Enter");
+  await emit(ev("kami", "turn.start"), ev("kami", "message", { id: "q-a2", text: "Sure." }), ev("kami", "turn.end", { outcome: "done" }));
+  await expect(tl.getByTestId("bubble-bot").last()).toHaveText("Sure.");
+  await expect(tl.getByTestId("bubble-quote")).toHaveCount(1);
 });
