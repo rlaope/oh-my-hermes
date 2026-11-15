@@ -1148,8 +1148,9 @@ export function reduce(state: AppState, a: Action): AppState {
       return touchChat(state, a.bot, (c) => ({ ...applyOpened(c, a.res, a.now, a.bot, a.since), openError: null }));
     case "local.user":
       return touchChat(state, a.bot, (c0) => {
-        // typed while the answer is already showing (held or not): that answer stays above this message (answerSlot)
-        const c = c0.turn && !c0.turn.before && answerSoFar(c0.turn) ? patchTurn(c0, (t) => ({ ...t, before: a.id })) : c0;
+        // the running turn's answer stays above this message (answerSlot) when it is held (it goes out after the
+        // turn, so the answer never covers it) or typed once the answer already shows
+        const c = c0.turn && !c0.turn.before && (a.held || answerSoFar(c0.turn)) ? patchTurn(c0, (t) => ({ ...t, before: a.id })) : c0;
         const next = withItems(c, [
           ...c.items,
           {

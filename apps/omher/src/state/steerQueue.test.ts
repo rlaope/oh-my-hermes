@@ -293,6 +293,14 @@ describe("reduceQueue (pure)", () => {
     const once = reduceQueue(c0, { type: "queue.take", bot: "kami", id: "a", now: T0 });
     expect(reduceQueue(once, { type: "queue.take", bot: "kami", id: "a", now: T0 })).toBe(once);
   });
+  it("a message held before any answer shows still reads under that answer", () => {
+    const ev = (e: Record<string, unknown>) => ({ bot: "kami", ...e }) as BridgeEvent;
+    let s = reduce(initialState(), { type: "local.user", bot: "kami", id: "q", text: "q", now: T0 });
+    s = reduce(s, { type: "event", ev: ev({ event: "turn.start" }), now: T0 + 100 });
+    s = reduce(s, { type: "local.user", bot: "kami", id: "h", text: "held", now: T0 + 200, held: true });
+    for (const e of [ev({ event: "message", id: "a1", text: "Done." }), ev({ event: "turn.end", outcome: "done" })]) s = reduce(s, { type: "event", ev: e, now: T0 + 300 });
+    expect(s.chats.kami.items.flatMap((i) => (i.kind === "user" || i.kind === "assistant" ? [i.text] : []))).toEqual(["q", "Done.", "held"]);
+  });
   it("with the answer showing: held messages read under it; one steered in moves above it", () => {
     const ev = (e: Record<string, unknown>) => ({ bot: "kami", ...e }) as BridgeEvent;
     const order = (st: AppState) =>
