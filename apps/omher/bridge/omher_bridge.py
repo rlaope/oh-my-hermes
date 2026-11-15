@@ -3165,6 +3165,27 @@ class NodeSessions:
                 return str(sid)
         return None
 
+    def hermes_owned(self, profile_dir: Path, sid: str) -> bool:
+        """True when `sid` is a subagent session whose parent chain (through subagents only) reaches one of the bot's
+        own non-subagent sessions in its state.db: a child of the bot's own runs and delegations. A ref to anything
+        else (a Discord or Slack chat, an orphaned or looping child) is not read."""
+        if not _HERMES_SID.match(sid):
+            return False
+        con = self._db(profile_dir)
+        try:
+            cur, seen = sid, set()
+            while cur and cur not in seen and len(seen) < 32:
+                seen.add(cur)
+                row = con.execute("SELECT source, parent_session_id FROM sessions WHERE id = ?", (cur,)).fetchone()
+                if row is None:
+                    return False
+                if row[0] != "subagent":
+                    return cur != sid
+                cur = row[1]
+            return False
+        finally:
+            con.close()
+
     def hermes_read(self, profile_dir: Path, sid: str, parent_name: str = "") -> dict:
         if not _HERMES_SID.match(sid):
             raise BridgeError("bad_request", "bad session id")
@@ -3475,6 +3496,8 @@ class NodeSessions:
                 raise BridgeError("bad_request", "bad session ref")
             kind, rest = m.group(1), m.group(2)
             if kind == "hermes":
+                if not self.hermes_owned(profile_dir, rest):
+                    raise BridgeError("not_found", "no such subagent session")
                 return {"session": self.hermes_read(profile_dir, rest)}
             if kind == "claude-sub":
                 parts = rest.split("/")

@@ -159,6 +159,26 @@ class HermesChild(unittest.TestCase):
         self.assertEqual(s["title"], "Subagent sk-•••")
         self.assertEqual((s["children"][0]["goal"], s["children"][0]["summary"]), ("Check sk-•••", "Used sk-•••"))
 
+    def test_ref_reads_only_the_bots_own_subagents(self):
+        """F2 (BOUNDARY rule 15): a `hermes:` ref reads only a subagent session whose parent chain reaches one of the
+        bot's own sessions; a Discord chat, an orphaned child or a child of a missing parent is not found."""
+        con = sqlite3.connect(self.prof / "state.db")
+        con.execute("INSERT INTO sessions VALUES ('unrelated','discord',NULL,'claude','x',1,2,'done','Other chat')")
+        con.execute("INSERT INTO messages (session_id, role, content) VALUES ('unrelated','user','UNRELATED_PRIVATE')")
+        con.execute("INSERT INTO sessions VALUES ('orphan','subagent','gone-parent','m','p',1,2,'done','Orphan')")
+        con.execute("INSERT INTO sessions VALUES ('main-1','tui',NULL,'m','p',1,NULL,NULL,'main')")
+        con.execute("INSERT INTO sessions VALUES ('kid-1','subagent','main-1','m','p',2,3,'done','Kid')")
+        con.execute("INSERT INTO messages (session_id, role, content) VALUES ('kid-1','user','Kid work')")
+        con.execute("INSERT INTO sessions VALUES ('loop-a','subagent','loop-b','m','p',1,2,'done','a')")
+        con.execute("INSERT INTO sessions VALUES ('loop-b','subagent','loop-a','m','p',1,2,'done','b')")
+        con.commit()
+        con.close()
+        for ref in ("hermes:unrelated", "hermes:orphan", "hermes:main-1", "hermes:loop-a", "hermes:missing"):
+            with self.assertRaises(ob.BridgeError) as cm:
+                self.ns.read(bot_of(self.prof), None, None, None, ref)
+            self.assertEqual(cm.exception.code, "not_found", ref)
+        self.assertEqual(self.ns.read(bot_of(self.prof), None, None, None, "hermes:kid-1")["session"]["prompt"], "Kid work")
+
 
 def write_claude(home: Path, folder: str, sid: str, prompt: str, tool_cmd: str, answer: str, ts="2026-11-02T15:40:00Z"):
     d = home / "projects" / ob.claude_slug(folder)

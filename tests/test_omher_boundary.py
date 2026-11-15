@@ -45,7 +45,10 @@ RULES = (
     "the page sends only a folder and a size (`shell_start`), omher types nothing into it, and the shell is stopped when"
     " its tab closes and when the app exits.",
     "omher also reads the messages of the subagent sessions of the bot's own runs from its `state.db` (read-only),",
-    "it never selects a reasoning or thinking field, clips each input and result to 4 KB and masks token-like strings.",
+    "A child named by an earlier read (`hermes:<id>`) is read only when it is a subagent session whose parent chain reaches"
+    " one of the bot's own sessions;",
+    "It never selects a reasoning or thinking field, clips each input and result to 4 KB and masks token-like strings in"
+    " every field it returns.",
     "then calls only Hermes' own `session.archive` for it (hidden, its messages kept, restorable in Hermes); omher never"
     " deletes a session, and never removes the main chat or a session the bridge did not create or list as a thread.",
     "Files the person attaches go to that same chat only, as bytes through Hermes' own `image.attach_bytes`,",
