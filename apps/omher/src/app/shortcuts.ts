@@ -3,7 +3,7 @@
 //   ⌘.     show or hide Details                    ⌘,  Settings
 //   ⌘J     jump to the next approval or question waiting on you (any bot or SESSIONS chat)
 //   ⌘⇧G   the Runs graph at full size (Esc closes it)
-//   ⌘N     the SESSIONS + menu (pick an agent for a New session)
+//   ⌘N ⌘T  the SESSIONS + menu (pick an agent for a New session)
 //   ⌘⇧]    the next session (sidebar order, wrapping)          ⌘⇧[  the previous session
 //   Esc    stop the running answer (only when no popover, field or dialog wants Esc first)
 // An approval card's own 1/2/3 keys live on the card (src/chat/cards), never here.
@@ -15,6 +15,10 @@ import { openNewSessionMenu } from "../sessions/newMenu";
 import { composing } from "../lib/ime";
 
 export const isMac = () => typeof navigator !== "undefined" && /Mac|iPhone|iPad/.test(navigator.platform);
+
+/** `letter` on a Latin layout; on a non-Latin one (Korean, Japanese, Russian...) the key that stands where it does. */
+const isLetter = (e: { key: string; code?: string }, letter: string) =>
+  e.key.toLowerCase() === letter || (!/^[a-z]$/i.test(e.key) && e.code === `Key${letter.toUpperCase()}`);
 
 /** What a keydown means, or null. Pure so it can be tested without a DOM. */
 export function shortcutFor(
@@ -35,7 +39,7 @@ export function shortcutFor(
     if (e.key === ".") return { kind: "details" };
     if (e.key === ",") return { kind: "settings" };
     if (e.key.toLowerCase() === "j") return { kind: "next-ask" };
-    if (e.key.toLowerCase() === "n") return { kind: "new-session" };
+    if (isLetter(e, "n") || (mac && isLetter(e, "t"))) return { kind: "new-session" };
   }
   if (e.key === "Escape" && !e.metaKey && !e.ctrlKey && !e.altKey && !e.shiftKey) return { kind: "stop" };
   return null;

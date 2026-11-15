@@ -357,6 +357,7 @@ const SHORTCUTS: [string, Key][] = [
   [`${MOD}.`, "key.details"],
   [`${MOD},`, "key.settings"],
   [`${MOD}J`, "key.nextAsk"],
+  [MOD === "⌘" ? `${MOD}N · ${MOD}T` : `${MOD}N`, "key.newSession"],
   ["1 · 2 · 3", "key.cardKeys"],
   ["Esc", "key.stop"],
 ];

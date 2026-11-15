@@ -228,6 +228,13 @@ test("⌘N opens the + menu; ⌘⇧] and ⌘⇧[ move between sessions; nothing 
   await expect(page.getByTestId("session-menu")).toBeVisible();
   await page.keyboard.press("Escape");
   await expect(page.getByTestId("session-menu")).toHaveCount(0);
+  // ⌘T is the same menu on macOS, like a new tab; Ctrl+T elsewhere stays the program's
+  await page.keyboard.press(`${mod}+t`);
+  await expect(page.getByTestId("session-menu")).toHaveCount(mod === "Meta" ? 1 : 0);
+  if (mod === "Meta") {
+    await page.keyboard.press("Escape");
+    await expect(page.getByTestId("session-menu")).toHaveCount(0);
+  }
 
   // an IME composition's keydown (isComposing) is never a shortcut
   await page.evaluate((m) => {

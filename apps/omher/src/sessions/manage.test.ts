@@ -141,6 +141,15 @@ describe("shortcuts", () => {
     expect(shortcutFor(k("n", { meta: true }), true)).toEqual({ kind: "new-session" });
     expect(shortcutFor(k("n", { ctrl: true }), false)).toEqual({ kind: "new-session" });
     expect(shortcutFor(k("n", { ctrl: true }), true)).toBeNull();
+    // ⌘T opens it too on macOS, like a new tab; Ctrl+T elsewhere stays the program's (a terminal's transpose)
+    expect(shortcutFor(k("t", { meta: true }), true)).toEqual({ kind: "new-session" });
+    expect(shortcutFor(k("T", { meta: true }), true)).toEqual({ kind: "new-session" });
+    expect(shortcutFor(k("t", { ctrl: true }), false)).toBeNull();
+    expect(shortcutFor(k("t", { meta: true, shift: true }), true)).toBeNull();
+    // the Korean layout: the key that stands where T / N do
+    expect(shortcutFor(k("ㅅ", { meta: true, code: "KeyT" }), true)).toEqual({ kind: "new-session" });
+    expect(shortcutFor(k("ㅜ", { meta: true, code: "KeyN" }), true)).toEqual({ kind: "new-session" });
+    expect(shortcutFor(k("ㅅ", { meta: true, code: "KeyS" }), true)).toBeNull();
     // ⇧ turns ] into } on a US layout; the physical key decides
     expect(shortcutFor(k("}", { meta: true, shift: true, code: "BracketRight" }), true)).toEqual({ kind: "session", step: 1 });
     expect(shortcutFor(k("{", { meta: true, shift: true, code: "BracketLeft" }), true)).toEqual({ kind: "session", step: -1 });
