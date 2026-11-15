@@ -993,6 +993,41 @@ button.upd:hover {
   position: relative;
   flex: none;
 }
+
+/* ---- hold to drag (useRowDrag) ---------------------------------------------------------------------- */
+/* while a row is held the others slide out of its way; the held row follows the pointer with no easing */
+.bot-w.sliding {
+  transition: transform 0.16s ease;
+}
+.bot-w.lifted {
+  z-index: 2;
+  transition: none;
+}
+.bot-w.lifted .bot {
+  /* not --raise2: that is the selected row's fill in the dark theme, so a held row must read apart from it */
+  background: var(--bg);
+  box-shadow:
+    inset 0 0 0 1px color-mix(in srgb, var(--accent) 55%, transparent),
+    0 6px 18px rgb(0 0 0 / 0.28);
+}
+body.row-dragging .bot-w .bot-more {
+  opacity: 0;
+  pointer-events: none;
+}
+/* hover swaps the time for ⋯; while dragging there is no ⋯, so the time stays */
+body.row-dragging .bot-w:hover .bot-r1 .bot-t {
+  visibility: visible;
+}
+body.row-dragging,
+body.row-dragging * {
+  cursor: grabbing !important;
+  user-select: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  .bot-w.sliding {
+    transition: none;
+  }
+}
 .bot-more {
   position: absolute;
   right: 4px;

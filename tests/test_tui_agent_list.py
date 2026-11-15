@@ -377,8 +377,8 @@ class ListLeaveTests(unittest.TestCase):
         self.assertIn("esc denies", screen[status])
         self.assertEqual([row[4:] for row in screen[status + 1 : status + 4]], [row[4:] for row in VIEW])
         now[0] += SLOT_ARM_SECONDS
-        for key in (Key(DOWN), Key(UP)):
-            app._on_input(key)  # the approval takes every key: these two move its highlight there and back
+        for key in (Key(DOWN), Key(UP), Key(UP)):
+            app._on_input(key)  # the approval takes every key: these move its highlight off allow once, back, to deny
         self.assertEqual((app.list_selected, client.answers), (None, []))
         app._on_input(Key(ENTER))  # a deliberate Enter on deny: the explicit deny
         self.assertEqual(client.answers, [("srq-1", {"result": {"choice": "deny"}})])

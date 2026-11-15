@@ -79,7 +79,10 @@ at once a request it cannot show (listed above): Esc or Ctrl+C declines, an
 approval decline is an explicit deny and then interrupts the running turn
 (`session.interrupt`, only while a turn runs; every deny the person gives an
 approval does, `d`, `n` and Enter on deny too, except the tell row's below),
-allowing a command takes the arrows and then Enter, and a request the gateway
+an approval opens with allow once highlighted (the owner's choice of
+2026-11-15), so an allow is still a key the person pressed (Enter on that row)
+and never a key typed for the composer as the slot opened, which the app
+ignores for a moment after any slot opens; a request the gateway
 withdraws (its own timeout, an interrupt) closes without an answer. Hermes'
 `always` choice is offered only when the request lists it and is sent, like any
 allow, only on the person's arrows and then Enter; saving it as a permanent

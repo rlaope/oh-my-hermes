@@ -7,6 +7,10 @@ All notable changes will be documented here.
 - **An OMH TUI reply no longer hangs on a rail.** The `⚚ Hermes · <model>` header starts at the left edge and the
   reply's text sits two cells in, with no `┃` beside it, so a reply reads apart from your prompts and the tool calls,
   which keep their rails. The two cells the bar took go to the reply's text, and a copy still leaves the margin out.
+- **An OMH TUI approval opens on allow once, not deny.** Enter alone now allows that one command; ↑ then Enter, `d`,
+  `n`, Esc or Ctrl+C still deny and stop the running turn. Keys typed for the composer as the approval appears still
+  land nowhere, since every question ignores keys for a moment after it opens, and a request that does not offer
+  allow once still opens on deny.
 - **A confirmed paired run now compares Hermes alone with Hermes plus OMH for real.** `omh coding paired-run dispatch
   --confirm-dispatch` prepares one disposable Hermes home per arm: the variant gets the packaged OMH plugin and exactly
   its frozen `exposed_skills`, the baseline neither, and both run the same `file,skills` flags. A gateway the harness
