@@ -1314,4 +1314,7 @@ export const zh: Record<Key, string> = {
   "termpanel.ended": "shell 已结束",
   "termpanel.endedCode": "shell 已结束，代码 {code}",
   "termpanel.couldNotStart": "无法启动 shell：{error}",
+  // panel (maximise the side panel in place)
+  "panel.max": "最大化",
+  "panel.restore": "还原",
 };

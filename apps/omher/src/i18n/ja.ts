@@ -1314,4 +1314,7 @@ export const ja: Record<Key, string> = {
   "termpanel.ended": "シェルが終了しました",
   "termpanel.endedCode": "シェルがコード {code} で終了しました",
   "termpanel.couldNotStart": "シェルを起動できませんでした: {error}",
+  // panel (maximise the side panel in place)
+  "panel.max": "最大化",
+  "panel.restore": "元のサイズに戻す",
 };

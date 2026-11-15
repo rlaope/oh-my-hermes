@@ -35,7 +35,7 @@ function snapshot(): ResumeSnap {
       session: st.ui.session,
       panelOpen: st.ui.panelOpen,
       panelTab: st.ui.panelTab,
-      runsFull: st.ui.runsFull,
+      runsFull: st.ui.panelMax, // the maximised panel (the key predates it)
       runId: st.ui.runId,
       drafts: allDrafts(),
       sessions: list.map((r) => ({

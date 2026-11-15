@@ -2,7 +2,7 @@
 //   ⌘1…⌘9  open bot 1 to 9 (sidebar order)      ⌘K  focus the bot search
 //   ⌘.     show or hide Details                    ⌘,  Settings
 //   ⌘J     jump to the next approval or question waiting on you (any bot or SESSIONS chat)
-//   ⌘⇧G   the Runs graph at full size (Esc closes it)
+//   ⌘⇧G   maximise the side panel in place, or restore it (Esc restores; a closed panel opens on Plans)
 //   ⌘N ⌘T  the SESSIONS + menu (pick an agent for a New session)
 //   ⌘⇧]    the next session (sidebar order, wrapping)          ⌘⇧[  the previous session
 //   Esc    stop the running answer (only when no popover, field or dialog wants Esc first)
@@ -85,15 +85,16 @@ export function useShortcuts(): void {
       if (hit.kind === "stop") {
         // Esc belongs to whatever is open first (popover, search field, inline rename, a card's input).
         if (e.defaultPrevented) return;
-        if (s.ui.runsFull) {
-          e.preventDefault();
-          a.setRunsFull(false);
-          return;
-        }
         const t = e.target as HTMLElement | null;
         if (t && t.closest("input, [role=dialog], [role=menu], [role=listbox]")) return;
         // Esc in the bottom terminal panel is the shell's: it neither stops an answer nor closes the panel
         if (t && t.closest(".termpanel")) return;
+        // a maximised panel goes back to its own width first (the chat behind it is inert anyway)
+        if (s.ui.panelMax && s.ui.panelOpen) {
+          e.preventDefault();
+          a.setPanelMax(false);
+          return;
+        }
         const bot = s.selectedBot;
         if (s.ui.view === "chat" && bot && s.chats[bot]?.turn) {
           e.preventDefault();
@@ -111,10 +112,11 @@ export function useShortcuts(): void {
       }
       e.preventDefault();
       if (hit.kind === "graph") {
-        if (s.ui.runsFull) a.setRunsFull(false);
+        // maximise the side panel in place, or restore it; a closed panel opens on Plans
+        if (s.ui.panelMax && s.ui.panelOpen) a.setPanelMax(false);
         else if (s.selectedBot) {
           if (s.ui.view !== "chat") a.closeSettings();
-          a.setRunsFull(true);
+          a.setPanelMax(true, s.ui.panelOpen ? undefined : "runs");
         }
       } else if (hit.kind === "bot") {
         const b = selectSidebarBots(s)[hit.index];

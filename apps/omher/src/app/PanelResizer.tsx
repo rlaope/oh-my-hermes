@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type KeyboardEvent, type PointerEvent } from "react";
-import { clampPanel, panelKind, readPanelWidths, savePanelWidth, type PanelKind } from "./panelWidth";
+import { clampPanel, panelKind, readPanelWidths, savePanelWidth, shownPanelWidth, type PanelKind } from "./panelWidth";
 import { t } from "../i18n";
 
 const STEP = 16;
@@ -10,7 +10,7 @@ const el = (id: string) => document.querySelector<HTMLElement>(`[data-testid=${i
  *  every rule that sizes the panel already reads it from there, within [PANEL_MIN, window - sidebar - CHAT_MIN]; a
  *  double click (or Enter) goes back to the tab's own width. Details, the tool tabs and Plans each keep their own
  *  width, saved on this computer. A window made smaller shows a saved width narrower without forgetting it. */
-export function PanelResizer({ open, tab }: { open: boolean; tab: string }) {
+export function PanelResizer({ open, tab, max = false }: { open: boolean; tab: string; max?: boolean }) {
   const [widths, setWidths] = useState(readPanelWidths);
   const [drag, setDrag] = useState<number | null>(null);
   const [winW, setWinW] = useState(() => window.innerWidth);
@@ -19,7 +19,8 @@ export function PanelResizer({ open, tab }: { open: boolean; tab: string }) {
   const sideW = () => el("sidebar")?.getBoundingClientRect().width ?? 248;
   const fit = (w: number) => clampPanel(w, window.innerWidth, sideW());
   const saved = widths[kind];
-  const width = drag ?? (saved === undefined ? null : fit(saved));
+  // maximised: everything right of the sidebar, and no handle; restoring goes back to the tab's own width
+  const width = drag ?? shownPanelWidth(max, saved, window.innerWidth, sideW());
 
   useEffect(() => {
     const on = () => setWinW(window.innerWidth);
@@ -34,7 +35,21 @@ export function PanelResizer({ open, tab }: { open: boolean; tab: string }) {
     else win.style.setProperty("--panel-w", `${width}px`);
     // while dragging the grid follows the pointer with no easing, and nothing under it selects
     win.classList.toggle("panel-dragging", drag !== null);
-  }, [width, open, drag, winW]);
+  }, [width, open, drag, winW, max]);
+
+  // maximise and restore ease in 180ms (app.css .panel-maxing); a window resize while maximised follows at once
+  const first = useRef(true);
+  useEffect(() => {
+    if (first.current) {
+      first.current = false;
+      return;
+    }
+    const win = el("window");
+    if (!win) return;
+    win.classList.add("panel-maxing");
+    const h = setTimeout(() => win.classList.remove("panel-maxing"), 260);
+    return () => clearTimeout(h);
+  }, [max]);
 
   const panelW = () => el("details")?.getBoundingClientRect().width ?? 300;
   const set = (k: PanelKind, w: number | null) => setWidths(savePanelWidth(k, w));
@@ -46,7 +61,7 @@ export function PanelResizer({ open, tab }: { open: boolean; tab: string }) {
     setDrag(null);
   };
 
-  if (!open) return null;
+  if (!open || max) return null;
   return (
     <div
       className={`panel-resizer${drag !== null ? " on" : ""}`}

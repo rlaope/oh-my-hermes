@@ -1,7 +1,7 @@
 // Plans tab (runs in the code): the bot's plans as a list of plain text rows, and the selected one as a graph in
 // the app's own font: a plain header (title, one muted line), one frontier of outlined boxes to a row (title, the
 // model's mark with what ran the node, a status icon and word), every edge a 1.25px line with rounded turns and a
-// small arrowhead, in the side panel and at full size over the chat column (⌘⇧G). Real (redacted) dag runs, real
+// small arrowhead, in the side panel and at full size when the panel is maximised in place (⌘⇧G). Real (redacted) dag runs, real
 // delegation logs for the models and routes, and a synthetic 40-node run for the layout.
 import { expect, test, type Page } from "@playwright/test";
 
@@ -80,7 +80,8 @@ async function pickRow(page: Page, text: string | RegExp, testId = "run-row") {
   await rowOf(page, text, testId).click();
 }
 const panel = (page: Page) => page.getByTestId("run-graph-box");
-const full = (page: Page) => page.getByTestId("runs-full");
+/** The plan's graph while the panel is maximised in place (⌘⇧G, the graph's expand button): full size, panned. */
+const full = (page: Page) => page.locator('[data-testid="run-graph-box"].max');
 /** A node's box, by its id (a "Node details" card carries the id too). */
 const nodeOf = (root: ReturnType<typeof panel>, id: string) => root.locator(`[data-testid="run-node"][data-node="${id}"]`);
 /** The glyphs of the terminal's box view: none of them is drawn here. */
@@ -982,7 +983,7 @@ test("dark theme: the shadow under the pointer is a quarter black, and a box sti
   const node = nodeOf(f, "t2-status-update");
   await node.hover();
   await eased(page);
-  const [shadow, bg, surface] = await node.evaluate((e) => [getComputedStyle(e).boxShadow, getComputedStyle(e).backgroundColor, getComputedStyle(e.closest(".rf")!).backgroundColor]);
+  const [shadow, bg, surface] = await node.evaluate((e) => [getComputedStyle(e).boxShadow, getComputedStyle(e).backgroundColor, getComputedStyle(e.closest(".details")!).backgroundColor]);
   expect(await page.evaluate(() => document.documentElement.getAttribute("data-theme"))).toBe("dark");
   expect(shadow).toMatch(/rgba\(0, 0, 0, 0\.25\) 0px 4px 12px 0px/);
   expect(bg).toBe(surface);
@@ -1279,17 +1280,18 @@ test("40 nodes: every edge is a line and no two boxes overlap, in the panel or t
 
 // ---- full view ----
 
-test("⌘⇧G and 'Full view' open the full view over the chat; Esc and × close it; the header keeps one control", async ({ page }) => {
+test("⌘⇧G and 'Full view' maximise the panel in place; Esc and the button restore it; the header keeps one control", async ({ page }) => {
   await openRuns(page);
   const m = await mod(page);
   await page.keyboard.press(`${m}+Shift+G`);
   await expect(full(page)).toBeVisible();
-  // everything right of the sidebar; the side panel steps aside and comes back on close
+  // the panel itself takes everything right of the sidebar; the chat column folds to 0
   const vw = page.viewportSize()!.width;
-  await expect.poll(async () => Math.round(await full(page).evaluate((e) => e.getBoundingClientRect().right))).toBe(vw);
-  const side = await page.locator(".pane").evaluate((e) => e.getBoundingClientRect().x);
-  expect(Math.round((await full(page).boundingBox())!.x)).toBe(Math.round(side));
-  await expect(page.getByTestId("details")).toBeHidden();
+  await expect.poll(async () => Math.round(await page.getByTestId("details").evaluate((e) => e.getBoundingClientRect().right))).toBe(vw);
+  const side = await page.getByTestId("sidebar").evaluate((e) => e.getBoundingClientRect().right);
+  await expect.poll(async () => Math.round((await page.getByTestId("details").boundingBox())!.x)).toBe(Math.round(side));
+  await expect(page.getByTestId("details")).toBeVisible();
+  await expect(page.locator("[role=dialog]")).toHaveCount(0);
   await expect(page.getByTestId("head-right").locator(":scope > *")).toHaveCount(2);
   await expect(full(page).getByTestId("run-node")).toHaveCount(6);
   // the same plain header, and the drawing at the text's own size from the top
@@ -1312,7 +1314,7 @@ test("⌘⇧G and 'Full view' open the full view over the chat; Esc and × close
   await expect(panel(page)).toBeVisible();
   await page.getByTestId("graph-expand").click();
   await expect(full(page)).toBeVisible();
-  await full(page).getByRole("button", { name: "Close graph" }).click();
+  await page.getByTestId("graph-expand").click();
   await expect(full(page)).toHaveCount(0);
 });
 
@@ -1389,8 +1391,9 @@ test("full view: zoom keys, Fit and the wheel; empty space pans", async ({ page 
   await page.getByTestId("graph-expand").click();
   const g = full(page).getByTestId("run-graph");
   const vw = page.viewportSize()!.width;
-  await expect.poll(async () => Math.round(await full(page).evaluate((e) => e.getBoundingClientRect().right))).toBe(vw);
-  await page.waitForTimeout(150); // the refit after the panel stepped aside
+  await expect.poll(async () => Math.round(await page.getByTestId("details").evaluate((e) => e.getBoundingClientRect().right))).toBe(vw);
+  await expect.poll(async () => Math.round(await page.locator(".main").evaluate((e) => e.getBoundingClientRect().width))).toBe(0);
+  await page.waitForTimeout(250); // the refit after the panel grew
   // it opens with the first frontier at the top, the run going on under the fold. Its widest frontier (nine) is a
   // little too long for the window, so the drawing is shown a little smaller than the text's own size: never
   // under four fifths of it for that

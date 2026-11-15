@@ -50,7 +50,7 @@ export function App() {
       current,
       open: (b) => {
         const st = getStore();
-        if (st.getState().ui.runsFull) st.actions.setRunsFull(false);
+        if (st.getState().ui.panelMax) st.actions.setPanelMax(false);
         void st.actions.selectBot(b);
       },
     };
@@ -58,14 +58,16 @@ export function App() {
   // a bot's chat shows its Details and Plans; a SESSIONS chat shows Plans for that session alone
   const onSession = s.ui.view === "session" && !!s.ui.session;
   const panelOpen = s.ui.panelOpen && ((s.ui.view === "chat" && !!bot) || onSession);
+  // maximised in place: the panel takes the chat column's room; the chat stays mounted (draft, scroll, stream)
+  const panelMax = panelOpen && !onSession && s.ui.panelMax;
   const Details = slots.detailsPanel;
   const close = () => s.togglePanel(false);
 
   return (
     <MentionContext.Provider value={mentions}>
-    <div className={`window${panelOpen ? " panel-open" : ""}`} data-testid="window" lang={s.ui.lang}>
+    <div className={`window${panelOpen ? " panel-open" : ""}${panelMax ? " panel-max" : ""}`} data-testid="window" lang={s.ui.lang}>
       <Sidebar />
-      <main className="main">
+      <main className="main" inert={panelMax} aria-hidden={panelMax || undefined}>
         {s.ui.view === "settings" ? <SettingsView /> : s.ui.view === "automations" ? (
           <AutomationsPage />
         ) : s.ui.view === "plugins" ? (
@@ -83,7 +85,7 @@ export function App() {
       </main>
       {/* inert while closed: the off-screen panel takes no focus and no clicks */}
       <aside className="details" aria-hidden={!panelOpen} inert={!panelOpen} data-testid="details">
-        <PanelResizer open={panelOpen} tab={onSession ? "runs" : s.ui.panelTab} />
+        <PanelResizer open={panelOpen} tab={onSession ? "runs" : s.ui.panelTab} max={panelMax} />
         {onSession ? (
           // mounted only while open: a closed panel reads nothing, and reopening it reads the session's run afresh
           panelOpen && (

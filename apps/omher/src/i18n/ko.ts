@@ -1314,4 +1314,7 @@ export const ko: Record<Key, string> = {
   "termpanel.ended": "셸이 끝났습니다",
   "termpanel.endedCode": "셸이 코드 {code}로 끝났습니다",
   "termpanel.couldNotStart": "셸을 시작하지 못했습니다: {error}",
+  // panel (maximise the side panel in place)
+  "panel.max": "최대로 펼치기",
+  "panel.restore": "원래 크기로",
 };

@@ -1316,4 +1316,7 @@ export const en = {
   "termpanel.ended": "shell ended",
   "termpanel.endedCode": "shell ended with code {code}",
   "termpanel.couldNotStart": "The shell could not start: {error}",
+  // panel (maximise the side panel in place)
+  "panel.max": "Expand",
+  "panel.restore": "Restore",
 };
