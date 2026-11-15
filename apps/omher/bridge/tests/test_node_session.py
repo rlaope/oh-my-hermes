@@ -17,6 +17,7 @@ sys.path.insert(0, str(HERE.parent))
 import omher_bridge as ob  # noqa: E402
 
 FIX = HERE / "fixtures" / "node_session"
+AT = 1793634000.0  # 2026-11-02T15:40:00Z, the transcripts' default start
 SECRET = "sk-" + "liveTokenABCDEFGH1234"
 
 
@@ -198,10 +199,9 @@ def write_claude(home: Path, folder: str, sid: str, prompt: str, tool_cmd: str, 
     return p
 
 
-def write_codex(home: Path, folder: str, tid: str, prompt: str, cmd: str, answer: str):
+def write_codex(home: Path, folder: str, tid: str, prompt: str, cmd: str, answer: str, ts="2026-11-02T15:40:00Z"):
     d = home / "sessions" / "2026" / "11" / "02"
     d.mkdir(parents=True, exist_ok=True)
-    ts = "2026-11-02T15:40:00Z"
     lines = [
         {"timestamp": ts, "type": "session_meta", "payload": {"id": tid, "timestamp": ts, "cwd": folder}},
         {"timestamp": ts, "type": "turn_context", "payload": {"model": "gpt-6.1-sol"}},
@@ -218,7 +218,7 @@ def write_codex(home: Path, folder: str, tid: str, prompt: str, cmd: str, answer
             {"type": "output_text", "text": answer}]}},
         {"timestamp": ts, "type": "event_msg", "payload": {"type": "task_complete", "last_agent_message": answer}},
     ]
-    p = d / f"rollout-2026-11-02T15-40-00-{tid}.jsonl"
+    p = d / f"rollout-{ts[:19].replace(':', '-')}-{tid}.jsonl"
     p.write_text("".join(json.dumps(x) + "\n" for x in lines), encoding="utf-8")
     return p
 
@@ -253,7 +253,7 @@ class CliSessions(unittest.TestCase):
         link.symlink_to(real)
         with self.assertRaises(ob.BridgeError):
             self.ns.claude_read(link, "claude:x/s2")
-        self.assertIsNone(self.ns.claude_find(self.wt, 0.0))
+        self.assertIsNone(self.ns.claude_find(self.wt, AT, "secret prompt"))
         # a ref through the op is refused the same way
         with self.assertRaises(ob.BridgeError):
             self.ns.read({"name": "kami", "path": self.root}, None, None, None, f"claude:{d.name}/s2")
@@ -261,16 +261,48 @@ class CliSessions(unittest.TestCase):
     def test_other_folders_session_not_picked(self):
         other = str(self.root / "wt" / "codex-coexist-t1-other")
         os.makedirs(other)
-        write_claude(self.claude, other, "s3", "Other work", "ls", "Other answer")
-        self.assertIsNone(self.ns.claude_find(self.wt, 0.0))
+        write_claude(self.claude, other, "s3", "My work", "ls", "Other answer")
+        self.assertIsNone(self.ns.claude_find(self.wt, AT, "My work"))
         mine = write_claude(self.claude, self.wt, "s4", "My work", "ls", "My answer")
-        self.assertEqual(self.ns.claude_find(self.wt, 0.0), mine)
+        self.assertEqual(self.ns.claude_find(self.wt, AT, "My work"), mine)
+
+    def test_claude_find_matches_prompt_and_start_never_newest(self):
+        """F3: two transcripts in exactly one folder; the unrelated one is newer. The unit's own (its first user
+        message is the unit's prompt, started near the unit's start) is found; without a matching prompt, none."""
+        wanted = write_claude(self.claude, self.wt, "wanted", "Overall goal: correct prompt\nmore", "pwd", "right")
+        other = write_claude(self.claude, self.wt, "other", "different prompt", "pwd", "wrong", ts="2026-11-02T15:41:40Z")
+        os.utime(wanted, (AT, AT))
+        os.utime(other, (AT + 100, AT + 100))
+        self.assertEqual(self.ns.claude_find(self.wt, AT, "correct prompt\nmore"), wanted)
+        self.assertEqual(self.ns.claude_find(self.wt, AT, "  correct   prompt more [dag:r/n]"), wanted)
+        # no prompt to match, or a prompt nobody got: none (the UI says "not on this computer"), never the newest
+        self.assertIsNone(self.ns.claude_find(self.wt, AT))
+        self.assertIsNone(self.ns.claude_find(self.wt, AT, "a prompt nobody got"))
+        # outside [since - 1 min, since + 15 min]: none
+        self.assertIsNone(self.ns.claude_find(self.wt, AT - 16 * 60, "correct prompt"))  # 16 min after
+        self.assertIsNone(self.ns.claude_find(self.wt, AT + 2 * 60, "correct prompt"))  # started 2 min before
+        # two with the same prompt: the one whose start is closest to `since`
+        near = write_claude(self.claude, self.wt, "near", "correct prompt", "pwd", "near", ts="2026-11-02T15:40:30Z")
+        write_claude(self.claude, self.wt, "far", "correct prompt", "pwd", "far", ts="2026-11-02T15:45:00Z")
+        self.assertEqual(self.ns.claude_find(self.wt, AT + 40, "correct prompt"), near)
+
+    def test_codex_find_matches_prompt_and_start_never_newest(self):
+        """F3, Codex: the same rule over rollouts of one folder (the harness preamble is not the first prompt)."""
+        mine = write_codex(self.codex, self.wt, "t-mine", "Do t1 please", "ls", "done")
+        later = write_codex(self.codex, self.wt, "t-later", "Other job", "ls", "no", ts="2026-11-02T15:42:00Z")
+        self.assertEqual(self.ns.codex_find(self.wt, AT, prompt="Do t1 please"), mine)
+        self.assertIsNone(self.ns.codex_find(self.wt, AT))
+        self.assertIsNone(self.ns.codex_find(self.wt, AT, prompt="# AGENTS.md instructions"))
+        self.assertIsNone(self.ns.codex_find(self.wt, AT + 20 * 60, prompt="Other job"))
+        self.assertEqual(self.ns.codex_find(self.wt, AT + 120, prompt="Other job"), later)
+        twin = write_codex(self.codex, self.wt, "t-twin", "Do t1 please", "ls", "again", ts="2026-11-02T15:44:00Z")
+        self.assertEqual(self.ns.codex_find(self.wt, AT + 200, prompt="Do t1 please"), twin)
 
     def test_codex_read_and_find_by_worktree(self):
         write_codex(self.codex, str(self.root / "wt" / "other"), "t-other", "Other", "ls", "no")
         p = write_codex(self.codex, self.wt, "t-mine", "Codex skill discovery reads .agents/skills", "pytest tests/x.py",
                         "Discovery reads .agents/skills now.")
-        self.assertEqual(self.ns.codex_find(self.wt, 0.0), p)
+        self.assertEqual(self.ns.codex_find(self.wt, AT, prompt="Codex skill discovery reads .agents/skills"), p)
         s = self.ns.codex_read(p, "Kami")
         self.assertEqual(s["kind"], "codex")
         self.assertEqual(s["prompt"], "Codex skill discovery reads .agents/skills")
@@ -286,6 +318,7 @@ class CliSessions(unittest.TestCase):
         run_dir = omh / "runtime" / "dag" / "20261102_235818_fcfb1bdd-96bc7f91f27a766c" / "codex-coexist"
         run_dir.mkdir(parents=True)
         (run_dir / "fanout-a1692394be85-units.json").write_text((FIX / "fanout-a1692394be85-units.json").read_text())
+        (run_dir / "fanout-a1692394be85-goal.txt").write_text("Codex coexistence fixes.\n## t1-hermes\nDo t1\n")
         b = omh / "runtime" / "runs" / "fanout-a1692394be85-t1-hermes" / "executor_progress"
         b.mkdir(parents=True)
         (b / "binding.json").write_text(json.dumps({"executor": "codex", "created_at": "2026-11-02T15:39:03Z",
@@ -293,8 +326,9 @@ class CliSessions(unittest.TestCase):
         got = self.ns.fanout_binding(omh, run_dir, "t1-hermes")
         self.assertEqual((got["owner"], got["worktree"]), ("codex", self.wt))
         self.assertIsNone(self.ns.fanout_binding(omh, run_dir, "t9-none"))
-        p = write_codex(self.codex, self.wt, "t-mine", "Do t1", "ls", "done t1")
-        self.assertEqual(self.ns.codex_find(got["worktree"], got["since"]), p)
+        p = write_codex(self.codex, self.wt, "t-mine", "Overall goal: Codex coexistence fixes.\n## t1-hermes\nDo t1\n"
+                        "Work unit: Codex skill discovery", "ls", "done t1")
+        self.assertEqual(self.ns.codex_find(got["worktree"], got["since"], prompt=got["goal"]), p)
 
 
 class Op(unittest.IsolatedAsyncioTestCase):

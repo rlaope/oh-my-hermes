@@ -3114,6 +3114,21 @@ def _ns_finish(kind: str, items: list[dict], **extra) -> dict:
     return {k: _ns_masked(v) for k, v in out.items()}
 
 
+def _ns_norm(text) -> str:
+    """A prompt as the matcher compares it: dag marks and a fanout unit prompt's `Overall goal: ` lead out, whitespace
+    folded, the first 200 characters."""
+    s = " ".join(DAG_MARK.sub("", str(text or "")).split())
+    return s.removeprefix("Overall goal: ")[:200]
+
+
+# the harness's own preamble in a Codex rollout (AGENTS.md, environment): not what the parent said
+_CODEX_PREAMBLE = ("# AGENTS.md", "<environment_context>", "<user_instructions>", "<permissions", "<INSTRUCTIONS>")
+
+
+NS_FIND_BEFORE = 60        # a CLI session may start this long before the unit's recorded start…
+NS_FIND_AFTER = 15 * 60    # …and this long after it
+
+
 def _inside(path: Path, root: Path) -> bool:
     try:
         real, top = os.path.realpath(path), os.path.realpath(root)
@@ -3331,22 +3346,56 @@ class NodeSessions:
         return _ns_finish("claude", out, ref=ref, model=info["model"], parent=parent_name, started=info["started"],
                           ended=info["ended"], cwd=info["cwd"])
 
-    def claude_find(self, worktree: str, since: float) -> Path | None:
-        """The newest Claude Code transcript of exactly that folder, started at or after `since` (a minute's grace)."""
+    @staticmethod
+    def _claude_head(path: Path) -> tuple[str, float | None]:
+        """A transcript's first user message (as the matcher compares it) and its first timestamp."""
+        first_ts: float | None = None
+        try:
+            with open(path, "rb") as fh:
+                for n, raw in enumerate(fh):
+                    if n > 400:
+                        break
+                    try:
+                        o = json.loads(raw)
+                    except ValueError:
+                        continue
+                    if not isinstance(o, dict) or o.get("type") not in ("user", "assistant"):
+                        continue
+                    first_ts = first_ts or _iso_ts(o.get("timestamp"))
+                    if o["type"] != "user":
+                        continue
+                    msg = o.get("message") if isinstance(o.get("message"), dict) else {}
+                    content = msg.get("content")
+                    parts = content if isinstance(content, list) else []
+                    text = content if isinstance(content, str) else "\n".join(
+                        str(p.get("text") or "") for p in parts if isinstance(p, dict) and p.get("type") == "text")
+                    if text.strip():
+                        return _ns_norm(text), first_ts
+        except OSError:
+            pass
+        return "", first_ts
+
+    @staticmethod
+    def _closest(found: list[tuple[str, float | None, Path]], prompt: str, since: float) -> Path | None:
+        """Of (first prompt, first timestamp, file): those whose prompt matches `prompt` (first 200 characters,
+        whitespace folded) and that started in [since - 1 min, since + 15 min]; the one closest to `since`. None when
+        no prompt is known or nothing matches: never the newest file of the folder."""
+        want = _ns_norm(prompt)
+        if not want or not since:
+            return None
+        hits = [(abs(ts - since), str(p), p) for text, ts, p in found
+                if ts is not None and since - NS_FIND_BEFORE <= ts <= since + NS_FIND_AFTER
+                and text and (text.startswith(want) or want.startswith(text))]
+        return min(hits)[2] if hits else None
+
+    def claude_find(self, worktree: str, since: float, prompt: str = "") -> Path | None:
+        """The Claude Code transcript of exactly that folder whose first user message is the unit's prompt and that
+        started near `since` (see `_closest`)."""
         d = self._claude_root() / claude_slug(worktree)
         if not d.is_dir() or d.is_symlink():
             return None
-        best = None
-        for f in d.glob("*.jsonl"):
-            if not _inside(f, self._claude_root()):
-                continue
-            try:
-                m = f.stat().st_mtime
-            except OSError:
-                continue
-            if m >= since - 60 and (best is None or m > best[0]):
-                best = (m, f)
-        return best[1] if best else None
+        found = [(*self._claude_head(f), f) for f in d.glob("*.jsonl") if _inside(f, self._claude_root())]
+        return self._closest(found, prompt, since)
 
     # ---- Codex
     def _codex_root(self) -> Path:
@@ -3375,9 +3424,11 @@ class NodeSessions:
                 "parent": spawn.get("parent_thread_id") if isinstance(spawn, dict) else None,
                 "start": pl.get("subagent_history_start_ordinal")}
 
-    def codex_find(self, worktree: str = "", since: float = 0.0, thread: str = "") -> Path | None:
+    def codex_find(self, worktree: str = "", since: float = 0.0, thread: str = "", prompt: str = "") -> Path | None:
+        """A Codex rollout by its thread id, or the top-level rollout of exactly that folder whose first user message
+        is the unit's prompt and that started near `since` (see `_closest`)."""
         want = os.path.realpath(worktree) if worktree else ""
-        best = None
+        found: list[tuple[str, float | None, Path]] = []
         for p in self._codex_files():
             m = self._codex_meta(p)
             if thread:
@@ -3386,10 +3437,32 @@ class NodeSessions:
                 continue
             if m.get("parent") or not m.get("cwd") or os.path.realpath(m["cwd"]) != want:
                 continue
-            st = m.get("started") or 0.0
-            if st >= since - 120 and (best is None or st > best[0]):
-                best = (st, p)
-        return best[1] if best else None
+            found.append((self._codex_first_prompt(p), m.get("started"), p))
+        return None if thread else self._closest(found, prompt, since)
+
+    @staticmethod
+    def _codex_first_prompt(path: Path) -> str:
+        """A rollout's first user message past the harness's own preamble, as the matcher compares it."""
+        try:
+            with open(path, "rb") as fh:
+                for n, raw in enumerate(fh):
+                    if n > 400:
+                        break
+                    try:
+                        o = json.loads(raw)
+                    except ValueError:
+                        continue
+                    if not isinstance(o, dict):
+                        continue
+                    pl = o.get("payload") if isinstance(o.get("payload"), dict) else {}
+                    if o.get("type") != "response_item" or pl.get("type") != "message" or pl.get("role") != "user":
+                        continue
+                    text = "\n".join(_texts(pl.get("content"))).strip()
+                    if text and not text.startswith(_CODEX_PREAMBLE):
+                        return _ns_norm(text)
+        except OSError:
+            pass
+        return ""
 
     def codex_read(self, path: Path, parent_name: str = "") -> dict:
         if not _inside(path, self._codex_root()):
@@ -3421,8 +3494,7 @@ class NodeSessions:
                 if typ == "message" and pl.get("role") in ("user", "assistant"):
                     text = "\n".join(_texts(pl.get("content"))).strip()
                     # the harness's own preamble (AGENTS.md, environment) is not what the parent said
-                    if not text or text.startswith(("# AGENTS.md", "<environment_context>", "<user_instructions>",
-                                                     "<permissions", "<INSTRUCTIONS>")):
+                    if not text or text.startswith(_CODEX_PREAMBLE):
                         continue
                     items.append({"type": pl["role"], "text": _ns_clip(text, NS_TEXT), "ts": ts})
                 elif typ == "agent_message":
@@ -3470,6 +3542,14 @@ class NodeSessions:
             if unit is None:
                 continue
             out = {"owner": str(unit.get("owner") or "")}
+            # every unit prompt of this fanout opens with its goal file's text (`Overall goal: …`)
+            g = run_folder / f"fanout-{m.group(1)}-goal.txt"
+            if g.is_file() and not g.is_symlink():
+                try:
+                    with open(g, encoding="utf-8", errors="replace") as fh:
+                        out["goal"] = fh.read(4000)
+                except OSError:
+                    pass
             b = omh_home / "runtime" / "runs" / f"fanout-{m.group(1)}-{node}" / "executor_progress" / "binding.json"
             if b.is_file() and not b.is_symlink():
                 try:
@@ -3538,12 +3618,13 @@ class NodeSessions:
                 ex = (b or {}).get("executor") or n["executor"]
                 wt = (b or {}).get("worktree") or ""
                 cli = "claude" if "claude" in ex else "codex" if "codex" in ex else ex
+                since_at, prompt = (b or {}).get("since") or started or 0.0, (b or {}).get("goal") or ""
                 if wt and cli == "codex":
-                    p = self.codex_find(wt, (b or {}).get("since") or started or 0.0)
+                    p = self.codex_find(wt, since_at, prompt=prompt)
                     if p:
                         return {"session": self.codex_read(p, parent_name)}
                 if wt and cli == "claude":
-                    p = self.claude_find(wt, (b or {}).get("since") or started or 0.0)
+                    p = self.claude_find(wt, since_at, prompt)
                     if p:
                         return {"session": self.claude_read(p, f"claude:{p.parent.name}/{p.stem}", parent_name)}
                 return {"session": None, "why": "no_cli_session", "executor": cli}
