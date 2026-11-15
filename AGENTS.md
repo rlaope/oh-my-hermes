@@ -105,16 +105,26 @@ and evidence obvious to a reviewer reading the PR without the chat history.
   isolated local Hermes single-query process (`hermes chat --query-file -`,
   the Hermes transport that reads a prompt from stdin). It requires
   `--confirm-dispatch`, takes prompts only through stdin/files, enforces a
-  depth-one recursion limit and safe-mode file tools, records authenticated
-  `routing_observation/v1` evidence, and never runs automatically. Two front
-  doors reuse it without adding a process authority:
+  depth-one recursion limit, runs safe-mode file tools by default, records
+  authenticated `routing_observation/v1` evidence, and never runs
+  automatically. Two front doors reuse it without adding a process authority:
   - `omh coding paired-run dispatch` for confirmed evaluation cells: one
     digest-matching task file per frozen task, task bytes over child stdin,
     detached per-cell worktrees under an atomically unique invocation-owned
     parent, signed evaluation bindings, removal of only the paths that
     invocation reserved, and no persisted task body. Executors without a
     receipt-capable adapter are refused without substitution;
-    caller-injected adapters stay the executor-neutral seam.
+    caller-injected adapters stay the executor-neutral seam. It is the one
+    caller that leaves safe mode: each arm runs a declared, receipt-signed
+    arm setup in its own disposable Hermes home (the variant with the OMH
+    plugin, a disposable OMH home and its frozen `exposed_skills`, the
+    baseline with neither; both `file,skills` tools), served by a
+    harness-owned `hermes gateway run` in its own process group that the
+    invocation warms before timing and stops on exit, never a service
+    manager. A custom provider is declared by base URL (https, or http to a
+    loopback host), API mode and key variable name; its secret arrives only
+    by environment. Fan-in refuses a cell whose signed setup contradicts its
+    arm.
   - `omh coding fanout dispatch --final-review`, after dispatcher-observed
     integration GREEN: the explicit flag, a clean integrated tree, named
     Hermes provider/model settings; four read-only lenses in disposable,

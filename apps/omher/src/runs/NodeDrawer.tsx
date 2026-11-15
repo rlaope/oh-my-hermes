@@ -4,7 +4,7 @@
 // chat composer so the person can ask the bot; it never sends.
 import { useEffect, useMemo, useState } from "react";
 import type { AgentRun, CliAgent, RunNode } from "../lib/runs";
-import { isCliRun, span } from "../lib/runs";
+import { isCliRun, lengthOf } from "../lib/runs";
 import { Markdown } from "../chat/parts/Markdown";
 import { LinksBlock } from "../chat/parts/LinkChip";
 import { linksIn } from "../chat/parts/linkKinds";
@@ -71,7 +71,7 @@ export function NodeDrawer({
   const [all, setAll] = useState(false);
   useEffect(() => setAll(false), [node.id]);
   const last = node.attempts[node.attempts.length - 1];
-  const t = node.started === undefined ? "" : span((node.ended ?? nowS) - node.started);
+  const t = node.started === undefined ? "" : lengthOf(node.started, node.ended, nowS);
   const ran = factsOf(node, run, bot);
   const facts = [node.lane, t].filter(Boolean).join(" · ");
   const long = (text?.length ?? 0) > PREVIEW;

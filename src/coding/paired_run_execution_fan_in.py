@@ -20,6 +20,7 @@ from ..quality.paired_run_receipt_binding import (
     evaluation_binding_errors,
 )
 from ..quality.paired_run_values import exposure_digest
+from .hermes_child_arm_setup import ArmSetup
 from .hermes_child_receipts import (
     ReceiptVerificationError,
     is_verified_receipt,
@@ -234,6 +235,30 @@ def _execution_state_error(outcome: PairedRunExecutionOutcome) -> str:
     return f"{state}: {outcome.crash_reason.label}"
 
 
+def arm_setup_error(
+    setup: ArmSetup | None,
+    role: ArmRole,
+    exposed_skills: tuple[str, ...],
+) -> str | None:
+    """Refuse a cell whose signed arm setup is not what its arm declares.
+
+    The arm role fixes the plugin expectation (the variant runs with the OMH
+    plugin enabled, the baseline without it); the frozen `exposed_skills`
+    fix the skills digest. A receipt with no arm setup proves neither.
+    """
+    if setup is None:
+        return "missing signed arm setup"
+    if setup.omh_plugin is not (role is ArmRole.VARIANT):
+        return (
+            "variant arm ran without the OMH plugin"
+            if role is ArmRole.VARIANT
+            else "baseline arm ran with the OMH plugin"
+        )
+    if setup.exposure_digest != exposure_digest(tuple(sorted(exposed_skills))):
+        return "arm setup skills do not match exposed_skills"
+    return None
+
+
 def _binding_error(
     cell: PairedRunDispatchCell,
     row: RunResultInput,
@@ -244,6 +269,9 @@ def _binding_error(
     if receipt is None:
         return "missing authenticated receipt"
     arm = request.baseline if cell.arm is ArmRole.BASELINE else request.variant
+    setup_error = arm_setup_error(receipt.arm_setup, cell.arm, arm.exposed_skills)
+    if setup_error is not None:
+        return setup_error
     errors = evaluation_binding_errors(
         receipt.evaluation_binding,
         ExpectedEvaluationBinding(
