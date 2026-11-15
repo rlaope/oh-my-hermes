@@ -700,6 +700,18 @@ function bumpUnread(state: AppState, bot: string): AppState {
   return { ...state, unread: { ...state.unread, [bot]: (state.unread[bot] ?? 0) + 1 } };
 }
 
+/** Where the running turn's answer goes: right before the first message the person sent after that turn's
+ *  activity line (sent while the bot was still writing: it is answered next, so it reads under this answer, as in
+ *  a messenger), else at the end. */
+export function answerSlot(chat: Chat): number {
+  const turn = chat.turn;
+  if (!turn) return chat.items.length;
+  const at = chat.items.findIndex((i) => i.kind === "activity" && i.id === turn.id);
+  if (at < 0) return chat.items.length;
+  const next = chat.items.findIndex((i, k) => k > at && i.kind === "user");
+  return next < 0 ? chat.items.length : next;
+}
+
 /** Insert `extra` rows into `base` by ts, after the last row whose ts is <= theirs. */
 function mergeByTs(base: ChatItem[], extra: ChatItem[]): ChatItem[] {
   const out = [...base];
@@ -939,9 +951,10 @@ function reduceEvent(state: AppState, ev: BridgeEvent, now: number): AppState {
         const cleared = patchTurn(c, (t) => ({ ...t, streaming: "", cut: undefined }));
         const msg: MessageItem = { kind: "assistant", id: ev.id, ts: now / 1000, text: ev.text };
         const exists = cleared.items.some((i) => i.kind === "assistant" && i.id === ev.id);
+        const slot = answerSlot(cleared);
         const items = exists
           ? cleared.items.map((i) => (i.kind === "assistant" && i.id === ev.id ? { ...i, text: ev.text } : i))
-          : [...cleared.items, msg];
+          : [...cleared.items.slice(0, slot), msg, ...cleared.items.slice(slot)];
         return withItems(cleared, items);
       });
       const existed = state.chats[bot]?.items.some((i) => i.kind === "assistant" && i.id === ev.id);
@@ -1005,7 +1018,8 @@ function reduceEvent(state: AppState, ev: BridgeEvent, now: number): AppState {
         const said = c.turn ? c.turn.streaming.slice(c.turn.cut ?? 0).trim() : "";
         if (ev.outcome === "done" && c.turn && said) {
           const text = said;
-          base = withItems(c, [...c.items, { kind: "assistant", id: `${c.turn.id}-a`, ts: now / 1000, text }]);
+          const slot = answerSlot(c);
+          base = withItems(c, [...c.items.slice(0, slot), { kind: "assistant", id: `${c.turn.id}-a`, ts: now / 1000, text }, ...c.items.slice(slot)]);
           base = patchTurn(base, (t) => ({ ...t, streaming: "", cut: undefined }));
         }
         return { ...endTurn(base, now, ev.outcome, ev.error), early: null };

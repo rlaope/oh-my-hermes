@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { answerSoFar, activityText, chatRoute, createStore, folderKey, setChatRoute, initialState, reduce, replyChipFor, selectTimeline, type Action, type AppState, type BridgeLike } from "./store";
+import { answerSlot, answerSoFar, activityText, chatRoute, createStore, folderKey, setChatRoute, initialState, reduce, replyChipFor, selectTimeline, type Action, type AppState, type BridgeLike } from "./store";
 import type { Away, BridgeEvent, ChatOpenResult } from "../lib/protocol";
 import type { BridgeStatus } from "../lib/bridge";
 
@@ -114,6 +114,20 @@ describe("reducer: a full turn", () => {
     s = run(s, [{ event: "message", bot: "kami", id: "a1", text: "All 35 tests pass." }]);
     expect(s.chats.kami.turn!.streaming).toBe("");
     expect(answerSoFar(s.chats.kami.turn!)).toBe("");
+  });
+
+  it("a message sent while the answer is written stays under that answer, which lands where it was being written", () => {
+    let s = reduce(initialState(), { type: "local.user", bot: "kami", id: "l1", text: "first question", now: 1000 });
+    s = run(s, [{ event: "turn.start", bot: "kami" }, { event: "delta", bot: "kami", text: "Line one.\nline tw" }]);
+    s = reduce(s, { type: "local.user", bot: "kami", id: "l2", text: "sent mid-answer", now: 2000 });
+    const kinds = (st: typeof s) => st.chats.kami.items.filter((i) => i.kind !== "away").map((i) => (i.kind === "user" || i.kind === "assistant" ? `${i.kind}:${i.text}` : i.kind));
+    // the answer being written goes right before the message sent while it was written
+    expect(s.chats.kami.items[answerSlot(s.chats.kami)]).toMatchObject({ kind: "user", id: "l2" });
+    s = run(s, [{ event: "message", bot: "kami", id: "a1", text: "Line one.\nline two." }, { event: "turn.end", bot: "kami", outcome: "done" }]);
+    expect(kinds(s)).toEqual(["user:first question", "activity", "assistant:Line one.\nline two.", "user:sent mid-answer"]);
+    // the next turn answers it, under it
+    s = run(s, [{ event: "turn.start", bot: "kami" }, { event: "message", bot: "kami", id: "a2", text: "Second answer." }, { event: "turn.end", bot: "kami", outcome: "done" }]);
+    expect(kinds(s).slice(-3)).toEqual(["user:sent mid-answer", "activity", "assistant:Second answer."]);
   });
 
   it("a status, thinking, step or text outside a turn starts none; a status just before turn.start opens it", () => {
