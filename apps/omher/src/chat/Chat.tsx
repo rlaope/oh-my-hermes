@@ -7,6 +7,7 @@ import { RunsFull } from "../runs/RunsTab";
 import { OmhPromptLine } from "../onboarding/OmhPromptLine";
 import { ConnectBlock } from "./connect/ConnectBlock";
 import { t } from "../i18n";
+import { ThreadChat } from "../threads/ThreadChat";
 
 /** The selected bot's one main chat: header, timeline, composer. */
 export function Chat() {
@@ -27,6 +28,8 @@ export function Chat() {
       </div>
     );
   }
+  // a thread of this bot (sidebar tree): the same parts, fed by the thread's chat
+  if (s.ui.thread) return <ThreadChat bot={bot} thread={s.ui.thread} />;
   const chat = s.chats[bot.name];
   const asking = selectAsks(s).some((a) => a.bot === bot.name);
   // the bridge is away (it reconnects by itself): the composer says so and waits, like a bot that is offline
