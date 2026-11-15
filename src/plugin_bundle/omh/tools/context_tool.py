@@ -62,7 +62,7 @@ def omh_context_handler(args: dict, **kwargs) -> str:
     payload = compact_context_brief(payload)
     payload["plugin_tool"] = "omh_context"
     payload["source_backend"] = backend
-    return json.dumps(attach_public_observation(payload, observation), sort_keys=True)
+    return json.dumps(attach_public_observation(payload, observation), ensure_ascii=False, sort_keys=True)
 
 
 def _context_brief(

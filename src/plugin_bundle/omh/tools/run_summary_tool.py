@@ -211,7 +211,7 @@ def _optional_number(value: Any) -> float | None:
 
 def omh_run_summary_handler(args: dict[str, Any], **kwargs) -> str:
     if error := runtime_paths.tool_home_error(args):
-        return json.dumps(error, sort_keys=True)
+        return json.dumps(error, ensure_ascii=False, sort_keys=True)
     observation = observe_plugin_tool_call("omh_run_summary", args, kwargs)
     language = str(args.get("language", "") or "en").strip().lower()
     if language not in _SUMMARY_LABELS:
@@ -230,7 +230,7 @@ def omh_run_summary_handler(args: dict[str, Any], **kwargs) -> str:
             "the host did not supply a session id and none was passed; "
             "run summaries need the session's accounting row"
         )
-        return json.dumps(attach_public_observation(payload, observation), sort_keys=True)
+        return json.dumps(attach_public_observation(payload, observation), ensure_ascii=False, sort_keys=True)
 
     # Metadata only; built beside the summary so a cost question and the
     # closing lines read the same accounting.
@@ -243,7 +243,7 @@ def omh_run_summary_handler(args: dict[str, Any], **kwargs) -> str:
     if session is None:
         payload["status"] = "not_observed"
         payload["error"] = f"no session row observed for {session_id!r}"
-        return json.dumps(attach_public_observation(payload, observation), sort_keys=True)
+        return json.dumps(attach_public_observation(payload, observation), ensure_ascii=False, sort_keys=True)
 
     started = _optional_number(session.get("started_at"))
     ended_raw = _optional_number(session.get("ended_at"))
@@ -295,4 +295,4 @@ def omh_run_summary_handler(args: dict[str, Any], **kwargs) -> str:
             "summary_text": "\n".join(lines),
         }
     )
-    return json.dumps(attach_public_observation(payload, observation), sort_keys=True)
+    return json.dumps(attach_public_observation(payload, observation), ensure_ascii=False, sort_keys=True)

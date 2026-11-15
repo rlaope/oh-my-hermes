@@ -351,7 +351,7 @@ def omh_remember_handler(args: dict, *, session_id: str, **kwargs) -> str:
     payload["plugin_tool"] = REMEMBER_TOOL_NAME
     payload["action"] = action
     payload["source_backend"] = "bundle_memory"
-    return json.dumps(attach_public_observation(payload, observation), sort_keys=True)
+    return json.dumps(attach_public_observation(payload, observation), ensure_ascii=False, sort_keys=True)
 
 
 def omh_memory_handler(args: dict, **kwargs) -> str:
@@ -376,7 +376,7 @@ def omh_memory_handler(args: dict, **kwargs) -> str:
     payload["plugin_tool"] = "omh_memory"
     payload["action"] = action
     payload["source_backend"] = backend
-    return json.dumps(attach_public_observation(payload, observation), sort_keys=True)
+    return json.dumps(attach_public_observation(payload, observation), ensure_ascii=False, sort_keys=True)
 
 
 def _memory_bridge() -> tuple[dict[str, object], str]:

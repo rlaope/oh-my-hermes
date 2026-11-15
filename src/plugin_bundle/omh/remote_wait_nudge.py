@@ -1213,4 +1213,4 @@ def _carry(result: object, text: str) -> str | None:
     if REMOTE_WAIT_NUDGE_KEY in parsed:
         return None
     parsed[REMOTE_WAIT_NUDGE_KEY] = text
-    return json.dumps(parsed)
+    return json.dumps(parsed, ensure_ascii=False)

@@ -182,6 +182,7 @@ export function PluginsPage() {
               setCategory={setCategory}
               installed={installedNames}
               onInstall={setSheet}
+              onDetails={setSheet}
             />
           ) : rows === null ? (
             <div className="pg-empty">{t("plug.loading")}</div>
@@ -388,6 +389,7 @@ function Browse({
   setCategory,
   installed,
   onInstall,
+  onDetails,
 }: {
   bot: Bot | undefined;
   catalog: CatalogResult | null;
@@ -397,6 +399,7 @@ function Browse({
   setCategory: (c: string) => void;
   installed: Set<string>;
   onInstall: (e: CatalogEntry) => void;
+  onDetails: (e: CatalogEntry) => void;
 }) {
   if (catalog && catalog.total === 0)
     return (
@@ -443,13 +446,24 @@ function Browse({
                   warn={e.requires_env.length ? t("plug.needsKey") : undefined}
                   testId={`plug-card-${e.name}`}
                   control={
-                    has ? (
-                      <span className="pl-done">{t("plug.installed")}</span>
-                    ) : (
-                      <button type="button" className="pg-btn" onClick={() => onInstall(e)} data-testid={`plug-install-${e.name}`}>
-                        {t("plug.install")}
+                    <>
+                      <button
+                        type="button"
+                        className="pg-btn"
+                        onClick={() => onDetails(e)}
+                        aria-label={t("plug.detailsFor", { name: e.title || e.name })}
+                        data-testid={`plug-details-${e.name}`}
+                      >
+                        {t("plug.details")}
                       </button>
-                    )
+                      {has ? (
+                        <span className="pl-done">{t("plug.installed")}</span>
+                      ) : (
+                        <button type="button" className="pg-btn" onClick={() => onInstall(e)} data-testid={`plug-install-${e.name}`}>
+                          {t("plug.install")}
+                        </button>
+                      )}
+                    </>
                   }
                 />
               );

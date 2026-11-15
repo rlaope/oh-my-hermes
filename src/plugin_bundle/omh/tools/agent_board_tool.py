@@ -79,7 +79,7 @@ def omh_agent_board_handler(args: Mapping[str, object], **kwargs: object) -> str
         if args.get("action") == "status":
             if set(args) != {"action", "request_id"} or not isinstance(args.get("request_id"), str):
                 return _unavailable("invalid_status_input")
-            return json.dumps(installed_status(str(args["request_id"])), sort_keys=True)
+            return json.dumps(installed_status(str(args["request_id"])), ensure_ascii=False, sort_keys=True)
         board = args.get("board")
         if not isinstance(board, str):
             return _unavailable("board_required")
@@ -92,7 +92,7 @@ def omh_agent_board_handler(args: Mapping[str, object], **kwargs: object) -> str
             return _unavailable("invalid_prepare_input", fields=missing)
         schemas, hooks = host_capabilities()
         prepared = bridge.prepare(args, host=identity, schemas=schemas, hooks=hooks)
-        return json.dumps(with_say(dict(prepared), board_say(prepared)), sort_keys=True)
+        return json.dumps(with_say(dict(prepared), board_say(prepared)), ensure_ascii=False, sort_keys=True)
     except BoardCoreUnavailable:
         # The module imported, but this host cannot import the engine behind
         # it; that is a missing component, not an invalid request.
@@ -116,4 +116,4 @@ def _unavailable(reason: str, *, detail: str = "", fields: list[str] | None = No
         payload["detail"] = detail
     if fields:
         payload["fields"] = fields
-    return json.dumps(payload, sort_keys=True)
+    return json.dumps(payload, ensure_ascii=False, sort_keys=True)

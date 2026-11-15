@@ -480,6 +480,12 @@ class NamedFileSnapshotTest(_Workspace):
         self.assertEqual(self.verdict(), ct.Verdict(True, "opaque_edit", "src/app/a.py"))
 
 
+def _home_env(home) -> dict[str, str]:
+    """``~`` as ``os.path.expanduser`` reads it on every platform: ``HOME`` on POSIX, ``USERPROFILE`` on
+    Windows (Python 3.8+ ignores ``HOME`` there)."""
+    return {"HOME": str(home), "USERPROFILE": str(home)}
+
+
 class IndexCostTest(_Workspace):
     def first_call(self, session: str = SESSION) -> None:
         """A call that can change a file (a command naming none): the turn's first one takes the index."""
@@ -549,6 +555,42 @@ class IndexCostTest(_Workspace):
         with mock.patch.object(ct, "OVER_BUDGET_SECONDS", 0.0), mock.patch.object(ct, "_index", wraps=ct._index) as walks:
             self.first_call()
         walks.assert_called_once()
+
+    def test_a_root_that_is_the_home_directory_is_never_walked(self):
+        self.write("src/app/a.py", "def a():\n    return 1\n")
+        with mock.patch.dict(os.environ, _home_env(self.root)), \
+                mock.patch.object(ct.os, "walk", side_effect=AssertionError("walked")) as walk:
+            self.first_call()
+        walk.assert_not_called()
+        self.assertIsNone(ct._sessions[SESSION]["index"])
+        self.assertEqual(ct._sessions[SESSION]["unindexed"], ("index_budget", "home"))
+
+    def test_a_root_above_the_home_directory_is_never_walked(self):
+        self.write("src/app/a.py", "def a():\n    return 1\n")
+        with mock.patch.dict(os.environ, _home_env(self.root / "Users" / "me")), \
+                mock.patch.object(ct.os, "walk", side_effect=AssertionError("walked")) as walk:
+            self.first_call()
+        walk.assert_not_called()
+        self.assertEqual(ct._sessions[SESSION]["unindexed"], ("index_budget", "home"))
+
+    def test_home_is_matched_by_the_platform_s_path_case_rule(self):
+        # Windows paths compare case-insensitively: `C:\Users\Me` and `c:\users\me` are one folder.
+        # Simulate that rule with `normcase` folding case, as ntpath's does.
+        def fold(p):
+            return p.lower()
+        mixed = str(self.root).swapcase()
+        with mock.patch.object(ct.os.path, "normcase", fold), \
+                mock.patch.object(ct.os.path, "expanduser", lambda p: mixed if p == "~" else p), \
+                mock.patch.object(ct.os.path, "realpath", lambda p: p):
+            self.assertTrue(ct._covers_home(str(self.root)))
+            self.assertTrue(ct._covers_home(str(self.root.parent)))
+            self.assertFalse(ct._covers_home(str(self.root / "src")))
+
+    def test_a_root_inside_the_home_directory_is_walked(self):
+        self.write("src/app/a.py", "def a():\n    return 1\n")
+        with mock.patch.dict(os.environ, _home_env(self.root.parent)):
+            self.first_call()
+        self.assertIn(str(self.root / "src" / "app" / "a.py"), ct._sessions[SESSION]["index"])
 
     def test_a_session_on_a_no_check_platform_takes_no_index(self):
         from omh.plugin_bundle.omh.hooks.verify_hooks import _NO_CHECKLIST_PLATFORMS

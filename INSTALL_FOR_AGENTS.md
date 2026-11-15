@@ -536,7 +536,12 @@ Agent/maintainer procedure:
 
    A target whose provider has no Hermes login is refused with
    `lacks safe observed provider auth`; the user links that provider with
-   `hermes auth` first, then you repeat the preview.
+   `hermes auth` first, then you repeat the preview. A provider configured
+   under Hermes `providers:` counts once its key is observable: the refusal
+   `is configured under providers: but no credential is observable` names the
+   environment variable it reads (its `key_env`), and the user sets that
+   variable in the shell OMH runs in, or adds a pool with
+   `hermes auth add <id>`, then you repeat the preview.
 
 3. Show the user `steps.model_activation.preview.changes` and
    `config_digest`. After explicit approval, repeat the command with

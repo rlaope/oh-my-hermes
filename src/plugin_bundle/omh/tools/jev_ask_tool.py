@@ -215,11 +215,11 @@ def omh_jev_ask_handler(
     **kwargs: Any,
 ) -> str:
     if error := runtime_paths.tool_home_error(args):
-        return json.dumps(error, sort_keys=True)
+        return json.dumps(error, ensure_ascii=False, sort_keys=True)
     observation = observe_plugin_tool_call("omh_jev_ask", _withheld(args), _withheld(kwargs))
     ask = _Ask(args, kwargs)
     result = ask.run(transport)
-    return json.dumps(attach_public_observation(result, observation), sort_keys=True)
+    return json.dumps(attach_public_observation(result, observation), ensure_ascii=False, sort_keys=True)
 
 
 def jev_ask_available() -> bool:

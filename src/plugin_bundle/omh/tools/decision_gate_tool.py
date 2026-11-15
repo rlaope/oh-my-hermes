@@ -58,30 +58,30 @@ def omh_decision_gate_handler(
     allowed = set(_REQUIRED_DECISION_GATE_FIELDS) | {"observation"}
     observation = observe_plugin_tool_call("omh_decision_gate", args if isinstance(args, dict) else {}, kwargs)
     if not isinstance(args, dict) or set(args) - allowed or set(_REQUIRED_DECISION_GATE_FIELDS) - set(args):
-        return json.dumps(attach_public_observation(_invalid_result("invalid_payload"), observation), sort_keys=True)
+        return json.dumps(attach_public_observation(_invalid_result("invalid_payload"), observation), ensure_ascii=False, sort_keys=True)
     payload = {key: args[key] for key in _REQUIRED_DECISION_GATE_FIELDS}
     # A host whose interpreter has no usable `omh` package refuses here,
     # bounded, instead of raising out of the tool (#2166).
     service, backend = load_backend(_import_gate_service)
     if service is None:
-        return json.dumps(attach_public_observation(_unavailable_result(backend), observation), sort_keys=True)
+        return json.dumps(attach_public_observation(_unavailable_result(backend), observation), ensure_ascii=False, sort_keys=True)
     validate_connector_decision_payload, resolve_paths, apply_connector_decision_answer = service
     parsed_payload, error = validate_connector_decision_payload(payload)
     if error:
-        return json.dumps(attach_public_observation(_invalid_result(error), observation), sort_keys=True)
+        return json.dumps(attach_public_observation(_invalid_result(error), observation), ensure_ascii=False, sort_keys=True)
     if trusted_connector_event is None:
-        return json.dumps(attach_public_observation(_invalid_result("untrusted_host_context"), observation), sort_keys=True)
+        return json.dumps(attach_public_observation(_invalid_result("untrusted_host_context"), observation), ensure_ascii=False, sort_keys=True)
     trusted_payload, trusted_error = validate_connector_decision_payload(trusted_connector_event)
     if trusted_error:
-        return json.dumps(attach_public_observation(_invalid_result("invalid_host_context"), observation), sort_keys=True)
+        return json.dumps(attach_public_observation(_invalid_result("invalid_host_context"), observation), ensure_ascii=False, sort_keys=True)
     if trusted_payload != parsed_payload:
-        return json.dumps(attach_public_observation(_invalid_result("host_context_mismatch"), observation), sort_keys=True)
+        return json.dumps(attach_public_observation(_invalid_result("host_context_mismatch"), observation), ensure_ascii=False, sort_keys=True)
     paths = resolve_paths(
         omh_home=default_omh_home(),
         hermes_home=runtime_paths.default_hermes_home(),
     )
     result = apply_connector_decision_answer(paths, **parsed_payload)
-    return json.dumps(attach_public_observation(result, observation), sort_keys=True)
+    return json.dumps(attach_public_observation(result, observation), ensure_ascii=False, sort_keys=True)
 
 
 def _import_gate_service() -> tuple[Any, Any, Any]:

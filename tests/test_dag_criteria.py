@@ -103,8 +103,10 @@ MAIN_VERIFY_CONTEXT = (
     "you are blocked and why; do not report blocked work as done."
 )
 MAIN_API_CONTEXT_SHA = "fd8a3794061b97010042cb5340cbcf4991630164ce58ed990667ccfbb5bc146c"
-MAIN_RESULT_RUNNING_SHA = "98a177d5682046408b2dce33d187db1dc5e255f38d5b2061d442b5b0f7fedf68"
-MAIN_RESULT_DONE_SHA = "6929d9578504513ff2e758766b2f293eda910749987d095aa51bba903a297c24"
+# The two tool-result pins hold the reply as the model reads it: non-ASCII kept as written (#2884), so the `·` of the
+# status line is one character, not `\u00b7`; the ASCII re-encoding of these bytes gives the pins main captured.
+MAIN_RESULT_RUNNING_SHA = "c53744ae5ca1a204693922fbc67dc5eb8b44cc9eb6ae714ac10955ba4fd03d50"
+MAIN_RESULT_DONE_SHA = "23f7a0fbcc001ab6dc3968b0980e2ba0806fbf7aa85d0d136a3bdbff23237ec8"
 MAIN_RECORD_DONE_SHA = "73428d56e7eef59d8ab280603de5610873ab3e4018287c6f03d8bfb7da544deb"
 
 

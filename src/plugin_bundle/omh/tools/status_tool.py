@@ -36,7 +36,7 @@ OMH_STATUS_SCHEMA = {
 def omh_status_handler(args: dict, *, group_activity_enabled: bool = False,
                        group_activity_observer: Callable[[], dict[str, str | int]] | None = None, **kwargs) -> str:
     if error := runtime_paths.tool_home_error(args):
-        return json.dumps(error, sort_keys=True)
+        return json.dumps(error, ensure_ascii=False, sort_keys=True)
     observation = observe_plugin_tool_call("omh_status", args, kwargs)
     payload = read_omh_status(
         omh_home=runtime_paths.plugin_home(args.get("omh_home")),
@@ -44,4 +44,4 @@ def omh_status_handler(args: dict, *, group_activity_enabled: bool = False,
     )
     payload["group_chat_activity"] = (group_activity_observer() if group_activity_observer is not None
                                       else group_activity_status(group_activity_enabled))
-    return json.dumps(attach_public_observation(payload, observation), sort_keys=True)
+    return json.dumps(attach_public_observation(payload, observation), ensure_ascii=False, sort_keys=True)

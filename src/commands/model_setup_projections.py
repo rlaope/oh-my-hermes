@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 
+from ..coding.hermes_model_config import providers_entry_remedy
 from ..coding.model_routing import MODEL_CATEGORIES
 
 
@@ -58,6 +59,16 @@ def provider_next_actions(confirmed: set[str], inspection) -> list[dict[str, str
                     "provider": provider_id,
                     "status": "custom_provider_name_required",
                     "next_action": "use the configured custom provider name as the prefix: <name>/<model>",
+                }
+            )
+        elif provider is not None and not provider.auth_present and provider.provider_entry:
+            # A Hermes `providers:` entry has no login: `hermes auth login <id>`
+            # answers Unknown provider. Name the route that does make it observable.
+            actions.append(
+                {
+                    "provider": provider_id,
+                    "status": "credential_not_observable",
+                    "next_action": providers_entry_remedy(provider),
                 }
             )
         elif provider is None or not provider.auth_present:

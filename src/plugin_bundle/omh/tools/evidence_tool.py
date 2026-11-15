@@ -548,4 +548,4 @@ def _rejected_result(command: str, reason: str) -> dict[str, object]:
 
 
 def _json(payload: dict[str, object]) -> str:
-    return json.dumps(payload, sort_keys=True)
+    return json.dumps(payload, ensure_ascii=False, sort_keys=True)

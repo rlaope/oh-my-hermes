@@ -121,12 +121,16 @@ fn hermes_homes<E: Fn(&str) -> Option<String>>(env: &E, os: Os) -> Vec<PathBuf> 
     homes
 }
 
-/// Where Hermes' Python lives, in the order the person would expect: `OMHER_HERMES_PYTHON`, then (Unix) the
-/// interpreter each Hermes home's PM launcher `hermes-agent/.hermes/bin/hermes` execs, then each home's
-/// `hermes-agent/venv`, then `hermes-agent/.venv` (`bin/python`, or `Scripts\python.exe` on Windows).
-/// The launcher goes first because it is the Python `hermes` itself runs on: an install upgraded to the
-/// unified package manager keeps its old venv, whose older Python cannot load the committed dependency
-/// generation the bridge activates. `env` and `exists` are injected so tests never touch the real machine.
+/// Where Hermes' Python lives, in the order the person would expect: `OMHER_HERMES_PYTHON`, then the
+/// interpreter each Hermes home's PM launcher names, then each home's `hermes-agent/venv`, then
+/// `hermes-agent/.venv` (`bin/python`, or `Scripts\python.exe` on Windows). The launcher is
+/// `hermes-agent/.hermes/bin/hermes` (a sh script that `exec`s it) on Unix; on Windows it is
+/// `hermes-agent\.hermes\bin\hermes.exe` or `hermes.cmd`, then the user bin `<home>\bin\hermes.exe` or
+/// `hermes.cmd` older PM installers published to (`.exe` first, as PATHEXT runs it). A Windows PM install
+/// has no venv at all. The launcher goes first because it is the Python `hermes` itself runs on: an
+/// install upgraded to the unified package manager keeps its old venv, whose older Python cannot load the
+/// committed dependency generation the bridge activates. omher only reads the launcher file; it never runs
+/// it. `env` and `exists` are injected so tests never touch the real machine.
 pub fn discover_python<E, X>(env: E, exists: X) -> Result<PathBuf, String>
 where
     E: Fn(&str) -> Option<String>,
@@ -140,7 +144,7 @@ where
     E: Fn(&str) -> Option<String>,
     X: Fn(&Path) -> bool,
 {
-    discover_python_in(env, exists, |p| std::fs::read_to_string(p).ok(), os)
+    discover_python_in(env, exists, |p| std::fs::read(p).ok(), os)
 }
 
 /// The interpreter a PM launcher script `exec`s: `exec /abs/python3 -I -c '...'`. Hermes writes that line
@@ -188,11 +192,69 @@ fn first_sh_word(line: &str) -> Option<String> {
     (!word.is_empty()).then_some(word)
 }
 
+/// The interpreter a Windows PM launcher starts, read from the file (never run). `hermes.exe` is distlib's
+/// native launcher: a loader stub, then `#!<python> -I` and the zipped script; the shebang follows the
+/// stub's last NUL byte before the zip, and distlib leaves the path unquoted, so it may hold a space.
+/// `hermes.cmd` is `@echo off`, then `"<python>" -I -c "..." %*`, possibly after a blank line. Both are
+/// read as Hermes' own `_launchers._launcher_python` reads them; the result must be a Windows absolute path.
+fn windows_launcher_python(name: &Path, data: &[u8]) -> Option<PathBuf> {
+    let exe = if name.extension().is_some_and(|e| e.eq_ignore_ascii_case("exe")) {
+        let prefix = &data[..zip_start(data)?];
+        let after_nul = prefix.iter().rposition(|&b| b == 0).map_or(0, |i| i + 1);
+        let start = after_nul + prefix[after_nul..].windows(2).position(|w| w == b"#!")? + 2;
+        let mut line = &prefix[start..];
+        while let [rest @ .., b'\r' | b'\n'] = line {
+            line = rest;
+        }
+        if line.contains(&b'\n') {
+            return None;
+        }
+        let path = std::str::from_utf8(line.strip_suffix(b" -I")?).ok()?;
+        path.trim_matches('"').to_string()
+    } else {
+        let text = std::str::from_utf8(data).ok()?;
+        let mut lines = text.strip_prefix('\u{feff}').unwrap_or(text).lines();
+        if !lines.next()?.trim().eq_ignore_ascii_case("@echo off") {
+            return None;
+        }
+        first_token(lines.find(|l| !l.trim().is_empty())?)?
+    };
+    windows_absolute(&exe).then(|| PathBuf::from(exe))
+}
+
+/// Where the zip a distlib launcher carries begins: its End of Central Directory record holds the
+/// central directory's size and its offset from the zip's own start, so the zip starts that far before
+/// the directory (the zip's members may hold NUL bytes, so the stub's last NUL is searched before it).
+fn zip_start(data: &[u8]) -> Option<usize> {
+    let eocd = data.windows(4).rposition(|w| w == b"PK\x05\x06")?;
+    let field = |at: usize| data.get(eocd + at..eocd + at + 4).map(|b| u32::from_le_bytes([b[0], b[1], b[2], b[3]]) as usize);
+    let (size, offset) = (field(12)?, field(16)?);
+    eocd.checked_sub(size)?.checked_sub(offset)
+}
+
+/// The first whitespace-separated token of a `.cmd` line, honouring one quote pair; never shell-lexed,
+/// which would eat a Windows path's backslashes.
+fn first_token(line: &str) -> Option<String> {
+    let text = line.trim();
+    let token = match text.chars().next()? {
+        q @ ('"' | '\'') => &text[1..1 + text[1..].find(q)?],
+        _ => text.split_whitespace().next()?,
+    };
+    (!token.is_empty()).then(|| token.to_string())
+}
+
+/// `C:\...`, `C:/...` or a UNC `\\server\share\...` path. `Path::is_absolute` cannot say this on the
+/// Unix machines these parse tests also run on.
+fn windows_absolute(p: &str) -> bool {
+    let b = p.as_bytes();
+    (b.len() > 2 && b[0].is_ascii_alphabetic() && b[1] == b':' && matches!(b[2], b'\\' | b'/')) || p.starts_with("\\\\")
+}
+
 pub fn discover_python_in<E, X, R>(env: E, exists: X, read: R, os: Os) -> Result<PathBuf, String>
 where
     E: Fn(&str) -> Option<String>,
     X: Fn(&Path) -> bool,
-    R: Fn(&Path) -> Option<String>,
+    R: Fn(&Path) -> Option<Vec<u8>>,
 {
     if let Some(p) = env("OMHER_HERMES_PYTHON").filter(|p| !p.trim().is_empty()) {
         let p = PathBuf::from(p.trim());
@@ -204,15 +266,24 @@ where
         Os::Unix => &["bin", "python"],
         Os::Windows => &["Scripts", "python.exe"],
     };
+    let launched = |launcher: &Path| exists(launcher).then(|| read(launcher)).flatten();
     for home in hermes_homes(&env, os) {
         let agent = home.join("hermes-agent");
-        if os == Os::Unix {
-            let launcher = agent.join(".hermes").join("bin").join("hermes");
-            if let Some(p) = exists(&launcher).then(|| read(&launcher)).flatten().as_deref().and_then(launcher_python) {
-                if exists(&p) {
-                    return Ok(p);
-                }
+        let found = match os {
+            Os::Unix => {
+                let launcher = agent.join(".hermes").join("bin").join("hermes");
+                launched(&launcher).and_then(|b| String::from_utf8(b).ok()).as_deref().and_then(launcher_python)
             }
+            Os::Windows => {
+                let bins = [agent.join(".hermes").join("bin"), home.join("bin")];
+                bins.iter().flat_map(|bin| ["hermes.exe", "hermes.cmd"].map(|n| bin.join(n))).find_map(|launcher| {
+                    let p = windows_launcher_python(&launcher, &launched(&launcher)?)?;
+                    exists(&p).then_some(p)
+                })
+            }
+        };
+        if let Some(p) = found.filter(|p| exists(p)) {
+            return Ok(p);
         }
         for dir in ["venv", ".venv"] {
             let p = exe.iter().fold(agent.join(dir), |p, part| p.join(part));
@@ -698,7 +769,7 @@ mod tests {
         const LAUNCHER: &str = "/h/.hermes/hermes-agent/.hermes/bin/hermes";
         const PM_PY: &str = "/h/.hermes/tools/python-3.14.9/bin/python3";
         let script = format!("#!/bin/sh\nexec {PM_PY} -I -c 'import os'\n");
-        let read = |p: &Path| (p == Path::new(LAUNCHER)).then(|| script.clone());
+        let read = |p: &Path| (p == Path::new(LAUNCHER)).then(|| script.clone().into_bytes());
         let env = env_of(&[("HOME", "/h")]);
         assert_eq!(discover_python_in(&env, fs_of(&[LAUNCHER, PM_PY]), read, Os::Unix), Ok(PathBuf::from(PM_PY)));
         // An install upgraded to PM keeps its old venv; `hermes` runs on the launcher's Python, so omher does too.
@@ -710,6 +781,143 @@ mod tests {
         // The override still wins over the launcher.
         let pinned = env_of(&[("HOME", "/h"), ("OMHER_HERMES_PYTHON", "/opt/py")]);
         assert_eq!(discover_python_in(&pinned, fs_of(&[LAUNCHER, PM_PY, "/opt/py"]), read, Os::Unix), Ok(PathBuf::from("/opt/py")));
+    }
+
+    const WIN_PY: &str = r"C:\Users\u\AppData\Local\hermes\tools\python-3.14.9\python.exe";
+
+    fn wenv() -> impl Fn(&str) -> Option<String> {
+        env_of(&[("LOCALAPPDATA", r"C:\Users\u\AppData\Local")])
+    }
+
+    /// `<home>\hermes-agent\.hermes\bin\<name>` (PM launcher) or `<home>\bin\<name>` (older user bin), with
+    /// this OS's separators, as `discover_python_in` joins them.
+    fn wlauncher(user_bin: bool, name: &str) -> PathBuf {
+        let home = PathBuf::from(r"C:\Users\u\AppData\Local").join("hermes");
+        let bin = if user_bin { home.join("bin") } else { home.join("hermes-agent").join(".hermes").join("bin") };
+        bin.join(name)
+    }
+
+    /// distlib's native launcher layout: a loader stub holding NULs, the shebang line, then a zip whose
+    /// own bytes hold NULs too (a local header and an End of Central Directory pointing back at it).
+    fn fake_exe(shebang: &str) -> Vec<u8> {
+        let mut out = b"MZ\x90\x00loader\x00stub\x00\x00".to_vec();
+        out.extend_from_slice(shebang.as_bytes());
+        let local = b"PK\x03\x04\x14\x00\x00\x00\x08\x00__main__.py\x00\x00".to_vec();
+        out.extend_from_slice(&local);
+        out.extend_from_slice(b"PK\x05\x06\x00\x00\x00\x00\x00\x00\x00\x00");
+        out.extend_from_slice(&0u32.to_le_bytes());
+        out.extend_from_slice(&(local.len() as u32).to_le_bytes());
+        out.extend_from_slice(b"\x00\x00");
+        out
+    }
+
+    fn files(entries: Vec<(PathBuf, Vec<u8>)>) -> impl Fn(&Path) -> Option<Vec<u8>> {
+        let m: HashMap<PathBuf, Vec<u8>> = entries.into_iter().collect();
+        move |p| m.get(p).cloned()
+    }
+
+    fn fs_with(paths: &[&Path]) -> impl Fn(&Path) -> bool {
+        let s: HashSet<PathBuf> = paths.iter().map(|p| p.to_path_buf()).collect();
+        move |p| s.contains(p)
+    }
+
+    #[test]
+    fn windows_python_comes_from_the_pm_launcher_exe() {
+        let exe = wlauncher(false, "hermes.exe");
+        let read = files(vec![(exe.clone(), fake_exe(&format!("#!{WIN_PY} -I\n")))]);
+        let got = discover_python_in(wenv(), fs_with(&[&exe, Path::new(WIN_PY)]), read, Os::Windows);
+        assert_eq!(got, Ok(PathBuf::from(WIN_PY)));
+    }
+
+    #[test]
+    fn windows_launcher_exe_shebang_may_hold_a_space_or_quotes() {
+        let spaced = r"C:\Users\u u\AppData\Local\hermes\tools\python-3.14.9\python.exe";
+        let exe = Path::new("hermes.exe");
+        assert_eq!(windows_launcher_python(exe, &fake_exe(&format!("#!{spaced} -I\n"))), Some(PathBuf::from(spaced)));
+        assert_eq!(windows_launcher_python(exe, &fake_exe(&format!("#!\"{spaced}\" -I\n"))), Some(PathBuf::from(spaced)));
+        // Vendored distlib trails the shebang with an extra CRLF before the zip.
+        assert_eq!(windows_launcher_python(exe, &fake_exe(&format!("#!{WIN_PY} -I\r\n\r\n"))), Some(PathBuf::from(WIN_PY)));
+        let unc = r"\\server\share\python.exe";
+        assert_eq!(windows_launcher_python(exe, &fake_exe(&format!("#!{unc} -I\n"))), Some(PathBuf::from(unc)));
+    }
+
+    #[test]
+    fn windows_python_comes_from_the_cmd_launcher() {
+        let cmd = wlauncher(false, "hermes.cmd");
+        let body = format!("@echo off\r\n\r\n\"{WIN_PY}\" -I -c \"import base64; exec(base64.b64decode('aW1wb3J0IG9z'))\" %*\r\n");
+        let read = files(vec![(cmd.clone(), body.into_bytes())]);
+        let got = discover_python_in(wenv(), fs_with(&[&cmd, Path::new(WIN_PY)]), read, Os::Windows);
+        assert_eq!(got, Ok(PathBuf::from(WIN_PY)));
+        // A BOM and an unquoted path read the same; a file that is not a launcher does not.
+        let cmd_name = Path::new("hermes.cmd");
+        let bom = format!("\u{feff}@echo off\r\n{WIN_PY} -I -c \"x\" %*\r\n");
+        assert_eq!(windows_launcher_python(cmd_name, bom.as_bytes()), Some(PathBuf::from(WIN_PY)));
+        assert_eq!(windows_launcher_python(cmd_name, format!("echo hi\r\n\"{WIN_PY}\" -I\r\n").as_bytes()), None);
+        assert_eq!(windows_launcher_python(cmd_name, b"@echo off\r\npython.exe -I %*\r\n"), None);
+    }
+
+    #[test]
+    fn windows_python_comes_from_the_older_user_bin_launcher() {
+        let exe = wlauncher(true, "hermes.exe");
+        let read = files(vec![(exe.clone(), fake_exe(&format!("#!{WIN_PY} -I\n")))]);
+        let got = discover_python_in(wenv(), fs_with(&[&exe, Path::new(WIN_PY)]), read, Os::Windows);
+        assert_eq!(got, Ok(PathBuf::from(WIN_PY)));
+        // HERMES_HOME names the home whose user bin is read.
+        let custom = PathBuf::from(r"D:\hermes").join("bin").join("hermes.cmd");
+        let py = r"D:\hermes\tools\python.exe";
+        let read = files(vec![(custom.clone(), format!("@echo off\r\n\"{py}\" -I -c \"x\" %*\r\n").into_bytes())]);
+        let env = env_of(&[("HERMES_HOME", r"D:\hermes")]);
+        assert_eq!(discover_python_in(env, fs_with(&[&custom, Path::new(py)]), read, Os::Windows), Ok(PathBuf::from(py)));
+    }
+
+    #[test]
+    fn windows_launcher_naming_a_missing_python_falls_through() {
+        let exe = wlauncher(false, "hermes.exe");
+        let agent = PathBuf::from(r"C:\Users\u\AppData\Local").join("hermes").join("hermes-agent");
+        let venv = agent.join("venv").join("Scripts").join("python.exe");
+        let read = || files(vec![(exe.clone(), fake_exe(&format!("#!{WIN_PY} -I\n")))]);
+        assert_eq!(discover_python_in(wenv(), fs_with(&[&exe, &venv]), read(), Os::Windows), Ok(venv.clone()));
+        assert_eq!(discover_python_in(wenv(), fs_with(&[&exe]), read(), Os::Windows).unwrap_err(), HERMES_NOT_FOUND);
+        // An install upgraded to PM keeps its old venv; the launcher's Python still wins.
+        let both = fs_with(&[&exe, &venv, Path::new(WIN_PY)]);
+        assert_eq!(discover_python_in(wenv(), both, read(), Os::Windows), Ok(PathBuf::from(WIN_PY)));
+    }
+
+    #[test]
+    fn windows_launcher_exe_without_a_dash_i_shebang_is_ignored() {
+        let exe = Path::new("hermes.exe");
+        assert_eq!(windows_launcher_python(exe, &fake_exe("")), None);
+        assert_eq!(windows_launcher_python(exe, &fake_exe(&format!("#!{WIN_PY}\n"))), None);
+        assert_eq!(windows_launcher_python(exe, &fake_exe(&format!("#!{WIN_PY} -E\n"))), None);
+        assert_eq!(windows_launcher_python(exe, &fake_exe("#!python.exe -I\n")), None);
+        assert_eq!(windows_launcher_python(exe, &fake_exe(&format!("#!/bin/sh\nexec {WIN_PY} -I\n"))), None);
+        // No zip, or a truncated directory record: nothing.
+        assert_eq!(windows_launcher_python(exe, format!("MZ\0#!{WIN_PY} -I\n").as_bytes()), None);
+        assert_eq!(windows_launcher_python(exe, b"\x00\x01PK\x05\x06garbage"), None);
+        let launcher = wlauncher(false, "hermes.exe");
+        let read = files(vec![(launcher.clone(), b"not a launcher".to_vec())]);
+        let got = discover_python_in(wenv(), fs_with(&[&launcher, Path::new(WIN_PY)]), read, Os::Windows);
+        assert_eq!(got.unwrap_err(), HERMES_NOT_FOUND);
+    }
+
+    #[test]
+    fn windows_launcher_exe_is_read_before_the_cmd() {
+        let (exe, cmd) = (wlauncher(false, "hermes.exe"), wlauncher(false, "hermes.cmd"));
+        let other = r"C:\old\python.exe";
+        let read = files(vec![
+            (exe.clone(), fake_exe(&format!("#!{WIN_PY} -I\n"))),
+            (cmd.clone(), format!("@echo off\r\n\"{other}\" -I -c \"x\" %*\r\n").into_bytes()),
+        ]);
+        let got = discover_python_in(wenv(), fs_with(&[&exe, &cmd, Path::new(WIN_PY), Path::new(other)]), read, Os::Windows);
+        assert_eq!(got, Ok(PathBuf::from(WIN_PY)));
+    }
+
+    #[test]
+    fn unix_never_reads_a_windows_launcher() {
+        let exe = PathBuf::from("/h/.hermes/hermes-agent/.hermes/bin/hermes.exe");
+        let read = files(vec![(exe.clone(), fake_exe("#!C:\\p\\python.exe -I\n"))]);
+        let got = discover_python_in(env_of(&[("HOME", "/h")]), fs_with(&[&exe, Path::new(r"C:\p\python.exe")]), read, Os::Unix);
+        assert_eq!(got.unwrap_err(), HERMES_NOT_FOUND);
     }
 
     #[test]
