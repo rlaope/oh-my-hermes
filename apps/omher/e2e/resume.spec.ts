@@ -211,7 +211,7 @@ test("a saved bot that is gone, or a bad snapshot, opens the app as a fresh star
   await page.goto("/");
   await expect(page.getByTestId("bot-kami")).toHaveAttribute("aria-current", "true");
   await expect(page.getByTestId("window")).not.toHaveClass(/\bpanel-open\b/);
-  await expect(page.getByTestId("runs-full")).toHaveCount(0);
+  await expect(page.getByTestId("window")).not.toHaveClass(/\bpanel-max\b/);
   await page.evaluate(() => sessionStorage.setItem("__step", "2"));
   await page.reload();
   await expect(page.getByTestId("bot-kami")).toHaveAttribute("aria-current", "true");
