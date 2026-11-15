@@ -660,6 +660,34 @@ class HermesModelConfigTests(unittest.TestCase):
                 with self.assertRaisesRegex(HermesModelConfigError, reason):
                     preview_hermes_model_config(inspection, {"main": "mistral/large"})
 
+    def test_malformed_base_url_is_refused_without_a_traceback(self) -> None:
+        # Given: a providers: entry whose base_url urlsplit cannot parse.
+        inspection = self.providers_entry_inspection(
+            {"base_url": "http://[bad"}, env_extra={"MISTRAL_API_KEY": "x" * 12}
+        )
+
+        # When/Then: a clean refusal, not a ValueError out of the inspection.
+        with self.assertRaisesRegex(
+            HermesModelConfigError, "name the variable holding its key with key_env"
+        ):
+            preview_hermes_model_config(inspection, {"main": "mistral/large"})
+
+    def test_a_secret_pasted_into_key_env_is_never_echoed(self) -> None:
+        # Given: key_env holds an identifier-shaped value that is not an UPPER_SNAKE name.
+        pasted = "q7Rk2Lm9Xw4Tz8Vb1Nc6Hd3Fs5Gj0Ya"
+        inspection = self.providers_entry_inspection(
+            {"base_url": "https://api.mistral.ai/v1", "key_env": pasted},
+            env_extra={"MISTRAL_API_KEY": "x" * 12},
+        )
+
+        # When: refused.
+        with self.assertRaises(HermesModelConfigError) as caught:
+            preview_hermes_model_config(inspection, {"main": "mistral/large"})
+
+        # Then: the remedy is generic and the pasted text never appears.
+        self.assertNotIn(pasted, str(caught.exception))
+        self.assertIn("set the variable its key_env names", str(caught.exception))
+
     def test_unconfigured_provider_keeps_the_missing_auth_refusal(self) -> None:
         # Given: a providers: entry for mistral, and a target naming another id
         # with no pool, entry, legacy entry, or plugin.

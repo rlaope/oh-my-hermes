@@ -34,6 +34,8 @@ _CUSTOM_PROVIDER_NAME_RE: Final[re.Pattern[str]] = re.compile(r"^[A-Za-z0-9_.-]+
 _CUSTOM_POOL_PREFIX: Final = "custom:"
 # An environment variable *name* (`key_env`); never its value.
 _ENV_NAME_RE: Final[re.Pattern[str]] = re.compile(r"^[A-Za-z_][A-Za-z0-9_]{0,127}$")
+# A name safe to print back: UPPER_SNAKE with at least one underscore (`MISTRAL_API_KEY`).
+_ECHOABLE_ENV_NAME_RE: Final[re.Pattern[str]] = re.compile(r"^[A-Z][A-Z0-9]*(?:_[A-Z0-9]+)+$")
 _FALSE_WORDS: Final = frozenset({"false", "0", "no", "off"})
 # Hosts whose key Hermes reads from a fixed variable rather than the
 # host-derived `<VENDOR>_API_KEY` (hermes_cli/runtime_provider.py
@@ -659,7 +661,11 @@ def _host_key_env(base_url: str) -> str | None:
     registrable label of the host (`api.mistral.ai` -> `MISTRAL_API_KEY`),
     nothing for IPs, loopback, or single-label hosts.
     """
-    hostname = urlsplit(base_url if "://" in base_url else f"//{base_url}").hostname or ""
+    try:
+        hostname = urlsplit(base_url if "://" in base_url else f"//{base_url}").hostname or ""
+    except ValueError:
+        # A malformed base_url (`http://[bad`) names no host; Hermes derives no key from it either.
+        return None
     for domain, env_name in _HOST_GATED_KEY_ENV:
         if hostname == domain or hostname.endswith(f".{domain}"):
             return env_name
@@ -692,11 +698,14 @@ def _missing_auth_message(
     )
     if _safe_metadata(target) and presence is not None and not presence.auth_present:
         if presence.provider_entry:
-            remedy = (
-                f"set {presence.credential_env} in the environment omh runs in"
-                if presence.credential_env
-                else "name the variable holding its key with key_env"
-            )
+            # Echo the variable name only in conventional UPPER_SNAKE shape: a key pasted into
+            # `key_env` by mistake is identifier-shaped too and must never reach the message.
+            if presence.credential_env and _ECHOABLE_ENV_NAME_RE.fullmatch(presence.credential_env):
+                remedy = f"set {presence.credential_env} in the environment omh runs in"
+            elif presence.credential_env:
+                remedy = "set the variable its key_env names in the environment omh runs in"
+            else:
+                remedy = "name the variable holding its key with key_env"
             return (
                 f"Hermes model target {target!r} names provider {provider_id!r}, which is "
                 "configured under providers: but no credential is observable: "
