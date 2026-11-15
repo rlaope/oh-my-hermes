@@ -822,8 +822,8 @@ class AppWallpaperTests(unittest.TestCase):
             app._render()
             top = app.region.top_row(app.size[1])
             answer = next(row for row in range(top) if "an answer someone may copy" in screen.line(row))
-            # The rail's `┃` is East Asian Ambiguous: counted as wide as a terminal may draw it, one cell more.
-            self.assertIn("an answer someone may copy" + " " * (TEXT_GAP + 1) + MARK, screen.line(answer),
+            # A reply has no rail (owner, 2026-11-15), so no East Asian Ambiguous `┃` widens its row: the gap is exact.
+            self.assertIn("an answer someone may copy" + " " * TEXT_GAP + MARK, screen.line(answer),
                           "the transcript's tail, past the gap (owner's choice; /wallpaper off keeps it clean)")
 
     def test_theme_light_or_dark_against_the_terminal_holds_the_ground_off(self) -> None:
@@ -1180,7 +1180,7 @@ class GroundPaintTests(unittest.TestCase):
             self.session(app)
             top = app.region.top_row(app.size[1])
             answer = next(row for row in range(top) if "Read the reader." in screen.line(row))
-            self.assertIn("Read the reader." + " " * (TEXT_GAP + 1) + MARK, screen.line(answer))
+            self.assertIn("Read the reader." + " " * TEXT_GAP + MARK, screen.line(answer))
             self.assertTrue(any(MARK in screen.line(row) for row in range(top, 42)), "on the region's rows too")
             self.assertEqual(screen.holes(app._ground()), [])
 

@@ -242,8 +242,8 @@ class AppBriefingTests(unittest.TestCase):
         history = [line_text(row) for row in app.transcript.history_lines(100, DEFAULT_THEME, details=False)]
         sentence = next(index for index, row in enumerate(history) if "The first sentence" in row)
         # The table is a box (#2590): its rows are the ones whose text opens with a border, `┌`, `│`, `├` or `└`.
-        table = [index for index, row in enumerate(history) if row.split()[1:2] and row.split()[1][0] in "┌│├└"]
-        self.assertEqual([history[index].split()[1:] for index in table if "│" in history[index]],
+        table = [index for index, row in enumerate(history) if row.split()[:1] and row.split()[0][0] in "┌│├└"]
+        self.assertEqual([history[index].split() for index in table if "│" in history[index]],
                          [["│", "a", "│", "b", "│"], ["│", "1", "│", "2", "│"]])
         brief = next(index for index, row in enumerate(history) if row.startswith("● find usages"))
         self.assertTrue(table and sentence < min(table) and max(table) < brief, history)

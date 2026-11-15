@@ -66,8 +66,9 @@ from omh.skin_pack import SKIN_THEMES
 
 # Every glyph a terminal could draw as a bar beside the text: the rail's `┃`, its light `│` and their kin.
 BAR_GLYPHS = set("┃│▎▍▌▋▏▕▐┆┊╎║█")
-# The blocks that hang on a rail; a steer reads as the prompt it is (a refused one, an amber row, does not).
-RAILED = (UserBlock, CommandBlock, AssistantBlock, ToolGroup, SteerBlock)
+# The blocks that hang on a rail; a steer reads as the prompt it is (a refused one, an amber row, does not). A reply
+# has none (owner, 2026-11-15): it is checked to draw no bar at all.
+RAILED = (UserBlock, CommandBlock, ToolGroup, SteerBlock)
 REPLY = "first line of the reply\nsecond line"
 KITTY = {"TERM": "xterm-kitty"}
 # A herdr pane's own variables (herdr `src/pane.rs`): no TMUX, no SSH variables, whatever the client is.
@@ -138,8 +139,10 @@ class BarOnTheMainScreenTests(unittest.TestCase):
         theme = DEFAULT_THEME
         reply = block_rows(AssistantBlock("ok"), 40, theme)
         call = block_rows(ToolGroup([ToolRow("a", "terminal", "ls", TOOL_ERROR)], done=True), 40, theme)
-        self.assertEqual({row[0].style.fg for row in reply}, {theme.brand.fg})
         self.assertEqual({row[0].style.fg for row in call}, {theme.error.fg})
+        # A reply has no rail; its `⚚ Hermes` name keeps the colour its rail had, the skin's accent.
+        self.assertEqual((reply[0][0].text, reply[0][0].style.fg), ("⚚ Hermes", theme.brand.fg))
+        self.assertFalse([span for row in reply for span in row if set(span.text) & BAR_GLYPHS])
 
 
 def reply_app(environ: dict[str, str] | None = None, platform: str = "linux") -> tuple[App, list[str]]:
@@ -177,7 +180,7 @@ class PagerDragTests(unittest.TestCase):
     def test_a_drag_copies_the_text_without_the_rail_or_the_margin_through_osc52(self) -> None:
         app, copied = reply_app(KITTY)
         first, second = row_of(app, "first line"), row_of(app, "second line")
-        drag(app, (1, first), (60, second))  # from the rail's own cell to the row's far end
+        drag(app, (1, first), (60, second))  # from the margin's first cell to the row's far end
         self.assertEqual(osc52(app), [REPLY])
         self.assertEqual(copied, [])
         footer = drawn(app)[-1]
@@ -201,16 +204,15 @@ class PagerDragTests(unittest.TestCase):
         self.assertEqual([7 in screen.attrs_at(y - 1, x - 1 + at) for at in range(6)], [True] * 5 + [False])
         self.assertEqual(osc52(app), [])  # nothing copied before the release
 
-    def test_the_highlight_leaves_the_rail_and_the_margin_as_they_are(self) -> None:
+    def test_the_highlight_leaves_the_margin_as_it_is(self) -> None:
         app, _copied = reply_app(KITTY)
         first, second = row_of(app, "first line"), row_of(app, "second line")
         app._on_input(Mouse(BUTTON_LEFT, 1, first))
         app._on_input(Mouse(BUTTON_LEFT, 60, second, motion=True))
         drawn(app)
         screen = app.terminal.screen  # type: ignore[attr-defined]
-        self.assertEqual(screen.line(first - 1)[0], "┃")
-        self.assertNotIn(7, screen.attrs_at(first - 1, 0))  # the rail's bar shows as it always does, not highlighted
-        self.assertEqual([7 in screen.attrs_at(first - 1, column) for column in range(1, 5)], [False] * 3 + [True])
+        self.assertEqual(screen.line(first - 1)[:3], "  f")  # a reply's row: its margin, no rail (owner, 2026-11-15)
+        self.assertEqual([7 in screen.attrs_at(first - 1, column) for column in range(3)], [False] * 2 + [True])
 
     def test_a_double_click_copies_a_word_and_a_triple_click_the_row(self) -> None:
         now = [100.0]
@@ -510,7 +512,7 @@ class SecondDragTests(unittest.TestCase):
         app._history("")
         drawn(app)
         first, second = row_of(app, "first line"), row_of(app, "second line")
-        for start in ((1, first), (5, first)):  # from the rail's cell, then from a text cell
+        for start in ((1, first), (3, first)):  # from the margin's cell, then from the text's first cell
             for _ in range(2):
                 drag(app, start, (60, second))
                 now[0] += 0.3
@@ -568,7 +570,7 @@ class CopiedTextTests(unittest.TestCase):
 class NoColorRailTests(unittest.TestCase):
     def test_without_colour_your_prompts_rail_is_the_light_bar(self) -> None:
         # With colour every rail is the thin `┃` in its own colour; without, the prompt's would look the same as a
-        # reply's, so it is the light `│` (its `❯` marks it anyway).
+        # tool call's, so it is the light `│` (its `❯` marks it anyway). A reply has no rail in either.
         call = ToolGroup([ToolRow("a", "terminal", "ls", TOOL_OK)], done=True)
         for name, theme, prompt_bar in (("NO_COLOR", without_colour(DEFAULT_THEME), "│"), ("colour", DEFAULT_THEME, "┃")):
             with self.subTest(theme=name):
@@ -577,9 +579,10 @@ class NoColorRailTests(unittest.TestCase):
                 screen = VTScreen(4, 40)
                 screen.feed("\r\n".join(paint_line(row, 40) for row in rows))
                 self.assertEqual([screen.line(row)[:4] for row in range(4)],
-                                 [f"{prompt_bar} ❯ ", f"{prompt_bar} ❯ ", "┃ ⚚ ", "┃ ● "])
-                self.assertEqual([7 in screen.attrs_at(row, 0) for row in range(4)], [False] * 4)  # no cell painted
-                self.assertEqual([bool(screen.attrs_at(row, 0)) for row in range(4)], [name == "colour"] * 4)
+                                 [f"{prompt_bar} ❯ ", f"{prompt_bar} ❯ ", "⚚ He", "┃ ● "])
+                railed = (0, 1, 3)
+                self.assertEqual([7 in screen.attrs_at(row, 0) for row in railed], [False] * 3)  # no cell painted
+                self.assertEqual([bool(screen.attrs_at(row, 0)) for row in railed], [name == "colour"] * 3)
 
 
 class BotBoardWheelTests(FixtureRoot):

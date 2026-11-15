@@ -331,7 +331,7 @@ class FramedWaitLayoutTests(unittest.TestCase):
                     {"qid": "q0", "question": "Which color?", "choices": ["red", "blue"], "multi_select": False}]}))
                 screen = drawn(app)
                 at = next(index for index, line in enumerate(screen) if "Which color" in line)
-                self.assertEqual(screen[at - 1], "┃   short reply")
+                self.assertEqual(screen[at - 1], "  short reply")
                 self.assertEqual(app._working_rows(), 0)
                 self.assertFalse([line for line in screen if "Waiting" in line or "Working" in line])
 

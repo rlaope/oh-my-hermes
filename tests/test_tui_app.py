@@ -2069,16 +2069,16 @@ class OpeningTests(AppTestCase):
             [  # each block on its rail, a blank row between two blocks and two between two calls, as for a live turn
                 "┃ ❯ What is in this repo?",
                 "",
-                "┃ ⚚ Hermes",  # who wrote it; the record does not say which model, so none is named
-                "┃   Let me look.",
+                "⚚ Hermes",  # who wrote it; the record does not say which model, so none is named
+                "  Let me look.",
                 "",
                 "┃ ● terminal(ls -la)",
                 "",
                 "",
                 "┃ ● read_file(README.md)",
                 "",
-                "┃ ⚚ Hermes",
-                "┃   It is oh-my-hermes.",
+                "⚚ Hermes",
+                "  It is oh-my-hermes.",
                 "",
                 "┃ ❯ Thanks",
             ],
@@ -2867,7 +2867,7 @@ class KeyTests(AppTestCase):
         self.assert_clean_run(run)
         details = "\n".join(terminal.captures["details"])
         self.assertIn("❯ Reply with exactly the word: ok", details)
-        self.assertIn("┃ ⚚ Hermes · deepseek-v4.1-flash-ultrafast\n┃   ok", details)
+        self.assertIn("⚚ Hermes · deepseek-v4.1-flash-ultrafast\n  ok", details)
         self.assertIn("history · ", details)
 
     def test_ctrl_l_redraws_the_session_from_memory(self) -> None:
