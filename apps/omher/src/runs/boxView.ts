@@ -401,7 +401,7 @@ export interface Frontiers {
   layer: Map<string, number>;
   /** Per node, the nodes it has an edge from, in frontier and drawing order. */
   parents: Map<string, string[]>;
-  /** Every edge between two nodes, in reading order: each is a line, and a row under Dependencies. */
+  /** Every edge between two nodes, in reading order: each is a line, and a name in a row under Dependencies (waitRows). */
   edges: EdgeRec[];
   /** A node added mid-run to repair another. */
   origin: Map<string, "repair">;
