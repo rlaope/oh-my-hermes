@@ -550,22 +550,34 @@
   color: var(--quiet);
 }
 .bx.s-done,
-.bv-card.s-done {
+.bv-card.s-done,
+.bv-dep.s-done,
+.bv-dep-p.s-done {
   --bx-tone: rgb(var(--rn-green));
 }
 .bx.s-running,
-.bv-card.s-running {
+.bv-card.s-running,
+.bv-dep.s-running,
+.bv-dep-p.s-running {
   --bx-tone: rgb(var(--rn-pink));
 }
 .bx.s-out,
-.bv-card.s-out {
+.bv-card.s-out,
+.bv-dep.s-out,
+.bv-dep-p.s-out {
   --bx-tone: rgb(var(--rn-violet));
 }
-.bx.s-failed {
+.bx.s-failed,
+.bv-dep.s-failed,
+.bv-dep-p.s-failed {
   --bx-tone: var(--danger);
 }
 .bx.s-repaired,
-.bx.s-retry {
+.bx.s-retry,
+.bv-dep.s-repaired,
+.bv-dep.s-retry,
+.bv-dep-p.s-repaired,
+.bv-dep-p.s-retry {
   --bx-tone: var(--rn-amber);
 }
 /* not handed out yet, or cancelled: no state line, quieter text */
@@ -695,22 +707,78 @@
   font-weight: 600;
   color: var(--ink);
 }
-/* a dependency: the two titles and an arrow between them, quieter than the drawing they repeat */
+/* a row: the node, its status as on its box, and under its title what it waits for, quieter. The names sit in one
+   column; the second line starts under the title, past the icon, and wraps rather than cutting a name off.
+   Hovering a row lights its box above. */
 .bv-dep {
-  display: -webkit-box;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
-  overflow: hidden;
-  overflow-wrap: anywhere;
-  /* a wrapped row hangs under its first word, so its second line never reads as a row of its own */
-  padding-left: 14px;
-  text-indent: -14px;
+  display: block;
+  padding: 1px 0;
+  border-radius: var(--r-sm);
+  cursor: pointer;
   color: var(--muted);
 }
-.bv-arrow {
-  margin: 0 5px;
-  vertical-align: -2px;
+.bv-dep + .bv-dep {
+  margin-top: 4px;
+}
+.bv-dep:hover,
+.bv-dep.on {
+  background: var(--hover);
+}
+.bv-dep-t {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+  color: var(--ink);
+}
+.bv-dep-t .bx-ic {
+  flex: none;
+  color: var(--bx-tone, var(--muted));
+}
+.bv-dep-n {
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+/* "waits for", then the names in a column of their own: a wrapped line starts under the first name */
+.bv-dep-on {
+  display: flex;
+  gap: 5px;
+  padding-left: 17px; /* the status icon and the space after it, as under a Node details card */
+  padding-right: 6px;
+}
+.bv-dep-on > .bv-dep-k {
+  flex: none;
+}
+.bv-dep-l {
+  min-width: 0;
+}
+/* lines break only between names; a name longer than the whole line is cut with "…" (the row's title says it whole) */
+.bv-dep-on .bv-dep-p {
+  display: inline-block;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  vertical-align: top;
+}
+.bv-dep-k {
   color: var(--quiet);
+}
+/* a node it waits for: that node's own status icon before its name, so a row says what is still open. A name
+   breaks only where the name itself is longer than the line. */
+.bv-dep-p {
+  white-space: nowrap;
+}
+.bv-dep-p + .bv-dep-p {
+  margin-left: 0.35em;
+}
+.bv-dep-p .bx-ic {
+  width: 11px;
+  height: 11px;
+  margin-right: 3px;
+  vertical-align: -1px;
+  color: var(--bx-tone, var(--muted));
 }
 .bv-card {
   display: block;

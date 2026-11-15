@@ -3,6 +3,9 @@
 export const en = {
   // graph (the dag box view and its header)
   "graph.deps": "Dependencies",
+  "graph.waitsFor": "waits for",
+  "graph.through": "+{n} further up",
+  "graph.depRows": "{n} tasks",
   "graph.details": "Node details",
   "graph.untitled": "untitled",
   "graph.finished": "Done",

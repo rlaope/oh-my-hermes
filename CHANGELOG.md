@@ -18,6 +18,10 @@ All notable changes will be documented here.
   dispatcher signs the arm setup it reads from disk into each receipt, and fan-in refuses a cell whose setup
   contradicts its arm. New `--provider-base-url`, `--provider-api-mode` and `--provider-key-env` declare a custom
   provider whose key arrives only by environment. Every other Hermes child keeps safe mode.
+- **omher: Plans › Dependencies is one row per task, not one per edge.** Each row is the task with its status, and
+  under it what it waits for, each with that task's own status. An edge another path already implies folds into
+  "+N further up" (a repair edge never folds), so a plan of 8 tasks and 15 edges reads as 6 rows, not 15. Hovering
+  a row lights its box in the drawing above; clicking it opens the node. The heading counts the rows.
 
 ## 4.0.8 - 2026-11-15
 

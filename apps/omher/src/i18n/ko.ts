@@ -3,6 +3,9 @@ import type { Key } from "./index";
 export const ko: Record<Key, string> = {
   // graph (the dag box view and its header)
   "graph.deps": "의존 관계",
+  "graph.waitsFor": "기다림",
+  "graph.through": "+{n}개 더 위쪽",
+  "graph.depRows": "작업 {n}개",
   "graph.details": "노드 상세",
   "graph.untitled": "제목 없음",
   "graph.finished": "완료",

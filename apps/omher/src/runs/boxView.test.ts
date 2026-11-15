@@ -23,6 +23,7 @@ import {
   type LayoutOpts,
   type Measure,
   type Rect,
+  waitRows,
 } from "./boxView";
 import { modelName } from "./format";
 
@@ -547,6 +548,50 @@ describe("a box's lines", () => {
 });
 
 describe("frontiers", () => {
+  it("lists one Dependencies row per node that waits, folding an edge another path implies", () => {
+    // the shape of a watch plan: probe → collector / omher-hits → recipe, rows → review → verify; baseline → verify,
+    // and verify also wired to every producer
+    const nodes = [
+      node("probe"),
+      node("baseline"),
+      node("collector", ["probe"]),
+      node("hits", ["probe"]),
+      node("recipe", ["collector", "hits"]),
+      node("rows", ["collector", "hits"]),
+      node("review", ["recipe", "rows"]),
+      node("verify", ["probe", "baseline", "collector", "hits", "recipe", "rows", "review"]),
+    ];
+    const s = frontiers(nodes);
+    expect(s.edges).toHaveLength(15);
+    const rows = waitRows(s);
+    expect(rows.map((r) => r.id)).toEqual(["collector", "hits", "recipe", "rows", "review", "verify"]);
+    const v = rows.find((r) => r.id === "verify")!;
+    expect(v.on.map((o) => o.id).sort()).toEqual(["baseline", "review"]);
+    expect(v.through.sort()).toEqual(["collector", "hits", "probe", "recipe", "rows"]);
+    expect(rows.find((r) => r.id === "review")!.on.map((o) => o.id)).toEqual(["recipe", "rows"]);
+    // every edge is in exactly one row, once
+    expect(rows.reduce((n, r) => n + r.on.length + r.through.length, 0)).toBe(15);
+  });
+
+  it("keeps every edge of a node whose parents are independent", () => {
+    const rows = waitRows(frontiers([node("a"), node("b"), node("c", ["a", "b"])]));
+    expect(rows).toEqual([{ id: "c", on: [{ id: "a", kind: "dep" }, { id: "b", kind: "dep" }], through: [] }]);
+  });
+
+  it("never folds a repair edge, and a node nothing waits on has no row", () => {
+    const s = frontiers([node("a", [], { state: "failed" }), node("fix", ["a"], { repairOf: "a" }), node("b", ["a"], { state: "waiting" })]);
+    const rows = waitRows(s);
+    expect(rows.map((r) => r.id)).not.toContain("a");
+    expect(rows.find((r) => r.id === "fix")!.on).toEqual([{ id: "a", kind: "repair" }]);
+  });
+
+  it("folds nothing on a loop: each edge of it stays its own", () => {
+    const rows = waitRows(frontiers([node("a", ["c"]), node("b", ["a"]), node("c", ["b", "a"])]));
+    const c = rows.find((r) => r.id === "c")!;
+    expect(c.through).toEqual([]);
+    expect(c.on.map((o) => o.id).sort()).toEqual(["a", "b"]);
+  });
+
   it("puts a node one frontier under the last of its parents", () => {
     const s = frontiers(sample().nodes);
     expect(s.rows).toEqual([["api"], ["button", "docs", "cli"], ["verify"]]);

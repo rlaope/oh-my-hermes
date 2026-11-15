@@ -473,6 +473,58 @@ function edgesOf(nodes: RunNode[], reroute: boolean): EdgeRec[] {
   return pairs;
 }
 
+/** One row of the Dependencies list: a node and what it waits on. */
+export interface WaitRow {
+  id: string;
+  /** What it waits on directly, in frontier order; a repair edge is always here. */
+  on: { id: string; kind: EdgeRec["kind"] }[];
+  /** What it also waits on through another node it waits on (a → b → c makes a → c one of these). */
+  through: string[];
+}
+
+/** The Dependencies list: one row per node that waits on anything, in frontier order, and in each row what it
+ *  waits on. An edge another path already implies is not a reason of its own: it moves to `through`, so the
+ *  closing check of a long plan reads "waits on review and baseline (+5 through them)", not seven rows. A repair
+ *  edge always stays, it is not an order but the reason the node exists. Only `shape.edges` is read. */
+export function waitRows(shape: Pick<Frontiers, "rows" | "edges">): WaitRow[] {
+  const order = shape.rows.flat();
+  const pos = new Map(order.map((id, i) => [id, i]));
+  const at = (id: string) => pos.get(id) ?? order.length;
+  const into = new Map<string, EdgeRec[]>();
+  const out = new Map<string, string[]>();
+  for (const e of shape.edges) {
+    (into.get(e.to) ?? into.set(e.to, []).get(e.to)!).push(e);
+    (out.get(e.from) ?? out.set(e.from, []).get(e.from)!).push(e.to);
+  }
+  // is there a path of edges from `from` to `to`
+  const reaches = (from: string, to: string): boolean => {
+    const seen = new Set<string>([from]);
+    const stack = [...(out.get(from) ?? [])];
+    while (stack.length) {
+      const n = stack.pop()!;
+      if (n === to) return true;
+      if (seen.has(n)) continue;
+      seen.add(n);
+      stack.push(...(out.get(n) ?? []));
+    }
+    return false;
+  };
+  const rows: WaitRow[] = [];
+  for (const id of [...into.keys()].sort((a, b) => at(a) - at(b))) {
+    const edges = [...into.get(id)!].sort((a, b) => at(a.from) - at(b.from));
+    const on: WaitRow["on"] = [];
+    const through: string[] = [];
+    for (const e of edges) {
+      // x → id is implied when x reaches another y this node waits on (x → … → y → id); a loop implies nothing
+      const implied = e.kind === "dep" && edges.some((o) => o !== e && o.from !== e.from && reaches(e.from, o.from) && !reaches(o.from, e.from));
+      if (implied) through.push(e.from);
+      else on.push({ id: e.from, kind: e.kind });
+    }
+    rows.push({ id, on, through });
+  }
+  return rows;
+}
+
 /** The nodes by frontier. A node's frontier is its longest path of edges (a dependency, a repair) from a node with
  *  none; inside a frontier a node stands under the middle of its parents, so that fewer lines cross. With `cap`
  *  (the most boxes a row holds), a frontier wider than that sends the nodes that have room below them down a
