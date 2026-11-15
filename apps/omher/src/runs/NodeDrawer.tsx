@@ -88,7 +88,7 @@ export function NodeDrawer({
   const links = useMemo(() => linksIn([text ?? "", node.summary ?? ""].join("\n")), [text, node.summary]);
   const ask = () => {
     const s = getStore();
-    if (s.getState().ui.runsFull) s.actions.setRunsFull(false);
+    if (s.getState().ui.panelMax) s.actions.setPanelMax(false);
     s.actions.prefill(tr("rn.retryMsg", { node: `\`${node.id}\``, run: `\`${runName(runId)}\`` }));
   };
   return (

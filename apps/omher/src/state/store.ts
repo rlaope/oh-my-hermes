@@ -321,8 +321,6 @@ export interface Ui {
   /** The side panel is maximised in place: it takes every pixel right of the sidebar and the chat column folds to 0
    *  (still mounted). Closing the panel restores it. */
   panelMax: boolean;
-  /** @deprecated mirror of `panelMax` for callers not yet moved over; integrate removes it. */
-  runsFull: boolean;
   /** Text put into a bot's composer for the person to edit and send (never sent by omher). */
   draft: { bot: string; text: string; n: number } | null;
   theme: Theme;
@@ -553,7 +551,6 @@ export function initialState(): AppState {
       panelTab: "details",
       runId: null,
       panelMax: false,
-      runsFull: false,
       draft: null,
       theme: readTheme(),
       look: readLook(),
@@ -861,7 +858,7 @@ export type Action =
   | { type: "ui.focusAsk"; bot: string; id: string }
   | { type: "ui.session"; id: string | null }
   /** After a restart: the panel, Plans view and open session as they were (resume.ts). */
-  | { type: "ui.restore"; ui: Pick<Ui, "panelOpen" | "panelTab" | "runsFull" | "runId"> & { session: string | null } }
+  | { type: "ui.restore"; ui: Pick<Ui, "panelOpen" | "panelTab" | "runId"> & { runsFull: boolean; session: string | null } }
   /** Drop a chat that is gone for good (a closed SESSIONS chat): its open asks go with it. */
   | { type: "chat.forget"; bot: string }
   /** A SESSIONS chat ended with `error`: its last turn, failed with that same reason, no longer repeats it (the
@@ -1323,7 +1320,7 @@ export function reduce(state: AppState, a: Action): AppState {
     case "ui.panel": {
       const open = a.open ?? !state.ui.panelOpen;
       // closing the panel also restores it: it opens again at its own width
-      return { ...state, ui: { ...state.ui, panelOpen: open, ...(open ? {} : { panelMax: false, runsFull: false }) } };
+      return { ...state, ui: { ...state.ui, panelOpen: open, ...(open ? {} : { panelMax: false }) } };
     }
     case "ui.panelTab":
       return { ...state, ui: { ...state.ui, panelOpen: true, panelTab: a.tab } };
@@ -1332,7 +1329,7 @@ export function reduce(state: AppState, a: Action): AppState {
     case "ui.panelMax":
       return {
         ...state,
-        ui: { ...state.ui, panelMax: a.open, runsFull: a.open, ...(a.open ? { panelOpen: true, ...(a.tab ? { panelTab: a.tab } : {}) } : {}) },
+        ui: { ...state.ui, panelMax: a.open, ...(a.open ? { panelOpen: true, ...(a.tab ? { panelTab: a.tab } : {}) } : {}) },
       };
     case "ui.draft":
       return { ...state, ui: { ...state.ui, draft: { bot: a.bot, text: a.text, n: (state.ui.draft?.n ?? 0) + 1 } } };
@@ -1349,10 +1346,10 @@ export function reduce(state: AppState, a: Action): AppState {
         withItems(c, [...c.items, { kind: "system", id: `system-${a.now}-${c.items.length}`, ts: a.now / 1000, text: a.text }]),
       );
     case "ui.restore": {
-      const { session, ...rest } = a.ui;
+      const { session, runsFull, ...rest } = a.ui;
       // the snapshot's `runsFull` carries the maximised panel
-      const max = rest.runsFull && rest.panelOpen;
-      return { ...state, ui: { ...state.ui, ...rest, panelMax: max, runsFull: max, ...(session ? { view: "session" as const, session } : {}) } };
+      const max = runsFull && rest.panelOpen;
+      return { ...state, ui: { ...state.ui, ...rest, panelMax: max, ...(session ? { view: "session" as const, session } : {}) } };
     }
     case "ui.session":
       return a.id
@@ -1548,8 +1545,6 @@ export interface Actions {
   /** Maximise the side panel in place (every pixel right of the sidebar) or restore it to its own width; `tab`
    *  also picks the tab it opens on. */
   setPanelMax(open: boolean, tab?: PanelTabId): void;
-  /** @deprecated `setPanelMax(open, "runs")`; kept for callers not yet moved over. */
-  setRunsFull(open: boolean): void;
   /** Put text in the selected bot's composer and focus it. Never sends. */
   prefill(text: string): void;
   setTheme(theme: Theme): void;
@@ -2160,7 +2155,6 @@ export function createStore(bridge: BridgeLike, opts: StoreOptions = {}): Store 
     setPanelTab: (tab) => dispatch({ type: "ui.panelTab", tab }),
     openRun: (run) => dispatch({ type: "ui.run", run }),
     setPanelMax: (open, tab) => dispatch({ type: "ui.panelMax", open, tab }),
-    setRunsFull: (open) => dispatch({ type: "ui.panelMax", open, tab: open ? "runs" : undefined }),
     prefill(text) {
       const bot = state.selectedBot;
       if (!bot) return;

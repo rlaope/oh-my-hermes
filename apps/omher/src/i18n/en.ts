@@ -33,9 +33,7 @@ export const en = {
   "graph.reset": "Reset layout",
   "graph.zoomIn": "Zoom in",
   "graph.zoomOut": "Zoom out",
-  "graph.hint": "View only · drag a node to move it · Esc closes",
   "graph.full": "Full view",
-  "graph.close": "Close graph",
   // a plan node's pull request: GitHub's state words
   "pr.open": "Open",
   "pr.merged": "Merged",
