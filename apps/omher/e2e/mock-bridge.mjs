@@ -1134,7 +1134,7 @@ const OPS = {
     const old = typeof p.key === "string" ? [...folders.entries()].find(([, f]) => f.thread && f.key === `${b.name}:${p.key}`) : null;
     const thread = old ? old[0] : nextId("stored-th");
     if (!old) {
-      folders.set(thread, { bot: b.name, cwd: p.cwd ?? "/Users/me", open: true, thread: true, title: p.title?.trim() ?? "", started: now(), archived: false,
+      folders.set(thread, { bot: b.name, cwd: p.cwd ?? "/home/me", open: true, thread: true, title: p.title?.trim() ?? "", started: now(), archived: false,
         key: typeof p.key === "string" ? `${b.name}:${p.key}` : null });
       threadHistory.set(thread, []);
       setTimeout(() => broadcast({ event: "thread.added", bot: b.name, thread, title: p.title?.trim() ?? "" }), 0);
@@ -1783,7 +1783,7 @@ const OPS = {
     const ids = [];
     for (const t of p.threads) {
       const thread = nextId("stored-th");
-      folders.set(thread, { bot: b.name, cwd: t.cwd ?? "/Users/me/work", open: true, thread: true, title: String(t.title ?? ""),
+      folders.set(thread, { bot: b.name, cwd: t.cwd ?? "/home/me/work", open: true, thread: true, title: String(t.title ?? ""),
         started: now() - (Number(t.ago) || 0), archived: false, key: null });
       threadHistory.set(thread, (t.messages ?? []).map(([role, text], i) => ({ id: `seed-${thread}-${i}`, role, text, ts: now() - (Number(t.ago) || 0) + i })));
       ids.push(thread);

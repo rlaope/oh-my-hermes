@@ -9,12 +9,12 @@
 // - split: link lines a tight list with an underline, Send there primary, the quoted message labelled
 // - agent chat: grandchild card on the step indent, no "0.0s", a single command not repeated, muted labels readable
 // - maximised Plans: the graph starts at the plan title's x
-// Shots (first): bt-shots/integrate-{sidebar-dark,sidebar-light,thread-with-harness,terminal}.png
+// Shots (first): OMHER_SHOTS=<dir> -> integrate-{sidebar-dark,sidebar-light,thread-with-harness,terminal}.png
 import { expect, test, type Page } from "@playwright/test";
 import { mkdirSync } from "node:fs";
 
 const MOCK = Number(process.env.OMHER_MOCK_PORT || 5308);
-const SHOTS = "/Users/khope@sionic.ai/.hermes/profiles/kami/cache/scratch/bt-shots";
+const SHOTS = process.env.OMHER_SHOTS || process.env.OMHER_SHOTS_DIR || "";
 
 async function mock(op: string, params: Record<string, unknown> = {}): Promise<any> {
   const ws = new WebSocket(`ws://127.0.0.1:${MOCK}/?token=e2e`);
@@ -42,11 +42,11 @@ async function setup(page: Page, theme: "dark" | "light" = "dark") {
 }
 
 const SEED = [
-  { title: "릴리스 노트 초안 정리", ago: 4 * 3600, cwd: "/Users/you/code/docs" },
+  { title: "릴리스 노트 초안 정리", ago: 4 * 3600, cwd: "/home/you/code/docs" },
   { title: "Nightly 빌드 실패 원인", ago: 3 * 3600 },
   { title: "Slack 알림 문구 다듬기", ago: 2 * 3600 },
   { title: "Docs dark mode 대비 점검", ago: 3600 },
-  { title: "OG 대시보드 502 원인 찾기", ago: 60, cwd: "/Users/you/code/og-gateway" },
+  { title: "OG 대시보드 502 원인 찾기", ago: 60, cwd: "/home/you/code/og-gateway" },
 ];
 
 /** Kami with five threads in the five states; the 502 thread runs a Codex part and a Hermes child. */
@@ -90,6 +90,7 @@ test.afterEach(async () => {
 test.describe("shots", () => {
   test.use({ deviceScaleFactor: 2 });
   test("integrate shots: sidebar dark/light, a thread with harness marks, the terminal", async ({ page }) => {
+    test.skip(!SHOTS, "OMHER_SHOTS unset");
     mkdirSync(SHOTS, { recursive: true });
     await setup(page, "dark");
     const ids = await seed(page);
@@ -101,7 +102,7 @@ test.describe("shots", () => {
     await page.screenshot({ path: `${SHOTS}/integrate-thread-with-harness.png`, animations: "disabled" });
     await page.keyboard.press("Control+Backquote");
     await expect(page.getByTestId("termpanel")).toBeVisible();
-    await expect(page.locator('[data-testid="termpanel-terminal"]:not([hidden]) .xterm-rows')).toContainText("/Users/you/code/og-gateway");
+    await expect(page.locator('[data-testid="termpanel-terminal"]:not([hidden]) .xterm-rows')).toContainText("/home/you/code/og-gateway");
     await page.keyboard.type("git log --oneline\r");
     await page.waitForTimeout(300);
     await page.screenshot({ path: `${SHOTS}/integrate-terminal.png`, animations: "disabled" });
@@ -155,9 +156,9 @@ test("the terminal panel's next tab starts in the open thread's folder, home in 
   const ids = await seed(page);
   const cwd = () => page.evaluate(async () => ((await import("/src/terminal/state.ts" as string)) as { getTermPanel?: () => { cwd: string | null } }).getTermPanel?.().cwd ?? null);
   await page.getByTestId(`thread-row-${ids.og}`).getByTestId("thread-open").click();
-  await expect.poll(cwd).toBe("/Users/you/code/og-gateway");
+  await expect.poll(cwd).toBe("/home/you/code/og-gateway");
   await page.getByTestId(`thread-row-${ids.notes}`).getByTestId("thread-open").click();
-  await expect.poll(cwd).toBe("/Users/you/code/docs");
+  await expect.poll(cwd).toBe("/home/you/code/docs");
   await page.getByTestId("thread-back").click();
   await expect.poll(cwd).toBe(null);
 });

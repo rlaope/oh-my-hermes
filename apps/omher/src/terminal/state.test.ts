@@ -6,11 +6,11 @@ beforeEach(() => resetTermPanel());
 
 describe("the terminal panel's state", () => {
   it("Ctrl+` opens with a first tab at the folder setTerminalCwd named, hides, and shows the same tab again", () => {
-    setTerminalCwd("/Users/you/code/web-app");
+    setTerminalCwd("/home/you/code/web-app");
     toggleTerminal();
     let s = getTermPanel();
     expect(s.open).toBe(true);
-    expect(s.tabs).toEqual([{ key: 1, want: "/Users/you/code/web-app", cwd: null }]);
+    expect(s.tabs).toEqual([{ key: 1, want: "/home/you/code/web-app", cwd: null }]);
     toggleTerminal();
     expect(getTermPanel().open).toBe(false);
     expect(getTermPanel().tabs).toHaveLength(1); // hidden, not closed
@@ -49,7 +49,7 @@ describe("the terminal panel's state", () => {
 
   it("names a tab by its folder's last part", () => {
     addTerminalTab();
-    setTabCwd(1, "/Users/you/code/web-app/");
+    setTabCwd(1, "/home/you/code/web-app/");
     expect(leafName(getTermPanel().tabs[0].cwd)).toBe("web-app");
     expect(leafName("C:\\Users\\you\\proj")).toBe("proj");
     expect(leafName(null)).toBe("~");

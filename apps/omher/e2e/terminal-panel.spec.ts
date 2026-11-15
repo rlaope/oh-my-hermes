@@ -1,13 +1,13 @@
 // The bottom terminal panel (mock shell host): Ctrl+` opens it at the folder setTerminalCwd named and gives the
 // shell the keyboard, typing echoes, Ctrl+` from inside the terminal hides it and brings it back with the scrollback
 // kept, Esc stays the shell's, a second tab starts its own shell, and closing a tab stops that shell.
-// Shots first: bt-shots/term-{open-dark,open-light,tabs}.png.
+// Shots first (OMHER_SHOTS=<dir>): term-{open-dark,open-light,tabs}.png.
 import { expect, test, type Page } from "@playwright/test";
 import { mkdirSync } from "node:fs";
 import { mock, openApp } from "./term-find-helpers";
 
-const SHOTS = process.env.OMHER_SHOTS_DIR || "/Users/khope@sionic.ai/.hermes/profiles/kami/cache/scratch/bt-shots";
-const PROJECT = "/Users/you/code/web-app";
+const SHOTS = process.env.OMHER_SHOTS || process.env.OMHER_SHOTS_DIR || "";
+const PROJECT = "/home/you/code/web-app";
 
 type Call = { op: string; id: number; cwd?: string | null; at?: string; data?: string };
 const calls = (page: Page) => page.evaluate(() => ((window as unknown as { __omherShellCalls?: Call[] }).__omherShellCalls ?? []) as Call[]);
@@ -37,6 +37,7 @@ test.beforeEach(async () => {
 });
 
 test.describe("shots", () => {
+  test.skip(!SHOTS, "OMHER_SHOTS unset");
   test.beforeAll(() => mkdirSync(SHOTS, { recursive: true }));
   for (const theme of ["dark", "light"] as const) {
     test(`term-open-${theme}`, async ({ page }) => {
@@ -52,12 +53,12 @@ test.describe("shots", () => {
   test("term-tabs", async ({ page }) => {
     await openAt(page);
     await page.keyboard.type("pnpm test\r");
-    await setCwd(page, "/Users/you/code/api-server");
+    await setCwd(page, "/home/you/code/api-server");
     await page.getByTestId("termpanel-new").click();
-    await expect(shown(page)).toContainText("login shell in /Users/you/code/api-server");
+    await expect(shown(page)).toContainText("login shell in /home/you/code/api-server");
     await setCwd(page, null);
     await page.getByTestId("termpanel-new").click();
-    await expect(shown(page)).toContainText("login shell in /Users/you");
+    await expect(shown(page)).toContainText("login shell in /home/you");
     await page.keyboard.type("git log --oneline\r");
     await expect(shown(page)).toContainText("Merge pull request");
     await page.screenshot({ path: `${SHOTS}/term-tabs.png`, animations: "disabled" });
@@ -79,8 +80,8 @@ test("Ctrl+` opens the panel at the open thread's folder, with the keyboard in t
 test("with no thread folder the shell starts at home", async ({ page }) => {
   await openApp(page);
   await page.keyboard.press("Control+Backquote");
-  await expect(shown(page)).toContainText("login shell in /Users/you");
-  expect((await calls(page)).find((c) => c.op === "start")).toMatchObject({ cwd: null, at: "/Users/you" });
+  await expect(shown(page)).toContainText("login shell in /home/you");
+  expect((await calls(page)).find((c) => c.op === "start")).toMatchObject({ cwd: null, at: "/home/you" });
   await expect(page.getByTestId("termpanel-tab")).toHaveText(["you"]);
 });
 
@@ -114,10 +115,10 @@ test("Esc in the terminal goes to the shell and does not close the panel", async
 test("a second tab is its own shell; closing a tab stops its shell, the last one hides the panel", async ({ page }) => {
   await openAt(page);
   await page.keyboard.type("echo first\r");
-  await setCwd(page, "/Users/you/code/api-server");
+  await setCwd(page, "/home/you/code/api-server");
   await page.getByTestId("termpanel-new").click();
   await expect(page.getByTestId("termpanel-tab")).toHaveText(["web-app", "api-server"]);
-  await expect(shown(page)).toContainText("login shell in /Users/you/code/api-server");
+  await expect(shown(page)).toContainText("login shell in /home/you/code/api-server");
   await expect(shown(page)).not.toContainText("echo first");
   await expect.poll(() => focusInTerminal(page)).toBe(true);
   await page.keyboard.type("echo second\r");

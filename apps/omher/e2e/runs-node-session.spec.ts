@@ -6,10 +6,19 @@
 // (breadcrumb Kami › child › grandchild). The answer is the last left bubble. The chat's own subagent cards open the
 // same view. Mock data: e2e/mock-bridge.mjs `runs.node_session`.
 import { expect, test, type Locator, type Page } from "@playwright/test";
+import { mkdirSync } from "node:fs";
+import { join } from "node:path";
 
 const MOCK = Number(process.env.OMHER_MOCK_PORT || 5308);
 const DEMO = "dag:20261110_091904_d4a1c7e2/docs-dark-mode";
-const SHOTS = "/Users/khope@sionic.ai/.hermes/profiles/kami/cache/scratch/bt-shots";
+const SHOTS = process.env.OMHER_SHOTS || process.env.OMHER_SHOTS_DIR || "";
+
+/** A shot only when OMHER_SHOTS names a folder (CI and other machines take none). */
+async function shot(page: Page, name: string) {
+  if (!SHOTS) return;
+  mkdirSync(SHOTS, { recursive: true });
+  await page.screenshot({ path: join(SHOTS, name) });
+}
 
 async function mock(op: string, params: Record<string, unknown> = {}): Promise<any> {
   const ws = new WebSocket(`ws://127.0.0.1:${MOCK}/?token=e2e`);
@@ -105,11 +114,11 @@ test("a Hermes subagent node opens as a chat: parent right, child left with Herm
   await expect(answer.locator("strong")).toHaveText("One pair fails AA:");
   await expect(chat).not.toContainText(/thinking/i);
   await page.getByTestId("run-session").scrollIntoViewIfNeeded();
-  await page.screenshot({ path: `${SHOTS}/harness-drawer-hermes.png` });
+  await shot(page, "harness-drawer-hermes.png");
   // Open as chat: the whole view, right/left bubbles
   await chat.getByTestId("agent-chat-full").click();
   await expect(page.getByTestId("run-session")).toHaveClass(/full/);
-  await page.screenshot({ path: `${SHOTS}/harness-agentchat-hermes.png` });
+  await shot(page, "harness-agentchat-hermes.png");
   // its own child opens in place: breadcrumb Kami › Contrast check › Code block palette contrast
   await chat.getByTestId("agent-chat-child").click();
   await expect(chat.getByTestId("agent-chat-crumb-current")).toHaveText("Code block palette contrast");
@@ -137,9 +146,9 @@ test("a Codex fanout node opens as a chat with Codex's mark: prompt, commands in
   expect(lines).toEqual(['rg -n "pre code" docs/', expect.stringContaining("*** Update File: docs/theme.css"), "pnpm test --run", 'gh pr create --draft --title "docs: code block palette"']);
   await expect(chat.getByTestId("agent-chat-answer")).toContainText("Draft PR #2360 is open.");
   await page.getByTestId("run-session").scrollIntoViewIfNeeded();
-  await page.screenshot({ path: `${SHOTS}/harness-drawer-codex.png` });
+  await shot(page, "harness-drawer-codex.png");
   await chat.getByTestId("agent-chat-full").click();
-  await page.screenshot({ path: `${SHOTS}/harness-agentchat-codex.png` });
+  await shot(page, "harness-agentchat-codex.png");
 });
 
 test("graph nodes keep one mark each from the registry: Codex and Claude Code lanes, Hermes children by model", async ({ page }) => {
@@ -149,7 +158,7 @@ test("graph nodes keep one mark each from the registry: Codex and Claude Code la
   expect(await marks("code-colors")).toEqual(["model:openai"]);
   expect(await marks("page-styles")).toEqual(["model:claude"]);
   expect(await nodeOf(box, "code-colors").getByTestId("node-facts").getAttribute("title")).toContain("via Codex");
-  await page.screenshot({ path: `${SHOTS}/harness-graph.png` });
+  await shot(page, "harness-graph.png");
 });
 
 test("the chat's own subagent rows open the same chat view", async ({ page }) => {

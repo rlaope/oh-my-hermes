@@ -76,7 +76,7 @@ export type MockShellCall =
 
 type MockGlobals = { __omherShellCalls?: MockShellCall[]; __omherShellHome?: string; __omherShellFolders?: string[] };
 
-const MOCK_HOME = "/Users/you";
+const MOCK_HOME = "/home/you";
 const leafOf = (p: string) => p.replace(/[\\/]+$/, "").split(/[\\/]/).pop() || p;
 
 /** Coloured output a person recognises (the mock's `git log` and `pnpm test`), so a theme shot shows colours. */
