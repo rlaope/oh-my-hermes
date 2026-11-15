@@ -3090,8 +3090,20 @@ def _ns_ok(result: str) -> bool:
     return not ('"error"' in head and '"error": null' not in head) and not head.startswith("error")
 
 
+def _ns_masked(value):
+    """`value` with every string in it masked (`mask_secrets`) and clipped to one bubble (NS_TEXT)."""
+    if isinstance(value, str):
+        return _ns_clip(value, NS_TEXT)
+    if isinstance(value, dict):
+        return {k: _ns_masked(v) for k, v in value.items()}
+    if isinstance(value, list):
+        return [_ns_masked(v) for v in value]
+    return value
+
+
 def _ns_finish(kind: str, items: list[dict], **extra) -> dict:
-    """The session dict: its items, plus the brief's flat view of them (prompt, steps, answer, children)."""
+    """The session dict: its items, plus the brief's flat view of them (prompt, steps, answer, children). Every
+    string in it (title, goals, summaries, prompt, answer, the parent's name…) is masked on the way out."""
     items = items[:NS_ITEMS]
     prompt = next((i["text"] for i in items if i["type"] == "user"), "")
     answer = next((i["text"] for i in reversed(items) if i["type"] == "assistant"), "")
@@ -3099,7 +3111,7 @@ def _ns_finish(kind: str, items: list[dict], **extra) -> dict:
     children = [i for i in items if i["type"] == "child"]
     out = {"kind": kind, "prompt": prompt, "steps": steps, "answer": answer, "children": children, "items": items}
     out.update({k: v for k, v in extra.items() if v not in (None, "")})
-    return out
+    return {k: _ns_masked(v) for k, v in out.items()}
 
 
 def _inside(path: Path, root: Path) -> bool:
@@ -3175,7 +3187,7 @@ class NodeSessions:
             con.close()
         results = {str(m[4]): str(m[1] or "") for m in msgs if m[0] == "tool" and m[4]}
         children = [{"type": "child", "ref": f"hermes:{k[0]}", "kind": "hermes", "model": k[1] or "",
-                     "provider": k[2] or "", "goal": _one_line(DAG_MARK.sub("", str(k[6] or "")), 200),
+                     "provider": k[2] or "", "goal": _one_line(mask_secrets(DAG_MARK.sub("", str(k[6] or ""))), 200),
                      "state": "running" if k[4] is None else ("failed" if k[5] in ("error", "failed") else "done"),
                      "summary": _one_line(mask_secrets(str(k[7] or "")), 300), "started": k[3], "ended": k[4]}
                     for k in kids]
@@ -3210,7 +3222,7 @@ class NodeSessions:
         items += [c for c in children if c["ref"] not in placed]
         # the answer is the child's last words: a trailing parent acceptance never shows (it is not in this session)
         return _ns_finish("hermes", items, ref=f"hermes:{sid}", model=row[2] or "", provider=row[3] or "",
-                          parent=parent_name, title=_one_line(str(row[6] or ""), 120), started=row[4], ended=row[5],
+                          parent=parent_name, title=_one_line(mask_secrets(str(row[6] or "")), 120), started=row[4], ended=row[5],
                           state="running" if row[5] is None else "done")
 
     # ---- Claude Code

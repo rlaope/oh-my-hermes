@@ -34,6 +34,10 @@ def make_profile(root: Path, plant_secret: bool = True) -> Path:
         con.execute("INSERT INTO sessions VALUES (?,?,?,?,?,?,?,?,?)", tuple(s[k] for k in (
             "id", "source", "parent_session_id", "model", "billing_provider", "started_at", "ended_at", "end_reason",
             "title")))
+    # the bot's own sessions those subagents ran under (rule 15: a ref is read only through such a lineage)
+    for parent, source in (("local-3bd80316ea6eacd3e888009bce3974ddc49efef85f0d7acfeb64ce37cb07a241", "local"),
+                           ("20261108_213859_c9a97486", "discord")):
+        con.execute("INSERT INTO sessions (id, source, title) VALUES (?,?,?)", (parent, source, "main"))
     first_tool = True
     for m in data["messages"]:
         content = m["content"]
@@ -130,6 +134,30 @@ class HermesChild(unittest.TestCase):
         for ref in ("hermes:../../etc", "claude:../x/y", "nope:1", "claude-sub:a/b"):
             with self.assertRaises(ob.BridgeError):
                 self.ns.read(bot_of(self.prof), None, None, None, ref)
+
+    def test_every_string_field_masked(self):
+        """F1: a token in the session title, a child's first message (its goal) or last words (its summary), a
+        grandchild's goal, or the parent's name never leaves the bridge whole."""
+        planted = "sk-" + "PLANTEDfake0123456789"
+        sid = "20261115_210457_2b5242"
+        con = sqlite3.connect(self.prof / "state.db")
+        con.execute("UPDATE sessions SET title=? WHERE id=?", ("Subagent " + planted, sid))
+        con.execute("INSERT INTO sessions VALUES ('grandchild','subagent',?,'claude-opus-5-5','claude-proxy',"
+                    "1794744400,1794744500,'agent_close','child')", (sid,))
+        con.execute("INSERT INTO messages (session_id, role, content) VALUES ('grandchild','user',?)", ("Check " + planted,))
+        con.execute("INSERT INTO messages (session_id, role, content) VALUES ('grandchild','assistant',?)", ("Used " + planted,))
+        con.execute("INSERT INTO sessions VALUES ('great','subagent','grandchild','glm-5','og',1794744410,NULL,NULL,'x')")
+        con.execute("INSERT INTO messages (session_id, role, content) VALUES ('great','user',?)", ("Deeper " + planted,))
+        con.commit()
+        con.close()
+        for got in (self.ns.hermes_read(self.prof, sid, "Kami " + planted),
+                    self.ns.read(bot_of(self.prof), None, None, None, "hermes:grandchild")["session"]):
+            dump = json.dumps(got, ensure_ascii=False)
+            self.assertFalse(planted in dump, "planted token leaked")
+            self.assertIn("sk-•••", dump)
+        s = self.ns.hermes_read(self.prof, sid)
+        self.assertEqual(s["title"], "Subagent sk-•••")
+        self.assertEqual((s["children"][0]["goal"], s["children"][0]["summary"]), ("Check sk-•••", "Used sk-•••"))
 
 
 def write_claude(home: Path, folder: str, sid: str, prompt: str, tool_cmd: str, answer: str, ts="2026-11-02T15:40:00Z"):
