@@ -349,7 +349,7 @@ test.skip("a running terminal session's dot: 6px, solid, inside its tile, readab
       (t) => {
         localStorage.setItem("omher.theme", t);
         localStorage.removeItem("omher.sessions.recent");
-        (window as unknown as Record<string, unknown>).__omherPickFolder = "/Users/you/code/api";
+        (window as unknown as Record<string, unknown>).__omherPickFolder = "/home/you/code/api";
         (window as unknown as Record<string, unknown>).__omherMockAgents = ["claude", "grok"];
       },
       theme,

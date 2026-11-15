@@ -38,7 +38,7 @@ async function terminal(page: Page) {
     localStorage.removeItem("omher.sessions.recent");
     localStorage.removeItem("omher.resume");
     const w = window as unknown as { __omherPickFolder: string; __omherMockAgents: string[] };
-    w.__omherPickFolder = "/Users/you/code/web-app";
+    w.__omherPickFolder = "/home/you/code/web-app";
     w.__omherMockAgents = ["claude", "codex", "omh", "grok"];
   });
   await page.goto("/");

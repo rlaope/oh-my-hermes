@@ -52,7 +52,7 @@ test.beforeEach(async () => {
 // SESSIONS hidden in favour of bot threads (plan 2026-11-15)
 test.skip("U10: the Terminal toggle is a 24px icon button named Open in Terminal, unlike the model chip", async ({ page }) => {
   await open(page);
-  await start(page, "claude", "/Users/you/code/web-app");
+  await start(page, "claude", "/home/you/code/web-app");
   const toggle = page.getByTestId("session-terminal-toggle");
   await expect(toggle).toHaveText("");
   await expect(toggle).toHaveAttribute("aria-label", "Open in Terminal");
@@ -97,11 +97,11 @@ test("U11: the collapsed strip names the newest ask's bot and its first words; e
 // SESSIONS hidden in favour of bot threads (plan 2026-11-15)
 test.skip("U12: two sessions in folders of the same name show their parent folder; a unique name stays alone", async ({ page }) => {
   await open(page);
-  await start(page, "claude", "/Users/you/work/web-app");
+  await start(page, "claude", "/home/you/work/web-app");
   const rows = page.locator("[data-testid=session-list] .ss-row");
   await expect(rows.first().getByTestId("session-where")).toHaveCount(0);
-  await start(page, "codex", "/Users/you/oss/web-app");
-  await start(page, "claude", "/Users/you/notes");
+  await start(page, "codex", "/home/you/oss/web-app");
+  await start(page, "claude", "/home/you/notes");
   // newest first: notes, oss/web-app, work/web-app
   await expect(rows.nth(0).locator(".bot-n")).toHaveText("notes");
   await expect(rows.nth(0).getByTestId("session-where")).toHaveCount(0);
@@ -115,7 +115,7 @@ test.skip("U12: two sessions in folders of the same name show their parent folde
 // SESSIONS hidden in favour of bot threads (plan 2026-11-15)
 test.skip("U13: an agent that exits with code 0 reads Ended in grey, never Failed", async ({ page }) => {
   await open(page);
-  await start(page, "claude", "/Users/you/code/web-app");
+  await start(page, "claude", "/home/you/code/web-app");
   await page.getByTestId("composer").fill("/exit");
   await page.keyboard.press("Enter");
   await expect(page.getByTestId("session-status")).toHaveText("Ended");

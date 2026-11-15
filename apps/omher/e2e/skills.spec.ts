@@ -255,7 +255,7 @@ test.skip("a SESSIONS chat keeps its agent's own / menu and never gets the bot s
   await page.addInitScript(() => {
     localStorage.removeItem("omher.sessions.recent");
     const w = window as unknown as { __omherPickFolder: string; __omherMockAgents: string[] };
-    w.__omherPickFolder = "/Users/you/code/web-app";
+    w.__omherPickFolder = "/home/you/code/web-app";
     w.__omherMockAgents = ["claude", "codex", "omo", "omh"];
   });
   await page.goto("/");

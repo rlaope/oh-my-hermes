@@ -39,7 +39,7 @@ for (const theme of ["dark", "light"] as const) {
     await page.addInitScript((t) => {
       localStorage.setItem("omher.theme", t);
       localStorage.removeItem("omher.sessions.recent");
-      (window as unknown as { __omherPickFolder: string }).__omherPickFolder = "/Users/you/code/calc";
+      (window as unknown as { __omherPickFolder: string }).__omherPickFolder = "/home/you/code/calc";
     }, theme);
     await page.goto("/");
     await page.getByTestId("session-new").click();

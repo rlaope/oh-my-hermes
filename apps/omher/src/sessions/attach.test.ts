@@ -26,8 +26,8 @@ describe("attach helpers", () => {
   });
 
   it("a dropped path is typed bare when plain, else quoted for the shell", () => {
-    expect(shellQuote("/Users/you/.omher/session-files/s1/1-a.png")).toBe("/Users/you/.omher/session-files/s1/1-a.png");
-    expect(shellQuote("/Users/you/My Shots/1-it's.png")).toBe("'/Users/you/My Shots/1-it'\\''s.png'");
+    expect(shellQuote("/home/you/.omher/session-files/s1/1-a.png")).toBe("/home/you/.omher/session-files/s1/1-a.png");
+    expect(shellQuote("/home/you/My Shots/1-it's.png")).toBe("'/home/you/My Shots/1-it'\\''s.png'");
     expect(shellQuote("/a/$(rm -rf ~).png")).toBe("'/a/$(rm -rf ~).png'");
     expect(shellQuote("C:\\Users\\you\\.omher\\a b.png", true)).toBe('"C:\\Users\\you\\.omher\\a b.png"');
   });
@@ -108,8 +108,8 @@ describe("files in a session chat", () => {
     const send = calls().filter((c) => c.op === "chat.input").pop()!;
     expect(send.input).toMatchObject({
       kind: "send",
-      text: `what is this?\n\nAttached file (a copy omher saved; open it with your tools):\n- /Users/you/.omher/session-files/${id}/1-notes.txt`,
-      images: [`/Users/you/.omher/session-files/${id}/1-shot.png`],
+      text: `what is this?\n\nAttached file (a copy omher saved; open it with your tools):\n- /home/you/.omher/session-files/${id}/1-notes.txt`,
+      images: [`/home/you/.omher/session-files/${id}/1-shot.png`],
     });
     // the bubble shows the text as typed and both files
     const user = store.getState().chats[ss.chatKey(id)!].items.filter((i) => i.kind === "user").pop()!;
@@ -126,7 +126,7 @@ describe("files in a session chat", () => {
     const ops = calls().map((c) => c.op).filter((o) => o !== "reset");
     expect(ops.slice(0, 3)).toEqual(["file.save", "chat.start", "chat.input"]);
     const send = calls().find((c) => c.op === "chat.input")!;
-    expect(send.input).toEqual({ kind: "send", text: "", images: [`/Users/you/.omher/session-files/${id}/1-word.png`], id: expect.stringMatching(/^local-/) });
+    expect(send.input).toEqual({ kind: "send", text: "", images: [`/home/you/.omher/session-files/${id}/1-word.png`], id: expect.stringMatching(/^local-/) });
     const user = store.getState().chats[ss.chatKey(id)!].items.find((i) => i.kind === "user")!;
     expect((user as { files: unknown[] }).files).toHaveLength(1);
   });
@@ -167,7 +167,7 @@ describe("files in a session chat", () => {
     const again = setup();
     again.storage.set("omher.sessions.files", book);
     const host = again.host as unknown as { files: Map<string, Uint8Array> };
-    host.files.set(`/Users/you/.omher/session-files/${id}/1-a.png`, new Uint8Array([1, 2]));
+    host.files.set(`/home/you/.omher/session-files/${id}/1-a.png`, new Uint8Array([1, 2]));
     const fresh = createSessions(again.host, () => again.store);
     fresh.restore([{ id, agent: "claude", cwd: "/w/app", startedAt: 1, view: "chat", running: false, messages: [{ ...userMsg, id: userMsg.id }] }]);
     await wait(30);

@@ -8,7 +8,7 @@ import { createSessions } from "./sessions";
 import { createStore, type BridgeLike } from "../state/store";
 import type { SessionNote } from "../lib/notify";
 
-const base: SessionRec = { id: "s1", agent: "claude", cwd: "/Users/k/web-app", startedAt: 1_700_000_000_000, status: "running", view: "chat" };
+const base: SessionRec = { id: "s1", agent: "claude", cwd: "/home/k/web-app", startedAt: 1_700_000_000_000, status: "running", view: "chat" };
 const idle = { turn: false, needsYou: false };
 
 describe("a session row's state", () => {

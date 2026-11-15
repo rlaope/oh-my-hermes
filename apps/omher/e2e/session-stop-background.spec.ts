@@ -39,7 +39,7 @@ async function session(page: Page, agent: "claude" | "codex", first: string, the
   await page.emulateMedia({ colorScheme: theme });
   await page.addInitScript(() => {
     localStorage.removeItem("omher.sessions.recent");
-    (window as unknown as { __omherPickFolder: string }).__omherPickFolder = "/Users/you/code/web-app";
+    (window as unknown as { __omherPickFolder: string }).__omherPickFolder = "/home/you/code/web-app";
   });
   await page.goto("/");
   await expect(page.getByTestId("bot-kami")).toHaveAttribute("aria-current", "true");

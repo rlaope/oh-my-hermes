@@ -40,7 +40,7 @@ async function open(page: Page, theme: "dark" | "light" = "dark") {
     localStorage.removeItem("omher.sessions.recent");
     localStorage.removeItem("omher.pinned");
     localStorage.removeItem("omher.hidden");
-    (window as unknown as { __omherPickFolder: string }).__omherPickFolder = "/Users/you/code/web-app";
+    (window as unknown as { __omherPickFolder: string }).__omherPickFolder = "/home/you/code/web-app";
   });
   await page.goto("/");
   await expect(page.getByTestId("bot-kami")).toHaveAttribute("aria-current", "true");
@@ -175,7 +175,7 @@ for (const theme of ["dark", "light"] as const) {
     await startClaude(page);
     await ask(page);
     const row = page.locator("[data-testid=session-list] .ss-row", { hasText: "web-app" });
-    await page.evaluate(() => ((window as unknown as { __omherPickFolder: string }).__omherPickFolder = "/Users/you/code/api-server"));
+    await page.evaluate(() => ((window as unknown as { __omherPickFolder: string }).__omherPickFolder = "/home/you/code/api-server"));
     await page.getByTestId("session-new").click();
     await page.getByTestId("session-agent-codex").click();
     await page.getByTestId("session-folder").click();

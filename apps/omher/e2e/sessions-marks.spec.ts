@@ -33,7 +33,7 @@ async function open(page: Page) {
     localStorage.removeItem("omher.sessions.open");
     localStorage.removeItem("omher.resume");
     const w = window as unknown as { __omherPickFolder: string; __omherMockAgents: string[]; __notes: unknown[]; Notification: unknown };
-    w.__omherPickFolder = "/Users/you/code/web-app";
+    w.__omherPickFolder = "/home/you/code/web-app";
     w.__omherMockAgents = ["claude", "codex", "omh", "opencode"];
     // record system notifications instead of showing them
     w.__notes = [];
@@ -142,7 +142,7 @@ test("a terminal session that ends while you are elsewhere: done after a clean e
   await open(page);
   await terminal(page, "claude");
   await type(page, "after 1500 exit");
-  await folder(page, "/Users/you/code/api-server");
+  await folder(page, "/home/you/code/api-server");
   await terminal(page, "opencode");
   await type(page, "after 1500 exit 3");
   await elsewhere(page);

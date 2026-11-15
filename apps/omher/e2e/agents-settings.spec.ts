@@ -39,7 +39,7 @@ async function open(page: Page, opts: { theme?: string; lang?: string; file?: un
       if (l) localStorage.setItem("omher.lang", l as string);
       localStorage.removeItem("omher.sessions.recent");
       const w = window as unknown as { __omherPickFolder: string; __omherMockAgents: string[]; __omherCustomFile?: unknown[] };
-      w.__omherPickFolder = "/Users/you/code/web-app";
+      w.__omherPickFolder = "/home/you/code/web-app";
       w.__omherMockAgents = ["claude", "codex", "omh", "opencode", "gemini"];
       if (f) w.__omherCustomFile = f as unknown[];
     },

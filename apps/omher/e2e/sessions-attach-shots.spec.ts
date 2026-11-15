@@ -33,7 +33,7 @@ async function running(page: Page, theme: string) {
   await page.addInitScript((t) => {
     localStorage.setItem("omher.theme", t);
     localStorage.removeItem("omher.sessions.recent");
-    (window as unknown as { __omherPickFolder: string }).__omherPickFolder = "/Users/you/code/omher";
+    (window as unknown as { __omherPickFolder: string }).__omherPickFolder = "/home/you/code/omher";
   }, theme);
   await page.goto("/");
   await page.getByTestId("session-new").click();

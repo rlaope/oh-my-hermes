@@ -32,7 +32,7 @@ async function open(page: Page, gpu: Gpu) {
     }
     localStorage.setItem("omher.term", JSON.stringify({ gpu: g }));
     const w = window as unknown as { __omherPickFolder: string; __omherMockAgents: string[] };
-    w.__omherPickFolder = "/Users/you/code/web-app";
+    w.__omherPickFolder = "/home/you/code/web-app";
     w.__omherMockAgents = ["claude", "codex", "omh"];
   }, gpu);
   await page.route("**/src/sessions/sessions.ts*", async (route) => {

@@ -33,7 +33,7 @@ const calls = (page: Page) => page.evaluate(() => ((window as unknown as { __omh
 async function session(page: Page, first: string) {
   await page.addInitScript(() => {
     localStorage.removeItem("omher.sessions.recent");
-    (window as unknown as { __omherPickFolder: string }).__omherPickFolder = "/Users/you/code/omher";
+    (window as unknown as { __omherPickFolder: string }).__omherPickFolder = "/home/you/code/omher";
   });
   await page.goto("/");
   await expect(page.getByTestId("bot-kami")).toHaveAttribute("aria-current", "true");

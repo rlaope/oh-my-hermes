@@ -29,7 +29,7 @@ test.beforeEach(async () => {
 async function session(page: Page, agent: "claude" | "codex", first: string) {
   await page.addInitScript(() => {
     localStorage.removeItem("omher.sessions.recent");
-    (window as unknown as { __omherPickFolder: string }).__omherPickFolder = "/Users/you/code/calc";
+    (window as unknown as { __omherPickFolder: string }).__omherPickFolder = "/home/you/code/calc";
   });
   await page.goto("/");
   await page.getByTestId("session-new").click();

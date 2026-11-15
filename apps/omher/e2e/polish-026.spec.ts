@@ -41,7 +41,7 @@ async function setup(page: Page, theme: "dark" | "light", globals: Record<string
       localStorage.setItem("omher.lang", l as string);
       localStorage.removeItem("omher.sessions.recent");
       Object.assign(w, g);
-      w.__omherPickFolder = "/Users/you/code/web-app";
+      w.__omherPickFolder = "/home/you/code/web-app";
     },
     [theme, globals, lang] as const,
   );

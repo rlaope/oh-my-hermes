@@ -15,7 +15,7 @@ const PHASE = process.env.OMHER_SHOTS_PHASE || "after";
 async function open(page: Page, theme: string) {
   await page.addInitScript((t) => {
     localStorage.setItem("omher.theme", t);
-    localStorage.setItem("omher.sessions.recent", JSON.stringify([{ agent: "claude", cwd: "/Users/you/code/web-app", at: 1 }]));
+    localStorage.setItem("omher.sessions.recent", JSON.stringify([{ agent: "claude", cwd: "/home/you/code/web-app", at: 1 }]));
     (window as unknown as Record<string, unknown>).__omherMockAgents = ["claude", "codex", "omo", "omh"];
   }, theme);
   await page.goto("/");

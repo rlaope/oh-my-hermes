@@ -37,7 +37,7 @@ async function session(page: Page, agent: string, theme: string, first?: string,
     ([t, g]) => {
       localStorage.setItem("omher.theme", t as string);
       localStorage.removeItem("omher.sessions.recent");
-      Object.assign(window, { __omherPickFolder: "/Users/you/code/omher", __omherMockAgents: ["claude", "codex", "omo", "omh"], ...(g as object) });
+      Object.assign(window, { __omherPickFolder: "/home/you/code/omher", __omherMockAgents: ["claude", "codex", "omo", "omh"], ...(g as object) });
     },
     [theme, globals] as const,
   );

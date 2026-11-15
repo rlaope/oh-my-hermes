@@ -32,7 +32,7 @@ const inputs = (page: Page) =>
       .map((c) => c.input!),
   );
 
-async function running(page: Page, agent: "claude" | "codex" | "omo" = "claude", folder = "/Users/you/code/omher") {
+async function running(page: Page, agent: "claude" | "codex" | "omo" = "claude", folder = "/home/you/code/omher") {
   await page.addInitScript(
     ([f, a]) => {
       localStorage.removeItem("omher.sessions.recent");
@@ -154,7 +154,7 @@ test("the line under the box shows the branch and the context the agent counted"
   // a folder that is not a repository: no branch
   await page.getByTestId("session-new").click();
   await page.getByTestId("session-agent-codex").click();
-  await page.evaluate(() => ((window as unknown as { __omherPickFolder: string }).__omherPickFolder = "/Users/you/notes"));
+  await page.evaluate(() => ((window as unknown as { __omherPickFolder: string }).__omherPickFolder = "/home/you/notes"));
   await page.getByTestId("session-folder").click();
   await page.getByTestId("session-choose").click();
   await page.getByTestId("composer").fill("/status");

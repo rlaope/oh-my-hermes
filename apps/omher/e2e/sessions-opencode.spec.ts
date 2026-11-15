@@ -31,7 +31,7 @@ async function open(page: Page, installed: string[]) {
   await page.addInitScript((list) => {
     localStorage.removeItem("omher.sessions.recent");
     const w = window as unknown as { __omherPickFolder: string; __omherMockAgents: string[] };
-    w.__omherPickFolder = "/Users/you/code/web-app";
+    w.__omherPickFolder = "/home/you/code/web-app";
     w.__omherMockAgents = list;
   }, installed);
   await page.goto("/");

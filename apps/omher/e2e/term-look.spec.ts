@@ -55,7 +55,7 @@ async function open(page: Page) {
       for (const k of ["omher.term", "omher.theme", "omher.sessions.recent", "omher.sessions.open", "omher.resume"]) localStorage.removeItem(k);
     }
     const w = window as unknown as { __omherPickFolder: string; __omherMockAgents: string[] };
-    w.__omherPickFolder = "/Users/you/code/web-app";
+    w.__omherPickFolder = "/home/you/code/web-app";
     w.__omherMockAgents = ["claude", "codex", "omh"];
     // the Option row is macOS's: the same page on every machine that runs this spec
     Object.defineProperty(navigator, "platform", { get: () => "MacIntel" });

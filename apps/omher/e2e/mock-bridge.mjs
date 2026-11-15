@@ -478,7 +478,7 @@ function omoSessionRun({ ago = 30 } = {}) {
   const ended = Math.max(...nodes.map((n) => n.ended));
   return {
     id: `omo:${sid}`, kind: "session", agent: "omo", owner: { type: "session", id: sid }, title: "OmO session",
-    cwd: "/Users/you/code/omher", state: "done", started, updated: ended, ended, nodes,
+    cwd: "/home/you/code/omher", state: "done", started, updated: ended, ended, nodes,
   };
 }
 
@@ -497,7 +497,7 @@ function omoBatchRun({ ago = 2 } = {}) {
   ];
   return {
     id: `omo:${sid}`, kind: "session", agent: "omo", owner: { type: "session", id: sid }, title: "OmO session",
-    cwd: "/Users/you/code/omher", state: "done", started: end - 28.851, updated: end, ended: end, nodes,
+    cwd: "/home/you/code/omher", state: "done", started: end - 28.851, updated: end, ended: end, nodes,
   };
 }
 
@@ -516,7 +516,7 @@ function sessionRun({ ago = 30, hold = false } = {}) {
   return {
     id: "claude:11111111-2222-4333-8444-555555555555", kind: "claude-task", agent: "claude",
     owner: { type: "session", id: "11111111-2222-4333-8444-555555555555" }, title: "Claude Code session",
-    cwd: "/Users/you/code/omher", state: hold ? "running" : "done", started: t, updated: hold ? now() : end,
+    cwd: "/home/you/code/omher", state: hold ? "running" : "done", started: t, updated: hold ? now() : end,
     ...(hold ? {} : { ended: end }), nodes,
   };
 }
@@ -1070,7 +1070,7 @@ const OPS = {
     if (typeof p.url !== "string" || !PEER_URL.test(p.url)) throw new OpError("bad_request", "url must be the forwarded loopback address");
     return {
       version: "0.2.8",
-      hermes: { home: "/Users/sionic/.hermes", version: "0.23.1" },
+      hermes: { home: "/home/sionic/.hermes", version: "0.23.1" },
       bots: (peerBots ?? PEER_BOTS_SEED).map(({ name, display_name, model, provider, status }) => ({ name, display_name, model, provider, status })),
     };
   },

@@ -35,7 +35,7 @@ async function open(page: Page, theme: string) {
     localStorage.setItem("omher.theme", t);
     localStorage.removeItem("omher.sessions.recent");
     const w = window as unknown as { __omherPickFolder: string; __omherMockAgents: string[] };
-    w.__omherPickFolder = "/Users/you/code/web-app";
+    w.__omherPickFolder = "/home/you/code/web-app";
     w.__omherMockAgents = ["claude", "codex", "omh", "opencode"];
   }, theme);
   await page.goto("/");

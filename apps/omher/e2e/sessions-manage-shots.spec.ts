@@ -53,8 +53,8 @@ for (const theme of ["dark", "light"] as const) {
       localStorage.removeItem("omher.resume");
     }, theme);
     await page.goto("/");
-    await start(page, "/Users/you/code/web-app", "Fix the login redirect");
-    await start(page, "/Users/you/code/omher", "Add rate limits to the API");
+    await start(page, "/home/you/code/web-app", "Fix the login redirect");
+    await start(page, "/home/you/code/omher", "Add rate limits to the API");
     await page.mouse.move(900, 790);
 
     // the row's right-click menu

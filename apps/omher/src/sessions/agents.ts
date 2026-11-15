@@ -226,7 +226,7 @@ export function parentPath(path: string): string {
   return i === 0 ? trimmed[0] : trimmed.slice(0, i);
 }
 
-/** `/Users/k/code/x` -> `~/code/x` when it is under `home`. */
+/** `/home/k/code/x` -> `~/code/x` when it is under `home`. */
 export function tildePath(path: string, home: string | null): string {
   if (!home) return path;
   const h = home.replace(/[\\/]+$/, "");

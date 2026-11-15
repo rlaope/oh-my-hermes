@@ -51,7 +51,7 @@ export async function openApp(page: Page, o: OpenOpts = {}) {
       if (theme) localStorage.setItem("omher.theme", theme as string);
       localStorage.setItem("omher.term", JSON.stringify(term ?? {}));
       const w = window as unknown as Spy & { __omherPickFolder: string; __omherMockAgents: string[] };
-      w.__omherPickFolder = "/Users/you/code/web-app";
+      w.__omherPickFolder = "/home/you/code/web-app";
       w.__omherMockAgents = ["claude", "codex", "omh"];
       w.__opened = [];
       w.__clipWrites = [];
