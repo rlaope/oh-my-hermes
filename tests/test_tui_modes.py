@@ -2485,7 +2485,7 @@ class RedrawKeptRowsTests(unittest.TestCase):
         self.assertGreater(len(kept), 3000 + 24)
         self.assertGreaterEqual(len(kept), app_module.REDRAW_TAIL_ROWS - 11)  # the cut falls between replies
         self.assertTrue(kept[0].startswith("⋯ ") and "earlier entries" in kept[0])
-        self.assertIn(f"┃   reply {replies - 1} row 8", kept)
+        self.assertIn(f"  reply {replies - 1} row 8", kept)
 
     def test_a_redraw_at_a_new_width_lays_every_row_out_as_a_session_drawn_there(self) -> None:
         app, _now = self.session(cols=80)

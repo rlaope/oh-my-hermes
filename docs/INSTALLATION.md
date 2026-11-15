@@ -2059,7 +2059,7 @@ below), `aurora` (emerald and teal into violet, a box per section), `ember`
 tints the chrome: the composer's rules and the frames drawn like them take
 its card-edge colour, and a tool call's rail and the working row's spinner
 its label colour (a failed or denied call's rail stays red), as do a sent
-prompt's band, the catch rows and the `[⚚ OMH Native]` badge. Body text, the grey details, the reply's rail and the state colours
+prompt's band, the catch rows and the `[⚚ OMH Native]` badge. Body text, the grey details, the reply's header and the state colours
 (running blue, done green, warning amber, failure red) keep the theme's
 colours, so a look never changes what a colour says. The card sits under the banner until your first
 prompt, then stays in scrollback above it. It names the model and effort,
