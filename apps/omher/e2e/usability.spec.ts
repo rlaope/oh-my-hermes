@@ -130,6 +130,8 @@ test("shortcuts: Mod+2 opens the second bot, Mod+K searches, Mod+. toggles Detai
   await page.keyboard.press(`${key}+,`);
   await expect(page.getByTestId("settings-view")).toBeVisible();
   await expect(page.getByTestId("shortcuts")).toContainText(mac ? "⌘K" : "Ctrl+K");
+  await expect(page.getByTestId("shortcuts")).toContainText(mac ? "⌘N · ⌘T" : "Ctrl+N");
+  if (!mac) await expect(page.getByTestId("shortcuts")).not.toContainText("Ctrl+T");
   await page.keyboard.press(`${key}+,`);
   await expect(page.getByTestId("settings-view")).toHaveCount(0);
 });

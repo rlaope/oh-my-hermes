@@ -455,6 +455,7 @@ export const en = {
   "key.details": "Show or hide Details",
   "key.settings": "Settings",
   "key.nextAsk": "Next approval or question",
+  "key.newSession": "New session",
   "key.cardKeys": "Deny · Allow once · Allow for session (focused card)",
   "key.stop": "Stop the running answer",
   "look.theme": "Theme",

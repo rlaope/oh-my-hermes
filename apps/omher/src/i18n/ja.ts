@@ -453,6 +453,7 @@ export const ja: Record<Key, string> = {
   "key.details": "詳細の表示/非表示",
   "key.settings": "設定",
   "key.nextAsk": "次の承認または質問",
+  "key.newSession": "新しいセッション",
   "key.cardKeys": "拒否 · 今回のみ許可 · このセッション中は許可（選択中のカード）",
   "key.stop": "回答中の処理を止める",
   "look.theme": "テーマ",
