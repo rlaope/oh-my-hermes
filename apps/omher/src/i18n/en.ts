@@ -1283,7 +1283,11 @@ export const en = {
   "sq.delete": "Delete",
   "sq.deleteTip": "Do not send it",
   "sq.steering": "Steering…",
-  "sq.steered": "Steered · added to the running answer",
+  "sq.steered": "Sent to {bot} · joins the running answer or starts right after",
+  "sq.unknown": "Might already be in the answer",
+  "sq.unused": "Not used · the answer stopped first",
+  "sq.send": "Send",
+  "sq.sendTip": "Send it as a new message",
   // steer queue sessions
   "sqs.handed": "Already with {agent} · it takes it next",
   "sqs.noSteer": "{agent} has no way to take a message mid-answer",

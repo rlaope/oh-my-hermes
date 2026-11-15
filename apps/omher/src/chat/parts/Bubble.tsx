@@ -31,10 +31,11 @@ export const Bubble = memo(function Bubble({
   onQueue,
   queueBusy,
   queueOff,
+  steeredTo,
   quote,
   onQuote,
 }: {
-  item: Pick<MessageItem, "kind" | "text" | "error" | "reply" | "files" | "skills" | "wait" | "held" | "steered">;
+  item: Pick<MessageItem, "kind" | "text" | "error" | "reply" | "files" | "skills" | "wait" | "held" | "steered" | "steerUnknown" | "steerUnused">;
   streaming?: boolean;
   /** The bot whose face sits beside its bubble; `face` false keeps the indent without repeating it. */
   bot?: string;
@@ -51,6 +52,8 @@ export const Bubble = memo(function Bubble({
   onQueue?: (c: QueueChoice) => void;
   /** Its steer is on the way: the mark waits. */
   queueBusy?: boolean;
+  /** The bot's name a steered message went to, for its line. */
+  steeredTo?: string;
   /** Menu items that are off, with their reasons (a SESSIONS chat's agent). */
   queueOff?: QueueOffReasons;
   /** A bot answer: the message of the person's it replies to, when that is not plain from where it sits; a click
@@ -61,7 +64,7 @@ export const Bubble = memo(function Bubble({
   if (item.kind === "user") {
     const held = !!item.held;
     // a SESSIONS chat's waiting message carries the mark too (held by omher, or already with the agent)
-    const marked = (held || item.wait === "queued") && !!onQueue;
+    const marked = (held || item.wait === "queued" || !!item.steerUnknown) && !!onQueue;
     return (
       <div
         className={`msg u${item.wait ? ` ${item.wait}` : ""}${held ? " held" : ""}`}
@@ -74,7 +77,7 @@ export const Bubble = memo(function Bubble({
           (marked && onQueue ? (
             // a held message: its ↵ mark before the bubble, on the bubble's first line
             <div className="msg-line">
-              <QueueMark onPick={onQueue} busy={queueBusy} off={queueOff} />
+              <QueueMark onPick={onQueue} busy={queueBusy} off={queueOff} unknown={!!item.steerUnknown} />
               <div className="b">
                 <SkillText text={item.text} skills={item.skills} />
               </div>
@@ -102,7 +105,12 @@ export const Bubble = memo(function Bubble({
         )}
         {item.steered && (
           <div className="msg-wait msg-steered" data-testid="bubble-steered">
-            {t("sq.steered")}
+            {t("sq.steered", { bot: steeredTo ?? "" })}
+          </div>
+        )}
+        {item.steerUnknown && (
+          <div className="msg-wait" data-testid="bubble-steer-unknown">
+            {item.steerUnused ? t("sq.unused") : t("sq.unknown")}
           </div>
         )}
         {item.wait === "dropped" && (

@@ -2170,6 +2170,10 @@ impl Adapter for Codex {
                     }
                 }
                 // the thread is back to before the person's last turn (its files stay as they are)
+                // the steer was taken: its request is done (the message's own userMessage item says so)
+                "turn/steer" => {
+                    self.steers.remove(&n);
+                }
                 "thread/revert" => {
                     self.turns.pop();
                     st.emit(ev("rewound", json!({})));
@@ -7201,6 +7205,10 @@ mod tests {
         // Codex records it in the same turn: taken
         let st = run(&mut x, &[r#"{"method":"item/started","params":{"item":{"type":"userMessage","id":"u2","clientId":"local-s2","content":[]}}}"#.into()]);
         assert_eq!(st.events, [json!({"event": "message.taken", "id": "local-s2"})]);
+        // its request answered: nothing kept for it
+        let n = w[0]["id"].as_u64().unwrap();
+        run(&mut x, &[format!(r#"{{"id":{n},"result":{{"turnId":"T1"}}}}"#)]);
+        assert!(x.steers.is_empty());
         // a steer Codex refuses (the turn moved on) never reached it, and says so
         let st = x.on_input(steer("late", "local-s3")).unwrap();
         let n = written(&st)[0]["id"].as_u64().unwrap();

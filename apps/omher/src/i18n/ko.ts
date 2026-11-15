@@ -1281,7 +1281,11 @@ export const ko: Record<Key, string> = {
   "sq.delete": "삭제",
   "sq.deleteTip": "보내지 않습니다",
   "sq.steering": "스티어링 중…",
-  "sq.steered": "스티어링됨 · 진행 중인 답에 전했어요",
+  "sq.steered": "{bot}에게 보냄 · 진행 중인 답에 합쳐지거나 바로 이어서 시작해요",
+  "sq.unknown": "이미 답에 들어갔을 수 있어요",
+  "sq.unused": "쓰이지 않음 · 답이 먼저 멈췄어요",
+  "sq.send": "보내기",
+  "sq.sendTip": "새 메시지로 보냅니다",
   // steer queue sessions
   "sqs.handed": "이미 {agent}에게 넘어갔어요 · 곧 읽어요",
   "sqs.noSteer": "{agent}는 답하는 중에 메시지를 받을 수 없어요",

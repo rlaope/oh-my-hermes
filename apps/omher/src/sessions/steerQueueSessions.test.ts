@@ -21,7 +21,7 @@ test("Steer is offered only to the agents with their own mid-turn input; the oth
 
 const bridge: BridgeLike = { connect: async () => undefined, onAny: () => () => {}, onStatus: () => () => {}, request: (async () => ({})) as BridgeLike["request"] };
 
-async function setup(agent = "codex") {
+async function setup(agent = "codex", failSends: string[] = [], interruptEnds = true) {
   (globalThis as { localStorage?: unknown }).localStorage = { getItem: () => null, setItem: () => {}, removeItem: () => {} };
   let sink: (e: ChatEvent) => void = () => {};
   const inputs: ChatInput[] = [];
@@ -37,8 +37,9 @@ async function setup(agent = "codex") {
     },
     chatInput: async (_id: number, i: ChatInput) => {
       inputs.push(i);
+      if (i.kind === "send" && failSends.includes(i.text)) throw new Error("agent gone");
       if (i.kind === "send") sink({ event: "turn.start" });
-      if (i.kind === "interrupt") sink({ event: "turn.end", outcome: "interrupted" });
+      if (i.kind === "interrupt" && interruptEnds) sink({ event: "turn.end", outcome: "interrupted" });
     },
     chatClose: async () => {},
   } as unknown as SessionHost;
@@ -52,7 +53,7 @@ async function setup(agent = "codex") {
   const chat = () => store.getState().chats[key]!;
   const row = (text: string) => chat().items.find((i) => i.kind === "user" && i.text === text) as { id: string; held?: boolean; wait?: string } | undefined;
   const tick = () => new Promise((r) => setTimeout(r, 5));
-  return { ss, id, key, chat, row, inputs, end: (outcome = "done") => sink({ event: "turn.end", outcome }), tick, store };
+  return { ss, id, key, chat, row, inputs, end: (outcome = "done") => sink({ event: "turn.end", outcome }), emit: (e: ChatEvent) => sink(e), tick, store };
 }
 
 const sends = (inputs: ChatInput[]) => inputs.filter((i) => i.kind === "send").map((i) => (i as { text: string }).text);
@@ -126,4 +127,34 @@ test("an agent without steer sends nothing for Steer", async () => {
   await t.ss.queuePick(t.id, t.row("B")!.id, "steer");
   expect(t.inputs.filter((i) => i.kind === "steer")).toEqual([]);
   expect(t.row("B")?.held).toBe(true);
+});
+
+test("M4: a held message whose send fails is marked, and the next one still goes out", async () => {
+  const t = await setup("codex", ["B"]);
+  await t.ss.send(t.id, "B");
+  await t.ss.send(t.id, "C");
+  t.end();
+  await t.tick();
+  await t.tick();
+  expect(sends(t.inputs)).toEqual(["first", "B", "C"]);
+  expect(t.row("B")).toMatchObject({ error: "agent gone" });
+  expect(t.row("C")?.held).toBeUndefined();
+  expect(t.chat().queue ?? []).toEqual([]);
+});
+
+test("a Send now mark is used up by the turn's end: a later Stop still throws away what waits", async () => {
+  const t = await setup("codex", [], false);
+  await t.ss.send(t.id, "B");
+  // Send now, then Delete before the stopped turn ends: that end finds nothing waiting
+  await t.ss.queuePick(t.id, t.row("B")!.id, "now");
+  await t.ss.queuePick(t.id, t.row("B")!.id, "delete");
+  t.end("interrupted");
+  await t.tick();
+  // a new turn, a message waiting behind it, then a real Stop: it is thrown away, not sent as a Send now
+  await t.ss.send(t.id, "C");
+  await t.ss.send(t.id, "D");
+  t.end("interrupted");
+  await t.tick();
+  expect(t.row("D")).toMatchObject({ wait: "dropped" });
+  expect(sends(t.inputs)).toEqual(["first", "C"]);
 });

@@ -278,7 +278,8 @@ export interface OpMap {
   "chat.open": { params: { bot: string; existing_only?: boolean }; result: ChatOpenResult };
   /** `reply_to` = an elsewhere session id: the bridge adds that thread as context for the bot.
    *  omher posts nothing. */
-  "chat.send": { params: { bot: string; text: string; session?: string; reply_to?: string }; result: { input_id: string } };
+  /** `queued`: a held message (steer queue); a still-busy Hermes runs it after its current work, never steers it. */
+  "chat.send": { params: { bot: string; text: string; session?: string; reply_to?: string; queued?: boolean }; result: { input_id: string } };
   "chat.interrupt": { params: { bot: string; session?: string }; result: Record<string, never> };
   /** Steer the main chat's running turn (Hermes' `session.steer`): `queued` = taken, `rejected` = not (no turn runs,
    *  or Hermes refused). The bridge never sends a refused steer another way. */

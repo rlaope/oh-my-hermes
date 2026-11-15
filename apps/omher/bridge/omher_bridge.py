@@ -4527,7 +4527,8 @@ class Bridge:
             text = f"{text.rstrip()}\n\n{PEER_HINT}"
         input_id = str(uuid.uuid4())
         await self._probe_clarify_batch(conn)
-        await self._submit(conn, main, text, input_id)
+        queued = p.get("queued") is True
+        await self._submit(conn, main, text, input_id, queued)
         return {"input_id": input_id}
 
     async def _probe_clarify_batch(self, conn: Conn) -> None:
@@ -4570,10 +4571,13 @@ class Bridge:
             raise BridgeError("attach_failed", str(res.get("message") or f"could not attach {name}"))
         return {"kind": kind, "name": name, "text": str(res.get("text") or ""), "ref_text": str(res.get("ref_text") or "")}
 
-    async def _submit(self, conn: Conn, main_id: str, text: str, input_id: str):
+    async def _submit(self, conn: Conn, main_id: str, text: str, input_id: str, queued: bool = False):
         # The single place a turn is sent. It takes the main chat's id or a folder chat's that this bridge
-        # created (both from _target), and nothing else.
+        # created (both from _target), and nothing else. ``queued`` (a message the app held, steer queue): when the
+        # session is still busy, Hermes runs it after that work in its own FIFO, never as a steer or interrupt.
         batch = {"clarify_batch": True} if conn.clarify_batch else {}
+        if queued:
+            batch["queued"] = True
         return await self._call(conn, "prompt.submit", session_id=main_id, text=text, input_id=input_id, **batch)
 
     async def _generation(self, conn: Conn, main: str, chat: FolderChat | None = None):
@@ -4593,7 +4597,9 @@ class Bridge:
         """Steer the running turn of the bot's main chat through Hermes' own ``session.steer``: the text joins the
         turn's next tool result, no new turn starts. Main chat only (never a folder chat or any other session).
         Hermes' answer goes back as it came (``queued`` = taken, ``rejected`` = not); a refused steer is never sent
-        another way here: the app sends it as a normal message after the turn."""
+        another way here: the app sends it as a normal message after the turn. The gateway's own error answer
+        (``GatewayRPCError``: 4002, 4010) is a received refusal too, so it reads ``rejected``; a lost answer
+        (bot offline, timeout) stays an error, since Hermes may have taken the text."""
         text = p.get("text")
         if not isinstance(text, str) or not text.strip():
             raise BridgeError("bad_request", "missing text")
@@ -4601,7 +4607,12 @@ class Bridge:
             raise BridgeError("bad_request", "steer goes to the bot's main chat only")
         conn = await self._conn(p.get("bot"))
         main = await self._main(conn)
-        res = await self._call(conn, "session.steer", session_id=main, text=text)
+        try:
+            res = await self._call(conn, "session.steer", session_id=main, text=text)
+        except Exception as e:
+            if not _named(e, "GatewayRPCError"):
+                raise
+            return {"status": "rejected"}
         status = res.get("status") if isinstance(res, dict) else None
         return {"status": status if status in ("queued", "rejected") else "rejected"}
 

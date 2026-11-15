@@ -94,6 +94,7 @@ export function Timeline({
     if (c === "now") void s.queueSendNow(id, bot.name);
     else if (c === "steer") void s.queueSteer(id, bot.name);
     else if (c === "edit") s.queueEdit(id, bot.name);
+    else if (c === "send") s.queueResend(id, bot.name);
     else s.queueDelete(id, bot.name);
   };
 
@@ -110,7 +111,7 @@ export function Timeline({
   const render = (it: TimelineItem, prev?: TimelineItem, at = -1): ReactNode => {
     switch (it.kind) {
       case "user": {
-        const off = queue ? queue.off(it) : it.held ? {} : null;
+        const off = queue ? queue.off(it) : it.held || it.steerUnknown ? {} : null;
         return (
           <Bubble
             item={it}
@@ -119,6 +120,7 @@ export function Timeline({
             onQueue={off ? (queue ? (c: QueueChoice) => queue.pick(it.id, c) : queuePick(it.id)) : undefined}
             queueBusy={it.held && chat?.steering === it.id}
             queueOff={off ?? undefined}
+            steeredTo={bot.display_name}
           />
         );
       }

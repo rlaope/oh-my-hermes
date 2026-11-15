@@ -112,7 +112,7 @@ test("Steer: one chat.steer, a Steered line, the message leaves the queue and is
   await b.getByTestId("queue-mark").click();
   await page.getByTestId("queue-steer").click();
   const row = page.locator("[data-testid=bubble-user][data-steered]", { hasText: "also keep the old timeout" });
-  await expect(row.getByTestId("bubble-steered")).toHaveText("Steered · added to the running answer");
+  await expect(row.getByTestId("bubble-steered")).toHaveText("Sent to Kami · joins the running answer or starts right after");
   await expect(row.getByTestId("queue-mark")).toHaveCount(0);
   const steer = await calls("chat.steer");
   expect(steer.map((c) => c.params)).toEqual([{ bot: "kami", text: "also keep the old timeout" }]);

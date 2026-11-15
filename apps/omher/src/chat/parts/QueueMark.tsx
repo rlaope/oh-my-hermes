@@ -5,14 +5,25 @@ import { t } from "../../i18n";
  *  steer; a message already handed to the agent). */
 export type QueueOffReasons = Partial<Record<QueueChoice, string>>;
 
-export type QueueChoice = "now" | "steer" | "edit" | "delete";
+export type QueueChoice = "now" | "steer" | "edit" | "delete" | "send";
 /** Room (px) the menu keeps from the bottom of the chat's scroll box (the composer sits right under it). */
 const ROOM = 16;
 
 /** The ↵ mark before a held message (steer queue): a button that opens a small menu. Send now stops the running
  *  answer and sends this one first; Steer hands it to the running answer; Edit puts it back in the box; Delete
  *  drops it. Arrow keys move in the menu, Enter picks, Esc closes it and gives focus back to the mark. */
-export function QueueMark({ onPick, busy = false, off = {} }: { onPick: (c: QueueChoice) => void; busy?: boolean; off?: QueueOffReasons }) {
+export function QueueMark({
+  onPick,
+  busy = false,
+  off = {},
+  unknown = false,
+}: {
+  onPick: (c: QueueChoice) => void;
+  busy?: boolean;
+  off?: QueueOffReasons;
+  /** A steer whose answer never came (it may be in the answer already): only Send or Delete. */
+  unknown?: boolean;
+}) {
   const [open, setOpen] = useState(false);
   const [up, setUp] = useState(false);
   const btn = useRef<HTMLButtonElement>(null);
@@ -36,12 +47,17 @@ export function QueueMark({ onPick, busy = false, off = {} }: { onPick: (c: Queu
     document.addEventListener("mousedown", onDown);
     return () => document.removeEventListener("mousedown", onDown);
   }, [open]);
-  const items: [QueueChoice, string, string][] = [
-    ["now", t("sq.sendNow"), t("sq.sendNowTip")],
-    ["steer", t("sq.steer"), t("sq.steerTip")],
-    ["edit", t("sq.edit"), t("sq.editTip")],
-    ["delete", t("sq.delete"), t("sq.deleteTip")],
-  ];
+  const items: [QueueChoice, string, string][] = unknown
+    ? [
+        ["send", t("sq.send"), t("sq.sendTip")],
+        ["delete", t("sq.delete"), t("sq.deleteTip")],
+      ]
+    : [
+        ["now", t("sq.sendNow"), t("sq.sendNowTip")],
+        ["steer", t("sq.steer"), t("sq.steerTip")],
+        ["edit", t("sq.edit"), t("sq.editTip")],
+        ["delete", t("sq.delete"), t("sq.deleteTip")],
+      ];
   // every item off for the same reason (the agent has it now): that reason once, at the top
   const reasons = items.map(([c]) => off[c]);
   const oneWhy = reasons.every((r) => r && r === reasons[0]) ? reasons[0] : undefined;

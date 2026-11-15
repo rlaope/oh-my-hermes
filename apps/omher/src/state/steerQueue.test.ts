@@ -2,7 +2,7 @@
 // when the turn ends, in order, exactly once; its ↵ menu sends it now (one interrupt), steers it (chat.steer, a
 // refusal falls back to a normal send), edits or deletes it. Holds across a reconnect, a bot switch and Stop.
 import { describe, expect, it } from "vitest";
-import { createStore, initialState, reduce, reduceQueue, type AppState, type BridgeLike, type Chat } from "./store";
+import { answerSlot, createStore, heldDrafts, initialState, reduce, reduceQueue, type AppState, type BridgeLike, type Chat } from "./store";
 import type { BridgeEvent } from "../lib/protocol";
 import type { BridgeStatus } from "../lib/bridge";
 
@@ -18,7 +18,8 @@ function fake() {
   let statusH: ((s: BridgeStatus) => void) | null = null;
   const calls: { op: string; params: Record<string, unknown> }[] = [];
   let running = false;
-  let steer: "queued" | "rejected" | "throw" = "queued";
+  let steer: "queued" | "rejected" | "throw" | "disconnected" | "bot_offline" | "timeout" | "internal" = "queued";
+  let botsFail = false;
   const bridge: BridgeLike = {
     connect: async () => statusH?.("open"),
     onAny: (h) => ((anyH = h), () => {}),
@@ -29,6 +30,7 @@ function fake() {
         case "hello":
           return { bridge: "mock", version: "0", hermes: { home: "/h" } };
         case "bots.list":
+          if (botsFail) throw { code: "disconnected", message: "bridge connection lost" };
           return { bots: ["kami", "friren"].map((name) => ({ name, display_name: name, is_default: false, model: "m", provider: "p", description: "", status: "online", running: false })) };
         case "chat.open":
           return { session_id: `s-${params.bot}`, messages: [], running, model: "m", provider: "p", reasoning: "high" };
@@ -42,6 +44,7 @@ function fake() {
           return { input_id: "i" };
         case "chat.steer":
           if (steer === "throw") throw { code: "gateway_error", message: "agent does not support steer" };
+          if (steer !== "queued" && steer !== "rejected") throw { code: steer, message: "no answer" };
           return { status: steer };
         default:
           return {};
@@ -55,6 +58,7 @@ function fake() {
     status: (s: BridgeStatus) => statusH!(s),
     setRunning: (r: boolean) => (running = r),
     setSteer: (s: typeof steer) => (steer = s),
+    setBotsFail: (v: boolean) => (botsFail = v),
     sends: (bot = "kami") => calls.filter((c) => c.op === "chat.send" && c.params.bot === bot).map((c) => c.params.text),
     count: (op: string) => calls.filter((c) => c.op === op).length,
   };
@@ -246,7 +250,7 @@ describe("steer queue: order and exactly-once", () => {
     await a.send("for kami");
     await a.selectBot("friren");
     await turn(f);
-    expect(f.calls.filter((c) => c.op === "chat.send").map((c) => c.params)).toEqual([{ bot: "kami", text: "for kami" }]);
+    expect(f.calls.filter((c) => c.op === "chat.send").map((c) => c.params)).toEqual([{ bot: "kami", text: "for kami", queued: true }]);
   });
 
   it("a send that fails is marked, and the next one still goes out", async () => {
@@ -325,5 +329,153 @@ describe("reduceQueue (pure)", () => {
     const c = { ...s.chats.kami, pendingTurn: "x" };
     expect(reduceQueue(c, { type: "queue.idle", bot: "kami", id: "x" }).pendingTurn).toBeNull();
     expect(reduceQueue(c, { type: "queue.idle", bot: "kami", id: "y" }).pendingTurn).toBe("x");
+  });
+});
+
+describe("steer queue: review fixes", () => {
+  const order = (c: Chat) =>
+    c.items.flatMap((i) => (i.kind === "user" || i.kind === "assistant" ? [`${i.kind}:${i.text}${i.kind === "user" && i.held ? "(held)" : ""}`] : []));
+
+  it("R1: deleting the first waiting message keeps the answer above the next one", () => {
+    const ev = (e: Record<string, unknown>) => ({ type: "event" as const, ev: { bot: "kami", ...e } as BridgeEvent, now: T0 + 100 });
+    let s = reduce(initialState(), { type: "local.user", bot: "kami", id: "q", text: "q", now: T0 });
+    s = reduce(s, ev({ event: "turn.start" }));
+    s = reduce(s, { type: "local.user", bot: "kami", id: "A", text: "A", now: T0 + 200, held: true });
+    s = reduce(s, { type: "local.user", bot: "kami", id: "B", text: "B", now: T0 + 300, held: true });
+    s = reduce(s, { type: "queue.drop", bot: "kami", id: "A" });
+    expect(s.chats.kami.turn?.before).toBe("B");
+    expect(s.chats.kami.items[answerSlot(s.chats.kami)]).toMatchObject({ id: "B" });
+    s = reduce(s, ev({ event: "message", id: "a1", text: "answer" }));
+    s = reduce(s, ev({ event: "turn.end", outcome: "done" }));
+    expect(order(s.chats.kami)).toEqual(["user:q", "assistant:answer", "user:B(held)"]);
+    // the only waiting one gone: the answer goes back to the end
+    let one = reduce(initialState(), { type: "local.user", bot: "kami", id: "q", text: "q", now: T0 });
+    one = reduce(one, ev({ event: "turn.start" }));
+    one = reduce(one, { type: "local.user", bot: "kami", id: "A", text: "A", now: T0 + 200, held: true });
+    one = reduce(one, { type: "queue.drop", bot: "kami", id: "A" });
+    expect(one.chats.kami.turn?.before).toBeUndefined();
+  });
+
+  it("Edit of the first waiting message moves the answer's place too", async () => {
+    const { a, chat } = await busy();
+    await a.send("A");
+    await a.send("B");
+    const [A, B] = heldIds(chat());
+    expect(chat().turn?.before).toBe(A);
+    a.queueEdit(A);
+    expect(chat().turn?.before).toBe(B);
+  });
+
+  it("R2: a steer with no answer (disconnect, bot offline, timeout, internal) is never sent again on its own", async () => {
+    for (const mode of ["disconnected", "bot_offline", "timeout", "internal"] as const) {
+      const { f, a, chat } = await busy();
+      f.setSteer(mode);
+      await a.send("also check the docs");
+      await a.send("next");
+      const [id] = heldIds(chat());
+      await a.queueSteer(id);
+      expect(f.count("chat.steer"), mode).toBe(1);
+      const row = chat().items.find((i) => i.id === id)!;
+      expect(row, mode).toMatchObject({ steerUnknown: true });
+      expect(chat().queue, mode).not.toContain(id);
+      await turn(f);
+      await start(f);
+      await turn(f);
+      // only "next" went out; the unknown one waits for the person
+      expect(f.sends(), mode).toEqual(["next"]);
+    }
+  });
+
+  it("an unknown steer: Send puts it out next as a normal message; Delete drops it", async () => {
+    const { f, a, chat } = await busy();
+    f.setSteer("disconnected");
+    await a.send("maybe");
+    await a.send("gone");
+    const [m, g] = heldIds(chat());
+    await a.queueSteer(m);
+    f.setSteer("timeout");
+    await a.queueSteer(g);
+    a.queueDelete(g);
+    expect(userTexts(chat())).not.toContain("gone");
+    a.queueResend(m);
+    expect(chat().items.find((i) => i.id === m)).toMatchObject({ held: true });
+    expect(chat().items.find((i) => i.id === m)).not.toHaveProperty("steerUnknown");
+    await turn(f);
+    expect(f.sends()).toEqual(["maybe"]);
+  });
+
+  it("M2: a held message goes out queued, and the steered line does not claim it joined the running answer", async () => {
+    const { f, a, chat } = await busy();
+    await a.send("one");
+    await turn(f);
+    expect(f.calls.filter((c) => c.op === "chat.send").map((c) => c.params.queued)).toEqual([true]);
+    const { en } = await import("../i18n/en");
+    expect(en["sq.steered"]).toBe("Sent to {bot} · joins the running answer or starts right after");
+    expect(chat().queue).toEqual([]);
+  });
+
+  it("M3: Stop or Send now before the turn read a steered message: it is marked not used, never lost or resent", async () => {
+    for (const how of ["stop", "now"] as const) {
+      const { f, a, chat } = await busy();
+      await a.send("A");
+      await a.send("B");
+      const [A, B] = heldIds(chat());
+      await a.queueSteer(A);
+      expect(chat().items.find((i) => i.id === A)).toMatchObject({ steered: true });
+      if (how === "now") await a.queueSendNow(B);
+      else await a.interrupt();
+      await turn(f, "interrupted");
+      const row = chat().items.find((i) => i.id === A)!;
+      expect(row, how).toMatchObject({ steerUnknown: true, steerUnused: true });
+      expect(row, how).not.toHaveProperty("steered");
+      expect(f.sends(), how).toEqual(["B"]);
+      // Send: it goes out as a normal message, once
+      a.queueResend(A);
+      await start(f);
+      await turn(f);
+      expect(f.sends(), how).toEqual(["B", "A"]);
+    }
+  });
+
+  it("M3: a steered message the turn already read (a tool step ended) stays Steered after a Stop", async () => {
+    const { f, a, chat } = await busy();
+    await a.send("A");
+    const [A] = heldIds(chat());
+    await a.queueSteer(A);
+    f.emit({ event: "tool.start", bot: "kami", tool_id: "t1", name: "read", detail: "" } as BridgeEvent);
+    f.emit({ event: "tool.end", bot: "kami", tool_id: "t1", ok: true } as BridgeEvent);
+    await a.interrupt();
+    await turn(f, "interrupted");
+    expect(chat().items.find((i) => i.id === A)).toMatchObject({ steered: true });
+    expect(chat().items.find((i) => i.id === A)).not.toHaveProperty("steerUnknown");
+    expect(f.sends()).toEqual([]);
+  });
+
+  it("a reconnect whose bots.list failed: the next bots.list success reads the chat again and the queue moves", async () => {
+    const { f, a, chat } = await busy();
+    await a.send("stuck?");
+    f.setBotsFail(true);
+    f.status("closed");
+    f.status("open");
+    for (let i = 0; i < 5; i++) await tick();
+    expect(chat().stale).toBe(true);
+    expect(f.sends()).toEqual([]);
+    f.setBotsFail(false);
+    f.emit({ event: "bots.update" } as BridgeEvent);
+    for (let i = 0; i < 6; i++) await tick();
+    expect(chat().stale).toBe(false);
+    expect(f.sends()).toEqual(["stuck?"]);
+  });
+
+  it("B2: a reload saves held messages (and unknown steers) into their chat's draft, in order, above what was typed", async () => {
+    const { f, a, store } = await busy();
+    await a.send("first held");
+    await a.send("second held");
+    f.setSteer("disconnected");
+    await a.send("maybe steered");
+    await a.queueSteer(store.getState().chats.kami.queue![2]);
+    const drafts = heldDrafts(store.getState(), { kami: "typing this", friren: "other" });
+    expect(drafts).toEqual({ kami: "first held\nsecond held\nmaybe steered\ntyping this", friren: "other" });
+    expect(heldDrafts(store.getState(), {})).toEqual({ kami: "first held\nsecond held\nmaybe steered" });
   });
 });

@@ -149,7 +149,8 @@ function ChatPane({ rec, chatKey }: { rec: SessionRec; chatKey: string }) {
       takesFiles
         ? {
             off: (it) => queueOff(rec.agent, label, !!it.held, it.wait === "queued" && !it.steered),
-            pick: (lid, c) => void getSessions().queuePick(rec.id, lid, c),
+            // "send" is the bot chat's unknown-steer choice: an agent chat never offers it
+            pick: (lid, c) => void (c !== "send" && getSessions().queuePick(rec.id, lid, c)),
           }
         : undefined,
     [takesFiles, rec.agent, rec.id, label],

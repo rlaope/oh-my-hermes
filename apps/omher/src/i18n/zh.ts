@@ -1281,7 +1281,11 @@ export const zh: Record<Key, string> = {
   "sq.delete": "删除",
   "sq.deleteTip": "不发送",
   "sq.steering": "引导中…",
-  "sq.steered": "已引导 · 已交给进行中的回答",
+  "sq.steered": "已发给 {bot} · 并入进行中的回答,或紧接着开始",
+  "sq.unknown": "可能已经在回答里了",
+  "sq.unused": "未使用 · 回答先停止了",
+  "sq.send": "发送",
+  "sq.sendTip": "作为新消息发送",
   // steer queue sessions
   "sqs.handed": "已交给 {agent} · 它接下来会读",
   "sqs.noSteer": "{agent} 无法在回答中途接收消息",

@@ -1281,7 +1281,11 @@ export const ja: Record<Key, string> = {
   "sq.delete": "削除",
   "sq.deleteTip": "送信しません",
   "sq.steering": "ステア中…",
-  "sq.steered": "ステア済み · 進行中の回答に渡しました",
+  "sq.steered": "{bot} に送信 · 進行中の回答に加わるか、すぐ後に始まります",
+  "sq.unknown": "すでに回答に入っているかもしれません",
+  "sq.unused": "使われませんでした · 回答が先に止まりました",
+  "sq.send": "送信",
+  "sq.sendTip": "新しいメッセージとして送信します",
   // steer queue sessions
   "sqs.handed": "すでに {agent} に渡しました · 次に読みます",
   "sqs.noSteer": "{agent} は回答中にメッセージを受け取れません",

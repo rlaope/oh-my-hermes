@@ -655,19 +655,22 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
     heldInputs.delete(head);
     store().dispatch({ type: "queue.take", bot: key, id: head, now: Date.now() });
     dispatchChat(id, { event: "message.taken", id: head });
-    if (!h) return;
+    // no text kept for it, or the send fails: no turn starts, so no turn.end would ever send the next one
+    if (!h) return void setTimeout(() => void sendHead(id), 0);
     h.sent?.();
     try {
       await input(id, h.input);
     } catch (e) {
       store().dispatch({ type: "send.failed", bot: key, id: head, error: errText(e) });
+      setTimeout(() => void sendHead(id), 0);
     }
   };
   /** A turn ended. Stop (not Send now) throws away what waited, as the agents themselves do; otherwise the head goes. */
   const afterTurn = (id: string, stopped: boolean) => {
     const key = keys.get(id);
-    if (!key || !chatOf(key)?.queue?.length) return;
+    // a Send now mark is used by this turn's end, whatever waits: a later real Stop is never read as Send now
     const now = sendingNow.delete(id);
+    if (!key || !chatOf(key)?.queue?.length) return;
     if (stopped && !now) {
       for (const lid of [...(chatOf(key)?.queue ?? [])]) {
         heldInputs.delete(lid);

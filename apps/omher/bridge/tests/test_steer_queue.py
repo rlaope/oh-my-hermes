@@ -68,8 +68,28 @@ class ChatSteer(BridgeCase):
             await s.req("chat.open", bot="kami")
             steer_answers(env, GatewayRPCError("agent does not support steer"))
             r = await s.req("chat.steer", bot="kami", text="x")
-            self.assertFalse(r["ok"])
+            # Hermes answered no (4010): a definite refusal, the app may send it normally after the turn
+            self.assertEqual(r["result"], {"status": "rejected"})
             self.assertEqual(env.clients["kami"].find("prompt.submit"), [])
+
+    async def test_a_lost_answer_stays_an_error_never_rejected(self):
+        async with Env() as env:
+            s = await self.open(env)
+            await s.req("chat.open", bot="kami")
+            steer_answers(env, TimeoutError())
+            r = await s.req("chat.steer", bot="kami", text="x")
+            self.assertFalse(r["ok"])
+            self.assertEqual(r["error"]["code"], "timeout")
+            self.assertEqual(env.clients["kami"].find("prompt.submit"), [])
+
+    async def test_a_held_message_goes_out_queued(self):
+        async with Env() as env:
+            s = await self.open(env)
+            self.assertTrue((await s.req("chat.send", bot="kami", text="held one", queued=True))["ok"])
+            self.assertTrue((await s.req("chat.send", bot="kami", text="plain"))["ok"])
+            sub = env.clients["kami"].find("prompt.submit")
+            self.assertEqual([p.get("queued") for p in sub], [True, None])
+            self.assertEqual({p["session_id"] for p in sub}, {MAIN_RUNTIME})
 
     async def test_refused_for_folder_chats_and_any_other_session(self):
         with tempfile.TemporaryDirectory() as folder:
