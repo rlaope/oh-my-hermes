@@ -40,7 +40,7 @@ All notable changes will be documented here.
   harness ran opens its work as a chat between the agents: the prompt it got, the commands it ran with their results,
   its own sub-steps and its answer, read-only. Ctrl+` opens a terminal panel at the bottom with your own login shell
   in the open thread's folder. The side panel can be maximised (its button, a double-click on the tab row, or ⌘⇧G;
-  Esc restores). The SESSIONS section is hidden in favour of threads.
+  Esc restores). The SESSIONS section is hidden in favour of threads. (#2906)
 
 ## 4.0.8 - 2026-11-15
 
