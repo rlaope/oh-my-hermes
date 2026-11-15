@@ -98,7 +98,22 @@ test("the + menu has one file item and Plugins ›, the plugins open beside it; 
   await expect(chips.nth(0).locator("img.att-thumb")).toBeVisible();
   await expect(chips.nth(2).locator(".att-badge")).toHaveText("PDF");
   await expect(chips.nth(0).getByTestId("attach-chip-note")).toHaveText(`${(PNG.length / 1024).toFixed(1)} KB`);
-  expect(Math.round((await chips.nth(0).locator(".att-thumb").boundingBox())!.width)).toBe(24);
+  // a picture is a large square tile (Codex's composer): the picture fills it, its name and size are the tooltip,
+  // and × shows on hover; a PDF stays a one-line chip
+  const tile = chips.nth(0);
+  await expect(tile).toHaveAttribute("data-tile", "true");
+  await expect(tile).toHaveAttribute("title", `one.png · ${(PNG.length / 1024).toFixed(1)} KB`);
+  const tb = (await tile.boundingBox())!;
+  expect([Math.round(tb.width), Math.round(tb.height)]).toEqual([120, 120]);
+  expect(Math.round((await tile.locator(".att-thumb").boundingBox())!.width)).toBeGreaterThanOrEqual(116);
+  await expect(tile.locator(".att-name")).toHaveCSS("width", "1px");
+  await page.getByTestId("composer").hover();
+  await expect(tile.getByTestId("attach-remove")).toHaveCSS("opacity", "0");
+  await tile.hover();
+  await expect(tile.getByTestId("attach-remove")).toHaveCSS("opacity", "1");
+  await expect(chips.nth(2)).not.toHaveAttribute("data-tile", "true");
+  expect(Math.round((await chips.nth(2).locator(".att-thumb").boundingBox())!.width)).toBe(24);
+  await expect(chips.nth(2).locator(".att-name")).toBeVisible();
 
   // the menu: two rows, ONE file item for every kind of file and "Plugins ›"; it opens entirely above the composer,
   // from its left edge

@@ -214,6 +214,69 @@
   background: var(--raise2);
   color: var(--ink);
 }
+
+/* a picture or video: a large square tile with the picture cropped to fill (Codex's composer); its name and size are
+   the tooltip and stay in the DOM for screen readers; × sits on the tile's corner when it is hovered or focused */
+.att-chips:has(.att-chip.tile) {
+  max-height: none;
+  align-items: flex-end;
+  padding: 4px 2px 2px;
+}
+.att-chip.tile {
+  position: relative;
+  width: 120px;
+  height: 120px;
+  max-width: none;
+  padding: 0;
+  gap: 0;
+  border-color: var(--line);
+  border-radius: 12px;
+  background: var(--raise2);
+  overflow: hidden;
+}
+.att-chip.tile .att-thumb {
+  width: 100%;
+  height: 100%;
+  border-radius: 0;
+  display: block;
+}
+.att-chip.tile .att-play {
+  font-size: 18px;
+}
+.att-vh {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+.att-chip.tile .att-x {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.62);
+  color: #fff;
+  font-size: 15px;
+  opacity: 0;
+  transition: opacity 0.12s;
+}
+.att-chip.tile:hover .att-x,
+.att-chip.tile:focus-within .att-x {
+  opacity: 1;
+}
+.att-chip.tile .att-x:hover {
+  background: rgba(0, 0, 0, 0.82);
+  color: #fff;
+}
+@media (hover: none) {
+  .att-chip.tile .att-x {
+    opacity: 1;
+  }
+}
 .att-err {
   font-size: 11.5px;
   color: var(--danger);
