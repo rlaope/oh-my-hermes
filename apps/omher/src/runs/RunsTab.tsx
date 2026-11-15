@@ -5,7 +5,7 @@
 // words on screen say "plan". Nothing here retries, settles or cancels.
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { Bot } from "../lib/protocol";
-import { cliName, sortRuns, span, type AgentRunSummary, type NodePr, type RunDetail } from "../lib/runs";
+import { cliName, lengthOf, sortRuns, span, type AgentRunSummary, type NodePr, type RunDetail } from "../lib/runs";
 import { getStore, useStore } from "../state/store";
 import { CloseIcon, ExpandIcon, IconButton, ModelIcon, Spinner } from "../ui";
 import { isMac } from "../app/shortcuts";
@@ -117,7 +117,7 @@ function RunRow({ r, on, nowS, onPick, testId = "run-row" }: { r: AgentRunSummar
             <span data-testid="run-row-stale">{t("plans.stale", { t: span(nowS - r.updated) })}</span>
           ) : (
             <>
-              {r.counts.done}/{r.counts.nodes} · {span((r.ended ?? nowS) - r.started)}
+              {r.counts.done}/{r.counts.nodes} · {lengthOf(r.started, r.ended, nowS)}
             </>
           )}
         </span>
@@ -191,7 +191,7 @@ export function RunsTab({ bot }: { bot: Bot }) {
   const [listOpen, setListOpen] = useState(false);
   const { runs, cli, error } = useRuns(bot.name, n);
   const omhMissing = hermesOnly(useSessions().agents);
-  const nowMs = useNow(!!runs?.some(isLive) || cli.some(isLive));
+  const nowMs = useNow(!!runs?.some(isLive) || cli.some(isLive), 1_000);
   if (!runs) return <div className={`pn-empty${error ? " bad" : ""}`}>{error ?? <Spinner size={12} label={t("pn.loading")} />}</div>;
   const selected = pickRun(runs, cli, s.ui.runId);
   const nowS = nowMs / 1000;
@@ -323,7 +323,7 @@ export function RunsFull({ bot }: { bot: Bot }) {
   const { runs, cli, error } = useRuns(bot.name);
   const selected = runs ? pickRun(runs, cli, s.ui.runId) : null;
   const { detail } = useDetail(bot.name, selected);
-  const nowMs = useNow(!!selected && isLive(selected));
+  const nowMs = useNow(!!selected && isLive(selected), 1_000);
   const [open, setOpen] = useState<string | null>(null);
   const [ref, width] = useWidth<HTMLDivElement>();
   useEffect(() => setOpen(null), [selected?.id]);

@@ -300,6 +300,23 @@ export function span(seconds: number): string {
   return h % 24 ? `${Math.floor(h / 24)}d ${h % 24}h` : `${Math.floor(h / 24)}d`;
 }
 
+/** A length that is still growing (a running run or node), to the second so it visibly ticks: "38s", "14m 05s",
+ *  "2h 05m 09s"; from a day on, `span`'s "1d 10h" (seconds there would only be noise). */
+export function liveSpan(seconds: number): string {
+  const s = Math.max(0, Math.floor(seconds));
+  if (s < 60) return `${s}s`;
+  const two = (n: number) => String(n).padStart(2, "0");
+  const m = Math.floor(s / 60);
+  if (m < 60) return `${m}m ${two(s % 60)}s`;
+  const h = Math.floor(m / 60);
+  if (h < 24) return `${h}h ${two(m % 60)}m ${two(s % 60)}s`;
+  return span(s);
+}
+
+/** A run's or node's length: ticking to the second while it runs (`ended` unset), coarse once it is over. */
+export const lengthOf = (started: number, ended: number | undefined, nowS: number) =>
+  ended === undefined ? liveSpan(nowS - started) : span(ended - started);
+
 // ---- delegate adapter: Hermes `delegate_task` fan-outs (the bridge's `delegation_to_run` / `attach_delegations`) ----
 
 /** One `cache/delegation/live/deleg_*` folder as the bridge reads it (manifest + task log head and final lines). */

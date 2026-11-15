@@ -917,6 +917,8 @@ export const en = {
 
   // right panel, sessions, routines, runs drawer, setup gate (i18n 0.2.5)
   "pn.panel": "Panel",
+  "pn.resize": "Resize the panel",
+  "pn.resizeTip": "Drag to resize · double-click for the usual width",
   "pn.details": "Details",
   "pn.terminal": "Terminal",
   "pn.schedule": "Schedule",

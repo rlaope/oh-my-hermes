@@ -120,7 +120,8 @@ SHORTCUTS: tuple[tuple[str, str], ...] = (
     ("Ctrl+D", "On an empty composer, exits; with text, deletes the character ahead"),
     ("↑ / ↓ or ← / → then Enter", "On an approval, highlight allow once, allow this session or (when Hermes "
                                   "offers it) always allow, and allow it, or the last row to deny and tell Hermes "
-                                  "what to do instead; Enter alone denies and stops the running turn"),
+                                  "what to do instead; Enter alone allows once, and ↑ then Enter denies and stops "
+                                  "the running turn"),
     ("d, n", "On an approval, deny and stop the running turn"),
     ("1 to 9", "On a clarify question's list, pick that choice, or the last number opens the field for your own "
                "answer; ↑ / ↓ then Enter picks too, and any other character starts your own answer"),

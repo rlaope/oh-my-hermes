@@ -115,10 +115,10 @@ class HiddenComposerTests(unittest.TestCase):
         self.assertFalse([row for row in during if row.startswith("❯ ")], during)
         info = info_row(during)
         self.assertEqual(during[info - 4 : info],
-                         ["▌ ❯ ✗ deny", "▌   ✓ allow once", "▌   ✓ allow this session", "▌   ✎ no, and tell Hermes what to do instead"])
+                         ["▌   ✗ deny", "▌ ❯ ✓ allow once", "▌   ✓ allow this session", "▌   ✎ no, and tell Hermes what to do instead"])
         self.assertIn("↑↓ pick · enter confirms · d or esc denies and stops", during[info])
         armed(app)
-        press(app, Key(DOWN), Key(ENTER))
+        press(app, Key(ENTER))
         self.assertEqual(answered(client, "srq-1"), [{"result": {"choice": "once"}}])
         after = drawn(app)
         self.assertIs(app.composer, composer)
@@ -158,8 +158,8 @@ class HiddenComposerTests(unittest.TestCase):
         for digit in "0123456789":
             press(app, Key(CHAR, digit))
         self.assertEqual(client.answers, [])
-        self.assertEqual(app.slot.selected, 0)  # type: ignore[union-attr]
-        self.assertIn("▌ ❯ ✗ deny", drawn(app))
+        self.assertEqual(app.slot.selected, 1)  # type: ignore[union-attr]
+        self.assertIn("▌ ❯ ✓ allow once", drawn(app))
 
     def test_a_waiting_request_opens_with_the_composer_still_hidden_and_it_returns_after_the_last(self) -> None:
         app, client = make_app(busy=True)
@@ -240,7 +240,7 @@ class HiddenComposerTests(unittest.TestCase):
         self.assertIsNone(app.pager)
         screen = drawn(app)
         self.assertFalse(app.terminal.screen.cursor_visible)  # type: ignore[attr-defined]
-        self.assertIn("▌ ❯ ✗ deny", screen)
+        self.assertIn("▌ ❯ ✓ allow once", screen)
 
     def test_two_text_questions_back_to_back_give_the_draft_back_unmasked(self) -> None:
         # The draft is back before the waiting question opens, so the second one sets the draft aside, not the first's field.
@@ -711,7 +711,7 @@ class ResizeAndShortTerminalTests(unittest.TestCase):
                 screen = drawn(app)
                 self.assertEqual(rule_rows(screen), [], screen)
                 self.assertFalse(app.terminal.screen.cursor_visible)  # type: ignore[attr-defined]
-                self.assertIn("▌ ❯ ✗ deny", screen)
+                self.assertIn("▌ ❯ ✓ allow once", screen)
                 self.assertTrue(all(len(row) <= cols for row in screen))
         armed(app)
         press(app, Key(ESCAPE))
@@ -726,7 +726,7 @@ class ResizeAndShortTerminalTests(unittest.TestCase):
                 app.effort = "high"
                 app._on_server_request(APPROVAL)
                 screen = drawn(app)
-                self.assertTrue(any(row.startswith("▌ ❯ ✗ deny") for row in screen), screen)
+                self.assertTrue(any(row.startswith("▌ ❯ ✓ allow once") for row in screen), screen)
                 self.assertTrue(all(len(row) <= cols for row in screen))
                 self.assertEqual(rule_rows(screen), [], screen)
                 self.assertIn("esc", screen[info_row(screen)])  # the info line keeps a way to deny at every height
@@ -739,7 +739,7 @@ class ResizeAndShortTerminalTests(unittest.TestCase):
         self.assertTrue(without_badge(screen[info]).startswith(INFO_INSET + "↑↓ pick · enter confirms · d or esc denies and stops"),
                         screen)
         self.assertEqual(screen[info - 3 : info],
-                         ["▌ ❯ ✗ deny", "▌   ✓ allow once", "▌   ✎ no, and tell Hermes what to do instead"])
+                         ["▌   ✗ deny", "▌ ❯ ✓ allow once", "▌   ✎ no, and tell Hermes what to do instead"])
         self.assertFalse([row for row in screen if row.startswith("▌") and "esc" in row], screen)  # no slot row for keys
 
 

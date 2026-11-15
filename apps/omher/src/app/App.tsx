@@ -9,6 +9,7 @@ import { slots } from "../features";
 import { Sidebar } from "../sidebar/Sidebar";
 import { Chat } from "../chat/Chat";
 import { DetailsFallback } from "./DetailsFallback";
+import { PanelResizer } from "./PanelResizer";
 import { SettingsView } from "./SettingsView";
 import { AutomationsPage } from "../pages/Automations";
 import { PluginsPage } from "../pages/Plugins";
@@ -73,6 +74,7 @@ export function App() {
       </main>
       {/* inert while closed: the off-screen panel takes no focus and no clicks */}
       <aside className="details" aria-hidden={!panelOpen} inert={!panelOpen} data-testid="details">
+        <PanelResizer open={panelOpen} tab={onSession ? "runs" : s.ui.panelTab} />
         {onSession ? (
           // mounted only while open: a closed panel reads nothing, and reopening it reads the session's run afresh
           panelOpen && (

@@ -8,7 +8,7 @@ from subprocess import SubprocessError
 from tempfile import mkdtemp
 from threading import Lock
 
-from ..quality.paired_run_model import PairedRunDecision
+from ..quality.paired_run_model import ArmRole, PairedRunDecision
 from ..runtime.critical_path_health_models import CriticalPathTerminalStatus
 from .fanout_dispatch import signal_safe_unit_runner
 from .fanout_health_events import FanoutHealthEvents, monotonic_milliseconds
@@ -23,6 +23,7 @@ from .paired_run_execution_model import (
     PairedRunWorkspace,
     PairedRunWorkspaceFailure,
 )
+from .paired_run_arm_home import ArmHomeRun
 from .paired_run_hermes_adapter import run_hermes_paired_cell
 from .paired_run_local_models import PairedRunLocalRunnerConfig
 
@@ -32,6 +33,7 @@ def execute_local_paired_plan(
     decision: PairedRunDecision,
     contents: Mapping[str, str],
     config: PairedRunLocalRunnerConfig,
+    arm_homes: Mapping[ArmRole, ArmHomeRun] | None = None,
 ) -> PairedRunExecutionReport:
     """Execute each frozen cell from a distinct detached checkout."""
     worktrees: dict[str, Path] = {}
@@ -127,6 +129,7 @@ def execute_local_paired_plan(
                 path,
                 decision,
                 config,
+                None if arm_homes is None else arm_homes[cell.arm].arm_home,
             )
         except PairedRunRunnerFailure:
             health.finished(cell.workspace_id, terminal_status="failed")

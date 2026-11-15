@@ -691,7 +691,9 @@ ledger is the only record of the turn's spend: every API call queues
 finalize and again when the quiet CLI exits. The home belongs to that child
 alone, so every row in the file is its spend and the rows are summed; the
 result is the `-z` report's vocabulary, which the observation builder already
-reads. The child runs with `--toolsets file --safe-mode`, so no delegate
+reads. The child runs with `--toolsets file --safe-mode` (a paired-run arm
+uses `file,skills` in its declared arm home, which also has no delegate
+toolset, and the read skips rows the home held before the cell), so no delegate
 subagent opens a row of its own and a context-compression rotation is the only
 source of a second row. The sum equals the `-z` counters only because of that
 restriction: a delegate child writes its own `sessions` row, and the `-z`

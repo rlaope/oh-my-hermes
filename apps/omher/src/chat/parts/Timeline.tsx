@@ -1,7 +1,7 @@
 import { Fragment, useEffect, useLayoutEffect, useRef, type ReactNode } from "react";
 import { RestartAction, RestartLine } from "../../sidebar/RestartLine";
 import type { Bot } from "../../lib/protocol";
-import { selectTimeline, turnHasActivity, useStore, type TimelineItem } from "../../state/store";
+import { answerSlot, answerSoFar, selectTimeline, turnHasActivity, useStore, type TimelineItem } from "../../state/store";
 import { slots } from "../../features";
 import { dayLabel, hhmm, sameDay } from "../../app/time";
 import { Bubble } from "./Bubble";
@@ -52,7 +52,8 @@ export function Timeline({
   const items = selectTimeline(s, bot.name);
   const chat = s.chats[bot.name];
   const notReady = useBotReady(bot.name).status === "not";
-  const streaming = chat?.turn?.streaming ?? "";
+  // the answer being written, in whole lines: never word by word, never the commentary beside a tool call
+  const writing = chat?.turn ? answerSoFar(chat.turn) : "";
   const typing = awaitingFirstToken(chat);
   // the one row of the live run that carries the bot's ringed face
   const faceRow = liveFaceRow(items, chat?.turn, typing);
@@ -73,7 +74,7 @@ export function Timeline({
     if (!el) return;
     if (lastBot.current !== bot.name || pinned.current) el.scrollTop = el.scrollHeight;
     lastBot.current = bot.name;
-  }, [bot.name, items, streaming, typing]);
+  }, [bot.name, items, writing, typing]);
 
   // Files the bot sent load after the row is drawn and make it taller: stay at the bottom if pinned.
   useEffect(() => {
@@ -143,6 +144,29 @@ export function Timeline({
     }
   };
 
+  // the answer as it is written, a whole line or paragraph at a time (answerSoFar), in the one bubble the whole answer
+  // then takes: never word by word, never the bot's commentary beside its tool calls. It sits where the answer will
+  // land (answerSlot): above a message the person sent while it was being written, which is answered next.
+  const slotId = chat?.turn ? chat.items[answerSlot(chat)]?.id : undefined;
+  const writingRow = writing ? (
+    <div className="row row-assistant" data-kind="streaming">
+      <Bubble
+        item={{ kind: "assistant", text: writing }}
+        streaming
+        bot={bot.name}
+        face={!botSpoke(slotId ? items[items.findIndex((i) => i.id === slotId) - 1] : items[items.length - 1])}
+        faceEl={face}
+        live={faceRow === "streaming"}
+      />
+    </div>
+  ) : null;
+  // the typing dots too: where the answer will land
+  const typingRow = typing ? (
+    <div className="row row-assistant row-typing" data-kind="typing">
+      <TypingRow bot={bot.name} name={bot.display_name} face={face} />
+    </div>
+  ) : null;
+
   return (
     <div
       className="thread"
@@ -187,6 +211,8 @@ export function Timeline({
         const liveFace = liveLine && faceRow === "activity";
         return (
           <Fragment key={it.id}>
+            {it.id === slotId && writingRow}
+            {it.id === slotId && typingRow}
             {label && <div className="day">{label}</div>}
             <div className={`row row-${it.kind}${liveLine ? " live-line" : ""}`} data-kind={it.kind}>
               {liveFace && <LiveFace bot={bot.name} face={face} />}
@@ -195,23 +221,8 @@ export function Timeline({
           </Fragment>
         );
       })}
-      {typing && (
-        <div className="row row-assistant row-typing" data-kind="typing">
-          <TypingRow bot={bot.name} name={bot.display_name} face={face} />
-        </div>
-      )}
-      {streaming && (
-        <div className="row row-assistant" data-kind="streaming">
-          <Bubble
-            item={{ kind: "assistant", text: streaming }}
-            streaming
-            bot={bot.name}
-            face={!botSpoke(items[items.length - 1])}
-            faceEl={face}
-            live={faceRow === "streaming"}
-          />
-        </div>
-      )}
+      {!slotId && writingRow}
+      {!slotId && typingRow}
     </div>
   );
 }

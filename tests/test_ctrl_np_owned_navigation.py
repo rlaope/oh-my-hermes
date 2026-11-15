@@ -30,11 +30,14 @@ class PromptNavigationTests(unittest.TestCase):
         for method, params in (("approval", APPROVAL), ("clarify", CLARIFY)):
             with self.subTest(method=method):
                 prompt = slot(method, params)
+                start = 1 if method == "approval" else 0  # an approval opens on allow once, under deny
+                self.assertEqual(prompt.selected, start)
                 self.assertIsNone(prompt.handle_key(ctrl("n")))
-                self.assertEqual(prompt.selected, 1)
+                self.assertEqual(prompt.selected, start + 1)
                 self.assertIsNone(prompt.handle_key(ctrl("p")))
-                self.assertEqual(prompt.selected, 0)
-                prompt.handle_key(ctrl("p"))
+                self.assertEqual(prompt.selected, start)
+                for _ in range(start + 1):
+                    prompt.handle_key(ctrl("p"))
                 self.assertEqual(prompt.selected, 0)
                 last = len(prompt.approval_choices()) - 1 if method == "approval" else 2
                 for _ in range(10):

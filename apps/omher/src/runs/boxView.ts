@@ -29,7 +29,7 @@
 // above the first node that waits on it; a dependency on a failed node that has repairs is an edge from those
 // repairs, which is what the dependent waits on; a duration reads as everywhere else in the app (`span`).
 import type { AgentRun, RunNode } from "../lib/runs";
-import { cliName, isRepaired, nodeModel, span, type CliAgent, type NodePr } from "../lib/runs";
+import { cliName, isRepaired, lengthOf, nodeModel, type CliAgent, type NodePr } from "../lib/runs";
 import { prLabel } from "./pr";
 import { t } from "../i18n";
 import { markFor } from "../ui/ModelIcon";
@@ -40,7 +40,7 @@ export const BOX_COMFORT = 176; // when a frontier wraps anyway, its boxes aim f
 export const BOX_MAX = 248; // and a box is never wider: a longer title takes its second line
 export const BOX_OPEN = 140; // boxes are not narrowed under this to open the spaces between them for passing lines
 /** The least a duration counts when a box is measured, so a ticking clock never resizes the boxes. */
-const LONGEST_DURATION = "23h 59m";
+const LONGEST_DURATION = "23h 59m 59s";
 const SEP = " · ";
 
 /** Pixel sizes of the drawing. */
@@ -236,7 +236,7 @@ export function statusOf(n: RunNode, run: Pick<AgentRun, "kind" | "nodes">): Sta
     }
   }
 }
-export const durationOf = (n: RunNode, nowS: number) => (n.started === undefined ? "" : span((n.ended ?? nowS) - n.started));
+export const durationOf = (n: RunNode, nowS: number) => (n.started === undefined ? "" : lengthOf(n.started, n.ended, nowS));
 /** "1.2k": a token count in at most four characters and a unit. */
 export function compactCount(value: number): string {
   for (const [size, suffix] of [

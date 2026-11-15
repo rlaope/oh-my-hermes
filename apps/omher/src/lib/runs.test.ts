@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { markFor } from "../ui/ModelIcon";
-import { attachDelegations, attachOwners, attachPlanned, cliName, countsOf, fromDag, isCliRun, fromDelegation, layerOf, nodeModel, routeTable, sortRuns, span, summary, type AgentRun, type DagRecord, type Delegation, type RouteRecord } from "./runs";
+import { attachDelegations, attachOwners, attachPlanned, cliName, countsOf, fromDag, isCliRun, fromDelegation, layerOf, nodeModel, routeTable, sortRuns, span, summary, type AgentRun, type DagRecord, type Delegation, type RouteRecord, liveSpan, lengthOf } from "./runs";
 
 const fx = (name: string) => readFileSync(fileURLToPath(new URL(`./__fixtures__/${name}`, import.meta.url)), "utf-8");
 const rec = (name: string) => JSON.parse(fx(name)) as DagRecord;
@@ -110,6 +110,11 @@ describe("ordering and time", () => {
   it("running first, then most recently updated", () => {
     const r = (id: string, state: AgentRun["state"], updated: number) => ({ id, state, updated });
     expect(sortRuns([r("a", "done", 5), r("b", "running", 1), r("c", "failed", 9)]).map((x) => x.id)).toEqual(["b", "c", "a"]);
+  });
+  it("a running length ticks to the second; a finished one stays coarse", () => {
+    expect([liveSpan(7), liveSpan(14 * 60 + 5), liveSpan(2 * 3600 + 5 * 60 + 9), liveSpan(26 * 3600)]).toEqual(["7s", "14m 05s", "2h 05m 09s", "1d 2h"]);
+    expect(lengthOf(100, undefined, 100 + 125)).toBe("2m 05s");
+    expect(lengthOf(100, 100 + 125, 9999)).toBe("2m");
   });
   it("span is coarse", () => {
     expect([span(40), span(14 * 60 + 30), span(2 * 3600 + 5 * 60), span(3 * 3600), span(5 * 86400)]).toEqual(["40s", "14m", "2h 5m", "3h", "5d"]);

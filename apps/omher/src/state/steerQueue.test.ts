@@ -7,6 +7,10 @@ import type { BridgeEvent } from "../lib/protocol";
 import type { BridgeStatus } from "../lib/bridge";
 
 const T0 = 1_800_000_000_000;
+
+function touch(s: AppState, c: Chat): AppState {
+  return { ...s, chats: { ...s.chats, kami: c } };
+}
 const tick = () => new Promise((r) => setTimeout(r, 0));
 
 function fake() {
@@ -288,6 +292,22 @@ describe("reduceQueue (pure)", () => {
     // a row no longer in the queue is never taken twice
     const once = reduceQueue(c0, { type: "queue.take", bot: "kami", id: "a", now: T0 });
     expect(reduceQueue(once, { type: "queue.take", bot: "kami", id: "a", now: T0 })).toBe(once);
+  });
+  it("with the answer showing: held messages read under it; one steered in moves above it", () => {
+    const ev = (e: Record<string, unknown>) => ({ bot: "kami", ...e }) as BridgeEvent;
+    const order = (st: AppState) =>
+      st.chats.kami.items.flatMap((i) => (i.kind === "user" || i.kind === "assistant" ? [`${i.kind}:${i.text}`] : []));
+    let s = reduce(initialState(), { type: "local.user", bot: "kami", id: "q", text: "q", now: T0 });
+    for (const e of [ev({ event: "turn.start" }), ev({ event: "delta", text: "Line one.\n" })]) s = reduce(s, { type: "event", ev: e, now: T0 + 100 });
+    s = reduce(s, { type: "local.user", bot: "kami", id: "w", text: "wait", now: T0 + 200, held: true });
+    s = reduce(s, { type: "local.user", bot: "kami", id: "x", text: "steer", now: T0 + 300, held: true });
+    expect(s.chats.kami.turn?.before).toBe("w");
+    // steer "w" in: it joined the running turn, so the answer is no longer kept above it
+    s = touch(s, reduceQueue(s.chats.kami, { type: "queue.steered", bot: "kami", id: "w", ok: true, now: T0 + 400 }));
+    expect(s.chats.kami.turn?.before).toBe("x");
+    for (const e of [ev({ event: "message", id: "a1", text: "Line one." }), ev({ event: "turn.end", outcome: "done" })]) s = reduce(s, { type: "event", ev: e, now: T0 + 500 });
+    // q, then "wait" (steered into this turn), the answer, and "steer" still waiting under it for the next turn
+    expect(order(s)).toEqual(["user:q", "user:wait", "assistant:Line one.", "user:steer"]);
   });
   it("a held row survives a chat re-read; an idle send stops holding the queue", () => {
     let s = base();

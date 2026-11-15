@@ -62,13 +62,6 @@ pub enum Input {
     Steer { id: String, text: String },
 }
 
-/// Whether agent `id` takes [`Input::Steer`] (mirrors `STEERS` in src/sessions/controls.ts; the adapters themselves
-/// refuse it otherwise).
-#[cfg(test)]
-pub fn steers(id: &str) -> bool {
-    matches!(id, "claude" | "codex" | "pi" | "omp" | "omo")
-}
-
 /// The permission modes a person can pick for agent `id`: Claude Code's own `default` (ask), `plan` and
 /// `acceptEdits`; Codex's read-only, ask and auto-in-the-workspace presets ([`codex_mode`]). No agent is offered a
 /// mode that skips every approval (`bypassPermissions`, `dontAsk`, `auto`) or lifts the sandbox
@@ -3816,6 +3809,13 @@ fn stop(s: ChatLive, grace: Duration) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Whether agent `id` takes [`Input::Steer`] (mirrors `STEERS` in src/sessions/controls.ts; the adapters
+    /// themselves refuse it otherwise). Kept in the test module: the boundary test reads the production code as
+    /// everything before the first `#[cfg(test)]`.
+    fn steers(id: &str) -> bool {
+        matches!(id, "claude" | "codex" | "pi" | "omp" | "omo")
+    }
 
     /// A stand-in rule listing: `/bin/sh -c <script>` prints its first listing, or with the variable set its second.
     #[cfg(unix)]

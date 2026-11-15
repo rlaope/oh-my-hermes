@@ -1231,9 +1231,11 @@ class SessionsStartOnlyAllowListedAgents(unittest.TestCase):
         body = self.lib[sig.end():].split("\n}\n", 1)[0]
         self.assertIn("chats.start_agent(&agent", body)
         self.assertNotIn(".spawn(", body)
-        # what the person does in a chat is one of five inputs, never a command line
+        # what the person does in a chat is one of these inputs, never a command line; Steer hands a held message's
+        # text to the running turn through the agent's own mid-turn input (rule 11)
         inputs = re.search(r"pub enum Input \{(.*?)\n\}", self.chat, re.S).group(1)
-        self.assertEqual(re.findall(r"^\s+(\w+)", inputs, re.M), ["Send", "Interrupt", "Approve", "Clarify", "Model", "Mode", "Effort", "Rewind"])
+        self.assertEqual(re.findall(r"^\s+(\w+)", inputs, re.M), ["Send", "Interrupt", "Approve", "Clarify", "Model", "Mode", "Effort", "Rewind", "Steer"])
+        self.assertIn("Steer { id: String, text: String },", inputs)
         # Send carries text, the paths of saved pictures (rule 26) and the bubble's id only: never bytes or a type
         self.assertIn("Send { text: String, #[serde(default)] images: Vec<Picture>, #[serde(default)] id: String },", inputs)
         self.assertIn('#[serde(from = "String")]\npub struct Picture', self.chat)
