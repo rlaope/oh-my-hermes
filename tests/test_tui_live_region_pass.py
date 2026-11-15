@@ -140,17 +140,17 @@ class FoldKeyTests(unittest.TestCase):
 class AssistantHeaderTests(unittest.TestCase):
     def test_a_reply_opens_with_who_wrote_it_and_the_model(self) -> None:
         rows = block_rows(AssistantBlock("ok", done=True, model="deepseek/deepseek-v4.1-flash"), 40, THEME)
-        self.assertEqual(lines_text(rows), ["┃ ⚚ Hermes · deepseek-v4.1-flash", "┃   ok"])
-        self.assertEqual(rows[0][2].style, replace(THEME.brand, bold=True))
-        self.assertEqual(rows[0][3].style, THEME.muted)
+        self.assertEqual(lines_text(rows), ["⚚ Hermes · deepseek-v4.1-flash", "  ok"])
+        self.assertEqual(rows[0][0].style, replace(THEME.brand, bold=True))
+        self.assertEqual(rows[0][1].style, THEME.muted)
         self.assertLessEqual(line_width(block_rows(AssistantBlock("ok", done=True, model="x" * 80), 30, THEME)[0]), 30)
 
     def test_no_color_keeps_the_name_bold_and_variant_a_puts_the_mark_on_the_first_row(self) -> None:
         plain = without_colour(THEME)
         (header, _row) = block_rows(AssistantBlock("ok", done=True), 40, plain)
-        self.assertTrue(header[2].style.bold)
+        self.assertTrue(header[0].style.bold)
         with mock.patch.object(transcript_module, "ASSISTANT_HEADER", False):
-            self.assertEqual(lines_text(block_rows(AssistantBlock("ok", done=True), 40, THEME)), ["┃ ⚚ ok"])
+            self.assertEqual(lines_text(block_rows(AssistantBlock("ok", done=True), 40, THEME)), ["⚚ ok"])
 
     def test_a_resumed_reply_names_no_model_it_was_not_recorded_with(self) -> None:
         # #2349 review, LOW: a resumed session's replies were named with the model of the moment.
@@ -158,7 +158,7 @@ class AssistantHeaderTests(unittest.TestCase):
         app.model = "openai/gpt-6.1-sol"
         app.transcript.add_assistant("Earlier answer.")
         (block,) = [block for block in app.transcript.blocks if isinstance(block, AssistantBlock)]
-        self.assertEqual(lines_text(block_rows(block, 40, THEME))[0], "┃ ⚚ Hermes")
+        self.assertEqual(lines_text(block_rows(block, 40, THEME))[0], "⚚ Hermes")
 
     def test_the_session_s_model_is_named_on_each_reply_begun_under_it(self) -> None:
         app, _client = make_app(busy=True)

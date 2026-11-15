@@ -68,7 +68,7 @@ def mark(line: tuple) -> object:
 class SaidAndDoneTests(unittest.TestCase):
     def test_a_reply_opens_in_the_text_colour_and_each_call_is_named_in_its_familys_hue(self) -> None:
         header, reply = block_rows(AssistantBlock("hello", done=True), 40, THEME)[:2]
-        self.assertEqual((header[2].text, header[2].style), ("⚚ Hermes", replace(THEME.brand, bold=True)))
+        self.assertEqual((header[0].text, header[0].style), ("⚚ Hermes", replace(THEME.brand, bold=True)))
         self.assertEqual(reply[-1], Span("hello", THEME.text))
         group = ToolGroup([ToolRow("a", "read_file", status=TOOL_OK), ToolRow("b", "terminal", status=TOOL_OK)], done=True)
         rows = [row for row in block_rows(group, 40, THEME) if row]  # blank rows between two calls

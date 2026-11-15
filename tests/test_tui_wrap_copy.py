@@ -47,7 +47,7 @@ def reply_app(reply: str, cols: int = 60, environ: dict[str, str] | None = None)
 
 
 def drag_rows(app: App, first: str, last: str) -> str:
-    """Drag from the rail of the row showing `first` to the end of the row showing `last`; what was copied."""
+    """Drag from the first cell (the margin) of the row showing `first` to the end of the row showing `last`; what was copied."""
     drag(app, (1, row_of(app, first)), (app.size[0], row_of(app, last)))
     sent = osc52(app)
     return sent[-1] if sent else ""
@@ -76,7 +76,7 @@ class MainScreenDragTests(unittest.TestCase):
     def test_a_word_cut_inside_is_joined_with_nothing(self) -> None:
         word = "x" * 90
         app = reply_app(word, cols=40)
-        self.assertEqual(drag_rows(app, "xxxx", "xxxx"), word[:app.size[0] - 4])  # one row only
+        self.assertEqual(drag_rows(app, "xxxx", "xxxx"), word[:app.size[0] - 2])  # one row only, beside the margin
         drag(app, (1, row_of(app, "xxxx")), (app.size[0], row_of(app, "xxxx") + 2))
         self.assertEqual(osc52(app)[-1], word)
 

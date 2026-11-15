@@ -72,7 +72,7 @@ class TableStreamingTests(unittest.TestCase):
         self.step(ev("message.start"))
         flushed = self.step(ev("message.delta", text="| X | Y |\n"))
         self.assertEqual(flushed, [], "the header escaped into scrollback before it was decidable")
-        self.assertEqual(self.live(), ["┃ ⚚ Hermes", "┃   | X | Y |"])
+        self.assertEqual(self.live(), ["⚚ Hermes", "  | X | Y |"])
         self.assert_no_raw_rows_taken()
 
     def test_table_renders_pretty_in_the_live_region_during_streaming(self) -> None:
@@ -81,12 +81,12 @@ class TableStreamingTests(unittest.TestCase):
         self.step(ev("message.delta", text="| --- | --- |\n"))
         live = self.live()
         # Decided the frame the divider lands: the header in a closed box.
-        self.assertEqual(live[1:], ["┃   ┌─────┬─────┐", "┃   │ X   │ Y   │", "┃   └─────┴─────┘"])
+        self.assertEqual(live[1:], ["  ┌─────┬─────┐", "  │ X   │ Y   │", "  └─────┴─────┘"])
         self.assertFalse(any("| ---" in row for row in live), f"raw divider in {live!r}")
         self.step(ev("message.delta", text="| 1 | a |\n"))
-        self.assertIn("┃   │ 1   │ a   │", self.live())
+        self.assertIn("  │ 1   │ a   │", self.live())
         self.step(ev("message.delta", text="| 2 | b |"))
-        self.assertIn("┃   │ 2   │ b   │", self.live())
+        self.assertIn("  │ 2   │ b   │", self.live())
         # Nothing table-shaped was flushed early: the whole table is still live
         # (and pretty, matching history at every frame via step's invariant).
         self.assertEqual(self.taken, [])
@@ -102,8 +102,8 @@ class TableStreamingTests(unittest.TestCase):
         self.assertTrue(self.transcript.blocks[-1].done)
         self.assertEqual(self.live(), [])
         self.assertEqual(flushed[1:], [
-            "┃   ┌─────┬─────┐", "┃   │ X   │ Y   │", "┃   ├─────┼─────┤", "┃   │ 1   │ a   │",
-            "┃   ├─────┼─────┤", "┃   │ 2   │ b   │", "┃   └─────┴─────┘",
+            "  ┌─────┬─────┐", "  │ X   │ Y   │", "  ├─────┼─────┤", "  │ 1   │ a   │",
+            "  ├─────┼─────┤", "  │ 2   │ b   │", "  └─────┴─────┘",
         ])
         self.assert_no_raw_rows_taken()
 
@@ -111,8 +111,8 @@ class TableStreamingTests(unittest.TestCase):
         self.step(ev("message.start"))
         flushed = self.step(ev("message.complete", text=TABLE_TEXT, status="complete"))
         self.assertTrue(self.transcript.blocks[-1].done)
-        self.assertIn("┃   │ X   │ Y   │", flushed)
-        self.assertIn("┃   └─────┴─────┘", flushed)
+        self.assertIn("  │ X   │ Y   │", flushed)
+        self.assertIn("  └─────┴─────┘", flushed)
         self.assert_no_raw_rows_taken()
 
     # (c) Non-table text is unchanged by the hold-back.
@@ -120,19 +120,19 @@ class TableStreamingTests(unittest.TestCase):
     def test_non_table_text_is_unchanged(self) -> None:
         self.step(ev("message.start"))
         self.assertEqual(self.step(ev("message.delta", text="hello ")), [])
-        self.assertEqual(self.live(), ["┃ ⚚ Hermes", "┃   hello "])
+        self.assertEqual(self.live(), ["⚚ Hermes", "  hello "])
         # A settled plain line still flushes immediately, exactly as before.
         self.assertEqual(
             self.step(ev("message.delta", text="world\n")),
-            ["┃ ⚚ Hermes", "┃   hello world"],
+            ["⚚ Hermes", "  hello world"],
         )
         self.assertEqual(self.step(ev("message.delta", text="\nsecond line")), [])
-        self.assertEqual(self.live(), ["┃", "┃   second line"])
+        self.assertEqual(self.live(), ["", "  second line"])
         flushed = self.step(ev("message.complete", text="hello world\n\nsecond line", status="complete"))
-        self.assertEqual(flushed, ["┃", "┃   second line"])
+        self.assertEqual(flushed, ["", "  second line"])
         self.assertEqual(
             self.taken,
-            ["┃ ⚚ Hermes", "┃   hello world", "┃", "┃   second line"],
+            ["⚚ Hermes", "  hello world", "", "  second line"],
         )
         self.assertFalse(any("─" in row for row in self.taken), "plain text gained a separator band")
 
@@ -381,9 +381,9 @@ class TableStreamingTests(unittest.TestCase):
         first = ["| ah1 | ah2 |", "|---|---|"] + [f"| a{i}c1 | a{i}c2 |" for i in range(10)]
         second = ["| bh1 | bh2 |", "|---|---|"] + [f"| b{i}c1 | b{i}c2 |" for i in range(2)]
         history = self.assert_streams_as_history([first, second], live_rows=8)
-        self.assertEqual([row[4] for row in history if row[4:5] in ("┌", "└")], ["┌", "└", "┌", "└"])
+        self.assertEqual([row[2] for row in history if row[2:3] in ("┌", "└")], ["┌", "└", "┌", "└"])
         header = next(at for at, row in enumerate(history) if "bh1" in row)
-        self.assertTrue(history[header - 1][4:].startswith("┌"), history[header - 1])
+        self.assertTrue(history[header - 1][2:].startswith("┌"), history[header - 1])
 
     def test_a_table_of_one_row_whose_row_heads_the_next_table_gets_its_own_box(self) -> None:
         # #2592 review: a next table whose one row already made it tall released that row, and when the line after it
@@ -393,7 +393,7 @@ class TableStreamingTests(unittest.TestCase):
         third = [f"| c{i}c1 | c{i}c2 |" for i in range(3)]
         for live_rows in (6, 8):
             history = self.assert_streams_as_history([first, second, third], live_rows)
-            self.assertEqual([row[4] for row in history if row[4:5] == "┌"], ["┌"] * 3)
+            self.assertEqual([row[2] for row in history if row[2:3] == "┌"], ["┌"] * 3)
 
     def test_a_divider_after_a_released_table_is_never_drawn_raw(self) -> None:
         # #2592 review: a one-cell divider-shaped line after a released table, and a run of dividers after a `|`
@@ -420,7 +420,7 @@ class TableStreamingTests(unittest.TestCase):
             with self.subTest(label):
                 blocks = [[change(line) for line in block] for block in (first, second)]
                 history = self.assert_streams_as_history(blocks, live_rows=8)
-                self.assertEqual([row[4] for row in history if row[4:5] in ("┌", "└")], ["┌", "└", "┌", "└"])
+                self.assertEqual([row[2] for row in history if row[2:3] in ("┌", "└")], ["┌", "└", "┌", "└"])
 
     def test_a_long_line_of_dashes_is_searched_once_not_once_per_dash(self) -> None:
         # #2598 review: a `-` between two starred runs backtracked over every dash of a line that fails at its end, and
