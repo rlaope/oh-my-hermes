@@ -106,6 +106,30 @@ test("Plans: the tab row's button maximises the panel in place; the sidebar stay
   await expect(page.getByTestId("panel-resizer")).toHaveCount(1);
 });
 
+test("Ctrl+` while Plans is maximised restores the panel to its width and shows the terminal with the keyboard", async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await openPanel(page, "runs");
+  const before = await panelW(page);
+  await page.getByTestId("panel-max").click();
+  await expectMaxed(page);
+  await page.keyboard.press("Control+Backquote");
+  await expect(page.getByTestId("window")).not.toHaveClass(/\bpanel-max\b/);
+  await expect(page.getByTestId("window")).toHaveClass(/\bpanel-open\b/);
+  await expect(page.getByTestId("termpanel")).toBeVisible();
+  await expect(page.locator(".main")).not.toHaveAttribute("inert", "");
+  await settled(page);
+  await expect.poll(() => panelW(page)).toBe(before);
+  const box = (await page.getByTestId("termpanel").boundingBox())!;
+  expect(box.width).toBeGreaterThan(200);
+  await expect
+    .poll(() => page.evaluate(() => !!document.activeElement?.closest('[data-testid="termpanel-terminal"]')))
+    .toBe(true);
+  // hiding it again leaves the panel at its width (not maximised again)
+  await page.keyboard.press("Control+Backquote");
+  await expect(page.getByTestId("termpanel")).toBeHidden();
+  await expect(page.getByTestId("window")).not.toHaveClass(/\bpanel-max\b/);
+});
+
 test("a dragged width comes back exactly after maximise and restore, for Details", async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
   await openPanel(page, "details");

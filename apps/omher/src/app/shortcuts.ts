@@ -6,7 +6,8 @@
 //   ⌘N ⌘T  the SESSIONS + menu (pick an agent for a New session)   } off while SESSIONS is hidden
 //   ⌘⇧]    the next session (sidebar order, wrapping)          ⌘⇧[  the previous session   } (sessions/entry.ts)
 //   Esc    stop the running answer (only when no popover, field or dialog wants Esc first)
-//   Ctrl+` the bottom terminal panel, show or hide, on every OS (Ctrl on macOS too, as in VS Code); taken before a
+//   Ctrl+` the bottom terminal panel, show or hide, on every OS (Ctrl on macOS too, as in VS Code; a maximised side
+//          panel goes back to its own width first, so the terminal shows); taken before a
 //          terminal sees it, so it works with the keyboard inside a terminal (it is omher's, not the program's)
 // An approval card's own 1/2/3 keys live on the card (src/chat/cards), never here.
 // None of these fire while an input method is composing (a Korean, Japanese or Chinese word not yet committed).
@@ -16,7 +17,7 @@ import { getSessions } from "../sessions/sessions";
 import { openNewSessionMenu } from "../sessions/newMenu";
 import { SESSIONS_ENTRY } from "../sessions/entry";
 import { composing } from "../lib/ime";
-import { toggleTerminal } from "../terminal/state";
+import { getTermPanel, toggleTerminal } from "../terminal/state";
 
 export const isMac = () => typeof navigator !== "undefined" && /Mac|iPhone|iPad/.test(navigator.platform);
 
@@ -68,12 +69,16 @@ export function nextAsk(asks: Ask[], last: FocusAsk | null): Ask | null {
 
 export function useShortcuts(): void {
   useEffect(() => {
-    // Ctrl+` is taken on the way down, before a focused terminal (xterm stops the keys it handles) can claim it
+    // Ctrl+` is taken on the way down, before a focused terminal (xterm stops the keys it handles) can claim it. The
+    // panel lives under the chat column, which a maximised side panel hides: showing it restores the side panel first
     const onTerminalKey = (e: KeyboardEvent) => {
       if (shortcutFor(e, isMac())?.kind !== "terminal") return;
       e.preventDefault();
       e.stopPropagation();
-      if (!e.repeat) toggleTerminal();
+      if (e.repeat) return;
+      const store = getStore();
+      if (!getTermPanel().open && store.getState().ui.panelMax) store.actions.setPanelMax(false);
+      toggleTerminal();
     };
     const onKey = (e: KeyboardEvent) => {
       const hit = shortcutFor(e, isMac());
