@@ -647,7 +647,7 @@ OMH_DELEGATE_ROUTE_SCHEMA = {
 
 def omh_delegate_route_handler(args: dict[str, Any], **kwargs) -> str:
     if error := runtime_paths.tool_home_error(args):
-        return json.dumps(error, sort_keys=True)
+        return json.dumps(error, ensure_ascii=False, sort_keys=True)
     observation = observe_plugin_tool_call("omh_delegate_route", args, kwargs)
     # Only the host keyword names the session; tool args are model-supplied and
     # must not be able to claim another session's route record. Two stores
@@ -717,7 +717,7 @@ def omh_delegate_route_handler(args: dict[str, Any], **kwargs) -> str:
             "delegation_backend": mode["backend"],
             "evidence_boundary": _BACKEND_EVIDENCE_BOUNDARY,
         }
-        return json.dumps(attach_public_observation(result, observation), sort_keys=True)
+        return json.dumps(attach_public_observation(result, observation), ensure_ascii=False, sort_keys=True)
     if action in ("set", "fallback") and mode["backend"] != DEFAULT_BACKEND:
         category = str(args.get("category", "") or "").strip()
         model = str(args.get("model", "") or "").strip()
@@ -728,7 +728,7 @@ def omh_delegate_route_handler(args: dict[str, Any], **kwargs) -> str:
                 "status": "error",
                 "error": f"unknown category {category!r}; choose one of " + ", ".join(sorted(chains)),
             }
-            return json.dumps(attach_public_observation(payload, observation), sort_keys=True)
+            return json.dumps(attach_public_observation(payload, observation), ensure_ascii=False, sort_keys=True)
         if action == "fallback" and not ((category or requested_identity) and after_option):
             payload = {
                 "status": "error",
@@ -738,10 +738,10 @@ def omh_delegate_route_handler(args: dict[str, Any], **kwargs) -> str:
                 ),
                 "delegation_backend": mode["backend"],
             }
-            return json.dumps(attach_public_observation(payload, observation), sort_keys=True)
+            return json.dumps(attach_public_observation(payload, observation), ensure_ascii=False, sort_keys=True)
         if action == "set" and not (category or model or requested_identity):
             payload = {"status": "error", "error": "set needs a category, an identity, or an explicit model"}
-            return json.dumps(attach_public_observation(payload, observation), sort_keys=True)
+            return json.dumps(attach_public_observation(payload, observation), ensure_ascii=False, sort_keys=True)
         # An identity supplies its own chain; `model` still outranks it, and a
         # declared category rides only as the lane label, never as the chain.
         chain = tuple(identity_chain) if identity_chain else tuple(chains.get(category, ()))
@@ -768,7 +768,7 @@ def omh_delegate_route_handler(args: dict[str, Any], **kwargs) -> str:
             identity_digest=identity_digest if identity_chain else "",
             explicit_override=explicit_override,
         )
-        return json.dumps(attach_public_observation(result, observation), sort_keys=True)
+        return json.dumps(attach_public_observation(result, observation), ensure_ascii=False, sort_keys=True)
     if action == "status":
         route = read_delegation_route(hermes_home)
         if route.get("model"):
@@ -821,7 +821,7 @@ def omh_delegate_route_handler(args: dict[str, Any], **kwargs) -> str:
             "provider_routes_path": str(model_provider_routes_path(omh_home)),
             "evidence_boundary": _EVIDENCE_BOUNDARY,
         }
-        return json.dumps(attach_public_observation(payload, observation), sort_keys=True)
+        return json.dumps(attach_public_observation(payload, observation), ensure_ascii=False, sort_keys=True)
 
     if action == "clear":
         result = _clear_to_baseline(
@@ -845,20 +845,20 @@ def omh_delegate_route_handler(args: dict[str, Any], **kwargs) -> str:
                 omh_home,
             )
         result["evidence_boundary"] = _EVIDENCE_BOUNDARY
-        return json.dumps(attach_public_observation(result, observation), sort_keys=True)
+        return json.dumps(attach_public_observation(result, observation), ensure_ascii=False, sort_keys=True)
 
     if action == "fallback":
         if override_status.startswith("invalid:"):
             payload = {"status": "error", "error": override_status}
             return json.dumps(
                 attach_public_observation(payload, observation),
-                sort_keys=True,
+                ensure_ascii=False, sort_keys=True,
             )
         if provider_route_status.startswith("invalid:"):
             payload = {"status": "error", "error": provider_route_status}
             return json.dumps(
                 attach_public_observation(payload, observation),
-                sort_keys=True,
+                ensure_ascii=False, sort_keys=True,
             )
         route = read_delegation_route(hermes_home)
         # A fallback normally happens a turn AFTER the route was written --
@@ -889,7 +889,7 @@ def omh_delegate_route_handler(args: dict[str, Any], **kwargs) -> str:
             }
             return json.dumps(
                 attach_public_observation(payload, observation),
-                sort_keys=True,
+                ensure_ascii=False, sort_keys=True,
             )
         current_alias = chain_alias_for(
             current_model,
@@ -907,7 +907,7 @@ def omh_delegate_route_handler(args: dict[str, Any], **kwargs) -> str:
                 "position_source": position_source,
                 "from": current_model,
             }
-            return json.dumps(attach_public_observation(payload, observation), sort_keys=True)
+            return json.dumps(attach_public_observation(payload, observation), ensure_ascii=False, sort_keys=True)
         category = str(args.get("category", "") or "").strip()
         if category and category not in chains:
             payload = {
@@ -917,13 +917,13 @@ def omh_delegate_route_handler(args: dict[str, Any], **kwargs) -> str:
                     + ", ".join(sorted(chains))
                 ),
             }
-            return json.dumps(attach_public_observation(payload, observation), sort_keys=True)
+            return json.dumps(attach_public_observation(payload, observation), ensure_ascii=False, sort_keys=True)
         if not current_provider and "/" in current_model:
             payload = {
                 "status": "error",
                 "error": f"current route {current_model!r} requires an explicit provider",
             }
-            return json.dumps(attach_public_observation(payload, observation), sort_keys=True)
+            return json.dumps(attach_public_observation(payload, observation), ensure_ascii=False, sort_keys=True)
         # With no category passed, the one this conversation routed the
         # position under decides; the alias must still be in that chain.
         # An identity position decides its own lane before any recorded
@@ -969,7 +969,7 @@ def omh_delegate_route_handler(args: dict[str, Any], **kwargs) -> str:
                     "position_source": position_source,
                     "from": current_model,
                 }
-                return json.dumps(attach_public_observation(payload, observation), sort_keys=True)
+                return json.dumps(attach_public_observation(payload, observation), ensure_ascii=False, sort_keys=True)
             if recorded_digest and recorded_digest != identity_digest:
                 # The document moved between the write that produced this
                 # position and this read: continuing the chain now would
@@ -987,7 +987,7 @@ def omh_delegate_route_handler(args: dict[str, Any], **kwargs) -> str:
                     "position_source": position_source,
                     "from": current_model,
                 }
-                return json.dumps(attach_public_observation(payload, observation), sort_keys=True)
+                return json.dumps(attach_public_observation(payload, observation), ensure_ascii=False, sort_keys=True)
             matched = [index for index, (alias, _) in enumerate(identity_chain) if alias == current_alias]
             if len(matched) != 1:
                 payload = {
@@ -1003,7 +1003,7 @@ def omh_delegate_route_handler(args: dict[str, Any], **kwargs) -> str:
                     "position_source": position_source,
                     "from": current_model,
                 }
-                return json.dumps(attach_public_observation(payload, observation), sort_keys=True)
+                return json.dumps(attach_public_observation(payload, observation), ensure_ascii=False, sort_keys=True)
             index = matched[0]
             chain = identity_chain
         else:
@@ -1031,7 +1031,7 @@ def omh_delegate_route_handler(args: dict[str, Any], **kwargs) -> str:
                 "position_source": position_source,
                 "from": current_model,
             }
-            return json.dumps(attach_public_observation(payload, observation), sort_keys=True)
+            return json.dumps(attach_public_observation(payload, observation), ensure_ascii=False, sort_keys=True)
         if len(matches) > 1:
             origins = ", ".join(sorted({name for name, _ in matches}))
             payload = {
@@ -1043,7 +1043,7 @@ def omh_delegate_route_handler(args: dict[str, Any], **kwargs) -> str:
                 "position_source": position_source,
                 "from": current_model,
             }
-            return json.dumps(attach_public_observation(payload, observation), sort_keys=True)
+            return json.dumps(attach_public_observation(payload, observation), ensure_ascii=False, sort_keys=True)
         if not identity_fallback:
             category, index = matches[0]
             chain = chains[category]
@@ -1101,7 +1101,7 @@ def omh_delegate_route_handler(args: dict[str, Any], **kwargs) -> str:
             if skipped_unconfigured:
                 result["skipped_unconfigured"] = skipped_unconfigured
             result["evidence_boundary"] = _EVIDENCE_BOUNDARY
-            return json.dumps(attach_public_observation(with_say(result, route_say(result)), observation), sort_keys=True)
+            return json.dumps(attach_public_observation(with_say(result, route_say(result)), observation), ensure_ascii=False, sort_keys=True)
         next_model, next_effort = chain[index + 1]
         wire_model, next_provider = resolve_provider_model(
             next_model, routes=provider_routes
@@ -1129,7 +1129,7 @@ def omh_delegate_route_handler(args: dict[str, Any], **kwargs) -> str:
                     "fallback refused without mutation"
                 ),
             }
-            return json.dumps(attach_public_observation(payload, observation), sort_keys=True)
+            return json.dumps(attach_public_observation(payload, observation), ensure_ascii=False, sort_keys=True)
         result = write_route_with_baseline(
             hermes_home,
             omh_home=omh_home,
@@ -1176,21 +1176,21 @@ def omh_delegate_route_handler(args: dict[str, Any], **kwargs) -> str:
         if skipped_unconfigured:
             result["skipped_unconfigured"] = skipped_unconfigured
         result["evidence_boundary"] = _EVIDENCE_BOUNDARY
-        return json.dumps(attach_public_observation(with_say(result, route_say(result)), observation), sort_keys=True)
+        return json.dumps(attach_public_observation(with_say(result, route_say(result)), observation), ensure_ascii=False, sort_keys=True)
 
     if action != "set":
         payload = {
             "status": "error",
             "error": f"unknown action {action!r}; use set, clear, status, or fallback",
         }
-        return json.dumps(attach_public_observation(payload, observation), sort_keys=True)
+        return json.dumps(attach_public_observation(payload, observation), ensure_ascii=False, sort_keys=True)
 
     if override_status.startswith("invalid:"):
         payload = {"status": "error", "error": override_status}
-        return json.dumps(attach_public_observation(payload, observation), sort_keys=True)
+        return json.dumps(attach_public_observation(payload, observation), ensure_ascii=False, sort_keys=True)
     if provider_route_status.startswith("invalid:"):
         payload = {"status": "error", "error": provider_route_status}
-        return json.dumps(attach_public_observation(payload, observation), sort_keys=True)
+        return json.dumps(attach_public_observation(payload, observation), ensure_ascii=False, sort_keys=True)
     category = str(args.get("category", "") or "").strip()
     model = str(args.get("model", "") or "").strip()
     effort = str(args.get("reasoning_effort", "") or "").strip()
@@ -1203,16 +1203,16 @@ def omh_delegate_route_handler(args: dict[str, Any], **kwargs) -> str:
                 + ", ".join(sorted(chains))
             ),
         }
-        return json.dumps(attach_public_observation(payload, observation), sort_keys=True)
+        return json.dumps(attach_public_observation(payload, observation), ensure_ascii=False, sort_keys=True)
     if provider and not model:
         payload = {
             "status": "error",
             "error": "provider and model overrides must appear together",
         }
-        return json.dumps(attach_public_observation(payload, observation), sort_keys=True)
+        return json.dumps(attach_public_observation(payload, observation), ensure_ascii=False, sort_keys=True)
     if not model and not category and not requested_identity:
         payload = {"status": "error", "error": "set needs a category, an identity, or an explicit model"}
-        return json.dumps(attach_public_observation(payload, observation), sort_keys=True)
+        return json.dumps(attach_public_observation(payload, observation), ensure_ascii=False, sort_keys=True)
     alias = model
     if identity_chain and not model:
         # The identity's own chain supplies the lane; an explicit category on
@@ -1234,7 +1234,7 @@ def omh_delegate_route_handler(args: dict[str, Any], **kwargs) -> str:
                 "disable thinking, which this generation rejects. Route `low` instead."
             ),
         }
-        return json.dumps(attach_public_observation(payload, observation), sort_keys=True)
+        return json.dumps(attach_public_observation(payload, observation), ensure_ascii=False, sort_keys=True)
     if provider:
         wire_model = model
     else:
@@ -1303,13 +1303,13 @@ def omh_delegate_route_handler(args: dict[str, Any], **kwargs) -> str:
                         "inherited_provider": serving,
                         "providers_serving_alias": list(candidates),
                     }
-                return json.dumps(attach_public_observation(payload, observation), sort_keys=True)
+                return json.dumps(attach_public_observation(payload, observation), ensure_ascii=False, sort_keys=True)
     if "/" in wire_model and not provider:
         payload = {
             "status": "error",
             "error": "a wire-shaped model requires an explicit provider",
         }
-        return json.dumps(attach_public_observation(payload, observation), sort_keys=True)
+        return json.dumps(attach_public_observation(payload, observation), ensure_ascii=False, sort_keys=True)
     if provider:
         # The provider is model-supplied (tool arg) or read from
         # routing/model-providers.json; either way the person must have
@@ -1318,7 +1318,7 @@ def omh_delegate_route_handler(args: dict[str, Any], **kwargs) -> str:
         if provider.casefold() not in configured:
             origin = "explicit provider argument" if args.get("provider") else "routing/model-providers.json"
             payload = _unconfigured_provider_error(provider, configured, origin=origin, hermes_home=hermes_home)
-            return json.dumps(attach_public_observation(payload, observation), sort_keys=True)
+            return json.dumps(attach_public_observation(payload, observation), ensure_ascii=False, sort_keys=True)
     result = write_route_with_baseline(
         hermes_home,
         omh_home=omh_home,
@@ -1362,4 +1362,4 @@ def omh_delegate_route_handler(args: dict[str, Any], **kwargs) -> str:
             for chain_alias, chain_effort in fallback_chain[1:]
         ]
     result["evidence_boundary"] = _EVIDENCE_BOUNDARY
-    return json.dumps(attach_public_observation(with_say(result, route_say(result)), observation), sort_keys=True)
+    return json.dumps(attach_public_observation(with_say(result, route_say(result)), observation), ensure_ascii=False, sort_keys=True)

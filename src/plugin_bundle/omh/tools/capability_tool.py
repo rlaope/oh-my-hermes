@@ -159,7 +159,7 @@ def omh_capabilities_handler(args: dict[str, object], **kwargs: object) -> str:
         payload = _handle_capability_action(action, section, str(args.get("id", "") or ""))
     except ValueError as exc:
         payload = {"error": str(exc)}
-    return json.dumps(attach_public_observation(payload, observation), sort_keys=True)
+    return json.dumps(attach_public_observation(payload, observation), ensure_ascii=False, sort_keys=True)
 
 
 def _handle_capability_action(action: str, section: str | None, capability_id: str) -> dict[str, object]:

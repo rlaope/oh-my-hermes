@@ -116,7 +116,7 @@ _SENSITIVE_VALUE_PATTERN = re.compile(
 
 def omh_interact_handler(args: dict, **kwargs) -> str:
     if error := runtime_paths.tool_home_error(args):
-        return json.dumps(error, sort_keys=True)
+        return json.dumps(error, ensure_ascii=False, sort_keys=True)
     observation = observe_plugin_tool_call("omh_interact", args, kwargs)
     message = str(args.get("message") or "").strip()
     if not message:
@@ -126,7 +126,7 @@ def omh_interact_handler(args: dict, **kwargs) -> str:
             "error": "omh_interact.message is required",
             "claim_boundary": _CLAIM_BOUNDARY,
         }
-        return json.dumps(attach_public_observation(payload, observation), sort_keys=True)
+        return json.dumps(attach_public_observation(payload, observation), ensure_ascii=False, sort_keys=True)
 
     # Validate the requested source before any package or fallback work: an
     # unknown source fails closed here, and every later path -- including the
@@ -135,7 +135,7 @@ def omh_interact_handler(args: dict, **kwargs) -> str:
         _source(args)
     except _UnsupportedSourceError:
         payload = _invalid_input_interaction(error="unsupported_source")
-        return json.dumps(attach_public_observation(payload, observation), sort_keys=True)
+        return json.dumps(attach_public_observation(payload, observation), ensure_ascii=False, sort_keys=True)
 
     try:
         payload = _package_interaction(
@@ -151,7 +151,7 @@ def omh_interact_handler(args: dict, **kwargs) -> str:
     except Exception as exc:
         payload = _backend_error_interaction(args, message, error_type=type(exc).__name__)
     _attach_answerer_ladder(payload, args)
-    return json.dumps(attach_public_observation(payload, observation), sort_keys=True)
+    return json.dumps(attach_public_observation(payload, observation), ensure_ascii=False, sort_keys=True)
 
 
 def _attach_answerer_ladder(payload: dict[str, Any], args: dict) -> None:

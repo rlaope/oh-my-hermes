@@ -235,7 +235,7 @@ OMH_TODO_SCHEMA = {
 
 def omh_todo_handler(args: dict[str, Any], **kwargs) -> str:
     if error := runtime_paths.tool_home_error(args):
-        return json.dumps(error, sort_keys=True)
+        return json.dumps(error, ensure_ascii=False, sort_keys=True)
     observation = observe_plugin_tool_call("omh_todo", args, kwargs)
     # Hermes passes its stable session/thread id as a keyword on every tool
     # call, so a plan declared in chat is stored for, and read back for, the
@@ -246,7 +246,7 @@ def omh_todo_handler(args: dict[str, Any], **kwargs) -> str:
     action = str(args.get("action", ""))
     if action in {"checkpoint", "record", "recall"}:
         return json.dumps(attach_public_observation(
-            completion_action(args, session=session_ref), observation), sort_keys=True)
+            completion_action(args, session=session_ref), observation), ensure_ascii=False, sort_keys=True)
     payload: dict[str, Any] = {
         "schema_version": "omh_todo_result/v1",
         "action": action,
@@ -259,7 +259,7 @@ def omh_todo_handler(args: dict[str, Any], **kwargs) -> str:
         payload["status"] = "invalid_todo"
         payload["error"] = "omh_home override is read-only; set and clear use the configured OMH home"
         payload["todo"] = read_omh_todo(session_ref=session_ref)
-        return json.dumps(attach_public_observation(payload, observation), sort_keys=True)
+        return json.dumps(attach_public_observation(payload, observation), ensure_ascii=False, sort_keys=True)
     if action == "set":
         try:
             items = args.get("items")
@@ -345,7 +345,7 @@ def omh_todo_handler(args: dict[str, Any], **kwargs) -> str:
         payload,
         todo_say(action, payload["status"], payload["todo"], item=args.get("item"), unverified=unverified),
     )
-    return json.dumps(attach_public_observation(payload, observation), sort_keys=True)
+    return json.dumps(attach_public_observation(payload, observation), ensure_ascii=False, sort_keys=True)
 
 
 def bind_declared_items(

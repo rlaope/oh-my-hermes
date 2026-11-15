@@ -135,17 +135,17 @@ def register(ctx, config):
     def handler(args, **kwargs):
         current = available()
         if current is None:
-            return json.dumps({"status": "blocked", "reason": "admission_required"})
+            return json.dumps({"status": "blocked", "reason": "admission_required"}, ensure_ascii=False)
         operations = {"acquire", "act", "observe", "release"}
         if effects_enabled:
             operations |= {"effect_preview", "effect_execute", "effect_abort"}
         if not isinstance(args, dict) or not isinstance(args.get("operation"), str) or args["operation"] not in operations:
-            return json.dumps({"status": "blocked", "reason": "invalid_operation"})
+            return json.dumps({"status": "blocked", "reason": "invalid_operation"}, ensure_ascii=False)
         owner = current.identity[0]
         if kwargs.get("session_id", owner) != owner:
-            return json.dumps({"status": "blocked", "reason": "foreign_owner"})
+            return json.dumps({"status": "blocked", "reason": "foreign_owner"}, ensure_ascii=False)
         if args["operation"] == "acquire" and args.get("task") != current.task:
-            return json.dumps({"status": "blocked", "reason": "foreign_task"})
+            return json.dumps({"status": "blocked", "reason": "foreign_task"}, ensure_ascii=False)
         from omh.workflows.browser_adapter import BrowserContractError
 
         try:
@@ -162,7 +162,7 @@ def register(ctx, config):
                 result = lifecycle.operate(owner, args)
         except BrowserContractError as exc:
             result = {"status": "blocked", "reason": str(exc)}
-        return json.dumps(result, sort_keys=True)
+        return json.dumps(result, ensure_ascii=False, sort_keys=True)
 
     def on_session_end(**kwargs):
         identity = _host_identity()

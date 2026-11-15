@@ -87,7 +87,7 @@ def omh_source_trust_handler(args: dict, **kwargs) -> str:
     rows = args.get("claims")
     rows = list(rows) if isinstance(rows, list) else []
     payload = _apply_ceiling(topic=topic, rows=rows[:_MAX_CLAIMS], dropped=max(0, len(rows) - _MAX_CLAIMS))
-    return json.dumps(attach_public_observation(payload, observation), sort_keys=True)
+    return json.dumps(attach_public_observation(payload, observation), ensure_ascii=False, sort_keys=True)
 
 
 def _apply_ceiling(*, topic: str, rows: list[Any], dropped: int) -> dict[str, Any]:

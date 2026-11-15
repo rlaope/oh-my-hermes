@@ -163,16 +163,16 @@ def omh_team_handler(args: Mapping[str, object], **kwargs: object) -> str:
                     # the plan the person accepted. Approval still rests on the
                     # verbatim command match and the person's own prompt.
                     payload["plan_ref"] = plan["items_digest"]
-                return json.dumps(payload, sort_keys=True)
+                return json.dumps(payload, ensure_ascii=False, sort_keys=True)
             _APPROVED_TEAMS.add((owner, str(result["team_id"]), str(result["commands_digest"])))
         elif action == "team_reconcile":
             result = team.team_reconcile(ctx, team_id=args.get("team_id"), since_seq=args.get("since_seq", 0))
         else:
             result = team.team_status(ctx, team_id=args.get("team_id"), cost=_cost(hermes_home, omh_home, durable),
                                       since_seq=args.get("since_seq", 0))
-        return json.dumps(result, sort_keys=True)
+        return json.dumps(result, ensure_ascii=False, sort_keys=True)
     except team.TeamRefusal as refusal:
-        return json.dumps(team.refusal_result(action, refusal), sort_keys=True)
+        return json.dumps(team.refusal_result(action, refusal), ensure_ascii=False, sort_keys=True)
     except (runtime_paths.RuntimeBindingError, OSError, ValueError):
         # Never echo exception strings, paths or command output.
         return _refused(action, "team_store_unavailable", "The team record could not be reached.")
@@ -335,7 +335,7 @@ def _refused(action: str, reason: str, say: str, *, detail: str = "") -> str:
     if detail:
         # Which bundle module failed to import: a module name, never a message or a path.
         payload["detail"] = detail
-    return json.dumps(payload, sort_keys=True)
+    return json.dumps(payload, ensure_ascii=False, sort_keys=True)
 
 
 # Module scope, not call time: Hermes can evict the bundle from sys.modules
