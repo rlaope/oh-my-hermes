@@ -458,11 +458,18 @@ test("chat: an answer to several messages quotes each one's first line; a click 
   await open(page);
   const tl = page.getByTestId("timeline");
   await mock("mock.manual", { bot: "kami" });
-  for (const text of ["the spinner looks stuck\nalso count seconds", "and too many bubbles per answer"]) {
-    await page.getByTestId("composer").fill(text);
-    await page.keyboard.press("Enter");
-  }
-  await emit(ev("kami", "turn.start"), ev("kami", "message", { id: "q-a1", text: "Fixed both." }), ev("kami", "turn.end", { outcome: "done" }));
+  // the first message starts a turn; the second, typed while it runs, waits (steer queue) and is steered into that
+  // same turn, so one answer replies to both
+  await page.getByTestId("composer").fill("the spinner looks stuck\nalso count seconds");
+  await page.keyboard.press("Enter");
+  await expect(page.getByTestId("stop")).toBeVisible();
+  await page.getByTestId("composer").fill("and too many bubbles per answer");
+  await page.keyboard.press("Enter");
+  const waiting = tl.getByTestId("bubble-user").filter({ hasText: "and too many bubbles per answer" });
+  await waiting.getByTestId("queue-mark").click();
+  await page.getByTestId("queue-steer").click();
+  await expect(waiting.getByTestId("bubble-steered")).toBeVisible();
+  await emit(ev("kami", "message", { id: "q-a1", text: "Fixed both." }), ev("kami", "turn.end", { outcome: "done" }));
   const quote = tl.getByTestId("bubble-quote");
   await expect(quote).toHaveCount(1);
   await expect(quote.getByTestId("bubble-quote-line")).toHaveText(["the spinner looks stuck also count seconds", "and too many bubbles per answer"]);

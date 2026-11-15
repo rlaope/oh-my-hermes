@@ -4523,7 +4523,7 @@ PEER_LIST_TIMEOUT = 5.0
 PEER_OPEN_TIMEOUT = 15.0
 # Bot-scoped ops a peer's bot takes: sent to the peer with the bare name, its answer passed back as it came.
 PEER_FORWARD = frozenset({
-    "chat.open", "chat.send", "chat.interrupt", "approval.respond", "clarify.respond", "chat.attach", "chat.set_model",
+    "chat.open", "chat.send", "chat.interrupt", "chat.steer", "approval.respond", "clarify.respond", "chat.attach", "chat.set_model",
     "models.options", "bots.ready", "bots.rename", "bots.avatar", "bots.set_avatar", "bots.info", "skills.list",
     "links.places", "elsewhere.list", "elsewhere.peek", "routines.list", "runs.list", "runs.get", "runs.prs",
     "runs.node_session",
@@ -4927,7 +4927,7 @@ class Bridge:
         self._own_plugins: set[tuple[str, str]] = set()
         self.ops = {
             "hello": self.op_hello, "bots.list": self.op_bots_list, "chat.open": self.op_chat_open,
-            "chat.send": self.op_chat_send, "chat.interrupt": self.op_chat_interrupt,
+            "chat.send": self.op_chat_send, "chat.interrupt": self.op_chat_interrupt, "chat.steer": self.op_chat_steer,
             "approval.respond": self.op_approval_respond, "clarify.respond": self.op_clarify_respond,
             "elsewhere.list": self.op_elsewhere_list, "elsewhere.peek": self.op_elsewhere_peek,
             "routines.list": self.op_routines_list, "models.options": self.op_models_options,
@@ -5568,7 +5568,8 @@ class Bridge:
             text = f"{text.rstrip()}\n\n{thread_hint(self._hint_rows(conn))}"
         input_id = str(uuid.uuid4())
         await self._probe_clarify_batch(conn)
-        await self._submit(conn, main, text, input_id)
+        queued = p.get("queued") is True
+        await self._submit(conn, main, text, input_id, queued)
         if chat is not None and chat.kind == "thread" and not chat.title:
             await self._name_thread(conn, chat, p["text"])
         return {"input_id": input_id}
@@ -5613,10 +5614,13 @@ class Bridge:
             raise BridgeError("attach_failed", str(res.get("message") or f"could not attach {name}"))
         return {"kind": kind, "name": name, "text": str(res.get("text") or ""), "ref_text": str(res.get("ref_text") or "")}
 
-    async def _submit(self, conn: Conn, main_id: str, text: str, input_id: str):
+    async def _submit(self, conn: Conn, main_id: str, text: str, input_id: str, queued: bool = False):
         # The single place a turn is sent. It takes the main chat's id or a folder chat's that this bridge
-        # created (both from _target), and nothing else.
+        # created (both from _target), and nothing else. ``queued`` (a message the app held, steer queue): when the
+        # session is still busy, Hermes runs it after that work in its own FIFO, never as a steer or interrupt.
         batch = {"clarify_batch": True} if conn.clarify_batch else {}
+        if queued:
+            batch["queued"] = True
         return await self._call(conn, "prompt.submit", session_id=main_id, text=text, input_id=input_id, **batch)
 
     async def _generation(self, conn: Conn, main: str, chat: FolderChat | None = None):
@@ -5631,6 +5635,39 @@ class Bridge:
         main, chat = await self._target(conn, p)
         await self._call(conn, "session.interrupt", session_id=main, execution_generation=await self._generation(conn, main, chat))
         return {}
+
+    async def op_chat_steer(self, p) -> dict:
+        """Steer the running turn of the bot's main chat through Hermes' own ``session.steer``: the text joins the
+        turn's next tool result, no new turn starts. Main chat only (never a folder chat or any other session).
+        Hermes' answer goes back as: ``queued`` = taken; ``rejected`` = Hermes confirmed no agent saw it (its
+        ``delivered: false``, the old idle reply, or a gateway error answer such as 4002/4010/invalid params), so
+        the app may send it as a normal message after the turn; ``uncertain`` = a plain live-agent ``rejected``,
+        which Hermes' contract says may follow delivery, so it is never re-sent on its own. A lost answer (bot
+        offline, timeout) stays an error for the same reason. Nothing is sent another way here. The call carries
+        the turn's ``execution_generation``, which the canonical gateway requires (as for ``session.interrupt``)."""
+        text = p.get("text")
+        if not isinstance(text, str) or not text.strip():
+            raise BridgeError("bad_request", "missing text")
+        if p.get("session") is not None:
+            raise BridgeError("bad_request", "steer goes to the bot's main chat only")
+        conn = await self._conn(p.get("bot"))
+        main = await self._main(conn)
+        try:
+            res = await self._call(conn, "session.steer", session_id=main, text=text,
+                                   execution_generation=await self._generation(conn, main))
+        except Exception as e:
+            if not _named(e, "GatewayRPCError"):
+                raise
+            return {"status": "rejected"}
+        res = res if isinstance(res, dict) else {}
+        status = res.get("status")
+        if status == "queued":
+            return {"status": "queued"}
+        # canonical gateway: a live agent's plain 'rejected' may follow delivery; only delivered: false is safe.
+        # The older tui_gateway reply has no execution_generation and answers 'rejected' only when idle.
+        if status == "rejected" and (res.get("delivered") is False or "execution_generation" not in res):
+            return {"status": "rejected"}
+        return {"status": "uncertain"}
 
     async def op_approval_respond(self, p) -> dict:
         choice, rid = p.get("choice"), p.get("request_id")

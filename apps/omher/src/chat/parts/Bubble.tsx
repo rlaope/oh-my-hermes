@@ -12,6 +12,7 @@ import { peerDraftsAllowed, stripPeerDrafts } from "../../peers/draft";
 import { AgentChips } from "./AgentChip";
 import { draftsAllowed, stripDrafts } from "./agentDraft";
 import { t } from "../../i18n";
+import { QueueMark, type QueueChoice, type QueueOffReasons } from "./QueueMark";
 import type { Quote } from "./answers";
 
 /** Messenger bubble, filled on both sides. Bot text renders markdown; user text stays plain. Files the bot
@@ -28,10 +29,14 @@ export const Bubble = memo(function Bubble({
   onEdit,
   editKeepsFiles,
   from,
+  onQueue,
+  queueBusy,
+  queueOff,
+  steeredTo,
   quote,
   onQuote,
 }: {
-  item: Pick<MessageItem, "kind" | "text" | "error" | "reply" | "files" | "skills" | "wait">;
+  item: Pick<MessageItem, "kind" | "text" | "error" | "reply" | "files" | "skills" | "wait" | "held" | "steered" | "steerUnknown" | "steerUnused">;
   streaming?: boolean;
   /** The bot whose face sits beside its bubble; `face` false keeps the indent without repeating it. */
   bot?: string;
@@ -47,33 +52,74 @@ export const Bubble = memo(function Bubble({
   /** A user bubble someone else sent (a parent agent, in a read-only agent-to-agent chat): their small mark and name
    *  above it. */
   from?: ReactNode;
+  /** A held message (steer queue): its ↵ mark's menu. */
+  onQueue?: (c: QueueChoice) => void;
+  /** Its steer is on the way: the mark waits. */
+  queueBusy?: boolean;
+  /** The bot's name a steered message went to, for its line. */
+  steeredTo?: string;
+  /** Menu items that are off, with their reasons (a SESSIONS chat's agent). */
+  queueOff?: QueueOffReasons;
   /** A bot answer: the message of the person's it replies to, when that is not plain from where it sits; a click
    *  scrolls to that message. */
   quote?: Quote | null;
   onQuote?: (id: string) => void;
 }) {
   if (item.kind === "user") {
+    const held = !!item.held;
+    // a SESSIONS chat's waiting message carries the mark too (held by omher, or already with the agent)
+    const marked = (held || item.wait === "queued" || !!item.steerUnknown) && !!onQueue;
     return (
-      <div className={`msg u${item.wait ? ` ${item.wait}` : ""}`} data-testid="bubble-user" data-wait={item.wait}>
+      <div
+        className={`msg u${item.wait ? ` ${item.wait}` : ""}${held ? " held" : ""}`}
+        data-testid="bubble-user"
+        data-wait={item.wait}
+        data-held={held || undefined}
+        data-steered={item.steered || undefined}
+      >
         {from && (
           <div className="msg-from" data-testid="bubble-from">
             {from}
           </div>
         )}
-        {(item.text || !item.files?.length) && (
-          <div className="b">
-            <SkillText text={item.text} skills={item.skills} />
-          </div>
-        )}
+        {(item.text || !item.files?.length) &&
+          (marked && onQueue ? (
+            // a held message: its ↵ mark before the bubble, on the bubble's first line
+            <div className="msg-line">
+              <QueueMark onPick={onQueue} busy={queueBusy} off={queueOff} unknown={!!item.steerUnknown} />
+              <div className="b">
+                <SkillText text={item.text} skills={item.skills} />
+              </div>
+            </div>
+          ) : (
+            <div className="b">
+              <SkillText text={item.text} skills={item.skills} />
+            </div>
+          ))}
         {item.files?.length ? <SentFiles files={item.files} /> : null}
         {item.reply && (
           <div className="msg-reply" data-testid="bubble-reply">
             {t("bub.replyTarget")} <SourceIcon source={item.reply.source} size={11} /> {item.reply.label}
           </div>
         )}
-        {item.wait === "queued" && (
+        {item.wait === "queued" && !item.steered && (
           <div className="msg-wait" data-testid="bubble-queued">
             {t("ctl.queued")}
+          </div>
+        )}
+        {held && item.wait !== "queued" && (
+          <div className="msg-wait" data-testid="bubble-held">
+            {queueBusy ? t("sq.steering") : t("ctl.queued")}
+          </div>
+        )}
+        {item.steered && (
+          <div className="msg-wait msg-steered" data-testid="bubble-steered">
+            {t("sq.steered", { bot: steeredTo ?? "" })}
+          </div>
+        )}
+        {item.steerUnknown && (
+          <div className="msg-wait" data-testid="bubble-steer-unknown">
+            {item.steerUnused ? t("sq.unused") : t("sq.unknown")}
           </div>
         )}
         {item.wait === "dropped" && (

@@ -11,7 +11,8 @@ export function answered(items: TimelineItem[], at: number): MessageItem[] {
     // sends each text block of one turn as its own bubble, so only the first bubble after the person's messages
     // carries the quote: the ones after it break here.
     if (it.kind === "assistant" || it.kind === "away") break;
-    if (it.kind === "user" && !it.error && it.wait !== "dropped") out.unshift(it);
+    // a held message (steer queue) was never sent, so no answer replies to it
+    if (it.kind === "user" && !it.error && it.wait !== "dropped" && !it.held) out.unshift(it);
   }
   return out;
 }

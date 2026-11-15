@@ -7,6 +7,7 @@ import mockAcpAgents from "./mockAcpAgents.json";
 import { botRefusal, mockCheck, mockNewId, type CustomEntry, type CustomList, type CustomPreview, type CustomWhy } from "./custom";
 import type { ApprovalChoice, ClarifyAnswers } from "../lib/protocol";
 import { t } from "../i18n";
+import { steersOf } from "./controls";
 
 /** What the person did in a chat. Mirrors `Input` in src-tauri/src/agent_chat.rs. `images`: saved copies
  *  (`saveFile`) of attached pictures, for the agent's own image input. */
@@ -21,7 +22,10 @@ export type ChatInput =
   /** reasoning effort, one of the levels the agent reported */
   | { kind: "effort"; effort: string }
   /** take back the last message, through the agent's own rewind (Claude Code and Codex) */
-  | { kind: "rewind" };
+  | { kind: "rewind" }
+  /** a message omher held while a turn ran, handed to the running turn without stopping it (the agent's own
+   *  mid-turn input; only the agents in controls.ts STEERS) */
+  | { kind: "steer"; id: string; text: string };
 
 /** An event from a chat agent: the bot chat's events (`turn.start`, `tool.start`, `delta`, `message`,
  *  `approval.request`, `turn.end`, …) plus `session.info`, `session.models`, `session.error` and, once,
@@ -898,6 +902,14 @@ class MockChat {
       // sent while a turn runs: it waits until the agent takes it
       this.queue.push({ text: i.text, id: i.id, images: i.images });
       this.emit({ event: "message.queued", id: i.id });
+      return;
+    }
+    if (i.kind === "steer") {
+      // as the adapters do: only an agent with its own mid-turn input, only while a turn runs; it reads the message
+      // into the running turn, then says it took it
+      if (!steersOf(this.agent)) throw new Error(`${agentDef(this.agent).label} cannot take a message into a running answer`);
+      if (!this.turn) throw new Error("nothing is running to steer");
+      this.at(60, () => this.emit({ event: "message.taken", id: i.id }));
       return;
     }
     if (i.kind === "mode") {

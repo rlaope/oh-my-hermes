@@ -4,6 +4,14 @@ All notable changes will be documented here.
 
 ## Unreleased
 
+- **omher: a message you send while the bot is answering waits behind a ↵ mark, and you choose what it does.** It
+  shows as a muted bubble with "Waiting" and goes out on its own after the turn, one per turn, in order, through
+  Hermes' own queue. Click the ↵ for Send now (stops the answer once, this message goes next), Steer (adds it to the
+  running answer through Hermes' `session.steer`, without stopping it), Edit (back into the box) or Delete. A steer
+  whose outcome Hermes could not confirm is never sent twice: the bubble says it might already be in the answer and
+  offers Send or Delete. Waiting messages survive a reload, returning to the box as a draft. SESSIONS chats get the
+  same menu; Steer works for Codex, Claude Code, pi, oh-my-pi and OmO and is off, with the reason, for the others.
+
 - **A bot can watch a Slack or Discord channel and tell you first.** Ask it in words ("watch #og and tell me first
   when someone reports an outage"); it confirms where, what, how often (every 5 minutes by default) and where it
   reports in one line, then sets up a Hermes cron job with a small collector that reads only new posts and wakes no

@@ -86,11 +86,13 @@ const out = (name: string, text: string, kind: OutFile["kind"] = "file"): OutFil
 
 const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
-async function running(ss: ReturnType<typeof setup>["ss"], agent: "claude" | "codex" | "omo" = "claude") {
+async function running(ss: ReturnType<typeof setup>["ss"], agent: "claude" | "codex" | "omo" = "claude", store?: ReturnType<typeof setup>["store"]) {
   await ss.loadAgents();
   const id = ss.draft(agent);
   ss.setDraft(id, { cwd: "/w/app" });
   await ss.start(id, "/status");
+  // the first answer ends (a message sent while a turn runs waits in omher, steer queue sessions)
+  for (let k = 0; k < 60 && store?.getState().chats[ss.chatKey(id)!]?.turn; k++) await wait(25);
   await wait(50);
   return id;
 }
@@ -98,7 +100,7 @@ async function running(ss: ReturnType<typeof setup>["ss"], agent: "claude" | "co
 describe("files in a session chat", () => {
   it("a running chat saves each file in the session's folder; pictures go as images, others by path", async () => {
     const { ss, store, calls } = setup();
-    const id = await running(ss);
+    const id = await running(ss, "claude", store);
     await ss.sendFiles(id, "what is this?", [out("shot.png", "PNGDATA", "image"), out("notes.txt", "a\nb\n")]);
     const saves = calls().filter((c) => c.op === "file.save");
     expect(saves.map((c) => [c.session, c.name, c.size])).toEqual([
@@ -132,8 +134,8 @@ describe("files in a session chat", () => {
   });
 
   it("a file that cannot be saved sends nothing, starts nothing and gives the error back", async () => {
-    const { ss, calls, g } = setup();
-    const id = await running(ss);
+    const { ss, calls, g, store } = setup();
+    const id = await running(ss, "claude", store);
     const before = calls().filter((c) => c.op === "chat.input").length;
     g.__omherFileSaveError = "disk full";
     await expect(ss.sendFiles(id, "x", [out("a.txt", "x")])).rejects.toThrow("Couldn't attach a.txt · disk full");
@@ -147,8 +149,8 @@ describe("files in a session chat", () => {
   });
 
   it("closing a session removes its saved files and forgets its sent-files record", async () => {
-    const { ss, calls, storage } = setup();
-    const id = await running(ss);
+    const { ss, calls, storage, store } = setup();
+    const id = await running(ss, "claude", store);
     await ss.sendFiles(id, "", [out("a.txt", "x")]);
     expect(JSON.parse(storage.get("omher.sessions.files")!)[id]).toBeTruthy();
     ss.close(id);
@@ -159,7 +161,7 @@ describe("files in a session chat", () => {
 
   it("after a restart a sent bubble shows its files again; folders of sessions that are gone are pruned", async () => {
     const first = setup();
-    const id = await running(first.ss);
+    const id = await running(first.ss, "claude", first.store);
     await first.ss.sendFiles(first.ss.getState().list[0].id, "look", [out("a.png", "PNG", "image")]);
     const book = first.storage.get("omher.sessions.files")!;
     const userMsg = first.store.getState().chats[first.ss.chatKey(id)!].messages.filter((m) => m.role === "user").pop()!;

@@ -31,7 +31,7 @@ import { onTermSettings, readTermSettings } from "./term/settings";
 import { termTheme } from "./term/themes";
 import { acpRow, agentDef, agentLabel, continues, draftAgent, draftFolder, draftOpen, hermesOnly, installLine, isBuiltin, isGone, OPEN_KEY, opensAs, parseOpens, parseRecent, pushRecent, RECENT_KEY, registerAcp, sessionMode, type AgentId, type AgentInfo, type OpenAs, type Unseen, type Opens, type Recent, type SessionRec } from "./agents";
 import { NAME_MAX, parseTitles, promptTitle, putTitle, TITLES_KEY } from "./titles";
-import { setDraft as setUnsent } from "../app/drafts";
+import { getDraft, setDraft as setUnsent } from "../app/drafts";
 import { getHost, type ChatEvent, type ChatInput, type PastChat, type SessionHost } from "./host";
 import { localBot } from "../peers/peerKey";
 import { folderKey, getStore, notifySessionEvent, notifySessionNote, onBridgeEvent, selectAsks, setChatRoute, setSessionKeyLookup, type OutFile, type SentFile, type Store } from "../state/store";
@@ -39,7 +39,7 @@ import { blobType, bytesOf, inlinePicture, parseSentFiles, putSentFiles, SENT_FI
 import type { AccountCli, AccountGroup, ApprovalChoice, BridgeEvent, ClarifyAnswers, Msg } from "../lib/protocol";
 import { continuesItself, type SavedSession } from "../app/resume";
 import { accountGroups } from "../settings/accounts/useAccounts";
-import { modesOf } from "./controls";
+import { modesOf, steersOf } from "./controls";
 import { parseCommands, type AgentCommand } from "../chat/parts/commands";
 import { t as tr } from "../i18n";
 import { windowWatched, type SessionNote } from "../lib/notify";
@@ -503,6 +503,7 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
         if (ev.event === "turn.end" && typeof ev.error === "string") ev = { ...ev, error: signedOutSaid(ev.error) };
         if (ev.event === "turn.end" && proc.noChat && ev.outcome === "error") ev = { ...ev, error: proc.noChat };
         dispatchChat(id, ev);
+        if (ev.event === "turn.end") afterTurn(id, ev.outcome === "interrupted");
         if (ev.event === "turn.end" && proc.signedOut) {
           endSignedOut(id, proc);
           return;
@@ -621,6 +622,115 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
     else if (i.kind === "clarify") await a.folderClarify(bot, fid, i.request_id, i.answer);
   };
 
+  // ---- steer queue sessions ------------------------------------------------------------------
+  //
+  // A message sent while an agent chat's turn runs stays in omher (a held row with the ↵ mark, "Waiting") instead of
+  // going to the agent's own queue, so it can still be sent now, steered in, edited or deleted. When the turn ends the
+  // head goes out, one per turn, in order. The rows reuse the bot chat's steer queue (held rows, `queue.take` /
+  // `queue.front` / `queue.drop`); the store's own flush, which sends through the Hermes bridge, is kept off agent
+  // chats by a standing `steering` mark (HOLD_MARK), so only this code sends them, to the agent.
+
+  /** What each held row sends, by its bubble id. */
+  const heldInputs = new Map<string, { id: string; input: Extract<ChatInput, { kind: "send" }>; sent?: () => void }>();
+  /** Sessions whose running turn Send now stopped: its end sends the chosen one first and keeps the rest waiting. */
+  const sendingNow = new Set<string>();
+  const HOLD_MARK = "agent-hold";
+  const chatOf = (key: string) => store().getState().chats[key];
+  /** Held for agent chats only (a Hermes folder chat goes through the bridge as before). */
+  const mustHoldHere = (id: string, key: string) => procs.get(id)?.kind === "agent" && (!!chatOf(key)?.turn || !!chatOf(key)?.queue?.length);
+  const hold = (id: string, key: string, lid: string, i: Extract<ChatInput, { kind: "send" }>, show: () => void, sent?: () => void) => {
+    const st = store();
+    if (chatOf(key)?.steering !== HOLD_MARK) st.dispatch({ type: "queue.steering", bot: key, id: HOLD_MARK });
+    heldInputs.set(lid, { id, input: i, sent });
+    show();
+    // the row reads "Waiting", as a message the agent queued does
+    dispatchChat(id, { event: "message.queued", id: lid });
+  };
+  /** The head held message goes out now: the row leaves the queue (moved to the end) before the request, once. */
+  const sendHead = async (id: string) => {
+    const key = keys.get(id);
+    const head = key ? chatOf(key)?.queue?.[0] : undefined;
+    if (!key || !head || chatOf(key)?.turn) return;
+    const h = heldInputs.get(head);
+    heldInputs.delete(head);
+    store().dispatch({ type: "queue.take", bot: key, id: head, now: Date.now() });
+    dispatchChat(id, { event: "message.taken", id: head });
+    // no text kept for it, or the send fails: no turn starts, so no turn.end would ever send the next one
+    if (!h) return void setTimeout(() => void sendHead(id), 0);
+    h.sent?.();
+    try {
+      await input(id, h.input);
+    } catch (e) {
+      store().dispatch({ type: "send.failed", bot: key, id: head, error: errText(e) });
+      setTimeout(() => void sendHead(id), 0);
+    }
+  };
+  /** A turn ended. Stop (not Send now) throws away what waited, as the agents themselves do; otherwise the head goes. */
+  const afterTurn = (id: string, stopped: boolean) => {
+    const key = keys.get(id);
+    // a Send now mark is used by this turn's end, whatever waits: a later real Stop is never read as Send now
+    const now = sendingNow.delete(id);
+    if (!key || !chatOf(key)?.queue?.length) return;
+    if (stopped && !now) {
+      for (const lid of [...(chatOf(key)?.queue ?? [])]) {
+        heldInputs.delete(lid);
+        store().dispatch({ type: "queue.take", bot: key, id: lid, now: Date.now() });
+        dispatchChat(id, { event: "message.dropped", id: lid });
+      }
+      return;
+    }
+    setTimeout(() => void sendHead(id), 0);
+  };
+  const heldIn = (id: string, lid: string) => {
+    const key = keys.get(id);
+    return key && chatOf(key)?.queue?.includes(lid) && heldInputs.get(lid)?.id === id ? key : null;
+  };
+  /** The ↵ menu of a waiting message in session `id`'s chat. */
+  const queuePick = async (id: string, lid: string, c: "now" | "steer" | "edit" | "delete") => {
+    const key = heldIn(id, lid);
+    if (!key) return; // already with the agent: the menu offers nothing
+    const st = store();
+    if (c === "delete" || c === "edit") {
+      const text = heldInputs.get(lid)?.input.text ?? "";
+      heldInputs.delete(lid);
+      st.dispatch({ type: "queue.drop", bot: key, id: lid });
+      if (c === "edit") {
+        const typed = getDraft(key).trim();
+        st.dispatch({ type: "ui.draft", bot: key, text: typed ? `${text}\n${typed}` : text });
+      }
+      return;
+    }
+    if (c === "now") {
+      st.dispatch({ type: "queue.front", bot: key, id: lid });
+      if (!chatOf(key)?.turn) return void sendHead(id);
+      // one Stop, however often it is pressed; the stopped turn's end sends this one first
+      if (sendingNow.has(id)) return;
+      sendingNow.add(id);
+      await input(id, { kind: "interrupt" }).catch((e) => {
+        sendingNow.delete(id);
+        note(id, errText(e));
+      });
+      return;
+    }
+    // Steer: the agent's own mid-turn input, text only; with pictures, or no turn left to steer, it goes out next
+    const h = heldInputs.get(lid)!;
+    const agent = rec(id)?.agent ?? "";
+    if (!steersOf(agent)) return;
+    if (!chatOf(key)?.turn || h.input.images?.length) {
+      st.dispatch({ type: "queue.front", bot: key, id: lid });
+      if (!chatOf(key)?.turn) void sendHead(id);
+      return;
+    }
+    try {
+      await input(id, { kind: "steer", id: lid, text: h.input.text });
+      heldInputs.delete(lid);
+      // with the agent now: no longer held, "Waiting" until the agent says it took it
+      st.dispatch({ type: "queue.take", bot: key, id: lid, now: Date.now() });
+    } catch {
+      st.dispatch({ type: "queue.front", bot: key, id: lid });
+    }
+  };
+
   /** Send chat text: the bubble shows at once; a refusal marks it "Not sent". */
   const send = async (id: string, text: string) => {
     const t = text.trim();
@@ -628,6 +738,10 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
     if (!t || !key) return;
     const st = store();
     const lid = `local-s${++localSeq}`;
+    if (mustHoldHere(id, key)) {
+      hold(id, key, lid, { kind: "send", text: t, id: lid }, () => st.dispatch({ type: "local.user", bot: key, id: lid, text: t, now: Date.now(), held: true }));
+      return;
+    }
     st.dispatch({ type: "local.user", bot: key, id: lid, text: t, now: Date.now() });
     // the first message that says something names the session until the agent or the person does
     const r = rec(id);
@@ -711,6 +825,23 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
     if (!key) return;
     if (procs.get(id)?.kind !== "agent") throw new Error(tr("ss.agentNotRunning", { agent: agentDef(rec(id)?.agent ?? "claude").label }));
     const p = await prepare(id, text, files);
+    if (mustHoldHere(id, key)) {
+      // held with its saved files: they go with it when it goes out
+      const lid = `local-s${++localSeq}`;
+      hold(
+        id,
+        key,
+        lid,
+        { ...p.input, id: lid },
+        () => store().dispatch({ type: "local.user", bot: key, id: lid, text: text.trim(), now: Date.now(), files: p.shown, held: true }),
+        // kept for a restart only once it went out (as showWithFiles does for a message sent at once)
+        () => {
+          const now = Date.now();
+          saveSentFiles(putSentFiles(sentFiles, id, String(now), { ts: now / 1000, text: text.trim(), files: p.saved }));
+        },
+      );
+      return;
+    }
     const lid = showWithFiles(id, key, text, p);
     try {
       await input(id, { ...p.input, id: lid });
@@ -1587,6 +1718,8 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
     send,
     sendFiles,
     dropOnTerminal,
+    /** The ↵ menu of a waiting message (steer queue sessions): Send now, Steer, Edit, Delete. */
+    queuePick,
     /** Esc / Stop: the agent's own interrupt. */
     interrupt: (id: string) => input(id, { kind: "interrupt" }).catch(() => undefined),
     /** Edit and resend: the agent takes back the last message (its own rewind), then the box holds its text. */

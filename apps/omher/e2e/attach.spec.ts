@@ -271,6 +271,9 @@ test("over-limit files show a red chip and are not sent; a failed attach sends n
   expect(ops.map((c: any) => c.params.name ?? c.op)).toEqual(["ok.txt", "chat.send"]);
 
   await huge.getByTestId("attach-remove").click();
+  // let that send's turn finish first: a message typed while a turn runs waits (steer queue) and attaches later
+  await page.getByTestId("stop").click();
+  await expect(page.getByTestId("stop")).toHaveCount(0);
   await mock("mock.reset");
   await dropFiles(page, [
     { name: "good.png", type: "image/png", text: "png" },
