@@ -3,6 +3,9 @@ import type { Key } from "./index";
 export const zh: Record<Key, string> = {
   // graph (the dag box view and its header)
   "graph.deps": "依赖关系",
+  "graph.waitsFor": "等待",
+  "graph.through": "+{n} 项 更上游",
+  "graph.depRows": "{n} 个任务",
   "graph.details": "节点详情",
   "graph.untitled": "未命名",
   "graph.finished": "完成",
