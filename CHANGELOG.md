@@ -303,9 +303,6 @@ All notable changes will be documented here.
   - **omher on Windows finds Hermes' Python through the package-manager launcher** (`hermes.exe` or `hermes.cmd`, read
     without running it), so a PM or source install no longer reads as "Hermes Agent isn't on this computer". Reported
     by @MarinWasAsleep in #2885. (#2887)
-  - **⌘T opens the New session picker on macOS**, the same menu as ⌘N; Settings › Keyboard lists both. On Windows
-    and Linux only Ctrl+N opens it (Ctrl+T stays the program's). Both keys work with a non-Latin layout active.
-    (#2890)
 
 - **omher 0.2.9.** A new bot without an AI account signs in from its own chat, the + in the message box has one
   way to add files and the bot's plugins beside it, and an empty part of the Sessions list starts a new session.
@@ -1108,6 +1105,10 @@ All notable changes will be documented here.
   or a credential pool exists. When neither can be seen, the refusal names the variable to set or
   `hermes auth add <id>` instead of "lacks safe observed provider auth". A key kept only in Hermes' `.env` file is not
   visible to OMH; export it in the shell that runs omh. Reported by @MarinWasAsleep in #2882.
+- **omher: ⌘T opens the New session picker on macOS**, the same menu as ⌘N, the way ⌘T opens a new tab elsewhere.
+  Settings › Keyboard lists both. On Windows and Linux Ctrl+T is left to the program (a terminal's transpose), so
+  only Ctrl+N opens it there. ⌘N and ⌘T also work with a non-Latin layout active (Korean, Japanese, Russian), by
+  the key's position.
 
 ## 4.0.7 - 2026-11-09
 
