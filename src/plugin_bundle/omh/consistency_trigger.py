@@ -865,8 +865,8 @@ def _covers_home(root: str) -> bool:
     home = os.path.expanduser("~")
     if not home or home == "~":
         return False
-    home = os.path.realpath(home)
-    real_root = os.path.realpath(root)
+    home = os.path.normcase(os.path.realpath(home))
+    real_root = os.path.normcase(os.path.realpath(root))
     return real_root == home or home.startswith(real_root.rstrip(os.sep) + os.sep)
 
 
