@@ -3,7 +3,7 @@
 // src/assets/agents (read only through ./assets). Adding a harness = one row here + one asset file.
 //
 // `harnessOf(facts)` decides WHO is working, in this order:
-//   1. an explicit executor / fanout owner (`claude-code` → claude, `codex`, `omp`…);
+//   1. an explicit executor / fanout owner (`claude-code` → claude, `codex`, `omp`…); one no row knows → `generic`;
 //   2. the ACP command's basename (`claude-agent-acp` → claude, `codex-acp` → codex, `gemini --acp` → gemini…);
 //   3. otherwise a plain Hermes child: the harness is `hermes`, and the model's maker (Claude, OpenAI, xAI, Z.ai…)
 //      is a second, smaller fact (`modelMark`). A Hermes child that merely runs a Claude model is never shown as
@@ -125,8 +125,9 @@ export function harnessOf(facts: HarnessFacts): HarnessIdentity {
   const modelMark = facts.model || facts.provider ? markFor(facts.model ?? undefined, facts.provider ?? undefined) : null;
   const k = harnessByName(facts.kind);
   if (k && k !== "hermes") return { harness: k, modelMark, by: "executor" };
-  const ex = harnessByName(facts.executor);
-  if (ex) return { harness: ex, modelMark, by: "executor" };
+  // an executor that is named decides, even when no row knows it: an unknown agent CLI is neutral, never Hermes on
+  // whatever model it reported
+  if ((facts.executor ?? "").trim()) return { harness: harnessByName(facts.executor) ?? "generic", modelMark, by: "executor" };
   if (facts.acpCommand) {
     const acp = harnessByName(facts.acpCommand);
     return { harness: acp ?? "generic", modelMark, by: "acp" };

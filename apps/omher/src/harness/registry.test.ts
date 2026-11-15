@@ -27,6 +27,11 @@ describe("harnessOf", () => {
     [{ acpCommand: "cline-acp" }, "cline", "acp"],
     // an ACP command no row knows: neutral, never a company's logo
     [{ acpCommand: "mystery-agent --acp", model: "claude-opus-5-5" }, "generic", "acp"],
+    // an executor no row knows: neutral by its executor, never Hermes because it reported a model
+    [{ executor: "mystery-agent", model: "claude-opus-5-5" }, "generic", "executor"],
+    [{ executor: "mystery-agent", model: "gpt-6.1-sol", provider: "openai-codex" }, "generic", "executor"],
+    [{ executor: "mystery-agent", kind: "hermes" }, "generic", "executor"],
+    [{ executor: "  ", model: "claude-opus-5-5" }, "hermes", "model"],
     // a plain Hermes child on any model is Hermes; the model is a second fact
     [{ model: "claude-opus-5-5", provider: "claude-proxy" }, "hermes", "model"],
     [{ model: "gpt-6.1-sol", provider: "openai-codex" }, "hermes", "model"],
