@@ -755,3 +755,13 @@
   text-overflow: ellipsis;
   min-width: 0;
 }
+
+/* who sent a user bubble in a read-only agent-to-agent chat (the parent agent): small, above the bubble */
+.msg-from {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  margin-bottom: 3px;
+  font-size: 11px;
+  color: var(--muted);
+}

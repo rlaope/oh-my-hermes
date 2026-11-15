@@ -290,9 +290,10 @@
 }
 .sa-mark {
   flex: none;
-  display: grid;
-  place-items: center;
-  width: 14px;
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  min-width: 14px;
   height: 18px;
   color: var(--muted);
 }
@@ -432,4 +433,50 @@
 }
 .sa-line.result {
   color: var(--muted);
+}
+
+/* a read-only session's step, opened: the call's input, then its result (mono, capped, own scroll) */
+.act-io {
+  display: grid;
+  gap: 4px;
+  margin: 2px 0 6px 2px;
+  min-width: 0;
+}
+.act-io pre {
+  margin: 0;
+  max-height: 220px;
+  overflow: auto;
+  padding: 6px 8px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  font-family: var(--mono);
+  font-size: 11px;
+  line-height: 1.45;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  color: var(--body);
+}
+.act-io-out {
+  color: var(--muted);
+}
+
+/* a subagent row's "Open as chat": quiet text, it opens the child's own chat under the card */
+.sa-chat {
+  align-self: flex-start;
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  font-size: 11px;
+  color: var(--muted);
+  cursor: pointer;
+}
+.sa-chat:hover {
+  color: var(--body);
+  text-decoration: underline;
+}
+.sa-chatw {
+  margin-top: 8px;
+  border-top: 1px solid var(--line);
+  padding-top: 8px;
 }

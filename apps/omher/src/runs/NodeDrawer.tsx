@@ -15,6 +15,7 @@ import { factsOf, titleOf } from "./boxView";
 import { modelName, runName, STATE_WORD } from "./format";
 import { NodeMark } from "./RunGraph";
 import { openPr, prLabel, prLink, prState, prText } from "./pr";
+import { AgentChat } from "../harness/AgentChat";
 
 const PREVIEW = 1200;
 
@@ -61,15 +62,22 @@ export function NodeDrawer({
   node: RunNode;
   /** The nodes it has a line from, as the graph draws them (a failed node's repairs stand in for it). */
   parents?: RunNode[];
-  /** The bot's own model: what a node with nothing else recorded is taken to run on. */
-  bot?: { model: string; provider: string };
+  /** The bot's own model: what a node with nothing else recorded is taken to run on. With its name, the drawer also
+   *  shows the node's session as a chat between the bot and the agent that ran it (`runs.node_session`). */
+  bot?: { model: string; provider: string; name?: string; display_name?: string };
   text?: string;
   nowS: number;
   onClose: () => void;
 }) {
   const runId = run.id;
   const [all, setAll] = useState(false);
-  useEffect(() => setAll(false), [node.id]);
+  const [chatFull, setChatFull] = useState(false);
+  useEffect(() => {
+    setAll(false);
+    setChatFull(false);
+  }, [node.id]);
+  // a node that went out (a helper or a CLI took it) has a session to show; a CLI agent's own run has no bot here
+  const sessionOf = bot?.name && !isCliRun(runId) && node.attempts.length > 0 ? bot.name : null;
   const last = node.attempts[node.attempts.length - 1];
   const t = node.started === undefined ? "" : lengthOf(node.started, node.ended, nowS);
   const ran = factsOf(node, run, bot);
@@ -144,6 +152,21 @@ export function NodeDrawer({
         </>
       ) : (
         !node.summary && <div className="rn-none">{tr("rn.noHandoff")}</div>
+      )}
+      {sessionOf && (
+        <section className={`rn-session${chatFull ? " full" : ""}`} data-testid="run-session" aria-label={tr("harness.session")}>
+          {!chatFull && <h4 className="rn-sh">{tr("harness.session")}</h4>}
+          <AgentChat
+            bot={sessionOf}
+            botName={bot?.display_name}
+            target={{ run: runId, node: node.id }}
+            title={node.label}
+            facts={{ executor: node.executor, model: node.model ?? node.planned?.model, provider: node.provider ?? node.planned?.provider }}
+            running={node.state === "running"}
+            full={chatFull}
+            onFull={() => setChatFull((v) => !v)}
+          />
+        </section>
       )}
       {bad && !isCliRun(runId) && (
         <div className="rn-ask">

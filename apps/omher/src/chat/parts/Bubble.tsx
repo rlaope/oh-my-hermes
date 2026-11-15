@@ -26,6 +26,7 @@ export const Bubble = memo(function Bubble({
   live,
   onEdit,
   editKeepsFiles,
+  from,
 }: {
   item: Pick<MessageItem, "kind" | "text" | "error" | "reply" | "files" | "skills" | "wait">;
   streaming?: boolean;
@@ -40,10 +41,18 @@ export const Bubble = memo(function Bubble({
   onEdit?: () => void;
   /** The turn Edit takes back changed files: a quiet line beside it says they stay as they are. */
   editKeepsFiles?: boolean;
+  /** A user bubble someone else sent (a parent agent, in a read-only agent-to-agent chat): their small mark and name
+   *  above it. */
+  from?: ReactNode;
 }) {
   if (item.kind === "user") {
     return (
       <div className={`msg u${item.wait ? ` ${item.wait}` : ""}`} data-testid="bubble-user" data-wait={item.wait}>
+        {from && (
+          <div className="msg-from" data-testid="bubble-from">
+            {from}
+          </div>
+        )}
         {(item.text || !item.files?.length) && (
           <div className="b">
             <SkillText text={item.text} skills={item.skills} />
