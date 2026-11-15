@@ -33,8 +33,21 @@ RULES = (
     "omher never writes to Slack, Discord or any other elsewhere session.",
     "omher may pass a thread reference to the bot; the bot posts with its own tools and approvals.",
     "omher sends, answers and interrupts only in the bot's main chat, the session titled `Bot Chat`,",
-    "and in folder chats the bridge created itself for an oh-my-hermes session (`folder.open`);",
-    "the bridge has exactly one `prompt.submit` call site and it takes the main chat's id or such a folder chat's.",
+    "and in folder chats and threads the bridge created itself (`folder.open` for an oh-my-hermes session;"
+    " `thread.create`, or an `omher-thread` block in the bot's own main-chat answer, for a thread under the bot);",
+    "the bridge has exactly one `prompt.submit` call site and it takes the main chat's id or such a folder chat's or thread's.",
+    "an `omher-thread-route` block in an answer only asks the person whether to send their message to an open thread,"
+    " and nothing is sent until they press Send there.",
+    "The SESSIONS entry (the sidebar section, its `+` menu and background menu, ⌘N/⌘T and ⌘⇧[ ]) is hidden in favour of"
+    " bot threads;",
+    "the only program omher starts for the person is their login shell for the bottom terminal panel (Ctrl+`):"
+    " `[$SHELL, -l]` when `$SHELL` is an absolute path to an executable file that `/etc/shells` lists,",
+    "the page sends only a folder and a size (`shell_start`), omher types nothing into it, and the shell is stopped when"
+    " its tab closes and when the app exits.",
+    "omher also reads the messages of the subagent sessions of the bot's own runs from its `state.db` (read-only),",
+    "it never selects a reasoning or thinking field, clips each input and result to 4 KB and masks token-like strings.",
+    "then calls only Hermes' own `session.archive` for it (hidden, its messages kept, restorable in Hermes); omher never"
+    " deletes a session, and never removes the main chat or a session the bridge did not create or list as a thread.",
     "Files the person attaches go to that same chat only, as bytes through Hermes' own `image.attach_bytes`,",
     "the bridge never opens the person's files.",
     "omher talks only to the person's own Hermes gateway on this machine, over loopback,",
@@ -301,10 +314,11 @@ class DocPins(unittest.TestCase):
         # after a refusal; plugin loads through its `reload-plugins`); 30: rule 30 (continue a Claude Code or Codex
         # conversation from its own files, read-only; a row's folder in the file manager or the system terminal; the
         # asks count on the Dock); 31: rule 31 (a Hermes on another computer over the person's own ssh, after a
-        # Connect on the confirm card: one fixed ssh argv, key login only, remote writes only under ~/.omher/peer).
-        # The rules stay numbered 1..n with no gap or repeat.
+        # Connect on the confirm card: one fixed ssh argv, key login only, remote writes only under ~/.omher/peer);
+        # 32: rule 32 (removing a thread interrupts it and archives it through Hermes' own `session.archive`, never
+        # a delete). The rules stay numbered 1..n with no gap or repeat.
         rules = re.findall(r"^(\d+)\. ", DOC.read_text(encoding="utf-8"), re.M)
-        self.assertTrue(6 <= len(rules) <= 31, len(rules))
+        self.assertTrue(6 <= len(rules) <= 32, len(rules))
         self.assertEqual([int(n) for n in rules], list(range(1, len(rules) + 1)))
 
     def test_glossary_and_docs_index_name_omher(self) -> None:
@@ -1868,3 +1882,37 @@ class SshPeersOnlyOverTheOwnSsh(unittest.TestCase):
         self.assertEqual(sorted(set(re.findall(r'call\("([a-z.]+)"', probe))), ["bots.list", "hello"])
         # the peer URL is the forwarded loopback port only
         self.assertIn(r'PEER_URL = re.compile(r"ws://127\.0\.0\.1:[0-9]{1,5}/\?token=[0-9a-f]{32}")', self.bridge)
+
+
+class BotThreads(unittest.TestCase):
+    """Rules 3, 11 and 32 for bot threads: a thread is removed by interrupt + Hermes' own ``session.archive``, never a
+    delete; the SESSIONS entry is off; the terminal panel's only program is the person's login shell."""
+
+    APP = ROOT / "apps" / "omher"
+
+    def test_thread_remove_archives_and_never_deletes(self) -> None:
+        src = (self.APP / "bridge" / "omher_bridge.py").read_text(encoding="utf-8")
+        tree = ast.parse(src)
+        op = [f for f in ast.walk(tree) if isinstance(f, ast.AsyncFunctionDef) and f.name == "op_thread_remove"][0]
+        body = ast.get_source_segment(src, op) or ""
+        self.assertIn('"session.archive"', body)
+        self.assertIn("archived=True", body)
+        self.assertLess(body.index('"session.interrupt"'), body.index('"session.archive"'))
+        self.assertNotIn("session.delete", src)
+        for word in ("delete", "unlink", "rmtree"):
+            self.assertNotIn(word, body.replace("never a delete", ""), word)
+
+    def test_sessions_entry_is_hidden(self) -> None:
+        entry = (self.APP / "src" / "sessions" / "entry.ts").read_text(encoding="utf-8")
+        self.assertIn("export const SESSIONS_ENTRY = false;", entry)
+        side = (self.APP / "src" / "sidebar" / "Sidebar.tsx").read_text(encoding="utf-8")
+        self.assertIn("{SESSIONS_ENTRY && (", side)
+        keys = (self.APP / "src" / "app" / "shortcuts.ts").read_text(encoding="utf-8")
+        self.assertIn('if (!SESSIONS_ENTRY && (hit.kind === "new-session" || hit.kind === "session")) return;', keys)
+
+    def test_terminal_panel_runs_only_the_login_shell(self) -> None:
+        rs = (self.APP / "src-tauri" / "src" / "sessions.rs").read_text(encoding="utf-8")
+        self.assertIn('return Ok(vec![OsString::from(sh), OsString::from("-l")]);', rs)
+        self.assertIn('std::fs::read_to_string("/etc/shells")', rs)
+        lib = (self.APP / "src-tauri" / "src" / "lib.rs").read_text(encoding="utf-8")
+        self.assertIn("async fn shell_start(", lib)

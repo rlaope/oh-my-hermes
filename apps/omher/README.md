@@ -2,9 +2,13 @@
 
 omher is a desktop app for your Hermes bots, on macOS, Windows and Linux. Each Hermes profile is one bot. Each bot has one main
 chat, and the app shows what that bot is doing in its other sessions (Slack, Discord, Telegram, cron)
-read-only. Under the bots, SESSIONS starts a coding agent (Claude Code, Codex, OmO, OpenCode, Gemini CLI and more, oh-my-hermes, pi) in a
-folder you pick and runs it inside the window, as if you had typed `claude` or `codex` in a terminal. It is part of
-this repository but is not part of the `omh` Python package.
+read-only. Work happens in threads under a bot: right-click a bot for "New thread · <bot>", or let the bot open
+threads itself when a request splits into separate tasks. Each thread row shows its live state (running, needs you,
+done, failed) and the marks of whoever works in it (Hermes, or a harness it handed work to such as Claude Code or
+Codex); its x archives the thread in Hermes, never deletes it. Ctrl+` opens a bottom terminal panel running your own
+login shell in the open thread's folder. The SESSIONS section (coding agents you started yourself) is hidden in
+favour of threads; its code stays until a later release. It is part of this repository but is not part of the `omh`
+Python package.
 
 Boundary: [`docs/OMHER-BOUNDARY.md`](../../docs/OMHER-BOUNDARY.md).
 

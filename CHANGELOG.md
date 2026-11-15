@@ -22,6 +22,16 @@ All notable changes will be documented here.
   under it what it waits for, each with that task's own status. An edge another path already implies folds into
   "+N further up" (a repair edge never folds), so a plan of 8 tasks and 15 edges reads as 6 rows, not 15. Hovering
   a row lights its box in the drawing above; clicking it opens the node. The heading counts the rows.
+- **omher: work happens in threads under a bot.** Right-click a bot for "New thread · <bot>", or let the bot open
+  threads itself when you ask for two separate things at once; its answer then links to each thread, and a message
+  that belongs in an open thread gets a "Send this to <thread>?" card. Each thread row shows a live state (a spinner
+  while it runs, a slow amber dot when it needs you, a check when done, an x when it failed or stopped) and the marks
+  of who works in it: Hermes, or Claude Code, Codex and others it handed work to. The x on a row asks first, then stops
+  the thread and archives it in Hermes; nothing is deleted. In Plans, clicking a step that a subagent or another
+  harness ran opens its work as a chat between the agents: the prompt it got, the commands it ran with their results,
+  its own sub-steps and its answer, read-only. Ctrl+` opens a terminal panel at the bottom with your own login shell
+  in the open thread's folder. The side panel can be maximised (its button, a double-click on the tab row, or ⌘⇧G;
+  Esc restores). The SESSIONS section is hidden in favour of threads.
 
 ## 4.0.8 - 2026-11-15
 
