@@ -204,10 +204,155 @@ const freeRowPoint = (page: Page) =>
   });
 const isMaxed = async (page: Page) => /\bpanel-max\b/.test((await page.getByTestId("window").getAttribute("class")) ?? "");
 
+/** Every pointerdown from now on: where it landed, and whether on an interactive control outside the tab row. */
+const recordPresses = (page: Page) =>
+  page.evaluate(() => {
+    const w = window as unknown as { __presses: unknown[] };
+    w.__presses = [];
+    const ctl = 'button, a[href], input, textarea, select, [role="button"], [role="menuitem"], [role="tab"], [role="combobox"], [role="link"], [contenteditable], [tabindex]:not([tabindex="-1"])';
+    window.addEventListener(
+      "pointerdown",
+      (e) => {
+        const t = e.target as Element;
+        w.__presses.push({
+          id: t.closest("[data-testid]")?.getAttribute("data-testid") ?? null,
+          row: !!t.closest('[data-testid="panel-tabs"]'),
+          control: !t.closest('[data-testid="panel-tabs"]') && !!t.closest(ctl),
+          model: !!t.closest('[data-testid="model-pill"]'),
+          places: !!t.closest('[data-testid="places"]'),
+        });
+      },
+      true,
+    );
+  });
+type Press = { id: string | null; row: boolean; control: boolean; model: boolean; places: boolean };
+const presses = (page: Page) => page.evaluate(() => (window as unknown as { __presses: Press[] }).__presses.splice(0));
+
+// A control in the chat header the person actually hits during the restore slide is theirs (the model pill opens
+// its picker, the places chip closes the panel), at every delay; only the header's bare background can be claimed by
+// a double-click aimed at the tab row. A sample where the control is still under the panel is left out.
+for (const control of ["model-pill", "places"] as const)
+  test(`a real click on the header's ${control} 120-450ms after Esc is never stolen by the slide`, async ({ page }) => {
+    test.setTimeout(60_000);
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await openPanel(page, "runs");
+    await recordPresses(page);
+    const out: { delay: number; hit?: Press; worked?: boolean }[] = [];
+    for (const delay of [120, 180, 220, 280, 350, 450]) {
+      if (!/\bpanel-open\b/.test((await page.getByTestId("window").getAttribute("class")) ?? "")) await page.getByTestId("places").click();
+      await page.getByTestId("panel-tab-runs").click();
+      if (!(await isMaxed(page))) await page.getByTestId("panel-max").click();
+      await expectMaxed(page);
+      await settled(page);
+      await page.keyboard.press("Escape");
+      await page.waitForTimeout(delay);
+      const p = await page.getByTestId(control).evaluate((e) => {
+        const b = e.getBoundingClientRect();
+        const y = b.y + b.height / 2;
+        const x = [b.x + b.width / 2, b.x + 5, b.right - 5].find((x) => e.contains(document.elementFromPoint(x, y)));
+        return x === undefined ? null : { x, y };
+      });
+      if (!p) {
+        out.push({ delay });
+        await settled(page);
+        continue;
+      }
+      await presses(page);
+      await page.mouse.click(p.x, p.y);
+      const [hit] = await presses(page);
+      await page.waitForTimeout(450);
+      const worked =
+        control === "model-pill"
+          ? await page.getByTestId("model-pop").isVisible()
+          : !/\bpanel-open\b/.test((await page.getByTestId("window").getAttribute("class")) ?? "");
+      out.push({ delay, hit, worked });
+      if (await page.getByTestId("model-pop").isVisible()) await page.keyboard.press("Escape");
+      await settled(page);
+    }
+    const valid = out.filter((o) => o.hit && (control === "model-pill" ? o.hit.model : o.hit.places));
+    expect(valid.length, JSON.stringify(out)).toBeGreaterThan(0);
+    expect(valid.filter((o) => !o.worked), JSON.stringify(out)).toEqual([]);
+  });
+
+/** What (x, y) shows now: the tab row, a control in the chat header, or its bare background. */
+const CONTROL = 'button, a[href], input, textarea, select, [role="button"], [role="menuitem"], [role="tab"], [role="combobox"], [role="link"], [contenteditable], [tabindex]:not([tabindex="-1"])';
+/** Esc restores; returns once (x, y), free tab-row space while maximised, shows `want` (checked every frame). */
+async function escUntil(page: Page, x: number, y: number, want: "bare" | "control") {
+  await page.keyboard.press("Escape");
+  await page.waitForFunction(
+    ([x, y, want, ctl]) => {
+      const hit = document.elementFromPoint(x as number, y as number);
+      const kind = !hit || hit.closest('[data-testid="panel-tabs"]') ? "row" : hit.closest(ctl as string) ? "control" : "bare";
+      return kind === want;
+    },
+    [x, y, want, CONTROL] as const,
+    { polling: "raf", timeout: 2000 },
+  );
+}
+
+// The restore-slide double-click attack (first press on the row's free space 25ms after Esc, the row slides away
+// before the second) aimed below the header's controls, so the second press lands on the chat header's bare
+// background, never a control: still maximises, 10 of 10. The chosen trade-off, next test: a press that lands on a
+// header control (the model pill) after the row left is the control's, and that double-click does not toggle.
+test("restore-slide double-click whose second press lands on bare header background maximises 10 of 10", async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await openPanel(page, "runs");
+  await recordPresses(page);
+  const y = (await page.getByTestId("panel-tabs").evaluate((e) => e.getBoundingClientRect().bottom)) - 5;
+  for (let i = 0; i < 10; i++) {
+    if (!(await isMaxed(page))) await page.getByTestId("panel-max").click();
+    await expectMaxed(page);
+    await settled(page);
+    await page.keyboard.press("Escape");
+    await page.waitForTimeout(25);
+    const p = await freeRowPoint(page);
+    expect(p.inRow, `round ${i}: first press on the tab row`).toBe(true);
+    await presses(page);
+    await page.mouse.dblclick(p.x, y, { delay: 45 });
+    const hits = await presses(page);
+    // the first press may already find the row gone, the second the row still there: never a control
+    expect(hits.map((h) => h.control), `round ${i}: ${JSON.stringify(hits)}`).toEqual([false, false]);
+    await page.waitForTimeout(400);
+    expect(await isMaxed(page), `round ${i}: double-click during the slide maximised`).toBe(true);
+  }
+});
+
+test("trade-off: where the model pill slid over the row's old free space, the pill wins and the double-click does not toggle", async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await openPanel(page, "runs");
+  await recordPresses(page);
+  // the pill's place once restored: free tab-row space while maximised
+  const p = await page.getByTestId("model-pill").evaluate((e) => {
+    const b = e.getBoundingClientRect();
+    return { x: b.x + b.width / 2, y: b.y + b.height / 2 };
+  });
+  for (let i = 0; i < 5; i++) {
+    if (await page.getByTestId("model-pop").isVisible()) await page.keyboard.press("Escape");
+    await expect(page.getByTestId("model-pop")).toBeHidden();
+    if (!(await isMaxed(page))) await page.getByTestId("panel-max").click();
+    await expectMaxed(page);
+    await settled(page);
+    expect(await page.evaluate(([x, y]) => !!document.elementFromPoint(x, y)?.closest('[data-testid="panel-tabs"]'), [p.x, p.y] as const)).toBe(true);
+    await escUntil(page, p.x, p.y, "control");
+    await presses(page);
+    await page.mouse.dblclick(p.x, p.y, { delay: 45 });
+    const [first] = await presses(page);
+    await page.waitForTimeout(400);
+    expect(first.model, `round ${i}: ${JSON.stringify(first)}`).toBe(true);
+    expect(await isMaxed(page), `round ${i}: the pill won, no toggle`).toBe(false);
+    await settled(page);
+  }
+});
+
+// Where the second press lands on a header control the slide brought under the pointer (the model pill), the control
+// wins and the pair does not toggle (the chosen trade-off, below); every other round maximises, 10 of 10.
 test("a person's double-click on the tab row during the restore slide still maximises, 10 of 10 (real mouse)", async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
   await openPanel(page, "runs");
-  for (let i = 0; i < 10; i++) {
+  await recordPresses(page);
+  let maxed = 0;
+  for (let i = 0; maxed < 10 && i < 20; i++) {
+    if (await page.getByTestId("model-pop").isVisible()) await page.keyboard.press("Escape");
     if (!(await isMaxed(page))) await page.getByTestId("panel-max").click();
     await expectMaxed(page);
     await settled(page);
@@ -216,10 +361,18 @@ test("a person's double-click on the tab row during the restore slide still maxi
     // the free row space under the pointer at the first press; the row slides away before the second
     const p = await freeRowPoint(page);
     expect(p.inRow, `round ${i}: first press on the tab row`).toBe(true);
+    await presses(page);
     await page.mouse.dblclick(p.x, p.y, { delay: 45 });
+    const hits = await presses(page);
     await page.waitForTimeout(400);
+    if (hits.some((h) => h.control)) {
+      expect(await isMaxed(page), `round ${i}: a press on a control ${JSON.stringify(hits)} is the control's`).toBe(false);
+      continue;
+    }
     expect(await isMaxed(page), `round ${i}: double-click during the slide maximised`).toBe(true);
+    maxed++;
   }
+  expect(maxed).toBe(10);
 });
 
 test("tab row: a settled double-click toggles once; one click, or two clicks 800ms apart, never toggles", async ({ page }) => {

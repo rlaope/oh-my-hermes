@@ -132,6 +132,9 @@ function onSecondPress(e: PointerEvent) {
   disarm();
   if (!a || e.button !== 0) return;
   if (e.timeStamp - a.t > PAIR_MS || Math.abs(e.screenX - a.x) > PAIR_PX || Math.abs(e.screenY - a.y) > PAIR_PX) return;
+  // a control outside the row that slid under the pointer and was actually hit (the model pill) is the person's: it
+  // takes the press, and the pair does not toggle
+  if (onControl(e.target)) return;
   paired = e;
   toggled = true;
   // the second press belongs to the row's double click: a tab or button that slid under it is not also clicked
@@ -162,9 +165,17 @@ export function onPanelRowPointerDown(e: { target: EventTarget | null; currentTa
 
 // While the panel slides (maximise / restore) the row can move out from under a pointer aimed at its free space
 // before the first press even lands. Each frame of the slide records the free space the row shows; a press on a spot
-// the free space covered in the last AIM_MS belongs to the row, whatever slid in under it: the chat header, or a tab
+// the free space covered in the last AIM_MS belongs to the row, whatever slid in under it: the chat header's bare
+// background (never a control in it, which the person hit and which always wins), or a tab
 // while the slide is still moving it (a tab pressed once it has stopped moving is the tab's). Such a press arms, and its
 // click goes nowhere else.
+const INTERACTIVE =
+  'button, a[href], input, textarea, select, [role="button"], [role="menuitem"], [role="tab"], [role="combobox"], [role="link"], [contenteditable]:not([contenteditable="false"]), [tabindex]:not([tabindex="-1"])';
+/** A press on an interactive element outside the tab row: always that element's, never claimed by the row. */
+const onControl = (t: EventTarget | null) => {
+  const hit = t instanceof Element ? t : null;
+  return !!hit && !hit.closest('[data-testid="panel-tabs"]') && !!hit.closest(INTERACTIVE);
+};
 const SWEEP_MS = 320;
 const AIM_MS = 200;
 type Box = { at: number; x0: number; x1: number; y0: number; y1: number };
@@ -193,6 +204,9 @@ function onSweptPress(e: PointerEvent) {
   const row = hit?.closest('[data-testid="panel-tabs"]');
   // on the row's free space now: the row's own handler arms; on the row's maximise / close buttons: theirs
   if (row && !hit?.closest(".pn-tab")) return;
+  // a control the person actually hit outside the row (the model pill, the places chip) always wins: only the
+  // header's bare background (and tabs still moving) can be claimed
+  if (onControl(hit)) return;
   const now = performance.now();
   if (row && !moving(now)) return;
   const aimed = (b: Box) => now - b.at <= AIM_MS && e.clientX >= b.x0 && e.clientX <= b.x1 && e.clientY >= b.y0 && e.clientY <= b.y1;
