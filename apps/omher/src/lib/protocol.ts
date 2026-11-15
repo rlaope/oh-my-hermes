@@ -83,6 +83,14 @@ export interface Msg {
   ts: number;
   /** user rows sent with "Reply there": the thread the person pointed the bot at. */
   reply_to?: ReplyRef | null;
+  /** assistant rows: the answer to an automation's delivered result (its inbound row is not sent). */
+  watch?: WatchTag;
+}
+
+/** The automation whose delivered result a Bot Chat answer replies to: its name and when it came in (unix s). */
+export interface WatchTag {
+  name: string;
+  ts: number;
 }
 
 /** A thread the bot was pointed at (`target` is Hermes' `platform:chat_id[:thread_id]`). */
@@ -606,7 +614,7 @@ export type BridgeEvent =
     })
   | (EventBase & { event: "skill"; name: string })
   | (EventBase & { event: "delta"; text: string })
-  | (EventBase & { event: "message"; id: string; text: string })
+  | (EventBase & { event: "message"; id: string; text: string; watch?: WatchTag })
   /** A folder chat's name from Hermes (its titler or /title); `session` names the folder chat. */
   | (EventBase & { event: "session.title"; title: string })
   | (EventBase & {
@@ -653,6 +661,9 @@ export type BridgeEvent =
       name: string;
       status: string;
       ts: number;
+      /** A bot-chat automation's run that handed its result to this Bot Chat: the answer arrives as a `message`
+       *  with `watch`, so the run itself draws no line. A silent run sends no `routine.ran` at all. */
+      delivered?: string;
     })
   /** A bot's jobs.json changed (a run, a pause, an edit): the Automations page re-reads. */
   | (EventBase & { event: "routines.update" })

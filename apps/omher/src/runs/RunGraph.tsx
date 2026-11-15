@@ -12,7 +12,7 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, typ
 import type { AgentRun } from "../lib/runs";
 import { t } from "../i18n";
 import { AgentIcon, ModelIcon, PrIcon } from "../ui";
-import { boxText, durationOf, estimate, factsOf, GEOMETRY, layoutBoxes, movedLines, statusOf, titleOf, titleParts, type BoxLayout, type Mark, type Measure, type Rect, type StatusIcon } from "./boxView";
+import { boxText, durationOf, estimate, factsOf, GEOMETRY, layoutBoxes, movedLines, statusOf, titleOf, titleParts, waitRows, type BoxLayout, type Mark, type Measure, type Rect, type StatusIcon } from "./boxView";
 import { reducedMotion } from "./format";
 import { openPr, prLabel, prLink, prState, prText } from "./pr";
 import type { NodePr } from "../lib/runs";
@@ -28,7 +28,7 @@ export interface BotModel {
 export const FONT = { title: "500 13px var(--font)", text: "400 12px var(--font)" };
 /** The panel shows this many rows of a long frontier before "Show all". */
 export const PANEL_CAP_ROWS = 8;
-/** The Dependencies list shows this many edges before "Show all". */
+/** The Dependencies list shows this many rows (one per node that waits) before "Show all". */
 export const DEPS_CAP = 12;
 const STAGGER = 60;
 const MAX_ENTRANCE = 900;
@@ -401,8 +401,9 @@ export function RunGraph({
     return s;
   }, [hover, lay]);
 
-  const deps = lay.shape.edges;
+  const deps = useMemo(() => waitRows(lay.shape), [lay]);
   const shownDeps = allDeps || deps.length <= DEPS_CAP + 2 ? deps : deps.slice(0, DEPS_CAP);
+  const nameOf = (id: string) => titleOf(byId.get(id)!);
   const live = lay.boxes.map((b) => byId.get(b.id)!).filter((n) => n.state === "running" && n.id !== open);
 
   const texts = new Map(lay.boxes.map((b) => [b.id, boxText(byId.get(b.id)!, run, lay, lay.inner, nowS, measureText, bot)]));
@@ -532,17 +533,57 @@ export function RunGraph({
     <div className="bv-secs" style={mode === "full" && lay.boxes.length ? { marginLeft: Math.min(...lay.boxes.map((b) => b.x)) } : undefined} onPointerDown={(e) => e.stopPropagation()}>
       {deps.length > 0 && (
         <section className="bv-sec" data-testid="run-deps" aria-label={t("graph.deps")}>
-          <h4>{t("graph.deps")}</h4>
-          {shownDeps.map((e) => (
-            <div key={`${e.from}>${e.to}`} className="bv-dep" data-testid="run-dep" data-from={e.from} data-to={e.to} title={`${titleOf(byId.get(e.from)!)} → ${titleOf(byId.get(e.to)!)}`}>
-              <span className="bv-dep-n">{titleOf(byId.get(e.from)!)}</span>
-              <svg className="bv-arrow" viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" role="img" aria-label="→">
-                <path d="M5 12h14M13 6l6 6-6 6" />
-              </svg>
-              <span className="bv-dep-n">{titleOf(byId.get(e.to)!)}</span>
-              {e.kind === "repair" && <span className="bx-dim"> ({t("graph.repair")})</span>}
-            </div>
-          ))}
+          <h4>
+            {t("graph.deps")}
+            <span className="bx-dim"> · {t("graph.depRows", { n: deps.length })}</span>
+          </h4>
+          {shownDeps.map((r) => {
+            const st = statusOf(byId.get(r.id)!, run);
+            const through = r.through.length ? t("graph.through", { n: r.through.length }) : "";
+            const full = [...r.on.map((o) => nameOf(o.id)), ...r.through.map(nameOf)].join(", ");
+            return (
+              <div
+                key={r.id}
+                className={`bv-dep s-${st.tone}${hover === r.id ? " on" : ""}`}
+                data-testid="run-dep"
+                data-node={r.id}
+                data-on={r.on.map((o) => o.id).join(" ")}
+                data-through={r.through.join(" ")}
+                title={`${nameOf(r.id)} ${t("graph.waitsFor")}: ${full}`}
+                onMouseEnter={() => setHover(r.id)}
+                onMouseLeave={() => setHover(null)}
+                onClick={() => onOpen(r.id)}
+              >
+                <span className="bv-dep-t">
+                  <StatusGlyph icon={st.icon} label={st.word} />
+                  <span className="bv-dep-n">{nameOf(r.id)}</span>
+                </span>
+                <span className="bv-dep-on">
+                  <span className="bv-dep-k">{t("graph.waitsFor")}</span>
+                  <span className="bv-dep-l">
+                    {r.on.map((o, i) => {
+                      const ps = statusOf(byId.get(o.id)!, run);
+                      const last = i === r.on.length - 1 && !through;
+                      // a "·" stays with the name before it: a wrapped line starts with a status icon, under the first
+                      return (
+                        <span key={o.id} className={`bv-dep-p s-${ps.tone}`} data-testid="run-dep-on" data-node={o.id}>
+                          <StatusGlyph icon={ps.icon} label={ps.word} />
+                          {nameOf(o.id)}
+                          {o.kind === "repair" && <span className="bx-dim"> ({t("graph.repair")})</span>}
+                          {!last && <span className="bv-dep-k"> ·</span>}
+                        </span>
+                      );
+                    })}
+                    {through && (
+                      <span className="bv-dep-p bx-dim" title={r.through.map(nameOf).join(", ")}>
+                        {through}
+                      </span>
+                    )}
+                  </span>
+                </span>
+              </div>
+            );
+          })}
           {deps.length > DEPS_CAP + 2 && (
             <button type="button" className="bv-more inline" onClick={() => setAllDeps((v) => !v)} data-testid="run-deps-more">
               {allDeps ? t("graph.fewer") : `${t("graph.more", { n: deps.length - DEPS_CAP })} · ${t("graph.all", { n: deps.length })}`}

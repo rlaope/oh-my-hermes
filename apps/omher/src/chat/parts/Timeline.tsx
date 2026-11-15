@@ -19,6 +19,7 @@ import { LiveFace, TypingRow, awaitingFirstToken } from "./Typing";
 import { liveFaceRow } from "./liveFace";
 import { ActivityFallback, CardFallback, ElsewhereFallback, RoutineFallback } from "./fallbacks";
 import { PluginAddedCard, RoutineAddedCard } from "../../pages/ChatCards";
+import { WatchLine } from "../../routines/WatchLine";
 import { t } from "../../i18n";
 import { useBotReady } from "../connect/ready";
 
@@ -125,7 +126,15 @@ export function Timeline({
         );
       }
       case "assistant":
-        // the face shows on the first bot bubble after something else (the user, a day line, a card)
+        // the face shows on the first bot bubble after something else (the user, a day line, a card); an automation's
+        // answer has its "Watch · <name>" line above it
+        if (it.watch)
+          return (
+            <>
+              <WatchLine name={it.watch.name} ts={it.watch.ts} text={it.text} />
+              <Bubble item={it} bot={bot.name} face faceEl={face} />
+            </>
+          );
         return <Bubble item={it} bot={bot.name} face={!botSpoke(prev)} faceEl={face} quote={quoteFor(items, at)} onQuote={showMessage} />;
       case "activity": {
         const C = slots.activity ?? ActivityFallback;

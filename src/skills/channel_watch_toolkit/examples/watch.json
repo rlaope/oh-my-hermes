@@ -1,0 +1,8 @@
+{
+  "name": "launch-questions",
+  "platform": "slack",
+  "channels": [{"id": "C0123456789", "name": "#launch"}],
+  "keywords": ["launch", "release"],
+  "daily_wake_cap": 24,
+  "slack_workspace_url": "https://example.slack.com"
+}

@@ -39,6 +39,9 @@ RULES = (
     "the bridge never opens the person's files.",
     "on the person's press it may instead steer the running turn through Hermes' own `session.steer` (`chat.steer`), in the main chat only and never a folder chat,",
     "A steer Hermes refuses is sent as a normal message after the turn; the bridge never sends it another way.",
+    "A bot that an automation delivers to (`deliver: bot-chat:<bot>` in `cron/jobs.json`) has its existing `Bot Chat`"
+    " attached the same way, without the person opening it,",
+    "the bridge reads that chat's own history (`session.history`) after the turn and nothing else.",
     "omher talks only to the person's own Hermes gateway on this machine, over loopback,",
     "omher makes no LLM or API call itself. Every model call is Hermes'.",
     "The bridge listens on 127.0.0.1 only and refuses any connection that lacks the random token",
@@ -174,6 +177,9 @@ RULES = (
     "It reads `cron/jobs.json` and never writes it;",
     "Running or editing an automation is a chat message to the bot:",
     "omher never imitates an edit by removing and adding a job.",
+    "A job whose script is the channel-watch collector (`channel_watch_<watch>.py`) is listed as a watch:",
+    "the newest 20 run records Hermes keeps in `cron/output/<job id>/`, bounded, read-only and never through a link.",
+    "+ New watch only sends one sentence the person filled in to that bot's chat and opens it; it creates no job itself,",
     "omher changes a bot's plugins only through Hermes' own `plugins.manage` on that bot's gateway (`list`, `toggle`,"
     " `inspect`, `install` from the curated catalog by name, `update`, `remove`), only when the person presses a button,",
     "`install` carries the pin `inspect` returned.",
@@ -567,6 +573,18 @@ class BridgeSubmitsOnlyToTheMainChat(unittest.TestCase):
         calls = re.findall(r"self\.(_call|_submit|_target)\(", steer)
         self.assertEqual(calls, ["_call"])
         self.assertIn('"chat.steer"', self.source.split("PEER_FORWARD = frozenset({", 1)[1].split("})", 1)[0])
+
+    def test_watch_attach_never_makes_a_bot_chat_and_reads_only_history(self) -> None:
+        """Rule 3: a bot an automation delivers to is attached with existing_only only; its answer is tagged from
+        that chat's own session.history, a read."""
+        fns = {f.name: ast.unparse(f) for f in ast.walk(self.tree) if isinstance(f, (ast.FunctionDef, ast.AsyncFunctionDef))}
+        attach = fns["attach_watch_targets"]
+        self.assertIn("existing_only=True", attach)
+        self.assertNotIn("session.create", attach)
+        self.assertNotIn("_main(", attach.replace("_ensure_main(", ""))
+        tag = fns["_watch_tag"]
+        methods = set(re.findall(r"self\._call\(conn, '([a-z_.]+)'", tag))
+        self.assertEqual(methods, {"session.history"})
 
     def test_profile_writes_are_only_name_and_picture(self) -> None:
         """Every Hermes profile method the bridge names is a read, except set_asset (the avatar)."""
@@ -1468,6 +1486,20 @@ class AutomationsAndPlugins(unittest.TestCase):
         for bad in ("https://github.com/x/y", "x/y", "git@github.com:x/y.git", "../x"):
             self.assertIsNone(re.fullmatch(pattern, bad), bad)
         self.assertIn("inspected_sha=sha", ast.unparse(self._fn("op_plugins_install")))
+
+    def test_watch_files_are_only_read_bounded_and_not_through_links(self) -> None:
+        """Rule 24: a channel watch's config and run records are read, bounded, never written or followed."""
+        self.assertEqual(ast.literal_eval(self._const("WATCH_RUNS")), 20)
+        for name in ("_watch_config", "_watch_runs", "read_watch", "_script_error", "_alerted"):
+            body = ast.unparse(self._fn(name))
+            for write in ("write_text", "write_bytes", "unlink", "rename", "replace(", "os.remove", "dump(", "mkdir",
+                          "'w'", "'wb'", "'a'", "_call(", "cron.manage"):
+                self.assertNotIn(write, body, f"{name}: {write}")
+        for name in ("_watch_config", "_watch_runs"):
+            body = ast.unparse(self._fn(name))
+            self.assertIn("is_symlink()", body, name)
+            self.assertRegex(body, r"\.read\(WATCH_(CONFIG|RUN)_MAX\)", name)
+        self.assertIn("JOB_ID.fullmatch(job_id)", ast.unparse(self._fn("_watch_runs")))
 
     def test_jobs_json_is_only_read(self) -> None:
         readers = {f.name for f in ast.walk(self.tree) if isinstance(f, (ast.FunctionDef, ast.AsyncFunctionDef))
