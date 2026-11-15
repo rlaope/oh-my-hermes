@@ -25,12 +25,14 @@ one before it, so a block is flushed only after every block above it.
 Assistant text opens with a bold `● ` in the text colour on its first row, and
 every later row of that reply, however many flushes it arrives in, is indented
 to match, so a reply reads as one block beside the dim `❯ ` of the prompt above
-it. Three kinds of block hang on a rail in the left gutter (`RAIL`: a thin
+it. Two kinds of block hang on a rail in the left gutter (`RAIL`: a thin
 bar `┃` in the block's colour and a space; a bar meets the ones above and
-below it, so a block's rail is one line): your prompt's in dim grey,
+below it, so a block's rail is one line): your prompt's in dim grey, and
 each tool call's in the launch look's `Theme.accent` (a failed or denied one's
-red, as its band is; its mark says every other state), and a reply's in the
-skin's accent, the banner's colour (`Theme.brand`). Nothing has a band behind it.
+red, as its band is; its mark says every other state). A reply has no rail
+(owner, 2026-11-15): its `⚚ Hermes` header in the skin's accent, the banner's
+colour (`Theme.brand`), starts at the left edge and its text sits at the
+reply's indent, so it reads apart from the railed blocks. Nothing has a band behind it.
 
 A slash command the person runs is a block of its own: `❯ /name arg` on the prompt's dim
 rail, in the hint colour, then what it printed under `⎿`, each part in its level's colour
@@ -237,8 +239,8 @@ TOOL_MARKS = {
     TOOL_RUNNING: "○", TOOL_OK: "●", TOOL_ERROR: "✗", TOOL_DENIED: "✗", TOOL_INTERRUPTED: "▪", TOOL_RECORDED: "●",
     TOOL_GENERATING: "◌",
 }
-RAIL = "┃ "  # the left rail of a prompt, a tool call or a reply: a thin bar in the block's colour, and a space
-RAIL_LIGHT = "│"  # your prompt's bar without colour, so it differs from a reply's
+RAIL = "┃ "  # the left rail of a prompt or a tool call (a reply has none): a thin bar in the block's colour, and a space
+RAIL_LIGHT = "│"  # your prompt's bar without colour, so it differs from a tool call's
 GUTTER = Style(gutter=True)  # a rail's or a reply margin's cells, which the pager's copy leaves out
 # A running tool's mark alternates the running blue and dim this often, counted from its own start, so calls that run
 # side by side pulse each on its own. Only the live region is drawn with a clock; scrollback gets the settled mark.
@@ -1210,26 +1212,26 @@ def _command_rows(block: CommandBlock, width: int, theme: Theme, expanded: bool)
 
 
 def _marked(rows: list[Line], opens_block: bool, theme: Theme, width: int, model: str | None = "") -> list[Line]:
-    """Assistant rows on the reply's rail in the skin's accent, every row at the reply's indent and the rail alone on
-    a blank row, so a reply's rail is one line; none wider than `width`. A block opens with who wrote it: the header
-    `⚚ Hermes · <model>` (bold in the rail's hue, the model muted, its last path segment), or with
-    ASSISTANT_HEADER False a `⚚ ` on its first row."""
+    """Assistant rows with no rail (owner, 2026-11-15: a reply reads apart from the prompts and tool calls that hang
+    on rails better without one of its own): every row at the reply's indent, a blank row left blank; none wider than
+    `width`. A block opens with who wrote it: the header `⚚ Hermes · <model>` at the left edge (bold in the skin's
+    accent, the model muted, its last path segment), the name over the text's column with the mark hanging left of
+    it; or with ASSISTANT_HEADER False a `⚚ ` on its first row."""
     rest: Line = (Span(ASSISTANT_INDENT, GUTTER),)
-    rail = _rail(theme.brand)
     name = replace(theme.brand, bold=True)
     first, head = rest, []
     if opens_block and ASSISTANT_HEADER and rows:
         said = (Span(f" · {model.rsplit('/', 1)[-1]}", theme.muted),) if model else ()
-        head = [_within((*rail, Span(f"{AGENT_MARK} {AGENT_NAME}", name), *said), width)]
+        head = [_within((Span(f"{AGENT_MARK} {AGENT_NAME}", name), *said), width)]
     elif opens_block:
         first = (Span(f"{AGENT_MARK} ", name),)
-    return head + [_within((*rail, *(first if opens_block and index == 0 else rest), *row), width) if row else rail[:1]
+    return head + [_within((*(first if opens_block and index == 0 else rest), *row), width) if row else ()
                    for index, row in enumerate(rows)]
 
 
 def _reply_width(width: int) -> int:
-    """The cells left for reply text beside its rail and margin."""
-    return max(1, width - len(RAIL) - len(ASSISTANT_INDENT))
+    """The cells left for reply text beside its margin."""
+    return max(1, width - len(ASSISTANT_INDENT))
 
 
 def _assistant_rows(block: AssistantBlock, width: int, theme: Theme) -> list[Line]:
@@ -1379,7 +1381,7 @@ def rail_cell(style: Style, faint: bool = False) -> Span:
     """A rail's cell: the thin bar `┃` in `style`'s colour (owner, 2026-10-30: the painted full cell of #2371 read too
     heavy; the README's `┃` is the look wanted). A terminal's own selection copies the bar; the pager's copy leaves
     the gutter out. Without colour a `faint` one (your prompt's, which its `❯` marks anyway) is the light `│`, so a
-    reply's bar still differs from it."""
+    tool call's bar still differs from it."""
     bar = RAIL_LIGHT if faint and style.depth == NO_COLOR else RAIL[0]
     return Span(bar, Style(fg=style.fg, depth=style.depth, gutter=True))
 

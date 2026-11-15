@@ -1126,6 +1126,9 @@ All notable changes will be documented here.
   or a credential pool exists. When neither can be seen, the refusal names the variable to set or
   `hermes auth add <id>` instead of "lacks safe observed provider auth". A key kept only in Hermes' `.env` file is not
   visible to OMH; export it in the shell that runs omh. Reported by @MarinWasAsleep in #2882.
+- **An OMH TUI reply no longer hangs on a rail.** The `⚚ Hermes · <model>` header starts at the left edge and the
+  reply's text sits two cells in, with no `┃` beside it, so a reply reads apart from your prompts and the tool calls,
+  which keep their rails. The two cells the bar took go to the reply's text, and a copy still leaves the margin out.
 
 ## 4.0.7 - 2026-11-09
 
