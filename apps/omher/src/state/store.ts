@@ -950,6 +950,14 @@ export const chatRoute = (key: string): ChatRoute | undefined => chatRoutes.get(
 export const folderKey = (bot: string, session: string) => `fold:${bot}:${session}`;
 /** True for a SESSIONS chat key (not a bot's main chat). */
 export const isSessionChat = (key: string) => key.startsWith("fold:") || key.startsWith("agent:");
+/** Where a Hermes chat's words go on the bridge: a bot's main chat (`<bot>`) or its folder chat / thread
+ *  (`fold:<bot>:<session>`, the bridge's `session=`). The steer queue sends, steers and stops through this. */
+export function chatTarget(key: string): { bot: string; session?: string } {
+  if (!key.startsWith("fold:")) return { bot: key };
+  const rest = key.slice(5);
+  const at = rest.indexOf(":");
+  return { bot: rest.slice(0, at), session: rest.slice(at + 1) };
+}
 
 function reduceEvent(state: AppState, ev: BridgeEvent, now: number): AppState {
   if (ev.session && ev.event !== "folder.closed") {
@@ -1959,16 +1967,17 @@ export function createStore(bridge: BridgeLike, opts: StoreOptions = {}): Store 
       dispatch({ type: "queue.take", bot, id, now: now() });
       if (!p) return;
       held.delete(id);
+      const to = chatTarget(bot);
       try {
         let wire = p.wire;
         if (p.files?.length) {
           const results: AttachResult[] = [];
-          for (const f of p.files) results.push(await bridge.request("chat.attach", { bot, kind: f.attach, name: f.name, data_base64: await f.read() }));
+          for (const f of p.files) results.push(await bridge.request("chat.attach", { bot: to.bot, kind: f.attach, name: f.name, data_base64: await f.read() }));
           wire = toWire(promptText(p.text, results), skillNames.get(bot) ?? []);
         }
         // queued: when Hermes is still busy (its own next turn: a steer it took during the final answer, or one held
         // through a compression), this waits behind it in Hermes' FIFO instead of steering or interrupting it
-        await bridge.request("chat.send", p.reply_to ? { bot, text: wire, reply_to: p.reply_to, queued: true } : { bot, text: wire, queued: true });
+        await bridge.request("chat.send", p.reply_to ? { ...to, text: wire, reply_to: p.reply_to, queued: true } : { ...to, text: wire, queued: true });
         idleLater(bot, id);
       } catch (e) {
         dispatch({ type: "send.failed", bot, id, error: errText(e) });
@@ -1997,6 +2006,14 @@ export function createStore(bridge: BridgeLike, opts: StoreOptions = {}): Store 
   /** A row of `bot` whose steer got no answer (it waits for Send or Delete): the text it carries, or null. */
   const unknownRow = (bot: string, id: string) =>
     state.chats[bot]?.items.some((i) => i.kind === "user" && i.id === id && i.steerUnknown) ? (held.get(id) ?? null) : null;
+  /** Typed in chat `key` (a bot's main chat or a thread) while its turn runs: held (steer queue, the ↵ mark) and sent
+   *  when the turn ends, instead of now. False when nothing runs there: send it now. */
+  const holdIfBusy = (key: string, id: string, p: { text: string; wire: string; reply_to?: string; files?: OutFile[] }, row: Extract<Action, { type: "local.user" }>) => {
+    if (!mustHold(state, key)) return false;
+    held.set(id, { bot: key, ...p });
+    dispatch({ ...row, held: true });
+    return true;
+  };
   const fail = (e: unknown) => dispatch({ type: "error", message: errText(e) });
   const botArg = (bot?: string) => bot ?? state.selectedBot;
 
@@ -2231,7 +2248,7 @@ export function createStore(bridge: BridgeLike, opts: StoreOptions = {}): Store 
         opts.onEvent?.(ev.session ? { ...ev, bot: folderKey(ev.bot, ev.session) } : ev, state);
         for (const fn of [...eventFns]) fn(ev);
         if (ev.event === "elsewhere.update") void loadElsewhere(ev.bot);
-        if (ev.event === "turn.end" && !ev.session) pruneHeld(ev.bot);
+        if (ev.event === "turn.end") pruneHeld(ev.session ? folderKey(ev.bot, ev.session) : ev.bot);
         // After a turn the person pointed at a thread, re-read the places so the bot's new reply shows there.
         if (ev.event === "turn.end" && lastUserReplied(state, ev.bot)) void loadElsewhere(ev.bot);
         if (ev.event === "routine.ran") void loadRoutines(ev.bot);
@@ -2329,10 +2346,8 @@ export function createStore(bridge: BridgeLike, opts: StoreOptions = {}): Store 
       const chip = state.replyTo[bot] ?? null;
       const reply = chip ? { source: chip.source, label: chip.place } : undefined;
       const wire = toWire(t, skillNames.get(bot) ?? []);
-      if (mustHold(state, bot)) {
-        // a turn runs: omher holds it (steer queue) and sends it when the turn ends
-        held.set(id, { bot, text: t, wire, ...(chip ? { reply_to: chip.session_id } : {}) });
-        dispatch({ type: "local.user", bot, id, text: t, now: now(), reply, sent: wire, skills: tokenNames(t, bot), held: true });
+      // a turn runs: omher holds it (steer queue) and sends it when the turn ends
+      if (holdIfBusy(bot, id, { text: t, wire, ...(chip ? { reply_to: chip.session_id } : {}) }, { type: "local.user", bot, id, text: t, now: now(), reply, sent: wire, skills: tokenNames(t, bot) })) {
         if (chip) dispatch({ type: "reply.set", bot, chip: null });
         return;
       }
@@ -2357,8 +2372,7 @@ export function createStore(bridge: BridgeLike, opts: StoreOptions = {}): Store 
         const id = `local-${++localSeq}`;
         const t = text.trim();
         const shown: SentFile[] = files.map(({ name, size, kind, url }) => ({ name, size, kind, url }));
-        held.set(id, { bot, text, wire: toWire(t, skillNames.get(bot) ?? []), files });
-        dispatch({ type: "local.user", bot, id, text: t, now: now(), files: shown, skills: tokenNames(t, bot), held: true });
+        holdIfBusy(bot, id, { text, wire: toWire(t, skillNames.get(bot) ?? []), files }, { type: "local.user", bot, id, text: t, now: now(), files: shown, skills: tokenNames(t, bot) });
         return;
       }
       const results: AttachResult[] = [];
@@ -2387,7 +2401,7 @@ export function createStore(bridge: BridgeLike, opts: StoreOptions = {}): Store 
       if (!state.chats[bot]?.turn || interrupting.has(bot)) return;
       interrupting.add(bot);
       try {
-        await bridge.request("chat.interrupt", { bot });
+        await bridge.request("chat.interrupt", chatTarget(bot));
       } catch (e) {
         fail(e);
       } finally {
@@ -2408,7 +2422,7 @@ export function createStore(bridge: BridgeLike, opts: StoreOptions = {}): Store 
       let ok = false;
       let unknown = false;
       try {
-        const status = (await bridge.request("chat.steer", { bot, text: p.wire })).status;
+        const status = (await bridge.request("chat.steer", { ...chatTarget(bot), text: p.wire })).status;
         ok = status === "queued";
         // Hermes could not say whether the agent saw it: the same as no answer, the person decides
         unknown = status === "uncertain";
@@ -2713,7 +2727,10 @@ export function createStore(bridge: BridgeLike, opts: StoreOptions = {}): Store 
     async threadSend(bot, thread, text) {
       const key = threadRoute(bot, thread);
       const id = `local-${++localSeq}`;
-      dispatch({ type: "local.user", bot: key, id, text: text.trim(), now: now() });
+      const t = text.trim();
+      // typed while the thread's turn runs: the same steer queue as the main chat (held, ↵ menu, sent in order)
+      if (holdIfBusy(key, id, { text: t, wire: t }, { type: "local.user", bot: key, id, text: t, now: now() })) return;
+      dispatch({ type: "local.user", bot: key, id, text: t, now: now() });
       const row = (state.threads[bot] ?? []).find((r) => r.thread === thread);
       // the row reads the first words at once; Hermes' own title replaces them when it lands
       if (row && !row.title) dispatch({ type: "thread.upsert", bot, row: { ...row, title: firstWords(text), last: now() / 1000 } });

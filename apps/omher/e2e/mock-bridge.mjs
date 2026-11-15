@@ -34,7 +34,8 @@
 // recorded answer for the bot's next main-chat turn. Its top-level ```omher-thread``` blocks open a thread each (task
 // sent there, `thread.split` event), an ```omher-thread-route``` block to an open thread sends `thread.route`; the
 // `message` comes without the blocks, as the bridge sends it.
-// mock.steerMode {bot, mode: "accept"|"reject"} (what chat.steer answers while a turn runs; with no turn it is
+// mock.steerMode {bot, mode: "accept"|"reject"} (what chat.steer answers while a turn runs, in the main chat or with
+// `session` a folder chat / thread; with no turn it is
 // always rejected, as Hermes' session.steer), mock.endTurn {bot, outcome?} (a manual turn ends, as Hermes ends it),
 // mock.steers (every steer the mock took),
 // mock.ready {bot, ok, signIn?} (what `bots.ready` answers for a bot: ok false = Hermes says it cannot answer; with
@@ -1244,7 +1245,7 @@ const OPS = {
     if (p.session !== undefined) {
       const f = needFolder(p, b);
       const key = folderTurnKey(b.name, p.session);
-      if (turns[key]) throw new OpError("busy", "a turn is running");
+      if (turns[key] && p.queued !== true) throw new OpError("busy", "a turn is running");
       if (f.thread) {
         threadHistory.get(p.session)?.push({ id: nextId("u"), role: "user", text, ts: now() });
         if (!f.title) {
@@ -1253,7 +1254,9 @@ const OPS = {
           setTimeout(() => broadcast({ event: "session.title", bot: b.name, session: p.session, title: f.title }), 0);
         }
       }
-      startTurn(key, text, f);
+      // a message the app held (steer queue, `queued`) waits behind a still-running turn, as Hermes' own FIFO does
+      if (turns[key]) (queues[key] ??= []).push(text);
+      else startTurn(key, text, f);
       return { input_id };
     }
     history[b.name].push({ id: nextId("u"), role: "user", text, ts: now(), ...(reply_to ? { reply_to } : {}) });
@@ -1261,13 +1264,14 @@ const OPS = {
     else startTurn(b.name, text);
     return { input_id };
   },
-  // Hermes' session.steer on the main chat only: taken while a turn runs, else rejected; never sent another way
+  // Hermes' session.steer on the main chat or a folder chat / thread the bridge made (any other id: not_found):
+  // taken while that chat's turn runs, else rejected; never sent another way
   "chat.steer": (p) => {
     const b = needBot(p);
     const text = needStr(p, "text");
-    if (p.session !== undefined) throw new OpError("bad_request", "steer goes to the bot's main chat only");
-    if (!turns[b.name] || steerMode.get(b.name) === "reject") return { status: "rejected" };
-    steers.push({ bot: b.name, text });
+    const key = p.session !== undefined ? (needFolder(p, b), folderTurnKey(b.name, p.session)) : b.name;
+    if (!turns[key] || steerMode.get(b.name) === "reject") return { status: "rejected" };
+    steers.push({ bot: b.name, text, ...(p.session !== undefined ? { session: p.session } : {}) });
     return { status: "queued" };
   },
   "chat.interrupt": (p) => {
@@ -1991,7 +1995,8 @@ function endTurn(bot, outcome, { drop = false } = {}) {
   ev(bot, "turn.end", { outcome });
   ev(bot, "bot.status", { status: bots[bot]?.status, running: false });
   const next = queues[bot]?.shift();
-  if (next !== undefined) setTimeout(() => startTurn(bot, next), 50);
+  const [, session] = bot.split("\u0000");
+  if (next !== undefined) setTimeout(() => startTurn(bot, next, session !== undefined ? folders.get(session) : undefined), 50);
 }
 
 function say(bot, text) {

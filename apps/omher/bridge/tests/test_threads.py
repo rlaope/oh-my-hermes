@@ -183,6 +183,29 @@ class Threads(BridgeCase):
             self.assertEqual(c.find("session.archive"), [])
             self.assertEqual([x["session_id"] for x in c.find("prompt.submit")], [])
 
+    async def test_steer_in_a_thread_carries_that_threads_generation_and_a_foreign_id_is_refused(self):
+        """Steer queue in a thread: `chat.steer {session}` steers that thread's running turn (its runtime id and its
+        own execution_generation, not the main chat's); an id the bridge did not create or list is refused."""
+        from test_steer_queue import steer_answers
+        async with ThreadEnv() as env:
+            s = await self.open(env)
+            tid = ok(await s.req("thread.create", bot="kami"))["thread"]
+            ok(await s.req("chat.send", bot="kami", session=tid, text="first running task"))
+            c = env.clients["kami"]
+            c.push("message.start", {}, sid="rt-" + tid, execution_generation=7)
+            await s.until(lambda ev: any(e["event"] == "turn.start" and e.get("session") == tid for e in ev))
+            steer_answers(env, {"status": "queued"})
+            self.assertEqual(ok(await s.req("chat.steer", bot="kami", session=tid, text="keep the old timeout")),
+                             {"status": "queued"})
+            [call] = c.find("session.steer")
+            self.assertEqual((call["session_id"], call["text"], call["execution_generation"]),
+                             ("rt-" + tid, "keep the old timeout", 7))
+            for sid in ("someone-elses-session", MAIN_STORED, "rt-" + tid):
+                r = await s.req("chat.steer", bot="kami", session=sid, text="x")
+                self.assertEqual(r["error"]["code"], "not_found", sid)
+            self.assertEqual(len(c.find("session.steer")), 1)
+            self.assertEqual([x["session_id"] for x in c.find("prompt.submit")], ["rt-" + tid])
+
     async def test_remove_interrupts_then_archives_in_order(self):
         async with ThreadEnv() as env:
             s = await self.open(env)

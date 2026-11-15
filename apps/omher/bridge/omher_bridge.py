@@ -5637,24 +5637,24 @@ class Bridge:
         return {}
 
     async def op_chat_steer(self, p) -> dict:
-        """Steer the running turn of the bot's main chat through Hermes' own ``session.steer``: the text joins the
-        turn's next tool result, no new turn starts. Main chat only (never a folder chat or any other session).
+        """Steer the running turn of the bot's main chat, or with ``session`` of a folder chat or thread this bridge
+        created (``_target``, as for send and interrupt; any other id is refused), through Hermes' own
+        ``session.steer``: the text joins the turn's next tool result, no new turn starts.
         Hermes' answer goes back as: ``queued`` = taken; ``rejected`` = Hermes confirmed no agent saw it (its
         ``delivered: false``, the old idle reply, or a gateway error answer such as 4002/4010/invalid params), so
         the app may send it as a normal message after the turn; ``uncertain`` = a plain live-agent ``rejected``,
         which Hermes' contract says may follow delivery, so it is never re-sent on its own. A lost answer (bot
         offline, timeout) stays an error for the same reason. Nothing is sent another way here. The call carries
-        the turn's ``execution_generation``, which the canonical gateway requires (as for ``session.interrupt``)."""
+        that chat's turn's ``execution_generation``, which the canonical gateway requires (as for
+        ``session.interrupt``)."""
         text = p.get("text")
         if not isinstance(text, str) or not text.strip():
             raise BridgeError("bad_request", "missing text")
-        if p.get("session") is not None:
-            raise BridgeError("bad_request", "steer goes to the bot's main chat only")
         conn = await self._conn(p.get("bot"))
-        main = await self._main(conn)
+        main, chat = await self._target(conn, p)
         try:
             res = await self._call(conn, "session.steer", session_id=main, text=text,
-                                   execution_generation=await self._generation(conn, main))
+                                   execution_generation=await self._generation(conn, main, chat))
         except Exception as e:
             if not _named(e, "GatewayRPCError"):
                 raise

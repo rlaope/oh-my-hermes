@@ -1,5 +1,5 @@
-"""Steer queue: the bridge's `chat.steer` op (Hermes' `session.steer`, main chat only; a refusal is passed back,
-never sent another way)."""
+"""Steer queue: the bridge's `chat.steer` op (Hermes' `session.steer`, in the main chat or a folder chat / thread the
+bridge created, never any other session; a refusal is passed back, never sent another way)."""
 from __future__ import annotations
 
 import sys
@@ -110,20 +110,29 @@ class ChatSteer(BridgeCase):
             self.assertEqual([p.get("queued") for p in sub], [True, None])
             self.assertEqual({p["session_id"] for p in sub}, {MAIN_RUNTIME})
 
-    async def test_refused_for_folder_chats_and_any_other_session(self):
+    async def test_a_folder_chat_takes_it_any_other_session_is_refused(self):
         with tempfile.TemporaryDirectory() as folder:
             async with Env() as env:
                 s = await self.open(env)
                 fid = (await s.req("folder.open", bot="kami", cwd=folder))["result"]["session"]
-                for sid in (fid, "20261108_235229_aaaf70c4", MAIN_RUNTIME, 3):
+                # an id this bridge did not create (a stored session, the main chat's runtime id, not a string)
+                for sid in ("20261108_235229_aaaf70c4", MAIN_RUNTIME, 3):
                     r = await s.req("chat.steer", bot="kami", session=sid, text="x")
-                    self.assertEqual(r["error"]["code"], "bad_request", sid)
+                    self.assertFalse(r["ok"], sid)
+                    self.assertEqual(r["error"]["code"], "not_found", sid)
+                c = env.clients["kami"]
+                self.assertEqual(c.find("session.steer"), [])
+                steer_answers(env, {"status": "queued"}, {"status": "queued"})
+                # the folder chat the bridge created: its own runtime id
+                r = await s.req("chat.steer", bot="kami", session=fid, text="x")
+                self.assertTrue(r["ok"], r)
                 # a client-supplied session_id is never used: the steer still targets the main chat
-                steer_answers(env, {"status": "queued"})
                 r = await s.req("chat.steer", bot="kami", text="x", session_id="20261108_235229_aaaf70c4")
                 self.assertTrue(r["ok"], r)
-                c = env.clients["kami"]
-                self.assertEqual([p["session_id"] for p in c.find("session.steer")], [MAIN_RUNTIME])
+                ids = [p["session_id"] for p in c.find("session.steer")]
+                self.assertEqual(len(ids), 2)
+                self.assertNotEqual(ids[0], MAIN_RUNTIME)
+                self.assertEqual(ids[1], MAIN_RUNTIME)
                 self.assertEqual(c.find("prompt.submit"), [])
 
     async def test_needs_text(self):
