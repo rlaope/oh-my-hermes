@@ -38,6 +38,12 @@ describe("harnessOf", () => {
     [{ model: "z-ai/glm-5.3", provider: "og" }, "hermes", "model"],
     [{ kind: "hermes" }, "hermes", "model"],
     [{ kind: "codex" }, "codex", "executor"],
+    // a named kind no row knows: neutral by that kind, never Hermes because it reported a model
+    [{ kind: "mystery-agent", model: "claude-opus-5-5" }, "generic", "executor"],
+    [{ kind: "hermes", model: "claude-opus-5-5" }, "hermes", "model"],
+    [{ kind: "", model: "claude-opus-5-5" }, "hermes", "model"],
+    [{ kind: "hermes", executor: "mystery-agent", model: "claude-opus-5-5" }, "generic", "executor"],
+    [{ executor: "", model: "claude-opus-5-5" }, "hermes", "model"],
     // nothing known
     [{}, "generic", "none"],
     [{ executor: "" }, "generic", "none"],
