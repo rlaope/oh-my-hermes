@@ -1107,6 +1107,25 @@ All notable changes will be documented here.
   unmeasured, never zero, and the share of timed tasks the variant won carries its denominator. `v1` decisions and
   store history still parse (timing reads as unmeasured), and a `v1` decision can be superseded by `v2`. No speed
   figure has been measured with it yet.
+- **Running OMH from your home directory no longer stalls every later tool call.** The consistency check's file
+  index never starts a walk at the home directory or above it (`/`, `/Users`): from a background gateway such a walk
+  reaches macOS privacy-protected folders, where one `open()` can wait forever on a prompt no one sees. That root is
+  treated as too large to index; project roots below home index as before. Reported and first fixed by @skihyeon in #2854.
+- **OMH tool results keep non-ASCII text as written** instead of `\uXXXX` escapes, which cuts their token cost for
+  Korean, Chinese, Japanese and other non-Latin text on every later model call. Reported and first fixed by @yqm-307 in #2884.
+- **omher's model picker completes a switch Hermes' selection guard asks to confirm** (a large-context, cost or
+  data-policy switch): the pick itself is the confirmation, sent once with Hermes' token on the same session revision.
+  The picker also shows the chat's live model instead of the profile default. Reported and first fixed by
+  @Pluronymous-ODK in #2883 and #2886.
+- **omher plugin cards have a Details button** that opens the plugin sheet without installing anything, and the sheet
+  shows the whole description. Reported and first fixed by @soares-daniel in #2833.
+- **omher on Windows finds Hermes' Python through the package-manager launcher** (`hermes.exe` or `hermes.cmd`, read
+  without running it), so a PM or source install with no venv no longer shows "Hermes Agent isn't on this computer".
+  Reported by @MarinWasAsleep in #2885.
+- **`omh setup --model-setup` accepts a provider configured under Hermes `providers:`** when its key variable is set
+  or a credential pool exists. When neither can be seen, the refusal names the variable to set or
+  `hermes auth add <id>` instead of "lacks safe observed provider auth". A key kept only in Hermes' `.env` file is not
+  visible to OMH; export it in the shell that runs omh. Reported by @MarinWasAsleep in #2882.
 
 ## 4.0.7 - 2026-11-09
 
