@@ -1286,4 +1286,11 @@ export const ko: Record<Key, string> = {
   "thread.st.idle": "대기",
   "thread.of": "{name}의 스레드",
   "thread.newHint": "{name}와 새 스레드예요. 무엇에 관한 건지 말해 주세요.",
+  "thread.link": "스레드:",
+  "thread.linkOpen": "{title} 스레드 열기",
+  "thread.routeAsk": "이 메시지를 {title}(으)로 보낼까요?",
+  "thread.routeSend": "거기로 보내기",
+  "thread.routeKeep": "여기 두기",
+  "thread.routeSent": "{title}(으)로 보냈어요",
+  "thread.routeKept": "여기 뒀어요",
 };

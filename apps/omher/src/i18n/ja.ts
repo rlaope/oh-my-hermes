@@ -1286,4 +1286,11 @@ export const ja: Record<Key, string> = {
   "thread.st.idle": "待機中",
   "thread.of": "{name}のスレッド",
   "thread.newHint": "{name}との新しいスレッドです。何についてか伝えてください。",
+  "thread.link": "スレッド:",
+  "thread.linkOpen": "スレッド {title} を開く",
+  "thread.routeAsk": "これを {title} に送りますか?",
+  "thread.routeSend": "そちらに送る",
+  "thread.routeKeep": "ここに残す",
+  "thread.routeSent": "{title} に送りました",
+  "thread.routeKept": "ここに残しました",
 };

@@ -1286,4 +1286,11 @@ export const zh: Record<Key, string> = {
   "thread.st.idle": "空闲",
   "thread.of": "{name} 的线程",
   "thread.newHint": "与 {name} 的新线程。说说它是关于什么的。",
+  "thread.link": "线程:",
+  "thread.linkOpen": "打开线程 {title}",
+  "thread.routeAsk": "把这条发到 {title}?",
+  "thread.routeSend": "发到那里",
+  "thread.routeKeep": "留在这里",
+  "thread.routeSent": "已发到 {title}",
+  "thread.routeKept": "已留在这里",
 };

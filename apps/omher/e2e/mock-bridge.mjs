@@ -23,6 +23,11 @@
 // Threads under a bot: thread.create / thread.list / thread.open / thread.remove as the bridge answers them (a thread
 // is a folder entry with `thread: true`, so chat.send / interrupt / approval take `session=<thread>` as for a folder
 // chat); mock.threads {bot, threads: [{title, ago?}]} seeds a bot's threads (listed newest first).
+// The bot opens threads itself (bridge `split`): once the app read a bot's threads, its main-chat turns carry the
+// threads note (recorded as `hint: true` on mock.submits, the text left as typed; a thread's submit carries `session`); mock.answer {bot, text} queues a
+// recorded answer for the bot's next main-chat turn. Its top-level ```omher-thread``` blocks open a thread each (task
+// sent there, `thread.split` event), an ```omher-thread-route``` block to an open thread sends `thread.route`; the
+// `message` comes without the blocks, as the bridge sends it.
 // mock.ready {bot, ok, signIn?} (what `bots.ready` answers for a bot: ok false = Hermes says it cannot answer; with
 // signIn: the strict check for that provider passes, as after `hermes auth add <id>`, and its models show in
 // models.options).
@@ -571,6 +576,8 @@ const restartTimers = new Set();
 // Every ask event sent, by request id: chat.open sends the ones still pending again, as the bridge does.
 let asked;
 let threadHistory = new Map(); // thread id -> its messages (as thread.open returns them)
+let threadsShown = new Set(); // bots whose threads the app read (thread.list): their main-chat turns carry the note
+let answers = {}; // bot -> recorded answers for its next main-chat turns (mock.answer)
 // Bots that have no Bot Chat yet (mock.noBotChat): chat.open with existing_only answers not_found for them.
 let noBotChat = new Set();
 /** Timers of subagents still reporting after their turn ended (cleared by mock.reset). */
@@ -716,6 +723,8 @@ function reset() {
   queues = {};
   avatars = {};
   threadHistory = new Map();
+  threadsShown = new Set();
+  answers = {};
   folders = new Map(); // folder chat id -> { bot, cwd, open }; a thread also has thread, title, started, archived
   runs = runsSeed();
   cliRuns = cliSeed();
@@ -1055,6 +1064,7 @@ const OPS = {
   },
   "thread.list": (p) => {
     const b = needBot(p);
+    threadsShown.add(b.name);
     const threads = [...folders.entries()]
       .filter(([, f]) => f.thread && f.bot === b.name && !f.archived)
       .map(([thread, f]) => ({ thread, title: f.title, cwd: f.cwd, started_at: f.started, running: Boolean(turns[folderTurnKey(b.name, thread)]),
@@ -1112,7 +1122,7 @@ const OPS = {
         `use your own messaging tool or \`hermes send --to ${seed.target}\`.`;
     }
     if (p.reply_to === undefined && peerAsk(text)) submitted = `${text.trimEnd()}\n\n${PEER_HINT}`;
-    submits.push({ bot: b.name, session_id: `main-${b.name}`, text: submitted });
+    submits.push({ bot: b.name, session_id: `main-${b.name}`, text: submitted, ...(p.session !== undefined ? { session: p.session } : threadsShown.has(b.name) ? { hint: true } : {}) });
     const input_id = nextId("input");
     if (p.session !== undefined) {
       const f = needFolder(p, b);
@@ -1698,6 +1708,11 @@ const OPS = {
     setTimeout(() => broadcast({ event: "thread.added", bot: b.name, thread: ids[0] ?? "", title: "" }), 0);
     return { threads: ids };
   },
+  "mock.answer": (p) => {
+    const b = needBot(p);
+    (answers[b.name] ??= []).push(needStr(p, "text"));
+    return {};
+  },
   "mock.reset": () => {
     reset();
     return {};
@@ -1834,6 +1849,7 @@ function startTurn(bot, text, folder) {
     ]);
   }
   ev(bot, "turn.start");
+  if (answers[bot]?.length) return scriptRecorded(bot, answers[bot].shift());
   if (manual.has(bot)) return;
   if (text.startsWith("/approve")) return scriptApproval(bot);
   if (text.startsWith("/clarify")) return scriptClarify(bot);
@@ -1841,6 +1857,92 @@ function startTurn(bot, text, folder) {
   if (text.startsWith("/delegate")) return scriptDelegate(bot);
   if (peerAsk(text)) return scriptPeer(bot, text);
   scriptNormal(bot, text);
+}
+
+// The bridge's split parser (omher_bridge.split_blocks), line for line: top-level fences only (not in a `>` quote,
+// not inside another fence), strict JSON (exactly the keys of its kind, strings, title <= 80, task <= 4000), at most 3
+// thread blocks and 1 route block. Returns the blocks and the text without them.
+function splitBlocks(text) {
+  const lines = text.split("\n");
+  const keep = [];
+  const creates = [];
+  let route = null;
+  const check = (kind, body) => {
+    let o;
+    try {
+      o = JSON.parse(body);
+    } catch {
+      return null;
+    }
+    if (!o || typeof o !== "object" || Array.isArray(o)) return null;
+    const keys = Object.keys(o).sort().join(",");
+    if (kind === "omher-thread") {
+      if (keys !== "task,title" || typeof o.title !== "string" || typeof o.task !== "string") return null;
+      const title = o.title.trim();
+      const task = o.task.trim();
+      return title && title.length <= 80 && !title.includes("\n") && task && task.length <= 4000 ? { title, task } : null;
+    }
+    return keys === "thread" && typeof o.thread === "string" && o.thread.trim() ? { thread: o.thread.trim() } : null;
+  };
+  const take = (kind, b) => {
+    if (b && kind === "omher-thread") creates.push(b);
+    else if (b && !route) route = b;
+  };
+  for (let i = 0; i < lines.length; i += 1) {
+    const line = lines[i];
+    const inline = /^ {0,3}(`{3,})(omher-thread|omher-thread-route)[ \t]+(\{.*\})[ \t]*\1[ \t]*$/.exec(line);
+    if (inline) {
+      take(inline[2], check(inline[2], inline[3]));
+      continue;
+    }
+    const m = /^ {0,3}(`{3,}|~{3,})[ \t]*([^\s`]*)[ \t]*(.*?)\s*$/.exec(line);
+    if (!m || line.trimStart().startsWith(">") || (m[1][0] === "`" && m[3].includes("`"))) {
+      keep.push(line);
+      continue;
+    }
+    let j = i + 1;
+    while (j < lines.length) {
+      const c = /^ {0,3}(`{3,}|~{3,})[ \t]*$/.exec(lines[j]);
+      if (c && c[1][0] === m[1][0] && c[1].length >= m[1].length) break;
+      j += 1;
+    }
+    if ((m[2] === "omher-thread" || m[2] === "omher-thread-route") && !m[3]) {
+      if (j < lines.length) take(m[2], check(m[2], lines.slice(i + 1, j).join("\n")));
+    } else keep.push(...lines.slice(i, j + 1));
+    i = j;
+  }
+  return { creates: creates.slice(0, 3), route: creates.length ? null : route, shown: keep.join("\n").replace(/\n{3,}/g, "\n\n").trim() };
+}
+
+// A recorded answer (mock.answer) for a main-chat turn: streamed as written (blocks and all, as Hermes streams it),
+// then the final `message` without its blocks, then what the blocks do (the bridge's _split_effects).
+function scriptRecorded(bot, text) {
+  const { creates, route, shown } = splitBlocks(text);
+  const half = Math.ceil(text.length / 2);
+  schedule(bot, [
+    [80, () => ev(bot, "delta", { text: text.slice(0, half) })],
+    [200, () => ev(bot, "delta", { text: text.slice(half) })],
+    [
+      320,
+      () => {
+        const id = nextId("a");
+        if (shown) {
+          history[bot]?.push({ id, role: "assistant", text: shown, ts: now() });
+          ev(bot, "message", { id, text: shown });
+        }
+        if (route) {
+          const f = folders.get(route.thread);
+          if (f && f.thread && !f.archived && f.bot === bot) ev(bot, "thread.route", { thread: route.thread, title: f.title, message: id });
+        }
+        creates.forEach((c, n) => {
+          const made = OPS["thread.create"]({ bot, title: c.title, key: `split-${id}-${n}` });
+          ev(bot, "thread.split", { thread: made.thread, title: made.title || c.title, message: id });
+          OPS["chat.send"]({ bot, session: made.thread, text: c.task });
+        });
+        endTurn(bot, "done");
+      },
+    ],
+  ]);
 }
 
 // A bot asked to connect a Hermes on another computer answers with one `omher-peer` block (the bridge's note asked it

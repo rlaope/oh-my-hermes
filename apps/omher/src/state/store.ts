@@ -49,7 +49,7 @@ import type {
   PlanItem,
 } from "../lib/protocol";
 import type { AgentRunSummary, CliAgent, NodePr, RunDetail } from "../lib/runs";
-import { firstWords, threadEvent, threadKey, type ThreadOps, type ThreadRow } from "../threads/types";
+import { firstWords, hideSplitBlocks, threadEvent, threadKey, type ThreadOps, type ThreadRow } from "../threads/types";
 
 export type PanelTabId = "details" | "terminal" | "schedule" | "worktrees" | "diff" | "runs";
 
@@ -235,6 +235,21 @@ export type RoutineAddedItem = {
 export type PluginAddedItem = { kind: "pluginAdded"; id: string; ts: number; name: string; title: string; tools: number; hooks: number };
 /** One quiet line from omher itself (e.g. "Switched to Claude #2 (limit on #1)"); never sent to the bot. */
 export type SystemItem = { kind: "system"; id: string; ts: number; text: string };
+/** "→ thread: <title>" under a main-chat answer: the bot opened `thread` (or the person sent a message there). */
+export type ThreadLinkItem = { kind: "threadLink"; id: string; ts: number; bot: string; thread: string; title: string };
+/** "Send this to <title>?" under a main-chat answer whose bot thought the person's message belongs in `thread`.
+ *  `text` is that message; nothing is sent until Send there. `done`: what the person chose. */
+export type ThreadRouteItem = {
+  kind: "threadRoute";
+  id: string;
+  ts: number;
+  bot: string;
+  thread: string;
+  title: string;
+  text: string;
+  done?: "sent" | "kept";
+  error?: string;
+};
 export type ChatItem =
   | MessageItem
   | ActivityItem
@@ -243,7 +258,9 @@ export type ChatItem =
   | RoutineItem
   | RoutineAddedItem
   | PluginAddedItem
-  | SystemItem;
+  | SystemItem
+  | ThreadLinkItem
+  | ThreadRouteItem;
 export type TimelineItem = ChatItem | AwayItem;
 
 export interface Chat {
@@ -412,7 +429,7 @@ export function liveLabel(t: Turn): { verb: string; code?: string } {
  *  never a line still being typed and never an open code block (it shows once its closing fence came). Shown in
  *  pieces of whole lines, so the answer grows a line or paragraph at a time instead of word by word. */
 export function answerSoFar(t: Turn): string {
-  const text = t.streaming.slice(t.cut ?? 0).replace(/^\s+/, "");
+  const text = hideSplitBlocks(t.streaming.slice(t.cut ?? 0).replace(/^\s+/, ""));
   const end = text.lastIndexOf("\n");
   if (end < 0) return "";
   const lines = text.slice(0, end).split("\n");
@@ -853,7 +870,11 @@ export type Action =
   /** A thread was archived: its row, its chat and the asks in it go. */
   | { type: "thread.gone"; bot: string; thread: string }
   /** Show a thread of `bot` in the main column (null: the bot's main chat). */
-  | { type: "ui.thread"; bot: string; thread: string | null };
+  | { type: "ui.thread"; bot: string; thread: string | null }
+  /** A link line or a route card under the main-chat answer `message` of `bot` (once per id). */
+  | { type: "thread.note"; bot: string; message: string; item: ThreadLinkItem | ThreadRouteItem }
+  /** The person answered a route card. */
+  | { type: "thread.routed"; bot: string; id: string; done?: "sent" | "kept"; error?: string };
 
 // ---- chats that are not a bot's main chat ------------------------------------------------------
 //
@@ -1030,7 +1051,7 @@ function reduceEvent(state: AppState, ev: BridgeEvent, now: number): AppState {
         let base = c;
         // A done turn that streamed text but never sent the final message: keep what was said.
         // Only what came after the latest tool call: the text before it was commentary on that call, not the answer.
-        const said = c.turn ? c.turn.streaming.slice(c.turn.cut ?? 0).trim() : "";
+        const said = c.turn ? hideSplitBlocks(c.turn.streaming.slice(c.turn.cut ?? 0).trim()) : "";
         if (ev.outcome === "done" && c.turn && said) {
           const text = said;
           const slot = answerSlot(c);
@@ -1155,6 +1176,25 @@ export function reduce(state: AppState, a: Action): AppState {
       const rows = i < 0 ? [a.row, ...list] : list.map((r, j) => (j === i ? { ...r, ...a.row, title: a.row.title || r.title } : r));
       return { ...state, threads: { ...state.threads, [a.bot]: rows } };
     }
+    case "thread.note":
+      return touchChat(state, a.bot, (c) => {
+        if (c.items.some((i) => i.id === a.item.id)) return c;
+        // right under the answer and the lines already under it; at the end when that answer is not here
+        let at = c.items.findIndex((i) => i.id === a.message);
+        if (at < 0) at = c.items.length;
+        else {
+          at += 1;
+          while (at < c.items.length && (c.items[at].kind === "threadLink" || c.items[at].kind === "threadRoute")) at += 1;
+        }
+        return withItems(c, [...c.items.slice(0, at), a.item, ...c.items.slice(at)]);
+      });
+    case "thread.routed":
+      return touchChat(state, a.bot, (c) =>
+        withItems(
+          c,
+          c.items.map((i) => (i.kind === "threadRoute" && i.id === a.id ? { ...i, done: a.done, error: a.error } : i)),
+        ),
+      );
     case "thread.gone": {
       const list = state.threads[a.bot];
       const key = threadKey(a.bot, a.thread);
@@ -1578,6 +1618,9 @@ export interface Actions {
   threadInterrupt(bot: string, thread: string): Promise<void>;
   /** Stop the thread when it runs, then archive it in Hermes (hidden, kept, restorable). Rejects on refusal. */
   removeThread(bot: string, thread: string): Promise<void>;
+  /** A route card's answer: `send` sends the person's message to the card's thread (and adds a link line); `keep`
+   *  only closes the card. */
+  answerRoute(bot: string, id: string, choice: "send" | "keep"): Promise<void>;
 }
 
 export type BridgeLike = Pick<BridgeClient, "connect" | "request" | "onAny" | "onStatus">;
@@ -1867,6 +1910,24 @@ export function createStore(bridge: BridgeLike, opts: StoreOptions = {}): Store 
         const tev = threadEvent(ev);
         if (tev) {
           if (tev.event === "thread.removed") dispatch({ type: "thread.gone", bot: tev.bot, thread: tev.thread });
+          else if (tev.event === "thread.split") {
+            // the bot opened a thread from its answer: the row at once (the list re-read confirms it), a link line
+            const known = (state.threads[tev.bot] ?? []).find((r) => r.thread === tev.thread);
+            const row: ThreadRow = known
+              ? { ...known, title: known.title || tev.title, last: now() / 1000 }
+              : { thread: tev.thread, title: tev.title, cwd: "", started_at: now() / 1000, running: false, needs: false, message_count: 0, last: now() / 1000 };
+            dispatch({ type: "thread.upsert", bot: tev.bot, row });
+            threadRoute(tev.bot, tev.thread);
+            dispatch({ type: "thread.note", bot: tev.bot, message: tev.message, item: { kind: "threadLink", id: `split-${tev.thread}`, ts: now() / 1000, bot: tev.bot, thread: tev.thread, title: tev.title } });
+          } else if (tev.event === "thread.route") {
+            // the bot thinks the person's last message belongs in an open thread: ask, move nothing
+            const items = state.chats[tev.bot]?.items ?? [];
+            const at = items.findIndex((i) => i.kind === "assistant" && i.id === tev.message);
+            const upTo = at < 0 ? items : items.slice(0, at);
+            const said = [...upTo].reverse().find((i): i is MessageItem => i.kind === "user");
+            if (said && (state.threads[tev.bot] ?? []).some((r) => r.thread === tev.thread))
+              dispatch({ type: "thread.note", bot: tev.bot, message: tev.message, item: { kind: "threadRoute", id: `route-${tev.message}`, ts: now() / 1000, bot: tev.bot, thread: tev.thread, title: tev.title, text: said.text } });
+          }
           // a thread the bot opened itself (or another window made): the list re-reads
           else if (!(state.threads[tev.bot] ?? []).some((r) => r.thread === tev.thread)) void loadThreads(tev.bot);
         } else {
@@ -2264,6 +2325,21 @@ export function createStore(bridge: BridgeLike, opts: StoreOptions = {}): Store 
       await threadReq("thread.remove", { bot, thread });
       setChatRoute(threadKey(bot, thread), null);
       dispatch({ type: "thread.gone", bot, thread });
+    },
+    async answerRoute(bot, id, choice) {
+      const card = state.chats[bot]?.items.find((i): i is ThreadRouteItem => i.kind === "threadRoute" && i.id === id);
+      if (!card || card.done) return;
+      if (choice === "keep") return dispatch({ type: "thread.routed", bot, id, done: "kept" });
+      const key = threadRoute(bot, card.thread);
+      const local = `local-${++localSeq}`;
+      try {
+        await bridge.request("chat.send", { bot, session: card.thread, text: card.text });
+      } catch (e) {
+        return dispatch({ type: "thread.routed", bot, id, error: errText(e) });
+      }
+      dispatch({ type: "local.user", bot: key, id: local, text: card.text, now: now() });
+      dispatch({ type: "thread.routed", bot, id, done: "sent" });
+      dispatch({ type: "thread.note", bot, message: id, item: { kind: "threadLink", id: `${id}-link`, ts: now() / 1000, bot, thread: card.thread, title: card.title } });
     },
   };
 

@@ -1288,4 +1288,11 @@ export const en = {
   "thread.st.idle": "Idle",
   "thread.of": "Thread of {name}",
   "thread.newHint": "A new thread with {name}. Say what it is about.",
+  "thread.link": "thread:",
+  "thread.linkOpen": "Open thread {title}",
+  "thread.routeAsk": "Send this to {title}?",
+  "thread.routeSend": "Send there",
+  "thread.routeKeep": "Keep here",
+  "thread.routeSent": "Sent to {title}",
+  "thread.routeKept": "Kept here",
 };
