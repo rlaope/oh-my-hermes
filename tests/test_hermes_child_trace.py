@@ -216,6 +216,29 @@ class CellTraceDispatchTests(unittest.TestCase):
                      TOOL_ARGUMENT, "tool result body", "thinking about it", "roman.py"):
             self.assertNotIn(text, raw)
 
+    def test_execution_metadata_carries_the_verified_trace_per_cell(self) -> None:
+        from omh.coding.paired_run_execution_model import (
+            ExecutionState,
+            PairedRunExecutionOutcome,
+            PairedRunExecutionReport,
+        )
+        from paired_run_execution_support import plan
+
+        terminal = self._dispatch()[-1]
+        _sign(self.omh_home, terminal)
+        receipt = load_hermes_child_receipt(self.omh_home, "cell-1")
+        frozen = plan()
+        report = PairedRunExecutionReport(frozen, (
+            PairedRunExecutionOutcome(ExecutionState.SUCCEEDED, receipt, cell=frozen.cells[0]),
+            PairedRunExecutionOutcome(ExecutionState.CRASHED, None, cell=frozen.cells[1]),
+        ))
+        cells = report.metadata()["cells"]
+        assert isinstance(cells, list) and isinstance(cells[0], dict) and isinstance(cells[1], dict)
+        assert terminal.cell_trace is not None
+        self.assertEqual(cells[0]["cell_trace"], terminal.cell_trace.to_record())
+        self.assertIsNone(cells[1]["cell_trace"])
+        self.assertNotIn(SECRET_PROMPT, json.dumps(report.metadata()))
+
     def test_tampered_trace_fails_verification(self) -> None:
         run_dir = _sign(self.omh_home, self._dispatch()[-1])
         path = run_dir / "observation.json"

@@ -18,6 +18,12 @@ All notable changes will be documented here.
   dispatcher signs the arm setup it reads from disk into each receipt, and fan-in refuses a cell whose setup
   contradicts its arm. New `--provider-base-url`, `--provider-api-mode` and `--provider-key-env` declare a custom
   provider whose key arrives only by environment. Every other Hermes child keeps safe mode.
+- **A paired-run receipt now says what each cell's child did, not only how long it took.** Before the arm home is
+  removed, the dispatcher reads the child's own rows from that home's `state.db` and signs a metadata-only
+  `cell_trace` into the receipt: API calls, input/output/cache/reasoning tokens, the ordered tool names, how many
+  `skill_view` calls opened which skills, and the system prompt's and first request's size in characters. No prompt,
+  reply or tool argument is kept, a caller cannot supply or keep one, and a store that is missing, locked or holds no
+  row of the child leaves the trace null rather than zero. The execution report lists each cell's verified trace.
 
 ## 4.0.8 - 2026-11-15
 
