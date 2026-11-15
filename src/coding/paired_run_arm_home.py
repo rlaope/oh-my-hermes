@@ -190,6 +190,7 @@ def prepare_arm_home(
         PairedRunArmHome(root, hermes_home, home, (), ()),
         None,
     )
+    prepared = False
     try:
         labels = _materialize(hermes_home, omh_home, provider, model, provider_config, exposed_skills, omh_plugin)
         key_names = (provider_config.key_env,) if provider_config else provider_env_names(provider)
@@ -237,15 +238,15 @@ def prepare_arm_home(
                 f"{role} arm warm-up chat {result.status} (exit {result.exit_code}): {tail}"
             )
         run.setup = observe_arm_setup(arm_home)
+        prepared = True
         return run
-    except (HermesChildDispatchError, OSError, ValueError, PairedRunArmHomeError) as exc:
-        run.close()
-        if isinstance(exc, PairedRunArmHomeError):
-            raise
+    except (HermesChildDispatchError, OSError, ValueError) as exc:
         raise PairedRunArmHomeError(f"{role} arm home could not be prepared ({type(exc).__name__}: {exc})") from exc
-    except BaseException:
-        run.close()
-        raise
+    finally:
+        # Any failure, an interrupt included, stops the gateway group and
+        # removes the root before the error leaves.
+        if not prepared:
+            run.close()
 
 
 def _await_ready(
