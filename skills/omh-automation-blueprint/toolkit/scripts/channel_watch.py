@@ -377,13 +377,30 @@ def discord_fetch(client: Client, channel: dict, cursor: str) -> tuple[list[dict
     return found, True
 
 
+DISCORD_STAMP = re.compile(r"(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.\d+)?(Z|[+-]\d{2}:\d{2})$")
+
+
+def discord_iso(stamp: str) -> str:
+    """Discord's `2026-11-15T15:03:38.123000+00:00` as UTC `...Z`; anything else, as it came. Parsed by hand: no
+    `fromisoformat`, whose reading of hour 24 differs between Python versions."""
+    m = DISCORD_STAMP.match(stamp)
+    if not m:
+        return stamp
+    y, mo, d, h, mi, s, tz = m.groups()
+    try:
+        when = dt.datetime(int(y), int(mo), int(d), int(h), int(mi), int(s), tzinfo=dt.timezone.utc)
+    except ValueError:
+        return stamp
+    if tz != "Z":
+        sign = 1 if tz[0] == "+" else -1
+        when -= sign * dt.timedelta(hours=int(tz[1:3]), minutes=int(tz[4:6]))
+    return when.strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
 def discord_post(channel: dict, msg: dict, me: dict) -> dict:
     author = msg.get("author") if isinstance(msg.get("author"), dict) else {}
     stamp = str(msg.get("timestamp") or "")
-    try:
-        iso = dt.datetime.fromisoformat(stamp.replace("Z", "+00:00")).astimezone(dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
-    except ValueError:
-        iso = stamp
+    iso = discord_iso(stamp)
     return {
         "key": (int(msg["id"]), 0), "cursor": str(msg["id"]),
         "own": bool(me.get("user_id") and author.get("id") == me["user_id"]),

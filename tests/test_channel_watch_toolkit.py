@@ -109,9 +109,29 @@ def _hermes_assembled_scan(text: str) -> str:
             sys.path.remove(str(HERMES_AGENT))
 
 
+def load_collector():
+    import importlib.util
+    spec = importlib.util.spec_from_file_location("channel_watch_under_test", SCRIPT)
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+
+class DiscordStampTest(unittest.TestCase):
+    def test_discord_stamps_read_as_utc_without_fromisoformat(self):
+        mod = load_collector()
+        self.assertEqual(mod.discord_iso("2026-11-15T01:02:03.000000+00:00"), "2026-11-15T01:02:03Z")
+        self.assertEqual(mod.discord_iso("2026-11-15T10:02:03+09:00"), "2026-11-15T01:02:03Z")
+        self.assertEqual(mod.discord_iso("2026-11-15T01:02:03Z"), "2026-11-15T01:02:03Z")
+        # hour 24 and anything else Discord never sends: kept as it came, never turned into a different instant
+        self.assertEqual(mod.discord_iso("2026-11-15T24:00:00+00:00"), "2026-11-15T24:00:00+00:00")
+        self.assertEqual(mod.discord_iso("yesterday"), "yesterday")
+
+
 class CollectorTest(unittest.TestCase):
     def setUp(self):
         self.tmp = TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
         self.home = Path(self.tmp.name) / "profile"
         (self.home / "channel_watch").mkdir(parents=True)
         self.api = FakeApi()
@@ -122,7 +142,6 @@ class CollectorTest(unittest.TestCase):
         for text in self.outputs:
             self.assertNotIn(TOKEN, text)
             self.assertNotIn(DTOKEN, text)
-        self.tmp.cleanup()
 
     # -- helpers
 

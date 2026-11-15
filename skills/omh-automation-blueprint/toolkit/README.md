@@ -89,7 +89,7 @@ rejected, `channel=*`) does the highest code win. A token with a space or
 control character is rejected before any request: `reason=bad_token`, exit 5,
 the token never echoed.
 
-Post text Hermes' cron scanner would block (prompt-injection directives such
-as "ignore all previous instructions") is printed as
+Post text Hermes' cron scanner would block (the prompt-injection directive
+patterns it checks, mirrored in `INSTRUCTION_LIKE` in the script) is printed as
 `[text withheld: looks like instructions]`, so one such post cannot block the
 run that judges the others.
