@@ -72,9 +72,10 @@ export function ThreadTree({ bot, id }: { bot: string; id: string }) {
             <button type="button" className="th-open" onClick={() => void s.openThread(bot, r.thread)} title={title} data-testid="thread-open">
               <StatusGlyph status={st} />
               <span className="th-title">{title}</span>
-              {/* who works in it: marks before the time, so the time column stays at the right edge */}
+              {/* who works in it: ONE mark, in the time's place while it shows (the first harness out; the tooltip names
+                  them all, the thread's chat shows each), so the title keeps its room at the sidebar's default width */}
               <span className="th-harness">
-                <HarnessStack items={threadHarness(s.chats[threadKey(bot, r.thread)])} size={12} />
+                <HarnessStack items={threadHarness(s.chats[threadKey(bot, r.thread)])} size={12} max={1} more={false} />
               </span>
               {ts > 0 && <span className="th-time">{shortTime(ts)}</span>}
             </button>

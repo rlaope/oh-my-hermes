@@ -41,8 +41,9 @@ export function HarnessFace({ facts, size = 28 }: { facts: HarnessFacts; size?: 
   );
 }
 
-/** Everyone working on a thread, one mark each (distinct harnesses), "+N" past `max`. */
-export function HarnessStack({ items, max = 3, size = 14 }: { items: HarnessFacts[]; max?: number; size?: number }) {
+/** Everyone working on a thread, one mark each (distinct harnesses), "+N" past `max` (no "+N" with `more={false}`:
+ *  the rest are named in the tooltip only). */
+export function HarnessStack({ items, max = 3, size = 14, more: showMore = true }: { items: HarnessFacts[]; max?: number; size?: number; more?: boolean }) {
   const ids: HarnessId[] = [];
   for (const f of items) {
     const id = harnessOf(f).harness;
@@ -57,7 +58,7 @@ export function HarnessStack({ items, max = 3, size = 14 }: { items: HarnessFact
       {shown.map((id) => (
         <HarnessMark key={id} id={id} size={size} />
       ))}
-      {more > 0 && (
+      {more > 0 && showMore && (
         <span className="hn-more" data-testid="harness-more">
           +{more}
         </span>

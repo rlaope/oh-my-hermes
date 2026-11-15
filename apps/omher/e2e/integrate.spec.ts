@@ -133,9 +133,24 @@ test("a thread row carries the marks of who works in it; the thread chat shows t
   const ids = await seed(page);
   const stack = page.getByTestId(`thread-row-${ids.og}`).getByTestId("harness-stack");
   await expect(stack).toBeVisible();
-  // Codex (its own mark) and a Hermes child: two distinct harnesses, never a wrong logo
-  await expect(stack.locator("[data-harness]")).toHaveCount(2);
-  expect(await stack.locator("[data-harness]").evaluateAll((els) => els.map((e) => e.getAttribute("data-harness")))).toEqual(["codex", "hermes"]);
+  // Codex (its own mark) and a Hermes child out: the row shows ONE mark (the first), no "+N"; the tooltip names both
+  await expect(stack.locator("[data-harness]")).toHaveCount(1);
+  await expect(stack.locator("[data-harness]")).toHaveAttribute("data-harness", "codex");
+  await expect(stack.getByTestId("harness-more")).toHaveCount(0);
+  await expect(stack).toHaveAttribute("title", "Codex, Hermes");
+  // the title keeps >= 14 visible characters at the default sidebar width
+  const visible = await page.getByTestId(`thread-row-${ids.og}`).locator(".th-title").evaluate((el) => {
+    const c = document.createElement("canvas").getContext("2d")!;
+    c.font = getComputedStyle(el).font;
+    const s = el.textContent ?? "";
+    let n = 0;
+    while (n < s.length && c.measureText(s.slice(0, n + 1) + "…").width <= el.clientWidth) n++;
+    return n;
+  });
+  expect(visible).toBeGreaterThanOrEqual(14);
+  // the mark sits in the time's place while it shows; a row with nobody out keeps its time
+  await expect(page.getByTestId(`thread-row-${ids.og}`).locator(".th-time")).toBeHidden();
+  await expect(page.getByTestId(`thread-row-${ids.slack}`).locator(".th-time")).toBeVisible();
   // a thread with nobody out has no stack (the slot stays empty)
   await expect(page.getByTestId(`thread-row-${ids.slack}`).getByTestId("harness-stack")).toHaveCount(0);
   await page.getByTestId(`thread-row-${ids.og}`).getByTestId("thread-open").click();
@@ -146,9 +161,9 @@ test("a thread row carries the marks of who works in it; the thread chat shows t
   expect(sep!.x - (name!.x + name!.width)).toBeLessThanOrEqual(16);
   await expect(chat.locator('.sa-mark[data-harness="codex"]')).toHaveCount(1);
   await expect(chat.locator('.sa-mark[data-harness="hermes"]')).toHaveCount(1);
-  // the child ends: its mark leaves the row
+  // the Codex child ends: the row's one mark is the Hermes child still out
   await mock("mock.emit", { events: [{ event: "subagent", bot: "kami", session: ids.og, id: "sa-og-1", index: 0, count: 2, delegation: "deleg_og", state: "done", summary: "502 at 14:31" }] });
-  await expect(stack.locator("[data-harness]")).toHaveCount(1);
+  await expect(stack.locator("[data-harness]")).toHaveAttribute("data-harness", "hermes");
 });
 
 test("the terminal panel's next tab starts in the open thread's folder, home in the main chat", async ({ page }) => {

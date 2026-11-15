@@ -92,6 +92,11 @@
 .th-harness:empty {
   display: none;
 }
+/* someone is at work in it (a mark shows): the mark takes the time's place, which reads "now" while it runs anyway,
+   so the title keeps its room at the default sidebar width */
+.th-harness:not(:empty) + .th-time {
+  display: none;
+}
 .th-x {
   flex: none;
   display: none;
