@@ -10,8 +10,7 @@
 .window.panel-open:has(.pn-wide[data-tab="runs"]) {
   --panel-w: clamp(460px, calc(100vw - var(--side-w) - 480px), 560px);
 }
-.rn,
-.rf {
+.rn {
   --rn-amber: #d39b2a;
   --rn-green: 127, 214, 164;
   --rn-red: 240, 138, 138;
@@ -28,8 +27,7 @@
   /* what waits on the person: the sidebar's needs amber (sidebar.css .side) */
   --ph-needs: #e9a23b;
 }
-[data-theme="light"] .rn,
-[data-theme="light"] .rf {
+[data-theme="light"] .rn {
   --rn-amber: #96640a;
   --rn-green: 31, 138, 82;
   --rn-red: 192, 57, 43;
@@ -46,9 +44,6 @@
 /* the surface a box stands on: its own background is this colour, so a line never shows through a dragged box */
 .rn {
   --bv-surface: var(--side);
-}
-.rf {
-  --bv-surface: var(--bg);
 }
 
 /* ---------------------------------------------------------------- list */
@@ -788,49 +783,25 @@
   }
 }
 
-/* ---------------------------------------------------------------- full view (over the chat column) */
-.pane.has-full {
-  position: relative;
-}
-/* the full view is the whole window right of the sidebar: the panel steps aside (it stays mounted) */
-.window.panel-open:has(.pane.has-full) {
-  grid-template-columns: var(--side-w) minmax(0, 1fr) 0px;
-}
-.window:has(.pane.has-full) .details {
-  visibility: hidden;
-}
-.rf {
-  position: absolute;
-  inset: 0;
-  z-index: 5;
+/* ---------------------------------------------------------------- the panel maximised in place (⌘⇧G) */
+/* the plan's graph fills what the maximised panel has below its header: the full drawing, panned and zoomed */
+.pn-scroll:has(.rn-run.max) {
   display: flex;
   flex-direction: column;
-  background: var(--bg);
 }
-.rf-head {
+.rn:has(.rn-run.max) {
+  flex: 1;
   display: flex;
-  align-items: flex-start;
-  gap: 12px;
-  padding: 12px 12px 12px 20px;
-  border-bottom: 1px solid var(--line-soft);
-  min-width: 0;
+  flex-direction: column;
+  min-height: 0;
 }
-.rf-head .ph {
+.rn-run.max {
   flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 420px;
 }
-.rf-head > b {
-  flex: 1;
-  font-size: 13px;
-  line-height: 28px;
-  color: var(--ink);
-}
-.rf-hint {
-  flex: none;
-  font-size: 11px;
-  line-height: 28px;
-  color: var(--quiet);
-}
-.rf-body {
+.rn-run.max .rn-gwrap {
   position: relative;
   flex: 1;
   min-height: 0;

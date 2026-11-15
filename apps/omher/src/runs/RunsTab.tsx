@@ -1,13 +1,13 @@
 // Plans tab: the bot's plans (OMH dag runs, Hermes delegate fan-outs) as a list of plain text rows, and the
 // selected one as plain text and a read-only graph (frontiers of outlined boxes joined by lines), plus the same
-// drawing at full size over the chat column (⌘⇧G). Below the bot's own, the CLI agents' on this machine (Claude Code subagents,
+// drawing at full size, pan and zoom, when the panel is maximised in place (⌘⇧G). Below the bot's own, the CLI agents' on this machine (Claude Code subagents,
 // Codex sub-agents) in the same list style. A plan is a run in the code and the protocol (`runs.list`); only the
 // words on screen say "plan". Nothing here retries, settles or cancels.
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { Bot } from "../lib/protocol";
 import { cliName, lengthOf, sortRuns, span, type AgentRunSummary, type NodePr, type RunDetail } from "../lib/runs";
 import { getStore, useStore } from "../state/store";
-import { CloseIcon, ExpandIcon, IconButton, ModelIcon, Spinner } from "../ui";
+import { ExpandIcon, ModelIcon, Spinner } from "../ui";
 import { isMac } from "../app/shortcuts";
 import { useNow } from "../elsewhere/useNow";
 import { t, tx } from "../i18n";
@@ -271,8 +271,11 @@ function PanelRun({ bot, summary, nowS }: { bot: Bot; summary: AgentRunSummary; 
     if (open) drawer.current?.scrollIntoView({ block: "nearest" });
   }, [open]);
   const fullKey = isMac() ? "⌘⇧G" : "Ctrl+Shift+G";
+  // the panel maximised in place: the same graph at full size, panned and zoomed, the node's detail over its right
+  const max = s.ui.panelMax;
+  const fullLabel = `${max ? t("panel.restore") : t("graph.full")} ${fullKey}`;
   return (
-    <div className="rn-run" data-testid="run-graph-box" data-run={summary.id} data-state={summary.state}>
+    <div className={`rn-run${max ? " max" : ""}`} data-testid="run-graph-box" data-run={summary.id} data-state={summary.state}>
       <PlanHeader
         summary={summary}
         run={run}
@@ -282,10 +285,11 @@ function PanelRun({ bot, summary, nowS }: { bot: Bot; summary: AgentRunSummary; 
           <button
             type="button"
             className="ph-full"
-            onClick={() => s.setRunsFull(true)}
+            onClick={() => s.setPanelMax(!max)}
             data-testid="graph-expand"
-            title={`${t("graph.full")} ${fullKey}`}
-            aria-label={`${t("graph.full")} ${fullKey}`}
+            aria-pressed={max}
+            title={fullLabel}
+            aria-label={fullLabel}
           >
             <ExpandIcon />
           </button>
@@ -297,13 +301,14 @@ function PanelRun({ bot, summary, nowS }: { bot: Bot; summary: AgentRunSummary; 
         ) : (
           <RunGraph
             run={run}
-            mode="panel"
+            mode={max ? "full" : "panel"}
             width={width}
             open={open}
             onOpen={setOpen}
             nowS={nowS}
             bot={bot}
             detail={
+              !max &&
               node && (
                 <div ref={drawer}>
                   <NodeDrawer run={run} node={node} parents={parentsOf(run, node.id)} bot={bot} text={detail!.handoffs[node.id]} nowS={nowS} onClose={() => setOpen(null)} />
@@ -312,46 +317,7 @@ function PanelRun({ bot, summary, nowS }: { bot: Bot; summary: AgentRunSummary; 
             }
           />
         )}
-      </div>
-    </div>
-  );
-}
-
-/** The full-size graph over the chat column. The side panel stays; Esc or × closes it. */
-export function RunsFull({ bot }: { bot: Bot }) {
-  const s = useStore();
-  const { runs, cli, error } = useRuns(bot.name);
-  const selected = runs ? pickRun(runs, cli, s.ui.runId) : null;
-  const { detail } = useDetail(bot.name, selected);
-  const nowMs = useNow(!!selected && isLive(selected), 1_000);
-  const [open, setOpen] = useState<string | null>(null);
-  const [ref, width] = useWidth<HTMLDivElement>();
-  useEffect(() => setOpen(null), [selected?.id]);
-  const run = detail?.run;
-  const node = run?.nodes.find((x) => x.id === open) ?? null;
-  const nowS = nowMs / 1000;
-  return (
-    <div className="rf" data-testid="runs-full" role="dialog" aria-label={t("plans.graph")}>
-      <div className="rf-head">
-        {selected ? <PlanHeader summary={selected} run={run} bot={bot} nowS={nowS} /> : <b>{t("plans.of", { bot: bot.display_name })}</b>}
-        <span className="rf-hint">{t("graph.hint")}</span>
-        <IconButton label={t("graph.close")} onClick={() => s.setRunsFull(false)}>
-          <CloseIcon />
-        </IconButton>
-      </div>
-      <div className="rf-body" ref={ref}>
-        {!runs ? (
-          <div className="pn-empty">{error ?? <Spinner size={12} label={t("pn.loading")} />}</div>
-        ) : !selected ? (
-          <div className="pn-empty">{t("plans.none")}</div>
-        ) : !run || !width ? (
-          <div className="pn-empty">
-            <Spinner size={12} label={t("pn.loading")} />
-          </div>
-        ) : (
-          <RunGraph key={run.id} run={run} mode="full" width={width} open={open} onOpen={setOpen} nowS={nowS} bot={bot} />
-        )}
-        {run && node && (
+        {max && run && node && (
           <div className="rf-drawer">
             <NodeDrawer run={run} node={node} parents={parentsOf(run, node.id)} bot={bot} text={detail!.handoffs[node.id]} nowS={nowS} onClose={() => setOpen(null)} />
           </div>
