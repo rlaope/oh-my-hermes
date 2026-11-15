@@ -167,12 +167,15 @@ test("⌘⇧G toggles (opening Plans when the panel is closed), Esc restores, do
   await page.keyboard.press("Escape");
   await expect(page.getByTestId("window")).not.toHaveClass(/\bpanel-max\b/);
   await expect(page.getByTestId("window")).toHaveClass(/\bpanel-open\b/);
-  // double-click on the free part of the tab row
+  // double-click on the free part of the tab row. The class flips at once but the restore slides the row for ~0.2s:
+  // the free space is measured once the row has stopped moving, never under a row still in motion (F7)
+  await settled(page);
   const row = page.getByTestId("panel-tabs");
   const b = (await row.boundingBox())!;
   const tabsRight = await row.evaluate((e) => Math.max(...[...e.querySelectorAll(".pn-tab")].map((t) => t.getBoundingClientRect().right)));
   await page.mouse.dblclick(tabsRight + 12, b.y + b.height / 2);
   await expectMaxed(page);
+  await settled(page);
   await page.mouse.dblclick(tabsRight + 12, b.y + b.height / 2);
   await expect(page.getByTestId("window")).not.toHaveClass(/\bpanel-max\b/);
   // a double click on a tab only picks the tab
