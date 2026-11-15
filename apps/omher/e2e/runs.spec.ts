@@ -352,7 +352,8 @@ test("the run's header is plain text in the app's font: the title leads, a statu
       goal: [goal.fontSize, goal.webkitLineClamp],
       // title, status and who run close together; the goal stands 10px apart
       gaps: [box("[data-testid=run-plan-counts]").top - box(".ph-top").bottom, box("[data-testid=run-plan-goal]").top - box("[data-testid=run-plan-where]").bottom],
-      dot: [box("[data-testid=run-dot]").width, box("[data-testid=run-dot]").height],
+      // the layout size: a running dot spins, and a turned box's bounding rect is wider than the dot
+      dot: [(e.querySelector("[data-testid=run-dot]") as HTMLElement).offsetWidth, (e.querySelector("[data-testid=run-dot]") as HTMLElement).offsetHeight],
       boxed,
     };
   });
