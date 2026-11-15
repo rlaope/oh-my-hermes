@@ -17,10 +17,13 @@ import { useLookAttributes, useThemeAttribute } from "./theme";
 import { useShortcuts } from "./shortcuts";
 import { useAsksBadge } from "./badge";
 import { startPeers } from "../peers/links";
+import { useTermPanel } from "../terminal/state";
 
 // The terminal view (and xterm with it) loads when a session is first opened.
 const SessionView = lazy(() => import("../sessions/SessionView").then((m) => ({ default: m.SessionView })));
 const SessionPanel = lazy(() => import("../sessions/SessionPlans").then((m) => ({ default: m.SessionPanel })));
+// The bottom terminal panel (Ctrl+`) loads the first time it opens, then stays mounted so hidden shells keep running.
+const TerminalPanel = lazy(() => import("../terminal/Panel").then((m) => ({ default: m.TerminalPanel })));
 
 export function App() {
   const s = useStore();
@@ -28,6 +31,7 @@ export function App() {
   useLookAttributes(s.ui.look);
   useShortcuts();
   useAsksBadge();
+  const term = useTermPanel();
   useEffect(() => {
     void s.init();
     void startPeers();
@@ -71,6 +75,11 @@ export function App() {
             <SessionView />
           </Suspense>
         ) : <Chat />}
+        {term.mounted && (
+          <Suspense fallback={null}>
+            <TerminalPanel />
+          </Suspense>
+        )}
       </main>
       {/* inert while closed: the off-screen panel takes no focus and no clicks */}
       <aside className="details" aria-hidden={!panelOpen} inert={!panelOpen} data-testid="details">

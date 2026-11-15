@@ -1303,4 +1303,15 @@ export const zh: Record<Key, string> = {
   "harness.noCli": "{agent} 负责了这一部分，但它的会话不在这台电脑上。",
   "harness.openChild": "打开 {name}",
   "harness.session": "会话",
+  // termpanel (the bottom terminal panel, Ctrl+`)
+  "termpanel.label": "终端",
+  "termpanel.tabs": "终端标签页",
+  "termpanel.newTab": "新建终端",
+  "termpanel.closeTab": "关闭 {name}",
+  "termpanel.hide": "隐藏终端 (Ctrl+`)",
+  "termpanel.resize": "终端高度",
+  "termpanel.home": "主文件夹",
+  "termpanel.ended": "shell 已结束",
+  "termpanel.endedCode": "shell 已结束，代码 {code}",
+  "termpanel.couldNotStart": "无法启动 shell：{error}",
 };

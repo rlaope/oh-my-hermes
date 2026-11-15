@@ -1303,4 +1303,15 @@ export const ja: Record<Key, string> = {
   "harness.noCli": "{agent} がこの部分を担当しましたが、そのセッションはこのコンピュータにありません。",
   "harness.openChild": "{name} を開く",
   "harness.session": "セッション",
+  // termpanel (the bottom terminal panel, Ctrl+`)
+  "termpanel.label": "ターミナル",
+  "termpanel.tabs": "ターミナルのタブ",
+  "termpanel.newTab": "新しいターミナル",
+  "termpanel.closeTab": "{name} を閉じる",
+  "termpanel.hide": "ターミナルを隠す (Ctrl+`)",
+  "termpanel.resize": "ターミナルの高さ",
+  "termpanel.home": "ホームフォルダ",
+  "termpanel.ended": "シェルが終了しました",
+  "termpanel.endedCode": "シェルがコード {code} で終了しました",
+  "termpanel.couldNotStart": "シェルを起動できませんでした: {error}",
 };

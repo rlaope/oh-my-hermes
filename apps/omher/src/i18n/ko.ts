@@ -1303,4 +1303,15 @@ export const ko: Record<Key, string> = {
   "harness.noCli": "{agent}이(가) 이 부분을 맡았지만, 그 세션이 이 컴퓨터에 없습니다.",
   "harness.openChild": "{name} 열기",
   "harness.session": "세션",
+  // termpanel (the bottom terminal panel, Ctrl+`)
+  "termpanel.label": "터미널",
+  "termpanel.tabs": "터미널 탭",
+  "termpanel.newTab": "새 터미널",
+  "termpanel.closeTab": "{name} 닫기",
+  "termpanel.hide": "터미널 숨기기 (Ctrl+`)",
+  "termpanel.resize": "터미널 높이",
+  "termpanel.home": "홈 폴더",
+  "termpanel.ended": "셸이 끝났습니다",
+  "termpanel.endedCode": "셸이 코드 {code}로 끝났습니다",
+  "termpanel.couldNotStart": "셸을 시작하지 못했습니다: {error}",
 };
