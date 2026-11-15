@@ -993,6 +993,30 @@ button.upd:hover {
   position: relative;
   flex: none;
 }
+
+/* ---- hold to drag (useRowDrag) ---------------------------------------------------------------------- */
+/* while a row is held the others slide out of its way; the held row follows the pointer with no easing */
+.bot-w.sliding {
+  transition: transform 0.16s ease;
+}
+.bot-w.lifted {
+  z-index: 2;
+  transition: none;
+}
+.bot-w.lifted .bot {
+  background: var(--raise2);
+  box-shadow: 0 6px 18px rgb(0 0 0 / 0.28);
+}
+body.row-dragging,
+body.row-dragging * {
+  cursor: grabbing !important;
+  user-select: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  .bot-w.sliding {
+    transition: none;
+  }
+}
 .bot-more {
   position: absolute;
   right: 4px;
