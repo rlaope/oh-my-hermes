@@ -836,7 +836,7 @@ class ApprovalOutcomeTests(unittest.TestCase):
         self.assertEqual(group.tools[0].status, TOOL_RUNNING)  # Hermes reports what the call did next
 
     def test_allowing_reads_in_green(self) -> None:
-        for keys, words in (([Key(RIGHT)], "allowed once"), ([Key(RIGHT), Key(RIGHT)], "allowed for this session")):
+        for keys, words in (([], "allowed once"), ([Key(RIGHT)], "allowed for this session")):
             with self.subTest(words=words):
                 app, _client, _clock = self.asked()
                 for key in (*keys, Key(ENTER)):
@@ -860,8 +860,7 @@ class ApprovalOutcomeTests(unittest.TestCase):
     def test_the_answer_goes_under_the_call_that_asked_not_the_first_of_the_turn(self) -> None:
         # Review B: `✓ allowed once · …` stood above `⏺ read_file(README.md)`, the turn's first call.
         app, _client, clock = self.asked_after_a_read()
-        app._on_input(Key(RIGHT))
-        app._on_input(Key(ENTER))
+        app._on_input(Key(ENTER))  # allow once, where the approval opens
         (group,) = app.transcript.blocks
         rows = lines_text(block_rows(group, 80, THEME))
         self.assertEqual(rows, ["┃ ● read_file(README.md)  0.1s", "┃   ⎿  Read 1 line", "", "",
@@ -903,8 +902,7 @@ class ApprovalOutcomeTests(unittest.TestCase):
         # A subagent's approval can arrive after the turn's own calls finished: none of them asked it.
         app, _client, _clock = self.asked_after_a_read()
         app._on_event(ev("tool.complete", tool_id="t1", name="terminal", duration_s=0.1, result={"output": ""}))
-        app._on_input(Key(RIGHT))
-        app._on_input(Key(ENTER))
+        app._on_input(Key(ENTER))  # allow once, where the approval opens
         notice, group = app.transcript.blocks
         self.assertEqual((notice.text, notice.level), (f"allowed once · {self.COMMAND}", NOTICE_OK))
         self.assertEqual([tool.answers for tool in group.tools], [[], []])

@@ -19,7 +19,6 @@ from test_tui_no_color import SGR
 from omh.skin_pack import SKIN_THEMES
 from omh.tui import prompts
 from omh.tui.command_risk import names_a_found_risk, segment_risks, segments, split_commands, unnamed_risks
-from omh.tui.keys import DOWN, Key
 from omh.tui.layout import choice_cap
 from omh.tui.style import NO_COLOR
 from omh.tui.theme import DEFAULT_THEME, TEXT_CONTRAST, build_theme, contrast_ratio, without_colour
@@ -484,8 +483,8 @@ class SlotRowsTests(unittest.TestCase):
             "  ▲ rm -rf ~/.hermes/cache/scratch/e2e ~/.hermes/cache/scratch/gen_*.py",
             "    + 8 other commands (git, gh, echo, ls) · ctrl+o shows all",
             "  " + "─" * prompts.RULE_CELLS,
-            "❯ ✗ deny",
-            "  ✓ allow once",
+            "  ✗ deny",
+            "❯ ✓ allow once",
             "  ✓ allow this session",
             f"  ★ always allow {OWNER_DESCRIPTION} (Hermes saves it)",
             "  ✎ no, and tell Hermes what to do instead",
@@ -582,7 +581,7 @@ class SlotRowsTests(unittest.TestCase):
         self.assertFalse([row for row in shortest if "other commands" in row], shortest)
         self.assertEqual([row for row in shortest if row.startswith("  ▲")], risky[:3], shortest)
         self.assertIn("  … +2 more lines · ctrl+o shows all", shortest)
-        self.assertIn("❯ ✗ deny", shortest)
+        self.assertEqual(shortest[shortest.index("  ✗ deny") + 1], "❯ ✓ allow once")
 
     def test_a_command_folds_only_when_dropping_the_rule_is_not_enough(self) -> None:
         # Folding `dd` to keep a separator hid a command that changes a disk (24x80).
@@ -708,8 +707,7 @@ class ChoiceToneTests(unittest.TestCase):
 
     def test_under_no_color_the_highlight_is_still_the_pointer_and_bold(self) -> None:
         theme = without_colour(build_theme(SKIN_THEMES[0], "#0D1117"))
-        approval = slot(OWNER_REQUEST)
-        approval.handle_key(Key(DOWN))
+        approval = slot(OWNER_REQUEST)  # opens on allow once
         rows = approval.lines(122, theme, 40)
         sgr = "".join(span.style.sgr() for row in rows for span in row)
         codes = {code for match in SGR.finditer(sgr) for code in match[1].split(";")}

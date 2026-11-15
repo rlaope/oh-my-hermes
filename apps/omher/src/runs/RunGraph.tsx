@@ -67,7 +67,13 @@ export const measureText: Measure = (text, font) => {
 const ICONS: Record<StatusIcon | "repair", ReactNode> = {
   check: <path d="M20 6 9 17l-5-5" />,
   x: <path d="M18 6 6 18M6 6l12 12" />,
-  dot: <circle cx="12" cy="12" r="5.5" fill="currentColor" stroke="none" />,
+  dot: (
+    // a running node: a spinner, an arc turning on a faint track (runs.css spins `.bx-spin`), so a node at work moves
+    <>
+      <circle cx="12" cy="12" r="8" strokeWidth="3" opacity="0.2" />
+      <path className="bx-spin" d="M12 4a8 8 0 0 1 8 8" strokeWidth="3" />
+    </>
+  ),
   ring: <circle cx="12" cy="12" r="7.5" />,
   dashed: <circle cx="12" cy="12" r="7.5" strokeDasharray="2.9 3" />,
   alert: (

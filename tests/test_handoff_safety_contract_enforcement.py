@@ -272,6 +272,12 @@ PROCESS_SPAWN_ALLOWLIST: dict[str, str] = {
         "in-worktree git identity reads - to validate an observed session receipt against the "
         "current binary and workspace. It never launches a resume or any executor turn."
     ),
+    "src/coding/paired_run_arm_home.py": (
+        "`omh coding paired-run dispatch --confirm-dispatch` only; starts one harness-owned "
+        "`hermes gateway run --quiet` per arm home in its own process group (never a service "
+        "manager), minimal env with the provider key by declared name, and stops the whole group "
+        "and removes the home in a finally block. Model turns still go through the Hermes child seam."
+    ),
     "src/coding/hermes_child_dispatch.py": (
         "operator-only, explicitly confirmed `ask_before_dispatch` seam for one bounded local "
         "`hermes chat --query-file - --model` child; suppresses recursion and cleans its process group."

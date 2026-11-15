@@ -57,7 +57,7 @@ _TEXT_COLUMNS: Final = (
 )
 _MAX_TEXT_CHARS: Final = 200
 _SELECT: Final = (
-    "SELECT " + ", ".join((*_COUNT_COLUMNS, "estimated_cost_usd", *(column for column, _key in _TEXT_COLUMNS)))
+    "SELECT id, " + ", ".join((*_COUNT_COLUMNS, "estimated_cost_usd", *(column for column, _key in _TEXT_COLUMNS)))
     + " FROM sessions ORDER BY started_at, rowid"
 )
 
@@ -66,7 +66,25 @@ class _StateDbUnreadable(ValueError):
     """The disposable home holds no readable ``state.db``."""
 
 
-def read_hermes_child_usage(hermes_home: Path) -> dict[str, object]:
+def state_session_ids(hermes_home: Path) -> frozenset[str]:
+    """The ``sessions`` ids already in a home, so a later read can leave them out."""
+    try:
+        _path, connection = open_state_db_readonly(hermes_home, error=_StateDbUnreadable)
+    except (_StateDbUnreadable, OSError):
+        return frozenset()
+    try:
+        return frozenset(str(row[0]) for row in connection.execute("SELECT id FROM sessions").fetchall())
+    except sqlite3.Error:
+        return frozenset()
+    finally:
+        connection.close()
+
+
+def read_hermes_child_usage(
+    hermes_home: Path,
+    *,
+    exclude: frozenset[str] = frozenset(),
+) -> dict[str, object]:
     """Sum the ``sessions`` rows of a finished child's disposable home into one usage record.
 
     Empty when the database is missing, is not a database, lacks the columns,
@@ -81,7 +99,10 @@ def read_hermes_child_usage(hermes_home: Path) -> dict[str, object]:
     except (_StateDbUnreadable, OSError):
         return {}
     try:
-        rows = connection.execute(_SELECT).fetchall()
+        rows = [
+            row[1:] for row in connection.execute(_SELECT).fetchall()
+            if str(row[0]) not in exclude
+        ]
     except sqlite3.Error:
         return {}
     finally:

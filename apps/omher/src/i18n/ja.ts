@@ -919,6 +919,8 @@ export const ja: Record<Key, string> = {
 
   // right panel, sessions, routines, runs drawer, setup gate (i18n 0.2.5)
   "pn.panel": "パネル",
+  "pn.resize": "パネルの幅を変える",
+  "pn.resizeTip": "ドラッグで幅を変更 · ダブルクリックで標準の幅",
   "pn.details": "詳細",
   "pn.terminal": "ターミナル",
   "pn.schedule": "スケジュール",

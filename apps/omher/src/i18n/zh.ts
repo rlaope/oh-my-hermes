@@ -919,6 +919,8 @@ export const zh: Record<Key, string> = {
 
   // right panel, sessions, routines, runs drawer, setup gate (i18n 0.2.5)
   "pn.panel": "面板",
+  "pn.resize": "调整面板宽度",
+  "pn.resizeTip": "拖动调整宽度 · 双击恢复默认宽度",
   "pn.details": "详情",
   "pn.terminal": "终端",
   "pn.schedule": "日程",

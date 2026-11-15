@@ -919,6 +919,8 @@ export const ko: Record<Key, string> = {
 
   // right panel, sessions, routines, runs drawer, setup gate (i18n 0.2.5)
   "pn.panel": "패널",
+  "pn.resize": "패널 크기 조절",
+  "pn.resizeTip": "끌어서 크기 조절 · 더블클릭하면 기본 너비",
   "pn.details": "상세",
   "pn.terminal": "터미널",
   "pn.schedule": "일정",

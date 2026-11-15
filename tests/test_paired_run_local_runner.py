@@ -136,7 +136,7 @@ class PairedRunLocalRunnerTests(unittest.TestCase):
                 "decision-local-cli",
                 None,
                 ArmSpec("baseline", "hermes", "model-base", ()),
-                ArmSpec("variant", "hermes", "model-variant", ("skill-a",)),
+                ArmSpec("variant", "hermes", "model-variant", ("code-review",)),
                 (task,),
                 2,
                 30,
@@ -247,7 +247,15 @@ class PairedRunLocalRunnerTests(unittest.TestCase):
                     encoding="utf-8"
                 ).splitlines()
             ]
-            self.assertEqual([call["prompt"] for call in calls], [task_content] * 2)
+            cell_calls = [call for call in calls if call["prompt"] == task_content]
+            self.assertEqual(len(cell_calls), 2)
+            self.assertEqual(len(calls), 4, "one untimed warm-up chat per arm, then the cells")
+            homes = execution["arm_homes"]
+            self.assertEqual(homes["baseline"]["arm_setup"]["omh_plugin"], False)
+            self.assertEqual(homes["variant"]["arm_setup"]["omh_plugin"], True)
+            self.assertTrue(homes["baseline"]["stopped"] and homes["variant"]["stopped"])
+            for call in calls:
+                self.assertFalse(Path(call["hermes_home"]).exists(), "arm homes are removed")
 
 
 if __name__ == "__main__":
