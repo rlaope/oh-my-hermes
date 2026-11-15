@@ -9,7 +9,7 @@
 # into a temporary folder next to apps/omher's node_modules (pnpm install there first). Nothing in the repo is
 # changed except site/app-preview/.
 set -eu
-OMHER_PREVIEW_APP=b9d913ad64a06ed2fc31f7a9a299ee840d9fb6d2   # omher v0.2.8 (#2864): six more ACP agents, More agents, responsive session header
+OMHER_PREVIEW_APP=d0bb9dc943eef3c3b5f0c9cb73729330ad88f6c0   # omher v0.2.10 (#2891): SSH peers, one-bot roster, custom ACP agents, ⌘T new session
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
 SHA=${1:-$OMHER_PREVIEW_APP}
 NM=${OMHER_NODE_MODULES:-$ROOT/apps/omher/node_modules}

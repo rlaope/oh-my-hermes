@@ -22,6 +22,8 @@ try {
   ss.setItem("omher.notify", "off");
   ss.setItem("omher.sounds", "off");
   ss.setItem("omher.lang", siteLang());
+  // From 0.2.10 the sidebar lists only the roster (one bot on a first run); the story plays on all four.
+  if (!ss.getItem("omher.roster")) ss.setItem("omher.roster", JSON.stringify(["kami", "friren", "juno-bot", "pip"]));
 } catch {
   /* storage blocked: the app falls back to its defaults */
 }
