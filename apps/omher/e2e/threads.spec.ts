@@ -174,7 +174,7 @@ test("thread rows are a two-level tree under their bot, joined by a thin connect
   await expect(group.locator("[role=treeitem] [role=group], [role=treeitem] [role=treeitem]")).toHaveCount(0);
   // newest first
   await expect(rows.first()).toHaveAttribute("data-thread", ids.og);
-  // the connector: a 1px line in the thin-line gray, an elbow into every row, the stem carried past every row but the last
+  // the connector: a 1px line (the timestamp gray at reduced strength, --th-line), an elbow into every row, the stem carried past every row but the last
   const lines = await rows.evaluateAll((els) =>
     els.map((el) => {
       const b = getComputedStyle(el.querySelector(".th-branch")!);
@@ -191,8 +191,8 @@ test("thread rows are a two-level tree under their bot, joined by a thin connect
   expect(lines.map((l) => l.last)).toEqual([false, false, false, false, true]);
   const lineGray = await page.evaluate(() => {
     const probe = document.createElement("div");
-    probe.style.color = "var(--line-strong)";
-    document.querySelector(".side")!.appendChild(probe);
+    probe.style.color = "var(--th-line)";
+    document.querySelector(".th-tree")!.appendChild(probe);
     const c = getComputedStyle(probe).color;
     probe.remove();
     return c;

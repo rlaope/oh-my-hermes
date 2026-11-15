@@ -92,7 +92,8 @@ test("a Hermes subagent node opens as a chat: parent right, child left with Herm
   await expect(steps.nth(0)).toContainText("docs/theme.css");
   await expect(steps.nth(1)).toContainText("node scripts/contrast.mjs docs/theme.css");
   await steps.nth(1).click();
-  await expect(chat.getByTestId("activity-step-input").first()).toContainText('"command": "node scripts/contrast.mjs docs/theme.css"');
+  // a single shell command already reads in full on its "Ran" row: the opened box shows only the result
+  await expect(chat.getByTestId("activity-step-input")).toHaveCount(0);
   // a Hermes tool's JSON result reads as its text: the two lines, not a JSON string with "\n" in it
   const result = chat.getByTestId("activity-step-result").first();
   expect(await result.textContent()).toContain("muted on bg (dark): 3.9:1  FAIL\nfg on bg (dark)");
