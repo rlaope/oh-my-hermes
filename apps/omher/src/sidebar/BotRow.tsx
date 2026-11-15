@@ -12,6 +12,7 @@ import { useRestart } from "./restart";
 import { RestartLine } from "./RestartLine";
 import { useMates } from "./restart";
 import { SshMarker } from "../peers/SshMarker";
+import type { RowDrag } from "./useRowDrag";
 
 /** The live step the activity line shows ("Reading gateway.log", "Running pnpm test"); "Thinking…" until there
  *  is one ("Working…" is only the placeholder of a turn found running on open). */
@@ -158,6 +159,7 @@ export function BotRow({
   pinned = false,
   menu,
   onSelect,
+  drag,
 }: {
   bot: Bot;
   chat: Chat | undefined;
@@ -168,6 +170,8 @@ export function BotRow({
   pinned?: boolean;
   menu?: RowMenu;
   onSelect: () => void;
+  /** Hold-and-drag reordering (useRowDrag); absent while the list is filtered. */
+  drag?: RowDrag | null;
 }) {
   // The menu is fixed to the window (the bot list scrolls and would clip it): opened at the pointer on a
   // right-click, under the ⋯ button otherwise, kept inside the sidebar's width and the window's height.
@@ -195,7 +199,15 @@ export function BotRow({
     place(e.clientX, e.clientY);
   };
   return (
-    <div ref={wrap} className={`bot-w${open ? " menu-open" : ""}`} onContextMenu={onContext}>
+    <div
+      ref={wrap}
+      className={`bot-w${open ? " menu-open" : ""}${drag?.lifted ? " lifted" : ""}${drag?.active ? " sliding" : ""}`}
+      style={drag?.dy ? { transform: `translateY(${drag.dy}px)` } : undefined}
+      onContextMenu={onContext}
+      onPointerDown={drag?.onPointerDown}
+      onKeyDown={drag?.onKeyDown}
+      data-testid={`bot-row-${bot.name}`}
+    >
       <button
         type="button"
         className={`bot${active ? " active" : ""}${unread && !needs ? " unread" : ""}${needs ? " needs" : ""}`}

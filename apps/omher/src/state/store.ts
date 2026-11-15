@@ -7,6 +7,7 @@ import { appSounds, soundFor, type SoundBoard } from "../lib/sounds";
 import { promptText } from "../chat/parts/attachFiles";
 import { findTokens, toWire } from "../chat/parts/skillTokens";
 import { forBots, parseResume, RESUME_KEY, type ResumeSnap } from "../app/resume";
+import { moveInSidebar } from "./order";
 import { LANG_KEY, readLang, setLang, t as tr, type Key, type Lang } from "../i18n";
 import type {
   Away,
@@ -795,6 +796,8 @@ export type Action =
   | { type: "system.note"; bot: string; text: string; now: number }
   | { type: "ui.pin"; bot: string; on: boolean }
   | { type: "ui.roster"; roster: string[] }
+  /** A sidebar row moved (drag or ⌥↑/⌥↓): the pin list and roster in their new order. */
+  | { type: "ui.order"; pinned: string[]; roster: string[] }
   | { type: "ui.focusAsk"; bot: string; id: string }
   | { type: "ui.session"; id: string | null }
   /** After a restart: the panel, Plans view and open session as they were (resume.ts). */
@@ -1219,6 +1222,8 @@ export function reduce(state: AppState, a: Action): AppState {
     }
     case "ui.roster":
       return { ...state, ui: { ...state.ui, roster: a.roster } };
+    case "ui.order":
+      return { ...state, ui: { ...state.ui, pinned: a.pinned, roster: a.roster } };
     case "ui.focusAsk":
       return { ...state, ui: { ...state.ui, focusAsk: { bot: a.bot, id: a.id, seq: (state.ui.focusAsk?.seq ?? 0) + 1 } } };
     case "turn.reasonMoved": {
@@ -1411,6 +1416,9 @@ export interface Actions {
   /** Put a bot in the roster (the sidebar list) or take it out ("Remove from list"; the profile stays). The last
    *  listed bot is never taken out; taking out the open bot opens the first one left. Saved on this computer. */
   listBot(bot: string, on: boolean): void;
+  /** Move a sidebar row to index `to` (held and dragged, or ⌥↑/⌥↓), inside its own group: pinned bots among the
+   *  pinned, the rest below them. Saved on this computer; ⌘1…⌘9 follow the new order. */
+  moveBot(bot: string, to: number): void;
   /** Open the bot's chat and scroll to / focus one of its ask cards. */
   jumpToAsk(bot: string, id: string): Promise<void>;
   /** Show terminal session `id` in the main column; null goes back to the selected bot's chat. */
@@ -1942,6 +1950,14 @@ export function createStore(bridge: BridgeLike, opts: StoreOptions = {}): Store 
       saveList("omher.pinned", state.ui.pinned);
     },
     listBot,
+    moveBot(bot, to) {
+      const order = selectSidebarBots(state).map((b) => b.name);
+      const next = moveInSidebar(order, state.ui.pinned, state.ui.roster ?? [], bot, to);
+      if (!next) return;
+      dispatch({ type: "ui.order", ...next });
+      saveList("omher.pinned", next.pinned);
+      saveList(ROSTER_KEY, next.roster);
+    },
     async jumpToAsk(bot, id) {
       dispatch({ type: "ui.focusAsk", bot, id });
       // a SESSIONS chat's ask opens that session; a bot's opens the bot's chat
