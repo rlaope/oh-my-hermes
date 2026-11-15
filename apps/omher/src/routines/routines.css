@@ -72,3 +72,25 @@
   color: var(--quiet);
   flex: none;
 }
+
+/* the line above an automation's answer, with its quiet "Not useful" */
+.watch-line .routine-row {
+  cursor: default;
+}
+.watch-nu {
+  margin-left: auto;
+  border: 0;
+  background: none;
+  color: var(--muted);
+  font: inherit;
+  font-size: 11px;
+  cursor: pointer;
+  padding: 0 4px;
+}
+.watch-nu:hover:not(:disabled) {
+  color: var(--body);
+  text-decoration: underline;
+}
+.watch-nu:disabled {
+  cursor: default;
+}

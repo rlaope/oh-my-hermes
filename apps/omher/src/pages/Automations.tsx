@@ -11,12 +11,15 @@ import { Avatar, PlusIcon, SourceIcon } from "../ui";
 import { Seg } from "../chat/model/Seg";
 import { AskBox, BotChip, errorLine, PageHead, Toggle, atWords, dateWords, nextWords, toSec } from "./kit";
 import { scheduleWords } from "./schedule";
+import { PLATFORM_NAME, reasonWords, watchOf, watchSentence, whereOf, WATCH_EVERY, type WatchInfo } from "./watch";
 
 const OK = new Set(["ok", "success", "done", "completed", "delivered"]);
 type Status = "ok" | "failed" | "never" | "paused";
 
 export function statusOf(a: Automation): Status {
   if (a.paused) return "paused";
+  // a channel watch the bot can't read is never shown as done, whatever the run's own status says
+  if (watchOf(a)?.state === "not_readable") return "failed";
   if (!a.last_run_at || !a.last_status) return "never";
   return OK.has(String(a.last_status).toLowerCase()) ? "ok" : "failed";
 }
@@ -59,6 +62,7 @@ export function AutomationsPage() {
   const [err, setErr] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
+  const [addingWatch, setAddingWatch] = useState(false);
   const askRef = useRef<HTMLInputElement>(null);
 
   const bot = bots.find((b) => b.name === askBot) ?? bots.find((b) => b.name === s.selectedBot) ?? bots[0];
@@ -149,7 +153,30 @@ export function AutomationsPage() {
             <span className="pg-summary" data-testid="auto-summary">
               {summary}
             </span>
-            <button type="button" className="pg-btn" onClick={() => setAdding((v) => !v)} aria-expanded={adding} data-testid="auto-new">
+            <button
+              type="button"
+              className="pg-btn"
+              onClick={() => {
+                setAdding(false);
+                if (!addingWatch) s.openAutomations(null);
+                setAddingWatch((v) => !v);
+              }}
+              aria-expanded={addingWatch}
+              data-testid="watch-new"
+            >
+              <PlusIcon size={12} />
+              {t("watch.new")}
+            </button>
+            <button
+              type="button"
+              className="pg-btn"
+              onClick={() => {
+                setAddingWatch(false);
+                setAdding((v) => !v);
+              }}
+              aria-expanded={adding}
+              data-testid="auto-new"
+            >
               <PlusIcon size={12} />
               {t("auto.new")}
             </button>
@@ -160,6 +187,7 @@ export function AutomationsPage() {
             </p>
           )}
           {adding && <NewForm bots={bots} initial={bot?.name} onDone={() => setAdding(false)} />}
+          {addingWatch && <NewWatchForm bots={bots} initial={bot?.name} onDone={() => setAddingWatch(false)} />}
           {shown.length === 0 ? (
             <div className="pg-empty" data-testid="auto-empty">
               <b>{filter ? t("auto.emptyBot", { bot: nameOf(filter) }) : t("auto.empty")}</b>
@@ -208,32 +236,46 @@ export function AutomationsPage() {
 function statusText(a: Automation, st: Status = statusOf(a)): string {
   const at = toSec(a.last_run_at);
   if (st === "paused") return t("auto.st.paused");
+  if (watchOf(a)?.state === "not_readable") return t("watch.st.unreadable");
+  if (watchOf(a)) return st === "never" ? t("watch.st.never") : t("watch.st.ok", { at: at ? atWords(at) : "" });
   if (st === "never") return t("auto.st.never");
   return t(st === "ok" ? "auto.st.ok" : "auto.st.failed", { at: at ? atWords(at) : "" });
 }
 
 function StatusMark({ a, st = statusOf(a), text = statusText(a, st) }: { a: Automation; st?: Status; text?: string }) {
   return (
-    <span className={`au-st ${st}`} data-status={st}>
+    <span className={`au-st ${st}`} data-status={st} title={text}>
       <i aria-hidden="true" />
-      {text}
+      <span className="au-st-t">{text}</span>
     </span>
   );
 }
 
 function Row({ a, on, busy, onOpen, onToggle }: { a: Automation; on: boolean; busy: boolean; onOpen: () => void; onToggle: (on: boolean) => void }) {
   const next = toSec(a.next_run_at);
+  const w = watchOf(a);
   return (
     <div
       role="listitem"
-      className={`au-row${on ? " on" : ""}${a.paused ? " paused" : ""}`}
+      className={`au-row${on ? " on" : ""}${a.paused ? " paused" : ""}${w ? " watch" : ""}`}
       onClick={onOpen}
       data-testid={`auto-row-${a.id}`}
+      data-watch={w ? w.state : undefined}
     >
       <Avatar bot={a.bot} size={26} />
       <button type="button" className="au-main" onClick={onOpen} aria-current={on ? "true" : undefined}>
-        <span className="au-name">{a.name}</span>
-        <span className="au-desc">{firstLine(whatOf(a))}</span>
+        <span className="au-name">
+          {w && <span className="au-tag" data-testid="watch-tag">{t("watch.line")}</span>}
+          {a.name}
+        </span>
+        {w ? (
+          <span className="au-desc au-watch-desc" data-testid="watch-desc">
+            {w.platform && <SourceIcon source={w.platform} size={11} />}
+            <span>{[whereOf(w), w.what].filter(Boolean).join(" · ")}</span>
+          </span>
+        ) : (
+          <span className="au-desc">{firstLine(whatOf(a))}</span>
+        )}
       </button>
       <span className="au-when">
         <span className="au-sched" title={a.schedule}>
@@ -271,6 +313,7 @@ function Detail({
   const next = toSec(a.next_run_at);
   const last = toSec(a.last_run_at);
   const st = statusOf(a);
+  const w = watchOf(a);
   return (
     <aside className="au-detail" aria-label={a.name} data-testid="auto-detail">
       <div className="au-d-top">
@@ -288,10 +331,16 @@ function Detail({
         <span title={a.schedule}>{scheduleWords(a.schedule)}</span>
         {!a.paused && next && <span className="au-quiet"> · {t("auto.next", { when: nextWords(next) })}</span>}
       </div>
-      <div className="au-k">{t("auto.what")}</div>
-      <div className="au-prompt" data-testid="auto-prompt">
-        {whatOf(a)}
-      </div>
+      {w ? (
+        <WatchFacts w={w} />
+      ) : (
+        <>
+          <div className="au-k">{t("auto.what")}</div>
+          <div className="au-prompt" data-testid="auto-prompt">
+            {whatOf(a)}
+          </div>
+        </>
+      )}
       <div className="au-k">{t("auto.deliver")}</div>
       <div className="au-v au-dl" data-testid="auto-deliver">
         {deliverParts(a, bots).map((d, i) => (
@@ -311,7 +360,7 @@ function Detail({
             return <StatusMark a={a} st={ran} text={t("auto.lastLine", { status: statusText(a, ran), n: a.repeat.completed })} />;
           })()
         )}
-        {a.last_error && st === "failed" && <div className="au-errline">{t("auto.lastError", { error: a.last_error })}</div>}
+        {a.last_error && st === "failed" && !w && <div className="au-errline">{t("auto.lastError", { error: a.last_error })}</div>}
       </div>
       {confirm ? (
         <div className="pg-confirm" role="alertdialog" data-testid="auto-confirm">
@@ -341,7 +390,7 @@ function Detail({
           </button>
         </div>
       )}
-      <p className="au-note">{t("auto.note", { bot: botName, name: a.name })}</p>
+      <p className="au-note" data-testid="auto-note">{t(w ? "watch.note" : "auto.note", { bot: botName, name: a.name })}</p>
     </aside>
   );
 }
@@ -428,6 +477,119 @@ function NewForm({ bots, initial, onDone }: { bots: Bot[]; initial?: string; onD
       <div className="pg-btns">
         <button type="submit" className="pg-btn pri" disabled={!ready || busy} data-testid="form-add">
           {t("auto.form.add")}
+        </button>
+        <button type="button" className="pg-btn" onClick={onDone}>
+          {t("page.cancel")}
+        </button>
+      </div>
+    </form>
+  );
+}
+
+/** A watch's own facts in the detail panel: where, the condition, last check and alert, and why it can't read. */
+function WatchFacts({ w }: { w: WatchInfo }) {
+  const check = toSec(w.last_check);
+  return (
+    <>
+      {w.state === "not_readable" && (
+        <div className="au-unread" role="status" data-testid="watch-unreadable">
+          <b>{t("watch.st.unreadable")}</b>
+          <span data-testid="watch-reason">{reasonWords(w)}</span>
+        </div>
+      )}
+      <div className="au-k">{t("watch.k.where")}</div>
+      <div className="au-v au-dl" data-testid="watch-where">
+        <span className="au-dl-p">
+          {w.platform && <SourceIcon source={w.platform} size={13} />}
+          {whereOf(w) || t("watch.unknown")}
+        </span>
+      </div>
+      <div className="au-k">{t("watch.k.what")}</div>
+      <div className="au-prompt" data-testid="watch-what">
+        {w.what || t("watch.unknown")}
+      </div>
+      <div className="au-k">{t("watch.k.checks")}</div>
+      <div className="au-v" data-testid="watch-checks">
+        {check ? t(w.state === "not_readable" ? "watch.st.tried" : "watch.st.ok", { at: atWords(check) }) : t("watch.st.never")}
+        {(w.last_alert || w.state !== "not_readable") && (
+          <span className="au-quiet"> · {w.last_alert ? t("watch.lastAlert", { at: atWords(w.last_alert) }) : t("watch.noAlert")}</span>
+        )}
+      </div>
+    </>
+  );
+}
+
+/** "+ New watch": fills one sentence and sends it to that bot's chat, then opens the chat. It makes no job itself;
+ *  the bot confirms the details with the person and sets the watch up with its own tools. */
+function NewWatchForm({ bots, initial, onDone }: { bots: Bot[]; initial?: string; onDone: () => void }) {
+  const s = useStore();
+  const [botName, setBotName] = useState(initial ?? bots[0]?.name ?? "");
+  const [platform, setPlatform] = useState<"slack" | "discord">("slack");
+  const [channel, setChannel] = useState("");
+  const [what, setWhat] = useState("");
+  const [every, setEvery] = useState<number>(WATCH_EVERY[0]);
+  const bot = bots.find((b) => b.name === botName);
+  const ready = !!bot && channel.trim() && what.trim();
+  const sentence = ready ? watchSentence({ platform, channel, what, minutes: every }) : "";
+  return (
+    <form
+      className="au-form"
+      onKeyDown={holdImeEnter}
+      data-testid="watch-form"
+      onSubmit={(e) => {
+        e.preventDefault();
+        if (!bot || !ready) return;
+        onDone();
+        void s.sendTo(bot.name, sentence);
+      }}
+    >
+      <div className="au-form-h">{t("watch.form.title")}</div>
+      <label className="au-f">
+        <span>{t("auto.form.bot")}</span>
+        <BotChip bots={bots} bot={bot} onPick={setBotName} testId="watch-form-bot" />
+      </label>
+      <div className="au-f">
+        <span>{t("watch.form.platform")}</span>
+        <Seg
+          small
+          label={t("watch.form.platform")}
+          value={platform}
+          onChange={(v) => setPlatform(v as "slack" | "discord")}
+          options={[
+            { value: "slack", label: PLATFORM_NAME.slack },
+            { value: "discord", label: PLATFORM_NAME.discord },
+          ]}
+          testId="watch-form-platform"
+        />
+      </div>
+      <label className="au-f">
+        <span>{t("watch.form.channel")}</span>
+        <input value={channel} onChange={(e) => setChannel(e.target.value)} placeholder={t("watch.form.channelPh")} maxLength={120} data-testid="watch-form-channel" />
+      </label>
+      <label className="au-f">
+        <span>{t("watch.form.what")}</span>
+        <input value={what} onChange={(e) => setWhat(e.target.value)} placeholder={t("watch.form.whatPh")} maxLength={400} data-testid="watch-form-what" />
+      </label>
+      <div className="au-f">
+        <span>{t("watch.form.every")}</span>
+        <Seg
+          small
+          label={t("watch.form.every")}
+          value={String(every)}
+          onChange={(v) => setEvery(Number(v))}
+          options={WATCH_EVERY.map((m) => ({ value: String(m), label: scheduleWords(`every ${m}m`) }))}
+          testId="watch-form-every"
+        />
+      </div>
+      {sentence && (
+        <p className="au-f-say" data-testid="watch-form-sentence">
+          {sentence}
+        </p>
+      )}
+      <p className="au-f-hint">{t("watch.form.hint", { bot: bot?.display_name ?? "" })}</p>
+      <div className="pg-btns">
+        <button type="submit" className="pg-btn pri" disabled={!ready} data-testid="watch-form-send">
+          {t("watch.form.send", { bot: bot?.display_name ?? "" })}
         </button>
         <button type="button" className="pg-btn" onClick={onDone}>
           {t("page.cancel")}

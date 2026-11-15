@@ -509,7 +509,9 @@ class AiJobSearchContextBudgetTests(unittest.TestCase):
         # the pin before it (with the design-skills lines) was 11dd6034...72d9.
         # agent-evaluation's body then names paired_run_decision/v2 and its speed-at-equal-quality verdict; only
         # agent-evaluation moves, and the pin before it was 9ec3df67...56b2.
-        self.assertEqual(_digest(legacy_hashes), 'e5dfad8f37cfb39e2d7468d7146552d282dcc31e277ccf36b9f8b8b3362e8749')
+        # automation-blueprint's quality bar then points at the channel-watch recipe; only automation-blueprint
+        # moves, and the pin before it was e5dfad8f...8749.
+        self.assertEqual(_digest(legacy_hashes), 'b1141bcf81c0ffbfd6c227ddfe0a3cede39e86130fcef81e6d47e70fb41ff0ee')
         legacy = _skill_context_cost_profile('full', legacy_templates, refs)
         current = _skill_context_cost_profile('full', templates, refs)
         # Main's search guidance adds 305; repro-audit's mandatory rails 1,943.

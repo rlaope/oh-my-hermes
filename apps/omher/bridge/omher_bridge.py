@@ -1123,12 +1123,12 @@ def _origin_place(origin) -> dict | None:
     return {"platform": platform, "place": name[:80]}
 
 
-def read_automations(profile_dir: Path) -> list[dict]:
+def read_automations(profile_dir: Path, jobs: list[dict] | None = None) -> list[dict]:
     """A bot's cron jobs for the Automations page: `read_routines`' fields plus what the detail panel shows
     (prompt or script name, delivery, created, last error, repeat). Read-only; `cron.manage` on the bot's gateway is the
-    only way omher changes a job."""
+    only way omher changes a job. ``jobs``: the raw rows already read from that same file (one read per poll)."""
     out = []
-    for j in _read_jobs(profile_dir):
+    for j in (_read_jobs(profile_dir) if jobs is None else jobs):
         base = _routine_row(j)
         rep = j.get("repeat") if isinstance(j.get("repeat"), dict) else {}
         times, done = rep.get("times"), rep.get("completed")
@@ -1141,8 +1141,186 @@ def read_automations(profile_dir: Path) -> list[dict]:
                     "created_at": j.get("created_at"),
                     "last_error": _clip(str(j.get("last_error") or j.get("last_delivery_error") or ""), 300) or None,
                     "repeat": {"times": times if isinstance(times, int) else None,
-                               "completed": done if isinstance(done, int) else 0}})
+                                "completed": done if isinstance(done, int) else 0},
+                    "watch": read_watch(profile_dir, j, base)})
     return out
+
+
+# ---------------------------------------------------------------- channel watches (Automations page)
+# A channel watch is a cron job whose script is the channel-watch collector, installed once per watch as
+# `<profile>/scripts/channel_watch_<watch>.py` with its config at `<profile>/channel_watch/<watch>.json`. The page
+# shows what it watches and whether the bot can read the channel; both come from files only, read-only: that config
+# (platform, channel names, keywords; it holds no token) and the newest few run records Hermes keeps in
+# `<profile>/cron/output/<job id>/*.md`. The collector prints `channel-watch: unreadable reason=<r> ...` (exit 4-6) or
+# `channel-watch: error reason=<no_token|config>` (exit 2-3); Hermes puts that in the run's `## Script Error` block.
+# When only some channels are unreadable it exits 0 and the same line sits in the `## Script Output` block next to the
+# readable channels' posts. Post lines start with `- `, so a post can never start a line the bridge reads.
+
+WATCH_SCRIPT = re.compile(r"channel_watch_([a-z0-9][a-z0-9_-]{0,63})\.py")
+WATCH_UNREADABLE = re.compile(r"(?m)^channel-watch: (?:unreadable|error) reason=([a-z_]{1,40})(?: [^\n]*?channel=(\S{1,80}))?")
+SCRIPT_HEADING = re.compile(r"(?m)^## Script (Error|Output)[ \t]*$")
+RESPONSE_HEADING = re.compile(r"(?m)^## Response[ \t]*$")
+WATCH_CONDITION = re.compile(r"for one condition:\s*(.+?)\.?\s*(?:\n\s*\n|$)", re.S)
+WATCH_CONFIG_MAX = 64 * 1024     # bytes of a watch config read
+WATCH_RUN_MAX = 256 * 1024       # bytes of one run record read
+WATCH_RUNS = 20                  # newest run records looked at for the last alert
+CRLF = re.compile(r"\r\n")       # a run record Hermes wrote in text mode on Windows
+
+
+def _watch_config(profile_dir: Path, watch: str) -> dict:
+    try:
+        p = profile_dir / "channel_watch" / f"{watch}.json"
+        if not p.is_file() or p.is_symlink():
+            return {}
+        with p.open("rb") as f:
+            data = json.loads(f.read(WATCH_CONFIG_MAX).decode("utf-8"))
+    except (OSError, ValueError):
+        return {}
+    return data if isinstance(data, dict) else {}
+
+
+def _watch_runs(profile_dir: Path, job_id: str) -> list[tuple[float, str]]:
+    """The job's newest run records (mtime, text), newest first; read-only and bounded."""
+    if not JOB_ID.fullmatch(job_id):
+        return []
+    d = profile_dir / "cron" / "output" / job_id
+    if d.is_symlink():
+        return []
+    try:
+        files = sorted((f for f in d.glob("*.md") if f.is_file() and not f.is_symlink()), key=lambda f: f.name, reverse=True)
+    except OSError:
+        return []
+    out = []
+    for f in files[:WATCH_RUNS]:
+        try:
+            with f.open("rb") as fh:
+                # Hermes writes run records in text mode: CRLF on Windows, which the line-anchored headings expect as LF
+                text = CRLF.sub("\n", fh.read(WATCH_RUN_MAX).decode("utf-8", "replace"))
+                out.append((f.stat().st_mtime, text))
+        except OSError:
+            continue
+    return out
+
+
+def _script_block(run: str) -> tuple[str, str] | None:
+    """`("Error" | "Output", fenced body)` of the run's script block: its heading on a line of its own."""
+    head = SCRIPT_HEADING.search(run)
+    if not head:
+        return None
+    fence = run.find("\n```", head.end())
+    if fence < 0:
+        return head.group(1), ""
+    start = run.find("\n", fence + 1) + 1
+    end = run.find("\n```", start) if start else -1
+    return head.group(1), run[start:end] if end >= 0 else run[start:start + 4000]
+
+
+def _script_error(run: str) -> tuple[str, str | None] | None:
+    """`(reason, channel)` when this run's script block is a collector failure or names an unreadable channel."""
+    block = _script_block(run)
+    if block is None:
+        return None
+    kind, body = block
+    m = WATCH_UNREADABLE.search(body)
+    if m:
+        return m.group(1), m.group(2) if m.group(2) not in (None, "*") else None
+    if kind == "Output":
+        return None
+    code = re.search(r"Script exited with code (\d+)", body[:4000])
+    return (f"exit_{code.group(1)}" if code else "script", None)
+
+
+def _alerted(run: str) -> bool:
+    """A run whose script reported posts and whose answer was delivered (not `[SILENT]`)."""
+    block = _script_block(run)
+    heads = list(RESPONSE_HEADING.finditer(run))
+    if not block or block[0] != "Output" or not heads:
+        return False
+    answer = run[heads[-1].end():].strip()
+    first = answer.splitlines()[0].strip().upper() if answer else ""
+    return bool(answer) and first not in ("[SILENT]", "SILENT", "NO_REPLY", "NO REPLY")
+
+
+def read_watch(profile_dir: Path, job: dict, row: dict) -> dict | None:
+    """What the Automations page shows for a channel watch, or None for any other job."""
+    m = WATCH_SCRIPT.fullmatch(Path(str(job.get("script") or "")).name)
+    if not m:
+        return None
+    watch = m.group(1)
+    cfg = _watch_config(profile_dir, watch)
+    platform = str(cfg.get("platform") or "").lower()
+    channels, names = [], {}
+    raw = cfg.get("channels")
+    for c in raw if isinstance(raw, list) else []:
+        label = c.get("name") or c.get("id") if isinstance(c, dict) else c
+        if isinstance(label, (str, int)) and str(label).strip():
+            channels.append(str(label).strip()[:80])
+            if isinstance(c, dict) and c.get("id"):
+                names[str(c["id"])] = channels[-1]
+    cond = WATCH_CONDITION.search(str(job.get("prompt") or ""))
+    what = " ".join(cond.group(1).split())[:200] if cond else ", ".join(_strs(cfg.get("keywords"), 12))[:200]
+    runs = _watch_runs(profile_dir, str(job["id"]))
+    paused = not row["enabled"] or str(job.get("state") or "") == "paused" or bool(job.get("paused_at"))
+    failed = str(row.get("last_status") or "").lower() in FAILED_RUN
+    err = _script_error(runs[0][1]) if runs else None
+    reason = None
+    if not cfg:
+        reason = {"code": "config", "channel": None}
+    elif err:
+        reason = {"code": err[0], "channel": names.get(err[1], err[1]) if err[1] else None}
+    elif failed:
+        reason = {"code": "failed", "channel": None}
+    last_alert = next((ts for ts, run in runs if _alerted(run)), None)
+    return {"name": watch, "platform": platform if platform in ("slack", "discord") else None, "channels": channels[:10],
+            "what": what, "interval": row["schedule"], "last_check": row["last_run_at"], "last_alert": last_alert,
+            "state": "paused" if paused else ("not_readable" if reason else "ok"), "reason": reason}
+
+
+# ---------------------------------------------------------------- watch results (bot-chat automations)
+# A job delivering to `bot-chat:<bot>` hands its answer to that bot's Bot Chat as an inbound turn whose user row starts
+# with Hermes' header (cron/scheduler_delivery.py `bot_chat_message`). jobs.json says per run whether it handed one
+# over: `last_delivery_queued` is set only on a run that delivered to a Bot Chat; a silent run (`wakeAgent: false`,
+# `[SILENT]`) leaves it null although `last_run_at` moves.
+
+CRON_HEADER = re.compile(r'\[Cronjob "(.*?)" output — scheduled job, not the user\.[^\]\n]*\]\s*')
+FAILED_RUN = frozenset({"error", "failed", "failure", "delivery_failed", "blocked_config"})
+WATCH_ATTACH_RETRY = 60.0  # s between tries to attach a bot-chat target that could not be attached
+
+
+def watch_of(text: str) -> str | None:
+    """The job name of an inbound cron delivery row, else None."""
+    m = CRON_HEADER.match(text or "")
+    return _clip(m.group(1), 120) if m else None
+
+
+def _bot_chat_label(part: str, own: str | None) -> str | None:
+    """`bot-chat[:<profile>]` (any case, as Hermes reads it) -> the profile; bare or `(own)` -> `own`; else None."""
+    kind, sep, label = str(part).strip().partition(":")
+    if kind.strip().lower() != "bot-chat":
+        return None
+    label = label.strip()
+    if not sep or not label or label == "(own)":
+        return own or None
+    return label
+
+
+def bot_chat_targets(deliver, own: str | None = None) -> set[str]:
+    """The profiles a job's `deliver` hands its answer to as a Bot Chat turn (`bot-chat:<profile>`, comma lists too).
+    `own`: the job's own profile, which a bare `bot-chat` means."""
+    return {t for t in (_bot_chat_label(part, own) for part in str(deliver or "").split(",")) if t}
+
+
+def delivered_to(job: dict, own: str | None = None) -> str | None:
+    """The Bot Chat this job's last run handed its answer to, or None (a silent run, or not a bot-chat job)."""
+    queued = job.get("last_delivery_queued")
+    if not isinstance(queued, dict) or not queued:
+        return None
+    for key in queued:
+        label = _bot_chat_label(key, own)
+        if label:
+            return label
+    targets = sorted(bot_chat_targets(job.get("deliver"), own))
+    return targets[0] if targets else None
 
 
 # ---------------------------------------------------------------- plugins (catalog cache + folder names)
@@ -3677,9 +3855,12 @@ def _turn_answers(rows, running: bool = False) -> set[int]:
     return keep
 
 
-def chat_messages(rows, running: bool = False) -> list[dict]:
+def chat_messages(rows, watch_names: set[str] | frozenset[str] = frozenset(), running: bool = False) -> list[dict]:
+    """`watch_names`: the channel watches delivering into this chat; their delivered row is hidden and the answer
+    after it tagged `watch`. Any other automation's row stays a normal row. `running`: see `_turn_answers`."""
     out = []
     answers = _turn_answers(rows, running)
+    watch = None  # an automation's delivered result: its inbound row is not shown, the answer after it carries `watch`
     for i, row in enumerate(rows or []):
         if not isinstance(row, dict) or row.get("role") not in ("user", "assistant"):
             continue
@@ -3693,11 +3874,17 @@ def chat_messages(rows, running: bool = False) -> list[dict]:
         rid = row.get("row_id")
         reply = None
         if row["role"] == "user":
+            name = watch_of(text) if row.get("display_kind") in (None, "internal_notification") else None
+            watch = {"name": name, "ts": float(row.get("timestamp") or 0.0)} if name in watch_names else None
+            if watch:
+                continue
             text, reply = split_reply_block(split_peer_hint(text))
         m = {"id": str(rid) if rid is not None else f"m{i}", "role": row["role"], "text": text,
              "ts": float(row.get("timestamp") or 0.0)}
         if reply:
             m["reply_to"] = reply
+        if watch and row["role"] == "assistant":
+            m["watch"], watch = watch, None
         out.append(m)
     return out[-MAX_OPEN_MESSAGES:]
 
@@ -3929,6 +4116,7 @@ class Conn:
         self.asked: dict[str, tuple[float, float | None]] = {}  # open prompt_id -> (asked at, gateway timeout s)
         self.batches: dict[str, list[str]] = {}  # open batch clarify request id -> question ids, in order
         self.clarify_batch: bool | None = None  # the gateway asks a multi-question clarify as one request
+        self.watch_names: set[str] = set()  # names of the channel watches (collector jobs) that deliver into this Bot Chat
 
     @property
     def connected(self) -> bool:
@@ -3961,6 +4149,8 @@ class Bridge:
         self._env_lock = asyncio.Lock()
         self._tasks: set[asyncio.Task] = set()
         self._routine_state: dict[str, dict] = {}
+        self._bot_chat_jobs: dict[str, list[tuple[str, str, bool]]] = {}  # profile -> (bot-chat target, job, is watch)
+        self._watch_tried: dict[str, float] = {}  # bot -> clock of the last attach try for its watch results
         self._routine_changes: list[tuple[str, str, dict]] = []  # routines.update / routine.added, queued by a poll
         self._plugin_state: dict[str, set[str]] = {}  # plugin folder names per bot at the last look
         # What omher itself just added: never announced back to the chat as something the bot did.
@@ -4342,7 +4532,8 @@ class Bridge:
             mid = turn.get("final_assistant_row_id") or p.get("admission_id") or uuid.uuid4().hex
             status = p.get("status")
             if text.strip():
-                await out("message", id=str(mid), text=text)
+                watch = await self._watch_tag(conn, turn) if chat is None else None
+                await out("message", id=str(mid), text=text, **({"watch": watch} if watch else {}))
             if status == "interrupted":
                 await self._end_turn(conn, "interrupted", chat=chat)
             elif status == "error":
@@ -4438,6 +4629,62 @@ class Bridge:
                 reason = "timeout" if self.clock() - asked_at >= timeout - 1.0 else "resolved"
         await self._chat_emit(conn, chat, "prompt.expired", request_id=pid, reason=reason)
 
+    async def _watch_tag(self, conn: Conn, turn: dict) -> dict | None:
+        """``{name, ts}`` when the main-chat turn that just ended answered an automation's delivered result: its user
+        row is Hermes' `[Cronjob "<name>" output …]` header. Read from the Bot Chat's own history, only for a bot that
+        a bot-chat automation delivers to; None for every other turn or when the read fails."""
+        if not conn.watch_names or not conn.main_id:
+            return None
+        try:
+            res = await self._call(conn, "session.history", session_id=conn.main_id)
+        except Exception as e:
+            log.debug("watch history read failed: %s", e)
+            return None
+        rows = [r for r in (res.get("messages") or []) if isinstance(r, dict)]
+        uid, aid = turn.get("user_row_id"), turn.get("final_assistant_row_id")
+        row = next((r for r in reversed(rows) if uid is not None and r.get("row_id") == uid), None)
+        if row is None:
+            end = next((i for i in range(len(rows) - 1, -1, -1) if aid is not None and rows[i].get("row_id") == aid),
+                       len(rows))
+            row = next((r for r in reversed(rows[:end]) if r.get("role") == "user"), None)
+        name = watch_of(_row_text(row)) if row and row.get("role") == "user" else None
+        return {"name": name, "ts": float(row.get("timestamp") or time.time())} if name in conn.watch_names else None
+
+    def _watch_names(self, bot: str) -> set[str]:
+        """Names of the channel watches (jobs whose script is the collector) that deliver into `bot`'s Bot Chat; only
+        their answers are tagged `watch`. Other bot-chat automations are attached the same way but stay untagged."""
+        return {job for pairs in self._bot_chat_jobs.values() for target, job, is_watch in pairs
+                if is_watch and target == bot}
+
+    async def attach_watch_targets(self) -> None:
+        """Attach the existing Bot Chat of every bot a bot-chat automation delivers to, so the delivered turn reaches
+        omher as events even when the person never opened that bot. ``existing_only``: a bot without a Bot Chat gets
+        none (Hermes makes it on its first delivery; the next poll attaches it)."""
+        names = {b["name"] for b in discover_bots(self.home)}
+        want: dict[str, set[str]] = {}
+        for pairs in self._bot_chat_jobs.values():
+            for target, job, _ in pairs:
+                if target in names:
+                    want.setdefault(target, set()).add(job)
+        for name, conn in self.conns.items():
+            conn.watch_names = self._watch_names(name)
+        for bot in sorted(want):
+            conn = self.conns.get(bot)
+            if conn is not None and conn.connected and conn.main_id:
+                continue
+            if self.clock() - self._watch_tried.get(bot, -1e9) < WATCH_ATTACH_RETRY:
+                continue
+            self._watch_tried[bot] = self.clock()
+            try:
+                conn = await self._conn(bot)
+                conn.watch_names = self._watch_names(bot)
+                if not conn.main_id:
+                    snap = await self._ensure_main(conn, existing_only=True)
+                    info = snap.get("info") if isinstance(snap.get("info"), dict) else {}
+                    conn.in_turn = bool(snap.get("running") if snap.get("running") is not None else info.get("running"))
+            except Exception as e:
+                log.debug("watch attach %s: %s", bot, e)
+
     # ------------------------------------------------------------ main chat
 
     async def _ensure_main(self, conn: Conn, existing_only: bool = False) -> dict:
@@ -4477,7 +4724,9 @@ class Bridge:
         bot = conn.bot
         running = bool(snap.get("running") if snap.get("running") is not None else info.get("running"))
         conn.in_turn = running
-        result = {"session_id": conn.main_id, "messages": chat_messages(snap.get("messages"), running), "running": running,
+        conn.watch_names = self._watch_names(conn.name)
+        result = {"session_id": conn.main_id, "messages": chat_messages(snap.get("messages"), conn.watch_names, running),
+                  "running": running,
                   "model": str(info.get("model") or bot["model"]), "provider": str(info.get("provider") or bot["provider"]),
                   "reasoning": str(info.get("reasoning_effort") or bot["reasoning"])}
         prompts = [x for x in (snap.get("prompts") or []) if isinstance(x, dict) and x.get("prompt_id")]
@@ -5245,10 +5494,16 @@ class Bridge:
             st = self._routine_state.get(b["name"])
             if st is not None and st["mtime"] == mtime:
                 continue
-            jobs = read_automations(b["path"]) if mtime is not None else []
+            raw = _read_jobs(b["path"]) if mtime is not None else []
+            jobs = read_automations(b["path"], raw)
             last = {j["id"]: j["last_run_at"] for j in jobs}
+            by_id = {str(j["id"]): j for j in raw}
+            self._bot_chat_jobs[b["name"]] = [(t, j["name"], j.get("watch") is not None) for j in jobs
+                                              for t in sorted(bot_chat_targets(j["deliver"], b["name"]))]
             if st is not None:
-                ran += [(b["name"], j) for j in jobs if j["last_run_at"] and st["last"].get(j["id"]) != j["last_run_at"]]
+                ran += [(b["name"], {**j, "bot_chat": bool(bot_chat_targets(j["deliver"], b["name"])),
+                                     "delivered": delivered_to(by_id.get(j["id"], {}), b["name"])})
+                        for j in jobs if j["last_run_at"] and st["last"].get(j["id"]) != j["last_run_at"]]
                 self._routine_changes.append(("routines.update", b["name"], {}))
                 for j in jobs:
                     if j["id"] not in st["last"] and (b["name"], j["id"]) not in self._own_jobs:
@@ -5270,8 +5525,13 @@ class Bridge:
     async def poll_routines_once(self) -> int:
         ran = self.poll_routines()
         for bot, j in ran:
+            status, extra = str(j["last_status"] or "ok"), {}
+            if j.get("bot_chat") and status.strip().lower() not in FAILED_RUN:
+                if not j.get("delivered"):
+                    continue  # a silent run handed nothing over: no line, no unread
+                extra["delivered"] = j["delivered"]  # the answer arrives as that Bot Chat's turn
             await self.emit("routine.ran", bot, routine_id=j["id"], name=j["name"],
-                            status=str(j["last_status"] or "ok"), ts=_to_ts(j["last_run_at"]))
+                            status=status, ts=_to_ts(j["last_run_at"]), **extra)
         changes, self._routine_changes = self._routine_changes, []
         for event, bot, j in changes:
             if event == "routine.added":
@@ -5280,6 +5540,7 @@ class Bridge:
                                 ts=_to_ts(j.get("created_at")))
             else:
                 await self.emit(event, bot)
+        await self.attach_watch_targets()
         return len(ran)
 
     async def poll_plugins_once(self) -> int:
@@ -5309,6 +5570,8 @@ class Bridge:
     async def _watch(self) -> None:
         self.poll_routines()  # baseline: nothing that already ran is announced
         self.poll_plugins()
+        with contextlib.suppress(Exception):
+            await self.attach_watch_targets()
         last_else = self.clock()
         while True:
             await asyncio.sleep(self.poll_s)
