@@ -835,6 +835,7 @@ class SlotArmFromArrivalTests(unittest.TestCase):
     SUDO = ServerRequest("srq-1", "sudo", {"command": "apt install x"})
     DENY = ("srq-1", {"result": {"choice": "deny"}})
     ONCE = ("srq-1", {"result": {"choice": "once"}})
+    SESSION = ("srq-1", {"result": {"choice": "session"}})
     QUIET = [(READ_TIMEOUT_SECONDS, b"")]
     INSIDE = (0.10, 0.30, 0.39, 0.45)  # first bytes inside the delay; the ESC at 0.45 is held as a report's
     PAST = REPORTING_SLOT_ARM_SECONDS + 0.05
@@ -866,13 +867,14 @@ class SlotArmFromArrivalTests(unittest.TestCase):
         for at in self.INSIDE:
             with self.subTest(at=at):
                 self.assertEqual(self.press(self.APPROVAL, at, b"\x1b", b"[13u"), [])
-        self.assertEqual(self.press(self.APPROVAL, self.PAST, b"\x1b[13u"), [self.DENY])
+        self.assertEqual(self.press(self.APPROVAL, self.PAST, b"\x1b[13u"), [self.ONCE])  # Enter on allow once
 
     def test_a_right_arrow_split_after_its_escape_is_timed_from_the_escape(self) -> None:
         for at in self.INSIDE:
             with self.subTest(at=at):
-                self.assertEqual(self.press(self.APPROVAL, at, b"\x1b", b"[C", then=b"\r"), [self.DENY])
-        self.assertEqual(self.press(self.APPROVAL, self.PAST, b"\x1b[C", then=b"\r"), [self.ONCE])
+                # The early Right moved nothing: the Enter answers allow once, where the approval opened.
+                self.assertEqual(self.press(self.APPROVAL, at, b"\x1b", b"[C", then=b"\r"), [self.ONCE])
+        self.assertEqual(self.press(self.APPROVAL, self.PAST, b"\x1b[C", then=b"\r"), [self.SESSION])
 
     def test_the_composers_enter_on_a_question_answered_with_text_is_timed_the_same_way(self) -> None:
         self.assertEqual(self.press(self.SUDO, 0.45, b"\x1b", b"[13u"), [])
@@ -881,7 +883,7 @@ class SlotArmFromArrivalTests(unittest.TestCase):
     def test_a_key_whose_first_byte_came_before_the_slot_opened_is_early_however_late_it_is_decided(self) -> None:
         # A Right arrow split twice by jitter around the opening: its ESC 10 ms before, its `[` and its `C` each
         # 0.27 to 0.29 s later, inside the 0.3 s wait. It is decided 0.55 s after the opening, past the delay,
-        # and still answers nothing; the untouched approval then denies.
+        # and still answers nothing and moves nothing; the untouched approval's Enter then allows once.
         now = [100.0]
         app, client = listing(clock=lambda: now[0])
         self.assertTrue(reporting(app))
@@ -893,7 +895,7 @@ class SlotArmFromArrivalTests(unittest.TestCase):
         self.assertAlmostEqual(now[0] - app.slot_opened_at, 0.55)
         self.assertEqual(client.answers, [])
         step_through(app, now, [*self.QUIET * 40, (0.0, b"\r"), *self.QUIET])
-        self.assertEqual(client.answers, [self.DENY])
+        self.assertEqual(client.answers, [self.ONCE])
 
     def esc_after_an_off(self, off_before: float | None, at: float) -> list:
         """An Esc `at` s after an approval opened, reports having gone off `off_before` s before it (None: never on)."""

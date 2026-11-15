@@ -8,10 +8,10 @@ or withdrawn by the gateway. Three rules shape this module:
   they pressed or text they submitted; Esc or Ctrl+C sends the contract's
   decline frame (an explicit deny for approvals). Every deny the person gives
   an approval (Esc, Ctrl+C, `d`, `n`, Enter on deny) also asks the app to stop
-  the running turn (`Answer.stops`). Allowing a command takes
-  the arrows and then Enter: deny is the first row and selected, the
-  narrowest allow sits under it, the selection does not wrap, no digit picks
-  a choice, and a letter can only deny. An approval's last row denies too,
+  the running turn (`Answer.stops`). An approval opens on allow once
+  (`APPROVAL_DEFAULT`), so Enter allows that one command: deny is the first
+  row, just above it, the broader allows sit under it, the selection does not
+  wrap, no digit picks a choice, and a letter can only deny. An approval's last row denies too,
   but stops nothing: it asks the app to give the composer to what the person
   tells Hermes instead (`Answer.tell`). The app ignores every key for a
   moment after any slot opens, or its next question appears. A request the gateway
@@ -76,8 +76,8 @@ from .style import Line, Span, Style, fill, is_fill
 from .theme import CATCH_MARK, Theme
 from .width import cell_width, line_width, truncate, truncate_left, truncate_line, wrap_line
 
-# The order is the distance from safe: deny first (and selected), then the
-# narrowest allow, then the broadest. `always` is Hermes' permanent allow:
+# The order is the distance from safe: deny first, then the narrowest allow
+# (selected as the slot opens, `APPROVAL_DEFAULT`), then the broadest. `always` is Hermes' permanent allow:
 # Hermes saves the command's pattern in its config (`command_allowlist`), so
 # later commands like it run without asking. It is offered only when Hermes
 # lists it (Hermes leaves it out where a permanent allow is refused, such as a
@@ -86,6 +86,9 @@ from .width import cell_width, line_width, truncate, truncate_left, truncate_lin
 # this session.
 APPROVAL_ORDER = ("deny", "once", "session", "always")
 APPROVAL_CHOICES = ("deny", "once", "session")
+# The row an approval opens on (owner, 2026-11-15: allow once, not deny). The keys typed for the composer as the
+# slot opens still land nowhere: every key is ignored for a moment after a slot opens (`App._slot_arming`).
+APPROVAL_DEFAULT = "once"
 # Last on every approval, as Claude Code puts its "No, and tell Claude" row last: it sends the explicit deny, and the
 # app then gives the composer to what the person tells Hermes instead (`App._open_tell`).
 APPROVAL_TELL = "tell"
@@ -430,10 +433,10 @@ class PromptSlot:
     def _approval_key(self, key: Key) -> Answer | None:
         """Up and Down (Left and Right too) move and stop at either end; Enter answers the highlighted choice.
 
-        Deny is the first row and selected as the slot opens, so Up then Enter,
-        the composer's recall-and-resend typed as the slot opened, still
-        denies: Up moves nothing off the first row. No digit picks a choice,
-        and the only letters that answer deny. Every deny stops the turn
+        Allow once is selected as the slot opens and deny is the row above it,
+        so Up then Enter denies and Enter alone allows that one command; keys
+        typed for the composer as the slot opened are ignored (`App._slot_arming`).
+        No digit picks a choice, and the only letters that answer deny. Every deny stops the turn
         (`_denied`) but the tell row's.
         """
         choices = self.approval_choices()
@@ -1231,6 +1234,8 @@ def open_request(request_id: str, method: str, params: dict[str, Any]) -> Prompt
         # An empty slot would wait on a question nobody can see; answer it now, visibly.
         return ImmediateAnswer(slot.decline(), "Hermes sent a clarify request with no question in it; declined.")
     if method == "approval":
-        # Enter on an untouched approval denies: allowing takes the arrows, then Enter.
-        slot.selected = slot.approval_choices().index("deny")
+        # Allow once is highlighted as the slot opens (owner, 2026-11-15), so Enter on an untouched approval allows
+        # this one command; Up then Enter denies. A request that does not offer allow once opens on deny.
+        choices = slot.approval_choices()
+        slot.selected = choices.index(APPROVAL_DEFAULT if APPROVAL_DEFAULT in choices else "deny")
     return slot
