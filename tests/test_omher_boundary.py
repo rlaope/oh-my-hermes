@@ -37,6 +37,8 @@ RULES = (
     "the bridge has exactly one `prompt.submit` call site and it takes the main chat's id or such a folder chat's.",
     "Files the person attaches go to that same chat only, as bytes through Hermes' own `image.attach_bytes`,",
     "the bridge never opens the person's files.",
+    "on the person's press it may instead steer the running turn through Hermes' own `session.steer` (`chat.steer`), in the main chat only and never a folder chat,",
+    "A steer Hermes refuses is sent as a normal message after the turn; the bridge never sends it another way.",
     "A bot that an automation delivers to (`deliver: bot-chat:<bot>` in `cron/jobs.json`) has its existing `Bot Chat`"
     " attached the same way, without the person opening it,",
     "the bridge reads that chat's own history (`session.history`) after the turn and nothing else.",
@@ -554,6 +556,23 @@ class BridgeSubmitsOnlyToTheMainChat(unittest.TestCase):
         self.assertIn("await self._target(conn, p)", ast.unparse(callers[0]))
         params = {a.arg for a in fn.args.args + fn.args.kwonlyargs}
         self.assertNotIn("session_id", params, "the submitting function must not take a session id from its caller")
+
+    def test_chat_steer_reaches_only_the_main_chat(self) -> None:
+        """Rule 3: `chat.steer` is `op_chat_steer`, the one place `session.steer` is named; it refuses a folder chat,
+        takes the main chat's id from `_main` and sends nothing else (a refused steer is not resent here)."""
+        self.assertEqual(self.source.count('"session.steer"'), 1)
+        fns = {f.name: f for f in ast.walk(self.tree) if isinstance(f, ast.AsyncFunctionDef)}
+        steer = ast.unparse(fns["op_chat_steer"])
+        self.assertIn("'chat.steer': self.op_chat_steer", ast.unparse(fns["__init__"]) if "__init__" in fns else
+                      ast.unparse([f for f in ast.walk(self.tree) if isinstance(f, ast.FunctionDef) and f.name == "__init__"
+                                   and "self.ops" in ast.unparse(f)][0]))
+        self.assertIn("if p.get('session') is not None:", steer)
+        self.assertIn("main = await self._main(conn)", steer)
+        # the main chat's own id and the turn's generation (the canonical gateway requires it), nothing else
+        self.assertIn("self._call(conn, 'session.steer', session_id=main, text=text, execution_generation=await self._generation(conn, main))", steer)
+        calls = re.findall(r"self\.(_call|_submit|_target)\(", steer)
+        self.assertEqual(calls, ["_call"])
+        self.assertIn('"chat.steer"', self.source.split("PEER_FORWARD = frozenset({", 1)[1].split("})", 1)[0])
 
     def test_watch_attach_never_makes_a_bot_chat_and_reads_only_history(self) -> None:
         """Rule 3: a bot an automation delivers to is attached with existing_only only; its answer is tagged from
@@ -1231,9 +1250,11 @@ class SessionsStartOnlyAllowListedAgents(unittest.TestCase):
         body = self.lib[sig.end():].split("\n}\n", 1)[0]
         self.assertIn("chats.start_agent(&agent", body)
         self.assertNotIn(".spawn(", body)
-        # what the person does in a chat is one of five inputs, never a command line
+        # what the person does in a chat is one of these inputs, never a command line; Steer hands a held message's
+        # text to the running turn through the agent's own mid-turn input (rule 11)
         inputs = re.search(r"pub enum Input \{(.*?)\n\}", self.chat, re.S).group(1)
-        self.assertEqual(re.findall(r"^\s+(\w+)", inputs, re.M), ["Send", "Interrupt", "Approve", "Clarify", "Model", "Mode", "Effort", "Rewind"])
+        self.assertEqual(re.findall(r"^\s+(\w+)", inputs, re.M), ["Send", "Interrupt", "Approve", "Clarify", "Model", "Mode", "Effort", "Rewind", "Steer"])
+        self.assertIn("Steer { id: String, text: String },", inputs)
         # Send carries text, the paths of saved pictures (rule 26) and the bubble's id only: never bytes or a type
         self.assertIn("Send { text: String, #[serde(default)] images: Vec<Picture>, #[serde(default)] id: String },", inputs)
         self.assertIn('#[serde(from = "String")]\npub struct Picture', self.chat)

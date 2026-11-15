@@ -1220,7 +1220,7 @@ class ReadOnlyRule(BridgeCase):
         src = (HERE.parent / "omher_bridge.py").read_text(encoding="utf-8")
         self.assertEqual(len(re.findall(r"prompt\.submit", src)), 1)
         sites = re.findall(r"self\._submit\(([^)]*)\)", src)
-        self.assertEqual(sites, ["conn, main, text, input_id"])
+        self.assertEqual(sites, ["conn, main, text, input_id, queued"])
 
     def test_bridge_makes_no_model_or_http_call(self):
         src = (HERE.parent / "omher_bridge.py").read_text(encoding="utf-8")

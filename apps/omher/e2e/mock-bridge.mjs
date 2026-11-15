@@ -26,6 +26,9 @@
 // "og-outage" ok on Slack, kami's "deploy-talk" paused on Discord, kami's "support-escalations" not readable),
 // SSH peers: peers.probe / peers.attach / peers.detach as the bridge's multiplexer answers them; an attached peer's
 // bots join bots.list as `<peer>:<name>` with a `host` field, and folder.open / bots.restart refuse them.
+// mock.steerMode {bot, mode: "accept"|"reject"} (what chat.steer answers while a turn runs; with no turn it is
+// always rejected, as Hermes' session.steer), mock.endTurn {bot, outcome?} (a manual turn ends, as Hermes ends it),
+// mock.steers (every steer the mock took),
 // mock.ready {bot, ok, signIn?} (what `bots.ready` answers for a bot: ok false = Hermes says it cannot answer; with
 // signIn: the strict check for that provider passes, as after `hermes auth add <id>`, and its models show in
 // models.options).
@@ -600,6 +603,9 @@ let noBotChat = new Set();
 const subTimers = new Set();
 // Bots whose turns the test drives by hand (mock.manual).
 let manual;
+// chat.steer: per bot "accept" (default) or "reject" (mock.steerMode), and every steer taken (mock.steers)
+let steerMode = new Map();
+let steers = [];
 // Bots whose skills.list is empty (mock.noSkills).
 let noSkills;
 let notReady = new Map();
@@ -757,6 +763,8 @@ function reset() {
   asked = new Map();
   noBotChat = new Set();
   manual = new Set();
+  steerMode = new Map();
+  steers = [];
   noSkills = new Set();
   notReady = new Map(); // bot -> the sign-in provider that now passes its strict check ("" = none)
   idSeq = 0;
@@ -1092,6 +1100,15 @@ const OPS = {
     if (turns[b.name]) (queues[b.name] ??= []).push(text);
     else startTurn(b.name, text);
     return { input_id };
+  },
+  // Hermes' session.steer on the main chat only: taken while a turn runs, else rejected; never sent another way
+  "chat.steer": (p) => {
+    const b = needBot(p);
+    const text = needStr(p, "text");
+    if (p.session !== undefined) throw new OpError("bad_request", "steer goes to the bot's main chat only");
+    if (!turns[b.name] || steerMode.get(b.name) === "reject") return { status: "rejected" };
+    steers.push({ bot: b.name, text });
+    return { status: "queued" };
   },
   "chat.interrupt": (p) => {
     const b = needBot(p);
@@ -1616,6 +1633,17 @@ const OPS = {
     else manual.add(p.bot);
     return {};
   },
+  "mock.steerMode": (p) => {
+    const b = needBot(p);
+    steerMode.set(b.name, p.mode === "reject" ? "reject" : "accept");
+    return {};
+  },
+  "mock.endTurn": (p) => {
+    const b = needBot(p);
+    endTurn(b.name, typeof p.outcome === "string" ? p.outcome : "done");
+    return {};
+  },
+  "mock.steers": () => ({ steers: steers.map((x) => ({ ...x })) }),
   "mock.ready": (p) => {
     const b = needBotAny(p);
     if (p.ok) notReady.delete(b.name);

@@ -38,4 +38,8 @@ describe("quoteFor: what a bot answer replies to", () => {
     expect(answered([u("u0", "old"), away, u("u1", "new"), a("a1")], 3).map((m) => m.id)).toEqual(["u1"]);
     expect(quoteFor([a("a0"), a("a1")], 1)).toBeNull();
   });
+  it("never quotes a held message: it was not sent yet", () => {
+    const held = { ...u("h", "held one"), held: true };
+    expect(answered([u("u1", "a"), u("u2", "b"), held, a("a1")], 3).map((m) => m.id)).toEqual(["u1", "u2"]);
+  });
 });

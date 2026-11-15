@@ -116,14 +116,23 @@ test("/ is a command, not a skill: /name anywhere, ./name and Hermes' own comman
   await expect(mine).toHaveText(typed);
   await expect(mine.getByTestId("bubble-skill")).toHaveCount(0);
 
-  // at the start: Hermes' own commands, a skill typed the Hermes way, and a path: one Enter each, as typed
+  // at the start: Hermes' own commands, a skill typed the Hermes way, and a path: one Enter each, as typed.
+  // Lines typed while a turn runs wait in omher and go out one per turn (steer queue), so each turn is ended here
+  // as soon as it starts instead of running its scripted second.
+  await mock("mock.manual", { bot: "friren", on: true });
+  await mock("mock.endTurn", { bot: "friren" });
   const lines = ["/new", "/help", "/model x", "/plan fix the upload test", "/tmp/build is full"];
   for (const line of lines) {
     await box.fill(line);
     await expect(page.getByTestId("skill-picker")).toHaveCount(0);
     await page.keyboard.press("Enter");
   }
-  await expect.poll(async () => (await sends()).slice(1)).toEqual(lines);
+  await expect
+    .poll(async () => {
+      await mock("mock.endTurn", { bot: "friren" });
+      return (await sends()).slice(1);
+    }, { timeout: 15_000 })
+    .toEqual(lines);
   await expect(page.getByTestId("bubble-user").last().getByTestId("bubble-skill")).toHaveCount(0);
 
   // the picker opens the first time a $ stands where a token can
