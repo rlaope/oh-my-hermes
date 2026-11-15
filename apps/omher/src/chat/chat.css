@@ -695,8 +695,8 @@
   display: flex;
   flex-direction: column;
   align-items: flex-start;
-  gap: 3px;
-  max-width: min(70%, 520px);
+  gap: 4px;
+  max-width: min(60%, 420px);
 }
 .msg-quotes.face {
   margin-left: calc(28px + 10px);
@@ -705,7 +705,7 @@
   display: inline-flex;
   align-items: center;
   gap: 5px;
-  margin: 0 0 2px 4px;
+  margin: 0 0 1px 4px;
   font-size: 11px;
   color: var(--quiet);
 }
@@ -714,36 +714,37 @@
   font-size: 11px;
   color: var(--quiet);
 }
+/* the person's message, faded: their bubble colour at low strength, one line, smaller; it recedes behind the answer */
 .msg-quote {
-  position: relative;
-  display: -webkit-box;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
   max-width: 100%;
   overflow: hidden;
-  padding: 6px 12px;
+  padding: 5px 11px;
   border: 0;
   border-radius: 14px;
-  background: color-mix(in srgb, var(--bub-me) 55%, transparent);
+  background: color-mix(in srgb, var(--bub-me) 40%, transparent);
   color: var(--muted);
+  opacity: 0.75;
   font: inherit;
-  font-size: 12.5px;
+  font-size: 11.5px;
   line-height: 1.4;
   text-align: left;
-  word-break: break-word;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  word-break: keep-all;
   cursor: pointer;
 }
 .msg-quote:hover {
-  color: var(--body);
-  background: color-mix(in srgb, var(--bub-me) 80%, transparent);
+  opacity: 1;
 }
-/* the last one sits behind the answer: the answer's bubble overlaps its bottom edge */
+/* the last one tucks under the answer: the answer's bubble overlaps its bottom, as Instagram draws a reply */
 .msg-quote:last-child {
-  margin-bottom: -10px;
-  padding-bottom: 14px;
+  margin-bottom: -18px;
+  padding-bottom: 23px;
 }
 .msg-quotes + .msg.a .b {
   position: relative;
+  /* a ring in the page colour, so the answer's edge reads over the faded quote in both themes */
+  box-shadow: 0 0 0 2px var(--bg);
 }
 /* the message a quote pointed at, lit for a moment */
 .row-user.lit .msg.u .b {

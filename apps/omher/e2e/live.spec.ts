@@ -452,6 +452,8 @@ test("chat: a message sent while the answer is written goes under that answer, w
   await expect.poll(kinds).toEqual(["assistant", "user"]);
   await expect(tl.getByTestId("bubble-bot").last()).toContainText("line two.");
   void before;
+});
+
 test("chat: an answer to several messages quotes each one's first line; a click shows that message; one message gets none", async ({ page }) => {
   await open(page);
   const tl = page.getByTestId("timeline");
@@ -469,7 +471,9 @@ test("chat: an answer to several messages quotes each one's first line; a click 
   const q = (await quote.boundingBox())!;
   const b = (await tl.getByTestId("bubble-bot").last().locator(".b").boundingBox())!;
   expect(Math.abs(q.x - b.x)).toBeLessThan(1);
-  expect(q.y + q.height).toBeLessThanOrEqual(b.y);
+  // the last quoted message tucks under the answer, Instagram-style: the answer overlaps its bottom, never its text
+  expect(q.y).toBeLessThan(b.y);
+  expect(q.y + q.height - b.y).toBeLessThanOrEqual(20);
   await quote.getByTestId("bubble-quote-line").first().click();
   await expect(tl.locator(".row-user.lit")).toContainText("the spinner looks stuck");
 
