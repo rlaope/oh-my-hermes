@@ -4012,6 +4012,24 @@ def read_origins(profile_dir: Path, ids: list[str]) -> dict[str, dict]:
     return {sid: v["origin"] for sid, v in read_session_facts(profile_dir, ids).items() if "origin" in v}
 
 
+def read_session_cwds(profile_dir: Path, ids: list[str]) -> dict[str, str]:
+    """Per session: the folder Hermes saved it with (`sessions.cwd`), from the profile's state.db opened read-only;
+    sessions without one (or a state.db without the column) are left out. Nothing is written."""
+    import sqlite3
+    db = profile_dir / "state.db"
+    if not ids or not db.is_file():
+        return {}
+    try:
+        con = sqlite3.connect(ro_uri(db), uri=True, timeout=1.0)
+        try:
+            rows = con.execute(f"SELECT id, cwd FROM sessions WHERE id IN ({','.join('?' * len(ids))})", ids).fetchall()
+        finally:
+            con.close()
+    except sqlite3.Error:
+        return {}
+    return {str(sid): str(cwd) for sid, cwd in rows if isinstance(cwd, str) and cwd}
+
+
 def read_session_facts(profile_dir: Path, ids: list[str]) -> dict[str, dict]:
     """Per session: its origin and the bot's last answer there (`last_reply`, `last_reply_at`), read in two
     queries from the profile's state.db, opened read-only. Nothing is written."""
@@ -5540,12 +5558,16 @@ class Bridge:
             conn.threads[sid] = r
             live = conn.folders.get(sid)
             out[sid] = {"thread": sid, "title": live.title if live and live.title else thread_name(r["title"]),
-                        "cwd": live.cwd if live else "", "started_at": float(r.get("started_at") or 0),
+                        "cwd": live.cwd if live and live.cwd else "", "started_at": float(r.get("started_at") or 0),
                         "running": bool(live and live.in_turn), "needs": bool(live and (live.prompts or live.batches)),
                         "message_count": int(r.get("message_count") or 0), "preview": _one_line(r.get("preview"), 120)}
         for chat in conn.folders.values():
             if chat.kind == "thread" and chat.id not in out:
                 out[chat.id] = self._thread_row(chat)
+        # a thread not attached in this run: the folder Hermes saved it with, so its terminal starts there
+        bare = [t["thread"] for t in out.values() if not t["cwd"]]
+        for sid, cwd in (await asyncio.to_thread(read_session_cwds, conn.bot["path"], bare)).items():
+            out[sid]["cwd"] = cwd
         return {"threads": sorted(out.values(), key=lambda t: -float(t["started_at"] or 0))}
 
     def _thread_known(self, conn: Conn, tid) -> str:

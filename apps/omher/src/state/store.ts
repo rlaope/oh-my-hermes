@@ -1170,7 +1170,8 @@ export function reduce(state: AppState, a: Action): AppState {
       const had = new Map((state.threads[a.bot] ?? []).map((r) => [r.thread, r]));
       const rows = a.threads.map((r) => {
         const old = had.get(r.thread);
-        return old ? { ...r, title: r.title || old.title, last: Math.max(old.last ?? 0, r.last ?? 0) || undefined } : r;
+        // a re-list keeps what the app already learned: the name, the last activity, and the folder thread.open gave
+        return old ? { ...r, title: r.title || old.title, cwd: r.cwd || old.cwd, last: Math.max(old.last ?? 0, r.last ?? 0) || undefined } : r;
       });
       return { ...state, threads: { ...state.threads, [a.bot]: rows } };
     }
@@ -1889,6 +1890,9 @@ export function createStore(bridge: BridgeLike, opts: StoreOptions = {}): Store 
     try {
       const res = await threadReq("thread.open", { bot, thread });
       dispatch({ type: "chat.opened", bot: key, res: { ...res, session_id: res.thread }, now: now(), since });
+      // the folder the open thread runs in (a restored row may have listed none): the terminal's next tab starts there
+      const row = (state.threads[bot] ?? []).find((r) => r.thread === thread);
+      if (row && res.cwd && res.cwd !== row.cwd) dispatch({ type: "thread.upsert", bot, row: { ...row, cwd: res.cwd } });
     } catch (e) {
       dispatch({ type: "chat.failed", bot: key, message: errText(e) });
     }

@@ -163,6 +163,24 @@ test("the terminal panel's next tab starts in the open thread's folder, home in 
   await expect.poll(cwd).toBe(null);
 });
 
+test("a restored thread listed without a folder: opening it gives the row its folder, and the next shell starts there", async ({ page }) => {
+  await setup(page);
+  await mock("mock.manual", { bot: "kami" });
+  const { threads } = await mock("mock.threads", { bot: "kami", threads: [{ title: "restored", ago: 60, cwd: "/work/restored", listedCwd: "" }] });
+  await page.reload();
+  const row = page.getByTestId(`thread-row-${threads[0]}`);
+  await expect(row).toBeVisible();
+  await row.getByTestId("thread-open").click();
+  await expect(page.getByTestId("thread-chat")).toHaveAttribute("data-thread", threads[0]);
+  // the row takes the folder once thread.open answers; the terminal's next tab follows it
+  const termCwd = () => page.evaluate(async () => ((await import("/src/terminal/state.ts" as string)) as { getTermPanel(): { cwd: string | null } }).getTermPanel().cwd);
+  await expect.poll(termCwd).toBe("/work/restored");
+  await page.keyboard.press("Control+Backquote");
+  await expect(page.getByTestId("termpanel")).toBeVisible();
+  await expect(page.locator('[data-testid="termpanel-terminal"]:not([hidden]) .xterm-rows')).toContainText("login shell in /work/restored");
+  expect((await page.evaluate(() => (window as unknown as { __omherShellCalls: { op: string; at?: string }[] }).__omherShellCalls)).find((c) => c.op === "start")?.at).toBe("/work/restored");
+});
+
 test("SESSIONS is hidden: no sidebar section, ⌘N and ⌘⇧] do nothing; Accounts usage stays", async ({ page }) => {
   await setup(page);
   await expect(page.getByTestId("side-bots")).toBeVisible();

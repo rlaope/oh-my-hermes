@@ -144,6 +144,28 @@ class Threads(BridgeCase):
             self.assertEqual(env2.clients["kami"].find("prompt.submit")[-1]["session_id"], "rt-stored-th-1")
             self.assertEqual(env2.clients["kami"].find("session.title"), [])  # already named
 
+    async def test_a_listed_thread_carries_the_folder_hermes_saved(self):
+        """F6: after a restart a thread is listed before it is attached; its row carries the cwd Hermes saved for the
+        session (state.db `sessions.cwd`, read-only), so the terminal's next tab starts there. None saved: ""."""
+        import sqlite3
+        store = HermesStore()
+        async with ThreadEnv(store) as env:
+            s = await self.open(env)
+            tid = ok(await s.req("thread.create", bot="kami"))["thread"]
+            ok(await s.req("chat.send", bot="kami", session=tid, text="first"))
+            other = ok(await s.req("thread.create", bot="kami"))["thread"]
+            ok(await s.req("chat.send", bot="kami", session=other, text="second"))
+        async with ThreadEnv(store) as env2:  # a new bridge on the same Hermes: nothing attached yet
+            con = sqlite3.connect(env2.home / "profiles" / "kami" / "state.db")
+            con.execute("CREATE TABLE sessions (id TEXT PRIMARY KEY, source TEXT, cwd TEXT)")
+            con.execute("INSERT INTO sessions VALUES (?, 'tui', '/work/restored')", (tid,))
+            con.execute("INSERT INTO sessions VALUES (?, 'tui', NULL)", (other,))
+            con.commit()
+            con.close()
+            s2 = await self.open(env2)
+            rows = {t["thread"]: t["cwd"] for t in ok(await s2.req("thread.list", bot="kami"))["threads"]}
+            self.assertEqual(rows, {tid: "/work/restored", other: ""})
+
     async def test_send_to_unknown_refused_and_main_cannot_be_removed(self):
         async with ThreadEnv() as env:
             s = await self.open(env)

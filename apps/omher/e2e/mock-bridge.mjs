@@ -1149,7 +1149,7 @@ const OPS = {
     threadsShown.add(b.name);
     const threads = [...folders.entries()]
       .filter(([, f]) => f.thread && f.bot === b.name && !f.archived)
-      .map(([thread, f]) => ({ thread, title: f.title, cwd: f.cwd, started_at: f.started, running: Boolean(turns[folderTurnKey(b.name, thread)]),
+      .map(([thread, f]) => ({ thread, title: f.title, cwd: f.listedCwd ?? f.cwd, started_at: f.started, running: Boolean(turns[folderTurnKey(b.name, thread)]),
         needs: [...pending.values()].some((w) => w.bot === folderTurnKey(b.name, thread)), message_count: threadHistory.get(thread)?.length ?? 0, preview: "" }))
       .sort((x, y) => y.started_at - x.started_at);
     return { threads };
@@ -1784,7 +1784,9 @@ const OPS = {
     for (const t of p.threads) {
       const thread = nextId("stored-th");
       folders.set(thread, { bot: b.name, cwd: t.cwd ?? "/home/me/work", open: true, thread: true, title: String(t.title ?? ""),
-        started: now() - (Number(t.ago) || 0), archived: false, key: null });
+        started: now() - (Number(t.ago) || 0), archived: false, key: null,
+        // a restored row the bridge lists before it attaches the thread: `listedCwd` (often "") until thread.open
+        ...(typeof t.listedCwd === "string" ? { listedCwd: t.listedCwd } : {}) });
       threadHistory.set(thread, (t.messages ?? []).map(([role, text], i) => ({ id: `seed-${thread}-${i}`, role, text, ts: now() - (Number(t.ago) || 0) + i })));
       ids.push(thread);
     }
