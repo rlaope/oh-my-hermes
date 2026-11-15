@@ -5,7 +5,8 @@ import logo from "../assets/omher-mark.png";
 import { selectAsks, selectSidebarBots, useStore } from "../state/store";
 import { slots } from "../features";
 import { CalendarIcon, GearIcon, GridIcon, IconButton, PlusIcon, SearchIcon } from "../ui";
-import { BotRow } from "./BotRow";
+import { BotRow, threadsLatest } from "./BotRow";
+import { threadKey } from "../threads/types";
 import { useRowDrag } from "./useRowDrag";
 import { AttachCard } from "../peers/AttachCard";
 import { Usage } from "./Usage";
@@ -13,6 +14,7 @@ import { AccountsWatcher } from "../settings/accounts/useAccounts";
 import "../sessions/sessions.css";
 import { SessionList, SessionsHeader } from "../sessions/SessionsSection";
 import { SessionBackgroundMenu } from "../sessions/SessionBackgroundMenu";
+import { SESSIONS_ENTRY } from "../sessions/entry";
 import { NeedsStrip } from "./Needs";
 import { UpdateButton } from "./UpdateButton";
 import { FirstRunHint } from "../onboarding/FirstRun";
@@ -95,6 +97,7 @@ export function Sidebar() {
               onSelect={() => void s.selectBot(b.name)}
               drag={drag.row(b.name)}
               groupId={hasThreads ? groupId : undefined}
+              latest={hasThreads ? threadsLatest(s.threads[b.name]!, (th) => s.chats[threadKey(b.name, th)]) : null}
               menu={{
                 onNewThread: b.host || b.status === "offline" ? undefined : () => void s.newThread(b.name),
                 pinned,
@@ -113,6 +116,7 @@ export function Sidebar() {
           {!needle && listed.length === 0 && <FirstRunHint text={t("onb.botsHint")} testId="onb-hint-bots" />}
         </nav>
       </section>
+      {SESSIONS_ENTRY && (
       <section
         className="side-sec"
         data-testid="side-sessions"
@@ -134,6 +138,7 @@ export function Sidebar() {
         <SessionList needle={needle} query={q.trim()} />
         {sessionMenu && <SessionBackgroundMenu at={sessionMenu} onClose={closeSessionMenu} />}
       </section>
+      )}
       <div className="side-foot">
         <button
           type="button"

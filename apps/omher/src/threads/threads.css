@@ -3,7 +3,10 @@
    No boxes, no fills except the gray selection. */
 .th-tree {
   --th-x: calc(var(--side-x) + 17px); /* the bot avatar's centre (34px face) */
-  --th-elbow: 9px;
+  /* the connector: the timestamp gray at reduced strength, one step lighter than the hairlines and still under
+     the text */
+  --th-line: color-mix(in srgb, var(--quiet) 70%, transparent);
+  --th-elbow: 22px; /* long enough that a thread's title starts >= 20px past the bot name */
   list-style: none;
   margin: -6px 0 2px;
   padding: 0;
@@ -16,14 +19,14 @@
   left: var(--th-x);
   top: 0;
   height: 6px;
-  border-left: 1px solid var(--line-strong);
+  border-left: 1px solid var(--th-line);
 }
 .th-row {
   position: relative;
   display: flex;
   align-items: center;
   height: 24px;
-  padding-left: calc(var(--th-x) + var(--th-elbow) + 4px);
+  padding-left: calc(var(--th-x) + var(--th-elbow) + 6px);
   padding-right: 4px;
   border-radius: var(--r-sm);
 }
@@ -34,7 +37,7 @@
   left: var(--th-x);
   top: 0;
   bottom: 0;
-  border-left: 1px solid var(--line-strong);
+  border-left: 1px solid var(--th-line);
 }
 /* the elbow: down from the top of the row and round into its middle */
 .th-branch {
@@ -43,8 +46,8 @@
   top: 0;
   height: 50%;
   width: var(--th-elbow);
-  border-left: 1px solid var(--line-strong);
-  border-bottom: 1px solid var(--line-strong);
+  border-left: 1px solid var(--th-line);
+  border-bottom: 1px solid var(--th-line);
   border-bottom-left-radius: 6px;
   pointer-events: none;
 }
@@ -115,6 +118,18 @@
   font-size: 11px;
 }
 
+[data-theme="light"] .th-tree {
+  --th-line: color-mix(in srgb, var(--quiet) 50%, transparent);
+}
+.th-harness {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+}
+.th-harness .hn-stack {
+  gap: 3px;
+}
+
 /* ---- state glyph ----------------------------------------------------------------------------------- */
 .th-g {
   flex: none;
@@ -128,7 +143,7 @@
   display: block;
 }
 .th-g-running {
-  color: var(--body);
+  color: var(--accent);
 }
 .th-g-running svg {
   animation: th-spin 0.9s linear infinite;
@@ -139,6 +154,12 @@
   border-radius: 50%;
   background: var(--needs, #e9a23b);
   animation: th-pulse 2.4s ease-in-out infinite;
+}
+.th-ring {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  border: 1px solid var(--th-line);
 }
 .th-g-done {
   color: var(--ok);
@@ -160,7 +181,7 @@
     opacity: 1;
   }
   50% {
-    opacity: 0.35;
+    opacity: 0.6;
   }
 }
 @keyframes th-pop {

@@ -1298,6 +1298,7 @@ export const ja: Record<Key, string> = {
   "thread.routeKeep": "ここに残す",
   "thread.routeSent": "{title} に送りました",
   "thread.routeKept": "ここに残しました",
+  "thread.routeYours": "あなたのメッセージ",
   "harness.working": "作業中: {who}",
   "harness.trail": "現在の場所",
   "harness.openChat": "チャットで開く",

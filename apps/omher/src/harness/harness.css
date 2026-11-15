@@ -106,10 +106,12 @@ button.ac-crumb:hover {
   gap: 3px;
   margin: 0 0 0 38px;
 }
+/* the grandchild card sits on the step rows' text column, the x and width of a step's expanded input/result boxes
+   (rail 38px + its 1px line + 14px padding + the boxes' 2px), not on the rail line */
 .ac-tl .ac-child {
   display: block;
-  margin: 0 0 0 38px;
-  max-width: min(100% - 38px, 760px);
+  margin: 0 0 0 55px;
+  max-width: none;
   padding: 6px 8px;
   border: 1px solid var(--line);
   border-radius: 6px;
@@ -119,6 +121,11 @@ button.ac-crumb:hover {
 .ac-child:hover {
   border-color: var(--line-strong, var(--muted));
 }
+/* durations of the steps: the secondary-text token, which passes 4.5:1 on dark and light (--quiet does not on dark) */
+.ac .act-step .s {
+  color: var(--muted);
+}
+
 .ac-none {
   display: flex;
   align-items: center;
@@ -150,9 +157,10 @@ button.ac-crumb:hover {
   font-weight: 600;
   color: var(--muted);
 }
+/* "Open as chat" lays the chat over everything right of the sidebar, under the tab row (the sidebar stays) */
 .rn-session.full {
   position: fixed;
-  inset: 48px 0 0 0;
+  inset: 48px 0 0 var(--side-w);
   z-index: 30;
   margin: 0;
   padding: 14px 24px;

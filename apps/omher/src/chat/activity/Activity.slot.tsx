@@ -171,7 +171,7 @@ export function StepRow({ step, live, now, io }: { step: Step; live: boolean; no
           </span>
         ))}
       <span className="s" data-testid="activity-step-time">
-        {running && live ? "…" : stopped ? stoppedTime(step, ms) : failed ? tr("act.stepFailed", { t: stepTime(ms) }) : stepTime(ms)}
+        {step.untimed ? "" : running && live ? "…" : stopped ? stoppedTime(step, ms) : failed ? tr("act.stepFailed", { t: stepTime(ms) }) : stepTime(ms)}
       </span>
       {opens && (
         <span className="act-chev" aria-hidden>
@@ -187,7 +187,7 @@ export function StepRow({ step, live, now, io }: { step: Step; live: boolean; no
       {diffOpen && diff && <DiffView files={diff} />}
       {diffOpen && io && (
         <div className="act-io" data-testid="activity-step-io">
-          <pre className="act-io-in" data-testid="activity-step-input">{io.input}</pre>
+          {io.input && <pre className="act-io-in" data-testid="activity-step-input">{io.input}</pre>}
           {io.result && <pre className="act-io-out" data-testid="activity-step-result">{io.result}</pre>}
         </div>
       )}

@@ -1298,6 +1298,7 @@ export const ko: Record<Key, string> = {
   "thread.routeKeep": "여기 두기",
   "thread.routeSent": "{title}(으)로 보냈어요",
   "thread.routeKept": "여기 뒀어요",
+  "thread.routeYours": "내 메시지",
   "harness.working": "작업 중: {who}",
   "harness.trail": "현재 위치",
   "harness.openChat": "채팅으로 열기",

@@ -1,5 +1,6 @@
 // The whole app view model: one reducer, one store, one React hook. UI nodes only read this and call
 // its actions; they never edit this file.
+import { SESSIONS_ENTRY } from "../sessions/entry";
 import { useSyncExternalStore } from "react";
 import { BridgeClient, type BridgeStatus } from "../lib/bridge";
 import { noteFor, sessionNote, showNote, windowWatched, type SessionNote } from "../lib/notify";
@@ -70,6 +71,8 @@ export interface Step {
   dag?: { run: string; node: string }[];
   /** A file edit's change, per file (SESSIONS agents), for the step's diff view. */
   diff?: DiffFile[];
+  /** Read back from a record with no later timestamp (a child's session): its length is unknown, none is shown. */
+  untimed?: boolean;
 }
 
 export interface Turn {
@@ -1976,9 +1979,11 @@ export function createStore(bridge: BridgeLike, opts: StoreOptions = {}): Store 
         // those reads ended, a click on the panel in the meantime (the places chip, ⌘.) was undone by it
         const loading = first ? selectBot(first) : Promise.resolve();
         if (back?.bot && back.bot === first) {
-          const { panelOpen, panelTab, runsFull, runId, session } = back;
+          const { panelOpen, panelTab, runsFull, runId } = back;
+          // a SESSIONS chat does not come back while SESSIONS is hidden (sessions/entry.ts)
+          const session = SESSIONS_ENTRY ? back.session : null;
           dispatch({ type: "ui.restore", ui: { panelOpen, panelTab, runsFull, runId, session } });
-        } else if (back?.session) dispatch({ type: "ui.session", id: back.session });
+        } else if (back?.session && SESSIONS_ENTRY) dispatch({ type: "ui.session", id: back.session });
         await loading;
         // Load the other listed chats too, so the sidebar can show previews and unread counts. A profile outside
         // the list is not opened as a chat (that would make its Bot Chat, and list it): it is only asked for the

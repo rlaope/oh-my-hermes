@@ -3,8 +3,8 @@
 //   ⌘.     show or hide Details                    ⌘,  Settings
 //   ⌘J     jump to the next approval or question waiting on you (any bot or SESSIONS chat)
 //   ⌘⇧G   maximise the side panel in place, or restore it (Esc restores; a closed panel opens on Plans)
-//   ⌘N ⌘T  the SESSIONS + menu (pick an agent for a New session)
-//   ⌘⇧]    the next session (sidebar order, wrapping)          ⌘⇧[  the previous session
+//   ⌘N ⌘T  the SESSIONS + menu (pick an agent for a New session)   } off while SESSIONS is hidden
+//   ⌘⇧]    the next session (sidebar order, wrapping)          ⌘⇧[  the previous session   } (sessions/entry.ts)
 //   Esc    stop the running answer (only when no popover, field or dialog wants Esc first)
 //   Ctrl+` the bottom terminal panel, show or hide, on every OS (Ctrl on macOS too, as in VS Code); taken before a
 //          terminal sees it, so it works with the keyboard inside a terminal (it is omher's, not the program's)
@@ -14,6 +14,7 @@ import { useEffect } from "react";
 import { getStore, selectAsks, selectSidebarBots, type Ask, type FocusAsk } from "../state/store";
 import { getSessions } from "../sessions/sessions";
 import { openNewSessionMenu } from "../sessions/newMenu";
+import { SESSIONS_ENTRY } from "../sessions/entry";
 import { composing } from "../lib/ime";
 import { toggleTerminal } from "../terminal/state";
 
@@ -77,6 +78,7 @@ export function useShortcuts(): void {
     const onKey = (e: KeyboardEvent) => {
       const hit = shortcutFor(e, isMac());
       if (!hit || hit.kind === "terminal") return;
+      if (!SESSIONS_ENTRY && (hit.kind === "new-session" || hit.kind === "session")) return;
       // In a terminal session, Ctrl+<key> belongs to the program (Ctrl+K kills a line); ⌘ on macOS stays ours.
       if (!isMac() && (e.target as HTMLElement | null)?.closest?.(".xterm")) return;
       const store = getStore();

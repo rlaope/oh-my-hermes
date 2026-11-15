@@ -10,6 +10,9 @@ import { StatusGlyph } from "./StatusGlyph";
 import { threadStatus, type ThreadStatus } from "./status";
 import { threadKey, THREADS_SHOWN, type ThreadRow } from "./types";
 import { ConfirmRemove } from "./ConfirmRemove";
+import { HarnessStack } from "../harness/HarnessMark";
+import type { HarnessFacts } from "../harness/registry";
+import { subagentEnded, type Chat } from "../state/store";
 import "./threads.css";
 
 /** A thread's state from what the store holds: its chat (turn, last turn, open asks) and the bridge's list row. */
@@ -22,6 +25,18 @@ export function rowStatus(state: AppState, bot: string, row: ThreadRow): ThreadS
     asks: chat ? asks : row.needs ? 1 : 0,
     lastOutcome: chat?.lastTurn?.outcome ?? null,
   });
+}
+
+/** Who works in a thread now: its subagents still out (in the running turn, or ones that outlived the last turn),
+ *  as harness facts (a CLI's own name, else a Hermes child on its model). Empty when nobody is out. */
+export function threadHarness(chat: Chat | undefined): HarnessFacts[] {
+  if (!chat) return [];
+  const turns = [chat.turn, chat.lastTurn].filter((t): t is NonNullable<typeof t> => !!t);
+  const facts: HarnessFacts[] = [];
+  for (const t of turns)
+    for (const f of t.fanouts ?? [])
+      for (const sub of f.subs) if (!subagentEnded(sub)) facts.push({ executor: sub.agent ?? null, model: sub.model ?? "hermes" });
+  return facts;
 }
 
 export function ThreadTree({ bot, id }: { bot: string; id: string }) {
@@ -57,9 +72,12 @@ export function ThreadTree({ bot, id }: { bot: string; id: string }) {
             <button type="button" className="th-open" onClick={() => void s.openThread(bot, r.thread)} title={title} data-testid="thread-open">
               <StatusGlyph status={st} />
               <span className="th-title">{title}</span>
+              {/* who works in it: marks before the time, so the time column stays at the right edge */}
+              <span className="th-harness">
+                <HarnessStack items={threadHarness(s.chats[threadKey(bot, r.thread)])} size={12} />
+              </span>
               {ts > 0 && <span className="th-time">{shortTime(ts)}</span>}
             </button>
-            <span className="th-harness" />
             <button
               type="button"
               className="th-x"

@@ -353,8 +353,11 @@
 .thread > .row-threadRoute {
   padding-left: calc(28px + 10px);
 }
+/* consecutive link lines are one tight list: no paragraph gap between them (the 24px line height is the spacing) */
+.thread > .row-threadLink + .row-threadLink {
+  margin-top: -18px;
+}
 .row-assistant + .row-threadLink,
-.row-threadLink + .row-threadLink,
 .row-assistant + .row-threadRoute,
 .row-threadLink + .row-threadRoute,
 .row-threadRoute + .row-threadLink {
@@ -372,17 +375,35 @@
 .th-link .line-ic {
   color: var(--muted);
 }
+/* the title reads as a link the way the Slack/Discord link chips do (links.css .lk-t): a hairline underline at rest,
+   the full underline and ink on hover */
 .th-link-t {
   color: var(--body);
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
+  text-decoration-color: color-mix(in srgb, currentColor 40%, transparent);
 }
 .th-link:hover .th-link-t,
 .th-link:focus-visible .th-link-t {
-  text-decoration: underline;
-  text-underline-offset: 2px;
+  color: var(--ink);
+  text-decoration-color: currentColor;
+}
+.th-route .th-route-q {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  min-width: 0;
+}
+.th-route .th-route-l {
+  flex: none;
+  font-size: 11px;
+  color: var(--muted);
 }
 .th-route .th-route-text {
+  min-width: 0;
   font-size: 12px;
-  color: var(--muted);
+  color: var(--body);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;

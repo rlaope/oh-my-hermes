@@ -123,6 +123,19 @@ export type ChatPiece =
   | { kind: "steps"; key: string; steps: (Step & { input: string; result: string })[] }
   | { kind: "child"; key: string; sub: SubagentRow; ref: string; childKind: string; provider?: string };
 
+/** The input is `{"command": <the row's own text>}` and nothing more. */
+function onlyCommand(input: string, detail: string): boolean {
+  try {
+    const a = JSON.parse(input) as unknown;
+    if (!a || typeof a !== "object" || Array.isArray(a)) return false;
+    const keys = Object.keys(a);
+    const c = (a as Record<string, unknown>).command ?? (a as Record<string, unknown>).cmd;
+    return keys.length === 1 && typeof c === "string" && !c.includes("\n") && c.trim() === detail;
+  } catch {
+    return false;
+  }
+}
+
 /** The session's items as chat pieces, in order: consecutive tool calls share one step block. */
 export function chatPieces(s: Pick<NodeSession, "items">): ChatPiece[] {
   const out: ChatPiece[] = [];
@@ -136,14 +149,18 @@ export function chatPieces(s: Pick<NodeSession, "items">): ChatPiece[] {
       const at = (it.ts ?? 0) * 1000;
       const next = items.slice(i + 1).find((x) => "ts" in x && x.ts);
       const end = next && "ts" in next && next.ts ? next.ts * 1000 : at;
+      const detail = stepDetail(it.tool, it.input);
       const step = {
         id: `s${i}`,
         name: TOOL_ALIAS[it.tool] ?? it.tool,
-        detail: stepDetail(it.tool, it.input),
+        detail,
         startedAt: at,
         endedAt: Math.max(at, end),
+        // no later timestamp to end it: its length is unknown, so it shows none (never "0.0s")
+        ...(next && at ? {} : { untimed: true }),
         ok: it.ok,
-        input: it.input,
+        // a single shell command already reads in full on the "Ran" row: its box shows only the result
+        input: onlyCommand(it.input, detail) ? "" : it.input,
         result: resultText(it.result),
       };
       const prev = out[out.length - 1];

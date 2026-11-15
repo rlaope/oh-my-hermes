@@ -279,10 +279,13 @@ export function RunGraph({
         const k0 = Math.min(MAX_FIT, el.clientWidth / (maxX - minX));
         if ((el.clientWidth + (maxX - minX) * k0) / 2 <= el.clientWidth - reserve) W = el.clientWidth;
       }
-      const want = Math.min(W / (maxX - minX), whole ? el.clientHeight / (maxY - minY) : Infinity);
+      // the drawing starts at the plan header's left edge (the x of the plan title), as the text above it does
+      const title = el.closest('[data-testid="run-graph-box"]')?.querySelector<HTMLElement>('[data-testid="run-plan-title"]');
+      const lead = title ? Math.max(0, title.getBoundingClientRect().left - el.getBoundingClientRect().left) : MARGIN;
+      const want = Math.min((W - lead) / (maxX - minX - MARGIN), whole ? el.clientHeight / (maxY - minY) : Infinity);
       const k = Math.min(MAX_FIT, Math.max(MIN_FIT, want));
       const sel = openRef.current && lay.at.has(openRef.current) ? rect(openRef.current) : null;
-      if (want >= MIN_FIT || !sel) return setView({ k, x: (W - (maxX - minX) * k) / 2 - minX * k, y: -minY * k });
+      if (want >= MIN_FIT || !sel) return setView({ k, x: lead - (minX + MARGIN) * k, y: -minY * k });
       // too wide to show whole next to the drawer: keep the open box in view
       setView({ k, x: W / 2 - (sel.x + sel.w / 2) * k, y: Math.min(-minY * k, el.clientHeight / 2 - (sel.y + sel.h / 2) * k) });
     },

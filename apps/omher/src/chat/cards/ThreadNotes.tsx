@@ -49,11 +49,14 @@ export function ThreadRouteCard({ item }: { item: ThreadRouteItem }) {
   return (
     <div className="card th-route" role="group" aria-label={t("thread.routeAsk", { title: item.title })} data-testid="thread-route" data-thread={item.thread}>
       <div className="card-title">{t("thread.routeAsk", { title: item.title })}</div>
-      <div className="th-route-text" title={item.text}>
-        {item.text}
+      <div className="th-route-q" data-testid="thread-route-quote">
+        <span className="th-route-l">{t("thread.routeYours")}</span>
+        <span className="th-route-text" title={item.text}>
+          “{item.text}”
+        </span>
       </div>
       <div className="card-acts">
-        <button type="button" className="card-btn soft" disabled={busy} onClick={() => void answer("send")} data-testid="thread-route-send">
+        <button type="button" className="card-btn primary" disabled={busy} onClick={() => void answer("send")} data-testid="thread-route-send">
           {t("thread.routeSend")}
         </button>
         <button type="button" className="card-btn soft" disabled={busy} onClick={() => void answer("keep")} data-testid="thread-route-keep">

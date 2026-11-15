@@ -17,7 +17,7 @@ import { useLookAttributes, useThemeAttribute } from "./theme";
 import { useShortcuts } from "./shortcuts";
 import { useAsksBadge } from "./badge";
 import { startPeers } from "../peers/links";
-import { useTermPanel } from "../terminal/state";
+import { setTerminalCwd, useTermPanel } from "../terminal/state";
 
 // The terminal view (and xterm with it) loads when a session is first opened.
 const SessionView = lazy(() => import("../sessions/SessionView").then((m) => ({ default: m.SessionView })));
@@ -40,6 +40,9 @@ export function App() {
   }, []);
 
   const bot = s.bots.find((b) => b.name === s.selectedBot) ?? null;
+  // the terminal panel's next tab starts in the open thread's folder (the bot's main chat: home)
+  const threadCwd = s.ui.view === "chat" && bot && s.ui.thread ? ((s.threads[bot.name] ?? []).find((r) => r.thread === s.ui.thread)?.cwd ?? null) : null;
+  useEffect(() => setTerminalCwd(threadCwd), [threadCwd]);
   // `@name` in any chat text opens that bot's chat; the open chat's own bot is not a link
   const current = s.ui.view === "chat" ? s.selectedBot : null;
   const mentions = useMemo<Mentions>(() => {

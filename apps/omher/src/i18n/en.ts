@@ -1300,6 +1300,7 @@ export const en = {
   "thread.routeKeep": "Keep here",
   "thread.routeSent": "Sent to {title}",
   "thread.routeKept": "Kept here",
+  "thread.routeYours": "Your message",
   "harness.working": "Working: {who}",
   "harness.trail": "Where you are",
   "harness.openChat": "Open as chat",

@@ -1298,6 +1298,7 @@ export const zh: Record<Key, string> = {
   "thread.routeKeep": "留在这里",
   "thread.routeSent": "已发到 {title}",
   "thread.routeKept": "已留在这里",
+  "thread.routeYours": "你的消息",
   "harness.working": "正在工作：{who}",
   "harness.trail": "当前位置",
   "harness.openChat": "以聊天打开",
