@@ -3,6 +3,9 @@
 export const en = {
   // graph (the dag box view and its header)
   "graph.deps": "Dependencies",
+  "graph.waitsFor": "waits for",
+  "graph.through": "+{n} further up",
+  "graph.depRows": "{n} tasks",
   "graph.details": "Node details",
   "graph.untitled": "untitled",
   "graph.finished": "Done",
@@ -810,6 +813,10 @@ export const en = {
   "att.failed": "Couldn't attach {name} · {error}",
   "bub.replyTarget": "Reply target",
   "bub.notSent": "Not sent · {error}",
+  "bub.quoteTip": "Show the message this answers",
+  "bub.quoteMore": "+{n} earlier",
+  "bub.repliedTo1": "Replied to you",
+  "bub.repliedTo": "Replied to {n} of your messages",
   "lk.links": "Links",
   "lk.showAll": "Show all {n}",
   "lk.thread": "{name} · thread",

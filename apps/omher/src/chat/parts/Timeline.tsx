@@ -5,6 +5,7 @@ import { answerSlot, answerSoFar, selectTimeline, turnHasActivity, useStore, typ
 import { slots } from "../../features";
 import { dayLabel, hhmm, sameDay } from "../../app/time";
 import { Bubble } from "./Bubble";
+import { quoteFor } from "./answers";
 import { LiveFace, TypingRow, awaitingFirstToken } from "./Typing";
 import { liveFaceRow } from "./liveFace";
 import { ActivityFallback, CardFallback, ElsewhereFallback, RoutineFallback } from "./fallbacks";
@@ -68,13 +69,23 @@ export function Timeline({ bot, face, onEditLast, connectionNotice = true }: { b
     return () => ro.disconnect();
   }, [bot.name, items]);
 
-  const render = (it: TimelineItem, prev?: TimelineItem): ReactNode => {
+  // a quote's click: the message it answers, brought into view and lit for a moment
+  const showMessage = (id: string) => {
+    const el = ref.current?.querySelector<HTMLElement>(`[data-item="${CSS.escape(id)}"]`);
+    if (!el) return;
+    el.scrollIntoView({ block: "center", behavior: "smooth" });
+    el.classList.remove("lit");
+    void el.offsetWidth;
+    el.classList.add("lit");
+  };
+
+  const render = (it: TimelineItem, prev?: TimelineItem, at = -1): ReactNode => {
     switch (it.kind) {
       case "user":
         return <Bubble item={it} onEdit={it === lastUser && !it.error && !it.wait ? onEditLast : undefined} editKeepsFiles={it === lastUser && keptFiles} />;
       case "assistant":
         // the face shows on the first bot bubble after something else (the user, a day line, a card)
-        return <Bubble item={it} bot={bot.name} face={!botSpoke(prev)} faceEl={face} />;
+        return <Bubble item={it} bot={bot.name} face={!botSpoke(prev)} faceEl={face} quote={quoteFor(items, at)} onQuote={showMessage} />;
       case "activity": {
         const C = slots.activity ?? ActivityFallback;
         return <C bot={bot.name} item={it} live={chat?.turn?.id === it.turn.id} />;
@@ -122,6 +133,8 @@ export function Timeline({ bot, face, onEditLast, connectionNotice = true }: { b
         face={!botSpoke(slotId ? items[items.findIndex((i) => i.id === slotId) - 1] : items[items.length - 1])}
         faceEl={face}
         live={faceRow === "streaming"}
+        quote={quoteFor(items, slotId ? items.findIndex((i) => i.id === slotId) : items.length)}
+        onQuote={showMessage}
       />
     </div>
   ) : null;
@@ -179,9 +192,9 @@ export function Timeline({ bot, face, onEditLast, connectionNotice = true }: { b
             {it.id === slotId && writingRow}
             {it.id === slotId && typingRow}
             {label && <div className="day">{label}</div>}
-            <div className={`row row-${it.kind}${liveLine ? " live-line" : ""}`} data-kind={it.kind}>
+            <div className={`row row-${it.kind}${liveLine ? " live-line" : ""}`} data-kind={it.kind} {...(it.kind === "user" ? { "data-item": it.id } : {})}>
               {liveFace && <LiveFace bot={bot.name} face={face} />}
-              {render(it, label ? undefined : items[i - 1])}
+              {render(it, label ? undefined : items[i - 1], i)}
             </div>
           </Fragment>
         );

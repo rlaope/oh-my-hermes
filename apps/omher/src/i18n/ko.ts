@@ -3,6 +3,9 @@ import type { Key } from "./index";
 export const ko: Record<Key, string> = {
   // graph (the dag box view and its header)
   "graph.deps": "의존 관계",
+  "graph.waitsFor": "기다림",
+  "graph.through": "+{n}개 더 위쪽",
+  "graph.depRows": "작업 {n}개",
   "graph.details": "노드 상세",
   "graph.untitled": "제목 없음",
   "graph.finished": "완료",
@@ -808,6 +811,10 @@ export const ko: Record<Key, string> = {
   "att.failed": "{name} 첨부 실패 · {error}",
   "bub.replyTarget": "답장 대상",
   "bub.notSent": "보내지 못함 · {error}",
+  "bub.quoteTip": "이 답장이 가리키는 메시지 보기",
+  "bub.quoteMore": "이전 {n}개 더",
+  "bub.repliedTo1": "회원님에게 답장",
+  "bub.repliedTo": "회원님의 메시지 {n}개에 답장",
   "lk.links": "링크",
   "lk.showAll": "전체 {n}개 보기",
   "lk.thread": "{name} · 스레드",

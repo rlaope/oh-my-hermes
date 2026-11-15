@@ -3,6 +3,9 @@ import type { Key } from "./index";
 export const zh: Record<Key, string> = {
   // graph (the dag box view and its header)
   "graph.deps": "依赖关系",
+  "graph.waitsFor": "等待",
+  "graph.through": "+{n} 项 更上游",
+  "graph.depRows": "{n} 个任务",
   "graph.details": "节点详情",
   "graph.untitled": "未命名",
   "graph.finished": "完成",
@@ -808,6 +811,10 @@ export const zh: Record<Key, string> = {
   "att.failed": "无法添加 {name} · {error}",
   "bub.replyTarget": "回复目标",
   "bub.notSent": "未发送 · {error}",
+  "bub.quoteTip": "查看这条回复对应的消息",
+  "bub.quoteMore": "更早 {n} 条",
+  "bub.repliedTo1": "回复了你",
+  "bub.repliedTo": "回复了你的 {n} 条消息",
   "lk.links": "链接",
   "lk.showAll": "显示全部 {n} 个",
   "lk.thread": "{name} · 消息列",

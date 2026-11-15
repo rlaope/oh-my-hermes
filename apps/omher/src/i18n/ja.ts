@@ -3,6 +3,9 @@ import type { Key } from "./index";
 export const ja: Record<Key, string> = {
   // graph (the dag box view and its header)
   "graph.deps": "依存関係",
+  "graph.waitsFor": "待ち",
+  "graph.through": "+{n} 件 さらに上流",
+  "graph.depRows": "{n} 件のタスク",
   "graph.details": "ノード詳細",
   "graph.untitled": "無題",
   "graph.finished": "完了",
@@ -808,6 +811,10 @@ export const ja: Record<Key, string> = {
   "att.failed": "{name} を添付できませんでした · {error}",
   "bub.replyTarget": "返信先",
   "bub.notSent": "未送信 · {error}",
+  "bub.quoteTip": "この返信の元のメッセージを表示",
+  "bub.quoteMore": "以前の {n} 件",
+  "bub.repliedTo1": "あなたに返信",
+  "bub.repliedTo": "あなたのメッセージ {n} 件に返信",
   "lk.links": "リンク",
   "lk.showAll": "すべて表示（{n}）",
   "lk.thread": "{name} · スレッド",

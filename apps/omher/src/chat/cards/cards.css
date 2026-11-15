@@ -128,6 +128,44 @@
 .card-btn.soft:not(:disabled):hover {
   background: var(--line-strong);
 }
+/* The approval buttons carry their meaning in colour, the same weight and order (Deny first): Deny in the danger
+   red, Allow once in the link violet, Allow for session in amber, since it allows more than this one command (never
+   green: the broadest choice must not read as the safe one). A tint fill and an edge of the colour, the label in it;
+   on hover the tint deepens. */
+.card-btn.soft.deny,
+.card-btn.soft.once,
+.card-btn.soft.session {
+  --tone: var(--danger);
+  background: color-mix(in srgb, var(--tone) 14%, var(--raise2));
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--tone) 45%, transparent);
+  color: color-mix(in srgb, var(--tone) 80%, var(--ink));
+}
+.card-btn.soft.once {
+  --tone: var(--link);
+}
+.card-btn.soft.session {
+  --tone: #e8a33c;
+}
+[data-theme="light"] .card-btn.soft.session {
+  --tone: #9a5f06;
+}
+[data-theme="light"] .card-btn.soft.deny,
+[data-theme="light"] .card-btn.soft.once,
+[data-theme="light"] .card-btn.soft.session {
+  background: color-mix(in srgb, var(--tone) 9%, var(--bg));
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--tone) 50%, transparent), 0 1px 0 rgba(0, 0, 0, 0.04);
+  color: color-mix(in srgb, var(--tone) 88%, var(--ink));
+}
+.card-btn.soft.deny:not(:disabled):hover,
+.card-btn.soft.once:not(:disabled):hover,
+.card-btn.soft.session:not(:disabled):hover {
+  background: color-mix(in srgb, var(--tone) 26%, var(--raise2));
+}
+[data-theme="light"] .card-btn.soft.deny:not(:disabled):hover,
+[data-theme="light"] .card-btn.soft.once:not(:disabled):hover,
+[data-theme="light"] .card-btn.soft.session:not(:disabled):hover {
+  background: color-mix(in srgb, var(--tone) 18%, var(--bg));
+}
 /* The one primary action of a card (Submit): the app's neutral primary, ink on page, as on the setup screen. Never
    the accent gradient, and not the gray of a selected chip. */
 .card-btn.primary {
