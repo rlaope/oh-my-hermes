@@ -4,6 +4,13 @@ All notable changes will be documented here.
 
 ## Unreleased
 
+- **An OMH TUI approval opens on allow once, not deny.** Enter alone now allows that one command; ↑ then Enter, `d`,
+  `n`, Esc or Ctrl+C still deny and stop the running turn. Keys typed for the composer as the approval appears still
+  land nowhere, since every question ignores keys for a moment after it opens, and a request that does not offer
+  allow once still opens on deny.
+
+## 4.0.8 - 2026-11-15
+
 - **The OMH TUI shows a compression as one gauge row, and a prompt typed meanwhile goes on by itself.** `/compact`
   (or `/compress`) no longer prints the long "Compressing: Hermes summarizes the older turns…" notice above a second
   spinner row. One row now reads `✻ Compacting conversation… ━━━━━━──── (30s)`, with a blank row between it and
@@ -24,12 +31,6 @@ All notable changes will be documented here.
   and rxvt, raised a notification (OSC 9 or 777) even with the window focused, where the person already sees it.
   Once the terminal has reported focus and has it, only the bell rings; with focus gone, or from a terminal that
   never reports it, both go as before. `OMH_TUI_BELL=0` still keeps everything quiet.
-- **The mouse never opens the OMH TUI's history view.** A drag that started
-  on a row the OMH TUI did not print (the shell's output above the session,
-  the rows from before a Ctrl+Z) still opened the full-screen transcript
-  view, the last mouse path that did after the wheel stopped opening it. It
-  now selects nothing and opens nothing; only Ctrl+O opens the view.
-
 - **A resumed session no longer shows Hermes' own turns as your prompts.**
   When `omh --resume` or `/resume` redrew a session, every user-role row in
   Hermes' history was drawn as a `❯` prompt, including the ones Hermes wrote
@@ -56,14 +57,6 @@ All notable changes will be documented here.
   the names the OMH TUI launch sets for its own frontend, on both the
   `hermes --tui` and plain `hermes` paths; `OMH_HOME` and the chosen
   `HERMES_HOME` still reach Hermes.
-
-- **Scrolling up in the OMH TUI scrolls.** Since the main screen took the
-  mouse so a drag copies clean, the wheel up opened the full-screen
-  transcript view instead of scrolling, a pager that could hold as little as
-  one notice. The wheel up now hands the mouse to the terminal, which scrolls
-  its own scrollback as in any shell; the next key or paste takes it back, so
-  a drag copies without the rail again. Ctrl+O still opens the transcript
-  view.
 
 - **Bare `/model` in the OMH TUI lists the models you last switched to first.**
   Each switch Hermes confirmed puts the model and provider Hermes confirmed
@@ -172,7 +165,10 @@ All notable changes will be documented here.
   into the line they were written as, a space where the wrap dropped one,
   nothing inside a long word or path, code exactly as it is. A long command
   or path pastes as the one line it is; a line break the text had stays.
-  The wheel opens the transcript view as it did with `OMH_TUI_MOUSE=1`;
+  The wheel up scrolls the terminal's own scrollback, as in any shell: its
+  first notch hands the mouse to the terminal, and the next key or paste takes
+  it back. A drag that starts on a row the OMH TUI did not print selects
+  nothing, and the mouse never opens the transcript view; only Ctrl+O does.
   `OMH_TUI_MOUSE=0` gives the wheel and native selection back to the
   terminal.
 
@@ -303,6 +299,9 @@ All notable changes will be documented here.
   - **omher on Windows finds Hermes' Python through the package-manager launcher** (`hermes.exe` or `hermes.cmd`, read
     without running it), so a PM or source install no longer reads as "Hermes Agent isn't on this computer". Reported
     by @MarinWasAsleep in #2885. (#2887)
+  - **⌘T opens the New session picker on macOS**, the same menu as ⌘N; Settings › Keyboard lists both. On Windows
+    and Linux only Ctrl+N opens it (Ctrl+T stays the program's). Both keys work with a non-Latin layout active.
+    (#2890)
 
 - **omher 0.2.9.** A new bot without an AI account signs in from its own chat, the + in the message box has one
   way to add files and the bot's plugins beside it, and an empty part of the Sessions list starts a new session.
@@ -675,16 +674,15 @@ All notable changes will be documented here.
 - **omher updates itself.** When a new omher release is out, an "Update to
   0.1.x" button appears at the bottom left of the sidebar; one click
   downloads it, checks its signature and restarts omher on the new version.
-  The app looks once at launch and every 6 hours. People on omher 0.1.1 or
+  The app checks at launch and again while it runs. People on omher 0.1.1 or
   earlier have no button yet: install the next version once from the
   Releases page (or the `omher@beta` one-liner), and every release after
   that arrives through the button.
 
-- **The OMH TUI queues what you send during a turn, commands too.** Enter
-  during a turn now always waits for the turn's end, whatever Hermes'
-  `display.busy_input_mode` says, so a config set to `interrupt` no longer
-  stops the turn and the `ctrl+enter to send now · ↑ to edit` row shows
-  under a queued prompt. A slash command typed during a turn waits in the same
+- **The OMH TUI queues commands sent during a turn, and Enter never interrupts
+  it.** What Enter does during a turn no longer depends on Hermes'
+  `display.busy_input_mode`, so a config set to `interrupt` no longer stops the
+  turn. A slash command typed during a turn waits in the prompt
   queue and runs in order when the turn ends (a prompt after a `/compress`
   goes once Hermes has answered it); only `/stop`, `/steer`, `/queue`, `/btw`,
   `/bg`, `/gateway`, `/quit` and the commands about this terminal run at once.
@@ -704,7 +702,12 @@ All notable changes will be documented here.
   #2709, #2710)
 - **Claude Fable 5.2 takes every Claude Fable 5.1 slot, and heads
   `ultrabrain`** (owner decision, 2026-11-10). The `ultrabrain` chain is now
-  Claude Fable 5.2, GPT-6 Astra, then Claude Opus 5.5, all at `xhigh`. Fable
+  Claude Fable 5.2, GPT-6 Astra, then Claude Opus 5.5, all at `xhigh`; it was
+  GPT-6 Astra alone, so a user without OpenAI access fell straight back to the
+  parent model. A child on Fable 5.2 at `xhigh` is labelled `ultrabrain`, and
+  one on GPT-6 Astra at `xhigh` is labelled `forensics` when no route record
+  names its lane, unless the machine's recorded providers put GPT-6 Astra
+  first in `ultrabrain`. Fable
   5.2 also replaces Fable 5.1 in `architect`, `visual-engineering`,
   `artistry`, `capable`, the Hermes `main` suggestion, and the Claude Code
   chain (`claude-opus-5-5` -> `claude-fable-5-2` -> `opus`), each at the effort
@@ -724,7 +727,7 @@ All notable changes will be documented here.
   (and the PowerShell script-block form with the same argument) installs Hermes with its official
   installer when it is missing, installs or upgrades OMH, runs `omh setup` when OMH or Hermes is new on
   the machine, then installs omher from the newest `omher-v*` release (dmg on macOS, silent per-user
-  installer on Windows; Linux skips the app with a note). The plain one-liner is unchanged. An omher
+  installer on Windows, the AppImage on Linux). The plain one-liner is unchanged. An omher
   installed first offers the same install, minus the app, on its first launch when Hermes is missing,
   and streams the installer's output on that screen. The README shows the one-liner and a screenshot.
   A failed download or install is reported as a failure, on the app's setup screen too (it used to
@@ -742,17 +745,6 @@ All notable changes will be documented here.
   dispatched reviewer still returns in full; release-cut says "every file
   that carries the version". No schema, tool contract or record field
   changes, and routing is unchanged.
-
-- **The `ultrabrain` chain is Claude Fable 5.1, GPT-6 Astra, then Claude
-  Opus 5.5, all at `xhigh`** (owner decision, 2026-11-09). It was GPT-6 Astra
-  alone, so a user without OpenAI access fell straight back to the parent
-  model. Fable 5.1 heading this one category does not change the Opus 5.5
-  before Fable 5.1 order anywhere else. A child on Fable 5.1 at `xhigh` is
-  now labelled `ultrabrain` (it was `architect`), and one on GPT-6 Astra at
-  `xhigh` is labelled `forensics` (it was `ultrabrain`) when no route record
-  names its lane, unless the machine's recorded providers put GPT-6 Astra
-  first in `ultrabrain`: the label follows the chains as shaped by those
-  providers. Pricing is unchanged: no model was added.
 
 - **Planning work runs on `ultrabrain`.** The `brain` role chain for Codex,
   Claude Code and a category-maestro table now heads on `ultrabrain` and
@@ -918,32 +910,11 @@ All notable changes will be documented here.
   a page in Playwright at 390x844 with touch and a mobile user agent and
   prints `omh_phone_check/v1` JSON: horizontal overflow, the first data and
   action y, touch targets under 44 px, inputs under 16 px and console
-  errors. OMH never runs it; when no browser is available the measurement
+  errors, measuring overflow from the page's start side, so a right-to-left
+  or vertical page is measured on the side it overflows (Chromium only).
+  OMH never runs it; when no browser is available the measurement
   is `not_observed`. `visual-qa` records in the capture manifest whether
   emulation was on.
-
-- **`phone_check.py` measures horizontal overflow from the page's start
-  side and survives named HTML tree links.** On a page whose `<body>` is
-  `direction: rtl`, or in a `-rl` vertical writing mode, the overflowing
-  side is the left. The script reads that start side from `<body>`, writing
-  mode before direction, takes overflow from the scrolling element (with
-  the root as the fallback when none exists), and lists elements left of
-  document x 0 under `elements_past_right_edge`, each with `left`.
-  `first_action_y` deliberately keeps the earlier geometric edge test on
-  both start sides: it neither adds a link in the left overflow nor predicts
-  whether a tap activates one. A hit-test addition was withdrawn after it
-  counted links whose iframe, object or embed took the event, and controls
-  changed by `:hover` / `:active` when touched. The existing misses remain,
-  including a control wholly in the left overflow or one a container clips.
-  The start side, root, body, scrolling element and every tree-walk step
-  use interface-prototype reads, so named forms or controls cannot replace
-  those values or loop a walk through `parentElement` or `offsetParent`.
-  A left-start page keeps its prior output except where these named tree
-  links formerly hung the script, misplaced a control under a fixed ancestor,
-  or corrupted a listed path. Measurement sends no tap, scroll or focus.
-  Page scripts can still corrupt other measurement APIs; the toolkit README
-  describes the omitted or misplaced controls this can produce. Measured in
-  Chromium only.
 
 - **frontend names the layout before it builds a new page, and reviews
   what the page says about itself.** A new `references/editorial-layout.md`
@@ -1105,14 +1076,18 @@ All notable changes will be documented here.
   or a credential pool exists. When neither can be seen, the refusal names the variable to set or
   `hermes auth add <id>` instead of "lacks safe observed provider auth". A key kept only in Hermes' `.env` file is not
   visible to OMH; export it in the shell that runs omh. Reported by @MarinWasAsleep in #2882.
-- **omher: ⌘T opens the New session picker on macOS**, the same menu as ⌘N, the way ⌘T opens a new tab elsewhere.
-  Settings › Keyboard lists both. On Windows and Linux Ctrl+T is left to the program (a terminal's transpose), so
-  only Ctrl+N opens it there. ⌘N and ⌘T also work with a non-Latin layout active (Korean, Japanese, Russian), by
-  the key's position.
-- **An OMH TUI approval opens on allow once, not deny.** Enter alone now allows that one command; ↑ then Enter, `d`,
-  `n`, Esc or Ctrl+C still deny and stop the running turn. Keys typed for the composer as the approval appears still
-  land nowhere, since every question ignores keys for a moment after it opens, and a request that does not offer
-  allow once still opens on deny.
+- **Vim NORMAL in the OMH TUI takes bracket text objects.** With `display.vim_mode` on, `d`, `c` and `y` take
+  `i(` / `a(`, `i[` / `a[` and `i{` / `a{` (the closing bracket works too, and counts reach outer pairs), so `di(`,
+  `ci[` and `ya{` act on the balanced region; an unmatched bracket changes nothing. Contributed by @DanRioDev
+  (#2714).
+- **Gemini 4 Carbon and Gemini 4 Hydrogen are priced and mapped to their providers.** Runs on `gemini-4-carbon`
+  and `gemini-4-hydrogen` now get a cost estimate from Google's own list prices, cached input included, and
+  provider filtering knows Google, Gemini and OpenRouter serve them. Neither is in a shipped chain. (#2762, #2848)
+- **`bench.py --extra-model` no longer needs `family=`.** Left out, the family is read from the model id.
+  Contributed by @Vedant-200 (#2798, carried in #2806).
+- **The README and omher.app open with the omher desktop app.** Its screenshot comes first, with per-OS download
+  links and the one-line install, and the site's hero window runs a live, clickable omher on staged data that
+  follows each omher release. (#2712, #2721, #2743, #2750, #2875 and follow-ups)
 
 ## 4.0.7 - 2026-11-09
 

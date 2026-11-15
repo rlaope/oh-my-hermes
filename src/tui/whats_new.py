@@ -34,6 +34,13 @@ SHORT_HINT = " · /whats-new lists it"
 EARLIER_TUI_STATE = ("tui/launch-skills.json",)
 
 WHATS_NEW: dict[str, tuple[str, ...]] = {
+    "4.0.8": (
+        "Enter during a turn steers it now, as in Claude Code",
+        "A drag copies clean, and the wheel scrolls the terminal's scrollback",
+        "/resume looks like Claude Code's picker; /sessions renames and deletes",
+        "/compact is one gauge row, and what you type meanwhile goes on after",
+        "Bare /model lists the models you last switched to first",
+    ),
     "4.0.7": (
         "The TUI runs on its own Hermes runtime, so bot restarts never pause it",
         "/gateway restart loads new OMH code and picks the session back up",
