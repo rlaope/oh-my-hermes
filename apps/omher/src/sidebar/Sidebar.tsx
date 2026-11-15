@@ -18,6 +18,7 @@ import { UpdateButton } from "./UpdateButton";
 import { FirstRunHint } from "../onboarding/FirstRun";
 import { OmhNotice } from "./OmhNotice";
 import { t } from "../i18n";
+import { ThreadTree } from "../threads/ThreadTree";
 
 const sessionBackground = (target: EventTarget) => target instanceof Element && !target.closest(".ss-row, button, input, textarea, select, a, [contenteditable], [role=menu], [role=menuitem]");
 
@@ -77,21 +78,25 @@ export function Sidebar() {
       <NeedsStrip asks={asks} />
       <section className={`side-sec${needle && bots.length === 0 ? " side-sec-fit" : ""}`} data-testid="side-bots">
         <div className="side-sh">{t("nav.bots")}</div>
-        <nav className="bot-list" aria-label={t("nav.bots")}>
+        <nav className="bot-list" aria-label={t("nav.bots")} role="tree">
           {bots.map((b) => {
             const pinned = s.ui.pinned.includes(b.name);
+            const hasThreads = (s.threads[b.name]?.length ?? 0) > 0;
+            const groupId = `threads-of-${b.name.replace(/[^A-Za-z0-9_-]/g, "_")}`;
             return (
             <BotRow
               key={b.name}
               bot={b}
               chat={s.chats[b.name]}
               unread={s.unread[b.name] ?? 0}
-              active={inChat && s.selectedBot === b.name}
+              active={inChat && s.selectedBot === b.name && !s.ui.thread}
               asks={asks.filter((a) => a.bot === b.name)}
               pinned={pinned}
               onSelect={() => void s.selectBot(b.name)}
               drag={drag.row(b.name)}
+              groupId={hasThreads ? groupId : undefined}
               menu={{
+                onNewThread: b.host || b.status === "offline" ? undefined : () => void s.newThread(b.name),
                 pinned,
                 onPin: () => s.pinBot(b.name, !pinned),
                 onEdit: () => s.openSettings(`bot:${b.name}`),
@@ -99,7 +104,9 @@ export function Sidebar() {
                 offline: b.status === "offline",
                 onRemove: listed.length > 1 ? () => s.listBot(b.name, false) : undefined,
               }}
-            />
+            >
+              {hasThreads && <ThreadTree bot={b.name} id={groupId} />}
+            </BotRow>
             );
           })}
           {needle && bots.length === 0 && <div className="bot-empty">{t("side.noBot", { q: q.trim() })}</div>}

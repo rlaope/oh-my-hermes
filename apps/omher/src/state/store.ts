@@ -49,6 +49,7 @@ import type {
   PlanItem,
 } from "../lib/protocol";
 import type { AgentRunSummary, CliAgent, NodePr, RunDetail } from "../lib/runs";
+import { firstWords, hideSplitBlocks, threadEvent, threadKey, type ThreadOps, type ThreadRow } from "../threads/types";
 
 export type PanelTabId = "details" | "terminal" | "schedule" | "worktrees" | "diff" | "runs";
 
@@ -234,6 +235,21 @@ export type RoutineAddedItem = {
 export type PluginAddedItem = { kind: "pluginAdded"; id: string; ts: number; name: string; title: string; tools: number; hooks: number };
 /** One quiet line from omher itself (e.g. "Switched to Claude #2 (limit on #1)"); never sent to the bot. */
 export type SystemItem = { kind: "system"; id: string; ts: number; text: string };
+/** "→ thread: <title>" under a main-chat answer: the bot opened `thread` (or the person sent a message there). */
+export type ThreadLinkItem = { kind: "threadLink"; id: string; ts: number; bot: string; thread: string; title: string };
+/** "Send this to <title>?" under a main-chat answer whose bot thought the person's message belongs in `thread`.
+ *  `text` is that message; nothing is sent until Send there. `done`: what the person chose. */
+export type ThreadRouteItem = {
+  kind: "threadRoute";
+  id: string;
+  ts: number;
+  bot: string;
+  thread: string;
+  title: string;
+  text: string;
+  done?: "sent" | "kept";
+  error?: string;
+};
 export type ChatItem =
   | MessageItem
   | ActivityItem
@@ -242,7 +258,9 @@ export type ChatItem =
   | RoutineItem
   | RoutineAddedItem
   | PluginAddedItem
-  | SystemItem;
+  | SystemItem
+  | ThreadLinkItem
+  | ThreadRouteItem;
 export type TimelineItem = ChatItem | AwayItem;
 
 export interface Chat {
@@ -323,6 +341,8 @@ export interface Ui {
   /** The ask card to scroll to and focus (set by the Needs-you strip and ⌘J); `seq` re-triggers the same one. */
   focusAsk: FocusAsk | null;
   session: string | null;
+  /** The thread under `selectedBot` the main column shows (`view` "chat"); null = the bot's main chat. */
+  thread: string | null;
 }
 
 export interface FocusAsk {
@@ -347,6 +367,8 @@ export interface AppState {
   models: Record<string, ModelOptions>;
   /** Per bot: the composer's "Reply there" chip, if any. */
   replyTo: Record<string, ReplyChip | null>;
+  /** Per bot: its threads (bridge `thread.list`), newest first; absent until read. */
+  threads: Record<string, ThreadRow[]>;
   ui: Ui;
 }
 
@@ -407,7 +429,7 @@ export function liveLabel(t: Turn): { verb: string; code?: string } {
  *  never a line still being typed and never an open code block (it shows once its closing fence came). Shown in
  *  pieces of whole lines, so the answer grows a line or paragraph at a time instead of word by word. */
 export function answerSoFar(t: Turn): string {
-  const text = t.streaming.slice(t.cut ?? 0).replace(/^\s+/, "");
+  const text = hideSplitBlocks(t.streaming.slice(t.cut ?? 0).replace(/^\s+/, ""));
   const end = text.lastIndexOf("\n");
   if (end < 0) return "";
   const lines = text.slice(0, end).split("\n");
@@ -522,6 +544,7 @@ export function initialState(): AppState {
     automations: null,
     models: {},
     replyTo: {},
+    threads: {},
     ui: {
       panelOpen: false,
       panelTab: "details",
@@ -536,6 +559,7 @@ export function initialState(): AppState {
       roster: readRoster(),
       focusAsk: null,
       session: null,
+      thread: null,
       automation: null,
       pluginsBot: null,
       lang: readLang(),
@@ -838,7 +862,19 @@ export type Action =
   | { type: "chat.forget"; bot: string }
   /** A SESSIONS chat ended with `error`: its last turn, failed with that same reason, no longer repeats it (the
    *  Ended line above the composer says it once, beside Restart). */
-  | { type: "turn.reasonMoved"; bot: string; error: string };
+  | { type: "turn.reasonMoved"; bot: string; error: string }
+  /** A bot's threads as `thread.list` read them (rows the app already holds keep their live title and time). */
+  | { type: "threads"; bot: string; threads: ThreadRow[] }
+  /** One thread joined (made here, or the bot opened one) or changed (named, active). */
+  | { type: "thread.upsert"; bot: string; row: ThreadRow }
+  /** A thread was archived: its row, its chat and the asks in it go. */
+  | { type: "thread.gone"; bot: string; thread: string }
+  /** Show a thread of `bot` in the main column (null: the bot's main chat). */
+  | { type: "ui.thread"; bot: string; thread: string | null }
+  /** A link line or a route card under the main-chat answer `message` of `bot` (once per id). */
+  | { type: "thread.note"; bot: string; message: string; item: ThreadLinkItem | ThreadRouteItem }
+  /** The person answered a route card. */
+  | { type: "thread.routed"; bot: string; id: string; done?: "sent" | "kept"; error?: string };
 
 // ---- chats that are not a bot's main chat ------------------------------------------------------
 //
@@ -1015,7 +1051,7 @@ function reduceEvent(state: AppState, ev: BridgeEvent, now: number): AppState {
         let base = c;
         // A done turn that streamed text but never sent the final message: keep what was said.
         // Only what came after the latest tool call: the text before it was commentary on that call, not the answer.
-        const said = c.turn ? c.turn.streaming.slice(c.turn.cut ?? 0).trim() : "";
+        const said = c.turn ? hideSplitBlocks(c.turn.streaming.slice(c.turn.cut ?? 0).trim()) : "";
         if (ev.outcome === "done" && c.turn && said) {
           const text = said;
           const slot = answerSlot(c);
@@ -1118,7 +1154,61 @@ export function reduce(state: AppState, a: Action): AppState {
     case "bots":
       return { ...state, bots: a.bots };
     case "select":
-      return { ...state, selectedBot: a.bot, unread: { ...state.unread, [a.bot]: 0 }, ui: { ...state.ui, view: "chat" } };
+      return { ...state, selectedBot: a.bot, unread: { ...state.unread, [a.bot]: 0 }, ui: { ...state.ui, view: "chat", thread: null } };
+    case "ui.thread":
+      return {
+        ...state,
+        selectedBot: a.bot,
+        unread: a.thread ? state.unread : { ...state.unread, [a.bot]: 0 },
+        ui: { ...state.ui, view: "chat", thread: a.thread },
+      };
+    case "threads": {
+      const had = new Map((state.threads[a.bot] ?? []).map((r) => [r.thread, r]));
+      const rows = a.threads.map((r) => {
+        const old = had.get(r.thread);
+        return old ? { ...r, title: r.title || old.title, last: Math.max(old.last ?? 0, r.last ?? 0) || undefined } : r;
+      });
+      return { ...state, threads: { ...state.threads, [a.bot]: rows } };
+    }
+    case "thread.upsert": {
+      const list = state.threads[a.bot] ?? [];
+      const i = list.findIndex((r) => r.thread === a.row.thread);
+      const rows = i < 0 ? [a.row, ...list] : list.map((r, j) => (j === i ? { ...r, ...a.row, title: a.row.title || r.title } : r));
+      return { ...state, threads: { ...state.threads, [a.bot]: rows } };
+    }
+    case "thread.note":
+      return touchChat(state, a.bot, (c) => {
+        if (c.items.some((i) => i.id === a.item.id)) return c;
+        // right under the answer and the lines already under it; at the end when that answer is not here
+        let at = c.items.findIndex((i) => i.id === a.message);
+        if (at < 0) at = c.items.length;
+        else {
+          at += 1;
+          while (at < c.items.length && (c.items[at].kind === "threadLink" || c.items[at].kind === "threadRoute")) at += 1;
+        }
+        return withItems(c, [...c.items.slice(0, at), a.item, ...c.items.slice(at)]);
+      });
+    case "thread.routed":
+      return touchChat(state, a.bot, (c) =>
+        withItems(
+          c,
+          c.items.map((i) => (i.kind === "threadRoute" && i.id === a.id ? { ...i, done: a.done, error: a.error } : i)),
+        ),
+      );
+    case "thread.gone": {
+      const list = state.threads[a.bot];
+      const key = threadKey(a.bot, a.thread);
+      if (!list?.some((r) => r.thread === a.thread) && !state.chats[key] && state.ui.thread !== a.thread) return state;
+      const chats = { ...state.chats };
+      delete chats[key];
+      const open = state.selectedBot === a.bot && state.ui.thread === a.thread;
+      return {
+        ...state,
+        chats,
+        threads: { ...state.threads, [a.bot]: (list ?? []).filter((r) => r.thread !== a.thread) },
+        ui: open ? { ...state.ui, thread: null } : state.ui,
+      };
+    }
     case "chat.opened":
       return touchChat(state, a.bot, (c) => ({ ...applyOpened(c, a.res, a.now, a.bot, a.since), openError: null }));
     case "local.user":
@@ -1517,6 +1607,20 @@ export interface Actions {
   restartScope(bot: string): Promise<OpMap["bots.restart_scope"]["result"]>;
   /** Hermes' own `reload-plugins` on the bot's gateway (restarts nothing). */
   reloadPlugins(bot: string, name?: string): Promise<OpMap["plugins.reload"]["result"]>;
+  /** Re-read a bot's threads (`thread.list`). */
+  loadThreads(bot: string): Promise<void>;
+  /** A new, empty thread under `bot`, opened in the main column (the composer takes focus). */
+  newThread(bot: string): Promise<string | null>;
+  /** Show thread `thread` of `bot` (reads its messages the first time); null = the bot's main chat. */
+  openThread(bot: string, thread: string | null): Promise<void>;
+  /** Send in a thread; the first message names it. */
+  threadSend(bot: string, thread: string, text: string): Promise<void>;
+  threadInterrupt(bot: string, thread: string): Promise<void>;
+  /** Stop the thread when it runs, then archive it in Hermes (hidden, kept, restorable). Rejects on refusal. */
+  removeThread(bot: string, thread: string): Promise<void>;
+  /** A route card's answer: `send` sends the person's message to the card's thread (and adds a link line); `keep`
+   *  only closes the card. */
+  answerRoute(bot: string, id: string, choice: "send" | "keep"): Promise<void>;
 }
 
 export type BridgeLike = Pick<BridgeClient, "connect" | "request" | "onAny" | "onStatus">;
@@ -1697,6 +1801,7 @@ export function createStore(bridge: BridgeLike, opts: StoreOptions = {}): Store 
     if (state.ui.roster && state.bots.some((b) => b.name === bot)) listBot(bot, true);
     dispatch({ type: "select", bot });
     const jobs: Promise<unknown>[] = [loadElsewhere(bot), loadRoutines(bot), loadModels(bot)];
+    if (!state.threads[bot]) jobs.push(loadThreads(bot));
     if (!state.chats[bot]?.loaded) jobs.push(loadChat(bot).catch(fail));
     await Promise.all(jobs);
   };
@@ -1728,8 +1833,56 @@ export function createStore(bridge: BridgeLike, opts: StoreOptions = {}): Store 
     }
     const names = new Set(state.bots.map((b) => b.name));
     const loaded = Object.entries(state.chats).filter(([n, c]) => c.loaded && names.has(n)).map(([n]) => n);
-    await Promise.allSettled([...loaded.map(loadChat), ...peekUnlisted(), loadElsewhere(), loadRoutines(), loadAutomations()]);
+    const threaded = Object.keys(state.threads).filter((n) => names.has(n));
+    await Promise.allSettled([...loaded.map(loadChat), ...threaded.map(loadThreads), ...peekUnlisted(), loadElsewhere(), loadRoutines(), loadAutomations()]);
   };
+
+  // ---- threads under a bot (bridge `thread.*`) ----
+  const threadReq = <K extends keyof ThreadOps>(op: K, params: ThreadOps[K]["params"]): Promise<ThreadOps[K]["result"]> =>
+    (bridge.request as unknown as (op: string, p: unknown) => Promise<ThreadOps[K]["result"]>)(op, params);
+  const threadRoute = (bot: string, thread: string) => {
+    const key = threadKey(bot, thread);
+    setChatRoute(key, {
+      label: `${(state.threads[bot] ?? []).find((r) => r.thread === thread)?.title || tr("thread.untitled")} · ${
+        state.bots.find((b) => b.name === bot)?.display_name ?? bot
+      }`,
+      open: () => void actions.openThread(bot, thread),
+      send: (text) => actions.threadSend(bot, thread, text),
+      interrupt: () => actions.threadInterrupt(bot, thread),
+      approve: async (request_id, choice) => {
+        await bridge.request("approval.respond", { bot, session: thread, request_id, choice });
+      },
+      clarify: async (request_id, answer) => {
+        await bridge.request(
+          "clarify.respond",
+          typeof answer === "string" ? { bot, session: thread, request_id, answer } : { bot, session: thread, request_id, answers: answer },
+        );
+      },
+    });
+    return key;
+  };
+  const loadThreads = async (bot: string) => {
+    try {
+      const r = await threadReq("thread.list", { bot });
+      dispatch({ type: "threads", bot, threads: r.threads });
+      for (const row of r.threads) threadRoute(bot, row.thread);
+    } catch {
+      /* an offline bot, or a bridge without threads: the bot row shows none */
+    }
+  };
+  const loadThread = async (bot: string, thread: string) => {
+    const key = threadRoute(bot, thread);
+    const since = now();
+    try {
+      const res = await threadReq("thread.open", { bot, thread });
+      dispatch({ type: "chat.opened", bot: key, res: { ...res, session_id: res.thread }, now: now(), since });
+    } catch (e) {
+      dispatch({ type: "chat.failed", bot: key, message: errText(e) });
+    }
+  };
+  /** The thread a `session`-tagged event belongs to, when it is one of the bot's threads. */
+  const threadOf = (ev: BridgeEvent) => (ev.session ? (state.threads[ev.bot] ?? []).find((r) => r.thread === ev.session) : undefined);
+  let threadSeq = 0;
 
   const actions: Actions = {
     async init() {
@@ -1754,6 +1907,36 @@ export function createStore(bridge: BridgeLike, opts: StoreOptions = {}): Store 
         if (ev.event === "routine.ran") void loadRoutines(ev.bot);
         if (ev.event === "routine.ran" || ev.event === "routines.update" || ev.event === "routine.added") void loadAutomations();
         if (ev.event === "bots.update") void reloadBots();
+        const tev = threadEvent(ev);
+        if (tev) {
+          if (tev.event === "thread.removed") dispatch({ type: "thread.gone", bot: tev.bot, thread: tev.thread });
+          else if (tev.event === "thread.split") {
+            // the bot opened a thread from its answer: the row at once (the list re-read confirms it), a link line
+            const known = (state.threads[tev.bot] ?? []).find((r) => r.thread === tev.thread);
+            const row: ThreadRow = known
+              ? { ...known, title: known.title || tev.title, last: now() / 1000 }
+              : { thread: tev.thread, title: tev.title, cwd: "", started_at: now() / 1000, running: false, needs: false, message_count: 0, last: now() / 1000 };
+            dispatch({ type: "thread.upsert", bot: tev.bot, row });
+            threadRoute(tev.bot, tev.thread);
+            dispatch({ type: "thread.note", bot: tev.bot, message: tev.message, item: { kind: "threadLink", id: `split-${tev.thread}`, ts: now() / 1000, bot: tev.bot, thread: tev.thread, title: tev.title } });
+          } else if (tev.event === "thread.route") {
+            // the bot thinks the person's last message belongs in an open thread: ask, move nothing
+            const items = state.chats[tev.bot]?.items ?? [];
+            const at = items.findIndex((i) => i.kind === "assistant" && i.id === tev.message);
+            const upTo = at < 0 ? items : items.slice(0, at);
+            const said = [...upTo].reverse().find((i): i is MessageItem => i.kind === "user");
+            if (said && (state.threads[tev.bot] ?? []).some((r) => r.thread === tev.thread))
+              dispatch({ type: "thread.note", bot: tev.bot, message: tev.message, item: { kind: "threadRoute", id: `route-${tev.message}`, ts: now() / 1000, bot: tev.bot, thread: tev.thread, title: tev.title, text: said.text } });
+          }
+          // a thread the bot opened itself (or another window made): the list re-reads
+          else if (!(state.threads[tev.bot] ?? []).some((r) => r.thread === tev.thread)) void loadThreads(tev.bot);
+        } else {
+          const row = threadOf(ev);
+          if (row && (ev.event === "turn.start" || ev.event === "turn.end" || ev.event === "message" || ev.event === "session.title")) {
+            const title = ev.event === "session.title" ? ev.title.trim() : row.title;
+            dispatch({ type: "thread.upsert", bot: ev.bot, row: { ...row, title, last: now() / 1000, running: ev.event === "turn.start" || (ev.event !== "turn.end" && row.running) } });
+          }
+        }
         // a restarted bot is attached again: its chat re-reads itself, as after a reconnect; a bot outside the list
         // is asked again, because the restart dropped the bridge's link to its Bot Chat
         if (ev.event === "bot.restarted" && ev.ok) {
@@ -1792,6 +1975,7 @@ export function createStore(bridge: BridgeLike, opts: StoreOptions = {}): Store 
         // prompts its existing Bot Chat holds, so an approval or question it is waiting on still reaches Needs you.
         await Promise.allSettled([
           ...selectSidebarBots(state).filter((b) => b.name !== first && online(b)).map((b) => loadChat(b.name)),
+          ...selectSidebarBots(state).filter((b) => b.name !== first && online(b)).map((b) => loadThreads(b.name)),
           // every bot outside the list, not only `online` ones: bots.list reads offline for any profile the bridge
           // has not attached yet, which is every one of these at start; chat.open attaches on demand, and one that
           // cannot start just fails and is skipped
@@ -2095,6 +2279,68 @@ export function createStore(bridge: BridgeLike, opts: StoreOptions = {}): Store 
     restartBot: (bot, interrupt) => bridge.request("bots.restart", interrupt ? { bot, interrupt: true } : { bot }),
     restartScope: (bot) => bridge.request("bots.restart_scope", { bot }),
     reloadPlugins: (bot, name) => bridge.request("plugins.reload", name ? { bot, name } : { bot }),
+    loadThreads,
+    async newThread(bot) {
+      try {
+        const key = `t${Date.now().toString(36)}${(threadSeq += 1)}`;
+        const r = await threadReq("thread.create", { bot, key });
+        const { model, provider, reasoning, ...row } = r;
+        dispatch({ type: "thread.upsert", bot, row: { ...row, last: now() / 1000 } });
+        const ck = threadRoute(bot, row.thread);
+        dispatch({ type: "chat.opened", bot: ck, res: { session_id: row.thread, messages: [], running: false, model, provider, reasoning }, now: now() });
+        dispatch({ type: "ui.thread", bot, thread: row.thread });
+        return row.thread;
+      } catch (e) {
+        fail(e);
+        return null;
+      }
+    },
+    async openThread(bot, thread) {
+      if (state.ui.roster && state.bots.some((b) => b.name === bot)) listBot(bot, true);
+      if (!thread) return selectBot(bot);
+      dispatch({ type: "ui.thread", bot, thread });
+      if (!state.chats[threadKey(bot, thread)]?.loaded) await loadThread(bot, thread);
+    },
+    async threadSend(bot, thread, text) {
+      const key = threadRoute(bot, thread);
+      const id = `local-${++localSeq}`;
+      dispatch({ type: "local.user", bot: key, id, text: text.trim(), now: now() });
+      const row = (state.threads[bot] ?? []).find((r) => r.thread === thread);
+      // the row reads the first words at once; Hermes' own title replaces them when it lands
+      if (row && !row.title) dispatch({ type: "thread.upsert", bot, row: { ...row, title: firstWords(text), last: now() / 1000 } });
+      try {
+        await bridge.request("chat.send", { bot, session: thread, text: text.trim() });
+      } catch (e) {
+        dispatch({ type: "send.failed", bot: key, id, error: errText(e) });
+      }
+    },
+    async threadInterrupt(bot, thread) {
+      try {
+        await bridge.request("chat.interrupt", { bot, session: thread });
+      } catch (e) {
+        fail(e);
+      }
+    },
+    async removeThread(bot, thread) {
+      await threadReq("thread.remove", { bot, thread });
+      setChatRoute(threadKey(bot, thread), null);
+      dispatch({ type: "thread.gone", bot, thread });
+    },
+    async answerRoute(bot, id, choice) {
+      const card = state.chats[bot]?.items.find((i): i is ThreadRouteItem => i.kind === "threadRoute" && i.id === id);
+      if (!card || card.done) return;
+      if (choice === "keep") return dispatch({ type: "thread.routed", bot, id, done: "kept" });
+      const key = threadRoute(bot, card.thread);
+      const local = `local-${++localSeq}`;
+      try {
+        await bridge.request("chat.send", { bot, session: card.thread, text: card.text });
+      } catch (e) {
+        return dispatch({ type: "thread.routed", bot, id, error: errText(e) });
+      }
+      dispatch({ type: "local.user", bot: key, id: local, text: card.text, now: now() });
+      dispatch({ type: "thread.routed", bot, id, done: "sent" });
+      dispatch({ type: "thread.note", bot, message: id, item: { kind: "threadLink", id: `${id}-link`, ts: now() / 1000, bot, thread: card.thread, title: card.title } });
+    },
   };
 
   return {
