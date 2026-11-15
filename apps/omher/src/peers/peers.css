@@ -6,31 +6,36 @@
   box-shadow: inset 0 0 0 1px var(--line-strong);
   display: inline-flex;
   align-items: center;
-  gap: 3px;
+  gap: 4px;
   min-width: 0;
   max-width: 100%;
-  height: 16px;
-  padding: 0 5px;
+  height: 18px;
+  padding: 0 6px;
   border-radius: 4px;
-  background: var(--raise2);
-  color: var(--body);
-  font-size: 10.5px;
+  /* an ink tint, not --raise2: the selected sidebar row is --raise2 too, and the marker must not melt into it */
+  background: color-mix(in srgb, var(--ink) 7%, transparent);
+  color: var(--ink);
+  font-size: 11px;
   font-weight: 500;
-  line-height: 16px;
+  line-height: 18px;
   white-space: nowrap;
   vertical-align: middle;
 }
 .ssh-mark .ssh-ic {
   flex: none;
+  color: var(--body);
 }
 .ssh-k {
+  flex: none;
   font-family: var(--mono);
-  font-size: 9.5px;
-  letter-spacing: 0.04em;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
   color: var(--body);
 }
 .ssh-sep {
-  color: var(--quiet);
+  flex: none;
+  color: var(--muted);
   white-space: pre;
   margin: 0 -2px;
 }
@@ -62,18 +67,32 @@
 .bot-r1 .bot-n.has-ssh {
   display: inline-flex;
   align-items: baseline;
-  gap: 5px;
+  gap: 4px;
   min-width: 0;
+}
+/* the sidebar row: the name keeps its room first (up to 60% of the line), the marker takes what is left and its
+   label ends in an ellipsis */
+.bot-n.has-ssh .bot-nt {
+  flex: 0 0 auto;
+  max-width: 60%;
 }
 .bot-n .ssh-mark {
   flex: 0 1 auto;
-  height: 15px;
-  line-height: 15px;
+  gap: 3px;
+  padding: 0 4px;
+  height: 17px;
+  line-height: 17px;
   font-weight: 500;
+  align-self: center;
+}
+/* on the selected row (--active-row) the tint would melt in: the page colour sets it apart instead */
+.bot.active .ssh-mark {
+  background: var(--bg);
 }
 .head .ssh-mark {
   margin-left: 2px;
   flex: 0 1 auto;
+  max-width: 260px;
 }
 .bc-id .ssh-mark,
 .be-sub .ssh-mark {

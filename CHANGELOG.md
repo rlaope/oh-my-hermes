@@ -4,6 +4,12 @@ All notable changes will be documented here.
 
 ## Unreleased
 
+- **omher shows a bot's SSH draft as its chip only, and the SSH marker reads at 11px.** The raw `omher-peer` JSON
+  (with its `user@host`) no longer sits in the bubble above the "Connect over SSH" chip, and an `omher-agent` draft
+  likewise shows only its Add agent chip; a folder or SESSIONS chat with no chip keeps the block. The `SSH · <name>`
+  marker on the bot row and chat header is 11px with ink text, stands apart on the selected row, keeps the bot's
+  name whole and ends a long computer name in an ellipsis.
+
 - **omher connects a Hermes on another computer over SSH.** The sidebar + has "Connect over SSH": pick a host from
   `~/.ssh/config` (or type `user@host`), press Check, and a card shows the exact `ssh` command omher will run, the
   Hermes and Python found there and the bots that computer has; nothing is saved until Connect. Its bots join the
