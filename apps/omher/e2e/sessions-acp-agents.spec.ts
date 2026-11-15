@@ -9,6 +9,8 @@ import { expect, test, type Page } from "@playwright/test";
 import { readFileSync } from "node:fs";
 import { INSTALL } from "../src/sessions/agents";
 
+test.skip(true, "SESSIONS hidden in favour of bot threads (plan 2026-11-15)");
+
 /** The shell's generic ACP agents as the mock host serves them (a Rust test pins this copy to `ACP_LIST`). */
 const shellList: { id: string; install: string }[] = JSON.parse(readFileSync(new URL("../src/sessions/mockAcpAgents.json", import.meta.url), "utf8"));
 

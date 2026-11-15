@@ -90,7 +90,8 @@ test.beforeEach(async () => {
   await mock("mock.reset");
 });
 
-test("gpu on: a canvas under the terminal, the renderer is the GPU, and the text is still there", async ({ page }) => {
+// SESSIONS hidden in favour of bot threads (plan 2026-11-15)
+test.skip("gpu on: a canvas under the terminal, the renderer is the GPU, and the text is still there", async ({ page }) => {
   await open(page, "on");
   await newTerminal(page);
   await expect.poll(() => renderer(page)).toBe("gpu");
@@ -98,7 +99,8 @@ test("gpu on: a canvas under the terminal, the renderer is the GPU, and the text
   expect(await lineText(page, "last")).toContain("(mock)");
 });
 
-test("gpu off: no canvas, the add-on's chunk is never requested", async ({ page }) => {
+// SESSIONS hidden in favour of bot threads (plan 2026-11-15)
+test.skip("gpu off: no canvas, the add-on's chunk is never requested", async ({ page }) => {
   const requested: string[] = [];
   page.on("request", (r) => {
     if (/addon-webgl/.test(r.url())) requested.push(r.url());
@@ -111,7 +113,8 @@ test("gpu off: no canvas, the add-on's chunk is never requested", async ({ page 
   expect(requested).toEqual([]);
 });
 
-test("gpu auto: where the rule says no (a software renderer, or macOS) the standard renderer draws and the chunk is never requested", async ({ page }) => {
+// SESSIONS hidden in favour of bot threads (plan 2026-11-15)
+test.skip("gpu auto: where the rule says no (a software renderer, or macOS) the standard renderer draws and the chunk is never requested", async ({ page }) => {
   const requested: string[] = [];
   page.on("request", (r) => {
     if (/addon-webgl/.test(r.url())) requested.push(r.url());
@@ -123,7 +126,8 @@ test("gpu auto: where the rule says no (a software renderer, or macOS) the stand
   expect(requested).toEqual([]);
 });
 
-test("the add-on's chunk is not loaded with the app", async ({ page }) => {
+// SESSIONS hidden in favour of bot threads (plan 2026-11-15)
+test.skip("the add-on's chunk is not loaded with the app", async ({ page }) => {
   const requested: string[] = [];
   page.on("request", (r) => {
     if (/addon-webgl/.test(r.url())) requested.push(r.url());
@@ -136,7 +140,8 @@ test("the add-on's chunk is not loaded with the app", async ({ page }) => {
   expect(requested.length).toBeGreaterThan(0);
 });
 
-test("a lost context: the terminal draws with the standard renderer at once and its text is readable", async ({ page }) => {
+// SESSIONS hidden in favour of bot threads (plan 2026-11-15)
+test.skip("a lost context: the terminal draws with the standard renderer at once and its text is readable", async ({ page }) => {
   await open(page, "on");
   await newTerminal(page);
   await expect.poll(() => renderer(page)).toBe("gpu");
@@ -156,7 +161,8 @@ test("a lost context: the terminal draws with the standard renderer at once and 
   await expect(page.locator(".xterm-rows")).toContainText("hello");
 });
 
-test("20 terminal sessions one after another: none blank, none without its renderer", async ({ page }) => {
+// SESSIONS hidden in favour of bot threads (plan 2026-11-15)
+test.skip("20 terminal sessions one after another: none blank, none without its renderer", async ({ page }) => {
   test.setTimeout(180_000);
   await open(page, "on");
   const ids: string[] = [];
@@ -174,7 +180,8 @@ test("20 terminal sessions one after another: none blank, none without its rende
   expect(held).toBe(1);
 });
 
-test("Unicode 11 widths: 한글 😀 表 puts the cursor where Unicode 11 says", async ({ page }) => {
+// SESSIONS hidden in favour of bot threads (plan 2026-11-15)
+test.skip("Unicode 11 widths: 한글 😀 表 puts the cursor where Unicode 11 says", async ({ page }) => {
   await open(page, "off");
   await newTerminal(page);
   const r = await page.evaluate(async () => {
@@ -187,7 +194,8 @@ test("Unicode 11 widths: 한글 😀 表 puts the cursor where Unicode 11 says",
   expect(r).toEqual({ x: 10, version: "11" });
 });
 
-test("feed: every done runs once, in order", async ({ page }) => {
+// SESSIONS hidden in favour of bot threads (plan 2026-11-15)
+test.skip("feed: every done runs once, in order", async ({ page }) => {
   await open(page, "off");
   await newTerminal(page);
   const r = await page.evaluate(async () => {

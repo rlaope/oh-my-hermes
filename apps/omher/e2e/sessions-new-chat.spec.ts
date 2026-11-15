@@ -7,6 +7,8 @@ import { expect, test, type Page } from "@playwright/test";
 import { mkdirSync } from "node:fs";
 import { join } from "node:path";
 
+test.skip(true, "SESSIONS hidden in favour of bot threads (plan 2026-11-15)");
+
 const MOCK = Number(process.env.OMHER_MOCK_PORT || 5308);
 /** Where the PR shots go (unset: none are taken). */
 const SHOTS = process.env.OMHER_SHOTS || "";

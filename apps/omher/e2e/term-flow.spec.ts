@@ -57,7 +57,8 @@ test.beforeEach(async () => {
   await mock("mock.reset");
 });
 
-test("every message the program prints is acknowledged once, with its byte count, in order", async ({ page }) => {
+// SESSIONS hidden in favour of bot threads (plan 2026-11-15)
+test.skip("every message the program prints is acknowledged once, with its byte count, in order", async ({ page }) => {
   await terminal(page);
   await page.locator(".xterm-helper-textarea").focus();
   // each key is echoed as its own message; Enter is answered with one message, Ctrl+C with one more
@@ -91,7 +92,8 @@ test("every message the program prints is acknowledged once, with its byte count
   expect((await calls(page)).filter((c) => c.op === "ack").map((c) => c.bytes)).toEqual(feeds.map((f) => f.bytes));
 });
 
-test("a burst of resizes ends as one resize with the last size", async ({ page }) => {
+// SESSIONS hidden in favour of bot threads (plan 2026-11-15)
+test.skip("a burst of resizes ends as one resize with the last size", async ({ page }) => {
   await terminal(page);
   const box = page.getByTestId("terminal");
   const drawn = () => page.locator(".xterm-screen").evaluate((el) => (el as HTMLElement).style.width);

@@ -3,6 +3,8 @@
 // turn runs, and the model menu's search and provider groups.
 import { expect, test, type Page } from "@playwright/test";
 
+test.skip(true, "SESSIONS hidden in favour of bot threads (plan 2026-11-15)");
+
 const MOCK = Number(process.env.OMHER_MOCK_PORT || 5308);
 
 async function mock(op: string): Promise<{ calls?: { op: string; input?: Record<string, unknown> }[] }> {

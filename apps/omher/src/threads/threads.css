@@ -243,8 +243,10 @@
 .th-head {
   gap: 8px;
 }
+/* the bot's name only as wide as it is: "Kami / <title>" reads as one breadcrumb, no fixed name slot */
 .th-head .who-btn {
   flex: none;
+  width: auto;
 }
 .th-head-bot {
   color: var(--muted);

@@ -126,7 +126,8 @@ test("Save opens the confirm card with the exact command; Cancel writes nothing"
   expect(await file(page)).toBeNull();
 });
 
-test("Add writes it; it appears in the + menu after the generic ACP agents and opens a session chat; Remove ends it", async ({ page }) => {
+// SESSIONS hidden in favour of bot threads (plan 2026-11-15)
+test.skip("Add writes it; it appears in the + menu after the generic ACP agents and opens a session chat; Remove ends it", async ({ page }) => {
   await open(page);
   await agentsPage(page);
   await fill(page, "Stub ACP", "stub-acp");
@@ -169,7 +170,8 @@ test("Add writes it; it appears in the + menu after the generic ACP agents and o
   await expect(page.getByTestId("session-agent-stub-acp")).toHaveCount(0);
 });
 
-test("a broken entry of the file is listed as broken, never offered, and can be removed", async ({ page }) => {
+// SESSIONS hidden in favour of bot threads (plan 2026-11-15)
+test.skip("a broken entry of the file is listed as broken, never offered, and can be removed", async ({ page }) => {
   await open(page, { file: [{ id: "evil", label: "Evil", program: "sh", args: ["-c", "rm -rf ~"], install: "" }, { id: "cursor", label: "Cursor", program: "cursor-agent", args: ["acp"], install: "" }] });
   await agentsPage(page);
   await expect(page.getByTestId("agents-broken-evil")).toContainText("evil cannot run");

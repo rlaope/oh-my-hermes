@@ -125,7 +125,8 @@ test("Terminal is a Settings page after General; omher's own two themes lead the
   expect(new Set(sw.ansi).size).toBe(8);
 });
 
-test("Dracula picked for dark reaches the open terminal at once and is still there after a restart", async ({ page }) => {
+// SESSIONS hidden in favour of bot threads (plan 2026-11-15)
+test.skip("Dracula picked for dark reaches the open terminal at once and is still there after a restart", async ({ page }) => {
   await open(page);
   await terminalClaude(page);
   expect((await look(page))?.background).toBe("#0b090d");
@@ -156,7 +157,8 @@ test("Dracula picked for dark reaches the open terminal at once and is still the
   await expect(page.getByTestId("term-theme-dracula")).toHaveAttribute("aria-checked", "true");
 });
 
-test("a light app theme uses the light pick, a dark one the dark pick", async ({ page }) => {
+// SESSIONS hidden in favour of bot threads (plan 2026-11-15)
+test.skip("a light app theme uses the light pick, a dark one the dark pick", async ({ page }) => {
   await open(page);
   await terminalClaude(page);
   await settings(page);
@@ -183,7 +185,8 @@ test("a light app theme uses the light pick, a dark one the dark pick", async ({
   await expect.poll(async () => (await look(page))?.background).toBe("#282a36");
 });
 
-test("with the app theme on System, an open terminal follows the OS when it goes light or dark", async ({ page }) => {
+// SESSIONS hidden in favour of bot threads (plan 2026-11-15)
+test.skip("with the app theme on System, an open terminal follows the OS when it goes light or dark", async ({ page }) => {
   await open(page);
   // nothing stored: the app theme is System, and the OS is dark
   expect(await page.evaluate(() => localStorage.getItem("omher.theme"))).toBeNull();
@@ -214,7 +217,8 @@ const wordColour = (page: Page, word: string) =>
     return `#${[m[1], m[2], m[3]].map((v) => Number(v).toString(16).padStart(2, "0")).join("")}`;
   }, word);
 
-test("bold green stays green on Solarized, whose bright slots are greys; on Dracula it takes the bright green", async ({ page }) => {
+// SESSIONS hidden in favour of bot threads (plan 2026-11-15)
+test.skip("bold green stays green on Solarized, whose bright slots are greys; on Dracula it takes the bright green", async ({ page }) => {
   await open(page);
   const pick = (themeDark: string) =>
     page.evaluate(async (id) => {
@@ -239,7 +243,8 @@ test("bold green stays green on Solarized, whose bright slots are greys; on Drac
   await expect.poll(() => wordColour(page, "boldword")).toBe("#859900");
 });
 
-test("font size 16 changes how many columns fit, and the program is told the new size", async ({ page }) => {
+// SESSIONS hidden in favour of bot threads (plan 2026-11-15)
+test.skip("font size 16 changes how many columns fit, and the program is told the new size", async ({ page }) => {
   await open(page);
   await terminalClaude(page);
   const before = await look(page);
@@ -277,7 +282,8 @@ test("font size 16 changes how many columns fit, and the program is told the new
   await expect(size).toHaveValue("16.5");
 });
 
-test("cursor, contrast and the other options reach the open terminal and are kept", async ({ page }) => {
+// SESSIONS hidden in favour of bot threads (plan 2026-11-15)
+test.skip("cursor, contrast and the other options reach the open terminal and are kept", async ({ page }) => {
   await open(page);
   await terminalClaude(page);
   expect(await look(page)).toMatchObject({ cursorStyle: "block", contrast: 4.5, pad: "16px", optionIsMeta: true, blink: true });
@@ -339,7 +345,8 @@ const wordContrast = (page: Page, word: string) =>
     return Math.round(contrastRatio(`#${shown.map((v) => v.toString(16).padStart(2, "0")).join("")}`, bgHex) * 100) / 100;
   }, word);
 
-test("the contrast hints are true: High lifts a text colour to 4.5:1 and leaves dim text below it, and the row says so", async ({ page }) => {
+// SESSIONS hidden in favour of bot threads (plan 2026-11-15)
+test.skip("the contrast hints are true: High lifts a text colour to 4.5:1 and leaves dim text below it, and the row says so", async ({ page }) => {
   await open(page);
   // Solarized Light: its yellow is 2.98:1 on its background, and dim text is the faintest of the catalog
   await page.evaluate(async () => {
@@ -388,7 +395,8 @@ const buffer = (page: Page) =>
   });
 const numbered = (from: number, to: number) => Array.from({ length: to - from }, (_, i) => `row ${from + i}\r\n`).join("");
 
-test("a new scrollback limit reaches a terminal that is already open: more rows are kept, and a smaller limit keeps the newest", async ({ page }) => {
+// SESSIONS hidden in favour of bot threads (plan 2026-11-15)
+test.skip("a new scrollback limit reaches a terminal that is already open: more rows are kept, and a smaller limit keeps the newest", async ({ page }) => {
   await open(page);
   await terminalClaude(page);
   expect((await buffer(page)).limit).toBe(5000);

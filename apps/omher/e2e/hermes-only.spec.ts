@@ -79,7 +79,8 @@ async function open(page: Page, o: { omh?: boolean; plan?: Plan; onboarding?: bo
 
 const installs = (page: Page) => page.evaluate(() => ((window as unknown as { __installCalls: string[] }).__installCalls ?? []).length);
 
-test("1. Hermes without omh: the + row reads Hermes with Hermes' mark and opens a Hermes chat in the folder, on the bot in view", async ({ page }) => {
+// SESSIONS hidden in favour of bot threads (plan 2026-11-15)
+test.skip("1. Hermes without omh: the + row reads Hermes with Hermes' mark and opens a Hermes chat in the folder, on the bot in view", async ({ page }) => {
   await open(page);
   await page.getByTestId("bot-friren").click();
   await expect(page.getByTestId("bot-friren")).toHaveAttribute("aria-current", "true");
@@ -105,7 +106,8 @@ test("1. Hermes without omh: the + row reads Hermes with Hermes' mark and opens 
   await expect(page.getByTestId("session-list").getByTestId("session-sub").first()).toContainText("Hermes");
 });
 
-test("2. Hermes and omh: the row reads oh-my-hermes as before, and nothing offers to add it", async ({ page }) => {
+// SESSIONS hidden in favour of bot threads (plan 2026-11-15)
+test.skip("2. Hermes and omh: the row reads oh-my-hermes as before, and nothing offers to add it", async ({ page }) => {
   await open(page, { omh: true });
   await page.getByTestId("session-new").click();
   const row = page.getByTestId("session-menu").getByTestId("session-agent-omh");
@@ -114,7 +116,8 @@ test("2. Hermes and omh: the row reads oh-my-hermes as before, and nothing offer
   await expect(page.getByTestId("session-add-omh")).toHaveCount(0);
 });
 
-test("3. a Hermes session without omh has no Terminal toggle (it would start omh); its model and panel stay", async ({ page }) => {
+// SESSIONS hidden in favour of bot threads (plan 2026-11-15)
+test.skip("3. a Hermes session without omh has no Terminal toggle (it would start omh); its model and panel stay", async ({ page }) => {
   await open(page);
   await page.getByTestId("session-new").click();
   await page.getByTestId("session-agent-omh").click();
@@ -131,7 +134,8 @@ test("3. a Hermes session without omh has no Terminal toggle (it would start omh
   expect(ops).not.toContain("start");
 });
 
-test("3b. with omh the same session keeps its Terminal toggle", async ({ page }) => {
+// SESSIONS hidden in favour of bot threads (plan 2026-11-15)
+test.skip("3b. with omh the same session keeps its Terminal toggle", async ({ page }) => {
   await open(page, { omh: true });
   await page.getByTestId("session-new").click();
   await page.getByTestId("session-agent-omh").click();
@@ -358,7 +362,8 @@ test("C. the output wraps at spaces and after / only, never inside a word; one t
   expect(m.sw).toBeGreaterThan(m.cw);
 });
 
-test("C. the ! has the + menu's pressed look while its popover is open, and none at rest", async ({ page }) => {
+// SESSIONS hidden in favour of bot threads (plan 2026-11-15)
+test.skip("C. the ! has the + menu's pressed look while its popover is open, and none at rest", async ({ page }) => {
   await open(page);
   const icon = page.getByTestId("omh-notice");
   const bg = () => icon.evaluate((el) => getComputedStyle(el).backgroundColor);
@@ -457,7 +462,8 @@ test("C. a long output stops at five lines and scrolls, the newest line in view"
   expect(m.top % 18).toBe(0);
 });
 
-test("C. done: the ! and its popover go, the + row reads oh-my-hermes and its Add line is gone", async ({ page }) => {
+// SESSIONS hidden in favour of bot threads (plan 2026-11-15)
+test.skip("C. done: the ! and its popover go, the + row reads oh-my-hermes and its Add line is gone", async ({ page }) => {
   await open(page, { plan: { exit: 0, lines: ["Installing oh-my-hermes …", "[ok] omh installed"] } });
   await page.getByTestId("omh-notice").click();
   await page.getByTestId("omh-pop-install").click();
@@ -496,7 +502,8 @@ test("C. a silent failure says the exit code", async ({ page }) => {
   await expect(page.getByTestId("omh-pop-error")).toHaveText("The installer stopped (exit 7).");
 });
 
-test("C+D. Don't show again hides the ! (also after a reload); the + menu's line closes the menu and opens the popover again", async ({ page }) => {
+// SESSIONS hidden in favour of bot threads (plan 2026-11-15)
+test.skip("C+D. Don't show again hides the ! (also after a reload); the + menu's line closes the menu and opens the popover again", async ({ page }) => {
   await open(page);
   await page.getByTestId("omh-notice").click();
   await page.getByTestId("omh-pop-hide").click();
@@ -517,7 +524,8 @@ test("C+D. Don't show again hides the ! (also after a reload); the + menu's line
   expect(await installs(page)).toBe(0);
 });
 
-test("D. the + menu's line is a quiet borderless row and never runs the installer itself", async ({ page }) => {
+// SESSIONS hidden in favour of bot threads (plan 2026-11-15)
+test.skip("D. the + menu's line is a quiet borderless row and never runs the installer itself", async ({ page }) => {
   await open(page);
   await page.getByTestId("session-new").click();
   const line = page.getByTestId("session-add-omh");
@@ -591,7 +599,8 @@ for (const [lang, line, row, tip] of [
   ["ja", "oh-my-hermes を追加", "Hermes", "oh-my-hermes がインストールされていません"],
   ["zh", "添加 oh-my-hermes", "Hermes", "未安装 oh-my-hermes"],
 ] as const) {
-  test(`6. the new line in ${lang}`, async ({ page }) => {
+  // SESSIONS hidden in favour of bot threads (plan 2026-11-15)
+  test.skip(`6. the new line in ${lang}`, async ({ page }) => {
     await open(page, { lang });
     await page.getByTestId("session-new").click();
     await expect(page.getByTestId("session-add-omh")).toHaveText(line);

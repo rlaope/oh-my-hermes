@@ -6,6 +6,8 @@ import { expect, test, type Page } from "@playwright/test";
 import { mkdirSync } from "node:fs";
 import { join } from "node:path";
 
+test.skip(true, "SESSIONS hidden in favour of bot threads (plan 2026-11-15)");
+
 const MOCK = Number(process.env.OMHER_MOCK_PORT || 5308);
 // Screenshots stay out of the repo (NEEDS_SHOTS dir, else Playwright's ignored test-results).
 const SHOTS = process.env.NEEDS_SHOTS || "test-results";

@@ -89,7 +89,8 @@ test.beforeEach(async () => {
 for (const theme of ["dark", "light"] as const) {
   test.describe(theme, () => {
     test.use({ colorScheme: theme });
-    test(`update asks first: Cancel keeps the app as it is, the confirm installs (${theme})`, async ({ page }) => {
+    // SESSIONS hidden in favour of bot threads (plan 2026-11-15)
+    test.skip(`update asks first: Cancel keeps the app as it is, the confirm installs (${theme})`, async ({ page }) => {
       await setup(page, ["/Users/you/code/web-app", "/Users/you/code/api"]);
       await start(page, "claude");
       await expect(page.getByTestId("session-status")).toHaveText("Ready");
@@ -218,7 +219,8 @@ test("a saved bot that is gone, or a bad snapshot, opens the app as a fresh star
   await expect(page.getByTestId("composer")).toHaveValue("");
 });
 
-test("after a restart: Claude Code and Codex continue by themselves, pi waits for Resume, an ended one stays ended", async ({ page }) => {
+// SESSIONS hidden in favour of bot threads (plan 2026-11-15)
+test.skip("after a restart: Claude Code and Codex continue by themselves, pi waits for Resume, an ended one stays ended", async ({ page }) => {
   await setup(page, ["/Users/you/code/web-app", "/Users/you/code/api", "/Users/you/code/pi-work", "/Users/you/code/old"]);
   await start(page, "claude", "hello before");
   await expect(page.getByTestId("bubble-bot").last()).toContainText("You said: hello before");
@@ -295,7 +297,8 @@ test("after a restart: Claude Code and Codex continue by themselves, pi waits fo
   expect((await sessionCalls(page)).filter((c) => c.op === "chat.start")).toHaveLength(3);
 });
 
-test("a terminal session that was running comes back paused and starts only on Resume", async ({ page }) => {
+// SESSIONS hidden in favour of bot threads (plan 2026-11-15)
+test.skip("a terminal session that was running comes back paused and starts only on Resume", async ({ page }) => {
   await setup(page, ["/Users/you/code/g"]);
   await start(page, "grok");
   await expect(page.getByTestId("terminal")).toBeVisible();
@@ -312,7 +315,8 @@ test("a terminal session that was running comes back paused and starts only on R
   expect((await sessionCalls(page)).filter((c) => c.op === "start")).toEqual([expect.objectContaining({ agent: "grok", cwd: "/Users/you/code/g" })]);
 });
 
-test("an ended terminal session comes back with Restart, which starts it again in its folder", async ({ page }) => {
+// SESSIONS hidden in favour of bot threads (plan 2026-11-15)
+test.skip("an ended terminal session comes back with Restart, which starts it again in its folder", async ({ page }) => {
   await setup(page, ["/Users/you/code/g"]);
   await start(page, "grok");
   await expect(page.locator(".xterm-rows")).toContainText("(mock)");
@@ -332,7 +336,8 @@ test("an ended terminal session comes back with Restart, which starts it again i
   expect((await sessionCalls(page)).filter((c) => c.op === "start")).toEqual([expect.objectContaining({ agent: "grok", cwd: "/Users/you/code/g" })]);
 });
 
-test("a New session chat that never started comes back as a draft after a restart, and nothing starts", async ({ page }) => {
+// SESSIONS hidden in favour of bot threads (plan 2026-11-15)
+test.skip("a New session chat that never started comes back as a draft after a restart, and nothing starts", async ({ page }) => {
   await setup(page, ["/Users/you/code/web-app"]);
   await page.getByTestId("session-new").click();
   await page.getByTestId("session-agent-codex").click();

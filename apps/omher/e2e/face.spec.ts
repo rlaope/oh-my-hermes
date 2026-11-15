@@ -159,7 +159,8 @@ test("a bot's face stays put from send to answer: typing, a recalled-memories st
   expect(Math.abs(end.faces[0].left - column)).toBeLessThan(0.75);
 });
 
-test("a SESSIONS chat keeps the agent's mark in the face column the same way", async ({ page }) => {
+// SESSIONS hidden in favour of bot threads (plan 2026-11-15)
+test.skip("a SESSIONS chat keeps the agent's mark in the face column the same way", async ({ page }) => {
   await page.addInitScript(() => {
     localStorage.removeItem("omher.sessions.recent");
     (window as unknown as { __omherPickFolder: string }).__omherPickFolder = "/Users/you/work/api";

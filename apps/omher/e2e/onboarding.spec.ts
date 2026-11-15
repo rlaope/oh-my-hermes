@@ -24,7 +24,8 @@ test.beforeEach(async () => {
   await mock("mock.reset");
 });
 
-test("first run: an empty chat shows just the chat, with no first-run panel over it", async ({ page }) => {
+// SESSIONS hidden in favour of bot threads (plan 2026-11-15)
+test.skip("first run: an empty chat shows just the chat, with no first-run panel over it", async ({ page }) => {
   await page.addInitScript(() => localStorage.removeItem("omher.sessions.recent"));
   await mock("mock.clearHistory", { bot: "friren" });
   await page.goto("/");

@@ -2,6 +2,8 @@ import { expect, test, type Page } from "@playwright/test";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
+test.skip(true, "SESSIONS hidden in favour of bot threads (plan 2026-11-15)");
+
 async function open(page: Page, theme = "dark") {
   await page.addInitScript((theme) => {
     localStorage.setItem("omher.theme", theme);

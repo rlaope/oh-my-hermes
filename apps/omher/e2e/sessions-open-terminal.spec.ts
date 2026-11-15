@@ -3,6 +3,8 @@
 // as a terminal ends, restarts and comes back after omher restarts, and OpenCode both ways.
 import { expect, test, type Page } from "@playwright/test";
 
+test.skip(true, "SESSIONS hidden in favour of bot threads (plan 2026-11-15)");
+
 const MOCK = Number(process.env.OMHER_MOCK_PORT || 5308);
 
 test.use({ colorScheme: "dark" });

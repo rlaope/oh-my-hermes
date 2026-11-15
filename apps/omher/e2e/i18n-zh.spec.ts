@@ -93,7 +93,8 @@ test("<html lang> follows the language, zh is zh-CN, and the CJK fonts are in --
 });
 
 for (const width of [1280, 900]) {
-  test(`sidebar, composer and the New session menu read in Chinese at ${width}px`, async ({ page }) => {
+  // SESSIONS hidden in favour of bot threads (plan 2026-11-15)
+  test.skip(`sidebar, composer and the New session menu read in Chinese at ${width}px`, async ({ page }) => {
     await page.setViewportSize({ width, height: 820 });
     await openZh(page);
     await expect(page.getByTestId("side-bots").locator(".side-sh")).toHaveText("机器人");

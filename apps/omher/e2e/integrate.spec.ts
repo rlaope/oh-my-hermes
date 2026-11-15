@@ -139,6 +139,10 @@ test("a thread row carries the marks of who works in it; the thread chat shows t
   await expect(page.getByTestId(`thread-row-${ids.slack}`).getByTestId("harness-stack")).toHaveCount(0);
   await page.getByTestId(`thread-row-${ids.og}`).getByTestId("thread-open").click();
   const chat = page.getByTestId("thread-chat");
+  // the header reads "Kami / <title>" as one breadcrumb: no fixed-width gap after the bot's name
+  const name = await page.getByTestId("thread-back").locator(".head-title").boundingBox();
+  const sep = await page.getByTestId("thread-header").locator(".th-head-sep").boundingBox();
+  expect(sep!.x - (name!.x + name!.width)).toBeLessThanOrEqual(16);
   await expect(chat.locator('.sa-mark[data-harness="codex"]')).toHaveCount(1);
   await expect(chat.locator('.sa-mark[data-harness="hermes"]')).toHaveCount(1);
   // the child ends: its mark leaves the row

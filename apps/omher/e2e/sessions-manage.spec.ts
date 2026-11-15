@@ -2,6 +2,8 @@
 // over sessions, continuing a Claude Code or Codex conversation made outside omher, ⌘N / ⌘⇧] / ⌘⇧[, and the asks count.
 import { expect, test, type Page } from "@playwright/test";
 
+test.skip(true, "SESSIONS hidden in favour of bot threads (plan 2026-11-15)");
+
 const MOCK = Number(process.env.OMHER_MOCK_PORT || 5308);
 const CLAUDE_SESSION = "11111111-2222-4333-8444-555555555555"; // the mock Claude Code's session id
 const PAST = "bbbbbbbb-1111-4222-8333-444444444444"; // host.ts MOCK_PAST: Claude Code in /Users/you/code/omher
