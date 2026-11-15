@@ -3683,7 +3683,8 @@ def _turn_answers(rows, running: bool = False) -> set[int]:
     return keep
 
 
-def chat_messages(rows, running: bool = False) -> list[dict]:
+def chat_messages(rows, running: bool = False, main: bool = False) -> list[dict]:
+    """``main``: the bot's main chat, whose answers may hold ```omher-thread``` blocks (shown without them)."""
     out = []
     answers = _turn_answers(rows, running)
     for i, row in enumerate(rows or []):
@@ -3699,7 +3700,11 @@ def chat_messages(rows, running: bool = False) -> list[dict]:
         rid = row.get("row_id")
         reply = None
         if row["role"] == "user":
-            text, reply = split_reply_block(split_peer_hint(text))
+            text, reply = split_reply_block(split_peer_hint(split_thread_hint(text)))
+        elif main and "omher-thread" in text:
+            text = split_blocks(text)[2]
+            if not text:
+                continue
         m = {"id": str(rid) if rid is not None else f"m{i}", "role": row["role"], "text": text,
              "ts": float(row.get("timestamp") or 0.0)}
         if reply:
@@ -3895,6 +3900,138 @@ def thread_name(title: str) -> str:
     return "" if _THREAD_PLACEHOLDER.fullmatch(name) else name
 
 
+# ---------------------------------------------------------------- the bot opens threads itself (`split`)
+# On each main-chat turn of an app that shows threads, the bridge appends one short note: the bot's open threads and
+# two rules. The bot may answer a many-part request with ```omher-thread``` blocks (omher opens a thread per block and
+# sends its task there) or a message that continues a thread with one ```omher-thread-route``` block (omher only asks
+# the person; nothing moves without their click). The note never shows back in the timeline.
+
+THREAD_HINT_HEAD = "[omher] Open threads:"
+THREAD_HINT_SPLIT = ("If this request has several independent parts or is long work, reply with one fenced block per "
+                     "part, ```omher-thread {\"title\": \"...\", \"task\": \"...\"}``` (max 3), and a one-line note; "
+                     "omher opens a thread for each. Answer simple questions directly, with no block.")
+THREAD_HINT_ROUTE = ("If this message continues an open thread, reply only ```omher-thread-route {\"thread\": \"<id>\"}``` "
+                     "and one sentence; omher asks the user before moving it.")
+THREAD_HINT_MAX = 900  # characters of the whole note
+THREAD_HINT_ROWS = 8
+THREAD_HINT_LAST = 80
+SPLIT_MAX = 3  # omher-thread blocks acted on per turn; the 4th and later are dropped
+SPLIT_TITLE = 80
+SPLIT_TASK = 4000
+_SPLIT_FENCE = re.compile(r"^( {0,3})(`{3,}|~{3,})[ \t]*([^\s`]*)[ \t]*(.*?)\s*$")
+_SPLIT_CLOSE = re.compile(r"^ {0,3}(`{3,}|~{3,})[ \t]*$")
+_SPLIT_INLINE = re.compile(r"^ {0,3}(`{3,})(omher-thread|omher-thread-route)[ \t]+(\{.*\})[ \t]*\1[ \t]*$")
+SPLIT_KINDS = ("omher-thread", "omher-thread-route")
+
+
+def thread_hint(rows: list[dict]) -> str:
+    """The note on a main-chat turn: up to 8 open threads (newest first: id, title, last line) and the two rules,
+    under THREAD_HINT_MAX characters (last lines shortened, then the oldest rows dropped, until it fits)."""
+    rows = rows[:THREAD_HINT_ROWS]
+    if not rows:
+        return f"{THREAD_HINT_HEAD} none.\n{THREAD_HINT_SPLIT}"
+    last_n = THREAD_HINT_LAST
+    while True:
+        lines = []
+        for r in rows:
+            line = f"{r['thread']} \"{_one_line(r.get('title') or '', 40) or 'untitled'}\""
+            last = _one_line(r.get("last") or "", last_n) if last_n > 0 else ""
+            lines.append(f"{line} — {last}" if last else line)
+        note = f"{THREAD_HINT_HEAD}\n" + "\n".join(lines) + f"\n{THREAD_HINT_SPLIT}\n{THREAD_HINT_ROUTE}"
+        if len(note) < THREAD_HINT_MAX or (last_n <= 0 and len(rows) <= 1):
+            return note
+        if last_n > 0:
+            last_n = 0 if last_n <= 20 else last_n - 20
+        else:
+            rows = rows[:-1]
+
+
+def split_thread_hint(text: str) -> str:
+    """A user row sent with the threads note, back as what the person typed (the note is always last)."""
+    if not isinstance(text, str):
+        return text
+    at = text.rfind(THREAD_HINT_HEAD)
+    if at < 0:
+        return text
+    tail = text[at:].rstrip()
+    if not (tail.endswith(THREAD_HINT_SPLIT) or tail.endswith(THREAD_HINT_ROUTE)):
+        return text
+    return text[:at].rstrip()
+
+
+def _split_block(kind: str, body: str) -> dict | None:
+    """One block's JSON checked strictly: exactly the keys of its kind, strings, sizes within bounds."""
+    try:
+        obj = json.loads(body)
+    except (ValueError, TypeError):
+        return None
+    if not isinstance(obj, dict):
+        return None
+    if kind == "omher-thread":
+        if set(obj) != {"title", "task"} or not all(isinstance(obj[k], str) for k in obj):
+            return None
+        title, task = obj["title"].strip(), obj["task"].strip()
+        if not title or len(title) > SPLIT_TITLE or "\n" in title or not task or len(task) > SPLIT_TASK:
+            return None
+        return {"title": title, "task": task}
+    if set(obj) != {"thread"} or not isinstance(obj["thread"], str) or not obj["thread"].strip():
+        return None
+    return {"thread": obj["thread"].strip()}
+
+
+def split_blocks(text: str) -> tuple[list[dict], dict | None, str]:
+    """The ```omher-thread``` / ```omher-thread-route``` blocks of a final answer, strictly: only top-level fenced
+    blocks count (not in a `>` quote, not inside another fence), each with valid JSON. Returns (up to SPLIT_MAX
+    thread blocks, the first route block or None, the text without any top-level block of those kinds)."""
+    if not isinstance(text, str) or "omher-thread" not in text:
+        return [], None, text if isinstance(text, str) else ""
+    lines = text.split("\n")
+    keep: list[str] = []
+    creates: list[dict] = []
+    route = None
+    i = 0
+    while i < len(lines):
+        line = lines[i]
+        m = _SPLIT_INLINE.match(line)
+        if m:
+            block = _split_block(m.group(2), m.group(3))
+            if block and m.group(2) == "omher-thread":
+                creates.append(block)
+            elif block and route is None:
+                route = block
+            i += 1
+            continue
+        m = _SPLIT_FENCE.match(line)
+        if not m or line.lstrip().startswith(">"):
+            keep.append(line)
+            i += 1
+            continue
+        fence, info, rest = m.group(2), m.group(3), m.group(4)
+        if fence[0] == "`" and "`" in rest:  # an inline code span, not a fence
+            keep.append(line)
+            i += 1
+            continue
+        # a fence opens: find its close (same character, at least as long, nothing after it)
+        j = i + 1
+        while j < len(lines):
+            c = _SPLIT_CLOSE.match(lines[j])
+            if c and c.group(1)[0] == fence[0] and len(c.group(1)) >= len(fence):
+                break
+            j += 1
+        body = lines[i + 1:j]
+        if info in SPLIT_KINDS and not rest:
+            block = _split_block(info, "\n".join(body)) if j < len(lines) else None
+            if block and info == "omher-thread":
+                creates.append(block)
+            elif block and route is None:
+                route = block
+        else:
+            keep.extend(lines[i:j + 1])
+        i = j + 1
+    shown = re.sub(r"\n{3,}", "\n\n", "\n".join(keep)).strip()
+    return creates[:SPLIT_MAX], route, shown
+
+
 # ---------------------------------------------------------------- one Hermes gateway connection
 
 class FolderChat:
@@ -3916,6 +4053,8 @@ class FolderChat:
         self.prompts: dict[str, int | None] = {}
         self.asked: dict[str, tuple[float, float | None]] = {}  # open prompt_id -> (asked at, gateway timeout s)
         self.batches: dict[str, list[str]] = {}  # open batch clarify request id -> question ids, in order
+        self.last = ""  # a thread's latest answer, its last line (the threads note on main-chat turns quotes it)
+        self.last_at = 0.0
 
     @property
     def ids(self) -> set[str]:
@@ -3945,6 +4084,8 @@ class Conn:
         self.prompts: dict[str, int | None] = {}  # open prompt_id -> execution_generation
         self.folders: dict[str, FolderChat] = {}  # folder chats and threads this bridge created or listed, by id
         self.threads: dict[str, dict] = {}  # threads `thread.list` found (stored id -> row): what `thread.open` takes
+        self.threads_shown = False  # an app that shows threads read them: main-chat turns carry the threads note
+        self.split_done: set[str] = set()  # answers whose thread blocks were acted on (never twice)
         self.asked: dict[str, tuple[float, float | None]] = {}  # open prompt_id -> (asked at, gateway timeout s)
         self.batches: dict[str, list[str]] = {}  # open batch clarify request id -> question ids, in order
         self.clarify_batch: bool | None = None  # the gateway asks a multi-question clarify as one request
@@ -4368,8 +4509,19 @@ class Bridge:
             turn = p.get("persisted_turn") if isinstance(p.get("persisted_turn"), dict) else {}
             mid = turn.get("final_assistant_row_id") or p.get("admission_id") or uuid.uuid4().hex
             status = p.get("status")
+            creates, route = [], None
+            if chat is None and status not in ("interrupted", "error") and "omher-thread" in text:
+                creates, route, text = split_blocks(text)
+                if route and creates:
+                    route = None  # a turn that opens threads does not also move the message
+            elif chat is not None and chat.kind == "thread" and text.strip():
+                chat.last = [ln for ln in text.strip().splitlines() if ln.strip()][-1]
+                chat.last_at = time.time()
             if text.strip():
                 await out("message", id=str(mid), text=text)
+            if (creates or route) and str(mid) not in conn.split_done:
+                conn.split_done.add(str(mid))
+                self._spawn(self._split_effects(conn, str(mid), creates, route))
             if status == "interrupted":
                 await self._end_turn(conn, "interrupted", chat=chat)
             elif status == "error":
@@ -4504,7 +4656,7 @@ class Bridge:
         bot = conn.bot
         running = bool(snap.get("running") if snap.get("running") is not None else info.get("running"))
         conn.in_turn = running
-        result = {"session_id": conn.main_id, "messages": chat_messages(snap.get("messages"), running), "running": running,
+        result = {"session_id": conn.main_id, "messages": chat_messages(snap.get("messages"), running, main=True), "running": running,
                   "model": str(info.get("model") or bot["model"]), "provider": str(info.get("provider") or bot["provider"]),
                   "reasoning": str(info.get("reasoning_effort") or bot["reasoning"])}
         prompts = [x for x in (snap.get("prompts") or []) if isinstance(x, dict) and x.get("prompt_id")]
@@ -4552,6 +4704,8 @@ class Bridge:
             text = f"{text.rstrip()}\n\n{reply_block(*ref)}"
         if peer_hint_wanted(text):
             text = f"{text.rstrip()}\n\n{PEER_HINT}"
+        if chat is None and conn.threads_shown:
+            text = f"{text.rstrip()}\n\n{thread_hint(self._hint_rows(conn))}"
         input_id = str(uuid.uuid4())
         await self._probe_clarify_batch(conn)
         await self._submit(conn, main, text, input_id)
@@ -4782,6 +4936,7 @@ class Bridge:
         """The bot's threads, newest first: its `omher · ` sessions Hermes still lists (archived ones it does not),
         plus the ones made in this run that have no saved message yet. Each once."""
         conn = await self._conn(p.get("bot"))
+        conn.threads_shown = True  # this app shows the bot's threads: its main-chat turns carry the threads note
         rows = (await self._call(conn, "session.list", limit=200)).get("sessions") or []
         out: dict[str, dict] = {}
         folder_ids = {f.stored_id for f in conn.folders.values() if f.kind == "folder"}
@@ -4851,6 +5006,51 @@ class Bridge:
             for x in asks:
                 await self._batch_clarify(conn, x)
         return Reply(result, replay if prompts or asks else None)
+
+    def _hint_rows(self, conn: Conn) -> list[dict]:
+        """The bot's open threads for the note, newest activity first: attached ones with their latest answer's last
+        line, then listed ones with Hermes' preview."""
+        rows: dict[str, dict] = {}
+        for tid, r in conn.threads.items():
+            if tid not in conn.main_ids:
+                rows[tid] = {"thread": tid, "title": thread_name(r.get("title") or ""), "last": r.get("preview") or "",
+                             "at": float(r.get("last_active") or r.get("started_at") or 0)}
+        for f in conn.folders.values():
+            if f.kind == "thread":
+                old = rows.get(f.id, {})
+                rows[f.id] = {"thread": f.id, "title": f.title or old.get("title") or "", "last": f.last or old.get("last") or "",
+                              "at": max(f.last_at, f.started, old.get("at") or 0)}
+        return sorted(rows.values(), key=lambda r: -r["at"])
+
+    def _thread_title(self, conn: Conn, tid: str) -> str | None:
+        """A thread's name when ``tid`` is one of the bot's open threads; None for any other id (main chat too)."""
+        if not isinstance(tid, str) or tid in conn.main_ids:
+            return None
+        f = conn.folders.get(tid)
+        if f is not None:
+            return (f.title or "") if f.kind == "thread" else None
+        r = conn.threads.get(tid)
+        return thread_name(r.get("title") or "") if r is not None else None
+
+    async def _split_effects(self, conn: Conn, mid: str, creates: list[dict], route: dict | None) -> None:
+        """What a main-chat answer's blocks do. Each ``omher-thread`` block: a thread made for it, its task sent
+        there, and one `thread.split` event (the app's link line). A route block to an open thread: one
+        `thread.route` event (the app's "Send this to …?" card); nothing is sent until the person presses Send there.
+        A route never creates a thread; one to an id that is not an open thread is ignored."""
+        if route is not None:
+            title = self._thread_title(conn, route["thread"])
+            if title is not None:
+                await self.emit("thread.route", conn.name, thread=route["thread"], title=title, message=mid)
+            return
+        tag = uuid.uuid5(uuid.NAMESPACE_URL, f"omher-split:{conn.name}:{mid}").hex[:20]
+        for n, block in enumerate(creates):
+            try:
+                made = await self.op_thread_create({"bot": conn.name, "title": block["title"], "key": f"split-{tag}-{n}"})
+                tid = made["thread"]
+                await self.emit("thread.split", conn.name, thread=tid, title=made["title"] or block["title"], message=mid)
+                await self.op_chat_send({"bot": conn.name, "session": tid, "text": block["task"]})
+            except Exception:
+                log.exception("opening a thread from the bot's answer failed")
 
     async def op_thread_remove(self, p) -> dict:
         """Take a thread out of the bot's list: interrupt it when it runs, withdraw the asks it holds, then Hermes'
