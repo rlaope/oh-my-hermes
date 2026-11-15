@@ -28,6 +28,7 @@ import re
 import secrets
 import shutil
 import subprocess
+import sys
 import tempfile
 import time
 from importlib import resources
@@ -198,7 +199,7 @@ def prepare_arm_home(
         gateway_env = arm_gateway_env(source, hermes_home, home, tmp, key_names)
         started = clock()
         process = subprocess.Popen(
-            (hermes, "gateway", "run", "--quiet"),
+            _gateway_argv(hermes),
             cwd=root,
             env=gateway_env,
             stdin=subprocess.DEVNULL,
@@ -247,6 +248,15 @@ def prepare_arm_home(
         # removes the root before the error leaves.
         if not prepared:
             run.close()
+
+
+def _gateway_argv(hermes: str) -> tuple[str, ...]:
+    # Same rule as the child argv: a `.py` Hermes on Windows runs through the
+    # current interpreter, since Windows cannot execute a script directly.
+    command = (hermes, "gateway", "run", "--quiet")
+    if os.name == "nt" and Path(hermes).suffix.casefold() == ".py":
+        return (sys.executable, *command)
+    return command
 
 
 def _await_ready(
