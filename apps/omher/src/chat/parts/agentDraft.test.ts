@@ -5,7 +5,7 @@
 import { describe, expect, it } from "vitest";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { draftBot, draftsAllowed, parseDrafts } from "./agentDraft";
+import { draftBot, draftsAllowed, parseDrafts, stripDrafts } from "./agentDraft";
 import { AgentChips } from "./AgentChip";
 import { Bubble } from "./Bubble";
 import { botRefusal, INTERPRETERS } from "../../sessions/custom";
@@ -76,6 +76,15 @@ describe("where drafts are read", () => {
     expect(draftBot("fold:friren:f1")).toBe("friren");
   });
 
+  it("strips the draft blocks from the shown text, and an unclosed one while streaming", () => {
+    const text = `Here it is:\n\n${block(CURSOR)}\n\nPress Add agent.`;
+    expect(stripDrafts(text)).toBe("Here it is:\n\nPress Add agent.");
+    expect(stripDrafts("no draft here")).toBe("no draft here");
+    expect(stripDrafts("Here:\n\n```omher-agent\n{\"name\": \"Cur", true)).toBe("Here:");
+    expect(stripDrafts("Here:\n\n```omher-agent\n{\"name\": \"Cur")).toContain("omher-agent");
+    expect(stripDrafts("```ts\nconst a = 1;\n```")).toBe("```ts\nconst a = 1;\n```");
+  });
+
   it("draws one chip per draft under a finished bot reply in an allowed chat, a refused one disabled with its reason", () => {
     const text = `${block(CURSOR)}\n${block({ ...CURSOR, program: "bash" })}`;
     const main = renderToStaticMarkup(createElement(AgentChips, { chatKey: "kami", text }));
@@ -84,10 +93,13 @@ describe("where drafts are read", () => {
     expect(main).toMatch(/disabled=""[^>]*data-why="interp"/);
     expect(renderToStaticMarkup(createElement(AgentChips, { chatKey: "fold:kami:f1", text }))).toContain("agent-chip");
     expect(renderToStaticMarkup(createElement(AgentChips, { chatKey: "agent:s3", text }))).toBe("");
-    // through the bubble: a finished bot reply gets them, the code block stays; a user message and a streaming reply do not
+    // through the bubble: a finished bot reply gets them and the raw block is not repeated above them; a user message
+    // and a streaming reply do not; a SESSIONS chat (no chips) keeps the block as code
     const bot = renderToStaticMarkup(createElement(Bubble, { item: { kind: "assistant", text }, bot: "kami" }));
     expect(bot).toContain('data-testid="agent-chips"');
-    expect(bot).toContain("<pre>");
+    expect(bot).not.toContain("<pre>");
+    expect(bot).not.toContain("stub-acp");
+    expect(renderToStaticMarkup(createElement(Bubble, { item: { kind: "assistant", text }, bot: "agent:s3" }))).toContain("<pre>");
     expect(renderToStaticMarkup(createElement(Bubble, { item: { kind: "assistant", text }, bot: "kami", streaming: true }))).not.toContain("agent-chip");
     expect(renderToStaticMarkup(createElement(Bubble, { item: { kind: "user", text } }))).not.toContain("agent-chip");
     expect(renderToStaticMarkup(createElement(Bubble, { item: { kind: "assistant", text }, bot: "agent:s3" }))).not.toContain("agent-chip");

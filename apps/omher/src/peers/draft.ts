@@ -1,6 +1,6 @@
 // A bot's SSH draft: a fenced ```omher-peer block in its reply holding one JSON object
-// `{"host": "<ssh alias or user@host>", "label": "<short name>", "port"?: 22}` (unknown keys ignored). The block still
-// renders as a code block; each one also gets a "Connect over SSH" chip under the reply (PeerChip.tsx) that opens the
+// `{"host": "<ssh alias or user@host>", "label": "<short name>", "port"?: 22}` (unknown keys ignored). The block is
+// not shown in the bubble (stripPeerDrafts); each one gets a "Connect over SSH" chip under the reply (PeerChip.tsx) that opens the
 // same confirm card as the sidebar's Connect over SSH, filled from the draft and checked again by the shell. Nothing
 // connects until that card's Connect. Drafts are read only from bot replies in a bot's main chat, never from tool
 // output, Slack/Discord mirrors (elsewhere lines) or a SESSIONS chat.
@@ -71,6 +71,18 @@ function parseOne(body: string): PeerDraftBlock {
   if (!validLabel(label)) return { draft, why: "label" };
   if (draft.port !== undefined && !(Number.isInteger(draft.port) && draft.port >= 1 && draft.port <= 65535)) return { draft, why: "port" };
   return { draft, why: null };
+}
+
+/** An `omher-peer` fence still being written (no closing line yet): hidden while the reply streams. */
+const OPEN = /^ {0,3}(`{3,}|~{3,})[ \t]*omher-peer[ \t]*(\r?\n[\s\S]*)?$/m;
+
+/** `text` without its omher-peer blocks: the chip under the reply stands for each one, so the bubble does not repeat the
+ *  raw JSON (and the user@host in it). `streaming` also drops a block whose closing fence has not arrived yet. */
+export function stripPeerDrafts(text: string, streaming = false): string {
+  if (!text.includes("omher-peer")) return text;
+  let out = text.replace(FENCE, "").replace(INLINE, "");
+  if (streaming) out = out.replace(OPEN, "");
+  return out.replace(/\n{3,}/g, "\n\n").trim();
 }
 
 /** Chats whose bot replies may carry drafts: a bot's main chat only (its profile name, no `fold:` / `agent:` key). A
