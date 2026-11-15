@@ -48,18 +48,18 @@ async function open(page: Page, theme: "dark" | "light" = "dark") {
 }
 
 /** The whole attach flow through the sidebar `+`, ending with the remote bot in the list. */
-async function attachMini(page: Page) {
+async function attachMini(page: Page, label = "Mac mini") {
   await page.getByRole("button", { name: "Add a bot" }).click();
   await page.getByTestId("addbot-ssh").click();
   const card = page.getByTestId("peer-card");
   await expect(card).toBeVisible();
   await card.getByTestId("peer-host").fill("sionic@10.1.145.204");
-  await card.getByTestId("peer-label").fill("Mac mini");
+  await card.getByTestId("peer-label").fill(label);
   await card.getByTestId("peer-check").click();
   await expect(card.getByTestId("peer-found")).toBeVisible();
   await card.getByTestId("peer-connect").click();
   await expect(card).toHaveCount(0);
-  await expect(page.getByTestId("bot-mac-mini:mini")).toBeVisible();
+  await expect(page.locator('button.bot[data-testid$=":mini"]')).toBeVisible();
 }
 
 test.beforeEach(async () => {
@@ -120,6 +120,17 @@ test("the SSH marker: sidebar row, chat header, bot card and page; link state on
   await expect(row).toHaveAttribute("title", /sionic@10\.1\.145\.204/);
   // the local bots carry none
   await expect(page.getByTestId("ssh-mark-kami")).toHaveCount(0);
+  // readable at the type scale's floor (11px), in the row's own line, with the label ending in an ellipsis when long
+  const size = (sel: string) => row.locator(sel).evaluate((el) => parseFloat(getComputedStyle(el).fontSize));
+  expect(await size(".ssh-k")).toBeGreaterThanOrEqual(11);
+  expect(await size(".ssh-l")).toBeGreaterThanOrEqual(11);
+  const rowBox = (await page.getByTestId("bot-mac-mini:mini").locator(".bot-r1").boundingBox())!;
+  const markBox = (await row.boundingBox())!;
+  expect(markBox.y).toBeGreaterThanOrEqual(rowBox.y - 1);
+  expect(markBox.y + markBox.height).toBeLessThanOrEqual(rowBox.y + rowBox.height + 1);
+  await expect(row.locator(".ssh-l")).toHaveCSS("text-overflow", "ellipsis");
+  await expect(page.getByTestId("bot-mac-mini:mini").locator(".bot-nt")).toHaveText("mini");
+  expect(await page.getByTestId("bot-mac-mini:mini").locator(".bot-nt").evaluate((el) => el.scrollWidth <= el.clientWidth)).toBe(true);
   await page.getByTestId("bot-mac-mini:mini").click();
   const head = page.getByTestId("head-ssh");
   await expect(head).toContainText("SSH · Mac mini");
@@ -145,6 +156,24 @@ test("the SSH marker: sidebar row, chat header, bot card and page; link state on
   await page.getByTestId("bot-mac-mini:mini").click();
   await expect(page.getByTestId("head-ssh")).toBeVisible();
   await shot(page, "peer-marker-light.png");
+});
+
+test("a long computer name ends in an ellipsis on the row; the name and the time keep their room", async ({ page }) => {
+  await open(page);
+  await attachMini(page, "Build server in the office rack");
+  const bot = page.locator('button.bot[data-testid$=":mini"]');
+  const mark = bot.locator(".ssh-mark");
+  const label = mark.locator(".ssh-l");
+  await expect(label).toHaveText("Build server in the office rack");
+  expect(await label.evaluate((el) => el.scrollWidth > el.clientWidth)).toBe(true);
+  // the name is whole, never cut for the marker
+  expect(await bot.locator(".bot-nt").evaluate((el) => el.scrollWidth <= el.clientWidth)).toBe(true);
+  const name = (await bot.locator(".bot-nt").boundingBox())!;
+  const markBox = (await mark.boundingBox())!;
+  const r1 = (await bot.locator(".bot-r1").boundingBox())!;
+  expect(markBox.x).toBeGreaterThanOrEqual(name.x + name.width);
+  expect(markBox.x + markBox.width).toBeLessThanOrEqual(r1.x + r1.width);
+  await shot(page, "peer-marker-long-dark.png");
 });
 
 for (const theme of ["dark", "light"] as const) {
