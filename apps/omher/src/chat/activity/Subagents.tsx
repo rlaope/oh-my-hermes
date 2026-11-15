@@ -13,6 +13,9 @@ import { useClock } from "../../app/clock";
 import { t } from "../../i18n";
 import { modelName } from "../../runs/format";
 import { DiffView } from "./Work";
+import { AgentChat } from "../../harness/AgentChat";
+import { HarnessMark } from "../../harness/HarnessMark";
+import { harness, harnessOf } from "../../harness/registry";
 
 const STATE_KEY = {
   queued: "sub.queued",
@@ -42,7 +45,20 @@ export function waitingSubs(items: ChatItem[] | undefined): Set<string> {
   return out;
 }
 
-export function SubagentLine({ sub, now, live = true, waiting = false }: { sub: SubagentRow; now: number; live?: boolean; waiting?: boolean }) {
+export function SubagentLine({
+  sub,
+  now,
+  live = true,
+  waiting = false,
+  onChat,
+}: {
+  sub: SubagentRow;
+  now: number;
+  live?: boolean;
+  waiting?: boolean;
+  /** Open this subagent's session as a chat (src/harness/AgentChat); the row then carries a quiet "Open as chat". */
+  onChat?: () => void;
+}) {
   const ended = subagentEnded(sub);
   const [open, setOpen] = useState(false);
   // a turn that ended with the child still out and nothing more heard (the bridge dropped, the chat reopened); a
@@ -52,10 +68,20 @@ export function SubagentLine({ sub, now, live = true, waiting = false }: { sub: 
   // its name and its task: "general-purpose · Read a.txt first line"; either alone when the agent gives one
   const title = [sub.name, fewWords(sub.goal)].filter(Boolean).join(" · ") || t("sub.untitled", { n: sub.index + 1 });
   const canOpen = !!(sub.steps?.length || (ended && sub.summary));
+  // a CLI session's own subagent is that CLI's; anything else Hermes ran is a Hermes child on some model
+  const who = harnessOf({ executor: sub.agent, model: sub.model ?? "hermes" });
   return (
     <div className={`sa-row s-${state}${open ? " open" : ""}`} data-testid="subagent-row" data-state={state} data-sub={sub.id} data-agent={sub.agent}>
-      <span className="sa-mark" title={sub.model ? modelName(sub.model) : undefined}>
-        <ModelIcon model={sub.model} size={12} />
+      {/* who works: the harness's mark (Hermes for its own children), then a Hermes child's model maker, smaller */}
+      <span className="sa-mark" title={[harness(who.harness).label, sub.model ? modelName(sub.model) : ""].filter(Boolean).join(" · ")} data-harness={who.harness}>
+        {who.harness === "hermes" ? (
+          <>
+            <HarnessMark id="hermes" size={12} />
+            <ModelIcon model={sub.model} size={10} />
+          </>
+        ) : (
+          <HarnessMark id={who.harness} size={12} />
+        )}
       </span>
       <span className="sa-main">
         <button
@@ -76,6 +102,11 @@ export function SubagentLine({ sub, now, live = true, waiting = false }: { sub: 
             {elapsed(rowMs(sub, now))}
           </span>
         </button>
+        {onChat && (
+          <button type="button" className="sa-chat" onClick={onChat} data-testid="subagent-chat">
+            {t("harness.openChat")}
+          </button>
+        )}
         {line && !open && (
           <span className={`sa-line${ended ? " result" : ""}`} title={line} data-testid="subagent-line">
             {!ended && sub.tool ? <code>{line}</code> : line}
@@ -136,6 +167,9 @@ export function FanoutCard({ fan, live, bot }: { fan: Fanout; live: boolean; bot
   const waits = running && out.length > 0 && out.length === total - done && out.every((s) => waiting.has(s.id));
   const run = subs.find((s) => s.dag)?.dag?.run ?? null;
   const open = () => getStore().actions.openRun(run ?? (fan.delegation ? `delegate:${fan.delegation}` : null));
+  // one subagent's own session, opened in place under the card as a chat (Kami › that subagent › …)
+  const [chat, setChat] = useState<SubagentRow | null>(null);
+  const botRow = useStore().bots.find((b) => b.name === bot);
   return (
     <div className="sa-card" data-testid="fanout-card" data-state={running ? "running" : "done"} data-waiting={waits || undefined} data-delegation={fan.delegation}>
       <div className="sa-head">
@@ -161,9 +195,21 @@ export function FanoutCard({ fan, live, bot }: { fan: Fanout; live: boolean; bot
       </div>
       <div className="sa-rows">
         {subs.map((s) => (
-          <SubagentLine key={s.id} sub={s} now={now} live={live} waiting={waiting.has(s.id)} />
+          <SubagentLine key={s.id} sub={s} now={now} live={live} waiting={waiting.has(s.id)} onChat={() => setChat(chat?.id === s.id ? null : s)} />
         ))}
       </div>
+      {chat && (
+        <div className="sa-chatw" data-testid="subagent-chat-view">
+          <AgentChat
+            bot={bot}
+            botName={botRow?.display_name}
+            target={chat.dag ? { goal: `[dag:${chat.dag.run}/${chat.dag.node}]` } : { goal: chat.goal, since: Math.floor(chat.startedAt / 1000) - (chat.seconds ?? 0) - 120 }}
+            title={chat.goal}
+            facts={{ executor: chat.agent, model: chat.model }}
+            running={!subagentEnded(chat)}
+          />
+        </div>
+      )}
     </div>
   );
 }

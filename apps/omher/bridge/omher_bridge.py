@@ -3046,6 +3046,479 @@ class CliRuns:
         return {"run": run, "handoffs": {}}
 
 
+# ---------------------------------------------------------------- runs: one node's session as a chat (read-only)
+# `runs.node_session`: what a Hermes subagent, or a Claude Code / Codex session a fanout handed a node to, did, in one
+# agent-neutral shape the UI draws as a chat between the parent (right) and the child (left): the prompt and any later
+# steer as `user` items, the child's own words as `assistant`, each tool call as a `step` (input and result, clipped
+# and masked), and its own children as `child` items that open the same way. Never a reasoning/thinking field.
+# Hermes children come from the bot's OWN state.db (read-only URI); CLI sessions from the CLI homes only (plain files,
+# no symlinks, real path inside the home).
+
+NS_CLIP = 4096             # bytes of one step's input or result sent to the UI
+NS_TEXT = 16000            # chars of one bubble
+NS_ITEMS = 400             # items of one session
+NS_REF = re.compile(r"^(hermes|claude|claude-sub|codex):([A-Za-z0-9_.:/@-]{1,300})$")
+_SECRET = re.compile(r"(sk-|ghp_|gho_|github_pat_|xox[bpas]-|AKIA)[A-Za-z0-9_-]{8,}")
+_HERMES_SID = re.compile(r"^[A-Za-z0-9_-]{1,80}$")
+
+
+def mask_secrets(text: str) -> str:
+    """Token-like strings (`sk-…`, `ghp_…`, `xoxb-…`, `AKIA…`) with their body replaced by `•••`."""
+    return _SECRET.sub(lambda m: m.group(1) + "•••", text)
+
+
+def _ns_clip(text, n: int = NS_CLIP) -> str:
+    s = mask_secrets(str(text or ""))
+    b = s.encode("utf-8")
+    if len(b) <= n:
+        return s
+    return b[:n].decode("utf-8", "ignore").rstrip() + f"\n… ({len(b) - n} more bytes)"
+
+
+def _ns_args(raw) -> str:
+    """Tool arguments as pretty JSON when they are JSON, else the text as it came."""
+    if isinstance(raw, (dict, list)):
+        return _ns_clip(json.dumps(raw, indent=2, ensure_ascii=False))
+    try:
+        return _ns_clip(json.dumps(json.loads(raw), indent=2, ensure_ascii=False))
+    except (TypeError, ValueError):
+        return _ns_clip(raw)
+
+
+def _ns_ok(result: str) -> bool:
+    head = result[:400].lower()
+    return not ('"error"' in head and '"error": null' not in head) and not head.startswith("error")
+
+
+def _ns_finish(kind: str, items: list[dict], **extra) -> dict:
+    """The session dict: its items, plus the brief's flat view of them (prompt, steps, answer, children)."""
+    items = items[:NS_ITEMS]
+    prompt = next((i["text"] for i in items if i["type"] == "user"), "")
+    answer = next((i["text"] for i in reversed(items) if i["type"] == "assistant"), "")
+    steps = [{k: i[k] for k in ("tool", "input", "result", "ok") if k in i} for i in items if i["type"] == "step"]
+    children = [i for i in items if i["type"] == "child"]
+    out = {"kind": kind, "prompt": prompt, "steps": steps, "answer": answer, "children": children, "items": items}
+    out.update({k: v for k, v in extra.items() if v not in (None, "")})
+    return out
+
+
+def _inside(path: Path, root: Path) -> bool:
+    try:
+        real, top = os.path.realpath(path), os.path.realpath(root)
+        return os.path.commonpath([real, top]) == top and not path.is_symlink() and path.is_file()
+    except (OSError, ValueError):
+        return False
+
+
+class NodeSessions:
+    """Finds and reads the session behind a node (or behind a child ref the UI got from an earlier read)."""
+
+    def __init__(self, homes: dict[str, Path] | None = None, delegations: Delegations | None = None):
+        self.homes = {**cli_homes(), **(homes or {})}
+        self.delegations = delegations or Delegations()
+
+    # ---- Hermes children (the bot's own state.db)
+    @staticmethod
+    def _db(profile_dir: Path):
+        import sqlite3
+        db = profile_dir / "state.db"
+        if not db.is_file():
+            raise BridgeError("not_found", "the bot has no state.db")
+        return sqlite3.connect(ro_uri(db), uri=True, timeout=1.0)
+
+    def hermes_find(self, profile_dir: Path, goal_mark: str | None = None, goal: str | None = None,
+                    since: float | None = None, parent: str | None = None) -> str | None:
+        """The newest subagent session whose prompt carries `goal_mark` (`[dag:run/node]`), else starts with `goal`
+        (started at or after `since`, a minute's grace), optionally under `parent`."""
+        con = self._db(profile_dir)
+        try:
+            q = ("SELECT s.id, s.started_at, (SELECT content FROM messages m WHERE m.session_id = s.id AND m.role = 'user'"
+                 " ORDER BY m.id LIMIT 1) FROM sessions s WHERE s.source = 'subagent'")
+            args: list = []
+            if parent:
+                q += " AND s.parent_session_id = ?"
+                args.append(parent)
+            if since:
+                q += " AND s.started_at >= ?"
+                args.append(since - 60)
+            rows = con.execute(q + " ORDER BY s.started_at DESC LIMIT 2000", args).fetchall()
+        finally:
+            con.close()
+        want = " ".join((goal or "").split())[:120]
+        for sid, _, first in rows:
+            text = str(first or "")
+            if goal_mark and goal_mark in text:
+                return str(sid)
+            if want and not goal_mark and " ".join(DAG_MARK.sub("", text).split()).startswith(want):
+                return str(sid)
+        return None
+
+    def hermes_read(self, profile_dir: Path, sid: str, parent_name: str = "") -> dict:
+        if not _HERMES_SID.match(sid):
+            raise BridgeError("bad_request", "bad session id")
+        con = self._db(profile_dir)
+        try:
+            row = con.execute("SELECT id, parent_session_id, model, billing_provider, started_at, ended_at, title, source"
+                              " FROM sessions WHERE id = ?", (sid,)).fetchone()
+            if row is None:
+                raise BridgeError("not_found", f"no session {sid}")
+            # only these columns: never reasoning / reasoning_content / reasoning_details / codex_reasoning_items
+            msgs = con.execute("SELECT role, content, tool_calls, tool_name, tool_call_id, timestamp FROM messages"
+                               " WHERE session_id = ? ORDER BY id LIMIT 4000", (sid,)).fetchall()
+            kids = con.execute("SELECT s.id, s.model, s.billing_provider, s.started_at, s.ended_at, s.end_reason,"
+                               " (SELECT content FROM messages m WHERE m.session_id = s.id AND m.role = 'user' ORDER BY m.id"
+                               " LIMIT 1), (SELECT content FROM messages m WHERE m.session_id = s.id AND m.role = 'assistant'"
+                               " AND (m.tool_calls IS NULL OR m.tool_calls = '' OR m.tool_calls = '[]') AND m.content != ''"
+                               " ORDER BY m.id DESC LIMIT 1) FROM sessions s WHERE s.parent_session_id = ?"
+                               " ORDER BY s.started_at", (sid,)).fetchall()
+        finally:
+            con.close()
+        results = {str(m[4]): str(m[1] or "") for m in msgs if m[0] == "tool" and m[4]}
+        children = [{"type": "child", "ref": f"hermes:{k[0]}", "kind": "hermes", "model": k[1] or "",
+                     "provider": k[2] or "", "goal": _one_line(DAG_MARK.sub("", str(k[6] or "")), 200),
+                     "state": "running" if k[4] is None else ("failed" if k[5] in ("error", "failed") else "done"),
+                     "summary": _one_line(mask_secrets(str(k[7] or "")), 300), "started": k[3], "ended": k[4]}
+                    for k in kids]
+        items: list[dict] = []
+        placed: set[str] = set()
+        for role, content, calls, _, _, ts in msgs:
+            text = str(content or "")
+            if role == "user" and text.strip():
+                items.append({"type": "user", "text": _ns_clip(DAG_MARK.sub("", text).strip(), NS_TEXT), "ts": ts})
+            elif role == "assistant":
+                try:
+                    tcs = json.loads(calls) if calls else []
+                except ValueError:
+                    tcs = []
+                if text.strip():
+                    items.append({"type": "assistant", "text": _ns_clip(text.strip(), NS_TEXT), "ts": ts})
+                for tc in tcs if isinstance(tcs, list) else []:
+                    fn = tc.get("function") if isinstance(tc, dict) else None
+                    if not isinstance(fn, dict):
+                        continue
+                    name = str(fn.get("name") or "tool")
+                    res = results.get(str(tc.get("id") or tc.get("call_id") or ""), "")
+                    items.append({"type": "step", "tool": name, "input": _ns_args(fn.get("arguments")),
+                                  "result": _ns_clip(res), "ok": _ns_ok(res), "ts": ts})
+                    if name == "delegate_task":
+                        for c in children:
+                            if c["ref"] not in placed and (c["started"] or 0) >= (ts or 0) - 5:
+                                goals = str(fn.get("arguments") or "")
+                                if c["goal"][:40] and c["goal"][:40] in " ".join(goals.split()):
+                                    items.append(c)
+                                    placed.add(c["ref"])
+        items += [c for c in children if c["ref"] not in placed]
+        # the answer is the child's last words: a trailing parent acceptance never shows (it is not in this session)
+        return _ns_finish("hermes", items, ref=f"hermes:{sid}", model=row[2] or "", provider=row[3] or "",
+                          parent=parent_name, title=_one_line(str(row[6] or ""), 120), started=row[4], ended=row[5],
+                          state="running" if row[5] is None else "done")
+
+    # ---- Claude Code
+    def _claude_root(self) -> Path:
+        return self.homes["claude"] / "projects"
+
+    @staticmethod
+    def _claude_items(path: Path, start_cut: bool = False) -> tuple[list[dict], dict]:
+        items: list[dict] = []
+        calls: dict[str, dict] = {}
+        info = {"model": "", "started": None, "ended": None, "cwd": ""}
+        with open(path, "rb") as fh:
+            for raw in fh:
+                try:
+                    o = json.loads(raw)
+                except ValueError:
+                    continue
+                if not isinstance(o, dict) or o.get("type") not in ("user", "assistant"):
+                    continue
+                ts = _iso_ts(o.get("timestamp"))
+                info["started"] = info["started"] or ts
+                info["ended"] = ts or info["ended"]
+                info["cwd"] = info["cwd"] or str(o.get("cwd") or "")
+                msg = o.get("message") if isinstance(o.get("message"), dict) else {}
+                content = msg.get("content")
+                if o["type"] == "assistant" and isinstance(msg.get("model"), str):
+                    info["model"] = msg["model"]
+                if isinstance(content, str):
+                    if content.strip() and "<task-notification>" not in content:
+                        items.append({"type": "user" if o["type"] == "user" else "assistant",
+                                      "text": _ns_clip(content.strip(), NS_TEXT), "ts": ts})
+                    continue
+                for part in content if isinstance(content, list) else []:
+                    if not isinstance(part, dict):
+                        continue
+                    kind = part.get("type")
+                    if kind == "text" and str(part.get("text") or "").strip():
+                        items.append({"type": "user" if o["type"] == "user" else "assistant",
+                                      "text": _ns_clip(part["text"].strip(), NS_TEXT), "ts": ts})
+                    elif kind == "tool_use":
+                        step = {"type": "step", "tool": str(part.get("name") or "tool"), "input": _ns_args(part.get("input")),
+                                "result": "", "ok": True, "ts": ts, "_id": str(part.get("id") or "")}
+                        items.append(step)
+                        calls[step["_id"]] = step
+                    elif kind == "tool_result":
+                        step = calls.get(str(part.get("tool_use_id") or ""))
+                        if step is not None:
+                            res = part.get("content")
+                            step["result"] = _ns_clip("\n".join(_texts(res)) if not isinstance(res, str) else res)
+                            step["ok"] = part.get("is_error") is not True
+                    # `thinking` / `redacted_thinking` parts are never read
+        return items, info
+
+    def claude_read(self, path: Path, ref: str, parent_name: str = "") -> dict:
+        if not _inside(path, self._claude_root()):
+            raise BridgeError("not_found", "no such Claude Code session")
+        items, info = self._claude_items(path)
+        # its Agent/Task calls open the subagent transcript Claude Code wrote next to it
+        sub_dir = path.parent / path.stem / "subagents"
+        metas: dict[str, str] = {}
+        if sub_dir.is_dir() and not sub_dir.is_symlink():
+            for f in sub_dir.glob("agent-*.meta.json"):
+                if f.is_symlink():
+                    continue
+                try:
+                    meta = json.loads(f.read_text(encoding="utf-8"))
+                except (OSError, ValueError):
+                    continue
+                if isinstance(meta, dict) and isinstance(meta.get("toolUseId"), str):
+                    metas[meta["toolUseId"]] = f.name[len("agent-"):-len(".meta.json")]
+        out: list[dict] = []
+        for it in items:
+            sid = it.pop("_id", None)
+            out.append(it)
+            if it["type"] == "step" and it["tool"] in _CLAUDE_TOOLS:
+                aid = metas.get(sid or "")
+                try:
+                    goal = json.loads(it["input"]).get("description", "")
+                except (ValueError, AttributeError):
+                    goal = ""
+                if aid:
+                    rel = f"{path.parent.name}/{path.stem}/{aid}"
+                    out.append({"type": "child", "ref": f"claude-sub:{rel}", "kind": "claude", "goal": _one_line(goal, 200),
+                                "summary": _one_line(it["result"], 300), "state": "done" if it["result"] else "running"})
+        return _ns_finish("claude", out, ref=ref, model=info["model"], parent=parent_name, started=info["started"],
+                          ended=info["ended"], cwd=info["cwd"])
+
+    def claude_find(self, worktree: str, since: float) -> Path | None:
+        """The newest Claude Code transcript of exactly that folder, started at or after `since` (a minute's grace)."""
+        d = self._claude_root() / claude_slug(worktree)
+        if not d.is_dir() or d.is_symlink():
+            return None
+        best = None
+        for f in d.glob("*.jsonl"):
+            if not _inside(f, self._claude_root()):
+                continue
+            try:
+                m = f.stat().st_mtime
+            except OSError:
+                continue
+            if m >= since - 60 and (best is None or m > best[0]):
+                best = (m, f)
+        return best[1] if best else None
+
+    # ---- Codex
+    def _codex_root(self) -> Path:
+        return self.homes["codex"] / "sessions"
+
+    def _codex_files(self):
+        root = self._codex_root()
+        if not root.is_dir() or root.is_symlink():
+            return []
+        return [p for p in root.glob("[0-9][0-9][0-9][0-9]/[0-9][0-9]/[0-9][0-9]/rollout-*.jsonl") if _inside(p, root)]
+
+    @staticmethod
+    def _codex_meta(path: Path) -> dict:
+        try:
+            with open(path, "rb") as fh:
+                o = json.loads(fh.readline())
+        except (OSError, ValueError):
+            return {}
+        pl = o.get("payload") if isinstance(o, dict) and o.get("type") == "session_meta" else None
+        if not isinstance(pl, dict):
+            return {}
+        src = pl.get("source")
+        spawn = (src.get("subagent") or {}).get("thread_spawn") if isinstance(src, dict) else None
+        return {"id": str(pl.get("id") or ""), "cwd": str(pl.get("cwd") or ""),
+                "started": _iso_ts(pl.get("timestamp")) or _iso_ts(o.get("timestamp")),
+                "parent": spawn.get("parent_thread_id") if isinstance(spawn, dict) else None,
+                "start": pl.get("subagent_history_start_ordinal")}
+
+    def codex_find(self, worktree: str = "", since: float = 0.0, thread: str = "") -> Path | None:
+        want = os.path.realpath(worktree) if worktree else ""
+        best = None
+        for p in self._codex_files():
+            m = self._codex_meta(p)
+            if thread:
+                if m.get("id") == thread:
+                    return p
+                continue
+            if m.get("parent") or not m.get("cwd") or os.path.realpath(m["cwd"]) != want:
+                continue
+            st = m.get("started") or 0.0
+            if st >= since - 120 and (best is None or st > best[0]):
+                best = (st, p)
+        return best[1] if best else None
+
+    def codex_read(self, path: Path, parent_name: str = "") -> dict:
+        if not _inside(path, self._codex_root()):
+            raise BridgeError("not_found", "no such Codex session")
+        meta = self._codex_meta(path)
+        start = meta.get("start") if isinstance(meta.get("start"), int) else None
+        items: list[dict] = []
+        calls: dict[str, dict] = {}
+        info = {"model": "", "ended": None}
+        with open(path, "rb") as fh:
+            for raw in fh:
+                try:
+                    o = json.loads(raw)
+                except ValueError:
+                    continue
+                if not isinstance(o, dict):
+                    continue
+                if start is not None and isinstance(o.get("ordinal"), int) and o["ordinal"] < start:
+                    continue
+                pl = o.get("payload") if isinstance(o.get("payload"), dict) else {}
+                ts = _iso_ts(o.get("timestamp"))
+                typ = pl.get("type")
+                if o.get("type") == "turn_context" and isinstance(pl.get("model"), str):
+                    info["model"] = pl["model"]
+                if o.get("type") == "event_msg" and typ == "task_complete":
+                    info["ended"] = ts
+                if o.get("type") != "response_item":
+                    continue
+                if typ == "message" and pl.get("role") in ("user", "assistant"):
+                    text = "\n".join(_texts(pl.get("content"))).strip()
+                    # the harness's own preamble (AGENTS.md, environment) is not what the parent said
+                    if not text or text.startswith(("# AGENTS.md", "<environment_context>", "<user_instructions>",
+                                                     "<permissions", "<INSTRUCTIONS>")):
+                        continue
+                    items.append({"type": pl["role"], "text": _ns_clip(text, NS_TEXT), "ts": ts})
+                elif typ == "agent_message":
+                    text = "\n".join(_texts(pl.get("content"))).strip()
+                    if text:
+                        items.append({"type": "user", "text": _ns_clip(text, NS_TEXT), "ts": ts})
+                elif typ in ("function_call", "custom_tool_call", "local_shell_call"):
+                    step = {"type": "step", "tool": str(pl.get("name") or "shell"),
+                            "input": _ns_args(pl.get("arguments") if "arguments" in pl else pl.get("input") or pl.get("action")),
+                            "result": "", "ok": True, "ts": ts}
+                    items.append(step)
+                    calls[str(pl.get("call_id") or "")] = step
+                elif typ in ("function_call_output", "custom_tool_call_output"):
+                    step = calls.get(str(pl.get("call_id") or ""))
+                    if step is not None:
+                        out = pl.get("output")
+                        text = out if isinstance(out, str) else "\n".join(_texts(out))
+                        step["result"] = _ns_clip(text)
+                        step["ok"] = _ns_ok(text)
+                # `reasoning` items are never read
+        # its spawned sub-agents: threads whose meta names this one as parent
+        tid = meta.get("id") or ""
+        for p in self._codex_files() if tid else []:
+            m = self._codex_meta(p)
+            if m.get("parent") == tid:
+                items.append({"type": "child", "ref": f"codex:{m['id']}", "kind": "codex", "goal": "", "state": "done",
+                              "summary": ""})
+        return _ns_finish("codex", items, ref=f"codex:{tid}", model=info["model"], parent=parent_name,
+                          started=meta.get("started"), ended=info["ended"], cwd=meta.get("cwd") or "")
+
+    # ---- fanout units -> their binding (worktree, start)
+    @staticmethod
+    def fanout_binding(omh_home: Path, run_folder: Path, node: str) -> dict | None:
+        if not run_folder.is_dir() or run_folder.is_symlink() or not DAG_ID.match(node):
+            return None
+        for f in sorted(run_folder.iterdir()):
+            m = re.match(r"^fanout-([0-9a-f]{6,32})-units\.json$", f.name)
+            if not m or f.is_symlink() or not f.is_file():
+                continue
+            try:
+                units = json.loads(f.read_text(encoding="utf-8")).get("units")
+            except (OSError, ValueError, AttributeError):
+                continue
+            unit = next((u for u in units or [] if isinstance(u, dict) and u.get("unit_id") == node), None)
+            if unit is None:
+                continue
+            out = {"owner": str(unit.get("owner") or "")}
+            b = omh_home / "runtime" / "runs" / f"fanout-{m.group(1)}-{node}" / "executor_progress" / "binding.json"
+            if b.is_file() and not b.is_symlink():
+                try:
+                    bind = json.loads(b.read_text(encoding="utf-8"))
+                except (OSError, ValueError):
+                    bind = {}
+                aliases = bind.get("correlation_aliases") if isinstance(bind, dict) else None
+                wt = next((a.get("value") for a in aliases or [] if isinstance(a, dict) and a.get("kind") == "worktree"), "")
+                wt = wt or ((bind.get("process") or {}).get("worktree") if isinstance(bind, dict) else "") or ""
+                out["worktree"] = str(wt)
+                out["since"] = _iso_ts(bind.get("created_at")) or 0.0
+                out["executor"] = str(bind.get("executor") or out["owner"])
+            return out
+        return None
+
+    # ---- entry
+    def read(self, bot: dict, runs: "DagRuns", run_id: str | None, node: str | None, ref: str | None,
+             goal: str | None = None, since: float | None = None) -> dict:
+        profile_dir: Path = bot["path"]
+        parent_name = str(bot.get("display_name") or bot["name"])
+        if ref:
+            m = NS_REF.match(ref)
+            if not m or ".." in ref:
+                raise BridgeError("bad_request", "bad session ref")
+            kind, rest = m.group(1), m.group(2)
+            if kind == "hermes":
+                return {"session": self.hermes_read(profile_dir, rest)}
+            if kind == "claude-sub":
+                parts = rest.split("/")
+                if len(parts) != 3 or not all(re.match(r"^[A-Za-z0-9_-]{1,200}$", p) for p in parts):
+                    raise BridgeError("bad_request", "bad session ref")
+                path = self._claude_root() / parts[0] / parts[1] / "subagents" / f"agent-{parts[2]}.jsonl"
+                return {"session": self.claude_read(path, ref)}
+            if kind == "claude":
+                parts = rest.split("/")
+                if len(parts) != 2 or not all(re.match(r"^[A-Za-z0-9_-]{1,200}$", p) for p in parts):
+                    raise BridgeError("bad_request", "bad session ref")
+                return {"session": self.claude_read(self._claude_root() / parts[0] / f"{parts[1]}.jsonl", ref)}
+            path = self.codex_find(thread=rest)
+            if path is None:
+                raise BridgeError("not_found", "no such Codex session")
+            return {"session": self.codex_read(path)}
+        if goal:  # a subagent card of the bot's own chat: its `[dag:run/node]` mark, else its goal, and its start
+            mark = DAG_MARK.fullmatch(goal.strip())
+            sid = (self.hermes_find(profile_dir, goal_mark=goal.strip()) if mark
+                   else self.hermes_find(profile_dir, goal_mark=None, goal=goal, since=since))
+            return {"session": self.hermes_read(profile_dir, sid, parent_name) if sid else None}
+        if not run_id or not node:
+            raise BridgeError("bad_request", "need run and node, or ref")
+        got = runs.get(bot["name"], profile_dir, run_id)
+        n = next((x for x in got["run"]["nodes"] if x["id"] == node), None)
+        if n is None:
+            raise BridgeError("not_found", f"no node {node} in {run_id}")
+        started = n.get("started")
+        if run_id.startswith("dag:") or "/" in run_id:
+            name = run_id.rsplit("/", 1)[-1]
+            home = omh_home_for(profile_dir)
+            if n.get("executor"):
+                folder = None
+                for p in (home / "runtime" / "dag").glob(f"*/{name}"):
+                    if p.is_dir() and not p.is_symlink():
+                        folder = p
+                b = self.fanout_binding(home, folder, node) if folder else None
+                ex = (b or {}).get("executor") or n["executor"]
+                wt = (b or {}).get("worktree") or ""
+                cli = "claude" if "claude" in ex else "codex" if "codex" in ex else ex
+                if wt and cli == "codex":
+                    p = self.codex_find(wt, (b or {}).get("since") or started or 0.0)
+                    if p:
+                        return {"session": self.codex_read(p, parent_name)}
+                if wt and cli == "claude":
+                    p = self.claude_find(wt, (b or {}).get("since") or started or 0.0)
+                    if p:
+                        return {"session": self.claude_read(p, f"claude:{p.parent.name}/{p.stem}", parent_name)}
+                return {"session": None, "why": "no_cli_session", "executor": cli}
+            sid = self.hermes_find(profile_dir, goal_mark=f"[dag:{name}/{node}]", since=None)
+            return {"session": self.hermes_read(profile_dir, sid, parent_name) if sid else None}
+        # a delegate_task fan-out's task: its goal and start
+        sid = self.hermes_find(profile_dir, goal=n.get("label") or "", since=started)
+        return {"session": self.hermes_read(profile_dir, sid, parent_name) if sid else None}
+
+
 # ---------------------------------------------------------------- accounts (coding-CLI logins on this computer)
 #
 # Settings › Accounts lists, per coding CLI, the login already on this computer (the CLI's own home: the
@@ -3731,6 +4204,7 @@ PEER_FORWARD = frozenset({
     "chat.open", "chat.send", "chat.interrupt", "approval.respond", "clarify.respond", "chat.attach", "chat.set_model",
     "models.options", "bots.ready", "bots.rename", "bots.avatar", "bots.set_avatar", "bots.info", "skills.list",
     "links.places", "elsewhere.list", "elsewhere.peek", "routines.list", "runs.list", "runs.get", "runs.prs",
+    "runs.node_session",
     "panel.terminal", "panel.worktrees", "panel.diff", "media.read", "automations.add", "automations.pause",
     "automations.resume", "automations.remove", "plugins.list", "plugins.catalog", "plugins.inspect",
     "plugins.install", "plugins.toggle", "plugins.update", "plugins.remove", "plugins.reload",
@@ -4142,7 +4616,7 @@ class Bridge:
             "panel.terminal": self.op_panel_terminal, "panel.worktrees": self.op_panel_worktrees,
             "panel.diff": self.op_panel_diff, "media.read": self.op_media_read,
             "chat.attach": self.op_chat_attach, "runs.list": self.op_runs_list, "runs.get": self.op_runs_get,
-            "runs.cli": self.op_runs_cli, "runs.prs": self.op_runs_prs, "cli.title": self.op_cli_title,
+            "runs.cli": self.op_runs_cli, "runs.prs": self.op_runs_prs, "runs.node_session": self.op_runs_node_session, "cli.title": self.op_cli_title,
             "usage.read": self.op_usage_read,
             "accounts.list": self.op_accounts_list, "accounts.add": self.op_accounts_add,
             "accounts.remove": self.op_accounts_remove, "accounts.set_active": self.op_accounts_set_active,
@@ -4164,6 +4638,7 @@ class Bridge:
         self._refused: dict[str, float] = {}     # bot -> when Hermes last refused its restart (live work)
         self.runs = DagRuns()
         self.cli = CliRuns()
+        self.node_sessions = NodeSessions(delegations=self.runs.delegations)
         self.prs = PrStates()
 
     # ------------------------------------------------------------ lifecycle
@@ -5424,6 +5899,18 @@ class Bridge:
         if since is not None and (isinstance(since, bool) or not isinstance(since, (int, float))):
             raise BridgeError("bad_request", "since must be epoch seconds")
         return await asyncio.to_thread(self.cli.list, agent, cwd, since)
+
+    async def op_runs_node_session(self, p) -> dict:
+        """One node's session as a chat (read-only): `{bot, run, node}`, or `{bot, ref}` for a child an earlier read
+        named, or `{bot, goal, since}` for a subagent card of the bot's own chat. `{session: null}` when none is found."""
+        bot = self._bot(p.get("bot"))
+        run, node, ref, goal, since = p.get("run"), p.get("node"), p.get("ref"), p.get("goal"), p.get("since")
+        for k, v in (("run", run), ("node", node), ("ref", ref), ("goal", goal)):
+            if v is not None and (not isinstance(v, str) or not v or len(v) > 2000):
+                raise BridgeError("bad_request", f"{k} must be text")
+        if since is not None and (isinstance(since, bool) or not isinstance(since, (int, float))):
+            raise BridgeError("bad_request", "since must be epoch seconds")
+        return await asyncio.to_thread(self.node_sessions.read, bot, self.runs, run, node, ref, goal, since)
 
     async def op_cli_title(self, p) -> dict:
         """The title of one Claude Code session or Codex thread a SESSIONS chat runs (`agent`, `session`: the id the

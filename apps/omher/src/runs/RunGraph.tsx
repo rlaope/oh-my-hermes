@@ -8,6 +8,7 @@
 // column, where you can drag a box (its position only, kept per run), pan, zoom and Fit. The only motion is the
 // boxes appearing one by one, a slow dash riding the edges into a running node, and a box answering the pointer.
 // Nothing here changes a run.
+import { harnessByName } from "../harness/registry";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type PointerEvent as RPE, type ReactNode } from "react";
 import type { AgentRun } from "../lib/runs";
 import { t } from "../i18n";
@@ -112,7 +113,12 @@ export function NodeMark({ mark }: { mark: Mark | null }) {
   if (!mark) return null;
   return (
     <span className="bx-mk" data-testid="node-mark" data-mark={mark.id} data-kind={mark.kind}>
-      {mark.kind === "model" ? <ModelIcon model={mark.model} provider={mark.provider} size={GEOMETRY.mark} /> : <AgentIcon id={mark.id} size={GEOMETRY.mark} />}
+      {mark.kind === "model" ? (
+        <ModelIcon model={mark.model} provider={mark.provider} size={GEOMETRY.mark} />
+      ) : (
+        // the agent CLI the lane went to, by the one harness registry's id for it (`claude-code` → claude)
+        <AgentIcon id={harnessByName(mark.id) ?? mark.id} size={GEOMETRY.mark} />
+      )}
     </span>
   );
 }

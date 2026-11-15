@@ -981,6 +981,88 @@ const awayFor = (bot) =>
     .sort((x, y) => y.last_active - x.last_active)
     .slice(0, 20);
 
+// runs.node_session (harness lane): one node's session as a chat. The demo plan's `contrast` node is a Hermes child
+// (DeepSeek) with a later steer and its own grandchild; `code-colors` is a Codex fanout session; `page-styles` a
+// Claude Code one. A subagent card's `[dag:codex-coexist-live/…]` goal reads the same Hermes child shape. Thinking
+// never appears; a planted token shows masked the way the bridge masks it.
+let nsClock = 0;
+function nsStep(tool, args, result, ok = true) {
+  nsClock += 3 + (nsClock % 7);
+  return { type: "step", tool, input: JSON.stringify(args, null, 2), result, ok, ts: now() - 300 + nsClock };
+}
+const NS_SESSIONS = {
+  "hermes:contrast": () => ({
+    kind: "hermes", ref: "hermes:20261110_092410_c0ffee", model: "deepseek/deepseek-v4.1-flash", provider: "deepseek",
+    parent: "Kami", title: "Contrast check", state: "running", started: now() - 290,
+    items: [
+      { type: "user", text: "Contrast check\n\nCheck every text colour in docs/theme.css against its background in dark and light; WCAG AA. Report the failing pairs." },
+      { type: "assistant", text: "Reading the tokens first, then I will measure each pair." },
+      nsStep("read_file", { path: "docs/theme.css" }, "1|:root {\n2|  --fg: #1b1b1f;\n3|  --muted: #8a8a93;"),
+      nsStep("terminal", { command: "node scripts/contrast.mjs docs/theme.css" }, '{"output": "muted on bg (dark): 3.9:1  FAIL\\nfg on bg (dark): 14.2:1 ok", "exit_code": 0}'),
+      { type: "user", text: "Also check the code block colours." },
+      nsStep("delegate_task", { goal: "Code block palette contrast" }, '{"status": "completed"}'),
+      { type: "child", ref: "hermes:20261110_092530_beef01", kind: "hermes", goal: "Code block palette contrast", state: "done",
+        summary: "All 9 code colours pass AA on both themes.", model: "z-ai/glm-5.3-ultrafast", provider: "z-ai", started: now() - 160, ended: now() - 120 },
+      nsStep("terminal", { command: "export TOKEN=sk-•••; node scripts/contrast.mjs --code" }, '{"output": "9/9 ok", "exit_code": 0}'),
+      { type: "assistant", text: "**One pair fails AA:** `--muted` on the dark background is 3.9:1.\n\n- Raise `--muted` to `#a0a0aa` (4.6:1).\n- Code block colours: all 9 pass." },
+    ],
+  }),
+  "hermes:20261110_092530_beef01": () => ({
+    kind: "hermes", ref: "hermes:20261110_092530_beef01", model: "z-ai/glm-5.3-ultrafast", provider: "z-ai", parent: "Kami",
+    title: "Code block palette contrast", state: "done", started: now() - 160, ended: now() - 120,
+    items: [
+      { type: "user", text: "Code block palette contrast" },
+      nsStep("search_files", { pattern: "--code-" }, "docs/theme.css:40: --code-keyword: #c678dd"),
+      { type: "assistant", text: "All 9 code colours pass AA on both themes." },
+    ],
+  }),
+  "codex:code-colors": () => ({
+    kind: "codex", ref: "codex:01a1dd00-0000-7000-8000-00000000c0de", model: "gpt-6.1-sol", provider: "openai", parent: "Kami",
+    title: "Code block colors", state: "running", started: now() - 235, cwd: "/w/web-app-code-colors",
+    items: [
+      { type: "user", text: "Code block colors: give code blocks a dark palette that matches the new tokens. Open a draft PR." },
+      nsStep("exec_command", { cmd: "rg -n \"pre code\" docs/" }, "docs/theme.css:88: pre code {"),
+      nsStep("apply_patch", { patch: "*** Update File: docs/theme.css\n@@\n-pre code { color: #333 }\n+pre code { color: var(--code-fg) }" }, "Success. Updated 1 file."),
+      nsStep("exec_command", { cmd: "pnpm test --run" }, "Process exited with code 0\n12 passed"),
+      nsStep("exec_command", { cmd: "gh pr create --draft --title \"docs: code block palette\"" }, "https://github.com/rlaope/oh-my-hermes/pull/2360"),
+      { type: "assistant", text: "Code blocks now use the dark palette. Tests pass. Draft PR #2360 is open." },
+    ],
+  }),
+  "claude:page-styles": () => ({
+    kind: "claude", ref: "claude:-w-web-app/aa11bb22-0000-4000-8000-0000000000aa", model: "claude-opus-5-5", parent: "Kami",
+    title: "Page styles", state: "running", started: now() - 240,
+    items: [
+      { type: "user", text: "Page styles: apply the tokens to every docs page." },
+      nsStep("Bash", { command: "ls docs/pages" }, "index.md\ninstall.md"),
+      { type: "assistant", text: "Both pages use the tokens now." },
+    ],
+  }),
+};
+function nodeSessionOp(p) {
+  nsClock = 0;
+  const b = needBot(p);
+  const pick = (k) => (NS_SESSIONS[k] ? { session: NS_SESSIONS[k]() } : { session: null });
+  if (typeof p.ref === "string") {
+    if (!/^(hermes|claude|claude-sub|codex):[A-Za-z0-9_.:/@-]{1,300}$/.test(p.ref) || p.ref.includes("..")) throw new OpError("bad_request", "bad session ref");
+    return pick(p.ref);
+  }
+  if (typeof p.goal === "string") {
+    const m = /^\[dag:([a-z0-9-]+)\/([a-z0-9-]+)\]$/.exec(p.goal.trim());
+    if (m && m[1] === "codex-coexist-live") return pick("hermes:contrast");
+    return { session: null };
+  }
+  const run = needStr(p, "run");
+  const node = needStr(p, "node");
+  const r = (runs[b.name] ?? []).find((x) => x.id === run);
+  if (!r) throw new OpError("not_found", `no run ${run} for ${b.name}`);
+  const n = r.nodes.find((x) => x.id === node);
+  if (!n) throw new OpError("not_found", `no node ${node} in ${run}`);
+  if (n.executor === "codex") return pick(`codex:${node}`);
+  if (n.executor === "claude") return pick(`claude:${node}`);
+  if (n.executor) return { session: null, why: "no_cli_session", executor: n.executor };
+  return pick(`hermes:${node}`);
+}
+
 const OPS = {
   hello: () => ({ bridge: "mock", version: "0.1.0", hermes: { home: "/mock/.hermes", version: "mock" } }),
   "bots.list": () => ({ bots: Object.values(bots).map(publicBot) }),
@@ -1329,6 +1411,7 @@ const OPS = {
       throw new OpError("bad_request", "session must be the agent's session id");
     return { title: cliTitles.get(`${p.agent}:${p.session}`) ?? "" };
   },
+  "runs.node_session": (p) => nodeSessionOp(p),
   "runs.get": (p) => {
     const id = needStr(p, "run");
     const cli = cliRuns.find((r) => r.id === id);
