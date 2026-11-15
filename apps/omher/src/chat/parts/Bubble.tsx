@@ -8,7 +8,9 @@ import { SentFiles } from "./Attach";
 import { SkillText } from "./Skills";
 import { CopyButton } from "./Copy";
 import { PeerChips } from "../../peers/PeerChip";
+import { peerDraftsAllowed, stripPeerDrafts } from "../../peers/draft";
 import { AgentChips } from "./AgentChip";
+import { draftsAllowed, stripDrafts } from "./agentDraft";
 import { t } from "../../i18n";
 
 /** Messenger bubble, filled on both sides. Bot text renders markdown; user text stays plain. Files the bot
@@ -78,6 +80,8 @@ export const Bubble = memo(function Bubble({
     );
   }
   const { text, paths } = splitMedia(item.text);
+  // a draft block shows only as its chip under the reply (where the chip can show); the chips still read `text`
+  const shown = bot ? draftless(text, bot, !!streaming) : text;
   const faceNode =
     bot &&
     (faceEl ? (
@@ -94,13 +98,14 @@ export const Bubble = memo(function Bubble({
       ) : (
         faceNode
       )}
-      {/* one column beside the face: the caption, then the files under it, both on the bubble's left edge */}
+      {/* one column beside the face: the caption, then the files under it, both on the bubble's left edge; a reply that
+          was only a draft block shows its chip alone */}
       <div className="msg-col">
-        {(text || streaming || paths.length === 0) && (
+        {(shown || streaming || (paths.length === 0 && shown === text)) && (
           <div className="b md">
-            <Markdown text={text} />
+            <Markdown text={shown} />
             {/* copy the answer: beside the bubble's last line, on hover; it takes no room */}
-            {!streaming && text.trim() && <CopyButton className="msg-copy" text={() => text} testId="copy-answer" />}
+            {!streaming && shown.trim() && <CopyButton className="msg-copy" text={() => shown} testId="copy-answer" />}
           </div>
         )}
         {bot && !streaming && paths.length > 0 && <MediaList bot={bot} paths={paths} />}
@@ -112,3 +117,11 @@ export const Bubble = memo(function Bubble({
     </div>
   );
 });
+
+/** The reply text the bubble shows: without the omher-peer / omher-agent blocks of a chat that turns them into chips. */
+function draftless(text: string, chatKey: string, streaming: boolean): string {
+  let out = text;
+  if (peerDraftsAllowed(chatKey)) out = stripPeerDrafts(out, streaming);
+  if (draftsAllowed(chatKey)) out = stripDrafts(out, streaming);
+  return out;
+}

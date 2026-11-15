@@ -453,6 +453,7 @@ export const ko: Record<Key, string> = {
   "key.details": "상세 보기/숨기기",
   "key.settings": "설정",
   "key.nextAsk": "다음 승인이나 질문",
+  "key.newSession": "새 세션",
   "key.cardKeys": "거부 · 한 번 허용 · 이 세션 동안 허용 (선택한 카드)",
   "key.stop": "진행 중인 답변 멈추기",
   "look.theme": "테마",

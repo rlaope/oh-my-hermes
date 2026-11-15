@@ -1,6 +1,6 @@
 // A bot's agent draft: a fenced ```omher-agent block in its reply holding one JSON object
-// `{"name": "...", "program": "...", "args": ["acp"], "install": "..."}` (unknown keys ignored). The block still
-// renders as a code block; each one also gets an "Add agent" chip under the reply (AgentChip.tsx) that opens
+// `{"name": "...", "program": "...", "args": ["acp"], "install": "..."}` (unknown keys ignored). The block is
+// not shown in the bubble (stripDrafts); each one gets an "Add agent" chip under the reply (AgentChip.tsx) that opens
 // Settings › Agents' own confirm card, filled from the draft and checked again by the shell. Nothing is written until
 // that card's Add. Drafts are read only from bot replies in a bot's main chat and in Hermes folder chats, never from
 // tool output, Slack/Discord mirrors (elsewhere lines) or a CLI agent's session chat.
@@ -43,6 +43,18 @@ function parseOne(body: string): DraftBlock {
   // own checks (whether an absolute path is a program here is the shell's to say)
   const why = botRefusal(draft.program) ?? mockCheck({ id: "draft", label: draft.name, program: draft.program, args: draft.args, install: draft.install }, () => true);
   return why ? { draft, why } : { draft, why: null };
+}
+
+/** An `omher-agent` fence still being written (no closing line yet): hidden while the reply streams. */
+const OPEN = /^ {0,3}(`{3,}|~{3,})[ \t]*omher-agent[ \t]*(\r?\n[\s\S]*)?$/m;
+
+/** `text` without its omher-agent blocks: the Add agent chip under the reply stands for each one, and its card shows
+ *  the exact command. `streaming` also drops a block whose closing fence has not arrived yet. */
+export function stripDrafts(text: string, streaming = false): string {
+  if (!text.includes("omher-agent")) return text;
+  let out = text.replace(FENCE, "");
+  if (streaming) out = out.replace(OPEN, "");
+  return out.replace(/\n{3,}/g, "\n\n").trim();
 }
 
 /** Chats whose bot replies may carry drafts: a bot's main chat (its profile name) and a Hermes folder chat (`fold:`);

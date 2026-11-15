@@ -4,15 +4,6 @@ All notable changes will be documented here.
 
 ## Unreleased
 
-- **omher connects a Hermes on another computer over SSH.** The sidebar + has "Connect over SSH": pick a host from
-  `~/.ssh/config` (or type `user@host`), press Check, and a card shows the exact `ssh` command omher will run, the
-  Hermes and Python found there and the bots that computer has; nothing is saved until Connect. Its bots join the
-  list marked "SSH · <name>" (the host in the tooltip) in the sidebar, the chat header and Settings, with the link's
-  state when it is reconnecting or failed. Asking a bot ("connect the Hermes on my Mac mini") makes it answer with a
-  draft that shows as a "Connect over SSH" chip under its reply, which opens the same card. omher uses your own `ssh`
-  with key login only and never asks for a password; on the other computer it writes only `~/.omher/peer/`. Settings
-  › Remote machines lists them, with Remove.
-
 - **The OMH TUI shows a compression as one gauge row, and a prompt typed meanwhile goes on by itself.** `/compact`
   (or `/compress`) no longer prints the long "Compressing: Hermes summarizes the older turns…" notice above a second
   spinner row. One row now reads `✻ Compacting conversation… ━━━━━━──── (30s)`, with a blank row between it and
@@ -234,30 +225,6 @@ All notable changes will be documented here.
   means unknown, never empty, none or equal. The idea of mining re-fixed commits
   comes from `yetone/magpie` (MIT), concept only, reimplemented here.
 
-- **omher's SESSIONS menu lists its agents in two tiers, and Kilo Code is gone.**
-  Claude Code, Codex and OmO, the main agents with their own adapters, come
-  first in the + menu (installed agents still before the rest), then the
-  other built-ins, then the generic ACP agents. Gemini CLI, Qwen Code, Kimi
-  Code, Copilot CLI and Cline now come from one list in the shell (program,
-  `acp` or `--acp`, sign-in and install lines, mark) that the agent look-up
-  hands to the UI, and behave as in 0.2.8: the same install lines, signed-out
-  line, Open in Terminal and Restart. Kilo Code is no longer offered or
-  startable; OpenCode and its rule check stay. A Kilo Code session saved
-  before this comes back ended with its chat and one line, "Kilo Code is no
-  longer offered in omher", and no Restart.
-- **Add your own ACP agent in omher, after a confirm card.** Settings › Agents
-  lists the agents SESSIONS offers with their tier and whether each is
-  installed, then yours. Add agent asks for a name, the program and its ACP
-  arguments; Save shows the exact command omher will run, and nothing is
-  saved until you press Add. It then opens from the SESSIONS + menu as a
-  session chat on the same ACP adapter, with no shell and no rule rewriting.
-  Entries live in `~/.omher/custom-agents.json` and are checked on every read.
-- **A bot can draft an ACP agent for you in omher; you still confirm it.** An
-  ```` ```omher-agent ```` block in a bot's reply (name, program, args,
-  install) gets an "Add agent" chip that opens the same confirm card, with
-  "Proposed by <bot>"; nothing is saved until Add. A shell or interpreter as
-  the program is refused for bot drafts. "Ask the bot" on Settings › Agents
-  puts the request in the bot's message box without sending it.
 - **Claude Fable 5.2 now leads the `visual-engineering` chain.** Frontend and
   visual lanes routed through Hermes try Fable 5.2 first, then Claude Opus
   5.5, Gemini 4 Argon and Kimi K3.1 Pro, all at `high` (before, Opus 5.5 came
@@ -306,6 +273,37 @@ All notable changes will be documented here.
   refused; a plain-HTTP ask never goes through `HTTP_PROXY`, so the key is not
   sent in clear to a proxy; and `typesafe_model` never applies to TypeSafe's
   own host however it is spelled. Thanks @brentkearney. (#2716)
+- **omher 0.2.10.** Bots on another computer join over SSH, the sidebar starts with one bot and adds the others from
+  +, and you can add your own ACP coding agent to SESSIONS, by hand or from a bot's draft.
+  - **Connect a Hermes on another computer over SSH.** The sidebar + has "Connect over SSH": pick a host from
+    `~/.ssh/config` (or type `user@host`), press Check, and a card shows the exact `ssh` command, the Hermes found
+    there and its bots; nothing is saved until Connect. Those bots join the list marked "SSH · <name>" (the host in
+    the tooltip), with the link's state when it reconnects or fails. Asking a bot to connect one makes it answer
+    with a "Connect over SSH" chip that opens the same card. omher uses your own `ssh` with key login only, writes
+    only `~/.omher/peer/` on the other computer, and Settings › Remote machines removes one. (#2881)
+  - **A bot's SSH or agent draft shows as its chip only, and the SSH marker is readable.** The raw JSON block (with
+    its `user@host`) no longer sits in the reply above the chip; the `SSH · <name>` marker is 11px, keeps the bot's
+    name whole and ends a long computer name in an ellipsis. (#2889)
+  - **omher starts with one bot; the others join from + in one click.** A new install starts with the default bot,
+    an existing one with the bot last open (plus pinned ones). `+` is "Add a bot", listing the profiles not in the
+    sidebar yet; right-click "Remove from list" keeps the profile. Settings › All bots still shows every profile. A
+    bot with no AI account is no longer offered a Claude sign-in (it needs Claude Max extra-usage credits); ChatGPT /
+    Codex, Nous Portal and API key… stay. (#2880)
+  - **Add your own ACP agent, after a confirm card.** Settings › Agents lists SESSIONS' agents and yours; Add agent
+    takes a name, a program and its ACP arguments, shows the exact command, and saves only on Add
+    (`~/.omher/custom-agents.json`). A bot can draft one with an `omher-agent` block that opens the same card with
+    "Proposed by <bot>"; a shell or interpreter is refused for bot drafts. The SESSIONS + menu lists Claude Code,
+    Codex and OmO first, then the other built-ins, then generic ACP agents. Kilo Code is no longer offered; a saved
+    Kilo Code session comes back ended with one line saying so. (#2876)
+  - **The model picker completes a switch Hermes asks to confirm** (large context, cost or data policy): the pick is
+    the confirmation, and the picker shows the chat's live model. Reported and first fixed by @Pluronymous-ODK in
+    #2883 and #2886. (#2887)
+  - **Plugin cards have a Details button** that opens the plugin sheet without installing and shows the whole
+    description. Reported and first fixed by @soares-daniel in #2833. (#2887)
+  - **omher on Windows finds Hermes' Python through the package-manager launcher** (`hermes.exe` or `hermes.cmd`, read
+    without running it), so a PM or source install no longer reads as "Hermes Agent isn't on this computer". Reported
+    by @MarinWasAsleep in #2885. (#2887)
+
 - **omher 0.2.9.** A new bot without an AI account signs in from its own chat, the + in the message box has one
   way to add files and the bot's plugins beside it, and an empty part of the Sessions list starts a new session.
   - **A new bot that cannot answer yet says so and signs in from its chat.** When Hermes' readiness check says a
@@ -1074,16 +1072,6 @@ All notable changes will be documented here.
   are listed under the cards, wrapped between two keys, as Claude Code lists its own. Ctrl+R turns the search box
   into the title field and Ctrl+D asks on the card's facts row, as before. Closing it gives every row back to the
   transcript, with no band of blank rows left above the composer. On a terminal too short for two cards and the keys, or under 30 columns, it stays the one-row list.
-- **omher starts with one bot; the other bots on this computer join from + in one click.** The sidebar no longer
-  lists every Hermes profile. A new install starts with the default bot alone; someone who already used omher starts
-  with the bot they last had open (plus any they had pinned). `+` is now "Add a bot": it lists the profiles that are
-  not in the sidebar yet, each with one Add that brings the bot in, connects it and opens its chat. Right-click
-  "Hide from sidebar" is now "Remove from list": the profile stays and shows under `+` again, and the last bot in the
-  list cannot be removed. Settings › All bots still shows every profile, each marked "In list" or with "Add to list".
-  An approval or question from a bot outside the list still shows in Needs you, and opening it adds that bot. The
-  connect block for a bot with no AI account no longer offers a Claude sign-in: Hermes' Claude sign-in works only on
-  Claude Max with purchased extra-usage credits, so most people who picked it hit "out of extra usage". ChatGPT /
-  Codex, Nous Portal and API key… stay; an Anthropic key goes in through API key….
 - **The OMH TUI's `✳ Waiting… (… · terminal)` row shows while a `notify=true` background process runs.** Hermes
   writes its process record at the spawn, before it arms the completion notice, and does not rewrite it until the
   process exits, so the record said nobody would be told for the whole run. The TUI read it that way: no waiting
@@ -1113,19 +1101,14 @@ All notable changes will be documented here.
   treated as too large to index; project roots below home index as before. Reported and first fixed by @skihyeon in #2854.
 - **OMH tool results keep non-ASCII text as written** instead of `\uXXXX` escapes, which cuts their token cost for
   Korean, Chinese, Japanese and other non-Latin text on every later model call. Reported and first fixed by @yqm-307 in #2884.
-- **omher's model picker completes a switch Hermes' selection guard asks to confirm** (a large-context, cost or
-  data-policy switch): the pick itself is the confirmation, sent once with Hermes' token on the same session revision.
-  The picker also shows the chat's live model instead of the profile default. Reported and first fixed by
-  @Pluronymous-ODK in #2883 and #2886.
-- **omher plugin cards have a Details button** that opens the plugin sheet without installing anything, and the sheet
-  shows the whole description. Reported and first fixed by @soares-daniel in #2833.
-- **omher on Windows finds Hermes' Python through the package-manager launcher** (`hermes.exe` or `hermes.cmd`, read
-  without running it), so a PM or source install with no venv no longer shows "Hermes Agent isn't on this computer".
-  Reported by @MarinWasAsleep in #2885.
 - **`omh setup --model-setup` accepts a provider configured under Hermes `providers:`** when its key variable is set
   or a credential pool exists. When neither can be seen, the refusal names the variable to set or
   `hermes auth add <id>` instead of "lacks safe observed provider auth". A key kept only in Hermes' `.env` file is not
   visible to OMH; export it in the shell that runs omh. Reported by @MarinWasAsleep in #2882.
+- **omher: ⌘T opens the New session picker on macOS**, the same menu as ⌘N, the way ⌘T opens a new tab elsewhere.
+  Settings › Keyboard lists both. On Windows and Linux Ctrl+T is left to the program (a terminal's transpose), so
+  only Ctrl+N opens it there. ⌘N and ⌘T also work with a non-Latin layout active (Korean, Japanese, Russian), by
+  the key's position.
 - **An OMH TUI reply no longer hangs on a rail.** The `⚚ Hermes · <model>` header starts at the left edge and the
   reply's text sits two cells in, with no `┃` beside it, so a reply reads apart from your prompts and the tool calls,
   which keep their rails. The two cells the bar took go to the reply's text, and a copy still leaves the margin out.
