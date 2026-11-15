@@ -1,0 +1,69 @@
+{"fixture": "watch-hit-events", "version": 1, "recorded": "2026-11-15 KST, real kami profile, Hermes 0.23.1 (3b42157858), omher bridge 0.2.10 on 127.0.0.1:5435, --hermes-home ~/.hermes, no --eager", "job": {"id": "209e6667d800", "name": "omh-watch-probe", "deliver": "bot-chat:kami", "script": "omh_watch_probe.py", "context_from": ["self"], "enabled_toolsets": [], "model": "claude-opus-5-5", "provider": "claude-proxy"}, "phases": {"job.created": "routine.added from the jobs.json poll", "hit.run": "cron run 19:10:31, script printed a fake batch, agent answered one line, delivery queued in kami's Bot Chat FIFO; bridge NOT attached (no gateway connection to kami yet)", "attach": "chat.open existing_only=true", "silent.wakeAgent_false": "cron run 19:12:54, script printed only {\"wakeAgent\": false}, no model call, no delivery", "silent.agent_SILENT": "cron run 19:23:19, script printed a non-matching batch, agent answered [SILENT], no delivery", "hit.botchat_turn": "19:33:11 the queued hit admission ran as a Bot Chat turn (attached): turn.start .. message .. turn.end. The inbound cron row itself is NOT emitted as an event", "hit.reopen": "chat.open again: the inbound cron row comes back as role=user text with the [Cronjob ...] header; display_kind internal_notification is not passed through"}, "scrubbed": "bridge token, unrelated Bot Chat rows/turns and subagent frames removed; no secrets in any frame", "line_shape": {"t": "recorder receive/send time (unix s)", "dir": "in|out", "phase": "see phases", "attached": "kami main chat attached in this bridge at that time", "frame": "bridge UI frame as sent"}}
+{"t": 1794737440.119, "dir": "in", "phase": "hit.run", "attached": false, "frame": {"event": "routine.ran", "bot": "kami", "routine_id": "209e6667d800", "name": "omh-watch-probe", "status": "ok", "ts": 1794737431.866613}}
+{"t": 1794737440.12, "dir": "in", "phase": "job.created", "attached": false, "frame": {"event": "routine.added", "bot": "kami", "routine_id": "209e6667d800", "name": "omh-watch-probe", "schedule": "every 1440m", "next_run_at": "2026-11-16T19:10:13.730231+09:00", "deliver": "bot-chat:kami", "origin": {"platform": "local", "place": ""}, "ts": 1794737413.726473}}
+{"t": 1794737548.81, "dir": "out", "phase": "attach", "attached": false, "frame": {"id": "o1", "op": "chat.open", "bot": "kami", "existing_only": true}}
+{"t": 1794737549.271, "dir": "in", "phase": "attach", "attached": true, "frame": {"id": "o1", "ok": true, "result": {"session_id": "local-3bd80316ea6eacd3e888009bce3974ddc49efef85f0d7acfeb64ce37cb07a241", "messages": "<78 unrelated Bot Chat rows omitted>", "running": true, "model": "claude-opus-5-5", "provider": "claude-proxy", "reasoning": "high"}}}
+{"t": 1794737590.314, "dir": "in", "phase": "silent.wakeAgent_false", "attached": true, "frame": {"event": "routine.ran", "bot": "kami", "routine_id": "209e6667d800", "name": "omh-watch-probe", "status": "ok", "ts": 1794737574.860283}}
+{"t": 1794738223.41, "dir": "in", "phase": "silent.agent_SILENT", "attached": true, "frame": {"event": "routine.ran", "bot": "kami", "routine_id": "209e6667d800", "name": "omh-watch-probe", "status": "ok", "ts": 1794738199.35062}}
+{"t": 1794738791.906, "dir": "in", "phase": "hit.botchat_turn", "attached": true, "frame": {"event": "turn.start", "bot": "kami"}}
+{"t": 1794738791.906, "dir": "in", "phase": "hit.botchat_turn", "attached": true, "frame": {"event": "bot.status", "bot": "kami", "status": "online", "running": true}}
+{"t": 1794738792.148, "dir": "in", "phase": "hit.botchat_turn", "attached": true, "frame": {"event": "status", "bot": "kami", "text": "🧠 OMH — recalled 6 memories"}}
+{"t": 1794738795.291, "dir": "in", "phase": "hit.botchat_turn", "attached": true, "frame": {"event": "thinking", "bot": "kami"}}
+{"t": 1794738795.291, "dir": "in", "phase": "hit.botchat_turn", "attached": true, "frame": {"event": "delta", "bot": "kami", "text": "이 알"}}
+{"t": 1794738795.408, "dir": "in", "phase": "hit.botchat_turn", "attached": true, "frame": {"event": "delta", "bot": "kami", "text": "림은 채널 감시"}}
+{"t": 1794738795.409, "dir": "in", "phase": "hit.botchat_turn", "attached": true, "frame": {"event": "delta", "bot": "kami", "text": " 경"}}
+{"t": 1794738795.438, "dir": "in", "phase": "hit.botchat_turn", "attached": true, "frame": {"event": "delta", "bot": "kami", "text": "로를"}}
+{"t": 1794738795.489, "dir": "in", "phase": "hit.botchat_turn", "attached": true, "frame": {"event": "delta", "bot": "kami", "text": " 조사하는 subag"}}
+{"t": 1794738795.541, "dir": "in", "phase": "hit.botchat_turn", "attached": true, "frame": {"event": "delta", "bot": "kami", "text": "ent가 테스트용"}}
+{"t": 1794738795.593, "dir": "in", "phase": "hit.botchat_turn", "attached": true, "frame": {"event": "delta", "bot": "kami", "text": "으로 만든 임시"}}
+{"t": 1794738795.64, "dir": "in", "phase": "hit.botchat_turn", "attached": true, "frame": {"event": "delta", "bot": "kami", "text": " cron("}}
+{"t": 1794738795.692, "dir": "in", "phase": "hit.botchat_turn", "attached": true, "frame": {"event": "delta", "bot": "kami", "text": "`omh-watch-prob"}}
+{"t": 1794738795.741, "dir": "in", "phase": "hit.botchat_turn", "attached": true, "frame": {"event": "delta", "bot": "kami", "text": "e`)이"}}
+{"t": 1794738795.796, "dir": "in", "phase": "hit.botchat_turn", "attached": true, "frame": {"event": "delta", "bot": "kami", "text": " 보낸 것입니"}}
+{"t": 1794738795.844, "dir": "in", "phase": "hit.botchat_turn", "attached": true, "frame": {"event": "delta", "bot": "kami", "text": "다. 실제 이"}}
+{"t": 1794738795.893, "dir": "in", "phase": "hit.botchat_turn", "attached": true, "frame": {"event": "delta", "bot": "kami", "text": "슈가"}}
+{"t": 1794738795.942, "dir": "in", "phase": "hit.botchat_turn", "attached": true, "frame": {"event": "delta", "bot": "kami", "text": " 아니어"}}
+{"t": 1794738795.992, "dir": "in", "phase": "hit.botchat_turn", "attached": true, "frame": {"event": "delta", "bot": "kami", "text": "서 따"}}
+{"t": 1794738796.041, "dir": "in", "phase": "hit.botchat_turn", "attached": true, "frame": {"event": "delta", "bot": "kami", "text": "로 할 일은"}}
+{"t": 1794738796.093, "dir": "in", "phase": "hit.botchat_turn", "attached": true, "frame": {"event": "delta", "bot": "kami", "text": " 없습니다.\n\n이"}}
+{"t": 1794738796.141, "dir": "in", "phase": "hit.botchat_turn", "attached": true, "frame": {"event": "delta", "bot": "kami", "text": " 결"}}
+{"t": 1794738796.19, "dir": "in", "phase": "hit.botchat_turn", "attached": true, "frame": {"event": "delta", "bot": "kami", "text": "과는"}}
+{"t": 1794738796.239, "dir": "in", "phase": "hit.botchat_turn", "attached": true, "frame": {"event": "delta", "bot": "kami", "text": " 그"}}
+{"t": 1794738796.29, "dir": "in", "phase": "hit.botchat_turn", "attached": true, "frame": {"event": "delta", "bot": "kami", "text": " subagent가 확"}}
+{"t": 1794738796.34, "dir": "in", "phase": "hit.botchat_turn", "attached": true, "frame": {"event": "delta", "bot": "kami", "text": "인하려던"}}
+{"t": 1794738796.39, "dir": "in", "phase": "hit.botchat_turn", "attached": true, "frame": {"event": "delta", "bot": "kami", "text": " 관"}}
+{"t": 1794738796.44, "dir": "in", "phase": "hit.botchat_turn", "attached": true, "frame": {"event": "delta", "bot": "kami", "text": "찰값"}}
+{"t": 1794738796.49, "dir": "in", "phase": "hit.botchat_turn", "attached": true, "frame": {"event": "delta", "bot": "kami", "text": "입니다. cron 결"}}
+{"t": 1794738796.538, "dir": "in", "phase": "hit.botchat_turn", "attached": true, "frame": {"event": "delta", "bot": "kami", "text": "과를 k"}}
+{"t": 1794738796.592, "dir": "in", "phase": "hit.botchat_turn", "attached": true, "frame": {"event": "delta", "bot": "kami", "text": "ami Bot Chat으"}}
+{"t": 1794738796.638, "dir": "in", "phase": "hit.botchat_turn", "attached": true, "frame": {"event": "delta", "bot": "kami", "text": "로 보"}}
+{"t": 1794738796.688, "dir": "in", "phase": "hit.botchat_turn", "attached": true, "frame": {"event": "delta", "bot": "kami", "text": "내면 이"}}
+{"t": 1794738796.739, "dir": "in", "phase": "hit.botchat_turn", "attached": true, "frame": {"event": "delta", "bot": "kami", "text": "렇게 들어오는 "}}
+{"t": 1794738796.838, "dir": "in", "phase": "hit.botchat_turn", "attached": true, "frame": {"event": "delta", "bot": "kami", "text": "턴이"}}
+{"t": 1794738796.887, "dir": "in", "phase": "hit.botchat_turn", "attached": true, "frame": {"event": "delta", "bot": "kami", "text": " 되고"}}
+{"t": 1794738796.937, "dir": "in", "phase": "hit.botchat_turn", "attached": true, "frame": {"event": "delta", "bot": "kami", "text": ", "}}
+{"t": 1794738796.988, "dir": "in", "phase": "hit.botchat_turn", "attached": true, "frame": {"event": "delta", "bot": "kami", "text": "앞에 `"}}
+{"t": 1794738797.036, "dir": "in", "phase": "hit.botchat_turn", "attached": true, "frame": {"event": "delta", "bot": "kami", "text": "[Cronjob \""}}
+{"t": 1794738797.087, "dir": "in", "phase": "hit.botchat_turn", "attached": true, "frame": {"event": "delta", "bot": "kami", "text": "<이름>\" output ...]"}}
+{"t": 1794738797.139, "dir": "in", "phase": "hit.botchat_turn", "attached": true, "frame": {"event": "delta", "bot": "kami", "text": "` 머리말이 "}}
+{"t": 1794738797.189, "dir": "in", "phase": "hit.botchat_turn", "attached": true, "frame": {"event": "delta", "bot": "kami", "text": "붙습니다. 이 "}}
+{"t": 1794738797.24, "dir": "in", "phase": "hit.botchat_turn", "attached": true, "frame": {"event": "delta", "bot": "kami", "text": "임시 cron과"}}
+{"t": 1794738797.288, "dir": "in", "phase": "hit.botchat_turn", "attached": true, "frame": {"event": "delta", "bot": "kami", "text": " 테"}}
+{"t": 1794738797.339, "dir": "in", "phase": "hit.botchat_turn", "attached": true, "frame": {"event": "delta", "bot": "kami", "text": "스트 스크립트는"}}
+{"t": 1794738797.389, "dir": "in", "phase": "hit.botchat_turn", "attached": true, "frame": {"event": "delta", "bot": "kami", "text": " subagent가 작"}}
+{"t": 1794738797.439, "dir": "in", "phase": "hit.botchat_turn", "attached": true, "frame": {"event": "delta", "bot": "kami", "text": "업을 마"}}
+{"t": 1794738797.539, "dir": "in", "phase": "hit.botchat_turn", "attached": true, "frame": {"event": "delta", "bot": "kami", "text": "칠 때 지우"}}
+{"t": 1794738797.587, "dir": "in", "phase": "hit.botchat_turn", "attached": true, "frame": {"event": "delta", "bot": "kami", "text": "게"}}
+{"t": 1794738797.637, "dir": "in", "phase": "hit.botchat_turn", "attached": true, "frame": {"event": "delta", "bot": "kami", "text": " 되어 있고, "}}
+{"t": 1794738797.687, "dir": "in", "phase": "hit.botchat_turn", "attached": true, "frame": {"event": "delta", "bot": "kami", "text": "결"}}
+{"t": 1794738797.736, "dir": "in", "phase": "hit.botchat_turn", "attached": true, "frame": {"event": "delta", "bot": "kami", "text": "과를"}}
+{"t": 1794738797.786, "dir": "in", "phase": "hit.botchat_turn", "attached": true, "frame": {"event": "delta", "bot": "kami", "text": " 받으면 실"}}
+{"t": 1794738797.837, "dir": "in", "phase": "hit.botchat_turn", "attached": true, "frame": {"event": "delta", "bot": "kami", "text": "제로 지워졌는"}}
+{"t": 1794738797.887, "dir": "in", "phase": "hit.botchat_turn", "attached": true, "frame": {"event": "delta", "bot": "kami", "text": "지 확"}}
+{"t": 1794738797.937, "dir": "in", "phase": "hit.botchat_turn", "attached": true, "frame": {"event": "delta", "bot": "kami", "text": "인하겠습니다."}}
+{"t": 1794738797.998, "dir": "in", "phase": "hit.botchat_turn", "attached": true, "frame": {"event": "thinking", "bot": "kami"}}
+{"t": 1794738798.478, "dir": "in", "phase": "hit.botchat_turn", "attached": true, "frame": {"event": "message", "bot": "kami", "id": "138428", "text": "이 알림은 채널 감시 경로를 조사하는 subagent가 테스트용으로 만든 임시 cron(`omh-watch-probe`)이 보낸 것입니다. 실제 이슈가 아니어서 따로 할 일은 없습니다.\n\n이 결과는 그 subagent가 확인하려던 관찰값입니다. cron 결과를 kami Bot Chat으로 보내면 이렇게 들어오는 턴이 되고, 앞에 `[Cronjob \"<이름>\" output ...]` 머리말이 붙습니다. 이 임시 cron과 테스트 스크립트는 subagent가 작업을 마칠 때 지우게 되어 있고, 결과를 받으면 실제로 지워졌는지 확인하겠습니다."}}
+{"t": 1794738798.478, "dir": "in", "phase": "hit.botchat_turn", "attached": true, "frame": {"event": "turn.end", "bot": "kami", "outcome": "done"}}
+{"t": 1794738798.478, "dir": "in", "phase": "hit.botchat_turn", "attached": true, "frame": {"event": "bot.status", "bot": "kami", "status": "online", "running": false}}
+{"t": 1794738892.89, "dir": "out", "phase": "hit.reopen", "attached": true, "frame": {"id": "o2", "op": "chat.open", "bot": "kami", "existing_only": true}}
+{"t": 1794738893.187, "dir": "in", "phase": "hit.reopen", "attached": true, "frame": {"id": "o2", "ok": true, "result": {"session_id": "local-3bd80316ea6eacd3e888009bce3974ddc49efef85f0d7acfeb64ce37cb07a241", "messages": [{"id": "138427", "role": "user", "text": "[Cronjob \"omh-watch-probe\" output — scheduled job, not the user. Review it, act on anything that needs action, and summarize for the chat.]\n\nPROBE-HIT seen — omher-channel-watch probe test, no action needed.", "ts": 1794738791.905959}, {"id": "138428", "role": "assistant", "text": "이 알림은 채널 감시 경로를 조사하는 subagent가 테스트용으로 만든 임시 cron(`omh-watch-probe`)이 보낸 것입니다. 실제 이슈가 아니어서 따로 할 일은 없습니다.\n\n이 결과는 그 subagent가 확인하려던 관찰값입니다. cron 결과를 kami Bot Chat으로 보내면 이렇게 들어오는 턴이 되고, 앞에 `[Cronjob \"<이름>\" output ...]` 머리말이 붙습니다. 이 임시 cron과 테스트 스크립트는 subagent가 작업을 마칠 때 지우게 되어 있고, 결과를 받으면 실제로 지워졌는지 확인하겠습니다.", "ts": 1794738798.0054889}], "running": true, "model": "claude-opus-5-5", "provider": "claude-proxy", "reasoning": "high", "note": "other rows omitted"}}}

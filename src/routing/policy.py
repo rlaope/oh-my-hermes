@@ -5314,6 +5314,55 @@ _EXPLICIT_SCHEDULED_OPS_BLUEPRINT_PHRASES = (
     "hermes cron spec",
     "cron spec",
 )
+# "Watch <Slack/Discord channel> and tell me first when <condition>" is a
+# recurring job: a collector script on a cron schedule, a judging prompt that
+# replies [SILENT] when nothing matches, and a Bot Chat delivery. Measured on
+# c4a0496e5, the Korean phrasings dispatched `gateway-intent-card` on the
+# platform and `알림` triggers, and the English ones clarified toward it or
+# `connector-operator`. It needs all three: a messenger platform, a watch verb,
+# and a tell-me cue; a how-to question or a video stands it down.
+_CHANNEL_WATCH_PLATFORMS = ("slack", "discord", "슬랙", "디스코드")
+_CHANNEL_WATCH_VERBS = (
+    "keep an eye on",
+    "keep watching",
+    "keep monitoring",
+    "지켜보",
+    "지켜봐",
+    "감시",
+    "모니터링",
+    "주시",
+)
+_CHANNEL_WATCH_SPOKEN_VERBS = ("watch", "monitor")
+_CHANNEL_WATCH_NOTIFY_CUES = (
+    "tell me",
+    "ping me",
+    "notify me",
+    "alert me",
+    "let me know",
+    "message me",
+    "dm me",
+    "알려줘",
+    "알려 줘",
+    "알려주",
+    "알림",
+)
+# The platform as the delivery target ("ping me on Slack when CPU spikes",
+# "장애 나면 슬랙으로 알려줘") means something else is watched; that keeps its
+# base route.
+_CHANNEL_WATCH_BLOCKERS = (
+    *_GREENFIELD_QUESTION_OPENERS,
+    "video",
+    "영상",
+    "on slack",
+    "to slack",
+    "via slack",
+    "in slack dm",
+    "on discord",
+    "to discord",
+    "via discord",
+    "슬랙으로",
+    "디스코드로",
+)
 _ONE_OFF_TOKENS = _normalized_token_set(
     {
         "once",
@@ -5960,6 +6009,15 @@ SCHEDULED_OPS_BLUEPRINT_GUARD = RoutingGuardRule(
     why="Matched guard/trigger metadata; recurring schedule or delivery requests should prepare a Hermes ops blueprint first.",
     activation_status="active",
 )
+CHANNEL_WATCH_GUARD = RoutingGuardRule(
+    id="channel_watch_before_gateway_or_connector",
+    rule="Watching a Slack or Discord channel and telling the user first when a matching post appears should route to automation-blueprint's channel-watch recipe before the gateway intent card or the connector lane.",
+    matched_label="guard:channel_watch",
+    preferred_skills=("automation-blueprint",),
+    score_boost=36,
+    why="Matched a messenger platform, a watch verb, and a tell-me cue; a channel watch is a recurring collector job with a [SILENT] judging prompt, not a one-off delivery card.",
+    activation_status="active",
+)
 RESEARCH_DEPARTMENT_GUARD = RoutingGuardRule(
     id="research_department_before_generic_scheduled_ops",
     rule="Recurring or durable research operations should route to the research department workflow pack before generic scheduled ops.",
@@ -6024,6 +6082,7 @@ ROUTING_GUARD_RULES = (
     JIT_LEARN_GUARD,
     RESEARCH_DEPARTMENT_GUARD,
     SCHEDULED_OPS_BLUEPRINT_GUARD,
+    CHANNEL_WATCH_GUARD,
     SOURCE_FINDER_GUARD,
     WEB_RESEARCH_BEFORE_PROCESS_GUARD,
     POINT_IN_TIME_WEB_GUARD,
@@ -6145,6 +6204,7 @@ GUARD_DISPATCH_TRUST: dict[str, tuple[str, str]] = {
     "research_department_before_generic_scheduled_ops": (GUARD_TRUSTED, "a recurring research operation shape; measured 1 right / 1 wrong; kept trusted: demoting it breaks the grounded-score and chat-card coverage floors"),
     "risky_refactor_before_cleanup": (GUARD_TRUSTED, "risky refactor named as the change; no measured record as a winner, keeps its shape label"),
     "safe_feature_change_before_generic_plan": (GUARD_TRUSTED, "a safe feature change named as the change; no measured record as a winner, keeps its shape label"),
+    "channel_watch_before_gateway_or_connector": (GUARD_TRUSTED, "a watch verb on a Slack or Discord channel plus a tell-me cue; no measured record as a winner, keeps its shape label"),
     "scheduled_ops_blueprint_before_reliability_or_research": (GUARD_CONTEXT_ONLY, "a cadence plus a scheduled action; measured 0 right / 1 wrong"),
     "source_finder_before_generic_web_research": (GUARD_CONTEXT_ONLY, "fires on source and paper nouns; no measured record as a winner, keeps its shape label"),
     "strategy_brief_before_generic_plan": (GUARD_TRUSTED, "a decide-whether or prioritize decision shape; no measured record as a winner, keeps its shape label"),
@@ -6675,6 +6735,8 @@ def _active_routing_guard_rules_cached(
         and (explicit_scheduled_ops_blueprint or not research_department_applies)
     ):
         rules.append(SCHEDULED_OPS_BLUEPRINT_GUARD)
+    if not direct_coding_task_applies and channel_watch_guard_applies(normalized_query):
+        rules.append(CHANNEL_WATCH_GUARD)
     source_finder_applies = (
         not delivery_cycle_applies
         and not paper_learning_applies
@@ -10594,6 +10656,20 @@ def game_build_guard_applies(normalized_query: str) -> bool:
     if not _contains_phrase(normalized_query, _GAME_BUILD_CUES):
         return False
     return not _contains_phrase(normalized_query, _GAME_NATIVE_ENGINES + _GAME_TOPIC_BLOCKERS)
+
+
+def channel_watch_guard_applies(normalized_query: str) -> bool:
+    """A Slack or Discord platform, a watch verb, and a tell-me cue together; none alone."""
+    if not _contains_phrase(normalized_query, _CHANNEL_WATCH_PLATFORMS):
+        return False
+    if not (
+        _contains_phrase(normalized_query, _CHANNEL_WATCH_VERBS)
+        or any(phrase_is_spoken(normalized_query, verb) for verb in _CHANNEL_WATCH_SPOKEN_VERBS)
+    ):
+        return False
+    if not _contains_phrase(normalized_query, _CHANNEL_WATCH_NOTIFY_CUES):
+        return False
+    return not _contains_phrase(normalized_query, _CHANNEL_WATCH_BLOCKERS)
 
 
 def credential_rotation_guard_applies(normalized_query: str) -> bool:

@@ -925,15 +925,24 @@ NETWORK_CLIENT_BRIDGES: dict[str, str] = {
         "once to pick the release wheel it is about to download (`commands/setup.py:_installer_self_update_release`); "
         "documented as a scoped exception in CLAUDE.md and AGENTS.md."
     ),
+    "src/skills/channel_watch_toolkit/scripts/channel_watch.py": (
+        "the channel watch collector -- inert package data that only a Hermes cron job runs, from a copy the person "
+        "installed into `<profile>/scripts/`, on Hermes' interpreter; read-only GETs to Slack (`auth.test`, "
+        "`conversations.history`) or Discord (`/users/@me`, `/channels/{id}/messages`) with the bot token read by its "
+        "one key name, never printed; redirects refused, bounded reply, a 15 s timeout; `api_base` only to a loopback "
+        "host (tests), sent direct and never through a proxy. Nothing in src/ imports it; owner approved as a scoped "
+        "integration 2026-11-15, documented in AGENTS.md."
+    ),
 }
 # `ProxyHandler` is imported only to pass an empty mapping, which turns proxies
-# off for the Jev local plain-HTTP endpoint so no proxy reads the key in clear.
+# off for the Jev local plain-HTTP endpoint (and the collector's loopback test base) so no proxy reads the key in clear.
 NETWORK_CLIENT_BRIDGE_URLLIB_NAMES = frozenset(
     {"Request", "build_opener", "HTTPSHandler", "HTTPRedirectHandler", "ProxyHandler"}
 )
 NETWORK_CLIENT_BRIDGE_IMPORTERS: dict[str, frozenset[str]] = {
     "src/plugin_bundle/omh/jev_ask_client.py": frozenset({"src/plugin_bundle/omh/tools/jev_ask_tool.py"}),
     "src/tui/update_notice.py": frozenset({"src/tui/app.py", "src/commands/setup.py"}),
+    "src/skills/channel_watch_toolkit/scripts/channel_watch.py": frozenset(),
 }
 
 

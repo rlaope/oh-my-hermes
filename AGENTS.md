@@ -173,6 +173,25 @@ and evidence obvious to a reviewer reading the PR without the chat history.
   nothing. OMH core, install, update, routing and doctor never import or
   execute them; `eleven.py` is in INVARIANT 1's `PROCESS_SPAWN_ALLOWLIST`, and
   the companion-nonexecution tests cover both Python scripts.
+- **Channel watch collector**: `src/skills/channel_watch_toolkit/scripts/channel_watch.py`
+  ships as inert package data (owner-approved scoped integration, 2026-11-15).
+  OMH core, install, update, routing and doctor never import or execute it;
+  nothing in `src/` imports it, and it is in INVARIANT 2's
+  `NETWORK_CLIENT_BRIDGES` with no importer. The person (or their bot, on their
+  request) copies it into `<profile>/scripts/channel_watch_<watch>.py`, and a
+  Hermes cron job runs it on Hermes' interpreter before the judging step. It is
+  stdlib only and read-only: GETs to Slack `auth.test` and
+  `conversations.history`, or Discord `/users/@me` and
+  `/channels/{id}/messages`, nothing posted, edited or joined. Hermes strips bot
+  tokens from a cron script's environment, so it reads exactly
+  `SLACK_BOT_TOKEN` or `DISCORD_BOT_TOKEN` by key name: from the environment
+  first, else that key from `$HERMES_HOME/.env`. It never prints or stores it
+  (a token with a space or control character is refused without echoing it);
+  without one it exits 2 and sends nothing.
+  Redirects are refused, replies bounded, and `api_base` overrides are accepted
+  only for loopback hosts (tests). Config, cursors, exit codes and the install
+  command are in its `README.md`; `tests/test_channel_watch_toolkit.py` runs it
+  against a fake API on 127.0.0.1.
 - **The OMH TUI** (bare `omh`) is a foreground frontend over Hermes' own
   gateway, not an execution surface: it relays only what the person types,
   answers no request on their behalf, and makes no model call; the one switch

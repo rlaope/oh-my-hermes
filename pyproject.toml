@@ -141,6 +141,8 @@ packages = [
   "show_reel_toolkit/assets/sfx_presets.json",
   "show_reel_toolkit/examples/timing.json", "show_reel_toolkit/examples/music-spec.json", "show_reel_toolkit/examples/README.md",
   "show_reel_craft/*.md",
+  "channel_watch_toolkit/README.md", "channel_watch_toolkit/scripts/channel_watch.py",
+  "channel_watch_toolkit/examples/watch.json",
 ]
 "omh.skins" = ["*.yaml"]
 "omh.tui" = ["frontend/dist/*.js"]

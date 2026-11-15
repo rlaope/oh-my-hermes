@@ -29,6 +29,7 @@ export function noteFor(
   const who = ctx.name(bot);
   switch (ev.event) {
     case "message":
+      if (ev.watch) return ev.text.trim() ? watchNote(who, bot, ev.watch.name, ev.text) : null;
       return ev.text.trim() ? { title: who, body: clip(ev.text), bot, tag: `${bot}:message` } : null;
     case "approval.request":
       return {
@@ -46,6 +47,20 @@ export function noteFor(
     default:
       return null;
   }
+}
+
+/** An automation's answer: "<bot> · <watch>", its first line. */
+export function watchNote(who: string, bot: string, name: string, text: string): Note {
+  const first = text.split("\n").find((l) => l.trim()) ?? text;
+  return { title: `${who} · ${name}`, body: clip(first), bot, tag: `${bot}:watch` };
+}
+
+/** Answers that came in while omher was closed: one note for the bot, never one per answer. */
+export function watchMissedNote(who: string, bot: string, rows: { text: string; watch?: { name: string } }[]): Note | null {
+  if (!rows.length) return null;
+  const last = rows[rows.length - 1];
+  if (rows.length === 1) return watchNote(who, bot, last.watch?.name ?? "", last.text);
+  return { title: t("note.watchMany", { bot: who, n: rows.length }), body: clip(last.text.split("\n")[0] ?? ""), bot, tag: `${bot}:watch` };
 }
 
 /** Something a SESSIONS session did that is not a chat event: its program ended, it could not start, or its
@@ -87,13 +102,29 @@ async function permitted(): Promise<boolean> {
   return granted ?? false;
 }
 
-/** Show `note`. `onClick` (browser build) opens that bot's chat. Never throws. */
-export async function showNote(note: Note, onClick?: () => void): Promise<void> {
+/** The bot to open when omher next gets focus after a desktop notification (the desktop plugin reports no click). */
+let openOnFocus: (() => void) | null = null;
+let focusHooked = false;
+function armFocusOpen(open: () => void): void {
+  openOnFocus = open;
+  if (focusHooked || typeof window === "undefined") return;
+  focusHooked = true;
+  window.addEventListener("focus", () => {
+    const fn = openOnFocus;
+    openOnFocus = null;
+    fn?.();
+  });
+}
+
+/** Show `note`. `onClick` opens that bot's chat: on a click (browser build), or with `focusOpen` when the desktop app
+ *  next gets focus after it was shown in the background. Never throws. */
+export async function showNote(note: Note, onClick?: () => void, focusOpen = false): Promise<void> {
   if (!(await permitted())) return;
   try {
     if (isTauri()) {
       const n = await import("@tauri-apps/plugin-notification");
       n.sendNotification({ title: note.title, body: note.body });
+      if (focusOpen && onClick && !windowWatched()) armFocusOpen(onClick);
       return;
     }
     const n = new Notification(note.title, { body: note.body, tag: note.tag });
