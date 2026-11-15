@@ -624,7 +624,9 @@ where
         Os::Unix => {
             if let Some(sh) = set("SHELL") {
                 let p = Path::new(&sh);
-                if p.is_absolute() && listed_in_etc_shells(etc_shells, &sh) && is_program(p) {
+                // absolute by Unix rules (a leading `/`), whatever OS the check runs on: `Path::is_absolute` on
+                // Windows wants a drive letter
+                if sh.starts_with('/') && listed_in_etc_shells(etc_shells, &sh) && is_program(p) {
                     return Ok(vec![OsString::from(sh), OsString::from("-l")]);
                 }
             }
