@@ -1126,6 +1126,13 @@ All notable changes will be documented here.
   or a credential pool exists. When neither can be seen, the refusal names the variable to set or
   `hermes auth add <id>` instead of "lacks safe observed provider auth". A key kept only in Hermes' `.env` file is not
   visible to OMH; export it in the shell that runs omh. Reported by @MarinWasAsleep in #2882.
+- **A confirmed paired run now compares Hermes alone with Hermes plus OMH for real.** `omh coding paired-run dispatch
+  --confirm-dispatch` prepares one disposable Hermes home per arm: the variant gets the packaged OMH plugin and exactly
+  its frozen `exposed_skills`, the baseline neither, and both run the same `file,skills` flags. A gateway the harness
+  starts and stops serves each home, and an untimed warm-up keeps first-start work out of every cell's seconds. The
+  dispatcher signs the arm setup it reads from disk into each receipt, and fan-in refuses a cell whose setup
+  contradicts its arm. New `--provider-base-url`, `--provider-api-mode` and `--provider-key-env` declare a custom
+  provider whose key arrives only by environment. Every other Hermes child keeps safe mode.
 
 ## 4.0.7 - 2026-11-09
 
