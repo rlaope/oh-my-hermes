@@ -4,6 +4,15 @@ All notable changes will be documented here.
 
 ## Unreleased
 
+- **A bot can watch a Slack or Discord channel and tell you first.** Ask it in words ("watch #og and tell me first
+  when someone reports an outage"); it confirms where, what, how often (every 5 minutes by default) and where it
+  reports in one line, then sets up a Hermes cron job with a small collector that reads only new posts and wakes no
+  model when there are none. A match reaches you in omher even for a bot you never opened: one "Watch · <name>" line,
+  a notification, an unread and the Dock badge; alerts that piled up while omher was closed become one summary, and a
+  run that found nothing leaves no trace. The alert only reports what happened with a link, never an action taken from
+  the post. Automations lists each watch (where, what, interval, last check, last alert, and "Can't read this
+  channel" when the bot lost access) with Pause, Resume and Delete, and "+ New watch" writes the request for you.
+
 - **An OMH TUI reply no longer hangs on a rail.** The `⚚ Hermes · <model>` header starts at the left edge and the
   reply's text sits two cells in, with no `┃` beside it, so a reply reads apart from your prompts and the tool calls,
   which keep their rails. The two cells the bar took go to the reply's text, and a copy still leaves the margin out.

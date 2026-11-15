@@ -3,7 +3,7 @@
 import { SESSIONS_ENTRY } from "../sessions/entry";
 import { useSyncExternalStore } from "react";
 import { BridgeClient, type BridgeStatus } from "../lib/bridge";
-import { noteFor, sessionNote, showNote, windowWatched, type SessionNote } from "../lib/notify";
+import { noteFor, sessionNote, showNote, watchMissedNote, windowWatched, type SessionNote } from "../lib/notify";
 import { appSounds, soundFor, type SoundBoard } from "../lib/sounds";
 import { promptText } from "../chat/parts/attachFiles";
 import { findTokens, toWire } from "../chat/parts/skillTokens";
@@ -48,6 +48,7 @@ import type {
   PluginRow,
   DiffFile,
   PlanItem,
+  Msg,
 } from "../lib/protocol";
 import type { AgentRunSummary, CliAgent, NodePr, RunDetail } from "../lib/runs";
 import { firstWords, hideSplitBlocks, threadEvent, threadKey, type ThreadOps, type ThreadRow } from "../threads/types";
@@ -143,6 +144,8 @@ export type MessageItem = {
   id: string;
   ts: number;
   text: string;
+  /** assistant rows only: the answer to an automation's delivered result, drawn under a "Watch · <name>" line. */
+  watch?: { name: string; ts: number };
   /** user rows only: the send failed (text of the bridge error). */
   error?: string;
   /** user rows only: sent while a turn ran, and the agent has not taken it yet (`queued`), or Stop threw it away
@@ -775,6 +778,7 @@ function applyOpened(chat: Chat, res: ChatOpenResult, now: number, bot: string, 
     ts: m.ts,
     text: m.text,
     ...(m.reply_to ? { reply: replyOf(m.reply_to) } : {}),
+    ...(m.watch ? { watch: m.watch } : {}),
   }));
   const ids = new Set(server.map((m) => m.id));
   const lastServerTs = server.length ? server[server.length - 1].ts : 0;
@@ -817,6 +821,8 @@ export type Action =
   | { type: "bots"; bots: Bot[] }
   | { type: "select"; bot: string }
   | { type: "chat.opened"; bot: string; res: ChatOpenResult; now: number; since?: number }
+  /** Automation answers that came in while omher was closed (or not attached): `count` more unread. */
+  | { type: "watch.missed"; bot: string; count: number }
   | {
       type: "local.user";
       bot: string;
@@ -989,7 +995,7 @@ function reduceEvent(state: AppState, ev: BridgeEvent, now: number): AppState {
     case "message": {
       const next = touchChat(state, bot, (c) => {
         const cleared = patchTurn(c, (t) => ({ ...t, streaming: "", cut: undefined }));
-        const msg: MessageItem = { kind: "assistant", id: ev.id, ts: now / 1000, text: ev.text };
+        const msg: MessageItem = { kind: "assistant", id: ev.id, ts: now / 1000, text: ev.text, ...(ev.watch ? { watch: ev.watch } : {}) };
         const exists = cleared.items.some((i) => i.kind === "assistant" && i.id === ev.id);
         const slot = answerSlot(cleared);
         const items = exists
@@ -1097,6 +1103,8 @@ function reduceEvent(state: AppState, ev: BridgeEvent, now: number): AppState {
       return bumpUnread(touchChat(state, bot, (c) => withItems(c, [...c.items, item])), bot);
     }
     case "routine.ran": {
+      // a delivered bot-chat run: its answer comes as that chat's message, which is the line and the unread
+      if (ev.delivered) return state;
       const next = touchChat(state, bot, (c) =>
         withItems(c, [
           ...c.items,
@@ -1214,6 +1222,10 @@ export function reduce(state: AppState, a: Action): AppState {
         ui: open ? { ...state.ui, thread: null } : state.ui,
       };
     }
+    case "watch.missed":
+      return a.count > 0 && a.bot !== state.selectedBot
+        ? { ...state, unread: { ...state.unread, [a.bot]: (state.unread[a.bot] ?? 0) + a.count } }
+        : state;
     case "chat.opened":
       return touchChat(state, a.bot, (c) => ({ ...applyOpened(c, a.res, a.now, a.bot, a.since), openError: null }));
     case "local.user":
@@ -1674,7 +1686,40 @@ export interface StoreOptions {
   resume?: () => ResumeSnap | null;
   /** Bots hidden from the sidebar before the roster (`omher.hidden`): read once, when the first roster is chosen. */
   hiddenBots?: () => string[];
+  /** When the person last saw each bot's automation answers (unix s; null: never recorded). Default: localStorage. */
+  watchSeen?: { get(bot: string): number | null; set(bot: string, ts: number): void };
+  /** Automation answers found on (re)opening a chat that the person has not seen: the app shows one note per bot. */
+  onWatchMissed?: (bot: string, rows: Msg[], state: AppState) => void;
 }
+
+/** The automation answers in `msgs` the person has not seen: newer than `seen` and not already in `chat`. A bot with
+ *  no record yet (`seen` null) has none, so a first start never floods with old answers. */
+export function newWatchRows(chat: Chat | undefined, msgs: readonly Msg[], seen: number | null): Msg[] {
+  if (seen === null) return [];
+  const have = new Set((chat?.items ?? []).map((i) => i.id));
+  return msgs.filter((m) => m.role === "assistant" && m.watch && m.ts > seen && !have.has(m.id));
+}
+
+const WATCH_SEEN_KEY = "omher.watchSeen";
+const localWatchSeen = {
+  get(bot: string): number | null {
+    try {
+      const v = (JSON.parse((typeof localStorage !== "undefined" && localStorage.getItem(WATCH_SEEN_KEY)) || "{}") as Record<string, unknown>)[bot];
+      return typeof v === "number" ? v : null;
+    } catch {
+      return null;
+    }
+  },
+  set(bot: string, ts: number): void {
+    try {
+      if (typeof localStorage === "undefined") return;
+      const all = JSON.parse(localStorage.getItem(WATCH_SEEN_KEY) || "{}") as Record<string, number>;
+      localStorage.setItem(WATCH_SEEN_KEY, JSON.stringify({ ...all, [bot]: ts }));
+    } catch {
+      /* no storage */
+    }
+  },
+};
 
 /** Every bridge event, after the store applied it (SESSIONS listens for `folder.closed`). */
 const bridgeListeners = new Set<(ev: BridgeEvent) => void>();
@@ -1709,6 +1754,20 @@ export function createStore(bridge: BridgeLike, opts: StoreOptions = {}): Store 
   const fail = (e: unknown) => dispatch({ type: "error", message: errText(e) });
   const botArg = (bot?: string) => bot ?? state.selectedBot;
 
+  const watchSeen = opts.watchSeen ?? localWatchSeen;
+  /** The person saw `bot`'s automation answers up to now. */
+  const markWatchSeen = (bot: string) => watchSeen.set(bot, now() / 1000);
+  /** Answers in a (re)opened chat the person has not seen: unread, and one note for the bot. */
+  const counted = new Map<string, number>(); // per bot: the newest missed answer already counted (a re-peek adds none)
+  const catchUpWatch = (bot: string, msgs: readonly Msg[]) => {
+    const seen = watchSeen.get(bot);
+    if (seen === null || bot === state.selectedBot) return markWatchSeen(bot);
+    const rows = newWatchRows(state.chats[bot], msgs, Math.max(seen, counted.get(bot) ?? -Infinity));
+    if (!rows.length) return;
+    counted.set(bot, Math.max(...rows.map((m) => m.ts)));
+    dispatch({ type: "watch.missed", bot, count: rows.length });
+    opts.onWatchMissed?.(bot, rows, state);
+  };
   const loadChat = async (bot: string) => {
     let res: ChatOpenResult;
     const since = now();
@@ -1719,6 +1778,7 @@ export function createStore(bridge: BridgeLike, opts: StoreOptions = {}): Store 
       dispatch({ type: "chat.failed", bot, message: errText(e) });
       throw e;
     }
+    catchUpWatch(bot, res.messages);
     dispatch({ type: "chat.opened", bot, res, now: now(), since });
   };
   /** A bot outside the sidebar list: ask its existing Bot Chat for the prompts waiting on the person. The bridge
@@ -1730,7 +1790,8 @@ export function createStore(bridge: BridgeLike, opts: StoreOptions = {}): Store 
     if (peeking.has(bot)) return;
     peeking.add(bot);
     try {
-      await bridge.request("chat.open", { bot, existing_only: true });
+      const res = await bridge.request("chat.open", { bot, existing_only: true });
+      catchUpWatch(bot, res.messages ?? []);
     } catch {
       /* no Bot Chat, or it cannot start: nothing can be waiting in it */
     } finally {
@@ -1814,6 +1875,7 @@ export function createStore(bridge: BridgeLike, opts: StoreOptions = {}): Store 
     // the open chat always has its row: a bot opened from Needs you, an @mention or Settings joins the list
     if (state.ui.roster && state.bots.some((b) => b.name === bot)) listBot(bot, true);
     dispatch({ type: "select", bot });
+    markWatchSeen(bot);
     const jobs: Promise<unknown>[] = [loadElsewhere(bot), loadRoutines(bot), loadModels(bot)];
     if (!state.threads[bot]) jobs.push(loadThreads(bot));
     if (!state.chats[bot]?.loaded) jobs.push(loadChat(bot).catch(fail));
@@ -1922,6 +1984,7 @@ export function createStore(bridge: BridgeLike, opts: StoreOptions = {}): Store 
         // After a turn the person pointed at a thread, re-read the places so the bot's new reply shows there.
         if (ev.event === "turn.end" && lastUserReplied(state, ev.bot)) void loadElsewhere(ev.bot);
         if (ev.event === "routine.ran") void loadRoutines(ev.bot);
+        if (ev.event === "message" && ev.watch && !ev.session && ev.bot === state.selectedBot) markWatchSeen(ev.bot);
         if (ev.event === "routine.ran" || ev.event === "routines.update" || ev.event === "routine.added") void loadAutomations();
         if (ev.event === "bots.update") void reloadBots();
         const tev = threadEvent(ev);
@@ -2400,6 +2463,7 @@ export function getStore(): Store {
     onEvent(ev, state) {
       notifySessionEvent(ev, state);
     },
+    onWatchMissed: notifyWatchMissed,
     onAction: (a, state) => soundOf(a, state, appSounds()),
     onSettled: () => appSounds().settle(),
     resume: () => {
@@ -2447,7 +2511,15 @@ export function notifySessionEvent(ev: BridgeEvent, state: AppState): void {
     const route = chatRoute(note.bot);
     if (route) route.open();
     else void singleton?.actions.selectBot(note.bot);
-  });
+  }, ev.event === "message" && !!ev.watch);
+}
+
+/** One note for the automation answers `bot` got while omher was closed ("<bot>: N watch alerts"). */
+export function notifyWatchMissed(bot: string, rows: Msg[], state: AppState): void {
+  if (!notifyEnabled() || watchingChat(state, bot)) return;
+  const who = state.bots.find((b) => b.name === bot)?.display_name ?? bot;
+  const note = watchMissedNote(who, bot, rows);
+  if (note) void showNote(note, () => void singleton?.actions.selectBot(bot), true);
 }
 
 /** A system notification for what session `id` did outside its chat (its program ended, it could not start, its
