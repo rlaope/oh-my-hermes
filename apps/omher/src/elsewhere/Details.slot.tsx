@@ -10,7 +10,7 @@ import { shortTime } from "../app/time";
 import { Avatar, CloseIcon, IconButton, SourceIcon } from "../ui";
 import logo from "../assets/omher-mark.png";
 import { awayTime, cadence, nextRun, sourceList, sourceName } from "./format";
-import { DiffTab, ScheduleTab, TAB_ICON, TABS, TerminalTab, WorktreesTab, type PanelTab } from "./PanelTabs";
+import { DiffTab, onPanelRowDoubleClick, PanelMaxButton, ScheduleTab, TAB_ICON, TABS, TerminalTab, WorktreesTab, type PanelTab } from "./PanelTabs";
 import { useNow } from "./useNow";
 import { RunsTab } from "../runs/RunsTab";
 import { markTabPicked } from "../chat/parts/PanelButton";
@@ -27,7 +27,7 @@ export default function DetailsPanel({ bot, open, onClose }: SlotProps["detailsP
   const [diffPath, setDiffPath] = useState<string | null>(null);
   useEffect(() => setDiffPath(null), [bot.name]);
   const head = (
-    <div className="details-h pn-tabs" role="tablist" aria-label={tr("pn.panel")}>
+    <div className="details-h pn-tabs" role="tablist" aria-label={tr("pn.panel")} onDoubleClick={onPanelRowDoubleClick} data-testid="panel-tabs">
       {TABS.map((t) => (
         <button
           key={t.id}
@@ -46,6 +46,7 @@ export default function DetailsPanel({ bot, open, onClose }: SlotProps["detailsP
           {tab === t.id && <span>{t.label}</span>}
         </button>
       ))}
+      <PanelMaxButton />
       <IconButton label={tr("pn.close")} onClick={onClose}>
         <CloseIcon />
       </IconButton>

@@ -1266,4 +1266,7 @@ export const ko: Record<Key, string> = {
   "peer.remoteBot": "이 봇은 {label}에서 실행돼요.",
   "ab.ssh": "SSH로 연결",
   "ab.sshSub": "다른 컴퓨터의 Hermes",
+  // panel (maximise the side panel in place)
+  "panel.max": "최대로 펼치기",
+  "panel.restore": "원래 크기로",
 };

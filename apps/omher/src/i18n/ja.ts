@@ -1266,4 +1266,7 @@ export const ja: Record<Key, string> = {
   "peer.remoteBot": "このボットは {label} で動いています。",
   "ab.ssh": "SSHで接続",
   "ab.sshSub": "別のコンピュータの Hermes",
+  // panel (maximise the side panel in place)
+  "panel.max": "最大化",
+  "panel.restore": "元のサイズに戻す",
 };

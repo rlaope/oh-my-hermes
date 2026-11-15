@@ -1266,4 +1266,7 @@ export const zh: Record<Key, string> = {
   "peer.remoteBot": "这个机器人运行在 {label} 上。",
   "ab.ssh": "通过 SSH 连接",
   "ab.sshSub": "另一台电脑上的 Hermes",
+  // panel (maximise the side panel in place)
+  "panel.max": "最大化",
+  "panel.restore": "还原",
 };

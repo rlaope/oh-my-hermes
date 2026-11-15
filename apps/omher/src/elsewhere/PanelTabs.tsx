@@ -71,6 +71,43 @@ export const TAB_ICON: Record<PanelTab, ReactElement> = {
   ),
 };
 
+/** The tab row's maximise / restore control: the panel grows in place to every pixel right of the sidebar and
+ *  comes back to the width it had. A double click on the row's free space does the same (`onPanelRowDoubleClick`). */
+export function PanelMaxButton() {
+  const s = useStore();
+  const max = s.ui.panelMax;
+  const label = max ? t("panel.restore") : t("panel.max");
+  return (
+    <button
+      type="button"
+      className="ui-ib pn-max"
+      aria-label={label}
+      title={label}
+      aria-pressed={max}
+      onClick={() => s.setPanelMax(!max)}
+      data-testid="panel-max"
+    >
+      {max ? (
+        <svg viewBox="0 0 24 24" {...I} width="14" height="14" aria-hidden="true">
+          <path d="M4 14h6v6M20 10h-6V4M14 10l6.5-6.5M10 14l-6.5 6.5" />
+        </svg>
+      ) : (
+        <svg viewBox="0 0 24 24" {...I} width="14" height="14" aria-hidden="true">
+          <path d="M14 4h6v6M10 20H4v-6M20 4l-6.5 6.5M4 20l6.5-6.5" />
+        </svg>
+      )}
+    </button>
+  );
+}
+
+/** Double click on the tab row (not on a tab or a button) maximises or restores the panel. */
+export function onPanelRowDoubleClick(e: { target: EventTarget | null; currentTarget: EventTarget }) {
+  const hit = e.target as HTMLElement | null;
+  if (hit !== e.currentTarget && hit?.closest("button, a, input, select")) return;
+  const st = getStore();
+  st.actions.setPanelMax(!st.getState().ui.panelMax);
+}
+
 /** Load once per (bot, tab open); `reload` re-reads. */
 function useLoad<T>(key: string, load: () => Promise<T>): { data: T | null; error: string | null; reload: () => void } {
   const [state, setState] = useState<{ key: string; data: T | null; error: string | null }>({ key: "", data: null, error: null });
