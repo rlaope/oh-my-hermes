@@ -512,5 +512,238 @@ class HermesModelConfigTests(unittest.TestCase):
                     preview_hermes_model_config(inspection, {"main": target})
 
 
+    def providers_entry_inspection(self, entry, *, env_extra=None, pools=(), status_ok=True):
+        # Issue #2882's machine: the provider is a Hermes `providers:` entry,
+        # not a pool and not a legacy `custom_providers` item, and
+        # `hermes auth status mistral` exits 0 ("logged out").
+        state = self.state()
+        state["providers"] = {"mistral": entry}
+        self.config.write_text(json.dumps(state, sort_keys=True), encoding="utf-8")
+        env = {
+            **self.env,
+            "HERMES_AUTH_LIST_EXTRA": json.dumps([f"{pool} (1 credentials):" for pool in pools]),
+            "HERMES_AUTH_STATUS_OK": "mistral" if status_ok else "",
+            **(env_extra or {}),
+        }
+        return inspect_hermes_model_config(hermes=str(self.hermes), env=env)
+
+    def test_reported_providers_entry_with_env_key_binds_alias(self) -> None:
+        # Given: the reporter's exact shape -- base_url only, MISTRAL_API_KEY
+        # exported, no pool, auth status exits 0.
+        key = "mistral-key-value-must-not-escape"
+        inspection = self.providers_entry_inspection(
+            {"name": "Mistral", "base_url": "https://api.mistral.ai/v1"},
+            env_extra={"MISTRAL_API_KEY": key},
+        )
+
+        # When: the guided preview names the provider.
+        preview = preview_hermes_model_config(
+            inspection, {"main": "mistral/deepseek-v4-1-flash-1017"}
+        )
+
+        # Then: the alias binds, and the key value is nowhere in the result.
+        self.assertEqual(
+            preview.commands,
+            (
+                (
+                    str(self.hermes),
+                    "config",
+                    "set",
+                    "model.aliases.main",
+                    "mistral/deepseek-v4-1-flash-1017",
+                ),
+            ),
+        )
+        mistral = {item.provider_id: item for item in inspection.providers}["mistral"]
+        self.assertTrue(mistral.auth_present)
+        self.assertTrue(mistral.provider_entry)
+        self.assertEqual(mistral.credential_env, "MISTRAL_API_KEY")
+        self.assertNotIn(key, repr(inspection) + repr(preview))
+        logged = (self.home / "commands.jsonl").read_text(encoding="utf-8")
+        self.assertNotIn(key, logged)
+
+    def test_providers_entry_declared_key_env_counts_when_present(self) -> None:
+        # Given: entries naming their key variable either way Hermes accepts.
+        for field in ("key_env", "api_key_env"):
+            with self.subTest(field=field):
+                inspection = self.providers_entry_inspection(
+                    {"base_url": "https://api.mistral.ai/v1", field: "MY_MISTRAL_KEY"},
+                    env_extra={"MY_MISTRAL_KEY": "x" * 12},
+                )
+
+                # When/Then: the declared variable being set is observed auth.
+                preview = preview_hermes_model_config(inspection, {"main": "mistral/large"})
+                self.assertEqual(preview.changes, {"main": "mistral/large"})
+
+    def test_providers_entry_pool_counts_without_env(self) -> None:
+        # Given: no key variable set, but a pool under the entry's key or its
+        # legacy `custom:<name>` id.
+        for pool in ("mistral", "custom:mistral"):
+            with self.subTest(pool=pool):
+                inspection = self.providers_entry_inspection(
+                    {"base_url": "https://api.mistral.ai/v1", "key_env": "MY_MISTRAL_KEY"},
+                    pools=(pool,),
+                )
+
+                # When/Then: the pool is the observed credential.
+                preview = preview_hermes_model_config(inspection, {"main": "mistral/large"})
+                self.assertEqual(preview.changes, {"main": "mistral/large"})
+
+    def test_providers_entry_binds_under_every_spelling_hermes_resolves(self) -> None:
+        # Given: an entry whose display name differs from its key.
+        inspection = self.providers_entry_inspection(
+            {"name": "Mistral AI", "base_url": "https://api.mistral.ai/v1"},
+            env_extra={"MISTRAL_API_KEY": "x" * 12},
+        )
+
+        # When: aliases spell it by key, by `custom:` key, and by name.
+        preview = preview_hermes_model_config(
+            inspection,
+            {
+                "main": "mistral/large",
+                "pool": "custom:mistral/large",
+                "named": "mistral-ai/large",
+            },
+        )
+
+        # Then: all bind, and auth status was asked once, for the entry key.
+        self.assertEqual(len(preview.commands), 3)
+        statuses = [
+            command
+            for command in inspection.commands
+            if command[1:3] == ("auth", "status")
+            and command[3] in {"mistral", "custom:mistral", "mistral-ai", "custom:mistral-ai"}
+        ]
+        self.assertEqual(statuses, [(str(self.hermes), "auth", "status", "mistral")])
+
+    def test_providers_entry_without_observable_credential_names_the_remedy(self) -> None:
+        # Given: the entry's key variable unset, or set but empty, and no pool.
+        for env_extra in ({}, {"MY_MISTRAL_KEY": ""}, {"MY_MISTRAL_KEY": "   "}):
+            with self.subTest(env=env_extra):
+                inspection = self.providers_entry_inspection(
+                    {"base_url": "https://api.mistral.ai/v1", "key_env": "MY_MISTRAL_KEY"},
+                    env_extra={"MISTRAL_API_KEY": "x" * 12, **env_extra},
+                )
+
+                # When/Then: refused, naming the configured route and its remedy.
+                with self.assertRaisesRegex(
+                    HermesModelConfigError,
+                    r"configured under providers: but no credential is observable: "
+                    r"set MY_MISTRAL_KEY .*`hermes auth add mistral`",
+                ):
+                    preview_hermes_model_config(inspection, {"main": "mistral/large"})
+
+    def test_providers_entry_with_unobservable_key_source_stays_refused(self) -> None:
+        # Given: an entry whose key comes from a command OMH cannot observe,
+        # and one Hermes keeps hidden with `enabled: false`.
+        cases = (
+            (
+                {"base_url": "https://api.mistral.ai/v1", "key_cmd": "pass show mistral"},
+                "name the variable holding its key with key_env",
+            ),
+            (
+                {"base_url": "https://api.mistral.ai/v1", "enabled": False},
+                "lacks safe observed provider auth",
+            ),
+            (
+                {"base_url": "http://127.0.0.1:8080/v1"},
+                "name the variable holding its key with key_env",
+            ),
+        )
+        for entry, reason in cases:
+            with self.subTest(entry=entry):
+                inspection = self.providers_entry_inspection(
+                    entry, env_extra={"MISTRAL_API_KEY": "x" * 12}
+                )
+
+                # When/Then: refused.
+                with self.assertRaisesRegex(HermesModelConfigError, reason):
+                    preview_hermes_model_config(inspection, {"main": "mistral/large"})
+
+    def test_unconfigured_provider_keeps_the_missing_auth_refusal(self) -> None:
+        # Given: a providers: entry for mistral, and a target naming another id
+        # with no pool, entry, legacy entry, or plugin.
+        inspection = self.providers_entry_inspection(
+            {"base_url": "https://api.mistral.ai/v1"},
+            env_extra={"MISTRAL_API_KEY": "x" * 12, "GAMMA_API_KEY": "x" * 12},
+        )
+
+        # When/Then: the old refusal stands.
+        with self.assertRaisesRegex(
+            HermesModelConfigError, r"^Hermes model target 'gamma/large' lacks safe observed provider auth$"
+        ):
+            preview_hermes_model_config(inspection, {"main": "gamma/large"})
+
+    def test_providers_entry_with_failed_auth_status_stays_refused(self) -> None:
+        # Given: an observable key, but `hermes auth status mistral` exits non-zero.
+        inspection = self.providers_entry_inspection(
+            {"base_url": "https://api.mistral.ai/v1"},
+            env_extra={"MISTRAL_API_KEY": "x" * 12},
+            status_ok=False,
+        )
+
+        # When/Then: refused as before.
+        with self.assertRaisesRegex(HermesModelConfigError, "lacks safe observed provider auth"):
+            preview_hermes_model_config(inspection, {"main": "mistral/large"})
+
+    def test_legacy_custom_provider_without_pool_is_unchanged(self) -> None:
+        # Given: a legacy custom_providers entry whose key variable is set, but
+        # no `custom:<name>` pool.
+        state = self.state()
+        state["custom_providers"] = [
+            {"name": "9router", "base_url": "http://localhost:20128/v1", "key_env": "ROUTER_KEY"}
+        ]
+        self.config.write_text(json.dumps(state, sort_keys=True), encoding="utf-8")
+        inspection = inspect_hermes_model_config(
+            hermes=str(self.hermes),
+            env={**self.env, "ROUTER_KEY": "x" * 12, "HERMES_AUTH_STATUS_OK": "9router"},
+        )
+
+        # When/Then: still refused with the missing-auth text.
+        with self.assertRaisesRegex(HermesModelConfigError, "lacks safe observed provider auth"):
+            preview_hermes_model_config(inspection, {"main": "9router/clv/kimi-k3"})
+
+    def test_plugin_provider_without_pool_is_refused_with_its_reason(self) -> None:
+        # Given: an enabled plugin provider whose auth status exits 0 but which
+        # holds no credential pool.
+        state = self.state()
+        state["plugins"]["enabled"].append("delta")
+        self.config.write_text(json.dumps(state, sort_keys=True), encoding="utf-8")
+        inspection = inspect_hermes_model_config(
+            hermes=str(self.hermes), env={**self.env, "HERMES_AUTH_STATUS_OK": "delta"}
+        )
+        delta = {item.provider_id: item for item in inspection.providers}["delta"]
+        self.assertTrue(delta.plugin_present and delta.auth_status_ok)
+
+        # When/Then: refused, saying its sign-in is not observable.
+        with self.assertRaisesRegex(
+            HermesModelConfigError, r"plugin whose own sign-in OMH cannot observe.*`hermes auth add delta`"
+        ):
+            preview_hermes_model_config(inspection, {"main": "delta/large"})
+
+    def test_agent_install_guide_names_both_refusals_and_their_remedies(self) -> None:
+        # Given: the agent install guide an agent follows on a refused preview.
+        guide = " ".join(
+            (Path(__file__).resolve().parents[1] / "INSTALL_FOR_AGENTS.md")
+            .read_text(encoding="utf-8")
+            .split()
+        )
+        inspection = self.providers_entry_inspection(
+            {"base_url": "https://api.mistral.ai/v1", "key_env": "MY_MISTRAL_KEY"}
+        )
+        with self.assertRaises(HermesModelConfigError) as raised:
+            preview_hermes_model_config(inspection, {"main": "mistral/large"})
+
+        # Then: it quotes the text each refusal really carries, with its remedy.
+        self.assertIn("is configured under providers: but no credential is observable", str(raised.exception))
+        for phrase in (
+            "`lacks safe observed provider auth`",
+            "`is configured under providers: but no credential is observable`",
+            "`key_env`",
+            "`hermes auth add <id>`",
+        ):
+            with self.subTest(phrase=phrase):
+                self.assertIn(phrase, guide)
+
 if __name__ == "__main__":
     unittest.main()

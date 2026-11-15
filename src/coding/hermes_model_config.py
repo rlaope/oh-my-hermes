@@ -2,7 +2,8 @@
 
 The adapter delegates all configuration interpretation and writes to Hermes'
 own ``config`` and ``auth`` commands. It never invokes ``hermes model``, reads
-Hermes' dotenv file, or performs network I/O.
+Hermes' dotenv file, or performs network I/O. For a ``providers:`` entry it
+checks only whether the key variable that entry names is set, never its value.
 """
 
 from __future__ import annotations
@@ -17,8 +18,9 @@ import subprocess
 import sys
 from threading import Lock
 from typing import Final, Mapping
+from urllib.parse import urlsplit
 
-from ..system.metadata_safety import is_sensitive_metadata_text
+from ..system.metadata_safety import is_secret_value_shaped, is_sensitive_metadata_text
 
 
 _ALIAS_RE: Final[re.Pattern[str]] = re.compile(r"^[A-Za-z0-9_-]+$")
@@ -30,6 +32,17 @@ _AUTH_PROVIDER_RE: Final[re.Pattern[str]] = re.compile(
 )
 _CUSTOM_PROVIDER_NAME_RE: Final[re.Pattern[str]] = re.compile(r"^[A-Za-z0-9_.-]+$")
 _CUSTOM_POOL_PREFIX: Final = "custom:"
+# An environment variable *name* (`key_env`); never its value.
+_ENV_NAME_RE: Final[re.Pattern[str]] = re.compile(r"^[A-Za-z_][A-Za-z0-9_]{0,127}$")
+_FALSE_WORDS: Final = frozenset({"false", "0", "no", "off"})
+# Hosts whose key Hermes reads from a fixed variable rather than the
+# host-derived `<VENDOR>_API_KEY` (hermes_cli/runtime_provider.py
+# `_host_gated_env_key_candidates`).
+_HOST_GATED_KEY_ENV: Final = (
+    ("openai.com", "OPENAI_API_KEY"),
+    ("openai.azure.com", "OPENAI_API_KEY"),
+    ("openrouter.ai", "OPENROUTER_API_KEY"),
+)
 _COMMAND_TIMEOUT_SECONDS: Final = 10
 _APPLY_LOCK: Final = Lock()
 
@@ -82,6 +95,19 @@ class ProviderPresence:
     auth_present: bool
     auth_status_ok: bool
     plugin_present: bool
+    # True when the id names an enabled entry under Hermes `providers:`; its
+    # credential then counts toward `auth_present` when observable.
+    provider_entry: bool = False
+    # The environment variable *name* that entry's key is read from, if known.
+    credential_env: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class _ProviderEntry:
+    canonical: str
+    ids: frozenset[str]
+    pool_ids: frozenset[str]
+    credential_env: str | None
 
 
 @dataclass(frozen=True, slots=True)
@@ -139,29 +165,48 @@ def inspect_hermes_model_config(
     custom_providers = _optional_json_value(
         (hermes, "config", "get", "custom_providers", "--json"), env, commands
     )
+    provider_entries = _provider_entries(
+        _optional_json_value((hermes, "config", "get", "providers", "--json"), env, commands)
+    )
     check = _run((hermes, "config", "check"), env, commands)
     auth_list = _run((hermes, "auth", "list"), env, commands)
 
+    pool_ids = _auth_provider_ids(auth_list.stdout if auth_list.returncode == 0 else "")
     auth_providers = _configured_auth_provider_ids(
-        _auth_provider_ids(auth_list.stdout if auth_list.returncode == 0 else ""),
+        pool_ids,
         _custom_provider_names(custom_providers),
     )
     plugin_providers = _plugin_provider_ids(plugins)
-    providers = set(auth_providers) | plugin_providers
+    entry_by_id = {
+        provider_id: entry for entry in provider_entries for provider_id in entry.ids
+    }
+    providers = set(auth_providers) | plugin_providers | set(entry_by_id)
     if isinstance(provider, str) and _safe_metadata(provider):
         providers.add(provider)
     providers.update(_alias_provider_ids(model_aliases))
     providers.update(_alias_provider_ids(model_dot_aliases))
 
     presence: list[ProviderPresence] = []
+    statuses: dict[str, bool] = {}
     for provider_id in sorted(providers):
-        status = _run((hermes, "auth", "status", provider_id), env, commands)
+        entry = entry_by_id.get(provider_id)
+        # Every spelling of one `providers:` entry resolves to the same
+        # Hermes provider, so its auth status is asked once.
+        status_id = provider_id if entry is None else entry.canonical
+        if status_id not in statuses:
+            status = _run((hermes, "auth", "status", status_id), env, commands)
+            statuses[status_id] = status.returncode == 0
+        entry_credential = entry is not None and (
+            bool(entry.pool_ids & pool_ids) or _env_var_present(env, entry.credential_env)
+        )
         presence.append(
             ProviderPresence(
                 provider_id=provider_id,
-                auth_present=provider_id in auth_providers,
-                auth_status_ok=status.returncode == 0,
+                auth_present=provider_id in auth_providers or entry_credential,
+                auth_status_ok=statuses[status_id],
                 plugin_present=provider_id in plugin_providers,
+                provider_entry=entry is not None,
+                credential_env=None if entry is None else entry.credential_env,
             )
         )
     return HermesModelConfigInspection(
@@ -210,7 +255,7 @@ def preview_hermes_model_config(
                 )
             if not _safe_metadata(target) or not _provider_has_auth(inspection, provider_id):
                 raise HermesModelConfigError(
-                    f"Hermes model target {target!r} lacks safe observed provider auth"
+                    _missing_auth_message(inspection, target, provider_id)
                 )
         normalized[alias] = target
         key = f"model.aliases.{alias}"
@@ -532,6 +577,138 @@ def _alias_provider_ids(aliases: Mapping[str, str]) -> set[str]:
         for target in aliases.values()
         if "/" in target and _safe_metadata(provider := target.split("/", 1)[0])
     }
+
+
+def _provider_entries(
+    value: str | list[str] | dict[str, str | list[str] | dict[str, str]] | None,
+) -> tuple[_ProviderEntry, ...]:
+    """Enabled Hermes `providers:` entries, as the ids and pools Hermes routes them by.
+
+    Hermes resolves `<key>`, `<name>`, and their `custom:` forms to one entry
+    (hermes_cli/providers.py `custom_provider_aliases`) and keeps its pool
+    under `<key>` or legacy `custom:<name>`. Only non-secret fields are read:
+    the env var *name* the key comes from, never an inline `api_key`.
+    """
+    if not isinstance(value, dict):
+        return ()
+    entries: list[_ProviderEntry] = []
+    for key, entry in value.items():
+        if not isinstance(entry, dict) or not _provider_enabled(entry.get("enabled", True)):
+            continue
+        base_url = next(
+            (
+                url.strip()
+                for field in ("base_url", "url", "api", "baseUrl")
+                if isinstance(url := entry.get(field), str) and url.strip()
+            ),
+            "",
+        )
+        name = entry.get("name")
+        names = {
+            normalized
+            for raw in (str(key), name if isinstance(name, str) else "")
+            if (normalized := raw.strip().lower().replace(" ", "-"))
+            and _CUSTOM_PROVIDER_NAME_RE.fullmatch(normalized)
+            and _safe_metadata(normalized)
+        }
+        canonical = str(key).strip().lower().replace(" ", "-")
+        if not base_url or canonical not in names:
+            continue
+        pools = {f"{_CUSTOM_POOL_PREFIX}{item}" for item in names}
+        entries.append(
+            _ProviderEntry(
+                canonical=canonical,
+                ids=frozenset(names | pools),
+                pool_ids=frozenset({canonical} | pools),
+                credential_env=_entry_credential_env(entry, base_url),
+            )
+        )
+    return tuple(entries)
+
+
+def _provider_enabled(flag: object) -> bool:
+    # hermes_cli/config_providers.py `is_provider_enabled`.
+    if isinstance(flag, str):
+        return flag.strip().lower() not in _FALSE_WORDS
+    return bool(flag)
+
+
+def _entry_credential_env(entry: Mapping[str, object], base_url: str) -> str | None:
+    """The env var name Hermes reads this entry's key from, or None.
+
+    A declared `key_env` is the only source then; an entry declaring an
+    inline `api_key` or a `key_cmd` gets no implicit env key from Hermes, and
+    OMH cannot observe either; otherwise Hermes reads the host's key variable.
+    """
+    for field in ("key_env", "api_key_env", "keyEnv", "apiKeyEnv"):
+        declared = entry.get(field)
+        if isinstance(declared, str) and declared.strip():
+            name = declared.strip()
+            if _ENV_NAME_RE.fullmatch(name) and not is_secret_value_shaped(name):
+                return name
+            return None
+    if any(str(entry.get(field) or "").strip() for field in ("api_key", "apiKey", "key_cmd")):
+        return None
+    return _host_key_env(base_url)
+
+
+def _host_key_env(base_url: str) -> str | None:
+    """`<VENDOR>_API_KEY` for a base URL's host, as Hermes derives it.
+
+    Mirrors hermes_cli/runtime_provider.py `_host_derived_api_key`: the
+    registrable label of the host (`api.mistral.ai` -> `MISTRAL_API_KEY`),
+    nothing for IPs, loopback, or single-label hosts.
+    """
+    hostname = urlsplit(base_url if "://" in base_url else f"//{base_url}").hostname or ""
+    for domain, env_name in _HOST_GATED_KEY_ENV:
+        if hostname == domain or hostname.endswith(f".{domain}"):
+            return env_name
+    labels = [label for label in hostname.split(".") if label]
+    if not labels or any(ch.isdigit() for ch in labels[-1]) or hostname == "localhost" or ":" in hostname:
+        return None
+    while labels and labels[0] in ("api", "www"):
+        labels.pop(0)
+    if len(labels) < 2:
+        return None
+    vendor = "".join(ch if ch.isalnum() else "_" for ch in labels[-2]).upper()
+    if not vendor or not vendor[0].isalpha() or vendor in ("OPENAI", "OPENROUTER", "OLLAMA"):
+        return None
+    return f"{vendor}_API_KEY"
+
+
+def _env_var_present(env: Mapping[str, str] | None, name: str | None) -> bool:
+    """Whether `name` is set non-empty; the value is neither kept nor returned."""
+    if name is None:
+        return False
+    source = os.environ if env is None else env
+    return bool(str(source.get(name) or "").strip())
+
+
+def _missing_auth_message(
+    inspection: HermesModelConfigInspection, target: str, provider_id: str
+) -> str:
+    presence = next(
+        (item for item in inspection.providers if item.provider_id == provider_id), None
+    )
+    if _safe_metadata(target) and presence is not None and not presence.auth_present:
+        if presence.provider_entry:
+            remedy = (
+                f"set {presence.credential_env} in the environment omh runs in"
+                if presence.credential_env
+                else "name the variable holding its key with key_env"
+            )
+            return (
+                f"Hermes model target {target!r} names provider {provider_id!r}, which is "
+                "configured under providers: but no credential is observable: "
+                f"{remedy}, or add a pool with `hermes auth add {provider_id}`"
+            )
+        if presence.plugin_present:
+            return (
+                f"Hermes model target {target!r} names provider {provider_id!r}, a Hermes "
+                "plugin whose own sign-in OMH cannot observe and that holds no credential "
+                f"pool: add a pool with `hermes auth add {provider_id}`"
+            )
+    return f"Hermes model target {target!r} lacks safe observed provider auth"
 
 
 def _provider_has_auth(inspection: HermesModelConfigInspection, provider_id: str) -> bool:
