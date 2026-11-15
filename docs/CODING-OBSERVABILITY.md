@@ -1158,6 +1158,11 @@ comparison they want to Hermes.
 omh coding paired-run dispatch --decision decision.json --dry-run
 omh coding paired-run dispatch --decision decision.json --confirm-dispatch \
   --task-file task-a=task-a.txt --repo . --provider <provider>
+# a custom provider: declared without its secret, key by variable name
+omh coding paired-run dispatch --decision decision.json --confirm-dispatch \
+  --task-file task-a=task-a.txt --repo . --provider claude-proxy \
+  --provider-base-url http://127.0.0.1:8317/v1 --provider-api-mode chat_completions \
+  --provider-key-env MY_PROXY_KEY
 ```
 
 `--dry-run` parses a committed `paired_run_decision/v2` document (a `v1` one
@@ -1177,6 +1182,41 @@ a shared-resource key still serializes only the cells that name it. The
 Hermes-child bridge's normal
 single-dispatch guard remains the default for every other caller, while this
 confirmed matrix path opts into the paired-run scheduler's own bounded guard.
+
+### The arm setup each cell runs in
+
+Every other Hermes child runs in safe mode with the user's config ignored and
+file tools only. A confirmed paired run is the one caller that leaves safe
+mode, because otherwise both arms would be the same Hermes and the comparison
+would measure noise. Before any cell starts, the invocation prepares one
+disposable Hermes home per arm under a fresh temporary root outside any Hermes
+`profiles/` tree:
+
+- `config.yaml` names the arm's model and the provider. A built-in provider
+  reads its documented key variables; a custom provider is declared by
+  `--provider-base-url` (https, or plain http only to a loopback host; no
+  credentials, query or fragment), `--provider-api-mode` and
+  `--provider-key-env`, the NAME of the variable holding its key. The key is
+  never written to disk and an inline key is refused.
+- The variant home holds the packaged OMH plugin, enabled with its own
+  disposable OMH home, and exactly the arm's frozen `exposed_skills`. The
+  baseline home holds neither. Both arms run the same flags (`--ignore-rules
+  --toolsets file,skills`), so the homes are the only difference.
+- A harness-owned `hermes gateway run --quiet` serves each home in its own
+  process group with a minimal environment, never a launchd or other service
+  job. One untimed warm-up chat absorbs the home's first-start work; its
+  seconds are reported per arm in `execution.arm_homes` and never enter a
+  cell's `elapsed_seconds`, which stays spawn-to-exit of the cell's own chat.
+  The whole gateway group is stopped and the root removed on exit, failure
+  included.
+
+At each cell's spawn the dispatcher reads the home from disk (plugin manifest
+present and enabled in config; the sorted OMH skills present) and signs that
+reading into the receipt as `arm_setup`. A caller cannot supply or keep one.
+Fan-in refuses a cell with no signed setup, a variant that ran without the
+plugin, a baseline that ran with it, or a skills digest that differs from the
+arm's `exposed_skills`. The arm role fixes the plugin expectation, so
+`paired_run_decision/v2` needs no new field.
 
 The built-in receipt-capable adapter currently supports decision arms whose
 executor is `hermes`. A Codex, Claude Code, or generic arm is refused before

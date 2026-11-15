@@ -11,6 +11,13 @@ All notable changes will be documented here.
   `n`, Esc or Ctrl+C still deny and stop the running turn. Keys typed for the composer as the approval appears still
   land nowhere, since every question ignores keys for a moment after it opens, and a request that does not offer
   allow once still opens on deny.
+- **A confirmed paired run now compares Hermes alone with Hermes plus OMH for real.** `omh coding paired-run dispatch
+  --confirm-dispatch` prepares one disposable Hermes home per arm: the variant gets the packaged OMH plugin and exactly
+  its frozen `exposed_skills`, the baseline neither, and both run the same `file,skills` flags. A gateway the harness
+  starts and stops serves each home, and an untimed warm-up keeps first-start work out of every cell's seconds. The
+  dispatcher signs the arm setup it reads from disk into each receipt, and fan-in refuses a cell whose setup
+  contradicts its arm. New `--provider-base-url`, `--provider-api-mode` and `--provider-key-env` declare a custom
+  provider whose key arrives only by environment. Every other Hermes child keeps safe mode.
 
 ## 4.0.8 - 2026-11-15
 
