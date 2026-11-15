@@ -45,6 +45,12 @@ VERSION = "0.2.10"
 BOT_CHAT_TITLE = "Bot Chat"
 FOLDER_CHAT_PREFIX = "omher · "
 MAX_FOLDER_CHATS = 16
+# Threads under a bot (`thread.*`): Hermes sessions the bridge creates for the bot, titled with the same prefix so
+# `thread.list` finds them again after a restart. At most this many are attached at once per bot.
+THREAD_PREFIX = FOLDER_CHAT_PREFIX
+MAX_THREADS = 48
+THREAD_TITLE = 40  # chars of the first message a new thread takes as its title
+_THREAD_PLACEHOLDER = re.compile(r"new thread [0-9a-f]{6}")
 LOCAL_SOURCES = frozenset({"tui", "cli", "local", "desktop", "acp", "api_server", "omher"})
 REASONING_LEVELS = ["none", "low", "medium", "high", "xhigh"]
 # `bots.ready {provider}`: a Hermes provider id, the shell's `valid_provider` pattern (the three sign-in ids the desktop
@@ -3881,13 +3887,25 @@ def split_peer_hint(text: str) -> str:
     return text[: m.start()].rstrip() if m else text
 
 
+def thread_name(title: str) -> str:
+    """A thread's Hermes title as the sidebar shows it: without the `omher · ` prefix; "" for the placeholder a
+    thread carries until its first message names it."""
+    name = title[len(THREAD_PREFIX):] if isinstance(title, str) and title.startswith(THREAD_PREFIX) else str(title or "")
+    name = name.strip()
+    return "" if _THREAD_PLACEHOLDER.fullmatch(name) else name
+
+
 # ---------------------------------------------------------------- one Hermes gateway connection
 
 class FolderChat:
     """A Hermes chat this bridge created in a folder the person picked (SESSIONS `+` > oh-my-hermes)."""
 
-    def __init__(self, fid: str, cwd: str, runtime_id: str, stored_id: str, subscription_id: str = ""):
+    def __init__(self, fid: str, cwd: str, runtime_id: str, stored_id: str, subscription_id: str = "",
+                 kind: str = "folder", title: str = ""):
         self.id = fid
+        self.kind = kind  # "folder" (SESSIONS > oh-my-hermes) or "thread" (a thread under the bot, `thread.*`)
+        self.title = title  # a thread's name without the prefix; "" until its first message names it
+        self.started = time.time()
         self.cwd = cwd
         self.runtime_id = runtime_id
         self.stored_id = stored_id
@@ -3925,7 +3943,8 @@ class Conn:
         self.last_elsewhere_emit = -1e9
         self.elsewhere_sig = None
         self.prompts: dict[str, int | None] = {}  # open prompt_id -> execution_generation
-        self.folders: dict[str, FolderChat] = {}  # folder chats this bridge created, by our own id
+        self.folders: dict[str, FolderChat] = {}  # folder chats and threads this bridge created or listed, by id
+        self.threads: dict[str, dict] = {}  # threads `thread.list` found (stored id -> row): what `thread.open` takes
         self.asked: dict[str, tuple[float, float | None]] = {}  # open prompt_id -> (asked at, gateway timeout s)
         self.batches: dict[str, list[str]] = {}  # open batch clarify request id -> question ids, in order
         self.clarify_batch: bool | None = None  # the gateway asks a multi-question clarify as one request
@@ -3977,6 +3996,8 @@ class Bridge:
             "bots.set_avatar": self.op_bots_set_avatar, "bots.info": self.op_bots_info,
             "skills.list": self.op_skills_list, "links.places": self.op_links_places,
             "folder.open": self.op_folder_open, "folder.close": self.op_folder_close,
+            "thread.create": self.op_thread_create, "thread.list": self.op_thread_list,
+            "thread.open": self.op_thread_open, "thread.remove": self.op_thread_remove,
             "panel.terminal": self.op_panel_terminal, "panel.worktrees": self.op_panel_worktrees,
             "panel.diff": self.op_panel_diff, "media.read": self.op_media_read,
             "chat.attach": self.op_chat_attach, "runs.list": self.op_runs_list, "runs.get": self.op_runs_get,
@@ -4191,7 +4212,8 @@ class Bridge:
             for f in folders:
                 if f.in_turn:
                     await self.emit("turn.end", conn.name, session=f.id, outcome="error", error=reason or "gateway disconnected")
-                await self.emit("folder.closed", conn.name, session=f.id, reason=reason or "gateway disconnected")
+                if f.kind == "folder":  # a thread stays listed: the next open attaches it again
+                    await self.emit("folder.closed", conn.name, session=f.id, reason=reason or "gateway disconnected")
             if was_turn:
                 await self.emit("turn.end", conn.name, outcome="error", error=reason or "gateway disconnected")
             conn.failed_at, conn.failed_msg = self.clock(), reason or f"{conn.name} is offline"
@@ -4329,7 +4351,12 @@ class Bridge:
         elif typ == "session.title" and chat is not None:
             # Hermes named a folder chat (its own titler, or /title); the name omher gave it at create is not news
             title = p.get("title")
-            if isinstance(title, str) and title.strip() and not title.startswith(FOLDER_CHAT_PREFIX):
+            if isinstance(title, str) and title.strip() and chat.kind == "thread":
+                name = thread_name(title)
+                if name and name != chat.title:
+                    chat.title = name
+                    await out("session.title", title=_one_line(name, CLI_TITLE))
+            elif isinstance(title, str) and title.strip() and not title.startswith(FOLDER_CHAT_PREFIX):
                 await out("session.title", title=_one_line(title, CLI_TITLE))
         elif typ == "message.delta":
             text = p.get("text")
@@ -4513,7 +4540,7 @@ class Bridge:
         if reply_to is not None and (not isinstance(reply_to, str) or not reply_to):
             raise BridgeError("bad_request", "reply_to must be a session id")
         conn = await self._conn(p.get("bot"))
-        main, _chat = await self._target(conn, p)
+        main, chat = await self._target(conn, p)
         if reply_to is not None:
             # A thread reference for the bot, read from the profile's own state.db. omher posts nothing.
             if reply_to in conn.main_ids:
@@ -4528,6 +4555,8 @@ class Bridge:
         input_id = str(uuid.uuid4())
         await self._probe_clarify_batch(conn)
         await self._submit(conn, main, text, input_id)
+        if chat is not None and chat.kind == "thread" and not chat.title:
+            await self._name_thread(conn, chat, p["text"])
         return {"input_id": input_id}
 
     async def _probe_clarify_batch(self, conn: Conn) -> None:
@@ -4638,7 +4667,7 @@ class Bridge:
         if not isinstance(cwd, str) or not cwd.strip() or not os.path.isabs(cwd) or not os.path.isdir(cwd):
             raise BridgeError("bad_request", "cwd must be an existing folder")
         conn = await self._conn(p.get("bot"))
-        if len(conn.folders) >= MAX_FOLDER_CHATS:
+        if sum(1 for f in conn.folders.values() if f.kind == "folder") >= MAX_FOLDER_CHATS:
             raise BridgeError("bad_request", f"at most {MAX_FOLDER_CHATS} folder chats per bot")
         leaf = Path(cwd).name or cwd
         snap = await self._call(conn, "session.create", title=FOLDER_CHAT_PREFIX + leaf, cwd=cwd, cwd_explicit=True,
@@ -4648,7 +4677,7 @@ class Bridge:
                           str(snap.get("subscription_id") or ""))
         if snap.get("execution_generation") is not None:
             chat.generation = snap["execution_generation"]
-        conn.folders[fid] = chat
+        self._keep_chat(conn, chat)
         info = snap.get("info") if isinstance(snap.get("info"), dict) else {}
         return {"session": fid, "cwd": str(info.get("cwd") or cwd),
                 "model": str(info.get("model") or conn.bot["model"]),
@@ -4676,6 +4705,182 @@ class Bridge:
                     raise
         await self._call(conn, "session.close", session_id=chat.runtime_id)
         return {}
+
+
+    # ------------------------------------------------------------ threads under a bot (`thread.*`)
+    #
+    # A thread is a Hermes session the bridge creates for the bot (`session.create`, titled `omher · …`), kept in
+    # `conn.folders` like a folder chat, so chat.send / interrupt / approval / clarify take `session=<thread>` and
+    # its events come tagged `session`. Its id is Hermes' stored session id, so the same thread keeps its id across
+    # app and bridge restarts. `thread.list` rebuilds the list from `session.list`; `thread.remove` interrupts it and
+    # archives it in Hermes (hidden, messages kept, restorable). Nothing is ever deleted.
+
+    def _keep_chat(self, conn: Conn, chat: FolderChat) -> None:
+        """The one place a chat the bridge created (or listed and attached) joins ``conn.folders``."""
+        conn.folders[chat.id] = chat
+
+    async def _name_thread(self, conn: Conn, chat: FolderChat, text: str) -> None:
+        """A new thread takes its first message's first words as its title (Hermes' own titler may rename it later;
+        a clash with another session's title adds a short tail)."""
+        name = _one_line(split_peer_hint(text), THREAD_TITLE)
+        if not name:
+            return
+        for title in (name, f"{name} · {chat.id[-4:]}"):
+            try:
+                await self._call(conn, "session.title", session_id=chat.runtime_id, title=THREAD_PREFIX + title)
+            except BridgeError:
+                raise
+            except Exception as e:
+                if _named(e, "GatewayClientError") and not _named(e, "GatewayRPCError"):
+                    raise
+                continue
+            chat.title = title
+            await self.emit("session.title", conn.name, session=chat.id, title=title)
+            return
+
+    def _thread_row(self, chat: FolderChat) -> dict:
+        return {"thread": chat.id, "title": chat.title, "cwd": chat.cwd, "started_at": chat.started,
+                "running": chat.in_turn, "needs": bool(chat.prompts or chat.batches), "message_count": 0, "preview": ""}
+
+    async def op_thread_create(self, p) -> dict:
+        """A new thread for the bot: an empty Hermes session in ``cwd`` (an existing folder) or, without one, where
+        the profile's own config starts it. ``key`` (optional) is the app's id for this press: a retry with the same
+        key gets the same session back (Hermes' ``idempotency_key``), never a second thread."""
+        title, cwd, key = p.get("title"), p.get("cwd"), p.get("key")
+        if title is not None and (not isinstance(title, str) or not title.strip()):
+            raise BridgeError("bad_request", "title must be text")
+        if cwd is not None and (not isinstance(cwd, str) or not os.path.isabs(cwd) or not os.path.isdir(cwd)):
+            raise BridgeError("bad_request", "cwd must be an existing folder")
+        if key is not None and (not isinstance(key, str) or not re.fullmatch(r"[A-Za-z0-9_-]{1,64}", key)):
+            raise BridgeError("bad_request", "key must be 1-64 letters, digits, - or _")
+        conn = await self._conn(p.get("bot"))
+        if sum(1 for f in conn.folders.values() if f.kind == "thread") >= MAX_THREADS:
+            raise BridgeError("bad_request", f"at most {MAX_THREADS} open threads per bot")
+        name = _one_line(title, THREAD_TITLE * 2) if title else ""
+        extra = {"cwd": cwd, "cwd_explicit": True} if cwd else {}
+        if key:
+            extra["idempotency_key"] = f"omher-thread:{conn.name}:{key}"
+        placeholder = f"new thread {uuid.uuid4().hex[:6]}"
+        snap = await self._call(conn, "session.create", title=THREAD_PREFIX + (name or placeholder),
+                                follow_profile_config=True, **extra)
+        stored = str(snap.get("stored_session_id") or snap["session_id"])
+        info = snap.get("info") if isinstance(snap.get("info"), dict) else {}
+        chat = conn.folders.get(stored)
+        if chat is None:  # a retried key answers the session it already made: kept once, with the name it has
+            known = thread_name((conn.threads.get(stored) or {}).get("title") or "")
+            chat = FolderChat(stored, str(info.get("cwd") or cwd or ""), str(snap["session_id"]), stored,
+                              str(snap.get("subscription_id") or ""), kind="thread", title=name or known)
+            if snap.get("execution_generation") is not None:
+                chat.generation = snap["execution_generation"]
+            self._keep_chat(conn, chat)
+            await self.emit("thread.added", conn.name, thread=chat.id, title=chat.title)
+        return {**self._thread_row(chat), "model": str(info.get("model") or conn.bot["model"]),
+                "provider": str(info.get("provider") or conn.bot["provider"]),
+                "reasoning": str(info.get("reasoning_effort") or conn.bot["reasoning"])}
+
+    async def op_thread_list(self, p) -> dict:
+        """The bot's threads, newest first: its `omher · ` sessions Hermes still lists (archived ones it does not),
+        plus the ones made in this run that have no saved message yet. Each once."""
+        conn = await self._conn(p.get("bot"))
+        rows = (await self._call(conn, "session.list", limit=200)).get("sessions") or []
+        out: dict[str, dict] = {}
+        folder_ids = {f.stored_id for f in conn.folders.values() if f.kind == "folder"}
+        for r in rows:
+            if not isinstance(r, dict) or not isinstance(r.get("title"), str) or not r["title"].startswith(THREAD_PREFIX):
+                continue
+            sid = str(r.get("id") or "")
+            if not sid or sid in conn.main_ids or sid in out or sid in folder_ids:
+                continue
+            conn.threads[sid] = r
+            live = conn.folders.get(sid)
+            out[sid] = {"thread": sid, "title": live.title if live and live.title else thread_name(r["title"]),
+                        "cwd": live.cwd if live else "", "started_at": float(r.get("started_at") or 0),
+                        "running": bool(live and live.in_turn), "needs": bool(live and (live.prompts or live.batches)),
+                        "message_count": int(r.get("message_count") or 0), "preview": _one_line(r.get("preview"), 120)}
+        for chat in conn.folders.values():
+            if chat.kind == "thread" and chat.id not in out:
+                out[chat.id] = self._thread_row(chat)
+        return {"threads": sorted(out.values(), key=lambda t: -float(t["started_at"] or 0))}
+
+    def _thread_known(self, conn: Conn, tid) -> str:
+        """``tid`` when it names a thread this bridge created or listed; the main chat and any other id refused."""
+        if not isinstance(tid, str) or not tid:
+            raise BridgeError("bad_request", "missing thread")
+        if tid in conn.main_ids:
+            raise BridgeError("bad_request", "that is the bot's main chat, not a thread")
+        chat = conn.folders.get(tid)
+        if chat is not None and chat.kind == "thread":
+            return tid
+        if chat is None and tid in conn.threads:
+            return tid
+        raise BridgeError("not_found", "no such thread")
+
+    async def op_thread_open(self, p) -> Reply:
+        """Attach a thread (resume) and return its messages, as ``chat.open`` does for the main chat; prompts still
+        waiting on the person are sent again after the reply."""
+        conn = await self._conn(p.get("bot"))
+        tid = self._thread_known(conn, p.get("thread"))
+        chat = conn.folders.get(tid)
+        snap = await self._call(conn, "session.resume", session_id=chat.stored_id if chat else tid)
+        info = snap.get("info") if isinstance(snap.get("info"), dict) else {}
+        running = bool(snap.get("running") if snap.get("running") is not None else info.get("running"))
+        if chat is None:
+            row = conn.threads.get(tid) or {}
+            chat = FolderChat(tid, str(info.get("cwd") or ""), str(snap["session_id"]), tid,
+                              str(snap.get("subscription_id") or ""), kind="thread", title=thread_name(row.get("title") or ""))
+            chat.started = float(row.get("started_at") or chat.started)
+            self._keep_chat(conn, chat)
+        else:
+            chat.runtime_id = str(snap.get("session_id") or chat.runtime_id)
+        if snap.get("execution_generation") is not None:
+            chat.generation = snap["execution_generation"]
+        chat.in_turn = running
+        result = {"thread": tid, "session_id": tid, "title": chat.title, "cwd": chat.cwd,
+                  "messages": chat_messages(snap.get("messages"), running), "running": running,
+                  "model": str(info.get("model") or conn.bot["model"]), "provider": str(info.get("provider") or conn.bot["provider"]),
+                  "reasoning": str(info.get("reasoning_effort") or conn.bot["reasoning"])}
+        prompts = [x for x in (snap.get("prompts") or []) if isinstance(x, dict) and x.get("prompt_id")]
+        asks = [x for x in (snap.get("open_requests") or [])
+                if isinstance(x, dict) and x.get("method") == "clarify" and isinstance(x.get("id"), str)]
+
+        async def replay():
+            for x in prompts:
+                pid = str(x["prompt_id"])
+                chat.prompts[pid] = x.get("execution_generation")
+                await (self._emit_clarify if x.get("kind") == "clarify" else self._emit_approval)(conn, pid, x, chat)
+            for x in asks:
+                await self._batch_clarify(conn, x)
+        return Reply(result, replay if prompts or asks else None)
+
+    async def op_thread_remove(self, p) -> dict:
+        """Take a thread out of the bot's list: interrupt it when it runs, withdraw the asks it holds, then Hermes'
+        own ``session.archive`` (hidden, messages kept, restorable in Hermes). Never the main chat, never a
+        session this bridge did not create or list as a thread, never a delete."""
+        conn = await self._conn(p.get("bot"))
+        tid = self._thread_known(conn, p.get("thread"))
+        chat = conn.folders.get(tid)
+        if chat is not None and chat.in_turn:
+            await self._call(conn, "session.interrupt", session_id=chat.runtime_id,
+                             execution_generation=await self._generation(conn, chat.runtime_id, chat))
+        if chat is not None:
+            for pid in [*chat.prompts, *chat.batches]:
+                await self._chat_emit(conn, chat, "prompt.expired", request_id=pid, reason="cancelled")
+            chat.prompts.clear()
+            chat.batches.clear()
+            chat.asked.clear()
+        await self._call(conn, "session.archive", session_id=chat.stored_id if chat else tid, archived=True)
+        conn.threads.pop(tid, None)
+        if chat is not None:
+            conn.folders.pop(tid, None)
+            if chat.in_turn:
+                chat.in_turn = False
+                await self._chat_emit(conn, chat, "turn.end", outcome="interrupted")
+            if chat.subscription_id:  # Hermes lets go of the agent; the archived conversation stays saved
+                with contextlib.suppress(Exception):
+                    await self._call(conn, "session.detach", session_id=chat.runtime_id,
+                                     subscription_id=chat.subscription_id, end_reason="omher_archive")
+        await self.emit("thread.removed", conn.name, thread=tid)
+        return {"thread": tid, "archived": True}
 
     # ------------------------------------------------------------ models
 
