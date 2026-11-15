@@ -13,6 +13,7 @@ import re
 import secrets
 from typing import Final, Mapping, TypeAlias, TypeVar
 
+from .hermes_child_arm_setup import ArmSetup, parse_arm_setup
 from .hermes_child_dispatch import HermesChildObservation, is_dispatch_observation
 from .hermes_child_evaluation import (
     HermesChildEvaluationBinding,
@@ -68,6 +69,8 @@ class VerifiedHermesChildReceipt:
     # The signed wall-clock seconds from spawn to the terminal event, or None
     # when the observation carried none (older receipts, no process started).
     elapsed_seconds: float | None
+    # The signed paired-run arm setup, or None outside paired-run evaluation.
+    arm_setup: ArmSetup | None
     _authority: _ReceiptAuthority
 
     def has_receipt_authority(self) -> bool:
@@ -168,6 +171,9 @@ def write_signed_observation(
     receipt holds rather than the mapping it passed in.
     """
     payload: dict[str, JsonValue] = dict(observation)
+    # Only the dispatcher's own from-disk reading fills arm_setup; a caller
+    # mapping can neither supply nor keep one.
+    payload.pop("arm_setup", None)
     if dispatch_observation is None:
         payload.pop("evaluation_binding", None)
     claim = payload.get("claim")
@@ -195,6 +201,8 @@ def write_signed_observation(
             if elapsed is not None and dispatch_observation.status in _TERMINAL_STATUSES
             else None
         )
+        if dispatch_observation.arm_setup is not None:
+            payload["arm_setup"] = dispatch_observation.arm_setup.to_record()
         context = dispatch_observation.evaluation_context
         if context is None:
             payload.pop("evaluation_binding", None)
@@ -279,6 +287,10 @@ def load_hermes_child_receipt(
         if isinstance(elapsed_value, (int, float)) and not isinstance(elapsed_value, bool)
         else None
     )
+    arm_setup_value = observation.get("arm_setup")
+    arm_setup = parse_arm_setup(arm_setup_value) if arm_setup_value is not None else None
+    if arm_setup_value is not None and arm_setup is None:
+        raise ReceiptVerificationError("Hermes child arm setup is invalid")
     digest = hmac.new(
         key,
         canonical_observation(observation) + b"\0receipt",
@@ -292,6 +304,7 @@ def load_hermes_child_receipt(
         f"hermes-child:{run_id}:{digest}",
         binding,
         elapsed,
+        arm_setup,
         _AUTHORITY,
     )
 

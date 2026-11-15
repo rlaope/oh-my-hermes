@@ -3,11 +3,12 @@
 from __future__ import annotations
 
 from collections.abc import Callable, Mapping
+from dataclasses import replace
 import hashlib
 from pathlib import Path
 import re
 
-from ..quality.paired_run_model import PairedRunDecision
+from ..quality.paired_run_model import ArmRole, PairedRunDecision
 from ..system.secure_regular_file import (
     SecureFileError,
     open_regular_read,
@@ -21,6 +22,7 @@ from .paired_run_local_models import (
     PairedRunLocalRunnerConfig,
     PairedRunLocalRunnerError,
 )
+from .paired_run_arm_home import ArmHomeRun, PairedRunArmHomeError, prepare_arm_home
 from .paired_run_local_worktrees import execute_local_paired_plan
 
 
@@ -73,6 +75,7 @@ def build_paired_run_local_boundary(
         config.hermes,
         config.reasoning,
         min(float(config.timeout_seconds), float(decision.max_dispatch_seconds)),
+        config.provider_config,
     )
 
     def run(plan: PairedRunDispatchPlan) -> PairedRunExecutionReport:
@@ -80,7 +83,31 @@ def build_paired_run_local_boundary(
             raise PairedRunLocalRunnerError(
                 "local runner requires the matching authorized paired-run plan"
             )
-        return execute_local_paired_plan(plan, decision, contents, effective)
+        homes: dict[ArmRole, ArmHomeRun] = {}
+        try:
+            # Both homes are started and warmed before any cell's clock runs.
+            for role, arm in ((ArmRole.BASELINE, decision.baseline), (ArmRole.VARIANT, decision.variant)):
+                homes[role] = prepare_arm_home(
+                    role.value,
+                    provider=effective.provider,
+                    model=arm.model,
+                    reasoning=effective.reasoning,
+                    hermes=effective.hermes,
+                    provider_config=effective.provider_config,
+                    exposed_skills=arm.exposed_skills,
+                    omh_plugin=role is ArmRole.VARIANT,
+                    warmup_timeout_seconds=effective.timeout_seconds,
+                )
+            report = execute_local_paired_plan(plan, decision, contents, effective, homes)
+        except PairedRunArmHomeError as exc:
+            raise PairedRunLocalRunnerError(str(exc)) from exc
+        finally:
+            stopped = {role: home.close() for role, home in homes.items()}
+        records = {
+            role.value: {**home.record(), "stopped": stopped[role]}
+            for role, home in homes.items()
+        }
+        return replace(report, arm_homes=records)
 
     return run
 

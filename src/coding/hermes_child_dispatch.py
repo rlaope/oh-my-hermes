@@ -26,12 +26,13 @@ import time
 from typing import Final
 
 from ..system.approval_tier import TIER_AUTO_ALLOWED, resolve_approval_tier
+from .hermes_child_arm_setup import ArmSetup, PairedRunArmHome, observe_arm_setup
 from ..system.security_posture import resolve_security_posture
 from .hermes_child_evaluation import (
     HermesChildEvaluationContext,
     seal_evaluation_binding,
 )
-from ._hermes_child_usage import read_hermes_child_usage
+from ._hermes_child_usage import read_hermes_child_usage, state_session_ids
 from ._hermes_child_process import (
     BoundedStreamCapture,
     PipeDrainer,
@@ -140,6 +141,10 @@ class HermesChildRequest:
     depth: int = 0
     evaluation_context: HermesChildEvaluationContext | None = None
     allow_parallel: bool = False
+    # Set only by confirmed paired-run evaluation (`paired_run_arm_home`): the
+    # child then runs in that declared arm home, attached to the gateway the
+    # harness started for it, instead of a fresh safe-mode scratch home.
+    arm_home: PairedRunArmHome | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -159,6 +164,9 @@ class HermesChildObservation:
     # and running events, and for a terminal event no process ever started.
     elapsed_seconds: float | None
     _authority: object
+    # What the arm home held when the child spawned, read from disk by the
+    # dispatcher. None outside paired-run evaluation.
+    arm_setup: ArmSetup | None = None
 
     def has_dispatch_authority(self) -> bool:
         """Return whether this event was sealed by the real dispatcher."""
@@ -310,6 +318,7 @@ def _dispatch_guarded(
     observer_error: BaseException | None = None
 
     spawned_at: float | None = None
+    arm_setup: ArmSetup | None = None
 
     def emit(status: str, pid: int | None = None) -> None:
         nonlocal observer_error
@@ -335,6 +344,7 @@ def _dispatch_guarded(
                 request.timeout_seconds,
                 elapsed,
                 _DISPATCH_OBSERVATION_AUTHORITY,
+                arm_setup,
             ))
         except RuntimeError as exc:
             if status == "prepared":
@@ -352,6 +362,14 @@ def _dispatch_guarded(
     home = scratch_path / "home"
     hermes_home.mkdir(mode=0o700)
     home.mkdir(mode=0o700)
+    prior_sessions: frozenset[str] = frozenset()
+    if request.arm_home is not None:
+        # The arm home outlives this child; only its gateway reads it. The
+        # scratch directory stays empty and is still removed below.
+        hermes_home = request.arm_home.hermes_home
+        home = request.arm_home.home
+        prior_sessions = state_session_ids(hermes_home)
+        arm_setup = observe_arm_setup(request.arm_home)
     marker = _parent_marker(request)
     child_env = _child_env(request, depth, hermes_home, home, marker)
     redaction_values = _redaction_values(request, child_env)
@@ -470,7 +488,7 @@ def _dispatch_guarded(
             # After the child has exited and its pipes are drained, before
             # the disposable home goes: the read is bounded, read-only, and
             # never raises; a home the child never wrote leaves `usage` empty.
-            usage = read_hermes_child_usage(hermes_home)
+            usage = read_hermes_child_usage(hermes_home, exclude=prior_sessions)
         try:
             scratch.cleanup()
         except OSError:
@@ -535,12 +553,20 @@ def _argv(request: HermesChildRequest) -> tuple[str, ...]:
     # (`_hermes_child_usage`, #1831). Safe mode
     # is the strongest customization boundary in the installed Hermes CLI;
     # explicit ignore flags keep the contract visible and compatible.
+    # Confirmed paired-run evaluation alone drops safe mode and the user-config
+    # bypass: its declared arm home (`paired_run_arm_home`) is the config to
+    # read, and the variant's plugin and skills are the point of the arm. Both
+    # arms take the same flags, so the arms differ only by what the home holds.
+    isolation = (
+        ("--ignore-rules", "--toolsets", "file,skills")
+        if request.arm_home is not None
+        else ("--safe-mode", "--ignore-user-config", "--ignore-rules", "--toolsets", "file")
+    )
     command = (
         request.hermes, "chat", "--query-file", "-", "--quiet",
         "--provider", request.provider, "--model", request.model,
         "--reasoning", request.reasoning,
-        "--safe-mode", "--ignore-user-config", "--ignore-rules",
-        "--toolsets", "file",
+        *isolation,
     )
     if os.name == "nt" and Path(request.hermes).suffix.casefold() == ".py":
         return (sys.executable, *command)
@@ -567,6 +593,8 @@ def _child_env(
     # documented variables. Hermes' auth.json and .env remain unreachable in
     # the disposable homes, and credentials for every other provider stay out.
     provider_names = set(_PROVIDER_ENV.get(request.provider.lower(), ()))
+    if request.arm_home is not None:
+        provider_names = set(request.arm_home.key_env_names)
     for name in provider_names:
         value = source.get(name)
         if value:
@@ -575,8 +603,6 @@ def _child_env(
         {
             "HOME": str(home),
             "HERMES_HOME": str(hermes_home),
-            "HERMES_SAFE_MODE": "1",
-            "HERMES_IGNORE_USER_CONFIG": "1",
             "HERMES_IGNORE_RULES": "1",
             "OMH_ISOLATED_HERMES_ROUTING": "disabled",
             "OMH_ISOLATED_HERMES_MAX_DEPTH": str(MAX_CHILD_DEPTH),
@@ -584,7 +610,48 @@ def _child_env(
             _PARENT_MARKER_ENV: marker,
         }
     )
+    if request.arm_home is None:
+        child["HERMES_SAFE_MODE"] = "1"
+        child["HERMES_IGNORE_USER_CONFIG"] = "1"
     return child
+
+
+def provider_env_names(provider: str) -> tuple[str, ...]:
+    """The documented credential variables of a built-in provider."""
+    return tuple(_PROVIDER_ENV.get(provider.lower(), ()))
+
+
+def arm_gateway_env(
+    source: Mapping[str, str],
+    hermes_home: Path,
+    home: Path,
+    tmp: Path,
+    key_env_names: tuple[str, ...],
+) -> dict[str, str]:
+    """The minimal environment of a paired-run arm's harness-owned gateway.
+
+    The gateway runs every turn's tools, so it carries the same depth-one
+    markers a child does: an agent inside it cannot start another dispatch.
+    The provider key arrives only by the variable names the arm declared.
+    """
+    env = {name: source[name] for name in _SAFE_ENV_NAMES if source.get(name)}
+    env.setdefault("PATH", os.defpath)
+    for name in key_env_names:
+        value = source.get(name)
+        if value:
+            env[name] = value
+    env.update(
+        {
+            "HOME": str(home),
+            "HERMES_HOME": str(hermes_home),
+            "TMPDIR": str(tmp),
+            "OMH_ISOLATED_HERMES_ROUTING": "disabled",
+            "OMH_ISOLATED_HERMES_MAX_DEPTH": str(MAX_CHILD_DEPTH),
+            _DEPTH_ENV: str(MAX_CHILD_DEPTH),
+            _PARENT_MARKER_ENV: f"v1.gateway.{secrets.token_urlsafe(18)}",
+        }
+    )
+    return env
 
 
 def _environment_is_child() -> bool:
@@ -608,6 +675,10 @@ def _parent_marker(request: HermesChildRequest) -> str:
 def _redaction_values(request: HermesChildRequest, child_env: Mapping[str, str]) -> set[str]:
     source = os.environ if request.env is None else request.env
     values = {request.prompt}
+    if request.arm_home is not None:
+        values.update(
+            source[name] for name in request.arm_home.key_env_names if source.get(name)
+        )
     values.update(
         value for name, value in source.items()
         if value and _CREDENTIAL_NAME.search(name)
