@@ -1164,6 +1164,7 @@ WATCH_CONDITION = re.compile(r"for one condition:\s*(.+?)\.?\s*(?:\n\s*\n|$)", r
 WATCH_CONFIG_MAX = 64 * 1024     # bytes of a watch config read
 WATCH_RUN_MAX = 256 * 1024       # bytes of one run record read
 WATCH_RUNS = 20                  # newest run records looked at for the last alert
+CRLF = re.compile(r"\r\n")       # a run record Hermes wrote in text mode on Windows
 
 
 def _watch_config(profile_dir: Path, watch: str) -> dict:
@@ -1194,7 +1195,7 @@ def _watch_runs(profile_dir: Path, job_id: str) -> list[tuple[float, str]]:
         try:
             with f.open("rb") as fh:
                 # Hermes writes run records in text mode: CRLF on Windows, which the line-anchored headings expect as LF
-                text = fh.read(WATCH_RUN_MAX).decode("utf-8", "replace").replace("\r\n", "\n")
+                text = CRLF.sub("\n", fh.read(WATCH_RUN_MAX).decode("utf-8", "replace"))
                 out.append((f.stat().st_mtime, text))
         except OSError:
             continue
