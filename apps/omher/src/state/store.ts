@@ -86,6 +86,10 @@ export interface Turn {
   /** Where in `streaming` the text after the latest tool call starts: what came before was the bot's commentary
    *  beside that call ("Now I'll run the tests"), never part of the answer, so it is never shown. */
   cut?: number;
+  /** The first message the person sent while this turn's answer was already showing: the answer stays above it
+   *  (it was read under the answer being written, and is answered next). A message sent before any of the answer
+   *  showed is folded into this turn by Hermes (steer), so the answer lands after it as usual. */
+  before?: string;
   /** The fan-outs (delegate_task children) this turn started, as Hermes' subagent events tell them. */
   fanouts?: Fanout[];
   /** The agent's own todo list as it last stood in this turn (SESSIONS agents). */
@@ -700,16 +704,12 @@ function bumpUnread(state: AppState, bot: string): AppState {
   return { ...state, unread: { ...state.unread, [bot]: (state.unread[bot] ?? 0) + 1 } };
 }
 
-/** Where the running turn's answer goes: right before the first message the person sent after that turn's
- *  activity line (sent while the bot was still writing: it is answered next, so it reads under this answer, as in
- *  a messenger), else at the end. */
+/** Where the running turn's answer goes: right before the message the person sent while that answer was already
+ *  showing (`Turn.before`: it reads under the answer, as in a messenger, and is answered next), else at the end. */
 export function answerSlot(chat: Chat): number {
-  const turn = chat.turn;
-  if (!turn) return chat.items.length;
-  const at = chat.items.findIndex((i) => i.kind === "activity" && i.id === turn.id);
-  if (at < 0) return chat.items.length;
-  const next = chat.items.findIndex((i, k) => k > at && i.kind === "user");
-  return next < 0 ? chat.items.length : next;
+  const id = chat.turn?.before;
+  const at = id ? chat.items.findIndex((i) => i.kind === "user" && i.id === id) : -1;
+  return at < 0 ? chat.items.length : at;
 }
 
 /** Insert `extra` rows into `base` by ts, after the last row whose ts is <= theirs. */
@@ -1122,8 +1122,10 @@ export function reduce(state: AppState, a: Action): AppState {
     case "chat.opened":
       return touchChat(state, a.bot, (c) => ({ ...applyOpened(c, a.res, a.now, a.bot, a.since), openError: null }));
     case "local.user":
-      return touchChat(state, a.bot, (c) =>
-        withItems(c, [
+      return touchChat(state, a.bot, (c0) => {
+        // sent while the answer is already showing: that answer stays above this message (answerSlot)
+        const c = c0.turn && !c0.turn.before && answerSoFar(c0.turn) ? patchTurn(c0, (t) => ({ ...t, before: a.id })) : c0;
+        return withItems(c, [
           ...c.items,
           {
             kind: "user",
@@ -1135,8 +1137,8 @@ export function reduce(state: AppState, a: Action): AppState {
             ...(a.sent !== undefined && a.sent !== a.text ? { sent: a.sent } : {}),
             ...(a.skills?.length ? { skills: a.skills } : {}),
           },
-        ]),
-      );
+        ]);
+      });
     case "reply.set":
       return { ...state, replyTo: { ...state.replyTo, [a.bot]: a.chip } };
     case "send.failed":

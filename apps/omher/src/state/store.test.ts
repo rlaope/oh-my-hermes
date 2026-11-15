@@ -125,6 +125,12 @@ describe("reducer: a full turn", () => {
     expect(s.chats.kami.items[answerSlot(s.chats.kami)]).toMatchObject({ kind: "user", id: "l2" });
     s = run(s, [{ event: "message", bot: "kami", id: "a1", text: "Line one.\nline two." }, { event: "turn.end", bot: "kami", outcome: "done" }]);
     expect(kinds(s)).toEqual(["user:first question", "activity", "assistant:Line one.\nline two.", "user:sent mid-answer"]);
+    // a message sent before any of the answer showed (Hermes folds it into the running turn): the answer lands after it
+    let t = reduce(initialState(), { type: "local.user", bot: "kami", id: "m1", text: "q", now: 1000 });
+    t = run(t, [{ event: "turn.start", bot: "kami" }, { event: "tool.start", bot: "kami", tool_id: "x", name: "terminal", detail: "ls" }]);
+    t = reduce(t, { type: "local.user", bot: "kami", id: "m2", text: "also this", now: 2000 });
+    t = run(t, [{ event: "message", bot: "kami", id: "b1", text: "Both done." }, { event: "turn.end", bot: "kami", outcome: "done" }]);
+    expect(kinds(t)).toEqual(["user:q", "activity", "user:also this", "assistant:Both done."]);
     // the next turn answers it, under it
     s = run(s, [{ event: "turn.start", bot: "kami" }, { event: "message", bot: "kami", id: "a2", text: "Second answer." }, { event: "turn.end", bot: "kami", outcome: "done" }]);
     expect(kinds(s).slice(-3)).toEqual(["user:sent mid-answer", "activity", "assistant:Second answer."]);
