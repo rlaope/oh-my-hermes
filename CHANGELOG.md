@@ -1126,6 +1126,10 @@ All notable changes will be documented here.
   or a credential pool exists. When neither can be seen, the refusal names the variable to set or
   `hermes auth add <id>` instead of "lacks safe observed provider auth". A key kept only in Hermes' `.env` file is not
   visible to OMH; export it in the shell that runs omh. Reported by @MarinWasAsleep in #2882.
+- **omher: ⌘T opens the New session picker on macOS**, the same menu as ⌘N, the way ⌘T opens a new tab elsewhere.
+  Settings › Keyboard lists both. On Windows and Linux Ctrl+T is left to the program (a terminal's transpose), so
+  only Ctrl+N opens it there. ⌘N and ⌘T also work with a non-Latin layout active (Korean, Japanese, Russian), by
+  the key's position.
 
 ## 4.0.7 - 2026-11-09
 

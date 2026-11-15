@@ -453,6 +453,7 @@ export const zh: Record<Key, string> = {
   "key.details": "显示或隐藏详情",
   "key.settings": "设置",
   "key.nextAsk": "下一个审批或问题",
+  "key.newSession": "新建会话",
   "key.cardKeys": "拒绝 · 允许一次 · 本会话内允许（当前卡片）",
   "key.stop": "停止正在生成的回复",
   "look.theme": "主题",
