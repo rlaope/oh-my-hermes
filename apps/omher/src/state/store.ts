@@ -2142,7 +2142,10 @@ export function createStore(bridge: BridgeLike, opts: StoreOptions = {}): Store 
       let ok = false;
       let unknown = false;
       try {
-        ok = (await bridge.request("chat.steer", { bot, text: p.wire })).status === "queued";
+        const status = (await bridge.request("chat.steer", { bot, text: p.wire })).status;
+        ok = status === "queued";
+        // Hermes could not say whether the agent saw it: the same as no answer, the person decides
+        unknown = status === "uncertain";
       } catch (e) {
         // a clear refusal is sent normally after the turn; no answer at all (the bridge dropped, the bot went
         // offline, a timeout) may mean Hermes took it: never sent again on its own, the person decides

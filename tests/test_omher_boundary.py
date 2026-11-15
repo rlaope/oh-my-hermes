@@ -562,7 +562,8 @@ class BridgeSubmitsOnlyToTheMainChat(unittest.TestCase):
                                    and "self.ops" in ast.unparse(f)][0]))
         self.assertIn("if p.get('session') is not None:", steer)
         self.assertIn("main = await self._main(conn)", steer)
-        self.assertIn("self._call(conn, 'session.steer', session_id=main, text=text)", steer)
+        # the main chat's own id and the turn's generation (the canonical gateway requires it), nothing else
+        self.assertIn("self._call(conn, 'session.steer', session_id=main, text=text, execution_generation=await self._generation(conn, main))", steer)
         calls = re.findall(r"self\.(_call|_submit|_target)\(", steer)
         self.assertEqual(calls, ["_call"])
         self.assertIn('"chat.steer"', self.source.split("PEER_FORWARD = frozenset({", 1)[1].split("})", 1)[0])

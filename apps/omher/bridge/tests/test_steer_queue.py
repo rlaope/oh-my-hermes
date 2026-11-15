@@ -24,6 +24,9 @@ def steer_answers(env: Env, *answers) -> None:
     async def rpc(method, *, _timeout=None, **params):
         if method == "session.steer":
             c.calls.append((method, params))
+            # the canonical gateway refuses a steer without the turn's generation (invalid_params, 4001)
+            if type(params.get("execution_generation")) is not int:
+                raise GatewayRPCError("invalid_params")
             a = queue.pop(0)
             if isinstance(a, Exception):
                 raise a
@@ -43,7 +46,9 @@ class ChatSteer(BridgeCase):
             self.assertTrue(r["ok"], r)
             self.assertEqual(r["result"], {"status": "queued"})
             c = env.clients["kami"]
-            self.assertEqual(c.find("session.steer"), [{"session_id": MAIN_RUNTIME, "text": "also check the logs"}])
+            [call] = c.find("session.steer")
+            self.assertEqual({k: call[k] for k in ("session_id", "text")}, {"session_id": MAIN_RUNTIME, "text": "also check the logs"})
+            self.assertIsInstance(call["execution_generation"], int)
             self.assertEqual(c.find("prompt.submit"), [])
             self.assertEqual(c.find("session.interrupt"), [])
 
@@ -54,9 +59,9 @@ class ChatSteer(BridgeCase):
             steer_answers(env, {"status": "rejected", "text": "x"}, {"status": "weird"})
             r = await s.req("chat.steer", bot="kami", text="x")
             self.assertEqual(r["result"], {"status": "rejected"})
-            # an answer Hermes never gives reads as not taken
+            # an answer Hermes never gives: it cannot be told apart from delivery, so the person decides
             r = await s.req("chat.steer", bot="kami", text="y")
-            self.assertEqual(r["result"], {"status": "rejected"})
+            self.assertEqual(r["result"], {"status": "uncertain"})
             c = env.clients["kami"]
             self.assertEqual(len(c.find("session.steer")), 2)
             for m in ("prompt.submit", "session.interrupt", "session.redirect"):
@@ -71,6 +76,20 @@ class ChatSteer(BridgeCase):
             # Hermes answered no (4010): a definite refusal, the app may send it normally after the turn
             self.assertEqual(r["result"], {"status": "rejected"})
             self.assertEqual(env.clients["kami"].find("prompt.submit"), [])
+
+    async def test_a_live_agents_plain_rejected_is_uncertain_only_delivered_false_is_rejected(self):
+        async with Env() as env:
+            s = await self.open(env)
+            await s.req("chat.open", bot="kami")
+            steer_answers(env, {"status": "rejected", "text": "x", "execution_generation": 3, "authority_epoch": 1},
+                          {"status": "rejected", "text": "x", "execution_generation": 3, "authority_epoch": 1, "delivered": False},
+                          {"status": "rejected", "text": "x"})
+            # may already be with the agent (Hermes' contract): never re-sent on its own
+            self.assertEqual((await s.req("chat.steer", bot="kami", text="x"))["result"], {"status": "uncertain"})
+            # no agent saw it: safe to send as a normal message
+            self.assertEqual((await s.req("chat.steer", bot="kami", text="x"))["result"], {"status": "rejected"})
+            # the older tui_gateway idle reply (no generation in it): not delivered
+            self.assertEqual((await s.req("chat.steer", bot="kami", text="x"))["result"], {"status": "rejected"})
 
     async def test_a_lost_answer_stays_an_error_never_rejected(self):
         async with Env() as env:

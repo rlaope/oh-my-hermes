@@ -4596,10 +4596,12 @@ class Bridge:
     async def op_chat_steer(self, p) -> dict:
         """Steer the running turn of the bot's main chat through Hermes' own ``session.steer``: the text joins the
         turn's next tool result, no new turn starts. Main chat only (never a folder chat or any other session).
-        Hermes' answer goes back as it came (``queued`` = taken, ``rejected`` = not); a refused steer is never sent
-        another way here: the app sends it as a normal message after the turn. The gateway's own error answer
-        (``GatewayRPCError``: 4002, 4010) is a received refusal too, so it reads ``rejected``; a lost answer
-        (bot offline, timeout) stays an error, since Hermes may have taken the text."""
+        Hermes' answer goes back as: ``queued`` = taken; ``rejected`` = Hermes confirmed no agent saw it (its
+        ``delivered: false``, the old idle reply, or a gateway error answer such as 4002/4010/invalid params), so
+        the app may send it as a normal message after the turn; ``uncertain`` = a plain live-agent ``rejected``,
+        which Hermes' contract says may follow delivery, so it is never re-sent on its own. A lost answer (bot
+        offline, timeout) stays an error for the same reason. Nothing is sent another way here. The call carries
+        the turn's ``execution_generation``, which the canonical gateway requires (as for ``session.interrupt``)."""
         text = p.get("text")
         if not isinstance(text, str) or not text.strip():
             raise BridgeError("bad_request", "missing text")
@@ -4608,13 +4610,21 @@ class Bridge:
         conn = await self._conn(p.get("bot"))
         main = await self._main(conn)
         try:
-            res = await self._call(conn, "session.steer", session_id=main, text=text)
+            res = await self._call(conn, "session.steer", session_id=main, text=text,
+                                   execution_generation=await self._generation(conn, main))
         except Exception as e:
             if not _named(e, "GatewayRPCError"):
                 raise
             return {"status": "rejected"}
-        status = res.get("status") if isinstance(res, dict) else None
-        return {"status": status if status in ("queued", "rejected") else "rejected"}
+        res = res if isinstance(res, dict) else {}
+        status = res.get("status")
+        if status == "queued":
+            return {"status": "queued"}
+        # canonical gateway: a live agent's plain 'rejected' may follow delivery; only delivered: false is safe.
+        # The older tui_gateway reply has no execution_generation and answers 'rejected' only when idle.
+        if status == "rejected" and (res.get("delivered") is False or "execution_generation" not in res):
+            return {"status": "rejected"}
+        return {"status": "uncertain"}
 
     async def op_approval_respond(self, p) -> dict:
         choice, rid = p.get("choice"), p.get("request_id")

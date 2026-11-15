@@ -18,7 +18,7 @@ function fake() {
   let statusH: ((s: BridgeStatus) => void) | null = null;
   const calls: { op: string; params: Record<string, unknown> }[] = [];
   let running = false;
-  let steer: "queued" | "rejected" | "throw" | "disconnected" | "bot_offline" | "timeout" | "internal" = "queued";
+  let steer: "queued" | "rejected" | "uncertain" | "throw" | "disconnected" | "bot_offline" | "timeout" | "internal" = "queued";
   let botsFail = false;
   const bridge: BridgeLike = {
     connect: async () => statusH?.("open"),
@@ -44,7 +44,7 @@ function fake() {
           return { input_id: "i" };
         case "chat.steer":
           if (steer === "throw") throw { code: "gateway_error", message: "agent does not support steer" };
-          if (steer !== "queued" && steer !== "rejected") throw { code: steer, message: "no answer" };
+          if (steer !== "queued" && steer !== "rejected" && steer !== "uncertain") throw { code: steer, message: "no answer" };
           return { status: steer };
         default:
           return {};
@@ -366,8 +366,8 @@ describe("steer queue: review fixes", () => {
     expect(chat().turn?.before).toBe(B);
   });
 
-  it("R2: a steer with no answer (disconnect, bot offline, timeout, internal) is never sent again on its own", async () => {
-    for (const mode of ["disconnected", "bot_offline", "timeout", "internal"] as const) {
+  it("R2: a steer with no answer (disconnect, bot offline, timeout, internal) or an uncertain one is never sent again on its own", async () => {
+    for (const mode of ["disconnected", "bot_offline", "timeout", "internal", "uncertain"] as const) {
       const { f, a, chat } = await busy();
       f.setSteer(mode);
       await a.send("also check the docs");
