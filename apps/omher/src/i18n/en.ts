@@ -1268,4 +1268,15 @@ export const en = {
   "peer.remoteBot": "This bot runs on {label}.",
   "ab.ssh": "Connect over SSH",
   "ab.sshSub": "A Hermes on another computer",
+  // termpanel (the bottom terminal panel, Ctrl+`)
+  "termpanel.label": "Terminal",
+  "termpanel.tabs": "Terminal tabs",
+  "termpanel.newTab": "New terminal",
+  "termpanel.closeTab": "Close {name}",
+  "termpanel.hide": "Hide terminal (Ctrl+`)",
+  "termpanel.resize": "Terminal height",
+  "termpanel.home": "Home folder",
+  "termpanel.ended": "shell ended",
+  "termpanel.endedCode": "shell ended with code {code}",
+  "termpanel.couldNotStart": "The shell could not start: {error}",
 };

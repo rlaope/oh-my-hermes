@@ -1266,4 +1266,15 @@ export const ja: Record<Key, string> = {
   "peer.remoteBot": "このボットは {label} で動いています。",
   "ab.ssh": "SSHで接続",
   "ab.sshSub": "別のコンピュータの Hermes",
+  // termpanel (the bottom terminal panel, Ctrl+`)
+  "termpanel.label": "ターミナル",
+  "termpanel.tabs": "ターミナルのタブ",
+  "termpanel.newTab": "新しいターミナル",
+  "termpanel.closeTab": "{name} を閉じる",
+  "termpanel.hide": "ターミナルを隠す (Ctrl+`)",
+  "termpanel.resize": "ターミナルの高さ",
+  "termpanel.home": "ホームフォルダ",
+  "termpanel.ended": "シェルが終了しました",
+  "termpanel.endedCode": "シェルがコード {code} で終了しました",
+  "termpanel.couldNotStart": "シェルを起動できませんでした: {error}",
 };

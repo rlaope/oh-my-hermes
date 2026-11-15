@@ -838,13 +838,15 @@ impl Sessions {
     /// Start the terminal panel's shell ([`shell_argv`]: the person's login shell, never a program the page names)
     /// in `cwd` when that is an existing folder, else in `home` ([`shell_cwd`]). Nothing is typed into it, and it
     /// gets no account variable. The session is an ordinary PTY session: write, ack, resize and close as any other.
-    pub fn start_shell<F>(&self, cwd: Option<&str>, home: &Path, cols: u16, rows: u16, sink: F) -> Result<u32, String>
+    /// Returns the session id and the folder it started in (the tab names it).
+    pub fn start_shell<F>(&self, cwd: Option<&str>, home: &Path, cols: u16, rows: u16, sink: F) -> Result<(u32, PathBuf), String>
     where
         F: FnMut(Output) + Send + 'static,
     {
         let etc_shells = std::fs::read_to_string("/etc/shells").unwrap_or_default();
         let argv = shell_argv(&host_env, &etc_shells, is_program_file, Os::current())?;
-        self.spawn(argv, &shell_cwd(cwd, home), None, &[], cols, rows, sink)
+        let at = shell_cwd(cwd, home);
+        Ok((self.spawn(argv, &at, None, &[], cols, rows, sink)?, at))
     }
 
     /// Queue `data` for session `id`'s writer thread. Never blocks: a program that is not reading its
@@ -2456,13 +2458,14 @@ mod tests {
             let s = Sessions::default();
             let out = Arc::new(Mutex::new(Vec::<u8>::new()));
             let o = out.clone();
-            let id = s
+            let (id, at) = s
                 .start_shell(Some(&wanted), &home, 120, 24, move |ev| {
                     if let Output::Data(b) = ev {
                         o.lock().unwrap().extend(b);
                     }
                 })
                 .unwrap();
+            assert_eq!(&at, expect);
             assert_eq!(s.count(), 1);
             s.write(id, b"echo \"at:$(pwd -P)\"\r").unwrap();
             let want = format!("at:{}", std::fs::canonicalize(expect).unwrap().display());

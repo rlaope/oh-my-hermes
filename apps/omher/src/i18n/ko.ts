@@ -1266,4 +1266,15 @@ export const ko: Record<Key, string> = {
   "peer.remoteBot": "이 봇은 {label}에서 실행돼요.",
   "ab.ssh": "SSH로 연결",
   "ab.sshSub": "다른 컴퓨터의 Hermes",
+  // termpanel (the bottom terminal panel, Ctrl+`)
+  "termpanel.label": "터미널",
+  "termpanel.tabs": "터미널 탭",
+  "termpanel.newTab": "새 터미널",
+  "termpanel.closeTab": "{name} 닫기",
+  "termpanel.hide": "터미널 숨기기 (Ctrl+`)",
+  "termpanel.resize": "터미널 높이",
+  "termpanel.home": "홈 폴더",
+  "termpanel.ended": "셸이 끝났습니다",
+  "termpanel.endedCode": "셸이 코드 {code}로 끝났습니다",
+  "termpanel.couldNotStart": "셸을 시작하지 못했습니다: {error}",
 };

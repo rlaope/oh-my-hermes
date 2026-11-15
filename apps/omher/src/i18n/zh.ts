@@ -1266,4 +1266,15 @@ export const zh: Record<Key, string> = {
   "peer.remoteBot": "这个机器人运行在 {label} 上。",
   "ab.ssh": "通过 SSH 连接",
   "ab.sshSub": "另一台电脑上的 Hermes",
+  // termpanel (the bottom terminal panel, Ctrl+`)
+  "termpanel.label": "终端",
+  "termpanel.tabs": "终端标签页",
+  "termpanel.newTab": "新建终端",
+  "termpanel.closeTab": "关闭 {name}",
+  "termpanel.hide": "隐藏终端 (Ctrl+`)",
+  "termpanel.resize": "终端高度",
+  "termpanel.home": "主文件夹",
+  "termpanel.ended": "shell 已结束",
+  "termpanel.endedCode": "shell 已结束，代码 {code}",
+  "termpanel.couldNotStart": "无法启动 shell：{error}",
 };

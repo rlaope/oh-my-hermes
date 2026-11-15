@@ -362,21 +362,29 @@ async fn shell_start(
     rows: u16,
     on_data: Channel<InvokeResponseBody>,
     on_exit: Channel<Option<u32>>,
-) -> Result<u32, String> {
+) -> Result<ShellStarted, String> {
     let sessions = shell.sessions.clone();
     tauri::async_runtime::spawn_blocking(move || {
         let home = user_home()?;
-        sessions.start_shell(cwd.as_deref(), &home, cols, rows, move |ev| match ev {
+        let (id, at) = sessions.start_shell(cwd.as_deref(), &home, cols, rows, move |ev| match ev {
             Output::Data(b) => {
                 let _ = on_data.send(InvokeResponseBody::Raw(b));
             }
             Output::Exit(code) => {
                 let _ = on_exit.send(code);
             }
-        })
+        })?;
+        Ok(ShellStarted { id, cwd: at.to_string_lossy().into_owned() })
     })
     .await
     .map_err(|e| e.to_string())?
+}
+
+/// A started terminal-panel shell: its session id and the folder it started in.
+#[derive(serde::Serialize)]
+struct ShellStarted {
+    id: u32,
+    cwd: String,
 }
 
 /// Keystrokes (and pastes) from the terminal view into session `id`.
