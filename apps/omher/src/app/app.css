@@ -31,6 +31,46 @@
 .window:not(.panel-open) .details {
   border-left-color: transparent;
 }
+/* the panel's left edge is a drag handle (PanelResizer): a 6px strip, a line when it is in use */
+.details {
+  position: relative;
+}
+.panel-resizer {
+  /* inside the panel's edge: .details clips what sticks out */
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 6px;
+  z-index: 6;
+  cursor: col-resize;
+  touch-action: none;
+}
+.panel-resizer::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 1px;
+  background: transparent;
+  transition: background 0.12s;
+}
+.panel-resizer:hover::after,
+.panel-resizer:focus-visible::after,
+.panel-resizer.on::after {
+  width: 3px;
+  background: color-mix(in srgb, var(--accent) 60%, transparent);
+}
+.panel-resizer:focus-visible {
+  outline: none;
+}
+/* while dragging the columns follow the pointer at once, and the drag selects no text */
+.window.panel-dragging {
+  transition: none;
+  user-select: none;
+  cursor: col-resize;
+}
 /* A narrow window keeps the chat its width: the panel slides over it instead of pushing it to ~350px. */
 @media (max-width: 1099px) {
   .window.panel-open {
