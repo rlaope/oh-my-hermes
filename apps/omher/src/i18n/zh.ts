@@ -1264,4 +1264,19 @@ export const zh: Record<Key, string> = {
   "peer.remoteBot": "这个机器人运行在 {label} 上。",
   "ab.ssh": "通过 SSH 连接",
   "ab.sshSub": "另一台电脑上的 Hermes",
+  // steer queue
+  "sq.mark": "等待中 · 选择操作",
+  "sq.sendNow": "立即发送",
+  "sq.sendNowTip": "停止当前回答，接着发送这条",
+  "sq.steer": "引导",
+  "sq.steerTip": "不停止，交给当前回答",
+  "sq.edit": "编辑",
+  "sq.editTip": "放回输入框",
+  "sq.delete": "删除",
+  "sq.deleteTip": "不发送",
+  "sq.steering": "引导中…",
+  "sq.steered": "已引导 · 已交给进行中的回答",
+  // steer queue sessions
+  "sqs.handed": "已交给 {agent} · 它接下来会读",
+  "sqs.noSteer": "{agent} 无法在回答中途接收消息",
 };

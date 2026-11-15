@@ -1264,4 +1264,19 @@ export const ko: Record<Key, string> = {
   "peer.remoteBot": "이 봇은 {label}에서 실행돼요.",
   "ab.ssh": "SSH로 연결",
   "ab.sshSub": "다른 컴퓨터의 Hermes",
+  // steer queue
+  "sq.mark": "대기 중 · 할 일 고르기",
+  "sq.sendNow": "지금 보내기",
+  "sq.sendNowTip": "지금 답을 멈추고 이걸 다음으로 보냅니다",
+  "sq.steer": "스티어링",
+  "sq.steerTip": "멈추지 않고 지금 답에 전합니다",
+  "sq.edit": "수정",
+  "sq.editTip": "입력창으로 되돌립니다",
+  "sq.delete": "삭제",
+  "sq.deleteTip": "보내지 않습니다",
+  "sq.steering": "스티어링 중…",
+  "sq.steered": "스티어링됨 · 진행 중인 답에 전했어요",
+  // steer queue sessions
+  "sqs.handed": "이미 {agent}에게 넘어갔어요 · 곧 읽어요",
+  "sqs.noSteer": "{agent}는 답하는 중에 메시지를 받을 수 없어요",
 };

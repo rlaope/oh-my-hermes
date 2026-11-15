@@ -56,6 +56,17 @@ pub enum Input {
     /// Take back the person's last message and what came after it, through the agent's own rewind (Claude Code
     /// `rewind_conversation`, Codex `thread/revert`); the UI then offers its text again. Files stay as they are.
     Rewind,
+    /// Hand a message the person held in omher (its bubble `id`) to the running turn without stopping it, through
+    /// the agent's own mid-turn input: Codex `turn/steer`, pi / oh-my-pi / OmO `steer`, Claude Code a stream-json
+    /// user message written mid-turn (read into the turn after the running tool). Every other agent refuses it.
+    Steer { id: String, text: String },
+}
+
+/// Whether agent `id` takes [`Input::Steer`] (mirrors `STEERS` in src/sessions/controls.ts; the adapters themselves
+/// refuse it otherwise).
+#[cfg(test)]
+pub fn steers(id: &str) -> bool {
+    matches!(id, "claude" | "codex" | "pi" | "omp" | "omo")
 }
 
 /// The permission modes a person can pick for agent `id`: Claude Code's own `default` (ask), `plan` and
@@ -104,6 +115,18 @@ impl Waiting {
             st.emit(ev("message.queued", json!({"id": id})));
         }
         self.sent.push_back((id, busy));
+    }
+    /// A message steered into the running turn: no `message.queued` (omher held it until now), `message.taken` once
+    /// the agent records it.
+    fn steer(&mut self, id: String) {
+        self.sent.push_back((id, true));
+    }
+    /// A steer the agent refused: it never reached the turn.
+    fn refused(&mut self, st: &mut Step, id: &str) {
+        if let Some(at) = self.sent.iter().position(|(i, _)| i == id) {
+            self.sent.remove(at);
+            st.emit(ev("message.dropped", json!({"id": id})));
+        }
     }
     /// The agent took its oldest message.
     fn take(&mut self, st: &mut Step) {
@@ -1690,6 +1713,17 @@ impl Adapter for Claude {
                 st.out(json!({"type": "control_response", "response": {"subtype": "success", "request_id": request_id, "response": response}}));
             }
             Input::Model { model } => self.control(&mut st, "model", json!({"subtype": "set_model", "model": model})),
+            // Claude Code reads a user message written mid-turn into the running turn after its current tool
+            // (claude-9-queued.jsonl: one answer, "FIRST\nSECOND"); it takes no separate steer command
+            Input::Steer { id, text } => {
+                if !self.turn {
+                    return Err("nothing is running to steer".into());
+                }
+                self.waiting.steer(id);
+                self.auto_turn = false;
+                st.out(json!({"type": "user", "session_id": "", "parent_tool_use_id": null,
+                              "message": {"role": "user", "content": [{"type": "text", "text": text}]}}));
+            }
             // Claude Code's own rewind: the conversation goes back to before the last message it took
             Input::Rewind => {
                 if self.turn {
@@ -1768,6 +1802,8 @@ pub struct Codex {
     turns: Vec<String>,
     /// reasoning items that streamed a summary: their raw text is not shown as well
     summarized: std::collections::HashSet<String>,
+    /// turn/steer request id -> the steered message's bubble id
+    steers: HashMap<u64, String>,
 }
 
 const CODEX_SIGNED_OUT: &str = "Codex is not signed in. Sign in from Settings › Accounts (or run `codex login`), then Restart.";
@@ -1799,6 +1835,7 @@ impl Codex {
             helpers: Subagents::new("codex"),
             turns: Vec::new(),
             summarized: Default::default(),
+            steers: HashMap::new(),
         }
     }
     fn call(&mut self, st: &mut Step, method: &'static str, params: Value) {
@@ -2065,6 +2102,12 @@ impl Adapter for Codex {
                     st.emit(ev("session.error", json!({"message": clip(&format!("Not taken back: {msg}"), 200)})));
                 } else if what == "turn/start" {
                     self.end(&mut st, "error", Some(clip(&msg, 200)));
+                } else if what == "turn/steer" {
+                    // the turn ended or moved on first: the message never reached it, and says so
+                    if let Some(id) = self.steers.remove(&n) {
+                        self.waiting.refused(&mut st, &id);
+                    }
+                    st.emit(ev("status", json!({"text": clip(&format!("Codex did not take the steer: {msg}"), 160)})));
                 } else if what == "turn/interrupt" && self.turn {
                     // a refused Stop says so where the person looks: the running turn's line
                     st.emit(ev("status", json!({"text": clip(&format!("Codex did not stop: {msg}"), 160)})));
@@ -2480,6 +2523,19 @@ impl Adapter for Codex {
                     return Err("not a question".into());
                 }
                 None => return Err("no such question".into()),
+            },
+            // app-server's own steer: the text joins the running turn (`expectedTurnId` must be the active turn)
+            Input::Steer { id, text } => match (self.thread.clone(), self.turn_id.clone()) {
+                (Some(thread), Some(turn)) if self.turn => {
+                    self.waiting.steer(id.clone());
+                    let mut p = json!({"threadId": thread, "input": [{"type": "text", "text": text}], "expectedTurnId": turn});
+                    if !id.is_empty() {
+                        p["clientUserMessageId"] = Value::String(id.clone());
+                    }
+                    self.call(&mut st, "turn/steer", p);
+                    self.steers.insert(self.seq, id);
+                }
+                _ => return Err("nothing is running to steer".into()),
             },
             Input::Model { model } => {
                 // app-server takes the model per turn; the next turn uses it
@@ -3156,6 +3212,15 @@ impl Adapter for Pi {
                 self.cmd(&mut st, "prompt", f);
             }
             Input::Interrupt => self.cmd(&mut st, "abort", json!({})),
+            // pi's rpc `steer` (pi, oh-my-pi and OmO's senpi docs/rpc.md): delivered after the running tool calls,
+            // before the next model call
+            Input::Steer { id, text } => {
+                if !self.streaming {
+                    return Err("nothing is running to steer".into());
+                }
+                self.waiting.steer(id);
+                self.cmd(&mut st, "steer", json!({"message": text}));
+            }
             Input::Approve { request_id, choice } => {
                 let ask = self.pending.remove(&request_id).ok_or("no such request")?;
                 let out = match (&ask, choice.as_str()) {
@@ -7106,5 +7171,121 @@ mod tests {
         assert!(input_diff("Bash", &json!({"command": "ls"}), "/w/proj").is_none());
         // the rpc and acp agents have no rewind; DSH neither
         assert!(Pi::new("/w/proj", "OmO").on_input(Input::Rewind).is_err());
+    }
+
+    // -- steer queue: a message omher held while a turn ran, handed to the running turn or sent first --
+
+    fn steer(text: &str, id: &str) -> Input {
+        Input::Steer { id: id.into(), text: text.into() }
+    }
+
+    #[test]
+    fn steer_input_reads_from_the_ui() {
+        let i: Input = serde_json::from_value(json!({"kind": "steer", "id": "local-s2", "text": "also the docs"})).unwrap();
+        assert_eq!(i, steer("also the docs", "local-s2"));
+    }
+
+    #[test]
+    fn codex_steer_is_its_own_turn_steer_on_the_running_turn() {
+        let mut x = codex_up();
+        x.on_input(sent_with("first", "local-s1")).unwrap();
+        run(&mut x, &[r#"{"method":"turn/started","params":{"turn":{"id":"T1","status":"inProgress","items":[]}}}"#.into()]);
+        let st = x.on_input(steer("also the docs", "local-s2")).unwrap();
+        // omher held it: no second "queued", and the frame is app-server's TurnSteerParams (codex 0.169 schema)
+        assert!(st.events.is_empty());
+        let w = written(&st);
+        assert_eq!(w.len(), 1);
+        assert_eq!(w[0]["method"], "turn/steer");
+        let thread = x.thread.clone().unwrap();
+        assert_eq!(w[0]["params"], json!({"threadId": thread, "input": [{"type": "text", "text": "also the docs"}], "expectedTurnId": "T1", "clientUserMessageId": "local-s2"}));
+        // Codex records it in the same turn: taken
+        let st = run(&mut x, &[r#"{"method":"item/started","params":{"item":{"type":"userMessage","id":"u2","clientId":"local-s2","content":[]}}}"#.into()]);
+        assert_eq!(st.events, [json!({"event": "message.taken", "id": "local-s2"})]);
+        // a steer Codex refuses (the turn moved on) never reached it, and says so
+        let st = x.on_input(steer("late", "local-s3")).unwrap();
+        let n = written(&st)[0]["id"].as_u64().unwrap();
+        let st = run(&mut x, &[format!(r#"{{"id":{n},"error":{{"code":-32600,"message":"expected turn T1 is not active"}}}}"#)]);
+        assert_eq!(names(&st.events), ["message.dropped", "status"]);
+        assert_eq!(st.events[0]["id"], "local-s3");
+        // no turn: nothing to steer
+        run(&mut x, &[r#"{"method":"turn/completed","params":{"turn":{"id":"T1","status":"completed"}}}"#.into()]);
+        assert!(x.on_input(steer("x", "local-s4")).is_err());
+    }
+
+    #[test]
+    fn claude_and_pi_steer_into_the_running_turn() {
+        // Claude Code: a stream-json user message written mid-turn is read into the running turn (claude-9-queued)
+        let mut c = claude_up();
+        assert!(c.on_input(steer("x", "a")).is_err(), "nothing runs");
+        c.on_input(sent_with("sleep then FIRST", "s1")).unwrap();
+        let st = c.on_input(steer("SECOND", "s2")).unwrap();
+        assert!(st.events.is_empty());
+        let w = written(&st);
+        assert_eq!((s(&w[0], "type"), w[0]["message"]["content"][0]["text"].clone()), ("user".into(), json!("SECOND")));
+        let st = run(&mut c, &[r#"{"type":"user","isReplay":true,"message":{"role":"user","content":[{"type":"text","text":"sleep then FIRST"}]},"parent_tool_use_id":null}"#.into()]);
+        assert!(of(&st.events, "message.taken").is_empty(), "the first message is not a waiting one");
+        let st = run(&mut c, &[r#"{"type":"user","isReplay":true,"message":{"role":"user","content":[{"type":"text","text":"SECOND"}]},"parent_tool_use_id":null}"#.into()]);
+        assert_eq!(of(&st.events, "message.taken")[0]["id"], "s2");
+        // pi / oh-my-pi / OmO: rpc `steer` (senpi docs/rpc.md "steer"), only while it streams
+        let mut p = pi_up("OmO", &[]);
+        assert!(p.on_input(steer("x", "a")).is_err());
+        p.on_input(sent_with("numbers", "p1")).unwrap();
+        run(&mut p, &[r#"{"type":"agent_start"}"#.into()]);
+        let w = written(&p.on_input(steer("only odd ones", "p2")).unwrap());
+        assert_eq!((s(&w[0], "type"), s(&w[0], "message")), ("steer".into(), "only odd ones".into()));
+    }
+
+    #[test]
+    fn an_agent_without_steer_refuses_it() {
+        for id in ["claude", "codex", "pi", "omp", "omo"] {
+            assert!(steers(id), "{id}");
+        }
+        for id in ["dsh", "opencode", "gemini", "grok", ""] {
+            assert!(!steers(id), "{id}");
+        }
+        // an ACP agent runs one prompt at a time: no mid-turn input, even with a turn running
+        let mut a = Acp::new(acp_agent("opencode").unwrap(), "/w/proj", None);
+        a.start();
+        a.on_input(Input::send("hi")).unwrap();
+        assert!(a.in_turn());
+        let e = a.on_input(steer("also", "x")).unwrap_err();
+        assert!(e.contains("cannot take a message into a running answer"), "{e}");
+    }
+
+    #[test]
+    fn send_now_is_one_stop_then_the_held_message_goes_first() {
+        // omher held "B" and "C"; Send now on C: Stop, and after the stopped turn's end C goes out before B
+        let mut x = codex_up();
+        x.on_input(sent_with("A", "s1")).unwrap();
+        run(&mut x, &[r#"{"method":"turn/started","params":{"turn":{"id":"T1","status":"inProgress","items":[]}}}"#.into()]);
+        let w = written(&x.on_input(Input::Interrupt).unwrap());
+        assert_eq!(w.iter().map(|v| s(v, "method")).collect::<Vec<_>>(), ["turn/interrupt"]);
+        let st = run(&mut x, &[r#"{"method":"turn/completed","params":{"turn":{"id":"T1","status":"interrupted"}}}"#.into()]);
+        // nothing was handed to Codex while it ran, so nothing is dropped
+        assert_eq!(names(&st.events), ["turn.end"]);
+        let mut order = vec![];
+        for (text, id) in [("C", "s3"), ("B", "s2")] {
+            let st = x.on_input(sent_with(text, id)).unwrap();
+            assert!(of(&st.events, "message.queued").is_empty(), "{text} starts its own turn");
+            let w = written(&st);
+            order.push(w[0]["params"]["input"][0]["text"].as_str().unwrap().to_string());
+            run(&mut x, &[r#"{"method":"turn/completed","params":{"turn":{"id":"T2","status":"completed"}}}"#.into()]);
+        }
+        assert_eq!(order, ["C", "B"]);
+    }
+
+    #[test]
+    fn delete_before_taken_never_reaches_the_agent_and_a_steer_waits_until_taken() {
+        // a held message is omher's: deleting it writes nothing. A steered one belongs to the agent until it is
+        // taken; Stop before that drops it (pi clears its queue)
+        let mut p = pi_up("pi", &[]);
+        p.on_input(sent_with("long", "a")).unwrap();
+        run(&mut p, &[r#"{"type":"agent_start"}"#.into()]);
+        p.on_input(steer("steered", "b")).unwrap();
+        let st = run(&mut p, &[r#"{"type":"message_end","message":{"role":"user","content":[{"type":"text","text":"long"}]}}"#.into()]);
+        assert!(of(&st.events, "message.taken").is_empty());
+        let st = run(&mut p, &[r#"{"type":"agent_end","aborted":true}"#.into()]);
+        assert_eq!(names(&st.events)[..2], ["message.dropped", "turn.end"]);
+        assert_eq!(st.events[0]["id"], "b");
     }
 }

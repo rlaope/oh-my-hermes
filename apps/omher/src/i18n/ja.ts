@@ -1264,4 +1264,19 @@ export const ja: Record<Key, string> = {
   "peer.remoteBot": "このボットは {label} で動いています。",
   "ab.ssh": "SSHで接続",
   "ab.sshSub": "別のコンピュータの Hermes",
+  // steer queue
+  "sq.mark": "待機中 · 操作を選ぶ",
+  "sq.sendNow": "今すぐ送信",
+  "sq.sendNowTip": "今の回答を止めて、これを次に送ります",
+  "sq.steer": "ステア",
+  "sq.steerTip": "止めずに今の回答に渡します",
+  "sq.edit": "編集",
+  "sq.editTip": "入力欄に戻します",
+  "sq.delete": "削除",
+  "sq.deleteTip": "送信しません",
+  "sq.steering": "ステア中…",
+  "sq.steered": "ステア済み · 進行中の回答に渡しました",
+  // steer queue sessions
+  "sqs.handed": "すでに {agent} に渡しました · 次に読みます",
+  "sqs.noSteer": "{agent} は回答中にメッセージを受け取れません",
 };

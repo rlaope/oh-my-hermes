@@ -37,6 +37,8 @@ RULES = (
     "the bridge has exactly one `prompt.submit` call site and it takes the main chat's id or such a folder chat's.",
     "Files the person attaches go to that same chat only, as bytes through Hermes' own `image.attach_bytes`,",
     "the bridge never opens the person's files.",
+    "on the person's press it may instead steer the running turn through Hermes' own `session.steer` (`chat.steer`), in the main chat only and never a folder chat,",
+    "A steer Hermes refuses is sent as a normal message after the turn; the bridge never sends it another way.",
     "omher talks only to the person's own Hermes gateway on this machine, over loopback,",
     "omher makes no LLM or API call itself. Every model call is Hermes'.",
     "The bridge listens on 127.0.0.1 only and refuses any connection that lacks the random token",
@@ -548,6 +550,22 @@ class BridgeSubmitsOnlyToTheMainChat(unittest.TestCase):
         self.assertIn("await self._target(conn, p)", ast.unparse(callers[0]))
         params = {a.arg for a in fn.args.args + fn.args.kwonlyargs}
         self.assertNotIn("session_id", params, "the submitting function must not take a session id from its caller")
+
+    def test_chat_steer_reaches_only_the_main_chat(self) -> None:
+        """Rule 3: `chat.steer` is `op_chat_steer`, the one place `session.steer` is named; it refuses a folder chat,
+        takes the main chat's id from `_main` and sends nothing else (a refused steer is not resent here)."""
+        self.assertEqual(self.source.count('"session.steer"'), 1)
+        fns = {f.name: f for f in ast.walk(self.tree) if isinstance(f, ast.AsyncFunctionDef)}
+        steer = ast.unparse(fns["op_chat_steer"])
+        self.assertIn("'chat.steer': self.op_chat_steer", ast.unparse(fns["__init__"]) if "__init__" in fns else
+                      ast.unparse([f for f in ast.walk(self.tree) if isinstance(f, ast.FunctionDef) and f.name == "__init__"
+                                   and "self.ops" in ast.unparse(f)][0]))
+        self.assertIn("if p.get('session') is not None:", steer)
+        self.assertIn("main = await self._main(conn)", steer)
+        self.assertIn("self._call(conn, 'session.steer', session_id=main, text=text)", steer)
+        calls = re.findall(r"self\.(_call|_submit|_target)\(", steer)
+        self.assertEqual(calls, ["_call"])
+        self.assertIn('"chat.steer"', self.source.split("PEER_FORWARD = frozenset({", 1)[1].split("})", 1)[0])
 
     def test_profile_writes_are_only_name_and_picture(self) -> None:
         """Every Hermes profile method the bridge names is a read, except set_asset (the avatar)."""

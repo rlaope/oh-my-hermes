@@ -1266,4 +1266,19 @@ export const en = {
   "peer.remoteBot": "This bot runs on {label}.",
   "ab.ssh": "Connect over SSH",
   "ab.sshSub": "A Hermes on another computer",
+  // steer queue
+  "sq.mark": "Waiting · choose what to do",
+  "sq.sendNow": "Send now",
+  "sq.sendNowTip": "Stop the current answer and send this next",
+  "sq.steer": "Steer",
+  "sq.steerTip": "Hand it to the current answer without stopping it",
+  "sq.edit": "Edit",
+  "sq.editTip": "Put it back in the message box",
+  "sq.delete": "Delete",
+  "sq.deleteTip": "Do not send it",
+  "sq.steering": "Steering…",
+  "sq.steered": "Steered · added to the running answer",
+  // steer queue sessions
+  "sqs.handed": "Already with {agent} · it takes it next",
+  "sqs.noSteer": "{agent} has no way to take a message mid-answer",
 };

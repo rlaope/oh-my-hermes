@@ -3693,7 +3693,7 @@ PEER_LIST_TIMEOUT = 5.0
 PEER_OPEN_TIMEOUT = 15.0
 # Bot-scoped ops a peer's bot takes: sent to the peer with the bare name, its answer passed back as it came.
 PEER_FORWARD = frozenset({
-    "chat.open", "chat.send", "chat.interrupt", "approval.respond", "clarify.respond", "chat.attach", "chat.set_model",
+    "chat.open", "chat.send", "chat.interrupt", "chat.steer", "approval.respond", "clarify.respond", "chat.attach", "chat.set_model",
     "models.options", "bots.ready", "bots.rename", "bots.avatar", "bots.set_avatar", "bots.info", "skills.list",
     "links.places", "elsewhere.list", "elsewhere.peek", "routines.list", "runs.list", "runs.get", "runs.prs",
     "panel.terminal", "panel.worktrees", "panel.diff", "media.read", "automations.add", "automations.pause",
@@ -3944,7 +3944,7 @@ class Bridge:
         self._own_plugins: set[tuple[str, str]] = set()
         self.ops = {
             "hello": self.op_hello, "bots.list": self.op_bots_list, "chat.open": self.op_chat_open,
-            "chat.send": self.op_chat_send, "chat.interrupt": self.op_chat_interrupt,
+            "chat.send": self.op_chat_send, "chat.interrupt": self.op_chat_interrupt, "chat.steer": self.op_chat_steer,
             "approval.respond": self.op_approval_respond, "clarify.respond": self.op_clarify_respond,
             "elsewhere.list": self.op_elsewhere_list, "elsewhere.peek": self.op_elsewhere_peek,
             "routines.list": self.op_routines_list, "models.options": self.op_models_options,
@@ -4564,6 +4564,22 @@ class Bridge:
         main, chat = await self._target(conn, p)
         await self._call(conn, "session.interrupt", session_id=main, execution_generation=await self._generation(conn, main, chat))
         return {}
+
+    async def op_chat_steer(self, p) -> dict:
+        """Steer the running turn of the bot's main chat through Hermes' own ``session.steer``: the text joins the
+        turn's next tool result, no new turn starts. Main chat only (never a folder chat or any other session).
+        Hermes' answer goes back as it came (``queued`` = taken, ``rejected`` = not); a refused steer is never sent
+        another way here: the app sends it as a normal message after the turn."""
+        text = p.get("text")
+        if not isinstance(text, str) or not text.strip():
+            raise BridgeError("bad_request", "missing text")
+        if p.get("session") is not None:
+            raise BridgeError("bad_request", "steer goes to the bot's main chat only")
+        conn = await self._conn(p.get("bot"))
+        main = await self._main(conn)
+        res = await self._call(conn, "session.steer", session_id=main, text=text)
+        status = res.get("status") if isinstance(res, dict) else None
+        return {"status": status if status in ("queued", "rejected") else "rejected"}
 
     async def op_approval_respond(self, p) -> dict:
         choice, rid = p.get("choice"), p.get("request_id")
