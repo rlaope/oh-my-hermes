@@ -150,7 +150,7 @@ function Approval({ bot, item }: { bot: string; item: ApprovalItem }) {
       )}
       <div className="card-acts">
         {shown.map((b) => (
-          <button key={b.choice} type="button" className="card-btn soft" disabled={!!busy} onClick={() => void pick(b.choice)}>
+          <button key={b.choice} type="button" className={`card-btn soft ${b.choice}`} data-choice={b.choice} disabled={!!busy} onClick={() => void pick(b.choice)}>
             {t(b.label)}
           </button>
         ))}

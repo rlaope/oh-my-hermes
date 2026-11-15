@@ -61,7 +61,7 @@ test.beforeEach(async () => {
   await mock("mock.reset");
 });
 
-test("approval: card with mono command, neutral buttons; Deny collapses it and stops the turn", async ({ page }) => {
+test("approval: card with mono command, coloured buttons of one weight; Deny collapses it and stops the turn", async ({ page }) => {
   const events = recordEvents(page);
   await open(page);
   await send(page, "/approve clean the build");
@@ -74,7 +74,8 @@ test("approval: card with mono command, neutral buttons; Deny collapses it and s
   expect(await cmd.evaluate((el) => getComputedStyle(el).fontFamily)).toMatch(/mono|Menlo/i);
   const btn = (name: string) => card.getByRole("button", { name, exact: true });
   for (const name of ["Allow once", "Allow for session", "Deny"]) await expect(btn(name)).toBeVisible();
-  // no pink / brand gradient on any button; every answer carries the same neutral weight; Deny comes first
+  // no brand gradient on any button; every answer carries the same weight and size, each in its own colour (Deny
+  // red, Allow once violet, Allow for session amber); Deny comes first
   for (const name of ["Allow once", "Allow for session", "Deny"]) {
     const bgImage = await btn(name).evaluate((el) => getComputedStyle(el).backgroundImage);
     expect(bgImage).toBe("none");
@@ -83,14 +84,13 @@ test("approval: card with mono command, neutral buttons; Deny collapses it and s
     ["Deny", "Allow once", "Allow for session"].map((n) =>
       btn(n).evaluate((el) => {
         const cs = getComputedStyle(el);
-        return `${cs.backgroundColor}|${cs.color}|${cs.boxShadow}|${cs.fontWeight}`;
+        return { weight: cs.fontWeight, height: el.getBoundingClientRect().height, color: cs.color, bg: cs.backgroundColor };
       }),
     ),
   );
-  expect(new Set(looks).size).toBe(1);
-  const rgb = (s: string) => (s.match(/[\d.]+/g) ?? []).map(Number);
-  const [r, g, b] = rgb(looks[0].split("|")[0]);
-  expect(Math.max(r, g, b) - Math.min(r, g, b)).toBeLessThan(24); // neutral, not pink
+  expect(new Set(looks.map((l) => `${l.weight}|${l.height}`)).size).toBe(1);
+  expect(new Set(looks.map((l) => l.color)).size).toBe(3);
+  expect(new Set(looks.map((l) => l.bg)).size).toBe(3);
   const order = await card.getByRole("button").allTextContents();
   expect(order.slice(0, 3)).toEqual(["Deny", "Allow once", "Allow for session"]);
   await page.screenshot({ path: join(SHOTS, "cards-approval-dark.png") });
