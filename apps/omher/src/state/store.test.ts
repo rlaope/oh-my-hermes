@@ -120,7 +120,7 @@ describe("reducer: a full turn", () => {
     let s = reduce(initialState(), { type: "local.user", bot: "kami", id: "l1", text: "first question", now: 1000 });
     s = run(s, [{ event: "turn.start", bot: "kami" }, { event: "delta", bot: "kami", text: "Line one.\nline tw" }]);
     s = reduce(s, { type: "local.user", bot: "kami", id: "l2", text: "sent mid-answer", now: 2000 });
-    const kinds = (st: typeof s) => st.chats.kami.items.filter((i) => i.kind !== "away").map((i) => (i.kind === "user" || i.kind === "assistant" ? `${i.kind}:${i.text}` : i.kind));
+    const kinds = (st: typeof s) => st.chats.kami.items.map((i) => (i.kind === "user" || i.kind === "assistant" ? `${i.kind}:${i.text}` : i.kind));
     // the answer being written goes right before the message sent while it was written
     expect(s.chats.kami.items[answerSlot(s.chats.kami)]).toMatchObject({ kind: "user", id: "l2" });
     s = run(s, [{ event: "message", bot: "kami", id: "a1", text: "Line one.\nline two." }, { event: "turn.end", bot: "kami", outcome: "done" }]);
