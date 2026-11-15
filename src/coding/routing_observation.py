@@ -16,6 +16,7 @@ from typing import Final, Mapping, Sequence, TypeAlias, TypeGuard, TypeVar
 from ..system.metadata_safety import require_opaque_metadata_ref
 from .hermes_child_arm_setup import arm_setup_errors
 from .hermes_child_evaluation import evaluation_binding_errors
+from .hermes_child_trace import cell_trace_errors
 from ..plugin_bundle.omh.iso_datetime import strict_fromisoformat
 
 JsonScalar: TypeAlias = str | int | float | bool | None
@@ -137,6 +138,10 @@ _PAYLOAD_FIELDS: Final[frozenset[str]] = frozenset(
         # OMH plugin and the digest of the OMH skills it held, read from disk
         # by the dispatcher and signed with the rest of the receipt.
         "arm_setup",
+        # Paired-run evaluation only: the metadata-only trace of the child's
+        # own state.db rows (counts, tool and skill NAMES, sizes), read by the
+        # dispatcher before the arm home goes and signed with the receipt.
+        "cell_trace",
     }
 )
 
@@ -357,6 +362,11 @@ def validate_routing_observation(payload: Mapping[str, object] | object) -> list
     arm_setup = payload.get("arm_setup")
     if arm_setup is not None:
         errors.extend(arm_setup_errors(arm_setup))
+    cell_trace = payload.get("cell_trace")
+    if cell_trace is not None:
+        if payload.get("claim") != "observed":
+            errors.append("cell_trace requires an observed claim")
+        errors.extend(cell_trace_errors(cell_trace))
     observed_at = payload.get("observed_at")
     if observed_at is not None:
         if isinstance(observed_at, str) and _UTC_Z.fullmatch(observed_at) is not None:
