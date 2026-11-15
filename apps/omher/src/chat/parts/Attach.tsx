@@ -284,29 +284,36 @@ const ClipIcon = () => (
   </svg>
 );
 
-/** The chips row above the input. */
+/** The attachments above the input, as Codex shows them: a picture or video the person can see is a large square
+ *  tile (the picture itself, cropped to fill; × on hover or focus; the name and size as its tooltip), so it reads at
+ *  a glance; any other file, and a file that will not be sent (red), stays a one-line chip with its name and size. */
 export function Chips({ chips, onRemove }: { chips: Chip[]; onRemove: (id: string) => void }) {
   if (!chips.length) return null;
   return (
     <div className="att-chips" data-testid="attach-chips">
-      {chips.map((c) => (
-        <div
-          key={c.id}
-          className={`att-chip${c.reason ? " bad" : ""}`}
-          data-testid="attach-chip"
-          data-name={c.name}
-          title={c.reason ? `${c.name} · ${c.reason}` : c.name}
-        >
-          <Thumb chip={c} />
-          <span className="att-name">{c.name}</span>
-          <span className="att-size" data-testid="attach-chip-note">
-            {c.reason ?? fileSize(c.size)}
-          </span>
-          <button type="button" className="att-x" aria-label={t("att.removeOf", { name: c.name })} onClick={() => onRemove(c.id)} data-testid="attach-remove">
-            ×
-          </button>
-        </div>
-      ))}
+      {chips.map((c) => {
+        const tile = !c.reason && !!c.url && (c.kind === "image" || c.kind === "video");
+        const label = c.reason ? `${c.name} · ${c.reason}` : `${c.name} · ${fileSize(c.size)}`;
+        return (
+          <div
+            key={c.id}
+            className={`att-chip${c.reason ? " bad" : ""}${tile ? " tile" : ""}`}
+            data-testid="attach-chip"
+            data-name={c.name}
+            data-tile={tile || undefined}
+            title={label}
+          >
+            <Thumb chip={c} />
+            <span className={tile ? "att-name att-vh" : "att-name"}>{c.name}</span>
+            <span className={tile ? "att-size att-vh" : "att-size"} data-testid="attach-chip-note">
+              {c.reason ?? fileSize(c.size)}
+            </span>
+            <button type="button" className="att-x" aria-label={t("att.removeOf", { name: c.name })} onClick={() => onRemove(c.id)} data-testid="attach-remove">
+              ×
+            </button>
+          </div>
+        );
+      })}
     </div>
   );
 }

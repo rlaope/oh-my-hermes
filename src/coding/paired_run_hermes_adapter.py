@@ -15,6 +15,7 @@ from .hermes_child_dispatch import (
     HermesChildRequest,
     dispatch_hermes_child,
 )
+from .hermes_child_arm_setup import PairedRunArmHome
 from .hermes_child_evaluation import HermesChildEvaluationContext
 from .hermes_child_receipts import (
     ReceiptVerificationError,
@@ -44,6 +45,7 @@ def run_hermes_paired_cell(
     worktree: Path,
     decision: PairedRunDecision,
     config: PairedRunLocalRunnerConfig,
+    arm_home: PairedRunArmHome | None = None,
 ) -> PairedRunExecutionOutcome:
     """Dispatch one digest-checked task and load its process-sealed receipt."""
     task = next(task for task in decision.tasks if task.task_id == cell.task_id)
@@ -108,6 +110,7 @@ def run_hermes_paired_cell(
                 cwd=worktree,
                 evaluation_context=evaluation_context,
                 allow_parallel=True,
+                arm_home=arm_home,
             ),
             dispatch_policy="ask_before_dispatch",
             confirmed=True,

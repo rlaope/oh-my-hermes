@@ -808,6 +808,10 @@ export const ko: Record<Key, string> = {
   "att.failed": "{name} 첨부 실패 · {error}",
   "bub.replyTarget": "답장 대상",
   "bub.notSent": "보내지 못함 · {error}",
+  "bub.quoteTip": "이 답장이 가리키는 메시지 보기",
+  "bub.quoteMore": "이전 {n}개 더",
+  "bub.repliedTo1": "회원님에게 답장",
+  "bub.repliedTo": "회원님의 메시지 {n}개에 답장",
   "lk.links": "링크",
   "lk.showAll": "전체 {n}개 보기",
   "lk.thread": "{name} · 스레드",
@@ -915,6 +919,8 @@ export const ko: Record<Key, string> = {
 
   // right panel, sessions, routines, runs drawer, setup gate (i18n 0.2.5)
   "pn.panel": "패널",
+  "pn.resize": "패널 크기 조절",
+  "pn.resizeTip": "끌어서 크기 조절 · 더블클릭하면 기본 너비",
   "pn.details": "상세",
   "pn.terminal": "터미널",
   "pn.schedule": "일정",

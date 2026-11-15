@@ -3831,15 +3831,39 @@ def _row_text(row: dict) -> str:
     return ""
 
 
-def chat_messages(rows, watch_names: set[str] | frozenset[str] = frozenset()) -> list[dict]:
+def _turn_answers(rows, running: bool = False) -> set[int]:
+    """The index of each turn's answer: its last assistant row with text. Hermes stores the commentary it writes
+    beside its tool calls ("Now I'll run the tests") as assistant rows of their own; the live chat never shows them
+    as bubbles (the activity line stands for that work), so a reopened chat does not either: one bubble per turn.
+    A turn still `running` has no answer yet: its rows so far are all commentary."""
+    keep: set[int] = set()
+    last = None
+    for i, row in enumerate(rows or []):
+        if not isinstance(row, dict):
+            continue
+        if row.get("role") == "user":
+            if last is not None:
+                keep.add(last)
+            last = None
+        elif row.get("role") == "assistant" and row.get("display_kind") != "hidden" and _row_text(row):
+            last = i
+    if last is not None and not running:
+        keep.add(last)
+    return keep
+
+
+def chat_messages(rows, watch_names: set[str] | frozenset[str] = frozenset(), running: bool = False) -> list[dict]:
     """`watch_names`: the channel watches delivering into this chat; their delivered row is hidden and the answer
-    after it tagged `watch`. Any other automation's row stays a normal row."""
+    after it tagged `watch`. Any other automation's row stays a normal row. `running`: see `_turn_answers`."""
     out = []
+    answers = _turn_answers(rows, running)
     watch = None  # an automation's delivered result: its inbound row is not shown, the answer after it carries `watch`
     for i, row in enumerate(rows or []):
         if not isinstance(row, dict) or row.get("role") not in ("user", "assistant"):
             continue
         if row.get("display_kind") == "hidden":
+            continue
+        if row["role"] == "assistant" and i not in answers:
             continue
         text = _row_text(row)
         if not text:
@@ -4698,7 +4722,7 @@ class Bridge:
         running = bool(snap.get("running") if snap.get("running") is not None else info.get("running"))
         conn.in_turn = running
         conn.watch_names = self._watch_names(conn.name)
-        result = {"session_id": conn.main_id, "messages": chat_messages(snap.get("messages"), conn.watch_names),
+        result = {"session_id": conn.main_id, "messages": chat_messages(snap.get("messages"), conn.watch_names, running),
                   "running": running,
                   "model": str(info.get("model") or bot["model"]), "provider": str(info.get("provider") or bot["provider"]),
                   "reasoning": str(info.get("reasoning_effort") or bot["reasoning"])}

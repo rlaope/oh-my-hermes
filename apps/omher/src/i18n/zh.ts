@@ -808,6 +808,10 @@ export const zh: Record<Key, string> = {
   "att.failed": "无法添加 {name} · {error}",
   "bub.replyTarget": "回复目标",
   "bub.notSent": "未发送 · {error}",
+  "bub.quoteTip": "查看这条回复对应的消息",
+  "bub.quoteMore": "更早 {n} 条",
+  "bub.repliedTo1": "回复了你",
+  "bub.repliedTo": "回复了你的 {n} 条消息",
   "lk.links": "链接",
   "lk.showAll": "显示全部 {n} 个",
   "lk.thread": "{name} · 消息列",
@@ -915,6 +919,8 @@ export const zh: Record<Key, string> = {
 
   // right panel, sessions, routines, runs drawer, setup gate (i18n 0.2.5)
   "pn.panel": "面板",
+  "pn.resize": "调整面板宽度",
+  "pn.resizeTip": "拖动调整宽度 · 双击恢复默认宽度",
   "pn.details": "详情",
   "pn.terminal": "终端",
   "pn.schedule": "日程",

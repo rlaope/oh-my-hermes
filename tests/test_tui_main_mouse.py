@@ -237,7 +237,7 @@ class DragTests(unittest.TestCase):
         release(app, text + 9, row)
         self.assertEqual(osc52(app), ["first line"])
         screen: VTScreen = app.terminal.screen  # type: ignore[attr-defined]
-        self.assertIn("┃   first line of the reply", screen.scrollback)  # the row went into the scrollback as flushed
+        self.assertIn("  first line of the reply", screen.scrollback)  # the row went into the scrollback as flushed
 
 
 class WheelTests(unittest.TestCase):

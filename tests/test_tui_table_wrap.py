@@ -135,7 +135,7 @@ class WideTableLayoutTests(unittest.TestCase):
                     self.assertEqual("".join(got[ci].split()), "".join(shown(cell).split()), (width, ci))
 
     def test_the_owners_table_wraps_inside_its_columns_at_150(self) -> None:
-        self.assert_owner_table(146)  # a reply's text at 150 columns, beside the rail and margin
+        self.assert_owner_table(148)  # a reply's text at 150 columns, beside its margin
 
     def test_the_owners_table_wraps_inside_its_columns_at_100(self) -> None:
         self.assert_owner_table(96)
@@ -254,7 +254,7 @@ class WideTableLayoutTests(unittest.TestCase):
 
     def test_every_width_from_40_to_200_keeps_every_cell_inside_the_row(self) -> None:
         for cols in range(40, 201):
-            width = cols - 4  # a reply's text beside the rail and margin
+            width = cols - 2  # a reply's text beside its margin
             texts = lines_text(self.render(OWNER_TABLE, width))
             if texts[0].startswith(OWNER_HEADER[0] + ":"):  # too narrow for columns: records
                 joined = "".join("".join(texts).split())
@@ -284,7 +284,7 @@ class WideTableLayoutTests(unittest.TestCase):
         paths = [f"src/omh/module{n}/package/file{n}.py" for n in range(5)]
         source = "| " + " | ".join(f"h{n}" for n in range(5)) + " |\n|---|---|---|---|---|\n| " + " | ".join(paths) + " |"
         for cols in (60, 70, 87):
-            texts = lines_text(self.render(source, cols - 4))
+            texts = lines_text(self.render(source, cols - 2))  # a reply's text beside its margin
             self.assertFalse(any(text.startswith("h0:") for text in texts), (cols, texts))
             cells = box_rows(texts)
             self.assertEqual(cells[0], [f"h{n}" for n in range(5)])
@@ -338,14 +338,13 @@ class WideTableStreamingTests(unittest.TestCase):
                     with self.subTest(cols=cols, live_rows=live_rows, chunk=chunk):
                         everything, history = self.stream(text, cols, live_rows, chunk)
                         for rows in (everything, history):
-                            got = [word for word in words([row for row in rows if not row.endswith("⚚ Hermes")])
-                                   if word != "┃"]
+                            got = words([row for row in rows if not row.endswith("⚚ Hermes")])
                             if live_rows == 12 and rows is everything:
                                 # released on the first rows' columns: a later path may break after a `/`
                                 self.assertEqual(sorted("".join(got)), sorted("".join(expected)))
                             else:
                                 self.assertEqual(sorted(got), sorted(expected))
-                            box = [row[4:] for row in rows if row[4:5] in ("┌", "├", "└", "│")]
+                            box = [row[2:] for row in rows if row[2:3] in ("┌", "├", "└", "│")]
                             self.assertEqual((box[0][0], box[-1][0]), ("┌", "└"), "the box is not closed")
                             self.assertEqual(sum(1 for row in box if row[0] == "┌"), 1)
                             self.assertEqual(sum(1 for row in box if row[0] == "└"), 1)
@@ -367,7 +366,7 @@ class WideTableStreamingTests(unittest.TestCase):
                     taken += lines_text(transcript.take_stable_lines(60, THEME, live_rows=8))
                 else:
                     taken += lines_text(transcript.take_stable_lines(60, THEME, final=True, live_rows=8))
-                self.assertEqual(taken[-1][4:5], "└", taken[-3:])
+                self.assertEqual(taken[-1][2:3], "└", taken[-3:])
                 self.assertEqual(sum(1 for row in taken if "└" in row), 1)
                 self.assertEqual(lines_text(transcript.live_lines(60, THEME)), [])
 
@@ -380,7 +379,7 @@ class WideTableStreamingTests(unittest.TestCase):
         transcript.apply(ev("message.delta", text="after the table\n"))
         taken += lines_text(transcript.take_stable_lines(60, THEME, live_rows=8))
         at = next(i for i, row in enumerate(taken) if "after the table" in row)
-        self.assertEqual(taken[at - 1][4:5], "└", taken[at - 3 : at + 1])
+        self.assertEqual(taken[at - 1][2:3], "└", taken[at - 3 : at + 1])
 
     def test_a_tall_wrapped_table_is_released_by_the_rows_it_draws(self) -> None:
         long = " ".join(f"word{n}" for n in range(60))
@@ -417,7 +416,7 @@ class WideTableStreamingTests(unittest.TestCase):
         self.assertEqual(len(starts), 1, late_rows)
         self.assertEqual(sorted(word for word in words(taken) if word.startswith("tail")),
                          sorted(f"tail{n}" for n in range(40)))
-        box_rows([row[4:] for row in taken if row[4:5] in ("┌", "├", "└", "│")])
+        box_rows([row[2:] for row in taken if row[2:3] in ("┌", "├", "└", "│")])
 
     def test_a_late_long_cell_on_narrow_frozen_columns_takes_the_rows_room(self) -> None:
         head = "| key | value | note |\n|---|---|---|\n" + "".join(f"| k{n} | v{n} | ok |\n" for n in range(30))
@@ -441,11 +440,11 @@ class WideTableStreamingTests(unittest.TestCase):
         late_rows = [row for row in taken[next(i for i, row in enumerate(taken) if "late" in row):] if "│" in row]
         self.assertLessEqual(len(late_rows), 3, late_rows)
         self.assertGreaterEqual(max(len(row.split("│")[2].strip()) for row in late_rows), 100, late_rows)
-        self.assertEqual(sorted(w for w in words(late_rows) if w != "┃"), sorted(["late", "fine", *(sentence * 2).split()]))
+        self.assertEqual(sorted(words(late_rows)), sorted(["late", "fine", *(sentence * 2).split()]))
         # The rule above the late row meets the narrow rows' borders and its own.
         rule = taken[next(i for i, row in enumerate(taken) if "late" in row) - 1]
         self.assertTrue({"┴", "┬"} <= set(rule), rule)
-        box_rows([row[4:] for row in taken if row[4:5] in ("┌", "├", "└", "│")])
+        box_rows([row[2:] for row in taken if row[2:3] in ("┌", "├", "└", "│")])
 
     def test_history_recomputes_the_widths_over_the_whole_table(self) -> None:
         source = "| a | b |\n|---|---|\n" + "".join(f"| r{n} | short |\n" for n in range(8))

@@ -264,14 +264,15 @@ class NarrowApprovalTests(unittest.TestCase):
                 row = line_text(app._info_line(width))
                 self.assertIn("esc denies", row)
                 self.assertLessEqual(len(row), width)
-                self.assertIn("▌ ❯ ✗ deny", self.rows(width))
+                rows = self.rows(width)
+                self.assertEqual(rows[rows.index("▌   ✗ deny") + 1], "▌ ❯ ✓ allow once")
 
     def test_a_wrapped_command_keeps_its_indent(self) -> None:
         # One command, so it is listed whole, wrapped under the indent (two would each fit on a row of their own).
         slot = open_request("srq", "approval", {"command": self.COMMAND.replace(" && ", " -o -exec "),
                                                 "description": "delete in root path"})
         rows = lines_text(slot.lines(50, DEFAULT_THEME, 20))
-        command_rows = [row for row in rows[1 : rows.index("▌ ❯ ✗ deny")] if row.strip("▌ ─")]  # past the spacing
+        command_rows = [row for row in rows[1 : rows.index("▌   ✗ deny")] if row.strip("▌ ─")]  # past the spacing
         self.assertGreater(len(command_rows), 1)
         for row in command_rows:
             self.assertTrue(row.startswith("▌   "), rows)

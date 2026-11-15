@@ -24,6 +24,7 @@ from omh.quality.paired_run_model import (
     RunResultInput,
     TaskSpec,
 )
+from omh.quality.paired_run_values import exposure_digest
 from paired_run_support import paired_evaluation_binding, write_observed_receipt
 
 
@@ -63,11 +64,15 @@ def workspace(cell) -> PairedRunWorkspace:
     return PairedRunWorkspace(cell.workspace_id)
 
 
+def arm_setup_record(omh_plugin: bool, skills: tuple[str, ...]) -> dict[str, object]:
+    return {"omh_plugin": omh_plugin, "exposure_digest": exposure_digest(tuple(sorted(skills)))}
+
+
 def receipt(home: Path, cell, run_id: str, status: str = "completed"):
     skills = () if cell.arm is ArmRole.BASELINE else ("skill-a",)
     write_observed_receipt(home, run_id, status, evaluation_binding=paired_evaluation_binding(
         task_id=cell.task_id, criteria_ref=f"criteria-{cell.task_id[-1]}",
         input_digest=cell.input_digest, arm=cell.arm.value, executor=cell.executor,
         model=cell.model, exposed_skills=skills, execution_revision=cell.execution_revision,
-    ))
+    ), arm_setup=arm_setup_record(cell.arm is ArmRole.VARIANT, skills))
     return load_hermes_child_receipt(home, run_id)

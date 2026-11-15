@@ -808,6 +808,10 @@ export const ja: Record<Key, string> = {
   "att.failed": "{name} を添付できませんでした · {error}",
   "bub.replyTarget": "返信先",
   "bub.notSent": "未送信 · {error}",
+  "bub.quoteTip": "この返信の元のメッセージを表示",
+  "bub.quoteMore": "以前の {n} 件",
+  "bub.repliedTo1": "あなたに返信",
+  "bub.repliedTo": "あなたのメッセージ {n} 件に返信",
   "lk.links": "リンク",
   "lk.showAll": "すべて表示（{n}）",
   "lk.thread": "{name} · スレッド",
@@ -915,6 +919,8 @@ export const ja: Record<Key, string> = {
 
   // right panel, sessions, routines, runs drawer, setup gate (i18n 0.2.5)
   "pn.panel": "パネル",
+  "pn.resize": "パネルの幅を変える",
+  "pn.resizeTip": "ドラッグで幅を変更 · ダブルクリックで標準の幅",
   "pn.details": "詳細",
   "pn.terminal": "ターミナル",
   "pn.schedule": "スケジュール",

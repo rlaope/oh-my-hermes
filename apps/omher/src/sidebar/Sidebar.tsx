@@ -6,6 +6,7 @@ import { selectAsks, selectSidebarBots, useStore } from "../state/store";
 import { slots } from "../features";
 import { CalendarIcon, GearIcon, GridIcon, IconButton, PlusIcon, SearchIcon } from "../ui";
 import { BotRow } from "./BotRow";
+import { useRowDrag } from "./useRowDrag";
 import { AttachCard } from "../peers/AttachCard";
 import { Usage } from "./Usage";
 import { AccountsWatcher } from "../settings/accounts/useAccounts";
@@ -34,6 +35,13 @@ export function Sidebar() {
     ? listed.filter((b) => b.display_name.toLowerCase().includes(needle) || b.name.toLowerCase().includes(needle))
     : listed;
   const asks = selectAsks(s);
+  // hold a row to drag it; off while searching, where a row's place in the filtered list is not its sidebar place
+  const drag = useRowDrag(
+    listed.map((b) => b.name),
+    s.ui.pinned,
+    !needle,
+    (bot, to) => s.moveBot(bot, to),
+  );
   const inSettings = s.ui.view === "settings";
   const automations = s.automations?.length ?? 0;
   const inChat = s.ui.view === "chat";
@@ -82,6 +90,7 @@ export function Sidebar() {
               asks={asks.filter((a) => a.bot === b.name)}
               pinned={pinned}
               onSelect={() => void s.selectBot(b.name)}
+              drag={drag.row(b.name)}
               menu={{
                 pinned,
                 onPin: () => s.pinBot(b.name, !pinned),

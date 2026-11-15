@@ -585,8 +585,8 @@ class ResumedHistoryTests(unittest.TestCase):
         self.assertTrue(diff and all(text.startswith("┃ ") for text in diff), texts)  # the diff, on the edit's rail
         self.assertEqual(texts[after - 2 : after + 5],
                          ["", "", "┃ ● terminal(sleep 6 + 1 command)", "", "", "┃ ● terminal(ls does-not-exist)", ""])
-        self.assertEqual(texts[after + 5], "┃ ⚚ Hermes", texts)  # the reply's header, then its words
-        self.assertTrue(texts[after + 6].startswith("┃   Done — div added to calc.py"), texts)
+        self.assertEqual(texts[after + 5], "⚚ Hermes", texts)  # the reply's header, then its words
+        self.assertTrue(texts[after + 6].startswith("  Done — div added to calc.py"), texts)
         calls = [lines[index] for index in (first, first + 3, first + 6, after, after + 3)]
         # The record says what ran, not how it ended: neither green nor red, its mark grey on the look's rail.
         self.assertEqual({row[0] for row in calls}, {rail_cell(THEME.accent)})

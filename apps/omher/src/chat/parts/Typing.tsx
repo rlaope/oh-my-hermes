@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import type { Chat } from "../../state/store";
-import { askOpen, turnHasActivity } from "../../state/store";
+import { answerSoFar, askOpen, turnHasActivity } from "../../state/store";
 import { Avatar, LiveRing, TypingDots } from "../../ui";
 import { t } from "../../i18n";
 
@@ -9,7 +9,8 @@ import { t } from "../../i18n";
  *  answer of this turn landed, and the bot is not waiting on the person (an open card says that instead). */
 export function awaitingFirstToken(chat: Chat | undefined): boolean {
   const t = chat?.turn;
-  if (!t || t.streaming || turnHasActivity(t)) return false;
+  // text being written ends the typing bubble only once a whole line of it can show (answerSoFar)
+  if (!t || answerSoFar(t) || turnHasActivity(t)) return false;
   const since = t.startedAt / 1000;
   for (const i of chat.items) {
     if (i.kind === "assistant" && i.ts >= since) return false;

@@ -14,6 +14,7 @@ import re
 from typing import Final, Mapping, Sequence, TypeAlias, TypeGuard, TypeVar
 
 from ..system.metadata_safety import require_opaque_metadata_ref
+from .hermes_child_arm_setup import arm_setup_errors
 from .hermes_child_evaluation import evaluation_binding_errors
 from ..plugin_bundle.omh.iso_datetime import strict_fromisoformat
 
@@ -132,6 +133,10 @@ _PAYLOAD_FIELDS: Final[frozenset[str]] = frozenset(
         "current_action",
         "observed_at",
         "evaluation_binding",
+        # Paired-run evaluation only: whether the arm home held the enabled
+        # OMH plugin and the digest of the OMH skills it held, read from disk
+        # by the dispatcher and signed with the rest of the receipt.
+        "arm_setup",
     }
 )
 
@@ -349,6 +354,9 @@ def validate_routing_observation(payload: Mapping[str, object] | object) -> list
             errors.extend(evaluation_binding_errors(evaluation_binding))
         else:
             errors.append("evaluation_binding must be a scalar object")
+    arm_setup = payload.get("arm_setup")
+    if arm_setup is not None:
+        errors.extend(arm_setup_errors(arm_setup))
     observed_at = payload.get("observed_at")
     if observed_at is not None:
         if isinstance(observed_at, str) and _UTC_Z.fullmatch(observed_at) is not None:
