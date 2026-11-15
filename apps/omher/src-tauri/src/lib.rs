@@ -351,6 +351,34 @@ async fn session_start(
     .map_err(|e| e.to_string())?
 }
 
+/// The bottom terminal panel's shell: the person's own login shell (`sessions::shell_argv`, decided by the shell,
+/// never by the page) in `cwd` when that is an existing folder, else home. The page sends a folder and a size only;
+/// the session is then written, acknowledged, resized and closed with the `session_*` commands like any other.
+#[tauri::command]
+async fn shell_start(
+    shell: State<'_, Shell>,
+    cwd: Option<String>,
+    cols: u16,
+    rows: u16,
+    on_data: Channel<InvokeResponseBody>,
+    on_exit: Channel<Option<u32>>,
+) -> Result<u32, String> {
+    let sessions = shell.sessions.clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        let home = user_home()?;
+        sessions.start_shell(cwd.as_deref(), &home, cols, rows, move |ev| match ev {
+            Output::Data(b) => {
+                let _ = on_data.send(InvokeResponseBody::Raw(b));
+            }
+            Output::Exit(code) => {
+                let _ = on_exit.send(code);
+            }
+        })
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
 /// Keystrokes (and pastes) from the terminal view into session `id`.
 #[tauri::command]
 async fn session_write(shell: State<'_, Shell>, id: u32, data: String) -> Result<(), String> {
@@ -685,6 +713,7 @@ pub fn run() {
             custom_agent_confirm,
             custom_agent_remove,
             session_start,
+            shell_start,
             session_write,
             session_ack,
             session_resize,

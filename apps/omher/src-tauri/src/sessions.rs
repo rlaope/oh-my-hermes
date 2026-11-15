@@ -593,6 +593,76 @@ pub fn launch_for(id: &str) -> Result<(Vec<OsString>, OsString), String> {
 }
 
 // ---------------------------------------------------------------------------------------------
+// The bottom terminal panel: the person's own login shell, nothing else
+// ---------------------------------------------------------------------------------------------
+
+/// The shells tried, in order, when `$SHELL` is not a usable login shell (macOS, Linux).
+pub const SHELL_FALLBACKS: [&str; 2] = ["/bin/zsh", "/bin/bash"];
+
+/// Windows PowerShell's fixed place under `%SystemRoot%`.
+const POWERSHELL_UNDER_ROOT: &str = r"System32\WindowsPowerShell\v1.0\powershell.exe";
+
+/// Does `/etc/shells` (its text) list `shell`? One absolute path per line; `#` starts a comment.
+pub fn listed_in_etc_shells(etc_shells: &str, shell: &str) -> bool {
+    etc_shells.lines().map(|l| l.split('#').next().unwrap_or("").trim()).any(|l| !l.is_empty() && l == shell)
+}
+
+/// The one program the terminal panel runs, as argv, decided here and never by the page:
+/// - macOS / Linux: `[$SHELL, "-l"]` when `$SHELL` is an absolute path to an executable file that `/etc/shells`
+///   lists; else `/bin/zsh -l`, else `/bin/bash -l`.
+/// - Windows: `powershell.exe -NoLogo` (Windows PowerShell at its fixed place under `%SystemRoot%`); when it is
+///   missing, `%COMSPEC%` (an absolute path to an existing file) with no arguments.
+///
+/// Pure: the environment, `/etc/shells`' text, the file check and the OS are passed in.
+pub fn shell_argv<E, X>(env: &E, etc_shells: &str, is_program: X, os: Os) -> Result<Vec<OsString>, String>
+where
+    E: Fn(&str) -> Option<String>,
+    X: Fn(&Path) -> bool,
+{
+    let set = |k: &str| env(k).filter(|v| !v.trim().is_empty());
+    match os {
+        Os::Unix => {
+            if let Some(sh) = set("SHELL") {
+                let p = Path::new(&sh);
+                if p.is_absolute() && listed_in_etc_shells(etc_shells, &sh) && is_program(p) {
+                    return Ok(vec![OsString::from(sh), OsString::from("-l")]);
+                }
+            }
+            SHELL_FALLBACKS
+                .iter()
+                .find(|s| is_program(Path::new(s)))
+                .map(|s| vec![OsString::from(*s), OsString::from("-l")])
+                .ok_or_else(|| "no login shell found (no usable $SHELL, /bin/zsh or /bin/bash)".to_string())
+        }
+        Os::Windows => {
+            let root = set("SystemRoot").or_else(|| set("windir")).unwrap_or_else(|| r"C:\Windows".to_string());
+            let ps = PathBuf::from(format!(r"{}\{POWERSHELL_UNDER_ROOT}", root.trim_end_matches('\\')));
+            if is_program(&ps) {
+                return Ok(vec![ps.into_os_string(), OsString::from("-NoLogo")]);
+            }
+            match set("COMSPEC") {
+                Some(c) if is_windows_absolute(&c) && is_program(Path::new(&c)) => Ok(vec![OsString::from(c)]),
+                _ => Err("no shell found (no Windows PowerShell and no %COMSPEC%)".to_string()),
+            }
+        }
+    }
+}
+
+/// `C:\…` or `\\server\…`: an absolute Windows path, whatever OS the check runs on.
+fn is_windows_absolute(p: &str) -> bool {
+    let b = p.as_bytes();
+    (b.len() > 2 && b[0].is_ascii_alphabetic() && b[1] == b':' && (b[2] == b'\\' || b[2] == b'/')) || p.starts_with(r"\\")
+}
+
+/// Where a terminal-panel shell starts: `wanted` when it is an absolute path to an existing folder, else `home`.
+pub fn shell_cwd(wanted: Option<&str>, home: &Path) -> PathBuf {
+    match wanted.map(Path::new) {
+        Some(p) if p.is_absolute() && p.is_dir() => p.to_path_buf(),
+        _ => home.to_path_buf(),
+    }
+}
+
+// ---------------------------------------------------------------------------------------------
 // Live sessions
 // ---------------------------------------------------------------------------------------------
 
@@ -763,6 +833,18 @@ impl Sessions {
             argv.extend(resume_args(agent_id, r)?);
         }
         self.spawn(argv, cwd, Some(path_env), account_env, cols, rows, sink)
+    }
+
+    /// Start the terminal panel's shell ([`shell_argv`]: the person's login shell, never a program the page names)
+    /// in `cwd` when that is an existing folder, else in `home` ([`shell_cwd`]). Nothing is typed into it, and it
+    /// gets no account variable. The session is an ordinary PTY session: write, ack, resize and close as any other.
+    pub fn start_shell<F>(&self, cwd: Option<&str>, home: &Path, cols: u16, rows: u16, sink: F) -> Result<u32, String>
+    where
+        F: FnMut(Output) + Send + 'static,
+    {
+        let etc_shells = std::fs::read_to_string("/etc/shells").unwrap_or_default();
+        let argv = shell_argv(&host_env, &etc_shells, is_program_file, Os::current())?;
+        self.spawn(argv, &shell_cwd(cwd, home), None, &[], cols, rows, sink)
     }
 
     /// Queue `data` for session `id`'s writer thread. Never blocks: a program that is not reading its
@@ -2277,5 +2359,117 @@ mod tests {
             ran += 1;
         }
         assert!(ran > 0, "neither claude nor codex is installed");
+    }
+
+    // ---- the terminal panel's shell -------------------------------------------------------------
+
+    const ETC_SHELLS: &str = "# List of acceptable shells\n/bin/bash\n/bin/csh\n/bin/zsh   # the default\n/opt/homebrew/bin/fish\n";
+
+    #[test]
+    fn shell_argv_is_the_login_shell_from_shell_when_etc_shells_lists_it() {
+        let all = fs_of(&[Path::new("/opt/homebrew/bin/fish"), Path::new("/bin/zsh"), Path::new("/bin/bash")]);
+        let argv = shell_argv(&env_of(&[("SHELL", "/opt/homebrew/bin/fish")]), ETC_SHELLS, &all, Os::Unix).unwrap();
+        assert_eq!(argv, vec![OsString::from("/opt/homebrew/bin/fish"), OsString::from("-l")]);
+        let argv = shell_argv(&env_of(&[("SHELL", "/bin/bash")]), ETC_SHELLS, &all, Os::Unix).unwrap();
+        assert_eq!(argv, vec![OsString::from("/bin/bash"), OsString::from("-l")]);
+    }
+
+    #[test]
+    fn shell_argv_falls_back_to_zsh_then_bash_when_shell_is_not_usable() {
+        let zsh_bash = fs_of(&[Path::new("/bin/zsh"), Path::new("/bin/bash"), Path::new("/tmp/evil"), Path::new("/usr/local/bin/nu")]);
+        let zsh = vec![OsString::from("/bin/zsh"), OsString::from("-l")];
+        // not listed in /etc/shells, relative, a command line, empty, unset, listed but missing
+        for bad in [Some("/tmp/evil"), Some("zsh"), Some("bin/zsh"), Some("/bin/zsh -c id"), Some("/bin/zsh;id"), Some(""), None, Some("/usr/local/bin/nu")] {
+            let env = env_of(&bad.map(|v| vec![("SHELL", v)]).unwrap_or_default());
+            assert_eq!(shell_argv(&env, ETC_SHELLS, &zsh_bash, Os::Unix).unwrap(), zsh, "{bad:?}");
+        }
+        // listed in /etc/shells but not an executable file here
+        assert_eq!(shell_argv(&env_of(&[("SHELL", "/bin/csh")]), ETC_SHELLS, &zsh_bash, Os::Unix).unwrap(), zsh);
+        // no zsh: bash; neither: an error, no program
+        let bash_only = fs_of(&[Path::new("/bin/bash")]);
+        assert_eq!(shell_argv(&env_of(&[]), ETC_SHELLS, &bash_only, Os::Unix).unwrap(), vec![OsString::from("/bin/bash"), OsString::from("-l")]);
+        assert!(shell_argv(&env_of(&[]), ETC_SHELLS, fs_of(&[]), Os::Unix).is_err());
+        // an /etc/shells that cannot be read lists nothing
+        assert_eq!(shell_argv(&env_of(&[("SHELL", "/bin/bash")]), "", &zsh_bash, Os::Unix).unwrap(), zsh);
+    }
+
+    #[test]
+    fn etc_shells_matches_whole_lines_only() {
+        assert!(listed_in_etc_shells(ETC_SHELLS, "/bin/zsh"));
+        assert!(listed_in_etc_shells(ETC_SHELLS, "/opt/homebrew/bin/fish"));
+        for no in ["", "/bin", "/bin/zs", "# List of acceptable shells", "the default", "/bin/zsh   # the default"] {
+            assert!(!listed_in_etc_shells(ETC_SHELLS, no), "{no:?}");
+        }
+    }
+
+    #[test]
+    fn shell_argv_on_windows_is_powershell_nologo_else_comspec() {
+        let ps = r"C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe";
+        let env = env_of(&[("SystemRoot", r"C:\Windows"), ("COMSPEC", r"C:\Windows\system32\cmd.exe"), ("SHELL", "/bin/zsh")]);
+        let argv = shell_argv(&env, "", fs_of(&[Path::new(ps), Path::new(r"C:\Windows\system32\cmd.exe")]), Os::Windows).unwrap();
+        assert_eq!(argv, vec![OsString::from(ps), OsString::from("-NoLogo")]);
+        // no PowerShell: %COMSPEC% alone, no arguments
+        let argv = shell_argv(&env, "", fs_of(&[Path::new(r"C:\Windows\system32\cmd.exe")]), Os::Windows).unwrap();
+        assert_eq!(argv, vec![OsString::from(r"C:\Windows\system32\cmd.exe")]);
+        // %COMSPEC% must be an absolute path to an existing file
+        for bad in ["cmd.exe", r"cmd.exe /c calc", r"C:\nope\cmd.exe"] {
+            let env = env_of(&[("SystemRoot", r"C:\Windows"), ("COMSPEC", bad)]);
+            assert!(shell_argv(&env, "", fs_of(&[Path::new("cmd.exe")]), Os::Windows).is_err(), "{bad}");
+        }
+    }
+
+    #[test]
+    fn shell_cwd_is_the_folder_when_it_exists_else_home() {
+        let home = std::env::temp_dir().join(format!("omher-shell-home-{}", std::process::id()));
+        let dir = home.join("project");
+        std::fs::create_dir_all(&dir).unwrap();
+        let file = home.join("a-file");
+        std::fs::write(&file, b"x").unwrap();
+        assert_eq!(shell_cwd(Some(dir.to_str().unwrap()), &home), dir);
+        for bad in [None, Some(""), Some("relative/dir"), Some(file.to_str().unwrap()), Some("/omher-no-such-dir-x9/deeper")] {
+            assert_eq!(shell_cwd(bad, &home), home, "{bad:?}");
+        }
+        let _ = std::fs::remove_dir_all(&home);
+    }
+
+    #[test]
+    fn the_shell_is_not_an_agent_id_and_no_other_program_is_launchable() {
+        // the panel's shell has its own start (`start_shell`) and is not on the agent allow-list
+        let s = Sessions::default();
+        for bad in ["shell", "zsh", "/bin/zsh", "bash -l", "powershell.exe", "cmd"] {
+            assert!(agent(bad).is_none(), "{bad}");
+            assert!(launch_for(bad).is_err(), "{bad}");
+            assert!(s.start_agent(bad, &std::env::temp_dir(), None, &[], 80, 24, |_| {}).unwrap_err().contains("unknown agent"));
+        }
+        assert_eq!(s.count(), 0);
+    }
+
+    /// The real start: a login shell in the folder (else home), echoing what is typed, stopped by close.
+    #[cfg(unix)]
+    #[test]
+    fn start_shell_runs_a_login_shell_in_the_folder_or_home() {
+        let base = std::env::temp_dir().join(format!("omher-shell-run-{}", std::process::id()));
+        let (home, dir) = (base.join("home"), base.join("work"));
+        std::fs::create_dir_all(&home).unwrap();
+        std::fs::create_dir_all(&dir).unwrap();
+        for (wanted, expect) in [(dir.to_str().unwrap().to_string(), &dir), (base.join("gone").to_str().unwrap().to_string(), &home)] {
+            let s = Sessions::default();
+            let out = Arc::new(Mutex::new(Vec::<u8>::new()));
+            let o = out.clone();
+            let id = s
+                .start_shell(Some(&wanted), &home, 120, 24, move |ev| {
+                    if let Output::Data(b) = ev {
+                        o.lock().unwrap().extend(b);
+                    }
+                })
+                .unwrap();
+            assert_eq!(s.count(), 1);
+            s.write(id, b"echo \"at:$(pwd -P)\"\r").unwrap();
+            let want = format!("at:{}", std::fs::canonicalize(expect).unwrap().display());
+            assert!(wait_for(|| String::from_utf8_lossy(&out.lock().unwrap()).contains(&want)), "{want}: {:?}", String::from_utf8_lossy(&out.lock().unwrap()));
+            s.close(id);
+            assert_eq!(s.count(), 0);
+        }
+        let _ = std::fs::remove_dir_all(&base);
     }
 }
