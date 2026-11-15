@@ -83,6 +83,9 @@ export interface Turn {
   skills: string[];
   /** Answer text streamed so far (cleared when the final `message` lands). */
   streaming: string;
+  /** Where in `streaming` the text after the latest tool call starts: what came before was the bot's commentary
+   *  beside that call ("Now I'll run the tests"), never part of the answer, so it is never shown. */
+  cut?: number;
   /** The fan-outs (delegate_task children) this turn started, as Hermes' subagent events tell them. */
   fanouts?: Fanout[];
   /** The agent's own todo list as it last stood in this turn (SESSIONS agents). */
@@ -396,6 +399,23 @@ export function liveLabel(t: Turn): { verb: string; code?: string } {
 
 /** Whether a running turn has something for its activity line to say: a tool or skill ran, or the bot sent a
  *  status of its own. Before that (only thinking) the chat shows the typing bubble instead of the line. */
+/** The part of the answer being written that can be shown already: its whole lines, after the latest tool call,
+ *  never a line still being typed and never an open code block (it shows once its closing fence came). Shown in
+ *  pieces of whole lines, so the answer grows a line or paragraph at a time instead of word by word. */
+export function answerSoFar(t: Turn): string {
+  const text = t.streaming.slice(t.cut ?? 0).replace(/^\s+/, "");
+  const end = text.lastIndexOf("\n");
+  if (end < 0) return "";
+  const lines = text.slice(0, end).split("\n");
+  let keep = lines.length;
+  let open = -1;
+  lines.forEach((l, i) => {
+    if (/^\s*(```|~~~)/.test(l)) open = open < 0 ? i : -1;
+  });
+  if (open >= 0) keep = open;
+  return lines.slice(0, keep).join("\n").trimEnd();
+}
+
 export function turnHasActivity(t: Turn): boolean {
   return t.steps.length > 0 || t.skills.length > 0 || !!(t.status && t.status !== THINKING && t.status !== WORKING) || !!t.plan?.length || !!t.thinking;
 }
@@ -886,6 +906,8 @@ function reduceEvent(state: AppState, ev: BridgeEvent, now: number): AppState {
         patchTurn(c, (t) => ({
           ...t,
           status: activityText(ev.name, ev.detail),
+          // what was written before this call was commentary on it, not the answer
+          cut: t.streaming.length,
           steps: [
             ...t.steps,
             { id: ev.tool_id, name: ev.name, detail: ev.detail, startedAt: now, ...(ev.dag?.length ? { dag: ev.dag } : {}) },
@@ -914,7 +936,7 @@ function reduceEvent(state: AppState, ev: BridgeEvent, now: number): AppState {
       return touchChat(state, bot, (c) => patchTurn(c, (t) => ({ ...t, streaming: t.streaming + ev.text })));
     case "message": {
       const next = touchChat(state, bot, (c) => {
-        const cleared = patchTurn(c, (t) => ({ ...t, streaming: "" }));
+        const cleared = patchTurn(c, (t) => ({ ...t, streaming: "", cut: undefined }));
         const msg: MessageItem = { kind: "assistant", id: ev.id, ts: now / 1000, text: ev.text };
         const exists = cleared.items.some((i) => i.kind === "assistant" && i.id === ev.id);
         const items = exists
@@ -979,10 +1001,12 @@ function reduceEvent(state: AppState, ev: BridgeEvent, now: number): AppState {
       return touchChat(state, bot, (c) => {
         let base = c;
         // A done turn that streamed text but never sent the final message: keep what was said.
-        if (ev.outcome === "done" && c.turn && c.turn.streaming) {
-          const text = c.turn.streaming;
+        // Only what came after the latest tool call: the text before it was commentary on that call, not the answer.
+        const said = c.turn ? c.turn.streaming.slice(c.turn.cut ?? 0).trim() : "";
+        if (ev.outcome === "done" && c.turn && said) {
+          const text = said;
           base = withItems(c, [...c.items, { kind: "assistant", id: `${c.turn.id}-a`, ts: now / 1000, text }]);
-          base = patchTurn(base, (t) => ({ ...t, streaming: "" }));
+          base = patchTurn(base, (t) => ({ ...t, streaming: "", cut: undefined }));
         }
         return { ...endTurn(base, now, ev.outcome, ev.error), early: null };
       });

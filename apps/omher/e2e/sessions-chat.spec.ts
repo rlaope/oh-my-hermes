@@ -175,6 +175,7 @@ test("Esc and Stop send the agent's own interrupt; the model button switches the
   await page.getByTestId("composer").fill("/slow");
   await page.keyboard.press("Enter");
   await expect(page.getByTestId("model-label")).toHaveText("GPT-6.1 Sol");
+  // the answer shows a whole line at a time
   await expect(page.getByTestId("bubble-streaming")).toContainText("line 2");
   await page.getByTestId("timeline").click();
   await page.keyboard.press("Escape");

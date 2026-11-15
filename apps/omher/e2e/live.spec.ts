@@ -296,6 +296,10 @@ test("chat: a typing bubble with the ringed face waits for the first delta, whic
   await expect(tl.getByTestId("typing")).toHaveCount(0);
 
   await emit(ev("kami", "delta", { text: "Found it: the" }));
+  // a line still being typed does not show; a whole one does
+  await expect(tl.locator("[data-testid=activity][data-state=live]")).toHaveCount(1);
+  await expect(tl.getByTestId("bubble-streaming")).toHaveCount(0);
+  await emit(ev("kami", "delta", { text: " retry cap.\n" }));
   await expect(tl.getByTestId("bubble-streaming")).toContainText("Found it");
   await expect(tl.getByTestId("typing")).toHaveCount(0);
 
@@ -311,6 +315,10 @@ test("chat: an answer with no tool: the typing bubble alone, then the first toke
   await expect(tl.getByTestId("typing")).toBeVisible();
   await expect(tl.locator("[data-testid=activity][data-state=live]")).toHaveCount(0);
   await emit(ev("kami", "delta", { text: "Short answer" }));
+  // the typing bubble stays until a whole line can show
+  await expect(tl.getByTestId("typing")).toBeVisible();
+  await expect(tl.getByTestId("bubble-streaming")).toHaveCount(0);
+  await emit(ev("kami", "delta", { text: ".\n" }));
   await expect(tl.getByTestId("bubble-streaming")).toContainText("Short answer");
   await expect(tl.getByTestId("typing")).toHaveCount(0);
   await emit(ev("kami", "message", { id: "k-a2", text: "Short answer." }), ev("kami", "turn.end", { outcome: "done" }));

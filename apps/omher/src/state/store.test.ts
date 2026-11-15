@@ -1,18 +1,5 @@
 import { describe, expect, it } from "vitest";
-import {
-  activityText,
-  chatRoute,
-  createStore,
-  folderKey,
-  setChatRoute,
-  initialState,
-  reduce,
-  replyChipFor,
-  selectTimeline,
-  type Action,
-  type AppState,
-  type BridgeLike,
-} from "./store";
+import { answerSoFar, activityText, chatRoute, createStore, folderKey, setChatRoute, initialState, reduce, replyChipFor, selectTimeline, type Action, type AppState, type BridgeLike } from "./store";
 import type { Away, BridgeEvent, ChatOpenResult } from "../lib/protocol";
 import type { BridgeStatus } from "../lib/bridge";
 
@@ -105,6 +92,28 @@ describe("reducer: a full turn", () => {
     expect(s.chats.kami.turn!.status).toBe("Summarising");
     s = run(s, [{ event: "delta", bot: "kami", text: "ab" }, { event: "delta", bot: "kami", text: "cd" }]);
     expect(s.chats.kami.turn!.streaming).toBe("abcd");
+  });
+
+  it("the answer being written shows a whole line at a time, never the commentary beside a tool call", () => {
+    const d = (text: string) => ({ event: "delta" as const, bot: "kami", text });
+    let s = run(initialState(), [{ event: "turn.start", bot: "kami" }, d("Now I'll run the tests.\n\n")]);
+    // commentary, then the call it was about: none of it is the answer
+    s = run(s, [{ event: "tool.start", bot: "kami", tool_id: "t1", name: "terminal", detail: "pnpm test" }]);
+    expect(answerSoFar(s.chats.kami.turn!)).toBe("");
+    s = run(s, [{ event: "tool.end", bot: "kami", tool_id: "t1", name: "terminal", ok: true, ms: 10 }, d("\n\nAll 35 tests pa")]);
+    // a line still being typed does not show
+    expect(answerSoFar(s.chats.kami.turn!)).toBe("");
+    s = run(s, [d("ss.\n\n- typecheck: ok\n- e2e: 3")]);
+    expect(answerSoFar(s.chats.kami.turn!)).toBe("All 35 tests pass.\n\n- typecheck: ok");
+    // an open code block waits for its closing fence
+    s = run(s, [d("5 passed\n\n```sh\npnpm test\n")]);
+    expect(answerSoFar(s.chats.kami.turn!)).toBe("All 35 tests pass.\n\n- typecheck: ok\n- e2e: 35 passed");
+    s = run(s, [d("```\n")]);
+    expect(answerSoFar(s.chats.kami.turn!)).toBe("All 35 tests pass.\n\n- typecheck: ok\n- e2e: 35 passed\n\n```sh\npnpm test\n```");
+    // the final message replaces it whole
+    s = run(s, [{ event: "message", bot: "kami", id: "a1", text: "All 35 tests pass." }]);
+    expect(s.chats.kami.turn!.streaming).toBe("");
+    expect(answerSoFar(s.chats.kami.turn!)).toBe("");
   });
 
   it("a status, thinking, step or text outside a turn starts none; a status just before turn.start opens it", () => {

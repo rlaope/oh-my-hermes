@@ -390,24 +390,44 @@ test("side panel tabs: a hovered tab never looks selected (no fill), only the se
   expect(await bg("panel-tab-terminal")).not.toBe("rgba(0, 0, 0, 0)");
 });
 
-test("while an answer streams, its caret ends the last line of text, not a line of its own", async ({ page }) => {
+test("an answer being written shows a whole line at a time in one bubble, never a half line or the commentary beside a tool call", async ({ page }) => {
   await open(page);
+  const before = await page.getByTestId("bubble-bot").count();
+  const e = (event: string, x: Record<string, unknown> = {}) => ({ event, bot: "kami", ...x });
   await mock("mock.emit", {
     events: [
-      { event: "turn.start", bot: "kami" },
-      { event: "delta", bot: "kami", text: "Done. The 502s came from expired keep-alive connections.\n\n- Cause: upstream connection reuse\n- Fix: raised the idle" },
+      e("turn.start"),
+      e("delta", { text: "Now I'll check the gateway log.\n\n" }),
+      e("tool.start", { tool_id: "p1", name: "terminal", detail: "grep 502 gateway.log" }),
+      e("tool.end", { tool_id: "p1", name: "terminal", ok: true }),
+      e("delta", { text: "Done. The 502s came from expired keep-alive connections.\n\n- Cause: upstream connection reuse\n- Fix: raised the idle" }),
     ],
   });
-  const b = page.getByTestId("bubble-streaming").locator(".b");
-  await expect(b).toContainText("raised the idle");
-  const caret = await b.evaluate((el) => {
+  const live = page.getByTestId("bubble-streaming");
+  await expect(live).toHaveCount(1);
+  // whole lines only: the half-typed last line and the commentary before the tool call are not there
+  await expect(live).toContainText("expired keep-alive connections.");
+  await expect(live).toContainText("Cause: upstream connection reuse");
+  await expect(live).not.toContainText("raised the idle");
+  await expect(live).not.toContainText("check the gateway log");
+  // and the caret ends its last line, not a line of its own
+  const caret = await live.locator(".b").evaluate((el) => {
     const on = (e: Element) => getComputedStyle(e, "::after").content !== "none";
     const li = el.querySelector("ul > li:last-child")!;
-    return { bubble: on(el), lastItem: on(li), firstItem: on(el.querySelector("ul > li")!), height: li.getBoundingClientRect().height, line: parseFloat(getComputedStyle(li).lineHeight) };
+    return { bubble: on(el), lastItem: on(li) };
   });
-  expect(caret).toMatchObject({ bubble: false, lastItem: true, firstItem: false });
-  expect(caret.height).toBeLessThanOrEqual(caret.line + 1); // still one line: the caret sits on it
-  await mock("mock.emit", { events: [{ event: "turn.end", bot: "kami", outcome: "done" }] });
+  expect(caret).toMatchObject({ bubble: false, lastItem: true });
+  await mock("mock.emit", {
+    events: [
+      e("message", { id: "pol-a1", text: "Done. The 502s came from expired keep-alive connections.\n\n- Cause: upstream connection reuse\n- Fix: raised the idle timeout" }),
+      e("turn.end", { outcome: "done" }),
+    ],
+  });
+  // the same one bubble, now whole
+  await expect(page.getByTestId("bubble-streaming")).toHaveCount(0);
+  await expect(page.getByTestId("bubble-bot")).toHaveCount(before + 1);
+  await expect(page.getByTestId("bubble-bot").last()).toContainText("raised the idle timeout");
+  await expect(page.getByTestId("bubble-bot").last()).not.toContainText("check the gateway log");
 });
 
 test("Accounts: every leading mark sits in one 16px slot, one column", async ({ page }) => {

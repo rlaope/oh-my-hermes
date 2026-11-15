@@ -129,8 +129,10 @@ test("a bot's face stays put from send to answer: typing, a recalled-memories st
   await settled(page);
 
   await emit({ event: "delta", bot: "kami", text: "The idle timeout on the upstream" });
-  await expect(tl.getByTestId("bubble-streaming")).toContainText("idle timeout");
-  await emit({ event: "delta", bot: "kami", text: " pool is shorter than the gateway's." });
+  // a line still being typed does not show
+  await settled(page);
+  await expect(tl.getByTestId("bubble-streaming")).toHaveCount(0);
+  await emit({ event: "delta", bot: "kami", text: " pool is shorter than the gateway's.\n" });
   await expect(tl.getByTestId("bubble-streaming")).toContainText("gateway's.");
   await settled(page);
 
@@ -183,7 +185,7 @@ test("a SESSIONS chat keeps the agent's mark in the face column the same way", a
   await emit(ev("tool.start", { tool_id: "fs1", name: "terminal", detail: "ls /Users/you/work/api" }));
   await expect(tl.locator("[data-testid=activity][data-state=live]").getByTestId("activity-text")).toContainText("ls /Users/you/work/api");
   await emit(ev("tool.end", { tool_id: "fs1", name: "terminal", ok: true }));
-  await emit(ev("delta", { text: "A small API server." }));
+  await emit(ev("delta", { text: "A small API server.\n" }));
   await expect(tl.getByTestId("bubble-streaming")).toContainText("A small API server.");
   await settled(page);
   await expectSteadyFace(page);
@@ -233,7 +235,7 @@ test.describe("screenshots", () => {
       await emit(
         { event: "tool.start", bot: "kami", tool_id: "fx1", name: "terminal", detail: "grep 502 gateway.log" },
         { event: "tool.end", bot: "kami", tool_id: "fx1", name: "terminal", ok: true },
-        { event: "delta", bot: "kami", text: "The idle timeout on the upstream pool is shorter than the gateway's." },
+        { event: "delta", bot: "kami", text: "The idle timeout on the upstream pool is shorter than the gateway's.\n" },
       );
       await expect(tl.getByTestId("bubble-streaming")).toContainText("gateway's.");
       await shot("3-streaming");

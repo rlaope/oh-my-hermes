@@ -2124,6 +2124,25 @@ class ReplyThere(BridgeCase):
         self.assertEqual(rows[0]["reply_to"], {"target": "slack:C1:1794.5", "label": "#og-dev"})
         self.assertNotIn("reply_to", rows[1])  # only the person's own rows carry a reference
 
+    def test_a_reopened_chat_shows_one_bubble_per_turn_its_answer(self):
+        """kami's real Bot Chat: a turn stores the commentary Hermes writes beside each tool call as assistant rows of
+        their own (14 of the 20 with text in one evening). The live chat shows only the answer; a reopened one too."""
+        rows = [{"role": "user", "text": "fix the tile", "row_id": 1},
+                {"role": "assistant", "text": "Now I'll implement it.", "tool_calls": [{"id": "a"}], "row_id": 2},
+                {"role": "tool", "text": "ok", "row_id": 3},
+                {"role": "assistant", "text": "", "tool_calls": [{"id": "b"}], "row_id": 4},
+                {"role": "assistant", "text": "All 35 tests pass. Committing.", "tool_calls": [{"id": "c"}], "row_id": 5},
+                {"role": "assistant", "text": "PR #2898 is up.", "row_id": 6},
+                {"role": "user", "text": "thanks", "row_id": 7},
+                {"role": "assistant", "text": "Merged.", "row_id": 8},
+                {"role": "user", "text": "still running?", "row_id": 9},
+                {"role": "assistant", "text": "Checking the logs.", "tool_calls": [{"id": "d"}], "row_id": 10}]
+        got = [(m["role"], m["text"]) for m in ob.chat_messages(rows)]
+        self.assertEqual(got, [("user", "fix the tile"), ("assistant", "PR #2898 is up."), ("user", "thanks"),
+                               ("assistant", "Merged."), ("user", "still running?"), ("assistant", "Checking the logs.")])
+        # opened while that last turn still runs: what it said so far is commentary, its answer comes live
+        self.assertEqual(ob.chat_messages(rows, running=True)[-1], {"id": "9", "role": "user", "text": "still running?", "ts": 0.0})
+
     async def test_elsewhere_list_carries_the_target_only_for_threads(self):
         async with Env(sessions=[dict(r) for r in self.SESSIONS]) as env:
             self._db(env.home / "profiles" / "kami")
