@@ -160,6 +160,11 @@ test(`a bot asked to connect the Mac mini drafts it (${theme}): the chip opens t
   await expect(chip).toBeVisible();
   await expect(chip).toContainText("Connect over SSH");
   await expect(chip).toContainText("Mac mini");
+  // the chip stands for the block: no raw JSON and no user@host in the bubble above it
+  const reply = page.getByTestId("bubble-bot").last();
+  await expect(reply.locator(".b")).toContainText("SSH");
+  await expect(reply.locator("pre")).toHaveCount(0);
+  await expect(reply.locator(".b")).not.toContainText("10.1.145.204");
   await shot(page, `peer-chip-${theme}.png`);
   expect((await calls()).some((c) => c.op === "peers.attach")).toBe(false); // the chip alone connects nothing
   await chip.click();

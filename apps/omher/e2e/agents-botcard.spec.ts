@@ -67,8 +67,10 @@ test("a bot reply with a draft: chip -> the same card, filled and naming the bot
   await open(page);
   await reply(`Here is the agent you asked for:\n\n${fence(STUB)}\n\nPress Add agent to see the exact command.`);
   const bubble = page.getByTestId("bubble-bot").last();
-  // the block still renders as code, and one chip sits under the reply
-  await expect(bubble.locator("pre")).toContainText('"program":"stub-acp"');
+  // one chip sits under the reply and stands for the block: the raw JSON is not repeated in the bubble
+  await expect(bubble.locator(".b")).toContainText("Here is the agent you asked for:");
+  await expect(bubble.locator("pre")).toHaveCount(0);
+  await expect(bubble.locator(".b")).not.toContainText("stub-acp");
   const chip = bubble.getByTestId("agent-chip");
   await expect(chip).toHaveCount(1);
   await expect(chip).toContainText("Add agent");

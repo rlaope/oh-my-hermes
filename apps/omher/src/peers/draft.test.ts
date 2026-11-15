@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { labelFor, parsePeerDrafts, peerDraftsAllowed, validHost, validLabel } from "./draft";
+import { createElement } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
+import { labelFor, parsePeerDrafts, peerDraftsAllowed, stripPeerDrafts, validHost, validLabel } from "./draft";
+import { Bubble } from "../chat/parts/Bubble";
 
 const fence = (body: string) => "```omher-peer\n" + body + "\n```";
 
@@ -52,6 +55,26 @@ describe("omher-peer drafts", () => {
     expect(validLabel("맥미니")).toBe(true);
     expect(validLabel(" ")).toBe(false);
     expect(validLabel("a\nb")).toBe(false);
+  });
+
+  it("leaves the blocks out of the shown text: fenced, ~~~, inline, and an unclosed one while streaming", () => {
+    const text = `I'll connect it.\n\n${fence('{"host": "sionic@10.1.145.204", "label": "Mac mini"}')}\n\nPress Connect.`;
+    expect(stripPeerDrafts(text)).toBe("I'll connect it.\n\nPress Connect.");
+    expect(stripPeerDrafts('Use ```omher-peer {"host": "mini"}``` now.\n~~~omher-peer\n{"host": "box"}\n~~~')).toBe("Use  now.");
+    expect(stripPeerDrafts('On it.\n\n```omher-peer\n{"host": "sionic@10.1', true)).toBe("On it.");
+    expect(stripPeerDrafts("```sh\nssh mini\n```")).toBe("```sh\nssh mini\n```");
+  });
+
+  it("the bubble shows the chip, not the raw block with its user@host; a folder chat (no chip) keeps the block", () => {
+    const text = `I'll connect it.\n\n${fence('{"host": "sionic@10.1.145.204", "label": "Mac mini"}')}`;
+    const main = renderToStaticMarkup(createElement(Bubble, { item: { kind: "assistant", text }, bot: "kami" }));
+    expect(main).toContain('data-testid="peer-chip"');
+    expect(main).not.toContain("<pre>");
+    // the bubble's own text holds no user@host (the chip keeps it in its tooltip, as the card shows it)
+    expect(main.split('data-testid="peer-chips"')[0]).not.toContain("10.1.145.204");
+    const live = renderToStaticMarkup(createElement(Bubble, { item: { kind: "assistant", text: text.slice(0, -10) }, bot: "kami", streaming: true }));
+    expect(live).not.toContain("10.1.145");
+    expect(renderToStaticMarkup(createElement(Bubble, { item: { kind: "assistant", text }, bot: "fold:kami:f1" }))).toContain("<pre>");
   });
 
   it("is read only in a bot's main chat", () => {
