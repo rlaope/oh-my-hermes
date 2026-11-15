@@ -66,6 +66,16 @@ class WatchRows(unittest.TestCase):
     def snapshot(self) -> dict:
         return {str(f): (f.stat().st_mtime_ns, f.read_bytes()) for f in self.p.rglob("*") if f.is_file()}
 
+    def test_run_records_written_with_crlf_read_the_same(self) -> None:
+        # Hermes writes run records in text mode; on Windows every line ends in CRLF
+        self.jobs(job())
+        d = self.p / "cron" / "output" / "w1"
+        d.mkdir(parents=True, exist_ok=True)
+        f = d / "2026-11-15_21-00-00.md"
+        f.write_bytes(UNREADABLE_RUN.replace("\r\n", "\n").replace("\n", "\r\n").encode("utf-8"))
+        w = self.watch()
+        self.assertEqual((w["state"], w["reason"]), ("not_readable", {"code": "not_in_channel", "channel": "#og"}))
+
     def test_a_collector_job_is_a_watch_with_what_it_watches(self) -> None:
         self.jobs(job(), {"id": "j2", "name": "digest", "prompt": "Summarise", "schedule_display": "0 9 * * *"})
         self.runs(OK_RUN, SILENT_RUN, GATED_RUN)

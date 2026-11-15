@@ -1193,7 +1193,9 @@ def _watch_runs(profile_dir: Path, job_id: str) -> list[tuple[float, str]]:
     for f in files[:WATCH_RUNS]:
         try:
             with f.open("rb") as fh:
-                out.append((f.stat().st_mtime, fh.read(WATCH_RUN_MAX).decode("utf-8", "replace")))
+                # Hermes writes run records in text mode: CRLF on Windows, which the line-anchored headings expect as LF
+                text = fh.read(WATCH_RUN_MAX).decode("utf-8", "replace").replace("\r\n", "\n")
+                out.append((f.stat().st_mtime, text))
         except OSError:
             continue
     return out
