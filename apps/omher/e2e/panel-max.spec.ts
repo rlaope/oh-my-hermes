@@ -192,6 +192,63 @@ test("⌘⇧G toggles (opening Plans when the panel is closed), Esc restores, do
   await expect(page.getByTestId("window")).not.toHaveClass(/\bpanel-max\b/);
 });
 
+/** The free point of the tab row right of its last tab, read now (also mid-slide). */
+const freeRowPoint = (page: Page) =>
+  page.getByTestId("panel-tabs").evaluate((e) => {
+    const b = e.getBoundingClientRect();
+    const right = Math.max(...[...e.querySelectorAll(".pn-tab")].map((t) => t.getBoundingClientRect().right));
+    const x = right + 12;
+    const y = b.y + b.height / 2;
+    const hit = document.elementFromPoint(x, y);
+    return { x, y, inRow: !!hit?.closest('[data-testid="panel-tabs"]'), moving: document.getAnimations().some((a) => a instanceof CSSTransition) };
+  });
+const isMaxed = async (page: Page) => /\bpanel-max\b/.test((await page.getByTestId("window").getAttribute("class")) ?? "");
+
+test("a person's double-click on the tab row during the restore slide still maximises, 10 of 10 (real mouse)", async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await openPanel(page, "runs");
+  for (let i = 0; i < 10; i++) {
+    if (!(await isMaxed(page))) await page.getByTestId("panel-max").click();
+    await expectMaxed(page);
+    await settled(page);
+    await page.keyboard.press("Escape");
+    await page.waitForTimeout(25);
+    // the free row space under the pointer at the first press; the row slides away before the second
+    const p = await freeRowPoint(page);
+    expect(p.inRow, `round ${i}: first press on the tab row`).toBe(true);
+    await page.mouse.dblclick(p.x, p.y, { delay: 45 });
+    await page.waitForTimeout(400);
+    expect(await isMaxed(page), `round ${i}: double-click during the slide maximised`).toBe(true);
+  }
+});
+
+test("tab row: a settled double-click toggles once; one click, or two clicks 800ms apart, never toggles", async ({ page }) => {
+  await openPanel(page, "runs");
+  const p = await freeRowPoint(page);
+  expect(p.moving).toBe(false);
+  await page.mouse.dblclick(p.x, p.y);
+  await expectMaxed(page);
+  await settled(page);
+  const q = await freeRowPoint(page);
+  await page.mouse.dblclick(q.x, q.y);
+  await expect(page.getByTestId("window")).not.toHaveClass(/\bpanel-max\b/);
+  await settled(page);
+  const r = await freeRowPoint(page);
+  await page.mouse.click(r.x, r.y);
+  await page.waitForTimeout(600);
+  expect(await isMaxed(page)).toBe(false);
+  await page.mouse.click(r.x, r.y);
+  await page.waitForTimeout(800);
+  await page.mouse.click(r.x, r.y);
+  await page.waitForTimeout(600);
+  expect(await isMaxed(page)).toBe(false);
+  // a double-click on a tab only picks the tab
+  await page.getByTestId("panel-tab-details").dblclick();
+  await page.waitForTimeout(300);
+  expect(await isMaxed(page)).toBe(false);
+  await expect(page.getByTestId("details-panel")).toHaveAttribute("data-tab", "details");
+});
+
 test("Esc in a field inside the panel does not restore it", async ({ page }) => {
   await openPanel(page, "details");
   await page.getByTestId("panel-max").click();

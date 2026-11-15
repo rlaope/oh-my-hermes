@@ -1,6 +1,6 @@
 // Right panel tabs next to Details: Terminal, Schedule, Worktrees, Diff. Everything here is read-only:
 // the bot runs things, omher shows what it ran and what it changed.
-import { useEffect, useMemo, useRef, useState, type ReactElement } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactElement } from "react";
 import type { Bot, Routine, TerminalRun, Worktree, WorktreeDiff } from "../lib/protocol";
 import { getStore, useStore } from "../state/store";
 import { shortTime } from "../app/time";
@@ -100,12 +100,146 @@ export function PanelMaxButton() {
   );
 }
 
-/** Double click on the tab row (not on a tab or a button) maximises or restores the panel. */
-export function onPanelRowDoubleClick(e: { target: EventTarget | null; currentTarget: EventTarget }) {
+/** Free space of the tab row: the row itself or anything in it that is not a tab or a button. */
+const onFreeRow = (e: { target: EventTarget | null; currentTarget: EventTarget }) => {
   const hit = e.target as HTMLElement | null;
-  if (hit !== e.currentTarget && hit?.closest("button, a, input, select")) return;
+  return hit === e.currentTarget || !hit?.closest("button, a, input, select");
+};
+const togglePanelMax = () => {
   const st = getStore();
   st.actions.setPanelMax(!st.getState().ui.panelMax);
+};
+
+// A double click on the tab row is read from its two presses, not from the browser's dblclick: maximise / restore
+// slides the row (app.css .panel-maxing), so a person's second press can land on whatever slid in under the pointer,
+// and the native dblclick never reaches the row. The first press on free row space arms; a second press within
+// PAIR_MS and PAIR_PX (screen pixels) toggles, wherever its target now is.
+const PAIR_MS = 500;
+const PAIR_PX = 6;
+let armed: { by: Event; t: number; x: number; y: number; timer: ReturnType<typeof setTimeout> } | null = null;
+/** The press that ended the last pair (the row must not arm on it again) and whether this gesture already toggled. */
+let paired: Event | null = null;
+let toggled = false;
+
+function disarm() {
+  if (!armed) return;
+  clearTimeout(armed.timer);
+  armed = null;
+  window.removeEventListener("pointerdown", onSecondPress, true);
+}
+function onSecondPress(e: PointerEvent) {
+  const a = armed;
+  disarm();
+  if (!a || e.button !== 0) return;
+  if (e.timeStamp - a.t > PAIR_MS || Math.abs(e.screenX - a.x) > PAIR_PX || Math.abs(e.screenY - a.y) > PAIR_PX) return;
+  paired = e;
+  toggled = true;
+  // the second press belongs to the row's double click: a tab or button that slid under it is not also clicked
+  const swallow = (c: MouseEvent) => {
+    c.stopPropagation();
+    c.preventDefault();
+  };
+  window.addEventListener("click", swallow, { capture: true, once: true });
+  setTimeout(() => window.removeEventListener("click", swallow, true), PAIR_MS);
+  togglePanelMax();
+}
+
+function arm(n: PointerEvent) {
+  disarm();
+  toggled = false;
+  armed = { by: n, t: n.timeStamp, x: n.screenX, y: n.screenY, timer: setTimeout(disarm, PAIR_MS) };
+  window.addEventListener("pointerdown", onSecondPress, true);
+}
+
+/** First press of a double click on the tab row's free space (the second is caught on the window, above). */
+export function onPanelRowPointerDown(e: { target: EventTarget | null; currentTarget: EventTarget; button: number; nativeEvent: PointerEvent }) {
+  // this press already ended a pair, or already armed as a press aimed at the swept row (below)
+  if (e.nativeEvent === paired || e.nativeEvent === armed?.by) return;
+  disarm();
+  if (e.button !== 0 || !onFreeRow(e)) return;
+  arm(e.nativeEvent);
+}
+
+// While the panel slides (maximise / restore) the row can move out from under a pointer aimed at its free space
+// before the first press even lands. Each frame of the slide records the free space the row shows; a press on a spot
+// the free space covered in the last AIM_MS belongs to the row, whatever slid in under it: the chat header, or a tab
+// while the slide is still moving it (a tab pressed once it has stopped moving is the tab's). Such a press arms, and its
+// click goes nowhere else.
+const SWEEP_MS = 320;
+const AIM_MS = 200;
+type Box = { at: number; x0: number; x1: number; y0: number; y1: number };
+let swept: Box[] = [];
+let sweepEnd = 0;
+
+function freeBox(row: HTMLElement): Box | null {
+  const b = row.getBoundingClientRect();
+  const tabs = [...row.querySelectorAll(".pn-tab")].map((t) => t.getBoundingClientRect().right);
+  const rest = [...row.querySelectorAll("button:not(.pn-tab)")].map((t) => t.getBoundingClientRect().left);
+  const x0 = tabs.length ? Math.max(...tabs) : b.left;
+  // the row's own buttons sit past the window's edge while the panel grows: only what the window shows counts
+  const x1 = Math.min(rest.length ? Math.min(...rest) : b.right, window.innerWidth);
+  return x1 > x0 ? { at: performance.now(), x0, x1, y0: b.top, y1: b.bottom } : null;
+}
+/** The row moved more than a pixel in the last MOVE_MS: what is under the pointer is not what the person aimed at. */
+const MOVE_MS = 60;
+const moving = (now: number) => {
+  const last = swept.filter((b) => now - b.at <= MOVE_MS).map((b) => b.x0);
+  return last.length > 1 && Math.max(...last) - Math.min(...last) > 1;
+};
+
+function onSweptPress(e: PointerEvent) {
+  if (armed || e === paired || e.button !== 0 || performance.now() > sweepEnd + AIM_MS) return;
+  const hit = e.target as Element | null;
+  const row = hit?.closest('[data-testid="panel-tabs"]');
+  // on the row's free space now: the row's own handler arms; on the row's maximise / close buttons: theirs
+  if (row && !hit?.closest(".pn-tab")) return;
+  const now = performance.now();
+  if (row && !moving(now)) return;
+  const aimed = (b: Box) => now - b.at <= AIM_MS && e.clientX >= b.x0 && e.clientX <= b.x1 && e.clientY >= b.y0 && e.clientY <= b.y1;
+  if (!swept.some(aimed)) return;
+  const swallow = (c: MouseEvent) => {
+    c.stopPropagation();
+    c.preventDefault();
+  };
+  window.addEventListener("click", swallow, { capture: true, once: true });
+  setTimeout(() => window.removeEventListener("click", swallow, true), PAIR_MS);
+  arm(e);
+}
+
+/** Records the tab row's free space every frame while maximise / restore slides it (`max` flips), see above. */
+export function usePanelRowSweep(row: () => HTMLElement | null, max: boolean) {
+  const first = useRef(true);
+  useLayoutEffect(() => {
+    if (first.current) {
+      first.current = false;
+      return;
+    }
+    let frame = 0;
+    const start = performance.now();
+    swept = [];
+    sweepEnd = start + SWEEP_MS;
+    const sample = () => {
+      const r = row();
+      const b = r && freeBox(r);
+      if (b) swept.push(b);
+      if (performance.now() - start < SWEEP_MS) frame = requestAnimationFrame(sample);
+    };
+    sample();
+    window.addEventListener("pointerdown", onSweptPress, true);
+    const off = setTimeout(() => window.removeEventListener("pointerdown", onSweptPress, true), SWEEP_MS + AIM_MS);
+    return () => {
+      cancelAnimationFrame(frame);
+      clearTimeout(off);
+      window.removeEventListener("pointerdown", onSweptPress, true);
+    };
+  }, [max]);
+}
+
+/** The browser's double click on the tab row (not on a tab or a button) toggles too, unless the presses already did:
+ *  one double click never toggles twice. */
+export function onPanelRowDoubleClick(e: { target: EventTarget | null; currentTarget: EventTarget }) {
+  if (toggled || !onFreeRow(e)) return;
+  togglePanelMax();
 }
 
 /** Load once per (bot, tab open); `reload` re-reads. */

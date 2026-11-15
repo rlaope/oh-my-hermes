@@ -1,6 +1,6 @@
 // Details panel: who the bot is, where it is right now (this chat + read-only sessions elsewhere),
 // and its routines from cron. Nothing here writes to another session.
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { SlotProps } from "../features";
 import type { ReactNode as JSXChild } from "react";
 import type { Away, Bot, Routine } from "../lib/protocol";
@@ -10,7 +10,19 @@ import { shortTime } from "../app/time";
 import { Avatar, CloseIcon, IconButton, SourceIcon } from "../ui";
 import logo from "../assets/omher-mark.png";
 import { awayTime, cadence, nextRun, sourceList, sourceName } from "./format";
-import { DiffTab, onPanelRowDoubleClick, PanelMaxButton, ScheduleTab, TAB_ICON, TABS, TerminalTab, WorktreesTab, type PanelTab } from "./PanelTabs";
+import {
+  DiffTab,
+  onPanelRowDoubleClick,
+  onPanelRowPointerDown,
+  PanelMaxButton,
+  usePanelRowSweep,
+  ScheduleTab,
+  TAB_ICON,
+  TABS,
+  TerminalTab,
+  WorktreesTab,
+  type PanelTab,
+} from "./PanelTabs";
 import { useNow } from "./useNow";
 import { RunsTab } from "../runs/RunsTab";
 import { markTabPicked } from "../chat/parts/PanelButton";
@@ -26,8 +38,18 @@ export default function DetailsPanel({ bot, open, onClose }: SlotProps["detailsP
   const tab = s.ui.panelTab;
   const [diffPath, setDiffPath] = useState<string | null>(null);
   useEffect(() => setDiffPath(null), [bot.name]);
+  const row = useRef<HTMLDivElement>(null);
+  usePanelRowSweep(() => row.current, s.ui.panelMax);
   const head = (
-    <div className="details-h pn-tabs" role="tablist" aria-label={tr("pn.panel")} onDoubleClick={onPanelRowDoubleClick} data-testid="panel-tabs">
+    <div
+      ref={row}
+      className="details-h pn-tabs"
+      role="tablist"
+      aria-label={tr("pn.panel")}
+      onPointerDown={onPanelRowPointerDown}
+      onDoubleClick={onPanelRowDoubleClick}
+      data-testid="panel-tabs"
+    >
       {TABS.map((t) => (
         <button
           key={t.id}
