@@ -1408,4 +1408,9 @@ export const en = {
   // spacing: the BOTS | TERMINALS divider
   "side.split": "Resize bots and terminals",
   "side.splitTip": "Drag to give bots or terminals more room. Double-click: back to automatic.",
+  // tidy: a thread row's second line
+  "thread.said": "{name}: {text}",
+  "thread.you": "You",
+  "thread.working": "{name} is working · {time}",
+  "thread.empty": "No messages yet",
 };

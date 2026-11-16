@@ -39,7 +39,7 @@ async function mock(op: string, params: Record<string, unknown> = {}): Promise<a
   return reply.result;
 }
 
-async function shot(page: Page, name: string) {
+async function shot(page: Page, name: string, clip?: { x: number; y: number; width: number; height: number }) {
   if (!SHOTS) return;
   mkdirSync(SHOTS, { recursive: true });
   await page.waitForTimeout(250);
@@ -47,7 +47,7 @@ async function shot(page: Page, name: string) {
   const text = await page.evaluate(() => document.body.innerText);
   expect(text).not.toContain("(mock)");
   expect(text).not.toMatch(/\/Users\//);
-  await page.screenshot({ path: join(SHOTS, `${name}.png`), animations: "disabled", caret: "initial" });
+  await page.screenshot({ path: join(SHOTS, `${name}.png`), animations: "disabled", caret: "initial", clip });
 }
 
 const WEB = "/home/you/code/web-app";
@@ -262,7 +262,18 @@ test.describe("shots", () => {
       await expect(page.getByTestId(`session-${ids.claude}`)).toBeInViewport();
       await noCutRows(page);
       await shot(page, `sidebar-${theme}`);
+      // Kami's five threads, one per state, as chat cards (tidy, 2026-11-16)
+      const tree = (await page.getByTestId("bot-row-kami").boundingBox())!;
+      const side = (await page.getByTestId("sidebar").boundingBox())!;
+      await shot(page, `threads-rows-${theme}`, { x: side.x, y: tree.y - 8, width: side.width, height: tree.height + 16 });
       if (theme !== "dark") return;
+      // a shorter window: each region ends on a whole row, no blank band
+      await page.setViewportSize({ width: 1440, height: 760 });
+      await page.waitForTimeout(400);
+      await noCutRows(page);
+      await shot(page, "sidebar-dark-760");
+      await page.setViewportSize({ width: 1440, height: 900 });
+      await page.waitForTimeout(400);
       await shot(page, "terminal-open");
       await page.getByTestId("session-new").click();
       await expect(page.getByTestId("session-agent-shell")).toBeVisible();

@@ -1406,4 +1406,9 @@ export const ja: Record<Key, string> = {
   // spacing: the BOTS | TERMINALS divider
   "side.split": "ボットとターミナルの高さを変える",
   "side.splitTip": "ドラッグでボットかターミナルを広げます。ダブルクリックで自動に戻ります。",
+  // tidy: a thread row's second line
+  "thread.said": "{name}: {text}",
+  "thread.you": "あなた",
+  "thread.working": "{name} が作業中 · {time}",
+  "thread.empty": "まだメッセージはありません",
 };

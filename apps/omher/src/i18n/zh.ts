@@ -1406,4 +1406,9 @@ export const zh: Record<Key, string> = {
   // spacing: the BOTS | TERMINALS divider
   "side.split": "调整机器人和终端的高度",
   "side.splitTip": "拖动为机器人或终端留出更多空间。双击恢复自动。",
+  // tidy: a thread row's second line
+  "thread.said": "{name}: {text}",
+  "thread.you": "你",
+  "thread.working": "{name} 正在处理 · {time}",
+  "thread.empty": "还没有消息",
 };

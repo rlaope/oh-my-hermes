@@ -296,3 +296,61 @@ test("x -> confirm removes the row (stop + archive); Cancel keeps it and sends n
   await expect(page.getByTestId(`thread-row-${ids.notes}`)).toBeVisible();
   await expect(page.locator(`[data-thread="${ids.slack}"], [data-thread="${ids.og}"], [data-thread="${ids.docs}"]`)).toHaveCount(0);
 });
+
+// tidy (2026-11-16, owner): a thread row reads as a chat you open, not a subtask
+test("a thread row is a chat card: bubble with its state badge inside, title and time / who said what, › on hover, opens its chat", async ({ page }) => {
+  await setup(page);
+  const ids = await seed(page);
+  const row = (id: string) => page.getByTestId(`thread-row-${id}`);
+  // two lines: the title and time, then a preview
+  const geo = await row(ids.slack).evaluate((el) => {
+    const r = (s: string) => el.querySelector(s)!.getBoundingClientRect();
+    const cs = getComputedStyle(el);
+    return { title: r(".th-title"), sub: r('[data-testid="thread-sub"]'), radius: cs.borderTopLeftRadius, cursor: getComputedStyle(el.querySelector(".th-open")!).cursor };
+  });
+  expect(geo.sub.top).toBeGreaterThanOrEqual(geo.title.bottom - 0.5);
+  expect(geo.radius).toBe("8px");
+  expect(geo.cursor).toBe("pointer");
+  await expect(row(ids.slack).getByTestId("thread-sub")).toHaveText("Kami: 알림 문구를 세 가지로 다듬었어요.");
+  await expect(row(ids.og).getByTestId("thread-sub")).toContainText("Kami is working · ");
+  await expect(row(ids.docs).getByTestId("thread-sub")).toContainText("pnpm build:docs");
+  await expect(row(ids.notes).getByTestId("thread-sub")).toHaveText("You: 릴리스 노트 초안 정리해줘");
+  // the state badge sits inside the bubble's box; idle has none
+  for (const id of [ids.og, ids.docs, ids.slack, ids.nightly]) {
+    const inside = await row(id).evaluate((el) => {
+      const ic = el.querySelector('[data-testid="thread-icon"]')!.getBoundingClientRect();
+      const g = el.querySelector('[data-testid="thread-glyph"]')!.getBoundingClientRect();
+      return g.width > 0 && g.left >= ic.left - 0.5 && g.right <= ic.right + 0.5 && g.top >= ic.top - 0.5 && g.bottom <= ic.bottom + 0.5;
+    });
+    expect(inside, id).toBe(true);
+  }
+  await expect(row(ids.notes).getByTestId("thread-glyph")).toBeHidden();
+  // hover: a fill and the › ; away: no ›
+  const go = row(ids.slack).getByTestId("thread-go");
+  await page.mouse.move(900, 600);
+  await expect(go).toBeHidden();
+  await row(ids.slack).hover();
+  await expect(go).toBeVisible();
+  await expect.poll(() => row(ids.slack).evaluate((el) => getComputedStyle(el).backgroundColor)).not.toBe("rgba(0, 0, 0, 0)");
+  // named for a screen reader, opened with Enter
+  await expect(row(ids.slack).getByTestId("thread-open")).toHaveAttribute("aria-label", "Open thread Slack 알림 문구 다듬기");
+  await row(ids.slack).getByTestId("thread-open").focus();
+  await page.keyboard.press("Enter");
+  await expect(page.getByTestId("thread-chat")).toHaveAttribute("data-thread", ids.slack);
+  await expect(row(ids.slack)).toHaveClass(/\bon\b/);
+  // the bot's own line is not the newest thread's title listed right under it
+  await expect(page.getByTestId("bot-kami").getByTestId("bot-sub")).not.toHaveText("OG 대시보드 502 원인 찾기");
+  await page.mouse.move(900, 600);
+  await shot(page, "rows-cards");
+});
+
+test("each thread row's time is its own last activity", async ({ page }) => {
+  await setup(page);
+  await mock("mock.threads", { bot: "kami", threads: [4 * 86400, 26 * 3600, 3 * 3600, 3600, 10].map((ago, i) => ({ title: `Thread ${i + 1}`, ago })) });
+  await page.reload();
+  const times = page.getByTestId("threads-kami").getByTestId("thread-time");
+  await expect(times).toHaveCount(5);
+  const texts = await times.allTextContents();
+  expect(new Set(texts).size).toBe(5);
+  expect(texts.filter((x) => x === "now")).toHaveLength(1);
+});

@@ -1186,7 +1186,9 @@ const OPS = {
     const threads = [...folders.entries()]
       .filter(([, f]) => f.thread && f.bot === b.name && !f.archived)
       .map(([thread, f]) => ({ thread, title: f.title, cwd: f.listedCwd ?? f.cwd, started_at: f.started, running: Boolean(turns[folderTurnKey(b.name, thread)]),
-        needs: [...pending.values()].some((w) => w.bot === folderTurnKey(b.name, thread)), message_count: threadHistory.get(thread)?.length ?? 0, preview: "" }))
+        needs: [...pending.values()].some((w) => w.bot === folderTurnKey(b.name, thread)), message_count: threadHistory.get(thread)?.length ?? 0,
+        // as Hermes' session.list: the session's first user message
+        preview: threadHistory.get(thread)?.find((m) => m.role === "user")?.text ?? "" }))
       .sort((x, y) => y.started_at - x.started_at);
     return { threads };
   },

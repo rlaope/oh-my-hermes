@@ -1406,4 +1406,9 @@ export const ko: Record<Key, string> = {
   // spacing: the BOTS | TERMINALS divider
   "side.split": "봇과 터미널 높이 조절",
   "side.splitTip": "끌어서 봇이나 터미널에 자리를 더 줍니다. 두 번 클릭: 자동으로",
+  // tidy: a thread row's second line
+  "thread.said": "{name}: {text}",
+  "thread.you": "나",
+  "thread.working": "{name} 작업 중 · {time}",
+  "thread.empty": "아직 메시지 없음",
 };
