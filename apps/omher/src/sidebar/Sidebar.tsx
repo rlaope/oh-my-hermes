@@ -26,6 +26,7 @@ import { useBotsAbove } from "./dockState";
 import { revealBotTop, revealPending } from "./revealBot";
 import { useEdgeFade } from "./edgeFade";
 import { SplitDivider, useSideSplit } from "./SideSplit";
+import { useAutoSplit } from "./autoSplit";
 
 const sessionBackground = (target: EventTarget) => target instanceof Element && !target.closest(".ss-row, button, input, textarea, select, a, [contenteditable], [role=menu], [role=menuitem]");
 
@@ -73,6 +74,8 @@ export function Sidebar() {
   const botSec = useRef<HTMLElement>(null);
   const termSec = useRef<HTMLElement>(null);
   const split = useSideSplit(botSec, termSec);
+  // auto (nothing dragged, no search): each region as tall as its rows, or cut on a whole row (autoSplit.ts)
+  useAutoSplit(botSec, termSec, SESSIONS_ENTRY && !needle && split.share === null);
 
   return (
     <aside className="side" data-testid="sidebar">

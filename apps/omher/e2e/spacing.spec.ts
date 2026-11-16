@@ -213,6 +213,23 @@ test("session cards: 4px apart, 10px+ between folders, rounded, two lines with t
   expect(geo.lineBelow).toBe(true);
   expect(geo.cut).toEqual(["ellipsis", true, 15]);
   expect(geo.inCard).toBe(true);
+  // every running card's lane sits inside its card (selected or not), the same distance from its left edge
+  const lanes = await page.evaluate(() =>
+    [...document.querySelectorAll<HTMLElement>('[data-testid="side-sessions"] .ss-row')].map((card) => {
+      const r = card.getBoundingClientRect();
+      const cs = getComputedStyle(card, "::before");
+      const on = card.classList.contains("run");
+      const left = r.left + parseFloat(cs.left || "0");
+      const top = r.top + parseFloat(cs.top || "0");
+      const bottom = r.bottom - parseFloat(cs.bottom || "0");
+      return { on, content: cs.content, inside: left >= r.left && left + parseFloat(cs.width) <= r.right && top >= r.top && bottom <= r.bottom, dx: Math.round(left - r.left) };
+    }),
+  );
+  const running = lanes.filter((l) => l.on);
+  expect(running.length).toBeGreaterThanOrEqual(2);
+  for (const l of running) expect(l.inside).toBe(true);
+  expect(new Set(running.map((l) => l.dx)).size).toBe(1);
+  for (const l of lanes.filter((l) => !l.on)) expect(l.content === "none" || l.content === "normal").toBe(true);
   // Codex runs: the amber lane; a bare shell prompt has none
   await expect(page.getByTestId(`session-${b}`)).toHaveClass(/\brun\b/);
   expect(geo.lane).not.toBe("rgba(0, 0, 0, 0)");
@@ -303,4 +320,85 @@ test("footer: Automations, Plugins and Settings in one row of icon buttons, name
   await expect(page.getByTestId("nav-settings")).toBeFocused();
   await page.keyboard.press("Enter");
   await expect(page.getByTestId("nav-settings")).toHaveClass(/\bon\b/);
+});
+
+/** The sidebar's lists as they show now: the blank band at each list's end (from the last whole row shown to the
+ *  list's visible end), the chevrons, every open folder's shown rows. */
+function bands(page: Page) {
+  return page.evaluate(() => {
+    const out: Record<string, { band: number; more: string | null; openHeadsAlone: number; cardsShown: number; cards: number }> = {};
+    for (const [name, sel] of [["bots", '[data-testid="side-bots"] > .bot-list'], ["terms", '[data-testid="side-sessions"] > .ss-list']] as const) {
+      const list = document.querySelector<HTMLElement>(sel);
+      if (!list) continue;
+      const box = list.getBoundingClientRect();
+      const v = (/inset\(([^)]*)\)/.exec(getComputedStyle(list).clipPath)?.[1] ?? "").trim().split(/\s+/).map(parseFloat).filter((n) => !Number.isNaN(n));
+      const end = box.bottom - (v.length ? (v[2] ?? v[0] ?? 0) : 0);
+      const rows = [...list.querySelectorAll<HTMLElement>(".bot-w > .bot, .th-row, .tg-h, .ss-row")].filter((r) => r.getBoundingClientRect().height > 0);
+      const shown = rows.filter((r) => r.getBoundingClientRect().top >= box.top - 0.5 && r.getBoundingClientRect().bottom <= end + 0.5);
+      const lastBottom = Math.max(box.top, ...shown.map((r) => r.getBoundingClientRect().bottom));
+      const more = list.dataset.more ?? null;
+      // an open folder whose header shows and none of its cards
+      const openHeadsAlone = [...list.querySelectorAll<HTMLElement>(".tg:not(.shut)")].filter((g) => {
+        const h = g.querySelector(".tg-h");
+        return h && shown.includes(h as HTMLElement) && ![...g.querySelectorAll(".ss-row")].some((c) => shown.includes(c as HTMLElement));
+      }).length;
+      out[name] = {
+        band: Math.round(more === "below" || more === "both" ? end - lastBottom : 0),
+        more,
+        openHeadsAlone,
+        cardsShown: shown.filter((r) => r.matches(".ss-row")).length,
+        cards: rows.filter((r) => r.matches(".ss-row")).length,
+      };
+    }
+    return out;
+  });
+}
+
+test.describe("auto split: no blank band", () => {
+  test.use({ deviceScaleFactor: 1, viewport: { width: 1440, height: 900 } });
+  test("few rows at 900: every card shows, no chevron; at 760 each region ends on a whole row", async ({ page }) => {
+    test.setTimeout(120_000);
+    await mock("mock.threads", { bot: "kami", threads: ["Release notes", "Nightly build", "Slack alert copy", "Docs dark mode", "Gateway 502s"].map((title, i) => ({ title, ago: (i + 1) * 600 })) });
+    await open(page);
+    for (const [agent, folder] of [["shell", API], ["pi", WEB], ["codex", WEB], ["claude", WEB]] as const) await newTerm(page, agent, folder);
+    await page.mouse.move(900, 600);
+    await page.waitForTimeout(400);
+    const b900 = await bands(page);
+    record("tidy-few@900", { ...b900, ...(await measure(page)) });
+    expect(b900.terms!.cardsShown).toBe(4);
+    expect(b900.terms!.more).toBeNull();
+    expect(b900.bots!.more).toBeNull();
+    await page.setViewportSize({ width: 1440, height: 760 });
+    await page.waitForTimeout(400);
+    const b760 = await bands(page);
+    record("tidy-few@760", { ...b760, ...(await measure(page)) });
+    for (const r of [b760.bots!, b760.terms!]) {
+      expect(r.band).toBeLessThanOrEqual(26);
+      expect(r.openHeadsAlone).toBe(0);
+    }
+  });
+
+  test("many rows at 900 and 760: no band over half a card; an open folder never shows without a card", async ({ page }) => {
+    test.setTimeout(240_000);
+    const { bots } = await mock("mock.manyBots", { n: 12 });
+    const names = ["Billing fixes", "Flaky e2e on CI", "Onboarding copy", "Search ranking", "Pricing page A/B", "Deploy checklist"];
+    for (const b of bots as string[]) await mock("mock.threads", { bot: b, threads: names.map((title, i) => ({ title, ago: (i + 1) * 600 })) });
+    await open(page, { roster: ["kami", ...(bots as string[])] });
+    const kinds = ["claude", "codex", "shell"];
+    const folders = [WEB, API, NOTES];
+    for (let i = 0; i < 15; i++) await newTerm(page, kinds[i % 3]!, folders[Math.floor(i / 5)]!);
+    await page.mouse.move(900, 600);
+    for (const h of [900, 760]) {
+      await page.setViewportSize({ width: 1440, height: h });
+      await page.waitForTimeout(400);
+      for (const top of [0, 37, 120]) {
+        await page.evaluate((t) => document.querySelectorAll<HTMLElement>(".side-sec > .ss-list").forEach((l) => (l.scrollTop = t)), top);
+        await page.waitForTimeout(150);
+        const b = await bands(page);
+        if (top === 0) record(`tidy-many@${h}`, { ...b, ...(await measure(page)) });
+        for (const r of [b.bots!, b.terms!]) expect(r.openHeadsAlone, JSON.stringify(b)).toBe(0);
+        if (top === 0) for (const r of [b.bots!, b.terms!]) expect(r.band, JSON.stringify(b)).toBeLessThanOrEqual(26);
+      }
+    }
+  });
 });

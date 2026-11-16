@@ -13,9 +13,10 @@ export const CUE_PX = 14;
 
 /** How many px to hide at the bottom of a list whose box ends at `bottom`: from the top of the first row that would
  *  reach into the cue band, at least the band itself. `rows`: the rows' tops and bottoms. */
-export function cutBelow(bottom: number, rows: readonly { top: number; bottom: number }[], band = CUE_PX): number {
+export function cutBelow(bottom: number, rows: readonly { top: number; bottom: number; head?: boolean }[], band = CUE_PX): number {
   // hiding a row from its top can reach into the row above it (a bot row over its first thread): repeat until no
-  // shown row reaches past the hidden part's top
+  // shown row reaches past the hidden part's top, and the last row shown is not a `head` (an open folder's header,
+  // a bot over its threads) whose rows are all hidden
   let from = bottom - band;
   for (let moved = true; moved; ) {
     moved = false;
@@ -24,9 +25,20 @@ export function cutBelow(bottom: number, rows: readonly { top: number; bottom: n
         from = r.top;
         moved = true;
       }
+    if (moved) continue;
+    let last: (typeof rows)[number] | null = null;
+    for (const r of rows) if (r.bottom <= from + 0.5 && r.bottom > (last?.bottom ?? -Infinity)) last = r;
+    if (last?.head && rows.some((r) => r.top >= last!.bottom - 0.5 && r.top < bottom)) {
+      from = last.top;
+      moved = true;
+    }
   }
   return Math.max(band, Math.ceil(bottom - from));
 }
+
+/** A row that heads others below it (an open folder's header, a bot row over its threads): never the last one shown. */
+export const isHead = (r: Element) =>
+  (r.matches(".tg-h") && !r.closest(".tg")?.matches(".shut")) || (r.matches(".bot-w > .bot") && !!r.parentElement?.querySelector(".th-tree"));
 
 export function edgeOf(el: { scrollTop: number; clientHeight: number; scrollHeight: number }): "above" | "below" | "both" | null {
   const above = el.scrollTop > 1;
@@ -49,7 +61,10 @@ export function useEdgeFade<T extends HTMLElement>(own?: { current: T | null }):
         let clip = "";
         if (m === "below" || m === "both") {
           const box = el.getBoundingClientRect();
-          const rows = [...el.querySelectorAll<HTMLElement>(CUT_ROWS)].map((r) => r.getBoundingClientRect());
+          const rows = [...el.querySelectorAll<HTMLElement>(CUT_ROWS)].map((r) => {
+            const b = r.getBoundingClientRect();
+            return { top: b.top, bottom: b.bottom, head: isHead(r) };
+          });
           clip = `inset(0 0 ${cutBelow(box.bottom, rows)}px 0)`;
         }
         if (el.style.clipPath !== clip) el.style.clipPath = clip;

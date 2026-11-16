@@ -24,6 +24,13 @@
 .side-sec .ss-row {
   scroll-margin-bottom: 14px;
 }
+/* auto split (autoSplit.ts): the height is set from the rows; nothing grows or shrinks it */
+.side-sec[data-auto] {
+  flex: none;
+  box-sizing: border-box;
+  min-height: 0;
+  max-height: none;
+}
 .side-sec.side-sec-fit {
   flex-grow: 0;
   min-height: 0;
@@ -1356,14 +1363,16 @@ body.side-resizing * {
   background: var(--active-row);
   border-color: var(--line);
 }
+/* the lane sits on the card's inner left edge, the same place on every running card (selected, hovered or neither),
+   inside its rounded box */
 .ss-row.tr.run::before {
   content: "";
   position: absolute;
-  left: 2px;
-  top: 7px;
-  bottom: 7px;
+  left: 0;
+  top: 8px;
+  bottom: 8px;
   width: 2px;
-  border-radius: 1px;
+  border-radius: 0 2px 2px 0;
   background: var(--term-run);
   pointer-events: none;
 }
