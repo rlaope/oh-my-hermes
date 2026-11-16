@@ -262,8 +262,8 @@ test("gh not signed in: one sentence naming gh auth login, and a button that ope
   await expect(box.locator("p")).toHaveText("Run `gh auth login` in a terminal.");
   await box.getByTestId("tasks-signin-terminal").click();
   await expect(page.getByTestId("termpanel")).toBeVisible();
-  const shells = await page.evaluate(() => ((window as any).__omherShellCalls ?? []).filter((c: any) => c.op === "start"));
-  expect(shells).toHaveLength(1);
+  // the panel starts its shell after it shows: wait for the one start
+  await expect.poll(() => page.evaluate(() => ((window as any).__omherShellCalls ?? []).filter((c: any) => c.op === "start").length)).toBe(1);
   // no list was asked while signed out
   expect((await taskCalls(page)).some((c: any) => c.op === "list")).toBe(false);
 });

@@ -24,6 +24,7 @@ test('independent missing gh and malformed repositories',async({page})=>{
 test('independent terminal here starts a shell in cloned repo',async({page})=>{
  await setup(page);await page.getByTestId('tasks-row-1').click();await page.getByTestId('tasks-terminal').click();
  await expect(page.getByTestId('termpanel')).toBeVisible();
+ await expect.poll(()=>page.evaluate(()=>((window as any).__omherShellCalls??[]).filter((c:any)=>c.op==='start').length)).toBe(1);
  const starts=await page.evaluate(()=>(window as any).__omherShellCalls.filter((c:any)=>c.op==='start'));
  console.log('TERMINAL START',JSON.stringify(starts));expect(starts).toHaveLength(1);expect(starts[0].cwd).toBe(CWD);
 });
