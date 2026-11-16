@@ -614,7 +614,12 @@ test("bot click: its chat opens and its row slides to the top of BOTS with its t
     (document.querySelector('[data-testid="bot-bot05"]') as HTMLElement).click();
     return new Promise<number[]>((res) => setTimeout(() => res(seen), 700));
   });
-  expect(new Set(samples).size).toBeGreaterThan(3);
+  // Smooth, not a jump: at least one frame strictly between where it started and where it ended. Counting distinct
+  // positions (>3) failed 2/10 on a loaded machine where rAF delivered only one frame inside the 250 ms slide.
+  const first = samples[0];
+  const last = samples[samples.length - 1];
+  expect(last).toBeGreaterThan(first);
+  expect(samples.some((v) => v > first && v < last)).toBe(true);
   await expect(page.getByTestId("bot-bot05")).toHaveAttribute("aria-current", "true");
   await expect(botList).toHaveAttribute("data-revealed", "bot05");
   const gap = await page.evaluate(() => {
