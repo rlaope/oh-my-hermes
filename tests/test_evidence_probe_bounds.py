@@ -2,7 +2,8 @@
 
 The model chooses `project_root` and the command suffix, so both are bounded:
 the root must be the host working directory or inside it, `-m unittest` takes
-only reporting flags, `git diff` refuses options that write a file, run a
+only reporting flags and a selection of test*.py modules inside workdir that
+default discovery would also run, `git diff` refuses options that write a file, run a
 configured program, or read outside the repository, and no `uv run` prefix is
 shipped. Every path a probe opens because the suffix named it -- a compileall or
 git diff argument, or the value of an omh option -- must stay inside workdir.
@@ -145,6 +146,114 @@ class EvidenceProbeBoundsTests(unittest.TestCase):
         ):
             self.assert_refused(command, "unittest argument not allowed")
 
+    def make_test_tree(self) -> None:
+        """tests/test_a.py (a class with test methods) in a regular package, and look-alikes."""
+        tests = self.host_cwd / "tests"
+        (tests / "nested").mkdir(parents=True)
+        (tests / "__init__.py").write_text("", encoding="utf-8")
+        (tests / "nested" / "__init__.py").write_text("", encoding="utf-8")
+        body = ("import os\nimport unittest\n\n\ndef helper():\n    pass\n\n\n"
+                "class CaseA(unittest.TestCase):\n    def test_one(self):\n        pass\n\n"
+                "    def setUp(self):\n        pass\n")
+        (tests / "test_a.py").write_text(body, encoding="utf-8")
+        (tests / "nested" / "test_deep.py").write_text(body, encoding="utf-8")
+        (tests / "helpers.py").write_text("x = 1\n", encoding="utf-8")
+        (self.host_cwd / "test_top.py").write_text(body, encoding="utf-8")
+        (self.host_cwd / "nopkg").mkdir()
+        (self.host_cwd / "nopkg" / "test_n.py").write_text(body, encoding="utf-8")
+        (self.host_cwd / "test").mkdir()
+        (self.host_cwd / "test" / "__init__.py").write_text("", encoding="utf-8")
+        (self.host_cwd / "test" / "test_shadow.py").write_text(body, encoding="utf-8")
+        # Named like a standard-library package the interpreter may already hold.
+        (self.host_cwd / "email").mkdir()
+        (self.host_cwd / "email" / "__init__.py").write_text("", encoding="utf-8")
+        (self.host_cwd / "email" / "test_e.py").write_text(body, encoding="utf-8")
+
+    def test_unittest_may_name_a_test_module_inside_workdir(self) -> None:
+        """The task's own test can be named, so a red unrelated suite does not hide its result."""
+        self.make_test_tree()
+        for command in (
+            "python3 -m unittest tests.test_a",
+            "python3 -m unittest tests.test_a.CaseA",
+            "python3 -m unittest tests.test_a.CaseA.test_one",
+            "python3 -m unittest -v tests.test_a tests.nested.test_deep",
+            "python3 -m unittest tests/test_a.py",
+            "python3 -m unittest tests/nested/test_deep.py -f",
+            "python3 -m unittest test_top",
+            "python3 -m unittest test_top.py",
+            "python -m unittest -k one tests.test_a",
+            # `sys.stdlib_module_names` leaves out CPython's own `test` package,
+            # so a workdir `test/` package is admitted like discovery runs it.
+            "python3 -m unittest test.test_shadow",
+        ):
+            argv = self.assert_admitted(command)
+            self.assertEqual(argv, shlex.split(command))
+
+    def test_unittest_refuses_a_selection_discovery_would_not_run(self) -> None:
+        self.make_test_tree()
+        for command, reason in (
+            ("python3 -m unittest tests.helpers", "names no test*.py module inside workdir"),
+            ("python3 -m unittest tests", "names no test*.py module inside workdir"),
+            ("python3 -m unittest tests.test_missing", "names no test*.py module inside workdir"),
+            ("python3 -m unittest nopkg.test_n", "names no test*.py module inside workdir"),
+            ("python3 -m unittest nopkg/test_n.py", "names no test*.py module inside workdir"),
+            ("python3 -m unittest tests/helpers.py", "names no test*.py module inside workdir"),
+            ("python3 -m unittest tests/test_missing.py", "names no test*.py module inside workdir"),
+            # A dotted name past the module is called by unittest when it is not a TestCase.
+            ("python3 -m unittest tests.test_a.helper", "names no class defined in the test module"),
+            ("python3 -m unittest tests.test_a.os", "names no class defined in the test module"),
+            ("python3 -m unittest tests.test_a.unittest.main", "names no class defined in the test module"),
+            ("python3 -m unittest tests.test_a.os.getcwd", "names no class defined in the test module"),
+            ("python3 -m unittest tests.test_a.CaseA.setUp", "names a method that is not test*"),
+            ("python3 -m unittest tests.test_a.CaseA.test_one.x", "names more than a test class and method"),
+            # Standard-library and installed modules, wherever they would resolve.
+            ("python3 -m unittest unittest", "names a standard-library module"),
+            ("python3 -m unittest os.system", "names a standard-library module"),
+            ("python3 -m unittest json.tool", "names a standard-library module"),
+            ("python3 -m unittest email.test_e", "names a standard-library module"),
+            ("python3 -m unittest email/test_e.py", "names a standard-library module"),
+            ("python3 -m unittest omh.cli", "names no test*.py module inside workdir"),
+            # Paths and shapes the name grammar never admits.
+            ("python3 -m unittest /tmp/test_x.py", "absolute or home-relative"),
+            ("python3 -m unittest ../test_x.py", "'..' component"),
+            ("python3 -m unittest ~/test_x.py", "absolute or home-relative"),
+            ("python3 -m unittest tests/test-a.py", "not a test file path"),
+            ("python3 -m unittest tests/te.st_a.py", "not a test file path"),
+            ("python3 -m unittest tests.test_a.", "not a dotted test name"),
+            ("python3 -m unittest tests..test_a", "not a dotted test name"),
+            ("python3 -m unittest 'tests.test_a CaseA'", "not a dotted test name"),
+            ("python3 -m unittest DISCOVER", "discover is not allowed"),
+            # Options still follow the reporting-flag rule, wherever they sit.
+            ("python3 -m unittest tests.test_a -s /tmp", "unittest argument not allowed: -s"),
+            ("python3 -m unittest tests.test_a --start-directory=/tmp", "unittest argument not allowed: --start"),
+            ("python3 -m unittest tests.test_a -c print", "unittest argument not allowed: print"),
+        ):
+            self.assert_refused(command, reason)
+
+    def test_unittest_refuses_a_selection_that_leaves_workdir_through_a_symlink(self) -> None:
+        self.make_test_tree()
+        outside_pkg = self.outside / "pkg"
+        outside_pkg.mkdir()
+        (outside_pkg / "__init__.py").write_text("", encoding="utf-8")
+        (outside_pkg / "test_out.py").write_text("x = 1\n", encoding="utf-8")
+        try:
+            (self.host_cwd / "linked").symlink_to(outside_pkg, target_is_directory=True)
+            (self.host_cwd / "tests" / "test_link.py").symlink_to(outside_pkg / "test_out.py")
+            mixed = self.host_cwd / "mixed"
+            mixed.mkdir()
+            (mixed / "__init__.py").symlink_to(outside_pkg / "__init__.py")
+            (mixed / "test_m.py").write_text("x = 1\n", encoding="utf-8")
+        except (OSError, NotImplementedError):
+            self.skipTest("symlinks unavailable")
+        for command in ("python3 -m unittest linked.test_out", "python3 -m unittest tests.test_link",
+                        "python3 -m unittest linked/test_out.py", "python3 -m unittest mixed.test_m"):
+            self.assert_refused(command, "resolves outside workdir")
+
+    def test_an_operator_entry_naming_a_module_still_takes_no_other_selection(self) -> None:
+        self.make_test_tree()
+        with patch.object(evidence_tool, "_allowlist", return_value=("python -m unittest tests.test_a",)):
+            self.assert_refused("python -m unittest tests.test_a tests.nested.test_deep", "unittest argument not allowed")
+
     def test_unittest_reporting_flags_are_allowed(self) -> None:
         for command in ("python -m unittest", "python3 -m unittest -v -f --locals",
                         "python -m unittest -q -b -c", "python -m unittest -k test_name"):
@@ -268,6 +377,85 @@ class EvidenceProbeBoundsTests(unittest.TestCase):
         self.assertTrue(self.gather(["python -m unittest -v"])["all_pass"])
         self.assertNotIn("PYTHONSAFEPATH", self.child.call_args.kwargs["env"])
         self.assertIs(self.child.call_args.kwargs["stdin"], subprocess.DEVNULL)
+
+    def gather_returning(self, command: str, returncode: int, stderr: str) -> dict:
+        """Gather one admitted command whose (faked) child exits `returncode` printing `stderr`."""
+        self.child.return_value = types.SimpleNamespace(returncode=returncode, stdout="", stderr=stderr)
+        return self.gather([command])
+
+    def test_a_run_that_ran_no_test_is_not_a_pass(self) -> None:
+        """`Ran 0 tests ... OK` (exit 0 before Python 3.12) and exit 5 prove nothing ran."""
+        ran_none = "\n----------------------------------------------------------------------\nRan 0 tests in 0.000s\n\nOK\n"
+        for command, returncode, stderr in (
+            ("python3 -m unittest", 0, ran_none),
+            ("python3 -m unittest -q", 0, ran_none),
+            ("python3 -m unittest", 5, ran_none.replace("OK", "NO TESTS RAN")),
+            # A test that prints its own summary-looking line does not decide it; the runner's last one does.
+            ("python3 -m unittest -v", 0, "Ran 3 tests in 0.1s\n" + ran_none),
+        ):
+            with self.subTest(command=command, returncode=returncode):
+                result = self.gather_returning(command, returncode, stderr)
+                self.assertFalse(result["all_pass"])
+                self.assertFalse(result["results"][0]["passed"])
+                self.assertEqual(result["results"][0]["reason"], "no tests ran")
+                self.assertEqual(result["results"][0]["evidence_type"], "observed_local_command")
+                self.assertEqual(result["summary"], "0/1 passed")
+
+    def test_a_run_that_ran_tests_still_passes_and_other_exit_fives_are_untouched(self) -> None:
+        ran = "\n----------------------------------------------------------------------\nRan {n} tests in 0.001s\n\nOK\n"
+        for command, returncode, stderr, passed in (
+            ("python3 -m unittest", 0, ran.format(n=3), True),
+            ("python3 -m unittest -v", 0, "Ran 0 tests in 0.0s\n" + ran.format(n=1), True),
+            ("python3 -m unittest", 0, "Ran 10 tests in 0.1s\n\nOK\n", True),
+            # Output whose tail was cut still reads the runner's line from the full output.
+            ("python3 -m unittest", 0, ran.format(n=2) + "\n" + "y" * 5_000, True),
+            ("python3 -m unittest", 1, ran.format(n=2).replace("OK", "FAILED (failures=1)"), False),
+            # Exit 5 means "no tests" only for a test runner.
+            ("python3 -m compileall -q .", 5, "", False),
+            ("git diff --check", 0, "Ran 0 tests in 0.0s\n", True),
+        ):
+            with self.subTest(command=command, returncode=returncode, passed=passed):
+                result = self.gather_returning(command, returncode, stderr)
+                self.assertIs(result["results"][0]["passed"], passed)
+                self.assertNotIn("reason", result["results"][0])
+
+    def test_an_operator_added_pytest_prefix_reports_no_tests_ran(self) -> None:
+        """pytest exits 5 when it collected nothing; an operator's pytest entry gets the same verdict."""
+        with patch.object(evidence_tool, "_allowlist", return_value=("python3 -m pytest", "pytest")):
+            for command in ("python3 -m pytest tests", "pytest -q"):
+                with self.subTest(command=command):
+                    result = self.gather_returning(command, 5, "no tests ran in 0.01s\n")
+                    self.assertFalse(result["results"][0]["passed"])
+                    self.assertEqual(result["results"][0]["reason"], "no tests ran")
+                    result = self.gather_returning(command, 0, "1 passed in 0.01s\n")
+                    self.assertTrue(result["results"][0]["passed"])
+                    self.assertNotIn("reason", result["results"][0])
+
+    def test_a_named_test_module_passes_in_one_call_while_the_full_suite_is_red(self) -> None:
+        """The measured shape: the task's module is fixed, another module still fails."""
+        python3 = shutil.which("python3")
+        if python3 is None:
+            self.skipTest("python3 unavailable")
+        tests = self.host_cwd / "tests"
+        tests.mkdir()
+        (tests / "__init__.py").write_text("", encoding="utf-8")
+        (tests / "test_fixed.py").write_text(
+            "import unittest\n\n\nclass Fixed(unittest.TestCase):\n    def test_ok(self):\n        self.assertTrue(True)\n",
+            encoding="utf-8")
+        (tests / "test_other.py").write_text(
+            "import unittest\n\n\nclass Other(unittest.TestCase):\n    def test_bug(self):\n        self.fail('unrelated')\n",
+            encoding="utf-8")
+        (self.host_cwd / "empty").mkdir()
+        with patch.object(evidence_tool.subprocess, "run", _REAL_RUN):
+            whole = self.gather(["python3 -m unittest"])
+            named = self.gather(["python3 -m unittest tests.test_fixed", "python3 -m unittest tests/test_fixed.py"])
+            nothing = self.gather(["python3 -m unittest"], workdir=str(self.host_cwd / "empty"))
+        self.assertFalse(whole["all_pass"])
+        self.assertTrue(named["all_pass"], named["results"])
+        self.assertEqual(named["summary"], "2/2 passed")
+        self.assertIn("Ran 1 test", named["results"][0]["output_tail"])
+        self.assertFalse(nothing["all_pass"])
+        self.assertEqual(nothing["results"][0]["reason"], "no tests ran")
 
     def test_a_compileall_module_in_workdir_does_not_run(self) -> None:
         python3 = shutil.which("python3")
@@ -415,6 +603,28 @@ class EvidenceProbeBoundsTests(unittest.TestCase):
                                 resolved = Path(os.path.realpath(self.host_cwd / Path(value).expanduser()))
                                 self.assertTrue(resolved.is_relative_to(self.host_cwd))
         self.assertGreater(admitted, 100)
+
+    def test_the_catalog_line_names_tests_and_a_call_the_allowlist_admits(self) -> None:
+        """Hermes defers plugin tools behind tool_search and lists each by its first
+        sentence, clipped at 80 characters (`_short_desc` in tools/tool_search_catalog.py).
+        That line is all the child sees before it pays a search and a describe, so it
+        names tests and carries a whole call; the call it shows must be one this tool runs.
+        """
+        description = evidence_tool.OMH_EVIDENCE_SCHEMA["description"]
+        first_sentence = description[: description.index(". ") + 1]
+        self.assertLessEqual(len(first_sentence), 80, first_sentence)
+        self.assertTrue(first_sentence.startswith("Run tests"), first_sentence)
+        shown = first_sentence[first_sentence.index("commands=") + len("commands="):].rstrip(".")
+        commands = json.loads(shown)
+        self.assertEqual(commands, ["python3 -m unittest tests.test_x"])
+        tests = self.host_cwd / "tests"
+        tests.mkdir()
+        (tests / "__init__.py").write_text("", encoding="utf-8")
+        (tests / "test_x.py").write_text("import unittest\n", encoding="utf-8")
+        self.assertEqual(self.assert_admitted(commands[0]), shlex.split(commands[0]))
+        # The words a model searching for this tool used in the measured runs stay in it.
+        for word in ("tests", "allowlisted", "probe", "verification", "evidence"):
+            self.assertIn(word, description)
 
     def test_every_shipped_prefix_has_a_reviewed_suffix_verdict(self) -> None:
         """A prefix keeps a free suffix only when none of its options opens a path."""

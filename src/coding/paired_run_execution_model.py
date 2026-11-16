@@ -176,6 +176,12 @@ class PairedRunExecutionReport:
                     "reused": item.reused,
                     "receipt_ref": item.receipt.receipt_ref if item.receipt else "",
                     "crash_reason": _crash_reason_payload(item.crash_reason),
+                    # The signed metadata-only trace from the verified receipt.
+                    "cell_trace": (
+                        item.receipt.cell_trace.to_record()
+                        if item.receipt is not None and item.receipt.cell_trace is not None
+                        else None
+                    ),
                 }
                 for item in self.receipts
             ],

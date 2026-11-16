@@ -11,7 +11,8 @@ claim_boundary: "Prepared handoffs are not execution, review, CI, merge-readines
 evidence:
   # Token-prefix allowlist for explicit local verification probes.
   # These commands are run with shell=False and bounded to a project_root that is the
-  # host working directory or inside it; `-m unittest` takes only reporting flags, a
+  # host working directory or inside it; `-m unittest` takes only reporting flags and
+  # test modules or files inside workdir that default discovery would also run, a
   # path that compileall or an omh option opens must stay inside workdir, and so must a
   # git diff path argument (a `:/` pathspec or `<rev>:<path>` still reaches the repo).
   allowlist_prefixes:

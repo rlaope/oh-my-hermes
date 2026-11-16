@@ -33,6 +33,7 @@ from .hermes_child_evaluation import (
     seal_evaluation_binding,
 )
 from ._hermes_child_usage import read_hermes_child_usage, state_session_ids
+from .hermes_child_trace import CellTrace, read_hermes_child_trace
 from ._hermes_child_process import (
     BoundedStreamCapture,
     PipeDrainer,
@@ -167,6 +168,11 @@ class HermesChildObservation:
     # What the arm home held when the child spawned, read from disk by the
     # dispatcher. None outside paired-run evaluation.
     arm_setup: ArmSetup | None = None
+    # Paired-run evaluation only, terminal events only: the metadata-only
+    # trace of the child's own rows in the arm home's `state.db`, read after
+    # it exits and before the home goes (`hermes_child_trace`). None when the
+    # store held no readable row of this child.
+    cell_trace: CellTrace | None = None
 
     def has_dispatch_authority(self) -> bool:
         """Return whether this event was sealed by the real dispatcher."""
@@ -319,6 +325,7 @@ def _dispatch_guarded(
 
     spawned_at: float | None = None
     arm_setup: ArmSetup | None = None
+    cell_trace: CellTrace | None = None
 
     def emit(status: str, pid: int | None = None) -> None:
         nonlocal observer_error
@@ -345,6 +352,7 @@ def _dispatch_guarded(
                 elapsed,
                 _DISPATCH_OBSERVATION_AUTHORITY,
                 arm_setup,
+                cell_trace if terminal else None,
             ))
         except RuntimeError as exc:
             if status == "prepared":
@@ -489,6 +497,10 @@ def _dispatch_guarded(
             # the disposable home goes: the read is bounded, read-only, and
             # never raises; a home the child never wrote leaves `usage` empty.
             usage = read_hermes_child_usage(hermes_home, exclude=prior_sessions)
+            if request.arm_home is not None:
+                # The arm home outlives this child, so its rows are still
+                # there; only names and counts leave the read.
+                cell_trace = read_hermes_child_trace(hermes_home, exclude=prior_sessions)
         try:
             scratch.cleanup()
         except OSError:

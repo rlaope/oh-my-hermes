@@ -2087,7 +2087,10 @@ function splitBlocks(text) {
       continue;
     }
     const m = /^ {0,3}(`{3,}|~{3,})[ \t]*([^\s`]*)[ \t]*(.*?)\s*$/.exec(line);
-    if (!m || line.trimStart().startsWith(">") || (m[1][0] === "`" && m[3].includes("`"))) {
+    // the JSON on the opening fence line, closed on the very next line (its task may hold `code` spans)
+    const close1 = m && i + 1 < lines.length ? /^ {0,3}(`{3,}|~{3,})[ \t]*$/.exec(lines[i + 1]) : null;
+    const oneLine = !!(m && (m[2] === "omher-thread" || m[2] === "omher-thread-route") && m[3].startsWith("{") && close1 && close1[1][0] === m[1][0] && close1[1].length >= m[1].length);
+    if (!m || line.trimStart().startsWith(">") || (m[1][0] === "`" && m[3].includes("`") && !oneLine)) {
       keep.push(line);
       continue;
     }
@@ -2097,8 +2100,9 @@ function splitBlocks(text) {
       if (c && c[1][0] === m[1][0] && c[1].length >= m[1].length) break;
       j += 1;
     }
-    if ((m[2] === "omher-thread" || m[2] === "omher-thread-route") && !m[3]) {
-      if (j < lines.length) take(m[2], check(m[2], lines.slice(i + 1, j).join("\n")));
+    // the JSON as the body, or on the opening fence line with the close right after it (an empty body)
+    if ((m[2] === "omher-thread" || m[2] === "omher-thread-route") && (!m[3] || oneLine)) {
+      if (j < lines.length) take(m[2], check(m[2], m[3] || lines.slice(i + 1, j).join("\n")));
     } else keep.push(...lines.slice(i, j + 1));
     i = j;
   }

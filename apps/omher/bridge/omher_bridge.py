@@ -41,7 +41,7 @@ from http import HTTPStatus
 from pathlib import Path
 from urllib.parse import parse_qs, urlsplit
 
-VERSION = "0.2.10"
+VERSION = "0.2.11"
 BOT_CHAT_TITLE = "Bot Chat"
 FOLDER_CHAT_PREFIX = "omher · "
 MAX_FOLDER_CHATS = 16
@@ -4807,11 +4807,17 @@ def thread_name(title: str) -> str:
 # the person; nothing moves without their click). The note never shows back in the timeline.
 
 THREAD_HINT_HEAD = "[omher] Open threads:"
+# Both rules show the block written on one line (fence, JSON, fence), the shape the model then copies. Shown inline
+# without saying so, it often put the JSON on the opening fence line and closed the fence on the next line;
+# split_blocks accepts that shape as well. Sizes: SPLIT 284 + ROUTE 174 characters; the note with no open thread
+# is 312, with one open thread at most ~640; past that thread_hint shortens last lines and drops the oldest rows to
+# stay under THREAD_HINT_MAX.
 THREAD_HINT_SPLIT = ("If this request has several independent parts or is long work, reply with one fenced block per "
-                     "part, ```omher-thread {\"title\": \"...\", \"task\": \"...\"}``` (max 3), and a one-line note; "
-                     "omher opens a thread for each. Answer simple questions directly, with no block.")
-THREAD_HINT_ROUTE = ("If this message continues an open thread, reply only ```omher-thread-route {\"thread\": \"<id>\"}``` "
-                     "and one sentence; omher asks the user before moving it.")
+                     "part, written on one line as ```omher-thread {\"title\": \"...\", \"task\": \"...\"}``` "
+                     "(max 3), and a one-line note; omher opens a thread for each. Answer simple questions "
+                     "directly, with no block.")
+THREAD_HINT_ROUTE = ("If this message continues an open thread, reply only ```omher-thread-route {\"thread\": \"<id>\"}```, "
+                     "written on one line, and one sentence; omher asks the user before moving it.")
 THREAD_HINT_MAX = 900  # characters of the whole note
 THREAD_HINT_ROWS = 8
 THREAD_HINT_LAST = 80
@@ -4881,7 +4887,9 @@ def _split_block(kind: str, body: str) -> dict | None:
 
 def split_blocks(text: str) -> tuple[list[dict], dict | None, str]:
     """The ```omher-thread``` / ```omher-thread-route``` blocks of a final answer, strictly: only top-level fenced
-    blocks count (not in a `>` quote, not inside another fence), each with valid JSON. Returns (up to SPLIT_MAX
+    blocks count (not in a `>` quote, not inside another fence), each with valid JSON. A block is the JSON as the
+    fence's body, the whole block on one line, or the JSON on the opening fence line with the closing fence on the very
+    next line (an empty body). Returns (up to SPLIT_MAX
     thread blocks, the first route block or None, the text without any top-level block of those kinds)."""
     if not isinstance(text, str) or "omher-thread" not in text:
         return [], None, text if isinstance(text, str) else ""
@@ -4907,7 +4915,11 @@ def split_blocks(text: str) -> tuple[list[dict], dict | None, str]:
             i += 1
             continue
         fence, info, rest = m.group(2), m.group(3), m.group(4)
-        if fence[0] == "`" and "`" in rest:  # an inline code span, not a fence
+        # the JSON on the opening fence line, closed on the very next line (its task may hold `code` spans)
+        one_line = (info in SPLIT_KINDS and rest.startswith("{") and i + 1 < len(lines)
+                    and (c := _SPLIT_CLOSE.match(lines[i + 1])) is not None
+                    and c.group(1)[0] == fence[0] and len(c.group(1)) >= len(fence))
+        if fence[0] == "`" and "`" in rest and not one_line:  # an inline code span, not a fence
             keep.append(line)
             i += 1
             continue
@@ -4919,8 +4931,8 @@ def split_blocks(text: str) -> tuple[list[dict], dict | None, str]:
                 break
             j += 1
         body = lines[i + 1:j]
-        if info in SPLIT_KINDS and not rest:
-            block = _split_block(info, "\n".join(body)) if j < len(lines) else None
+        if info in SPLIT_KINDS and (not rest or one_line):
+            block = _split_block(info, rest or "\n".join(body)) if j < len(lines) else None
             if block and info == "omher-thread":
                 creates.append(block)
             elif block and route is None:

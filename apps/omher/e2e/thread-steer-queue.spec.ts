@@ -92,3 +92,73 @@ test("Send now in a thread stops that thread's turn (chat.interrupt with its ses
   await expect.poll(async () => (await calls("chat.interrupt")).map((c) => c.params)).toEqual([{ bot: "kami", session: id }]);
   await expect.poll(async () => (await calls("chat.send")).map((c) => c.params.text)).toEqual(["first running task", "b goes first"]);
 });
+
+// x -> confirm on a thread that holds messages: they are dropped, never sent to the archived session (the archive
+// ends its turn, and that turn's end must not drain them), and no blank chat stays behind. The main chat and another
+// thread still drain theirs. Asserted on the request log the mock keeps, in order.
+test("removing a thread that holds messages never sends them; the main chat and another thread still drain", async ({ page }) => {
+  await mock("mock.reset");
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto("/");
+  await expect(page.getByTestId("bot-kami")).toHaveAttribute("aria-current", "true");
+  await mock("mock.manual", { bot: "kami" });
+  const { threads } = await mock("mock.threads", {
+    bot: "kami",
+    threads: [
+      { title: "Removed", cwd: "/work/a", ago: 1 },
+      { title: "Kept", cwd: "/work/b", ago: 2 },
+    ],
+  });
+  const [a, b] = threads as string[];
+  await page.reload();
+  const open = async (id: string) => {
+    await page.getByTestId(`thread-row-${id}`).getByTestId("thread-open").click();
+    await expect(page.getByTestId("thread-chat")).toHaveAttribute("data-thread", id);
+  };
+  const heldRow = (text: string) => page.locator("[data-testid=bubble-user][data-held]", { hasText: text });
+  await open(b);
+  await say(page, "B running");
+  await expect(page.getByTestId("stop")).toBeVisible();
+  await say(page, "B held");
+  await page.getByTestId("bot-kami").click();
+  await say(page, "main running");
+  await expect(page.getByTestId("stop")).toBeVisible();
+  await say(page, "main held");
+  await open(a);
+  await say(page, "first running task");
+  await expect(page.getByTestId("stop")).toBeVisible();
+  await say(page, "do not send after archive");
+  await expect(heldRow("do not send after archive")).toBeVisible();
+
+  const row = page.getByTestId(`thread-row-${a}`);
+  await row.hover();
+  await row.getByTestId("thread-x").click();
+  await page.getByTestId("thread-confirm-remove").click();
+  await expect(row).toHaveCount(0);
+  await page.waitForTimeout(750);
+  // the other thread's and the main chat's turns end: theirs go out, the removed thread's never
+  await mock("mock.emit", { events: [{ event: "turn.end", bot: "kami", session: b, outcome: "done" }] });
+  await mock("mock.endTurn", { bot: "kami" });
+  await expect.poll(async () => (await calls("chat.send")).map((c) => c.params.text)).toEqual([
+    "B running",
+    "main running",
+    "first running task",
+    "B held",
+    "main held",
+  ]);
+  await page.waitForTimeout(400);
+  const log = ((await mock("mock.calls")).calls as Call[]).filter((c) => c.op === "thread.remove" || c.op === "chat.send");
+  const removed = log.findIndex((c) => c.op === "thread.remove");
+  expect(removed, JSON.stringify(log)).toBeGreaterThanOrEqual(0);
+  expect(log.slice(removed).filter((c) => c.op === "chat.send" && c.params.session === a), JSON.stringify(log)).toEqual([]);
+  expect(log.filter((c) => c.op === "chat.send" && c.params.text === "do not send after archive")).toEqual([]);
+  const sends = (await calls("chat.send")).map((c) => c.params);
+  expect(sends).toContainEqual({ bot: "kami", session: b, text: "B held", queued: true });
+  expect(sends).toContainEqual({ bot: "kami", text: "main held", queued: true });
+  // no blank chat of the removed thread is left in the store
+  const left = await page.evaluate(async (id) => {
+    const m = await import(/* @vite-ignore */ "/src/state/store.ts");
+    return Object.keys(m.getStore().getState().chats).filter((k) => k.endsWith(`:${id}`));
+  }, a);
+  expect(left).toEqual([]);
+});
