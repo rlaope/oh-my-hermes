@@ -103,7 +103,7 @@ body.side-resizing * {
   height: 28px;
   background:
     url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 24 24' fill='none' stroke='%23908a94' stroke-width='2.6' stroke-linecap='round' stroke-linejoin='round'><path d='m6 9 6 6 6-6'/></svg>") center bottom 2px / 10px 10px no-repeat,
-    linear-gradient(to bottom, transparent, var(--side) 60%);
+    linear-gradient(to bottom, transparent, var(--side));
 }
 .side-sh-row {
   position: relative; /* the + menu spans the section's width under this row */
