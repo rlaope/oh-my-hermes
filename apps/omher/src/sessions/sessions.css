@@ -26,6 +26,25 @@
 .side-sec > .ss-list {
   flex: 1 1 auto;
 }
+/* more rows past an edge (edgeFade.ts): a band of the sidebar's colour fades in over that edge's last 16px, so a cut
+   row reads as "more". An overlay, not a mask: a mask would also fade (and clip) a row's menu opened inside the list */
+.side-sec {
+  position: relative;
+}
+.side-sec:has(> [data-more="below"])::after,
+.side-sec:has(> [data-more="both"])::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 30px;
+  background:
+    url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 24 24' fill='none' stroke='%23908a94' stroke-width='2.6' stroke-linecap='round' stroke-linejoin='round'><path d='m6 9 6 6 6-6'/></svg>") center bottom 3px / 10px 10px no-repeat,
+    linear-gradient(to bottom, transparent, var(--side) 70%);
+  pointer-events: none;
+  z-index: 1;
+}
 .side-sh-row {
   position: relative; /* the + menu spans the section's width under this row */
   display: flex;
@@ -1198,6 +1217,16 @@
   font-size: 10.5px;
   color: var(--muted);
 }
+.side-sec > .bot-list[data-more="above"],
+.side-sec > .bot-list[data-more="both"],
+.side-sec > .ss-list[data-more="above"],
+.side-sec > .ss-list[data-more="both"] {
+  /* rows scrolled away above: a soft shadow under the header (no mask: a mask would clip a row's menu) */
+  box-shadow: inset 0 9px 7px -9px color-mix(in srgb, var(--ink) 35%, transparent);
+}
+.tg-run {
+  color: var(--term-run);
+}
 .tg-dot {
   width: 6px;
   height: 6px;
@@ -1238,7 +1267,7 @@
 }
 /* the first row of a group scrolls into view with its folder header */
 .tg > .tg-h + .ss-row {
-  scroll-margin-top: 30px;
+  scroll-margin-top: 56px;
 }
 [data-theme="light"] .tg-ic {
   color: #a8700f;

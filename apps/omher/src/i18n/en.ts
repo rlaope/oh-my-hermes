@@ -1402,4 +1402,5 @@ export const en = {
   "term.collapseOthers": "Collapse others",
   "term.folderOpen": "Show the terminals in {name}",
   "term.folderClose": "Hide the terminals in {name}",
+  "term.folderRunning": "{n} running ·",
 };

@@ -24,6 +24,7 @@ import { agentDef, agentLabel, draftFolder, folderChoices, folderName, hermesOnl
 import { TermRowMark } from "./TermRowMark";
 import { allCollapsed, collapseOthers, folderSummary, getFolderPrefs, moveFolder, orderFolders, revealFolder as openFolder, setAllFolders, setFolderPrefs, toggleFolder, useFolderPrefs } from "./folders";
 import { ChevronDown, ChevronRight } from "../ui/icons";
+import { useEdgeFade } from "../sidebar/edgeFade";
 import { pinToDock, useDock } from "../sidebar/dockState";
 import { getHost, type PastChat } from "./host";
 import { getSessions, useSessions } from "./sessions";
@@ -621,6 +622,7 @@ export function SessionList({ needle = "", query = "" }: { needle?: string; quer
   // ...and stays in view when the region changes size (the dock gains a row, the window shrinks) or rows land above
   // it (a newer folder lists first): only then, never against the person's own scrolling
   const nav = useRef<HTMLElement>(null);
+  const navRef = useEdgeFade(nav);
   const rowsKey = ss.list.map((r) => r.id).join(",");
   useEffect(() => {
     if (!current) return;
@@ -654,7 +656,7 @@ export function SessionList({ needle = "", query = "" }: { needle?: string; quer
   if (terms.length === 0) return <SessionStart />;
   const shown = terms.filter((r) => sessionMatches(r, needle));
   return (
-    <nav ref={nav} className="bot-list ss-list" aria-label={t("nav.terminals")} data-testid="session-list">
+    <nav ref={navRef} className="bot-list ss-list" aria-label={t("nav.terminals")} data-testid="session-list">
       {needle && shown.length === 0 && (
         <div className="bot-empty" data-testid="session-none-match">
           {t("side.noSession", { q: query })}
@@ -671,7 +673,7 @@ export function SessionList({ needle = "", query = "" }: { needle?: string; quer
             shut={shut}
             index={gi}
             all={all.map((x) => x.cwd)}
-            summary={folderSummary(g.rows.map((r) => termStatus(r, ss.unseen[r.id], now)))}
+            summary={{ ...folderSummary(g.rows.map((r) => termStatus(r, ss.unseen[r.id], now))), running: g.rows.filter((r) => (r.status === "running" || r.status === "starting") && termMarkAgent(r) !== null).length }}
           />
           {!shut && g.rows.map((rec) =>
             confirm === rec.id ? (
@@ -792,7 +794,7 @@ function useFolderDrag(cwd: string, all: readonly string[]) {
  *  folder's name (semibold) and its git branch in small grey; collapsed, it shows how many sessions it holds and
  *  their live summary (the spinner while one prints, the amber dot while one waits for you, a red dot when one
  *  failed). Right-click: New terminal here, Collapse others, Show in Finder. Drag to reorder. */
-function FolderHead({ cwd, home, shut, index, all, summary }: { cwd: string; home: string | null; shut: boolean; index: number; all: string[]; summary: ReturnType<typeof folderSummary> }) {
+function FolderHead({ cwd, home, shut, index, all, summary }: { cwd: string; home: string | null; shut: boolean; index: number; all: string[]; summary: ReturnType<typeof folderSummary> & { running: number } }) {
   const [branch, setBranch] = useState("");
   const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
   const drag = useFolderDrag(cwd, all);
@@ -831,6 +833,11 @@ function FolderHead({ cwd, home, shut, index, all, summary }: { cwd: string; hom
         {shut && (
           <span className="tg-sum" data-testid="term-group-summary" data-busy={summary.busy ? "true" : undefined} data-needs={summary.needs ? "true" : undefined} data-failed={summary.failed ? "true" : undefined}>
             {summary.busy && <TermStatusGlyph status="busy" />}
+            {summary.running > 0 && (
+              <span className="tg-run" data-testid="term-group-running">
+                {t("term.folderRunning", { n: summary.running })}
+              </span>
+            )}
             {summary.needs && <span className="tg-dot needs" title={t("ss.mark.bell")} />}
             {summary.failed && <span className="tg-dot err" title={t("ss.mark.error")} />}
             <span className="tg-count" data-testid="term-group-count">

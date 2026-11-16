@@ -20,7 +20,7 @@ import type { SessionQueue } from "../chat/parts/Timeline";
 import { ownSetting } from "./ownSetting";
 import type { Bot } from "../lib/protocol";
 import { AgentMark } from "./AgentMark";
-import { TermRowMark } from "./TermRowMark";
+import { fgName, TermRowMark } from "./TermRowMark";
 import { SessionFace } from "./SessionFace";
 import { agentDef, agentLabel, continues, GONE, isCustom, isGone, STOPS_BACKGROUND, draftOpen, folderChoices, folderName, hermesOnly, missingNote, opensAs, parentPath, sessionMode, termMarkAgent, terminalNote, tildePath, type AgentId, type OpenAs, type SessionRec } from "./agents";
 import { pickTitle } from "./titles";
@@ -817,7 +817,8 @@ export function SessionView() {
   const chatKey = getSessions().chatKey(rec.id);
   // a session opened as a terminal is one whatever its agent usually does: it has no chat, no model and no toggle
   const mode = sessionMode(ss.agents, rec);
-  const label = agentLabel(rec.agent, ss.agents);
+  // a terminal names the CLI in its foreground (a Shell where `claude` runs reads Claude Code)
+  const label = mode === "terminal" && rec.fgAgent ? fgName(rec.fgAgent) : agentLabel(rec.agent, ss.agents);
   // DeepSeek Harness ships no terminal profile: a DSH chat has no Terminal view (and its model is set in its own app).
   // A Hermes chat without oh-my-hermes has none either: that view starts `omh`, which is not there.
   const noTerminal = rec.agent === "dsh" || (rec.agent === "omh" && hermesOnly(ss.agents));

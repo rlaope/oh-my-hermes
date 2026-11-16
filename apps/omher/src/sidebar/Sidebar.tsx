@@ -24,6 +24,7 @@ import { ThreadTree } from "../threads/ThreadTree";
 import { Dock } from "./Dock";
 import { pinToDock, useDock } from "./dockState";
 import { revealBotTop, revealPending } from "./revealBot";
+import { useEdgeFade } from "./edgeFade";
 
 const sessionBackground = (target: EventTarget) => target instanceof Element && !target.closest(".ss-row, button, input, textarea, select, a, [contenteditable], [role=menu], [role=menuitem]");
 
@@ -64,6 +65,7 @@ export function Sidebar() {
   const automations = s.automations?.length ?? 0;
   const inChat = s.ui.view === "chat";
   useRevealBot(s.selectedBot, s.ui.thread, inChat);
+  const botNav = useEdgeFade<HTMLElement>();
 
   return (
     <aside className="side" data-testid="sidebar">
@@ -96,7 +98,7 @@ export function Sidebar() {
       <NeedsStrip asks={asks} />
       <section className={`side-sec${needle && bots.length === 0 ? " side-sec-fit" : ""}`} data-testid="side-bots">
         <div className="side-sh">{t("nav.bots")}</div>
-        <nav className="bot-list" aria-label={t("nav.bots")} role="tree">
+        <nav ref={botNav} className="bot-list" aria-label={t("nav.bots")} role="tree">
           {bots.map((b) => {
             const pinned = s.ui.pinned.includes(b.name);
             const hasThreads = (s.threads[b.name]?.length ?? 0) > 0;

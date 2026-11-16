@@ -1400,4 +1400,5 @@ export const ja: Record<Key, string> = {
   "term.collapseOthers": "ほかを折りたたむ",
   "term.folderOpen": "{name} のターミナルを表示",
   "term.folderClose": "{name} のターミナルを隠す",
+  "term.folderRunning": "{n} 件実行中 ·",
 };
