@@ -30,6 +30,16 @@ All notable changes will be documented here.
   no longer hides whether the change at hand passes. `Ran 0 tests`, and exit 5 from unittest or pytest, now read
   `passed: false` with `reason: no tests ran`. The tool's line in Hermes' deferred-tool catalog names tests and shows
   a whole call, so a model looking for a test runner can call it from the listing. Every existing refusal stays.
+- **Another OMH TUI no longer exits when Hermes' gateway restarts, and typing shows while it reattaches.** Where no
+  service runs the gateway, `hermes gateway restart` (also `/gateway restart` from another TUI) stops it as `hermes
+  gateway stop` does, so its record says `stopped` with no restart asked, and starts the new one a few seconds later.
+  Every other TUI attached to it read that record as a stop and left at once with the resume hint. A stopped record is
+  now watched for up to 30 s, with no try: a new live record reattaches the session as a restart run elsewhere, a
+  failed start ends with Hermes' reason, and a record still stopped then leaves as before, so no try ever starts a
+  gateway the person stopped. While any respawn or reattach waits, text and its editing keys go into the composer at
+  once and show on the next frame; before, every key was held unseen until the gateway was back, which read as a
+  frozen TUI. Enter, a paste, a key that opens a list and every key after one of those still wait for the gateway, in
+  order.
 
 ## 4.0.8 - 2026-11-15
 

@@ -848,7 +848,7 @@ STARTUP_TIMEOUT_ENV = "HERMES_TUI_STARTUP_TIMEOUT_MS"
 STARTUP_TIMEOUT_MIN_SECONDS = 5.0
 RESPAWN_NOTICE = (
     "{reason}: starting it again and resuming session {session} ({attempt} of {limit} in {window:g} s); "
-    "what you type waits until it is back, and ctrl+c leaves."
+    "you can keep typing, Enter waits until it is back, and ctrl+c leaves."
 )
 RESPAWNED_NOTICE = "Resumed session {session} on a new Hermes gateway."
 RESPAWN_LEFT_REASON = "you left while the Hermes gateway was starting again"
@@ -910,8 +910,8 @@ GATEWAY_RESTART_SLOW = (
 )
 GATEWAY_RESTARTED_REASON = "Hermes' gateway restarted"
 GATEWAY_REATTACHING_NOTICE = (
-    "Hermes' gateway restarted: reattaching to session {session}; what you type waits until it is back, and ctrl+c "
-    "leaves."
+    "Hermes' gateway restarted: reattaching to session {session}; you can keep typing, Enter waits until it is back, "
+    "and ctrl+c leaves."
 )
 GATEWAY_REATTACHED_NOTICE = "Hermes' gateway is back: reattached to session {session}."
 GATEWAY_PROFILE_REATTACHED_NOTICE = "Reattached to session {session} after Hermes restarted profile {profile}."
@@ -941,13 +941,23 @@ GATEWAY_RESTARTING_SAY = ("restarting Hermes' gateway… {seconds}s", "restartin
 # at most Hermes' `restart_after_turn_timeout` past the drop plus GATEWAY_EXTERNAL_REATTACH_SECONDS; otherwise tries
 # pause 1, 2, 4, then GATEWAY_REATTACH_MAX_PAUSE_SECONDS, for GATEWAY_EXTERNAL_REATTACH_SECONDS. A try that fails any
 # other way, or a resume the gateway refuses, spends one of the crash respawn's RESPAWN_LIMIT, so a refusal still ends
-# the wait fast. A record saying the gateway was stopped (`hermes gateway stop`: no restart asked), or that the new one
-# failed to start, ends it at once: a try would start the service the person stopped.
+# the wait fast. A record saying the new one failed to start ends it at once. A record saying the gateway was stopped
+# (no restart asked) is watched, with no try, for GATEWAY_STOP_WATCH_SECONDS: Hermes' own `hermes gateway restart`
+# where no service runs the gateway stops it as `hermes gateway stop` does (a planned SIGTERM, `restart_requested`
+# false) and starts the new one seconds later, so only a new live record tells the two apart. A new live record goes on
+# as a restart run elsewhere; a record still stopped at the end ends the screen, and no try ever starts a gateway the
+# person stopped.
 GATEWAY_EXTERNAL_REATTACH_SECONDS = 150.0
+GATEWAY_STOP_WATCH_SECONDS = 30.0
+GATEWAY_STOP_WATCH_PAUSE_SECONDS = 1.0
+GATEWAY_STOP_WATCH_NOTICE = (
+    "Hermes' gateway stopped: waiting up to {seconds:g} s in case it is restarting, then reattaching to session "
+    "{session}; you can keep typing, and ctrl+c leaves."
+)
 GATEWAY_REATTACH_MAX_PAUSE_SECONDS = 5.0
 GATEWAY_EXTERNAL_REATTACHING_NOTICE = (
-    "Hermes' gateway is restarting: reattaching to session {session} once it is back; what you type waits until "
-    "then, and ctrl+c leaves."
+    "Hermes' gateway is restarting: reattaching to session {session} once it is back; you can keep typing, Enter "
+    "waits until then, and ctrl+c leaves."
 )
 GATEWAY_EXTERNAL_GAVE_UP = "Hermes' gateway did not come back within {seconds:g} s ({error})"
 GATEWAY_STOPPED_REASON = "Hermes' gateway is stopped; `hermes gateway start` starts it again"
@@ -3491,8 +3501,12 @@ class App(ModesMixin, AgentViewMixin):
         run elsewhere is the same reattach (`_external_restart`), entered at
         the drop or at a try's not-ready exit; there a try that fails another
         way, or a refused resume, spends one of the crash respawn's tries, and a
-        record saying the gateway was stopped or failed to start ends it at once
-        (as it ends a crash respawn: a try would start a stopped service). While
+        record saying the new gateway failed to start ends it at once. A record
+        saying the gateway was stopped (no restart asked), at the drop or during
+        the wait, is watched with no try for `GATEWAY_STOP_WATCH_SECONDS` (a try
+        would start a stopped service, and Hermes' restart without a service
+        stops it the same way before it starts the new one): a new live record
+        goes on as a restart run elsewhere, one still stopped ends it. While
         the record says a live process drains for a restart, a try goes every
         `GATEWAY_REATTACH_MAX_PAUSE_SECONDS` and the wait lasts as long as the
         drain, up to `cap`. One status row counts the wait
@@ -3561,19 +3575,41 @@ class App(ModesMixin, AgentViewMixin):
         said = False
         tries = 0  # the reattach's tries so far: each pause after one is longer (`_reattach_pause`)
         draining = False
+        # While a stopped record is watched (GATEWAY_STOP_WATCH_SECONDS): its end, and the record's `updated` then.
+        stop_until: float | None = None
+        stop_seen: float | None = None
         while True:
             now = self.clock()
             draining = False
             if restart is None or restart.external:
                 # A gateway stopped on purpose is not started again by a try; a new one that failed to start says why.
                 record = self.read_gateway_record(self.environ, self.launch_profile) if self.shared_gateway else None
-                verdict = record_verdict(record, restart.seen if restart is not None else None)
+                verdict = record_verdict(record, restart.seen if restart is not None else stop_seen)
                 if verdict == RECORD_STOPPED:
-                    lose(GATEWAY_STOPPED_REASON)
-                    return
-                if verdict == RECORD_FAILED and restart is not None:
+                    # No try while it is stopped: Hermes' own restart without a service starts the new one itself.
+                    if stop_until is None:
+                        stop_until, stop_seen = now + GATEWAY_STOP_WATCH_SECONDS, record.updated  # type: ignore[union-attr]
+                        self.transcript.add_notice(GATEWAY_STOP_WATCH_NOTICE.format(
+                            seconds=GATEWAY_STOP_WATCH_SECONDS, session=stored), NOTICE_WARN)
+                        self.reattach_since, self.reattach_shown = now, -1
+                        self.dirty = True
+                        self._render_when_due()
+                    if not stored or now >= stop_until:
+                        lose(GATEWAY_STOPPED_REASON)
+                        return
+                    if old is not None:  # the dropped child goes now: nothing is tried while the record says stopped
+                        old.close(grace=CLOSE_GRACE_SECONDS, terminate_grace=TERMINATE_GRACE_SECONDS)
+                        old = None
+                    if not self._reattach_pause(stop_until, GATEWAY_STOP_WATCH_PAUSE_SECONDS):
+                        lose(RESPAWN_LEFT_REASON)
+                        return
+                    continue
+                if verdict == RECORD_FAILED and (restart is not None or stop_until is not None):
                     lose(GATEWAY_START_FAILED_REASON.format(why=record.exit_reason or STARTUP_FAILED))  # type: ignore[union-attr]
                     return
+                if stop_until is not None and restart is None:
+                    # The stopped gateway has a live record again: the restart Hermes ran, reattached as one run elsewhere.
+                    restart = self._external_restart(True)
             if restart is not None:
                 # A live gateway draining for a restart refuses new work, but its after-turn wait admits a client to
                 # answer a parked question: tried at the longest pause, the wait lasting as long as the drain.
@@ -4080,7 +4116,8 @@ class App(ModesMixin, AgentViewMixin):
 
     def _respawn_cancel(self) -> bool:
         """Asked while a respawn waits on the new gateway: True once the person pressed Ctrl+C or Ctrl+D, or the
-        terminal hung up. Every other key read meanwhile is kept for the loop, in order (`held_input`). While a
+        terminal hung up. Text and its editing keys go into the composer at once and are drawn
+        (`_types_while_waiting`); every other key read meanwhile is kept for the loop, in order (`held_input`). While a
         reattach waits, its status row is drawn again each second."""
         if self.reattach_since is not None:
             second = int(self.clock() - self.reattach_since)
@@ -4094,12 +4131,33 @@ class App(ModesMixin, AgentViewMixin):
         if not data:
             return False
         self.input_at = self.clock()
+        typed = False
         for event in self.decoder.feed(data):
             leaves = isinstance(event, Key) and event.name == CHAR and event.ctrl and not event.alt
             if leaves and event.char in LEAVE_CHARS:
                 return True
-            self.held_input.append(event)
+            if self._types_while_waiting(event):
+                self._edit(self.composer, event)  # type: ignore[arg-type]
+                typed = True
+            else:
+                self.held_input.append(event)
+        if typed:
+            self.dirty = True
+            self._render_when_due()
         return False
+
+    def _types_while_waiting(self, event: Key | Paste | Mouse) -> bool:
+        """Whether a key read while a respawn waits goes into the composer at once, so what is typed shows: text and its
+        editing keys (`_early_edit`), into an open composer in insert mode, while no earlier key is held. Everything
+        else (Enter, a paste, a key for a picker) waits for the loop, in order, as does every key after one that
+        waits."""
+        if self.held_input or not isinstance(event, Key) or not self._composer_open():
+            return False
+        if self.composer.normal or self.composer.pending or self.composer.visual:
+            return False
+        if event.name == CHAR and event.char == GUIDE_KEY and not self.composer.text:
+            return False  # `?` on an empty composer opens the key list (`_guide_key`) once the loop reads it
+        return _early_edit(event)
 
     def _give_back_tell(self) -> None:
         """An open tell field closes with the gateway its deny went to; what was typed in it goes back to the draft,
