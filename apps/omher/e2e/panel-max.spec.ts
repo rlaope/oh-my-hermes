@@ -250,14 +250,16 @@ const presses = (page: Page) => page.evaluate(() => (window as unknown as { __pr
 for (const control of ["model-pill", "places"] as const)
   for (const delay of [120, 180, 220, 280, 350, 450])
     test(`a real click on the header's ${control} ${delay}ms after Esc is never stolen by the slide, 20 actual hits`, async ({ page }) => {
-      test.setTimeout(240_000); // 20 actual hits, up to 80 rounds on a slow runner
+      // 20 actual hits: on a loaded runner the control is often still under the panel at 120-180ms (1 round in 9
+      // is a hit there), so up to 400 rounds
+      test.setTimeout(900_000);
       await page.setViewportSize({ width: 1440, height: 900 });
       await openPanel(page, "runs");
       await recordPresses(page);
       const own = (h: Press) => (control === "model-pill" ? h.model : h.places);
       const hits: { round: number; after: number; worked: boolean }[] = [];
       const left: { round: number; why: string }[] = [];
-      for (let round = 0; hits.length < 20 && round < 80; round++) {
+      for (let round = 0; hits.length < 20 && round < 400; round++) {
         await maxForRound(page);
         await page.evaluate(() => {
           const w = window as unknown as { __esc: number };
