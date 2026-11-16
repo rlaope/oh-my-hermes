@@ -4181,3 +4181,32 @@ class PeerHint(BridgeCase):
             self.assertIn("```omher-peer", ob.PEER_HINT)
             rows = ob.chat_messages([{"role": "user", "text": sent[0], "row_id": 9}])
             self.assertEqual(rows[0]["text"], "맥미니 헤르메스 붙여줘")
+
+
+class TasksLinear(unittest.TestCase):
+    """`tasks.linear`: the Tasks page's Linear source asks only whether the bot's config names a Linear MCP server;
+    the reader keeps the server's name and nothing of its url, headers, env or auth."""
+
+    def _dir(self, text: str) -> Path:
+        d = Path(tempfile.mkdtemp())
+        (d / "config.yaml").write_text(text, encoding="utf-8")
+        return d
+
+    def test_finds_a_linear_server_by_name_or_url(self):
+        d = self._dir("mcp_servers:\n  notion:\n    url: https://mcp.notion.com/mcp\n  linear:\n    url: https://mcp.linear.app/sse\n"
+                      "    headers:\n      Authorization: Bearer lin_api_SECRET\n")
+        self.assertEqual(ob.read_linear_mcp(d), {"configured": True, "server": "linear"})
+        d = self._dir("mcp_servers:\n  issues:\n    url: https://mcp.linear.app/mcp\n    auth: oauth\n")
+        self.assertEqual(ob.read_linear_mcp(d), {"configured": True, "server": "issues"})
+        self.assertNotIn("SECRET", json.dumps(ob.read_linear_mcp(d)))
+
+    def test_none_off_or_broken(self):
+        for text in ("", "mcp_servers: []\n", "mcp_servers:\n  notion:\n    url: https://mcp.notion.com/mcp\n",
+                     "model: x\n"):
+            self.assertEqual(ob.read_linear_mcp(self._dir(text)), {"configured": False, "server": ""}, text)
+        off = self._dir("mcp_servers:\n  linear:\n    url: https://mcp.linear.app/sse\n    enabled: false\n")
+        self.assertEqual(ob.read_linear_mcp(off), {"configured": False, "server": "linear"})
+
+    def test_is_an_op(self):
+        self.assertIn("tasks.linear", ob.Bridge(token=TOKEN, hermes_home=Path(tempfile.gettempdir())).ops)
+        self.assertIn("tasks.linear", ob.PEER_FORWARD)

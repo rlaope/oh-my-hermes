@@ -163,6 +163,14 @@ RULES = (
     " and only after the person presses the update button and confirms the restart; then it restarts omher.",
     "For the Plans graph the bridge asks the person's own GitHub CLI for the state of a pull request a plan node names",
     "with one fixed read: `gh pr view <number> -R <owner>/<repo> --json state,isDraft,mergedAt,url`.",
+    "Tasks (the sidebar's Tasks row and the Tasks page) list open issues and pull or merge requests read-only,"
+    " through the person's own GitHub CLI (`gh`) and GitLab CLI (`glab`) under their own logins:",
+    "The only argv are `auth status` (only its exit code is read; its output, which can name a token, is thrown away),",
+    "omher passes no token, asks for none, reads none and shows none, and never comments, closes, assigns, labels, merges"
+    " or edits anything on GitHub, GitLab or Linear.",
+    "For Linear omher holds no key: the bridge reads only whether the bot's `config.yaml` names a Linear MCP server under"
+    " `mcp_servers` (its name and whether it is turned off, never its url, headers, env or auth) through `tasks.linear`,",
+    "Besides it and the GitHub and GitLab CLIs' read-only lists of rule 33,",
     "This is the one exception to rules 5 and 10: the request is `gh`'s own, under its own login; omher passes no token,"
     " reads none and changes nothing on GitHub.",
     "An answer is kept 5 minutes, a call is stopped after 3 seconds,",
@@ -329,9 +337,11 @@ class DocPins(unittest.TestCase):
         # asks count on the Dock); 31: rule 31 (a Hermes on another computer over the person's own ssh, after a
         # Connect on the confirm card: one fixed ssh argv, key login only, remote writes only under ~/.omher/peer);
         # 32: rule 32 (removing a thread interrupts it and archives it through Hermes' own `session.archive`, never
-        # a delete). The rules stay numbered 1..n with no gap or repeat.
+        # a delete); 33: rule 33 (Tasks: open issues and pull / merge requests through the person's own `gh` / `glab`,
+        # a fixed read-only argv, no token; Linear only as a config check). The rules stay numbered 1..n with no gap or
+        # repeat.
         rules = re.findall(r"^(\d+)\. ", DOC.read_text(encoding="utf-8"), re.M)
-        self.assertTrue(6 <= len(rules) <= 32, len(rules))
+        self.assertTrue(6 <= len(rules) <= 33, len(rules))
         self.assertEqual([int(n) for n in rules], list(range(1, len(rules) + 1)))
 
     def test_glossary_and_docs_index_name_omher(self) -> None:
@@ -415,9 +425,10 @@ class TheOneInstaller(unittest.TestCase):
         # CLIs' fixed status / sign-in argv (rule 18); hermes_auth.rs opens the system terminal with
         # `hermes auth add <id> --type api-key` (rule 23); dsh_chat.rs runs a DSH chat's message through DeepSeek
         # Harness's headless profile (rule 11); folder_open.rs opens the person's own system terminal in a session's
-        # folder with no command (rule 30); peers.rs starts the person's own `ssh` with a fixed argv (rule 31).
+        # folder with no command (rule 30); peers.rs starts the person's own `ssh` with a fixed argv (rule 31); tasks.rs
+        # runs the person's own `gh` / `glab` with a fixed read-only argv (rule 33).
         # Terminal sessions start theirs through the PTY's `spawn_command`, not `Command::new`.
-        self.assertEqual(spawns, {"accounts.rs": 2, "agent_chat.rs": 1, "bridge.rs": 1, "dsh_chat.rs": 1, "folder_open.rs": 1, "hermes_auth.rs": 1, "peers.rs": 1, "setup.rs": 1})
+        self.assertEqual(spawns, {"accounts.rs": 2, "agent_chat.rs": 1, "bridge.rs": 1, "dsh_chat.rs": 1, "folder_open.rs": 1, "hermes_auth.rs": 1, "peers.rs": 1, "setup.rs": 1, "tasks.rs": 1})
 
     def test_the_install_command_takes_nothing_from_the_page(self) -> None:
         lib = (SHELL_SRC / "lib.rs").read_text(encoding="utf-8")
@@ -911,8 +922,8 @@ class AccountsNeverCarryAToken(unittest.TestCase):
         # agent_chat.rs starts an allow-listed agent in its structured mode (rule 11); hermes_auth.rs opens the
         # system terminal for `hermes auth add` (rule 23); dsh_chat.rs runs DeepSeek Harness's headless profile (rule 11);
         # folder_open.rs opens the system terminal in a session's folder with no command (rule 30); peers.rs starts the
-        # person's own `ssh` with a fixed argv (rule 31).
-        self.assertEqual(spawns, {"accounts.rs": 2, "agent_chat.rs": 1, "bridge.rs": 1, "dsh_chat.rs": 1, "folder_open.rs": 1, "hermes_auth.rs": 1, "peers.rs": 1, "setup.rs": 1})
+        # person's own `ssh` with a fixed argv (rule 31); tasks.rs runs `gh` / `glab` read-only (rule 33).
+        self.assertEqual(spawns, {"accounts.rs": 2, "agent_chat.rs": 1, "bridge.rs": 1, "dsh_chat.rs": 1, "folder_open.rs": 1, "hermes_auth.rs": 1, "peers.rs": 1, "setup.rs": 1, "tasks.rs": 1})
 
 
 
@@ -1287,11 +1298,12 @@ class SessionsStartOnlyAllowListedAgents(unittest.TestCase):
         """`Command::new` only in bridge.rs (Hermes' Python), setup.rs (the one fixed installer,
         rule 12), once in agent_chat.rs (the chat spawner), in accounts.rs (rule 18's fixed status /
         sign-in argv), in hermes_auth.rs (rule 23's terminal), in folder_open.rs (rule 30's terminal in a session's
-        folder) and in peers.rs (rule 31's `ssh`); `spawn_command` only in sessions.rs."""
+        folder), in peers.rs (rule 31's `ssh`) and in tasks.rs (rule 33's read-only `gh` / `glab`); `spawn_command` only
+        in sessions.rs."""
         for path in sorted(SHELL.glob("*.rs")):
             text = path.read_text(encoding="utf-8")
             prod = text.split("#[cfg(test)]", 1)[0]
-            if path.name not in ("bridge.rs", "setup.rs", "agent_chat.rs", "dsh_chat.rs", "accounts.rs", "hermes_auth.rs", "folder_open.rs", "peers.rs"):
+            if path.name not in ("bridge.rs", "setup.rs", "agent_chat.rs", "dsh_chat.rs", "accounts.rs", "hermes_auth.rs", "folder_open.rs", "peers.rs", "tasks.rs"):
                 self.assertNotIn("Command::new", prod, path.name)
             if path.name != "sessions.rs":
                 self.assertNotIn("spawn_command", text, path.name)
@@ -1979,3 +1991,67 @@ class BotThreads(unittest.TestCase):
         self.assertIn('std::fs::read_to_string("/etc/shells")', rs)
         lib = (self.APP / "src-tauri" / "src" / "lib.rs").read_text(encoding="utf-8")
         self.assertIn("async fn shell_start(", lib)
+
+
+class TasksReadOnly(unittest.TestCase):
+    """Rule 33: Tasks runs only `gh` / `glab` reads from tasks.rs, with a fixed argv the page cannot extend, no token,
+    and the Linear source reads only the MCP server's name from the bot's config."""
+
+    def setUp(self) -> None:
+        text = (SHELL / "tasks.rs").read_text(encoding="utf-8")
+        self.prod = text.split("#[cfg(test)]\nmod tests", 1)[0]
+        self.lib = (SHELL / "lib.rs").read_text(encoding="utf-8")
+
+    def test_one_spawn_with_no_shell_and_a_timeout(self) -> None:
+        self.assertEqual(self.prod.count("Command::new("), 1)
+        self.assertIn("Command::new(exe)", self.prod)
+        self.assertIn(".stdin(Stdio::null())", self.prod)
+        self.assertIn("pub const TIMEOUT: Duration = Duration::from_secs(20);", self.prod)
+        self.assertIn("pub const KEEP: Duration = Duration::from_secs(60);", self.prod)
+        for shell in ('"sh"', '"bash"', '"-c"', '"cmd"', '"/c"', "powershell"):
+            self.assertNotIn(shell, self.prod, shell)
+        # the programs are the two CLIs, named in one place
+        self.assertIn('Source::Github => "gh",', self.prod)
+        self.assertIn('Source::Gitlab => "glab",', self.prod)
+
+    def test_every_verb_is_a_read_and_no_token_is_read(self) -> None:
+        verbs = set(re.findall(r's\("(list|view|create|close|edit|comment|merge|delete|reopen|review|api)"\)', self.prod))
+        self.assertEqual(verbs, {"list", "view"})
+        self.assertIn('vec!["auth".into(), "status".into()]', self.prod)
+        # auth status: its exit code only (its output is never kept)
+        self.assertIn("matches!(run(&exe, &auth_argv(source)), Ok(Ran { code: Some(0), .. }))", self.prod)
+        for word in ("GH_TOKEN", "GITHUB_TOKEN", "GITLAB_TOKEN", "hosts.yml", "keyring", "auth token", '"token"', "--web", "Authorization"):
+            self.assertNotIn(word, self.prod, word)
+
+    def test_the_page_sends_only_words_and_numbers(self) -> None:
+        for cmd, want in (("tasks_status", "source: String, fresh: Option<bool>"),
+                          ("tasks_list", "source: String, repo: String, kind: String, filter: String, page: u32"),
+                          ("tasks_view", "source: String, repo: String, kind: String, number: u64"),
+                          ("tasks_remote", "cwd: String")):
+            sig = self.lib[self.lib.index(f"async fn {cmd}("):]
+            sig = sig[: sig.index(") ->")]
+            self.assertIn(want, sig, cmd)
+            self.assertNotRegex(sig, r"\b(argv|args|program|command|token)\b", cmd)
+        # the repository is checked before any argv is built
+        self.assertIn("let repo = check_repo(source, repo)?;", self.prod.split("pub fn list_argv", 1)[1].split("\n}\n", 1)[0])
+        self.assertIn("let repo = check_repo(source, repo)?;", self.prod.split("pub fn view_argv", 1)[1].split("\n}\n", 1)[0])
+
+    def test_linear_reads_only_the_server_name(self) -> None:
+        src = (ROOT / "apps" / "omher" / "bridge" / "omher_bridge.py").read_text(encoding="utf-8")
+        fn = src.split("def read_linear_mcp(", 1)[1].split("\ndef ", 1)[0]
+        self.assertIn('_load_yaml(profile_dir / "config.yaml").get("mcp_servers")', fn)
+        for word in ("headers", "env", "auth", "token", "open(", "subprocess", "write"):
+            self.assertNotIn(f'"{word}"' if word.isalpha() else word, fn.split('"""', 2)[2], word)
+        self.assertIn('return {"configured": on, "server": name[:64]}', fn)
+        self.assertIn('"tasks.linear": self.op_tasks_linear', src)
+
+    def test_the_page_starts_threads_only_through_thread_create_and_chat_send(self) -> None:
+        page = (UI_SRC / "tasks" / "TasksPage.tsx").read_text(encoding="utf-8")
+        self.assertNotIn("invoke(", page)
+        self.assertNotIn("bridge.request", page)
+        store = (UI_SRC / "state" / "store.ts").read_text(encoding="utf-8")
+        start = store.split("async startTaskThread(", 1)[1].split("\n    },\n", 1)[0]
+        self.assertEqual(re.findall(r'(threadReq|bridge\.request)\("([a-z.]+)"', start), [("threadReq", "thread.create")])
+        self.assertIn("await actions.threadSend(bot, row.thread, text);", start)
+        host = (UI_SRC / "tasks" / "host.ts").read_text(encoding="utf-8")
+        self.assertEqual(sorted(set(re.findall(r'invoke<[^>]+>\("([a-z_]+)"', host))), ["tasks_list", "tasks_remote", "tasks_status", "tasks_view"])

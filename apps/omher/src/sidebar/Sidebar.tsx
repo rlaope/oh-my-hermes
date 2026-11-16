@@ -21,6 +21,7 @@ import { FirstRunHint } from "../onboarding/FirstRun";
 import { OmhNotice } from "./OmhNotice";
 import { t } from "../i18n";
 import { ThreadTree } from "../threads/ThreadTree";
+import { TasksBar } from "../tasks/TasksBar";
 
 const sessionBackground = (target: EventTarget) => target instanceof Element && !target.closest(".ss-row, button, input, textarea, select, a, [contenteditable], [role=menu], [role=menuitem]");
 
@@ -77,6 +78,7 @@ export function Sidebar() {
           onKeyDown={(e) => e.key === "Escape" && setQ("")}
         />
       </label>
+      <TasksBar />
       <NeedsStrip asks={asks} />
       <section className={`side-sec${needle && bots.length === 0 ? " side-sec-fit" : ""}`} data-testid="side-bots">
         <div className="side-sh">{t("nav.bots")}</div>

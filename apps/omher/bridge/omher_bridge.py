@@ -853,6 +853,24 @@ def skill_roots(profile_dir: Path) -> list[Path]:
     return roots
 
 
+
+def read_linear_mcp(profile_dir: Path) -> dict:
+    """`tasks.linear`: whether the bot's `config.yaml` names a Linear MCP server under `mcp_servers` (a key or a URL
+    with `linear` in it), for the Tasks page's Linear source. Reads the server's name and whether it is turned off,
+    nothing else: never its url, headers, env or auth (a credential may sit there), never a token file. Read-only."""
+    servers = _load_yaml(profile_dir / "config.yaml").get("mcp_servers")
+    if not isinstance(servers, dict):
+        return {"configured": False, "server": ""}
+    for name, cfg in servers.items():
+        if not isinstance(name, str):
+            continue
+        url = cfg.get("url") if isinstance(cfg, dict) else None
+        if "linear" in name.lower() or (isinstance(url, str) and "linear.app" in url.lower()):
+            on = not (isinstance(cfg, dict) and cfg.get("enabled") is False)
+            return {"configured": on, "server": name[:64]}
+    return {"configured": False, "server": ""}
+
+
 def read_skills(profile_dir: Path) -> list[dict]:
     """`skills.list`: the bot's skills (`SKILL.md` under each of `skill_roots`: its own `<profile>/skills`, then
     the `skills.external_dirs` its config names), each as the `/command` Hermes registers for it (`name`, the slug
@@ -4525,7 +4543,7 @@ PEER_OPEN_TIMEOUT = 15.0
 PEER_FORWARD = frozenset({
     "chat.open", "chat.send", "chat.interrupt", "chat.steer", "approval.respond", "clarify.respond", "chat.attach", "chat.set_model",
     "models.options", "bots.ready", "bots.rename", "bots.avatar", "bots.set_avatar", "bots.info", "skills.list",
-    "links.places", "elsewhere.list", "elsewhere.peek", "routines.list", "runs.list", "runs.get", "runs.prs",
+    "links.places", "tasks.linear", "elsewhere.list", "elsewhere.peek", "routines.list", "runs.list", "runs.get", "runs.prs",
     "runs.node_session",
     "panel.terminal", "panel.worktrees", "panel.diff", "media.read", "automations.add", "automations.pause",
     "automations.resume", "automations.remove", "plugins.list", "plugins.catalog", "plugins.inspect",
@@ -4934,7 +4952,7 @@ class Bridge:
             "chat.set_model": self.op_set_model, "bots.ready": self.op_bots_ready,
             "bots.rename": self.op_bots_rename, "bots.avatar": self.op_bots_avatar,
             "bots.set_avatar": self.op_bots_set_avatar, "bots.info": self.op_bots_info,
-            "skills.list": self.op_skills_list, "links.places": self.op_links_places,
+            "skills.list": self.op_skills_list, "links.places": self.op_links_places, "tasks.linear": self.op_tasks_linear,
             "folder.open": self.op_folder_open, "folder.close": self.op_folder_close,
             "thread.create": self.op_thread_create, "thread.list": self.op_thread_list,
             "thread.open": self.op_thread_open, "thread.remove": self.op_thread_remove,
@@ -6227,6 +6245,12 @@ class Bridge:
     async def op_bots_info(self, p) -> dict:
         bot = self._bot(p.get("bot"))
         return await asyncio.to_thread(read_bot_facts, bot["path"])
+
+    async def op_tasks_linear(self, p) -> dict:
+        """Tasks › Linear: whether the bot has a Linear MCP server in its config (rule 33). Hermes' gateway offers no
+        call that runs an MCP tool for a client, so omher lists nothing from Linear itself."""
+        bot = self._bot(p.get("bot"))
+        return await asyncio.to_thread(read_linear_mcp, bot["path"])
 
     async def op_skills_list(self, p) -> dict:
         bot = self._bot(p.get("bot"))

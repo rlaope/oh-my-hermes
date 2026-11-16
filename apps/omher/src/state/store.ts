@@ -356,7 +356,7 @@ export interface Ui {
   look: Look;
   /** "session" = a terminal session (SESSIONS in the sidebar) fills the main column; `session` names it.
    *  "automations" and "plugins" are the two pages of the sidebar's foot. */
-  view: "chat" | "settings" | "session" | "automations" | "plugins";
+  view: "chat" | "settings" | "session" | "automations" | "plugins" | "tasks";
   /** Automations: the job the detail panel shows (`<bot>:<id>`); Plugins: the bot whose plugins the page shows. */
   automation: string | null;
   pluginsBot: string | null;
@@ -881,6 +881,7 @@ export type Action =
   | { type: "automations"; automations: Automation[] }
   | { type: "ui.automations"; job?: string | null }
   | { type: "ui.plugins"; bot?: string | null }
+  | { type: "ui.tasks" }
   | { type: "ui.lang"; lang: Lang }
   | { type: "models"; bot: string; options: ModelOptions }
   | { type: "model.set"; bot: string; current: ModelCurrent }
@@ -1375,6 +1376,8 @@ export function reduce(state: AppState, a: Action): AppState {
       return { ...state, ui: { ...state.ui, view: "automations", ...(a.job !== undefined ? { automation: a.job } : {}) } };
     case "ui.plugins":
       return { ...state, ui: { ...state.ui, view: "plugins", ...(a.bot ? { pluginsBot: a.bot } : {}) } };
+    case "ui.tasks":
+      return { ...state, ui: { ...state.ui, view: "tasks" } };
     case "ui.lang":
       return { ...state, ui: { ...state.ui, lang: a.lang } };
     case "models":
@@ -1728,6 +1731,12 @@ export interface Actions {
   openAutomations(job?: string | null): void;
   /** Open the Plugins page, scoped to `bot` when given (else the last one, else the selected bot). */
   openPlugins(bot?: string | null): void;
+  /** Open the Tasks page (src/tasks: issues and pull requests, read-only). */
+  openTasks(): void;
+  /** Tasks › Linear: whether `bot`'s config names a Linear MCP server (bridge `tasks.linear`, config only). */
+  tasksLinear(bot: string): Promise<{ configured: boolean; server: string }>;
+  /** Tasks › Start in thread: a new thread under `bot` titled `title`, opened, whose first message is `text`. */
+  startTaskThread(bot: string, title: string, text: string): Promise<string | null>;
   /** Open `bot`'s main chat and send `text` there (the pages' "say it in words" box, Run now). */
   sendTo(bot: string, text: string): Promise<void>;
   /** The bot's own `cron.manage` through the bridge: pause, resume or remove one job, or add one. Rejects with
@@ -2506,6 +2515,24 @@ export function createStore(bridge: BridgeLike, opts: StoreOptions = {}): Store 
     openAutomations: (job) => {
       dispatch({ type: "ui.automations", job });
       void loadAutomations();
+    },
+    openTasks: () => dispatch({ type: "ui.tasks" }),
+    tasksLinear: (bot) => (bridge.request as unknown as (op: string, p: unknown) => Promise<{ configured: boolean; server: string }>)("tasks.linear", { bot }),
+    async startTaskThread(bot, title, text) {
+      try {
+        const key = `t${Date.now().toString(36)}${(threadSeq += 1)}`;
+        const r = await threadReq("thread.create", { bot, key, title });
+        const { model, provider, reasoning, ...row } = r;
+        dispatch({ type: "thread.upsert", bot, row: { ...row, title: row.title || title, last: now() / 1000 } });
+        const ck = threadRoute(bot, row.thread);
+        dispatch({ type: "chat.opened", bot: ck, res: { session_id: row.thread, messages: [], running: false, model, provider, reasoning }, now: now() });
+        dispatch({ type: "ui.thread", bot, thread: row.thread });
+        await actions.threadSend(bot, row.thread, text);
+        return row.thread;
+      } catch (e) {
+        fail(e);
+        return null;
+      }
     },
     openPlugins: (bot) => dispatch({ type: "ui.plugins", bot: bot ?? state.ui.pluginsBot ?? state.selectedBot ?? state.bots[0]?.name ?? null }),
     async sendTo(bot, text) {
