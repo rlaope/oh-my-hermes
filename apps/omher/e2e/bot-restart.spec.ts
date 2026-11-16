@@ -78,9 +78,9 @@ for (const theme of ["dark", "light"] as const) {
     const items = menu.getByRole("menuitem");
     // Friren shares the host gateway: the Restart item says who restarts with it, before the press, quietly
     await expect(menu.getByTestId("row-restart-with")).toHaveText("with Kami and Hermes");
-    await expect(items.nth(2)).toHaveText(/^Restart/);
-    await expect(items.nth(0)).toHaveText("Pin to top");
-    await expect(items.nth(3)).toHaveText("Remove from list");
+    await expect(menu.getByTestId("row-restart")).toHaveText(/^Restart/);
+    await expect(items.nth(1)).toHaveText("Pin to top");
+    await expect(menu.getByTestId("row-remove")).toHaveText("Remove from list");
     const sub = await menu.getByTestId("row-restart-with").evaluate((el) => {
       const s = getComputedStyle(el);
       const main = getComputedStyle(el.parentElement!);
@@ -89,16 +89,16 @@ for (const theme of ["dark", "light"] as const) {
     expect(sub.size).toBeLessThan(12.5);
     expect(sub.color).not.toBe(sub.mainColor); // dim
     expect(sub.ws).toBe("nowrap");
-    const restart = items.nth(2);
+    const restart = menu.getByTestId("row-restart");
     const css = await restart.evaluate((el) => {
       const s = getComputedStyle(el);
       return { size: s.fontSize, border: s.borderTopWidth, radius: s.borderRadius, bg: s.backgroundColor, h: el.getBoundingClientRect().height };
     });
-    const edit = await items.nth(1).evaluate((el) => getComputedStyle(el).fontSize);
+    const edit = await menu.getByRole("menuitem", { name: "Edit bot" }).evaluate((el) => getComputedStyle(el).fontSize);
     // a bot with its own gateway restarts alone: no second line
     await page.keyboard.press("Escape");
     const solo = await menuOf(page, "omh-tui");
-    await expect(solo.getByRole("menuitem").nth(2)).toHaveText("Restart");
+    await expect(solo.getByTestId("row-restart")).toHaveText("Restart");
     await expect(solo.getByTestId("row-restart-with")).toHaveCount(0);
     await page.keyboard.press("Escape");
     await menuOf(page, "friren");
@@ -116,7 +116,7 @@ for (const theme of ["dark", "light"] as const) {
     await page.keyboard.press("Escape");
     await page.getByTestId("bot-friren").hover();
     await page.getByTestId("bot-more-friren").click();
-    await expect(page.getByTestId("row-menu").getByRole("menuitem").nth(2)).toHaveText(/^Restart/);
+    await expect(page.getByTestId("row-menu").getByTestId("row-restart")).toHaveText(/^Restart/);
   });
 
   test(`one press restarts the host gateway: every bot on it reads Restarting together, then back (${theme})`, async ({ page }) => {
@@ -284,7 +284,7 @@ for (const theme of ["dark", "light"] as const) {
     await setup(page, theme);
     await mock("mock.botStatus", { bot: "friren", status: "offline" });
     await expect(page.getByTestId("bot-friren").getByTestId("bot-sub")).toHaveText("Not connected");
-    await expect((await menuOf(page, "friren")).getByRole("menuitem").nth(2)).toHaveText(/^Start/);
+    await expect((await menuOf(page, "friren")).getByTestId("row-restart")).toHaveText(/^Start/);
     await page.keyboard.press("Escape");
     await page.getByTestId("bot-friren").click();
     const note = page.getByTestId("chat-offline");
@@ -420,7 +420,7 @@ for (const lang of ["ko", "ja", "zh"]) {
   test(`the busy sentence agrees with the count in ${lang}`, async ({ page }) => {
     await setup(page, "dark", lang);
     await mock("mock.restart", { bot: "kami", outcome: "refused", work: [{ kind: "cron", name: "PR digest", secs: 40, bot: null }] });
-    await (await menuOf(page, "kami")).getByRole("menuitem").nth(2).click();
+    await (await menuOf(page, "kami")).getByTestId("row-restart").click();
     const line = page.getByTestId("restart-line-kami");
     await expect(line.locator(".rs-t")).toHaveText(BUSY[lang][0]);
     await line.getByTestId("restart-cancel").click();
@@ -428,7 +428,7 @@ for (const lang of ["ko", "ja", "zh"]) {
       { kind: "cron", name: "PR digest", secs: 40, bot: null },
       { kind: "work", name: null, secs: 7, bot: null },
     ] });
-    await (await menuOf(page, "kami")).getByRole("menuitem").nth(2).click();
+    await (await menuOf(page, "kami")).getByTestId("row-restart").click();
     await expect(line.locator(".rs-t")).toHaveText(BUSY[lang][1]);
     await expect(line).not.toContainText(/rs\.[a-z]|\{/);
   });
@@ -438,7 +438,7 @@ for (const lang of ["ko", "ja", "zh"]) {
     await mock("mock.restart", { bot: "kami", outcome: "refused", work: [{ kind: "cron", name: "PR digest", secs: 40 }] });
     const menu = await menuOf(page, "kami");
     await expect(menu).not.toContainText(/row\.|rs\./);
-    await menu.getByRole("menuitem").nth(2).click();
+    await menu.getByTestId("row-restart").click();
     const line = page.getByTestId("restart-line-kami");
     await expect(line).toBeVisible();
     await expect(line).not.toContainText(/rs\.[a-z]/);

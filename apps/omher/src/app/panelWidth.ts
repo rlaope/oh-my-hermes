@@ -27,6 +27,19 @@ export function clampPanel(w: number, windowW: number, sideW: number): number {
   return Math.round(Math.min(panelMax(windowW, sideW), Math.max(PANEL_MIN, w)));
 }
 
+/** Maximised in place: every pixel right of the sidebar (the chat column folds to 0; under 1100px the overlay
+ *  covers the chat the same way). */
+export function maxedPanel(windowW: number, sideW: number): number {
+  return Math.max(PANEL_MIN, Math.round(windowW - sideW));
+}
+
+/** The width the panel is drawn at, or null for the stylesheet's own. Maximising never saves a width, so restoring
+ *  lands on exactly the width the tab had before (its saved one, fitted to the window, or the stylesheet's). */
+export function shownPanelWidth(max: boolean, saved: number | undefined, windowW: number, sideW: number): number | null {
+  if (max) return maxedPanel(windowW, sideW);
+  return saved === undefined ? null : clampPanel(saved, windowW, sideW);
+}
+
 export function readPanelWidths(): Partial<Record<PanelKind, number>> {
   try {
     const raw = typeof localStorage !== "undefined" ? localStorage.getItem(KEY) : null;

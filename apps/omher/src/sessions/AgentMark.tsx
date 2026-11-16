@@ -8,19 +8,17 @@
 // with Hermes but not oh-my-hermes, the oh-my-hermes
 // row is a plain Hermes chat and shows Hermes Agent's official mark (NousResearch/hermes-agent `assets/icon-master.svg`,
 // MIT, the repo's `assets/hermes-agent-icon.png` render, unchanged).
-import dshSvg from "../assets/agents/dsh.svg?raw";
-import omoMark from "../assets/agents/omo.svg";
-import ompMark from "../assets/agents/omp.svg";
 import logo from "../assets/omher-mark.png";
-import hermesMark from "../assets/agents/hermes-agent.png";
+import { assetRaw, assetUrl } from "../harness/assets";
 import { AgentIcon, fileMark, ModelIcon } from "../ui";
 import { acpRow, agentDef, hermesOnly, isBuiltin, type AgentId } from "./agents";
 import { useSessions } from "./sessions";
 
-const IMG: Partial<Record<AgentId, string>> = { omp: ompMark, omo: omoMark };
+const IMG: Partial<Record<AgentId, string>> = { omp: assetUrl("omp.svg"), omo: assetUrl("omo.svg") };
+const hermesMark = assetUrl("hermes-agent.png");
 
 // DeepSeek Harness's mark is one black path; drawn inline in currentColor so it shows on both themes
-const DSH_PATH = /\sd="([^"]+)"/.exec(dshSvg)?.[1] ?? "";
+const DSH_PATH = /\sd="([^"]+)"/.exec(assetRaw("dsh.svg") ?? "")?.[1] ?? "";
 
 export function AgentMark({ agent, size = 16 }: { agent: AgentId; size?: number }) {
   const box = { width: size, height: size };

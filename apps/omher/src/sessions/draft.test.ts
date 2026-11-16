@@ -75,21 +75,21 @@ describe("draft defaults", () => {
   });
 
   it("the folder: the last folder used, else home, else nothing yet", () => {
-    expect(draftFolder([rec("claude", "/w/old", 1), rec("codex", "/w/new", 4)], "/Users/k")).toBe("/w/new");
-    expect(draftFolder([], "/Users/k")).toBe("/Users/k");
+    expect(draftFolder([rec("claude", "/w/old", 1), rec("codex", "/w/new", 4)], "/home/k")).toBe("/w/new");
+    expect(draftFolder([], "/home/k")).toBe("/home/k");
     expect(draftFolder([], null)).toBe("");
   });
 
   it("the folder menu: the recents in order, then home unless it is one of them", () => {
     const list = [rec("claude", "/w/a", 3), rec("codex", "/w/b", 2)];
-    expect(folderChoices(list, "/Users/k")).toEqual({ recent: ["/w/a", "/w/b"], home: "/Users/k" });
-    expect(folderChoices([...list, rec("pi", "/Users/k", 1)], "/Users/k")).toEqual({ recent: ["/w/a", "/w/b", "/Users/k"], home: null });
+    expect(folderChoices(list, "/home/k")).toEqual({ recent: ["/w/a", "/w/b"], home: "/home/k" });
+    expect(folderChoices([...list, rec("pi", "/home/k", 1)], "/home/k")).toEqual({ recent: ["/w/a", "/w/b", "/home/k"], home: null });
     expect(folderChoices([], null)).toEqual({ recent: [], home: null });
   });
 
   it("a draft row reads New session over its folder, never live", () => {
-    const d: SessionRec = { id: "s1", agent: "codex", cwd: "/Users/k/code/app", startedAt: 1_000, status: "draft", view: "chat" };
-    expect(rowModel(d, { turn: true, needsYou: true }, { cwds: [d.cwd], home: "/Users/k" })).toEqual({
+    const d: SessionRec = { id: "s1", agent: "codex", cwd: "/home/k/code/app", startedAt: 1_000, status: "draft", view: "chat" };
+    expect(rowModel(d, { turn: true, needsYou: true }, { cwds: [d.cwd], home: "/home/k" })).toEqual({
       title: "New session",
       titleSource: "folder",
       folder: "app",
@@ -183,7 +183,7 @@ describe("a New session chat", () => {
     const id = ss.draft();
     expect(ss.getState().list[0].cwd).toBe("");
     await ss.loadAgents();
-    expect(ss.getState().list[0]).toMatchObject({ cwd: "/Users/you", agent: "claude" });
+    expect(ss.getState().list[0]).toMatchObject({ cwd: "/home/you", agent: "claude" });
     ss.setDraft(id, { cwd: "/w/picked" });
     await ss.loadAgents();
     expect(ss.getState().list[0].cwd).toBe("/w/picked");

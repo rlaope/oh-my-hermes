@@ -19,6 +19,7 @@ import { LiveFace, TypingRow, awaitingFirstToken } from "./Typing";
 import { liveFaceRow } from "./liveFace";
 import { ActivityFallback, CardFallback, ElsewhereFallback, RoutineFallback } from "./fallbacks";
 import { PluginAddedCard, RoutineAddedCard } from "../../pages/ChatCards";
+import { ThreadLinkLine, ThreadRouteCard } from "../cards/ThreadNotes";
 import { WatchLine } from "../../routines/WatchLine";
 import { t } from "../../i18n";
 import { useBotReady } from "../connect/ready";
@@ -157,6 +158,10 @@ export function Timeline({
         return <RoutineAddedCard bot={bot.name} item={it} />;
       case "pluginAdded":
         return <PluginAddedCard bot={bot.name} item={it} />;
+      case "threadLink":
+        return <ThreadLinkLine item={it} />;
+      case "threadRoute":
+        return <ThreadRouteCard item={it} />;
       case "system":
         return (
           <div className="line sys" data-testid="system-line">

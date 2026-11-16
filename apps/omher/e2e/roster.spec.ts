@@ -93,7 +93,7 @@ test("resume saved Kami: Kami alone; Remove from list puts a bot back under +; t
   // the last bot: Remove from list is there but disabled, with a reason
   await page.getByTestId("bot-kami").click({ button: "right" });
   const menu = page.getByTestId("row-menu");
-  await expect(menu.getByRole("menuitem")).toHaveText(["Pin to top", "Edit bot", /^Restart/, "Remove from list"]);
+  await expect(menu.getByRole("menuitem")).toHaveText([/^New thread · /, "Pin to top", "Edit bot", /^Restart/, "Remove from list"]);
   const remove = page.getByTestId("row-remove");
   await expect(remove).toHaveAttribute("aria-disabled", "true");
   await expect(remove).toHaveAttribute("title", "The last bot in the list stays");

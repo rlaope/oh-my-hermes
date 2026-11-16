@@ -3,6 +3,8 @@
 // as a terminal ends, restarts and comes back after omher restarts, and OpenCode both ways.
 import { expect, test, type Page } from "@playwright/test";
 
+test.skip(true, "SESSIONS hidden in favour of bot threads (plan 2026-11-15)");
+
 const MOCK = Number(process.env.OMHER_MOCK_PORT || 5308);
 
 test.use({ colorScheme: "dark" });
@@ -33,7 +35,7 @@ async function open(page: Page, installed = ["claude", "codex", "omh", "dsh", "g
       localStorage.removeItem("omher.resume");
     }
     const w = window as unknown as { __omherPickFolder: string; __omherMockAgents: string[] };
-    w.__omherPickFolder = "/Users/you/code/web-app";
+    w.__omherPickFolder = "/home/you/code/web-app";
     w.__omherMockAgents = list;
   }, installed);
   await page.goto("/");
@@ -76,7 +78,7 @@ test("Claude Code: pick Terminal, press Start: its terminal runs and no chat sta
   await expect(page.locator(".xterm-rows")).toContainText("(mock)");
   const starts = (await calls(page)).filter((c) => c.op === "start");
   expect(starts).toHaveLength(1);
-  expect(starts[0]).toMatchObject({ agent: "claude", cwd: "/Users/you/code/web-app" });
+  expect(starts[0]).toMatchObject({ agent: "claude", cwd: "/home/you/code/web-app" });
   expect(await count(page, "chat.start")).toBe(0);
   // nothing was typed into the program
   expect(await count(page, "write")).toBe(0);
@@ -159,7 +161,7 @@ test("a session opened as a terminal ends with its program, shows the ended line
   await expect(page.getByTestId("session-status")).toHaveText("Running");
   const starts = (await calls(page)).filter((c) => c.op === "start");
   expect(starts).toHaveLength(2);
-  expect(starts[1]).toMatchObject({ agent: "claude", cwd: "/Users/you/code/web-app" });
+  expect(starts[1]).toMatchObject({ agent: "claude", cwd: "/home/you/code/web-app" });
   expect(await count(page, "chat.start")).toBe(0);
 });
 
@@ -251,7 +253,7 @@ test("a session row carries a mark for its view: a draft shows the picked way, a
   await expect(term).toHaveAttribute("title", "Terminal");
 
   // opened as a chat: the chat's mark; the header's Terminal toggle moves it, and back
-  await page.evaluate(() => ((window as unknown as { __omherPickFolder: string }).__omherPickFolder = "/Users/you/code/api-server"));
+  await page.evaluate(() => ((window as unknown as { __omherPickFolder: string }).__omherPickFolder = "/home/you/code/api-server"));
   await draft(page, "claude");
   await page.getByTestId("session-way-chat").click();
   await page.getByTestId("composer").fill("hello");

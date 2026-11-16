@@ -3,6 +3,8 @@
 // turn runs, and the model menu's search and provider groups.
 import { expect, test, type Page } from "@playwright/test";
 
+test.skip(true, "SESSIONS hidden in favour of bot threads (plan 2026-11-15)");
+
 const MOCK = Number(process.env.OMHER_MOCK_PORT || 5308);
 
 async function mock(op: string): Promise<{ calls?: { op: string; input?: Record<string, unknown> }[] }> {
@@ -30,7 +32,7 @@ const inputs = (page: Page) =>
       .map((c) => c.input!),
   );
 
-async function running(page: Page, agent: "claude" | "codex" | "omo" = "claude", folder = "/Users/you/code/omher") {
+async function running(page: Page, agent: "claude" | "codex" | "omo" = "claude", folder = "/home/you/code/omher") {
   await page.addInitScript(
     ([f, a]) => {
       localStorage.removeItem("omher.sessions.recent");
@@ -152,7 +154,7 @@ test("the line under the box shows the branch and the context the agent counted"
   // a folder that is not a repository: no branch
   await page.getByTestId("session-new").click();
   await page.getByTestId("session-agent-codex").click();
-  await page.evaluate(() => ((window as unknown as { __omherPickFolder: string }).__omherPickFolder = "/Users/you/notes"));
+  await page.evaluate(() => ((window as unknown as { __omherPickFolder: string }).__omherPickFolder = "/home/you/notes"));
   await page.getByTestId("session-folder").click();
   await page.getByTestId("session-choose").click();
   await page.getByTestId("composer").fill("/status");

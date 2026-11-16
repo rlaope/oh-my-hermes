@@ -6,6 +6,8 @@ import { expect, test, type Page } from "@playwright/test";
 import { mkdirSync } from "node:fs";
 import { join } from "node:path";
 
+test.skip(true, "SESSIONS hidden in favour of bot threads (plan 2026-11-15)");
+
 const MOCK = Number(process.env.OMHER_MOCK_PORT || 5308);
 const SHOTS = process.env.OMHER_SHOTS || "";
 
@@ -29,7 +31,7 @@ const bridgeCalls = async () => (await mock("mock.calls")).calls ?? [];
 type Call = { op: string; agent?: string; cwd?: string; id?: number; resume?: string; input?: { kind: string; [k: string]: unknown } };
 const calls = (page: Page) => page.evaluate(() => ((window as unknown as { __omherSessionCalls?: Call[] }).__omherSessionCalls ?? []));
 
-async function open(page: Page, folder = "/Users/you/code/omher") {
+async function open(page: Page, folder = "/home/you/code/omher") {
   await page.addInitScript((f) => {
     localStorage.removeItem("omher.sessions.recent");
     (window as unknown as { __omherPickFolder: string }).__omherPickFolder = f;
@@ -83,7 +85,7 @@ test("Claude Code opens as a chat: bubbles, one progress line, no terminal", asy
   // the UI sent only an agent id, a folder and the session's own id (whose attachment folder Claude Code may read)
   const st = (await calls(page)).find((c) => c.op === "chat.start")!;
   expect(Object.keys(st).sort()).toEqual(["agent", "cwd", "id", "op", "session"]);
-  expect(st).toMatchObject({ agent: "claude", cwd: "/Users/you/code/omher" });
+  expect(st).toMatchObject({ agent: "claude", cwd: "/home/you/code/omher" });
   expect(st.session).toMatch(/^s\d+$/);
   await expect(page.getByTestId("bubble-user")).toHaveText("explain the sessions feature");
   await expect(row.getByTestId("live-ring")).toBeVisible(); // the answer ring while the turn runs, as on a bot row
@@ -134,7 +136,7 @@ test("the empty section's New session row opens a New session chat, then gives w
   await page.getByTestId("session-choose").click();
   await page.getByTestId("composer").fill("hello");
   await page.keyboard.press("Enter");
-  await expect.poll(async () => (await calls(page)).find((c) => c.op === "chat.start")).toMatchObject({ agent: "claude", cwd: "/Users/you/code/omher" });
+  await expect.poll(async () => (await calls(page)).find((c) => c.op === "chat.start")).toMatchObject({ agent: "claude", cwd: "/home/you/code/omher" });
 });
 
 test("an approval card in a session: Deny first, answered with Allow for session, the row waits", async ({ page }) => {
@@ -257,23 +259,23 @@ test("Codex's terminal view starts its TUI fresh and the chat keeps running", as
 });
 
 test("oh-my-hermes opens as a Hermes chat in the folder through the bridge", async ({ page }) => {
-  await open(page, "/Users/you/work/api");
+  await open(page, "/home/you/work/api");
   await draft(page, "omh");
   await page.getByTestId("composer").fill("what is here?");
   await page.keyboard.press("Enter");
   await expect(page.getByTestId("session-agent")).toHaveText("oh-my-hermes");
   await expect(page.getByTestId("model-label")).toHaveText("Opus 5.5");
   const opened = (await bridgeCalls()).find((c) => c.op === "folder.open")!;
-  expect(opened.params).toEqual({ bot: "kami", cwd: "/Users/you/work/api" });
-  await expect(page.getByTestId("bubble-bot")).toHaveText("(mock oh-my-hermes) Working in /Users/you/work/api: what is here?");
+  expect(opened.params).toEqual({ bot: "kami", cwd: "/home/you/work/api" });
+  await expect(page.getByTestId("bubble-bot")).toHaveText("(mock oh-my-hermes) Working in /home/you/work/api: what is here?");
   await page.getByTestId("activity-toggle").click();
-  await expect(page.getByTestId("activity-step")).toHaveText(/Ran\s*ls \/Users\/you\/work\/api/);
+  await expect(page.getByTestId("activity-step")).toHaveText(/Ran\s*ls \/home\/you\/work\/api/);
   const sent = (await bridgeCalls()).filter((c) => c.op === "chat.send");
   expect(sent).toHaveLength(1);
   expect(sent[0].params).toEqual({ bot: "kami", session: expect.stringMatching(/^f-/), text: "what is here?" });
   // the bot's own chat is untouched
   await page.getByTestId("bot-kami").click();
-  await expect(page.getByTestId("timeline")).not.toContainText("Working in /Users/you/work/api");
+  await expect(page.getByTestId("timeline")).not.toContainText("Working in /home/you/work/api");
 
   // closing asks, then closes the folder chat in Hermes
   const row = page.locator("[data-testid=session-list] .ss-row").first();
@@ -356,26 +358,26 @@ test("a session's question becomes a question card; a failed command and a missi
 });
 
 test("the approval card says which folder the command runs in", async ({ page }) => {
-  await open(page, "/Users/you/code/web-app");
+  await open(page, "/home/you/code/web-app");
   await draft(page, "claude");
   await page.getByTestId("composer").fill("/approve");
   await page.keyboard.press("Enter");
   const card = page.getByTestId("card-approval");
   await expect(card.locator(".card-cmd")).toHaveText("rm -rf ./build");
-  await expect(card.getByTestId("card-cwd")).toHaveText("in /Users/you/code/web-app");
+  await expect(card.getByTestId("card-cwd")).toHaveText("in /home/you/code/web-app");
   await expect(card.getByRole("button")).toHaveText(["Deny", "Allow once", "Allow for session"]);
 });
 
 test("screenshots: a chat session with an approval, dark and light", async ({ page }) => {
   test.skip(!SHOTS, "set OMHER_SHOTS to a folder to save screenshots");
   mkdirSync(SHOTS, { recursive: true });
-  await open(page, "/Users/you/code/omher");
-  await page.evaluate(() => ((window as unknown as { __omherPickFolder: string }).__omherPickFolder = "/Users/you/work/api"));
+  await open(page, "/home/you/code/omher");
+  await page.evaluate(() => ((window as unknown as { __omherPickFolder: string }).__omherPickFolder = "/home/you/work/api"));
   await start(page, "omh");
-  await page.evaluate(() => ((window as unknown as { __omherPickFolder: string }).__omherPickFolder = "/Users/you/code/omher"));
+  await page.evaluate(() => ((window as unknown as { __omherPickFolder: string }).__omherPickFolder = "/home/you/code/omher"));
   await start(page, "codex", "run the tests");
   await expect(page.getByTestId("activity")).toHaveAttribute("data-state", "done");
-  await page.evaluate(() => ((window as unknown as { __omherPickFolder: string }).__omherPickFolder = "/Users/you/code/oh-my-hermes"));
+  await page.evaluate(() => ((window as unknown as { __omherPickFolder: string }).__omherPickFolder = "/home/you/code/oh-my-hermes"));
   await start(page, "claude", "explain the sessions feature");
   await expect(page.getByTestId("activity")).toHaveAttribute("data-state", "done");
   await page.getByTestId("composer").fill("/approve clean the build folder");

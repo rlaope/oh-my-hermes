@@ -6,6 +6,8 @@ import { expect, test, type Page } from "@playwright/test";
 import { mkdirSync } from "node:fs";
 import { join } from "node:path";
 
+test.skip(true, "SESSIONS hidden in favour of bot threads (plan 2026-11-15)");
+
 const MOCK = Number(process.env.OMHER_MOCK_PORT || 5308);
 // Screenshots stay out of the repo (NEEDS_SHOTS dir, else Playwright's ignored test-results).
 const SHOTS = process.env.NEEDS_SHOTS || "test-results";
@@ -38,7 +40,7 @@ async function open(page: Page, theme: "dark" | "light" = "dark") {
     localStorage.removeItem("omher.sessions.recent");
     localStorage.removeItem("omher.pinned");
     localStorage.removeItem("omher.hidden");
-    (window as unknown as { __omherPickFolder: string }).__omherPickFolder = "/Users/you/code/web-app";
+    (window as unknown as { __omherPickFolder: string }).__omherPickFolder = "/home/you/code/web-app";
   });
   await page.goto("/");
   await expect(page.getByTestId("bot-kami")).toHaveAttribute("aria-current", "true");
@@ -173,7 +175,7 @@ for (const theme of ["dark", "light"] as const) {
     await startClaude(page);
     await ask(page);
     const row = page.locator("[data-testid=session-list] .ss-row", { hasText: "web-app" });
-    await page.evaluate(() => ((window as unknown as { __omherPickFolder: string }).__omherPickFolder = "/Users/you/code/api-server"));
+    await page.evaluate(() => ((window as unknown as { __omherPickFolder: string }).__omherPickFolder = "/home/you/code/api-server"));
     await page.getByTestId("session-new").click();
     await page.getByTestId("session-agent-codex").click();
     await page.getByTestId("session-folder").click();

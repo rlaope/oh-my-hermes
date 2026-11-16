@@ -6,6 +6,8 @@ import { expect, test, type Page } from "@playwright/test";
 import { mkdirSync } from "node:fs";
 import { join } from "node:path";
 
+test.skip(true, "SESSIONS hidden in favour of bot threads (plan 2026-11-15)");
+
 const MOCK = Number(process.env.OMHER_MOCK_PORT || 5308);
 const SHOTS = process.env.OMHER_SHOTS || "";
 const TAG = process.env.OMHER_SHOT_TAG || "after";
@@ -51,8 +53,8 @@ for (const theme of ["dark", "light"] as const) {
       localStorage.removeItem("omher.resume");
     }, theme);
     await page.goto("/");
-    await start(page, "/Users/you/code/web-app", "Fix the login redirect");
-    await start(page, "/Users/you/code/omher", "Add rate limits to the API");
+    await start(page, "/home/you/code/web-app", "Fix the login redirect");
+    await start(page, "/home/you/code/omher", "Add rate limits to the API");
     await page.mouse.move(900, 790);
 
     // the row's right-click menu

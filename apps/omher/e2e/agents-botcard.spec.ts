@@ -44,7 +44,7 @@ async function open(page: Page, theme = "dark") {
     localStorage.setItem("omher.theme", t);
     localStorage.removeItem("omher.sessions.recent");
     const w = window as unknown as { __omherPickFolder: string; __omherMockAgents: string[] };
-    w.__omherPickFolder = "/Users/you/code/web-app";
+    w.__omherPickFolder = "/home/you/code/web-app";
     w.__omherMockAgents = ["claude", "codex", "omh", "opencode", "gemini"];
   }, theme);
   await page.goto("/");
@@ -63,7 +63,8 @@ async function plus(page: Page) {
   await page.waitForFunction(() => document.querySelector(".ss-pop")?.getAnimations().every((a) => a.playState !== "running"));
 }
 
-test("a bot reply with a draft: chip -> the same card, filled and naming the bot -> Add -> the agent is in the + menu", async ({ page }) => {
+// SESSIONS hidden in favour of bot threads (plan 2026-11-15)
+test.skip("a bot reply with a draft: chip -> the same card, filled and naming the bot -> Add -> the agent is in the + menu", async ({ page }) => {
   await open(page);
   await reply(`Here is the agent you asked for:\n\n${fence(STUB)}\n\nPress Add agent to see the exact command.`);
   const bubble = page.getByTestId("bubble-bot").last();
@@ -149,7 +150,8 @@ test("Cancel writes nothing; two blocks make two chips; a refused draft's chip i
   expect((await calls(page)).filter((c) => c.op === "custom.confirm")).toEqual([]);
 });
 
-test("a SESSIONS agent's reply with a draft shows no chip", async ({ page }) => {
+// SESSIONS hidden in favour of bot threads (plan 2026-11-15)
+test.skip("a SESSIONS agent's reply with a draft shows no chip", async ({ page }) => {
   await open(page);
   await page.getByTestId("session-new").click();
   await page.getByTestId("session-agent-claude").click();

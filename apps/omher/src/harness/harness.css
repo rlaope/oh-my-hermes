@@ -1,0 +1,170 @@
+.hn-mk { display: inline-flex; align-items: center; justify-content: center; flex: none; vertical-align: middle; }
+.hn-mk img, .hn-mk svg { display: block; }
+.hn-generic { color: var(--muted, #888); }
+.hn-face { position: relative; display: inline-flex; flex: none; }
+.hn-face > .hn-mk img { border-radius: 6px; }
+.hn-model {
+  position: absolute; right: -3px; bottom: -3px; display: inline-flex; align-items: center; justify-content: center;
+  border-radius: 50%; background: var(--bg, #fff); box-shadow: 0 0 0 1px var(--line, rgba(127, 127, 127, 0.25));
+}
+.hn-stack { display: inline-flex; align-items: center; gap: 2px; }
+.hn-more { font-size: 11px; color: var(--muted, #888); margin-left: 2px; }
+
+/* ---------------------------------------------------------------- AgentChat: a child's session as a chat */
+.ac {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  font-size: 12px;
+}
+.ac-head {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--line);
+  color: var(--muted);
+  font-size: 11px;
+}
+.ac-crumbs {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 2px;
+  min-width: 0;
+  flex: 1 1 auto;
+}
+.ac-crumb-w {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  min-width: 0;
+}
+.ac-crumb {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  color: var(--muted);
+}
+.ac-crumb.root img {
+  border-radius: 50%;
+}
+button.ac-crumb {
+  cursor: pointer;
+}
+button.ac-crumb:hover {
+  color: var(--body);
+  text-decoration: underline;
+}
+.ac-crumb.cur {
+  color: var(--ink);
+}
+.ac-who {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  white-space: nowrap;
+}
+.ac-full {
+  padding: 0 6px;
+  height: 20px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: none;
+  font: inherit;
+  color: var(--muted);
+  cursor: pointer;
+}
+.ac-full:hover {
+  color: var(--body);
+}
+.ac-body {
+  min-width: 0;
+  padding-top: 10px;
+}
+.ac-tl {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+.ac-tl .msg .b {
+  font-size: 12.5px;
+}
+.ac-steps .act-det {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  margin: 0 0 0 38px;
+}
+/* the grandchild card sits on the step rows' text column, the x and width of a step's expanded input/result boxes
+   (rail 38px + its 1px line + 14px padding + the boxes' 2px), not on the rail line */
+.ac-tl .ac-child {
+  display: block;
+  margin: 0 0 0 55px;
+  max-width: none;
+  padding: 6px 8px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  text-align: left;
+  cursor: pointer;
+}
+.ac-child:hover {
+  border-color: var(--line-strong, var(--muted));
+}
+/* durations of the steps: the secondary-text token, which passes 4.5:1 on dark and light (--quiet does not on dark) */
+.ac .act-step .s {
+  color: var(--muted);
+}
+
+.ac-none {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--muted);
+  padding: 4px 0;
+}
+.ac-none.bad {
+  color: var(--danger);
+}
+/* the whole view: one centred chat column, the width of the main chat */
+.ac.full .ac-head,
+.ac.full .ac-body {
+  width: 100%;
+  max-width: 920px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+/* the drawer's Session section; "Open as chat" lays it over the whole Plans view */
+.rn-session {
+  margin-top: 12px;
+  border-top: 1px solid var(--line);
+  padding-top: 8px;
+}
+.rn-sh {
+  margin: 0 0 6px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--muted);
+}
+/* "Open as chat" lays the chat over everything right of the sidebar, under the tab row (the sidebar stays) */
+.rn-session.full {
+  position: fixed;
+  inset: 48px 0 0 var(--side-w);
+  z-index: 30;
+  margin: 0;
+  padding: 14px 24px;
+  overflow-y: auto;
+  background: var(--bg);
+  border-top: 1px solid var(--line);
+}

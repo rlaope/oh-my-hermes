@@ -6,6 +6,8 @@ import { expect, test, type Locator, type Page } from "@playwright/test";
 import { mkdirSync } from "node:fs";
 import { join } from "node:path";
 
+test.skip(true, "SESSIONS hidden in favour of bot threads (plan 2026-11-15)");
+
 const MOCK = Number(process.env.OMHER_MOCK_PORT || 5308);
 const SHOTS = process.env.OMHER_SHOTS || "";
 
@@ -24,7 +26,7 @@ async function mock(op: string, params: Record<string, unknown> = {}): Promise<v
   ws.close();
 }
 
-async function open(page: Page, folder = "/Users/you/code/oh-my-hermes", installed = ["claude", "codex", "omh", "grok"]) {
+async function open(page: Page, folder = "/home/you/code/oh-my-hermes", installed = ["claude", "codex", "omh", "grok"]) {
   await page.addInitScript(
     ([f, agents]) => {
       if (!sessionStorage.getItem("__kept")) localStorage.removeItem("omher.sessions.recent");
@@ -374,7 +376,7 @@ test("start a mock terminal session, type, see the echo, then switch to a bot ch
 
   // only the agent id and folder went to the host: no command line
   const start = (await calls(page)).find((c) => c.op === "start")!;
-  expect(start).toMatchObject({ agent: "grok", cwd: "/Users/you/code/oh-my-hermes" });
+  expect(start).toMatchObject({ agent: "grok", cwd: "/home/you/code/oh-my-hermes" });
   expect(Object.keys(start).sort()).toEqual(["agent", "cols", "cwd", "id", "op", "rows"]);
 
   await page.locator(".xterm-helper-textarea").focus();
@@ -402,7 +404,7 @@ test("start a mock terminal session, type, see the echo, then switch to a bot ch
 test("a second session, recent folders, and exit ends a session", async ({ page }) => {
   await open(page);
   await startSession(page, "grok");
-  await page.evaluate(() => ((window as unknown as { __omherPickFolder: string }).__omherPickFolder = "/Users/you/work/api"));
+  await page.evaluate(() => ((window as unknown as { __omherPickFolder: string }).__omherPickFolder = "/home/you/work/api"));
   await startSession(page, "grok");
   const rows = page.locator("[data-testid=session-list] .ss-row");
   await expect(rows).toHaveCount(2);
@@ -536,11 +538,11 @@ test("the terminal follows the light theme", async ({ page }) => {
 test("screenshots: sidebar with sessions and an open session, dark and light", async ({ page }) => {
   test.skip(!SHOTS, "set OMHER_SHOTS to a folder to save screenshots");
   mkdirSync(SHOTS, { recursive: true });
-  await open(page, "/Users/you/code/oh-my-hermes");
+  await open(page, "/home/you/code/oh-my-hermes");
   await startSession(page, "grok");
-  await page.evaluate(() => ((window as unknown as { __omherPickFolder: string }).__omherPickFolder = "/Users/you/work/api-server"));
+  await page.evaluate(() => ((window as unknown as { __omherPickFolder: string }).__omherPickFolder = "/home/you/work/api-server"));
   await startSession(page, "grok");
-  await page.evaluate(() => ((window as unknown as { __omherPickFolder: string }).__omherPickFolder = "/Users/you/code/omher"));
+  await page.evaluate(() => ((window as unknown as { __omherPickFolder: string }).__omherPickFolder = "/home/you/code/omher"));
   await startSession(page, "grok");
   await page.locator(".xterm-helper-textarea").focus();
   await page.keyboard.type("explain the sessions feature");

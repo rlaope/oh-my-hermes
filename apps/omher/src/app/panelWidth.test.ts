@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { CHAT_MIN, PANEL_MIN, clampPanel, panelKind, panelMax, readPanelWidths, savePanelWidth } from "./panelWidth";
+import { CHAT_MIN, PANEL_MIN, clampPanel, maxedPanel, panelKind, panelMax, readPanelWidths, savePanelWidth, shownPanelWidth } from "./panelWidth";
 
 describe("panel width", () => {
   const disk = new Map<string, string>();
@@ -37,5 +37,31 @@ describe("panel width", () => {
     expect(readPanelWidths()).toEqual({ runs: 500 });
     localStorage.setItem("omher.panelWidth", "{not json");
     expect(readPanelWidths()).toEqual({});
+  });
+
+  it("maximised takes every pixel right of the sidebar, in a wide window and in the overlay", () => {
+    expect(maxedPanel(1440, 248)).toBe(1192);
+    expect(maxedPanel(1280, 248.4)).toBe(1032);
+    expect(maxedPanel(900, 248)).toBe(652); // under 1100px: the overlay, full width minus the sidebar
+    expect(maxedPanel(400, 300)).toBe(PANEL_MIN);
+    expect(shownPanelWidth(true, 500, 1440, 248)).toBe(1192);
+    expect(shownPanelWidth(true, undefined, 1440, 248)).toBe(1192);
+  });
+
+  it("restores the exact width each tab had before, and saves nothing while maximised", () => {
+    savePanelWidth("runs", 640);
+    savePanelWidth("details", 352);
+    const before = readPanelWidths();
+    for (const tab of ["details", "runs", "terminal"]) {
+      const saved = before[panelKind(tab)];
+      const prior = shownPanelWidth(false, saved, 1440, 248);
+      expect(shownPanelWidth(true, saved, 1440, 248)).toBe(1192);
+      expect(shownPanelWidth(false, saved, 1440, 248)).toBe(prior);
+    }
+    expect(shownPanelWidth(false, before.runs, 1440, 248)).toBe(640);
+    expect(shownPanelWidth(false, before.details, 1440, 248)).toBe(352);
+    // a tab with no saved width goes back to the stylesheet's own
+    expect(shownPanelWidth(false, before.tools, 1440, 248)).toBeNull();
+    expect(readPanelWidths()).toEqual(before);
   });
 });

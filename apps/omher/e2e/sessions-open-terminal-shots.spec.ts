@@ -4,6 +4,8 @@ import { expect, test, type Page } from "@playwright/test";
 import { mkdirSync } from "node:fs";
 import { join } from "node:path";
 
+test.skip(true, "SESSIONS hidden in favour of bot threads (plan 2026-11-15)");
+
 const MOCK = Number(process.env.OMHER_MOCK_PORT || 5308);
 const SHOTS = process.env.OMHER_SHOTS || "";
 
@@ -31,7 +33,7 @@ async function open(page: Page, theme: string) {
     localStorage.removeItem("omher.sessions.open");
     localStorage.removeItem("omher.resume");
     const w = window as unknown as { __omherPickFolder: string; __omherMockAgents: string[] };
-    w.__omherPickFolder = "/Users/you/code/web-app";
+    w.__omherPickFolder = "/home/you/code/web-app";
     w.__omherMockAgents = ["claude", "codex", "omh", "dsh", "grok", "opencode"];
   }, theme);
   await page.goto("/");
@@ -128,7 +130,7 @@ for (const theme of ["dark", "light"] as const) {
       await shot("running-claude");
 
       // a second folder for the second session
-      await page.evaluate(() => ((window as unknown as { __omherPickFolder: string }).__omherPickFolder = "/Users/you/code/api-server"));
+      await page.evaluate(() => ((window as unknown as { __omherPickFolder: string }).__omherPickFolder = "/home/you/code/api-server"));
       await draft(page, "opencode");
       await page.getByTestId("session-way-terminal").click();
       await page.getByTestId("session-go").click();
@@ -169,18 +171,18 @@ for (const theme of ["dark", "light"] as const) {
         await page.keyboard.type("exit");
         await page.keyboard.press("Enter");
         await expect(page.getByTestId("session-ended")).toBeVisible();
-        await folder("/Users/you/code/api-server");
+        await folder("/home/you/code/api-server");
         await draft(page, "opencode");
         await page.getByTestId("session-way-terminal").click();
         await page.getByTestId("session-go").click();
         await expect(page.locator(".xterm-rows")).toContainText("opencode");
-        await folder("/Users/you/code/docs-site");
+        await folder("/home/you/code/docs-site");
         await draft(page, "claude");
         await page.getByTestId("session-way-chat").click();
         await page.getByTestId("composer").fill("Summarize the README");
         await page.keyboard.press("Enter");
         await expect(page.getByTestId("session-status")).toHaveText("Ready");
-        await folder("/Users/you/code/infra");
+        await folder("/home/you/code/infra");
         await draft(page, "codex");
         await page.getByTestId("session-way-terminal").click();
         await expect(page.locator("[data-testid=session-list] [data-testid=session-view]")).toHaveCount(4);
@@ -218,22 +220,22 @@ for (const theme of ["dark", "light"] as const) {
         await open(page, theme);
         await terminal("claude", "(mock)");
         await line("after 2500 bell");
-        await folder("/Users/you/code/api-server");
+        await folder("/home/you/code/api-server");
         await terminal("opencode", "opencode");
         await line("after 2500 exit 3");
-        await folder("/Users/you/code/docs-site");
+        await folder("/home/you/code/docs-site");
         await draft(page, "claude");
         await page.getByTestId("session-way-chat").click();
         await page.getByTestId("composer").fill("Summarize the README");
         await page.keyboard.press("Enter");
         await page.getByTestId("bot-kami").click();
-        await folder("/Users/you/code/infra");
+        await folder("/home/you/code/infra");
         await draft(page, "codex");
         await page.getByTestId("session-way-chat").click();
         await page.getByTestId("composer").fill("/approve clean the build folder");
         await page.keyboard.press("Enter");
         await page.getByTestId("bot-kami").click();
-        await folder("/Users/you/code/mobile-app");
+        await folder("/home/you/code/mobile-app");
         await terminal("claude", "(mock)");
         await page.getByTestId("bot-kami").click();
         await expect(rowOf("web-app")).toHaveAttribute("data-mark", "needs", { timeout: 10_000 });

@@ -32,7 +32,7 @@ async function open(page: Page, theme: string, lang = "en") {
       localStorage.setItem("omher.lang", l);
       for (const k of ["omher.term", "omher.sessions.recent", "omher.sessions.open", "omher.resume"]) localStorage.removeItem(k);
       const w = window as unknown as { __omherPickFolder: string; __omherMockAgents: string[] };
-      w.__omherPickFolder = "/Users/you/code/web-app";
+      w.__omherPickFolder = "/home/you/code/web-app";
       w.__omherMockAgents = ["claude", "codex", "omh"];
     },
     [theme, lang],

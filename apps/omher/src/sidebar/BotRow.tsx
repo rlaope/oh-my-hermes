@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type MouseEvent } from "react";
+import { useEffect, useRef, useState, type MouseEvent, type ReactNode } from "react";
 import type { Bot } from "../lib/protocol";
 import { askText, liveLabel, type Ask, type Chat } from "../state/store";
 import { Avatar, LiveRing, Ticker, TypingDots } from "../ui";
@@ -13,6 +13,27 @@ import { RestartLine } from "./RestartLine";
 import { useMates } from "./restart";
 import { SshMarker } from "../peers/SshMarker";
 import type { RowDrag } from "./useRowDrag";
+
+/** The newest thing a bot's threads did: when, and a line of it (the thread's latest answer, else its preview or
+ *  title). The bot row shows it when it is newer than the main chat's own last line. */
+export function threadsLatest(rows: { thread: string; title: string; preview?: string; last?: number; started_at: number }[], chatOf: (thread: string) => Chat | undefined): { text: string; ts: number } | null {
+  let best: { text: string; ts: number } | null = null;
+  for (const r of rows) {
+    const items = chatOf(r.thread)?.items ?? [];
+    let said: { text: string; ts: number } | null = null;
+    for (let i = items.length - 1; i >= 0; i -= 1) {
+      const it = items[i];
+      if (it.kind === "assistant" || it.kind === "user") {
+        said = { text: plain(it.text), ts: it.ts };
+        break;
+      }
+    }
+    const ts = Math.max(r.last ?? 0, r.started_at ?? 0, said?.ts ?? 0);
+    if (!ts || (best && best.ts >= ts)) continue;
+    best = { text: said?.text || r.preview || r.title, ts };
+  }
+  return best;
+}
 
 /** The live step the activity line shows ("Reading gateway.log", "Running pnpm test"); "Thinking…" until there
  *  is one ("Working…" is only the placeholder of a turn found running on open). */
@@ -61,10 +82,12 @@ const flat = (t: string) =>
     .replace(/\s+/g, " ")
     .trim();
 
-const MENU_W = 168;
-const MENU_H = 166;
+const MENU_W = 188;
+const MENU_H = 196;
 
 export interface RowMenu {
+  /** "New thread · <name>": a new, empty thread under this bot, opened with the composer focused. */
+  onNewThread?: () => void;
   pinned: boolean;
   onPin: () => void;
   onEdit: () => void;
@@ -77,9 +100,8 @@ export interface RowMenu {
   onRemove?: () => void;
 }
 
-/** Right-click or ⋯ menu of a bot row: Pin to top, Edit bot, Restart (Start when offline), Remove from list.
- *  Nothing that would create, stop or delete a Hermes profile, no "restart all", and no "New thread" (one chat per
- *  bot). */
+/** Right-click or ⋯ menu of a bot row: New thread · <name> first, then Pin to top, Edit bot, Restart (Start when
+ *  offline), Remove from list. Nothing that would create, stop or delete a Hermes profile, and no "restart all". */
 function Menu({ menu, onClose, name, bot, at }: { menu: RowMenu; onClose: () => void; name: string; bot: string; at: { x: number; y: number } }) {
   const ref = useRef<HTMLDivElement>(null);
   // Restart restarts the gateway process that serves this bot: say who else goes down with it, before the press
@@ -97,6 +119,7 @@ function Menu({ menu, onClose, name, bot, at }: { menu: RowMenu; onClose: () => 
     fn();
   };
   const items: [string, (() => void) | undefined][] = [
+    ...(menu.onNewThread ? ([[t("thread.new", { name }), menu.onNewThread]] as [string, () => void][]) : []),
     [menu.pinned ? t("row.unpin") : t("row.pin"), menu.onPin],
     [t("row.edit"), menu.onEdit],
     [menu.offline ? t("row.start") : t("row.restart"), menu.onRestart],
@@ -123,8 +146,14 @@ function Menu({ menu, onClose, name, bot, at }: { menu: RowMenu; onClose: () => 
         btns[(at + (e.key === "ArrowDown" ? 1 : btns.length - 1)) % btns.length]?.focus();
       }}
     >
-      {items.map(([label, fn], i) =>
-        i === 2 && mates.length && fn ? (
+      {items.map(([label, fn], at) => {
+        // the fixed items keep their places (Restart is 2, Remove 3) after the New thread line
+        const i = at - (menu.onNewThread ? 1 : 0);
+        return i === -1 && fn ? (
+          <button key={label} type="button" role="menuitem" className="row-mi row-mi-new" onClick={run(fn)} data-testid="row-new-thread">
+            {label}
+          </button>
+        ) : i === 2 && mates.length && fn ? (
           <button key={label} type="button" role="menuitem" className="row-mi two" onClick={run(fn)} data-testid="row-restart">
             {label}
             <span className="row-mi-sub" data-testid="row-restart-with">
@@ -144,8 +173,8 @@ function Menu({ menu, onClose, name, bot, at }: { menu: RowMenu; onClose: () => 
           >
             {label}
           </button>
-        ),
-      )}
+        );
+      })}
     </div>
   );
 }
@@ -160,6 +189,9 @@ export function BotRow({
   menu,
   onSelect,
   drag,
+  children,
+  groupId,
+  latest,
 }: {
   bot: Bot;
   chat: Chat | undefined;
@@ -172,6 +204,12 @@ export function BotRow({
   onSelect: () => void;
   /** Hold-and-drag reordering (useRowDrag); absent while the list is filtered. */
   drag?: RowDrag | null;
+  /** The bot's threads, nested under the row (a `role=group` inside this treeitem). */
+  children?: ReactNode;
+  /** The id of that group, when there is one (aria-owns / aria-expanded). */
+  groupId?: string;
+  /** The newest activity in the bot's threads (threadsLatest): the row's time and line when newer than its chat's. */
+  latest?: { text: string; ts: number } | null;
 }) {
   // The menu is fixed to the window (the bot list scrolls and would clip it): opened at the pointer on a
   // right-click, under the ⋯ button otherwise, kept inside the sidebar's width and the window's height.
@@ -183,7 +221,8 @@ export function BotRow({
     const right = (side?.right ?? window.innerWidth) - 6;
     setAt({ x: Math.max(6, Math.min(x, right - MENU_W)), y: Math.min(y, window.innerHeight - MENU_H - 6) });
   };
-  const p = preview(bot, chat);
+  const own = preview(bot, chat);
+  const p = latest && !own.live && bot.status !== "offline" && latest.ts > (own.ts ?? 0) ? { text: latest.text, live: false, ts: latest.ts } : own;
   const rs = useRestart(bot.name);
   const restarting = rs.step === "restarting";
   const running = bot.running || !!chat?.turn;
@@ -207,6 +246,11 @@ export function BotRow({
       onPointerDown={drag?.onPointerDown}
       onKeyDown={drag?.onKeyDown}
       data-testid={`bot-row-${bot.name}`}
+      role="treeitem"
+      aria-level={1}
+      aria-selected={active}
+      aria-expanded={groupId ? true : undefined}
+      aria-label={bot.display_name}
     >
       <button
         type="button"
@@ -288,6 +332,7 @@ export function BotRow({
       )}
       {menu && at && <Menu menu={menu} at={at} name={bot.display_name} bot={bot.name} onClose={() => setAt(null)} />}
       <RestartLine bot={bot} testId={`restart-line-${bot.name}`} pop />
+      {children}
     </div>
   );
 }

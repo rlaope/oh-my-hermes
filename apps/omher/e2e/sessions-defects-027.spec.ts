@@ -5,6 +5,8 @@
 // claude-14-plan-*.jsonl and codex-15-sub-edit*.jsonl.
 import { expect, test, type Page } from "@playwright/test";
 
+test.skip(true, "SESSIONS hidden in favour of bot threads (plan 2026-11-15)");
+
 const MOCK = Number(process.env.OMHER_MOCK_PORT || 5308);
 
 async function mock(op: string): Promise<void> {
@@ -27,7 +29,7 @@ test.beforeEach(async () => {
 async function session(page: Page, agent: "claude" | "codex", first: string) {
   await page.addInitScript(() => {
     localStorage.removeItem("omher.sessions.recent");
-    (window as unknown as { __omherPickFolder: string }).__omherPickFolder = "/Users/you/code/calc";
+    (window as unknown as { __omherPickFolder: string }).__omherPickFolder = "/home/you/code/calc";
   });
   await page.goto("/");
   await page.getByTestId("session-new").click();

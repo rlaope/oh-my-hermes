@@ -14,6 +14,8 @@ import { expect, test, type Page } from "@playwright/test";
 import { mkdirSync } from "node:fs";
 import { join } from "node:path";
 
+test.skip(true, "SESSIONS hidden in favour of bot threads (plan 2026-11-15)");
+
 const MOCK = Number(process.env.OMHER_MOCK_PORT || 5308);
 const SHOTS = process.env.OMHER_SHOTS || "";
 const TAG = process.env.OMHER_SHOT_TAG || "after";
@@ -57,7 +59,7 @@ async function session(page: Page, first: string, theme: Theme = "dark", lang: L
       localStorage.setItem("omher.lang", l);
       localStorage.removeItem("omher.sessions.recent");
       localStorage.setItem("omher.sessions.titles", JSON.stringify({ [key]: name }));
-      (window as unknown as { __omherPickFolder: string }).__omherPickFolder = "/Users/you/code/web-app";
+      (window as unknown as { __omherPickFolder: string }).__omherPickFolder = "/home/you/code/web-app";
     },
     [lang, `claude:${CLAUDE_SESSION}`, NAME] as const,
   );
@@ -183,7 +185,7 @@ for (const theme of SHOTS ? (["dark", "light"] as const) : (["dark"] as const)) 
     expect(await page.getByTestId("subagent-row").evaluateAll((rows) => rows.map((r) => r.getAttribute("data-state")))).toEqual(["waiting", "running"]);
     await expect(label).toHaveText("2 still running in the background");
     // the second one asks too: both wait on the person
-    await agentSays(page, [{ event: "approval.request", request_id: "req-9", title: "Run this command?", command: "wc -l b.txt", cwd: "/Users/you/code/web-app", choices: ["deny", "once", "session"], subagent: { id: "sa-5", name: "Count lines of b.txt" } }]);
+    await agentSays(page, [{ event: "approval.request", request_id: "req-9", title: "Run this command?", command: "wc -l b.txt", cwd: "/home/you/code/web-app", choices: ["deny", "once", "session"], subagent: { id: "sa-5", name: "Count lines of b.txt" } }]);
     expect(await page.getByTestId("subagent-row").evaluateAll((rows) => rows.map((r) => r.getAttribute("data-state")))).toEqual(["waiting", "waiting"]);
     await expect(label).toHaveText("2 waiting in the background");
     await expect(head).not.toContainText(RUNNING);

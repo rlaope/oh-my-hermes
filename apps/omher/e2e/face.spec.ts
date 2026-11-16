@@ -159,10 +159,11 @@ test("a bot's face stays put from send to answer: typing, a recalled-memories st
   expect(Math.abs(end.faces[0].left - column)).toBeLessThan(0.75);
 });
 
-test("a SESSIONS chat keeps the agent's mark in the face column the same way", async ({ page }) => {
+// SESSIONS hidden in favour of bot threads (plan 2026-11-15)
+test.skip("a SESSIONS chat keeps the agent's mark in the face column the same way", async ({ page }) => {
   await page.addInitScript(() => {
     localStorage.removeItem("omher.sessions.recent");
-    (window as unknown as { __omherPickFolder: string }).__omherPickFolder = "/Users/you/work/api";
+    (window as unknown as { __omherPickFolder: string }).__omherPickFolder = "/home/you/work/api";
   });
   await page.goto("/");
   await expect(page.getByTestId("bot-kami")).toHaveAttribute("aria-current", "true");
@@ -182,8 +183,8 @@ test("a SESSIONS chat keeps the agent's mark in the face column the same way", a
 
   await emit(ev("status", { text: STATUS }));
   await expect(tl.locator("[data-testid=activity][data-state=live]").getByTestId("activity-text")).toHaveText(STATUS);
-  await emit(ev("tool.start", { tool_id: "fs1", name: "terminal", detail: "ls /Users/you/work/api" }));
-  await expect(tl.locator("[data-testid=activity][data-state=live]").getByTestId("activity-text")).toContainText("ls /Users/you/work/api");
+  await emit(ev("tool.start", { tool_id: "fs1", name: "terminal", detail: "ls /home/you/work/api" }));
+  await expect(tl.locator("[data-testid=activity][data-state=live]").getByTestId("activity-text")).toContainText("ls /home/you/work/api");
   await emit(ev("tool.end", { tool_id: "fs1", name: "terminal", ok: true }));
   await emit(ev("delta", { text: "A small API server.\n" }));
   await expect(tl.getByTestId("bubble-streaming")).toContainText("A small API server.");

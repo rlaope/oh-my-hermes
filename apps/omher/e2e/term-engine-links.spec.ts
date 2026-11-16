@@ -26,7 +26,8 @@ async function hover(page: import("@playwright/test").Page, text: string) {
   return p;
 }
 
-test("Cmd/Ctrl+click on https://example.com/x opens it once, through the app's opener", async ({ page }) => {
+// SESSIONS hidden in favour of bot threads (plan 2026-11-15)
+test.skip("Cmd/Ctrl+click on https://example.com/x opens it once, through the app's opener", async ({ page }) => {
   await ready(page);
   const p = await hover(page, URL_OK);
   await expect(page.locator(".xterm .xterm-cursor-pointer")).toHaveCount(1); // xterm's pointer cursor over a link
@@ -39,7 +40,8 @@ test("Cmd/Ctrl+click on https://example.com/x opens it once, through the app's o
   expect(await opened(page)).toEqual([URL_OK]); // once, not twice
 });
 
-test("a plain click does not open it (it still selects text, so a TUI's own mouse handling is not broken)", async ({ page }) => {
+// SESSIONS hidden in favour of bot threads (plan 2026-11-15)
+test.skip("a plain click does not open it (it still selects text, so a TUI's own mouse handling is not broken)", async ({ page }) => {
   await ready(page);
   const p = await hover(page, URL_OK);
   await page.mouse.click(p.x, p.y);
@@ -47,7 +49,8 @@ test("a plain click does not open it (it still selects text, so a TUI's own mous
   expect(await opened(page)).toEqual([]);
 });
 
-test("the wrong modifier does not open it (Ctrl on macOS, Cmd on Windows and Linux; Shift or Alt with the right key)", async ({ page }) => {
+// SESSIONS hidden in favour of bot threads (plan 2026-11-15)
+test.skip("the wrong modifier does not open it (Ctrl on macOS, Cmd on Windows and Linux; Shift or Alt with the right key)", async ({ page }) => {
   await ready(page);
   const p = await hover(page, URL_OK);
   const mac = await page.evaluate(() => /Mac/.test(navigator.platform));
@@ -60,7 +63,8 @@ test("the wrong modifier does not open it (Ctrl on macOS, Cmd on Windows and Lin
   expect(await opened(page)).toEqual([]);
 });
 
-test("http://user:pw@example.com and file:///etc/passwd do nothing, with the key held", async ({ page }) => {
+// SESSIONS hidden in favour of bot threads (plan 2026-11-15)
+test.skip("http://user:pw@example.com and file:///etc/passwd do nothing, with the key held", async ({ page }) => {
   await ready(page);
   const key = await modKey(page);
   for (const text of ["http://user:pw@example.com/secret", "file:///etc/passwd"]) {
@@ -75,7 +79,8 @@ test("http://user:pw@example.com and file:///etc/passwd do nothing, with the key
   expect(await opened(page)).toEqual([]);
 });
 
-test("hovering a link says which key to hold, and the hint goes when the mouse leaves", async ({ page }) => {
+// SESSIONS hidden in favour of bot threads (plan 2026-11-15)
+test.skip("hovering a link says which key to hold, and the hint goes when the mouse leaves", async ({ page }) => {
   await ready(page);
   await hover(page, URL_OK);
   const tip = page.locator(".term-linktip");
@@ -98,7 +103,8 @@ const hintBox = (page: import("@playwright/test").Page, pointerY: number) =>
     return { top: tip.top, bottom: tip.bottom, screenTop: screen.top, line, rowTop: screen.top + Math.floor((y - screen.top) / line) * line };
   }, pointerY);
 
-test("the hint stands a line clear of the link: the line above the link stays uncovered, and a link on the first line gets it below", async ({ page }) => {
+// SESSIONS hidden in favour of bot threads (plan 2026-11-15)
+test.skip("the hint stands a line clear of the link: the line above the link stays uncovered, and a link on the first line gets it below", async ({ page }) => {
   await ready(page);
   const p = await hover(page, URL_OK);
   await expect(page.locator(".term-linktip")).toBeVisible();
@@ -121,7 +127,8 @@ test("the hint stands a line clear of the link: the line above the link stays un
 /** A hyperlink the program marks itself: `ESC ] 8 ;; url ST text ESC ] 8 ;; ST`. */
 const osc8 = (url: string, text: string) => `\x1b]8;;${url}\x1b\\${text}\x1b]8;;\x1b\\`;
 
-test("a hyperlink the program marked itself (OSC 8) follows the same rule: Cmd/Ctrl+click only, through the app's opener, with no dialog", async ({ page }) => {
+// SESSIONS hidden in favour of bot threads (plan 2026-11-15)
+test.skip("a hyperlink the program marked itself (OSC 8) follows the same rule: Cmd/Ctrl+click only, through the app's opener, with no dialog", async ({ page }) => {
   // xterm's own handler for these asks with a confirm() dialog and then calls window.open itself
   const dialogs: string[] = [];
   page.on("dialog", (d) => {
@@ -162,7 +169,8 @@ test("a hyperlink the program marked itself (OSC 8) follows the same rule: Cmd/C
   expect(dialogs).toEqual([]);
 });
 
-test("the bell and OSC 9 / OSC 777 still reach xterm's parser with the link and find add-ons loaded", async ({ page }) => {
+// SESSIONS hidden in favour of bot threads (plan 2026-11-15)
+test.skip("the bell and OSC 9 / OSC 777 still reach xterm's parser with the link and find add-ons loaded", async ({ page }) => {
   await ready(page);
   // the handlers sessions.ts registers return false (not consumed), so a handler registered after them sees the
   // escape too: the add-ons must not have swallowed it first

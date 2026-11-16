@@ -17,10 +17,13 @@ import { useLookAttributes, useThemeAttribute } from "./theme";
 import { useShortcuts } from "./shortcuts";
 import { useAsksBadge } from "./badge";
 import { startPeers } from "../peers/links";
+import { setTerminalCwd, useTermPanel } from "../terminal/state";
 
 // The terminal view (and xterm with it) loads when a session is first opened.
 const SessionView = lazy(() => import("../sessions/SessionView").then((m) => ({ default: m.SessionView })));
 const SessionPanel = lazy(() => import("../sessions/SessionPlans").then((m) => ({ default: m.SessionPanel })));
+// The bottom terminal panel (Ctrl+`) loads the first time it opens, then stays mounted so hidden shells keep running.
+const TerminalPanel = lazy(() => import("../terminal/Panel").then((m) => ({ default: m.TerminalPanel })));
 
 export function App() {
   const s = useStore();
@@ -28,6 +31,7 @@ export function App() {
   useLookAttributes(s.ui.look);
   useShortcuts();
   useAsksBadge();
+  const term = useTermPanel();
   useEffect(() => {
     void s.init();
     void startPeers();
@@ -36,6 +40,9 @@ export function App() {
   }, []);
 
   const bot = s.bots.find((b) => b.name === s.selectedBot) ?? null;
+  // the terminal panel's next tab starts in the open thread's folder (the bot's main chat: home)
+  const threadCwd = s.ui.view === "chat" && bot && s.ui.thread ? ((s.threads[bot.name] ?? []).find((r) => r.thread === s.ui.thread)?.cwd ?? null) : null;
+  useEffect(() => setTerminalCwd(threadCwd), [threadCwd]);
   // `@name` in any chat text opens that bot's chat; the open chat's own bot is not a link
   const current = s.ui.view === "chat" ? s.selectedBot : null;
   const mentions = useMemo<Mentions>(() => {
@@ -46,7 +53,7 @@ export function App() {
       current,
       open: (b) => {
         const st = getStore();
-        if (st.getState().ui.runsFull) st.actions.setRunsFull(false);
+        if (st.getState().ui.panelMax) st.actions.setPanelMax(false);
         void st.actions.selectBot(b);
       },
     };
@@ -54,14 +61,16 @@ export function App() {
   // a bot's chat shows its Details and Plans; a SESSIONS chat shows Plans for that session alone
   const onSession = s.ui.view === "session" && !!s.ui.session;
   const panelOpen = s.ui.panelOpen && ((s.ui.view === "chat" && !!bot) || onSession);
+  // maximised in place: the panel takes the chat column's room; the chat stays mounted (draft, scroll, stream)
+  const panelMax = panelOpen && !onSession && s.ui.panelMax;
   const Details = slots.detailsPanel;
   const close = () => s.togglePanel(false);
 
   return (
     <MentionContext.Provider value={mentions}>
-    <div className={`window${panelOpen ? " panel-open" : ""}`} data-testid="window" lang={s.ui.lang}>
+    <div className={`window${panelOpen ? " panel-open" : ""}${panelMax ? " panel-max" : ""}`} data-testid="window" lang={s.ui.lang}>
       <Sidebar />
-      <main className="main">
+      <main className="main" inert={panelMax} aria-hidden={panelMax || undefined}>
         {s.ui.view === "settings" ? <SettingsView /> : s.ui.view === "automations" ? (
           <AutomationsPage />
         ) : s.ui.view === "plugins" ? (
@@ -71,10 +80,15 @@ export function App() {
             <SessionView />
           </Suspense>
         ) : <Chat />}
+        {term.mounted && (
+          <Suspense fallback={null}>
+            <TerminalPanel />
+          </Suspense>
+        )}
       </main>
       {/* inert while closed: the off-screen panel takes no focus and no clicks */}
       <aside className="details" aria-hidden={!panelOpen} inert={!panelOpen} data-testid="details">
-        <PanelResizer open={panelOpen} tab={onSession ? "runs" : s.ui.panelTab} />
+        <PanelResizer open={panelOpen} tab={onSession ? "runs" : s.ui.panelTab} max={panelMax} />
         {onSession ? (
           // mounted only while open: a closed panel reads nothing, and reopening it reads the session's run afresh
           panelOpen && (

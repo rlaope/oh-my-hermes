@@ -8,6 +8,8 @@ import { expect, test, type Page } from "@playwright/test";
 import { mkdirSync } from "node:fs";
 import { join } from "node:path";
 
+test.skip(true, "SESSIONS hidden in favour of bot threads (plan 2026-11-15)");
+
 const MOCK = Number(process.env.OMHER_MOCK_PORT || 5308);
 const SHOTS = process.env.OMHER_SHOTS || "";
 const TAG = process.env.OMHER_SHOT_TAG || "after";
@@ -32,7 +34,7 @@ async function lateAsk(page: Page, theme: "dark" | "light", shot = false) {
   await page.emulateMedia({ colorScheme: theme });
   await page.addInitScript(() => {
     localStorage.removeItem("omher.sessions.recent");
-    (window as unknown as { __omherPickFolder: string }).__omherPickFolder = "/Users/you/code/web-app";
+    (window as unknown as { __omherPickFolder: string }).__omherPickFolder = "/home/you/code/web-app";
   });
   await page.goto("/");
   await expect(page.getByTestId("bot-kami")).toHaveAttribute("aria-current", "true");

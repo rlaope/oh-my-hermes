@@ -1,0 +1,273 @@
+/* Threads under a bot (src/threads): a Discord-style branch from the bot's avatar column into each thread row.
+   One 1px line in the sidebar's thin-line gray, a rounded elbow into each row, the last row with the elbow only.
+   No boxes, no fills except the gray selection. */
+.th-tree {
+  --th-x: calc(var(--side-x) + 17px); /* the bot avatar's centre (34px face) */
+  /* the connector: the timestamp gray at reduced strength, one step lighter than the hairlines and still under
+     the text */
+  --th-line: color-mix(in srgb, var(--quiet) 70%, transparent);
+  --th-elbow: 22px; /* long enough that a thread's title starts >= 20px past the bot name */
+  list-style: none;
+  margin: -6px 0 2px;
+  padding: 0;
+  position: relative;
+}
+/* the stem from just under the avatar down to the first row */
+.th-tree::before {
+  content: "";
+  position: absolute;
+  left: var(--th-x);
+  top: 0;
+  height: 6px;
+  border-left: 1px solid var(--th-line);
+}
+.th-row {
+  position: relative;
+  display: flex;
+  align-items: center;
+  height: 24px;
+  padding-left: calc(var(--th-x) + var(--th-elbow) + 6px);
+  padding-right: 4px;
+  border-radius: var(--r-sm);
+}
+/* every row but the last carries the stem on past itself to the next */
+.th-row:not(.th-last)::before {
+  content: "";
+  position: absolute;
+  left: var(--th-x);
+  top: 0;
+  bottom: 0;
+  border-left: 1px solid var(--th-line);
+}
+/* the elbow: down from the top of the row and round into its middle */
+.th-branch {
+  position: absolute;
+  left: var(--th-x);
+  top: 0;
+  height: 50%;
+  width: var(--th-elbow);
+  border-left: 1px solid var(--th-line);
+  border-bottom: 1px solid var(--th-line);
+  border-bottom-left-radius: 6px;
+  pointer-events: none;
+}
+.th-open {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 100%;
+  padding: 0 4px;
+  border-radius: var(--r-sm);
+  text-align: left;
+  font-size: 12px;
+  color: var(--muted);
+}
+.th-row:hover .th-open {
+  color: var(--body);
+}
+.th-row:hover {
+  background: var(--hover);
+}
+.th-row.on {
+  background: var(--active-row);
+}
+.th-row.on .th-open {
+  color: var(--ink);
+}
+.th-title {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.th-time {
+  flex: none;
+  font-size: 11px;
+  color: var(--quiet);
+  font-variant-numeric: tabular-nums;
+}
+.th-harness:empty {
+  display: none;
+}
+/* someone is at work in it (a mark shows): the mark takes the time's place, which reads "now" while it runs anyway,
+   so the title keeps its room at the default sidebar width */
+.th-harness:not(:empty) + .th-time {
+  display: none;
+}
+.th-x {
+  flex: none;
+  display: none;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  border-radius: var(--r-sm);
+  color: var(--muted);
+}
+.th-row:hover .th-x,
+.th-row:focus-within .th-x {
+  display: grid;
+}
+.th-row:hover .th-time,
+.th-row:focus-within .th-time {
+  display: none;
+}
+.th-x:hover {
+  color: var(--ink);
+  background: var(--line-strong);
+}
+.th-more .th-open {
+  color: var(--quiet);
+  font-size: 11px;
+}
+
+[data-theme="light"] .th-tree {
+  --th-line: color-mix(in srgb, var(--quiet) 50%, transparent);
+}
+.th-harness {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+}
+.th-harness .hn-stack {
+  gap: 3px;
+}
+
+/* ---- state glyph ----------------------------------------------------------------------------------- */
+.th-g {
+  flex: none;
+  width: 10px;
+  height: 10px;
+  display: grid;
+  place-items: center;
+  color: var(--muted);
+}
+.th-g svg {
+  display: block;
+}
+.th-g-running {
+  color: var(--accent);
+}
+.th-g-running svg {
+  animation: th-spin 0.9s linear infinite;
+}
+.th-g-needs_you .th-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--needs, #e9a23b);
+  animation: th-pulse 2.4s ease-in-out infinite;
+}
+.th-ring {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  border: 1px solid var(--th-line);
+}
+.th-g-done {
+  color: var(--ok);
+}
+.th-g-done svg {
+  animation: th-pop 0.32s ease-out 1;
+}
+.th-g-failed {
+  color: var(--danger);
+}
+@keyframes th-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@keyframes th-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.6;
+  }
+}
+@keyframes th-pop {
+  0% {
+    transform: scale(0.4);
+  }
+  70% {
+    transform: scale(1.18);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .th-g-running svg,
+  .th-g-needs_you .th-dot,
+  .th-g-done svg {
+    animation: none;
+  }
+}
+
+/* ---- remove confirm ---------------------------------------------------------------------------------- */
+.th-confirm {
+  position: fixed;
+  z-index: 50;
+  padding: 10px;
+  background: var(--pop);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  font-size: 12px;
+  color: var(--body);
+  box-shadow: 0 6px 18px rgb(0 0 0 / 0.22);
+}
+.th-confirm p {
+  margin: 0 0 8px;
+  line-height: 1.4;
+}
+.th-confirm-b {
+  display: flex;
+  justify-content: flex-end;
+  gap: 6px;
+}
+.th-confirm-b button {
+  height: 24px;
+  padding: 0 10px;
+  border-radius: var(--r-sm);
+  font-size: 12px;
+  color: var(--body);
+  background: var(--raise2);
+}
+.th-confirm-b button:hover {
+  background: var(--line-strong);
+}
+.th-confirm-b button.danger {
+  color: var(--danger);
+}
+
+/* ---- a thread in the main column --------------------------------------------------------------------- */
+.th-head {
+  gap: 8px;
+}
+/* the bot's name only as wide as it is: "Kami / <title>" reads as one breadcrumb, no fixed name slot */
+.th-head .who-btn {
+  flex: none;
+  width: auto;
+}
+.th-head-bot {
+  color: var(--muted);
+}
+.th-head-sep {
+  color: var(--quiet);
+}
+.th-head-title {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.th-empty {
+  padding: 0 24px 12px;
+  font-size: 12px;
+  color: var(--quiet);
+  text-align: center;
+}

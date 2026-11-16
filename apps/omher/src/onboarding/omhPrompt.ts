@@ -180,7 +180,7 @@ export function getOmhPrompt(): OmhPrompt {
           const s = store.getState();
           const bot = (want === "default" ? s.bots.find((b) => b.is_default)?.name : undefined) ?? s.selectedBot ?? s.bots[0]?.name;
           if (!bot) return;
-          if (s.ui.runsFull) store.actions.setRunsFull(false);
+          if (s.ui.panelMax) store.actions.setPanelMax(false);
           if (s.ui.view !== "chat" || s.selectedBot !== bot) void store.actions.selectBot(bot);
         });
       },
