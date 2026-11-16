@@ -1,7 +1,6 @@
 // The verifier's probes (V1/V2 on PR #2908) kept as regression tests: production tasks.rs, included unchanged, with
-// only its host-resolution/folder dependencies stubbed. Unix only (the fake `gh` is a shell script).
+// only its host-resolution dependencies stubbed. Unix only (the fake `gh` is a shell script).
 #![cfg(unix)]
-// Stubs only its host-resolution/folder dependencies; parser and argv are actual production code.
 #![allow(dead_code)]
 mod bridge { #[derive(Clone, Copy)] pub struct Os; impl Os { pub fn current() -> Self { Self } } }
 mod accounts {
@@ -9,7 +8,7 @@ mod accounts {
  pub fn search_dirs<E: Fn(&str)->Option<String>>(env: &E, _: crate::bridge::Os) -> Vec<PathBuf> { std::env::split_paths(&env("PATH").unwrap_or_default()).collect() }
  pub fn resolve<X: Fn(&Path)->bool>(p: &str, dirs: &[PathBuf], ok: X, _:crate::bridge::Os) -> Option<PathBuf> { dirs.iter().map(|d|d.join(p)).find(|p|ok(p)) }
 }
-mod git_branch { pub fn git_dir(_: &std::path::Path)->Option<std::path::PathBuf> { None } }
+#[path="../src/git_branch.rs"] mod git_branch;
 mod appimage { pub fn host_env(_: &mut std::process::Command) {} }
 #[path="../src/tasks.rs"] mod tasks;
 use tasks::*;
