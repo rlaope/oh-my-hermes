@@ -1,5 +1,7 @@
+// The verifier's V4 probes on PR #2908 (a code block and a link href, and a token split over a line break: masked in
+// the drawer and the text Start in thread sends), kept as regression tests.
 import {test,expect,type Page} from '@playwright/test';
-const PORT=Number(process.env.OMHER_MOCK_PORT||5596), REPO='rlaope/oh-my-hermes', CWD='/home/you/code/oh-my-hermes';
+const PORT=Number(process.env.OMHER_MOCK_PORT||5308), REPO='rlaope/oh-my-hermes', CWD='/home/you/code/oh-my-hermes';
 async function mock(op:string,params:Record<string,unknown>={}) { const ws=new WebSocket(`ws://127.0.0.1:${PORT}/?token=e2e`); await new Promise<void>((r,j)=>{ws.onopen=()=>r();ws.onerror=()=>j(Error('ws'));}); const out=await new Promise<any>(r=>{ws.onmessage=m=>{const x=JSON.parse(String(m.data));if(x.id==='v8')r(x);};ws.send(JSON.stringify({id:'v8',op,...params}));}); ws.close();expect(out.ok).toBe(true);return out.result; }
 async function setup(page:Page,body:string) {
  await mock('mock.reset'); await mock('mock.threads',{bot:'kami',threads:[{title:'Verify8',ago:60,cwd:CWD}]});
