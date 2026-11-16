@@ -231,13 +231,14 @@ describe("mock session host", () => {
 
 describe("TERMINALS card second line", () => {
   it("takes the last line that says something, skipping blank lines, frames and bare prompts", () => {
-    expect(lastPrintedLine(["╭────╮", "│ hi │", "╰────╯", "", "✻ Running tests… (12s · esc to interrupt)", "", "  "])).toBe("✻ Running tests… (12s · esc to interrupt)");
+    expect(lastPrintedLine(["╭────╮", "│ hi │", "╰────╯", "", "Running tests… (12s · esc to interrupt)", "", "  "])).toBe("Running tests… (12s · esc to interrupt)");
     expect(lastPrintedLine(["Wrote docs/RELEASE.md", "╰──────────╯", "▌ "])).toBe("Wrote docs/RELEASE.md");
     expect(lastPrintedLine(["a   b\tc"])).toBe("a b c");
     expect(lastPrintedLine(["› Read 142 lines", "❯ "])).toBe("Read 142 lines");
     expect(lastPrintedLine(["❯ fix the flaky test"])).toBe("fix the flaky test");
     expect(lastPrintedLine(["• Ran pnpm test payments", "›"])).toBe("Ran pnpm test payments");
     expect(lastPrintedLine(["⏺ Read 3 files", "", "›  "])).toBe("Read 3 files");
+    expect(lastPrintedLine(["✻ Running tests… (12s · esc to interrupt)"])).toBe("Running tests… (12s · esc to interrupt)");
     expect(lastPrintedLine(["", "   ", "────"])).toBe("");
   });
   it("cuts a very long line with an ellipsis", () => {

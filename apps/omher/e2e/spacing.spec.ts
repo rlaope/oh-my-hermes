@@ -176,6 +176,11 @@ test("session cards: 4px apart, 10px+ between folders, rounded, two lines with t
   await expect(page.getByTestId(`session-${b}`).getByTestId("term-meta")).toContainText("codex");
   await expect(page.getByTestId(`session-${c}`).getByTestId("term-line")).toHaveText("Read 142 lines");
   await expect(page.getByTestId(`session-${a}`).getByTestId("term-line")).toHaveText("## main");
+  // a CLI's own bullet before its line is dropped (the card already has its · after the CLI)
+  await out(page, b, "\x1b[2m• Ran\x1b[0m pnpm test payments\r\n");
+  await expect(page.getByTestId(`session-${b}`).getByTestId("term-line")).toHaveText("Ran pnpm test payments");
+  await out(page, b, `\x1b[2J\x1b[H${LONG}\r\n`);
+  await expect(page.getByTestId(`session-${b}`).getByTestId("term-line")).toHaveText(LONG);
   const geo = await page.evaluate(([b]) => {
     const rows = [...document.querySelectorAll<HTMLElement>('[data-testid="side-sessions"] .ss-row')];
     const groups = [...document.querySelectorAll<HTMLElement>('[data-testid="term-group"]')];

@@ -190,7 +190,7 @@ test("the + menu: Shell first, then CLIs with official marks; no chat choice; pi
   expect(shells.filter((c) => c.op === "start")).toEqual([expect.objectContaining({ cwd: FOLDERS[1] })]);
 });
 
-test("rows: grouped by folder with the branch; one line with status, mark, title and mono cli/age; mark follows fgAgent", async ({ page }) => {
+test("rows: grouped by folder with the branch; two-line cards (status, mark, title, age / mono cli); mark follows fgAgent", async ({ page }) => {
   test.setTimeout(90_000);
   await open(page);
   const ids = await seedTerminals(page);
@@ -201,10 +201,12 @@ test("rows: grouped by folder with the branch; one line with status, mark, title
   await expect(groups.nth(1).getByTestId("term-group-branch")).toHaveText("feature/checkout-flow");
   const row = page.getByTestId(`session-${ids.claude}`);
   await expect(row.getByTestId("term-row-mark")).toHaveAttribute("data-agent", "claude");
-  await expect(row.getByTestId("term-meta")).toHaveText(/^claude (now|\d+[smhd])$/);
-  // one line: the row is about one text line tall
+  // a two-line card (spacing, 2026-11-16): the age on line 1, the CLI (then what it last said) on line 2
+  await expect(row.getByTestId("term-age")).toHaveText(/^(now|\d+[smhd])$/);
+  await expect(row.getByTestId("term-meta")).toHaveText(/^claude/);
   const h = await row.boundingBox();
-  expect(h!.height).toBeLessThan(34);
+  expect(h!.height).toBeGreaterThan(40);
+  expect(h!.height).toBeLessThan(52);
   // a Shell whose foreground CLI is grok shows Grok's mark; back to the shell icon when it leaves
   const sg = page.getByTestId(`session-${ids.shellGrok}`);
   await expect(sg.getByTestId("term-row-mark")).toHaveAttribute("data-agent", "grok");
