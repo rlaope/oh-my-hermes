@@ -1,9 +1,9 @@
 // BOTS | TERMINALS in auto mode (no divider share saved), sized from what the two lists hold (tidy, 2026-11-16):
 // - both fit the room the sidebar has for them: each is as tall as its rows, the rest goes under them (above the footer)
 // - else each region ends on a whole row: its list is cut just under a row (plus the chevron's band), never on an
-//   expanded folder header or a bot whose threads are open with none of them showing, and the two heights are picked
-//   so the room left unused is as small as it can be, near an even split (or the smaller region whole when it needs at
-//   most AUTO_WHOLE of the room). A plain flex layout split evenly and left a blank band where edgeFade hid a cut row.
+//   expanded folder header or a bot whose threads are open with none of them showing. The smaller region is shown
+//   whole when it needs at most AUTO_WHOLE of the room; else the two heights leave as little room unused as they can,
+//   near an even split. A plain flex layout split evenly and left a blank band where edgeFade hid a cut row.
 import { useEffect, type RefObject } from "react";
 import { CUE_PX, CUT_ROWS, isHead } from "./edgeFade";
 
@@ -30,6 +30,17 @@ export function planSplit(room: number, b: Region, t: Region, min = AUTO_MIN): [
   if (t.need <= b.need && t.need <= room * AUTO_WHOLE) aim = room - t.need;
   else if (b.need < t.need && b.need <= room * AUTO_WHOLE) aim = b.need;
   const hs = (r: Region) => [...new Set([...r.stops.filter((s) => s < r.need), r.need])].sort((x, y) => x - y);
+  // the smaller one fits in AUTO_WHOLE of the room: it is shown whole, the other ends on its last whole row above it
+  const small = t.need <= b.need ? "t" : "b";
+  const sr = small === "t" ? t : b;
+  const big = small === "t" ? b : t;
+  if (sr.need <= room * AUTO_WHOLE) {
+    const fit = hs(big).filter((h) => h <= room - sr.need && h >= Math.min(big.need, min));
+    if (fit.length) {
+      const h = fit[fit.length - 1]!;
+      return small === "t" ? [h, t.need] : [b.need, h];
+    }
+  }
   let best: { hb: number; ht: number; score: number } | null = null;
   for (const hb of hs(b)) {
     if (hb < minB || hb > room - minT) continue;

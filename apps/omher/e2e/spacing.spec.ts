@@ -356,7 +356,7 @@ function bands(page: Page) {
 
 test.describe("auto split: no blank band", () => {
   test.use({ deviceScaleFactor: 1, viewport: { width: 1440, height: 900 } });
-  test("few rows at 900: every card shows, no chevron; at 760 each region ends on a whole row", async ({ page }) => {
+  test("few rows at 900: every card shows, TERMINALS without a chevron, BOTS ends on a whole row; at 760 each region ends on a whole row", async ({ page }) => {
     test.setTimeout(120_000);
     await mock("mock.threads", { bot: "kami", threads: ["Release notes", "Nightly build", "Slack alert copy", "Docs dark mode", "Gateway 502s"].map((title, i) => ({ title, ago: (i + 1) * 600 })) });
     await open(page);
@@ -367,7 +367,8 @@ test.describe("auto split: no blank band", () => {
     record("tidy-few@900", { ...b900, ...(await measure(page)) });
     expect(b900.terms!.cardsShown).toBe(4);
     expect(b900.terms!.more).toBeNull();
-    expect(b900.bots!.more).toBeNull();
+    // BOTS (Kami's five threads as two-line chat cards) needs more than what is left: it ends on a whole row
+    expect(b900.bots!.band).toBeLessThanOrEqual(26);
     await page.setViewportSize({ width: 1440, height: 760 });
     await page.waitForTimeout(400);
     const b760 = await bands(page);
