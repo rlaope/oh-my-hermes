@@ -3,13 +3,34 @@
 /* BOTS and SESSIONS each take the room their rows need and share what is left; when both are long, each gives
    way in proportion and scrolls on its own. Neither is squeezed under its header and a row or two: twelve bots
    beside an empty SESSIONS no longer stop at five with a blank half under them. */
+/* Both regions grow from zero, so when both overflow they share the column evenly (twelve bots with threads no
+   longer leave TERMINALS one row); each stops at its content's height, so a short one gives the rest away. */
 .side-sec {
-  flex: 1 1 auto;
+  flex: 1 1 0;
   min-height: 96px;
+  max-height: max-content;
   display: flex;
   flex-direction: column;
 }
 /* A search that leaves BOTS with only its "No bot named …" line: that line's height, SESSIONS right under it. */
+/* a row's menu or confirm opened inside a clipped list is never cut by that clip */
+.side-sec > .bot-list:has(.row-menu, .th-confirm, [role="menu"], [role="dialog"]) {
+  clip-path: none !important;
+}
+/* a row scrolled into view stops above the chevron's band, where it would be hidden */
+.side-sec .bot-w > .bot,
+.side-sec .th-row,
+.side-sec .tg-h,
+.side-sec .ss-row {
+  scroll-margin-bottom: 14px;
+}
+/* auto split (autoSplit.ts): the height is set from the rows; nothing grows or shrinks it */
+.side-sec[data-auto] {
+  flex: none;
+  box-sizing: border-box;
+  min-height: 0;
+  max-height: none;
+}
 .side-sec.side-sec-fit {
   flex-grow: 0;
   min-height: 0;
@@ -19,9 +40,70 @@
   padding-top: 10px;
   border-top: 1px solid var(--line-soft);
 }
+/* BOTS | TERMINALS: the line between them is a handle (SideSplit.tsx): an 11px grab band, its 1px line in the middle,
+   drawn stronger while hovered, focused or dragged */
+.side-split {
+  position: relative;
+  flex: none;
+  height: 11px;
+  margin: 1px 0 0;
+  cursor: row-resize;
+  outline: 0;
+  touch-action: none;
+}
+.side-split::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 5px;
+  height: 1px;
+  background: var(--line-soft);
+  transition: background 0.12s, height 0.12s, top 0.12s;
+}
+.side-split:hover::before,
+.side-split:focus-visible::before,
+.side-resizing .side-split::before {
+  top: 4px;
+  height: 3px;
+  border-radius: 2px;
+  background: var(--line-strong, var(--muted));
+}
+.side-split + .side-sec {
+  padding-top: 4px;
+}
+body.side-resizing,
+body.side-resizing * {
+  cursor: row-resize !important;
+  user-select: none;
+}
 .side-sec > .bot-list,
 .side-sec > .ss-list {
   flex: 1 1 auto;
+}
+/* more rows past the bottom edge (edgeFade.ts): at the list's top it hides the row its end would cut, whole (a clip,
+   so nothing moves), and a small chevron sits in the band that leaves free (CUE_PX); scrolled, the cut row shows
+   under a soft fade to the sidebar's colour with the chevron on it, so no empty band stands above the chevron */
+.side-sec {
+  position: relative;
+}
+.side-sec:has(> [data-more="below"])::after,
+.side-sec:has(> [data-more="both"])::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 14px;
+  background: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 24 24' fill='none' stroke='%23908a94' stroke-width='2.6' stroke-linecap='round' stroke-linejoin='round'><path d='m6 9 6 6 6-6'/></svg>") center bottom 2px / 10px 10px no-repeat;
+  pointer-events: none;
+  z-index: 1;
+}
+.side-sec:has(> [data-more="both"])::after {
+  height: 28px;
+  background:
+    url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 24 24' fill='none' stroke='%23908a94' stroke-width='2.6' stroke-linecap='round' stroke-linejoin='round'><path d='m6 9 6 6 6-6'/></svg>") center bottom 2px / 10px 10px no-repeat,
+    linear-gradient(to bottom, transparent, var(--side));
 }
 .side-sh-row {
   position: relative; /* the + menu spans the section's width under this row */
@@ -523,6 +605,11 @@
 }
 .ss-head-st.failed {
   color: var(--danger);
+}
+/* a terminal session's running dot is the colour of its row's spinner */
+.ss-head-st.term.running::before,
+.ss-head-st.term.starting::before {
+  background: var(--term-run);
 }
 /* The space around a terminal and its colour come from Settings > Terminal (term/look.ts sets both on this box):
    --term-pad is the left side, and the top, right and bottom keep the proportions of the 14 6 8 16 it always had;
@@ -1120,4 +1207,362 @@
   color: var(--muted);
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+
+/* ---- TERMINALS (termui, 2026-11-16): folder groups, one-line rows ------------------------------------------- */
+.ss-list {
+  gap: 0;
+}
+.tg {
+  display: flex;
+  flex-direction: column;
+  gap: 4px; /* cards stand 4px apart (fitMenu's ROW_CLEAR of 2px keeps clear of them) */
+  padding-bottom: 12px; /* and a folder group 12px from the next */
+}
+.tg-h {
+  position: relative;
+  padding: 4px 0 3px;
+  color: var(--ink);
+  border-radius: 8px;
+  flex: none;
+}
+/* the first folder keeps the same air under the TERMINALS label as every folder has above it */
+.tg-h.first {
+  margin-top: 6px;
+}
+.tg-h.lifted {
+  opacity: 0.55;
+}
+.tg-h.drop {
+  box-shadow: inset 0 2px 0 var(--muted);
+}
+/* the whole header is the toggle: chevron, folder icon, name (and, collapsed, its count and live summary); the branch
+   sits under the name */
+.tg-open {
+  display: grid;
+  grid-template-columns: 10px 16px minmax(0, 1fr) auto;
+  column-gap: 5px;
+  align-items: center;
+  width: 100%;
+  padding: 0 8px 0 calc(var(--side-x) - 6px);
+  min-height: 22px;
+  background: none;
+  border: 0;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: default;
+  border-radius: 8px;
+}
+.tg-open:hover {
+  background: var(--hover);
+}
+.tg-open:focus-visible {
+  outline: 2px solid var(--muted);
+  outline-offset: -2px;
+}
+.tg-chev {
+  display: grid;
+  place-items: center;
+  color: var(--quiet);
+}
+/* a collapsed folder's summary sits on the branch's line, at its right: the folder's name keeps the whole first line */
+.tg-sum {
+  grid-column: 4;
+  grid-row: 2;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-family: var(--mono);
+  font-size: 10.5px;
+  color: var(--muted);
+}
+.side-sec > .bot-list[data-more="above"],
+.side-sec > .bot-list[data-more="both"],
+.side-sec > .ss-list[data-more="above"],
+.side-sec > .ss-list[data-more="both"] {
+  /* rows scrolled away above: a soft shadow under the header (no mask: a mask would clip a row's menu) */
+  box-shadow: inset 0 9px 7px -9px color-mix(in srgb, var(--ink) 35%, transparent);
+}
+.tg-run {
+  color: var(--term-run);
+}
+.tg-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+}
+.tg-dot.needs {
+  background: var(--needs);
+}
+.tg-dot.err {
+  background: var(--danger);
+}
+.tg.shut {
+  padding-bottom: 2px;
+}
+.tg-ic {
+  display: grid;
+  place-items: center;
+  width: 16px;
+  height: 16px;
+  overflow: visible;
+  color: #d9a03a;
+}
+.tg-n {
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.tg-b {
+  grid-column: 3 / 5;
+  grid-row: 2;
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+/* the first row of a group scrolls into view with its folder header */
+.tg > .tg-h + .ss-row {
+  scroll-margin-top: 56px;
+}
+[data-theme="light"] .tg-ic {
+  color: #a8700f;
+}
+/* spacing (2026-11-16): each session is its own card, Orca's feel: 8px corners, a 1px edge that shows on hover and
+   when selected, two lines (status, mark, name, age / the CLI and what it last printed, muted), and a thin amber
+   lane on the left edge while a CLI runs in it */
+.ss-row.tr {
+  position: relative;
+  display: flex;
+  border-radius: 8px;
+  border: 1px solid transparent;
+  flex: none;
+  transition: background 0.12s, border-color 0.12s;
+}
+.ss-row.tr .ss-open {
+  display: grid;
+  grid-template-columns: 12px 16px minmax(0, 1fr) auto;
+  grid-template-rows: 18px 15px;
+  column-gap: 7px;
+  row-gap: 1px;
+  align-items: center;
+  height: auto;
+  padding: 6px 8px 6px calc(var(--side-x) + 7px);
+  font-size: 12px;
+  color: var(--body);
+  border-radius: 7px;
+}
+.ss-row.tr .ss-open:focus-visible {
+  outline: 2px solid var(--muted);
+  outline-offset: -2px;
+}
+.ss-row.tr:hover {
+  background: var(--hover);
+  border-color: var(--line-soft);
+}
+.ss-row.tr.active {
+  background: var(--active-row);
+  border-color: var(--line);
+}
+/* the lane sits on the card's inner left edge, the same place on every running card (selected, hovered or neither),
+   inside its rounded box */
+.ss-row.tr.run::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 8px;
+  bottom: 8px;
+  width: 2px;
+  border-radius: 0 2px 2px 0;
+  background: var(--term-run);
+  pointer-events: none;
+}
+.tr-n {
+  grid-column: 3;
+  min-width: 0;
+  font-weight: 500;
+  color: var(--ink);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.ss-row.tr .ss-name-in {
+  grid-column: 3 / 5;
+}
+.tr-age {
+  grid-column: 4;
+  font-family: var(--mono);
+  font-size: 10.5px;
+  color: var(--muted);
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+/* line 2: under the name, to the card's right edge, one line cut with an ellipsis */
+.tr-sub {
+  grid-column: 3 / 5;
+  grid-row: 2;
+  display: flex;
+  align-items: baseline;
+  gap: 5px;
+  min-width: 0;
+  font-size: 11px;
+  line-height: 15px;
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+}
+.tr-cli {
+  flex: none;
+  font-family: var(--mono);
+  font-size: 10.5px;
+}
+.tr-dot {
+  flex: none;
+  color: var(--quiet);
+}
+.tr-line {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.ss-row.tr:hover .tr-age,
+.ss-row.tr:focus-within .tr-age {
+  visibility: hidden;
+}
+.ss-row.tr .ss-x {
+  right: 5px;
+  top: 6px;
+  transform: none;
+}
+.ss-row.tr .ss-name-in {
+  flex: 1;
+  min-width: 0;
+}
+.tst {
+  width: 12px;
+  height: 12px;
+  flex: none;
+  display: grid;
+  place-items: center;
+}
+.side,
+.head,
+.dock {
+  --term-run: #f2b705;
+}
+[data-theme="light"] .side,
+[data-theme="light"] .head,
+[data-theme="light"] .dock {
+  --term-run: #c48a00;
+}
+.tst.busy {
+  color: var(--term-run);
+}
+.tst.busy svg {
+  animation: tst-turn 0.9s linear infinite;
+}
+.tst.ok {
+  color: var(--ok);
+}
+.tst.err {
+  color: var(--danger);
+}
+.tst.bell {
+  color: #e8a33c;
+}
+@keyframes tst-turn {
+  to {
+    transform: rotate(360deg);
+  }
+}
+.trm {
+  position: relative;
+  display: inline-grid;
+  place-items: center;
+  flex: none;
+  color: var(--muted);
+}
+/* every mark the same: drawn bare at the slot's size, square corners rounded alike (a full-colour image mark such as
+   pi's or OMH's reads as one set with the line marks), no tile behind any of them */
+.trm img,
+.trm svg {
+  display: block;
+  border-radius: 3px;
+}
+/* one frame for every mark in a row or tab, running or not (an exited pi and a running Codex read alike): a hairline
+   rounded square a few px outside the mark; running turns it the running colour. It never moves */
+.ss-row .trm::after,
+.termpanel-tab .trm::after,
+.ss-head-mark .trm::after {
+  content: "";
+  position: absolute;
+  inset: -3px;
+  border-radius: 5px;
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--muted) 45%, transparent);
+  pointer-events: none;
+}
+/* live (the program prints now): the same frame in the running colour, beside the row's amber spinner */
+.ss-row .trm.live::after,
+.termpanel-tab .trm.live::after,
+.ss-head-mark .trm.live::after {
+  box-shadow: 0 0 0 1px var(--term-run, #f2b705);
+}
+/* the + menu: rows below the cut get a visible cue, not only a fade */
+.ss-more-cue {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  width: 100%;
+  height: 20px;
+  margin-top: 2px;
+  border: 0;
+  border-top: 1px solid var(--line-soft);
+  background: none;
+  color: var(--muted);
+  font: inherit;
+  font-size: 10.5px;
+  cursor: default;
+}
+.ss-more-cue:hover {
+  color: var(--ink);
+}
+.ss-fold-all {
+  margin-right: 2px;
+}
+/* a bottom-panel tab names the CLI in its shell's foreground with its mark */
+.termpanel-tab-name .trm {
+  margin-right: 5px;
+  vertical-align: -2px;
+}
+.ss-at .ss-path,
+.ss-folders .ss-path {
+  margin-left: auto;
+  font-size: 10.5px;
+  color: var(--quiet);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 45%;
+}
+.ss-folders {
+  padding-left: 8px;
+}
+@media (prefers-reduced-motion: reduce) {
+  .tst.busy svg {
+    animation: none;
+  }
+}
+.tg-open:has(> .tg-sum) > .tg-b {
+  grid-column: 3;
+}
+.tg-open:has(> .tg-sum) > .tg-n {
+  grid-column: 3 / 5;
 }

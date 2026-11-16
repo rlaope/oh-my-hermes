@@ -62,7 +62,7 @@ async function shot(page: Page, what: string, theme: string) {
 const themes = SHOTS ? (["dark", "light"] as const) : (["dark"] as const);
 
 for (const theme of themes) {
-  // SESSIONS hidden in favour of bot threads (plan 2026-11-15)
+  // chat-mode CLI sessions replaced by bot threads (2026-11-16: terminals kept)
   test.skip(`O5 an OmO retry is one turn that fails once with OmO's reason, never the raw reply (${theme})`, async ({ page }) => {
     await session(page, "omo", theme, "/retry");
     await expect(page.getByTestId("session-status")).toHaveText("Ready");
@@ -79,7 +79,7 @@ for (const theme of themes) {
     expect(await text.evaluate((el) => el.scrollWidth <= el.clientWidth && el.scrollHeight <= el.clientHeight + 1)).toBe(true);
   });
 
-  // SESSIONS hidden in favour of bot threads (plan 2026-11-15)
+  // chat-mode CLI sessions replaced by bot threads (2026-11-16: terminals kept)
   test.skip(`O5 while OmO retries, the live line says which try (${theme})`, async ({ page }) => {
     await session(page, "omo", theme, "/retry hold");
     await page.waitForTimeout(400);
@@ -88,7 +88,7 @@ for (const theme of themes) {
     await expect(page.getByTestId("activity")).toHaveCount(1);
   });
 
-  // SESSIONS hidden in favour of bot threads (plan 2026-11-15)
+  // chat-mode CLI sessions replaced by bot threads (2026-11-16: terminals kept)
   test.skip(`O11 a command Stop cut short reads as stopped, then as finished late (${theme})`, async ({ page }) => {
     await session(page, "codex", theme, "/stoplate");
     await expect(page.getByTestId("activity-text")).toContainText("sleep 40; echo late");
@@ -116,7 +116,7 @@ for (const theme of themes) {
     await expect(page.getByTestId("activity")).toHaveCount(1);
   });
 
-  // SESSIONS hidden in favour of bot threads (plan 2026-11-15)
+  // chat-mode CLI sessions replaced by bot threads (2026-11-16: terminals kept)
   test.skip(`O13 Codex running its own config with no approvals says so where the mode is (${theme})`, async ({ page }) => {
     await session(page, "codex", theme, undefined, { __omherMockCodexUnguarded: true });
     await page.getByTestId("composer").fill("/status");
@@ -149,7 +149,7 @@ for (const theme of themes) {
     expect((await calls(page)).filter((c) => c.input?.kind === "mode").map((c) => c.input?.mode)).toEqual(["ask"]);
   });
 
-  // SESSIONS hidden in favour of bot threads (plan 2026-11-15)
+  // chat-mode CLI sessions replaced by bot threads (2026-11-16: terminals kept)
   test.skip(`O13 a new Codex session says it from its first session.info, before any turn, whole at 900-1280px (${theme})`, async ({ page }) => {
     await session(page, "codex", theme, undefined, { __omherMockCodexUnguarded: true });
     await page.getByTestId("composer").fill("Look at the README");
@@ -171,14 +171,14 @@ for (const theme of themes) {
     }
   });
 
-  // SESSIONS hidden in favour of bot threads (plan 2026-11-15)
+  // chat-mode CLI sessions replaced by bot threads (2026-11-16: terminals kept)
   test.skip(`O13 a Codex whose own config still asks keeps "Agent's own" (${theme})`, async ({ page }) => {
     await session(page, "codex", theme, "/status");
     await expect(page.getByTestId("session-status")).toHaveText("Ready");
     await expect(page.getByTestId("session-mode")).toHaveText("Agent's own");
   });
 
-  // SESSIONS hidden in favour of bot threads (plan 2026-11-15)
+  // chat-mode CLI sessions replaced by bot threads (2026-11-16: terminals kept)
   test.skip(`an OmO foreground batch: each row ends with its own answer and model, as Plans says (${theme})`, async ({ page }) => {
     // omo-13-batch.jsonl (OmO 5.1.56): one foreground `task`, two subagents; OmO's result names no answer, its own
     // record of each task id does, and Plans reads the same records
@@ -208,7 +208,7 @@ for (const theme of themes) {
     }
   });
 
-  // SESSIONS hidden in favour of bot threads (plan 2026-11-15)
+  // chat-mode CLI sessions replaced by bot threads (2026-11-16: terminals kept)
   test.skip(`O15 an OmO session's subagents show as its run in Plans (${theme})`, async ({ page }) => {
     await session(page, "omo", theme, "/subagents");
     await expect(page.getByTestId("fanout-card")).toHaveAttribute("data-state", "done");

@@ -72,7 +72,7 @@ const secs = (s: string) => {
 };
 
 for (const theme of ["dark", "light"] as const) {
-  // SESSIONS hidden in favour of bot threads (plan 2026-11-15)
+  // chat-mode CLI sessions replaced by bot threads (2026-11-16: terminals kept)
   test.skip(`1. a running subagent card says how many are done, never more running than are (${theme})`, async ({ page }) => {
     await setup(page, theme);
     await start(page, "claude", "/subagents hold");
@@ -91,7 +91,7 @@ for (const theme of ["dark", "light"] as const) {
     await expect(card.getByTestId("fanout-summary")).toHaveText(/^Ran 2 subagents · \d+s/);
   });
 
-  // SESSIONS hidden in favour of bot threads (plan 2026-11-15)
+  // chat-mode CLI sessions replaced by bot threads (2026-11-16: terminals kept)
   test.skip(`2. a subagent waiting on the person's approval reads waiting, then running again (${theme})`, async ({ page }) => {
     await setup(page, theme);
     await start(page, "claude", "/subask");
@@ -114,7 +114,7 @@ for (const theme of ["dark", "light"] as const) {
     await expect(row).toHaveAttribute("data-state", "done");
   });
 
-  // SESSIONS hidden in favour of bot threads (plan 2026-11-15)
+  // chat-mode CLI sessions replaced by bot threads (2026-11-16: terminals kept)
   test.skip(`3. the activity line and the subagent's row show one clock (${theme})`, async ({ page }) => {
     await setup(page, theme);
     await page.clock.install();
@@ -136,7 +136,7 @@ for (const theme of ["dark", "light"] as const) {
     }
   });
 
-  // SESSIONS hidden in favour of bot threads (plan 2026-11-15)
+  // chat-mode CLI sessions replaced by bot threads (2026-11-16: terminals kept)
   test.skip(`4. an agent that never answered in chat mode says why once, Restart beside it (${theme})`, async ({ page }) => {
     await setup(page, theme, { __omherMockNoChat: ["omo"], __omherMockAgents: ["claude", "codex", "omo", "pi"] });
     await start(page, "omo", "Summarize the README");
@@ -245,7 +245,7 @@ async function plusMenu(page: Page, height: number, width = 1280) {
 }
 
 for (const theme of ["dark", "light"] as const) {
-  // SESSIONS hidden in favour of bot threads (plan 2026-11-15)
+  // chat-mode CLI sessions replaced by bot threads (2026-11-16: terminals kept)
   test.skip(`6. the + menu shows a fade where its list is cut, none at the end, and air above (${theme})`, async ({ page }) => {
     await setup(page, theme, { __omherMockAgents: ["claude", "codex", "omh", "opencode"] });
     for (const height of [600, 720, 820]) {
@@ -293,7 +293,7 @@ for (const theme of ["dark", "light"] as const) {
     }
   });
 
-  // SESSIONS hidden in favour of bot threads (plan 2026-11-15)
+  // chat-mode CLI sessions replaced by bot threads (2026-11-16: terminals kept)
   test.skip(`7. the / menu tells skills apart, gives descriptions the column's width, names plain (${theme})`, async ({ page }) => {
     await setup(page, theme);
     await page.setViewportSize({ width: 1280, height: 820 });

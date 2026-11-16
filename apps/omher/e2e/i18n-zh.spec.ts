@@ -93,7 +93,7 @@ test("<html lang> follows the language, zh is zh-CN, and the CJK fonts are in --
 });
 
 for (const width of [1280, 900]) {
-  // SESSIONS hidden in favour of bot threads (plan 2026-11-15)
+  // chat-mode CLI sessions replaced by bot threads (2026-11-16: terminals kept)
   test.skip(`sidebar, composer and the New session menu read in Chinese at ${width}px`, async ({ page }) => {
     await page.setViewportSize({ width, height: 820 });
     await openZh(page);

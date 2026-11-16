@@ -6,6 +6,7 @@ mod appimage;
 mod bridge;
 mod custom_agents;
 mod dsh_chat;
+mod fg;
 mod folder_open;
 mod git_branch;
 mod hermes_auth;
@@ -28,7 +29,7 @@ use bridge::{Bridge, BridgeStatus, Os};
 use sessions::{AgentInfo, Output, Sessions};
 use setup::InstallEvent;
 use tauri::ipc::{Channel, InvokeResponseBody};
-use tauri::{Manager, RunEvent, State};
+use tauri::{AppHandle, Emitter, Manager, RunEvent, State};
 
 struct Shell {
     bridge: Arc<Bridge>,
@@ -323,6 +324,7 @@ async fn custom_agent_remove(id: String) -> Result<(), String> {
 /// to `on_data` as raw bytes, the exit code (null after a signal) once to `on_exit`.
 #[tauri::command]
 async fn session_start(
+    app: AppHandle,
     shell: State<'_, Shell>,
     agent: String,
     cwd: String,
@@ -347,6 +349,7 @@ async fn session_start(
                 let _ = on_exit.send(code);
             }
         })
+        .inspect(|id| watch_foreground(&sessions, &app, *id))
     })
     .await
     .map_err(|e| e.to_string())?
@@ -357,6 +360,7 @@ async fn session_start(
 /// the session is then written, acknowledged, resized and closed with the `session_*` commands like any other.
 #[tauri::command]
 async fn shell_start(
+    app: AppHandle,
     shell: State<'_, Shell>,
     cwd: Option<String>,
     cols: u16,
@@ -375,10 +379,31 @@ async fn shell_start(
                 let _ = on_exit.send(code);
             }
         })?;
+        watch_foreground(&sessions, &app, id);
         Ok(ShellStarted { id, cwd: at.to_string_lossy().into_owned() })
     })
     .await
     .map_err(|e| e.to_string())?
+}
+
+/// How often a terminal session's foreground program is looked at.
+const FOREGROUND_EVERY: Duration = Duration::from_secs(1);
+
+/// The page hears `session-fg` `{id, agent}` when the agent CLI in the foreground of terminal session `id` changes:
+/// its id (`claude`, `codex`, … the ids of src/ui/AgentIcon.tsx) or null (a shell or any other program). Nothing is
+/// sent while it stays the same; a session starts at null, and one that ends goes back to null (`fg.rs`).
+fn watch_foreground(sessions: &Arc<Sessions>, app: &AppHandle, id: u32) {
+    let app = app.clone();
+    sessions.watch_foreground(id, FOREGROUND_EVERY, move |agent| {
+        let _ = app.emit("session-fg", SessionFg { id, agent });
+    });
+}
+
+/// The `session-fg` event's payload.
+#[derive(Clone, serde::Serialize)]
+struct SessionFg {
+    id: u32,
+    agent: Option<&'static str>,
 }
 
 /// A started terminal-panel shell: its session id and the folder it started in.

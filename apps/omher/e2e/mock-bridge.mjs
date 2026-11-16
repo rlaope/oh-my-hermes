@@ -1189,7 +1189,9 @@ const OPS = {
     const threads = [...folders.entries()]
       .filter(([, f]) => f.thread && f.bot === b.name && !f.archived)
       .map(([thread, f]) => ({ thread, title: f.title, cwd: f.listedCwd ?? f.cwd, started_at: f.started, running: Boolean(turns[folderTurnKey(b.name, thread)]),
-        needs: [...pending.values()].some((w) => w.bot === folderTurnKey(b.name, thread)), message_count: threadHistory.get(thread)?.length ?? 0, preview: "" }))
+        needs: [...pending.values()].some((w) => w.bot === folderTurnKey(b.name, thread)), message_count: threadHistory.get(thread)?.length ?? 0,
+        // as Hermes' session.list: the session's first user message
+        preview: threadHistory.get(thread)?.find((m) => m.role === "user")?.text ?? "" }))
       .sort((x, y) => y.started_at - x.started_at);
     return { threads };
   },
@@ -1845,15 +1847,17 @@ const OPS = {
   },
   "mock.threads": (p) => {
     const b = needBot(p);
+    const at = (t) => (typeof t.at === "number" ? t.at : now() - (Number(t.ago) || 0));
     if (!Array.isArray(p.threads)) throw new OpError("bad_request", "threads must be an array");
     const ids = [];
     for (const t of p.threads) {
       const thread = nextId("stored-th");
       folders.set(thread, { bot: b.name, cwd: t.cwd ?? "/home/me/work", open: true, thread: true, title: String(t.title ?? ""),
-        started: now() - (Number(t.ago) || 0), archived: false, key: null,
+        // `at` (seconds since epoch) pins the time for a test that fixes the page's clock; else `ago` before now
+        started: at(t), archived: false, key: null,
         // a restored row the bridge lists before it attaches the thread: `listedCwd` (often "") until thread.open
         ...(typeof t.listedCwd === "string" ? { listedCwd: t.listedCwd } : {}) });
-      threadHistory.set(thread, (t.messages ?? []).map(([role, text], i) => ({ id: `seed-${thread}-${i}`, role, text, ts: now() - (Number(t.ago) || 0) + i })));
+      threadHistory.set(thread, (t.messages ?? []).map(([role, text], i) => ({ id: `seed-${thread}-${i}`, role, text, ts: at(t) + i })));
       ids.push(thread);
     }
     setTimeout(() => broadcast({ event: "thread.added", bot: b.name, thread: ids[0] ?? "", title: "" }), 0);
@@ -1890,6 +1894,19 @@ const OPS = {
     return { run: DEMO_RUN };
   },
   // a bot whose main chat has no messages yet (first run)
+  // termui: `n` extra local bots (bot01…), each with a short main chat, for the many-rows sidebar scroll test
+  "mock.manyBots": (p) => {
+    const n = Math.max(0, Math.min(40, Number(p.n) || 0));
+    const names = [];
+    for (let i = 1; i <= n; i++) {
+      const name = `bot${String(i).padStart(2, "0")}`;
+      bots[name] = { ...BOT_SEED[1], name, display_name: `Bot ${String(i).padStart(2, "0")}`, running: false };
+      models[name] = { model: BOT_SEED[1].model, provider: BOT_SEED[1].provider, reasoning: "medium" };
+      history[name] = [{ id: `seed-${name}-0`, role: "assistant", text: `Bot ${i} is ready.`, ts: now() - i * 60 }];
+      names.push(name);
+    }
+    return { bots: names };
+  },
   "mock.peerBots": (p) => {
     if (!Array.isArray(p.bots)) throw new OpError("bad_request", "bots must be an array");
     peerBots = p.bots.map((b) => ({ ...PEER_BOTS_SEED[0], ...b }));

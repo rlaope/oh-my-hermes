@@ -2360,7 +2360,7 @@ export function createStore(bridge: BridgeLike, opts: StoreOptions = {}): Store 
         const loading = first ? selectBot(first) : Promise.resolve();
         if (back?.bot && back.bot === first) {
           const { panelOpen, panelTab, runsFull, runId } = back;
-          // a SESSIONS chat does not come back while SESSIONS is hidden (sessions/entry.ts)
+          // a TERMINALS session comes back open (sessions/entry.ts)
           const session = SESSIONS_ENTRY ? back.session : null;
           dispatch({ type: "ui.restore", ui: { panelOpen, panelTab, runsFull, runId, session } });
         } else if (back?.session && SESSIONS_ENTRY) dispatch({ type: "ui.session", id: back.session });

@@ -2,8 +2,8 @@
 // fix the parent asked for after layer 1.
 // - thread rows carry HarnessStack marks from the thread's live subagents; the thread chat shows the same subagent row
 // - the terminal panel's next tab starts in the open thread's folder (home in the main chat)
-// - SESSIONS is hidden: no sidebar section, ⌘N / ⌘⇧] do nothing
-// - threads: connector lighter than the hairline, running spinner in the accent at 1.5px, needs-you pulse >= 0.6 in
+// - SESSIONS is back as TERMINALS only (2026-11-16): ⌘N opens its + menu (no chat choice)
+// - threads: connector lighter than the hairline, running spinner in the running amber (--term-run) at 1.5px, needs-you pulse >= 0.6 in
 //   the strip's amber, idle rows a hollow dot, titles >= 20px past the bot name and smaller, the bot row's time
 //   follows its newest thread
 // - split: link lines a tight list with an underline, Send there primary, the quoted message labelled
@@ -196,16 +196,18 @@ test("a restored thread listed without a folder: opening it gives the row its fo
   expect((await page.evaluate(() => (window as unknown as { __omherShellCalls: { op: string; at?: string }[] }).__omherShellCalls)).find((c) => c.op === "start")?.at).toBe("/work/restored");
 });
 
-test("SESSIONS is hidden: no sidebar section, ⌘N and ⌘⇧] do nothing; Accounts usage stays", async ({ page }) => {
+test("SESSIONS is back as TERMINALS only (2026-11-16): ⌘N opens its + menu with no chat choice; ⌘⇧] with no terminal opens nothing", async ({ page }) => {
   await setup(page);
   await expect(page.getByTestId("side-bots")).toBeVisible();
-  await expect(page.getByTestId("side-sessions")).toHaveCount(0);
+  await expect(page.getByTestId("side-sessions")).toBeVisible();
   const mod = await page.evaluate(() => (/Mac/.test(navigator.platform) ? "Meta" : "Control"));
-  await page.keyboard.press(`${mod}+n`);
   await page.keyboard.press(`${mod}+Shift+BracketRight`);
   await page.waitForTimeout(200);
-  await expect(page.getByTestId("session-menu")).toHaveCount(0);
   await expect(page.getByTestId("session-view")).toHaveCount(0);
+  await page.keyboard.press(`${mod}+n`);
+  await expect(page.getByTestId("session-menu")).toBeVisible();
+  await expect(page.getByTestId("session-agent-shell")).toBeVisible();
+  await expect(page.getByTestId("session-menu").getByText(/^Chat$/)).toHaveCount(0);
 });
 
 test("thread rows: connector, spinner, pulse, idle dot, indent and size; bot row follows its newest thread", async ({ page }) => {
@@ -226,6 +228,7 @@ test("thread rows: connector, spinner, pulse, idle dot, indent and size; bot row
     probe.remove();
     const running = document.querySelector(`[data-testid="thread-row-${ids.og}"] .th-g-running svg path`)!;
     const accent = css(tree, "--accent").trim();
+    const run = css(tree, "--term-run").trim();
     const dot = document.querySelector(`[data-testid="thread-row-${ids.docs}"] .th-dot`)!;
     const kf = dot.getAnimations()[0] as CSSAnimation | undefined;
     const frames = (kf?.effect as KeyframeEffect | undefined)?.getKeyframes() ?? [];
@@ -238,6 +241,7 @@ test("thread rows: connector, spinner, pulse, idle dot, indent and size; bot row
       stroke: css(running, "stroke-width"),
       runningColor: css(running.closest(".th-g")!, "color"),
       accent,
+      run,
       minOpacity: Math.min(...frames.map((f) => Number(f.opacity ?? 1))),
       dotBg: css(dot, "background-color"),
       needs,
@@ -264,7 +268,7 @@ test("thread rows: connector, spinner, pulse, idle dot, indent and size; bot row
     }, c);
   // (1) the connector is one step lighter than the 1px hairline on dark, and still under the text
   expect(await lum(look.line)).toBeGreaterThan(await lum(look.hair));
-  // (2) running: accent colour, 1.5px stroke
+  // (2) running: the sidebar's one running colour (the running terminals' amber, polish 4), 1.5px stroke
   expect(look.stroke).toBe("1.5px");
   const toRgb = await page.evaluate((c) => {
     const s = document.createElement("span");
@@ -273,7 +277,7 @@ test("thread rows: connector, spinner, pulse, idle dot, indent and size; bot row
     const v = getComputedStyle(s).color;
     s.remove();
     return v;
-  }, look.accent);
+  }, look.run);
   expect(look.runningColor).toBe(toRgb);
   // (3) needs you: pulse never under 0.6 and the strip's amber
   expect(look.minOpacity).toBeGreaterThanOrEqual(0.6);
