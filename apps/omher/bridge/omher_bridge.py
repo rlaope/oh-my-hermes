@@ -3254,13 +3254,20 @@ NS_CLIP = 4096             # bytes of one step's input or result sent to the UI
 NS_TEXT = 16000            # chars of one bubble
 NS_ITEMS = 400             # items of one session
 NS_REF = re.compile(r"^(hermes|claude|claude-sub|codex):([A-Za-z0-9_.:/@-]{1,300})$")
-_SECRET = re.compile(r"(sk-|ghp_|gho_|github_pat_|xox[bpas]-|AKIA)[A-Za-z0-9_-]{8,}")
+# omher's one masker: the same two patterns as src/lib/secrets.json, which the page (src/lib/secrets.ts) and the
+# desktop shell (tasks.rs mask_secrets) read; bridge/tests pin these strings to that file.
+SECRET_MASK = "••••"
+SECRET_TOKENS = r"\b(?:gh[pousr]_|github_pat_|glpat-|sk-|xox[abprs]-|AKIA)[A-Za-z0-9_-]{8,}"
+SECRET_ASSIGNED = r"""\b([a-z_-]*(?:credentials?|token|password|passwd|secret|api[_-]?key))=[^\s"'<>&;,)\]]+"""
+_SECRET = re.compile(SECRET_TOKENS)
+_SECRET_ASSIGNED = re.compile(SECRET_ASSIGNED, re.IGNORECASE)
 _HERMES_SID = re.compile(r"^[A-Za-z0-9_-]{1,80}$")
 
 
 def mask_secrets(text: str) -> str:
-    """Token-like strings (`sk-…`, `ghp_…`, `xoxb-…`, `AKIA…`) with their body replaced by `•••`."""
-    return _SECRET.sub(lambda m: m.group(1) + "•••", text)
+    """Token-like strings (`sk-…`, `ghp_…`, `glpat-…`, `xoxb-…`, `AKIA…`) replaced by `••••`, and the value of a
+    `token=` / `credential=` / `password=` / `secret=` / `api_key=` replaced the same way (the name stays)."""
+    return _SECRET_ASSIGNED.sub(lambda m: m.group(1) + "=" + SECRET_MASK, _SECRET.sub(SECRET_MASK, text))
 
 
 def _ns_clip(text, n: int = NS_CLIP) -> str:

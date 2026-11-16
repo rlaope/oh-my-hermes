@@ -1,6 +1,7 @@
 // Where the Tasks page's lists come from. In the desktop app: the shell's `tasks_*` commands (src-tauri/src/tasks.rs),
 // which run the person's own `gh` / `glab` with a fixed, read-only argv. In a plain browser (dev, e2e against the mock
 // bridge) a mock answers from `window.__omherTasks` and records every call in `window.__omherTaskCalls`.
+import { maskSecrets } from "../lib/secrets";
 import type { CliSource, CliStatus, TaskDetail, TaskFilter, TaskItem, TaskKind, TaskPage, TaskRemote } from "./types";
 import { PAGE } from "./types";
 
@@ -96,9 +97,46 @@ class MockTaskHost implements TaskHost {
   }
 }
 
+// ---- Masking --------------------------------------------------------------------------------
+
+const maskItem = (i: TaskItem): TaskItem => ({ ...i, title: maskSecrets(i.title), labels: i.labels.map((l) => ({ ...l, name: maskSecrets(l.name) })) });
+
+/** A failed call as an Error whose message has no token-like string in it. */
+const masked = (e: unknown) => new Error(maskSecrets(e instanceof Error ? e.message : String(e)));
+
+/** `inner` with every text it answers (titles, labels, descriptions, comments, check names, error lines) passed
+ *  through omher's one masker (src/lib/secrets.ts). The shell masks the same strings already; this keeps every
+ *  surface the page draws from (the list, the drawer, Start in thread's text, the error line) masked whichever
+ *  host answered. */
+export class MaskingTaskHost implements TaskHost {
+  constructor(private inner: TaskHost) {}
+  get kind() {
+    return this.inner.kind;
+  }
+  status(source: CliSource, fresh?: boolean) {
+    return this.inner.status(source, fresh).catch((e) => Promise.reject(masked(e)));
+  }
+  async list(source: CliSource, repo: string, kind: TaskKind, filter: TaskFilter, page: number): Promise<TaskPage> {
+    const p = await this.inner.list(source, repo, kind, filter, page).catch((e) => Promise.reject(masked(e)));
+    return { ...p, items: p.items.map(maskItem) };
+  }
+  async view(source: CliSource, repo: string, kind: TaskKind, number: number): Promise<TaskDetail> {
+    const d = await this.inner.view(source, repo, kind, number).catch((e) => Promise.reject(masked(e)));
+    return {
+      item: maskItem(d.item),
+      body: maskSecrets(d.body),
+      comments: d.comments.map((c) => ({ ...c, body: maskSecrets(c.body) })),
+      checks: d.checks.map((c) => ({ ...c, name: maskSecrets(c.name) })),
+    };
+  }
+  remote(cwd: string) {
+    return this.inner.remote(cwd).catch((e) => Promise.reject(masked(e)));
+  }
+}
+
 const inTauri = () => typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
 
 let host: TaskHost | null = null;
 export function taskHost(): TaskHost {
-  return (host ??= inTauri() ? new TauriTaskHost() : new MockTaskHost());
+  return (host ??= new MaskingTaskHost(inTauri() ? new TauriTaskHost() : new MockTaskHost()));
 }

@@ -8,15 +8,17 @@
 //! What crosses from the page is only: the source (`github` / `gitlab`), the repository (`owner/repo`, checked
 //! below), the filter and kind (fixed words), the page number and an item number. Every program runs as a fixed argv
 //! with no shell, nothing on stdin, at most 20 seconds, and its answer is kept 60 seconds per argv. omher passes no
-//! token, reads none (`auth status` is judged by its exit code alone, its output is thrown away) and changes nothing:
-//! every argv here is a `list`, `view` or `auth status`.
+//! token, reads none (`auth status` is judged by its exit code alone, its output goes nowhere) and changes nothing:
+//! every argv here is a `list`, `view` or `auth status`. Every text a CLI answers passes `mask_secrets` before it
+//! leaves this module, so a token-like string in an issue never reaches the page.
 use std::collections::HashMap;
 use std::io::Read;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
-use std::sync::Mutex;
+use std::sync::{Mutex, OnceLock};
 use std::time::{Duration, Instant};
 
+use regex::{Regex, RegexBuilder};
 use serde::Serialize;
 use serde_json::Value;
 
@@ -25,8 +27,11 @@ use crate::bridge::Os;
 
 /// Rows a page shows.
 pub const PAGE: usize = 25;
-/// The last page asked for (gh lists from the top, so page `n` asks for `(n + 1) * PAGE` rows: at most 200).
-pub const MAX_PAGE: u32 = 7;
+/// The last page asked for (100 000 rows). Every page is one call of at most `PAGE + 1 + MAX_SEEN` rows, however
+/// deep it is: GitHub pages start below the row the page before ended on (`After`), GitLab's CLI has `--page`.
+pub const MAX_PAGE: u32 = 3999;
+/// The most rows of one second a GitHub page may have to skip (more rows opened in the same second: the page fails).
+const MAX_SEEN: usize = 100;
 /// How long a program may run.
 pub const TIMEOUT: Duration = Duration::from_secs(20);
 /// How long an answer is kept for the same argv.
@@ -134,27 +139,67 @@ fn s(v: &str) -> String {
     v.to_string()
 }
 
+/// Where a GitHub page starts. gh lists newest first; page `n` asks for the rows opened at or before `created` (the
+/// second the page before ended on) and drops `seen`, the rows of that same second earlier pages already showed. So
+/// a page deep in a long list costs one call of `PAGE + 1 + seen` rows, never every row above it.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct After {
+    /// seconds since the epoch
+    pub created: i64,
+    pub seen: Vec<u64>,
+}
+
+/// `2026-11-15T18:19:59Z` for seconds since the epoch (the inverse of `epoch`).
+pub fn iso(t: i64) -> String {
+    let (days, secs) = (t.div_euclid(86_400), t.rem_euclid(86_400));
+    // civil from days (Howard Hinnant)
+    let z = days + 719_468;
+    let era = z.div_euclid(146_097);
+    let doe = z - era * 146_097;
+    let yoe = (doe - doe / 1460 + doe / 36_524 - doe / 146_096) / 365;
+    let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
+    let mp = (5 * doy + 2) / 153;
+    let d = doy - (153 * mp + 2) / 5 + 1;
+    let m = if mp < 10 { mp + 3 } else { mp - 9 };
+    let y = yoe + era * 400 + if m <= 2 { 1 } else { 0 };
+    format!("{y:04}-{m:02}-{d:02}T{:02}:{:02}:{:02}Z", secs / 3600, secs % 3600 / 60, secs % 60)
+}
+
 /// The list argv for one page. `None` when the source has no such filter (GitLab's CLI has no "mentions me").
-pub fn list_argv(source: Source, kind: Kind, repo: &str, filter: Filter, page: u32) -> Result<Option<Vec<String>>, String> {
+/// `after`: where a GitHub page after the first starts (`Tasks` keeps it from the page before).
+pub fn list_argv(source: Source, kind: Kind, repo: &str, filter: Filter, page: u32, after: Option<&After>) -> Result<Option<Vec<String>>, String> {
     let repo = check_repo(source, repo)?;
     if page > MAX_PAGE {
         return Err(format!("page {page} is past the last one"));
     }
     Ok(match source {
         Source::Github => {
-            let limit = (page as usize + 1) * PAGE;
+            if page > 0 && after.is_none() {
+                return Err(format!("page {} follows a page not read yet", page + 1));
+            }
+            let seen = after.map_or(0, |a| a.seen.len());
+            if seen > MAX_SEEN {
+                return Err(format!("more than {MAX_SEEN} items were opened in one second"));
+            }
             let (noun, fields) = match kind {
                 Kind::Issues => ("issue", GH_ISSUE_FIELDS),
                 Kind::Changes => ("pr", GH_PR_FIELDS),
             };
+            let limit = PAGE + 1 + seen;
             let mut a = vec![s(noun), s("list"), s("--repo"), repo, s("--state"), s("open"), s("--json"), s(fields), s("--limit"), limit.to_string()];
+            let mut search = vec![];
             match (filter, kind) {
                 (Filter::Assigned, _) => a.extend([s("--assignee"), s("@me")]),
                 (Filter::Created, _) => a.extend([s("--author"), s("@me")]),
                 (Filter::Mentioned, Kind::Issues) => a.extend([s("--mention"), s("@me")]),
-                (Filter::Mentioned, Kind::Changes) => a.extend([s("--search"), s("mentions:@me")]),
+                (Filter::Mentioned, Kind::Changes) => search.push(s("mentions:@me")),
                 (Filter::Open, _) => {}
             }
+            search.push(s("sort:created-desc"));
+            if let Some(at) = after {
+                search.push(format!("created:<={}", iso(at.created)));
+            }
+            a.extend([s("--search"), search.join(" ")]);
             Some(a)
         }
         Source::Gitlab => {
@@ -271,8 +316,31 @@ pub struct Status {
 
 // ---- parsing ------------------------------------------------------------------------------------
 
+/// omher's one masker (src/lib/secrets.json: the bridge and the page use the same two patterns).
+const SECRETS: &str = include_str!("../../src/lib/secrets.json");
+
+fn secrets() -> &'static (Regex, Regex, String) {
+    static R: OnceLock<(Regex, Regex, String)> = OnceLock::new();
+    R.get_or_init(|| {
+        let v: Value = serde_json::from_str(SECRETS).expect("secrets.json");
+        let get = |k: &str| v[k].as_str().expect("secrets.json key").to_string();
+        let tokens = Regex::new(&get("tokens")).expect("secrets.json tokens");
+        let assigned = RegexBuilder::new(&get("assigned")).case_insensitive(true).build().expect("secrets.json assigned");
+        (tokens, assigned, get("mask"))
+    })
+}
+
+/// `t` with every token-like string replaced by `••••` (an assignment keeps its name: `token=••••`).
+pub fn mask_secrets(t: &str) -> String {
+    let (tokens, assigned, mask) = secrets();
+    let t = tokens.replace_all(t, mask.as_str());
+    assigned.replace_all(&t, |c: &regex::Captures| format!("{}={mask}", &c[1])).into_owned()
+}
+
+/// A text field of a CLI answer: control characters out, token-like strings masked.
 fn text(v: &Value, k: &str) -> String {
-    v.get(k).and_then(Value::as_str).unwrap_or("").chars().filter(|c| !c.is_control() || *c == '\n' || *c == '\t').collect()
+    let t: String = v.get(k).and_then(Value::as_str).unwrap_or("").chars().filter(|c| !c.is_control() || *c == '\n' || *c == '\t').collect();
+    mask_secrets(&t)
 }
 
 fn clip(mut t: String, n: usize) -> String {
@@ -440,20 +508,28 @@ fn gl_item(v: &Value, change: bool) -> Item {
     }
 }
 
-/// A list answer (a JSON array) as one page of items. `page` is the page asked for; gh answered every row up to it.
-pub fn parse_list(source: Source, kind: Kind, page: u32, out: &str) -> Result<Page, String> {
+/// A list answer (a JSON array) as one page of items, and where the next GitHub page starts (None: no next page,
+/// or GitLab, which pages by number). `page` is the page asked for, `after` the start `list_argv` was given.
+pub fn parse_list(source: Source, kind: Kind, page: u32, after: Option<&After>, out: &str) -> Result<(Page, Option<After>), String> {
     let v: Value = serde_json::from_str(out.trim()).map_err(|e| format!("{} answered something that is not JSON: {e}", source.program()))?;
     let rows = v.as_array().ok_or_else(|| format!("{} did not answer a list", source.program()))?;
     let change = kind == Kind::Changes;
     Ok(match source {
         Source::Github => {
-            let from = page as usize * PAGE;
-            let items: Vec<Item> = rows.iter().skip(from).take(PAGE).map(|r| gh_item(r, change)).filter(|i| i.number > 0).collect();
-            Page { more: rows.len() >= from + PAGE && page < MAX_PAGE, items }
+            let shown = |i: &Item| after.is_some_and(|a| i.created == a.created && a.seen.contains(&i.number));
+            let mut items: Vec<Item> = rows.iter().map(|r| gh_item(r, change)).filter(|i| i.number > 0 && !shown(i)).collect();
+            let more = items.len() > PAGE && page < MAX_PAGE;
+            items.truncate(PAGE);
+            let next = items.last().filter(|_| more).map(|last| {
+                let mut seen: Vec<u64> = after.filter(|a| a.created == last.created).map(|a| a.seen.clone()).unwrap_or_default();
+                seen.extend(items.iter().filter(|i| i.created == last.created).map(|i| i.number));
+                After { created: last.created, seen }
+            });
+            (Page { items, more }, next)
         }
         Source::Gitlab => {
             let items: Vec<Item> = rows.iter().take(PAGE).map(|r| gl_item(r, change)).filter(|i| i.number > 0).collect();
-            Page { more: rows.len() >= PAGE && page < MAX_PAGE, items }
+            (Page { more: rows.len() >= PAGE && page < MAX_PAGE, items }, None)
         }
     })
 }
@@ -632,29 +708,35 @@ pub struct Ran {
     pub err: String,
 }
 
-/// Run `exe argv` with no shell, nothing on stdin, at most `TIMEOUT`. The CLI's prompts and colours are off.
-fn run(exe: &Path, argv: &[String]) -> Result<Ran, String> {
+/// Run `exe argv` with no shell, nothing on stdin, at most `TIMEOUT`. The CLI's prompts and colours are off. With
+/// `keep` false its output goes nowhere (`auth status`, whose output can name a token): only the exit code is read.
+fn run(exe: &Path, argv: &[String], keep: bool) -> Result<Ran, String> {
+    let out = || if keep { Stdio::piped() } else { Stdio::null() };
     let mut cmd = Command::new(exe);
     cmd.args(argv)
         .stdin(Stdio::null())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
+        .stdout(out())
+        .stderr(out())
         .env("GH_PROMPT_DISABLED", "1")
         .env("GH_NO_UPDATE_NOTIFIER", "1")
         .env("GLAB_NO_PROMPT", "1")
         .env("NO_COLOR", "1");
     crate::appimage::host_env(&mut cmd);
     let mut child = cmd.spawn().map_err(|e| format!("could not start {}: {e}", exe.display()))?;
-    let mut so = child.stdout.take().ok_or("no stdout")?;
-    let mut se = child.stderr.take().ok_or("no stderr")?;
+    let so = child.stdout.take();
+    let se = child.stderr.take();
     let to = std::thread::spawn(move || {
         let mut b = Vec::new();
-        let _ = (&mut so).take(MAX_OUT).read_to_end(&mut b);
+        if let Some(mut so) = so {
+            let _ = (&mut so).take(MAX_OUT).read_to_end(&mut b);
+        }
         b
     });
     let te = std::thread::spawn(move || {
         let mut b = Vec::new();
-        let _ = (&mut se).take(64 * 1024).read_to_end(&mut b);
+        if let Some(mut se) = se {
+            let _ = (&mut se).take(64 * 1024).read_to_end(&mut b);
+        }
         b
     });
     let start = Instant::now();
@@ -675,21 +757,19 @@ fn run(exe: &Path, argv: &[String]) -> Result<Ran, String> {
     Ok(Ran { code, out, err })
 }
 
-/// The last non-empty line of an error answer, short, with anything token-like taken out.
+/// The last non-empty line of an error answer, short, with anything token-like masked.
 pub fn error_line(err: &str) -> String {
-    let line = err.lines().map(str::trim).filter(|l| !l.is_empty()).last().unwrap_or("").to_string();
-    let words: Vec<String> = line
-        .split_whitespace()
-        .map(|w| if w.starts_with("gh") && w.len() > 20 && w.chars().nth(3) == Some('_') || w.starts_with("glpat-") { "…".to_string() } else { w.to_string() })
-        .collect();
-    one_line(words.join(" "), 200)
+    let line = err.lines().map(str::trim).filter(|l| !l.is_empty()).last().unwrap_or("");
+    one_line(mask_secrets(line), 200)
 }
 
-/// The answers of the last minute, by argv.
+/// The answers of the last minute, by argv, and where each GitHub page read so far ends.
 #[derive(Default)]
 pub struct Tasks {
     cache: Mutex<HashMap<String, (Instant, String)>>,
     status: Mutex<HashMap<&'static str, (Instant, Status)>>,
+    /// `<kind>\0<repo>\0<filter>` -> page -> where it starts (kept while omher runs, at most 64 lists)
+    starts: Mutex<HashMap<String, HashMap<u32, After>>>,
 }
 
 impl Tasks {
@@ -717,7 +797,7 @@ impl Tasks {
         }
         let st = match find(p) {
             None => Status { installed: false, signed_in: false },
-            Some(exe) => Status { installed: true, signed_in: matches!(run(&exe, &auth_argv(source)), Ok(Ran { code: Some(0), .. })) },
+            Some(exe) => Status { installed: true, signed_in: matches!(run(&exe, &auth_argv(source), false), Ok(Ran { code: Some(0), .. })) },
         };
         if let Ok(mut c) = self.status.lock() {
             c.insert(p, (Instant::now(), st.clone()));
@@ -731,7 +811,7 @@ impl Tasks {
             return Ok(v);
         }
         let exe = find(source.program()).ok_or_else(|| format!("{} is not installed", source.program()))?;
-        let ran = run(&exe, &argv)?;
+        let ran = run(&exe, &argv, true)?;
         if ran.code != Some(0) {
             let line = error_line(&ran.err);
             return Err(if line.is_empty() { format!("{} failed", source.program()) } else { line });
@@ -741,10 +821,24 @@ impl Tasks {
     }
 
     pub fn list(&self, source: Source, kind: Kind, repo: &str, filter: Filter, page: u32) -> Result<Page, String> {
-        let Some(argv) = list_argv(source, kind, repo, filter, page)? else {
+        self.list_with(source, kind, repo, filter, page, |argv| self.answer(source, argv))
+    }
+
+    /// `list`, with `ask` running the argv (tests answer from a recorded list).
+    pub fn list_with(&self, source: Source, kind: Kind, repo: &str, filter: Filter, page: u32, ask: impl FnOnce(Vec<String>) -> Result<String, String>) -> Result<Page, String> {
+        let key = format!("{kind:?}\0{repo}\0{filter:?}");
+        let after = if source == Source::Github && page > 0 { self.starts.lock().ok().and_then(|m| m.get(&key).and_then(|p| p.get(&page)).cloned()) } else { None };
+        let Some(argv) = list_argv(source, kind, repo, filter, page, after.as_ref())? else {
             return Ok(Page::default());
         };
-        parse_list(source, kind, page, &self.answer(source, argv)?)
+        let (out, next) = parse_list(source, kind, page, after.as_ref(), &ask(argv)?)?;
+        if let (Some(next), Ok(mut m)) = (next, self.starts.lock()) {
+            if m.len() >= 64 && !m.contains_key(&key) {
+                m.clear();
+            }
+            m.entry(key).or_default().insert(page + 1, next);
+        }
+        Ok(out)
     }
 
     pub fn view(&self, source: Source, kind: Kind, repo: &str, number: u64) -> Result<Detail, String> {
@@ -796,23 +890,33 @@ mod tests {
         let r = "rlaope/oh-my-hermes";
         let j = |a: Vec<String>| a.join(" ");
         let table: &[(Source, Kind, Filter, u32, Option<&str>)] = &[
-            (Source::Github, Kind::Issues, Filter::Open, 0, Some("issue list --repo rlaope/oh-my-hermes --state open --json number,title,state,url,labels,author,createdAt,updatedAt --limit 25")),
-            (Source::Github, Kind::Issues, Filter::Assigned, 1, Some("issue list --repo rlaope/oh-my-hermes --state open --json number,title,state,url,labels,author,createdAt,updatedAt --limit 50 --assignee @me")),
-            (Source::Github, Kind::Issues, Filter::Created, 0, Some("issue list --repo rlaope/oh-my-hermes --state open --json number,title,state,url,labels,author,createdAt,updatedAt --limit 25 --author @me")),
-            (Source::Github, Kind::Issues, Filter::Mentioned, 0, Some("issue list --repo rlaope/oh-my-hermes --state open --json number,title,state,url,labels,author,createdAt,updatedAt --limit 25 --mention @me")),
-            (Source::Github, Kind::Changes, Filter::Mentioned, 7, Some("pr list --repo rlaope/oh-my-hermes --state open --json number,title,state,url,labels,author,createdAt,updatedAt,isDraft,statusCheckRollup --limit 200 --search mentions:@me")),
-            (Source::Github, Kind::Changes, Filter::Assigned, 0, Some("pr list --repo rlaope/oh-my-hermes --state open --json number,title,state,url,labels,author,createdAt,updatedAt,isDraft,statusCheckRollup --limit 25 --assignee @me")),
+            (Source::Github, Kind::Issues, Filter::Open, 0, Some("issue list --repo rlaope/oh-my-hermes --state open --json number,title,state,url,labels,author,createdAt,updatedAt --limit 26 --search sort:created-desc")),
+            (Source::Github, Kind::Issues, Filter::Assigned, 1, Some("issue list --repo rlaope/oh-my-hermes --state open --json number,title,state,url,labels,author,createdAt,updatedAt --limit 28 --assignee @me --search sort:created-desc created:<=2026-11-15T18:19:59Z")),
+            (Source::Github, Kind::Issues, Filter::Created, 0, Some("issue list --repo rlaope/oh-my-hermes --state open --json number,title,state,url,labels,author,createdAt,updatedAt --limit 26 --author @me --search sort:created-desc")),
+            (Source::Github, Kind::Issues, Filter::Mentioned, 0, Some("issue list --repo rlaope/oh-my-hermes --state open --json number,title,state,url,labels,author,createdAt,updatedAt --limit 26 --mention @me --search sort:created-desc")),
+            (Source::Github, Kind::Changes, Filter::Mentioned, 7, Some("pr list --repo rlaope/oh-my-hermes --state open --json number,title,state,url,labels,author,createdAt,updatedAt,isDraft,statusCheckRollup --limit 28 --search mentions:@me sort:created-desc created:<=2026-11-15T18:19:59Z")),
+            (Source::Github, Kind::Changes, Filter::Assigned, 0, Some("pr list --repo rlaope/oh-my-hermes --state open --json number,title,state,url,labels,author,createdAt,updatedAt,isDraft,statusCheckRollup --limit 26 --assignee @me --search sort:created-desc")),
             (Source::Gitlab, Kind::Issues, Filter::Open, 2, Some("issue list --repo rlaope/oh-my-hermes --output json --per-page 25 --page 3")),
             (Source::Gitlab, Kind::Changes, Filter::Created, 0, Some("mr list --repo rlaope/oh-my-hermes --output json --per-page 25 --page 1 --author=@me")),
             (Source::Gitlab, Kind::Changes, Filter::Assigned, 0, Some("mr list --repo rlaope/oh-my-hermes --output json --per-page 25 --page 1 --assignee=@me")),
             (Source::Gitlab, Kind::Issues, Filter::Mentioned, 0, None),
         ];
+        let after = After { created: 1_794_766_799, seen: vec![9, 8] };
         for (src, kind, f, page, want) in table {
-            let got = list_argv(*src, *kind, r, *f, *page).unwrap().map(j);
+            let at = (*page > 0 && *src == Source::Github).then_some(&after);
+            let got = list_argv(*src, *kind, r, *f, *page, at).unwrap().map(j);
             assert_eq!(got.as_deref(), *want, "{src:?} {kind:?} {f:?} {page}");
         }
-        assert!(list_argv(Source::Github, Kind::Issues, r, Filter::Open, MAX_PAGE + 1).is_err());
-        assert!(list_argv(Source::Github, Kind::Issues, "x/--web", Filter::Open, 0).is_err());
+        assert!(list_argv(Source::Github, Kind::Issues, r, Filter::Open, MAX_PAGE + 1, Some(&after)).is_err());
+        assert!(list_argv(Source::Gitlab, Kind::Issues, r, Filter::Open, MAX_PAGE + 1, None).is_err());
+        assert!(list_argv(Source::Github, Kind::Issues, "x/--web", Filter::Open, 0, None).is_err());
+        // a GitHub page after the first starts where the page before ended, never from the top
+        assert!(list_argv(Source::Github, Kind::Issues, r, Filter::Open, 3, None).is_err());
+        let crowded = After { created: 0, seen: (0..=MAX_SEEN as u64).collect() };
+        assert!(list_argv(Source::Github, Kind::Issues, r, Filter::Open, 3, Some(&crowded)).is_err());
+        assert_eq!(iso(1_794_766_799), "2026-11-15T18:19:59Z");
+        assert_eq!(iso(0), "1970-01-01T00:00:00Z");
+        assert_eq!(iso(951_782_400), "2000-02-29T00:00:00Z");
     }
 
     #[test]
@@ -836,7 +940,7 @@ mod tests {
         for src in [Source::Github, Source::Gitlab] {
             for kind in [Kind::Issues, Kind::Changes] {
                 for f in [Filter::Assigned, Filter::Created, Filter::Mentioned, Filter::Open] {
-                    all.extend(list_argv(src, kind, "o/r", f, 0).unwrap());
+                    all.extend(list_argv(src, kind, "o/r", f, 0, None).unwrap());
                 }
                 all.push(view_argv(src, kind, "o/r", 1).unwrap());
             }
@@ -851,9 +955,9 @@ mod tests {
 
     #[test]
     fn parses_recorded_gh_issue_list() {
-        let p = parse_list(Source::Github, Kind::Issues, 0, GH_ISSUES).unwrap();
+        let (p, next) = parse_list(Source::Github, Kind::Issues, 0, None, GH_ISSUES).unwrap();
         assert_eq!(p.items.len(), 4);
-        assert!(!p.more);
+        assert!(!p.more && next.is_none());
         let i = &p.items[1];
         assert!(i.number > 0 && !i.title.is_empty());
         assert_eq!(i.state, "open");
@@ -862,13 +966,11 @@ mod tests {
         assert!(i.created > 1_700_000_000);
         assert!(i.labels.iter().any(|l| l.name == "enhancement" && l.color == "a2eeef"));
         assert!(i.checks.is_none());
-        // page 1 of a 4-row answer is empty
-        assert!(parse_list(Source::Github, Kind::Issues, 1, GH_ISSUES).unwrap().items.is_empty());
     }
 
     #[test]
     fn parses_recorded_gh_pr_list_with_checks() {
-        let p = parse_list(Source::Github, Kind::Changes, 0, GH_PRS).unwrap();
+        let (p, _) = parse_list(Source::Github, Kind::Changes, 0, None, GH_PRS).unwrap();
         assert_eq!(p.items.len(), 3);
         let first = &p.items[0];
         assert_eq!(first.state, "merged");
@@ -908,14 +1010,14 @@ mod tests {
             assert_eq!(gh_check_state(&serde_json::from_str(j).unwrap()), *want, "{j}");
         }
         let draft = r#"[{"number":5,"title":"x","state":"OPEN","isDraft":true,"statusCheckRollup":[]}]"#;
-        let p = parse_list(Source::Github, Kind::Changes, 0, draft).unwrap();
+        let (p, _) = parse_list(Source::Github, Kind::Changes, 0, None, draft).unwrap();
         assert_eq!(p.items[0].state, "draft");
         assert_eq!(p.items[0].checks, Some(Checks::default()));
     }
 
     #[test]
     fn parses_gitlab_shapes() {
-        let p = parse_list(Source::Gitlab, Kind::Issues, 0, GL_ISSUES).unwrap();
+        let (p, _) = parse_list(Source::Gitlab, Kind::Issues, 0, None, GL_ISSUES).unwrap();
         assert_eq!(p.items.len(), 2);
         assert_eq!(p.items[0].number, 42);
         assert_eq!(p.items[0].state, "open");
@@ -932,11 +1034,11 @@ mod tests {
     #[test]
     fn bad_answers_are_errors_not_panics() {
         for out in ["", "not json", "{}", "[1,2", "null"] {
-            assert!(parse_list(Source::Github, Kind::Issues, 0, out).is_err(), "{out:?}");
+            assert!(parse_list(Source::Github, Kind::Issues, 0, None, out).is_err(), "{out:?}");
         }
         assert!(parse_view(Source::Github, Kind::Issues, "[]").is_err());
         // a row with no number is dropped; an http (not https) link is dropped
-        let p = parse_list(Source::Github, Kind::Issues, 0, r#"[{"title":"x"},{"number":3,"title":"y","url":"http://evil"}]"#).unwrap();
+        let (p, _) = parse_list(Source::Github, Kind::Issues, 0, None, r#"[{"title":"x"},{"number":3,"title":"y","url":"http://evil"}]"#).unwrap();
         assert_eq!(p.items.len(), 1);
         assert_eq!(p.items[0].url, "");
     }
@@ -994,8 +1096,71 @@ mod tests {
 
     #[test]
     fn error_lines_hide_tokens() {
-        assert_eq!(error_line("warn\nHTTP 401: Bad credentials gho_abcdefghijklmnopqrstuvwxyz\n"), "HTTP 401: Bad credentials …");
+        let old = format!("warn\nHTTP 401: Bad credentials gho_{}\n", "a".repeat(36));
+        assert_eq!(error_line(&old), "HTTP 401: Bad credentials ••••");
+        let fake = format!("ghp_{}", "X".repeat(36));
+        assert_eq!(error_line(&format!("failure credential={fake}")), "failure credential=••••");
+        assert_eq!(error_line(&format!("bad token ({fake}), retry")), "bad token (••••), retry");
         assert_eq!(error_line(""), "");
+    }
+
+    /// A gh stand-in over `rows` (newest first): honours `--limit` and `created:<=` in `--search`, as gh does.
+    fn fake_gh(rows: &[Value], argv: &[String]) -> String {
+        let at = |k: &str| argv.iter().position(|a| a == k).map(|i| argv[i + 1].clone());
+        let limit: usize = at("--limit").unwrap().parse().unwrap();
+        let search = at("--search").unwrap();
+        assert!(search.contains("sort:created-desc"), "{search}");
+        let bound = search.split(' ').find_map(|w| w.strip_prefix("created:<=")).map(epoch);
+        let out: Vec<&Value> = rows.iter().filter(|r| bound.is_none_or(|b| epoch(r["createdAt"].as_str().unwrap()) <= b)).take(limit).collect();
+        serde_json::to_string(&out).unwrap()
+    }
+
+    #[test]
+    fn every_page_of_a_long_list_is_reachable_with_bounded_calls() {
+        // several items opened in the same second, so ties cross page edges
+        for (n, per_second) in [(500u64, 3i64), (1001, 4), (201, 1), (25, 1), (26, 7), (0, 1)] {
+            let base = 1_794_766_799i64;
+            let rows: Vec<Value> = (1..=n).rev().map(|k| serde_json::json!({"number": k, "title": format!("issue {k}"), "createdAt": iso(base - (n - k) as i64 / per_second)})).collect();
+            let t = Tasks::default();
+            let mut seen = Vec::new();
+            let mut biggest = 0;
+            for page in 0..=MAX_PAGE {
+                let p = t
+                    .list_with(Source::Github, Kind::Issues, "o/r", Filter::Open, page, |argv| {
+                        biggest = biggest.max(argv[argv.iter().position(|a| a == "--limit").unwrap() + 1].parse::<usize>().unwrap());
+                        Ok(fake_gh(&rows, &argv))
+                    })
+                    .unwrap();
+                seen.extend(p.items.iter().map(|i| i.number));
+                if !p.more {
+                    break;
+                }
+                assert_eq!(p.items.len(), PAGE, "a page before the last is full");
+            }
+            let want: Vec<u64> = (1..=n).rev().collect();
+            assert_eq!(seen, want, "{n} items: every one, once, newest first");
+            assert!(biggest <= PAGE + 1 + per_second as usize, "{n}: one call asked for {biggest} rows");
+        }
+    }
+
+    #[test]
+    fn item_text_is_masked_by_the_one_masker() {
+        let fake = format!("ghp_{}", "X".repeat(36));
+        let view = serde_json::json!({"number": 1, "title": format!("leak {fake}"), "body": format!("example credential {fake}\n```sh\nexport GH_TOKEN={fake}\n```\n[link](https://example.com/?token=abc123)"), "comments": [{"author": {"login": "p"}, "body": format!("password=hunter2 and glpat-{}", "Y".repeat(20))}], "labels": [{"name": format!("sk-{}", "Z".repeat(20)), "color": "fff"}]}).to_string();
+        let d = parse_view(Source::Github, Kind::Issues, &view).unwrap();
+        let all = serde_json::to_string(&d).unwrap();
+        for bad in [fake.as_str(), "hunter2", "abc123", "glpat-", "sk-Z"] {
+            assert!(!all.contains(bad), "{bad} in {all}");
+        }
+        assert_eq!(d.item.title, "leak ••••");
+        assert_eq!(d.body, "example credential ••••\n```sh\nexport GH_TOKEN=••••\n```\n[link](https://example.com/?token=••••)");
+        assert_eq!(d.comments[0].body, "password=•••• and ••••");
+        let (p, _) = parse_list(Source::Github, Kind::Issues, 0, None, &format!("[{view}]")).unwrap();
+        assert_eq!(p.items[0].title, "leak ••••");
+        // the same patterns as the page's and the bridge's (src/lib/secrets.json); ordinary words stay
+        for plain in ["task-management works", "a risk-assessment", "the token is in the vault", "password: see wiki"] {
+            assert_eq!(mask_secrets(plain), plain);
+        }
     }
 
     /// The real smoke on this computer: `cargo test tasks::tests::real_gh -- --ignored --nocapture`. Lists the open
