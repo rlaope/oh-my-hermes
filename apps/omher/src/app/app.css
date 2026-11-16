@@ -71,6 +71,29 @@
   user-select: none;
   cursor: col-resize;
 }
+/* Maximised in place (⌘⇧G, the tab row's button): PanelResizer sets --panel-w to everything right of the sidebar,
+   so the chat column folds to 0 inside the same grid. The chat stays mounted, hidden and inert, and is hidden only
+   once the panel has covered it. No handle while maximised. */
+.window.panel-maxing {
+  transition: grid-template-columns 0.18s ease-out;
+}
+.window.panel-max .main {
+  visibility: hidden;
+  transition: visibility 0s linear 0.18s;
+}
+.window.panel-max .panel-resizer {
+  display: none;
+}
+.window.panel-max .details {
+  border-left-color: transparent;
+}
+@media (prefers-reduced-motion: reduce) {
+  .window.panel-maxing,
+  .window.panel-maxing .details,
+  .window.panel-max .main {
+    transition: none;
+  }
+}
 /* A narrow window keeps the chat its width: the panel slides over it instead of pushing it to ~350px. */
 @media (max-width: 1099px) {
   .window.panel-open {

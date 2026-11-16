@@ -292,7 +292,7 @@ export interface OpMap {
   /** Steer the main chat's running turn (Hermes' `session.steer`): `queued` = taken, `rejected` = not (no turn runs,
    *  or Hermes refused). The bridge never sends a refused steer another way. */
   /** queued = taken; rejected = no agent saw it (safe to send normally); uncertain = may already be with the agent */
-  "chat.steer": { params: { bot: string; text: string }; result: { status: "queued" | "rejected" | "uncertain" } };
+  "chat.steer": { params: { bot: string; text: string; session?: string }; result: { status: "queued" | "rejected" | "uncertain" } };
   "approval.respond": {
     params: { bot: string; request_id: string; choice: ApprovalChoice; session?: string };
     result: Record<string, never>;

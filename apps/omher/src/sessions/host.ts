@@ -380,9 +380,9 @@ const MOCK_PROGRAMS: Record<string, string> = { "cursor-agent": "/opt/homebrew/b
 
 /** The mock's past conversations: two Claude Code and one Codex conversation in the e2e folders. */
 const MOCK_PAST: PastChat[] = [
-  { agent: "claude", id: "aaaaaaaa-1111-4222-8333-444444444444", cwd: "/Users/you/code/web-app", title: "Fix the login redirect", named: true, at: Date.now() / 1000 - 3_600 },
-  { agent: "claude", id: "bbbbbbbb-1111-4222-8333-444444444444", cwd: "/Users/you/code/omher", title: "Remember the word MARIGOLD for later", named: false, at: Date.now() / 1000 - 3 * 86_400 },
-  { agent: "codex", id: "01a1d060-4ab7-72b2-b02b-1dbee1d5f52c", cwd: "/Users/you/code/web-app", title: "Add a dark theme", named: true, at: Date.now() / 1000 - 600 },
+  { agent: "claude", id: "aaaaaaaa-1111-4222-8333-444444444444", cwd: "/home/you/code/web-app", title: "Fix the login redirect", named: true, at: Date.now() / 1000 - 3_600 },
+  { agent: "claude", id: "bbbbbbbb-1111-4222-8333-444444444444", cwd: "/home/you/code/omher", title: "Remember the word MARIGOLD for later", named: false, at: Date.now() / 1000 - 3 * 86_400 },
+  { agent: "codex", id: "01a1d060-4ab7-72b2-b02b-1dbee1d5f52c", cwd: "/home/you/code/web-app", title: "Add a dark theme", named: true, at: Date.now() / 1000 - 600 },
 ];
 const MOCK_PAST_MSGS: Record<string, PastMsg[]> = {
   "bbbbbbbb-1111-4222-8333-444444444444": [
@@ -412,7 +412,7 @@ export class MockHost implements SessionHost {
     const noOmh = !!this.g.__omherMockNoOmh;
     const builtins: AgentInfo[] = AGENTS.map((a) =>
       a.id === "omh" && noOmh
-        ? { id: a.id, label: HERMES_LABEL, mode: a.mode, path: "/Users/you/.hermes/hermes-agent/venv/bin/python", via: "hermes" as const }
+        ? { id: a.id, label: HERMES_LABEL, mode: a.mode, path: "/home/you/.hermes/hermes-agent/venv/bin/python", via: "hermes" as const }
         : { id: a.id, label: a.label, mode: a.mode, path: installed.includes(a.id) ? `/usr/local/bin/${a.program}` : null },
     );
     const acp: AgentInfo[] = MOCK_ACP.map((r) => ({ id: r.id, label: r.label, mode: "chat", path: installed.includes(r.id) ? `/usr/local/bin/${r.program}` : null, acp: r }));
@@ -485,7 +485,7 @@ export class MockHost implements SessionHost {
     this.g.__omherCustomFile = (this.g.__omherCustomFile ?? []).filter((v) => (v as { id?: unknown })?.id !== id);
   }
   async home() {
-    return "/Users/you";
+    return "/home/you";
   }
   async pickFolder(defaultPath: string) {
     const v = this.g.__omherPickFolder;
@@ -602,7 +602,7 @@ export class MockHost implements SessionHost {
   private files = new Map<string, Uint8Array>();
   async saveFile(session: string, name: string, data: Uint8Array) {
     if (this.g.__omherFileSaveError) throw new Error(this.g.__omherFileSaveError);
-    const dir = `/Users/you/.omher/session-files/${session}/`;
+    const dir = `/home/you/.omher/session-files/${session}/`;
     let n = 1;
     while (this.files.has(`${dir}${n}-${name}`)) n += 1;
     const path = `${dir}${n}-${name}`;
@@ -623,7 +623,7 @@ export class MockHost implements SessionHost {
     this.log({ op: "file.prune", keep });
   }
   async branch(cwd: string) {
-    const b = this.g.__omherBranches ?? { "/Users/you/code/omher": "feat/session-controls" };
+    const b = this.g.__omherBranches ?? { "/home/you/code/omher": "feat/session-controls" };
     return b[cwd] ?? "";
   }
   async reveal(cwd: string) {

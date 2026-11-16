@@ -43,7 +43,7 @@ async function open(page: Page, theme: string, o: { run?: Run; fresh?: boolean }
       localStorage.removeItem("omher.sessions.recent");
       localStorage.removeItem("omher.omhOffer.hidden");
       if (fresh) localStorage.removeItem("omher.onboarded");
-      w.__omherPickFolder = "/Users/you/code/web-app";
+      w.__omherPickFolder = "/home/you/code/web-app";
       w.__omherMockAgents = ["claude", "codex"];
       w.__omherMockNoOmh = true;
       const lines =

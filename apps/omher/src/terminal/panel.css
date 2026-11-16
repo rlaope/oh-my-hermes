@@ -1,0 +1,134 @@
+/* The bottom terminal panel. Quiet house style: one hairline on top, a thin tab strip, no cards, no shadows; the
+   tab in front is the selection gray. The terminal keeps its own theme background (--term-bg, set by applyLook). */
+.termpanel {
+  position: relative;
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  border-top: 1px solid var(--line);
+  background: var(--term-bg, var(--bg));
+}
+.termpanel[hidden] {
+  display: none;
+}
+.termpanel-resizer {
+  position: absolute;
+  top: -3px;
+  left: 0;
+  right: 0;
+  height: 6px;
+  z-index: 6;
+  cursor: row-resize;
+}
+.termpanel-resizer:hover,
+.termpanel.dragging .termpanel-resizer,
+.termpanel-resizer:focus-visible {
+  background: linear-gradient(var(--line-strong), var(--line-strong)) center / 100% 1px no-repeat;
+  outline: none;
+}
+.termpanel.dragging,
+.termpanel.dragging * {
+  user-select: none;
+}
+.termpanel-bar {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  height: 28px;
+  padding: 0 6px 0 8px;
+  background: var(--bg);
+  border-bottom: 1px solid var(--line-soft);
+  font-size: 12px;
+}
+.termpanel-tabs {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.termpanel-tab {
+  flex: none;
+  display: flex;
+  align-items: center;
+  height: 22px;
+  border-radius: var(--r-sm);
+  color: var(--muted);
+}
+.termpanel-tab:hover {
+  color: var(--ink);
+}
+.termpanel-tab.on {
+  background: var(--raise2);
+  color: var(--ink);
+}
+.termpanel-tab-name {
+  max-width: 180px;
+  padding: 0 4px 0 8px;
+  height: 22px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font: inherit;
+  font-family: var(--mono);
+  font-size: 11.5px;
+  color: inherit;
+}
+.termpanel-tab-x,
+.termpanel-ib {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  border-radius: var(--r-sm);
+  color: var(--quiet);
+}
+.termpanel-tab-x svg {
+  width: 9px;
+  height: 9px;
+}
+.termpanel-tab-x:hover,
+.termpanel-ib:hover {
+  color: var(--ink);
+  background: var(--hover);
+}
+.termpanel-bodies {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+.termpanel .term-wrap {
+  --term-pad: 12px;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  padding: calc(var(--term-pad) * 0.5) calc(var(--term-pad) * 0.375) calc(var(--term-pad) * 0.25) var(--term-pad);
+  background: var(--term-bg, var(--bg));
+}
+.termpanel .term-wrap[hidden] {
+  display: none;
+}
+.termpanel .term-box {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  position: relative;
+}
+.termpanel .term-host {
+  position: absolute;
+  inset: 0;
+}
+.termpanel .term-host .xterm {
+  height: 100%;
+}
+.termpanel .term-host .xterm .xterm-viewport {
+  background-color: transparent;
+  scrollbar-width: thin;
+  scrollbar-color: var(--scrollbar) transparent;
+}

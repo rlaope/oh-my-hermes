@@ -48,7 +48,8 @@ const run = async (page: Page, line: string) => {
 test.describe("credit through the engine's feed", () => {
   test.use({ colorScheme: "dark" });
 
-  test("a flood the terminal takes over several frames: every message acknowledged once, with its size, in order", async ({ page }) => {
+  // SESSIONS hidden in favour of bot threads (plan 2026-11-15)
+  test.skip("a flood the terminal takes over several frames: every message acknowledged once, with its size, in order", async ({ page }) => {
     await openApp(page);
     await newTerminal(page);
     const [id] = await hostIds(page);
@@ -95,7 +96,8 @@ test.describe("credit through the engine's feed", () => {
     expect([...frames].sort((a, b) => a - b)).toEqual(frames);
   });
 
-  test("a session that is not on the page keeps acknowledging: another session shown, then Settings, then a bot's chat", async ({ page }) => {
+  // SESSIONS hidden in favour of bot threads (plan 2026-11-15)
+  test.skip("a session that is not on the page keeps acknowledging: another session shown, then Settings, then a bot's chat", async ({ page }) => {
     await openApp(page);
     const a = await newTerminal(page);
     const b = await newTerminal(page);
@@ -154,7 +156,8 @@ test.describe("the renderer, from Settings", () => {
     await expect(page.getByTestId("terminal")).toBeVisible();
   };
 
-  test("the row says what draws the terminals; Auto, On and Off reach a terminal that is already open", async ({ page }) => {
+  // SESSIONS hidden in favour of bot threads (plan 2026-11-15)
+  test.skip("the row says what draws the terminals; Auto, On and Off reach a terminal that is already open", async ({ page }) => {
     const requested: string[] = [];
     page.on("request", (r) => {
       if (/addon-webgl/.test(r.url())) requested.push(r.url());
@@ -204,7 +207,8 @@ test.describe("the renderer, from Settings", () => {
   });
 
   for (const platform of ["Win32", "Linux x86_64"]) {
-    test(`Auto stays on the standard renderer on ${platform} too, and never asks for a WebGL context to decide`, async ({ page }) => {
+    // SESSIONS hidden in favour of bot threads (plan 2026-11-15)
+    test.skip(`Auto stays on the standard renderer on ${platform} too, and never asks for a WebGL context to decide`, async ({ page }) => {
       const requested: string[] = [];
       page.on("request", (r) => {
         if (/addon-webgl/.test(r.url())) requested.push(r.url());
@@ -241,7 +245,8 @@ test.describe("the look reaches a hidden terminal", () => {
       return [...(set ?? [])].filter((t) => t.element?.closest(".term-host")).map((t) => ({ background: t.options.theme?.background, fontSize: t.options.fontSize, cols: t.cols, rows: t.rows, connected: !!t.element?.isConnected }));
     });
 
-  test("a theme and a font size picked while a terminal is hidden are on it when it is shown again, and its program is told the new size", async ({ page }) => {
+  // SESSIONS hidden in favour of bot threads (plan 2026-11-15)
+  test.skip("a theme and a font size picked while a terminal is hidden are on it when it is shown again, and its program is told the new size", async ({ page }) => {
     await openApp(page);
     const a = await newTerminal(page);
     const b = await newTerminal(page);
@@ -322,7 +327,8 @@ for (const th of THEMES) {
   test.describe(`${th.id} (${th.app})`, () => {
     test.use({ colorScheme: th.app });
 
-    test(`find's matches and a link's underline are readable on ${th.id}, and the active match is the most visible`, async ({ page }) => {
+    // SESSIONS hidden in favour of bot threads (plan 2026-11-15)
+    test.skip(`find's matches and a link's underline are readable on ${th.id}, and the active match is the most visible`, async ({ page }) => {
       // `contrast: "theme"`: xterm lifts no colour, so what is read here is what the theme and find-colors.ts give
       await openApp(page, { theme: th.app, term: { [th.app === "light" ? "themeLight" : "themeDark"]: th.id, contrast: "theme" } });
       await newTerminal(page);

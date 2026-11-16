@@ -65,11 +65,11 @@ describe("the row menu", () => {
 
 describe("the sidebar search", () => {
   it("matches a session by the name its row shows or by its folder, ignoring case", () => {
-    const r = live({ agentTitle: "Fix the login redirect", cwd: "/Users/you/code/Web-App" });
+    const r = live({ agentTitle: "Fix the login redirect", cwd: "/Home/you/code/Web-App" });
     expect(sessionMatches(r, "")).toBe(true);
     expect(sessionMatches(r, "login")).toBe(true);
     expect(sessionMatches(r, "web-app")).toBe(true);
-    expect(sessionMatches(r, "/users/you/code")).toBe(true);
+    expect(sessionMatches(r, "/home/you/code")).toBe(true);
     expect(sessionMatches(r, "codex")).toBe(false);
     // the person's own name wins over the agent's, as on the row
     expect(sessionMatches({ ...r, title: "Auth work" }, "auth")).toBe(true);
@@ -80,29 +80,29 @@ describe("the sidebar search", () => {
 });
 
 describe("continuing a past conversation", () => {
-  const past: PastChat = { agent: "claude", id: "bbbbbbbb-1111-4222-8333-444444444444", cwd: "/Users/you/code/omher", title: "Remember the word MARIGOLD for later", named: false, at: 1 };
+  const past: PastChat = { agent: "claude", id: "bbbbbbbb-1111-4222-8333-444444444444", cwd: "/home/you/code/omher", title: "Remember the word MARIGOLD for later", named: false, at: 1 };
 
   it("opens a session in its folder with the earlier messages and resumes the agent's own conversation", async () => {
     const { ss, store, calls } = setup([past]);
     const id = await ss.continuePast(past);
     const r = ss.getState().list.find((x) => x.id === id)!;
-    expect(r).toMatchObject({ agent: "claude", cwd: "/Users/you/code/omher", agentSession: past.id, promptTitle: past.title, view: "chat" });
+    expect(r).toMatchObject({ agent: "claude", cwd: "/home/you/code/omher", agentSession: past.id, promptTitle: past.title, view: "chat" });
     expect(store.getState().ui).toMatchObject({ view: "session", session: id });
     const key = ss.chatKey(id)!;
     expect(store.getState().chats[key].messages.slice(0, 2).map((m) => [m.role, m.text])).toEqual([
       ["user", "Remember the word MARIGOLD for later"],
       ["assistant", "Noted: MARIGOLD."],
     ]);
-    expect(calls().find((c) => c.op === "chat.start")).toMatchObject({ agent: "claude", cwd: "/Users/you/code/omher", resume: past.id });
+    expect(calls().find((c) => c.op === "chat.start")).toMatchObject({ agent: "claude", cwd: "/home/you/code/omher", resume: past.id });
     // the folder becomes a recent one
-    expect(ss.getState().recent[0]).toMatchObject({ agent: "claude", cwd: "/Users/you/code/omher" });
+    expect(ss.getState().recent[0]).toMatchObject({ agent: "claude", cwd: "/home/you/code/omher" });
     // picking it again opens the same session; nothing starts twice
     expect(await ss.continuePast(past)).toBe(id);
     expect(calls().filter((c) => c.op === "chat.start")).toHaveLength(1);
   });
 
   it("a named conversation keeps its name as the agent's title", async () => {
-    const named: PastChat = { agent: "codex", id: "01a1d060-4ab7-72b2-b02b-1dbee1d5f52c", cwd: "/Users/you/code/web-app", title: "Add a dark theme", named: true, at: 1 };
+    const named: PastChat = { agent: "codex", id: "01a1d060-4ab7-72b2-b02b-1dbee1d5f52c", cwd: "/home/you/code/web-app", title: "Add a dark theme", named: true, at: 1 };
     const { ss, calls } = setup([named]);
     const id = await ss.continuePast(named);
     expect(ss.getState().list.find((x) => x.id === id)).toMatchObject({ agentTitle: "Add a dark theme" });
@@ -111,9 +111,9 @@ describe("continuing a past conversation", () => {
 
   it("the list asks only for the agent's conversations in the folders given", async () => {
     const { host, g } = setup();
-    const rows = await host.pastChats("claude", ["/Users/you/code/omher", "/Users/you"]);
+    const rows = await host.pastChats("claude", ["/home/you/code/omher", "/home/you"]);
     expect(rows.map((r) => r.title)).toEqual(["Remember the word MARIGOLD for later"]);
-    expect(g.__omherPastReads).toEqual([{ op: "list", agent: "claude", cwds: ["/Users/you/code/omher", "/Users/you"] }]);
+    expect(g.__omherPastReads).toEqual([{ op: "list", agent: "claude", cwds: ["/home/you/code/omher", "/home/you"] }]);
   });
 
   it("ages read as now, minutes, hours, days", () => {

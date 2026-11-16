@@ -312,7 +312,7 @@ test("row menu: pin moves a bot to the top (and ⌘1 follows), Remove from list 
   await page.getByTestId("bot-default").click({ button: "right" });
   const menu = page.getByTestId("row-menu");
   // Restart (slot 14) restarts the gateway that serves the bot, and names the bots that share it
-  await expect(menu.getByRole("menuitem")).toHaveText(["Pin to top", "Edit bot", /^Restart/, "Remove from list"]);
+  await expect(menu.getByRole("menuitem")).toHaveText([/^New thread · /, "Pin to top", "Edit bot", /^Restart/, "Remove from list"]);
   await page.screenshot({ path: join(SHOTS, "T12-menu-dark.png"), animations: "disabled" });
   await menu.getByRole("menuitem", { name: "Pin to top" }).click();
   expect(await order()).toEqual(["bot-default", "bot-kami", "bot-friren", "bot-omh-tui"]);

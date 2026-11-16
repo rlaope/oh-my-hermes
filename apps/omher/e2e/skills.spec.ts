@@ -259,11 +259,12 @@ test("a single /word says skills take $; with no skill list the hint says to typ
   await expect(hint).toHaveCount(0);
 });
 
-test("a SESSIONS chat keeps its agent's own / menu and never gets the bot skill picker", async ({ page }) => {
+// SESSIONS hidden in favour of bot threads (plan 2026-11-15)
+test.skip("a SESSIONS chat keeps its agent's own / menu and never gets the bot skill picker", async ({ page }) => {
   await page.addInitScript(() => {
     localStorage.removeItem("omher.sessions.recent");
     const w = window as unknown as { __omherPickFolder: string; __omherMockAgents: string[] };
-    w.__omherPickFolder = "/Users/you/code/web-app";
+    w.__omherPickFolder = "/home/you/code/web-app";
     w.__omherMockAgents = ["claude", "codex", "omo", "omh"];
   });
   await page.goto("/");

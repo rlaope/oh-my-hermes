@@ -19,7 +19,7 @@ const info = (installed: AgentId[], omh: "omh" | "hermes" | "none"): AgentInfo[]
 const rec = (over: Partial<SessionRec> = {}): SessionRec => ({
   id: "s1",
   agent: "omh",
-  cwd: "/Users/you/code/web-app",
+  cwd: "/home/you/code/web-app",
   startedAt: 1_700_000_000_000,
   status: "running",
   view: "chat",
@@ -51,8 +51,8 @@ describe("Hermes without oh-my-hermes", () => {
   });
 
   it("names the session's row Hermes on its second line", () => {
-    expect(rowModel(rec(), undefined, { cwds: [], home: "/Users/you", agents: info([], "hermes") }).sub).toBe("Hermes");
-    expect(rowModel(rec(), undefined, { cwds: [], home: "/Users/you", agents: info([], "omh") }).sub).toBe("oh-my-hermes");
+    expect(rowModel(rec(), undefined, { cwds: [], home: "/home/you", agents: info([], "hermes") }).sub).toBe("Hermes");
+    expect(rowModel(rec(), undefined, { cwds: [], home: "/home/you", agents: info([], "omh") }).sub).toBe("oh-my-hermes");
   });
 });
 

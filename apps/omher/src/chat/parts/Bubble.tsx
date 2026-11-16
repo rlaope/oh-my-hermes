@@ -28,6 +28,7 @@ export const Bubble = memo(function Bubble({
   live,
   onEdit,
   editKeepsFiles,
+  from,
   onQueue,
   queueBusy,
   queueOff,
@@ -48,6 +49,9 @@ export const Bubble = memo(function Bubble({
   onEdit?: () => void;
   /** The turn Edit takes back changed files: a quiet line beside it says they stay as they are. */
   editKeepsFiles?: boolean;
+  /** A user bubble someone else sent (a parent agent, in a read-only agent-to-agent chat): their small mark and name
+   *  above it. */
+  from?: ReactNode;
   /** A held message (steer queue): its ↵ mark's menu. */
   onQueue?: (c: QueueChoice) => void;
   /** Its steer is on the way: the mark waits. */
@@ -73,6 +77,11 @@ export const Bubble = memo(function Bubble({
         data-held={held || undefined}
         data-steered={item.steered || undefined}
       >
+        {from && (
+          <div className="msg-from" data-testid="bubble-from">
+            {from}
+          </div>
+        )}
         {(item.text || !item.files?.length) &&
           (marked && onQueue ? (
             // a held message: its ↵ mark before the bubble, on the bubble's first line

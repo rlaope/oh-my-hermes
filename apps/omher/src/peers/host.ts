@@ -138,7 +138,7 @@ class MockPeers implements PeersHost {
       check: `c${++this.seq}`,
       url: mockPeerUrl(),
       found: {
-        python: "/Users/sionic/.hermes/tools/python-3.14.9/bin/python3",
+        python: "/home/sionic/.hermes/tools/python-3.14.9/bin/python3",
         pyver: "3.14.9",
         command: `ssh -o BatchMode=yes -o ConnectTimeout=10 -o ExitOnForwardFailure=yes -o ServerAliveInterval=15 -o ServerAliveCountMax=3 -T -L 127.0.0.1:53005:127.0.0.1:41873 -- ${host} sh -c '<remote script>'`,
         script: "",

@@ -9,6 +9,13 @@
 .pn-tabs > :last-child {
   margin-left: auto;
 }
+/* maximise / restore sits just before the close button, both at the row's right end */
+.pn-tabs > .pn-max {
+  margin-left: auto;
+}
+.pn-tabs > .pn-max + :last-child {
+  margin-left: 0;
+}
 .pn-tab {
   height: 26px;
   padding: 0 7px;

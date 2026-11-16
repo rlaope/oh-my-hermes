@@ -5,7 +5,8 @@ import logo from "../assets/omher-mark.png";
 import { selectAsks, selectSidebarBots, useStore } from "../state/store";
 import { slots } from "../features";
 import { CalendarIcon, GearIcon, GridIcon, IconButton, PlusIcon, SearchIcon } from "../ui";
-import { BotRow } from "./BotRow";
+import { BotRow, threadsLatest } from "./BotRow";
+import { threadKey } from "../threads/types";
 import { useRowDrag } from "./useRowDrag";
 import { AttachCard } from "../peers/AttachCard";
 import { Usage } from "./Usage";
@@ -13,11 +14,13 @@ import { AccountsWatcher } from "../settings/accounts/useAccounts";
 import "../sessions/sessions.css";
 import { SessionList, SessionsHeader } from "../sessions/SessionsSection";
 import { SessionBackgroundMenu } from "../sessions/SessionBackgroundMenu";
+import { SESSIONS_ENTRY } from "../sessions/entry";
 import { NeedsStrip } from "./Needs";
 import { UpdateButton } from "./UpdateButton";
 import { FirstRunHint } from "../onboarding/FirstRun";
 import { OmhNotice } from "./OmhNotice";
 import { t } from "../i18n";
+import { ThreadTree } from "../threads/ThreadTree";
 
 const sessionBackground = (target: EventTarget) => target instanceof Element && !target.closest(".ss-row, button, input, textarea, select, a, [contenteditable], [role=menu], [role=menuitem]");
 
@@ -77,21 +80,26 @@ export function Sidebar() {
       <NeedsStrip asks={asks} />
       <section className={`side-sec${needle && bots.length === 0 ? " side-sec-fit" : ""}`} data-testid="side-bots">
         <div className="side-sh">{t("nav.bots")}</div>
-        <nav className="bot-list" aria-label={t("nav.bots")}>
+        <nav className="bot-list" aria-label={t("nav.bots")} role="tree">
           {bots.map((b) => {
             const pinned = s.ui.pinned.includes(b.name);
+            const hasThreads = (s.threads[b.name]?.length ?? 0) > 0;
+            const groupId = `threads-of-${b.name.replace(/[^A-Za-z0-9_-]/g, "_")}`;
             return (
             <BotRow
               key={b.name}
               bot={b}
               chat={s.chats[b.name]}
               unread={s.unread[b.name] ?? 0}
-              active={inChat && s.selectedBot === b.name}
+              active={inChat && s.selectedBot === b.name && !s.ui.thread}
               asks={asks.filter((a) => a.bot === b.name)}
               pinned={pinned}
               onSelect={() => void s.selectBot(b.name)}
               drag={drag.row(b.name)}
+              groupId={hasThreads ? groupId : undefined}
+              latest={hasThreads ? threadsLatest(s.threads[b.name]!, (th) => s.chats[threadKey(b.name, th)]) : null}
               menu={{
+                onNewThread: b.host || b.status === "offline" ? undefined : () => void s.newThread(b.name),
                 pinned,
                 onPin: () => s.pinBot(b.name, !pinned),
                 onEdit: () => s.openSettings(`bot:${b.name}`),
@@ -99,13 +107,16 @@ export function Sidebar() {
                 offline: b.status === "offline",
                 onRemove: listed.length > 1 ? () => s.listBot(b.name, false) : undefined,
               }}
-            />
+            >
+              {hasThreads && <ThreadTree bot={b.name} id={groupId} />}
+            </BotRow>
             );
           })}
           {needle && bots.length === 0 && <div className="bot-empty">{t("side.noBot", { q: q.trim() })}</div>}
           {!needle && listed.length === 0 && <FirstRunHint text={t("onb.botsHint")} testId="onb-hint-bots" />}
         </nav>
       </section>
+      {SESSIONS_ENTRY && (
       <section
         className="side-sec"
         data-testid="side-sessions"
@@ -127,6 +138,7 @@ export function Sidebar() {
         <SessionList needle={needle} query={q.trim()} />
         {sessionMenu && <SessionBackgroundMenu at={sessionMenu} onClose={closeSessionMenu} />}
       </section>
+      )}
       <div className="side-foot">
         <button
           type="button"

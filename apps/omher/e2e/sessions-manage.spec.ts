@@ -2,9 +2,11 @@
 // over sessions, continuing a Claude Code or Codex conversation made outside omher, ⌘N / ⌘⇧] / ⌘⇧[, and the asks count.
 import { expect, test, type Page } from "@playwright/test";
 
+test.skip(true, "SESSIONS hidden in favour of bot threads (plan 2026-11-15)");
+
 const MOCK = Number(process.env.OMHER_MOCK_PORT || 5308);
 const CLAUDE_SESSION = "11111111-2222-4333-8444-555555555555"; // the mock Claude Code's session id
-const PAST = "bbbbbbbb-1111-4222-8333-444444444444"; // host.ts MOCK_PAST: Claude Code in /Users/you/code/omher
+const PAST = "bbbbbbbb-1111-4222-8333-444444444444"; // host.ts MOCK_PAST: Claude Code in /home/you/code/omher
 
 async function mock(op: string): Promise<void> {
   const ws = new WebSocket(`ws://127.0.0.1:${MOCK}/?token=e2e`);
@@ -55,7 +57,7 @@ test.beforeEach(async () => {
 test("the row menu: reveal and terminal take the folder, copy takes the conversation id, new session here, keyboard", async ({ page, context }) => {
   await context.grantPermissions(["clipboard-read", "clipboard-write"]);
   await open(page);
-  await start(page, "/Users/you/code/web-app", "Fix the login redirect");
+  await start(page, "/home/you/code/web-app", "Fix the login redirect");
   const row = rows(page).first();
   await row.click({ button: "right" });
   const menu = page.getByTestId("session-row-menu");
@@ -80,8 +82,8 @@ test("the row menu: reveal and terminal take the folder, copy takes the conversa
   await expect(menu.getByTestId("session-system-terminal")).toBeFocused();
   await page.keyboard.press("Enter");
   await expect.poll(async () => (await calls(page)).filter((c) => c.op === "reveal" || c.op === "terminal")).toEqual([
-    { op: "reveal", cwd: "/Users/you/code/web-app" },
-    { op: "terminal", cwd: "/Users/you/code/web-app" },
+    { op: "reveal", cwd: "/home/you/code/web-app" },
+    { op: "terminal", cwd: "/home/you/code/web-app" },
   ]);
 
   // Copy conversation id
@@ -101,7 +103,7 @@ test("the row menu: reveal and terminal take the folder, copy takes the conversa
 test("a session with no conversation id yet has no Copy item", async ({ page }) => {
   await open(page);
   // a terminal session reports no conversation id
-  await page.evaluate(() => ((window as unknown as { __omherPickFolder: string }).__omherPickFolder = "/Users/you/code/api"));
+  await page.evaluate(() => ((window as unknown as { __omherPickFolder: string }).__omherPickFolder = "/home/you/code/api"));
   await page.getByTestId("session-new").click();
   await page.getByTestId("session-agent-codex").click();
   await page.getByTestId("session-folder").click();
@@ -115,8 +117,8 @@ test("a session with no conversation id yet has no Copy item", async ({ page }) 
 
 test("the sidebar search filters sessions by name and folder, and says when none match", async ({ page }) => {
   await open(page);
-  await start(page, "/Users/you/code/web-app", "Fix the login redirect");
-  await start(page, "/Users/you/code/api", "Add rate limits");
+  await start(page, "/home/you/code/web-app", "Fix the login redirect");
+  await start(page, "/home/you/code/api", "Add rate limits");
   await expect(rows(page)).toHaveCount(2);
   const search = page.getByRole("searchbox", { name: "Search bots and sessions" });
   await search.fill("login");
@@ -137,7 +139,7 @@ for (const theme of ["dark", "light"] as const) {
   test(`a search that matches no bot leaves BOTS at its one line and SESSIONS right under it (${theme})`, async ({ page }) => {
     await page.addInitScript((t) => localStorage.setItem("omher.theme", t), theme);
     await open(page);
-    await start(page, "/Users/you/code/web-app", "Fix the login redirect");
+    await start(page, "/home/you/code/web-app", "Fix the login redirect");
     await page.getByTestId("bot-search").fill("web-app");
     const empty = page.getByTestId("side-bots").locator(".bot-empty");
     await expect(empty).toHaveText("No bot named “web-app”");
@@ -152,7 +154,7 @@ for (const theme of ["dark", "light"] as const) {
 }
 
 test("continue a Claude Code conversation made in its CLI: the list, then the session with its earlier messages", async ({ page }) => {
-  await open(page, [{ agent: "claude", cwd: "/Users/you/code/omher", at: 2 }]);
+  await open(page, [{ agent: "claude", cwd: "/home/you/code/omher", at: 2 }]);
   await page.getByTestId("session-new").click();
   const menu = page.getByTestId("session-menu");
   // the + menu ends with one row per agent that keeps conversations
@@ -164,7 +166,7 @@ test("continue a Claude Code conversation made in its CLI: the list, then the se
   await expect(past.getByTestId(`session-past-row-${PAST}`)).toContainText("~/code/omher · 3d");
   // only that agent's conversations in the menu's folders (the recent one and home)
   expect(await page.evaluate(() => (window as unknown as { __omherPastReads: unknown[] }).__omherPastReads)).toEqual([
-    { op: "list", agent: "claude", cwds: ["/Users/you/code/omher", "/Users/you"] },
+    { op: "list", agent: "claude", cwds: ["/home/you/code/omher", "/home/you"] },
   ]);
   // the back row is one line inside the menu: ‹, the agent's mark and its name side by side, nothing outside
   const geo = await past.evaluate((el) => {
@@ -185,7 +187,7 @@ test("continue a Claude Code conversation made in its CLI: the list, then the se
   await expect(rows(page)).toHaveCount(1);
   await expect(rows(page).first().getByTestId("session-name")).toHaveText("Remember the word MARIGOLD for later");
   await expect(page.getByTestId("session-chat")).toContainText("Noted: MARIGOLD.");
-  await expect.poll(async () => (await calls(page)).find((c) => c.op === "chat.start")).toMatchObject({ agent: "claude", cwd: "/Users/you/code/omher", resume: PAST });
+  await expect.poll(async () => (await calls(page)).find((c) => c.op === "chat.start")).toMatchObject({ agent: "claude", cwd: "/home/you/code/omher", resume: PAST });
   await expect(page.getByTestId("session-status")).toHaveText("Ready");
   await page.getByTestId("composer").fill("What was the word?");
   await page.keyboard.press("Enter");
@@ -195,7 +197,7 @@ test("continue a Claude Code conversation made in its CLI: the list, then the se
 });
 
 test("an agent with no conversations in these folders says so", async ({ page }) => {
-  await open(page, [{ agent: "codex", cwd: "/Users/you/code/empty", at: 1 }]);
+  await open(page, [{ agent: "codex", cwd: "/home/you/code/empty", at: 1 }]);
   await page.evaluate(() => ((window as unknown as { __omherPastChats: unknown[] }).__omherPastChats = []));
   await page.getByTestId("session-new").click();
   await page.getByTestId("session-past-codex").click();
@@ -207,8 +209,8 @@ test("an agent with no conversations in these folders says so", async ({ page })
 test("⌘N opens the + menu; ⌘⇧] and ⌘⇧[ move between sessions; nothing while a Korean word is composing", async ({ page }) => {
   await open(page);
   const mod = await modKey(page);
-  await start(page, "/Users/you/code/web-app", "First");
-  await start(page, "/Users/you/code/api", "Second");
+  await start(page, "/home/you/code/web-app", "First");
+  await start(page, "/home/you/code/api", "Second");
   // the newest is on top and open
   const names = rows(page).getByTestId("session-name");
   await expect(names).toHaveText(["Second", "First"]);
@@ -248,7 +250,7 @@ test("the asks count follows the approvals and questions waiting", async ({ page
   await open(page);
   await expect.poll(() => page.evaluate(() => (window as unknown as { __omherBadge?: number }).__omherBadge)).toBe(0);
   // a chat whose first message asks for an approval: it waits on the person ("Needs you"), not Ready
-  await page.evaluate(() => ((window as unknown as { __omherPickFolder: string }).__omherPickFolder = "/Users/you/code/web-app"));
+  await page.evaluate(() => ((window as unknown as { __omherPickFolder: string }).__omherPickFolder = "/home/you/code/web-app"));
   await page.getByTestId("session-new").click();
   await page.getByTestId("session-agent-claude").click();
   await page.getByTestId("session-folder").click();

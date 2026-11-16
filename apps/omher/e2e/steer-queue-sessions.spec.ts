@@ -3,8 +3,10 @@
 // Delete (only while omher still holds it). Runs on the mock host (src/sessions/host.ts MockChat).
 import { expect, test, type Page } from "@playwright/test";
 
+test.skip(true, "SESSIONS hidden in favour of bot threads (plan 2026-11-15)");
+
 const MOCK = Number(process.env.OMHER_MOCK_PORT || 5308);
-const SHOTS = "/Users/khope@sionic.ai/.hermes/profiles/kami/cache/scratch/sq-shots";
+const SHOTS = process.env.OMHER_SHOTS || "";
 
 async function mock(op: string) {
   const ws = new WebSocket(`ws://127.0.0.1:${MOCK}/?token=e2e`);
@@ -36,7 +38,7 @@ async function running(page: Page, agent: "claude" | "codex" | "omo" | "dsh") {
   await page.addInitScript(() => {
     localStorage.removeItem("omher.sessions.recent");
     const w = window as unknown as { __omherPickFolder: string; __omherMockAgents: string[] };
-    w.__omherPickFolder = "/Users/you/code/omher";
+    w.__omherPickFolder = "/home/you/code/omher";
     w.__omherMockAgents = ["claude", "codex", "omo", "dsh", "omh"];
   });
   // shots are 900x600, laid out at that size from the start

@@ -9,6 +9,8 @@ import { expect, test, type Page } from "@playwright/test";
 import { readFileSync } from "node:fs";
 import { INSTALL } from "../src/sessions/agents";
 
+test.skip(true, "SESSIONS hidden in favour of bot threads (plan 2026-11-15)");
+
 /** The shell's generic ACP agents as the mock host serves them (a Rust test pins this copy to `ACP_LIST`). */
 const shellList: { id: string; install: string }[] = JSON.parse(readFileSync(new URL("../src/sessions/mockAcpAgents.json", import.meta.url), "utf8"));
 
@@ -45,7 +47,7 @@ async function open(page: Page, installed: string[], theme = "dark", signedIn: s
       localStorage.setItem("omher.theme", t as string);
       localStorage.removeItem("omher.sessions.recent");
       const w = window as unknown as { __omherPickFolder: string; __omherMockAgents: string[]; __omherMockSignedIn: string[] };
-      w.__omherPickFolder = "/Users/you/code/web-app";
+      w.__omherPickFolder = "/home/you/code/web-app";
       w.__omherMockAgents = list as string[];
       w.__omherMockSignedIn = signed as string[];
     },
@@ -328,7 +330,7 @@ for (const [id, label, cmd] of [
     await expect(page.locator('input[type="password"]')).toHaveCount(0);
     // Open in Terminal opens the person's own terminal in the session's folder; Restart is there too
     await ended.getByTestId("session-signin-terminal").click();
-    expect((await calls(page)).filter((c) => c.op === "terminal").map((c) => c.cwd)).toEqual(["/Users/you/code/web-app"]);
+    expect((await calls(page)).filter((c) => c.op === "terminal").map((c) => c.cwd)).toEqual(["/home/you/code/web-app"]);
     await expect(ended.getByTestId("session-restart")).toBeVisible();
   });
 }
@@ -376,7 +378,7 @@ test("a Kilo Code session saved before this comes back ended: one plain line, it
       "omher.resume",
       JSON.stringify({
         v: 1, at, bot: null, view: "session", session: "s3", panelOpen: false, panelTab: "details", runsFull: false, runId: null, drafts: {},
-        sessions: [{ id: "s3", agent: "kilo", cwd: "/Users/you/code/web-app", startedAt: at - 60_000, view: "chat", running: true, agentSession: "ses_e2d9961a8ffe6pwTlM4aAUbsu1", title: "fix login", messages: [{ id: "m1", role: "user", text: "fix the login form", ts: at - 50_000 }] }],
+        sessions: [{ id: "s3", agent: "kilo", cwd: "/home/you/code/web-app", startedAt: at - 60_000, view: "chat", running: true, agentSession: "ses_e2d9961a8ffe6pwTlM4aAUbsu1", title: "fix login", messages: [{ id: "m1", role: "user", text: "fix the login form", ts: at - 50_000 }] }],
       }),
     );
   });

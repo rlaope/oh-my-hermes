@@ -41,7 +41,7 @@ async function setup(page: Page, theme: "dark" | "light", globals: Record<string
       localStorage.setItem("omher.lang", l as string);
       localStorage.removeItem("omher.sessions.recent");
       Object.assign(w, g);
-      w.__omherPickFolder = "/Users/you/code/web-app";
+      w.__omherPickFolder = "/home/you/code/web-app";
     },
     [theme, globals, lang] as const,
   );
@@ -72,7 +72,8 @@ const secs = (s: string) => {
 };
 
 for (const theme of ["dark", "light"] as const) {
-  test(`1. a running subagent card says how many are done, never more running than are (${theme})`, async ({ page }) => {
+  // SESSIONS hidden in favour of bot threads (plan 2026-11-15)
+  test.skip(`1. a running subagent card says how many are done, never more running than are (${theme})`, async ({ page }) => {
     await setup(page, theme);
     await start(page, "claude", "/subagents hold");
     const card = page.getByTestId("fanout-card");
@@ -90,7 +91,8 @@ for (const theme of ["dark", "light"] as const) {
     await expect(card.getByTestId("fanout-summary")).toHaveText(/^Ran 2 subagents · \d+s/);
   });
 
-  test(`2. a subagent waiting on the person's approval reads waiting, then running again (${theme})`, async ({ page }) => {
+  // SESSIONS hidden in favour of bot threads (plan 2026-11-15)
+  test.skip(`2. a subagent waiting on the person's approval reads waiting, then running again (${theme})`, async ({ page }) => {
     await setup(page, theme);
     await start(page, "claude", "/subask");
     await expect(page.getByTestId("card-subagent")).toBeVisible();
@@ -112,7 +114,8 @@ for (const theme of ["dark", "light"] as const) {
     await expect(row).toHaveAttribute("data-state", "done");
   });
 
-  test(`3. the activity line and the subagent's row show one clock (${theme})`, async ({ page }) => {
+  // SESSIONS hidden in favour of bot threads (plan 2026-11-15)
+  test.skip(`3. the activity line and the subagent's row show one clock (${theme})`, async ({ page }) => {
     await setup(page, theme);
     await page.clock.install();
     await start(page, "claude", "/subagents hold");
@@ -133,7 +136,8 @@ for (const theme of ["dark", "light"] as const) {
     }
   });
 
-  test(`4. an agent that never answered in chat mode says why once, Restart beside it (${theme})`, async ({ page }) => {
+  // SESSIONS hidden in favour of bot threads (plan 2026-11-15)
+  test.skip(`4. an agent that never answered in chat mode says why once, Restart beside it (${theme})`, async ({ page }) => {
     await setup(page, theme, { __omherMockNoChat: ["omo"], __omherMockAgents: ["claude", "codex", "omo", "pi"] });
     await start(page, "omo", "Summarize the README");
     const ended = page.getByTestId("session-ended");
@@ -241,7 +245,8 @@ async function plusMenu(page: Page, height: number, width = 1280) {
 }
 
 for (const theme of ["dark", "light"] as const) {
-  test(`6. the + menu shows a fade where its list is cut, none at the end, and air above (${theme})`, async ({ page }) => {
+  // SESSIONS hidden in favour of bot threads (plan 2026-11-15)
+  test.skip(`6. the + menu shows a fade where its list is cut, none at the end, and air above (${theme})`, async ({ page }) => {
     await setup(page, theme, { __omherMockAgents: ["claude", "codex", "omh", "opencode"] });
     for (const height of [600, 720, 820]) {
       for (const width of [900, 1100, 1280]) {
@@ -288,7 +293,8 @@ for (const theme of ["dark", "light"] as const) {
     }
   });
 
-  test(`7. the / menu tells skills apart, gives descriptions the column's width, names plain (${theme})`, async ({ page }) => {
+  // SESSIONS hidden in favour of bot threads (plan 2026-11-15)
+  test.skip(`7. the / menu tells skills apart, gives descriptions the column's width, names plain (${theme})`, async ({ page }) => {
     await setup(page, theme);
     await page.setViewportSize({ width: 1280, height: 820 });
     await start(page, "claude", "Look at the README and tell me what this repo does");

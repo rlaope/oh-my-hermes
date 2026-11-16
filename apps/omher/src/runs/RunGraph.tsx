@@ -8,6 +8,7 @@
 // column, where you can drag a box (its position only, kept per run), pan, zoom and Fit. The only motion is the
 // boxes appearing one by one, a slow dash riding the edges into a running node, and a box answering the pointer.
 // Nothing here changes a run.
+import { harnessByName } from "../harness/registry";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type PointerEvent as RPE, type ReactNode } from "react";
 import type { AgentRun } from "../lib/runs";
 import { t } from "../i18n";
@@ -112,7 +113,12 @@ export function NodeMark({ mark }: { mark: Mark | null }) {
   if (!mark) return null;
   return (
     <span className="bx-mk" data-testid="node-mark" data-mark={mark.id} data-kind={mark.kind}>
-      {mark.kind === "model" ? <ModelIcon model={mark.model} provider={mark.provider} size={GEOMETRY.mark} /> : <AgentIcon id={mark.id} size={GEOMETRY.mark} />}
+      {mark.kind === "model" ? (
+        <ModelIcon model={mark.model} provider={mark.provider} size={GEOMETRY.mark} />
+      ) : (
+        // the agent CLI the lane went to, by the one harness registry's id for it (`claude-code` → claude)
+        <AgentIcon id={harnessByName(mark.id) ?? mark.id} size={GEOMETRY.mark} />
+      )}
     </span>
   );
 }
@@ -273,10 +279,13 @@ export function RunGraph({
         const k0 = Math.min(MAX_FIT, el.clientWidth / (maxX - minX));
         if ((el.clientWidth + (maxX - minX) * k0) / 2 <= el.clientWidth - reserve) W = el.clientWidth;
       }
-      const want = Math.min(W / (maxX - minX), whole ? el.clientHeight / (maxY - minY) : Infinity);
+      // the drawing starts at the plan header's left edge (the x of the plan title), as the text above it does
+      const title = el.closest('[data-testid="run-graph-box"]')?.querySelector<HTMLElement>('[data-testid="run-plan-title"]');
+      const lead = title ? Math.max(0, title.getBoundingClientRect().left - el.getBoundingClientRect().left) : MARGIN;
+      const want = Math.min((W - lead) / (maxX - minX - MARGIN), whole ? el.clientHeight / (maxY - minY) : Infinity);
       const k = Math.min(MAX_FIT, Math.max(MIN_FIT, want));
       const sel = openRef.current && lay.at.has(openRef.current) ? rect(openRef.current) : null;
-      if (want >= MIN_FIT || !sel) return setView({ k, x: (W - (maxX - minX) * k) / 2 - minX * k, y: -minY * k });
+      if (want >= MIN_FIT || !sel) return setView({ k, x: lead - (minX + MARGIN) * k, y: -minY * k });
       // too wide to show whole next to the drawer: keep the open box in view
       setView({ k, x: W / 2 - (sel.x + sel.w / 2) * k, y: Math.min(-minY * k, el.clientHeight / 2 - (sel.y + sel.h / 2) * k) });
     },

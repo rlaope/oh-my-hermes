@@ -187,7 +187,7 @@ test("a click on the number opens the PR's page and does not select the node; a 
 test("in the full view (⌘⇧G) a click on the number neither selects nor drags the node", async ({ page }) => {
   const { opened } = await openDemo(page);
   await page.getByTestId("graph-expand").click();
-  const full = page.getByTestId("runs-full");
+  const full = page.locator('[data-testid="run-graph-box"].max');
   await expect(full.getByTestId("run-node")).toHaveCount(6);
   await page.waitForTimeout(1300);
   const node = nodeOf(full, "page-styles");

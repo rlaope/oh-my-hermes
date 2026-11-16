@@ -27,7 +27,8 @@ const selected = (page: Page) =>
     return [...w.__omherTerms].find((t) => t.element === host)?.getSelection() ?? "";
   });
 
-test("both settings are off by default: a selection copies nothing and a right click pastes nothing", async ({ page }) => {
+// SESSIONS hidden in favour of bot threads (plan 2026-11-15)
+test.skip("both settings are off by default: a selection copies nothing and a right click pastes nothing", async ({ page }) => {
   await openApp(page, { clipboard: "FROM-CLIPBOARD" });
   await newTerminal(page);
   await feed(page, "\r\nselect-me-please\r\n");
@@ -42,7 +43,8 @@ test("both settings are off by default: a selection copies nothing and a right c
   expect((await typed(page)).slice(before.length)).toBe("");
 });
 
-test("copy on select: the selection is on the clipboard once the mouse is let go, and only when the setting is on", async ({ page }) => {
+// SESSIONS hidden in favour of bot threads (plan 2026-11-15)
+test.skip("copy on select: the selection is on the clipboard once the mouse is let go, and only when the setting is on", async ({ page }) => {
   await openApp(page, { term: { copyOnSelect: true } });
   await newTerminal(page);
   await feed(page, "\r\nselect-me-please\r\n");
@@ -50,7 +52,8 @@ test("copy on select: the selection is on the clipboard once the mouse is let go
   await expect.poll(() => clipWrites(page)).toEqual(["select-me-please"]);
 });
 
-test("turning copy on select on in Settings applies to a terminal that is already open", async ({ page }) => {
+// SESSIONS hidden in favour of bot threads (plan 2026-11-15)
+test.skip("turning copy on select on in Settings applies to a terminal that is already open", async ({ page }) => {
   await openApp(page);
   await newTerminal(page);
   await feed(page, "\r\nselect-me-please\r\n");
@@ -67,7 +70,8 @@ test("turning copy on select on in Settings applies to a terminal that is alread
   await expect.poll(() => clipWrites(page)).toEqual(["select-me-please"]);
 });
 
-test("a click that selects nothing copies nothing even with copy on select on", async ({ page }) => {
+// SESSIONS hidden in favour of bot threads (plan 2026-11-15)
+test.skip("a click that selects nothing copies nothing even with copy on select on", async ({ page }) => {
   await openApp(page, { term: { copyOnSelect: true } });
   await newTerminal(page);
   await feed(page, "\r\nsome text\r\n");
@@ -77,7 +81,8 @@ test("a click that selects nothing copies nothing even with copy on select on", 
   expect(await clipWrites(page)).toEqual([]);
 });
 
-test("right-click pastes the clipboard into the program when the setting is on, and Ctrl+right-click does not", async ({ page }) => {
+// SESSIONS hidden in favour of bot threads (plan 2026-11-15)
+test.skip("right-click pastes the clipboard into the program when the setting is on, and Ctrl+right-click does not", async ({ page }) => {
   await openApp(page, { term: { rightClickPaste: true }, clipboard: "pasted-text" });
   await newTerminal(page);
   const p = await pointAt(page, "(mock)");
@@ -92,7 +97,8 @@ test("right-click pastes the clipboard into the program when the setting is on, 
   expect(await typed(page)).toBe(mid);
 });
 
-test("right-click paste leaves a program that has mouse reporting on without a second paste", async ({ page }) => {
+// SESSIONS hidden in favour of bot threads (plan 2026-11-15)
+test.skip("right-click paste leaves a program that has mouse reporting on without a second paste", async ({ page }) => {
   await openApp(page, { term: { rightClickPaste: true }, clipboard: "once" });
   await newTerminal(page);
   await feed(page, "\x1b[?1000h\x1b[?1006h"); // mouse reporting on, as a TUI asks for it
@@ -106,7 +112,8 @@ test("right-click paste leaves a program that has mouse reporting on without a s
   expect(sent).not.toMatch(/\x1b\[<2;/); // the right button's mouse report was not sent as well
 });
 
-test("Ctrl+C with no selection still reaches the program, with both settings on", async ({ page }) => {
+// SESSIONS hidden in favour of bot threads (plan 2026-11-15)
+test.skip("Ctrl+C with no selection still reaches the program, with both settings on", async ({ page }) => {
   await openApp(page, { term: { copyOnSelect: true, rightClickPaste: true } });
   await newTerminal(page);
   const before = await typed(page);
@@ -131,7 +138,8 @@ test("the Terminal page has both rows, off, under Clipboard, and switching one l
   await expect(page.getByTestId("term-right-paste-row")).toContainText("Right-click pastes");
 });
 
-test("a picture pasted on a terminal still goes through the drop/paste path, not into the program as text", async ({ page }) => {
+// SESSIONS hidden in favour of bot threads (plan 2026-11-15)
+test.skip("a picture pasted on a terminal still goes through the drop/paste path, not into the program as text", async ({ page }) => {
   await openApp(page, { term: { copyOnSelect: true, rightClickPaste: true } });
   await newTerminal(page);
   await page.evaluate(() => {
@@ -145,7 +153,8 @@ test("a picture pasted on a terminal still goes through the drop/paste path, not
   expect(await typed(page)).toMatch(/session-files\/s\d+\/1-image\.png/);
 });
 
-test("the GPU row's second line says what draws the terminals: standard, then GPU when it is switched on, nothing with no terminal open", async ({ page }) => {
+// SESSIONS hidden in favour of bot threads (plan 2026-11-15)
+test.skip("the GPU row's second line says what draws the terminals: standard, then GPU when it is switched on, nothing with no terminal open", async ({ page }) => {
   await openApp(page, { term: { gpu: "off" } });
   const row = page.getByTestId("term-gpu-row");
   await page.getByTestId("nav-settings").click();

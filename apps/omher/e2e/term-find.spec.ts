@@ -30,7 +30,8 @@ async function terminalWithText(page: Page) {
   await feed(page, LINES);
 }
 
-test("Cmd/Ctrl+F opens the bar with the field focused; a closed bar is not in the page", async ({ page }) => {
+// SESSIONS hidden in favour of bot threads (plan 2026-11-15)
+test.skip("Cmd/Ctrl+F opens the bar with the field focused; a closed bar is not in the page", async ({ page }) => {
   await terminalWithText(page);
   await expect(bar(page)).toHaveCount(0);
   await find(page);
@@ -43,7 +44,8 @@ test("Cmd/Ctrl+F opens the bar with the field focused; a closed bar is not in th
   expect(b!.x).toBeGreaterThan(t!.x + t!.width / 2);
 });
 
-test("typing shows the match count, Enter moves to the next match, Shift+Enter back, Esc closes and the terminal has focus again", async ({ page }) => {
+// SESSIONS hidden in favour of bot threads (plan 2026-11-15)
+test.skip("typing shows the match count, Enter moves to the next match, Shift+Enter back, Esc closes and the terminal has focus again", async ({ page }) => {
   await terminalWithText(page);
   await find(page);
   await input(page).fill("needle");
@@ -81,7 +83,8 @@ test("typing shows the match count, Enter moves to the next match, Shift+Enter b
   await expect.poll(() => typed(page)).toContain("hi");
 });
 
-test("matches are selected in the scrollback; a search with no match says so, and an empty field says nothing", async ({ page }) => {
+// SESSIONS hidden in favour of bot threads (plan 2026-11-15)
+test.skip("matches are selected in the scrollback; a search with no match says so, and an empty field says nothing", async ({ page }) => {
   await terminalWithText(page);
   await find(page);
   await input(page).fill("needle");
@@ -94,7 +97,8 @@ test("matches are selected in the scrollback; a search with no match says so, an
   await expect(count(page)).toHaveText("");
 });
 
-test("find also reaches text that scrolled out of the screen", async ({ page }) => {
+// SESSIONS hidden in favour of bot threads (plan 2026-11-15)
+test.skip("find also reaches text that scrolled out of the screen", async ({ page }) => {
   await terminalWithText(page);
   await feed(page, Array.from({ length: 120 }, (_, i) => `filler ${i}\r\n`).join(""));
   await find(page);
@@ -102,7 +106,8 @@ test("find also reaches text that scrolled out of the screen", async ({ page }) 
   await expect(count(page)).toHaveText(/ of 3$/);
 });
 
-test("the counter is not clipped and the bar stays inside a narrow window", async ({ page }) => {
+// SESSIONS hidden in favour of bot threads (plan 2026-11-15)
+test.skip("the counter is not clipped and the bar stays inside a narrow window", async ({ page }) => {
   await page.setViewportSize({ width: 900, height: 700 });
   await terminalWithText(page);
   await find(page);
@@ -127,7 +132,8 @@ test("the counter is not clipped and the bar stays inside a narrow window", asyn
   expect(r.radius).toBeLessThanOrEqual(6);
 });
 
-test("the shortcut does nothing in a chat session", async ({ page }) => {
+// SESSIONS hidden in favour of bot threads (plan 2026-11-15)
+test.skip("the shortcut does nothing in a chat session", async ({ page }) => {
   await openApp(page);
   await page.getByTestId("session-new").click();
   await page.getByTestId("session-agent-claude").click();
@@ -155,7 +161,8 @@ test("the shortcut does nothing in a bot chat", async ({ page }) => {
   await expect(bar(page)).toHaveCount(0);
 });
 
-test("a terminal that is not focused does not take the shortcut (the bar is for the terminal the keyboard is in)", async ({ page }) => {
+// SESSIONS hidden in favour of bot threads (plan 2026-11-15)
+test.skip("a terminal that is not focused does not take the shortcut (the bar is for the terminal the keyboard is in)", async ({ page }) => {
   await terminalWithText(page);
   // the keyboard is in the sidebar's search field, not the terminal. A click, not the search shortcut: off macOS
   // Ctrl+K typed in a terminal is the program's (src/app/shortcuts.ts), so the shortcut would leave the keyboard
@@ -167,7 +174,8 @@ test("a terminal that is not focused does not take the shortcut (the bar is for 
   await expect(bar(page)).toHaveCount(0);
 });
 
-test("macOS: Cmd+F opens find even in a full-screen program; Ctrl+F stays the program's. Windows/Linux: Ctrl+F in a full-screen program stays the program's, Ctrl+Shift+F opens find", async ({ page }) => {
+// SESSIONS hidden in favour of bot threads (plan 2026-11-15)
+test.skip("macOS: Cmd+F opens find even in a full-screen program; Ctrl+F stays the program's. Windows/Linux: Ctrl+F in a full-screen program stays the program's, Ctrl+Shift+F opens find", async ({ page }) => {
   await terminalWithText(page);
   await feed(page, "\x1b[?1049h\x1b[2J\x1b[Hfull screen needle"); // the alternate screen (vim, less, htop)
   const mac = await platformIsMac(page);
@@ -191,7 +199,8 @@ test("macOS: Cmd+F opens find even in a full-screen program; Ctrl+F stays the pr
   }
 });
 
-test("Windows/Linux: Ctrl+F at a prompt opens find and is not sent to the program", async ({ page }) => {
+// SESSIONS hidden in favour of bot threads (plan 2026-11-15)
+test.skip("Windows/Linux: Ctrl+F at a prompt opens find and is not sent to the program", async ({ page }) => {
   await terminalWithText(page);
   test.skip(await platformIsMac(page), "on macOS Ctrl+F is the program's (cursor forward) and Cmd+F finds");
   const before = await typed(page);
@@ -224,7 +233,8 @@ const fills = (page: Page) =>
     };
   });
 
-test("leaving the terminal with find open takes the highlights with the bar: back on it, nothing is filled and nothing selected", async ({ page }) => {
+// SESSIONS hidden in favour of bot threads (plan 2026-11-15)
+test.skip("leaving the terminal with find open takes the highlights with the bar: back on it, nothing is filled and nothing selected", async ({ page }) => {
   await terminalWithText(page);
   const id = (await page.getByTestId("terminal").getAttribute("data-session")) as string;
   const back = async () => {
@@ -259,7 +269,8 @@ test("leaving the terminal with find open takes the highlights with the bar: bac
   expect((await fills(page)).active).toBe(6);
 });
 
-test("a theme that changes while find is open recolours the matches at once, and the active match stays where it was", async ({ page }) => {
+// SESSIONS hidden in favour of bot threads (plan 2026-11-15)
+test.skip("a theme that changes while find is open recolours the matches at once, and the active match stays where it was", async ({ page }) => {
   await openApp(page, { theme: "dark", term: { themeDark: "dracula" } });
   await newTerminal(page);
   await feed(page, LINES);
@@ -290,7 +301,8 @@ test("a theme that changes while find is open recolours the matches at once, and
   await expect(count(page)).toHaveText(at as string);
 });
 
-test("a click or a selection of your own made while find is open is yours: a theme change keeps it and the active match, and leaving the terminal does not take it", async ({ page }) => {
+// SESSIONS hidden in favour of bot threads (plan 2026-11-15)
+test.skip("a click or a selection of your own made while find is open is yours: a theme change keeps it and the active match, and leaving the terminal does not take it", async ({ page }) => {
   await openApp(page, { theme: "dark", term: { themeDark: "dracula" } });
   await newTerminal(page);
   await feed(page, `${LINES}pick selectme here\r\n`);
@@ -348,7 +360,8 @@ test("a click or a selection of your own made while find is open is yours: a the
   expect(await colours()).toHaveLength(1);
 });
 
-test("find does not change what a program is sent: typing in the field never reaches the terminal", async ({ page }) => {
+// SESSIONS hidden in favour of bot threads (plan 2026-11-15)
+test.skip("find does not change what a program is sent: typing in the field never reaches the terminal", async ({ page }) => {
   await terminalWithText(page);
   await find(page);
   const before = await typed(page);
@@ -358,7 +371,8 @@ test("find does not change what a program is sent: typing in the field never rea
   expect((await typed(page)).slice(before.length)).toBe("");
 });
 
-test("find does not touch the clipboard (it selects, and copy on select must not copy a find's selection)", async ({ page }) => {
+// SESSIONS hidden in favour of bot threads (plan 2026-11-15)
+test.skip("find does not touch the clipboard (it selects, and copy on select must not copy a find's selection)", async ({ page }) => {
   await openApp(page, { term: { copyOnSelect: true } });
   await newTerminal(page);
   await feed(page, LINES);

@@ -37,7 +37,7 @@ async function session(page: Page, agent: string, theme: string, first?: string,
     ([t, g]) => {
       localStorage.setItem("omher.theme", t as string);
       localStorage.removeItem("omher.sessions.recent");
-      Object.assign(window, { __omherPickFolder: "/Users/you/code/omher", __omherMockAgents: ["claude", "codex", "omo", "omh"], ...(g as object) });
+      Object.assign(window, { __omherPickFolder: "/home/you/code/omher", __omherMockAgents: ["claude", "codex", "omo", "omh"], ...(g as object) });
     },
     [theme, globals] as const,
   );
@@ -62,7 +62,8 @@ async function shot(page: Page, what: string, theme: string) {
 const themes = SHOTS ? (["dark", "light"] as const) : (["dark"] as const);
 
 for (const theme of themes) {
-  test(`O5 an OmO retry is one turn that fails once with OmO's reason, never the raw reply (${theme})`, async ({ page }) => {
+  // SESSIONS hidden in favour of bot threads (plan 2026-11-15)
+  test.skip(`O5 an OmO retry is one turn that fails once with OmO's reason, never the raw reply (${theme})`, async ({ page }) => {
     await session(page, "omo", theme, "/retry");
     await expect(page.getByTestId("session-status")).toHaveText("Ready");
     await page.waitForTimeout(300);
@@ -78,7 +79,8 @@ for (const theme of themes) {
     expect(await text.evaluate((el) => el.scrollWidth <= el.clientWidth && el.scrollHeight <= el.clientHeight + 1)).toBe(true);
   });
 
-  test(`O5 while OmO retries, the live line says which try (${theme})`, async ({ page }) => {
+  // SESSIONS hidden in favour of bot threads (plan 2026-11-15)
+  test.skip(`O5 while OmO retries, the live line says which try (${theme})`, async ({ page }) => {
     await session(page, "omo", theme, "/retry hold");
     await page.waitForTimeout(400);
     await shot(page, "retrying", theme);
@@ -86,7 +88,8 @@ for (const theme of themes) {
     await expect(page.getByTestId("activity")).toHaveCount(1);
   });
 
-  test(`O11 a command Stop cut short reads as stopped, then as finished late (${theme})`, async ({ page }) => {
+  // SESSIONS hidden in favour of bot threads (plan 2026-11-15)
+  test.skip(`O11 a command Stop cut short reads as stopped, then as finished late (${theme})`, async ({ page }) => {
     await session(page, "codex", theme, "/stoplate");
     await expect(page.getByTestId("activity-text")).toContainText("sleep 40; echo late");
     // the recorded stream pressed Stop 3 s into the command (6.1 s into the turn); here 1.2 s in
@@ -113,7 +116,8 @@ for (const theme of themes) {
     await expect(page.getByTestId("activity")).toHaveCount(1);
   });
 
-  test(`O13 Codex running its own config with no approvals says so where the mode is (${theme})`, async ({ page }) => {
+  // SESSIONS hidden in favour of bot threads (plan 2026-11-15)
+  test.skip(`O13 Codex running its own config with no approvals says so where the mode is (${theme})`, async ({ page }) => {
     await session(page, "codex", theme, undefined, { __omherMockCodexUnguarded: true });
     await page.getByTestId("composer").fill("/status");
     await page.keyboard.press("Enter");
@@ -145,7 +149,8 @@ for (const theme of themes) {
     expect((await calls(page)).filter((c) => c.input?.kind === "mode").map((c) => c.input?.mode)).toEqual(["ask"]);
   });
 
-  test(`O13 a new Codex session says it from its first session.info, before any turn, whole at 900-1280px (${theme})`, async ({ page }) => {
+  // SESSIONS hidden in favour of bot threads (plan 2026-11-15)
+  test.skip(`O13 a new Codex session says it from its first session.info, before any turn, whole at 900-1280px (${theme})`, async ({ page }) => {
     await session(page, "codex", theme, undefined, { __omherMockCodexUnguarded: true });
     await page.getByTestId("composer").fill("Look at the README");
     await page.keyboard.press("Enter");
@@ -166,13 +171,15 @@ for (const theme of themes) {
     }
   });
 
-  test(`O13 a Codex whose own config still asks keeps "Agent's own" (${theme})`, async ({ page }) => {
+  // SESSIONS hidden in favour of bot threads (plan 2026-11-15)
+  test.skip(`O13 a Codex whose own config still asks keeps "Agent's own" (${theme})`, async ({ page }) => {
     await session(page, "codex", theme, "/status");
     await expect(page.getByTestId("session-status")).toHaveText("Ready");
     await expect(page.getByTestId("session-mode")).toHaveText("Agent's own");
   });
 
-  test(`an OmO foreground batch: each row ends with its own answer and model, as Plans says (${theme})`, async ({ page }) => {
+  // SESSIONS hidden in favour of bot threads (plan 2026-11-15)
+  test.skip(`an OmO foreground batch: each row ends with its own answer and model, as Plans says (${theme})`, async ({ page }) => {
     // omo-13-batch.jsonl (OmO 5.1.56): one foreground `task`, two subagents; OmO's result names no answer, its own
     // record of each task id does, and Plans reads the same records
     await session(page, "omo", theme, "/batch");
@@ -201,7 +208,8 @@ for (const theme of themes) {
     }
   });
 
-  test(`O15 an OmO session's subagents show as its run in Plans (${theme})`, async ({ page }) => {
+  // SESSIONS hidden in favour of bot threads (plan 2026-11-15)
+  test.skip(`O15 an OmO session's subagents show as its run in Plans (${theme})`, async ({ page }) => {
     await session(page, "omo", theme, "/subagents");
     await expect(page.getByTestId("fanout-card")).toHaveAttribute("data-state", "done");
     // OmO 5.1.56 wrote its records: the session's own run
