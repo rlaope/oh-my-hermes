@@ -304,20 +304,81 @@ class GraphTests(unittest.TestCase):
             start(home, "child-only", "sa-only", "only [dag:second/api]", now=now + 1)
             home.session("child-only", "glm-5.3-flash", parent=PARENT, effort="low")
 
-            def drawn(**kwargs: str) -> tuple[str, set[str]]:
+            def drawn(**kwargs: str) -> tuple[str, set[str], set[str]]:
                 graph = build_delegation_graph(home.omh, home.hermes, PARENT, now=now + 2, **kwargs)
-                return graph["name"], {node["id"] for node in graph["nodes"] if node["kind"] != "root"}
+                return (
+                    graph["name"],
+                    {node["id"] for node in graph["nodes"] if node["kind"] != "root"},
+                    {node["id"] for node in graph["nodes"] if node.get("outside_dag") is True},
+                )
 
-            name, ids = drawn()
+            name, ids, outside = drawn()
             self.assertEqual(name, "second feature")
-            self.assertTrue(all(node.startswith("d:second:") for node in ids), ids)  # no wave of the other run's child
-            name, ids = drawn(dag_run="export")
+            # The other run's bound child is no lane of this run either: an outside lane, beside it.
+            self.assertEqual(outside, {"s:sa-api"})
+            self.assertEqual(ids - outside, {"d:second:api"})
+            self.assertFalse({node_id for node_id in ids if node_id.startswith("d:export:")})
+            name, ids, outside = drawn(dag_run="export")
             self.assertEqual(name, "export feature")
+            self.assertEqual(outside, set(), "a run the pane picks is drawn alone")
             self.assertTrue(all(node.startswith("d:export:") for node in ids), ids)
             self.assertEqual(drawn(dag_run="no-such-run"), drawn())
             choices = dag_run_choices(home.omh, home.hermes, PARENT, now=now + 2)
         self.assertEqual([(item["run"], item["name"], item["nodes"]) for item in choices],
                          [("second", "second feature", 1), ("export", "export feature", 3)])
+
+    def test_an_unbound_child_is_an_outside_lane_not_a_layer_of_the_run(self) -> None:
+        """A ledger child no `[dag:export/...]` marker binds stays a node — flagged, layered nowhere, with no edge."""
+        with homes() as home:
+            defined(home)
+            now = time.time()
+            started(home, "api", now=now)
+            # A plain delegate_task spawn in the same conversation, and a child it spawned: both outside.
+            start(home, "child-free", "sa-free", "Fix the typo", now=now + 1)
+            home.session("child-free", "glm-5.3-flash", parent=PARENT, effort="low")
+            start(home, "grand-0", "sa-free-leaf", "Sweep under the free child", parent="child-free",
+                  parent_subagent="sa-free", now=now + 2)
+            graph = build_delegation_graph(home.omh, home.hermes, PARENT, now=now + 4)
+        self.assertEqual(graph["name"], "export feature")
+        by_id = {node["id"]: node for node in graph["nodes"]}
+        outside = {node_id for node_id, node in by_id.items() if node.get("outside_dag") is True}
+        self.assertEqual(outside, {"s:sa-free", "s:sa-free-leaf"})
+        self.assertEqual(set(by_id) - outside - {"root"},
+                         {f"d:export:{node_id}" for node_id in ("api", "ui", "verify")})
+        layered = {node_id for layer in graph["layers"] for node_id in layer}
+        self.assertFalse(outside & layered, "an outside lane lands in no layer")
+        self.assertFalse([edge for edge in graph["edges"]
+                          if edge["from"] in outside or edge["to"] in outside], graph["edges"])
+        # Every field a plain lane carries is still there: state, title, usage, group and session tail.
+        free = by_id["s:sa-free"]
+        self.assertEqual((free["title"], free["group"].split(" ")[0], free["model"], free["session_tail"]),
+                         ("Fix the typo", "wave", "glm-5.3-flash", "child-fr"))
+        # With no dag run in the conversation the same children are plain lanes, as before.
+        with homes() as home:
+            home.session(PARENT, "claude-opus-5-5")
+            start(home, "child-free", "sa-free", "Fix the typo", now=now + 1)
+            graph = build_delegation_graph(home.omh, home.hermes, PARENT, now=now + 4)
+        self.assertFalse([node for node in graph["nodes"] if node.get("outside_dag")])
+        self.assertEqual(graph["layers"], [["root"], ["s:sa-free"]])
+
+    def test_the_outside_group_draws_after_the_run_not_inside_it(self) -> None:
+        with homes() as home:
+            defined(home)
+            now = time.time()
+            started(home, "api", now=now)
+            start(home, "child-free", "sa-free", "Fix the typo", now=now + 1)
+            home.session("child-free", "glm-5.3-flash", parent=PARENT, effort="low")
+            graph = build_delegation_graph(home.omh, home.hermes, PARENT, now=now + 2)
+            tree = render_delegation_view(graph, width=100, layout="tree").text_lines()
+            boxes = render_delegation_view(graph, width=100, layout="box", max_lines=44).text_lines()
+        for lines, name in ((tree, "tree"), (boxes, "box")):
+            with self.subTest(layout=name):
+                text = "\n".join(lines)
+                self.assertIn("outside DAG", text)
+                row = next(line for line in lines if "Fix the typo" in line)
+                self.assertGreater(lines.index(row), lines.index(next(line for line in lines if "outside DAG" in line)))
+                start_rows = [line for line in lines if "Fix the typo" in line and "Start node" in line]
+                self.assertFalse(start_rows, "an outside lane is never drawn as the run's start node")
 
     def test_a_named_run_does_not_lapse_after_it_is_over(self) -> None:
         with homes() as home:

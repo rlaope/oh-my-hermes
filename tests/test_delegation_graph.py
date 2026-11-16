@@ -1304,6 +1304,63 @@ class LayerBoundTests(unittest.TestCase):
         self.assertTrue({"f0", "run"} <= {node["id"] for node in cut["nodes"]})
         self.assertNoBetterLaneCut(graph, cut)
 
+    @staticmethod
+    def _mixed_graph(inside_done: int, outside: int, *, summary: int = 400) -> dict:
+        """A running DAG lane fed by a chain of finished ones, beside an outside roster of finished ledger children."""
+        nodes = [{"id": "run", "kind": "lane", "state": "running", "order": 0, "group": "layer 2",
+                  "summary": "s" * summary}]
+        nodes += [{"id": f"d{index}", "kind": "lane", "state": "done", "order": 10 + index, "group": "layer 1",
+                   "summary": "s" * summary} for index in range(inside_done)]
+        nodes += [{"id": f"x{index}", "kind": "lane", "state": "done", "order": 10_000 + index, "outside_dag": True,
+                   "summary": "s" * summary} for index in range(outside)]
+        edges = [("root", "run"), ("root", "d0"), ("d0", "run")] + \
+                [(f"d{at}", f"d{at + 1}") for at in range(inside_done - 1)]
+        return _graph_of(nodes, edges)
+
+    def test_outside_lanes_join_the_bounded_selection_and_running_dag_work_beats_the_roster(self) -> None:
+        """Mutation: union the whole outside roster into the kept set ahead of the ranking, which let finished
+        outside lanes consume the node allowance the run's own work needs."""
+        for inside_done, outside in ((40, 45), (60, 45)):
+            with self.subTest(inside_done=inside_done, outside=outside):
+                graph = self._mixed_graph(inside_done, outside)
+                cut = self._layered(graph, byte_limit=24_576)
+                kept = {node["id"] for node in cut["nodes"]}
+                self.assertLessEqual(len(kept), GRAPH_NODE_LIMIT, "the outside roster consumed the node allowance")
+                self.assertIn("run", kept, "running DAG work is kept ahead of finished outside lanes")
+                outside_kept = [node for node in cut["nodes"] if node.get("outside_dag") is True]
+                cut_inside = inside_done - len([node_id for node_id in kept if node_id.startswith("d")])
+                self.assertFalse(len(outside_kept) and cut_inside,
+                                 "an outside lane was kept while the run's own finished lane was cut")
+                self.assertTrue(all("layer" not in node for node in outside_kept),
+                                "an outside lane carries no layer even when the selection keeps it")
+                self.assertTrue(all(isinstance(node.get("layer"), int) for node in cut["nodes"]
+                                    if node.get("outside_dag") is not True and node.get("kind") != "root"))
+                self.assertEqual(len(kept) + cut["hidden_nodes"], len(graph["nodes"]))
+                self.assertEqual(sum(cut["hidden_by_state"].values()), cut["hidden_nodes"])
+                # A layer row counts only the run lanes its layer lost; an omitted outside lane is counted in
+                # `hidden_nodes` without a layer of its own.
+                hidden_outside = outside - len(outside_kept)
+                self.assertEqual(sum(row["count"] for row in cut["layer_hidden"]),
+                                 cut["hidden_nodes"] - hidden_outside)
+                self.assertNoBetterLaneCut(graph, cut)
+                self.assertTrue(all(edge["from"] in kept and edge["to"] in kept for edge in cut["edges"]))
+
+    def test_the_byte_bound_holds_when_the_outside_roster_beside_the_run_overruns_it(self) -> None:
+        """Mutation: accept the cut when the bytes fit, which sent an over-allowance payload once the roster
+        outweighed the ranking; the selection has to stop at the bytes too."""
+        graph = self._mixed_graph(5, 20, summary=900)
+        cut = self._layered(graph, byte_limit=24_576)
+        kept = {node["id"] for node in cut["nodes"]}
+        self.assertLessEqual(_size(cut), 24_576, "an over-allowance payload went out unchecked")
+        self.assertLessEqual(len(kept), GRAPH_NODE_LIMIT)
+        self.assertIn("run", kept)
+        self.assertTrue({f"d{index}" for index in range(5)} <= kept,
+                        "no finished DAG lane is cut while an outside lane is kept")
+        self.assertLess(len(kept), len(graph["nodes"]), "the bytes really cut the roster")
+        self.assertNotIn("counts_only", cut, "a bounded mixed selection still has lanes to draw")
+        self.assertEqual(len(kept) + cut["hidden_nodes"], len(graph["nodes"]))
+        self.assertEqual(sum(cut["hidden_by_state"].values()), cut["hidden_nodes"])
+
     def test_the_bytes_hold_for_deep_and_wide_runs_open_or_not(self) -> None:
         """Mutation: keep a zero row per layer and send the cut when nothing fits, which overran the limit 13 times."""
         from omh.plugin_bundle.omh import delegation_graph

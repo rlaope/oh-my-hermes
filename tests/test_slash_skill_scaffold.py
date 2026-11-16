@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+import sqlite3
 import unittest
 from unittest.mock import patch
 
@@ -25,9 +26,14 @@ from _local_package import load_local_package
 load_local_package()
 
 from _delegation_state import PARENT, homes  # noqa: E402
-from omh.plugin_bundle.omh import hermes_session_commands  # noqa: E402
+from omh.plugin_bundle.omh import dag_run, hermes_session_commands  # noqa: E402
 from omh.plugin_bundle.omh.awareness import awareness_route_hint  # noqa: E402
-from omh.plugin_bundle.omh.dag_define_gate import DEFINE_FIRST_MESSAGE, reset_dag_define_gate  # noqa: E402
+from omh.plugin_bundle.omh.dag_define_gate import (  # noqa: E402
+    DEFINE_FIRST_MESSAGE,
+    mid_run_message,
+    note_turn,
+    reset_dag_define_gate,
+)
 from omh.plugin_bundle.omh.hermes_session_commands import (  # noqa: E402
     handed_on_text,
     host_command_turn,
@@ -310,7 +316,8 @@ class DagDefineGateTests(unittest.TestCase):
             self.assertIsNone(self._delegate(home, MARKERLESS))
             self.assertIsNone(self._delegate(home, MARKERLESS, turn="turn-2"))
 
-    def test_a_conversation_with_a_run_is_never_blocked(self) -> None:
+    def test_a_conversation_with_a_run_blocks_mid_run_instead(self) -> None:
+        # The start-turn gate stands down once a run exists — the mid-run gate is what answers there.
         with homes() as home:
             defined = json.loads(dag_tool.omh_dag_handler({"action": "define", "run": "prs", "nodes": [
                 {"id": "pr1", "label": "PR 1", "category": "quick", "prompt": "TASK: x\nVERIFY: `true`",
@@ -320,7 +327,135 @@ class DagDefineGateTests(unittest.TestCase):
             ]}, session_id=PARENT))
             self.assertNotEqual(defined.get("status"), "refused", defined)
             self._turn(home, scaffold("dag-ulw", OWNER_TURN))
+            first = self._delegate(home, MARKERLESS)
+            second = self._delegate(home, MARKERLESS, call="call-2")
+        self.assertEqual(first, {"action": "block", "message": mid_run_message("prs")})
+        self.assertIsNone(second)
+
+
+DAG_NODES = [
+    {"id": "pr1", "label": "PR 1", "category": "quick", "prompt": "TASK: x\nVERIFY: `true`",
+     "depends_on": [], "write_scope": ["a.py"]},
+    {"id": "verify", "label": "Verify", "category": "quick", "prompt": "TASK: v\nVERIFY: `true`",
+     "depends_on": ["pr1"], "write_scope": []},
+]
+
+
+def _define(nodes=None, run: str = "prs") -> dict:
+    return json.loads(dag_tool.omh_dag_handler(
+        {"action": "define", "run": run, "nodes": nodes if nodes is not None else DAG_NODES}, session_id=PARENT))
+
+
+def _write_handoff(home, run: str, node: str) -> None:
+    path = dag_run.handoff_path(home.omh, PARENT, run, node)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text("done", encoding="utf-8")
+
+
+class DagMidRunGateTests(unittest.TestCase):
+    """The mid-run gate: while a conversation's dag run is active, a markerless spawn is sent back to `omh_dag`
+    once per turn — any turn, no dag-ulw hint needed — and a resend goes through."""
+
+    def setUp(self) -> None:
+        reset_dag_define_gate()
+        reset_nudge_budget()
+        self.addCleanup(reset_dag_define_gate)
+        self.addCleanup(reset_nudge_budget)
+
+    def _turn(self, home, message: str, *, turn: str = "turn-1", session: str = PARENT) -> None:
+        pre_llm_call(user_message=message, is_first_turn=True, session_id=session, turn_id=turn, platform="tui",
+                     **home.hooks())
+
+    def _delegate(self, home, args: dict, *, turn: str = "turn-1", session: str = PARENT, call: str = "call-1"):
+        return pre_tool_call(tool_name="delegate_task", args=args, session_id=session, turn_id=turn,
+                             tool_call_id=call, **home.hooks())
+
+    def test_a_markerless_spawn_inside_an_active_run_blocks_once_then_passes(self) -> None:
+        with homes() as home:
+            self.assertNotEqual(_define().get("status"), "refused")
+            note_turn(PARENT, "turn-1", starts_run=False)
+            first = self._delegate(home, MARKERLESS)
+            second = self._delegate(home, MARKERLESS, call="call-2")
+            third = self._delegate(home, MARKERLESS, call="call-3")
+        self.assertEqual(first, {"action": "block", "message": mid_run_message("prs")})
+        self.assertIn("dag run prs", first["message"])
+        self.assertIn("omh_dag action=status", first["message"])
+        self.assertIn("send this call again and it goes through", first["message"])
+        self.assertIsNone(second)
+        self.assertIsNone(third)
+
+    def test_each_new_turn_blocks_once_again(self) -> None:
+        with homes() as home:
+            self.assertNotEqual(_define().get("status"), "refused")
+            note_turn(PARENT, "turn-1", starts_run=False)
+            self.assertIsNotNone(self._delegate(home, MARKERLESS))
+            self.assertIsNone(self._delegate(home, MARKERLESS, call="call-2"))
+            note_turn(PARENT, "turn-2", starts_run=False)
+            self.assertIsNotNone(self._delegate(home, MARKERLESS, turn="turn-2"))
+            self.assertIsNone(self._delegate(home, MARKERLESS, turn="turn-2", call="call-4"))
+
+    def test_a_turn_without_a_hint_blocks_too(self) -> None:
+        with homes() as home:
+            self.assertNotEqual(_define().get("status"), "refused")
+            pre_llm_call(user_message="fix the flaky login test", is_first_turn=True, session_id=PARENT,
+                         turn_id="turn-1", platform="tui", **home.hooks())
+            self.assertIsNotNone(self._delegate(home, MARKERLESS))
+
+    def test_what_the_mid_run_gate_lets_through(self) -> None:
+        with homes() as home:
+            self.assertNotEqual(_define().get("status"), "refused")
+            cases = {
+                "a goal with its node marker": {"tasks": [{"goal": "api [dag:prs/api]"}]},
+                "a marked task among plain ones": {"tasks": [{"goal": "plain"}, {"goal": "x [dag:prs/verify]"}]},
+                "a control action": {"action": "stop", "subagent_id": "sa-1"},
+                "list": {"action": "list"},
+                "steer": {"action": "steer", "subagent_id": "sa-1"},
+            }
+            for label, args in cases.items():
+                with self.subTest(label):
+                    note_turn(PARENT, "turn-1", starts_run=False)
+                    self.assertIsNone(self._delegate(home, args))
+
+    def test_a_finished_run_holds_no_turn(self) -> None:
+        for end in ("done", "cancelled"):
+            with self.subTest(end=end), homes() as home:
+                self.assertNotEqual(_define().get("status"), "refused")
+                if end == "done":
+                    for node_id in ("pr1", "verify"):
+                        _write_handoff(home, "prs", node_id)
+                        settled = json.loads(dag_tool.omh_dag_handler(
+                            {"action": "settle", "run": "prs", "node": node_id, "outcome": "accepted"},
+                            session_id=PARENT))
+                        self.assertNotEqual(settled.get("status"), "refused", settled)
+                else:
+                    call = json.loads(dag_tool.omh_dag_handler({"action": "cancel", "run": "prs"}, session_id=PARENT))
+                    self.assertNotEqual(call.get("status"), "refused", call)
+                note_turn(PARENT, "turn-1", starts_run=False)
+                self.assertIsNone(self._delegate(home, MARKERLESS))
+
+    def test_no_run_means_no_mid_run_block(self) -> None:
+        with homes() as home:
+            note_turn(PARENT, "turn-1", starts_run=False)
             self.assertIsNone(self._delegate(home, MARKERLESS))
+
+    def test_an_unreadable_run_store_is_no_active_run(self) -> None:
+        with homes() as home:
+            self.assertNotEqual(_define().get("status"), "refused")  # a readable store holds the active run `prs`
+            note_turn(PARENT, "turn-1", starts_run=False)
+            # The same turn, the same session: only the run store raising on read differs, and that is no
+            # evidence of an active run (`_active_run` fails open) — the reader is reached, and the spawn
+            # a readable store would have held goes through.
+            with patch.object(dag_run, "session_runs", side_effect=sqlite3.DatabaseError("store is closed")) as reads:
+                self.assertIsNone(self._delegate(home, MARKERLESS))
+            self.assertTrue(reads.called, "the failing store read is what this fail-open case pins")
+
+    def test_a_delegated_childs_spawn_is_never_held(self) -> None:
+        child = "20261020_140300_child"
+        with homes() as home:
+            self.assertNotEqual(_define().get("status"), "refused")
+            subagent_start(parent_session_id=PARENT, child_session_id=child, **home.hooks())
+            note_turn(child, "turn-1", starts_run=False)
+            self.assertIsNone(self._delegate(home, MARKERLESS, session=child))
 
     def test_a_delegated_child_never_records_a_dag_turn(self) -> None:
         child = "20261020_140300_child"

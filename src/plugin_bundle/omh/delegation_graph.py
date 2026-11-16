@@ -51,6 +51,12 @@ node it repairs) or an extend (from the node whose check found the work
 missing). Dispatch waves of one parent (the children one turn started) are
 grouped as ``wave N · HH:MM``; that is order, not dependency, and no edge is
 drawn for it.
+
+While a dag run is drawn, a ledger child bound to no node of it is an
+``outside_dag`` lane: still a node with its state, title, usage and group, but
+with no edge and in no layer — the run's layers hold the run alone. The views
+draw such a lane under its own ``outside DAG`` heading rather than as a start
+node of the run. With no run drawn a child is a plain lane, as ever.
 """
 
 from __future__ import annotations
@@ -140,7 +146,8 @@ def graph_fingerprint(graph: Mapping[str, Any]) -> str:
     """What a reader would see, minus the clock: structure, states and labels, never elapsed time."""
     nodes = graph.get("nodes") if isinstance(graph.get("nodes"), list) else []
     edges = graph.get("edges") if isinstance(graph.get("edges"), list) else []
-    keys = ("id", "kind", "title", "category", "model", "effort", "state", "status", "waits_on", "group")
+    keys = ("id", "kind", "title", "category", "model", "effort", "state", "status", "waits_on", "group",
+            "outside_dag")
     shape = {
         "nodes": [{key: node.get(key) for key in keys} for node in nodes if isinstance(node, Mapping)],
         "edges": [[edge.get("from"), edge.get("to"), edge.get("kind")] for edge in edges if isinstance(edge, Mapping)],
@@ -896,15 +903,10 @@ def _build(
     team = max(teams, key=lambda found: found[1]) if teams else None
     children = [child for ledger in ledgers.values() if ledger for child in ledger["children"]]
     dag = _dag_run(Path(omh_home), session_id, ledgers, dag_pick)
-    if dag is not None:
-        run = str(dag["record"]["run"])
-        # Another run's children are that run's nodes, not waves of this graph.
-        children = [child for child in children
-                    if not (isinstance(child.get("dag"), Mapping) and child["dag"].get("run") not in (None, run))]
-        if dag["picked"]:
-            children, team, linger = [], None, None
-        known = {child["child_session_id"] for child in children}
-        children += [child for child in dag["children"] if child["child_session_id"] not in known]
+    if dag is not None and dag["picked"]:
+        # A run the pane named is drawn alone: no team, no lanes of the run's or outside it; only its own
+        # children feed its nodes' facts.
+        children, team, linger = list(dag["children"]), None, None
     if not children and team is None and dag is None:
         return inactive_graph("no_delegation", scope=scope)
     sessions = [session_id] + [child["child_session_id"] for child in children]
@@ -1106,18 +1108,29 @@ def _build(
         derived = facts_for(child, model_of_node.get(parent_id, ""))
         key = (child["parent_session_id"], child["parent_turn_id"] or child.get("call_id", ""))
         group = f"wave {waves[key]} · {_clock(wave_start[key])}" if parent_id == "root" and key in waves else ""
-        nodes.append({
+        entry = {
             "id": node_id, "kind": "lane",
             "title": _text(title_for(child), TITLE_LIMIT) or f"session {session_tail(child['child_session_id'])}",
             **derived, "order": order, "group": group, "waits_on": 0,
             "session_tail": session_tail(child["child_session_id"]),
-        })
+        }
+        if dag is not None:
+            # No node of the run owns this child: it stays visible under its own outside-DAG group, out of the
+            # run's layers and edges (`_layers`, the strip below).
+            entry["outside_dag"] = True
+        nodes.append(entry)
         model_of_node[node_id] = derived["model"] if derived["model"] != "?" else ""
         order += 1
         edges.append({"from": parent_id, "to": node_id, "kind": "dispatch"})
 
     if linger is not None:
         nodes, edges = _without_old_waves(nodes, edges, children, now, linger)
+    if any(node.get("outside_dag") is True for node in nodes):
+        # The prune above still saw these edges (an outside lane goes with its wave as ever); the payload carries
+        # none touching an outside lane, so no view can draw it under the run.
+        edges = [edge for edge in edges
+                 if not any(node.get("outside_dag") is True and node["id"] in (edge["from"], edge["to"])
+                            for node in nodes)]
     lanes = [node for node in nodes if node["kind"] != "root"]
     if not lanes:
         return inactive_graph("no_delegation", scope=scope)
@@ -1541,7 +1554,8 @@ def fanout_graph(record: Mapping[str, Any]) -> dict[str, Any]:
 # Kept on its own walk, not the DAG core's `layers`: given a repeated node id this walk answers no layers or
 # lists the id twice, where the core reads the id once, and its readers do not drop repeats first.
 def _layers(nodes: Sequence[Mapping[str, Any]], edges: Sequence[Mapping[str, str]]) -> list[list[str]]:
-    ids = [str(node["id"]) for node in nodes]
+    # An outside_dag lane is a node but no layer's member: callers hand it whatever they have, and it never lands.
+    ids = [str(node["id"]) for node in nodes if node.get("outside_dag") is not True]
     incoming = {node_id: 0 for node_id in ids}
     successors: dict[str, list[str]] = {node_id: [] for node_id in ids}
     for edge in edges:
@@ -1668,9 +1682,11 @@ def _layered(graph: dict[str, Any], open_layers: Sequence[int] = ()) -> dict[str
     """The pane's cut: at most `GRAPH_NODE_LIMIT` nodes and `GRAPH_BYTE_LIMIT` bytes, kept by layer.
 
     ``open_layers`` are the layers the pane has open: their lanes come after the lanes in hand and the stopped ones
-    and before the rest, under the larger `GRAPH_OPEN_NODE_LIMIT` and `GRAPH_OPEN_BYTE_LIMIT`. Every kept lane
-    carries its ``layer``; ``layer_count`` is how many the run has, and ``layer_hidden`` counts, for each layer that
-    lost any, the lanes it lost by state. A kept lane whose parent was cut hangs from its nearest kept ancestor by an
+    and before the rest, under the larger `GRAPH_OPEN_NODE_LIMIT` and `GRAPH_OPEN_BYTE_LIMIT`. Every kept run lane
+    carries its ``layer``; an outside-dag lane is selected by the same ranking (after the run's own lanes of its
+    state's tier) but carries none. ``layer_count`` is how many layers the run has, and ``layer_hidden`` counts, for
+    each layer that lost any, the lanes it lost by state; a cut outside lane counts in ``hidden_nodes`` without a
+    layer. A kept lane whose parent was cut hangs from its nearest kept ancestor by an
     ``elided`` edge, so it is never drawn under the wrong parent. With ``open_layers`` named the cut is sent even
     when nothing was left out, so the pane's ask stays the same. A run whose layer rows alone overrun the bytes is
     sent as its counts by state (``counts_only``), which the pane draws as one line.
@@ -1679,12 +1695,16 @@ def _layered(graph: dict[str, Any], open_layers: Sequence[int] = ()) -> dict[str
     if graph.get("status") != "active":
         return graph
     lanes = [node for node in nodes if node.get("kind") != "root"]
+    # Outside-dag lanes join the same bounded selection, never a free pass past it: within a state's tier they
+    # rank after the run's own lanes, so running DAG work is kept ahead of any outside lane and the outside
+    # roster can never consume the allowance the run's own work needs.
+    run_lanes = [node for node in lanes if node.get("outside_dag") is not True]
     edges = graph.get("edges") or []
-    layer_ids = _layers(lanes, edges) or [[str(node["id"]) for node in lanes]]
+    layer_ids = _layers(run_lanes, edges) or [[str(node["id"]) for node in run_lanes]]
     layer_of = {node_id: at for at, ids in enumerate(layer_ids) for node_id in ids}
     # The pane's frontier: the furthest layer with work in hand, else the first unsettled one, else the last.
     states: list[set[str]] = [set() for _ in layer_ids]
-    for node in lanes:
+    for node in run_lanes:
         states[layer_of[str(node["id"])]].add(str(node.get("state") or "unknown"))
     active = [at for at, held in enumerate(states) if held & _ACTIVE_STATES]
     unsettled = [at for at, held in enumerate(states) if held - {"done"}]
@@ -1693,8 +1713,12 @@ def _layered(graph: dict[str, Any], open_layers: Sequence[int] = ()) -> dict[str
 
     def rank(node: Mapping[str, Any]) -> tuple[Any, ...]:
         state = str(node.get("state") or "")
-        at = layer_of[str(node["id"])]
         tier = 0 if state in _IN_HAND_STATES else 1 if state in _STOPPED_STATES else 2
+        if node.get("outside_dag") is True:
+            # Its state's own tier, after the run's own lanes of that tier: outside work in hand still beats
+            # anything less urgent, but never displaces the run's own lanes.
+            return (tier, True, len(layer_ids), False, _KEEP_ORDER.get(state, 5), -int(node.get("order") or 0))
+        at = layer_of[str(node["id"])]
         return (tier, at not in wanted, abs(at - frontier), at < frontier, _KEEP_ORDER.get(state, 5),
                 -int(node.get("order") or 0))
 
@@ -1735,7 +1759,9 @@ def _layered_cut(
 ) -> dict[str, Any]:
     nodes = graph["nodes"]
     kept_ids = kept_lanes | {str(node["id"]) for node in nodes if node.get("kind") == "root"}
-    kept = [node if node.get("kind") == "root" else {**node, "layer": layer_of[str(node["id"])]}
+    # An outside lane the selection kept carries no layer: it draws beside the run, never in it.
+    kept = [node if node.get("kind") == "root" or node.get("outside_dag") is True
+            else {**node, "layer": layer_of[str(node["id"])]}
             for node in nodes if str(node["id"]) in kept_ids]
     drawn = [edge for edge in graph["edges"] if str(edge["from"]) in kept_ids and str(edge["to"]) in kept_ids]
     # For every cut node, its nearest kept ancestors, walked parents first; a kept lane under a cut parent takes an
@@ -1768,10 +1794,12 @@ def _layered_cut(
             continue
         state = str(node.get("state") or "unknown")
         hidden_by_state[state] = hidden_by_state.get(state, 0) + 1
-        at = layer_of[str(node["id"])]
-        row = rows.setdefault(at, {"layer": at, "count": 0, "states": {}})
-        row["count"] += 1
-        row["states"][state] = row["states"].get(state, 0) + 1
+        # An outside lane the cut omitted counts with the hidden lanes, but it lost no layer to name a row for.
+        if node.get("outside_dag") is not True:
+            at = layer_of[str(node["id"])]
+            row = rows.setdefault(at, {"layer": at, "count": 0, "states": {}})
+            row["count"] += 1
+            row["states"][state] = row["states"].get(state, 0) + 1
     out = {key: value for key, value in graph.items() if key not in ("layers", "hidden_by_group", "group_order")}
     topology = graph.get("dag_topology")
     if isinstance(topology, Mapping):

@@ -359,7 +359,13 @@ What it shows, and what it leaves as `?`:
     `stuck`, `say` and the run's status line (`1 open past 1h (Docs body
     2h 10m)`). The profile's `dag_stale_after_s` and
     `dag_max_lost_reoffers` move when a node no child took is offered again
-    (600 s) and how many times a restart's loss is (3). Nodes of an earlier repair group that were never
+    (600 s) and how many times a restart's loss is (3). A ledger child no node
+    of the drawn run owns — one whose goal carries no `[dag:<run>/<node>]`
+    marker, or one bound to another run — is an `outside_dag` lane: it stays a
+    node of the graph with its state, title and usage, but it joins no layer
+    and no edge, and the drawings show it under its own `outside DAG` heading
+    (the desktop cards under `Outside DAG`), never as a start node of the run.
+    With no run drawn it is a plain lane. Nodes of an earlier repair group that were never
     accepted leave the drawing. Each node carries where it came from
     (`dag_origin`: `define`, `repair:<root>`, `extend:<round>`), and a repair
     node its repair cycle (`cycle`: 2 for the second repair of the same
