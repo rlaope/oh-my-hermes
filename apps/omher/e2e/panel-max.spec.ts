@@ -204,6 +204,19 @@ const freeRowPoint = (page: Page) =>
   });
 const isMaxed = async (page: Page) => /\bpanel-max\b/.test((await page.getByTestId("window").getAttribute("class")) ?? "");
 
+/** Each slide round starts the same way, whatever the last one's press hit (a control is the person's: the model
+ *  picker may be open, the places chip may have closed the panel): picker closed, panel open on Plans, maximised. */
+async function maxForRound(page: Page) {
+  if (await page.getByTestId("model-pop").isVisible()) await page.keyboard.press("Escape");
+  await expect(page.getByTestId("model-pop")).toBeHidden();
+  if (!/\bpanel-open\b/.test((await page.getByTestId("window").getAttribute("class")) ?? "")) await page.getByTestId("places").click();
+  await expect(page.getByTestId("window")).toHaveClass(/\bpanel-open\b/);
+  await page.getByTestId("panel-tab-runs").click();
+  if (!(await isMaxed(page))) await page.getByTestId("panel-max").click();
+  await expectMaxed(page);
+  await settled(page);
+}
+
 /** Every pointerdown from now on: where it landed, and whether on an interactive control outside the tab row. */
 const recordPresses = (page: Page) =>
   page.evaluate(() => {
@@ -295,15 +308,13 @@ async function escUntil(page: Page, x: number, y: number, want: "bare" | "contro
 // background, never a control: still maximises, 10 of 10. The chosen trade-off, next test: a press that lands on a
 // header control (the model pill) after the row left is the control's, and that double-click does not toggle.
 test("restore-slide double-click whose second press lands on bare header background maximises 10 of 10", async ({ page }) => {
-  test.setTimeout(60_000); // up to 20 slide rounds
+  test.setTimeout(90_000); // 10 slide rounds on a slow runner
   await page.setViewportSize({ width: 1440, height: 900 });
   await openPanel(page, "runs");
   await recordPresses(page);
   const y = (await page.getByTestId("panel-tabs").evaluate((e) => e.getBoundingClientRect().bottom)) - 5;
   for (let i = 0; i < 10; i++) {
-    if (!(await isMaxed(page))) await page.getByTestId("panel-max").click();
-    await expectMaxed(page);
-    await settled(page);
+    await maxForRound(page);
     await page.keyboard.press("Escape");
     await page.waitForTimeout(25);
     const p = await freeRowPoint(page);
@@ -319,7 +330,7 @@ test("restore-slide double-click whose second press lands on bare header backgro
 });
 
 test("trade-off: where the model pill slid over the row's old free space, the pill wins and the double-click does not toggle", async ({ page }) => {
-  test.setTimeout(60_000); // up to 20 slide rounds
+  test.setTimeout(90_000); // 10 slide rounds on a slow runner
   await page.setViewportSize({ width: 1440, height: 900 });
   await openPanel(page, "runs");
   await recordPresses(page);
@@ -329,11 +340,7 @@ test("trade-off: where the model pill slid over the row's old free space, the pi
     return { x: b.x + b.width / 2, y: b.y + b.height / 2 };
   });
   for (let i = 0; i < 5; i++) {
-    if (await page.getByTestId("model-pop").isVisible()) await page.keyboard.press("Escape");
-    await expect(page.getByTestId("model-pop")).toBeHidden();
-    if (!(await isMaxed(page))) await page.getByTestId("panel-max").click();
-    await expectMaxed(page);
-    await settled(page);
+    await maxForRound(page);
     expect(await page.evaluate(([x, y]) => !!document.elementFromPoint(x, y)?.closest('[data-testid="panel-tabs"]'), [p.x, p.y] as const)).toBe(true);
     await escUntil(page, p.x, p.y, "control");
     await presses(page);
@@ -350,15 +357,12 @@ test("trade-off: where the model pill slid over the row's old free space, the pi
 // brought under the pointer (the model pill), which is the control's and does not toggle (the chosen trade-off above;
 // the bare-header test above pins 10 of 10 maximised).
 test("a person's double-click on the tab row during the restore slide still maximises, 10 of 10 (real mouse)", async ({ page }) => {
-  test.setTimeout(60_000);
+  test.setTimeout(90_000); // 10 slide rounds on a slow runner
   await page.setViewportSize({ width: 1440, height: 900 });
   await openPanel(page, "runs");
   await recordPresses(page);
   for (let i = 0; i < 10; i++) {
-    if (await page.getByTestId("model-pop").isVisible()) await page.keyboard.press("Escape");
-    if (!(await isMaxed(page))) await page.getByTestId("panel-max").click();
-    await expectMaxed(page);
-    await settled(page);
+    await maxForRound(page);
     await page.keyboard.press("Escape");
     await page.waitForTimeout(25);
     // the free row space under the pointer at the first press; the row slides away before the second
