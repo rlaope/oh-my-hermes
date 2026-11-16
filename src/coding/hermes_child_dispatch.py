@@ -568,9 +568,12 @@ def _argv(request: HermesChildRequest) -> tuple[str, ...]:
     # Confirmed paired-run evaluation alone drops safe mode and the user-config
     # bypass: its declared arm home (`paired_run_arm_home`) is the config to
     # read, and the variant's plugin and skills are the point of the arm. Both
-    # arms take the same flags, so the arms differ only by what the home holds.
+    # arms take the same flags, so the arms differ only by what the home holds:
+    # the home's toolsets are `file,skills`, or with the run's explicit opt-in
+    # `file,skills,terminal`, identical for both arms. `--yolo` is never passed,
+    # so Hermes' dangerous-command approval stays on.
     isolation = (
-        ("--ignore-rules", "--toolsets", "file,skills")
+        ("--ignore-rules", "--toolsets", request.arm_home.toolsets)
         if request.arm_home is not None
         else ("--safe-mode", "--ignore-user-config", "--ignore-rules", "--toolsets", "file")
     )

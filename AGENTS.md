@@ -112,7 +112,10 @@ and evidence obvious to a reviewer reading the PR without the chat history.
     digest-matching task file per frozen task, task bytes over child stdin,
     detached per-cell worktrees under an atomically unique invocation-owned
     parent, signed evaluation bindings, removal of only the paths that
-    invocation reserved, and no persisted task body. Executors without a
+    invocation reserved, and no persisted task body. Both arms run
+    `--toolsets file,skills`; only the explicit `--arm-toolsets` opt-in may
+    add `terminal`, to both arms identically, signed into each cell and
+    checked at fan-in, with Hermes' command approval left on. Executors without a
     receipt-capable adapter are refused without substitution;
     caller-injected adapters stay the executor-neutral seam. It is the one
     caller that leaves safe mode: each arm runs a declared, receipt-signed
