@@ -1216,9 +1216,10 @@
   place-items: center;
   color: var(--quiet);
 }
+/* a collapsed folder's summary sits on the branch's line, at its right: the folder's name keeps the whole first line */
 .tg-sum {
   grid-column: 4;
-  grid-row: 1;
+  grid-row: 2;
   display: inline-flex;
   align-items: center;
   gap: 5px;
@@ -1267,6 +1268,7 @@
 }
 .tg-b {
   grid-column: 3 / 5;
+  grid-row: 2;
   font-family: var(--mono);
   font-size: 10px;
   color: var(--muted);
@@ -1441,4 +1443,10 @@
   .tst.busy svg {
     animation: none;
   }
+}
+.tg-open:has(> .tg-sum) > .tg-b {
+  grid-column: 3;
+}
+.tg-open:has(> .tg-sum) > .tg-n {
+  grid-column: 3 / 5;
 }

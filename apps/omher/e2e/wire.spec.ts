@@ -13,7 +13,7 @@
 //    ring sits centred inside its tile;
 // 7. no row is ever drawn cut at a region's bottom edge (the row there is hidden whole under the "more" chevron).
 // Shots: OMHER_SHOTS=<dir> (1440x900) -> sidebar-dark, sidebar-light, plus-menu, many-rows-scroll, terminal-open,
-// threads-chat, terminals-folders-collapsed, bot-reveal-before, bot-reveal-after, sidebar-dark-scrolled.
+// threads-chat, terminals-folders-collapsed, bot-reveal-before, bot-reveal-after, sidebar-dark-scrolled (the dock).
 import { expect, test, type Page } from "@playwright/test";
 import { mkdirSync } from "node:fs";
 import { join } from "node:path";
@@ -263,17 +263,6 @@ test.describe("shots", () => {
       await noCutRows(page);
       await shot(page, `sidebar-${theme}`);
       if (theme !== "dark") return;
-      // BOTS scrolled to its end: the bots gone out of view at the top come back as dock tiles, bots only
-      const botList = page.getByTestId("side-bots").locator(".bot-list");
-      await botList.evaluate((el) => (el.scrollTop = el.scrollHeight));
-      await expect(page.getByTestId("dock-tile-bot:kami")).toBeVisible();
-      await expect(page.getByTestId("dock").locator('[data-testid^="dock-tile-term:"]')).toHaveCount(0);
-      await page.mouse.move(900, 600);
-      await page.waitForTimeout(300);
-      await noCutRows(page);
-      await shot(page, "sidebar-dark-scrolled");
-      await botList.evaluate((el) => (el.scrollTop = 0));
-      await expect(page.getByTestId("dock")).toHaveCount(0);
       await shot(page, "terminal-open");
       await page.getByTestId("session-new").click();
       await expect(page.getByTestId("session-agent-shell")).toBeVisible();
@@ -310,6 +299,31 @@ test.describe("shots", () => {
     });
   }
 
+  test("shots: the dark sidebar with BOTS scrolled: the bots gone above are the dock's tiles (bots only)", async ({ page }) => {
+    test.skip(!SHOTS, "no shot folder");
+    test.setTimeout(180_000);
+    const { bots } = await mock("mock.manyBots", { n: 6 });
+    await open(page, { theme: "dark", roster: ["kami", "friren", "default", "omh-tui", ...(bots as string[])] });
+    await seedThreads(page);
+    await seed(page);
+    await failFriren();
+    const botList = page.getByTestId("side-bots").locator(".bot-list");
+    await expect(page.getByTestId("dock")).toHaveCount(0);
+    // scrolled until Kami, Friren and the next bot are above the list's top
+    await page.evaluate(() => {
+      const list = document.querySelector('[data-testid="side-bots"] .bot-list') as HTMLElement;
+      const rows = [...list.querySelectorAll(':scope > [data-testid^="bot-row-"]')];
+      list.scrollTop += rows[3]!.getBoundingClientRect().top - list.getBoundingClientRect().top;
+    });
+    await expect.poll(() => page.getByTestId("dock").locator(".dk-t").count()).toBe(3);
+    await expect(page.getByTestId("dock-tile-bot:friren")).toHaveAttribute("data-state", "failed");
+    await expect(page.locator('[data-testid^="dock-tile-term:"]')).toHaveCount(0);
+    expect(await botList.evaluate((el) => el.scrollTop)).toBeGreaterThan(0);
+    await page.mouse.move(900, 600);
+    await noCutRows(page);
+    await shot(page, "sidebar-dark-scrolled");
+  });
+
   test("shots: many rows (12 bots x 6 threads, 15 terminals, both scrolled midway) and the bot reveal", async ({ page }) => {
     test.skip(!SHOTS, "no shot folder");
     test.setTimeout(240_000);
@@ -335,8 +349,14 @@ test.describe("shots", () => {
       expect(m.top).toBeLessThan(m.max);
       expect(m.more).toBe("both");
     }
+    // BOTS scrolled midway: the bots gone out of view at the top are the dock's tiles, bots only
+    await expect(page.getByTestId("dock").locator(".dk-t").first()).toBeVisible();
+    await expect(page.locator('[data-testid^="dock-tile-term:"]')).toHaveCount(0);
+    await noCutRows(page);
     await shot(page, "many-rows-scroll");
     await botList.evaluate((el) => (el.scrollTop = 0));
+    // at the top of BOTS: no dock
+    await expect(page.getByTestId("dock")).toHaveCount(0);
     await shot(page, "bot-reveal-before");
     await page.getByTestId("bot-bot06").click();
     await expect(botList).toHaveAttribute("data-revealed", "bot06");
@@ -486,6 +506,8 @@ test("folders: collapse persists across a reload; collapsed header shows count a
   await expect(api.getByTestId("term-group-count")).toHaveText("2 sessions");
   await expect(api.getByTestId("term-group-running")).toHaveText("1 running");
   await expect(api.getByTestId("term-group-summary")).toContainText("1 running·2 sessions");
+  // the folder's name keeps its whole line beside the summary (never "api…")
+  expect(await api.locator(".tg-n").evaluate((el) => el.scrollWidth <= el.clientWidth)).toBe(true);
   await expect(api.getByTestId("term-group-summary")).toHaveAttribute("data-busy", "true");
   await expect.poll(() => page.evaluate(() => JSON.parse(localStorage.getItem("omher.term.folders") ?? "{}").collapsed)).toEqual([API]);
   await page.waitForTimeout(600);

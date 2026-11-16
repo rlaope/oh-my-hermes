@@ -625,20 +625,38 @@ export function SessionList({ needle = "", query = "" }: { needle?: string; quer
   const rowsKey = ss.list.map((r) => r.id).join(",");
   useEffect(() => {
     if (!current) return;
-    const keep = () => {
+    const rowOf = () => nav.current?.querySelector<HTMLElement>(`[data-testid="session-${CSS.escape(current)}"]`) ?? null;
+    // the band above the region's end is kept for the "more below" chevron (a row reaching into it is hidden)
+    const inView = () => {
       const list = nav.current;
-      const row = list?.querySelector<HTMLElement>(`[data-testid="session-${CSS.escape(current)}"]`);
-      if (!list || !row) return;
+      const row = rowOf();
+      if (!list || !row) return false;
       const l = list.getBoundingClientRect();
       const r = row.getBoundingClientRect();
-      // the band above the region's end is kept for the "more below" chevron (a row reaching into it is hidden)
-      if (r.top < l.top || r.bottom > l.bottom - CUE_PX) row.scrollIntoView({ block: "nearest" });
+      return r.top >= l.top && r.bottom <= l.bottom - CUE_PX;
+    };
+    // held in view until the person scrolls it away themselves (scrolling BOTS brings the dock in and shrinks this
+    // region: that must not undo their own TERMINALS scroll)
+    let held = true;
+    let ours = false;
+    const keep = () => {
+      const row = rowOf();
+      if (!held || !row || inView()) return;
+      ours = true;
+      row.scrollIntoView({ block: "nearest" });
+    };
+    const onScroll = () => {
+      if (ours) ours = false;
+      else held = inView();
     };
     const id = requestAnimationFrame(keep);
+    const el = nav.current;
+    el?.addEventListener("scroll", onScroll, { passive: true });
     const ro = typeof ResizeObserver === "function" ? new ResizeObserver(keep) : null;
-    if (nav.current) ro?.observe(nav.current);
+    if (el) ro?.observe(el);
     return () => {
       cancelAnimationFrame(id);
+      el?.removeEventListener("scroll", onScroll);
       ro?.disconnect();
     };
   }, [current, folders.collapsed, rowsKey]);
