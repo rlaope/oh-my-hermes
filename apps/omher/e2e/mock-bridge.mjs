@@ -1847,15 +1847,17 @@ const OPS = {
   },
   "mock.threads": (p) => {
     const b = needBot(p);
+    const at = (t) => (typeof t.at === "number" ? t.at : now() - (Number(t.ago) || 0));
     if (!Array.isArray(p.threads)) throw new OpError("bad_request", "threads must be an array");
     const ids = [];
     for (const t of p.threads) {
       const thread = nextId("stored-th");
       folders.set(thread, { bot: b.name, cwd: t.cwd ?? "/home/me/work", open: true, thread: true, title: String(t.title ?? ""),
-        started: now() - (Number(t.ago) || 0), archived: false, key: null,
+        // `at` (seconds since epoch) pins the time for a test that fixes the page's clock; else `ago` before now
+        started: at(t), archived: false, key: null,
         // a restored row the bridge lists before it attaches the thread: `listedCwd` (often "") until thread.open
         ...(typeof t.listedCwd === "string" ? { listedCwd: t.listedCwd } : {}) });
-      threadHistory.set(thread, (t.messages ?? []).map(([role, text], i) => ({ id: `seed-${thread}-${i}`, role, text, ts: now() - (Number(t.ago) || 0) + i })));
+      threadHistory.set(thread, (t.messages ?? []).map(([role, text], i) => ({ id: `seed-${thread}-${i}`, role, text, ts: at(t) + i })));
       ids.push(thread);
     }
     setTimeout(() => broadcast({ event: "thread.added", bot: b.name, thread: ids[0] ?? "", title: "" }), 0);

@@ -54,13 +54,15 @@ export function rowPreview(state: AppState, bot: string, row: ThreadRow, nowMs: 
   for (let i = items.length - 1; i >= 0 && !said; i -= 1) if (items[i]!.kind === "assistant" || items[i]!.kind === "user") said = items[i];
   const ts = Math.max(row.last ?? 0, row.started_at ?? 0, said?.ts ?? 0);
   const asks = selectAsks(state).filter((a) => a.bot === key);
-  if (asks.length) return { text: askText(asks[asks.length - 1]!.item), kind: "ask", ts };
+  // plain text on every kind: an ask names its command in backticks ("Allow `pnpm build:docs`?")
+  if (asks.length) return { text: plain(askText(asks[asks.length - 1]!.item)), kind: "ask", ts };
   if (chat?.turn) return { text: t("thread.working", { name, time: busyFor(nowMs - chat.turn.startedAt) }), kind: "live", ts };
   if (said && (said.kind === "assistant" || said.kind === "user")) {
     const text = plain(said.text);
     if (text) return { text: t("thread.said", { name: said.kind === "user" ? t("thread.you") : name, text }), kind: "said", ts };
   }
-  if (row.preview) return { text: t("thread.said", { name: t("thread.you"), text: row.preview }), kind: "said", ts };
+  const preview = row.preview ? plain(row.preview) : "";
+  if (preview) return { text: t("thread.said", { name: t("thread.you"), text: preview }), kind: "said", ts };
   return { text: t("thread.empty"), kind: "none", ts };
 }
 

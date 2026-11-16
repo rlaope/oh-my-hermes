@@ -344,13 +344,61 @@ test("a thread row is a chat card: bubble with its state badge inside, title and
   await shot(page, "rows-cards");
 });
 
-test("each thread row's time is its own last activity", async ({ page }) => {
+// fix5: the labels come from time.ts ("now", "14:02", "Mon", "Nov 2"), so two ages can share one (3h and 1h ago
+// are both yesterday's weekday just after midnight). Each row must show the label of ITS OWN last activity: the
+// page's clock is fixed (midday and 00:05 local, in Seoul and in UTC) and every row is compared with time.ts's
+// formatter applied to that row's own timestamp, so the test holds at any wall-clock time.
+for (const tz of ["Asia/Seoul", "UTC"] as const) {
+  test.describe(`thread times in ${tz}`, () => {
+    test.use({ timezoneId: tz });
+    // 2026-11-17 local: Seoul is UTC+9 all year
+    const local = (h: number, m: number) => Date.UTC(2026, 10, 17, h, m) - (tz === "UTC" ? 0 : 9 * 3600_000);
+    for (const [label, nowMs] of [["midday", local(12, 0)], ["00:05", local(0, 5)]] as const) {
+      test(`each thread row's time is its own last activity (${tz}, ${label})`, async ({ page }) => {
+        await page.clock.setFixedTime(nowMs);
+        await setup(page);
+        const ages = [4 * 86400, 26 * 3600, 3 * 3600, 3600, 10];
+        const { threads } = await mock("mock.threads", { bot: "kami", threads: ages.map((ago, i) => ({ title: `Thread ${i + 1}`, at: nowMs / 1000 - ago })) });
+        await page.reload();
+        await expect(page.getByTestId("threads-kami").getByTestId("thread-time")).toHaveCount(5);
+        const want = await page.evaluate(
+          async ([stamps, now]) => {
+            const { shortTime } = await import("/src/app/time.ts" as string);
+            return (stamps as number[]).map((ts) => shortTime(ts, now) as string);
+          },
+          [ages.map((ago) => nowMs / 1000 - ago), nowMs] as const,
+        );
+        // the fixture covers the formatter's kinds: just now, earlier today or a weekday, an older day
+        expect(new Set(want).size, JSON.stringify(want)).toBeGreaterThanOrEqual(3);
+        expect(want[4]).toBe("now");
+        for (const [i, id] of (threads as string[]).entries())
+          await expect(page.getByTestId(`thread-row-${id}`).getByTestId("thread-time"), `Thread ${i + 1}`).toHaveText(want[i]!);
+      });
+    }
+  });
+}
+
+// fix5: the second line is plain text, as for what was said: an ask ("Allow `pnpm build:docs`?") and the bridge's
+// preview of the first message lose their markdown marks
+test("a thread row's ask and its bridge preview show plain text, no markdown marks", async ({ page }) => {
   await setup(page);
-  await mock("mock.threads", { bot: "kami", threads: [4 * 86400, 26 * 3600, 3 * 3600, 3600, 10].map((ago, i) => ({ title: `Thread ${i + 1}`, ago })) });
+  const { threads } = await mock("mock.threads", {
+    bot: "kami",
+    threads: [
+      { title: "Docs build", ago: 60 },
+      { title: "Release notes", ago: 120, messages: [["user", "Draft the **release notes** from `CHANGELOG.md`"]] },
+    ],
+  });
   await page.reload();
-  const times = page.getByTestId("threads-kami").getByTestId("thread-time");
-  await expect(times).toHaveCount(5);
-  const texts = await times.allTextContents();
-  expect(new Set(texts).size).toBe(5);
-  expect(texts.filter((x) => x === "now")).toHaveLength(1);
+  const [ask, said] = threads as string[];
+  await expect(page.getByTestId(`thread-row-${said}`).getByTestId("thread-sub")).toHaveText("You: Draft the release notes from CHANGELOG.md");
+  await mock("mock.manual", { bot: "kami" });
+  await mock("mock.emit", {
+    events: [
+      { event: "turn.start", bot: "kami", session: ask },
+      { event: "approval.request", bot: "kami", session: ask, request_id: "fix5-ask", title: "Allow `pnpm build:docs`?", command: "pnpm build:docs", choices: ["once", "deny"] },
+    ],
+  });
+  await expect(page.getByTestId(`thread-row-${ask}`)).toHaveAttribute("data-state", "needs_you");
+  await expect(page.getByTestId(`thread-row-${ask}`).getByTestId("thread-sub")).toHaveText("Allow pnpm build:docs?");
 });
