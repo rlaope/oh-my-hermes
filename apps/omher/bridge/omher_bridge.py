@@ -856,9 +856,58 @@ def skill_roots(profile_dir: Path) -> list[Path]:
 
 def read_linear_mcp(profile_dir: Path) -> dict:
     """`tasks.linear`: whether the bot's `config.yaml` has an MCP server under `mcp_servers` whose NAME has `linear`
-    in it, for the Tasks page's Linear source (`linear_server`). Read-only; the config is Hermes' own, parsed once
-    and shared (`_load_yaml`)."""
-    return linear_server(_load_yaml(profile_dir / "config.yaml").get("mcp_servers"))
+    in it, for the Tasks page's Linear source (`linear_server`). Read-only, and never through `_load_yaml`: the config
+    is not parsed whole nor put in the shared cache; `mcp_server_names` keeps only the names and each `enabled`."""
+    return linear_server(mcp_server_names(profile_dir / "config.yaml"))
+
+
+def mcp_server_names(path: Path) -> dict:
+    """`{name: {"enabled": bool}}` (or `{name: {}}` when it has no `enabled`) for each server under the top-level
+    `mcp_servers` mapping of the YAML file at *path*; {} when there is none or it does not parse. The file goes
+    through the safe loader's event stream and nothing is built from it: a scalar is kept only when it is a top-level
+    key equal to `mcp_servers`, a key directly under it (a server name), or the plain `enabled` value of one; every
+    other scalar (a url, headers, env, auth: a credential may sit there) is dropped as it passes, so no other value
+    of the file is kept, returned or cached."""
+    try:
+        import yaml  # Hermes' own dependency; absent only outside its venv
+        loader = getattr(yaml, "CSafeLoader", None) or yaml.SafeLoader
+        out: dict[str, dict] = {}
+        stack: list[list] = []  # one per open collection: [is_map, kept key or None, awaiting a key, was a key]
+        with path.open(encoding="utf-8") as f:
+            for ev in yaml.parse(f, Loader=loader):
+                if isinstance(ev, (yaml.MappingEndEvent, yaml.SequenceEndEvent)):
+                    was_key = stack.pop()[3]
+                    if stack and stack[-1][0]:
+                        stack[-1][2] = not was_key
+                    continue
+                if not isinstance(ev, (yaml.ScalarEvent, yaml.AliasEvent, yaml.MappingStartEvent, yaml.SequenceStartEvent)):
+                    continue
+                top = stack[-1] if stack else None
+                as_key = bool(top and top[0] and top[2])
+                depth = len(stack)
+                servers = depth >= 2 and stack[0][1] == "mcp_servers" and stack[1][0]
+                if as_key and isinstance(ev, yaml.ScalarEvent):
+                    if depth == 1:
+                        top[1] = "mcp_servers" if ev.value == "mcp_servers" else None
+                    elif depth == 2 and servers:
+                        top[1] = ev.value
+                        out.setdefault(ev.value, {})
+                    elif depth == 3 and servers and stack[1][1] is not None:
+                        top[1] = "enabled" if ev.value == "enabled" else None
+                    else:
+                        top[1] = None
+                elif as_key:
+                    top[1] = None
+                elif (depth == 3 and servers and isinstance(ev, yaml.ScalarEvent) and top[0] and top[1] == "enabled"
+                      and stack[1][1] is not None and ev.implicit[0]):
+                    out[stack[1][1]]["enabled"] = ev.value not in ("false", "False", "FALSE", "no", "No", "NO", "off", "Off", "OFF")
+                if isinstance(ev, (yaml.MappingStartEvent, yaml.SequenceStartEvent)):
+                    stack.append([isinstance(ev, yaml.MappingStartEvent), None, True, as_key])
+                elif top and top[0]:
+                    top[2] = not as_key
+        return out
+    except Exception:
+        return {}
 
 
 def linear_server(servers) -> dict:
@@ -3261,7 +3310,11 @@ NS_REF = re.compile(r"^(hermes|claude|claude-sub|codex):([A-Za-z0-9_.:/@-]{1,300
 # omher's one masker: the same two patterns as src/lib/secrets.json, which the page (src/lib/secrets.ts) and the
 # desktop shell (tasks.rs mask_secrets) read; bridge/tests pin these strings to that file.
 SECRET_MASK = "••••"
-SECRET_TOKENS = r"\b(?:gh[pousr]_|github_pat_|glpat-|sk-|xox[abprs]-|AKIA)[A-Za-z0-9_-]{8,}"
+SECRET_TOKENS = (
+    r"\b(?:gh[pousr]_|github_pat_|glpat-|sk-|xox[abprs]-|AKIA)(?:[A-Za-z0-9_-]{8,}(?:(?:[ \t]?\r?\n[ \t]?|[ \t])"
+    r"[a-z_-]*[A-Z0-9][a-z_-]*[A-Z0-9][A-Za-z0-9_-]*){0,4}|[a-z_-]*[A-Z0-9][A-Za-z0-9_-]*(?:(?:[ \t]?\r?\n[ \t]?|[ \t])"
+    r"[a-z_-]*[A-Z0-9][a-z_-]*[A-Z0-9][A-Za-z0-9_-]*){1,4})"
+)
 SECRET_ASSIGNED = r"""\b([a-z_-]*(?:credentials?|token|password|passwd|secret|api[_-]?key))=[^\s"'<>&;,)\]]+"""
 _SECRET = re.compile(SECRET_TOKENS)
 _SECRET_ASSIGNED = re.compile(SECRET_ASSIGNED, re.IGNORECASE)
@@ -3269,8 +3322,9 @@ _HERMES_SID = re.compile(r"^[A-Za-z0-9_-]{1,80}$")
 
 
 def mask_secrets(text: str) -> str:
-    """Token-like strings (`sk-…`, `ghp_…`, `glpat-…`, `xoxb-…`, `AKIA…`) replaced by `••••`, and the value of a
-    `token=` / `credential=` / `password=` / `secret=` / `api_key=` replaced the same way (the name stays)."""
+    """Token-like strings (`sk-…`, `ghp_…`, `glpat-…`, `xoxb-…`, `AKIA…`, also one broken by line breaks) replaced by
+    `••••`, and the value of a `token=` / `credential=` / `password=` / `secret=` / `api_key=` replaced the same way
+    (the name stays)."""
     return _SECRET_ASSIGNED.sub(lambda m: m.group(1) + "=" + SECRET_MASK, _SECRET.sub(SECRET_MASK, text))
 
 

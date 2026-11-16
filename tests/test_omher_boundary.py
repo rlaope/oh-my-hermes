@@ -169,13 +169,15 @@ RULES = (
     " it is never piped to omher),",
     "omher passes no token, asks for none, reads none and shows none, and never comments, closes, assigns, labels, merges"
     " or edits anything on GitHub, GitLab or Linear.",
-    "A token-like string inside an item's own text (title, label, description, comment, check name) or a CLI's error"
+    "A token-like string (also one broken over lines) inside an item's own text (title, label, description, comment,"
+    " check name) or a CLI's error"
     " line is shown as `••••`, in the list, the drawer, the error line and the text \"Start in thread\" sends, by omher's"
     " one masker (the patterns in `apps/omher/src/lib/secrets.json`, read by the desktop shell, the page and the"
     " bridge's `mask_secrets` alike).",
     "For Linear omher holds no key: through `tasks.linear` the bridge reads only the server names under the bot's"
     " `config.yaml` `mcp_servers` and, of the first one whose name has `linear` in it, whether it is turned off"
-    " (`enabled`); it never reads a server's url, headers, env or auth, so a server is Linear by its name alone,",
+    " (`enabled`), with a YAML event reader that keeps no other value of the file and puts nothing in a cache; it never"
+    " keeps a server's url, headers, env or auth, so a server is Linear by its name alone,",
     "Besides it and the GitHub and GitLab CLIs' read-only lists of rule 33,",
     "This is the one exception to rules 5 and 10: the request is `gh`'s own, under its own login; omher passes no token,"
     " reads none and changes nothing on GitHub.",
@@ -2048,7 +2050,13 @@ class TasksReadOnly(unittest.TestCase):
     def test_linear_reads_only_the_server_names(self) -> None:
         src = (ROOT / "apps" / "omher" / "bridge" / "omher_bridge.py").read_text(encoding="utf-8")
         fn = src.split("def read_linear_mcp(", 1)[1].split("\ndef ", 1)[0]
-        self.assertEqual(fn.split('"""', 2)[2].strip(), 'return linear_server(_load_yaml(profile_dir / "config.yaml").get("mcp_servers"))')
+        self.assertEqual(fn.split('"""', 2)[2].strip(), 'return linear_server(mcp_server_names(profile_dir / "config.yaml"))')
+        # the config never goes through the shared YAML cache; the event reader keeps only names and `enabled`
+        names = src.split("def mcp_server_names(", 1)[1].split("\ndef ", 1)[0]
+        for word in ("_load_yaml", "_YAML_CACHE", "yaml.load(", "safe_load", "compose", "read_text"):
+            self.assertNotIn(word, names, word)
+        self.assertIn("yaml.parse(f, Loader=loader)", names)
+        self.assertEqual(sorted(set(re.findall(r'== "([a-z_]+)"', names))), ["enabled", "mcp_servers"])
         body = src.split("def linear_server(", 1)[1].split("\ndef ", 1)[0].split('"""', 2)[2]
         # the keys, then of the Linear-named server only its `enabled`: no url, no values(), no items()
         self.assertIn("for name in servers.keys():", body)

@@ -4231,6 +4231,27 @@ class TasksLinear(unittest.TestCase):
         self.assertEqual(ob.linear_server(Spy(work=work, my_linear=lin)), {"configured": False, "server": "my_linear"})
         self.assertEqual(touched, ["my_linear", "enabled"])
 
+    def test_no_other_value_is_kept_or_cached(self):
+        # the verifier's V5 probe (PR #2908): a fake credential under the Linear server must not be held by anything
+        # the reader returns or caches; the config never reaches the shared YAML cache
+        fake = "glpat-" + "X" * 24
+        for name, url, want in (("linear-work", "https://example.org/sse", True), ("work", "https://mcp.linear.app/sse", False)):
+            d = self._dir(f"model: x\nmcp_servers:\n  {name}:\n    url: {url}?token={fake}\n    headers:\n"
+                          f"      Authorization: {fake}\n    env: [{fake}, {{K: {fake}}}]\n    enabled: true\n")
+            ob._YAML_CACHE.clear()
+            result = ob.read_linear_mcp(d)
+            self.assertEqual(result, {"configured": want, "server": name if want else ""})
+            self.assertNotIn(str(d / "config.yaml"), ob._YAML_CACHE)
+            self.assertEqual(ob.mcp_server_names(d / "config.yaml"), {name: {"enabled": True}})
+            for held in (result, ob._YAML_CACHE, ob.mcp_server_names(d / "config.yaml")):
+                self.assertNotIn(fake, repr(held))
+
+    def test_names_and_enabled_only(self):
+        d = self._dir("mcp_servers:\n  notion: {url: x}\n  lin:\n    nested: {enabled: false}\n    enabled: off\n"
+                      "  q:\n    enabled: 'false'\nskills:\n  mcp_servers: {linear: {}}\n")
+        self.assertEqual(ob.mcp_server_names(d / "config.yaml"), {"notion": {}, "lin": {"enabled": False}, "q": {}})
+        self.assertEqual(ob.mcp_server_names(self._dir("mcp_servers: {linear: {enabled: false}\n") / "config.yaml"), {})
+
     def test_none_off_or_broken(self):
         for text in ("", "mcp_servers: []\n", "mcp_servers:\n  notion:\n    url: https://mcp.notion.com/mcp\n",
                      "mcp_servers:\n  issues:\n    url: https://mcp.linear.app/mcp\n", "model: x\n"):
@@ -4250,6 +4271,18 @@ class OneMasker(unittest.TestCase):
     def test_same_patterns_as_the_shared_file(self):
         spec = json.loads((Path(ob.__file__).parent.parent / "src" / "lib" / "secrets.json").read_text(encoding="utf-8"))
         self.assertEqual((ob.SECRET_TOKENS, ob.SECRET_ASSIGNED, ob.SECRET_MASK), (spec["tokens"], spec["assigned"], spec["mask"]))
+
+    def test_the_shared_cases(self):
+        # src/lib/secrets.cases.json: the same table the page (secrets.test.ts) and the shell (tasks.rs) run
+        table = json.loads((Path(ob.__file__).parent.parent / "src" / "lib" / "secrets.cases.json").read_text(encoding="utf-8"))
+        self.assertGreater(len(table["cases"]), 10)
+        for text, want in table["cases"]:
+            self.assertEqual(ob.mask_secrets(text), want, text)
+
+    def test_a_token_broken_by_a_line_break(self):
+        # the verifier's V4 (PR #2908): `ghp_XXXX` + newline + 32 X stayed visible
+        self.assertEqual(ob.mask_secrets("before ghp_XXXX\n" + "X" * 32 + " after"), "before •••• after")
+        self.assertEqual(ob.mask_secrets("ghp_" + "X" * 36 + "\nThe next line"), "••••\nThe next line")
 
     def test_masks_tokens_and_assigned_values(self):
         fake = "ghp_" + "X" * 36

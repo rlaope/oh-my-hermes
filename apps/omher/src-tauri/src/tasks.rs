@@ -1163,6 +1163,20 @@ mod tests {
         }
     }
 
+    #[test]
+    fn the_shared_masker_table() {
+        // src/lib/secrets.cases.json: the same table the page (secrets.test.ts) and the bridge (OneMasker) run
+        let v: Value = serde_json::from_str(include_str!("../../src/lib/secrets.cases.json")).unwrap();
+        let cases = v["cases"].as_array().unwrap();
+        assert!(cases.len() > 10);
+        for c in cases {
+            assert_eq!(mask_secrets(c[0].as_str().unwrap()), c[1].as_str().unwrap(), "{c}");
+        }
+        // the verifier's V4 (PR #2908): a token broken by a line break, through parse_view
+        let raw = serde_json::json!({"number": 1, "title": "safe", "body": format!("before ghp_XXXX\n{} after", "X".repeat(32))}).to_string();
+        assert_eq!(parse_view(Source::Github, Kind::Issues, &raw).unwrap().body, "before •••• after");
+    }
+
     /// The real smoke on this computer: `cargo test tasks::tests::real_gh -- --ignored --nocapture`. Lists the open
     /// issues and pull requests of rlaope/oh-my-hermes through the same code the app runs.
     #[test]
