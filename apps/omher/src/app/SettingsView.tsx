@@ -2,6 +2,7 @@ import { useStore } from "../state/store";
 import { t } from "../i18n";
 import { slots } from "../features";
 import { CloseIcon, IconButton } from "../ui";
+import { PageBack } from "./PageBack";
 
 /** Main column while `ui.view === "settings"`: a header plus the `settings` slot (or a plain note). */
 export function SettingsView() {
@@ -10,6 +11,7 @@ export function SettingsView() {
   return (
     <>
       <header className="head" data-testid="header">
+        <PageBack />
         <span className="head-title">{t("set.title")}</span>
         <div className="head-right" data-testid="head-right">
           <IconButton label={t("set.close")} onClick={() => s.closeSettings()}>

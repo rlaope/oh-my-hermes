@@ -166,6 +166,7 @@ export const en = {
   // shared words of both pages
   "page.cancel": "Cancel",
   "page.close": "Close",
+  "page.back": "Back",
   "page.offline": "{bot} is offline. Start its gateway, then try again.",
   "page.failed": "Couldn't do that: {error}",
   "page.on": "On",

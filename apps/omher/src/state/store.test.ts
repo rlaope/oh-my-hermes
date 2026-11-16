@@ -683,6 +683,28 @@ describe("store", () => {
     expect(store.getState().ui).toMatchObject({ view: "chat", session: null });
   });
 
+  it("a page's back returns where it was opened from: a session, through another page, else the chat", () => {
+    const f = fakeBridge();
+    const store = createStore(f.bridge);
+    store.actions.openSession("s1");
+    store.actions.openAutomations();
+    store.actions.openPlugins("kami");
+    store.actions.openSettings();
+    store.actions.closeSettings();
+    expect(store.getState().ui).toMatchObject({ view: "session", session: "s1" });
+    store.actions.openSession(null);
+    store.actions.openPlugins("kami");
+    store.actions.closeSettings();
+    expect(store.getState().ui.view).toBe("chat");
+    // a session closed while the page was open: back lands on the chat
+    store.actions.openSession("s1");
+    store.actions.openSettings();
+    store.actions.openSession(null);
+    store.actions.openSettings();
+    store.actions.closeSettings();
+    expect(store.getState().ui.view).toBe("chat");
+  });
+
   it("Reply there: the chip goes along as reply_to once, then clears; a turn end re-reads the places", async () => {
     const f = fakeBridge();
     const store = createStore(f.bridge, { now: () => T0 });

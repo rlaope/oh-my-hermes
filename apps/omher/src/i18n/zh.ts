@@ -165,6 +165,7 @@ export const zh: Record<Key, string> = {
   // shared words of both pages
   "page.cancel": "取消",
   "page.close": "关闭",
+  "page.back": "返回",
   "page.offline": "{bot} 已离线。请先启动它的网关，再试一次。",
   "page.failed": "操作失败：{error}",
   "page.on": "开",

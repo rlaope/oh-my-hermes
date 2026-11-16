@@ -4,6 +4,9 @@ All notable changes will be documented here.
 
 ## Unreleased
 
+- **omher: Settings, Automations and Plugins have a back arrow at the top left.** It returns to the chat, or to the
+  session the page was opened from (also after moving page to page); Settings keeps its × at the top right.
+
 - **omher: a message you send while the bot is answering waits behind a ↵ mark, and you choose what it does.** It
   shows as a muted bubble with "Waiting" and goes out on its own after the turn, one per turn, in order, through
   Hermes' own queue. Click the ↵ for Send now (stops the answer once, this message goes next), Steer (adds it to the

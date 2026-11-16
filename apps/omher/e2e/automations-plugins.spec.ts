@@ -378,3 +378,28 @@ test("the language picker switches at once (ko, ja); both pages translate and sh
   await page.getByTestId("language").getByRole("radio", { name: "English" }).click();
   await expect(page.getByTestId("nav-settings")).toHaveText("Settings");
 });
+
+// ---- the back arrow ---------------------------------------------------------------------------------------------
+
+test("Automations, Plugins and Settings each have a back arrow top left that returns to the chat", async ({ page }) => {
+  await open(page);
+  for (const [nav, view] of [["nav-automations", "automations"], ["nav-plugins", "plugins"], ["nav-settings", "settings"]]) {
+    await page.getByTestId(nav).click();
+    await expect(page.getByTestId(view)).toBeVisible();
+    const head = page.getByTestId("header");
+    const back = head.getByTestId("page-back");
+    await expect(back).toHaveAttribute("aria-label", "Back");
+    // the arrow is the first thing in the header, left of the title
+    const b = (await back.boundingBox())!;
+    const title = (await head.locator(".head-title").boundingBox())!;
+    expect(b.x + b.width).toBeLessThanOrEqual(title.x);
+    expect(b.x - (await head.boundingBox())!.x).toBeLessThan(20);
+    await back.click();
+    await expect(page.getByTestId(view)).toHaveCount(0);
+    await expect(page.getByTestId("composer")).toBeVisible();
+  }
+  // Settings keeps its × too
+  await page.getByTestId("nav-settings").click();
+  await page.getByRole("button", { name: "Close settings" }).click();
+  await expect(page.getByTestId("composer")).toBeVisible();
+});
