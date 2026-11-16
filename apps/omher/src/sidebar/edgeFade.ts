@@ -1,9 +1,13 @@
 // A sidebar list that scrolls on its own (BOTS, TERMINALS) marks an edge that has more rows past it. `data-more` on the
-// list: "below", "above", "both" or nothing; the cue itself is CSS (sessions.css). At the bottom edge no row is ever
-// shown cut: the row the region's end would cut (and any row in the cue's band) is hidden whole by a clip on the list,
-// so the "more below" chevron sits on empty sidebar, never on half a face or a preview line. The clip is paint only:
-// the list keeps its size, so nothing below it moves. Use the returned callback as the list's `ref` (the list can
-// mount after its section, as TERMINALS does with its first session).
+// list: "below", "above", "both" or nothing; the cue itself is CSS (sessions.css). At the bottom edge the region never
+// ends on an empty band (owner, fix5):
+// - at its top ("below"): no row is shown cut. The row the region's end would cut (and any row in the cue's band) is
+//   hidden whole by a clip on the list, so the chevron sits on empty sidebar; the auto split (autoSplit.ts) sizes the
+//   regions so that this hides nothing but the cue's band.
+// - scrolled ("both"): the cut row shows, under a soft bottom fade with the chevron on it, as in any scrolling list.
+//   Hiding it there left its whole height empty above the chevron.
+// The clip is paint only: the list keeps its size, so nothing below it moves. Use the returned callback as the list's
+// `ref` (the list can mount after its section, as TERMINALS does with its first session).
 import { useCallback, useRef } from "react";
 
 /** The rows that are shown whole or not at all: a bot's own row, a thread row, a folder header, a terminal row. */
@@ -59,7 +63,7 @@ export function useEdgeFade<T extends HTMLElement>(own?: { current: T | null }):
         if (m) el.dataset.more = m;
         else delete el.dataset.more;
         let clip = "";
-        if (m === "below" || m === "both") {
+        if (m === "below") {
           const box = el.getBoundingClientRect();
           const rows = [...el.querySelectorAll<HTMLElement>(CUT_ROWS)].map((r) => {
             const b = r.getBoundingClientRect();

@@ -208,7 +208,8 @@ async function failFriren() {
 }
 
 /** Every bot row and thread row of BOTS, and every folder header and row of TERMINALS, is drawn whole or not at all
- *  at its list's bottom edge (the list's box less its bottom clip); at the top edge only when scrolled past. */
+ *  at its list's bottom edge (the list's box less its bottom clip) while the list is at its top; scrolled (fix5), a
+ *  row cut at the bottom edge shows under the soft fade; at the top edge only when scrolled past. */
 async function noCutRows(page: Page) {
   // settled: a scroll that brings the dock in re-lays the regions out over a frame or two
   await expect.poll(() => cutRows(page), { message: "rows drawn cut at a region edge", timeout: 3000 }).toEqual([]);
@@ -226,7 +227,8 @@ async function cutRows(page: Page): Promise<string[]> {
         if (b.height === 0) continue;
         // a row partly above the top edge is one the person scrolled past (the top shadow says so); the bottom edge
         // never cuts one
-        const whole = (b.top >= box.top - 0.5 || list.scrollTop > 0) && b.bottom <= bottom + 0.5;
+        const faded = list.dataset.more === "both" && /gradient/.test(getComputedStyle(list.parentElement!, "::after").backgroundImage);
+        const whole = (b.top >= box.top - 0.5 || list.scrollTop > 0) && (b.bottom <= bottom + 0.5 || faded);
         const out = b.bottom <= box.top + 0.5 || b.top >= bottom - 0.5;
         if (!whole && !out) bad.push(`${r.closest("[data-testid]")?.getAttribute("data-testid")} ${Math.round(b.top)}..${Math.round(b.bottom)} in ${Math.round(box.top)}..${Math.round(bottom)} (box end ${Math.round(box.bottom)}, clip "${getComputedStyle(list).clipPath}", more ${list.dataset.more ?? "-"})`);
       }

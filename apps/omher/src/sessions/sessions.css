@@ -81,8 +81,9 @@ body.side-resizing * {
 .side-sec > .ss-list {
   flex: 1 1 auto;
 }
-/* more rows past the bottom edge (edgeFade.ts): the list hides the row its end would cut, whole (a clip, so nothing
-   moves), and a small chevron sits in the band that leaves free (CUE_PX); no row is ever drawn half */
+/* more rows past the bottom edge (edgeFade.ts): at the list's top it hides the row its end would cut, whole (a clip,
+   so nothing moves), and a small chevron sits in the band that leaves free (CUE_PX); scrolled, the cut row shows
+   under a soft fade to the sidebar's colour with the chevron on it, so no empty band stands above the chevron */
 .side-sec {
   position: relative;
 }
@@ -97,6 +98,12 @@ body.side-resizing * {
   background: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 24 24' fill='none' stroke='%23908a94' stroke-width='2.6' stroke-linecap='round' stroke-linejoin='round'><path d='m6 9 6 6 6-6'/></svg>") center bottom 2px / 10px 10px no-repeat;
   pointer-events: none;
   z-index: 1;
+}
+.side-sec:has(> [data-more="both"])::after {
+  height: 28px;
+  background:
+    url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 24 24' fill='none' stroke='%23908a94' stroke-width='2.6' stroke-linecap='round' stroke-linejoin='round'><path d='m6 9 6 6 6-6'/></svg>") center bottom 2px / 10px 10px no-repeat,
+    linear-gradient(to bottom, transparent, var(--side) 60%);
 }
 .side-sh-row {
   position: relative; /* the + menu spans the section's width under this row */

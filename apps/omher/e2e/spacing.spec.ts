@@ -322,41 +322,72 @@ test("footer: Automations, Plugins and Settings in one row of icon buttons, name
   await expect(page.getByTestId("nav-settings")).toHaveClass(/\bon\b/);
 });
 
-/** The sidebar's lists as they show now: the blank band at each list's end (from the last whole row shown to the
- *  list's visible end), the chevrons, every open folder's shown rows. */
+/** The sidebar's lists as they show now (fix5: what is painted, not where a clip ends). `band`: while more rows are
+ *  below, the empty space from the last thing painted in the list (a whole row, or the part of a cut row the bottom
+ *  fade shows) down to the chevron's band (the list's last CUE_PX); `cut`: a row drawn cut at the end (only under the
+ *  fade); `fade`: the fade is drawn; `openHeadsAlone`: an open folder whose header shows whole and none of its cards. */
 function bands(page: Page) {
   return page.evaluate(() => {
-    const out: Record<string, { band: number; more: string | null; openHeadsAlone: number; cardsShown: number; cards: number }> = {};
+    type Band = { band: number; more: string | null; scrollTop: number; cut: boolean; fade: boolean; openHeadsAlone: number; cardsShown: number; cards: number };
+    const out: Record<string, Band> = {};
     for (const [name, sel] of [["bots", '[data-testid="side-bots"] > .bot-list'], ["terms", '[data-testid="side-sessions"] > .ss-list']] as const) {
       const list = document.querySelector<HTMLElement>(sel);
       if (!list) continue;
       const box = list.getBoundingClientRect();
       const v = (/inset\(([^)]*)\)/.exec(getComputedStyle(list).clipPath)?.[1] ?? "").trim().split(/\s+/).map(parseFloat).filter((n) => !Number.isNaN(n));
       const end = box.bottom - (v.length ? (v[2] ?? v[0] ?? 0) : 0);
-      const rows = [...list.querySelectorAll<HTMLElement>(".bot-w > .bot, .th-row, .tg-h, .ss-row")].filter((r) => r.getBoundingClientRect().height > 0);
-      const shown = rows.filter((r) => r.getBoundingClientRect().top >= box.top - 0.5 && r.getBoundingClientRect().bottom <= end + 0.5);
-      const lastBottom = Math.max(box.top, ...shown.map((r) => r.getBoundingClientRect().bottom));
+      const rows = [...list.querySelectorAll<HTMLElement>(".bot-w > .bot, .th-row, .tg-h, .ss-row, .bot-list > :not(.bot-w):not(.tg)")]
+        .map((r) => ({ r, b: r.getBoundingClientRect() }))
+        .filter(({ b }) => b.height > 0);
+      const painted = rows.filter(({ b }) => b.top < end - 0.5 && b.bottom > box.top + 0.5);
+      const whole = painted.filter(({ b }) => b.top >= box.top - 0.5 && b.bottom <= end + 0.5);
+      const lastPainted = Math.max(box.top, ...painted.map(({ b }) => Math.min(b.bottom, end)));
       const more = list.dataset.more ?? null;
-      // an open folder whose header shows and none of its cards
+      const below = more === "below" || more === "both";
+      const after = getComputedStyle(list.parentElement!, "::after");
       const openHeadsAlone = [...list.querySelectorAll<HTMLElement>(".tg:not(.shut)")].filter((g) => {
         const h = g.querySelector(".tg-h");
-        return h && shown.includes(h as HTMLElement) && ![...g.querySelectorAll(".ss-row")].some((c) => shown.includes(c as HTMLElement));
+        return whole.some(({ r }) => r === h) && !painted.some(({ r }) => r.matches(".ss-row") && g.contains(r));
       }).length;
       out[name] = {
-        band: Math.round(more === "below" || more === "both" ? end - lastBottom : 0),
+        band: below ? Math.max(0, Math.round((box.bottom - 14 - lastPainted) * 100) / 100) : 0,
         more,
+        scrollTop: Math.round(list.scrollTop),
+        cut: painted.some(({ b }) => b.bottom > end + 0.5),
+        fade: after.content !== "none" && /gradient/.test(after.backgroundImage),
         openHeadsAlone,
-        cardsShown: shown.filter((r) => r.matches(".ss-row")).length,
-        cards: rows.filter((r) => r.matches(".ss-row")).length,
+        cardsShown: whole.filter(({ r }) => r.matches(".ss-row")).length,
+        cards: rows.filter(({ r }) => r.matches(".ss-row")).length,
       };
     }
     return out;
   });
 }
 
+/** Scrolls BOTS and TERMINALS each to `f` of the way down and waits for the dock and the split to settle. */
+async function scrollBoth(page: Page, f: number) {
+  await page.evaluate((f) => document.querySelectorAll<HTMLElement>(".side-sec > .bot-list").forEach((l) => (l.scrollTop = f * (l.scrollHeight - l.clientHeight))), f);
+  await page.waitForTimeout(500);
+}
+
+const FRACTIONS = [0, 0.25, 0.43, 0.7, 1];
+
+// owner (2026-11-16, "no empty band"), fix5: a region's last visible thing is a whole row at its end, or a row cut
+// under the soft bottom fade, never an empty band (over 12px, besides the chevron's 14px). At the top of an auto
+// split the regions end on whole rows; scrolled, the cut row shows under the fade, as in any scrolling list.
+function expectNoBand(b: Awaited<ReturnType<typeof bands>>, f: number) {
+  for (const r of [b.bots!, b.terms!]) {
+    const at = JSON.stringify({ f, ...b });
+    expect(r.band, at).toBeLessThanOrEqual(12);
+    expect(r.openHeadsAlone, at).toBe(0);
+    if (r.cut) expect(r.fade, at).toBe(true);
+    if (f === 0 && r.scrollTop === 0) expect(r.cut, at).toBe(false);
+  }
+}
+
 test.describe("auto split: no blank band", () => {
   test.use({ deviceScaleFactor: 1, viewport: { width: 1440, height: 900 } });
-  test("few rows at 900: every card shows, TERMINALS without a chevron, BOTS ends on a whole row; at 760 each region ends on a whole row", async ({ page }) => {
+  test("few rows at 900: every card shows, TERMINALS without a chevron, BOTS ends on a whole row; at 760 each region ends on a whole row; no band at any scroll", async ({ page }) => {
     test.setTimeout(120_000);
     await mock("mock.threads", { bot: "kami", threads: ["Release notes", "Nightly build", "Slack alert copy", "Docs dark mode", "Gateway 502s"].map((title, i) => ({ title, ago: (i + 1) * 600 })) });
     await open(page);
@@ -367,19 +398,20 @@ test.describe("auto split: no blank band", () => {
     record("tidy-few@900", { ...b900, ...(await measure(page)) });
     expect(b900.terms!.cardsShown).toBe(4);
     expect(b900.terms!.more).toBeNull();
-    // BOTS (Kami's five threads as two-line chat cards) needs more than what is left: it ends on a whole row
-    expect(b900.bots!.band).toBeLessThanOrEqual(26);
-    await page.setViewportSize({ width: 1440, height: 760 });
-    await page.waitForTimeout(400);
-    const b760 = await bands(page);
-    record("tidy-few@760", { ...b760, ...(await measure(page)) });
-    for (const r of [b760.bots!, b760.terms!]) {
-      expect(r.band).toBeLessThanOrEqual(26);
-      expect(r.openHeadsAlone).toBe(0);
+    for (const h of [900, 760]) {
+      await page.setViewportSize({ width: 1440, height: h });
+      await page.waitForTimeout(400);
+      for (const f of FRACTIONS) {
+        await scrollBoth(page, f);
+        const b = await bands(page);
+        record(`fix5-few@${h}@${f}`, b);
+        expectNoBand(b, f);
+      }
+      await scrollBoth(page, 0);
     }
   });
 
-  test("many rows at 900 and 760: no band over half a card; an open folder never shows without a card", async ({ page }) => {
+  test("many rows at 900 and 760: no band at any scroll; an open folder never shows without a card", async ({ page }) => {
     test.setTimeout(240_000);
     const { bots } = await mock("mock.manyBots", { n: 12 });
     const names = ["Billing fixes", "Flaky e2e on CI", "Onboarding copy", "Search ranking", "Pricing page A/B", "Deploy checklist"];
@@ -392,13 +424,19 @@ test.describe("auto split: no blank band", () => {
     for (const h of [900, 760]) {
       await page.setViewportSize({ width: 1440, height: h });
       await page.waitForTimeout(400);
-      for (const top of [0, 37, 120]) {
+      for (const f of FRACTIONS) {
+        await scrollBoth(page, f);
+        const b = await bands(page);
+        if (f === 0) record(`tidy-many@${h}`, { ...b, ...(await measure(page)) });
+        record(`fix5-many@${h}@${f}`, b);
+        expectNoBand(b, f);
+      }
+      // TERMINALS alone at a few offsets, BOTS at its top
+      await scrollBoth(page, 0);
+      for (const top of [37, 120]) {
         await page.evaluate((t) => document.querySelectorAll<HTMLElement>(".side-sec > .ss-list").forEach((l) => (l.scrollTop = t)), top);
         await page.waitForTimeout(150);
-        const b = await bands(page);
-        if (top === 0) record(`tidy-many@${h}`, { ...b, ...(await measure(page)) });
-        for (const r of [b.bots!, b.terms!]) expect(r.openHeadsAlone, JSON.stringify(b)).toBe(0);
-        if (top === 0) for (const r of [b.bots!, b.terms!]) expect(r.band, JSON.stringify(b)).toBeLessThanOrEqual(26);
+        expectNoBand(await bands(page), -1);
       }
     }
   });
