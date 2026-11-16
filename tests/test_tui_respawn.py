@@ -144,7 +144,7 @@ class RespawnTests(unittest.TestCase):
         self.assertIn(RESPAWN_NOTICE.format(reason="The Hermes gateway exited (code 1)", session=STORED, attempt=1,
                                             limit=RESPAWN_LIMIT, window=RESPAWN_WINDOW_SECONDS), said)
         self.assertIn(f"The Hermes gateway exited (code 1): starting it again and resuming session {STORED} (1 of 3 in 60 s); "
-                      "what you type waits until it is back, and ctrl+c leaves.", said)
+                      "you can keep typing, Enter waits until it is back, and ctrl+c leaves.", said)
         self.assertEqual(said[-1], RESPAWNED_NOTICE.format(session=STORED))
         # It reads the session's settings and command list again, as a session that opens does.
         self.assertEqual([method for method, _params in new.calls], ["config.get", "commands.catalog"])
