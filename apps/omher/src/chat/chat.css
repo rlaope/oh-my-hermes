@@ -231,6 +231,113 @@
   font-size: 11px;
   color: var(--quiet);
 }
+/* steer queue: a message held while the bot answers, with its ↵ mark before the bubble */
+.msg-line {
+  display: flex;
+  align-items: flex-start;
+  justify-content: flex-end;
+  gap: 6px;
+  /* the row's full width, so the bubble's max-width resolves as it does without the mark */
+  width: 100%;
+  min-width: 0;
+}
+/* muted, but its text keeps 4.5:1 in both themes (measured in e2e/steer-queue.spec.ts shots) */
+.msg.u.held .b {
+  opacity: 0.72;
+}
+.sq-w {
+  position: relative;
+  flex: none;
+  margin-top: calc((var(--fs-msg) * var(--lh-msg) + 18px - 24px) / 2);
+}
+.sq-mark {
+  width: 24px;
+  height: 24px;
+  border-radius: var(--r-sm);
+  font-size: 14px;
+  line-height: 24px;
+  color: var(--muted);
+  background: var(--raise);
+  border: 1px solid var(--line);
+}
+.sq-mark:hover,
+.sq-mark.on {
+  color: var(--ink);
+  background: var(--raise2);
+}
+.sq-mark:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+.sq-menu {
+  position: absolute;
+  z-index: 30;
+  top: 0;
+  right: calc(100% + 6px);
+  width: 150px;
+  display: flex;
+  flex-direction: column;
+  background: var(--pop);
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  padding: 4px;
+  box-shadow: var(--pop-shadow);
+}
+.sq-menu.up {
+  top: auto;
+  bottom: 0;
+}
+.sq-mi {
+  height: 26px;
+  padding: 0 8px;
+  border-radius: var(--r-sm);
+  font-size: 12px;
+  color: var(--body);
+  text-align: left;
+}
+.sq-mi:hover,
+.sq-mi:focus-visible {
+  background: var(--raise2);
+  color: var(--ink);
+  outline: 0;
+}
+.sq-mi.danger:hover,
+.sq-mi.danger:focus-visible {
+  color: var(--danger);
+}
+/* steer queue sessions: an item that is off says why, on its own line under its name */
+.sq-menu.why {
+  width: 220px;
+}
+.sq-mi.off {
+  height: auto;
+  min-height: 26px;
+  padding: 4px 8px;
+  color: var(--quiet);
+  cursor: not-allowed;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+}
+.sq-mi.off:hover,
+.sq-mi.off:focus-visible {
+  color: var(--quiet);
+  background: transparent;
+}
+.sq-mi.off:focus-visible {
+  box-shadow: inset 0 0 0 1px var(--line);
+}
+.sq-why {
+  font-size: 11px;
+  line-height: 1.35;
+  color: var(--muted);
+  white-space: normal;
+}
+.sq-why-all {
+  padding: 4px 8px 6px;
+  margin-bottom: 4px;
+  border-bottom: 1px solid var(--line);
+}
 /* Markdown in bubbles. One rhythm (8px between blocks), headings by size, code blocks as their own surface,
    tables that keep numbers on one line, GFM task lists without a second marker. */
 .md > * + * {
@@ -687,6 +794,82 @@
 }
 .composer-col textarea {
   width: 100%;
+}
+/* what a bot answer replies to, as an Instagram DM reply draws it: a quiet "↩ Replied to you" line, then the
+   person's message as a faded bubble in their own colour that the answer overlaps from below. Shown when several
+   messages wait or something sits between; a click on a faded bubble brings that message into view */
+.msg-quotes {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  max-width: min(60%, 420px);
+}
+.msg-quotes.face {
+  margin-left: calc(28px + 10px);
+}
+.msg-quote-h {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  margin: 0 0 1px 4px;
+  font-size: 11px;
+  color: var(--quiet);
+}
+.msg-quote-n {
+  margin-left: 4px;
+  font-size: 11px;
+  color: var(--quiet);
+}
+/* the person's message, faded: their bubble colour at low strength, one line, smaller; it recedes behind the answer */
+.msg-quote {
+  max-width: 100%;
+  overflow: hidden;
+  padding: 5px 11px;
+  border: 0;
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--bub-me) 40%, transparent);
+  color: var(--muted);
+  opacity: 0.75;
+  font: inherit;
+  font-size: 11.5px;
+  line-height: 1.4;
+  text-align: left;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  word-break: keep-all;
+  cursor: pointer;
+}
+.msg-quote:hover {
+  opacity: 1;
+}
+/* the last one tucks under the answer: the answer's bubble overlaps its bottom, as Instagram draws a reply */
+.msg-quote:last-child {
+  margin-bottom: -18px;
+  padding-bottom: 23px;
+}
+.msg-quotes + .msg.a .b {
+  position: relative;
+  /* a ring in the page colour, so the answer's edge reads over the faded quote in both themes */
+  box-shadow: 0 0 0 2px var(--bg);
+}
+/* the message a quote pointed at, lit for a moment */
+.row-user.lit .msg.u .b {
+  animation: msg-lit 1.4s ease-out;
+}
+@keyframes msg-lit {
+  0%,
+  35% {
+    box-shadow: 0 0 0 2px var(--accent);
+  }
+  100% {
+    box-shadow: 0 0 0 2px transparent;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .row-user.lit .msg.u .b {
+    animation: none;
+  }
 }
 .msg-reply {
   display: inline-flex;

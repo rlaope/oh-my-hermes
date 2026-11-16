@@ -15,7 +15,8 @@ import { Seg } from "../chat/model/Seg";
 import "../chat/model/model.css";
 import { ArrowUp, ChatIcon, ChevronDown, ModelIcon, Popover, SearchIcon, TerminalIcon } from "../ui";
 import { composing } from "../lib/ime";
-import { levelLabel, levelOptions, modeHint, modeLabel, modesOf, usageText } from "./controls";
+import { levelLabel, levelOptions, modeHint, modeLabel, modesOf, queueOff, usageText } from "./controls";
+import type { SessionQueue } from "../chat/parts/Timeline";
 import { ownSetting } from "./ownSetting";
 import type { Bot } from "../lib/protocol";
 import { AgentMark } from "./AgentMark";
@@ -142,12 +143,25 @@ function ChatPane({ rec, chatKey }: { rec: SessionRec; chatKey: string }) {
         : tr("ss.hasEnded", { agent: label });
   // one element per chat: the bubbles are memoized on it
   const face = useMemo(() => <SessionFace chatKey={chatKey} size={28} />, [chatKey]);
+  // steer queue sessions: the ↵ menu of an agent chat's waiting message (a Hermes folder chat has none)
+  const queue = useMemo<SessionQueue | undefined>(
+    () =>
+      takesFiles
+        ? {
+            off: (it) => queueOff(rec.agent, label, !!it.held, it.wait === "queued" && !it.steered),
+            // "send" is the bot chat's unknown-steer choice: an agent chat never offers it
+            pick: (lid, c) => void (c !== "send" && getSessions().queuePick(rec.id, lid, c)),
+          }
+        : undefined,
+    [takesFiles, rec.agent, rec.id, label],
+  );
   return (
     <div className="pane ss-chat" data-pane={chatKey} data-testid="session-chat">
       <Timeline
         bot={bot}
         face={face}
         connectionNotice={false}
+        queue={queue}
         onEditLast={ss.live[rec.id]?.rewind && rec.status === "running" && !chat?.turn ? () => void getSessions().rewind(rec.id) : undefined}
       />
       {rec.paused ? <Paused rec={rec} /> : ended && <Ended rec={rec} />}

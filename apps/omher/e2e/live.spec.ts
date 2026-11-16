@@ -453,3 +453,41 @@ test("chat: a message sent while the answer is written goes under that answer, w
   await expect(tl.getByTestId("bubble-bot").last()).toContainText("line two.");
   void before;
 });
+
+test("chat: an answer to several messages quotes each one's first line; a click shows that message; one message gets none", async ({ page }) => {
+  await open(page);
+  const tl = page.getByTestId("timeline");
+  await mock("mock.manual", { bot: "kami" });
+  // the first message starts a turn; the second, typed while it runs, waits (steer queue) and is steered into that
+  // same turn, so one answer replies to both
+  await page.getByTestId("composer").fill("the spinner looks stuck\nalso count seconds");
+  await page.keyboard.press("Enter");
+  await expect(page.getByTestId("stop")).toBeVisible();
+  await page.getByTestId("composer").fill("and too many bubbles per answer");
+  await page.keyboard.press("Enter");
+  const waiting = tl.getByTestId("bubble-user").filter({ hasText: "and too many bubbles per answer" });
+  await waiting.getByTestId("queue-mark").click();
+  await page.getByTestId("queue-steer").click();
+  await expect(waiting.getByTestId("bubble-steered")).toBeVisible();
+  await emit(ev("kami", "message", { id: "q-a1", text: "Fixed both." }), ev("kami", "turn.end", { outcome: "done" }));
+  const quote = tl.getByTestId("bubble-quote");
+  await expect(quote).toHaveCount(1);
+  await expect(quote.getByTestId("bubble-quote-line")).toHaveText(["the spinner looks stuck also count seconds", "and too many bubbles per answer"]);
+  await expect(quote.getByTestId("bubble-quote-head")).toHaveText("Replied to 2 of your messages");
+  // above the answer, in its column: the quote's left edge is the bubble's
+  const q = (await quote.boundingBox())!;
+  const b = (await tl.getByTestId("bubble-bot").last().locator(".b").boundingBox())!;
+  expect(Math.abs(q.x - b.x)).toBeLessThan(1);
+  // the last quoted message tucks under the answer, Instagram-style: the answer overlaps its bottom, never its text
+  expect(q.y).toBeLessThan(b.y);
+  expect(q.y + q.height - b.y).toBeLessThanOrEqual(20);
+  await quote.getByTestId("bubble-quote-line").first().click();
+  await expect(tl.locator(".row-user.lit")).toContainText("the spinner looks stuck");
+
+  // one message, one answer right under it: plain, no quote
+  await page.getByTestId("composer").fill("thanks");
+  await page.keyboard.press("Enter");
+  await emit(ev("kami", "turn.start"), ev("kami", "message", { id: "q-a2", text: "Sure." }), ev("kami", "turn.end", { outcome: "done" }));
+  await expect(tl.getByTestId("bubble-bot").last()).toHaveText("Sure.");
+  await expect(tl.getByTestId("bubble-quote")).toHaveCount(1);
+});

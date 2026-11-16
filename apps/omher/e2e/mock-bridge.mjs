@@ -18,8 +18,17 @@
 // mock.manual {bot, on} (a message to that bot, or to its folder chats, starts a turn that runs no script: the test
 // drives it with mock.emit),
 // mock.peerBots {bots} (the bots the mock "other computer" lists to peers.probe / peers.attach),
+// mock.watchRun {bot, name, kind: hit|silent, text?} (a bot-chat automation of `bot` ran, as the real bridge reports it:
+// a hit = `routine.ran {delivered}` then the Bot Chat turn whose `message` carries `watch`; silent = routines.update
+// only), mock.watchQueued {bot, name, n} (n automation answers landed in the bot's Bot Chat while omher was closed:
+// only its history grows, no event),
+// mock.watches {} (adds three channel watches to the automations, as `read_automations` reports collector jobs: friren's
+// "og-outage" ok on Slack, kami's "deploy-talk" paused on Discord, kami's "support-escalations" not readable),
 // SSH peers: peers.probe / peers.attach / peers.detach as the bridge's multiplexer answers them; an attached peer's
 // bots join bots.list as `<peer>:<name>` with a `host` field, and folder.open / bots.restart refuse them.
+// mock.steerMode {bot, mode: "accept"|"reject"} (what chat.steer answers while a turn runs; with no turn it is
+// always rejected, as Hermes' session.steer), mock.endTurn {bot, outcome?} (a manual turn ends, as Hermes ends it),
+// mock.steers (every steer the mock took),
 // mock.ready {bot, ok, signIn?} (what `bots.ready` answers for a bot: ok false = Hermes says it cannot answer; with
 // signIn: the strict check for that provider passes, as after `hermes auth add <id>`, and its models show in
 // models.options).
@@ -186,6 +195,25 @@ const AUTOMATION_SEED = [
     prompt: "On the 1st of each month, total last month's model and cloud spend by provider.", deliver: "bot-chat:default",
     created: -60 * 24 * 3600, repeat: { times: null, completed: 2 }, paused: true },
 ];
+// What `mock.watches` adds: channel watches (cron jobs whose script is `channel_watch_<watch>.py`).
+const WATCH_PROMPT = (cond) => `You judge new posts from a watched channel for one condition:\n${cond}.\n\nThe Script Output block holds the posts.`;
+const WATCH_SEED = [
+  { bot: "friren", id: "w0a1b2c3d4e5", name: "og-outage", schedule: "every 5m", next: 3 * MIN, last: -2 * MIN, status: "ok",
+    prompt: WATCH_PROMPT("posts about an outage or an error"), script: "channel_watch_og-outage.py", deliver: "bot-chat:friren",
+    created: -3 * DAY, repeat: { times: null, completed: 860 },
+    watch: { name: "og-outage", platform: "slack", channels: ["#og", "#og-alerts"], what: "posts about an outage or an error",
+      interval: "every 5m", last_alert: -40 * MIN, state: "ok", reason: null } },
+  { bot: "kami", id: "w1b2c3d4e5f6", name: "deploy-talk", schedule: "every 15m", next: null, last: -DAY, status: "ok",
+    prompt: WATCH_PROMPT("someone asks for a deploy"), script: "channel_watch_deploy-talk.py", deliver: "bot-chat:kami",
+    created: -9 * DAY, repeat: { times: null, completed: 410 }, paused: true,
+    watch: { name: "deploy-talk", platform: "discord", channels: ["#deploys"], what: "someone asks for a deploy",
+      interval: "every 15m", last_alert: null, state: "paused", reason: null } },
+  { bot: "kami", id: "w2c3d4e5f6a7", name: "support-escalations", schedule: "every 5m", next: 4 * MIN, last: -MIN, status: "ok",
+    prompt: WATCH_PROMPT("a customer asks to escalate"), script: "channel_watch_support-escalations.py", deliver: "bot-chat:kami",
+    created: -DAY, repeat: { times: null, completed: 12 },
+    watch: { name: "support-escalations", platform: "slack", channels: ["#support-vip"], what: "a customer asks to escalate",
+      interval: "every 5m", last_alert: null, state: "not_readable", reason: { code: "not_in_channel", channel: "#support-vip" } } },
+];
 // What `mock.botMade {kind: "routine"}` adds: a job the bot made from its chat.
 const BOT_MADE_JOB = { id: "a9c1e7f30d12", name: "CI watch on my PRs", schedule: "every 15m", next: 15 * MIN, last: null, status: null,
   prompt: "Check my open PRs in rlaope/oh-my-hermes. If a CI run failed since the last check, tell me which and why.",
@@ -197,6 +225,8 @@ const automationRow = (j) => ({
   last_run_at: j.last === null ? null : BOOT + j.last,
   last_status: j.status, enabled: !j.paused, paused: Boolean(j.paused), prompt: j.prompt, script: j.script ?? null, deliver: j.deliver,
   origin: j.origin ?? null, created_at: BOOT + j.created, last_error: j.error ?? null, repeat: j.repeat,
+  watch: j.watch ? { ...j.watch, state: j.paused ? "paused" : j.watch.state === "paused" ? "ok" : j.watch.state,
+    last_check: j.last === null ? null : BOOT + j.last, last_alert: j.watch.last_alert === null ? null : BOOT + j.watch.last_alert } : null,
 });
 
 // Plugins (plugins.*): Kami's installs as `plugin_row` returns them (4 of his own, one that needs a key it does not
@@ -573,6 +603,9 @@ let noBotChat = new Set();
 const subTimers = new Set();
 // Bots whose turns the test drives by hand (mock.manual).
 let manual;
+// chat.steer: per bot "accept" (default) or "reject" (mock.steerMode), and every steer taken (mock.steers)
+let steerMode = new Map();
+let steers = [];
 // Bots whose skills.list is empty (mock.noSkills).
 let noSkills;
 let notReady = new Map();
@@ -730,6 +763,8 @@ function reset() {
   asked = new Map();
   noBotChat = new Set();
   manual = new Set();
+  steerMode = new Map();
+  steers = [];
   noSkills = new Set();
   notReady = new Map(); // bot -> the sign-in provider that now passes its strict check ("" = none)
   idSeq = 0;
@@ -1065,6 +1100,15 @@ const OPS = {
     if (turns[b.name]) (queues[b.name] ??= []).push(text);
     else startTurn(b.name, text);
     return { input_id };
+  },
+  // Hermes' session.steer on the main chat only: taken while a turn runs, else rejected; never sent another way
+  "chat.steer": (p) => {
+    const b = needBot(p);
+    const text = needStr(p, "text");
+    if (p.session !== undefined) throw new OpError("bad_request", "steer goes to the bot's main chat only");
+    if (!turns[b.name] || steerMode.get(b.name) === "reject") return { status: "rejected" };
+    steers.push({ bot: b.name, text });
+    return { status: "queued" };
   },
   "chat.interrupt": (p) => {
     const b = needBot(p);
@@ -1589,6 +1633,17 @@ const OPS = {
     else manual.add(p.bot);
     return {};
   },
+  "mock.steerMode": (p) => {
+    const b = needBot(p);
+    steerMode.set(b.name, p.mode === "reject" ? "reject" : "accept");
+    return {};
+  },
+  "mock.endTurn": (p) => {
+    const b = needBot(p);
+    endTurn(b.name, typeof p.outcome === "string" ? p.outcome : "done");
+    return {};
+  },
+  "mock.steers": () => ({ steers: steers.map((x) => ({ ...x })) }),
   "mock.ready": (p) => {
     const b = needBotAny(p);
     if (p.ok) notReady.delete(b.name);
@@ -1648,6 +1703,39 @@ const OPS = {
   "mock.noBotChat": (p) => {
     noBotChat.add(needBot(p).name);
     return {};
+  },
+  "mock.watchRun": (p) => {
+    const b = needBot(p);
+    const name = needStr(p, "name");
+    if (p.kind === "silent") {
+      broadcast({ event: "routines.update", bot: b.name });
+      return { count: 0 };
+    }
+    const text = typeof p.text === "string" ? p.text : `${name}: 1 matching post in #alerts\nThe deploy failed on main.`;
+    const at = now();
+    const id = nextId("w");
+    history[b.name].push({ id, role: "assistant", text, ts: at, watch: { name, ts: at } });
+    broadcast({ event: "routine.ran", bot: b.name, routine_id: `job-${name}`, name, status: "ok", ts: at, delivered: b.name });
+    broadcast({ event: "routines.update", bot: b.name });
+    ev(b.name, "turn.start");
+    ev(b.name, "delta", { text });
+    ev(b.name, "message", { id, text, watch: { name, ts: at } });
+    ev(b.name, "turn.end", { outcome: "done" });
+    return { id };
+  },
+  "mock.watches": () => {
+    for (const w of WATCH_SEED) if (!automations.some((x) => x.id === w.id)) automations.push(structuredClone(w));
+    for (const b of new Set(WATCH_SEED.map((w) => w.bot))) broadcast({ event: "routines.update", bot: b });
+    return { count: WATCH_SEED.length };
+  },
+  "mock.watchQueued": (p) => {
+    const b = needBot(p);
+    const name = needStr(p, "name");
+    const n = Number.isInteger(p.n) && p.n > 0 ? p.n : 1;
+    const at = now();
+    for (let i = 0; i < n; i++)
+      history[b.name].push({ id: nextId("w"), role: "assistant", text: `${name}: match ${i + 1}\nA post matched.`, ts: at + i / 1000, watch: { name, ts: at + i / 1000 } });
+    return { count: n };
   },
   "mock.ask": (p) => {
     const b = needBot(p);

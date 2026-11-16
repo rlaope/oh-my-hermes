@@ -68,6 +68,11 @@ class ClassifiedSite(NamedTuple):
 
 CLASSIFIED_SITES: tuple[ClassifiedSite, ...] = (
     ClassifiedSite(
+        "src/skills/channel_watch_toolkit/scripts/channel_watch.py", "main", INTENTIONAL,
+        "The cron collector's last guard: an unexpected error prints only its class name and exits 1, which Hermes "
+        "reports as a Script Error the watch row shows as not readable; a traceback could quote the bot token.",
+    ),
+    ClassifiedSite(
         "src/workflows/repro_audit/operations.py", "_publish", INTENTIONAL,
         "Exclusive publication rolls back only invocation-owned staged files and re-raises the original failure; it never relabels a failed audit as success.",
     ),
@@ -1126,8 +1131,10 @@ CLASSIFIED_SITES: tuple[ClassifiedSite, ...] = (
 # 113 -> 114 / 102 -> 103: `own_runtime.build_tui_home`, the staged first build of the TUI's Hermes
 # profile (a failed `_build` removes its staging and re-raises; the host never sees a half-built
 # profile).
-EXPECTED_HANDLER_COUNT = 114
-EXPECTED_ANCHOR_COUNT = 103
+# 114 -> 115 / 103 -> 104: the channel-watch collector's `main` (an unexpected error names its class only, exit 1;
+# a traceback could quote the bot token).
+EXPECTED_HANDLER_COUNT = 115
+EXPECTED_ANCHOR_COUNT = 104
 
 
 class DerivedSite(NamedTuple):

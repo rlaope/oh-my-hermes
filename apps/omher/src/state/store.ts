@@ -2,11 +2,12 @@
 // its actions; they never edit this file.
 import { useSyncExternalStore } from "react";
 import { BridgeClient, type BridgeStatus } from "../lib/bridge";
-import { noteFor, sessionNote, showNote, windowWatched, type SessionNote } from "../lib/notify";
+import { noteFor, sessionNote, showNote, watchMissedNote, windowWatched, type SessionNote } from "../lib/notify";
 import { appSounds, soundFor, type SoundBoard } from "../lib/sounds";
 import { promptText } from "../chat/parts/attachFiles";
 import { findTokens, toWire } from "../chat/parts/skillTokens";
 import { forBots, parseResume, RESUME_KEY, type ResumeSnap } from "../app/resume";
+import { getDraft } from "../app/drafts";
 import { moveInSidebar } from "./order";
 import { LANG_KEY, readLang, setLang, t as tr, type Key, type Lang } from "../i18n";
 import type {
@@ -47,6 +48,7 @@ import type {
   PluginRow,
   DiffFile,
   PlanItem,
+  Msg,
 } from "../lib/protocol";
 import type { AgentRunSummary, CliAgent, NodePr, RunDetail } from "../lib/runs";
 
@@ -139,11 +141,24 @@ export type MessageItem = {
   id: string;
   ts: number;
   text: string;
+  /** assistant rows only: the answer to an automation's delivered result, drawn under a "Watch · <name>" line. */
+  watch?: { name: string; ts: number };
   /** user rows only: the send failed (text of the bridge error). */
   error?: string;
   /** user rows only: sent while a turn ran, and the agent has not taken it yet (`queued`), or Stop threw it away
    *  before the agent read it (`dropped`). */
   wait?: "queued" | "dropped";
+  /** user rows only (a bot's main chat): typed while a turn ran, so omher holds it and sends it when the turn ends
+   *  (steer queue). Not sent to Hermes yet: it can still be sent now, steered in, edited or deleted. */
+  held?: boolean;
+  /** user rows only: steered into the running turn (Hermes' `session.steer`) instead of sent as a new turn. */
+  steered?: boolean;
+  /** user rows only (held): a steer whose answer never came back (the bridge dropped, the bot went offline, a
+   *  timeout). Hermes may have taken it, so it is never sent again on its own: the person picks Send or Delete. */
+  steerUnknown?: boolean;
+  /** user rows only, with `steerUnknown`: steered in, then Stop or Send now ended the turn before it read the text
+   *  (Hermes drops an unread steer then): not used, it waits for Send or Delete. */
+  steerUnused?: boolean;
   /** user rows only: sent with "Reply there" (where the person pointed the bot). */
   reply?: { source: string; label: string };
   /** user rows only: files sent with it, shown from the local copies (never read back). */
@@ -263,6 +278,17 @@ export interface Chat {
   /** A status that came while no turn ran (Hermes says "Resuming interrupted turn…" just before the turn starts):
    *  never shown on its own; a turn that starts within EARLY_STATUS_MS opens with it. */
   early?: { text: string; at: number } | null;
+  /** Steer queue (a bot's main chat): the held user rows' ids in the order they go out (head first). */
+  queue?: string[];
+  /** The id of a held message just sent whose turn has not started yet: nothing else goes out until it does. */
+  pendingTurn?: string | null;
+  /** The bridge dropped: the chat is re-read (chat.open) before anything held goes out. */
+  stale?: boolean;
+  /** The held row being steered right now: nothing goes out until Hermes answers. */
+  steering?: string | null;
+  /** Rows steered into the running turn that it has not read yet (no tool step ended and no message came since):
+   *  a Stop or Send now before then makes Hermes drop them, so they are marked not used (Send / Delete). */
+  steeredUnread?: string[];
 }
 
 /** The composer's "Reply there" chip: a thread elsewhere the next message points the bot at. */
@@ -377,6 +403,12 @@ export function activityText(name: string, detail: string): string {
 export const WORKING = "Working…";
 /** The status a turn gets from `thinking`, before any tool or status text. */
 export const THINKING = "Thinking…";
+/** A held message sent whose turn has not started after this long (a command Hermes answered with no turn) no
+ *  longer holds the steer queue. */
+export const PENDING_TURN_MS = 15_000;
+/** Steer errors that are a clear refusal (the gateway answered no): the row is sent normally after the turn. Any
+ *  other error (disconnected, bot_offline, timeout, internal) leaves it unknown: Hermes may have taken it. */
+const STEER_REFUSED = new Set(["gateway_error", "bad_request"]);
 /** How much of a turn's thinking text is kept (the start; the rest is dropped, never shown cut mid-word). */
 export const THINKING_MAX = 20_000;
 
@@ -747,11 +779,13 @@ function applyOpened(chat: Chat, res: ChatOpenResult, now: number, bot: string, 
     ts: m.ts,
     text: m.text,
     ...(m.reply_to ? { reply: replyOf(m.reply_to) } : {}),
+    ...(m.watch ? { watch: m.watch } : {}),
   }));
   const ids = new Set(server.map((m) => m.id));
   const lastServerTs = server.length ? server[server.length - 1].ts : 0;
   const keep = chat.items.filter((i) => {
     if (i.kind !== "user" && i.kind !== "assistant") return true;
+    if (i.kind === "user" && i.held) return true; // never sent: no server row can be its twin
     if (ids.has(i.id)) return false;
     if (i.id.startsWith("local-")) {
       const sent = i.sent ?? i.text;
@@ -770,6 +804,7 @@ function applyOpened(chat: Chat, res: ChatOpenResult, now: number, bot: string, 
     reasoning: res.reasoning,
     loaded: true,
     sessionId: res.session_id,
+    stale: false,
   };
   if (res.running && !next.turn && !((next.lastTurn?.endedAt ?? -Infinity) >= since)) {
     next = newTurn(next, bot, now, WORKING)[0];
@@ -789,6 +824,8 @@ export type Action =
   | { type: "bots"; bots: Bot[] }
   | { type: "select"; bot: string }
   | { type: "chat.opened"; bot: string; res: ChatOpenResult; now: number; since?: number }
+  /** Automation answers that came in while omher was closed (or not attached): `count` more unread. */
+  | { type: "watch.missed"; bot: string; count: number }
   | {
       type: "local.user";
       bot: string;
@@ -799,8 +836,11 @@ export type Action =
       files?: SentFile[];
       sent?: string;
       skills?: string[];
+      /** Typed while a turn ran: held in the steer queue, not sent yet. */
+      held?: boolean;
     }
   | { type: "reply.set"; bot: string; chip: ReplyChip | null }
+  | QueueAction
   | { type: "send.failed"; bot: string; id: string; error: string }
   | { type: "event"; ev: BridgeEvent; now: number }
   | { type: "approval.resolved"; bot: string; request_id: string; choice: ApprovalChoice }
@@ -884,7 +924,7 @@ function reduceEvent(state: AppState, ev: BridgeEvent, now: number): AppState {
     case "turn.start":
       return touchChat(state, bot, (c) => {
         const early = c.early && now - c.early.at <= EARLY_STATUS_MS ? c.early.text : "";
-        return { ...newTurn(endTurn(c, now, "done"), bot, now, early)[0], early: null };
+        return { ...newTurn(endTurn(c, now, "done"), bot, now, early)[0], early: null, pendingTurn: null, steeredUnread: undefined };
       });
     case "status": {
       // the agent's own retry of this turn: the line says which try, in the person's language
@@ -927,14 +967,16 @@ function reduceEvent(state: AppState, ev: BridgeEvent, now: number): AppState {
         })),
       );
     case "tool.end":
-      return touchChat(state, bot, (c) =>
-        c.turn?.steps.some((s) => s.id === ev.tool_id)
+      // a tool step ended: Hermes hands what was steered in to the model with its result
+      return touchChat(state, bot, (c0) => {
+        const c = c0.steeredUnread ? { ...c0, steeredUnread: undefined } : c0;
+        return c.turn?.steps.some((s) => s.id === ev.tool_id)
           ? patchTurn(c, (t) => ({
               ...t,
               steps: t.steps.map((s) => (s.id === ev.tool_id ? { ...s, endedAt: now, ok: ev.ok } : s)),
             }))
-          : lateStepEnd(c, ev, now),
-      );
+          : lateStepEnd(c, ev, now);
+      });
     case "subagent": {
       const c = state.chats[bot];
       const next = c && withSubagent(c, ev, now);
@@ -948,8 +990,9 @@ function reduceEvent(state: AppState, ev: BridgeEvent, now: number): AppState {
       return touchChat(state, bot, (c) => patchTurn(c, (t) => ({ ...t, streaming: t.streaming + ev.text })));
     case "message": {
       const next = touchChat(state, bot, (c) => {
-        const cleared = patchTurn(c, (t) => ({ ...t, streaming: "", cut: undefined }));
-        const msg: MessageItem = { kind: "assistant", id: ev.id, ts: now / 1000, text: ev.text };
+        // the answer came: a steer Hermes took by now runs in this turn or right after it (never dropped by a Stop)
+        const cleared = patchTurn({ ...c, steeredUnread: undefined }, (t) => ({ ...t, streaming: "", cut: undefined }));
+        const msg: MessageItem = { kind: "assistant", id: ev.id, ts: now / 1000, text: ev.text, ...(ev.watch ? { watch: ev.watch } : {}) };
         const exists = cleared.items.some((i) => i.kind === "assistant" && i.id === ev.id);
         const slot = answerSlot(cleared);
         const items = exists
@@ -1022,7 +1065,9 @@ function reduceEvent(state: AppState, ev: BridgeEvent, now: number): AppState {
           base = withItems(c, [...c.items.slice(0, slot), { kind: "assistant", id: `${c.turn.id}-a`, ts: now / 1000, text }, ...c.items.slice(slot)]);
           base = patchTurn(base, (t) => ({ ...t, streaming: "", cut: undefined }));
         }
-        return { ...endTurn(base, now, ev.outcome, ev.error), early: null };
+        // stopped before the turn read what was steered in: Hermes dropped it, so it says so and waits for Send / Delete
+        if (ev.outcome === "interrupted" && c.steeredUnread?.length) base = unsteer(base, c.steeredUnread);
+        return { ...endTurn(base, now, ev.outcome, ev.error), early: null, pendingTurn: null, steeredUnread: undefined };
       });
     case "bot.status":
       return {
@@ -1057,6 +1102,8 @@ function reduceEvent(state: AppState, ev: BridgeEvent, now: number): AppState {
       return bumpUnread(touchChat(state, bot, (c) => withItems(c, [...c.items, item])), bot);
     }
     case "routine.ran": {
+      // a delivered bot-chat run: its answer comes as that chat's message, which is the line and the unread
+      if (ev.delivered) return state;
       const next = touchChat(state, bot, (c) =>
         withItems(c, [
           ...c.items,
@@ -1105,12 +1152,16 @@ export function reduce(state: AppState, a: Action): AppState {
       const t = a.now ?? Date.now();
       const chats: AppState["chats"] = {};
       // agent:<id> chats run in the desktop shell, not through Hermes: a bridge outage does not touch them
-      for (const [b, c] of Object.entries(state.chats))
-        chats[b] = c.turn && !b.startsWith("agent:") ? endTurn(c, t, "interrupted", tr("live.lost")) : c;
+      for (const [b, c] of Object.entries(state.chats)) {
+        const ended = c.turn && !b.startsWith("agent:") ? endTurn(c, t, "interrupted", tr("live.lost")) : c;
+        // what Hermes runs is not known until the chat is read again: the steer queue waits for that
+        chats[b] = isSessionChat(b) ? ended : { ...ended, stale: true, pendingTurn: null, steeredUnread: undefined };
+      }
       return { ...state, conn: a.status, chats };
     }
     case "chat.failed":
-      return touchChat(state, a.bot, (c) => ({ ...c, loaded: true, openError: a.message }));
+      // read again (or tried): the steer queue no longer waits on a re-read that is not coming
+      return touchChat(state, a.bot, (c) => ({ ...c, loaded: true, openError: a.message, stale: false }));
     case "hello":
       return { ...state, hello: a.hello };
     case "error":
@@ -1119,13 +1170,18 @@ export function reduce(state: AppState, a: Action): AppState {
       return { ...state, bots: a.bots };
     case "select":
       return { ...state, selectedBot: a.bot, unread: { ...state.unread, [a.bot]: 0 }, ui: { ...state.ui, view: "chat" } };
+    case "watch.missed":
+      return a.count > 0 && a.bot !== state.selectedBot
+        ? { ...state, unread: { ...state.unread, [a.bot]: (state.unread[a.bot] ?? 0) + a.count } }
+        : state;
     case "chat.opened":
       return touchChat(state, a.bot, (c) => ({ ...applyOpened(c, a.res, a.now, a.bot, a.since), openError: null }));
     case "local.user":
       return touchChat(state, a.bot, (c0) => {
-        // sent while the answer is already showing: that answer stays above this message (answerSlot)
-        const c = c0.turn && !c0.turn.before && answerSoFar(c0.turn) ? patchTurn(c0, (t) => ({ ...t, before: a.id })) : c0;
-        return withItems(c, [
+        // the running turn's answer stays above this message (answerSlot) when it is held (it goes out after the
+        // turn, so the answer never covers it) or typed once the answer already shows
+        const c = c0.turn && !c0.turn.before && (a.held || answerSoFar(c0.turn)) ? patchTurn(c0, (t) => ({ ...t, before: a.id })) : c0;
+        const next = withItems(c, [
           ...c.items,
           {
             kind: "user",
@@ -1136,18 +1192,29 @@ export function reduce(state: AppState, a: Action): AppState {
             ...(a.files?.length ? { files: a.files } : {}),
             ...(a.sent !== undefined && a.sent !== a.text ? { sent: a.sent } : {}),
             ...(a.skills?.length ? { skills: a.skills } : {}),
+            ...(a.held ? { held: true } : {}),
           },
         ]);
+        return a.held ? { ...next, queue: [...(c.queue ?? []), a.id] } : next;
       });
     case "reply.set":
       return { ...state, replyTo: { ...state.replyTo, [a.bot]: a.chip } };
     case "send.failed":
-      return touchChat(state, a.bot, (c) =>
-        withItems(
+      return touchChat(state, a.bot, (c) => ({
+        ...withItems(
           c,
           c.items.map((i) => (i.kind === "user" && i.id === a.id ? { ...i, error: a.error } : i)),
         ),
-      );
+        ...(c.pendingTurn === a.id ? { pendingTurn: null } : {}),
+      }));
+    case "queue.take":
+    case "queue.front":
+    case "queue.drop":
+    case "queue.steering":
+    case "queue.steered":
+    case "queue.resend":
+    case "queue.idle":
+      return state.chats[a.bot] ? touchChat(state, a.bot, (c) => reduceQueue(c, a)) : state;
     case "event":
       return reduceEvent(state, a.ev, a.now);
     case "approval.resolved":
@@ -1283,6 +1350,130 @@ export function reduce(state: AppState, a: Action): AppState {
   }
 }
 
+// ---- steer queue ------------------------------------------------------------------------------
+//
+// A message typed in a bot's main chat while a turn runs stays in omher (a held row with a ↵ mark) instead of going
+// to Hermes at once, so it can still change: Hermes keeps no way to take a message back out of its own queue. When
+// the turn ends the head goes out with chat.send, one at a time, each after the previous one's turn started.
+
+export type QueueAction =
+  /** The head goes out now: no longer held, moved to the end of the timeline, its turn awaited. */
+  | { type: "queue.take"; bot: string; id: string; now: number }
+  /** Send now / a refused steer: this one goes out next. */
+  | { type: "queue.front"; bot: string; id: string }
+  /** Delete, or Edit (the text goes back to the composer). */
+  | { type: "queue.drop"; bot: string; id: string }
+  | { type: "queue.steering"; bot: string; id: string | null }
+  /** Hermes' answer to a steer: taken (`ok`), the row joins the running turn; refused, it goes out next instead;
+   *  no answer (`unknown`: Hermes may have taken it), it leaves the queue and waits for the person's Send / Delete. */
+  | { type: "queue.steered"; bot: string; id: string; ok: boolean; now: number; unknown?: boolean }
+  /** Send, on a steer whose answer never came: it goes out next as a normal message. */
+  | { type: "queue.resend"; bot: string; id: string }
+  /** A send whose turn never started (Hermes ran no turn for it): stop waiting on it. */
+  | { type: "queue.idle"; bot: string; id: string };
+
+const toEnd = (c: Chat, id: string, patch: (m: MessageItem) => MessageItem): Chat => {
+  const row = c.items.find((i): i is MessageItem => i.kind === "user" && i.id === id);
+  return row ? withItems(c, [...c.items.filter((i) => i !== row), patch(row)]) : c;
+};
+
+/** Rows steered in that the stopped turn never read: no longer Steered, marked not used (Send / Delete). Never sent
+ *  again on their own: after a Stop the person decides. */
+function unsteer(c: Chat, ids: string[]): Chat {
+  if (!c.items.some((i) => i.kind === "user" && ids.includes(i.id) && i.steered)) return c;
+  return withItems(
+    c,
+    c.items.map((i) => (i.kind === "user" && ids.includes(i.id) && i.steered ? { ...withoutSteered(i), steerUnknown: true, steerUnused: true } : i)),
+  );
+}
+const withoutSteered = ({ steered: _s, ...m }: MessageItem): MessageItem => m;
+
+/** The row the running answer goes before once `id` leaves: the next user row after it (one still waiting, or
+ *  typed under the answer), or none. */
+function nextBefore(c: Chat, id: string): string | undefined {
+  const at = c.items.findIndex((i) => i.kind === "user" && i.id === id);
+  if (at < 0) return undefined;
+  return c.items.slice(at + 1).find((i) => i.kind === "user" && !i.steered)?.id;
+}
+
+export function reduceQueue(c: Chat, a: QueueAction): Chat {
+  const queue = c.queue ?? [];
+  const without = queue.filter((x) => x !== a.id);
+  switch (a.type) {
+    case "queue.take": {
+      if (!queue.includes(a.id)) return c;
+      const moved = toEnd(c, a.id, ({ held: _h, ...m }) => ({ ...m, ts: a.now / 1000 }));
+      return { ...moved, queue: without, pendingTurn: a.id };
+    }
+    case "queue.front":
+      return queue.includes(a.id) ? { ...c, queue: [a.id, ...without] } : c;
+    case "queue.drop": {
+      const unknown = c.items.some((i) => i.kind === "user" && i.id === a.id && i.steerUnknown);
+      if (!queue.includes(a.id) && !unknown) return c;
+      // the answer was kept above this row: it now stays above the next one (or goes back to the end)
+      const moved = c.turn?.before === a.id ? patchTurn(c, (t) => ({ ...t, before: nextBefore(c, a.id) })) : c;
+      return { ...withItems(moved, moved.items.filter((i) => !(i.kind === "user" && i.id === a.id))), queue: without, ...(c.steering === a.id ? { steering: null } : {}) };
+    }
+    case "queue.resend":
+      if (!c.items.some((i) => i.kind === "user" && i.id === a.id && i.steerUnknown)) return c;
+      return {
+        ...withItems(c, c.items.map((i) => (i.kind === "user" && i.id === a.id ? (({ steerUnknown: _u, steerUnused: _n, ...m }) => ({ ...m, held: true }))(i) : i))),
+        queue: [a.id, ...without],
+      };
+    case "queue.steering":
+      return { ...c, steering: a.id };
+    case "queue.steered": {
+      if (!queue.includes(a.id)) return { ...c, steering: null };
+      if (!a.ok && a.unknown) {
+        const marked = withItems(c, c.items.map((i) => (i.kind === "user" && i.id === a.id ? { ...i, steerUnknown: true } : i)));
+        return { ...marked, queue: without, steering: null };
+      }
+      if (!a.ok) return { ...c, queue: [a.id, ...without], steering: null };
+      const moved = toEnd(c, a.id, ({ held: _h, ...m }) => ({ ...m, steered: true, ts: a.now / 1000 }));
+      // it joined the running turn: it sits before the messages still waiting (they go out after this turn), and
+      // the turn's answer lands after it, still above those waiting ones
+      const items = [...moved.items];
+      const next = without.length ? items.findIndex((i) => i.kind === "user" && i.id === without[0]) : -1;
+      if (next >= 0) items.splice(next, 0, items.pop()!);
+      const placed = withItems(moved, items);
+      const joined = placed.turn?.before === a.id ? patchTurn(placed, (t) => ({ ...t, before: without[0] })) : placed;
+      return { ...joined, queue: without, steering: null, steeredUnread: [...(c.steeredUnread ?? []), a.id] };
+    }
+    case "queue.idle":
+      return c.pendingTurn === a.id ? { ...c, pendingTurn: null } : c;
+  }
+}
+
+/** The held row that goes out now, or null: the bridge is up, the chat was read, no turn runs, no send is waiting
+ *  for its turn to start, and no steer is waiting for Hermes' answer. */
+export function queueReady(state: AppState, bot: string): string | null {
+  const c = state.chats[bot];
+  if (!c?.queue?.length || state.conn !== "open" || !c.loaded || c.turn || c.pendingTurn || c.stale || c.steering) return null;
+  return c.queue[0];
+}
+
+/** The drafts to save before a reload or quit, with every chat's held messages (and unknown steers) put back in
+ *  its box in queue order, above what was typed there: nothing typed is lost (files are not kept, only the text). */
+export function heldDrafts(state: AppState, drafts: Record<string, string>): Record<string, string> {
+  const out = { ...drafts };
+  for (const [key, c] of Object.entries(state.chats)) {
+    const byId = new Map(c.items.flatMap((i) => (i.kind === "user" ? [[i.id, i] as const] : [])));
+    const waiting = [...(c.queue ?? []), ...c.items.filter((i) => i.kind === "user" && i.steerUnknown).map((i) => i.id)];
+    const texts = waiting.map((id) => byId.get(id)?.text?.trim() ?? "").filter(Boolean);
+    if (!texts.length) continue;
+    const typed = out[key]?.trim();
+    out[key] = [...texts, ...(typed ? [typed] : [])].join("\n");
+  }
+  return out;
+}
+
+/** Whether a message typed now in `bot`'s main chat is held instead of sent: a turn runs, others wait before it,
+ *  a send's turn has not started, or the chat is being read again after the bridge came back. */
+export function mustHold(state: AppState, bot: string): boolean {
+  const c = state.chats[bot];
+  return !!c && (!!c.turn || !!c.queue?.length || !!c.pendingTurn || !!c.stale || !!c.steering);
+}
+
 // ---- selectors ------------------------------------------------------------------------------
 
 const timelineCache = new Map<string, { items: ChatItem[]; away: Away[] | undefined; max: number; out: TimelineItem[] }>();
@@ -1405,6 +1596,16 @@ export interface Actions {
   /** Attach each file in order (`chat.attach`), then send. Rejects, sending nothing, if any attach fails. */
   sendWithFiles(text: string, files: OutFile[]): Promise<void>;
   interrupt(): Promise<void>;
+  /** Steer queue, on a held row of `bot`'s main chat (the selected bot's by default). Send now: stop the running
+   *  turn (one `chat.interrupt`) and send this one first when it ends. */
+  queueSendNow(id: string, bot?: string): Promise<void>;
+  /** Steer it into the running turn (`chat.steer`); when Hermes refuses or no turn runs, it goes out next instead. */
+  queueSteer(id: string, bot?: string): Promise<void>;
+  /** A steer that got no answer (it may be in the answer already): send it anyway, as the next normal message. */
+  queueResend(id: string, bot?: string): void;
+  /** Take it out of the queue and put its text back into the composer. */
+  queueEdit(id: string, bot?: string): void;
+  queueDelete(id: string, bot?: string): void;
   respondApproval(requestId: string, choice: ApprovalChoice, bot?: string): Promise<void>;
   /** A text answer for one question, or every answer of an interview at once (one `clarify.respond`). */
   respondClarify(requestId: string, answer: string | ClarifyAnswers, bot?: string): Promise<void>;
@@ -1556,7 +1757,40 @@ export interface StoreOptions {
   resume?: () => ResumeSnap | null;
   /** Bots hidden from the sidebar before the roster (`omher.hidden`): read once, when the first roster is chosen. */
   hiddenBots?: () => string[];
+  /** When the person last saw each bot's automation answers (unix s; null: never recorded). Default: localStorage. */
+  watchSeen?: { get(bot: string): number | null; set(bot: string, ts: number): void };
+  /** Automation answers found on (re)opening a chat that the person has not seen: the app shows one note per bot. */
+  onWatchMissed?: (bot: string, rows: Msg[], state: AppState) => void;
 }
+
+/** The automation answers in `msgs` the person has not seen: newer than `seen` and not already in `chat`. A bot with
+ *  no record yet (`seen` null) has none, so a first start never floods with old answers. */
+export function newWatchRows(chat: Chat | undefined, msgs: readonly Msg[], seen: number | null): Msg[] {
+  if (seen === null) return [];
+  const have = new Set((chat?.items ?? []).map((i) => i.id));
+  return msgs.filter((m) => m.role === "assistant" && m.watch && m.ts > seen && !have.has(m.id));
+}
+
+const WATCH_SEEN_KEY = "omher.watchSeen";
+const localWatchSeen = {
+  get(bot: string): number | null {
+    try {
+      const v = (JSON.parse((typeof localStorage !== "undefined" && localStorage.getItem(WATCH_SEEN_KEY)) || "{}") as Record<string, unknown>)[bot];
+      return typeof v === "number" ? v : null;
+    } catch {
+      return null;
+    }
+  },
+  set(bot: string, ts: number): void {
+    try {
+      if (typeof localStorage === "undefined") return;
+      const all = JSON.parse(localStorage.getItem(WATCH_SEEN_KEY) || "{}") as Record<string, number>;
+      localStorage.setItem(WATCH_SEEN_KEY, JSON.stringify({ ...all, [bot]: ts }));
+    } catch {
+      /* no storage */
+    }
+  },
+};
 
 /** Every bridge event, after the store applied it (SESSIONS listens for `folder.closed`). */
 const bridgeListeners = new Set<(ev: BridgeEvent) => void>();
@@ -1580,6 +1814,10 @@ export function createStore(bridge: BridgeLike, opts: StoreOptions = {}): Store 
   const skillNames = new Map<string, string[]>();
   const tokenNames = (text: string, bot: string) => [...new Set(findTokens(text, skillNames.get(bot) ?? []).map((k) => k.name))];
 
+  // Steer queue: what each held row sends (the wire text, a Reply there target, its files), kept out of the state
+  const held = new Map<string, { bot: string; text: string; wire: string; reply_to?: string; files?: OutFile[] }>();
+  const flushing = new Set<string>();
+  const interrupting = new Set<string>();
   const dispatch = (a: Action) => {
     const next = reduce(state, a);
     if (next === state) return;
@@ -1587,10 +1825,77 @@ export function createStore(bridge: BridgeLike, opts: StoreOptions = {}): Store 
     snapshot = null;
     for (const l of [...listeners]) l();
     opts.onAction?.(a, state);
+    flushQueues();
   };
+  /** Every chat whose held head can go out now sends it (exactly once: it leaves the queue before the request). */
+  const flushQueues = () => {
+    for (const bot of Object.keys(state.chats)) {
+      const id = queueReady(state, bot);
+      if (id && !flushing.has(bot)) void sendHeld(bot, id);
+    }
+  };
+  const sendHeld = async (bot: string, id: string) => {
+    const p = held.get(id);
+    flushing.add(bot);
+    try {
+      dispatch({ type: "queue.take", bot, id, now: now() });
+      if (!p) return;
+      held.delete(id);
+      try {
+        let wire = p.wire;
+        if (p.files?.length) {
+          const results: AttachResult[] = [];
+          for (const f of p.files) results.push(await bridge.request("chat.attach", { bot, kind: f.attach, name: f.name, data_base64: await f.read() }));
+          wire = toWire(promptText(p.text, results), skillNames.get(bot) ?? []);
+        }
+        // queued: when Hermes is still busy (its own next turn: a steer it took during the final answer, or one held
+        // through a compression), this waits behind it in Hermes' FIFO instead of steering or interrupting it
+        await bridge.request("chat.send", p.reply_to ? { bot, text: wire, reply_to: p.reply_to, queued: true } : { bot, text: wire, queued: true });
+        idleLater(bot, id);
+      } catch (e) {
+        dispatch({ type: "send.failed", bot, id, error: errText(e) });
+      }
+    } finally {
+      flushing.delete(bot);
+      flushQueues();
+    }
+  };
+  /** A send Hermes ran no turn for (a command it answered at once) must not hold the queue forever. */
+  const idleLater = (bot: string, id: string) => {
+    setTimeout(() => dispatch({ type: "queue.idle", bot, id }), PENDING_TURN_MS);
+  };
+  /** A held row of `bot`: the text it carries, or null when it is not waiting. */
+  const heldRow = (bot: string, id: string) =>
+    state.chats[bot]?.queue?.includes(id) ? (held.get(id) ?? null) : null;
+  /** After a turn: drop the texts kept for rows that can no longer go out (steered in and read, or gone). */
+  const pruneHeld = (bot: string) => {
+    const c = state.chats[bot];
+    for (const [id, p] of held) {
+      if (p.bot !== bot) continue;
+      const row = c?.items.find((i) => i.kind === "user" && i.id === id);
+      if (!row || (row.kind === "user" && !row.held && !row.steerUnknown)) held.delete(id);
+    }
+  };
+  /** A row of `bot` whose steer got no answer (it waits for Send or Delete): the text it carries, or null. */
+  const unknownRow = (bot: string, id: string) =>
+    state.chats[bot]?.items.some((i) => i.kind === "user" && i.id === id && i.steerUnknown) ? (held.get(id) ?? null) : null;
   const fail = (e: unknown) => dispatch({ type: "error", message: errText(e) });
   const botArg = (bot?: string) => bot ?? state.selectedBot;
 
+  const watchSeen = opts.watchSeen ?? localWatchSeen;
+  /** The person saw `bot`'s automation answers up to now. */
+  const markWatchSeen = (bot: string) => watchSeen.set(bot, now() / 1000);
+  /** Answers in a (re)opened chat the person has not seen: unread, and one note for the bot. */
+  const counted = new Map<string, number>(); // per bot: the newest missed answer already counted (a re-peek adds none)
+  const catchUpWatch = (bot: string, msgs: readonly Msg[]) => {
+    const seen = watchSeen.get(bot);
+    if (seen === null || bot === state.selectedBot) return markWatchSeen(bot);
+    const rows = newWatchRows(state.chats[bot], msgs, Math.max(seen, counted.get(bot) ?? -Infinity));
+    if (!rows.length) return;
+    counted.set(bot, Math.max(...rows.map((m) => m.ts)));
+    dispatch({ type: "watch.missed", bot, count: rows.length });
+    opts.onWatchMissed?.(bot, rows, state);
+  };
   const loadChat = async (bot: string) => {
     let res: ChatOpenResult;
     const since = now();
@@ -1601,6 +1906,7 @@ export function createStore(bridge: BridgeLike, opts: StoreOptions = {}): Store 
       dispatch({ type: "chat.failed", bot, message: errText(e) });
       throw e;
     }
+    catchUpWatch(bot, res.messages);
     dispatch({ type: "chat.opened", bot, res, now: now(), since });
   };
   /** A bot outside the sidebar list: ask its existing Bot Chat for the prompts waiting on the person. The bridge
@@ -1612,7 +1918,8 @@ export function createStore(bridge: BridgeLike, opts: StoreOptions = {}): Store 
     if (peeking.has(bot)) return;
     peeking.add(bot);
     try {
-      await bridge.request("chat.open", { bot, existing_only: true });
+      const res = await bridge.request("chat.open", { bot, existing_only: true });
+      catchUpWatch(bot, res.messages ?? []);
     } catch {
       /* no Bot Chat, or it cannot start: nothing can be waiting in it */
     } finally {
@@ -1696,6 +2003,7 @@ export function createStore(bridge: BridgeLike, opts: StoreOptions = {}): Store 
     // the open chat always has its row: a bot opened from Needs you, an @mention or Settings joins the list
     if (state.ui.roster && state.bots.some((b) => b.name === bot)) listBot(bot, true);
     dispatch({ type: "select", bot });
+    markWatchSeen(bot);
     const jobs: Promise<unknown>[] = [loadElsewhere(bot), loadRoutines(bot), loadModels(bot)];
     if (!state.chats[bot]?.loaded) jobs.push(loadChat(bot).catch(fail));
     await Promise.all(jobs);
@@ -1707,6 +2015,10 @@ export function createStore(bridge: BridgeLike, opts: StoreOptions = {}): Store 
       const r = await bridge.request("bots.list", {});
       dispatch({ type: "bots", bots: r.bots });
       ensureRoster();
+      // a reconnect whose bots.list failed left chats unread (stale): read them now, so their held rows go out
+      const names = new Set(state.bots.map((b) => b.name));
+      const stale = Object.entries(state.chats).filter(([n, c]) => c.stale && c.loaded && names.has(n)).map(([n]) => n);
+      await Promise.allSettled(stale.map(loadChat));
       // a profile that appeared since: ask it too (only new names, so a bots.update storm asks nobody twice)
       await Promise.allSettled(
         selectUnlisted(state).filter((b) => !before.has(b.name) && !state.chats[b.name]?.loaded).map((b) => peekAsks(b.name)),
@@ -1749,9 +2061,11 @@ export function createStore(bridge: BridgeLike, opts: StoreOptions = {}): Store 
         opts.onEvent?.(ev.session ? { ...ev, bot: folderKey(ev.bot, ev.session) } : ev, state);
         for (const fn of [...eventFns]) fn(ev);
         if (ev.event === "elsewhere.update") void loadElsewhere(ev.bot);
+        if (ev.event === "turn.end" && !ev.session) pruneHeld(ev.bot);
         // After a turn the person pointed at a thread, re-read the places so the bot's new reply shows there.
         if (ev.event === "turn.end" && lastUserReplied(state, ev.bot)) void loadElsewhere(ev.bot);
         if (ev.event === "routine.ran") void loadRoutines(ev.bot);
+        if (ev.event === "message" && ev.watch && !ev.session && ev.bot === state.selectedBot) markWatchSeen(ev.bot);
         if (ev.event === "routine.ran" || ev.event === "routines.update" || ev.event === "routine.added") void loadAutomations();
         if (ev.event === "bots.update") void reloadBots();
         // a restarted bot is attached again: its chat re-reads itself, as after a reconnect; a bot outside the list
@@ -1812,6 +2126,13 @@ export function createStore(bridge: BridgeLike, opts: StoreOptions = {}): Store 
       const chip = state.replyTo[bot] ?? null;
       const reply = chip ? { source: chip.source, label: chip.place } : undefined;
       const wire = toWire(t, skillNames.get(bot) ?? []);
+      if (mustHold(state, bot)) {
+        // a turn runs: omher holds it (steer queue) and sends it when the turn ends
+        held.set(id, { bot, text: t, wire, ...(chip ? { reply_to: chip.session_id } : {}) });
+        dispatch({ type: "local.user", bot, id, text: t, now: now(), reply, sent: wire, skills: tokenNames(t, bot), held: true });
+        if (chip) dispatch({ type: "reply.set", bot, chip: null });
+        return;
+      }
       dispatch({ type: "local.user", bot, id, text: t, now: now(), reply, sent: wire, skills: tokenNames(t, bot) });
       if (chip) dispatch({ type: "reply.set", bot, chip: null });
       try {
@@ -1828,6 +2149,15 @@ export function createStore(bridge: BridgeLike, opts: StoreOptions = {}): Store 
       const bot = state.selectedBot;
       if (!bot) return;
       if (!files.length) return actions.send(text);
+      if (mustHold(state, bot)) {
+        // held with its files: they are attached when it goes out (an attach stages for the very next send)
+        const id = `local-${++localSeq}`;
+        const t = text.trim();
+        const shown: SentFile[] = files.map(({ name, size, kind, url }) => ({ name, size, kind, url }));
+        held.set(id, { bot, text, wire: toWire(t, skillNames.get(bot) ?? []), files });
+        dispatch({ type: "local.user", bot, id, text: t, now: now(), files: shown, skills: tokenNames(t, bot), held: true });
+        return;
+      }
       const results: AttachResult[] = [];
       for (const f of files) {
         try {
@@ -1845,6 +2175,66 @@ export function createStore(bridge: BridgeLike, opts: StoreOptions = {}): Store 
       } catch (e) {
         dispatch({ type: "send.failed", bot, id, error: errText(e) });
       }
+    },
+    async queueSendNow(id, which) {
+      const bot = botArg(which);
+      if (!bot || !heldRow(bot, id)) return;
+      dispatch({ type: "queue.front", bot, id });
+      // one interrupt, however often it is pressed; the turn's end sends this one first
+      if (!state.chats[bot]?.turn || interrupting.has(bot)) return;
+      interrupting.add(bot);
+      try {
+        await bridge.request("chat.interrupt", { bot });
+      } catch (e) {
+        fail(e);
+      } finally {
+        interrupting.delete(bot);
+      }
+    },
+    async queueSteer(id, which) {
+      const bot = botArg(which);
+      const p = bot ? heldRow(bot, id) : null;
+      if (!bot || !p || state.chats[bot]?.steering) return;
+      // no turn to steer (it ended), or a message Hermes cannot take as a steer (files, a Reply there target):
+      // it goes out next as a normal message
+      if (!state.chats[bot]?.turn || p.files?.length || p.reply_to) {
+        dispatch({ type: "queue.front", bot, id });
+        return;
+      }
+      dispatch({ type: "queue.steering", bot, id });
+      let ok = false;
+      let unknown = false;
+      try {
+        const status = (await bridge.request("chat.steer", { bot, text: p.wire })).status;
+        ok = status === "queued";
+        // Hermes could not say whether the agent saw it: the same as no answer, the person decides
+        unknown = status === "uncertain";
+      } catch (e) {
+        // a clear refusal is sent normally after the turn; no answer at all (the bridge dropped, the bot went
+        // offline, a timeout) may mean Hermes took it: never sent again on its own, the person decides
+        unknown = !STEER_REFUSED.has((e as { code?: string } | null)?.code ?? "");
+      }
+      dispatch({ type: "queue.steered", bot, id, ok, now: now(), ...(unknown ? { unknown } : {}) });
+    },
+    queueResend(id, which) {
+      const bot = botArg(which);
+      if (!bot || !unknownRow(bot, id)) return;
+      dispatch({ type: "queue.resend", bot, id });
+    },
+    queueEdit(id, which) {
+      const bot = botArg(which);
+      const p = bot ? heldRow(bot, id) : null;
+      if (!bot || !p) return;
+      held.delete(id);
+      dispatch({ type: "queue.drop", bot, id });
+      const typed = getDraft(bot).trim();
+      dispatch({ type: "ui.draft", bot, text: typed ? `${p.text}\n${typed}` : p.text });
+    },
+    queueDelete(id, which) {
+      const bot = botArg(which);
+      if (!bot || !(heldRow(bot, id) || unknownRow(bot, id))) return;
+      held.delete(id);
+      dispatch({ type: "queue.drop", bot, id });
     },
     async interrupt() {
       const bot = state.selectedBot;
@@ -2135,6 +2525,7 @@ export function getStore(): Store {
     onEvent(ev, state) {
       notifySessionEvent(ev, state);
     },
+    onWatchMissed: notifyWatchMissed,
     onAction: (a, state) => soundOf(a, state, appSounds()),
     onSettled: () => appSounds().settle(),
     resume: () => {
@@ -2182,7 +2573,15 @@ export function notifySessionEvent(ev: BridgeEvent, state: AppState): void {
     const route = chatRoute(note.bot);
     if (route) route.open();
     else void singleton?.actions.selectBot(note.bot);
-  });
+  }, ev.event === "message" && !!ev.watch);
+}
+
+/** One note for the automation answers `bot` got while omher was closed ("<bot>: N watch alerts"). */
+export function notifyWatchMissed(bot: string, rows: Msg[], state: AppState): void {
+  if (!notifyEnabled() || watchingChat(state, bot)) return;
+  const who = state.bots.find((b) => b.name === bot)?.display_name ?? bot;
+  const note = watchMissedNote(who, bot, rows);
+  if (note) void showNote(note, () => void singleton?.actions.selectBot(bot), true);
 }
 
 /** A system notification for what session `id` did outside its chat (its program ended, it could not start, its

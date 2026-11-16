@@ -78,3 +78,27 @@ export function tokens(n: number): string {
   const m = n / 1_000_000;
   return `${Number.isInteger(Math.round(m * 10) / 10) ? Math.round(m) : (Math.round(m * 10) / 10).toFixed(1)}M`;
 }
+
+// ---- steer queue sessions ------------------------------------------------------------------------
+//
+// A message sent while a turn runs waits in omher (a bubble with the ↵ mark) and goes out when the turn ends. Steer
+// hands it to the running turn through the agent's own mid-turn input (src-tauri/src/agent_chat.rs `Input::Steer`):
+// Codex app-server `turn/steer`, pi / oh-my-pi / OmO rpc `steer`, Claude Code a stream-json user message written
+// mid-turn. ACP agents and DSH run one prompt at a time and have none.
+
+/** The agents that take a steer. Mirrors `steers` in src-tauri/src/agent_chat.rs (pinned by its tests). */
+export const STEERS: readonly AgentId[] = ["claude", "codex", "pi", "omp", "omo"];
+export const steersOf = (agent: AgentId | string): boolean => (STEERS as readonly string[]).includes(agent);
+
+export type QueueOff = Partial<Record<"now" | "steer" | "edit" | "delete", string>>;
+
+/** Which ↵ menu items are off for a waiting message, each with its one-line reason; null = no menu. `held`: omher
+ *  still holds it (it can change); otherwise the agent has it and only it can say when it takes it. */
+export function queueOff(agent: AgentId | string, label: string, held: boolean, waiting: boolean): QueueOff | null {
+  if (!held && !waiting) return null;
+  if (!held) {
+    const why = t("sqs.handed", { agent: label });
+    return { now: why, steer: why, edit: why, delete: why };
+  }
+  return steersOf(agent) ? {} : { steer: t("sqs.noSteer", { agent: label }) };
+}
