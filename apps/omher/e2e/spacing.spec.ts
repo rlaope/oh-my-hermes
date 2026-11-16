@@ -100,6 +100,8 @@ function measure(page: Page) {
       botsList: Math.round(bots),
       termsList: Math.round(terms),
       listArea: Math.round(bots + terms),
+      botsNeed: bl?.scrollHeight ?? 0,
+      termsNeed: tl?.scrollHeight ?? 0,
       footer: Math.round(foot?.height ?? 0),
       dock: Math.round(dock?.height ?? 0),
       botRows: whole(bl, ".bot-w > .bot"),

@@ -236,6 +236,8 @@ describe("TERMINALS card second line", () => {
     expect(lastPrintedLine(["a   b\tc"])).toBe("a b c");
     expect(lastPrintedLine(["› Read 142 lines", "❯ "])).toBe("Read 142 lines");
     expect(lastPrintedLine(["❯ fix the flaky test"])).toBe("fix the flaky test");
+    expect(lastPrintedLine(["• Ran pnpm test payments", "›"])).toBe("Ran pnpm test payments");
+    expect(lastPrintedLine(["⏺ Read 3 files", "", "›  "])).toBe("Read 3 files");
     expect(lastPrintedLine(["", "   ", "────"])).toBe("");
   });
   it("cuts a very long line with an ellipsis", () => {

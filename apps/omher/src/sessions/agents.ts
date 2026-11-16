@@ -353,9 +353,9 @@ export const LAST_LINE_MAX = 160;
  *  one, a leading prompt mark dropped, and a line of only box-drawing, block or rule characters (a frame's edge, a prompt bar) skipped. "" = none. */
 export function lastPrintedLine(lines: readonly string[]): string {
   for (let i = lines.length - 1; i >= 0; i--) {
-    // an input prompt's mark before the text (Codex's ›, Claude's ❯, a quote bar) is not part of what it says
-    const l = lines[i]!.replace(/\s+/g, " ").trim().replace(/^[›❯▌>]+ /, "");
-    if (!l || /^[\u2500-\u259f\u2800-\u28ff\s|+\-=_.:>▌❯$%#]*$/.test(l)) continue;
+    // an input prompt's mark before the text (Codex's › and •, Claude's ❯ and ⏺, a quote bar) is not part of what it says
+    const l = lines[i]!.replace(/\s+/g, " ").trim().replace(/^[›❯▌>•⏺]+ /, "");
+    if (!l || /^[\u2500-\u259f\u2800-\u28ff\s|+\-=_.:>▌❯›•⏺$%#]*$/.test(l)) continue;
     return l.length > LAST_LINE_MAX ? `${l.slice(0, LAST_LINE_MAX - 1)}…` : l;
   }
   return "";
