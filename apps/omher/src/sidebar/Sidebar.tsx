@@ -25,6 +25,7 @@ import { Dock } from "./Dock";
 import { useBotsAbove } from "./dockState";
 import { revealBotTop, revealPending } from "./revealBot";
 import { useEdgeFade } from "./edgeFade";
+import { SplitDivider, useSideSplit } from "./SideSplit";
 
 const sessionBackground = (target: EventTarget) => target instanceof Element && !target.closest(".ss-row, button, input, textarea, select, a, [contenteditable], [role=menu], [role=menuitem]");
 
@@ -68,6 +69,10 @@ export function Sidebar() {
   const botNav = useEdgeFade<HTMLElement>(botList);
   // the dock: the bots scrolled out of view at the top of BOTS (none at the top: no dock)
   const above = useBotsAbove(botList);
+  // BOTS | TERMINALS: auto (each takes what its rows need and they share the rest) or the share the person dragged
+  const botSec = useRef<HTMLElement>(null);
+  const termSec = useRef<HTMLElement>(null);
+  const split = useSideSplit(botSec, termSec);
 
   return (
     <aside className="side" data-testid="sidebar">
@@ -98,7 +103,7 @@ export function Sidebar() {
         />
       </label>
       <NeedsStrip asks={asks} />
-      <section className={`side-sec${needle && bots.length === 0 ? " side-sec-fit" : ""}`} data-testid="side-bots">
+      <section ref={botSec} className={`side-sec${needle && bots.length === 0 ? " side-sec-fit" : ""}`} data-testid="side-bots" style={needle ? undefined : split.bots}>
         <div className="side-sh">{t("nav.bots")}</div>
         <nav ref={botNav} className="bot-list" aria-label={t("nav.bots")} role="tree">
           {bots.map((b) => {
@@ -139,10 +144,13 @@ export function Sidebar() {
           {!needle && listed.length === 0 && <FirstRunHint text={t("onb.botsHint")} testId="onb-hint-bots" />}
         </nav>
       </section>
+      {SESSIONS_ENTRY && <SplitDivider share={split.share} onDrag={split.onDrag} onReset={split.reset} onKey={split.onKey} />}
       {SESSIONS_ENTRY && (
       <section
+        ref={termSec}
         className="side-sec"
         data-testid="side-sessions"
+        style={needle ? undefined : split.terms}
         tabIndex={-1}
         onPointerDown={(e) => {
           // Keep the previous focus available for Escape, before the right press can blur it.
@@ -164,37 +172,44 @@ export function Sidebar() {
       )}
       <Dock above={needle ? [] : above} />
       <div className="side-foot">
-        <button
-          type="button"
-          className={`nav${s.ui.view === "automations" ? " on" : ""}`}
-          aria-current={s.ui.view === "automations" ? "page" : undefined}
-          onClick={() => s.openAutomations()}
-          data-testid="nav-automations"
-        >
-          <CalendarIcon />
-          {t("nav.automations")}
-          {automations > 0 && <span className="nav-count">{automations}</span>}
-        </button>
-        <button
-          type="button"
-          className={`nav${s.ui.view === "plugins" ? " on" : ""}`}
-          aria-current={s.ui.view === "plugins" ? "page" : undefined}
-          onClick={() => s.openPlugins()}
-          data-testid="nav-plugins"
-        >
-          <GridIcon />
-          {t("nav.plugins")}
-        </button>
-        <button
-          type="button"
-          className={`nav${inSettings && s.ui.settingsPage !== "accounts" ? " on" : ""}`}
-          onClick={() => (inSettings ? s.closeSettings() : s.openSettings())}
-          data-testid="nav-settings"
-        >
-          <GearIcon />
-          {t("nav.settings")}
-        </button>
-        <Usage />
+        {/* one compact row: Automations, Plugins and Settings as icon buttons (their names in the tooltip and to a
+            screen reader), the usage marks after them */}
+        <div className="foot-row" data-testid="foot-row">
+          <button
+            type="button"
+            className={`nav nav-i${s.ui.view === "automations" ? " on" : ""}`}
+            aria-current={s.ui.view === "automations" ? "page" : undefined}
+            title={automations > 0 ? `${t("nav.automations")} · ${automations}` : t("nav.automations")}
+            onClick={() => s.openAutomations()}
+            data-testid="nav-automations"
+          >
+            <CalendarIcon />
+            <span className="vh">{t("nav.automations")}</span>
+            {automations > 0 && <span className="nav-count">{automations}</span>}
+          </button>
+          <button
+            type="button"
+            className={`nav nav-i${s.ui.view === "plugins" ? " on" : ""}`}
+            aria-current={s.ui.view === "plugins" ? "page" : undefined}
+            title={t("nav.plugins")}
+            onClick={() => s.openPlugins()}
+            data-testid="nav-plugins"
+          >
+            <GridIcon />
+            <span className="vh">{t("nav.plugins")}</span>
+          </button>
+          <button
+            type="button"
+            className={`nav nav-i${inSettings && s.ui.settingsPage !== "accounts" ? " on" : ""}`}
+            title={t("nav.settings")}
+            onClick={() => (inSettings ? s.closeSettings() : s.openSettings())}
+            data-testid="nav-settings"
+          >
+            <GearIcon />
+            <span className="vh">{t("nav.settings")}</span>
+          </button>
+          <Usage />
+        </div>
         <AccountsWatcher />
         <div className={`me${inSettings && s.ui.settingsPage === "accounts" ? " on" : ""}`} data-testid="me">
           <button type="button" className="me-btn" onClick={() => s.openSettings("accounts")} title={t("nav.accounts")}>

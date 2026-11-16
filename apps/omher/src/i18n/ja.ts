@@ -1403,4 +1403,7 @@ export const ja: Record<Key, string> = {
   "term.folderRunning": "{n} 件実行中",
   "term.folderCount1": "1 セッション",
   "term.folderCountN": "{n} セッション",
+  // spacing: the BOTS | TERMINALS divider
+  "side.split": "ボットとターミナルの高さを変える",
+  "side.splitTip": "ドラッグでボットかターミナルを広げます。ダブルクリックで自動に戻ります。",
 };

@@ -1403,4 +1403,7 @@ export const zh: Record<Key, string> = {
   "term.folderRunning": "{n} 个运行中",
   "term.folderCount1": "1 个会话",
   "term.folderCountN": "{n} 个会话",
+  // spacing: the BOTS | TERMINALS divider
+  "side.split": "调整机器人和终端的高度",
+  "side.splitTip": "拖动为机器人或终端留出更多空间。双击恢复自动。",
 };

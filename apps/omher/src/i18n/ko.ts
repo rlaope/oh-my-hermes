@@ -1403,4 +1403,7 @@ export const ko: Record<Key, string> = {
   "term.folderRunning": "{n}개 실행 중",
   "term.folderCount1": "세션 1개",
   "term.folderCountN": "세션 {n}개",
+  // spacing: the BOTS | TERMINALS divider
+  "side.split": "봇과 터미널 높이 조절",
+  "side.splitTip": "끌어서 봇이나 터미널에 자리를 더 줍니다. 두 번 클릭: 자동으로",
 };

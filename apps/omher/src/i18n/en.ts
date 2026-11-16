@@ -1405,4 +1405,7 @@ export const en = {
   "term.folderRunning": "{n} running",
   "term.folderCount1": "1 session",
   "term.folderCountN": "{n} sessions",
+  // spacing: the BOTS | TERMINALS divider
+  "side.split": "Resize bots and terminals",
+  "side.splitTip": "Drag to give bots or terminals more room. Double-click: back to automatic.",
 };

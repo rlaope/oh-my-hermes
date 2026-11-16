@@ -330,8 +330,75 @@
   margin-top: auto;
   display: grid;
   gap: 1px;
-  padding-top: 8px;
+  padding-top: 6px;
   flex: none;
+}
+/* spacing (2026-11-16): Automations, Plugins and Settings are one row of icon buttons (their names in the tooltip
+   and for a screen reader), the usage marks at its right end; the user row under it. The footer was 172px tall. */
+.foot-row {
+  position: relative; /* the usage card spans this row */
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 0 calc(var(--side-x) - 6px);
+}
+.nav.nav-i {
+  position: relative;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  justify-content: center;
+  flex: none;
+}
+.nav.nav-i svg {
+  width: 18px;
+  height: 16px;
+}
+.nav.nav-i:focus-visible {
+  outline: 2px solid var(--muted);
+  outline-offset: -2px;
+}
+/* the Automations count: a small number on the icon's corner, cut out of the sidebar's colour (no filled chip) */
+.nav.nav-i .nav-count {
+  position: absolute;
+  top: 2px;
+  right: 1px;
+  margin: 0;
+  min-width: 12px;
+  padding: 0 2px;
+  border-radius: 6px;
+  font-size: 9.5px;
+  line-height: 12px;
+  font-weight: 600;
+  text-align: center;
+  color: var(--muted);
+  background: var(--side);
+}
+.nav.nav-i.on .nav-count,
+.nav.nav-i:hover .nav-count {
+  background: transparent;
+}
+.foot-row .usage {
+  position: static;
+  margin: 0 0 0 auto;
+  padding: 0;
+  gap: 4px;
+}
+.foot-row .usage-card {
+  left: 0;
+  right: 0;
+}
+/* visually hidden, read out */
+.vh {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
 }
 .nav {
   display: flex;
@@ -385,8 +452,8 @@
   align-items: center;
   gap: 10px;
   width: 100%;
-  padding: 6px var(--side-x);
-  margin-top: 4px;
+  padding: 5px var(--side-x);
+  margin-top: 2px;
   border-radius: var(--r);
   color: var(--ink);
   font-size: 12.5px;

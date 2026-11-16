@@ -340,6 +340,30 @@ export interface SessionRec {
   fgAgent?: string | null;
   /** ms since epoch of the terminal's last output (throttled), for the row's spinner and age. */
   lastOut?: number;
+  /** The last line the terminal shows with text on it (read from its own screen, throttled): the card's second line. */
+  lastLine?: string;
+  /** The window title the program set (OSC 0/2), when it set one: the second line while nothing is printed yet. */
+  oscTitle?: string;
+}
+
+/** How long a TERMINALS card's second line may be (the card truncates it further with an ellipsis). */
+export const LAST_LINE_MAX = 160;
+
+/** The last line of `lines` (a terminal's screen, top to bottom) that says something: trimmed, runs of spaces made
+ *  one, a leading prompt mark dropped, and a line of only box-drawing, block or rule characters (a frame's edge, a prompt bar) skipped. "" = none. */
+export function lastPrintedLine(lines: readonly string[]): string {
+  for (let i = lines.length - 1; i >= 0; i--) {
+    // an input prompt's mark before the text (Codex's ›, Claude's ❯, a quote bar) is not part of what it says
+    const l = lines[i]!.replace(/\s+/g, " ").trim().replace(/^[›❯▌>]+ /, "");
+    if (!l || /^[\u2500-\u259f\u2800-\u28ff\s|+\-=_.:>▌❯$%#]*$/.test(l)) continue;
+    return l.length > LAST_LINE_MAX ? `${l.slice(0, LAST_LINE_MAX - 1)}…` : l;
+  }
+  return "";
+}
+
+/** A TERMINALS card's second line: the CLI, then what it last printed (else the title it set), when it said anything. */
+export function termActivity(rec: Pick<SessionRec, "agent" | "fgAgent" | "lastLine" | "oscTitle">): { cli: string; line: string } {
+  return { cli: termCli(rec), line: rec.lastLine || rec.oscTitle || "" };
 }
 
 /** TERMINALS: whether a session is listed there. Only terminal sessions are (the Shell, or an agent opened in its

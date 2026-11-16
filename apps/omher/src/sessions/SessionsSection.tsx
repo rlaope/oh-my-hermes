@@ -20,7 +20,7 @@ import { useNow } from "../elsewhere/useNow";
 import { t } from "../i18n";
 import { composing } from "../lib/ime";
 import { AgentMark } from "./AgentMark";
-import { agentDef, agentLabel, draftFolder, folderChoices, folderName, hermesOnly, installLine, isTerminalRec, menuFocus, menuOrder, missingNote, parentPath, SHELL, termCli, termFallbackName, termGroups, terminalAgents, termMarkAgent, termStatus, tildePath, type AgentId, type AgentInfo, type RowMark, type SessionRec, type TermStatus, type Unseen } from "./agents";
+import { agentDef, agentLabel, draftFolder, folderChoices, folderName, hermesOnly, installLine, isTerminalRec, menuFocus, menuOrder, missingNote, parentPath, SHELL, termActivity, termFallbackName, termGroups, terminalAgents, termMarkAgent, termStatus, tildePath, type AgentId, type AgentInfo, type RowMark, type SessionRec, type TermStatus, type Unseen } from "./agents";
 import { TermRowMark } from "./TermRowMark";
 import { allCollapsed, collapseOthers, folderSummary, getFolderPrefs, moveFolder, orderFolders, revealFolder as openFolder, setAllFolders, setFolderPrefs, toggleFolder, useFolderPrefs } from "./folders";
 import { ChevronDown, ChevronRight } from "../ui/icons";
@@ -1157,6 +1157,9 @@ function TermRow({ rec, unseen, active, now, onClose }: { rec: SessionRec; unsee
   const live = rec.status === "running" || rec.status === "starting";
   const markAgent = termMarkAgent(rec);
   const age = ageMs(rec.lastOut ?? rec.startedAt, now);
+  const activity = termActivity(rec);
+  // a CLI runs in it: the card's thin amber lane on its left edge (the folder summary's "running" counts the same)
+  const running = live && markAgent !== null;
   const actions = termMenuItems(rec);
   const pick = (a: RowAction) => {
     const sx = getSessions();
@@ -1193,15 +1196,29 @@ function TermRow({ rec, unseen, active, now, onClose }: { rec: SessionRec; unsee
           {title.title}
         </span>
       )}
-      <span className="tr-meta" data-testid="term-meta">
-        <span className="tr-cli">{termCli(rec)}</span> <span className="tr-age">{age}</span>
+      <span className="tr-age" data-testid="term-age">
+        {age}
+      </span>
+      {/* line 2, muted: the CLI, then what it last printed (else the title it set) */}
+      <span className="tr-sub" data-testid="term-meta" title={activity.line || undefined}>
+        <span className="tr-cli">{activity.cli}</span>
+        {activity.line && (
+          <>
+            <span className="tr-dot" aria-hidden="true">
+              ·
+            </span>
+            <span className="tr-line" data-testid="term-line">
+              {activity.line}
+            </span>
+          </>
+        )}
       </span>
     </>
   );
   return (
     <div
       ref={wrap}
-      className={`ss-row tr${active ? " active" : ""}${menu ? " menu-open" : ""}`}
+      className={`ss-row tr${active ? " active" : ""}${running ? " run" : ""}${menu ? " menu-open" : ""}`}
       data-testid={`session-${rec.id}`}
       data-status={rec.status}
       data-term-status={status ?? "idle"}
