@@ -1305,8 +1305,11 @@ class SessionsStartOnlyAllowListedAgents(unittest.TestCase):
         sig = re.search(r"async fn session_start\((.*?)\) -> ", self.lib, re.S)
         self.assertIsNotNone(sig)
         params = {p.split(":")[0].strip() for p in sig.group(1).split(",") if ":" in p}
-        # `resume` is the only extra: a conversation id (Claude Code, DSH) that resume_args checks is a UUID
-        self.assertEqual(params, {"shell", "agent", "cwd", "resume", "account", "cols", "rows", "on_data", "on_exit"})
+        # `resume` is the only extra input: a conversation id (Claude Code, DSH) that resume_args checks is a UUID.
+        # `app` is Tauri's handle, injected by the shell, not sent by the page: the `session-fg` event (the CLI in the
+        # session's foreground) is emitted through it (2026-11-16, terminal sessions)
+        self.assertEqual(params, {"app", "shell", "agent", "cwd", "resume", "account", "cols", "rows", "on_data", "on_exit"})
+        self.assertIn("app: AppHandle,", sig.group(1))
         body = self.lib[sig.end():].split("\n}\n", 1)[0]
         self.assertIn("start_agent(&agent, std::path::Path::new(&cwd), resume.as_deref()", body)
         self.assertNotIn(".spawn(", body)
