@@ -17,6 +17,7 @@ mod pty_bench;
 mod session_files;
 mod sessions;
 mod setup;
+mod tasks;
 
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -516,6 +517,38 @@ async fn session_file_read(path: String) -> Result<tauri::ipc::Response, String>
     Ok(tauri::ipc::Response::new(bytes))
 }
 
+/// Tasks: whether `source`'s CLI (`gh` / `glab`) is on this computer and signed in, by `auth status`'s exit code
+/// only (rule 33). `fresh` asks again instead of the last minute's answer.
+#[tauri::command]
+async fn tasks_status(tasks: State<'_, Arc<tasks::Tasks>>, source: String, fresh: Option<bool>) -> Result<tasks::Status, String> {
+    let src = tasks::Source::parse(&source)?;
+    let t = Arc::clone(&tasks);
+    tauri::async_runtime::spawn_blocking(move || t.status(src, fresh.unwrap_or(false))).await.map_err(|e| e.to_string())
+}
+
+/// Tasks: one page of open issues or pull / merge requests of `repo`, through the person's own CLI with a fixed,
+/// read-only argv (rule 33). The page sends only these words and numbers.
+#[tauri::command]
+async fn tasks_list(tasks: State<'_, Arc<tasks::Tasks>>, source: String, repo: String, kind: String, filter: String, page: u32) -> Result<tasks::Page, String> {
+    let (src, kind, filter) = (tasks::Source::parse(&source)?, tasks::Kind::parse(&kind)?, tasks::Filter::parse(&filter)?);
+    let t = Arc::clone(&tasks);
+    tauri::async_runtime::spawn_blocking(move || t.list(src, kind, &repo, filter, page)).await.map_err(|e| e.to_string())?
+}
+
+/// Tasks: one item's description, comments and checks, read-only (rule 33).
+#[tauri::command]
+async fn tasks_view(tasks: State<'_, Arc<tasks::Tasks>>, source: String, repo: String, kind: String, number: u64) -> Result<tasks::Detail, String> {
+    let (src, kind) = (tasks::Source::parse(&source)?, tasks::Kind::parse(&kind)?);
+    let t = Arc::clone(&tasks);
+    tauri::async_runtime::spawn_blocking(move || t.view(src, kind, &repo, number)).await.map_err(|e| e.to_string())?
+}
+
+/// Tasks: the GitHub / GitLab repository folder `cwd` is in, from its `.git/config` (no program runs); null when none.
+#[tauri::command]
+async fn tasks_remote(cwd: String) -> Result<Option<tasks::Remote>, String> {
+    Ok(tasks::folder_remote(std::path::Path::new(&cwd)))
+}
+
 /// The git branch of a session's folder, from its `.git/HEAD` only (no program runs); "" outside a repository.
 #[tauri::command]
 async fn session_branch(cwd: String) -> Result<String, String> {
@@ -776,7 +809,11 @@ pub fn run() {
             peers_check_close,
             peers_add,
             peers_remove,
-            peers_retry
+            peers_retry,
+            tasks_status,
+            tasks_list,
+            tasks_view,
+            tasks_remote
         ])
         .setup(|app| {
             let bridge = Bridge::new();
@@ -788,6 +825,7 @@ pub fn run() {
                 peers.set_script(script);
             }
             peers.start_all();
+            app.manage(Arc::new(tasks::Tasks::default()));
             app.manage(Shell {
                 bridge,
                 peers,

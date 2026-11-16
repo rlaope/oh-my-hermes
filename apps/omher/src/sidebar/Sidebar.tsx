@@ -27,6 +27,7 @@ import { revealBotTop, revealPending } from "./revealBot";
 import { useEdgeFade } from "./edgeFade";
 import { SplitDivider, useSideSplit } from "./SideSplit";
 import { useAutoSplit } from "./autoSplit";
+import { TasksBar } from "../tasks/TasksBar";
 
 const sessionBackground = (target: EventTarget) => target instanceof Element && !target.closest(".ss-row, button, input, textarea, select, a, [contenteditable], [role=menu], [role=menuitem]");
 
@@ -105,6 +106,7 @@ export function Sidebar() {
           onKeyDown={(e) => e.key === "Escape" && setQ("")}
         />
       </label>
+      <TasksBar />
       <NeedsStrip asks={asks} />
       <section ref={botSec} className={`side-sec${needle && bots.length === 0 ? " side-sec-fit" : ""}`} data-testid="side-bots" style={needle ? undefined : split.bots}>
         <div className="side-sh">{t("nav.bots")}</div>

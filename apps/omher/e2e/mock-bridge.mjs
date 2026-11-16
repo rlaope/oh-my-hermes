@@ -620,6 +620,8 @@ let steerMode = new Map();
 let steers = [];
 // Bots whose skills.list is empty (mock.noSkills).
 let noSkills;
+// Tasks › Linear: the bots whose config names a Linear MCP server (mock.linear {bot, server|null})
+let linearMcp;
 let notReady = new Map();
 
 // What each bot has done (bots.info): sessions per place, skills, routines.
@@ -781,6 +783,7 @@ function reset() {
   steerMode = new Map();
   steers = [];
   noSkills = new Set();
+  linearMcp = new Map();
   notReady = new Map(); // bot -> the sign-in provider that now passes its strict check ("" = none)
   idSeq = 0;
   calls = [];
@@ -1377,6 +1380,10 @@ const OPS = {
     const late = skillsLater.after-- <= 0 ? skillsLater.add : [];
     return { skills: [...SKILL_SEED, ...late].sort((a, b) => a.name.localeCompare(b.name)).map((x) => ({ ...x })) };
   },
+  "tasks.linear": (p) => {
+    const server = linearMcp.get(needBot(p).name);
+    return server ? { configured: true, server } : { configured: false, server: "" };
+  },
   "links.places": (p) => ({ places: structuredClone(LINK_PLACES[needBot(p).name] ?? { slack: {}, discord: {} }) }),
   "panel.terminal": (p) => ({
     runs: (PANEL_RUNS[needBot(p).name] ?? []).map(({ ago, ...r }) => ({ ...r, session_id: "s-" + r.id, ts: now() - ago })),
@@ -1857,6 +1864,12 @@ const OPS = {
   "mock.answer": (p) => {
     const b = needBot(p);
     (answers[b.name] ??= []).push(needStr(p, "text"));
+    return {};
+  },
+  "mock.linear": (p) => {
+    const b = needBot(p);
+    if (p.server) linearMcp.set(b.name, String(p.server));
+    else linearMcp.delete(b.name);
     return {};
   },
   "mock.reset": () => {

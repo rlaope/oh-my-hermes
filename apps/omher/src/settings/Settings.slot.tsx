@@ -18,6 +18,8 @@ import { ProvidersPage } from "./providers/ProvidersPage";
 import { TerminalPage } from "./terminal/TerminalPage";
 import { SshMarker } from "../peers/SshMarker";
 import { RemoteMachines } from "../peers/RemoteMachines";
+import { setBar, useTasks } from "../tasks/state";
+import { Toggle } from "../pages/kit";
 import { AgentsPage } from "./agents/AgentsPage";
 import { AvatarEditor, BotFacts, NameEditor, PictureActions, placeName, useBotInfo, usePictureEditor } from "./BotIdentity";
 
@@ -407,6 +409,11 @@ function SoundsSeg() {
   );
 }
 
+function TasksBarToggle() {
+  const tk = useTasks();
+  return <Toggle on={tk.bar} label={t("tasks.barSetting")} onChange={setBar} testId="set-tasks-bar" />;
+}
+
 function GeneralPage() {
   const s = useStore();
   const h = s.hello;
@@ -432,6 +439,11 @@ function GeneralPage() {
         </Row>
         <Row title={t("sounds.title")} hint={t("sounds.hint")}>
           <SoundsSeg />
+        </Row>
+      </div>
+      <div className="st-grp">
+        <Row title={t("tasks.barSetting")} hint={t("tasks.barSettingHint")}>
+          <TasksBarToggle />
         </Row>
       </div>
       <div className="st-gh">{t("set.keyboard")}</div>
