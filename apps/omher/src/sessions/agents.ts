@@ -161,11 +161,17 @@ export const CONTINUES: readonly BuiltinId[] = ["claude", "codex", "omo", "dsh",
 /** Whether `agent`'s Restart (and a restart of omher) continues its conversation. */
 export const continues = (agent: AgentId): boolean => (isBuiltin(agent) ? CONTINUES.includes(agent) : !!acpRow(agent)?.continues);
 
+/** The TERMINALS Shell row: the person's login shell in the folder (src-tauri `shell_start`, the same argv rule as the
+ *  bottom panel's). Not an allow-listed agent: the page never names a program for it. */
+export const SHELL = "shell";
+export const isShell = (agent: AgentId | null | undefined): boolean => agent === SHELL;
+
 /** A built-in's definition, a generic ACP agent's from its row, else (an agent omher no longer offers, or one the
  *  shell has not described yet) its id as a name with no way to run. */
 export const agentDef = (id: AgentId): AgentDef => {
   const b = AGENTS.find((a) => a.id === id);
   if (b) return b;
+  if (id === SHELL) return { id, program: "shell", label: "Shell", mode: "terminal" };
   const row = acpRow(id);
   if (row) return { id, program: row.program, label: row.label, mode: "chat" };
   return { id, program: id, label: GONE[id] ?? id, mode: "chat" };
@@ -258,6 +264,7 @@ export function parseOpens(raw: string | null): Opens {
 /** Which ways `agent` can open: omher's chat and/or its own terminal. oh-my-hermes has a terminal (`omh`) but, for a
  *  person who has Hermes and no `omh`, only the Hermes chat; DSH has no terminal here; Grok has no chat here. */
 export function opensAs(agent: AgentId, agents?: AgentInfo[] | null): Record<OpenAs, boolean> {
+  if (agent === SHELL) return { chat: false, terminal: true };
   if (agent === "dsh") return { chat: true, terminal: false };
   if (agent === "grok") return { chat: false, terminal: true };
   if (agent === "omh" && hermesOnly(agents)) return { chat: true, terminal: false };
@@ -327,7 +334,57 @@ export interface SessionRec {
   mode?: string;
   /** The reasoning effort the person picked, likewise. */
   effort?: string;
+  /** The CLI running in the foreground of this terminal (a harness id or program name, e.g. `claude` started from a
+   *  Shell), as the shell reports it; null = none known (the session's own agent, or the shell itself). */
+  fgAgent?: string | null;
+  /** ms since epoch of the terminal's last output (throttled), for the row's spinner and age. */
+  lastOut?: number;
 }
+
+/** TERMINALS: whether a session is listed there. Only terminal sessions are (the Shell, or an agent opened in its
+ *  own terminal); a saved chat-mode session is not listed and opens nowhere (its records stay untouched). */
+export function isTerminalRec(agents: AgentInfo[] | null | undefined, rec: Pick<SessionRec, "agent" | "open" | "status">): boolean {
+  if (rec.status === "draft") return false;
+  return isShell(rec.agent) || sessionMode(agents, rec) === "terminal";
+}
+
+/** The agents the TERMINALS + menu offers: every one that has a terminal view (no DSH, no Hermes-only chat row). */
+export function terminalAgents(agents: AgentInfo[], list: Recent[]): { shown: AgentInfo[]; more: AgentInfo[] } {
+  const { shown, more } = menuParts(agents.filter((a) => opensAs(a.id, agents).terminal), list);
+  return { shown, more };
+}
+
+/** TERMINALS groups: sessions by folder, in the order each folder first appears in `list` (newest first). */
+export function termGroups<T extends Pick<SessionRec, "cwd">>(list: readonly T[]): { cwd: string; rows: T[] }[] {
+  const out: { cwd: string; rows: T[] }[] = [];
+  for (const r of list) {
+    const g = out.find((x) => x.cwd === r.cwd);
+    if (g) g.rows.push(r);
+    else out.push({ cwd: r.cwd, rows: [r] });
+  }
+  return out;
+}
+
+/** The output counts as flowing for this long after the terminal's last output (the row's spinner). */
+export const BUSY_MS = 2_000;
+
+/** What a TERMINALS row's status glyph shows: `busy` (output in the last BUSY_MS), `bell` (it rang while unseen),
+ *  `ok` (exited 0), `err` (exited non-zero or failed to start), or nothing (idle at a prompt, or stopped). */
+export type TermStatus = "busy" | "bell" | "ok" | "err" | null;
+export function termStatus(rec: Pick<SessionRec, "status" | "exitCode" | "lastOut">, unseen: Unseen | undefined, now: number): TermStatus {
+  if (rec.status === "failed") return "err";
+  if (rec.status === "exited") return rec.exitCode === 0 ? "ok" : typeof rec.exitCode === "number" ? "err" : null;
+  if (unseen === "bell") return "bell";
+  if ((rec.status === "running" || rec.status === "starting") && rec.lastOut && now - rec.lastOut < BUSY_MS) return "busy";
+  return null;
+}
+
+/** The mark a TERMINALS row shows: the foreground CLI when one is known, else the session's own agent, else null
+ *  (the shell icon). */
+export const termMarkAgent = (rec: Pick<SessionRec, "agent" | "fgAgent">): string | null => rec.fgAgent ?? (isShell(rec.agent) ? null : rec.agent);
+
+/** The row's grey mono meta: the CLI's program name (`claude`, `codex`, `shell`). */
+export const termCli = (rec: Pick<SessionRec, "agent" | "fgAgent">): string => rec.fgAgent ?? agentDef(rec.agent).program;
 
 /** Live state of a session's chat that the row needs (from the store). */
 export interface ChatLive {

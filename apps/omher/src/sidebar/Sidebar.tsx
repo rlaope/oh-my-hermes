@@ -1,4 +1,4 @@
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { getRestarts } from "./restart";
 import "./sidebar.css";
 import logo from "../assets/omher-mark.png";
@@ -21,11 +21,23 @@ import { FirstRunHint } from "../onboarding/FirstRun";
 import { OmhNotice } from "./OmhNotice";
 import { t } from "../i18n";
 import { ThreadTree } from "../threads/ThreadTree";
+import { Dock } from "./Dock";
+import { pinToDock, useDock } from "./dockState";
 
 const sessionBackground = (target: EventTarget) => target instanceof Element && !target.closest(".ss-row, button, input, textarea, select, a, [contenteditable], [role=menu], [role=menuitem]");
 
+/** The open bot or thread row scrolls into view inside BOTS (never moving TERMINALS). */
+function useRevealBot(bot: string | null, thread: string | null, inChat: boolean) {
+  useEffect(() => {
+    if (!inChat || !bot) return;
+    const sel = thread ? `[data-testid="thread-row-${CSS.escape(thread)}"]` : `[data-testid="bot-${CSS.escape(bot)}"]`;
+    document.querySelector(sel)?.scrollIntoView({ block: "nearest" });
+  }, [bot, thread, inChat]);
+}
+
 export function Sidebar() {
   const s = useStore();
+  const dock = useDock();
   const [q, setQ] = useState("");
   const [sessionMenu, setSessionMenu] = useState<{ x: number; y: number; focus: HTMLElement } | null>(null);
   const closeSessionMenu = useCallback(() => setSessionMenu(null), []);
@@ -48,6 +60,7 @@ export function Sidebar() {
   const inSettings = s.ui.view === "settings";
   const automations = s.automations?.length ?? 0;
   const inChat = s.ui.view === "chat";
+  useRevealBot(s.selectedBot, s.ui.thread, inChat);
 
   return (
     <aside className="side" data-testid="sidebar">
@@ -106,6 +119,8 @@ export function Sidebar() {
                 onRestart: () => void getRestarts().press(b.name),
                 offline: b.status === "offline",
                 onRemove: listed.length > 1 ? () => s.listBot(b.name, false) : undefined,
+                docked: dock.pins.includes(`bot:${b.name}`),
+                onDock: () => pinToDock(`bot:${b.name}`, !dock.pins.includes(`bot:${b.name}`)),
               }}
             >
               {hasThreads && <ThreadTree bot={b.name} id={groupId} />}
@@ -139,6 +154,7 @@ export function Sidebar() {
         {sessionMenu && <SessionBackgroundMenu at={sessionMenu} onClose={closeSessionMenu} />}
       </section>
       )}
+      <Dock />
       <div className="side-foot">
         <button
           type="button"

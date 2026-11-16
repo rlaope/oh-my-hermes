@@ -1121,3 +1121,152 @@
   overflow: hidden;
   text-overflow: ellipsis;
 }
+
+
+/* ---- TERMINALS (termui, 2026-11-16): folder groups, one-line rows ------------------------------------------- */
+.ss-list {
+  gap: 0;
+}
+.tg {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding-bottom: 6px;
+}
+.tg-h {
+  display: grid;
+  grid-template-columns: 16px minmax(0, 1fr);
+  column-gap: 6px;
+  align-items: center;
+  padding: 4px var(--side-x) 3px;
+  color: var(--ink);
+}
+.tg-ic {
+  display: grid;
+  place-items: center;
+  color: #d9a03a;
+}
+.tg-n {
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.tg-b {
+  grid-column: 2;
+  font-size: 10.5px;
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.ss-row.tr {
+  position: relative;
+  display: flex;
+  border-radius: 8px;
+  border: 1px solid transparent;
+  flex: none;
+}
+.ss-row.tr .ss-open {
+  gap: 7px;
+  height: 28px;
+  padding: 0 8px 0 calc(var(--side-x) + 8px);
+  font-size: 12px;
+  color: var(--body);
+}
+.ss-row.tr:hover {
+  background: var(--hover);
+}
+.ss-row.tr.active {
+  background: var(--active-row);
+  border-color: var(--line);
+}
+.tr-n {
+  flex: 1;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.tr-meta {
+  flex: none;
+  font-family: var(--mono);
+  font-size: 10.5px;
+  color: var(--quiet);
+  white-space: nowrap;
+}
+.ss-row.tr:hover .tr-meta,
+.ss-row.tr:focus-within .tr-meta {
+  visibility: hidden;
+}
+.ss-row.tr .ss-x {
+  right: 4px;
+}
+.ss-row.tr .ss-name-in {
+  flex: 1;
+  min-width: 0;
+}
+.tst {
+  width: 12px;
+  height: 12px;
+  flex: none;
+  display: grid;
+  place-items: center;
+}
+.tst.busy {
+  color: #f2b705;
+}
+.tst.busy svg {
+  animation: tst-turn 0.9s linear infinite;
+}
+.tst.ok {
+  color: var(--ok);
+}
+.tst.err {
+  color: var(--danger);
+}
+.tst.bell {
+  color: #e8a33c;
+}
+[data-theme="light"] .tst.busy {
+  color: #c48a00;
+}
+@keyframes tst-turn {
+  to {
+    transform: rotate(360deg);
+  }
+}
+.trm {
+  position: relative;
+  display: inline-grid;
+  place-items: center;
+  flex: none;
+  color: var(--muted);
+}
+.trm.live::after {
+  content: "";
+  position: absolute;
+  inset: -3px;
+  border-radius: 50%;
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--ok) 55%, transparent);
+  pointer-events: none;
+}
+.ss-at .ss-path,
+.ss-folders .ss-path {
+  margin-left: auto;
+  font-size: 10.5px;
+  color: var(--quiet);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 45%;
+}
+.ss-folders {
+  padding-left: 8px;
+}
+@media (prefers-reduced-motion: reduce) {
+  .tst.busy svg {
+    animation: none;
+  }
+}

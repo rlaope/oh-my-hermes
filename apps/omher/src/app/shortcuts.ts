@@ -3,8 +3,8 @@
 //   ⌘.     show or hide Details                    ⌘,  Settings
 //   ⌘J     jump to the next approval or question waiting on you (any bot or SESSIONS chat)
 //   ⌘⇧G   maximise the side panel in place, or restore it (Esc restores; a closed panel opens on Plans)
-//   ⌘N ⌘T  the SESSIONS + menu (pick an agent for a New session)   } off while SESSIONS is hidden
-//   ⌘⇧]    the next session (sidebar order, wrapping)          ⌘⇧[  the previous session   } (sessions/entry.ts)
+//   ⌘N ⌘T  the TERMINALS + menu (Shell or a CLI, in a terminal)
+//   ⌘⇧]    the next terminal session (sidebar order, wrapping)  ⌘⇧[  the previous one
 //   Esc    stop the running answer (only when no popover, field or dialog wants Esc first)
 //   Ctrl+` the bottom terminal panel, show or hide, on every OS (Ctrl on macOS too, as in VS Code; a maximised side
 //          panel goes back to its own width first, so the terminal shows); taken before a
@@ -16,6 +16,7 @@ import { getStore, selectAsks, selectSidebarBots, type Ask, type FocusAsk } from
 import { getSessions } from "../sessions/sessions";
 import { openNewSessionMenu } from "../sessions/newMenu";
 import { SESSIONS_ENTRY } from "../sessions/entry";
+import { isTerminalRec, termGroups } from "../sessions/agents";
 import { composing } from "../lib/ime";
 import { getTermPanel, toggleTerminal } from "../terminal/state";
 
@@ -131,9 +132,9 @@ export function useShortcuts(): void {
       } else if (hit.kind === "new-session") {
         openNewSessionMenu();
       } else if (hit.kind === "session") {
-        const ids = getSessions()
-          .getState()
-          .list.map((r) => r.id);
+        const ss = getSessions().getState();
+        // TERMINALS order: the folder groups as the sidebar shows them
+        const ids = termGroups(ss.list.filter((r) => isTerminalRec(ss.agents, r))).flatMap((g) => g.rows.map((r) => r.id));
         const to = stepSession(ids, s.ui.view === "session" ? s.ui.session : null, hit.step);
         if (to) a.openSession(to);
       } else if (hit.kind === "next-ask") {

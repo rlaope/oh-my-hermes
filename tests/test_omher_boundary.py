@@ -38,9 +38,12 @@ RULES = (
     "the bridge has exactly one `prompt.submit` call site and it takes the main chat's id or such a folder chat's or thread's.",
     "an `omher-thread-route` block in an answer only asks the person whether to send their message to an open thread,"
     " and nothing is sent until they press Send there.",
-    "The SESSIONS entry (the sidebar section, its `+` menu and background menu, ⌘N/⌘T and ⌘⇧[ ]) is hidden in favour of"
-    " bot threads;",
-    "the only program omher starts for the person is their login shell for the bottom terminal panel (Ctrl+`):"
+    "The SESSIONS entry is back as TERMINALS (the sidebar section, its `+` menu and background menu, ⌘N/⌘T and ⌘⇧[ ])"
+    " and lists terminal sessions only:",
+    "Chat mode is not offered (chat-mode CLI sessions are replaced by bot threads): no Chat/Terminal choice,",
+    "The Shell row runs the same login shell, by the same rule and command (`shell_start`), as the bottom panel.",
+    "the only program omher starts for the person is their login shell for the bottom terminal panel (Ctrl+`) and the"
+    " TERMINALS Shell row:"
     " `[$SHELL, -l]` when `$SHELL` is an absolute path to an executable file that `/etc/shells` lists,",
     "the page sends only a folder and a size (`shell_start`), omher types nothing into it, and the shell is stopped when"
     " its tab closes and when the app exits.",
@@ -86,7 +89,7 @@ RULES = (
     "An OmO session chat reads the same records for one more thing: when OmO's `task` result names a subagent's"
     " task id but not its answer, it reads that one record (`st_<task id>.json`, from the same folders and under the"
     " same rules, read-only, and only a record of that session)",
-    "omher starts a terminal program only when the person asks for a session (SESSIONS `+`), and only one of a"
+    "omher starts a terminal program only when the person asks for a session (TERMINALS `+`), and only one of a"
     " fixed allow-list: `claude`, `codex`, `omo`, `dsh`, `omh`, `pi`, `omp`, `grok`, `opencode`, `gemini`, `qwen`, `kimi`, `copilot`, `cline`, with no arguments,",
     "A chat session starts the same program with its fixed structured-mode arguments from the allow-list",
     "(`claude -p --input-format stream-json --output-format stream-json --verbose --include-partial-messages"
@@ -1602,7 +1605,9 @@ class SessionFilesStayInOmhersFolder(unittest.TestCase):
     def test_a_terminal_gets_only_a_saved_quoted_path_and_hermes_sessions_take_no_files(self) -> None:
         drop = self.ui.split("const dropOnTerminal = async", 1)[1].split("\n  };\n", 1)[0]
         self.assertIn("shellQuote(await host.saveFile(id, f.name, await f.read()), windows)", drop)
-        self.assertEqual(self.ui.count("host.write("), 2)  # xterm's own typing, and the dropped path
+        # xterm's own typing, and the dropped path, through the terminal's PTY (the agent host, or the Shell row's
+        # login-shell host)
+        self.assertEqual(self.ui.count("io.write("), 2)
         # files go to chat agents only: an oh-my-hermes session's composer has no onSendFiles
         self.assertIn('onSendFiles={takesFiles ? (t, files) => getSessions().sendFiles(rec.id, t, files) : undefined}', self.view)
         self.assertIn("=== \"chat\";", self.view.split("const takesFiles", 1)[1].split("\n", 1)[0])
@@ -1949,7 +1954,8 @@ class SshPeersOnlyOverTheOwnSsh(unittest.TestCase):
 
 class BotThreads(unittest.TestCase):
     """Rules 3, 11 and 32 for bot threads: a thread is removed by interrupt + Hermes' own ``session.archive``, never a
-    delete; the SESSIONS entry is off; the terminal panel's only program is the person's login shell."""
+    delete; the SESSIONS entry is back as TERMINALS (terminal sessions only, no chat mode); the terminal panel's and the
+    Shell row's only program is the person's login shell."""
 
     APP = ROOT / "apps" / "omher"
 
@@ -1965,13 +1971,27 @@ class BotThreads(unittest.TestCase):
         for word in ("delete", "unlink", "rmtree"):
             self.assertNotIn(word, body.replace("never a delete", ""), word)
 
-    def test_sessions_entry_is_hidden(self) -> None:
+    def test_sessions_entry_is_terminals_only(self) -> None:
         entry = (self.APP / "src" / "sessions" / "entry.ts").read_text(encoding="utf-8")
-        self.assertIn("export const SESSIONS_ENTRY = false;", entry)
-        side = (self.APP / "src" / "sidebar" / "Sidebar.tsx").read_text(encoding="utf-8")
-        self.assertIn("{SESSIONS_ENTRY && (", side)
-        keys = (self.APP / "src" / "app" / "shortcuts.ts").read_text(encoding="utf-8")
-        self.assertIn('if (!SESSIONS_ENTRY && (hit.kind === "new-session" || hit.kind === "session")) return;', keys)
+        self.assertIn("export const SESSIONS_ENTRY = true;", entry)
+        section = (self.APP / "src" / "sessions" / "SessionsSection.tsx").read_text(encoding="utf-8")
+        # the + menu starts terminals only (startTerminal), offers only agents with a terminal view, and never a draft
+        # chat; the list shows terminal sessions only
+        self.assertIn("getSessions().startTerminal(id, at || undefined);", section)
+        self.assertIn("terminalAgents(ss.agents, ss.recent)", section)
+        self.assertNotIn("getSessions().draft(", section)
+        self.assertNotIn("session-way", section)
+        self.assertIn("ss.list.filter((r) => isTerminalRec(ss.agents, r))", section)
+        sessions = (self.APP / "src" / "sessions" / "sessions.ts").read_text(encoding="utf-8")
+        start = sessions.split("const startTerminal = ", 1)[1].split("\n  };\n", 1)[0]
+        self.assertIn('view: "terminal"', start)
+        self.assertNotIn("startAgentChat", start)
+        self.assertNotIn("startFolderChat", start)
+        # the Shell row goes through the bottom panel's login-shell command: a folder and a size, never a program
+        self.assertIn("(await getShellHost().start(r.cwd || null, cols, rows, onData, onExit)).id", sessions)
+        # a saved chat-mode session restarts nothing
+        restore = sessions.split("const restore = ", 1)[1].split("\n  };\n", 1)[0]
+        self.assertIn("const auto = !terminalOnly &&", restore)
 
     def test_terminal_panel_runs_only_the_login_shell(self) -> None:
         rs = (self.APP / "src-tauri" / "src" / "sessions.rs").read_text(encoding="utf-8")

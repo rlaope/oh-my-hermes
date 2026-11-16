@@ -13,14 +13,16 @@
 // Line 1 is the session's name (the person's, the agent's own title, a summary of the first message, else the
 // folder) and line 2 the folder and the agent. Double-click the name, or right-click › Rename, to name it.
 import { Fragment, useEffect, useLayoutEffect, useRef, useState, type RefObject } from "react";
-import { selectAsks, useStore, type AppState } from "../state/store";
+import { useStore } from "../state/store";
 import { CloseIcon, LiveRing, PlusIcon, Popover, TypingDots } from "../ui";
 import { busyFor, shortTime } from "../app/time";
 import { useNow } from "../elsewhere/useNow";
 import { t } from "../i18n";
 import { composing } from "../lib/ime";
 import { AgentMark } from "./AgentMark";
-import { agentDef, agentLabel, draftOpen, folderChoices, folderName, hermesOnly, installLine, menuFocus, menuOrder, menuParts, missingNote, rowModel, tildePath, type AgentId, type AgentInfo, type ChatLive, type RowContext, type RowMark, type SessionRec, type Unseen } from "./agents";
+import { agentDef, agentLabel, draftFolder, folderChoices, folderName, hermesOnly, installLine, isShell, isTerminalRec, menuFocus, menuOrder, missingNote, parentPath, SHELL, termCli, termGroups, terminalAgents, termMarkAgent, termStatus, tildePath, type AgentId, type AgentInfo, type RowMark, type SessionRec, type TermStatus, type Unseen } from "./agents";
+import { TermRowMark } from "./TermRowMark";
+import { pinToDock, useDock } from "../sidebar/dockState";
 import { getHost, type PastChat } from "./host";
 import { getSessions, useSessions } from "./sessions";
 import { pickTitle } from "./titles";
@@ -54,14 +56,14 @@ export function SessionsHeader() {
   useEffect(() => onOpenNewSessionMenu(() => setOpen(true)), []);
   return (
     <div className="side-sh side-sh-row">
-      <span>{t("nav.sessions")}</span>
+      <span>{t("nav.terminals")}</span>
       <span className="ss-add">
         <button
           ref={plus}
           type="button"
           className="ss-plus"
-          aria-label={t("sessions.new")}
-          title={t("sessions.new")}
+          aria-label={t("term.new")}
+          title={t("term.new")}
           aria-haspopup="menu"
           aria-expanded={open}
           onClick={() => setOpen((v) => !v)}
@@ -195,7 +197,7 @@ function NewSessionMenu({ onClose, trigger }: { onClose: () => void; trigger: Re
   useEffect(() => {
     if (ss.agents === null) void getSessions().loadAgents();
   }, [ss.agents]);
-  const parts = ss.agents ? menuParts(ss.agents, ss.recent) : null;
+  const parts = ss.agents ? terminalAgents(ss.agents, ss.recent) : null;
   const agents = parts ? [...parts.shown, ...parts.more] : null;
   // the agents that are not installed stay folded until the person opens them
   const [unfold, setUnfold] = useState(false);
@@ -221,10 +223,20 @@ function NewSessionMenu({ onClose, trigger }: { onClose: () => void; trigger: Re
     onClose();
     if (why === "escape") trigger.current?.focus();
   };
+  // the folder it starts in: the chip under the list (the last folder used, else home)
+  const [folder, setFolder] = useState<string | null>(null);
+  const [folders, setFolders] = useState(false);
+  const at = folder ?? draftFolder(ss.recent, ss.home);
   const pick = (id: AgentId) => {
     close("pick");
-    getSessions().draft(id);
+    getSessions().startTerminal(id, at || undefined);
   };
+  const choose = async () => {
+    const got = await getSessions().pickFolder(at || ss.home || "");
+    if (got) setFolder(got);
+    setFolders(false);
+  };
+  const { recent: recentFolders, home } = folderChoices(ss.recent, ss.home);
   // an agent that is not installed: its install line goes to the clipboard, as text (omher runs nothing)
   const copyInstall = (id: AgentId) => {
     void navigator.clipboard?.writeText(installLine(id)).then(
@@ -280,7 +292,6 @@ function NewSessionMenu({ onClose, trigger }: { onClose: () => void; trigger: Re
       </button>
     );
   };
-  const keeps = (agents ?? []).filter((a) => a.path && PAST_AGENTS.includes(a.id as PastAgent)).map((a) => a.id as PastAgent);
   if (past)
     return (
       <Popover open onClose={close} align="left" side={fit?.side ?? "bottom"} width={MENU_W} label={t("ss.past.title", { agent: agentLabel(past, ss.agents) })} className="ss-pop">
@@ -288,11 +299,11 @@ function NewSessionMenu({ onClose, trigger }: { onClose: () => void; trigger: Re
       </Popover>
     );
   return (
-    <Popover open onClose={close} align="left" side={fit?.side ?? "bottom"} width={MENU_W} label={t("sessions.new")} className={`ss-pop${ready && !fit ? " ss-pop-measuring" : ""}`}>
+    <Popover open onClose={close} align="left" side={fit?.side ?? "bottom"} width={MENU_W} label={t("term.new")} className={`ss-pop${ready && !fit ? " ss-pop-measuring" : ""}`}>
       <div
         ref={box}
         role="menu"
-        aria-label={t("sessions.new")}
+        aria-label={t("term.new")}
         data-testid="session-menu"
         onKeyDown={(e) => {
           const items = [...(box.current?.querySelectorAll<HTMLButtonElement>("[role=menuitem]") ?? [])];
@@ -305,9 +316,19 @@ function NewSessionMenu({ onClose, trigger }: { onClose: () => void; trigger: Re
           next?.scrollIntoView({ block: "nearest" });
         }}
       >
-        <div className="ss-h">{t("sessions.new")}</div>
+        <div className="ss-h">{t("term.new")}</div>
         {agents === null && <div className="ss-empty">{t("ss.lookingAgents")}</div>}
         <div ref={list} className={`ss-scroll${more ? " more" : ""}`} style={fit ? { maxHeight: fit.max } : undefined} data-testid="session-menu-list">
+        {ready && (
+          <button key="shell" type="button" role="menuitem" className="ss-item" title={t("term.shellTip")} onClick={() => pick(SHELL)} data-testid="session-agent-shell">
+            <span className="ss-ic">
+              <TermRowMark agent={null} size={16} />
+            </span>
+            <span className="ss-n ss-n-as">
+              <span className="ss-l">{t("term.shell")}</span>
+            </span>
+          </button>
+        )}
         {(parts?.shown ?? []).map(row)}
         {parts && parts.more.length > 0 && (
           <button
@@ -326,24 +347,49 @@ function NewSessionMenu({ onClose, trigger }: { onClose: () => void; trigger: Re
           </button>
         )}
         {unfold && parts?.more.map(row)}
-        {keeps.length > 0 && (
-          <>
-            <div className="ss-sep" />
-            <div className="ss-h">{t("ss.past.head")}</div>
-            {keeps.map((id) => (
-              <button key={id} type="button" role="menuitem" className="ss-item" onClick={() => setPast(id)} data-testid={`session-past-${id}`}>
-                <span className="ss-ic">
-                  <AgentMark agent={id} />
-                </span>
-                <span className="ss-n">{agentLabel(id, ss.agents)}</span>
-                <span className="ss-chev" aria-hidden="true">
-                  ›
-                </span>
+        </div>
+        <div className="ss-sep" />
+        <button
+          type="button"
+          role="menuitem"
+          className="ss-item ss-at"
+          aria-expanded={folders}
+          title={at}
+          onClick={() => setFolders((v) => !v)}
+          data-testid="session-folder"
+        >
+          <span className="ss-ic" aria-hidden="true">
+            <FolderGlyph />
+          </span>
+          <span className="ss-n">{at ? folderName(at) : t("sessions.findingHome")}</span>
+          <span className="ss-path">{at ? parentPath(tildePath(at, ss.home)) : ""}</span>
+        </button>
+        {folders && (
+          <div className="ss-folders" data-testid="session-folders">
+            {[...recentFolders, ...(home ? [home] : [])].map((cwd) => (
+              <button
+                key={cwd}
+                type="button"
+                role="menuitem"
+                className={`ss-item${cwd === at ? " on" : ""}`}
+                title={cwd}
+                onClick={() => {
+                  setFolder(cwd);
+                  setFolders(false);
+                }}
+                data-testid="session-folder-pick"
+              >
+                <span className="ss-ic" />
+                <span className="ss-n">{folderName(cwd)}</span>
+                <span className="ss-path">{parentPath(tildePath(cwd, ss.home))}</span>
               </button>
             ))}
-          </>
+            <button type="button" role="menuitem" className="ss-item" onClick={() => void choose()} data-testid="session-choose">
+              <span className="ss-ic" />
+              <span className="ss-n">{t("sessions.choose")}</span>
+            </button>
+          </div>
         )}
-        </div>
         {hermesOnly(ss.agents) && <AddOmhLine onPick={() => close("pick")} />}
       </div>
     </Popover>
@@ -499,7 +545,7 @@ function SessionStart() {
     .filter((a) => a.path && coding(a))
     .map((a) => agentDef(a.id).label)
     .join(", ");
-  const tip = names ? `${t("onb.sessionsHint")} ${names}` : t("onb.sessionsHint");
+  const tip = names ? `${t("term.empty")} ${names}` : t("term.empty");
   return (
     <div className="ss-none" data-testid="session-none">
       <div className="ss-start-w">
@@ -514,7 +560,7 @@ function SessionStart() {
           data-testid="session-start"
         >
           <PlusIcon size={16} />
-          {t("sessions.new")}
+          {t("term.new")}
         </button>
         {open && <NewSessionMenu onClose={() => setOpen(false)} trigger={btn} />}
       </div>
@@ -542,6 +588,10 @@ export function SessionList({ needle = "", query = "" }: { needle?: string; quer
     document.querySelector<HTMLElement>(`[data-testid="session-${refocus}"] .ss-open`)?.focus();
     setRefocus(null);
   }, [refocus]);
+  // the open terminal's row scrolls into view inside TERMINALS (never moving BOTS)
+  useEffect(() => {
+    if (current) document.querySelector(`[data-testid="session-${current}"]`)?.scrollIntoView({ block: "nearest" });
+  }, [current]);
   const cancel = (id: string) => {
     setConfirm(null);
     setRefocus(id);
@@ -550,80 +600,143 @@ export function SessionList({ needle = "", query = "" }: { needle?: string; quer
     if (rec.status === "running" || rec.status === "starting") setConfirm(rec.id);
     else getSessions().close(rec.id);
   };
-  if (ss.list.length === 0) return <SessionStart />;
-  const shown = ss.list.filter((r) => sessionMatches(r, needle));
-  // a draft's folder is not settled yet: it never makes another row show its parent
-  const ctx: RowContext = { cwds: ss.list.filter((r) => r.status !== "draft").map((r) => r.cwd), home: ss.home, agents: ss.agents };
+  const terms = ss.list.filter((r) => isTerminalRec(ss.agents, r));
+  // a terminal row's spinner and age tick on their own (output marks arrive throttled)
+  const now = useNow(terms.some((r) => r.status === "running" || r.status === "starting"), 1_000);
+  if (terms.length === 0) return <SessionStart />;
+  const shown = terms.filter((r) => sessionMatches(r, needle));
   return (
-    <nav className="bot-list ss-list" aria-label={t("nav.sessions")} data-testid="session-list">
+    <nav className="bot-list ss-list" aria-label={t("nav.terminals")} data-testid="session-list">
       {needle && shown.length === 0 && (
         <div className="bot-empty" data-testid="session-none-match">
           {t("side.noSession", { q: query })}
         </div>
       )}
-      {shown.map((rec) =>
-        confirm === rec.id ? (
-          <div
-            key={rec.id}
-            className="ss-row ss-confirm"
-            role="group"
-            aria-label={t("ss.stopIn", { agent: agentDef(rec.agent).label, folder: folderName(rec.cwd) })}
-            data-testid={`session-confirm-${rec.id}`}
-            onKeyDown={(e) => {
-              if (e.key !== "Escape") return;
-              e.preventDefault();
-              e.stopPropagation();
-              cancel(rec.id);
-            }}
-          >
-            <span className="ss-q" title={rec.cwd}>
-              {t("ss.stopQ", { agent: agentDef(rec.agent).label })}
-            </span>
-            <button type="button" className="ss-btn" onClick={() => cancel(rec.id)} autoFocus>
-              {t("ss.cancel")}
-            </button>
-            <button
-              type="button"
-              className="ss-btn"
-              onClick={() => {
-                setConfirm(null);
-                getSessions().close(rec.id);
-              }}
-              data-testid="session-stop"
-            >
-              {t("ss.stop")}
-            </button>
-          </div>
-        ) : (
-          <Row
-            key={rec.id}
-            rec={rec}
-            ctx={ctx}
-            // a draft has no view yet: its mark is the way picked for it
-            view={rec.status === "draft" ? draftOpen(rec.agent, ss.agents, ss.opens) : rec.view}
-            unseen={ss.unseen[rec.id]}
-            active={current === rec.id}
-            onClose={() => ask(rec)}
-          />
-        ),
-      )}
+      {termGroups(shown).map((g) => (
+        <div key={g.cwd} className="tg" role="group" aria-label={folderName(g.cwd)} data-testid="term-group" data-cwd={g.cwd}>
+          <FolderHead cwd={g.cwd} home={ss.home} />
+          {g.rows.map((rec) =>
+            confirm === rec.id ? (
+              <div
+                key={rec.id}
+                className="ss-row ss-confirm"
+                role="group"
+                aria-label={t("ss.stopIn", { agent: agentDef(rec.agent).label, folder: folderName(rec.cwd) })}
+                data-testid={`session-confirm-${rec.id}`}
+                onKeyDown={(e) => {
+                  if (e.key !== "Escape") return;
+                  e.preventDefault();
+                  e.stopPropagation();
+                  cancel(rec.id);
+                }}
+              >
+                <span className="ss-q" title={rec.cwd}>
+                  {t("ss.stopQ", { agent: agentDef(rec.agent).label })}
+                </span>
+                <button type="button" className="ss-btn" onClick={() => cancel(rec.id)} autoFocus>
+                  {t("ss.cancel")}
+                </button>
+                <button
+                  type="button"
+                  className="ss-btn"
+                  onClick={() => {
+                    setConfirm(null);
+                    getSessions().close(rec.id);
+                  }}
+                  data-testid="session-stop"
+                >
+                  {t("ss.stop")}
+                </button>
+              </div>
+            ) : (
+              <TermRow key={rec.id} rec={rec} unseen={ss.unseen[rec.id]} active={current === rec.id} now={now} onClose={() => ask(rec)} />
+            ),
+          )}
+        </div>
+      ))}
     </nav>
   );
 }
 
-/** The row's view of a session's chat: a turn running, and an ask of it open (the Needs-you model). */
-function chatLive(s: AppState, key: string | null): ChatLive | undefined {
-  const c = key ? s.chats[key] : undefined;
-  if (!c) return undefined;
-  return { turn: !!c.turn, needsYou: selectAsks(s).some((a) => a.bot === key), failed: !c.turn && c.lastTurn?.outcome === "error" };
+/** A small folder outline, the TERMINALS group header's icon. */
+function FolderGlyph() {
+  return (
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinejoin="round" aria-hidden="true">
+      <path d="M3.5 7.5A2 2 0 0 1 5.5 5.5h4l2 2.2h7a2 2 0 0 1 2 2v7.8a2 2 0 0 1-2 2h-13a2 2 0 0 1-2-2Z" />
+    </svg>
+  );
 }
+
+/** A TERMINALS group's header: the folder's name (semibold) and, for a git repository, its branch in small grey. */
+function FolderHead({ cwd, home }: { cwd: string; home: string | null }) {
+  const [branch, setBranch] = useState("");
+  useEffect(() => {
+    let live = true;
+    if (cwd)
+      void getHost()
+        .branch(cwd)
+        .then((b) => live && setBranch(b))
+        .catch(() => undefined);
+    return () => {
+      live = false;
+    };
+  }, [cwd]);
+  return (
+    <div className="tg-h" title={tildePath(cwd, home)} data-testid="term-group-head">
+      <span className="tg-ic">
+        <FolderGlyph />
+      </span>
+      <span className="tg-n">{folderName(cwd)}</span>
+      {branch && (
+        <span className="tg-b" data-testid="term-group-branch">
+          {branch}
+        </span>
+      )}
+    </div>
+  );
+}
+
+/** The row's status glyph, 12px: an amber arc spinning while output flows (static under reduced motion), the bell's
+ *  warning triangle, a green outlined check on exit 0, a red x on a non-zero exit; nothing when idle. */
+export function TermStatusGlyph({ status }: { status: TermStatus }) {
+  const label = status === "busy" ? t("term.st.busy") : status === "bell" ? t("ss.mark.bell") : status === "ok" ? t("ss.at.done") : status === "err" ? t("ss.mark.error") : "";
+  return (
+    <span className={`tst${status ? ` ${status}` : ""}`} data-testid="term-status" data-status={status ?? "idle"} role={status ? "img" : undefined} aria-label={label || undefined} title={label || undefined}>
+      {status === "busy" && (
+        <svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true">
+          <path d="M6 1.6A4.4 4.4 0 1 1 1.6 6" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+        </svg>
+      )}
+      {status === "ok" && (
+        <svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true">
+          <circle cx="6" cy="6" r="5" fill="none" stroke="currentColor" strokeWidth="1.2" />
+          <path d="M3.7 6.2 5.3 7.8 8.4 4.4" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+      )}
+      {status === "err" && (
+        <svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true">
+          <path d="M3.4 3.4 8.6 8.6M8.6 3.4 3.4 8.6" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+        </svg>
+      )}
+      {status === "bell" && <StateSign mark="needs" />}
+    </span>
+  );
+}
+
+/** `now`, `12m`, `3h`, `2d` since `ms`. */
+const ageMs = (ms: number, now: number) => ageOf(ms / 1000, now);
 
 /** What a session row's menu offers, in order: Rename, Reveal the folder, Open the folder in the system terminal,
  *  Copy the conversation id (only when the agent reported one), New session here, Close session. */
 export function rowMenuItems(rec: Pick<SessionRec, "cwd" | "agentSession">): RowAction[] {
   return ["rename", ...(rec.cwd ? (["reveal", "terminal"] as const) : []), ...(rec.agentSession ? (["copy"] as const) : []), "here", "close"];
 }
-export type RowAction = "rename" | "reveal" | "terminal" | "copy" | "here" | "close";
+/** A TERMINALS row's menu: Rename, Pin to dock / Unpin, Reveal, Open in the system terminal, New terminal here,
+ *  Close. */
+export function termMenuItems(rec: Pick<SessionRec, "cwd">): RowAction[] {
+  return ["rename", "pin", ...(rec.cwd ? (["reveal", "terminal"] as const) : []), "here", "close"];
+}
+export type RowAction = "rename" | "reveal" | "terminal" | "copy" | "here" | "pin" | "close";
 
 /** \"Show in Finder\" on macOS, \"Show in Explorer\" on Windows, \"Show in file manager\" elsewhere. */
 const revealWord = () => {
@@ -632,11 +745,12 @@ const revealWord = () => {
 };
 
 const ROW_ACTION_LABEL: Record<RowAction, () => string> = {
+  pin: () => t("dock.pin"),
   rename: () => t("ss.rename"),
   reveal: revealWord,
   terminal: () => t("ss.menu.terminal"),
   copy: () => t("ss.menu.copyId"),
-  here: () => t("ss.menu.here"),
+  here: () => t("term.here"),
   close: () => t("ss.close"),
 };
 const ROW_ACTION_ID: Record<RowAction, string> = {
@@ -645,12 +759,13 @@ const ROW_ACTION_ID: Record<RowAction, string> = {
   terminal: "session-system-terminal",
   copy: "session-copy-id",
   here: "session-new-here",
+  pin: "session-pin",
   close: "session-menu-close",
 };
 
 /** Right-click menu of a session row (rowMenuItems). Placed at the pointer, inside the window. Arrow keys move,
  *  Home / End jump, Enter picks, Esc closes. */
-function SessionMenu({ at, name, actions, onPick, onDismiss }: { at: { x: number; y: number }; name: string; actions: RowAction[]; onPick: (a: RowAction) => void; onDismiss: () => void }) {
+function SessionMenu({ at, name, actions, pinned = false, onPick, onDismiss }: { at: { x: number; y: number }; name: string; actions: RowAction[]; pinned?: boolean; onPick: (a: RowAction) => void; onDismiss: () => void }) {
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => {
     ref.current?.querySelector<HTMLButtonElement>("button")?.focus();
@@ -695,7 +810,7 @@ function SessionMenu({ at, name, actions, onPick, onDismiss }: { at: { x: number
             onPick(a);
           }}
         >
-          {ROW_ACTION_LABEL[a]()}
+          {a === "pin" && pinned ? t("dock.unpin") : ROW_ACTION_LABEL[a]()}
         </button>
       ))}
     </div>
@@ -793,142 +908,83 @@ function ViewMark({ view }: { view: "chat" | "terminal" }) {
   );
 }
 
-function Row({ rec, ctx, view, unseen, active, onClose }: { rec: SessionRec; ctx: RowContext; view: "chat" | "terminal"; unseen?: Unseen; active: boolean; onClose: () => void }) {
+function TermRow({ rec, unseen, active, now, onClose }: { rec: SessionRec; unseen?: Unseen; active: boolean; now: number; onClose: () => void }) {
   const s = useStore();
-  const key = getSessions().chatKey(rec.id);
-  const chat = rec.view === "chat" ? chatLive(s, key) : undefined;
-  const m = rowModel(rec, chat, ctx, unseen);
-  // what the state's sign says, for a pointer and a screen reader (an error says its own text when it has one)
-  const markSays = m.mark === "needs" ? t("ss.mark.bell") : m.mark === "error" ? rec.error || t("ss.mark.error") : t("ss.mark.done");
+  const ss = useSessions();
   const [editing, setEditing] = useState(false);
   const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
   const wrap = useRef<HTMLDivElement>(null);
-  // a chat answers in turns (ring); a terminal just runs (dot)
-  const ring = rec.view === "chat" && m.live && !m.needsYou;
-  const dot = rec.view !== "chat" && m.live;
-  const busySince = ring && key ? (s.chats[key]?.turn?.startedAt ?? null) : null;
-  const now = useNow(busySince !== null, 1_000);
+  const dock = useDock();
+  const pinKey = `term:${rec.id}`;
+  const pinned = dock.pins.includes(pinKey);
+  const title = pickTitle(rec, isShell(rec.agent) ? t("term.shell") : agentLabel(rec.agent, ss.agents));
+  const status = termStatus(rec, unseen, now);
+  const live = rec.status === "running" || rec.status === "starting";
+  const markAgent = termMarkAgent(rec);
+  const age = ageMs(rec.lastOut ?? rec.startedAt, now);
+  const actions = termMenuItems(rec);
   const pick = (a: RowAction) => {
-    const ss = getSessions();
+    const sx = getSessions();
     if (a === "rename") setEditing(true);
-    else if (a === "reveal") void ss.revealFolder(rec.id);
-    else if (a === "terminal") void ss.openTerminal(rec.id);
-    else if (a === "copy" && rec.agentSession) void navigator.clipboard?.writeText(rec.agentSession).catch(() => undefined);
-    else if (a === "here") ss.draftHere(rec.id);
+    else if (a === "reveal") void sx.revealFolder(rec.id);
+    else if (a === "terminal") void sx.openTerminal(rec.id);
+    else if (a === "here") sx.startTerminal(rec.agent, rec.cwd);
+    else if (a === "pin") pinToDock(pinKey, !pinned);
     else if (a === "close") onClose();
   };
-  const endEdit = (title: string | null | undefined) => {
+  const endEdit = (name: string | null | undefined) => {
     setEditing(false);
-    if (title !== undefined) getSessions().rename(rec.id, title);
+    if (name !== undefined) getSessions().rename(rec.id, name);
     requestAnimationFrame(() => wrap.current?.querySelector<HTMLElement>(".ss-open")?.focus());
   };
   const body = (
     <>
-      <LiveRing on={ring} size={34} gap={3.5} label={t("ss.answering")} seed={rec.id}>
-        <span className="ss-av">
-          <AgentMark agent={rec.agent} size={18} />
-          {dot && <span className="live-dot" data-testid="live-dot" aria-label={t("ss.liveDot")} />}
+      <TermStatusGlyph status={status} />
+      <TermRowMark agent={markAgent} live={live} size={16} />
+      {editing ? (
+        <NameInput initial={title.title} auto={title.source !== "person"} onDone={endEdit} />
+      ) : (
+        <span
+          className="tr-n"
+          data-testid="session-name"
+          data-source={title.source}
+          title={title.title}
+          onDoubleClick={(e) => {
+            e.preventDefault();
+            setEditing(true);
+          }}
+        >
+          {title.title}
         </span>
-      </LiveRing>
-      <span className="bot-m">
-        <span className="bot-r1">
-          {editing ? (
-            <NameInput initial={m.title} auto={m.titleSource !== "person"} onDone={endEdit} />
-          ) : (
-            <span
-              className="bot-n"
-              data-testid="session-name"
-              data-source={m.titleSource}
-              title={m.titleSource === "folder" ? undefined : m.title}
-              onDoubleClick={(e) => {
-                e.preventDefault();
-                if (rec.status !== "draft") setEditing(true);
-              }}
-            >
-              {m.title}
-              {m.where && (
-                <span className="ss-where" data-testid="session-where">
-                  {" · "}
-                  {m.where}
-                </span>
-              )}
-            </span>
-          )}
-          {m.mark ? (
-            <span className={`bot-t ${m.mark === "needs" ? "wait" : m.mark === "error" ? "err" : "ok"}`} data-testid="bot-time">
-              <span
-                className={`ss-sign ${m.mark}`}
-                data-testid={m.needsYou ? "needs" : "session-mark"}
-                data-mark={m.mark}
-                role="img"
-                aria-label={m.needsYou ? t("ss.needsAnswer") : markSays}
-                title={m.needsYou ? t("ss.needsAnswer") : markSays}
-              >
-                <StateSign mark={m.mark} />
-              </span>
-              {t(m.mark === "needs" ? "ss.waiting" : m.mark === "error" ? "ss.at.error" : "ss.at.done")}
-            </span>
-          ) : busySince !== null ? (
-            <span className="bot-t busy" data-testid="bot-time">
-              {busyFor(now - busySince)}
-            </span>
-          ) : rec.status === "draft" ? null : (
-            <span className="bot-t" data-testid="bot-time">
-              {shortTime(m.ts)}
-            </span>
-          )}
-        </span>
-        <span className="bot-r2">
-          <span className={`bot-p${ring ? " live" : ""}`} data-testid="session-sub">
-            {m.sub}
-          </span>
-          {ring && <TypingDots size={3} testId="bot-typing" />}
-          <span
-            className="ss-view"
-            role="img"
-            data-testid="session-view"
-            data-view={view}
-            aria-label={t(view === "terminal" ? "ss.open.terminal" : "ss.open.chat")}
-            title={t(view === "terminal" ? "ss.open.terminal" : "ss.open.chat")}
-          >
-            <ViewMark view={view} />
-          </span>
-        </span>
+      )}
+      <span className="tr-meta" data-testid="term-meta">
+        <span className="tr-cli">{termCli(rec)}</span> <span className="tr-age">{age}</span>
       </span>
     </>
   );
   return (
     <div
       ref={wrap}
-      className={`ss-row bot${active ? " active" : ""}${m.needsYou ? " needs" : ""}${m.over ? " over" : ""}${menu ? " menu-open" : ""}`}
+      className={`ss-row tr${active ? " active" : ""}${menu ? " menu-open" : ""}`}
       data-testid={`session-${rec.id}`}
       data-status={rec.status}
-      data-needs-you={m.needsYou ? "true" : undefined}
-      data-mark={m.needsYou ? "needs" : (m.mark ?? undefined)}
+      data-term-status={status ?? "idle"}
+      data-fg={rec.fgAgent ?? undefined}
       onContextMenu={(e) => {
         if (editing) return;
         e.preventDefault();
-        // a draft has nothing to rename yet: right-click closes it, as before
-        if (rec.status === "draft") return onClose();
         const side = wrap.current?.closest(".side")?.getBoundingClientRect();
         const right = (side?.right ?? window.innerWidth) - 6;
-        const h = menuHeight(rowMenuItems(rec).length);
+        const h = menuHeight(actions.length);
         setMenu({ x: Math.max(6, Math.min(e.clientX, right - MENU_W_PX)), y: Math.max(6, Math.min(e.clientY, window.innerHeight - h - 6)) });
       }}
     >
       {editing ? (
-        // no button around a text field: the same row, not clickable while the name is edited
         <div className="ss-open ss-editing" title={rec.cwd}>
           {body}
         </div>
       ) : (
-        <button
-          type="button"
-          className="ss-open"
-          onClick={() => s.openSession(rec.id)}
-          aria-current={active ? "true" : undefined}
-          title={rec.cwd}
-        >
+        <button type="button" className="ss-open" onClick={() => s.openSession(rec.id)} aria-current={active ? "true" : undefined} title={`${title.title}\n${rec.cwd}`}>
           {body}
         </button>
       )}
@@ -937,7 +993,7 @@ function Row({ rec, ctx, view, unseen, active, onClose }: { rec: SessionRec; ctx
           <CloseIcon />
         </button>
       )}
-      {menu && <SessionMenu at={menu} name={m.title} actions={rowMenuItems(rec)} onPick={pick} onDismiss={() => setMenu(null)} />}
+      {menu && <SessionMenu at={menu} name={title.title} actions={actions} pinned={pinned} onPick={pick} onDismiss={() => setMenu(null)} />}
     </div>
   );
 }

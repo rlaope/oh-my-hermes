@@ -20,8 +20,9 @@ import type { SessionQueue } from "../chat/parts/Timeline";
 import { ownSetting } from "./ownSetting";
 import type { Bot } from "../lib/protocol";
 import { AgentMark } from "./AgentMark";
+import { TermRowMark } from "./TermRowMark";
 import { SessionFace } from "./SessionFace";
-import { agentDef, agentLabel, continues, GONE, isCustom, isGone, STOPS_BACKGROUND, draftOpen, folderChoices, folderName, hermesOnly, missingNote, opensAs, parentPath, sessionMode, terminalNote, tildePath, type AgentId, type OpenAs, type SessionRec } from "./agents";
+import { agentDef, agentLabel, continues, GONE, isCustom, isGone, STOPS_BACKGROUND, draftOpen, folderChoices, folderName, hermesOnly, missingNote, opensAs, parentPath, sessionMode, termMarkAgent, terminalNote, tildePath, type AgentId, type OpenAs, type SessionRec } from "./agents";
 import { pickTitle } from "./titles";
 import { t as tr, tx, type Key } from "../i18n";
 import { windowWatched } from "../lib/notify";
@@ -864,7 +865,7 @@ export function SessionView() {
     <>
       <header className="head" data-testid="header">
         <span className="ss-head-mark">
-          <AgentMark agent={rec.agent} size={18} />
+          {mode === "terminal" ? <TermRowMark agent={termMarkAgent(rec)} size={18} /> : <AgentMark agent={rec.agent} size={18} />}
         </span>
         {/* two boxes that are not there on a wide header (display: contents): on a narrow one with background work
             they let the status, the label and its Stop go under the name (sessions.css) */}

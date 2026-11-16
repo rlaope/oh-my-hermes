@@ -1877,6 +1877,19 @@ const OPS = {
     return { run: DEMO_RUN };
   },
   // a bot whose main chat has no messages yet (first run)
+  // termui: `n` extra local bots (bot01…), each with a short main chat, for the many-rows sidebar scroll test
+  "mock.manyBots": (p) => {
+    const n = Math.max(0, Math.min(40, Number(p.n) || 0));
+    const names = [];
+    for (let i = 1; i <= n; i++) {
+      const name = `bot${String(i).padStart(2, "0")}`;
+      bots[name] = { ...BOT_SEED[1], name, display_name: `Bot ${String(i).padStart(2, "0")}`, running: false };
+      models[name] = { model: BOT_SEED[1].model, provider: BOT_SEED[1].provider, reasoning: "medium" };
+      history[name] = [{ id: `seed-${name}-0`, role: "assistant", text: `Bot ${i} is ready.`, ts: now() - i * 60 }];
+      names.push(name);
+    }
+    return { bots: names };
+  },
   "mock.peerBots": (p) => {
     if (!Array.isArray(p.bots)) throw new OpError("bad_request", "bots must be an array");
     peerBots = p.bots.map((b) => ({ ...PEER_BOTS_SEED[0], ...b }));
