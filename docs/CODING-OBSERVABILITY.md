@@ -1218,6 +1218,25 @@ plugin, a baseline that ran with it, or a skills digest that differs from the
 arm's `exposed_skills`. The arm role fixes the plugin expectation, so
 `paired_run_decision/v2` needs no new field.
 
+After the cell's child exits, and while its arm home still exists, the
+dispatcher reads that child's own rows from the home's `state.db` and signs a
+metadata-only `cell_trace` into the same receipt
+(`src/coding/hermes_child_trace.py`): `session_count`, `api_call_count`, the
+input, output, cache-read, cache-write, reasoning and total token counts,
+`tool_call_count` and the ordered `tool_names` (capped at 200, with
+`tool_names_truncated`), `skill_view_count` and the `skill_view_names` it
+opened (capped at 50), and the size in characters of the system prompt and of
+the first request (`system_prompt_chars`, `first_request_chars`). Rows the home
+held before the cell, such as the warm-up chat, are left out. No prompt,
+reply, tool argument or tool result is kept, and a name that is not a short
+plain identifier is stored as `unrecognized`. A missing, locked or empty store
+leaves the trace null, never zero; a column the store lacks nulls only its own
+field. A caller cannot supply or keep a trace, and editing the stored one fails
+verification. The execution report lists each cell's verified trace, so a
+speed difference can be read as extra model round-trips, extra tool calls or
+a larger prompt instead of only as seconds. A tool reached through Hermes'
+deferred-tool bridge appears as `tool_call`, not under the tool's own name.
+
 The built-in receipt-capable adapter currently supports decision arms whose
 executor is `hermes`. A Codex, Claude Code, or generic arm is refused before
 Git or child execution rather than silently substituted. Those executors use
