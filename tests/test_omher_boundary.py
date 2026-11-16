@@ -165,11 +165,17 @@ RULES = (
     "with one fixed read: `gh pr view <number> -R <owner>/<repo> --json state,isDraft,mergedAt,url`.",
     "Tasks (the sidebar's Tasks row and the Tasks page) list open issues and pull or merge requests read-only,"
     " through the person's own GitHub CLI (`gh`) and GitLab CLI (`glab`) under their own logins:",
-    "The only argv are `auth status` (only its exit code is read; its output, which can name a token, is thrown away),",
+    "The only argv are `auth status` (only its exit code is read; its output, which can name a token, goes nowhere:"
+    " it is never piped to omher),",
     "omher passes no token, asks for none, reads none and shows none, and never comments, closes, assigns, labels, merges"
     " or edits anything on GitHub, GitLab or Linear.",
-    "For Linear omher holds no key: the bridge reads only whether the bot's `config.yaml` names a Linear MCP server under"
-    " `mcp_servers` (its name and whether it is turned off, never its url, headers, env or auth) through `tasks.linear`,",
+    "A token-like string inside an item's own text (title, label, description, comment, check name) or a CLI's error"
+    " line is shown as `••••`, in the list, the drawer, the error line and the text \"Start in thread\" sends, by omher's"
+    " one masker (the patterns in `apps/omher/src/lib/secrets.json`, read by the desktop shell, the page and the"
+    " bridge's `mask_secrets` alike).",
+    "For Linear omher holds no key: through `tasks.linear` the bridge reads only the server names under the bot's"
+    " `config.yaml` `mcp_servers` and, of the first one whose name has `linear` in it, whether it is turned off"
+    " (`enabled`); it never reads a server's url, headers, env or auth, so a server is Linear by its name alone,",
     "Besides it and the GitHub and GitLab CLIs' read-only lists of rule 33,",
     "This is the one exception to rules 5 and 10: the request is `gh`'s own, under its own login; omher passes no token,"
     " reads none and changes nothing on GitHub.",
@@ -2018,8 +2024,11 @@ class TasksReadOnly(unittest.TestCase):
         verbs = set(re.findall(r's\("(list|view|create|close|edit|comment|merge|delete|reopen|review|api)"\)', self.prod))
         self.assertEqual(verbs, {"list", "view"})
         self.assertIn('vec!["auth".into(), "status".into()]', self.prod)
-        # auth status: its exit code only (its output is never kept)
-        self.assertIn("matches!(run(&exe, &auth_argv(source)), Ok(Ran { code: Some(0), .. }))", self.prod)
+        # auth status: its exit code only (its output is never piped: `keep` false sends it to Stdio::null())
+        self.assertIn("matches!(run(&exe, &auth_argv(source), false), Ok(Ran { code: Some(0), .. }))", self.prod)
+        self.assertIn("let out = || if keep { Stdio::piped() } else { Stdio::null() };", self.prod)
+        self.assertEqual(self.prod.count("run(&exe, "), 2)
+        self.assertIn("let ran = run(&exe, &argv, true)?;", self.prod)
         for word in ("GH_TOKEN", "GITHUB_TOKEN", "GITLAB_TOKEN", "hosts.yml", "keyring", "auth token", '"token"', "--web", "Authorization"):
             self.assertNotIn(word, self.prod, word)
 
@@ -2036,14 +2045,31 @@ class TasksReadOnly(unittest.TestCase):
         self.assertIn("let repo = check_repo(source, repo)?;", self.prod.split("pub fn list_argv", 1)[1].split("\n}\n", 1)[0])
         self.assertIn("let repo = check_repo(source, repo)?;", self.prod.split("pub fn view_argv", 1)[1].split("\n}\n", 1)[0])
 
-    def test_linear_reads_only_the_server_name(self) -> None:
+    def test_linear_reads_only_the_server_names(self) -> None:
         src = (ROOT / "apps" / "omher" / "bridge" / "omher_bridge.py").read_text(encoding="utf-8")
         fn = src.split("def read_linear_mcp(", 1)[1].split("\ndef ", 1)[0]
-        self.assertIn('_load_yaml(profile_dir / "config.yaml").get("mcp_servers")', fn)
-        for word in ("headers", "env", "auth", "token", "open(", "subprocess", "write"):
-            self.assertNotIn(f'"{word}"' if word.isalpha() else word, fn.split('"""', 2)[2], word)
-        self.assertIn('return {"configured": on, "server": name[:64]}', fn)
+        self.assertEqual(fn.split('"""', 2)[2].strip(), 'return linear_server(_load_yaml(profile_dir / "config.yaml").get("mcp_servers"))')
+        body = src.split("def linear_server(", 1)[1].split("\ndef ", 1)[0].split('"""', 2)[2]
+        # the keys, then of the Linear-named server only its `enabled`: no url, no values(), no items()
+        self.assertIn("for name in servers.keys():", body)
+        self.assertIn('if isinstance(name, str) and "linear" in name.lower():', body)
+        self.assertEqual(re.findall(r'\.get\("([a-z_]+)"', body), ["enabled"])
+        for word in ('"url"', '"headers"', '"env"', '"auth"', '"token"', ".values(", ".items(", "open(", "subprocess", "write"):
+            self.assertNotIn(word, body, word)
+        self.assertIn('return {"configured": on, "server": name[:64]}', body)
         self.assertIn('"tasks.linear": self.op_tasks_linear', src)
+
+    def test_one_masker_for_task_text(self) -> None:
+        self.assertIn('const SECRETS: &str = include_str!("../../src/lib/secrets.json");', self.prod)
+        self.assertIn("mask_secrets(&t)", self.prod.split("fn text(", 1)[1].split("\n}\n", 1)[0])
+        self.assertIn("one_line(mask_secrets(line), 200)", self.prod.split("pub fn error_line(", 1)[1].split("\n}\n", 1)[0])
+        host = (UI_SRC / "tasks" / "host.ts").read_text(encoding="utf-8")
+        self.assertIn('import { maskSecrets } from "../lib/secrets";', host)
+        self.assertIn("new MaskingTaskHost(inTauri() ? new TauriTaskHost() : new MockTaskHost())", host)
+        msg = (UI_SRC / "tasks" / "message.ts").read_text(encoding="utf-8")
+        self.assertIn("maskSecrets(d.body)", msg)
+        self.assertIn("maskSecrets(item.title)", msg)
+        self.assertIn('import spec from "./secrets.json";', (UI_SRC / "lib" / "secrets.ts").read_text(encoding="utf-8"))
 
     def test_the_page_starts_threads_only_through_thread_create_and_chat_send(self) -> None:
         page = (UI_SRC / "tasks" / "TasksPage.tsx").read_text(encoding="utf-8")

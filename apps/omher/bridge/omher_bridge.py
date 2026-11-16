@@ -855,17 +855,21 @@ def skill_roots(profile_dir: Path) -> list[Path]:
 
 
 def read_linear_mcp(profile_dir: Path) -> dict:
-    """`tasks.linear`: whether the bot's `config.yaml` names a Linear MCP server under `mcp_servers` (a key or a URL
-    with `linear` in it), for the Tasks page's Linear source. Reads the server's name and whether it is turned off,
-    nothing else: never its url, headers, env or auth (a credential may sit there), never a token file. Read-only."""
-    servers = _load_yaml(profile_dir / "config.yaml").get("mcp_servers")
+    """`tasks.linear`: whether the bot's `config.yaml` has an MCP server under `mcp_servers` whose NAME has `linear`
+    in it, for the Tasks page's Linear source (`linear_server`). Read-only; the config is Hermes' own, parsed once
+    and shared (`_load_yaml`)."""
+    return linear_server(_load_yaml(profile_dir / "config.yaml").get("mcp_servers"))
+
+
+def linear_server(servers) -> dict:
+    """The first server in `servers` (the `mcp_servers` mapping) whose name has `linear` in it, and whether it is on.
+    Reads the names (the keys) and, of that one server only, its `enabled`; never a server's url, headers, env or
+    auth (a credential may sit there), so a server is Linear by its name alone."""
     if not isinstance(servers, dict):
         return {"configured": False, "server": ""}
-    for name, cfg in servers.items():
-        if not isinstance(name, str):
-            continue
-        url = cfg.get("url") if isinstance(cfg, dict) else None
-        if "linear" in name.lower() or (isinstance(url, str) and "linear.app" in url.lower()):
+    for name in servers.keys():
+        if isinstance(name, str) and "linear" in name.lower():
+            cfg = servers[name]
             on = not (isinstance(cfg, dict) and cfg.get("enabled") is False)
             return {"configured": on, "server": name[:64]}
     return {"configured": False, "server": ""}
