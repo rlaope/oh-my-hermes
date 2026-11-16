@@ -165,6 +165,7 @@ export const ja: Record<Key, string> = {
   // shared words of both pages
   "page.cancel": "キャンセル",
   "page.close": "閉じる",
+  "page.back": "戻る",
   "page.offline": "{bot} はオフラインです。ゲートウェイを起動してからもう一度お試しください。",
   "page.failed": "実行できませんでした: {error}",
   "page.on": "オン",

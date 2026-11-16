@@ -165,6 +165,7 @@ export const ko: Record<Key, string> = {
   // shared words of both pages
   "page.cancel": "취소",
   "page.close": "닫기",
+  "page.back": "뒤로",
   "page.offline": "{bot} 게이트웨이가 꺼져 있어요. 켠 뒤 다시 해 주세요.",
   "page.failed": "하지 못했어요: {error}",
   "page.on": "켬",
