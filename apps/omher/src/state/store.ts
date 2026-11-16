@@ -1953,9 +1953,21 @@ export function createStore(bridge: BridgeLike, opts: StoreOptions = {}): Store 
     opts.onAction?.(a, state);
     flushQueues();
   };
+  // Thread chats (`fold:<bot>:<thread>` keys threadRoute made) and the ones removed here: a removed thread's held
+  // rows never go out, not even when the archive itself ends its turn
+  const threadKeys = new Set<string>();
+  const goneThreads = new Set<string>();
+  /** A thread chat whose thread is removed, archived or no longer listed: nothing of it is sent. */
+  const threadGone = (key: string) => {
+    if (goneThreads.has(key)) return true;
+    if (!threadKeys.has(key)) return false;
+    const { bot, session } = chatTarget(key);
+    return !(state.threads[bot] ?? []).some((r) => r.thread === session);
+  };
   /** Every chat whose held head can go out now sends it (exactly once: it leaves the queue before the request). */
   const flushQueues = () => {
     for (const bot of Object.keys(state.chats)) {
+      if (threadGone(bot)) continue;
       const id = queueReady(state, bot);
       if (id && !flushing.has(bot)) void sendHeld(bot, id);
     }
@@ -2185,6 +2197,7 @@ export function createStore(bridge: BridgeLike, opts: StoreOptions = {}): Store 
     (bridge.request as unknown as (op: string, p: unknown) => Promise<ThreadOps[K]["result"]>)(op, params);
   const threadRoute = (bot: string, thread: string) => {
     const key = threadKey(bot, thread);
+    threadKeys.add(key);
     setChatRoute(key, {
       label: `${(state.threads[bot] ?? []).find((r) => r.thread === thread)?.title || tr("thread.untitled")} · ${
         state.bots.find((b) => b.name === bot)?.display_name ?? bot
@@ -2244,6 +2257,8 @@ export function createStore(bridge: BridgeLike, opts: StoreOptions = {}): Store 
       });
       bridge.onAny((ev) => {
         dispatch({ type: "event", ev, now: now() });
+        // a removed thread's late events (its turn's end) leave no blank chat behind
+        if (ev.session && goneThreads.has(folderKey(ev.bot, ev.session))) dispatch({ type: "chat.forget", bot: folderKey(ev.bot, ev.session) });
         for (const l of [...bridgeListeners]) l(ev);
         opts.onEvent?.(ev.session ? { ...ev, bot: folderKey(ev.bot, ev.session) } : ev, state);
         for (const fn of [...eventFns]) fn(ev);
@@ -2257,7 +2272,13 @@ export function createStore(bridge: BridgeLike, opts: StoreOptions = {}): Store 
         if (ev.event === "bots.update") void reloadBots();
         const tev = threadEvent(ev);
         if (tev) {
-          if (tev.event === "thread.removed") dispatch({ type: "thread.gone", bot: tev.bot, thread: tev.thread });
+          if (tev.event === "thread.removed") {
+            // removed elsewhere (another window, the bot): its held rows go with it, as for the x here
+            const key = threadKey(tev.bot, tev.thread);
+            goneThreads.add(key);
+            for (const [id, p] of held) if (p.bot === key) held.delete(id);
+            dispatch({ type: "thread.gone", bot: tev.bot, thread: tev.thread });
+          }
           else if (tev.event === "thread.split") {
             // the bot opened a thread from its answer: the row at once (the list re-read confirms it), a link line
             const known = (state.threads[tev.bot] ?? []).find((r) => r.thread === tev.thread);
@@ -2748,8 +2769,24 @@ export function createStore(bridge: BridgeLike, opts: StoreOptions = {}): Store 
       }
     },
     async removeThread(bot, thread) {
-      await threadReq("thread.remove", { bot, thread });
-      setChatRoute(threadKey(bot, thread), null);
+      const key = threadKey(bot, thread);
+      // its held rows (and its chat) go first: the archive ends the thread's turn, and that turn's end must not
+      // drain them to the archived session
+      goneThreads.add(key);
+      const texts = (state.chats[key]?.queue ?? []).map((id) => held.get(id)?.text).filter((t): t is string => !!t);
+      for (const [id, p] of held) if (p.bot === key) held.delete(id);
+      dispatch({ type: "chat.forget", bot: key });
+      try {
+        await threadReq("thread.remove", { bot, thread });
+      } catch (e) {
+        // not removed: the thread reads again, and what it held is back in its box, unsent
+        goneThreads.delete(key);
+        const typed = getDraft(key).trim();
+        if (texts.length) dispatch({ type: "ui.draft", bot: key, text: [...texts, ...(typed ? [typed] : [])].join("\n") });
+        if (state.ui.thread === thread) void loadThread(bot, thread);
+        throw e;
+      }
+      setChatRoute(key, null);
       dispatch({ type: "thread.gone", bot, thread });
     },
     async answerRoute(bot, id, choice) {
