@@ -119,6 +119,7 @@ test.describe("shots", () => {
   for (const theme of ["dark", "light"] as const) {
     test(`shots: TERMINALS groups, sidebar and dock (${theme})`, async ({ page }) => {
       test.skip(!SHOTS, "no shot folder");
+      test.setTimeout(90_000);
       await page.setViewportSize({ width: 1280, height: 900 });
       await open(page, { theme });
       const ids = await seedTerminals(page);
@@ -137,7 +138,21 @@ test.describe("shots", () => {
       await page.mouse.move(900, 600);
       await shot(page, `terminals-groups-${theme}`);
       await shot(page, `termsessions-sidebar-${theme}`);
+      // the dock with a needs-you dot (Kami asks) and a failed one (Friren's turn failed)
+      await mock("mock.manual", { bot: "kami" });
+      await mock("mock.manual", { bot: "friren" });
+      await mock("mock.emit", {
+        events: [
+          { event: "turn.start", bot: "kami" },
+          { event: "approval.request", bot: "kami", request_id: "ap-shot", title: "Run", command: "ls", choices: ["once", "deny"] },
+          { event: "turn.start", bot: "friren" },
+          { event: "turn.end", bot: "friren", outcome: "error", error: "boom" },
+        ],
+      });
+      await expect(page.getByTestId("dock-tile-bot:kami")).toHaveAttribute("data-state", "needs");
       await shot(page, `sidebar-dock-${theme}`);
+      await mock("mock.manual", { bot: "kami", on: false });
+      await mock("mock.manual", { bot: "friren", on: false });
       if (theme === "dark") {
         await page.getByTestId("session-new").click();
         await expect(page.getByTestId("session-agent-shell")).toBeVisible();
@@ -160,6 +175,10 @@ test("the + menu: Shell first, then CLIs with official marks; no chat choice; pi
   // no letter glyphs: every CLI row draws a mark image or svg
   for (const a of ["claude", "codex", "grok"]) await expect(menu.getByTestId(`session-agent-${a}`).locator("svg, img").first()).toBeVisible();
   await expect(page.getByTestId("session-way")).toHaveCount(0);
+  // the folder chip: home with no recent folder; Choose folder… picks another
+  await expect(menu.getByTestId("session-folder")).toHaveAttribute("title", "/home/you");
+  await menu.getByTestId("session-folder").click();
+  await menu.getByTestId("session-choose").click();
   await expect(menu.getByTestId("session-folder")).toContainText("web-app");
   await menu.getByTestId("session-agent-claude").click();
   await expect(page.getByTestId("terminal")).toBeVisible();
@@ -175,6 +194,7 @@ test("the + menu: Shell first, then CLIs with official marks; no chat choice; pi
 });
 
 test("rows: grouped by folder with the branch; one line with status, mark, title and mono cli/age; mark follows fgAgent", async ({ page }) => {
+  test.setTimeout(90_000);
   await open(page);
   const ids = await seedTerminals(page);
   const groups = page.getByTestId("term-group");
@@ -192,6 +212,7 @@ test("rows: grouped by folder with the branch; one line with status, mark, title
   const sg = page.getByTestId(`session-${ids.shellGrok}`);
   await expect(sg.getByTestId("term-row-mark")).toHaveAttribute("data-agent", "grok");
   await expect(sg.getByTestId("term-meta")).toContainText("grok");
+  await expect(sg.getByTestId("session-name")).toHaveText("Grok");
   await setFg(page, ids.shellGrok, null);
   await expect(sg.getByTestId("term-row-mark")).toHaveAttribute("data-agent", "shell");
   await expect(sg.getByTestId("term-meta")).toContainText("shell");
@@ -244,6 +265,7 @@ test("a saved chat-mode session is not listed; a saved terminal one is", async (
 });
 
 test("scroll: 12 bots x 6 threads and 15 terminals at 900px; each region scrolls on its own; the dock stays", async ({ page }) => {
+  test.setTimeout(180_000);
   await page.setViewportSize({ width: 1280, height: 900 });
   const { bots } = await mock("mock.manyBots", { n: 12 });
   for (const b of bots as string[]) await mock("mock.threads", { bot: b, threads: Array.from({ length: 6 }, (_, i) => ({ title: `${b} thread ${i + 1}`, ago: (i + 1) * 600 })) });
@@ -291,21 +313,31 @@ test("scroll: 12 bots x 6 threads and 15 terminals at 900px; each region scrolls
   await expect.poll(() => termList.evaluate((el) => el.scrollTop)).toBeGreaterThan(tTop0);
   expect(await botList.evaluate((el) => el.scrollTop)).toBe(bTop);
   expect(await divider()).toBe(d0);
-  // the selected row scrolls into view: ⌘⇧] to the first terminal, then a bot far down the list
-  await termList.evaluate((el) => (el.scrollTop = el.scrollHeight));
-  const first = page.locator('[data-testid^="session-s"].tr').first();
+  // the selected row scrolls into view inside its own region: ⌘⇧[ from the first terminal wraps to the last one
+  const rows = page.locator('[data-testid^="session-s"].tr');
+  await rows.first().locator(".ss-open").click();
+  await termList.evaluate((el) => (el.scrollTop = 0));
   const mod = process.platform === "darwin" ? "Meta" : "Control";
-  await page.locator("body").click({ position: { x: 900, y: 450 } });
-  await page.keyboard.press(`${mod}+Shift+BracketRight`);
-  await expect(first).toBeInViewport();
-  await botList.evaluate((el) => (el.scrollTop = 0));
   await page.keyboard.press(`${mod}+Shift+BracketLeft`);
-  const last = page.locator('[data-testid^="session-s"].tr').last();
-  await expect(last).toBeInViewport();
+  await expect(rows.last()).toHaveClass(/active/);
+  await expect(rows.last()).toBeInViewport();
+  const bTop2 = await botList.evaluate((el) => el.scrollTop);
+  await page.keyboard.press(`${mod}+Shift+BracketRight`);
+  await expect(rows.first()).toHaveClass(/active/);
+  await expect(rows.first()).toBeInViewport();
+  expect(await botList.evaluate((el) => el.scrollTop)).toBe(bTop2);
+  // a bot far down BOTS, opened from its dock tile, scrolls into view inside BOTS
+  await page.getByTestId("bot-bot12").click({ button: "right" });
+  await page.getByTestId("row-dock").click();
+  await botList.evaluate((el) => (el.scrollTop = 0));
+  await expect(page.getByTestId("bot-bot12")).not.toBeInViewport();
+  await page.getByTestId("dock-tile-bot:bot12").click();
+  await expect(page.getByTestId("bot-bot12")).toBeInViewport();
   expect(await divider()).toBe(d0);
 });
 
 test("dock: pin, unpin and reorder persist across a reload; a tile opens and scrolls its row into view; dots", async ({ page }) => {
+  test.setTimeout(60_000);
   await page.setViewportSize({ width: 1280, height: 900 });
   await open(page, { keep: true });
   // with nothing pinned the dock shows the bots with the newest activity

@@ -1228,8 +1228,6 @@ body.row-dragging * {
   grid-template-columns: repeat(3, minmax(0, 1fr));
   grid-auto-rows: 44px;
   gap: 6px;
-  max-height: calc(44px * 2 + 6px);
-  overflow: hidden;
   padding: 8px 0 2px;
   margin-top: 6px;
   border-top: 1px solid var(--line-soft);
@@ -1308,9 +1306,8 @@ body.row-dragging * {
 }
 /* a short window keeps one row of tiles; a sidebar too narrow for three tiles hides the dock */
 @media (max-height: 699px) {
-  .dock {
-    max-height: 44px;
-    grid-template-rows: 44px;
+  .dock > .dk-t:nth-of-type(n + 4) {
+    display: none;
   }
 }
 .side {

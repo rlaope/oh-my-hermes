@@ -1,5 +1,6 @@
 import { pickTitle, type TitleSource } from "./titles";
 import { t } from "../i18n";
+import { harness, harnessByName } from "../harness/registry";
 
 // The agent programs a session can run, and the pure helpers the sidebar and the session views share.
 // Two kinds, both decided by the shell (it refuses anything else):
@@ -382,6 +383,16 @@ export function termStatus(rec: Pick<SessionRec, "status" | "exitCode" | "lastOu
 /** The mark a TERMINALS row shows: the foreground CLI when one is known, else the session's own agent, else null
  *  (the shell icon). */
 export const termMarkAgent = (rec: Pick<SessionRec, "agent" | "fgAgent">): string | null => rec.fgAgent ?? (isShell(rec.agent) ? null : rec.agent);
+
+/** A terminal's name when nothing named it (the person, the agent's own title): the foreground CLI's label (a Shell
+ *  running grok reads "Grok"), else its agent's, else "Shell". */
+export function termFallbackName(rec: Pick<SessionRec, "agent" | "fgAgent">, agents: AgentInfo[] | null | undefined): string {
+  if (rec.fgAgent) {
+    const h = harness(harnessByName(rec.fgAgent));
+    return h.id === "generic" ? rec.fgAgent : h.label;
+  }
+  return isShell(rec.agent) ? t("term.shell") : agentLabel(rec.agent, agents);
+}
 
 /** The row's grey mono meta: the CLI's program name (`claude`, `codex`, `shell`). */
 export const termCli = (rec: Pick<SessionRec, "agent" | "fgAgent">): string => rec.fgAgent ?? agentDef(rec.agent).program;

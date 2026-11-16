@@ -77,11 +77,9 @@ export async function openApp(page: Page, o: OpenOpts = {}) {
 /** A new Claude Code session opened as a terminal; returns its session id once the mock program has printed. */
 export async function newTerminal(page: Page): Promise<string> {
   await page.getByTestId("session-new").click();
-  await page.getByTestId("session-agent-claude").click();
   await page.getByTestId("session-folder").click();
   await page.getByTestId("session-choose").click();
-  await page.getByTestId("session-way-terminal").click();
-  await page.getByTestId("session-go").click();
+  await page.getByTestId("session-agent-claude").click();
   const term = page.getByTestId("terminal");
   await expect(term).toBeVisible();
   await expect(page.locator(".xterm-rows")).toContainText("(mock)");

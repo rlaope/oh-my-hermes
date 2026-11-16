@@ -7,7 +7,7 @@
 import { useEffect, useRef, useState, type KeyboardEvent, type PointerEvent, type ReactNode } from "react";
 import { selectAsks, selectSidebarBots, useStore } from "../state/store";
 import { useSessions } from "../sessions/sessions";
-import { isShell, isTerminalRec, termMarkAgent, termStatus, agentLabel, type SessionRec } from "../sessions/agents";
+import { isTerminalRec, termFallbackName, termMarkAgent, termStatus, type SessionRec } from "../sessions/agents";
 import { pickTitle } from "../sessions/titles";
 import { TermRowMark } from "../sessions/TermRowMark";
 import { Avatar } from "../ui";
@@ -75,7 +75,7 @@ export function Dock() {
     }
     const r = termOf(key.slice(5)) as SessionRec;
     const st = termStatus(r, ss.unseen[r.id], now);
-    const name = pickTitle(r, isShell(r.agent) ? t("term.shell") : agentLabel(r.agent, ss.agents)).title;
+    const name = pickTitle(r, termFallbackName(r, ss.agents)).title;
     return {
       key,
       name,

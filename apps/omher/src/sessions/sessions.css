@@ -1131,7 +1131,7 @@
   display: flex;
   flex-direction: column;
   gap: 1px;
-  padding-bottom: 6px;
+  padding-bottom: 8px;
 }
 .tg-h {
   display: grid;
@@ -1155,8 +1155,9 @@
 }
 .tg-b {
   grid-column: 2;
-  font-size: 10.5px;
-  color: var(--muted);
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--quiet);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -1169,7 +1170,7 @@
   flex: none;
 }
 .ss-row.tr .ss-open {
-  gap: 7px;
+  gap: 8px;
   height: 28px;
   padding: 0 8px 0 calc(var(--side-x) + 8px);
   font-size: 12px;
@@ -1244,12 +1245,13 @@
   flex: none;
   color: var(--muted);
 }
+/* running: a hairline rounded square a few px outside the mark (square logos keep their air) */
 .trm.live::after {
   content: "";
   position: absolute;
-  inset: -3px;
-  border-radius: 50%;
-  box-shadow: 0 0 0 1px color-mix(in srgb, var(--ok) 55%, transparent);
+  inset: -4px;
+  border-radius: 6px;
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--ok) 38%, transparent);
   pointer-events: none;
 }
 .ss-at .ss-path,

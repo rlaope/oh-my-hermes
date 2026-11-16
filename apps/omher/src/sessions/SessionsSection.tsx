@@ -20,7 +20,7 @@ import { useNow } from "../elsewhere/useNow";
 import { t } from "../i18n";
 import { composing } from "../lib/ime";
 import { AgentMark } from "./AgentMark";
-import { agentDef, agentLabel, draftFolder, folderChoices, folderName, hermesOnly, installLine, isShell, isTerminalRec, menuFocus, menuOrder, missingNote, parentPath, SHELL, termCli, termGroups, terminalAgents, termMarkAgent, termStatus, tildePath, type AgentId, type AgentInfo, type RowMark, type SessionRec, type TermStatus, type Unseen } from "./agents";
+import { agentDef, agentLabel, draftFolder, folderChoices, folderName, hermesOnly, installLine, isTerminalRec, menuFocus, menuOrder, missingNote, parentPath, SHELL, termCli, termFallbackName, termGroups, terminalAgents, termMarkAgent, termStatus, tildePath, type AgentId, type AgentInfo, type RowMark, type SessionRec, type TermStatus, type Unseen } from "./agents";
 import { TermRowMark } from "./TermRowMark";
 import { pinToDock, useDock } from "../sidebar/dockState";
 import { getHost, type PastChat } from "./host";
@@ -917,7 +917,7 @@ function TermRow({ rec, unseen, active, now, onClose }: { rec: SessionRec; unsee
   const dock = useDock();
   const pinKey = `term:${rec.id}`;
   const pinned = dock.pins.includes(pinKey);
-  const title = pickTitle(rec, isShell(rec.agent) ? t("term.shell") : agentLabel(rec.agent, ss.agents));
+  const title = pickTitle(rec, termFallbackName(rec, ss.agents));
   const status = termStatus(rec, unseen, now);
   const live = rec.status === "running" || rec.status === "starting";
   const markAgent = termMarkAgent(rec);
