@@ -635,28 +635,27 @@ export function SessionList({ needle = "", query = "" }: { needle?: string; quer
       const r = row.getBoundingClientRect();
       return r.top >= l.top && r.bottom <= l.bottom - CUE_PX;
     };
-    // held in view until the person scrolls it away themselves (scrolling BOTS brings the dock in and shrinks this
-    // region: that must not undo their own TERMINALS scroll)
+    // held in view until the person scrolls TERMINALS themselves (wheel, touch, keys, the scrollbar): scrolling BOTS
+    // brings the dock in and shrinks this region, which must not undo their own scroll. A scroll the browser makes
+    // (the region shrank) does not let go of the row.
     let held = true;
-    let ours = false;
     const keep = () => {
       const row = rowOf();
       if (!held || !row || inView()) return;
-      ours = true;
       row.scrollIntoView({ block: "nearest" });
     };
-    const onScroll = () => {
-      if (ours) ours = false;
-      else held = inView();
+    const own = () => {
+      held = false;
     };
     const id = requestAnimationFrame(keep);
     const el = nav.current;
-    el?.addEventListener("scroll", onScroll, { passive: true });
+    const input = ["wheel", "touchmove", "keydown", "pointerdown"] as const;
+    for (const k of input) el?.addEventListener(k, own, { passive: true });
     const ro = typeof ResizeObserver === "function" ? new ResizeObserver(keep) : null;
     if (el) ro?.observe(el);
     return () => {
       cancelAnimationFrame(id);
-      el?.removeEventListener("scroll", onScroll);
+      for (const k of input) el?.removeEventListener(k, own);
       ro?.disconnect();
     };
   }, [current, folders.collapsed, rowsKey]);

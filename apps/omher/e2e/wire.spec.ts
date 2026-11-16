@@ -341,7 +341,14 @@ test.describe("shots", () => {
     await page.mouse.move(900, 600);
     const botList = page.getByTestId("side-bots").locator(".bot-list");
     const termList = page.getByTestId("side-sessions").locator(".ss-list");
-    for (const l of [botList, termList]) await l.evaluate((el) => (el.scrollTop = (el.scrollHeight - el.clientHeight) / 2));
+    // BOTS first (the dock comes in, TERMINALS gets shorter), then TERMINALS by the wheel, as a person scrolls it
+    await botList.evaluate((el) => (el.scrollTop = (el.scrollHeight - el.clientHeight) / 2));
+    await page.waitForTimeout(300);
+    const tb = (await termList.boundingBox())!;
+    await page.mouse.move(tb.x + tb.width / 2, tb.y + tb.height / 2);
+    await page.mouse.wheel(0, 1);
+    await termList.evaluate((el) => (el.scrollTop = (el.scrollHeight - el.clientHeight) / 2));
+    await page.mouse.move(900, 600);
     await page.waitForTimeout(300);
     const mid = await Promise.all([botList, termList].map((l) => l.evaluate((el) => ({ top: el.scrollTop, max: el.scrollHeight - el.clientHeight, more: el.dataset.more ?? null }))));
     for (const m of mid) {
