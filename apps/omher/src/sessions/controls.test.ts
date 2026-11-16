@@ -27,12 +27,17 @@ describe("permission modes", () => {
 });
 
 describe("reasoning levels", () => {
-  it("labels levels as the agent names them; xhigh and max never read the same", () => {
-    expect(levelOptions(["low", "medium", "high", "xhigh", "max"]).map((o) => o.label)).toEqual(["Low", "Med", "High", "X-High", "Max"]);
-    // without a `max`, xhigh is the bot chat's "Max"
-    expect(levelLabel("xhigh", ["low", "high", "xhigh"])).toBe("Max");
-    expect(levelOptions(["minimal", "low", "ultra"]).map((o) => o.label)).toEqual(["Minimal", "Low", "Ultra"]);
-    expect(levelLabel("weird")).toBe("Weird");
+  it("shows levels by the agent's own names, untranslated in every language", async () => {
+    expect(levelOptions(["low", "medium", "high", "xhigh", "max"]).map((o) => o.label)).toEqual(["low", "medium", "high", "xhigh", "max"]);
+    expect(levelLabel("xhigh", ["low", "high", "xhigh"])).toBe("xhigh");
+    expect(levelOptions(["minimal", "low", "ultra"]).map((o) => o.label)).toEqual(["minimal", "low", "ultra"]);
+    const { setLang } = await import("../i18n");
+    setLang("ko");
+    try {
+      expect(levelOptions(["none", "low", "medium", "high", "xhigh", "max"]).map((o) => o.label)).toEqual(["none", "low", "medium", "high", "xhigh", "max"]);
+    } finally {
+      setLang("en");
+    }
   });
 });
 

@@ -1,0 +1,176 @@
+[
+ {
+  "author": {
+   "id": "U_redacted",
+   "is_bot": false,
+   "login": "person1",
+   "name": "Person1"
+  },
+  "createdAt": "2026-11-15T18:19:19Z",
+  "isDraft": false,
+  "labels": [],
+  "number": 2907,
+  "state": "MERGED",
+  "statusCheckRollup": [
+   {
+    "__typename": "CheckRun",
+    "completedAt": "2026-11-15T18:19:59Z",
+    "conclusion": "SUCCESS",
+    "detailsUrl": "https://github.com/rlaope/oh-my-hermes/actions/runs/43746096096/job/132909609660",
+    "name": "plan",
+    "startedAt": "2026-11-15T18:19:25Z",
+    "status": "COMPLETED",
+    "workflowName": "CI"
+   },
+   {
+    "__typename": "CheckRun",
+    "completedAt": "2026-11-15T18:21:10Z",
+    "conclusion": "SUCCESS",
+    "detailsUrl": "https://github.com/rlaope/oh-my-hermes/actions/runs/43746096031/job/132909609337",
+    "name": "PR / candidate OMH x stable Hermes",
+    "startedAt": "2026-11-15T18:19:25Z",
+    "status": "COMPLETED",
+    "workflowName": "Hermes compatibility"
+   },
+   {
+    "__typename": "CheckRun",
+    "completedAt": "2026-11-15T18:19:23Z",
+    "conclusion": "SKIPPED",
+    "detailsUrl": "https://github.com/rlaope/oh-my-hermes/actions/runs/43746096031/job/132909611114",
+    "name": "${{ matrix.omh }} OMH x ${{ matrix.host }} Hermes",
+    "startedAt": "2026-11-15T18:19:23Z",
+    "status": "COMPLETED",
+    "workflowName": "Hermes compatibility"
+   },
+   {
+    "__typename": "CheckRun",
+    "completedAt": "2026-11-15T18:19:50Z",
+    "conclusion": "SUCCESS",
+    "detailsUrl": "https://github.com/rlaope/oh-my-hermes/actions/runs/43746096096/job/132909609678",
+    "name": "distribution (ubuntu-latest)",
+    "startedAt": "2026-11-15T18:19:25Z",
+    "status": "COMPLETED",
+    "workflowName": "CI"
+   }
+  ],
+  "title": "test: carry the #2830 test-hygiene fixes to current main",
+  "updatedAt": "2026-11-16T02:43:31Z",
+  "url": "https://github.com/rlaope/oh-my-hermes/pull/2907"
+ },
+ {
+  "author": {
+   "id": "U_redacted",
+   "is_bot": false,
+   "login": "person2",
+   "name": "Person2"
+  },
+  "createdAt": "2026-11-15T17:34:52Z",
+  "isDraft": false,
+  "labels": [],
+  "number": 2906,
+  "state": "MERGED",
+  "statusCheckRollup": [
+   {
+    "__typename": "CheckRun",
+    "completedAt": "2026-11-16T01:30:39Z",
+    "conclusion": "SUCCESS",
+    "detailsUrl": "https://github.com/rlaope/oh-my-hermes/actions/runs/43786612486/job/133035584551",
+    "name": "plan",
+    "startedAt": "2026-11-16T01:30:02Z",
+    "status": "COMPLETED",
+    "workflowName": "CI"
+   },
+   {
+    "__typename": "CheckRun",
+    "completedAt": "2026-11-16T01:31:50Z",
+    "conclusion": "SUCCESS",
+    "detailsUrl": "https://github.com/rlaope/oh-my-hermes/actions/runs/43786612491/job/133035584599",
+    "name": "PR / candidate OMH x stable Hermes",
+    "startedAt": "2026-11-16T01:30:02Z",
+    "status": "COMPLETED",
+    "workflowName": "Hermes compatibility"
+   },
+   {
+    "__typename": "CheckRun",
+    "completedAt": "2026-11-16T01:30:33Z",
+    "conclusion": "SUCCESS",
+    "detailsUrl": "https://github.com/rlaope/oh-my-hermes/actions/runs/43786612463/job/133035584132",
+    "name": "bridge (ubuntu-latest)",
+    "startedAt": "2026-11-16T01:30:01Z",
+    "status": "COMPLETED",
+    "workflowName": "omher"
+   },
+   {
+    "__typename": "CheckRun",
+    "completedAt": "2026-11-16T01:39:52Z",
+    "conclusion": "SUCCESS",
+    "detailsUrl": "https://github.com/rlaope/oh-my-hermes/actions/runs/43786612627/job/133035584644",
+    "name": "appimage",
+    "startedAt": "2026-11-16T01:30:01Z",
+    "status": "COMPLETED",
+    "workflowName": "omher linux"
+   }
+  ],
+  "title": "omher: bot threads with live states, harness marks, agent-to-agent chat, terminal panel; SESSIONS hidden",
+  "updatedAt": "2026-11-16T02:43:26Z",
+  "url": "https://github.com/rlaope/oh-my-hermes/pull/2906"
+ },
+ {
+  "author": {
+   "id": "U_redacted",
+   "is_bot": false,
+   "login": "person2",
+   "name": "Person2"
+  },
+  "createdAt": "2026-11-15T16:59:00Z",
+  "isDraft": false,
+  "labels": [],
+  "number": 2905,
+  "state": "MERGED",
+  "statusCheckRollup": [
+   {
+    "__typename": "CheckRun",
+    "completedAt": "2026-11-15T19:36:10Z",
+    "conclusion": "SUCCESS",
+    "detailsUrl": "https://github.com/rlaope/oh-my-hermes/actions/runs/43753288521/job/132931766328",
+    "name": "plan",
+    "startedAt": "2026-11-15T19:35:35Z",
+    "status": "COMPLETED",
+    "workflowName": "CI"
+   },
+   {
+    "__typename": "CheckRun",
+    "completedAt": "2026-11-15T19:37:24Z",
+    "conclusion": "SUCCESS",
+    "detailsUrl": "https://github.com/rlaope/oh-my-hermes/actions/runs/43753288544/job/132931766410",
+    "name": "PR / candidate OMH x stable Hermes",
+    "startedAt": "2026-11-15T19:35:35Z",
+    "status": "COMPLETED",
+    "workflowName": "Hermes compatibility"
+   },
+   {
+    "__typename": "CheckRun",
+    "completedAt": "2026-11-15T19:36:01Z",
+    "conclusion": "SUCCESS",
+    "detailsUrl": "https://github.com/rlaope/oh-my-hermes/actions/runs/43753288596/job/132931766724",
+    "name": "bridge (ubuntu-latest)",
+    "startedAt": "2026-11-15T19:35:35Z",
+    "status": "COMPLETED",
+    "workflowName": "omher"
+   },
+   {
+    "__typename": "CheckRun",
+    "completedAt": "2026-11-15T19:44:45Z",
+    "conclusion": "SUCCESS",
+    "detailsUrl": "https://github.com/rlaope/oh-my-hermes/actions/runs/43753288506/job/132931766322",
+    "name": "appimage",
+    "startedAt": "2026-11-15T19:35:35Z",
+    "status": "COMPLETED",
+    "workflowName": "omher linux"
+   }
+  ],
+  "title": "feat(omher): hold messages typed mid-turn behind a ↵ menu (send now, steer, edit, delete)",
+  "updatedAt": "2026-11-15T20:19:40Z",
+  "url": "https://github.com/rlaope/oh-my-hermes/pull/2905"
+ }
+]

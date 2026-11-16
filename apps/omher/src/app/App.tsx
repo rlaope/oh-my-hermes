@@ -13,6 +13,7 @@ import { PanelResizer } from "./PanelResizer";
 import { SettingsView } from "./SettingsView";
 import { AutomationsPage } from "../pages/Automations";
 import { PluginsPage } from "../pages/Plugins";
+import { TasksPage } from "../tasks/TasksPage";
 import { useLookAttributes, useThemeAttribute } from "./theme";
 import { useShortcuts } from "./shortcuts";
 import { useAsksBadge } from "./badge";
@@ -75,6 +76,8 @@ export function App() {
           <AutomationsPage />
         ) : s.ui.view === "plugins" ? (
           <PluginsPage />
+        ) : s.ui.view === "tasks" ? (
+          <TasksPage />
         ) : s.ui.view === "session" ? (
           <Suspense fallback={null}>
             <SessionView />

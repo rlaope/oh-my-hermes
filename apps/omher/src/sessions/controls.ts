@@ -42,25 +42,8 @@ export const modesOf = (agent: AgentId): readonly string[] => MODES[agent] ?? []
 export const modeLabel = (mode: string | undefined): string => (mode && MODE_LABEL[mode] ? t(MODE_LABEL[mode]) : t("ctl.mode.own"));
 export const modeHint = (mode: string): string => (MODE_HINT[mode] ? t(MODE_HINT[mode]) : "");
 
-const LEVEL_LABEL: Record<string, Key> = {
-  none: "lvl.none",
-  off: "lvl.none",
-  minimal: "ctl.lvl.minimal",
-  low: "lvl.low",
-  medium: "lvl.medium",
-  high: "lvl.high",
-  xhigh: "ctl.lvl.xhigh",
-  max: "lvl.xhigh",
-  ultra: "ctl.lvl.ultra",
-};
-
-/** A reasoning level as the agent names it, in the person's words. The bot chat calls `xhigh` "Max"; an agent that
- *  also has a `max` above `xhigh` gets "Extra high" for `xhigh` so the two never read the same. */
-export function levelLabel(level: string, levels: readonly string[] = []): string {
-  if (level === "xhigh" && !levels.includes("max")) return t("lvl.xhigh");
-  const k = LEVEL_LABEL[level];
-  return k ? t(k) : level ? level[0].toUpperCase() + level.slice(1) : "";
-}
+/** A reasoning level by the agent's own name (low, high, xhigh, max…), untranslated in every language. */
+export const levelLabel = (level: string, _levels: readonly string[] = []): string => level;
 
 export const levelOptions = (levels: readonly string[]) => levels.map((value) => ({ value, label: levelLabel(value, levels) }));
 
