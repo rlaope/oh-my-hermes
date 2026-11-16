@@ -7,6 +7,10 @@ All notable changes will be documented here.
 - **omher: reasoning levels read as their own names in every language.** The model pill, the picker and Settings show
   none, low, medium, high, xhigh and max as Hermes, Codex and Claude Code name them, instead of translated words
   ("높음", "最大") or renamed ones (xhigh as "Max").
+- **omher: technical words and setting values stay in English in Korean, Japanese and Chinese.** The permission modes
+  (Ask, Plan, Accept edits, Read-only, Auto in folder), Steer, Diff, Worktree, exit codes, Scrollback, GPU renderer,
+  chain head / fallback, effort and the colour set names (Graphite, Ocean…) read as written instead of 스티어링,
+  워크트리, 종료 코드, 差分, 引导 and the like; sentences around them stay translated.
 
 - **An OMH TUI reply no longer hangs on a rail.** The `⚚ Hermes · <model>` header starts at the left edge and the
   reply's text sits two cells in, with no `┃` beside it, so a reply reads apart from your prompts and the tool calls,
