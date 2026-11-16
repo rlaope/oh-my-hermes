@@ -1438,4 +1438,5 @@ export const ko: Record<Key, string> = {
   "tasks.barSettingHint": "BOTS 위의 GitHub·GitLab·Linear 작업 줄.",
   "tasks.repoPhGh": "소유자/저장소",
   "tasks.repoPhGl": "그룹/프로젝트",
+  "tasks.opened": "{age} 전에 열림",
 };

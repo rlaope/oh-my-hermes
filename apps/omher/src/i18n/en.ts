@@ -1440,4 +1440,5 @@ export const en = {
   "tasks.barSettingHint": "The Tasks row with GitHub, GitLab and Linear, above BOTS.",
   "tasks.repoPhGh": "owner/repo",
   "tasks.repoPhGl": "group/project",
+  "tasks.opened": "opened {age} ago",
 };

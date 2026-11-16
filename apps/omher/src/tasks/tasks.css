@@ -249,9 +249,9 @@
   flex: none;
 }
 .tk-row-n {
-  color: var(--quiet);
+  color: var(--muted);
   font-variant-numeric: tabular-nums;
-  font-size: 11.5px;
+  font-size: 12.5px;
   min-width: 44px;
   flex: none;
 }
@@ -276,8 +276,8 @@
   gap: 4px;
   flex: none;
   max-width: 140px;
-  font-size: 10.5px;
-  color: var(--muted);
+  font-size: 11px;
+  color: var(--body);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -469,9 +469,14 @@
   display: flex;
   align-items: center;
   flex-wrap: wrap;
-  gap: 6px;
+  row-gap: 4px;
+  column-gap: 6px;
   padding: 8px 14px 10px;
   border-bottom: 1px solid var(--line-soft);
+}
+.tk-dr-more {
+  display: inline-flex;
+  gap: 2px;
 }
 .tk-dr-start {
   display: inline-flex;
@@ -507,6 +512,20 @@
 }
 .tk-md img {
   max-width: 100%;
+}
+.tk-md ul,
+.tk-md ol {
+  padding-left: 1.3em;
+  margin: 6px 0;
+}
+.tk-md p {
+  margin: 6px 0;
+}
+.tk-md h1,
+.tk-md h2,
+.tk-md h3 {
+  font-size: 13.5px;
+  margin: 10px 0 4px;
 }
 .tk-md pre {
   overflow-x: auto;

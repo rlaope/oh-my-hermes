@@ -366,7 +366,7 @@ function Drawer({ source, repo, kind, item, folder, onClose }: { source: CliSour
       <div className="tk-dr-meta">
         <span className="tk-who">{initials(item.author)}</span>
         <span>{item.author}</span>
-        <span className="tk-age">{ago(item.created)}</span>
+        <span className="tk-age">{t("tasks.opened", { age: ago(item.created) })}</span>
         {item.labels.map((l) => (
           <LabelChip key={l.name} {...l} />
         ))}
@@ -378,12 +378,14 @@ function Drawer({ source, repo, kind, item, folder, onClose }: { source: CliSour
             {t("tasks.startThread")}
           </button>
         </span>
+        <span className="tk-dr-more">
         <button type="button" className="tk-btn ghost" disabled={!folder} title={folder ? folder : t("tasks.notCloned")} onClick={() => folder && openShellAt(folder)} data-testid="tasks-terminal">
           {t("tasks.terminalHere")}
         </button>
         <button type="button" className="tk-btn ghost" disabled={!item.url} onClick={() => void openExternal(item.url)} data-testid="tasks-browser">
           {t("tasks.openBrowser")}
         </button>
+        </span>
       </div>
       <div className="tk-dr-body">
         {err ? (

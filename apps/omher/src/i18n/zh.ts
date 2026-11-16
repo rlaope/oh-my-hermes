@@ -1438,4 +1438,5 @@ export const zh: Record<Key, string> = {
   "tasks.barSettingHint": "BOTS 上方的 GitHub、GitLab、Linear 任务行。",
   "tasks.repoPhGh": "所有者/仓库",
   "tasks.repoPhGl": "群组/项目",
+  "tasks.opened": "{age}前创建",
 };

@@ -1438,4 +1438,5 @@ export const ja: Record<Key, string> = {
   "tasks.barSettingHint": "BOTS の上にある GitHub・GitLab・Linear のタスク行。",
   "tasks.repoPhGh": "owner/repo",
   "tasks.repoPhGl": "group/project",
+  "tasks.opened": "{age}前に作成",
 };

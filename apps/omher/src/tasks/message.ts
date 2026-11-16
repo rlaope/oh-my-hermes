@@ -17,6 +17,9 @@ export function cutBytes(s: string, n: number): string {
     out += ch;
     used += b;
   }
+  // end on a word when one ends in the last fifth
+  const sp = out.search(/\s\S*$/);
+  if (sp > out.length * 0.8) out = out.slice(0, sp);
   return `${out.trimEnd()}…`;
 }
 

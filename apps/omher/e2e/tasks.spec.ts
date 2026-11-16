@@ -119,7 +119,7 @@ async function openOn(page: Page, src: "github" | "gitlab" | "linear") {
 async function openThreadFolder(page: Page) {
   // open the seeded thread so its folder becomes the page's context
   await page.getByTestId("bot-kami").click();
-  const row = page.locator('[role="treeitem"][aria-level="2"]').first();
+  const row = page.locator('[role="treeitem"][aria-level="2"]', { hasText: "Tasks port" }).first();
   await expect(row).toBeVisible();
   await row.click();
 }
