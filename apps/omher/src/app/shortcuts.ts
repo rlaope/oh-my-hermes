@@ -69,12 +69,33 @@ export function nextAsk(asks: Ask[], last: FocusAsk | null): Ask | null {
   return asks[(at + 1) % asks.length];
 }
 
+const inTerminal = (t: EventTarget | null) => !!(t as HTMLElement | null)?.closest?.(".xterm");
+
+/** Open the next (1) or previous (-1) terminal session in TERMINALS order: the folder groups as the sidebar shows them. */
+function stepTerminal(step: 1 | -1) {
+  const store = getStore();
+  const s = store.getState();
+  const ss = getSessions().getState();
+  const ids = orderFolders(termGroups(ss.list.filter((r) => isTerminalRec(ss.agents, r))), getFolderPrefs().order).flatMap((g) => g.rows.map((r) => r.id));
+  const to = stepSession(ids, s.ui.view === "session" ? s.ui.session : null, step);
+  if (to) store.actions.openSession(to);
+}
+
 export function useShortcuts(): void {
   useEffect(() => {
     // Ctrl+` is taken on the way down, before a focused terminal (xterm stops the keys it handles) can claim it. The
     // panel lives under the chat column, which a maximised side panel hides: showing it restores the side panel first
     const onTerminalKey = (e: KeyboardEvent) => {
-      if (shortcutFor(e, isMac())?.kind !== "terminal") return;
+      const hit = shortcutFor(e, isMac());
+      // Ctrl+Shift+] / [ on Windows and Linux: omher's own chord, which no shell needs; inside a terminal xterm would
+      // take it (as Ctrl+] / Ctrl+[), so it is taken here first. Every other Ctrl+key in a terminal stays the program's
+      if (hit?.kind === "session" && !isMac() && SESSIONS_ENTRY && inTerminal(e.target)) {
+        e.preventDefault();
+        e.stopPropagation();
+        stepTerminal(hit.step);
+        return;
+      }
+      if (hit?.kind !== "terminal") return;
       e.preventDefault();
       e.stopPropagation();
       if (e.repeat) return;
@@ -87,7 +108,7 @@ export function useShortcuts(): void {
       if (!hit || hit.kind === "terminal") return;
       if (!SESSIONS_ENTRY && (hit.kind === "new-session" || hit.kind === "session")) return;
       // In a terminal session, Ctrl+<key> belongs to the program (Ctrl+K kills a line); ⌘ on macOS stays ours.
-      if (!isMac() && (e.target as HTMLElement | null)?.closest?.(".xterm")) return;
+      if (!isMac() && inTerminal(e.target)) return;
       const store = getStore();
       const s = store.getState();
       const a = store.actions;
@@ -133,11 +154,7 @@ export function useShortcuts(): void {
       } else if (hit.kind === "new-session") {
         openNewSessionMenu();
       } else if (hit.kind === "session") {
-        const ss = getSessions().getState();
-        // TERMINALS order: the folder groups as the sidebar shows them
-        const ids = orderFolders(termGroups(ss.list.filter((r) => isTerminalRec(ss.agents, r))), getFolderPrefs().order).flatMap((g) => g.rows.map((r) => r.id));
-        const to = stepSession(ids, s.ui.view === "session" ? s.ui.session : null, hit.step);
-        if (to) a.openSession(to);
+        stepTerminal(hit.step);
       } else if (hit.kind === "next-ask") {
         const n = nextAsk(selectAsks(s), s.ui.focusAsk);
         if (n) void a.jumpToAsk(n.bot, n.item.id);

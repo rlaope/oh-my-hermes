@@ -359,3 +359,36 @@ test("⌘N / ⌘T open the TERMINALS + menu", async ({ page }) => {
   await expect(page.getByTestId("session-menu")).toBeVisible();
   await expect(page.getByTestId("session-agent-shell")).toBeVisible();
 });
+
+// tidy (2026-11-16): on Windows and Linux xterm took Ctrl+Shift+] / [ (as Ctrl+] / Ctrl+[) while a terminal had the
+// keyboard, so the session keys did nothing there; they are omher's and pass through now. Plain Ctrl+keys stay the
+// program's; on macOS ⌘⇧] works as before and Ctrl+Shift+] is the program's.
+for (const [platform, mod] of [["Win32", "Control"], ["MacIntel", "Meta"]] as const) {
+  test(`${platform}: ${mod}+Shift+] / [ inside a terminal steps the sessions; a plain Ctrl+K stays the terminal's`, async ({ page }) => {
+    test.setTimeout(60_000);
+    await page.addInitScript((p) => Object.defineProperty(Navigator.prototype, "platform", { get: () => p }), platform);
+    await open(page);
+    const a = await newTerm(page, "shell", FOLDERS[0]);
+    const b = await newTerm(page, "shell", FOLDERS[0]);
+    await page.getByTestId(`session-${a}`).locator(".ss-open").click();
+    await expect(page.getByTestId(`session-${a}`)).toHaveClass(/active/);
+    const area = page.locator(".xterm-helper-textarea").last();
+    await area.focus();
+    await page.keyboard.press(`${mod}+Shift+BracketRight`);
+    await expect(page.getByTestId(`session-${b}`)).toHaveClass(/active/);
+    await page.locator(".xterm-helper-textarea").last().focus();
+    await page.keyboard.press(`${mod}+Shift+BracketLeft`);
+    await expect(page.getByTestId(`session-${a}`)).toHaveClass(/active/);
+    await page.locator(".xterm-helper-textarea").last().focus();
+    if (platform === "Win32") {
+      // Ctrl+K in a terminal kills a line: the bot search does not take the keyboard
+      await page.keyboard.press("Control+k");
+      await expect(page.getByTestId("bot-search")).not.toBeFocused();
+    } else {
+      // Ctrl+Shift+] on macOS is the program's: nothing moves
+      await page.keyboard.press("Control+Shift+BracketRight");
+      await page.waitForTimeout(200);
+      await expect(page.getByTestId(`session-${a}`)).toHaveClass(/active/);
+    }
+  });
+}
