@@ -303,7 +303,9 @@ remains available in the machine-readable payload but is not shown in the
 Hermes-facing status line.
 It intentionally omits install inventory such as managed skill counts. Its
 evidence probe is allowlisted, shell-free, bounded to a project root inside the
-host working directory (with `-m unittest` limited to reporting flags, every
+host working directory (with `-m unittest` limited to reporting flags and a
+selection of `test*.py` modules inside the working directory that default
+discovery would also run, a run that ran no test reported as not passed, every
 path a compileall argument or an omh option names kept inside the working
 directory, and `git diff` unable to leave the repository, though a `:/`
 pathspec or `<rev>:<path>` reaches all of it, which may extend above the

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from .. import runtime_paths
 
+import ast
 from datetime import datetime, timezone
 import json
 import os
@@ -9,6 +10,7 @@ from pathlib import Path, PurePath
 import re
 import shlex
 import subprocess
+import sys
 import tempfile
 from typing import Any, NamedTuple
 
@@ -17,8 +19,12 @@ from ..host_observation import OBSERVATION_SCHEMA, attach_public_observation, ob
 OMH_EVIDENCE_SCHEMA = {
     "name": "omh_gather_evidence",
     "description": (
-        "Run bounded allowlisted local verification probes and return structured evidence. "
-        "This is explicit verification evidence only, not executor dispatch or coding execution."
+        # The first sentence is the whole line Hermes' deferred-tool catalog
+        # shows a model (it clips at 80 characters), so it names tests and the
+        # call shape: a model looking for a test runner can call the tool from
+        # the listing instead of searching and describing it first.
+        'Run tests or allowlisted checks: commands=["python3 -m unittest tests.test_x"]. '
+        "Each probe is explicit verification evidence only, not executor dispatch or coding execution."
     ),
     "parameters": {
         "type": "object",
@@ -26,7 +32,7 @@ OMH_EVIDENCE_SCHEMA = {
             "commands": {
                 "type": "array",
                 "items": {"type": "string"},
-                "description": "Commands to run. Each command must match an allowlisted token prefix.",
+                "description": "Commands to run. Each command must match an allowlisted prefix.",
             },
             "project_root": {
                 "type": "string",
@@ -57,14 +63,21 @@ _MAX_TRUNCATE_CHARS = 20_000
 _DEFAULT_TIMEOUT_SECONDS = 60
 _DEFAULT_TRUNCATE_CHARS = 4_000
 _SHELL_METACHAR_RE = re.compile(r"[\n\r;&|`$<>(){}]")
-# After a `-m unittest` prefix only these options may follow, so a probe runs
-# the tests the allowlist entry names (or default discovery from workdir) and
-# never `discover`, a start/top-level directory, or a module named by the model.
+# After a `-m unittest` prefix only these options may follow, plus, when the
+# prefix names no test itself, a selection of test*.py modules inside workdir
+# (`_unittest_selection_rejection`). Never `discover`, a start/top-level
+# directory, or a module from outside workdir: a probe imports only the code
+# default discovery from workdir could reach.
 _UNITTEST_FLAGS = frozenset({
     "-v", "--verbose", "-q", "--quiet", "-f", "--failfast",
     "-b", "--buffer", "-c", "--catch", "--locals",
 })
 _UNITTEST_VALUE_FLAGS = frozenset({"-k"})
+_UNITTEST_DOTTED_NAME_RE = re.compile(r"[A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)*")
+# The runner's own summary line; the last one in the output is the runner's.
+_UNITTEST_RAN_RE = re.compile(r"^Ran (\d+) tests? in ", re.MULTILINE)
+# Python 3.12+ unittest and pytest both exit 5 when no test ran.
+_NO_TESTS_RAN_EXIT_CODE = 5
 # `git diff` options that write a file, run a configured external program, or
 # read paths outside the repository. Every other argument that is not an option
 # must name a path inside workdir: with two paths and one of them outside the
@@ -326,6 +339,8 @@ def _suffix_rejection(prefix_tokens: list[str], suffix: list[str], workdir: Path
     """Bound the free suffix after a prefix whose program would run it as code
     or open a path it names outside workdir."""
     if _has_pair(prefix_tokens, "-m", "unittest"):
+        # An operator entry that already names a test keeps exactly that test.
+        selection_allowed = prefix_tokens[-2:] == ["-m", "unittest"]
         index = 0
         while index < len(suffix):
             token = suffix[index]
@@ -333,7 +348,10 @@ def _suffix_rejection(prefix_tokens: list[str], suffix: list[str], workdir: Path
                 index += 2
                 continue
             if token not in _UNITTEST_FLAGS:
-                return f"unittest argument not allowed: {token[:80]}"
+                # Any other option fails the selection's name grammar.
+                refused = _unittest_selection_rejection(token, workdir) if selection_allowed else ""
+                if refused is not None:
+                    return f"unittest argument not allowed: {token[:80]}" + (f" ({refused})" if refused else "")
             index += 1
     if _has_pair(prefix_tokens, "-m", "compileall"):
         return _grammar_rejection("compileall", _COMPILEALL_GRAMMAR, suffix, workdir)
@@ -355,6 +373,83 @@ def _suffix_rejection(prefix_tokens: list[str], suffix: list[str], workdir: Path
             refused = _path_rejection("git diff", token, workdir)
             if refused is not None:
                 return refused
+    return None
+
+
+def _unittest_selection_rejection(token: str, workdir: Path) -> str | None:
+    """None when `token` selects tests that default discovery from workdir runs.
+
+    Two forms, read the way `python -m unittest` reads them: a relative `.py`
+    path (`tests/test_x.py`, which unittest turns into `tests.test_x`), or a
+    dotted name (`tests.test_x`, `tests.test_x.Case.test_y`). The leading parts
+    must be regular packages inside workdir (a directory with `__init__.py`,
+    the only kind discovery descends into) and the module a `test*.py` file
+    inside workdir, the discovery pattern; what follows it is checked by
+    `_unittest_attribute_rejection`. So the selection runs only code bare
+    `-m unittest` from workdir would run anyway: a standard-library name, a
+    symlink out of workdir, or a module discovery would not run is refused,
+    and so is `discover` in every form.
+    """
+    if token.lower() == "discover":
+        return "discover is not allowed"
+    if token.lower().endswith(".py"):
+        refused = _path_rejection("unittest", token, workdir)
+        if refused is not None:
+            return refused
+        parts = list(PurePath(token[:-3]).parts)
+        if not parts or not all(_UNITTEST_DOTTED_NAME_RE.fullmatch(part) and "." not in part for part in parts):
+            return "not a test file path"
+    elif _UNITTEST_DOTTED_NAME_RE.fullmatch(token):
+        parts = token.split(".")
+    else:
+        return "not a dotted test name"
+    # A standard-library package the interpreter may already hold would be
+    # imported in place of the workdir one. (`sys.stdlib_module_names` leaves
+    # out CPython's own `test` package, which a workdir `test/` shadows.)
+    if parts[0] in sys.stdlib_module_names:
+        return "names a standard-library module"
+    base = workdir
+    for index, part in enumerate(parts):
+        package, module = base / part, base / f"{part}.py"
+        if package.is_dir() and (package / "__init__.py").is_file():
+            found = package
+        elif module.is_file():
+            found = module
+        else:
+            break
+        if not all(Path(os.path.realpath(path)).is_relative_to(workdir)
+                   for path in (found, found / "__init__.py") if path.exists()):
+            return "resolves outside workdir"
+        if found is module:
+            if not part.startswith("test"):
+                return "names no test*.py module inside workdir"
+            return _unittest_attribute_rejection(module, parts[index + 1:])
+        base = found
+    return "names no test*.py module inside workdir"
+
+
+def _unittest_attribute_rejection(module: Path, attributes: list[str]) -> str | None:
+    """None when `attributes` name what discovery would run in `module`.
+
+    unittest calls any callable a dotted name reaches that is not a TestCase,
+    so `tests.test_x.helper` would run a helper and `tests.test_x.os.<f>` a
+    function of a module the test imported. Allowed: nothing, a class defined
+    at the top of the test file, or such a class and a `test*` method, which
+    is the shape discovery itself runs.
+    """
+    if not attributes:
+        return None
+    try:
+        tree = ast.parse(module.read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError, SyntaxError, ValueError):
+        return "test module cannot be read"
+    classes = {node.name for node in tree.body if isinstance(node, ast.ClassDef)}
+    if attributes[0] not in classes:
+        return "names no class defined in the test module"
+    if len(attributes) > 2:
+        return "names more than a test class and method"
+    if len(attributes) == 2 and not attributes[1].startswith("test"):
+        return "names a method that is not test*"
     return None
 
 
@@ -510,14 +605,35 @@ def _run_command(command_text: str, tokens: list[str], *, workdir: Path, timeout
         return _rejected_result(command_text, f"timeout after {timeout}s")
     output = str(run["output"])
     truncated = len(output) > truncate
-    return {
+    no_tests_ran = _no_tests_ran(tokens, run["exit_code"], output)
+    result = {
         "command": command_text,
         "exit_code": run["exit_code"],
         "output_tail": output[-truncate:] if truncated else output,
         "truncated": truncated,
-        "passed": run["exit_code"] == 0,
+        "passed": run["exit_code"] == 0 and not no_tests_ran,
         "evidence_type": "observed_local_command",
     }
+    if no_tests_ran:
+        result["reason"] = "no tests ran"
+    return result
+
+
+def _no_tests_ran(tokens: list[str], exit_code: object, output: str) -> bool:
+    """True when a test runner exited without running a test, which proves nothing.
+
+    Python before 3.12 prints `Ran 0 tests` and exits 0 when unittest finds no
+    test; 3.12+ and pytest exit 5 instead. Read from the whole output, before
+    truncation, and from the runner's own (last) summary line.
+    """
+    if _has_pair(tokens, "-m", "unittest"):
+        if exit_code == _NO_TESTS_RAN_EXIT_CODE:
+            return True
+        counts = _UNITTEST_RAN_RE.findall(output)
+        return exit_code == 0 and bool(counts) and int(counts[-1]) == 0
+    if _has_pair(tokens, "-m", "pytest") or (tokens[:1] == ["pytest"]):
+        return exit_code == _NO_TESTS_RAN_EXIT_CODE
+    return False
 
 
 def _minimal_child_environment(pycache_dir: str) -> dict[str, str]:
