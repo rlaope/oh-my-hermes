@@ -1,0 +1,143 @@
+[
+ {
+  "author": {
+   "id": "U_redacted",
+   "is_bot": false,
+   "login": "person2",
+   "name": "Person2"
+  },
+  "createdAt": "2026-09-23T08:14:01Z",
+  "labels": [],
+  "number": 1836,
+  "state": "OPEN",
+  "title": "Measurement path for the Claude composer calibration",
+  "updatedAt": "2026-09-23T09:01:14Z",
+  "url": "https://github.com/rlaope/oh-my-hermes/issues/1836"
+ },
+ {
+  "author": {
+   "id": "U_redacted",
+   "is_bot": false,
+   "login": "person2",
+   "name": "Person2"
+  },
+  "createdAt": "2026-09-22T09:22:03Z",
+  "labels": [
+   {
+    "id": "LA_kwDOSwAnf88AAAACl4Mr8w",
+    "name": "enhancement",
+    "description": "New feature or request",
+    "color": "a2eeef"
+   },
+   {
+    "id": "LA_kwDOSwAnf88AAAACuf1FRg",
+    "name": "area/routing",
+    "description": "Chat router, intent detection, triggers, and overroute guards",
+    "color": "1d76db"
+   },
+   {
+    "id": "LA_kwDOSwAnf88AAAACuf1GqA",
+    "name": "area/plugin",
+    "description": "Hermes plugin bundle, MCP bridge, hooks, and awareness delivery",
+    "color": "006b75"
+   },
+   {
+    "id": "LA_kwDOSwAnf88AAAACuf1HiQ",
+    "name": "area/quality",
+    "description": "Quality gates, conformance, governance, and evidence contracts",
+    "color": "0052cc"
+   },
+   {
+    "id": "LA_kwDOSwAnf88AAAACuf1Iuw",
+    "name": "needs-triage",
+    "description": "Not yet routed to an area or priority",
+    "color": "ededed"
+   }
+  ],
+  "number": 1817,
+  "state": "OPEN",
+  "title": "[Feature]: Shadow, decline, refuse and replay — turning an OMH decision surface on from the owner's own traffic",
+  "updatedAt": "2026-09-28T00:47:48Z",
+  "url": "https://github.com/rlaope/oh-my-hermes/issues/1817"
+ },
+ {
+  "author": {
+   "id": "U_redacted",
+   "is_bot": false,
+   "login": "person2",
+   "name": "Person2"
+  },
+  "createdAt": "2026-09-22T07:28:04Z",
+  "labels": [
+   {
+    "id": "LA_kwDOSwAnf88AAAACl4Mr8w",
+    "name": "enhancement",
+    "description": "New feature or request",
+    "color": "a2eeef"
+   },
+   {
+    "id": "LA_kwDOSwAnf88AAAACuf1FRg",
+    "name": "area/routing",
+    "description": "Chat router, intent detection, triggers, and overroute guards",
+    "color": "1d76db"
+   },
+   {
+    "id": "LA_kwDOSwAnf88AAAACuf1HiQ",
+    "name": "area/quality",
+    "description": "Quality gates, conformance, governance, and evidence contracts",
+    "color": "0052cc"
+   },
+   {
+    "id": "LA_kwDOSwAnf88AAAACuf1Iuw",
+    "name": "needs-triage",
+    "description": "Not yet routed to an area or priority",
+    "color": "ededed"
+   }
+  ],
+  "number": 1815,
+  "state": "OPEN",
+  "title": "[Feature]: Measure the routing-questions lane's model and decision-model arms",
+  "updatedAt": "2026-09-22T07:28:04Z",
+  "url": "https://github.com/rlaope/oh-my-hermes/issues/1815"
+ },
+ {
+  "author": {
+   "id": "U_redacted",
+   "is_bot": false,
+   "login": "person3",
+   "name": "Person3"
+  },
+  "createdAt": "2026-09-20T12:45:33Z",
+  "labels": [
+   {
+    "id": "LA_kwDOSwAnf88AAAACl4Mr8w",
+    "name": "enhancement",
+    "description": "New feature or request",
+    "color": "a2eeef"
+   },
+   {
+    "id": "LA_kwDOSwAnf88AAAACuf1FIQ",
+    "name": "area/skills",
+    "description": "Skill catalog, rendering, and the generated SKILL.md surface",
+    "color": "0e8a16"
+   },
+   {
+    "id": "LA_kwDOSwAnf88AAAACuf1FRg",
+    "name": "area/routing",
+    "description": "Chat router, intent detection, triggers, and overroute guards",
+    "color": "1d76db"
+   },
+   {
+    "id": "LA_kwDOSwAnf88AAAACuf1Ixg",
+    "name": "needs-evidence",
+    "description": "Claims execution, review, or CI results that are not backed by observed output",
+    "color": "fef2c0"
+   }
+  ],
+  "number": 1789,
+  "state": "OPEN",
+  "title": "No chat trigger reaches the story close: the token set over-fires and the phrase list cannot be made precise",
+  "updatedAt": "2026-09-20T12:45:33Z",
+  "url": "https://github.com/rlaope/oh-my-hermes/issues/1789"
+ }
+]
