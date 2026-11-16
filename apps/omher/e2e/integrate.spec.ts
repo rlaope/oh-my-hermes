@@ -2,7 +2,7 @@
 // fix the parent asked for after layer 1.
 // - thread rows carry HarnessStack marks from the thread's live subagents; the thread chat shows the same subagent row
 // - the terminal panel's next tab starts in the open thread's folder (home in the main chat)
-// - SESSIONS is hidden: no sidebar section, ⌘N / ⌘⇧] do nothing
+// - SESSIONS is back as TERMINALS only (2026-11-16): ⌘N opens its + menu (no chat choice)
 // - threads: connector lighter than the hairline, running spinner in the accent at 1.5px, needs-you pulse >= 0.6 in
 //   the strip's amber, idle rows a hollow dot, titles >= 20px past the bot name and smaller, the bot row's time
 //   follows its newest thread
@@ -196,16 +196,18 @@ test("a restored thread listed without a folder: opening it gives the row its fo
   expect((await page.evaluate(() => (window as unknown as { __omherShellCalls: { op: string; at?: string }[] }).__omherShellCalls)).find((c) => c.op === "start")?.at).toBe("/work/restored");
 });
 
-test("SESSIONS is hidden: no sidebar section, ⌘N and ⌘⇧] do nothing; Accounts usage stays", async ({ page }) => {
+test("SESSIONS is back as TERMINALS only (2026-11-16): ⌘N opens its + menu with no chat choice; ⌘⇧] with no terminal opens nothing", async ({ page }) => {
   await setup(page);
   await expect(page.getByTestId("side-bots")).toBeVisible();
-  await expect(page.getByTestId("side-sessions")).toHaveCount(0);
+  await expect(page.getByTestId("side-sessions")).toBeVisible();
   const mod = await page.evaluate(() => (/Mac/.test(navigator.platform) ? "Meta" : "Control"));
-  await page.keyboard.press(`${mod}+n`);
   await page.keyboard.press(`${mod}+Shift+BracketRight`);
   await page.waitForTimeout(200);
-  await expect(page.getByTestId("session-menu")).toHaveCount(0);
   await expect(page.getByTestId("session-view")).toHaveCount(0);
+  await page.keyboard.press(`${mod}+n`);
+  await expect(page.getByTestId("session-menu")).toBeVisible();
+  await expect(page.getByTestId("session-agent-shell")).toBeVisible();
+  await expect(page.getByTestId("session-menu").getByText(/^Chat$/)).toHaveCount(0);
 });
 
 test("thread rows: connector, spinner, pulse, idle dot, indent and size; bot row follows its newest thread", async ({ page }) => {
