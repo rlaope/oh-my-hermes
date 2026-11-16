@@ -1261,9 +1261,15 @@ body.row-dragging * {
 }
 .dk-f {
   position: relative;
+  width: 30px;
+  height: 30px;
   display: grid;
   place-items: center;
   line-height: 0;
+}
+[data-theme="light"] .dk-t {
+  background: var(--raise2);
+  border-color: var(--line);
 }
 .dk-f img {
   border-radius: 6px;
@@ -1271,7 +1277,7 @@ body.row-dragging * {
 .dk-f.ring::after {
   content: "";
   position: absolute;
-  inset: -4px;
+  inset: -3px;
   border-radius: 50%;
   border: 1.5px solid transparent;
   border-top-color: var(--spin);

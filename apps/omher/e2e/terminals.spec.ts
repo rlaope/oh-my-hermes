@@ -329,11 +329,13 @@ test("scroll: 12 bots x 6 threads and 15 terminals at 900px; each region scrolls
   // a bot far down BOTS, opened from its dock tile, scrolls into view inside BOTS
   await page.getByTestId("bot-bot12").click({ button: "right" });
   await page.getByTestId("row-dock").click();
+  // pinning changed the dock's height (the automatic tiles gave way to one pin): the divider is measured again
+  const d1 = await divider();
   await botList.evaluate((el) => (el.scrollTop = 0));
   await expect(page.getByTestId("bot-bot12")).not.toBeInViewport();
   await page.getByTestId("dock-tile-bot:bot12").click();
   await expect(page.getByTestId("bot-bot12")).toBeInViewport();
-  expect(await divider()).toBe(d0);
+  expect(await divider()).toBe(d1);
 });
 
 test("dock: pin, unpin and reorder persist across a reload; a tile opens and scrolls its row into view; dots", async ({ page }) => {

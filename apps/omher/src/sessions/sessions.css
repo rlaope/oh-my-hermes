@@ -3,9 +3,12 @@
 /* BOTS and SESSIONS each take the room their rows need and share what is left; when both are long, each gives
    way in proportion and scrolls on its own. Neither is squeezed under its header and a row or two: twelve bots
    beside an empty SESSIONS no longer stop at five with a blank half under them. */
+/* Both regions grow from zero, so when both overflow they share the column evenly (twelve bots with threads no
+   longer leave TERMINALS one row); each stops at its content's height, so a short one gives the rest away. */
 .side-sec {
-  flex: 1 1 auto;
+  flex: 1 1 0;
   min-height: 96px;
+  max-height: max-content;
   display: flex;
   flex-direction: column;
 }
@@ -1130,7 +1133,7 @@
 .tg {
   display: flex;
   flex-direction: column;
-  gap: 1px;
+  gap: 2px; /* rows stand 2px apart, as the + menu's fit (fitMenu, ROW_CLEAR) expects */
   padding-bottom: 8px;
 }
 .tg-h {
@@ -1157,10 +1160,17 @@
   grid-column: 2;
   font-family: var(--mono);
   font-size: 10px;
-  color: var(--quiet);
+  color: var(--muted);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+/* the first row of a group scrolls into view with its folder header */
+.tg > .tg-h + .ss-row {
+  scroll-margin-top: 30px;
+}
+[data-theme="light"] .tg-ic {
+  color: #a8700f;
 }
 .ss-row.tr {
   position: relative;
@@ -1194,7 +1204,7 @@
   flex: none;
   font-family: var(--mono);
   font-size: 10.5px;
-  color: var(--quiet);
+  color: var(--muted);
   white-space: nowrap;
 }
 .ss-row.tr:hover .tr-meta,
@@ -1251,7 +1261,7 @@
   position: absolute;
   inset: -4px;
   border-radius: 6px;
-  box-shadow: 0 0 0 1px color-mix(in srgb, var(--ok) 38%, transparent);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--ok) 30%, transparent);
   pointer-events: none;
 }
 .ss-at .ss-path,

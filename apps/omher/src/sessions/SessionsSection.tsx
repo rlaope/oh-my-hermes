@@ -147,7 +147,14 @@ function useMenuFit(box: RefObject<HTMLDivElement | null>, ready: boolean, shape
       const natural = chrome + list.scrollHeight;
       // the gap between the row and the menu, the same on both sides (offsets ignore the pop-in transform)
       const gap = Math.max(0, pop.classList.contains("ui-pop-bottom") ? pop.offsetTop - anchor.offsetHeight : -pop.offsetTop - pop.offsetHeight);
-      const rows = [...(side?.querySelectorAll(".bot-list > *, .ss-list > *, .side-sec > .side-sh, .side > :not(.side-sec)") ?? [])].map((r) => r.getBoundingClientRect());
+      // rows as drawn: a group's rows, not the group (TERMINALS lists folder groups), and only what its list shows
+      const rows = [...(side?.querySelectorAll(".bot-list:not(.ss-list) > *, .ss-list .tg > *, .side-sec > .side-sh, .side > :not(.side-sec)") ?? [])]
+        .map((r) => {
+          const b = r.getBoundingClientRect();
+          const box = r.closest(".bot-list")?.getBoundingClientRect();
+          return box && (b.bottom <= box.top || b.top >= box.bottom) ? null : b;
+        })
+        .filter((b): b is DOMRect => !!b);
       const f = fitMenu(a, natural, gap, { top: Math.max(top, 0) + MENU_GAP, bottom: Math.min(foot, innerHeight) - MENU_GAP }, rows);
       // the band above an upward menu (`.ss-pop.ui-pop-top::before`) is as tall as the air it keeps
       pop.style.setProperty("--ss-air", `${f.air}px`);
@@ -206,7 +213,11 @@ function NewSessionMenu({ onClose, trigger }: { onClose: () => void; trigger: Re
   const ready = agents !== null;
   // the second step: one agent's past conversations (its own list: this menu is not measured while it shows)
   const [past, setPast] = useState<PastAgent | null>(null);
-  const fit = useMenuFit(box, ready && !past, unfold ? "open" : "folded");
+  // the folder it starts in: the chip at the top (the last folder used, else home)
+  const [folder, setFolder] = useState<string | null>(null);
+  const [folders, setFolders] = useState(false);
+  // measured again whenever its rows change (the folded agents, the folder list)
+  const fit = useMenuFit(box, ready && !past, `${unfold ? "open" : "folded"}:${folders ? "folders" : ""}`);
   // once placed (a hidden menu cannot take focus)
   const placed = fit !== null;
   const list = useRef<HTMLDivElement>(null);
@@ -223,9 +234,6 @@ function NewSessionMenu({ onClose, trigger }: { onClose: () => void; trigger: Re
     onClose();
     if (why === "escape") trigger.current?.focus();
   };
-  // the folder it starts in: the chip under the list (the last folder used, else home)
-  const [folder, setFolder] = useState<string | null>(null);
-  const [folders, setFolders] = useState(false);
   const at = folder ?? draftFolder(ss.recent, ss.home);
   const pick = (id: AgentId) => {
     close("pick");
@@ -318,37 +326,6 @@ function NewSessionMenu({ onClose, trigger }: { onClose: () => void; trigger: Re
       >
         <div className="ss-h">{t("term.new")}</div>
         {agents === null && <div className="ss-empty">{t("ss.lookingAgents")}</div>}
-        <div ref={list} className={`ss-scroll${more ? " more" : ""}`} style={fit ? { maxHeight: fit.max } : undefined} data-testid="session-menu-list">
-        {ready && (
-          <button key="shell" type="button" role="menuitem" className="ss-item" title={t("term.shellTip")} onClick={() => pick(SHELL)} data-testid="session-agent-shell">
-            <span className="ss-ic">
-              <TermRowMark agent={null} size={16} />
-            </span>
-            <span className="ss-n ss-n-as">
-              <span className="ss-l">{t("term.shell")}</span>
-            </span>
-          </button>
-        )}
-        {(parts?.shown ?? []).map(row)}
-        {parts && parts.more.length > 0 && (
-          <button
-            type="button"
-            role="menuitem"
-            className="ss-item ss-more"
-            aria-expanded={unfold}
-            onClick={() => setUnfold((v) => !v)}
-            data-testid="session-more"
-          >
-            <span className="ss-ic ss-more-ic" aria-hidden="true">
-              {unfold ? "⌄" : "›"}
-            </span>
-            <span className="ss-n">{t("ss.moreAgents")}</span>
-            <span className="ss-missing">{parts.more.length}</span>
-          </button>
-        )}
-        {unfold && parts?.more.map(row)}
-        </div>
-        <div className="ss-sep" />
         <button
           type="button"
           role="menuitem"
@@ -390,6 +367,37 @@ function NewSessionMenu({ onClose, trigger }: { onClose: () => void; trigger: Re
             </button>
           </div>
         )}
+        <div className="ss-sep" />
+        <div ref={list} className={`ss-scroll${more ? " more" : ""}`} style={fit ? { maxHeight: fit.max } : undefined} data-testid="session-menu-list">
+        {ready && (
+          <button key="shell" type="button" role="menuitem" className="ss-item" title={t("term.shellTip")} onClick={() => pick(SHELL)} data-testid="session-agent-shell">
+            <span className="ss-ic">
+              <TermRowMark agent={null} size={16} />
+            </span>
+            <span className="ss-n ss-n-as">
+              <span className="ss-l">{t("term.shell")}</span>
+            </span>
+          </button>
+        )}
+        {(parts?.shown ?? []).map(row)}
+        {parts && parts.more.length > 0 && (
+          <button
+            type="button"
+            role="menuitem"
+            className="ss-item ss-more"
+            aria-expanded={unfold}
+            onClick={() => setUnfold((v) => !v)}
+            data-testid="session-more"
+          >
+            <span className="ss-ic ss-more-ic" aria-hidden="true">
+              {unfold ? "⌄" : "›"}
+            </span>
+            <span className="ss-n">{t("ss.moreAgents")}</span>
+            <span className="ss-missing">{parts.more.length}</span>
+          </button>
+        )}
+        {unfold && parts?.more.map(row)}
+        </div>
         {hermesOnly(ss.agents) && <AddOmhLine onPick={() => close("pick")} />}
       </div>
     </Popover>
