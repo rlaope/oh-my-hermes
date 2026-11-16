@@ -64,8 +64,14 @@ def workspace(cell) -> PairedRunWorkspace:
     return PairedRunWorkspace(cell.workspace_id)
 
 
-def arm_setup_record(omh_plugin: bool, skills: tuple[str, ...]) -> dict[str, object]:
-    return {"omh_plugin": omh_plugin, "exposure_digest": exposure_digest(tuple(sorted(skills)))}
+def arm_setup_record(
+    omh_plugin: bool, skills: tuple[str, ...], toolsets: str = "file,skills"
+) -> dict[str, object]:
+    return {
+        "omh_plugin": omh_plugin,
+        "exposure_digest": exposure_digest(tuple(sorted(skills))),
+        "toolsets": toolsets,
+    }
 
 
 def receipt(home: Path, cell, run_id: str, status: str = "completed"):

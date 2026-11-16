@@ -22,7 +22,12 @@ from _local_package import load_local_package
 
 load_local_package()
 
-from omh.coding.hermes_child_arm_setup import ArmSetup, observe_arm_setup  # noqa: E402
+from omh.coding.hermes_child_arm_setup import (  # noqa: E402
+    ArmSetup,
+    arm_setup_errors,
+    observe_arm_setup,
+    parse_arm_toolsets,
+)
 from omh.coding.hermes_child_dispatch import (  # noqa: E402
     HermesChildObservation,
     HermesChildRequest,
@@ -52,6 +57,8 @@ from omh.quality.paired_run_model import ArmRole  # noqa: E402
 from omh.quality.paired_run_values import exposure_digest  # noqa: E402
 
 REPO = Path(__file__).resolve().parents[1]
+FS = "file,skills"
+FST = "file,skills,terminal"
 KEY_ENV = "OMH_TEST_PAIRED_PROVIDER_KEY"
 KEY_VALUE = "sk-test-paired-key-value-7f1c2d9e"
 
@@ -141,11 +148,11 @@ class PairedRunArmHomeTests(unittest.TestCase):
         self.assertEqual(config["plugins"]["enabled"], ["omh"])
         self.assertEqual(config["plugins"]["entries"]["omh"]["settings"]["omh_home"],
                          str(variant.arm_home.root / "omh"))
-        self.assertEqual(variant.setup, ArmSetup(True, exposure_digest(("code-review", "verification-gate"))))
+        self.assertEqual(variant.setup, ArmSetup(True, exposure_digest(("code-review", "verification-gate")), FS))
         self.assertFalse((bhome / "plugins").exists())
         self.assertEqual(list((bhome / "skills").iterdir()), [])
         self.assertNotIn("plugins", json.loads((bhome / "config.yaml").read_text()))
-        self.assertEqual(baseline.setup, ArmSetup(False, exposure_digest(())))
+        self.assertEqual(baseline.setup, ArmSetup(False, exposure_digest(()), FS))
         for home in (vhome, bhome):
             config = json.loads((home / "config.yaml").read_text())
             self.assertEqual(config["model"], {"default": "claude-sonnet-5-5", "provider": "claude-proxy"})
@@ -199,6 +206,26 @@ class PairedRunArmHomeTests(unittest.TestCase):
         self.assertIn(KEY_ENV, cell["env"])
         self.assertNotIn("OTHER_API_KEY", cell["env"])
 
+    def test_terminal_opt_in_reaches_the_cell_argv_and_the_signed_setup(self) -> None:
+        run = self._prepare("variant", ("code-review",), True, toolsets=FST)
+        self.assertEqual(run.setup, ArmSetup(True, exposure_digest(("code-review",)), FST))
+        events: list[HermesChildObservation] = []
+        dispatch_hermes_child(
+            HermesChildRequest(
+                prompt="cell task", model="claude-sonnet-5-5", provider="claude-proxy", reasoning="low",
+                parent_run_id="decision", run_id="cell-t", timeout_seconds=10, hermes=str(self.hermes),
+                cwd=self.root, env=self.env, allow_parallel=True, arm_home=run.arm_home,
+            ),
+            dispatch_policy="ask_before_dispatch", confirmed=True, observe=events.append,
+        )
+        self.assertEqual(events[-1].arm_setup.toolsets, FST)
+        chats = self._lines("chats.jsonl")
+        self.assertEqual({tuple(line["argv"][10:]) for line in chats},
+                         {("--ignore-rules", "--toolsets", FST)}, "warm-up and cell take the same toolsets")
+        for line in chats:
+            self.assertNotIn("--yolo", line["argv"])
+            self.assertNotIn("HERMES_YOLO_MODE", line["env"])
+
     def test_gateway_group_is_stopped_and_root_removed_when_warmup_fails(self) -> None:
         (self.root / "warm-fails").write_text("1")
         with self.assertRaises(PairedRunArmHomeError):
@@ -235,6 +262,24 @@ class PairedRunArmHomeTests(unittest.TestCase):
         profiled = self.root / "profiles" / "p" / "tmp"
         profiled.mkdir(parents=True)
         self.assertEqual(arm_root_parent((str(profiled), str(self.parent))), self.parent)
+
+
+class ArmToolsetsBoundaryTextTests(unittest.TestCase):
+    """AGENTS.md names the terminal opt-in under paired-run only (owner-approved 2026-11-16)."""
+
+    def _bullet(self) -> str:
+        text = (REPO / "AGENTS.md").read_text(encoding="utf-8")
+        start = text.index("- **Hermes-native child boundary**")
+        return text[start:text.index("\n- **", start + 1)]
+
+    def test_boundary_names_the_opt_in_for_both_arms_with_approval_on(self) -> None:
+        bullet = " ".join(self._bullet().split())
+        paired = bullet[bullet.index("`omh coding paired-run dispatch`"):bullet.index("`omh coding fanout dispatch --final-review`")]
+        for phrase in ("`--toolsets file,skills`", "`--arm-toolsets`", "`terminal`", "both arms identically",
+                       "checked at fan-in", "command approval left on"):
+            self.assertIn(phrase, paired)
+        self.assertNotIn("terminal", bullet[:bullet.index("`omh coding paired-run dispatch`")])
+        self.assertNotIn("terminal", bullet[bullet.index("`omh coding fanout dispatch --final-review`"):])
 
 
 class ProviderConfigTests(unittest.TestCase):
@@ -299,7 +344,7 @@ class ArmSetupReceiptTests(unittest.TestCase):
         return replace(terminal, arm_setup=setup)
 
     def test_dispatcher_setup_is_signed_and_a_caller_value_never_survives(self) -> None:
-        setup = ArmSetup(True, exposure_digest(("code-review",)))
+        setup = ArmSetup(True, exposure_digest(("code-review",)), FS)
         self._sign(self._terminal(setup), arm_setup={"omh_plugin": False, "exposure_digest": "0" * 64})
         self.assertEqual(load_hermes_child_receipt(self.omh_home, "cell-1").arm_setup, setup)
 
@@ -308,7 +353,7 @@ class ArmSetupReceiptTests(unittest.TestCase):
         self.assertIsNone(load_hermes_child_receipt(self.omh_home, "cell-1").arm_setup)
 
     def test_tampered_setup_fails_verification(self) -> None:
-        run_dir = self._sign(self._terminal(ArmSetup(False, exposure_digest(()))))
+        run_dir = self._sign(self._terminal(ArmSetup(False, exposure_digest(()), FS)))
         path = run_dir / "observation.json"
         observation = json.loads(path.read_text())
         observation["arm_setup"]["omh_plugin"] = True
@@ -317,20 +362,67 @@ class ArmSetupReceiptTests(unittest.TestCase):
             load_hermes_child_receipt(self.omh_home, "cell-1")
 
 
+    def test_tampered_toolsets_fail_verification(self) -> None:
+        run_dir = self._sign(self._terminal(ArmSetup(True, exposure_digest(()), FS)))
+        path = run_dir / "observation.json"
+        observation = json.loads(path.read_text())
+        observation["arm_setup"]["toolsets"] = FST
+        path.write_text(json.dumps(observation))
+        with self.assertRaises(ReceiptVerificationError):
+            load_hermes_child_receipt(self.omh_home, "cell-1")
+
+    def test_signed_toolsets_survive_verification(self) -> None:
+        setup = ArmSetup(False, exposure_digest(()), FST)
+        self._sign(self._terminal(setup))
+        self.assertEqual(load_hermes_child_receipt(self.omh_home, "cell-1").arm_setup, setup)
+
+
+class ArmToolsetsTests(unittest.TestCase):
+    def test_closed_allowlist_with_file_and_skills_required(self) -> None:
+        self.assertEqual(parse_arm_toolsets("file,skills"), FS)
+        self.assertEqual(parse_arm_toolsets("terminal, skills,file"), FST, "canonical order")
+        refusals = (
+            ("file,skills,web", "refused: web"),
+            ("file,skills,delegation", "refused: delegation"),
+            ("file,skills,terminal,code_execution", "refused: code_execution"),
+            ("file,terminal", "must include file and skills"),
+            ("skills,terminal", "must include file and skills"),
+            ("file,skills,skills", "distinct"),
+            ("file,,skills", "distinct"),
+            ("", "distinct"),
+        )
+        for value, message in refusals:
+            with self.subTest(value=value), self.assertRaisesRegex(ValueError, message):
+                parse_arm_toolsets(value)
+
+    def test_a_signed_setup_needs_canonical_toolsets(self) -> None:
+        digest = exposure_digest(())
+        self.assertEqual(arm_setup_errors({"omh_plugin": False, "exposure_digest": digest, "toolsets": FST}), [])
+        for toolsets in ("terminal,file,skills", "file,skills,web", "file", 3, None):
+            with self.subTest(toolsets=toolsets):
+                self.assertTrue(arm_setup_errors(
+                    {"omh_plugin": False, "exposure_digest": digest, "toolsets": toolsets}))
+        self.assertTrue(arm_setup_errors({"omh_plugin": False, "exposure_digest": digest}),
+                        "a setup without toolsets proves nothing about them")
+
+
 class FanInArmSetupTests(unittest.TestCase):
     def test_arm_setup_error_names_each_mismatch(self) -> None:
         skills = ("code-review",)
-        good_variant = ArmSetup(True, exposure_digest(skills))
-        good_baseline = ArmSetup(False, exposure_digest(()))
-        self.assertIsNone(arm_setup_error(good_variant, ArmRole.VARIANT, skills))
-        self.assertIsNone(arm_setup_error(good_baseline, ArmRole.BASELINE, ()))
-        self.assertEqual(arm_setup_error(None, ArmRole.VARIANT, skills), "missing signed arm setup")
-        self.assertEqual(arm_setup_error(ArmSetup(False, exposure_digest(skills)), ArmRole.VARIANT, skills),
+        good_variant = ArmSetup(True, exposure_digest(skills), FS)
+        good_baseline = ArmSetup(False, exposure_digest(()), FS)
+        self.assertIsNone(arm_setup_error(good_variant, ArmRole.VARIANT, skills, FS))
+        self.assertIsNone(arm_setup_error(good_baseline, ArmRole.BASELINE, (), FS))
+        self.assertEqual(arm_setup_error(None, ArmRole.VARIANT, skills, FS), "missing signed arm setup")
+        self.assertEqual(arm_setup_error(ArmSetup(False, exposure_digest(skills), FS), ArmRole.VARIANT, skills, FS),
                          "variant arm ran without the OMH plugin")
-        self.assertEqual(arm_setup_error(ArmSetup(True, exposure_digest(())), ArmRole.BASELINE, ()),
+        self.assertEqual(arm_setup_error(ArmSetup(True, exposure_digest(()), FS), ArmRole.BASELINE, (), FS),
                          "baseline arm ran with the OMH plugin")
-        self.assertEqual(arm_setup_error(ArmSetup(True, exposure_digest(())), ArmRole.VARIANT, skills),
+        self.assertEqual(arm_setup_error(ArmSetup(True, exposure_digest(()), FS), ArmRole.VARIANT, skills, FS),
                          "arm setup skills do not match exposed_skills")
+        self.assertEqual(arm_setup_error(good_variant, ArmRole.VARIANT, skills, FST),
+                         "arm setup toolsets do not match the run's declared toolsets")
+        self.assertIsNone(arm_setup_error(ArmSetup(True, exposure_digest(skills), FST), ArmRole.VARIANT, skills, FST))
 
     def test_fan_in_refuses_a_matrix_whose_variant_ran_without_the_plugin(self) -> None:
         from paired_run_execution_support import arm_setup_record
@@ -351,6 +443,39 @@ class FanInArmSetupTests(unittest.TestCase):
         self.assertTrue(all(b.endswith("variant arm ran without the OMH plugin")
                             for b in raised.exception.blockers), raised.exception.blockers)
 
+    def _fan_in(self, toolsets_for, declared: str):
+        from paired_run_execution_support import arm_setup_record
+        from test_paired_run_execution_fan_in import _execute, _request
+        import paired_run_execution_support as support
+
+        original = support.arm_setup_record
+        with TemporaryDirectory(prefix="omh-arm-fan-in-") as raw:
+            home = (Path(raw) / ".omh").resolve()
+            support.arm_setup_record = lambda plugin, skills: arm_setup_record(plugin, skills, toolsets_for(plugin))
+            try:
+                report = replace(_execute(home), arm_toolsets=declared)
+            finally:
+                support.arm_setup_record = original
+            return build_paired_run_execution_decision(_request(report), report, home)
+
+    def test_fan_in_accepts_both_arms_on_the_declared_terminal_toolsets(self) -> None:
+        self.assertIsNotNone(self._fan_in(lambda plugin: FST, FST))
+
+    def test_fan_in_refuses_cells_whose_toolsets_differ_from_the_declared_ones(self) -> None:
+        with self.assertRaises(PairedRunExecutionFanInError) as raised:
+            self._fan_in(lambda plugin: FS, FST)
+        self.assertTrue(raised.exception.blockers)
+        self.assertTrue(all(b.endswith("arm setup toolsets do not match the run's declared toolsets")
+                            for b in raised.exception.blockers), raised.exception.blockers)
+
+    def test_fan_in_refuses_arms_that_ran_with_different_toolsets(self) -> None:
+        with self.assertRaises(PairedRunExecutionFanInError) as raised:
+            self._fan_in(lambda plugin: FST if plugin else FS, FST)
+        blockers = raised.exception.blockers
+        self.assertIn("report: arms ran with different toolsets", blockers)
+        # Only the two baseline cells (one per task) ran with other toolsets.
+        self.assertEqual(sum(b.endswith("declared toolsets") for b in blockers), 2, blockers)
+
 
 class NonPairedCallersKeepSafeModeTests(unittest.TestCase):
     SANCTIONED = {"src/coding/paired_run_hermes_adapter.py", "src/coding/paired_run_arm_home.py"}
@@ -369,6 +494,39 @@ class NonPairedCallersKeepSafeModeTests(unittest.TestCase):
                    "src/coding/dispatch_failure_recovery.py"}
         for relative in callers:
             self.assertIn("HermesChildRequest(", (REPO / relative).read_text(encoding="utf-8"))
+
+    def test_only_the_paired_run_path_builds_an_arm_home_or_chooses_its_toolsets(self) -> None:
+        # An arm home is what lets a child leave `--toolsets file`; only the
+        # paired-run path may build one or carry the run's toolsets choice.
+        sanctioned = {
+            "PairedRunArmHome": {"src/coding/paired_run_arm_home.py"},
+            "prepare_arm_home": {"src/coding/paired_run_local_runner.py"},
+            "PairedRunLocalRunnerConfig": {"src/coding/paired_run_local_runner.py", "src/commands/paired_run.py"},
+        }
+        offenders = []
+        for path in sorted((REPO / "src").rglob("*.py")):
+            relative = path.relative_to(REPO).as_posix()
+            for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
+                if not isinstance(node, ast.Call):
+                    continue
+                name = getattr(node.func, "id", getattr(node.func, "attr", ""))
+                if name in sanctioned and relative not in sanctioned[name]:
+                    offenders.append(f"{relative}: {name}")
+                if any(k.arg == "arm_toolsets" for k in node.keywords) and relative not in sanctioned[
+                    "PairedRunLocalRunnerConfig"
+                ]:
+                    offenders.append(f"{relative}: arm_toolsets")
+        self.assertEqual(offenders, [])
+
+    def test_the_safe_mode_argv_literal_still_names_file_only(self) -> None:
+        tree = ast.parse((REPO / "src/coding/hermes_child_dispatch.py").read_text(encoding="utf-8"))
+        literals = [
+            [elt.value for elt in node.elts if isinstance(elt, ast.Constant)]
+            for node in ast.walk(tree)
+            if isinstance(node, ast.Tuple) and any(
+                isinstance(elt, ast.Constant) and elt.value == "--safe-mode" for elt in node.elts)
+        ]
+        self.assertEqual(literals, [["--safe-mode", "--ignore-user-config", "--ignore-rules", "--toolsets", "file"]])
 
     @unittest.skipIf(os.name == "nt", "POSIX fake executable")
     def test_request_without_arm_home_keeps_the_safe_mode_argv_and_env(self) -> None:
