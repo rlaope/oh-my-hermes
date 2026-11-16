@@ -4,6 +4,10 @@ All notable changes will be documented here.
 
 ## Unreleased
 
+- **omher: reasoning levels read as their own names in every language.** The model pill, the picker and Settings show
+  none, low, medium, high, xhigh and max as Hermes, Codex and Claude Code name them, instead of translated words
+  ("높음", "最大") or renamed ones (xhigh as "Max").
+
 - **An OMH TUI reply no longer hangs on a rail.** The `⚚ Hermes · <model>` header starts at the left edge and the
   reply's text sits two cells in, with no `┃` beside it, so a reply reads apart from your prompts and the tool calls,
   which keep their rails. The two cells the bar took go to the reply's text, and a copy still leaves the margin out.
