@@ -316,25 +316,58 @@ pub struct Status {
 
 // ---- parsing ------------------------------------------------------------------------------------
 
-/// omher's one masker (src/lib/secrets.json: the bridge and the page use the same two patterns).
+/// omher's one masker (src/lib/secrets.json: the bridge and the page use the same patterns).
 const SECRETS: &str = include_str!("../../src/lib/secrets.json");
 
-fn secrets() -> &'static (Regex, Regex, String) {
-    static R: OnceLock<(Regex, Regex, String)> = OnceLock::new();
+struct Secrets {
+    /// a fixed-length family broken over lines: (pattern, body length)
+    split: Vec<(Regex, usize)>,
+    tokens: Regex,
+    assigned: Regex,
+    mask: String,
+}
+
+fn secrets() -> &'static Secrets {
+    static R: OnceLock<Secrets> = OnceLock::new();
     R.get_or_init(|| {
         let v: Value = serde_json::from_str(SECRETS).expect("secrets.json");
         let get = |k: &str| v[k].as_str().expect("secrets.json key").to_string();
+        let split = v["split"].as_array().expect("secrets.json split").iter()
+            .map(|e| (Regex::new(e[0].as_str().expect("split pattern")).expect("split pattern"), e[1].as_u64().expect("split length") as usize))
+            .collect();
         let tokens = Regex::new(&get("tokens")).expect("secrets.json tokens");
         let assigned = RegexBuilder::new(&get("assigned")).case_insensitive(true).build().expect("secrets.json assigned");
-        (tokens, assigned, get("mask"))
+        Secrets { split, tokens, assigned, mask: get("mask") }
     })
+}
+
+/// A `split` match: the prefix and the body's pieces up to exactly `n` token characters become `mask` (the pieces
+/// after stay); left as it is when the pieces do not make exactly `n` at the end of one.
+fn split_token(c: &regex::Captures, n: usize, mask: &str) -> String {
+    let body = &c[1];
+    let mut k = 0;
+    for (i, ch) in body.char_indices() {
+        if ch.is_whitespace() {
+            continue;
+        }
+        k += 1;
+        if k == n {
+            let rest = &body[i + ch.len_utf8()..];
+            return if rest.is_empty() || rest.starts_with(char::is_whitespace) { format!("{mask}{rest}") } else { c[0].to_string() };
+        }
+    }
+    c[0].to_string()
 }
 
 /// `t` with every token-like string replaced by `••••` (an assignment keeps its name: `token=••••`).
 pub fn mask_secrets(t: &str) -> String {
-    let (tokens, assigned, mask) = secrets();
-    let t = tokens.replace_all(t, mask.as_str());
-    assigned.replace_all(&t, |c: &regex::Captures| format!("{}={mask}", &c[1])).into_owned()
+    let s = secrets();
+    let mut t = t.to_string();
+    for (rx, n) in &s.split {
+        t = rx.replace_all(&t, |c: &regex::Captures| split_token(c, *n, &s.mask)).into_owned();
+    }
+    let t = s.tokens.replace_all(&t, s.mask.as_str());
+    s.assigned.replace_all(&t, |c: &regex::Captures| format!("{}={}", &c[1], s.mask)).into_owned()
 }
 
 /// A text field of a CLI answer: control characters out, token-like strings masked.

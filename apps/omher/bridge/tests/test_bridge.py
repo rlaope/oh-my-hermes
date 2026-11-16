@@ -4309,6 +4309,7 @@ class OneMasker(unittest.TestCase):
     def test_same_patterns_as_the_shared_file(self):
         spec = json.loads((Path(ob.__file__).parent.parent / "src" / "lib" / "secrets.json").read_text(encoding="utf-8"))
         self.assertEqual((ob.SECRET_TOKENS, ob.SECRET_ASSIGNED, ob.SECRET_MASK), (spec["tokens"], spec["assigned"], spec["mask"]))
+        self.assertEqual([list(e) for e in ob.SECRET_SPLIT], spec["split"])
 
     def test_the_shared_cases(self):
         # src/lib/secrets.cases.json: the same table the page (secrets.test.ts) and the shell (tasks.rs) run

@@ -3307,53 +3307,45 @@ NS_CLIP = 4096             # bytes of one step's input or result sent to the UI
 NS_TEXT = 16000            # chars of one bubble
 NS_ITEMS = 400             # items of one session
 NS_REF = re.compile(r"^(hermes|claude|claude-sub|codex):([A-Za-z0-9_.:/@-]{1,300})$")
-# omher's one masker: the same two patterns as src/lib/secrets.json, which the page (src/lib/secrets.ts) and the
+# omher's one masker: the same patterns as src/lib/secrets.json, which the page (src/lib/secrets.ts) and the
 # desktop shell (tasks.rs mask_secrets) read; bridge/tests pin these strings to that file.
 SECRET_MASK = "••••"
 SECRET_TOKENS = (
-    r"\b(?:(?:gh[pousr]_[A-Za-z0-9](?:[A-Za-z0-9]{9}|(?:[ \t]?\r?\n[ \t]?|[ \t])[A-Za-z0-9]{9}|[A-Za-z0-9](?:[ \t]?\r?"
-    r"\n[ \t]?|[ \t])[A-Za-z0-9]{8}|[A-Za-z0-9]{2}(?:[ \t]?\r?\n[ \t]?|[ \t])[A-Za-z0-9]{7}|[A-Za-z0-9]{3}(?:[ \t]?\r?"
-    r"\n[ \t]?|[ \t])[A-Za-z0-9]{6}|[A-Za-z0-9]{4}(?:[ \t]?\r?\n[ \t]?|[ \t])[A-Za-z0-9]{5}|[A-Za-z0-9]{5}(?:[ \t]?\r?"
-    r"\n[ \t]?|[ \t])[A-Za-z0-9]{4}|[A-Za-z0-9]{6}(?:[ \t]?\r?\n[ \t]?|[ \t])[A-Za-z0-9]{3}|[A-Za-z0-9]{7}(?:[ \t]?\r?"
-    r"\n[ \t]?|[ \t])[A-Za-z0-9]{2}|[A-Za-z0-9]{8}(?:[ \t]?\r?\n[ \t]?|[ \t])[A-Za-z0-9])(?:[A-Za-z0-9]{9}|(?:[ \t]?\r"
-    r"?\n[ \t]?|[ \t])[A-Za-z0-9]{9}|[A-Za-z0-9](?:[ \t]?\r?\n[ \t]?|[ \t])[A-Za-z0-9]{8}|[A-Za-z0-9]{2}(?:[ \t]?\r?\n"
-    r"[ \t]?|[ \t])[A-Za-z0-9]{7}|[A-Za-z0-9]{3}(?:[ \t]?\r?\n[ \t]?|[ \t])[A-Za-z0-9]{6}|[A-Za-z0-9]{4}(?:[ \t]?\r?\n"
-    r"[ \t]?|[ \t])[A-Za-z0-9]{5}|[A-Za-z0-9]{5}(?:[ \t]?\r?\n[ \t]?|[ \t])[A-Za-z0-9]{4}|[A-Za-z0-9]{6}(?:[ \t]?\r?\n"
-    r"[ \t]?|[ \t])[A-Za-z0-9]{3}|[A-Za-z0-9]{7}(?:[ \t]?\r?\n[ \t]?|[ \t])[A-Za-z0-9]{2}|[A-Za-z0-9]{8}(?:[ \t]?\r?\n"
-    r"[ \t]?|[ \t])[A-Za-z0-9])(?:[A-Za-z0-9]{9}|(?:[ \t]?\r?\n[ \t]?|[ \t])[A-Za-z0-9]{9}|[A-Za-z0-9](?:[ \t]?\r?\n[ "
-    r"\t]?|[ \t])[A-Za-z0-9]{8}|[A-Za-z0-9]{2}(?:[ \t]?\r?\n[ \t]?|[ \t])[A-Za-z0-9]{7}|[A-Za-z0-9]{3}(?:[ \t]?\r?\n[ "
-    r"\t]?|[ \t])[A-Za-z0-9]{6}|[A-Za-z0-9]{4}(?:[ \t]?\r?\n[ \t]?|[ \t])[A-Za-z0-9]{5}|[A-Za-z0-9]{5}(?:[ \t]?\r?\n[ "
-    r"\t]?|[ \t])[A-Za-z0-9]{4}|[A-Za-z0-9]{6}(?:[ \t]?\r?\n[ \t]?|[ \t])[A-Za-z0-9]{3}|[A-Za-z0-9]{7}(?:[ \t]?\r?\n[ "
-    r"\t]?|[ \t])[A-Za-z0-9]{2}|[A-Za-z0-9]{8}(?:[ \t]?\r?\n[ \t]?|[ \t])[A-Za-z0-9])(?:[A-Za-z0-9]{8}|(?:[ \t]?\r?\n["
-    r" \t]?|[ \t])[A-Za-z0-9]{8}|[A-Za-z0-9](?:[ \t]?\r?\n[ \t]?|[ \t])[A-Za-z0-9]{7}|[A-Za-z0-9]{2}(?:[ \t]?\r?\n[ \t"
-    r"]?|[ \t])[A-Za-z0-9]{6}|[A-Za-z0-9]{3}(?:[ \t]?\r?\n[ \t]?|[ \t])[A-Za-z0-9]{5}|[A-Za-z0-9]{4}(?:[ \t]?\r?\n[ \t"
-    r"]?|[ \t])[A-Za-z0-9]{4}|[A-Za-z0-9]{5}(?:[ \t]?\r?\n[ \t]?|[ \t])[A-Za-z0-9]{3}|[A-Za-z0-9]{6}(?:[ \t]?\r?\n[ \t"
-    r"]?|[ \t])[A-Za-z0-9]{2}|[A-Za-z0-9]{7}(?:[ \t]?\r?\n[ \t]?|[ \t])[A-Za-z0-9])\b|glpat-[A-Za-z0-9_-](?:[A-Za-z0-9"
-    r"_-]{5}|(?:[ \t]?\r?\n[ \t]?|[ \t])[A-Za-z0-9_-]{5}|[A-Za-z0-9_-](?:[ \t]?\r?\n[ \t]?|[ \t])[A-Za-z0-9_-]{4}|[A-Z"
-    r"a-z0-9_-]{2}(?:[ \t]?\r?\n[ \t]?|[ \t])[A-Za-z0-9_-]{3}|[A-Za-z0-9_-]{3}(?:[ \t]?\r?\n[ \t]?|[ \t])[A-Za-z0-9_-]"
-    r"{2}|[A-Za-z0-9_-]{4}(?:[ \t]?\r?\n[ \t]?|[ \t])[A-Za-z0-9_-])(?:[A-Za-z0-9_-]{5}|(?:[ \t]?\r?\n[ \t]?|[ \t])[A-Z"
-    r"a-z0-9_-]{5}|[A-Za-z0-9_-](?:[ \t]?\r?\n[ \t]?|[ \t])[A-Za-z0-9_-]{4}|[A-Za-z0-9_-]{2}(?:[ \t]?\r?\n[ \t]?|[ \t]"
-    r")[A-Za-z0-9_-]{3}|[A-Za-z0-9_-]{3}(?:[ \t]?\r?\n[ \t]?|[ \t])[A-Za-z0-9_-]{2}|[A-Za-z0-9_-]{4}(?:[ \t]?\r?\n[ \t"
-    r"]?|[ \t])[A-Za-z0-9_-])(?:[A-Za-z0-9_-]{5}|(?:[ \t]?\r?\n[ \t]?|[ \t])[A-Za-z0-9_-]{5}|[A-Za-z0-9_-](?:[ \t]?\r?"
-    r"\n[ \t]?|[ \t])[A-Za-z0-9_-]{4}|[A-Za-z0-9_-]{2}(?:[ \t]?\r?\n[ \t]?|[ \t])[A-Za-z0-9_-]{3}|[A-Za-z0-9_-]{3}(?:["
-    r" \t]?\r?\n[ \t]?|[ \t])[A-Za-z0-9_-]{2}|[A-Za-z0-9_-]{4}(?:[ \t]?\r?\n[ \t]?|[ \t])[A-Za-z0-9_-])(?:[A-Za-z0-9_-"
-    r"]{4}|(?:[ \t]?\r?\n[ \t]?|[ \t])[A-Za-z0-9_-]{4}|[A-Za-z0-9_-](?:[ \t]?\r?\n[ \t]?|[ \t])[A-Za-z0-9_-]{3}|[A-Za-"
-    r"z0-9_-]{2}(?:[ \t]?\r?\n[ \t]?|[ \t])[A-Za-z0-9_-]{2}|[A-Za-z0-9_-]{3}(?:[ \t]?\r?\n[ \t]?|[ \t])[A-Za-z0-9_-])"
-    r"\b)|(?:gh[pousr]_|github_pat_|glpat-|sk-|xox[abprs]-|AKIA)(?:[A-Za-z0-9_-]{8,}(?:(?:[ \t]?\r?\n[ \t]?|[ \t])[a-z"
-    r"_-]*[A-Z0-9][a-z_-]*[A-Z0-9][A-Za-z0-9_-]*){0,4}|[a-z_-]*[A-Z0-9][A-Za-z0-9_-]*(?:(?:[ \t]?\r?\n[ \t]?|[ \t])[a-"
-    r"z_-]*[A-Z0-9][a-z_-]*[A-Z0-9][A-Za-z0-9_-]*){1,4}))"
+    r"\b(?:gh[pousr]_|github_pat_|glpat-|sk-|xox[abprs]-|AKIA)(?:[A-Za-z0-9_-]{8,}(?:(?:[ \t]?\r?\n[ \t]?|[ \t])"
+    r"[a-z_-]*[A-Z0-9][a-z_-]*[A-Z0-9][A-Za-z0-9_-]*){0,4}|[a-z_-]*[A-Z0-9][A-Za-z0-9_-]*(?:(?:[ \t]?\r?\n[ \t]?|[ \t])"
+    r"[a-z_-]*[A-Z0-9][a-z_-]*[A-Z0-9][A-Za-z0-9_-]*){1,4})"
+)
+SECRET_SPLIT = (
+    (r"\b(?:gh[pousr]_)([A-Za-z0-9]+(?:(?:[ \t]?\r?\n[ \t]?|[ \t])[A-Za-z0-9]+){1,4})", 36),
+    (r"\b(?:glpat-)([A-Za-z0-9_-]+(?:(?:[ \t]?\r?\n[ \t]?|[ \t])[A-Za-z0-9_-]+){1,4})", 20),
 )
 SECRET_ASSIGNED = r"""\b([a-z_-]*(?:credentials?|token|password|passwd|secret|api[_-]?key))=[^\s"'<>&;,)\]]+"""
+_SECRET_SPLIT = tuple((re.compile(p), n) for p, n in SECRET_SPLIT)
 _SECRET = re.compile(SECRET_TOKENS)
 _SECRET_ASSIGNED = re.compile(SECRET_ASSIGNED, re.IGNORECASE)
 _HERMES_SID = re.compile(r"^[A-Za-z0-9_-]{1,80}$")
 
 
+def _split_token(m: re.Match, n: int) -> str:
+    """A `SECRET_SPLIT` match: the prefix and the body's pieces up to exactly *n* token characters become `••••` (the
+    pieces after stay); left as it is when the pieces do not make exactly *n* at the end of one."""
+    body, k = m.group(1), 0
+    for i, c in enumerate(body):
+        if c.isspace():
+            continue
+        k += 1
+        if k == n:
+            return SECRET_MASK + body[i + 1:] if i + 1 == len(body) or body[i + 1].isspace() else m.group(0)
+    return m.group(0)
+
+
 def mask_secrets(text: str) -> str:
-    """Token-like strings (`sk-…`, `ghp_…`, `glpat-…`, `xoxb-…`, `AKIA…`, also one broken by line breaks, taken by
-    its known length for `gh?_` (36) and `glpat-` (20) in any letter case) replaced by
-    `••••`, and the value of a `token=` / `credential=` / `password=` / `secret=` / `api_key=` replaced the same way
+    """Token-like strings (`sk-…`, `ghp_…`, `glpat-…`, `xoxb-…`, `AKIA…`) replaced by `••••`: also one broken by line
+    breaks or a space, taken by its known length for `gh?_` (36) and `glpat-` (20) in any letter case, or by its shape
+    for the rest; the value of a `token=` / `credential=` / `password=` / `secret=` / `api_key=` replaced the same way
     (the name stays)."""
+    for rx, n in _SECRET_SPLIT:
+        text = rx.sub(lambda m: _split_token(m, n), text)
     return _SECRET_ASSIGNED.sub(lambda m: m.group(1) + "=" + SECRET_MASK, _SECRET.sub(SECRET_MASK, text))
 
 
