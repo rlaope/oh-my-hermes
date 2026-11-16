@@ -30,6 +30,8 @@ import unicodedata
 from typing import Final
 
 from . import skill_shortlist as _skill_shortlist
+from .boundary_phrase import contains_boundary_phrase
+from .executor_cues import NAMED_CODING_AGENT_PHRASES
 from .name_report_cues import COINED_NAMES, asks_after_the_name, asks_for_something, reports_on_the_name
 
 DAG_ULW: Final = "dag-ulw"
@@ -2452,3 +2454,104 @@ def names_several_features(text: str, links: tuple[str, ...] = ()) -> bool:
         return True
     span = _EN_RANGE.match(words)
     return bool(span) and all(_en_range_end(span.group(end)) for end in ("start", "end"))
+
+
+# A backlog of separate code changes, handed over as a list: four or more items, each on its own line after a marker
+# ("1.", "2)", "-", "*", "•", "a)"), in a request whose own words, outside the items, ask for the changes ("these six
+# issues are open: fix all of them", "아래 버그들 전부 고쳐줘") and show the work is code, there or in two of the items. Each
+# item is a part a child can take on its own, so the router dispatches dag-ulw and the route hint starts it; no breadth
+# word or ultrawork score is needed. Not a backlog: a list of three or fewer (a child's start, repo read and handoff
+# cost more than they save), a list the request reviews, triages, plans, estimates or asks about rather than changes
+# ("which of these should I fix first?", "review these changes", "turn these into tickets"), a list it holds or puts
+# off, one it hands to a named coding agent or skill, items of one or two words (failing test ids, file names), and a
+# list with no code in it (chores, a reading list). Items are read only as list lines of the executable text, so a
+# fenced or quoted list never counts.
+BACKLOG_MIN_ITEMS: Final = 4
+_BACKLOG_MAX_CHARS: Final = 12000
+_BACKLOG_ITEM: Final = re.compile(r"^[ \t]*(?:\d{1,2}[.)]|[-*•]|\(?[a-h]\))[ \t]+(?P<item>\S[^\n]*)$", re.MULTILINE)
+# An item says one change: three English words or two Korean ones at least, so a list of test ids or paths is no
+# backlog of parts ("- tests/test_a.py::test_x").
+_BACKLOG_ITEM_MIN_WORDS: Final = 3
+_BACKLOG_KOREAN_ITEM_MIN_WORDS: Final = 2
+# Code named: a source path, a dotted name or a call, a snake_case name, a test runner or test, an error, or a word for
+# code. A bare "issue" or "item" names nothing; "bug" and "crash" are code's.
+_BACKLOG_CODE: Final = re.compile(
+    r"\b\w+\.(?:py|pyi|js|jsx|ts|tsx|go|rs|java|kt|rb|php|cs|c|cc|cpp|h|hpp|swift|scala|sh|sql|vue|svelte)\b"
+    r"|\b[a-z_]\w*\.[a-z_]\w*(?:\.[a-z_]\w*)*\b|\b[a-z_]\w*\(|\b[a-z]+_[a-z_]+\b"
+    r"|\b(?:tests?|unit\s?tests?|unittest|pytest|jest|vitest|traceback|stack\s?trace|exceptions?|segfault|regressions?)\b"
+    r"|\b\w*(?:error|exception)\b"
+    r"|\b(?:functions?|methods?|class(?:es)?|modules?|packages?|code|codebase|repo|repository|bugs?|crash(?:es|ing)?"
+    r"|endpoints?|api|cli|sdk|library|script|compiler|parser|schema|migration|build|ci)\b"
+    r"|코드|함수|메서드|클래스|모듈|패키지|테스트|에러|오류|예외|버그|크래시|엔드포인트|저장소|레포|빌드|파서|스키마"
+)
+# The request's own words ask for the change: a change verb, in English or Korean.
+_BACKLOG_CHANGE: Final = re.compile(
+    r"\b(?:fix|fixes|resolve|implement|address|tackle|handle|close|add|build|update|refactor|clear|ship|land"
+    r"|work\s+through|get\s+through|knock\s+out|take\s+care\s+of)\b"
+    r"|고쳐|고치|수정해|수정하|해결해|해결하|구현해|구현하|처리해|처리하|반영해|추가해|만들어|개발해"
+)
+# ... over the whole list, not one item of it: every, all, each, these, them, the following, the list, a count.
+_BACKLOG_SCOPE: Final = re.compile(
+    r"\b(?:all|every|each|these|them|those|following|below|list|backlog|checklist|todos?|tickets|issues|bugs|items"
+    r"|tasks|features|changes|requests|two|three|four|five|six|seven|eight|nine|ten|twelve|\d+)\b"
+    r"|전부|모두|각각|다\s|다$|아래|다음|이것들|목록|리스트|이슈들|버그들|\d+\s*개|여러|네\s*개|다섯|여섯|일곱"
+)
+# The list is to be looked at, sorted, planned or turned into something else, not changed; or the change is refused.
+_BACKLOG_NOT_THE_CHANGE: Final = re.compile(
+    r"(?:^|[.!:;,\n]\s*|\b(?:and|then|please|pls|just|only|first|to|you|we|i|could|can|would|will|should)\s+)"
+    r"(?:review|triage|prioriti[sz]e|estimate|rank|summari[sz]e|explain|describe|plan|scope|groom|categori[sz]e"
+    r"|label|assess|evaluate|comment\s+on|sort|compare|translate|proofread|look\s+over|go\s+over)\b"
+    r"|\b(?:turn|convert|break)\s+(?:\S+\s+){0,3}into\s+(?:\S+\s+){0,2}(?:issues|tickets|stories|tasks|a\s+plan)\b"
+    r"|\b(?:file|open|create|write)\s+(?:up\s+)?(?:an?\s+|the\s+)?(?:issues?|tickets?|stories|jira|a\s+plan)\b"
+    r"|\b(?:don'?t|do\s+not|never)\s+(?:fix|implement|change|resolve|code)\b"
+    r"|리뷰|검토|우선순위|순서\s*정|계획|견적|설명해|요약|이슈로|티켓으로|고치지\s*마|수정하지\s*마|건드리지\s*마"
+)
+
+
+def _backlog_parts(text: str) -> tuple[list[str], str]:
+    """The list items of ``text`` that each say a change, and the request's own words around them."""
+    items = [match.group("item").strip() for match in _BACKLOG_ITEM.finditer(text)]
+    frame = _BACKLOG_ITEM.sub(" ", text)
+    kept = [
+        item for item in items
+        if len(item.split()) >= (_BACKLOG_KOREAN_ITEM_MIN_WORDS if re.search(r"[가-힣]", item) else _BACKLOG_ITEM_MIN_WORDS)
+    ]
+    return kept, frame
+
+
+def lists_several_code_changes(text: str, links: tuple[str, ...] = ()) -> bool:
+    """Whether ``text`` hands over a backlog of separate code changes as a list (`BACKLOG_MIN_ITEMS` or more items, each
+    a change of its own) and asks, in its own words, for all of them to be made. The router dispatches dag-ulw on it and
+    the route hint starts it, each item its own node; ``links`` are the message's links, which the executable text
+    leaves out."""
+    if not isinstance(text, str) or len(text) > _BACKLOG_MAX_CHARS:
+        return False
+    items, frame = _backlog_parts(text)
+    if len(items) < BACKLOG_MIN_ITEMS:
+        return False
+    plain = _folded(frame)
+    code_items = sum(1 for item in items if _BACKLOG_CODE.search(_folded(item)))
+    if not (_BACKLOG_CODE.search(plain) or code_items >= 2):
+        return False
+    if not _BACKLOG_CHANGE.search(plain) or not _BACKLOG_SCOPE.search(plain) or _BACKLOG_NOT_THE_CHANGE.search(plain):
+        return False
+    request = " ".join(plain.split())
+    if _asks_to_be_told(request) or any(link and _PULL_REQUEST_ADDRESS.search(link.casefold()) for link in links):
+        return False
+    return not (
+        request.startswith(("/", "$", "@", "./"))
+        or _opens_with_a_skill_name(request)
+        or _names_a_skill_as_the_instrument(request)
+        or _STOP_OR_HOLD.search(request)
+        or _says_a_deferral(request)
+        or _says_a_schedule(request)
+        or _takes_it_back(request)
+        or _UNTIL.search(request)
+        or names_ultrawork(request)
+        or _names_a_coding_agent(request)
+    )
+
+
+def _names_a_coding_agent(folded: str) -> bool:
+    """Whether ``folded`` names a coding agent to do the work (\"have codex fix …\"): that owner's handoff, not a graph."""
+    return contains_boundary_phrase(folded, NAMED_CODING_AGENT_PHRASES)

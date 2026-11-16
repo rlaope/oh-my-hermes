@@ -54,7 +54,9 @@
    `for_parent: [...]` and the say tells you to do each node yourself, write its handoff at the path
    the say gives, and settle it, without `delegate_task` -- those nodes are never offered to a child again.
    `held_for_slots` also lists ready nodes left for the next turn when no free background slot remains.
-4. End the turn with one status line. Each completion re-enters as a new turn.
+4. End the turn with one status line. Each completion re-enters as a new turn. When `delegate_task` returns the
+   children's results inside the call instead (a finite one-shot session joins them there), nothing re-enters:
+   settle each node from its handoff and dispatch what settle returns in the same turn, until the run is done.
 5. On a completion, read the node's handoff file, then `omh_dag action=settle node=<id> outcome=<...>`.
    `accepted` is refused while the handoff file is missing or when Hermes reported the child failed.
    On a Docker or SSH terminal the handoff files live in that terminal, under its user's home, and OMH

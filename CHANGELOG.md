@@ -80,6 +80,16 @@ All notable changes will be documented here.
   how many ran at once, and which models the cell's sessions used, and fan-in refuses a delegating cell whose trace is
   missing or names another model. A delegating cell's usage reports no cost rather than one that may count the
   children twice; tokens and API calls still sum. Without `delegation` nothing changes.
+- **A listed backlog of separate code changes runs as a dag-ulw graph.** A request that hands over four or more list
+  items, each its own change, and asks in its own words for all of them to be made in code ("these six issues are
+  open: fix all of them", "아래 버그들 전부 고쳐줘") is dispatched to `dag-ulw` by the router, and Hermes' per-turn hint
+  starts it with each item as its own build node and a verify node after them. Before, such a backlog went to whatever
+  lane one item's word scored (a "stock" lot took a six-bug job to `live-info-operator`) and the skill's own size cue
+  never ran. A list of three or fewer, one bug, a list to review, prioritize, explain, plan or file as issues, one held
+  or put off, one handed to a named coding agent, a fenced list, failing test files by path, and chores or reading stay
+  where they were. The dag-ulw skill now also says what to do where `delegate_task` returns its children inside the
+  call (a finite one-shot session): settle and dispatch the next layer in the same turn. "current" said of the
+  workspace (the current directory, branch or file) is no longer read as a live-information cue.
 
 ## 4.0.8 - 2026-11-15
 
