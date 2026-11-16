@@ -28,13 +28,15 @@ from unittest.mock import patch
 
 from test_hermes_gateway_health import iso, write_home
 from test_tui_modes import SID, drawn, make_app, notices, type_text
-from test_tui_respawn import ENVIRON, RESUMED, STORED, RespawnClient, Spawner
+from test_tui_respawn import ENVIRON, RESUMED, STORED, RespawnClient, Spawner, crashing
 from omh.tui import bot_board, gateway_restart, slash
 from omh.tui.app import (
     GATEWAY_CANCEL_CHOICE,
     GATEWAY_EXTERNAL_REATTACH_SECONDS,
     GATEWAY_EXTERNAL_REATTACHING_NOTICE,
     GATEWAY_STOPPED_REASON,
+    GATEWAY_STOP_WATCH_NOTICE,
+    GATEWAY_STOP_WATCH_SECONDS,
     GATEWAY_NOW_RUNS_NOTICE,
     GATEWAY_REATTACH_SECONDS,
     GATEWAY_REATTACHED_NOTICE,
@@ -67,7 +69,7 @@ from omh.tui.app import (
 from omh.tui.bot_board import Gateway, Platform
 from omh.tui.gateway import GatewayCallError, GatewayExited, GatewayTimeout, GatewayUnavailable
 from omh.tui.gateway_restart import RestartImpact, RestartResult
-from omh.tui.keys import DOWN, ENTER, ESCAPE, Key
+from omh.tui.keys import CHAR, DOWN, ENTER, ESCAPE, Key
 from omh.tui.transcript import NOTICE_ERROR, NOTICE_WARN
 
 HOST = Gateway(
@@ -575,7 +577,9 @@ class ExternalRestartTests(unittest.TestCase):
         self.assertEqual(len(spawner.made), 1)  # tried at once, while it drains
         self.assertIn(RECONNECTED_NOTICE.format(session=STORED), notices(app))  # the same owner, still draining
 
-    def test_a_stop_elsewhere_leaves_at_once_without_starting_the_service_again(self) -> None:
+    def test_a_stop_elsewhere_is_watched_without_a_try_then_leaves(self) -> None:
+        # `hermes gateway stop`: no restart asked, and nothing comes back. The screen waits out the watch without
+        # trying once (a try's ensure would start the service the person stopped), then leaves with the resume hint.
         records = {
             "draining to stop": Gateway("draining", True, 4242, updated=50.0),
             "stopped": Gateway("stopped", False, 4242, updated=50.0),
@@ -583,13 +587,64 @@ class ExternalRestartTests(unittest.TestCase):
         for name, stopped in records.items():
             for code in (1, 69):
                 with self.subTest(record=name, code=code):
-                    app, old, spawner, _now, _spawned = self.external(record=lambda at, stopped=stopped: stopped)
+                    app, old, spawner, now, _spawned = self.external(record=lambda at, stopped=stopped: stopped)
                     old.inbox.append(GatewayExited(code))
                     app._step()
                     self.assertEqual(app.exit_code, 1)
                     self.assertEqual(spawner.made, [])
+                    self.assertGreaterEqual(now[0] - 100.0, GATEWAY_STOP_WATCH_SECONDS)
+                    self.assertLess(now[0] - 100.0, GATEWAY_STOP_WATCH_SECONDS + 2)
+                    self.assertEqual(old.closed, 1)
+                    self.assertIn(GATEWAY_STOP_WATCH_NOTICE.format(seconds=GATEWAY_STOP_WATCH_SECONDS, session=STORED),
+                                  notices(app, NOTICE_WARN))
                     self.assertIn(GATEWAY_STOPPED_REASON, app.farewell)
                     self.assertIn("Resume the session in Hermes' own terminal", app.farewell)
+
+    def test_hermes_restart_without_a_service_reads_stopped_then_reattaches(self) -> None:
+        # The owner's 2026-11-16 drop: `hermes gateway restart` with no service stops the gateway as `gateway stop`
+        # does (a planned SIGTERM, restart_requested false), then starts a new pid about 7 s later. Every other TUI on
+        # that gateway used to leave at once; it now waits, tries nothing while the record says stopped, and reattaches.
+        stopping = Gateway("draining", True, 4242, updated=50.0)
+        stopped = Gateway("stopped", False, 4242, updated=52.0)
+        new = Gateway("running", True, 4343, updated=107.0)
+
+        def record(at: float) -> Gateway:
+            return stopping if at < 102.0 else stopped if at < 107.0 else new
+
+        app, old, spawner, now, spawned = self.external(
+            record=record, make=lambda at: RespawnClient(resume=self.BACK_RESUME))
+        type_text(app, "half a thought")
+        old.inbox.append(GatewayExited(1))
+        app._step()
+        self.assertIsNone(app.exit_code)
+        self.assertEqual(len(spawner.made), 1)  # one try, once the new record is live
+        self.assertGreaterEqual(spawned[0], 107.0)
+        self.assertEqual(spawner.made[0].blocking, [("session.resume", {"session_id": STORED, "cols": 80})])
+        self.assertEqual(app.composer.text, "half a thought")
+        self.assertEqual(app.respawned_at, [])  # a restart, not one of the crash respawn's three
+        self.assertIn(GATEWAY_REATTACHED_NOTICE.format(session=STORED), notices(app))
+        self.assertIsNone(app.reattach_since)
+
+    def test_a_start_that_failed_after_a_stop_ends_the_watch_with_hermes_reason(self) -> None:
+        stopped = Gateway("stopped", False, 4242, updated=52.0)
+        failed = Gateway("startup_failed", False, 4343, updated=60.0, exit_reason="config.yaml: bad model")
+        app, old, spawner, now, _spawned = self.external(record=lambda at: stopped if at < 105.0 else failed)
+        old.inbox.append(GatewayExited(1))
+        app._step()
+        self.assertEqual(app.exit_code, 1)
+        self.assertEqual(spawner.made, [])
+        self.assertLess(now[0] - 100.0, 10.0)
+        self.assertIn("the new Hermes gateway did not start (config.yaml: bad model)", app.farewell)
+
+    def test_ctrl_c_while_a_stop_is_watched_leaves(self) -> None:
+        app, old, spawner, now, _spawned = self.external(record=lambda at: Gateway("stopped", False, 4242, updated=50.0))
+        app.terminal.read = lambda timeout, wake=None: b"\x03" if timeout == 0.0 else b""  # type: ignore[method-assign]
+        old.inbox.append(GatewayExited(1))
+        app._step()
+        self.assertEqual(app.exit_code, 1)
+        self.assertEqual(spawner.made, [])
+        self.assertLess(now[0] - 100.0, 2.0)
+        self.assertIn(RESPAWN_LEFT_REASON, app.farewell)
 
     def test_a_stopped_gateway_is_said_plainly_with_how_to_start_it(self) -> None:
         # A state and the command that starts it again: not a crash, and nothing the person did wrong.
@@ -607,8 +662,10 @@ class ExternalRestartTests(unittest.TestCase):
         old.inbox.append(GatewayExited(1))
         app._step()
         self.assertEqual(app.exit_code, 1)
-        self.assertLess(now[0], 130.0)
+        tried = len(spawner.made)
+        self.assertLess(now[0], 130.0 + GATEWAY_STOP_WATCH_SECONDS)  # the stop is watched, not waited out to 150 s
         self.assertIn(GATEWAY_STOPPED_REASON, app.farewell)
+        self.assertEqual(len(spawner.made), tried)
 
     def test_a_start_that_failed_after_the_drop_ends_the_wait_with_hermes_reason(self) -> None:
         failed = Gateway("startup_failed", False, 4343, updated=60.0, exit_reason="config.yaml: bad model")
@@ -743,6 +800,95 @@ class ExternalRestartTests(unittest.TestCase):
         self.assertIsNone(app.exit_code)
         self.assertEqual(len(app.respawned_at), 1)
         self.assertNotIn(GATEWAY_EXTERNAL_REATTACHING_NOTICE.format(session=STORED), notices(app))
+
+
+
+class TypingWhileWaitingTests(unittest.TestCase):
+    """The owner's 2026-11-16 report: after a restart he typed and nothing showed until the gateway was back. Text and
+    its editing keys read while a reattach waits go into the composer at once and show on the next frame; whatever
+    would send, pick or leave a mode waits for the loop, in order, as before."""
+
+    DRAIN = Gateway("draining", True, 4242, updated=50.0, restart_requested=True)
+    NEW = Gateway("running", True, 4343, updated=110.0)
+
+    def waiting(self, *reads: bytes):
+        """An app whose gateway restarts elsewhere for 10 s; `reads` arrive one per poll while it waits."""
+        frames: list[tuple[float, str, list[str]]] = []
+        tests = ExternalRestartTests()
+
+        def make(at: float) -> RespawnClient:
+            # What the terminal shows at each try: the frames the TUI wrote itself while it waited, not one drawn here.
+            frames.append((at, app.composer.text, app.terminal.screen.lines()))  # type: ignore[attr-defined]
+            if at < 110.0:
+                return tests.not_up()
+            return RespawnClient(resume={**RESUMED, "authority_epoch": EPOCH_AFTER})
+
+        app, old, spawner, now, _spawned = tests.external(record=lambda at: self.DRAIN if at < 110.0 else self.NEW,
+                                                           make=make)
+        queued = iter(reads)
+        app.terminal.read = lambda timeout, wake=None: next(queued, b"") if timeout == 0.0 else b""  # type: ignore[method-assign]
+        old.inbox.append(GatewayExited(1))
+        app._step()
+        self.assertIsNone(app.exit_code)
+        return app, spawner, frames
+
+    def test_text_typed_while_it_reattaches_shows_before_it_is_back(self) -> None:
+        app, _spawner, frames = self.waiting(b"", "안녕 hel".encode(), b"\x7f")
+        later = [(text, screen) for at, text, screen in frames if at > 100.0]
+        self.assertTrue(later)
+        text, screen = later[-1]
+        self.assertEqual(text, "안녕 he")  # the Backspace went in too, in order
+        self.assertTrue(any("안녕 he" in row for row in screen), screen)
+        self.assertEqual(app.held_input, [])
+        self.assertEqual(app.composer.text, "안녕 he")
+
+    def test_enter_and_what_follows_it_wait_for_the_gateway_in_order(self) -> None:
+        app, spawner, frames = self.waiting(b"", b"go\r", b"next")
+        self.assertTrue(all(text in ("", "go") for _at, text, _screen in frames))  # Enter sent nothing meanwhile
+        self.assertEqual([key.char if key.name == CHAR else key.name for key in app.held_input],
+                         [ENTER, "n", "e", "x", "t"])  # held behind the Enter, in order
+        self.assertFalse([call for call in spawner.made[-1].calls if call[0] == "prompt.submit"])
+        app._take_input(b"")
+        self.assertEqual(app.composer.text, "next")
+
+    def test_keys_for_a_mode_or_a_paste_are_held_as_before(self) -> None:
+        cases = {
+            "vim normal": (lambda app: (app.composer.set_vim(True), app.composer.handle(Key(ESCAPE))), b"x"),
+            "a key list ?": (lambda app: None, b"?"),
+            "a paste": (lambda app: None, b"\x1b[200~pasted\x1b[201~"),
+        }
+        for name, (prepare, data) in cases.items():
+            with self.subTest(case=name):
+                tests = ExternalRestartTests()
+                app, old, _spawner, _now, _spawned = tests.external(
+                    record=lambda at: self.DRAIN if at < 110.0 else self.NEW,
+                    make=lambda at: tests.not_up() if at < 110.0 else RespawnClient(
+                        resume={**RESUMED, "authority_epoch": EPOCH_AFTER}))
+                prepare(app)
+                before = app.composer.text
+                queued = iter([b"", data])
+                app.terminal.read = lambda timeout, wake=None: next(queued, b"") if timeout == 0.0 else b""  # type: ignore[method-assign]
+                old.inbox.append(GatewayExited(1))
+                app._step()
+                self.assertEqual(app.composer.text, before)
+                self.assertTrue(app.held_input)
+
+    def test_a_question_open_on_the_new_gateway_takes_no_key_typed_before_it(self) -> None:
+        # Text typed while it waited went to the composer; the question the resume redelivers opens empty-handed.
+        app, _spawner, _frames = self.waiting(b"", b"abc")
+        self.assertEqual(app.composer.text, "abc")
+        self.assertIsNone(app.slot)
+
+    def test_a_crash_respawns_wait_draws_what_is_typed_at_once(self) -> None:
+        # A crash respawn has no status row counting seconds (`reattach_since` stays None), so nothing else redraws
+        # while `start` polls the cancel: the key itself must draw the frame.
+        app, _old, _spawner, _now = crashing()
+        app._render_when_due()
+        app.terminal.read = lambda timeout, wake=None: b"typed" if timeout == 0.0 else b""  # type: ignore[method-assign]
+        self.assertIsNone(app.reattach_since)
+        self.assertFalse(app._respawn_cancel())
+        self.assertEqual(app.composer.text, "typed")
+        self.assertTrue(any("typed" in row for row in app.terminal.screen.lines()))  # type: ignore[attr-defined]
 
 
 class RecordTests(unittest.TestCase):
