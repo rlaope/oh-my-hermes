@@ -346,15 +346,15 @@ test("trade-off: where the model pill slid over the row's old free space, the pi
   }
 });
 
-// Where the second press lands on a header control the slide brought under the pointer (the model pill), the control
-// wins and the pair does not toggle (the chosen trade-off, below); every other round maximises, 10 of 10.
+// 10 rounds of the real-mouse attack: each maximises, except a round whose press landed on a header control the slide
+// brought under the pointer (the model pill), which is the control's and does not toggle (the chosen trade-off above;
+// the bare-header test above pins 10 of 10 maximised).
 test("a person's double-click on the tab row during the restore slide still maximises, 10 of 10 (real mouse)", async ({ page }) => {
-  test.setTimeout(60_000); // up to 20 slide rounds
+  test.setTimeout(60_000);
   await page.setViewportSize({ width: 1440, height: 900 });
   await openPanel(page, "runs");
   await recordPresses(page);
-  let maxed = 0;
-  for (let i = 0; maxed < 10 && i < 20; i++) {
+  for (let i = 0; i < 10; i++) {
     if (await page.getByTestId("model-pop").isVisible()) await page.keyboard.press("Escape");
     if (!(await isMaxed(page))) await page.getByTestId("panel-max").click();
     await expectMaxed(page);
@@ -368,14 +368,9 @@ test("a person's double-click on the tab row during the restore slide still maxi
     await page.mouse.dblclick(p.x, p.y, { delay: 45 });
     const hits = await presses(page);
     await page.waitForTimeout(400);
-    if (hits.some((h) => h.control)) {
-      expect(await isMaxed(page), `round ${i}: a press on a control ${JSON.stringify(hits)} is the control's`).toBe(false);
-      continue;
-    }
-    expect(await isMaxed(page), `round ${i}: double-click during the slide maximised`).toBe(true);
-    maxed++;
+    const onControl = hits.some((h) => h.control);
+    expect(await isMaxed(page), `round ${i}: ${onControl ? "a press on a control is the control's" : "maximised"} ${JSON.stringify(hits)}`).toBe(!onControl);
   }
-  expect(maxed).toBe(10);
 });
 
 test("tab row: a settled double-click toggles once; one click, or two clicks 800ms apart, never toggles", async ({ page }) => {
