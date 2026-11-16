@@ -7,6 +7,7 @@ import { hhmm } from "../app/time";
 import { lang, t } from "../i18n";
 import { composing } from "../lib/ime";
 import { ArrowUp, Avatar, ChevronDown, Popover } from "../ui";
+import { PageBack } from "../app/PageBack";
 
 /** The bot chip: its face and name; a click lists every bot to pick from. */
 export function BotChip({
@@ -155,6 +156,7 @@ export function Toggle({
 export function PageHead({ title, sub, right }: { title: string; sub: string; right?: ReactNode }) {
   return (
     <header className="head pg-head" data-testid="header">
+      <PageBack />
       <span className="head-title">{title}</span>
       <span className="pg-sub">{sub}</span>
       {right && <div className="head-right">{right}</div>}

@@ -353,13 +353,26 @@ describe("unread", () => {
   it("counts assistant messages and routine lines for unselected bots only", () => {
     let s = reduce(initialState(), { type: "select", bot: "kami" });
     s = run(s, [{ event: "message", bot: "friren", id: "x1", text: "hello" }]);
-    s = run(s, [{ event: "routine.ran", bot: "friren", routine_id: "r1", name: "Repo watch", status: "ok", ts: T0 / 1000 }]);
+    s = run(s, [{ event: "routine.ran", bot: "friren", routine_id: "r1", name: "Repo watch", status: "error", ts: T0 / 1000 }]);
     s = run(s, [{ event: "message", bot: "kami", id: "k1", text: "mine" }]);
     expect(s.unread.friren).toBe(2);
     expect(s.unread.kami ?? 0).toBe(0);
     expect(s.chats.friren.items.some((i) => i.kind === "routine")).toBe(true);
     s = reduce(s, { type: "select", bot: "friren" });
     expect(s.unread.friren).toBe(0);
+  });
+
+  it("a routine run that went fine draws no line and no unread; a failed one does", () => {
+    let s = reduce(initialState(), { type: "select", bot: "kami" });
+    for (const status of ["ok", "success", "done", "completed", "", "silent"])
+      s = run(s, [{ event: "routine.ran", bot: "friren", routine_id: "r1", name: "sso refresh", status, ts: T0 / 1000 }]);
+    expect(s.chats.friren?.items.some((i) => i.kind === "routine") ?? false).toBe(false);
+    expect(s.unread.friren ?? 0).toBe(0);
+    ["error", "Failed", "delivery_failed"].forEach((status, n) => {
+      s = run(s, [{ event: "routine.ran", bot: "friren", routine_id: "r1", name: "sso refresh", status, ts: T0 / 1000 + 1 + n }]);
+    });
+    expect(s.chats.friren.items.filter((i) => i.kind === "routine")).toHaveLength(3);
+    expect(s.unread.friren).toBe(3);
   });
 
   it("does not double count a message re-delivered with the same id", () => {
@@ -681,6 +694,28 @@ describe("store", () => {
     store.actions.openSession("s1");
     store.actions.openSession(null);
     expect(store.getState().ui).toMatchObject({ view: "chat", session: null });
+  });
+
+  it("a page's back returns where it was opened from: a session, through another page, else the chat", () => {
+    const f = fakeBridge();
+    const store = createStore(f.bridge);
+    store.actions.openSession("s1");
+    store.actions.openAutomations();
+    store.actions.openPlugins("kami");
+    store.actions.openSettings();
+    store.actions.closeSettings();
+    expect(store.getState().ui).toMatchObject({ view: "session", session: "s1" });
+    store.actions.openSession(null);
+    store.actions.openPlugins("kami");
+    store.actions.closeSettings();
+    expect(store.getState().ui.view).toBe("chat");
+    // a session closed while the page was open: back lands on the chat
+    store.actions.openSession("s1");
+    store.actions.openSettings();
+    store.actions.openSession(null);
+    store.actions.openSettings();
+    store.actions.closeSettings();
+    expect(store.getState().ui.view).toBe("chat");
   });
 
   it("Reply there: the chip goes along as reply_to once, then clears; a turn end re-reads the places", async () => {

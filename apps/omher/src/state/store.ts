@@ -357,6 +357,8 @@ export interface Ui {
   /** "session" = a terminal session (SESSIONS in the sidebar) fills the main column; `session` names it.
    *  "automations" and "plugins" are the two pages of the sidebar's foot. */
   view: "chat" | "settings" | "session" | "automations" | "plugins";
+  /** Where a page's back arrow (and Settings' ×) returns: the chat or the session the page was opened from. */
+  back: "chat" | "session";
   /** Automations: the job the detail panel shows (`<bot>:<id>`); Plugins: the bot whose plugins the page shows. */
   automation: string | null;
   pluginsBot: string | null;
@@ -590,6 +592,7 @@ export function initialState(): AppState {
       theme: readTheme(),
       look: readLook(),
       view: "chat",
+      back: "chat",
       settingsPage: "general",
       pinned: readList("omher.pinned"),
       roster: readRoster(),
@@ -1152,6 +1155,9 @@ function reduceEvent(state: AppState, ev: BridgeEvent, now: number): AppState {
     case "routine.ran": {
       // a delivered bot-chat run: its answer comes as that chat's message, which is the line and the unread
       if (ev.delivered) return state;
+      // a run that went fine says nothing in the chat (a 30-minute job would fill it); Automations shows its last run.
+      // Only a failed run draws a line and an unread.
+      if (!FAILED_ROUTINE.has(String(ev.status ?? "").trim().toLowerCase())) return state;
       const next = touchChat(state, bot, (c) =>
         withItems(c, [
           ...c.items,
@@ -1372,9 +1378,9 @@ export function reduce(state: AppState, a: Action): AppState {
     case "automations":
       return { ...state, automations: a.automations };
     case "ui.automations":
-      return { ...state, ui: { ...state.ui, view: "automations", ...(a.job !== undefined ? { automation: a.job } : {}) } };
+      return { ...state, ui: { ...state.ui, view: "automations", back: backOf(state.ui), ...(a.job !== undefined ? { automation: a.job } : {}) } };
     case "ui.plugins":
-      return { ...state, ui: { ...state.ui, view: "plugins", ...(a.bot ? { pluginsBot: a.bot } : {}) } };
+      return { ...state, ui: { ...state.ui, view: "plugins", back: backOf(state.ui), ...(a.bot ? { pluginsBot: a.bot } : {}) } };
     case "ui.lang":
       return { ...state, ui: { ...state.ui, lang: a.lang } };
     case "models":
@@ -1417,9 +1423,10 @@ export function reduce(state: AppState, a: Action): AppState {
     case "ui.look":
       return { ...state, ui: { ...state.ui, look: { ...state.ui.look, ...a.look } } };
     case "ui.settings":
-      return { ...state, ui: { ...state.ui, view: "settings", settingsPage: a.page ?? state.ui.settingsPage } };
+      return { ...state, ui: { ...state.ui, view: "settings", back: backOf(state.ui), settingsPage: a.page ?? state.ui.settingsPage } };
     case "ui.closeSettings":
-      return { ...state, ui: { ...state.ui, view: "chat" } };
+      // back to the session the page was opened from, when it is still open; otherwise the chat
+      return { ...state, ui: { ...state.ui, view: state.ui.back === "session" && state.ui.session ? "session" : "chat", back: "chat" } };
     case "system.note":
       return touchChat(state, a.bot, (c) =>
         withItems(c, [...c.items, { kind: "system", id: `system-${a.now}-${c.items.length}`, ts: a.now / 1000, text: a.text }]),
@@ -1580,6 +1587,14 @@ export function heldDrafts(state: AppState, drafts: Record<string, string>): Rec
 
 /** Whether a message typed now in `bot`'s main chat is held instead of sent: a turn runs, others wait before it,
  *  a send's turn has not started, or the chat is being read again after the bridge came back. */
+/** The view a page returns to: the one it was opened from, or (page to page) where the first page returns. */
+function backOf(ui: Ui): Ui["back"] {
+  return ui.view === "chat" || ui.view === "session" ? ui.view : ui.back;
+}
+
+/** Hermes' run states that mean a routine failed (the bridge's FAILED_RUN). */
+const FAILED_ROUTINE = new Set(["error", "failed", "failure", "delivery_failed", "blocked_config"]);
+
 export function mustHold(state: AppState, bot: string): boolean {
   const c = state.chats[bot];
   return !!c && (!!c.turn || !!c.queue?.length || !!c.pendingTurn || !!c.stale || !!c.steering);
