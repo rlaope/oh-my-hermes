@@ -789,6 +789,7 @@ class PreLlmCallScenarioTests(unittest.TestCase):
                     "first_turn_without_section",
                     "route_hint",
                     "skill_candidates",
+                    "defect_fix_method",
                     "role_marker",
                     "active_workflow",
                     "running_work_board",
@@ -825,6 +826,21 @@ class PreLlmCallScenarioTests(unittest.TestCase):
         with mock.patch.object(llm_hooks, "acceptance_line", lambda *args: ""):
             without_line = per_turn_context.pre_llm_call_context_scenario_chars()["plan_acceptance"]
         self.assertEqual(with_line - without_line, len(plan_follow_on.ACCEPTANCE_LINE) + len("\n\n"))
+
+    def test_the_defect_fix_scenario_measures_the_method_block(self) -> None:
+        from omh.plugin_bundle.omh.defect_fix_method import METHOD_BLOCK
+        from omh.plugin_bundle.omh.hooks import llm_hooks
+
+        with_block = per_turn_context.pre_llm_call_context_scenario_chars()
+        with mock.patch.object(llm_hooks, "asks_to_fix_code", lambda _message: False):
+            without_block = per_turn_context.pre_llm_call_context_scenario_chars()
+        self.assertEqual(
+            with_block["defect_fix_method"] - without_block["defect_fix_method"], len(METHOD_BLOCK) + len("\n\n")
+        )
+        # Only the scenarios whose request asks to fix code move: this one and the
+        # plain first turn ("... and fix the tests"); the maxima do not.
+        moved = sorted(name for name in with_block if with_block[name] != without_block[name])
+        self.assertEqual(moved, ["defect_fix_method", "first_turn_without_section"])
 
     def test_the_console_scenarios_measure_the_console_choices_lines(self) -> None:
         from omh.plugin_bundle.omh import console_choices
@@ -877,12 +893,16 @@ class PreLlmCallScenarioTests(unittest.TestCase):
     def test_the_primer_limit_still_binds_the_primer_alone(self) -> None:
         self.assertLessEqual(len(awareness_primer_context()), AWARENESS_PRIMER_CONTEXT_CHAR_LIMIT)
         # The first-turn scenario is the primer inside the fence, plus the
-        # request's skill candidate line when it has one, and nothing else.
+        # request's skill candidate line when it has one, plus the debugging
+        # method block when the request asks to fix code, and nothing else.
+        from omh.plugin_bundle.omh.defect_fix_method import METHOD_BLOCK, asks_to_fix_code
+
         first_turn = per_turn_context.pre_llm_call_context_scenario_chars()["first_turn_without_section"]
         fence_overhead = len(llm_hooks.fence_omh_context(["x"])) - 1
         line = skill_candidate_line(skill_candidates_for_turn(per_turn_context._PLAIN_REQUEST))
         line_chars = len("\n\n" + line) if line else 0
-        self.assertEqual(first_turn, len(awareness_primer_context()) + fence_overhead + line_chars)
+        block_chars = len("\n\n" + METHOD_BLOCK) if asks_to_fix_code(per_turn_context._PLAIN_REQUEST) else 0
+        self.assertEqual(first_turn, len(awareness_primer_context()) + fence_overhead + line_chars + block_chars)
 
     def test_a_larger_injected_part_moves_the_measurement(self) -> None:
         before = per_turn_context.pre_llm_call_context_scenario_chars()["first_turn_without_section"]

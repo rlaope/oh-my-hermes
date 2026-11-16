@@ -46,6 +46,14 @@ All notable changes will be documented here.
   `arm_setup`; fan-in refuses a cell whose toolsets differ from the run's declared ones and a matrix whose arms differ
   from each other. Every other Hermes child keeps safe mode and `--toolsets file`.
 
+- **A request to fix a code defect now gets OMH's debugging method in the turn, not only a skill name.** Hermes'
+  skills index tells a model not to open process skills such as debugging, so `omh-app-debugging` and
+  `omh-verification-gate` stayed closed on exactly the turns they exist for. On a
+  turn that asks to fix code (a change verb such as fix, debug, "make ... pass", 고쳐, with a code object such as a
+  test, a traceback, a source path or a function), the plugin now adds a short block once per session: reproduce
+  first, trace the bad value to where it is produced, try other valid inputs, run the whole suite. Questions,
+  reviews, features and fixes of anything that is not code get nothing new.
+
 ## 4.0.8 - 2026-11-15
 
 - **The OMH TUI shows a compression as one gauge row, and a prompt typed meanwhile goes on by itself.** `/compact`
