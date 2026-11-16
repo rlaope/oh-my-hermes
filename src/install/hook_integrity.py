@@ -158,6 +158,7 @@ HOOK_REVIEWS: dict[str, dict[str, Any]] = {
         "reviewed_timeout_ms": 2000,
         "capability": (
             "OMH awareness, context brief, and route hint injection before a Hermes LLM call, "
+            "the debugging method block once per session on a request to fix a code defect, "
             "and, in a Slack or Discord room where Hermes lets a silence marker stand, a short "
             "instruction to answer [SHUTUP] to be quiet or [SILENT] when a message is not for the bot"
         ),
