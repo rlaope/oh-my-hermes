@@ -681,6 +681,26 @@ const namesBefore = (page: Page, bot: string) =>
     const names = [...document.querySelectorAll('[data-testid="side-bots"] .bot-list > [data-testid^="bot-row-"]')].map((e) => e.getAttribute("data-testid")!.slice("bot-row-".length));
     return names.slice(0, names.indexOf(b));
   }, bot);
+/** BOTS has settled (its height and content height unchanged over 5 frames). Rows still landing (a turn's preview,
+ *  the window resize's re-split) grow the list after the first paint, and a scroll made before then is clamped to
+ *  the shorter list's end: bot03 stayed in view, 1 run in 4. */
+const settled = (page: Page) =>
+  page.evaluate(
+    () =>
+      new Promise<void>((done) => {
+        const list = document.querySelector('[data-testid="side-bots"] .bot-list') as HTMLElement;
+        let last = "";
+        let same = 0;
+        const tick = () => {
+          const k = `${list.clientHeight}/${list.scrollHeight}`;
+          same = k === last ? same + 1 : 0;
+          last = k;
+          if (same >= 5) done();
+          else requestAnimationFrame(tick);
+        };
+        requestAnimationFrame(tick);
+      }),
+  );
 /** Scroll BOTS so `bot`'s row is at the list's top: exactly the bots above it are out of view. */
 const scrollToRow = (page: Page, bot: string) =>
   page.evaluate((b) => {
@@ -801,6 +821,7 @@ test("the dock: 4 tiles fill 2x2 (no lone tile); the running ring is centred ins
   // the first bot answering
   await mock("mock.manual", { bot: order[0] });
   await mock("mock.emit", { events: [{ event: "turn.start", bot: order[0] }] });
+  await settled(page);
   await scrollToRow(page, order[4]!);
   await expect.poll(() => tileNames(page)).toEqual(order.slice(0, 4));
   const boxes = await page.getByTestId("dock").locator(".dk-t").evaluateAll((els) => els.map((e) => e.getBoundingClientRect()).map((r) => ({ x: r.x, y: r.y, w: r.width })));
