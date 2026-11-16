@@ -120,6 +120,33 @@ test("two omher-thread blocks: two rows under Kami, two link lines, no raw block
   await expect(page.getByTestId("thread-title")).toHaveText("OG 대시보드 502 원인 찾기");
 });
 
+test("the real model's layout (JSON on the opening fence line, close on the next) opens two threads, no raw text", async ({ page }) => {
+  await setup(page);
+  const openLine = (obj: unknown) => "```omher-thread " + JSON.stringify(obj) + "\n```";
+  const answer = [
+    openLine({ title: "Settings dark-mode toggle", task: "Add a dark-mode toggle; check the theme with `pnpm dev`" }),
+    "",
+    openLine({ title: "v0.3 release notes", task: "Write the v0.3 release notes from git log" }),
+    "",
+    "두 작업은 서로 독립적이라 thread 두 개로 나눴습니다.",
+  ].join("\n");
+  await mock("mock.answer", { bot: "kami", text: answer });
+  await send(page, "설정 페이지 dark-mode toggle 추가하고 v0.3 release notes도 써줘");
+  const tree = page.getByTestId("threads-kami");
+  await expect(tree.getByRole("treeitem")).toHaveCount(2);
+  const links = page.getByTestId("thread-link");
+  await expect(links).toHaveCount(2);
+  await expect(links.nth(0)).toContainText("Settings dark-mode toggle");
+  await expect(links.nth(1)).toContainText("v0.3 release notes");
+  await expect(page.getByTestId("timeline")).toContainText("두 작업은 서로 독립적이라 thread 두 개로 나눴습니다.");
+  expect(await rawSeen(page)).toBe(false);
+  await expect(page.getByTestId("timeline")).not.toContainText("omher-thread");
+  expect((await threadSubmits()).map((x) => x.text)).toEqual([
+    "Add a dark-mode toggle; check the theme with `pnpm dev`",
+    "Write the v0.3 release notes from git log",
+  ]);
+});
+
 test("a route block asks first; Send there moves the message into that thread; still two rows", async ({ page }) => {
   const { tree } = await splitIntoTwo(page);
   const ids = await tree.getByRole("treeitem").evaluateAll((els) => els.map((e) => e.getAttribute("data-thread")!));
