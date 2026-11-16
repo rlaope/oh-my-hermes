@@ -4,6 +4,10 @@ All notable changes will be documented here.
 
 ## Unreleased
 
+- **omher: a routine that ran fine no longer adds a line to the chat.** A job on a short schedule (every 30 minutes)
+  filled its bot's chat with "Routine · … · done" lines and unreads. Now only a failed run shows there; every run's
+  result stays on the Automations page (last run, status), and a bot-chat job's answer still arrives as its message.
+
 - **omher: a message you send while the bot is answering waits behind a ↵ mark, and you choose what it does.** It
   shows as a muted bubble with "Waiting" and goes out on its own after the turn, one per turn, in order, through
   Hermes' own queue. Click the ↵ for Send now (stops the answer once, this message goes next), Steer (adds it to the
