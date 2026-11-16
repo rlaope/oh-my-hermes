@@ -800,12 +800,12 @@ class KeptTokenTests(ImageTestCase):
                                     for said in notices(self.app)), notices(self.app))
                 self.assertEqual(self.methods("image.attach_bytes"), [])
 
-    def test_ctrl_enter_with_an_image_is_a_prompt_not_a_steer(self) -> None:
+    def test_enter_with_an_image_during_a_turn_queues_for_its_end(self) -> None:
         self.app.turn_pending = True
         self.paste_image()
         self.type("this one")
-        self.press(Key(ENTER, ctrl=True))
-        self.assertEqual(self.methods("session.redirect"), [])
+        self.press(Key(ENTER))
+        self.assertEqual(self.methods("session."), [])
         self.assertEqual([image.label for image in self.app.queued[-1].images], ["[Image #1]"])
 
 
@@ -959,3 +959,116 @@ class AttachmentShapeTests(ImageTestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class CutInTests(ImageTestCase):
+    """Ctrl+Enter on a prompt with images while a turn runs: the turn stops and the prompt goes the moment it ends,
+    shown meanwhile as a prompt above the working row, never as a queued `⧗` row."""
+
+    def running(self) -> None:
+        self.app._on_event(Event("message.start", SID, {}))
+        self.hermes.pump()
+
+    def cut_in(self, text: str = "this one") -> bytes:
+        self.running()
+        data = self.paste_image()
+        self.type(text)
+        self.press(Key(ENTER, ctrl=True))
+        return data
+
+    def stopped(self) -> None:
+        self.app._on_event(Event("message.complete", SID, {"text": "", "status": "interrupted"}))
+        self.hermes.pump()
+
+    def test_ctrl_enter_with_an_image_stops_the_turn_and_shows_the_prompt_not_a_queue_row(self) -> None:
+        self.cut_in()
+        self.assertEqual(self.methods("session."), ["session.interrupt"])
+        self.assertEqual(self.methods("session.redirect"), [])
+        self.assertEqual(list(self.app.queued), [])
+        screen = self.screen()
+        self.assertIn("❯ [Image #1] this one", screen)
+        self.assertNotIn("⧗", screen)
+        self.assertEqual(self.methods("prompt.submit"), [])  # nothing goes while the stopped turn still runs
+
+    def test_the_prompt_goes_with_its_image_once_the_stopped_turn_ends(self) -> None:
+        data = self.cut_in()
+        self.stopped()
+        self.hermes.admit()
+        self.assertEqual(self.hermes.turns, [("[Image #1] this one", [data])])
+        self.assertEqual([block.text for block in self.users()], ["[Image #1] this one"])
+        self.assertIsNone(self.app.cut_in)
+        self.assertNotIn("what you queued waits", "\n".join(notices(self.app)))
+
+    def test_lines_queued_before_it_wait_behind_it_and_go_after_its_turn(self) -> None:
+        self.running()
+        self.type("/usage")
+        self.press(Key(ENTER))  # a slash command during a turn queues
+        data = self.paste_image()
+        self.type("now")
+        self.press(Key(ENTER, ctrl=True))
+        self.stopped()
+        self.hermes.admit()
+        self.assertEqual(self.hermes.turns, [("[Image #1] now", [data])])
+        self.assertEqual([line.shown or line.text for line in self.app.queued], ["/usage"])
+
+    def test_esc_while_it_waits_gives_it_back_to_the_composer_with_its_image(self) -> None:
+        data = self.cut_in()
+        self.app._interrupt()  # Esc or /stop again before the turn ended
+        self.assertIsNone(self.app.cut_in)
+        self.assertEqual(self.shown(), "[Image #1] this one")
+        ((_label, image),) = self.app.composer.images.values()
+        self.assertEqual(image.data, data)
+        self.assertNotIn("this one", [getattr(block, "text", "") for block in self.app.transcript.shown_blocks()])
+        self.stopped()
+        self.assertEqual(self.methods("prompt.submit"), [])
+
+    def test_a_session_switch_while_it_waits_gives_it_back(self) -> None:
+        self.cut_in()
+        self.app._reset_staging("The session changed")
+        self.assertIsNone(self.app.cut_in)
+        self.assertEqual(self.shown(), "[Image #1] this one")
+
+    def test_ctrl_enter_with_text_alone_still_steers_without_stopping(self) -> None:
+        self.running()
+        self.type("just text")
+        self.press(Key(ENTER, ctrl=True))
+        self.assertEqual(self.client.calls[-1], ("session.redirect", {"session_id": SID, "text": "just text"}))
+        self.assertEqual(self.methods("session.interrupt"), [])
+        self.assertIsNone(self.app.cut_in)
+
+    def test_a_slash_command_with_an_image_still_queues_on_ctrl_enter(self) -> None:
+        self.running()
+        self.type("/skill-a ")
+        self.paste_image()
+        self.press(Key(ENTER, ctrl=True))
+        self.assertEqual(self.methods("session.interrupt"), [])
+        self.assertIsNone(self.app.cut_in)
+
+    def test_idle_ctrl_enter_with_an_image_sends_at_once(self) -> None:
+        data = self.paste_image()
+        self.type("idle")
+        self.press(Key(ENTER, ctrl=True))
+        self.hermes.admit()
+        self.assertEqual(self.methods("session.interrupt"), [])
+        self.assertEqual(self.hermes.turns, [("[Image #1] idle", [data])])
+
+    def test_a_second_ctrl_enter_with_an_image_while_one_waits_queues(self) -> None:
+        self.cut_in()
+        self.paste_image()
+        self.type("second")
+        self.press(Key(ENTER, ctrl=True))
+        self.assertEqual(self.methods("session.interrupt"), ["session.interrupt"])
+        self.assertEqual([line.text for line in self.app.queued], ["[Image #2] second"])
+        self.stopped()
+        self.hermes.admit()
+        self.assertEqual([text for text, _images in self.hermes.turns], ["[Image #1] this one"])
+
+    def test_a_held_ctrl_enter_whose_paste_brings_an_image_cuts_in(self) -> None:
+        self.running()
+        self.type("look at b")
+        self.app._on_input(CTRL_V)
+        self.app._on_input(Key(ENTER, ctrl=True))  # held: the paste is still out
+        self.assertEqual(self.methods("session."), [])
+        self.hermes.pump()
+        self.assertEqual(self.methods("session."), ["session.interrupt"])
+        self.assertIsNotNone(self.app.cut_in)

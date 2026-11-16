@@ -4,6 +4,12 @@ All notable changes will be documented here.
 
 ## Unreleased
 
+- **OMH TUI: Ctrl+Enter with an image attached sends it now.** Before, a prompt with an image never went into a
+  running turn: Ctrl+Enter left it as a `⧗` queued row over the composer until the turn finished. Now Ctrl+Enter
+  stops the turn and sends the prompt with its image the moment the turn ends. Meanwhile it shows above the working
+  row as your prompt, not a queued row. Esc again gives it back to the composer. Enter with an image still queues for
+  the turn's end, and Ctrl+Enter with text alone still steers without stopping anything.
+
 - **omher: a routine that ran fine no longer adds a line to the chat.** A job on a short schedule (every 30 minutes)
   filled its bot's chat with "Routine · … · done" lines and unreads. Now only a failed run shows there; every run's
   result stays on the Automations page (last run, status), and a bot-chat job's answer still arrives as its message.
