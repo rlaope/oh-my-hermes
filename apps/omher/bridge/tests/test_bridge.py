@@ -4246,6 +4246,44 @@ class TasksLinear(unittest.TestCase):
             for held in (result, ob._YAML_CACHE, ob.mcp_server_names(d / "config.yaml")):
                 self.assertNotIn(fake, repr(held))
 
+    def test_the_op_returns_caches_and_logs_no_other_value(self):
+        # rule 33 as written (the verifier's V5 probe, PR #2908 verify9): fake values in headers, env and args. The
+        # bot lookup parses the config whole for every op (`_load_yaml`, discover_bots); the Linear path adds nothing
+        # to that cache, returns only the name and `enabled`, logs nothing, and only names / `enabled` leave its parser.
+        import logging
+        import yaml
+
+        fake = "ghp_" + "Q7" * 18
+        for name, enabled, want in (("linear-work", True, True), ("work", True, False), ("linear", False, False)):
+            home = Path(tempfile.mkdtemp())
+            (home / "config.yaml").write_text(yaml.safe_dump({"mcp_servers": {name: {
+                "enabled": enabled, "url": "https://example.org/sse", "headers": {"Authorization": fake},
+                "env": {"API_TOKEN": fake}, "args": ["--token", fake]}}}), encoding="utf-8")
+            bridge = ob.Bridge(token=TOKEN, hermes_home=home)
+            ob._YAML_CACHE.clear()
+            ob.discover_bots(home)
+            before = repr(ob._YAML_CACHE)
+            records: list[logging.LogRecord] = []
+
+            class Keep(logging.Handler):
+                def emit(self, record):
+                    records.append(record)
+
+            root, keep = logging.getLogger(), Keep(logging.DEBUG)
+            level = root.level
+            root.addHandler(keep)
+            root.setLevel(logging.DEBUG)
+            try:
+                result = asyncio.run(bridge.op_tasks_linear({"bot": "default"}))
+            finally:
+                root.removeHandler(keep)
+                root.setLevel(level)
+            self.assertEqual(result, {"configured": want, "server": name if "linear" in name else ""})
+            self.assertNotIn(fake, repr(result))
+            self.assertEqual(repr(ob._YAML_CACHE), before)  # the Linear path stores nothing of its own
+            self.assertEqual([r.getMessage() for r in records if fake in r.getMessage()], [])
+            self.assertEqual(ob.mcp_server_names(home / "config.yaml"), {name: {"enabled": enabled}})
+
     def test_names_and_enabled_only(self):
         d = self._dir("mcp_servers:\n  notion: {url: x}\n  lin:\n    nested: {enabled: false}\n    enabled: off\n"
                       "  q:\n    enabled: 'false'\nskills:\n  mcp_servers: {linear: {}}\n")

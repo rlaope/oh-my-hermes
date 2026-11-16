@@ -3311,9 +3311,37 @@ NS_REF = re.compile(r"^(hermes|claude|claude-sub|codex):([A-Za-z0-9_.:/@-]{1,300
 # desktop shell (tasks.rs mask_secrets) read; bridge/tests pin these strings to that file.
 SECRET_MASK = "••••"
 SECRET_TOKENS = (
-    r"\b(?:gh[pousr]_|github_pat_|glpat-|sk-|xox[abprs]-|AKIA)(?:[A-Za-z0-9_-]{8,}(?:(?:[ \t]?\r?\n[ \t]?|[ \t])"
-    r"[a-z_-]*[A-Z0-9][a-z_-]*[A-Z0-9][A-Za-z0-9_-]*){0,4}|[a-z_-]*[A-Z0-9][A-Za-z0-9_-]*(?:(?:[ \t]?\r?\n[ \t]?|[ \t])"
-    r"[a-z_-]*[A-Z0-9][a-z_-]*[A-Z0-9][A-Za-z0-9_-]*){1,4})"
+    r"\b(?:(?:gh[pousr]_[A-Za-z0-9](?:[A-Za-z0-9]{9}|(?:[ \t]?\r?\n[ \t]?|[ \t])[A-Za-z0-9]{9}|[A-Za-z0-9](?:[ \t]?\r?"
+    r"\n[ \t]?|[ \t])[A-Za-z0-9]{8}|[A-Za-z0-9]{2}(?:[ \t]?\r?\n[ \t]?|[ \t])[A-Za-z0-9]{7}|[A-Za-z0-9]{3}(?:[ \t]?\r?"
+    r"\n[ \t]?|[ \t])[A-Za-z0-9]{6}|[A-Za-z0-9]{4}(?:[ \t]?\r?\n[ \t]?|[ \t])[A-Za-z0-9]{5}|[A-Za-z0-9]{5}(?:[ \t]?\r?"
+    r"\n[ \t]?|[ \t])[A-Za-z0-9]{4}|[A-Za-z0-9]{6}(?:[ \t]?\r?\n[ \t]?|[ \t])[A-Za-z0-9]{3}|[A-Za-z0-9]{7}(?:[ \t]?\r?"
+    r"\n[ \t]?|[ \t])[A-Za-z0-9]{2}|[A-Za-z0-9]{8}(?:[ \t]?\r?\n[ \t]?|[ \t])[A-Za-z0-9])(?:[A-Za-z0-9]{9}|(?:[ \t]?\r"
+    r"?\n[ \t]?|[ \t])[A-Za-z0-9]{9}|[A-Za-z0-9](?:[ \t]?\r?\n[ \t]?|[ \t])[A-Za-z0-9]{8}|[A-Za-z0-9]{2}(?:[ \t]?\r?\n"
+    r"[ \t]?|[ \t])[A-Za-z0-9]{7}|[A-Za-z0-9]{3}(?:[ \t]?\r?\n[ \t]?|[ \t])[A-Za-z0-9]{6}|[A-Za-z0-9]{4}(?:[ \t]?\r?\n"
+    r"[ \t]?|[ \t])[A-Za-z0-9]{5}|[A-Za-z0-9]{5}(?:[ \t]?\r?\n[ \t]?|[ \t])[A-Za-z0-9]{4}|[A-Za-z0-9]{6}(?:[ \t]?\r?\n"
+    r"[ \t]?|[ \t])[A-Za-z0-9]{3}|[A-Za-z0-9]{7}(?:[ \t]?\r?\n[ \t]?|[ \t])[A-Za-z0-9]{2}|[A-Za-z0-9]{8}(?:[ \t]?\r?\n"
+    r"[ \t]?|[ \t])[A-Za-z0-9])(?:[A-Za-z0-9]{9}|(?:[ \t]?\r?\n[ \t]?|[ \t])[A-Za-z0-9]{9}|[A-Za-z0-9](?:[ \t]?\r?\n[ "
+    r"\t]?|[ \t])[A-Za-z0-9]{8}|[A-Za-z0-9]{2}(?:[ \t]?\r?\n[ \t]?|[ \t])[A-Za-z0-9]{7}|[A-Za-z0-9]{3}(?:[ \t]?\r?\n[ "
+    r"\t]?|[ \t])[A-Za-z0-9]{6}|[A-Za-z0-9]{4}(?:[ \t]?\r?\n[ \t]?|[ \t])[A-Za-z0-9]{5}|[A-Za-z0-9]{5}(?:[ \t]?\r?\n[ "
+    r"\t]?|[ \t])[A-Za-z0-9]{4}|[A-Za-z0-9]{6}(?:[ \t]?\r?\n[ \t]?|[ \t])[A-Za-z0-9]{3}|[A-Za-z0-9]{7}(?:[ \t]?\r?\n[ "
+    r"\t]?|[ \t])[A-Za-z0-9]{2}|[A-Za-z0-9]{8}(?:[ \t]?\r?\n[ \t]?|[ \t])[A-Za-z0-9])(?:[A-Za-z0-9]{8}|(?:[ \t]?\r?\n["
+    r" \t]?|[ \t])[A-Za-z0-9]{8}|[A-Za-z0-9](?:[ \t]?\r?\n[ \t]?|[ \t])[A-Za-z0-9]{7}|[A-Za-z0-9]{2}(?:[ \t]?\r?\n[ \t"
+    r"]?|[ \t])[A-Za-z0-9]{6}|[A-Za-z0-9]{3}(?:[ \t]?\r?\n[ \t]?|[ \t])[A-Za-z0-9]{5}|[A-Za-z0-9]{4}(?:[ \t]?\r?\n[ \t"
+    r"]?|[ \t])[A-Za-z0-9]{4}|[A-Za-z0-9]{5}(?:[ \t]?\r?\n[ \t]?|[ \t])[A-Za-z0-9]{3}|[A-Za-z0-9]{6}(?:[ \t]?\r?\n[ \t"
+    r"]?|[ \t])[A-Za-z0-9]{2}|[A-Za-z0-9]{7}(?:[ \t]?\r?\n[ \t]?|[ \t])[A-Za-z0-9])\b|glpat-[A-Za-z0-9_-](?:[A-Za-z0-9"
+    r"_-]{5}|(?:[ \t]?\r?\n[ \t]?|[ \t])[A-Za-z0-9_-]{5}|[A-Za-z0-9_-](?:[ \t]?\r?\n[ \t]?|[ \t])[A-Za-z0-9_-]{4}|[A-Z"
+    r"a-z0-9_-]{2}(?:[ \t]?\r?\n[ \t]?|[ \t])[A-Za-z0-9_-]{3}|[A-Za-z0-9_-]{3}(?:[ \t]?\r?\n[ \t]?|[ \t])[A-Za-z0-9_-]"
+    r"{2}|[A-Za-z0-9_-]{4}(?:[ \t]?\r?\n[ \t]?|[ \t])[A-Za-z0-9_-])(?:[A-Za-z0-9_-]{5}|(?:[ \t]?\r?\n[ \t]?|[ \t])[A-Z"
+    r"a-z0-9_-]{5}|[A-Za-z0-9_-](?:[ \t]?\r?\n[ \t]?|[ \t])[A-Za-z0-9_-]{4}|[A-Za-z0-9_-]{2}(?:[ \t]?\r?\n[ \t]?|[ \t]"
+    r")[A-Za-z0-9_-]{3}|[A-Za-z0-9_-]{3}(?:[ \t]?\r?\n[ \t]?|[ \t])[A-Za-z0-9_-]{2}|[A-Za-z0-9_-]{4}(?:[ \t]?\r?\n[ \t"
+    r"]?|[ \t])[A-Za-z0-9_-])(?:[A-Za-z0-9_-]{5}|(?:[ \t]?\r?\n[ \t]?|[ \t])[A-Za-z0-9_-]{5}|[A-Za-z0-9_-](?:[ \t]?\r?"
+    r"\n[ \t]?|[ \t])[A-Za-z0-9_-]{4}|[A-Za-z0-9_-]{2}(?:[ \t]?\r?\n[ \t]?|[ \t])[A-Za-z0-9_-]{3}|[A-Za-z0-9_-]{3}(?:["
+    r" \t]?\r?\n[ \t]?|[ \t])[A-Za-z0-9_-]{2}|[A-Za-z0-9_-]{4}(?:[ \t]?\r?\n[ \t]?|[ \t])[A-Za-z0-9_-])(?:[A-Za-z0-9_-"
+    r"]{4}|(?:[ \t]?\r?\n[ \t]?|[ \t])[A-Za-z0-9_-]{4}|[A-Za-z0-9_-](?:[ \t]?\r?\n[ \t]?|[ \t])[A-Za-z0-9_-]{3}|[A-Za-"
+    r"z0-9_-]{2}(?:[ \t]?\r?\n[ \t]?|[ \t])[A-Za-z0-9_-]{2}|[A-Za-z0-9_-]{3}(?:[ \t]?\r?\n[ \t]?|[ \t])[A-Za-z0-9_-])"
+    r"\b)|(?:gh[pousr]_|github_pat_|glpat-|sk-|xox[abprs]-|AKIA)(?:[A-Za-z0-9_-]{8,}(?:(?:[ \t]?\r?\n[ \t]?|[ \t])[a-z"
+    r"_-]*[A-Z0-9][a-z_-]*[A-Z0-9][A-Za-z0-9_-]*){0,4}|[a-z_-]*[A-Z0-9][A-Za-z0-9_-]*(?:(?:[ \t]?\r?\n[ \t]?|[ \t])[a-"
+    r"z_-]*[A-Z0-9][a-z_-]*[A-Z0-9][A-Za-z0-9_-]*){1,4}))"
 )
 SECRET_ASSIGNED = r"""\b([a-z_-]*(?:credentials?|token|password|passwd|secret|api[_-]?key))=[^\s"'<>&;,)\]]+"""
 _SECRET = re.compile(SECRET_TOKENS)
@@ -3322,7 +3350,8 @@ _HERMES_SID = re.compile(r"^[A-Za-z0-9_-]{1,80}$")
 
 
 def mask_secrets(text: str) -> str:
-    """Token-like strings (`sk-…`, `ghp_…`, `glpat-…`, `xoxb-…`, `AKIA…`, also one broken by line breaks) replaced by
+    """Token-like strings (`sk-…`, `ghp_…`, `glpat-…`, `xoxb-…`, `AKIA…`, also one broken by line breaks, taken by
+    its known length for `gh?_` (36) and `glpat-` (20) in any letter case) replaced by
     `••••`, and the value of a `token=` / `credential=` / `password=` / `secret=` / `api_key=` replaced the same way
     (the name stays)."""
     return _SECRET_ASSIGNED.sub(lambda m: m.group(1) + "=" + SECRET_MASK, _SECRET.sub(SECRET_MASK, text))

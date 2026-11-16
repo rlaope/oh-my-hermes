@@ -167,17 +167,22 @@ RULES = (
     " through the person's own GitHub CLI (`gh`) and GitLab CLI (`glab`) under their own logins:",
     "The only argv are `auth status` (only its exit code is read; its output, which can name a token, goes nowhere:"
     " it is never piped to omher),",
-    "omher passes no token, asks for none, reads none and shows none, and never comments, closes, assigns, labels, merges"
+    "omher passes no token to them, asks for none and shows none, and never comments, closes, assigns, labels, merges"
     " or edits anything on GitHub, GitLab or Linear.",
     "A token-like string (also one broken over lines) inside an item's own text (title, label, description, comment,"
     " check name) or a CLI's error"
     " line is shown as `••••`, in the list, the drawer, the error line and the text \"Start in thread\" sends, by omher's"
     " one masker (the patterns in `apps/omher/src/lib/secrets.json`, read by the desktop shell, the page and the"
     " bridge's `mask_secrets` alike).",
-    "For Linear omher holds no key: through `tasks.linear` the bridge reads only the server names under the bot's"
-    " `config.yaml` `mcp_servers` and, of the first one whose name has `linear` in it, whether it is turned off"
-    " (`enabled`), with a YAML event reader that keeps no other value of the file and puts nothing in a cache; it never"
-    " keeps a server's url, headers, env or auth, so a server is Linear by its name alone,",
+    "For Linear omher holds no key. The bot's `config.yaml` is the file the bridge already parses whole (and keeps"
+    " parsed) to find the bots, for every op; for `tasks.linear` it runs that file through a YAML event reader of its"
+    " own, and the only values that leave"
+    " that parser are the server names under `mcp_servers` and each one's plain `enabled`: a header, env or args value"
+    " (or a url or auth) is never copied out of it.",
+    "The Tasks/Linear path adds nothing to that and returns, caches and shows only that: the first server whose name"
+    " has `linear` in it and"
+    " whether it is turned on, so a server is Linear by its name alone; it never sends, logs, stores or displays any"
+    " other value of the file,",
     "Besides it and the GitHub and GitLab CLIs' read-only lists of rule 33,",
     "This is the one exception to rules 5 and 10: the request is `gh`'s own, under its own login; omher passes no token,"
     " reads none and changes nothing on GitHub.",
@@ -2066,6 +2071,13 @@ class TasksReadOnly(unittest.TestCase):
             self.assertNotIn(word, body, word)
         self.assertIn('return {"configured": on, "server": name[:64]}', body)
         self.assertIn('"tasks.linear": self.op_tasks_linear', src)
+        # rule 33: the Linear path sends, logs, stores and shows nothing else; the op only looks the bot up and returns
+        op = src.split("async def op_tasks_linear(", 1)[1].split("\n    async def ", 1)[0].split('"""', 2)[2]
+        self.assertEqual([l.strip() for l in op.strip().splitlines()],
+                         ['bot = self._bot(p.get("bot"))', 'return await asyncio.to_thread(read_linear_mcp, bot["path"])'])
+        for part in (fn, names, body):
+            for word in ("log.", "print(", "_YAML_CACHE", "emit(", "send(", "write", "global "):
+                self.assertNotIn(word, part, word)
 
     def test_one_masker_for_task_text(self) -> None:
         self.assertIn('const SECRETS: &str = include_str!("../../src/lib/secrets.json");', self.prod)
