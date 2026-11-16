@@ -14,6 +14,9 @@ arm gets its own home under a fresh temporary root outside any Hermes
   process group, so Hermes never starts a service-manager job for it, and one
   untimed warm-up chat absorbs the home's first-start work before any cell's
   clock starts. Closing stops the whole group and removes the root.
+- Both homes of one run carry the same `toolsets` (`file,skills` by default,
+  `file,skills,terminal` with the run's explicit opt-in); every child in the
+  home is spawned with them.
 """
 
 from __future__ import annotations
@@ -36,7 +39,7 @@ from typing import Final
 from urllib.parse import urlsplit
 
 from ._hermes_child_process import terminate_process_group
-from .hermes_child_arm_setup import ArmSetup, PairedRunArmHome, observe_arm_setup
+from .hermes_child_arm_setup import DEFAULT_ARM_TOOLSETS, ArmSetup, PairedRunArmHome, observe_arm_setup
 from .hermes_child_dispatch import (
     HermesChildDispatchError,
     HermesChildRequest,
@@ -175,6 +178,7 @@ def prepare_arm_home(
     provider_config: PairedRunProviderConfig | None,
     exposed_skills: tuple[str, ...],
     omh_plugin: bool,
+    toolsets: str = DEFAULT_ARM_TOOLSETS,
     parent: Path | None = None,
     ready_seconds: float = 300.0,
     warmup_timeout_seconds: float = 900.0,
@@ -188,7 +192,7 @@ def prepare_arm_home(
     for directory in (hermes_home, home, omh_home, tmp):
         directory.mkdir(mode=0o700)
     run = ArmHomeRun(
-        PairedRunArmHome(root, hermes_home, home, (), ()),
+        PairedRunArmHome(root, hermes_home, home, (), (), toolsets),
         None,
     )
     prepared = False
@@ -209,7 +213,7 @@ def prepare_arm_home(
             **_process_group_options(),
         )
         run.process = process
-        arm_home = PairedRunArmHome(root, hermes_home, home, key_names, labels)
+        arm_home = PairedRunArmHome(root, hermes_home, home, key_names, labels, toolsets)
         run.arm_home = arm_home
         _await_ready(process, hermes_home / "gateway.pid", ready_seconds, clock)
         run.gateway_ready_seconds = clock() - started

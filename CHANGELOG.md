@@ -38,6 +38,13 @@ All notable changes will be documented here.
   no longer hides whether the change at hand passes. `Ran 0 tests`, and exit 5 from unittest or pytest, now read
   `passed: false` with `reason: no tests ran`. The tool's line in Hermes' deferred-tool catalog names tests and shows
   a whole call, so a model looking for a test runner can call it from the listing. Every existing refusal stays.
+- **A paired run can give both arms Hermes' shell tool, and only both at once.** `omh coding paired-run dispatch
+  --arm-toolsets file,skills,terminal` runs both the baseline and the variant with `file,skills,terminal` instead of the
+  default `file,skills`, so an arm whose skills say "run the tests" is no longer measured against an arm that cannot
+  run them. Only `file`, `skills` and `terminal` are accepted, `file` and `skills` are required, and `--yolo` is never
+  passed, so Hermes' dangerous-command approval stays on. The toolsets each cell ran with are signed into its receipt's
+  `arm_setup`; fan-in refuses a cell whose toolsets differ from the run's declared ones and a matrix whose arms differ
+  from each other. Every other Hermes child keeps safe mode and `--toolsets file`.
 
 ## 4.0.8 - 2026-11-15
 
