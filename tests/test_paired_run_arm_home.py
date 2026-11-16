@@ -39,6 +39,7 @@ from omh.coding.hermes_child_receipts import (  # noqa: E402
     write_signed_observation,
 )
 from omh.coding.paired_run_arm_home import (  # noqa: E402
+    ARM_DELEGATION_MAX_CHILDREN,
     PairedRunArmHomeError,
     arm_root_parent,
     prepare_arm_home,
@@ -59,6 +60,7 @@ from omh.quality.paired_run_values import exposure_digest  # noqa: E402
 REPO = Path(__file__).resolve().parents[1]
 FS = "file,skills"
 FST = "file,skills,terminal"
+FSTD = "file,skills,terminal,delegation"
 KEY_ENV = "OMH_TEST_PAIRED_PROVIDER_KEY"
 KEY_VALUE = "sk-test-paired-key-value-7f1c2d9e"
 
@@ -226,6 +228,57 @@ class PairedRunArmHomeTests(unittest.TestCase):
             self.assertNotIn("--yolo", line["argv"])
             self.assertNotIn("HERMES_YOLO_MODE", line["env"])
 
+    def test_delegation_opt_in_pins_the_same_child_block_in_both_homes(self) -> None:
+        variant = self._prepare("variant", ("code-review",), True, toolsets=FSTD)
+        baseline = self._prepare("baseline", (), False, toolsets=FSTD)
+        self.assertEqual(variant.setup, ArmSetup(True, exposure_digest(("code-review",)), FSTD))
+        texts = [(run.arm_home.hermes_home / "config.yaml").read_text() for run in (variant, baseline)]
+        blocks = [text[text.index("delegation:"):] for text in texts]
+        self.assertEqual(blocks[0], blocks[1], "byte-identical delegation block in both arms")
+        block = blocks[0]
+        for line in ('  model: "claude-sonnet-5-5"', '  provider: "claude-proxy"',
+                     f"  oneshot_max_children: {ARM_DELEGATION_MAX_CHILDREN}",
+                     f"  max_concurrent_children: {ARM_DELEGATION_MAX_CHILDREN}",
+                     "  max_spawn_depth: 1", "  worktree_isolation: false"):
+            self.assertIn(line + "\n", block)
+        self.assertGreater(ARM_DELEGATION_MAX_CHILDREN, 2, "lifts Hermes' one-shot default of 2")
+        # The plugin reads `delegation.*` with its own line scanner, which needs block YAML.
+        from omh.plugin_bundle.omh.delegation_routing import read_delegation_settings
+        for run in (variant, baseline):
+            settings = read_delegation_settings(run.arm_home.hermes_home, ("oneshot_max_children", "model"))
+            self.assertEqual(settings, {"oneshot_max_children": str(ARM_DELEGATION_MAX_CHILDREN),
+                                        "model": "claude-sonnet-5-5"})
+        # The rest of the config still says what the JSON form said.
+        self.assertIn('  default: "claude-sonnet-5-5"\n', texts[0])
+        self.assertIn(f'    key_env: "{KEY_ENV}"\n', texts[0])
+        self.assertIn('plugins:\n  enabled:\n    - "omh"\n', texts[0])
+        self.assertTrue(observe_arm_setup(variant.arm_home).omh_plugin, "the YAML form still enables the plugin")
+        self.assertNotIn("plugins:", texts[1])
+
+    def test_delegation_opt_in_pins_every_routing_category_in_the_variant_only(self) -> None:
+        from omh.plugin_bundle.omh.hermes_delegation import (
+            HERMES_MIXTURE_CATEGORY_CHAINS,
+            effective_mixture_category_chains,
+            load_mixture_chain_overrides,
+        )
+
+        variant = self._prepare("variant", ("code-review",), True, toolsets=FSTD)
+        baseline = self._prepare("baseline", (), False, toolsets=FSTD)
+        overrides, status = load_mixture_chain_overrides(variant.arm_home.root / "omh")
+        self.assertEqual(status, "applied")
+        self.assertEqual(set(overrides), set(HERMES_MIXTURE_CATEGORY_CHAINS))
+        chains = effective_mixture_category_chains(variant.arm_home.root / "omh", variant.arm_home.hermes_home)
+        self.assertEqual({chain for chain in chains.values()}, {(("claude-sonnet-5-5", "low"),)})
+        self.assertFalse((baseline.arm_home.root / "omh" / "routing").exists())
+
+    def test_without_delegation_the_config_stays_json_with_no_delegation_block(self) -> None:
+        for toolsets in (FS, FST):
+            with self.subTest(toolsets=toolsets):
+                run = self._prepare("variant", ("code-review",), True, toolsets=toolsets)
+                config = json.loads((run.arm_home.hermes_home / "config.yaml").read_text())
+                self.assertNotIn("delegation", config)
+                self.assertFalse((run.arm_home.root / "omh" / "routing").exists())
+
     def test_gateway_group_is_stopped_and_root_removed_when_warmup_fails(self) -> None:
         (self.root / "warm-fails").write_text("1")
         with self.assertRaises(PairedRunArmHomeError):
@@ -280,6 +333,17 @@ class ArmToolsetsBoundaryTextTests(unittest.TestCase):
             self.assertIn(phrase, paired)
         self.assertNotIn("terminal", bullet[:bullet.index("`omh coding paired-run dispatch`")])
         self.assertNotIn("terminal", bullet[bullet.index("`omh coding fanout dispatch --final-review`"):])
+
+    def test_boundary_scopes_delegation_to_paired_run_arms_with_pinned_children(self) -> None:
+        bullet = " ".join(self._bullet().split())
+        head = bullet[:bullet.index("`omh coding paired-run dispatch`")]
+        paired = bullet[bullet.index("`omh coding paired-run dispatch`"):bullet.index("`omh coding fanout dispatch --final-review`")]
+        self.assertIn("depth-one recursion limit (OMH dispatch depth; inside a paired-run arm, Hermes' own one-level "
+                      "`delegate_task` children are allowed when the run's `--arm-toolsets` names `delegation`)", head)
+        for phrase in ("add `terminal` and `delegation`", "same child cap and the arm's model for every child",
+                       "fan-in refuses a cell whose child sessions ran another model", "both the run's declared toolsets"):
+            self.assertIn(phrase, paired)
+        self.assertNotIn("delegation", bullet[bullet.index("`omh coding fanout dispatch --final-review`"):])
 
 
 class ProviderConfigTests(unittest.TestCase):
@@ -381,9 +445,12 @@ class ArmToolsetsTests(unittest.TestCase):
     def test_closed_allowlist_with_file_and_skills_required(self) -> None:
         self.assertEqual(parse_arm_toolsets("file,skills"), FS)
         self.assertEqual(parse_arm_toolsets("terminal, skills,file"), FST, "canonical order")
+        self.assertEqual(parse_arm_toolsets("delegation,terminal,file,skills"), FSTD, "canonical order")
+        self.assertEqual(parse_arm_toolsets("file,skills,delegation"), "file,skills,delegation")
         refusals = (
             ("file,skills,web", "refused: web"),
-            ("file,skills,delegation", "refused: delegation"),
+            ("file,skills,delegation,web", "refused: web"),
+            ("file,delegation", "must include file and skills"),
             ("file,skills,terminal,code_execution", "refused: code_execution"),
             ("file,terminal", "must include file and skills"),
             ("skills,terminal", "must include file and skills"),
@@ -467,6 +534,59 @@ class FanInArmSetupTests(unittest.TestCase):
         self.assertTrue(raised.exception.blockers)
         self.assertTrue(all(b.endswith("arm setup toolsets do not match the run's declared toolsets")
                             for b in raised.exception.blockers), raised.exception.blockers)
+
+    def _delegating_fan_in(self, models_for):
+        """Fan-in of a `delegation` run whose cells sign a trace naming `models_for(cell)`."""
+        from paired_run_execution_support import arm_setup_record
+        from test_paired_run_execution_fan_in import _execute, _request
+        import paired_run_execution_support as support
+
+        original_setup, original_trace = support.arm_setup_record, support.cell_trace_record
+        with TemporaryDirectory(prefix="omh-arm-fan-in-") as raw:
+            home = (Path(raw) / ".omh").resolve()
+            support.arm_setup_record = lambda plugin, skills: arm_setup_record(plugin, skills, FSTD)
+            support.cell_trace_record = models_for
+            try:
+                report = replace(_execute(home), arm_toolsets=FSTD)
+            finally:
+                support.arm_setup_record, support.cell_trace_record = original_setup, original_trace
+            return build_paired_run_execution_decision(_request(report), report, home)
+
+    def test_fan_in_accepts_a_delegating_run_whose_sessions_all_ran_the_arm_model(self) -> None:
+        from paired_run_execution_support import trace_with_models
+
+        self.assertIsNotNone(self._delegating_fan_in(lambda cell: trace_with_models((cell.model,), children=3)))
+
+    def test_fan_in_refuses_a_delegating_cell_whose_child_ran_another_model(self) -> None:
+        from paired_run_execution_support import trace_with_models
+
+        def models(cell):
+            extra = ("claude-opus-5-5",) if cell.arm is ArmRole.VARIANT else ()
+            return trace_with_models((cell.model, *extra), children=3)
+
+        with self.assertRaises(PairedRunExecutionFanInError) as raised:
+            self._delegating_fan_in(models)
+        blockers = raised.exception.blockers
+        self.assertEqual(len(blockers), 2, blockers)
+        self.assertTrue(all(b.endswith("a session in a delegating cell ran another model than the arm's")
+                            for b in blockers), blockers)
+
+    def test_fan_in_refuses_a_delegating_cell_with_no_trace_or_no_model_list(self) -> None:
+        from paired_run_execution_support import trace_with_models
+
+        cases = {
+            "delegating cell has no signed cell trace": lambda cell: None,
+            "delegating cell trace does not list its session models": lambda cell: trace_with_models(None),
+        }
+        for reason, models_for in cases.items():
+            with self.subTest(reason=reason), self.assertRaises(PairedRunExecutionFanInError) as raised:
+                self._delegating_fan_in(models_for)
+            self.assertTrue(raised.exception.blockers)
+            self.assertTrue(all(b.endswith(reason) for b in raised.exception.blockers), raised.exception.blockers)
+
+    def test_fan_in_without_delegation_does_not_ask_for_a_trace(self) -> None:
+        # The default and terminal runs keep accepting a cell with no trace (negative case).
+        self.assertIsNotNone(self._fan_in(lambda plugin: FST, FST))
 
     def test_fan_in_refuses_arms_that_ran_with_different_toolsets(self) -> None:
         with self.assertRaises(PairedRunExecutionFanInError) as raised:

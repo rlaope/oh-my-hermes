@@ -65,6 +65,7 @@ def write_observed_receipt(
     evaluation_binding: dict[str, str | int] | None = None,
     elapsed_seconds: float | None = None,
     arm_setup: dict[str, object] | None = None,
+    cell_trace: dict[str, object] | None = None,
 ) -> Path:
     root = omh_home / "coding" / "hermes-child"
     run_dir = root / run_id
@@ -89,6 +90,8 @@ def write_observed_receipt(
         observation["evaluation_binding"] = evaluation_binding
     if arm_setup is not None:
         observation["arm_setup"] = arm_setup
+    if cell_trace is not None:
+        observation["cell_trace"] = cell_trace
     canonical = json.dumps(
         observation,
         sort_keys=True,

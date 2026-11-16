@@ -14,9 +14,16 @@ arm gets its own home under a fresh temporary root outside any Hermes
   process group, so Hermes never starts a service-manager job for it, and one
   untimed warm-up chat absorbs the home's first-start work before any cell's
   clock starts. Closing stops the whole group and removes the root.
-- Both homes of one run carry the same `toolsets` (`file,skills` by default,
-  `file,skills,terminal` with the run's explicit opt-in); every child in the
-  home is spawned with them.
+- Both homes of one run carry the same `toolsets` (`file,skills` by default;
+  the run's explicit opt-in may add `terminal` and `delegation`); every child
+  in the home is spawned with them.
+- With `delegation`, both configs carry the same `delegation:` block: the
+  one-shot child cap, one level of children, no per-child worktree, and the
+  arm's own model and provider for every child. The variant's OMH home also
+  pins every routing category to the arm's model
+  (`routing/model-chains.json`), so `omh_delegate_route` cannot move a child
+  onto another model. That config is written as block YAML, which both Hermes
+  and the plugin's `delegation:` reader take; every other home stays JSON.
 """
 
 from __future__ import annotations
@@ -39,7 +46,13 @@ from typing import Final
 from urllib.parse import urlsplit
 
 from ._hermes_child_process import terminate_process_group
-from .hermes_child_arm_setup import DEFAULT_ARM_TOOLSETS, ArmSetup, PairedRunArmHome, observe_arm_setup
+from .hermes_child_arm_setup import (
+    DEFAULT_ARM_TOOLSETS,
+    ArmSetup,
+    PairedRunArmHome,
+    delegates,
+    observe_arm_setup,
+)
 from .hermes_child_dispatch import (
     HermesChildDispatchError,
     HermesChildRequest,
@@ -53,6 +66,9 @@ WARMUP_PROMPT: Final = "Reply with the single word READY."
 _PROVIDER_NAME: Final = re.compile(r"^[a-z0-9][a-z0-9._-]{0,63}$")
 _ENV_NAME: Final = re.compile(r"^[A-Z][A-Z0-9_]{0,63}$")
 _LOOPBACK_NAMES: Final = frozenset({"localhost"})
+# Hermes' one-shot default is 2 children per session, and it refuses a whole
+# `delegate_task` call over the cap; both arms get this instead.
+ARM_DELEGATION_MAX_CHILDREN: Final = 6
 
 
 class PairedRunArmHomeError(RuntimeError):
@@ -197,7 +213,9 @@ def prepare_arm_home(
     )
     prepared = False
     try:
-        labels = _materialize(hermes_home, omh_home, provider, model, provider_config, exposed_skills, omh_plugin)
+        labels = _materialize(
+            hermes_home, omh_home, provider, model, reasoning, provider_config, exposed_skills, omh_plugin, toolsets
+        )
         key_names = (provider_config.key_env,) if provider_config else provider_env_names(provider)
         source = os.environ if env is None else env
         gateway_env = arm_gateway_env(source, hermes_home, home, tmp, key_names)
@@ -289,9 +307,11 @@ def _materialize(
     omh_home: Path,
     provider: str,
     model: str,
+    reasoning: str,
     provider_config: PairedRunProviderConfig | None,
     exposed_skills: tuple[str, ...],
     omh_plugin: bool,
+    toolsets: str = DEFAULT_ARM_TOOLSETS,
 ) -> tuple[tuple[str, str], ...]:
     config: dict[str, object] = {"model": {"default": model, "provider": provider}}
     if provider_config is not None:
@@ -309,9 +329,64 @@ def _materialize(
             "entries": {"omh": {"settings": {"omh_home": str(omh_home)}}},
         }
         _copy_plugin(resources.files("omh.plugin_bundle.omh"), hermes_home / "plugins" / "omh")
-    # JSON is valid YAML; Hermes reads it as its config.yaml.
-    (hermes_home / "config.yaml").write_text(json.dumps(config, indent=2) + "\n", encoding="utf-8")
+    if delegates(toolsets):
+        config["delegation"] = delegation_config(model, provider)
+        if omh_plugin:
+            _pin_routing_chains(omh_home, model, reasoning)
+        text = _block_yaml(config)
+    else:
+        # JSON is valid YAML; Hermes reads it as its config.yaml.
+        text = json.dumps(config, indent=2) + "\n"
+    (hermes_home / "config.yaml").write_text(text, encoding="utf-8")
     return _write_skills(hermes_home / "skills", exposed_skills)
+
+
+def delegation_config(model: str, provider: str) -> dict[str, object]:
+    """The `delegation:` block both arm homes of a delegating run carry, byte for byte."""
+    return {
+        "model": model,
+        "provider": provider,
+        "oneshot_max_children": ARM_DELEGATION_MAX_CHILDREN,
+        "max_concurrent_children": ARM_DELEGATION_MAX_CHILDREN,
+        "max_spawn_depth": 1,
+        "worktree_isolation": False,
+    }
+
+
+def _pin_routing_chains(omh_home: Path, model: str, reasoning: str) -> None:
+    from ..plugin_bundle.omh.hermes_delegation import (
+        HERMES_MIXTURE_CATEGORY_CHAINS,
+        MIXTURE_CHAIN_OVERRIDES_SCHEMA_VERSION,
+        mixture_chain_overrides_path,
+    )
+
+    path = mixture_chain_overrides_path(omh_home)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    entry = [{"model": model, "reasoning_effort": reasoning}]
+    document = {
+        "schema_version": MIXTURE_CHAIN_OVERRIDES_SCHEMA_VERSION,
+        "categories": {name: entry for name in sorted(HERMES_MIXTURE_CATEGORY_CHAINS)},
+    }
+    path.write_text(json.dumps(document, indent=2) + "\n", encoding="utf-8")
+
+
+def _block_yaml(value: dict[str, object], indent: int = 0) -> str:
+    """Block YAML for the arm config's own shapes: mappings, string lists, scalars.
+
+    Strings are JSON-quoted, which YAML reads as double-quoted scalars.
+    """
+    lines: list[str] = []
+    pad = " " * indent
+    for key, item in value.items():
+        if isinstance(item, dict) and item:
+            lines.append(f"{pad}{key}:")
+            lines.append(_block_yaml(item, indent + 2).rstrip("\n"))
+        elif isinstance(item, list):
+            lines.append(f"{pad}{key}:")
+            lines.extend(f"{pad}  - {json.dumps(element)}" for element in item)
+        else:
+            lines.append(f"{pad}{key}: {json.dumps(item)}")
+    return "\n".join(lines) + "\n"
 
 
 def _copy_plugin(source: object, target: Path) -> None:

@@ -72,6 +72,14 @@ All notable changes will be documented here.
   passed, so Hermes' dangerous-command approval stays on. The toolsets each cell ran with are signed into its receipt's
   `arm_setup`; fan-in refuses a cell whose toolsets differ from the run's declared ones and a matrix whose arms differ
   from each other. Every other Hermes child keeps safe mode and `--toolsets file`.
+- **A paired run can let both arms delegate, so OMH's job decomposition can be timed against Hermes alone.**
+  `--arm-toolsets file,skills,terminal,delegation` gives both arms Hermes' own one-level `delegate_task`. Both arm
+  homes then carry the same child settings (up to 6 children instead of Hermes' one-shot default of 2, no deeper
+  children, no per-child worktree) and run every child on the arm's own model; the variant's OMH routing chains are
+  pinned to that model too. Each cell's signed `cell_trace` now says how many delegate children ran, their API calls,
+  how many ran at once, and which models the cell's sessions used, and fan-in refuses a delegating cell whose trace is
+  missing or names another model. A delegating cell's usage reports no cost rather than one that may count the
+  children twice; tokens and API calls still sum. Without `delegation` nothing changes.
 
 ## 4.0.8 - 2026-11-15
 

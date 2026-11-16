@@ -122,6 +122,45 @@ class HermesChildUsageReaderTests(unittest.TestCase):
             ("qwen3-coder-next-rotated", "estimated", "provider_models_api"),
         )
 
+    def test_delegate_child_rows_sum_their_counts_but_report_no_cost(self) -> None:
+        # Hermes folds a delegate child's cost into the parent's running total,
+        # so parent + child rows may count the child twice: the cost is left
+        # out (unmeasured), never doubled. Counts are per-row deltas and sum.
+        db_rows = (
+            _row(id="parent", started_at=1.0, cost=0.75, input=100, output=20, api_calls=2),
+            _row(id="child", parent="parent", started_at=2.0, cost=0.5, input=30, output=5, api_calls=1),
+        )
+        with closing(sqlite3.connect(self.home / "state.db")) as db, db:
+            db.execute(_SESSIONS_DDL)
+            for row in db_rows:
+                db.execute(_INSERT, row)
+            db.execute("UPDATE sessions SET source = 'subagent' WHERE id = 'child'")
+        usage = read_hermes_child_usage(self.home)
+        self.assertEqual((usage["input_tokens"], usage["output_tokens"], usage["api_calls"]), (130, 25, 3))
+        for key in ("estimated_cost_usd", "cost_status", "cost_source"):
+            self.assertNotIn(key, usage)
+        self.assertEqual(usage["model"], "qwen3-coder-next")
+
+    def test_an_excluded_subagent_row_does_not_withhold_the_cell_cost(self) -> None:
+        with closing(sqlite3.connect(self.home / "state.db")) as db, db:
+            db.execute(_SESSIONS_DDL)
+            db.execute(_INSERT, _row(id="old-child", started_at=0.5))
+            db.execute(_INSERT, _row(id="cell", started_at=1.0))
+            db.execute("UPDATE sessions SET source = 'subagent' WHERE id = 'old-child'")
+        usage = read_hermes_child_usage(self.home, exclude=frozenset({"old-child"}))
+        self.assertEqual(usage["estimated_cost_usd"], 0.125)
+
+    def test_without_subagent_rows_the_summary_is_unchanged(self) -> None:
+        rows = [(11, 7, 3, 0, 2, 1, 0.125, "m", "p", "estimated", "src")]
+        self.assertEqual(summarize_session_rows(rows), summarize_session_rows(rows, has_subagents=False))
+        self.assertEqual(summarize_session_rows(rows)["estimated_cost_usd"], 0.125)
+        withheld = summarize_session_rows(rows, has_subagents=True)
+        self.assertEqual(
+            {key: value for key, value in summarize_session_rows(rows).items()
+             if key not in ("estimated_cost_usd", "cost_status", "cost_source")},
+            withheld,
+        )
+
     def test_an_unpriced_route_keeps_hermes_zero_with_the_status_that_explains_it(self) -> None:
         # Hermes stores `COALESCE(estimated_cost_usd, 0) + COALESCE(delta, 0)`
         # per call, so an unpriced route reads 0.0 with `cost_status`

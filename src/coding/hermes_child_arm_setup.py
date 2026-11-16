@@ -6,8 +6,8 @@ ignore-user-config, file-only transport. This module holds the value the
 dispatcher reads and the from-disk observation it signs, and spawns nothing.
 
 Both arms of one run take the same Hermes toolsets. The default is
-`file,skills`; the run may opt into `terminal` as well, for both arms at once
-(`parse_arm_toolsets`). The toolsets the child was spawned with are signed
+`file,skills`; the run may opt into `terminal` and `delegation` as well, for
+both arms at once (`parse_arm_toolsets`). The toolsets the child was spawned with are signed
 beside the home reading, so fan-in can refuse a cell that ran with others.
 """
 
@@ -24,7 +24,10 @@ from ..quality.paired_run_values import exposure_digest
 ARM_SETUP_FIELDS: Final = frozenset({"omh_plugin", "exposure_digest", "toolsets"})
 # The closed set of Hermes toolsets a paired-run arm may be given, in the
 # order the argv names them. `file` and `skills` are always present.
-ARM_TOOLSET_NAMES: Final = ("file", "skills", "terminal")
+# `delegation` gives both arms Hermes' own one-level `delegate_task`; the arm
+# homes then pin the child cap and every child's model (`paired_run_arm_home`).
+ARM_TOOLSET_NAMES: Final = ("file", "skills", "terminal", "delegation")
+DELEGATION_TOOLSET: Final = "delegation"
 DEFAULT_ARM_TOOLSETS: Final = "file,skills"
 _REQUIRED_ARM_TOOLSETS: Final = frozenset({"file", "skills"})
 _DIGEST: Final = re.compile(r"^[0-9a-f]{64}$")
@@ -82,6 +85,11 @@ def parse_arm_toolsets(value: str) -> str:
     if not _REQUIRED_ARM_TOOLSETS <= set(names):
         raise ValueError("--arm-toolsets must include file and skills")
     return ",".join(name for name in ARM_TOOLSET_NAMES if name in names)
+
+
+def delegates(toolsets: str) -> bool:
+    """Whether a canonical toolsets value gives the arm `delegate_task`."""
+    return DELEGATION_TOOLSET in toolsets.split(",")
 
 
 def observe_arm_setup(arm_home: PairedRunArmHome) -> ArmSetup:
