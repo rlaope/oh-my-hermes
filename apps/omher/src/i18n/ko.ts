@@ -1393,4 +1393,11 @@ export const ko: Record<Key, string> = {
   "dock.needs": "{name}: 확인이 필요해요",
   "dock.failed": "{name}: 실패",
   "dock.running": "{name}: 작업 중",
+  "term.fgRunning": "{name} 실행 중",
+  "term.moreBelow": "아래에 더 있음",
+  "term.collapseAll": "모든 폴더 접기",
+  "term.expandAll": "모든 폴더 펼치기",
+  "term.collapseOthers": "다른 폴더 접기",
+  "term.folderOpen": "{name}의 터미널 보기",
+  "term.folderClose": "{name}의 터미널 숨기기",
 };

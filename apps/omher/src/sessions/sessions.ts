@@ -30,6 +30,7 @@ import { applyLook, termOptions } from "./term/look";
 import { onTermSettings, readTermSettings } from "./term/settings";
 import { termTheme } from "./term/themes";
 import { getShellHost } from "../terminal/host";
+import { onSessionFg } from "./fg";
 import { acpRow, agentDef, agentLabel, continues, draftAgent, draftFolder, draftOpen, hermesOnly, installLine, isBuiltin, isGone, isShell, isTerminalRec, OPEN_KEY, opensAs, parseOpens, parseRecent, pushRecent, RECENT_KEY, registerAcp, sessionMode, type AgentId, type AgentInfo, type OpenAs, type Unseen, type Opens, type Recent, type SessionRec } from "./agents";
 import { NAME_MAX, parseTitles, promptTitle, putTitle, TITLES_KEY } from "./titles";
 import { getDraft, setDraft as setUnsent } from "../app/drafts";
@@ -1203,6 +1204,8 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
 
   /** How many times session `id`'s terminal was started again (Restart): the view keys its terminal on it. */
   const termRuns = new Map<string, number>();
+  /** What stops following each session's foreground CLI (its pty's `session-fg` events). */
+  const fgOff = new Map<string, () => void>();
 
   const startTerm = async (id: string, t: Term) => {
     const r = rec(id);
@@ -1231,6 +1234,9 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
     try {
       const onExit = (code: number | null) => {
         t.closed = true;
+        fgOff.get(id)?.();
+        fgOff.delete(id);
+        if (rec(id)?.fgAgent) setSessionFg(id, null);
         if (!ofChat) {
           patchRec(id, { status: "exited", exitCode: code });
           tellEnd(id, "ended", { code });
@@ -1242,6 +1248,9 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
         ? (await getShellHost().start(r.cwd || null, cols, rows, onData, onExit)).id
         : await host.start(r.agent, r.cwd, cols, rows, onData, onExit, resume, accountOf(r));
       t.hostId = hostId;
+      // the TERMINALS row's mark follows the CLI the shell sees in the foreground (`session-fg`)
+      fgOff.get(id)?.();
+      fgOff.set(id, onSessionFg(hostId, (agent) => setSessionFg(id, agent)));
       if (t.closed) {
         // closed while starting
         void t.io.close(hostId);
@@ -1277,6 +1286,8 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
   const disposeTerm = (id: string) => {
     const t = terms.get(id);
     if (!t) return;
+    fgOff.get(id)?.();
+    fgOff.delete(id);
     if (t.hostId !== null && !t.closed) void t.io.close(t.hostId).catch(() => undefined);
     t.closed = true;
     if (t.settle !== null) clearTimeout(t.settle);
@@ -1754,6 +1765,8 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
     draftHere,
     startTerminal,
     setSessionFg,
+    /** The pty id session `id`'s terminal runs on (the `session-fg` event's id), null before it started. */
+    ptyOf: (id: string): number | null => terms.get(id)?.hostId ?? null,
     /** The native folder dialog (TERMINALS + menu's "Choose folder…"); null when cancelled. */
     pickFolder: (at: string) => host.pickFolder(at),
     continuePast,

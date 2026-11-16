@@ -12,7 +12,7 @@
 // dot. A session that no longer runs steps back.
 // Line 1 is the session's name (the person's, the agent's own title, a summary of the first message, else the
 // folder) and line 2 the folder and the agent. Double-click the name, or right-click › Rename, to name it.
-import { Fragment, useEffect, useLayoutEffect, useRef, useState, type RefObject } from "react";
+import { Fragment, useEffect, useLayoutEffect, useRef, useState, type PointerEvent as ReactPointerEvent, type RefObject } from "react";
 import { useStore } from "../state/store";
 import { CloseIcon, LiveRing, PlusIcon, Popover, TypingDots } from "../ui";
 import { busyFor, shortTime } from "../app/time";
@@ -22,6 +22,8 @@ import { composing } from "../lib/ime";
 import { AgentMark } from "./AgentMark";
 import { agentDef, agentLabel, draftFolder, folderChoices, folderName, hermesOnly, installLine, isTerminalRec, menuFocus, menuOrder, missingNote, parentPath, SHELL, termCli, termFallbackName, termGroups, terminalAgents, termMarkAgent, termStatus, tildePath, type AgentId, type AgentInfo, type RowMark, type SessionRec, type TermStatus, type Unseen } from "./agents";
 import { TermRowMark } from "./TermRowMark";
+import { allCollapsed, collapseOthers, folderSummary, getFolderPrefs, moveFolder, orderFolders, revealFolder as openFolder, setAllFolders, setFolderPrefs, toggleFolder, useFolderPrefs } from "./folders";
+import { ChevronDown, ChevronRight } from "../ui/icons";
 import { pinToDock, useDock } from "../sidebar/dockState";
 import { getHost, type PastChat } from "./host";
 import { getSessions, useSessions } from "./sessions";
@@ -58,6 +60,7 @@ export function SessionsHeader() {
     <div className="side-sh side-sh-row">
       <span>{t("nav.terminals")}</span>
       <span className="ss-add">
+        <CollapseAllButton />
         <button
           ref={plus}
           type="button"
@@ -398,6 +401,19 @@ function NewSessionMenu({ onClose, trigger }: { onClose: () => void; trigger: Re
         )}
         {unfold && parts?.more.map(row)}
         </div>
+        {more && (
+          <button
+            type="button"
+            className="ss-more-cue"
+            tabIndex={-1}
+            aria-hidden="true"
+            onClick={() => list.current?.scrollBy({ top: list.current.clientHeight - 32, behavior: "smooth" })}
+            data-testid="session-menu-more-below"
+          >
+            <ChevronDown size={10} />
+            {t("term.moreBelow")}
+          </button>
+        )}
         {hermesOnly(ss.agents) && <AddOmhLine onPick={() => close("pick")} />}
       </div>
     </Popover>
@@ -596,10 +612,34 @@ export function SessionList({ needle = "", query = "" }: { needle?: string; quer
     document.querySelector<HTMLElement>(`[data-testid="session-${refocus}"] .ss-open`)?.focus();
     setRefocus(null);
   }, [refocus]);
-  // the open terminal's row scrolls into view inside TERMINALS (never moving BOTS)
+  const folders = useFolderPrefs();
+  const currentCwd = current ? ss.list.find((r) => r.id === current)?.cwd : undefined;
+  // the open terminal's folder opens (reveal) and its row scrolls into view inside TERMINALS (never moving BOTS)
   useEffect(() => {
-    if (current) document.querySelector(`[data-testid="session-${current}"]`)?.scrollIntoView({ block: "nearest" });
-  }, [current]);
+    if (currentCwd !== undefined) openFolder(currentCwd);
+  }, [current, currentCwd]);
+  // ...and stays in view when the region changes size (the dock gains a row, the window shrinks) or rows land above
+  // it (a newer folder lists first): only then, never against the person's own scrolling
+  const nav = useRef<HTMLElement>(null);
+  const rowsKey = ss.list.map((r) => r.id).join(",");
+  useEffect(() => {
+    if (!current) return;
+    const keep = () => {
+      const list = nav.current;
+      const row = list?.querySelector<HTMLElement>(`[data-testid="session-${CSS.escape(current)}"]`);
+      if (!list || !row) return;
+      const l = list.getBoundingClientRect();
+      const r = row.getBoundingClientRect();
+      if (r.top < l.top || r.bottom > l.bottom) row.scrollIntoView({ block: "nearest" });
+    };
+    const id = requestAnimationFrame(keep);
+    const ro = typeof ResizeObserver === "function" ? new ResizeObserver(keep) : null;
+    if (nav.current) ro?.observe(nav.current);
+    return () => {
+      cancelAnimationFrame(id);
+      ro?.disconnect();
+    };
+  }, [current, folders.collapsed, rowsKey]);
   const cancel = (id: string) => {
     setConfirm(null);
     setRefocus(id);
@@ -614,16 +654,26 @@ export function SessionList({ needle = "", query = "" }: { needle?: string; quer
   if (terms.length === 0) return <SessionStart />;
   const shown = terms.filter((r) => sessionMatches(r, needle));
   return (
-    <nav className="bot-list ss-list" aria-label={t("nav.terminals")} data-testid="session-list">
+    <nav ref={nav} className="bot-list ss-list" aria-label={t("nav.terminals")} data-testid="session-list">
       {needle && shown.length === 0 && (
         <div className="bot-empty" data-testid="session-none-match">
           {t("side.noSession", { q: query })}
         </div>
       )}
-      {termGroups(shown).map((g) => (
-        <div key={g.cwd} className="tg" role="group" aria-label={folderName(g.cwd)} data-testid="term-group" data-cwd={g.cwd}>
-          <FolderHead cwd={g.cwd} home={ss.home} />
-          {g.rows.map((rec) =>
+      {orderFolders(termGroups(shown), folders.order).map((g, gi, all) => {
+        // a search shows every match, collapsed or not
+        const shut = !needle && folders.collapsed.includes(g.cwd);
+        return (
+        <div key={g.cwd} className={`tg${shut ? " shut" : ""}`} role="group" aria-label={folderName(g.cwd)} data-testid="term-group" data-cwd={g.cwd} data-collapsed={shut ? "true" : undefined}>
+          <FolderHead
+            cwd={g.cwd}
+            home={ss.home}
+            shut={shut}
+            index={gi}
+            all={all.map((x) => x.cwd)}
+            summary={folderSummary(g.rows.map((r) => termStatus(r, ss.unseen[r.id], now)))}
+          />
+          {!shut && g.rows.map((rec) =>
             confirm === rec.id ? (
               <div
                 key={rec.id}
@@ -661,7 +711,8 @@ export function SessionList({ needle = "", query = "" }: { needle?: string; quer
             ),
           )}
         </div>
-      ))}
+        );
+      })}
     </nav>
   );
 }
@@ -675,9 +726,76 @@ function FolderGlyph() {
   );
 }
 
-/** A TERMINALS group's header: the folder's name (semibold) and, for a git repository, its branch in small grey. */
-function FolderHead({ cwd, home }: { cwd: string; home: string | null }) {
+/** "Collapse all" / "Expand all" for the TERMINALS folders, in the section header next to its +. */
+function CollapseAllButton() {
+  const ss = useSessions();
+  const prefs = useFolderPrefs();
+  const all = [...new Set(ss.list.filter((r) => isTerminalRec(ss.agents, r)).map((r) => r.cwd))];
+  if (all.length < 2) return null;
+  const shut = allCollapsed(prefs, all);
+  const label = shut ? t("term.expandAll") : t("term.collapseAll");
+  return (
+    <button type="button" className="ss-plus ss-fold-all" aria-label={label} title={label} onClick={() => setFolderPrefs(setAllFolders(getFolderPrefs(), all, !shut))} data-testid="term-collapse-all" data-all={shut ? "collapsed" : "expanded"}>
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+        {shut ? <path d="m7 9 5-5 5 5M7 15l5 5 5-5" /> : <path d="m7 4 5 5 5-5M7 20l5-5 5 5" />}
+      </svg>
+    </button>
+  );
+}
+
+/** Drag folder headers to reorder them: the header under the pointer is where it goes (saved on this computer). */
+function useFolderDrag(cwd: string, all: readonly string[]) {
+  return (e: ReactPointerEvent<HTMLDivElement>) => {
+    if (e.button !== 0 || (e.target as Element).closest("button:not(.tg-open)")) return;
+    const sx = e.clientX;
+    const sy = e.clientY;
+    const head = e.currentTarget;
+    let moving = false;
+    const heads = () => [...(head.closest(".ss-list")?.querySelectorAll<HTMLElement>(".tg-h") ?? [])];
+    const slot = (y: number) => {
+      const hs = heads();
+      const i = hs.findIndex((h) => {
+        const g = h.closest(".tg")!.getBoundingClientRect();
+        return y >= g.top && y <= g.bottom;
+      });
+      return i;
+    };
+    const move = (ev: PointerEvent) => {
+      if (!moving && Math.hypot(ev.clientX - sx, ev.clientY - sy) < 5) return;
+      moving = true;
+      head.classList.add("lifted");
+      const to = slot(ev.clientY);
+      for (const [i, h] of heads().entries()) h.classList.toggle("drop", i === to && h !== head);
+    };
+    const up = (ev: PointerEvent) => {
+      removeEventListener("pointermove", move);
+      removeEventListener("pointerup", up);
+      head.classList.remove("lifted");
+      for (const h of heads()) h.classList.remove("drop");
+      if (!moving) return;
+      const to = slot(ev.clientY);
+      if (to >= 0 && all[to] !== cwd) setFolderPrefs({ ...getFolderPrefs(), order: moveFolder(all, cwd, to) });
+      // the click that follows a drag toggles nothing
+      const stop = (c: MouseEvent) => {
+        c.stopPropagation();
+        c.preventDefault();
+      };
+      addEventListener("click", stop, { capture: true, once: true });
+      setTimeout(() => removeEventListener("click", stop, { capture: true }), 0);
+    };
+    addEventListener("pointermove", move);
+    addEventListener("pointerup", up);
+  };
+}
+
+/** A TERMINALS group's header, Orca-style: a chevron that collapses its sessions (kept on this computer), the
+ *  folder's name (semibold) and its git branch in small grey; collapsed, it shows how many sessions it holds and
+ *  their live summary (the spinner while one prints, the amber dot while one waits for you, a red dot when one
+ *  failed). Right-click: New terminal here, Collapse others, Show in Finder. Drag to reorder. */
+function FolderHead({ cwd, home, shut, index, all, summary }: { cwd: string; home: string | null; shut: boolean; index: number; all: string[]; summary: ReturnType<typeof folderSummary> }) {
   const [branch, setBranch] = useState("");
+  const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
+  const drag = useFolderDrag(cwd, all);
   useEffect(() => {
     let live = true;
     if (cwd)
@@ -689,17 +807,103 @@ function FolderHead({ cwd, home }: { cwd: string; home: string | null }) {
       live = false;
     };
   }, [cwd]);
+  const name = folderName(cwd);
+  const toggle = () => setFolderPrefs(toggleFolder(getFolderPrefs(), cwd));
   return (
-    <div className="tg-h" title={tildePath(cwd, home)} data-testid="term-group-head">
-      <span className="tg-ic">
-        <FolderGlyph />
-      </span>
-      <span className="tg-n">{folderName(cwd)}</span>
-      {branch && (
-        <span className="tg-b" data-testid="term-group-branch">
-          {branch}
+    <div
+      className={`tg-h${index === 0 ? " first" : ""}`}
+      title={tildePath(cwd, home)}
+      data-testid="term-group-head"
+      onPointerDown={drag}
+      onContextMenu={(e) => {
+        e.preventDefault();
+        const side = e.currentTarget.closest(".side")?.getBoundingClientRect();
+        const right = (side?.right ?? innerWidth) - 6;
+        setMenu({ x: Math.max(6, Math.min(e.clientX, right - MENU_W_PX)), y: Math.max(6, Math.min(e.clientY, innerHeight - menuHeight(3) - 6)) });
+      }}
+    >
+      <button type="button" className="tg-open" aria-expanded={!shut} aria-label={t(shut ? "term.folderOpen" : "term.folderClose", { name })} onClick={toggle} data-testid="term-group-toggle">
+        <span className="tg-chev" aria-hidden="true">{shut ? <ChevronRight size={9} /> : <ChevronDown size={9} />}</span>
+        <span className="tg-ic">
+          <FolderGlyph />
         </span>
-      )}
+        <span className="tg-n">{name}</span>
+        {shut && (
+          <span className="tg-sum" data-testid="term-group-summary" data-busy={summary.busy ? "true" : undefined} data-needs={summary.needs ? "true" : undefined} data-failed={summary.failed ? "true" : undefined}>
+            {summary.busy && <TermStatusGlyph status="busy" />}
+            {summary.needs && <span className="tg-dot needs" title={t("ss.mark.bell")} />}
+            {summary.failed && <span className="tg-dot err" title={t("ss.mark.error")} />}
+            <span className="tg-count" data-testid="term-group-count">
+              {summary.count}
+            </span>
+          </span>
+        )}
+        {branch && (
+          <span className="tg-b" data-testid="term-group-branch">
+            {branch}
+          </span>
+        )}
+      </button>
+      {menu && <FolderMenu at={menu} cwd={cwd} all={all} onDismiss={() => setMenu(null)} />}
+    </div>
+  );
+}
+
+/** A folder header's right-click menu: New terminal here (the + menu's Shell in that folder), Collapse others,
+ *  Show in Finder. */
+function FolderMenu({ at, cwd, all, onDismiss }: { at: { x: number; y: number }; cwd: string; all: string[]; onDismiss: () => void }) {
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    ref.current?.querySelector<HTMLButtonElement>("button")?.focus();
+    const onDown = (e: globalThis.MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) onDismiss();
+    };
+    document.addEventListener("mousedown", onDown);
+    return () => document.removeEventListener("mousedown", onDown);
+  }, [onDismiss]);
+  const items: [string, string, () => void][] = [
+    ["term-folder-new", t("term.here"), () => void getSessions().startTerminal(SHELL, cwd)],
+    ["term-folder-others", t("term.collapseOthers"), () => setFolderPrefs(collapseOthers(getFolderPrefs(), all, cwd))],
+    ["term-folder-reveal", revealWord(), () => void getHost().reveal(cwd).catch(() => undefined)],
+  ];
+  return (
+    <div
+      ref={ref}
+      className="row-menu"
+      style={{ left: at.x, top: at.y }}
+      role="menu"
+      aria-label={folderName(cwd)}
+      data-testid="term-folder-menu"
+      onKeyDown={(e) => {
+        if (e.key === "Escape") {
+          e.preventDefault();
+          e.stopPropagation();
+          onDismiss();
+          return;
+        }
+        const btns = [...(ref.current?.querySelectorAll<HTMLButtonElement>("button") ?? [])];
+        const i = btns.indexOf(document.activeElement as HTMLButtonElement);
+        const to = e.key === "ArrowDown" ? i + 1 : e.key === "ArrowUp" ? i - 1 + btns.length : null;
+        if (to === null) return;
+        e.preventDefault();
+        btns[to % btns.length]?.focus();
+      }}
+    >
+      {items.map(([id, label, run]) => (
+        <button
+          key={id}
+          type="button"
+          role="menuitem"
+          className="row-mi"
+          data-testid={id}
+          onClick={() => {
+            onDismiss();
+            run();
+          }}
+        >
+          {label}
+        </button>
+      ))}
     </div>
   );
 }
@@ -948,7 +1152,9 @@ function TermRow({ rec, unseen, active, now, onClose }: { rec: SessionRec; unsee
   const body = (
     <>
       <TermStatusGlyph status={status} />
-      <TermRowMark agent={markAgent} live={live} size={16} />
+      {/* live: a CLI runs in it (its own, or one the shell reports in front): the amber frame; a bare shell prompt and
+          an ended session keep the plain frame */}
+      <TermRowMark agent={markAgent} live={live && markAgent !== null} size={16} />
       {editing ? (
         <NameInput initial={title.title} auto={title.source !== "person"} onDone={endEdit} />
       ) : (

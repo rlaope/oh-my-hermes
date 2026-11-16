@@ -881,7 +881,7 @@ export function SessionView() {
           </span>
           <span className="ss-head-now">
             <span
-              className={`ss-head-st ${rec.view === "terminal" && canToggle ? "mode" : rec.status}${showChat && !turn ? " idle" : ""}${showChat && needs ? " needs" : ""}`}
+              className={`ss-head-st ${rec.view === "terminal" && canToggle ? "mode" : rec.status}${mode === "terminal" ? " term" : ""}${showChat && !turn ? " idle" : ""}${showChat && needs ? " needs" : ""}`}
               title={status}
               data-testid="session-status"
             >

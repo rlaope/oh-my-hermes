@@ -527,6 +527,11 @@
 .ss-head-st.failed {
   color: var(--danger);
 }
+/* a terminal session's running dot is the colour of its row's spinner */
+.ss-head-st.term.running::before,
+.ss-head-st.term.starting::before {
+  background: var(--term-run);
+}
 /* The space around a terminal and its colour come from Settings > Terminal (term/look.ts sets both on this box):
    --term-pad is the left side, and the top, right and bottom keep the proportions of the 14 6 8 16 it always had;
    --term-bg is the picked theme's background, so the space is the terminal's colour and not the page's. */
@@ -1137,16 +1142,82 @@
   padding-bottom: 8px;
 }
 .tg-h {
-  display: grid;
-  grid-template-columns: 16px minmax(0, 1fr);
-  column-gap: 6px;
-  align-items: center;
-  padding: 4px var(--side-x) 3px;
+  position: relative;
+  padding: 4px 0 3px;
   color: var(--ink);
+  border-radius: 8px;
+  flex: none;
+}
+/* the first folder keeps the same air under the TERMINALS label as every folder has above it */
+.tg-h.first {
+  margin-top: 6px;
+}
+.tg-h.lifted {
+  opacity: 0.55;
+}
+.tg-h.drop {
+  box-shadow: inset 0 2px 0 var(--muted);
+}
+/* the whole header is the toggle: chevron, folder icon, name (and, collapsed, its count and live summary); the branch
+   sits under the name */
+.tg-open {
+  display: grid;
+  grid-template-columns: 10px 16px minmax(0, 1fr) auto;
+  column-gap: 5px;
+  align-items: center;
+  width: 100%;
+  padding: 0 8px 0 calc(var(--side-x) - 6px);
+  min-height: 22px;
+  background: none;
+  border: 0;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: default;
+  border-radius: 8px;
+}
+.tg-open:hover {
+  background: var(--hover);
+}
+.tg-open:focus-visible {
+  outline: 2px solid var(--muted);
+  outline-offset: -2px;
+}
+.tg-chev {
+  display: grid;
+  place-items: center;
+  color: var(--quiet);
+}
+.tg-sum {
+  grid-column: 4;
+  grid-row: 1;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-family: var(--mono);
+  font-size: 10.5px;
+  color: var(--muted);
+}
+.tg-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+}
+.tg-dot.needs {
+  background: var(--needs);
+}
+.tg-dot.err {
+  background: var(--danger);
+}
+.tg.shut {
+  padding-bottom: 2px;
 }
 .tg-ic {
   display: grid;
   place-items: center;
+  width: 16px;
+  height: 16px;
+  overflow: visible;
   color: #d9a03a;
 }
 .tg-n {
@@ -1157,7 +1228,7 @@
   text-overflow: ellipsis;
 }
 .tg-b {
-  grid-column: 2;
+  grid-column: 3 / 5;
   font-family: var(--mono);
   font-size: 10px;
   color: var(--muted);
@@ -1225,8 +1296,18 @@
   display: grid;
   place-items: center;
 }
+.side,
+.head,
+.dock {
+  --term-run: #f2b705;
+}
+[data-theme="light"] .side,
+[data-theme="light"] .head,
+[data-theme="light"] .dock {
+  --term-run: #c48a00;
+}
 .tst.busy {
-  color: #f2b705;
+  color: var(--term-run);
 }
 .tst.busy svg {
   animation: tst-turn 0.9s linear infinite;
@@ -1240,9 +1321,6 @@
 .tst.bell {
   color: #e8a33c;
 }
-[data-theme="light"] .tst.busy {
-  color: #c48a00;
-}
 @keyframes tst-turn {
   to {
     transform: rotate(360deg);
@@ -1255,14 +1333,58 @@
   flex: none;
   color: var(--muted);
 }
-/* running: a hairline rounded square a few px outside the mark (square logos keep their air) */
-.trm.live::after {
+/* every mark the same: drawn bare at the slot's size, square corners rounded alike (a full-colour image mark such as
+   pi's or OMH's reads as one set with the line marks), no tile behind any of them */
+.trm img,
+.trm svg {
+  display: block;
+  border-radius: 3px;
+}
+/* one frame for every mark in a row or tab, running or not (an exited pi and a running Codex read alike): a hairline
+   rounded square a few px outside the mark; running turns it the running colour. It never moves */
+.ss-row .trm::after,
+.termpanel-tab .trm::after,
+.ss-head-mark .trm::after {
   content: "";
   position: absolute;
-  inset: -4px;
-  border-radius: 6px;
-  box-shadow: 0 0 0 1px color-mix(in srgb, var(--ok) 30%, transparent);
+  inset: -3px;
+  border-radius: 5px;
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--muted) 45%, transparent);
   pointer-events: none;
+}
+/* live (the program prints now): the same frame in the running colour, beside the row's amber spinner */
+.ss-row .trm.live::after,
+.termpanel-tab .trm.live::after,
+.ss-head-mark .trm.live::after {
+  box-shadow: 0 0 0 1px var(--term-run, #f2b705);
+}
+/* the + menu: rows below the cut get a visible cue, not only a fade */
+.ss-more-cue {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  width: 100%;
+  height: 20px;
+  margin-top: 2px;
+  border: 0;
+  border-top: 1px solid var(--line-soft);
+  background: none;
+  color: var(--muted);
+  font: inherit;
+  font-size: 10.5px;
+  cursor: default;
+}
+.ss-more-cue:hover {
+  color: var(--ink);
+}
+.ss-fold-all {
+  margin-right: 2px;
+}
+/* a bottom-panel tab names the CLI in its shell's foreground with its mark */
+.termpanel-tab-name .trm {
+  margin-right: 5px;
+  vertical-align: -2px;
 }
 .ss-at .ss-path,
 .ss-folders .ss-path {

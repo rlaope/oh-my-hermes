@@ -23,6 +23,7 @@ import { t } from "../i18n";
 import { ThreadTree } from "../threads/ThreadTree";
 import { Dock } from "./Dock";
 import { pinToDock, useDock } from "./dockState";
+import { revealBotTop, revealPending } from "./revealBot";
 
 const sessionBackground = (target: EventTarget) => target instanceof Element && !target.closest(".ss-row, button, input, textarea, select, a, [contenteditable], [role=menu], [role=menuitem]");
 
@@ -30,6 +31,8 @@ const sessionBackground = (target: EventTarget) => target instanceof Element && 
 function useRevealBot(bot: string | null, thread: string | null, inChat: boolean) {
   useEffect(() => {
     if (!inChat || !bot) return;
+    // a bot clicked in the sidebar or the dock rises to the top on its own (revealBot): no nearest-scroll under it
+    if (!thread && revealPending(bot)) return;
     const sel = thread ? `[data-testid="thread-row-${CSS.escape(thread)}"]` : `[data-testid="bot-${CSS.escape(bot)}"]`;
     document.querySelector(sel)?.scrollIntoView({ block: "nearest" });
   }, [bot, thread, inChat]);
@@ -107,7 +110,10 @@ export function Sidebar() {
               active={inChat && s.selectedBot === b.name && !s.ui.thread}
               asks={asks.filter((a) => a.bot === b.name)}
               pinned={pinned}
-              onSelect={() => void s.selectBot(b.name)}
+              onSelect={() => {
+                revealBotTop(b.name);
+                void s.selectBot(b.name);
+              }}
               drag={drag.row(b.name)}
               groupId={hasThreads ? groupId : undefined}
               latest={hasThreads ? threadsLatest(s.threads[b.name]!, (th) => s.chats[threadKey(b.name, th)]) : null}

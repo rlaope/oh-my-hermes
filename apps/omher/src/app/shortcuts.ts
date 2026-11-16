@@ -11,6 +11,7 @@
 //          terminal sees it, so it works with the keyboard inside a terminal (it is omher's, not the program's)
 // An approval card's own 1/2/3 keys live on the card (src/chat/cards), never here.
 // None of these fire while an input method is composing (a Korean, Japanese or Chinese word not yet committed).
+import { getFolderPrefs, orderFolders } from "../sessions/folders";
 import { useEffect } from "react";
 import { getStore, selectAsks, selectSidebarBots, type Ask, type FocusAsk } from "../state/store";
 import { getSessions } from "../sessions/sessions";
@@ -134,7 +135,7 @@ export function useShortcuts(): void {
       } else if (hit.kind === "session") {
         const ss = getSessions().getState();
         // TERMINALS order: the folder groups as the sidebar shows them
-        const ids = termGroups(ss.list.filter((r) => isTerminalRec(ss.agents, r))).flatMap((g) => g.rows.map((r) => r.id));
+        const ids = orderFolders(termGroups(ss.list.filter((r) => isTerminalRec(ss.agents, r))), getFolderPrefs().order).flatMap((g) => g.rows.map((r) => r.id));
         const to = stepSession(ids, s.ui.view === "session" ? s.ui.session : null, hit.step);
         if (to) a.openSession(to);
       } else if (hit.kind === "next-ask") {

@@ -1225,7 +1225,8 @@ body.row-dragging * {
 .dock {
   flex: none;
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  /* the tiles fill each row (Arc): Dock.tsx sets the column count so no tile is left alone on a row (4 = 2x2) */
+  grid-template-columns: repeat(6, minmax(0, 1fr));
   grid-auto-rows: 44px;
   gap: 6px;
   padding: 8px 0 2px;
@@ -1261,8 +1262,8 @@ body.row-dragging * {
 }
 .dk-f {
   position: relative;
-  width: 30px;
-  height: 30px;
+  width: 24px;
+  height: 24px;
   display: grid;
   place-items: center;
   line-height: 0;
@@ -1274,16 +1275,27 @@ body.row-dragging * {
 .dk-f img {
   border-radius: 6px;
 }
-.dk-f.ring::after {
+/* running: a thin turning ring centred on the tile (not on the face, whose box can sit off the tile's middle), well
+   inside the tile's edges; a bot's in the bots' ring colour, a terminal's in the running-terminal colour */
+.dk-t.ring::after {
   content: "";
   position: absolute;
-  inset: -3px;
+  top: calc(50% - 16px);
+  left: calc(50% - 16px);
+  width: 32px;
+  height: 32px;
+  box-sizing: border-box;
   border-radius: 50%;
-  border: 1.5px solid transparent;
-  border-top-color: var(--spin);
-  border-right-color: color-mix(in srgb, var(--spin) 45%, transparent);
+  /* a faint whole circle with the turning arc on it: still (reduced motion, a still shot) it reads as one ring round
+     the face, not a mark off to one side */
+  border: 1.5px solid color-mix(in srgb, var(--dk-run, var(--spin)) 22%, transparent);
+  border-top-color: var(--dk-run, var(--spin));
+  border-right-color: var(--dk-run, var(--spin));
   animation: dk-turn 1.1s linear infinite;
   pointer-events: none;
+}
+.dk-t.ring.term {
+  --dk-run: var(--term-run);
 }
 .dk-dot {
   position: absolute;
@@ -1306,16 +1318,11 @@ body.row-dragging * {
   }
 }
 @media (prefers-reduced-motion: reduce) {
-  .dk-f.ring::after {
+  .dk-t.ring::after {
     animation: none;
   }
 }
-/* a short window keeps one row of tiles; a sidebar too narrow for three tiles hides the dock */
-@media (max-height: 699px) {
-  .dock > .dk-t:nth-of-type(n + 4) {
-    display: none;
-  }
-}
+/* a sidebar too narrow for three tiles hides the dock (a short window keeps one row: Dock.tsx) */
 .side {
   container: side / inline-size;
 }

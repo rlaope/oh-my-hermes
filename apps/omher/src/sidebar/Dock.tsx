@@ -4,7 +4,7 @@
 // thin ring (static with reduced motion); done and idle show nothing. Click opens the bot's main chat or the
 // terminal and scrolls its row into view; right-click offers Open and Unpin; drag a tile to reorder. Tiles are one
 // roving-tabindex group (arrow keys move, Enter opens).
-import { useEffect, useRef, useState, type KeyboardEvent, type PointerEvent, type ReactNode } from "react";
+import { useEffect, useRef, useState, type CSSProperties, type KeyboardEvent, type PointerEvent, type ReactNode } from "react";
 import { selectAsks, selectSidebarBots, useStore } from "../state/store";
 import { useSessions } from "../sessions/sessions";
 import { isTerminalRec, termFallbackName, termMarkAgent, termStatus, type SessionRec } from "../sessions/agents";
@@ -13,6 +13,34 @@ import { TermRowMark } from "../sessions/TermRowMark";
 import { Avatar } from "../ui";
 import { t } from "../i18n";
 import { dockTiles, moveInDock, pinToDock, useDock } from "./dockState";
+import { revealBotTop } from "./revealBot";
+import { useNow } from "../elsewhere/useNow";
+
+/** Tiles per row for `n` tiles: rows filled edge to edge, never one tile alone under a full row (4 = 2x2). */
+export function dockCols(n: number): number {
+  return n <= 3 ? Math.max(1, n) : n === 4 ? 2 : 3;
+}
+
+/** How many of the dock's 6 grid columns tile `i` of `n` spans: a full row's tiles share the width evenly, and a
+ *  short last row stretches to fill it too (5 tiles = 3 over 2). */
+export function dockSpan(i: number, n: number): number {
+  const per = dockCols(n);
+  const last = n % per;
+  return last && i >= n - last ? 6 / last : 6 / per;
+}
+
+/** Under 700px of window height the dock keeps one row. */
+function useShortWindow(): boolean {
+  const q = typeof matchMedia === "function" ? matchMedia("(max-height: 699px)") : null;
+  const [short, setShort] = useState(!!q?.matches);
+  useEffect(() => {
+    if (!q) return;
+    const on = () => setShort(q.matches);
+    q.addEventListener("change", on);
+    return () => q.removeEventListener("change", on);
+  }, [q]);
+  return short;
+}
 
 type TileState = "needs" | "failed" | "running" | null;
 
@@ -41,6 +69,7 @@ export function Dock() {
   const [focus, setFocus] = useState(0);
   const [drag, setDrag] = useState<{ key: string; to: number } | null>(null);
   const box = useRef<HTMLDivElement>(null);
+  const short = useShortWindow();
   const bots = selectSidebarBots(s);
   const asks = selectAsks(s);
   const terms = ss.list.filter((r) => isTerminalRec(ss.agents, r));
@@ -54,7 +83,7 @@ export function Dock() {
   const recent = [...bots].sort((a, b) => lastOf(b.name) - lastOf(a.name)).map((b) => b.name);
   const exists = (k: string) => (k.startsWith("bot:") ? bots.some((b) => b.name === k.slice(4)) : !!termOf(k.slice(5)));
   const { keys } = dockTiles(dock.pins, exists, recent);
-  const now = Date.now();
+  const now = useNow(terms.some((r) => r.status === "running" || r.status === "starting"), 1_000);
   const tiles: Tile[] = keys.map((key) => {
     if (key.startsWith("bot:")) {
       const name = key.slice(4);
@@ -63,13 +92,20 @@ export function Dock() {
       const needs = asks.some((a) => mine(a.bot));
       const chats = Object.entries(s.chats).filter(([k]) => mine(k));
       const running = b.running || chats.some(([, c]) => !!c.turn);
-      const failed = chats.some(([, c]) => !c.turn && c.lastTurn?.outcome === "error");
+      // red = failed only: the newest ended turn among the bot's main chat and threads failed, and nothing runs now
+      // (an old failed thread under a bot that answered since leaves no dot)
+      const ended = chats.map(([, c]) => c.lastTurn).filter((x): x is NonNullable<typeof x> => !!x);
+      const newest = ended.sort((a, b) => (b.endedAt ?? 0) - (a.endedAt ?? 0))[0];
+      const failed = !chats.some(([, c]) => !!c.turn) && newest?.outcome === "error";
       return {
         key,
         name: b.display_name,
         state: needs ? "needs" : failed ? "failed" : running ? "running" : null,
         active: s.ui.view === "chat" && s.selectedBot === name && !s.ui.thread,
-        open: () => void s.selectBot(name),
+        open: () => {
+          revealBotTop(name);
+          void s.selectBot(name);
+        },
         face: <Avatar bot={name} size={24} />,
       };
     }
@@ -79,7 +115,8 @@ export function Dock() {
     return {
       key,
       name,
-      state: st === "bell" ? "needs" : st === "err" ? "failed" : r.status === "running" || r.status === "starting" ? "running" : null,
+      // running = a CLI runs in it (the row's amber frame); a bare shell prompt has no ring
+      state: st === "bell" ? "needs" : st === "err" ? "failed" : (r.status === "running" || r.status === "starting") && termMarkAgent(r) !== null ? "running" : null,
       active: s.ui.view === "session" && s.ui.session === r.id,
       open: () => s.openSession(r.id),
       face: <TermRowMark agent={termMarkAgent(r)} size={20} />,
@@ -97,13 +134,18 @@ export function Dock() {
     return () => document.removeEventListener("pointerdown", off, true);
   }, [menu]);
   if (!tiles.length) return null;
+  // a short window keeps one row; the columns fill each row so no tile is left alone (4 = 2x2, 5 = 3 + 2 wider)
+  const shown = short ? tiles.slice(0, 3) : tiles;
+  const cols = dockCols(shown.length);
+  const n = shown.length;
   const go = (tile: Tile) => {
     tile.open();
-    reveal(tile.key);
+    // a bot's tile slides its row to the top of BOTS (revealBotTop, in open); a terminal's row comes into view
+    if (!tile.key.startsWith("bot:")) reveal(tile.key);
   };
   const onKey = (e: KeyboardEvent, i: number) => {
-    const step = e.key === "ArrowRight" ? 1 : e.key === "ArrowLeft" ? -1 : e.key === "ArrowDown" ? 3 : e.key === "ArrowUp" ? -3 : 0;
-    const to = e.key === "Home" ? 0 : e.key === "End" ? tiles.length - 1 : step ? Math.max(0, Math.min(tiles.length - 1, i + step)) : -1;
+    const step = e.key === "ArrowRight" ? 1 : e.key === "ArrowLeft" ? -1 : e.key === "ArrowDown" ? cols : e.key === "ArrowUp" ? -cols : 0;
+    const to = e.key === "Home" ? 0 : e.key === "End" ? n - 1 : step ? Math.max(0, Math.min(n - 1, i + step)) : -1;
     if (to < 0) return;
     e.preventDefault();
     setFocus(to);
@@ -148,20 +190,21 @@ export function Dock() {
     addEventListener("pointerup", up);
   };
   return (
-    <div className="dock" ref={box} role="toolbar" aria-label={t("dock.label")} data-testid="dock">
-      {tiles.map((tile, i) => {
+    <div className="dock" ref={box} role="toolbar" aria-label={t("dock.label")} data-testid="dock" data-cols={cols}>
+      {shown.map((tile, i) => {
         const label = tile.state === "needs" ? t("dock.needs", { name: tile.name }) : tile.state === "failed" ? t("dock.failed", { name: tile.name }) : tile.state === "running" ? t("dock.running", { name: tile.name }) : tile.name;
         return (
           <button
             key={tile.key}
             type="button"
-            className={`dk-t${tile.active ? " on" : ""}${drag?.key === tile.key ? " lifted" : ""}${drag && drag.key !== tile.key && drag.to === i ? " drop" : ""}`}
+            className={`dk-t${tile.key.startsWith("term:") ? " term" : ""}${tile.state === "running" ? " ring" : ""}${tile.active ? " on" : ""}${drag?.key === tile.key ? " lifted" : ""}${drag && drag.key !== tile.key && drag.to === i ? " drop" : ""}`}
             tabIndex={i === focus ? 0 : -1}
             aria-label={label}
             aria-current={tile.active ? "true" : undefined}
             title={tile.name}
             data-testid={`dock-tile-${tile.key}`}
             data-state={tile.state ?? "idle"}
+            style={{ gridColumn: `span ${dockSpan(i, n)}` } as CSSProperties}
             onClick={() => go(tile)}
             onFocus={() => setFocus(i)}
             onKeyDown={(e) => onKey(e, i)}
@@ -171,7 +214,7 @@ export function Dock() {
               setMenu({ key: tile.key, x: e.clientX, y: e.clientY });
             }}
           >
-            <span className={`dk-f${tile.state === "running" ? " ring" : ""}`}>{tile.face}</span>
+            <span className="dk-f">{tile.face}</span>
             {(tile.state === "needs" || tile.state === "failed") && <span className={`dk-dot ${tile.state}`} data-testid="dock-dot" data-dot={tile.state} aria-hidden="true" />}
           </button>
         );

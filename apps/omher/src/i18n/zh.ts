@@ -1393,4 +1393,11 @@ export const zh: Record<Key, string> = {
   "dock.needs": "{name}：等待你处理",
   "dock.failed": "{name}：失败",
   "dock.running": "{name}：进行中",
+  "term.fgRunning": "{name} 正在运行",
+  "term.moreBelow": "下方还有更多",
+  "term.collapseAll": "折叠所有文件夹",
+  "term.expandAll": "展开所有文件夹",
+  "term.collapseOthers": "折叠其他",
+  "term.folderOpen": "显示 {name} 中的终端",
+  "term.folderClose": "隐藏 {name} 中的终端",
 };

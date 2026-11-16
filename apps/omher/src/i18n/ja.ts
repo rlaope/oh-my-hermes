@@ -1393,4 +1393,11 @@ export const ja: Record<Key, string> = {
   "dock.needs": "{name}: あなたの応答待ち",
   "dock.failed": "{name}: 失敗",
   "dock.running": "{name}: 作業中",
+  "term.fgRunning": "{name} 実行中",
+  "term.moreBelow": "下にさらにあります",
+  "term.collapseAll": "すべてのフォルダを折りたたむ",
+  "term.expandAll": "すべてのフォルダを展開",
+  "term.collapseOthers": "ほかを折りたたむ",
+  "term.folderOpen": "{name} のターミナルを表示",
+  "term.folderClose": "{name} のターミナルを隠す",
 };

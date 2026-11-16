@@ -1395,4 +1395,11 @@ export const en = {
   "dock.needs": "{name}: waiting for you",
   "dock.failed": "{name}: failed",
   "dock.running": "{name}: working",
+  "term.fgRunning": "{name} running",
+  "term.moreBelow": "More below",
+  "term.collapseAll": "Collapse all folders",
+  "term.expandAll": "Expand all folders",
+  "term.collapseOthers": "Collapse others",
+  "term.folderOpen": "Show the terminals in {name}",
+  "term.folderClose": "Hide the terminals in {name}",
 };
