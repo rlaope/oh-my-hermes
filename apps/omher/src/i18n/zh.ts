@@ -1400,5 +1400,7 @@ export const zh: Record<Key, string> = {
   "term.collapseOthers": "折叠其他",
   "term.folderOpen": "显示 {name} 中的终端",
   "term.folderClose": "隐藏 {name} 中的终端",
-  "term.folderRunning": "{n} 个运行中 ·",
+  "term.folderRunning": "{n} 个运行中",
+  "term.folderCount1": "1 个会话",
+  "term.folderCountN": "{n} 个会话",
 };

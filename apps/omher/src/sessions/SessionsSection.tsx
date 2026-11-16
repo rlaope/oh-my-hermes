@@ -24,8 +24,7 @@ import { agentDef, agentLabel, draftFolder, folderChoices, folderName, hermesOnl
 import { TermRowMark } from "./TermRowMark";
 import { allCollapsed, collapseOthers, folderSummary, getFolderPrefs, moveFolder, orderFolders, revealFolder as openFolder, setAllFolders, setFolderPrefs, toggleFolder, useFolderPrefs } from "./folders";
 import { ChevronDown, ChevronRight } from "../ui/icons";
-import { useEdgeFade } from "../sidebar/edgeFade";
-import { pinToDock, useDock } from "../sidebar/dockState";
+import { CUE_PX, useEdgeFade } from "../sidebar/edgeFade";
 import { getHost, type PastChat } from "./host";
 import { getSessions, useSessions } from "./sessions";
 import { pickTitle } from "./titles";
@@ -632,7 +631,8 @@ export function SessionList({ needle = "", query = "" }: { needle?: string; quer
       if (!list || !row) return;
       const l = list.getBoundingClientRect();
       const r = row.getBoundingClientRect();
-      if (r.top < l.top || r.bottom > l.bottom) row.scrollIntoView({ block: "nearest" });
+      // the band above the region's end is kept for the "more below" chevron (a row reaching into it is hidden)
+      if (r.top < l.top || r.bottom > l.bottom - CUE_PX) row.scrollIntoView({ block: "nearest" });
     };
     const id = requestAnimationFrame(keep);
     const ro = typeof ResizeObserver === "function" ? new ResizeObserver(keep) : null;
@@ -834,15 +834,19 @@ function FolderHead({ cwd, home, shut, index, all, summary }: { cwd: string; hom
           <span className="tg-sum" data-testid="term-group-summary" data-busy={summary.busy ? "true" : undefined} data-needs={summary.needs ? "true" : undefined} data-failed={summary.failed ? "true" : undefined}>
             {summary.busy && <TermStatusGlyph status="busy" />}
             {summary.running > 0 && (
-              <span className="tg-run" data-testid="term-group-running">
-                {t("term.folderRunning", { n: summary.running })}
-              </span>
+              <>
+                <span className="tg-run" data-testid="term-group-running">
+                  {t("term.folderRunning", { n: summary.running })}
+                </span>
+                <span aria-hidden="true">·</span>
+              </>
             )}
+            {/* the count says what it counts: "2 sessions", never a bare number */}
+            <span className="tg-count" data-testid="term-group-count" data-n={summary.count}>
+              {summary.count === 1 ? t("term.folderCount1") : t("term.folderCountN", { n: summary.count })}
+            </span>
             {summary.needs && <span className="tg-dot needs" title={t("ss.mark.bell")} />}
             {summary.failed && <span className="tg-dot err" title={t("ss.mark.error")} />}
-            <span className="tg-count" data-testid="term-group-count">
-              {summary.count}
-            </span>
           </span>
         )}
         {branch && (
@@ -950,12 +954,12 @@ const ageMs = (ms: number, now: number) => ageOf(ms / 1000, now);
 export function rowMenuItems(rec: Pick<SessionRec, "cwd" | "agentSession">): RowAction[] {
   return ["rename", ...(rec.cwd ? (["reveal", "terminal"] as const) : []), ...(rec.agentSession ? (["copy"] as const) : []), "here", "close"];
 }
-/** A TERMINALS row's menu: Rename, Pin to dock / Unpin, Reveal, Open in the system terminal, New terminal here,
+/** A TERMINALS row's menu: Rename, Reveal, Open in the system terminal, New terminal here,
  *  Close. */
 export function termMenuItems(rec: Pick<SessionRec, "cwd">): RowAction[] {
-  return ["rename", "pin", ...(rec.cwd ? (["reveal", "terminal"] as const) : []), "here", "close"];
+  return ["rename", ...(rec.cwd ? (["reveal", "terminal"] as const) : []), "here", "close"];
 }
-export type RowAction = "rename" | "reveal" | "terminal" | "copy" | "here" | "pin" | "close";
+export type RowAction = "rename" | "reveal" | "terminal" | "copy" | "here" | "close";
 
 /** \"Show in Finder\" on macOS, \"Show in Explorer\" on Windows, \"Show in file manager\" elsewhere. */
 const revealWord = () => {
@@ -964,7 +968,6 @@ const revealWord = () => {
 };
 
 const ROW_ACTION_LABEL: Record<RowAction, () => string> = {
-  pin: () => t("dock.pin"),
   rename: () => t("ss.rename"),
   reveal: revealWord,
   terminal: () => t("ss.menu.terminal"),
@@ -978,13 +981,12 @@ const ROW_ACTION_ID: Record<RowAction, string> = {
   terminal: "session-system-terminal",
   copy: "session-copy-id",
   here: "session-new-here",
-  pin: "session-pin",
   close: "session-menu-close",
 };
 
 /** Right-click menu of a session row (rowMenuItems). Placed at the pointer, inside the window. Arrow keys move,
  *  Home / End jump, Enter picks, Esc closes. */
-function SessionMenu({ at, name, actions, pinned = false, onPick, onDismiss }: { at: { x: number; y: number }; name: string; actions: RowAction[]; pinned?: boolean; onPick: (a: RowAction) => void; onDismiss: () => void }) {
+function SessionMenu({ at, name, actions, onPick, onDismiss }: { at: { x: number; y: number }; name: string; actions: RowAction[]; onPick: (a: RowAction) => void; onDismiss: () => void }) {
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => {
     ref.current?.querySelector<HTMLButtonElement>("button")?.focus();
@@ -1029,7 +1031,7 @@ function SessionMenu({ at, name, actions, pinned = false, onPick, onDismiss }: {
             onPick(a);
           }}
         >
-          {a === "pin" && pinned ? t("dock.unpin") : ROW_ACTION_LABEL[a]()}
+          {ROW_ACTION_LABEL[a]()}
         </button>
       ))}
     </div>
@@ -1133,9 +1135,6 @@ function TermRow({ rec, unseen, active, now, onClose }: { rec: SessionRec; unsee
   const [editing, setEditing] = useState(false);
   const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
   const wrap = useRef<HTMLDivElement>(null);
-  const dock = useDock();
-  const pinKey = `term:${rec.id}`;
-  const pinned = dock.pins.includes(pinKey);
   const title = pickTitle(rec, termFallbackName(rec, ss.agents));
   const status = termStatus(rec, unseen, now);
   const live = rec.status === "running" || rec.status === "starting";
@@ -1148,7 +1147,6 @@ function TermRow({ rec, unseen, active, now, onClose }: { rec: SessionRec; unsee
     else if (a === "reveal") void sx.revealFolder(rec.id);
     else if (a === "terminal") void sx.openTerminal(rec.id);
     else if (a === "here") sx.startTerminal(rec.agent, rec.cwd);
-    else if (a === "pin") pinToDock(pinKey, !pinned);
     else if (a === "close") onClose();
   };
   const endEdit = (name: string | null | undefined) => {
@@ -1214,7 +1212,7 @@ function TermRow({ rec, unseen, active, now, onClose }: { rec: SessionRec; unsee
           <CloseIcon />
         </button>
       )}
-      {menu && <SessionMenu at={menu} name={title.title} actions={actions} pinned={pinned} onPick={pick} onDismiss={() => setMenu(null)} />}
+      {menu && <SessionMenu at={menu} name={title.title} actions={actions} onPick={pick} onDismiss={() => setMenu(null)} />}
     </div>
   );
 }

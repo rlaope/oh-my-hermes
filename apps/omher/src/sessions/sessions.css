@@ -13,6 +13,17 @@
   flex-direction: column;
 }
 /* A search that leaves BOTS with only its "No bot named …" line: that line's height, SESSIONS right under it. */
+/* a row's menu or confirm opened inside a clipped list is never cut by that clip */
+.side-sec > .bot-list:has(.row-menu, .th-confirm, [role="menu"], [role="dialog"]) {
+  clip-path: none !important;
+}
+/* a row scrolled into view stops above the chevron's band, where it would be hidden */
+.side-sec .bot-w > .bot,
+.side-sec .th-row,
+.side-sec .tg-h,
+.side-sec .ss-row {
+  scroll-margin-bottom: 14px;
+}
 .side-sec.side-sec-fit {
   flex-grow: 0;
   min-height: 0;
@@ -26,8 +37,8 @@
 .side-sec > .ss-list {
   flex: 1 1 auto;
 }
-/* more rows past an edge (edgeFade.ts): a band of the sidebar's colour fades in over that edge's last 16px, so a cut
-   row reads as "more". An overlay, not a mask: a mask would also fade (and clip) a row's menu opened inside the list */
+/* more rows past the bottom edge (edgeFade.ts): the list hides the row its end would cut, whole (a clip, so nothing
+   moves), and a small chevron sits in the band that leaves free (CUE_PX); no row is ever drawn half */
 .side-sec {
   position: relative;
 }
@@ -38,10 +49,8 @@
   left: 0;
   right: 0;
   bottom: 0;
-  height: 30px;
-  background:
-    url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 24 24' fill='none' stroke='%23908a94' stroke-width='2.6' stroke-linecap='round' stroke-linejoin='round'><path d='m6 9 6 6 6-6'/></svg>") center bottom 3px / 10px 10px no-repeat,
-    linear-gradient(to bottom, transparent, var(--side) 70%);
+  height: 14px;
+  background: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 24 24' fill='none' stroke='%23908a94' stroke-width='2.6' stroke-linecap='round' stroke-linejoin='round'><path d='m6 9 6 6 6-6'/></svg>") center bottom 2px / 10px 10px no-repeat;
   pointer-events: none;
   z-index: 1;
 }

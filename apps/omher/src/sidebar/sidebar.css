@@ -613,14 +613,15 @@ button.upd:hover {
 .usage-fill.lv-red {
   stroke: var(--usage-red);
 }
-/* a dot only for a state worth a glance (limited, near, stale); a CLI with nothing to report shows just its mark */
+/* a mark only for a state worth a glance (limited, near, stale); a CLI with nothing to report shows just its mark.
+   A short bar under the mark, never a dot: in the sidebar a red dot means a failed turn and nothing else */
 .usage-dot {
   position: absolute;
-  right: 1px;
-  bottom: 1px;
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
+  left: calc(50% - 5px);
+  bottom: 0;
+  width: 10px;
+  height: 3px;
+  border-radius: 1.5px;
   box-shadow: 0 0 0 1.5px var(--side);
   background: var(--quiet);
 }
@@ -1221,9 +1222,11 @@ body.row-dragging * {
 }
 
 
-/* ---- The dock (termui, 2026-11-16): Arc-favourites tiles fixed above the account row ----------------------- */
+/* ---- The dock: the bots scrolled out of view above BOTS, as Arc-favourites tiles above the account row (Dock.tsx);
+   only while BOTS is scrolled, fading and sliding in and out ---------------------------------------------------- */
 .dock {
   flex: none;
+  animation: dk-in 150ms ease-out;
   display: grid;
   /* the tiles fill each row (Arc): Dock.tsx sets the column count so no tile is left alone on a row (4 = 2x2) */
   grid-template-columns: repeat(6, minmax(0, 1fr));
@@ -1294,9 +1297,6 @@ body.row-dragging * {
   animation: dk-turn 1.1s linear infinite;
   pointer-events: none;
 }
-.dk-t.ring.term {
-  --dk-run: var(--term-run);
-}
 .dk-dot {
   position: absolute;
   top: 5px;
@@ -1312,13 +1312,30 @@ body.row-dragging * {
 .dk-dot.failed {
   background: #e5484d;
 }
+.dock.out {
+  animation: dk-out 150ms ease-in forwards;
+}
+@keyframes dk-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+}
+@keyframes dk-out {
+  to {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+}
 @keyframes dk-turn {
   to {
     transform: rotate(360deg);
   }
 }
 @media (prefers-reduced-motion: reduce) {
-  .dk-t.ring::after {
+  .dk-t.ring::after,
+  .dock,
+  .dock.out {
     animation: none;
   }
 }

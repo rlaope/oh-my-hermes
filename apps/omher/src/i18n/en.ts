@@ -1402,5 +1402,7 @@ export const en = {
   "term.collapseOthers": "Collapse others",
   "term.folderOpen": "Show the terminals in {name}",
   "term.folderClose": "Hide the terminals in {name}",
-  "term.folderRunning": "{n} running ·",
+  "term.folderRunning": "{n} running",
+  "term.folderCount1": "1 session",
+  "term.folderCountN": "{n} sessions",
 };

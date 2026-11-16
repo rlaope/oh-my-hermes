@@ -1400,5 +1400,7 @@ export const ko: Record<Key, string> = {
   "term.collapseOthers": "다른 폴더 접기",
   "term.folderOpen": "{name}의 터미널 보기",
   "term.folderClose": "{name}의 터미널 숨기기",
-  "term.folderRunning": "{n}개 실행 중 ·",
+  "term.folderRunning": "{n}개 실행 중",
+  "term.folderCount1": "세션 1개",
+  "term.folderCountN": "세션 {n}개",
 };

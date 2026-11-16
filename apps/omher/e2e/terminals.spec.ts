@@ -1,12 +1,13 @@
 // TERMINALS (termui, owner 2026-11-16): SESSIONS is back as terminal sessions only, grouped by folder, with an
-// independent scroll for BOTS (with nested threads) and TERMINALS, and the pinned dock at the bottom of the sidebar.
+// independent scroll for BOTS (with nested threads) and TERMINALS, and the dock of bots scrolled out of view.
 // 1. the + menu: Shell first, then the CLIs with their official marks; no Chat/Terminal choice anywhere; picking one
 //    starts it in a terminal in the folder chip's folder;
 // 2. rows: one line [status][mark][title][cli age], grouped under a folder header with the git branch; the mark is
 //    TermRowMark and follows session.fgAgent (setSessionFg), status spinner while output flows, check / x on exit;
 // 3. scroll: 12 bots x 6 threads and 15 terminals at 900px: both headers visible, each list scrolls on its own, the
-//    selected row scrolls into view, the region divider stays put, "Show N more" kept, the dock stays visible;
-// 4. dock: pin/unpin/reorder persist across reload; tile click opens and scrolls its row into view; needs/failed dots;
+//    selected row scrolls into view, the region divider stays put, "Show N more" kept, the dock (bots only, while
+//    BOTS is scrolled) ends below TERMINALS; a tile brings its bot back into view;
+// 4. a short window keeps one row of dock tiles (the dock's bots-only rules: wire.spec.ts);
 // 5. ⌘N/⌘T open the + menu, ⌘⇧] / ⌘⇧[ step through terminals.
 // Shots (taken first): OMHER_SHOTS=<dir> -> termsessions-{sidebar-dark,sidebar-light,many-scroll,plus-menu}.png,
 // sidebar-dock-{dark,light}.png, terminals-groups-{dark,light}.png
@@ -48,7 +49,7 @@ async function open(page: Page, o: { theme?: "dark" | "light"; roster?: string[]
   await page.addInitScript(
     ([theme, folders, roster, keep]) => {
       if (!keep || !sessionStorage.getItem("__kept")) {
-        for (const k of ["omher.sessions.recent", "omher.sessions.open", "omher.resume", "omher.dock"]) localStorage.removeItem(k);
+        for (const k of ["omher.sessions.recent", "omher.sessions.open", "omher.resume"]) localStorage.removeItem(k);
         sessionStorage.setItem("__kept", "1");
       }
       if (theme) localStorage.setItem("omher.theme", theme as string);
@@ -123,22 +124,13 @@ test.describe("shots", () => {
       await page.setViewportSize({ width: 1280, height: 900 });
       await open(page, { theme });
       const ids = await seedTerminals(page);
-      // pins: two bots and two terminals
-      await page.getByTestId("bot-kami").click({ button: "right" });
-      await page.getByTestId("row-dock").click();
-      await page.getByTestId("bot-friren").click({ button: "right" });
-      await page.getByTestId("row-dock").click();
-      for (const id of [ids.claude, ids.shellGrok]) {
-        await page.getByTestId(`session-${id}`).click({ button: "right" });
-        await page.getByTestId("session-pin").click();
-      }
       await page.getByTestId(`session-${ids.claude}`).locator(".ss-open").click();
       // output flowing on claude: the spinner shows
       await typeIn(page, "after 0 progress");
       await page.mouse.move(900, 600);
       await shot(page, `terminals-groups-${theme}`);
       await shot(page, `termsessions-sidebar-${theme}`);
-      // the dock with a needs-you dot (Kami asks) and a failed one (Friren's turn failed)
+      // the dock (BOTS scrolled to its end) with a needs-you dot (Kami asks) and a failed one (Friren's turn failed)
       await mock("mock.manual", { bot: "kami" });
       await mock("mock.manual", { bot: "friren" });
       await mock("mock.emit", {
@@ -149,8 +141,13 @@ test.describe("shots", () => {
           { event: "turn.end", bot: "friren", outcome: "error", error: "boom" },
         ],
       });
-      await expect(page.getByTestId("dock-tile-bot:kami")).toHaveAttribute("data-state", "needs");
-      await shot(page, `sidebar-dock-${theme}`);
+      await page.getByTestId("side-bots").locator(".bot-list").evaluate((el) => (el.scrollTop = el.scrollHeight));
+      const scrolls = await page.getByTestId("side-bots").locator(".bot-list").evaluate((el) => el.scrollTop > 0);
+      if (scrolls) {
+        await expect(page.getByTestId("dock-tile-bot:kami")).toHaveAttribute("data-state", "needs");
+        await shot(page, `sidebar-dock-${theme}`);
+      }
+      await page.getByTestId("side-bots").locator(".bot-list").evaluate((el) => (el.scrollTop = 0));
       await mock("mock.manual", { bot: "kami", on: false });
       await mock("mock.manual", { bot: "friren", on: false });
       if (theme === "dark") {
@@ -264,7 +261,7 @@ test("a saved chat-mode session is not listed; a saved terminal one is", async (
   await expect(page.getByTestId("session-s1")).toHaveCount(0);
 });
 
-test("scroll: 12 bots x 6 threads and 15 terminals at 900px; each region scrolls on its own; the dock stays", async ({ page }) => {
+test("scroll: 12 bots x 6 threads and 15 terminals at 900px; each region scrolls on its own; the dock of bots out of view", async ({ page }) => {
   test.setTimeout(180_000);
   await page.setViewportSize({ width: 1280, height: 900 });
   const { bots } = await mock("mock.manyBots", { n: 12 });
@@ -286,25 +283,33 @@ test("scroll: 12 bots x 6 threads and 15 terminals at 900px; each region scrolls
     expect(b.y).toBeGreaterThanOrEqual(0);
     expect(b.y + b.height).toBeLessThanOrEqual(vh);
   }
-  const dock = page.getByTestId("dock");
-  await expect(dock).toBeVisible();
-  const dockBox = (await dock.boundingBox())!;
-  const termBox = (await termList.boundingBox())!;
-  expect(termBox.y + termBox.height).toBeLessThanOrEqual(dockBox.y + 0.5);
-  expect(dockBox.y + dockBox.height).toBeLessThanOrEqual(vh);
+  // at the top of BOTS there is no dock
+  await expect(page.getByTestId("dock")).toHaveCount(0);
   // both lists overflow and scroll
   for (const l of [botList, termList]) expect(await l.evaluate((el) => el.scrollHeight > el.clientHeight + 4)).toBe(true);
   // "Show N more" is kept for threads
   await expect(page.getByTestId("thread-more").first()).toBeAttached();
   const divider = async () => (await termSec.boundingBox())!.y;
-  const d0 = await divider();
+  let d0 = await divider();
   // wheel inside BOTS moves BOTS only
   const tTop0 = await termList.evaluate((el) => el.scrollTop);
   const bb = (await botList.boundingBox())!;
   await page.mouse.move(bb.x + bb.width / 2, bb.y + bb.height / 2);
   await page.mouse.wheel(0, 600);
   await expect.poll(() => botList.evaluate((el) => el.scrollTop)).toBeGreaterThan(0);
+  // the dock came in under TERMINALS: the divider is measured with it
+  await expect(page.getByTestId("dock")).toBeVisible();
+  await page.waitForTimeout(200);
+  d0 = await divider();
   expect(await termList.evaluate((el) => el.scrollTop)).toBe(tTop0);
+  // BOTS scrolled: the dock holds the bots gone above, below TERMINALS and inside the window
+  const dock = page.getByTestId("dock");
+  await expect(dock).toBeVisible();
+  await expect(dock.locator('[data-testid^="dock-tile-term:"]')).toHaveCount(0);
+  const dockBox = (await dock.boundingBox())!;
+  const termBox = (await termList.boundingBox())!;
+  expect(termBox.y + termBox.height).toBeLessThanOrEqual(dockBox.y + 0.5);
+  expect(dockBox.y + dockBox.height).toBeLessThanOrEqual(vh);
   // wheel inside TERMINALS moves TERMINALS only
   const bTop = await botList.evaluate((el) => el.scrollTop);
   const tb = (await termList.boundingBox())!;
@@ -326,77 +331,18 @@ test("scroll: 12 bots x 6 threads and 15 terminals at 900px; each region scrolls
   await expect(rows.first()).toHaveClass(/active/);
   await expect(rows.first()).toBeInViewport();
   expect(await botList.evaluate((el) => el.scrollTop)).toBe(bTop2);
-  // a bot far down BOTS, opened from its dock tile, scrolls into view inside BOTS
-  await page.getByTestId("bot-bot12").click({ button: "right" });
-  await page.getByTestId("row-dock").click();
-  // pinning changed the dock's height (the automatic tiles gave way to one pin): the divider is measured again
-  const d1 = await divider();
-  await botList.evaluate((el) => (el.scrollTop = 0));
-  await expect(page.getByTestId("bot-bot12")).not.toBeInViewport();
-  await page.getByTestId("dock-tile-bot:bot12").click();
-  await expect(page.getByTestId("bot-bot12")).toBeInViewport();
-  expect(await divider()).toBe(d1);
-});
-
-test("dock: pin, unpin and reorder persist across a reload; a tile opens and scrolls its row into view; dots", async ({ page }) => {
-  test.setTimeout(60_000);
-  await page.setViewportSize({ width: 1280, height: 900 });
-  await open(page, { keep: true });
-  // with nothing pinned the dock shows the bots with the newest activity
-  await expect(page.getByTestId("dock").locator(".dk-t").first()).toBeVisible();
-  const id = await newTerm(page, "claude", FOLDERS[0]);
-  await page.getByTestId("bot-friren").click({ button: "right" });
-  await page.getByTestId("row-dock").click();
-  await page.getByTestId(`session-${id}`).click({ button: "right" });
-  await page.getByTestId("session-pin").click();
-  await page.getByTestId("bot-kami").click({ button: "right" });
-  await page.getByTestId("row-dock").click();
-  const order = () => page.getByTestId("dock").locator(".dk-t").evaluateAll((els) => els.map((e) => e.getAttribute("data-testid")));
-  expect(await order()).toEqual(["dock-tile-bot:friren", `dock-tile-term:${id}`, "dock-tile-bot:kami"]);
-  // drag kami to the first place
-  const from = (await page.getByTestId("dock-tile-bot:kami").boundingBox())!;
-  const to = (await page.getByTestId("dock-tile-bot:friren").boundingBox())!;
-  await page.mouse.move(from.x + from.width / 2, from.y + from.height / 2);
-  await page.mouse.down();
-  await page.mouse.move(from.x + 10, from.y + 10, { steps: 4 });
-  await page.mouse.move(to.x + to.width / 2, to.y + to.height / 2, { steps: 6 });
-  await page.mouse.up();
-  expect(await order()).toEqual(["dock-tile-bot:kami", "dock-tile-bot:friren", `dock-tile-term:${id}`]);
-  // unpin friren from its tile
-  await page.getByTestId("dock-tile-bot:friren").click({ button: "right" });
-  await page.getByTestId("dock-unpin").click();
-  expect(await order()).toEqual(["dock-tile-bot:kami", `dock-tile-term:${id}`]);
-  // reload: the same pins in the same order (the terminal comes back from the resume snapshot)
-  await page.waitForTimeout(600);
-  await page.reload();
-  await expect(page.getByTestId("bot-kami")).toBeVisible();
-  await expect.poll(order).toEqual(["dock-tile-bot:kami", `dock-tile-term:${id}`]);
-  const stored = await page.evaluate(() => localStorage.getItem("omher.dock"));
-  expect(JSON.parse(stored!).pins).toEqual(["bot:kami", `term:${id}`]);
-  // the terminal tile opens it and marks it active
-  await page.getByTestId(`dock-tile-term:${id}`).click();
-  await expect(page.getByTestId(`dock-tile-term:${id}`)).toHaveAttribute("aria-current", "true");
-  await expect(page.getByTestId(`session-${id}`)).toBeInViewport();
-  // a needs-you ask on kami: orange dot on its tile; a failed turn: red dot
-  await mock("mock.manual", { bot: "kami" });
-  await mock("mock.emit", { events: [{ event: "turn.start", bot: "kami" }, { event: "approval.request", bot: "kami", request_id: "ap-1", title: "Run", command: "ls", choices: ["once", "deny"] }] });
-  await expect(page.getByTestId("dock-tile-bot:kami")).toHaveAttribute("data-state", "needs");
-  await expect(page.getByTestId("dock-tile-bot:kami").getByTestId("dock-dot")).toHaveAttribute("data-dot", "needs");
-  await mock("mock.emit", { events: [{ event: "turn.end", bot: "kami", outcome: "error", error: "boom" }] });
-  await expect(page.getByTestId("dock-tile-bot:kami")).toHaveAttribute("data-state", "failed");
-  await expect(page.getByTestId("dock-tile-bot:kami").getByTestId("dock-dot")).toHaveAttribute("data-dot", "failed");
-  await mock("mock.manual", { bot: "kami", on: false });
-  // keyboard: one tab stop, arrows move
-  await page.getByTestId("dock-tile-bot:kami").focus();
-  await page.keyboard.press("ArrowRight");
-  await expect(page.getByTestId(`dock-tile-term:${id}`)).toBeFocused();
-  await expect(page.getByTestId("dock-tile-bot:kami")).toHaveAttribute("tabindex", "-1");
+  // a bot scrolled away above, opened from its dock tile, comes back into view inside BOTS
+  await botList.evaluate((el) => (el.scrollTop = el.scrollHeight));
+  await expect(page.getByTestId("bot-kami")).not.toBeInViewport();
+  await page.getByTestId("dock-tile-bot:kami").click();
+  await expect(page.getByTestId("bot-kami")).toBeInViewport();
 });
 
 test("a short window keeps one row of tiles", async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: 640 });
   await mock("mock.manyBots", { n: 6 });
   await open(page, { roster: ["kami", "friren", "bot01", "bot02", "bot03", "bot04", "bot05", "bot06"] });
+  await page.getByTestId("side-bots").locator(".bot-list").evaluate((el) => (el.scrollTop = el.scrollHeight));
   const dock = page.getByTestId("dock");
   await expect(dock).toBeVisible();
   const h = (await dock.boundingBox())!.height;

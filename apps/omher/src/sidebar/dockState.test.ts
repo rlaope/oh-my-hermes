@@ -1,20 +1,18 @@
 import { describe, expect, it } from "vitest";
-import { dockTiles, DOCK_MAX, parseDock } from "./dockState";
+import { botsAbove } from "./dockState";
 
-describe("dock state", () => {
-  it("keeps only well-formed pins, once each", () => {
-    expect(parseDock(JSON.stringify({ pins: ["bot:kami", "term:s3", "bot:kami", "x", 4, "term:"] })).pins).toEqual(["bot:kami", "term:s3"]);
-    expect(parseDock("not json").pins).toEqual([]);
-    expect(parseDock(null).pins).toEqual([]);
+describe("dock: the bots scrolled out of view above BOTS", () => {
+  const rows = [
+    { name: "kami", bottom: 40 },
+    { name: "friren", bottom: 90 },
+    { name: "bot01", bottom: 101 },
+    { name: "bot02", bottom: 150 },
+  ];
+  it("none at the top of the list", () => {
+    expect(botsAbove(0, rows)).toEqual([]);
   });
-  it("shows the pins that still exist, in order, at most six", () => {
-    const pins = ["bot:a", "term:s1", "bot:gone", "bot:b", "bot:c", "bot:d", "bot:e", "bot:f"];
-    const t = dockTiles(pins, (k) => k !== "bot:gone", []);
-    expect(t.auto).toBe(false);
-    expect(t.keys).toEqual(["bot:a", "term:s1", "bot:b", "bot:c", "bot:d", "bot:e"]);
-    expect(t.keys).toHaveLength(DOCK_MAX);
-  });
-  it("with nothing pinned, the bots with the newest activity (no terminal)", () => {
-    expect(dockTiles([], () => true, ["kami", "friren"])).toEqual({ keys: ["bot:kami", "bot:friren"], auto: true });
+  it("exactly the rows wholly above the list's top, in list order; a row still partly in view is not one", () => {
+    expect(botsAbove(100, rows)).toEqual(["kami", "friren", "bot01"]);
+    expect(botsAbove(95, rows)).toEqual(["kami", "friren"]);
   });
 });

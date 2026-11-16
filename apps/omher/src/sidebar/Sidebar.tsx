@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { getRestarts } from "./restart";
 import "./sidebar.css";
 import logo from "../assets/omher-mark.png";
@@ -22,7 +22,7 @@ import { OmhNotice } from "./OmhNotice";
 import { t } from "../i18n";
 import { ThreadTree } from "../threads/ThreadTree";
 import { Dock } from "./Dock";
-import { pinToDock, useDock } from "./dockState";
+import { useBotsAbove } from "./dockState";
 import { revealBotTop, revealPending } from "./revealBot";
 import { useEdgeFade } from "./edgeFade";
 
@@ -41,7 +41,6 @@ function useRevealBot(bot: string | null, thread: string | null, inChat: boolean
 
 export function Sidebar() {
   const s = useStore();
-  const dock = useDock();
   const [q, setQ] = useState("");
   const [sessionMenu, setSessionMenu] = useState<{ x: number; y: number; focus: HTMLElement } | null>(null);
   const closeSessionMenu = useCallback(() => setSessionMenu(null), []);
@@ -65,7 +64,10 @@ export function Sidebar() {
   const automations = s.automations?.length ?? 0;
   const inChat = s.ui.view === "chat";
   useRevealBot(s.selectedBot, s.ui.thread, inChat);
-  const botNav = useEdgeFade<HTMLElement>();
+  const botList = useRef<HTMLElement>(null);
+  const botNav = useEdgeFade<HTMLElement>(botList);
+  // the dock: the bots scrolled out of view at the top of BOTS (none at the top: no dock)
+  const above = useBotsAbove(botList);
 
   return (
     <aside className="side" data-testid="sidebar">
@@ -127,8 +129,6 @@ export function Sidebar() {
                 onRestart: () => void getRestarts().press(b.name),
                 offline: b.status === "offline",
                 onRemove: listed.length > 1 ? () => s.listBot(b.name, false) : undefined,
-                docked: dock.pins.includes(`bot:${b.name}`),
-                onDock: () => pinToDock(`bot:${b.name}`, !dock.pins.includes(`bot:${b.name}`)),
               }}
             >
               {hasThreads && <ThreadTree bot={b.name} id={groupId} />}
@@ -162,7 +162,7 @@ export function Sidebar() {
         {sessionMenu && <SessionBackgroundMenu at={sessionMenu} onClose={closeSessionMenu} />}
       </section>
       )}
-      <Dock />
+      <Dock above={needle ? [] : above} />
       <div className="side-foot">
         <button
           type="button"

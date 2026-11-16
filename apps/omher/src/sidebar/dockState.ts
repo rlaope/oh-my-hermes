@@ -1,75 +1,54 @@
-// The dock at the bottom of the sidebar (Arc favourites): up to six tiles, bots and terminals, that stay on screen
-// while BOTS and TERMINALS scroll above it. What is pinned, and in which order, is kept in this computer's storage for
-// the app (`omher.dock`), never in Hermes. A pin is `bot:<profile>` or `term:<session id>`.
-import { useSyncExternalStore } from "react";
+// The dock at the bottom of the sidebar holds BOTS ONLY, and only while BOTS is scrolled (owner, 2026-11-16: "스크롤을
+// 하면 저 하단에 있는 게 상단에 보이게" / "클로드랑 덱스는 빼고"): its tiles are exactly the bots whose rows scrolled out
+// of view at the top of BOTS, in list order, at most six. With every bot row in view (scrollTop 0) there is no dock.
+// Nothing is pinned or stored: the tiles follow the scroll.
+import { useEffect, useState } from "react";
 
-export const DOCK_KEY = "omher.dock";
 export const DOCK_MAX = 6;
 
-export interface DockState {
-  pins: string[];
+/** The bots whose own row (face and name, not its threads) is wholly above the list's top edge, in list order. */
+export function botsAbove(listTop: number, rows: readonly { name: string; bottom: number }[]): string[] {
+  return rows.filter((r) => r.bottom <= listTop + 1).map((r) => r.name);
 }
 
-const PIN = /^(bot|term):.{1,200}$/;
+const PREFIX = "bot-row-";
 
-export function parseDock(raw: string | null): DockState {
-  try {
-    const v = raw ? JSON.parse(raw) : null;
-    const pins = Array.isArray(v?.pins) ? (v.pins as unknown[]).filter((p): p is string => typeof p === "string" && PIN.test(p)) : [];
-    return { pins: [...new Set(pins)].slice(0, 24) };
-  } catch {
-    return { pins: [] };
-  }
+function read(list: HTMLElement): string[] {
+  if (list.scrollTop <= 0) return [];
+  const top = list.getBoundingClientRect().top;
+  const rows = [...list.querySelectorAll<HTMLElement>(`:scope > [data-testid^="${PREFIX}"]`)].map((w) => ({
+    name: w.dataset.testid!.slice(PREFIX.length),
+    bottom: (w.querySelector<HTMLElement>(":scope > .bot") ?? w).getBoundingClientRect().bottom,
+  }));
+  return botsAbove(top, rows);
 }
 
-const read = (): DockState => parseDock(typeof localStorage === "undefined" ? null : localStorage.getItem(DOCK_KEY));
-let state: DockState = read();
-const listeners = new Set<() => void>();
-
-function save(next: DockState) {
-  state = next;
-  try {
-    localStorage.setItem(DOCK_KEY, JSON.stringify(next));
-  } catch {
-    /* no storage */
-  }
-  for (const l of [...listeners]) l();
-}
-
-export const getDock = (): DockState => state;
-export function subscribeDock(fn: () => void): () => void {
-  listeners.add(fn);
-  return () => listeners.delete(fn);
-}
-export function useDock(): DockState {
-  return useSyncExternalStore(subscribeDock, getDock, getDock);
-}
-
-/** Pin `key` to the dock (at its end) or unpin it. */
-export function pinToDock(key: string, on: boolean): void {
-  const has = state.pins.includes(key);
-  if (on === has || !PIN.test(key)) return;
-  save({ pins: on ? [...state.pins, key] : state.pins.filter((p) => p !== key) });
-}
-
-/** Move pin `key` to place `to` of `order` (the tiles as shown). Moving an unpinned tile pins the whole shown order,
- *  so what the person arranged is what stays. */
-export function moveInDock(order: string[], key: string, to: number): void {
-  const list = order.filter((k) => k !== key);
-  list.splice(Math.max(0, Math.min(to, list.length)), 0, key);
-  const rest = state.pins.filter((p) => !list.includes(p));
-  save({ pins: [...list, ...rest] });
-}
-
-/** The tiles, in order: the pins that still exist; with nothing pinned, the bots with the most recent activity. */
-export function dockTiles(pins: string[], exists: (key: string) => boolean, recentBots: string[]): { keys: string[]; auto: boolean } {
-  const pinned = pins.filter(exists);
-  if (pinned.length) return { keys: pinned.slice(0, DOCK_MAX), auto: false };
-  return { keys: recentBots.slice(0, DOCK_MAX).map((b) => `bot:${b}`), auto: true };
-}
-
-/** e2e / tests: forget what was read at load. */
-export function resetDock(): void {
-  state = read();
-  for (const l of [...listeners]) l();
+/** The bots scrolled out of view above the BOTS list; follows its scroll, its size and its rows. */
+export function useBotsAbove(list: { current: HTMLElement | null }): string[] {
+  const [above, setAbove] = useState<string[]>([]);
+  useEffect(() => {
+    const el = list.current;
+    if (!el) return;
+    let frame = 0;
+    const update = () => {
+      cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(() => {
+        const next = read(el);
+        setAbove((cur) => (cur.join("\n") === next.join("\n") ? cur : next));
+      });
+    };
+    update();
+    el.addEventListener("scroll", update, { passive: true });
+    const ro = typeof ResizeObserver === "function" ? new ResizeObserver(update) : null;
+    ro?.observe(el);
+    const mo = typeof MutationObserver === "function" ? new MutationObserver(update) : null;
+    mo?.observe(el, { childList: true, subtree: true });
+    return () => {
+      cancelAnimationFrame(frame);
+      el.removeEventListener("scroll", update);
+      ro?.disconnect();
+      mo?.disconnect();
+    };
+  }, [list]);
+  return above;
 }

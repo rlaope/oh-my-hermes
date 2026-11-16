@@ -147,8 +147,9 @@
 .th-g svg {
   display: block;
 }
+/* one running colour in the sidebar: a working thread turns in the running terminals' amber */
 .th-g-running {
-  color: var(--accent);
+  color: var(--term-run, #f2b705);
 }
 .th-g-running svg {
   animation: th-spin 0.9s linear infinite;

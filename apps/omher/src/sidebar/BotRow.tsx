@@ -98,9 +98,6 @@ export interface RowMenu {
   /** Take the bot out of the sidebar list (the profile stays; it is offered under + again). Absent for the last
    *  listed bot: the item shows disabled, with a tooltip saying why. */
   onRemove?: () => void;
-  /** Pin the bot to the sidebar dock, or unpin it (sidebar/dock.ts). */
-  docked?: boolean;
-  onDock?: () => void;
 }
 
 /** Right-click or ⋯ menu of a bot row: New thread · <name> first, then Pin to top, Edit bot, Restart (Start when
@@ -127,7 +124,6 @@ function Menu({ menu, onClose, name, bot, at }: { menu: RowMenu; onClose: () => 
     [t("row.edit"), menu.onEdit],
     [menu.offline ? t("row.start") : t("row.restart"), menu.onRestart],
     [t("row.remove"), menu.onRemove],
-    ...(menu.onDock ? ([[menu.docked ? t("dock.unpin") : t("dock.pin"), menu.onDock]] as [string, () => void][]) : []),
   ];
   return (
     <div
@@ -173,7 +169,7 @@ function Menu({ menu, onClose, name, bot, at }: { menu: RowMenu; onClose: () => 
             onClick={fn ? run(fn) : undefined}
             aria-disabled={!fn || undefined}
             title={!fn && i === 3 ? t("row.removeLast") : undefined}
-            data-testid={i === 2 ? "row-restart" : i === 3 ? "row-remove" : i === 4 ? "row-dock" : undefined}
+            data-testid={i === 2 ? "row-restart" : i === 3 ? "row-remove" : undefined}
           >
             {label}
           </button>

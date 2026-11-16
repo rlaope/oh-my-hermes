@@ -8,9 +8,12 @@
 // 4. folders: collapse/expand persists across a reload; a collapsed header shows the count and the live summary;
 //    opening a session in a collapsed folder opens it; Collapse all; right-click menu; drag reorder persists;
 // 5. bot click: its row slides to the top of BOTS with its threads under it; TERMINALS stays; reduced motion jumps;
-// 6. the dock: 4 tiles fill 2x2 (no lone tile), the running ring sits centred inside its tile.
+// 6. the dock (owner correction, polish 7): BOTS ONLY, and only while BOTS is scrolled: its tiles are exactly the bots
+//    scrolled out of view at the top; none at the top; a tile click is the bot reveal; 4 tiles fill 2x2, the running
+//    ring sits centred inside its tile;
+// 7. no row is ever drawn cut at a region's bottom edge (the row there is hidden whole under the "more" chevron).
 // Shots: OMHER_SHOTS=<dir> (1440x900) -> sidebar-dark, sidebar-light, plus-menu, many-rows-scroll, terminal-open,
-// threads-chat, terminals-folders-collapsed, bot-reveal-before, bot-reveal-after.
+// threads-chat, terminals-folders-collapsed, bot-reveal-before, bot-reveal-after, sidebar-dark-scrolled.
 import { expect, test, type Page } from "@playwright/test";
 import { mkdirSync } from "node:fs";
 import { join } from "node:path";
@@ -56,7 +59,7 @@ async function open(page: Page, o: { theme?: "dark" | "light"; roster?: string[]
   await page.addInitScript(
     ([theme, roster, keep]) => {
       if (!keep || !sessionStorage.getItem("__kept")) {
-        for (const k of ["omher.sessions.recent", "omher.sessions.open", "omher.resume", "omher.dock", "omher.term.folders"]) localStorage.removeItem(k);
+        for (const k of ["omher.sessions.recent", "omher.sessions.open", "omher.resume", "omher.term.folders"]) localStorage.removeItem(k);
         sessionStorage.setItem("__kept", "1");
       }
       if (theme) localStorage.setItem("omher.theme", theme as string);
@@ -197,19 +200,39 @@ async function seedThreads(page: Page) {
   return { notes, nightly, slack, docs, gw };
 }
 
-/** The dock: Kami (needs you), Friren (its last turn failed), Claude Code and Codex running: 2x2. */
-async function pinAll(page: Page, ids: { claude: string; codex: string }) {
-  for (const bot of ["kami", "friren"]) {
-    await page.getByTestId(`bot-${bot}`).click({ button: "right" });
-    await page.getByTestId("row-dock").click();
-  }
+/** Friren's last turn failed (its dock tile's red dot when it scrolls out of view). */
+async function failFriren() {
   await mock("mock.manual", { bot: "friren" });
   await mock("mock.emit", { events: [{ event: "turn.start", bot: "friren" }, { event: "turn.end", bot: "friren", outcome: "error", error: "provider timeout" }] });
   await mock("mock.manual", { bot: "friren", on: false });
-  for (const id of [ids.claude, ids.codex]) {
-    await page.getByTestId(`session-${id}`).click({ button: "right" });
-    await page.getByTestId("session-pin").click();
-  }
+}
+
+/** Every bot row and thread row of BOTS, and every folder header and row of TERMINALS, is drawn whole or not at all
+ *  at its list's bottom edge (the list's box less its bottom clip); at the top edge only when scrolled past. */
+async function noCutRows(page: Page) {
+  // settled: a scroll that brings the dock in re-lays the regions out over a frame or two
+  await expect.poll(() => cutRows(page), { message: "rows drawn cut at a region edge", timeout: 3000 }).toEqual([]);
+}
+async function cutRows(page: Page): Promise<string[]> {
+  return page.evaluate(() => {
+    const bad: string[] = [];
+    for (const list of document.querySelectorAll<HTMLElement>(".side-sec > .bot-list")) {
+      const box = list.getBoundingClientRect();
+      // inset(top right bottom left), as the browser writes it back (it drops repeated values: "0px 0px 56px")
+      const v = (/inset\(([^)]*)\)/.exec(getComputedStyle(list).clipPath)?.[1] ?? "").trim().split(/\s+/).map(parseFloat).filter((n) => !Number.isNaN(n));
+      const bottom = box.bottom - (v.length ? (v[2] ?? v[0] ?? 0) : 0);
+      for (const r of list.querySelectorAll<HTMLElement>(".bot-w > .bot, .th-row, .tg-h, .ss-row")) {
+        const b = r.getBoundingClientRect();
+        if (b.height === 0) continue;
+        // a row partly above the top edge is one the person scrolled past (the top shadow says so); the bottom edge
+        // never cuts one
+        const whole = (b.top >= box.top - 0.5 || list.scrollTop > 0) && b.bottom <= bottom + 0.5;
+        const out = b.bottom <= box.top + 0.5 || b.top >= bottom - 0.5;
+        if (!whole && !out) bad.push(`${r.closest("[data-testid]")?.getAttribute("data-testid")} ${Math.round(b.top)}..${Math.round(b.bottom)} in ${Math.round(box.top)}..${Math.round(bottom)} (box end ${Math.round(box.bottom)}, clip "${getComputedStyle(list).clipPath}", more ${list.dataset.more ?? "-"})`);
+      }
+    }
+    return bad;
+  });
 }
 
 test.beforeEach(async () => {
@@ -228,16 +251,29 @@ test.describe("shots", () => {
       await open(page, { theme });
       await seedThreads(page);
       const ids = await seed(page);
-      await pinAll(page, ids);
-      await expect(page.getByTestId("dock-tile-bot:friren")).toHaveAttribute("data-state", "failed");
+      await failFriren();
+      // BOTS at its top: every bot in view, so no dock
+      await expect(page.getByTestId("dock")).toHaveCount(0);
       // output flowing in both CLIs: their arcs turn
       await out(page, ids.codex, "\x1b[2m• Running\x1b[0m pnpm test payments\r\n");
       await out(page, ids.claude, "");
       await expect(page.getByTestId(`session-${ids.codex}`)).toHaveAttribute("data-term-status", "busy");
       await page.mouse.move(900, 600);
       await expect(page.getByTestId(`session-${ids.claude}`)).toBeInViewport();
+      await noCutRows(page);
       await shot(page, `sidebar-${theme}`);
       if (theme !== "dark") return;
+      // BOTS scrolled to its end: the bots gone out of view at the top come back as dock tiles, bots only
+      const botList = page.getByTestId("side-bots").locator(".bot-list");
+      await botList.evaluate((el) => (el.scrollTop = el.scrollHeight));
+      await expect(page.getByTestId("dock-tile-bot:kami")).toBeVisible();
+      await expect(page.getByTestId("dock").locator('[data-testid^="dock-tile-term:"]')).toHaveCount(0);
+      await page.mouse.move(900, 600);
+      await page.waitForTimeout(300);
+      await noCutRows(page);
+      await shot(page, "sidebar-dark-scrolled");
+      await botList.evaluate((el) => (el.scrollTop = 0));
+      await expect(page.getByTestId("dock")).toHaveCount(0);
       await shot(page, "terminal-open");
       await page.getByTestId("session-new").click();
       await expect(page.getByTestId("session-agent-shell")).toBeVisible();
@@ -249,6 +285,7 @@ test.describe("shots", () => {
       await page.locator(`[data-testid=term-group][data-cwd="${API}"]`).getByTestId("term-group-toggle").click();
       await expect(page.locator(`[data-testid=term-group][data-cwd="${API}"]`).getByTestId("term-group-running")).toBeVisible();
       await page.mouse.move(900, 600);
+      await noCutRows(page);
       await shot(page, "terminals-folders-collapsed");
       // a thread chat with the agent chat view: Kami splits the release-notes thread between Codex and Claude, live
       const rel = page.locator('[data-testid^="thread-row-"]').filter({ hasText: "Release notes" });
@@ -361,26 +398,36 @@ test("session-fg on the bottom panel: the tab shows its shell's foreground CLI",
   await expect(tab.getByTestId("term-row-mark")).toHaveCount(0);
 });
 
-test("reduced motion: the live frame, the status arc and the dock ring stand still", async ({ page }) => {
+test("reduced motion: the live frame, the status arc, the dock ring and the dock's entrance stand still", async ({ page }) => {
   test.setTimeout(60_000);
-  await open(page, { reduced: true });
+  const { bots } = await mock("mock.manyBots", { n: 12 });
+  await open(page, { reduced: true, roster: ["kami", ...(bots as string[])] });
+  await page.setViewportSize({ width: 1280, height: 700 });
   const a = await newTerm(page, "shell", WEB);
   await fg(page, a, "claude");
-  await page.getByTestId(`session-${a}`).click({ button: "right" });
-  await page.getByTestId("session-pin").click();
   await out(page, a, "Reading src/checkout/cart.ts\r\n");
   await expect(page.getByTestId(`session-${a}`)).toHaveAttribute("data-term-status", "busy");
+  // Kami answering, then scrolled out of view: its tile has the running ring
+  await mock("mock.manual", { bot: "kami" });
+  await mock("mock.emit", { events: [{ event: "turn.start", bot: "kami" }] });
+  await page.getByTestId("side-bots").locator(".bot-list").evaluate((el) => (el.scrollTop = el.scrollHeight));
+  await expect(page.getByTestId("dock-tile-bot:kami")).toHaveAttribute("data-state", "running");
   const anim = await page.evaluate((id) => {
     const row = document.querySelector(`[data-testid="session-${id}"]`)!;
-    const tile = document.querySelector(`[data-testid="dock-tile-term:${id}"]`)!;
+    const tile = document.querySelector('[data-testid="dock-tile-bot:kami"]')!;
     return {
       arc: getComputedStyle(row.querySelector(".tst svg")!).animationName,
       frame: getComputedStyle(row.querySelector(".trm")!, "::after").animationName,
       ring: getComputedStyle(tile, "::after").animationName,
       ringOn: getComputedStyle(tile, "::after").content,
+      dock: getComputedStyle(document.querySelector('[data-testid="dock"]')!).animationName,
     };
   }, a);
-  expect(anim).toEqual({ arc: "none", frame: "none", ring: "none", ringOn: '""' });
+  expect(anim).toEqual({ arc: "none", frame: "none", ring: "none", ringOn: '""', dock: "none" });
+  // back at the top: gone at once
+  await page.getByTestId("side-bots").locator(".bot-list").evaluate((el) => (el.scrollTop = 0));
+  await expect(page.getByTestId("dock")).toHaveCount(0);
+  await mock("mock.emit", { events: [{ event: "turn.end", bot: "kami", outcome: "done" }] });
 });
 
 test("status glyph from the session events: arc while output flows, check on exit 0, x on exit 3", async ({ page }) => {
@@ -400,18 +447,15 @@ test("status glyph from the session events: arc while output flows, check on exi
   await expect(page.getByTestId(`session-${b}`)).toHaveAttribute("data-term-status", "ok");
 });
 
-test("the open session is always listed and in view, with pins and a short TERMINALS region", async ({ page }) => {
+test("the open session is always listed and in view, with a short TERMINALS region", async ({ page }) => {
   test.setTimeout(120_000);
   await page.setViewportSize({ width: 1440, height: 760 });
   await open(page);
   const ids: string[] = [];
   for (let i = 0; i < 6; i++) ids.push(await newTerm(page, i % 2 ? "codex" : "claude", i % 3 === 0 ? WEB : API));
-  // the first one opened, then four pins grow the dock under the list
+  // the first one opened, then the window gets shorter under it
   await page.getByTestId(`session-${ids[0]}`).locator(".ss-open").click();
-  for (const id of ids.slice(0, 4)) {
-    await page.getByTestId(`session-${id}`).click({ button: "right" });
-    await page.getByTestId("session-pin").click();
-  }
+  await page.setViewportSize({ width: 1440, height: 640 });
   await page.mouse.move(900, 600);
   const listed = await page.evaluate(() => [...document.querySelectorAll('[data-testid="session-list"] .ss-row.tr')].map((e) => e.getAttribute("data-testid")));
   for (const id of ids) expect(listed).toContain(`session-${id}`);
@@ -432,24 +476,26 @@ test("folders: collapse persists across a reload; collapsed header shows count a
   const a = await newTerm(page, "claude", API);
   const b = await newTerm(page, "shell", API);
   await newTerm(page, "codex", WEB);
-  await page.getByTestId(`session-${b}`).click({ button: "right" });
-  await page.getByTestId("session-pin").click();
   const api = page.locator(`[data-testid=term-group][data-cwd="${API}"]`);
   await expect(api.getByTestId("term-group-toggle")).toHaveAttribute("aria-expanded", "true");
   await out(page, a, "Reading src/routes/orders.ts\r\n");
   await api.getByTestId("term-group-toggle").click();
   await expect(api).toHaveAttribute("data-collapsed", "true");
   await expect(api.locator(".ss-row")).toHaveCount(0);
-  await expect(api.getByTestId("term-group-count")).toHaveText("2");
+  // the count says what it counts, and the running part has its own words: "1 running · 2 sessions"
+  await expect(api.getByTestId("term-group-count")).toHaveText("2 sessions");
+  await expect(api.getByTestId("term-group-running")).toHaveText("1 running");
+  await expect(api.getByTestId("term-group-summary")).toContainText("1 running·2 sessions");
   await expect(api.getByTestId("term-group-summary")).toHaveAttribute("data-busy", "true");
   await expect.poll(() => page.evaluate(() => JSON.parse(localStorage.getItem("omher.term.folders") ?? "{}").collapsed)).toEqual([API]);
   await page.waitForTimeout(600);
   await page.reload();
   await expect(page.getByTestId("bot-kami")).toBeVisible();
   await expect(page.locator(`[data-testid=term-group][data-cwd="${API}"]`)).toHaveAttribute("data-collapsed", "true");
-  // opening a session of the collapsed folder (its dock tile) opens the folder (reveal) and shows the row
+  // opening a session of the collapsed folder (⌘⇧] steps into it) opens the folder (reveal) and shows the row
   await expect(page.getByTestId(`session-${b}`)).toHaveCount(0);
-  await page.getByTestId(`dock-tile-term:${b}`).click();
+  const mod = process.platform === "darwin" ? "Meta" : "Control";
+  for (let i = 0; i < 4 && !(await page.getByTestId(`session-${b}`).count()); i++) await page.keyboard.press(`${mod}+Shift+BracketRight`);
   await expect(page.locator(`[data-testid=term-group][data-cwd="${API}"]`)).not.toHaveAttribute("data-collapsed", "true");
   await expect(page.getByTestId(`session-${b}`)).toHaveClass(/active/);
   await expect(page.getByTestId(`session-${b}`)).toBeInViewport();
@@ -513,7 +559,7 @@ test("bot click: its chat opens and its row slides to the top of BOTS with its t
   await botList.evaluate((el) => (el.scrollTop = 0));
   await termList.evaluate((el) => (el.scrollTop = 0));
   const tTop = await termList.evaluate((el) => el.scrollTop);
-  const dock0 = (await page.getByTestId("dock").boundingBox())!.y;
+  await expect(page.getByTestId("dock")).toHaveCount(0);
   // a bot in the middle: it rises to the top, smoothly (several frames between the first and last scrollTop)
   const samples = await page.evaluate(() => {
     const list = document.querySelector('[data-testid="side-bots"] .bot-list') as HTMLElement;
@@ -537,20 +583,23 @@ test("bot click: its chat opens and its row slides to the top of BOTS with its t
   expect(Math.abs(gap)).toBeLessThanOrEqual(2);
   // its threads are under it, in view
   await expect(page.getByTestId("threads-bot05").locator('[data-testid^="thread-row-"]').first()).toBeInViewport();
-  // TERMINALS and the dock did not move
+  // TERMINALS did not scroll; the bots now above bot05 are the dock's tiles
   expect(await termList.evaluate((el) => el.scrollTop)).toBe(tTop);
-  expect((await page.getByTestId("dock").boundingBox())!.y).toBe(dock0);
-  // from its dock tile, too
-  await page.getByTestId("bot-bot09").click({ button: "right" });
-  await page.getByTestId("row-dock").click();
-  await botList.evaluate((el) => (el.scrollTop = 0));
-  await page.getByTestId("dock-tile-bot:bot09").click();
-  await expect(botList).toHaveAttribute("data-revealed", "bot09");
+  await expect.poll(() => tileNames(page)).toEqual(await namesBefore(page, "bot05"));
+  // from a dock tile, too: BOTS at its end, then bot02's tile
+  await botList.evaluate((el) => (el.scrollTop = el.scrollHeight));
+  await expect(page.getByTestId("dock-tile-bot:bot02")).toBeVisible();
+  await page.getByTestId("dock-tile-bot:bot02").click();
+  await expect(botList).toHaveAttribute("data-revealed", "bot02");
+  await expect(page.getByTestId("bot-bot02")).toHaveAttribute("aria-current", "true");
   const gap2 = await page.evaluate(() => {
     const list = document.querySelector('[data-testid="side-bots"] .bot-list')!.getBoundingClientRect();
-    return document.querySelector('[data-testid="bot-row-bot09"]')!.getBoundingClientRect().top - list.top;
+    return document.querySelector('[data-testid="bot-row-bot02"]')!.getBoundingClientRect().top - list.top;
   });
   expect(Math.abs(gap2)).toBeLessThanOrEqual(2);
+  await expect.poll(() => tileNames(page)).toEqual(await namesBefore(page, "bot02"));
+  await page.getByTestId("bot-bot09").click();
+  await expect(botList).toHaveAttribute("data-revealed", "bot09");
   // a thread click does not move BOTS when its row is in view
   const before = await botList.evaluate((el) => el.scrollTop);
   await page.getByTestId("threads-bot09").locator('[data-testid="thread-open"]').first().click();
@@ -581,25 +630,142 @@ test("bot click under reduced motion jumps to the top at once", async ({ page })
   await expect(botList).toHaveAttribute("data-revealed", "bot06");
 });
 
-test("the dock: 4 tiles fill 2x2 (no lone tile); the running ring is centred inside its tile", async ({ page }) => {
-  test.setTimeout(60_000);
+/** The bot names of the dock's tiles, in order. */
+const tileNames = (page: Page) =>
+  page.getByTestId("dock").locator(".dk-t").evaluateAll((els) => els.map((e) => e.getAttribute("data-testid")!.replace("dock-tile-bot:", "")));
+/** The bots listed above `bot` in BOTS, in list order. */
+const namesBefore = (page: Page, bot: string) =>
+  page.evaluate((b) => {
+    const names = [...document.querySelectorAll('[data-testid="side-bots"] .bot-list > [data-testid^="bot-row-"]')].map((e) => e.getAttribute("data-testid")!.slice("bot-row-".length));
+    return names.slice(0, names.indexOf(b));
+  }, bot);
+/** Scroll BOTS so `bot`'s row is at the list's top: exactly the bots above it are out of view. */
+const scrollToRow = (page: Page, bot: string) =>
+  page.evaluate((b) => {
+    const list = document.querySelector('[data-testid="side-bots"] .bot-list') as HTMLElement;
+    const row = document.querySelector(`[data-testid="bot-row-${b}"]`)!;
+    list.scrollTop += row.getBoundingClientRect().top - list.getBoundingClientRect().top;
+  }, bot);
+
+test("the dock holds bots only, and only the bots scrolled out of view at the top; a tile reveals its bot", async ({ page }) => {
+  test.setTimeout(90_000);
+  const { bots } = await mock("mock.manyBots", { n: 12 });
+  await open(page, { roster: ["kami", ...(bots as string[])] });
+  await page.setViewportSize({ width: 1440, height: 760 });
+  // terminals running Claude Code and Codex: never a tile
+  await newTerm(page, "claude", WEB);
+  await newTerm(page, "codex", WEB);
+  const botList = page.getByTestId("side-bots").locator(".bot-list");
+  // at the top: no dock in the page at all
+  await botList.evaluate((el) => (el.scrollTop = 0));
+  await page.waitForTimeout(300);
+  await expect(page.getByTestId("dock")).toHaveCount(0);
+  // three bots leave the top: exactly those three tiles, in list order
+  const order = await namesBefore(page, "bot12");
+  await scrollToRow(page, order[3]!);
+  await expect.poll(() => tileNames(page)).toEqual(order.slice(0, 3));
+  await expect(page.locator('[data-testid^="dock-tile-term:"]')).toHaveCount(0);
+  // a failed turn and an open ask show on the tiles
+  await mock("mock.manual", { bot: order[0] });
+  await mock("mock.emit", { events: [{ event: "turn.start", bot: order[0] }, { event: "approval.request", bot: order[0], request_id: "ap-d", title: "Run", command: "ls", choices: ["once", "deny"] }] });
+  await expect(page.getByTestId(`dock-tile-bot:${order[0]}`).getByTestId("dock-dot")).toHaveAttribute("data-dot", "needs");
+  await mock("mock.emit", { events: [{ event: "turn.end", bot: order[0], outcome: "error", error: "boom" }] });
+  await expect(page.getByTestId(`dock-tile-bot:${order[0]}`).getByTestId("dock-dot")).toHaveAttribute("data-dot", "failed");
+  await mock("mock.manual", { bot: order[0], on: false });
+  // keyboard: one tab stop, arrows move
+  await page.getByTestId(`dock-tile-bot:${order[0]}`).focus();
+  await page.keyboard.press("ArrowRight");
+  await expect(page.getByTestId(`dock-tile-bot:${order[1]}`)).toBeFocused();
+  // a tile click is the bot click: its chat opens, its row rises to the top, and the dock follows (one tile fewer)
+  await page.getByTestId(`dock-tile-bot:${order[1]}`).click();
+  await expect(page.getByTestId(`bot-${order[1]}`)).toHaveAttribute("aria-current", "true");
+  await expect(botList).toHaveAttribute("data-revealed", order[1]!);
+  await expect.poll(() => tileNames(page)).toEqual(order.slice(0, 1));
+  // nothing is stored for the dock
+  expect(await page.evaluate(() => localStorage.getItem("omher.dock"))).toBeNull();
+  // back at the top: the dock leaves (after its fade)
+  await botList.evaluate((el) => (el.scrollTop = 0));
+  await expect(page.getByTestId("dock")).toHaveCount(0);
+  // the terminal rows' menu has no pin
+  await page.locator(".ss-row.tr").first().click({ button: "right" });
+  await expect(page.getByTestId("session-row-menu")).toBeVisible();
+  await expect(page.getByTestId("session-pin")).toHaveCount(0);
+  await page.keyboard.press("Escape");
+  // nor the bots' menu
+  await page.getByTestId("bot-kami").click({ button: "right" });
+  await expect(page.getByTestId("row-menu")).toBeVisible();
+  await expect(page.getByTestId("row-menu")).not.toContainText(/dock/i);
+});
+
+test("no row is drawn cut at a region's end: a collapsed bot under an expanded one, rows at the TERMINALS edge", async ({ page }) => {
+  test.setTimeout(120_000);
   await page.setViewportSize({ width: 1440, height: 900 });
   await open(page);
-  const a = await newTerm(page, "claude", WEB);
-  const b = await newTerm(page, "codex", WEB);
-  for (const bot of ["kami", "friren"]) {
-    await page.getByTestId(`bot-${bot}`).click({ button: "right" });
-    await page.getByTestId("row-dock").click();
+  await seedThreads(page);
+  for (let i = 0; i < 9; i++) await newTerm(page, i % 3 === 0 ? "claude" : i % 3 === 1 ? "codex" : "shell", [WEB, API, NOTES][i % 3]!);
+  await page.mouse.move(900, 600);
+  await page.waitForTimeout(300);
+  const botList = page.getByTestId("side-bots").locator(".bot-list");
+  const termList = page.getByTestId("side-sessions").locator(".ss-list");
+  await noCutRows(page);
+  // at every scroll step of both lists
+  for (const l of [botList, termList]) {
+    const max = await l.evaluate((el) => el.scrollHeight - el.clientHeight);
+    for (let y = 0; y <= max; y += 23) {
+      await l.evaluate((el, v) => (el.scrollTop = v), y);
+      await page.waitForTimeout(40);
+      await noCutRows(page);
+    }
   }
-  for (const id of [a, b]) {
-    await page.getByTestId(`session-${id}`).click({ button: "right" });
-    await page.getByTestId("session-pin").click();
+  // a short window, too
+  await page.setViewportSize({ width: 1440, height: 640 });
+  await botList.evaluate((el) => (el.scrollTop = 0));
+  await page.waitForTimeout(200);
+  await noCutRows(page);
+});
+
+test("one running colour: a working thread's spinner is the running terminals' amber", async ({ page }) => {
+  test.setTimeout(60_000);
+  await open(page);
+  const { gw } = await seedThreads(page);
+  const a = await newTerm(page, "shell", WEB);
+  await fg(page, a, "claude");
+  const colours = await page.evaluate(([th, id]) => {
+    const glyph = document.querySelector(`[data-testid="thread-row-${th}"] [data-testid="thread-glyph"]`)!;
+    const mark = document.querySelector(`[data-testid="session-${id}"] .trm`)!;
+    return { thread: getComputedStyle(glyph).color, term: getComputedStyle(mark).getPropertyValue("--term-run").trim(), run: getComputedStyle(glyph).getPropertyValue("--term-run").trim() };
+  }, [gw, a] as const);
+  expect(colours.run).toBe(colours.term);
+  // the theme's running amber (#f2b705 dark, #c48a00 light), never the bots' pink accent
+  expect(["rgb(242, 183, 5)", "rgb(196, 138, 0)"]).toContain(colours.thread);
+});
+
+test("the usage meter's state is a short bar, never a dot (a red dot means a failed turn only)", async ({ page }) => {
+  await open(page);
+  const marks = page.locator(".usage-dot");
+  await expect(page.getByTestId("usage")).toBeVisible();
+  for (const el of await marks.all()) {
+    const box = (await el.boundingBox())!;
+    expect(box.width).toBeGreaterThan(box.height * 2);
   }
+});
+
+test("the dock: 4 tiles fill 2x2 (no lone tile); the running ring is centred inside its tile", async ({ page }) => {
+  test.setTimeout(60_000);
+  const { bots } = await mock("mock.manyBots", { n: 12 });
+  await open(page, { roster: ["kami", ...(bots as string[])] });
+  await page.setViewportSize({ width: 1440, height: 760 });
+  const order = await namesBefore(page, "bot12");
+  // the first bot answering
+  await mock("mock.manual", { bot: order[0] });
+  await mock("mock.emit", { events: [{ event: "turn.start", bot: order[0] }] });
+  await scrollToRow(page, order[4]!);
+  await expect.poll(() => tileNames(page)).toEqual(order.slice(0, 4));
   const boxes = await page.getByTestId("dock").locator(".dk-t").evaluateAll((els) => els.map((e) => e.getBoundingClientRect()).map((r) => ({ x: r.x, y: r.y, w: r.width })));
   expect(boxes).toHaveLength(4);
   expect(new Set(boxes.map((r) => r.y)).size).toBe(2);
   expect(Math.abs(boxes[0]!.w - boxes[3]!.w)).toBeLessThanOrEqual(1);
-  const ring = await page.getByTestId(`dock-tile-term:${a}`).evaluate((el) => {
+  const ring = await page.getByTestId(`dock-tile-bot:${order[0]}`).evaluate((el) => {
     const t = el.getBoundingClientRect();
     const cs = getComputedStyle(el, "::after");
     const top = parseFloat(cs.top);
@@ -613,4 +779,6 @@ test("the dock: 4 tiles fill 2x2 (no lone tile); the running ring is centred ins
   expect(Math.abs(ring.dy)).toBeLessThanOrEqual(1);
   expect(ring.inTop).toBeGreaterThanOrEqual(4);
   expect(ring.inBottom).toBeGreaterThanOrEqual(4);
+  await mock("mock.emit", { events: [{ event: "turn.end", bot: order[0], outcome: "done" }] });
+  await mock("mock.manual", { bot: order[0], on: false });
 });
