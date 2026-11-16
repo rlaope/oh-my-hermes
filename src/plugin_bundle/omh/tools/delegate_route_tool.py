@@ -309,15 +309,24 @@ def _provider_conflict(
     wire id no route describes is dispatched unchanged (fail open).
     """
     wanted = str(wire_model or "").strip().casefold()
+    wanted_provider = str(provider or "").strip().casefold()
     if not wanted:
         return None
+    conflicts: list[tuple[str, str]] = []
+    serving_providers: set[str] = set()
     for route_alias, (route_provider, route_wire) in routes.items():
         if not route_provider or str(route_wire or "").strip().casefold() != wanted:
             continue
-        if route_provider.casefold() == str(provider or "").strip().casefold():
-            continue
-        return str(route_alias), str(route_provider)
-    return None
+        serving_providers.add(route_provider.casefold())
+        if route_provider.casefold() != wanted_provider:
+            conflicts.append((str(route_alias), str(route_provider)))
+    # More than one alias may legitimately name the same wire id, including
+    # across providers. An explicit provider is not in conflict when at least
+    # one recorded route assigns that wire id to it; only reject providers the
+    # route document does not list at all.
+    if wanted_provider in serving_providers:
+        return None
+    return conflicts[0] if conflicts else None
 
 
 def _provider_conflict_error(alias: str, wire_model: str, provider: str, held_by: tuple[str, str]) -> dict[str, Any]:
