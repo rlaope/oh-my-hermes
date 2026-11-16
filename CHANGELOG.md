@@ -303,6 +303,8 @@ All notable changes will be documented here.
   - **Channel watch alerts arrive as "Watch · <name>",** with a notification, an unread and the Dock badge;
     Automations lists each watch with its last check and alert. (#2904)
   - **Settings, Automations and Plugins have a back arrow at the top left.** (#2911)
+  - **A routine that ran fine no longer adds a line to the chat;** only a failed run does, and every run stays on the
+    Automations page. (#2913)
   - **Plans:** a spinner and seconds on running steps (#2899); Dependencies is one row per task (#2903).
   - **Approval buttons have colours:** deny red, allow once purple, allow for this session orange. (#2902)
   - **Attached images show as large tiles** (#2898); **the side panel is resized with the mouse** (#2897); **bots

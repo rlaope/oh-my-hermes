@@ -1155,6 +1155,9 @@ function reduceEvent(state: AppState, ev: BridgeEvent, now: number): AppState {
     case "routine.ran": {
       // a delivered bot-chat run: its answer comes as that chat's message, which is the line and the unread
       if (ev.delivered) return state;
+      // a run that went fine says nothing in the chat (a 30-minute job would fill it); Automations shows its last run.
+      // Only a failed run draws a line and an unread.
+      if (!FAILED_ROUTINE.has(String(ev.status ?? "").trim().toLowerCase())) return state;
       const next = touchChat(state, bot, (c) =>
         withItems(c, [
           ...c.items,
@@ -1588,6 +1591,9 @@ export function heldDrafts(state: AppState, drafts: Record<string, string>): Rec
 function backOf(ui: Ui): Ui["back"] {
   return ui.view === "chat" || ui.view === "session" ? ui.view : ui.back;
 }
+
+/** Hermes' run states that mean a routine failed (the bridge's FAILED_RUN). */
+const FAILED_ROUTINE = new Set(["error", "failed", "failure", "delivery_failed", "blocked_config"]);
 
 export function mustHold(state: AppState, bot: string): boolean {
   const c = state.chats[bot];
