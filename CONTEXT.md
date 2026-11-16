@@ -713,6 +713,21 @@ result's usage as complete (the child was killed, deltas still in Hermes'
 daemon token-writer queue are lost, and the read is a lower bound with no
 marker of its own)
 
+**Paired-run cell trace**:
+The same disposable-home `state.db` read for one confirmed paired-run cell
+(`src/coding/hermes_child_trace.py`), taken after the cell's child exits and
+before its arm home is removed, signed into the receipt as `cell_trace`.
+Besides the `sessions` token and `api_call_count` columns it reads
+`messages.tool_calls` of assistant rows for tool names only (a `skill_view`
+argument is parsed only for its `name`), the length of
+`COALESCE(messages.api_content, content)` of the first user row, and the
+length of the system prompt, inline or through `system_prompts.prompt` by
+`sessions.system_prompt_hash`. Lengths and names leave the read; text never
+does. Same Hermes-private coupling and same quiet-on-shape-change rule as the
+usage ledger above.
+_Avoid_: keeping any message text, counting rows the home held before the
+cell, reading it outside a paired-run arm home, treating a null trace as zero
+
 **Stored prompt identity**:
 The `Model:` line of the identity trailer Hermes ends every system prompt
 with (`agent/system_prompt._timestamp_line`), as stored for a delegation
