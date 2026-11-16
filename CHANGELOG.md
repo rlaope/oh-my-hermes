@@ -57,6 +57,14 @@ All notable changes will be documented here.
   frozen TUI. Enter, a paste, a key that opens a list and every key after one of those still wait for the gateway, in
   order.
 
+- **A request to fix a code defect now gets OMH's debugging method in the turn, not only a skill name.** Hermes'
+  skills index tells a model not to open process skills such as debugging, so `omh-app-debugging` and
+  `omh-verification-gate` stayed closed on exactly the turns they exist for. On a
+  turn that asks to fix code (a change verb such as fix, debug, "make ... pass", 고쳐, with a code object such as a
+  test, a traceback, a source path or a function), the plugin now adds a short block once per session: reproduce
+  first, trace the bad value to where it is produced, try other valid inputs, run the whole suite. Questions,
+  reviews, features and fixes of anything that is not code get nothing new.
+
 ## 4.0.8 - 2026-11-15
 
 - **The OMH TUI shows a compression as one gauge row, and a prompt typed meanwhile goes on by itself.** `/compact`
