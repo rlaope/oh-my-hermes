@@ -49,6 +49,47 @@ The profile of the bg scenario (N=20, 6 s) showed:
   `RenderService.handleSelectionChanged` renders rows whether or not the terminal is paused. xterm's own
   IntersectionObserver pause does not cover this path.
 
+## Result: all four lanes together (`perf/omher-many-terminals`)
+
+The merged branch (rust, sidebar, hidden and park lanes, plus `origin/main`) against the base `5cac3df06`, Playwright
+Chromium on the mock host, N=20, 2 MiB each, 8 s. Three rounds, each running `bg` then `park` once per side, the order
+alternating (round 1 and 3 base first, round 2 head first), every run in its own process under
+`/usr/bin/lockf -k /tmp/omher-heavy.lock`, ports 5431/5432. Base ran this branch's `bench.mjs` copied into a detached
+worktree of `5cac3df06` (the base has no `--park` or `selHidden`). Load average 4.7 to 7.6 at the start of each run.
+Files: `raw/{base,head}-int2-{bg,park}-r{1,2,3}-chromium.json`.
+
+| scenario | metric | base `5cac3df06` median (min-max) | head median (min-max) |
+|---|---|---|---|
+| bg | main-thread script time (`scriptMs`) | 1333 ms (1321-1903) | 124 ms (119-266) |
+| bg | main-thread task time (`taskMs`) | 1487 ms (1470-2108) | 230 ms (227-482) |
+| bg | store updates (`updates`) | 513 (494-513) | 0 (0-0) |
+| bg | full redraws of hidden terminals (`selHidden`) | 285 (285-285) | 0 (0-0) |
+| bg | DOM changes outside `.xterm` (`domMutations`) | 464 (464-502) | 502 (464-502), **worse** |
+| bg | frames over 50 ms (`longFrames`) | 59 (54-76) | 71 (54-72), **worse** |
+| bg | longest frame gap (`maxGapMs`) | 133 ms (133-133) | 133 ms (133-150) |
+| bg | output ticks delivered in 8 s (`ticks`) | 77 (76-77) | 79 (73-79) |
+| park | xterm buffers after fill (`bufMB`) | 170.9 MB (170.9-170.9) | 170.9 MB (170.9-170.9) |
+| park | JS heap after fill (`heapFillMB`) | 34.5 MB (33.9-34.7) | 33.6 MB (33.5-34.2) |
+| park | terminals parked | 0 (0-0) | 19 (19-19) |
+| park | xterm buffers after the park wait (`bufParkMB`) | 170.9 MB (170.9-170.9) | 10 MB (10-10) |
+| park | snapshots (`snapMB`) | 0 MB (0-0) | 11 MB (11-11), **worse** |
+| park | JS heap after the park wait (`heapParkMB`) | 34.6 MB (34.5-35) | 14.5 MB (14.4-15.3) |
+| park | **total after the wait** (buffers + snapshots + heap) | 205.5 MB (205.4-205.9) | 35.5 MB (35.4-36.3) |
+
+- `bg`: script time drops by 91% (1333 to 124 ms), because hidden output no longer re-renders the sessions list
+  (sidebar lane, `updates` 513 to 0) and hidden terminals no longer redraw their rows on a selection refresh (hidden
+  lane, `selHidden` 285 to 0).
+- `park`: after the wait, the 19 hidden terminals are parked. Buffers, snapshots and heap total 35.5 MB, against
+  205.5 MB on base (83% less). The snapshots themselves are new memory (11 MB) and are labelled worse.
+- **Worse**: `longFrames` (59 to 71) and `domMutations` (464 to 502) are worse at the median. `maxGapMs` is the same
+  (133 ms). Not verified: with the main thread nearly idle, the count of frames over 50 ms in a headless Chromium
+  window may measure frame pacing rather than work. `domMutations` also counts text changes inside `.xterm` (see the
+  sidebar lane's note), so it is not sidebar-only.
+- The rust lane's shared foreground watcher is not in this table (it is not on the page). Its own bench is in its
+  commit `fda9a2da1`: with 20 idle shells, the 10-second wake count drops from 189 to 9, the probe count from 189 to
+  21, and the thread count from 100 to 81.
+- Not measured: the Tauri window (WKWebView), WebKit, Windows.
+
 ## Sidebar lane (`perf/omher-mt-sidebar`)
 
 Hidden output no longer goes through the sessions list. `lastOut`/`lastLine`/`oscTitle` live in a per-session store

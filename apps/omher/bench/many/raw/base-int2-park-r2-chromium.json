@@ -1,0 +1,127 @@
+{
+  "summary": {
+    "label": "base-int2-park-r2",
+    "engine": "chromium",
+    "scenario": "park",
+    "n": 20,
+    "mb": 2,
+    "secs": 8,
+    "runs": 1,
+    "load": "5.1",
+    "measuredOn": "Playwright browser + vite dev + mock host (not the Tauri window)",
+    "heapOpenMB": {
+      "median": 15.5,
+      "min": 15.5,
+      "max": 15.5
+    },
+    "heapFillMB": {
+      "median": 33.9,
+      "min": 33.9,
+      "max": 33.9
+    },
+    "bufMB": {
+      "median": 170.9,
+      "min": 170.9,
+      "max": 170.9
+    },
+    "bufParkMB": {
+      "median": 170.9,
+      "min": 170.9,
+      "max": 170.9
+    },
+    "snapMB": {
+      "median": 0,
+      "min": 0,
+      "max": 0
+    },
+    "heapParkMB": {
+      "median": 34.5,
+      "min": 34.5,
+      "max": 34.5
+    },
+    "parked": {
+      "median": 0,
+      "min": 0,
+      "max": 0
+    },
+    "parkMs": {
+      "median": 20054,
+      "min": 20054,
+      "max": 20054
+    },
+    "terms": {
+      "median": 20,
+      "min": 20,
+      "max": 20
+    },
+    "lines": {
+      "median": 100900,
+      "min": 100900,
+      "max": 100900
+    },
+    "renders": null,
+    "rendersHidden": null,
+    "selHidden": null,
+    "domMutations": null,
+    "nodes": {
+      "median": 771,
+      "min": 771,
+      "max": 771
+    },
+    "canvases": {
+      "median": 0,
+      "min": 0,
+      "max": 0
+    },
+    "updates": null,
+    "scriptMs": {
+      "median": 102,
+      "min": 102,
+      "max": 102
+    },
+    "taskMs": {
+      "median": 247,
+      "min": 247,
+      "max": 247
+    },
+    "layoutMs": {
+      "median": 0,
+      "min": 0,
+      "max": 0
+    },
+    "styleMs": {
+      "median": 28,
+      "min": 28,
+      "max": 28
+    },
+    "layouts": {
+      "median": 1,
+      "min": 1,
+      "max": 1
+    },
+    "longFrames": null,
+    "maxGapMs": null
+  },
+  "runs": [
+    {
+      "run": 1,
+      "heapOpenMB": 15.5,
+      "heapFillMB": 33.9,
+      "bufMB": 170.9,
+      "terms": 20,
+      "lines": 100900,
+      "nodes": 771,
+      "canvases": 0,
+      "bufParkMB": 170.9,
+      "snapMB": 0,
+      "parked": 0,
+      "parkMs": 20054,
+      "heapParkMB": 34.5,
+      "scriptMs": 102,
+      "taskMs": 247,
+      "layoutMs": 0,
+      "styleMs": 28,
+      "layouts": 1
+    }
+  ]
+}

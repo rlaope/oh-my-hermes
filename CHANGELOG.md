@@ -4,6 +4,14 @@ All notable changes will be documented here.
 
 ## Unreleased
 
+- **omher stays light with many terminal sessions open.** A hidden terminal's output now re-renders only its own
+  TERMINALS row, never the list. A terminal that is not on the page draws nothing, not even the selection redraw that
+  xterm's own pause misses. One hidden and quiet for two minutes gives its scrollback back as a snapshot and is made
+  again when shown or when its program prints. One shared thread watches every session's foreground program, instead
+  of one per session. With 20 terminals of 2 MiB each and 19 hidden ones printing, main-thread script time over 8 s
+  drops from 1333 ms to 124 ms. After the park wait, buffers, snapshots and heap hold 35.5 MB instead of 205.5 MB.
+  Frames over 50 ms went from 59 to 71 (worse); details in `apps/omher/bench/many/README.md`.
+
 - **omher: a routine that keeps failing is one line in the chat, not one per run.** The same routine failing again
   with nothing between updates its line instead of adding another: `Routine · sso-refresh · not delivered ×12 ·
   03:56–09:37`, with one unread for the first failure. Hermes' `delivery_failed` and `blocked_config` read as "not
