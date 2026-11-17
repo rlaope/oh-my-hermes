@@ -9,6 +9,13 @@ in characters of the system prompt and of the first request. No prompt,
 reply, tool argument or tool result leaves the read; a `skill_view` argument
 is parsed only to keep its `name`.
 
+When the arm may delegate (`--arm-toolsets ... delegation`), Hermes' own
+`delegate_task` children write `sessions` rows of their own (`source =
+'subagent'`) into the same store. They count in the sums above, and the trace
+also says how many there were, their API calls, how many ran at once (from
+`started_at`/`ended_at`), and every model the new rows name
+(`session_models`), so fan-in can refuse a child that ran another model.
+
 The read is read-only (`mode=ro`, `immutable=1` when no `-wal`/`-shm`/`-journal`
 sits beside the store), bounded, and never raises: a missing, locked or
 unreadable store, or one holding no row of this child, yields no trace (None),
@@ -46,6 +53,10 @@ CELL_TRACE_FIELDS: Final = frozenset(
         "skill_view_names",
         "system_prompt_chars",
         "first_request_chars",
+        "subagent_session_count",
+        "subagent_api_call_count",
+        "max_concurrent_subagents",
+        "session_models",
     }
 )
 _TOKEN_COLUMNS: Final = (
@@ -64,8 +75,13 @@ _COUNT_FIELDS: Final = (
     "skill_view_count",
     "system_prompt_chars",
     "first_request_chars",
+    "subagent_session_count",
+    "subagent_api_call_count",
+    "max_concurrent_subagents",
 )
 MAX_TOOL_NAMES: Final = 200
+MAX_SESSION_MODELS: Final = 10
+SUBAGENT_SOURCE: Final = "subagent"
 MAX_SKILL_NAMES: Final = 50
 # A tool_calls cell larger than this is not parsed; the tool fields go null
 # rather than undercount. A coding child's write_file arguments stay far below.
@@ -94,6 +110,12 @@ class CellTrace:
     skill_view_names: tuple[str, ...] | None
     system_prompt_chars: int | None
     first_request_chars: int | None
+    # Hermes `delegate_task` children among the rows; None when the store
+    # lacks the column that says so, never zero.
+    subagent_session_count: int | None = None
+    subagent_api_call_count: int | None = None
+    max_concurrent_subagents: int | None = None
+    session_models: tuple[str, ...] | None = None
 
     def to_record(self) -> dict[str, int | bool | list[str] | None]:
         return {
@@ -112,6 +134,10 @@ class CellTrace:
             "skill_view_names": None if self.skill_view_names is None else list(self.skill_view_names),
             "system_prompt_chars": self.system_prompt_chars,
             "first_request_chars": self.first_request_chars,
+            "subagent_session_count": self.subagent_session_count,
+            "subagent_api_call_count": self.subagent_api_call_count,
+            "max_concurrent_subagents": self.max_concurrent_subagents,
+            "session_models": None if self.session_models is None else list(self.session_models),
         }
 
 
@@ -168,6 +194,7 @@ def _trace(connection: sqlite3.Connection, exclude: frozenset[str]) -> CellTrace
     total_tokens = None if input_tokens is None or output_tokens is None else input_tokens + output_tokens
     tools = _tool_calls(connection, ids, marks)
     tool_names, skill_names = tools if tools is not None else (None, None)
+    subagents = _subagents(connection, session_columns, ids, marks)
     return CellTrace(
         session_count=len(ids),
         api_call_count=counts["api_call_count"],
@@ -184,7 +211,63 @@ def _trace(connection: sqlite3.Connection, exclude: frozenset[str]) -> CellTrace
         skill_view_names=None if skill_names is None else tuple(skill_names[:MAX_SKILL_NAMES]),
         system_prompt_chars=_system_prompt_chars(connection, session_columns, ids[0]),
         first_request_chars=_first_request_chars(connection, ids, marks),
+        subagent_session_count=subagents[0],
+        subagent_api_call_count=subagents[1],
+        max_concurrent_subagents=subagents[2],
+        session_models=_session_models(connection, session_columns, ids, marks),
     )
+
+
+def _subagents(
+    connection: sqlite3.Connection, columns: frozenset[str], ids: list[str], marks: str
+) -> tuple[int | None, int | None, int | None]:
+    """(children, their API calls, most children open at once); each None when unreadable."""
+    if "source" not in columns:
+        return None, None, None
+    rows = connection.execute(
+        f"SELECT {', '.join(_column_or_null(columns, name) for name in ('api_call_count', 'started_at', 'ended_at'))}"
+        f" FROM sessions WHERE source = ? AND id IN ({marks})",
+        [SUBAGENT_SOURCE, *ids],
+    ).fetchall()
+    calls: int | None = 0 if "api_call_count" in columns else None
+    for row in rows:
+        if calls is not None:
+            calls += _count(row[0]) or 0
+    return len(rows), calls, _max_overlap([(row[1], row[2]) for row in rows])
+
+
+def _column_or_null(columns: frozenset[str], name: str) -> str:
+    return name if name in columns else "NULL"
+
+
+def _max_overlap(spans: list[tuple[object, object]]) -> int | None:
+    """The most `[started_at, ended_at)` spans open at one instant; None if any end is unknown."""
+    events: list[tuple[float, int]] = []
+    for start, end in spans:
+        if not all(isinstance(value, (int, float)) and not isinstance(value, bool) for value in (start, end)):
+            return None
+        events.extend(((float(start), 1), (float(end), -1)))  # type: ignore[arg-type]
+    # An end sorts before a start at the same instant: back-to-back is not overlap.
+    open_now = most = 0
+    for _at, step in sorted(events):
+        open_now += step
+        most = max(most, open_now)
+    return most
+
+
+def _session_models(
+    connection: sqlite3.Connection, columns: frozenset[str], ids: list[str], marks: str
+) -> tuple[str, ...] | None:
+    """Sorted distinct models of the new rows; a row naming none reads `unrecognized`.
+
+    More distinct models than the cap reads as unknown (None), never as a
+    shortened list that could hide one.
+    """
+    if "model" not in columns:
+        return None
+    rows = connection.execute(f"SELECT DISTINCT model FROM sessions WHERE id IN ({marks})", ids).fetchall()
+    models = tuple(sorted({_safe_name(row[0]) for row in rows}))
+    return models if len(models) <= MAX_SESSION_MODELS else None
 
 
 def _tool_calls(
@@ -285,7 +368,11 @@ def cell_trace_errors(value: object) -> list[str]:
         errors.append("cell_trace.session_count must be a non-negative integer")
     if not isinstance(value.get("tool_names_truncated"), bool):
         errors.append("cell_trace.tool_names_truncated must be a boolean")
-    for field, limit in (("tool_names", MAX_TOOL_NAMES), ("skill_view_names", MAX_SKILL_NAMES)):
+    for field, limit in (
+        ("tool_names", MAX_TOOL_NAMES),
+        ("skill_view_names", MAX_SKILL_NAMES),
+        ("session_models", MAX_SESSION_MODELS),
+    ):
         names = value.get(field)
         if names is None:
             continue
@@ -303,6 +390,7 @@ def parse_cell_trace(value: object) -> CellTrace | None:
         return None
     names = value["tool_names"]
     skills = value["skill_view_names"]
+    models = value["session_models"]
     return CellTrace(
         session_count=value["session_count"],
         api_call_count=value["api_call_count"],
@@ -319,4 +407,8 @@ def parse_cell_trace(value: object) -> CellTrace | None:
         skill_view_names=None if skills is None else tuple(skills),
         system_prompt_chars=value["system_prompt_chars"],
         first_request_chars=value["first_request_chars"],
+        subagent_session_count=value["subagent_session_count"],
+        subagent_api_call_count=value["subagent_api_call_count"],
+        max_concurrent_subagents=value["max_concurrent_subagents"],
+        session_models=None if models is None else tuple(models),
     )

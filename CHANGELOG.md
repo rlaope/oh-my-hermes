@@ -37,6 +37,24 @@ All notable changes will be documented here.
   passed, so Hermes' dangerous-command approval stays on. The toolsets each cell ran with are signed into its receipt's
   `arm_setup`; fan-in refuses a cell whose toolsets differ from the run's declared ones and a matrix whose arms differ
   from each other. Every other Hermes child keeps safe mode and `--toolsets file`.
+- **A paired run can let both arms delegate, so OMH's job decomposition can be timed against Hermes alone.**
+  `--arm-toolsets file,skills,terminal,delegation` gives both arms Hermes' own one-level `delegate_task`. Both arm
+  homes then carry the same child settings (up to 6 children instead of Hermes' one-shot default of 2, no deeper
+  children, no per-child worktree) and run every child on the arm's own model; the variant's OMH routing chains are
+  pinned to that model too. Each cell's signed `cell_trace` now says how many delegate children ran, their API calls,
+  how many ran at once, and which models the cell's sessions used, and fan-in refuses a delegating cell whose trace is
+  missing or names another model. A delegating cell's usage reports no cost rather than one that may count the
+  children twice; tokens and API calls still sum. Without `delegation` nothing changes.
+- **A listed backlog of separate code changes runs as a dag-ulw graph.** A request that hands over four or more list
+  items, each its own change, and asks in its own words for all of them to be made in code ("these six issues are
+  open: fix all of them", "아래 버그들 전부 고쳐줘") is dispatched to `dag-ulw` by the router, and Hermes' per-turn hint
+  starts it with each item as its own build node and a verify node after them. Before, such a backlog went to whatever
+  lane one item's word scored (a "stock" lot took a six-bug job to `live-info-operator`) and the skill's own size cue
+  never ran. A list of three or fewer, one bug, a list to review, prioritize, explain, plan or file as issues, one held
+  or put off, one handed to a named coding agent, a fenced list, failing test files by path, and chores or reading stay
+  where they were. The dag-ulw skill now also says what to do where `delegate_task` returns its children inside the
+  call (a finite one-shot session): settle and dispatch the next layer in the same turn. "current" said of the
+  workspace (the current directory, branch or file) is no longer read as a live-information cue.
 
 - **Another OMH TUI no longer exits when Hermes' gateway restarts, and typing shows while it reattaches.** Where no
   service runs the gateway, `hermes gateway restart` (also `/gateway restart` from another TUI) stops it as `hermes

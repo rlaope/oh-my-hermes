@@ -54,6 +54,7 @@ from ..plugin_bundle.omh.dag_ulw_cues import (
     big_work_for_dag_ulw,
     dag_ulw_control,
     dispatches_dag_ulw,
+    lists_several_code_changes,
     names_several_features,
     reports_or_asks_after_the_name,
     refuses_dag_ulw,
@@ -219,6 +220,8 @@ _DAG_ULW_CANCEL_OR_RUN_CLARIFICATION = (
     "Ask one short question that names both readings: stop the dag-ulw run in progress, or start a dag-ulw run on "
     "the work those words name. Do neither until the user answers."
 )
+# A backlog of separate code changes handed over as a list (`dag_ulw_cues.lists_several_code_changes`).
+DAG_ULW_BACKLOG_REASON = "A backlog of separate code changes: plan each one as its own node and run them as a dag-ulw graph."
 ROUTE_EXPLANATION_SCHEMA_VERSION = "route_explanation/v1"
 MULTIPLE_COMPLETE_DOMAIN_INTENTS = "multiple_complete_domain_intents"
 _ROUTER_SKILL = "oh-my-hermes"
@@ -2273,13 +2276,17 @@ def _route_chat_message_cached(
     # words ("upstream", "pytest", "stale"), so the route hint, which starts dag-ulw on the same reading, never
     # starts a run the router did not dispatch. A request that invokes a skill or the loop is that skill's ("use
     # git-workflow: 열린 PR들 전부 리베이스해줘", "omh loop …").
+    # A backlog of separate code changes handed over as a list (`lists_several_code_changes`: four or more items, a
+    # request to make them all) is the same evidence by its shape, read before a lane's word in one item ("stock",
+    # "pipeline", "crash") can claim the whole list.
+    backlog = lists_several_code_changes(routing_message, reference_regions(message).links)
     if (
-        dispatches_dag_ulw(routing_message, reference_regions(message).links)
+        (backlog or dispatches_dag_ulw(routing_message, reference_regions(message).links))
         and explicit_skill_invocation(routing_message, query=query) in (None, DAG_ULW)
         and not explicit_loop_invocation_signal(routing_message)
     ):
         return _dag_ulw_by_evidence_decision(
-            message, routing_message=routing_message, source=source, min_confidence=min_confidence
+            message, routing_message=routing_message, source=source, min_confidence=min_confidence, backlog=backlog
         ).to_dict()
     trivial_decision = _trivial_message_fast_path_decision(
         routing_message,
@@ -3282,16 +3289,20 @@ def _dag_ulw_by_evidence_decision(
     routing_message: str,
     source: str,
     min_confidence: str,
+    backlog: bool = False,
 ) -> ChatRouteDecision:
     """A dag-ulw dispatch for work over many targets with positive evidence (`dag_ulw_cues.dispatches_dag_ulw`: a
-    change verb from a closed allow list, in request form, on a breadth object)."""
+    change verb from a closed allow list, in request form, on a breadth object), or for a backlog of separate code
+    changes handed over as a list (``backlog``: `dag_ulw_cues.lists_several_code_changes`)."""
     selected_skill = DAG_ULW
     selected_harness = primary_harness_for_skill(selected_skill)
-    reason = "Work over many targets: plan and run it as a dag-ulw graph."
+    reason = (
+        DAG_ULW_BACKLOG_REASON if backlog else "Work over many targets: plan and run it as a dag-ulw graph."
+    )
     recommendation = recommendation_for_definition(
         _skill_definition_by_name(selected_skill),
         message,
-        matched=("dag_ulw_by_evidence",),
+        matched=("dag_ulw_backlog" if backlog else "dag_ulw_by_evidence",),
         score=12,
         why=reason,
     )
