@@ -9,6 +9,7 @@ from enum import StrEnum
 from typing import TypeAlias
 
 from .context_safety import compact_visible_text, redact_absolute_paths
+from .hermes_child_arm_setup import DEFAULT_ARM_TOOLSETS
 from .hermes_child_receipts import VerifiedHermesChildReceipt
 from .paired_run_dispatch_model import PairedRunDispatchCell, PairedRunDispatchPlan
 
@@ -154,6 +155,9 @@ class PairedRunExecutionReport:
     # Per-arm home records of a local run (warm-up seconds, signed-able arm
     # setup, gateway stopped); empty for an injected runner.
     arm_homes: Mapping[str, Mapping[str, JsonValue]] = field(default_factory=dict)
+    # The toolsets the run declared for both arms; fan-in refuses a cell whose
+    # signed arm setup names others.
+    arm_toolsets: str = DEFAULT_ARM_TOOLSETS
 
     @property
     def fan_in_ready(self) -> bool:
@@ -188,6 +192,7 @@ class PairedRunExecutionReport:
         }
         if self.arm_homes:
             payload["arm_homes"] = {role: dict(record) for role, record in self.arm_homes.items()}
+            payload["arm_toolsets"] = self.arm_toolsets
         return payload
 
 

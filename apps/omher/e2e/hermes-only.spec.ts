@@ -79,7 +79,7 @@ async function open(page: Page, o: { omh?: boolean; plan?: Plan; onboarding?: bo
 
 const installs = (page: Page) => page.evaluate(() => ((window as unknown as { __installCalls: string[] }).__installCalls ?? []).length);
 
-// SESSIONS hidden in favour of bot threads (plan 2026-11-15)
+// chat-mode CLI sessions replaced by bot threads (2026-11-16: terminals kept)
 test.skip("1. Hermes without omh: the + row reads Hermes with Hermes' mark and opens a Hermes chat in the folder, on the bot in view", async ({ page }) => {
   await open(page);
   await page.getByTestId("bot-friren").click();
@@ -106,7 +106,7 @@ test.skip("1. Hermes without omh: the + row reads Hermes with Hermes' mark and o
   await expect(page.getByTestId("session-list").getByTestId("session-sub").first()).toContainText("Hermes");
 });
 
-// SESSIONS hidden in favour of bot threads (plan 2026-11-15)
+// chat-mode CLI sessions replaced by bot threads (2026-11-16: terminals kept)
 test.skip("2. Hermes and omh: the row reads oh-my-hermes as before, and nothing offers to add it", async ({ page }) => {
   await open(page, { omh: true });
   await page.getByTestId("session-new").click();
@@ -116,7 +116,7 @@ test.skip("2. Hermes and omh: the row reads oh-my-hermes as before, and nothing 
   await expect(page.getByTestId("session-add-omh")).toHaveCount(0);
 });
 
-// SESSIONS hidden in favour of bot threads (plan 2026-11-15)
+// chat-mode CLI sessions replaced by bot threads (2026-11-16: terminals kept)
 test.skip("3. a Hermes session without omh has no Terminal toggle (it would start omh); its model and panel stay", async ({ page }) => {
   await open(page);
   await page.getByTestId("session-new").click();
@@ -134,7 +134,7 @@ test.skip("3. a Hermes session without omh has no Terminal toggle (it would star
   expect(ops).not.toContain("start");
 });
 
-// SESSIONS hidden in favour of bot threads (plan 2026-11-15)
+// chat-mode CLI sessions replaced by bot threads (2026-11-16: terminals kept)
 test.skip("3b. with omh the same session keeps its Terminal toggle", async ({ page }) => {
   await open(page, { omh: true });
   await page.getByTestId("session-new").click();
@@ -362,7 +362,7 @@ test("C. the output wraps at spaces and after / only, never inside a word; one t
   expect(m.sw).toBeGreaterThan(m.cw);
 });
 
-// SESSIONS hidden in favour of bot threads (plan 2026-11-15)
+// chat-mode CLI sessions replaced by bot threads (2026-11-16: terminals kept)
 test.skip("C. the ! has the + menu's pressed look while its popover is open, and none at rest", async ({ page }) => {
   await open(page);
   const icon = page.getByTestId("omh-notice");
@@ -462,7 +462,7 @@ test("C. a long output stops at five lines and scrolls, the newest line in view"
   expect(m.top % 18).toBe(0);
 });
 
-// SESSIONS hidden in favour of bot threads (plan 2026-11-15)
+// chat-mode CLI sessions replaced by bot threads (2026-11-16: terminals kept)
 test.skip("C. done: the ! and its popover go, the + row reads oh-my-hermes and its Add line is gone", async ({ page }) => {
   await open(page, { plan: { exit: 0, lines: ["Installing oh-my-hermes …", "[ok] omh installed"] } });
   await page.getByTestId("omh-notice").click();
@@ -502,7 +502,7 @@ test("C. a silent failure says the exit code", async ({ page }) => {
   await expect(page.getByTestId("omh-pop-error")).toHaveText("The installer stopped (exit 7).");
 });
 
-// SESSIONS hidden in favour of bot threads (plan 2026-11-15)
+// chat-mode CLI sessions replaced by bot threads (2026-11-16: terminals kept)
 test.skip("C+D. Don't show again hides the ! (also after a reload); the + menu's line closes the menu and opens the popover again", async ({ page }) => {
   await open(page);
   await page.getByTestId("omh-notice").click();
@@ -524,7 +524,7 @@ test.skip("C+D. Don't show again hides the ! (also after a reload); the + menu's
   expect(await installs(page)).toBe(0);
 });
 
-// SESSIONS hidden in favour of bot threads (plan 2026-11-15)
+// chat-mode CLI sessions replaced by bot threads (2026-11-16: terminals kept)
 test.skip("D. the + menu's line is a quiet borderless row and never runs the installer itself", async ({ page }) => {
   await open(page);
   await page.getByTestId("session-new").click();
@@ -599,7 +599,7 @@ for (const [lang, line, row, tip] of [
   ["ja", "oh-my-hermes を追加", "Hermes", "oh-my-hermes がインストールされていません"],
   ["zh", "添加 oh-my-hermes", "Hermes", "未安装 oh-my-hermes"],
 ] as const) {
-  // SESSIONS hidden in favour of bot threads (plan 2026-11-15)
+  // chat-mode CLI sessions replaced by bot threads (2026-11-16: terminals kept)
   test.skip(`6. the new line in ${lang}`, async ({ page }) => {
     await open(page, { lang });
     await page.getByTestId("session-new").click();

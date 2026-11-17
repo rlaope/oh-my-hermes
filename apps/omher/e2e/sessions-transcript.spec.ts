@@ -5,7 +5,7 @@
 // for a real two-file edit (claude-12-work.jsonl).
 import { expect, test, type Page } from "@playwright/test";
 
-test.skip(true, "SESSIONS hidden in favour of bot threads (plan 2026-11-15)");
+test.skip(true, "chat-mode CLI sessions replaced by bot threads (2026-11-16: terminals kept)");
 
 const MOCK = Number(process.env.OMHER_MOCK_PORT || 5308);
 

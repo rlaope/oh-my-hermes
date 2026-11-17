@@ -2007,8 +2007,8 @@ effort its config sets and Vim mode), reading the command list and the
 the gateway itself exits mid-session with a failure, the TUI starts it again
 the way Hermes' launcher set it up and resumes the same session, saying so
 (`The Hermes gateway exited (code 1): starting it again and resuming session
-<id> (1 of 3 in 60 s); what you type waits until it is back, and ctrl+c
-leaves.`), as Hermes' own
+<id> (1 of 3 in 60 s); you can keep typing, Enter waits until it is back, and
+ctrl+c leaves.`), as Hermes' own
 TUI does; each attempt waits up to 15 s for the new gateway, the time Hermes'
 own TUI gives one before it reports a slow start (or what
 `HERMES_TUI_STARTUP_TIMEOUT_MS` sets, at least 5 s, as there). A question it had asked closes
@@ -2021,8 +2021,15 @@ before it resumed the session counts as one of them; after that, or when the
 new gateway refuses the resume or does not answer it, it leaves with the command that reopens
 the session, `omh --resume <id>` (`hermes --tui` when something other than `omh` opened the TUI),
 and Ctrl+C or Ctrl+D while it waits leaves the
-same way, the new gateway stopped. A gateway that exits normally, or after you
-quit, is not started again. A
+same way, the new gateway stopped. While it waits, or reattaches after a
+restart, what you type shows in the composer at once; Enter, a paste and the
+keys after them wait until it is back, in order. When the gateway's record
+says it was stopped with no restart asked, the TUI tries nothing (a try would
+start a gateway you stopped) and watches the record for up to 30 s, because
+Hermes' own `hermes gateway restart` without a service stops the gateway the
+same way and starts the new one seconds later: a new live record reattaches
+the session, and a record still stopped then leaves with the resume command.
+A gateway that exits normally, or after you quit, is not started again. A
 turn that brings no event the TUI shows, only types it does not know (Hermes
 renamed its turn events), gets one notice pointing at `omh doctor`, which
 prints the installed Hermes commit next to the one the TUI was declared

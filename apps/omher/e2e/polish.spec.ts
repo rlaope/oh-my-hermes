@@ -342,7 +342,7 @@ test("text fields take one calm focus: a 1px edge in --muted, the sidebar search
   }
 });
 
-// SESSIONS hidden in favour of bot threads (plan 2026-11-15)
+// chat-mode CLI sessions replaced by bot threads (2026-11-16: terminals kept)
 test.skip("a running terminal session's dot: 6px, solid, inside its tile, readable on it", async ({ page }) => {
   for (const theme of ["dark", "light"] as const) {
     await page.addInitScript(

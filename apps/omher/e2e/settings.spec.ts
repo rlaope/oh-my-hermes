@@ -50,7 +50,7 @@ test("model pill: the model control plus the panel button, popover lists provide
   // the model's company mark sits before the name (Opus -> Claude)
   await expect(pill.locator('svg.model-ic[data-mark="claude"]')).toBeVisible();
   await expect(pill).toContainText("Opus 5.5");
-  await expect(pill).toContainText("High");
+  await expect(pill).toContainText("high");
 
   await pill.click();
   const pop = page.getByTestId("model-pop");
@@ -63,8 +63,8 @@ test("model pill: the model control plus the panel button, popover lists provide
   await expect(on).toContainText("Opus 5.5");
   // selection is gray, never the brand gradient
   expect(await on.evaluate((el) => getComputedStyle(el).backgroundImage)).toBe("none");
-  await expect(pop.getByRole("radio", { name: "High" })).toHaveAttribute("aria-checked", "true");
-  for (const label of ["Off", "Low", "Med", "High", "Max"]) await expect(pop.getByRole("radio", { name: label })).toBeVisible();
+  await expect(pop.getByRole("radio", { name: "high", exact: true })).toHaveAttribute("aria-checked", "true");
+  for (const label of ["none", "low", "medium", "high", "xhigh"]) await expect(pop.getByRole("radio", { name: label, exact: true })).toBeVisible();
 
   // Escape closes
   await page.keyboard.press("Escape");
@@ -75,9 +75,9 @@ test("changing reasoning and model calls chat.set_model and updates the pill", a
   await open(page);
   await page.getByTestId("model-pill").click();
   const pop = page.getByTestId("model-pop");
-  await pop.getByRole("radio", { name: "Max" }).click();
-  await expect(page.getByTestId("reasoning-label")).toHaveText("Max");
-  await expect(pop.getByRole("radio", { name: "Max" })).toHaveAttribute("aria-checked", "true");
+  await pop.getByRole("radio", { name: "xhigh", exact: true }).click();
+  await expect(page.getByTestId("reasoning-label")).toHaveText("xhigh");
+  await expect(pop.getByRole("radio", { name: "xhigh", exact: true })).toHaveAttribute("aria-checked", "true");
   await expect.poll(async () => (await callsOf("chat.set_model")).map((c) => c.params)).toEqual([
     { bot: "kami", reasoning: "xhigh" },
   ]);
@@ -109,8 +109,8 @@ test("unsupported: one gray note, the old value stays", async ({ page }) => {
   await pop.getByRole("radio", { name: "Low" }).click();
   const note = page.getByTestId("model-note");
   await expect(note).toHaveText("Change it in Hermes for now");
-  await expect(page.getByTestId("reasoning-label")).toHaveText("High");
-  await expect(pop.getByRole("radio", { name: "High" })).toHaveAttribute("aria-checked", "true");
+  await expect(page.getByTestId("reasoning-label")).toHaveText("high");
+  await expect(pop.getByRole("radio", { name: "high", exact: true })).toHaveAttribute("aria-checked", "true");
   const color = await note.evaluate((el) => getComputedStyle(el).color);
   const [r, g, b] = color.match(/\d+/g)!.map(Number);
   expect(Math.max(r, g, b) - Math.min(r, g, b)).toBeLessThan(24); // gray, not a colour
@@ -142,7 +142,7 @@ test("settings opens and closes; theme Light sets data-theme; bot and provider p
   const body = page.getByTestId("settings-page-bot-friren");
   await expect(body.locator(".st-gh")).toHaveText(["Profile", "Model", "Work"]);
   await expect(body).toContainText("Sonnet 5.5");
-  await expect(body).toContainText("Med");
+  await expect(body).toContainText("medium");
   await expect(body).toContainText("friren");
 
   // Providers: read-only list from models.options

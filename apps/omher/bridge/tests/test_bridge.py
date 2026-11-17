@@ -4181,3 +4181,152 @@ class PeerHint(BridgeCase):
             self.assertIn("```omher-peer", ob.PEER_HINT)
             rows = ob.chat_messages([{"role": "user", "text": sent[0], "row_id": 9}])
             self.assertEqual(rows[0]["text"], "맥미니 헤르메스 붙여줘")
+
+
+class TasksLinear(unittest.TestCase):
+    """`tasks.linear`: the Tasks page's Linear source asks only whether the bot's config has an MCP server whose name
+    has `linear` in it; the reader reads the names and that server's `enabled`, never a url, headers, env or auth."""
+
+    def _dir(self, text: str) -> Path:
+        d = Path(tempfile.mkdtemp())
+        (d / "config.yaml").write_text(text, encoding="utf-8")
+        return d
+
+    def test_finds_a_linear_server_by_name_only(self):
+        d = self._dir("mcp_servers:\n  notion:\n    url: https://mcp.notion.com/mcp\n  linear:\n    url: https://mcp.linear.app/sse\n"
+                      "    headers:\n      Authorization: Bearer ***")
+        self.assertEqual(ob.read_linear_mcp(d), {"configured": True, "server": "linear"})
+        # a name with linear in it, whatever its url
+        d = self._dir("mcp_servers:\n  linear-work:\n    url: https://mcp.example.com/sse\n")
+        self.assertEqual(ob.read_linear_mcp(d), {"configured": True, "server": "linear-work"})
+        # a Linear url under another name is not detected: the url is never read
+        fake = "glpat-" + "X" * 24
+        d = self._dir(f"mcp_servers:\n  work:\n    url: https://mcp.linear.app/sse?token={fake}\n    headers:\n      Authorization: {fake}\n")
+        self.assertEqual(ob.read_linear_mcp(d), {"configured": False, "server": ""})
+
+    def test_reads_only_the_names_and_enabled(self):
+        # the verifier's probe (V3 on PR #2908): every value read is recorded; only the Linear server's `enabled` may be
+        touched = []
+
+        class Spy(dict):
+            def __getitem__(self, k):
+                touched.append(k)
+                return super().__getitem__(k)
+
+            def get(self, k, default=None):
+                touched.append(k)
+                return super().get(k, default)
+
+            def values(self):
+                raise AssertionError("values() read")
+
+            def items(self):
+                raise AssertionError("items() read")
+
+        fake = "glpat-" + "X" * 24
+        work = Spy(url="https://mcp.linear.app/sse?token=" + fake, headers=Spy(Authorization=fake), enabled=True)
+        lin = Spy(url="https://mcp.example.com/" + fake, env=Spy(LINEAR_API_KEY=fake), enabled=False)
+        self.assertEqual(ob.linear_server(Spy(work=work)), {"configured": False, "server": ""})
+        self.assertEqual(touched, [])
+        self.assertEqual(ob.linear_server(Spy(work=work, my_linear=lin)), {"configured": False, "server": "my_linear"})
+        self.assertEqual(touched, ["my_linear", "enabled"])
+
+    def test_no_other_value_is_kept_or_cached(self):
+        # the verifier's V5 probe (PR #2908): a fake credential under the Linear server must not be held by anything
+        # the reader returns or caches; the config never reaches the shared YAML cache
+        fake = "glpat-" + "X" * 24
+        for name, url, want in (("linear-work", "https://example.org/sse", True), ("work", "https://mcp.linear.app/sse", False)):
+            d = self._dir(f"model: x\nmcp_servers:\n  {name}:\n    url: {url}?token={fake}\n    headers:\n"
+                          f"      Authorization: {fake}\n    env: [{fake}, {{K: {fake}}}]\n    enabled: true\n")
+            ob._YAML_CACHE.clear()
+            result = ob.read_linear_mcp(d)
+            self.assertEqual(result, {"configured": want, "server": name if want else ""})
+            self.assertNotIn(str(d / "config.yaml"), ob._YAML_CACHE)
+            self.assertEqual(ob.mcp_server_names(d / "config.yaml"), {name: {"enabled": True}})
+            for held in (result, ob._YAML_CACHE, ob.mcp_server_names(d / "config.yaml")):
+                self.assertNotIn(fake, repr(held))
+
+    def test_the_op_returns_caches_and_logs_no_other_value(self):
+        # rule 33 as written (the verifier's V5 probe, PR #2908 verify9): fake values in headers, env and args. The
+        # bot lookup parses the config whole for every op (`_load_yaml`, discover_bots); the Linear path adds nothing
+        # to that cache, returns only the name and `enabled`, logs nothing, and only names / `enabled` leave its parser.
+        import logging
+        import yaml
+
+        fake = "ghp_" + "Q7" * 18
+        for name, enabled, want in (("linear-work", True, True), ("work", True, False), ("linear", False, False)):
+            home = Path(tempfile.mkdtemp())
+            (home / "config.yaml").write_text(yaml.safe_dump({"mcp_servers": {name: {
+                "enabled": enabled, "url": "https://example.org/sse", "headers": {"Authorization": fake},
+                "env": {"API_TOKEN": fake}, "args": ["--token", fake]}}}), encoding="utf-8")
+            bridge = ob.Bridge(token=TOKEN, hermes_home=home)
+            ob._YAML_CACHE.clear()
+            ob.discover_bots(home)
+            before = repr(ob._YAML_CACHE)
+            records: list[logging.LogRecord] = []
+
+            class Keep(logging.Handler):
+                def emit(self, record):
+                    records.append(record)
+
+            root, keep = logging.getLogger(), Keep(logging.DEBUG)
+            level = root.level
+            root.addHandler(keep)
+            root.setLevel(logging.DEBUG)
+            try:
+                result = asyncio.run(bridge.op_tasks_linear({"bot": "default"}))
+            finally:
+                root.removeHandler(keep)
+                root.setLevel(level)
+            self.assertEqual(result, {"configured": want, "server": name if "linear" in name else ""})
+            self.assertNotIn(fake, repr(result))
+            self.assertEqual(repr(ob._YAML_CACHE), before)  # the Linear path stores nothing of its own
+            self.assertEqual([r.getMessage() for r in records if fake in r.getMessage()], [])
+            self.assertEqual(ob.mcp_server_names(home / "config.yaml"), {name: {"enabled": enabled}})
+
+    def test_names_and_enabled_only(self):
+        d = self._dir("mcp_servers:\n  notion: {url: x}\n  lin:\n    nested: {enabled: false}\n    enabled: off\n"
+                      "  q:\n    enabled: 'false'\nskills:\n  mcp_servers: {linear: {}}\n")
+        self.assertEqual(ob.mcp_server_names(d / "config.yaml"), {"notion": {}, "lin": {"enabled": False}, "q": {}})
+        self.assertEqual(ob.mcp_server_names(self._dir("mcp_servers: {linear: {enabled: false}\n") / "config.yaml"), {})
+
+    def test_none_off_or_broken(self):
+        for text in ("", "mcp_servers: []\n", "mcp_servers:\n  notion:\n    url: https://mcp.notion.com/mcp\n",
+                     "mcp_servers:\n  issues:\n    url: https://mcp.linear.app/mcp\n", "model: x\n"):
+            self.assertEqual(ob.read_linear_mcp(self._dir(text)), {"configured": False, "server": ""}, text)
+        off = self._dir("mcp_servers:\n  linear:\n    url: https://mcp.linear.app/sse\n    enabled: false\n")
+        self.assertEqual(ob.read_linear_mcp(off), {"configured": False, "server": "linear"})
+
+    def test_is_an_op(self):
+        self.assertIn("tasks.linear", ob.Bridge(token=TOKEN, hermes_home=Path(tempfile.gettempdir())).ops)
+        self.assertIn("tasks.linear", ob.PEER_FORWARD)
+
+
+class OneMasker(unittest.TestCase):
+    """The bridge's `mask_secrets` is omher's one masker: the same patterns as src/lib/secrets.json (the page and the
+    desktop shell read that file)."""
+
+    def test_same_patterns_as_the_shared_file(self):
+        spec = json.loads((Path(ob.__file__).parent.parent / "src" / "lib" / "secrets.json").read_text(encoding="utf-8"))
+        self.assertEqual((ob.SECRET_TOKENS, ob.SECRET_ASSIGNED, ob.SECRET_MASK), (spec["tokens"], spec["assigned"], spec["mask"]))
+        self.assertEqual([list(e) for e in ob.SECRET_SPLIT], spec["split"])
+
+    def test_the_shared_cases(self):
+        # src/lib/secrets.cases.json: the same table the page (secrets.test.ts) and the shell (tasks.rs) run
+        table = json.loads((Path(ob.__file__).parent.parent / "src" / "lib" / "secrets.cases.json").read_text(encoding="utf-8"))
+        self.assertGreater(len(table["cases"]), 10)
+        for text, want in table["cases"]:
+            self.assertEqual(ob.mask_secrets(text), want, text)
+
+    def test_a_token_broken_by_a_line_break(self):
+        # the verifier's V4 (PR #2908): `ghp_XXXX` + newline + 32 X stayed visible
+        self.assertEqual(ob.mask_secrets("before ghp_XXXX\n" + "X" * 32 + " after"), "before •••• after")
+        self.assertEqual(ob.mask_secrets("ghp_" + "X" * 36 + "\nThe next line"), "••••\nThe next line")
+
+    def test_masks_tokens_and_assigned_values(self):
+        fake = "ghp_" + "X" * 36
+        self.assertEqual(ob.mask_secrets(f"failure credential={fake}"), "failure credential=••••")
+        self.assertEqual(ob.mask_secrets(f"example credential {fake}"), "example credential ••••")
+        self.assertEqual(ob.mask_secrets("[d](https://e.com/?token=abc&x=1)"), "[d](https://e.com/?token=••••&x=1)")
+        for plain in ("task-management works", "the token is in the vault", "password: see wiki"):
+            self.assertEqual(ob.mask_secrets(plain), plain)

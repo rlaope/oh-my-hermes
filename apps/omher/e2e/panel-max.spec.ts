@@ -233,59 +233,71 @@ const recordPresses = (page: Page) =>
           control: !t.closest('[data-testid="panel-tabs"]') && !!t.closest(ctl),
           model: !!t.closest('[data-testid="model-pill"]'),
           places: !!t.closest('[data-testid="places"]'),
+          at: performance.now(),
         });
       },
       true,
     );
   });
-type Press = { id: string | null; row: boolean; control: boolean; model: boolean; places: boolean };
+type Press = { id: string | null; row: boolean; control: boolean; model: boolean; places: boolean; at: number };
 const presses = (page: Page) => page.evaluate(() => (window as unknown as { __presses: Press[] }).__presses.splice(0));
 
 // A control in the chat header the person actually hits during the restore slide is theirs (the model pill opens
 // its picker, the places chip closes the panel), at every delay; only the header's bare background can be claimed by
-// a double-click aimed at the tab row. A sample where the control is still under the panel is left out.
+// a double-click aimed at the tab row. The delay counts from the Esc keydown; the point is hit-tested right before a
+// real mouse click, and only a round whose real pointerdown landed inside the control counts. A round where the
+// control was still under the panel, or the press landed elsewhere, is sampled again: 20 actual hits, 0 lost.
 for (const control of ["model-pill", "places"] as const)
-  test(`a real click on the header's ${control} 120-450ms after Esc is never stolen by the slide`, async ({ page }) => {
-    test.setTimeout(60_000);
-    await page.setViewportSize({ width: 1440, height: 900 });
-    await openPanel(page, "runs");
-    await recordPresses(page);
-    const out: { delay: number; hit?: Press; worked?: boolean }[] = [];
-    for (const delay of [120, 180, 220, 280, 350, 450]) {
-      if (!/\bpanel-open\b/.test((await page.getByTestId("window").getAttribute("class")) ?? "")) await page.getByTestId("places").click();
-      await page.getByTestId("panel-tab-runs").click();
-      if (!(await isMaxed(page))) await page.getByTestId("panel-max").click();
-      await expectMaxed(page);
-      await settled(page);
-      await page.keyboard.press("Escape");
-      await page.waitForTimeout(delay);
-      const p = await page.getByTestId(control).evaluate((e) => {
-        const b = e.getBoundingClientRect();
-        const y = b.y + b.height / 2;
-        const x = [b.x + b.width / 2, b.x + 5, b.right - 5].find((x) => e.contains(document.elementFromPoint(x, y)));
-        return x === undefined ? null : { x, y };
-      });
-      if (!p) {
-        out.push({ delay });
-        await settled(page);
-        continue;
+  for (const delay of [120, 180, 220, 280, 350, 450])
+    test(`a real click on the header's ${control} ${delay}ms after Esc is never stolen by the slide, 20 actual hits`, async ({ page }) => {
+      // 20 actual hits: on a loaded runner the control is often still under the panel at 120-180ms (1 round in 9
+      // is a hit there), so up to 400 rounds
+      test.setTimeout(900_000);
+      await page.setViewportSize({ width: 1440, height: 900 });
+      await openPanel(page, "runs");
+      await recordPresses(page);
+      const own = (h: Press) => (control === "model-pill" ? h.model : h.places);
+      const hits: { round: number; after: number; worked: boolean }[] = [];
+      const left: { round: number; why: string }[] = [];
+      for (let round = 0; hits.length < 20 && round < 400; round++) {
+        await maxForRound(page);
+        await page.evaluate(() => {
+          const w = window as unknown as { __esc: number };
+          w.__esc = 0;
+          window.addEventListener("keydown", (e) => e.key === "Escape" && (w.__esc = performance.now()), { capture: true, once: true });
+        });
+        await presses(page);
+        await page.keyboard.press("Escape");
+        const p = await page.getByTestId(control).evaluate(async (e, delay) => {
+          const esc = (window as unknown as { __esc: number }).__esc;
+          while (performance.now() - esc < delay) await new Promise((r) => setTimeout(r, 1));
+          const b = e.getBoundingClientRect();
+          for (const y of [b.y + b.height / 2, b.y + 2, b.bottom - 2])
+            for (let x = b.x + 2; x < b.right - 1; x += 2) if (e.contains(document.elementFromPoint(x, y))) return { x, y };
+          return null;
+        }, delay);
+        if (!p) {
+          left.push({ round, why: "occluded" });
+          continue;
+        }
+        await page.mouse.click(p.x, p.y);
+        const [hit] = await presses(page);
+        if (!hit || !own(hit)) {
+          left.push({ round, why: `pressed ${hit?.id ?? "nothing"}` });
+          continue;
+        }
+        const after = Math.round(hit.at - (await page.evaluate(() => (window as unknown as { __esc: number }).__esc)));
+        await page.waitForTimeout(450);
+        const worked =
+          control === "model-pill"
+            ? await page.getByTestId("model-pop").isVisible()
+            : !/\bpanel-open\b/.test((await page.getByTestId("window").getAttribute("class")) ?? "");
+        hits.push({ round, after, worked });
       }
-      await presses(page);
-      await page.mouse.click(p.x, p.y);
-      const [hit] = await presses(page);
-      await page.waitForTimeout(450);
-      const worked =
-        control === "model-pill"
-          ? await page.getByTestId("model-pop").isVisible()
-          : !/\bpanel-open\b/.test((await page.getByTestId("window").getAttribute("class")) ?? "");
-      out.push({ delay, hit, worked });
-      if (await page.getByTestId("model-pop").isVisible()) await page.keyboard.press("Escape");
-      await settled(page);
-    }
-    const valid = out.filter((o) => o.hit && (control === "model-pill" ? o.hit.model : o.hit.places));
-    expect(valid.length, JSON.stringify(out)).toBeGreaterThan(0);
-    expect(valid.filter((o) => !o.worked), JSON.stringify(out)).toEqual([]);
-  });
+      const summary = JSON.stringify({ control, delay, hits, left });
+      expect(hits.filter((h) => !h.worked), summary).toEqual([]);
+      expect(hits.length, summary).toBe(20);
+    });
 
 /** What (x, y) shows now: the tab row, a control in the chat header, or its bare background. */
 const CONTROL = 'button, a[href], input, textarea, select, [role="button"], [role="menuitem"], [role="tab"], [role="combobox"], [role="link"], [contenteditable], [tabindex]:not([tabindex="-1"])';
@@ -353,15 +365,16 @@ test("trade-off: where the model pill slid over the row's old free space, the pi
   }
 });
 
-// 10 rounds of the real-mouse attack: each maximises, except a round whose press landed on a header control the slide
-// brought under the pointer (the model pill), which is the control's and does not toggle (the chosen trade-off above;
-// the bare-header test above pins 10 of 10 maximised).
+// Where the second press lands on a header control the slide brought under the pointer (the model pill), the control
+// wins and the pair does not toggle (the chosen trade-off, above); every other round maximises, 10 of 10. About two
+// rounds in three land on the pill at this point, so the 10 qualifying rounds take up to 60.
 test("a person's double-click on the tab row during the restore slide still maximises, 10 of 10 (real mouse)", async ({ page }) => {
-  test.setTimeout(90_000); // 10 slide rounds on a slow runner
+  test.setTimeout(300_000); // up to 60 slide rounds on a slow runner
   await page.setViewportSize({ width: 1440, height: 900 });
   await openPanel(page, "runs");
   await recordPresses(page);
-  for (let i = 0; i < 10; i++) {
+  let maxed = 0;
+  for (let i = 0; maxed < 10 && i < 60; i++) {
     await maxForRound(page);
     await page.keyboard.press("Escape");
     await page.waitForTimeout(25);
@@ -372,9 +385,14 @@ test("a person's double-click on the tab row during the restore slide still maxi
     await page.mouse.dblclick(p.x, p.y, { delay: 45 });
     const hits = await presses(page);
     await page.waitForTimeout(400);
-    const onControl = hits.some((h) => h.control);
-    expect(await isMaxed(page), `round ${i}: ${onControl ? "a press on a control is the control's" : "maximised"} ${JSON.stringify(hits)}`).toBe(!onControl);
+    if (hits.some((h) => h.control)) {
+      expect(await isMaxed(page), `round ${i}: a press on a control ${JSON.stringify(hits)} is the control's`).toBe(false);
+      continue;
+    }
+    expect(await isMaxed(page), `round ${i}: double-click during the slide maximised`).toBe(true);
+    maxed++;
   }
+  expect(maxed).toBe(10);
 });
 
 test("tab row: a settled double-click toggles once; one click, or two clicks 800ms apart, never toggles", async ({ page }) => {

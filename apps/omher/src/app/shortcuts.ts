@@ -3,19 +3,21 @@
 //   ⌘.     show or hide Details                    ⌘,  Settings
 //   ⌘J     jump to the next approval or question waiting on you (any bot or SESSIONS chat)
 //   ⌘⇧G   maximise the side panel in place, or restore it (Esc restores; a closed panel opens on Plans)
-//   ⌘N ⌘T  the SESSIONS + menu (pick an agent for a New session)   } off while SESSIONS is hidden
-//   ⌘⇧]    the next session (sidebar order, wrapping)          ⌘⇧[  the previous session   } (sessions/entry.ts)
+//   ⌘N ⌘T  the TERMINALS + menu (Shell or a CLI, in a terminal)
+//   ⌘⇧]    the next terminal session (sidebar order, wrapping)  ⌘⇧[  the previous one
 //   Esc    stop the running answer (only when no popover, field or dialog wants Esc first)
 //   Ctrl+` the bottom terminal panel, show or hide, on every OS (Ctrl on macOS too, as in VS Code; a maximised side
 //          panel goes back to its own width first, so the terminal shows); taken before a
 //          terminal sees it, so it works with the keyboard inside a terminal (it is omher's, not the program's)
 // An approval card's own 1/2/3 keys live on the card (src/chat/cards), never here.
 // None of these fire while an input method is composing (a Korean, Japanese or Chinese word not yet committed).
+import { getFolderPrefs, orderFolders } from "../sessions/folders";
 import { useEffect } from "react";
 import { getStore, selectAsks, selectSidebarBots, type Ask, type FocusAsk } from "../state/store";
 import { getSessions } from "../sessions/sessions";
 import { openNewSessionMenu } from "../sessions/newMenu";
 import { SESSIONS_ENTRY } from "../sessions/entry";
+import { isTerminalRec, termGroups } from "../sessions/agents";
 import { composing } from "../lib/ime";
 import { getTermPanel, toggleTerminal } from "../terminal/state";
 
@@ -67,12 +69,33 @@ export function nextAsk(asks: Ask[], last: FocusAsk | null): Ask | null {
   return asks[(at + 1) % asks.length];
 }
 
+const inTerminal = (t: EventTarget | null) => !!(t as HTMLElement | null)?.closest?.(".xterm");
+
+/** Open the next (1) or previous (-1) terminal session in TERMINALS order: the folder groups as the sidebar shows them. */
+function stepTerminal(step: 1 | -1) {
+  const store = getStore();
+  const s = store.getState();
+  const ss = getSessions().getState();
+  const ids = orderFolders(termGroups(ss.list.filter((r) => isTerminalRec(ss.agents, r))), getFolderPrefs().order).flatMap((g) => g.rows.map((r) => r.id));
+  const to = stepSession(ids, s.ui.view === "session" ? s.ui.session : null, step);
+  if (to) store.actions.openSession(to);
+}
+
 export function useShortcuts(): void {
   useEffect(() => {
     // Ctrl+` is taken on the way down, before a focused terminal (xterm stops the keys it handles) can claim it. The
     // panel lives under the chat column, which a maximised side panel hides: showing it restores the side panel first
     const onTerminalKey = (e: KeyboardEvent) => {
-      if (shortcutFor(e, isMac())?.kind !== "terminal") return;
+      const hit = shortcutFor(e, isMac());
+      // Ctrl+Shift+] / [ on Windows and Linux: omher's own chord, which no shell needs; inside a terminal xterm would
+      // take it (as Ctrl+] / Ctrl+[), so it is taken here first. Every other Ctrl+key in a terminal stays the program's
+      if (hit?.kind === "session" && !isMac() && SESSIONS_ENTRY && inTerminal(e.target)) {
+        e.preventDefault();
+        e.stopPropagation();
+        stepTerminal(hit.step);
+        return;
+      }
+      if (hit?.kind !== "terminal") return;
       e.preventDefault();
       e.stopPropagation();
       if (e.repeat) return;
@@ -85,7 +108,7 @@ export function useShortcuts(): void {
       if (!hit || hit.kind === "terminal") return;
       if (!SESSIONS_ENTRY && (hit.kind === "new-session" || hit.kind === "session")) return;
       // In a terminal session, Ctrl+<key> belongs to the program (Ctrl+K kills a line); ⌘ on macOS stays ours.
-      if (!isMac() && (e.target as HTMLElement | null)?.closest?.(".xterm")) return;
+      if (!isMac() && inTerminal(e.target)) return;
       const store = getStore();
       const s = store.getState();
       const a = store.actions;
@@ -131,11 +154,7 @@ export function useShortcuts(): void {
       } else if (hit.kind === "new-session") {
         openNewSessionMenu();
       } else if (hit.kind === "session") {
-        const ids = getSessions()
-          .getState()
-          .list.map((r) => r.id);
-        const to = stepSession(ids, s.ui.view === "session" ? s.ui.session : null, hit.step);
-        if (to) a.openSession(to);
+        stepTerminal(hit.step);
       } else if (hit.kind === "next-ask") {
         const n = nextAsk(selectAsks(s), s.ui.focusAsk);
         if (n) void a.jumpToAsk(n.bot, n.item.id);

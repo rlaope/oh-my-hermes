@@ -1202,6 +1202,16 @@ disposable Hermes home per arm under a fresh temporary root outside any Hermes
   disposable OMH home, and exactly the arm's frozen `exposed_skills`. The
   baseline home holds neither. Both arms run the same flags (`--ignore-rules
   --toolsets file,skills`), so the homes are the only difference.
+- `--arm-toolsets` is the one opt-in that changes those flags, and it changes
+  them for both arms at once. It takes names from the closed set `file`,
+  `skills`, `terminal`; `file` and `skills` are required, and anything else is
+  refused before a home is built. `--arm-toolsets file,skills,terminal` gives
+  both arms Hermes' shell tool, running in the cell's detached worktree, so a
+  comparison of a plugin that runs tests is not a comparison against an arm
+  that cannot. `--yolo` is never passed, so Hermes' dangerous-command
+  approval stays on in both arms. No other Hermes child (`hermes-child
+  dispatch`, `fanout --final-review`, recovery) can take this flag; each keeps
+  safe mode and `--toolsets file`.
 - A harness-owned `hermes gateway run --quiet` serves each home in its own
   process group with a minimal environment, never a launchd or other service
   job. One untimed warm-up chat absorbs the home's first-start work; its
@@ -1212,10 +1222,14 @@ disposable Hermes home per arm under a fresh temporary root outside any Hermes
 
 At each cell's spawn the dispatcher reads the home from disk (plugin manifest
 present and enabled in config; the sorted OMH skills present) and signs that
-reading into the receipt as `arm_setup`. A caller cannot supply or keep one.
-Fan-in refuses a cell with no signed setup, a variant that ran without the
-plugin, a baseline that ran with it, or a skills digest that differs from the
-arm's `exposed_skills`. The arm role fixes the plugin expectation, so
+reading, with the canonical `toolsets` the child was spawned with, into the
+receipt as `arm_setup`. A caller cannot supply or keep one, and editing the
+stored toolsets fails verification. Fan-in refuses a cell with no signed
+setup, a variant that ran without the plugin, a baseline that ran with it, a
+skills digest that differs from the arm's `exposed_skills`, or toolsets that
+differ from the run's declared `arm_toolsets` (listed beside `arm_homes` in
+the execution report), and refuses the whole matrix when its arms' signed
+toolsets differ from each other. The arm role fixes the plugin expectation, so
 `paired_run_decision/v2` needs no new field.
 
 After the cell's child exits, and while its arm home still exists, the

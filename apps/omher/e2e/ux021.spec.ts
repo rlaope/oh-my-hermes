@@ -49,7 +49,7 @@ test.beforeEach(async () => {
   await mock("mock.reset");
 });
 
-// SESSIONS hidden in favour of bot threads (plan 2026-11-15)
+// chat-mode CLI sessions replaced by bot threads (2026-11-16: terminals kept)
 test.skip("U10: the Terminal toggle is a 24px icon button named Open in Terminal, unlike the model chip", async ({ page }) => {
   await open(page);
   await start(page, "claude", "/home/you/code/web-app");
@@ -94,7 +94,7 @@ test("U11: the collapsed strip names the newest ask's bot and its first words; e
   await expect(page.getByTestId("bot-friren")).toHaveAttribute("aria-current", "true");
 });
 
-// SESSIONS hidden in favour of bot threads (plan 2026-11-15)
+// chat-mode CLI sessions replaced by bot threads (2026-11-16: terminals kept)
 test.skip("U12: two sessions in folders of the same name show their parent folder; a unique name stays alone", async ({ page }) => {
   await open(page);
   await start(page, "claude", "/home/you/work/web-app");
@@ -112,7 +112,7 @@ test.skip("U12: two sessions in folders of the same name show their parent folde
   expect(where).not.toBe(name);
 });
 
-// SESSIONS hidden in favour of bot threads (plan 2026-11-15)
+// chat-mode CLI sessions replaced by bot threads (2026-11-16: terminals kept)
 test.skip("U13: an agent that exits with code 0 reads Ended in grey, never Failed", async ({ page }) => {
   await open(page);
   await start(page, "claude", "/home/you/code/web-app");
@@ -129,7 +129,7 @@ test.skip("U13: an agent that exits with code 0 reads Ended in grey, never Faile
   expect(rgb(await page.getByTestId("session-status").evaluate((el) => getComputedStyle(el).color))).not.toEqual(rgb("rgb(240, 138, 138)"));
 });
 
-// SESSIONS hidden in favour of bot threads (plan 2026-11-15)
+// chat-mode CLI sessions replaced by bot threads (2026-11-16: terminals kept)
 test.skip("U14: a missing agent's Not installed tooltip carries its install line, as text only", async ({ page }) => {
   await open(page, ["claude"]);
   await page.getByTestId("session-new").click();

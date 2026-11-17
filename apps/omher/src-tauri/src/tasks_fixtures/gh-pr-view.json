@@ -1,0 +1,69 @@
+{
+ "author": {
+  "id": "U_redacted",
+  "is_bot": false,
+  "login": "person1",
+  "name": "Person1"
+ },
+ "body": "## Feature Report\n\n### What Changed\n\n- `tests/test_jev_ask_tool.py`: clear `no_proxy` and `NO_PROXY` inside the temporary environment used by the proxy-transport test, so an inherited bypass list cannot add a `\"no\"` entry to the HTTPS opener's proxy map.\n- `tools/stamp_site_counts.py`: close a caught `HTTPError` before formatting the failure message, so its response wrapper does not emit a `ResourceWarning` when collected.\n- `tests/test_release_resume.py`: raise this module's CLI subprocess timeout from 120s to 300s. No assertions change.\n\nThis carries over only the three test-hygiene changes from #2830. The plugin-bytecode fix that #2830 also contained already landed in #2810, so it is intentionally not part of this branch.\n\n### Why This Exists\n\n- The Jev test was environment-dependent. With `NO_PROXY` set, `urllib` includes a `\"no\"` key in the default proxy map used for the HTTPS opene",
+ "comments": [],
+ "createdAt": "2026-11-15T18:19:19Z",
+ "isDraft": false,
+ "labels": [],
+ "number": 2907,
+ "state": "MERGED",
+ "statusCheckRollup": [
+  {
+   "__typename": "CheckRun",
+   "completedAt": "2026-11-15T18:19:59Z",
+   "conclusion": "SUCCESS",
+   "detailsUrl": "https://github.com/rlaope/oh-my-hermes/actions/runs/43746096096/job/132909609660",
+   "name": "plan",
+   "startedAt": "2026-11-15T18:19:25Z",
+   "status": "COMPLETED",
+   "workflowName": "CI"
+  },
+  {
+   "__typename": "CheckRun",
+   "completedAt": "2026-11-15T18:21:10Z",
+   "conclusion": "SUCCESS",
+   "detailsUrl": "https://github.com/rlaope/oh-my-hermes/actions/runs/43746096031/job/132909609337",
+   "name": "PR / candidate OMH x stable Hermes",
+   "startedAt": "2026-11-15T18:19:25Z",
+   "status": "COMPLETED",
+   "workflowName": "Hermes compatibility"
+  },
+  {
+   "__typename": "CheckRun",
+   "completedAt": "2026-11-15T18:19:23Z",
+   "conclusion": "SKIPPED",
+   "detailsUrl": "https://github.com/rlaope/oh-my-hermes/actions/runs/43746096031/job/132909611114",
+   "name": "${{ matrix.omh }} OMH x ${{ matrix.host }} Hermes",
+   "startedAt": "2026-11-15T18:19:23Z",
+   "status": "COMPLETED",
+   "workflowName": "Hermes compatibility"
+  },
+  {
+   "__typename": "CheckRun",
+   "completedAt": "2026-11-15T18:19:50Z",
+   "conclusion": "SUCCESS",
+   "detailsUrl": "https://github.com/rlaope/oh-my-hermes/actions/runs/43746096096/job/132909609678",
+   "name": "distribution (ubuntu-latest)",
+   "startedAt": "2026-11-15T18:19:25Z",
+   "status": "COMPLETED",
+   "workflowName": "CI"
+  },
+  {
+   "__typename": "CheckRun",
+   "completedAt": "2026-11-15T18:21:15Z",
+   "conclusion": "SUCCESS",
+   "detailsUrl": "https://github.com/rlaope/oh-my-hermes/actions/runs/43746096096/job/132909609404",
+   "name": "distribution (macos-latest)",
+   "startedAt": "2026-11-15T18:19:26Z",
+   "status": "COMPLETED",
+   "workflowName": "CI"
+  }
+ ],
+ "title": "test: carry the #2830 test-hygiene fixes to current main",
+ "url": "https://github.com/rlaope/oh-my-hermes/pull/2907"
+}

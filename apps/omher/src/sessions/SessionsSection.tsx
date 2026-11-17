@@ -12,15 +12,19 @@
 // dot. A session that no longer runs steps back.
 // Line 1 is the session's name (the person's, the agent's own title, a summary of the first message, else the
 // folder) and line 2 the folder and the agent. Double-click the name, or right-click › Rename, to name it.
-import { Fragment, useEffect, useLayoutEffect, useRef, useState, type RefObject } from "react";
-import { selectAsks, useStore, type AppState } from "../state/store";
+import { Fragment, useEffect, useLayoutEffect, useRef, useState, type PointerEvent as ReactPointerEvent, type RefObject } from "react";
+import { useStore } from "../state/store";
 import { CloseIcon, LiveRing, PlusIcon, Popover, TypingDots } from "../ui";
 import { busyFor, shortTime } from "../app/time";
 import { useNow } from "../elsewhere/useNow";
 import { t } from "../i18n";
 import { composing } from "../lib/ime";
 import { AgentMark } from "./AgentMark";
-import { agentDef, agentLabel, draftOpen, folderChoices, folderName, hermesOnly, installLine, menuFocus, menuOrder, menuParts, missingNote, rowModel, tildePath, type AgentId, type AgentInfo, type ChatLive, type RowContext, type RowMark, type SessionRec, type Unseen } from "./agents";
+import { agentDef, agentLabel, draftFolder, folderChoices, folderName, hermesOnly, installLine, isTerminalRec, menuFocus, menuOrder, missingNote, parentPath, SHELL, termActivity, termFallbackName, termGroups, terminalAgents, termMarkAgent, termStatus, tildePath, type AgentId, type AgentInfo, type RowMark, type SessionRec, type TermStatus, type Unseen } from "./agents";
+import { TermRowMark } from "./TermRowMark";
+import { allCollapsed, collapseOthers, folderSummary, getFolderPrefs, moveFolder, orderFolders, revealFolder as openFolder, setAllFolders, setFolderPrefs, toggleFolder, useFolderPrefs } from "./folders";
+import { ChevronDown, ChevronRight } from "../ui/icons";
+import { CUE_PX, useEdgeFade } from "../sidebar/edgeFade";
 import { getHost, type PastChat } from "./host";
 import { getSessions, useSessions } from "./sessions";
 import { pickTitle } from "./titles";
@@ -54,14 +58,15 @@ export function SessionsHeader() {
   useEffect(() => onOpenNewSessionMenu(() => setOpen(true)), []);
   return (
     <div className="side-sh side-sh-row">
-      <span>{t("nav.sessions")}</span>
+      <span>{t("nav.terminals")}</span>
       <span className="ss-add">
+        <CollapseAllButton />
         <button
           ref={plus}
           type="button"
           className="ss-plus"
-          aria-label={t("sessions.new")}
-          title={t("sessions.new")}
+          aria-label={t("term.new")}
+          title={t("term.new")}
           aria-haspopup="menu"
           aria-expanded={open}
           onClick={() => setOpen((v) => !v)}
@@ -145,7 +150,14 @@ function useMenuFit(box: RefObject<HTMLDivElement | null>, ready: boolean, shape
       const natural = chrome + list.scrollHeight;
       // the gap between the row and the menu, the same on both sides (offsets ignore the pop-in transform)
       const gap = Math.max(0, pop.classList.contains("ui-pop-bottom") ? pop.offsetTop - anchor.offsetHeight : -pop.offsetTop - pop.offsetHeight);
-      const rows = [...(side?.querySelectorAll(".bot-list > *, .ss-list > *, .side-sec > .side-sh, .side > :not(.side-sec)") ?? [])].map((r) => r.getBoundingClientRect());
+      // rows as drawn: a group's rows, not the group (TERMINALS lists folder groups), and only what its list shows
+      const rows = [...(side?.querySelectorAll(".bot-list:not(.ss-list) > *, .ss-list .tg > *, .side-sec > .side-sh, .side > :not(.side-sec)") ?? [])]
+        .map((r) => {
+          const b = r.getBoundingClientRect();
+          const box = r.closest(".bot-list")?.getBoundingClientRect();
+          return box && (b.bottom <= box.top || b.top >= box.bottom) ? null : b;
+        })
+        .filter((b): b is DOMRect => !!b);
       const f = fitMenu(a, natural, gap, { top: Math.max(top, 0) + MENU_GAP, bottom: Math.min(foot, innerHeight) - MENU_GAP }, rows);
       // the band above an upward menu (`.ss-pop.ui-pop-top::before`) is as tall as the air it keeps
       pop.style.setProperty("--ss-air", `${f.air}px`);
@@ -195,7 +207,7 @@ function NewSessionMenu({ onClose, trigger }: { onClose: () => void; trigger: Re
   useEffect(() => {
     if (ss.agents === null) void getSessions().loadAgents();
   }, [ss.agents]);
-  const parts = ss.agents ? menuParts(ss.agents, ss.recent) : null;
+  const parts = ss.agents ? terminalAgents(ss.agents, ss.recent) : null;
   const agents = parts ? [...parts.shown, ...parts.more] : null;
   // the agents that are not installed stay folded until the person opens them
   const [unfold, setUnfold] = useState(false);
@@ -204,7 +216,11 @@ function NewSessionMenu({ onClose, trigger }: { onClose: () => void; trigger: Re
   const ready = agents !== null;
   // the second step: one agent's past conversations (its own list: this menu is not measured while it shows)
   const [past, setPast] = useState<PastAgent | null>(null);
-  const fit = useMenuFit(box, ready && !past, unfold ? "open" : "folded");
+  // the folder it starts in: the chip at the top (the last folder used, else home)
+  const [folder, setFolder] = useState<string | null>(null);
+  const [folders, setFolders] = useState(false);
+  // measured again whenever its rows change (the folded agents, the folder list)
+  const fit = useMenuFit(box, ready && !past, `${unfold ? "open" : "folded"}:${folders ? "folders" : ""}`);
   // once placed (a hidden menu cannot take focus)
   const placed = fit !== null;
   const list = useRef<HTMLDivElement>(null);
@@ -221,10 +237,17 @@ function NewSessionMenu({ onClose, trigger }: { onClose: () => void; trigger: Re
     onClose();
     if (why === "escape") trigger.current?.focus();
   };
+  const at = folder ?? draftFolder(ss.recent, ss.home);
   const pick = (id: AgentId) => {
     close("pick");
-    getSessions().draft(id);
+    getSessions().startTerminal(id, at || undefined);
   };
+  const choose = async () => {
+    const got = await getSessions().pickFolder(at || ss.home || "");
+    if (got) setFolder(got);
+    setFolders(false);
+  };
+  const { recent: recentFolders, home } = folderChoices(ss.recent, ss.home);
   // an agent that is not installed: its install line goes to the clipboard, as text (omher runs nothing)
   const copyInstall = (id: AgentId) => {
     void navigator.clipboard?.writeText(installLine(id)).then(
@@ -280,7 +303,6 @@ function NewSessionMenu({ onClose, trigger }: { onClose: () => void; trigger: Re
       </button>
     );
   };
-  const keeps = (agents ?? []).filter((a) => a.path && PAST_AGENTS.includes(a.id as PastAgent)).map((a) => a.id as PastAgent);
   if (past)
     return (
       <Popover open onClose={close} align="left" side={fit?.side ?? "bottom"} width={MENU_W} label={t("ss.past.title", { agent: agentLabel(past, ss.agents) })} className="ss-pop">
@@ -288,11 +310,11 @@ function NewSessionMenu({ onClose, trigger }: { onClose: () => void; trigger: Re
       </Popover>
     );
   return (
-    <Popover open onClose={close} align="left" side={fit?.side ?? "bottom"} width={MENU_W} label={t("sessions.new")} className={`ss-pop${ready && !fit ? " ss-pop-measuring" : ""}`}>
+    <Popover open onClose={close} align="left" side={fit?.side ?? "bottom"} width={MENU_W} label={t("term.new")} className={`ss-pop${ready && !fit ? " ss-pop-measuring" : ""}`}>
       <div
         ref={box}
         role="menu"
-        aria-label={t("sessions.new")}
+        aria-label={t("term.new")}
         data-testid="session-menu"
         onKeyDown={(e) => {
           const items = [...(box.current?.querySelectorAll<HTMLButtonElement>("[role=menuitem]") ?? [])];
@@ -305,9 +327,61 @@ function NewSessionMenu({ onClose, trigger }: { onClose: () => void; trigger: Re
           next?.scrollIntoView({ block: "nearest" });
         }}
       >
-        <div className="ss-h">{t("sessions.new")}</div>
+        <div className="ss-h">{t("term.new")}</div>
         {agents === null && <div className="ss-empty">{t("ss.lookingAgents")}</div>}
+        <button
+          type="button"
+          role="menuitem"
+          className="ss-item ss-at"
+          aria-expanded={folders}
+          title={at}
+          onClick={() => setFolders((v) => !v)}
+          data-testid="session-folder"
+        >
+          <span className="ss-ic" aria-hidden="true">
+            <FolderGlyph />
+          </span>
+          <span className="ss-n">{at ? folderName(at) : t("sessions.findingHome")}</span>
+          <span className="ss-path">{at ? parentPath(tildePath(at, ss.home)) : ""}</span>
+        </button>
+        {folders && (
+          <div className="ss-folders" data-testid="session-folders">
+            {[...recentFolders, ...(home ? [home] : [])].map((cwd) => (
+              <button
+                key={cwd}
+                type="button"
+                role="menuitem"
+                className={`ss-item${cwd === at ? " on" : ""}`}
+                title={cwd}
+                onClick={() => {
+                  setFolder(cwd);
+                  setFolders(false);
+                }}
+                data-testid="session-folder-pick"
+              >
+                <span className="ss-ic" />
+                <span className="ss-n">{folderName(cwd)}</span>
+                <span className="ss-path">{parentPath(tildePath(cwd, ss.home))}</span>
+              </button>
+            ))}
+            <button type="button" role="menuitem" className="ss-item" onClick={() => void choose()} data-testid="session-choose">
+              <span className="ss-ic" />
+              <span className="ss-n">{t("sessions.choose")}</span>
+            </button>
+          </div>
+        )}
+        <div className="ss-sep" />
         <div ref={list} className={`ss-scroll${more ? " more" : ""}`} style={fit ? { maxHeight: fit.max } : undefined} data-testid="session-menu-list">
+        {ready && (
+          <button key="shell" type="button" role="menuitem" className="ss-item" title={t("term.shellTip")} onClick={() => pick(SHELL)} data-testid="session-agent-shell">
+            <span className="ss-ic">
+              <TermRowMark agent={null} size={16} />
+            </span>
+            <span className="ss-n ss-n-as">
+              <span className="ss-l">{t("term.shell")}</span>
+            </span>
+          </button>
+        )}
         {(parts?.shown ?? []).map(row)}
         {parts && parts.more.length > 0 && (
           <button
@@ -326,24 +400,20 @@ function NewSessionMenu({ onClose, trigger }: { onClose: () => void; trigger: Re
           </button>
         )}
         {unfold && parts?.more.map(row)}
-        {keeps.length > 0 && (
-          <>
-            <div className="ss-sep" />
-            <div className="ss-h">{t("ss.past.head")}</div>
-            {keeps.map((id) => (
-              <button key={id} type="button" role="menuitem" className="ss-item" onClick={() => setPast(id)} data-testid={`session-past-${id}`}>
-                <span className="ss-ic">
-                  <AgentMark agent={id} />
-                </span>
-                <span className="ss-n">{agentLabel(id, ss.agents)}</span>
-                <span className="ss-chev" aria-hidden="true">
-                  ›
-                </span>
-              </button>
-            ))}
-          </>
-        )}
         </div>
+        {more && (
+          <button
+            type="button"
+            className="ss-more-cue"
+            tabIndex={-1}
+            aria-hidden="true"
+            onClick={() => list.current?.scrollBy({ top: list.current.clientHeight - 32, behavior: "smooth" })}
+            data-testid="session-menu-more-below"
+          >
+            <ChevronDown size={10} />
+            {t("term.moreBelow")}
+          </button>
+        )}
         {hermesOnly(ss.agents) && <AddOmhLine onPick={() => close("pick")} />}
       </div>
     </Popover>
@@ -499,7 +569,7 @@ function SessionStart() {
     .filter((a) => a.path && coding(a))
     .map((a) => agentDef(a.id).label)
     .join(", ");
-  const tip = names ? `${t("onb.sessionsHint")} ${names}` : t("onb.sessionsHint");
+  const tip = names ? `${t("term.empty")} ${names}` : t("term.empty");
   return (
     <div className="ss-none" data-testid="session-none">
       <div className="ss-start-w">
@@ -514,7 +584,7 @@ function SessionStart() {
           data-testid="session-start"
         >
           <PlusIcon size={16} />
-          {t("sessions.new")}
+          {t("term.new")}
         </button>
         {open && <NewSessionMenu onClose={() => setOpen(false)} trigger={btn} />}
       </div>
@@ -542,6 +612,53 @@ export function SessionList({ needle = "", query = "" }: { needle?: string; quer
     document.querySelector<HTMLElement>(`[data-testid="session-${refocus}"] .ss-open`)?.focus();
     setRefocus(null);
   }, [refocus]);
+  const folders = useFolderPrefs();
+  const currentCwd = current ? ss.list.find((r) => r.id === current)?.cwd : undefined;
+  // the open terminal's folder opens (reveal) and its row scrolls into view inside TERMINALS (never moving BOTS)
+  useEffect(() => {
+    if (currentCwd !== undefined) openFolder(currentCwd);
+  }, [current, currentCwd]);
+  // ...and stays in view when the region changes size (the dock gains a row, the window shrinks) or rows land above
+  // it (a newer folder lists first): only then, never against the person's own scrolling
+  const nav = useRef<HTMLElement>(null);
+  const navRef = useEdgeFade(nav);
+  const rowsKey = ss.list.map((r) => r.id).join(",");
+  useEffect(() => {
+    if (!current) return;
+    const rowOf = () => nav.current?.querySelector<HTMLElement>(`[data-testid="session-${CSS.escape(current)}"]`) ?? null;
+    // the band above the region's end is kept for the "more below" chevron (a row reaching into it is hidden)
+    const inView = () => {
+      const list = nav.current;
+      const row = rowOf();
+      if (!list || !row) return false;
+      const l = list.getBoundingClientRect();
+      const r = row.getBoundingClientRect();
+      return r.top >= l.top && r.bottom <= l.bottom - CUE_PX;
+    };
+    // held in view until the person scrolls TERMINALS themselves (wheel, touch, keys, the scrollbar): scrolling BOTS
+    // brings the dock in and shrinks this region, which must not undo their own scroll. A scroll the browser makes
+    // (the region shrank) does not let go of the row.
+    let held = true;
+    const keep = () => {
+      const row = rowOf();
+      if (!held || !row || inView()) return;
+      row.scrollIntoView({ block: "nearest" });
+    };
+    const own = () => {
+      held = false;
+    };
+    const id = requestAnimationFrame(keep);
+    const el = nav.current;
+    const input = ["wheel", "touchmove", "keydown", "pointerdown"] as const;
+    for (const k of input) el?.addEventListener(k, own, { passive: true });
+    const ro = typeof ResizeObserver === "function" ? new ResizeObserver(keep) : null;
+    if (el) ro?.observe(el);
+    return () => {
+      cancelAnimationFrame(id);
+      for (const k of input) el?.removeEventListener(k, own);
+      ro?.disconnect();
+    };
+  }, [current, folders.collapsed, rowsKey]);
   const cancel = (id: string) => {
     setConfirm(null);
     setRefocus(id);
@@ -550,78 +667,314 @@ export function SessionList({ needle = "", query = "" }: { needle?: string; quer
     if (rec.status === "running" || rec.status === "starting") setConfirm(rec.id);
     else getSessions().close(rec.id);
   };
-  if (ss.list.length === 0) return <SessionStart />;
-  const shown = ss.list.filter((r) => sessionMatches(r, needle));
-  // a draft's folder is not settled yet: it never makes another row show its parent
-  const ctx: RowContext = { cwds: ss.list.filter((r) => r.status !== "draft").map((r) => r.cwd), home: ss.home, agents: ss.agents };
+  const terms = ss.list.filter((r) => isTerminalRec(ss.agents, r));
+  // a terminal row's spinner and age tick on their own (output marks arrive throttled)
+  const now = useNow(terms.some((r) => r.status === "running" || r.status === "starting"), 1_000);
+  if (terms.length === 0) return <SessionStart />;
+  const shown = terms.filter((r) => sessionMatches(r, needle));
   return (
-    <nav className="bot-list ss-list" aria-label={t("nav.sessions")} data-testid="session-list">
+    <nav ref={navRef} className="bot-list ss-list" aria-label={t("nav.terminals")} data-testid="session-list">
       {needle && shown.length === 0 && (
         <div className="bot-empty" data-testid="session-none-match">
           {t("side.noSession", { q: query })}
         </div>
       )}
-      {shown.map((rec) =>
-        confirm === rec.id ? (
-          <div
-            key={rec.id}
-            className="ss-row ss-confirm"
-            role="group"
-            aria-label={t("ss.stopIn", { agent: agentDef(rec.agent).label, folder: folderName(rec.cwd) })}
-            data-testid={`session-confirm-${rec.id}`}
-            onKeyDown={(e) => {
-              if (e.key !== "Escape") return;
-              e.preventDefault();
-              e.stopPropagation();
-              cancel(rec.id);
-            }}
-          >
-            <span className="ss-q" title={rec.cwd}>
-              {t("ss.stopQ", { agent: agentDef(rec.agent).label })}
-            </span>
-            <button type="button" className="ss-btn" onClick={() => cancel(rec.id)} autoFocus>
-              {t("ss.cancel")}
-            </button>
-            <button
-              type="button"
-              className="ss-btn"
-              onClick={() => {
-                setConfirm(null);
-                getSessions().close(rec.id);
-              }}
-              data-testid="session-stop"
-            >
-              {t("ss.stop")}
-            </button>
-          </div>
-        ) : (
-          <Row
-            key={rec.id}
-            rec={rec}
-            ctx={ctx}
-            // a draft has no view yet: its mark is the way picked for it
-            view={rec.status === "draft" ? draftOpen(rec.agent, ss.agents, ss.opens) : rec.view}
-            unseen={ss.unseen[rec.id]}
-            active={current === rec.id}
-            onClose={() => ask(rec)}
+      {orderFolders(termGroups(shown), folders.order).map((g, gi, all) => {
+        // a search shows every match, collapsed or not
+        const shut = !needle && folders.collapsed.includes(g.cwd);
+        return (
+        <div key={g.cwd} className={`tg${shut ? " shut" : ""}`} role="group" aria-label={folderName(g.cwd)} data-testid="term-group" data-cwd={g.cwd} data-collapsed={shut ? "true" : undefined}>
+          <FolderHead
+            cwd={g.cwd}
+            home={ss.home}
+            shut={shut}
+            index={gi}
+            all={all.map((x) => x.cwd)}
+            summary={{ ...folderSummary(g.rows.map((r) => termStatus(r, ss.unseen[r.id], now))), running: g.rows.filter((r) => (r.status === "running" || r.status === "starting") && termMarkAgent(r) !== null).length }}
           />
-        ),
-      )}
+          {!shut && g.rows.map((rec) =>
+            confirm === rec.id ? (
+              <div
+                key={rec.id}
+                className="ss-row ss-confirm"
+                role="group"
+                aria-label={t("ss.stopIn", { agent: agentDef(rec.agent).label, folder: folderName(rec.cwd) })}
+                data-testid={`session-confirm-${rec.id}`}
+                onKeyDown={(e) => {
+                  if (e.key !== "Escape") return;
+                  e.preventDefault();
+                  e.stopPropagation();
+                  cancel(rec.id);
+                }}
+              >
+                <span className="ss-q" title={rec.cwd}>
+                  {t("ss.stopQ", { agent: agentDef(rec.agent).label })}
+                </span>
+                <button type="button" className="ss-btn" onClick={() => cancel(rec.id)} autoFocus>
+                  {t("ss.cancel")}
+                </button>
+                <button
+                  type="button"
+                  className="ss-btn"
+                  onClick={() => {
+                    setConfirm(null);
+                    getSessions().close(rec.id);
+                  }}
+                  data-testid="session-stop"
+                >
+                  {t("ss.stop")}
+                </button>
+              </div>
+            ) : (
+              <TermRow key={rec.id} rec={rec} unseen={ss.unseen[rec.id]} active={current === rec.id} now={now} onClose={() => ask(rec)} />
+            ),
+          )}
+        </div>
+        );
+      })}
     </nav>
   );
 }
 
-/** The row's view of a session's chat: a turn running, and an ask of it open (the Needs-you model). */
-function chatLive(s: AppState, key: string | null): ChatLive | undefined {
-  const c = key ? s.chats[key] : undefined;
-  if (!c) return undefined;
-  return { turn: !!c.turn, needsYou: selectAsks(s).some((a) => a.bot === key), failed: !c.turn && c.lastTurn?.outcome === "error" };
+/** A small folder outline, the TERMINALS group header's icon. */
+function FolderGlyph() {
+  return (
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinejoin="round" aria-hidden="true">
+      <path d="M3.5 7.5A2 2 0 0 1 5.5 5.5h4l2 2.2h7a2 2 0 0 1 2 2v7.8a2 2 0 0 1-2 2h-13a2 2 0 0 1-2-2Z" />
+    </svg>
+  );
 }
+
+/** "Collapse all" / "Expand all" for the TERMINALS folders, in the section header next to its +. */
+function CollapseAllButton() {
+  const ss = useSessions();
+  const prefs = useFolderPrefs();
+  const all = [...new Set(ss.list.filter((r) => isTerminalRec(ss.agents, r)).map((r) => r.cwd))];
+  if (all.length < 2) return null;
+  const shut = allCollapsed(prefs, all);
+  const label = shut ? t("term.expandAll") : t("term.collapseAll");
+  return (
+    <button type="button" className="ss-plus ss-fold-all" aria-label={label} title={label} onClick={() => setFolderPrefs(setAllFolders(getFolderPrefs(), all, !shut))} data-testid="term-collapse-all" data-all={shut ? "collapsed" : "expanded"}>
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+        {shut ? <path d="m7 9 5-5 5 5M7 15l5 5 5-5" /> : <path d="m7 4 5 5 5-5M7 20l5-5 5 5" />}
+      </svg>
+    </button>
+  );
+}
+
+/** Drag folder headers to reorder them: the header under the pointer is where it goes (saved on this computer). */
+function useFolderDrag(cwd: string, all: readonly string[]) {
+  return (e: ReactPointerEvent<HTMLDivElement>) => {
+    if (e.button !== 0 || (e.target as Element).closest("button:not(.tg-open)")) return;
+    const sx = e.clientX;
+    const sy = e.clientY;
+    const head = e.currentTarget;
+    let moving = false;
+    const heads = () => [...(head.closest(".ss-list")?.querySelectorAll<HTMLElement>(".tg-h") ?? [])];
+    const slot = (y: number) => {
+      const hs = heads();
+      const i = hs.findIndex((h) => {
+        const g = h.closest(".tg")!.getBoundingClientRect();
+        return y >= g.top && y <= g.bottom;
+      });
+      return i;
+    };
+    const move = (ev: PointerEvent) => {
+      if (!moving && Math.hypot(ev.clientX - sx, ev.clientY - sy) < 5) return;
+      moving = true;
+      head.classList.add("lifted");
+      const to = slot(ev.clientY);
+      for (const [i, h] of heads().entries()) h.classList.toggle("drop", i === to && h !== head);
+    };
+    const up = (ev: PointerEvent) => {
+      removeEventListener("pointermove", move);
+      removeEventListener("pointerup", up);
+      head.classList.remove("lifted");
+      for (const h of heads()) h.classList.remove("drop");
+      if (!moving) return;
+      const to = slot(ev.clientY);
+      if (to >= 0 && all[to] !== cwd) setFolderPrefs({ ...getFolderPrefs(), order: moveFolder(all, cwd, to) });
+      // the click that follows a drag toggles nothing
+      const stop = (c: MouseEvent) => {
+        c.stopPropagation();
+        c.preventDefault();
+      };
+      addEventListener("click", stop, { capture: true, once: true });
+      setTimeout(() => removeEventListener("click", stop, { capture: true }), 0);
+    };
+    addEventListener("pointermove", move);
+    addEventListener("pointerup", up);
+  };
+}
+
+/** A TERMINALS group's header, Orca-style: a chevron that collapses its sessions (kept on this computer), the
+ *  folder's name (semibold) and its git branch in small grey; collapsed, it shows how many sessions it holds and
+ *  their live summary (the spinner while one prints, the amber dot while one waits for you, a red dot when one
+ *  failed). Right-click: New terminal here, Collapse others, Show in Finder. Drag to reorder. */
+function FolderHead({ cwd, home, shut, index, all, summary }: { cwd: string; home: string | null; shut: boolean; index: number; all: string[]; summary: ReturnType<typeof folderSummary> & { running: number } }) {
+  const [branch, setBranch] = useState("");
+  const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
+  const drag = useFolderDrag(cwd, all);
+  useEffect(() => {
+    let live = true;
+    if (cwd)
+      void getHost()
+        .branch(cwd)
+        .then((b) => live && setBranch(b))
+        .catch(() => undefined);
+    return () => {
+      live = false;
+    };
+  }, [cwd]);
+  const name = folderName(cwd);
+  const toggle = () => setFolderPrefs(toggleFolder(getFolderPrefs(), cwd));
+  return (
+    <div
+      className={`tg-h${index === 0 ? " first" : ""}`}
+      title={tildePath(cwd, home)}
+      data-testid="term-group-head"
+      onPointerDown={drag}
+      onContextMenu={(e) => {
+        e.preventDefault();
+        const side = e.currentTarget.closest(".side")?.getBoundingClientRect();
+        const right = (side?.right ?? innerWidth) - 6;
+        setMenu({ x: Math.max(6, Math.min(e.clientX, right - MENU_W_PX)), y: Math.max(6, Math.min(e.clientY, innerHeight - menuHeight(3) - 6)) });
+      }}
+    >
+      <button type="button" className="tg-open" aria-expanded={!shut} aria-label={t(shut ? "term.folderOpen" : "term.folderClose", { name })} onClick={toggle} data-testid="term-group-toggle">
+        <span className="tg-chev" aria-hidden="true">{shut ? <ChevronRight size={9} /> : <ChevronDown size={9} />}</span>
+        <span className="tg-ic">
+          <FolderGlyph />
+        </span>
+        <span className="tg-n">{name}</span>
+        {shut && (
+          <span className="tg-sum" data-testid="term-group-summary" data-busy={summary.busy ? "true" : undefined} data-needs={summary.needs ? "true" : undefined} data-failed={summary.failed ? "true" : undefined}>
+            {summary.busy && <TermStatusGlyph status="busy" />}
+            {summary.running > 0 && (
+              <>
+                <span className="tg-run" data-testid="term-group-running">
+                  {t("term.folderRunning", { n: summary.running })}
+                </span>
+                <span aria-hidden="true">·</span>
+              </>
+            )}
+            {/* the count says what it counts: "2 sessions", never a bare number */}
+            <span className="tg-count" data-testid="term-group-count" data-n={summary.count}>
+              {summary.count === 1 ? t("term.folderCount1") : t("term.folderCountN", { n: summary.count })}
+            </span>
+            {summary.needs && <span className="tg-dot needs" title={t("ss.mark.bell")} />}
+            {summary.failed && <span className="tg-dot err" title={t("ss.mark.error")} />}
+          </span>
+        )}
+        {branch && (
+          <span className="tg-b" data-testid="term-group-branch">
+            {branch}
+          </span>
+        )}
+      </button>
+      {menu && <FolderMenu at={menu} cwd={cwd} all={all} onDismiss={() => setMenu(null)} />}
+    </div>
+  );
+}
+
+/** A folder header's right-click menu: New terminal here (the + menu's Shell in that folder), Collapse others,
+ *  Show in Finder. */
+function FolderMenu({ at, cwd, all, onDismiss }: { at: { x: number; y: number }; cwd: string; all: string[]; onDismiss: () => void }) {
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    ref.current?.querySelector<HTMLButtonElement>("button")?.focus();
+    const onDown = (e: globalThis.MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) onDismiss();
+    };
+    document.addEventListener("mousedown", onDown);
+    return () => document.removeEventListener("mousedown", onDown);
+  }, [onDismiss]);
+  const items: [string, string, () => void][] = [
+    ["term-folder-new", t("term.here"), () => void getSessions().startTerminal(SHELL, cwd)],
+    ["term-folder-others", t("term.collapseOthers"), () => setFolderPrefs(collapseOthers(getFolderPrefs(), all, cwd))],
+    ["term-folder-reveal", revealWord(), () => void getHost().reveal(cwd).catch(() => undefined)],
+  ];
+  return (
+    <div
+      ref={ref}
+      className="row-menu"
+      style={{ left: at.x, top: at.y }}
+      role="menu"
+      aria-label={folderName(cwd)}
+      data-testid="term-folder-menu"
+      onKeyDown={(e) => {
+        if (e.key === "Escape") {
+          e.preventDefault();
+          e.stopPropagation();
+          onDismiss();
+          return;
+        }
+        const btns = [...(ref.current?.querySelectorAll<HTMLButtonElement>("button") ?? [])];
+        const i = btns.indexOf(document.activeElement as HTMLButtonElement);
+        const to = e.key === "ArrowDown" ? i + 1 : e.key === "ArrowUp" ? i - 1 + btns.length : null;
+        if (to === null) return;
+        e.preventDefault();
+        btns[to % btns.length]?.focus();
+      }}
+    >
+      {items.map(([id, label, run]) => (
+        <button
+          key={id}
+          type="button"
+          role="menuitem"
+          className="row-mi"
+          data-testid={id}
+          onClick={() => {
+            onDismiss();
+            run();
+          }}
+        >
+          {label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+/** The row's status glyph, 12px: an amber arc spinning while output flows (static under reduced motion), the bell's
+ *  warning triangle, a green outlined check on exit 0, a red x on a non-zero exit; nothing when idle. */
+export function TermStatusGlyph({ status }: { status: TermStatus }) {
+  const label = status === "busy" ? t("term.st.busy") : status === "bell" ? t("ss.mark.bell") : status === "ok" ? t("ss.at.done") : status === "err" ? t("ss.mark.error") : "";
+  return (
+    <span className={`tst${status ? ` ${status}` : ""}`} data-testid="term-status" data-status={status ?? "idle"} role={status ? "img" : undefined} aria-label={label || undefined} title={label || undefined}>
+      {status === "busy" && (
+        <svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true">
+          <path d="M6 1.6A4.4 4.4 0 1 1 1.6 6" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+        </svg>
+      )}
+      {status === "ok" && (
+        <svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true">
+          <circle cx="6" cy="6" r="5" fill="none" stroke="currentColor" strokeWidth="1.2" />
+          <path d="M3.7 6.2 5.3 7.8 8.4 4.4" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+      )}
+      {status === "err" && (
+        <svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true">
+          <path d="M3.4 3.4 8.6 8.6M8.6 3.4 3.4 8.6" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+        </svg>
+      )}
+      {status === "bell" && <StateSign mark="needs" />}
+    </span>
+  );
+}
+
+/** `now`, `12m`, `3h`, `2d` since `ms`. */
+const ageMs = (ms: number, now: number) => ageOf(ms / 1000, now);
 
 /** What a session row's menu offers, in order: Rename, Reveal the folder, Open the folder in the system terminal,
  *  Copy the conversation id (only when the agent reported one), New session here, Close session. */
 export function rowMenuItems(rec: Pick<SessionRec, "cwd" | "agentSession">): RowAction[] {
   return ["rename", ...(rec.cwd ? (["reveal", "terminal"] as const) : []), ...(rec.agentSession ? (["copy"] as const) : []), "here", "close"];
+}
+/** A TERMINALS row's menu: Rename, Reveal, Open in the system terminal, New terminal here,
+ *  Close. */
+export function termMenuItems(rec: Pick<SessionRec, "cwd">): RowAction[] {
+  return ["rename", ...(rec.cwd ? (["reveal", "terminal"] as const) : []), "here", "close"];
 }
 export type RowAction = "rename" | "reveal" | "terminal" | "copy" | "here" | "close";
 
@@ -636,7 +989,7 @@ const ROW_ACTION_LABEL: Record<RowAction, () => string> = {
   reveal: revealWord,
   terminal: () => t("ss.menu.terminal"),
   copy: () => t("ss.menu.copyId"),
-  here: () => t("ss.menu.here"),
+  here: () => t("term.here"),
   close: () => t("ss.close"),
 };
 const ROW_ACTION_ID: Record<RowAction, string> = {
@@ -793,142 +1146,98 @@ function ViewMark({ view }: { view: "chat" | "terminal" }) {
   );
 }
 
-function Row({ rec, ctx, view, unseen, active, onClose }: { rec: SessionRec; ctx: RowContext; view: "chat" | "terminal"; unseen?: Unseen; active: boolean; onClose: () => void }) {
+function TermRow({ rec, unseen, active, now, onClose }: { rec: SessionRec; unseen?: Unseen; active: boolean; now: number; onClose: () => void }) {
   const s = useStore();
-  const key = getSessions().chatKey(rec.id);
-  const chat = rec.view === "chat" ? chatLive(s, key) : undefined;
-  const m = rowModel(rec, chat, ctx, unseen);
-  // what the state's sign says, for a pointer and a screen reader (an error says its own text when it has one)
-  const markSays = m.mark === "needs" ? t("ss.mark.bell") : m.mark === "error" ? rec.error || t("ss.mark.error") : t("ss.mark.done");
+  const ss = useSessions();
   const [editing, setEditing] = useState(false);
   const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
   const wrap = useRef<HTMLDivElement>(null);
-  // a chat answers in turns (ring); a terminal just runs (dot)
-  const ring = rec.view === "chat" && m.live && !m.needsYou;
-  const dot = rec.view !== "chat" && m.live;
-  const busySince = ring && key ? (s.chats[key]?.turn?.startedAt ?? null) : null;
-  const now = useNow(busySince !== null, 1_000);
+  const title = pickTitle(rec, termFallbackName(rec, ss.agents));
+  const status = termStatus(rec, unseen, now);
+  const live = rec.status === "running" || rec.status === "starting";
+  const markAgent = termMarkAgent(rec);
+  const age = ageMs(rec.lastOut ?? rec.startedAt, now);
+  const activity = termActivity(rec);
+  // a CLI runs in it: the card's thin amber lane on its left edge (the folder summary's "running" counts the same)
+  const running = live && markAgent !== null;
+  const actions = termMenuItems(rec);
   const pick = (a: RowAction) => {
-    const ss = getSessions();
+    const sx = getSessions();
     if (a === "rename") setEditing(true);
-    else if (a === "reveal") void ss.revealFolder(rec.id);
-    else if (a === "terminal") void ss.openTerminal(rec.id);
-    else if (a === "copy" && rec.agentSession) void navigator.clipboard?.writeText(rec.agentSession).catch(() => undefined);
-    else if (a === "here") ss.draftHere(rec.id);
+    else if (a === "reveal") void sx.revealFolder(rec.id);
+    else if (a === "terminal") void sx.openTerminal(rec.id);
+    else if (a === "here") sx.startTerminal(rec.agent, rec.cwd);
     else if (a === "close") onClose();
   };
-  const endEdit = (title: string | null | undefined) => {
+  const endEdit = (name: string | null | undefined) => {
     setEditing(false);
-    if (title !== undefined) getSessions().rename(rec.id, title);
+    if (name !== undefined) getSessions().rename(rec.id, name);
     requestAnimationFrame(() => wrap.current?.querySelector<HTMLElement>(".ss-open")?.focus());
   };
   const body = (
     <>
-      <LiveRing on={ring} size={34} gap={3.5} label={t("ss.answering")} seed={rec.id}>
-        <span className="ss-av">
-          <AgentMark agent={rec.agent} size={18} />
-          {dot && <span className="live-dot" data-testid="live-dot" aria-label={t("ss.liveDot")} />}
+      <TermStatusGlyph status={status} />
+      {/* live: a CLI runs in it (its own, or one the shell reports in front): the amber frame; a bare shell prompt and
+          an ended session keep the plain frame */}
+      <TermRowMark agent={markAgent} live={live && markAgent !== null} size={16} />
+      {editing ? (
+        <NameInput initial={title.title} auto={title.source !== "person"} onDone={endEdit} />
+      ) : (
+        <span
+          className="tr-n"
+          data-testid="session-name"
+          data-source={title.source}
+          title={title.title}
+          onDoubleClick={(e) => {
+            e.preventDefault();
+            setEditing(true);
+          }}
+        >
+          {title.title}
         </span>
-      </LiveRing>
-      <span className="bot-m">
-        <span className="bot-r1">
-          {editing ? (
-            <NameInput initial={m.title} auto={m.titleSource !== "person"} onDone={endEdit} />
-          ) : (
-            <span
-              className="bot-n"
-              data-testid="session-name"
-              data-source={m.titleSource}
-              title={m.titleSource === "folder" ? undefined : m.title}
-              onDoubleClick={(e) => {
-                e.preventDefault();
-                if (rec.status !== "draft") setEditing(true);
-              }}
-            >
-              {m.title}
-              {m.where && (
-                <span className="ss-where" data-testid="session-where">
-                  {" · "}
-                  {m.where}
-                </span>
-              )}
+      )}
+      <span className="tr-age" data-testid="term-age">
+        {age}
+      </span>
+      {/* line 2, muted: the CLI, then what it last printed (else the title it set) */}
+      <span className="tr-sub" data-testid="term-meta" title={activity.line || undefined}>
+        <span className="tr-cli">{activity.cli}</span>
+        {activity.line && (
+          <>
+            <span className="tr-dot" aria-hidden="true">
+              ·
             </span>
-          )}
-          {m.mark ? (
-            <span className={`bot-t ${m.mark === "needs" ? "wait" : m.mark === "error" ? "err" : "ok"}`} data-testid="bot-time">
-              <span
-                className={`ss-sign ${m.mark}`}
-                data-testid={m.needsYou ? "needs" : "session-mark"}
-                data-mark={m.mark}
-                role="img"
-                aria-label={m.needsYou ? t("ss.needsAnswer") : markSays}
-                title={m.needsYou ? t("ss.needsAnswer") : markSays}
-              >
-                <StateSign mark={m.mark} />
-              </span>
-              {t(m.mark === "needs" ? "ss.waiting" : m.mark === "error" ? "ss.at.error" : "ss.at.done")}
+            <span className="tr-line" data-testid="term-line">
+              {activity.line}
             </span>
-          ) : busySince !== null ? (
-            <span className="bot-t busy" data-testid="bot-time">
-              {busyFor(now - busySince)}
-            </span>
-          ) : rec.status === "draft" ? null : (
-            <span className="bot-t" data-testid="bot-time">
-              {shortTime(m.ts)}
-            </span>
-          )}
-        </span>
-        <span className="bot-r2">
-          <span className={`bot-p${ring ? " live" : ""}`} data-testid="session-sub">
-            {m.sub}
-          </span>
-          {ring && <TypingDots size={3} testId="bot-typing" />}
-          <span
-            className="ss-view"
-            role="img"
-            data-testid="session-view"
-            data-view={view}
-            aria-label={t(view === "terminal" ? "ss.open.terminal" : "ss.open.chat")}
-            title={t(view === "terminal" ? "ss.open.terminal" : "ss.open.chat")}
-          >
-            <ViewMark view={view} />
-          </span>
-        </span>
+          </>
+        )}
       </span>
     </>
   );
   return (
     <div
       ref={wrap}
-      className={`ss-row bot${active ? " active" : ""}${m.needsYou ? " needs" : ""}${m.over ? " over" : ""}${menu ? " menu-open" : ""}`}
+      className={`ss-row tr${active ? " active" : ""}${running ? " run" : ""}${menu ? " menu-open" : ""}`}
       data-testid={`session-${rec.id}`}
       data-status={rec.status}
-      data-needs-you={m.needsYou ? "true" : undefined}
-      data-mark={m.needsYou ? "needs" : (m.mark ?? undefined)}
+      data-term-status={status ?? "idle"}
+      data-fg={rec.fgAgent ?? undefined}
       onContextMenu={(e) => {
         if (editing) return;
         e.preventDefault();
-        // a draft has nothing to rename yet: right-click closes it, as before
-        if (rec.status === "draft") return onClose();
         const side = wrap.current?.closest(".side")?.getBoundingClientRect();
         const right = (side?.right ?? window.innerWidth) - 6;
-        const h = menuHeight(rowMenuItems(rec).length);
+        const h = menuHeight(actions.length);
         setMenu({ x: Math.max(6, Math.min(e.clientX, right - MENU_W_PX)), y: Math.max(6, Math.min(e.clientY, window.innerHeight - h - 6)) });
       }}
     >
       {editing ? (
-        // no button around a text field: the same row, not clickable while the name is edited
         <div className="ss-open ss-editing" title={rec.cwd}>
           {body}
         </div>
       ) : (
-        <button
-          type="button"
-          className="ss-open"
-          onClick={() => s.openSession(rec.id)}
-          aria-current={active ? "true" : undefined}
-          title={rec.cwd}
-        >
+        <button type="button" className="ss-open" onClick={() => s.openSession(rec.id)} aria-current={active ? "true" : undefined} title={`${title.title}\n${rec.cwd}`}>
           {body}
         </button>
       )}
@@ -937,7 +1246,7 @@ function Row({ rec, ctx, view, unseen, active, onClose }: { rec: SessionRec; ctx
           <CloseIcon />
         </button>
       )}
-      {menu && <SessionMenu at={menu} name={m.title} actions={rowMenuItems(rec)} onPick={pick} onDismiss={() => setMenu(null)} />}
+      {menu && <SessionMenu at={menu} name={title.title} actions={actions} onPick={pick} onDismiss={() => setMenu(null)} />}
     </div>
   );
 }

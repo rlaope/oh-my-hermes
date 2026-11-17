@@ -135,7 +135,7 @@ test("header right holds the model pill and the panel button; name toggles the d
   const right = page.getByTestId("head-right");
   await expect(right.locator(":scope > *")).toHaveCount(2);
   await expect(right).toContainText("Opus 5.5");
-  await expect(right).toContainText("High");
+  await expect(right).toContainText("high");
   // two controls: the model picker's one button and the panel button
   expect(await right.locator("button, a, [role=button], input, select").count()).toBeLessThanOrEqual(2);
   await expect(right.locator(":scope > *").last()).toHaveAttribute("data-testid", "panel-button");

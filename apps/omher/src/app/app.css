@@ -189,6 +189,11 @@
   font-size: 13.5px;
   letter-spacing: -0.005em;
 }
+/* a page's back arrow sits on the header's left padding, so the title keeps its place beside it */
+.head > .head-back {
+  margin-left: -6px;
+  margin-right: -4px;
+}
 .head-right {
   margin-left: auto;
   display: flex;

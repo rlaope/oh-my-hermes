@@ -44,10 +44,9 @@ async function terminal(page: Page) {
   await page.goto("/");
   await expect(page.getByTestId("bot-kami")).toHaveAttribute("aria-current", "true");
   await page.getByTestId("session-new").click();
-  await page.getByTestId("session-agent-grok").click();
   await page.getByTestId("session-folder").click();
   await page.getByTestId("session-choose").click();
-  await page.getByTestId("session-go").click();
+  await page.getByTestId("session-agent-grok").click();
   await expect(page.getByTestId("terminal")).toBeVisible();
   // the banner has been printed, taken by the terminal and acknowledged
   await expect.poll(async () => (await flow(page)).filter((f) => f.op === "ack").length).toBe(1);
@@ -57,8 +56,7 @@ test.beforeEach(async () => {
   await mock("mock.reset");
 });
 
-// SESSIONS hidden in favour of bot threads (plan 2026-11-15)
-test.skip("every message the program prints is acknowledged once, with its byte count, in order", async ({ page }) => {
+test("every message the program prints is acknowledged once, with its byte count, in order", async ({ page }) => {
   await terminal(page);
   await page.locator(".xterm-helper-textarea").focus();
   // each key is echoed as its own message; Enter is answered with one message, Ctrl+C with one more
@@ -92,8 +90,7 @@ test.skip("every message the program prints is acknowledged once, with its byte 
   expect((await calls(page)).filter((c) => c.op === "ack").map((c) => c.bytes)).toEqual(feeds.map((f) => f.bytes));
 });
 
-// SESSIONS hidden in favour of bot threads (plan 2026-11-15)
-test.skip("a burst of resizes ends as one resize with the last size", async ({ page }) => {
+test("a burst of resizes ends as one resize with the last size", async ({ page }) => {
   await terminal(page);
   const box = page.getByTestId("terminal");
   const drawn = () => page.locator(".xterm-screen").evaluate((el) => (el as HTMLElement).style.width);
