@@ -155,6 +155,36 @@ test("a parked terminal's bell and OSC 9 ring its row", async ({ page }) => {
   await expect(row).toHaveAttribute("data-term-status", "bell");
 });
 
+// integrate (run omher-mt): the remade xterm writes its row's activity through termActivity like the first one did,
+// the second line from the readLine timer reading the NEW xterm, the OSC title from the handler `wire` mounts on it
+test("a parked terminal that prints updates its row's second line and OSC title from the remade xterm", async ({ page }) => {
+  await openApp(page);
+  // two Shell terminals, as the + menu starts them; the second is shown, the first is hidden and parks
+  const [a] = await page.evaluate(async () => {
+    const s = (window as unknown as { __omherSessions: { startTerminal(a: string, cwd: string): string; ptyOf(id: string): number | null } }).__omherSessions;
+    const ids: string[] = [];
+    for (let i = 0; i < 2; i++) {
+      const id = s.startTerminal("shell", "/home/you/code/repo");
+      ids.push(id);
+      for (let k = 0; k < 300 && s.ptyOf(id) === null; k++) await new Promise((r) => setTimeout(r, 10));
+    }
+    return ids;
+  });
+  const row = page.getByTestId(`session-${a}`);
+  const pa = await ptyOf(page, a!);
+  await fast(page);
+  await expect.poll(() => parkedCount(page)).toBe(1);
+  await out(page, pa, "printed after parking, line one\r\n$ ");
+  await expect.poll(() => parkedCount(page)).toBe(0);
+  // the line is read from the screen a moment later: from the xterm made again, not the disposed one
+  await expect(row.getByTestId("term-line")).toContainText("printed after parking, line one");
+  // parked again, then the program clears its screen and sets a title: the title is the second line
+  await expect.poll(() => parkedCount(page), { timeout: 10_000 }).toBe(1);
+  await out(page, pa, "\x1b[2J\x1b[H\x1b]2;watching after a park\x07");
+  await expect.poll(() => parkedCount(page)).toBe(0);
+  await expect(row.getByTestId("term-meta")).toContainText("watching after a park");
+});
+
 test("closing a parked terminal stops its program", async ({ page }) => {
   await openApp(page);
   const a = await tagged(page);
