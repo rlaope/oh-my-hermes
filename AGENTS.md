@@ -147,7 +147,20 @@ and evidence obvious to a reviewer reading the PR without the chat history.
   removed. On Windows the provider starts suspended, enters a kill-on-close
   Job Object, and resumes only after ownership succeeds; clean evidence
   requires the Job Object to report zero active processes.
-- **`omh_jev_ask`**, one of two scoped network integrations: the plugin tool POSTs
+- **Local proofreader** (proposed scoped exception; upstream owner approval is
+  requested in the PR): only explicit Alt+P in the main or clarify free-text
+  composer sends unprotected draft text to a local LanguageTool server.
+  `src/tui/proofread.py` uses stdlib `http.client` and `socket`, plain HTTP to
+  loopback IP literals only (`localhost` is pinned to `127.0.0.1`), no proxies
+  or redirects, a five-second elapsed deadline, a 512 KiB reply cap and a
+  20,000-character draft cap. Masked fields send nothing; code, commands,
+  image tokens and paste chips are excluded. No automatic server installation
+  or startup, silent rewrite or submission. Accept/skip is explicit per issue;
+  accepted edits use `Composer.replace` and its normal undo. Only `tui/app.py`
+  may import the client, pinned by
+  `NoNetworkClientInSource.test_local_proofreader_import_surface_and_owner` in
+  `tests/test_handoff_safety_contract_enforcement.py`.
+- **`omh_jev_ask`**, a scoped network integration: the plugin tool POSTs
   typed questions to Jev with the user's own key and returns probabilities.
   It runs only when the user's own message for that turn names Jev (a
   per-turn marker `pre_llm_call` records; otherwise it returns
@@ -162,11 +175,11 @@ and evidence obvious to a reviewer reading the PR without the chat history.
   IP literal (a self-hosted Jev-compatible server); its `typesafe_model` names
   the model such a non-TypeSafe endpoint serves. It
   persists no key, `state`, question text, or reply; one metadata-only ledger
-  row per ask. `src/plugin_bundle/omh/jev_ask_client.py` is one of the two
+  row per ask. `src/plugin_bundle/omh/jev_ask_client.py` is one of the scoped
   in-process network clients in `src/`, and only `tools/jev_ask_tool.py` may
   import it. Third-party Jev plugins are never called, and `omh doctor` reads
   no credential value.
-- **The OMH TUI's update notice**, the other scoped network integration: at
+- **The OMH TUI's update notice**, a scoped network integration: at
   most once a day per OMH home, on a background thread that never holds the
   start or the screen, the TUI GETs `https://registry.npmjs.org/oh-my-hermes/latest`
   and keeps only its `version`, cached with the time of the ask in
@@ -179,7 +192,7 @@ and evidence obvious to a reviewer reading the PR without the chat history.
   `<omh_home>/setup-profile.json`, written by `omh update-check set` or
   confirmed in `omh setup`; a home that never stored a mode keeps it on), and
   nothing is asked without an OMH home. `src/tui/update_notice.py`
-  is the other in-process network client in `src/`. Only `tui/app.py` and
+  is another in-process network client in `src/`. Only `tui/app.py` and
   `commands/setup.py` may import it; the latter calls `fetch_latest` once in
   an explicit `omh update` on an installer-managed stable install, to pick the
   release wheel it is about to download, and never moves on a failed read.
