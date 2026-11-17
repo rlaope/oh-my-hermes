@@ -4,7 +4,9 @@
 // The app needs a few small hooks to run on its own in a page, applied here as exact-once replacements so the
 // app's source and behaviour stay untouched (a missing anchor fails the build instead of shipping a still app):
 //   - plan timers tick every second instead of every 10 s, so running parts count up live;
-//   - a SESSIONS chat's mock agent says it is a preview instead of echoing "(mock …)".
+//   - a SESSIONS chat's mock agent says it is a preview instead of echoing "(mock …)";
+//   - the TERMINALS cards' in-page programs (0.2.12) print the CLI's banner and a shell prompt without "(mock)", in
+//     /Users/you like the rest of the staged folders.
 // (From 0.2.1 the app itself draws each part's vendor mark and lists GPT-6.1 for Codex; from 0.2.5 the Plans list
 // re-reads itself (runs/live.ts) and the story calls its refreshRuns, so those hooks are gone.)
 import { defineConfig, type Plugin } from "vite";
@@ -22,6 +24,18 @@ const HOOKS: Record<string, [string, string][]> = {
       "this.say(`(mock ${agentDef(this.agent).label}) You said: ${text}${pics}`, 360);",
       'this.say(`This session is a preview, so ${agentDef(this.agent).label} did not run. Download omher to start a real one in your own folder.`, 360);',
     ],
+    // the TERMINALS cards' screens: the CLI's own banner (no "(mock)"), in the staged /Users/you folders
+    [
+      "const banner = (agent: AgentId) => BANNER[agent] ?? `\\x1b[1m${agentDef(agent).program}\\x1b[0m \\x1b[2m(mock)\\x1b[0m`;",
+      'const banner = (agent: AgentId) => (BANNER[agent] ?? `\\x1b[1m${agentDef(agent).program}\\x1b[0m`).replace(" \\x1b[2m(mock)\\x1b[0m", "");',
+    ],
+    ['    return "/home/you";', '    return "/Users/you";'],
+  ],
+  // the Shell card's login shell: a plain prompt, no "(mock)" line
+  "src/terminal/host.ts": [
+    ['const MOCK_HOME = "/home/you";', 'const MOCK_HOME = "/Users/you";'],
+    ["return `\\x1b[32myou@mock\\x1b[0m", "return `\\x1b[32myou@macbook\\x1b[0m"],
+    ["setTimeout(() => onData(`\\x1b[2m(mock) login shell in ${at}\\x1b[0m\\r\\n${this.prompt(at)}`), 20);", "setTimeout(() => onData(this.prompt(at)), 20);"],
   ],
 };
 

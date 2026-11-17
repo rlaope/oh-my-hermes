@@ -3,7 +3,9 @@
 //   After a click it scrolls the pane under the cursor when that pane can move that way, else the page.
 // - Things that would start real work (add a bot, attachments, changing an automation or a plugin, restarting a bot,
 //   a session in the agent's own terminal, taking a message back, installing oh-my-hermes, opening a session's folder
-//   in the file manager or the system terminal) show one small note instead: "Download omher to …". Nothing is
+//   in the file manager or the system terminal; from 0.2.12 a new or archived thread, Start in thread and the other
+//   real-work buttons of Tasks, a new terminal, and typing into a terminal) show one small note instead: "Download
+//   omher to …". Nothing is
 //   started anywhere. The Automations and Plugins pages themselves open on staged data (host.ts), so a visitor can
 //   look around them.
 const W = window as unknown as { __omherPreviewToasts?: string[] };
@@ -53,6 +55,13 @@ export function toast(text: string): void {
 // those two calls, so each was a click that did nothing. The menu's other items stay live: Rename, Copy conversation
 // id, New session here and Close session act on the staged session only, and Continue a conversation in the + menu
 // lists the in-page host's staged conversations.
+// From 0.2.12: threads under a bot are opened by the bot itself (the story's split) and can be read and written to (the
+// in-page bridge answers with the preview note), but New thread (the bot row's menu) and a thread's x (archive) would
+// make or end a Hermes session. Tasks lists staged GitHub issues and PRs and opens their drawer; Start in thread, Open
+// terminal here, Open in browser (the staged items have no page), another repository (a gh call) and the sign-in /
+// Linear terminals are held back. TERMINALS cards open and show their staged screens, but a new terminal (+, a
+// folder's New terminal here, a card's menu, the bottom panel's +, Ctrl+`), Restart, and typing into a terminal
+// would run a program on this computer.
 // The third field lets a note fire inside a menu (the bot row's menu, a session row's); other menus keep their own
 // items.
 type Note = Record<"en" | "ko" | "ja" | "zh", string>;
@@ -104,7 +113,7 @@ const INERT: [string, Note, boolean?][] = [
     true,
   ],
   [
-    '[data-testid="session-way-terminal"], [data-testid="session-go"], [data-testid="session-terminal-toggle"]',
+    '[data-testid="session-go"], [data-testid="session-terminal-toggle"]',
     {
       en: "This is a preview. Download omher to run the agent in its own terminal in your folder.",
       ko: "미리보기 화면이에요. omher를 내려받으면 내 폴더에서 에이전트를 자기 터미널로 실행할 수 있어요.",
@@ -132,7 +141,36 @@ const INERT: [string, Note, boolean?][] = [
     true,
   ],
   [
-    '[data-testid="session-reveal"], [data-testid="session-system-terminal"]',
+    '[data-testid="row-new-thread"], [data-testid="thread-x"], [data-testid="thread-confirm-remove"]',
+    {
+      en: "This is a preview. Download omher to start and archive threads with your own Hermes bots.",
+      ko: "미리보기 화면이에요. omher를 내려받으면 내 Hermes 봇과 스레드를 열고 보관할 수 있어요.",
+      ja: "これはプレビューです。omher をダウンロードすると、自分の Hermes ボットとスレッドを始めたりアーカイブしたりできます。",
+      zh: "这是预览。下载 omher 即可和你自己的 Hermes 机器人开启、归档线程。",
+    },
+    true,
+  ],
+  [
+    '[data-testid="tasks-start"], [data-testid="tasks-terminal"], [data-testid="tasks-browser"], [data-testid="tasks-repo-go"], [data-testid="tasks-signin-terminal"], [data-testid="tasks-linear-terminal"]',
+    {
+      en: "This is a preview. Download omher to work on your own GitHub and GitLab issues and pull requests.",
+      ko: "미리보기 화면이에요. omher를 내려받으면 내 GitHub·GitLab 이슈와 PR로 작업할 수 있어요.",
+      ja: "これはプレビューです。omher をダウンロードすると、自分の GitHub と GitLab の Issue やプルリクエストで作業できます。",
+      zh: "这是预览。下载 omher 即可处理你自己的 GitHub 和 GitLab issue 与 PR。",
+    },
+  ],
+  [
+    '[data-testid="session-new"], [role="menu"] [data-testid^="session-agent-"], [data-testid^="session-past-row-"], [data-testid="term-folder-new"], [data-testid="session-new-here"], [data-testid="termpanel-new"], [data-testid="session-restart"]',
+    {
+      en: "This is a preview. Download omher to open terminals in your own folders.",
+      ko: "미리보기 화면이에요. omher를 내려받으면 내 폴더에서 터미널을 열 수 있어요.",
+      ja: "これはプレビューです。omher をダウンロードすると、自分のフォルダでターミナルを開けます。",
+      zh: "这是预览。下载 omher 即可在你自己的文件夹中打开终端。",
+    },
+    true,
+  ],
+  [
+    '[data-testid="session-reveal"], [data-testid="session-system-terminal"], [data-testid="term-folder-reveal"], [data-testid="session-signin-terminal"]',
     {
       en: "This is a preview. Download omher to open a session's folder in your file manager or your own terminal.",
       ko: "미리보기 화면이에요. omher를 내려받으면 세션 폴더를 파일 관리자나 내 터미널에서 열 수 있어요.",
@@ -142,6 +180,12 @@ const INERT: [string, Note, boolean?][] = [
     true,
   ],
 ];
+const TYPE_NOTE: Note = {
+  en: "This is a preview. Download omher to type into a terminal on your own computer.",
+  ko: "미리보기 화면이에요. omher를 내려받으면 내 컴퓨터의 터미널에 입력할 수 있어요.",
+  ja: "これはプレビューです。omher をダウンロードすると、自分のコンピューターのターミナルに入力できます。",
+  zh: "这是预览。下载 omher 即可在你自己电脑的终端里输入。",
+};
 const noteIn = (n: Note) => n[(document.documentElement.lang.slice(0, 2) as keyof Note) in n ? (document.documentElement.lang.slice(0, 2) as keyof Note) : "en"];
 
 export function installGuards(): void {
@@ -157,6 +201,48 @@ export function installGuards(): void {
     { passive: false, capture: true },
   );
   addEventListener("pointerdown", () => (focused = true), { capture: true });
+  // Typing into a terminal (a TERMINALS card, the bottom panel) and Ctrl+` (the bottom panel's login shell): the note,
+  // and the key never reaches the terminal. Registered before the app's own key handlers (main.tsx), so it runs first.
+  const inTerm = (t: EventTarget | null) => t instanceof Element && !!t.closest(".xterm");
+  const typing = (e: KeyboardEvent) =>
+    e.ctrlKey && !e.metaKey && !e.altKey && !e.shiftKey && (e.code === "Backquote" || e.key === "`")
+      ? true
+      : inTerm(e.target) && !e.metaKey && !["Shift", "Control", "Alt", "Meta", "CapsLock", "Escape"].includes(e.key);
+  addEventListener(
+    "keydown",
+    (e) => {
+      if (!e.isTrusted || !typing(e)) return;
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      toast(noteIn(TYPE_NOTE));
+    },
+    { capture: true },
+  );
+  // Tasks' repository box sends with Enter too: another repository would be a `gh` call on the person's account
+  addEventListener(
+    "submit",
+    (e) => {
+      if (!(e.target instanceof Element) || !e.target.closest(".tk-repo-form")) return;
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      const tasks = INERT.find(([sel]) => sel.includes("tasks-repo-go"));
+      if (tasks) toast(noteIn(tasks[1]));
+    },
+    { capture: true },
+  );
+  // text an input method commits (Korean, Japanese, Chinese) comes as input events, not as keys
+  addEventListener("beforeinput", (e) => inTerm(e.target) && (e.preventDefault(), e.stopImmediatePropagation()), { capture: true });
+  for (const type of ["paste", "drop"])
+    addEventListener(
+      type,
+      (e) => {
+        if (!inTerm(e.target)) return;
+        e.preventDefault();
+        e.stopImmediatePropagation();
+        toast(noteIn(TYPE_NOTE));
+      },
+      { capture: true },
+    );
   addEventListener("blur", () => (focused = false));
   addEventListener(
     "click",

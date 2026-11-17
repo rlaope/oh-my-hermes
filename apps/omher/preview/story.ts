@@ -1,15 +1,19 @@
 // The preview's live scenario: the window keeps moving with no input. Kami is ~9 minutes into the docs dark mode
 // plan with three Hermes subagents running; parts finish one by one, the next starts, the open part's detail grows,
 // Slack / Discord replies and other bots' messages land, Kami posts the PR with a before/after, and the loop
-// starts over (~55-65 s, a little different each time). Real clock: requestAnimationFrame plus Date.now, with a 250 ms timer when frames are held back.
+// starts over (~55-65 s, a little different each time). Since 0.2.12 the sidebar moves too: Kami's threads (one
+// working, one waiting on an approval, one done) change state and preview line, the next request in Kami's chat
+// opens two threads by itself (the bridge's split path: `thread.split`), and in TERMINALS the Shell card runs Claude
+// Code for a while (its mark and name flip to Claude Code's and back) while the Codex card prints what it does. Real clock: requestAnimationFrame plus Date.now, with a 250 ms timer when frames are held back.
 // The visitor always wins: any click, key or wheel pauses the story for 8 s, and what they set off (a reply, the
 // plan built from scratch, Juno's deploy) plays on its own timers. Hidden tab or window off-screen: paused.
 // Everything is staged data inside the page; nothing runs anywhere.
 import { getStore } from "../src/state/store";
 import { getSessions } from "../src/sessions/sessions";
-import type { AgentId } from "../src/sessions/agents";
+import { SHELL, type AgentId } from "../src/sessions/agents";
+import { threadKey } from "../src/threads/types";
 import { refreshRuns } from "../src/runs/live";
-import { away, broadcast, history, hooks, kamiSeed, nowS, PR_REPO, runs } from "./host";
+import { addThread, away, broadcast, dropThread, history, hooks, kamiSeed, nowS, PR_REPO, runs, threads, threadSaid } from "./host";
 
 type Ev = { event: string; [k: string]: unknown };
 const store = () => getStore();
@@ -170,7 +174,7 @@ addEventListener("message", (e) => {
 /** Is the visitor on Kami's chat, so the story may open things in its panel? */
 const onKami = () => {
   const s = store().getState();
-  return !touched && !yielded() && s.selectedBot === "kami" && s.ui.view === "chat";
+  return !touched && !yielded() && s.selectedBot === "kami" && s.ui.view === "chat" && !s.ui.thread;
 };
 function openNode(id: string) {
   if (!onKami()) return;
@@ -202,6 +206,133 @@ function snapPanel() {
   }
 }
 
+// ---- Kami's threads ----------------------------------------------------------------------------------------------
+
+const WEB = "/Users/you/code/web-app";
+type RestThread = { id: string; title: string; ask: string; ago: number };
+/** The three threads every loop opens on: one working, one waiting on an approval, one done. */
+const REST: Record<"flake" | "notes" | "log", RestThread> = {
+  log: { id: "", title: "Changelog for 2.4", ask: "Add the 2.4 entries to CHANGELOG.md.", ago: 25 * 60 },
+  notes: { id: "", title: "Release notes 2.4", ask: "Draft the 2.4 release notes and push them to a branch.", ago: 4 * 60 },
+  flake: { id: "", title: "Flaky search test", ask: "The search test fails about 1 run in 10 on CI. Find out why and fix it.", ago: 6 * 60 },
+};
+for (const k of ["log", "notes", "flake"] as const) REST[k].id = addThread("kami", REST[k].title, WEB);
+/** Threads Kami opened during this loop (removed when the next loop starts). */
+let split: string[] = [];
+/** Open asks of threads, by request id: the thread and what happens once it is allowed. */
+const threadAsks = new Map<string, { thread: string; run: Step[] }>();
+
+/** A thread's event. Live ones go through the bridge socket, so the app's own thread handling runs (the row's state
+ *  and last activity); the seeded past is dispatched with its time. */
+const tev = (thread: string, e: Ev, at = Date.now()) =>
+  at < Date.now() - 1000 ? ev("kami", { ...e, session: thread }, at) : broadcast({ ...e, bot: "kami", session: thread });
+const said = (thread: string, role: "user" | "assistant", id: string, text: string, at = Date.now()) => {
+  threadSaid("kami", thread, { id, role, text, ts: at / 1000 });
+  if (role === "assistant") tev(thread, { event: "message", id, text }, at);
+};
+const threadStart = (thread: string, at = Date.now()) => {
+  threadSaid("kami", thread, null, true);
+  tev(thread, { event: "turn.start" }, at);
+};
+const threadEnd = (thread: string, at = Date.now()) => {
+  threadSaid("kami", thread, null, false);
+  tev(thread, { event: "turn.end", outcome: "done" }, at);
+};
+function threadAsk(thread: string, id: string, command: string, run: Step[], at = Date.now()) {
+  threadAsks.set(id, { thread, run });
+  tev(thread, { event: "approval.request", request_id: id, title: "Run shell command", command, choices: ["deny", "once", "session"] }, at);
+}
+/** The person allows a thread's ask (the story stands in for them while the visitor only watches). */
+function allow(id: string) {
+  const a = threadAsks.get(id);
+  if (!a) return;
+  void store().actions.respondApproval(id, "once", threadKey("kami", a.thread));
+}
+
+/** Every loop starts from the same three threads; the ones Kami opened last loop are gone (archived). */
+function resetThreads(t0: number) {
+  const s = store();
+  for (const th of split) {
+    dropThread("kami", th);
+    broadcast({ event: "thread.removed", bot: "kami", thread: th });
+  }
+  split = [];
+  threadAsks.clear();
+  for (const r of Object.values(REST)) {
+    const t = threads.kami.find((x) => x.thread === r.id);
+    if (t) {
+      t.msgs = [];
+      t.running = false;
+    }
+    s.dispatch({ type: "chat.forget", bot: threadKey("kami", r.id) });
+  }
+  const { log, notes, flake } = REST;
+  said(log.id, "user", `tl-u-${loop}`, log.ask, t0 - log.ago * 1000);
+  threadStart(log.id, t0 - log.ago * 1000 + 5_000);
+  said(log.id, "assistant", `tl-a-${loop}`, "Added 6 entries under **2.4** (2 fixes, 4 changes); the release PR picks them up.", t0 - log.ago * 1000 + 120_000);
+  threadEnd(log.id, t0 - log.ago * 1000 + 121_000);
+  said(notes.id, "user", `tn-u-${loop}`, notes.ask, t0 - notes.ago * 1000);
+  threadStart(notes.id, t0 - notes.ago * 1000 + 4_000);
+  said(notes.id, "assistant", `tn-a-${loop}`, "Drafted `docs/releases/2.4.md`: delta updates, faster search, the rate limits.", t0 - 70_000);
+  threadAsk(notes.id, `tn-ap-${loop}`, "git push origin release-notes-2.4", [
+    [0.3, () => tev(notes.id, { event: "tool.start", tool_id: `tn-p-${loop}`, name: "terminal", detail: "git push origin release-notes-2.4" })],
+    [1.7, () => tev(notes.id, { event: "tool.end", tool_id: `tn-p-${loop}`, name: "terminal", ok: true, ms: 1400 })],
+    [2.1, () => { said(notes.id, "assistant", `tn-b-${loop}`, "Pushed `release-notes-2.4` and opened **PR #131** for it."); threadEnd(notes.id); }],
+  ], t0 - 25_000);
+  said(flake.id, "user", `tf-u-${loop}`, flake.ask, t0 - flake.ago * 1000);
+  threadStart(flake.id, t0 - flake.ago * 1000 + 5_000);
+  tev(flake.id, { event: "tool.start", tool_id: `tf-t-${loop}`, name: "terminal", detail: "pnpm test search --repeat 50" }, t0 - 40_000);
+}
+
+/** A request in Kami's chat that Kami splits into two threads (the bridge opens them and says so with
+ *  `thread.split`; the main chat shows a link line for each under the answer). */
+const NEXT_ASK = "Next: draft the 2.4 release on GitHub and check every docs link. Run them on their own.";
+function splitRequest() {
+  const id = `local-next-${loop}`;
+  store().dispatch({ type: "local.user", bot: "kami", id, text: NEXT_ASK, now: Date.now() });
+  ev("kami", { event: "bot.status", status: "online", running: true });
+  ev("kami", { event: "turn.start" });
+  ev("kami", { event: "thinking" });
+}
+function splitAnswer() {
+  const msg = `k-split-${loop}`;
+  ev("kami", { event: "message", id: msg, text: "Opened two threads for these, so this chat stays free. I'll post here when they land." });
+  const post = addThread("kami", "Release post 2.4", WEB);
+  const links = addThread("kami", "Docs link check", WEB);
+  split = [post, links];
+  for (const [th, title, task] of [
+    [post, "Release post 2.4", "Draft the 2.4 release on GitHub from docs/releases/2.4.md. Leave it as a draft."],
+    [links, "Docs link check", "Check every link in the docs and fix what is broken."],
+  ] as const) {
+    broadcast({ event: "thread.split", bot: "kami", thread: th, title, message: msg });
+    said(th, "user", `${th}-u`, task);
+    threadStart(th);
+  }
+  ev("kami", { event: "turn.end", outcome: "done" });
+  ev("kami", { event: "bot.status", status: "online", running: false });
+}
+
+// ---- TERMINALS ---------------------------------------------------------------------------------------------------
+
+/** The terminal cards in web-app: Codex at work, and a Shell that runs Claude Code for part of each loop. Two cards,
+ *  so TERMINALS and Kami's three threads both fit whole in the hero-sized window (the app's own auto split shows the
+ *  smaller region whole and cuts the other on a whole row: three cards left the third thread under the cut). */
+const term: Record<"codex" | "shell", string | null> = { codex: null, shell: null };
+const w = window as unknown as { __omherEmitSessionFg?: (p: { id: number; agent: string | null }) => void; __omherMockOut?: (id: number, d: string) => boolean };
+/** Print into a terminal card's program, as it would (its second line reads the last line). */
+function say(role: keyof typeof term, text: string) {
+  const id = term[role];
+  const pty = id ? getSessions().ptyOf(id) : null;
+  if (pty !== null) w.__omherMockOut?.(pty, text);
+}
+/** The CLI the shell sees in front of the Shell card (the shell's `session-fg` event): its mark follows it. */
+function shellFg(agent: string | null) {
+  const id = term.shell;
+  const pty = id ? getSessions().ptyOf(id) : null;
+  if (pty !== null) w.__omherEmitSessionFg?.({ id: pty, agent });
+}
+const SHELL_PROMPT = "\x1b[32myou@macbook\x1b[0m \x1b[34mweb-app\x1b[0m % ";
+
 // ---- one loop --------------------------------------------------------------------------------------------------
 
 let loop = 0;
@@ -225,8 +356,8 @@ function startLoop() {
   const app = store();
   if (app.getState().ui.view !== "chat") app.actions.openSession(null);
   if (app.getState().ui.view === "settings") app.actions.closeSettings();
-  if (app.getState().ui.runsFull) app.actions.setRunsFull(false);
-  if (app.getState().selectedBot !== "kami") void app.actions.selectBot("kami");
+  if (app.getState().ui.panelMax) app.actions.setPanelMax(false);
+  if (app.getState().selectedBot !== "kami" || app.getState().ui.thread) void app.actions.selectBot("kami");
   touched = false;
   storyT = 0;
   const j = rand(0.94, 1.08); // each loop a little different
@@ -238,6 +369,7 @@ function startLoop() {
   st = {};
   runs.handoffs[RUN] = {};
   resetKami(T);
+  resetThreads(t0);
   ev("kami", { event: "bot.status", status: "online", running: true }, T);
   ev("kami", { event: "turn.start" }, T);
   ev("kami", { event: "tool.start", tool_id: "k1", name: "skill_view", detail: "dag-ulw" }, T + 1500);
@@ -269,20 +401,35 @@ function startLoop() {
   if (!junoAsk && !junoBusy) raiseJuno(t0 - 60_000);
 
   const k = (s: number) => s * 1.1 * j;
+  const notesAsk = `tn-ap-${loop}`;
+  const { flake } = REST;
   steps = [
     [k(0.2), () => openNode("page-styles")],
+    [k(1), () => say("codex", "\r\n• Read api/search/index.go\r\n")],
     [k(1.8), () => { stream("page-styles", 2); pushRun(); }],
     [k(2.6), () => ev("friren", { event: "status", text: "Reading the updater section" })],
+    [k(4), () => say("codex", "\r\n• Ran go test ./search/... (38 passed)\r\n")],
+    [k(5), () => allow(notesAsk)],
     [k(6), () => { stream("page-styles", 3); pushRun(); }],
+    [k(7), () => { say("shell", "claude\r\n"); shellFg("claude"); say("shell", "\x1b[38;2;217;119;87m✻\x1b[0m \x1b[1mClaude Code\x1b[0m\r\n\r\n› write the Filters section of docs/search.md\r\n"); }],
+    [k(9.5), () => say("shell", "\x1b[38;2;217;119;87m⏺\x1b[0m Read docs/search.md\r\n")],
     [k(8.5), () => landAway("discord")],
     [k(10.5), () => { stream("page-styles", 4); pushRun(); }],
     [k(12.5), () => ev("pip", { event: "message", id: `pip-${loop}`, text: "Standup notes are filed: 4 updates, 1 blocker (the iOS build)." })],
+    [k(13.2), () => {
+      tev(flake.id, { event: "tool.end", tool_id: `tf-t-${loop}`, name: "terminal", ok: true, ms: 41_000 });
+      said(flake.id, "assistant", `tf-a-${loop}`, "Found it: the test raced the index refresh. It waits for the refresh now, and 50 of 50 runs pass.");
+      threadEnd(flake.id);
+    }],
+    [k(15.5), () => say("shell", "\x1b[38;2;217;119;87m⏺\x1b[0m Read src/search/filters.ts\r\n")],
     [k(14), () => {
       setNode("code-colors", "done"); pushRun();
       fan(f2, ["page-styles", "code-colors"], { "code-colors": "done" });
       ev("kami", { event: "status", text: "Running 1 part" });
     }],
     [k(16), () => { stream("page-styles", 5); pushRun(); }],
+    [k(18.5), () => say("codex", "\r\n• Running go test ./...\r\n")],
+    [k(21), () => say("shell", "\x1b[38;2;217;119;87m⏺\x1b[0m Edited docs/search.md (+48 -2)\r\n")],
     [k(17.5), () => {
       setNode("page-styles", "done"); setNode("contrast", "running"); pushRun();
       fan(f2, ["page-styles", "code-colors"], { "page-styles": "done" });
@@ -308,7 +455,9 @@ function startLoop() {
       ev("friren", { event: "bot.status", status: "online", running: false });
     }],
     [k(23.5), () => { stream("verify-pr", 2); pushRun(); }],
+    [k(25), () => say("codex", "\r\n• Ran go test ./... (214 passed)\r\n")],
     [k(27), () => { stream("verify-pr", 3); pushRun(); }],
+    [k(28.5), () => say("shell", "\x1b[38;2;217;119;87m⏺\x1b[0m Ran pnpm docs:build (14 pages)\r\n")],
     [k(31), () => {
       stream("verify-pr", 4);
       setNode("verify-pr", "done");
@@ -321,7 +470,29 @@ function startLoop() {
       ev("kami", { event: "turn.end", outcome: "done" });
       ev("kami", { event: "bot.status", status: "online", running: false });
     }],
+    [k(34.5), splitRequest],
+    [k(36.5), splitAnswer],
+    [k(33), () => { say("shell", "\r\n"); shellFg(null); say("shell", SHELL_PROMPT); }],
     [k(39), () => landAway("slack")],
+    [k(40), () => split[1] && tev(split[1], { event: "tool.start", tool_id: `tk-l-${loop}`, name: "terminal", detail: "lychee docs/" })],
+    [k(41.5), () => say("codex", "\r\n• Edited api/search/handler.go (+22 -6)\r\n")],
+    [k(42.5), () => {
+      const post = split[0];
+      if (!post) return;
+      threadAsk(post, `tp-ap-${loop}`, "gh release create v2.4 --draft --notes-file docs/releases/2.4.md", [
+        [0.3, () => tev(post, { event: "tool.start", tool_id: `tp-r-${loop}`, name: "terminal", detail: "gh release create v2.4 --draft" })],
+        [1.5, () => tev(post, { event: "tool.end", tool_id: `tp-r-${loop}`, name: "terminal", ok: true, ms: 1200 })],
+        [1.9, () => { said(post, "assistant", `tp-a-${loop}`, "The v2.4 release is drafted on GitHub, not published. It links PR #128 and PR #131."); threadEnd(post); }],
+      ]);
+    }],
+    [k(45.5), () => {
+      const links = split[1];
+      if (!links) return;
+      tev(links, { event: "tool.end", tool_id: `tk-l-${loop}`, name: "terminal", ok: true, ms: 6_000 });
+      said(links, "assistant", `tk-a-${loop}`, "All 214 docs links resolve. Fixed 2 that pointed at old redirects.");
+      threadEnd(links);
+    }],
+    [k(48.5), () => allow(`tp-ap-${loop}`)],
     [k(52), () => fadeThen(startLoop)],
   ];
 }
@@ -454,18 +625,36 @@ function planFromScratch() {
  *  bridge events a real folder chat sends. */
 hooks.folder = (bot, session) => {
   const name = bot === "juno-bot" ? "Juno" : bot.charAt(0).toUpperCase() + bot.slice(1);
-  const text = document.documentElement.lang === "ko"
-    ? `미리보기 세션이라 ${name}는 실행되지 않았어요. omher를 내려받으면 내 폴더에서 진짜 세션을 시작할 수 있어요.`
-    : `This session is a preview, so ${name} did not run. Download omher to start a real one in your own folder.`;
+  const isThread = (threads[bot] ?? []).some((t) => t.thread === session);
+  const ko = document.documentElement.lang === "ko";
+  const text = isThread
+    ? ko
+      ? `미리보기 스레드라 ${name}는 실행되지 않았어요. omher를 내려받으면 내 Hermes 봇과 진짜 스레드를 열 수 있어요.`
+      : `This thread is a preview, so ${name} did not run. Download omher to open real threads with your own Hermes bots.`
+    : ko
+      ? `미리보기 세션이라 ${name}는 실행되지 않았어요. omher를 내려받으면 내 폴더에서 진짜 세션을 시작할 수 있어요.`
+      : `This session is a preview, so ${name} did not run. Download omher to start a real one in your own folder.`;
   const id = `fv-${Math.random().toString(36).slice(2, 8)}`;
+  // mid-turn (a thread at work): the note lands in the thread without ending its work
+  const busy = !!store().getState().chats[threadKey(bot, session)]?.turn;
   after([
-    [0, () => { broadcast({ event: "turn.start", bot, session }); broadcast({ event: "thinking", bot, session }); }],
-    [0.9, () => broadcast({ event: "message", bot, session, id, text })],
-    [1.0, () => broadcast({ event: "turn.end", bot, session, outcome: "done" })],
+    ...(busy ? [] : ([[0, () => { broadcast({ event: "turn.start", bot, session }); broadcast({ event: "thinking", bot, session }); }]] as Step[])),
+    [0.9, () => { threadSaid(bot, session, { id, role: "assistant", text, ts: nowS() }); broadcast({ event: "message", bot, session, id, text }); }],
+    ...(busy ? [] : ([[1.0, () => broadcast({ event: "turn.end", bot, session, outcome: "done" })]] as Step[])),
   ]);
 };
 
-hooks.approve = (bot, requestId, choice) => {
+hooks.approve = (bot, requestId, choice, session) => {
+  const ta = session ? threadAsks.get(requestId) : undefined;
+  if (ta && ta.thread === session) {
+    threadAsks.delete(requestId);
+    if (choice === "deny") {
+      after([[0.4, () => { said(ta.thread, "assistant", `${requestId}-no`, "Okay, I won't run it. Tell me when it should go out."); threadEnd(ta.thread); }]]);
+      return;
+    }
+    after(ta.run);
+    return;
+  }
   if (bot !== "juno-bot" || requestId !== junoAsk) return;
   junoAsk = "";
   junoBusy = true;
@@ -540,25 +729,22 @@ function tick() {
 
 // ---- start ---------------------------------------------------------------------------------------------------
 
-async function seedSessions() {
+/** The TERMINALS cards, through the app's own + path (startTerminal): each starts in web-app and opens once so its
+ *  terminal runs, then the window goes back to Kami. Claude Code and Codex run in their own terminals; the Shell is
+ *  a login shell (the in-page one: nothing runs anywhere). */
+async function seedTerminals() {
   const S = getSessions();
-  const ids: Record<string, string> = {};
-  // two sessions: what fits whole under the four bots and the "needs you" strip in the hero-sized window (a third
-  // row was cut in half at 975x568)
-  // the app's own New session path: a draft, its folder, then start (no first message, so nothing is sent)
-  for (const [folder, agent] of [["api-server", "codex"], ["web-app", "claude"]] as [string, AgentId][]) {
-    const id = S.draft(agent);
-    S.setDraft(id, { cwd: `/Users/you/code/${folder}` });
-    if (await S.start(id)) ids[folder] = id;
+  const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+  for (const [role, agent, name] of [["shell", SHELL, ""], ["codex", "codex", "search API"]] as [keyof typeof term, AgentId, string][]) {
+    const id = S.startTerminal(agent, WEB);
+    if (!id) continue;
+    term[role] = id;
+    for (let i = 0; i < 100 && S.ptyOf(id) === null; i++) await sleep(40);
+    if (name) S.rename(id, name);
   }
+  await sleep(120);
+  say("codex", "• Read api/search/handler.go\r\n");
   store().actions.openSession(null);
-  const t = Date.now();
-  for (const [f, cmd, ago] of [["web-app", "pnpm build", 4], ["api-server", "go test ./...", 9]] as [string, string, number][]) {
-    const key = S.chatKey(ids[f]);
-    if (!key) continue;
-    ev(key, { event: "turn.start" }, t - ago * 60_000);
-    ev(key, { event: "tool.start", tool_id: "x", name: "terminal", detail: cmd }, t - 30_000);
-  }
 }
 
 export async function startStory(): Promise<void> {
@@ -567,7 +753,7 @@ export async function startStory(): Promise<void> {
   // its turn (Juno's ask, Friren reading) would replace that turn with the plain history
   const loaded = () => ["kami", "friren", "juno-bot", "pip"].every((b) => s.getState().chats[b]?.loaded);
   for (let i = 0; i < 150 && !loaded(); i++) await new Promise((r) => setTimeout(r, 30));
-  await seedSessions().catch(() => undefined);
+  await seedTerminals().catch(() => undefined);
   if (s.getState().selectedBot !== "kami") await s.actions.selectBot("kami");
   startLoop();
   // reduced motion: the settled state above with the running part open; nothing moves after it
