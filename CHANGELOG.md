@@ -115,6 +115,15 @@ All notable changes will be documented here.
   "rebase them nightly, then report"). Naming a thing ("the monthly report", "a weekly digest module") no longer stops
   a listed backlog of code changes from running as a dag-ulw graph.
 
+- **DeepSeek coding units write their answer in the shape the task asked for.** The `deepseek` calibration block gains
+  one sentence: the answer file is one JSON object keyed by the task's own field names, not a bare list and not a
+  wrapper key of the model's own. On og `deepseek/deepseek-v4.1-flash-eco` the search tasks of
+  `benchmarks/live-model-tools/v1` had been writing `[...]` or `{"results": [...]}` where the task asked for
+  `locations`; with the sentence the six fixable templates passed 90 / 90 against 76 / 90 for a control run in the
+  same window (3 seeds x 5 reps, gate fixed before the run). The held-out `product-ab` corpus showed no difference
+  either way (19 / 40 against 20 / 40, one run per task). The block also reaches DeepSeek V3.2, V4 Flash and V4 Pro,
+  which were not measured; V4.1 Flash keeps its own override and does not get the sentence.
+
 ## 4.0.8 - 2026-11-15
 
 - **The OMH TUI shows a compression as one gauge row, and a prompt typed meanwhile goes on by itself.** `/compact`

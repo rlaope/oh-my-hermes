@@ -348,6 +348,11 @@ class CalibrationSelectionTests(unittest.TestCase):
         # protocol, which the composition guide prints beside every composer
         # block, so the family entry no longer repeats it.
         self.assertIn("exact literal strings", HIGH_EFFORT_CALIBRATIONS["deepseek"])
+        # Measured 2026-11-17 on og deepseek-v4.1-flash-eco (live-model-tools,
+        # 6 templates x 3 seeds x 5 reps): 90/90 with this sentence against
+        # 76/90 without it; the search templates wrote a bare list or a
+        # wrapper key of their own instead of the task's `locations` object.
+        self.assertIn("not a bare list and not a wrapper key", HIGH_EFFORT_CALIBRATIONS["deepseek"])
         self.assertIn("byte-identical", PROMPT_CACHE_COMPOSITION_PROTOCOL)
         self.assertIn("interleaved", HIGH_EFFORT_CALIBRATIONS["glm"])
 

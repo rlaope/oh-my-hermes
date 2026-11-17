@@ -74,7 +74,10 @@ HIGH_EFFORT_CALIBRATIONS: Final[dict[str, str]] = {
         "reasoning context across tool results only on a reasoning-capable route; otherwise use the "
         "same explicit goal, boundaries, and completion criteria without thinking tags. Edit by exact "
         "literal strings — a unique match with exact whitespace — as this family's edit training "
-        "expects. Make the smallest correct change, verify once, and stop."
+        "expects. Make the smallest correct change, verify once, and stop. Write the answer file in "
+        "the exact shape the task names: one JSON object whose top-level keys are the field names the "
+        "task uses (for example `locations`, `changed_paths`, `facts`), not a bare list and not a "
+        "wrapper key of your own."
     ),
     "mistral": (
         "High-effort calibration: instructions are followed literally here, so the stated criteria "
