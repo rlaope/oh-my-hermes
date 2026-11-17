@@ -101,8 +101,8 @@ All notable changes will be documented here.
 
 - **omher.app's macOS button now opens an install popup, and the installer opens omher when it is done.** The first
   version only copied the curl line and showed one grey line below the fold, so a click looked like nothing
-  happened. Now a click opens a dialog with two steps (open Terminal with ⌘ Space, paste with ⌘ V) and the command,
-  already copied, in English. On macOS `curl -fsSL https://omher.app/omher | sh` ends by opening the new
+  happened. Now a click opens a short English dialog, "Run this in Terminal and omher installs.", with the command
+  already copied. On macOS `curl -fsSL https://omher.app/omher | sh` ends by opening the new
   omher.app, so the app is on screen when the command finishes (`OMH_OMHER_NO_OPEN=1` or `CI` skip it).
 
 ## 4.0.8 - 2026-11-15

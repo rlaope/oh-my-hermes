@@ -607,10 +607,6 @@ details.agent .copy--agent{margin-top:12px;padding:8px 14px;border:1px solid var
 .macdlg__in{padding:24px 24px 20px}
 .macdlg__t{margin:0 0 6px;font:600 17px/1.3 var(--sans)}
 .macdlg__d{margin:0 0 18px;font:400 13px/1.55 var(--sans);color:var(--ink-3)}
-.macdlg ol{margin:0 0 16px;padding:0;list-style:none;counter-reset:s;display:grid;gap:10px}
-.macdlg li{counter-increment:s;display:flex;gap:10px;align-items:baseline;font:400 14px/1.5 var(--sans);color:var(--ink-2)}
-.macdlg li::before{content:counter(s);flex:none;width:20px;height:20px;border-radius:50%;display:inline-grid;place-items:center;background:var(--bg-3);border:1px solid var(--line-2);font:600 11px var(--mono);color:var(--ink);transform:translateY(-1px)}
-.macdlg kbd{font:500 12px var(--mono);padding:1px 6px;border:1px solid var(--line-2);border-radius:4px;background:var(--bg-3);color:var(--ink)}
 .macdlg__cmd{display:flex;align-items:stretch;border:1px solid var(--line-2);border-radius:8px;background:var(--bg);overflow:hidden}
 .macdlg__cmd code{flex:1;min-width:0;padding:12px 14px;font:400 12.5px/1.6 var(--mono);white-space:nowrap;overflow-x:auto}
 .macdlg__cmd code::before{content:"$ ";color:var(--pink)}
@@ -755,11 +751,7 @@ body.rail-off .rail{opacity:0;pointer-events:none;visibility:hidden}
 <dialog class="macdlg" data-macdlg aria-labelledby="macdlg-t">
   <div class="macdlg__in">
     <h3 class="macdlg__t" id="macdlg-t">Install omher on your Mac</h3>
-    <p class="macdlg__d">One command installs omher and opens it. No "Not Opened" warning from macOS.</p>
-    <ol>
-      <li><span>Open <b>Terminal</b>: press <kbd>⌘</kbd> <kbd>Space</kbd>, type Terminal, press <kbd>Return</kbd>.</span></li>
-      <li><span>Paste with <kbd>⌘</kbd> <kbd>V</kbd>, press <kbd>Return</kbd>. The app opens by itself.</span></li>
-    </ol>
+    <p class="macdlg__d">Run this in Terminal and omher installs.</p>
     <div class="macdlg__cmd"><code>curl -fsSL https://omher.app/omher | sh</code><button type="button" data-macdlg-copy>Copy</button></div>
     <div class="macdlg__f"><span data-macdlg-state>Copied to your clipboard.</span><button type="button" class="macdlg__x" data-macdlg-close>Done</button></div>
   </div>
