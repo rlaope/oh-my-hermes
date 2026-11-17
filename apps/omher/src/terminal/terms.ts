@@ -5,6 +5,7 @@ import type { Terminal } from "@xterm/xterm";
 import type { FitAddon } from "@xterm/addon-fit";
 import { afterOpen, feed, onVisible } from "../sessions/term/engine";
 import { applyLook, termOptions } from "../sessions/term/look";
+import { termFontsReady } from "../sessions/term/fonts";
 import { onTermSettings, readTermSettings } from "../sessions/term/settings";
 import { termTheme } from "../sessions/term/themes";
 import { t } from "../i18n";
@@ -19,7 +20,7 @@ const utf8 = new TextEncoder();
 type Xterm = [typeof import("@xterm/xterm"), typeof import("@xterm/addon-fit")];
 let load: Promise<Xterm> | null = null;
 const loadXterm = () =>
-  (load ??= Promise.all([import("@xterm/xterm"), import("@xterm/addon-fit"), import("@xterm/xterm/css/xterm.css")]).then(([x, f]) => [x, f] as Xterm));
+  (load ??= Promise.all([import("@xterm/xterm"), import("@xterm/addon-fit"), import("@xterm/xterm/css/xterm.css"), termFontsReady()]).then(([x, f]) => [x, f] as Xterm));
 
 interface PanelTerm {
   term: Terminal;

@@ -27,11 +27,12 @@ import type { Terminal } from "@xterm/xterm";
 import type { FitAddon } from "@xterm/addon-fit";
 import { afterOpen, feed, onVisible } from "./term/engine";
 import { applyLook, termOptions } from "./term/look";
+import { termFontsReady } from "./term/fonts";
 import { onTermSettings, readTermSettings } from "./term/settings";
 import { termTheme } from "./term/themes";
 import { getShellHost } from "../terminal/host";
 import { onSessionFg } from "./fg";
-import { acpRow, agentDef, agentLabel, continues, draftAgent, draftFolder, draftOpen, hermesOnly, installLine, isBuiltin, isGone, isShell, isTerminalRec, LAST_LINE_MAX, lastPrintedLine, OPEN_KEY, opensAs, parseOpens, parseRecent, pushRecent, RECENT_KEY, registerAcp, sessionMode, type AgentId, type AgentInfo, type OpenAs, type Unseen, type Opens, type Recent, type SessionRec } from "./agents";
+import { acpRow, agentDef, agentLabel, continues, draftAgent, draftFolder, draftOpen, hermesOnly, installLine, isBuiltin, isGone, isShell, isTerminalRec, LAST_LINE_MAX, SHELL, termEnd, lastPrintedLine, OPEN_KEY, opensAs, parseOpens, parseRecent, pushRecent, RECENT_KEY, registerAcp, sessionMode, type AgentId, type AgentInfo, type OpenAs, type Unseen, type Opens, type Recent, type SessionRec } from "./agents";
 import { NAME_MAX, parseTitles, promptTitle, putTitle, TITLES_KEY } from "./titles";
 import { getDraft, setDraft as setUnsent } from "../app/drafts";
 import { getHost, type ChatEvent, type ChatInput, type PastChat, type SessionHost } from "./host";
@@ -116,14 +117,17 @@ interface Term {
   closed: boolean;
   /** Undoes what the engine attached after the terminal opened (its renderer, add-ons). */
   undo: () => void;
-  /** Bytes drawn before the shell's id for the session was known: acknowledged once it is. */
-  owed: number;
   /** The size the program was last told (when it started, then each resize sent). */
   told: { cols: number; rows: number } | null;
   /** A changed size waiting to be sent (`RESIZE_SETTLE_MS`). */
   settle: ReturnType<typeof setTimeout> | null;
   /** Where its program runs: the agent PTY host, or (a Shell row) the login-shell host of the bottom panel. */
   io: TermIo;
+  /** Which program run in this terminal it is (a CLI row goes on as the login shell when its CLI ends): output
+   *  drawn after its program was replaced is not acknowledged to the next one. */
+  run: number;
+  /** The person typed into the current program: a shell that ends before that, with an error, failed at start. */
+  typed: boolean;
 }
 
 /** The PTY calls a terminal makes once its program runs. */
@@ -144,7 +148,7 @@ let xtermLoad: Promise<Xterm> | null = null;
 let xtermMods: Xterm | null = null;
 /** xterm (about 88 kB gz) loads when the first session opens, not with the app. */
 const loadXterm = () =>
-  (xtermLoad ??= Promise.all([import("@xterm/xterm"), import("@xterm/addon-fit"), import("@xterm/xterm/css/xterm.css")]).then(
+  (xtermLoad ??= Promise.all([import("@xterm/xterm"), import("@xterm/addon-fit"), import("@xterm/xterm/css/xterm.css"), termFontsReady()]).then(
     ([x, f]) => (xtermMods = [x, f]),
   ));
 
@@ -1207,15 +1211,33 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
   /** What stops following each session's foreground CLI (its pty's `session-fg` events). */
   const fgOff = new Map<string, () => void>();
 
+  /**
+   * Start session `id`'s program in its terminal `t`. A Shell row runs the person's login shell; a CLI row runs its
+   * CLI and, when that ends, goes on as the login shell in the same terminal (same scrollback, size and folder), so
+   * the next CLI the person starts there is followed like any other (`session-fg`). When the shell of a TERMINALS row
+   * ends the row closes, as its x does; a shell that ends with an error before the person typed anything (it could
+   * not start properly) stays, with what it printed.
+   */
   const startTerm = async (id: string, t: Term) => {
     const r = rec(id);
     if (!r) return;
+    const run = ++t.run;
+    const shell = isShell(r.agent);
+    const io: TermIo = shell ? getShellHost() : host;
+    t.io = io;
+    t.hostId = null;
+    t.closed = false;
+    t.typed = false;
+    t.told = null;
     // the terminal view of a chat session does not decide the session's status; the chat does
     const ofChat = sessionMode(state.agents, r) !== "terminal";
     // Claude Code's terminal continues the chat's conversation
     const resume = r.agentSession && ofChat && r.agent === "claude" ? r.agentSession : undefined;
     const { cols, rows } = t.term;
     let marked = 0;
+    // this program's pty id once known, and what was drawn of its output before that
+    let pty: number | null = null;
+    let owed = 0;
     // the TERMINALS card's second line: the last line on its screen with text, read a moment after output stops
     // flowing in (once per OUT_MARK_MS at most), from the terminal itself
     let lineTimer: ReturnType<typeof setTimeout> | null = null;
@@ -1229,11 +1251,12 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
     };
     const onData = (d: Uint8Array | string) => {
       // every message is acknowledged once the terminal has taken it, in order: the shell reads the program
-      // no further ahead of the page than its credit allows
+      // no further ahead of the page than its credit allows (to this program only: a replaced one is gone)
       const bytes = typeof d === "string" ? utf8.encode(d).length : d.byteLength;
       feed(t.term, d, () => {
-        if (t.hostId === null) t.owed += bytes;
-        else t.io.ack(t.hostId, bytes);
+        if (t.run !== run) return;
+        if (pty === null) owed += bytes;
+        else io.ack(pty, bytes);
       });
       // the TERMINALS row's spinner and age: when output last flowed (throttled)
       const now = Date.now();
@@ -1245,38 +1268,61 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
     };
     try {
       const onExit = (code: number | null) => {
+        // a program omher stopped (the row closed, Restart) or one already replaced says nothing more
+        if (terms.get(id) !== t || t.run !== run) return;
         t.closed = true;
         if (lineTimer !== null) clearTimeout(lineTimer);
         lineTimer = null;
         fgOff.get(id)?.();
         fgOff.delete(id);
         if (rec(id)?.fgAgent) setSessionFg(id, null);
+        const label = agentDef(r.agent).label;
+        const end = termEnd({ ofChat, shell, typed: t.typed, code });
+        if (end === "shell") {
+          // the CLI ended: the same terminal goes on as the person's login shell in that folder
+          t.term.write(`\r\n\x1b[2m${code ? tr("ss.backToShellExit", { agent: label, code }) : tr("ss.backToShell", { agent: label })}\x1b[0m\r\n`);
+          patchRec(id, { agent: SHELL, open: undefined, account: undefined, agentSession: undefined, agentTitle: undefined, startedAs: undefined, fgAgent: null, status: "starting", exitCode: null, error: undefined });
+          void startTerm(id, t);
+          return;
+        }
+        if (end === "close") {
+          // exit, Ctrl+D: the row goes, as closing it with its x does
+          close(id);
+          return;
+        }
         if (!ofChat) {
           patchRec(id, { status: "exited", exitCode: code });
           tellEnd(id, "ended", { code });
         }
-        t.term.write(`\r\n\x1b[2m[${code ? tr("ss.termEndedExit", { agent: agentDef(r.agent).label, code }) : tr("ss.termEnded", { agent: agentDef(r.agent).label })}]\x1b[0m\r\n`);
+        t.term.write(`\r\n\x1b[2m[${code ? tr("ss.termEndedExit", { agent: label, code }) : tr("ss.termEnded", { agent: label })}]\x1b[0m\r\n`);
       };
       // a Shell row is the person's login shell (the bottom panel's `shell_start`: only a folder and a size go out)
-      const hostId = isShell(r.agent)
+      const hostId = shell
         ? (await getShellHost().start(r.cwd || null, cols, rows, onData, onExit)).id
         : await host.start(r.agent, r.cwd, cols, rows, onData, onExit, resume, accountOf(r));
+      if (t.run !== run) {
+        // replaced while starting
+        void io.close(hostId).catch(() => undefined);
+        return;
+      }
       t.hostId = hostId;
+      pty = hostId;
       // the TERMINALS row's mark follows the CLI the shell sees in the foreground (`session-fg`)
       fgOff.get(id)?.();
       fgOff.set(id, onSessionFg(hostId, (agent) => setSessionFg(id, agent)));
       if (t.closed) {
         // closed while starting
-        void t.io.close(hostId);
+        void io.close(hostId);
         return;
       }
-      if (t.owed) t.io.ack(hostId, t.owed);
-      t.owed = 0;
+      if (owed) io.ack(hostId, owed);
+      owed = 0;
       // the program started at this size; one that changed while it started is sent now
       t.told = { cols, rows };
       if (t.settle === null) tellSize(t);
       if (!ofChat) patchRec(id, { status: "running" });
     } catch (e) {
+      if (t.run !== run) return;
       t.closed = true;
       const error = errText(e);
       if (!ofChat) {
@@ -1337,11 +1383,13 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
       const term = new Terminal(termOptions(theme, settings));
       const fit = new FitAddon();
       term.loadAddon(fit);
-      t = { term, fit, el, hostId: null, closed: false, undo: () => undefined, owed: 0, told: null, settle: null, io: isShell(rec(id)?.agent) ? getShellHost() : host };
+      t = { term, fit, el, hostId: null, closed: false, undo: () => undefined, told: null, settle: null, io: isShell(rec(id)?.agent) ? getShellHost() : host, run: 0, typed: false };
       terms.set(id, t);
       const tt = t;
       term.onData((d) => {
-        if (tt.hostId !== null && !tt.closed) void tt.io.write(tt.hostId, d).catch(() => undefined);
+        if (tt.hostId === null || tt.closed) return;
+        tt.typed = true;
+        void tt.io.write(tt.hostId, d).catch(() => undefined);
       });
       // the title the program sets (OSC 0/2): the TERMINALS card's second line until it prints a line
       term.onTitleChange((title) => {
@@ -1404,6 +1452,7 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
   const typeAt = async (id: string, text: string) => {
     const t = terms.get(id);
     if (!t || t.hostId === null || t.closed) return;
+    t.typed = true;
     await t.io.write(t.hostId, text);
     t.term.focus();
   };

@@ -156,11 +156,11 @@ async function seed(page: Page, o: { grok?: boolean } = {}) {
   await out(page, codex, CODEX_SCREEN);
   const claude = await newTerm(page, "shell", WEB);
   await fg(page, claude, "claude");
-  // pi ends (exit 0): the check
+  // pi ends (exit 0): its row goes on as the login shell
   await page.getByTestId(`session-${pi}`).locator(".ss-open").click();
   await page.locator(".xterm-helper-textarea").last().focus();
   await page.keyboard.type("exit\r");
-  await expect(page.getByTestId(`session-${pi}`)).toHaveAttribute("data-term-status", "ok");
+  await expect(page.getByTestId(`session-${pi}`).getByTestId("term-row-mark")).toHaveAttribute("data-agent", "shell");
   await page.getByTestId(`session-${claude}`).locator(".ss-open").click();
   await out(page, claude, CLAUDE_SCREEN);
   return { claude, codex, shellGrok, shell, pi };
@@ -414,11 +414,11 @@ test("session-fg: shell icon -> Claude mark with the live frame and tooltip -> s
   // the open session's header follows too
   await page.getByTestId(`session-${b}`).locator(".ss-open").click();
   await expect(page.getByTestId("header").getByTestId("term-row-mark")).toHaveAttribute("data-agent", "codex");
-  // the session ends: no CLI is in front any more
+  // its shell exits: the row closes (term-exit.spec.ts)
   await page.locator(".xterm-helper-textarea").last().focus();
   await page.keyboard.type("exit\r");
-  await expect(page.getByTestId(`session-${b}`)).toHaveAttribute("data-term-status", "ok");
-  await expect(mark(b)).toHaveAttribute("data-agent", "shell");
+  await expect(page.getByTestId(`session-${b}`)).toHaveCount(0);
+  await expect(mark(a)).toHaveAttribute("data-agent", "generic");
 });
 
 test("session-fg on the bottom panel: the tab shows its shell's foreground CLI", async ({ page }) => {
@@ -470,7 +470,7 @@ test("reduced motion: the live frame, the status arc, the dock ring and the dock
   await mock("mock.emit", { events: [{ event: "turn.end", bot: "kami", outcome: "done" }] });
 });
 
-test("status glyph from the session events: arc while output flows, check on exit 0, x on exit 3", async ({ page }) => {
+test("status glyph from the session events: arc while output flows; a CLI's end goes back to the shell; x when the shell cannot start", async ({ page }) => {
   test.setTimeout(60_000);
   await open(page);
   const a = await newTerm(page, "codex", WEB);
@@ -480,11 +480,14 @@ test("status glyph from the session events: arc while output flows, check on exi
   await expect(row).toHaveAttribute("data-term-status", "idle", { timeout: 6000 });
   await page.locator(".xterm-helper-textarea").last().focus();
   await page.keyboard.type("after 10 exit 3\r");
-  await expect(row).toHaveAttribute("data-term-status", "err");
+  await expect(row.getByTestId("term-row-mark")).toHaveAttribute("data-agent", "shell");
+  await expect(row).toHaveAttribute("data-term-status", /idle|busy/);
+  // the login shell after Claude Code cannot start: x
+  await page.evaluate(() => ((window as unknown as Record<string, unknown>).__omherShellDie = { error: "no login shell" }));
   const b = await newTerm(page, "claude", WEB);
   await page.locator(".xterm-helper-textarea").last().focus();
   await page.keyboard.type("exit\r");
-  await expect(page.getByTestId(`session-${b}`)).toHaveAttribute("data-term-status", "ok");
+  await expect(page.getByTestId(`session-${b}`)).toHaveAttribute("data-term-status", "err");
 });
 
 test("the open session is always listed and in view, with a short TERMINALS region", async ({ page }) => {

@@ -248,7 +248,7 @@ test.describe("the look reaches a hidden terminal", () => {
     const [idA] = await hostIds(page);
     const before = await terms(page);
     expect(before.map((t) => t.connected)).toEqual([false, true]); // A is hidden, B is shown
-    expect(before[0]).toMatchObject({ background: "#0b090d", fontSize: 12.5 });
+    expect(before[0]).toMatchObject({ background: "#0b090d", fontSize: 13 });
     expect(before[0].cols).toBeGreaterThan(40);
 
     await settings(page);

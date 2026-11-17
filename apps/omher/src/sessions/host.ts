@@ -518,7 +518,8 @@ export class MockHost implements SessionHost {
       if (ch === "\r") {
         const line = s.line.trim();
         s.line = "";
-        if (line === "exit") {
+        // `exit`, or a CLI's own `/exit` command, ends the program
+        if (line === "exit" || line === "/exit") {
           s.out("\r\n");
           this.live.delete(id);
           setTimeout(() => s.exit(0), 10);

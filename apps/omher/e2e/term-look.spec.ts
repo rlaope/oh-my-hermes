@@ -241,7 +241,7 @@ test("font size 16 changes how many columns fit, and the program is told the new
   await open(page);
   await terminalClaude(page);
   const before = await look(page);
-  expect(before?.fontSize).toBe(12.5);
+  expect(before?.fontSize).toBe(13);
   expect(before!.cols).toBeGreaterThan(40);
 
   await settings(page);
