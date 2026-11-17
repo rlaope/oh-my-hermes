@@ -7,6 +7,7 @@ command check, and ``dag_ulw_cues`` compiling every one of its patterns at impor
 
 from __future__ import annotations
 
+import re
 import subprocess
 import sys
 import textwrap
@@ -49,6 +50,44 @@ class RouterImportCostTests(unittest.TestCase):
         for text in ("", "   ", "loophole in the parser", "a loop over the files", "omh looped", "slash /loop later"):
             with self.subTest(text=text):
                 self.assertFalse(signal(text))
+
+
+class DagUlwCuePatternTests(unittest.TestCase):
+    def test_importing_the_module_compiles_none_of_its_patterns(self) -> None:
+        compiled = _run(
+            """
+            import omh.plugin_bundle.omh.dag_ulw_cues as m
+            lazy = [v for v in vars(m).values() if isinstance(v, m._LazyPattern)]
+            print(len(lazy), sum(v._compiled is not None for v in lazy))
+            """
+        )
+        count, already = (int(part) for part in compiled.split())
+        self.assertGreater(count, 100)
+        self.assertEqual(already, 0)
+
+    def test_a_lazy_pattern_answers_like_the_compiled_one(self) -> None:
+        from omh.plugin_bundle.omh import dag_ulw_cues
+
+        lazy = dag_ulw_cues._lazy_compile(r"(?P<w>b+)|x", re.IGNORECASE)
+        real = re.compile(r"(?P<w>b+)|x", re.IGNORECASE)
+        text = "aBb x bbb"
+        self.assertEqual(lazy.pattern, real.pattern)
+        self.assertEqual(lazy.flags, re.IGNORECASE)
+        self.assertEqual(lazy.search(text).span(), real.search(text).span())
+        self.assertEqual(lazy.match("bb!").group("w"), real.match("bb!").group("w"))
+        self.assertIsNone(lazy.fullmatch(text))
+        self.assertEqual([m.span() for m in lazy.finditer(text)], [m.span() for m in real.finditer(text)])
+        self.assertEqual(lazy.findall(text), real.findall(text))
+        self.assertEqual(lazy.split(text), real.split(text))
+        self.assertEqual(lazy.sub("-", text, count=1), real.sub("-", text, count=1))
+
+    def test_every_module_pattern_compiles(self) -> None:
+        from omh.plugin_bundle.omh import dag_ulw_cues
+
+        lazy = {name: v for name, v in vars(dag_ulw_cues).items() if isinstance(v, dag_ulw_cues._LazyPattern)}
+        for name, pattern in lazy.items():
+            with self.subTest(pattern=name):
+                self.assertIsInstance(re.compile(pattern.pattern, pattern.flags), re.Pattern)
 
 
 if __name__ == "__main__":
