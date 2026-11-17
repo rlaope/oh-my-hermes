@@ -126,6 +126,8 @@ $OmhSetupArgs       = Get-OmhEnv 'OMH_SETUP_ARGS'
 $OmhWithHermes      = Get-OmhEnv 'OMH_WITH_HERMES' '1'
 $OmhWithDesktop     = Get-OmhEnv 'OMH_WITH_DESKTOP' '1'
 $OmhAppDir          = Get-OmhEnv 'OMH_APP_DIR'
+# Like install.sh: the app opens when the command ends; OMH_OMHER_NO_OPEN=1 (or CI) skips it.
+$OmhOmherNoOpen     = Get-OmhEnv 'OMH_OMHER_NO_OPEN' '0'
 # Taken here, at script scope: inside a function $args is that function's own.
 $OmhScriptArgs      = @($args)
 $OmhHermesInstallUrl  = 'https://hermes-agent.nousresearch.com/install.ps1'
@@ -1388,7 +1390,16 @@ try {
             }
         }
         if ($script:OmhOmherAppPath) {
-            Write-OmhLine 'omher is installed. Open it from the Start menu.'
+            $omherExe = Join-Path $script:OmhOmherAppPath 'omher.exe'
+            $opened = $false
+            if ($OmhOmherNoOpen -ne '1' -and -not $env:CI -and (Test-Path -LiteralPath $omherExe -PathType Leaf)) {
+                try {
+                    Start-Process -FilePath $omherExe | Out-Null
+                    $opened = $true
+                    Write-OmhLine "Opened omher ($omherExe)."
+                } catch { $opened = $false }
+            }
+            if (-not $opened) { Write-OmhLine 'omher is installed. Open it from the Start menu.' }
         }
     }
 } catch {
