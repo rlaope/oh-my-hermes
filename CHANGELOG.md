@@ -67,6 +67,14 @@ All notable changes will be documented here.
   on macOS painted its two `✳` frames as a green emoji, so the spinner flashed green twice a cycle. Those frames now
   ask for text presentation (U+FE0E) and stay one cell in the accent colour. Contributed by @DanRioDev (#2923).
 
+- **An OMH update asks one restart question, not two.** The TUI still asks once whether to restart on the new
+  version. The reopened TUI no longer opens a second question about Hermes' gateway: when the gateway still runs the
+  old OMH plugin code, it says so in one line and names `/gateway restart`, which loads the new code.
+
+- **What you type while the OMH TUI loses its gateway is never lost.** When the gateway does not come back and the TUI
+  leaves (its restarts spent, a stop it watched, a reattach given up), what you typed and never sent, the draft and
+  anything typed while it waited, is printed under its last line instead of going with the screen.
+
 ## 4.0.8 - 2026-11-15
 
 - **The OMH TUI shows a compression as one gauge row, and a prompt typed meanwhile goes on by itself.** `/compact`
