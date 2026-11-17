@@ -3,6 +3,10 @@
 //   fill  - N shell terminals, each viewed once, each fed `--mb` MiB of 120-column lines; JS heap after GC, DOM nodes
 //   bg    - the same N terminals; N-1 hidden ones stream an agent-like spinner (+ a line now and then) every 100 ms
 //           for `--secs`; the visible one is idle. Main-thread time (CDP Performance metrics), store updates.
+//   park  - (`--park`, instead of bg) after fill, the N-1 hidden terminals wait out park thresholds shortened to 1 s
+//           through the dev hook (src/sessions/term/park.ts); xterm buffers and heap again. A build without parking
+//           waits the same time. `bufParkMB` also counts the disposed xterm objects parking still holds; `snapMB` is
+//           what the snapshots take (UTF-8 bytes, outside the JS heap's count like the buffers).
 // usage: node bench/many/bench.mjs --n 20 --mb 2 --secs 8 --runs 3 --label base
 import { spawn } from "node:child_process";
 import { createRequire } from "node:module";
@@ -29,6 +33,7 @@ const LABEL = arg("label", "run");
 const ENGINE = arg("engine", "chromium");
 const PORT = Number(arg("port", "5391"));
 const MOCK = Number(arg("mock", "5392"));
+const PARK = argv.includes("--park");
 
 const children = [];
 const waitPort = (port) =>
@@ -90,6 +95,23 @@ const pageFill = async (mb) => {
     }
   }
   return { bufMB: Math.round((bufBytes / 1048576) * 10) / 10, terms: (window.__omherTerms ?? new Set()).size, lines: [...(window.__omherTerms ?? [])].reduce((n, t) => n + t.buffer.active.length, 0) };
+};
+
+/** Park thresholds shortened, then wait until N-1 terminals are parked (or `maxMs` on a build without parking). */
+const pagePark = async ({ n, maxMs }) => {
+  const p = window.__omherPark;
+  const t0 = performance.now();
+  p?.set({ hiddenMs: 1000, idleMs: 1000, sweepMs: 250 });
+  while (performance.now() - t0 < maxMs && !(p && p.parked() >= n - 1)) await new Promise((r) => setTimeout(r, 100));
+  let bufBytes = 0;
+  for (const t of [...(window.__omherTerms ?? []), ...(p?.held() ?? [])]) {
+    for (const b of [t._core.buffers.normal, t._core.buffers.alt]) {
+      const l = b.lines;
+      for (let i = 0; i < l.length; i++) bufBytes += l.get(i)?._data?.byteLength ?? 0;
+    }
+  }
+  const snap = p?.snapshotBytes?.() ?? 0;
+  return { bufParkMB: Math.round((bufBytes / 1048576) * 10) / 10, snapMB: Math.round((snap / 1048576) * 10) / 10, parked: p ? p.parked() : 0, parkMs: Math.round(performance.now() - t0) };
 };
 
 const pageBg = async (secs) => {
@@ -190,7 +212,8 @@ async function main() {
     const m0 = cdp ? await metrics(cdp) : null;
     const PROF = argv.includes("--profile") && cdp;
     if (PROF) (await cdp.send("Profiler.enable"), await cdp.send("Profiler.setSamplingInterval", { interval: 200 }), await cdp.send("Profiler.start"));
-    const bg = await page.evaluate(pageBg, SECS);
+    const bg = PARK ? await page.evaluate(pagePark, { n: N, maxMs: 20000 }) : await page.evaluate(pageBg, SECS);
+    if (PARK) bg.heapParkMB = await heap();
     if (PROF) {
       const { profile } = await cdp.send("Profiler.stop");
       const byId = new Map(profile.nodes.map((n) => [n.id, n]));
@@ -237,8 +260,8 @@ async function main() {
     const v = out.map((r) => r[k]).filter((x) => typeof x === "number").sort((a, b) => a - b);
     return v.length ? { median: v[Math.floor(v.length / 2)], min: v[0], max: v.at(-1) } : null;
   };
-  const summary = { label: LABEL, engine: ENGINE, n: N, mb: MB, secs: SECS, runs: RUNS, load: os.loadavg()[0].toFixed(1), measuredOn: "Playwright browser + vite dev + mock host (not the Tauri window)" };
-  for (const k of ["heapOpenMB", "heapFillMB", "bufMB", "terms", "lines", "renders", "rendersHidden", "selHidden", "domMutations", "nodes", "canvases", "updates", "scriptMs", "taskMs", "layoutMs", "styleMs", "layouts", "longFrames", "maxGapMs"]) summary[k] = med(k);
+  const summary = { label: LABEL, engine: ENGINE, scenario: PARK ? "park" : "bg", n: N, mb: MB, secs: SECS, runs: RUNS, load: os.loadavg()[0].toFixed(1), measuredOn: "Playwright browser + vite dev + mock host (not the Tauri window)" };
+  for (const k of ["heapOpenMB", "heapFillMB", "bufMB", "bufParkMB", "snapMB", "heapParkMB", "parked", "parkMs", "terms", "lines", "renders", "rendersHidden", "selHidden", "domMutations", "nodes", "canvases", "updates", "scriptMs", "taskMs", "layoutMs", "styleMs", "layouts", "longFrames", "maxGapMs"]) summary[k] = med(k);
   mkdirSync(join(here, "raw"), { recursive: true });
   writeFileSync(join(here, "raw", `${LABEL}-${ENGINE}.json`), JSON.stringify({ summary, runs: out }, null, 2));
   console.log("SUMMARY", JSON.stringify(summary));

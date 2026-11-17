@@ -75,7 +75,8 @@ export type Remake = (size: { cols: number; rows: number }) => Terminal;
 
 /** A parked terminal: its snapshot and what the one made from it takes over. */
 interface Parked {
-  snapshot: string;
+  /** UTF-8: the add-on builds its string from many small pieces, which V8 keeps as a rope several times its length */
+  snapshot: Uint8Array;
   cols: number;
   rows: number;
   remake: Remake;
@@ -303,13 +304,14 @@ export function live(term: Terminal): Terminal {
   const s = states.get(next);
   // the snapshot is not the program's output: it neither counts as output nor waits for an ack
   if (s?.held) s.held.push(() => next.write(p.snapshot));
-  else next.write(p.snapshot);
+  else next.write(p.snapshot); // xterm decodes UTF-8 bytes itself
   return next;
 }
 
 /** Whether `term` is parked: it has no xterm (nothing to dispose) until `live` makes it again. */
 export const isParked = (term: Terminal): boolean => parked.has(term);
 
+const utf8 = new TextEncoder();
 let sweepTimer: ReturnType<typeof setInterval> | null = null;
 let serializeLoad: Promise<typeof import("@xterm/addon-serialize").SerializeAddon> | null = null;
 const loadSerialize = () =>
@@ -361,7 +363,7 @@ function park(s: State, Serialize: typeof import("@xterm/addon-serialize").Seria
   }
   const title = (term as unknown as { _core?: { _inputHandler?: { _windowTitle?: unknown } } })._core?._inputHandler?._windowTitle;
   if (typeof title === "string" && title) snapshot += `\x1b]2;${title}\x07`;
-  parked.set(term, { snapshot, cols: term.cols, rows: term.rows, remake: s.remake!, hiddenAt: s.hiddenAt, lastOut: s.lastOut, gpuLast: s.gpuLast, gaveUp: s.gaveUp, losses: s.losses });
+  parked.set(term, { snapshot: utf8.encode(snapshot), cols: term.cols, rows: term.rows, remake: s.remake!, hiddenAt: s.hiddenAt, lastOut: s.lastOut, gpuLast: s.gpuLast, gaveUp: s.gaveUp, losses: s.losses });
   // a find bar left open on it (the bottom panel keeps one while hidden) closes: its terminal is going
   s.el.dispatchEvent(new CustomEvent(FIND_EVENT, { bubbles: true, detail: null }));
   s.undo();
@@ -436,5 +438,7 @@ if (import.meta.env?.DEV && typeof window !== "undefined") {
     parked: () => parked.size,
     /** the parked (disposed) xterm objects, so a bench can count what they still hold */
     held: () => [...parked.keys()],
+    /** what the snapshots take (bytes) */
+    snapshotBytes: () => [...parked.values()].reduce((n, p) => n + p.snapshot.byteLength, 0),
   };
 }

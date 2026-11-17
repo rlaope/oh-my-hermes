@@ -181,13 +181,15 @@ test("ten parked terminals hold at least 80% less xterm buffer than before", asy
     }
     return out;
   });
-  /** xterm buffer bytes of every terminal object still around: live ones and the parked (disposed) ones. */
+  /** xterm buffer bytes of every terminal object still around (live ones and the parked, disposed ones), plus the
+   *  parked ones' snapshots. */
   const bytes = () =>
     page.evaluate(async () => {
       type T = { write(d: string, cb: () => void): void; _core: { buffers: { normal: { lines: { length: number; get(i: number): { _data?: Uint32Array } | undefined } }; alt: { lines: { length: number; get(i: number): { _data?: Uint32Array } | undefined } } } } };
-      const w = window as unknown as { __omherTerms: Set<T>; __omherPark: { held(): T[] } };
+      const w = window as unknown as { __omherTerms: Set<T>; __omherPark: { held(): T[]; snapshotBytes(): number } };
       const all = [...w.__omherTerms, ...w.__omherPark.held()];
-      let n = 0;
+      // what parking keeps instead counts too
+      let n = w.__omherPark.snapshotBytes();
       for (const t of all)
         for (const b of [t._core.buffers.normal, t._core.buffers.alt]) for (let i = 0; i < b.lines.length; i++) n += b.lines.get(i)?._data?.byteLength ?? 0;
       return n;
