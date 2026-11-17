@@ -731,6 +731,8 @@ RELAUNCH_AFTER_WAIT = "The TUI restarts on {label} once the work this session wa
 RELAUNCH_CANCELLED = "OMH went back to the version this TUI runs, so it does not restart."
 RELAUNCH_FAILED = "The TUI could not ask omh to restart it. To use {label}, quit and run `{command}`."
 RELAUNCH_FAREWELL = "omh: restarting the OMH TUI on {label}…"
+# A TUI that leaves because its gateway is gone prints what was typed and never sent under its farewell (`_lose_gateway`).
+UNSENT_ON_LEAVE = "omh: what you typed was not sent, so here it is:\n{text}"
 # In a TUI `omh` relaunched for an update (`UPDATED_ENV`) whose shared gateway still runs the old OMH plugin code: one
 # line, and no second question (the owner, 2026-11-16: an update asks one restart question, the TUI's own).
 GATEWAY_UPDATE_NOTICE = (
@@ -4187,7 +4189,24 @@ class App(ModesMixin, AgentViewMixin):
             self.farewell = f"omh: {reason}. Resume the session: {omh_way}"
         else:
             self.farewell = f"omh: {reason}. Resume the session in Hermes' own terminal: {resume_command(self.stored_id)}"
+        unsent = self._unsent_text()
+        if unsent:  # what was typed and never sent is not lost with the screen: it is printed with the farewell
+            self.farewell += "\n" + UNSENT_ON_LEAVE.format(text=unsent)
         self.exit_code = 1
+
+    def _unsent_text(self) -> str:
+        """What the person typed and never sent, as they typed it: the composer's draft, then the text of keys held
+        while a respawn waited (`held_input`, an Enter there a line break); "" for none."""
+        held: list[str] = []
+        for event in self.held_input:
+            if isinstance(event, Paste):
+                held.append(event.text)
+            elif isinstance(event, Key) and event.name == CHAR and not event.ctrl and not event.alt and event.char:
+                held.append(event.char)
+            elif isinstance(event, Key) and event.name == ENTER and not event.alt:
+                held.append("\n")
+        draft = self.composer.expanded() if self.composer.text else ""
+        return (draft + "".join(held)).strip("\n")
 
     def _omh_resume_command(self) -> str:
         """`omh --resume <id>` for the open session when `omh` launched the TUI (`SESSION_FILE_ENV`), with `-p` for a

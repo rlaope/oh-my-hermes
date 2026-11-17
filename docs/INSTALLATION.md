@@ -2019,7 +2019,9 @@ the session, `omh --resume <id>` (`hermes --tui` when something other than `omh`
 and Ctrl+C or Ctrl+D while it waits leaves the
 same way, the new gateway stopped. While it waits, or reattaches after a
 restart, what you type shows in the composer at once; Enter, a paste and the
-keys after them wait until it is back, in order. When the gateway's record
+keys after them wait until it is back, in order. If it leaves instead, what
+you typed and never sent is printed under its last line, so nothing typed
+during a restart is lost. When the gateway's record
 says it was stopped with no restart asked, the TUI tries nothing (a try would
 start a gateway you stopped) and watches the record for up to 30 s, because
 Hermes' own `hermes gateway restart` without a service stops the gateway the
