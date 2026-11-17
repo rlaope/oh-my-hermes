@@ -65,6 +65,10 @@ All notable changes will be documented here.
   first, trace the bad value to where it is produced, try other valid inputs, run the whole suite. Questions,
   reviews, features and fixes of anything that is not code get nothing new.
 
+- **An OMH update asks one restart question, not two.** The TUI still asks once whether to restart on the new
+  version. The reopened TUI no longer opens a second question about Hermes' gateway: when the gateway still runs the
+  old OMH plugin code, it says so in one line and names `/gateway restart`, which loads the new code.
+
 ## 4.0.8 - 2026-11-15
 
 - **The OMH TUI shows a compression as one gauge row, and a prompt typed meanwhile goes on by itself.** `/compact`

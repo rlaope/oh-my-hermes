@@ -731,9 +731,11 @@ RELAUNCH_AFTER_WAIT = "The TUI restarts on {label} once the work this session wa
 RELAUNCH_CANCELLED = "OMH went back to the version this TUI runs, so it does not restart."
 RELAUNCH_FAILED = "The TUI could not ask omh to restart it. To use {label}, quit and run `{command}`."
 RELAUNCH_FAREWELL = "omh: restarting the OMH TUI on {label}…"
-# In a TUI `omh` relaunched for an update (`UPDATED_ENV`) whose shared gateway still runs the old OMH plugin code:
-# the line above `/gateway restart`'s own question, which is asked once, with nothing chosen by default.
-GATEWAY_UPDATE_LEAD = "OMH moved to another version, but Hermes' gateway still runs the OMH plugin code it started with."
+# In a TUI `omh` relaunched for an update (`UPDATED_ENV`) whose shared gateway still runs the old OMH plugin code: one
+# line, and no second question (the owner, 2026-11-16: an update asks one restart question, the TUI's own).
+GATEWAY_UPDATE_NOTICE = (
+    "Hermes' gateway still runs the OMH plugin code it started with; /gateway restart loads the new code."
+)
 WHATS_NEW_NONE_NOTICE = "There is no What's new written for v{version}."
 WALLPAPER_KEPT_NOTICE = "Living wallpaper {state}, kept in {path}."
 WALLPAPER_SESSION_NOTICE = "Living wallpaper {state} for this session; there is no OMH home to keep it in."
@@ -880,17 +882,14 @@ GATEWAY_CANCEL_CHOICE = "Cancel"
 GATEWAY_RESTART_CANCELLED = "Hermes' gateway was not restarted."
 
 
-def gateway_restart_choices(profile: str, *, own: bool = False, offered: bool = False) -> tuple[str, ...]:
+def gateway_restart_choices(profile: str, *, own: bool = False) -> tuple[str, ...]:
     """The answers `/gateway restart` offers: on the TUI's own runtime, its restart alone; for a named profile the
-    shared gateway serves, that profile alone or the whole gateway; else the one restart. Cancel last, or first
-    when the TUI offers the restart itself after an update (`offered`), so the answer defaults to no restart."""
+    shared gateway serves, that profile alone or the whole gateway; else the one restart. Cancel last."""
     if own:
-        choices: tuple[str, ...] = (GATEWAY_OWN_RUNTIME_CHOICE, GATEWAY_CANCEL_CHOICE)
-    elif profile:
-        choices = (GATEWAY_PROFILE_CHOICE.format(profile=profile), GATEWAY_WHOLE_CHOICE, GATEWAY_CANCEL_CHOICE)
-    else:
-        choices = (GATEWAY_RESTART_CHOICE, GATEWAY_CANCEL_CHOICE)
-    return (GATEWAY_CANCEL_CHOICE, *choices[:-1]) if offered else choices
+        return (GATEWAY_OWN_RUNTIME_CHOICE, GATEWAY_CANCEL_CHOICE)
+    if profile:
+        return (GATEWAY_PROFILE_CHOICE.format(profile=profile), GATEWAY_WHOLE_CHOICE, GATEWAY_CANCEL_CHOICE)
+    return (GATEWAY_RESTART_CHOICE, GATEWAY_CANCEL_CHOICE)
 GATEWAY_RESTART_STDIO = (
     "/gateway restart restarts Hermes' shared gateway, and this session runs on Hermes' stdio entry in a process of "
     "its own; run `{command}` in a terminal for the messaging gateway."
@@ -2660,11 +2659,14 @@ class App(ModesMixin, AgentViewMixin):
         self.card_state = CARD_NONE if resume else CARD_LIVE
         if resume:
             self._draw_history(result.get("messages"))
-        self._say_gateway_health()  # under a resumed session's history, where the launch's screen ends
-        self._redeliver(result.get("open_requests"))
         relaunched = self.environ.get(UPDATED_ENV) in (UPDATED_PLAIN, UPDATED_PLAN)
-        if relaunched:
-            self._offer_gateway_after_update()
+        # After an update the gateway's old code is said once, as the line that names `/gateway restart`: the launch
+        # hint saying the same with Hermes' terminal command is left out then.
+        stale = relaunched and self._gateway_left_on_old_code()
+        self._say_gateway_health(skip_stale=stale)  # under a resumed session's history, where the launch's screen ends
+        if stale:
+            self.transcript.add_notice(GATEWAY_UPDATE_NOTICE, NOTICE_WARN)
+        self._redeliver(result.get("open_requests"))
         if resume and relaunched:
             self._say_work_left(result)
         elif resume:
@@ -2697,14 +2699,16 @@ class App(ModesMixin, AgentViewMixin):
         elif home is not None:
             self.transcript.add_notice(LAUNCH_UNKNOWN_NOTICE.format(name=saved, path=theme_store_path(home)), NOTICE_WARN)
 
-    def _say_gateway_health(self) -> None:
+    def _say_gateway_health(self, skip_stale: bool = False) -> None:
         """Say once, at launch, why Hermes' gateway needs a restart and the command, read from its files alone.
 
         The shared gateway's files are in the root home; a profile running its
         own gateway has them in its own. Nothing is restarted, and nothing
-        is said when the files show nothing (`gateway_notices`).
+        is said when the files show nothing (`gateway_notices`). `skip_stale`
+        leaves out the old-plugin-code hint, which a TUI relaunched for an
+        update says itself (`GATEWAY_UPDATE_NOTICE`).
         """
-        from ..maintenance.hermes_gateway import gateway_notice_home, gateway_notices
+        from ..maintenance.hermes_gateway import NOTICE_STALE_BUNDLE, gateway_notice_home, gateway_notices
 
         history = history_path(self.environ)
         if history is None:
@@ -2716,7 +2720,8 @@ class App(ModesMixin, AgentViewMixin):
             homes.append(gateway_notice_home(current, current.name))
         for home, label, command in homes:
             for notice in gateway_notices(home, label=label, restart_command=command):
-                self.transcript.add_notice(notice.text, NOTICE_WARN)
+                if not (skip_stale and notice.kind == NOTICE_STALE_BUNDLE):
+                    self.transcript.add_notice(notice.text, NOTICE_WARN)
 
     def _whats_new_on_launch(self) -> None:
         """Put this version's What's new under the launch card when it is due (`whats_new.is_due`), to be recorded as
@@ -3925,31 +3930,27 @@ class App(ModesMixin, AgentViewMixin):
         self.farewell = " ".join(filter(None, (RELAUNCH_FAREWELL.format(label=label), self._side_answers_lost())))
         self.exit_code = RELAUNCH_EXIT
 
-    def _offer_gateway_after_update(self) -> None:
-        """In a TUI `omh` relaunched for an update (`UPDATED_ENV`): when the shared gateway it attached to has not
-        loaded the OMH plugin bundle installed now (`stale_bundle_version`, the hint's own evidence), `/gateway
-        restart`'s question, once, with Cancel first. A gateway of the TUI's own (Hermes' stdio entry) started with
-        this TUI and runs the new code already; a gateway with no live record is not offered."""
+    def _gateway_left_on_old_code(self) -> bool:
+        """In a TUI `omh` relaunched for an update (`UPDATED_ENV`): whether the shared gateway it attached to has not
+        loaded the OMH plugin bundle installed now (`stale_bundle_version`, the hint's own evidence). The TUI then
+        says so in one line (`GATEWAY_UPDATE_NOTICE`) and asks nothing: the update's one question was the TUI's own
+        restart. A gateway of the TUI's own (Hermes' stdio entry) started with this TUI and runs the new code
+        already; a gateway with no live record is not named."""
         if not self.shared_gateway or not self.stored_id:
-            return
+            return False
         from ..maintenance.hermes_gateway import stale_bundle_version
 
         impact = self.read_restart_impact(self.environ, self.launch_profile)
-        if impact.home is None or stale_bundle_version(impact.home) is None:
-            return
-        self._gateway_command(GATEWAY_RESTART_ARG, offered=True)
+        return impact.home is not None and stale_bundle_version(impact.home) is not None
 
     # ── /gateway restart ──
 
-    def _gateway_command(self, arg: str, *, offered: bool = False) -> None:
+    def _gateway_command(self, arg: str) -> None:
         """`/gateway restart`: ask, naming what the restart interrupts, then run Hermes' own restart and reattach.
         `/gateway` with anything else is Hermes' (its alias of `/platforms`), sent as typed.
 
         A named profile the shared gateway serves is asked which restart: Hermes' own for the profile, which only
-        re-serves it inside the shared process, or the whole gateway (`-p default`), the one that loads new code.
-
-        `offered`: the TUI asks after an update (`_offer_gateway_after_update`), not the person: a line says why, and
-        Cancel comes first, so the answer defaults to no restart."""
+        re-serves it inside the shared process, or the whole gateway (`-p default`), the one that loads new code."""
         if arg.strip().lower() != GATEWAY_RESTART_ARG:
             self._route_slash(SlashInvocation("gateway", arg, None), 0)
             return
@@ -3967,7 +3968,7 @@ class App(ModesMixin, AgentViewMixin):
         profile = impact.profile
         own = self.environ.get(RUNTIME_ENV) == RUNTIME_OWN_VALUE  # the TUI's own runtime: no profile, no bots
         alone = GATEWAY_PROFILE_CHOICE.format(profile=profile) if profile else ""
-        choices = gateway_restart_choices(profile, own=own, offered=offered)
+        choices = gateway_restart_choices(profile, own=own)
 
         def decided(choice: str) -> None:
             if profile and choice == alone:
@@ -3978,9 +3979,7 @@ class App(ModesMixin, AgentViewMixin):
             else:
                 self.transcript.add_notice(GATEWAY_RESTART_CANCELLED)
 
-        lead = [GATEWAY_UPDATE_LEAD] if offered else []
-        if own:
-            lead.append(GATEWAY_OWN_RUNTIME_LEAD)
+        lead = [GATEWAY_OWN_RUNTIME_LEAD] if own else []
         question = "\n".join([*lead, *impact_lines(impact, self._busy()), GATEWAY_RESTART_QUESTION])
         self._ask_locally(question, choices, decided)
 

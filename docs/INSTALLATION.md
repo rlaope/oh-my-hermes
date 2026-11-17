@@ -2155,10 +2155,10 @@ default to no:
   you pick Restart the TUI, it leaves after the running turn, once the work
   the session waits on has ended and what you typed is sent or cleared, then
   opens again on the new version and resumes the same session, as
-  `omh --resume <id>` would. If the gateway it attaches
-  to still runs the old plugin code, the reopened TUI then offers
-  `/gateway restart` once, with Cancel first. If you pick Not now, only the
-  info line hint stays.
+  `omh --resume <id>` would. That is the update's only question: if the
+  gateway it attaches to still runs the old plugin code, the reopened TUI
+  says so in one line and names `/gateway restart`, without asking. If you
+  pick Not now, only the info line hint stays.
 
 On a machine that never completed `omh setup`, `omh update` bootstraps OMH
 instead of skipping it: it installs the plugin bundle (which carries the

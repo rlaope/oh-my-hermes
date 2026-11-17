@@ -470,9 +470,9 @@ scope and profile and `--resume <id>` (`src/commands/bare_launch.py`, in
 INVARIANT 1's `PROCESS_SPAWN_ALLOWLIST`), and holds its own generation until
 that exits. A 78 without the marker is an ordinary exit code. A new TUI is not
 told to restart again: the generation it runs is the one `current` names.
-`UPDATED_ENV` in that launch makes the new TUI offer `/gateway restart` once,
-with Cancel first, when the shared gateway still runs older OMH plugin code. It
-never restarts the gateway without the person's pick. Each such restart leaves
+`UPDATED_ENV` in that launch makes the new TUI say in one line, asking nothing,
+that the shared gateway still runs older OMH plugin code and that `/gateway
+restart` loads the new code. It never restarts the gateway itself. Each such restart leaves
 one waiting `omh` holding its generation until the session ends.
 
 ## Job control, and what OMH does not do
