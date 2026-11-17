@@ -9,7 +9,8 @@
 //   4. closing a parked terminal stops its program;
 //   5. ten parked terminals hold at least 80% less xterm buffer than they did;
 //   6. the bottom panel's terminal parks while the panel is hidden and shows its shell's output when opened;
-//   7. one in a mode the snapshot cannot restore (mouse tracking) is not parked.
+//   7. one in a mode the snapshot cannot restore (mouse tracking) is not parked;
+//   8. 8 MiB fed to a parked terminal is all acknowledged, in order, read after every message was taken.
 // Chromium (Playwright's headless shell) on the mock host; nothing here ran in the Tauri window.
 import { expect, test, type Page } from "@playwright/test";
 import { mock, newTerminal, openApp } from "./term-find-helpers";
@@ -135,6 +136,50 @@ test("a parked terminal that gets output is made again off the page and acknowle
   expect(await page.evaluate((sid) => [...(window as unknown as { __omherTerms: Set<{ element?: HTMLElement }> }).__omherTerms].find((t) => (t.element?.parentElement as { __sid?: string } | null)?.__sid === sid)!.element!.isConnected, a)).toBe(false);
   await show(page, a);
   await expect(page.locator('[data-testid="terminal"] .xterm-rows')).toContainText("line 199 after parking");
+});
+
+// fix2 (run omher-mt): 8 MiB into a parked terminal, read only after it has taken every message: the remade xterm
+// holds its writes until unicode11 is active, so a `write('')` probe resolves before they run. Here the read waits
+// for one ack per fed message (each ack is one `done`), then the totals, the order and the screen against a twin.
+test("8 MiB fed to a parked terminal is all acknowledged, in order, and its screen equals a twin's", async ({ page }) => {
+  test.setTimeout(120_000);
+  await openApp(page);
+  const a = await tagged(page);
+  const b = await tagged(page);
+  const [pa, pb] = [await ptyOf(page, a), await ptyOf(page, b)];
+  await fast(page);
+  await expect.poll(() => parkedCount(page)).toBe(1);
+  expect(await hasXterm(page, a)).toBe(false);
+  // not parked again while the flow runs: this test is about the remade xterm taking all of it
+  await page.evaluate(() => (window as unknown as { __omherPark: { set(l: object): void } }).__omherPark.set({ hiddenMs: 999_999, idleMs: 999_999, sweepMs: 1000 }));
+  await expect.poll(async () => sum(await flow(page), "ack", pa)).toBe(sum(await flow(page), "feed", pa));
+  const fed = await page.evaluate(
+    ([p, q]) => {
+      const w = window as unknown as { __omherSessionFlow: Flow[]; __omherMockOut(p: number, d: string): boolean };
+      w.__omherSessionFlow.length = 0;
+      let remain = 8 * 1048576;
+      let seq = 0;
+      while (remain) {
+        const len = Math.min(8191 + (seq % 7) * 997, remain);
+        const d = (`${String(seq).padStart(6, "0")}: ` + "x".repeat(len)).slice(0, len - 2) + "\r\n";
+        remain -= d.length;
+        w.__omherMockOut(p, d);
+        w.__omherMockOut(q, d);
+        seq++;
+      }
+      return seq;
+    },
+    [pa, pb] as const,
+  );
+  const count = async (op: Flow["op"]) => (await flow(page)).filter((f) => f.op === op && f.id === pa).length;
+  expect(await count("feed")).toBe(fed);
+  await expect.poll(() => count("ack"), { timeout: 60_000 }).toBe(fed);
+  const mine = (await flow(page)).filter((f) => f.id === pa);
+  expect(sum(mine, "feed", pa)).toBe(8 * 1048576);
+  expect(sum(mine, "ack", pa)).toBe(8 * 1048576);
+  expect(mine.filter((f) => f.op === "ack").map((f) => f.bytes)).toEqual(mine.filter((f) => f.op === "feed").map((f) => f.bytes));
+  await expect.poll(async () => sum(await flow(page), "ack", pb)).toBe(8 * 1048576);
+  expect(await stateOf(page, a)).toEqual(await stateOf(page, b));
 });
 
 test("a parked terminal's bell and OSC 9 ring its row", async ({ page }) => {
