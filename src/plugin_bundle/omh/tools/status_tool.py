@@ -21,7 +21,7 @@ OMH_STATUS_SCHEMA = {
         "properties": {
             "omh_home": {
                 "type": "string",
-                "description": "Standalone operator override only. Native Hermes calls reject this field; omit it to use the active profile.",
+                "description": "Standalone operator use only. Native Hermes calls reject it; omit.",
             },
             "limit": {
                 "type": "integer",
