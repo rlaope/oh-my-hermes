@@ -66,6 +66,12 @@ All notable changes will be documented here.
 - **OMH TUI: the working spinner stays in the theme colour on terminals that draw `✳` as an emoji.** Zellij Desktop
   on macOS painted its two `✳` frames as a green emoji, so the spinner flashed green twice a cycle. Those frames now
   ask for text presentation (U+FE0E) and stay one cell in the accent colour. Contributed by @DanRioDev (#2923).
+- **omher on macOS installs without the "Not Opened" warning.** omher is not notarized, so a `.dmg` opened from a
+  browser download was stopped by Gatekeeper ("Apple could not verify omher is free of malware") and people did
+  not know how to get past it. The macOS buttons on omher.app no longer link a dmg: they copy
+  `curl -fsSL https://omher.app/omher | sh`, bring the command into view and say to paste it into Terminal. A
+  `curl` download carries no quarantine flag, so the installed app opens straight away. The omher README and new
+  release pages lead with the same command; the dmg and the Open Anyway steps stay for people who already have one.
 
 - **An OMH update asks one restart question, not two.** The TUI still asks once whether to restart on the new
   version. The reopened TUI no longer opens a second question about Hermes' gateway: when the gateway still runs the

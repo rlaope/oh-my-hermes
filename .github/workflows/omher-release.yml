@@ -190,12 +190,13 @@ jobs:
           cat > notes.md <<EOF
           omher $v, the desktop app for your Hermes bots. If Hermes Agent is not installed yet, omher offers to install it (with oh-my-hermes) on first launch.
 
-          - **macOS (Apple Silicon):** \`omher-$v-macos-arm64.dmg\`
-          - **macOS (Intel):** \`omher-$v-macos-x64.dmg\`
+          - **macOS:** run \`curl -fsSL https://omher.app/omher | sh\` in Terminal. It installs this build with no security prompt.
+          - macOS dmg (Apple Silicon / Intel): \`omher-$v-macos-arm64.dmg\`, \`omher-$v-macos-x64.dmg\`
           - **Windows:** \`omher-$v-windows-x64-setup.exe\` (or the \`.msi\`)
           - **Linux (x86_64):** \`omher-$v-linux-x64.AppImage\` (\`chmod +x\` it, then run it; or the \`.deb\`)
 
-          These builds are open source and not notarized. The first time on macOS 15 or later, close the
+          These builds are open source and not notarized. A dmg opened from a browser download is stopped on
+          first launch; the curl line above avoids that. For a dmg on macOS 15 or later, close the
           warning, open **System Settings › Privacy & Security** and click **Open Anyway** next to omher
           (macOS 14 or earlier: right-click omher in Applications and choose **Open**). Or run
           \`xattr -dr com.apple.quarantine /Applications/omher.app\` once. On Windows, if SmartScreen
