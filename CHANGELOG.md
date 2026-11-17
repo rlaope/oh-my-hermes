@@ -113,7 +113,8 @@ All notable changes will be documented here.
 - **`omh model-chains` and `/omh-model` now look like every other OMH picker.** The chain picker paints through the
   OMH TUI's theme roles instead of the old skin palette: no selection band, the cursor row is `❯` with its name bold
   in the menu colour, the rules and the effort bar's filled cells take the launch look's colours, words are neutral
-  greys, and hue is kept for states (`edited`, `enabled`, `disabled`, warnings). It follows `/theme`, the saved launch
+  greys, and hue is kept for what a cell says (`customized`, `edited`, `enabled`, `disabled`, an effort off its
+  model's list, warnings). It follows `/theme`, the saved launch
   look, a light background (`COLORFGBG` on the command line, the measured background in the TUI) and the terminal's
   colour depth. Text, columns and keys are unchanged; only the cursor mark moved from `▍` to `❯`.
 

@@ -24,7 +24,7 @@ from omh.commands.model_chain_picker import render_frame
 from omh.plugin_bundle.omh.model_chain_picker import chain_from_entries, picker_rows
 from omh.skin_pack import default_theme, theme_for_name, write_launch_choice
 from omh.tui.style import COLOR_256, NO_COLOR, TRUECOLOR
-from omh.tui.theme import DEFAULT_LAUNCH, DEFAULT_THEME, build_theme, with_launch_look
+from omh.tui.theme import DEFAULT_LAUNCH, DEFAULT_THEME, build_theme, with_launch_look, without_colour
 
 SGR = re.compile(r"\x1b\[[0-9;]*m")
 BACKGROUND = re.compile(r"\x1b\[(?:[0-9]+;)*48;")
@@ -109,6 +109,12 @@ class FrameLookTests(unittest.TestCase):
         self.assertFalse(any("\x1b" in line for line in plain))
         self.assertEqual(plain, [SGR.sub("", line) for line in self.frame()])
 
+    def test_a_colourless_theme_stays_colourless_at_any_depth(self) -> None:
+        lines = self.frame(without_colour(DEFAULT_THEME), depth=TRUECOLOR)
+        params = {param for line in lines for match in SGR.finditer(line) for param in match.group(0)[2:-1].split(";")}
+        self.assertTrue(params)
+        self.assertLessEqual(params, {"0", "1", ""})
+
 
 class _Tty(io.StringIO):
     def isatty(self) -> bool:
@@ -159,6 +165,14 @@ class CommandThemeTests(unittest.TestCase):
             self.assertEqual(theme.menu_current.sgr(), "\x1b[1m")
             _, piped = self.theme(root, {"COLORTERM": "truecolor"}, stdout=io.StringIO())
             self.assertEqual(piped, NO_COLOR)
+
+    def test_an_unreadable_hermes_config_still_opens_in_the_default_skin(self) -> None:
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / ".hermes").mkdir()
+            (root / ".hermes" / "config.yaml").write_bytes(b"display:\n  skin: \xff\xfe\n")
+            theme, _ = self.theme(root, {"COLORTERM": "truecolor"})
+            self.assertEqual(theme.name, default_theme().short_name)
 
 
 class TuiThemeTests(unittest.TestCase):

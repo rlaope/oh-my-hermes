@@ -425,9 +425,14 @@ def _picker_theme(paths) -> tuple[Theme, str]:
     light background `COLORFGBG` names (None: the palette's own dark one
     stands in, as `omh hud` does), in the launch look saved beside it (the
     default look for none or a name the TUI does not have). At the `NO_COLOR`
-    depth the theme carries no colour.
+    depth the theme carries no colour. A Hermes config it cannot read names no
+    skin, as in `omh hud`, so the picker still opens.
     """
-    skin, _source = effective_theme(paths.omh_home, display_skin_selection(read_config(paths.hermes_config_path)))
+    try:
+        hermes_skin = display_skin_selection(read_config(paths.hermes_config_path))
+    except (OSError, UnicodeDecodeError):
+        hermes_skin = ""
+    skin, _source = effective_theme(paths.omh_home, hermes_skin)
     background = background_from_colorfgbg(os.environ)
     saved = read_launch_choice(paths.omh_home)
     look = saved if saved in LAUNCH_PRESETS else DEFAULT_LAUNCH

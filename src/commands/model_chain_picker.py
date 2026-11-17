@@ -52,7 +52,7 @@ from ..plugin_bundle.omh.model_chain_picker import (
     step_head_model,
 )
 from ..tui.prompts import CHOICE_MARK
-from ..tui.style import TRUECOLOR, Style
+from ..tui.style import NO_COLOR, TRUECOLOR, Style
 from ..tui.theme import DEFAULT_THEME, Theme
 from .theme_picker import (
     CLEAR_LINE,
@@ -147,7 +147,8 @@ class _Painter:
     def __call__(self, text: str, style: Style | None = None) -> str:
         if not self.use_color or not text or style is None:
             return text
-        prefix = replace(style, depth=self.depth).sgr()
+        # A style already at NO_COLOR (`without_colour`) stays there: a depth passed beside it never puts colour back.
+        prefix = (style if style.depth == NO_COLOR else replace(style, depth=self.depth)).sgr()
         return f"{prefix}{text}{RESET}" if prefix else text
 
 
