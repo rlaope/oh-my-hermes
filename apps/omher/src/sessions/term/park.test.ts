@@ -5,7 +5,7 @@ import { Terminal, type IBufferCell } from "@xterm/xterm";
 import { SerializeAddon } from "@xterm/addon-serialize";
 import { Unicode11Addon } from "@xterm/addon-unicode11";
 import { describe, expect, it } from "vitest";
-import { PARK_HIDDEN_MS, PARK_IDLE_MS, PARK_SWEEP_MS, cannotPark, dueToPark, extras, innerOf, type Inner } from "./park";
+import { PARK_HIDDEN_MS, PARK_IDLE_MS, PARK_SWEEP_MS, cannotPark, carriedOf, dueToPark, extras, innerOf, putCarried, type Inner } from "./park";
 
 const MIN = 60_000;
 
@@ -96,17 +96,23 @@ function state(t: Terminal) {
     lines.push(l.translateToString(true));
     for (let x = 0; x < t.cols; x += 7) cells.push(cell(l.getCell(x)!));
   }
-  return { type: b.type, lines, cells, cursor: [b.cursorX, b.cursorY, b.baseY], modes: t.modes };
+  return { type: b.type, lines, cells, cursor: [b.cursorX, b.cursorY, b.baseY], viewportY: b.viewportY, modes: t.modes };
 }
 
 /** What the engine does to park and make again, minus the page: snapshot + extras + title into a fresh terminal. */
-async function roundTrip(bytes: string) {
+async function roundTrip(bytes: string, more = "\x1b[1;31mnext\x1b[0m line\r\n$ ", scrollTo?: number) {
   const twin = make();
   const a = make();
   let title = "";
   a.onTitleChange((x) => (title = x));
   await write(twin, bytes);
   await write(a, bytes);
+  if (scrollTo !== undefined) {
+    twin.scrollToLine(scrollTo);
+    a.scrollToLine(scrollTo);
+  }
+  const carried = carriedOf(a);
+  expect(carried).not.toBeNull();
   const inner = innerOf(a);
   expect(inner).not.toBeNull();
   expect(cannotPark(inner!)).toBeNull();
@@ -119,11 +125,11 @@ async function roundTrip(bytes: string) {
   let titleB = "";
   b.onTitleChange((x) => (titleB = x));
   await write(b, snap);
+  putCarried(b, carried!);
   expect(state(b)).toEqual(state(twin));
   expect(titleB).toBe(title);
   expect(innerOf(b)).toEqual(innerOf(twin));
   // and the program's next bytes land the same in both
-  const more = "\x1b[1;31mnext\x1b[0m line\r\n$ ";
   await write(b, more);
   await write(twin, more);
   expect(state(b)).toEqual(state(twin));
@@ -142,6 +148,15 @@ describe("snapshot round trip (xterm 6 + addon-serialize 0.14)", () => {
         "╭──────────────────────────╮\r\n│ \x1b[1m✻ Welcome\x1b[0m                │\r\n╰──────────────────────────╯\r\n\x1b[36m> \x1b[0mtype here",
     ));
   it("a line rewritten in place", () => roundTrip("before\r\n\x1b[33m⠋\x1b[0m Working (1s)\r\x1b[2K\x1b[33m⠙\x1b[0m Working (2s)\r\x1b[2K  ⎿ done\r\n$ "));
+
+  // found by the run's independent verify: the add-on's snapshot leaves these out
+  it("a saved cursor (DECSC) the program restores after the park", () =>
+    roundTrip("\x1b[2J\x1b[H\x1b[3J\x1b[4;9H\x1b[33m\x1b7\x1b[0m\x1b[10;25Hhold", "\x1b8RESTORED"));
+  it("custom tab stops", () => roundTrip("\x1b[2J\x1b[H\x1b[3J\x1b[3g\x1b[1;5H\x1bH\x1b[1;14H\x1bH\x1b[H", "\tX\tY"));
+  it("where the person had scrolled to", () =>
+    roundTrip(Array.from({ length: 150 }, (_, i) => `numbered ${i}`).join("\r\n"), "", 12));
+  it("a saved cursor in the alternate screen", () =>
+    roundTrip("\x1b[?1049h\x1b[H\x1b[2J\x1b[5;7H\x1b7\x1b[1;1Htop", "\x1b8alt"));
 
   it("innerOf sees a half-read sequence, a selection and a mouse mode", async () => {
     const t = make();

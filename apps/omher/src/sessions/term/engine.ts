@@ -12,7 +12,7 @@ import type { Terminal } from "@xterm/xterm";
 import type { WebglAddon } from "@xterm/addon-webgl";
 import { canRetry, probeWebgl, recordLoss } from "./engine-policy";
 import { hideRows, showRows } from "./engine-hidden";
-import { cannotPark, dueToPark, extras, innerOf, limits } from "./park";
+import { cannotPark, carriedOf, dueToPark, extras, innerOf, limits, putCarried, type Carried } from "./park";
 import { onTermSettings, type TermSettings } from "./settings";
 import { attachLinks } from "./engine-links";
 import { attachInput } from "./engine-input";
@@ -77,6 +77,8 @@ export type Remake = (size: { cols: number; rows: number }) => Terminal;
 interface Parked {
   /** UTF-8: the add-on builds its string from many small pieces, which V8 keeps as a rope several times its length */
   snapshot: Uint8Array;
+  /** what the snapshot leaves out (saved cursor, tab stops, scroll position), put back once it is read */
+  carried: Carried;
   cols: number;
   rows: number;
   remake: Remake;
@@ -304,10 +306,14 @@ export function live(term: Terminal): Terminal {
   const s = states.get(next);
   // the snapshot is not the program's output: it neither counts as output nor waits for an ack. It is pending, though:
   // parked again before xterm has taken all of it, the next snapshot would miss the rest
-  if (!s) next.write(p.snapshot);
+  if (!s) next.write(p.snapshot, () => putCarried(next, p.carried));
   else {
     s.pending++;
-    const took = () => void s.pending--;
+    // the write callback runs before xterm parses the next write, so the program's next bytes see it all
+    const took = () => {
+      putCarried(next, p.carried);
+      s.pending--;
+    };
     if (s.held) s.held.push(() => next.write(p.snapshot, took));
     else next.write(p.snapshot, took); // xterm decodes UTF-8 bytes itself
   }
@@ -357,6 +363,8 @@ function park(s: State, Serialize: typeof import("@xterm/addon-serialize").Seria
   const term = s.term;
   const inner = innerOf(term);
   if (!inner || cannotPark(inner) !== null) return;
+  const carried = carriedOf(term);
+  if (!carried) return;
   let snapshot: string;
   const ser = new Serialize();
   try {
@@ -369,7 +377,7 @@ function park(s: State, Serialize: typeof import("@xterm/addon-serialize").Seria
   }
   const title = (term as unknown as { _core?: { _inputHandler?: { _windowTitle?: unknown } } })._core?._inputHandler?._windowTitle;
   if (typeof title === "string" && title) snapshot += `\x1b]2;${title}\x07`;
-  parked.set(term, { snapshot: utf8.encode(snapshot), cols: term.cols, rows: term.rows, remake: s.remake!, hiddenAt: s.hiddenAt, lastOut: s.lastOut, gpuLast: s.gpuLast, gaveUp: s.gaveUp, losses: s.losses });
+  parked.set(term, { snapshot: utf8.encode(snapshot), carried, cols: term.cols, rows: term.rows, remake: s.remake!, hiddenAt: s.hiddenAt, lastOut: s.lastOut, gpuLast: s.gpuLast, gaveUp: s.gaveUp, losses: s.losses });
   // a find bar left open on it (the bottom panel keeps one while hidden) closes: its terminal is going
   s.el.dispatchEvent(new CustomEvent(FIND_EVENT, { bubbles: true, detail: null }));
   s.undo();

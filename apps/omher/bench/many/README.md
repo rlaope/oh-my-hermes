@@ -64,7 +64,7 @@ Files: `raw/{base,head}-int2-{bg,park}-r{1,2,3}-chromium.json`.
 | bg | main-thread task time (`taskMs`) | 1487 ms (1470-2108) | 230 ms (227-482) |
 | bg | store updates (`updates`) | 513 (494-513) | 0 (0-0) |
 | bg | full redraws of hidden terminals (`selHidden`) | 285 (285-285) | 0 (0-0) |
-| bg | DOM changes outside `.xterm` (`domMutations`) | 464 (464-502) | 502 (464-502), **worse** |
+| bg | DOM changes, sidebar plus text nodes inside `.xterm` (`domMutations`) | 464 (464-502) | 502 (464-502), **worse** |
 | bg | frames over 50 ms (`longFrames`) | 59 (54-76) | 71 (54-72), **worse** |
 | bg | longest frame gap (`maxGapMs`) | 133 ms (133-133) | 133 ms (133-150) |
 | bg | output ticks delivered in 8 s (`ticks`) | 77 (76-77) | 79 (73-79) |
@@ -81,13 +81,23 @@ Files: `raw/{base,head}-int2-{bg,park}-r{1,2,3}-chromium.json`.
   lane, `selHidden` 285 to 0).
 - `park`: after the wait, the 19 hidden terminals are parked. Buffers, snapshots and heap total 35.5 MB, against
   205.5 MB on base (83% less). The snapshots themselves are new memory (11 MB) and are labelled worse.
-- **Worse**: `longFrames` (59 to 71) and `domMutations` (464 to 502) are worse at the median. `maxGapMs` is the same
-  (133 ms). Not verified: with the main thread nearly idle, the count of frames over 50 ms in a headless Chromium
-  window may measure frame pacing rather than work. `domMutations` also counts text changes inside `.xterm` (see the
-  sidebar lane's note), so it is not sidebar-only.
-- The rust lane's shared foreground watcher is not in this table (it is not on the page). Its own bench is in its
-  commit `fda9a2da1`: with 20 idle shells, the 10-second wake count drops from 189 to 9, the probe count from 189 to
-  21, and the thread count from 100 to 81.
+- **Worse in this set, not in the re-measure**: `longFrames` (59 to 71) and `domMutations` (464 to 502) were worse at
+  the median here. The run's independent verifier re-measured the same scenarios (3 alternating pairs, load 6.4 to
+  7.9) and got `domMutations` 502 to 502, `longFrames` 63 to 59 and `maxGapMs` 150 to 133. The ranges overlap in both
+  sets, so neither shows a change beyond the spread. With the main thread nearly idle, the count of frames over 50 ms
+  in a headless Chromium window may measure frame pacing rather than work; whether a person sees a difference in the
+  Tauri window is not measured. `domMutations` is not sidebar-only: the bench's filter
+  (`m.target.closest?.(".xterm")`) does not exclude text-node changes inside `.xterm`, because a Text node has no
+  `closest`.
+- The rust lane's shared foreground watcher is not in this table (it is not on the page). With 20 idle shells over
+  10 s, the threads drop from 100 to 81. Wakes drop from 189 to 9 in the lane's own bench (commit `fda9a2da1`) and
+  from 189 to 10 in the verifier's re-measure. Foreground probes drop from 189 to 21 in the lane's bench and from 189
+  to 40 in the verifier's. The verifier warmed up for 2 s before counting; the probe count depends on when in the
+  5 s idle cadence the window starts. The CLI mark after typing `claude` in an idle shell arrived in 119 to 947 ms
+  (6 runs, native callback, not the painted row).
+- Park costs CPU while it serializes: in the verifier's park scenario `taskMs` was 280 ms on base and 508 ms on head.
+  The two windows are not the same length (base waits out a 20 s timeout, head ends once 19 are parked), so this is
+  an indication, not a steady-state number.
 - Not measured: the Tauri window (WKWebView), WebKit, Windows.
 
 ## Sidebar lane (`perf/omher-mt-sidebar`)

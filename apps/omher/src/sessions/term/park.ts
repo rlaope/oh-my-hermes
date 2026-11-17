@@ -70,6 +70,85 @@ export function extras(i: Pick<Inner, "cursorHidden" | "cursorStyle" | "cursorBl
   return s;
 }
 
+/** One buffer's state the add-on's snapshot leaves out: the saved cursor (DECSC: its place, colours and charset) and
+ *  the tab stops. The saved row is kept from the top of the screen, as DECRC reads it. */
+interface BufferExtra {
+  savedX: number;
+  savedRow: number;
+  savedFg: number;
+  savedBg: number;
+  savedCharset: unknown;
+  tabs: number[];
+}
+
+/** What the engine carries beside the snapshot and puts back once the new terminal has read it: each buffer's
+ *  saved cursor and tab stops, and how far the person had scrolled up from the bottom. */
+export interface Carried {
+  normal: BufferExtra;
+  alt: BufferExtra;
+  /** rows between the viewport's top and the bottom screen's top (0: at the bottom) */
+  scrolledUp: number;
+}
+
+type RawBuffer = {
+  x?: unknown;
+  savedX?: unknown;
+  savedY?: unknown;
+  ybase?: unknown;
+  ydisp?: unknown;
+  savedCurAttrData?: { fg?: unknown; bg?: unknown };
+  savedCharset?: unknown;
+  tabs?: unknown;
+};
+const buffersOf = (term: Terminal) =>
+  (term as unknown as { _core?: { buffers?: { normal?: RawBuffer; alt?: RawBuffer; active?: RawBuffer } } })._core?.buffers;
+
+function readBuffer(b: RawBuffer | undefined): BufferExtra | null {
+  const a = b?.savedCurAttrData;
+  if (!b || !a || typeof b.savedX !== "number" || typeof b.savedY !== "number" || typeof b.ybase !== "number") return null;
+  if (typeof a.fg !== "number" || typeof a.bg !== "number" || !b.tabs || typeof b.tabs !== "object") return null;
+  const tabs = Object.keys(b.tabs as object)
+    .filter((k) => (b.tabs as Record<string, unknown>)[k])
+    .map(Number);
+  return { savedX: b.savedX, savedRow: b.savedY - b.ybase, savedFg: a.fg, savedBg: a.bg, savedCharset: b.savedCharset, tabs };
+}
+
+/** The state to carry, or null when xterm's shape is not the one this knows (then the terminal is not parked). */
+export function carriedOf(term: Terminal): Carried | null {
+  const bs = buffersOf(term);
+  const normal = readBuffer(bs?.normal);
+  const alt = readBuffer(bs?.alt);
+  const act = bs?.active;
+  if (!normal || !alt || !act || typeof act.ybase !== "number" || typeof act.ydisp !== "number") return null;
+  return { normal, alt, scrolledUp: act.ybase - act.ydisp };
+}
+
+function writeBuffer(b: RawBuffer | undefined, e: BufferExtra): void {
+  if (!b || typeof b.ybase !== "number" || !b.savedCurAttrData) return;
+  b.savedX = e.savedX;
+  b.savedY = b.ybase + e.savedRow;
+  b.savedCurAttrData.fg = e.savedFg;
+  b.savedCurAttrData.bg = e.savedBg;
+  b.savedCharset = e.savedCharset;
+  const tabs: Record<number, boolean> = {};
+  for (const t of e.tabs) tabs[t] = true;
+  b.tabs = tabs;
+}
+
+/** Put the carried state into the terminal made from the snapshot, after it has read the snapshot. */
+export function putCarried(term: Terminal, c: Carried): void {
+  const bs = buffersOf(term);
+  writeBuffer(bs?.normal, c.normal);
+  writeBuffer(bs?.alt, c.alt);
+  if (c.scrolledUp > 0) {
+    try {
+      term.scrollLines(-c.scrolledUp);
+    } catch {
+      /* not scrollable */
+    }
+  }
+}
+
 /** The internals of xterm 6 `Inner` reads, after checking they are there; null for any other shape (then nothing is
  *  parked). park.test.ts fails when an xterm bump removes one of them. */
 type Core = {
