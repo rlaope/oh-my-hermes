@@ -99,6 +99,12 @@ All notable changes will be documented here.
   leaves (its restarts spent, a stop it watched, a reattach given up), what you typed and never sent, the draft and
   anything typed while it waited, is printed under its last line instead of going with the screen.
 
+- **omher.app's macOS button now opens an install popup, and the installer opens omher when it is done.** The first
+  version only copied the curl line and showed one grey line below the fold, so a click looked like nothing
+  happened. Now a click opens a dialog with two steps (open Terminal with ⌘ Space, paste with ⌘ V) and the command,
+  already copied, in en/ko/ja/zh. On macOS `curl -fsSL https://omher.app/omher | sh` ends by opening the new
+  omher.app, so the app is on screen when the command finishes (`OMH_OMHER_NO_OPEN=1` or `CI` skip it).
+
 ## 4.0.8 - 2026-11-15
 
 - **The OMH TUI shows a compression as one gauge row, and a prompt typed meanwhile goes on by itself.** `/compact`

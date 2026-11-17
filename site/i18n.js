@@ -41,11 +41,47 @@ window.OMH_I18N = {
       ja: "Hermes のボットとコーディングエージェントを、ひとつの窓で。",
       zh: "你的 Hermes 机器人和编码智能体，尽在一个窗口。"
     },
-    "omher.mac.hint": {
-      en: "Copied. Paste it into Terminal: it installs omher with no security warning.",
-      ko: "복사했습니다. 터미널에 붙여 넣으면 보안 경고 없이 omher가 설치됩니다.",
-      ja: "コピーしました。ターミナルに貼り付けると、セキュリティ警告なしで omher をインストールします。",
-      zh: "已复制。粘贴到终端即可安装 omher，不会出现安全警告。"
+    "mac.t": {
+      en: "Install omher on your Mac",
+      ko: "Mac에 omher 설치",
+      ja: "Mac に omher をインストール",
+      zh: "在 Mac 上安装 omher"
+    },
+    "mac.d": {
+      en: "One command installs omher and opens it. No \"Not Opened\" warning from macOS.",
+      ko: "명령 한 줄로 설치하고 바로 열립니다. macOS의 \"열 수 없음\" 경고가 뜨지 않습니다.",
+      ja: "コマンド 1 行でインストールして開きます。セキュリティ警告は出ません。",
+      zh: "一行命令即可安装并打开 omher，不会出现安全警告。"
+    },
+    "mac.s1": {
+      en: "Open <b>Terminal</b>: press <kbd>⌘</kbd> <kbd>Space</kbd>, type Terminal, press <kbd>Return</kbd>.",
+      ko: "<b>터미널</b>을 엽니다: <kbd>⌘</kbd> <kbd>Space</kbd>를 누르고 터미널을 입력한 뒤 <kbd>Return</kbd>.",
+      ja: "<b>ターミナル</b>を開きます: <kbd>⌘</kbd> <kbd>Space</kbd> を押し、ターミナルと入力して <kbd>Return</kbd>。",
+      zh: "打开<b>终端</b>：按 <kbd>⌘</kbd> <kbd>Space</kbd>，输入 终端，按 <kbd>Return</kbd>。"
+    },
+    "mac.s2": {
+      en: "Paste with <kbd>⌘</kbd> <kbd>V</kbd>, press <kbd>Return</kbd>. The app opens by itself.",
+      ko: "<kbd>⌘</kbd> <kbd>V</kbd>로 붙여 넣고 <kbd>Return</kbd>. 설치가 끝나면 omher가 열립니다.",
+      ja: "<kbd>⌘</kbd> <kbd>V</kbd> で貼り付けて <kbd>Return</kbd>。終わると omher が開きます。",
+      zh: "按 <kbd>⌘</kbd> <kbd>V</kbd> 粘贴并按 <kbd>Return</kbd>。完成后 omher 会自动打开。"
+    },
+    "mac.copy": {
+      en: "Copy",
+      ko: "복사",
+      ja: "コピー",
+      zh: "复制"
+    },
+    "mac.copied": {
+      en: "Copied to your clipboard.",
+      ko: "클립보드에 복사했습니다.",
+      ja: "クリップボードにコピーしました。",
+      zh: "已复制到剪贴板。"
+    },
+    "mac.close": {
+      en: "Done",
+      ko: "닫기",
+      ja: "閉じる",
+      zh: "完成"
     },
     "faces.title": {
       en: "A face for every bot.",
