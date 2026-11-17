@@ -714,8 +714,9 @@ class AppWallpaperTests(unittest.TestCase):
                 self.assertEqual([line.replace(MARK, " ").rstrip() for line in painted.lines()], plain.lines(),
                                  f"step {step}")
                 self.assertEqual(painted.scrollback, plain.scrollback, f"step {step}")
-                marks = {(row, col) for row in range(20) for col, char in enumerate(painted.line(row))
-                         if char == MARK}
+                # By cell, not by character: a glyph with a variation selector (the spinner's `✳\ufe0e`) is one cell.
+                marks = {(row, col) for row in range(20) for col, cell in enumerate(painted._text[row])
+                         if cell == MARK}
                 self.assertEqual(marks, set(runs[0][0].region._paper), f"step {step}")
             self.assertGreater(len(runs[0][0].terminal.screen.scrollback), 0, "the session scrolled")
 
