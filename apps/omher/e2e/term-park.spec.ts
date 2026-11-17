@@ -13,6 +13,9 @@
 //   8. 8 MiB fed to a parked terminal is all acknowledged, in order, read after every message was taken;
 //   9. a parked CLI that ends goes on as the shell in the remade xterm, below what it printed;
 //  10. Korean typed (the WebKit 2-Set replay) into a terminal made again reaches its shell once.
+//  11. GPU renderer on, its chunk arriving after the first fit: the terminal is fitted again in the GPU's cells, so
+//      a TUI printed while it is hidden lands where a twin's does, and parked and shown three times it still equals
+//      the twin.
 // Chromium (Playwright's headless shell) on the mock host; nothing here ran in the Tauri window.
 import { expect, test, type Page } from "@playwright/test";
 import { mock, newTerminal, openApp } from "./term-find-helpers";
@@ -384,4 +387,49 @@ test("Korean typed into a terminal made again after parking reaches its shell ex
   await webkit2Set(page, [S.안, S.녕, S.하, S.세, S.요, " ", S.한, S.글, "\r"]);
   await expect.poll(async () => (await writes()).slice(from).join("")).toBe("안녕하세요 한글\r");
   await expect(page.locator('[data-testid="terminal"] .xterm-rows')).toContainText("안녕하세요 한글");
+});
+
+test("GPU renderer on, arriving after the first fit: a TUI printed while hidden equals a twin's after three parks", async ({ page }) => {
+  test.setTimeout(60_000);
+  // the add-on's chunk comes late, as on a busy machine: each terminal is fitted first in the standard renderer's
+  // cells (fractional px) and only then gets the GPU renderer, whose cells are whole device pixels (narrower here)
+  await page.route(/addon-webgl/, async (route) => {
+    await new Promise((r) => setTimeout(r, 400));
+    await route.continue();
+  });
+  await openApp(page, { term: { gpu: "on" } });
+  const ids: string[] = [];
+  for (let i = 0; i < 2; i++) {
+    const id = await page.evaluate(() => (window as unknown as { __omherSessions: { startTerminal(a: string, cwd: string): string } }).__omherSessions.startTerminal("shell", "/home/you/code/repo"));
+    await expect(page.getByTestId("terminal")).toHaveAttribute("data-session", id);
+    await page.evaluate((sid) => {
+      (document.querySelector('[data-testid="terminal"] .xterm')!.parentElement as HTMLElement & { __sid?: string }).__sid = sid;
+    }, id);
+    // shown until the GPU renderer has come; then the next one is opened and this one is hidden
+    await expect.poll(() => page.evaluate(() => document.querySelectorAll('[data-testid="terminal"] .xterm canvas').length)).toBeGreaterThan(0);
+    // its shell's banner is in before the test's bytes, so both take the same bytes in the same order
+    await expect.poll(async () => (await stateOf(page, id)).lines.join("\n")).toContain("login shell in");
+    ids.push(id);
+  }
+  const [a, twin] = ids as [string, string];
+  const cols = (sid: string) =>
+    page.evaluate((want) => [...(window as unknown as { __omherTerms: Set<{ cols: number; element?: HTMLElement }> }).__omherTerms].find((t) => (t.element?.parentElement as { __sid?: string } | null)?.__sid === want)?.cols, sid);
+  // the hidden one has the width the shown one has: it was fitted again in the GPU's cells before it left the page
+  expect(await cols(a)).toBe(await cols(twin));
+  // an agent's TUI: a header, a box, a line of wide CJK that wraps, and its prompt line at a fixed row
+  const tui =
+    "\x1b[2J\x1b[H\x1b[3J" +
+    many(12, (i) => `\x1b[H\x1b[2K\x1b[38;2;90;160;220m✻ Agent frame ${i}\x1b[0m\r\n╭── repo ──╮\r\n│ reading ${i}.ts │\r\n╰──────────╯\x1b[6;1H\x1b[2K${"漢글界".repeat(65)}\r\n\x1b[13;2H\x1b[33m> step ${i}\x1b[0m`);
+  const [pa, pt] = [await ptyOf(page, a), await ptyOf(page, twin)];
+  expect(await out(page, pa, tui)).toBe(true);
+  expect(await out(page, pt, tui)).toBe(true);
+  for (let i = 0; i < 3; i++) {
+    await show(page, twin);
+    await fast(page);
+    await expect.poll(() => parkedCount(page)).toBe(1);
+    await page.evaluate(() => (window as unknown as { __omherPark: { set(l: object): void } }).__omherPark.set({ hiddenMs: 999_999, idleMs: 999_999, sweepMs: 1000 }));
+    await show(page, a);
+    await expect.poll(() => hasXterm(page, a)).toBe(true);
+    expect(await stateOf(page, a)).toEqual(await stateOf(page, twin));
+  }
 });

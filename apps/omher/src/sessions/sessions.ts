@@ -25,7 +25,7 @@
 import { useSyncExternalStore } from "react";
 import type { ITerminalInitOnlyOptions, ITerminalOptions, Terminal } from "@xterm/xterm";
 import type { FitAddon } from "@xterm/addon-fit";
-import { afterOpen, feed, isParked, live, onVisible, type Remake } from "./term/engine";
+import { afterOpen, CELLS_EVENT, feed, isParked, live, onVisible, PARKING_EVENT, type Remake } from "./term/engine";
 import { applyLook, termOptions } from "./term/look";
 import { termFontsReady } from "./term/fonts";
 import { onTermSettings, readTermSettings } from "./term/settings";
@@ -1256,6 +1256,15 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
       // its own small store: a line change re-renders that one row, never the sessions list
       if (rec(id)) termActs.patch(id, { lastLine: line });
     };
+    // parked before that read came (only an e2e's short thresholds allow it: a real park waits for a minute of
+    // quiet): the line is read now, from the xterm being parked, so the read does not make it again
+    const lineBeforePark = () => {
+      if (t.run !== run) return t.el.removeEventListener(PARKING_EVENT, lineBeforePark);
+      if (lineTimer === null) return;
+      clearTimeout(lineTimer);
+      readLine();
+    };
+    t.el.addEventListener(PARKING_EVENT, lineBeforePark);
     const onData = (d: Uint8Array | string) => {
       // every message is acknowledged once the terminal has taken it, in order: the shell reads the program
       // no further ahead of the page than its credit allows (to this program only: a replaced one is gone)
@@ -1482,10 +1491,13 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
     if (fresh) void ready().then(() => startTerm(id, tt));
     const ro = new ResizeObserver(refit);
     ro.observe(container);
+    // and when its cells change size (the GPU renderer arrived after this fit, or went)
+    tt.el.addEventListener(CELLS_EVENT, refit);
     onVisible(tt.term, true);
     tt.term.focus();
     return () => {
       ro.disconnect();
+      tt.el.removeEventListener(CELLS_EVENT, refit);
       onVisible(tt.raw, false);
       if (tt.el.parentElement === container) container.removeChild(tt.el);
     };

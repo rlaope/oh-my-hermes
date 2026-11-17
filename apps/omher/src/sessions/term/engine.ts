@@ -117,6 +117,20 @@ function detach(s: State, release = false): void {
   }
 }
 
+/** Sent on a terminal's element when its cells change size while it is on the page: the GPU renderer came or went
+ *  (it draws in whole device pixels, the standard one does not) or a font arrived. Its owner fits it to its box
+ *  again, as it does when the box changes size; otherwise the program keeps printing at a width the box no longer
+ *  has, and a screen it drew at that width moves when the next fit reflows it. */
+export const CELLS_EVENT = "omher-term-cells";
+
+/** Sent on a terminal's element just before it is parked, while its xterm can still be read: its owner takes what
+ *  it was about to read from the screen now, as reading it after the park would make the terminal again. */
+export const PARKING_EVENT = "omher-term-parking";
+
+function cellsChanged(s: State): void {
+  if (!s.gone && s.shown) s.el.dispatchEvent(new Event(CELLS_EVENT));
+}
+
 function repaint(s: State): void {
   if (s.gone) return;
   try {
@@ -149,6 +163,7 @@ function attach(s: State): void {
           off.dispose();
           for (const c of canvases) c.removeEventListener("webglcontextlost", onLost);
         };
+        cellsChanged(s);
       } catch {
         // no context, or the add-on would not start: keep the standard renderer, say nothing
         s.addon = null;
@@ -170,6 +185,7 @@ function attach(s: State): void {
 function lost(s: State, addon: WebglAddon): void {
   if (s.addon !== addon) return; // a loss already handled
   detach(s);
+  cellsChanged(s);
   repaint(s);
   const now = Date.now();
   s.losses = recordLoss(s.losses, now);
@@ -191,7 +207,9 @@ function reconsider(settings: TermSettings): void {
     if (s.gpu !== settings.gpu) s.gaveUp = false;
     s.gpu = settings.gpu;
     if (s.gpu === "off" || (s.gpu === "auto" && !probeWebgl().allow)) {
+      const had = !!s.addon;
       detach(s);
+      if (had) cellsChanged(s);
       repaint(s);
     } else attach(s);
   }
@@ -268,6 +286,7 @@ export function afterOpen(term: Terminal, el: HTMLElement, settings: TermSetting
     } catch {
       /* not drawable yet */
     }
+    cellsChanged(s);
     repaint(s);
   };
   fonts?.addEventListener?.("loadingdone", fontsLoaded);
@@ -385,6 +404,7 @@ function park(s: State, Serialize: typeof import("@xterm/addon-serialize").Seria
   if (!inner || cannotPark(inner) !== null) return;
   const carried = carriedOf(term);
   if (!carried) return;
+  s.el.dispatchEvent(new Event(PARKING_EVENT));
   let snapshot: string;
   const ser = new Serialize();
   try {

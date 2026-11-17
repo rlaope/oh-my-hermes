@@ -3,7 +3,7 @@
 // (src/sessions/term: look, Orca themes, renderer, find, links, clipboard settings), imported, not copied.
 import type { ITerminalInitOnlyOptions, ITerminalOptions, Terminal } from "@xterm/xterm";
 import type { FitAddon } from "@xterm/addon-fit";
-import { afterOpen, feed, isParked, live, onVisible, type Remake } from "../sessions/term/engine";
+import { afterOpen, CELLS_EVENT, feed, isParked, live, onVisible, type Remake } from "../sessions/term/engine";
 import { applyLook, termOptions } from "../sessions/term/look";
 import { termFontsReady } from "../sessions/term/fonts";
 import { onTermSettings, readTermSettings } from "../sessions/term/settings";
@@ -172,11 +172,15 @@ export function attachTerm(key: number, want: string | null, box: HTMLElement, m
     if (fresh) start(key, pt, want);
     const ro = new ResizeObserver(() => refit(pt));
     ro.observe(box);
+    // and when its cells change size (the GPU renderer arrived after this fit, or went)
+    const cells = () => refit(pt);
+    pt.el.addEventListener(CELLS_EVENT, cells);
     onVisible(pt.term, true);
     // a tab is made when it comes to the front: once xterm has loaded, it takes the keyboard
     if (fresh) pt.term.focus();
     detach = () => {
       ro.disconnect();
+      pt.el.removeEventListener(CELLS_EVENT, cells);
       onVisible(pt.raw, false);
       if (pt.el.parentElement === box) box.removeChild(pt.el);
     };

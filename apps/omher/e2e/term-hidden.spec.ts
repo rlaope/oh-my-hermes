@@ -199,13 +199,17 @@ test("a hidden terminal flooded with more than 2 MiB keeps acknowledging every b
   const a = await tagged(page);
   const calls = await page.evaluate(() => (window as unknown as { __omherSessionCalls: Call[] }).__omherSessionCalls);
   const idA = calls.filter((c) => c.op === "start").at(-1)!.id!;
-  await page.locator('[data-testid="terminal"] .xterm-helper-textarea').focus();
-  await page.keyboard.type("after 1500 flood 3");
-  await page.keyboard.press("Enter");
   await tagged(page);
   await page.waitForTimeout(200);
   await count(page);
   expect((await flow(page)).filter((f) => f.id === idA && f.bytes === 64 * 1024)).toHaveLength(0);
+  // the flood starts only now, once the draws are counted (a timer started before could fire before the count on a
+  // busy machine): 3 MiB as 48 messages of 64 KiB, the mock's own `flood` message, from its pty
+  await page.evaluate((p) => {
+    const w = window as unknown as { __omherMockOut(p: number, d: string): boolean };
+    const message = `${"build output ".repeat(5).slice(0, 62)}\r\n`.repeat(1024);
+    for (let i = 0; i < 48; i++) if (!w.__omherMockOut(p, message)) throw new Error(`no pty ${p}`);
+  }, idA);
   await expect.poll(async () => sum(await flow(page), "feed", idA), { timeout: 20_000 }).toBeGreaterThanOrEqual(3 * MIB);
   await expect.poll(async () => sum(await flow(page), "ack", idA), { timeout: 20_000 }).toBe(sum(await flow(page), "feed", idA));
   expect(sum(await flow(page), "ack", idA)).toBeGreaterThan(FLOW_HIGH);
