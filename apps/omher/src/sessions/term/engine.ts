@@ -186,12 +186,14 @@ export function afterOpen(term: Terminal, el: HTMLElement, settings: TermSetting
   });
   // Korean, Japanese and Chinese input methods: each committed text reaches the program once (engine-ime.ts)
   const undoIme = attachIme(term, el);
-  // a font that arrives after the terminal drew (the symbols font loads on its first glyph): the GPU renderer's
-  // glyph cache holds the fallback's shapes until it is cleared
+  // a font that arrives after the terminal drew (the symbols font loads on its first glyph, or JetBrains Mono came
+  // after the wait for it gave up): the cell is measured again in the font now drawn, and the GPU renderer's glyph
+  // cache, which holds the fallback's shapes, is cleared
   const fonts = typeof document !== "undefined" ? document.fonts : undefined;
   const fontsLoaded = () => {
     if (s.gone) return;
     try {
+      (term as unknown as { _core?: { _charSizeService?: { measure?(): void } } })._core?._charSizeService?.measure?.();
       term.clearTextureAtlas();
     } catch {
       /* not drawable yet */
