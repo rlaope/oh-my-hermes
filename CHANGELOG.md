@@ -4,6 +4,15 @@ All notable changes will be documented here.
 
 ## Unreleased
 
+- **OMH starts faster in a fresh Hermes process and its tools cost fewer tokens to open.** The chat router no longer
+  imports the whole loop engine for one loop-command check, and the dag-ulw cue patterns compile on first use instead
+  of all at import, so the plugin's start before a one-shot `chat -q`, a cron run or a delegated child's first reply
+  drops by about 70 ms (register, import warm-up and first routed turn together: median 327 -> 254 ms over 10
+  interleaved cold starts against the previous main; the first turn pays about 20 ms of it back compiling the patterns
+  it reads). The OMH tool schemas Hermes loads on a tool's first use shrink from 72,940 to 63,324 characters (-13%):
+  the `observation` field on 20 tools stops describing metadata a model never fills, and the profile-override fields
+  say their refusal in fewer words. No tool, parameter or rule a model acts on changed.
+
 - **omher: a routine that keeps failing is one line in the chat, not one per run.** The same routine failing again
   with nothing between updates its line instead of adding another: `Routine · sso-refresh · not delivered ×12 ·
   03:56–09:37`, with one unread for the first failure. Hermes' `delivery_failed` and `blocked_config` read as "not
