@@ -1369,6 +1369,14 @@ class SentNow:
     block: SteerBlock
 
 
+class CutIn(NamedTuple):
+    """A prompt with images the send-now key sent while a turn ran (`App._cut_in`): the turn is stopped, `block` shows
+    it above the working row meanwhile, and `line` goes as the next prompt the moment that turn ends."""
+
+    line: QueuedLine
+    block: SteerBlock
+
+
 class SwitchHeld(NamedTuple):
     """What the person sent while a session switch was out (`App.switch_held`): submitted again, as sent, in the
     session the switch opens, or given back to the composer."""
@@ -1674,6 +1682,7 @@ class HeldSubmit:
     steer: bool
     since: float
     cancelled: bool = False
+    now: bool = False  # sent with the send-now key (Ctrl+Enter): with images it cuts in (`App._cut_in`)
 
 
 @dataclass
@@ -2390,6 +2399,7 @@ class App(ModesMixin, AgentViewMixin):
         # The composer's text as `/sessions` asked for its list: what differs when the picker opens was typed meanwhile.
         self.list_asked_draft: str | None = None
         self.sent_now: list[SentNow] = []  # sent-now steers Hermes took and the turn has not read yet
+        self.cut_in: CutIn | None = None  # a prompt with images sent now: it goes once the turn it stopped ends
         self.unread_steers: list[SteerBlock] = []  # every steer into the main turn Hermes took and it has not read
         # Redirects Hermes answered `queued`: its own next prompt, read only after the turn and cleared by a stop, so
         # no tool finishing settles them (`_track_sent_now`); the line, for a sent-now one.
@@ -5188,12 +5198,13 @@ class App(ModesMixin, AgentViewMixin):
             # Plan mode keeps Enter's queue: a plan request must not land in a turn that can edit. So does a queue
             # already holding lines: what is sent goes behind them, in the order it was sent. And so does a prompt
             # sent before Hermes has started the turn (`message.start`): there is no turn yet to steer.
+            now = steer  # the send-now key itself (Ctrl+Enter): a prompt with images cuts in (`_steer_or_submit`)
             steer = steer or (
                 self.transcript.running and self._steer_keys_live() and not self.plan_mode and not self.queued
                 and bool(action.text.strip())
             )
             images = tuple(image for _label, image in action.images if isinstance(image, Attachment))
-            if self.slot is None and self.tell_draft is None and self._hold_submit(action, images, steer):
+            if self.slot is None and self.tell_draft is None and self._hold_submit(action, images, steer, now):
                 return  # it goes once the pastes it was typed with are answered, with their images
             if self.slot is not None:
                 question = self.slot.question_index
@@ -5205,7 +5216,7 @@ class App(ModesMixin, AgentViewMixin):
             elif self.tell_draft is not None and self.agent_steer is None and self.rewind is None:
                 self._tell(action.text, action.shown, action.chips, images)
             elif steer:
-                self._steer_or_submit(action.text, action.shown, action.chips, images)
+                self._steer_or_submit(action.text, action.shown, action.chips, images, now=now)
             elif not action.text and self._background_live() and self.bg_done is not None and self.agent_steer is None \
                     and self.rewind is None:
                 self._report_background()
@@ -6508,6 +6519,16 @@ class App(ModesMixin, AgentViewMixin):
         unsent, self.unsent = [prompt for prompt in self.unsent if not prompt.cancelled], []
         for prompt in unsent:
             prompt.cancelled = True
+        cut, self.cut_in = self.cut_in, None
+        if cut is not None:  # a cut-in not sent yet: it goes back as any unsent prompt, its row with it
+            self.transcript.withdraw_steer(cut.block)
+            line = cut.line
+            if keep_draft:
+                self.queued.appendleft(line)
+            else:
+                self._give_back(line.text, line.images)
+            if not unsent:
+                return True
         if keep_draft:
             for prompt in reversed(unsent):
                 self.queued.appendleft(QueuedLine(prompt.text, images=prompt.images, command=parse_slash(prompt.text)))
@@ -6524,7 +6545,7 @@ class App(ModesMixin, AgentViewMixin):
             self._give_back(submit.text, submit.images)
         return bool(held)
 
-    def _hold_submit(self, action: ComposerAction, images: tuple[Attachment, ...], steer: bool) -> bool:
+    def _hold_submit(self, action: ComposerAction, images: tuple[Attachment, ...], steer: bool, now: bool = False) -> bool:
         """A submit made while a paste, drop or `/image` typed before it is still out, or behind one held so, waits
         (`held_submits`): the image each such intake answers joins it, and it goes once they are all answered
         (`_release_held`), as if sent then. True when it was held."""
@@ -6532,7 +6553,7 @@ class App(ModesMixin, AgentViewMixin):
         if not out and not self.held_submits:
             return False
         self._cancel_auto_continue(AUTO_CONTINUE_SENT)  # a submit, though it waits for its pastes
-        held = HeldSubmit(action.text, action.shown, action.chips, images, steer, self.clock())
+        held = HeldSubmit(action.text, action.shown, action.chips, images, steer, self.clock(), now=now)
         for intake in out:
             intake.held = held
         self.held_submits.append(held)
@@ -6557,7 +6578,7 @@ class App(ModesMixin, AgentViewMixin):
             if submit.cancelled:
                 continue
             if submit.steer:
-                self._steer_or_submit(submit.text, submit.shown, submit.chips, submit.images)
+                self._steer_or_submit(submit.text, submit.shown, submit.chips, submit.images, now=submit.now)
             else:
                 self._submit(submit.text, submit.shown, submit.chips, images=submit.images)
 
@@ -6615,6 +6636,14 @@ class App(ModesMixin, AgentViewMixin):
         # it: detached. After `message.start` nothing is left (`_claimed` emptied `staged`).
         self._release_staged()
         self.bg_after = self.poller.refresh()  # the background row stamps what still runs now (`_take_background`)
+        if self.cut_in is not None:
+            # The turn a cut-in stopped is over: the prompt goes now, and the queue goes on behind it, as behind any
+            # prompt the person sends. Steers the turn had not read go back to the queue's head first.
+            self.interrupting = False
+            self._requeue_unread_steers()
+            self._send_cut_in()
+            self._check_default()
+            return
         if self.interrupting:
             self.interrupting = False
             self._hold_queue(INTERRUPTED_WHY)
@@ -7020,19 +7049,50 @@ class App(ModesMixin, AgentViewMixin):
         self._steer(line.text, line)
 
     def _steer_or_submit(
-        self, text: str, shown: str = "", chips: tuple[tuple[str, str], ...] = (), images: Sequence[Attachment] = ()
+        self, text: str, shown: str = "", chips: tuple[tuple[str, str], ...] = (), images: Sequence[Attachment] = (),
+        now: bool = False,
     ) -> None:
-        """Ctrl+Enter: steer the running turn with the typed text. Idle, or on a slash command, a `!` line or a line with
-        images, it is Enter.
+        """Ctrl+Enter: steer the running turn with the typed text. Idle, or on a slash command or a `!` line, it is
+        Enter. A line with images cannot be a steer (Hermes takes text alone into a running turn): sent with the
+        send-now key itself (`now`) it cuts in (`_cut_in`); sent with Enter it queues for the turn's end.
 
         As for Enter, what the line is comes from what the composer showed (`shown`, paste chips unexpanded).
         """
         seen = shown or text
-        if (self._busy() and seen.strip() and parse_slash(seen) is None and not seen.startswith(SHELL_PREFIX)
-                and not images):  # a steer is text alone: one with images goes as a prompt
+        typed = self._busy() and seen.strip() and parse_slash(seen) is None and not seen.startswith(SHELL_PREFIX)
+        if typed and not images:
             self._steer(text)
+        elif typed and now and self.sid and self.agent_steer is None and self.rewind is None and self.cut_in is None:
+            self._cut_in(text, shown, chips, tuple(images))
         else:
             self._submit(text, shown, chips, images=images)
+
+    def _cut_in(self, text: str, shown: str, chips: tuple[tuple[str, str], ...], images: tuple[Attachment, ...]) -> None:
+        """The send-now key on a prompt with images while a turn runs: stop that turn and send the prompt the moment
+        it ends, as Hermes' own TUI does with busy input (`busy_input_mode: interrupt`).
+
+        Hermes' redirect and steer carry text alone, and a `prompt.submit`
+        with images during a turn only queues behind it, so the prompt waits
+        for the turn it stopped (`_turn_ended`, `_send_cut_in`). Meanwhile it
+        shows as the prompt it is, dim, above the working row, where a steer
+        shows, never as a queued `⧗` row. Stopping again (Esc, `/stop`), a
+        session switch or a new gateway gives it back to the composer
+        (`_give_back_unsent`).
+        """
+        self._interrupt()
+        line = QueuedLine(text, shown, chips=chips, images=images)
+        if not self._busy():  # nothing ran to stop after all (only a prompt not sent yet): it goes now
+            self._submit(text, shown, chips, images=images)
+            return
+        self.cut_in = CutIn(line, self.transcript.add_steer(shown or text))
+
+    def _send_cut_in(self) -> None:
+        """The turn a cut-in stopped is over: its row leaves, and the prompt goes as Enter sends one, images too."""
+        cut, self.cut_in = self.cut_in, None
+        if cut is None:
+            return
+        self.transcript.withdraw_steer(cut.block)
+        self._submit(cut.line.text, cut.line.shown, cut.line.chips, images=cut.line.images)
 
     def _steer_command(self, arg: str) -> None:
         """`/steer <text>`: what Ctrl+Enter does, on any terminal. Idle, the text goes as a prompt: in place of the

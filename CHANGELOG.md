@@ -65,6 +65,12 @@ All notable changes will be documented here.
   first, trace the bad value to where it is produced, try other valid inputs, run the whole suite. Questions,
   reviews, features and fixes of anything that is not code get nothing new.
 
+- **OMH TUI: Ctrl+Enter with an image attached sends it now.** Before, a prompt with an image never went into a
+  running turn: Ctrl+Enter left it as a `⧗` queued row over the composer until the turn finished. Now Ctrl+Enter
+  stops the turn and sends the prompt with its image the moment the turn ends. Meanwhile it shows above the working
+  row as your prompt, not a queued row. Esc again gives it back to the composer. Enter with an image still queues for
+  the turn's end, and Ctrl+Enter with text alone still steers without stopping anything.
+
 - **An OMH update asks one restart question, not two.** The TUI still asks once whether to restart on the new
   version. The reopened TUI no longer opens a second question about Hermes' gateway: when the gateway still runs the
   old OMH plugin code, it says so in one line and names `/gateway restart`, which loads the new code.
