@@ -6,8 +6,9 @@ few seconds (`generation_watch`). A move is named on the info line (`restart
 to update`) and asked about once, between turns, with Not now first. Restart
 leaves with `RELAUNCH_EXIT` after creating the marker `omh` named, once no turn
 runs and nothing typed waits, and `omh` opens the installed generation on the
-same session. A TUI `omh` relaunched for an update offers `/gateway restart`
-once when the shared gateway still runs the old OMH plugin code. Every case
+same session. A TUI `omh` relaunched for an update asks nothing more: when the
+shared gateway still runs the old OMH plugin code, one line says so and names
+`/gateway restart` (the owner, 2026-11-16: one restart question). Every case
 drives an `App` over a fake link reader and recording clients: no installer
 root, no gateway, no process.
 """
@@ -38,7 +39,7 @@ from omh.tui.app import (
     GATEWAY_CANCEL_CHOICE,
     GATEWAY_RESTART_CHOICE,
     GATEWAY_RESTART_QUESTION,
-    GATEWAY_UPDATE_LEAD,
+    GATEWAY_UPDATE_NOTICE,
     RELAUNCH_AFTER_DRAFT,
     RELAUNCH_AFTER_GATEWAY,
     RELAUNCH_AFTER_TURN,
@@ -588,25 +589,57 @@ class OfferTests(unittest.TestCase):
 
 
 class GatewayAfterUpdateTests(unittest.TestCase):
-    def offered(self, *, stale: str | None, shared: bool = True, home: Path | None = Path("/h")) -> App:
-        app, _old, _spawner, _started, _now = restart_app(impact=RestartImpact(home, HOST))
-        app.shared_gateway = shared
-        with patch("omh.maintenance.hermes_gateway.stale_bundle_version", return_value=stale):
-            app._offer_gateway_after_update()
+    """The owner's decision 1a (2026-11-16): an update asks one restart question, the TUI's own. The relaunched TUI
+    opens no `/gateway restart` question; one line says the gateway still runs the old code and names the command."""
+
+    def started(self, *, stale: str | None, flag: str = launch.UPDATED_PLAIN, shared: bool = True,
+                home: Path | None = Path("/h")) -> App:
+        from test_tui_respawn import ENVIRON, RESUMED, RespawnClient, crashing
+
+        resume = {**RESUMED, "subscription_id": "sub-1"} if shared else dict(RESUMED)
+        app, _old, _spawner, _now = crashing(environ={**ENVIRON, launch.UPDATED_ENV: flag})
+        app.client = RespawnClient(resume=resume)  # type: ignore[assignment]
+        app.environ = {**app.environ, "HERMES_TUI_RESUME": "20261016_101010_abcdef"}
+        app.read_restart_impact = lambda environ, profile: RestartImpact(home, HOST)  # type: ignore[assignment]
+        with patch("omh.maintenance.hermes_gateway.stale_bundle_version", return_value=stale), \
+                patch.object(App, "_resume_evidence", return_value=""):
+            app.startup()
         return app
 
-    def test_a_stale_shared_gateway_is_offered_its_restart_once_with_cancel_first(self) -> None:
-        app = self.offered(stale="4.0.6")
-        asked = question(app)
-        self.assertEqual(asked["choices"], [GATEWAY_CANCEL_CHOICE, GATEWAY_RESTART_CHOICE])
-        lines = asked["question"].splitlines()
-        self.assertEqual((lines[0], lines[-1]), (GATEWAY_UPDATE_LEAD, GATEWAY_RESTART_QUESTION))
+    def test_a_stale_shared_gateway_gets_one_line_and_no_question(self) -> None:
+        app = self.started(stale="4.0.6")
+        self.assertIsNone(app.slot)
+        self.assertEqual(app.local_questions, {})
+        self.assertEqual(notices(app, NOTICE_WARN).count(GATEWAY_UPDATE_NOTICE), 1)
+        self.assertIn("/gateway restart", GATEWAY_UPDATE_NOTICE)
 
-    def test_nothing_is_offered_for_a_gateway_already_on_the_new_code_its_own_or_unknown(self) -> None:
+    def test_nothing_is_said_for_a_gateway_already_on_the_new_code_its_own_or_unknown(self) -> None:
         for case, options in (("current", {"stale": None}), ("stdio", {"stale": "4.0.6", "shared": False}),
                               ("no record", {"stale": "4.0.6", "home": None})):
             with self.subTest(case=case):
-                self.assertIsNone(self.offered(**options).slot)  # type: ignore[arg-type]
+                app = self.started(**options)  # type: ignore[arg-type]
+                self.assertIsNone(app.slot)
+                self.assertNotIn(GATEWAY_UPDATE_NOTICE, notices(app))
+
+    def test_only_a_tui_omh_relaunched_for_an_update_says_it(self) -> None:
+        for flag in ("", "0"):
+            with self.subTest(flag=flag):
+                app = self.started(stale="4.0.6", flag=flag)
+                self.assertNotIn(GATEWAY_UPDATE_NOTICE, notices(app))
+                self.assertIsNone(app.slot)
+
+    def test_the_launch_hint_with_hermes_command_gives_way_to_the_one_line(self) -> None:
+        from omh.maintenance.hermes_gateway import NOTICE_STALE_BUNDLE, GatewayNotice
+
+        said = [GatewayNotice(NOTICE_STALE_BUNDLE, "STALE HINT", "hermes gateway restart", ""),
+                GatewayNotice("session_store_unavailable", "STORE HINT", "", "")]
+        for stale, expected in (("4.0.6", ["STORE HINT"]), (None, ["STALE HINT", "STORE HINT"])):
+            with self.subTest(stale=stale), patch("omh.maintenance.hermes_gateway.gateway_notices", return_value=said):
+                from test_tui_respawn import ENVIRON
+
+                with patch.dict(ENVIRON, {"HERMES_HOME": "/h"}):
+                    app = self.started(stale=stale)
+                self.assertEqual([line for line in notices(app) if line.endswith("HINT")], expected)
 
     def test_the_person_typed_restart_keeps_restart_first(self) -> None:
         app, _old, _spawner, _started, now = restart_app()
@@ -614,16 +647,7 @@ class GatewayAfterUpdateTests(unittest.TestCase):
         from omh.tui.keys import ENTER
         app._on_input(Key(ENTER))
         self.assertEqual(question(app)["choices"], [GATEWAY_RESTART_CHOICE, GATEWAY_CANCEL_CHOICE])
-        self.assertNotIn(GATEWAY_UPDATE_LEAD, question(app)["question"])
-
-    def test_only_a_tui_omh_relaunched_for_an_update_offers_it_at_startup(self) -> None:
-        from test_tui_respawn import ENVIRON, crashing
-
-        for flag, calls in (("1", 1), ("", 0), ("0", 0)):
-            with self.subTest(flag=flag), patch.object(App, "_offer_gateway_after_update") as offer:
-                app, _old, _spawner, _now = crashing(environ={**ENVIRON, launch.UPDATED_ENV: flag})
-                app.startup()
-                self.assertEqual(offer.call_count, calls)
+        self.assertEqual(question(app)["question"].splitlines()[-1], GATEWAY_RESTART_QUESTION)
 
 
 class ReopenedSessionTests(unittest.TestCase):
@@ -635,7 +659,8 @@ class ReopenedSessionTests(unittest.TestCase):
         environ = {**ENVIRON, "HERMES_TUI_RESUME": "20261106_120000_abcdef"}
         if flag is not None:
             environ[launch.UPDATED_ENV] = flag
-        with patch.object(App, "_offer_gateway_after_update"), patch.object(App, "_resume_evidence", return_value=why):
+        with patch.object(App, "_gateway_left_on_old_code", return_value=False), \
+                patch.object(App, "_resume_evidence", return_value=why):
             app, _old, _spawner, _now = crashing(environ=environ)
             app.startup()
         return app
@@ -660,10 +685,11 @@ class ReopenedSessionTests(unittest.TestCase):
 
         environ = {**ENVIRON, "HERMES_TUI_RESUME": "20261106_120000_abcdef", launch.UPDATED_ENV: launch.UPDATED_PLAIN}
 
-        def offer(app: App) -> None:
+        def offer(app: App) -> bool:
             app._ask_locally("Restart the gateway?", ("Cancel", "Restart"), lambda choice: None)
+            return False
 
-        with patch.object(App, "_offer_gateway_after_update", offer), \
+        with patch.object(App, "_gateway_left_on_old_code", offer), \
                 patch.object(App, "_resume_evidence", return_value="Hermes interrupted its last turn"):
             app, _old, _spawner, _now = crashing(environ=environ)
             app.startup()

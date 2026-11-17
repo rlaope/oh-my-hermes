@@ -91,7 +91,7 @@ Do not replace the resolved SHA with main. Execute the pinned protocol's OS-appr
 
 <br>
 
-## DAG-ULW
+## Graph Engineering
 
 **Tapez simplement `/dag-ulw`, et vous voilà maître de l'ingénierie de graphes.**
 

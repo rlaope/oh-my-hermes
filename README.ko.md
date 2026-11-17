@@ -74,7 +74,7 @@ omh setup
 
 <br>
 
-## DAG-ULW
+## Graph Engineering
 
 **`/dag-ulw`만 입력하세요. 그래프 엔지니어링 마스터가 됩니다.**
 
