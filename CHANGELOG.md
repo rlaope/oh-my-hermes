@@ -4,6 +4,11 @@ All notable changes will be documented here.
 
 ## Unreleased
 
+- **omher: a routine that keeps failing is one line in the chat, not one per run.** The same routine failing again
+  with nothing between updates its line instead of adding another: `Routine · sso-refresh · not delivered ×12 ·
+  03:56–09:37`, with one unread for the first failure. Hermes' `delivery_failed` and `blocked_config` read as "not
+  delivered" and "blocked by config" in the danger colour, instead of the raw state.
+
 - **An OMH TUI reply no longer hangs on a rail.** The `⚚ Hermes · <model>` header starts at the left edge and the
   reply's text sits two cells in, with no `┃` beside it, so a reply reads apart from your prompts and the tool calls,
   which keep their rails. The two cells the bar took go to the reply's text, and a copy still leaves the margin out.
