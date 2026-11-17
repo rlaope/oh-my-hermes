@@ -45,3 +45,32 @@ The profile of the bg scenario (N=20, 6 s) showed:
   chain is: output scrolls a hidden terminal, the selection service redraws, and
   `RenderService.handleSelectionChanged` renders rows whether or not the terminal is paused. xterm's own
   IntersectionObserver pause does not cover this path.
+
+## Sidebar lane (`perf/omher-mt-sidebar`)
+
+Hidden output no longer goes through the sessions list. `lastOut`/`lastLine`/`oscTitle` live in a per-session store
+(`src/sessions/termActivity.ts`); a memoised `TermRow` re-renders only when its spinner, age label or second line
+changes.
+
+`node bench/many/bench.mjs --n 20 --mb 1 --secs 8 --runs 1`, three runs per side, alternating base / head in separate
+processes (base = detached `5cac3df06`), ports 5411/5412, Playwright Chromium. Load average 36 / 22-25 / 10.5 over
+the three pairs (other lanes' work on the machine). Raw files: `raw/{base,head}-sidebar-r{1,2,3}-chromium.json` (base
+files are in the base worktree and are not committed).
+
+| metric (8 s bg, 19 hidden printing) | base median (min-max) | head median (min-max) |
+|---|---|---|
+| store updates (`updates`) | 475 (361-475) | 0 (0-0) |
+| main-thread script time (`scriptMs`) | 3112 ms (2335-4920) | 1436 ms (902-1579) |
+| main-thread task time (`taskMs`) | 3652 ms (2713-5591) | 1832 ms (1094-1867) |
+| DOM changes outside `.xterm` (`domMutations`) | 426 (312-426) | 464 (464-502), worse |
+| frames over 50 ms (`longFrames`) | 57 (54-59) | 63 (62-72), worse |
+| longest frame gap (`maxGapMs`) | 283 ms (183-433) | 183 ms (133-250) |
+| output ticks delivered in 8 s (`ticks`) | 64 (44-67) | 78 (71-78) |
+
+Notes:
+- `updates` falls to 0 because terminal output no longer notifies the sessions store at all.
+- `domMutations` and `longFrames` are worse at the median. Head also delivered about 20% more output ticks in the same
+  8 s, so the hidden terminals parsed more. Per tick, `domMutations` is 6.7 on base and 5.9 on head. Not verified: the
+  observer's `m.target.closest` filter does not exclude text-node changes inside `.xterm`, so this count is not
+  sidebar-only. Most of the remaining frame cost is the hidden-redraw chain the hidden lane owns.
+- `renders`/`rendersHidden` read 0 on both sides in this run (the bench's `_renderRows` hook), so they are left out.
