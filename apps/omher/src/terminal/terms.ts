@@ -128,7 +128,7 @@ function start(key: number, p: PanelTerm, want: string | null): void {
       (code) => {
         p.ended = true;
         setTabFg(key, null);
-        p.term.write(`\r\n\x1b[2m[${code ? t("termpanel.endedCode", { code }) : t("termpanel.ended")}]\x1b[0m\r\n`);
+        feed(p.term, `\r\n\x1b[2m[${code ? t("termpanel.endedCode", { code }) : t("termpanel.ended")}]\x1b[0m\r\n`);
       },
     )
     .then(
@@ -147,7 +147,7 @@ function start(key: number, p: PanelTerm, want: string | null): void {
       },
       (e) => {
         p.ended = true;
-        p.term.write(`\x1b[31m${t("termpanel.couldNotStart", { error: e instanceof Error ? e.message : String(e) })}\x1b[0m\r\n`);
+        feed(p.term, `\x1b[31m${t("termpanel.couldNotStart", { error: e instanceof Error ? e.message : String(e) })}\x1b[0m\r\n`);
       },
     );
 }

@@ -10,10 +10,13 @@
 //   5. ten parked terminals hold at least 80% less xterm buffer than they did;
 //   6. the bottom panel's terminal parks while the panel is hidden and shows its shell's output when opened;
 //   7. one in a mode the snapshot cannot restore (mouse tracking) is not parked;
-//   8. 8 MiB fed to a parked terminal is all acknowledged, in order, read after every message was taken.
+//   8. 8 MiB fed to a parked terminal is all acknowledged, in order, read after every message was taken;
+//   9. a parked CLI that ends goes on as the shell in the remade xterm, below what it printed;
+//  10. Korean typed (the WebKit 2-Set replay) into a terminal made again reaches its shell once.
 // Chromium (Playwright's headless shell) on the mock host; nothing here ran in the Tauri window.
 import { expect, test, type Page } from "@playwright/test";
 import { mock, newTerminal, openApp } from "./term-find-helpers";
+import { S, webkit2Set } from "./ime-helpers";
 
 test.beforeEach(async () => {
   await mock("mock.reset");
@@ -316,4 +319,69 @@ test("a terminal in a mode the snapshot cannot restore (mouse tracking) is not p
   await page.waitForTimeout(1200);
   expect(await parkedCount(page)).toBe(0);
   expect(await hasXterm(page, a)).toBe(true);
+});
+
+// fix2 (run omher-mt), the seams with main's terminal exit: a parked CLI whose program ends goes on as the login shell
+// in the remade xterm; what it printed before parking stays above the line that says so, and the shell's output and the
+// person's Korean typed after unparking reach it
+test("a parked terminal whose CLI ends goes on as the shell in the remade xterm, after what it printed", async ({ page }) => {
+  await openApp(page);
+  const a = await tagged(page);
+  await tagged(page);
+  const pa = await ptyOf(page, a);
+  await out(page, pa, "printed before parking\r\n");
+  await page.waitForTimeout(100);
+  await fast(page);
+  await expect.poll(() => parkedCount(page)).toBe(1);
+  // the CLI ends while parked (mock `after <ms> exit`, typed through the host as the person would have)
+  await page.evaluate(async (p) => {
+    const m = (await import("/src/sessions/host.ts" as string)) as { getHost(): { write(id: number, d: string): Promise<void> } };
+    await m.getHost().write(p, "after 1500 exit\r");
+  }, pa);
+  // the echo of that line made it again; it parks again before the CLI ends
+  await expect.poll(() => parkedCount(page)).toBe(0);
+  await expect.poll(() => parkedCount(page)).toBe(1);
+  expect(await ptyOf(page, a)).toBe(pa);
+  const row = page.getByTestId(`session-${a}`);
+  await expect(row.getByTestId("term-row-mark")).toHaveAttribute("data-agent", "shell");
+  await expect.poll(async () => (await ptyOf(page, a)) !== pa).toBe(true);
+  const sp = await ptyOf(page, a);
+  await expect.poll(() => hasXterm(page, a)).toBe(true);
+  await page.evaluate(() => (window as unknown as { __omherPark: { set(l: object): void } }).__omherPark.set({ hiddenMs: 999_999, idleMs: 999_999, sweepMs: 1000 }));
+  await out(page, sp, "shell output after the CLI ended\r\n");
+  await show(page, a);
+  const rows = page.locator('[data-testid="terminal"] .xterm-rows');
+  await expect(rows).toContainText("login shell in");
+  await expect(rows).toContainText("shell output after the CLI ended");
+  const text = (await stateOf(page, a)).lines.join("\n");
+  const at = (s: string) => text.indexOf(s);
+  expect(at("printed before parking")).toBeGreaterThanOrEqual(0);
+  expect(at("printed before parking")).toBeLessThan(at("back to your shell"));
+  expect(at("back to your shell")).toBeLessThan(at("login shell in"));
+  expect(at("login shell in")).toBeLessThan(at("shell output after the CLI ended"));
+});
+
+test("Korean typed into a terminal made again after parking reaches its shell exactly once", async ({ page }) => {
+  await openApp(page);
+  await page.getByTestId("session-new").click();
+  await page.getByTestId("session-folder").click();
+  await page.getByTestId("session-choose").click();
+  await page.getByTestId("session-agent-shell").click();
+  await expect(page.locator('[data-testid="terminal"] .xterm-rows')).toContainText("login shell in");
+  const a = (await page.getByTestId("terminal").getAttribute("data-session"))!;
+  await page.evaluate((sid) => {
+    (document.querySelector('[data-testid="terminal"] .xterm')!.parentElement as HTMLElement & { __sid?: string }).__sid = sid;
+  }, a);
+  await tagged(page);
+  await fast(page);
+  await expect.poll(() => parkedCount(page)).toBe(1);
+  expect(await hasXterm(page, a)).toBe(false);
+  await show(page, a);
+  await expect.poll(() => hasXterm(page, a)).toBe(true);
+  const p = await ptyOf(page, a);
+  const writes = () => page.evaluate((id) => ((window as unknown as { __omherShellCalls?: { op: string; id: number; data?: string }[] }).__omherShellCalls ?? []).filter((c) => c.op === "write" && c.id === id).map((c) => c.data ?? ""), p);
+  const from = (await writes()).length;
+  await webkit2Set(page, [S.안, S.녕, S.하, S.세, S.요, " ", S.한, S.글, "\r"]);
+  await expect.poll(async () => (await writes()).slice(from).join("")).toBe("안녕하세요 한글\r");
+  await expect(page.locator('[data-testid="terminal"] .xterm-rows')).toContainText("안녕하세요 한글");
 });

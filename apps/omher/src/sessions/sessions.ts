@@ -1287,7 +1287,7 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
         const end = termEnd({ ofChat, shell, typed: t.typed, code });
         if (end === "shell") {
           // the CLI ended: the same terminal goes on as the person's login shell in that folder
-          t.term.write(`\r\n\x1b[2m${code ? tr("ss.backToShellExit", { agent: label, code }) : tr("ss.backToShell", { agent: label })}\x1b[0m\r\n`);
+          feed(t.term, `\r\n\x1b[2m${code ? tr("ss.backToShellExit", { agent: label, code }) : tr("ss.backToShell", { agent: label })}\x1b[0m\r\n`);
           patchRec(id, { agent: SHELL, open: undefined, account: undefined, agentSession: undefined, agentTitle: undefined, startedAs: undefined, fgAgent: null, status: "starting", exitCode: null, error: undefined });
           void startTerm(id, t);
           return;
@@ -1301,7 +1301,7 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
           patchRec(id, { status: "exited", exitCode: code });
           tellEnd(id, "ended", { code });
         }
-        t.term.write(`\r\n\x1b[2m[${code ? tr("ss.termEndedExit", { agent: label, code }) : tr("ss.termEnded", { agent: label })}]\x1b[0m\r\n`);
+        feed(t.term, `\r\n\x1b[2m[${code ? tr("ss.termEndedExit", { agent: label, code }) : tr("ss.termEnded", { agent: label })}]\x1b[0m\r\n`);
       };
       // a Shell row is the person's login shell (the bottom panel's `shell_start`: only a folder and a size go out)
       const hostId = shell
@@ -1336,7 +1336,7 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
         patchRec(id, { status: "failed", error });
         tellEnd(id, "failed", { error });
       }
-      t.term.write(`\x1b[31m${error}\x1b[0m\r\n`);
+      feed(t.term, `\x1b[31m${error}\x1b[0m\r\n`);
     }
   };
 
@@ -1509,7 +1509,7 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
       try {
         paths.push(shellQuote(await host.saveFile(id, f.name, await f.read()), windows));
       } catch (e) {
-        t?.term.write(`\r\n\x1b[31m${tr("att.failed", { name: f.name, error: errText(e) })}\x1b[0m\r\n`);
+        if (t) feed(t.term, `\r\n\x1b[31m${tr("att.failed", { name: f.name, error: errText(e) })}\x1b[0m\r\n`);
         return;
       }
     }
