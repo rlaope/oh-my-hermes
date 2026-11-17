@@ -302,9 +302,15 @@ export function live(term: Terminal): Terminal {
   }
   remade.set(term, next);
   const s = states.get(next);
-  // the snapshot is not the program's output: it neither counts as output nor waits for an ack
-  if (s?.held) s.held.push(() => next.write(p.snapshot));
-  else next.write(p.snapshot); // xterm decodes UTF-8 bytes itself
+  // the snapshot is not the program's output: it neither counts as output nor waits for an ack. It is pending, though:
+  // parked again before xterm has taken all of it, the next snapshot would miss the rest
+  if (!s) next.write(p.snapshot);
+  else {
+    s.pending++;
+    const took = () => void s.pending--;
+    if (s.held) s.held.push(() => next.write(p.snapshot, took));
+    else next.write(p.snapshot, took); // xterm decodes UTF-8 bytes itself
+  }
   return next;
 }
 
