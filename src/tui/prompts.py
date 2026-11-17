@@ -256,6 +256,7 @@ class PromptSlot:
     draft_sent: str = ""
     # The field's words before the composer's caret, as `draft` shows them: where the caret stands on the field's row.
     draft_before: str = ""
+    draft_marks: tuple[tuple[int, int], ...] = ()
     # What the model wrote only into its reasoning before asking a clarify with no reply text (`silent_lead`),
     # drawn dim above the first question as its context; "" when the reply said it, or nothing could be read.
     silent_lead: str = ""
@@ -1039,16 +1040,32 @@ class PromptSlot:
         words, before = _one_line_keep(self.draft), _one_line_keep(self.draft_before)
         if not words:
             return (*mark, Span(CLARIFY_OTHER, _framing(theme.hint))), start
+
+        def styled(text: str, offset: int = 0) -> tuple[Span, ...]:
+            # Ranges refer to the labelled one-line draft, not to screen cells.
+            spans: list[Span] = []
+            at = 0
+            for left, right in self.draft_marks if not self.masked else ():
+                left, right = max(left - offset, 0), min(right - offset, len(text))
+                if right <= left:
+                    continue
+                spans.extend((Span(text[at:left], theme.text),
+                              Span(text[left:right], replace(theme.text, underline=True))))
+                at = right
+            spans.append(Span(text[at:], theme.text))
+            return tuple(spans)
         if cell_width(words) <= room:
-            return (*mark, Span(words, theme.text)), start + cell_width(before)
+            return (*mark, *styled(words)), start + cell_width(before)
         # Scroll: the caret's words end the row, unless it stands near the start.
         head = cell_width(before)
         if head < room:
-            return (*mark, Span(truncate(words, room), theme.text)), start + head
+            return (*mark, *truncate_line(styled(words), room)), start + head
         shown = truncate_left(before, room)
         # Words after the caret that the row cannot show: a dim `…` where they start, under the caret.
         rest = (Span("…", theme.muted),) if len(before) < len(words) else ()
-        return (*mark, Span(shown, theme.text), *rest), start + cell_width(shown)
+        cut = len(before) - len(shown) + 1
+        body = (Span("…", theme.text), *styled(shown[1:], cut)) if shown != before else styled(shown)
+        return (*mark, *body, *rest), start + cell_width(shown)
 
     def _value_lines(self, width: int, theme: Theme, queued: Line) -> list[Line]:
         label = {

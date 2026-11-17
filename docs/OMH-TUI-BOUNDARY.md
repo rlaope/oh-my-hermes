@@ -12,7 +12,10 @@ what a user sees is in [Installation](INSTALLATION.md).
 
 ### Proofreading
 
-Alt+P explicitly sends only unprotected draft text to a local LanguageTool server.
+After 600 ms quiet in the main or clarify free-text composer, only unprotected
+draft text is sent to a local LanguageTool server for inline underlines (portable
+SGR 4, including NO_COLOR). `OMH_PROOFREAD=0` disables automatic checks; Alt+P
+can still explicitly request one. Cursor motion alone never starts a check.
 Only plain HTTP to a loopback IP literal is accepted; `localhost` is pinned to
 127.0.0.1. Proxy variables are bypassed and redirects refused. A daemon worker
 allows one pending request with a five-second elapsed deadline, a 512 KiB reply
@@ -21,13 +24,22 @@ Masked fields send nothing. Command lines, fenced, indented, inline, multiline
 and unclosed backtick code, image tokens and paste chips are blanked before HTTP
 with UTF-16 widths preserved. Paste contents are never expanded.
 
-Main drafts and clarify free-text fields share the review. Approval and choice
+Main drafts and clarify free-text fields share diagnostics. Approval and choice
 menus keep their keys, as does pending Vim grammar. Results bind composer object,
 edit/metadata generation, session and question identity. Changed ownership or
-draft discards results. Enter explicitly accepts the selected replacement after
-the 300 ms arming guard; Skip and Esc leave text unchanged. Each accepted edit
-uses Composer.replace and its existing undo. No action submits a prompt.
-Unavailable servers produce a notice and leave the draft untouched. No server
+draft discards results immediately, including an ownership change away and back.
+Automatic results never open review or take keys. Alt+P opens only the issue
+containing the cursor, or the immediately preceding issue at its exact end when
+none contains it. Without fresh results it remembers this explicit intent for
+the exact snapshot; editing or changing owner cancels it. Without an issue at
+the cursor it shows a local hint. Enter explicitly accepts the selected replacement
+after the 300 ms arming guard; Skip and Esc leave text unchanged. Each action
+closes review without advancing elsewhere. Each accepted edit uses
+Composer.replace and its existing undo. No action submits a prompt.
+Unavailable servers leave the draft untouched and produce a quiet inline status,
+with retries backing off from 5 to at most 30 seconds; Alt+P retries immediately.
+One in-flight request finishes before the latest eligible generation is checked.
+No per-keystroke or stale-result transcript notices are added. No server
 installation or startup happens automatically. Only tui/app.py imports the client.
 
 The OMH TUI is the frontend bare `omh` opens. `omh` runs the user's own `hermes
@@ -359,7 +371,7 @@ clipboard helper where Hermes stages images, as the stdio entry saved it.
 
 ## Connections and the import allow list
 
-Beyond explicit local proofreading above, the frontend's network call is the update notice: at most
+Beyond local proofreading above, the frontend's network call is the update notice: at most
 once a day per OMH home, on a background thread, an HTTPS GET of npm's latest
 `oh-my-hermes` version from `registry.npmjs.org`, keeping only the version
 (`tui/update_notice.py`, listed in INVARIANT 2's `NETWORK_CLIENT_BRIDGES`; off

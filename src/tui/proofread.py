@@ -1,9 +1,9 @@
-"""On-demand local proofreading of the draft in the composer (Alt+P).
+"""Bounded local proofreading of the draft in the composer.
 
-The person asks for it; nothing runs by itself. The draft goes to a LanguageTool
-server on this machine, and what comes back is a list of corrections the person
-accepts or skips one by one. Nothing is applied without an explicit Enter on a
-replacement, and no submit ever follows.
+App checks after 600 ms quiet (unless OMH_PROOFREAD=0), showing inline marks.
+Alt+P opens only the issue at the cursor. Nothing is applied without an explicit
+Enter on a replacement, and no submit ever follows. App owns scheduling and
+foreground state; this client has no automatic server installation or startup.
 
 What keeps the read narrow (`docs/OMH-TUI-BOUNDARY.md`, "Proofreading"):
 

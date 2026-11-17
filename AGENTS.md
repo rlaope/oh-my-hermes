@@ -148,8 +148,10 @@ and evidence obvious to a reviewer reading the PR without the chat history.
   Job Object, and resumes only after ownership succeeds; clean evidence
   requires the Job Object to report zero active processes.
 - **Local proofreader** (proposed scoped exception; upstream owner approval is
-  requested in the PR): only explicit Alt+P in the main or clarify free-text
-  composer sends unprotected draft text to a local LanguageTool server.
+  requested in the PR): the main or clarify free-text composer checks unprotected
+  draft text on a local LanguageTool server after 600 ms quiet. `OMH_PROOFREAD=0`
+  disables automatic checks; Alt+P explicitly checks or opens only the issue at
+  the cursor. Automatic results only underline; they never take keys or open review.
   `src/tui/proofread.py` uses stdlib `http.client` and `socket`, plain HTTP to
   loopback IP literals only (`localhost` is pinned to `127.0.0.1`), no proxies
   or redirects, a five-second elapsed deadline, a 512 KiB reply cap and a

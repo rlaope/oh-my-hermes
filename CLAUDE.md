@@ -41,7 +41,9 @@ held by the invariants in `tests/test_handoff_safety_contract_enforcement.py`:
   may import it; the latter reads `latest` once in an explicit `omh update` on
   an installer-managed stable install to pick the release wheel to download.
 - Local proofreader (proposed scoped exception; the PR requests upstream
-  owner approval): explicit Alt+P only, to a loopback-only local LanguageTool
+  owner approval): automatic inline marks after 600 ms quiet in main/clarify
+  free-text fields (`OMH_PROOFREAD=0` disables automatic checks), with explicit
+  Alt+P correction only at the cursor, to a loopback-only local LanguageTool
   server using stdlib `http.client` and `socket`. No proxies or redirects;
   five-second elapsed deadline, 512 KiB reply cap, 20,000-character draft cap.
   Masked fields send nothing; code, commands, image tokens and paste chips are
