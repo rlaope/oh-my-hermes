@@ -92,6 +92,48 @@ class EndpointTests(unittest.TestCase):
 
 
 class ProtectTests(unittest.TestCase):
+    def test_outbound_tabs_keep_original_columns_and_prose(self) -> None:
+        code_lines = (
+            ">\t  - secretF",
+            ">\t   - secretF",
+            " >\t   - secretF",
+            "  >\t    - secretF",
+            "   >\t - secretF",
+            "> >\t    - secretF",
+        )
+        prose_lines = (
+            "> ordinary quote prose",
+            "- ordinary list prose",
+            "> - ordinary quoted list prose",
+            ">\tordinary quote prose",
+            "> >\t  - ordinary nested list prose",
+            "-\tordinary list prose",
+        )
+        cases = []
+        for line in (*code_lines, *prose_lines):
+            separator = "> >" if line.startswith("> >") else ">"
+            text = f"prose\n{separator}\n{line}\n{separator}\nafter"
+            expected = text.replace(line, " " * len(line)) if line in code_lines else text
+            cases.append((text, expected))
+        # Indented markers neither open a fence nor close an existing one.
+        cases.extend((
+            ("prose\n>\n>\t  ~~~\n> ordinary prose\n>\nafter",
+             "prose\n>\n       \n> ordinary prose\n>\nafter"),
+            ("prose\n> ~~~\n>\t  ~~~\n> secretF\n> ~~~\nafter",
+             "prose\n     \n       \n         \n     \nafter"),
+        ))
+        with Served() as env:
+            for text, expected in cases:
+                with self.subTest(text=text):
+                    composer, job = job_for(text, env=env)
+                    proofread.post_check(job.endpoint, job.protected.sent)
+                    sent = parse_qs(Fake.hits[-1])["text"][0]
+                    self.assertEqual(sent, expected)
+                    self.assertEqual(len(sent.encode("utf-16-le")), len(text.encode("utf-16-le")))
+                    self.assertEqual(composer.text, text)
+                    self.assertEqual(job.original, text)
+                    self.assertEqual(job.snapshot.text, text)
+
     def test_outbound_container_indentation_survives_marker_stripping(self) -> None:
         lines = (
             ">     - secret10",

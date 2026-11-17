@@ -146,11 +146,13 @@ def _blocked(text: str, chips: list[tuple[int, int]]) -> list[bool]:
     for line in text.split("\n"):
         start, end = position, position + len(line)
         position = end + 1
-        content = line
+        # Expand at original columns before slicing prefixes; detection only.
+        content = line.expandtabs(4)
+        raw_content = line
         quotes, list_marker = 0, False
         while True:
             # Inspect every remainder before another marker can consume its indent.
-            indented = content.expandtabs(4).startswith("    ")
+            indented = content.startswith("    ") or raw_content.expandtabs(4).startswith("    ")
             container = None if indented else _CONTAINER.match(content)
             if container is None:
                 break
@@ -158,6 +160,9 @@ def _blocked(text: str, chips: list[tuple[int, int]]) -> list[bool]:
             quotes += prefix.startswith(">")
             list_marker |= not prefix.startswith(">")
             content = content[container.end():]
+            # Retain the existing conservative tab-indent exclusions too.
+            raw_container = _CONTAINER.match(raw_content)
+            raw_content = raw_content[raw_container.end():] if raw_container else ""
         marker = None if indented else _FENCE.match(content)
         protect = False
         if fence:
