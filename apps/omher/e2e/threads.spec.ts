@@ -296,3 +296,109 @@ test("x -> confirm removes the row (stop + archive); Cancel keeps it and sends n
   await expect(page.getByTestId(`thread-row-${ids.notes}`)).toBeVisible();
   await expect(page.locator(`[data-thread="${ids.slack}"], [data-thread="${ids.og}"], [data-thread="${ids.docs}"]`)).toHaveCount(0);
 });
+
+// tidy (2026-11-16, owner): a thread row reads as a chat you open, not a subtask
+test("a thread row is a chat card: bubble with its state badge inside, title and time / who said what, › on hover, opens its chat", async ({ page }) => {
+  await setup(page);
+  const ids = await seed(page);
+  const row = (id: string) => page.getByTestId(`thread-row-${id}`);
+  // two lines: the title and time, then a preview
+  const geo = await row(ids.slack).evaluate((el) => {
+    const r = (s: string) => el.querySelector(s)!.getBoundingClientRect();
+    const cs = getComputedStyle(el);
+    return { title: r(".th-title"), sub: r('[data-testid="thread-sub"]'), radius: cs.borderTopLeftRadius, cursor: getComputedStyle(el.querySelector(".th-open")!).cursor };
+  });
+  expect(geo.sub.top).toBeGreaterThanOrEqual(geo.title.bottom - 0.5);
+  expect(geo.radius).toBe("8px");
+  expect(geo.cursor).toBe("pointer");
+  await expect(row(ids.slack).getByTestId("thread-sub")).toHaveText("Kami: 알림 문구를 세 가지로 다듬었어요.");
+  await expect(row(ids.og).getByTestId("thread-sub")).toContainText("Kami is working · ");
+  await expect(row(ids.docs).getByTestId("thread-sub")).toContainText("pnpm build:docs");
+  await expect(row(ids.notes).getByTestId("thread-sub")).toHaveText("You: 릴리스 노트 초안 정리해줘");
+  // the state badge sits inside the bubble's box; idle has none
+  for (const id of [ids.og, ids.docs, ids.slack, ids.nightly]) {
+    const inside = await row(id).evaluate((el) => {
+      const ic = el.querySelector('[data-testid="thread-icon"]')!.getBoundingClientRect();
+      const g = el.querySelector('[data-testid="thread-glyph"]')!.getBoundingClientRect();
+      return g.width > 0 && g.left >= ic.left - 0.5 && g.right <= ic.right + 0.5 && g.top >= ic.top - 0.5 && g.bottom <= ic.bottom + 0.5;
+    });
+    expect(inside, id).toBe(true);
+  }
+  await expect(row(ids.notes).getByTestId("thread-glyph")).toBeHidden();
+  // hover: a fill and the › ; away: no ›
+  const go = row(ids.slack).getByTestId("thread-go");
+  await page.mouse.move(900, 600);
+  await expect(go).toBeHidden();
+  await row(ids.slack).hover();
+  await expect(go).toBeVisible();
+  await expect.poll(() => row(ids.slack).evaluate((el) => getComputedStyle(el).backgroundColor)).not.toBe("rgba(0, 0, 0, 0)");
+  // named for a screen reader, opened with Enter
+  await expect(row(ids.slack).getByTestId("thread-open")).toHaveAttribute("aria-label", "Open thread Slack 알림 문구 다듬기");
+  await row(ids.slack).getByTestId("thread-open").focus();
+  await page.keyboard.press("Enter");
+  await expect(page.getByTestId("thread-chat")).toHaveAttribute("data-thread", ids.slack);
+  await expect(row(ids.slack)).toHaveClass(/\bon\b/);
+  // the bot's own line is not the newest thread's title listed right under it
+  await expect(page.getByTestId("bot-kami").getByTestId("bot-sub")).not.toHaveText("OG 대시보드 502 원인 찾기");
+  await page.mouse.move(900, 600);
+  await shot(page, "rows-cards");
+});
+
+// fix5: the labels come from time.ts ("now", "14:02", "Mon", "Nov 2"), so two ages can share one (3h and 1h ago
+// are both yesterday's weekday just after midnight). Each row must show the label of ITS OWN last activity: the
+// page's clock is fixed (midday and 00:05 local, in Seoul and in UTC) and every row is compared with time.ts's
+// formatter applied to that row's own timestamp, so the test holds at any wall-clock time.
+for (const tz of ["Asia/Seoul", "UTC"] as const) {
+  test.describe(`thread times in ${tz}`, () => {
+    test.use({ timezoneId: tz });
+    // 2026-11-17 local: Seoul is UTC+9 all year
+    const local = (h: number, m: number) => Date.UTC(2026, 10, 17, h, m) - (tz === "UTC" ? 0 : 9 * 3600_000);
+    for (const [label, nowMs] of [["midday", local(12, 0)], ["00:05", local(0, 5)]] as const) {
+      test(`each thread row's time is its own last activity (${tz}, ${label})`, async ({ page }) => {
+        await page.clock.setFixedTime(nowMs);
+        await setup(page);
+        const ages = [4 * 86400, 26 * 3600, 3 * 3600, 3600, 10];
+        const { threads } = await mock("mock.threads", { bot: "kami", threads: ages.map((ago, i) => ({ title: `Thread ${i + 1}`, at: nowMs / 1000 - ago })) });
+        await page.reload();
+        await expect(page.getByTestId("threads-kami").getByTestId("thread-time")).toHaveCount(5);
+        const want = await page.evaluate(
+          async ([stamps, now]) => {
+            const { shortTime } = await import("/src/app/time.ts" as string);
+            return (stamps as number[]).map((ts) => shortTime(ts, now) as string);
+          },
+          [ages.map((ago) => nowMs / 1000 - ago), nowMs] as const,
+        );
+        // the fixture covers the formatter's kinds: just now, earlier today or a weekday, an older day
+        expect(new Set(want).size, JSON.stringify(want)).toBeGreaterThanOrEqual(3);
+        expect(want[4]).toBe("now");
+        for (const [i, id] of (threads as string[]).entries())
+          await expect(page.getByTestId(`thread-row-${id}`).getByTestId("thread-time"), `Thread ${i + 1}`).toHaveText(want[i]!);
+      });
+    }
+  });
+}
+
+// fix5: the second line is plain text, as for what was said: an ask ("Allow `pnpm build:docs`?") and the bridge's
+// preview of the first message lose their markdown marks
+test("a thread row's ask and its bridge preview show plain text, no markdown marks", async ({ page }) => {
+  await setup(page);
+  const { threads } = await mock("mock.threads", {
+    bot: "kami",
+    threads: [
+      { title: "Docs build", ago: 60 },
+      { title: "Release notes", ago: 120, messages: [["user", "Draft the **release notes** from `CHANGELOG.md`"]] },
+    ],
+  });
+  await page.reload();
+  const [ask, said] = threads as string[];
+  await expect(page.getByTestId(`thread-row-${said}`).getByTestId("thread-sub")).toHaveText("You: Draft the release notes from CHANGELOG.md");
+  await mock("mock.manual", { bot: "kami" });
+  await mock("mock.emit", {
+    events: [
+      { event: "turn.start", bot: "kami", session: ask },
+      { event: "approval.request", bot: "kami", session: ask, request_id: "fix5-ask", title: "Allow `pnpm build:docs`?", command: "pnpm build:docs", choices: ["once", "deny"] },
+    ],
+  });
+  await expect(page.getByTestId(`thread-row-${ask}`)).toHaveAttribute("data-state", "needs_you");
+  await expect(page.getByTestId(`thread-row-${ask}`).getByTestId("thread-sub")).toHaveText("Allow pnpm build:docs?");
+});

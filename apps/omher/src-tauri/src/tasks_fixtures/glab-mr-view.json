@@ -1,0 +1,10 @@
+{"id": 2001, "iid": 9, "project_id": 7, "title": "Draft: fix SSO loop", "state": "opened", "draft": true, "work_in_progress": true,
+ "labels": ["bug"], "author": {"id": 1, "username": "person1", "name": "Person1"},
+ "created_at": "2026-11-11T09:00:00.000Z", "updated_at": "2026-11-12T09:00:00.000Z",
+ "web_url": "https://gitlab.com/group/sub/proj/-/merge_requests/9",
+ "description": "Fixes #42 by keeping the return URL.",
+ "head_pipeline": {"id": 555, "status": "failed", "web_url": "https://gitlab.com/group/sub/proj/-/pipelines/555"},
+ "notes": [
+  {"id": 1, "body": "assigned to @person2", "system": true, "author": {"username": "person1"}, "created_at": "2026-11-11T09:01:00.000Z"},
+  {"id": 2, "body": "Looks right; the test fails on CI though.", "system": false, "author": {"username": "person2"}, "created_at": "2026-11-11T10:00:00.000Z"}
+ ]}

@@ -1,18 +1,21 @@
-/* Threads under a bot (src/threads): a Discord-style branch from the bot's avatar column into each thread row.
-   One 1px line in the sidebar's thin-line gray, a rounded elbow into each row, the last row with the elbow only.
-   No boxes, no fills except the gray selection. */
+/* Threads under a bot (src/threads), tidy 2026-11-16: each thread is a chat you open, so it is a card like a terminal
+   session (8px corners, a 1px edge and a fill on hover, the open chat's fill when selected, a › on hover), joined to
+   the bot by one thin rail from the avatar column with a short rounded elbow into each card. */
 .th-tree {
   --th-x: calc(var(--side-x) + 17px); /* the bot avatar's centre (34px face) */
-  /* the connector: the timestamp gray at reduced strength, one step lighter than the hairlines and still under
-     the text */
-  --th-line: color-mix(in srgb, var(--quiet) 70%, transparent);
-  --th-elbow: 22px; /* long enough that a thread's title starts >= 20px past the bot name */
+  /* the rail: the timestamp gray at reduced strength, one step lighter than the hairlines and still under the text */
+  --th-line: color-mix(in srgb, var(--quiet) 60%, transparent);
+  --th-elbow: 11px; /* the card starts 11px past the rail: the titles keep the width, still >= 20px past the bot name */
+  --th-gap: 3px;
   list-style: none;
-  margin: -6px 0 2px;
+  margin: -6px 0 4px;
   padding: 0;
   position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: var(--th-gap);
 }
-/* the stem from just under the avatar down to the first row */
+/* the stem from just under the avatar down to the first card */
 .th-tree::before {
   content: "";
   position: absolute;
@@ -24,70 +27,147 @@
 .th-row {
   position: relative;
   display: flex;
-  align-items: center;
-  height: 24px;
-  padding-left: calc(var(--th-x) + var(--th-elbow) + 6px);
-  padding-right: 4px;
-  border-radius: var(--r-sm);
+  align-items: stretch;
+  margin-left: calc(var(--th-x) + var(--th-elbow));
+  border: 1px solid transparent;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background 0.12s, border-color 0.12s;
 }
-/* every row but the last carries the stem on past itself to the next */
+/* every card but the last carries the rail on past itself (and the gap) to the next */
 .th-row:not(.th-last)::before {
   content: "";
   position: absolute;
-  left: var(--th-x);
-  top: 0;
-  bottom: 0;
+  left: calc(-1 * var(--th-elbow) - 1px);
+  top: -1px;
+  bottom: calc(-1 * var(--th-gap) - 1px);
   border-left: 1px solid var(--th-line);
 }
-/* the elbow: down from the top of the row and round into its middle */
+/* the elbow: down from the top of the card and round into its middle, where the bubble is */
 .th-branch {
   position: absolute;
-  left: var(--th-x);
-  top: 0;
-  height: 50%;
-  width: var(--th-elbow);
+  left: calc(-1 * var(--th-elbow) - 1px);
+  top: -1px;
+  height: calc(50% + 1px);
+  width: calc(var(--th-elbow) - 1px);
   border-left: 1px solid var(--th-line);
   border-bottom: 1px solid var(--th-line);
-  border-bottom-left-radius: 6px;
+  border-bottom-left-radius: 5px;
   pointer-events: none;
 }
 .th-open {
   flex: 1;
   min-width: 0;
-  display: flex;
+  display: grid;
+  /* the bubble, the title, then one slot the time, a harness mark at work and the › share */
+  grid-template-columns: 20px minmax(0, 1fr) auto;
+  grid-template-rows: 18px 15px;
+  column-gap: 7px;
+  row-gap: 1px;
   align-items: center;
-  gap: 6px;
-  height: 100%;
-  padding: 0 4px;
-  border-radius: var(--r-sm);
+  padding: 5px 8px;
+  border-radius: 7px;
   text-align: left;
   font-size: 12px;
-  color: var(--muted);
-}
-.th-row:hover .th-open {
   color: var(--body);
+  cursor: pointer;
+}
+.th-open:focus-visible {
+  outline: 2px solid var(--muted);
+  outline-offset: -2px;
 }
 .th-row:hover {
   background: var(--hover);
+  border-color: var(--line-soft);
 }
 .th-row.on {
   background: var(--active-row);
+  border-color: var(--line);
 }
 .th-row.on .th-open {
   color: var(--ink);
 }
+/* the thread's mark: a speech bubble, its state a small badge on the bubble's lower right corner (inside the mark) */
+.th-ic {
+  grid-row: 1 / 3;
+  grid-column: 1;
+  position: relative;
+  width: 20px;
+  height: 20px;
+  align-self: center;
+  color: var(--muted);
+}
+.th-bub {
+  position: absolute;
+  left: 0;
+  top: 0;
+  display: block;
+}
+.th-ic > .th-g {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  width: 11px;
+  height: 11px;
+  border-radius: 50%;
+  background: var(--side);
+  box-shadow: 0 0 0 1px var(--side);
+}
+.th-ic > .th-g-idle {
+  display: none;
+}
 .th-title {
-  flex: 1;
+  grid-column: 2;
+  grid-row: 1;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 .th-time {
-  flex: none;
-  font-size: 11px;
-  color: var(--quiet);
+  grid-column: 3;
+  grid-row: 1;
+  font-size: 10.5px;
+  color: var(--muted);
   font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+/* line 2: who said the last thing, what it does now, or what it asks */
+.th-sub {
+  grid-column: 2;
+  grid-row: 2;
+  min-width: 0;
+  font-size: 11px;
+  line-height: 15px;
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.th-sub-ask {
+  color: var(--needs, #e9a23b);
+}
+.th-sub-none {
+  color: var(--quiet);
+}
+/* "open": a › on the second line's right while hovered or focused */
+.th-go {
+  grid-column: 3;
+  grid-row: 2;
+  justify-self: end;
+  display: grid;
+  place-items: center;
+  color: var(--muted);
+  visibility: hidden;
+}
+.th-row:hover .th-go,
+.th-row:focus-within .th-go {
+  visibility: visible;
+}
+.th-harness {
+  grid-column: 3;
+  grid-row: 1;
+  justify-self: end;
 }
 .th-harness:empty {
   display: none;
@@ -98,7 +178,9 @@
   display: none;
 }
 .th-x {
-  flex: none;
+  position: absolute;
+  right: 5px;
+  top: 5px;
   display: none;
   place-items: center;
   width: 18px;
@@ -111,20 +193,34 @@
   display: grid;
 }
 .th-row:hover .th-time,
-.th-row:focus-within .th-time {
-  display: none;
+.th-row:focus-within .th-time,
+.th-row:hover .th-harness,
+.th-row:focus-within .th-harness {
+  visibility: hidden;
 }
 .th-x:hover {
   color: var(--ink);
   background: var(--line-strong);
 }
+/* "Show N more": a plain line on the rail, no card */
+.th-row.th-more {
+  border: 0;
+}
+.th-row.th-more:hover {
+  background: none;
+}
 .th-more .th-open {
+  display: flex;
+  padding: 2px 8px;
   color: var(--quiet);
   font-size: 11px;
 }
+.th-more .th-open:hover {
+  color: var(--body);
+}
 
 [data-theme="light"] .th-tree {
-  --th-line: color-mix(in srgb, var(--quiet) 50%, transparent);
+  --th-line: color-mix(in srgb, var(--quiet) 45%, transparent);
 }
 .th-harness {
   flex: none;
@@ -147,8 +243,9 @@
 .th-g svg {
   display: block;
 }
+/* one running colour in the sidebar: a working thread turns in the running terminals' amber */
 .th-g-running {
-  color: var(--accent);
+  color: var(--term-run, #f2b705);
 }
 .th-g-running svg {
   animation: th-spin 0.9s linear infinite;

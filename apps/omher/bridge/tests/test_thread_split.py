@@ -21,6 +21,11 @@ def block(obj, kind="omher-thread") -> str:
     return f"```{kind}\n{json.dumps(obj, ensure_ascii=False)}\n```"
 
 
+def open_line(obj, kind="omher-thread") -> str:
+    """The layout the real model writes: the JSON on the opening fence line, the closing fence on the next line."""
+    return f"```{kind} {json.dumps(obj, ensure_ascii=False)}\n```"
+
+
 A = {"title": "OG 502 원인", "task": "gateway 로그에서 502 원인 찾아줘"}
 B = {"title": "릴리스 노트", "task": "v0.3 릴리스 노트 초안"}
 
@@ -52,6 +57,19 @@ class Parser(unittest.TestCase):
             ("second route ignored", block({"thread": "a"}, "omher-thread-route") + "\n" +
              block({"thread": "b"}, "omher-thread-route"), [], {"thread": "a"}),
             ("no block", "그냥 답이에요. `omher-thread` 라는 말만.", [], None),
+            # the JSON on the opening fence line, closed on the next line (what the model writes under the hint)
+            ("open-line block ok", f"나눌게요.\n\n{open_line(A)}\n\n{open_line(B)}\n\n한 줄 메모.", [A, B], None),
+            ("open-line block with `code` in its task ok", open_line({"title": "t", "task": "run `git log`"}),
+             [{"title": "t", "task": "run `git log`"}], None),
+            ("open-line route ok", open_line({"thread": "stored-th-1"}, "omher-thread-route") + "\n이어서 할게요.", [],
+             {"thread": "stored-th-1"}),
+            ("open-line block inside a > quote ignored", "> " + open_line(A).replace("\n", "\n> "), [], None),
+            ("open-line block inside a ````md fence ignored", f"````md\n{open_line(A)}\n````", [], None),
+            ("open-line block inside a ~~~ fence ignored", f"~~~\n{open_line(A)}\n~~~", [], None),
+            ("open-line block with a body ignored", f"```omher-thread {json.dumps(A)}\nmore\n```", [], None),
+            ("open-line block never closed dropped", f"```omher-thread {json.dumps(A)}", [], None),
+            ("open-line block extra key dropped", open_line({**A, "cwd": "/tmp"}), [], None),
+            ("open-line long title dropped", open_line({"title": "x" * 81, "task": "y"}), [], None),
         ]
         for name, text, want, route in cases:
             with self.subTest(name):
@@ -68,6 +86,11 @@ class Parser(unittest.TestCase):
         # an invalid block is not acted on, and its machine syntax is not shown either
         bad = block({**A, "cwd": "/tmp"})
         self.assertEqual(ob.split_blocks(bad)[2], "")
+        # the open-line layout is hidden too; quoted it stays as written
+        _, _, shown = ob.split_blocks(f"나눌게요.\n\n{open_line(A)}\n\n{open_line(B)}\n\n한 줄 메모.")
+        self.assertEqual(shown, "나눌게요.\n\n한 줄 메모.")
+        quoted = "> " + open_line(A).replace("\n", "\n> ")
+        self.assertEqual(ob.split_blocks(quoted)[2], quoted)
 
     def test_hint_size_and_strip(self):
         rows = [{"thread": f"20261115_2{n:05d}_{'abcdef01'}", "title": "긴 스레드 제목 " * 6, "last": "마지막 줄 " * 30}
@@ -78,6 +101,9 @@ class Parser(unittest.TestCase):
         self.assertLessEqual(note.count("\n"), 8 + 3)  # head + at most 8 rows + two rules
         self.assertIn("```omher-thread {", note)
         self.assertIn("```omher-thread-route {", note)
+        self.assertIn("written on one line as ```omher-thread {", ob.THREAD_HINT_SPLIT)
+        self.assertIn("written on one line", ob.THREAD_HINT_ROUTE)
+        self.assertLess(len(ob.thread_hint(rows[:1])), 700)  # one open thread, full last line: ~640
         sent = f"이거 해줘\n\n{note}"
         self.assertEqual(ob.split_thread_hint(sent), "이거 해줘")
         rows_out = ob.chat_messages([{"role": "user", "text": sent, "row_id": 1}])
@@ -152,6 +178,21 @@ class Effects(BridgeCase):
             listed = ok(await s.req("thread.list", bot="kami"))["threads"]
             self.assertEqual(len(listed), 2)
 
+    async def test_open_line_blocks_make_two_threads_too(self):
+        """The real model's layout (JSON on the opening fence line, close on the next) opens threads the same way."""
+        async with ThreadEnv(HermesStore()) as env:
+            s = await self.opened(env)
+            ok(await s.req("thread.list", bot="kami"))
+            c = env.clients["kami"]
+            c.push("message.start")
+            c.push("message.complete", {"text": f"{open_line(A)}\n\n{open_line(B)}\n\n두 작업이라 나눴어요.",
+                                        "status": "complete", "persisted_turn": {"final_assistant_row_id": 78}})
+            await s.until(lambda ev: sum(e["event"] == "thread.split" for e in ev) == 2
+                          and len(c.find("prompt.submit")) == 2)
+            msg = next(e for e in s.events if e["event"] == "message")
+            self.assertEqual(msg["text"], "두 작업이라 나눴어요.")
+            self.assertEqual([x["text"] for x in c.find("prompt.submit")], [A["task"], B["task"]])
+
     async def test_four_blocks_make_three_and_a_thread_answer_makes_none(self):
         async with ThreadEnv(HermesStore()) as env:
             s = await self.opened(env)
@@ -178,6 +219,9 @@ class Effects(BridgeCase):
             c.push("message.start")
             c.push("tool.start", {"tool_id": "t1", "name": "read_file", "context": "README.md"})
             c.push("tool.complete", {"tool_id": "t1", "name": "read_file", "result": block(A), "summary": block(A)})
+            c.push("tool.start", {"tool_id": "t2", "name": "read_file", "context": "NOTES.md"})
+            c.push("tool.complete", {"tool_id": "t2", "name": "read_file", "result": open_line(A),
+                                     "summary": open_line(A)})
             c.push("message.complete", {"text": "README를 읽었어요.", "status": "complete"})
             c.push("message.start")
             c.push("message.complete", {"text": block(B), "status": "interrupted"})

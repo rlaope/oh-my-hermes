@@ -63,7 +63,7 @@ async function plus(page: Page) {
   await page.waitForFunction(() => document.querySelector(".ss-pop")?.getAnimations().every((a) => a.playState !== "running"));
 }
 
-// SESSIONS hidden in favour of bot threads (plan 2026-11-15)
+// chat-mode CLI sessions replaced by bot threads (2026-11-16: terminals kept)
 test.skip("a bot reply with a draft: chip -> the same card, filled and naming the bot -> Add -> the agent is in the + menu", async ({ page }) => {
   await open(page);
   await reply(`Here is the agent you asked for:\n\n${fence(STUB)}\n\nPress Add agent to see the exact command.`);
@@ -150,7 +150,7 @@ test("Cancel writes nothing; two blocks make two chips; a refused draft's chip i
   expect((await calls(page)).filter((c) => c.op === "custom.confirm")).toEqual([]);
 });
 
-// SESSIONS hidden in favour of bot threads (plan 2026-11-15)
+// chat-mode CLI sessions replaced by bot threads (2026-11-16: terminals kept)
 test.skip("a SESSIONS agent's reply with a draft shows no chip", async ({ page }) => {
   await open(page);
   await page.getByTestId("session-new").click();

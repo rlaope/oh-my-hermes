@@ -92,7 +92,7 @@ class HermesChild(unittest.TestCase):
         sid = self.ns.hermes_find(self.prof, goal_mark="[dag:omher-channel-watch/collector]")
         dump = json.dumps(self.ns.hermes_read(self.prof, sid), ensure_ascii=False)
         self.assertTrue(SECRET not in dump, "secret leaked")
-        self.assertTrue("sk-•••" in dump, "mask missing")
+        self.assertTrue("••••" in dump, "mask missing")
         s = self.ns.hermes_read(self.prof, sid)
         for st in s["steps"]:
             self.assertLessEqual(len(st["input"].encode()), ob.NS_CLIP + 40)
@@ -155,10 +155,10 @@ class HermesChild(unittest.TestCase):
                     self.ns.read(bot_of(self.prof), None, None, None, "hermes:grandchild")["session"]):
             dump = json.dumps(got, ensure_ascii=False)
             self.assertFalse(planted in dump, "planted token leaked")
-            self.assertIn("sk-•••", dump)
+            self.assertIn("••••", dump)
         s = self.ns.hermes_read(self.prof, sid)
-        self.assertEqual(s["title"], "Subagent sk-•••")
-        self.assertEqual((s["children"][0]["goal"], s["children"][0]["summary"]), ("Check sk-•••", "Used sk-•••"))
+        self.assertEqual(s["title"], "Subagent ••••")
+        self.assertEqual((s["children"][0]["goal"], s["children"][0]["summary"]), ("Check ••••", "Used ••••"))
 
     def test_ref_reads_only_the_bots_own_subagents(self):
         """F2 (BOUNDARY rule 15): a `hermes:` ref reads only a subagent session whose parent chain reaches one of the

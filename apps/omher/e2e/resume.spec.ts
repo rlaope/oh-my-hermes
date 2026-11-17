@@ -89,7 +89,7 @@ test.beforeEach(async () => {
 for (const theme of ["dark", "light"] as const) {
   test.describe(theme, () => {
     test.use({ colorScheme: theme });
-    // SESSIONS hidden in favour of bot threads (plan 2026-11-15)
+    // chat-mode CLI sessions replaced by bot threads (2026-11-16: terminals kept)
     test.skip(`update asks first: Cancel keeps the app as it is, the confirm installs (${theme})`, async ({ page }) => {
       await setup(page, ["/home/you/code/web-app", "/home/you/code/api"]);
       await start(page, "claude");
@@ -219,7 +219,7 @@ test("a saved bot that is gone, or a bad snapshot, opens the app as a fresh star
   await expect(page.getByTestId("composer")).toHaveValue("");
 });
 
-// SESSIONS hidden in favour of bot threads (plan 2026-11-15)
+// chat-mode CLI sessions replaced by bot threads (2026-11-16: terminals kept)
 test.skip("after a restart: Claude Code and Codex continue by themselves, pi waits for Resume, an ended one stays ended", async ({ page }) => {
   await setup(page, ["/home/you/code/web-app", "/home/you/code/api", "/home/you/code/pi-work", "/home/you/code/old"]);
   await start(page, "claude", "hello before");
@@ -297,7 +297,7 @@ test.skip("after a restart: Claude Code and Codex continue by themselves, pi wai
   expect((await sessionCalls(page)).filter((c) => c.op === "chat.start")).toHaveLength(3);
 });
 
-// SESSIONS hidden in favour of bot threads (plan 2026-11-15)
+// chat-mode CLI sessions replaced by bot threads (2026-11-16: terminals kept)
 test.skip("a terminal session that was running comes back paused and starts only on Resume", async ({ page }) => {
   await setup(page, ["/home/you/code/g"]);
   await start(page, "grok");
@@ -315,7 +315,7 @@ test.skip("a terminal session that was running comes back paused and starts only
   expect((await sessionCalls(page)).filter((c) => c.op === "start")).toEqual([expect.objectContaining({ agent: "grok", cwd: "/home/you/code/g" })]);
 });
 
-// SESSIONS hidden in favour of bot threads (plan 2026-11-15)
+// chat-mode CLI sessions replaced by bot threads (2026-11-16: terminals kept)
 test.skip("an ended terminal session comes back with Restart, which starts it again in its folder", async ({ page }) => {
   await setup(page, ["/home/you/code/g"]);
   await start(page, "grok");
@@ -336,7 +336,7 @@ test.skip("an ended terminal session comes back with Restart, which starts it ag
   expect((await sessionCalls(page)).filter((c) => c.op === "start")).toEqual([expect.objectContaining({ agent: "grok", cwd: "/home/you/code/g" })]);
 });
 
-// SESSIONS hidden in favour of bot threads (plan 2026-11-15)
+// chat-mode CLI sessions replaced by bot threads (2026-11-16: terminals kept)
 test.skip("a New session chat that never started comes back as a draft after a restart, and nothing starts", async ({ page }) => {
   await setup(page, ["/home/you/code/web-app"]);
   await page.getByTestId("session-new").click();

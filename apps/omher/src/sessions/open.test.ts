@@ -148,9 +148,10 @@ describe("a session saved before this", () => {
     const before = setup(["claude"]);
     before.ss.restore([saved({ agentSession: "11111111-2222-4333-8444-555555555555" })]);
     await wait(30);
-    expect(before.ss.getState().list[0]).toMatchObject({ view: "chat", status: "running" });
+    // a saved chat-mode session is kept as its chat but starts nothing (chat mode replaced by bot threads, 2026-11-16)
+    expect(before.ss.getState().list[0]).toMatchObject({ view: "chat", status: "exited" });
     expect(before.ss.getState().list[0].open).toBeUndefined();
-    expect(before.calls().map((c) => c.op)).toEqual(["chat.start"]);
+    expect(before.calls().map((c) => c.op)).toEqual([]);
 
     const after = setup(["claude"]);
     after.ss.restore([saved({ open: "terminal", view: "terminal" })]);

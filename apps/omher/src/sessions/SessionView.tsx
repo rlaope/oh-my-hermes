@@ -20,8 +20,9 @@ import type { SessionQueue } from "../chat/parts/Timeline";
 import { ownSetting } from "./ownSetting";
 import type { Bot } from "../lib/protocol";
 import { AgentMark } from "./AgentMark";
+import { fgName, TermRowMark } from "./TermRowMark";
 import { SessionFace } from "./SessionFace";
-import { agentDef, agentLabel, continues, GONE, isCustom, isGone, STOPS_BACKGROUND, draftOpen, folderChoices, folderName, hermesOnly, missingNote, opensAs, parentPath, sessionMode, terminalNote, tildePath, type AgentId, type OpenAs, type SessionRec } from "./agents";
+import { agentDef, agentLabel, continues, GONE, isCustom, isGone, STOPS_BACKGROUND, draftOpen, folderChoices, folderName, hermesOnly, missingNote, opensAs, parentPath, sessionMode, termMarkAgent, terminalNote, tildePath, type AgentId, type OpenAs, type SessionRec } from "./agents";
 import { pickTitle } from "./titles";
 import { t as tr, tx, type Key } from "../i18n";
 import { windowWatched } from "../lib/notify";
@@ -816,7 +817,8 @@ export function SessionView() {
   const chatKey = getSessions().chatKey(rec.id);
   // a session opened as a terminal is one whatever its agent usually does: it has no chat, no model and no toggle
   const mode = sessionMode(ss.agents, rec);
-  const label = agentLabel(rec.agent, ss.agents);
+  // a terminal names the CLI in its foreground (a Shell where `claude` runs reads Claude Code)
+  const label = mode === "terminal" && rec.fgAgent ? fgName(rec.fgAgent) : agentLabel(rec.agent, ss.agents);
   // DeepSeek Harness ships no terminal profile: a DSH chat has no Terminal view (and its model is set in its own app).
   // A Hermes chat without oh-my-hermes has none either: that view starts `omh`, which is not there.
   const noTerminal = rec.agent === "dsh" || (rec.agent === "omh" && hermesOnly(ss.agents));
@@ -864,7 +866,7 @@ export function SessionView() {
     <>
       <header className="head" data-testid="header">
         <span className="ss-head-mark">
-          <AgentMark agent={rec.agent} size={18} />
+          {mode === "terminal" ? <TermRowMark agent={termMarkAgent(rec)} size={18} /> : <AgentMark agent={rec.agent} size={18} />}
         </span>
         {/* two boxes that are not there on a wide header (display: contents): on a narrow one with background work
             they let the status, the label and its Stop go under the name (sessions.css) */}
@@ -880,7 +882,7 @@ export function SessionView() {
           </span>
           <span className="ss-head-now">
             <span
-              className={`ss-head-st ${rec.view === "terminal" && canToggle ? "mode" : rec.status}${showChat && !turn ? " idle" : ""}${showChat && needs ? " needs" : ""}`}
+              className={`ss-head-st ${rec.view === "terminal" && canToggle ? "mode" : rec.status}${mode === "terminal" ? " term" : ""}${showChat && !turn ? " idle" : ""}${showChat && needs ? " needs" : ""}`}
               title={status}
               data-testid="session-status"
             >

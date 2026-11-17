@@ -2,7 +2,7 @@ import { expect, test, type Page } from "@playwright/test";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
-test.skip(true, "SESSIONS hidden in favour of bot threads (plan 2026-11-15)");
+test.skip(true, "chat-mode CLI sessions replaced by bot threads (2026-11-16: terminals kept)");
 
 async function open(page: Page, theme = "dark") {
   await page.addInitScript((theme) => {

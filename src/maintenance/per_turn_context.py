@@ -52,6 +52,9 @@ _RUNNING_BOARD_UNITS = 6
 # so the scenario pins one message rather than claiming a bound over all of them.
 _ROUTED_REQUEST = "review this PR for bugs before merge"
 _PLAIN_REQUEST = "migrate the database schema and fix the tests"
+# A request to fix a code defect, so the turn carries the debugging method
+# block (`defect_fix_method`) beside its candidate line.
+_DEFECT_FIX_REQUEST = "python3 -m unittest tests.test_invoice fails: the tax comes out wrong. Find the cause and fix it."
 # A work request the rule table has no cue for, so the turn's only routing
 # text is the skill candidate line (`skill_shortlist`); three candidates, the
 # most the line names.
@@ -259,11 +262,13 @@ def _run_pre_llm_call(
     # section for this session, as every admitted host does; without it the
     # primer rides the fenced context, as on a host that lacks the API.
     from ..plugin_bundle.omh.plan_follow_on import reset_plan_follow_on_state
+    from ..plugin_bundle.omh.defect_fix_method import reset_method_block_state
     from ..plugin_bundle.omh.skill_shortlist import reset_candidate_line_state
 
     llm_hooks._reset_awareness_section_state()
     # Every scenario runs under one session id; each measures a fresh session.
     reset_candidate_line_state()
+    reset_method_block_state()
     reset_plan_follow_on_state()
     try:
         with tempfile.TemporaryDirectory() as tmp:
@@ -310,10 +315,18 @@ def pre_llm_call_context_scenario_chars() -> dict[str, int]:
 
     - `first_turn_without_section`: a session's first turn on a request with
       no OMH vocabulary, on a host that did not render the section (the primer
-      alone, inside the fence). This is the fallback, not the default.
+      inside the fence, plus the request's candidate line and, since it asks
+      to fix the tests, the debugging method block). This is the fallback,
+      not the default.
     - `route_hint`: a first turn on a routed request (the route hint).
     - `skill_candidates`: a later turn on a work request that gets the skill
       candidate line and no route hint.
+    - `defect_fix_method`: a later turn whose request asks to fix a code
+      defect, so it carries the debugging method block once per session
+      (`defect_fix_method`) beside whatever candidate line it gets. The
+      routed request below is a review, not a fix, so `all_surfaces` does not
+      carry the block; a fix request that is also routed, with a role and a
+      full board, can exceed it, as the other unseeded parts below can.
     - `role_marker`: a later turn carrying an `[omh-role:...]` marker, the
       largest shipped role.
     - `active_workflow`: a later turn while a workflow is active.
@@ -378,6 +391,7 @@ def pre_llm_call_context_scenario_chars() -> dict[str, int]:
         ),
         "route_hint": _run_pre_llm_call(no_seed, user_message=_ROUTED_REQUEST, is_first_turn=True),
         "skill_candidates": _run_pre_llm_call(no_seed, user_message=_CANDIDATE_REQUEST, **later),
+        "defect_fix_method": _run_pre_llm_call(no_seed, user_message=_DEFECT_FIX_REQUEST, **later),
         "role_marker": _largest_role("continue", no_seed, **later),
         "active_workflow": _run_pre_llm_call((_seed_active_workflow,), user_message="continue", **later),
         "running_work_board": _run_pre_llm_call((_seed_running_board,), user_message="continue", **later),

@@ -71,7 +71,9 @@ subagent card in the chat). The op is read-only and returns:
   the CLI home. Symlinks are refused, and a session from another folder is never picked. `thinking` parts and
   `reasoning` items are skipped.
 - **Every input and result** is clipped to 4 KB. Token-like strings
-  (`sk-…`, `ghp_…`, `gho_…`, `github_pat_…`, `xox[bpas]-…`, `AKIA…`) have their bodies replaced by `•••`.
+  (`sk-…`, `gh[pousr]_…`, `github_pat_…`, `glpat-…`, `xox[abprs]-…`, `AKIA…`, and the value of `token=`,
+  `credential=`, `password=`, `secret=`, `api_key=`) are replaced by `••••`, by omher's one masker
+  (`apps/omher/src/lib/secrets.json`, shared with the desktop shell and the page).
 
 The UI (`src/harness/AgentChat.tsx`) draws the session as a chat between agents, reusing the main chat's components:
 

@@ -385,12 +385,12 @@ pub fn layout(id: &str) -> Option<&'static Layout> {
 }
 
 /// A path's folder names, split on both separators so a Windows path reads the same on any host.
-fn parts_of(p: &Path) -> Vec<String> {
+pub(crate) fn parts_of(p: &Path) -> Vec<String> {
     // (the `?` of a Windows `\\?\` canonical path is no folder)
     p.to_string_lossy().split(['/', '\\']).filter(|c| !c.is_empty() && *c != "?").map(str::to_string).collect()
 }
 
-fn holds(parts: &[String], seq: &[&str]) -> bool {
+pub(crate) fn holds(parts: &[String], seq: &[&str]) -> bool {
     !seq.is_empty() && parts.windows(seq.len()).any(|w| w.iter().zip(seq).all(|(a, b)| a.eq_ignore_ascii_case(b)))
 }
 
@@ -691,6 +691,17 @@ struct Live {
     out: Arc<Out>,
 }
 
+impl Live {
+    /// The process [`crate::fg::Probe`] reads: the terminal's foreground process group leader (unix: the program a
+    /// shell runs now, else the shell), or on Windows the session's program (its tree is searched).
+    fn foreground(&self) -> Option<u32> {
+        #[cfg(unix)]
+        return self.master.process_group_leader().map(|p| p as u32);
+        #[cfg(not(unix))]
+        return self.pid;
+    }
+}
+
 /// Pending writes per session (keystrokes or whole pastes). A program that stops reading fills it, and
 /// further writes fail at once instead of piling up.
 pub(crate) const INPUT_QUEUE: usize = 256;
@@ -891,6 +902,42 @@ impl Sessions {
         for h in handles {
             let _ = h.join();
         }
+    }
+
+    /// Watch which agent CLI runs in session `id`'s foreground ([`crate::fg`]): every `every`, and `on_change` gets
+    /// the agent id (or `None`: a shell, any other program) only when it differs from the last one it got; it starts
+    /// from `None`. The watch ends when the session ends or is closed, handing on `None` then if an agent was shown.
+    /// Each tick takes the sessions lock only to read the terminal's foreground process group (unix) or the program's
+    /// pid (Windows); the process is read outside it.
+    pub fn watch_foreground<F>(self: &Arc<Self>, id: u32, every: Duration, mut on_change: F)
+    where
+        F: FnMut(Option<&'static str>) + Send + 'static,
+    {
+        let sessions = Arc::downgrade(self);
+        thread::spawn(move || {
+            let mut probe = crate::fg::Probe::default();
+            let mut last: Option<&'static str> = None;
+            loop {
+                thread::sleep(every);
+                let Some(s) = sessions.upgrade() else { break };
+                let pid = {
+                    let g = s.live.lock().unwrap();
+                    match g.get(&id) {
+                        Some(l) if !l.exited.load(Ordering::SeqCst) => l.foreground(),
+                        _ => break,
+                    }
+                };
+                drop(s);
+                let now = pid.and_then(|p| probe.agent(p));
+                if now != last {
+                    last = now;
+                    on_change(now);
+                }
+            }
+            if last.is_some() {
+                on_change(None);
+            }
+        });
     }
 
     #[cfg(test)]
@@ -1975,6 +2022,83 @@ mod tests {
         assert_eq!(s.count(), 0);
         assert!(wait_for(|| exit.lock().unwrap().is_some()), "close did not stop cat");
         assert!(s.write(id, b"x").is_err());
+    }
+
+    /// A folder with a fake `claude` (`#!/bin/sh` running `body`) for a session's PATH.
+    #[cfg(unix)]
+    fn fake_claude(tag: &str, body: &str) -> PathBuf {
+        use std::os::unix::fs::PermissionsExt;
+        let dir = std::env::temp_dir().canonicalize().unwrap().join(format!("omher-fg-{tag}-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let p = dir.join("claude");
+        std::fs::write(&p, format!("#!/bin/sh\n{body}\n")).unwrap();
+        std::fs::set_permissions(&p, std::fs::Permissions::from_mode(0o755)).unwrap();
+        dir
+    }
+
+    /// What a foreground watch handed on, in order.
+    #[cfg(unix)]
+    type FgSeen = Arc<Mutex<Vec<Option<&'static str>>>>;
+
+    /// Start `sh -c <script>` with `dir` first on PATH and record what the foreground watch hands on.
+    #[cfg(unix)]
+    fn watch(s: &Arc<Sessions>, dir: Option<&Path>, script: &str) -> (u32, FgSeen, Arc<AtomicBool>) {
+        let path = dir.map(|d| OsString::from(format!("{}:/usr/bin:/bin", d.display())));
+        let exited = Arc::new(AtomicBool::new(false));
+        let x = exited.clone();
+        let argv = vec!["/bin/sh".into(), "-c".into(), script.into()];
+        let id = s
+            .spawn(argv, &std::env::temp_dir().canonicalize().unwrap(), path, &[], 80, 24, move |ev| {
+                if let Output::Exit(_) = ev {
+                    x.store(true, Ordering::SeqCst);
+                }
+            })
+            .unwrap();
+        let seen = Arc::new(Mutex::new(Vec::new()));
+        let o = seen.clone();
+        s.watch_foreground(id, Duration::from_millis(50), move |a| o.lock().unwrap().push(a));
+        (id, seen, exited)
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_plain_program_in_the_foreground_is_no_agent() {
+        let s = Sessions::new();
+        let (id, seen, _) = watch(&s, None, "exec sleep 3");
+        thread::sleep(Duration::from_millis(800));
+        s.close(id);
+        thread::sleep(Duration::from_millis(200));
+        assert_eq!(*seen.lock().unwrap(), Vec::<Option<&str>>::new());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_claude_on_path_in_the_foreground_is_claude() {
+        // the script stays the foreground process (it waits for its own `sleep`): /bin/sh running …/claude
+        let dir = fake_claude("on", "sleep 3");
+        let s = Sessions::new();
+        let (id, seen, _) = watch(&s, Some(&dir), "exec claude");
+        assert!(wait_for(|| seen.lock().unwrap().contains(&Some("claude"))), "{:?}", seen.lock().unwrap());
+        thread::sleep(Duration::from_millis(300));
+        assert_eq!(*seen.lock().unwrap(), vec![Some("claude")], "sent once, not once a tick");
+        // closing the session hands on null
+        s.close(id);
+        assert!(wait_for(|| seen.lock().unwrap().len() == 2), "{:?}", seen.lock().unwrap());
+        assert_eq!(*seen.lock().unwrap(), vec![Some("claude"), None]);
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn the_watch_sends_each_change_once() {
+        // shell (none) -> claude -> claude execs sleep (none) -> the program ends
+        let dir = fake_claude("seq", "sleep 1; exec sleep 1");
+        let s = Sessions::new();
+        let (_id, seen, exited) = watch(&s, Some(&dir), "sleep 0.5; exec claude");
+        assert!(wait_for(|| exited.load(Ordering::SeqCst)), "the program did not end");
+        thread::sleep(Duration::from_millis(200));
+        assert_eq!(*seen.lock().unwrap(), vec![Some("claude"), None]);
+        let _ = std::fs::remove_dir_all(dir);
     }
 
     #[cfg(unix)]

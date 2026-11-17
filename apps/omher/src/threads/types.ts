@@ -59,10 +59,18 @@ export function threadEvent(ev: { event: string }): ThreadEvent | null {
  *  at the end): the bridge acts on it and the final answer comes without it, so the streaming bubble hides it too. */
 const SPLIT_FENCE = /^ {0,3}(`{3,}|~{3,})[ \t]*omher-thread(?:-route)?[ \t]*(?:\r?\n[\s\S]*?\r?\n {0,3}\1[ \t]*$|\r?\n[\s\S]*$|$)/gm;
 const SPLIT_INLINE = /^ {0,3}(`{3,})omher-thread(?:-route)?[ \t]+\{[^\n]*\}[ \t]*\1[ \t]*$/gm;
+/** The JSON on the opening fence line, closed on the next line (or that close, or anything after the line, not
+ *  streamed yet). */
+const SPLIT_OPEN_LINE = /^ {0,3}(`{3,}|~{3,})[ \t]*omher-thread(?:-route)?[ \t]+\{[^\n]*(?:\r?\n {0,3}[`~]+[ \t]*$|\s*(?![\s\S]))/gm;
 
 export function hideSplitBlocks(text: string): string {
   if (!text.includes("omher-thread")) return text;
-  return text.replace(SPLIT_INLINE, "").replace(SPLIT_FENCE, "").replace(/\n{3,}/g, "\n\n").trim();
+  return text
+    .replace(SPLIT_INLINE, "")
+    .replace(SPLIT_OPEN_LINE, "")
+    .replace(SPLIT_FENCE, "")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
 }
 
 /** Store key of a thread's chat: the same `fold:<bot>:<id>` the bridge's `session`-tagged events land under. */

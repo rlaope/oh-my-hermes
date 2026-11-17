@@ -4,26 +4,13 @@ All notable changes will be documented here.
 
 ## Unreleased
 
-- **omher: a routine that ran fine no longer adds a line to the chat.** A job on a short schedule (every 30 minutes)
-  filled its bot's chat with "Routine · … · done" lines and unreads. Now only a failed run shows there; every run's
-  result stays on the Automations page (last run, status), and a bot-chat job's answer still arrives as its message.
-
-- **omher: a message you send while the bot is answering waits behind a ↵ mark, and you choose what it does.** It
-  shows as a muted bubble with "Waiting" and goes out on its own after the turn, one per turn, in order, through
-  Hermes' own queue. Click the ↵ for Send now (stops the answer once, this message goes next), Steer (adds it to the
-  running answer through Hermes' `session.steer`, without stopping it), Edit (back into the box) or Delete. A steer
-  whose outcome Hermes could not confirm is never sent twice: the bubble says it might already be in the answer and
-  offers Send or Delete. Waiting messages survive a reload, returning to the box as a draft. SESSIONS chats get the
-  same menu; Steer works for Codex, Claude Code, pi, oh-my-pi and OmO and is off, with the reason, for the others.
-
-- **A bot can watch a Slack or Discord channel and tell you first.** Ask it in words ("watch #og and tell me first
-  when someone reports an outage"); it confirms where, what, how often (every 5 minutes by default) and where it
-  reports in one line, then sets up a Hermes cron job with a small collector that reads only new posts and wakes no
-  model when there are none. A match reaches you in omher even for a bot you never opened: one "Watch · <name>" line,
-  a notification, an unread and the Dock badge; alerts that piled up while omher was closed become one summary, and a
-  run that found nothing leaves no trace. The alert only reports what happened with a link, never an action taken from
-  the post. Automations lists each watch (where, what, interval, last check, last alert, and "Can't read this
-  channel" when the bot lost access) with Pause, Resume and Delete, and "+ New watch" writes the request for you.
+- **omher: reasoning levels read as their own names in every language.** The model pill, the picker and Settings show
+  none, low, medium, high, xhigh and max as Hermes, Codex and Claude Code name them, instead of translated words
+  ("높음", "最大") or renamed ones (xhigh as "Max").
+- **omher: technical words and setting values stay in English in Korean, Japanese and Chinese.** The permission modes
+  (Ask, Plan, Accept edits, Read-only, Auto in folder), Steer, Diff, Worktree, exit codes, Scrollback, GPU renderer,
+  chain head / fallback, effort and the colour set names (Graphite, Ocean…) read as written instead of 스티어링,
+  워크트리, 종료 코드, 差分, 引导 and the like; sentences around them stay translated.
 
 - **An OMH TUI reply no longer hangs on a rail.** The `⚚ Hermes · <model>` header starts at the left edge and the
   reply's text sits two cells in, with no `┃` beside it, so a reply reads apart from your prompts and the tool calls,
@@ -39,20 +26,6 @@ All notable changes will be documented here.
   dispatcher signs the arm setup it reads from disk into each receipt, and fan-in refuses a cell whose setup
   contradicts its arm. New `--provider-base-url`, `--provider-api-mode` and `--provider-key-env` declare a custom
   provider whose key arrives only by environment. Every other Hermes child keeps safe mode.
-- **omher: Plans › Dependencies is one row per task, not one per edge.** Each row is the task with its status, and
-  under it what it waits for, each with that task's own status. An edge another path already implies folds into
-  "+N further up" (a repair edge never folds), so a plan of 8 tasks and 15 edges reads as 6 rows, not 15. Hovering
-  a row lights its box in the drawing above; clicking it opens the node. The heading counts the rows.
-- **omher: work happens in threads under a bot.** Right-click a bot for "New thread · <bot>", or let the bot open
-  threads itself when you ask for two separate things at once; its answer then links to each thread, and a message
-  that belongs in an open thread gets a "Send this to <thread>?" card. Each thread row shows a live state (a spinner
-  while it runs, a slow amber dot when it needs you, a check when done, an x when it failed or stopped) and the marks
-  of who works in it: Hermes, or Claude Code, Codex and others it handed work to. The x on a row asks first, then stops
-  the thread and archives it in Hermes; nothing is deleted. In Plans, clicking a step that a subagent or another
-  harness ran opens its work as a chat between the agents: the prompt it got, the commands it ran with their results,
-  its own sub-steps and its answer, read-only. Ctrl+` opens a terminal panel at the bottom with your own login shell
-  in the open thread's folder. The side panel can be maximised (its button, a double-click on the tab row, or ⌘⇧G;
-  Esc restores). The SESSIONS section is hidden in favour of threads. (#2906)
 - **A paired-run receipt now says what each cell's child did, not only how long it took.** Before the arm home is
   removed, the dispatcher reads the child's own rows from that home's `state.db` and signs a metadata-only
   `cell_trace` into the receipt: API calls, input/output/cache/reasoning tokens, the ordered tool names, how many
@@ -90,6 +63,31 @@ All notable changes will be documented here.
   where they were. The dag-ulw skill now also says what to do where `delegate_task` returns its children inside the
   call (a finite one-shot session): settle and dispatch the next layer in the same turn. "current" said of the
   workspace (the current directory, branch or file) is no longer read as a live-information cue.
+
+- **Another OMH TUI no longer exits when Hermes' gateway restarts, and typing shows while it reattaches.** Where no
+  service runs the gateway, `hermes gateway restart` (also `/gateway restart` from another TUI) stops it as `hermes
+  gateway stop` does, so its record says `stopped` with no restart asked, and starts the new one a few seconds later.
+  Every other TUI attached to it read that record as a stop and left at once with the resume hint. A stopped record is
+  now watched for up to 30 s, with no try: a new live record reattaches the session as a restart run elsewhere, a
+  failed start ends with Hermes' reason, and a record still stopped then leaves as before, so no try ever starts a
+  gateway the person stopped. While any respawn or reattach waits, text and its editing keys go into the composer at
+  once and show on the next frame; before, every key was held unseen until the gateway was back, which read as a
+  frozen TUI. Enter, a paste, a key that opens a list and every key after one of those still wait for the gateway, in
+  order.
+
+- **A request to fix a code defect now gets OMH's debugging method in the turn, not only a skill name.** Hermes'
+  skills index tells a model not to open process skills such as debugging, so `omh-app-debugging` and
+  `omh-verification-gate` stayed closed on exactly the turns they exist for. On a
+  turn that asks to fix code (a change verb such as fix, debug, "make ... pass", 고쳐, with a code object such as a
+  test, a traceback, a source path or a function), the plugin now adds a short block once per session: reproduce
+  first, trace the bad value to where it is produced, try other valid inputs, run the whole suite. Questions,
+  reviews, features and fixes of anything that is not code get nothing new.
+
+- **OMH TUI: Ctrl+Enter with an image attached sends it now.** Before, a prompt with an image never went into a
+  running turn: Ctrl+Enter left it as a `⧗` queued row over the composer until the turn finished. Now Ctrl+Enter
+  stops the turn and sends the prompt with its image the moment the turn ends. Meanwhile it shows above the working
+  row as your prompt, not a queued row. Esc again gives it back to the composer. Enter with an image still queues for
+  the turn's end, and Ctrl+Enter with text alone still steers without stopping anything.
 
 ## 4.0.8 - 2026-11-15
 
@@ -351,6 +349,24 @@ All notable changes will be documented here.
   refused; a plain-HTTP ask never goes through `HTTP_PROXY`, so the key is not
   sent in clear to a proxy; and `typesafe_model` never applies to TypeSafe's
   own host however it is spelled. Thanks @brentkearney. (#2716)
+- **omher 0.2.11.** Messages typed mid-answer wait behind a ↵ menu, a reply quotes what it answers, work happens in
+  threads under a bot, and a bot can watch a Slack or Discord channel for you.
+  - **A message sent while the bot answers waits behind ↵.** Send now, Steer (joins the running answer), Edit or
+    Delete; a steer Hermes could not confirm is never sent twice, and waiting messages survive a reload. (#2905)
+  - **An answer to several messages quotes each one, Instagram-DM style,** as faint one-line bubbles above it; a
+    click shows that message. (#2901)
+  - **One bubble per turn, in the order things happened;** a message sent while an answer shows stays below it. (#2900)
+  - **Threads under a bot:** right-click a bot for a new thread, live state per thread, and a step another agent ran
+    opens as a read-only chat. (#2906)
+  - **Channel watch alerts arrive as "Watch · <name>",** with a notification, an unread and the Dock badge;
+    Automations lists each watch with its last check and alert. (#2904)
+  - **Settings, Automations and Plugins have a back arrow at the top left.** (#2911)
+  - **A routine that ran fine no longer adds a line to the chat;** only a failed run does, and every run stays on the
+    Automations page. (#2913)
+  - **Plans:** a spinner and seconds on running steps (#2899); Dependencies is one row per task (#2903).
+  - **Approval buttons have colours:** deny red, allow once purple, allow for this session orange. (#2902)
+  - **Attached images show as large tiles** (#2898); **the side panel is resized with the mouse** (#2897); **bots
+    reorder by drag** (#2896).
 - **omher 0.2.10.** Bots on another computer join over SSH, the sidebar starts with one bot and adds the others from
   +, and you can add your own ACP coding agent to SESSIONS, by hand or from a bot's draft.
   - **Connect a Hermes on another computer over SSH.** The sidebar + has "Connect over SSH": pick a host from

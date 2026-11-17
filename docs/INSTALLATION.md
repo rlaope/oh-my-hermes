@@ -1396,7 +1396,7 @@ Esc closes it):
 | --- | --- |
 | Enter | Sends the composer; while a turn runs, typed text goes into it now as a steer (shown as your prompt above the working row, read at the next tool call); a slash command, a `!` line, a prompt with images, one sent in plan mode or behind queued lines queues for the turn's end instead (`/stop`, `/steer`, `/queue`, `/btw`, `/bg`, `/yolo`, `/effort`, `/reasoning <level>` and the commands about this terminal run at once), whatever Hermes' `busy_input_mode` says |
 | `\` then Enter, Alt+Enter, Shift+Enter, Ctrl+J | Adds a line; with a list or menu focused, Ctrl+J moves down instead. Alt+Enter and Shift+Enter still add a line in an open menu; backslash then Enter may accept a completion |
-| Ctrl+Enter | While a turn runs, sends the composer's text into it now as a steer (`/steer <text>` too); idle, sends as Enter does |
+| Ctrl+Enter | While a turn runs, sends the composer's text into it now as a steer (`/steer <text>` too); with images, stops the turn and sends the prompt with them as soon as it ends; idle, sends as Enter does |
 | Ctrl+Enter, Ctrl+J | While a turn runs, on an empty composer, send the oldest queued prompt into it now as a steer; the row under the queue names the key (Ctrl+J where the terminal has not shown it tells Ctrl+Enter from Enter). A queued `!` line, slash command, skill prompt or plan prompt waits its turn |
 | Tab | Completes a slash command, or the `@` reference being typed; on an open menu, Enter takes the highlighted row too, and sends a command already typed in full |
 | Shift+Tab | Cycles the input mode: normal, accept all (Hermes asks no approvals in this session), plan (prompts go as /plan); while Hermes itself has approvals off, turns plan on and off |
@@ -1720,7 +1720,11 @@ A steer adds what you typed to the turn that is running, without interrupting
 it, as Claude Code does with text you send mid-turn: Enter sends one while a
 turn runs (so do Ctrl+Enter and `/steer <text>`), unless what you typed is a
 slash command, a `!` line, a prompt with images, a prompt in plan mode, or
-lines are already queued, which queue as before. Hermes reads it after its
+lines are already queued, which queue as before. Ctrl+Enter on a prompt with
+images stops the turn instead (Hermes takes text alone into a running turn):
+the prompt shows above the working row as a dim prompt and goes, with its
+images, as soon as that turn ends; Esc again gives it back to the composer.
+Hermes reads a steer after its
 next tool call, or, while it is compressing the
 context, queues it and sends it as the next prompt once compression is done.
 Hermes gives the same answer for both. The steer shows as a dim prompt row
@@ -2003,8 +2007,8 @@ effort its config sets and Vim mode), reading the command list and the
 the gateway itself exits mid-session with a failure, the TUI starts it again
 the way Hermes' launcher set it up and resumes the same session, saying so
 (`The Hermes gateway exited (code 1): starting it again and resuming session
-<id> (1 of 3 in 60 s); what you type waits until it is back, and ctrl+c
-leaves.`), as Hermes' own
+<id> (1 of 3 in 60 s); you can keep typing, Enter waits until it is back, and
+ctrl+c leaves.`), as Hermes' own
 TUI does; each attempt waits up to 15 s for the new gateway, the time Hermes'
 own TUI gives one before it reports a slow start (or what
 `HERMES_TUI_STARTUP_TIMEOUT_MS` sets, at least 5 s, as there). A question it had asked closes
@@ -2017,8 +2021,15 @@ before it resumed the session counts as one of them; after that, or when the
 new gateway refuses the resume or does not answer it, it leaves with the command that reopens
 the session, `omh --resume <id>` (`hermes --tui` when something other than `omh` opened the TUI),
 and Ctrl+C or Ctrl+D while it waits leaves the
-same way, the new gateway stopped. A gateway that exits normally, or after you
-quit, is not started again. A
+same way, the new gateway stopped. While it waits, or reattaches after a
+restart, what you type shows in the composer at once; Enter, a paste and the
+keys after them wait until it is back, in order. When the gateway's record
+says it was stopped with no restart asked, the TUI tries nothing (a try would
+start a gateway you stopped) and watches the record for up to 30 s, because
+Hermes' own `hermes gateway restart` without a service stops the gateway the
+same way and starts the new one seconds later: a new live record reattaches
+the session, and a record still stopped then leaves with the resume command.
+A gateway that exits normally, or after you quit, is not started again. A
 turn that brings no event the TUI shows, only types it does not know (Hermes
 renamed its turn events), gets one notice pointing at `omh doctor`, which
 prints the installed Hermes commit next to the one the TUI was declared
