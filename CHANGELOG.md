@@ -4,6 +4,12 @@ All notable changes will be documented here.
 
 ## Unreleased
 
+- **omher: the bot's sessions elsewhere stay out of its chat.** Answers from its Slack, Discord and cron sessions no
+  longer sit between this chat's messages as bubbles (with only a small link to say where each came from, they read as
+  part of this conversation). The header's "N other places" and the side panel's "Where Kami is" list them, each row
+  opens its thread (↗), and Reply there moved onto the row (hover), still only pointing the next message at that
+  thread.
+
 - **An OMH TUI reply no longer hangs on a rail.** The `⚚ Hermes · <model>` header starts at the left edge and the
   reply's text sits two cells in, with no `┃` beside it, so a reply reads apart from your prompts and the tool calls,
   which keep their rails. The two cells the bar took go to the reply's text, and a copy still leaves the margin out.

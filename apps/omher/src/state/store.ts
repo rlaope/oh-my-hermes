@@ -228,7 +228,6 @@ export type ClarifyItem = {
   answers?: ClarifyAnswers;
   expired?: AskExpiry;
 };
-export type AwayItem = { kind: "away"; id: string; ts: number; away: Away };
 export type RoutineItem = {
   kind: "routine";
   id: string;
@@ -279,7 +278,7 @@ export type ChatItem =
   | SystemItem
   | ThreadLinkItem
   | ThreadRouteItem;
-export type TimelineItem = ChatItem | AwayItem;
+export type TimelineItem = ChatItem;
 
 export interface Chat {
   /** user / assistant / activity / approval / clarify / routine rows in arrival order. */
@@ -1605,29 +1604,13 @@ export function mustHold(state: AppState, bot: string): boolean {
 
 // ---- selectors ------------------------------------------------------------------------------
 
-const timelineCache = new Map<string, { items: ChatItem[]; away: Away[] | undefined; max: number; out: TimelineItem[] }>();
-
 /**
- * The bot's timeline: chat rows in order with its elsewhere sessions placed by `last_active`.
- * Only the `maxAway` most recent elsewhere sessions go in (the UI shows the rest in the panel).
- * The result is memoised, so it is safe to call from render.
+ * The bot's timeline: its chat rows in order. The bot's sessions elsewhere (Slack, Discord, cron) are not placed in
+ * it: the header's "N other places" and the side panel show them (khope: answers from other channels in this chat,
+ * with nothing saying where they came from, made the chat hard to follow).
  */
-export function selectTimeline(state: AppState, bot: string, maxAway = 2): TimelineItem[] {
-  const items = state.chats[bot]?.items ?? EMPTY_ITEMS;
-  const away = state.elsewhere[bot];
-  const hit = timelineCache.get(bot);
-  if (hit && hit.items === items && hit.away === away && hit.max === maxAway) return hit.out;
-  const recent = [...(away ?? [])].sort((a, b) => b.last_active - a.last_active).slice(0, maxAway);
-  const out: TimelineItem[] = [...items];
-  // oldest first so equal timestamps keep newest-last
-  for (const a of recent.reverse()) {
-    const row: AwayItem = { kind: "away", id: `away-${a.id}`, ts: a.last_active, away: a };
-    let idx = out.length;
-    while (idx > 0 && out[idx - 1].ts > row.ts) idx -= 1;
-    out.splice(idx, 0, row);
-  }
-  timelineCache.set(bot, { items, away, max: maxAway, out });
-  return out;
+export function selectTimeline(state: AppState, bot: string): TimelineItem[] {
+  return state.chats[bot]?.items ?? EMPTY_ITEMS;
 }
 const EMPTY_ITEMS: ChatItem[] = [];
 

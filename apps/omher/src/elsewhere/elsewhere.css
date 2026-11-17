@@ -52,70 +52,6 @@
   object-fit: contain;
 }
 
-/* elsewhere in the timeline: an ordinary bot bubble ending in a link to its thread */
-.ew-msg .b {
-  white-space: normal;
-}
-/* The thread link: the app's mark, then the underlined place ("[Slack] #og-dev"). Only the text is
-   underlined, so the mark reads as an icon, not as part of the word. */
-.ew-link,
-.ew-where {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  vertical-align: -2px;
-  color: var(--link);
-  white-space: nowrap;
-}
-.ew-link .ew-lt {
-  text-decoration: underline;
-  text-decoration-thickness: 1px;
-  text-underline-offset: 3px;
-}
-.ew-where {
-  color: var(--muted);
-}
-.ew-link:hover {
-  color: var(--ink);
-}
-.ew-link .src-ic,
-.ew-where .src-ic {
-  flex: none;
-  transition: transform 0.15s ease;
-}
-/* Room for the live ring around the mark, kept whether or not it runs so nothing moves when it stops. The room
-   before the mark and before "working" sits on the end of what precedes them, so a link or a "working" that wraps
-   starts on the text's left edge, not 4px or 8px in. */
-.ew-link .ui-ring-w,
-.ew-where .ui-ring-w {
-  margin-right: 3px;
-}
-.ew-text {
-  margin-right: 4px;
-}
-.ew-link:has(+ .ew-working),
-.ew-where:has(+ .ew-working) {
-  margin-right: 8px;
-}
-/* an away session's ring is quieter than the bot's own: thinner and dimmed, so it never competes with the
-   sidebar's live signal */
-.ew-msg .ui-ring {
-  --ring-w: 1.5px;
-  opacity: 0.6;
-}
-.ew-link:hover .src-ic {
-  transform: scale(1.12);
-}
-.ew-working {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  font-size: 11px;
-  color: var(--quiet);
-  white-space: nowrap;
-  vertical-align: 1px;
-}
-
 /* Details panel */
 .ew-panel {
   min-height: 0;
@@ -185,6 +121,39 @@
 .ew-sess > li:not(.ew-ss) {
   display: block;
   min-width: 0;
+}
+/* Reply there: shown on a row's hover or focus, over the row's top right corner (where the time sits) */
+.ew-sess > li.ew-has-reply {
+  position: relative;
+}
+.ew-reply {
+  position: absolute;
+  top: 5px;
+  right: 6px;
+  padding: 2px 8px;
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  background: var(--raise);
+  color: var(--body);
+  font: inherit;
+  font-size: 11.5px;
+  cursor: pointer;
+  opacity: 0;
+  pointer-events: none;
+}
+/* while it shows, the title stops short of it instead of running under it */
+.ew-sess > li.ew-has-reply:hover .t1,
+.ew-sess > li.ew-has-reply:focus-within .t1 {
+  padding-right: 64px;
+}
+.ew-sess > li.ew-has-reply:hover .ew-reply,
+.ew-sess > li.ew-has-reply:focus-within .ew-reply {
+  opacity: 1;
+  pointer-events: auto;
+}
+.ew-reply:hover {
+  background: var(--hover);
+  color: var(--ink);
 }
 a.ew-ss,
 div.ew-ss {
@@ -257,76 +226,3 @@ div.ew-ss {
   color: var(--quiet);
 }
 
-/* "Reply there": hover actions beside an away bubble. They only fill the composer; nothing is sent. */
-.ew-row {
-  display: flex;
-  align-items: flex-end;
-  gap: 6px;
-  max-width: 100%;
-  min-width: 0;
-}
-.ew-row > .b {
-  min-width: 0;
-}
-.ew-acts {
-  display: flex;
-  align-items: center;
-  gap: 2px;
-  flex: none;
-  opacity: 0;
-  transition: opacity 0.12s ease;
-}
-.ew-msg:hover .ew-acts,
-.ew-acts:focus-within,
-.ew-acts.on {
-  opacity: 1;
-}
-.ew-act {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  height: 24px;
-  padding: 0 7px;
-  border-radius: var(--r-sm);
-  font-size: 11.5px;
-  color: var(--muted);
-  white-space: nowrap;
-}
-.ew-act-ic {
-  width: 24px;
-  padding: 0;
-  justify-content: center;
-}
-.ew-act:hover,
-.ew-act[aria-expanded="true"] {
-  background: var(--raise2);
-  color: var(--ink);
-}
-.ew-menu-w {
-  position: relative;
-  display: inline-flex;
-}
-.ew-menu {
-  padding: 4px;
-}
-.ew-mi {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  width: 100%;
-  height: 28px;
-  padding: 0 8px;
-  border-radius: var(--r-sm);
-  font-size: 12px;
-  color: var(--body);
-  text-align: left;
-  white-space: nowrap;
-}
-.ew-mi:hover {
-  background: var(--raise2);
-  color: var(--ink);
-}
-.ew-mi svg {
-  flex: none;
-  color: var(--muted);
-}

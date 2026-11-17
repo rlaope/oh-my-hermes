@@ -1,4 +1,4 @@
-// "Reply there": an away bubble puts a thread reference in the composer; the bot gets it as context in an
+// "Reply there": a row in the side panel's "Where Kami is" puts a thread reference in the composer; the bot gets it as context in an
 // ordinary turn and posts with its own tools. omher itself never writes to Slack or Discord.
 import { expect, test, type Page } from "@playwright/test";
 import { mkdirSync } from "node:fs";
@@ -76,8 +76,11 @@ async function shot(page: Page, name: string) {
 async function open(page: Page) {
   await page.goto("/");
   await expect(page.getByTestId("bot-kami")).toHaveAttribute("aria-current", "true");
-  await expect(page.getByTestId("timeline").getByTestId("away")).toHaveCount(2);
+  await page.getByTestId("places").click();
+  await expect(page.getByTestId("details-panel").getByTestId("where-row")).toHaveCount(4);
 }
+/** The panel row for one of the bot's sessions elsewhere. */
+const row = (page: Page, session: string) => page.getByTestId("details-panel").locator(`[data-testid=where-row][data-session=${session}]`);
 
 test.beforeEach(async () => {
   await mock("mock.reset");
@@ -86,12 +89,12 @@ test.beforeEach(async () => {
 test("hover Reply there → chip → send: the submitted text carries the target block once", async ({ page }) => {
   await page.emulateMedia({ colorScheme: "dark" });
   await open(page);
-  const slack = page.getByTestId("timeline").locator("[data-testid=away][data-source=slack]");
-  const action = slack.getByTestId("reply-there");
-  const acts = slack.getByTestId("away-actions");
-  await expect(acts).toHaveCSS("opacity", "0"); // hidden until hover
+  const slack = row(page, "slack-og-dev-502");
+  const action = slack.getByTestId("where-reply");
+  await expect(action).toHaveCSS("opacity", "0"); // hidden until hover
   await slack.hover();
-  await expect(acts).toHaveCSS("opacity", "1");
+  await expect(action).toHaveCSS("opacity", "1");
+  await expect(action).toHaveText("Reply there");
   await action.click();
 
   const chip = page.getByTestId("reply-chip");
@@ -128,15 +131,12 @@ test("hover Reply there → chip → send: the submitted text carries the target
   expect(ops.some((op) => /send_message|post|slack|discord|telegram/i.test(op))).toBe(false);
 });
 
-test("the ⋯ menu has Reply there too; the chip is removable (× and Backspace)", async ({ page }) => {
+test("Reply there on a Discord row; the chip is removable (× and Backspace)", async ({ page }) => {
   await page.emulateMedia({ colorScheme: "light" });
   await open(page);
-  const discord = page.getByTestId("timeline").locator("[data-testid=away][data-source=discord]").first();
+  const discord = row(page, "discord-cron-openmaus");
   await discord.hover();
-  await discord.getByTestId("away-more").click();
-  await expect(discord.getByTestId("menu-open")).toHaveText("Open in Discord");
-  await shot(page, "T15-menu-light.png");
-  await discord.getByTestId("menu-reply-there").click();
+  await discord.getByTestId("where-reply").click();
   const chip = page.getByTestId("reply-chip");
   await expect(chip).toHaveText("#cron · thread");
   await expect(chip.locator("svg.src-ic-discord")).toBeVisible();
@@ -149,7 +149,7 @@ test("the ⋯ menu has Reply there too; the chip is removable (× and Backspace)
 
   // Backspace in an empty composer removes the chip as well
   await discord.hover();
-  await discord.getByTestId("reply-there").click();
+  await discord.getByTestId("where-reply").click();
   await page.getByTestId("composer").fill("");
   await page.getByTestId("composer").press("Backspace");
   await expect(chip).toHaveCount(0);
@@ -194,10 +194,8 @@ test("a session with no thread offers no Reply there", async ({ page }) => {
     });
   });
   await open(page);
-  const slack = page.getByTestId("timeline").locator("[data-testid=away][data-source=slack]");
+  const slack = row(page, "slack-og-dev-502");
   await slack.hover();
-  await expect(slack.getByTestId("reply-there")).toHaveCount(0);
-  await slack.getByTestId("away-more").click();
-  await expect(slack.getByTestId("menu-reply-there")).toHaveCount(0);
-  await expect(slack.getByTestId("menu-open")).toBeVisible();
+  await expect(slack.getByTestId("where-reply")).toHaveCount(0);
+  await expect(slack.locator("a.ew-ss")).toBeVisible(); // it still opens in Slack
 });
