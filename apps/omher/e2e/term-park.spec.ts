@@ -402,8 +402,10 @@ test("GPU renderer on, arriving after the first fit: a TUI printed while hidden 
   for (let i = 0; i < 2; i++) {
     const id = await page.evaluate(() => (window as unknown as { __omherSessions: { startTerminal(a: string, cwd: string): string } }).__omherSessions.startTerminal("shell", "/home/you/code/repo"));
     await expect(page.getByTestId("terminal")).toHaveAttribute("data-session", id);
+    // xterm opens into the session's element a moment after the element is there (slower on a busy Windows runner)
+    await expect(page.locator(`[data-testid="terminal"][data-session="${id}"] .xterm`)).toHaveCount(1);
     await page.evaluate((sid) => {
-      (document.querySelector('[data-testid="terminal"] .xterm')!.parentElement as HTMLElement & { __sid?: string }).__sid = sid;
+      (document.querySelector(`[data-testid="terminal"][data-session="${sid}"] .xterm`)!.parentElement as HTMLElement & { __sid?: string }).__sid = sid;
     }, id);
     // shown until the GPU renderer has come; then the next one is opened and this one is hidden
     await expect.poll(() => page.evaluate(() => document.querySelectorAll('[data-testid="terminal"] .xterm canvas').length)).toBeGreaterThan(0);
