@@ -1180,7 +1180,7 @@ class RowTests(unittest.TestCase):
             # On the row's own second, the one its clock and its frames go by: never one ahead of the other.
             self.clock.at, self.wall.at = 100.37 + step, NOW + 0.6 + step
             shown = self.shown()
-            self.assertEqual(shown[0], WORKING_GLYPHS[(4033 + step) % len(WORKING_GLYPHS)])
+            self.assertTrue(shown.startswith(WORKING_GLYPHS[(4033 + step) % len(WORKING_GLYPHS)] + " "))
             self.assertIn(f"1h 07m {13 + step:02d}s", shown)
             glyphs.add(shown[0])
         self.assertGreater(len(glyphs), 1)

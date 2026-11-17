@@ -4,14 +4,6 @@ All notable changes will be documented here.
 
 ## Unreleased
 
-- **omher: reasoning levels read as their own names in every language.** The model pill, the picker and Settings show
-  none, low, medium, high, xhigh and max as Hermes, Codex and Claude Code name them, instead of translated words
-  ("높음", "最大") or renamed ones (xhigh as "Max").
-- **omher: technical words and setting values stay in English in Korean, Japanese and Chinese.** The permission modes
-  (Ask, Plan, Accept edits, Read-only, Auto in folder), Steer, Diff, Worktree, exit codes, Scrollback, GPU renderer,
-  chain head / fallback, effort and the colour set names (Graphite, Ocean…) read as written instead of 스티어링,
-  워크트리, 종료 코드, 差分, 引导 and the like; sentences around them stay translated.
-
 - **An OMH TUI reply no longer hangs on a rail.** The `⚚ Hermes · <model>` header starts at the left edge and the
   reply's text sits two cells in, with no `┃` beside it, so a reply reads apart from your prompts and the tool calls,
   which keep their rails. The two cells the bar took go to the reply's text, and a copy still leaves the margin out.
@@ -70,6 +62,10 @@ All notable changes will be documented here.
   stops the turn and sends the prompt with its image the moment the turn ends. Meanwhile it shows above the working
   row as your prompt, not a queued row. Esc again gives it back to the composer. Enter with an image still queues for
   the turn's end, and Ctrl+Enter with text alone still steers without stopping anything.
+
+- **OMH TUI: the working spinner stays in the theme colour on terminals that draw `✳` as an emoji.** Zellij Desktop
+  on macOS painted its two `✳` frames as a green emoji, so the spinner flashed green twice a cycle. Those frames now
+  ask for text presentation (U+FE0E) and stay one cell in the accent colour. Contributed by @DanRioDev (#2923).
 
 - **An OMH update asks one restart question, not two.** The TUI still asks once whether to restart on the new
   version. The reopened TUI no longer opens a second question about Hermes' gateway: when the gateway still runs the
@@ -339,6 +335,18 @@ All notable changes will be documented here.
   refused; a plain-HTTP ask never goes through `HTTP_PROXY`, so the key is not
   sent in clear to a proxy; and `typesafe_model` never applies to TypeSafe's
   own host however it is spelled. Thanks @brentkearney. (#2716)
+- **omher 0.2.12.** Terminal sessions come back as TERMINALS with each CLI's logo, a Tasks page brings GitHub, GitLab
+  and Linear issues into the app, and reasoning levels and technical words read as written in every language.
+  - **TERMINALS:** Shell or any CLI with a terminal view starts from the + menu in a folder you pick; rows group by
+    folder with the git branch, show the official logo of the CLI running inside and a live/exit status, BOTS and
+    TERMINALS scroll on their own, and bots scrolled out of view sit in a dock at the bottom. (#2912)
+  - **Tasks:** a sidebar row and a page for GitHub, GitLab and Linear issues and PRs, read-only through your own `gh`
+    / `glab`, with a detail drawer and Start in thread, which hands an issue to a bot. (#2908)
+  - **Removing a thread that still holds waiting messages no longer sends them.** (#2910)
+  - **Reasoning levels read as their own names** (none, low, medium, high, xhigh, max) in the model pill, the picker
+    and Settings in every language. (#2918)
+  - **Technical words and setting values stay in English in Korean, Japanese and Chinese** (permission modes, Steer,
+    Diff, Worktree, exit codes, colour set names); sentences around them stay translated. (#2920)
 - **omher 0.2.11.** Messages typed mid-answer wait behind a ↵ menu, a reply quotes what it answers, work happens in
   threads under a bot, and a bot can watch a Slack or Discord channel for you.
   - **A message sent while the bot answers waits behind ↵.** Send now, Steer (joins the running answer), Edit or

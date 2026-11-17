@@ -409,7 +409,8 @@ REDUCED_TICK_SECONDS = 1.0
 SWEEP_CLUSTERS = 3
 # The working row's glyph, one a tick: Claude Code's `· ✢ ✳ ✶ ✻ ✽` up and back down, starting at the `✻` that
 # reduced motion holds (frame 0).
-WORKING_GLYPHS = "✻✽✻✶✳✢·✢✳✶"
+# Keep frames as graphemes: VS15 makes the emoji-capable asterisk text, not a green emoji in Zellij.
+WORKING_GLYPHS = ("✻", "✽", "✻", "✶", "✳\ufe0e", "✢", "·", "✢", "✳\ufe0e", "✶")
 WORKING_VERB = "Working"  # the verb while Hermes says nothing it is doing
 # The end of Hermes' own spinner text, `f"{face} {verb}..."` (6c61c3e27d `agent/turn_iteration_prep.py`).
 SPINNER_DOTS = "..."
