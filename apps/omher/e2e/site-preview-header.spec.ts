@@ -1,8 +1,11 @@
-// The omher.app hero's live preview (site/app-preview, built by tools/build_omher_preview.sh): in its 400px chat (the
-// Plans panel pinned to 552px) the chat header keeps the bot name, the whole model name, the effort word and the panel
-// button, and nothing in it overlaps, through the story loop in which Kami's places chip goes from none to "1 other
-// place" to "2 other places", in every site language. The places chip is what gives way. This loads the built site
-// from disk over a local server, as a visitor at 1280x900 sees it, and measures the DOM inside the iframe.
+// The omher.app hero's live preview (site/app-preview, built by tools/build_omher_preview.sh), loaded from disk over a
+// local server as a visitor sees it, measured inside the iframe.
+// 1. The chat header keeps the bot name, the whole model name, the effort word and the panel button, and nothing in it
+//    overlaps, through the story loop in which Kami's places chip goes from none to "1 other place" to "2 other
+//    places", in every site language (1280x900). Below a 470px chat the places chip is what gives way.
+// 2. The bot chat is the widest column (the Plans panel starts at 352px), and the panel's own handle resizes it from
+//    the page: a drag in the outer page's coordinates and the arrow keys, both ways, between the app's limits, with
+//    the model name still whole in the narrowest chat.
 import { expect, test, type Page } from "@playwright/test";
 import { createServer, type Server } from "node:http";
 import { readFile } from "node:fs/promises";
@@ -120,4 +123,78 @@ test("the hero preview's chat header shows the whole model name through the stor
     expect(samples.some((s) => s.dot), `${lang}: saw the panel button's live dot`).toBe(true);
     expect(problems.slice(0, 8), `${lang}: ${problems.length} bad samples of ${samples.length}`).toEqual([]);
   }
+});
+
+test("the hero preview's Plans panel starts narrow and resizes by drag and arrow keys from the site page", async ({ browser }) => {
+  test.setTimeout(90_000);
+  const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
+  await page.goto(`${base}/?lang=en`, { waitUntil: "load" });
+  await page.waitForFunction(() => (window as unknown as { __hero?: { ready: boolean } }).__hero?.ready, null, { timeout: 45_000 });
+  // the settled window (no transform once scrolled a little), then the story opens Kami's plan in the panel
+  await page.mouse.move(5, 5);
+  await page.mouse.wheel(0, 200);
+  const frame = page.frames().find((f) => f.url().includes("app-preview"))!;
+  const handle = frame.locator('[data-testid="panel-resizer"]');
+  await expect(handle).toBeVisible({ timeout: 20_000 });
+  const cols = () =>
+    frame.evaluate(() => {
+      const w = (s: string) => Math.round(document.querySelector(s)!.getBoundingClientRect().width);
+      const ml = document.querySelector('[data-testid="header"] [data-testid="model-label"]');
+      return {
+        side: w('[data-testid="sidebar"]'),
+        chat: w(".main"),
+        panel: w('[data-testid="details"]'),
+        model: ml ? [ml.clientWidth, ml.scrollWidth] : null,
+        notes: ((window as unknown as { __omherPreviewToasts?: string[] }).__omherPreviewToasts ?? []).length,
+      };
+    });
+  await expect.poll(async () => (await cols()).panel).toBe(352);
+  // the window has finished its scroll-rise (no transform), and the handle has stopped moving: a drag that starts
+  // while the window still grows lands beside the 5px handle
+  await page.waitForFunction(() => getComputedStyle(document.querySelector("[data-app-shot]")!).transform === "none");
+  await expect
+    .poll(async () => {
+      const a = await handle.boundingBox();
+      await page.waitForTimeout(150);
+      const b = await handle.boundingBox();
+      return !!a && !!b && Math.abs(a.x - b.x) < 0.5 && Math.abs(a.height - b.height) < 0.5;
+    })
+    .toBe(true);
+  const start = await cols();
+  expect(start.chat, "the bot chat is the widest column").toBeGreaterThan(Math.max(start.side, start.panel));
+  const scrollY = await page.evaluate(() => scrollY);
+
+  // drag in the outer page: Playwright's box for an element in the iframe is in the page's coordinates, scaled
+  const drag = async (dx: number) => {
+    const b = (await handle.boundingBox())!;
+    const x = b.x + b.width / 2, y = b.y + b.height / 2;
+    await page.mouse.move(x, y);
+    await page.mouse.down();
+    for (let i = 1; i <= 10; i++) await page.mouse.move(x + (dx * i) / 10, y);
+    await page.mouse.up();
+    await page.waitForTimeout(300);
+    return cols();
+  };
+  const left = await drag(-120);
+  expect(left.panel, "dragged left: the panel grows").toBeGreaterThan(start.panel + 100);
+  expect(left.chat).toBeLessThan(start.chat - 100);
+  const widest = await drag(-600);
+  expect(widest.chat, "the chat stops at the app's 360px minimum").toBe(360);
+  expect(widest.model && widest.model[1] >= widest.model[0] && widest.model[0] > 0, "model name whole in a 360px chat").toBe(true);
+  const narrowest = await drag(700);
+  expect(narrowest.panel, "the panel stops at the app's 260px minimum").toBe(260);
+  expect(narrowest.chat).toBeGreaterThan(start.chat);
+
+  // keyboard: the handle takes focus; ←/→ move it 16px
+  await handle.focus();
+  await page.keyboard.press("ArrowLeft");
+  await expect.poll(async () => (await cols()).panel).toBe(276);
+  await page.keyboard.press("ArrowRight");
+  await expect.poll(async () => (await cols()).panel).toBe(260);
+  await expect(frame.locator('[data-testid="window"]')).toHaveAttribute("style", /--panel-w: 260px/);
+
+  // the drag neither scrolled the site page nor counted as an inert action
+  expect(await page.evaluate(() => scrollY)).toBe(scrollY);
+  expect((await cols()).notes).toBe(0);
+  await page.close();
 });
