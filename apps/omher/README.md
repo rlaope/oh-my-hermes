@@ -5,10 +5,12 @@ chat, and the app shows what that bot is doing in its other sessions (Slack, Dis
 read-only. Work happens in threads under a bot: right-click a bot for "New thread · <bot>", or let the bot open
 threads itself when a request splits into separate tasks. Each thread row shows its live state (running, needs you,
 done, failed) and the marks of whoever works in it (Hermes, or a harness it handed work to such as Claude Code or
-Codex); its x archives the thread in Hermes, never deletes it. Ctrl+` opens a bottom terminal panel running your own
-login shell in the open thread's folder. The SESSIONS section (coding agents you started yourself) is hidden in
-favour of threads; its code stays until a later release. It is part of this repository but is not part of the `omh`
-Python package.
+Codex); its x archives the thread in Hermes, never deletes it. Under the bots, TERMINALS lists the terminal sessions
+you start yourself (a Shell, or a coding CLI such as Claude Code or Codex), grouped by folder; each row carries the
+official logo of the CLI running in it. Above the bots, Tasks lists open issues and pull or merge requests read-only
+through your own `gh` or `glab`, and starts a thread from one; Linear shows a connect screen. Ctrl+` opens a bottom
+terminal panel running your own login shell in the open thread's folder. It is part of this repository but is not
+part of the `omh` Python package.
 
 Boundary: [`docs/OMHER-BOUNDARY.md`](../../docs/OMHER-BOUNDARY.md).
 
@@ -116,17 +118,19 @@ UI (React in a Tauri window)  ⇄  bridge (Python, loopback WebSocket)  ⇄  the
   computer's `~/.omher/peer/` (nothing else is written there) and forwards its loopback port. The local bridge then
   lists that computer's bots as `<peer>:<name>`, marked **SSH · <name>** in the sidebar, header and Settings; folder
   chats and Restart stay on this computer. The link reconnects with backoff when it drops. `BOUNDARY.md` rule 31.
-- **Sessions** (`src-tauri/src/sessions.rs`, `src/sessions/`): the SESSIONS `+` opens a menu of the agents found on
-  `PATH` and in the usual install folders (`~/.local/bin`, Homebrew, npm/pnpm/bun globals, `%APPDATA%\npm`): the
-  installed ones first, the last one used on top, the missing ones dimmed with their install line. Picking one
-  opens its New session chat at once; its composer names the agent, and the folder chip under it picks the folder
-  (the last one used, else home; recent folders, Choose folder… or home). Nothing runs until the first message, which
-  becomes the agent's first prompt; a terminal agent starts on Start. Beside the agent, Chat | Terminal picks how the
-  session opens (Chat by default, the last pick remembered per agent): Terminal runs the agent's own program, with no
-  arguments, in the pseudo-terminal, and a session opened that way ends with its program and comes back after a
-  restart waiting for Resume. DSH is DeepSeek Harness only (the CLI inside its
-  app, or the npm package `@deepseek-ai/dsh`; any other `dsh` on PATH is skipped) and opens as a chat: one
-  `dsh --profile headless --json` run per message, continued with the harness's `--session-id`. The program runs in a pseudo-terminal (`portable-pty`: a Unix PTY on macOS, ConPTY on
+- **Threads, TERMINALS and Tasks** (`src/threads/`, `src-tauri/src/sessions.rs` with `src/sessions/`, `src-tauri/src/tasks.rs`
+  with `src/tasks/`): work you hand a bot goes into threads under that bot's row (see the top of this file). Below the
+  bots, TERMINALS holds terminal sessions only; chat-mode CLI sessions are replaced by bot threads, so there is no
+  Chat | Terminal choice, and a chat-mode session saved by an earlier version is not listed. Its `+` (⌘N or ⌘T)
+  offers the Shell first, then the agents found on `PATH` and in the usual install folders (`~/.local/bin`, Homebrew,
+  npm/pnpm/bun globals, `%APPDATA%\npm`) with their official marks, the missing ones dimmed with their install line;
+  the folder chip picks the folder (the last one used, else home; recent folders, Choose folder… or home), and picking
+  an agent starts it at once. Rows are grouped by folder under its git branch; each card shows its status (a spinner
+  while output flows, a check or an x when the program ends), the mark of the CLI in the foreground (a Shell running
+  `codex` shows Codex's), its name and age, and on its second line the CLI and the last line it printed. ⌘⇧] and ⌘⇧[
+  step through the terminals, and BOTS and TERMINALS scroll on their own. A session ends with its program and comes
+  back after a restart waiting for Resume. DSH has no terminal view and is not offered there. The program runs in a
+  pseudo-terminal (`portable-pty`: a Unix PTY on macOS, ConPTY on
   Windows) drawn with xterm.js. Settings › Terminal picks how every session terminal looks: a theme for the dark app
   theme and one for the light (omher's own two, plus 36 carried over from Orca with their licences in
   `THIRD_PARTY_NOTICES.md`), font, size, line height, cursor, scrollback, contrast and padding, kept on this
@@ -134,13 +138,12 @@ UI (React in a Tauri window)  ⇄  bridge (Python, loopback WebSocket)  ⇄  the
   link in the browser. The shell reads a program only as far ahead of the terminal as the terminal has drawn (2 MiB
   at most), so a runaway program holds memory flat and Ctrl+C is answered at once. The UI sends only an agent id (`claude`, `codex`, `omo`, `dsh`, `omh`, `pi`, `omp`, `grok`, `opencode`, `gemini`, `qwen`, `kimi`, `copilot`, `cline`); the shell
   refuses anything else and never takes a command line or arguments. Closing a session or quitting the app stops
-  the program. In a plain browser (dev, e2e) a mock host echoes what you type instead. A chat session's approvals
-  and questions are asks like a bot's: they join the Needs-you strip and ⌘J (named by folder and agent), and the
-  session row rings while a turn runs and shows the amber dot while it asks. A row's first line is the session's
-  name: the one you gave it (double-click or right-click › Rename), else the title the agent gave the conversation
-  (`session_title_changed` from Claude Code, `thread/name/updated` from Codex, `session.title` from Hermes, or the
-  bridge's `cli.title` read of their own session files), else a summary of your first message made in the UI
-  (`src/sessions/titles.ts`, no model call), else the folder. The second line is the folder and the agent.
+  the program. In a plain browser (dev, e2e) a mock host echoes what you type instead. A row's first line is the
+  session's name: the one you gave it (double-click or right-click › Rename), else the title the agent gave the
+  conversation, else the CLI's name. Above the bots, the Tasks row opens the Tasks page: open issues and pull or merge
+  requests of the repository, read-only through your own `gh` or `glab` (`BOUNDARY.md` rule 33), with a drawer for
+  one item and Start in thread, which opens a thread under the bot you pick with the issue as its first message.
+  Linear shows a connect screen naming the `hermes -p <bot> mcp install linear` command; omher keeps no Linear key.
 - **ACP agents** (`src-tauri/src/acp_chat.rs`): one adapter for agents that speak the Agent Client Protocol
   (JSON-RPC on stdio), one table row per agent. OpenCode (`opencode acp`) is the first. omher turns off the
   protocol's file and terminal capabilities, so the agent uses its own tools; its permission requests become
