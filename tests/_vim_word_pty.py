@@ -49,10 +49,12 @@ def assert_word_motions_pty(testcase):
             home.mkdir()
             (home / "config.yaml").write_text("display:\n  vim_mode: true\n", encoding="utf-8")
             env = replay_env(root)
+            # Cursor-local proofreader hints change the footer during motions.
+            # Keep this word-motion screen oracle independent of a local server.
             env.update(HOME=str(root), HERMES_HOME=str(home), OMH_HOME=str(root / "omh"),
                        HERMES_CWD=str(root), TERM="xterm-256color", TERM_PROGRAM="Apple_Terminal",
                        PYTHONPATH=os.pathsep.join((str(repo), str(repo / "tests"))),
-                       OMH_NO_TUI="0", OMH_TUI_KEYBOARD="legacy")
+                       OMH_NO_TUI="0", OMH_TUI_KEYBOARD="legacy", OMH_PROOFREAD="0")
             master, slave = pty.openpty()
             termios.tcsetwinsize(slave, (40, width))
             screen = VTScreen(rows=40, cols=width)
