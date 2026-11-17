@@ -110,6 +110,14 @@ All notable changes will be documented here.
   already copied. On macOS `curl -fsSL https://omher.app/omher | sh` ends by opening the new
   omher.app, so the app is on screen when the command finishes (`OMH_OMHER_NO_OPEN=1` or `CI` skip it).
 
+- **`omh model-chains` and `/omh-model` now look like every other OMH picker.** The chain picker paints through the
+  OMH TUI's theme roles instead of the old skin palette: no selection band, the cursor row is `❯` with its name bold
+  in the menu colour, the rules and the effort bar's filled cells take the launch look's colours, words are neutral
+  greys, and hue is kept for what a cell says (`customized`, `edited`, `enabled`, `disabled`, an effort off its
+  model's list, warnings). It follows `/theme`, the saved launch
+  look, a light background (`COLORFGBG` on the command line, the measured background in the TUI) and the terminal's
+  colour depth. Text, columns and keys are unchanged; only the cursor mark moved from `▍` to `❯`.
+
 ## 4.0.8 - 2026-11-15
 
 - **The OMH TUI shows a compression as one gauge row, and a prompt typed meanwhile goes on by itself.** `/compact`
