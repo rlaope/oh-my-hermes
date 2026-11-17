@@ -100,6 +100,9 @@ const pageBg = async (secs) => {
   const off = s.subscribe(() => updates++);
   let renders = 0;
   let rendersHidden = 0;
+  // selection redraws that reached a hidden terminal's renderer: each one redraws every row (the DOM renderer's
+  // handleSelectionChanged), and xterm's own pause does not hold them back
+  let selHidden = 0;
   for (const t of window.__omherTerms ?? []) {
     const rs = t._core._renderService;
     if (rs.__wrapped) continue;
@@ -109,6 +112,15 @@ const pageBg = async (secs) => {
       if (window.__countRenders) t.element?.isConnected ? renders++ : rendersHidden++;
       return orig(a, b);
     };
+    const r = rs._renderer?.value;
+    if (r && !r.__wrapped) {
+      r.__wrapped = true;
+      const sel = r.handleSelectionChanged.bind(r);
+      r.handleSelectionChanged = (...a) => {
+        if (window.__countRenders && !t.element?.isConnected) selHidden++;
+        return sel(...a);
+      };
+    }
   }
   window.__countRenders = true;
   let reactCommits = 0;
@@ -143,7 +155,7 @@ const pageBg = async (secs) => {
   mo.disconnect();
   window.__countRenders = false;
   const g = frames.gaps;
-  return { updates, renders, rendersHidden, domMutations: reactCommits, ticks: n, longFrames: g.filter((x) => x > 50).length, maxGapMs: Math.round(Math.max(0, ...g)) };
+  return { updates, renders, rendersHidden, selHidden, domMutations: reactCommits, ticks: n, longFrames: g.filter((x) => x > 50).length, maxGapMs: Math.round(Math.max(0, ...g)) };
 };
 
 const metrics = async (cdp) => Object.fromEntries((await cdp.send("Performance.getMetrics")).metrics.map((m) => [m.name, m.value]));
@@ -226,7 +238,7 @@ async function main() {
     return v.length ? { median: v[Math.floor(v.length / 2)], min: v[0], max: v.at(-1) } : null;
   };
   const summary = { label: LABEL, engine: ENGINE, n: N, mb: MB, secs: SECS, runs: RUNS, load: os.loadavg()[0].toFixed(1), measuredOn: "Playwright browser + vite dev + mock host (not the Tauri window)" };
-  for (const k of ["heapOpenMB", "heapFillMB", "bufMB", "terms", "lines", "renders", "rendersHidden", "domMutations", "nodes", "canvases", "updates", "scriptMs", "taskMs", "layoutMs", "styleMs", "layouts", "longFrames", "maxGapMs"]) summary[k] = med(k);
+  for (const k of ["heapOpenMB", "heapFillMB", "bufMB", "terms", "lines", "renders", "rendersHidden", "selHidden", "domMutations", "nodes", "canvases", "updates", "scriptMs", "taskMs", "layoutMs", "styleMs", "layouts", "longFrames", "maxGapMs"]) summary[k] = med(k);
   mkdirSync(join(here, "raw"), { recursive: true });
   writeFileSync(join(here, "raw", `${LABEL}-${ENGINE}.json`), JSON.stringify({ summary, runs: out }, null, 2));
   console.log("SUMMARY", JSON.stringify(summary));

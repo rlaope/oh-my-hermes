@@ -19,6 +19,9 @@ Per run:
   - `updates`: session-store notifications, which re-render the sidebar.
   - `domMutations`: DOM changes outside `.xterm`, i.e. sidebar work.
   - `renders` / `rendersHidden`: xterm row renders on the shown and the hidden terminals.
+  - `selHidden`: selection redraws that reached a hidden terminal's renderer. Each one redraws every row. It is
+    counted on the renderer's `handleSelectionChanged`. That path calls the renderer's `renderRows` directly, not
+    through the RenderService's `_renderRows`, so `rendersHidden` does not count it.
   - `longFrames` (> 50 ms) and `maxGapMs`: gaps between `requestAnimationFrame` callbacks.
 - `--profile` prints the top self-time functions and call chains of the bg scenario.
 
@@ -45,3 +48,39 @@ The profile of the bg scenario (N=20, 6 s) showed:
   chain is: output scrolls a hidden terminal, the selection service redraws, and
   `RenderService.handleSelectionChanged` renders rows whether or not the terminal is paused. xterm's own
   IntersectionObserver pause does not cover this path.
+
+## Hidden lane: a terminal that is not on the page draws nothing
+
+Change: `src/sessions/term/engine-hidden.ts`. While a terminal is hidden, the selection redraw that output scrolling
+triggers is held back. The selection is kept, and when the terminal is shown its screen and selection are drawn once.
+
+Run: `node bench/many/bench.mjs --n 20 --mb 1 --secs 8 --runs 3`. Base is a detached worktree of `5cac3df06` running
+this bench.mjs; head is `perf/omher-mt-hidden`. There were 4 rounds of 3 runs per side (12 runs each), each round in
+its own process. Rounds 1-2 ran base then head; rounds 3-4 ran head then base. Load average at round start was 10 to
+53. Files: `raw/{base,head}-hidden-r{1..4}-chromium.json`.
+
+| metric (8 s bg) | base median (min-max) | head median (min-max) |
+|---|---|---|
+| `selHidden`: full redraws of hidden terminals | 238 (209-266) | 0 (0-0) |
+| `rendersHidden`: `_renderRows` on hidden terminals | 0 (0-0) | 0 (0-0) |
+| `scriptMs` | 2758 (1525-3312) | 1637 (843-2017) |
+| `taskMs` | 3239 (1727-3879) | 1998 (984-2422) |
+| `longFrames` (> 50 ms) | 61.5 (56-64) | 62 (57-77) |
+| `maxGapMs` | 192 (150-283) | 159 (133-300) |
+| `updates` (store) | 476 (437-513) | 485 (456-532) |
+
+Script time was lower on head in every round. The round medians were:
+
+| round | base ms (load) | head ms (load) |
+|---|---|---|
+| 1 | 2884 (40) | 1797 (26) |
+| 2 | 1582 (23) | 922 (10) |
+| 3 | 2674 (43) | 1690 (23) |
+| 4 | 3203 (40) | 1791 (53) |
+
+Round 4 is the one where head ran under the higher load.
+
+- `longFrames` did not improve: 61.5 on base, 62 on head, inside the spread. The long frames come from the sidebar's
+  re-renders (the sidebar lane), not from xterm.
+- `rendersHidden` was already 0 on base, because xterm's IntersectionObserver pause covers `_renderRows`. The hidden
+  work was all on the selection path, which `selHidden` counts.

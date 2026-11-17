@@ -1,0 +1,178 @@
+{
+  "summary": {
+    "label": "base-hidden-r3",
+    "engine": "chromium",
+    "n": 20,
+    "mb": 1,
+    "secs": 8,
+    "runs": 3,
+    "load": "52.8",
+    "measuredOn": "Playwright browser + vite dev + mock host (not the Tauri window)",
+    "heapOpenMB": {
+      "median": 14.5,
+      "min": 14.1,
+      "max": 14.5
+    },
+    "heapFillMB": {
+      "median": 33.9,
+      "min": 33.8,
+      "max": 34.9
+    },
+    "bufMB": {
+      "median": 170.9,
+      "min": 170.9,
+      "max": 170.9
+    },
+    "terms": {
+      "median": 20,
+      "min": 20,
+      "max": 20
+    },
+    "lines": {
+      "median": 100900,
+      "min": 100900,
+      "max": 100900
+    },
+    "renders": {
+      "median": 0,
+      "min": 0,
+      "max": 0
+    },
+    "rendersHidden": {
+      "median": 0,
+      "min": 0,
+      "max": 0
+    },
+    "selHidden": {
+      "median": 229,
+      "min": 228,
+      "max": 247
+    },
+    "domMutations": {
+      "median": 464,
+      "min": 426,
+      "max": 482
+    },
+    "nodes": {
+      "median": 771,
+      "min": 755,
+      "max": 771
+    },
+    "canvases": {
+      "median": 0,
+      "min": 0,
+      "max": 0
+    },
+    "updates": {
+      "median": 476,
+      "min": 475,
+      "max": 494
+    },
+    "scriptMs": {
+      "median": 2674,
+      "min": 2116,
+      "max": 2842
+    },
+    "taskMs": {
+      "median": 3208,
+      "min": 2372,
+      "max": 3269
+    },
+    "layoutMs": {
+      "median": 29,
+      "min": 21,
+      "max": 37
+    },
+    "styleMs": {
+      "median": 60,
+      "min": 36,
+      "max": 81
+    },
+    "layouts": {
+      "median": 27,
+      "min": 24,
+      "max": 27
+    },
+    "longFrames": {
+      "median": 61,
+      "min": 58,
+      "max": 63
+    },
+    "maxGapMs": {
+      "median": 183,
+      "min": 167,
+      "max": 217
+    }
+  },
+  "runs": [
+    {
+      "run": 1,
+      "heapOpenMB": 14.1,
+      "heapFillMB": 33.8,
+      "bufMB": 170.9,
+      "terms": 20,
+      "lines": 100900,
+      "nodes": 771,
+      "canvases": 0,
+      "updates": 494,
+      "renders": 0,
+      "rendersHidden": 0,
+      "selHidden": 247,
+      "domMutations": 464,
+      "ticks": 70,
+      "longFrames": 61,
+      "maxGapMs": 167,
+      "scriptMs": 2116,
+      "taskMs": 2372,
+      "layoutMs": 21,
+      "styleMs": 36,
+      "layouts": 24
+    },
+    {
+      "run": 2,
+      "heapOpenMB": 14.5,
+      "heapFillMB": 33.9,
+      "bufMB": 170.9,
+      "terms": 20,
+      "lines": 100900,
+      "nodes": 771,
+      "canvases": 0,
+      "updates": 476,
+      "renders": 0,
+      "rendersHidden": 0,
+      "selHidden": 229,
+      "domMutations": 426,
+      "ticks": 62,
+      "longFrames": 63,
+      "maxGapMs": 217,
+      "scriptMs": 2842,
+      "taskMs": 3269,
+      "layoutMs": 29,
+      "styleMs": 81,
+      "layouts": 27
+    },
+    {
+      "run": 3,
+      "heapOpenMB": 14.5,
+      "heapFillMB": 34.9,
+      "bufMB": 170.9,
+      "terms": 20,
+      "lines": 100900,
+      "nodes": 755,
+      "canvases": 0,
+      "updates": 475,
+      "renders": 0,
+      "rendersHidden": 0,
+      "selHidden": 228,
+      "domMutations": 482,
+      "ticks": 65,
+      "longFrames": 58,
+      "maxGapMs": 183,
+      "scriptMs": 2674,
+      "taskMs": 3208,
+      "layoutMs": 37,
+      "styleMs": 60,
+      "layouts": 27
+    }
+  ]
+}
