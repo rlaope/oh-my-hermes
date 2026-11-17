@@ -31,6 +31,7 @@ import { onTermSettings, readTermSettings } from "./term/settings";
 import { termTheme } from "./term/themes";
 import { getShellHost } from "../terminal/host";
 import { onSessionFg } from "./fg";
+import { termActs } from "./termActivity";
 import { acpRow, agentDef, agentLabel, continues, draftAgent, draftFolder, draftOpen, hermesOnly, installLine, isBuiltin, isGone, isShell, isTerminalRec, LAST_LINE_MAX, lastPrintedLine, OPEN_KEY, opensAs, parseOpens, parseRecent, pushRecent, RECENT_KEY, registerAcp, sessionMode, type AgentId, type AgentInfo, type OpenAs, type Unseen, type Opens, type Recent, type SessionRec } from "./agents";
 import { NAME_MAX, parseTitles, promptTitle, putTitle, TITLES_KEY } from "./titles";
 import { getDraft, setDraft as setUnsent } from "../app/drafts";
@@ -1225,7 +1226,8 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
       const lines: string[] = [];
       for (let y = 0; y < t.term.rows; y++) lines.push(b.getLine(b.baseY + y)?.translateToString(true) ?? "");
       const line = lastPrintedLine(lines) || undefined;
-      if (rec(id) && rec(id)!.lastLine !== line) patchRec(id, { lastLine: line });
+      // its own small store: a line change re-renders that one row, never the sessions list
+      if (rec(id)) termActs.patch(id, { lastLine: line });
     };
     const onData = (d: Uint8Array | string) => {
       // every message is acknowledged once the terminal has taken it, in order: the shell reads the program
@@ -1239,7 +1241,7 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
       const now = Date.now();
       if (!ofChat && now - marked >= OUT_MARK_MS) {
         marked = now;
-        patchRec(id, { lastOut: now });
+        termActs.patch(id, { lastOut: now });
       }
       if (!ofChat && lineTimer === null) lineTimer = setTimeout(readLine, OUT_MARK_MS);
     };
@@ -1346,7 +1348,7 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
       // the title the program sets (OSC 0/2): the TERMINALS card's second line until it prints a line
       term.onTitleChange((title) => {
         const v = title.replace(/\s+/g, " ").trim().slice(0, LAST_LINE_MAX) || undefined;
-        if (rec(id) && rec(id)!.oscTitle !== v) patchRec(id, { oscTitle: v });
+        if (rec(id)) termActs.patch(id, { oscTitle: v });
       });
       term.onResize(() => {
         // the size it ends on is sent, once (a drag gives one size per frame)
