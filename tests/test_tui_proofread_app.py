@@ -315,6 +315,53 @@ class AppTests(unittest.TestCase):
             app._on_input(Key(CHAR, "x"))
             self.assertEqual(app._proofread_marks(), ())
 
+    def test_empty_protected_and_hidden_drafts_do_not_wake_or_redraw(self):
+        for text, masked, hidden in (("", False, False), ("`teh`", False, False),
+                                     ("/teh", False, False), ("secret", True, False),
+                                     ("teh", False, True), (" " * 3, False, False)):
+            with self.subTest(text=text, masked=masked, hidden=hidden):
+                app, _, _ = self.typo_app(text)
+                app.composer.masked = masked
+                if hidden:
+                    app.list_selected = "agent"
+                app.dirty = False
+                with patch.object(app.proofread_worker, "start") as start:
+                    app._take_proofread()
+                    app._take_proofread()
+                    self.assertIsNone(app.proofread_due)
+                    self.assertFalse(app.dirty)
+                    start.assert_not_called()
+
+    def test_enabled_prose_debounce_shares_aura_deadline_without_redraw(self):
+        from omh.tui.app import TICK_SECONDS
+
+        app, _, _ = self.typo_app()
+        with patch.object(app, "clock", return_value=10) as clock:
+            app.last_render = 10
+            app.dirty = False
+            app._take_proofread()
+            self.assertAlmostEqual(app._read_timeout(), 0.6)
+            with patch.object(app, "_aura_live", return_value=True):
+                self.assertAlmostEqual(app._read_timeout(), TICK_SECONDS)
+            self.assertFalse(app.dirty)
+            clock.return_value = 10.6
+            with patch.object(app.proofread_worker, "start") as start:
+                app._take_proofread()
+                start.assert_called_once()
+            self.assertFalse(app.dirty)
+            self.assertIsNone(app.proofread_due)
+
+    def test_pending_and_ineligible_start_do_not_redraw(self):
+        app, _, _ = self.typo_app("`teh`")
+        app._sync_proofread()
+        app.dirty = False
+        app._start_proofread()
+        self.assertFalse(app.dirty)
+        with patch.object(type(app.proofread_worker), "pending", new_callable=property,
+                          fget=lambda _: True):
+            app._start_proofread()
+            self.assertFalse(app.dirty)
+
     def test_cursor_local_cached_and_pending_intent(self):
         for caret, expected in ((0, 0), (1, 0), (3, 0), (4, 4), (5, 4), (7, 4), (8, None)):
             with self.subTest(caret=caret):

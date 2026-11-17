@@ -5015,6 +5015,7 @@ class App(ModesMixin, AgentViewMixin):
         owner = self._proofread_owner()
         if self.proofread_snapshot is not None and self.proofread_snapshot.matches(self.composer, owner):
             return
+        had_display = bool(self.proofread_issues or self.proofread_status)
         self.proofread_snapshot = proofread.Snapshot.capture(self.composer, owner)
         self.proofread_job = None
         self.proofread_issues = ()
@@ -5023,18 +5024,22 @@ class App(ModesMixin, AgentViewMixin):
         self.proofread_status = ""
         self.proofread_due = None
         if (self._proofread_foreground() and not self.composer.masked and self.composer.text
-                and self.environ.get("OMH_PROOFREAD") != "0"):
+                and self.environ.get("OMH_PROOFREAD") != "0"
+                and isinstance(proofread.prepare(self.composer, owner, self.environ), proofread.Job)):
             self.proofread_due = self.clock() + 0.6
-        self.dirty = True
+        if had_display:
+            self.dirty = True
 
     def _start_proofread(self) -> None:
-        self.dirty = True
         if self.proofread_worker.pending:
             return  # the latest generation waits for the one in flight
         self.proofread_due = None
         job = proofread.prepare(self.composer, self._proofread_owner(), self.environ)
         if isinstance(job, str):
-            self.proofread_status = job if self.proofread_intent else ""
+            status = job if self.proofread_intent else ""
+            if status != self.proofread_status:
+                self.proofread_status = status
+                self.dirty = True
             self.proofread_intent = False
             return
         self.proofread_job = job
@@ -5076,7 +5081,6 @@ class App(ModesMixin, AgentViewMixin):
                     and self.proofread_review is None):
                 self._start_proofread()
             return
-        self.dirty = True
         valid = self._proofread_foreground() and outcome.job is self.proofread_job and outcome.job.snapshot.matches(
             self.composer, self._proofread_owner(),
         )
@@ -5085,6 +5089,7 @@ class App(ModesMixin, AgentViewMixin):
             if self.proofread_intent:
                 self._start_proofread()
             return
+        self.dirty = True
         if outcome.error:
             self.proofread_status = "Local proofreader unavailable · Alt+P retries"
             self.proofread_failures = min(self.proofread_failures + 1, 4)
