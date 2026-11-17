@@ -546,9 +546,12 @@ class PickerNavigationTests(unittest.TestCase):
         self.assertTrue(all(len(line) <= 120 for line in wide[0].splitlines()))
         _, frames = _drive(payload, [KEY_DOWN, KEY_ENTER], use_color=True)
         self.assertIn(ESC, frames[0])
-        # Exactly one row sits on the selection background -- the cursor row
-        # -- and every category is present.
-        self.assertEqual(sum("48;2;" in line for line in frames[0].splitlines()), 1)
+        # No row carries a background: the cursor row is the one row that
+        # starts with the pointer, and every category is present.
+        lines = frames[0].splitlines()
+        self.assertFalse(any(re.search(r"\x1b\[(?:[0-9]+;)*48;", line) for line in lines))
+        plain = [re.sub(r"\x1b\[[0-9;]*m", "", line) for line in lines]
+        self.assertEqual(sum(line.startswith(f" {CURSOR_MARK} ") for line in plain), 1)
         for row in payload["categories"]:
             self.assertIn(row["category"], frames[0])
 

@@ -17,10 +17,15 @@ module only paints frames and reads keys. The same seams as the theme picker
 keep it testable without a terminal: `read_key`, `write` and the frame width
 arrive as arguments, and the raw-mode reader is shared with that picker.
 
-The frame is painted in the OMH theme's palette so it reads as part of the
-same product as the OMH TUI: the cursor row sits on the skin's selection
-background with `◂ model ▸` and `− effort +` markers showing which keys act
-on which cell, effort bars are toned by rung, a value carries `?` when the
+The frame is painted through the OMH TUI's `Theme` roles (`tui/theme.py`), so
+it reads like every other OMH picker and follows `/theme`, the launch look and
+a light background as the TUI does. It has no fill: the cursor row is told
+apart by the `❯` pointer (`prompts.CHOICE_MARK`) and its name bold in
+`menu_current`, other names are `menu`, and the words around them are the
+neutral greys (`muted`, `hint`, `faint`). The launch look owns the rules
+(`rule`) and an effort bar's filled cells (`accent`); hue is kept for what
+says a state (`ok`, `warn`, `error`). On the cursor row `◂ model ▸` and
+`− effort +` mark which keys act on which cell; a value carries `?` when the
 model ladder is unknown and `!` off its list. Built-in rows say `built-in`
 or `customized`; custom identities say `enabled` or `disabled`. NO_COLOR or a
 non-terminal keeps the exact same text with no escape bytes. Every line is
@@ -32,6 +37,7 @@ the cursor-up repaint off by one row and duplicate the header.
 from __future__ import annotations
 
 from collections.abc import Callable, Mapping
+from dataclasses import replace
 import os
 from pathlib import Path
 import sys
@@ -45,7 +51,9 @@ from ..plugin_bundle.omh.model_chain_picker import (
     step_effort,
     step_head_model,
 )
-from ..skin_pack import hex_to_rgb, skin_colors
+from ..tui.prompts import CHOICE_MARK
+from ..tui.style import TRUECOLOR, Style
+from ..tui.theme import DEFAULT_THEME, Theme
 from .theme_picker import (
     CLEAR_LINE,
     ESC,
@@ -67,7 +75,7 @@ from .theme_picker import (
     read_terminal_key,
 )
 
-CURSOR_MARK = "▍"
+CURSOR_MARK = CHOICE_MARK.strip()
 LEFT_MARK = "◂"
 RIGHT_MARK = "▸"
 STATE_GLYPHS = {
@@ -77,24 +85,13 @@ STATE_GLYPHS = {
     "enabled": "●",
     "disabled": "×",
 }
-# Palette token per state word and per effort rung; the palette itself is
-# the OMH theme's (`effective_theme`), so the picker follows `omh theme` like
-# the TUI does.
-STATE_TONES = {
-    "edited": "ui_warn",
-    "customized": "ui_accent",
-    "built-in": "banner_dim",
-    "enabled": "ui_ok",
-    "disabled": "ui_error",
-}
-EFFORT_TONES = {
-    "none": "banner_dim",
-    "minimal": "banner_dim",
-    "low": "banner_dim",
-    "medium": "ui_ok",
-    "high": "ui_warn",
-    "xhigh": "ui_accent",
-    "max": "banner_title",
+# The `Theme` role each state word is painted in.
+STATE_ROLES = {
+    "edited": "warn",
+    "customized": "label",
+    "built-in": "faint",
+    "enabled": "ok",
+    "disabled": "error",
 }
 _PROVIDERS_LABEL_WIDTH = 11
 KEY_HINTS = (
@@ -115,10 +112,6 @@ _BAR_WIDTH = 6  # the longest ladder has six rungs above `none`
 _EFFORT_WIDTH = 2 + _BAR_WIDTH + 2 + 9
 _STATE_WIDTH = 11
 _PURPOSE_MIN_WIDTH = _MARGIN + _CATEGORY_WIDTH + _PURPOSE_WIDTH + _MODEL_WIDTH + _EFFORT_WIDTH + _STATE_WIDTH
-
-
-def default_palette() -> dict[str, str]:
-    return skin_colors("omh")
 
 
 def effort_bar(effort: str, ring: tuple[str, ...] = ("low", "medium", "high", "xhigh")) -> str:
@@ -144,28 +137,17 @@ def _clip(text: str, width: int) -> str:
     return text if len(text) <= width else text[: max(0, width - 1)] + "…"
 
 
-def _sgr(palette: Mapping[str, str], fg: str | None, bg: str | None, bold: bool) -> str:
-    codes: list[str] = []
-    if bold:
-        codes.append("1")
-    for token, kind in ((fg, "38"), (bg, "48")):
-        rgb = hex_to_rgb(palette.get(token, "")) if token else None
-        if rgb is not None:
-            codes.append(f"{kind};2;{rgb[0]};{rgb[1]};{rgb[2]}")
-    return f"{ESC}[{';'.join(codes)}m" if codes else ""
-
-
 class _Painter:
-    """Paints text with palette tokens, or returns it untouched without color."""
+    """Paints text in a `Theme` role's style at `depth`, or returns it untouched without color."""
 
-    def __init__(self, palette: Mapping[str, str], use_color: bool) -> None:
-        self.palette = palette
+    def __init__(self, use_color: bool, depth: str) -> None:
         self.use_color = use_color
+        self.depth = depth
 
-    def __call__(self, text: str, fg: str | None = None, *, bg: str | None = None, bold: bool = False) -> str:
-        if not self.use_color or not text:
+    def __call__(self, text: str, style: Style | None = None) -> str:
+        if not self.use_color or not text or style is None:
             return text
-        prefix = _sgr(self.palette, fg, bg, bold)
+        prefix = replace(style, depth=self.depth).sgr()
         return f"{prefix}{text}{RESET}" if prefix else text
 
 
@@ -212,42 +194,49 @@ def _row_cells(
     effort_keys: bool,
     with_purpose: bool,
     enabled: bool,
-) -> list[tuple[str, str | None]]:
-    """The row as (text, tone) cells; tones are palette tokens for the painter."""
+    theme: Theme,
+) -> list[tuple[str, Style | None]]:
+    """The row as (text, style) cells; styles are `theme`'s roles for the painter."""
     head_model, head_effort = chain[0]
     label = labels.get(head_model, head_model)
     unserved = not served.get(head_model, True)
     state = row_status(row, chain, enabled)
-    cells: list[tuple[str, str | None]] = [
-        (f" {CURSOR_MARK} " if cursor else " " * _MARGIN, "ui_accent"),
+    cells: list[tuple[str, Style | None]] = [
+        (f" {CHOICE_MARK}" if cursor else " " * _MARGIN, theme.menu_current if cursor else None),
         (
             _fit(
                 f"custom:{row['category']}" if row.get("type") == "custom" else str(row["category"]),
                 _CATEGORY_WIDTH,
             ),
-            "ui_label",
+            theme.menu_current if cursor else theme.menu,
         ),
     ]
     if with_purpose:
-        cells.append((_fit(str(row["purpose"]), _PURPOSE_WIDTH), "banner_dim"))
+        cells.append((_fit(str(row["purpose"]), _PURPOSE_WIDTH), theme.muted))
     # `◂ label ▸` hugs the label on the cursor row so the markers read as
     # handles on the value, not as column borders; the cell keeps its width.
     model_text = _clip(label + (" !" if unserved else ""), _MODEL_WIDTH - 5)
-    cells.append((f"{LEFT_MARK} " if cursor else "  ", "ui_accent"))
-    cells.append((model_text, "ui_error" if unserved else "banner_text"))
-    cells.append((f" {RIGHT_MARK}" if cursor else "  ", "ui_accent"))
+    handle = theme.menu_current if cursor else None
+    cells.append((f"{LEFT_MARK} " if cursor else "  ", handle))
+    cells.append((model_text, theme.error if unserved else theme.user if cursor else theme.text))
+    cells.append((f" {RIGHT_MARK}" if cursor else "  ", handle))
     cells.append((" " * (_MODEL_WIDTH - 4 - len(model_text)), None))
     allowed = tuple(models[head_model]["efforts"])
     mark = _effort_mark(head_effort, models[head_model])
-    tone = "ui_error" if mark == "!" else EFFORT_TONES.get(head_effort, "banner_dim")
+    word = theme.error if mark == "!" else theme.warn if mark == "?" else theme.muted
     bar = effort_bar(head_effort, allowed) if allowed else "fixed"
     keys = cursor and effort_keys and bool(allowed)
-    cells.append(("− " if keys else "  ", "ui_accent"))
-    cells.append((bar, "ui_accent" if cursor else tone))
-    cells.append((" +" if keys else "  ", "ui_accent"))
+    cells.append(("− " if keys else "  ", handle))
+    if allowed:
+        filled = bar.count("■")
+        cells.append((bar[:filled], theme.error if mark == "!" else theme.accent))
+        cells.append((bar[filled:], theme.dim))
+    else:
+        cells.append((bar, theme.muted))
+    cells.append((" +" if keys else "  ", handle))
     cells.append((" " * (_BAR_WIDTH - len(bar)), None))
-    cells.append((f" {(head_effort or '-')[: 7 - len(mark)] + mark:<8}", tone))
-    cells.append((f"{STATE_GLYPHS[state]} {state:<{_STATE_WIDTH - 2}}", STATE_TONES[state]))
+    cells.append((f" {(head_effort or '-')[: 7 - len(mark)] + mark:<8}", word))
+    cells.append((f"{STATE_GLYPHS[state]} {state:<{_STATE_WIDTH - 2}}", getattr(theme, STATE_ROLES[state])))
     return cells
 
 
@@ -258,13 +247,17 @@ def render_frame(
     *,
     use_color: bool,
     width: int,
-    palette: Mapping[str, str] | None = None,
+    theme: Theme | None = None,
+    depth: str = TRUECOLOR,
     notice: str = "",
     enabled_overrides: Mapping[str, bool] | None = None,
 ) -> list[str]:
     """One full repaint: title, column header, one row per category, the
-    cursor row's detail, then the key hints. Every line fits `width`."""
-    paint = _Painter(palette or default_palette(), use_color)
+    cursor row's detail, then the key hints. Every line fits `width`.
+
+    `theme` (the OMH TUI's default when None) is painted at `depth`."""
+    theme = theme or DEFAULT_THEME
+    paint = _Painter(use_color, depth)
     rows = payload.get("rows") or payload["categories"]
     models = {row["alias"]: row for row in payload["models"]}
     effort_keys = _effort_keys_on(payload)
@@ -283,15 +276,15 @@ def render_frame(
     if gap < 2:
         title_right = _clip(title_right, max(0, row_width - len(title_left) - 2))
         gap = row_width - len(title_left) - len(title_right)
-    title = paint(" ⚚ OMH", "ui_accent", bold=True) + paint(f" · {title_name}", "banner_title", bold=True)
-    title += " " * gap + paint(title_right, "banner_dim")
-    rule = paint("─" * row_width, "input_rule")
+    title = paint(" ⚚ OMH", theme.brand) + paint(f" · {title_name}", theme.heading)
+    title += " " * gap + paint(title_right, theme.muted)
+    rule = paint("─" * row_width, theme.rule if theme.rule.fg else theme.muted)
 
     header_cells = [(" " * _MARGIN, None), (_fit("CATEGORY", _CATEGORY_WIDTH), None)]
     if with_purpose:
         header_cells.append((_fit("PURPOSE", _PURPOSE_WIDTH), None))
     header_cells += [(_fit("  HEAD MODEL", _MODEL_WIDTH), None), (_fit("  EFFORT", _EFFORT_WIDTH), None), ("STATE", None)]
-    header = paint("".join(text for text, _ in header_cells), "banner_dim")
+    header = paint("".join(text for text, _ in header_cells), theme.muted)
 
     # The providers the served marks are judged against, each with where it
     # was found, so a `!` on a row has its reason one glance up. No provider
@@ -304,8 +297,8 @@ def render_frame(
         provider_text = "none linked to Hermes yet · every model counts as served"
     providers_line = (
         " " * _MARGIN
-        + paint(_fit("providers", _PROVIDERS_LABEL_WIDTH), "banner_dim")
-        + paint(_clip(provider_text, inner - _PROVIDERS_LABEL_WIDTH), "banner_text" if providers else "banner_dim")
+        + paint(_fit("providers", _PROVIDERS_LABEL_WIDTH), theme.muted)
+        + paint(_clip(provider_text, inner - _PROVIDERS_LABEL_WIDTH), theme.text if providers else theme.muted)
     )
 
     lines = [title, providers_line]
@@ -318,7 +311,7 @@ def render_frame(
         reason = entitlements_status[len("invalid:"):].strip()
         lines.append(
             " " * _MARGIN
-            + paint(_clip(f"! providers.json ignored: {reason} · any providers it excluded count again", inner), "ui_warn")
+            + paint(_clip(f"! providers.json ignored: {reason} · any providers it excluded count again", inner), theme.warn)
         )
     # An override document the reader rejects is ignored whole, so every row
     # below reads `default` -- the exact picture of a chain that was never
@@ -328,27 +321,25 @@ def render_frame(
         reason = document_status[len("invalid:"):].strip()
         lines.append(
             " " * _MARGIN
-            + paint(_clip(f"! model-chains.json ignored: {reason} · every category shows its shipped default", inner), "ui_warn")
+            + paint(_clip(f"! model-chains.json ignored: {reason} · every category shows its shipped default", inner), theme.warn)
         )
     if not effort_keys:
         reason = str(payload["effort_document_status"])[len("invalid:"):].strip()
         lines.append(
             " " * _MARGIN
-            + paint(_clip(f"! model-efforts.json ignored: {reason} · −/+ are off until it is fixed", inner), "ui_warn")
+            + paint(_clip(f"! model-efforts.json ignored: {reason} · −/+ are off until it is fixed", inner), theme.warn)
         )
     lines += [rule, header]
     for index, row in enumerate(rows):
         if row.get("type") == "custom" and (index == 0 or rows[index - 1].get("type") != "custom"):
-            lines.append(" " * _MARGIN + paint("── Custom identities ──", "ui_accent", bold=True))
+            lines.append(" " * _MARGIN + paint("── Custom identities ──", theme.heading))
         is_cursor = index == cursor
         cells = _row_cells(
             row, chains[row.get("key", row["category"])], cursor=is_cursor, labels=labels, served=served, models=models,
             effort_keys=effort_keys, with_purpose=with_purpose, enabled=enabled[row.get("key", row["category"])],
+            theme=theme,
         )
-        if is_cursor:
-            lines.append("".join(paint(text, tone, bg="selection_bg", bold=True) for text, tone in cells))
-        else:
-            lines.append("".join(paint(text, tone) for text, tone in cells))
+        lines.append("".join(paint(text, style) for text, style in cells))
 
     current = rows[cursor]
     chain = chains[current.get("key", current["category"])]
@@ -363,11 +354,11 @@ def render_frame(
         )
     )
     lines.append(rule)
-    heading = paint(str(current["category"]), "ui_label", bold=True)
+    heading = paint(str(current["category"]), theme.user)
     if current.get("purpose"):
-        heading += paint(f" · {_clip(str(current['purpose']), inner - len(str(current['category'])) - 3)}", "banner_dim")
+        heading += paint(f" · {_clip(str(current['purpose']), inner - len(str(current['category'])) - 3)}", theme.muted)
     lines.append(" " * _MARGIN + heading)
-    lines.append(" " * _MARGIN + paint(_fit("chain", 18), "banner_dim") + paint(_clip(chain_text(chain), inner - 18), "banner_text"))
+    lines.append(" " * _MARGIN + paint(_fit("chain", 18), theme.muted) + paint(_clip(chain_text(chain), inner - 18), theme.text))
     head_model, head_effort = chain[0]
     model = models[head_model]
     if not model["efforts_configured"]:
@@ -376,14 +367,14 @@ def render_frame(
         effort_text = ", ".join(model["efforts"]) + f"  ({model['efforts_source']})"
     else:
         effort_text = "fixed: this model's list is empty, so −/+ do nothing"
-    lines.append(" " * _MARGIN + paint(_fit("effort", 18) + _clip(effort_text, width - _MARGIN - 18), "banner_text"))
+    lines.append(" " * _MARGIN + paint(_fit("effort", 18), theme.muted) + paint(_clip(effort_text, width - _MARGIN - 18), theme.text))
     explained = {
         "none": "explicit no thinking; an unset effort is a different thing and inherits",
         "": "unset: the model or provider default applies, which is not the same as `none`",
         "auto": "`auto` is the provider default, not a rung",
     }.get(head_effort)
     if explained:
-        lines.append(" " * _MARGIN + paint(_fit("", 18) + _clip(explained, inner - 18), "banner_dim"))
+        lines.append(" " * _MARGIN + paint(_fit("", 18) + _clip(explained, inner - 18), theme.hint))
     if _effort_mark(head_effort, model) == "!" and model["efforts"]:
         if model["refuses_none"] and head_effort in ("none", "off"):
             warning = f"! the route refuses `{head_effort}` on {head_model}: thinking is always on; −/+ moves it"
@@ -391,25 +382,28 @@ def render_frame(
             warning = "! `off` is the old spelling; Hermes does not read it, so the provider default runs; −/+ moves it"
         else:
             warning = f"! `{head_effort}` is not on this list; −/+ moves it onto the list"
-        lines.append(" " * _MARGIN + paint(_clip(warning, width - _MARGIN), "ui_warn"))
+        lines.append(" " * _MARGIN + paint(_clip(warning, width - _MARGIN), theme.warn))
     if current.get("type") == "custom":
         current_state = "enabled" if enabled[current.get("key", current["category"])] else "disabled"
-        lines.append(" " * _MARGIN + paint(_fit("status", 18) + current_state, "ui_ok" if current_state == "enabled" else "ui_error"))
+        lines.append(
+            " " * _MARGIN + paint(_fit("status", 18), theme.muted)
+            + paint(current_state, theme.ok if current_state == "enabled" else theme.error)
+        )
     else:
         default_text = "✓ same as shipped" if chain == default_chain else _clip(chain_text(default_chain), inner - 18)
-        lines.append(" " * _MARGIN + paint(_fit("shipped default", 18) + default_text, "banner_dim"))
+        lines.append(" " * _MARGIN + paint(_fit("shipped default", 18) + default_text, theme.muted))
     if changed:
-        lines.append(" " * _MARGIN + paint(f"{changed} unsaved change{'s' if changed != 1 else ''} · ⏎ writes the file", "ui_warn"))
+        lines.append(" " * _MARGIN + paint(f"{changed} unsaved change{'s' if changed != 1 else ''} · ⏎ writes the file", theme.warn))
     else:
-        lines.append(" " * _MARGIN + paint("no unsaved changes · ⏎ or esc leaves the file as it is", "banner_dim"))
+        lines.append(" " * _MARGIN + paint("no unsaved changes · ⏎ or esc leaves the file as it is", theme.hint))
     if not served.get(head_model, True):
         note = _clip(f"! {labels.get(head_model, head_model)} is not served by this machine's providers", inner)
-        lines.append(" " * _MARGIN + paint(note, "ui_error"))
+        lines.append(" " * _MARGIN + paint(note, theme.error))
     if notice:
-        lines.append(" " * _MARGIN + paint(_clip(notice, inner), "ui_error", bold=True))
+        lines.append(" " * _MARGIN + paint(_clip(notice, inner), replace(theme.error, bold=True)))
     lines.append(rule)
     hint_items = KEY_HINTS + ((CUSTOM_KEY_HINT,) if any(row.get("type") == "custom" for row in rows) else ())
-    hints = "   ".join(paint(keys, "ui_accent", bold=True) + " " + paint(what, "banner_dim") for keys, what in hint_items)
+    hints = "   ".join(paint(keys, theme.user) + " " + paint(what, theme.hint) for keys, what in hint_items)
     lines.append(" " * _MARGIN + hints)
     # Below the narrowest layout the plain frame is cut to the terminal; a
     # painted row carries escape bytes no column count applies to, and
@@ -449,7 +443,8 @@ def run_picker(
     write: Callable[[str], None],
     use_color: bool,
     width: int = 110,
-    palette: Mapping[str, str] | None = None,
+    theme: Theme | None = None,
+    depth: str = TRUECOLOR,
     max_keys: int = 4000,
 ) -> PickerChanges | None:
     """Drive the cursor until Enter or cancel.
@@ -472,7 +467,7 @@ def run_picker(
     enabled = dict(original_enabled)
     cursor = 0
     frame = render_frame(
-        payload, chains, cursor, use_color=use_color, width=width, palette=palette, enabled_overrides=enabled
+        payload, chains, cursor, use_color=use_color, width=width, theme=theme, depth=depth, enabled_overrides=enabled
     )
     write("\n".join(frame) + "\n")
     # `max_keys` bounds a pathological reader (a stream returning nothing but
@@ -522,7 +517,10 @@ def run_picker(
         else:
             continue
         previous_rows = len(frame)
-        frame = render_frame(payload, chains, cursor, use_color=use_color, width=width, palette=palette, notice=notice, enabled_overrides=enabled)
+        frame = render_frame(
+            payload, chains, cursor, use_color=use_color, width=width, theme=theme, depth=depth, notice=notice,
+            enabled_overrides=enabled,
+        )
         # The frame's height follows the head's effort and the notice, so a
         # shorter one must clear what the taller one left below it.
         write(cursor_up(previous_rows) + "".join(f"{CLEAR_LINE}{line}\n" for line in frame) + f"{ESC}[J")
@@ -533,7 +531,8 @@ def pick_chains_interactively(
     payload: Mapping[str, Any],
     *,
     use_color: bool,
-    palette: Mapping[str, str] | None = None,
+    theme: Theme | None = None,
+    depth: str = TRUECOLOR,
     stdin: TextIO | None = None,
     stdout: TextIO | None = None,
 ) -> PickerChanges | None:
@@ -551,7 +550,8 @@ def pick_chains_interactively(
                 write=lambda text: (sink.write(text), sink.flush(), None)[-1],
                 use_color=use_color,
                 width=width,
-                palette=palette,
+                theme=theme,
+                depth=depth,
             )
         finally:
             if use_color:

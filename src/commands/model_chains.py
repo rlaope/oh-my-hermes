@@ -28,6 +28,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import re
 import sys
 
@@ -67,8 +68,11 @@ from ..plugin_bundle.omh.model_chain_picker import (
     read_override_document,
 )
 from ..install.config_adapter import display_skin_selection, read_config
-from ..skin_pack import effective_theme, skin_colors
+from ..skin_pack import effective_theme, read_launch_choice
 from ..system.stdin_probe import stdin_is_tty
+from ..tui.style import NO_COLOR, color_depth
+from ..tui.terminal import background_from_colorfgbg
+from ..tui.theme import DEFAULT_LAUNCH, LAUNCH_PRESETS, Theme, build_theme, with_launch_look, without_colour
 from .common import _paths
 from .model_chain_picker import pick_chains_interactively
 
@@ -413,14 +417,23 @@ def cmd_model_chains_set(args: argparse.Namespace) -> int:
     return 0
 
 
-def _active_palette(paths) -> dict[str, str]:
-    """The colours of the theme the OMH TUI opens with, so the picker matches it.
+def _picker_theme(paths) -> tuple[Theme, str]:
+    """The OMH TUI's theme as it opens, and the depth stdout paints at, so the picker matches it.
 
-    `effective_theme`'s order: the theme saved under the OMH home, else an
-    OMH palette `display.skin` names, else the default.
+    The skin is `effective_theme`'s (the theme saved under the OMH home, else an
+    OMH palette `display.skin` names, else the default), measured against a
+    light background `COLORFGBG` names (None: the palette's own dark one
+    stands in, as `omh hud` does), in the launch look saved beside it (the
+    default look for none or a name the TUI does not have). At the `NO_COLOR`
+    depth the theme carries no colour.
     """
-    theme, _source = effective_theme(paths.omh_home, display_skin_selection(read_config(paths.hermes_config_path)))
-    return skin_colors(theme.skin_name)
+    skin, _source = effective_theme(paths.omh_home, display_skin_selection(read_config(paths.hermes_config_path)))
+    background = background_from_colorfgbg(os.environ)
+    saved = read_launch_choice(paths.omh_home)
+    look = saved if saved in LAUNCH_PRESETS else DEFAULT_LAUNCH
+    theme = with_launch_look(build_theme(skin, background), skin, background, look)
+    depth = color_depth(os.environ, sys.stdout.isatty())
+    return (without_colour(theme) if depth == NO_COLOR else theme), depth
 
 
 def cmd_model_chains_pick(args: argparse.Namespace) -> int:
@@ -442,7 +455,8 @@ def cmd_model_chains_pick(args: argparse.Namespace) -> int:
         purposes=CHAIN_SURFACE_PURPOSES,
         contract_option=contract_effort_option,
     )
-    changes = pick_chains_interactively(payload, use_color=_use_color(), palette=_active_palette(paths))
+    theme, depth = _picker_theme(paths)
+    changes = pick_chains_interactively(payload, use_color=_use_color(), theme=theme, depth=depth)
     if changes is None:
         print(f"Cancelled; {payload['path']} was not changed.")
         return 0

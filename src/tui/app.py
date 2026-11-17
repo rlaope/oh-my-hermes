@@ -142,7 +142,6 @@ from ..skin_pack import (
     hex_to_rgb,
     read_launch_choice,
     read_wallpaper_choice,
-    skin_colors,
     theme_for_name,
     theme_for_skin_name,
     theme_names,
@@ -2198,14 +2197,14 @@ def run_model_chain_picker(
         )
     except (OSError, ValueError) as error:
         return f"/omh-model could not read the model chains: {error}"
-    skin = theme_for_name(theme.name) or default_theme()
     changes = run_picker(
         payload,
         read_key=read_key,
         write=write,
         use_color=not environ.get("NO_COLOR"),
         width=width,
-        palette=skin_colors(skin.skin_name),
+        theme=theme,
+        depth=color_depth(environ),
     )
     if changes is None:
         return f"Cancelled; {payload['path']} was not changed."
