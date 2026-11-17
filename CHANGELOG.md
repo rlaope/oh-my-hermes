@@ -71,6 +71,13 @@ All notable changes will be documented here.
   row as your prompt, not a queued row. Esc again gives it back to the composer. Enter with an image still queues for
   the turn's end, and Ctrl+Enter with text alone still steers without stopping anything.
 
+- **omher on macOS installs without the "Not Opened" warning.** omher is not notarized, so a `.dmg` opened from a
+  browser download was stopped by Gatekeeper ("Apple could not verify omher is free of malware") and people did
+  not know how to get past it. The macOS buttons on omher.app no longer link a dmg: they copy
+  `curl -fsSL https://omher.app/omher | sh`, bring the command into view and say to paste it into Terminal. A
+  `curl` download carries no quarantine flag, so the installed app opens straight away. The omher README and new
+  release pages lead with the same command; the dmg and the Open Anyway steps stay for people who already have one.
+
 ## 4.0.8 - 2026-11-15
 
 - **The OMH TUI shows a compression as one gauge row, and a prompt typed meanwhile goes on by itself.** `/compact`
