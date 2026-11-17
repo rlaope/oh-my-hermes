@@ -65,6 +65,12 @@ All notable changes will be documented here.
   first, trace the bad value to where it is produced, try other valid inputs, run the whole suite. Questions,
   reviews, features and fixes of anything that is not code get nothing new.
 
+- **OMH TUI: Ctrl+Enter with an image attached sends it now.** Before, a prompt with an image never went into a
+  running turn: Ctrl+Enter left it as a `⧗` queued row over the composer until the turn finished. Now Ctrl+Enter
+  stops the turn and sends the prompt with its image the moment the turn ends. Meanwhile it shows above the working
+  row as your prompt, not a queued row. Esc again gives it back to the composer. Enter with an image still queues for
+  the turn's end, and Ctrl+Enter with text alone still steers without stopping anything.
+
 ## 4.0.8 - 2026-11-15
 
 - **The OMH TUI shows a compression as one gauge row, and a prompt typed meanwhile goes on by itself.** `/compact`

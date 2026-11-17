@@ -1785,6 +1785,14 @@ class Transcript:
         else:
             self.add_aside(block)
 
+    def withdraw_steer(self, block: SteerBlock) -> None:
+        """Take back a steer row still held under the live blocks (never written, so never in scrollback): a cut-in
+        whose prompt now goes as a prompt of its own, or comes back to the composer."""
+        kept = [held for held in self._held if held is not block]  # by identity: two rows of one text are equal
+        if len(kept) != len(self._held):
+            self._held = kept
+            self._version += 1
+
     def steer_answered(self, block: SteerBlock, state: str, outcome: str = "") -> None:
         block.state, block.outcome = state, outcome
         self._write_held()
