@@ -4,11 +4,6 @@ All notable changes will be documented here.
 
 ## Unreleased
 
-- **omher: the bot's sessions elsewhere stay out of its chat.** Answers from its Slack, Discord and cron sessions no
-  longer sit between this chat's messages as bubbles (with only a small link to say where each came from, they read as
-  part of this conversation). The header's "N other places" and the side panel's "Where Kami is" list them, each row
-  opens its thread (↗), and Reply there moved onto the row (hover), still only pointing the next message at that
-  thread.
 - **OMH starts faster in a fresh Hermes process and its tools cost fewer tokens to open.** The chat router no longer
   imports the whole loop engine for one loop-command check, and the dag-ulw cue patterns compile on first use instead
   of all at import, so the plugin's start before a one-shot `chat -q`, a cron run or a delegated child's first reply
@@ -18,17 +13,6 @@ All notable changes will be documented here.
   the `observation` field on 20 tools stops describing metadata a model never fills, and the profile-override fields
   say their refusal in fewer words. No tool, parameter or rule a model acts on changed.
 
-- **omher terminals behave like a real terminal.** `exit` (or Ctrl+D) in a TERMINALS shell closes its row, as its
-  x does, and the next terminal or the bot chat opens; a shell that could not start stays with its error. When Claude
-  Code, Codex or any CLI opened in a terminal ends, the same row goes on as your login shell in that folder, with one
-  dim line saying so, and the row's mark follows whatever you start there next. Korean typed with the macOS 2-Set
-  input source no longer loses or repeats syllables (the window's engine sends no composition events for it), and a
-  fast Enter after the last syllable keeps it. Terminals draw in the bundled JetBrains Mono at 13px, with Symbols
-  Nerd Font Mono for prompt icons, as Otty does; Settings › Terminal still picks another font and size.
-- **omher: a routine that keeps failing is one line in the chat, not one per run.** The same routine failing again
-  with nothing between updates its line instead of adding another: `Routine · sso-refresh · not delivered ×12 ·
-  03:56–09:37`, with one unread for the first failure. Hermes' `delivery_failed` and `blocked_config` read as "not
-  delivered" and "blocked by config" in the danger colour, instead of the raw state.
 - **An OMH TUI reply no longer hangs on a rail.** The `⚚ Hermes · <model>` header starts at the left edge and the
   reply's text sits two cells in, with no `┃` beside it, so a reply reads apart from your prompts and the tool calls,
   which keep their rails. The two cells the bar took go to the reply's text, and a copy still leaves the margin out.
@@ -109,12 +93,6 @@ All notable changes will be documented here.
 - **OMH TUI: the working spinner stays in the theme colour on terminals that draw `✳` as an emoji.** Zellij Desktop
   on macOS painted its two `✳` frames as a green emoji, so the spinner flashed green twice a cycle. Those frames now
   ask for text presentation (U+FE0E) and stay one cell in the accent colour. Contributed by @DanRioDev (#2923).
-- **omher on macOS installs without the "Not Opened" warning.** omher is not notarized, so a `.dmg` opened from a
-  browser download was stopped by Gatekeeper ("Apple could not verify omher is free of malware") and people did
-  not know how to get past it. The macOS buttons on omher.app no longer link a dmg: they copy
-  `curl -fsSL https://omher.app/omher | sh`, bring the command into view and say to paste it into Terminal. A
-  `curl` download carries no quarantine flag, so the installed app opens straight away. The omher README and new
-  release pages lead with the same command; the dmg and the Open Anyway steps stay for people who already have one.
 
 - **An OMH update asks one restart question, not two.** The TUI still asks once whether to restart on the new
   version. The reopened TUI no longer opens a second question about Hermes' gateway: when the gateway still runs the
@@ -123,12 +101,6 @@ All notable changes will be documented here.
 - **What you type while the OMH TUI loses its gateway is never lost.** When the gateway does not come back and the TUI
   leaves (its restarts spent, a stop it watched, a reattach given up), what you typed and never sent, the draft and
   anything typed while it waited, is printed under its last line instead of going with the screen.
-
-- **omher.app's macOS button now opens an install popup, and the installer opens omher when it is done.** The first
-  version only copied the curl line and showed one grey line below the fold, so a click looked like nothing
-  happened. Now a click opens a short English dialog, "Run this in Terminal and omher installs.", with the command
-  already copied. On macOS `curl -fsSL https://omher.app/omher | sh` ends by opening the new
-  omher.app, so the app is on screen when the command finishes (`OMH_OMHER_NO_OPEN=1` or `CI` skip it).
 
 - **`omh model-chains` and `/omh-model` now look like every other OMH picker.** The chain picker paints through the
   OMH TUI's theme roles instead of the old skin palette: no selection band, the cursor row is `❯` with its name bold
@@ -403,6 +375,20 @@ All notable changes will be documented here.
   refused; a plain-HTTP ask never goes through `HTTP_PROXY`, so the key is not
   sent in clear to a proxy; and `typesafe_model` never applies to TypeSafe's
   own host however it is spelled. Thanks @brentkearney. (#2716)
+- **omher 0.2.13.** Terminals behave like a real terminal, a routine that keeps failing is one line in the chat, and
+  macOS installs from one Terminal command without the "Not Opened" warning.
+  - **Terminals:** `exit` or Ctrl+D closes a shell row as its x does; when Claude Code, Codex or any CLI ends, the
+    same row goes on as your login shell in that folder and its mark follows what you start next; Korean typed with
+    the macOS 2-Set input source no longer drops or repeats syllables, and a fast Enter keeps the last one; terminals
+    draw in the bundled JetBrains Mono at 13px with Symbols Nerd Font Mono, as Otty does. (#2936)
+  - **Routines:** the same routine failing again updates one line (`Routine · sso-refresh · not delivered ×12 ·
+    03:56–09:37`) with one unread, and Hermes' failure states read as "not delivered" and "blocked by config". (#2932)
+  - **macOS install:** omher.app's macOS button opens a popup with `curl -fsSL https://omher.app/omher | sh` already
+    copied, a `curl` install carries no quarantine flag so the app opens straight away, and the installer opens omher
+    when it ends (`OMH_OMHER_NO_OPEN=1` or `CI` skip it; the Windows installer does the same). (#2929, #2934, #2940)
+  - **Sessions elsewhere stay out of the chat:** answers from the bot's Slack, Discord and cron sessions no longer sit
+    between this chat's messages; the header's "N other places" and the side panel list them, each opens its thread,
+    and Reply there sits on the row. (#2933)
 - **omher 0.2.12.** Terminal sessions come back as TERMINALS with each CLI's logo, a Tasks page brings GitHub, GitLab
   and Linear issues into the app, and reasoning levels and technical words read as written in every language.
   - **TERMINALS:** Shell or any CLI with a terminal view starts from the + menu in a folder you pick; rows group by
