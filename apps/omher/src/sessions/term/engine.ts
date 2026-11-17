@@ -5,10 +5,12 @@
 // keeps xterm's standard renderer and shows nothing about it. A lost context drops back to the standard renderer at
 // once and is tried again later (three losses in 60 s stop it for that terminal). A terminal that leaves the page
 // gives its GPU context back (its program keeps running and its output keeps being parsed) and takes one again when
-// it returns, so many open sessions never run into the browser's cap on live contexts.
+// it returns, so many open sessions never run into the browser's cap on live contexts. While it is away it draws no
+// rows at all (engine-hidden.ts); shown, it draws its screen and selection once.
 import type { Terminal } from "@xterm/xterm";
 import type { WebglAddon } from "@xterm/addon-webgl";
 import { canRetry, probeWebgl, recordLoss } from "./engine-policy";
+import { hideRows, showRows } from "./engine-hidden";
 import { onTermSettings, type TermSettings } from "./settings";
 import { attachLinks } from "./engine-links";
 import { attachInput } from "./engine-input";
@@ -184,6 +186,7 @@ export function afterOpen(term: Terminal, el: HTMLElement, settings: TermSetting
     el.dispatchEvent(new CustomEvent<FindRequest>(FIND_EVENT, { bubbles: true, detail }));
   });
   stopSettings ??= onTermSettings(reconsider);
+  if (!s.shown) hideRows(term);
   attach(s);
   return () => {
     undoInput();
@@ -228,8 +231,10 @@ export function onVisible(term: Terminal, shown: boolean): void {
       s.retry = null;
     }
     detach(s, true); // gives the GPU context back
+    hideRows(term); // and draws nothing until it is back
     return;
   }
+  showRows(term);
   if (s.addon) repaint(s);
   else attach(s);
 }
