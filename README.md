@@ -87,13 +87,13 @@ omh setup
 
 Your Hermes bots and coding agents, in one window.
 
-[macOS (Apple silicon)](https://omher.app/#omher) · [macOS (Intel)](https://omher.app/#omher) · [Windows](https://omher.app/#omher) · [All releases →](https://github.com/rlaope/oh-my-hermes/releases?q=omher&expanded=true)
+[macOS (Apple silicon)](https://omher.app/#omher) · [macOS (Intel)](https://omher.app/#omher) · [Linux](https://omher.app/#omher) · [Windows](https://omher.app/#omher) · [All releases →](https://github.com/rlaope/oh-my-hermes/releases?q=omher&expanded=true)
 
 </div>
 
 <br>
 
-## DAG-ULW
+## Graph Engineering
 
 **Just type `/dag-ulw`, and you're a graph engineering master.**
 
