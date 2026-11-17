@@ -127,6 +127,11 @@ All notable changes will be documented here.
   look, a light background (`COLORFGBG` on the command line, the measured background in the TUI) and the terminal's
   colour depth. Text, columns and keys are unchanged; only the cursor mark moved from `▍` to `❯`.
 
+- **A code backlog that names a monthly report is no longer read as a schedule.** A period word such as monthly,
+  weekly or nightly counts as a recurring schedule only when it says how often the work runs ("fix these monthly",
+  "rebase them nightly, then report"). Naming a thing ("the monthly report", "a weekly digest module") no longer stops
+  a listed backlog of code changes from running as a dag-ulw graph.
+
 ## 4.0.8 - 2026-11-15
 
 - **The OMH TUI shows a compression as one gauge row, and a prompt typed meanwhile goes on by itself.** `/compact`
