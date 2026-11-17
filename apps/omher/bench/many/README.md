@@ -19,6 +19,9 @@ Per run:
   - `updates`: session-store notifications, which re-render the sidebar.
   - `domMutations`: DOM changes outside `.xterm`, i.e. sidebar work.
   - `renders` / `rendersHidden`: xterm row renders on the shown and the hidden terminals.
+  - `selHidden`: selection redraws that reached a hidden terminal's renderer. Each one redraws every row. It is
+    counted on the renderer's `handleSelectionChanged`. That path calls the renderer's `renderRows` directly, not
+    through the RenderService's `_renderRows`, so `rendersHidden` does not count it.
   - `longFrames` (> 50 ms) and `maxGapMs`: gaps between `requestAnimationFrame` callbacks.
 - `--profile` prints the top self-time functions and call chains of the bg scenario.
 
@@ -74,3 +77,72 @@ Notes:
   observer's `m.target.closest` filter does not exclude text-node changes inside `.xterm`, so this count is not
   sidebar-only. Most of the remaining frame cost is the hidden-redraw chain the hidden lane owns.
 - `renders`/`rendersHidden` read 0 on both sides in this run (the bench's `_renderRows` hook), so they are left out.
+
+## Hidden lane: a terminal that is not on the page draws nothing
+
+Change: `src/sessions/term/engine-hidden.ts`. While a terminal is hidden, the selection redraw that output scrolling
+triggers is held back. The selection is kept, and when the terminal is shown its screen and selection are drawn once.
+
+Run: `node bench/many/bench.mjs --n 20 --mb 1 --secs 8 --runs 3`. Base is a detached worktree of `5cac3df06` running
+this bench.mjs; head is `perf/omher-mt-hidden`. There were 4 rounds of 3 runs per side (12 runs each), each round in
+its own process. Rounds 1-2 ran base then head; rounds 3-4 ran head then base. Load average at round start was 10 to
+53. Files: `raw/{base,head}-hidden-r{1..4}-chromium.json`.
+
+| metric (8 s bg) | base median (min-max) | head median (min-max) |
+|---|---|---|
+| `selHidden`: full redraws of hidden terminals | 238 (209-266) | 0 (0-0) |
+| `rendersHidden`: `_renderRows` on hidden terminals | 0 (0-0) | 0 (0-0) |
+| `scriptMs` | 2758 (1525-3312) | 1637 (843-2017) |
+| `taskMs` | 3239 (1727-3879) | 1998 (984-2422) |
+| `longFrames` (> 50 ms) | 61.5 (56-64) | 62 (57-77) |
+| `maxGapMs` | 192 (150-283) | 159 (133-300) |
+| `updates` (store) | 476 (437-513) | 485 (456-532) |
+
+Script time was lower on head in every round. The round medians were:
+
+| round | base ms (load) | head ms (load) |
+|---|---|---|
+| 1 | 2884 (40) | 1797 (26) |
+| 2 | 1582 (23) | 922 (10) |
+| 3 | 2674 (43) | 1690 (23) |
+| 4 | 3203 (40) | 1791 (53) |
+
+Round 4 is the one where head ran under the higher load.
+
+- `longFrames` did not improve: 61.5 on base, 62 on head, inside the spread. The long frames come from the sidebar's
+  re-renders (the sidebar lane), not from xterm.
+- `rendersHidden` was already 0 on base, because xterm's IntersectionObserver pause covers `_renderRows`. The hidden
+  work was all on the selection path, which `selHidden` counts.
+
+## Park lane: a terminal hidden and quiet for a while gives back its scrollback
+
+Change: `src/sessions/term/park.ts` and the engine. A terminal off the page for 2 minutes that has printed nothing
+for 60 s is serialized with `@xterm/addon-serialize`, its xterm is disposed, and the snapshot is kept as UTF-8 bytes.
+Output or showing it makes a new xterm from the snapshot first.
+
+Run: `node bench/many/bench.mjs --park --n 20 --mb 2 --runs 3`. After fill, the N-1 hidden terminals wait out park
+thresholds shortened to 1 s through the dev hook; a build without parking waits 20 s. Base is a detached worktree of
+`33de47302` (the hidden lane) running this bench.mjs. There were 3 rounds of 3 runs per side (9 runs each), in the
+order base, head, head, base, base, head. Load average at round start was 17 to 32 (the machine had just rebooted).
+Files: `raw/{base,head}-park-r{1..3}-chromium.json`.
+
+- `bufParkMB`: xterm buffer bytes after the wait, counting the live terminals and the disposed xterm objects the
+  engine still holds as map keys.
+- `snapMB`: the snapshots' bytes. Like the buffers, they are typed arrays outside the JS heap's count.
+- `heapParkMB`: the JS heap after a forced GC.
+
+| metric | base median (min-max) | head median (min-max) |
+|---|---|---|
+| parked terminals | 0 | 19 (19-19) |
+| `bufMB` after fill | 170.9 | 170.9 |
+| `heapFillMB` after fill | 33.5 (33.5-34.2) | 33.6 (33.4-35.0) |
+| `bufParkMB` after the wait | 170.9 | 10.0 (10.0-10.0) |
+| `snapMB` | 0 | 11.0 (11.0-11.0) |
+| `heapParkMB` | 33.9 (33.9-34.3) | 14.7 (14.3-15.0) |
+| total after the wait (`bufParkMB + snapMB + heapParkMB`) | 204.8 (204.8-205.2) | 35.7 (35.3-36.0) |
+| time until 19 are parked | - | 843 ms (602-1016) |
+
+- The total went from 204.8 MB to 35.7 MB, 83% less. The one shown terminal keeps its 8.5 MB of buffer.
+- The first try kept the snapshot as the JS string the add-on returns. That string is built from many small
+  pieces, which V8 keeps as a rope several times its length: the heap after GC went from 34 to 214.6 MB with 19
+  parked. Encoding it to UTF-8 bytes at park time fixed that. xterm takes the bytes in `write` directly.

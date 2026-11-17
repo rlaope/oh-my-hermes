@@ -23,9 +23,9 @@
 // message by its saved copy's path. An oh-my-hermes session takes no files: the bridge attaches files to a bot's
 // main chat only.
 import { useSyncExternalStore } from "react";
-import type { Terminal } from "@xterm/xterm";
+import type { ITerminalInitOnlyOptions, ITerminalOptions, Terminal } from "@xterm/xterm";
 import type { FitAddon } from "@xterm/addon-fit";
-import { afterOpen, feed, onVisible } from "./term/engine";
+import { afterOpen, feed, isParked, live, onVisible, type Remake } from "./term/engine";
 import { applyLook, termOptions } from "./term/look";
 import { onTermSettings, readTermSettings } from "./term/settings";
 import { termTheme } from "./term/themes";
@@ -109,8 +109,13 @@ export interface AgentLive {
 }
 
 interface Term {
-  term: Terminal;
+  /** the terminal now: reading it makes a parked one again (term/park.ts) */
+  readonly term: Terminal;
+  /** the xterm it has, parked or not */
+  raw: Terminal;
   fit: FitAddon;
+  /** makes it again after it was parked */
+  remake?: Remake;
   /** xterm renders into this element; it moves between session views instead of being re-created */
   el: HTMLDivElement;
   hostId: number | null;
@@ -1307,8 +1312,9 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
     if (t.hostId !== null && !t.closed) void t.io.close(t.hostId).catch(() => undefined);
     t.closed = true;
     if (t.settle !== null) clearTimeout(t.settle);
+    const wasParked = isParked(t.raw);
     t.undo();
-    t.term.dispose();
+    if (!wasParked) t.raw.dispose(); // a parked one was disposed when it was parked
     t.el.remove();
     terms.delete(id);
   };
@@ -1336,49 +1342,83 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
     if (!t) {
       const el = document.createElement("div");
       el.className = "term-host";
-      const term = new Terminal(termOptions(theme, settings));
-      const fit = new FitAddon();
-      term.loadAddon(fit);
-      t = { term, fit, el, hostId: null, closed: false, undo: () => undefined, owed: 0, told: null, settle: null, io: isShell(rec(id)?.agent) ? getShellHost() : host };
+      const make = (opts: ITerminalOptions & ITerminalInitOnlyOptions) => {
+        const term = new Terminal(opts);
+        const fit = new FitAddon();
+        term.loadAddon(fit);
+        return { term, fit };
+      };
+      const first = make(termOptions(theme, settings));
+      t = {
+        get term() {
+          return live(this.raw);
+        },
+        raw: first.term,
+        fit: first.fit,
+        el,
+        hostId: null,
+        closed: false,
+        undo: () => undefined,
+        owed: 0,
+        told: null,
+        settle: null,
+        io: isShell(rec(id)?.agent) ? getShellHost() : host,
+      };
       terms.set(id, t);
       const tt = t;
-      term.onData((d) => {
-        if (tt.hostId !== null && !tt.closed) void tt.io.write(tt.hostId, d).catch(() => undefined);
-      });
-      // the title the program sets (OSC 0/2): the TERMINALS card's second line until it prints a line
-      term.onTitleChange((title) => {
-        const v = title.replace(/\s+/g, " ").trim().slice(0, LAST_LINE_MAX) || undefined;
-        if (rec(id)) termActs.patch(id, { oscTitle: v });
-      });
-      term.onResize(() => {
-        // the size it ends on is sent, once (a drag gives one size per frame)
-        if (tt.settle !== null) clearTimeout(tt.settle);
-        tt.settle = setTimeout(() => tellSize(tt), RESIZE_SETTLE_MS);
-      });
-      // The program rang the terminal's bell, as agents do when they wait for the person. omher reads nothing the
-      // program prints: the bell is the one thing a terminal tells it. The row says so and a notification goes
-      // out, once, until the person comes back to the session.
-      const ring = () => {
-        const r = rec(id);
-        if (r && !tt.closed && flag(id, "bell")) notifyState?.(id, { kind: "bell", name: nameOf(r) });
+      // a parked terminal made again: the same options and handlers, at the size it had, where it was
+      tt.remake = ({ cols, rows }) => {
+        const s = readTermSettings();
+        const th = termTheme(look, s);
+        const next = make({ ...termOptions(th, s), cols, rows });
+        tt.raw = next.term;
+        tt.fit = next.fit;
+        wire(next.term);
+        next.term.open(tt.el);
+        tt.undo = afterOpen(next.term, tt.el, s, tt.remake);
+        applyLook(next.term, th, s);
+        return next.term;
       };
-      term.onBell(ring);
-      // The notification escapes agents send instead of a bell count as a ring too: OSC 9 with a message (not a
-      // `9;<number>` report such as the 9;4 progress bar) and OSC 777 `notify`. Their text is never shown or kept.
-      term.parser.registerOscHandler(9, (d) => {
-        if (!/^\d+(;|$)/.test(d)) ring();
-        return false; // not consumed: another handler may want the escape
-      });
-      term.parser.registerOscHandler(777, (d) => {
-        if (d.startsWith("notify;")) ring();
-        return false;
-      });
+      const wire = (term: Terminal) => {
+        term.onData((d) => {
+          if (tt.hostId !== null && !tt.closed) void tt.io.write(tt.hostId, d).catch(() => undefined);
+        });
+        // the title the program sets (OSC 0/2): the TERMINALS card's second line until it prints a line
+        term.onTitleChange((title) => {
+          const v = title.replace(/\s+/g, " ").trim().slice(0, LAST_LINE_MAX) || undefined;
+          if (rec(id)) termActs.patch(id, { oscTitle: v });
+        });
+        term.onResize(() => {
+          // the size it ends on is sent, once (a drag gives one size per frame)
+          if (tt.settle !== null) clearTimeout(tt.settle);
+          tt.settle = setTimeout(() => tellSize(tt), RESIZE_SETTLE_MS);
+        });
+        // The program rang the terminal's bell, as agents do when they wait for the person. omher reads nothing the
+        // program prints: the bell is the one thing a terminal tells it. The row says so and a notification goes
+        // out, once, until the person comes back to the session.
+        const ring = () => {
+          const r = rec(id);
+          if (r && !tt.closed && flag(id, "bell")) notifyState?.(id, { kind: "bell", name: nameOf(r) });
+        };
+        term.onBell(ring);
+        // The notification escapes agents send instead of a bell count as a ring too: OSC 9 with a message (not a
+        // `9;<number>` report such as the 9;4 progress bar) and OSC 777 `notify`. Their text is never shown or kept.
+        term.parser.registerOscHandler(9, (d) => {
+          if (!/^\d+(;|$)/.test(d)) ring();
+          return false; // not consumed: another handler may want the escape
+        });
+        term.parser.registerOscHandler(777, (d) => {
+          if (d.startsWith("notify;")) ring();
+          return false;
+        });
+      };
+      wire(first.term);
     }
     const tt = t;
     container.appendChild(tt.el);
     if (fresh) {
-      tt.term.open(tt.el);
-      tt.undo = afterOpen(tt.term, tt.el, settings);
+      tt.raw.open(tt.el);
+      tt.undo = afterOpen(tt.raw, tt.el, settings, tt.remake);
     }
     applyLook(tt.term, theme, settings);
     const refit = () => {
@@ -1397,7 +1437,7 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
     tt.term.focus();
     return () => {
       ro.disconnect();
-      onVisible(tt.term, false);
+      onVisible(tt.raw, false);
       if (tt.el.parentElement === container) container.removeChild(tt.el);
     };
   };
@@ -1755,6 +1795,7 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
     const settings = readTermSettings();
     const theme = termTheme(look, settings);
     for (const t of terms.values()) {
+      if (isParked(t.raw)) continue; // takes the look when it is made again
       applyLook(t.term, theme, settings);
       // a changed font or line height changes how many cells fit
       if (t.el.isConnected && t.el.clientWidth > 0) {
