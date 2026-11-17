@@ -4,6 +4,15 @@ All notable changes will be documented here.
 
 ## Unreleased
 
+- **OMH starts faster in a fresh Hermes process and its tools cost fewer tokens to open.** The chat router no longer
+  imports the whole loop engine for one loop-command check, and the dag-ulw cue patterns compile on first use instead
+  of all at import, so the plugin's start before a one-shot `chat -q`, a cron run or a delegated child's first reply
+  drops by about 70 ms (register, import warm-up and first routed turn together: median 327 -> 254 ms over 10
+  interleaved cold starts against the previous main; the first turn pays about 20 ms of it back compiling the patterns
+  it reads). The OMH tool schemas Hermes loads on a tool's first use shrink from 72,940 to 63,324 characters (-13%):
+  the `observation` field on 20 tools stops describing metadata a model never fills, and the profile-override fields
+  say their refusal in fewer words. No tool, parameter or rule a model acts on changed.
+
 - **omher terminals behave like a real terminal.** `exit` (or Ctrl+D) in a TERMINALS shell closes its row, as its
   x does, and the next terminal or the bot chat opens; a shell that could not start stays with its error. When Claude
   Code, Codex or any CLI opened in a terminal ends, the same row goes on as your login shell in that folder, with one
@@ -115,6 +124,14 @@ All notable changes will be documented here.
   happened. Now a click opens a short English dialog, "Run this in Terminal and omher installs.", with the command
   already copied. On macOS `curl -fsSL https://omher.app/omher | sh` ends by opening the new
   omher.app, so the app is on screen when the command finishes (`OMH_OMHER_NO_OPEN=1` or `CI` skip it).
+
+- **`omh model-chains` and `/omh-model` now look like every other OMH picker.** The chain picker paints through the
+  OMH TUI's theme roles instead of the old skin palette: no selection band, the cursor row is `❯` with its name bold
+  in the menu colour, the rules and the effort bar's filled cells take the launch look's colours, words are neutral
+  greys, and hue is kept for what a cell says (`customized`, `edited`, `enabled`, `disabled`, an effort off its
+  model's list, warnings). It follows `/theme`, the saved launch
+  look, a light background (`COLORFGBG` on the command line, the measured background in the TUI) and the terminal's
+  colour depth. Text, columns and keys are unchanged; only the cursor mark moved from `▍` to `❯`.
 
 ## 4.0.8 - 2026-11-15
 

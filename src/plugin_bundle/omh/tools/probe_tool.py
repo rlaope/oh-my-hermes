@@ -26,11 +26,11 @@ OMH_PROBE_SCHEMA = {
         "properties": {
             "omh_home": {
                 "type": "string",
-                "description": "Standalone operator override only. Native Hermes calls reject this field; omit it to use the active profile.",
+                "description": "Standalone operator use only. Native Hermes calls reject it; omit.",
             },
             "hermes_home": {
                 "type": "string",
-                "description": "Standalone operator override only. Native Hermes calls reject this field; omit it to use the active profile.",
+                "description": "Standalone operator use only. Native Hermes calls reject it; omit.",
             },
             "include_parity": {
                 "type": "boolean",
