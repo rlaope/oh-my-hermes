@@ -110,6 +110,11 @@ All notable changes will be documented here.
   already copied. On macOS `curl -fsSL https://omher.app/omher | sh` ends by opening the new
   omher.app, so the app is on screen when the command finishes (`OMH_OMHER_NO_OPEN=1` or `CI` skip it).
 
+- **The Windows installer opens omher at the end too, and honours `OMH_OMHER_NO_OPEN`.** `install.sh` started
+  opening the new app on macOS and reading `OMH_OMHER_NO_OPEN=1` to skip it; `install.ps1` did neither, which broke the
+  rule that both installers take the same options (CI's installer parity test failed on every PR). Windows now starts
+  `omher.exe` from the folder it installed to, unless `OMH_OMHER_NO_OPEN=1` or `CI` is set.
+
 ## 4.0.8 - 2026-11-15
 
 - **The OMH TUI shows a compression as one gauge row, and a prompt typed meanwhile goes on by itself.** `/compact`

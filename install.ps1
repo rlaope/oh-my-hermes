@@ -122,10 +122,11 @@ $OmhScope           = Get-OmhEnv 'OMH_SCOPE'
 $OmhSetupArgs       = Get-OmhEnv 'OMH_SETUP_ARGS'
 # omher@beta only (see the usage note above): OMH_WITH_HERMES=0 skips
 # installing Hermes, OMH_WITH_DESKTOP=0 skips the app, OMH_APP_DIR picks the
-# app's install folder.
+# app's install folder, OMH_OMHER_NO_OPEN=1 (or CI) leaves the new app closed.
 $OmhWithHermes      = Get-OmhEnv 'OMH_WITH_HERMES' '1'
 $OmhWithDesktop     = Get-OmhEnv 'OMH_WITH_DESKTOP' '1'
 $OmhAppDir          = Get-OmhEnv 'OMH_APP_DIR'
+$OmhOmherNoOpen     = Get-OmhEnv 'OMH_OMHER_NO_OPEN' '0'
 # Taken here, at script scope: inside a function $args is that function's own.
 $OmhScriptArgs      = @($args)
 $OmhHermesInstallUrl  = 'https://hermes-agent.nousresearch.com/install.ps1'
@@ -1388,7 +1389,23 @@ try {
             }
         }
         if ($script:OmhOmherAppPath) {
-            Write-OmhLine 'omher is installed. Open it from the Start menu.'
+            # Open it now, as install.sh does on macOS: the person ran this to get
+            # the app. Only the exe at a folder this run knows; never in CI.
+            $omherExe = if ($script:OmhOmherAppPath -ne 'the Start menu') { Join-Path $script:OmhOmherAppPath 'omher.exe' } else { '' }
+            $opened = $false
+            if ($OmhOmherNoOpen -ne '1' -and -not $env:CI -and $omherExe -and (Test-Path -LiteralPath $omherExe -PathType Leaf)) {
+                try {
+                    Start-Process -FilePath $omherExe -ErrorAction Stop | Out-Null
+                    $opened = $true
+                } catch {
+                    $opened = $false
+                }
+            }
+            if ($opened) {
+                Write-OmhLine "Opened omher ($omherExe)."
+            } else {
+                Write-OmhLine 'omher is installed. Open it from the Start menu.'
+            }
         }
     }
 } catch {

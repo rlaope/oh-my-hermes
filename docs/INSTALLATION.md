@@ -309,7 +309,8 @@ The app is the newest `omher-v*` release: the `.dmg` for your Mac's architecture
 under a temporary name, then swapped for an older copy only once the copy is whole; on Windows the per-user
 installer is checked the same way and runs silently. On Linux x86_64 the AppImage is checked the same way,
 put at `~/.local/bin/omher` (or `OMH_APP_DIR`) and given an app menu entry ([omher on Linux](omher-linux.md));
-other Linux machines get Hermes and OMH only, with a note.
+other Linux machines get Hermes and OMH only, with a note. On macOS and Windows the new app is opened when the
+install ends; `OMH_OMHER_NO_OPEN=1` (or a `CI` environment) leaves it closed.
 `OMH_WITH_HERMES=0` skips installing Hermes and `OMH_WITH_DESKTOP=0` skips the app. Run from a Hermes profile
 shell (`HERMES_HOME=<root>/profiles/<name>`), the installer looks for Hermes under `<root>`, as omher does.
 
