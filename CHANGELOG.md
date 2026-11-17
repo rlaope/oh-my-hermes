@@ -105,6 +105,11 @@ All notable changes will be documented here.
   already copied. On macOS `curl -fsSL https://omher.app/omher | sh` ends by opening the new
   omher.app, so the app is on screen when the command finishes (`OMH_OMHER_NO_OPEN=1` or `CI` skip it).
 
+- **A code backlog that names a monthly report is no longer read as a schedule.** A period word such as monthly,
+  weekly or nightly counts as a recurring schedule only when it says how often the work runs ("fix these monthly",
+  "rebase them nightly, then report"). Naming a thing ("the monthly report", "a weekly digest module") no longer stops
+  a listed backlog of code changes from running as a dag-ulw graph.
+
 ## 4.0.8 - 2026-11-15
 
 - **The OMH TUI shows a compression as one gauge row, and a prompt typed meanwhile goes on by itself.** `/compact`

@@ -1776,7 +1776,10 @@ _SCHEDULE: Final = re.compile(
     rf"|\bevery\s+(?:\d+\s+|other\s+)?{_TIME_UNIT_EN}s?\b|\beach\s+{_TIME_UNIT_EN}\b"
     r"|\b(?:once|twice|thrice|(?:\d+|two|three|four|five|several)\s+times)\s+(?:a|per|each|every)\s+(?:hour|day|week|month|year)\b"
     r"|\b(?:on|after|upon)\s+(?:every|each)\s+(?:new\s+)?(?:push|commit|merge|deploy|deployment|release|build|pr|pull\s+request)\b"
-    r"|\b(?:hourly|daily|nightly|weekly|monthly|periodically)\b|\bat\s+\d{1,2}(?::\d{2})?\s*(?:am|pm)\b"
+    # An adverb of period, not the same word naming a thing ("the monthly report", "a weekly digest module"): a
+    # period word followed by a word other than a conjunction or a time anchor is that word's adjective.
+    r"|\bperiodically\b|\b(?:hourly|daily|nightly|weekly|monthly)\b(?!\s+(?!(?:and|or|at|on|in|from|before|after"
+    r"|until|by|then|too|again|instead)\b)[a-z0-9])|\bat\s+\d{1,2}(?::\d{2})?\s*(?:am|pm)\b"
     r"|\bon\s+a\s+schedule\b"
 )
 # What comes before 마다: a unit of work makes it "each of them" (`_KOREAN_UNIT`), anything else a recurrence.

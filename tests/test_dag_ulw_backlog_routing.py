@@ -50,6 +50,8 @@ BACKLOGS = (
     "- add a health check endpoint that pings the database",
     "아래 버그들 전부 고쳐줘\n1. 로그인 후 세션이 만료되지 않음\n2. 결제 모듈에서 환불 금액이 음수로 저장됨\n"
     "3. 알림 API가 중복으로 발송됨\n4. 검색 결과 페이지네이션이 마지막 페이지를 건너뜀",
+    # A period word naming a thing (the monthly report, a weekly digest) is no schedule.
+    _listed("The package's monthly report and weekly digest modules have these bugs. Fix all of them:", 4),
 )
 
 NOT_BACKLOGS = (
@@ -69,6 +71,10 @@ NOT_BACKLOGS = (
     "4. 검색 페이지네이션 버그 수정",
     # Held, put off, or handed to a named coding agent.
     _listed("Fix all of these bugs next week:", 4),
+    # A period word said of the work itself is a schedule, so the list stays out of a graph.
+    _listed("Fix these bugs in the repo monthly:", 4),
+    _listed("Rebase and fix these in the package nightly, then report:", 4),
+    _listed("Fix these bugs in the repo weekly and post the result:", 4),
     _listed("Have codex fix all of these bugs:", 4),
     # A quoted or fenced list is not the request's own.
     "Fix all of these:\n```\n" + _listed("", 4).strip() + "\n```",
