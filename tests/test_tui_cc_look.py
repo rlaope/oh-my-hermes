@@ -70,7 +70,7 @@ from omh.tui.transcript import (
     block_rows,
     rail_cell,
 )
-from omh.tui.width import line_width
+from omh.tui.width import cell_width, clusters, line_width
 
 SID = "s"
 
@@ -363,7 +363,7 @@ class WorkingRowTests(unittest.TestCase):
         for _ in range(len(WORKING_GLYPHS)):
             clock.now += TICK_SECONDS
             seen.append(app._tail(100)[-2][0])
-        self.assertEqual({span.text for span in seen}, set("·✢✳✶✻✽"))
+        self.assertEqual({span.text for span in seen}, {"·", "✢", "✳\ufe0e", "✶", "✻", "✽"})
         self.assertEqual({span.style for span in seen}, {THEME.accent})  # the launch look's, not a state's
         still, clock = self.busy(environ={"OMH_TUI_REDUCED_MOTION": "1"})
         held = set()
@@ -371,6 +371,20 @@ class WorkingRowTests(unittest.TestCase):
             clock.now += TICK_SECONDS
             held.add(still._tail(100)[-2][0].text)
         self.assertEqual(held, {WORKING_GLYPHS[0]})
+
+    def test_spinner_frames_keep_text_presentation_and_one_cell_without_extra_ticks(self) -> None:
+        expected = ("✻", "✽", "✻", "✶", "✳\ufe0e", "✢", "·", "✢", "✳\ufe0e", "✶")
+        self.assertEqual(WORKING_GLYPHS, expected)
+        app, _clock = self.busy()
+        for frame, glyph in enumerate(expected):
+            with self.subTest(frame=frame):
+                self.assertEqual(clusters(glyph), [glyph])
+                self.assertEqual(cell_width(glyph), 1)
+                with mock.patch.object(app, "_spinner_frame", return_value=frame):
+                    row = next(row for row in app._tail(100) if "Working…" in line_text(row))
+                self.assertEqual(row[0].text, glyph)
+                self.assertEqual(cell_width(line_text(row).split("Working…")[0]), 2)
+                self.assertEqual(row[0].style, THEME.accent)
 
     def test_the_interrupting_row_lines_up_with_the_working_row(self) -> None:
         app, _clock = self.busy()
@@ -654,7 +668,7 @@ class DocumentedLookTests(unittest.TestCase):
         self.assertTrue(f"`✶ {working[2:]}`" in prose, working)
         self.assertTrue(f"(`{' '.join(tip.split())}`)" in prose, tip)
         self.assertTrue("(`· ✢ ✳ ✶ ✻ ✽`)" in prose)
-        self.assertEqual(set(WORKING_GLYPHS), set("·✢✳✶✻✽"))
+        self.assertEqual({glyph.removesuffix("\ufe0e") for glyph in WORKING_GLYPHS}, set("·✢✳✶✻✽"))
         self.assertTrue(f"On a terminal {TIP_MIN_ROWS} rows tall or more a tip sits under it" in prose)
         app.interrupting, app.turn_shown = True, 0  # the example has written nothing yet
         (row,) = [line for line in lines_text(app._tail(100)) if INTERRUPTING in line]

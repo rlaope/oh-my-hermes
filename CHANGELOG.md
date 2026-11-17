@@ -63,6 +63,10 @@ All notable changes will be documented here.
   row as your prompt, not a queued row. Esc again gives it back to the composer. Enter with an image still queues for
   the turn's end, and Ctrl+Enter with text alone still steers without stopping anything.
 
+- **OMH TUI: the working spinner stays in the theme colour on terminals that draw `✳` as an emoji.** Zellij Desktop
+  on macOS painted its two `✳` frames as a green emoji, so the spinner flashed green twice a cycle. Those frames now
+  ask for text presentation (U+FE0E) and stay one cell in the accent colour. Contributed by @DanRioDev (#2923).
+
 ## 4.0.8 - 2026-11-15
 
 - **The OMH TUI shows a compression as one gauge row, and a prompt typed meanwhile goes on by itself.** `/compact`
