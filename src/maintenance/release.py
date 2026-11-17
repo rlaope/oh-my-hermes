@@ -430,7 +430,13 @@ SKILL_INDEX_LINE_CHAR_LIMIT = 100
 # description's node field list (+45, 3504 -> 3549). Measured by
 # per_turn_context.plugin_tool_schema_chars_by_tool() against base 55c802b39.
 # No headroom.
-PLUGIN_TOOL_SCHEMA_CHAR_LIMIT = 72940
+# 72940 -> 63324: the shared `observation` parameter (on 20 tools) keeps its
+# fields but drops the per-field descriptions a model never fills (-452 per
+# tool, -9040), and the twelve `omh_home`/`hermes_home` override descriptions
+# say the same refusal in fewer words (-576). Every rule a model acts on is
+# unchanged. Measured by per_turn_context.plugin_tool_schema_chars_by_tool()
+# against base 32a8217f8. No headroom.
+PLUGIN_TOOL_SCHEMA_CHAR_LIMIT = 63324
 # PRE_LLM_CALL_CONTEXT_CHAR_LIMIT, PRE_LLM_CALL_CONTEXT_FALLBACK_CHAR_LIMIT: moved with
 # their history to src/plugin_bundle/omh/turn_budget.py; imported at the top of this file.
 # 340000 -> 349637: three capability-skill sections were added by the domain
