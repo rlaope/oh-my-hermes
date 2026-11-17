@@ -13,11 +13,17 @@ All notable changes will be documented here.
   the `observation` field on 20 tools stops describing metadata a model never fills, and the profile-override fields
   say their refusal in fewer words. No tool, parameter or rule a model acts on changed.
 
+- **omher terminals behave like a real terminal.** `exit` (or Ctrl+D) in a TERMINALS shell closes its row, as its
+  x does, and the next terminal or the bot chat opens; a shell that could not start stays with its error. When Claude
+  Code, Codex or any CLI opened in a terminal ends, the same row goes on as your login shell in that folder, with one
+  dim line saying so, and the row's mark follows whatever you start there next. Korean typed with the macOS 2-Set
+  input source no longer loses or repeats syllables (the window's engine sends no composition events for it), and a
+  fast Enter after the last syllable keeps it. Terminals draw in the bundled JetBrains Mono at 13px, with Symbols
+  Nerd Font Mono for prompt icons, as Otty does; Settings › Terminal still picks another font and size.
 - **omher: a routine that keeps failing is one line in the chat, not one per run.** The same routine failing again
   with nothing between updates its line instead of adding another: `Routine · sso-refresh · not delivered ×12 ·
   03:56–09:37`, with one unread for the first failure. Hermes' `delivery_failed` and `blocked_config` read as "not
   delivered" and "blocked by config" in the danger colour, instead of the raw state.
-
 - **An OMH TUI reply no longer hangs on a rail.** The `⚚ Hermes · <model>` header starts at the left edge and the
   reply's text sits two cells in, with no `┃` beside it, so a reply reads apart from your prompts and the tool calls,
   which keep their rails. The two cells the bar took go to the reply's text, and a copy still leaves the margin out.

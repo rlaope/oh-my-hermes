@@ -4,6 +4,7 @@ import type { ITerminalOptions, ITheme, Terminal } from "@xterm/xterm";
 import type { TermContrast, TermSettings } from "./settings";
 import { brightIsBrighter, isLightBackground } from "./themes";
 import { finderOf } from "./engine-find";
+import { BUNDLED_FAMILIES } from "./fonts";
 
 const appMono = () => (typeof document === "undefined" ? "" : getComputedStyle(document.documentElement).getPropertyValue("--mono").trim()) || "monospace";
 
@@ -22,15 +23,16 @@ export function termContrast(background: string | undefined, c: TermContrast): n
 
 const GENERIC = new Set(["monospace", "ui-monospace", "serif", "sans-serif", "ui-serif", "ui-sans-serif", "system-ui", "cursive", "fantasy"]);
 
-/** The person's fonts first, omher's monospace stack behind them (a name that is not installed falls through).
- *  Each name is written quoted, whatever quotes it was typed with, so a half-typed list is still valid CSS. */
+/** The person's fonts first, then the bundled JetBrains Mono and Symbols Nerd Font Mono (fonts.ts), then omher's
+ *  monospace stack (a name that is not installed falls through). Each name is written quoted, whatever quotes it was
+ *  typed with, so a half-typed list is still valid CSS. */
 export function termFont(family: string, mono: string = appMono()): string {
   const names = family
     .split(",")
     .map((n) => n.replace(/['"]/g, "").trim().replace(/\s+/g, " "))
-    .filter(Boolean)
-    .map((n) => (GENERIC.has(n.toLowerCase()) ? n.toLowerCase() : `"${n}"`));
-  return names.length ? `${names.join(", ")}, ${mono}` : mono;
+    .filter(Boolean);
+  const all = [...names, ...BUNDLED_FAMILIES.filter((b) => !names.some((n) => n.toLowerCase() === b.toLowerCase()))];
+  return `${all.map((n) => (GENERIC.has(n.toLowerCase()) ? n.toLowerCase() : `"${n}"`)).join(", ")}, ${mono}`;
 }
 
 /** The options a new terminal starts with. */

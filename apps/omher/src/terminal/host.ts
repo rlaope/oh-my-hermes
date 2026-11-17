@@ -76,7 +76,9 @@ export type MockShellCall =
   | { op: "resize"; id: number; cols: number; rows: number }
   | { op: "close"; id: number };
 
-type MockGlobals = { __omherShellCalls?: MockShellCall[]; __omherShellHome?: string; __omherShellFolders?: string[] };
+/** `__omherShellDie` (e2e): the next shells cannot start (`error`: start fails with it) or end at once with `code`,
+ *  as a broken login shell does. */
+type MockGlobals = { __omherShellCalls?: MockShellCall[]; __omherShellHome?: string; __omherShellFolders?: string[]; __omherShellDie?: { error?: string; code?: number } };
 
 const MOCK_HOME = "/home/you";
 const leafOf = (p: string) => p.replace(/[\\/]+$/, "").split(/[\\/]/).pop() || p;
@@ -114,9 +116,19 @@ class MockShellHost implements ShellHost {
     const folders = this.g.__omherShellFolders;
     const ok = !!cwd && cwd.startsWith("/") && (!folders || folders.includes(cwd));
     const at = ok ? cwd! : home;
+    const die = this.g.__omherShellDie;
+    if (die?.error) throw new Error(die.error);
     this.log({ op: "start", id, cwd, at, cols, rows });
     this.live.set(id, { line: "", cwd: at, out: onData, exit: onExit });
     mockPtyOut(id, onData);
+    if (typeof die?.code === "number") {
+      setTimeout(() => {
+        onData(`\x1b[31m(mock) the login shell could not read its profile\x1b[0m\r\n`);
+        this.live.delete(id);
+        onExit(die.code!);
+      }, 20);
+      return { id, cwd: at };
+    }
     setTimeout(() => onData(`\x1b[2m(mock) login shell in ${at}\x1b[0m\r\n${this.prompt(at)}`), 20);
     return { id, cwd: at };
   }
@@ -129,14 +141,21 @@ class MockShellHost implements ShellHost {
       if (ch === "\r") {
         const line = s.line.trim();
         s.line = "";
-        if (line === "exit") {
+        const quit = /^exit(?: (\d+))?$/.exec(line);
+        if (quit) {
           s.out("\r\nlogout\r\n");
           this.live.delete(id);
-          setTimeout(() => s.exit(0), 10);
+          setTimeout(() => s.exit(Number(quit[1] ?? 0)), 10);
           return;
         }
         const body = line === "pwd" ? [s.cwd] : line === "git log --oneline" ? GIT_LOG : line === "pnpm test" ? TEST_RUN : line ? [`${line}`] : [];
         s.out(`\r\n${body.map((l) => `${l}\r\n`).join("")}${this.prompt(s.cwd)}`);
+      } else if (ch === "\x04" && !s.line) {
+        // Ctrl+D at an empty prompt: the shell logs out
+        s.out("\r\nlogout\r\n");
+        this.live.delete(id);
+        setTimeout(() => s.exit(0), 10);
+        return;
       } else if (ch === "\x7f") {
         if (s.line) {
           s.line = s.line.slice(0, -1);

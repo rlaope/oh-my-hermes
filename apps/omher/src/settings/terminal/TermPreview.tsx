@@ -5,6 +5,7 @@ import { useEffect, useRef } from "react";
 import type { Terminal } from "@xterm/xterm";
 import type { FitAddon } from "@xterm/addon-fit";
 import { applyLook, termOptions } from "../../sessions/term/look";
+import { termFontsReady } from "../../sessions/term/fonts";
 import { SAMPLE_COLS, SAMPLE_ROWS, SAMPLE_SELECT, SAMPLE_WIDE_COLS, termSample } from "../../sessions/term/look-sample";
 import type { TermSettings } from "../../sessions/term/settings";
 import type { TermTheme } from "../../sessions/term/themes";
@@ -67,7 +68,7 @@ export function TermPreview({ theme, settings }: { theme: TermTheme; settings: T
   useEffect(() => {
     let gone = false;
     let ro: ResizeObserver | null = null;
-    void Promise.all([import("@xterm/xterm"), import("@xterm/addon-fit"), import("@xterm/xterm/css/xterm.css")]).then(([{ Terminal }, { FitAddon }]) => {
+    void Promise.all([import("@xterm/xterm"), import("@xterm/addon-fit"), import("@xterm/xterm/css/xterm.css"), termFontsReady()]).then(([{ Terminal }, { FitAddon }]) => {
       const el = host.current;
       if (gone || !el) return;
       const { theme: th, settings: s } = now.current;

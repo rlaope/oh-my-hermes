@@ -1181,6 +1181,8 @@ export const en = {
   "graph.editMsg": "Edit the plan of run {run}: ",
   "ss.termEnded": "{agent} ended",
   "ss.termEndedExit": "{agent} ended with exit {code}",
+  "ss.backToShell": "{agent} ended — back to your shell",
+  "ss.backToShellExit": "{agent} ended with exit {code} — back to your shell",
   "ss.codexBundled": " (the Codex bundled in the ChatGPT app is found too)",
   "ss.dshOld": "This DSH session ran deepseek-bot (omher 0.2.4). DSH is DeepSeek Harness now: Restart starts it in this folder.",
   "ss.gone": "{agent} is no longer offered in omher",

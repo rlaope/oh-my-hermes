@@ -105,9 +105,10 @@ async function seedTerminals(page: Page) {
   const shellGrok = await newTerm(page, "shell", FOLDERS[1]);
   await setFg(page, shellGrok, "grok");
   const shell = await newTerm(page, "shell", FOLDERS[1]);
+  // pi ended: its row goes on as the login shell (term-exit.spec.ts)
   const done = await newTerm(page, "pi", FOLDERS[1]);
   await typeIn(page, "exit");
-  await expect(page.getByTestId(`session-${done}`)).toHaveAttribute("data-term-status", "ok");
+  await expect(page.getByTestId(`session-${done}`).getByTestId("term-row-mark")).toHaveAttribute("data-agent", "shell");
   return { claude, codex, shellGrok, shell, done };
 }
 
@@ -215,14 +216,17 @@ test("rows: grouped by folder with the branch; two-line cards (status, mark, tit
   await setFg(page, ids.shellGrok, null);
   await expect(sg.getByTestId("term-row-mark")).toHaveAttribute("data-agent", "shell");
   await expect(sg.getByTestId("term-meta")).toContainText("shell");
-  // exit 0 = check; exit 3 = x; output flowing = spinner, then idle
-  await expect(page.getByTestId(`session-${ids.done}`).getByTestId("term-status")).toHaveAttribute("data-status", "ok");
+  // a CLI that ended is a shell now (no check: the row goes on); output flowing = spinner, then idle; a shell that
+  // could not start = x
+  await expect(page.getByTestId(`session-${ids.done}`)).toHaveAttribute("data-term-status", "idle");
   await page.getByTestId(`session-${ids.codex}`).locator(".ss-open").click();
   await typeIn(page, "hello");
   await expect(page.getByTestId(`session-${ids.codex}`)).toHaveAttribute("data-term-status", "busy");
   await expect(page.getByTestId(`session-${ids.codex}`)).toHaveAttribute("data-term-status", "idle", { timeout: 6000 });
+  await page.evaluate(() => ((window as unknown as Record<string, unknown>).__omherShellDie = { code: 1 }));
   await typeIn(page, "after 10 exit 3");
   await expect(page.getByTestId(`session-${ids.codex}`)).toHaveAttribute("data-term-status", "err");
+  await page.evaluate(() => delete (window as unknown as Record<string, unknown>).__omherShellDie);
   // the selected row is a rounded block with a border, no accent bar
   const sel = await page.getByTestId(`session-${ids.codex}`).evaluate((el) => {
     const cs = getComputedStyle(el);

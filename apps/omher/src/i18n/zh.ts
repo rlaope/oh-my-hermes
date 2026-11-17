@@ -1179,6 +1179,8 @@ export const zh: Record<Key, string> = {
   "graph.editMsg": "修改运行 {run} 的计划：",
   "ss.termEnded": "{agent} 已结束",
   "ss.termEndedExit": "{agent} 已结束（exit {code}）",
+  "ss.backToShell": "{agent} 已结束 — 已回到 shell",
+  "ss.backToShellExit": "{agent} 已结束（exit {code}）— 已回到 shell",
   "ss.codexBundled": "（也会找到 ChatGPT 应用内置的 Codex）",
   "ss.dshOld": "这个 DSH 会话运行的是 deepseek-bot（omher 0.2.4）。DSH 现在是 DeepSeek Harness：点 Restart 会在此文件夹中启动它。",
   "ss.gone": "omher 已不再提供 {agent}",

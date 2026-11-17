@@ -12,6 +12,7 @@ import { canRetry, probeWebgl, recordLoss } from "./engine-policy";
 import { onTermSettings, type TermSettings } from "./settings";
 import { attachLinks } from "./engine-links";
 import { attachInput } from "./engine-input";
+import { attachIme } from "./engine-ime";
 import { FIND_EVENT, makeFinder, type FindRequest } from "./engine-find";
 
 /** The add-on's chunk loads the first time a terminal wants it, never with the app and never while `gpu` is off. */
@@ -183,9 +184,28 @@ export function afterOpen(term: Terminal, el: HTMLElement, settings: TermSetting
     const detail: FindRequest = { term, finder };
     el.dispatchEvent(new CustomEvent<FindRequest>(FIND_EVENT, { bubbles: true, detail }));
   });
+  // Korean, Japanese and Chinese input methods: each committed text reaches the program once (engine-ime.ts)
+  const undoIme = attachIme(term, el);
+  // a font that arrives after the terminal drew (the symbols font loads on its first glyph, or JetBrains Mono came
+  // after the wait for it gave up): the cell is measured again in the font now drawn, and the GPU renderer's glyph
+  // cache, which holds the fallback's shapes, is cleared
+  const fonts = typeof document !== "undefined" ? document.fonts : undefined;
+  const fontsLoaded = () => {
+    if (s.gone) return;
+    try {
+      (term as unknown as { _core?: { _charSizeService?: { measure?(): void } } })._core?._charSizeService?.measure?.();
+      term.clearTextureAtlas();
+    } catch {
+      /* not drawable yet */
+    }
+    repaint(s);
+  };
+  fonts?.addEventListener?.("loadingdone", fontsLoaded);
   stopSettings ??= onTermSettings(reconsider);
   attach(s);
   return () => {
+    fonts?.removeEventListener?.("loadingdone", fontsLoaded);
+    undoIme();
     undoInput();
     undoLinks();
     finder.dispose();
