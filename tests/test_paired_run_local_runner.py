@@ -44,13 +44,21 @@ class PairedRunLocalRunnerTests(unittest.TestCase):
             )
             hermes.chmod(0o755)
 
-            for name, executor, digest, expected in (
-                ("digest", "hermes", "a" * 64, "digest does not match"),
+            for name, executor, digest, expected, extra in (
+                ("digest", "hermes", "a" * 64, "digest does not match", ()),
                 (
                     "executor",
                     "codex",
                     actual_digest,
                     "no sanctioned paired-run adapter",
+                    (),
+                ),
+                (
+                    "toolsets",
+                    "hermes",
+                    actual_digest,
+                    "refused: web",
+                    ("--arm-toolsets", "file,skills,terminal,web"),
                 ),
             ):
                 with self.subTest(name=name):
@@ -99,6 +107,7 @@ class PairedRunLocalRunnerTests(unittest.TestCase):
                             "fake-provider",
                             "--hermes",
                             str(hermes),
+                            *extra,
                         ],
                         output_json=False,
                     )
@@ -108,6 +117,17 @@ class PairedRunLocalRunnerTests(unittest.TestCase):
                     self.assertFalse((root / "calls.jsonl").exists())
 
     def test_confirmed_cli_runs_hermes_cells_with_receipts_and_cleanup(self) -> None:
+        calls = self._confirmed_run(())
+        for call in calls:
+            self.assertEqual(call["argv"][10:], ["--ignore-rules", "--toolsets", "file,skills"])
+
+    def test_terminal_opt_in_gives_both_arms_the_same_toolsets_and_signs_them(self) -> None:
+        calls = self._confirmed_run(("--arm-toolsets", "terminal,file,skills"), "file,skills,terminal")
+        self.assertEqual({tuple(call["argv"][10:]) for call in calls},
+                         {("--ignore-rules", "--toolsets", "file,skills,terminal")})
+        self.assertTrue(all("--yolo" not in call["argv"] for call in calls))
+
+    def _confirmed_run(self, extra: tuple[str, ...], toolsets: str = "file,skills") -> list[dict[str, object]]:
         with TemporaryDirectory(prefix="omh-paired-cli-") as raw:
             root = Path(raw)
             omh_home = root / ".omh"
@@ -186,6 +206,7 @@ class PairedRunLocalRunnerTests(unittest.TestCase):
                     "--timeout",
                     "5",
                     "--json",
+                    *extra,
                 ],
                 output_json=False,
             )
@@ -254,8 +275,12 @@ class PairedRunLocalRunnerTests(unittest.TestCase):
             self.assertEqual(homes["baseline"]["arm_setup"]["omh_plugin"], False)
             self.assertEqual(homes["variant"]["arm_setup"]["omh_plugin"], True)
             self.assertTrue(homes["baseline"]["stopped"] and homes["variant"]["stopped"])
+            self.assertEqual(execution["arm_toolsets"], toolsets)
+            self.assertEqual(homes["baseline"]["arm_setup"]["toolsets"], toolsets)
+            self.assertEqual(homes["variant"]["arm_setup"]["toolsets"], toolsets)
             for call in calls:
                 self.assertFalse(Path(call["hermes_home"]).exists(), "arm homes are removed")
+            return calls
 
 
 if __name__ == "__main__":

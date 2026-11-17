@@ -22,6 +22,10 @@ export const ChevronDown = ({ size = 9 }: { size?: number }) => (
 export const ChevronRight = ({ size = 10 }: { size?: number }) => (
   <svg width={size} height={size} viewBox="0 0 24 24" {...s} strokeWidth="2.6"><path d="m9 6 6 6-6 6" /></svg>
 );
+/** A page's back arrow (top left of Settings, Automations and Plugins). */
+export const ArrowLeft = ({ size = 14 }: { size?: number }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" {...s} strokeWidth="2.2" aria-hidden="true"><path d="M19 12H5M11 6l-6 6 6 6" /></svg>
+);
 export const ArrowUp = () => (
   <svg width="13" height="13" viewBox="0 0 24 24" {...s} strokeWidth="2.6"><path d="M12 19V5M5 12l7-7 7 7" /></svg>
 );

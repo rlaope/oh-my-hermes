@@ -259,7 +259,7 @@ test("a single /word says skills take $; with no skill list the hint says to typ
   await expect(hint).toHaveCount(0);
 });
 
-// SESSIONS hidden in favour of bot threads (plan 2026-11-15)
+// chat-mode CLI sessions replaced by bot threads (2026-11-16: terminals kept)
 test.skip("a SESSIONS chat keeps its agent's own / menu and never gets the bot skill picker", async ({ page }) => {
   await page.addInitScript(() => {
     localStorage.removeItem("omher.sessions.recent");

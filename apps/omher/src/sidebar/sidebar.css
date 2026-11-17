@@ -330,8 +330,75 @@
   margin-top: auto;
   display: grid;
   gap: 1px;
-  padding-top: 8px;
+  padding-top: 6px;
   flex: none;
+}
+/* spacing (2026-11-16): Automations, Plugins and Settings are one row of icon buttons (their names in the tooltip
+   and for a screen reader), the usage marks at its right end; the user row under it. The footer was 172px tall. */
+.foot-row {
+  position: relative; /* the usage card spans this row */
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 0 calc(var(--side-x) - 6px);
+}
+.nav.nav-i {
+  position: relative;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  justify-content: center;
+  flex: none;
+}
+.nav.nav-i svg {
+  width: 18px;
+  height: 16px;
+}
+.nav.nav-i:focus-visible {
+  outline: 2px solid var(--muted);
+  outline-offset: -2px;
+}
+/* the Automations count: a small number on the icon's corner, cut out of the sidebar's colour (no filled chip) */
+.nav.nav-i .nav-count {
+  position: absolute;
+  top: 2px;
+  right: 1px;
+  margin: 0;
+  min-width: 12px;
+  padding: 0 2px;
+  border-radius: 6px;
+  font-size: 9.5px;
+  line-height: 12px;
+  font-weight: 600;
+  text-align: center;
+  color: var(--muted);
+  background: var(--side);
+}
+.nav.nav-i.on .nav-count,
+.nav.nav-i:hover .nav-count {
+  background: transparent;
+}
+.foot-row .usage {
+  position: static;
+  margin: 0 0 0 auto;
+  padding: 0;
+  gap: 4px;
+}
+.foot-row .usage-card {
+  left: 0;
+  right: 0;
+}
+/* visually hidden, read out */
+.vh {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
 }
 .nav {
   display: flex;
@@ -385,8 +452,8 @@
   align-items: center;
   gap: 10px;
   width: 100%;
-  padding: 6px var(--side-x);
-  margin-top: 4px;
+  padding: 5px var(--side-x);
+  margin-top: 2px;
   border-radius: var(--r);
   color: var(--ink);
   font-size: 12.5px;
@@ -613,14 +680,15 @@ button.upd:hover {
 .usage-fill.lv-red {
   stroke: var(--usage-red);
 }
-/* a dot only for a state worth a glance (limited, near, stale); a CLI with nothing to report shows just its mark */
+/* a mark only for a state worth a glance (limited, near, stale); a CLI with nothing to report shows just its mark.
+   A short bar under the mark, never a dot: in the sidebar a red dot means a failed turn and nothing else */
 .usage-dot {
   position: absolute;
-  right: 1px;
-  bottom: 1px;
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
+  left: calc(50% - 5px);
+  bottom: 0;
+  width: 10px;
+  height: 3px;
+  border-radius: 1.5px;
   box-shadow: 0 0 0 1.5px var(--side);
   background: var(--quiet);
 }
@@ -1218,4 +1286,132 @@ body.row-dragging * {
 .pl-load {
   font-size: 12px;
   color: var(--body);
+}
+
+
+/* ---- The dock: the bots scrolled out of view above BOTS, as Arc-favourites tiles above the account row (Dock.tsx);
+   only while BOTS is scrolled, fading and sliding in and out ---------------------------------------------------- */
+.dock {
+  flex: none;
+  animation: dk-in 150ms ease-out;
+  display: grid;
+  /* the tiles fill each row (Arc): Dock.tsx sets the column count so no tile is left alone on a row (4 = 2x2) */
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  grid-auto-rows: 44px;
+  gap: 6px;
+  padding: 8px 0 2px;
+  margin-top: 6px;
+  border-top: 1px solid var(--line-soft);
+  position: relative;
+}
+.dk-t {
+  position: relative;
+  display: grid;
+  place-items: center;
+  border-radius: 9px;
+  background: var(--raise2);
+  border: 1px solid transparent;
+  transition: background 0.12s;
+  touch-action: none;
+}
+.dk-t:hover {
+  background: var(--hover);
+}
+.dk-t.on {
+  border-color: var(--muted);
+}
+.dk-t:focus-visible {
+  outline: 2px solid var(--muted);
+  outline-offset: 1px;
+}
+.dk-t.lifted {
+  opacity: 0.55;
+}
+.dk-t.drop {
+  box-shadow: inset 0 0 0 1px var(--muted);
+}
+.dk-f {
+  position: relative;
+  width: 24px;
+  height: 24px;
+  display: grid;
+  place-items: center;
+  line-height: 0;
+}
+[data-theme="light"] .dk-t {
+  background: var(--raise2);
+  border-color: var(--line);
+}
+.dk-f img {
+  border-radius: 6px;
+}
+/* running: a thin turning ring centred on the tile (not on the face, whose box can sit off the tile's middle), well
+   inside the tile's edges; a bot's in the bots' ring colour, a terminal's in the running-terminal colour */
+.dk-t.ring::after {
+  content: "";
+  position: absolute;
+  top: calc(50% - 16px);
+  left: calc(50% - 16px);
+  width: 32px;
+  height: 32px;
+  box-sizing: border-box;
+  border-radius: 50%;
+  /* a faint whole circle with the turning arc on it: still (reduced motion, a still shot) it reads as one ring round
+     the face, not a mark off to one side */
+  border: 1.5px solid color-mix(in srgb, var(--dk-run, var(--spin)) 22%, transparent);
+  border-top-color: var(--dk-run, var(--spin));
+  border-right-color: var(--dk-run, var(--spin));
+  animation: dk-turn 1.1s linear infinite;
+  pointer-events: none;
+}
+.dk-dot {
+  position: absolute;
+  top: 5px;
+  right: 5px;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  box-shadow: 0 0 0 2px var(--raise2);
+}
+.dk-dot.needs {
+  background: #f28c28;
+}
+.dk-dot.failed {
+  background: #e5484d;
+}
+.dock.out {
+  animation: dk-out 150ms ease-in forwards;
+}
+@keyframes dk-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+}
+@keyframes dk-out {
+  to {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+}
+@keyframes dk-turn {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .dk-t.ring::after,
+  .dock,
+  .dock.out {
+    animation: none;
+  }
+}
+/* a sidebar too narrow for three tiles hides the dock (a short window keeps one row: Dock.tsx) */
+.side {
+  container: side / inline-size;
+}
+@container side (max-width: 150px) {
+  .dock {
+    display: none;
+  }
 }

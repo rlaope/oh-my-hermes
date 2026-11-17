@@ -22,6 +22,7 @@ from .paired_run_local_models import (
     PairedRunLocalRunnerConfig,
     PairedRunLocalRunnerError,
 )
+from .hermes_child_arm_setup import parse_arm_toolsets
 from .paired_run_arm_home import ArmHomeRun, PairedRunArmHomeError, prepare_arm_home
 from .paired_run_local_worktrees import execute_local_paired_plan
 
@@ -67,6 +68,7 @@ def build_paired_run_local_boundary(
         or config.timeout_seconds <= 0
     ):
         raise PairedRunLocalRunnerError("paired-run timeout must be positive")
+    toolsets = _validated_toolsets(config.arm_toolsets)
     repo_root = _validated_repo(config.repo_root, decision.execution_revision)
     effective = PairedRunLocalRunnerConfig(
         config.paths,
@@ -76,6 +78,7 @@ def build_paired_run_local_boundary(
         config.reasoning,
         min(float(config.timeout_seconds), float(decision.max_dispatch_seconds)),
         config.provider_config,
+        toolsets,
     )
 
     def run(plan: PairedRunDispatchPlan) -> PairedRunExecutionReport:
@@ -96,6 +99,8 @@ def build_paired_run_local_boundary(
                     provider_config=effective.provider_config,
                     exposed_skills=arm.exposed_skills,
                     omh_plugin=role is ArmRole.VARIANT,
+                    # One value for both arms: the toolsets never differ per arm.
+                    toolsets=effective.arm_toolsets,
                     warmup_timeout_seconds=effective.timeout_seconds,
                 )
             report = execute_local_paired_plan(plan, decision, contents, effective, homes)
@@ -107,9 +112,16 @@ def build_paired_run_local_boundary(
             role.value: {**home.record(), "stopped": stopped[role]}
             for role, home in homes.items()
         }
-        return replace(report, arm_homes=records)
+        return replace(report, arm_homes=records, arm_toolsets=effective.arm_toolsets)
 
     return run
+
+
+def _validated_toolsets(value: str) -> str:
+    try:
+        return parse_arm_toolsets(value)
+    except ValueError as exc:
+        raise PairedRunLocalRunnerError(str(exc)) from exc
 
 
 def _validated_repo(repo_root: Path, revision: str) -> Path:

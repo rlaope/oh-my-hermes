@@ -17,7 +17,7 @@ fn read_small(p: &Path) -> Option<String> {
 
 /// The git folder of the repository `cwd` is in: `<dir>/.git` (a folder), or the folder a `.git` file names
 /// (`gitdir: <path>`, a worktree or submodule), looking up from `cwd` to the filesystem root.
-fn git_dir(cwd: &Path) -> Option<PathBuf> {
+pub fn git_dir(cwd: &Path) -> Option<PathBuf> {
     let mut at = Some(cwd);
     while let Some(dir) = at {
         let dot = dir.join(".git");

@@ -49,11 +49,9 @@ async function settings(page: Page) {
 
 async function terminalClaude(page: Page) {
   await page.getByTestId("session-new").click();
-  await page.getByTestId("session-agent-claude").click();
   await page.getByTestId("session-folder").click();
   await page.getByTestId("session-choose").click();
-  await page.getByTestId("session-way-terminal").click();
-  await page.getByTestId("session-go").click();
+  await page.getByTestId("session-agent-claude").click();
   await expect(page.locator(".xterm-rows")).toContainText("(mock)");
 }
 

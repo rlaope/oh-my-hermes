@@ -1,19 +1,5 @@
 <div align="center">
 
-### omher desktop @ beta
-
-<img src="assets/omher-hero.webp" alt="The omher desktop app in dark mode: bots Kami, Friren and Juno and SESSIONS on Claude Code, Codex and oh-my-pi in the sidebar; Kami's chat holds the ask to add dark mode to the docs and open a PR, planned with dag-ulw in 6 parts: 3 Hermes subagents on GLM, Kimi and DeepSeek, plus Claude Code, Codex and omp lanes; the Plans panel draws that plan as a graph of rounded boxes, each with its model's logo and model, effort and category (GLM-5.3 · medium · quick, Kimi K3 · high · visual-engineering, Opus 5.5 · high via Claude, GPT-6.1 Sol · medium via Codex, DeepSeek V4.1 · high · review, Sonnet 5.5 · high via omp), two done, two running and two waiting, with the full dependency list under it" width="900">
-
-Your Hermes bots and coding agents, in one window.
-
-[macOS (Apple silicon)](https://omher.app/#omher) · [macOS (Intel)](https://omher.app/#omher) · [Windows](https://omher.app/#omher) · [All releases →](https://github.com/rlaope/oh-my-hermes/releases?q=omher&expanded=true)
-
-</div>
-
-<br>
-
-<div align="center">
-
 <br>
 
 <img src="assets/oh-my-hermes-wordmark.png?v=spectrum" alt="OH-MY-HERMES" width="70%">
@@ -93,7 +79,21 @@ omh setup
 
 <br>
 
-## DAG-ULW
+<div align="center">
+
+### omher desktop @ beta
+
+<img src="assets/omher-hero.webp" alt="The omher desktop app in dark mode: bots Kami, Friren and Juno and SESSIONS on Claude Code, Codex and oh-my-pi in the sidebar; Kami's chat holds the ask to add dark mode to the docs and open a PR, planned with dag-ulw in 6 parts: 3 Hermes subagents on GLM, Kimi and DeepSeek, plus Claude Code, Codex and omp lanes; the Plans panel draws that plan as a graph of rounded boxes, each with its model's logo and model, effort and category (GLM-5.3 · medium · quick, Kimi K3 · high · visual-engineering, Opus 5.5 · high via Claude, GPT-6.1 Sol · medium via Codex, DeepSeek V4.1 · high · review, Sonnet 5.5 · high via omp), two done, two running and two waiting, with the full dependency list under it" width="900">
+
+Your Hermes bots and coding agents, in one window.
+
+[macOS (Apple silicon)](https://omher.app/#omher) · [macOS (Intel)](https://omher.app/#omher) · [Linux](https://omher.app/#omher) · [Windows](https://omher.app/#omher) · [All releases →](https://github.com/rlaope/oh-my-hermes/releases?q=omher&expanded=true)
+
+</div>
+
+<br>
+
+## Graph Engineering
 
 **Just type `/dag-ulw`, and you're a graph engineering master.**
 

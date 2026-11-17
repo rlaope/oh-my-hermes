@@ -69,7 +69,7 @@ omh setup
 
 <br>
 
-## DAG-ULW
+## Graph Engineering
 
 **`/dag-ulw` と打つだけで、あなたもグラフエンジニアリングの達人。**
 

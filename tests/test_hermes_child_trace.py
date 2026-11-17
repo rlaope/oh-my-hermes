@@ -37,6 +37,7 @@ from omh.coding.hermes_child_receipts import (  # noqa: E402
 )
 from omh.coding.hermes_child_trace import (  # noqa: E402
     CELL_TRACE_FIELDS,
+    MAX_SESSION_MODELS,
     CellTrace,
     cell_trace_errors,
     read_hermes_child_trace,
@@ -248,6 +249,21 @@ class CellTraceDispatchTests(unittest.TestCase):
         with self.assertRaises(ReceiptVerificationError):
             load_hermes_child_receipt(self.omh_home, "cell-1")
 
+    def test_tampered_child_fields_fail_verification(self) -> None:
+        run_dir = _sign(self.omh_home, self._dispatch()[-1])
+        path = run_dir / "observation.json"
+        original = path.read_text()
+        for field, value in (("subagent_session_count", 5), ("session_models", ["claude-opus-5-5"])):
+            with self.subTest(field=field):
+                observation = json.loads(original)
+                self.assertNotEqual(observation["cell_trace"][field], value)
+                observation["cell_trace"][field] = value
+                path.write_text(json.dumps(observation))
+                with self.assertRaises(ReceiptVerificationError):
+                    load_hermes_child_receipt(self.omh_home, "cell-1")
+        path.write_text(original)
+        self.assertIsNotNone(load_hermes_child_receipt(self.omh_home, "cell-1").cell_trace)
+
     def test_a_removed_trace_fails_verification(self) -> None:
         run_dir = _sign(self.omh_home, self._dispatch()[-1])
         path = run_dir / "observation.json"
@@ -354,6 +370,96 @@ class CellTraceReaderTests(unittest.TestCase):
         self.assertIsNone(broken.skill_view_count)
         self.assertEqual(broken.api_call_count, 1)
 
+    def _hermes_rows(self, *rows: tuple[str, str, str | None, float, float | None, int, str | None]) -> None:
+        """Rows in Hermes' own column shape: (id, source, parent, started_at, ended_at, api_calls, model)."""
+        db = sqlite3.connect(self.db)
+        db.execute("CREATE TABLE sessions (id TEXT PRIMARY KEY, source TEXT NOT NULL, parent_session_id TEXT,"
+                   " started_at REAL NOT NULL, ended_at REAL, api_call_count INTEGER DEFAULT 0, model TEXT,"
+                   " input_tokens INTEGER DEFAULT 0, output_tokens INTEGER DEFAULT 0)")
+        db.executemany("INSERT INTO sessions VALUES (?, ?, ?, ?, ?, ?, ?, 10, 1)", rows)
+        db.commit()
+        db.close()
+
+    def test_delegate_children_are_counted_with_their_overlap_and_models(self) -> None:
+        self._hermes_rows(
+            ("warm", "oneshot", None, 1.0, 2.0, 1, "m"),
+            ("parent", "oneshot", None, 10.0, 100.0, 4, "m"),
+            # Three children; c1 and c2 overlap, c3 starts exactly when c2 ends.
+            ("c1", "subagent", "parent", 20.0, 50.0, 3, "m"),
+            ("c2", "subagent", "parent", 30.0, 60.0, 5, "m"),
+            ("c3", "subagent", "parent", 60.0, 70.0, 2, "m"),
+        )
+        trace = read_hermes_child_trace(self.home, exclude=frozenset({"warm"}))
+        assert trace is not None
+        self.assertEqual((trace.session_count, trace.api_call_count), (4, 14))
+        self.assertEqual(
+            (trace.subagent_session_count, trace.subagent_api_call_count, trace.max_concurrent_subagents), (3, 10, 2)
+        )
+        self.assertEqual(trace.session_models, ("m",))
+        self.assertEqual(cell_trace_errors(trace.to_record()), [])
+
+    def test_a_child_on_another_model_is_listed_and_a_pre_cell_row_is_not(self) -> None:
+        self._hermes_rows(
+            ("warm", "subagent", None, 1.0, 2.0, 1, "pre-cell-model"),
+            ("parent", "oneshot", None, 10.0, 100.0, 4, "m"),
+            ("c1", "subagent", "parent", 20.0, 50.0, 3, "claude-opus-5-5"),
+            ("c2", "subagent", "parent", 20.0, None, 3, None),
+        )
+        trace = read_hermes_child_trace(self.home, exclude=frozenset({"warm"}))
+        assert trace is not None
+        self.assertEqual(trace.session_models, ("claude-opus-5-5", "m", "unrecognized"))
+        self.assertEqual(trace.subagent_session_count, 2, "the excluded pre-cell row is not counted")
+        self.assertIsNone(trace.max_concurrent_subagents, "an open child's overlap is unknown, not zero")
+
+    def test_back_to_back_children_never_overlap(self) -> None:
+        self._hermes_rows(
+            ("parent", "oneshot", None, 10.0, 100.0, 4, "m"),
+            ("c1", "subagent", "parent", 20.0, 30.0, 1, "m"),
+            ("c2", "subagent", "parent", 30.0, 40.0, 1, "m"),
+        )
+        trace = read_hermes_child_trace(self.home)
+        assert trace is not None
+        self.assertEqual(trace.max_concurrent_subagents, 1)
+
+    def test_a_cell_without_children_reads_zero_children_and_its_one_model(self) -> None:
+        self._hermes_rows(("parent", "oneshot", None, 10.0, 20.0, 4, "m"))
+        trace = read_hermes_child_trace(self.home)
+        assert trace is not None
+        self.assertEqual(
+            (trace.subagent_session_count, trace.subagent_api_call_count, trace.max_concurrent_subagents), (0, 0, 0)
+        )
+        self.assertEqual(trace.session_models, ("m",))
+
+    def test_missing_source_or_model_columns_null_only_their_fields(self) -> None:
+        db = sqlite3.connect(self.db)
+        db.execute("CREATE TABLE sessions (id TEXT, started_at REAL, api_call_count INTEGER)")
+        db.execute("INSERT INTO sessions VALUES ('s1', 1.0, 3)")
+        db.commit()
+        db.close()
+        trace = read_hermes_child_trace(self.home)
+        assert trace is not None
+        self.assertEqual(trace.api_call_count, 3)
+        self.assertIsNone(trace.subagent_session_count)
+        self.assertIsNone(trace.subagent_api_call_count)
+        self.assertIsNone(trace.max_concurrent_subagents)
+        self.assertIsNone(trace.session_models)
+
+    def test_more_models_than_the_cap_read_as_unknown_not_shortened(self) -> None:
+        rows = [(f"s{i}", "subagent", None, float(i), float(i) + 0.5, 1, f"model-{i:02d}")
+                for i in range(MAX_SESSION_MODELS + 1)]
+        self._hermes_rows(*rows)
+        trace = read_hermes_child_trace(self.home)
+        assert trace is not None
+        self.assertIsNone(trace.session_models)
+        self._fresh_db()
+        self._hermes_rows(*rows[:MAX_SESSION_MODELS])
+        capped = read_hermes_child_trace(self.home)
+        assert capped is not None
+        self.assertEqual(len(capped.session_models or ()), MAX_SESSION_MODELS)
+
+    def _fresh_db(self) -> None:
+        self.db.unlink()
+
     def test_compression_rotation_rows_are_summed_in_order(self) -> None:
         write_state(self.db, "s1", "p", api_calls=2, tokens=(10, 1, 0, 0), tool_calls=[[("read_file", {})]])
         write_state(self.db, "s2", "p2", api_calls=3, tokens=(20, 2, 0, 0), tool_calls=[[("patch", {})]])
@@ -373,7 +479,7 @@ class CellTraceSchemaTests(unittest.TestCase):
         )
 
     def _trace(self, **changes: object) -> dict[str, object]:
-        record = CellTrace(1, 2, 3, 4, 0, 0, 0, 7, 1, ("read_file",), False, 0, (), None, 12).to_record()
+        record = CellTrace(1, 2, 3, 4, 0, 0, 0, 7, 1, ("read_file",), False, 0, (), None, 12, 0, 0, 0, ("m",)).to_record()
         record.update(changes)
         return record
 
@@ -395,6 +501,12 @@ class CellTraceSchemaTests(unittest.TestCase):
             self._trace(skill_view_names="omh-x"),
             {**self._trace(), "prompt": "body"},
             {key: value for key, value in self._trace().items() if key != "first_request_chars"},
+            {key: value for key, value in self._trace().items() if key != "session_models"},
+            self._trace(subagent_session_count=-1),
+            self._trace(max_concurrent_subagents="2"),
+            self._trace(session_models="m"),
+            self._trace(session_models=["m\nbody"]),
+            self._trace(session_models=["m"] * (MAX_SESSION_MODELS + 1)),
         )
         for value in cases:
             with self.subTest(value=value):

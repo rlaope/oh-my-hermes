@@ -620,6 +620,8 @@ let steerMode = new Map();
 let steers = [];
 // Bots whose skills.list is empty (mock.noSkills).
 let noSkills;
+// Tasks › Linear: the bots whose config names a Linear MCP server (mock.linear {bot, server|null})
+let linearMcp;
 let notReady = new Map();
 
 // What each bot has done (bots.info): sessions per place, skills, routines.
@@ -781,6 +783,7 @@ function reset() {
   steerMode = new Map();
   steers = [];
   noSkills = new Set();
+  linearMcp = new Map();
   notReady = new Map(); // bot -> the sign-in provider that now passes its strict check ("" = none)
   idSeq = 0;
   calls = [];
@@ -1186,7 +1189,9 @@ const OPS = {
     const threads = [...folders.entries()]
       .filter(([, f]) => f.thread && f.bot === b.name && !f.archived)
       .map(([thread, f]) => ({ thread, title: f.title, cwd: f.listedCwd ?? f.cwd, started_at: f.started, running: Boolean(turns[folderTurnKey(b.name, thread)]),
-        needs: [...pending.values()].some((w) => w.bot === folderTurnKey(b.name, thread)), message_count: threadHistory.get(thread)?.length ?? 0, preview: "" }))
+        needs: [...pending.values()].some((w) => w.bot === folderTurnKey(b.name, thread)), message_count: threadHistory.get(thread)?.length ?? 0,
+        // as Hermes' session.list: the session's first user message
+        preview: threadHistory.get(thread)?.find((m) => m.role === "user")?.text ?? "" }))
       .sort((x, y) => y.started_at - x.started_at);
     return { threads };
   },
@@ -1374,6 +1379,10 @@ const OPS = {
     if (noSkills.has(p.bot)) return { skills: [] };
     const late = skillsLater.after-- <= 0 ? skillsLater.add : [];
     return { skills: [...SKILL_SEED, ...late].sort((a, b) => a.name.localeCompare(b.name)).map((x) => ({ ...x })) };
+  },
+  "tasks.linear": (p) => {
+    const server = linearMcp.get(needBot(p).name);
+    return server ? { configured: true, server } : { configured: false, server: "" };
   },
   "links.places": (p) => ({ places: structuredClone(LINK_PLACES[needBot(p).name] ?? { slack: {}, discord: {} }) }),
   "panel.terminal": (p) => ({
@@ -1838,15 +1847,17 @@ const OPS = {
   },
   "mock.threads": (p) => {
     const b = needBot(p);
+    const at = (t) => (typeof t.at === "number" ? t.at : now() - (Number(t.ago) || 0));
     if (!Array.isArray(p.threads)) throw new OpError("bad_request", "threads must be an array");
     const ids = [];
     for (const t of p.threads) {
       const thread = nextId("stored-th");
       folders.set(thread, { bot: b.name, cwd: t.cwd ?? "/home/me/work", open: true, thread: true, title: String(t.title ?? ""),
-        started: now() - (Number(t.ago) || 0), archived: false, key: null,
+        // `at` (seconds since epoch) pins the time for a test that fixes the page's clock; else `ago` before now
+        started: at(t), archived: false, key: null,
         // a restored row the bridge lists before it attaches the thread: `listedCwd` (often "") until thread.open
         ...(typeof t.listedCwd === "string" ? { listedCwd: t.listedCwd } : {}) });
-      threadHistory.set(thread, (t.messages ?? []).map(([role, text], i) => ({ id: `seed-${thread}-${i}`, role, text, ts: now() - (Number(t.ago) || 0) + i })));
+      threadHistory.set(thread, (t.messages ?? []).map(([role, text], i) => ({ id: `seed-${thread}-${i}`, role, text, ts: at(t) + i })));
       ids.push(thread);
     }
     setTimeout(() => broadcast({ event: "thread.added", bot: b.name, thread: ids[0] ?? "", title: "" }), 0);
@@ -1855,6 +1866,12 @@ const OPS = {
   "mock.answer": (p) => {
     const b = needBot(p);
     (answers[b.name] ??= []).push(needStr(p, "text"));
+    return {};
+  },
+  "mock.linear": (p) => {
+    const b = needBot(p);
+    if (p.server) linearMcp.set(b.name, String(p.server));
+    else linearMcp.delete(b.name);
     return {};
   },
   "mock.reset": () => {
@@ -1877,6 +1894,19 @@ const OPS = {
     return { run: DEMO_RUN };
   },
   // a bot whose main chat has no messages yet (first run)
+  // termui: `n` extra local bots (bot01…), each with a short main chat, for the many-rows sidebar scroll test
+  "mock.manyBots": (p) => {
+    const n = Math.max(0, Math.min(40, Number(p.n) || 0));
+    const names = [];
+    for (let i = 1; i <= n; i++) {
+      const name = `bot${String(i).padStart(2, "0")}`;
+      bots[name] = { ...BOT_SEED[1], name, display_name: `Bot ${String(i).padStart(2, "0")}`, running: false };
+      models[name] = { model: BOT_SEED[1].model, provider: BOT_SEED[1].provider, reasoning: "medium" };
+      history[name] = [{ id: `seed-${name}-0`, role: "assistant", text: `Bot ${i} is ready.`, ts: now() - i * 60 }];
+      names.push(name);
+    }
+    return { bots: names };
+  },
   "mock.peerBots": (p) => {
     if (!Array.isArray(p.bots)) throw new OpError("bad_request", "bots must be an array");
     peerBots = p.bots.map((b) => ({ ...PEER_BOTS_SEED[0], ...b }));
@@ -2074,7 +2104,10 @@ function splitBlocks(text) {
       continue;
     }
     const m = /^ {0,3}(`{3,}|~{3,})[ \t]*([^\s`]*)[ \t]*(.*?)\s*$/.exec(line);
-    if (!m || line.trimStart().startsWith(">") || (m[1][0] === "`" && m[3].includes("`"))) {
+    // the JSON on the opening fence line, closed on the very next line (its task may hold `code` spans)
+    const close1 = m && i + 1 < lines.length ? /^ {0,3}(`{3,}|~{3,})[ \t]*$/.exec(lines[i + 1]) : null;
+    const oneLine = !!(m && (m[2] === "omher-thread" || m[2] === "omher-thread-route") && m[3].startsWith("{") && close1 && close1[1][0] === m[1][0] && close1[1].length >= m[1].length);
+    if (!m || line.trimStart().startsWith(">") || (m[1][0] === "`" && m[3].includes("`") && !oneLine)) {
       keep.push(line);
       continue;
     }
@@ -2084,8 +2117,9 @@ function splitBlocks(text) {
       if (c && c[1][0] === m[1][0] && c[1].length >= m[1].length) break;
       j += 1;
     }
-    if ((m[2] === "omher-thread" || m[2] === "omher-thread-route") && !m[3]) {
-      if (j < lines.length) take(m[2], check(m[2], lines.slice(i + 1, j).join("\n")));
+    // the JSON as the body, or on the opening fence line with the close right after it (an empty body)
+    if ((m[2] === "omher-thread" || m[2] === "omher-thread-route") && (!m[3] || oneLine)) {
+      if (j < lines.length) take(m[2], check(m[2], m[3] || lines.slice(i + 1, j).join("\n")));
     } else keep.push(...lines.slice(i, j + 1));
     i = j;
   }

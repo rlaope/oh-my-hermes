@@ -1208,6 +1208,28 @@ disposable Hermes home per arm under a fresh temporary root outside any Hermes
   disposable OMH home, and exactly the arm's frozen `exposed_skills`. The
   baseline home holds neither. Both arms run the same flags (`--ignore-rules
   --toolsets file,skills`), so the homes are the only difference.
+- `--arm-toolsets` is the one opt-in that changes those flags, and it changes
+  them for both arms at once. It takes names from the closed set `file`,
+  `skills`, `terminal`, `delegation`; `file` and `skills` are required, and anything else is
+  refused before a home is built. `--arm-toolsets file,skills,terminal` gives
+  both arms Hermes' shell tool, running in the cell's detached worktree, so a
+  comparison of a plugin that runs tests is not a comparison against an arm
+  that cannot. `--yolo` is never passed, so Hermes' dangerous-command
+  approval stays on in both arms. No other Hermes child (`hermes-child
+  dispatch`, `fanout --final-review`, recovery) can take this flag; each keeps
+  safe mode and `--toolsets file`.
+- `delegation` gives both arms Hermes' own `delegate_task`, one level deep.
+  Both configs then carry the same `delegation:` block: `oneshot_max_children`
+  and `max_concurrent_children` of 6 (Hermes' one-shot default of 2 refuses a
+  whole call over it), `max_spawn_depth: 1`, `worktree_isolation: false` (the
+  children share the cell worktree), and the arm's own `model` and `provider`
+  for every child. The variant's OMH home also pins every routing category to
+  the arm's model (`routing/model-chains.json`), so `omh_delegate_route`
+  cannot move a child onto another model. Children run as threads of the arm
+  gateway and a one-shot session joins them inside the call, so the cell's
+  spawn-to-exit `elapsed_seconds` covers the whole job, children included. A
+  timed-out cell can leave children running in that gateway until the run's
+  homes close; run one job per decision when that matters.
 - A harness-owned `hermes gateway run --quiet` serves each home in its own
   process group with a minimal environment, never a launchd or other service
   job. One untimed warm-up chat absorbs the home's first-start work; its
@@ -1218,10 +1240,19 @@ disposable Hermes home per arm under a fresh temporary root outside any Hermes
 
 At each cell's spawn the dispatcher reads the home from disk (plugin manifest
 present and enabled in config; the sorted OMH skills present) and signs that
-reading into the receipt as `arm_setup`. A caller cannot supply or keep one.
-Fan-in refuses a cell with no signed setup, a variant that ran without the
-plugin, a baseline that ran with it, or a skills digest that differs from the
-arm's `exposed_skills`. The arm role fixes the plugin expectation, so
+reading, with the canonical `toolsets` the child was spawned with, into the
+receipt as `arm_setup`. A caller cannot supply or keep one, and editing the
+stored toolsets fails verification. Fan-in refuses a cell with no signed
+setup, a variant that ran without the plugin, a baseline that ran with it, a
+skills digest that differs from the arm's `exposed_skills`, or toolsets that
+differ from the run's declared `arm_toolsets` (listed beside `arm_homes` in
+the execution report), and refuses the whole matrix when its arms' signed
+toolsets differ from each other. With `delegation` declared it also refuses a
+cell with no signed `cell_trace`, a trace whose `session_models` is null, and
+one that names any model other than the arm's. A delegating cell's usage
+carries no cost: Hermes folds each child's cost into the parent's total, so
+summing the rows could count the children twice; tokens and API calls still
+sum. The arm role fixes the plugin expectation, so
 `paired_run_decision/v2` needs no new field.
 
 After the cell's child exits, and while its arm home still exists, the
@@ -1232,7 +1263,12 @@ input, output, cache-read, cache-write, reasoning and total token counts,
 `tool_call_count` and the ordered `tool_names` (capped at 200, with
 `tool_names_truncated`), `skill_view_count` and the `skill_view_names` it
 opened (capped at 50), and the size in characters of the system prompt and of
-the first request (`system_prompt_chars`, `first_request_chars`). Rows the home
+the first request (`system_prompt_chars`, `first_request_chars`). For Hermes'
+own delegate children it adds `subagent_session_count`,
+`subagent_api_call_count`, `max_concurrent_subagents` (the most child
+`[started_at, ended_at)` spans open at one instant; null when a child has no
+end) and `session_models` (sorted distinct models of every new row; null past
+ten, never shortened). The sums above already include the children. Rows the home
 held before the cell, such as the warm-up chat, are left out. No prompt,
 reply, tool argument or tool result is kept, and a name that is not a short
 plain identifier is stored as `unrecognized`. A missing, locked or empty store

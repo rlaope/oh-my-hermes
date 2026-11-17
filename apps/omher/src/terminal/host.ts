@@ -3,6 +3,8 @@
 // then the same `session_*` commands every PTY session uses. In a plain browser (dev, e2e against the mock bridge)
 // a mock shell echoes typing and answers a few commands, and records every call in `window.__omherShellCalls`.
 
+import { mockPtyOut, nextMockPty } from "../sessions/fg";
+
 export interface ShellStarted {
   id: number;
   /** the folder the shell started in: the one asked for when it exists, else home */
@@ -96,7 +98,6 @@ const TEST_RUN = [
 
 class MockShellHost implements ShellHost {
   readonly kind = "mock" as const;
-  private next = 0;
   private live = new Map<number, { line: string; cwd: string; out: (d: string) => void; exit: (c: number | null) => void }>();
   constructor(private g: MockGlobals = globalThis as MockGlobals) {}
   private log(c: MockShellCall) {
@@ -107,7 +108,7 @@ class MockShellHost implements ShellHost {
     return `\x1b[32myou@mock\x1b[0m \x1b[34m${cwd === home ? "~" : leafOf(cwd)}\x1b[0m % `;
   }
   async start(cwd: string | null, cols: number, rows: number, onData: (d: string) => void, onExit: (c: number | null) => void) {
-    const id = ++this.next;
+    const id = nextMockPty();
     const home = this.g.__omherShellHome ?? MOCK_HOME;
     // as the shell does: the folder when it exists (the mock's list; any absolute path when none is set), else home
     const folders = this.g.__omherShellFolders;
@@ -115,6 +116,7 @@ class MockShellHost implements ShellHost {
     const at = ok ? cwd! : home;
     this.log({ op: "start", id, cwd, at, cols, rows });
     this.live.set(id, { line: "", cwd: at, out: onData, exit: onExit });
+    mockPtyOut(id, onData);
     setTimeout(() => onData(`\x1b[2m(mock) login shell in ${at}\x1b[0m\r\n${this.prompt(at)}`), 20);
     return { id, cwd: at };
   }

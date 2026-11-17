@@ -9,7 +9,8 @@ import { onTermSettings, readTermSettings } from "../sessions/term/settings";
 import { termTheme } from "../sessions/term/themes";
 import { t } from "../i18n";
 import { getShellHost } from "./host";
-import { setTabCwd } from "./state";
+import { setTabCwd, setTabFg } from "./state";
+import { onSessionFg } from "../sessions/fg";
 
 /** A size goes to the shell once it has held this long (a drag gives one per frame). */
 const RESIZE_SETTLE_MS = 32;
@@ -31,6 +32,8 @@ interface PanelTerm {
   ended: boolean;
   settle: ReturnType<typeof setTimeout> | null;
   undo: () => void;
+  /** stops following the shell's foreground CLI */
+  fgOff?: () => void;
 }
 
 const terms = new Map<number, PanelTerm>();
@@ -86,6 +89,7 @@ function start(key: number, p: PanelTerm, want: string | null): void {
       },
       (code) => {
         p.ended = true;
+        setTabFg(key, null);
         p.term.write(`\r\n\x1b[2m[${code ? t("termpanel.endedCode", { code }) : t("termpanel.ended")}]\x1b[0m\r\n`);
       },
     )
@@ -97,6 +101,8 @@ function start(key: number, p: PanelTerm, want: string | null): void {
           return;
         }
         p.id = started.id;
+        // the tab's mark follows the CLI in the shell's foreground
+        p.fgOff = onSessionFg(started.id, (agent) => setTabFg(key, agent));
         if (p.owed) host.ack(p.id, p.owed);
         p.owed = 0;
         setTabCwd(key, started.cwd);
@@ -171,6 +177,7 @@ export function disposeTerm(key: number): void {
   p.ended = true;
   if (p.settle !== null) clearTimeout(p.settle);
   p.undo();
+  p.fgOff?.();
   p.term.dispose();
   p.el.remove();
 }

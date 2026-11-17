@@ -5,7 +5,7 @@
 // claude-14-plan-*.jsonl and codex-15-sub-edit*.jsonl.
 import { expect, test, type Page } from "@playwright/test";
 
-test.skip(true, "SESSIONS hidden in favour of bot threads (plan 2026-11-15)");
+test.skip(true, "chat-mode CLI sessions replaced by bot threads (2026-11-16: terminals kept)");
 
 const MOCK = Number(process.env.OMHER_MOCK_PORT || 5308);
 

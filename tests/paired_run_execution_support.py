@@ -64,8 +64,31 @@ def workspace(cell) -> PairedRunWorkspace:
     return PairedRunWorkspace(cell.workspace_id)
 
 
-def arm_setup_record(omh_plugin: bool, skills: tuple[str, ...]) -> dict[str, object]:
-    return {"omh_plugin": omh_plugin, "exposure_digest": exposure_digest(tuple(sorted(skills)))}
+def arm_setup_record(
+    omh_plugin: bool, skills: tuple[str, ...], toolsets: str = "file,skills"
+) -> dict[str, object]:
+    return {
+        "omh_plugin": omh_plugin,
+        "exposure_digest": exposure_digest(tuple(sorted(skills))),
+        "toolsets": toolsets,
+    }
+
+
+def trace_with_models(models: tuple[str, ...] | None, *, children: int = 0) -> dict[str, object]:
+    """A valid `cell_trace` record naming `models` (sorted), with `children` subagent rows."""
+    return {
+        "session_count": 1 + children, "api_call_count": 2 + children, "input_tokens": 10, "output_tokens": 5,
+        "cache_read_tokens": 0, "cache_write_tokens": 0, "reasoning_tokens": 0, "total_tokens": 15,
+        "tool_call_count": 1, "tool_names": ["delegate_task"], "tool_names_truncated": False,
+        "skill_view_count": 0, "skill_view_names": [], "system_prompt_chars": 10, "first_request_chars": 5,
+        "subagent_session_count": children, "subagent_api_call_count": children,
+        "max_concurrent_subagents": children, "session_models": None if models is None else sorted(models),
+    }
+
+
+def cell_trace_record(cell) -> dict[str, object] | None:
+    """The trace a fixture cell signs; None by default (no trace), replaced by tests that need one."""
+    return None
 
 
 def receipt(home: Path, cell, run_id: str, status: str = "completed"):
@@ -74,5 +97,5 @@ def receipt(home: Path, cell, run_id: str, status: str = "completed"):
         task_id=cell.task_id, criteria_ref=f"criteria-{cell.task_id[-1]}",
         input_digest=cell.input_digest, arm=cell.arm.value, executor=cell.executor,
         model=cell.model, exposed_skills=skills, execution_revision=cell.execution_revision,
-    ), arm_setup=arm_setup_record(cell.arm is ArmRole.VARIANT, skills))
+    ), arm_setup=arm_setup_record(cell.arm is ArmRole.VARIANT, skills), cell_trace=cell_trace_record(cell))
     return load_hermes_child_receipt(home, run_id)

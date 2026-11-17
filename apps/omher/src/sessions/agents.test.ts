@@ -4,6 +4,8 @@ import {
   folderName,
   INSTALL,
   isAgentId,
+  lastPrintedLine,
+  LAST_LINE_MAX,
   missingNote,
   parentPath,
   parseRecent,
@@ -11,6 +13,7 @@ import {
   RECENT_MAX,
   recentFolders,
   rowModel,
+  termActivity,
   terminalNote,
   tildePath,
   type Recent,
@@ -223,5 +226,29 @@ describe("mock session host", () => {
     // the generic ACP agents come as the shell's rows, with nothing of theirs kept in this app
     expect(list.filter((a) => a.acp).map((a) => a.acp!.id)).toEqual(["gemini", "qwen", "kimi", "copilot", "cline"]);
     expect(list.map((a) => a.mode)).toEqual(["chat", "chat", "chat", "chat", "hermes", "chat", "chat", "terminal", "chat", "chat", "chat", "chat", "chat", "chat"]);
+  });
+});
+
+describe("TERMINALS card second line", () => {
+  it("takes the last line that says something, skipping blank lines, frames and bare prompts", () => {
+    expect(lastPrintedLine(["╭────╮", "│ hi │", "╰────╯", "", "Running tests… (12s · esc to interrupt)", "", "  "])).toBe("Running tests… (12s · esc to interrupt)");
+    expect(lastPrintedLine(["Wrote docs/RELEASE.md", "╰──────────╯", "▌ "])).toBe("Wrote docs/RELEASE.md");
+    expect(lastPrintedLine(["a   b\tc"])).toBe("a b c");
+    expect(lastPrintedLine(["› Read 142 lines", "❯ "])).toBe("Read 142 lines");
+    expect(lastPrintedLine(["❯ fix the flaky test"])).toBe("fix the flaky test");
+    expect(lastPrintedLine(["• Ran pnpm test payments", "›"])).toBe("Ran pnpm test payments");
+    expect(lastPrintedLine(["⏺ Read 3 files", "", "›  "])).toBe("Read 3 files");
+    expect(lastPrintedLine(["✻ Running tests… (12s · esc to interrupt)"])).toBe("Running tests… (12s · esc to interrupt)");
+    expect(lastPrintedLine(["", "   ", "────"])).toBe("");
+  });
+  it("cuts a very long line with an ellipsis", () => {
+    const l = lastPrintedLine(["x".repeat(400)]);
+    expect(l.length).toBe(LAST_LINE_MAX);
+    expect(l.endsWith("…")).toBe(true);
+  });
+  it("is the CLI, then the last line, else the title the program set", () => {
+    expect(termActivity({ agent: "shell", fgAgent: "claude", lastLine: "Running tests…" })).toEqual({ cli: "claude", line: "Running tests…" });
+    expect(termActivity({ agent: "codex", oscTitle: "codex: webhook retry" })).toEqual({ cli: "codex", line: "codex: webhook retry" });
+    expect(termActivity({ agent: "codex" })).toEqual({ cli: "codex", line: "" });
   });
 });

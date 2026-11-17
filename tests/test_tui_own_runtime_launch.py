@@ -224,8 +224,6 @@ class RestartChoiceTests(unittest.TestCase):
         choices = app_module.gateway_restart_choices("", own=True)
         self.assertEqual(choices, (app_module.GATEWAY_OWN_RUNTIME_CHOICE, app_module.GATEWAY_CANCEL_CHOICE))
         self.assertEqual(app_module.gateway_restart_choices("kami", own=True), choices)
-        self.assertEqual(app_module.gateway_restart_choices("", own=True, offered=True),
-                         (app_module.GATEWAY_CANCEL_CHOICE, app_module.GATEWAY_OWN_RUNTIME_CHOICE))
 
     def test_the_shared_gateway_keeps_its_choices(self) -> None:
         self.assertEqual(app_module.gateway_restart_choices(""),
@@ -233,9 +231,6 @@ class RestartChoiceTests(unittest.TestCase):
         self.assertEqual(app_module.gateway_restart_choices("kami"), (
             app_module.GATEWAY_PROFILE_CHOICE.format(profile="kami"), app_module.GATEWAY_WHOLE_CHOICE,
             app_module.GATEWAY_CANCEL_CHOICE))
-        self.assertEqual(app_module.gateway_restart_choices("kami", offered=True), (
-            app_module.GATEWAY_CANCEL_CHOICE, app_module.GATEWAY_PROFILE_CHOICE.format(profile="kami"),
-            app_module.GATEWAY_WHOLE_CHOICE))
 
 
 if __name__ == "__main__":

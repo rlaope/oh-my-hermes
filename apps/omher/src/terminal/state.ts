@@ -13,6 +13,8 @@ export interface TermTab {
   want: string | null;
   /** the folder the shell started in, once it has */
   cwd: string | null;
+  /** the CLI in the shell's foreground (`session-fg`), null for the shell itself */
+  fg?: string | null;
 }
 
 export interface TermPanelState {
@@ -79,6 +81,13 @@ export function pickTerminalTab(key: number): void {
 }
 
 /** The shell of tab `key` started in `cwd`. */
+/** The CLI in tab `key`'s foreground (the shell's `session-fg` event), null when the shell itself is in front. */
+export function setTabFg(key: number, fg: string | null): void {
+  const tab = state.tabs.find((t) => t.key === key);
+  if (!tab || (tab.fg ?? null) === fg) return;
+  set({ tabs: state.tabs.map((t) => (t.key === key ? { ...t, fg } : t)) });
+}
+
 export function setTabCwd(key: number, cwd: string): void {
   if (!state.tabs.some((t) => t.key === key)) return;
   set({ tabs: state.tabs.map((t) => (t.key === key ? { ...t, cwd } : t)) });

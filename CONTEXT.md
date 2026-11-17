@@ -691,14 +691,17 @@ ledger is the only record of the turn's spend: every API call queues
 finalize and again when the quiet CLI exits. The home belongs to that child
 alone, so every row in the file is its spend and the rows are summed; the
 result is the `-z` report's vocabulary, which the observation builder already
-reads. The child runs with `--toolsets file --safe-mode` (a paired-run arm
-uses `file,skills` in its declared arm home, which also has no delegate
-toolset, and the read skips rows the home held before the cell), so no delegate
+reads. The child runs with `--toolsets file --safe-mode`, so no delegate
 subagent opens a row of its own and a context-compression rotation is the only
-source of a second row. The sum equals the `-z` counters only because of that
-restriction: a delegate child writes its own `sessions` row, and the `-z`
-main-loop keys exclude subagent tokens while its cost includes them, so a
-later `--toolsets` widening that admits delegation has to revisit this read.
+source of a second row (the read skips rows the home held before the cell). A
+paired-run arm uses `file,skills`, optionally with `terminal` and `delegation`
+from the run's `--arm-toolsets` opt-in, in its declared arm home. With
+`delegation`, Hermes' own `delegate_task` children each write a `sessions`
+row (`source = 'subagent'`). Their token and API-call counts are per-row
+deltas and are summed with the parent's; their cost is not, because Hermes
+folds a child's cost into the parent's running total, so when any read row
+is a subagent's the usage carries no `estimated_cost_usd`, `cost_status` or
+`cost_source` (unmeasured, never a doubled figure).
 The columns have been in the table since Hermes 2026-04, before the
 `requires_hermes` floor.
 
@@ -722,7 +725,12 @@ Besides the `sessions` token and `api_call_count` columns it reads
 argument is parsed only for its `name`), the length of
 `COALESCE(messages.api_content, content)` of the first user row, and the
 length of the system prompt, inline or through `system_prompts.prompt` by
-`sessions.system_prompt_hash`. Lengths and names leave the read; text never
+`sessions.system_prompt_hash`. For Hermes' own `delegate_task` children it
+reads `sessions.source`, `started_at`, `ended_at` and `model`:
+`subagent_session_count`, `subagent_api_call_count`,
+`max_concurrent_subagents` (most child spans open at one instant; null when a
+child has no end) and `session_models` (sorted distinct models of every new
+row, null past ten). Lengths and names leave the read; text never
 does. Same Hermes-private coupling and same quiet-on-shape-change rule as the
 usage ledger above.
 _Avoid_: keeping any message text, counting rows the home held before the

@@ -1,0 +1,65 @@
+{
+ "author": {
+  "id": "U_redacted",
+  "is_bot": false,
+  "login": "person2",
+  "name": "Person2"
+ },
+ "body": "> **Corrected 2026-09-22 after a coverage audit.** The first version of this\n> issue said OMH had nothing shadowable, on the strength of a grep for the word\n> `shadow`. That was wrong as a reading: OMH already ships the pattern for\n> skill routing, and the evidence below now says so. The word is absent; the\n> capability is not.\n\n## Problem\n\nOMH already records a decision without applying it. `route_question/v1` types\nthe question an undecidable route could not answer, `omh_route_answer` writes\none bounded `route_question_answer/v1` record per (session, question) whose own\ndocstring says \"Recording an answer changes no route… The record exists to be\nMEASURED\", and `src/quality/routing_question_corpus.py` scores a deterministic\narm against an answerer arm over the same two shipped corpora. That is shadow\nmode, built for one surface.\n\nWhat is missing is everything around it that makes a sha",
+ "comments": [
+  {
+   "id": "IC_kwDOSwAnf88AAAABXV3aXw",
+   "author": {
+    "login": "person2",
+    "name": "Person2",
+    "id": "U_redacted"
+   },
+   "authorAssociation": "OWNER",
+   "body": "#1809 (a generic shadow-evaluation framework) was closed in favour of this issue. Any shared machinery should be extracted only once a second decision surface needs it.",
+   "createdAt": "2026-09-28T00:47:48Z",
+   "includesCreatedEdit": false,
+   "isMinimized": false,
+   "minimizedReason": "",
+   "reactionGroups": [],
+   "url": "https://github.com/rlaope/oh-my-hermes/issues/1817#issuecomment-5861399135",
+   "viewerDidAuthor": true
+  }
+ ],
+ "createdAt": "2026-09-22T09:22:03Z",
+ "labels": [
+  {
+   "id": "LA_kwDOSwAnf88AAAACl4Mr8w",
+   "name": "enhancement",
+   "description": "New feature or request",
+   "color": "a2eeef"
+  },
+  {
+   "id": "LA_kwDOSwAnf88AAAACuf1FRg",
+   "name": "area/routing",
+   "description": "Chat router, intent detection, triggers, and overroute guards",
+   "color": "1d76db"
+  },
+  {
+   "id": "LA_kwDOSwAnf88AAAACuf1GqA",
+   "name": "area/plugin",
+   "description": "Hermes plugin bundle, MCP bridge, hooks, and awareness delivery",
+   "color": "006b75"
+  },
+  {
+   "id": "LA_kwDOSwAnf88AAAACuf1HiQ",
+   "name": "area/quality",
+   "description": "Quality gates, conformance, governance, and evidence contracts",
+   "color": "0052cc"
+  },
+  {
+   "id": "LA_kwDOSwAnf88AAAACuf1Iuw",
+   "name": "needs-triage",
+   "description": "Not yet routed to an area or priority",
+   "color": "ededed"
+  }
+ ],
+ "number": 1817,
+ "state": "OPEN",
+ "title": "[Feature]: Shadow, decline, refuse and replay — turning an OMH decision surface on from the owner's own traffic",
+ "url": "https://github.com/rlaope/oh-my-hermes/issues/1817"
+}

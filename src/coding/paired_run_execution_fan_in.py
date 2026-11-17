@@ -20,7 +20,8 @@ from ..quality.paired_run_receipt_binding import (
     evaluation_binding_errors,
 )
 from ..quality.paired_run_values import exposure_digest
-from .hermes_child_arm_setup import ArmSetup
+from .hermes_child_arm_setup import ArmSetup, delegates
+from .hermes_child_trace import CellTrace
 from .hermes_child_receipts import (
     ReceiptVerificationError,
     is_verified_receipt,
@@ -119,12 +120,19 @@ def _fan_in_blockers(
         if task is None:
             blockers.append(f"{label}: stale execution identity")
             continue
-        reason = _outcome_error(cell, row, task, request, items[0], receipt_context)
+        reason = _outcome_error(cell, row, task, request, items[0], receipt_context, report.arm_toolsets)
         if reason is not None:
             blockers.append(f"{label}: {reason}")
     for key, cell in cells.items():
         if key not in expected:
             blockers.append(f"{cell.workspace_id}: stale execution identity")
+    signed_toolsets = {
+        item.receipt.arm_setup.toolsets
+        for item in report.receipts
+        if item.receipt is not None and item.receipt.arm_setup is not None
+    }
+    if len(signed_toolsets) > 1:
+        blockers.append("report: arms ran with different toolsets")
     return tuple(blockers)
 
 
@@ -196,6 +204,7 @@ def _outcome_error(
     request: PairedRunRequest,
     outcome: PairedRunExecutionOutcome,
     receipt_context: Path,
+    arm_toolsets: str,
 ) -> str | None:
     if outcome.cell is None or normalized_cell(outcome.cell) != normalized_cell(cell):
         return "stale execution identity"
@@ -219,7 +228,7 @@ def _outcome_error(
         return "persisted receipt could not be verified"
     if persisted != outcome.receipt:
         return "persisted receipt does not match execution receipt"
-    return _binding_error(cell, row, task, request)
+    return _binding_error(cell, row, task, request, arm_toolsets)
 
 
 def _execution_state_error(outcome: PairedRunExecutionOutcome) -> str:
@@ -239,12 +248,14 @@ def arm_setup_error(
     setup: ArmSetup | None,
     role: ArmRole,
     exposed_skills: tuple[str, ...],
+    arm_toolsets: str,
 ) -> str | None:
     """Refuse a cell whose signed arm setup is not what its arm declares.
 
     The arm role fixes the plugin expectation (the variant runs with the OMH
     plugin enabled, the baseline without it); the frozen `exposed_skills`
-    fix the skills digest. A receipt with no arm setup proves neither.
+    fix the skills digest; the run's declared `arm_toolsets`, one value for
+    both arms, fix the toolsets. A receipt with no arm setup proves none.
     """
     if setup is None:
         return "missing signed arm setup"
@@ -256,6 +267,24 @@ def arm_setup_error(
         )
     if setup.exposure_digest != exposure_digest(tuple(sorted(exposed_skills))):
         return "arm setup skills do not match exposed_skills"
+    if setup.toolsets != arm_toolsets:
+        return "arm setup toolsets do not match the run's declared toolsets"
+    return None
+
+
+def delegated_model_error(trace: CellTrace | None, model: str) -> str | None:
+    """Refuse a delegating cell unless its signed trace shows every session on the arm's model.
+
+    With `delegation` declared, Hermes children may run in the cell; the arm
+    homes pin them to the arm's model, and this proves the pin held. A trace
+    that is missing, or that cannot list the models, proves nothing.
+    """
+    if trace is None:
+        return "delegating cell has no signed cell trace"
+    if trace.session_models is None:
+        return "delegating cell trace does not list its session models"
+    if set(trace.session_models) != {model}:
+        return "a session in a delegating cell ran another model than the arm's"
     return None
 
 
@@ -264,14 +293,19 @@ def _binding_error(
     row: RunResultInput,
     task: TaskSpec,
     request: PairedRunRequest,
+    arm_toolsets: str,
 ) -> str | None:
     receipt = row.receipt
     if receipt is None:
         return "missing authenticated receipt"
     arm = request.baseline if cell.arm is ArmRole.BASELINE else request.variant
-    setup_error = arm_setup_error(receipt.arm_setup, cell.arm, arm.exposed_skills)
+    setup_error = arm_setup_error(receipt.arm_setup, cell.arm, arm.exposed_skills, arm_toolsets)
     if setup_error is not None:
         return setup_error
+    if delegates(arm_toolsets):
+        model_error = delegated_model_error(receipt.cell_trace, arm.model)
+        if model_error is not None:
+            return model_error
     errors = evaluation_binding_errors(
         receipt.evaluation_binding,
         ExpectedEvaluationBinding(

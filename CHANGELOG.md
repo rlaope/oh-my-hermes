@@ -4,27 +4,6 @@ All notable changes will be documented here.
 
 ## Unreleased
 
-- **omher: a routine that ran fine no longer adds a line to the chat.** A job on a short schedule (every 30 minutes)
-  filled its bot's chat with "Routine · … · done" lines and unreads. Now only a failed run shows there; every run's
-  result stays on the Automations page (last run, status), and a bot-chat job's answer still arrives as its message.
-
-- **omher: a message you send while the bot is answering waits behind a ↵ mark, and you choose what it does.** It
-  shows as a muted bubble with "Waiting" and goes out on its own after the turn, one per turn, in order, through
-  Hermes' own queue. Click the ↵ for Send now (stops the answer once, this message goes next), Steer (adds it to the
-  running answer through Hermes' `session.steer`, without stopping it), Edit (back into the box) or Delete. A steer
-  whose outcome Hermes could not confirm is never sent twice: the bubble says it might already be in the answer and
-  offers Send or Delete. Waiting messages survive a reload, returning to the box as a draft. SESSIONS chats get the
-  same menu; Steer works for Codex, Claude Code, pi, oh-my-pi and OmO and is off, with the reason, for the others.
-
-- **A bot can watch a Slack or Discord channel and tell you first.** Ask it in words ("watch #og and tell me first
-  when someone reports an outage"); it confirms where, what, how often (every 5 minutes by default) and where it
-  reports in one line, then sets up a Hermes cron job with a small collector that reads only new posts and wakes no
-  model when there are none. A match reaches you in omher even for a bot you never opened: one "Watch · <name>" line,
-  a notification, an unread and the Dock badge; alerts that piled up while omher was closed become one summary, and a
-  run that found nothing leaves no trace. The alert only reports what happened with a link, never an action taken from
-  the post. Automations lists each watch (where, what, interval, last check, last alert, and "Can't read this
-  channel" when the bot lost access) with Pause, Resume and Delete, and "+ New watch" writes the request for you.
-
 - **An OMH TUI reply no longer hangs on a rail.** The `⚚ Hermes · <model>` header starts at the left edge and the
   reply's text sits two cells in, with no `┃` beside it, so a reply reads apart from your prompts and the tool calls,
   which keep their rails. The two cells the bar took go to the reply's text, and a copy still leaves the margin out.
@@ -39,20 +18,6 @@ All notable changes will be documented here.
   dispatcher signs the arm setup it reads from disk into each receipt, and fan-in refuses a cell whose setup
   contradicts its arm. New `--provider-base-url`, `--provider-api-mode` and `--provider-key-env` declare a custom
   provider whose key arrives only by environment. Every other Hermes child keeps safe mode.
-- **omher: Plans › Dependencies is one row per task, not one per edge.** Each row is the task with its status, and
-  under it what it waits for, each with that task's own status. An edge another path already implies folds into
-  "+N further up" (a repair edge never folds), so a plan of 8 tasks and 15 edges reads as 6 rows, not 15. Hovering
-  a row lights its box in the drawing above; clicking it opens the node. The heading counts the rows.
-- **omher: work happens in threads under a bot.** Right-click a bot for "New thread · <bot>", or let the bot open
-  threads itself when you ask for two separate things at once; its answer then links to each thread, and a message
-  that belongs in an open thread gets a "Send this to <thread>?" card. Each thread row shows a live state (a spinner
-  while it runs, a slow amber dot when it needs you, a check when done, an x when it failed or stopped) and the marks
-  of who works in it: Hermes, or Claude Code, Codex and others it handed work to. The x on a row asks first, then stops
-  the thread and archives it in Hermes; nothing is deleted. In Plans, clicking a step that a subagent or another
-  harness ran opens its work as a chat between the agents: the prompt it got, the commands it ran with their results,
-  its own sub-steps and its answer, read-only. Ctrl+` opens a terminal panel at the bottom with your own login shell
-  in the open thread's folder. The side panel can be maximised (its button, a double-click on the tab row, or ⌘⇧G;
-  Esc restores). The SESSIONS section is hidden in favour of threads. (#2906)
 - **A paired-run receipt now says what each cell's child did, not only how long it took.** Before the arm home is
   removed, the dispatcher reads the child's own rows from that home's `state.db` and signs a metadata-only
   `cell_trace` into the receipt: API calls, input/output/cache/reasoning tokens, the ordered tool names, how many
@@ -65,6 +30,80 @@ All notable changes will be documented here.
   no longer hides whether the change at hand passes. `Ran 0 tests`, and exit 5 from unittest or pytest, now read
   `passed: false` with `reason: no tests ran`. The tool's line in Hermes' deferred-tool catalog names tests and shows
   a whole call, so a model looking for a test runner can call it from the listing. Every existing refusal stays.
+- **A paired run can give both arms Hermes' shell tool, and only both at once.** `omh coding paired-run dispatch
+  --arm-toolsets file,skills,terminal` runs both the baseline and the variant with `file,skills,terminal` instead of the
+  default `file,skills`, so an arm whose skills say "run the tests" is no longer measured against an arm that cannot
+  run them. Only `file`, `skills` and `terminal` are accepted, `file` and `skills` are required, and `--yolo` is never
+  passed, so Hermes' dangerous-command approval stays on. The toolsets each cell ran with are signed into its receipt's
+  `arm_setup`; fan-in refuses a cell whose toolsets differ from the run's declared ones and a matrix whose arms differ
+  from each other. Every other Hermes child keeps safe mode and `--toolsets file`.
+- **A paired run can let both arms delegate, so OMH's job decomposition can be timed against Hermes alone.**
+  `--arm-toolsets file,skills,terminal,delegation` gives both arms Hermes' own one-level `delegate_task`. Both arm
+  homes then carry the same child settings (up to 6 children instead of Hermes' one-shot default of 2, no deeper
+  children, no per-child worktree) and run every child on the arm's own model; the variant's OMH routing chains are
+  pinned to that model too. Each cell's signed `cell_trace` now says how many delegate children ran, their API calls,
+  how many ran at once, and which models the cell's sessions used, and fan-in refuses a delegating cell whose trace is
+  missing or names another model. A delegating cell's usage reports no cost rather than one that may count the
+  children twice; tokens and API calls still sum. Without `delegation` nothing changes.
+- **A listed backlog of separate code changes runs as a dag-ulw graph.** A request that hands over four or more list
+  items, each its own change, and asks in its own words for all of them to be made in code ("these six issues are
+  open: fix all of them", "아래 버그들 전부 고쳐줘") is dispatched to `dag-ulw` by the router, and Hermes' per-turn hint
+  starts it with each item as its own build node and a verify node after them. Before, such a backlog went to whatever
+  lane one item's word scored (a "stock" lot took a six-bug job to `live-info-operator`) and the skill's own size cue
+  never ran. A list of three or fewer, one bug, a list to review, prioritize, explain, plan or file as issues, one held
+  or put off, one handed to a named coding agent, a fenced list, failing test files by path, and chores or reading stay
+  where they were. The dag-ulw skill now also says what to do where `delegate_task` returns its children inside the
+  call (a finite one-shot session): settle and dispatch the next layer in the same turn. "current" said of the
+  workspace (the current directory, branch or file) is no longer read as a live-information cue.
+
+- **Another OMH TUI no longer exits when Hermes' gateway restarts, and typing shows while it reattaches.** Where no
+  service runs the gateway, `hermes gateway restart` (also `/gateway restart` from another TUI) stops it as `hermes
+  gateway stop` does, so its record says `stopped` with no restart asked, and starts the new one a few seconds later.
+  Every other TUI attached to it read that record as a stop and left at once with the resume hint. A stopped record is
+  now watched for up to 30 s, with no try: a new live record reattaches the session as a restart run elsewhere, a
+  failed start ends with Hermes' reason, and a record still stopped then leaves as before, so no try ever starts a
+  gateway the person stopped. While any respawn or reattach waits, text and its editing keys go into the composer at
+  once and show on the next frame; before, every key was held unseen until the gateway was back, which read as a
+  frozen TUI. Enter, a paste, a key that opens a list and every key after one of those still wait for the gateway, in
+  order.
+
+- **A request to fix a code defect now gets OMH's debugging method in the turn, not only a skill name.** Hermes'
+  skills index tells a model not to open process skills such as debugging, so `omh-app-debugging` and
+  `omh-verification-gate` stayed closed on exactly the turns they exist for. On a
+  turn that asks to fix code (a change verb such as fix, debug, "make ... pass", 고쳐, with a code object such as a
+  test, a traceback, a source path or a function), the plugin now adds a short block once per session: reproduce
+  first, trace the bad value to where it is produced, try other valid inputs, run the whole suite. Questions,
+  reviews, features and fixes of anything that is not code get nothing new.
+
+- **OMH TUI: Ctrl+Enter with an image attached sends it now.** Before, a prompt with an image never went into a
+  running turn: Ctrl+Enter left it as a `⧗` queued row over the composer until the turn finished. Now Ctrl+Enter
+  stops the turn and sends the prompt with its image the moment the turn ends. Meanwhile it shows above the working
+  row as your prompt, not a queued row. Esc again gives it back to the composer. Enter with an image still queues for
+  the turn's end, and Ctrl+Enter with text alone still steers without stopping anything.
+
+- **OMH TUI: the working spinner stays in the theme colour on terminals that draw `✳` as an emoji.** Zellij Desktop
+  on macOS painted its two `✳` frames as a green emoji, so the spinner flashed green twice a cycle. Those frames now
+  ask for text presentation (U+FE0E) and stay one cell in the accent colour. Contributed by @DanRioDev (#2923).
+- **omher on macOS installs without the "Not Opened" warning.** omher is not notarized, so a `.dmg` opened from a
+  browser download was stopped by Gatekeeper ("Apple could not verify omher is free of malware") and people did
+  not know how to get past it. The macOS buttons on omher.app no longer link a dmg: they copy
+  `curl -fsSL https://omher.app/omher | sh`, bring the command into view and say to paste it into Terminal. A
+  `curl` download carries no quarantine flag, so the installed app opens straight away. The omher README and new
+  release pages lead with the same command; the dmg and the Open Anyway steps stay for people who already have one.
+
+- **An OMH update asks one restart question, not two.** The TUI still asks once whether to restart on the new
+  version. The reopened TUI no longer opens a second question about Hermes' gateway: when the gateway still runs the
+  old OMH plugin code, it says so in one line and names `/gateway restart`, which loads the new code.
+
+- **What you type while the OMH TUI loses its gateway is never lost.** When the gateway does not come back and the TUI
+  leaves (its restarts spent, a stop it watched, a reattach given up), what you typed and never sent, the draft and
+  anything typed while it waited, is printed under its last line instead of going with the screen.
+
+- **omher.app's macOS button now opens an install popup, and the installer opens omher when it is done.** The first
+  version only copied the curl line and showed one grey line below the fold, so a click looked like nothing
+  happened. Now a click opens a short English dialog, "Run this in Terminal and omher installs.", with the command
+  already copied. On macOS `curl -fsSL https://omher.app/omher | sh` ends by opening the new
+  omher.app, so the app is on screen when the command finishes (`OMH_OMHER_NO_OPEN=1` or `CI` skip it).
 
 ## 4.0.8 - 2026-11-15
 
@@ -326,6 +365,36 @@ All notable changes will be documented here.
   refused; a plain-HTTP ask never goes through `HTTP_PROXY`, so the key is not
   sent in clear to a proxy; and `typesafe_model` never applies to TypeSafe's
   own host however it is spelled. Thanks @brentkearney. (#2716)
+- **omher 0.2.12.** Terminal sessions come back as TERMINALS with each CLI's logo, a Tasks page brings GitHub, GitLab
+  and Linear issues into the app, and reasoning levels and technical words read as written in every language.
+  - **TERMINALS:** Shell or any CLI with a terminal view starts from the + menu in a folder you pick; rows group by
+    folder with the git branch, show the official logo of the CLI running inside and a live/exit status, BOTS and
+    TERMINALS scroll on their own, and bots scrolled out of view sit in a dock at the bottom. (#2912)
+  - **Tasks:** a sidebar row and a page for GitHub, GitLab and Linear issues and PRs, read-only through your own `gh`
+    / `glab`, with a detail drawer and Start in thread, which hands an issue to a bot. (#2908)
+  - **Removing a thread that still holds waiting messages no longer sends them.** (#2910)
+  - **Reasoning levels read as their own names** (none, low, medium, high, xhigh, max) in the model pill, the picker
+    and Settings in every language. (#2918)
+  - **Technical words and setting values stay in English in Korean, Japanese and Chinese** (permission modes, Steer,
+    Diff, Worktree, exit codes, colour set names); sentences around them stay translated. (#2920)
+- **omher 0.2.11.** Messages typed mid-answer wait behind a ↵ menu, a reply quotes what it answers, work happens in
+  threads under a bot, and a bot can watch a Slack or Discord channel for you.
+  - **A message sent while the bot answers waits behind ↵.** Send now, Steer (joins the running answer), Edit or
+    Delete; a steer Hermes could not confirm is never sent twice, and waiting messages survive a reload. (#2905)
+  - **An answer to several messages quotes each one, Instagram-DM style,** as faint one-line bubbles above it; a
+    click shows that message. (#2901)
+  - **One bubble per turn, in the order things happened;** a message sent while an answer shows stays below it. (#2900)
+  - **Threads under a bot:** right-click a bot for a new thread, live state per thread, and a step another agent ran
+    opens as a read-only chat. (#2906)
+  - **Channel watch alerts arrive as "Watch · <name>",** with a notification, an unread and the Dock badge;
+    Automations lists each watch with its last check and alert. (#2904)
+  - **Settings, Automations and Plugins have a back arrow at the top left.** (#2911)
+  - **A routine that ran fine no longer adds a line to the chat;** only a failed run does, and every run stays on the
+    Automations page. (#2913)
+  - **Plans:** a spinner and seconds on running steps (#2899); Dependencies is one row per task (#2903).
+  - **Approval buttons have colours:** deny red, allow once purple, allow for this session orange. (#2902)
+  - **Attached images show as large tiles** (#2898); **the side panel is resized with the mouse** (#2897); **bots
+    reorder by drag** (#2896).
 - **omher 0.2.10.** Bots on another computer join over SSH, the sidebar starts with one bot and adds the others from
   +, and you can add your own ACP coding agent to SESSIONS, by hand or from a bot's draft.
   - **Connect a Hermes on another computer over SSH.** The sidebar + has "Connect over SSH": pick a host from
