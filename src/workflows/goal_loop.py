@@ -27,6 +27,7 @@ from ..loopability import LOOPABILITY_ASSESSMENT_SCHEMA, assess_loopability, val
 from ..paths import OmhPaths
 from ..system.security_posture import resolve_security_posture, strict_override
 from .goal_quality_coaching import UPSTREAM_GOAL_DEFAULT_MAX_TURNS
+from .loop_command import LOOP_COMMAND_RE, OMH_LOOP_COMMAND_RE, explicit_loop_invocation_signal
 from ..coding.executor_capability_snapshots import JsonValue
 from .loop_driver_contract import driver_status, select_driver, validate_driver_cycle, validate_driver_history
 from .loop_driver_updates import observe_external_driver
@@ -465,8 +466,6 @@ LOOP_EXECUTOR_OPTIONS = (
 )
 LOOP_EXECUTOR_OPTION_IDS = tuple(str(option["id"]) for option in LOOP_EXECUTOR_OPTIONS)
 STORAGE_ID_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{0,127}")
-LOOP_COMMAND_RE = re.compile(r"^(?:\./|/|\$)?loop(?:\s|$)")
-OMH_LOOP_COMMAND_RE = re.compile(r"^omh\s+(?:loop|루프)(?:\s|$)")
 
 LOOP_CORE_ROLES = (
     {
@@ -866,17 +865,6 @@ def _loop_role_pipeline() -> list[dict[str, Any]]:
 
 def _explicit_loop_invocation(goal_summary: str) -> bool:
     return explicit_loop_invocation_signal(goal_summary)
-
-
-def explicit_loop_invocation_signal(goal_summary: str) -> bool:
-    normalized = goal_summary.strip().casefold()
-    if not normalized:
-        return False
-    if LOOP_COMMAND_RE.match(normalized):
-        return True
-    if OMH_LOOP_COMMAND_RE.match(normalized):
-        return True
-    return False
 
 
 def _loop_invocation_payload(goal_summary: str) -> str:

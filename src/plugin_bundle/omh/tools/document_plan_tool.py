@@ -167,7 +167,7 @@ OMH_DOCUMENT_PLAN_SCHEMA = {
             },
             "omh_home": {
                 "type": "string",
-                "description": "Standalone operator override for action=show only; plan and mark write to the configured OMH home. Native Hermes calls reject this field; omit it to use the active profile.",
+                "description": "Standalone operator use, action=show only. Native Hermes calls reject it; omit.",
             },
             "observation": OBSERVATION_SCHEMA,
         },

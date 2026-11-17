@@ -100,7 +100,7 @@ OMH_RUN_SUMMARY_SCHEMA = {
             },
             "hermes_home": {
                 "type": "string",
-                "description": "Standalone operator override only. Native Hermes calls reject this field; omit it to use the active profile.",
+                "description": "Standalone operator use only. Native Hermes calls reject it; omit.",
             },
             "observation": OBSERVATION_SCHEMA,
         },

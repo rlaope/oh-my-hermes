@@ -36,20 +36,67 @@ from .name_report_cues import COINED_NAMES, asks_after_the_name, asks_for_someth
 
 DAG_ULW: Final = "dag-ulw"
 
+
+class _LazyPattern:
+    """A module pattern compiled on its first use.
+
+    This module holds a few hundred alternation-heavy patterns and a turn reads a few dozen of them, so compiling
+    them all at import cost the plugin's ``register()`` tens of milliseconds on every fresh Hermes process (one-shot
+    ``chat -q``, cron, delegated children). ``pattern`` is the source text and never compiles.
+    """
+
+    __slots__ = ("pattern", "flags", "_compiled")
+
+    def __init__(self, pattern: str, flags: int = 0) -> None:
+        self.pattern = pattern
+        self.flags = flags
+        self._compiled: re.Pattern[str] | None = None
+
+    def _get(self) -> re.Pattern[str]:
+        compiled = self._compiled
+        if compiled is None:
+            compiled = self._compiled = re.compile(self.pattern, self.flags)
+        return compiled
+
+    def search(self, *args, **kwargs):
+        return self._get().search(*args, **kwargs)
+
+    def match(self, *args, **kwargs):
+        return self._get().match(*args, **kwargs)
+
+    def fullmatch(self, *args, **kwargs):
+        return self._get().fullmatch(*args, **kwargs)
+
+    def finditer(self, *args, **kwargs):
+        return self._get().finditer(*args, **kwargs)
+
+    def findall(self, *args, **kwargs):
+        return self._get().findall(*args, **kwargs)
+
+    def split(self, *args, **kwargs):
+        return self._get().split(*args, **kwargs)
+
+    def sub(self, *args, **kwargs):
+        return self._get().sub(*args, **kwargs)
+
+
+def _lazy_compile(pattern: str, flags: int = 0) -> re.Pattern[str]:
+    return _LazyPattern(pattern, flags)  # type: ignore[return-value]  # duck-types the methods this module calls
+
 _NAME: Final = r"(?:dag[\s_-]*(?:ulw|ultrawork)|(?:ulw|ultrawork)[\s_-]*dag)(?![a-z0-9_-])"
 # A request put politely as a question ("can you dag ulw the migration?") still asks to run it.
 _POLITE_OPENER: Final = r"(?:(?:can|could|would|will)\s+you\s+(?:please\s+)?)"
-_LEAD: Final = re.compile(
+_LEAD: Final = _lazy_compile(
     rf"^(?:(?:please|pls)\s+)?{_POLITE_OPENER}?(?:(?:use|run|start)\s+(?:omh\s+)?)?(?:\$|\./|/|@)?{_NAME}"
 )
-_WITH: Final = re.compile(rf"\b(?:with|via|using|through)\s+(?:the\s+)?{_NAME}")
+_WITH: Final = _lazy_compile(rf"\b(?:with|via|using|through)\s+(?:the\s+)?{_NAME}")
 # The name with a run ending right after it ("dag ulw해줘"), or the name as an instrument ("dag ulw로") and,
 # within four words, a request ending ("dag ulw로 결제 모듈 고쳐줘").
-_KOREAN_RUN: Final = re.compile(
+_KOREAN_RUN: Final = _lazy_compile(
     rf"{_NAME}\s*(?:해\s*줘|해\s*주세요|해\b|돌려|실행|진행|부탁)"
     rf"|{_NAME}\s*(?:으로|로)\s+(?:\S+\s+){{0,3}}\S*(?:줘|주세요)"
 )
-_NEGATED: Final = re.compile(
+_NEGATED: Final = _lazy_compile(
     rf"(?:\b(?:don'?t|do not|never|not|without|instead of|other than)\s+(?:use\s+|run\s+)?(?:the\s+)?{_NAME})"
     rf"|(?:\b(?:stop|quit)\s+(?:using|running)\s+(?:the\s+)?{_NAME})"
     rf"|(?:{_NAME}\s*(?:은|는|을|를)?\s*(?:말고|쓰지|하지\s*마|대신|아니))"
@@ -59,23 +106,23 @@ _NEGATED: Final = re.compile(
 # docs or result); an English verb that describes it ("dag ulw is broken"); or an English question that opens
 # before the name, put politely or not ("can you explain dag ulw?"). A question mark anywhere at the end is read
 # by `asks_about_dag_ulw` itself.
-_ASKED_ABOUT: Final = re.compile(
+_ASKED_ABOUT: Final = _lazy_compile(
     rf"{_NAME}\s*(?:은|는|이란|란|이|가)(?![가-힣])"
     rf"|{_NAME}\s*(?:설명|뭐|뭔|무엇|무슨|알려|결과|문서|사용법|어떻게|어때|쓰면|비용|원리|왜)"
     rf"|{_NAME}\s+(?:is|are|was|were|does|should|has|seems?|vs\.?|versus)\b"
     rf"|^{_POLITE_OPENER}?(?:how|what|why|when|where|who|which|is|are|does|should|tell\s+me|explain|describe)\b"
     rf"(?:\s+\S+){{0,6}}?\s+(?:the\s+)?(?:\$|/)?{_NAME}"
 )
-_POLITE_REQUEST: Final = re.compile(rf"^(?:(?:please|pls)\s+)?{_POLITE_OPENER}")
+_POLITE_REQUEST: Final = _lazy_compile(rf"^(?:(?:please|pls)\s+)?{_POLITE_OPENER}")
 # The name with nothing before it, as a report or a question opens (`name_report_cues`).
-_BARE_LEAD: Final = re.compile(rf"^{_NAME}")
+_BARE_LEAD: Final = _lazy_compile(rf"^{_NAME}")
 # A polite question that weighs the run against another way asks about it, not for it ("can you dag ulw this or
 # should I just fix it myself?", "could you dag ulw this, or is that overkill?", "would you dag ulw it, if you were
 # me?"). An `or` between two targets weighs nothing ("can you dag ulw the auth or billing refactor?").
 _OR_ANOTHER_WAY: Final = (
     r"\bor\s+(?:should|shall|is|are|would|will|could|can|do|does|just|not|maybe|keep|leave|skip|ultrawork|ulw)\b"
 )
-_WEIGHED: Final = re.compile(rf"{_NAME}.*(?:{_OR_ANOTHER_WAY}|아니면)|\bif\s+you\s+were\b")
+_WEIGHED: Final = _lazy_compile(rf"{_NAME}.*(?:{_OR_ANOTHER_WAY}|아니면)|\bif\s+you\s+were\b")
 # A word for the run a person already has, said to the name: stop or cancel it ("dag ulw stop", "dag ulw 멈춰",
 # "dag ulw 돌린 거 취소해줘", "cancel dag ulw", "can you stop dag ulw"), or show how it stands ("dag ulw status",
 # "dag ulw 상태 보여줘", "dag ulw 진행 상황"). The words must end the request, or be all it asks about, so a thing
@@ -114,11 +161,11 @@ _KOREAN_STOP_ACT: Final = (
 # The same act after other words, alone after the stop word or with the button it is pressed on ("dag ulw 결제 취소
 # 처리해줘", "dag ulw 결제 작업 중단 걸어줘", "dag ulw 취소 버튼 눌러줘"): it names no work of its own, so the words
 # before the stop word decide, as for a bare stop noun (owner decision O7).
-_KOREAN_STOP_ACT_ALONE: Final = re.compile(rf"^{_KOREAN_STOP_ACT}(?:{_KOREAN_PARTICLE_TAIL})?\s*[.!?~]*$")
+_KOREAN_STOP_ACT_ALONE: Final = _lazy_compile(rf"^{_KOREAN_STOP_ACT}(?:{_KOREAN_PARTICLE_TAIL})?\s*[.!?~]*$")
 # The button a stop is pressed on is the stop's own ("dag ulw 취소 버튼 눌러줘", "dag ulw 취소 버튼 눌렀는데 계속
 # 돌아가"), not work, unless other work words follow ("… 버튼 눌러도 안 멈추는 버그 고쳐줘").
-_KOREAN_STOP_BUTTON: Final = re.compile(r"^\s*버튼\s*(?:을|를)?(?=\s*눌)")
-_STOP: Final = re.compile(
+_KOREAN_STOP_BUTTON: Final = _lazy_compile(r"^\s*버튼\s*(?:을|를)?(?=\s*눌)")
+_STOP: Final = _lazy_compile(
     rf"{_NAME}[\s,:]*(?:please\s+)?(?:stop|cancel|abort|halt|kill){_RUN_OBJECT}\s*[.!?]*$"
     rf"|^(?:please\s+)?{_POLITE_OPENER}?(?:stop|cancel|abort|halt|kill)\s+(?:the\s+|this\s+|that\s+|my\s+)?"
     rf"(?:current\s+|running\s+)?(?:\$|/)?{_NAME}(?:\s+(?:run|job|graph))?(?:\s+(?:now|please))*\s*[.!?]*$"
@@ -142,31 +189,31 @@ _STOP: Final = re.compile(
 #   작업 꺼줘").
 # A how word after it asks about stopping, and so does a past or passive form ("dag ulw 취소됐어?", "dag ulw
 # 멈췄어?") or 여부: those are answered (`asks_about_dag_ulw`).
-_STOP_AFTER_NAME: Final = re.compile(
+_STOP_AFTER_NAME: Final = _lazy_compile(
     rf"{_NAME}(?P<before>.*)(?P<stem>{_KOREAN_STOP_NOUN}|멈추|멈춰|멈출|멈췄|멈춘|그만(?!큼)|꺼\s*(?:줘|주세요|라))(?P<after>.*)$",
     re.DOTALL,
 )
-_KOREAN_WORK_WORD: Final = re.compile(
+_KOREAN_WORK_WORD: Final = _lazy_compile(
     r"기능|로직|버튼|화면|페이지|모듈|컴포넌트|서비스|엔드포인트|핸들러|함수|메서드|클래스|코드|처리|구현|만들|추가|리팩터"
     r"|고쳐|고치|수정|정리|작성|개발|테스트|변경|개선|설계|연동|적용|배포|마이그레이션|흐름|플로우|정책|조건|이벤트|알림|넣"
     r"|붙여|바꿔|분리|나눠|해결|잡아|버그|이슈|디버깅|디버그|최적화|캐싱|캐시|검토|스펙|문서|써\s*(?:줘|주세요)|정의|쿼리"
     r"|스키마|설정|중단점|모드|로그|\b(?:api|ui|button|page|feature|logic|flow|handler|endpoint|dto|tests?)\b"
 )
-_KOREAN_WORK_CONDITION: Final = re.compile(r"^\s*시\s|[할될]\s*때|[하되]면(?!\s*(?:돼|된다|되잖아))|\S(?:되게|되도록|하도록)")
-_KOREAN_CONDITION_BEFORE: Final = re.compile(r"(?:[하되]면|[할될]\s*때|다가|\s시)\s*$")
-_KOREAN_RUN_OBJECT_BEFORE: Final = re.compile(r"(?:작업|거|것|run|job|그거|이거|저거)\s*$")
-_KOREAN_STOP_ENDING: Final = re.compile(rf"(?:{_KOREAN_VERB_TAIL}|{_KOREAN_PARTICLE_TAIL})")
-_KOREAN_REQUEST_VERB: Final = re.compile(r"(?P<stem>\S*?)(?:해)?(?:줘|주세요|줄래|주라)요?|(?P<stem2>\S*?)(?:해요|하자|해라|하세요)")
+_KOREAN_WORK_CONDITION: Final = _lazy_compile(r"^\s*시\s|[할될]\s*때|[하되]면(?!\s*(?:돼|된다|되잖아))|\S(?:되게|되도록|하도록)")
+_KOREAN_CONDITION_BEFORE: Final = _lazy_compile(r"(?:[하되]면|[할될]\s*때|다가|\s시)\s*$")
+_KOREAN_RUN_OBJECT_BEFORE: Final = _lazy_compile(r"(?:작업|거|것|run|job|그거|이거|저거)\s*$")
+_KOREAN_STOP_ENDING: Final = _lazy_compile(rf"(?:{_KOREAN_VERB_TAIL}|{_KOREAN_PARTICLE_TAIL})")
+_KOREAN_REQUEST_VERB: Final = _lazy_compile(r"(?P<stem>\S*?)(?:해)?(?:줘|주세요|줄래|주라)요?|(?P<stem2>\S*?)(?:해요|하자|해라|하세요)")
 _KOREAN_NOT_A_VERB_STEM: Final = frozenset(
     {"", "해", "하", "좀", "부탁", "다시", "빨리", "지금", "그냥", "일단", "바로", "얼른", "당장", "꼭", "제발", "어서",
      "게", "되게", "하게", "도록", "되도록"}
 )
-_KOREAN_HOW: Final = re.compile(r"어떻게|방법|뭐|왜|가능|(?:^|[할될])\s*수\s*있|되나|될까|돼\s*요?\s*[?？]")
-_KOREAN_PAST: Final = re.compile(r"^\s*(?:완료\s*)?(?:됐|되었|됨|된|했|하였|한\s*거|뒀|눌렀)|여부")
+_KOREAN_HOW: Final = _lazy_compile(r"어떻게|방법|뭐|왜|가능|(?:^|[할될])\s*수\s*있|되나|될까|돼\s*요?\s*[?？]")
+_KOREAN_PAST: Final = _lazy_compile(r"^\s*(?:완료\s*)?(?:됐|되었|됨|된|했|하였|한\s*거|뒀|눌렀)|여부")
 # A sigil before a question is a question, not a command ("/dag-ulw what is it?", "/dag-ulw how do I cancel it?"),
 # unless a request for work follows it ("/dag-ulw explain the plan, then run the migration", "/dag-ulw is the auth
 # refactor done? if not, finish it").
-_SIGIL_QUESTION: Final = re.compile(
+_SIGIL_QUESTION: Final = _lazy_compile(
     r"^(?!.*(?:\b(?:then|and)\s+(?:run|do|start|finish|implement|fix|migrate|build)\b|\bif\s+not\b"
     r"|[,?!.]\s*(?:finish|run|do|fix|start|implement)\b))"
     rf"(?:\$|\./|/){_NAME}[\s,:]+(?:how|what|why|when|where|who|which|is|are|does|do\s+i|can\s+i|should|tell\s+me"
@@ -175,13 +222,13 @@ _SIGIL_QUESTION: Final = re.compile(
 )
 # A stop the person already made, said while the run still goes ("dag ulw 취소했는데 계속 돌아가", "dag ulw 취소
 # 눌렀는데 계속 돌아가"): stop it again.
-_KOREAN_PRESSED: Final = re.compile(r"\s*눌렀")
-_REQUEST_BEFORE_STOP: Final = re.compile(r"(?:^|\s)(?:다시\s*)?(?!해|하|좀)\S+?(?:해)?(?:줘|주세요)(?=[\s,.]|$)|(?:다시|이어서|계속|마저)\s*해\s*(?:줘|주세요)")
-_STATUS_REQUEST: Final = re.compile(r"(?:확인|체크|봐|보여|알려|살펴|점검|조회)\S*?(?:해)?(?:줘|주세요)")
-_KOREAN_STILL_RUNNING: Final = re.compile(r"(?:계속|아직|여전히)\s*(?:돌아|돌고|실행|진행|안\s*멈)|안\s*(?:멈춰|멈추|꺼져|꺼지)")
+_KOREAN_PRESSED: Final = _lazy_compile(r"\s*눌렀")
+_REQUEST_BEFORE_STOP: Final = _lazy_compile(r"(?:^|\s)(?:다시\s*)?(?!해|하|좀)\S+?(?:해)?(?:줘|주세요)(?=[\s,.]|$)|(?:다시|이어서|계속|마저)\s*해\s*(?:줘|주세요)")
+_STATUS_REQUEST: Final = _lazy_compile(r"(?:확인|체크|봐|보여|알려|살펴|점검|조회)\S*?(?:해)?(?:줘|주세요)")
+_KOREAN_STILL_RUNNING: Final = _lazy_compile(r"(?:계속|아직|여전히)\s*(?:돌아|돌고|실행|진행|안\s*멈)|안\s*(?:멈춰|멈추|꺼져|꺼지)")
 # A stop of the run right after the name, then more work ("dag ulw 지금 거 취소하고 결제 모듈부터 다시 해줘",
 # "dag ulw 취소하고 다시 처음부터 구현해줘"): stop and restart, or work on a cancel, so it asks before either.
-_STOP_THEN_WORK: Final = re.compile(
+_STOP_THEN_WORK: Final = _lazy_compile(
     rf"{_NAME}[\s,:]*(?:의\s*)?(?:(?:{_KOREAN_RUN_MODIFIER}\s*){{0,2}}{_KOREAN_RUN_NOUN}\s*)?"
     rf"(?:{_KOREAN_STOP_ADVERB}\s*){{0,2}}(?:{_KOREAN_STOP_NOUN}|멈추|그만)\s*(?:하|시키)?고(?:서)?\s"
 )
@@ -190,15 +237,15 @@ _STOP_THEN_WORK: Final = re.compile(
 # name the work, so it asks which (owner decision O7). A work word makes it work ("dag ulw add a cancel button",
 # "dag ulw cancel order flow", "dag ulw implement order cancel").
 _EN_STOP_WORD: Final = r"(?:stop|cancel|abort|halt|kill)"
-_EN_STOP_AFTER_NAME: Final = re.compile(
+_EN_STOP_AFTER_NAME: Final = _lazy_compile(
     rf"^{_NAME}[\s,:]+(?:(?:\S+\s+){{1,3}}{_EN_STOP_WORD}|{_EN_STOP_WORD}\s+\S+(?:\s+\S+){{0,3}})\s*[.!?]*$"
 )
-_EN_WORK_WORD: Final = re.compile(
+_EN_WORK_WORD: Final = _lazy_compile(
     r"\b(?:add|implement|build|create|make|write|fix|refactor|support|design|migrate|handle|handling|test|tests"
     r"|button|feature|flow|endpoint|api|handler|logic|page|ui|function|method|module|service|bug|issue|dto|schema"
     r"|query|filter|words?|tokens?|signals?|conditions?|switch(?:es)?|flags?|toggles?)\b"
 )
-_STATUS: Final = re.compile(
+_STATUS: Final = _lazy_compile(
     rf"{_NAME}[\s,:]*(?:status|progress|logs?)(?:\s+(?:please|now|of\s+the\s+(?:run|dag|graph)))*\s*[.!?]*$"
     rf"|{_NAME}[\s,:]*(?:의\s*)?(?:상태|진행\s*상황|진행\s*상태|진행도|로그)\s*(?:좀\s*)?"
     rf"(?:보여|알려|확인|어때|어떻게|는\s*[?？]|[?？]|$)"
@@ -248,7 +295,7 @@ def _run_stop_source(names: str = "", nouns: str = "") -> str:
     )
 
 
-_RUN_STOP_ALONE: Final = re.compile(_run_stop_source())
+_RUN_STOP_ALONE: Final = _lazy_compile(_run_stop_source())
 
 
 def _alternation(words: tuple[str, ...]) -> str:
@@ -262,12 +309,12 @@ def _run_stop_alone(names: tuple[str, ...], nouns: tuple[str, ...]) -> re.Patter
     return re.compile(_run_stop_source(_alternation(names), _alternation(nouns)))
 
 
-_STOP_WORD: Final = re.compile(r"stop|cancel|abort|halt|kill|멈춰|그만|그만해|취소|중단|중지|정지")
+_STOP_WORD: Final = _lazy_compile(r"stop|cancel|abort|halt|kill|멈춰|그만|그만해|취소|중단|중지|정지")
 # A Korean stop said as a verb, then why ("그만해 비싸", "멈춰 너무 오래 걸려"), as "stop, too expensive" says it with a
 # comma. A bare stop noun is not a verb: after "취소" the words may be its object ("취소 버튼"). The why closes on a
 # predicate: a noun after the stop is its object ("취소해 주문", "cancel the order"), and so is a why that names work or
 # asks how or why (`stops_the_run`). The stop is a few words at most (`_KOREAN_STOP_WORDS_MAX`).
-_KOREAN_STOP_VERB_END: Final = re.compile(
+_KOREAN_STOP_VERB_END: Final = _lazy_compile(
     rf"(?:(?:멈춰(?:라)?|멈추(?:세요|자))(?:{_KOREAN_VERB_TAIL})?|(?:그만|{_KOREAN_STOP_NOUN})(?:{_KOREAN_VERB_TAIL}))$"
 )
 _KOREAN_STOP_WORDS_MAX: Final = 6
@@ -275,12 +322,12 @@ _KOREAN_STOP_WORDS_MAX: Final = 6
 # 아니야", "지금 회의 중"), reads as a report on the run (`reports_on_the_name`: "비싸", "너무 오래 걸려"), or is only
 # fillers and stop words ("일단", "잠깐만", "멈춰 멈춰 제발"). A noun is the stop's object, so a loanword that closes
 # on a vowel is too ("취소해 주문", "멈춰 서버").
-_KOREAN_REASON_END: Final = re.compile(
+_KOREAN_REASON_END: Final = _lazy_compile(
     r"(?:[어아여해워야냐요다네게걸까래대데든군음함됨임듯]|아니라고|아님|중)$"
 )
 # A noun that closes like a reason: a loanword ("플레이어", "하드웨어", "리뷰어") or a lone counter or quantifier ("서버 두
 # 대", "주문 다"), the stop's object.
-_KOREAN_NOUN_LIKE_A_REASON: Final = re.compile(r"(?:^|\s)(?:다|대)$|(?:레이어|웨어|뷰어)$")
+_KOREAN_NOUN_LIKE_A_REASON: Final = _lazy_compile(r"(?:^|\s)(?:다|대)$|(?:레이어|웨어|뷰어)$")
 
 
 def _ends_in_a_past(word: str) -> bool:
@@ -291,16 +338,16 @@ def _ends_in_a_past(word: str) -> bool:
     return word[-1] in "어아" and 0 <= code < 11172 and code % 28 == 20
 
 
-_KOREAN_FILLER_REASON: Final = re.compile(
+_KOREAN_FILLER_REASON: Final = _lazy_compile(
     r"^(?:(?:일단|잠깐만?|제발|좀|그냥|지금|빨리|당장|얼른|바로|멈춰|그만|그만해|취소|중단)\s*)+$"
 )
 # A word that only answers or interrupts before the stop ("no stop", "no, stop", "잠깐 멈춰").
-_INTERJECTION: Final = re.compile(r"^(?:no|nope|wait|ok|okay|아니|아니야|잠깐|야)(?:\s*[,!.]+\s*|\s+)(?=\S)")
+_INTERJECTION: Final = _lazy_compile(r"^(?:no|nope|wait|ok|okay|아니|아니야|잠깐|야)(?:\s*[,!.]+\s*|\s+)(?=\S)")
 # What the skill is, in Japanese and Chinese, which `asks_after_the_name` does not read.
-_JA_ZH_META: Final = re.compile(
+_JA_ZH_META: Final = _lazy_compile(
     r"^(?:何これ|これ(?:は)?何(?:ですか)?|使い方(?:は)?|どうやって使う(?:の)?|(?:这|这个)是什么|是什么|怎么用)[?？。]*$"
 )
-_RUN_STATUS: Final = re.compile(
+_RUN_STATUS: Final = _lazy_compile(
     r"^(?:(?:please\s+)?show\s+(?:me\s+)?(?:the\s+)?)?(?:status|progress|logs?)"
     r"(?:\s+(?:please|now|of\s+the\s+(?:run|dag|graph|job)))*\s*[.!?]*$"
     r"|^(?:please\s+)?show\s+(?:me\s+)?(?:the\s+)?(?:run|dag|graph|job)\s*[.!?]*$"
@@ -493,15 +540,15 @@ def asks_about_dag_ulw(text: str) -> bool:
     return folded.endswith(("?", "？"))
 
 
-_SIGIL_LEAD: Final = re.compile(rf"^(?:\$|\./|/){_NAME}")
+_SIGIL_LEAD: Final = _lazy_compile(rf"^(?:\$|\./|/){_NAME}")
 # Further skills stacked after the sigil ("/dag-ulw /ulw-plan what is it?"): Hermes loads each, and the words after
 # the last one are the instruction.
-_STACKED_SIGILS: Final = re.compile(r"(?:\s+(?:\$|\./|/)[a-z0-9][a-z0-9_-]*)+(?=\s|$)")
+_STACKED_SIGILS: Final = _lazy_compile(r"(?:\s+(?:\$|\./|/)[a-z0-9][a-z0-9_-]*)+(?=\s|$)")
 # A Korean question that asks for the work to be done for the person, with 주다 ("구현해줄 수 있어?", "나눠서 해주실래요?",
 # "고쳐주시겠어요?"): a polite request, as "can you dag ulw the migration?" is.
-_KOREAN_ASKS_TO_BE_DONE: Final = re.compile(r"(?:줄|주실)\s*(?:수\s*있|래|거)|주시겠|줄래")
+_KOREAN_ASKS_TO_BE_DONE: Final = _lazy_compile(r"(?:줄|주실)\s*(?:수\s*있|래|거)|주시겠|줄래")
 # Work proposed as a question is a request for it ("can we split the api, ui and docs work into parallel lanes?").
-_PROPOSED: Final = re.compile(r"^(?:can|could|shall)\s+we\b")
+_PROPOSED: Final = _lazy_compile(r"^(?:can|could|shall)\s+we\b")
 
 
 def _sigil_asks(folded: str) -> bool:
@@ -618,26 +665,26 @@ _ULTRAWORK_STEMS: Final = ("ultrawork", "ulw", "울트라워크")
 # services is too high"), and not where the split's object is one paragraph or sentence, a small text task ("split
 # the paragraph into parallel parts for the translation", "이 문단을 병렬로 나눠서 번역해줘"); a paragraph named
 # elsewhere ("the paragraph parser", "fix the paragraph in the README") changes nothing.
-_REMARK_SUBJECT: Final = re.compile(
+_REMARK_SUBJECT: Final = _lazy_compile(
     r"^(?:the|a|an|this|that|these|those|our|its|their|my|your)\s+([^.?!,;]*?)\s(?:is|are|was|were|seems|looks)\b"
 )
-_SMALL_TEXT_OBJECT: Final = re.compile(
+_SMALL_TEXT_OBJECT: Final = _lazy_compile(
     r"\bsplit\s+(?:the|this|that|a|one|my|your)\s+(?:paragraph|sentence)\s+into\b|(?:이|그|저|한)\s*(?:문단|문장|단락)(?:을|를)\s"
 )
 # A fault the parts cause together, with one fix asked for: the concurrency word says when the bug happens, not how
 # the work splits ("api 모듈과 ui 모듈이 동시에 요청하면 캐시가 깨져, 고쳐줘").
-_FAULT: Final = re.compile(
+_FAULT: Final = _lazy_compile(
     r"\b(?:breaks|broke|fails|failed|crash(?:es|ed)|hangs|hung|deadlocks|deadlocked|corrupts|corrupted"
     r"|(?:is|are|gets?|got)\s+(?:broken|corrupted|stuck)|times?\s+out|timed\s+out)\b"
     r"|깨져|깨지|깨졌|터져|터지|터졌|죽어|죽었|실패해|실패하|실패했|꼬여|꼬이|꼬였|(?:에러|오류)가?\s*(?:나|났|떠|뜨)"
     r"|충돌이?\s*(?:나|났)|데드락|교착"
 )
-_FIX_REQUEST: Final = re.compile(r"\b(?:fix|resolve|debug|repair)\b|고쳐|수정해|해결해")
+_FIX_REQUEST: Final = _lazy_compile(r"\b(?:fix|resolve|debug|repair)\b|고쳐|수정해|해결해")
 # Unless the concurrency word says how the work or the fixes run ("테스트가 실패하는데 병렬로 고쳐줘", "병렬로 각각
 # 고쳐줘", "동시에 진행해줘, 실패하는 테스트도 고쳐줘", "fix them in parallel"): a request, a verb with a request
 # ending, follows it at most two words on. In the fault it is a condition ("동시에 요청하면 캐시가 깨져", "동시에
 # 처리해서 캐시가 깨져").
-_PARALLEL_WORK: Final = re.compile(
+_PARALLEL_WORK: Final = _lazy_compile(
     r"(?:병렬로|동시에)\s*(?:(?:각각|따로|모두|전부|다|같이|함께|한꺼번에|\S+해서)\s*){0,2}"
     r"(?:고쳐|수정해|해결해|진행해|작업해|처리해|구현해)\s*(?:줘|주세요|줄래|봐)"
     r"|\bfix\s+(?:them|both|all|each|these|those)(?:\s+of\s+them)?\s+"
@@ -649,22 +696,22 @@ _PARALLEL_WORK: Final = re.compile(
 # work ("how about we split ...", "why don't we split ...", "what we need is to split ...", "tell me when done:
 # split ..."), not a Korean explain clause after the work it explains ("... 구현하고 나눈 방법 설명해줘"), and not a
 # request put as a question ("can we split ...?", "let's split ...?", "..., ok?", "... 구현해줄 수 있어?").
-_ASKS_TO_BE_TOLD: Final = re.compile(
+_ASKS_TO_BE_TOLD: Final = _lazy_compile(
     rf"^{_POLITE_OPENER}?(?:how(?!\s+about)|what(?!\s+(?:we|i)\s+(?:need|want)(?:\s+is\s+to\b|\s*:))|why\s+not\s+just\s+explain"
     r"|why(?!\s+(?:don'?t|not)\b)|explain|describe|tell\s+me(?!\s+when)|show\s+me\s+how|help\s+me\s+understand"
     r"|i(?:\s+(?:want|need)|['’]d\s+like|\s+would\s+like)\s+to\s+know|is\s+it\s+possible)\b"
 )
 # Talking it over is not asking for it either ("can we talk about how to split ...", "can we discuss whether to
 # split ..."), nor is a question that weighs the split against another way ("could we split ..., or is it overkill?").
-_TALKS_IT_OVER: Final = re.compile(r"\b(?:talk|think)\s+(?:about|through)\b|\bdiscuss\b|\bwhether\s+(?:to|we|i)\b")
-_WEIGHS_THE_SPLIT: Final = re.compile(_OR_ANOTHER_WAY)
-_KOREAN_ASKS_TO_BE_TOLD: Final = re.compile(
+_TALKS_IT_OVER: Final = _lazy_compile(r"\b(?:talk|think)\s+(?:about|through)\b|\bdiscuss\b|\bwhether\s+(?:to|we|i)\b")
+_WEIGHS_THE_SPLIT: Final = _lazy_compile(_OR_ANOTHER_WAY)
+_KOREAN_ASKS_TO_BE_TOLD: Final = _lazy_compile(
     r"(?:방법|는\s*법)\s*(?:을|를|이|가)?\s*(?:좀\s*)?(?:설명해|알려|뭐)|지\s*(?:를\s*)?(?:좀\s*)?(?:설명해|알려)"
 )
-_KOREAN_WORK_FIRST: Final = re.compile(
+_KOREAN_WORK_FIRST: Final = _lazy_compile(
     r"(?:구현|만들|고치|고쳐|수정|작성|리팩터링|추가|개발|빌드|배포|진행|테스트|마이그레이션|적용|처리)\S*(?:고|서)\s"
 )
-_REQUEST_AS_QUESTION: Final = re.compile(
+_REQUEST_AS_QUESTION: Final = _lazy_compile(
     rf"^(?:(?:please|pls)\s+)?(?:{_POLITE_OPENER}|(?:can|could|shall)\s+we\b|let'?s\b)"
     r"|,\s*(?:ok|okay|alright|right)\s*[?？]$|(?:줄\s*수\s*있|주실\s*수\s*있|줄래|주시겠|주겠)\S*\s*[?？]$"
     r"|면\s*어때요?\s*[?？]$"
@@ -742,7 +789,7 @@ _EN_UNITS: Final = (
     r"|tests?|issues?|files?|pages?|apps?|branch(?:es)?)"
 )
 # A fault word that only describes the units ("실패하는 테스트", "the failing tests") names which units, not one fault.
-_FAULTY_UNIT: Final = re.compile(
+_FAULTY_UNIT: Final = _lazy_compile(
     r"(?:실패하는|실패한|실패했(?:었)?던|깨진|깨지는|깨졌(?:었)?던|터진|터졌(?:었)?던|충돌난|충돌났(?:었)?던|failing|failed|broken"
     rf"|flaky)\s+(?:{_KOREAN_UNIT}|{_EN_UNITS})"
 )
@@ -750,14 +797,14 @@ _FAULTY_UNIT: Final = re.compile(
 # predicate ("안 돌아가", "안 먹어", "못 해"), …지 않 or …지 못 ("돌지 않아"), a fault noun ("먹통", "고장"), or a symptom
 # clause, a subject with 이 or 가 and its predicate right before the fix ("페이지가 하얗게 나와 고쳐줘", "아이콘이 깨져 보여
 # 고쳐줘", "페이지가 느려 고쳐줘").
-_KOREAN_NEGATED_PREDICATE: Final = re.compile(
+_KOREAN_NEGATED_PREDICATE: Final = _lazy_compile(
     r"(?<![가-힣])(?:안|못)\s*(?!(?:의|에|에서|으로|을|이)(?![가-힣]))(?P<word>[가-힣]+)|지\s*(?P<negation>(?:않|못)[가-힣]*)"
 )
-_KOREAN_FAULT_NOUN: Final = re.compile(r"먹통|고장")
-_KOREAN_SYMPTOM_BEFORE_FIX: Final = re.compile(
+_KOREAN_FAULT_NOUN: Final = _lazy_compile(r"먹통|고장")
+_KOREAN_SYMPTOM_BEFORE_FIX: Final = _lazy_compile(
     r"[가-힣](?:이|가)\s+(?:\S+\s+){0,2}?(?P<word>[가-힣]+)\s*[,.~]?\s+(?:고쳐|고치|수정|해결|fix\b)"
 )
-_FIX_VERB: Final = re.compile(r"\b(?:fix|resolve|debug|repair)\b|고쳐|고치|수정|해결")
+_FIX_VERB: Final = _lazy_compile(r"\b(?:fix|resolve|debug|repair)\b|고쳐|고치|수정|해결")
 
 
 def _closes_a_clause(word: str) -> bool:
@@ -786,7 +833,7 @@ def _one_fault(folded: str) -> bool:
         match.group("word") not in ("해", "돼") and _closes_a_clause(match.group("word"))
         for match in _KOREAN_SYMPTOM_BEFORE_FIX.finditer(plain)
     )
-_EN_PARTS_IN_PARALLEL: Final = re.compile(
+_EN_PARTS_IN_PARALLEL: Final = _lazy_compile(
     r"^(?:please\s+)?(?:implement|build|develop|ship|write|add|create)\s+(?:the\s+)?\S+(?:,\s*\S+)*\s+(?:and|&)\s+\S+\s+"
     r"(?:features|endpoints|pages|screens|apis|modules|services|components)\s+(?:in\s+parallel|concurrently)\b"
 )
@@ -799,7 +846,7 @@ _EN_VERB_IN_KOREAN: Final = (
 )
 # A push is one command over everything ("모든 브랜치 push 해줘", as "모든 브랜치 푸시해줘"); said last, after a change, it is
 # that change's final step ("리뷰 코멘트 반영하고 force push ㄱㄱ").
-_PUSH_IN_KOREAN: Final = re.compile(rf"(?<![a-z])(?:force\s*)?push{_KOREAN_ENDING_AFTER_EN}")
+_PUSH_IN_KOREAN: Final = _lazy_compile(rf"(?<![a-z])(?:force\s*)?push{_KOREAN_ENDING_AFTER_EN}")
 # The change verbs the router dispatches a graph on: a closed allow list. Reading, explaining, summarising,
 # measuring, comparing, surveying, sharing, notifying, checking, reviewing and auditing are not on it, and neither is
 # one command over everything (run, restart, push, deploy, format, delete, merge into one).
@@ -830,14 +877,14 @@ _EN_PLURAL_UNITS: Final = (
     r"(?:prs|pull\s+requests|repos|repositories|(?:micro)?services|modules|packages|components|endpoints|tests|issues|files"
     r"|pages|apps|branches)"
 )
-_EN_OFFER: Final = re.compile(
+_EN_OFFER: Final = _lazy_compile(
     rf"^(?:please\s+)?{_POLITE_OPENER}?(?:{_EN_OFFER_VERB}\b[^.?!]*?{_EN_BREADTH}"
     rf"|(?:check|go\s+through|look\s+at)\b[^.?!]*?{_EN_BREADTH}[^.?!]*?\band\s+(?:then\s+)?{_EN_CHANGE_VERB}\b"
     rf"|{_EN_FOR_EACH}{_EN_OFFER_VERB}\b)"
     rf"|\b{_EN_PLURAL_UNITS}\b[^.?!]*?\b{_EN_OFFER_VERB}\s+them\s+all\b"
 )
-_EN_LATER_CLAUSE_VERB: Final = re.compile(r"\band\s+(?:then\s+)?(?:just\s+)?([a-z]+)")
-_KOREAN_OFFER: Final = re.compile(
+_EN_LATER_CLAUSE_VERB: Final = _lazy_compile(r"\band\s+(?:then\s+)?(?:just\s+)?([a-z]+)")
+_KOREAN_OFFER: Final = _lazy_compile(
     rf"{_KOREAN_BREADTH_OBJECT}\s*(?:\S+\s+){{0,3}}\S*{_KOREAN_OFFER_VERB}"
     rf"|{_KOREAN_BREADTH_OBJECT}\s*(?:\S+\s+){{0,4}}\S*(?:게|게끔|도록)\s+(?:좀\s+)?\S*{_KOREAN_OFFER_VERB}"
 )
@@ -849,11 +896,11 @@ _KOREAN_GIVE: Final = r"(?:줘요|줘|주세요|주세용|주셈|주라|주십�
 # A casual imperative of a change verb closes a request on its own ("PR들 전부 닫아", "모든 테스트 고쳐", "모든 패키지
 # 올려라").
 _KOREAN_PLAIN_IMPERATIVE: Final = r"(?:닫아|고쳐|올려|바꿔|옮겨|붙여|만들어|넣어)(?:라)?"
-_KOREAN_REQUEST_END: Final = re.compile(
+_KOREAN_REQUEST_END: Final = _lazy_compile(
     rf"(?:해\s*{_KOREAN_GIVE}|하자|{_KOREAN_GIVE}|해라|해|놔라|둬라|놔|둬|자|{_KOREAN_PLAIN_IMPERATIVE}|{_G}+|고고싱|고고)"
     r"\s*[.!~]*$"
 )
-_KOREAN_BARE_REQUEST_END: Final = re.compile(
+_KOREAN_BARE_REQUEST_END: Final = _lazy_compile(
     r"\s(?:(?:좀|꼭|다시|빨리|얼른|바로|제발)\s+)?"
     rf"(?:(?:진행\s*)?해\s*(?:{_KOREAN_GIVE}|(?:놔|둬)\s*{_KOREAN_GIVE}?)?|{_KOREAN_GIVE}|시켜\s*{_KOREAN_GIVE}?|하자"
     rf"|부탁(?:해요|해|드려요|드립니다|합니다|요)?|(?:해\s*)?주시기\s*바랍니다|바랍니다|(?:해\s*)?주시면\s*감사하겠습니다|요망"
@@ -863,7 +910,7 @@ _KOREAN_BARE_REQUEST_END: Final = re.compile(
 # The verb a bare ending is said after closes its word, or carries only its own ending ("고쳐", "만들어", "업데이트해",
 # "rebase까지"): not a clause before it ("리베이스하려고 해", "리베이스해야 해").
 _VERB_BEFORE_A_BARE_END: Final = r"(?:아|어|여|해|하)?(?:까지|도|만)?$"
-_KOREAN_CHAIN_END: Final = re.compile(r"고\s*[.!~]*$")
+_KOREAN_CHAIN_END: Final = _lazy_compile(r"고\s*[.!~]*$")
 
 
 def _korean_request_verb(folded: str) -> tuple[str, bool]:
@@ -890,7 +937,7 @@ def _korean_request_verb(folded: str) -> tuple[str, bool]:
 # The leading space is read only where a run of it starts (`(?<!\s)`), or not at all right after an earlier cut: the
 # same cuts, but a search no longer re-reads a run of spaces from each of its positions, which is quadratic in the run,
 # and a fenced log masked to spaces by `executable_routing_text` is one long run.
-_CLAUSE_BREAK: Final = re.compile(r"(?:(?<!\s)\s*)?(?:[,;—–…]|\.{2,}|\s-\s)\s*")
+_CLAUSE_BREAK: Final = _lazy_compile(r"(?:(?<!\s)\s*)?(?:[,;—–…]|\.{2,}|\s-\s)\s*")
 _INTENSIFIER: Final = r"(?:(?:최대한|가능한(?:\s*한)?|되도록|좀|진짜|정말|제발|너무|완전)\s*)?"
 _TIME_WORD: Final = (
     r"(?:오늘|내일|모레|글피|이번\s*주|다음\s*주|이번\s*달|다음\s*달|주말|월말|연말|[월화수목금토일]요일|오전|오후|점심|저녁|아침|밤"
@@ -913,13 +960,13 @@ _KEEPER_WORD: Final = (
     r"\s+(?:[a-z][\w-]*\s+){0,2}?[a-z][\w-]*\s+(?:per|for\s+each|for\s+every)\s+[a-z][\w-]*"
     r"|(?:one\s+)?per\s+[a-z][\w-]*|each\s+(?:in|on)\s+(?:its|their)\s+own\s+[a-z][\w-]*)"
 )
-_KEEPER_CLAUSE: Final = re.compile(
+_KEEPER_CLAUSE: Final = _lazy_compile(
     rf"{_KEEPER_WORD}(?:\s*(?:and\s+)?{_KEEPER_WORD})*(?:\s*(?:해\s*{_KOREAN_GIVE}|해요|해|{_KOREAN_GIVE}|요))?\s*[.!~]*"
 )
 # A follow-on opens with a sequencing connective (끝나면 is a condition, not one), or on each of the units ("패키지마다"),
 # and asks for more work: a Korean work verb in request form, not narrowed to that work alone ("확인만") or undoing the
 # request ("되돌려줘"), or an English one ("…, then run the tests", "…, and then integrate").
-_KOREAN_CONNECTIVE: Final = re.compile(
+_KOREAN_CONNECTIVE: Final = _lazy_compile(
     r"^(?:그리고(?:\s*나서)?|그\s*다음(?:에|엔|으로)?|그\s*담에|다음으로|이어서|끝나고(?:\s*나서)?|그러고\s*나서|그\s*(?:뒤|후)에"
     rf"|(?:각\s*)?(?:{_KOREAN_UNIT}|풀\s*리퀘(?:스트)?)(?:들)?\s*마다)\s+"
 )
@@ -928,7 +975,7 @@ _EN_FOLLOW_ON_VERB: Final = (
     rf"(?:{_EN_OFFER_VERB}|integrate|develop|ship|test|run|rerun|deploy|write|document|verify|check|clean\s+up|push|tag"
     r"|release)"
 )
-_EN_FOLLOW_ON: Final = re.compile(
+_EN_FOLLOW_ON: Final = _lazy_compile(
     rf"^(?:and\s+then|and|then|after\s+that|next|afterwards)\s*,?\s+(?:please\s+|just\s+|also\s+)*{_EN_FOLLOW_ON_VERB}\b"
 )
 # A colon list after a breadth head is one request, not trailing clauses, when every item opens on a verb of work
@@ -950,26 +997,26 @@ _STATUS_WORD: Final = (
     r"(?:done|failed|failing|passing|passed|green|red|ok|fine|good|blocked|stuck|broken|gone|conflict(?:s|ing)?|clean"
     r"|dirty|stale|pending|wip|[a-z]+(?<!e)ed)"
 )
-_EN_LIST_ITEM: Final = re.compile(rf"^(?:and\s+)?(?:please\s+)?(?!(?:{_NOT_A_WORK_VERB}|{_STATUS_WORD})\b)[a-z][a-z-]*\b")
+_EN_LIST_ITEM: Final = _lazy_compile(rf"^(?:and\s+)?(?:please\s+)?(?!(?:{_NOT_A_WORK_VERB}|{_STATUS_WORD})\b)[a-z][a-z-]*\b")
 # A hedge or a refusal anywhere in an item ends the list and holds the request ("…, too risky though", "…, someday",
 # "…, eh, rather not", "…, someone else's call though", "…, nope").
-_HEDGE_IN_AN_ITEM: Final = re.compile(
+_HEDGE_IN_AN_ITEM: Final = _lazy_compile(
     r"\b(?:maybe|perhaps|though|eventually|some\s*day|nope|nah|rather|not\s+my\s+call|someone\s+else'?s|not\s+sure"
     r"|too|risky|idk|eh|meh|ugh)\b"
 )
 # The head: the request so far ends in the first item of a colon list after a breadth word; a colon after a whole
 # request opens a list too ("rebase all my open PRs: done, done, conflict"), and a colon between digits is a time.
-_EN_LIST_HEAD: Final = re.compile(rf"(?:{_EN_BREADTH}|\bfor\s+(?:each|every|all)\b|\b{_EN_PLURAL_UNITS}\b)[^:,.!?]*:[^,]*$")
-_LIST_COLON: Final = re.compile(r"(?:(?<!\s)\s*)?(?<!\d):(?!\d)\s*")  # leading space as in `_CLAUSE_BREAK`
-_HOLD: Final = re.compile(
+_EN_LIST_HEAD: Final = _lazy_compile(rf"(?:{_EN_BREADTH}|\bfor\s+(?:each|every|all)\b|\b{_EN_PLURAL_UNITS}\b)[^:,.!?]*:[^,]*$")
+_LIST_COLON: Final = _lazy_compile(r"(?:(?<!\s)\s*)?(?<!\d):(?!\d)\s*")  # leading space as in `_CLAUSE_BREAK`
+_HOLD: Final = _lazy_compile(
     r"농담|장난|됐어|됐고|(?<![가-힣])(?:아냐|아니야|아니다|아니|잠깐만?|잠시만?|말고)(?![가-힣])"
     r"|\b(?:jk|j/k|kidding|never\s*mind|nvm|wait|hold\s+on)\b"
 )
-_EN_TAKE_BACK: Final = re.compile(
+_EN_TAKE_BACK: Final = _lazy_compile(
     r"^(?:oh\s+|um\s+|no\s+)?(?:never\s*mind|nvm|jk|j/k|just\s+kidding|kidding|scratch\s+that|or\s+not|actually\s+(?:don'?t|no)"
     r"|don'?t|wait|hold\s+on|cancel\s+that|forget\s+(?:it|that)|not\s+now|later)\b"
 )
-_EN_TAKE_BACK_AT_THE_END: Final = re.compile(
+_EN_TAKE_BACK_AT_THE_END: Final = _lazy_compile(
     r"\b(?:jk|j/k|just\s+kidding|nvm|never\s*mind|or\s+(?:maybe\s+)?not)\s*[.!]*$"
 )
 
@@ -1019,7 +1066,7 @@ def _korean_clauses(folded: str) -> list[str]:
 # other "let me <verb>" is the person's own step ("…, and let me check with the team first"), and a tail that asks for
 # anything before the work or about whether to do it is no report ("…, then tell me why we shouldn't", "…, then tell me the risks first", "…, and tell me what
 # would break before you do"): both stay trailing clauses that keep nothing (`_trails_off`).
-_FINAL_CONFIRMATION_TAG: Final = re.compile(r"(?:(?<!\s)\s*)?,\s*(?:ok|okay|alright|right)\s*[?？]+\s*$")  # as `_CLAUSE_BREAK`
+_FINAL_CONFIRMATION_TAG: Final = _lazy_compile(r"(?:(?<!\s)\s*)?,\s*(?:ok|okay|alright|right)\s*[?？]+\s*$")  # as `_CLAUSE_BREAK`
 _DONE_CLAUSE: Final = (
     r"(?:when|once|after)\s+(?:[a-z']+\s+){0,3}?(?:(?:is|are|has|have)\s+)?(?:been\s+|all\s+)?"
     r"(?:done|finished|finishes|complete[ds]?|merged|lands?|landed|green|through|ready|over|deployed|shipped|in|passes"
@@ -1061,18 +1108,18 @@ _REPORT_FOLLOWER: Final = (
 )
 # Anywhere in the tail, a person with a modal or an intention, or deliberation, asks before the work ("which ones
 # failed and which you want to retry", "which ones you'd recommend").
-_NOT_A_REPORT: Final = re.compile(
+_NOT_A_REPORT: Final = _lazy_compile(
     rf"\b{_PERSON}(?:'(?:d|ll)\b|'re\s+going\b|\s+{_MODAL_OR_INTENT})|\b{_DELIBERATION}\b"
 )
 _REPORT_OPENER: Final = r"(?:(?:tell|ping|notify|message|show|send)\s+me|let\s+me\s+know|report(?:\s+back)?)"
-_EN_REPORT_TAIL: Final = re.compile(
+_EN_REPORT_TAIL: Final = _lazy_compile(
     r"(?:,\s*|\s+)(?:and\s+then|and|then)\s+(?:also\s+|just\s+|please\s+)*"
     rf"(?:let\s+me\s+know|report(?:\s+back)?|{_REPORT_OPENER}\s+"
     rf"(?:(?P<done>{_DONE_CLAUSE})|(?:(?:about|on|with|of)\s+)?{_REPORT_FOLLOWER}[^?]*?"
     rf"|(?:with\s+)?(?:(?:the|a|an|all\s+the|any|all)\s+)?(?:[a-z][\w-]*\s+){{0,2}}?{_RESULT_NOUN}\b[^?]*?))"
     r"\s*[.!]*$"
 )
-_ASKS_BEFORE_THE_WORK: Final = re.compile(
+_ASKS_BEFORE_THE_WORK: Final = _lazy_compile(
     r"[?？]|\b(?:why|would|should|could|risks?|how\s+(?:you|we|i|to|it)|first|before|beforehand|whether|if|unless)\b"
 )
 
@@ -1103,11 +1150,11 @@ _ASKS_BEFORE_THE_WORK: Final = re.compile(
 #   negated outcome keeps, and a warning or a retraction said under a negation is none (`_NEGATED_BEFORE`).
 # A deferral and a condition are refused before it, on the whole text (`_hard_excluded`; no pressure is read off there
 # too, so "…, whenever works" is none). A Korean message keeps the keepers alone, since main reads it whole.
-_EN_ASKS_FOR_MORE: Final = re.compile(
+_EN_ASKS_FOR_MORE: Final = _lazy_compile(
     rf"^(?:and\s+|then\s+|also\s+|please\s+|pls\s+|just\s+|so\s+)*(?!let'?s\s+hope\b)(?:{_EN_FOLLOW_ON_VERB}|{_READ_OR_HOLD_VERB}(?!\s+(?:you|ya)\b)"
     r"|(?!(?:wish|bless|excuse)\b)[a-z]+\s+me)\b"
 )
-_HEDGE: Final = re.compile(
+_HEDGE: Final = _lazy_compile(
     r"\b(?:ma+y+b+e+|perhaps|probably|possibly|not\s+(?:\w+\s+)?(?:sure|certain|convinced|positive|confident|clear|decided|settled)"
     r"|unsure|uncertain|undecided|indecisive|i\s+guess|i\s+suppose|idk"
     r"|dunno|who\s+(?:knows|can\s+say)|or\s+whatever|or\s+something|kinda|sorta|hmm+|eh|meh|nah|nope|rather\s+not|torn"
@@ -1121,11 +1168,11 @@ _HEDGE: Final = re.compile(
 # "…, pretend I didn't say it", "…, on reflection no"); handing the decision back asks before the work ("…, your call",
 # "…, up to you", "…, up to the team", "…, you decide"); and a clause that is only a hesitation hesitates ("…, umm",
 # "…, welp").
-_THINKING_ALOUD: Final = re.compile(
+_THINKING_ALOUD: Final = _lazy_compile(
     r"\b(?:think\w*|musing|muse|brainstorm\w*|spitball\w*|toying|ponder\w*|mull\w*|riffing|wondering|weighing|debating"
     r"|consider\w*|inkling|hunch|brainwave|off\s+the\s+top\s+of\s+my\s+head|gut\s+(?:says|feeling|check|call))\b"
 )
-_RETRACTS: Final = re.compile(
+_RETRACTS: Final = _lazy_compile(
     r"\b(?:scrap\w*|scratch\w*|forget\w*|disregard\w*|ignor\w*|strike|retract\w*|nix\w*|belay|withdraw\w*|pretend\w*|undo\w*"
     r"|cancel\w*|abort\w*|call\w*\s+(?:\w+\s+){0,3}?off|skip\w*|shelv\w*|park\w*|pass\s+on\s+(?:it|this|that)"
     r"|back\w*\s+out|pull\w*\s+(?:out|the\s+plug)|bail\w*|drop\w*\s+(?:it|this|that)|walk\w*\s+(?:it\s+|that\s+)?back"
@@ -1133,14 +1180,14 @@ _RETRACTS: Final = re.compile(
     r"|hang\s+on|hold\s+up|stand\s*by|sit\s+tight"
     r"|take\s+(?:it|that|this|all\s+that)\s+back|on\s+(?:second\s+thought|reflection))\b"
 )
-_HANDS_IT_BACK: Final = re.compile(
+_HANDS_IT_BACK: Final = _lazy_compile(
     r"\byour\s+(?:call|choice|pick|decision|preference)\b|\byou\s+(?:decide|choose|pick)\b|\bup\s+to\s+(?!date\b)\w+"
     r"|\bdealer'?s\s+choice\b|\bwhatever\s+you\b"
 )
-_HESITATION: Final = re.compile(r"(?:u+h+m*|u+m+|e+r+m*|e+h+|h+m+|h+r+m+|w+e+l+p+|m+e+h+|m{2,}|a+h+|o+o+f+)\W*")
+_HESITATION: Final = _lazy_compile(r"(?:u+h+m*|u+m+|e+r+m*|e+h+|h+m+|h+r+m+|w+e+l+p+|m+e+h+|m{2,}|a+h+|o+o+f+)\W*")
 # A verb said on the request itself acts on it, as a retraction or a new request does ("…, shelve it", "…, park it for
 # now", "…, scrap it", "…, nix that"), except a wish or thanks ("…, hope it goes smoothly", "…, love it").
-_ACTS_ON_IT: Final = re.compile(
+_ACTS_ON_IT: Final = _lazy_compile(
     r"^(?:just\s+|maybe\s+|so\s+|and\s+)?(?!(?:hope|hoping|wish|love|bless|thank|thanks|appreciate|may)\b)[a-z]+\s+"
     r"(?:it|that|this|everything|all\s+(?:of\s+)?(?:it|that|this))\b"
 )
@@ -1148,53 +1195,53 @@ _ACTS_ON_IT: Final = re.compile(
 # ("…, long day lol"); a clause that is only a status says the work is done or where it stands ("…: done, done,
 # conflict", "…, all done"); and a clause that ends on first or beforehand asks for something before the work ("…, let
 # me check first", "…: the billing one first").
-_LAUGH_ALONE: Final = re.compile(r"(?:lol|lmao|rofl|haha+|hehe+)\s*[.!]*")
-_STATUS_ALONE: Final = re.compile(rf"(?:all\s+|already\s+)?{_STATUS_WORD}(?:\s+already)?\s*[.!]*")
-_BEFORE_THE_WORK: Final = re.compile(
+_LAUGH_ALONE: Final = _lazy_compile(r"(?:lol|lmao|rofl|haha+|hehe+)\s*[.!]*")
+_STATUS_ALONE: Final = _lazy_compile(rf"(?:all\s+|already\s+)?{_STATUS_WORD}(?:\s+already)?\s*[.!]*")
+_BEFORE_THE_WORK: Final = _lazy_compile(
     r"\b(?:first|beforehand)\s*[.!]*$|\b(?:need|needs|have|has|got|gotta|want|wanna)\s+(?:to\s+)?(?:confirm|check|verify|validate"
     r"|make\s+sure|double[-\s]?check|ask|clear\s+it|run\s+(?:it|this|that)\s+by|sign\s+off|get\s+(?:sign[-\s]?off|approval|a\s+green))\b"
     r"|\b(?:pending|awaiting|waiting\s+(?:on|for))\b"
 )
-_WEIGHS: Final = re.compile(rf"(?<!\bper\sthe\s)(?<!\bsame\s)(?<!\bgood\s)\b(?!take\s+care\b|feel\s+free\b){_DELIBERATION}\b")
-_ASKER_INTENT: Final = re.compile(
+_WEIGHS: Final = _lazy_compile(rf"(?<!\bper\sthe\s)(?<!\bsame\s)(?<!\bgood\s)\b(?!take\s+care\b|feel\s+free\b){_DELIBERATION}\b")
+_ASKER_INTENT: Final = _lazy_compile(
     rf"\b(?:i|you|we)(?:'(?:d|ll)\b|'re\s+going\b|\s+(?!ha(?:ve|s)\s+(?!to\b)){_MODAL_OR_INTENT})"
     r"(?!\s+(?:\w+\s+)?(?:appreciate|be\s+(?:\w+\s+)?(?:grateful|thankful)|owe\s+you)\b)"
 )
-_QUESTION: Final = re.compile(
+_QUESTION: Final = _lazy_compile(
     r"[?？]|^(?:what|why|how|which|who|where|whether|is|are|am|was|were|do|does|did|should|shall|could|would(?!\s+love\b)|can|will"
     r"|may(?!\s+(?:the|it|this|our|all|your)\b)|might|must)(?![\w'])|\b(?:curious|wondering|wdyt|wyt|hbu|wbu)\b"
 )
 # A negation said before a warning or a retraction negates it: "…, hope nothing breaks", "…, fingers crossed we don't
 # regress", "…, fyi don't skip any" warn and take back nothing.
-_NEGATED_BEFORE: Final = re.compile(
+_NEGATED_BEFORE: Final = _lazy_compile(
     r"\b(?:not|no|nothing|never|without|\w+n['’]t|dont|wont|cant|doesnt|isnt|wouldnt|shouldnt)\s+(?:\w+\s+){0,2}$"
 )
 # A warning about the work is no harmless aside ("…, fwiw last time this broke CI", "…, careful, prod is fragile").
-_WARNS: Final = re.compile(
+_WARNS: Final = _lazy_compile(
     r"\b(?:broke|break(?:s|ing)?|blew\s+up|blow\s+up|went\s+down|outage|incident|regress\w*|careful|beware|watch\s+out"
     r"|caution|danger\w*|yikes|fragile|bricked|bit\s+us|burned\s+us|could|might|(?<=\s)may|los[et]|losing|corrupt\w*|wipe\w*"
     r"|data\s+loss)\b"
 )
-_GRATITUDE: Final = re.compile(
+_GRATITUDE: Final = _lazy_compile(
     r"\b(?:thanks?|thank\s*(?:you|u|ya|ye)|thx|thnx|tnx|tx|ty|tysm|tyvm|ta|cheers|appreciat\w*|grateful|thankful|obliged"
     r"|kudos|much\s+love|bless\s+you|you\s+rock|you(?:'re|\s+are)\s+(?:the\s+best|a\s+(?:star|legend|lifesaver|gem|hero))"
     r"|legend|lifesaver|owe\s+you|(?:big|much|so\s+much)\s+love|props|shout[-\s]?out|hats\s+off|bear\s+with\s+(?:me|us))\b"
     r"|^(?:awesome|amazing|great|perfect|nice|sweet|lovely|brilliant|excellent|wonderful|fantastic)\W*$"
 )
-_SIGN_OFF: Final = re.compile(
+_SIGN_OFF: Final = _lazy_compile(
     r"\b(?:have\s+a\s+(?:\w+\s+)?(?:one|day|weekend|evening|night|week|afternoon|morning)|talk\s+soon|ttyl|signing\s+off"
     r"|regards|best\s+wishes|all\s+the\s+best|take\s+care|see\s+(?:ya|you)|cya|bye|good\s*night|peace\s+out"
     r"|over\s+and\s+out|(?:catch|see|talk|speak)\s+(?:you\s+|ya\s+)?later|laters|later\s+gators?)\b"
     r"|^(?:hey|hi|hello|hiya|yo|howdy|morning|good\s+(?:morning|afternoon|evening))\b"
 )
-_WISH: Final = re.compile(
+_WISH: Final = _lazy_compile(
     r"^(?:i\s+|we\s+|and\s+|so\s+|let'?s\s+)?(?:(?:really|so|truly|just|sure)\s+)?(?:hope|hoping|here'?s\s+hoping|wish|wishing"
     r"|(?:(?:keeping|keep|got)\s+(?:my\s+|our\s+|the\s+)?)?(?:fingers|toes)\s+(?:\w+\s+){0,2}crossed|pray\w*|knock\s+on\s+wood|touch\s+wood"
     r"|(?:good|best\s+of)\s+luck|(?:i'?d\s+|would\s+)love|keen|excited|eager|stoked|can'?t\s+wait|looking\s+forward|wouldn'?t\s+mind"
     r"|optimistic|(?:got\s+a\s+)?good\s+feeling|feeling\s+(?:good|positive|optimistic)|here'?s\s+to|may\s+(?:the|it|this|our|all|your)"
     r"|cheers\s+to)\b"
 )
-_BACK_REFERENCE: Final = re.compile(
+_BACK_REFERENCE: Final = _lazy_compile(
     r"\b(?:as|like|per|what|how|the\s+way)\s+(?:(?:we|i|you|they)\s+(?:\w+\s+)?(?:discussed|agreed|said|mentioned|planned|talked|decided"
     r"|spoke|chatted|covered|sorted|settled|aligned|landed|went\s+over|figured|mapped|outlined|scoped|laid)|(?:discussed|agreed"
     r"|mentioned|planned|promised|usual|always|before))\b"
@@ -1207,7 +1254,7 @@ _BACK_REFERENCE: Final = re.compile(
     r"|\b(?:consistent|in\s+line|in\s+keeping)\s+with\b|\b(?:like|as)\s+(?:we|i|they)\s+(?:did|do|handled|did\s+it)\b"
     r"|^agreed\s+(?:in|at|during|over)\s+(?:the\s+)?\w+"
 )
-_ATTRIBUTION: Final = re.compile(
+_ATTRIBUTION: Final = _lazy_compile(
     r"^(?!(?:i|we|you)\b)(?:\w+(?:'s)?\s+){1,4}?(?:asked|requested|wants?|wanted|needs?|needed|approved|okayed|ok'?d|signed\s+off"
     r"|flagged|greenlit|insisted|ordered|mandated|cleared|blessed|backed|endorsed|sanctioned|authori[sz]ed|said|says|told)\b"
     r"|\b(?:as\s+)?(?:requested|approved|okayed|signed\s+off|cleared|blessed|backed|endorsed|ordered|mandated|greenlit"
@@ -1224,13 +1271,13 @@ _ATTRIBUTION: Final = re.compile(
 )
 # A contrast followed by a negation turns against the request ("…, fingers crossed but let's not", "…, thanks but
 # no", "…, approved by the CTO but not yet").
-_TURNS_AGAINST: Final = re.compile(
+_TURNS_AGAINST: Final = _lazy_compile(
     r"\b(?:but|though|although|however|except|yet)\b[^,;]*?\b(?:not|no|never|nope|nah|\w+n['’]t|dont|wont|cant)\b"
 )
 # An aside marker, by meaning: the remark that follows is on something else ("…, fyi …", "…, btw …", "…, also …", "…, oh
 # and …", "…, off topic, …", "…, random but …", "…, tangent, …", "…, unrelated but …", "…, on another note, …",
 # "…, incidentally …").
-_ASIDE_MARKER: Final = re.compile(
+_ASIDE_MARKER: Final = _lazy_compile(
     r"^(?:just\s+(?:an?\s+)?|oh\s+)?(?:fyi|btw|by\s+the\s+way|ps|psa|p\.s\.?|(?:side|quick|random)\s*note|note|for\s+what\s+it'?s\s+worth"
     r"|fwiw|for\s+the\s+record|heads\s+up|nb|jsyk|just\s+so\s+you\s+know|fun\s+fact|(?:random\s+|quick\s+)?aside|also|and\s+also"
     r"|oh\s+and|off[-\s]topic|random(?:ly)?(?:\s+but)?|tangent(?:ially)?|(?:totally\s+|completely\s+)?unrelated(?:ly)?(?:\s+but)?"
@@ -1240,13 +1287,13 @@ _ASIDE_MARKER: Final = re.compile(
 # A sign-off that says later, a back-reference to before and a plan named are no deferral, take-back, condition or
 # deliberation ("…, catch you later", "…, later gators", "…, same deal as before", "…, following the plan from last
 # sprint"): they are read off before the whole-text checks and the refusals, as no pressure is.
-_KEEP_IDIOM: Final = re.compile(
+_KEEP_IDIOM: Final = _lazy_compile(
     r"\b(?:(?:catch|see|talk|speak)\s+(?:you\s+|ya\s+)?later|laters|later\s+gators?|(?:same\s+(?:\w+\s+)?as|like)\s+before"
     r"|(?:the|our|same)\s+plan(?:\s+from\s+(?:last\s+)?\w+)?)\b"
 )
 # No pressure is no refusal, whatever words it borrows from one ("…, no worries", "…, take your time", "…, whenever
 # works", "…, nothing urgent"): it is read off before the refusals are, and before the whole-text condition.
-_NO_PRESSURE: Final = re.compile(
+_NO_PRESSURE: Final = _lazy_compile(
     r"\b(?:(?:no|zero|0)\s+(?:\w+\s+)?(?:rush|pressure|worries|hurry|stress|problem|biggie|big\s+deal|panic|drama|urgency"
     r"|deadline|hard\s+deadline|eta|timeline)"
     r"|not\s+(?:urgent|a\s+big\s+deal|in\s+a\s+(?:hurry|rush))|nothing\s+(?:urgent|pressing)|take\s+your\s+(?:sweet\s+)?time"
@@ -1267,11 +1314,11 @@ _NO_PRESSURE: Final = re.compile(
 _OUTCOME_VERB: Final = r"(?:fail|break|crash|explod|regress|flak|conflict|tim|blow|los|corrupt|wip|leak)\w*"
 # Thanks whose object is a negation mocks ("…, thanks for nothing", "…, cheers for nothing, really", "…, ty for no help"),
 # except thanks for an outcome that did not happen ("…, thanks for not breaking prod").
-_MOCKED_THANKS: Final = re.compile(
+_MOCKED_THANKS: Final = _lazy_compile(
     r"\b(?:thanks?|thank\s+(?:you|u|ya)|thx|cheers|ta|ty)\s+(?:\w+\s+){0,2}?for\s+(?:nothing|none|nada|zilch|no\s+help|zero\s+help"
     rf"|not\b(?!\s+(?:\w+\s+)?{_OUTCOME_VERB}))"
 )
-_NOT_DOING: Final = re.compile(
+_NOT_DOING: Final = _lazy_compile(
     rf"\bnot\s+(?:even\s+|just\s+|really\s+)?(?!{_OUTCOME_VERB})"
     r"(?:\w+ing|do|touch|bother|start|proceed|ship|merge|run)\b"
     r"|\bnot\s+(?:yet|now|today|tonight|right\s+now|anymore|this\s+(?:time|sprint|week))\b|\blet'?s\s+not\b|\bno\s+thank(?:s|\s+you)\b"
@@ -1298,7 +1345,7 @@ def _unnegated(pattern: re.Pattern[str], text: str) -> bool:
 
 
 # A flat refusal said on its own ("…, btw, no", "…, my manager asked: no", "…, hard pass").
-_FLAT_REFUSAL: Final = re.compile(
+_FLAT_REFUSAL: Final = _lazy_compile(
     r"(?:no+|nope|nah|no\s+way|absolutely\s+not|not\s+a\s+chance|not\s+happening|hard\s+pass|count\s+(?:me|us)\s+out"
     r"|no\s+can\s+do|none\s+of\s+it|veto(?:ed)?|denied|rejected|negative|nope\s+nope)\W*"
 )
@@ -1314,16 +1361,16 @@ _FLAT_REFUSAL: Final = re.compile(
 # sure", "…, QA said yeah yeah", "…, QA said great idea… not"). Anything else reported holds ("…, ops said something
 # about the docs"). Asking for it is no reported speech ("…, my manager asked for it" keeps as an attribution), and
 # neither is a relative what ("…, hope it's what the PM wants" keeps as a wish).
-_REPORTED_SPEECH: Final = re.compile(
+_REPORTED_SPEECH: Final = _lazy_compile(
     r"\b(?:said|says|saying|told\s+(?:us|me|them)|tells\s+(?:us|me)|wants|wanted)\b(?:\s+that\b(?!'))?\s*[:,]?\s*"
 )
-_SPEAKER_BACK_REFERENCE: Final = re.compile(r"\b(?:as|like|what|how)\s+(?:i|we|you|they)\s+(?:\w+\s+)?$")
-_RELATIVE_WHAT: Final = re.compile(r"\bwhat(?:ever)?\s+(?:\w+(?:'s)?\s+){0,3}$")
-_ATTRIBUTION_VERB: Final = re.compile(
+_SPEAKER_BACK_REFERENCE: Final = _lazy_compile(r"\b(?:as|like|what|how)\s+(?:i|we|you|they)\s+(?:\w+\s+)?$")
+_RELATIVE_WHAT: Final = _lazy_compile(r"\bwhat(?:ever)?\s+(?:\w+(?:'s)?\s+){0,3}$")
+_ATTRIBUTION_VERB: Final = _lazy_compile(
     r"\b(?:gave|give[sn]?|sign(?:ed|s)?\s+off|clear(?:ed|s)?|approv(?:ed|es|e)|okay(?:ed|s)?|ok'?d|greenl(?:it|ight(?:ed|s)?)"
     r"|bless(?:ed|es)?)\b"
 )
-_NEGATOR: Final = re.compile(
+_NEGATOR: Final = _lazy_compile(
     r"\b(?:nobody|no\s*one|none|not|never|neither|nor|\w+n['’]t|dont|didnt|doesnt|hasnt|havent|wont|cant|wasnt)\b"
 )
 _APPROVAL_INTENSIFIER: Final = (
@@ -1355,7 +1402,7 @@ _APPROVAL_TAIL: Final = (
     r"|eod|eow|tonight|tomorrow)|this\s+(?:sprint|week|month|quarter|cycle|iteration)|in\s+q[1-4]"
     r"|for\s+(?:the\s+|this\s+|our\s+)?(?:release|launch|demo|milestone|deploy(?:ment)?|cut|freeze|sprint))"
 )
-_APPROVAL: Final = re.compile(
+_APPROVAL: Final = _lazy_compile(
     rf"(?:(?:(?:us|me|them|him|her|you)\s+)?to\s+)?(?:{_APPROVAL_AROUND}{_APPROVAL_SEP})*"
     rf"(?:(?:a|an|the|their|his|her)\s+(?:{_APPROVAL_INTENSIFIER}{_APPROVAL_SEP})*)?"
     rf"(?:{_APPROVAL_ASSENT}|{_APPROVAL_WORD})"
@@ -1363,11 +1410,11 @@ _APPROVAL: Final = re.compile(
 )
 # An object that opens like an approval and is no clean one is dressed: filler before it, an assent said twice, or a
 # word after it ("…, ops said oh fine", "…, the PM said sure 🙄", "…, the lead said ok, sure, totally").
-_APPROVAL_LEAD: Final = re.compile(
+_APPROVAL_LEAD: Final = _lazy_compile(
     rf"(?:oh|ah|well|um+|uh+|hm+|{_APPROVAL_ASSENT}|go|go[-\s]ahead|approved?|lgtm|ship\s+it|do\s+it|green\s*light"
     r"|thumbs\s+up)(?![\w'])|👍|✅"
 )
-_MOCKING: Final = re.compile(
+_MOCKING: Final = _lazy_compile(
     r"\b(?:yeah\s+right|in\s+your\s+dreams|dream\s+on|as\s+if|nice\s+try|said\s+no\s+one"
     r"|(?:good\s+luck|have\s+fun)\s+with\s+that|over\s+my\s+dead\s+body|when\s+pigs\s+fly|not\s+in\s+a\s+million\s+years)\b"
     r"|(?:^|\s)/s\b|🙄|😒|🙃"
@@ -1376,8 +1423,8 @@ _MOCKING: Final = re.compile(
 # nice"); a reported wish keeps only as a wish alone or a wish that the work goes well (`_REPORTED_WISH`: "…, the lead
 # said good luck", "…, QA said hope the rollout is smooth"), so a wish with anything else after it holds ("…, the PM
 # said good luck lol", "…, legal said best of luck explaining that", "…, ops said hope you enjoy debugging").
-_ASSENT_ALONE: Final = re.compile(rf"(?:{_APPROVAL_INTENSIFIER}\s+)?{_APPROVAL_ASSENT}[\s.!…]*")
-_REPORTED_WISH: Final = re.compile(
+_ASSENT_ALONE: Final = _lazy_compile(rf"(?:{_APPROVAL_INTENSIFIER}\s+)?{_APPROVAL_ASSENT}[\s.!…]*")
+_REPORTED_WISH: Final = _lazy_compile(
     rf"(?:(?:{_APPROVAL_INTENSIFIER}|so|just)\s+)*(?:good\s+luck|best\s+of\s+luck|(?:fingers|toes)\s+crossed|break\s+a\s+leg"
     r"|godspeed|knock\s+on\s+wood|touch\s+wood)(?:\s+(?:to\s+(?:you|us|all|everyone)|with\s+the\s+(?:\w+\s+)?(?:rollout|migration"
     r"|release|deploy(?:ment)?|launch|upgrade|rebase|work|change|refactor|rewrite)))?[\s.!…]*"
@@ -1400,15 +1447,15 @@ _PROBLEM: Final = (
     r"(?:an?\s+|any\s+)?(?:big\s+|real\s+|major\s+|huge\s+)?(?:problems?|issues?|blockers?|blocking|deal|urgent|broken|failing"
     r"|worry|worries|concerns?|risky|risks?|dealbreaker|showstopper|flaky|dangerous))"
 )
-_NEGATED_STATE: Final = re.compile(
+_NEGATED_STATE: Final = _lazy_compile(
     r"\b(?:isn'?t|aren'?t|wasn'?t|weren'?t|hasn'?t|haven'?t|won'?t|can'?t|cannot|doesn'?t|don'?t|didn'?t|is\s+not|are\s+not"
     rf"|was\s+not|were\s+not|has\s+not|have\s+not|will\s+not|does\s+not|did\s+not)\b(?!\s+{_PROBLEM}\b)"
 )
-_RELUCTANCE: Final = re.compile(
+_RELUCTANCE: Final = _lazy_compile(
     r"\b(?:rather|sooner)\s+(?:not|we|they|you)\b|\bprefer(?:s|red)?\s+(?:not|we|us|they|you|to\s+(?:not|wait|hold)|waiting)\b"
 )
 _COPULA: Final = r"(?:\s+(?:is|are|was|were|will\s+be|stays?|remains?)|'s|'re)\s+(?:still\s+|currently\s+|now\s+|totally\s+|completely\s+|all\s+)?"
-_BLOCKING_STATUS: Final = re.compile(
+_BLOCKING_STATUS: Final = _lazy_compile(
     r"(?:\b(?:is|are|was|were|be|been|stays?|remains?|still|now|currently)|'s|'re)\s+(?:still\s+|currently\s+|now\s+|totally\s+"
     r"|completely\s+|all\s+)?(?:frozen|blocked|locked\s+down|on\s+hold|paused|over\s+budget|not\s+ready)\b"
 )
@@ -1416,12 +1463,12 @@ _WORK_ITEM: Final = (
     r"(?:fix(?:es)?|builds?|releases?|tickets?|bugs?|incidents?|prs?|pull\s+requests?|issues?|migrations?|patch(?:es)?|hotfix(?:es)?"
     r"|versions?|updates?|changes?|features?|errors?|error\s+rate|alerts?|outage|it|everything|that|this)"
 )
-_PERSON_AWAY: Final = re.compile(
+_PERSON_AWAY: Final = _lazy_compile(
     r"(?:she|he|they|i|we|(?:the\s+|our\s+|my\s+)?(?:lead|tech\s+lead|team\s+lead|pm|po|cto|ceo|cfo|vp|manager|boss|owner"
     rf"|reviewer|approver|on-?call|maintainer|admin|dba|sre|engineer|designer|team)|(?!(?:the|a|an|our|my|their|this|{_WORK_ITEM})\b)"
     rf"[a-z][\w-]*){_COPULA}(?:out|off|away|sick|ooo|on\s+(?:leave|vacation|pto))\b"
 )
-_SYSTEM_DOWN: Final = re.compile(
+_SYSTEM_DOWN: Final = _lazy_compile(
     r"(?:(?:the|our|all)\s+)?(?:prod(?:uction)?|staging|dev|ci|cd|main|master|pipelines?|clusters?|db|databases?|deploys?"
     r"|deployments?|(?:build\s+)?servers?|registry|env(?:ironment)?s?|infra|vpn|runners?|\w+\s+(?:server|cluster|env|environment|db"
     rf"|database)){_COPULA}(?:down|offline|frozen|locked)\b"
@@ -1517,7 +1564,7 @@ def _statement_refuses(clause: str) -> bool:
     return False
 
 
-_STATEMENT_SET_OFF: Final = re.compile(r"\s*[:;—–]\s*|\s+-\s+")
+_STATEMENT_SET_OFF: Final = _lazy_compile(r"\s*[:;—–]\s*|\s+-\s+")
 
 
 def _refuses(clause: str) -> bool:
@@ -1550,7 +1597,7 @@ def _refuses(clause: str) -> bool:
 
 
 # A clause that is only an intensifier adds nothing of its own ("…, you rock, seriously!!", "…, thanks, truly").
-_INTENSIFIER_ALONE: Final = re.compile(r"(?:seriously|honestly|truly|really|totally|for\s+real|fr|ngl|tbh|so\s+much|a\s+lot)\W*")
+_INTENSIFIER_ALONE: Final = _lazy_compile(r"(?:seriously|honestly|truly|really|totally|for\s+real|fr|ngl|tbh|so\s+much|a\s+lot)\W*")
 
 
 def _of_a_keep_kind(clause: str) -> bool:
@@ -1670,11 +1717,11 @@ def _asks_for(folded: str, verbs: str) -> bool:
 # the dependencies in all services"). A singular object in many places is one change ("fix the login bug on every
 # page", "update the license header in every file").
 # A clause that aims the change may sit between them, a few words longer ("모든 서비스에서 중복 결제가 안 되게 수정해줘").
-_KOREAN_CHANGE_ON_BREADTH: Final = re.compile(
+_KOREAN_CHANGE_ON_BREADTH: Final = _lazy_compile(
     rf"{_KOREAN_BREADTH_OBJECT}\s*(?:\S+\s+){{0,3}}\S*{_KOREAN_CHANGE_VERB}"
     rf"|{_KOREAN_BREADTH_OBJECT}\s*(?:\S+\s+){{0,4}}\S*(?:게|게끔|도록)\s+(?:좀\s+)?\S*{_KOREAN_CHANGE_VERB}"
 )
-_EN_CHANGE_ON_BREADTH: Final = re.compile(
+_EN_CHANGE_ON_BREADTH: Final = _lazy_compile(
     rf"^(?:please\s+)?{_POLITE_OPENER}?{_EN_CHANGE_VERB}\s+"
     rf"(?:(?:all|every|each)\s+(?:of\s+)?(?:the\s+|my\s+|our\s+)?(?:\S+\s+){{0,2}}?{_EN_UNITS}\b"
     rf"|(?!(?:the|a|an|this|that)\b)\S+(?:\s+\S+)?\s+(?:to|in|on|across|for)\s+(?:all|every|each)\s+(?:of\s+)?(?:the\s+)?(?:\S+\s+){{0,2}}?{_EN_UNITS}\b"
@@ -1691,7 +1738,7 @@ _EN_CHANGE_ON_BREADTH: Final = re.compile(
 
 # Hard excludes, which win over every reading above (lead decision on the #2232 review):
 # - a stop or a hold on the work ("PR들 전부 머지 보류해줘", "모든 서비스 배포 멈춰줘", "PR들 전부 머지 금지");
-_STOP_OR_HOLD: Final = re.compile(
+_STOP_OR_HOLD: Final = _lazy_compile(
     r"중단|취소|멈춰|멈추|멈춤|보류|금지|그만|\b(?:stop|cancel|hold|halt|pause|abort|freeze)\b"
 )
 # - a condition ("테스트 다 통과하면 머지해줘", "PR 다 올렸으면 리뷰 요청해줘", "if all the tests pass, merge"); a noun that ends in
@@ -1701,7 +1748,7 @@ _STOP_OR_HOLD: Final = re.compile(
 #   keeps, as on main ("rename every module as long as the import paths stay the same", "update every service assuming
 #   the defaults are fine", "rebase all open PRs as soon as possible"), and so does an adjective or a participle ("…
 #   using the provided helper", "… with the fixtures provided", "fix all the failing tests provided by QA");
-_CONDITION: Final = re.compile(
+_CONDITION: Final = _lazy_compile(
     r"(?<![화측전양단표방내외평])면(?=[\s,.!?~]|$)(?!\s*감사)|거든|\b(?:if|when|once|after|unless|whenever|before)\b"
     r"|(?:^|[,;:—–]\s*|\s-\s)(?:assuming|supposing|provided|providing\s+that|as\s+long\s+as|so\s+long\s+as|in\s+case"
     r"|on\s+(?:the\s+)?condition|as\s+soon\s+as)\b"
@@ -1710,7 +1757,7 @@ _CONDITION: Final = re.compile(
 # - a deferral of the work past now ("rebase all the open PRs later", "update every service tonight", "… next week",
 #   "… on monday", "PR들 전부 나중에 리베이스해줘", "모든 서비스 내일 업데이트해줘"); a deadline is none ("… by tonight",
 #   "…해줘, 내일까지"), and now, today and asap keep;
-_DEFERRAL: Final = re.compile(
+_DEFERRAL: Final = _lazy_compile(
     r"(?<!\bby\s)\b(?:later|tomorrow|tonight|next\s+(?:week|month|sprint|quarter|year|time|monday|tuesday|wednesday"
     r"|thursday|friday|saturday|sunday)|on\s+(?:monday|tuesday|wednesday|thursday|friday|saturday|sunday|the\s+weekend)"
     r"|this\s+weekend|over\s+the\s+weekend|eventually|some\s+other\s+time|another\s+time|at\s+some\s+point"
@@ -1721,15 +1768,15 @@ _DEFERRAL: Final = re.compile(
 )
 # A weekday inside a clause with a past verb of its own says when that happened, not when to work ("update every
 # service we deployed on monday", "지난 월요일에 배포한 서비스 전부 업데이트해줘", "월요일에 배포한 서비스 전부 …").
-_PAST_VERB: Final = re.compile(
+_PAST_VERB: Final = _lazy_compile(
     r"(?:[a-z]+(?<!e)ed|broke|went|ran|did|made|built|wrote|sent|took|got|put|set|found|began|came|saw|left|lost|split"
     r"|shipped)"
 )
-_KOREAN_PAST_AROUND: Final = re.compile(r"지난\s*$")
+_KOREAN_PAST_AROUND: Final = _lazy_compile(r"지난\s*$")
 # The times a past clause may carry: a weekday or the weekend, which point back as well as ahead ("we deployed on
 # monday", "월요일에 배포한"); tomorrow, next week, later or 나중에 never point back.
-_BACKWARD_TIME: Final = re.compile(r"on\s+\S+|over\s+the\s+weekend|[월화수목금토일]요일에|주말에")
-_KOREAN_PAST_RELATIVE_AFTER: Final = re.compile(r"\s*\S*(?:한|했던|된|됐던|던)(?=\s|$)")
+_BACKWARD_TIME: Final = _lazy_compile(r"on\s+\S+|over\s+the\s+weekend|[월화수목금토일]요일에|주말에")
+_KOREAN_PAST_RELATIVE_AFTER: Final = _lazy_compile(r"\s*\S*(?:한|했던|된|됐던|던)(?=\s|$)")
 
 
 def _says_a_deferral(folded: str) -> bool:
@@ -1745,7 +1792,7 @@ def _says_a_deferral(folded: str) -> bool:
     return False
 # - a completion said as a noun or a bare word ("브랜치들 다 정리됨", "upstream PR들 다 리뷰 반영 끝", "테스트 수정 완료"),
 #   not one that names the units ("완료된 이슈들 전부 닫아줘") or asks for it ("… 리베이스 완료해줘");
-_COMPLETED: Final = re.compile(
+_COMPLETED: Final = _lazy_compile(
     r"됨(?=[\s,.!?~]|$)|(?<![가-힣])끝(?=[\s,.!?~]|$)|완료(?=[\s,.!?~]|$|됨|됐|되었|했|함|임|입니다|이에요|예요|요)"
 )
 # - a recurring schedule, which stays on ulw-loop, Hermes' /loop or an automation ("매일 아침 PR들 전부 리베이스해줘", "30분마다
@@ -1766,7 +1813,7 @@ _TIME_UNIT_EN: Final = (
     r"(?:second|minute|min|hour|day|week|month|year|morning|afternoon|evening|night|weekday|weekend|monday|tuesday"
     r"|wednesday|thursday|friday|saturday|sunday)"
 )
-_SCHEDULE: Final = re.compile(
+_SCHEDULE: Final = _lazy_compile(
     r"(?<![가-힣])매(?:일|주|달|월|년|시간|분)(?![가-힣])|(?<![가-힣])매일(?=아침|밤|저녁|오전|오후)|(?<![가-힣])매\s+(?=\S)"
     r"|주기적|정기적|\d{1,2}\s*시(?:\s*\d{1,2}\s*분)?\s*(?:에|마다|정각)|(?<![가-힣])(?:자정|정오|새벽)(?:에|마다)?(?![가-힣])"
     rf"|(?:(?<![가-힣]){_KOREAN_NUMBER}|일)\s*{_TIME_UNIT_KO}\s*에\s*{_KOREAN_NUMBER}\s*번|하루\s*(?:에\s*)?{_KOREAN_NUMBER}\s*번"
@@ -1780,8 +1827,8 @@ _SCHEDULE: Final = re.compile(
     r"|\bon\s+a\s+schedule\b"
 )
 # What comes before 마다: a unit of work makes it "each of them" (`_KOREAN_UNIT`), anything else a recurrence.
-_BEFORE_MADA: Final = re.compile(r"(?P<noun>[^\s,.!?~]+?)(?:들)?\s*마다")
-_WORK_UNIT_BEFORE_MADA: Final = re.compile(rf"(?:마이크로)?(?:{_KOREAN_UNIT}|풀\s*리퀘(?:스트)?|repos?)")
+_BEFORE_MADA: Final = _lazy_compile(r"(?P<noun>[^\s,.!?~]+?)(?:들)?\s*마다")
+_WORK_UNIT_BEFORE_MADA: Final = _lazy_compile(rf"(?:마이크로)?(?:{_KOREAN_UNIT}|풀\s*리퀘(?:스트)?|repos?)")
 
 
 def _says_a_schedule(folded: str) -> bool:
@@ -1791,13 +1838,13 @@ def _says_a_schedule(folded: str) -> bool:
     )
 # A pull request's address, written bare or as a link the caller passes (`reference_regions(...).links`: the
 # executable text has none).
-_PULL_REQUEST_ADDRESS: Final = re.compile(r"/pulls?/\d+|/merge_requests/\d+")
+_PULL_REQUEST_ADDRESS: Final = _lazy_compile(r"/pulls?/\d+|/merge_requests/\d+")
 # - one numbered pull request, or the person's own one ("PR 2232", "#2232", "2232번 PR", "내 PR", "pull request 2232",
 #   "pull 951", "files touched by PR 2232", "this PR", "이 PR"); 이 or 그 must open its word, so 버그 and 블로그 are no
 #   scope, and a number with a counter is a count of PRs, not one ("PR 3개", "PR 5건": `_KOREAN_COUNT`). One branch is
 #   one scope the same way: a named one ("feature/dag-default", "fix/login-bug") and the current one ("current
 #   branch", "this branch", "이 브랜치");
-_ONE_SCOPE: Final = re.compile(
+_ONE_SCOPE: Final = _lazy_compile(
     r"\bpr\s*#?\s*\d+(?!\d|\s*(?:개|건))|#\s*\d+|\d+\s*번\s*(?:pr|이슈)|(?<![가-힣])내\s*pr(?!\s*들)"
     r"|\bpull\s+request\s+#?\d+(?!\d|\s*(?:개|건))|\bpull\s*#?\s*\d+(?!\d|\s*(?:개|건))"
     r"|(?<![\w/.-])(?:feature|feat|fix|bugfix|hotfix|release|chore|docs|refactor|omh|dev|wip)/[\w.-]+"
@@ -1816,7 +1863,7 @@ _ONE_SCOPE: Final = re.compile(
 # - one PR or one branch singled out by a modifier, with the breadth on what is inside it ("어제 내가 연 PR 테스트 전부",
 #   "방금 올린 PR 파일들 전부", "feature/x 브랜치 테스트 전부", "현재 브랜치 테스트 전부"): no 들 and no breadth word on the PR
 #   or the branch itself, and no 모든, 전체, 각 or 여러 before it ("PR들 전부", "모든 PR 테스트", "열린 PR 전부" stay many).
-_ONE_CONTAINER: Final = re.compile(
+_ONE_CONTAINER: Final = _lazy_compile(
     r"(?:(?P<before>\S+)\s+)?(?<![a-z가-힣])(?:pr|pull\s*request|풀\s*리퀘(?:스트)?|브랜치)(?:의|에서|에\s*있는|안의|안에\s*있는)?"
     r"\s+(?:리뷰\s+)?(?:테스트|파일|라인|줄|커밋|코드|변경|스냅샷|함수|코멘트|충돌|에러|오류|경고|린트|타입)"
 )
@@ -1863,7 +1910,7 @@ def _asks_to_fix_a_fault(folded: str) -> bool:
 # Words that ask for no work, or only a report: a negation, no need, a lookup or a status, a question ("PR들 전부
 # 머지하지 마", "PR들 전부 알려줘", "모든 서비스 상태 확인해줘", "check the status of all open PRs", "review all open PRs and
 # just tell me which are safe"), and one thing in many places ("fix the bug in all three services").
-_NO_WORK_ASKED: Final = re.compile(
+_NO_WORK_ASKED: Final = _lazy_compile(
     r"했다|됐다|했음|됐음|했잖아|했는데|했지만|했더니|지\s*마(?!다)|지\s*말|안\s*해|필요\s*없|도\s*돼|도\s*된다|도\s*괜찮"
     r"|알려\s*줘|알려\s*주세요|보여\s*줘|찾아|링크\s*(?:줘|주세요|보내)|읽어|상태|몇\s*개|목록|리스트|어때|뭐야|[?？]"
     r"|pr\s*들?\s*(?:을|를)?\s*(?:전부|모두|다)\s*정리"
@@ -1873,23 +1920,23 @@ _NO_WORK_ASKED: Final = re.compile(
     r"|\b(?:the|this|that|a)\s+(?:\S+\s+){0,2}\S+(?<!s)\s+(?:in|on)\s+(?:all|every|each)\b"
 )
 # Parallel running is the work's subject, not its shape ("fix the race where uploads run in parallel across modules").
-_RUNTIME_PARALLEL: Final = re.compile(
+_RUNTIME_PARALLEL: Final = _lazy_compile(
     r"\b(?:run|runs|running|execute|executes|load|loads)\s+in\s+parallel\b|\brace(?:\s+condition)?s?\b|\bdeadlock"
 )
 # Work until a condition holds stays on the loop and ultrawork lanes ("… until every test passes", "다 통과할 때까지").
-_UNTIL: Final = re.compile(r"\buntil\b|\btill\b|때까지")
+_UNTIL: Final = _lazy_compile(r"\buntil\b|\btill\b|때까지")
 # A retired engine's name, which opens a request for that engine as a skill's name does ("team 실패하는 테스트 다 고쳐"),
 # and a name said in Korean ("루프로 모든 서비스 업데이트해줘").
 _RETIRED_ENGINE_NAMES: Final = frozenset({"team", "maestro", "ralph", "ultrapilot", "ultraprocess", "ultragoal"})
 _KOREAN_NAMES: Final = frozenset({"루프"})
 # A Korean particle on the name keeps it the name ("loop로", "refactor-plan으로", "github-event-ops에서"), and so does
 # OMH's own name before it ("omh loop …", "use omh github-event-ops …").
-_NAME_PARTICLE: Final = re.compile(r"(?:으로|로|을|를|에서|에게|한테|이랑|랑|와|과)$")
-_OMH_OPENER: Final = re.compile(r"^(?:use\s+)?(?:omh|oh-my-hermes(?:-agent)?)\s+")
+_NAME_PARTICLE: Final = _lazy_compile(r"(?:으로|로|을|를|에서|에게|한테|이랑|랑|와|과)$")
+_OMH_OPENER: Final = _lazy_compile(r"^(?:use\s+)?(?:omh|oh-my-hermes(?:-agent)?)\s+")
 # A skill named as the instrument anywhere names it for the work too, as dag-ulw's own name does (`_WITH`,
 # `_KOREAN_RUN`): "열린 PR들 전부 git-workflow로 리베이스해줘", "rebase all my open PRs with git-workflow".
-_KOREAN_INSTRUMENT: Final = re.compile(r"(?P<name>\S+?)(?:으로|로)(?:\s|$)")
-_EN_INSTRUMENT: Final = re.compile(r"\b(?:with|using|via|through)\s+(?:the\s+)?(?P<name>[a-z0-9][a-z0-9_-]*)")
+_KOREAN_INSTRUMENT: Final = _lazy_compile(r"(?P<name>\S+?)(?:으로|로)(?:\s|$)")
+_EN_INSTRUMENT: Final = _lazy_compile(r"\b(?:with|using|via|through)\s+(?:the\s+)?(?P<name>[a-z0-9][a-z0-9_-]*)")
 
 
 # The catalog's names, kept once the sidecar answered. A missing sidecar is not kept: the next call reads it again.
@@ -1980,13 +2027,13 @@ def _work_over_many_targets(text: str, links: tuple[str, ...]) -> bool:
 # translation", "문단을 병렬로 나눠서 번역해줘"), not a proposal or a plan said ("how about we …", "why not …", "my plan is
 # to …", "the goal is to …", "maybe …": no imperative, `_EN_SPLIT_REQUEST`), and nothing hard-excluded or asking for no
 # work (rule A for the size cues).
-_SPLIT_TEXT: Final = re.compile(r"\btranslat|번역")
+_SPLIT_TEXT: Final = _lazy_compile(r"\btranslat|번역")
 _SPLIT_WORK_NOUN: Final = r"(?:migration|refactor(?:ing)?|rewrite|work|implementation|port|upgrade)"
 # The split asked for: an imperative, whatever its verb ("split …", "fan out …", "do the api and the ui in parallel …",
 # "analyze API and UI in parallel, then integrate"), put politely, after a clause ("…, fan out across the services",
 # "tell me when done: split …"), or said as what the person wants ("what we need is to split …"). A sentence that
 # opens on a determiner, a pronoun, a question word or an auxiliary is no imperative.
-_EN_SPLIT_REQUEST: Final = re.compile(
+_EN_SPLIT_REQUEST: Final = _lazy_compile(
     rf"^(?:please\s+)?(?:{_POLITE_OPENER}|(?:can|could|shall)\s+we\s+|let'?s\s+)?(?:just\s+)?"
     r"(?!(?:the|a|an|this|that|these|those|my|our|your|their|its|we|i|you|it|they|there|here|which|what|who|why|how"
     r"|when|where|is|are|was|were|am|do\s+(?:you|we|i)|does|did|should|would|could|can|will|shall|may|might|must|if"
@@ -1994,7 +2041,7 @@ _EN_SPLIT_REQUEST: Final = re.compile(
     r"|[,:]\s*(?:so\s+|just\s+|please\s+)?(?:fan\s+out|split)\b"
     r"|^(?:what\s+(?:i|we)\s+(?:want|need)\s+is\s+to|(?:i|we)\s+(?:want|need)\s+(?:you\s+)?to)\s+(?:fan\s+out|split)\b"
 )
-_EN_SPLIT_EVIDENCE: Final = re.compile(
+_EN_SPLIT_EVIDENCE: Final = _lazy_compile(
     rf"(?:\band|\bthen|,\s*then)\s+(?:then\s+)?(?:{_EN_CHANGE_VERB}|integrate|develop|ship)\b"
     rf"|\bsplit\s+(?:the\s+|this\s+|that\s+|our\s+|my\s+)?(?:\S+\s+){{0,6}}?{_SPLIT_WORK_NOUN}\s+into\b"
     r"|\binto\s+parallel\s+work\b"
@@ -2006,17 +2053,17 @@ _KOREAN_WORK_VERB: Final = rf"(?:{_KOREAN_CHANGE_VERB}|구현|개발|통합)"
 # a demonstrative and its noun, a noun and 하나, a single file or function name, or "the" and a singular noun. Several
 # objects ("api, ui, docs 작업을", "결제/주문/배송 모듈", "분리기와 파서") and the work itself as what splits ("split the
 # migration into …") are not one object.
-_KOREAN_SPLIT_OBJECT: Final = re.compile(r"(?P<object>[^.!?]*?)\s*(?:을|를|은|는)?\s*(?:병렬로\s*나눠|나눠서\s*병렬로)")
-_EN_SPLIT_OBJECT: Final = re.compile(
+_KOREAN_SPLIT_OBJECT: Final = _lazy_compile(r"(?P<object>[^.!?]*?)\s*(?:을|를|은|는)?\s*(?:병렬로\s*나눠|나눠서\s*병렬로)")
+_EN_SPLIT_OBJECT: Final = _lazy_compile(
     r"\b(?:split|fan\s+out|break\s+(?:up|down)|parallelize)\s+(?P<object>(?:the|this|that|my|our)\s+[^,.!?]*?)\s+"
     r"(?:into|across)\b"
 )
 # The object said first, as the topic the split refers back to ("the checkout page: split it into parallel parts …").
-_EN_SPLIT_TOPIC: Final = re.compile(
+_EN_SPLIT_TOPIC: Final = _lazy_compile(
     r"^(?P<object>(?:(?:the|this|that|my|our)\s+)?[^,:.!?]+?)\s*:\s*(?:please\s+|just\s+)?"
     r"(?:split|fan\s+out|break\s+(?:up|down)|parallelize)\s+(?:it|this)\s+(?:into|across)\b"
 )
-_SEVERAL_OBJECTS: Final = re.compile(
+_SEVERAL_OBJECTS: Final = _lazy_compile(
     r"[,/&]|\band\b|(?:와|과|랑|하고)(?:\s|$)|(?<![가-힣])(?:및|모든|전체|여러|각)(?![가-힣])|들(?:\s|$)"
     r"|(?<![가-힣])(?:두|세|네|다섯|여섯|일곱|여덟|아홉|열|몇)(?![가-힣])|\d+\s*개"
 )
@@ -2046,8 +2093,8 @@ def _splits_one_object(request: str) -> bool:
 # What a split request may carry besides the work: a request put as a question ("can you split …?", "… 구현해줄래?"), a
 # "tell me when done" before it, and a report on the work after it ("…, then tell me which failed", "… 구현하고 나눈 방법
 # 설명해줘"): the work asked for is still the split.
-_EN_DONE_OPENER: Final = re.compile(r"^tell\s+me\s+when\s+(?:it'?s\s+|you'?re\s+)?done\s*[:,]\s*")
-_KOREAN_REPORT_TAIL: Final = re.compile(
+_EN_DONE_OPENER: Final = _lazy_compile(r"^tell\s+me\s+when\s+(?:it'?s\s+|you'?re\s+)?done\s*[:,]\s*")
+_KOREAN_REPORT_TAIL: Final = _lazy_compile(
     r"(?P<work>\S*(?:고|해서))\s+(?:\S+\s+){0,3}\S*(?:설명|알려|보고|공유)\S*\s*[.!~]*$"
 )
 
@@ -2190,21 +2237,21 @@ _FEATURE_NOUN: Final = r"(?:기능|화면|모듈)"
 _SOFT_FEATURE_NOUN: Final = r"(?:페이지|단계|과정|흐름|플로우|플로|api|탭|메뉴|부분)"
 _EN_FEATURE_NOUN: Final = r"(?:features?|screens?|modules?|endpoints?|views?)"
 _EN_SOFT_FEATURE_NOUN: Final = r"(?:pages?|flows?|stages?|steps?|parts?|tabs?)"
-_KOREAN_PRODUCT_FEATURE: Final = re.compile(
+_KOREAN_PRODUCT_FEATURE: Final = _lazy_compile(
     r"(?:로그인|로그아웃|회원가입|가입|탈퇴|인증|온보딩|프로필|마이페이지|대시보드|검색|탐색|필터|정렬|페이징|알림|댓글|좋아요|공유|업로드|다운로드|미리보기|결제"
     r"|장바구니|주문|환불|배송|쿠폰|포인트|정산|채팅|쪽지|즐겨찾기|북마크|리뷰|팔로우|신고|리포트|지식그래프)$"
 )
-_KOREAN_WORK_STAGE: Final = re.compile(
+_KOREAN_WORK_STAGE: Final = _lazy_compile(
     r"(?:기획|설계|개발|구현|테스트|배포|출시|런칭|운영|수집|크롤링|정제|전처리|적재|분석|학습|시각화|등록|조회|접수|승인|완료|생성|발행|작성|신청|구매|예약|발송)$"
 )
-_EN_PRODUCT_FEATURE: Final = re.compile(
+_EN_PRODUCT_FEATURE: Final = _lazy_compile(
     r"(?<![\w-])(?:log-?in|log-?out|sign-?in|sign-?up|sign-?out|registration|verification|onboarding|password\s+reset"
     r"|profiles?|dashboards?|search|browsing|filters?|sort|sorting|pagination|notifications?|comments?|likes?|sharing"
     r"|uploads?|downloads?|previews?|cart|checkout|payments?|billing|refunds?|invoices?|invoicing|orders?|bookmarks?"
     r"|favorites?|tagging|exports?|imports?|reports?|reporting|mentions?|reactions?|subscriptions?|coupons?|messaging|chat"
     r"|knowledge\s+graph)$"
 )
-_EN_WORK_STAGE: Final = re.compile(
+_EN_WORK_STAGE: Final = _lazy_compile(
     r"(?<![\w-])(?:planning|design|development|testing|deployment|launch|ingest|ingestion|collection|training|evaluation"
     r"|visualization|confirmation|delivery|fulfillment|analytics)$"
 )
@@ -2217,29 +2264,29 @@ _KOREAN_EXTENT: Final = (
     r"(?:다|전부|전부다|모두|모두다|다같이|같이|함께|한번에|한\s*번에|한꺼번에|순서대로|차례대로|단계별로|각각|하나씩|하나하나|모조리"
     r"|\S+에\s*맞게|\S+대로|끝까지|이어붙여서|이어서|붙여서|나눠서)"
 )
-_KOREAN_LIST_TAIL: Final = re.compile(
+_KOREAN_LIST_TAIL: Final = _lazy_compile(
     rf"(?:(?<!\s)\s*)?(?:(?:(?P<noun>{_FEATURE_NOUN})|(?P<soft>{_SOFT_FEATURE_NOUN}))(?:들)?)?\s*"
     rf"(?:을|를|도|까지|들|들을|까지도|이랑|랑)?(?:\s*{_KOREAN_EXTENT})*\s*$"
 )
 # A joining 와, 과, 랑 or 하고 follows a word of two syllables or more: 사과, 결과 and 사랑 hold no join.
-_KOREAN_JOINER: Final = re.compile(r"(?<=[가-힣a-z0-9]{2})(?:이랑|랑|하고|와|과|및)\s+|\s*[,/]\s*|\s+및\s+")
+_KOREAN_JOINER: Final = _lazy_compile(r"(?<=[가-힣a-z0-9]{2})(?:이랑|랑|하고|와|과|및)\s+|\s*[,/]\s*|\s+및\s+")
 # A word in the list that a case particle ties to something else, so that the list sits inside that thing ("설정 페이지에 테마,
 # 언어, 시간대 탭 추가해줘", "빨강, 파랑, 초록으로 화면 만들어줘", "리액트, 뷰, 스벨트로 개발해줘").
-_KOREAN_TIED_WORD: Final = re.compile(r"(?:에|에서|에게|한테|으로|을|를)(?:\s|$)|로$")
+_KOREAN_TIED_WORD: Final = _lazy_compile(r"(?:에|에서|에게|한테|으로|을|를)(?:\s|$)|로$")
 # A subject in an item after the verb: a complaint about each part, not the part's name ("검색이 느려, 필터가 안 돼").
-_KOREAN_SUBJECT_WORD: Final = re.compile(r"[이가]\s")
+_KOREAN_SUBJECT_WORD: Final = _lazy_compile(r"[이가]\s")
 # The last word of an item that names one thing rather than a feature: the list is that thing's content.
-_ONE_THING_NOUN: Final = re.compile(r"(?:^|\s)(?:목록|리스트|표|문서|메모|함수|변수|테이블|그래프|차트|색|색깔|글자|문구|이름)(?:만|을|를)?$")
-_NUMBER_OR_TIME: Final = re.compile(
+_ONE_THING_NOUN: Final = _lazy_compile(r"(?:^|\s)(?:목록|리스트|표|문서|메모|함수|변수|테이블|그래프|차트|색|색깔|글자|문구|이름)(?:만|을|를)?$")
+_NUMBER_OR_TIME: Final = _lazy_compile(
     r"\d|요일|^(?:오늘|내일|어제|모레|이번|다음|지난)|^[일이삼사오육칠팔구십백천]+(?:페이지|쪽|번|장|줄|시|일)?$"
 )
-_KOREAN_RANGE: Final = re.compile(
+_KOREAN_RANGE: Final = _lazy_compile(
     rf"(?P<start>[^\s,]+)부터\s+(?:[^\s,]+\s+){{0,3}}?(?P<end>[^\s,]+?)까지(?P<tail>(?:\s*(?:도|{_KOREAN_EXTENT}))*)\s*$"
 )
 # Several features counted rather than named, as the verb's own object ("여러 기능 나눠서 다 해줘", "기능 여러 개 한꺼번에
 # 개발해줘", "세 기능 같이넣고 테스트까지 다해줘"). Only a noun that is a feature by itself counts: "두 단계 인증", "세 페이지 보고서",
 # "여러 페이지 PDF" and "여러 탭" are one thing.
-_KOREAN_COUNTED_FEATURES: Final = re.compile(
+_KOREAN_COUNTED_FEATURES: Final = _lazy_compile(
     rf"(?:^|\s)(?:(?:여러|두|세)\s*(?:개의?\s*)?|(?:몇|\d+)\s*개의?\s*){_FEATURE_NOUN}(?:들)?(?:을|를|도)?"
     rf"(?:\s*\S*(?:넣|만들|구현|개발)고)?(?:\s*\S+까지)?(?:\s*{_KOREAN_EXTENT})*\s*$"
     rf"|(?:^|\s){_FEATURE_NOUN}\s*(?:들\s*)?(?:이\s*)?여러\s*개(?:를|을)?(?:\s*{_KOREAN_EXTENT})*\s*$"
@@ -2247,33 +2294,33 @@ _KOREAN_COUNTED_FEATURES: Final = re.compile(
 # A count or 다음 before the verb, its list after the verb and a colon ("기능 네 개 개발해줘: 검색, 필터, 정렬, 페이징", "다음 기능들
 # 개발해줘: 로그인, 검색, 알림", "세 가지 기능을 만들어줘. 태그, 즐겨찾기, 최근 본 항목").
 _KOREAN_COUNT: Final = r"(?:두|세|네|다섯|여섯|일곱|여덟|아홉|열|몇|\d+)"
-_KOREAN_ANNOUNCED_FEATURES: Final = re.compile(
+_KOREAN_ANNOUNCED_FEATURES: Final = _lazy_compile(
     rf"(?:다음|아래)(?:의)?\s*(?:{_KOREAN_COUNT}\s*(?:개의?|가지)\s*)?{_FEATURE_NOUN}(?:들)?(?:을|를)?"
     rf"|{_KOREAN_COUNT}\s*(?:개의?|가지)\s*{_FEATURE_NOUN}(?:들)?(?:을|를)?"
     rf"|{_FEATURE_NOUN}(?:들)?(?:을|를)?\s*{_KOREAN_COUNT}\s*(?:개|가지)(?:를|을)?"
 )
-_LIST_AFTER_THE_VERB: Final = re.compile(r"(?P<lead>[^:：.!]+?)\s*(?P<mark>[:：]|\.(?=\s))\s*(?P<list>[^:：.!?]+?)[\s.!~]*$")
+_LIST_AFTER_THE_VERB: Final = _lazy_compile(r"(?P<lead>[^:：.!]+?)\s*(?P<mark>[:：]|\.(?=\s))\s*(?P<list>[^:：.!?]+?)[\s.!~]*$")
 _EN_BUILD_VERB: Final = r"(?:build|implement|add|develop|create|make|ship|wire\s+up|set\s+up|code)"
 # The English build verbs that name software work on their own; add, create, make and set up need a feature noun after
 # the list ("add sign-in, billing and export features"), since "add milk, eggs and bread" names no feature.
-_EN_DEV_VERB: Final = re.compile(rf"^(?:please\s+)?{_POLITE_OPENER}?(?:let'?s\s+)?(?:build|implement|develop|ship|wire\s+up|code)\b")
+_EN_DEV_VERB: Final = _lazy_compile(rf"^(?:please\s+)?{_POLITE_OPENER}?(?:let'?s\s+)?(?:build|implement|develop|ship|wire\s+up|code)\b")
 _EN_ITEM: Final = r"(?!(?:a|an|the|this|that|it|me|us|them)\b)[a-z][\w-]*(?:\s+(?!and\b)[a-z][\w-]*)?"
 _EN_EXTENT: Final = r"(?:\s+(?:end\s+to\s+end|too|as\s+well|all|in\s+order|one\s+by\s+one|together|at\s+once))*"
 _EN_LIST_OPENING: Final = rf"^(?:please\s+)?{_POLITE_OPENER}?(?:let'?s\s+)?{_EN_BUILD_VERB}\s+(?:the\s+|our\s+|my\s+)?"
-_EN_SEVERAL_FEATURES: Final = re.compile(
+_EN_SEVERAL_FEATURES: Final = _lazy_compile(
     rf"{_EN_LIST_OPENING}(?P<many>(?:{_EN_ITEM}\s*,\s*(?:the\s+)?){{2,}}?(?:and\s+)?(?:the\s+)?{_EN_ITEM})"
     rf"|{_EN_LIST_OPENING}(?P<three>{_EN_ITEM}\s*,\s*(?:the\s+)?{_EN_ITEM},?\s+and\s+(?:the\s+)?{_EN_ITEM})"
 )
-_EN_ITEM_BREAK: Final = re.compile(r"\s*,\s*(?:and\s+)?(?:the\s+)?|\s+and\s+(?:the\s+)?")
-_EN_LIST_END: Final = re.compile(rf"(?:\s+(?P<noun>{_EN_FEATURE_NOUN}|{_EN_SOFT_FEATURE_NOUN}))?{_EN_EXTENT}\s*[.!]*$")
-_EN_RANGE: Final = re.compile(
+_EN_ITEM_BREAK: Final = _lazy_compile(r"\s*,\s*(?:and\s+)?(?:the\s+)?|\s+and\s+(?:the\s+)?")
+_EN_LIST_END: Final = _lazy_compile(rf"(?:\s+(?P<noun>{_EN_FEATURE_NOUN}|{_EN_SOFT_FEATURE_NOUN}))?{_EN_EXTENT}\s*[.!]*$")
+_EN_RANGE: Final = _lazy_compile(
     rf"^(?:please\s+)?{_POLITE_OPENER}?(?:let'?s\s+)?(?:build|implement|develop|ship|wire\s+up|code)\s+"
     r"(?:(?:it|everything|all\s+of\s+it|the\s+(?:whole\s+)?(?:app|product|service|system|flow|thing))\s+)?"
     r"from\s+(?:the\s+)?(?P<start>[a-z][\w-]*(?:\s+[a-z][\w-]*)?)\s+(?:to|through|until)\s+(?:the\s+)?"
     rf"(?P<end>[a-z][\w-]*(?:\s+[a-z][\w-]*)?){_EN_EXTENT}\s*[.!]*$"
 )
 _EN_COUNT: Final = r"(?:two|three|four|five|six|seven|eight|nine|ten|several|multiple|\d+)"
-_EN_ANNOUNCED_FEATURES: Final = re.compile(
+_EN_ANNOUNCED_FEATURES: Final = _lazy_compile(
     rf"{_EN_LIST_OPENING}(?:(?:these|the\s+following|following)\s+(?:{_EN_COUNT}\s+)?(?:new\s+)?|{_EN_COUNT}\s+(?:new\s+)?)"
     rf"(?:features|screens|modules|endpoints)\s*:\s*(?P<list>[a-z][\w\s,-]*?)[\s.!]*$"
 )
@@ -2468,14 +2515,14 @@ def names_several_features(text: str, links: tuple[str, ...] = ()) -> bool:
 # fenced or quoted list never counts.
 BACKLOG_MIN_ITEMS: Final = 4
 _BACKLOG_MAX_CHARS: Final = 12000
-_BACKLOG_ITEM: Final = re.compile(r"^[ \t]*(?:\d{1,2}[.)]|[-*•]|\(?[a-h]\))[ \t]+(?P<item>\S[^\n]*)$", re.MULTILINE)
+_BACKLOG_ITEM: Final = _lazy_compile(r"^[ \t]*(?:\d{1,2}[.)]|[-*•]|\(?[a-h]\))[ \t]+(?P<item>\S[^\n]*)$", re.MULTILINE)
 # An item says one change: three English words or two Korean ones at least, so a list of test ids or paths is no
 # backlog of parts ("- tests/test_a.py::test_x").
 _BACKLOG_ITEM_MIN_WORDS: Final = 3
 _BACKLOG_KOREAN_ITEM_MIN_WORDS: Final = 2
 # Code named: a source path, a dotted name or a call, a snake_case name, a test runner or test, an error, or a word for
 # code. A bare "issue" or "item" names nothing; "bug" and "crash" are code's.
-_BACKLOG_CODE: Final = re.compile(
+_BACKLOG_CODE: Final = _lazy_compile(
     r"\b\w+\.(?:py|pyi|js|jsx|ts|tsx|go|rs|java|kt|rb|php|cs|c|cc|cpp|h|hpp|swift|scala|sh|sql|vue|svelte)\b"
     r"|\b[a-z_]\w*\.[a-z_]\w*(?:\.[a-z_]\w*)*\b|\b[a-z_]\w*\(|\b[a-z]+_[a-z_]+\b"
     r"|\b(?:tests?|unit\s?tests?|unittest|pytest|jest|vitest|traceback|stack\s?trace|exceptions?|segfault|regressions?)\b"
@@ -2485,19 +2532,19 @@ _BACKLOG_CODE: Final = re.compile(
     r"|코드|함수|메서드|클래스|모듈|패키지|테스트|에러|오류|예외|버그|크래시|엔드포인트|저장소|레포|빌드|파서|스키마"
 )
 # The request's own words ask for the change: a change verb, in English or Korean.
-_BACKLOG_CHANGE: Final = re.compile(
+_BACKLOG_CHANGE: Final = _lazy_compile(
     r"\b(?:fix|fixes|resolve|implement|address|tackle|handle|close|add|build|update|refactor|clear|ship|land"
     r"|work\s+through|get\s+through|knock\s+out|take\s+care\s+of)\b"
     r"|고쳐|고치|수정해|수정하|해결해|해결하|구현해|구현하|처리해|처리하|반영해|추가해|만들어|개발해"
 )
 # ... over the whole list, not one item of it: every, all, each, these, them, the following, the list, a count.
-_BACKLOG_SCOPE: Final = re.compile(
+_BACKLOG_SCOPE: Final = _lazy_compile(
     r"\b(?:all|every|each|these|them|those|following|below|list|backlog|checklist|todos?|tickets|issues|bugs|items"
     r"|tasks|features|changes|requests|two|three|four|five|six|seven|eight|nine|ten|twelve|\d+)\b"
     r"|전부|모두|각각|다\s|다$|아래|다음|이것들|목록|리스트|이슈들|버그들|\d+\s*개|여러|네\s*개|다섯|여섯|일곱"
 )
 # The list is to be looked at, sorted, planned or turned into something else, not changed; or the change is refused.
-_BACKLOG_NOT_THE_CHANGE: Final = re.compile(
+_BACKLOG_NOT_THE_CHANGE: Final = _lazy_compile(
     r"(?:^|[.!:;,\n]\s*|\b(?:and|then|please|pls|just|only|first|to|you|we|i|could|can|would|will|should)\s+)"
     r"(?:review|triage|prioriti[sz]e|estimate|rank|summari[sz]e|explain|describe|plan|scope|groom|categori[sz]e"
     r"|label|assess|evaluate|comment\s+on|sort|compare|translate|proofread|look\s+over|go\s+over)\b"

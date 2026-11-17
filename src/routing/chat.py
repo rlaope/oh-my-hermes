@@ -7,7 +7,7 @@ import re
 import unicodedata
 from typing import Any, Mapping
 
-from ..goal_loop import explicit_loop_invocation_signal
+from ..workflows.loop_command import explicit_loop_invocation_signal
 from ..ingress import CHAT_SOURCES, MESSAGING_CHAT_SOURCES, extract_message_text
 from ..system.tracker_content import normalize_tracker_content
 from ..loopability import assess_loopability
