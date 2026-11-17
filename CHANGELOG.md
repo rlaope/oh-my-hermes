@@ -4,6 +4,11 @@ All notable changes will be documented here.
 
 ## Unreleased
 
+- **omher: the bot's sessions elsewhere stay out of its chat.** Answers from its Slack, Discord and cron sessions no
+  longer sit between this chat's messages as bubbles (with only a small link to say where each came from, they read as
+  part of this conversation). The header's "N other places" and the side panel's "Where Kami is" list them, each row
+  opens its thread (↗), and Reply there moved onto the row (hover), still only pointing the next message at that
+  thread.
 - **OMH starts faster in a fresh Hermes process and its tools cost fewer tokens to open.** The chat router no longer
   imports the whole loop engine for one loop-command check, and the dag-ulw cue patterns compile on first use instead
   of all at import, so the plugin's start before a one-shot `chat -q`, a cron run or a delegated child's first reply

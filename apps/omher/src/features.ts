@@ -8,12 +8,11 @@
 // file after the shell node: add a slot file instead. Slot components may also call useStore().
 import type { ComponentType } from "react";
 import type { Bot } from "./lib/protocol";
-import type { ActivityItem, ApprovalItem, AwayItem, Chat, ClarifyItem, RoutineItem } from "./state/store";
+import type { ActivityItem, ApprovalItem, Chat, ClarifyItem, RoutineItem } from "./state/store";
 
 export type SlotName =
   | "activity"
   | "cards"
-  | "elsewhereLine"
   | "detailsPanel"
   | "headerPlaces"
   | "modelPicker"
@@ -31,13 +30,6 @@ export interface ActivitySlotProps {
 export interface CardsSlotProps {
   bot: string;
   item: ApprovalItem | ClarifyItem;
-}
-/** Timeline: one read-only line for a session of the bot elsewhere (Slack, Discord…). */
-export interface ElsewhereLineSlotProps {
-  bot: string;
-  item: AwayItem;
-  /** false: a bot bubble is right above, so keep the indent without repeating the face. */
-  face?: boolean;
 }
 /** Timeline: one line for a `routine.ran` row. */
 export interface RoutineLineSlotProps {
@@ -75,7 +67,6 @@ export interface AddBotSlotProps {
 export interface SlotProps {
   activity: ActivitySlotProps;
   cards: CardsSlotProps;
-  elsewhereLine: ElsewhereLineSlotProps;
   detailsPanel: DetailsPanelSlotProps;
   headerPlaces: HeaderPlacesSlotProps;
   modelPicker: ModelPickerSlotProps;
@@ -89,7 +80,6 @@ export type Slots = { [K in SlotName]?: ComponentType<SlotProps[K]> };
 const SLOT_NAMES: readonly SlotName[] = [
   "activity",
   "cards",
-  "elsewhereLine",
   "detailsPanel",
   "headerPlaces",
   "modelPicker",

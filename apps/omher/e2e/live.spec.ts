@@ -337,29 +337,6 @@ test("chat: an approval card replaces the typing bubble while the bot waits on y
   await emit(ev("kami", "turn.end", { outcome: "interrupted" }));
 });
 
-test("away bubbles: a session still working there rings its source mark instead of a spinner", async ({ page }) => {
-  await open(page);
-  const tl = page.getByTestId("timeline");
-  const slack = tl.locator("[data-testid=away][data-source=slack]");
-  await expect(slack.getByTestId("away-time")).toContainText(/working · \d+m/);
-  await expect(slack.locator(".ui-spin")).toHaveCount(0);
-  const ring = slack.getByTestId("away-ring");
-  await expect(ring).toBeVisible();
-  await expect(ring).toHaveCSS("animation-name", "ui-ring-turn");
-  // the ring wraps the Slack mark inside the link
-  const wraps = await ring.evaluate((el) => {
-    const mark = el.parentElement!.querySelector("svg.src-ic-slack")!.getBoundingClientRect();
-    const r = el.getBoundingClientRect();
-    return r.left < mark.left && r.right > mark.right && r.top < mark.top && r.bottom > mark.bottom && !!el.closest("[data-testid=away-link]");
-  });
-  expect(wraps).toBe(true);
-  // quieter than the bot's own ring: a 1.5px band at 60% opacity
-  await expect(ring).toHaveCSS("opacity", "0.6");
-  expect(await ring.evaluate((e) => getComputedStyle(e).getPropertyValue("--ring-w").trim())).toBe("1.5px");
-  // a finished session has no ring
-  await expect(tl.locator("[data-testid=away][data-source=discord]").getByTestId("away-ring")).toHaveCount(0);
-});
-
 test("reduced motion: the arc and the dots stand still", async ({ page }) => {
   await page.emulateMedia({ reducedMotion: "reduce" });
   await open(page);
@@ -375,7 +352,6 @@ test("reduced motion: the arc and the dots stand still", async ({ page }) => {
   const typing = page.getByTestId("typing");
   await expect(typing.getByTestId("typing-ring")).toHaveCSS("animation-name", "none");
   for (const dot of await typing.locator(".ui-typing i").all()) await expect(dot).toHaveCSS("animation-name", "none");
-  await expect(page.locator("[data-testid=away][data-source=slack]").getByTestId("away-ring")).toHaveCSS("animation-name", "none");
   await emit(ev("friren", "tool.start", { tool_id: "r1", name: "read_file", detail: "a.txt" }));
   const sub = page.getByTestId("bot-friren").getByTestId("bot-sub");
   await expect(sub.getByTestId("tick-text")).toHaveText("Reading a.txt");
@@ -457,6 +433,9 @@ test("chat: a message sent while the answer is written goes under that answer, w
 test("chat: an answer to several messages quotes each one's first line; a click shows that message; one message gets none", async ({ page }) => {
   await open(page);
   const tl = page.getByTestId("timeline");
+  // the seeded history ends on a message of the person's that this answer is not about: answer it first
+  await emit(ev("kami", "message", { id: "q-a0", text: "Will do." }));
+  await expect(tl.getByTestId("bubble-bot").last()).toContainText("Will do.");
   await mock("mock.manual", { bot: "kami" });
   // the first message starts a turn; the second, typed while it runs, waits (steer queue) and is steered into that
   // same turn, so one answer replies to both
