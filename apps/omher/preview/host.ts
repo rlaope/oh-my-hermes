@@ -23,16 +23,9 @@ type Row = { id: string; role: "user" | "assistant"; text: string; ts: number };
 const seed = (bot: string, rows: [Row["role"], string, number][]): Row[] =>
   rows.map(([role, text, ago], i) => ({ id: `seed-${bot}-${i}`, role, text, ts: nowS() - ago }));
 
-// Kami's chat before the dark mode ask (story.ts adds the ask and Kami's answer): one note from Kami, naming the Slack
-// channel the way a person would, by its link. The chat stays about three bubbles at rest.
-export function kamiSeed(): Row[] {
-  return seed("kami", [
-    ["assistant", "Mina asked about a dark theme for the docs again in https://acme.slack.com/archives/C02DESIGN. Want me to do it today?", 14 * MIN],
-  ]);
-}
-
 export const history: Record<string, Row[]> = {
-  kami: kamiSeed(),
+  // Kami's chat is staged by story.ts each loop: the person's short ask and one big answer (story.ts resetKami)
+  kami: [],
   friren: seed("friren", [
     ["user", "Read the Tauri 2.4 release notes for me.", 50 * MIN],
     ["assistant", "The updater got delta downloads; I'll write it up.", 48 * MIN],
