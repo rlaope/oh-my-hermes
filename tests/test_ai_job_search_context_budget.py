@@ -511,7 +511,9 @@ class AiJobSearchContextBudgetTests(unittest.TestCase):
         # agent-evaluation moves, and the pin before it was 9ec3df67...56b2.
         # automation-blueprint's quality bar then points at the channel-watch recipe; only automation-blueprint
         # moves, and the pin before it was e5dfad8f...8749.
-        self.assertEqual(_digest(legacy_hashes), 'b1141bcf81c0ffbfd6c227ddfe0a3cede39e86130fcef81e6d47e70fb41ff0ee')
+        # dag-ulw's when-to-use then names a listed backlog of code changes and its run loop settles joined children
+        # in the same turn; only dag-ulw moves, and the pin before it was b1141bcf...f0ee.
+        self.assertEqual(_digest(legacy_hashes), '9cecce5a7cd24a1d6956e0fbd740a3e8085f92d669a9f8fd0f9736e3a569a605')
         legacy = _skill_context_cost_profile('full', legacy_templates, refs)
         current = _skill_context_cost_profile('full', templates, refs)
         # Main's search guidance adds 305; repro-audit's mandatory rails 1,943.

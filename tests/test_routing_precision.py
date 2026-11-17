@@ -104,7 +104,9 @@ class RoutingPrecisionTests(unittest.TestCase):
         # Its second review round adds eighteen: billions that are money, data or
         # volume, game and 3D bit widths, grid transformers, firmware quantization.
         # Its third review round adds four: two billions of money or data.
-        self.assertEqual(payload["summary"]["case_count"], 1512)
+        # dag-ulw backlogs add thirteen: lists too short, looked at, held or put off, chores and reading, and
+        # fixes in the current directory or branch that are no live lookup.
+        self.assertEqual(payload["summary"]["case_count"], 1525)
         self.assertEqual(payload["summary"]["passing_count"], payload["summary"]["case_count"])
         self.assertEqual(payload["summary"]["negative_case_count"], payload["summary"]["case_count"])
         self.assertEqual(payload["summary"]["negative_passing_count"], payload["summary"]["case_count"])
@@ -271,7 +273,9 @@ class RoutingPrecisionTests(unittest.TestCase):
         # Its review round adds eight requests that missed: GGUF and 4-bit Korean
         # quantization, distillation by parameter count, a llama model slimmed.
         # Its second review round drops the Korean 4-bit case, which falls back to main.
-        self.assertEqual(payload["summary"]["intervention_case_count"], 1329)
+        # dag-ulw backlogs add eleven: five code backlogs that run as a graph, four listed look-alikes
+        # that keep their owner, two live lookups said with "current".
+        self.assertEqual(payload["summary"]["intervention_case_count"], 1340)
         self.assertEqual(
             payload["summary"]["intervention_passing_count"], payload["summary"]["intervention_case_count"]
         )

@@ -235,6 +235,10 @@ export type RoutineItem = {
   routine_id: string;
   name: string;
   status: string;
+  /** Failed runs of this routine folded into this one line, back to back with nothing between them (1 = this run). */
+  count?: number;
+  /** The first of those runs (`ts` is the latest). */
+  since?: number;
 };
 /** A card for an automation the bot made from this chat (`routine.added`): what, when, where it delivers. */
 export type RoutineAddedItem = {
@@ -1158,6 +1162,18 @@ function reduceEvent(state: AppState, ev: BridgeEvent, now: number): AppState {
       // a run that went fine says nothing in the chat (a 30-minute job would fill it); Automations shows its last run.
       // Only a failed run draws a line and an unread.
       if (!FAILED_ROUTINE.has(String(ev.status ?? "").trim().toLowerCase())) return state;
+      // the same routine failing again with nothing between: one line counts the runs (×12 · 03:56–09:37), no new
+      // unread; the first failure drew the unread already
+      const tail = state.chats[bot]?.items.at(-1);
+      if (tail?.kind === "routine" && tail.routine_id === ev.routine_id) {
+        if (ev.ts <= tail.ts) return state;
+        return touchChat(state, bot, (c) =>
+          withItems(c, [
+            ...c.items.slice(0, -1),
+            { ...tail, ts: ev.ts, status: ev.status, count: (tail.count ?? 1) + 1, since: tail.since ?? tail.ts },
+          ]),
+        );
+      }
       const next = touchChat(state, bot, (c) =>
         withItems(c, [
           ...c.items,

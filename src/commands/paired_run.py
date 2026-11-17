@@ -266,7 +266,8 @@ def add_coding_paired_run_command(coding_sub: argparse._SubParsersAction[argpars
         help=(
             "Hermes toolsets BOTH arms run with, from " + ", ".join(ARM_TOOLSET_NAMES)
             + "; file and skills are required. Add terminal to give both arms Hermes' shell tool "
-            "(dangerous-command approval stays on). Signed into each cell and checked at fan-in."
+            "(dangerous-command approval stays on), and delegation to give both Hermes' one-level delegate_task "
+            "with the same child cap and every child on the arm's model. Signed into each cell and checked at fan-in."
         ),
     )
     dispatch.add_argument(

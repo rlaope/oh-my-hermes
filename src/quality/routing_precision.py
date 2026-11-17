@@ -10568,12 +10568,71 @@ ROUTING_PRECISION_CASES: tuple[RoutingPrecisionCase, ...] = (
     RoutingPrecisionCase("ko-ops-pair-split-word", "A blocker split by a space is not the ops pair", "블로 커 리스크 정리", "answer_clarification", "", "ops-review"),
     RoutingPrecisionCase("native-debugging-dap-handshake", "A dap between friends is not a debugger session", "give me a dap, nice work today", "answer_clarification", ""),
     RoutingPrecisionCase("native-debugging-printf-opinion", "An opinion on printf and debuggers asks at most", "debugger or printf, which do people prefer", "answer_clarification", ""),
+    # A backlog of separate code changes runs as a dag-ulw graph only when it is one: four or more listed changes to
+    # code, asked to be made. Fewer items, a list to look at, sort or plan, one fault's notes, a fenced list, a list of
+    # chores or reading, and a list put off are not, and none of them is offered dag-ulw.
+    RoutingPrecisionCase("backlog-one-bug-is-not-a-graph", "One bug with its fix asked is one task, not a dag-ulw graph", "parse_amount('0.2') gives 2 cents instead of 20 cents. Fix it.", "answer_clarification", "", "dag-ulw"),
+    RoutingPrecisionCase("backlog-two-items-is-not-a-graph", "Two listed bugs are too few to split into a graph", "Fix these two bugs:\n1. parse_amount('0.2') gives 2 cents instead of 20\n2. export_csv breaks on names with commas", "answer_clarification", "", "dag-ulw"),
+    RoutingPrecisionCase("backlog-three-items-is-not-a-graph", "Three listed bugs stay one agent's work", "Fix these bugs:\n1. parse_amount('0.2') gives 2 cents instead of 20\n2. export_csv breaks on names with commas\n3. oldest_lot_age crashes after load_lots", "answer_clarification", "", "dag-ulw"),
+    RoutingPrecisionCase("backlog-question-which-first-is-not-a-graph", "Asking which listed bug to fix first is a question, not a run", "Which of these bugs should I fix first?\n1. parse_amount('0.2') gives 2 cents instead of 20\n2. export_csv breaks on names with commas\n3. oldest_lot_age crashes after load_lots\n4. the aging report counts invoices twice", "answer_clarification", "", "dag-ulw"),
+    RoutingPrecisionCase("backlog-to-prioritize-is-not-a-graph", "A backlog to prioritize is sorted, not built", "Prioritize this backlog for the next sprint:\n1. fix parse_amount for one-decimal input\n2. fix export_csv quoting\n3. fix oldest_lot_age after load_lots\n4. fix the aging report buckets", "answer_clarification", "", "dag-ulw"),
+    RoutingPrecisionCase("backlog-to-explain-is-not-a-graph", "Asking why each listed bug happens is a question, not a run", "Explain why each of these bugs happens:\n1. parse_amount('0.2') gives 2 cents instead of 20\n2. export_csv breaks on names with commas\n3. oldest_lot_age crashes after load_lots\n4. the aging report counts invoices twice", "answer_clarification", "", "dag-ulw"),
+    RoutingPrecisionCase("backlog-held-back-is-not-a-graph", "A listed backlog with the fix refused is no request to run it", "Don't fix anything yet, just tell me what is wrong in each:\n1. parse_amount('0.2') gives 2 cents instead of 20\n2. export_csv breaks on names with commas\n3. oldest_lot_age crashes after load_lots\n4. the aging report counts invoices twice", "answer_clarification", "", "dag-ulw"),
+    RoutingPrecisionCase("backlog-put-off-is-not-a-graph", "A listed backlog put off to next week starts nothing now", "Fix all of these bugs next week:\n1. parse_amount('0.2') gives 2 cents instead of 20\n2. export_csv breaks on names with commas\n3. oldest_lot_age crashes after load_lots\n4. the aging report counts invoices twice", "answer_clarification", "", "dag-ulw"),
+    RoutingPrecisionCase("backlog-fenced-list-is-not-a-graph", "A backlog inside a fence is quoted text, not the request's own list", "Fix all of these:\n```\n1. parse_amount('0.2') gives 2 cents instead of 20\n2. export_csv breaks on names with commas\n3. oldest_lot_age crashes after load_lots\n4. the aging report counts invoices twice\n```", "answer_clarification", "", "dag-ulw"),
+    RoutingPrecisionCase("backlog-chores-are-not-a-graph", "Four chores asked for today name no code", "Please do all of these today:\n1. buy milk and eggs at the store\n2. call the dentist about Friday\n3. pick up the dry cleaning downtown\n4. book a table for Saturday dinner", "answer_clarification", "", "dag-ulw"),
+    RoutingPrecisionCase("backlog-reading-list-is-not-a-graph", "Four articles to summarize name no code change", "Summarize all of these articles for me:\n1. the history of the Roman empire\n2. a guide to sourdough baking at home\n3. how tides work on the Atlantic coast\n4. why cats knock things off tables", "answer_clarification", "", "dag-ulw"),
+    # "current" said of the workspace is where the work is, not a live lookup: a fix in the current directory and a
+    # check of the current branch are no live-information card.
+    RoutingPrecisionCase("current-directory-fix-is-not-live-info", "A fix in the current directory with a price word is code, not a live lookup", "In the current directory, the invoice total in invoice.py rounds half cents down; fix it to round half up.", "answer_clarification", "", "live-info-operator"),
+    RoutingPrecisionCase("current-branch-check-is-not-live-info", "The current branch and when it was made is a repository question, not a live lookup", "Check the current branch and the time it was created", "answer_clarification", ""),
 )
 
 
 # Positive-intervention corpus. These are real OMH-shaped turns where the router
 # should still step in after the direct-answer fallback was added.
 ROUTING_INTERVENTION_CASES: tuple[RoutingInterventionCase, ...] = (
+    # A backlog of separate code changes handed over as a list, four or more, asked to be made: each item is a node of
+    # a dag-ulw graph, whatever lane a word in one item would score (a "stock" lot, a "price", a "crash").
+    RoutingInterventionCase(
+        "backlog-of-six-ledger-issues-runs-as-a-graph",
+        "Six listed ledgerkit issues, fix all of them: a dag-ulw graph, not a live-information card",
+        "You are working in the current directory, a small Python package named ledgerkit (bookkeeping helpers: amounts, stock lots, reporting periods, CSV export, invoices, receivables aging) with a unittest suite under tests/. Do not edit anything under tests/.\n\nThese six issues are open against ledgerkit. Fix all of them and keep the existing tests working.\n\n1. Amounts with one decimal digit come out wrong: parse_amount(\"0.2\") gives 2 cents instead of 20.\n2. oldest_lot_age crashes on lots that came from load_lots.\n3. Finance needs per-month totals: add periods.month_totals(entries, year).\n4. export_csv produces broken CSV when a name contains a comma or a double quote.\n5. Invoice totals are sometimes off by a cent compared with the invoices finance writes by hand.\n6. The receivables aging report counts some invoices in two buckets.",
+        "dispatch", "dag-ulw", "start_dag_run", "dag_run",
+    ),
+    RoutingInterventionCase(
+        "backlog-of-four-service-bugs-runs-as-a-graph",
+        "Four listed bugs in one service, fix these: a dag-ulw graph",
+        "Fix these bugs in the billing service:\n1. invoice totals round the wrong way on half cents\n2. the refund endpoint returns 500 when the order has no lines\n3. currency codes are lower-cased in the CSV export\n4. parse_date crashes on ISO dates with a Z suffix",
+        "dispatch", "dag-ulw", "start_dag_run", "dag_run",
+    ),
+    RoutingInterventionCase(
+        "backlog-of-four-api-features-runs-as-a-graph",
+        "Four listed API changes to implement: a dag-ulw graph",
+        "Please implement the following in our API, each is its own change:\n- add pagination to the /users endpoint\n- add a created_at filter to the orders list\n- return 404 instead of 500 for unknown product ids\n- add a health check endpoint that pings the database",
+        "dispatch", "dag-ulw", "start_dag_run", "dag_run",
+    ),
+    RoutingInterventionCase(
+        "korean-backlog-of-four-bugs-runs-as-a-graph",
+        "아래 버그들 전부 고쳐줘 with four listed bugs: a dag-ulw graph",
+        "아래 버그들 전부 고쳐줘\n1. 로그인 후 세션이 만료되지 않음\n2. 결제 모듈에서 환불 금액이 음수로 저장됨\n3. 알림 API가 중복으로 발송됨\n4. 검색 결과 페이지네이션이 마지막 페이지를 건너뜀",
+        "dispatch", "dag-ulw", "start_dag_run", "dag_run",
+    ),
+    RoutingInterventionCase(
+        "sprint-checklist-of-four-code-items-runs-as-a-graph",
+        "A sprint checklist of four code items to work through: a dag-ulw graph",
+        "Here is this sprint's backlog for the repo; work through all of it and keep the tests green:\n- [ ] the cli crashes when the config file is empty\n- [ ] export_csv drops the header row for empty reports\n- [ ] add a --dry-run flag to the sync command\n- [ ] retry the upload three times on a timeout error",
+        "dispatch", "dag-ulw", "start_dag_run", "dag_run",
+    ),
+    # Lists that keep their own owner, not a graph: bug reports to file are GitHub work, a named coding agent's
+    # backlog is its handoff, failing test files are one fault's lane, and one fault's notes are triage.
+    RoutingInterventionCase("backlog-to-file-as-issues-keeps-github", "Four bug reports to turn into GitHub issues stay GitHub work, not a graph", "Turn these bug reports into GitHub issues:\n1. parse_amount('0.2') gives 2 cents instead of 20\n2. export_csv breaks on names with commas\n3. oldest_lot_age crashes after load_lots\n4. the aging report counts invoices twice", "dispatch", "github-event-ops", "prepare_github_event_ops_card", "github_event_ops"),
+    RoutingInterventionCase("backlog-for-codex-keeps-the-named-agent", "A backlog handed to codex by name stays that agent's, not a graph", "Have codex fix all of these bugs:\n1. parse_amount('0.2') gives 2 cents instead of 20\n2. export_csv breaks on names with commas\n3. oldest_lot_age crashes after load_lots\n4. the aging report counts invoices twice", "dispatch", "executor-runtime-readiness", "prepare_executor_runtime_readiness", "executor_runtime_readiness"),
+    RoutingInterventionCase("failing-test-files-list-stays-on-ultrawork", "Four failing test files listed by path are one fault's lane, not a graph", "fix these failing tests:\n- tests/test_amounts.py\n- tests/test_lots.py\n- tests/test_export.py\n- tests/test_aging.py", "dispatch", "ultrawork", "choose_executor", "handoff"),
+    RoutingInterventionCase("steps-tried-on-one-bug-stay-triage", "Four steps already tried on one login bug are one fault, not a graph", "The login bug: here is what I tried, please fix it:\n1. cleared the browser cache and cookies\n2. restarted the auth service twice\n3. checked the logs for a token error\n4. rolled back the last deploy of the api", "dispatch", "feedback-triage", "triage_feedback", "feedback_triage"),
+    # A live lookup said with "current" still reaches live information.
+    RoutingInterventionCase("current-stock-price-stays-live-info", "The current stock price stays a live lookup after workspace currents are read off", "what's the current stock price of AAPL", "dispatch", "live-info-operator", "prepare_live_info_operator_card", "live_info_operator"),
+    RoutingInterventionCase("current-time-in-a-city-stays-live-info", "The current time in a city stays a live lookup", "check the current time in Tokyo", "dispatch", "live-info-operator", "prepare_live_info_operator_card", "live_info_operator"),
     RoutingInterventionCase('frontend-design-case-1', 'UI design or neighbouring request keeps its route', '대시보드 다시 디자인해줘', 'dispatch', 'frontend', 'prepare_frontend_handoff', 'frontend_handoff', ''),
     RoutingInterventionCase('frontend-design-case-2', 'UI design or neighbouring request keeps its route', '이 화면 모바일에서 깨지는데 폰 화면 고쳐줘', 'dispatch', 'frontend', 'prepare_frontend_handoff', 'frontend_handoff', ''),
     RoutingInterventionCase('frontend-design-case-3', 'UI design or neighbouring request keeps its route', '폰에서 가로 스크롤 생기는데 고쳐줘', 'dispatch', 'frontend', 'prepare_frontend_handoff', 'frontend_handoff', ''),

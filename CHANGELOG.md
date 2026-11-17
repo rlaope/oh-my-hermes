@@ -9,6 +9,10 @@ All notable changes will be documented here.
   part of this conversation). The header's "N other places" and the side panel's "Where Kami is" list them, each row
   opens its thread (↗), and Reply there moved onto the row (hover), still only pointing the next message at that
   thread.
+- **omher: a routine that keeps failing is one line in the chat, not one per run.** The same routine failing again
+  with nothing between updates its line instead of adding another: `Routine · sso-refresh · not delivered ×12 ·
+  03:56–09:37`, with one unread for the first failure. Hermes' `delivery_failed` and `blocked_config` read as "not
+  delivered" and "blocked by config" in the danger colour, instead of the raw state.
 
 - **An OMH TUI reply no longer hangs on a rail.** The `⚚ Hermes · <model>` header starts at the left edge and the
   reply's text sits two cells in, with no `┃` beside it, so a reply reads apart from your prompts and the tool calls,
@@ -43,6 +47,24 @@ All notable changes will be documented here.
   passed, so Hermes' dangerous-command approval stays on. The toolsets each cell ran with are signed into its receipt's
   `arm_setup`; fan-in refuses a cell whose toolsets differ from the run's declared ones and a matrix whose arms differ
   from each other. Every other Hermes child keeps safe mode and `--toolsets file`.
+- **A paired run can let both arms delegate, so OMH's job decomposition can be timed against Hermes alone.**
+  `--arm-toolsets file,skills,terminal,delegation` gives both arms Hermes' own one-level `delegate_task`. Both arm
+  homes then carry the same child settings (up to 6 children instead of Hermes' one-shot default of 2, no deeper
+  children, no per-child worktree) and run every child on the arm's own model; the variant's OMH routing chains are
+  pinned to that model too. Each cell's signed `cell_trace` now says how many delegate children ran, their API calls,
+  how many ran at once, and which models the cell's sessions used, and fan-in refuses a delegating cell whose trace is
+  missing or names another model. A delegating cell's usage reports no cost rather than one that may count the
+  children twice; tokens and API calls still sum. Without `delegation` nothing changes.
+- **A listed backlog of separate code changes runs as a dag-ulw graph.** A request that hands over four or more list
+  items, each its own change, and asks in its own words for all of them to be made in code ("these six issues are
+  open: fix all of them", "아래 버그들 전부 고쳐줘") is dispatched to `dag-ulw` by the router, and Hermes' per-turn hint
+  starts it with each item as its own build node and a verify node after them. Before, such a backlog went to whatever
+  lane one item's word scored (a "stock" lot took a six-bug job to `live-info-operator`) and the skill's own size cue
+  never ran. A list of three or fewer, one bug, a list to review, prioritize, explain, plan or file as issues, one held
+  or put off, one handed to a named coding agent, a fenced list, failing test files by path, and chores or reading stay
+  where they were. The dag-ulw skill now also says what to do where `delegate_task` returns its children inside the
+  call (a finite one-shot session): settle and dispatch the next layer in the same turn. "current" said of the
+  workspace (the current directory, branch or file) is no longer read as a live-information cue.
 
 - **Another OMH TUI no longer exits when Hermes' gateway restarts, and typing shows while it reattaches.** Where no
   service runs the gateway, `hermes gateway restart` (also `/gateway restart` from another TUI) stops it as `hermes
@@ -72,6 +94,26 @@ All notable changes will be documented here.
 - **OMH TUI: the working spinner stays in the theme colour on terminals that draw `✳` as an emoji.** Zellij Desktop
   on macOS painted its two `✳` frames as a green emoji, so the spinner flashed green twice a cycle. Those frames now
   ask for text presentation (U+FE0E) and stay one cell in the accent colour. Contributed by @DanRioDev (#2923).
+- **omher on macOS installs without the "Not Opened" warning.** omher is not notarized, so a `.dmg` opened from a
+  browser download was stopped by Gatekeeper ("Apple could not verify omher is free of malware") and people did
+  not know how to get past it. The macOS buttons on omher.app no longer link a dmg: they copy
+  `curl -fsSL https://omher.app/omher | sh`, bring the command into view and say to paste it into Terminal. A
+  `curl` download carries no quarantine flag, so the installed app opens straight away. The omher README and new
+  release pages lead with the same command; the dmg and the Open Anyway steps stay for people who already have one.
+
+- **An OMH update asks one restart question, not two.** The TUI still asks once whether to restart on the new
+  version. The reopened TUI no longer opens a second question about Hermes' gateway: when the gateway still runs the
+  old OMH plugin code, it says so in one line and names `/gateway restart`, which loads the new code.
+
+- **What you type while the OMH TUI loses its gateway is never lost.** When the gateway does not come back and the TUI
+  leaves (its restarts spent, a stop it watched, a reattach given up), what you typed and never sent, the draft and
+  anything typed while it waited, is printed under its last line instead of going with the screen.
+
+- **omher.app's macOS button now opens an install popup, and the installer opens omher when it is done.** The first
+  version only copied the curl line and showed one grey line below the fold, so a click looked like nothing
+  happened. Now a click opens a short English dialog, "Run this in Terminal and omher installs.", with the command
+  already copied. On macOS `curl -fsSL https://omher.app/omher | sh` ends by opening the new
+  omher.app, so the app is on screen when the command finishes (`OMH_OMHER_NO_OPEN=1` or `CI` skip it).
 
 ## 4.0.8 - 2026-11-15
 
