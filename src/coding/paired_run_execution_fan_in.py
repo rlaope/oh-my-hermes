@@ -20,7 +20,8 @@ from ..quality.paired_run_receipt_binding import (
     evaluation_binding_errors,
 )
 from ..quality.paired_run_values import exposure_digest
-from .hermes_child_arm_setup import ArmSetup
+from .hermes_child_arm_setup import ArmSetup, delegates
+from .hermes_child_trace import CellTrace
 from .hermes_child_receipts import (
     ReceiptVerificationError,
     is_verified_receipt,
@@ -271,6 +272,22 @@ def arm_setup_error(
     return None
 
 
+def delegated_model_error(trace: CellTrace | None, model: str) -> str | None:
+    """Refuse a delegating cell unless its signed trace shows every session on the arm's model.
+
+    With `delegation` declared, Hermes children may run in the cell; the arm
+    homes pin them to the arm's model, and this proves the pin held. A trace
+    that is missing, or that cannot list the models, proves nothing.
+    """
+    if trace is None:
+        return "delegating cell has no signed cell trace"
+    if trace.session_models is None:
+        return "delegating cell trace does not list its session models"
+    if set(trace.session_models) != {model}:
+        return "a session in a delegating cell ran another model than the arm's"
+    return None
+
+
 def _binding_error(
     cell: PairedRunDispatchCell,
     row: RunResultInput,
@@ -285,6 +302,10 @@ def _binding_error(
     setup_error = arm_setup_error(receipt.arm_setup, cell.arm, arm.exposed_skills, arm_toolsets)
     if setup_error is not None:
         return setup_error
+    if delegates(arm_toolsets):
+        model_error = delegated_model_error(receipt.cell_trace, arm.model)
+        if model_error is not None:
+            return model_error
     errors = evaluation_binding_errors(
         receipt.evaluation_binding,
         ExpectedEvaluationBinding(

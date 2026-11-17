@@ -371,7 +371,25 @@ describe("unread", () => {
     ["error", "Failed", "delivery_failed"].forEach((status, n) => {
       s = run(s, [{ event: "routine.ran", bot: "friren", routine_id: "r1", name: "sso refresh", status, ts: T0 / 1000 + 1 + n }]);
     });
-    expect(s.chats.friren.items.filter((i) => i.kind === "routine")).toHaveLength(3);
+    // three failures of the same routine in a row: one line counting them, one unread
+    expect(s.chats.friren.items.filter((i) => i.kind === "routine")).toMatchObject([{ count: 3 }]);
+    expect(s.unread.friren).toBe(1);
+  });
+
+  it("the same routine failing again folds into one line that counts the runs; anything between starts a new line", () => {
+    let s = reduce(initialState(), { type: "select", bot: "kami" });
+    const fail = (ts: number, id = "r1") => ({ event: "routine.ran" as const, bot: "friren", routine_id: id, name: "sso refresh", status: "delivery_failed", ts });
+    for (let n = 0; n < 12; n++) s = run(s, [fail(T0 / 1000 + n * 1860)]);
+    let lines = s.chats.friren.items.filter((i) => i.kind === "routine");
+    expect(lines).toHaveLength(1);
+    expect(lines[0]).toMatchObject({ count: 12, since: T0 / 1000, ts: T0 / 1000 + 11 * 1860 });
+    expect(s.unread.friren).toBe(1); // only the first failure is new
+    s = run(s, [fail(T0 / 1000 + 11 * 1860)]); // the same run again changes nothing
+    expect(s.chats.friren.items.filter((i) => i.kind === "routine")[0]).toMatchObject({ count: 12 });
+    s = run(s, [fail(T0 / 1000 + 30000, "r2")]); // another routine: its own line
+    s = run(s, [fail(T0 / 1000 + 40000)]); // r1 again, but r2 came between: a new line
+    lines = s.chats.friren.items.filter((i) => i.kind === "routine");
+    expect(lines.map((i) => [i.kind === "routine" && i.routine_id, i.kind === "routine" && (i.count ?? 1)])).toEqual([["r1", 12], ["r2", 1], ["r1", 1]]);
     expect(s.unread.friren).toBe(3);
   });
 

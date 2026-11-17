@@ -569,8 +569,11 @@ def _argv(request: HermesChildRequest) -> tuple[str, ...]:
     # bypass: its declared arm home (`paired_run_arm_home`) is the config to
     # read, and the variant's plugin and skills are the point of the arm. Both
     # arms take the same flags, so the arms differ only by what the home holds:
-    # the home's toolsets are `file,skills`, or with the run's explicit opt-in
-    # `file,skills,terminal`, identical for both arms. `--yolo` is never passed,
+    # the home's toolsets are `file,skills`, plus `terminal` and/or
+    # `delegation` with the run's explicit opt-in, identical for both arms. A
+    # `delegation` arm's `delegate_task` children are threads of the arm
+    # gateway, one level deep, pinned to the arm's model by the home's config;
+    # this process still spawns nothing but the one CLI child. `--yolo` is never passed,
     # so Hermes' dangerous-command approval stays on.
     isolation = (
         ("--ignore-rules", "--toolsets", request.arm_home.toolsets)
