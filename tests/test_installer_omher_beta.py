@@ -149,6 +149,11 @@ STUB_XATTR = """#!/bin/sh
 printf '%s\\n' "$*" >> "$FAKE_LOG/xattr"
 """
 
+# `open`: the installer opens the new omher.app at the end on macOS.
+STUB_OPEN = """#!/bin/sh
+printf '%s\\n' "$*" >> "$FAKE_LOG/open"
+"""
+
 
 def _release(tag: str, names: list[str]) -> dict[str, object]:
     return {
@@ -201,7 +206,7 @@ class OmherBetaInstallerTests(unittest.TestCase):
         self.tools = tools
         for name, body in (
             ("curl", STUB_CURL), ("hdiutil", STUB_HDIUTIL), ("uname", STUB_UNAME), ("xattr", STUB_XATTR),
-            ("cp", STUB_CP),
+            ("cp", STUB_CP), ("open", STUB_OPEN),
         ):
             self._write(self.bin / name, body)
         self._write(self.net / "python-stub", STUB_PYTHON)
@@ -249,6 +254,7 @@ class OmherBetaInstallerTests(unittest.TestCase):
             "FAKE_LOG": str(self.log),
             "FAKE_NET": str(self.net),
             "NO_COLOR": "1",
+            "CI": "",
             **environment,
         }
         return subprocess.run(
@@ -273,6 +279,30 @@ class OmherBetaInstallerTests(unittest.TestCase):
         hdiutil = self._calls("hdiutil")
         self.assertEqual([c.split()[0] for c in hdiutil], ["attach", "detach"], hdiutil)
         self.assertIn("-nobrowse", hdiutil[0])
+
+    # -- the app is on screen when the command ends -------------------------------------------
+
+    def test_the_new_app_is_opened_at_the_end(self) -> None:
+        self._system_python()
+        self._existing_hermes()
+        self._existing_omh()
+        result = self._run("omher@beta")
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self._assert_app_installed(result)
+        self.assertEqual(self._calls("open"), [f"{self.apps}/omher.app"])
+        self.assertIn(f"Opened omher ({self.apps}/omher.app).", result.stdout)
+
+    def test_no_open_and_ci_leave_the_app_closed(self) -> None:
+        self._system_python()
+        self._existing_hermes()
+        self._existing_omh()
+        for env in ({"OMH_OMHER_NO_OPEN": "1"}, {"CI": "true"}):
+            with self.subTest(env=env):
+                (self.log / "open").unlink(missing_ok=True)
+                result = self._run("omher@beta", **env)
+                self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+                self.assertEqual(self._calls("open"), [])
+                self.assertIn("Open it from there or from Launchpad.", result.stdout)
 
     # -- the plain one-liner is unchanged ------------------------------------------------------
 

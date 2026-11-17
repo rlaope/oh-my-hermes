@@ -1287,7 +1287,16 @@ if [ "$OMH_OMHER_BETA" = "1" ]; then
   fi
   if [ -n "$OMH_OMHER_APP_PATH" ]; then
     case "$OMH_OMHER_APP_PATH" in
-      *.app) say "omher is in $OMH_OMHER_APP_PATH. Open it from there or from Launchpad." ;;
+      *.app)
+        # Open it now: the person ran this to get the app, so it should be on
+        # screen when the command ends. OMH_OMHER_NO_OPEN=1 (or CI) skips it.
+        if [ "${OMH_OMHER_NO_OPEN:-0}" != "1" ] && [ -z "${CI:-}" ] && command -v open >/dev/null 2>&1 \
+          && open "$OMH_OMHER_APP_PATH" </dev/null >/dev/null 2>&1; then
+          say "Opened omher ($OMH_OMHER_APP_PATH)."
+        else
+          say "omher is in $OMH_OMHER_APP_PATH. Open it from there or from Launchpad."
+        fi
+        ;;
       *) say "omher is in $OMH_OMHER_APP_PATH. Open it from your app menu, or run 'omher' when $(dirname "$OMH_OMHER_APP_PATH") is on your PATH." ;;
     esac
   fi

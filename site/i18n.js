@@ -41,12 +41,6 @@ window.OMH_I18N = {
       ja: "Hermes のボットとコーディングエージェントを、ひとつの窓で。",
       zh: "你的 Hermes 机器人和编码智能体，尽在一个窗口。"
     },
-    "omher.mac.hint": {
-      en: "Copied. Paste it into Terminal: it installs omher with no security warning.",
-      ko: "복사했습니다. 터미널에 붙여 넣으면 보안 경고 없이 omher가 설치됩니다.",
-      ja: "コピーしました。ターミナルに貼り付けると、セキュリティ警告なしで omher をインストールします。",
-      zh: "已复制。粘贴到终端即可安装 omher，不会出现安全警告。"
-    },
     "faces.title": {
       en: "A face for every bot.",
       ko: "봇마다 얼굴 하나.",
