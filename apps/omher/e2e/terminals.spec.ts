@@ -181,9 +181,13 @@ test("the + menu: Shell first, then CLIs with official marks; no chat choice; pi
   await expect(page.getByTestId("terminal")).toBeVisible();
   await expect(page.getByTestId("session-chat")).toHaveCount(0);
   await expect(page.getByTestId("composer")).toHaveCount(0);
-  const calls = await page.evaluate(() => (window as unknown as { __omherSessionCalls: { op: string; agent?: string; cwd?: string }[] }).__omherSessionCalls);
-  expect(calls.filter((c) => c.op === "start")).toEqual([expect.objectContaining({ op: "start", agent: "claude", cwd: "/home/you/code/web-app" })]);
-  expect(calls.some((c) => c.op === "chat.start")).toBe(false);
+  // the terminal view shows before its program is started (the start waits on the host's reset), so a slow runner
+  // reads the calls before the start is in them: wait for it
+  const calls = () => page.evaluate(() => (window as unknown as { __omherSessionCalls?: { op: string; agent?: string; cwd?: string }[] }).__omherSessionCalls ?? []);
+  await expect
+    .poll(async () => (await calls()).filter((c) => c.op === "start"))
+    .toEqual([expect.objectContaining({ op: "start", agent: "claude", cwd: "/home/you/code/web-app" })]);
+  expect((await calls()).some((c) => c.op === "chat.start")).toBe(false);
   // the Shell row runs the login shell through shell_start (a folder and a size, never a program)
   await newTerm(page, "shell", FOLDERS[1]);
   const shells = await page.evaluate(() => (window as unknown as { __omherShellCalls: { op: string; cwd?: string | null }[] }).__omherShellCalls);
