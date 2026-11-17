@@ -23,16 +23,11 @@ type Row = { id: string; role: "user" | "assistant"; text: string; ts: number };
 const seed = (bot: string, rows: [Row["role"], string, number][]): Row[] =>
   rows.map(([role, text, ago], i) => ({ id: `seed-${bot}-${i}`, role, text, ts: nowS() - ago }));
 
+// Kami's chat before the dark mode ask (story.ts adds the ask and Kami's answer): one note from Kami, naming the Slack
+// channel the way a person would, by its link. The chat stays about three bubbles at rest.
 export function kamiSeed(): Row[] {
   return seed("kami", [
-    ["user", "Did the search filters land last night?", 15 * 3600],
-    ["assistant", "Yes: **PR #121** is merged. Tag and date filters are live on the docs, and 38 search tests pass.", 15 * 3600 - 60],
-    ["user", "Morning! What needs me today?", 62 * MIN],
-    ["assistant", "Three things today:\n\n1. **Review** the rate-limit PR in api-server (#126).\n2. **Answer** Mina in #design about the docs theme.\n3. **Approve** Juno's deploy once the tests pass.", 61 * MIN],
-    ["user", "Review #126 and merge it if it's clean.", 24 * MIN],
-    ["assistant", "Reviewed **#126**: fixed two nits, CI is green. Merged into main, and Juno's deploy picks it up.", 21 * MIN],
-    ["user", "Can the docs get a dark mode today? Mina keeps asking.", 3 * MIN],
-    ["assistant", "Yes. It's color tokens, a theme toggle, code colors and the page styles, then a contrast check, a final check and the PR. Say the word and I'll plan it.", 2.5 * MIN],
+    ["assistant", "Mina asked about a dark theme for the docs again in https://acme.slack.com/archives/C02DESIGN. Want me to do it today?", 14 * MIN],
   ]);
 }
 
@@ -380,7 +375,8 @@ const OPS: Record<string, (p: Json) => unknown> = {
     const { sha, ...entry } = c;
     return { entry, sha, agent: c.tools.length + c.hooks.length > 0, desktop: c.category === "desktop", warnings: [] };
   },
-  "links.places": (p) => (need(p), { places: { slack: { C02DESIGN: "design", C03RELEASES: "releases" }, discord: { "900000000000000009": "releases", "900000000000000012": "ops" } } }),
+  // the bridge names a channel with its "#" (omher_bridge.read_link_places)
+  "links.places": (p) => (need(p), { places: { slack: { C02DESIGN: "#design", C03RELEASES: "#releases" }, discord: { "900000000000000009": "#releases", "900000000000000012": "#ops" } } }),
   "cli.title": () => ({ title: "" }),
   // 0.2.11-0.2.12 reads: every staged bot is ready; a steer is taken into the running turn; a plan part's own session
   // is not on this computer (the drawer says so); Linear: no MCP server set up (Tasks shows its connect screen)

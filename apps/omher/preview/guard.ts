@@ -179,6 +179,18 @@ const INERT: [string, Note, boolean?][] = [
     },
     true,
   ],
+  // links in the chat (link chips in a bubble, an away reply's place, its "Open in" menu, the panel's place rows):
+  // the staged Slack / Discord / GitHub places are nobody's, so a click (or a middle click) opens nothing
+  [
+    'a.lk, a.lk-text, a.lk-web, .md a[href], a.ew-link, a.ew-ss.link, [data-testid="menu-open"]',
+    {
+      en: "This is a preview. Download omher to open links in your own Slack, Discord and GitHub.",
+      ko: "미리보기 화면이에요. omher를 내려받으면 내 Slack, Discord, GitHub 링크를 열 수 있어요.",
+      ja: "これはプレビューです。omher をダウンロードすると、自分の Slack・Discord・GitHub のリンクを開けます。",
+      zh: "这是预览。下载 omher 即可打开你自己的 Slack、Discord 和 GitHub 链接。",
+    },
+    true,
+  ],
 ];
 const TYPE_NOTE: Note = {
   en: "This is a preview. Download omher to type into a terminal on your own computer.",
@@ -244,24 +256,23 @@ export function installGuards(): void {
       { capture: true },
     );
   addEventListener("blur", () => (focused = false));
-  addEventListener(
-    "click",
-    (e) => {
-      const t = e.target as Element | null;
-      if (!t) return;
-      for (const [sel, text, inMenu] of INERT) {
-        const hit = t.closest(sel);
-        const menu = hit?.closest<HTMLElement>('[role="menu"]');
-        if (hit && (!menu || inMenu)) {
-          e.preventDefault();
-          e.stopPropagation();
-          toast(noteIn(text));
-          // a menu item: the menu closes as after any pick (its own Escape)
-          menu?.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
-          return;
-        }
+  const onClick = (e: MouseEvent) => {
+    const t = e.target as Element | null;
+    if (!t) return;
+    for (const [sel, text, inMenu] of INERT) {
+      const hit = t.closest(sel);
+      const menu = hit?.closest<HTMLElement>('[role="menu"]');
+      if (hit && (!menu || inMenu)) {
+        e.preventDefault();
+        e.stopPropagation();
+        toast(noteIn(text));
+        // a menu item: the menu closes as after any pick (its own Escape)
+        menu?.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+        return;
       }
-    },
-    { capture: true },
-  );
+    }
+  };
+  addEventListener("click", onClick, { capture: true });
+  // a middle click on a link opens it in a new tab without a click event
+  addEventListener("auxclick", (e) => e.button === 1 && onClick(e), { capture: true });
 }
