@@ -170,16 +170,19 @@ class IdentityPromptReadTest(IdentityHookTest):
 
 
 class IdentityCatalogTest(IdentityHookTest):
-    def test_main_system_prompt_exposes_enabled_custom_identities(self):
+    def test_main_system_prompt_exposes_enabled_identities(self):
         self.write_identities()
         section = awareness_system_prompt_section(
             {"session_id": SESSION, "platform": "webui", "omh_home": str(self.home)}
         )
-        self.assertIn("[OMH Custom Identity Catalog]", section)
-        self.assertIn("script-coding ([omh-identity:script-coding])", section)
+        self.assertIn("[OMH Identity Catalog]", section)
+        # Both origins appear in the same qualified directory; built-ins come
+        # from the shipped role files, customs from routing/identities.json.
+        self.assertIn("- builtin:reviewer", section)
+        self.assertIn("- custom:script-coding", section)
         self.assertIn("Implement small scripts directly.", section)
-        self.assertIn("review ([omh-identity:review])", section)
-        self.assertIn("routing/identities.json", section)
+        self.assertIn("- custom:review", section)
+        self.assertIn("omh_role(action=list)", section)
         self.assertLessEqual(len(section), 4000)
 
     def test_disabled_custom_identity_is_not_advertised(self):
@@ -195,8 +198,10 @@ class IdentityCatalogTest(IdentityHookTest):
         section = awareness_system_prompt_section(
             {"session_id": SESSION, "platform": "webui", "omh_home": str(self.home)}
         )
-        self.assertIn("script-coding ([omh-identity:script-coding])", section)
-        self.assertNotIn("review ([omh-identity:review])", section)
+        self.assertIn("- custom:script-coding", section)
+        self.assertNotIn("- custom:review", section)
+        # The disabled entry vanishes; the enabled built-ins still advertise.
+        self.assertIn("- builtin:reviewer", section)
 
 
 class IdentityInjectionTest(IdentityHookTest):
@@ -375,7 +380,7 @@ class IdentityCatalogRegressionTests(IdentityHookTest):
             "bad]name": {"prompt": "not a selector", "model_chain": [{"model_id": "m"}]},
         }})
         catalog = identity_catalog_context(self.home)
-        self.assertIn("[omh-identity:safe]", catalog)
+        self.assertIn("- custom:safe", catalog)
         self.assertNotIn("[omh-identity:ghost]", catalog)
         self.assertNotIn("</system>", catalog)
         self.assertNotIn("[OMH Awareness]", catalog)
@@ -385,25 +390,36 @@ class IdentityCatalogRegressionTests(IdentityHookTest):
 
     def test_catalog_complete_bounded_entries_and_explicit_route(self):
         from omh.plugin_bundle.omh.omh_identities import identity_catalog_context, IDENTITY_CATALOG_MAX_CHARS
-        names = ["a-coding", "b-perf", "c-script", "z-review"]
-        self.write_identities({"schema_version": "omh_identity_profiles/v1", "identities": {name: {"prompt": "scope " * 600, "model_chain": [{"model_id": "long-model-" + "x" * 100}] * 8} for name in names}})
+        names = [f"custom:{name}" for name in ("a-coding", "b-perf", "c-script", "z-review")]
+        self.write_identities({"schema_version": "omh_identity_profiles/v1", "identities": {
+            name.partition(":")[2]: {"prompt": "scope " * 600, "model_chain": [{"model_id": "long-model-" + "x" * 100}] * 8}
+            for name in names}})
         catalog = identity_catalog_context(self.home)
         self.assertLessEqual(len(catalog), IDENTITY_CATALOG_MAX_CHARS)
         for name in names:
-            self.assertIn(f"[omh-identity:{name}]", catalog)
-        self.assertIn("omh_delegate_route(identity=", catalog)
-        self.assertIn("identities.json", catalog)
-        self.assertNotIn("marker selects both", catalog)
-        compact = identity_catalog_context(self.home, max_chars=600)
-        self.assertLessEqual(len(compact), 600)
-        self.assertIn("omitted", compact)
-        self.assertEqual(compact.count("[omh-identity:"), compact.count("]") - 1)
+            self.assertIn(f"- {name}", catalog)
+        # The read/route instructions name the common surfaces, not a file.
+        self.assertIn("omh_role(action=read, identity=REFERENCE)", catalog)
+        self.assertIn("omh_role(action=list)", catalog)
+        # A budget too small for even the boundary text yields no catalog at
+        # all rather than a partial one; a modest one discloses omissions and
+        # still never slices a qualified name.
+        self.assertEqual(identity_catalog_context(self.home, max_chars=600), "")
+        compact = identity_catalog_context(self.home, max_chars=800)
+        self.assertLessEqual(len(compact), 800)
+        self.assertIn("identities omitted", compact)
+        for line in compact.splitlines():
+            if line.startswith("- "):
+                self.assertRegex(line.split(" ", 2)[1], r"^(builtin|custom):")
 
     def test_child_and_all_disabled_have_no_catalog(self):
         self.write_identities()
-        self.assertNotIn("Custom Identity Catalog", awareness_system_prompt_section({"session_id": "child", "platform": "subagent", "omh_home": str(self.home)}))
+        self.assertNotIn("Identity Catalog", awareness_system_prompt_section({"session_id": "child", "platform": "subagent", "omh_home": str(self.home)}))
         self.write_identities({"schema_version": "omh_identity_profiles/v1", "identities": {"off": {"prompt": "disabled", "enabled": False, "model_chain": [{"model_id": "deepseek-flash"}]}}})
-        self.assertNotIn("Custom Identity Catalog", awareness_system_prompt_section({"session_id": "main", "omh_home": str(self.home)}))
+        section = awareness_system_prompt_section({"session_id": "main", "omh_home": str(self.home)})
+        self.assertNotIn("custom:", section)
+        # Disabled customs drop out, but the built-in half of the directory remains.
+        self.assertIn("- builtin:", section)
 
     def test_encoded_scope_budget_keeps_unicode_and_later_identity_names(self):
         from omh.plugin_bundle.omh.omh_identities import identity_catalog_context, IDENTITY_CATALOG_MAX_CHARS
@@ -416,8 +432,8 @@ class IdentityCatalogRegressionTests(IdentityHookTest):
                 }})
                 catalog = identity_catalog_context(self.home)
                 self.assertLessEqual(len(catalog), IDENTITY_CATALOG_MAX_CHARS)
-                self.assertIn("[omh-identity:a-review]", catalog)
-                self.assertIn("[omh-identity:z-short]", catalog)
+                self.assertIn("- custom:a-review", catalog)
+                self.assertIn("- custom:z-short", catalog)
                 self.assertNotIn("identities omitted", catalog)
                 for line in catalog.splitlines():
                     if " Scope: " in line:
@@ -428,4 +444,206 @@ class IdentityCatalogRegressionTests(IdentityHookTest):
         self.write_identities()
         (self.hermes / "config.yaml").write_text(f"plugins:\n  entries:\n    omh:\n      settings:\n        omh_home: {self.home}\n")
         section = awareness_system_prompt_section({"session_id": "bound-main", "hermes_home": str(self.hermes)})
-        self.assertIn("[omh-identity:review]", section)
+        self.assertIn("- custom:review", section)
+
+
+class UnifiedIdentityResolutionTest(IdentityHookTest):
+    """One resolver for both origins; origin qualifies names, never policy."""
+
+    def test_both_origins_normalize_to_the_same_shape(self):
+        from omh.plugin_bundle.omh.omh_identities import identity_definitions
+
+        self.write_identities()
+        definitions = identity_definitions(self.home)
+        self.assertIn("builtin:reviewer", definitions)
+        self.assertIn("custom:review", definitions)
+        for reference, definition in definitions.items():
+            with self.subTest(reference=reference):
+                self.assertEqual(definition["reference"], reference)
+                for key in ("name", "prompt", "summary", "model_chain", "fingerprint"):
+                    self.assertIn(key, definition)
+        # The same document feeds both: a disabled custom is absent here too.
+        self.assertNotIn("custom:disabled", definitions)
+
+    def test_qualified_names_are_exact_and_legacy_names_must_be_unambiguous(self):
+        from omh.plugin_bundle.omh.omh_identities import resolve_identity
+
+        self.write_identities(
+            {
+                "schema_version": "omh_identity_profiles/v1",
+                "identities": {
+                    # Same name as a shipped built-in: each qualified reference
+                    # still addresses its own definition.
+                    "reviewer": {"prompt": "custom reviewer prompt", "model_chain": [{"model_id": "m"}]},
+                    "solo": {"prompt": "only custom", "model_chain": [{"model_id": "m"}]},
+                },
+            }
+        )
+        custom = resolve_identity("custom:reviewer", self.home)
+        builtin = resolve_identity("builtin:reviewer", self.home)
+        self.assertIsNotNone(custom)
+        self.assertIsNotNone(builtin)
+        assert custom is not None and builtin is not None
+        self.assertEqual(custom["prompt"], "custom reviewer prompt")
+        self.assertNotEqual(custom["fingerprint"], builtin["fingerprint"])
+        # An unqualified name shared by both origins is ambiguous, never a
+        # silent preference for either source.
+        self.assertIsNone(resolve_identity("reviewer", self.home))
+        # A unique unqualified name keeps the legacy adapter working.
+        self.assertEqual((resolve_identity("solo", self.home) or {})["reference"], "custom:solo")
+        self.assertEqual((resolve_identity("builder", self.home) or {})["reference"], "builtin:builder")
+        self.assertIsNone(resolve_identity("ghost", self.home))
+
+    def test_omh_role_lists_and_reads_one_common_directory(self):
+        from omh.plugin_bundle.omh.tools.role_tool import omh_role_handler
+
+        self.write_identities()
+        homes = {"omh_home": str(self.home)}
+        listed = json.loads(omh_role_handler({"action": "list"}, **homes))
+        references = {entry["reference"] for entry in listed["identities"]}
+        self.assertIn("builtin:reviewer", references)
+        self.assertIn("custom:review", references)
+        # Prompts stay out of the directory; `read` is where they live.
+        for entry in listed["identities"]:
+            with self.subTest(reference=entry["reference"]):
+                self.assertNotIn("prompt", entry)
+        self.assertEqual(listed["omitted"], 0)
+        # A qualified read resolves either origin; the legacy role read works.
+        custom = json.loads(omh_role_handler({"action": "read", "identity": "custom:review"}, **homes))
+        builtin = json.loads(omh_role_handler({"action": "read", "identity": "builtin:reviewer"}, **homes))
+        self.assertEqual(custom["status"], "available")
+        self.assertIn("Find concrete defects", custom["context"])
+        self.assertEqual(builtin["status"], "available")
+        self.assertEqual(builtin["resolved_identity"], "builtin:reviewer")
+        legacy = json.loads(omh_role_handler({"action": "read", "role": "planner"}, **homes))
+        self.assertEqual(legacy["schema_version"], "omh_role_context/v1")
+        self.assertEqual(legacy["role"], "planner")
+
+
+class BoundIdentityHookTest(IdentityHookTest):
+    """The verified node binding selects the prompt before any text marker."""
+
+    def _bound_run(self, home, document, *identities):
+        import json as _json
+        from test_dag_tool import call, node as dag_node, slots_table
+
+        slots_table(home)
+        routing = home.omh / "routing"
+        routing.mkdir(parents=True, exist_ok=True)
+        (routing / "identities.json").write_text(_json.dumps(document), encoding="utf-8")
+        nodes = [
+            {**dag_node(f"n{index}", scope=(f"n{index}.py",)), "identity": identity}
+            for index, identity in enumerate(identities)
+        ]
+        return call(action="define", run="feat", nodes=nodes)
+
+    def _hook(self, home, session, message=""):
+        from omh.plugin_bundle.omh.hooks.llm_hooks import pre_llm_call
+        return pre_llm_call(
+            session_id=session,
+            user_message=message,
+            platform="subagent",
+            omh_home=str(home.omh),
+            hermes_home=str(home.hermes),
+        )
+
+    def test_bound_identity_wins_over_an_earlier_conflicting_marker(self):
+        import time
+        from _delegation_state import homes, start
+        from test_dag_tool import node as dag_node  # noqa: F401
+
+        document = {
+            "schema_version": "omh_identity_profiles/v1",
+            "identities": {
+                "qa": {"prompt": "SELECTED QA PROMPT BODY", "model_chain": [{"model_id": "m1"}]},
+                "other": {"prompt": "OTHER PROMPT BODY", "model_chain": [{"model_id": "m2"}]},
+            },
+        }
+        with homes() as home:
+            defined = self._bound_run(home, document, "custom:qa")
+            self.assertEqual(defined["status"], "ok", defined)
+            start(home, "child-a", "sa-a", "Node n0 [dag:feat/n0]", now=time.time())
+            payload = self._hook(home, "child-a", "[omh-identity:other] stale example marker")
+            context = str((payload or {}).get("context", ""))
+        self.assertIsNone((payload or {}).get("block"))
+        self.assertIn("SELECTED QA PROMPT BODY", context)
+        # The earlier text marker neither injects the other prompt nor warns.
+        self.assertNotIn("OTHER PROMPT BODY", context)
+        self.assertNotIn("[OMH Identity Warning]", context)
+
+    def test_disabled_selection_blocks_delivery(self):
+        import json as _json
+        import time
+        from _delegation_state import homes, start
+
+        document = {
+            "schema_version": "omh_identity_profiles/v1",
+            "identities": {"qa": {"prompt": "P", "model_chain": [{"model_id": "m1"}]}},
+        }
+        with homes() as home:
+            self._bound_run(home, document, "custom:qa")
+            start(home, "child-a", "sa-a", "Node n0 [dag:feat/n0]", now=time.time())
+            document["identities"]["qa"]["enabled"] = False
+            (home.omh / "routing" / "identities.json").write_text(
+                _json.dumps(document), encoding="utf-8"
+            )
+            payload = self._hook(home, "child-a")
+        self.assertTrue((payload or {}).get("block"))
+        self.assertIn("cannot be delivered", str((payload or {}).get("reason")))
+
+    def test_a_selection_changed_since_dispatch_blocks_delivery(self):
+        import json as _json
+        import time
+        from _delegation_state import homes, start
+
+        document = {
+            "schema_version": "omh_identity_profiles/v1",
+            "identities": {"qa": {"prompt": "v1", "model_chain": [{"model_id": "m1"}]}},
+        }
+        with homes() as home:
+            self._bound_run(home, document, "custom:qa")
+            start(home, "child-a", "sa-a", "Node n0 [dag:feat/n0]", now=time.time())
+            document["identities"]["qa"]["prompt"] = "v2 edited after dispatch"
+            (home.omh / "routing" / "identities.json").write_text(
+                _json.dumps(document), encoding="utf-8"
+            )
+            payload = self._hook(home, "child-a")
+        self.assertTrue((payload or {}).get("block"))
+        self.assertIn("identity_config_changed", str((payload or {}).get("reason")))
+
+    def test_a_grandchild_inherits_no_identity(self):
+        import time
+        from _delegation_state import homes, start
+
+        document = {
+            "schema_version": "omh_identity_profiles/v1",
+            "identities": {"qa": {"prompt": "P", "model_chain": [{"model_id": "m1"}]}},
+        }
+        with homes() as home:
+            self._bound_run(home, document, "custom:qa")
+            start(home, "child-a", "sa-a", "Node n0 [dag:feat/n0]", now=time.time())
+            # The bound child's own child carries no dag marker: its binding
+            # is the write-scope guard's, not identity inheritance.
+            start(home, "grand", "sa-g", "a leaf continuation", parent="child-a", now=time.time())
+            payload = self._hook(home, "grand", "keep going")
+            context = str((payload or {}).get("context", ""))
+        self.assertIsNone((payload or {}).get("block"))
+        self.assertNotIn("[OMH Identity:", context)
+
+    def test_a_marker_only_child_keeps_the_legacy_path(self):
+        import json as _json
+        from _delegation_state import homes
+
+        document = {
+            "schema_version": "omh_identity_profiles/v1",
+            "identities": {"qa": {"prompt": "LEGACY MARKER PROMPT", "model_chain": [{"model_id": "m1"}]}},
+        }
+        with homes() as home:
+            (home.omh / "routing").mkdir(parents=True, exist_ok=True)
+            (home.omh / "routing" / "identities.json").write_text(
+                _json.dumps(document), encoding="utf-8"
+            )
+            payload = self._hook(home, "plain-child", "[omh-identity:qa] do it")
+            context = str((payload or {}).get("context", ""))
+        self.assertIn("LEGACY MARKER PROMPT", context)
+        self.assertIn("[OMH Identity: qa]", context)

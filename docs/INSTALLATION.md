@@ -2708,13 +2708,18 @@ state, `omh model-chains interview` walks every built-in category with numbered
 choices, and `omh model-chains set <category> "model[:effort], ..."` remains the
 scriptable category write (agents included).
 
-The custom-identity discovery catalog is main-agent-only and is frozen when
-Hermes builds the session system prompt. Start a new session after editing
-identities to refresh discovery. It contains complete bounded entries; overflow
-is explicitly counted, and `routing/identities.json` under the active OMH home
-is the full directory (readable with `read_file`). Route explicitly with
-`omh_delegate_route(identity=NAME)` before `delegate_task`; the GOAL marker
-selects prompt guidance, not the model chain. No automatic routing hook runs.
+The common identity discovery catalog is main-agent-only and is frozen when
+Hermes builds the session system prompt. It presents built-in and custom
+responsibilities equally, with omissions disclosed. For agents and operators,
+`omh_role action=list` reads the current directory and `action=read
+identity=builtin:builder` (or `custom:<name>`) reads a full definition.
+Start a new session after edits to refresh the system snapshot. DAG guidance
+compares responsibilities, honors user instructions and project ownership, and
+records a suitable qualified `identity` on each node; no match leaves it absent.
+Run the complete returned route and tasks unchanged. Outside DAG, route
+explicitly with `omh_delegate_route(identity=REFERENCE, category=...)` before
+`delegate_task`; `[omh-identity:REFERENCE]` selects prompt guidance. A configured
+chain supplies models; a definition without one uses the category route.
 
 Picker saves validate both documents before writing. Each file replacement is
 atomic, but the pair is not a transaction: if identity I/O fails after category
@@ -2967,10 +2972,25 @@ fields are rejected. Each identity is validated on its own: a broken one is
 dropped (and named on stderr by `omh coding` commands) while the valid ones
 keep working.
 
-Select an identity explicitly, one of three ways:
+For agents and operators, DAG nodes select a built-in or custom definition with
+`identity: builtin:name` or `identity: custom:name`. Define, repair and extend
+use the same field. `role` still means build/baseline/verify/review, while
+`category` describes work. Calls group by identity and each node's retry count;
+default routes carry `action=set` and a zero-based `attempt`, while model_map
+tasks carry matching options. A chain never falls back to an unrelated local
+option on a `local: true` node. Missing, disabled or drifting selections fail
+closed. The direct child's verified node/attempt binding wins over quoted
+markers; its continuations retain it and grandchildren do not inherit it.
+Selected identities require default or model_map routing; profile/unknown
+backends, DAG external-owner exports and parent fallback after the child budget
+is spent refuse the unsupported capability.
+No-identity DAGs and external exports preserve their existing behavior.
+
+Existing explicit selection adapters remain:
 
 - **Prompt:** put `[omh-identity:script-coding]` in the request (or in a
-  delegated child's goal). The first marker wins. OMH adds the identity's
+  delegated child's goal). Without a structured DAG binding the first marker wins;
+  the legacy unqualified marker names a custom identity. OMH adds the identity's
   prompt to that turn's OMH context. A marker quoted, relayed, or written by
   the host rather than typed by the person selects nothing, and an unknown
   name adds a warning that lists the available identities instead of
@@ -2997,16 +3017,19 @@ names, the same way `omh_delegate_route` answers `choice_required`; it never
 falls back to the executor's default model. The
 vocabulary stays separate: a *role* (`[omh-role:name]`, `docs/ROLES.md`) is a
 shipped specialist stance, a *category* is a work type with a model table,
-and an *identity* is your own prompt plus chain.
+and an *identity* is the common prompt definition, with model policy determined
+by whether that definition configures a chain. CLI custom-identity adapters
+continue to read the user's existing file.
 
 This is prepared routing and prompt guidance, not observed execution: an
 identity does not prove the named model ran, and a fallback is a candidate,
-not a record of one used. Compatibility is additive: with no
-`identities.json`, routes and prompts are byte-identical to before, and
+not a record of one used. With no structured selection or marker, routes and
+prompts retain their legacy behavior. Built-in discovery does not require an
+`identities.json` file. In CLI custom-identity contracts,
 changing the file between `fanout prepare` and dispatch shows up as a
 `config_fingerprint` mismatch rather than silently re-routing. Not included
-in this version: a command to manage identities, picking an identity
-automatically, or carrying one from a session to the next; name it again
+in this version: an automatic identity selector or carrying one from an
+unrelated session to the next; name it again
 when you want it.
 
 ### Per-model reasoning efforts

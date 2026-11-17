@@ -53,12 +53,16 @@ _Avoid_: slash command, prompt template, OMC skill (that is a different
 product's concept)
 
 **Identity profile**:
-A user-named pair of one prompt and one ordered model chain, read from
-`<omh_home>/routing/identities.json` (`omh_identity_profiles/v1`) and selected
-only explicitly: `[omh-identity:<name>]` for the prompt, `--identity` or a
-unit `identity` field for the model route. Prepared guidance and routing, not
-evidence that a model ran.
-_Avoid_: role (a shipped specialist stance from `[omh-role:name]`), category
+A named prompt definition in the common `omh_role` directory: `builtin:name`
+reads shipped role guidance and `custom:name` reads the user's prompt and
+ordered model chain from `<omh_home>/routing/identities.json`
+(`omh_identity_profiles/v1`). A DAG node's optional `identity` binds prompt
+delivery and routing together; a configured chain supplies models, otherwise
+the node's category does. Origin only selects the loader. Legacy
+`[omh-role:name]`, `[omh-identity:name]`, CLI `--identity` and unit `identity`
+remain their existing explicit-selection adapters. Prepared guidance and
+routing are not evidence that a model ran.
+_Avoid_: confusing identity with DAG role (build/baseline/verify/review), category
 (a work type with a model table), inferring or inheriting an identity across
 sessions
 

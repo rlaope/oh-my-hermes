@@ -511,7 +511,9 @@ class AiJobSearchContextBudgetTests(unittest.TestCase):
         # agent-evaluation moves, and the pin before it was 9ec3df67...56b2.
         # automation-blueprint's quality bar then points at the channel-watch recipe; only automation-blueprint
         # moves, and the pin before it was e5dfad8f...8749.
-        self.assertEqual(_digest(legacy_hashes), 'b1141bcf81c0ffbfd6c227ddfe0a3cede39e86130fcef81e6d47e70fb41ff0ee')
+        # dag-ulw's run-loop then names the common built-in/custom identity directory, the `identity` node
+        # field and its per-node retry position; only dag-ulw moves, and the pin before it was b1141bcf...1ff0ee.
+        self.assertEqual(_digest(legacy_hashes), '70daae4adcaf62994adda4d54e7df47921e644c876762c6ab41df4df0db699ec')
         legacy = _skill_context_cost_profile('full', legacy_templates, refs)
         current = _skill_context_cost_profile('full', templates, refs)
         # Main's search guidance adds 305; repro-audit's mandatory rails 1,943.
@@ -561,7 +563,7 @@ class AiJobSearchContextBudgetTests(unittest.TestCase):
         from omh.maintenance.drift import budget_metrics
         expected = {
             'skill_index_line_max_chars': 100,
-            'plugin_tool_schema_chars': 72940,  # Parked DAG waits (+429), delegation backends (+245), six routing-recipe categories (+213), opt-in omh-lsp tools (+2187), opt-in lsp_diagnostics (+396), identity argument (+143), dag node role (+85), dag node owner (+70), dag node local (+37) less the route fallback sentence (-1), then the ultrabrain head in the route example (+5), then omh_dag goal criteria (+226), then the criteria parameter's keep-the-condition description (+95), said in the positive form (+8), then dag node read_only (+45).
+            'plugin_tool_schema_chars': 73585,  # Prior ratchet 72940 (itemized above at the read_only +45 step). Unified identities: the identity reference on omh_dag nodes (+122, 3549 -> 3671), `attempt` plus the qualified-reference identity description on omh_delegate_route (+303, 5300 -> 5603), and the common-directory description plus `identity` argument on omh_role (+220, 1373 -> 1593), measured by per_turn_context.plugin_tool_schema_chars_by_tool() against this diff's schema edits. No headroom.
             'pre_llm_call_context_chars_max': 5977,  # The pi-family runtime rename (+6), the route-hint dedup (-154), then the console choices line (+409).
             'pre_llm_call_context_fallback_chars_max': 7529,  # The same rename (+6), the human-voice primer sentence (+116), the route-hint dedup (-154), then the console choices line (+409).
             'awareness_primer_markdown_chars': 4051,  # Human-voice reply sentence (+110), full skill names in the checkpoint (+55), then loadable labels there (+49), on the card and cue lines (+239) and in the lane keys (+78).

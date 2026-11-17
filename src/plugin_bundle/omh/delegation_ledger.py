@@ -55,11 +55,14 @@ import sqlite3
 import time
 from typing import Any, Final
 
-from . import runtime_paths
 from .awareness_delivery import _awareness_delivery_lock
+
 from .hermes_delegation import load_delegation_route_provenance
 from .host_process import recorded_process, this_process
+from .kanban_board_reader import conversation_session_ids as _conversation_session_ids
+from . import runtime_paths
 from .sqlite_readonly import connect_readonly
+
 
 LEDGER_SCHEMA_VERSION: Final = "delegation_ledger/v1"
 LEDGER_DIRNAME: Final = "delegation"
@@ -89,7 +92,7 @@ LEDGER_CLAIM_BOUNDARY: Final = (
     "times, status words and the route OMH had prepared. It holds no goal, summary, prompt or tool history, and "
     "it is not execution, verification, review, CI or merge evidence."
 )
-ROUTE_FIELDS: Final = ("category", "alias", "wire_model", "reasoning_effort", "origin")
+ROUTE_FIELDS: Final = ("category", "alias", "wire_model", "reasoning_effort", "origin", "identity", "identity_digest")
 # What Hermes' own result says a backend-routed child ran on (`delegate_tool_child_run._route_report`).
 OBSERVED_ROUTE_FIELDS: Final = ("backend", "label", "provider", "model", "reasoning_effort", "service_tier")
 # What a chat reply last carried (`delegation_snapshot.py`): the moment, and whether its run is still open.
@@ -338,6 +341,8 @@ def _valid_child(value: object) -> dict[str, Any] | None:
     dag = value.get("dag")
     if isinstance(dag, dict) and all(re.fullmatch(_DAG_ID, str(dag.get(key))) for key in ("run", "node")):
         entry["dag"] = {"run": str(dag["run"]), "node": str(dag["node"])}
+        if isinstance(dag.get("attempt"), int) and dag["attempt"] > 0:
+            entry["dag"]["attempt"] = dag["attempt"]
     if (process := recorded_process(value.get("host"))) is not None:
         entry["host"] = process
     index = value.get("task_index")
@@ -585,6 +590,17 @@ def observe_subagent_start(kwargs: dict[str, object], *, now: float | None = Non
     binding = dag_binding(kwargs.get("child_goal"))
     if binding:
         entry["dag"] = binding
+        # Bind only a direct child of the run owner, never an inherited scope.
+        for owner in sorted({parent, *_conversation_session_ids(hermes_home, parent)}):
+            run = _dag_run.read_run(_dag_run.record_path(omh_home, owner, binding["run"]))
+            node = next((item for item in run["nodes"] if item["id"] == binding["node"]), None) if run else None
+            attempts = node.get("attempts") or [] if node else []
+            if attempts:
+                attempt = attempts[-1]
+                binding["attempt"] = attempt["n"]
+                if node.get("identity"):
+                    entry["route"].update(identity=node["identity"], identity_digest=attempt.get("identity_digest", ""))
+                break
         # The Hermes process the child runs in and ends with: a restart fires no `subagent_stop`, so `omh_dag`
         # tells a node whose child it ended from one still running by this.
         if (process := this_process()) is not None:
@@ -811,3 +827,7 @@ def note_skipped(omh_home: Path, session_id: str, fingerprint: str, reason: str,
         return True
 
     return _update(omh_home, session_id, mark, now=moment)
+
+
+# Bind the module after ledger_key exists; handlers survive Hermes' module eviction.
+from . import dag_run as _dag_run

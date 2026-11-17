@@ -57,7 +57,7 @@ import stat
 import time
 from typing import Any
 
-from .. import dag_run, runtime_paths
+from .. import dag_run, omh_identities as _omh_identities, runtime_paths
 from ..delegation_graph import closing_usage, run_usage_text
 from ..delegation_ledger import oneshot_children_spawned, read_ledger, with_unjoined_stop
 from ..delegation_snapshot import dag_added_clause, shown_lanes
@@ -68,6 +68,7 @@ from ..delegation_backend_mode import (
     category_local_options,
     category_options,
     delegation_section,
+    is_local_option,
     read_backend_mode,
 )
 from ..delegation_routing import _config_path, _read_config_snapshot, read_delegation_settings
@@ -177,7 +178,7 @@ OMH_DAG_SCHEMA = {
     "description": (
         "Keep a dag-ulw run: small nodes the parent dispatches via delegate_task. define records nodes "
         "(id, label, category, prompt with TASK / DELIVERABLE / SCOPE / VERIFY / STOP WHEN, depends_on, "
-        "write_scope, role, owner, local, read_only) and refuses cycles, unknown or self-edges, write scopes shared without an edge, more "
+        "write_scope, role, owner, local, read_only, identity) and refuses cycles, unknown or self-edges, write scopes shared without an edge, more "
         "than 48 nodes, and prompts naming none of the markers; a one-shot session caps nodes at "
         "delegation.oneshot_max_children. Lint is advice. ready returns delegate_task calls per category "
         "within the free slots: route each via omh_delegate_route, then delegate_task unchanged. After each "
@@ -214,6 +215,8 @@ OMH_DAG_SCHEMA = {
                         "owner": {"type": "string", "enum": list(EXTERNAL_OWNERS)},
                         "local": {"type": "boolean"},
                         "read_only": {"type": "boolean"},
+                        "identity": {"type": "string",
+                                     "description": "Optional identity reference: builtin:<name> or custom:<name>."},
                     },
                     "required": ["id", "label", "category", "prompt"],
                 },
@@ -931,9 +934,13 @@ def _ready(
     mine: list[str] = []
     if spent_out and not calls and not any(info["state"] in dag_run.LIVE for info in derived.values()):
         mine = list(held)
+        if any(nodes[node_id].get("identity") for node_id in mine):
+            raise dag_run.DagRefusal(
+                "identity_capability_unavailable",
+                "The child budget is spent; this session cannot apply a selected node's prompt and model policy.")
         for node_id in mine:
             attempt = dag_run.hand_out(nodes[node_id], derived[node_id]["state"], now,
-                                       token=dag_run.wants_token(record, nodes[node_id]))
+                                       token=dag_run.wants_token(record, nodes[node_id]), omh_home=omh_home)
             attempt["lane"] = "parent"
         held = []
     if calls or pinned or mine:
@@ -1059,9 +1066,17 @@ def delegation_backend(omh_home: Path, hermes_home: Path) -> dict[str, Any] | No
         return None
     routes, _status = load_model_provider_routes(omh_home)
     chains = effective_mixture_category_chains(omh_home, hermes_home)
+    definitions = _omh_identities.identity_definitions(omh_home)
+    identity_chains = {name: definition["model_chain"]
+                       for name, definition in definitions.items()
+                       if definition.get("model_chain")}
+    local_mode = {**mode, "options": [option for option in mode.get("options", []) if is_local_option(option)]}
     return {"backend": mode["backend"], "status": mode["status"],
             "options": category_options(mode, chains, routes),
-            "local_options": category_local_options(mode, chains, routes)}
+            "local_options": category_local_options(mode, chains, routes),
+            "identity_chains": identity_chains,
+            "identity_options": category_options(mode, identity_chains, routes),
+            "identity_local_options": category_options(local_mode, identity_chains, routes)}
 
 
 # The profile settings that move `dag_run.Limits`: `plugins.entries.omh.settings.<name>`, in seconds or a count.
@@ -1311,6 +1326,10 @@ def export_units(record: Mapping[str, Any], derived: Mapping[str, Mapping[str, A
         raise dag_run.DagRefusal("nothing_to_export", "No coding node is ready for the coding owner yet.")
     units = []
     for node in exportable:
+        if node.get("identity"):
+            raise dag_run.DagRefusal(
+                "identity_capability_unavailable",
+                "DAG export cannot carry a selected prompt and model policy through this external owner's contract.")
         units.append({
             "unit_id": str(node["id"]),
             "title": str(node["label"]),
