@@ -17,7 +17,7 @@ export interface SessionQueue {
 import { quoteFor } from "./answers";
 import { LiveFace, TypingRow, awaitingFirstToken } from "./Typing";
 import { liveFaceRow } from "./liveFace";
-import { ActivityFallback, CardFallback, ElsewhereFallback, RoutineFallback } from "./fallbacks";
+import { ActivityFallback, CardFallback, RoutineFallback } from "./fallbacks";
 import { PluginAddedCard, RoutineAddedCard } from "../../pages/ChatCards";
 import { ThreadLinkLine, ThreadRouteCard } from "../cards/ThreadNotes";
 import { WatchLine } from "../../routines/WatchLine";
@@ -34,7 +34,7 @@ function divider(prev: TimelineItem | undefined, cur: TimelineItem): string | nu
 }
 
 /** A bot bubble right above: the next bot bubble keeps the indent but not the face (one face per run). */
-const botSpoke = (it?: TimelineItem) => it?.kind === "assistant" || it?.kind === "away";
+const botSpoke = (it?: TimelineItem) => it?.kind === "assistant";
 
 /** `face` stands in for the bot's picture beside its bubbles and the typing bubble (a SESSIONS chat: its
  *  agent's mark). Pass a stable element (useMemo): the bubbles are memoized on it. */
@@ -145,10 +145,6 @@ export function Timeline({
       case "clarify": {
         const C = slots.cards ?? CardFallback;
         return <C bot={bot.name} item={it} />;
-      }
-      case "away": {
-        const C = slots.elsewhereLine ?? ElsewhereFallback;
-        return <C bot={bot.name} item={it} face={!botSpoke(prev)} />;
       }
       case "routine": {
         const C = slots.routineLine ?? RoutineFallback;

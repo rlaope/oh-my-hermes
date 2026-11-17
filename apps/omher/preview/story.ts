@@ -1,10 +1,10 @@
 // The preview's live scenario: the window keeps moving with no input. Kami is a few minutes into the docs dark mode
-// plan: its chat is a short exchange (the ask, one plain answer) with one quiet working line under it, while the
-// Plans panel shows the parts; parts finish one by one, the next starts, the open part's detail grows,
-// Slack / Discord replies and other bots' messages land, Kami posts the PR with a before/after, and the loop
+// plan: its chat is the person's short ask and one big answer, with the spinner and one or two plain Hermes lines
+// under it, while the Plans panel shows the parts; parts finish one by one, the next starts, the open part's detail
+// grows, Slack / Discord replies and other bots' messages land, Kami posts the PR, and the loop
 // starts over (~55-65 s, a little different each time). Since 0.2.12 the sidebar moves too: Kami's threads (one
-// working, one waiting on an approval, one done) change state and preview line, the next request in Kami's chat
-// opens two threads by itself (the bridge's split path: `thread.split`), and in TERMINALS the Shell card runs Claude
+// working, one waiting on an approval, one done) change state and preview line, the PR message opens two threads
+// (the bridge's split path: `thread.split`), and in TERMINALS the Shell card runs Claude
 // Code for a while (its mark and name flip to Claude Code's and back) while the Codex card prints what it does. Real clock: requestAnimationFrame plus Date.now, with a 250 ms timer when frames are held back.
 // The visitor always wins: any click, key or wheel pauses the story for 8 s, and what they set off (a reply, the
 // plan built from scratch, Juno's deploy) plays on its own timers. Hidden tab or window off-screen: paused.
@@ -14,7 +14,7 @@ import { getSessions } from "../src/sessions/sessions";
 import { SHELL, type AgentId } from "../src/sessions/agents";
 import { threadKey } from "../src/threads/types";
 import { refreshRuns } from "../src/runs/live";
-import { addThread, away, broadcast, dropThread, history, hooks, kamiSeed, nowS, PR_REPO, runs, threads, threadSaid } from "./host";
+import { addThread, away, broadcast, dropThread, history, hooks, nowS, PR_REPO, runs, threads, threadSaid } from "./host";
 
 type Ev = { event: string; [k: string]: unknown };
 const store = () => getStore();
@@ -28,12 +28,16 @@ const RUN_BASE = "dag:20261110_091904_d4a1c7e2/dark-mode";
 let runSeq = 0;
 let RUN = RUN_BASE;
 const runName = () => RUN.split("/").pop()!;
-// Kami's chat at rest: the ask, one plain answer and the working line (the spinner, Hermes' status, the time). The
-// links are staged places: the Discord and Slack chips take their #channel from host.ts links.places, the GitHub ones
-// point at the staged acme/web-app (Tasks); guard.ts keeps every chip from opening anything.
-const REQUEST = "Sam asked for it in https://discord.com/channels/1/900000000000000009 too. Yes, go ahead and open a PR when it's done.";
+// Kami's chat at rest: the person's short ask, ONE big answer from Kami, and under it the spinner with one or two
+// plain grey Hermes lines (what the running parts do now) and the time. The answer names the places the way a person
+// would, by their links: the Discord and Slack chips take their #channel from host.ts links.places, the GitHub one
+// points at the staged acme/web-app (Tasks); guard.ts keeps every chip from opening anything.
+const REQUEST = "Can you add dark mode to the docs today? Open a PR when it's done.";
 const PROGRESS =
-  "On it, in six parts. Color tokens and the theme toggle are done; page styles and code blocks are going now, and the code block colors fix https://github.com/acme/web-app/issues/139 too.";
+  "I'm following Mina's notes in https://acme.slack.com/archives/C02DESIGN/p1794195216893139?thread_ts=1794195216.893139: links stay purple, and the theme follows the system. " +
+  "Sam asked for the same in https://discord.com/channels/1/900000000000000009, so I'll tell him there when it's live. " +
+  "The new code colors also fix https://github.com/acme/web-app/issues/139. " +
+  "I'll post the PR here once every page passes a contrast check in both themes.";
 const PR_URL = "https://github.com/acme/web-app/pull/146";
 // [id, label, deps, model, provider, effort, category, executor]. The cast: three Hermes subagents on GLM, Kimi and
 // DeepSeek, and three lanes handed to agent CLIs (Claude Code on Opus, Codex on GPT-6.1 Sol, omp on Sonnet), side by side.
@@ -110,11 +114,14 @@ function stream(id: string, n: number) {
   const lines = STREAM[id] ?? [];
   (runs.handoffs[RUN] ??= {})[id] = lines.slice(0, n).join("\n");
 }
-/** Kami's one working line under its last bubble: the app's spinner, Hermes' status text and the turn's time. The
- *  chat shows no per-part cards (no subagent events, no delegate_task rows): the Plans panel and the threads already
- *  show the parts, and the middle stays calm. */
-const working = (text: string, at = Date.now()) => ev("kami", { event: "status", text }, at);
-const parts = (n: number) => `Working on ${n} part${n === 1 ? "" : "s"}`;
+/** Kami's working lines under the big bubble: the app's spinner line (Hermes' status and the turn's time) and, while a
+ *  second part runs, one more plain grey line: the turn's `plan` rows, which preview.css shows as bare text under the
+ *  status (no head, no boxes). The chat shows no per-part cards (no subagent events, no delegate_task rows): the Plans
+ *  panel and the threads already show the parts, and the middle stays calm. */
+function working(text: string, also = "", at = Date.now()) {
+  ev("kami", { event: "status", text }, at);
+  ev("kami", { event: "plan", items: also ? [{ text: also, status: "in_progress" }] : [] }, at);
+}
 
 // ---- the story clock -----------------------------------------------------------------------------------------
 
@@ -260,19 +267,9 @@ function resetThreads(t0: number) {
   tev(flake.id, { event: "tool.start", tool_id: `tf-t-${loop}`, name: "terminal", detail: "pnpm test search --repeat 50" }, t0 - 40_000);
 }
 
-/** A request in Kami's chat that Kami splits into two threads (the bridge opens them and says so with
- *  `thread.split`; the main chat shows a link line for each under the answer). */
-const NEXT_ASK = "Next, draft the 2.4 release on GitHub and check every docs link.";
-function splitRequest() {
-  const id = `local-next-${loop}`;
-  store().dispatch({ type: "local.user", bot: "kami", id, text: NEXT_ASK, now: Date.now() });
-  ev("kami", { event: "bot.status", status: "online", running: true });
-  ev("kami", { event: "turn.start" });
-  ev("kami", { event: "thinking" });
-}
-function splitAnswer() {
-  const msg = `k-split-${loop}`;
-  ev("kami", { event: "message", id: msg, text: "Opened a thread for each. I'll post here when they land." });
+/** Kami opens two threads from its PR message (the bridge's split path: `thread.split`; the main chat shows a link
+ *  line for each under that message), so the chat gets no extra ask and answer. */
+function splitThreads(msg: string) {
   const post = addThread("kami", "Release post 2.4", WEB);
   const links = addThread("kami", "Docs link check", WEB);
   split = [post, links];
@@ -284,8 +281,6 @@ function splitAnswer() {
     said(th, "user", `${th}-u`, task);
     threadStart(th);
   }
-  ev("kami", { event: "turn.end", outcome: "done" });
-  ev("kami", { event: "bot.status", status: "online", running: false });
 }
 
 // ---- TERMINALS ---------------------------------------------------------------------------------------------------
@@ -316,10 +311,9 @@ let junoAsk = "";
 let junoBusy = false;
 
 function resetKami(asked: number, answered: number) {
-  const seedRows = kamiSeed();
   const ask = { id: `ask-${loop}`, role: "user" as const, text: REQUEST, ts: asked / 1000 };
   const answer = { id: `k-plan-${loop}`, role: "assistant" as const, text: PROGRESS, ts: answered / 1000 };
-  history.kami = [...seedRows, ask, answer];
+  history.kami = [ask, answer];
   away.kami = [];
   const s = store();
   s.dispatch({ type: "chat.forget", bot: "kami" });
@@ -351,10 +345,12 @@ function startLoop() {
   st["color-tokens"].started = runStarted;
   setNode("theme-toggle", "done", T / 1000 - 8);
   st["theme-toggle"].started = runStarted;
-  for (const id of ["page-styles", "code-colors"]) setNode(id, "running", T / 1000 + rand(0, 6));
+  // Page styles (the part the Plans panel opens) started with the turn, so its time and the working line's agree
+  setNode("page-styles", "running", T / 1000);
+  setNode("code-colors", "running", T / 1000 + rand(2, 6));
   ev("kami", { event: "bot.status", status: "online", running: true }, T);
   ev("kami", { event: "turn.start" }, T);
-  working(parts(2), T + 500);
+  working("Editing docs/styles/code.css", "Moving the sidebar to the new colors", T + 500);
   stream("page-styles", 1);
   pushRun();
 
@@ -372,21 +368,21 @@ function startLoop() {
     [k(1), () => say("codex", "\r\n• Read api/search/index.go\r\n")],
     [k(1.8), () => { stream("page-styles", 2); pushRun(); }],
     [k(2.6), () => ev("friren", { event: "status", text: "Reading the updater section" })],
-    [k(3.2), () => working("Editing docs/styles/code.css")],
+    [k(3.2), () => working("Checking code blocks in light and dark", "Moving the sidebar to the new colors")],
     [k(4), () => say("codex", "\r\n• Ran go test ./search/... (38 passed)\r\n")],
     [k(5), () => allow(notesAsk)],
     [k(6), () => { stream("page-styles", 3); pushRun(); }],
     [k(7), () => { say("shell", "claude\r\n"); shellFg("claude"); say("shell", "\x1b[38;2;217;119;87m✻\x1b[0m \x1b[1mClaude Code\x1b[0m\r\n\r\n› write the Filters section of docs/search.md\r\n"); }],
-    [k(7.6), () => working(parts(2))],
+    [k(7.6), () => working("Checking code blocks in light and dark", "Editing docs/styles/search.css")],
     [k(9.5), () => say("shell", "\x1b[38;2;217;119;87m⏺\x1b[0m Read docs/search.md\r\n")],
-    [k(10.5), () => { stream("page-styles", 4); pushRun(); working("Editing docs/styles/search.css"); }],
+    [k(10.5), () => { stream("page-styles", 4); pushRun(); working("Writing the dark code theme", "Editing docs/styles/search.css"); }],
     [k(12.5), () => ev("pip", { event: "message", id: `pip-${loop}`, text: "Standup notes are filed: 4 updates, 1 blocker (the iOS build)." })],
     [k(13.2), () => {
       tev(flake.id, { event: "tool.end", tool_id: `tf-t-${loop}`, name: "terminal", ok: true, ms: 41_000 });
       said(flake.id, "assistant", `tf-a-${loop}`, "Found it: the test raced the index refresh. It waits for the refresh now, and 50 of 50 runs pass.");
       threadEnd(flake.id);
     }],
-    [k(14), () => { setNode("code-colors", "done"); pushRun(); working(parts(1)); }],
+    [k(14), () => { setNode("code-colors", "done"); pushRun(); working("Editing docs/styles/search.css"); }],
     [k(15.5), () => say("shell", "\x1b[38;2;217;119;87m⏺\x1b[0m Read src/search/filters.ts\r\n")],
     [k(16), () => { stream("page-styles", 5); pushRun(); }],
     [k(17.5), () => { setNode("page-styles", "done"); setNode("contrast", "running"); pushRun(); working("Checking contrast in light and dark"); }],
@@ -411,15 +407,15 @@ function startLoop() {
     [k(28.5), () => say("shell", "\x1b[38;2;217;119;87m⏺\x1b[0m Ran pnpm docs:build (14 pages)\r\n")],
     [k(31), () => { stream("verify-pr", 4); setNode("verify-pr", "done"); pushRun("done"); }],
     [k(32), () => {
-      ev("kami", { event: "message", id: `k-pr-${loop}`, text: `Here it is: ${PR_URL}. Dark mode follows the system theme, and links keep Mina's purple.\n\nMEDIA:/w/media/docs-light.webp\nMEDIA:/w/media/docs-dark.webp` });
+      ev("kami", { event: "message", id: `k-pr-${loop}`, text: `The PR is up: ${PR_URL}. I told Sam in #releases, and I opened two threads, one for the 2.4 release post and one to check the docs links.` });
       ev("kami", { event: "turn.end", outcome: "done" });
       ev("kami", { event: "bot.status", status: "online", running: false });
+      splitThreads(`k-pr-${loop}`);
     }],
     [k(33), () => { say("shell", "\r\n"); shellFg(null); say("shell", SHELL_PROMPT); }],
-    // replies elsewhere land once the turn is over, so the working line is never left above a bubble
+    // replies elsewhere land once the turn is over (the header's places chip and the panel count them; preview.css
+    // keeps them out of Kami's chat, which stays the ask, the big answer and the PR)
     [k(33.8), () => landAway("discord")],
-    [k(35.5), splitRequest],
-    [k(37.5), splitAnswer],
     [k(40), () => landAway("slack")],
     [k(40.5), () => split[1] && tev(split[1], { event: "tool.start", tool_id: `tk-l-${loop}`, name: "terminal", detail: "lychee docs/" })],
     [k(41.5), () => say("codex", "\r\n• Edited api/search/handler.go (+22 -6)\r\n")],
@@ -525,17 +521,17 @@ function planFromScratch() {
     [1.2, () => {
       pushRun();
       store().actions.openRun(runName());
-      ev("kami", { event: "message", id: `p-plan-${runSeq}`, text: "On it. I split it into six parts and put the plan on the right." });
+      ev("kami", { event: "message", id: `p-plan-${runSeq}`, text: "On it. The plan is on the right, and I'll post the PR here." });
       ev("kami", { event: "turn.start" });
-      working(parts(2));
+      working("Editing docs/theme.css", "Adding the theme toggle");
     }],
     [2.8, () => { setNode("color-tokens", "running"); setNode("theme-toggle", "running"); pushRun(); }],
-    [4.6, () => { setNode("color-tokens", "done"); pushRun(); working(parts(1)); }],
+    [4.6, () => { setNode("color-tokens", "done"); pushRun(); working("Adding the theme toggle"); }],
     [5.6, () => {
       setNode("theme-toggle", "done"); for (const id of ["page-styles", "code-colors"]) setNode(id, "running"); pushRun();
-      working("Editing docs/styles/code.css");
+      working("Editing docs/styles/code.css", "Moving the sidebar to the new colors");
     }],
-    [7.4, () => { setNode("code-colors", "done"); pushRun(); working(parts(1)); }],
+    [7.4, () => { setNode("code-colors", "done"); pushRun(); working("Editing docs/styles/search.css"); }],
     [8.4, () => { setNode("page-styles", "done"); setNode("contrast", "running"); pushRun(); working("Checking contrast in light and dark"); }],
     [9.6, () => { setNode("contrast", "done"); setNode("verify-pr", "running"); pushRun(); working("Building the docs"); }],
     [12, () => { setNode("verify-pr", "done"); pushRun("done"); }],

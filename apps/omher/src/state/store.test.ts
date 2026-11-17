@@ -322,7 +322,7 @@ describe("reducer: approvals and clarifications", () => {
 });
 
 describe("elsewhere ordering", () => {
-  it("places away lines by last_active among chat rows, capped to the 2 most recent", () => {
+  it("keeps the bot's sessions elsewhere out of the chat timeline; the list itself is newest first", () => {
     const base = T0 / 1000;
     let s = reduce(initialState(), {
       type: "chat.opened",
@@ -342,10 +342,8 @@ describe("elsewhere ordering", () => {
       sessions: [away("old", base - 2000), away("mid", base - 300), away("new", base - 50), away("mid2", base - 700)],
     });
     expect(s.elsewhere.kami.map((a) => a.id)).toEqual(["new", "mid", "mid2", "old"]); // newest first
-    const tl = selectTimeline(s, "kami");
-    expect(tl.map((i) => i.id)).toEqual(["a", "b", "away-mid", "c", "away-new"]);
-    expect(selectTimeline(s, "kami")).toBe(tl); // memoised
-    expect(selectTimeline(s, "kami", 4).map((i) => i.id)).toContain("away-old");
+    // the chat keeps other places out: the header count and the side panel show them
+    expect(selectTimeline(s, "kami").map((i) => i.id)).toEqual(["a", "b", "c"]);
   });
 });
 

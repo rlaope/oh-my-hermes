@@ -12,6 +12,6 @@ export function liveFaceRow(items: TimelineItem[], turn: Turn | null | undefined
   if (!turnHasActivity(turn)) return null;
   const at = items.findIndex((i) => i.kind === "activity" && i.id === turn.id);
   if (at < 0) return null;
-  for (let k = at + 1; k < items.length; k++) if (items[k].kind === "assistant" || items[k].kind === "away") return null;
+  for (let k = at + 1; k < items.length; k++) if (items[k].kind === "assistant") return null;
   return "activity";
 }

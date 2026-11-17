@@ -260,26 +260,6 @@ test("five asks: the Needs list ends on the third, whole, and a '+2 more' row op
   await expect(list.getByTestId("needs-item")).toHaveCount(3);
 });
 
-test("an away bubble has one left edge: a link or a 'working' that wraps starts where the text starts", async ({ page }) => {
-  await page.setViewportSize({ width: 1440, height: 900 });
-  await open(page);
-  const bubble = page.getByTestId("away").filter({ has: page.getByTestId("away-time") }).first();
-  await expect(bubble).toBeVisible();
-  const edges = await bubble.evaluate((m) => {
-    // each part on a line of its own, as a narrow column wraps them
-    const text = m.querySelector<HTMLElement>(".ew-text")!;
-    const link = m.querySelector<HTMLElement>(".ew-link, .ew-where")!;
-    text.style.display = "inline-block";
-    text.style.width = "100%";
-    link.style.width = "100%";
-    const left = (e: Element) => e.getBoundingClientRect().left;
-    return { text: left(text), mark: left(link.querySelector(".src-ic")!), working: left(m.querySelector("[data-testid=away-time]")!), lines: [text, link, m.querySelector("[data-testid=away-time]")!].map((e) => Math.round(e.getBoundingClientRect().top)) };
-  });
-  expect(new Set(edges.lines).size).toBe(3); // three lines
-  expect(Math.abs(edges.mark - edges.text)).toBeLessThanOrEqual(0.5);
-  expect(Math.abs(edges.working - edges.text)).toBeLessThanOrEqual(0.5);
-});
-
 test("lines that carry information are 12px in --muted, not the 11px tertiary gray", async ({ page }) => {
   // the bot cannot be reached: the notice in the date dividers' place
   await page.routeWebSocket(/127\.0\.0\.1/, (ws) => {

@@ -1,6 +1,6 @@
 // One-line plain fallbacks used until a feature node registers its slot.
 import { useEffect, useState } from "react";
-import type { ActivitySlotProps, CardsSlotProps, ElsewhereLineSlotProps, RoutineLineSlotProps } from "../../features";
+import type { ActivitySlotProps, CardsSlotProps, RoutineLineSlotProps } from "../../features";
 import { SourceIcon, Spinner } from "../../ui";
 import { elapsed, hhmm } from "../../app/time";
 import { t as tr } from "../../i18n";
@@ -49,18 +49,6 @@ export function CardFallback({ item }: CardsSlotProps) {
 
 const SOURCE: Record<string, string> = { slack: "Slack", discord: "Discord", telegram: "Telegram", cron: "Cron" };
 export const sourceName = (s: string) => SOURCE[s] ?? (s ? s[0].toUpperCase() + s.slice(1) : tr("fb.elsewhere"));
-
-export function ElsewhereFallback({ item }: ElsewhereLineSlotProps) {
-  const a = item.away;
-  return (
-    <div className="line" data-testid="away-fallback">
-      <SourceIcon source={a.source} size={12} />
-      <span className="line-src">{sourceName(a.source)}</span>
-      <span className="line-t strong">{a.label}</span>
-      <span className="line-tm">{a.running ? tr("act.dag.working") : hhmm(new Date(a.last_active * 1000))}</span>
-    </div>
-  );
-}
 
 export function RoutineFallback({ item }: RoutineLineSlotProps) {
   return (

@@ -11,6 +11,11 @@ All notable changes will be documented here.
   of one per session. With 20 terminals of 2 MiB each and 19 hidden ones printing, main-thread script time over 8 s
   drops from 1333 ms to 124 ms. After the park wait, buffers, snapshots and heap hold 35.5 MB instead of 205.5 MB.
   Frames over 50 ms went from 59 to 71 (worse); details in `apps/omher/bench/many/README.md`.
+- **omher: the bot's sessions elsewhere stay out of its chat.** Answers from its Slack, Discord and cron sessions no
+  longer sit between this chat's messages as bubbles (with only a small link to say where each came from, they read as
+  part of this conversation). The header's "N other places" and the side panel's "Where Kami is" list them, each row
+  opens its thread (↗), and Reply there moved onto the row (hover), still only pointing the next message at that
+  thread.
 - **OMH starts faster in a fresh Hermes process and its tools cost fewer tokens to open.** The chat router no longer
   imports the whole loop engine for one loop-command check, and the dag-ulw cue patterns compile on first use instead
   of all at import, so the plugin's start before a one-shot `chat -q`, a cron run or a delegated child's first reply
@@ -20,11 +25,17 @@ All notable changes will be documented here.
   the `observation` field on 20 tools stops describing metadata a model never fills, and the profile-override fields
   say their refusal in fewer words. No tool, parameter or rule a model acts on changed.
 
+- **omher terminals behave like a real terminal.** `exit` (or Ctrl+D) in a TERMINALS shell closes its row, as its
+  x does, and the next terminal or the bot chat opens; a shell that could not start stays with its error. When Claude
+  Code, Codex or any CLI opened in a terminal ends, the same row goes on as your login shell in that folder, with one
+  dim line saying so, and the row's mark follows whatever you start there next. Korean typed with the macOS 2-Set
+  input source no longer loses or repeats syllables (the window's engine sends no composition events for it), and a
+  fast Enter after the last syllable keeps it. Terminals draw in the bundled JetBrains Mono at 13px, with Symbols
+  Nerd Font Mono for prompt icons, as Otty does; Settings › Terminal still picks another font and size.
 - **omher: a routine that keeps failing is one line in the chat, not one per run.** The same routine failing again
   with nothing between updates its line instead of adding another: `Routine · sso-refresh · not delivered ×12 ·
   03:56–09:37`, with one unread for the first failure. Hermes' `delivery_failed` and `blocked_config` read as "not
   delivered" and "blocked by config" in the danger colour, instead of the raw state.
-
 - **An OMH TUI reply no longer hangs on a rail.** The `⚚ Hermes · <model>` header starts at the left edge and the
   reply's text sits two cells in, with no `┃` beside it, so a reply reads apart from your prompts and the tool calls,
   which keep their rails. The two cells the bar took go to the reply's text, and a copy still leaves the margin out.
@@ -133,6 +144,11 @@ All notable changes will be documented here.
   model's list, warnings). It follows `/theme`, the saved launch
   look, a light background (`COLORFGBG` on the command line, the measured background in the TUI) and the terminal's
   colour depth. Text, columns and keys are unchanged; only the cursor mark moved from `▍` to `❯`.
+
+- **A code backlog that names a monthly report is no longer read as a schedule.** A period word such as monthly,
+  weekly or nightly counts as a recurring schedule only when it says how often the work runs ("fix these monthly",
+  "rebase them nightly, then report"). Naming a thing ("the monthly report", "a weekly digest module") no longer stops
+  a listed backlog of code changes from running as a dag-ulw graph.
 
 ## 4.0.8 - 2026-11-15
 

@@ -59,3 +59,33 @@ html .window.panel-open:has(.ss-view):has(.pn-wide[data-tab="runs"]) {
     transition: none;
   }
 }
+/* Kami's chat in the hero: the person's ask and one big answer sit just above the composer, as in a real chat (the
+   thread fills from the bottom, so a short chat leaves no hole between the working line and the composer). Under the
+   answer: the spinner with Hermes' status and the time, and at most one more plain grey line for the other part at
+   work (the turn's plan rows, without their head and boxes). The live line drops the bot's ringed face: the
+   spinner already says Kami is working, and the face sits beside the bubble right above it. */
+.pane[data-pane="kami"] > .thread > :first-child {
+  margin-top: auto;
+}
+/* What Kami said in Slack and Discord stays in the header's places chip and the panel, not as more bubbles here. */
+.pane[data-pane="kami"] > .thread > .row-away {
+  display: none;
+}
+.pane[data-pane="kami"] > .thread > .row-activity.live-line > .ui-ring-w {
+  display: none;
+}
+.pane[data-pane="kami"] .act .pl {
+  margin: 0;
+  padding-left: 18px;
+}
+.pane[data-pane="kami"] .act .pl-head,
+.pane[data-pane="kami"] .act .pl-box {
+  display: none;
+}
+.pane[data-pane="kami"] .act .pl-row {
+  min-height: 18px;
+  color: var(--muted);
+}
+.pane[data-pane="kami"] .act:not([data-state="live"]) .pl {
+  display: none;
+}

@@ -1,0 +1,39 @@
+/* The terminal's own font, bundled (Otty's): JetBrains Mono (SIL OFL 1.1) in four styles, and Symbols Nerd Font Mono
+   (MIT) for the icon glyphs prompts and TUIs draw from the private use area. The symbols file is fetched only when such
+   a glyph is on screen (unicode-range). Licences: src/assets/fonts/*.txt and THIRD_PARTY_NOTICES.md. */
+@font-face {
+  font-family: "JetBrains Mono";
+  src: url("../../assets/fonts/JetBrainsMono-Regular.woff2") format("woff2");
+  font-weight: 400;
+  font-style: normal;
+  font-display: block;
+}
+@font-face {
+  font-family: "JetBrains Mono";
+  src: url("../../assets/fonts/JetBrainsMono-Bold.woff2") format("woff2");
+  font-weight: 700;
+  font-style: normal;
+  font-display: block;
+}
+@font-face {
+  font-family: "JetBrains Mono";
+  src: url("../../assets/fonts/JetBrainsMono-Italic.woff2") format("woff2");
+  font-weight: 400;
+  font-style: italic;
+  font-display: block;
+}
+@font-face {
+  font-family: "JetBrains Mono";
+  src: url("../../assets/fonts/JetBrainsMono-BoldItalic.woff2") format("woff2");
+  font-weight: 700;
+  font-style: italic;
+  font-display: block;
+}
+@font-face {
+  font-family: "Symbols Nerd Font Mono";
+  src: url("../../assets/fonts/SymbolsNerdFontMono-Regular.woff2") format("woff2");
+  font-weight: 400;
+  font-style: normal;
+  font-display: block;
+  unicode-range: U+23FB-23FE, U+2665, U+26A1, U+2B58, U+E000-F8FF, U+F0000-FFFFD;
+}

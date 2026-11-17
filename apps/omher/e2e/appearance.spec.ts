@@ -107,9 +107,6 @@ test("bubble styles: solid puts your bubble in the accent; open drops the bot's 
   expect(await css(page, "bubble-bot", "padding-left")).toBe("0px");
   // your bubble is back to the soft tint under "open"
   expect(await css(page, "bubble-user", "background-image")).toBe("none");
-  // elsewhere answers follow the bot's bubble (same element classes)
-  const away = page.getByTestId("timeline").locator("[data-testid=away]").first().locator(".b");
-  expect(await away.evaluate((e) => getComputedStyle(e).backgroundColor)).toBe("rgba(0, 0, 0, 0)");
 });
 
 test("text size changes messages and the composer; every choice survives a reload", async ({ page }) => {

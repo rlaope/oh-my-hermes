@@ -404,6 +404,16 @@ export function termStatus(rec: Pick<SessionRec, "status" | "exitCode" | "lastOu
   return null;
 }
 
+/** What a terminal does when its program ends. A TERMINALS row: its CLI ended, so it goes on as the login `shell` in
+ *  the same terminal; its shell ended (exit, Ctrl+D, any code once the person typed), so the row `close`s as its x
+ *  does; a shell that ended with an error before anything was typed (it could not start properly) stays `ended`,
+ *  showing why. The terminal view of a chat session only says it `ended` (the chat decides the session). */
+export function termEnd(o: { ofChat: boolean; shell: boolean; typed: boolean; code: number | null }): "shell" | "close" | "ended" {
+  if (o.ofChat) return "ended";
+  if (!o.shell) return "shell";
+  return o.typed || o.code === 0 ? "close" : "ended";
+}
+
 /** The mark a TERMINALS row shows: the foreground CLI when one is known, else the session's own agent, else null
  *  (the shell icon). */
 export const termMarkAgent = (rec: Pick<SessionRec, "agent" | "fgAgent">): string | null => rec.fgAgent ?? (isShell(rec.agent) ? null : rec.agent);

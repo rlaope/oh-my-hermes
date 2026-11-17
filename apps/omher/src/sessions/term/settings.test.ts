@@ -12,9 +12,9 @@ describe("terminal settings", () => {
     resetTermSettings();
   });
 
-  it("nothing stored reads as the defaults a terminal had before there were settings", () => {
+  it("nothing stored reads as the defaults: the bundled font (fontFamily \"\") at Otty's 13px, the rest as before there were settings", () => {
     expect(readTermSettings()).toEqual(TERM_DEFAULTS);
-    expect(TERM_DEFAULTS).toMatchObject({ fontSize: 12.5, lineHeight: 1.2, cursorBlink: true, scrollback: 5000, gpu: "auto" });
+    expect(TERM_DEFAULTS).toMatchObject({ fontFamily: "", fontSize: 13, lineHeight: 1.2, cursorBlink: true, scrollback: 5000, gpu: "auto" });
   });
 
   it("a stored value of the wrong type or out of range falls back or is clamped, field by field", () => {
@@ -80,7 +80,7 @@ describe("terminal settings", () => {
   it("font size 9 to 24, line height 1 to 2, scrollback 1,000 to 50,000 rows: clamped, or the default for a wrong type", () => {
     expect(parseTermSettings({ fontSize: 2, lineHeight: 0.4, scrollback: 9e9 })).toMatchObject({ fontSize: 9, lineHeight: 1, scrollback: 50000 });
     expect(parseTermSettings({ fontSize: 99, lineHeight: 7, scrollback: 25000.4 })).toMatchObject({ fontSize: 24, lineHeight: 2, scrollback: 25000 });
-    expect(parseTermSettings({ fontSize: "16", lineHeight: null, scrollback: "many" })).toMatchObject({ fontSize: 12.5, lineHeight: 1.2, scrollback: 5000 });
+    expect(parseTermSettings({ fontSize: "16", lineHeight: null, scrollback: "many" })).toMatchObject({ fontSize: 13, lineHeight: 1.2, scrollback: 5000 });
   });
 
   it("a font name keeps only what a font name is made of, and a theme id of the wrong type is omher's own", () => {

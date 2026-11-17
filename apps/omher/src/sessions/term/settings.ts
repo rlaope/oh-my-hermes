@@ -22,7 +22,7 @@ export interface TermSettings {
   /** Theme ids from the catalog, one per app theme. */
   themeDark: string;
   themeLight: string;
-  /** "" = the app's own monospace stack (`--mono`). */
+  /** "" = the bundled JetBrains Mono (Otty's terminal font), then the app's monospace stack (`--mono`). */
   fontFamily: string;
   fontSize: number;
   lineHeight: number;
@@ -50,7 +50,7 @@ export const TERM_DEFAULTS: TermSettings = {
   themeDark: "omher-dark",
   themeLight: "omher-light",
   fontFamily: "",
-  fontSize: 12.5,
+  fontSize: 13,
   lineHeight: 1.2,
   cursorStyle: "block",
   cursorBlink: true,
