@@ -131,9 +131,32 @@ elif [ -n "$OMH_HOME_DIR" ]; then
 fi
 
 # Hermes' own Python, where Hermes' installer puts it. The same places the
-# omher app looks (apps/omher/src-tauri/src/bridge.rs).
+# omher app looks (apps/omher/src-tauri/src/bridge.rs): first the interpreter
+# the launcher `hermes-agent/.hermes/bin/hermes` execs (Hermes' packaged
+# installs have no venv at all; the launcher's first `exec` word names the
+# store Python, quoted with single quotes when the path has a space), then the
+# venv of an older install.
 hermes_python() {
   [ -n "$OMH_HERMES_DIR" ] || return 1
+  omh_hermes_launcher="$OMH_HERMES_DIR/hermes-agent/.hermes/bin/hermes"
+  if [ -f "$omh_hermes_launcher" ]; then
+    omh_hermes_exec="$(sed -n 's/^exec //p' "$omh_hermes_launcher" | head -n 1)"
+    case "$omh_hermes_exec" in
+      "'"*)
+        omh_hermes_exe="${omh_hermes_exec#\'}"
+        omh_hermes_exe="${omh_hermes_exe%%\'*}"
+        ;;
+      *) omh_hermes_exe="${omh_hermes_exec%% *}" ;;
+    esac
+    case "$omh_hermes_exe" in
+      /*)
+        if [ -x "$omh_hermes_exe" ]; then
+          printf '%s\n' "$omh_hermes_exe"
+          return 0
+        fi
+        ;;
+    esac
+  fi
   for omh_hermes_venv in venv .venv; do
     if [ -x "$OMH_HERMES_DIR/hermes-agent/$omh_hermes_venv/bin/python" ]; then
       printf '%s\n' "$OMH_HERMES_DIR/hermes-agent/$omh_hermes_venv/bin/python"

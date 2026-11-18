@@ -121,6 +121,28 @@ cp "$FAKE_NET/python-stub" "$HOME/.hermes/hermes-agent/venv/bin/python"
 chmod +x "$HOME/.hermes/hermes-agent/venv/bin/python"
 """
 
+# What Hermes' packaged installer (v0.23+) leaves behind: a store Python under
+# `tools/`, the launcher `hermes-agent/.hermes/bin/hermes` that execs it, and no
+# venv. `hermes` lands in ~/.local/bin, which is not on the installer's PATH.
+# FAKE_STORE_DIR names the store folder (a space in it is quoted the way
+# Hermes' `shlex.join` quotes it).
+FAKE_PACKAGED_HERMES_INSTALLER = """#!/bin/bash
+printf '%s\\n' "$*" > "$FAKE_LOG/hermes-installer-args"
+store="$HOME/.hermes/tools/${FAKE_STORE_DIR:-python-3.14.9-darwin-arm64}/bin"
+mkdir -p "$store" "$HOME/.hermes/hermes-agent/.hermes/bin" "$HOME/.local/bin"
+cp "$FAKE_NET/python-stub" "$store/python3"
+chmod +x "$store/python3"
+launcher="$HOME/.hermes/hermes-agent/.hermes/bin/hermes"
+case "$store" in
+  *" "*) exe="'$store/python3'" ;;
+  *) exe="$store/python3" ;;
+esac
+printf '#!/bin/sh\\nexec %s -I -c %s "$@"\\n' "$exe" "'import sys'" > "$launcher"
+chmod +x "$launcher"
+printf '#!/bin/sh\\nexec %s "$@"\\n' "$launcher" > "$HOME/.local/bin/hermes"
+chmod +x "$HOME/.local/bin/hermes"
+"""
+
 STUB_HDIUTIL = """#!/bin/sh
 printf '%s\\n' "$*" >> "$FAKE_LOG/hdiutil"
 case "$1" in
@@ -619,6 +641,54 @@ class OmherInstallerTests(unittest.TestCase):
         self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
         self.assertIn(f"Could not download {HERMES_URL}", result.stdout)
         self.assertFalse((self.home / ".local" / "share" / "omh" / "venv").exists())
+
+    # -- Hermes' packaged layout: a launcher and a store Python, no venv ---------------------------
+
+    def _packaged_hermes_installer(self) -> None:
+        self._write(self.net / "hermes-install.sh", FAKE_PACKAGED_HERMES_INSTALLER)
+
+    def test_a_packaged_hermes_install_is_found_after_its_installer_ran(self) -> None:
+        # Hermes v0.23's installer leaves no venv and puts `hermes` in ~/.local/bin, which the
+        # installer's own PATH does not hold; looking only for `venv/bin/python` failed every
+        # new user with "no Hermes was found" right after Hermes installed.
+        self._system_python()
+        self._packaged_hermes_installer()
+        result = self._run("omher@beta")
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertNotIn("no Hermes was found", result.stdout)
+        self.assertIn("[ok] Hermes Agent", result.stdout)
+        self.assertTrue(self._setup_ran(), self._calls("omh-cli"))
+        self._assert_app_installed(result)
+
+    def test_a_packaged_hermes_with_a_space_in_its_store_path_is_found(self) -> None:
+        self._system_python()
+        self._packaged_hermes_installer()
+        result = self._run("omher@beta", FAKE_STORE_DIR="python 3.14")
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn("[ok] Hermes Agent", result.stdout)
+
+    def test_a_machine_with_a_packaged_hermes_is_not_given_hermes_again(self) -> None:
+        self._system_python()
+        self._packaged_hermes_installer()
+        subprocess.run(
+            ["bash", str(self.net / "hermes-install.sh")],
+            env={"HOME": str(self.home), "FAKE_LOG": str(self.log), "FAKE_NET": str(self.net), "PATH": str(self.tools)},
+            check=True,
+        )
+        result = self._run("omher@beta")
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn("found Hermes without OMH", result.stdout)
+        self.assertNotIn(HERMES_URL, self._calls("curl"))
+
+    @unittest.skipIf(
+        any(glob.glob(p) for p in HOST_PYTHON_GLOBS),
+        "this host has an interpreter install.sh probes by absolute path, which would be chosen first",
+    )
+    def test_with_no_python_at_all_omh_builds_on_the_packaged_hermes_python(self) -> None:
+        self._packaged_hermes_installer()
+        result = self._run("omher@beta")
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn(f"Python: {self.home}/.hermes/tools/python-3.14.9-darwin-arm64/bin/python3", result.stdout)
 
 
 if __name__ == "__main__":
