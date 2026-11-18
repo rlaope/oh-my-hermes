@@ -316,8 +316,8 @@ shell (`HERMES_HOME=<root>/profiles/<name>`), the installer looks for Hermes und
 
 The release lookup reads GitHub's API ten releases at a time and stops at the first omher one. Without a token
 GitHub allows 60 API requests an hour per network; when that runs out the installer stops with exit 1 and says so
-(set `GITHUB_TOKEN` to raise the limit). A Hermes installed this way skipped its setup wizard: open omher and pick a
-model from the model menu at the top of the chat (without the app, run `hermes setup`). `irm ... | iex` cannot
+(set `GITHUB_TOKEN` to raise the limit). A Hermes installed this way skipped its setup wizard: open omher and sign it in
+to an AI account from the line above the chat box (without the app, run `hermes setup`). `irm ... | iex` cannot
 pass an argument, which is why the PowerShell form runs the downloaded script as a script block; a failed run
 leaves its exit code in `$LASTEXITCODE`.
 
