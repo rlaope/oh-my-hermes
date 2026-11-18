@@ -119,7 +119,7 @@ test("Details panel: identity, where the bot is, note, routines", async ({ page 
   await expect(rows.nth(3)).toContainText("Discord #oh-my-hermes");
 
   await expect(panel.getByTestId("where-note")).toHaveText(
-    "Talk to Kami here — it knows what it did in Slack and Discord. Reply there points your next message at that thread; ↗ opens it in its app.",
+    "Talk to Kami here — it knows what it did in Slack and Discord. “Reply there” points your next message at that thread; ↗ opens it in its app.",
   );
 
   await expect(panel.getByTestId("routines-sec")).toHaveText("Routines2");

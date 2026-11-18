@@ -380,6 +380,7 @@ from .transcript import (
     compact_count,
     review_line,
 )
+from . import proofread
 from .update_notice import UpdateCheck, fetch_latest
 from .update_notice_switch import update_check_off
 from .wallpaper import TICK_SECONDS as WALLPAPER_TICK_SECONDS
@@ -2296,6 +2297,17 @@ class App(ModesMixin, AgentViewMixin):
         self.search: HistorySearch | None = None  # Ctrl+R's search, while it has the keys
         self.escape_armed: tuple[str, float] | None = None  # (what a second Esc does, when the first came)
         self.rewind_picker: RewindPicker | None = None
+        self.proofread_worker = proofread.Worker()
+        self.proofread_review: proofread.Review | None = None
+        self.proofread_job: proofread.Job | None = None
+        self.proofread_snapshot: proofread.Snapshot | None = None
+        self.proofread_issues: tuple[proofread.Issue, ...] = ()
+        self.proofread_due: float | None = None
+        self.proofread_checked = False
+        self.proofread_intent = False
+        self.proofread_status = ""
+        self.proofread_retry = 0.0
+        self.proofread_failures = 0
         self.rewind_messages: list[dict[str, Any]] = []  # the history the picker was opened over
         self.rewind: Rewind | None = None  # a picked prompt waiting to be sent again
         self.model_picker: ModelPicker | None = None  # bare /model's list of what Hermes offers
@@ -3144,6 +3156,7 @@ class App(ModesMixin, AgentViewMixin):
         self._take_hud()
         self._take_board()
         self._take_update_check()
+        self._take_proofread()
         self._watch_generation()
         self._offer_restart_when_due()
         self._relaunch_when_due()
@@ -3202,6 +3215,8 @@ class App(ModesMixin, AgentViewMixin):
             due.append(self.ambient_at + WALLPAPER_TICK_SECONDS)
         if self.path_due is not None and self.sid:
             due.append(self.path_due)
+        if self.proofread_due is not None and not self.proofread_worker.pending:
+            due.append(max(self.proofread_due, self.proofread_retry))
         if self.auto_continue is not None and not self.decoder.holding:  # a held Esc has its own deadline above
             due.append(self.auto_continue[1])
         if self.hermes_next_due is not None:
@@ -4802,8 +4817,23 @@ class App(ModesMixin, AgentViewMixin):
             self._on_event_input(event)
         finally:
             self.queue_command_open = opened
+            self._sync_proofread()
 
     def _on_event_input(self, event: Key | Paste | Mouse) -> None:
+        if self.proofread_review is not None and not self._proofread_foreground():
+            self._close_proofread()
+        if (self.proofread_review is None and isinstance(event, Key) and event.name == ENTER
+                and self._proofread_foreground()
+                and self.clock() < getattr(self, "proofread_enter_until", 0)):
+            self.proofread_enter_until = self.clock() + proofread.ARM_SECONDS
+            return  # require a quiet interval after closing; buffered/repeated Enter cannot send
+        if self.proofread_review is not None:
+            self._proofread_key(event)
+            return
+        if self.proofread_job is not None and not self.proofread_job.snapshot.matches(
+            self.composer, self._proofread_owner(),
+        ):
+            self.proofread_job = None
         if isinstance(event, Mouse):
             self.report_at = self.clock()
             if not event.motion and event.button not in (WHEEL_UP, WHEEL_DOWN):
@@ -4860,6 +4890,18 @@ class App(ModesMixin, AgentViewMixin):
             self.composer._drop_pending()  # Ctrl+C does what it does unarmed, a question's text field included
         if self.slot is not None and self._slot_arming(event):
             return  # in the first moment of a question every key is ignored: nothing typed, cleared or sent
+        if (isinstance(event, Key) and event.name == CHAR and event.alt and not event.ctrl
+                and event.char.lower() == "p" and not self.composer.pending and not self.composer.visual
+                and self.pager is None and self._front_picker() is None
+                and self.list_selected is None and self.tree_selected is None
+                and (self.slot is None or (self.slot.method == "clarify" and not self.slot.picking))):
+            self._sync_proofread()
+            if self.proofread_checked:
+                self._open_proofread_issue()
+            else:
+                self.proofread_intent = True
+                self._start_proofread()
+            return
         if self.slot is not None and _slot_owns(self.slot, event, self.composer.text):
             question = self.slot.question_index
             self._sync_draft(self.slot)  # the clarify field's words, which a Submit row sends
@@ -4947,6 +4989,150 @@ class App(ModesMixin, AgentViewMixin):
             self._send_queued_now()
             return True
         return False
+
+    def _proofread_foreground(self) -> bool:
+        return (self.pager is None and self._front_picker() is None
+                and not self.composer.pending and not self.composer.visual
+                and self.list_selected is None and self.tree_selected is None
+                and (self.slot is None or (self.slot.method == "clarify" and not self.slot.picking)))
+
+    def _close_proofread(self) -> None:
+        self.proofread_review = None
+        self.proofread_enter_until = self.clock() + proofread.ARM_SECONDS
+        self.dirty = True
+
+    def _proofread_owner(self) -> tuple:
+        slot = self.slot
+        return (self.sid, id(slot) if slot is not None else None,
+                slot.request_id if slot is not None else None,
+                slot.question_index if slot is not None else None,
+                slot.typing if slot is not None else None, self.slot_opened_at,
+                id(self.pager), id(self._front_picker()), self.list_selected, self.tree_selected,
+                self._proofread_foreground())
+
+    def _sync_proofread(self) -> None:
+        """Invalidate on edit or foreground change, never on cursor motion alone."""
+        owner = self._proofread_owner()
+        if self.proofread_snapshot is not None and self.proofread_snapshot.matches(self.composer, owner):
+            return
+        had_display = bool(self.proofread_issues or self.proofread_status)
+        self.proofread_snapshot = proofread.Snapshot.capture(self.composer, owner)
+        self.proofread_job = None
+        self.proofread_issues = ()
+        self.proofread_checked = False
+        self.proofread_intent = False
+        self.proofread_status = ""
+        self.proofread_due = None
+        if (self._proofread_foreground() and not self.composer.masked and self.composer.text
+                and self._proofread_auto()
+                and isinstance(proofread.prepare(self.composer, owner, self.environ), proofread.Job)):
+            self.proofread_due = self.clock() + 0.6
+        if had_display:
+            self.dirty = True
+
+    def _proofread_auto(self) -> bool:
+        """Automatic checks are opt-in: only `OMH_PROOFREAD=1` sends a draft without Alt+P."""
+        return self.environ.get("OMH_PROOFREAD") == "1"
+
+    def _start_proofread(self) -> None:
+        if self.proofread_worker.pending:
+            return  # the latest generation waits for the one in flight
+        self.proofread_due = None
+        job = proofread.prepare(self.composer, self._proofread_owner(), self.environ)
+        if isinstance(job, str):
+            status = job if self.proofread_intent else ""
+            if status != self.proofread_status:
+                self.proofread_status = status
+                self.dirty = True
+            self.proofread_intent = False
+            return
+        self.proofread_job = job
+        self.proofread_worker.start(job, self._wake_loop)
+
+    def _proofread_issue(self) -> proofread.Issue | None:
+        if (not self._proofread_foreground() or self.composer.masked or self.proofread_snapshot is None
+                or not self.proofread_snapshot.matches(self.composer, self._proofread_owner())):
+            return None
+        caret = self.composer.caret
+        return (next((issue for issue in self.proofread_issues if issue.start <= caret < issue.end), None)
+                or next((issue for issue in self.proofread_issues if issue.end == caret), None))
+
+    def _proofread_marks(self) -> tuple[tuple[int, int], ...]:
+        self._sync_proofread()
+        return tuple((issue.start, issue.end) for issue in self.proofread_issues)
+
+    def _open_proofread_issue(self) -> None:
+        self.proofread_intent = False
+        issue = self._proofread_issue()
+        if issue is None:
+            self.proofread_status = "No correction at cursor · Alt+P checks"
+        else:
+            self.proofread_review = proofread.Review(
+                proofread.Snapshot.capture(self.composer, self._proofread_owner()), [issue],
+                self.clock() + proofread.ARM_SECONDS,
+            )
+        self.dirty = True
+
+    def _take_proofread(self) -> None:
+        self._sync_proofread()
+        review = self.proofread_review
+        if review is not None and not review.snapshot.matches(self.composer, self._proofread_owner()):
+            self._close_proofread()
+            self.dirty = True
+        outcome = self.proofread_worker.take()
+        if outcome is None:
+            if (self.proofread_due is not None and self.clock() >= max(self.proofread_due, self.proofread_retry)
+                    and self.proofread_review is None):
+                self._start_proofread()
+            return
+        valid = self._proofread_foreground() and outcome.job is self.proofread_job and outcome.job.snapshot.matches(
+            self.composer, self._proofread_owner(),
+        )
+        self.proofread_job = None
+        if not valid:
+            if self.proofread_intent:
+                self._start_proofread()
+            return
+        self.dirty = True
+        if outcome.error:
+            self.proofread_status = "Local proofreader unavailable · Alt+P retries"
+            self.proofread_failures = min(self.proofread_failures + 1, 4)
+            self.proofread_retry = self.clock() + min(5 * 2 ** (self.proofread_failures - 1), 30)
+            self.proofread_due = self.proofread_retry if self._proofread_auto() else None
+            self.proofread_intent = False
+            return
+        self.proofread_failures = 0
+        self.proofread_retry = 0
+        self.proofread_status = ""
+        self.proofread_checked = True
+        self.proofread_issues = tuple(outcome.issues)
+        if self.proofread_intent:
+            self._open_proofread_issue()
+
+    def _proofread_key(self, event: Key | Paste | Mouse) -> None:
+        review = self.proofread_review
+        if review is None:
+            return
+        if not review.snapshot.matches(self.composer, self._proofread_owner()):
+            self._close_proofread()
+            return  # the stale overlay still consumes this key; Enter never falls through
+        if isinstance(event, Mouse):
+            return
+        if isinstance(event, Key) and event.name == CHAR and event.ctrl and not event.alt and event.char == "_":
+            self._close_proofread()
+            self._edit(self.composer, event)  # undo exactly one correction; remaining offsets are invalid
+            return
+        action = review.handle_key(event, self.clock())
+        if action is None:
+            return
+        kind, value = action
+        if kind == "cancel":
+            self._close_proofread()
+            return
+        if kind == "accept":
+            issue = review.issue
+            self.composer.replace(issue.start, issue.end, value)
+        self._close_proofread()
 
     def _edit(self, composer: Composer, event: Key | Paste) -> ComposerAction:
         """`event` to `composer`, the person's own key: one that changes its text reopens the `/` menu at its top."""
@@ -5141,6 +5327,11 @@ class App(ModesMixin, AgentViewMixin):
         the field sends it, pastes whole (`Composer.expanded`)."""
         slot.draft, slot.draft_sent = self.composer.shown(), self.composer.expanded()
         slot.draft_before = self.composer._labelled(self.composer.text[: self.composer.caret])
+        slot.draft_marks = tuple(
+            (len(self.composer._labelled(self.composer.text[:start]).replace("\r\n", " ")),
+             len(self.composer._labelled(self.composer.text[:end]).replace("\r\n", " ")))
+            for start, end in self._proofread_marks()
+        )
 
     def _next_question(self, question: int) -> None:
         """After a key or a submit the open slot took, from its question number `question`: if it moved on.
@@ -9597,6 +9788,7 @@ class App(ModesMixin, AgentViewMixin):
             agents=self._drawn("the agent view", lambda: self._agent_view(cols, rows), cols),
             tail_floor=self._working_rows(),
             known_slash=self.known_slash,
+            diagnostics=self._proofread_marks(),
             aura=self._spinner_frame() if self._aura_live() else 0,
             aura_depth=self.color_depth,
             text_question=self.slot is not None and not self.slot.picking,
@@ -9762,7 +9954,9 @@ class App(ModesMixin, AgentViewMixin):
         armed = self.escape_armed
         steered = self.roster.agents.get(self.agent_steer or "")
         picker_keys = self._picker_keys()
-        if self.slot is not None:
+        if self.proofread_review is not None:
+            say = proofread.KEYS
+        elif self.slot is not None:
             # A framed clarify question says its keys on its own row, under its bottom rule (`PromptSlot.framed`),
             # when the slot has the rows for it; on a shorter one the info line says them, as for any question.
             framed_keys = self.slot.framed and self._slot_cap(cols, self.size[1]) >= FRAMED_FOOTER_MIN_ROWS
@@ -9794,6 +9988,8 @@ class App(ModesMixin, AgentViewMixin):
             say, say_style = tuple(form.format(seconds=seconds) for form in GATEWAY_RESTARTING_SAY), self.theme.warn
         elif self._newline_keys_due():
             say = NEWLINE_KEYS
+        if not say and self._proofread_foreground():
+            say = "Alt+P corrects at cursor" if self._proofread_issue() is not None else self.proofread_status
         badge = self._badge_forms()
         # A tiny terminal keeps its one line for the keys, as it does without the badge (`_badge_forms`).
         background = self._background_forms() if badge and not self._background_hidden() else ()
@@ -9860,6 +10056,8 @@ class App(ModesMixin, AgentViewMixin):
 
     def _picker_keys(self) -> tuple[str, ...]:
         """The open picker's or search's keys, said on the info line in place of the composer's; () with neither open."""
+        if self.proofread_review is not None:
+            return proofread.KEYS
         picker = self._front_picker()
         if picker is None:
             return ()
@@ -10127,6 +10325,8 @@ class App(ModesMixin, AgentViewMixin):
         if cap <= 0:
             return []
         # The info line says a question's or a picker's keys at every height; their rows do not.
+        if self.proofread_review is not None:
+            return self.proofread_review.lines(cols, self.theme, cap, self.composer)
         if self.slot is not None:
             # Hermes gives up on a clarify after an hour, so the key row says how long it has waited once that
             # is a minute or more (`WAIT_SHOWN_SECONDS`); a fresh question says nothing about time.

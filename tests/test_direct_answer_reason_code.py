@@ -23,6 +23,7 @@ load_local_package()
 from omh.quality.routing_precision import ROUTING_INTERVENTION_CASES, ROUTING_PRECISION_CASES
 from omh.routing import chat
 from omh.routing.chat import (
+    CODE_BACKLOG_REASON,
     DIRECT_ANSWER_REASON,
     DIRECT_ANSWER_REASON_CODES,
     FILE_LOOKUP_REASON,
@@ -48,6 +49,7 @@ _PROSE_BY_CODE = {
     "native_loop_cadence": NATIVE_LOOP_CADENCE_REASON,
     "typed_loop_goal": TYPED_LOOP_GOAL_REASON,
     "loop_construct": LOOP_CONSTRUCT_REASON,
+    "code_backlog": CODE_BACKLOG_REASON,
 }
 _CODE_BY_PROSE = {prose: code for code, prose in _PROSE_BY_CODE.items()}
 
@@ -69,7 +71,7 @@ class ReasonCodeContractTest(unittest.TestCase):
     def test_the_code_sets_are_the_named_codes(self) -> None:
         self.assertEqual(
             DIRECT_ANSWER_REASON_CODES,
-            {"direct_answer", "host_command_turn", "native_loop_cadence", "typed_loop_goal", "loop_construct"},
+            {"direct_answer", "host_command_turn", "native_loop_cadence", "typed_loop_goal", "loop_construct", "code_backlog"},
         )
         self.assertEqual(LOOP_TIMER_ANSWER_REASON_CODES, {"native_loop_cadence", "typed_loop_goal", "loop_construct"})
         self.assertEqual(REASON_CODE_FILE_LOOKUP, "file_lookup")
