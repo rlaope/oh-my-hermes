@@ -773,6 +773,7 @@ export const ja: Record<Key, string> = {
   "mp.offline": "{bot} はオフラインです",
   "mp.loading": "モデルを読み込み中…",
   "mp.none": "一致するモデルはありません",
+  "mp.noAccount": "{bot} にはまだ AI アカウントがありません。チャットの下でサインインすると、ここにモデルが表示されます。",
   "mp.reasoning": "推論",
   "mp.inHermes": "現在は Hermes で変更してください",
   "mp.appliesChat": "このチャットに適用 · {link}",
