@@ -84,7 +84,7 @@ class ModelChainsSetTests(unittest.TestCase):
             self.assertEqual(status, 0)
             self.assertIn("quick: kimi-k3-ultrafast:low, glm-5.2-ultrafast:low (override)", stdout)
             # Untouched categories keep the shipped default.
-            self.assertNotIn("architect: claude-fable-5-2:xhigh, gpt-6-astra:xhigh, kimi-k3.1-pro:xhigh (override)", stdout)
+            self.assertNotIn("architect: claude-fable-5-2:xhigh, gpt-6.2-astra:xhigh, kimi-k3.1-pro:xhigh (override)", stdout)
 
     def test_clear_returns_the_category_to_the_shipped_default(self) -> None:
         with TemporaryDirectory() as tmp:
@@ -94,7 +94,7 @@ class ModelChainsSetTests(unittest.TestCase):
                 _base(root) + ["model-chains", "set", "deep", "--clear"], output_json=False
             )
             self.assertEqual((status, stderr), (0, ""))
-            self.assertIn("deep: claude-opus-5-5:high, gpt-6.1-sol:high, kimi-k3.1-pro:high (default)", stdout)
+            self.assertIn("deep: claude-opus-5-5:high, gpt-6.2-sol:high, kimi-k3.1-pro:high (default)", stdout)
             document = json.loads(_chains_path(root).read_text(encoding="utf-8"))
             self.assertNotIn("deep", document["categories"])
 

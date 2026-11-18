@@ -11,6 +11,21 @@ All notable changes will be documented here.
   old and the new text. A first draft that also cut "a route set in an earlier turn runs on the previous model" and
   "OMH mirrors each todo_list write" lost passes and was restored.
 
+- **GPT-6.2 Astra and GPT-6.2 Sol take every slot GPT-6 Astra and GPT-6.1 Sol held** (OpenAI released both on
+  2026-11-17; owner decision, 2026-11-18). In the Hermes chains, the Codex lane table and the shared final order
+  (Claude Opus 5.5, then GPT-6.2 Sol), each new id sits where its predecessor sat, at the same effort, and no chain
+  changes order. `ultrabrain` is now Claude Fable 5.2, GPT-6.2 Astra, then Claude Opus 5.5; `forensics` and the Codex
+  `ultrabrain`, `architect`, `deep-work` and `forensics` rows lead with GPT-6.2 Astra, and every Sol slot names GPT-6.2
+  Sol. A child with no route record is labelled by its new pair: GPT-6.2 Astra at `xhigh` reads `forensics`, GPT-6.2
+  Sol at `xhigh` `review`. `omh coding model-contract --model gpt-6.2-sol` (or `gpt-6.2-astra`) prints each record from
+  OpenAI's pages: the API rejects `none`, so a request for `off`, `none` or `minimal` is raised to `low` on record, and
+  tool calling needs the Responses API. Astra lists at $8 / $40 per million tokens against GPT-6 Astra's $10 / $50, Sol
+  at GPT-6.1 Sol's $2 / $10, both with cached input at 5%, and cost estimates use those prices. Both get GPT-6 Astra's
+  calibration text unchanged; OpenAI's "persist until the task is complete" prompts are not used. GPT-6 Astra and
+  GPT-6.1 Sol leave the shipped chains but stay recognized, priced and routable, so a chain you set yourself can still
+  name them. Hermes builds up to origin/main of 2026-11-17 do not know the 6.2 ids yet and clamp `max` to `xhigh` on
+  the Codex route.
+
 - **omher stays light with many terminal sessions open.** A hidden terminal's output now re-renders only its own
   TERMINALS row, never the list. A terminal that is not on the page draws nothing, not even the selection redraw that
   xterm's own pause misses. One hidden and quiet for two minutes gives its scrollback back as a snapshot and is made

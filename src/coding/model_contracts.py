@@ -517,6 +517,223 @@ _GPT_6_1_SOL: Final[dict[str, object]] = {
     "claim_boundary": MODEL_CONTRACT_CLAIM_BOUNDARY,
 }
 
+# GPT-6.2 Astra and GPT-6.2 Sol (the API changelog's "Nov 17 ... Model:
+# gpt-6.2-astra · Model: gpt-6.2-sol"). Each takes every shipped slot of the
+# line's previous generation (owner decision, 2026-11-18: 6.2 Astra GPT-6
+# Astra's, 6.2 Sol GPT-6.1 Sol's). Both model pages say "The API rejects
+# requests that set reasoning effort to `none`", and the migration guide
+# sends `none` and `minimal` callers to `low`, so the ladder is Astra's shape
+# and a lower request is raised to the `low` floor on record. Neither page
+# nor the reasoning guide states an API default effort (the guide's list of
+# `medium` defaults names GPT-6.1 Sol, GPT-6 Sol, and GPT-6 Luna, not 6.2),
+# so `effort_default` is empty, as for GPT-6 Astra: a route names one. New in
+# 6.2 (reasoning guide): the API drops reasoning items on a mid-conversation
+# prefix edit or a safety-identifier change, besides the model-downgrade and
+# organization checks every generation has; recorded as a documented,
+# unobserved runtime mechanism, because it is wire behaviour a prompt cannot
+# counter. Both share one base instruction set in the Codex client catalog
+# that differs from GPT-6 Astra's and GPT-6.1 Sol's (official-client).
+_GPT_6_2_SURFACE_HERMES: Final[str] = (
+    "Hermes v0.23.1 (3b42157858) and origin/main da9c2bd62f (2026-11-17) carry no `gpt-6.2` id: "
+    "`ASTRA_MODEL_IDS` names only `gpt-6-astra` and `NO_DISABLE_TIER_PREFIXES` only `gpt-6.1-sol`, "
+    "so the Codex route takes the legacy `none`..`xhigh` ladder, clamps `max` to `xhigh` without a "
+    "notice, sends `none` for a disable (which the API rejects), and has no price or context row; "
+    "observed in the Hermes source, not a vendor statement"
+)
+_GPT_6_2_RUNTIME_MECHANISMS: Final[dict[str, str]] = {
+    "reasoning_items_dropped_on_prefix_edit": "documented_not_observed",
+    "multi_agent_beta": "documented_not_observed",
+    "async_tool_calling": "documented_not_observed",
+}
+_GPT_6_2_DYNAMIC_EFFORT: Final[dict[str, object]] = {
+    "mechanism": "configuration_update",
+    "scope": "standard single-agent mode only",
+    "constraints": (
+        "not combinable with automatic compaction or automatic truncation",
+        "two adjacent configuration_update items are rejected",
+        "the original prompt prefix is preserved for prompt caching",
+    ),
+    "compatible_profiles": (),
+    "status": "documented_not_observed",
+}
+_GPT_6_2_DOCUMENTED_TRAITS: Final[tuple[str, ...]] = (
+    "stated for the GPT-6.2 family from behaviour seen with GPT-6.2 Astra and Sol: writing is more "
+    "concise and direct by default",
+    "stated for the GPT-6.2 family: when the user's intent is unclear, may propose a next step and "
+    "wait for confirmation",
+    "stated for the GPT-6.2 family: tends to write more efficient, high-quality code than its "
+    "predecessors",
+    "stated for the GPT-6.2 family: during longer tasks, can carry shorthand from its reasoning or "
+    "other agents into its final answer",
+    "the vendor's Codex client gives both GPT-6.2 ids one new base prompt, not GPT-6 Astra's",
+)
+_GPT_6_2_SOURCES_COMMON: Final[tuple[str, ...]] = (
+    "https://developers.openai.com/api/docs/guides/latest-model",
+    "https://developers.openai.com/api/docs/guides/reasoning",
+    "https://developers.openai.com/api/docs/pricing",
+    "https://developers.openai.com/api/docs/changelog",
+)
+
+_GPT_6_2_ASTRA: Final[dict[str, object]] = {
+    "schema_version": MODEL_CONTRACT_SCHEMA_VERSION,
+    "model_id": "gpt-6.2-astra",
+    "reasoning_mode": "standard",
+    "service_tier": "standard",
+    "family": "gpt",
+    "generation": "gpt-6.2",
+    # The API changelog entry date ("Nov 17 ... Model: gpt-6.2-astra").
+    "released": "2026-11-17",
+    "rollout": "a released id is not account-level readiness evidence",
+    "knowledge_cutoff": "2026-05-18",
+    "context_window_tokens": 1_050_000,
+    "max_input_tokens": 922_000,
+    "max_output_tokens": 128_000,
+    "limits_note": (
+        "the model page documents a 1,050,000-token context, 922,000 maximum input tokens, and "
+        "128,000 max output, and lists one model id, `gpt-6.2-astra`"
+    ),
+    "reasoning_efforts": ("low", "medium", "high", "xhigh", "max"),
+    "effort_floor": "low",
+    "effort_default": "",
+    "unsupported_efforts": {
+        "off": "the API rejects `none` (model page); the migration guide says use `low` instead",
+        "minimal": "not in the documented ladder; the migration guide says use `low` instead",
+    },
+    "tool_calling": {
+        "api": "responses",
+        "note": (
+            "tool calling requires the Responses API; Chat Completions serves requests without "
+            "tool calling at every effort, since there is no `none` rung"
+        ),
+    },
+    "unsupported_parameters": ("temperature", "top_p", "top_logprobs"),
+    "unsupported_parameters_note": (
+        "always rejected (migration guide); on Chat Completions `logprobs` is rejected too, and on "
+        "Responses `message.output_text.logprobs` is removed from `include`"
+    ),
+    "dynamic_effort": _GPT_6_2_DYNAMIC_EFFORT,
+    "runtime_mechanisms": _GPT_6_2_RUNTIME_MECHANISMS,
+    "surface_notes": {
+        "codex": (
+            "Codex CLI 0.169.0's served model catalog (read 2026-11-18) lists `low` through `max` plus "
+            "a Codex-only `ultra` rung that no OMH ladder or chain carries, a `low` default, `low` "
+            "default verbosity, `xhigh` multi-agent effort, reasoning-effort updates enabled, a 272K "
+            "context window with an 872K maximum, and the Fast speed tier only; it names no upgrade "
+            "from GPT-6 Astra"
+        ),
+        "hermes": _GPT_6_2_SURFACE_HERMES,
+    },
+    # The Codex client's model-catalog ladder from `surface_notes.codex`,
+    # without `ultra` (owner decision, 2026-09-23: no OMH ladder or chain
+    # carries it).
+    "surface_efforts": {
+        "codex": ("low", "medium", "high", "xhigh", "max"),
+    },
+    "documented_traits": _GPT_6_2_DOCUMENTED_TRAITS,
+    # OpenAI list price (developers.openai.com model and pricing pages, read
+    # 2026-11-18). The cached rate is 5% of input, so `APPROX_CACHE_READ_RATIO`
+    # carries a row for it. The Flex table does not list the id.
+    "pricing_usd_per_mtok": {
+        "input": 8.0,
+        "cached_input": 0.40,
+        "cache_write": 10.0,
+        "cache_write_12h": 20.0,
+        "output": 40.0,
+        "long_context_over_272k_input": "2x input and cache rates, 1.5x output, for the full request",
+        "batch": "0.5x every standard rate",
+        "fast_mode": "2x every applicable rate",
+        "ultrafast": "3x every standard rate through 2027-02-28, 6x from 2027-03-01 (Pacific time)",
+        "background_completion_window": "30% below standard for the 2-hour window, 40% for the 8-hour",
+        "regional_processing": "+10% where available",
+    },
+    "data_handling": _DATA_HANDLING_NOT_READ,
+    "sources": ("https://developers.openai.com/api/docs/models/gpt-6.2-astra", *_GPT_6_2_SOURCES_COMMON),
+    "sources_read": "2026-11-18",
+    "claim_boundary": MODEL_CONTRACT_CLAIM_BOUNDARY,
+}
+
+_GPT_6_2_SOL: Final[dict[str, object]] = {
+    "schema_version": MODEL_CONTRACT_SCHEMA_VERSION,
+    "model_id": "gpt-6.2-sol",
+    "reasoning_mode": "standard",
+    "service_tier": "standard",
+    "family": "gpt",
+    "generation": "gpt-6.2",
+    # The API changelog entry date ("Nov 17 ... Model: gpt-6.2-sol").
+    "released": "2026-11-17",
+    "rollout": "a released id is not account-level readiness evidence",
+    "knowledge_cutoff": "2026-06-01",
+    "context_window_tokens": 1_050_000,
+    "max_input_tokens": 922_000,
+    "max_output_tokens": 128_000,
+    "limits_note": (
+        "the model page documents a 1,050,000-token context, 922,000 maximum input tokens, and "
+        "128,000 max output, and lists one model id, `gpt-6.2-sol`"
+    ),
+    "reasoning_efforts": ("low", "medium", "high", "xhigh", "max"),
+    "effort_floor": "low",
+    "effort_default": "",
+    "unsupported_efforts": {
+        "off": "the API rejects `none` (model page); the migration guide says use `low` instead",
+        "minimal": "not in the documented ladder; the migration guide says use `low` instead",
+    },
+    "tool_calling": {
+        "api": "responses",
+        "note": (
+            "tool calling requires the Responses API; Chat Completions serves requests without "
+            "tool calling at every effort, since there is no `none` rung"
+        ),
+    },
+    "unsupported_parameters": ("temperature", "top_p", "top_logprobs"),
+    "unsupported_parameters_note": (
+        "always rejected (migration guide); on Chat Completions `logprobs` is rejected too, and on "
+        "Responses `message.output_text.logprobs` is removed from `include`"
+    ),
+    "dynamic_effort": _GPT_6_2_DYNAMIC_EFFORT,
+    # The reasoning guide's pro-mode example names this id
+    # (`"model": "gpt-6.2-sol", "reasoning": {"mode": "pro"}`).
+    "runtime_mechanisms": {**_GPT_6_2_RUNTIME_MECHANISMS, "pro_reasoning_mode": "documented_not_observed"},
+    "surface_notes": {
+        "codex": (
+            "Codex CLI 0.169.0's served model catalog (read 2026-11-18) lists `low` through `max` plus "
+            "a Codex-only `ultra` rung that no OMH ladder or chain carries, a `low` default, `low` "
+            "default verbosity, `xhigh` multi-agent effort, reasoning-effort updates enabled, a 500K "
+            "context window with an 872K maximum, the Fast and Ultrafast speed tiers, and audio among "
+            "its input modalities, which the API model page lists as unsupported; it names no "
+            "upgrade from GPT-6.1 Sol"
+        ),
+        "hermes": _GPT_6_2_SURFACE_HERMES,
+    },
+    # The Codex client's model-catalog ladder from `surface_notes.codex`,
+    # without `ultra` (owner decision, 2026-09-23: no OMH ladder or chain
+    # carries it).
+    "surface_efforts": {
+        "codex": ("low", "medium", "high", "xhigh", "max"),
+    },
+    "documented_traits": _GPT_6_2_DOCUMENTED_TRAITS,
+    # OpenAI list price (developers.openai.com model and pricing pages, read
+    # 2026-11-18): GPT-6.1 Sol's card. The cached rate is 5% of input, so
+    # `APPROX_CACHE_READ_RATIO` carries a row for it. The Flex table does not
+    # list the id.
+    "pricing_usd_per_mtok": {
+        "input": 2.0,
+        "cached_input": 0.10,
+        "cache_write": 2.5,
+        "cache_write_12h": 5.0,
+        "output": 10.0,
+        "long_context_over_272k_input": "2x input and cache rates, 1.5x output, for the full request",
+        "batch": "0.5x every standard rate",
+        "fast_mode": "2x every applicable rate",
+        "ultrafast": "3x every standard rate through 2027-02-28, 6x from 2027-03-01 (Pacific time)",
+        "background_completion_window": "30% below standard for the 2-hour window, 40% for the 8-hour",
+        "regional_processing": "+10% where available",
+    },
+    "data_handling": _DATA_HANDLING_NOT_READ,
+    "sources": ("https://developers.openai.com/api/docs/models/gpt-6.2-sol", *_GPT_6_2_SOURCES_COMMON),
+    "sources_read": "2026-11-18",
+    "claim_boundary": MODEL_CONTRACT_CLAIM_BOUNDARY,
+}
+
 # GPT-6.1 Terra, the Terra tier's first GPT-6-generation release (the API
 # changelog's "Oct 26 ... Released GPT-6.1 Terra"). GPT-6 Luna's ladder shape,
 # not GPT-6.1 Sol's: the model page and the latest-model guide both list
@@ -1901,6 +2118,8 @@ MODEL_CONTRACTS: Final[dict[str, Mapping[str, object]]] = {
     "gpt-6-astra": _GPT_6_ASTRA,
     "gpt-6-sol": _GPT_6_SOL,
     "gpt-6.1-sol": _GPT_6_1_SOL,
+    "gpt-6.2-astra": _GPT_6_2_ASTRA,
+    "gpt-6.2-sol": _GPT_6_2_SOL,
     "gpt-6.1-terra": _GPT_6_1_TERRA,
     "gpt-6-cyber": _GPT_6_CYBER,
     "gpt-6-luna": _GPT_6_LUNA,

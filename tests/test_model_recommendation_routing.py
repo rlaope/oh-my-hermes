@@ -124,7 +124,7 @@ class HermesRecommendationRoutingTests(unittest.TestCase):
         )
         recommendation = route["recommendation"]
         # The default working chain heads on GPT-6.1 Sol since 2026-10-13.
-        self.assertEqual(recommendation["inactive_candidates"][0], "gpt-6.1-sol")
+        self.assertEqual(recommendation["inactive_candidates"][0], "gpt-6.2-sol")
 
     def test_dated_snapshot_counts_as_its_base_and_routes_as_served(self) -> None:
         from omh.coding.model_recommendations import resolve_model_recommendation
@@ -136,12 +136,12 @@ class HermesRecommendationRoutingTests(unittest.TestCase):
         # shipped chains on 2026-09-23, so the rule is held on an id `deep`
         # names (second behind Opus 5.5 since 2026-10-13); the date is a
         # shape, not a published snapshot.
-        dated = _active("gpt-6.1-sol-2026-09-29", "openai", "gpt")
+        dated = _active("gpt-6.2-sol-2026-11-17", "openai", "gpt")
         recommendation = resolve_model_recommendation(owner="hermes", active_models=[dated], category="deep")
         self.assertEqual(recommendation["status"], "resolved")
-        self.assertEqual(recommendation["selected"]["model_alias"], "gpt-6.1-sol")
-        self.assertEqual(recommendation["selected"]["model_id"], "gpt-6.1-sol-2026-09-29")
-        qualified = _active("openai/gpt-6.1-sol-2026-09-29", "openai", "gpt")
+        self.assertEqual(recommendation["selected"]["model_alias"], "gpt-6.2-sol")
+        self.assertEqual(recommendation["selected"]["model_id"], "gpt-6.2-sol-2026-11-17")
+        qualified = _active("openai/gpt-6.2-sol-2026-11-17", "openai", "gpt")
         self.assertEqual(
             resolve_model_recommendation(owner="hermes", active_models=[qualified], category="deep")["status"],
             "resolved",
@@ -149,14 +149,14 @@ class HermesRecommendationRoutingTests(unittest.TestCase):
         # An explicit request for the base is met by its confirmed snapshot;
         # a request pinned to a date is not met by an unpinned base.
         self.assertEqual(
-            resolve_model_recommendation(owner="hermes", active_models=[dated], explicit_model="gpt-6.1-sol")["status"],
+            resolve_model_recommendation(owner="hermes", active_models=[dated], explicit_model="gpt-6.2-sol")["status"],
             "resolved",
         )
         self.assertEqual(
             resolve_model_recommendation(
                 owner="hermes",
-                active_models=[_active("gpt-6.1-sol", "openai", "gpt")],
-                explicit_model="gpt-6.1-sol-2026-09-29",
+                active_models=[_active("gpt-6.2-sol", "openai", "gpt")],
+                explicit_model="gpt-6.2-sol-2026-11-17",
             )["status"],
             "choice_required",
         )
@@ -336,13 +336,13 @@ class HermesRecommendationRoutingTests(unittest.TestCase):
         # deep, the next depth tier, and keeps deep's effort instead of the
         # last-resort one. Opus 5.5 is in the ultrabrain chain, so it routes
         # there at xhigh without a step.
-        astra = _active("gpt-6-astra", "openai-codex", "gpt")
-        sol = _active("gpt-6.1-sol", "openai-codex", "gpt")
+        astra = _active("gpt-6.2-astra", "openai-codex", "gpt")
+        sol = _active("gpt-6.2-sol", "openai-codex", "gpt")
         for active, model, effort, category in (
             ([_OPUS], "ccapi/claude-opus-5-5", "xhigh", "ultrabrain"),
-            ([sol], "openai-codex/gpt-6.1-sol", "high", "deep"),
+            ([sol], "openai-codex/gpt-6.2-sol", "high", "deep"),
             ([_KIMI], "apitopia/kimi-k3.1-pro", "high", "deep"),
-            ([astra, _OPUS], "openai-codex/gpt-6-astra", "xhigh", "ultrabrain"),
+            ([astra, _OPUS], "openai-codex/gpt-6.2-astra", "xhigh", "ultrabrain"),
         ):
             with self.subTest(active=[entry["model_alias"] for entry in active]):
                 route = resolve_model_route("hermes", role="brain", active_models=active)
@@ -390,7 +390,7 @@ class HermesRecommendationRoutingTests(unittest.TestCase):
         self.assertEqual(route["category"], "deep")
 
     def test_requested_category_is_never_widened(self) -> None:
-        sol = _active("gpt-6.1-sol", "openai-codex", "gpt")
+        sol = _active("gpt-6.2-sol", "openai-codex", "gpt")
         route = resolve_model_route(
             "hermes", role="brain", requested_category="ultrabrain", active_models=[sol]
         )
@@ -468,13 +468,13 @@ class HermesRecommendationRoutingTests(unittest.TestCase):
             },
         }
         qwen = _active("qwen3-coder", "qwen-oauth", "qwen")
-        astra = _active("gpt-6-astra", "openai-codex", "gpt")
+        astra = _active("gpt-6.2-astra", "openai-codex", "gpt")
         alone = resolve_model_route("hermes", role="brain", active_models=[qwen], recommendation_overrides=overrides)
         self.assertEqual(alone["selected_model"], "qwen-oauth/qwen3-coder")
         beside = resolve_model_route(
             "hermes", role="brain", active_models=[qwen, astra], recommendation_overrides=overrides
         )
-        self.assertEqual(beside["selected_model"], "openai-codex/gpt-6-astra")
+        self.assertEqual(beside["selected_model"], "openai-codex/gpt-6.2-astra")
 
     def test_cli_category_routes_independently_from_role(self) -> None:
         inventory = {

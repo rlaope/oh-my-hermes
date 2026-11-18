@@ -49,8 +49,8 @@ EFFORTS = ("low", "high", "max")
 # `-pro` projection of 6.1 Sol and the claude family's shipped head.
 MODELS = (
     ("kimi-k3", "kimi"),
-    ("gpt-6-astra", "gpt"),
-    ("gpt-6.1-sol", "gpt"),
+    ("gpt-6.2-astra", "gpt"),
+    ("gpt-6.2-sol", "gpt"),
     ("gpt-6.1-sol-pro", "gpt"),
     ("deepseek-v4.1-flash", "deepseek"),
     ("claude-sonnet-5-5", "claude"),
@@ -234,8 +234,8 @@ class BlockNameGoldenTests(unittest.TestCase):
             *_HEAD, *_FRAME, *_CRITERIA, "unit.review_role", "unit.calibration[deepseek-v4.1-flash]",
             "unit.domain_bundle", "tail.unit_result_contract", "tail.commit", "append.repair",
         ),
-        "dispatch|claude-code|review|high|gpt-6-astra|sidecar+parent": (
-            *_HEAD, *_FRAME, *_CRITERIA, "unit.review_role", "unit.calibration[gpt-6-astra]",
+        "dispatch|claude-code|review|high|gpt-6.2-astra|sidecar+parent": (
+            *_HEAD, *_FRAME, *_CRITERIA, "unit.review_role", "unit.calibration[gpt-6.2-astra]",
             "unit.domain_bundle", "tail.unit_result_contract", "tail.commit", "append.parent_decision",
         ),
     }
@@ -268,7 +268,7 @@ class BlockNameGoldenTests(unittest.TestCase):
                 self.assertIn("head.failure_kind", names, case_id)
 
     def test_a_sidecar_prompt_cannot_omit_the_head_failure_kind(self) -> None:
-        unit = golden_unit("codex", "implementation", "high", "gpt-6-astra", "gpt")
+        unit = golden_unit("codex", "implementation", "high", "gpt-6.2-astra", "gpt")
         omit = frozenset({"head.failure_kind"})
         with self.assertRaisesRegex(ValueError, "must carry head.failure_kind"):
             assemble_unit_prompt(unit, GOAL, route=None, binding=_WORST_BINDING, omit=omit)
@@ -276,7 +276,7 @@ class BlockNameGoldenTests(unittest.TestCase):
         self.assertNotIn("head.failure_kind", assemble_unit_prompt(unit, GOAL, route=None, omit=omit).names())
 
     def test_unknown_omitted_block_names_raise(self) -> None:
-        unit = golden_unit("codex", "implementation", "high", "gpt-6-astra", "gpt")
+        unit = golden_unit("codex", "implementation", "high", "gpt-6.2-astra", "gpt")
         with self.assertRaisesRegex(ValueError, "unknown unit prompt blocks: head.nope"):
             assemble_unit_prompt(unit, GOAL, route=None, omit=frozenset({"head.nope"}))
         lean = assemble_unit_prompt(unit, GOAL, route=unit["handoff"]["model_route"],  # type: ignore[index]
