@@ -1858,6 +1858,9 @@ export interface Actions {
   loadThreads(bot: string): Promise<void>;
   /** A new, empty thread under `bot`, opened in the main column (the composer takes focus). */
   newThread(bot: string): Promise<string | null>;
+  /** `./thread <text>`: a new thread under `bot`, opened, with `first` sent as its first message (it names the
+   *  thread); an empty `first` is the same as newThread. Nothing goes to the bot's main chat. */
+  newThreadWith(bot: string, first: string): Promise<string | null>;
   /** Show thread `thread` of `bot` (reads its messages the first time); null = the bot's main chat. */
   openThread(bot: string, thread: string | null): Promise<void>;
   /** Send in a thread; the first message names it. */
@@ -2780,6 +2783,11 @@ export function createStore(bridge: BridgeLike, opts: StoreOptions = {}): Store 
         fail(e);
         return null;
       }
+    },
+    async newThreadWith(bot, first) {
+      const thread = await actions.newThread(bot);
+      if (thread && first.trim()) await actions.threadSend(bot, thread, first);
+      return thread;
     },
     async openThread(bot, thread) {
       if (state.ui.roster && state.bots.some((b) => b.name === bot)) listBot(bot, true);

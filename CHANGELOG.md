@@ -9,6 +9,9 @@ All notable changes will be documented here.
   MESSAGE]`), and a reopened Bot Chat showed that frame in your bubble. The bridge now shows only the typed text,
   keeps the "Sent to …" line under it, and drops stray frame lines from any other row.
 
+- **omher: Run now no longer looks like the button you must press.** On an automation's detail it was the first,
+  filled button; on the "New automation" card in chat, the first button. It is now a quiet text action at the end of
+  the row, after Delete or Remove, and a click only asks "Run it now, outside its schedule?" with Run and Cancel.
 - **Four OMH tool descriptions are shorter, and the model still picks the same calls.** `omh_todo`, `omh_loop`,
   `omh_document_plan` and `omh_delegate_route` say the same rules in fewer words, so each costs fewer tokens the
   first time Hermes loads it (24,943 -> 23,718 characters together; the registered OMH schemas 63,324 -> 62,099).
@@ -23,6 +26,18 @@ All notable changes will be documented here.
   until each date; the price rows now point at the current page, and Argon's row is pinned by the same list-price
   test as Carbon's.
 
+- **omher.app has a Start Guide at `/guide/`, linked beside Docs in every header** (owner request, 2026-11-18). One
+  page for someone new, with plain section titles that say what each part covers: what OMH does in three cards (a model per kind of work, `dag-ulw`, expert skills), install in
+  three commands (`curl … | sh`, `omh setup`, `omh model`), categories and fallback shown on three real chains, plan
+  versus `dag-ulw` as a to-do list versus a flowchart (an animated graph: two steps at once, fix, test, a separate goal
+  check, and the loop back when it fails), how OMH stays current (a new model is checked before it joins a chain, the
+  plugin loads into stable and main Hermes every night, reconstructed skills record the upstream commit they were
+  reviewed against), the `omh` TUI, and omher desktop as an ADE for bots with a terminal panel. Everything else
+  (`ulw-maestro`, memory, evidence labels, LSP) sits in one short list at the end. It reads in English, Korean,
+  Japanese and Chinese through the site's language switch. The model names on the page come from the shipped
+  recommendation catalog through `tools/render_site_guide.py`, which Pages re-runs on every deploy, so a model
+  onboarding never leaves the guide naming a retired model; `tests/test_site_guide.py` pins the sections, the
+  installer commands, four-language coverage of every key, the header links and the catalog match.
 - **GPT-6.2 Astra and GPT-6.2 Sol take every slot GPT-6 Astra and GPT-6.1 Sol held** (OpenAI released both on
   2026-11-17; owner decision, 2026-11-18). In the Hermes chains, the Codex lane table and the shared final order
   (Claude Opus 5.5, then GPT-6.2 Sol), each new id sits where its predecessor sat, at the same effort, and no chain
@@ -165,11 +180,54 @@ All notable changes will be documented here.
   run's one-line summary open. While a run is active, such a dispatch is stopped once per turn with a pointer to
   `omh_dag` (ready, settle, repair, extend); sending it again goes through. Contributed by @yqm-307 (#2914).
 
+- **`omh_delegate_route set` refuses a model id pinned to a provider that does not serve it.** A `set` with
+  `model=ANT-claude-opus-5-5 provider=openai-codex` used to reach `config.yaml`, and every delegated child after it
+  died on its first call with HTTP 400 from the vendor. When `routing/model-providers.json` records that exact model
+  id only under other providers, the call now returns an error naming the alias, every provider that serves the id
+  and the two valid ways to route it, and writes nothing. Aliases may still be pinned to another provider, and ids no
+  route records pass unchanged. Contributed by @rafaelmoreiraai (#2915).
+
 - **The omher desktop app is no longer labelled beta.** The one-command install is now
   `curl -fsSL https://raw.githubusercontent.com/rlaope/oh-my-hermes/main/install.sh | sh -s -- omher` (and
   `... install.ps1))) omher` on Windows); `curl -fsSL https://omher.app/omher | sh` stays the short form and now passes
   `omher`. The old argument `omher@beta` keeps working, because every omher app up to 0.2.13 sends it from its
   first-run Install button. The README and install docs drop "(beta)".
+- **omher: start a thread from the chat box with `./thread`, or from a "+ New thread" line under the bot.** In a
+  bot's chat, `./` opens one row, `./thread`. `./thread` alone opens a new empty thread with its box focused, as the
+  bot's right-click New thread does; `./thread <text>` opens one and sends the text there as its first message, which
+  also names it. The command never reaches the bot, and the main chat gets nothing. It counts only at the start of the
+  message; mid-message, `./threads` or a path go out as typed. Inside a thread it opens a sibling thread under the same
+  bot. Skills stay `$name`, so a skill named `thread` is `$thread` and never collides. In the sidebar, each bot's
+  thread list ends in a quiet dashed "+ New thread" line on the same rail (a bot with no threads shows it while open),
+  and a hovered bot row shows a new-thread button beside ⋯. The row menu now sets New thread apart: its own group with
+  an icon and a divider above the bot's management items. Bots on another computer and offline bots get none of these.
+  While a bot's answer streams, a thread block it quotes as an example inside another fence or a `>` quote no longer
+  disappears and leaves an empty code block; only the blocks the bridge acts on are hidden.
+
+- **A new user's one-command install of omher finishes.** On a Mac with neither Hermes nor OMH,
+  `curl -fsSL https://omher.app/omher | sh` installed Hermes and then stopped with "Hermes' installer finished, but no
+  Hermes was found" (exit 1), before OMH, setup or the app. omher's own first-run Install button stopped the same way.
+  Hermes' installer now ships its own Python and a `hermes` launcher with no `venv` folder, and puts `hermes` in
+  `~/.local/bin`, which the running installer does not see. `install.sh` and `install.ps1` now find Hermes through
+  the launcher, as the omher app does. Measured on Hermes 0.23.2 in a sandboxed new home: the run finishes in about
+  two minutes with the app installed.
+
+- **The install's last lines point at the right next step.** After the installer had run `omh setup` and `omh doctor`
+  itself, it still ended with "Next: run 'omh setup' … then 'omh doctor'". It now says OMH is connected to Hermes, and
+  where to add `omh` to PATH. For a Hermes installed in the same run, it says to sign in to an AI account from the line
+  above omher's chat box. It no longer says to pick a model from the model menu, which is empty until an account is
+  signed in.
+
+- **omher's model menu says when the bot has no AI account.** For a bot that Hermes says cannot answer, the menu's
+  empty list now reads "Hermes has no AI account yet. Sign in below the chat, then its models show here." instead of
+  "No models match", and the dot on the model button is gray instead of the connected green.
+
+- **`omh setup` and `omh uninstall` can edit a config that Hermes' installer just wrote.** Hermes' config template has
+  comment lines with quotes in them (`# order: ["anthropic", "google"]`), and OMH's config editor read those as quoted
+  keys it must not touch. On a fresh Hermes, setup therefore never recorded `plugins.entries.omh.settings.omh_home`,
+  and `omh doctor` warned about it with a fix that hit the same refusal. Uninstall could not take back
+  `plugins.enabled` or `memory.provider`. Comments are now ignored by that check; a quoted key in the YAML itself is
+  still left alone.
 
 ## 4.0.8 - 2026-11-15
 

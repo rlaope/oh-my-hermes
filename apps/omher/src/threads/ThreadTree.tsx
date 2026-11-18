@@ -4,6 +4,9 @@
 // its last activity / who said the last thing ("Kami: …", "You: …"), what it is doing now, or the question it asks.
 // A thin rail from the bot's avatar with a short rounded elbow into each card keeps the hierarchy (owner, 2026-11-15).
 // Two levels only: bot > thread. Hover shows x, which asks first (ConfirmRemove), then stops and archives the thread.
+// "+ New thread" closes the list on the same rail (owner, 2026-11-18: the action must show under the bot, not only in
+// the right-click menu): no card, a dashed edge that turns solid on hover; under a bot with no threads yet it shows
+// only while that bot is open (a row that appeared on hover would push the list under the pointer).
 import { useState } from "react";
 import { askText, selectAsks, useStore, type AppState } from "../state/store";
 import { busyFor, shortTime } from "../app/time";
@@ -17,6 +20,7 @@ import { ConfirmRemove } from "./ConfirmRemove";
 import { HarnessStack } from "../harness/HarnessMark";
 import type { HarnessFacts } from "../harness/registry";
 import { subagentEnded, type Chat } from "../state/store";
+import { NewThreadIcon } from "./NewThreadIcon";
 import "./threads.css";
 
 /** A thread's state from what the store holds: its chat (turn, last turn, open asks) and the bridge's list row. */
@@ -75,25 +79,47 @@ function Bubble() {
   );
 }
 
-export function ThreadTree({ bot, id }: { bot: string; id: string }) {
+/** "+ New thread": the last line of a bot's tree, on the rail like a card. */
+function NewRow({ name, onNew, solo }: { name: string; onNew: () => void; solo?: boolean }) {
+  const Tag = solo ? "div" : "li";
+  return (
+    <Tag role="none" className="th-row th-new th-last">
+      <span className="th-branch" aria-hidden="true" />
+      <button type="button" className="th-open" onClick={onNew} title={t("thread.newWith", { name })} data-testid="thread-new">
+        <NewThreadIcon />
+        <span className="th-title">{t("thread.newRow")}</span>
+      </button>
+    </Tag>
+  );
+}
+
+/** A bot's threads; `onNew` (absent for a bot on another computer or offline) adds the "+ New thread" line. With no
+ *  threads the tree is that line only, when `onNew` is given, else nothing. */
+export function ThreadTree({ bot, id, onNew }: { bot: string; id: string; onNew?: () => void }) {
   const s = useStore();
   const rows = s.threads[bot] ?? [];
   const [all, setAll] = useState(false);
   const [asking, setAsking] = useState<{ thread: string; at: DOMRect } | null>(null);
-  if (!rows.length) return null;
+  // a working thread's "· 2m" moves on (read before any return: the tree stays mounted from 0 threads to 1)
+  const nowMs = useNow(rows.some((r) => !!s.chats[threadKey(bot, r.thread)]?.turn), 10_000);
+  const name = s.bots.find((b) => b.name === bot)?.display_name ?? bot;
+  if (!rows.length)
+    return onNew ? (
+      <div className="th-tree th-solo" data-testid={`threads-${bot}`}>
+        <NewRow name={name} onNew={onNew} solo />
+      </div>
+    ) : null;
   const openThread = s.ui.view === "chat" && s.selectedBot === bot ? s.ui.thread : null;
   // the open thread stays in view even when it is past the first five
   const shown = all || rows.length <= THREADS_SHOWN ? rows : rows.filter((r, i) => i < THREADS_SHOWN || r.thread === openThread);
   const hidden = rows.length - shown.length;
-  const name = s.bots.find((b) => b.name === bot)?.display_name ?? bot;
-  // a working thread's "· 2m" moves on
-  const nowMs = useNow(rows.some((r) => !!s.chats[threadKey(bot, r.thread)]?.turn), 10_000);
+  const more = hidden > 0 || (all && rows.length > THREADS_SHOWN);
   return (
     <ul className="th-tree" role="group" id={id} aria-label={t("thread.list", { name })} data-testid={`threads-${bot}`}>
       {shown.map((r, i) => {
         const st = rowStatus(s, bot, r);
         const title = r.title || t("thread.untitled");
-        const last = i === shown.length - 1 && hidden === 0;
+        const last = i === shown.length - 1 && !more && !onNew;
         const pv = rowPreview(s, bot, r, nowMs);
         const ts = pv.ts;
         return (
@@ -170,14 +196,15 @@ export function ThreadTree({ bot, id }: { bot: string; id: string }) {
           </li>
         );
       })}
-      {(hidden > 0 || (all && rows.length > THREADS_SHOWN)) && (
-        <li role="none" className="th-row th-more th-last">
+      {more && (
+        <li role="none" className={`th-row th-more${onNew ? "" : " th-last"}`}>
           <span className="th-branch" aria-hidden="true" />
           <button type="button" className="th-open" onClick={() => setAll((v) => !v)} aria-expanded={all} data-testid="thread-more">
             <span className="th-title">{all ? t("thread.less") : t("thread.more", { n: hidden })}</span>
           </button>
         </li>
       )}
+      {onNew && <NewRow name={name} onNew={onNew} />}
     </ul>
   );
 }

@@ -214,3 +214,33 @@ test("in a long chat the block sits above the composer, visible without scrollin
   // not inside the scrolling thread
   expect(await block.evaluate((e) => !!e.closest(".thread"))).toBe(false);
 });
+
+test("with no account the model menu says to sign in, and the pill's dot is not the connected green", async ({ page }) => {
+  // A Hermes installed a minute ago lists no provider; the installer sends the person to this menu.
+  await mock("mock.ready", { bot: "kami", ok: false });
+  await mock("mock.providers", { fixture: "empty" });
+  await open(page);
+  await expect(page.getByTestId("connect-block")).toBeVisible();
+  await expect(page.getByTestId("model-dot")).not.toHaveClass(/live/);
+  await expect(page.getByTestId("model-pill").locator(".mp-mk")).toHaveAttribute("title", "Kami needs an AI account to answer.");
+  await page.getByTestId("model-pill").click();
+  await expect(page.getByTestId("model-empty")).toHaveText(
+    "Kami has no AI account yet. Sign in below the chat, then its models show here.",
+  );
+  await page.keyboard.press("Escape");
+  // signed in: the dot is green again
+  await mock("mock.ready", { bot: "kami", ok: true });
+  await mock("mock.providers", { fixture: "default" });
+  await page.evaluate(() => window.dispatchEvent(new Event("focus")));
+  await expect(page.getByTestId("connect-block")).toHaveCount(0, { timeout: 5_000 });
+  await expect(page.getByTestId("model-dot")).toHaveClass(/live/);
+});
+
+test("a search that matches nothing still says no models match, account or not", async ({ page }) => {
+  await mock("mock.ready", { bot: "kami", ok: false });
+  await open(page);
+  await expect(page.getByTestId("connect-block")).toBeVisible();
+  await page.getByTestId("model-pill").click();
+  await page.getByTestId("model-search").fill("zzzz-no-such-model");
+  await expect(page.getByTestId("model-empty")).toHaveText("No models match");
+});

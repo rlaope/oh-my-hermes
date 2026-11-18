@@ -127,3 +127,9 @@
   font-weight: 560;
   color: var(--accent);
 }
+
+/* the `./thread` row: the new-thread icon before the command, gray like the description */
+.sk-thread .nt-ic {
+  flex: none;
+  color: var(--muted);
+}

@@ -1269,11 +1269,39 @@ def _document_edit_guard(lines: list[str]) -> str:
     return ""
 
 
+def _yaml_code(line: str) -> str:
+    """`line` without its YAML comment.
+
+    A comment starts at a `#` that opens the line or follows whitespace, and
+    is outside a quoted scalar (a quote opens one only where a token starts).
+    The syntax guards below read only this part: Hermes' own config template
+    carries comments such as `# order: ["anthropic", "google"]`, and reading
+    those as quoted mapping keys refused every edit on a fresh install.
+    """
+    quote = ""
+    index = 0
+    while index < len(line):
+        char = line[index]
+        if quote:
+            if quote == '"' and char == "\\":
+                index += 2
+                continue
+            if char == quote:
+                quote = ""
+        elif char in "\"'" and (index == 0 or line[index - 1] in " \t,[{:-?"):
+            quote = char
+        elif char == "#" and (index == 0 or line[index - 1] in " \t"):
+            return line[:index]
+        index += 1
+    return line
+
+
 def _document_syntax_guard(lines: list[str]) -> str:
     """Node syntax this hand-rolled editor cannot preserve if it rewrites a line."""
-    if any(_contains_potential_quoted_mapping_key(line) for line in lines):
+    code = [_yaml_code(line) for line in lines]
+    if any(_contains_potential_quoted_mapping_key(line) for line in code):
         return "quoted YAML mapping keys are user-owned; leaving them alone"
-    if any(_contains_unsupported_yaml_node_syntax(line) for line in lines):
+    if any(_contains_unsupported_yaml_node_syntax(line) for line in code):
         return "YAML node properties are user-owned; leaving them alone"
     return ""
 
