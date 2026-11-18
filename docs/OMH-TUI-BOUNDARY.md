@@ -92,6 +92,22 @@ last row, "no, and tell Hermes what to do instead", sends the explicit deny at
 once, interrupts nothing, and then opens the composer for what the person tells
 Hermes instead; Esc there sends nothing more.
 
+The one prompt it sends that the person did not type is the onboarding prompt.
+It goes only when `omh` was launched with `--onboard model-setup`, which only
+the accepted "Set up your models now?" question at the end of an interactive
+`omh setup` starts (setup opens the TUI as a child process and waits for it).
+The flag is for a bare launch in a new session: it is refused beside `--resume`
+or `--continue` or with a subcommand, and it skips the last-session question and
+the what's-new notice. The text is the fixed, packaged one in
+`src/tui/onboarding.py` (English, Korean, Japanese or Chinese by the `OMH_LANG`
+setup passed on), sent once through the same submit path a typed prompt takes,
+so it is echoed, queued and checked against the default model like any other.
+It is never sent on a resume, a reconnect, a gateway restart or a session
+switch, and `/new` starts a session without it. `OMH_TUI_ONBOARD` and
+`OMH_TUI_ONBOARD_LANG` are `OMH_TUI_` names, so they never reach the gateway.
+Everything after that first turn is the person's own: Hermes asks, the person
+answers, and every approval and secret request stays theirs to answer.
+
 When the person attaches an image, it also sends `image.render` once for that
 image, naming only the path Hermes staged and answered, to draw a preview under
 the prompt that sends it: it asks for at most 64 columns by 16 rows, for kitty

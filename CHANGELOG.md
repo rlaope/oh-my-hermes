@@ -155,6 +155,13 @@ All notable changes will be documented here.
   run's one-line summary open. While a run is active, such a dispatch is stopped once per turn with a pointer to
   `omh_dag` (ready, settle, repair, extend); sending it again goes through. Contributed by @yqm-307 (#2914).
 
+- **`omh setup` ends by offering a guided model setup in the OMH TUI.** On a terminal, the last question is "Set up
+  your models now?" (default Yes). Yes opens the OMH TUI in a new session with a fixed onboarding prompt as its first
+  turn, and Hermes walks you through providers, keys, a main model and at most one fallback by conversation; if Hermes
+  has no main model yet, your own `hermes model` runs first. No prints how to come back later. The prompt is sent only
+  under the new `omh --onboard model-setup`, never on a resume, and `omh setup --model-setup --fallback-model
+  PROVIDER/MODEL` previews and writes one Hermes `fallback_model` under the same digest-bound approval.
+
 ## 4.0.8 - 2026-11-15
 
 - **The OMH TUI shows a compression as one gauge row, and a prompt typed meanwhile goes on by itself.** `/compact`

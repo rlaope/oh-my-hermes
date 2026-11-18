@@ -374,6 +374,22 @@ Hermes:
 omh setup
 ```
 
+On a terminal, setup's last question is **Set up your models now?** (default
+Yes). Yes opens the OMH TUI in a new session and sends OMH's fixed onboarding
+prompt as its first turn; Hermes then walks you through your providers, keys and
+model choices by conversation (the `model-setup` skill), one question at a time,
+and keeps at most one fallback model. Setup waits while the TUI is open and
+returns the TUI's exit code. If Hermes has no main model yet, Yes first runs
+your own `hermes model` in the same terminal and opens the conversation only when
+a main model exists afterwards; if none was set it says so and stops. No prints
+how to come back: run `omh` later and say "set up my models".
+
+The question needs both a terminal on stdin and stdout, a platform other than
+Windows, `hermes` on PATH, and a terminal the OMH TUI can open on. Without
+them, and under `--yes`, `--json`, `--dry-run` or `--no-interactive`, setup does
+not ask and does not open anything. Where the offer cannot be made, the wizard
+keeps its per-category model-chains question instead.
+
 ### Workflows in Claude Code, Codex, Cursor, opencode, OpenClaw, or pi
 
 These hosts can load OMH workflows as Agent Skills without Hermes. The
@@ -2634,7 +2650,13 @@ The guided flow is deliberately staged:
    configuration, not entitlement, credential validity, quota, or execution.
 3. **Preview.** Repeated `--model-alias ALIAS=MODEL` values produce exact Hermes
    `model.aliases` changes and a digest-bound preview. Existing aliases remain
-   user-owned; collisions fail closed unless separately allowed.
+   user-owned; collisions fail closed unless separately allowed. One
+   `--fallback-model PROVIDER/MODEL` (it needs `--model-setup`, and onboarding
+   keeps one) previews Hermes' `fallback_model` in the same preview and digest:
+   it is refused when the provider has no credential in Hermes, or when it is the
+   main model, and a fallback chain Hermes already holds is replaced only after
+   the preview shows that. A failed fallback write rolls back the aliases written
+   with it.
 4. **Apply.** No preview writes. An apply requires both
    `--apply-model-config` and the preview's `--model-config-digest`; an
    interactive flow asks after showing the preview. Hermes' own `config set`
@@ -2649,6 +2671,7 @@ omh setup --model-setup \
   --confirm-model openai-codex/gpt-6.2-sol \
   --confirm-model google/gemini-4-argon \
   --model-alias main=openai-codex/gpt-6.2-sol \
+  --fallback-model google/gemini-4-argon \
   --no-interactive --json
 ```
 
