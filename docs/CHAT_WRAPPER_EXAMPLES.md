@@ -544,8 +544,10 @@ This message needs no OMH workflow; Hermes can answer it directly in chat.
 
 The direct-answer card is chosen from `route_decision.reason_code`, a stable
 name for each of the router's answer-in-chat fallbacks. `direct_answer`,
-`host_command_turn`, `native_loop_cadence`, `typed_loop_goal`, and
-`loop_construct` give the direct-answer card; `file_lookup` keeps the no-hint
+`host_command_turn`, `native_loop_cadence`, `typed_loop_goal`,
+`loop_construct`, and `code_backlog` (a listed backlog of four or more code
+changes, made in the session without a workflow or child agents) give the
+direct-answer card; `file_lookup` keeps the no-hint
 card. The full route payload, `route` in both `omh chat route --json` and
 `omh chat interact --json`, carries the same `reason_code`. The key is
 additive: a route with none of these reasons has no `reason_code`, and

@@ -1,11 +1,12 @@
-"""A backlog of separate code changes, handed over as a list, runs as a dag-ulw graph; small or other lists do not.
+"""A backlog of separate code changes, handed over as a list, is made in the current session, not split.
 
 `dag_ulw_cues.lists_several_code_changes` reads the shape: four or more list items that each say a change, in a request
-whose own words ask for all of them and name code. The router dispatches dag-ulw on it before any lane's word in one
-item can claim the list, and Hermes' per-turn route hint starts it with an instruction to give each item its own node.
-The routed outcomes are pinned in the corpus (`quality/routing_precision.py`); these pin the reading itself, the
-injected text, the agreement of router and hint, the standalone bundle, and the live-information guard that took the
-paired-run job before.
+whose own words ask for all of them and name code. The router answers it in the session (`code_backlog`) before any
+lane's word in one item can claim the list, and Hermes' per-turn route hint offers nothing, so no dag-ulw graph and no
+child agents start: paired runs measured a graph slower than Hermes alone on such a backlog at equal quality. The
+routed outcomes are pinned in the corpus (`quality/routing_precision.py`); these pin the reading itself, the injected
+text, the agreement of router and hint, the standalone bundle, and the live-information guard that took the paired-run
+job before.
 """
 
 from __future__ import annotations
@@ -89,6 +90,7 @@ NOT_BACKLOGS = (
 )
 
 _HINT_HEAD = "first_response_shape=Start at once: give each listed change its own build node"
+_IN_SESSION = "Make the listed code changes in this session, one after another"
 
 
 class BacklogReadingTests(unittest.TestCase):
@@ -133,28 +135,37 @@ class BacklogReadingTests(unittest.TestCase):
 
 
 class BacklogRoutingTests(unittest.TestCase):
-    def test_the_router_and_the_route_hint_both_start_a_graph(self) -> None:
+    def test_the_router_answers_in_the_session_and_the_hint_offers_nothing(self) -> None:
         for message in BACKLOGS:
             with self.subTest(message=message[:60]):
                 route = route_chat_message(message, source="discord")
-                self.assertEqual((route["action"], route["selected_skill"]), ("dispatch", "dag-ulw"))
-                hints = awareness_route_hint(message)["hints"]
                 self.assertEqual(
-                    (hints[0]["workflow"], hints[0]["next_action"], hints[0]["id"]),
-                    ("dag-ulw", "start_dag_run", "dag_ulw_backlog"),
+                    (route["action"], route["selected_skill"], route.get("reason_code")),
+                    ("fallback", "oh-my-hermes", "code_backlog"),
                 )
+                self.assertTrue(route["routing_prompt"].startswith(_IN_SESSION))
+                self.assertEqual(awareness_route_hint(message)["hints"], [])
 
     def test_no_negative_is_started_or_offered_a_graph(self) -> None:
         for message in NOT_BACKLOGS:
             with self.subTest(message=message[:60]):
-                self.assertNotEqual(route_chat_message(message, source="discord")["selected_skill"], "dag-ulw")
-                self.assertFalse(
-                    [hint for hint in awareness_route_hint(message)["hints"] if hint.get("id") == "dag_ulw_backlog"]
-                )
+                route = route_chat_message(message, source="discord")
+                self.assertNotEqual(route["selected_skill"], "dag-ulw")
+                self.assertNotEqual(route.get("reason_code"), "code_backlog")
 
     def test_a_skill_invoked_by_name_keeps_the_backlog(self) -> None:
         message = _listed("ulw-plan: fix all of these bugs in the repo", 4)
-        self.assertNotEqual(route_chat_message(message, source="discord")["selected_skill"], "dag-ulw")
+        route = route_chat_message(message, source="discord")
+        self.assertNotEqual(route["selected_skill"], "dag-ulw")
+        self.assertNotEqual(route.get("reason_code"), "code_backlog")
+        # dag-ulw by name still runs the list as a graph: the person asked for it.
+        named = route_chat_message(_listed("dag-ulw: fix all of these bugs in the repo", 4), source="discord")
+        self.assertEqual((named["action"], named["selected_skill"]), ("dispatch", "dag-ulw"))
+
+    def test_work_over_many_targets_still_runs_as_a_graph(self) -> None:
+        # Not a listed backlog: the breadth dispatch the backlog rule sat beside is unchanged.
+        route = route_chat_message("열린 PR들 전부 리베이스해줘", source="discord")
+        self.assertEqual((route["action"], route["selected_skill"]), ("dispatch", "dag-ulw"))
 
     def test_the_hint_is_the_same_on_a_host_without_the_package(self) -> None:
         standalone = _load_standalone_bundle_awareness()
@@ -182,15 +193,18 @@ class BacklogInjectionTests(unittest.TestCase):
             ) or {}
         return str(payload.get("context", ""))
 
-    def test_a_backlog_turn_tells_the_model_to_decompose_and_settle_in_the_same_turn(self) -> None:
-        context = self.context(BACKLOGS[0])
-        self.assertIn("selected=dag-ulw", context)
-        self.assertIn("next_action=start_dag_run", context)
-        self.assertIn(_HINT_HEAD, context)
-        self.assertIn("call omh_dag define and dispatch the calls it returns", context)
-        self.assertIn("settle each node and dispatch what settle returns in this same turn", context)
-        # The pilot's misdirection is gone: the backlog is not handed to a lane one item's word scored.
-        self.assertNotIn("selected=live-info-operator", context)
+    def test_a_backlog_turn_starts_no_graph_and_no_lane(self) -> None:
+        for message in BACKLOGS:
+            with self.subTest(message=message[:60]):
+                for reset in (llm_hooks._reset_awareness_section_state, reset_candidate_line_state,
+                              reset_plan_follow_on_state):
+                    reset()
+                context = self.context(message)
+                self.assertNotIn("selected=dag-ulw", context)
+                self.assertNotIn("next_action=start_dag_run", context)
+                self.assertNotIn(_HINT_HEAD, context)
+                # The pilot's misdirection stays gone: no lane one item's word scored is offered either.
+                self.assertNotIn("selected=live-info-operator", context)
 
     def test_a_small_or_other_list_turn_carries_no_backlog_instruction(self) -> None:
         for message in NOT_BACKLOGS:
