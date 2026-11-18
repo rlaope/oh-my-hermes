@@ -19,7 +19,7 @@ All notable changes will be documented here.
   test as Carbon's.
 
 - **omher.app has a Start Guide at `/guide/`, linked beside Docs in every header** (owner request, 2026-11-18). One
-  page for someone new: what OMH does in three cards (a model per kind of work, `dag-ulw`, expert skills), install in
+  page for someone new, with plain section titles that say what each part covers: what OMH does in three cards (a model per kind of work, `dag-ulw`, expert skills), install in
   three commands (`curl … | sh`, `omh setup`, `omh model`), categories and fallback shown on three real chains, plan
   versus `dag-ulw` as a to-do list versus a flowchart (an animated graph: two steps at once, fix, test, a separate goal
   check, and the loop back when it fails), how OMH stays current (a new model is checked before it joins a chain, the

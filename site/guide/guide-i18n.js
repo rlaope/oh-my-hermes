@@ -54,17 +54,11 @@
     ja: "もっと",
     zh: "更多"
   },
-  "guide.kicker": {
-    en: "Start Guide",
-    ko: "시작 가이드",
-    ja: "スタートガイド",
-    zh: "入门指南"
-  },
   "guide.title": {
-    en: "<span class=\"nw\">Oh My Hermes</span>, in five minutes.",
-    ko: "5분 만에 보는 <span class=\"nw\">Oh My Hermes</span>.",
-    ja: "5 分でわかる <span class=\"nw\">Oh My Hermes</span>。",
-    zh: "五分钟了解 <span class=\"nw\">Oh My Hermes</span>。"
+    en: "<span class=\"nw\">Oh My Hermes</span> Start Guide",
+    ko: "<span class=\"nw\">Oh My Hermes</span> 시작 가이드",
+    ja: "<span class=\"nw\">Oh My Hermes</span> スタートガイド",
+    zh: "<span class=\"nw\">Oh My Hermes</span> 入门指南"
   },
   "guide.lede": {
     en: "OMH is a layer on top of <a href=\"https://github.com/NousResearch/hermes-agent\">Hermes Agent</a>. You keep talking to Hermes; OMH splits the work into lanes and runs each one on the model that suits it, at the same time.",
@@ -79,28 +73,22 @@
     zh: "它从不修改 Hermes，也从不把只是计划好的工作称为完成。"
   },
   "guide.hero.start": {
-    en: "Start with install",
-    ko: "설치부터 시작",
-    ja: "インストールから始める",
-    zh: "从安装开始"
-  },
-  "guide.what.kicker": {
-    en: "What it does",
-    ko: "하는 일",
-    ja: "できること",
-    zh: "能做什么"
+    en: "Install",
+    ko: "설치하기",
+    ja: "インストール",
+    zh: "安装"
   },
   "guide.what.title": {
-    en: "Three things to know.",
-    ko: "알아 둘 것 세 가지.",
-    ja: "知っておくことは三つ。",
-    zh: "记住三件事。"
+    en: "What OMH does",
+    ko: "OMH가 하는 일",
+    ja: "OMH でできること",
+    zh: "OMH 能做什么"
   },
   "guide.what.c1.t": {
-    en: "The right model for each job",
-    ko: "일마다 맞는 모델",
-    ja: "仕事ごとに合ったモデル",
-    zh: "每件事配合适的模型"
+    en: "Models by category",
+    ko: "카테고리별 모델",
+    ja: "カテゴリ別のモデル",
+    zh: "按类别选模型"
   },
   "guide.what.c1.d": {
     en: "Every lane gets a category, like <code>quick</code> or <code>deep</code>. The category picks the model and how hard it thinks.",
@@ -109,10 +97,10 @@
     zh: "每条 lane 都带一个类别，比如 <code>quick</code> 或 <code>deep</code>；类别决定用哪个模型、想得多深（effort）。"
   },
   "guide.what.c2.t": {
-    en: "Big jobs, split and run at once",
-    ko: "큰 일은 쪼개서 동시에",
-    ja: "大きな仕事は分けて同時に",
-    zh: "大任务拆开同时跑"
+    en: "Parallel runs with dag-ulw",
+    ko: "dag-ulw 병렬 실행",
+    ja: "dag-ulw の並列実行",
+    zh: "dag-ulw 并行运行"
   },
   "guide.what.c2.d": {
     en: "Type <code>/dag-ulw</code> and a goal. It becomes small steps, the ready ones run in parallel, and a separate step checks the result.",
@@ -121,10 +109,10 @@
     zh: "输入 <code>/dag-ulw</code> 加上目标，它会拆成小步骤，就绪的并行运行，最后由单独一步检查结果。"
   },
   "guide.what.c3.t": {
-    en: "Expert skills, picked for you",
-    ko: "전문 스킬은 알아서",
-    ja: "専門スキルは自動で",
-    zh: "专家技能自动上场"
+    en: "Expert skills",
+    ko: "전문 스킬",
+    ja: "専門スキル",
+    zh: "专家技能"
   },
   "guide.what.c3.d": {
     en: "A hundred-plus specialists: frontend, backend, Rust, security review. You never call them; the router brings the right ones in.",
@@ -132,23 +120,17 @@
     ja: "フロントエンド、バックエンド、Rust、セキュリティレビューなど 100 を超える専門スキル。呼ばなくても、ルーターが合うものを取り込みます。",
     zh: "前端、后端、Rust、安全审查等 100 多个专家技能。不用你点名，路由器会把合适的带进来。"
   },
-  "guide.install.kicker": {
+  "guide.install.title": {
     en: "Install",
     ko: "설치",
     ja: "インストール",
     zh: "安装"
-  },
-  "guide.install.title": {
-    en: "Three commands.",
-    ko: "명령 세 줄.",
-    ja: "コマンドは三つ。",
-    zh: "三条命令。"
   },
   "guide.install.s1.t": {
-    en: "Install",
-    ko: "설치",
-    ja: "インストール",
-    zh: "安装"
+    en: "Install omh",
+    ko: "omh 설치",
+    ja: "omh をインストール",
+    zh: "安装 omh"
   },
   "guide.install.s1.d": {
     en: "macOS and Linux. It finds Python 3.11+ on its own.",
@@ -204,17 +186,11 @@
     ja: "すべてのインストール方法",
     zh: "全部安装方式"
   },
-  "guide.route.kicker": {
-    en: "Categories and routing",
-    ko: "카테고리와 라우팅",
-    ja: "カテゴリとルーティング",
-    zh: "类别与路由"
-  },
   "guide.route.title": {
-    en: "A roster for every kind of work.",
-    ko: "일 종류별 담당자 명단.",
-    ja: "仕事の種類ごとの担当表。",
-    zh: "按工作类型排好的值班表。"
+    en: "Categories and model routing",
+    ko: "카테고리와 모델 라우팅",
+    ja: "カテゴリとモデルルーティング",
+    zh: "类别与模型路由"
   },
   "guide.route.body": {
     en: "A category is a kind of work. Each one keeps its models in order: first choice, then the next.",
@@ -270,23 +246,17 @@
     ja: "モデルルーティングの詳細",
     zh: "模型路由详解"
   },
-  "guide.dag.kicker": {
+  "guide.dag.title": {
     en: "plan and dag-ulw",
     ko: "plan과 dag-ulw",
     ja: "plan と dag-ulw",
     zh: "plan 与 dag-ulw"
   },
-  "guide.dag.title": {
-    en: "A to-do list, or a flowchart.",
-    ko: "할 일 목록, 아니면 순서도.",
-    ja: "ToDo リストか、フローチャートか。",
-    zh: "待办清单，还是流程图。"
-  },
   "guide.dag.plan.t": {
-    en: "A to-do list",
-    ko: "할 일 목록",
-    ja: "ToDo リスト",
-    zh: "待办清单"
+    en: "plan",
+    ko: "plan",
+    ja: "plan",
+    zh: "plan"
   },
   "guide.dag.plan.d": {
     en: "<code>ulw-plan</code> writes the list and gets it agreed. <code>ulw-work</code> then works through it.",
@@ -295,10 +265,10 @@
     zh: "<code>ulw-plan</code> 写出清单并确认，<code>ulw-work</code> 照着清单去做。"
   },
   "guide.dag.dag.t": {
-    en: "A flowchart",
-    ko: "순서도",
-    ja: "フローチャート",
-    zh: "流程图"
+    en: "dag-ulw",
+    ko: "dag-ulw",
+    ja: "dag-ulw",
+    zh: "dag-ulw"
   },
   "guide.dag.dag.d": {
     en: "<code>dag-ulw</code> turns the list into a flowchart. Only a step that needs an earlier one waits; the rest run at the same time. A separate step checks the goal, and anything that failed is fixed before you get the report.",
@@ -378,17 +348,11 @@
     ja: "迷ったら <code>/dag-ulw</code> のあとにやりたいことを書くだけ。",
     zh: "拿不准用哪个？输入 <code>/dag-ulw</code>，后面写上你想做的事就行。"
   },
-  "guide.fresh.kicker": {
-    en: "Always current",
-    ko: "늘 최신",
-    ja: "いつも最新",
-    zh: "始终最新"
-  },
   "guide.fresh.title": {
-    en: "Always current. Checked first.",
-    ko: "늘 최신으로. 확인한 다음에.",
-    ja: "いつも最新に。確かめてから。",
-    zh: "始终最新，先验证再更新。"
+    en: "Updates and compatibility checks",
+    ko: "업데이트와 호환성 검사",
+    ja: "アップデートと互換性チェック",
+    zh: "更新与兼容性检查"
   },
   "guide.fresh.body": {
     en: "When a new model or a new Hermes ships, OMH does not just follow. It checks that things still work, then updates.",
@@ -456,17 +420,11 @@
     ja: "あなたは <code>omh update</code> を実行するだけ。",
     zh: "你只需要运行 <code>omh update</code>。"
   },
-  "guide.tui.kicker": {
-    en: "omh TUI",
-    ko: "omh TUI",
-    ja: "omh TUI",
-    zh: "omh TUI"
-  },
   "guide.tui.title": {
-    en: "Just type <code>omh</code>.",
-    ko: "<code>omh</code>만 입력하세요.",
-    ja: "<code>omh</code> と打つだけ。",
-    zh: "只要输入 <code>omh</code>。"
+    en: "The <code>omh</code> TUI",
+    ko: "<code>omh</code> TUI",
+    ja: "<code>omh</code> TUI",
+    zh: "<code>omh</code> TUI"
   },
   "guide.tui.body": {
     en: "Bare <code>omh</code> opens OMH's own terminal on your Hermes. Every model call and approval is still Hermes'; the screen is OMH's. <code>/dag-ulw</code> draws the graph, then a live tree with each lane's model, effort and tokens.",
@@ -498,17 +456,11 @@
     ja: "前のセッションに戻る",
     zh: "回到之前的会话"
   },
-  "guide.omher.kicker": {
-    en: "omher desktop · beta",
-    ko: "omher desktop · beta",
-    ja: "omher desktop · beta",
-    zh: "omher desktop · beta"
-  },
   "guide.omher.title": {
-    en: "An ADE for your bots.",
-    ko: "봇을 위한 ADE.",
-    ja: "ボットのための ADE。",
-    zh: "为机器人打造的 ADE。"
+    en: "omher desktop (beta)",
+    ko: "omher desktop (beta)",
+    ja: "omher desktop (beta)",
+    zh: "omher desktop (beta)"
   },
   "guide.omher.body": {
     en: "ADE means agent development environment. Your Hermes bots sit on the left, each with its work threads; the chat is in the middle; terminals open in a panel at the bottom with <kbd>Ctrl</kbd> <kbd>`</kbd>, as in VS Code.",
@@ -522,23 +474,17 @@
     ja: "コマンド一つで Hermes（なければ）、OMH、アプリまで入ります。",
     zh: "一条命令装好 Hermes（若没有）、OMH 和应用。"
   },
-  "guide.more.kicker": {
-    en: "More",
-    ko: "더 보기",
-    ja: "もっと",
-    zh: "更多"
-  },
   "guide.more.title": {
-    en: "When you want more.",
-    ko: "더 알고 싶을 때.",
-    ja: "もっと知りたいときは。",
-    zh: "想了解更多时。"
+    en: "More features",
+    ko: "그 밖의 기능",
+    ja: "その他の機能",
+    zh: "其他功能"
   },
   "guide.more.maestro.t": {
-    en: "Coding harness · ulw-maestro",
-    ko: "코딩 하네스 · ulw-maestro",
-    ja: "コーディングハーネス · ulw-maestro",
-    zh: "编码 harness · ulw-maestro"
+    en: "ulw-maestro",
+    ko: "ulw-maestro",
+    ja: "ulw-maestro",
+    zh: "ulw-maestro"
   },
   "guide.more.maestro": {
     en: "Hands a coding task to Claude Code or Codex, and lets you steer it while it runs.",
@@ -559,10 +505,10 @@
     zh: "不会悄悄记住任何东西：每个候选都会写明理由，记住、拒绝或暂缓。"
   },
   "guide.more.evidence.t": {
-    en: "Evidence before done",
-    ko: "완료 전에 증거",
-    ja: "完了の前に証拠",
-    zh: "先有证据再说完成"
+    en: "Verification status",
+    ko: "검증 상태 표시",
+    ja: "検証ステータス",
+    zh: "验证状态"
   },
   "guide.more.evidence": {
     en: "A run counts as verified only when a test, a review or CI actually passed.",
@@ -571,10 +517,10 @@
     zh: "只有测试、评审或 CI 真正通过，才算 verified。"
   },
   "guide.more.lsp.t": {
-    en: "LSP in the loop",
+    en: "LSP integration",
     ko: "LSP 연동",
     ja: "LSP 連携",
-    zh: "LSP 接入"
+    zh: "LSP 集成"
   },
   "guide.more.lsp": {
     en: "Definitions, references and renames come from the language server, not text search. Off by default.",

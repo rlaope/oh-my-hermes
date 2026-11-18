@@ -475,13 +475,12 @@ kbd{margin:0 2px}
   <div class="g-hero__grid" aria-hidden="true"></div>
   <div class="g-hero__in">
     <div>
-      <div class="kicker caps"><b>●</b><span data-i18n="guide.kicker">Start Guide</span></div>
-      <h1 id="g-h1" data-i18n-html="guide.title"><span class="nw">Oh My Hermes</span>, in five minutes.</h1>
+      <h1 id="g-h1" data-i18n-html="guide.title"><span class="nw">Oh My Hermes</span> Start Guide</h1>
       <p class="g-lede" data-i18n-html="guide.lede">OMH is a layer on top of <a href="https://github.com/NousResearch/hermes-agent">Hermes Agent</a>. You keep talking to Hermes; OMH splits the work into lanes and runs each one on the model that suits it, at the same time.</p>
       <p class="g-lede g-lede--note" data-i18n="guide.lede.note">It never patches Hermes, and it never calls planned work done.</p>
       <div class="g-hero__acts">
         <div class="cmd"><div><span class="p">$</span><code>curl -fsSL https://omher.app/install | sh</code></div><button class="copy" type="button" data-copy-text="curl -fsSL https://omher.app/install | sh" data-i18n="hero.copy">Copy</button></div>
-        <a class="btn" href="#install"><span data-i18n="guide.hero.start">Start with install</span><span class="arr" aria-hidden="true">→</span></a>
+        <a class="btn" href="#install"><span data-i18n="guide.hero.start">Install</span><span class="arr" aria-hidden="true">→</span></a>
       </div>
     </div>
     <div class="g-hero__face" aria-hidden="true"><img src="../assets/omh-logo-pinklight.png" alt=""></div>
@@ -489,18 +488,18 @@ kbd{margin:0 2px}
 </section>
 
 <section class="s" id="what" aria-labelledby="what-t">
-  <div class="rv"><div class="kicker caps"><b>01</b><span data-i18n="guide.what.kicker">What it does</span></div><h2 id="what-t" data-i18n="guide.what.title">Three things to know.</h2></div>
+  <div class="rv"><div class="kicker caps"><b>01</b></div><h2 id="what-t" data-i18n="guide.what.title">What OMH does</h2></div>
   <div class="g-three">
-    <article class="g-card rv" style="--c:var(--violet)"><div class="g-card__ic"><svg viewBox="0 0 24 24"><circle cx="5" cy="6" r="2.2"/><circle cx="5" cy="18" r="2.2"/><circle cx="19" cy="12" r="2.2"/><path d="M7.2 6.4c5 .6 4.6 5.2 9.6 5.6M7.2 17.6c5-.6 4.6-5.2 9.6-5.6"/></svg></div><h3 data-i18n="guide.what.c1.t">The right model for each job</h3><p data-i18n-html="guide.what.c1.d">Every lane gets a category, like <code>quick</code> or <code>deep</code>. The category picks the model and how hard it thinks.</p></article>
-    <article class="g-card rv" style="--c:var(--pink)"><div class="g-card__ic"><svg viewBox="0 0 24 24"><rect x="3" y="3.5" width="6" height="5" rx="1.5"/><rect x="15" y="3.5" width="6" height="5" rx="1.5"/><rect x="9" y="15.5" width="6" height="5" rx="1.5"/><path d="M6 8.5v2.5c0 1.5 1 2.5 2.5 2.5H12v2M18 8.5v2.5c0 1.5-1 2.5-2.5 2.5H12"/></svg></div><h3 data-i18n="guide.what.c2.t">Big jobs, split and run at once</h3><p data-i18n-html="guide.what.c2.d">Type <code>/dag-ulw</code> and a goal. It becomes small steps, the ready ones run in parallel, and a separate step checks the result.</p></article>
-    <article class="g-card rv" style="--c:var(--peach)"><div class="g-card__ic"><svg viewBox="0 0 24 24"><path d="M12 3l2.4 5.1 5.6.7-4.1 3.8 1.1 5.5L12 15.4 7 18.1l1.1-5.5L4 8.8l5.6-.7z"/></svg></div><h3 data-i18n="guide.what.c3.t">Expert skills, picked for you</h3><p data-i18n="guide.what.c3.d">A hundred-plus specialists: frontend, backend, Rust, security review. You never call them; the router brings the right ones in.</p><a class="g-more" href="../docs/skills/">Skills →</a></article>
+    <article class="g-card rv" style="--c:var(--violet)"><div class="g-card__ic"><svg viewBox="0 0 24 24"><circle cx="5" cy="6" r="2.2"/><circle cx="5" cy="18" r="2.2"/><circle cx="19" cy="12" r="2.2"/><path d="M7.2 6.4c5 .6 4.6 5.2 9.6 5.6M7.2 17.6c5-.6 4.6-5.2 9.6-5.6"/></svg></div><h3 data-i18n="guide.what.c1.t">Models by category</h3><p data-i18n-html="guide.what.c1.d">Every lane gets a category, like <code>quick</code> or <code>deep</code>. The category picks the model and how hard it thinks.</p></article>
+    <article class="g-card rv" style="--c:var(--pink)"><div class="g-card__ic"><svg viewBox="0 0 24 24"><rect x="3" y="3.5" width="6" height="5" rx="1.5"/><rect x="15" y="3.5" width="6" height="5" rx="1.5"/><rect x="9" y="15.5" width="6" height="5" rx="1.5"/><path d="M6 8.5v2.5c0 1.5 1 2.5 2.5 2.5H12v2M18 8.5v2.5c0 1.5-1 2.5-2.5 2.5H12"/></svg></div><h3 data-i18n="guide.what.c2.t">Parallel runs with dag-ulw</h3><p data-i18n-html="guide.what.c2.d">Type <code>/dag-ulw</code> and a goal. It becomes small steps, the ready ones run in parallel, and a separate step checks the result.</p></article>
+    <article class="g-card rv" style="--c:var(--peach)"><div class="g-card__ic"><svg viewBox="0 0 24 24"><path d="M12 3l2.4 5.1 5.6.7-4.1 3.8 1.1 5.5L12 15.4 7 18.1l1.1-5.5L4 8.8l5.6-.7z"/></svg></div><h3 data-i18n="guide.what.c3.t">Expert skills</h3><p data-i18n="guide.what.c3.d">A hundred-plus specialists: frontend, backend, Rust, security review. You never call them; the router brings the right ones in.</p><a class="g-more" href="../docs/skills/">Skills →</a></article>
   </div>
 </section>
 
 <section class="s" id="install" aria-labelledby="install-t">
-  <div class="rv"><div class="kicker caps"><b>02</b><span data-i18n="guide.install.kicker">Install</span></div><h2 id="install-t" data-i18n="guide.install.title">Three commands.</h2></div>
+  <div class="rv"><div class="kicker caps"><b>02</b></div><h2 id="install-t" data-i18n="guide.install.title">Install</h2></div>
   <div class="g-steps">
-    <div class="g-step rv"><span class="g-step__n">1</span><h3 data-i18n="guide.install.s1.t">Install</h3><p data-i18n="guide.install.s1.d">macOS and Linux. It finds Python 3.11+ on its own.</p><div class="cmd"><div><span class="p">$</span><code>curl -fsSL https://omher.app/install | sh</code></div><button class="copy" type="button" data-copy-text="curl -fsSL https://omher.app/install | sh" data-i18n="hero.copy">Copy</button></div></div>
+    <div class="g-step rv"><span class="g-step__n">1</span><h3 data-i18n="guide.install.s1.t">Install omh</h3><p data-i18n="guide.install.s1.d">macOS and Linux. It finds Python 3.11+ on its own.</p><div class="cmd"><div><span class="p">$</span><code>curl -fsSL https://omher.app/install | sh</code></div><button class="copy" type="button" data-copy-text="curl -fsSL https://omher.app/install | sh" data-i18n="hero.copy">Copy</button></div></div>
     <div class="g-step rv"><span class="g-step__n">2</span><h3 data-i18n="guide.install.s2.t">Connect it to Hermes</h3><p data-i18n="guide.install.s2.d">Installs the skills and registers OMH with Hermes.</p><div class="cmd"><div><span class="p">$</span><code>omh setup</code></div><button class="copy" type="button" data-copy-text="omh setup" data-i18n="hero.copy">Copy</button></div></div>
     <div class="g-step rv"><span class="g-step__n">3</span><h3 data-i18n="guide.install.s3.t">Pick your models</h3><p data-i18n="guide.install.s3.d">Opens the picker, one row per category. The arrow keys change the model and the effort.</p><div class="cmd"><div><span class="p">$</span><code>omh model</code></div><button class="copy" type="button" data-copy-text="omh model" data-i18n="hero.copy">Copy</button></div></div>
   </div>
@@ -515,7 +514,7 @@ kbd{margin:0 2px}
 </section>
 
 <section class="s" id="routing" aria-labelledby="routing-t">
-  <div class="rv"><div class="kicker caps"><b>03</b><span data-i18n="guide.route.kicker">Categories and routing</span></div><h2 id="routing-t" data-i18n="guide.route.title">A roster for every kind of work.</h2><p class="body" data-i18n="guide.route.body">A category is a kind of work. Each one keeps its models in order: first choice, then the next.</p></div>
+  <div class="rv"><div class="kicker caps"><b>03</b></div><h2 id="routing-t" data-i18n="guide.route.title">Categories and model routing</h2><p class="body" data-i18n="guide.route.body">A category is a kind of work. Each one keeps its models in order: first choice, then the next.</p></div>
 <!-- omh:guide-chains:begin (generated: uv run python tools/render_site_guide.py --write; source: src/coding/model_recommendations.py) -->
 <div class="g-cats">
   <article class="g-cat rv">
@@ -558,10 +557,10 @@ kbd{margin:0 2px}
 </section>
 
 <section class="s" id="dag" aria-labelledby="dag-t">
-  <div class="rv"><div class="kicker caps"><b>04</b><span data-i18n="guide.dag.kicker">plan and dag-ulw</span></div><h2 id="dag-t" data-i18n="guide.dag.title">A to-do list, or a flowchart.</h2></div>
+  <div class="rv"><div class="kicker caps"><b>04</b></div><h2 id="dag-t" data-i18n="guide.dag.title">plan and dag-ulw</h2></div>
   <div class="g-pd">
     <div class="rv">
-      <h3><span data-i18n="guide.dag.plan.t">A to-do list</span><span>ulw-plan · ulw-work</span></h3>
+      <h3><span data-i18n="guide.dag.plan.t">plan</span><span>ulw-plan · ulw-work</span></h3>
       <p data-i18n-html="guide.dag.plan.d"><code>ulw-plan</code> writes the list and gets it agreed. <code>ulw-work</code> then works through it.</p>
       <ol class="g-list">
         <li data-i18n="guide.dag.n.read">Read the code</li>
@@ -571,7 +570,7 @@ kbd{margin:0 2px}
       </ol>
     </div>
     <div class="rv">
-      <h3><span data-i18n="guide.dag.dag.t">A flowchart</span><span>dag-ulw</span></h3>
+      <h3><span data-i18n="guide.dag.dag.t">dag-ulw</span></h3>
       <p data-i18n-html="guide.dag.dag.d"><code>dag-ulw</code> turns the list into a flowchart. Only a step that needs an earlier one waits; the rest run at the same time. A separate step checks the goal, and anything that failed is fixed before you get the report.</p>
       <div class="g-prompt" aria-hidden="true"><b>❯</b><i>/dag-ulw</i><span data-i18n="guide.dag.prompt">fix the login bug</span></div>
       <svg class="g-graph" viewBox="-40 0 840 330" role="img" aria-label="dag-ulw graph: read the code and reproduce run at the same time, then fix, then write a test, then a separate step checks the goal; if it fails, the fix runs again" data-gdag>
@@ -611,7 +610,7 @@ kbd{margin:0 2px}
 </section>
 
 <section class="s g-fresh" id="fresh" aria-labelledby="fresh-t">
-  <div class="rv"><div class="kicker caps"><b>05</b><span data-i18n="guide.fresh.kicker">Always current</span></div><h2 id="fresh-t" data-i18n="guide.fresh.title">Always current. Checked first.</h2><p class="body" data-i18n="guide.fresh.body">When a new model or a new Hermes ships, OMH does not just follow. It checks that things still work, then updates.</p></div>
+  <div class="rv"><div class="kicker caps"><b>05</b></div><h2 id="fresh-t" data-i18n="guide.fresh.title">Updates and compatibility checks</h2><p class="body" data-i18n="guide.fresh.body">When a new model or a new Hermes ships, OMH does not just follow. It checks that things still work, then updates.</p></div>
   <div class="g-three">
     <article class="g-card rv"><div class="g-card__ic"><svg viewBox="0 0 24 24"><path d="M12 3v3M12 18v3M3 12h3M18 12h3"/><rect x="7" y="7" width="10" height="10" rx="2.5"/><path d="M10.5 10.5h3v3h-3z"/></svg></div><h3 data-i18n="guide.fresh.c1.t">New model</h3><p data-i18n="guide.fresh.c1.d">OMH first checks that its router recognizes the model and which effort levels the provider accepts. Only then does it take a place in the category lists.</p><a class="g-more" href="https://github.com/rlaope/oh-my-hermes/blob/main/docs/MODEL-ONBOARDING.md"><span data-i18n="guide.fresh.how">How it is done</span> ↗</a></article>
     <article class="g-card rv"><div class="g-card__ic"><svg viewBox="0 0 24 24"><path d="M4 7h16M4 12h10M4 17h7"/><path d="M15.5 15.5l2 2 3.5-4"/></svg></div><h3 data-i18n="guide.fresh.c2.t">New Hermes</h3><p data-i18n="guide.fresh.c2.d">Every night the OMH plugin is loaded into a real Hermes, both the stable release and main. If any check is missing, the run fails.</p><a class="g-more" href="https://github.com/rlaope/oh-my-hermes/blob/main/.github/workflows/hermes-compatibility.yml"><span data-i18n="guide.fresh.how2">The nightly check</span> ↗</a></article>
@@ -629,8 +628,8 @@ kbd{margin:0 2px}
       </video>
     </div>
     <div class="rv">
-      <div class="kicker caps"><b>06</b><span data-i18n="guide.tui.kicker">omh TUI</span></div>
-      <h2 id="tui-t" data-i18n-html="guide.tui.title">Just type <code>omh</code>.</h2>
+      <div class="kicker caps"><b>06</b></div>
+      <h2 id="tui-t" data-i18n-html="guide.tui.title">The <code>omh</code> TUI</h2>
       <p class="body" data-i18n-html="guide.tui.body">Bare <code>omh</code> opens OMH's own terminal on your Hermes. Every model call and approval is still Hermes'; the screen is OMH's. <code>/dag-ulw</code> draws the graph, then a live tree with each lane's model, effort and tokens.</p>
       <ul class="g-keys">
         <li><kbd>/theme</kbd><span data-i18n="guide.tui.k.theme">Change the launch look</span></li>
@@ -643,7 +642,7 @@ kbd{margin:0 2px}
 </section>
 
 <section class="s g-omher" id="omher" aria-labelledby="omher-t">
-  <div class="rv"><div class="kicker caps"><b>07</b><span data-i18n="guide.omher.kicker">omher desktop · beta</span></div><h2 id="omher-t" data-i18n="guide.omher.title">An ADE for your bots.</h2><p class="body" data-i18n-html="guide.omher.body">ADE means agent development environment. Your Hermes bots sit on the left, each with its work threads; the chat is in the middle; terminals open in a panel at the bottom with <kbd>Ctrl</kbd> <kbd>`</kbd>, as in VS Code.</p></div>
+  <div class="rv"><div class="kicker caps"><b>07</b></div><h2 id="omher-t" data-i18n="guide.omher.title">omher desktop (beta)</h2><p class="body" data-i18n-html="guide.omher.body">ADE means agent development environment. Your Hermes bots sit on the left, each with its work threads; the chat is in the middle; terminals open in a panel at the bottom with <kbd>Ctrl</kbd> <kbd>`</kbd>, as in VS Code.</p></div>
   <figure class="g-shot rv" style="margin-bottom:0"><img src="../assets/omher-app-window.webp" width="1817" height="1109" loading="lazy" alt="The omher desktop app: the bot Kami with three work threads, the bots Friren and Juno, terminals for a shell, Codex and Claude Code, and Kami's chat in the middle"></figure>
   <div class="g-omher__acts rv">
     <p data-i18n="guide.omher.one">One command installs Hermes if it is missing, OMH, and the app.</p>
@@ -653,12 +652,12 @@ kbd{margin:0 2px}
 </section>
 
 <section class="s" id="more" aria-labelledby="more-t">
-  <div class="rv"><div class="kicker caps"><b>08</b><span data-i18n="guide.more.kicker">More</span></div><h2 id="more-t" data-i18n="guide.more.title">When you want more.</h2></div>
+  <div class="rv"><div class="kicker caps"><b>08</b></div><h2 id="more-t" data-i18n="guide.more.title">More features</h2></div>
   <div class="g-mlist rv">
-    <div><h3 data-i18n="guide.more.maestro.t">Coding harness · ulw-maestro</h3><p data-i18n="guide.more.maestro">Hands a coding task to Claude Code or Codex, and lets you steer it while it runs.</p></div>
+    <div><h3 data-i18n="guide.more.maestro.t">ulw-maestro</h3><p data-i18n="guide.more.maestro">Hands a coding task to Claude Code or Codex, and lets you steer it while it runs.</p></div>
     <div><h3 data-i18n="guide.more.memory.t">Long-term memory</h3><p data-i18n="guide.more.memory">Nothing is remembered silently: each candidate is kept, refused or deferred with a written reason.</p></div>
-    <div><h3 data-i18n="guide.more.evidence.t">Evidence before done</h3><p data-i18n="guide.more.evidence">A run counts as verified only when a test, a review or CI actually passed.</p></div>
-    <div><h3 data-i18n="guide.more.lsp.t">LSP in the loop</h3><p data-i18n="guide.more.lsp">Definitions, references and renames come from the language server, not text search. Off by default.</p></div>
+    <div><h3 data-i18n="guide.more.evidence.t">Verification status</h3><p data-i18n="guide.more.evidence">A run counts as verified only when a test, a review or CI actually passed.</p></div>
+    <div><h3 data-i18n="guide.more.lsp.t">LSP integration</h3><p data-i18n="guide.more.lsp">Definitions, references and renames come from the language server, not text search. Off by default.</p></div>
   </div>
   <div class="g-go rv">
     <a href="../docs/"><span class="caps">Docs</span><b data-i18n="guide.more.docs">All the docs</b></a>
