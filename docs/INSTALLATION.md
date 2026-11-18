@@ -386,9 +386,10 @@ how to come back: run `omh` later and say "set up my models".
 
 The question needs both a terminal on stdin and stdout, a platform other than
 Windows, `hermes` on PATH, and a terminal the OMH TUI can open on. Without
-them, and under `--yes`, `--json`, `--dry-run` or `--no-interactive`, setup does
-not ask and does not open anything. Where the offer cannot be made, the wizard
-keeps its per-category model-chains question instead.
+them, and under `--yes`, `--json`, `--dry-run` or `--no-interactive` (even
+beside `--interactive`), setup does not ask and does not open anything. Where
+the offer cannot be made, the wizard keeps its per-category model-chains
+question instead.
 
 ### Workflows in Claude Code, Codex, Cursor, opencode, OpenClaw, or pi
 
@@ -2652,11 +2653,16 @@ The guided flow is deliberately staged:
    `model.aliases` changes and a digest-bound preview. Existing aliases remain
    user-owned; collisions fail closed unless separately allowed. One
    `--fallback-model PROVIDER/MODEL` (it needs `--model-setup`, and onboarding
-   keeps one) previews Hermes' `fallback_model` in the same preview and digest:
-   it is refused when the provider has no credential in Hermes, or when it is the
-   main model, and a fallback chain Hermes already holds is replaced only after
-   the preview shows that. A failed fallback write rolls back the aliases written
-   with it.
+   keeps one) previews Hermes' fallback chain in the same preview and digest:
+   the effective chain before (`fallback_providers`, then legacy
+   `fallback_model` entries) and the one entry after. Apply writes
+   `fallback_providers` as that one entry and drops the legacy `fallback_model`,
+   as `hermes fallback` does. It is refused when the provider has no credential
+   in Hermes, when it is the main model, or when an existing entry carries a
+   field OMH cannot restore (a key, for example; change that chain with
+   `hermes fallback` instead). A chain Hermes already holds is replaced only
+   after the preview shows that, and a failed fallback write restores the prior
+   chain and the aliases written with it.
 4. **Apply.** No preview writes. An apply requires both
    `--apply-model-config` and the preview's `--model-config-digest`; an
    interactive flow asks after showing the preview. Hermes' own `config set`

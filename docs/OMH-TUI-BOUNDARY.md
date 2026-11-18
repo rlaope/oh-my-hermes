@@ -93,9 +93,11 @@ once, interrupts nothing, and then opens the composer for what the person tells
 Hermes instead; Esc there sends nothing more.
 
 The one prompt it sends that the person did not type is the onboarding prompt.
-It goes only when `omh` was launched with `--onboard model-setup`, which only
-the accepted "Set up your models now?" question at the end of an interactive
-`omh setup` starts (setup opens the TUI as a child process and waits for it).
+It goes only when `omh` was launched with `--onboard model-setup`. The accepted
+"Set up your models now?" question at the end of an interactive `omh setup` is
+its only automatic caller (setup opens the TUI as a child process and waits for
+it); a person may also run `omh --onboard model-setup` themselves, which sends
+the same fixed prompt.
 The flag is for a bare launch in a new session: it is refused beside `--resume`
 or `--continue` or with a subcommand, and it skips the last-session question and
 the what's-new notice. The text is the fixed, packaged one in
