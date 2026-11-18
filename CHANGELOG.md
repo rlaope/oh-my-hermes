@@ -155,6 +155,18 @@ All notable changes will be documented here.
   run's one-line summary open. While a run is active, such a dispatch is stopped once per turn with a pointer to
   `omh_dag` (ready, settle, repair, extend); sending it again goes through. Contributed by @yqm-307 (#2914).
 
+- **omher: start a thread from the chat box with `./thread`, or from a "+ New thread" line under the bot.** In a
+  bot's chat, `./` opens one row, `./thread`. `./thread` alone opens a new empty thread with its box focused, as the
+  bot's right-click New thread does; `./thread <text>` opens one and sends the text there as its first message, which
+  also names it. The command never reaches the bot, and the main chat gets nothing. It counts only at the start of the
+  message; mid-message, `./threads` or a path go out as typed. Inside a thread it opens a sibling thread under the same
+  bot. Skills stay `$name`, so a skill named `thread` is `$thread` and never collides. In the sidebar, each bot's
+  thread list ends in a quiet dashed "+ New thread" line on the same rail (a bot with no threads shows it while open),
+  and a hovered bot row shows a new-thread button beside ⋯. The row menu now sets New thread apart: its own group with
+  an icon and a divider above the bot's management items. Bots on another computer and offline bots get none of these.
+  While a bot's answer streams, a thread block it quotes as an example inside another fence or a `>` quote no longer
+  disappears and leaves an empty code block; only the blocks the bridge acts on are hidden.
+
 ## 4.0.8 - 2026-11-15
 
 - **The OMH TUI shows a compression as one gauge row, and a prompt typed meanwhile goes on by itself.** `/compact`
