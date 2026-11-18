@@ -8,6 +8,7 @@ from typing import Callable
 
 from ..coding.hermes_model_config import (
     AliasCollisionError,
+    effective_fallback_entries,
     fallback_entries,
     HermesCommandError,
     HermesConfigUnreadableError,
@@ -354,12 +355,17 @@ def _model_preview_payload(preview) -> dict[str, object]:
 
 
 def _fallback_payload(preview) -> dict[str, object] | None:
-    """The fallback_model change before -> after; None when the run left it alone."""
+    """The fallback chain before -> after; None when the run left it alone.
+
+    `before` is Hermes' effective chain (`fallback_providers`, then legacy
+    `fallback_model` entries not already present); `after` is its only entry.
+    """
     if preview.fallback is None:
         return None
-    before = list(fallback_entries(preview.before_fallback))
+    before = list(preview.before_fallback_chain)
     return {
         "before": before,
+        "before_chain": before,
         "after": preview.fallback,
         "replaces_chain": preview.fallback_replaces_chain,
         "unchanged": not preview.fallback_commands,
@@ -374,6 +380,9 @@ def _model_inspection_payload(inspection) -> dict[str, object]:
         "aliases": dict(inspection.model_dot_aliases),
         "main_model": inspection.main_model,
         "fallback_model": list(fallback_entries(inspection.fallback_model)),
+        "fallback_chain": list(
+            effective_fallback_entries(inspection.fallback_providers, inspection.fallback_model)
+        ),
         "providers": [
             {
                 "provider_id": provider.provider_id,
