@@ -115,7 +115,7 @@ export function useRowDrag(order: readonly string[], pinned: readonly string[], 
       active: !!l,
       onPointerDown(e) {
         // the primary button only, and not on the ⋯ button or an open menu
-        if (e.button !== 0 || liftRef.current || (e.target as Element).closest(".bot-more, [role=menu]")) return;
+        if (e.button !== 0 || liftRef.current || (e.target as Element).closest(".bot-more, .bot-new, [role=menu]")) return;
         const range = moveRange(order, pinned, bot);
         if (!range || range[0] === range[1]) return;
         const el = e.currentTarget;

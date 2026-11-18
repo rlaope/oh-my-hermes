@@ -334,6 +334,7 @@ def render(recs: list[dict]) -> str:
       <a class="brand brand--link" href="../../">OMH</a>
       <nav class="nav" aria-label="Primary navigation">
         <a href="../">Docs</a>
+        <a href="../../guide/">Start Guide</a>
         <a aria-current="page" href="./">Skills</a>
         <a href="../hermes-agent-architecture/">Architecture</a>
         <a class="nav__icon" href="https://github.com/rlaope/oh-my-hermes" aria-label="Open OMH on GitHub" title="GitHub repository">

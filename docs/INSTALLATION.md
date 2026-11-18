@@ -316,8 +316,8 @@ shell (`HERMES_HOME=<root>/profiles/<name>`), the installer looks for Hermes und
 
 The release lookup reads GitHub's API ten releases at a time and stops at the first omher one. Without a token
 GitHub allows 60 API requests an hour per network; when that runs out the installer stops with exit 1 and says so
-(set `GITHUB_TOKEN` to raise the limit). A Hermes installed this way skipped its setup wizard: open omher and pick a
-model from the model menu at the top of the chat (without the app, run `hermes setup`). `irm ... | iex` cannot
+(set `GITHUB_TOKEN` to raise the limit). A Hermes installed this way skipped its setup wizard: open omher and sign it in
+to an AI account from the line above the chat box (without the app, run `hermes setup`). `irm ... | iex` cannot
 pass an argument, which is why the PowerShell form runs the downloaded script as a script block; a failed run
 leaves its exit code in `$LASTEXITCODE`.
 
@@ -1409,6 +1409,7 @@ Esc closes it):
 | Ctrl+N / Ctrl+P | Move down / up in lists, menus, pickers and prompts; scroll one line in pagers, including /dag. Also work in CLI theme, model-chain and setup pickers |
 | Ctrl+R | Searches the input history; Ctrl+R again finds an older match, Enter puts it in the composer, Esc leaves the composer as it was |
 | Ctrl+X | Opens the `/sessions` picker |
+| Alt+P | Corrects the underlined issue at cursor locally; Enter accepts, Skip/Esc closes; never sends |
 | Ctrl+S | Opens the bot board, as `/bots` does: this machine's Hermes profiles, their gateways and sessions, read-only |
 | Ctrl+P | Folds the plan above the composer to its header and the item it is on, or expands it again, while a turn runs or between turns; the header says which on its right; on an open menu, Ctrl+P and Ctrl+N move the menu instead |
 | ↑ | On an empty composer with prompts queued, takes them back into the composer to edit; a queued shell line comes back on its own |
@@ -6575,3 +6576,28 @@ default full cleanup. Add `--force` only when you intentionally want to remove
 an unmanaged `~/.hermes/plugins/omh` directory. Add `--keep-command` when you
 want to keep the install.sh-managed command venv/link while removing Hermes
 state.
+**Local proofreader (optional external dependency):** on macOS with Homebrew:
+
+```sh
+brew install languagetool
+brew services start languagetool
+```
+
+The formula is singular `languagetool`; its service listens on port 8081 and
+Homebrew installs Java transitively (`openjdk@17` in the current formula).
+On other platforms, run your own local LanguageTool server, for example
+`java -cp languagetool-server.jar org.languagetool.server.HTTPServer --port 8081`.
+Keep it bound to loopback; do not enable public access. OMH does not install or
+start Java or LanguageTool. Launch OMH with
+`OMH_PROOFREAD_URL=http://127.0.0.1:8081/v2/check` (the default) and optionally
+`OMH_PROOFREAD_LANGUAGE=en-US` (default `auto`). Press Alt+P to check the
+draft. Automatic checks are off by default; set `OMH_PROOFREAD=1` and main and
+clarify free-text fields also check after 600 ms quiet and underline issues
+without interrupting typing. Move the cursor onto an
+underlined issue and press Alt+P, then pick a replacement with arrows and Enter,
+or Skip/Esc to close. Alt+P checks immediately if results are missing, and never
+opens an unrelated issue elsewhere in the draft. Corrections use normal Ctrl+_
+undo and never send. Missing servers leave the draft unchanged and show a quiet
+inline status, with bounded retry/backoff (Alt+P retries immediately).
+Masked fields, command lines, code, images and paste-chip contents are
+excluded. See [proofreading boundary](OMH-TUI-BOUNDARY.md#proofreading).
