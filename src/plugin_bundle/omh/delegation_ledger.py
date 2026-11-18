@@ -55,14 +55,16 @@ import sqlite3
 import time
 from typing import Any, Final
 
+from . import runtime_paths
 from .awareness_delivery import _awareness_delivery_lock
-
 from .hermes_delegation import load_delegation_route_provenance
 from .host_process import recorded_process, this_process
-from .kanban_board_reader import conversation_session_ids as _conversation_session_ids
-from . import runtime_paths
 from .sqlite_readonly import connect_readonly
 
+# A module binding, not a name import: importing kanban_board_reader first runs
+# hermes_delegation, whose last line imports this module while the reader is
+# still half built. The attribute is read at call time, after both finish.
+from . import kanban_board_reader as _kanban_board_reader  # noqa: E402
 
 LEDGER_SCHEMA_VERSION: Final = "delegation_ledger/v1"
 LEDGER_DIRNAME: Final = "delegation"
@@ -591,7 +593,7 @@ def observe_subagent_start(kwargs: dict[str, object], *, now: float | None = Non
     if binding:
         entry["dag"] = binding
         # Bind only a direct child of the run owner, never an inherited scope.
-        for owner in sorted({parent, *_conversation_session_ids(hermes_home, parent)}):
+        for owner in sorted({parent, *_kanban_board_reader.conversation_session_ids(hermes_home, parent)}):
             run = _dag_run.read_run(_dag_run.record_path(omh_home, owner, binding["run"]))
             node = next((item for item in run["nodes"] if item["id"] == binding["node"]), None) if run else None
             attempts = node.get("attempts") or [] if node else []

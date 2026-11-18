@@ -418,7 +418,13 @@ class IdentityCatalogRegressionTests(IdentityHookTest):
         self.write_identities({"schema_version": "omh_identity_profiles/v1", "identities": {"off": {"prompt": "disabled", "enabled": False, "model_chain": [{"model_id": "deepseek-flash"}]}}})
         section = awareness_system_prompt_section({"session_id": "main", "omh_home": str(self.home)})
         self.assertNotIn("custom:", section)
-        # Disabled customs drop out, but the built-in half of the directory remains.
+        # With no enabled custom identity the snapshot is not paid at all; omh_role(action=list) still lists
+        # the built-in roles.
+        self.assertNotIn("Identity Catalog", section)
+        self.assertNotIn("- builtin:", section)
+        self.write_identities({"schema_version": "omh_identity_profiles/v1", "identities": {"on": {"prompt": "enabled", "model_chain": [{"model_id": "deepseek-flash"}]}}})
+        section = awareness_system_prompt_section({"session_id": "main-2", "omh_home": str(self.home)})
+        self.assertIn("- custom:on", section)
         self.assertIn("- builtin:", section)
 
     def test_encoded_scope_budget_keeps_unicode_and_later_identity_names(self):

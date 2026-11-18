@@ -148,7 +148,10 @@ def identity_catalog_context(
     snapshot refreshes when Hermes builds a new session's system prompt.
     """
     profiles = identity_definitions(omh_home)
-    if not profiles:
+    # Built-in roles alone are already listed by omh_role(action=list); the
+    # snapshot is paid on every main session's system prompt, so it appears
+    # only when an enabled custom identity exists, and then lists both halves.
+    if not any(reference.startswith("custom:") for reference in profiles):
         return ""
     header = (
         "[OMH Identity Catalog]\n"
