@@ -312,7 +312,8 @@ work. OMH starts no timer or poll. After three parks per node, another park is r
 A child that stopped before editing and wrote an `ESCALATE: <question>` line into its handoff asked for a
 stronger model. Settle it `outcome=escalated reason=<that question>` and dispatch what settle returns: the node
 comes back one category up (quick, unspecified-low, unspecified-high, ultrabrain), at most twice, briefed with
-the question. Never answer the question yourself and accept.
+the question. Never answer the question yourself and accept. A node pinned to an `identity` keeps
+that identity's model chain, so it cannot escalate; pick another identity for it instead.
 
 ## Goal criteria
 

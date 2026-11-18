@@ -1655,7 +1655,12 @@ def retry_count(node: Mapping[str, Any]) -> int:
 
 
 def can_escalate(node: Mapping[str, Any]) -> bool:
-    """True when the node's category has a rung above it and it escalated fewer than `MAX_ESCALATIONS` times."""
+    """True when the node's category has a rung above it and it escalated fewer than `MAX_ESCALATIONS` times.
+
+    A node pinned to an `identity` runs on that identity's own model chain whatever its category, so a climb would
+    change only the label; such a node cannot escalate (the parent picks another identity instead)."""
+    if node.get("identity"):
+        return False
     return str(node.get("category")) in ESCALATION_LADDER and len(node.get("escalations") or []) < MAX_ESCALATIONS
 
 
@@ -1952,6 +1957,10 @@ def _escalate(node: dict[str, Any], reason: object, now: float) -> str:
     if not isinstance(reason, str) or not reason.strip():
         raise DagRefusal("escalation_needs_reason",
                          "escalated needs the question the child stopped on as the reason, one short line.")
+    if node.get("identity"):
+        raise DagRefusal("identity_node_cannot_escalate",
+                         f"Node {node_id} runs on identity {node['identity']}, whose own model chain a category climb "
+                         "would not change; settle it accepted, failed or blocked.")
     if category not in ESCALATION_LADDER:
         raise DagRefusal("no_higher_category",
                          f"Node {node_id} is on {category}, which has no category above it; settle it accepted, "

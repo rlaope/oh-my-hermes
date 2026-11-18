@@ -8,7 +8,8 @@ All notable changes will be documented here.
   child cannot settle a design choice or a root cause, it stops before editing and writes `ESCALATE: <question>` into
   its handoff; the node is settled `escalated` and offered again one category up (quick, unspecified-low,
   unspecified-high, ultrabrain), at most twice, briefed with the question the first child stopped on. Nodes already on
-  ultrabrain, review or deep never get the option.
+  ultrabrain, review or deep never get the option, nor does a node pinned to an identity, which keeps that
+  identity's own model chain.
 
 - **omher: a waiting message is sent or taken back in one click, with no menu.** A message typed while the bot
   answers waits with buttons before it instead of a ↵ that opened Send now / Steer / Edit / Delete. ↵ sends it:

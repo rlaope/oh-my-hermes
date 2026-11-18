@@ -189,6 +189,15 @@ class EscalationRefusedTest(unittest.TestCase):
                 self.assertEqual(record["nodes"][0]["category"], category)
                 self.assertEqual(record["nodes"][0]["attempts"][-1]["outcome"], "")
 
+    def test_a_node_pinned_to_an_identity_cannot_escalate(self) -> None:
+        # An identity node runs on that identity's own model chain whatever its category: a climb changes nothing.
+        record = _record(identity="builtin:builder")
+        record["nodes"][0]["attempts"] = [{"n": 1, "handed_out_at": 1_000_000.0, "fallback": False, "settled_at": None,
+                                           "outcome": "", "reason": "", "provider_error": False}]
+        self.assertEqual(self._refusal(record, QUESTION), "identity_node_cannot_escalate")
+        self.assertEqual(record["nodes"][0]["category"], "quick")
+        self.assertNotIn("escalations", record["nodes"][0])
+
     def test_a_third_escalation_is_refused(self) -> None:
         with homes() as home:
             record, now = _record(), 1_000_000.0
@@ -234,6 +243,13 @@ class EscalateLineTest(unittest.TestCase):
                                                dag_run.derive(record, [], 1_000_000.0))["context"]
                     self.assertEqual(ESCALATE_LINE in context, expected)
                     self.assertNotIn("Escalated from", context)
+
+    def test_a_node_pinned_to_an_identity_is_not_told(self) -> None:
+        with homes() as home:
+            record = _record(identity="builtin:builder")
+            context = dag_run.task_for(record, record["nodes"][0], home.omh,
+                                       dag_run.derive(record, [], 1_000_000.0))["context"]
+        self.assertNotIn(ESCALATE_LINE, context)
 
     def test_a_node_at_the_limit_is_not_told(self) -> None:
         with homes() as home:
