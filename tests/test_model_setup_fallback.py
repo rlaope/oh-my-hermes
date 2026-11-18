@@ -20,6 +20,7 @@ from omh.coding.hermes_model_config import (  # noqa: E402
     ConfirmationRequiredError,
     HermesCommandError,
     HermesModelConfigError,
+    HermesVerificationError,
     apply_hermes_model_config,
     effective_fallback_entries,
     inspect_hermes_model_config,
@@ -37,9 +38,13 @@ from omh.installer import OmhError  # noqa: E402
 
 
 # A stand-in `hermes` over a JSON config file: `config get/set/unset`, `config check`,
-# `auth list/status`. Like Hermes, `config set` coerces a JSON object or list value, and
-# `HERMES_FAIL_MUTATION=<key>` makes the first write to that key exit nonzero. An unset
-# `fallback_providers` reads back as Hermes' default `[]`.
+# `auth list/status`. Like Hermes, `config set` coerces a JSON object or list value, an
+# unset `fallback_providers` reads back as Hermes' default `[]`, and any other missing key
+# exits 1 with "Config key not set" on stderr. Faults: `HERMES_FAIL_MUTATION=<key>` makes
+# the first write to that key exit 9 without writing, `HERMES_FAIL_AFTER_WRITE=<key>`
+# writes and then exits 9, `HERMES_FAIL_READ=<key>[:<code>]` makes `config get <key>` exit
+# with that code (9 by default), `HERMES_FAIL_READ_AFTER_WRITE=<key>` does so once any
+# write ran, and `HERMES_BAD_JSON=<key>` answers that read with exit 0 and no JSON.
 _FAKE_HERMES = r"""
 #!/usr/bin/env python3
 import json
@@ -63,15 +68,29 @@ def fail_once(key):
         marker.touch()
         raise SystemExit(9)
 
+def read_fault(key):
+    spec = os.environ.get("HERMES_FAIL_READ", "")
+    name, _, code = spec.partition(":")
+    if spec and name == key:
+        print("synthetic read failure", file=sys.stderr)
+        raise SystemExit(int(code or 9))
+    if os.environ.get("HERMES_FAIL_READ_AFTER_WRITE") == key and (home / "written").exists():
+        raise SystemExit(9)
+    if os.environ.get("HERMES_BAD_JSON") == key:
+        print("not json")
+        raise SystemExit(0)
+
 if args == ["config", "path"]:
     print(state_path)
 elif args[:2] == ["config", "get"]:
+    read_fault(args[2])
     current = state
     for part in args[2].split("."):
         if not isinstance(current, dict) or part not in current:
             if args[2] == "fallback_providers":
                 print("[]")
                 raise SystemExit(0)
+            print(f"Config key not set: {args[2]}", file=sys.stderr)
             raise SystemExit(1)
         current = current[part]
     print(json.dumps(current))
@@ -92,6 +111,9 @@ elif args[:2] == ["config", "set"]:
         current = current.setdefault(part, {})
     current[parts[-1]] = value
     save()
+    (home / "written").touch()
+    if os.environ.get("HERMES_FAIL_AFTER_WRITE") == args[2]:
+        raise SystemExit(9)
 elif args[:2] == ["config", "unset"]:
     fail_once(args[2])
     current = state
@@ -113,6 +135,7 @@ _CHAIN = [
 ]
 _BACKUP = [{"provider": "alpha", "model": "backup"}]
 _BACKUP_LITERAL = json.dumps(_BACKUP)
+_SET_BACKUP = ["config", "set", "fallback_providers", _BACKUP_LITERAL]
 
 
 class FallbackModelTests(unittest.TestCase):
@@ -198,7 +221,7 @@ class FallbackModelTests(unittest.TestCase):
     # -- preview -----------------------------------------------------------
 
     def test_preview_shows_the_fallback_before_and_after_in_the_same_payload(self) -> None:
-        self.write_config({**_BASE_CONFIG, "fallback_model": {"provider": "alpha", "model": "old-1"}})
+        self.write_config({**_BASE_CONFIG, "fallback_providers": [{"provider": "alpha", "model": "old-1"}]})
         args = self.args("--confirm-model", "alpha/main-1", "--model-alias", "main=alpha/main-1", "--fallback-model", "alpha/backup")
 
         result = model_activation_result(args, language="en", dependencies=self.dependencies())
@@ -208,7 +231,7 @@ class FallbackModelTests(unittest.TestCase):
         self.assertEqual(
             preview["fallback_model"],
             {"before": ["alpha/old-1"], "before_chain": ["alpha/old-1"], "after": "alpha/backup",
-             "replaces_chain": False, "unchanged": False},
+             "replaces_chain": False, "unchanged": False, "legacy": False, "refusal": None},
         )
         self.assertEqual(preview["config_digest"], self.inspect().config_digest)
         self.assertEqual(result["inspection"]["main_model"], "alpha/main-1")
@@ -267,7 +290,7 @@ class FallbackModelTests(unittest.TestCase):
             )
 
     def test_a_chain_is_previewed_as_replaced_by_one_entry(self) -> None:
-        self.write_config({**_BASE_CONFIG, "fallback_model": _CHAIN})
+        self.write_config({**_BASE_CONFIG, "fallback_providers": _CHAIN})
 
         result = model_activation_result(
             self.args("--fallback-model", "alpha/backup"),
@@ -287,7 +310,7 @@ class FallbackModelTests(unittest.TestCase):
                 color=lambda text, _c, _u: text,
             )
         self.assertIn("chain is replaced by this one entry", shown.getvalue())
-        self.assertEqual(self.state()["fallback_model"], _CHAIN)
+        self.assertEqual(self.state()["fallback_providers"], _CHAIN)
         self.assertEqual(self.writes(), [])
 
     # -- apply -------------------------------------------------------------
@@ -344,7 +367,7 @@ class FallbackModelTests(unittest.TestCase):
         self.assertEqual(self.writes(), [])
 
     def test_a_chain_is_replaced_only_after_explicit_approval(self) -> None:
-        self.write_config({**_BASE_CONFIG, "fallback_model": _CHAIN})
+        self.write_config({**_BASE_CONFIG, "fallback_providers": _CHAIN})
         inspection = self.inspect()
         preview = preview_hermes_model_config(inspection, {}, fallback="alpha/backup")
 
@@ -352,33 +375,22 @@ class FallbackModelTests(unittest.TestCase):
             apply_hermes_model_config(
                 preview, confirmed=False, expected_config_digest=inspection.config_digest, env=self.env
             )
-        self.assertEqual(self.state()["fallback_model"], _CHAIN)
+        self.assertEqual(self.state()["fallback_providers"], _CHAIN)
         self.assertEqual(self.writes(), [])
 
         apply_hermes_model_config(
             preview, confirmed=True, expected_config_digest=inspection.config_digest, env=self.env
         )
         self.assertEqual(self.state()["fallback_providers"], _BACKUP)
-        self.assertNotIn("fallback_model", self.state())
-        self.assertEqual(
-            self.writes(),
-            [
-                ["config", "set", "fallback_providers", _BACKUP_LITERAL],
-                ["config", "unset", "fallback_model"],
-            ],
-        )
+        self.assertEqual(self.writes(), [_SET_BACKUP])
 
     def test_the_same_fallback_already_set_writes_nothing(self) -> None:
-        for config in (
-            {"fallback_model": {"provider": "alpha", "model": "backup"}},
-            {"fallback_providers": _BACKUP},
-        ):
-            with self.subTest(config=list(config)):
-                self.write_config({**_BASE_CONFIG, **config})
-                preview = preview_hermes_model_config(self.inspect(), {}, fallback="alpha/backup")
+        self.write_config({**_BASE_CONFIG, "fallback_providers": _BACKUP})
+        preview = preview_hermes_model_config(self.inspect(), {}, fallback="alpha/backup")
 
-                self.assertEqual(preview.commands, ())
-                self.assertFalse(preview.fallback_replaces_chain)
+        self.assertEqual(preview.commands, ())
+        self.assertFalse(preview.fallback_replaces_chain)
+        self.assertIsNone(preview.fallback_refusal)
 
     # -- Hermes' current chain: fallback_providers --------------------------
 
@@ -401,6 +413,7 @@ class FallbackModelTests(unittest.TestCase):
         state = self.state()
         self.assertEqual(state["fallback_providers"], _BACKUP)
         self.assertNotIn("fallback_model", state)
+        self.assertEqual(self.writes(), [_SET_BACKUP])
         inspection = self.inspect()
         self.assertEqual(
             effective_fallback_entries(inspection.fallback_providers, inspection.fallback_model),
@@ -417,23 +430,100 @@ class FallbackModelTests(unittest.TestCase):
         preview = preview_hermes_model_config(self.inspect(), {}, fallback="alpha/backup")
 
         self.assertEqual(preview.before_fallback_chain, ("alpha/old-2", "alpha/old-1"))
-        self.assertTrue(preview.fallback_replaces_chain)
+        self.assertTrue(preview.fallback_is_legacy)
 
-    def test_a_legacy_only_fallback_moves_to_fallback_providers(self) -> None:
+    # -- legacy fallback_model: shown, never written -------------------------
+
+    def test_a_legacy_fallback_model_is_previewed_and_its_apply_refused_with_no_write(self) -> None:
+        for extra in (
+            {"fallback_model": {"provider": "alpha", "model": "old-1"}},
+            {"fallback_model": _CHAIN},
+            {"fallback_providers": _CHAIN, "fallback_model": {"provider": "alpha", "model": "old-3"}},
+            {"fallback_model": {"provider": "alpha", "model": "old-1", "api_key": "synthetic-canary"}},
+        ):
+            with self.subTest(keys=sorted(extra)):
+                self.write_config({**_BASE_CONFIG, **extra})
+                before = self.state()
+                digest = self.inspect().config_digest
+                preview = model_activation_result(
+                    self.args("--fallback-model", "alpha/backup"), language="en", dependencies=self.dependencies()
+                )["preview"]
+                for mode in ((), ("--dry-run",)):
+                    args = self.args(
+                        "--fallback-model", "alpha/backup", "--apply-model-config", "--model-config-digest", digest,
+                        *mode,
+                    )
+                    with self.assertRaises(OmhError) as raised:
+                        model_activation_result(args, language="en", dependencies=self.dependencies())
+                    self.assertIn("hermes fallback clear", str(raised.exception))
+                    self.assertNotIn("synthetic-canary", str(raised.exception))
+
+                self.assertTrue(preview["fallback_model"]["legacy"])
+                self.assertIn("older `fallback_model` setting", preview["fallback_model"]["refusal"])
+                self.assertEqual(preview["commands"], [])
+                shown = io.StringIO()
+                with redirect_stdout(shown):
+                    print_model_preview_review(
+                        preview, language="en", use_color=lambda: False, color=lambda text, _c, _u: text
+                    )
+                self.assertIn("Apply is refused", shown.getvalue())
+                self.assertEqual(self.writes(), [])
+                self.assertEqual(self.state(), before)
+
+    def test_the_library_apply_refuses_a_legacy_preview_before_any_write(self) -> None:
         self.write_config({**_BASE_CONFIG, "fallback_model": {"provider": "alpha", "model": "old-1"}})
         inspection = self.inspect()
+        preview = preview_hermes_model_config(inspection, {"main": "alpha/main-1"}, fallback="alpha/backup")
+
+        with self.assertRaisesRegex(HermesModelConfigError, "hermes fallback clear"):
+            apply_hermes_model_config(
+                preview, confirmed=True, expected_config_digest=inspection.config_digest, env=self.env
+            )
+
+        self.assertEqual(self.writes(), [])
+
+    # -- strict reads ------------------------------------------------------
+
+    def test_a_failed_fallback_read_refuses_before_any_write(self) -> None:
+        self.write_config({
+            **_BASE_CONFIG,
+            "fallback_providers": [_CHAIN[0]],
+            "fallback_model": {"provider": "alpha", "model": "old-3"},
+        })
+        before = self.state()
+        digest = self.inspect().config_digest
+        for fault in (
+            {"HERMES_FAIL_READ": "fallback_model"},
+            {"HERMES_FAIL_READ": "fallback_providers"},
+            {"HERMES_FAIL_READ": "fallback_model:1"},
+            {"HERMES_BAD_JSON": "fallback_providers"},
+        ):
+            with self.subTest(fault=fault):
+                env = {**self.env, **fault}
+                args = self.args(
+                    "--fallback-model", "alpha/backup", "--apply-model-config", "--model-config-digest", digest,
+                )
+
+                with self.assertRaises(OmhError) as raised:
+                    model_activation_result(args, language="en", dependencies=self.dependencies(env))
+
+                message = str(raised.exception)
+                self.assertIn("could not read your current fallback settings", message)
+                self.assertIn("nothing was changed", message)
+                self.assertNotIn("synthetic read failure", message)
+                self.assertEqual(self.writes(), [])
+                self.assertEqual(self.state(), before)
+
+    def test_config_key_not_set_reads_as_absent(self) -> None:
+        inspection = self.inspect()
+
+        self.assertIsNone(inspection.fallback_model)
+        self.assertIsNone(inspection.fallback_read_error)
         preview = preview_hermes_model_config(inspection, {}, fallback="alpha/backup")
-
-        apply_hermes_model_config(
-            preview, confirmed=True, expected_config_digest=inspection.config_digest, env=self.env
-        )
-
-        self.assertEqual(self.state()["fallback_providers"], _BACKUP)
-        self.assertNotIn("fallback_model", self.state())
+        self.assertEqual(preview.fallback_commands[0][1:], tuple(_SET_BACKUP))
 
     def test_an_entry_with_a_credential_field_is_refused_before_any_write(self) -> None:
         for key, value in (
-            ("fallback_model", {"provider": "alpha", "model": "old-1", "api_key": "synthetic-canary"}),
             ("fallback_providers", [{"provider": "alpha", "model": "old-1", "api_key": "synthetic-canary"}]),
             ("fallback_providers", [{"provider": "alpha", "model": "old-1", "extra_headers": {"x": "y"}}]),
         ):
@@ -462,62 +552,55 @@ class FallbackModelTests(unittest.TestCase):
 
         self.assertEqual(preview.fallback_commands[0][1:], ("config", "set", "fallback_providers", _BACKUP_LITERAL))
 
-    # -- rollback ----------------------------------------------------------
+    # -- one write, no replay ------------------------------------------------
 
-    def test_a_failed_second_write_restores_a_prior_chain(self) -> None:
-        self.write_config({**_BASE_CONFIG, "fallback_model": _CHAIN})
-        before = self.state()
+    def _apply_with(self, fault: dict[str, str], config: dict[str, object] | None = None):
+        self.write_config(config or {**_BASE_CONFIG, "fallback_providers": _CHAIN})
         inspection = self.inspect()
         preview = preview_hermes_model_config(inspection, {}, fallback="alpha/backup")
-
-        with self.assertRaises(HermesCommandError):
-            apply_hermes_model_config(
-                preview,
-                confirmed=True,
-                expected_config_digest=inspection.config_digest,
-                env={**self.env, "HERMES_FAIL_MUTATION": "fallback_model"},
-            )
-
-        self.assertEqual(self.state(), before)
-
-    def test_a_failed_second_write_restores_both_keys_exactly(self) -> None:
-        entry = {"provider": "alpha", "model": "old-3", "base_url": "https://example.test/v1"}
-        self.write_config({**_BASE_CONFIG, "fallback_providers": _CHAIN, "fallback_model": entry})
-        before = self.state()
-        inspection = self.inspect()
-        preview = preview_hermes_model_config(inspection, {}, fallback="alpha/backup")
-
-        with self.assertRaises(HermesCommandError):
-            apply_hermes_model_config(
-                preview,
-                confirmed=True,
-                expected_config_digest=inspection.config_digest,
-                env={**self.env, "HERMES_FAIL_MUTATION": "fallback_model"},
-            )
-
-        self.assertEqual(self.state(), before)
-        self.assertEqual(
-            [call[:3] for call in self.writes()],
-            [
-                ["config", "set", "fallback_providers"],
-                ["config", "unset", "fallback_model"],
-                ["config", "set", "fallback_providers"],
-            ],
+        apply_hermes_model_config(
+            preview,
+            confirmed=True,
+            expected_config_digest=inspection.config_digest,
+            env={**self.env, **fault},
         )
 
-    def test_a_failed_second_write_removes_a_fallback_that_did_not_exist(self) -> None:
-        inspection = self.inspect()
-        preview = preview_hermes_model_config(inspection, {}, fallback="alpha/backup")
+    def test_a_refused_write_that_left_the_file_alone_says_nothing_changed(self) -> None:
+        for config in (None, _BASE_CONFIG):
+            with self.subTest(existing=config is None):
+                self.write_config(config or {**_BASE_CONFIG, "fallback_providers": _CHAIN})
+                before = self.state()
+                (self.home / "mutation-failed").unlink(missing_ok=True)
+                log = self.home / "commands.jsonl"
+                log.unlink(missing_ok=True)
 
-        with self.assertRaises(HermesCommandError):
-            apply_hermes_model_config(
-                preview,
-                confirmed=True,
-                expected_config_digest=inspection.config_digest,
-                env={**self.env, "HERMES_FAIL_MUTATION": "fallback_providers"},
-            )
+                with self.assertRaisesRegex(HermesCommandError, "nothing was changed") as raised:
+                    self._apply_with({"HERMES_FAIL_MUTATION": "fallback_providers"}, config)
 
-        self.assertNotIn("fallback_providers", self.state())
+                self.assertIn("exit 9", str(raised.exception))
+                self.assertEqual(self.writes(), [_SET_BACKUP])
+                self.assertEqual(self.state(), before)
+
+    def test_a_failed_write_that_changed_the_file_points_to_hermes_fallback_list(self) -> None:
+        with self.assertRaises(HermesVerificationError) as raised:
+            self._apply_with({"HERMES_FAIL_AFTER_WRITE": "fallback_providers"})
+
+        self.assertIn("config file changed", str(raised.exception))
+        self.assertIn("hermes fallback list", str(raised.exception))
+        self.assertEqual(self.writes(), [_SET_BACKUP])
+
+    def test_a_failed_read_after_the_write_is_a_verification_error_with_no_more_writes(self) -> None:
+        for key in ("fallback_providers", "fallback_model"):
+            with self.subTest(key=key):
+                for marker in ("written", "commands.jsonl"):
+                    (self.home / marker).unlink(missing_ok=True)
+
+                with self.assertRaises(HermesVerificationError) as raised:
+                    self._apply_with({"HERMES_FAIL_READ_AFTER_WRITE": key})
+
+                self.assertIn("OMH made one write", str(raised.exception))
+                self.assertIn("hermes fallback list", str(raised.exception))
+                self.assertEqual(self.writes(), [_SET_BACKUP])
 
     def test_a_failed_fallback_write_also_restores_the_alias_written_before_it(self) -> None:
         inspection = self.inspect()
@@ -525,7 +608,7 @@ class FallbackModelTests(unittest.TestCase):
             inspection, {"main": "alpha/main-1"}, fallback="alpha/backup"
         )
 
-        with self.assertRaises(HermesCommandError):
+        with self.assertRaisesRegex(HermesCommandError, "nothing was changed"):
             apply_hermes_model_config(
                 preview,
                 confirmed=True,
@@ -538,11 +621,11 @@ class FallbackModelTests(unittest.TestCase):
         self.assertNotIn("fallback_providers", state)
 
     def test_a_fallback_changed_by_someone_else_mid_apply_is_not_overwritten(self) -> None:
-        self.write_config({**_BASE_CONFIG, "fallback_model": {"provider": "alpha", "model": "old-1"}})
+        self.write_config({**_BASE_CONFIG, "fallback_providers": [{"provider": "alpha", "model": "old-1"}]})
         inspection = self.inspect()
         preview = preview_hermes_model_config(inspection, {}, fallback="alpha/backup")
         # Another writer lands a different entry after our preview, before the apply writes.
-        racing = {**self.state(), "fallback_model": {"provider": "alpha", "model": "theirs"}}
+        racing = {**self.state(), "fallback_providers": [{"provider": "alpha", "model": "theirs"}]}
         self.write_config(racing)
 
         with self.assertRaises(ConfigDigestMismatchError):
@@ -550,7 +633,8 @@ class FallbackModelTests(unittest.TestCase):
                 preview, confirmed=True, expected_config_digest=inspection.config_digest, env=self.env
             )
 
-        self.assertEqual(self.state()["fallback_model"], {"provider": "alpha", "model": "theirs"})
+        self.assertEqual(self.state()["fallback_providers"], [{"provider": "alpha", "model": "theirs"}])
+        self.assertEqual(self.writes(), [])
 
 
 if __name__ == "__main__":

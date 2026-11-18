@@ -2655,14 +2655,21 @@ The guided flow is deliberately staged:
    `--fallback-model PROVIDER/MODEL` (it needs `--model-setup`, and onboarding
    keeps one) previews Hermes' fallback chain in the same preview and digest:
    the effective chain before (`fallback_providers`, then legacy
-   `fallback_model` entries) and the one entry after. Apply writes
-   `fallback_providers` as that one entry and drops the legacy `fallback_model`,
-   as `hermes fallback` does. It is refused when the provider has no credential
-   in Hermes, when it is the main model, or when an existing entry carries a
-   field OMH cannot restore (a key, for example; change that chain with
-   `hermes fallback` instead). A chain Hermes already holds is replaced only
-   after the preview shows that, and a failed fallback write restores the prior
-   chain and the aliases written with it.
+   `fallback_model` entries) and the one entry after. Apply is one write:
+   `fallback_providers` set to that one entry. When your fallback still lives
+   in Hermes' older `fallback_model` setting, the preview says so and apply is
+   refused before any write; run `hermes fallback clear` (Hermes then uses its
+   current format) and set the fallback again. It is also refused when OMH
+   cannot read either fallback setting from Hermes, when the provider has no
+   credential in Hermes, when it is the main model, or when an existing entry
+   carries a field OMH cannot show faithfully (a key, for example; change that
+   chain with `hermes fallback` instead). A chain Hermes already holds is
+   replaced only after the preview shows that. If Hermes refuses the write and
+   the config file is unchanged, nothing was changed; if the file did change,
+   or the result cannot be read back as exactly that one entry, OMH says so
+   and points you to `hermes fallback list`. OMH never rewrites your earlier
+   entries to undo a fallback write; aliases written in the same apply are
+   still rolled back.
 4. **Apply.** No preview writes. An apply requires both
    `--apply-model-config` and the preview's `--model-config-digest`; an
    interactive flow asks after showing the preview. Hermes' own `config set`

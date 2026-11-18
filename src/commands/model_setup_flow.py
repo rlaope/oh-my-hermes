@@ -210,6 +210,9 @@ def model_activation_result(
                 language=language,
             )
         if getattr(args, "apply_model_config", False):
+            if model_preview.fallback_refusal is not None:
+                # Refused before any write, dry run included.
+                raise OmhError(model_preview.fallback_refusal)
             expected_digest = str(getattr(args, "model_config_digest", "") or "")
             if getattr(args, "interactive", False) and not expected_digest:
                 expected_digest = model_preview.config_digest
@@ -368,7 +371,10 @@ def _fallback_payload(preview) -> dict[str, object] | None:
         "before_chain": before,
         "after": preview.fallback,
         "replaces_chain": preview.fallback_replaces_chain,
-        "unchanged": not preview.fallback_commands,
+        "unchanged": not preview.fallback_commands and preview.fallback_refusal is None,
+        # The chain is in Hermes' older `fallback_model` key; apply is refused.
+        "legacy": preview.fallback_is_legacy,
+        "refusal": preview.fallback_refusal,
     }
 
 

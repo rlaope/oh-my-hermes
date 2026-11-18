@@ -30,6 +30,8 @@ def print_model_preview_review(
             print("  The existing fallback chain is replaced by this one entry.")
         if fallback.get("unchanged"):
             print("  The fallback chain already is this one entry; nothing to write.")
+        if fallback.get("refusal"):
+            print(f"  Apply is refused: {fallback['refusal']}")
 
 
 def print_model_activation_summary(
