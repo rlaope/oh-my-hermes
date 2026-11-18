@@ -446,7 +446,6 @@ test("chat: an answer to several messages quotes each one's first line; a click 
   await page.keyboard.press("Enter");
   const waiting = tl.getByTestId("bubble-user").filter({ hasText: "and too many bubbles per answer" });
   await waiting.getByTestId("queue-mark").click();
-  await page.getByTestId("queue-steer").click();
   await expect(waiting.getByTestId("bubble-steered")).toBeVisible();
   await emit(ev("kami", "message", { id: "q-a1", text: "Fixed both." }), ev("kami", "turn.end", { outcome: "done" }));
   const quote = tl.getByTestId("bubble-quote");

@@ -2799,7 +2799,7 @@ export function createStore(bridge: BridgeLike, opts: StoreOptions = {}): Store 
       const key = threadRoute(bot, thread);
       const id = `local-${++localSeq}`;
       const t = text.trim();
-      // typed while the thread's turn runs: the same steer queue as the main chat (held, ↵ menu, sent in order)
+      // typed while the thread's turn runs: the same steer queue as the main chat (held, ↵ ↓ × buttons, sent in order)
       if (holdIfBusy(key, id, { text: t, wire: t }, { type: "local.user", bot: key, id, text: t, now: now() })) return;
       dispatch({ type: "local.user", bot: key, id, text: t, now: now() });
       const row = (state.threads[bot] ?? []).find((r) => r.thread === thread);

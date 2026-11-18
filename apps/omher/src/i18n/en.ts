@@ -1278,7 +1278,6 @@ export const en = {
   "ab.ssh": "Connect over SSH",
   "ab.sshSub": "A Hermes on another computer",
   // steer queue
-  "sq.mark": "Waiting · choose what to do",
   "sq.sendNow": "Send now",
   "sq.sendNowTip": "Stop the current answer and send this next",
   "sq.steer": "Steer",

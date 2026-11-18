@@ -1276,7 +1276,6 @@ export const zh: Record<Key, string> = {
   "ab.ssh": "通过 SSH 连接",
   "ab.sshSub": "另一台电脑上的 Hermes",
   // steer queue
-  "sq.mark": "等待中 · 选择操作",
   "sq.sendNow": "立即发送",
   "sq.sendNowTip": "停止当前回答，接着发送这条",
   "sq.steer": "Steer",

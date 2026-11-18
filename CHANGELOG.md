@@ -4,6 +4,12 @@ All notable changes will be documented here.
 
 ## Unreleased
 
+- **omher: a waiting message is sent or taken back in one click, with no menu.** A message typed while the bot
+  answers waits with buttons before it instead of a ↵ that opened Send now / Steer / Edit / Delete. ↵ sends it:
+  Steer into the running answer, or, for an agent with no steer of its own, Send now (stop the answer, this one
+  first). ↓ puts it back in the message box to fix or add to. × (on hover or focus) drops it. A button that cannot
+  act (the agent has the message already) says why in its tooltip.
+
 - **omher: a message steered into a running answer reads as you typed it after the chat reopens.** Hermes keeps
   a mid-turn steer wrapped in a frame for the model (`[OUT-OF-BAND USER MESSAGE — …]` … `[/OUT-OF-BAND USER
   MESSAGE]`), and a reopened Bot Chat showed that frame in your bubble. The bridge now shows only the typed text,
