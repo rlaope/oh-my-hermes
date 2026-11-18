@@ -155,6 +155,16 @@ All notable changes will be documented here.
   run's one-line summary open. While a run is active, such a dispatch is stopped once per turn with a pointer to
   `omh_dag` (ready, settle, repair, extend); sending it again goes through. Contributed by @yqm-307 (#2914).
 
+- **omher's main screens say what they mean in every language and show whole names (1.0 usability pass).** A sidebar
+  search that finds no bot now shows its "No bot named …" line instead of drawing it under TERMINALS. Settings ›
+  Providers shows the in-use model whole (it was cut to "Sonnet …"), and a bot card's profile id no longer breaks at
+  its hyphen. Korean wraps between words everywhere, not inside one. A new thread has one empty line, not two. An
+  agent added in Settings › Agents is no longer offered in TERMINALS, where the shell could not start it. The side
+  panel's "now" / "working", a routine's cadence and its last run read in the UI language, never Hermes' raw
+  `ok` / `delivery_failed`, and a bot with nothing elsewhere gets a note that fits it. Copy that still named the old
+  SESSIONS section (search label, ⌘N, Settings › Agents, Plans) says Terminals, and the sidebar preview drops
+  markdown list markers. (#2960)
+
 ## 4.0.8 - 2026-11-15
 
 - **The OMH TUI shows a compression as one gauge row, and a prompt typed meanwhile goes on by itself.** `/compact`
