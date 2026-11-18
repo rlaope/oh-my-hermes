@@ -552,6 +552,9 @@ class MixtureCategoryProjectionTest(unittest.TestCase):
         # Catalog sync, 2026-11-11: Gemini 4 Carbon carries Argon's
         # introductory card (aistudio.google.com/docs/pricing).
         "gemini-4-carbon": (2.0, 10.0, 0.10),
+        # Re-read 2026-11-18: Argon's introductory card, which runs through
+        # 2026-11-30 (4/20, cache 0.20, from 2026-12-01).
+        "gemini-4-argon": (2.0, 10.0, 0.10),
         # Catalog sync, 2026-11-13: Gemini 4 Hydrogen's own card, cached
         # input a twentieth of input (aistudio.google.com/docs/pricing).
         "gemini-4-hydrogen": (1.5, 7.5, 0.075),
@@ -577,10 +580,11 @@ class MixtureCategoryProjectionTest(unittest.TestCase):
                     cost(f"vendor/{model_id}", 1_000, 1_000, 1_000), cost(model_id, 1_000, 1_000, 1_000)
                 )
                 # None of them borrows a category label from a chain, except
-                # Grok 4.7, which heads x-search since 2026-10-28.
+                # Grok 4.7, which heads x-search since 2026-10-28, and Gemini 4
+                # Argon, which heads artistry since 2026-10-28.
                 self.assertEqual(
                     mixture_category_for(model_id, "high", parent_model="gpt-6.1-sol"),
-                    "x-search" if model_id == "grok-4.7" else "",
+                    {"grok-4.7": "x-search", "gemini-4-argon": "artistry"}.get(model_id, ""),
                 )
 
     def test_mixed_case_served_ids_meet_the_lower_case_price_rows(self):
