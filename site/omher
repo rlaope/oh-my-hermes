@@ -1,7 +1,7 @@
 #!/bin/sh
 # omher.app/omher - the short form of
-#   curl -fsSL https://raw.githubusercontent.com/rlaope/oh-my-hermes/main/install.sh | sh -s -- omher@beta
-# It downloads that installer and runs it with omher@beta: Hermes (when missing),
+#   curl -fsSL https://raw.githubusercontent.com/rlaope/oh-my-hermes/main/install.sh | sh -s -- omher
+# It downloads that installer and runs it with omher: Hermes (when missing),
 # OMH, then the omher desktop app. Usage: curl -fsSL https://omher.app/omher | sh
 # Everything sits in one function called on the last line, so the shell has read
 # the whole file before the installer starts reading the same stdin.
@@ -12,7 +12,7 @@ omher_main() {
     printf 'omher: could not download the OMH installer\n' >&2
     exit 1
   fi
-  sh "$omher_f" omher@beta "$@"
+  sh "$omher_f" omher "$@"
   omher_rc=$?
   rm -f "$omher_f"
   exit "$omher_rc"

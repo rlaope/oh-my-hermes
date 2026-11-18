@@ -21,7 +21,7 @@ $script:OmhUninstallPurge = $false
 $script:OmhUninstallDryRun = $false
 
 function Write-OmhLine { param([string]$Text = '') $script:OmhLines += $Text }
-$OmhOmherBetaOneLiner = '& ([scriptblock]::Create((irm https://raw.githubusercontent.com/rlaope/oh-my-hermes/main/install.ps1))) omher@beta'
+$OmhOmherOneLiner = '& ([scriptblock]::Create((irm https://raw.githubusercontent.com/rlaope/oh-my-hermes/main/install.ps1))) omher'
 $OmhUninstallOneLiner = '& ([scriptblock]::Create((irm https://raw.githubusercontent.com/rlaope/oh-my-hermes/main/install.ps1))) --uninstall [--purge] [--dry-run]'
 
 function Stop-OmhInstall {
@@ -65,7 +65,7 @@ try {
             $beta = $false
             foreach ($argument in @($Arguments)) {
                 $text = [string]$argument
-                if ($text -eq 'omher@beta') { $beta = $true; continue }
+                if ($text -eq 'omher' -or $text -eq 'omher@beta') { $beta = $true; continue }
                 if ($text -match '^--?uninstall$') { $script:OmhUninstall = $true; continue }
                 if ($text -match '^--?purge$') { $script:OmhUninstallPurge = $true; continue }
                 if ($text -match '^--?dry-run$') { $script:OmhUninstallDryRun = $true; continue }
@@ -78,7 +78,7 @@ try {
     # -- arguments ---------------------------------------------------------------------------
     Assert-Omh 'no argument is the plain install' (Read-OmhInstallerArgs @()) $false
     Assert-Omh 'no argument leaves uninstall off' $script:OmhUninstall $false
-    Assert-Omh 'omher@beta still opts in' (Read-OmhInstallerArgs @('omher@beta')) $true
+    Assert-Omh 'omher still opts in' (Read-OmhInstallerArgs @('omher')) $true
 
     Read-OmhInstallerArgs @('--uninstall') | Out-Null
     Assert-Omh '--uninstall sets uninstall' $script:OmhUninstall $true
@@ -100,7 +100,7 @@ try {
             @('--purge'),
             @('--dry-run'),
             @('--purge', '--dry-run'),
-            @('--uninstall', 'omher@beta'),
+            @('--uninstall', 'omher'),
             @('omher@beta', '--uninstall'),
             @('--uninstall', '--force'),
             @('--uninstall', '--all'),
@@ -109,7 +109,7 @@ try {
     }
     Test-Refused @('--unknown') | Out-Null
     Assert-Omh 'the refusal names the argument' ([bool]($script:OmhLines -match "unknown argument '--unknown'")) $true
-    Assert-Omh 'the refusal shows the install form' ([bool]($script:OmhLines -match [regex]::Escape($OmhOmherBetaOneLiner))) $true
+    Assert-Omh 'the refusal shows the install form' ([bool]($script:OmhLines -match [regex]::Escape($OmhOmherOneLiner))) $true
     Assert-Omh 'the refusal shows the remove form' ([bool]($script:OmhLines -match [regex]::Escape($OmhUninstallOneLiner))) $true
 
     # -- what omh uninstall is asked ---------------------------------------------------------

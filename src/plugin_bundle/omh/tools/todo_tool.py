@@ -84,20 +84,19 @@ _COMPLETION_FIELDS = {
 OMH_TODO_SCHEMA = {
     "name": "omh_todo",
     "description": (
-        "Declare, advance, clear, or read this session's metadata-only plan todo list, which the OMH HUD "
-        "renders above the prompt; other sessions neither see nor overwrite it. "
+        "Declare, advance, clear, or read this session's metadata-only plan todo list (the OMH HUD "
+        "draws it above the prompt). "
         f"Keep steps in ONE tool, never both: {OMH_TODO_HELD_PLANS} keeps them here "
-        "(to leave one for unrelated work, clear it first; a deferred_reason only pauses it); "
+        "(clear it before unrelated work; a deferred_reason only pauses it); "
         f"otherwise, when {native_tool_presence_clause(NATIVE_TODO_TOOL)}, keep them in {NATIVE_TODO_TOOL} "
         "(OMH mirrors each write into this plan) and call this tool only for checkpoint/record/recall, "
-        "blocked_reason, deferred_reason, or advancing a done item again after its check passes. "
-        "When steps live here, declare them BEFORE starting engine work (todo init): numbered phases in delivery order covering setup, "
-        "implement/verify/deliver per work unit, independent review, and an evidence-and-cleanup close, "
-        "one item per observable outcome. Keep exactly one item active and advance it as work completes. "
-        "Items are plan declarations, never execution evidence. "
-        "To finish or resume accepted work, read the plan and recall its checkpoint; do exactly the "
-        "accepted items, never rejected ideas. No action executes work or grants approval; templates are "
-        "optional and tiny tasks need fewer phases. "
+        "blocked_reason, deferred_reason, or re-advancing a done item after its check passes. "
+        "When steps live here, declare them BEFORE engine work (todo init): numbered phases in delivery "
+        "order (setup, implement/verify/deliver per unit, independent review, an evidence-and-cleanup "
+        "close), one item per observable outcome, exactly one active, advanced as work completes; "
+        "tiny tasks need fewer phases. Items are plan declarations, never execution evidence, and no "
+        "action executes work or grants approval. To finish or resume accepted work, recall its "
+        "checkpoint and do exactly the accepted items, never rejected ideas. "
         "Relay any `say` field to the user once, in their language and your own words."
     ),
     "parameters": {
@@ -146,14 +145,12 @@ OMH_TODO_SCHEMA = {
             "deferred_reason": {
                 "type": "string",
                 "description": (
-                    "Omit this field unless the PERSON redirected this session away from the plan "
-                    "('do Y first', 'forget that for now'); name what they asked for instead. "
-                    "Sent with set or advance. While it holds, the plan stops asking you to advance "
-                    "the next item. It CLEARS ITSELF: it is bound to the item list sent with it, so "
-                    "the next write that omits it, or any item change that does not re-send it, ends "
-                    "it. Re-send it with a changed list only while the person is still steering. "
-                    "It is not blocked_reason, which is per item for work that CANNOT proceed and "
-                    "wins when both apply."
+                    "Omit unless the PERSON redirected this session away from the plan ('do Y first', "
+                    "'forget that for now'); name what they asked for. Sent with set or advance; while "
+                    "it holds, the plan stops asking you to advance. It CLEARS ITSELF: bound to the item "
+                    "list sent with it, so any write that does not re-send it ends it; re-send it only "
+                    "while the person is still steering. Not blocked_reason (per item, work that CANNOT "
+                    "proceed; wins when both apply)."
                 ),
             },
             "item": {

@@ -39,8 +39,8 @@
     Usage:
       irm https://raw.githubusercontent.com/rlaope/oh-my-hermes/main/install.ps1 | iex
 
-    The omher desktop app (beta), plus Hermes Agent when it is missing:
-      & ([scriptblock]::Create((irm https://raw.githubusercontent.com/rlaope/oh-my-hermes/main/install.ps1))) omher@beta
+    The omher desktop app, plus Hermes Agent when it is missing:
+      & ([scriptblock]::Create((irm https://raw.githubusercontent.com/rlaope/oh-my-hermes/main/install.ps1))) omher
     `irm | iex` cannot pass an argument, so that form runs the downloaded text
     as a script block with one. Without the argument nothing below changes.
 
@@ -120,7 +120,7 @@ $OmhSetupProfiles   = Get-OmhEnv 'OMH_SETUP_PROFILES'
 $OmhDefaultExecutor = Get-OmhEnv 'OMH_DEFAULT_EXECUTOR'
 $OmhScope           = Get-OmhEnv 'OMH_SCOPE'
 $OmhSetupArgs       = Get-OmhEnv 'OMH_SETUP_ARGS'
-# omher@beta only (see the usage note above): OMH_WITH_HERMES=0 skips
+# omher only (see the usage note above): OMH_WITH_HERMES=0 skips
 # installing Hermes, OMH_WITH_DESKTOP=0 skips the app, OMH_APP_DIR picks the
 # app's install folder.
 $OmhWithHermes      = Get-OmhEnv 'OMH_WITH_HERMES' '1'
@@ -134,12 +134,12 @@ $OmhHermesInstallUrl  = 'https://hermes-agent.nousresearch.com/install.ps1'
 $OmhOmherReleasesUrl  = 'https://api.github.com/repos/rlaope/oh-my-hermes/releases?per_page=10'
 $OmhOmherReleasePages = 5
 $OmhOmherSiteUrl      = 'https://omher.app/'
-$OmhOmherBetaOneLiner = '& ([scriptblock]::Create((irm https://raw.githubusercontent.com/rlaope/oh-my-hermes/main/install.ps1))) omher@beta'
+$OmhOmherOneLiner = '& ([scriptblock]::Create((irm https://raw.githubusercontent.com/rlaope/oh-my-hermes/main/install.ps1))) omher'
 $OmhUninstallOneLiner = '& ([scriptblock]::Create((irm https://raw.githubusercontent.com/rlaope/oh-my-hermes/main/install.ps1))) --uninstall [--purge] [--dry-run]'
 $script:OmhUninstall       = $false
 $script:OmhUninstallPurge  = $false
 $script:OmhUninstallDryRun = $false
-$script:OmhOmherBeta     = $false
+$script:OmhOmherRun      = $false
 $script:OmhHadOmh        = $false
 $script:OmhHadHermes     = $false
 $script:OmhInstallHermes = $false
@@ -395,9 +395,9 @@ function Resolve-OmhPython {
     #>
     $explicit = Get-OmhEnv 'OMH_PYTHON'
     if ($explicit) { $candidates = @($explicit) } else { $candidates = @('py', 'python', 'python3') }
-    # omher@beta only: Hermes' own interpreter, last. On a machine that had no
+    # omher only: Hermes' own interpreter, last. On a machine that had no
     # Python 3.11+ until Hermes' installer brought one, it is the only candidate.
-    if (-not $explicit -and $script:OmhOmherBeta) {
+    if (-not $explicit -and $script:OmhOmherRun) {
         $hermesPython = Get-OmhHermesPython
         if ($hermesPython) { $candidates += $hermesPython }
     }
@@ -840,45 +840,46 @@ function Resolve-OmhLatestReleaseLocation {
 }
 
 # ---------------------------------------------------------------------------
-# omher@beta: Hermes when missing, then the omher desktop app
+# omher: Hermes when missing, then the omher desktop app
 # ---------------------------------------------------------------------------
 
 function Read-OmhInstallerArgs {
-    <#  $true for omher@beta, $false otherwise. Also sets the --uninstall,
+    <#  $true for omher (or omher@beta, its name before omher 1.0, which every
+        app up to 0.2.13 still sends from its Install button), $false otherwise. Also sets the --uninstall,
         --purge and --dry-run switches. Anything else, and any combination the
         installer does not offer, stops with the usage before any work and exit
         code 2, the code install.sh uses for a usage refusal.  #>
     param([object[]]$Arguments = @())
-    $beta = $false
+    $omher = $false
     $script:OmhUninstall = $false
     $script:OmhUninstallPurge = $false
     $script:OmhUninstallDryRun = $false
     foreach ($argument in @($Arguments)) {
         $text = [string]$argument
-        if ($text -eq 'omher@beta') { $beta = $true; continue }
+        if ($text -eq 'omher' -or $text -eq 'omher@beta') { $omher = $true; continue }
         if ($text -match '^--?uninstall$') { $script:OmhUninstall = $true; continue }
         if ($text -match '^--?purge$') { $script:OmhUninstallPurge = $true; continue }
         if ($text -match '^--?dry-run$') { $script:OmhUninstallDryRun = $true; continue }
         $script:OmhExitCode = 2
         Stop-OmhInstall @(
-            "omh installer: unknown argument '$argument'. The arguments are omher@beta (adds Hermes when missing, and the omher desktop app) and --uninstall [--purge] [--dry-run] (removes OMH):",
-            "  $OmhOmherBetaOneLiner",
+            "omh installer: unknown argument '$argument'. The arguments are omher (adds Hermes when missing, and the omher desktop app) and --uninstall [--purge] [--dry-run] (removes OMH):",
+            "  $OmhOmherOneLiner",
             "  $OmhUninstallOneLiner"
         )
     }
     $refusal = ''
-    if ($script:OmhUninstall -and $beta) { $refusal = '--uninstall cannot be combined with omher@beta.' }
+    if ($script:OmhUninstall -and $omher) { $refusal = '--uninstall cannot be combined with omher.' }
     elseif (-not $script:OmhUninstall -and $script:OmhUninstallPurge) { $refusal = '--purge only works together with --uninstall.' }
     elseif (-not $script:OmhUninstall -and $script:OmhUninstallDryRun) { $refusal = '--dry-run only works together with --uninstall.' }
     if ($refusal) {
         $script:OmhExitCode = 2
         Stop-OmhInstall @(
             "omh installer: $refusal",
-            "  $OmhOmherBetaOneLiner",
+            "  $OmhOmherOneLiner",
             "  $OmhUninstallOneLiner"
         )
     }
-    return $beta
+    return $omher
 }
 
 # ---------------------------------------------------------------------------
@@ -993,20 +994,20 @@ function Test-OmhOmhPresent {
     return [bool](Get-OmhCommandOnPath)
 }
 
-function Write-OmhOmherBetaPlan {
+function Write-OmhOmherPlan {
     if ($script:OmhHadOmh -and $script:OmhHadHermes) {
-        Write-OmhNote 'omher@beta: found Hermes and OMH. Upgrading OMH, then adding the omher app.'
+        Write-OmhNote 'omher: found Hermes and OMH. Upgrading OMH, then adding the omher app.'
     } elseif ($script:OmhHadHermes) {
-        Write-OmhNote "omher@beta: found Hermes without OMH. Installing OMH, connecting it with 'omh setup', then adding the omher app."
+        Write-OmhNote "omher: found Hermes without OMH. Installing OMH, connecting it with 'omh setup', then adding the omher app."
     } elseif ($script:OmhInstallHermes -and $script:OmhHadOmh) {
-        Write-OmhNote "omher@beta: found OMH without Hermes. Installing Hermes, upgrading OMH, connecting them with 'omh setup', then adding the omher app."
+        Write-OmhNote "omher: found OMH without Hermes. Installing Hermes, upgrading OMH, connecting them with 'omh setup', then adding the omher app."
     } elseif ($script:OmhInstallHermes) {
-        Write-OmhNote "omher@beta: found neither Hermes nor OMH. Installing Hermes first, then OMH, 'omh setup', and the omher app."
+        Write-OmhNote "omher: found neither Hermes nor OMH. Installing Hermes first, then OMH, 'omh setup', and the omher app."
     } else {
-        Write-OmhNote "omher@beta: Hermes is not installed and OMH_WITH_HERMES=0 skips it. Install Hermes yourself, then run 'omh setup'."
+        Write-OmhNote "omher: Hermes is not installed and OMH_WITH_HERMES=0 skips it. Install Hermes yourself, then run 'omh setup'."
     }
     if ($OmhWithDesktop -eq '0') {
-        Write-OmhNote 'omher@beta: OMH_WITH_DESKTOP=0, so the omher app is not installed.'
+        Write-OmhNote 'omher: OMH_WITH_DESKTOP=0, so the omher app is not installed.'
     }
 }
 
@@ -1140,7 +1141,7 @@ function Stop-OmherApp {
 function Install-OmherApp {
     if ([System.Environment]::OSVersion.Platform -ne [System.PlatformID]::Win32NT) {
         Write-OmhStep '[omher]' 'Install the omher desktop app'
-        Write-OmhNote 'install.ps1 installs the Windows build only. On macOS, use install.sh with omher@beta.'
+        Write-OmhNote 'install.ps1 installs the Windows build only. On macOS, use install.sh with omher.'
         return
     }
     Write-OmhStep '[omher]' 'Install the omher desktop app (Windows x64)'
@@ -1205,7 +1206,7 @@ function Install-OmherApp {
 $OmhInstallFailed = $false
 try {
     $script:OmhLang = Get-OmhNormalizedLang $OmhLangRaw
-    $script:OmhOmherBeta = Read-OmhInstallerArgs $OmhScriptArgs
+    $script:OmhOmherRun = Read-OmhInstallerArgs $OmhScriptArgs
     if ($script:OmhUninstall) {
         # Before the header, the interpreter and every network step: a removal
         # never installs anything. The sentinel ends the flow without the
@@ -1214,7 +1215,7 @@ try {
         if ($script:OmhExitCode -ne 0) { $OmhInstallFailed = $true }
         throw 'omh uninstall finished.'
     }
-    if ($script:OmhOmherBeta) {
+    if ($script:OmhOmherRun) {
         $script:OmhHadOmh = Test-OmhOmhPresent
         $script:OmhHadHermes = Test-OmhHermesPresent
         $script:OmhInstallHermes = (-not $script:OmhHadHermes) -and $OmhWithHermes -ne '0'
@@ -1228,8 +1229,8 @@ try {
     # Header, then the interpreter, then any network work: the order
     # install.sh uses, so a failed release lookup never prints above it.
     Write-OmhHeader (Get-OmhMessage 'installer_title') (Get-OmhMessage 'installer_subtitle')
-    if ($script:OmhOmherBeta) {
-        Write-OmhOmherBetaPlan
+    if ($script:OmhOmherRun) {
+        Write-OmhOmherPlan
         if ($script:OmhInstallHermes) { Install-OmhHermes }
     }
     $script:OmhRuntimePython = Resolve-OmhPython
@@ -1349,7 +1350,7 @@ try {
             try {
                 if ($OmhScope) { Invoke-OmhCli @('--scope', $OmhScope, 'doctor') } else { Invoke-OmhCli @('doctor') }
             } catch {
-                if (-not $script:OmhOmherBeta) { throw }
+                if (-not $script:OmhOmherRun) { throw }
                 # A Hermes installed a minute ago has no model chosen yet, and
                 # doctor says so. That is the person's next step, not a reason
                 # to stop before the app.
@@ -1362,7 +1363,7 @@ try {
         Write-OmhNote "Run 'omh setup' with those choices explicitly, or set OMH_RUN_SETUP=1 for advanced one-shot bootstrap."
     }
 
-    if ($script:OmhOmherBeta) {
+    if ($script:OmhOmherRun) {
         if ($OmhWithDesktop -eq '0') {
             Write-OmhNote 'Skipped the omher app because OMH_WITH_DESKTOP=0.'
         } else {
@@ -1379,7 +1380,7 @@ try {
     } else {
         Write-OmhLine "Next: run '$OmhRuntimePython -P -E -m omh.cli setup' to connect OMH to Hermes, then '$OmhRuntimePython -P -E -m omh.cli doctor' to verify."
     }
-    if ($script:OmhOmherBeta) {
+    if ($script:OmhOmherRun) {
         if ($script:OmhInstallHermes) {
             # With the app (installed now, or the app that runs this with
             # OMH_WITH_DESKTOP=0), the model is picked in the app, not in a terminal.
@@ -1419,7 +1420,7 @@ if ($OmhInvocationCommand) {
     if ($OmhInvocationPathProperty) { $OmhInvocationPath = [string]$OmhInvocationPathProperty.Value }
 }
 if ($OmhInstallFailed -and $OmhInvocationPath) { exit $OmhExitCode }
-# Run as a script block (the omher@beta form, and the omher app's Install button) there is no file,
+# Run as a script block (the omher form, and the omher app's Install button) there is no file,
 # so the `exit` above never runs. Leave the result in $LASTEXITCODE instead, which a caller ending
 # with `; exit $LASTEXITCODE` turns into the process exit code; a native probe earlier in the run
 # must not leave a stale non-zero there after a clean install.

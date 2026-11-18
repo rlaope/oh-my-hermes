@@ -1,4 +1,4 @@
-"""`install.sh` with the `omher@beta` argument: Hermes when missing, OMH, setup, the omher app.
+"""`install.sh` with the `omher` argument: Hermes when missing, OMH, setup, the omher app.
 
 Plain `curl ... | sh` must keep doing exactly what it did before the argument
 existed, so the first cases pin that it neither fetches Hermes nor looks for the
@@ -22,7 +22,7 @@ from tempfile import TemporaryDirectory
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 INSTALLER = PROJECT_ROOT / "install.sh"
-ONE_LINER = "curl -fsSL https://raw.githubusercontent.com/rlaope/oh-my-hermes/main/install.sh | sh -s -- omher@beta"
+ONE_LINER = "curl -fsSL https://raw.githubusercontent.com/rlaope/oh-my-hermes/main/install.sh | sh -s -- omher"
 HERMES_URL = "https://hermes-agent.nousresearch.com/install.sh"
 # The absolute paths install.sh probes beyond PATH (HOME-relative ones point
 # into the test's temporary home).
@@ -182,7 +182,7 @@ RELEASES = [
 
 
 @unittest.skipIf(sys.platform == "win32", "install.sh is the POSIX installer; install.ps1 covers Windows")
-class OmherBetaInstallerTests(unittest.TestCase):
+class OmherInstallerTests(unittest.TestCase):
     def setUp(self) -> None:
         self._tmp = TemporaryDirectory()
         self.addCleanup(self._tmp.cleanup)
@@ -286,7 +286,7 @@ class OmherBetaInstallerTests(unittest.TestCase):
         self._system_python()
         self._existing_hermes()
         self._existing_omh()
-        result = self._run("omher@beta")
+        result = self._run("omher")
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         self._assert_app_installed(result)
         self.assertEqual(self._calls("open"), [f"{self.apps}/omher.app"])
@@ -299,7 +299,7 @@ class OmherBetaInstallerTests(unittest.TestCase):
         for env in ({"OMH_OMHER_NO_OPEN": "1"}, {"CI": "true"}):
             with self.subTest(env=env):
                 (self.log / "open").unlink(missing_ok=True)
-                result = self._run("omher@beta", **env)
+                result = self._run("omher", **env)
                 self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
                 self.assertEqual(self._calls("open"), [])
                 self.assertIn("Open it from there or from Launchpad.", result.stdout)
@@ -332,13 +332,25 @@ class OmherBetaInstallerTests(unittest.TestCase):
         self.assertEqual(self._calls("curl"), [])
         self.assertFalse((self.home / ".local" / "share" / "omh" / "venv").exists())
 
+    def test_the_pre_1_0_name_omher_at_beta_still_runs_the_same_path(self) -> None:
+        # Every omher app up to 0.2.13 runs this installer with `omher@beta` from its first-run
+        # Install button, and that command is compiled into those apps.
+        self._system_python()
+        self._existing_hermes()
+        self._existing_omh()
+        result = self._run("omher@beta")
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self._assert_app_installed(result)
+        self.assertIn("omher: found Hermes and OMH.", result.stdout + result.stderr)
+        self.assertNotIn("beta", ONE_LINER)
+
     # -- the three starting points --------------------------------------------------------------
 
     def test_an_existing_omh_user_is_upgraded_and_gets_the_app_without_a_new_setup(self) -> None:
         self._system_python()
         self._existing_hermes()
         self._existing_omh()
-        result = self._run("omher@beta")
+        result = self._run("omher")
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         self.assertIn("found Hermes and OMH", result.stdout)
         self.assertNotIn(HERMES_URL, self._calls("curl"))
@@ -349,7 +361,7 @@ class OmherBetaInstallerTests(unittest.TestCase):
     def test_a_hermes_user_without_omh_gets_omh_setup_and_the_app(self) -> None:
         self._system_python()
         self._existing_hermes()
-        result = self._run("omher@beta")
+        result = self._run("omher")
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         self.assertIn("found Hermes without OMH", result.stdout)
         self.assertNotIn(HERMES_URL, self._calls("curl"))
@@ -359,7 +371,7 @@ class OmherBetaInstallerTests(unittest.TestCase):
 
     def test_a_machine_with_neither_installs_hermes_first(self) -> None:
         self._system_python()
-        result = self._run("omher@beta")
+        result = self._run("omher")
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         self.assertIn("found neither Hermes nor OMH", result.stdout)
         curls = self._calls("curl")
@@ -378,14 +390,14 @@ class OmherBetaInstallerTests(unittest.TestCase):
         "this host has an interpreter install.sh probes by absolute path, which would be chosen first",
     )
     def test_with_no_python_at_all_omh_builds_on_the_python_hermes_brought(self) -> None:
-        result = self._run("omher@beta")
+        result = self._run("omher")
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         self.assertIn(f"Python: {self.home}/.hermes/hermes-agent/venv/bin/python", result.stdout)
         self._assert_app_installed(result)
 
     def test_omh_with_hermes_0_skips_the_hermes_install(self) -> None:
         self._system_python()
-        result = self._run("omher@beta", OMH_WITH_HERMES="0")
+        result = self._run("omher", OMH_WITH_HERMES="0")
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         self.assertNotIn(HERMES_URL, self._calls("curl"))
         self.assertIn("OMH_WITH_HERMES=0 skips it", result.stdout)
@@ -400,7 +412,7 @@ class OmherBetaInstallerTests(unittest.TestCase):
         old = self.apps / "omher.app" / "Contents"
         old.mkdir(parents=True)
         (old / "stale").write_text("old\n", encoding="utf-8")
-        result = self._run("omher@beta")
+        result = self._run("omher")
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         self.assertIn("Replacing the omher.app", result.stdout)
         self.assertFalse((old / "stale").exists())
@@ -410,7 +422,7 @@ class OmherBetaInstallerTests(unittest.TestCase):
         self._system_python()
         self._existing_hermes()
         self._existing_omh()
-        result = self._run("omher@beta", FAKE_UNAME_M="x86_64")
+        result = self._run("omher", FAKE_UNAME_M="x86_64")
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         self.assertTrue(self._dmg_call().endswith("/omher-0.1.0-macos-x64.dmg"), self._calls("curl"))
 
@@ -419,7 +431,7 @@ class OmherBetaInstallerTests(unittest.TestCase):
         self._system_python()
         self._existing_hermes()
         self._existing_omh()
-        result = self._run("omher@beta")
+        result = self._run("omher")
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         self._assert_app_installed(result)
 
@@ -428,7 +440,7 @@ class OmherBetaInstallerTests(unittest.TestCase):
         self._system_python()
         self._existing_hermes()
         self._existing_omh()
-        result = self._run("omher@beta")
+        result = self._run("omher")
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         self.assertIn("No omher release was found", result.stdout)
         self.assertIn("https://omher.app/", result.stdout)
@@ -436,7 +448,7 @@ class OmherBetaInstallerTests(unittest.TestCase):
 
     def test_omh_with_desktop_0_installs_hermes_and_omh_only(self) -> None:
         self._system_python()
-        result = self._run("omher@beta", OMH_WITH_DESKTOP="0")
+        result = self._run("omher", OMH_WITH_DESKTOP="0")
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         self.assertEqual(self._calls("curl"), [HERMES_URL])
         self.assertTrue(self._setup_ran())
@@ -451,7 +463,7 @@ class OmherBetaInstallerTests(unittest.TestCase):
         self._existing_hermes()
         env = {"FAKE_UNAME_S": "Linux", "FAKE_UNAME_M": "x86_64", "XDG_DATA_HOME": str(self.root / "share")}
         env.update(environment)
-        return self._run("omher@beta", **env)
+        return self._run("omher", **env)
 
     def test_linux_installs_the_appimage_with_a_menu_entry(self) -> None:
         result = self._linux()
@@ -493,7 +505,7 @@ class OmherBetaInstallerTests(unittest.TestCase):
 
     def test_a_doctor_complaint_after_a_fresh_hermes_does_not_cost_the_app(self) -> None:
         self._system_python()
-        result = self._run("omher@beta", FAKE_DOCTOR_STATUS="1")
+        result = self._run("omher", FAKE_DOCTOR_STATUS="1")
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         self.assertIn("omh doctor reported problems", result.stdout)
         self._assert_app_installed(result)
@@ -505,7 +517,7 @@ class OmherBetaInstallerTests(unittest.TestCase):
         old = self.apps / "omher.app" / "Contents"
         old.mkdir(parents=True)
         (old / "stale").write_text("old\n", encoding="utf-8")
-        result = self._run("omher@beta", FAKE_CP_FAIL="1")
+        result = self._run("omher", FAKE_CP_FAIL="1")
         self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
         self.assertIn("Could not copy omher.app", result.stdout)
         self.assertEqual((old / "stale").read_text(encoding="utf-8"), "old\n")
@@ -515,7 +527,7 @@ class OmherBetaInstallerTests(unittest.TestCase):
         self._system_python()
         self._existing_hermes()
         self._existing_omh()
-        result = self._run("omher@beta")
+        result = self._run("omher")
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         self.assertIn("SHA-256 matches SHA256SUMS.txt (omher-0.1.0-macos-arm64.dmg)", result.stdout)
         self.assertIn(
@@ -527,7 +539,7 @@ class OmherBetaInstallerTests(unittest.TestCase):
         self._system_python()
         self._existing_hermes()
         self._existing_omh()
-        result = self._run("omher@beta")
+        result = self._run("omher")
         self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
         self.assertIn("does not match SHA256SUMS.txt", result.stdout)
         self.assertEqual(self._calls("hdiutil"), [])
@@ -537,7 +549,7 @@ class OmherBetaInstallerTests(unittest.TestCase):
         self._system_python()
         self._existing_hermes()
         self._existing_omh()
-        result = self._run("omher@beta")
+        result = self._run("omher")
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         api = [u for u in self._calls("curl") if u.startswith("https://api.github.com/")]
         self.assertEqual(api, ["https://api.github.com/repos/rlaope/oh-my-hermes/releases?per_page=10&page=1"])
@@ -550,7 +562,7 @@ class OmherBetaInstallerTests(unittest.TestCase):
         self._system_python()
         self._existing_hermes()
         self._existing_omh()
-        result = self._run("omher@beta")
+        result = self._run("omher")
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         api = [u for u in self._calls("curl") if u.startswith("https://api.github.com/")]
         self.assertEqual([u.rsplit("=", 1)[1] for u in api], ["1", "2"])
@@ -560,7 +572,7 @@ class OmherBetaInstallerTests(unittest.TestCase):
         self._system_python()
         self._existing_hermes()
         self._existing_omh()
-        result = self._run("omher@beta", FAKE_RELEASES_STATUS="403")
+        result = self._run("omher", FAKE_RELEASES_STATUS="403")
         self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
         self.assertIn("rate limit", result.stdout)
         self.assertIn("GITHUB_TOKEN", result.stdout)
@@ -570,7 +582,7 @@ class OmherBetaInstallerTests(unittest.TestCase):
         self._system_python()
         self._existing_hermes()
         self._existing_omh()
-        result = self._run("omher@beta", GITHUB_TOKEN="ghs_example_not_real")
+        result = self._run("omher", GITHUB_TOKEN="ghs_example_not_real")
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         self.assertIn('header = "Authorization: Bearer ghs_example_not_real"', self._calls("curl-config"))
         self.assertFalse(any("ghs_example_not_real" in line for line in self._calls("curl-argv")))
@@ -585,7 +597,7 @@ class OmherBetaInstallerTests(unittest.TestCase):
         profile = self.home / ".hermes" / "profiles" / "kami"
         profile.mkdir(parents=True)
         (profile / "config.yaml").write_text("model: y\n", encoding="utf-8")
-        result = self._run("omher@beta", HERMES_HOME=str(profile), OMH_WITH_DESKTOP="0")
+        result = self._run("omher", HERMES_HOME=str(profile), OMH_WITH_DESKTOP="0")
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         self.assertIn("found Hermes without OMH", result.stdout)
         self.assertNotIn(HERMES_URL, self._calls("curl"))
@@ -597,13 +609,13 @@ class OmherBetaInstallerTests(unittest.TestCase):
         self._existing_hermes()
         home = self.root / "elsewhere" / "profiles" / "kami"
         home.mkdir(parents=True)
-        result = self._run("omher@beta", HERMES_HOME=str(home), OMH_WITH_DESKTOP="0")
+        result = self._run("omher", HERMES_HOME=str(home), OMH_WITH_DESKTOP="0")
         self.assertIn("found neither Hermes nor OMH", result.stdout)
         self.assertEqual(self._calls("curl")[0], HERMES_URL)
 
     def test_a_failed_hermes_download_stops_before_omh(self) -> None:
         (self.net / "hermes-install.sh").unlink()
-        result = self._run("omher@beta")
+        result = self._run("omher")
         self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
         self.assertIn(f"Could not download {HERMES_URL}", result.stdout)
         self.assertFalse((self.home / ".local" / "share" / "omh" / "venv").exists())
