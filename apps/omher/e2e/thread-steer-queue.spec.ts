@@ -71,7 +71,6 @@ test("Steer in a thread goes to that thread's running turn (chat.steer with its 
   await say(page, "also check the retry policy");
   const b = page.locator("[data-testid=bubble-user][data-held]", { hasText: "also check the retry policy" });
   await b.getByTestId("queue-mark").click();
-  await page.getByTestId("queue-steer").click();
   await expect.poll(async () => (await calls("chat.steer")).map((c) => c.params)).toEqual([{ bot: "kami", session: id, text: "also check the retry policy" }]);
   expect((await mock("mock.steers")).steers).toEqual([{ bot: "kami", session: id, text: "also check the retry policy" }]);
   const row = page.getByTestId("bubble-user").filter({ hasText: "also check the retry policy" });
@@ -83,14 +82,17 @@ test("Steer in a thread goes to that thread's running turn (chat.steer with its 
   expect((await calls("chat.send")).map((c) => c.params.text)).toEqual(["first running task"]);
 });
 
-test("Send now in a thread stops that thread's turn (chat.interrupt with its session), then sends it first", async ({ page }) => {
-  const id = await runningThread(page);
+test("a Steer the thread's bot refuses: the message waits and goes out after that thread's turn", async ({ page }) => {
+  const id = await runningThread(page); // resets the mock: refuse steers after it
+  await mock("mock.steerMode", { bot: "kami", mode: "reject" });
   await say(page, "b goes first");
   const b = page.locator("[data-testid=bubble-user][data-held]", { hasText: "b goes first" });
   await b.getByTestId("queue-mark").click();
-  await page.getByTestId("queue-now").click();
-  await expect.poll(async () => (await calls("chat.interrupt")).map((c) => c.params)).toEqual([{ bot: "kami", session: id }]);
+  await expect.poll(async () => (await calls("chat.steer")).map((c) => c.params)).toEqual([{ bot: "kami", session: id, text: "b goes first" }]);
+  await expect(b).toBeVisible();
+  await mock("mock.emit", { events: [{ event: "turn.end", bot: "kami", session: id, outcome: "done" }] });
   await expect.poll(async () => (await calls("chat.send")).map((c) => c.params.text)).toEqual(["first running task", "b goes first"]);
+  expect((await calls("chat.interrupt")).length).toBe(0);
 });
 
 // x -> confirm on a thread that holds messages: they are dropped, never sent to the archived session (the archive

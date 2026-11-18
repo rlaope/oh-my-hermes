@@ -4,6 +4,12 @@ All notable changes will be documented here.
 
 ## Unreleased
 
+- **omher: a waiting message is sent or taken back in one click, with no menu.** A message typed while the bot
+  answers waits with buttons before it instead of a ↵ that opened Send now / Steer / Edit / Delete. ↵ sends it:
+  Steer into the running answer, or, for an agent with no steer of its own, Send now (stop the answer, this one
+  first). ↓ puts it back in the message box to fix or add to. × (on hover or focus) drops it. A button that cannot
+  act (the agent has the message already) says why in its tooltip.
+
 - **Gemini prices re-read ahead of Google's two increases.** Google's pricing page, re-read on 2026-11-18, still
   lists Gemini 4 Argon and Gemini 4 Carbon at $2 / $10 per million tokens through 2026-11-30 and $4 / $20 from
   2026-12-01, and Gemini 3.8 Flash and 3.6 Flash at $0.75 / $3.75 through 2026-12-31 and $1.50 / $7.50 from

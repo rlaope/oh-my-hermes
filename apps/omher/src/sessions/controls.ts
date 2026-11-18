@@ -75,7 +75,7 @@ export const steersOf = (agent: AgentId | string): boolean => (STEERS as readonl
 
 export type QueueOff = Partial<Record<"now" | "steer" | "edit" | "delete", string>>;
 
-/** Which ↵ menu items are off for a waiting message, each with its one-line reason; null = no menu. `held`: omher
+/** Which of a waiting message's buttons (↵ ↓ ×) are off, each with its one-line reason; null = no buttons. `held`: omher
  *  still holds it (it can change); otherwise the agent has it and only it can say when it takes it. */
 export function queueOff(agent: AgentId | string, label: string, held: boolean, waiting: boolean): QueueOff | null {
   if (!held && !waiting) return null;

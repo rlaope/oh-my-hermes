@@ -705,7 +705,7 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
     const key = keys.get(id);
     return key && chatOf(key)?.queue?.includes(lid) && heldInputs.get(lid)?.id === id ? key : null;
   };
-  /** The ↵ menu of a waiting message in session `id`'s chat. */
+  /** The ↵ ↓ × buttons of a waiting message in session `id`'s chat. */
   const queuePick = async (id: string, lid: string, c: "now" | "steer" | "edit" | "delete") => {
     const key = heldIn(id, lid);
     if (!key) return; // already with the agent: the menu offers nothing
@@ -1914,7 +1914,7 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
     send,
     sendFiles,
     dropOnTerminal,
-    /** The ↵ menu of a waiting message (steer queue sessions): Send now, Steer, Edit, Delete. */
+    /** The ↵ ↓ × buttons of a waiting message (steer queue sessions): Send now or Steer, Edit, Delete. */
     queuePick,
     /** Esc / Stop: the agent's own interrupt. */
     interrupt: (id: string) => input(id, { kind: "interrupt" }).catch(() => undefined),

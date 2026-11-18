@@ -8,7 +8,7 @@ import { Bubble } from "./Bubble";
 import type { QueueChoice, QueueOffReasons } from "./QueueMark";
 import type { MessageItem } from "../../state/store";
 
-/** steer queue sessions: a SESSIONS chat's own ↵ menu. `off` says which items are off and why for a user row, or
+/** steer queue sessions: a SESSIONS chat's own ↵ ↓ × buttons. `off` says which items are off and why for a user row, or
  *  null for a row with no menu; `pick` runs the choice. */
 export interface SessionQueue {
   off(it: MessageItem): QueueOffReasons | null;
@@ -91,7 +91,7 @@ export function Timeline({
     return () => ro.disconnect();
   }, [bot.name, items]);
 
-  // steer queue: the ↵ menu of a held message (Edit puts it back in this chat's box)
+  // steer queue: the ↵ ↓ × buttons of a held message (↓ = Edit puts it back in this chat's box)
   const queuePick = (id: string) => (c: QueueChoice) => {
     if (c === "now") void s.queueSendNow(id, bot.name);
     else if (c === "steer") void s.queueSteer(id, bot.name);

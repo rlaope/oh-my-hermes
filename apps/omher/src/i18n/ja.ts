@@ -1267,7 +1267,6 @@ export const ja: Record<Key, string> = {
   "ab.ssh": "SSHで接続",
   "ab.sshSub": "別のコンピュータの Hermes",
   // steer queue
-  "sq.mark": "待機中 · 操作を選ぶ",
   "sq.sendNow": "今すぐ送信",
   "sq.sendNowTip": "今の回答を止めて、これを次に送ります",
   "sq.steer": "Steer",

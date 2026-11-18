@@ -67,17 +67,16 @@ async function busy(page: Page, ...texts: string[]) {
 }
 const bubble = (page: Page, text: string) => page.getByTestId("bubble-user").filter({ hasText: text });
 
-test("Codex: a waiting message has the ↵ menu with every item on; Steer sends one steer input", async ({ page }) => {
+test("Codex: a waiting message's ↵ steers it in one click (one steer input); ↓ and × are on", async ({ page }) => {
   await running(page, "codex");
   await busy(page, "also check the changelog");
   const b = bubble(page, "also check the changelog");
   await expect(b.getByTestId("bubble-queued")).toHaveText("Waiting");
   // held in omher: not sent to the agent yet
   expect(await sent(page)).toEqual(["/status", "/slow"]);
+  for (const c of ["mark", "edit", "delete"]) await expect(b.getByTestId(`queue-${c}`)).not.toHaveAttribute("aria-disabled", "true");
+  await expect(b.getByTestId("queue-mark")).toHaveAttribute("data-choice", "steer");
   await b.getByTestId("queue-mark").click();
-  const menu = page.getByTestId("queue-menu");
-  for (const c of ["now", "steer", "edit", "delete"]) await expect(menu.getByTestId(`queue-${c}`)).not.toHaveAttribute("aria-disabled", "true");
-  await menu.getByTestId("queue-steer").click();
   await expect.poll(async () => (await inputs(page)).filter((i) => i.kind === "steer")).toEqual([
     { kind: "steer", id: expect.stringMatching(/^local-s/), text: "also check the changelog" },
   ]);
@@ -89,11 +88,12 @@ test("Codex: a waiting message has the ↵ menu with every item on; Steer sends 
   expect(await sent(page)).toEqual(["/status", "/slow"]);
 });
 
-test("Send now: one Stop, then this message goes first; the other keeps waiting", async ({ page }) => {
-  await running(page, "claude");
+test("an agent with no steer of its own: ↵ is Send now (one Stop, this one first); the other keeps waiting", async ({ page }) => {
+  await running(page, "dsh");
   await busy(page, "second", "third");
+  await expect(bubble(page, "third").getByTestId("queue-mark")).toHaveAttribute("data-choice", "now");
+  await expect(bubble(page, "third").getByTestId("queue-mark")).toHaveAttribute("title", "Stop the current answer and send this next");
   await bubble(page, "third").getByTestId("queue-mark").click();
-  await page.getByTestId("queue-menu").getByTestId("queue-now").click();
   await expect.poll(() => sent(page)).toEqual(["/status", "/slow", "third"]);
   expect((await inputs(page)).filter((i) => i.kind === "interrupt")).toHaveLength(1);
   await expect(bubble(page, "second")).toHaveAttribute("data-held", "true");
@@ -102,14 +102,13 @@ test("Send now: one Stop, then this message goes first; the other keeps waiting"
   await expect(page.getByTestId("bubble-bot").filter({ hasText: "You said: second" })).toBeVisible();
 });
 
-test("Edit and Delete take a message back while omher holds it", async ({ page }) => {
+test("↓ and × take a message back while omher holds it", async ({ page }) => {
   await running(page, "omo");
   await busy(page, "drop me", "fix me");
-  await bubble(page, "drop me").getByTestId("queue-mark").click();
-  await page.getByTestId("queue-menu").getByTestId("queue-delete").click();
+  await bubble(page, "drop me").hover();
+  await bubble(page, "drop me").getByTestId("queue-delete").click();
   await expect(bubble(page, "drop me")).toHaveCount(0);
-  await bubble(page, "fix me").getByTestId("queue-mark").click();
-  await page.getByTestId("queue-menu").getByTestId("queue-edit").click();
+  await bubble(page, "fix me").getByTestId("queue-edit").click();
   await expect(bubble(page, "fix me")).toHaveCount(0);
   await expect(page.getByTestId("composer")).toHaveValue("fix me");
   // (with text in the box the composer shows Send, not Stop)
@@ -119,26 +118,7 @@ test("Edit and Delete take a message back while omher holds it", async ({ page }
   expect(await sent(page)).toEqual(["/status", "/slow"]);
 });
 
-test("an agent without its own steer: Steer is off with its reason; once handed over, every item says so", async ({ page }) => {
-  await running(page, "dsh");
-  await busy(page, "later please");
-  const b = bubble(page, "later please");
-  await b.getByTestId("queue-mark").click();
-  const menu = page.getByTestId("queue-menu");
-  await expect(menu.getByTestId("queue-steer")).toHaveAttribute("aria-disabled", "true");
-  await expect(menu.getByTestId("queue-steer-why")).toHaveText("DSH has no way to take a message mid-answer");
-  // an item that is off does nothing (forced: Playwright never clicks an aria-disabled element)
-  await menu.getByTestId("queue-steer").click({ force: true });
-  await expect(menu).toBeVisible();
-  expect((await inputs(page)).filter((i) => i.kind === "steer")).toEqual([]);
-  for (const c of ["now", "edit", "delete"]) await expect(menu.getByTestId(`queue-${c}`)).not.toHaveAttribute("aria-disabled", "true");
-  if (process.env.OMHER_SHOTS) await shot(page, "dsh");
-  await page.keyboard.press("Escape");
-  await expect(menu).toHaveCount(0);
-  await expect(page.getByTestId("session-status")).toHaveText("Working");
-});
-
-test("a steered message the agent has not taken yet: every item off, with one reason", async ({ page }) => {
+test("a steered message the agent has not taken yet: every button off, each saying why", async ({ page }) => {
   await running(page, "codex");
   await busy(page, "steered one");
   // the mock agent takes a steer after 60 ms: hold that back so the row stays with the agent
@@ -149,24 +129,24 @@ test("a steered message the agent has not taken yet: every item off, with one re
   });
   const b = bubble(page, "steered one");
   await b.getByTestId("queue-mark").click();
-  await page.getByTestId("queue-menu").getByTestId("queue-steer").click();
   await expect(b).not.toHaveAttribute("data-held", "true");
   await expect(b).toHaveAttribute("data-wait", "queued");
-  await b.getByTestId("queue-mark").click();
-  const menu = page.getByTestId("queue-menu");
-  await expect(menu.getByTestId("queue-why")).toHaveText("Already with Codex · it takes it next");
-  for (const c of ["now", "steer", "edit", "delete"]) await expect(menu.getByTestId(`queue-${c}`)).toHaveAttribute("aria-disabled", "true");
-  await menu.getByTestId("queue-delete").click({ force: true });
+  for (const c of ["mark", "edit", "delete"]) {
+    await expect(b.getByTestId(`queue-${c}`)).toHaveAttribute("aria-disabled", "true");
+    await expect(b.getByTestId(`queue-${c}`)).toHaveAttribute("title", "Already with Codex · it takes it next");
+  }
+  await b.hover();
+  await b.getByTestId("queue-delete").click({ force: true });
   await expect(b).toHaveCount(1);
+  expect((await inputs(page)).filter((i) => i.kind === "steer")).toHaveLength(1);
   if (process.env.OMHER_SHOTS) await shot(page, "handed");
 });
 
-test("shots: Codex menu with every item on", async ({ page }) => {
+test("shots: Codex waiting messages with their buttons", async ({ page }) => {
   test.skip(!process.env.OMHER_SHOTS, "OMHER_SHOTS not set");
   await running(page, "codex");
   await busy(page, "also check the changelog", "then run the tests");
-  await bubble(page, "then run the tests").getByTestId("queue-mark").click();
-  await expect(page.getByTestId("queue-menu")).toBeVisible();
+  await bubble(page, "then run the tests").hover();
   await shot(page, "codex");
 });
 

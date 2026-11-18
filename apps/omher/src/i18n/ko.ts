@@ -1267,7 +1267,6 @@ export const ko: Record<Key, string> = {
   "ab.ssh": "SSH로 연결",
   "ab.sshSub": "다른 컴퓨터의 Hermes",
   // steer queue
-  "sq.mark": "대기 중 · 할 일 고르기",
   "sq.sendNow": "지금 보내기",
   "sq.sendNowTip": "지금 답을 멈추고 이걸 다음으로 보냅니다",
   "sq.steer": "Steer",
