@@ -36,7 +36,9 @@ function parse(id: string, title: string, raw: string): AgentMark {
 const SVG: [string, string, string][] = (
   [
   ["claude", "Claude Code", "claudecode-color.svg"],
-  ["codex", "Codex", "codex-color.svg"],
+  // Codex draws the OpenAI (GPT) mark bare: the published codex-color.svg is a white app tile that reads as a
+  // blank square at 16px inside a row frame
+  ["codex", "Codex", "openai.svg"],
   ["openai", "OpenAI", "openai.svg"],
   ["gemini", "Gemini CLI", "geminicli-color.svg"],
   ["gemini-app", "Gemini", "gemini-color.svg"],

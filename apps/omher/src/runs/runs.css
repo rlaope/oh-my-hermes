@@ -490,13 +490,6 @@
   margin-right: 5px;
   color: var(--body);
 }
-/* Codex's mark is a white tile (the first path of codex-color.svg). A dark page shows its edge; on a light page
-   the tile is a light gray with a hairline, so the mark is a tile there too and not a cloud on its own */
-[data-theme="light"] .bx-mk[data-mark="codex"] svg path:first-child {
-  fill: var(--raise2);
-  stroke: var(--line-strong);
-  stroke-width: 2; /* of 24: half of it falls inside the tile */
-}
 .bx-ft {
   flex: 0 1 auto;
   min-width: 0;
