@@ -114,6 +114,9 @@ export function Sidebar() {
           {bots.map((b) => {
             const pinned = s.ui.pinned.includes(b.name);
             const hasThreads = (s.threads[b.name]?.length ?? 0) > 0;
+            // a new thread runs on this computer, on a bot that is up (host and offline bots get none, as in the menu)
+            const onNew = b.host || b.status === "offline" ? undefined : () => void s.newThread(b.name);
+            const open = inChat && s.selectedBot === b.name;
             const groupId = `threads-of-${b.name.replace(/[^A-Za-z0-9_-]/g, "_")}`;
             return (
             <BotRow
@@ -132,7 +135,7 @@ export function Sidebar() {
               groupId={hasThreads ? groupId : undefined}
               latest={hasThreads ? threadsLatest(s.threads[b.name]!, (th) => s.chats[threadKey(b.name, th)]) : null}
               menu={{
-                onNewThread: b.host || b.status === "offline" ? undefined : () => void s.newThread(b.name),
+                onNewThread: onNew,
                 pinned,
                 onPin: () => s.pinBot(b.name, !pinned),
                 onEdit: () => s.openSettings(`bot:${b.name}`),
@@ -141,7 +144,8 @@ export function Sidebar() {
                 onRemove: listed.length > 1 ? () => s.listBot(b.name, false) : undefined,
               }}
             >
-              {hasThreads && <ThreadTree bot={b.name} id={groupId} />}
+              {/* the threads and "+ New thread" under them; a bot with none shows that line only while it is open */}
+              {(hasThreads || (onNew && open)) && <ThreadTree bot={b.name} id={groupId} onNew={onNew} />}
             </BotRow>
             );
           })}

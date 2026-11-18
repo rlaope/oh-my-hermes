@@ -585,7 +585,8 @@ const SIGN_IN_MODELS = {
   "openai-codex": { slug: "openai-codex", name: "ChatGPT or Codex Subscription", models: ["gpt-6-sol", "gpt-6-luna"] },
   nous: { slug: "nous", name: "Nous Portal", models: ["anthropic/claude-fable-5.2", "moonshotai/kimi-k3"] },
 };
-// mock.providers {fixture: "long"}: the long catalogs of a real profile (Nous Portal ~60, OpenRouter ~60).
+// mock.providers {fixture: "long"}: the long catalogs of a real profile (Nous Portal ~60, OpenRouter ~60); "empty": none, as a
+// Hermes with no account lists.
 const PROVIDERS_LONG = JSON.parse(readFileSync(new URL("./fixtures/providers-long.json", import.meta.url), "utf-8"));
 let providerFixture = "default";
 const REASONING_LEVELS = ["none", "low", "medium", "high", "xhigh"];
@@ -1584,6 +1585,8 @@ const OPS = {
     if (signed && SIGN_IN_MODELS[signed]) {
       return { providers: [...PROVIDERS, SIGN_IN_MODELS[signed]], current: { ...models[b.name] }, reasoning_levels: REASONING_LEVELS };
     }
+    // a Hermes installed a minute ago with no account lists no provider at all (measured on Hermes 0.23.2)
+    if (providerFixture === "empty") return { providers: [], current: { ...models[b.name] }, reasoning_levels: REASONING_LEVELS };
     if (providerFixture === "long") {
       return { providers: PROVIDERS_LONG.providers, current: { ...models[b.name], ...PROVIDERS_LONG.current }, reasoning_levels: REASONING_LEVELS };
     }
@@ -1673,7 +1676,7 @@ const OPS = {
     return {};
   },
   "mock.providers": (p) => {
-    if (p.fixture !== "default" && p.fixture !== "long") throw new OpError("bad_request", "unknown providers fixture");
+    if (!["default", "long", "empty"].includes(p.fixture)) throw new OpError("bad_request", "unknown providers fixture");
     providerFixture = p.fixture;
     return {};
   },

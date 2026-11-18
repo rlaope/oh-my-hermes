@@ -131,9 +131,32 @@ elif [ -n "$OMH_HOME_DIR" ]; then
 fi
 
 # Hermes' own Python, where Hermes' installer puts it. The same places the
-# omher app looks (apps/omher/src-tauri/src/bridge.rs).
+# omher app looks (apps/omher/src-tauri/src/bridge.rs): first the interpreter
+# the launcher `hermes-agent/.hermes/bin/hermes` execs (Hermes' packaged
+# installs have no venv at all; the launcher's first `exec` word names the
+# store Python, quoted with single quotes when the path has a space), then the
+# venv of an older install.
 hermes_python() {
   [ -n "$OMH_HERMES_DIR" ] || return 1
+  omh_hermes_launcher="$OMH_HERMES_DIR/hermes-agent/.hermes/bin/hermes"
+  if [ -f "$omh_hermes_launcher" ]; then
+    omh_hermes_exec="$(sed -n 's/^exec //p' "$omh_hermes_launcher" | head -n 1)"
+    case "$omh_hermes_exec" in
+      "'"*)
+        omh_hermes_exe="${omh_hermes_exec#\'}"
+        omh_hermes_exe="${omh_hermes_exe%%\'*}"
+        ;;
+      *) omh_hermes_exe="${omh_hermes_exec%% *}" ;;
+    esac
+    case "$omh_hermes_exe" in
+      /*)
+        if [ -x "$omh_hermes_exe" ]; then
+          printf '%s\n' "$omh_hermes_exe"
+          return 0
+        fi
+        ;;
+    esac
+  fi
   for omh_hermes_venv in venv .venv; do
     if [ -x "$OMH_HERMES_DIR/hermes-agent/$omh_hermes_venv/bin/python" ]; then
       printf '%s\n' "$OMH_HERMES_DIR/hermes-agent/$omh_hermes_venv/bin/python"
@@ -1270,7 +1293,14 @@ fi
 
 printf '\n'
 say "$(color '1;36' "$(msg installed)")"
-if command -v omh >/dev/null 2>&1; then
+if [ "$OMH_RUN_SETUP" = "1" ] && [ "$OMH_AUTO_APPLY" != "0" ]; then
+  # Setup and doctor already ran above: asking for them again is a wrong next step.
+  if [ -n "$OMH_COMMAND_PATH" ] && ! command -v omh >/dev/null 2>&1; then
+    say "OMH is connected to Hermes. To use the omh command, add $(dirname "$OMH_COMMAND_PATH") to PATH."
+  else
+    say "OMH is connected to Hermes."
+  fi
+elif command -v omh >/dev/null 2>&1; then
   say "$(msg next_path)"
 elif [ -n "$OMH_COMMAND_PATH" ]; then
   say "$(msg next_command_path "$OMH_COMMAND_PATH")"
@@ -1282,7 +1312,7 @@ if [ "$OMH_OMHER_RUN" = "1" ]; then
     # With the app (installed now, or the app that runs this with
     # OMH_WITH_DESKTOP=0), the model is picked in the app, not in a terminal.
     if [ -n "$OMH_OMHER_APP_PATH" ] || [ "$OMH_WITH_DESKTOP" = "0" ]; then
-      say "Hermes was installed without its setup wizard. Open omher and pick a model from the model menu at the top of the chat."
+      say "Hermes was installed without its setup wizard. Open omher and sign it in to an AI account from the line above the chat box (ChatGPT / Codex, Nous Portal or an API key)."
     else
       say "Hermes was installed without its setup wizard: run 'hermes setup' to choose a model."
     fi

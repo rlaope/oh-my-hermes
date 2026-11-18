@@ -101,9 +101,12 @@ test("a row opens its detail: when, what, where it delivers, last run, and the n
   // a job delivered to the bot's own chat says so
   await page.getByTestId("auto-row-a1f0c2d9e801").click();
   await expect(d.getByTestId("auto-deliver")).toHaveText("Kami chat (omher)");
-  // primary action is the neutral ink fill, never the accent gradient
-  const bg = await d.getByTestId("auto-run").evaluate((el) => getComputedStyle(el).backgroundImage);
-  expect(bg).toBe("none");
+  // Run now is a quiet text action at the end of the row, not a filled button (khope: it looked like one you must
+  // press): no fill, the quiet colour, after Delete
+  const run = d.getByTestId("auto-run");
+  expect(await run.evaluate((el) => [getComputedStyle(el).backgroundColor, getComputedStyle(el).backgroundImage])).toEqual(["rgba(0, 0, 0, 0)", "none"]);
+  const [runBox, delBox] = await Promise.all([run.boundingBox(), d.getByTestId("auto-delete").boundingBox()]);
+  expect(runBox!.x).toBeGreaterThan(delBox!.x);
 });
 
 test("the toggle pauses and resumes through cron.manage with the job id; offline is one short line", async ({ page }) => {
@@ -146,7 +149,14 @@ test("Run now is a chat message to the bot and opens its chat; Edit fills the bo
   await expect(page.getByTestId("ask-bot")).toContainText("Friren");
   expect(await submitted("friren")).toEqual([]);
 
+  // one click only asks; Cancel sends nothing; Run sends
   await page.getByTestId("auto-run").click();
+  await expect(page.getByTestId("auto-run-ask")).toContainText("Run it now, outside its schedule?");
+  await page.getByTestId("auto-run-cancel").click();
+  await expect(page.getByTestId("auto-run")).toBeVisible();
+  expect(await submitted("friren")).toEqual([]);
+  await page.getByTestId("auto-run").click();
+  await page.getByTestId("auto-run-confirm").click();
   await expect(page.getByTestId("bot-friren")).toHaveAttribute("aria-current", "true");
   await expect(page.getByTestId("bubble-user").last()).toHaveText('Run my automation "Weekly product-ab report" (id e5c2a9b81d40) now.');
   expect(await submitted("friren")).toEqual(['Run my automation "Weekly product-ab report" (id e5c2a9b81d40) now.']);
@@ -196,6 +206,15 @@ test("an automation the bot made in chat leaves a card there: run, open, undo", 
   await expect(card).toContainText("every 15 min");
   await expect(card).toContainText("Kami chat (omher)");
   await expect(page.getByTestId("nav-automations")).toContainText("7");
+  // Run once is the quiet last action: a click asks first, Run sends the run message to the bot
+  const run = card.getByTestId("card-run");
+  const [runBox, undoBox] = await Promise.all([run.boundingBox(), card.getByTestId("card-undo").boundingBox()]);
+  expect(runBox!.x).toBeGreaterThan(undoBox!.x);
+  expect(await run.evaluate((el) => getComputedStyle(el).backgroundColor)).toBe("rgba(0, 0, 0, 0)");
+  await run.click();
+  expect(await submitted("kami")).toEqual([]);
+  await card.getByTestId("card-run-confirm").click();
+  await expect.poll(() => submitted("kami")).toEqual(['Run my automation "CI watch on my PRs" (id a9c1e7f30d12) now.']);
 
   await card.getByTestId("card-open-auto").click();
   await expect(page.getByTestId("auto-detail").getByRole("heading")).toHaveText("CI watch on my PRs");
