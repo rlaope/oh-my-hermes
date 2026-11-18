@@ -402,7 +402,7 @@ class OmherInstallerTests(unittest.TestCase):
         self.assertTrue(self._setup_ran())
         self._assert_app_installed(result)
         # the model is picked in the app, not in a terminal
-        self.assertIn("pick a model from the model menu", result.stdout)
+        self.assertIn("sign it in to an AI account from the line above the chat box", result.stdout)
         self.assertNotIn("hermes setup", result.stdout)
         # Hermes came first: its installer ran before the OMH venv existed.
         self.assertLess(result.stdout.index("Install Hermes Agent"), result.stdout.index("Install OMH package"))
@@ -477,7 +477,7 @@ class OmherInstallerTests(unittest.TestCase):
         self.assertEqual(self._calls("hdiutil"), [])
         self.assertIn("OMH_WITH_DESKTOP=0", result.stdout)
         # this is the app's own Install button: the app is where the model gets picked
-        self.assertIn("pick a model from the model menu", result.stdout)
+        self.assertIn("sign it in to an AI account from the line above the chat box", result.stdout)
         self.assertNotIn("hermes setup", result.stdout)
 
     def _linux(self, **environment: str) -> subprocess.CompletedProcess[str]:
@@ -689,6 +689,24 @@ class OmherInstallerTests(unittest.TestCase):
         result = self._run("omher@beta")
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         self.assertIn(f"Python: {self.home}/.hermes/tools/python-3.14.9-darwin-arm64/bin/python3", result.stdout)
+
+    def test_after_setup_ran_the_closing_lines_do_not_ask_for_setup_again(self) -> None:
+        # The installer ran `omh setup` and `omh doctor` itself; ending with "Next: run 'omh setup' ... then
+        # 'omh doctor'" sent a newcomer to repeat both.
+        self._system_python()
+        result = self._run("omher@beta")
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertTrue(self._setup_ran())
+        closing = result.stdout[result.stdout.index("oh-my-hermes is installed."):]
+        self.assertNotIn(" setup' to connect OMH to Hermes", closing)
+        self.assertIn("OMH is connected to Hermes.", closing)
+
+    def test_without_setup_the_closing_line_still_names_the_setup_command(self) -> None:
+        self._system_python()
+        result = self._run("omher@beta", OMH_WITH_HERMES="0")
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertFalse(self._setup_ran())
+        self.assertIn(" setup' to connect OMH to Hermes", result.stdout)
 
 
 if __name__ == "__main__":
