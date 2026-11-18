@@ -156,18 +156,18 @@ All notable changes will be documented here.
   either way (19 / 40 against 20 / 40, one run per task). The block also reaches DeepSeek V3.2, V4 Flash and V4 Pro,
   which were not measured; V4.1 Flash keeps its own override, which gains the same sentence in the entry below.
 
+- **DeepSeek V4.1 Flash units also write their answer in the shape the task asked for.** The V4.1 Flash override
+  replaces the `deepseek` family block, so it did not get the answer-shape sentence the family block gained; it now
+  carries the same sentence verbatim. On og `deepseek/deepseek-flash` the six fixable `live-model-tools` templates
+  passed 85 / 90 with it against 76 / 90 for the shipped override in the same window (3 seeds x 5 reps), at 0.97x
+  the tokens.
+
 - **A subagent that is not part of the running dag-ulw run no longer shows up inside it.** A subagent sent without
   the run's `[dag:<run>/<node>]` marker (a hand-made repair, a child of an earlier cancelled run) used to sit in layer
   1 of the DAG pane, where Desktop labelled it "Start node". It now shows below the run as **Outside DAG**: Desktop
   cards, the text tree and the TUI block alike. Usage and cost still count it, and it no longer holds a finished
   run's one-line summary open. While a run is active, such a dispatch is stopped once per turn with a pointer to
   `omh_dag` (ready, settle, repair, extend); sending it again goes through. Contributed by @yqm-307 (#2914).
-
-- **DeepSeek V4.1 Flash units also write their answer in the shape the task asked for.** The V4.1 Flash override
-  replaces the `deepseek` family block, so it did not get the answer-shape sentence the family block gained; it now
-  carries the same sentence verbatim. On og `deepseek/deepseek-flash` the six fixable `live-model-tools` templates
-  passed 85 / 90 with it against 76 / 90 for the shipped override in the same window (3 seeds x 5 reps), at 0.97x
-  the tokens.
 
 - **`omh_delegate_route set` refuses a model id pinned to a provider that does not serve it.** A `set` with
   `model=ANT-claude-opus-5-5 provider=openai-codex` used to reach `config.yaml`, and every delegated child after it
