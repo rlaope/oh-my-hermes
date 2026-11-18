@@ -51,14 +51,16 @@ OMH_LANG_WAS_SET=0
 if [ -n "$OMH_LANG_RAW" ]; then
   OMH_LANG_WAS_SET=1
 fi
-# `sh -s -- omher@beta` opts into the desktop path: Hermes when it is missing
+# `sh -s -- omher` opts into the desktop path: Hermes when it is missing
 # (its official installer, non-interactive), OMH, `omh setup` when this machine
 # had no OMH or no Hermes, then the omher desktop app. With no argument this
-# installer does exactly what it did before the argument existed.
+# installer does exactly what it did before the argument existed. `omher@beta`,
+# the argument's name before omher 1.0, stays accepted: every omher app up to
+# 0.2.13 runs this installer with it from its first-run Install button.
 OMH_WITH_HERMES="${OMH_WITH_HERMES:-1}"
 OMH_WITH_DESKTOP="${OMH_WITH_DESKTOP:-1}"
 OMH_APP_DIR="${OMH_APP_DIR:-}"
-OMH_OMHER_BETA=0
+OMH_OMHER_RUN=0
 # `sh -s -- --uninstall [--purge] [--dry-run]` removes OMH instead of installing
 # it: it finds the installed command and runs `omh uninstall`, and never
 # downloads or installs anything. --purge and --dry-run only mean something with
@@ -70,23 +72,23 @@ omh_usage() {
   printf 'omh installer: %s\n' "$1" >&2
   printf 'Usage:\n' >&2
   printf '  install   curl -fsSL https://raw.githubusercontent.com/rlaope/oh-my-hermes/main/install.sh | sh\n' >&2
-  printf '  desktop   curl -fsSL https://raw.githubusercontent.com/rlaope/oh-my-hermes/main/install.sh | sh -s -- omher@beta\n' >&2
+  printf '  desktop   curl -fsSL https://raw.githubusercontent.com/rlaope/oh-my-hermes/main/install.sh | sh -s -- omher\n' >&2
   printf '  remove    curl -fsSL https://raw.githubusercontent.com/rlaope/oh-my-hermes/main/install.sh | sh -s -- --uninstall [--purge] [--dry-run]\n' >&2
   exit 2
 }
 for omh_arg in "$@"; do
   case "$omh_arg" in
-    omher@beta) OMH_OMHER_BETA=1 ;;
+    omher|omher@beta) OMH_OMHER_RUN=1 ;;
     --uninstall) OMH_UNINSTALL=1 ;;
     --purge) OMH_UNINSTALL_PURGE=1 ;;
     --dry-run) OMH_UNINSTALL_DRY_RUN=1 ;;
     *)
-      omh_usage "unknown argument '$omh_arg'. The arguments are omher@beta (adds Hermes when missing, and the omher desktop app) and --uninstall [--purge] [--dry-run] (removes OMH)."
+      omh_usage "unknown argument '$omh_arg'. The arguments are omher (adds Hermes when missing, and the omher desktop app) and --uninstall [--purge] [--dry-run] (removes OMH)."
       ;;
   esac
 done
-if [ "$OMH_UNINSTALL" = "1" ] && [ "$OMH_OMHER_BETA" = "1" ]; then
-  omh_usage "--uninstall cannot be combined with omher@beta."
+if [ "$OMH_UNINSTALL" = "1" ] && [ "$OMH_OMHER_RUN" = "1" ]; then
+  omh_usage "--uninstall cannot be combined with omher."
 fi
 if [ "$OMH_UNINSTALL" = "0" ] && [ "$OMH_UNINSTALL_PURGE" = "1" ]; then
   omh_usage "--purge only works together with --uninstall."
@@ -129,9 +131,32 @@ elif [ -n "$OMH_HOME_DIR" ]; then
 fi
 
 # Hermes' own Python, where Hermes' installer puts it. The same places the
-# omher app looks (apps/omher/src-tauri/src/bridge.rs).
+# omher app looks (apps/omher/src-tauri/src/bridge.rs): first the interpreter
+# the launcher `hermes-agent/.hermes/bin/hermes` execs (Hermes' packaged
+# installs have no venv at all; the launcher's first `exec` word names the
+# store Python, quoted with single quotes when the path has a space), then the
+# venv of an older install.
 hermes_python() {
   [ -n "$OMH_HERMES_DIR" ] || return 1
+  omh_hermes_launcher="$OMH_HERMES_DIR/hermes-agent/.hermes/bin/hermes"
+  if [ -f "$omh_hermes_launcher" ]; then
+    omh_hermes_exec="$(sed -n 's/^exec //p' "$omh_hermes_launcher" | head -n 1)"
+    case "$omh_hermes_exec" in
+      "'"*)
+        omh_hermes_exe="${omh_hermes_exec#\'}"
+        omh_hermes_exe="${omh_hermes_exe%%\'*}"
+        ;;
+      *) omh_hermes_exe="${omh_hermes_exec%% *}" ;;
+    esac
+    case "$omh_hermes_exe" in
+      /*)
+        if [ -x "$omh_hermes_exe" ]; then
+          printf '%s\n' "$omh_hermes_exe"
+          return 0
+        fi
+        ;;
+    esac
+  fi
   for omh_hermes_venv in venv .venv; do
     if [ -x "$OMH_HERMES_DIR/hermes-agent/$omh_hermes_venv/bin/python" ]; then
       printf '%s\n' "$OMH_HERMES_DIR/hermes-agent/$omh_hermes_venv/bin/python"
@@ -156,7 +181,7 @@ OMH_HAD_OMH=0
 OMH_HAD_HERMES=0
 OMH_INSTALL_HERMES=0
 OMH_OMHER_APP_PATH=""
-if [ "$OMH_OMHER_BETA" = "1" ]; then
+if [ "$OMH_OMHER_RUN" = "1" ]; then
   if omh_present; then
     OMH_HAD_OMH=1
   fi
@@ -612,9 +637,9 @@ python_candidates() {
     uv python list --managed-python --only-installed 2>/dev/null |
       sed -n 's/^[^[:space:]][^[:space:]]*[[:space:]][[:space:]]*//p'
   fi
-  # omher@beta only: Hermes' own interpreter, last. On a machine that had no
+  # omher only: Hermes' own interpreter, last. On a machine that had no
   # Python 3.11+ until Hermes' installer brought one, it is the only candidate.
-  if [ "$OMH_OMHER_BETA" = "1" ]; then
+  if [ "$OMH_OMHER_RUN" = "1" ]; then
     hermes_python || true
   fi
 }
@@ -713,20 +738,20 @@ resolve_python() {
 }
 
 
-omher_beta_plan() {
+omher_plan() {
   if [ "$OMH_HAD_OMH" = "1" ] && [ "$OMH_HAD_HERMES" = "1" ]; then
-    say_note "omher@beta: found Hermes and OMH. Upgrading OMH, then adding the omher app."
+    say_note "omher: found Hermes and OMH. Upgrading OMH, then adding the omher app."
   elif [ "$OMH_HAD_HERMES" = "1" ]; then
-    say_note "omher@beta: found Hermes without OMH. Installing OMH, connecting it with 'omh setup', then adding the omher app."
+    say_note "omher: found Hermes without OMH. Installing OMH, connecting it with 'omh setup', then adding the omher app."
   elif [ "$OMH_INSTALL_HERMES" = "1" ] && [ "$OMH_HAD_OMH" = "1" ]; then
-    say_note "omher@beta: found OMH without Hermes. Installing Hermes, upgrading OMH, connecting them with 'omh setup', then adding the omher app."
+    say_note "omher: found OMH without Hermes. Installing Hermes, upgrading OMH, connecting them with 'omh setup', then adding the omher app."
   elif [ "$OMH_INSTALL_HERMES" = "1" ]; then
-    say_note "omher@beta: found neither Hermes nor OMH. Installing Hermes first, then OMH, 'omh setup', and the omher app."
+    say_note "omher: found neither Hermes nor OMH. Installing Hermes first, then OMH, 'omh setup', and the omher app."
   else
-    say_note "omher@beta: Hermes is not installed and OMH_WITH_HERMES=0 skips it. Install Hermes yourself, then run 'omh setup'."
+    say_note "omher: Hermes is not installed and OMH_WITH_HERMES=0 skips it. Install Hermes yourself, then run 'omh setup'."
   fi
   if [ "$OMH_WITH_DESKTOP" = "0" ]; then
-    say_note "omher@beta: OMH_WITH_DESKTOP=0, so the omher app is not installed."
+    say_note "omher: OMH_WITH_DESKTOP=0, so the omher app is not installed."
   fi
 }
 
@@ -1058,8 +1083,8 @@ install_omher_app() {
 }
 
 say_header "$(msg installer_title)" "$(msg installer_subtitle)"
-if [ "$OMH_OMHER_BETA" = "1" ]; then
-  omher_beta_plan
+if [ "$OMH_OMHER_RUN" = "1" ]; then
+  omher_plan
   if [ "$OMH_INSTALL_HERMES" = "1" ]; then
     install_hermes
   fi
@@ -1244,7 +1269,7 @@ if [ "$OMH_RUN_SETUP" = "1" ]; then
       run_omh doctor || OMH_DOCTOR_STATUS=$?
     fi
     if [ "$OMH_DOCTOR_STATUS" != "0" ]; then
-      if [ "$OMH_OMHER_BETA" != "1" ]; then
+      if [ "$OMH_OMHER_RUN" != "1" ]; then
         exit "$OMH_DOCTOR_STATUS"
       fi
       # A Hermes installed a minute ago has no model chosen yet, and doctor
@@ -1258,7 +1283,7 @@ elif [ "$OMH_AUTO_APPLY" = "0" ] || [ "$OMH_WITH_PLUGIN" = "1" ] || [ "$OMH_WITH
   say_note "Run 'omh setup' with those choices explicitly, or set OMH_RUN_SETUP=1 for advanced one-shot bootstrap."
 fi
 
-if [ "$OMH_OMHER_BETA" = "1" ]; then
+if [ "$OMH_OMHER_RUN" = "1" ]; then
   if [ "$OMH_WITH_DESKTOP" = "0" ]; then
     say_note "Skipped the omher app because OMH_WITH_DESKTOP=0."
   else
@@ -1268,19 +1293,26 @@ fi
 
 printf '\n'
 say "$(color '1;36' "$(msg installed)")"
-if command -v omh >/dev/null 2>&1; then
+if [ "$OMH_RUN_SETUP" = "1" ] && [ "$OMH_AUTO_APPLY" != "0" ]; then
+  # Setup and doctor already ran above: asking for them again is a wrong next step.
+  if [ -n "$OMH_COMMAND_PATH" ] && ! command -v omh >/dev/null 2>&1; then
+    say "OMH is connected to Hermes. To use the omh command, add $(dirname "$OMH_COMMAND_PATH") to PATH."
+  else
+    say "OMH is connected to Hermes."
+  fi
+elif command -v omh >/dev/null 2>&1; then
   say "$(msg next_path)"
 elif [ -n "$OMH_COMMAND_PATH" ]; then
   say "$(msg next_command_path "$OMH_COMMAND_PATH")"
 else
   say "Next: run '$OMH_PYTHON -P -E -m omh.cli setup' to connect OMH to Hermes, then '$OMH_PYTHON -P -E -m omh.cli doctor' to verify."
 fi
-if [ "$OMH_OMHER_BETA" = "1" ]; then
+if [ "$OMH_OMHER_RUN" = "1" ]; then
   if [ "$OMH_INSTALL_HERMES" = "1" ]; then
     # With the app (installed now, or the app that runs this with
     # OMH_WITH_DESKTOP=0), the model is picked in the app, not in a terminal.
     if [ -n "$OMH_OMHER_APP_PATH" ] || [ "$OMH_WITH_DESKTOP" = "0" ]; then
-      say "Hermes was installed without its setup wizard. Open omher and pick a model from the model menu at the top of the chat."
+      say "Hermes was installed without its setup wizard. Open omher and sign it in to an AI account from the line above the chat box (ChatGPT / Codex, Nous Portal or an API key)."
     else
       say "Hermes was installed without its setup wizard: run 'hermes setup' to choose a model."
     fi

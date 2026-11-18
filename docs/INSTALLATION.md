@@ -284,19 +284,20 @@ environment the wheel cannot be installed into. With nothing suitable found and
 versions it did find. `OMH_PYTHON=/path/to/python3.12` overrides the search
 entirely.
 
-### Hermes, OMH and the omher desktop app in one command (beta)
+### Hermes, OMH and the omher desktop app in one command
 
 ```sh
 curl -fsSL https://omher.app/omher | sh
-# same as: curl -fsSL https://raw.githubusercontent.com/rlaope/oh-my-hermes/main/install.sh | sh -s -- omher@beta
+# same as: curl -fsSL https://raw.githubusercontent.com/rlaope/oh-my-hermes/main/install.sh | sh -s -- omher
 ```
 
 ```powershell
 irm https://omher.app/omher.ps1 | iex
-# same as: & ([scriptblock]::Create((irm https://raw.githubusercontent.com/rlaope/oh-my-hermes/main/install.ps1))) omher@beta
+# same as: & ([scriptblock]::Create((irm https://raw.githubusercontent.com/rlaope/oh-my-hermes/main/install.ps1))) omher
 ```
 
-The `omher@beta` argument adds three things to the plain install, and only with it:
+The `omher` argument adds three things to the plain install, and only with it
+(`omher@beta`, its name before omher 1.0, is still accepted):
 
 | Starting point | What runs |
 | --- | --- |
@@ -315,8 +316,8 @@ shell (`HERMES_HOME=<root>/profiles/<name>`), the installer looks for Hermes und
 
 The release lookup reads GitHub's API ten releases at a time and stops at the first omher one. Without a token
 GitHub allows 60 API requests an hour per network; when that runs out the installer stops with exit 1 and says so
-(set `GITHUB_TOKEN` to raise the limit). A Hermes installed this way skipped its setup wizard: open omher and pick a
-model from the model menu at the top of the chat (without the app, run `hermes setup`). `irm ... | iex` cannot
+(set `GITHUB_TOKEN` to raise the limit). A Hermes installed this way skipped its setup wizard: open omher and sign it in
+to an AI account from the line above the chat box (without the app, run `hermes setup`). `irm ... | iex` cannot
 pass an argument, which is why the PowerShell form runs the downloaded script as a script block; a failed run
 leaves its exit code in `$LASTEXITCODE`.
 
@@ -6451,7 +6452,7 @@ curl -fsSL https://omher.app/install | sh -s -- --uninstall --purge     # omh un
 ```
 
 `--purge` and `--dry-run` are accepted only with `--uninstall`, and `--uninstall`
-cannot be combined with `omher@beta`; any other argument prints the usage and
+cannot be combined with `omher`; any other argument prints the usage and
 exits 2 without writing anything. `OMH_LANG` is passed on as `--language`.
 
 What it does not do: it downloads and installs nothing, deletes no file itself,

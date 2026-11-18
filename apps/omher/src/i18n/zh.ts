@@ -773,6 +773,7 @@ export const zh: Record<Key, string> = {
   "mp.offline": "{bot} 已离线",
   "mp.loading": "正在加载模型…",
   "mp.none": "没有匹配的模型",
+  "mp.noAccount": "{bot} 还没有 AI 账户。在聊天下方登录后，这里会列出模型。",
   "mp.reasoning": "推理强度",
   "mp.inHermes": "目前请在 Hermes 中更改",
   "mp.appliesChat": "仅对此聊天生效 · {link}",

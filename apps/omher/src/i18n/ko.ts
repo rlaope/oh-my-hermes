@@ -773,6 +773,7 @@ export const ko: Record<Key, string> = {
   "mp.offline": "{bot} 오프라인",
   "mp.loading": "모델 불러오는 중…",
   "mp.none": "맞는 모델이 없어요",
+  "mp.noAccount": "{bot}에 아직 AI 계정이 없어요. 채팅 아래에서 로그인하면 여기에 모델이 나와요.",
   "mp.reasoning": "추론",
   "mp.inHermes": "지금은 Hermes에서 바꿔 주세요",
   "mp.appliesChat": "이 채팅에 적용 · {link}",
