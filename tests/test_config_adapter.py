@@ -16,8 +16,12 @@ from omh.config_adapter import (
     external_dir_registered,
     ensure_external_dir,
     external_dirs,
+    ensure_plugin_omh_home,
     memory_provider_selection,
+    plugin_omh_home_setting,
     remove_external_dir,
+    remove_memory_provider,
+    remove_plugin_enabled,
     section_edit_guard,
     set_memory_provider,
 )
@@ -500,3 +504,61 @@ webhooks: {routes: {a: {skills: [x]}}}
         self.assertTrue(config_names_key("skills:\n  external_dirs:\n    - /home/u/test\n", "skills.external_dirs"))
         # A flow mapping on the section's own line still names its child.
         self.assertTrue(config_names_key("display: {skin: omh}\n", "display.skin"))
+
+
+class CommentedQuotesTests(unittest.TestCase):
+    """A quote inside a YAML comment is not a quoted mapping key.
+
+    Hermes' own config template (`cli-config.yaml.example`, which its
+    installer copies to `config.yaml`) carries comments such as
+    `# order: ["anthropic", "google"]` and `journal_mode: "wal"  # Supported
+    values: "wal", "delete"`. The syntax guard read those as quoted keys, so on
+    a Hermes installed a minute earlier setup could not record
+    `plugins.entries.omh.settings.omh_home` and uninstall could not take back
+    `plugins.enabled` or `memory.provider`.
+    """
+
+    FRESH_HERMES = (
+        "storage:\n"
+        '  journal_mode: "wal"  # Supported values: "wal", "delete"\n'
+        "provider_routing:\n"
+        '#   # order: ["anthropic", "google", "together"]\n'
+        '  client_env_passthrough: []  # e.g. ["GEM_HOME", "POETRY_HOME"]\n'
+        "memory:\n"
+        "  provider: omh\n"
+        "plugins:\n"
+        "  enabled:\n"
+        "    - omh\n"
+        "  clone_timeout_seconds: 300\n"
+        "display:\n"
+        '  #     waiting_faces: ["(⚔)", "(⛨)"]       # Faces shown while waiting\n'
+        '  # removes the tool-progress bubble, "⏳ Still working..." notices, and\n'
+    )
+
+    def test_quotes_in_comments_leave_every_section_editable(self) -> None:
+        lines = self.FRESH_HERMES.splitlines()
+        for section, key in (("plugins", "entries"), ("plugins", "enabled"), ("memory", "provider"), ("display", "")):
+            with self.subTest(section=section):
+                self.assertEqual(section_edit_guard(lines, section, key), "")
+
+    def test_setup_and_uninstall_edit_a_fresh_hermes_config(self) -> None:
+        bound = ensure_plugin_omh_home(self.FRESH_HERMES, "/home/u/.omh")
+        self.assertTrue(bound.changed, bound.message)
+        self.assertEqual(plugin_omh_home_setting(bound.text), "/home/u/.omh")
+        self.assertTrue(remove_plugin_enabled(self.FRESH_HERMES, "omh").changed)
+        self.assertTrue(remove_memory_provider(self.FRESH_HERMES, "omh").changed)
+
+    def test_a_quoted_key_or_node_property_outside_a_comment_is_still_refused(self) -> None:
+        for text in (
+            '"plugins":\n  enabled:\n    - omh\n',
+            "plugins:\n  enabled: [omh, 'x']  # a 'quote' after\n  {'a': 1}\n",
+            "plugins:\n  enabled: &p  # anchored\n    - omh\n",
+            "plugins:\n  enabled:\n    - omh\nother: {'k': v}  # trailing\n",
+        ):
+            with self.subTest(text=text):
+                self.assertNotEqual(section_edit_guard(text.splitlines(), "plugins", "enabled"), "")
+
+    def test_a_hash_inside_a_quoted_value_does_not_start_a_comment(self) -> None:
+        # `"a #b"` is one scalar: what follows it is still code and still guarded.
+        text = 'note: "a #b", "c"\nplugins:\n  enabled:\n    - omh\n'
+        self.assertNotEqual(section_edit_guard(text.splitlines(), "plugins", "enabled"), "")

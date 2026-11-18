@@ -6,6 +6,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import type { Automation, Bot } from "../lib/protocol";
 import { useStore } from "../state/store";
 import { t } from "../i18n";
+import { RunOnce } from "./RunOnce";
 import { holdImeEnter } from "../lib/ime";
 import { Avatar, PlusIcon, SourceIcon } from "../ui";
 import { Seg } from "../chat/model/Seg";
@@ -376,9 +377,6 @@ function Detail({
         </div>
       ) : (
         <div className="pg-btns au-btns">
-          <button type="button" className="pg-btn pri" onClick={onRun} data-testid="auto-run">
-            {t("auto.run")}
-          </button>
           <button type="button" className="pg-btn" onClick={onEdit} data-testid="auto-edit">
             {t("auto.edit")}
           </button>
@@ -388,6 +386,8 @@ function Detail({
           <button type="button" className="pg-btn danger" onClick={() => setConfirm(true)} data-testid="auto-delete">
             {t("auto.delete")}
           </button>
+          {/* outside the schedule, so quiet and one step more: never the button that asks to be pressed */}
+          <RunOnce label={t("auto.run")} onRun={onRun} resetKey={a.id} testId="auto-run" />
         </div>
       )}
       <p className="au-note" data-testid="auto-note">{t(w ? "watch.note" : "auto.note", { bot: botName, name: a.name })}</p>
