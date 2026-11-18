@@ -4,6 +4,13 @@ All notable changes will be documented here.
 
 ## Unreleased
 
+- **Gemini prices re-read ahead of Google's two increases.** Google's pricing page, re-read on 2026-11-18, still
+  lists Gemini 4 Argon and Gemini 4 Carbon at $2 / $10 per million tokens through 2026-11-30 and $4 / $20 from
+  2026-12-01, and Gemini 3.8 Flash and 3.6 Flash at $0.75 / $3.75 through 2026-12-31 and $1.50 / $7.50 from
+  2027-01-01, cached input moving with each. Hydrogen stays at $1.50 / $7.50. Cost estimates keep today's prices
+  until each date; the price rows now point at the current page, and Argon's row is pinned by the same list-price
+  test as Carbon's.
+
 - **GPT-6.2 Astra and GPT-6.2 Sol take every slot GPT-6 Astra and GPT-6.1 Sol held** (OpenAI released both on
   2026-11-17; owner decision, 2026-11-18). In the Hermes chains, the Codex lane table and the shared final order
   (Claude Opus 5.5, then GPT-6.2 Sol), each new id sits where its predecessor sat, at the same effort, and no chain

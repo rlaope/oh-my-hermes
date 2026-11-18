@@ -1768,35 +1768,37 @@ APPROX_PRICE_PER_MTOK: dict[str, tuple[float, float]] = {
     # The id left the shipped chains on 2026-10-28 and stays priced for
     # overrides.
     "gemini-3.1-pro": (2.0, 12.0),
-    # Google list price (ai.google.dev/gemini-api/docs/pricing, read
-    # 2026-10-28), Standard paid tier, no prompt-size tier: Gemini 4 Argon
+    # Google list price (aistudio.google.com/docs/pricing, re-read
+    # 2026-11-18), Standard paid tier, no prompt-size tier: Gemini 4 Argon
     # 2/10 through 2026-11-30, cached input 0.10 (APPROX_CACHE_READ_RATIO).
-    # From 2026-12-01 the card is 4/20 (cache 0.20, the same 0.05 ratio), so
-    # re-read the page after that date. Batch is half. GA 2026-10-13;
-    # 1,048,576-token unified context, 65,536 output per synchronous request.
+    # From 2026-12-01 the card is 4/20 (cache 0.20, the same 0.05 ratio); a
+    # scheduled job re-reads the page that day and moves this row. Batch is
+    # half. GA 2026-10-13; 1,048,576-token unified context, 65,536 output per
+    # synchronous request.
     # Thinking `low`/`medium`/`high` (default `medium`), never off.
     "gemini-4-argon": (2.0, 10.0),
-    # Google list price (aistudio.google.com/docs/pricing, read 2026-11-11),
-    # paid tier only, no prompt-size tier: Gemini 4 Carbon 2/10 through
-    # 2026-11-30, cached input 0.10 (APPROX_CACHE_READ_RATIO), implicit
-    # caching only. From 2026-12-01 the card is 4/20 (cache 0.20, the same
-    # 0.05 ratio), so re-read the page after that date. GA 2026-11-10.
+    # Google list price (aistudio.google.com/docs/pricing, re-read
+    # 2026-11-18), paid tier only, no prompt-size tier: Gemini 4 Carbon 2/10
+    # through 2026-11-30, cached input 0.10 (APPROX_CACHE_READ_RATIO),
+    # implicit caching only. From 2026-12-01 the card is 4/20 (cache 0.20,
+    # the same 0.05 ratio); the same scheduled job moves this row. GA
+    # 2026-11-10.
     "gemini-4-carbon": (2.0, 10.0),
-    # Google list price (aistudio.google.com/docs/pricing, read 2026-11-13),
-    # Standard paid tier, no prompt-size tier and no dated change on the
-    # card: Gemini 4 Hydrogen 1.50/7.50, cached input 0.075
+    # Google list price (aistudio.google.com/docs/pricing, re-read
+    # 2026-11-18), Standard paid tier, no prompt-size tier and no dated
+    # change on the card: Gemini 4 Hydrogen 1.50/7.50, cached input 0.075
     # (APPROX_CACHE_READ_RATIO), implicit caching only. The model page lists
     # a stable `gemini-4-hydrogen` with a 1,048,576-token unified context and
     # 65,536 output per synchronous request. Recognition-only, in no shipped
     # chain.
     "gemini-4-hydrogen": (1.5, 7.5),
-    # Google list price (ai.google.dev/gemini-api/docs/pricing, read
-    # 2026-10-28), paid tier, no prompt-size tier: Gemini 3.8 Flash and 3.6
+    # Google list price (aistudio.google.com/docs/pricing, re-read
+    # 2026-11-18), paid tier, no prompt-size tier: Gemini 3.8 Flash and 3.6
     # Flash 0.75/3.75, cached input 0.075 (the default tenth). Both are an
     # introductory price through 2026-12-31; from 2027-01-01 they are
-    # 1.50/7.50 (cache 0.15), so re-read the page after that date. 3.8 Flash
-    # went GA 2026-09-02 and 3.6 Flash 2026-07-21; both take 1,048,576 input
-    # and 65,536 output tokens. Thinking levels: 3.8 Flash `low`/`medium`/
+    # 1.50/7.50 (cache 0.15), and a scheduled job re-reads the page that day
+    # and moves both rows. 3.8 Flash went GA 2026-09-02 and 3.6 Flash
+    # 2026-07-21; both take 1,048,576 input and 65,536 output tokens. Thinking levels: 3.8 Flash `low`/`medium`/
     # `high` (default `medium`, `minimal` errors), 3.6 Flash `minimal` to
     # `high` (default `medium`). Gemini 3.7 Flash and 3.5 Flash were
     # deprecated on 2026-10-08 and route to 3.8 Flash and 3.6 Flash; neither
@@ -1953,15 +1955,15 @@ APPROX_CACHE_READ_RATIO: dict[str, float] = {
     # (api-docs.deepseek.com/quick_start/pricing, read 2026-10-28).
     "deepseek-v4-pro": 0.0333,
     # Gemini 4 Argon cached input 0.10 against 2.00 input through 2026-11-30,
-    # and 0.20 against 4.00 from 2026-12-01 (ai.google.dev/gemini-api/docs/
-    # pricing, read 2026-10-28).
+    # and 0.20 against 4.00 from 2026-12-01 (aistudio.google.com/docs/
+    # pricing, re-read 2026-11-18).
     "gemini-4-argon": 0.05,
     # Gemini 4 Carbon carries Argon's card: cached input 0.10 against 2.00
     # through 2026-11-30, 0.20 against 4.00 from 2026-12-01
-    # (aistudio.google.com/docs/pricing, read 2026-11-11).
+    # (aistudio.google.com/docs/pricing, re-read 2026-11-18).
     "gemini-4-carbon": 0.05,
     # Gemini 4 Hydrogen cached input 0.075 against 1.50 input
-    # (aistudio.google.com/docs/pricing, read 2026-11-13).
+    # (aistudio.google.com/docs/pricing, re-read 2026-11-18).
     "gemini-4-hydrogen": 0.05,
     # Kimi K3.1 Pro Highspeed cached input 0.20 against 4.00 input
     # (platform.kimi.ai/docs/pricing/chat, read 2026-10-24); the base model's
