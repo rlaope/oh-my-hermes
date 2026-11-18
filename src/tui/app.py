@@ -209,7 +209,7 @@ from .keys import (
 )
 from .generation_watch import GenerationWatch, watch_for
 from .launch import (
-    CLOSED_EXIT, PICK_SESSION_ENV, RELAUNCH_EXIT, RELAUNCH_FILE_ENV, RUNTIME_ENV, RUNTIME_OWN_VALUE,
+    CLOSED_EXIT, ONBOARD_ENV, ONBOARD_LANG_ENV, PICK_SESSION_ENV, RELAUNCH_EXIT, RELAUNCH_FILE_ENV, RUNTIME_ENV, RUNTIME_OWN_VALUE,
     SESSION_FILE_ENV, UPDATED_ENV, UPDATED_PLAIN, UPDATED_PLAN, request_fallback, request_relaunch,
 )
 from .agent_view import AGENT_STEER_LEFT_UNANSWERED_NOTICE, STEER_SAY, TAIL_ANSWER_SECONDS, AgentViewMixin
@@ -273,6 +273,7 @@ from .session_picker import PICK, RENAME, PickerAction, SessionPicker, SessionRo
 from .rewind_picker import KEYS as REWIND_PICKER_KEYS
 from .rewind_picker import PICK as REWIND_PICK
 from .rewind_picker import RewindPicker, rewind_rows
+from .onboarding import ONBOARDING_NAMES, onboarding_prompt
 from .shortcuts import shortcut_lines
 from .silent_lead import read_silent_lead
 from .launch_card import Facts as LaunchFacts
@@ -2353,6 +2354,7 @@ class App(ModesMixin, AgentViewMixin):
         self.context_max: float | None = None
         # What the info line shows (`mode`): accept while Hermes has approvals off, the TUI's own plan flag.
         self.approvals_off = False
+        self.onboarding_sent = False  # `omh --onboard`'s prompt went (`_send_onboarding`): it never goes again
         self.plan_mode = environ.get(UPDATED_ENV) == UPDATED_PLAN  # a TUI left in plan mode for an update's restart
         self.yolo_by_tui = False  # the approvals off shown are the TUI's own confirmed `on`, not Hermes' own
         self.hermes_approvals_said = False  # HERMES_APPROVALS_NOTICE was shown in this session
@@ -2660,7 +2662,8 @@ class App(ModesMixin, AgentViewMixin):
         self._request("config.get", {"key": "full"}, self._take_settings, self._on_settings_refused)
         self._refresh_catalog()
         pick = not resume and self.environ.get(PICK_SESSION_ENV) == "1"  # a bare `omh --resume`: pick one at once
-        if not resume and not pick:
+        onboard = self._onboarding_due(resume, pick)
+        if not resume and not pick and not onboard:
             self._ask_last_session()
             self._whats_new_on_launch()
         self._read_default()
@@ -2685,6 +2688,26 @@ class App(ModesMixin, AgentViewMixin):
             self._offer_resume_continue(result)
         if pick:
             self._sessions("")
+        if onboard:
+            self._send_onboarding(onboard)
+
+    def _onboarding_due(self, resume: str, pick: bool) -> str:
+        """The onboarding `omh --onboard` asked for (`ONBOARD_ENV`), when this startup opened a new session and none
+        was sent yet; "" otherwise. A resume, the session picker, and a startup after the first never send it."""
+        name = self.environ.get(ONBOARD_ENV, "")
+        if resume or pick or self.onboarding_sent or name not in ONBOARDING_NAMES:
+            return ""
+        return name
+
+    def _send_onboarding(self, name: str) -> None:
+        """Send the packaged onboarding prompt `name` as the session's first turn, once, as a typed prompt goes.
+
+        The one prompt the TUI sends that the person did not type: only `omh --onboard` asks for it, which only
+        `omh setup`'s last question runs. It goes through `_submit`, so its echo, busy state and queueing are a typed
+        prompt's. `onboarding_sent` is set first, so a later startup (a reconnect) never sends it again.
+        """
+        self.onboarding_sent = True
+        self._submit(onboarding_prompt(name, self.environ.get(ONBOARD_LANG_ENV, "") or "en"))
 
     def _snapshot_home(self) -> Path | None:
         """Where the launch card's skills snapshot is kept; None without an OMH home, or when `session.create` named
