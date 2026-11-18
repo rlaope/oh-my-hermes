@@ -1407,6 +1407,11 @@ export const ja: Record<Key, string> = {
   "thread.you": "あなた",
   "thread.working": "{name} が作業中 · {time}",
   "thread.empty": "まだメッセージはありません",
+  "thread.cmdList": "新しいスレッドのコマンド",
+  "thread.cmdHint": "{name}との新しいスレッド",
+  "thread.cmdFiles": "ファイルではスレッドを始められません。先に ./thread を送り、スレッドで添付してください。",
+  "thread.newRow": "新しいスレッド",
+  "thread.newWith": "{name}との新しいスレッド",
   // tasks (sidebar Tasks row and page)
   "tasks.title": "タスク",
   "tasks.openSource": "{source} のタスクを開く",
