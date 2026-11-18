@@ -516,7 +516,9 @@ class AiJobSearchContextBudgetTests(unittest.TestCase):
         # model-setup's chain sentence then names GPT-6.2 Astra and GPT-6.2 Sol in every GPT-6 Astra and GPT-6.1
         # Sol slot and lists both among the superseded generations; only model-setup moves, and the pin before
         # it was 9cecce5a...a605.
-        self.assertEqual(_digest(legacy_hashes), '58106a4e90e2e64691f782292436dbbbe49379b492945dbb25ce97eed7484542')
+        # model-setup's quality bar then gains the onboarding-mode line; only model-setup moves, and the pin
+        # before it was 58106a4e...4542.
+        self.assertEqual(_digest(legacy_hashes), 'bd1d10780046bcdab3af1ede18db6114b20099e607f7d58ad3948894b36ee878')
         legacy = _skill_context_cost_profile('full', legacy_templates, refs)
         current = _skill_context_cost_profile('full', templates, refs)
         # Main's search guidance adds 305; repro-audit's mandatory rails 1,943.
