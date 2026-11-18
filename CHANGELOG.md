@@ -4,6 +4,11 @@ All notable changes will be documented here.
 
 ## Unreleased
 
+- **omher: a message steered into a running answer reads as you typed it after the chat reopens.** Hermes keeps
+  a mid-turn steer wrapped in a frame for the model (`[OUT-OF-BAND USER MESSAGE — …]` … `[/OUT-OF-BAND USER
+  MESSAGE]`), and a reopened Bot Chat showed that frame in your bubble. The bridge now shows only the typed text,
+  keeps the "Sent to …" line under it, and drops stray frame lines from any other row.
+
 - **The Start Guide lists long-term memory among the main features.** It moves from the closing list to a fourth card
   in "What OMH does" (owner request, 2026-11-18): nothing is remembered silently, and the next session gets only the
   memories that fit its task, within a token budget. The closing list is now one row of three.
