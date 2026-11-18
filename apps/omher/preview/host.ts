@@ -236,7 +236,8 @@ const awayRows = (bot: string) =>
 type ThreadSeed = { thread: string; title: string; cwd: string; started: number; msgs: Row[]; running?: boolean };
 export const threads: Record<string, ThreadSeed[]> = { kami: [], friren: [], "juno-bot": [], pip: [] };
 let threadSeq = 0;
-/** A new thread of `bot` (the story's split, never a visitor: New thread and Start in thread are held back in guard.ts). */
+/** A new thread of `bot`: the story's split, or a visitor's New thread / `./thread` (1.0; an empty staged thread whose
+ *  first message gets the preview note, story.ts hooks.folder). Start in thread is held back in guard.ts. */
 export function addThread(bot: string, title: string, cwd: string, msgs: Row[] = []): string {
   const thread = `th-${bot}-${(threadSeq += 1)}`;
   threads[bot] = [{ thread, title, cwd, started: nowS(), msgs }, ...(threads[bot] ?? [])];
@@ -249,6 +250,8 @@ export function threadSaid(bot: string, thread: string, row: Row | null, running
   if (row && !t.msgs.some((m) => m.id === row.id)) t.msgs.push(row);
   if (running !== undefined) t.running = running;
 }
+/** Threads the visitor opened (New thread, `./thread`): the story drops them when the next loop starts. */
+export const visitorThreads: [string, string][] = [];
 export function dropThread(bot: string, thread: string): void {
   threads[bot] = (threads[bot] ?? []).filter((t) => t.thread !== thread);
 }
@@ -395,6 +398,15 @@ const OPS: Record<string, (p: Json) => unknown> = {
     const m = models[b.name] as Json;
     return { thread: t.thread, session_id: t.thread, title: t.title, cwd: t.cwd, messages: t.msgs, running: !!t.running, model: m.model, provider: m.provider, reasoning: m.reasoning };
   },
+  // 1.0: New thread under a bot (and `./thread` in its composer) opens an empty thread; nothing runs until the first
+  // message, which the story answers with the preview note
+  "thread.create": (p) => {
+    const b = need(p);
+    const t = threadOf(b.name, addThread(b.name, "", "/Users/you/code/web-app"));
+    visitorThreads.push([b.name, t.thread]);
+    const m = models[b.name] as Json;
+    return { thread: t.thread, title: "", cwd: t.cwd, started_at: t.started, running: false, needs: false, message_count: 0, preview: "", model: m.model, provider: m.provider, reasoning: m.reasoning };
+  },
   // an oh-my-hermes session: a Hermes chat of the bot in that folder (the story answers its first message)
   "folder.open": (p) => {
     const b = need(p);
@@ -421,8 +433,8 @@ for (const op of [
   "bots.rename", "bots.set_avatar", "chat.attach", "accounts.add", "accounts.set_active", "accounts.label", "accounts.remove", "accounts.discard",
   "automations.add", "automations.pause", "automations.resume", "automations.remove",
   "plugins.install", "plugins.toggle", "plugins.update", "plugins.remove", "plugins.reload", "bots.restart",
-  // a new thread or archiving one would start or change a Hermes session (guard.ts holds the buttons back)
-  "thread.create", "thread.remove",
+  // archiving a thread would change a Hermes session (guard.ts holds the buttons back)
+  "thread.remove",
 ])
   OPS[op] = () => {
     throw new OpError("preview", "This is a preview: download omher to do this for real.");

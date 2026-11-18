@@ -9,7 +9,7 @@
 # into a temporary folder next to apps/omher's node_modules (pnpm install there first). Nothing in the repo is
 # changed except site/app-preview/.
 set -eu
-OMHER_PREVIEW_APP=d3b8d66d89d691899297e986b99062a3dd3cb067   # omher v0.2.12 (#2927): threads under bots, Tasks, TERMINALS
+OMHER_PREVIEW_APP=7e50590058db5b3fd82740b117bc24609e6de42c   # omher v1.0.0 (#2971): + New thread under each bot, ./thread, waiting-message buttons
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
 SHA=${1:-$OMHER_PREVIEW_APP}
 NM=${OMHER_NODE_MODULES:-$ROOT/apps/omher/node_modules}

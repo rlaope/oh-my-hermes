@@ -3,7 +3,7 @@
 // under it, while the Plans panel shows the parts; parts finish one by one, the next starts, the open part's detail
 // grows, Slack / Discord replies and other bots' messages land, Kami posts the PR, and the loop
 // starts over (~55-65 s, a little different each time). Since 0.2.12 the sidebar moves too: Kami's threads (one
-// working, one waiting on an approval, one done) change state and preview line, the PR message opens two threads
+// working, one waiting on an approval; both finish) change state and preview line, the PR message opens two threads
 // (the bridge's split path: `thread.split`), and in TERMINALS the Shell card runs Claude
 // Code for a while (its mark and name flip to Claude Code's and back) while the Codex card prints what it does. Real clock: requestAnimationFrame plus Date.now, with a 250 ms timer when frames are held back.
 // The visitor always wins: any click, key or wheel pauses the story for 8 s, and what they set off (a reply, the
@@ -14,7 +14,7 @@ import { getSessions } from "../src/sessions/sessions";
 import { SHELL, type AgentId } from "../src/sessions/agents";
 import { threadKey } from "../src/threads/types";
 import { refreshRuns } from "../src/runs/live";
-import { addThread, away, broadcast, dropThread, history, hooks, nowS, PR_REPO, runs, threads, threadSaid } from "./host";
+import { addThread, away, broadcast, dropThread, history, hooks, nowS, PR_REPO, runs, threads, threadSaid, visitorThreads } from "./host";
 
 type Ev = { event: string; [k: string]: unknown };
 const store = () => getStore();
@@ -193,13 +193,13 @@ function snapPanel() {
 
 const WEB = "/Users/you/code/web-app";
 type RestThread = { id: string; title: string; ask: string; ago: number };
-/** The three threads every loop opens on: one working, one waiting on an approval, one done. */
-const REST: Record<"flake" | "notes" | "log", RestThread> = {
-  log: { id: "", title: "Changelog for 2.4", ask: "Add the 2.4 entries to CHANGELOG.md.", ago: 25 * 60 },
+/** The two threads every loop opens on: one working, one waiting on an approval (both finish before the PR). Two, so
+ *  the "+ New thread" row under them (1.0) sits whole above the BOTS cut in the hero-sized window. */
+const REST: Record<"flake" | "notes", RestThread> = {
   notes: { id: "", title: "Release notes 2.4", ask: "Draft the 2.4 release notes and push them to a branch.", ago: 4 * 60 },
   flake: { id: "", title: "Flaky search test", ask: "The search test fails about 1 run in 10 on CI. Find out why and fix it.", ago: 6 * 60 },
 };
-for (const k of ["log", "notes", "flake"] as const) REST[k].id = addThread("kami", REST[k].title, WEB);
+for (const k of ["notes", "flake"] as const) REST[k].id = addThread("kami", REST[k].title, WEB);
 /** Threads Kami opened during this loop (removed when the next loop starts). */
 let split: string[] = [];
 /** Open asks of threads, by request id: the thread and what happens once it is allowed. */
@@ -232,7 +232,7 @@ function allow(id: string) {
   void store().actions.respondApproval(id, "once", threadKey("kami", a.thread));
 }
 
-/** Every loop starts from the same three threads; the ones Kami opened last loop are gone (archived). */
+/** Every loop starts from the same two threads; the ones Kami or the visitor opened last loop are gone (archived). */
 function resetThreads(t0: number) {
   const s = store();
   for (const th of split) {
@@ -240,6 +240,10 @@ function resetThreads(t0: number) {
     broadcast({ event: "thread.removed", bot: "kami", thread: th });
   }
   split = [];
+  for (const [bot, th] of visitorThreads.splice(0)) {
+    dropThread(bot, th);
+    broadcast({ event: "thread.removed", bot, thread: th });
+  }
   threadAsks.clear();
   for (const r of Object.values(REST)) {
     const t = threads.kami.find((x) => x.thread === r.id);
@@ -249,11 +253,7 @@ function resetThreads(t0: number) {
     }
     s.dispatch({ type: "chat.forget", bot: threadKey("kami", r.id) });
   }
-  const { log, notes, flake } = REST;
-  said(log.id, "user", `tl-u-${loop}`, log.ask, t0 - log.ago * 1000);
-  threadStart(log.id, t0 - log.ago * 1000 + 5_000);
-  said(log.id, "assistant", `tl-a-${loop}`, "Added 6 entries under **2.4** (2 fixes, 4 changes); the release PR picks them up.", t0 - log.ago * 1000 + 120_000);
-  threadEnd(log.id, t0 - log.ago * 1000 + 121_000);
+  const { notes, flake } = REST;
   said(notes.id, "user", `tn-u-${loop}`, notes.ask, t0 - notes.ago * 1000);
   threadStart(notes.id, t0 - notes.ago * 1000 + 4_000);
   said(notes.id, "assistant", `tn-a-${loop}`, "Drafted `docs/releases/2.4.md`: delta updates, faster search, the rate limits.", t0 - 70_000);
@@ -286,7 +286,7 @@ function splitThreads(msg: string) {
 // ---- TERMINALS ---------------------------------------------------------------------------------------------------
 
 /** The terminal cards in web-app: Codex at work, and a Shell that runs Claude Code for part of each loop. Two cards,
- *  so TERMINALS and Kami's three threads both fit whole in the hero-sized window (the app's own auto split shows the
+ *  so TERMINALS and Kami's threads both fit whole in the hero-sized window (the app's own auto split shows the
  *  smaller region whole and cuts the other on a whole row: three cards left the third thread under the cut). */
 const term: Record<"codex" | "shell", string | null> = { codex: null, shell: null };
 const w = window as unknown as { __omherEmitSessionFg?: (p: { id: number; agent: string | null }) => void; __omherMockOut?: (id: number, d: string) => boolean };

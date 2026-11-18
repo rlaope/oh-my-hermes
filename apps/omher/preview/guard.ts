@@ -3,7 +3,7 @@
 //   After a click it scrolls the pane under the cursor when that pane can move that way, else the page.
 // - Things that would start real work (add a bot, attachments, changing an automation or a plugin, restarting a bot,
 //   a session in the agent's own terminal, taking a message back, installing oh-my-hermes, opening a session's folder
-//   in the file manager or the system terminal; from 0.2.12 a new or archived thread, Start in thread and the other
+//   in the file manager or the system terminal; from 0.2.12 an archived thread, Start in thread and the other
 //   real-work buttons of Tasks, a new terminal, and typing into a terminal) show one small note instead: "Download
 //   omher to …". Nothing is
 //   started anywhere. The Automations and Plugins pages themselves open on staged data (host.ts), so a visitor can
@@ -56,9 +56,11 @@ export function toast(text: string): void {
 // id, New session here and Close session act on the staged session only, and Continue a conversation in the + menu
 // lists the in-page host's staged conversations.
 // From 0.2.12: threads under a bot are opened by the bot itself (the story's split) and can be read and written to (the
-// in-page bridge answers with the preview note), but New thread (the bot row's menu) and a thread's x (archive) would
-// make or end a Hermes session. Tasks lists staged GitHub issues and PRs and opens their drawer; Start in thread, Open
-// terminal here, Open in browser (the staged items have no page), another repository (a gh call) and the sign-in /
+// in-page bridge answers with the preview note), but a thread's x (archive) would end a Hermes session. From 1.0 New
+// thread (the "+ New thread" row under each bot, the row's hover button and menu, `./thread` in the composer) opens an
+// empty staged thread like a SESSIONS draft: nothing runs until its first message, which gets the preview note.
+// Tasks lists staged GitHub issues and PRs and opens their drawer; Start in thread, Open terminal here, Open in
+// browser (the staged items have no page), another repository (a gh call) and the sign-in /
 // Linear terminals are held back. TERMINALS cards open and show their staged screens, but a new terminal (+, a
 // folder's New terminal here, a card's menu, the bottom panel's +, Ctrl+`), Restart, and typing into a terminal
 // would run a program on this computer.
@@ -141,12 +143,12 @@ const INERT: [string, Note, boolean?][] = [
     true,
   ],
   [
-    '[data-testid="row-new-thread"], [data-testid="thread-x"], [data-testid="thread-confirm-remove"]',
+    '[data-testid="thread-x"], [data-testid="thread-confirm-remove"]',
     {
-      en: "This is a preview. Download omher to start and archive threads with your own Hermes bots.",
-      ko: "미리보기 화면이에요. omher를 내려받으면 내 Hermes 봇과 스레드를 열고 보관할 수 있어요.",
-      ja: "これはプレビューです。omher をダウンロードすると、自分の Hermes ボットとスレッドを始めたりアーカイブしたりできます。",
-      zh: "这是预览。下载 omher 即可和你自己的 Hermes 机器人开启、归档线程。",
+      en: "This is a preview. Download omher to archive threads with your own Hermes bots.",
+      ko: "미리보기 화면이에요. omher를 내려받으면 내 Hermes 봇과 나눈 스레드를 보관할 수 있어요.",
+      ja: "これはプレビューです。omher をダウンロードすると、自分の Hermes ボットとのスレッドをアーカイブできます。",
+      zh: "这是预览。下载 omher 即可归档你和自己的 Hermes 机器人的线程。",
     },
     true,
   ],
