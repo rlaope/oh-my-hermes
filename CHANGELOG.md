@@ -224,6 +224,14 @@ All notable changes will be documented here.
   `plugins.enabled` or `memory.provider`. Comments are now ignored by that check; a quoted key in the YAML itself is
   still left alone.
 
+- **The OMH TUI can proofread a draft on a local LanguageTool server.** Press Alt+P in the main or clarify text
+  field and issues are underlined; Alt+P on an underlined word offers replacements, Enter applies one (normal Ctrl+_
+  undo), Skip or Esc closes, and nothing is ever sent or rewritten on its own. Automatic checks after 600 ms of quiet
+  are off by default and turn on with `OMH_PROOFREAD=1`. Only plain HTTP to a loopback address is accepted
+  (`OMH_PROOFREAD_URL`, default `http://127.0.0.1:8081/v2/check`); masked fields, commands, code, images and paste
+  chips are never sent. OMH does not install or start LanguageTool (`brew install languagetool`). Contributed by
+  @DanRioDev (#2948).
+
 ## 4.0.8 - 2026-11-15
 
 - **The OMH TUI shows a compression as one gauge row, and a prompt typed meanwhile goes on by itself.** `/compact`

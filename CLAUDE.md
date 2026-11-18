@@ -27,8 +27,8 @@ held by the invariants in `tests/test_handoff_safety_contract_enforcement.py`:
   Stdlib, HTTPS only, redirects refused; the same file's
   `local_http_endpoint` opt-in alone allows plain HTTP, and only to a
   loopback, private, or link-local `TYPESAFE_BASE_URL`.
-  `src/plugin_bundle/omh/jev_ask_client.py` is one of the two in-process
-  network clients in `src/`, both pinned by INVARIANT 2's
+  `src/plugin_bundle/omh/jev_ask_client.py` is an in-process
+  network client in `src/`, pinned by INVARIANT 2's
   `NETWORK_CLIENT_BRIDGES`. Third-party Jev plugins are never called.
 - The OMH TUI's update notice: GETs npm's latest `oh-my-hermes` version, at
   most once a day per OMH home, on a background thread, and names a newer one
@@ -36,10 +36,21 @@ held by the invariants in `tests/test_handoff_safety_contract_enforcement.py`:
   redirects off it refused, only the version string kept, nothing about the
   person sent. Off with `OMH_TUI_UPDATE_CHECK=0`, `omh theme update-check
   off`, or an explicit `omh update-check` `off` (a stored mode, not the
-  default). `src/tui/update_notice.py` is the other client in
+  default). `src/tui/update_notice.py` is another client in
   `NETWORK_CLIENT_BRIDGES`. Only `src/tui/app.py` and `src/commands/setup.py`
   may import it; the latter reads `latest` once in an explicit `omh update` on
   an installer-managed stable install to pick the release wheel to download.
+- Local proofreader (scoped exception, owner-approved 2026-11-18, automatic
+  checks opt-in): inline marks in main/clarify free-text fields, on Alt+P or,
+  only with `OMH_PROOFREAD=1` (off by default), after 600 ms quiet, with explicit
+  Alt+P correction only at the cursor, to a loopback-only local LanguageTool
+  server using stdlib `http.client` and `socket`. No proxies or redirects;
+  five-second elapsed deadline, 512 KiB reply cap, 20,000-character draft cap.
+  Masked fields send nothing; code, commands, image tokens and paste chips are
+  excluded. No automatic server installation/startup or silent rewrite/submit.
+  Accept/skip is explicit per issue; accepted edits use `Composer.replace`
+  with normal undo. Only `tui/app.py` may import `tui/proofread.py`, pinned by
+  `NoNetworkClientInSource.test_local_proofreader_import_surface_and_owner`.
 - The `show-reel` toolkit scripts `toolkit/scripts/eleven.py`, `narrate.py`
   (ElevenLabs, by spawning `curl` with the key on stdin) and
   `codex_ref_image.sh` (the user's codex CLI): package data the user runs with
