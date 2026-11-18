@@ -202,6 +202,8 @@ export const ja: Record<Key, string> = {
   "auto.lastNever": "まだ実行されていません",
   "auto.lastError": "エラー: {error}",
   "auto.run": "今すぐ実行",
+  "auto.runAsk": "スケジュールとは別に今すぐ実行しますか？",
+  "auto.runGo": "実行",
   "auto.edit": "編集",
   "auto.pause": "一時停止",
   "auto.resume": "再開",

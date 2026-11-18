@@ -202,6 +202,8 @@ export const ko: Record<Key, string> = {
   "auto.lastNever": "아직 실행된 적 없어요",
   "auto.lastError": "오류: {error}",
   "auto.run": "지금 실행",
+  "auto.runAsk": "예약과 별개로 지금 실행할까요?",
+  "auto.runGo": "실행",
   "auto.edit": "수정",
   "auto.pause": "멈춤",
   "auto.resume": "다시 켜기",

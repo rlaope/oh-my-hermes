@@ -203,6 +203,8 @@ export const en = {
   "auto.lastNever": "Hasn't run yet",
   "auto.lastError": "Error: {error}",
   "auto.run": "Run now",
+  "auto.runAsk": "Run it now, outside its schedule?",
+  "auto.runGo": "Run",
   "auto.edit": "Edit",
   "auto.pause": "Pause",
   "auto.resume": "Resume",
