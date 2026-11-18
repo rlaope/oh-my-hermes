@@ -139,7 +139,12 @@ DEFINITION = SkillDefinition(
         f"{native_tool_presence_clause(NATIVE_TODO_TOOL, code=True)} (OMH mirrors it), else `omh_todo`; an accepted plan stays in `omh_todo`. One item per "
         "layer, named for what it delivers, never a list of its nodes (the panel draws those); advance it as each "
         "layer settles.",
-        "For each call `omh_dag` returns, run its route (`omh_delegate_route`, set or fallback as given), then "
+        "Before defining nodes, read `omh_role action=list` and compare built-in and custom identity responsibilities "
+        "equally. User instructions and project ownership win. Read suitable definitions with `action=read identity=REFERENCE`; "
+        "record the choice in each node's optional `identity` (`builtin:name` or `custom:name`). Omit it when none fits. "
+        "Identity is prompt guidance; `role` remains build/baseline/verify/review and `category` describes the work.",
+        "For each call `omh_dag` returns, run its route (`omh_delegate_route`, set or fallback as given), check "
+        "that it succeeded (a refusal or exhausted chain stops dispatch), then "
         "`delegate_task` with the tasks unchanged; never more calls than it returned. A call whose route names a "
         "`backend` (Hermes' model_map or profile_routes) runs no route tool: its tasks already carry what that "
         "backend takes. Then end the turn with one status line; never wait or poll. When `delegate_task` returns "
@@ -237,7 +242,22 @@ def run_loop_reference() -> str:
    on), and a graph of 5+ nodes where at least 80% of its two or more build nodes sit on one chain
    (`serial_graph`; baseline, review and verify nodes do not count: split the build work into parallel
    lanes where it allows, or fold a small step that only follows another into the node it follows).
-2. The result carries `calls`. Each call is one category (and route: a node retried after a provider error
+2. Before defining nodes, call `omh_role action=list`: its bounded common directory includes built-in and custom
+   identities, with omissions disclosed. Compare responsibilities without an origin preference; user instructions
+   and project ownership take precedence. Read a suitable definition with `omh_role action=read identity=REFERENCE`
+   and record `identity: builtin:name` or `identity: custom:name` on its node; omit it when none fits. Keep `role`
+   (build/baseline/verify/review) and `category` independent. Define, repair and extend accept the same identity field.
+   The result carries `calls`. Each call groups category, identity and its own retry position. Run the complete
+   returned route arguments unchanged and dispatch only after success: structured identity calls use `set` with
+   `attempt` (zero-based chain position),
+   so interleaved nodes never use another node's fallback position. A configured chain supplies models; a definition
+   without a chain uses category. The child's verified direct-node binding supplies its prompt through the fenced
+   hook channel before any example markers; continuations retain it, grandchildren do not inherit it. Missing,
+   disabled or changed selections block delivery. `profile_routes` and unknown backends cannot apply a selected
+   identity; DAG external-owner export also refuses selected identities because its contract cannot carry both
+   prompt and model policy. A spent child budget cannot substitute the parent session for a selected identity.
+   Old exports and parent fallback without identity keep their existing behavior.
+   Each call is one category (and route: a node retried after a provider error
    goes in a call of its own): run its `route` with `omh_delegate_route` (`set`, or `fallback`), then one
    `delegate_task` with its `tasks` unchanged. The goal ends with `[dag:<run>/<node>]`; that marker is how
    OMH ties the child to its node. A node after a repaired one is told to read the repair's handoff files.
@@ -250,7 +270,8 @@ def run_loop_reference() -> str:
    normal one; elsewhere the normal one leads. Mark a node `local: true` when its material must not leave the
    machine (customer data, keys, private documents): it runs only on a `model_map` option whose `base_url` is
    on this machine or its private network (or provider `lmstudio`/`llamacpp`), a retry takes the next local
-   one, and with none left it is listed in `held_for_local_model`, never sent to a cloud model. Tell the
+   one. With an identity chain only matching local options in that chain qualify; no unrelated local model
+   substitutes for it. With none left it is listed in `held_for_local_model`, never sent to a cloud model. Tell the
    person; they add a local option or the node is settled blocked.
 3. `calls` never exceeds the free background slots (`slots.free`): a call past them would run blocking.
    In a one-shot session, `calls` also never carries more tasks than the remaining one-shot budget;

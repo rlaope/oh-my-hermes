@@ -299,6 +299,13 @@ def roles_reference_markdown() -> str:
         "",
         "OMH roles are responsibility descriptors, not runtime agents. They make chat responses, wrapper buttons, and status cards easier to read without claiming that a separate worker exists or ran.",
         "",
+        "For agents, `omh_role action=list` also exposes the bounded common identity directory: "
+        "shipped roles as `builtin:name` and user definitions as `custom:name`. Read either with "
+        "`action=read identity=REFERENCE`. DAG nodes select either through optional `identity`; "
+        "a configured model chain supplies routing, otherwise category does. Compare responsibilities "
+        "equally and omit identity when none fits. A DAG `role` still means build/baseline/verify/review. "
+        "The directory and selected guidance are prepared context, not observed execution.",
+        "",
         "Use roles inside the flagship `request-to-handoff` path:",
         "",
         "`plain request -> responsible role -> plan/status/handoff action -> observed evidence boundary`",

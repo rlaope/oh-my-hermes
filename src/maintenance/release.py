@@ -445,7 +445,13 @@ SKILL_INDEX_LINE_CHAR_LIMIT = 100
 # OMH mirrors each todo_list write) lost passes and were restored. Measured by
 # per_turn_context.plugin_tool_schema_chars_by_tool() against base a3068c323.
 # No headroom.
-PLUGIN_TOOL_SCHEMA_CHAR_LIMIT = 62099
+# 62099 -> 62744: unified identities add the identity reference on omh_dag
+# nodes (+122, 3549 -> 3671), `attempt` and the qualified-reference identity
+# description on omh_delegate_route (+303, 4111 -> 4414), and the common
+# directory description and `identity` argument on omh_role (+220, 921 ->
+# 1141). Measured by per_turn_context.plugin_tool_schema_chars_by_tool()
+# against base 8c70948f6. No headroom.
+PLUGIN_TOOL_SCHEMA_CHAR_LIMIT = 62744
 # PRE_LLM_CALL_CONTEXT_CHAR_LIMIT, PRE_LLM_CALL_CONTEXT_FALLBACK_CHAR_LIMIT: moved with
 # their history to src/plugin_bundle/omh/turn_budget.py; imported at the top of this file.
 # 340000 -> 349637: three capability-skill sections were added by the domain

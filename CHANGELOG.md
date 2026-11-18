@@ -189,6 +189,13 @@ All notable changes will be documented here.
   run's one-line summary open. While a run is active, such a dispatch is stopped once per turn with a pointer to
   `omh_dag` (ready, settle, repair, extend); sending it again goes through. Contributed by @yqm-307 (#2914).
 
+- **A dag-ulw node can pick a built-in role or a custom identity by name.** `omh_role action=list` now shows
+  built-in roles and custom identity profiles together, and a node sets `identity: builtin:<name>` or
+  `custom:<name>` independently of its `role` and `category`. The chosen definition supplies the child's prompt
+  guidance and its model chain; retries count per node, so two nodes no longer use up each other's place in the chain.
+  A missing, disabled or changed identity stops the dispatch instead of quietly swapping in another one.
+  Contributed by @yqm-307 (#2939).
+
 - **`omh_delegate_route set` refuses a model id pinned to a provider that does not serve it.** A `set` with
   `model=ANT-claude-opus-5-5 provider=openai-codex` used to reach `config.yaml`, and every delegated child after it
   died on its first call with HTTP 400 from the vendor. When `routing/model-providers.json` records that exact model

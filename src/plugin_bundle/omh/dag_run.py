@@ -77,6 +77,7 @@ from .awareness_delivery import _awareness_delivery_lock
 from .delegation_ledger import ledger_key
 from .hermes_delegation import HERMES_MIXTURE_CATEGORY_CHAINS
 from .iso_datetime import strict_fromisoformat
+from .omh_identities import IDENTITY_REFERENCE_RE, resolve_identity
 
 DAG_SCHEMA_VERSION: Final = "omh_dag/v1"
 DAG_RESULT_SCHEMA_VERSION: Final = "omh_dag_result/v1"
@@ -149,7 +150,7 @@ CHILD_FAILURE_STOPS: Final = frozenset({"failed", "error", "timeout", "interrupt
 HANDOFF_NOT_CHECKED: Final = "handoff not checked"
 EXTERNAL_OWNERS: Final = ("claude-code", "codex")
 NODE_FIELDS: Final = frozenset({"id", "label", "category", "prompt", "depends_on", "write_scope", "role", "owner",
-                                "local", "read_only"})
+                                "local", "read_only", "identity"})
 # What a node is for, as the parent declares it (``build`` when it names none). A ``build`` node with a write scope is a
 # producer; baseline, verify and review nodes stay native whoever builds, and only a ``verify`` node verifies the goal.
 ROLES: Final = ("build", "baseline", "verify", "review")
@@ -396,7 +397,7 @@ def _validated_node(raw: object) -> dict[str, Any]:
     if not isinstance(raw, Mapping) or set(raw) - NODE_FIELDS:
         raise DagRefusal("invalid_node",
                          "Each node takes only id, label, category, prompt, depends_on, write_scope, role, owner, "
-                         "local and read_only.")
+                         "local, read_only and identity.")
     node_id = valid_id(raw.get("id"), "invalid_node_id", "Each node needs a short lowercase id (a-z, 0-9, -).")
     label = _plain(raw.get("label"), MAX_LABEL_CHARS, "invalid_label", f"Node {node_id} needs a short label.")
     # Either lane's reader also takes a marker that opens a goal (one handed out before an update), so a label holding
@@ -423,6 +424,12 @@ def _validated_node(raw: object) -> dict[str, Any]:
     role = raw.get("role", DEFAULT_ROLE)
     if role not in ROLES:
         raise DagRefusal("invalid_role", f"Node {node_id}: role is one of {', '.join(ROLES)}.")
+    identity = raw.get("identity")
+    if "identity" in raw:
+        if (not isinstance(identity, str) or ":" not in identity
+                or not IDENTITY_REFERENCE_RE.fullmatch(identity.strip())):
+            raise DagRefusal("invalid_identity",
+                             f"Node {node_id}: identity is a qualified builtin:<name> or custom:<name> reference.")
     validated = {
         "id": node_id,
         "label": label,
@@ -437,6 +444,8 @@ def _validated_node(raw: object) -> dict[str, Any]:
         "found_by": "",
         "attempts": [],
     }
+    if "identity" in raw:
+        validated["identity"] = identity.strip()
     guess = guessed_role(validated) if "role" not in raw else DEFAULT_ROLE
     if guess == DEFAULT_ROLE and "role" not in raw and _DOUBLE_CHECK.search(label.casefold()):
         guess = "verify"
@@ -1428,8 +1437,8 @@ def resume_handle_for(attempts: Sequence[Mapping[str, Any]]) -> str:
     return ""
 
 
-def hand_out(node: dict[str, Any], derived_state: str, now: float, *, lost: bool = False,
-             token: bool = False) -> dict[str, Any]:
+def hand_out(node: dict[str, Any], derived_state: str, now: float, *, lost: bool = False, token: bool = False,
+             omh_home: Path | None = None) -> dict[str, Any]:
     """Write-ahead: the attempt exists before its goal leaves this tool, so a marker always finds it.
 
     ``lost``: the attempt is offered again because a restart ended its child, which the attempt counts.
@@ -1437,6 +1446,13 @@ def hand_out(node: dict[str, Any], derived_state: str, now: float, *, lost: bool
     for another attempt, earlier or later, counts for it. Offering the same attempt again keeps its token.
     """
     attempts = node.setdefault("attempts", [])
+    selected = resolve_identity(str(node["identity"]), omh_home) if node.get("identity") else None
+    if node.get("identity"):
+        if selected is None:
+            raise DagRefusal("identity_unavailable", "The selected identity is missing, disabled or ambiguous.")
+        digest = selected["fingerprint"]["digest"]
+        if any(item.get("identity_digest") and item["identity_digest"] != digest for item in attempts):
+            raise DagRefusal("identity_config_changed", "The selected identity changed since this node was prepared.")
     if derived_state == "handed_out" and attempts:
         attempts[-1].setdefault("opened_at", attempts[-1].get("handed_out_at"))
         attempts[-1]["handed_out_at"] = now
@@ -1452,6 +1468,8 @@ def hand_out(node: dict[str, Any], derived_state: str, now: float, *, lost: bool
         attempt["resume_handle"] = handle
     if token:
         attempt["token"] = secrets.token_hex(ATTEMPT_TOKEN_BYTES)
+    if selected is not None:
+        attempt.update(identity=selected["reference"], identity_digest=selected["fingerprint"]["digest"])
     attempts.append(attempt)
     return attempt
 
@@ -1628,14 +1646,20 @@ def local_blocked(record: Mapping[str, Any], offered: Iterable[str], backend: Ma
         node = nodes[node_id]
         if not node.get("local"):
             continue
-        names = list(local_options.get(str(node["category"])) or []) if readable else []
+        identity = str(node.get("identity") or "")
+        has_chain = bool(((backend or {}).get("identity_chains") or {}).get(identity))
+        key = identity if has_chain else str(node["category"])
+        identity_local = (backend or {}).get("identity_local_options") or {}
+        source = identity_local if has_chain else local_options
+        names = list(source.get(key) or []) if readable else []
         if retry_count(node) >= len(names):
             blocked.append(node_id)
     return blocked
 
 
 def _call_route(
-    category: str, fallback: bool, retries: int, backend: Mapping[str, Any] | None, local: bool = False
+    category: str, fallback: bool, retries: int, backend: Mapping[str, Any] | None, local: bool = False,
+    identity: str = ""
 ) -> tuple[dict[str, Any], str]:
     """The call's ``route`` and the model_map option its tasks carry (``""`` for none).
 
@@ -1649,14 +1673,22 @@ def _call_route(
     """
     name = str((backend or {}).get("backend") or "default")
     if name == "default":
+        if identity:
+            return {"tool": "omh_delegate_route", "action": "set", "category": category,
+                    "identity": identity, "attempt": retries}, ""
         return {"tool": "omh_delegate_route", "action": "fallback" if fallback else "set", "category": category}, ""
     route: dict[str, Any] = {"backend": name, "category": category}
+    if identity:
+        route.update(identity=identity, attempt=retries)
     if local:
         route["local"] = True
     if name != "model_map" or (backend or {}).get("status") != "read":
         route["status"] = "not_applied"
         return route, ""
-    names = list(((backend or {}).get("local_options" if local else "options") or {}).get(category) or [])
+    has_chain = bool(((backend or {}).get("identity_chains") or {}).get(identity))
+    option_key = ("identity_local_options" if local else "identity_options") if has_chain else (
+        "local_options" if local else "options")
+    names = list(((backend or {}).get(option_key) or {}).get(identity if has_chain else category) or [])
     if retries < len(names):
         route.update(status="option_selected", option=names[retries])
         return route, names[retries]
@@ -1686,21 +1718,31 @@ def calls_for(
     by_option = str((backend or {}).get("backend") or "") == "model_map"
     # A local node no local model can take is never handed out, whatever the caller skips.
     skipped |= set(local_blocked(record, offerable(record, derived, now, limits=limits), backend))
-    groups: dict[tuple[str, bool, int, bool], list[str]] = {}
+    groups: dict[tuple[str, bool, int, bool, str], list[str]] = {}
     for node_id in offerable(record, derived, now, limits=limits):
         if node_id in skipped:
             continue
         node = nodes[node_id]
         attempts = node.get("attempts") or []
         fallback = bool(attempts) and attempts[-1].get("outcome") == "retry"
-        retries = retry_count(node) if by_option else 0
-        groups.setdefault((str(node["category"]), fallback, retries, bool(node.get("local"))), []).append(node_id)
+        identity = str(node.get("identity") or "")
+        selected = resolve_identity(identity, omh_home) if identity else None
+        if identity and selected is None:
+            raise DagRefusal("identity_unavailable", "The selected identity is missing, disabled or ambiguous.")
+        retries = retry_count(node) if by_option or identity else 0
+        if (selected and selected["model_chain"] and not by_option
+                and retries >= len(selected["model_chain"])):
+            raise DagRefusal("identity_chain_exhausted", "This node has tried every entry in its identity chain.")
+        groups.setdefault((str(node["category"]), fallback, retries, bool(node.get("local")), identity),
+                          []).append(node_id)
     calls: list[dict[str, Any]] = []
     held: list[str] = []
     size = max(1, per_call)
     left = None if task_budget is None else max(0, task_budget)
-    for (category, fallback, retries, local), members in groups.items():
-        route, option = _call_route(category, fallback, retries, backend, local)
+    for (category, fallback, retries, local, identity), members in groups.items():
+        route, option = _call_route(category, fallback, retries, backend, local, identity)
+        if identity and "backend" in route and route.get("status") != "option_selected":
+            raise DagRefusal("identity_route_unavailable", "The backend cannot apply the selected identity's route.")
         for start in range(0, len(members), size):
             chunk = members[start:start + size]
             if left is not None:
@@ -1715,13 +1757,17 @@ def calls_for(
                 left -= len(chunk)
             for node_id in chunk:
                 attempt = hand_out(nodes[node_id], derived[node_id]["state"], now,
-                                   lost=bool(derived[node_id].get("lost")), token=wants_token(record, nodes[node_id]))
+                                   lost=bool(derived[node_id].get("lost")), token=wants_token(record, nodes[node_id]),
+                                   omh_home=omh_home)
                 if "backend" in route:
                     attempt.update(backend=route["backend"], option=option)
             tasks = [task_for(record, nodes[node_id], omh_home, derived) for node_id in chunk]
             if option:
                 tasks = [{**task, "option": option} for task in tasks]
-            calls.append({"category": category, "route": dict(route), "nodes": chunk, "tasks": tasks})
+            call = {"category": category, "route": dict(route), "nodes": chunk, "tasks": tasks}
+            if identity:
+                call["identity"] = identity
+            calls.append(call)
     return calls, held
 
 
@@ -2061,6 +2107,8 @@ def node_rows(record: Mapping[str, Any], derived: Mapping[str, Mapping[str, Any]
             row["origin"] = node["origin"]
         if node.get("found_by"):
             row["found_by"] = node["found_by"]
+        if node.get("identity"):
+            row["identity"] = node["identity"]
         if attempts and attempts[-1].get("reason"):
             row["reason"] = attempts[-1]["reason"]
         if info["state"] == "accepted" and handoff_unchecked(node):

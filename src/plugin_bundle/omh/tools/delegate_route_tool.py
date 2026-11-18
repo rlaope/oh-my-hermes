@@ -51,7 +51,6 @@ from ..delegation_backend_mode import (
     option_for,
     read_backend_mode,
 )
-from ..omh_identities import read_identity_chains
 from ..route_endpoint_guard import managed_config_layer, route_endpoint_refusal
 from ..provider_detection import (
     config_provider_base_url_hosts,
@@ -61,6 +60,7 @@ from ..provider_detection import (
 )
 from ..host_observation import OBSERVATION_SCHEMA, attach_public_observation, host_session_id, observe_plugin_tool_call
 from ..kanban_board_reader import conversation_session_ids
+from .. import omh_identities as _omh_identities
 from ..orchestration_say import route_say, with_say
 
 _EVIDENCE_BOUNDARY = (
@@ -87,6 +87,7 @@ def _backend_route(
     identity: str = "",
     identity_digest: str = "",
     explicit_override: bool = False,
+    attempt: int = 0,
 ) -> dict[str, Any]:
     """`set`/`fallback`'s answer when `delegation.backend` is not `default`.
 
@@ -184,12 +185,14 @@ def _backend_route(
                 "`option` (the backend's default) or ask the user to add one; OMH never edits options."
             ),
         }
+    if attempt >= len(carried):
+        return {**base, "status": "options_exhausted", "option_chain": carried}
     return {
         **base,
         "status": "option_selected",
-        "option": carried[0]["option"],
-        "alias": carried[0]["alias"],
-        "reasoning_effort": carried[0]["reasoning_effort"],
+        "option": carried[attempt]["option"],
+        "alias": carried[attempt]["alias"],
+        "reasoning_effort": carried[attempt]["reasoning_effort"],
         "option_chain": carried,
     }
 
@@ -680,9 +683,14 @@ OMH_DELEGATE_ROUTE_SCHEMA = {
             "identity": {
                 "type": "string",
                 "description": (
-                    "Identity profile name from routing/identities.json; an unknown name "
-                    "answers choice_required."
+                    "Identity reference from omh_role: builtin:name or custom:name. Legacy unambiguous names work. "
+                    "A configured chain wins over category; without one category supplies the route."
                 ),
+            },
+            "attempt": {
+                "type": "integer", "minimum": 0,
+                "description": "action=set only: zero-based position in this node's chain (model_map option chain). "
+                               "DAG calls supply their own provider-error retry count; omit for the head.",
             },
             "hermes_home": {
                 "type": "string",
@@ -743,20 +751,23 @@ def omh_delegate_route_handler(args: dict[str, Any], **kwargs) -> str:
     # named no identity never consults it. The digest rides alongside so a
     # config edited between write and continuation shows up as a changed
     # basis, not silently as the same identity.
-    identity_doc = read_identity_chains(omh_home)
-    raw_identity_chains = identity_doc.get("identities")
-    identity_chains: dict[str, tuple[tuple[str, str], ...]] = {
-        str(name): tuple(chain)
-        for name, chain in (raw_identity_chains.items() if isinstance(raw_identity_chains, Mapping) else ())
-        if isinstance(chain, (list, tuple))
-    }
+    definitions = _omh_identities.identity_definitions(omh_home)
+    # Preserve the legacy status projection; selection and fallback use the common resolver.
+    identity_doc = _omh_identities.read_identity_chains(omh_home)
+    identity_chains = identity_doc["identities"]
     fingerprint = identity_doc.get("fingerprint")
-    identity_digest = (
-        str(fingerprint.get("digest", "") or "") if isinstance(fingerprint, Mapping) else ""
-    )
+    identity_digest = str(fingerprint.get("digest", "") or "") if isinstance(fingerprint, Mapping) else ""
     requested_identity = str(args.get("identity", "") or "").strip()
-    identity_chain = identity_chains.get(requested_identity, ())
-    if action in ("set", "fallback") and requested_identity and not identity_chain:
+    definition = _omh_identities.resolve_identity(requested_identity, omh_home) if requested_identity else None
+    identity_chain = tuple(definition["model_chain"]) if definition else ()
+    if definition:
+        identity_digest = str(definition["fingerprint"]["digest"])
+    chain_index = args.get("attempt", 0)
+    if not isinstance(chain_index, int) or isinstance(chain_index, bool) or chain_index < 0:
+        return json.dumps({"status": "error", "error": "attempt must be a non-negative chain position"})
+    if "attempt" in args and action != "set":
+        return json.dumps({"status": "error", "error": "attempt applies only to action=set"})
+    if action in ("set", "fallback") and requested_identity and definition is None:
         # Typed choice_required, never a silent fallback to a different
         # identity or the category table: the name the caller passed is not
         # in the validated document, so the lane is for the caller to
@@ -766,7 +777,7 @@ def omh_delegate_route_handler(args: dict[str, Any], **kwargs) -> str:
             "status": "choice_required",
             "reason": "unknown_identity",
             "identity": requested_identity,
-            "available_identities": sorted(identity_chains),
+            "available_identities": sorted({*definitions, *identity_chains}),
             "delegation_backend": mode["backend"],
             "evidence_boundary": _BACKEND_EVIDENCE_BOUNDARY,
         }
@@ -817,9 +828,10 @@ def omh_delegate_route_handler(args: dict[str, Any], **kwargs) -> str:
             effort=effort,
             after_option=after_option,
             provider_routes=provider_routes,
-            identity=requested_identity if identity_chain else "",
-            identity_digest=identity_digest if identity_chain else "",
+            identity=requested_identity,
+            identity_digest=identity_digest,
             explicit_override=explicit_override,
+            attempt=chain_index,
         )
         return json.dumps(attach_public_observation(result, observation), ensure_ascii=False, sort_keys=True)
     if action == "status":
@@ -983,64 +995,34 @@ def omh_delegate_route_handler(args: dict[str, Any], **kwargs) -> str:
         # category does: a `set` that named both an identity and a category
         # records both, and recovering the category first would send the
         # fallback looking for the identity's model in the category chain.
-        identity_lane = not category and bool(position_identity or requested_identity)
+        lane_definition = _omh_identities.resolve_identity(requested_identity or position_identity, omh_home)
+        identity_selected = bool(requested_identity or position_identity)
+        if identity_selected and lane_definition is None:
+            return json.dumps({"status": "choice_required", "reason": "identity_unavailable",
+                               "identity": requested_identity or position_identity})
+        if (lane_definition and position_identity_digest and requested_identity in ("", position_identity)
+                and lane_definition["fingerprint"]["digest"] != position_identity_digest):
+            return json.dumps({"status": "choice_required", "reason": "identity_config_changed",
+                               "identity": position_identity, "frozen_digest": position_identity_digest,
+                               "current_digest": lane_definition["fingerprint"]["digest"]})
+        if not requested_identity and lane_definition:
+            identity_digest = lane_definition["fingerprint"]["digest"]
+        identity_lane = bool(lane_definition and lane_definition["model_chain"])
         recorded = not category and not identity_lane and position_category in chains
         if recorded:
             category = position_category
         # An identity position continues inside the identity's own chain --
         # never inside a mixture category that happens to list the model.
-        # The continuation key is the newest provenance record's identity --
-        # or an `identity` the caller passed explicitly, which is an explicit
-        # re-resolution and skips the prepare-vs-read digest check -- and the
-        # recorded digest must still match the file for the recorded path.
+        # A different explicit identity re-resolves; continuing the same selection checks its digest above.
         matches: list[tuple[str, int]] = []
         index = -1
-        recorded_identity = ""
-        recorded_digest = ""
+        recorded_identity = requested_identity or position_identity
         chain: tuple[tuple[str, str], ...] = ()
-        explicit_identity = bool(requested_identity) and requested_identity != position_identity
         identity_fallback = identity_lane
         if identity_fallback:
             # The recorded category stays the lane label it was on `set`.
             category = position_category if position_category in chains else ""
-            recorded_identity = requested_identity or position_identity
-            # An explicitly re-passed identity resolves fresh against the file
-            # (the caller saw it), so only a position-carried identity checks
-            # that the document has not moved since the route was written.
-            recorded_digest = "" if explicit_identity else position_identity_digest
-            identity_chain = tuple(identity_chains.get(recorded_identity, ()))
-            if not identity_chain:
-                payload = {
-                    "status": "choice_required",
-                    "reason": "identity_unavailable",
-                    "error": (
-                        f"this conversation routed under identity {recorded_identity!r}, "
-                        "which is no longer in the validated identity document"
-                    ),
-                    "identity": recorded_identity,
-                    "available_identities": sorted(identity_chains),
-                    "position_source": position_source,
-                    "from": current_model,
-                }
-                return json.dumps(attach_public_observation(payload, observation), ensure_ascii=False, sort_keys=True)
-            if recorded_digest and recorded_digest != identity_digest:
-                # The document moved between the write that produced this
-                # position and this read: continuing the chain now would
-                # advance entries that may not be the ones the route meant.
-                payload = {
-                    "status": "choice_required",
-                    "reason": "identity_config_changed",
-                    "error": (
-                        f"identity {recorded_identity!r} changed since this conversation "
-                        "routed under it; set the route again to re-resolve it"
-                    ),
-                    "identity": recorded_identity,
-                    "frozen_digest": recorded_digest,
-                    "current_digest": identity_digest,
-                    "position_source": position_source,
-                    "from": current_model,
-                }
-                return json.dumps(attach_public_observation(payload, observation), ensure_ascii=False, sort_keys=True)
+            identity_chain = tuple(lane_definition["model_chain"]) if lane_definition else ()
             matched = [index for index, (alias, _) in enumerate(identity_chain) if alias == current_alias]
             if len(matched) != 1:
                 payload = {
@@ -1140,14 +1122,14 @@ def omh_delegate_route_handler(args: dict[str, Any], **kwargs) -> str:
                         "written_at": time.time(),
                         **(
                             {"identity": recorded_identity, "identity_digest": identity_digest}
-                            if identity_fallback
+                            if identity_selected
                             else {}
                         ),
                     },
                     omh_home,
                 )
             result["category"] = category
-            if identity_fallback:
+            if identity_selected:
                 result["identity"] = recorded_identity
             result["from"] = current_model
             result["position_source"] = position_source
@@ -1199,7 +1181,7 @@ def omh_delegate_route_handler(args: dict[str, Any], **kwargs) -> str:
             if fallback_pinned is not None:
                 result["provider_pinned"] = fallback_pinned
             result["category"] = category
-            if identity_fallback:
+            if identity_selected:
                 result["identity"] = recorded_identity
             result["from"] = current_model
             result["position_source"] = position_source
@@ -1216,7 +1198,7 @@ def omh_delegate_route_handler(args: dict[str, Any], **kwargs) -> str:
                     "written_at": time.time(),
                     **(
                         {"identity": recorded_identity, "identity_digest": identity_digest}
-                        if identity_fallback
+                        if identity_selected
                         else {}
                     ),
                 },
@@ -1267,17 +1249,20 @@ def omh_delegate_route_handler(args: dict[str, Any], **kwargs) -> str:
         payload = {"status": "error", "error": "set needs a category, an identity, or an explicit model"}
         return json.dumps(attach_public_observation(payload, observation), ensure_ascii=False, sort_keys=True)
     alias = model
+    selected_chain = identity_chain or chains.get(category, ())
+    if not model and chain_index >= len(selected_chain):
+        return json.dumps({"status": "chain_exhausted", "identity": requested_identity, "category": category})
     if identity_chain and not model:
         # The identity's own chain supplies the lane; an explicit category on
         # the same call stays the lane label but never supplies the chain.
-        alias, head_effort = identity_chain[0]
+        alias, head_effort = identity_chain[chain_index]
         if not effort:
             effort = head_effort
     elif category and not model:
-        alias, head_effort = chains[category][0]
+        alias, head_effort = chains[category][chain_index]
         if not effort:
             effort = head_effort
-    identity_routed = bool(identity_chain) and not model
+    identity_routed = bool(definition) and not model
     always_thinking = _always_thinking_claude(alias)
     if always_thinking and effort.casefold() in _NO_THINKING_EFFORTS:
         payload = {
@@ -1416,10 +1401,10 @@ def omh_delegate_route_handler(args: dict[str, Any], **kwargs) -> str:
         )
         # The identity's own chain supplies the fallback candidates when the
         # identity supplied the head; a category keeps its own chain either way.
-        fallback_chain = identity_chain if identity_routed else chains.get(category, ())
+        fallback_chain = identity_chain or chains.get(category, ())
         result["fallback_candidates"] = [
             _chain_entry(chain_alias, chain_effort, provider_routes)
-            for chain_alias, chain_effort in fallback_chain[1:]
+            for chain_alias, chain_effort in fallback_chain[chain_index + 1:]
         ]
     result["evidence_boundary"] = _EVIDENCE_BOUNDARY
     return json.dumps(attach_public_observation(with_say(result, route_say(result)), observation), ensure_ascii=False, sort_keys=True)
