@@ -85,6 +85,8 @@ export interface Msg {
   reply_to?: ReplyRef | null;
   /** assistant rows: the answer to an automation's delivered result (its inbound row is not sent). */
   watch?: WatchTag;
+  /** user rows: steered into a running turn (Hermes' mid-turn steer), shown with its "Sent to …" line. */
+  steered?: boolean;
 }
 
 /** The automation whose delivered result a Bot Chat answer replies to: its name and when it came in (unix s). */
