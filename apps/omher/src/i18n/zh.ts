@@ -1406,6 +1406,11 @@ export const zh: Record<Key, string> = {
   "thread.you": "你",
   "thread.working": "{name} 正在处理 · {time}",
   "thread.empty": "还没有消息",
+  "thread.cmdList": "新线程命令",
+  "thread.cmdHint": "与 {name} 的新线程",
+  "thread.cmdFiles": "文件不能开始一个线程。请先发送 ./thread，再在线程里附加文件。",
+  "thread.newRow": "新线程",
+  "thread.newWith": "与 {name} 的新线程",
   // tasks (sidebar Tasks row and page)
   "tasks.title": "任务",
   "tasks.openSource": "打开 {source} 任务",
