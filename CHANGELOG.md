@@ -4,6 +4,13 @@ All notable changes will be documented here.
 
 ## Unreleased
 
+- **Four OMH tool descriptions are shorter, and the model still picks the same calls.** `omh_todo`, `omh_loop`,
+  `omh_document_plan` and `omh_delegate_route` say the same rules in fewer words, so each costs fewer tokens the
+  first time Hermes loads it (24,943 -> 23,718 characters together; the registered OMH schemas 63,324 -> 62,099).
+  An A/B of the first tool call on 11 scenarios (Claude Haiku and Sonnet, 3 runs per arm) passed 33/33 on both the
+  old and the new text. A first draft that also cut "a route set in an earlier turn runs on the previous model" and
+  "OMH mirrors each todo_list write" lost passes and was restored.
+
 - **omher stays light with many terminal sessions open.** A hidden terminal's output now re-renders only its own
   TERMINALS row, never the list. A terminal that is not on the page draws nothing, not even the selection redraw that
   xterm's own pause misses. One hidden and quiet for two minutes gives its scrollback back as a snapshot and is made
