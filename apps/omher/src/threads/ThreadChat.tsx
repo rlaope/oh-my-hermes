@@ -50,6 +50,8 @@ export function ThreadChat({ bot, thread }: { bot: Bot; thread: string }) {
           offlineText={away ? t("chat.connecting") : undefined}
           onSend={(text) => void s.threadSend(bot.name, thread, text)}
           onStop={() => void s.threadInterrupt(bot.name, thread)}
+          // `./thread` here opens a sibling thread under the same bot, as it does in the bot's main chat
+          onNewThread={bot.host || bot.status === "offline" ? undefined : (first) => void s.newThreadWith(bot.name, first)}
         />
       </div>
     </>
