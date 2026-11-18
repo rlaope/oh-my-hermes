@@ -101,6 +101,10 @@ class ParityTests(unittest.TestCase):
         "grok-code-fast": ("xai", "openrouter"),
         # Retired 2026-10-01 when GPT-6.1 Sol took every GPT-6 Sol slot.
         "gpt-6-sol": ("openai-codex", "openai"),
+        # Retired 2026-11-18 when GPT-6.2 Astra and GPT-6.2 Sol took every slot
+        # of GPT-6 Astra and GPT-6.1 Sol.
+        "gpt-6-astra": ("openai-codex", "openai"),
+        "gpt-6.1-sol": ("openai-codex", "openai"),
         # Retired 2026-10-13: Claude Haiku 4.5 behind Haiku 5.5, and the 2025
         # Qwen3-Coder with no Qwen successor.
         "claude-haiku-4-5": ("ccapi", "anthropic", "openrouter"),
@@ -311,7 +315,7 @@ class ChainSurfaceConsistencyTests(unittest.TestCase):
             # The one GPT entry is served by the confirmed openai-codex
             # provider and leads; the Claude and Kimi entries follow as
             # unserved in shipped order (Opus 5.5 before Fable 5.2).
-            self.assertEqual(architect["chain"][0]["model"], "gpt-6-astra")
+            self.assertEqual(architect["chain"][0]["model"], "gpt-6.2-astra")
             self.assertEqual(architect["chain"][1]["model"], "claude-opus-5-5")
             self.assertEqual(architect["chain"][2]["model"], "claude-fable-5-2")
             self.assertTrue(architect["chain"][0]["served"])
@@ -321,7 +325,7 @@ class ChainSurfaceConsistencyTests(unittest.TestCase):
             with redirect_stdout(out):
                 _print_state(state)
             self.assertIn(
-                "architect: gpt-6-astra:xhigh, claude-opus-5-5:xhigh, claude-fable-5-2:xhigh, kimi-k3.1-pro:xhigh",
+                "architect: gpt-6.2-astra:xhigh, claude-opus-5-5:xhigh, claude-fable-5-2:xhigh, kimi-k3.1-pro:xhigh",
                 out.getvalue(),
             )
             self.assertIn("(reordered by this machine's providers)", out.getvalue())
@@ -343,14 +347,14 @@ class ChainSurfaceConsistencyTests(unittest.TestCase):
                 omh_delegate_route_handler({"action": "set", "category": "architect", **common}, **host)
             )
             self.assertEqual(routed["status"], "routed", routed)
-            self.assertEqual(routed["applied"]["alias"], "gpt-6-astra")
+            self.assertEqual(routed["applied"]["alias"], "gpt-6.2-astra")
             for expected in ("claude-opus-5-5", "claude-fable-5-2", "kimi-k3.1-pro"):
                 fallback = json.loads(
                     omh_delegate_route_handler({"action": "fallback", "category": "architect", **common}, **host)
                 )
                 self.assertEqual(fallback["applied"]["alias"], expected)
             status = json.loads(omh_delegate_route_handler({"action": "status", **common}))
-            self.assertEqual(status["categories"]["architect"][0]["alias"], "gpt-6-astra")
+            self.assertEqual(status["categories"]["architect"][0]["alias"], "gpt-6.2-astra")
 
 
 class ConfigReaderTests(unittest.TestCase):

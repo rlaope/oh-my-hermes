@@ -85,7 +85,7 @@ QUALIFICATION_HOLDS: Final[dict[str, dict[str, object]]] = {
 # Re-reviewed 2026-10-13 against the owner's table of that date: every slot
 # below is that decision, editorial except the `unspecified-high` GPT head,
 # which rests on the 2026-09-05 live-model-tools measurement of its
-# predecessor (gpt-5.6-sol); GPT-6.1 Sol itself is unmeasured there.
+# predecessor (gpt-5.6-sol); GPT-6.1 Sol and GPT-6.2 Sol are unmeasured there.
 # The six routing-recipe categories (google-search, x-search, review, swarm,
 # forensics, synthesize) were added on 2026-10-28 from the owner's published
 # recipe; every slot they add is editorial and unmeasured.
@@ -94,7 +94,10 @@ QUALIFICATION_HOLDS: Final[dict[str, dict[str, object]]] = {
 # took every Fable 5.1 slot at the same effort on 2026-11-10 (owner
 # decision), editorial and unmeasured. The same day Fable 5.2 moved ahead of
 # Opus 5.5 to head visual-engineering (owner decision); the slot set did not
-# change, editorial and unmeasured.
+# change, editorial and unmeasured. GPT-6.2 Astra took every GPT-6 Astra slot
+# and GPT-6.2 Sol every GPT-6.1 Sol slot, each at the same effort, on
+# 2026-11-18 (owner decision), editorial and unmeasured; the `unspecified-high`
+# GPT head's measurement is still of gpt-5.6-sol.
 RECOMMENDATION_DECISIONS: Final[dict[str, tuple[str, ...]]] = {
     "claude-fable-5-2": (
         "categories:architect", "categories:artistry", "categories:capable",
@@ -116,11 +119,11 @@ RECOMMENDATION_DECISIONS: Final[dict[str, tuple[str, ...]]] = {
     ),
     "glm-5.3": ("categories:unspecified-low",),
     "glm-5.3-flash": ("categories:quick", "categories:swarm"),
-    "gpt-6-astra": (
+    "gpt-6-luna": ("categories:quick", "categories:simple-work", "categories:swarm"),
+    "gpt-6.2-astra": (
         "categories:architect", "categories:forensics", "categories:ultrabrain", "role_suggestions:main",
     ),
-    "gpt-6-luna": ("categories:quick", "categories:simple-work", "categories:swarm"),
-    "gpt-6.1-sol": (
+    "gpt-6.2-sol": (
         "categories:capable", "categories:deep", "categories:deep-work", "categories:google-search",
         "categories:review", "categories:synthesize", "categories:unspecified-high",
         "categories:unspecified-low", "last_resort:any", "role_suggestions:main",
@@ -172,6 +175,10 @@ RETIREMENT_DECISIONS: Final[dict[str, dict[str, object]]] = {
         # Anthropic released Claude Fable 5.2 on 2026-11-09; it took every
         # Fable 5.1 slot, the ultrabrain head included.
         ("claude-fable-5-1", "claude-fable-5-2", "all_shipped_chains", "2026-11-10"),
+        # OpenAI released GPT-6.2 Astra and GPT-6.2 Sol on 2026-11-17; each
+        # took every slot of the line's previous generation.
+        ("gpt-6-astra", "gpt-6.2-astra", "all_shipped_chains", "2026-11-18"),
+        ("gpt-6.1-sol", "gpt-6.2-sol", "all_shipped_chains", "2026-11-18"),
     )
 } | {
     # Qwen3-Coder (2025) left its only slot on 2026-10-13 and no Qwen-line

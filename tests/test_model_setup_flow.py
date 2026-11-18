@@ -381,7 +381,7 @@ class ModelSetupFlowTests(unittest.TestCase):
                 "status": "observed_before",
             }
             for provider, model, source in (
-                ("openai", "gpt-6.1-sol", "codex"),
+                ("openai", "gpt-6.2-sol", "codex"),
                 ("openai", "gpt-5.6-terra", "codex"),
                 ("apitopia", "kimi-k3", RUNTIME_CONFIG_SOURCE),
                 ("anthropic", "claude-fable-5", "claude-code"),

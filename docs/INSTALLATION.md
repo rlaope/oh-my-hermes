@@ -2646,9 +2646,9 @@ Agent/maintainer preview example:
 
 ```sh
 omh setup --model-setup \
-  --confirm-model openai-codex/gpt-6.1-sol \
+  --confirm-model openai-codex/gpt-6.2-sol \
   --confirm-model google/gemini-4-argon \
-  --model-alias main=openai-codex/gpt-6.1-sol \
+  --model-alias main=openai-codex/gpt-6.2-sol \
   --no-interactive --json
 ```
 
@@ -2666,7 +2666,7 @@ and ordered recommendation chains skip missing entries in favor of a confirmed
 compatible alternative, so a model that heads no chain stays a valid
 user-selected alternative. If no candidate is
 confirmed for the selected category, role-slot, and domain chains, the resolver
-consults one shared final order: Claude Opus 5.5, then GPT-6.1 Sol. These names
+consults one shared final order: Claude Opus 5.5, then GPT-6.2 Sol. These names
 remain editorial candidates filtered through caller-confirmed metadata; they
 do not prove subscription, entitlement, authentication, or runtime readiness.
 If no candidate is confirmed anywhere, the resolver records `owner_default`;
@@ -2681,27 +2681,27 @@ The shipped catalog is editorial policy, not benchmark output:
 <!-- omh:model-chain-table:begin (generated: uv run python -m omh.cli docs chain-table; source: src/coding/model_recommendations.py) -->
 | Surface | What it is for | Shipped editable order |
 | --- | --- | --- |
-| Hermes `main` suggestion | The session's own model | GPT-6.1 Sol (`high`), Claude Opus 5.5, Claude Fable 5.2, GPT-6 Astra (`xhigh`), Kimi K3.1 Pro |
-| `ultrabrain` | Deepest reasoning | Claude Fable 5.2 (`xhigh`), GPT-6 Astra (`xhigh`), Claude Opus 5.5 (`xhigh`) |
-| `deep` | Strong default tier | Claude Opus 5.5 (`high`), GPT-6.1 Sol (`high`), Kimi K3.1 Pro (`high`) |
-| `architect` | Architecture and system design | Claude Opus 5.5 (`xhigh`), GPT-6 Astra (`xhigh`), Claude Fable 5.2 (`xhigh`), Kimi K3.1 Pro (`xhigh`) |
-| `unspecified-high` | Default working model | GPT-6.1 Sol (`medium`), Claude Opus 5.5 (`medium`), Kimi K3.1 Pro (`medium`) |
-| `unspecified-low` | Cheaper fallback | GLM 5.3 (`low`), DeepSeek V4.1 Flash (`low`), GPT-6.1 Sol (`low`), Claude Sonnet 5.5 (`low`) |
+| Hermes `main` suggestion | The session's own model | GPT-6.2 Sol (`high`), Claude Opus 5.5, Claude Fable 5.2, GPT-6.2 Astra (`xhigh`), Kimi K3.1 Pro |
+| `ultrabrain` | Deepest reasoning | Claude Fable 5.2 (`xhigh`), GPT-6.2 Astra (`xhigh`), Claude Opus 5.5 (`xhigh`) |
+| `deep` | Strong default tier | Claude Opus 5.5 (`high`), GPT-6.2 Sol (`high`), Kimi K3.1 Pro (`high`) |
+| `architect` | Architecture and system design | Claude Opus 5.5 (`xhigh`), GPT-6.2 Astra (`xhigh`), Claude Fable 5.2 (`xhigh`), Kimi K3.1 Pro (`xhigh`) |
+| `unspecified-high` | Default working model | GPT-6.2 Sol (`medium`), Claude Opus 5.5 (`medium`), Kimi K3.1 Pro (`medium`) |
+| `unspecified-low` | Cheaper fallback | GLM 5.3 (`low`), DeepSeek V4.1 Flash (`low`), GPT-6.2 Sol (`low`), Claude Sonnet 5.5 (`low`) |
 | `quick` | Short tasks | GLM 5.3 Flash (`low`), GPT-6 Luna (`low`), Claude Haiku 5.5 (`low`), Kimi K3.1 Pro (`low`) |
 | `writing` | Prose and docs | Claude Opus 5.5 (`medium`), Claude Sonnet 5.5 (`medium`), Kimi K3.1 Pro (`medium`), Gemini 4 Argon (`medium`) |
 | `visual-engineering` | Frontend and visual | Claude Fable 5.2 (`high`), Claude Opus 5.5 (`high`), Gemini 4 Argon (`high`), Kimi K3.1 Pro (`high`) |
 | `artistry` | Unconventional work | Gemini 4 Argon (`high`), Claude Opus 5.5 (`high`), Claude Fable 5.2 (`high`), Kimi K3.1 Pro (`high`) |
-| `capable` | Strong general work | Claude Opus 5.5 (`medium`), GPT-6.1 Sol (`medium`), Claude Fable 5.2 (`medium`), Kimi K3.1 Pro (`medium`) |
+| `capable` | Strong general work | Claude Opus 5.5 (`medium`), GPT-6.2 Sol (`medium`), Claude Fable 5.2 (`medium`), Kimi K3.1 Pro (`medium`) |
 | `simple-work` | Small everyday tasks | GPT-6 Luna (`low`), Claude Haiku 5.5 (`low`), DeepSeek V4.1 Flash (`low`) |
-| `deep-work` | Long tasks at frontier depth | Claude Opus 5.5 (`max`), GPT-6.1 Sol (`max`) |
-| `google-search` | Research grounded in Google Search | Gemini 4 Argon (`medium`), GPT-6.1 Sol (`medium`), Claude Opus 5.5 (`medium`) |
+| `deep-work` | Long tasks at frontier depth | Claude Opus 5.5 (`max`), GPT-6.2 Sol (`max`) |
+| `google-search` | Research grounded in Google Search | Gemini 4 Argon (`medium`), GPT-6.2 Sol (`medium`), Claude Opus 5.5 (`medium`) |
 | `x-search` | Live search on X | Grok 4.7 (`high`), Kimi K3.1 Pro (`high`), Gemini 4 Argon (`high`) |
-| `review` | A different model tries to break the diff | GPT-6.1 Sol (`xhigh`), Claude Opus 5.5 (`xhigh`), Kimi K3.1 Pro (`xhigh`) |
+| `review` | A different model tries to break the diff | GPT-6.2 Sol (`xhigh`), Claude Opus 5.5 (`xhigh`), Kimi K3.1 Pro (`xhigh`) |
 | `swarm` | Many parallel workers on separate slices | DeepSeek V4.1 Flash (`low`), GLM 5.3 Flash (`low`), GPT-6 Luna (`low`) |
-| `forensics` | Root-causing a live symptom or a captured trace | GPT-6 Astra (`xhigh`), Claude Opus 5.5 (`xhigh`), Kimi K3.1 Pro (`xhigh`) |
-| `synthesize` | Merging many results into one answer | Claude Opus 5.5 (`xhigh`), GPT-6.1 Sol (`xhigh`), Gemini 4 Argon (`high`) |
+| `forensics` | Root-causing a live symptom or a captured trace | GPT-6.2 Astra (`xhigh`), Claude Opus 5.5 (`xhigh`), Kimi K3.1 Pro (`xhigh`) |
+| `synthesize` | Merging many results into one answer | Claude Opus 5.5 (`xhigh`), GPT-6.2 Sol (`xhigh`), Gemini 4 Argon (`high`) |
 | `x_platform_data` affinity | X-platform data affinity | Grok Build 0.1, Kimi K3.1 Pro, Gemini 4 Argon |
-| Shared final order (`last_resort.any`) | Last resort when a chain is exhausted | Claude Opus 5.5 (`medium`), GPT-6.1 Sol (`medium`) |
+| Shared final order (`last_resort.any`) | Last resort when a chain is exhausted | Claude Opus 5.5 (`medium`), GPT-6.2 Sol (`medium`) |
 <!-- omh:model-chain-table:end -->
 
 Chain customization is a config edit, not a source edit — bare
@@ -2761,7 +2761,7 @@ $ cat ~/.omh/routing/model-chains.json
   "categories": {
     "architect": [
       {"model": "claude-fable-5-2", "reasoning_effort": "xhigh"},
-      {"model": "gpt-6.1-sol", "reasoning_effort": "xhigh"}
+      {"model": "gpt-6.2-sol", "reasoning_effort": "xhigh"}
     ],
     "quick": [
       {"model": "deepseek-v4.1-flash-ultrafast", "reasoning_effort": "low"},
@@ -3475,7 +3475,7 @@ implicit default.
 3. **Optional: route per work category.** The Maestro lane resolves each
    unit's model from a category → model table (`ultrabrain`, `deep`, `quick`,
    `writing`, ...). Override it per profile with
-   `omh coding category-maestro set codex ultrabrain gpt-6.1-sol:xhigh`, walk
+   `omh coding category-maestro set codex ultrabrain gpt-6.2-sol:xhigh`, walk
    it guided with `omh coding category-maestro interview` (the interactive
    `omh setup` offers this walk too), and inspect the effective table with
    `omh coding category-maestro show`. A unit declares its category

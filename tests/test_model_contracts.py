@@ -252,14 +252,15 @@ class EffortFloorTests(unittest.TestCase):
         self.assertEqual(route["effort_change"]["kind"], EFFORT_FLOOR_KIND)
 
     def test_hermes_recommendation_path_applies_the_same_floor(self) -> None:
+        # GPT-6.2 Astra holds ultrabrain's GPT slot since 2026-11-18.
         route = resolve_model_route(
             "hermes",
             role="brain",
             requested_effort="off",
             requested_category="ultrabrain",
-            active_models=("gpt-6-astra",),
+            active_models=("gpt-6.2-astra",),
         )
-        self.assertEqual(route["selected_model"], "gpt-6-astra")
+        self.assertEqual(route["selected_model"], "gpt-6.2-astra")
         self.assertEqual(route["selected_reasoning_effort"], "low")
         self.assertEqual(route["effort_change"]["kind"], EFFORT_FLOOR_KIND)
         # A model without a contract keeps the previous behavior byte for byte.
@@ -1154,8 +1155,9 @@ class Gpt6SolContractTests(unittest.TestCase):
                 aliases = [candidate["model_alias"] for candidate in chain]
                 with self.subTest(section=section, slot=slot):
                     self.assertNotIn("gpt-6-sol", aliases)
+        # GPT-6.2 Sol took every GPT-6.1 Sol slot on 2026-11-18 the same way.
         self.assertIn(
-            "gpt-6.1-sol",
+            "gpt-6.2-sol",
             [candidate["model_alias"] for candidate in SHIPPED_MODEL_RECOMMENDATIONS["categories"]["deep"]],
         )
         route = resolve_model_route(
@@ -1299,28 +1301,17 @@ class Gpt61SolContractTests(unittest.TestCase):
         route = resolve_model_route("codex", requested_model="gpt-6.1-sol", requested_effort="max")
         self.assertEqual(route["effort_change"]["kind"], "unchanged")
 
-    def test_hermes_recommendation_chain_head_applies_the_contract(self) -> None:
-        # No named model: 6.1 Sol is the only active model, so it is the
-        # first eligible entry of `deep` (second behind Opus 5.5 since
-        # 2026-10-13) and the resolver reports it as the chain head.
-        for effort, selected, kind in (
-            ("none", "low", EFFORT_FLOOR_KIND),
-            ("off", "low", EFFORT_FLOOR_KIND),
-            ("minimal", "low", EFFORT_FLOOR_KIND),
-            ("high", "high", None),
-        ):
-            route = resolve_model_route(
-                "hermes",
-                requested_effort=effort,
-                requested_category="deep",
-                active_models=("gpt-6.1-sol",),
-            )
-            with self.subTest(effort=effort):
-                self.assertEqual(route["provenance"], "recommendation_chain_head")
-                self.assertEqual(route["selected_model"], "gpt-6.1-sol")
-                self.assertEqual(route["selected_reasoning_effort"], selected)
-                change = route.get("effort_change")
-                self.assertEqual(change["kind"] if change else None, kind)
+    def test_the_retired_id_is_out_of_every_shipped_chain_but_still_routes(self) -> None:
+        # GPT-6.2 Sol took every GPT-6.1 Sol slot on 2026-11-18: a machine
+        # confirming only 6.1 Sol is not reached through the shipped `deep`
+        # chain, while an explicit request still routes on its contract.
+        route = resolve_model_route(
+            "hermes", requested_effort="high", requested_category="deep", active_models=("gpt-6.1-sol",)
+        )
+        self.assertNotEqual(route["selected_model"], "gpt-6.1-sol")
+        explicit = resolve_model_route("hermes", requested_model="gpt-6.1-sol", requested_effort="none")
+        self.assertEqual(explicit["selected_model"], "gpt-6.1-sol")
+        self.assertEqual(explicit["selected_reasoning_effort"], "low")
 
     def test_exact_calibration_reuses_astra_wording_and_sol_keeps_the_family_block(self) -> None:
         # The vendor's Codex client gives 6.1 Sol Astra's base prompt, so the
@@ -1347,6 +1338,196 @@ class Gpt61SolContractTests(unittest.TestCase):
         self.assertEqual(status, 0)
         self.assertIn("reasoning efforts: low, medium, high, xhigh, max (floor `low`)", stdout)
 
+
+
+_GPT_62 = ("gpt-6.2-astra", "gpt-6.2-sol")
+_GPT_62_FORMS = {
+    model: (model, f"openai/{model}", f"openai-codex/{model}", model.upper(), f"{model}-2026-11-17")
+    for model in _GPT_62
+}
+
+
+class Gpt62ContractTests(unittest.TestCase):
+    """GPT-6.2 Astra and GPT-6.2 Sol (2026-11-17), onboarded 2026-11-18: one
+    exact contract each, read from their own pages; the `low`-floor ladder;
+    Astra's calibration text; and every slot of GPT-6 Astra and GPT-6.1 Sol,
+    which leave the shipped chains and stay routable."""
+
+    def test_every_served_form_resolves_its_own_contract(self) -> None:
+        for model, forms in _GPT_62_FORMS.items():
+            base = model_contract(model)
+            assert base is not None
+            for form in forms:
+                with self.subTest(form=form):
+                    self.assertEqual(model_family(form), "gpt")
+                    self.assertEqual(contract_model_id(form), model)
+                    self.assertIs(model_contract(form), base)
+            # No mode or tier row is declared for either id.
+            for suffix in ("-pro", "-fast", "-flex"):
+                with self.subTest(model=model, suffix=suffix):
+                    self.assertIsNone(model_contract_projection(model + suffix))
+
+    def test_contracts_record_the_api_pages(self) -> None:
+        expected = {
+            "gpt-6.2-astra": ("2026-05-18", (8.0, 0.40, 10.0, 20.0, 40.0)),
+            "gpt-6.2-sol": ("2026-06-01", (2.0, 0.10, 2.5, 5.0, 10.0)),
+        }
+        for model, (cutoff, prices) in expected.items():
+            contract = model_contract(model)
+            assert contract is not None
+            with self.subTest(model=model):
+                self.assertEqual(contract["released"], "2026-11-17")
+                self.assertEqual(contract["generation"], "gpt-6.2")
+                self.assertEqual(contract["knowledge_cutoff"], cutoff)
+                self.assertEqual(
+                    (contract["context_window_tokens"], contract["max_input_tokens"], contract["max_output_tokens"]),
+                    (1_050_000, 922_000, 128_000),
+                )
+                self.assertEqual(contract["reasoning_efforts"], ("low", "medium", "high", "xhigh", "max"))
+                self.assertEqual(contract["effort_floor"], "low")
+                self.assertEqual(contract["effort_default"], "")
+                self.assertEqual(set(contract["unsupported_efforts"]), {"off", "minimal"})
+                self.assertEqual(contract["tool_calling"]["api"], "responses")
+                self.assertIn("without tool calling", contract["tool_calling"]["note"])
+                self.assertEqual(contract["unsupported_parameters"], ("temperature", "top_p", "top_logprobs"))
+                self.assertEqual(contract["surface_efforts"], {"codex": ("low", "medium", "high", "xhigh", "max")})
+                self.assertIn("`ultra`", contract["surface_notes"]["codex"])
+                self.assertEqual(
+                    contract["runtime_mechanisms"]["reasoning_items_dropped_on_prefix_edit"],
+                    "documented_not_observed",
+                )
+                pricing = contract["pricing_usd_per_mtok"]
+                self.assertEqual(
+                    (pricing["input"], pricing["cached_input"], pricing["cache_write"],
+                     pricing["cache_write_12h"], pricing["output"]),
+                    prices,
+                )
+                self.assertIn(f"https://developers.openai.com/api/docs/models/{model}", contract["sources"])
+                self.assertEqual(contract["claim_boundary"], MODEL_CONTRACT_CLAIM_BOUNDARY)
+        self.assertIn("272K", model_contract("gpt-6.2-astra")["surface_notes"]["codex"])
+        self.assertIn("500K", model_contract("gpt-6.2-sol")["surface_notes"]["codex"])
+
+    def test_price_rows_mirror_the_contracts_with_their_cache_ratio(self) -> None:
+        from omh.plugin_bundle.omh.hermes_delegation import APPROX_CACHE_READ_RATIO, _approximate_cost_usd
+
+        for model in _GPT_62:
+            contract = model_contract(model)
+            assert contract is not None
+            pricing = contract["pricing_usd_per_mtok"]
+            with self.subTest(model=model):
+                self.assertEqual(APPROX_PRICE_PER_MTOK[model], (pricing["input"], pricing["output"]))
+                self.assertAlmostEqual(pricing["input"] * APPROX_CACHE_READ_RATIO[model], pricing["cached_input"])
+                self.assertAlmostEqual(
+                    _approximate_cost_usd(f"openai/{model}-2026-11-17", 1e6, 1e6, 1e6),
+                    pricing["input"] + pricing["output"] + pricing["cached_input"],
+                )
+        # The retired generation keeps its own rows.
+        self.assertEqual(APPROX_PRICE_PER_MTOK["gpt-6-astra"], (10.0, 50.0))
+        self.assertEqual(APPROX_PRICE_PER_MTOK["gpt-6.1-sol"], (2.0, 10.0))
+
+    def test_no_reasoning_and_minimal_are_raised_to_low_on_every_profile(self) -> None:
+        for profile in ("codex", "hermes", "claude-code", "generic"):
+            for model, forms in _GPT_62_FORMS.items():
+                for form in forms:
+                    for effort in ("off", "none", "minimal"):
+                        with self.subTest(profile=profile, model=form, effort=effort):
+                            route = resolve_model_route(profile, requested_model=form, requested_effort=effort)
+                            self.assertEqual(route["selected_reasoning_effort"], "low")
+                            change = route["effort_change"]
+                            self.assertEqual(change["kind"], EFFORT_FLOOR_KIND)
+                            self.assertEqual((change["requested"], change["selected"]), (effort, "low"))
+            for effort in ("low", "medium", "high", "xhigh", "max"):
+                self.assertIsNone(contract_effort_floor("gpt-6.2-sol", effort), effort)
+                self.assertIsNone(contract_effort_floor("gpt-6.2-astra", effort), effort)
+
+    def test_codex_option_rows_are_the_surface_ladder_and_the_old_rows_stay(self) -> None:
+        ids = [option["model_id"] for option in EXECUTOR_MODEL_OPTIONS["codex"]]
+        for model in (*_GPT_62, "gpt-6-astra", "gpt-6.1-sol"):
+            with self.subTest(model=model):
+                self.assertEqual(ids.count(model), 1)
+        for model in _GPT_62:
+            row = next(option for option in EXECUTOR_MODEL_OPTIONS["codex"] if option["model_id"] == model)
+            self.assertEqual(tuple(row["reasoning_efforts"]), model_contract(model)["surface_efforts"]["codex"])
+        self.assertEqual(ids[:2], list(_GPT_62))
+        for model in ("gpt-6-astra", "gpt-6.1-sol"):
+            row = next(option for option in EXECUTOR_MODEL_OPTIONS["codex"] if option["model_id"] == model)
+            self.assertIn("previous", row["label"])
+
+    def test_each_takes_every_slot_of_its_predecessor_in_both_lanes(self) -> None:
+        from omh.coding.model_recommendations import SHIPPED_MODEL_RECOMMENDATIONS
+        from omh.coding.model_routing import BUILTIN_CATEGORY_MODELS
+
+        hermes = [
+            candidate["model_alias"]
+            for section in ("categories", "role_suggestions", "domain_affinities", "last_resort")
+            for chain in SHIPPED_MODEL_RECOMMENDATIONS[section].values()
+            for candidate in chain
+        ]
+        maestro = [
+            entry["model_id"] for categories in BUILTIN_CATEGORY_MODELS.values()
+            for chain in categories.values() for entry in chain
+        ]
+        for retired in ("gpt-6-astra", "gpt-6.1-sol"):
+            self.assertNotIn(retired, hermes)
+            self.assertNotIn(retired, maestro)
+        self.assertEqual(
+            [entry["model_alias"] for entry in SHIPPED_MODEL_RECOMMENDATIONS["last_resort"]["any"]],
+            ["claude-opus-5-5", "gpt-6.2-sol"],
+        )
+        codex = BUILTIN_CATEGORY_MODELS["codex"]
+        self.assertEqual(
+            sorted(category for category, chain in codex.items() if chain[0]["model_id"] == "gpt-6.2-astra"),
+            ["architect", "deep-work", "forensics", "ultrabrain"],
+        )
+        self.assertEqual(
+            {chain[0]["model_id"] for chain in codex.values()}, {"gpt-6.2-astra", "gpt-6.2-sol"}
+        )
+        for category, chain in SHIPPED_MODEL_RECOMMENDATIONS["categories"].items():
+            for entry in chain:
+                if entry["model_alias"] in _GPT_62:
+                    with self.subTest(category=category, model=entry["model_alias"]):
+                        self.assertIn(entry["reasoning_effort"], model_contract(entry["model_alias"])["reasoning_efforts"])
+
+    def test_hermes_recommendation_chain_head_applies_the_contract(self) -> None:
+        # No named model: 6.2 Sol is the only active model, so it is the
+        # first eligible entry of `deep` (second behind Opus 5.5) and the
+        # resolver reports it as the chain head.
+        for effort, selected, kind in (
+            ("none", "low", EFFORT_FLOOR_KIND),
+            ("off", "low", EFFORT_FLOOR_KIND),
+            ("minimal", "low", EFFORT_FLOOR_KIND),
+            ("high", "high", None),
+        ):
+            route = resolve_model_route(
+                "hermes", requested_effort=effort, requested_category="deep", active_models=("gpt-6.2-sol",)
+            )
+            with self.subTest(effort=effort):
+                self.assertEqual(route["provenance"], "recommendation_chain_head")
+                self.assertEqual(route["selected_model"], "gpt-6.2-sol")
+                self.assertEqual(route["selected_reasoning_effort"], selected)
+                change = route.get("effort_change")
+                self.assertEqual(change["kind"] if change else None, kind)
+
+    def test_exact_calibration_is_astra_wording_with_no_keep_working_text(self) -> None:
+        for model in _GPT_62:
+            with self.subTest(model=model):
+                self.assertEqual(MODEL_HIGH_EFFORT_CALIBRATIONS[model], MODEL_HIGH_EFFORT_CALIBRATIONS["gpt-6-astra"])
+                self.assertEqual(MODEL_COMPOSITION_CALIBRATIONS[model], MODEL_COMPOSITION_CALIBRATIONS["gpt-6-astra"])
+                route = {"selected_model": f"openai/{model}-2026-11-17", "model_family": "gpt",
+                         "selected_reasoning_effort": "xhigh"}
+                self.assertEqual(calibration_for_route(route), MODEL_HIGH_EFFORT_CALIBRATIONS[model])
+                for text in (MODEL_HIGH_EFFORT_CALIBRATIONS[model], MODEL_COMPOSITION_CALIBRATIONS[model]):
+                    lowered = text.casefold()
+                    for phrase in ("persist until", "bias towards action", "avoid stopping", "until their intended goal",
+                                   "verify that it has completed"):
+                        self.assertNotIn(phrase, lowered, phrase)
+
+    def test_the_cli_prints_the_ladder(self) -> None:
+        for model in _GPT_62:
+            status, stdout, _stderr = run_cli(["coding", "model-contract", "--model", model], output_json=False)
+            with self.subTest(model=model):
+                self.assertEqual(status, 0)
+                self.assertIn("reasoning efforts: low, medium, high, xhigh, max (floor `low`)", stdout)
 
 
 _TERRA_61_FORMS = ("gpt-6.1-terra", "openai/gpt-6.1-terra", "openai-codex/gpt-6.1-terra", "GPT-6.1-Terra")
@@ -2295,9 +2476,10 @@ class FableTwoContractTests(unittest.TestCase):
         from omh.coding.model_routing import CLAUDE_FRONTIER_CHAIN_MODELS
 
         ultrabrain = SHIPPED_MODEL_RECOMMENDATIONS["categories"]["ultrabrain"]
+        # GPT-6.2 Astra holds the GPT slot since 2026-11-18.
         self.assertEqual(
             [(entry["model_alias"], entry["reasoning_effort"]) for entry in ultrabrain],
-            [("claude-fable-5-2", "xhigh"), ("gpt-6-astra", "xhigh"), ("claude-opus-5-5", "xhigh")],
+            [("claude-fable-5-2", "xhigh"), ("gpt-6.2-astra", "xhigh"), ("claude-opus-5-5", "xhigh")],
         )
         self.assertEqual(CLAUDE_FRONTIER_CHAIN_MODELS, ("claude-opus-5-5", "claude-fable-5-2", "opus"))
         for category, chain in SHIPPED_MODEL_RECOMMENDATIONS["categories"].items():
