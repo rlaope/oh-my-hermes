@@ -247,6 +247,13 @@ All notable changes will be documented here.
   chips are never sent. OMH does not install or start LanguageTool (`brew install languagetool`). Contributed by
   @DanRioDev (#2948).
 
+- **A listed backlog of code changes is made in the session, not split into child agents.** A request that hands
+  over four or more separate code changes and asks for all of them is still recognized, so it no longer lands on an
+  unrelated workflow because of one item's word. It now gets an answer in the same session (`code_backlog`): the
+  changes are made one after another, with no dag-ulw graph and no child agents. In paired runs on a five-part,
+  six-thousand-line job, splitting such a backlog finished later than Hermes alone at the same quality. Asking for
+  dag-ulw by name still runs the list as a graph.
+
 ## 4.0.8 - 2026-11-15
 
 - **The OMH TUI shows a compression as one gauge row, and a prompt typed meanwhile goes on by itself.** `/compact`
