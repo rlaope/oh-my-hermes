@@ -436,7 +436,16 @@ SKILL_INDEX_LINE_CHAR_LIMIT = 100
 # say the same refusal in fewer words (-576). Every rule a model acts on is
 # unchanged. Measured by per_turn_context.plugin_tool_schema_chars_by_tool()
 # against base 32a8217f8. No headroom.
-PLUGIN_TOOL_SCHEMA_CHAR_LIMIT = 63324
+# 63324 -> 62099: the omh_todo, omh_loop, omh_document_plan and
+# omh_delegate_route descriptions say the same rules in fewer words (-1225;
+# 7811 -> 7545, 6856 -> 6726, 5512 -> 5336, 4764 -> 4111). An A/B of the
+# first tool call on 11 scenarios (claude-haiku-5-5 and claude-sonnet-5-5, 3
+# reps per arm) kept every scenario the old text passed; two sentences cut in
+# a first draft (a route set in an earlier turn runs on the previous model;
+# OMH mirrors each todo_list write) lost passes and were restored. Measured by
+# per_turn_context.plugin_tool_schema_chars_by_tool() against base a3068c323.
+# No headroom.
+PLUGIN_TOOL_SCHEMA_CHAR_LIMIT = 62099
 # PRE_LLM_CALL_CONTEXT_CHAR_LIMIT, PRE_LLM_CALL_CONTEXT_FALLBACK_CHAR_LIMIT: moved with
 # their history to src/plugin_bundle/omh/turn_budget.py; imported at the top of this file.
 # 340000 -> 349637: three capability-skill sections were added by the domain

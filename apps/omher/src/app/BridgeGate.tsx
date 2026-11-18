@@ -3,7 +3,7 @@
 // unless the page sets `window.__OMHER_GATE__` (the e2e stand-in for the shell).
 //
 // When Hermes itself is missing, the screen offers to install Hermes and oh-my-hermes. The shell runs one
-// fixed command (OMH's one-line installer with `omher@beta`, without the app); the page only presses the
+// fixed command (OMH's one-line installer with `omher`, without the app); the page only presses the
 // button and shows the output.
 import { Fragment, useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import mark from "../assets/omher-mark.png";

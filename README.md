@@ -81,7 +81,7 @@ omh setup
 
 <div align="center">
 
-### omher desktop @ beta
+### omher desktop
 
 <img src="assets/omher-hero.webp" alt="The omher desktop app in dark mode: the sidebar has Tasks with GitHub, GitLab and Linear, then the bot Kami with three threads it opened, each its own chat in a different live state (Fix flaky login test is running with Claude Code at work, Write 2.4 changelog needs you to allow gh pr create, Bump mobile SDK is done), the bots Friren and Juno, and TERMINALS with a Shell, a Codex session and a Claude Code session in the api-server folder, each with its CLI's logo; Kami's chat holds the ask that opened the three threads and a live answer about a slow nightly build" width="900">
 

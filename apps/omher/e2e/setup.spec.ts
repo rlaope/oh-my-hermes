@@ -26,7 +26,7 @@ async function mock(op: string, params: Record<string, unknown> = {}): Promise<u
   expect(reply.ok, JSON.stringify(reply)).toBe(true);
   return reply.result;
 }
-const CMD = "curl -fsSL https://raw.githubusercontent.com/rlaope/oh-my-hermes/main/install.sh | OMH_WITH_DESKTOP=0 sh -s -- omher@beta";
+const CMD = "curl -fsSL https://raw.githubusercontent.com/rlaope/oh-my-hermes/main/install.sh | OMH_WITH_DESKTOP=0 sh -s -- omher";
 
 type Plan = { exit: number; lines: string[]; holdMs?: number; reject?: string };
 
@@ -68,8 +68,8 @@ async function stub(page: Page, plan: Plan) {
 
 const RUN = [
   "OMH installer",
-  "[note] omher@beta: found neither Hermes nor OMH. Installing Hermes first, then OMH, 'omh setup', and the omher app.",
-  "[note] omher@beta: OMH_WITH_DESKTOP=0, so the omher app is not installed.",
+  "[note] omher: found neither Hermes nor OMH. Installing Hermes first, then OMH, 'omh setup', and the omher app.",
+  "[note] omher: OMH_WITH_DESKTOP=0, so the omher app is not installed.",
   "[hermes] Install Hermes Agent with its official installer (non-interactive)",
   "  Cloning hermes-agent …",
   "  Downloading Python 3.12 …",
