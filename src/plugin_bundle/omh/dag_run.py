@@ -68,6 +68,7 @@ import re
 import secrets
 import shlex
 import shutil
+import time
 from typing import Any, Final
 import unicodedata
 
@@ -1007,6 +1008,8 @@ def derive(record: Mapping[str, Any], children: Sequence[Mapping[str, Any]], now
                 child = None
                 info["lost"] = True
             info["child"] = child
+            if child is not None and isinstance(child.get("waiting_resume"), Mapping):
+                info["waiting_resume"] = dict(child["waiting_resume"])
             if child is None:
                 info["state"] = "handed_out"
             elif isinstance(child.get("stop"), Mapping):
@@ -1318,16 +1321,23 @@ def stuck(record: Mapping[str, Any], derived: Mapping[str, Mapping[str, Any]], n
           limits: Limits = DEFAULT_LIMITS) -> list[tuple[str, float]]:
     """Open nodes past ``limits.stuck_after_s``, oldest first, as ``(node id, seconds open)``; none when the mark is 0.
 
-    Left out: a node whose child a restart ended (offered again, or settled past the bound, on its own line), and
-    one exported to a coding owner or left to the parent, which no delegate_task child runs.
+    Left out: a node whose child a restart ended (offered again, or settled past the bound, on its own line), one
+    whose child Hermes will resume (a usage limit can hold it for hours), and one exported to a coding owner or
+    left to the parent, which no delegate_task child runs.
     """
     if limits.stuck_after_s <= 0:
         return []
     lanes = {str(node["id"]): (node.get("attempts") or [{}])[-1].get("lane") for node in record["nodes"]}
     found = [(node_id, age) for node_id, age in open_for(record, derived, now).items()
              if age > limits.stuck_after_s and not derived[node_id].get("lost")
+             and not derived[node_id].get("waiting_resume")
              and lanes[node_id] not in ("fanout", "parent")]
     return sorted(found, key=lambda item: (-item[1], item[0]))
+
+
+def _clock(epoch: float) -> str:
+    """``HH:MM`` local time, as Hermes writes a resume time."""
+    return time.strftime("%H:%M", time.localtime(epoch))
 
 
 def age_text(seconds: float) -> str:
@@ -1778,6 +1788,17 @@ def settle(
             raise DagRefusal("invalid_handle", "parked needs a nonempty handle of at most 120 characters on one line.")
         wake_at = _park_deadline(wake_at, now)
     child = info["child"]
+    waiting = info.get("waiting_resume")
+    if isinstance(waiting, Mapping) and isinstance(child, Mapping):
+        sid = child.get("subagent_id")
+        when = (f"after its limit resets ({_clock(waiting['at'])})" if isinstance(waiting.get("at"), (int, float))
+                else "once the gateway is up")
+        raise DagRefusal(
+            "child_resume_pending",
+            f"Hermes will resume node {node_id}'s child {sid} {when}, on its own conversation and worktree, and its "
+            f"result settles the node then. Wait for it; to give it up, call delegate_task(action='stop', "
+            f"subagent_id='{sid}') first, then settle the node.",
+        )
     stop = child.get("stop") if isinstance(child, Mapping) else None
     if outcome == "accepted" and isinstance(stop, Mapping) and stop.get("status") in CHILD_FAILURE_STOPS:
         raise DagRefusal(
@@ -2048,6 +2069,8 @@ def node_rows(record: Mapping[str, Any], derived: Mapping[str, Mapping[str, Any]
             row.update(handle=attempts[-1]["handle"], wake_at=attempts[-1]["wake_at"])
         if info["state"] in ("failed", "blocked"):
             row["repair_cycles_left"] = cycles_left(record, node_id)
+        if info.get("waiting_resume"):
+            row["waiting_resume"] = dict(info["waiting_resume"])
         if node_id in ages:
             row["open_for_s"] = int(ages[node_id])
         rows.append(row)
