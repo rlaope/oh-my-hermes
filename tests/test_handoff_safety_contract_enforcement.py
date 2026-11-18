@@ -343,7 +343,10 @@ PROCESS_SPAWN_ALLOWLIST: dict[str, str] = {
         "in the process the person started, only on their yes at a terminal or an explicit "
         "`--restart-gateway`: the person's `hermes -p <profile> gateway restart --yes --detach` for each "
         "running gateway still on the old OMH plugin code (`commands/update_gateway.py` builds the argv), "
-        "in a session of its own with no stdin."
+        "in a session of its own with no stdin; and after an interactive setup, only on the person's yes to "
+        "the wizard's model-setup question, `hermes config get model --json`, the person's own `hermes model` "
+        "in the foreground when no main model is set, then the OMH TUI as a foreground "
+        "`python -P -m omh.cli ... --onboard model-setup` child."
     ),
     "src/quality/cross_harness_adapter_sandbox.py": (
         "sandboxed child process for the cross-harness benchmark lane."
