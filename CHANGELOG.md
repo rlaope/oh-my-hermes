@@ -7,6 +7,12 @@ All notable changes will be documented here.
 - **omher: Run now no longer looks like the button you must press.** On an automation's detail it was the first,
   filled button; on the "New automation" card in chat, the first button. It is now a quiet text action at the end of
   the row, after Delete or Remove, and a click only asks "Run it now, outside its schedule?" with Run and Cancel.
+- **Four OMH tool descriptions are shorter, and the model still picks the same calls.** `omh_todo`, `omh_loop`,
+  `omh_document_plan` and `omh_delegate_route` say the same rules in fewer words, so each costs fewer tokens the
+  first time Hermes loads it (24,943 -> 23,718 characters together; the registered OMH schemas 63,324 -> 62,099).
+  An A/B of the first tool call on 11 scenarios (Claude Haiku and Sonnet, 3 runs per arm) passed 33/33 on both the
+  old and the new text. A first draft that also cut "a route set in an earlier turn runs on the previous model" and
+  "OMH mirrors each todo_list write" lost passes and was restored.
 
 - **Gemini prices re-read ahead of Google's two increases.** Google's pricing page, re-read on 2026-11-18, still
   lists Gemini 4 Argon and Gemini 4 Carbon at $2 / $10 per million tokens through 2026-11-30 and $4 / $20 from

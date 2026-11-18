@@ -47,13 +47,12 @@ OMH_LOOP_SCHEMA = {
     "name": "omh_loop",
     "description": (
         "Manage one durable, permission-scoped OMH Loop (loop_cycle/v2) for this session without "
-        "shell commands. Every mutation binds to the configured OMH home and this host session; no "
-        "argument selects a store. A successful call records an OMH transition only: never executor "
-        "dispatch, implementation, review, CI, merge readiness, or merge, and a queue item OMH "
-        "prepares stays prepared_not_observed until separate evidence is recorded. Each action "
-        "accepts only the fields marked with its name below; a field from another action is "
-        "refused, not ignored. Tick, sticky rules, queue dispatch and recovery, driver binding and "
-        "migration, handoffs, and narration stay on the `omh loop` CLI. "
+        "shell commands; every mutation binds to the configured OMH home and this session. A call "
+        "records an OMH transition only, never dispatch, implementation, review, CI or merge, and a "
+        "prepared queue item stays prepared_not_observed until separate evidence is recorded. Each "
+        "action takes only the fields marked with its name; another action's field is refused. "
+        "Tick, sticky rules, queue dispatch, driver binding, handoffs and narration stay on the "
+        "`omh loop` CLI. "
         "Relay any `say` field to the user once, in their language and your own words."
     ),
     "parameters": {
