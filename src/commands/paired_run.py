@@ -18,6 +18,7 @@ from ..coding.paired_run_dispatch import (
     SharedResourceMode,
     plan_paired_run_dispatch,
 )
+from ..coding.hermes_child_arm_setup import ARM_TOOLSET_NAMES, DEFAULT_ARM_TOOLSETS
 from ..coding.paired_run_arm_home import API_MODES, PairedRunArmHomeError, validate_provider_config
 from ..coding.paired_run_execution import PairedRunExecutionReport
 from ..coding.paired_run_local_runner import (
@@ -81,6 +82,7 @@ def cmd_coding_paired_run_dispatch(
                     reasoning=str(getattr(args, "reasoning", "medium")),
                     timeout_seconds=getattr(args, "timeout", 900.0),
                     provider_config=provider_config,
+                    arm_toolsets=str(getattr(args, "arm_toolsets", DEFAULT_ARM_TOOLSETS)),
                 ),
             )
         except (PairedRunLocalRunnerError, PairedRunArmHomeError) as exc:
@@ -257,6 +259,16 @@ def add_coding_paired_run_command(coding_sub: argparse._SubParsersAction[argpars
         "--reasoning",
         default="medium",
         help="Hermes reasoning effort for every frozen cell.",
+    )
+    dispatch.add_argument(
+        "--arm-toolsets",
+        default=DEFAULT_ARM_TOOLSETS,
+        help=(
+            "Hermes toolsets BOTH arms run with, from " + ", ".join(ARM_TOOLSET_NAMES)
+            + "; file and skills are required. Add terminal to give both arms Hermes' shell tool "
+            "(dangerous-command approval stays on), and delegation to give both Hermes' one-level delegate_task "
+            "with the same child cap and every child on the arm's model. Signed into each cell and checked at fan-in."
+        ),
     )
     dispatch.add_argument(
         "--timeout",

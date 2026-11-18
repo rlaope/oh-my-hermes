@@ -47,7 +47,8 @@ test("an away session with a blank label still gets a title", async ({ page }) =
     });
   });
   await open(page);
-  const titles = await page.getByTestId("away-text").allTextContents();
+  await page.getByTestId("places").click();
+  const titles = await page.getByTestId("details-panel").locator("[data-testid=where-row] .t1").allTextContents();
   expect(titles.length).toBeGreaterThan(0);
   for (const t of titles) expect(t.trim()).not.toBe("");
   expect(titles).toContain("Slack session");

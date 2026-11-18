@@ -141,7 +141,9 @@ MORE_NOTE = "/dag shows the whole graph"
 
 def _lanes(graph: Mapping[str, Any]) -> list[Mapping[str, Any]]:
     nodes = graph.get("nodes") if isinstance(graph.get("nodes"), list) else []
-    return [node for node in nodes if isinstance(node, Mapping) and node.get("kind") != "root"]
+    # An outside_dag lane is no lane of the run: the condensed rows and tallies skip it as every view does.
+    return [node for node in nodes
+            if isinstance(node, Mapping) and node.get("kind") != "root" and node.get("outside_dag") is not True]
 
 
 def _lane_count(graph: Mapping[str, Any]) -> int:

@@ -4325,6 +4325,13 @@ _LIVE_INFO_OPERATOR_EVERYDAY_CONTEXT_TOKENS = _normalized_token_set(
 _LIVE_INFO_OPERATOR_LIVE_CUE_TOKENS = _normalized_token_set(
     {"now", "today", "current", "latest", "tonight", "yesterday", "live", "nearby"}
 )
+# A "current" that is not said of the workspace the work happens in: any "current" but one before a workspace noun
+# ("the current directory", "current branch", "current working directory"), which names where the work is.
+_CURRENT_NOT_OF_THE_WORKSPACE = re.compile(
+    r"\bcurrent\b(?!\s+(?:working\s+)?(?:directory|dir|folder|repo|repository|branch|checkout|worktree|workspace"
+    r"|project|file|module|package|code|codebase|implementation|behaviou?r|test\s+suite|tests?|commit|config"
+    r"|configuration|setup)\b)"
+)
 _LIVE_INFO_OPERATOR_BLOCKERS = (
     "web search",
     "web research",
@@ -10364,6 +10371,10 @@ def _live_info_operator_guard_applies(normalized_query: str, query_tokens: set[s
         return True
     if any(phrase_is_spoken(normalized_query, phrase) for phrase in _LIVE_INFO_OPERATOR_SPOKEN_PHRASES):
         return True
+    # "current" said of the workspace ("the current directory", "the current branch") is where the work is, not a
+    # live lookup: with every "current" of that kind it neither asks for nor times a lookup.
+    if "current" in query_tokens and not _CURRENT_NOT_OF_THE_WORKSPACE.search(normalized_query):
+        query_tokens = query_tokens - {"current"}
     live_context = _LIVE_INFO_OPERATOR_CONTEXT_TOKENS & query_tokens
     lookup_intent = bool(_LIVE_INFO_OPERATOR_LOOKUP_TOKENS & query_tokens)
     if not (live_context and lookup_intent):

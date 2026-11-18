@@ -11,7 +11,7 @@ use std::collections::HashMap;
 use std::ffi::OsString;
 use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU32, AtomicU64, Ordering};
 use std::sync::mpsc::{self, Receiver, RecvTimeoutError, SyncSender, TrySendError};
 use std::sync::{Arc, Condvar, Mutex};
 use std::thread;
@@ -385,12 +385,12 @@ pub fn layout(id: &str) -> Option<&'static Layout> {
 }
 
 /// A path's folder names, split on both separators so a Windows path reads the same on any host.
-fn parts_of(p: &Path) -> Vec<String> {
+pub(crate) fn parts_of(p: &Path) -> Vec<String> {
     // (the `?` of a Windows `\\?\` canonical path is no folder)
     p.to_string_lossy().split(['/', '\\']).filter(|c| !c.is_empty() && *c != "?").map(str::to_string).collect()
 }
 
-fn holds(parts: &[String], seq: &[&str]) -> bool {
+pub(crate) fn holds(parts: &[String], seq: &[&str]) -> bool {
     !seq.is_empty() && parts.windows(seq.len()).any(|w| w.iter().zip(seq).all(|(a, b)| a.eq_ignore_ascii_case(b)))
 }
 
@@ -691,6 +691,17 @@ struct Live {
     out: Arc<Out>,
 }
 
+impl Live {
+    /// The process [`crate::fg::Probe`] reads: the terminal's foreground process group leader (unix: the program a
+    /// shell runs now, else the shell), or on Windows the session's program (its tree is searched).
+    fn foreground(&self) -> Option<u32> {
+        #[cfg(unix)]
+        return self.master.process_group_leader().map(|p| p as u32);
+        #[cfg(not(unix))]
+        return self.pid;
+    }
+}
+
 /// Pending writes per session (keystrokes or whole pastes). A program that stops reading fills it, and
 /// further writes fail at once instead of piling up.
 pub(crate) const INPUT_QUEUE: usize = 256;
@@ -722,12 +733,60 @@ pub struct Sessions {
     next: AtomicU32,
     /// (high, low) of each new session's output credit
     marks: (u64, u64),
+    /// The one foreground watcher's inbox ([`Sessions::watch_foreground`]).
+    fg: Mutex<FgInbox>,
+    #[cfg(test)]
+    fg_stats: FgStats,
 }
 
 impl Default for Sessions {
     fn default() -> Sessions {
-        Sessions { live: Mutex::default(), next: AtomicU32::new(0), marks: (FLOW_HIGH, FLOW_LOW) }
+        Sessions {
+            live: Mutex::default(),
+            next: AtomicU32::new(0),
+            marks: (FLOW_HIGH, FLOW_LOW),
+            fg: Mutex::default(),
+            #[cfg(test)]
+            fg_stats: FgStats::default(),
+        }
     }
+}
+
+/// Spawn a thread named `name` (they show by name in a profiler and in `ps -M`). Fails only as `thread::spawn` does.
+fn named<F: FnOnce() + Send + 'static>(name: String, f: F) -> thread::JoinHandle<()> {
+    thread::Builder::new().name(name).spawn(f).expect("failed to spawn thread")
+}
+
+/// Sessions handed to [`Sessions::watch_foreground`] that its thread has not taken yet, and whether that thread runs.
+#[derive(Default)]
+struct FgInbox {
+    pending: Vec<FgWatch>,
+    running: bool,
+}
+
+/// One watched session, owned by the foreground watcher thread.
+struct FgWatch {
+    id: u32,
+    /// probed on the next tick of this length after its terminal had I/O...
+    every: Duration,
+    /// ...and at least this often without
+    idle: Duration,
+    on_change: Box<dyn FnMut(Option<&'static str>) + Send>,
+    probe: crate::fg::Probe,
+    last: Option<&'static str>,
+    /// [`Out::io`] at the last probe, and when that was (`None`: not probed yet)
+    io: u64,
+    probed: Option<Instant>,
+}
+
+/// What the watcher did, for the tests.
+#[cfg(test)]
+#[derive(Default)]
+struct FgStats {
+    threads: AtomicU32,
+    watched: AtomicU32,
+    wakes: AtomicU64,
+    probes: AtomicU64,
 }
 
 fn clamp_size(cols: u16, rows: u16) -> PtySize {
@@ -776,16 +835,17 @@ impl Sessions {
 
         let id = self.next.fetch_add(1, Ordering::SeqCst) + 1;
         let out = Out::new(self.marks);
-        spawn_reader(reader, sink.clone(), out.clone());
+        spawn_reader(id, reader, sink.clone(), out.clone());
         let (input, queued) = mpsc::sync_channel::<Vec<u8>>(INPUT_QUEUE);
         let writer_done = Arc::new(AtomicBool::new(false));
         {
-            let done = writer_done.clone();
-            thread::spawn(move || {
+            let (done, out) = (writer_done.clone(), out.clone());
+            named(format!("omher-pty-{id}-writer"), move || {
                 for chunk in queued {
                     if writer.write_all(&chunk).and_then(|_| writer.flush()).is_err() {
                         break;
                     }
+                    out.io.fetch_add(1, Ordering::Relaxed);
                 }
                 drop(writer);
                 done.store(true, Ordering::SeqCst);
@@ -793,7 +853,7 @@ impl Sessions {
         }
         {
             let (exited, out) = (exited.clone(), out.clone());
-            thread::spawn(move || {
+            named(format!("omher-pty-{id}-wait"), move || {
                 let code = match child.wait() {
                     Ok(st) if st.signal().is_none() => Some(st.exit_code()),
                     _ => None,
@@ -880,16 +940,40 @@ impl Sessions {
     pub fn close(&self, id: u32) {
         let live = self.live.lock().unwrap().remove(&id);
         if let Some(s) = live {
-            thread::spawn(move || stop(s, Duration::from_millis(1500)));
+            named(format!("omher-pty-{id}-close"), move || stop(s, Duration::from_millis(1500)));
         }
     }
 
     /// Stop every session now (the app is quitting).
     pub fn close_all(&self) {
-        let all: Vec<Live> = self.live.lock().unwrap().drain().map(|(_, s)| s).collect();
-        let handles: Vec<_> = all.into_iter().map(|s| thread::spawn(move || stop(s, Duration::from_millis(400)))).collect();
+        let all: Vec<(u32, Live)> = self.live.lock().unwrap().drain().collect();
+        let handles: Vec<_> = all.into_iter().map(|(id, s)| named(format!("omher-pty-{id}-close"), move || stop(s, Duration::from_millis(400)))).collect();
         for h in handles {
             let _ = h.join();
+        }
+    }
+
+    /// Watch which agent CLI runs in session `id`'s foreground ([`crate::fg`]): `on_change` gets the agent id (or
+    /// `None`: a shell, any other program) only when it differs from the last one it got; it starts from `None`. The
+    /// watch ends when the session ends or is closed, handing on `None` then if an agent was shown.
+    ///
+    /// One thread (`omher-fg`) watches every session; it starts with the first watch and ends when none is left. It
+    /// wakes every `every` and looks at a session's foreground process only when its terminal had output or input since
+    /// the last look, else every [`FG_IDLE_TICKS`] wakes: starting a CLI is typing its name and it prints as it starts,
+    /// so the mark still shows within about `every`, while idle terminals cost no process reads. Whether a session
+    /// ended is checked on every wake. Each wake takes the sessions lock once, to read the terminals' foreground
+    /// process groups (unix) or the programs' pids (Windows); processes are read outside it.
+    pub fn watch_foreground<F>(self: &Arc<Self>, id: u32, every: Duration, on_change: F)
+    where
+        F: FnMut(Option<&'static str>) + Send + 'static,
+    {
+        let w = FgWatch { id, every, idle: every * FG_IDLE_TICKS, on_change: Box::new(on_change), probe: crate::fg::Probe::default(), last: None, io: 0, probed: None };
+        let mut inbox = self.fg.lock().unwrap();
+        inbox.pending.push(w);
+        if !inbox.running {
+            inbox.running = true;
+            let sessions = Arc::downgrade(self);
+            named("omher-fg".into(), move || fg_watcher(sessions));
         }
     }
 
@@ -902,6 +986,89 @@ impl Sessions {
     #[cfg(all(test, unix))]
     pub(crate) fn unacked(&self, id: u32) -> Option<u64> {
         self.live.lock().unwrap().get(&id).map(|s| s.out.flow.state.lock().unwrap().unacked)
+    }
+}
+
+/// A session with no terminal I/O since its foreground was last read is read again after this many watcher wakes.
+pub(crate) const FG_IDLE_TICKS: u32 = 5;
+
+/// The `omher-fg` thread ([`Sessions::watch_foreground`]).
+fn fg_watcher(sessions: std::sync::Weak<Sessions>) {
+    #[cfg(test)]
+    if let Some(s) = sessions.upgrade() {
+        s.fg_stats.threads.fetch_add(1, Ordering::SeqCst);
+    }
+    let mut watches: Vec<FgWatch> = Vec::new();
+    // (the session ended or is gone, else its foreground pid and its I/O count), per watch, read under the lock
+    let mut seen: Vec<Option<(Option<u32>, u64)>> = Vec::new();
+    loop {
+        let Some(s) = sessions.upgrade() else { break };
+        {
+            let mut inbox = s.fg.lock().unwrap();
+            watches.append(&mut inbox.pending);
+            if watches.is_empty() {
+                inbox.running = false;
+                break;
+            }
+        }
+        #[cfg(test)]
+        s.fg_stats.watched.store(watches.len() as u32, Ordering::SeqCst);
+        drop(s);
+        let tick = watches.iter().map(|w| w.every).min().unwrap_or(Duration::from_secs(1));
+        thread::sleep(tick);
+        let Some(s) = sessions.upgrade() else { break };
+        #[cfg(test)]
+        s.fg_stats.wakes.fetch_add(1, Ordering::SeqCst);
+        seen.clear();
+        {
+            let g = s.live.lock().unwrap();
+            seen.extend(watches.iter().map(|w| match g.get(&w.id) {
+                Some(l) if !l.exited.load(Ordering::SeqCst) => Some((l.foreground(), l.out.io.load(Ordering::Relaxed))),
+                _ => None,
+            }));
+        }
+        let now = Instant::now();
+        let mut i = 0;
+        for at in seen.iter() {
+            let Some((pid, io)) = *at else {
+                let mut gone = watches.remove(i);
+                if gone.last.is_some() {
+                    (gone.on_change)(None);
+                }
+                continue;
+            };
+            let w = &mut watches[i];
+            i += 1;
+            // a little slack: a wake that comes a hair early still counts as the idle look
+            let due = match w.probed {
+                None => true,
+                Some(t) => io != w.io || now.duration_since(t) + w.every / 2 >= w.idle,
+            };
+            if !due {
+                continue;
+            }
+            w.io = io;
+            w.probed = Some(now);
+            #[cfg(test)]
+            s.fg_stats.probes.fetch_add(1, Ordering::SeqCst);
+            let agent = pid.and_then(|p| w.probe.agent(p));
+            if agent != w.last {
+                w.last = agent;
+                (w.on_change)(agent);
+            }
+        }
+        drop(s);
+    }
+    // the app is gone: every watch ends
+    for mut w in watches {
+        if w.last.is_some() {
+            (w.on_change)(None);
+        }
+    }
+    #[cfg(test)]
+    if let Some(s) = sessions.upgrade() {
+        s.fg_stats.watched.store(0, Ordering::SeqCst);
+        s.fg_stats.threads.fetch_sub(1, Ordering::SeqCst);
     }
 }
 
@@ -936,10 +1103,10 @@ pub(crate) static PTY_READ_BYTES: std::sync::atomic::AtomicU64 = std::sync::atom
 /// One thread reads the PTY (macOS hands out at most 1 KB per read) into the session's [`Pipe`]; another takes one
 /// message per [`COALESCE_WINDOW`] / [`COALESCE_BYTES`] out of it and hands it to the sink, so a big dump is a few
 /// dozen Channel sends instead of one per KB. The reader holds off while the page is behind ([`Flow`]).
-fn spawn_reader(mut reader: Box<dyn Read + Send>, sink: Sink, out: Arc<Out>) {
+fn spawn_reader(id: u32, mut reader: Box<dyn Read + Send>, sink: Sink, out: Arc<Out>) {
     {
         let out = out.clone();
-        thread::spawn(move || {
+        named(format!("omher-pty-{id}-reader"), move || {
             let mut buf = [0u8; 16 * 1024];
             // Once the session is closed, what is left is read and dropped instead of handed on: closing a
             // pseudo-terminal can wait until its output has been read (ConPTY, documented for ClosePseudoConsole).
@@ -951,6 +1118,7 @@ fn spawn_reader(mut reader: Box<dyn Read + Send>, sink: Sink, out: Arc<Out>) {
                     Ok(n) => {
                         #[cfg(all(test, unix))]
                         PTY_READ_BYTES.fetch_add(n as u64, Ordering::SeqCst);
+                        out.io.fetch_add(1, Ordering::Relaxed);
                         forward = forward && out.pipe.push(&buf[..n]);
                     }
                 }
@@ -958,7 +1126,7 @@ fn spawn_reader(mut reader: Box<dyn Read + Send>, sink: Sink, out: Arc<Out>) {
             out.pipe.end();
         });
     }
-    thread::spawn(move || {
+    named(format!("omher-pty-{id}-coalesce"), move || {
         while let Some(b) = out.pipe.take(COALESCE_WINDOW) {
             // counted before the sink has it: the acknowledgement may come back while the sink still runs
             out.flow.sent(b.len());
@@ -975,11 +1143,13 @@ fn spawn_reader(mut reader: Box<dyn Read + Send>, sink: Sink, out: Arc<Out>) {
 struct Out {
     pipe: Pipe,
     flow: Flow,
+    /// Bumped by every PTY read and every write: the foreground watcher looks again soon after a change.
+    io: AtomicU64,
 }
 
 impl Out {
     fn new(marks: (u64, u64)) -> Arc<Out> {
-        Arc::new(Out { pipe: Pipe::new(COALESCE_BYTES), flow: Flow::new(marks) })
+        Arc::new(Out { pipe: Pipe::new(COALESCE_BYTES), flow: Flow::new(marks), io: AtomicU64::new(0) })
     }
 
     /// The session is closed: nothing more is handed on, and nothing holds the reader back.
@@ -1975,6 +2145,181 @@ mod tests {
         assert_eq!(s.count(), 0);
         assert!(wait_for(|| exit.lock().unwrap().is_some()), "close did not stop cat");
         assert!(s.write(id, b"x").is_err());
+    }
+
+    /// A folder with a fake `claude` (`#!/bin/sh` running `body`) for a session's PATH.
+    #[cfg(unix)]
+    fn fake_claude(tag: &str, body: &str) -> PathBuf {
+        use std::os::unix::fs::PermissionsExt;
+        let dir = std::env::temp_dir().canonicalize().unwrap().join(format!("omher-fg-{tag}-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let p = dir.join("claude");
+        std::fs::write(&p, format!("#!/bin/sh\n{body}\n")).unwrap();
+        std::fs::set_permissions(&p, std::fs::Permissions::from_mode(0o755)).unwrap();
+        dir
+    }
+
+    /// What a foreground watch handed on, in order.
+    #[cfg(unix)]
+    type FgSeen = Arc<Mutex<Vec<Option<&'static str>>>>;
+
+    /// Start `sh -c <script>` with `dir` first on PATH and record what the foreground watch hands on.
+    #[cfg(unix)]
+    fn watch(s: &Arc<Sessions>, dir: Option<&Path>, script: &str) -> (u32, FgSeen, Arc<AtomicBool>) {
+        let path = dir.map(|d| OsString::from(format!("{}:/usr/bin:/bin", d.display())));
+        let exited = Arc::new(AtomicBool::new(false));
+        let x = exited.clone();
+        let argv = vec!["/bin/sh".into(), "-c".into(), script.into()];
+        let id = s
+            .spawn(argv, &std::env::temp_dir().canonicalize().unwrap(), path, &[], 80, 24, move |ev| {
+                if let Output::Exit(_) = ev {
+                    x.store(true, Ordering::SeqCst);
+                }
+            })
+            .unwrap();
+        let seen = Arc::new(Mutex::new(Vec::new()));
+        let o = seen.clone();
+        s.watch_foreground(id, Duration::from_millis(50), move |a| o.lock().unwrap().push(a));
+        (id, seen, exited)
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_plain_program_in_the_foreground_is_no_agent() {
+        let s = Sessions::new();
+        let (id, seen, _) = watch(&s, None, "exec sleep 3");
+        thread::sleep(Duration::from_millis(800));
+        s.close(id);
+        thread::sleep(Duration::from_millis(200));
+        assert_eq!(*seen.lock().unwrap(), Vec::<Option<&str>>::new());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_claude_on_path_in_the_foreground_is_claude() {
+        // the script stays the foreground process (it waits for its own `sleep`): /bin/sh running …/claude
+        let dir = fake_claude("on", "sleep 3");
+        let s = Sessions::new();
+        let (id, seen, _) = watch(&s, Some(&dir), "exec claude");
+        assert!(wait_for(|| seen.lock().unwrap().contains(&Some("claude"))), "{:?}", seen.lock().unwrap());
+        thread::sleep(Duration::from_millis(300));
+        assert_eq!(*seen.lock().unwrap(), vec![Some("claude")], "sent once, not once a tick");
+        // closing the session hands on null
+        s.close(id);
+        assert!(wait_for(|| seen.lock().unwrap().len() == 2), "{:?}", seen.lock().unwrap());
+        assert_eq!(*seen.lock().unwrap(), vec![Some("claude"), None]);
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn the_watch_sends_each_change_once() {
+        // shell (none) -> claude -> claude execs sleep (none) -> the program ends
+        let dir = fake_claude("seq", "sleep 1; exec sleep 1");
+        let s = Sessions::new();
+        let (_id, seen, exited) = watch(&s, Some(&dir), "sleep 0.5; exec claude");
+        assert!(wait_for(|| exited.load(Ordering::SeqCst)), "the program did not end");
+        thread::sleep(Duration::from_millis(200));
+        assert_eq!(*seen.lock().unwrap(), vec![Some("claude"), None]);
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    /// Every watched session shares the one `omher-fg` thread.
+    #[cfg(unix)]
+    #[test]
+    fn sessions_share_one_foreground_watcher() {
+        let s = Sessions::new();
+        let ids: Vec<u32> = (0..6).map(|_| watch(&s, None, "exec sleep 5").0).collect();
+        assert!(wait_for(|| s.fg_stats.watched.load(Ordering::SeqCst) == 6), "watched {}", s.fg_stats.watched.load(Ordering::SeqCst));
+        thread::sleep(Duration::from_millis(200));
+        assert_eq!(s.fg_stats.threads.load(Ordering::SeqCst), 1);
+        s.close_all();
+        assert!(wait_for(|| s.fg_stats.threads.load(Ordering::SeqCst) == 0));
+        assert_eq!(ids.len(), 6);
+    }
+
+    /// A terminal with no I/O is looked at once per FG_IDLE_TICKS wakes' worth of time; output brings it back to every
+    /// wake. Counted against the wakes and the time that really passed, so a loaded machine's late wakes do not fail it.
+    #[cfg(unix)]
+    #[test]
+    fn an_idle_session_is_probed_less_often_until_it_has_output() {
+        let s = Sessions::new();
+        let (id, _, _) = watch(&s, None, "stty -echo; read x; while :; do echo .; sleep 0.01; done");
+        let probes = || s.fg_stats.probes.load(Ordering::SeqCst);
+        let wakes = || s.fg_stats.wakes.load(Ordering::SeqCst);
+        assert!(wait_for(|| probes() >= 1));
+        thread::sleep(Duration::from_millis(300));
+        // the shell prints nothing: one look per 250 ms (5 wakes of 50 ms) at most, however late the wakes come
+        let (p0, w0, t0) = (probes(), wakes(), Instant::now());
+        thread::sleep(Duration::from_millis(2000));
+        let (idle, idle_wakes) = (probes() - p0, wakes() - w0);
+        let most = (t0.elapsed().as_millis() / 200) as u64 + 1;
+        assert!(idle >= 1 && idle <= most, "{idle} looks in {:?} idle ({idle_wakes} wakes)", t0.elapsed());
+        assert!(idle * 2 <= idle_wakes, "{idle} looks for {idle_wakes} wakes while idle");
+        // it prints every 10 ms: a look on (almost) every wake
+        s.write(id, b"go\r").unwrap();
+        thread::sleep(Duration::from_millis(300));
+        let (p1, w1) = (probes(), wakes());
+        thread::sleep(Duration::from_millis(2000));
+        let (busy, busy_wakes) = (probes() - p1, wakes() - w1);
+        assert!(busy_wakes >= 5 && busy * 10 >= busy_wakes * 7, "{busy} looks for {busy_wakes} wakes with output");
+        s.close(id);
+    }
+
+    /// The watcher ends with the last watched session and starts again with the next one.
+    #[cfg(unix)]
+    #[test]
+    fn the_watcher_ends_with_the_last_session() {
+        let s = Sessions::new();
+        let (a, _, _) = watch(&s, None, "exec sleep 5");
+        let (b, _, _) = watch(&s, None, "exec sleep 5");
+        assert!(wait_for(|| s.fg_stats.watched.load(Ordering::SeqCst) == 2));
+        s.close(a);
+        thread::sleep(Duration::from_millis(300));
+        assert_eq!(s.fg_stats.threads.load(Ordering::SeqCst), 1, "one session is still watched");
+        s.close(b);
+        assert!(wait_for(|| s.fg_stats.threads.load(Ordering::SeqCst) == 0), "the watcher outlived its sessions");
+        let (c, _, _) = watch(&s, None, "exec sleep 5");
+        assert!(wait_for(|| s.fg_stats.threads.load(Ordering::SeqCst) == 1 && s.fg_stats.watched.load(Ordering::SeqCst) == 1));
+        s.close(c);
+        assert!(wait_for(|| s.fg_stats.threads.load(Ordering::SeqCst) == 0));
+    }
+
+    /// This process's thread count (`ps -M`, macOS) or `/proc/self/task` (Linux).
+    #[cfg(unix)]
+    fn thread_count() -> usize {
+        if let Ok(rd) = std::fs::read_dir("/proc/self/task") {
+            return rd.count();
+        }
+        let out = std::process::Command::new("ps").args(["-M", "-p", &std::process::id().to_string()]).output().unwrap();
+        String::from_utf8_lossy(&out.stdout).lines().count().saturating_sub(1)
+    }
+
+    /// The numbers for the handoff: 20 idle login shells watched at the app's 1 s for 10 s; the threads they add and
+    /// the foreground looks they cost (`FG_BENCH_SECS`, default 10). `cargo test --lib fg_bench_20_idle_shells -- --ignored --nocapture --test-threads=1`
+    #[cfg(unix)]
+    #[test]
+    #[ignore]
+    fn fg_bench_20_idle_shells() {
+        let s = Sessions::new();
+        let before = thread_count();
+        let argv = || vec![OsString::from("/bin/sh")];
+        let ids: Vec<u32> = (0..20)
+            .map(|_| {
+                let id = s.spawn(argv(), &std::env::temp_dir().canonicalize().unwrap(), None, &[], 80, 24, |_| {}).unwrap();
+                s.watch_foreground(id, Duration::from_secs(1), |_| {});
+                id
+            })
+            .collect();
+        thread::sleep(Duration::from_secs(2)); // the prompts are printed and looked at once
+        let threads = thread_count() - before;
+        let (p0, w0) = (s.fg_stats.probes.load(Ordering::SeqCst), s.fg_stats.wakes.load(Ordering::SeqCst));
+        let secs: u64 = std::env::var("FG_BENCH_SECS").ok().and_then(|v| v.parse().ok()).unwrap_or(10);
+        thread::sleep(Duration::from_secs(secs));
+        let looks = s.fg_stats.probes.load(Ordering::SeqCst) - p0;
+        let wakes = s.fg_stats.wakes.load(Ordering::SeqCst) - w0;
+        println!("FG_BENCH sessions={} threads_added={threads} secs={secs} watcher_wakes={wakes} probes={looks}", ids.len());
+        s.close_all();
     }
 
     #[cfg(unix)]

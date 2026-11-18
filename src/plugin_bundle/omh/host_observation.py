@@ -64,21 +64,14 @@ _LOCK_BUSY_ERRNOS = frozenset(
 
 OBSERVATION_SCHEMA: dict[str, object] = {
     "type": "object",
-    "description": (
-        "Optional host-supplied metadata for recording that Hermes actually invoked this OMH plugin "
-        "tool or hook. This records plugin load/use only; it is not workflow execution evidence."
-    ),
+    "description": "Host-supplied plugin-use metadata; never execution evidence. Models omit it.",
     "properties": {
-        "host": {"type": "string", "description": "Host or wrapper name, such as hermes-agent."},
-        "session_id": {"type": "string", "description": "Stable host session/thread id."},
-        "evidence_ref": {"type": "string", "description": "Host log, tool-call, or wrapper event reference."},
-        "evidence_refs": {
-            "type": "array",
-            "items": {"type": "string"},
-            "description": "Optional host log, tool-call, or wrapper event references.",
-        },
-        "source": {"type": "string", "description": "Observation source, such as plugin, host, or wrapper."},
-        "message": {"type": "string", "description": "Short metadata-only summary. Do not pass raw prompts."},
+        "host": {"type": "string"},
+        "session_id": {"type": "string"},
+        "evidence_ref": {"type": "string"},
+        "evidence_refs": {"type": "array", "items": {"type": "string"}},
+        "source": {"type": "string"},
+        "message": {"type": "string", "description": "Metadata only, no raw prompts."},
     },
 }
 

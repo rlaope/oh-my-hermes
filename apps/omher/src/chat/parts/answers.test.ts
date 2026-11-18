@@ -31,11 +31,9 @@ describe("quoteFor: what a bot answer replies to", () => {
   it("keeps a long message to 140 characters and says nothing after a message nobody asked", () => {
     const long = "x".repeat(200);
     expect(quoteFor([u("u1", "a"), u("u2", long), a("a1")], 2)!.lines[1].text).toHaveLength(140);
-    // at most three lines; the rest is a count. A line from the bot's other sessions ends what it answers
+    // at most three lines; the rest is a count
     const five = [u("u1", "1"), u("u2", "2"), u("u3", "3"), u("u4", "4"), u("u5", "5"), a("a1")];
     expect(quoteFor(five, 5)).toEqual({ lines: [{ id: "u3", text: "3" }, { id: "u4", text: "4" }, { id: "u5", text: "5" }], more: 2 });
-    const away = { kind: "away", id: "w1", ts: 0, away: {} } as unknown as TimelineItem;
-    expect(answered([u("u0", "old"), away, u("u1", "new"), a("a1")], 3).map((m) => m.id)).toEqual(["u1"]);
     expect(quoteFor([a("a0"), a("a1")], 1)).toBeNull();
   });
   it("never quotes a held message: it was not sent yet", () => {

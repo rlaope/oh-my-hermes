@@ -65,6 +65,7 @@ from ..omh_identities import (
 )
 from ..dispatch_outcomes import unacknowledged_outcomes
 from ..runtime_reader import read_omh_activity, read_omh_hud, read_omh_status, read_omh_todo
+from ..defect_fix_method import METHOD_BLOCK, asks_to_fix_code, claim_method_block
 from ..skill_shortlist import claim_candidate_line, skill_candidate_line, skill_candidates_for_turn
 from .session_attendance import note_session_platform
 from .verify_hooks import clear_round_end_answer
@@ -1100,6 +1101,13 @@ def _turn_context(**kwargs) -> dict[str, object] | None:
         )
         if claim_candidate_line(session_id, candidates):
             context_parts.append(skill_candidate_line(candidates))
+    # A request to fix a code defect gets the debugging and verification
+    # method itself, once per session: Hermes' skills index tells the model
+    # not to open process skills, so app-debugging stays closed on exactly
+    # this turn (`defect_fix_method`). Every other turn gets nothing here.
+    if include_awareness and not capability_off_context and asks_to_fix_code(request_message):
+        if claim_method_block(session_id):
+            context_parts.append(METHOD_BLOCK)
 
     # The person's own text, so a marker inside a quoted reply or backfill is
     # someone else's and sets nothing. A host turn keeps its frame here, as it

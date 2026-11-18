@@ -4428,7 +4428,10 @@ mod tests {
         for _ in 0..16 {
             c.input(stuck, Input::send("x".repeat(64 * 1024))).unwrap();
         }
-        assert!(started.elapsed() < Duration::from_millis(500), "input blocked: {:?}", started.elapsed());
+        // A blocked send waits on a reader that sleeps for 60 s, so any bound well short of that catches it. 500 ms
+        // failed at 560-860 ms on a host at load ~100 (sixteen 64 KiB prompts are framed in a debug build), so the
+        // bound leaves room for a loaded machine without hiding a real block.
+        assert!(started.elapsed() < Duration::from_secs(5), "input blocked: {:?}", started.elapsed());
         // other chats keep working while that one is stuck
         c.input(other, Input::send("pong")).unwrap();
         assert!(wait_for(|| std::fs::read_to_string(&mark).is_ok_and(|t| t.contains("pong")), 10), "other chat stalled");

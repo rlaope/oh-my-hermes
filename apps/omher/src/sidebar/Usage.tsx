@@ -126,10 +126,10 @@ export function Usage() {
 
   if (providers.length === 0) return null;
   const shown = providers.find((p) => p.id === open?.id);
-  // the caret points at the middle of the open mark (measured from the card's own left edge)
+  // the caret points at the middle of the open mark, measured from the card's own left edge (the card spans the
+  // footer row the marks sit in: both are placed against it)
   const btn = shown ? marks.current.get(shown.id) : undefined;
-  const first = providers.length ? marks.current.get(providers[0].id) : undefined;
-  const caret = btn && first ? btn.offsetLeft - first.offsetLeft + btn.offsetWidth / 2 : 0;
+  const caret = btn ? btn.offsetLeft + btn.offsetWidth / 2 : 0;
   return (
     <div className="usage" ref={ref} data-testid="usage" onMouseLeave={() => !open?.pinned && setOpen(null)}>
       {providers.map((p) => (

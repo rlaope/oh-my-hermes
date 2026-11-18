@@ -3,6 +3,7 @@
 // (src-tauri/src/agent_chat.rs). In a plain browser (dev, e2e against the mock bridge) there is no shell,
 // so a mock host echoes terminal typing and a mock agent answers chats with the same events.
 import { AGENTS, acpRow, agentDef, HERMES_LABEL, type AcpRow, type AgentId, type AgentInfo } from "./agents";
+import { mockPtyOut, nextMockPty } from "./fg";
 import mockAcpAgents from "./mockAcpAgents.json";
 import { botRefusal, mockCheck, mockNewId, type CustomEntry, type CustomList, type CustomPreview, type CustomWhy } from "./custom";
 import type { ApprovalChoice, ClarifyAnswers } from "../lib/protocol";
@@ -492,13 +493,14 @@ export class MockHost implements SessionHost {
     return v === undefined ? defaultPath : v;
   }
   async start(agent: AgentId, cwd: string, cols: number, rows: number, onData: (d: string) => void, onExit: (c: number | null) => void, resume?: string, account?: string) {
-    const id = ++this.next;
+    const id = nextMockPty();
     this.log({ op: "start", id, agent, cwd, cols, rows, ...(resume ? { resume } : {}), ...(account ? { account } : {}) });
     const out = (d: string) => {
       (this.g.__omherSessionFlow ??= []).push({ op: "feed", id, bytes: utf8.encode(d).length });
       onData(d);
     };
     this.live.set(id, { line: "", out, exit: onExit });
+    mockPtyOut(id, out);
     setTimeout(() => {
       out(`${banner(agent)}\r\n\x1b[2m  ${agentDef(agent).program} in ${cwd}\x1b[0m\r\n\r\n${PROMPT}`);
     }, 30);
@@ -516,7 +518,8 @@ export class MockHost implements SessionHost {
       if (ch === "\r") {
         const line = s.line.trim();
         s.line = "";
-        if (line === "exit") {
+        // `exit`, or a CLI's own `/exit` command, ends the program
+        if (line === "exit" || line === "/exit") {
           s.out("\r\n");
           this.live.delete(id);
           setTimeout(() => s.exit(0), 10);

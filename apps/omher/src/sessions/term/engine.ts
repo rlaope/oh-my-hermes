@@ -5,13 +5,18 @@
 // keeps xterm's standard renderer and shows nothing about it. A lost context drops back to the standard renderer at
 // once and is tried again later (three losses in 60 s stop it for that terminal). A terminal that leaves the page
 // gives its GPU context back (its program keeps running and its output keeps being parsed) and takes one again when
-// it returns, so many open sessions never run into the browser's cap on live contexts.
+// it returns, so many open sessions never run into the browser's cap on live contexts. While it is away it draws no
+// rows at all (engine-hidden.ts); shown, it draws its screen and selection once. One that stays away and quiet long
+// enough is parked (park.ts): kept as a snapshot, its xterm disposed, and made again when it is shown or prints.
 import type { Terminal } from "@xterm/xterm";
 import type { WebglAddon } from "@xterm/addon-webgl";
 import { canRetry, probeWebgl, recordLoss } from "./engine-policy";
+import { hideRows, showRows } from "./engine-hidden";
+import { cannotPark, carriedOf, dueToPark, extras, innerOf, limits, putCarried, type Carried } from "./park";
 import { onTermSettings, type TermSettings } from "./settings";
 import { attachLinks } from "./engine-links";
 import { attachInput } from "./engine-input";
+import { attachIme } from "./engine-ime";
 import { FIND_EVENT, makeFinder, type FindRequest } from "./engine-find";
 
 /** The add-on's chunk loads the first time a terminal wants it, never with the app and never while `gpu` is off. */
@@ -52,10 +57,48 @@ interface State {
   unwatch: (() => void) | null;
   /** output that came before the Unicode 11 widths were active, in order; null once they are */
   held: (() => void)[] | null;
+  /** when it left the page (ms); null while it is on it */
+  hiddenAt: number | null;
+  /** when its program last printed (ms) */
+  lastOut: number;
+  /** writes the terminal has not taken yet */
+  pending: number;
+  /** makes the terminal again after it was parked (null: its owner cannot, so it is never parked) */
+  remake: Remake | null;
+  el: HTMLElement;
+  /** the undo `afterOpen` returned, run once */
+  undo: () => void;
 }
+
+/** Makes a parked terminal again: a new `Terminal` at this size with its owner's options and handlers, opened on the
+ *  same element and passed to `afterOpen`. The engine then writes the snapshot into it. */
+export type Remake = (size: { cols: number; rows: number }) => Terminal;
+
+/** A parked terminal: its snapshot and what the one made from it takes over. */
+interface Parked {
+  /** UTF-8: the add-on builds its string from many small pieces, which V8 keeps as a rope several times its length */
+  snapshot: Uint8Array;
+  /** what the snapshot leaves out (saved cursor, tab stops, scroll position), put back once it is read */
+  carried: Carried;
+  cols: number;
+  rows: number;
+  remake: Remake;
+  hiddenAt: number | null;
+  lastOut: number;
+  gpuLast: boolean;
+  gaveUp: boolean;
+  losses: number[];
+}
+const parked = new Map<Terminal, Parked>();
+/** a parked terminal that was made again: the one that replaced it */
+const remade = new WeakMap<Terminal, Terminal>();
+/** what the next `afterOpen` takes over from the parked terminal it replaces */
+let carry: Parked | null = null;
 
 const states = new Map<Terminal, State>();
 let stopSettings: (() => void) | null = null;
+/** the GPU setting as the engine last read it (a parked terminal has no state to keep it in) */
+let gpuSetting: TermSettings["gpu"] = "auto";
 
 const wants = (s: State) => !s.gone && s.shown && !s.gaveUp && !s.addon && s.gpu !== "off" && (s.gpu === "on" || probeWebgl().allow);
 
@@ -72,6 +115,20 @@ function detach(s: State, release = false): void {
   } catch {
     /* already gone with its context */
   }
+}
+
+/** Sent on a terminal's element when its cells change size while it is on the page: the GPU renderer came or went
+ *  (it draws in whole device pixels, the standard one does not) or a font arrived. Its owner fits it to its box
+ *  again, as it does when the box changes size; otherwise the program keeps printing at a width the box no longer
+ *  has, and a screen it drew at that width moves when the next fit reflows it. */
+export const CELLS_EVENT = "omher-term-cells";
+
+/** Sent on a terminal's element just before it is parked, while its xterm can still be read: its owner takes what
+ *  it was about to read from the screen now, as reading it after the park would make the terminal again. */
+export const PARKING_EVENT = "omher-term-parking";
+
+function cellsChanged(s: State): void {
+  if (!s.gone && s.shown) s.el.dispatchEvent(new Event(CELLS_EVENT));
 }
 
 function repaint(s: State): void {
@@ -106,6 +163,7 @@ function attach(s: State): void {
           off.dispose();
           for (const c of canvases) c.removeEventListener("webglcontextlost", onLost);
         };
+        cellsChanged(s);
       } catch {
         // no context, or the add-on would not start: keep the standard renderer, say nothing
         s.addon = null;
@@ -127,6 +185,7 @@ function attach(s: State): void {
 function lost(s: State, addon: WebglAddon): void {
   if (s.addon !== addon) return; // a loss already handled
   detach(s);
+  cellsChanged(s);
   repaint(s);
   const now = Date.now();
   s.losses = recordLoss(s.losses, now);
@@ -142,19 +201,49 @@ function lost(s: State, addon: WebglAddon): void {
 }
 
 function reconsider(settings: TermSettings): void {
+  if (settings.gpu !== gpuSetting) for (const p of parked.values()) p.gaveUp = false;
+  gpuSetting = settings.gpu;
   for (const s of states.values()) {
     if (s.gpu !== settings.gpu) s.gaveUp = false;
     s.gpu = settings.gpu;
     if (s.gpu === "off" || (s.gpu === "auto" && !probeWebgl().allow)) {
+      const had = !!s.addon;
       detach(s);
+      if (had) cellsChanged(s);
       repaint(s);
     } else attach(s);
   }
 }
 
 /** Called once, right after `term.open(el)`. Returns what undoes it (called before the terminal is disposed). */
-export function afterOpen(term: Terminal, el: HTMLElement, settings: TermSettings): () => void {
-  const s: State = { term, gpu: settings.gpu, shown: el.isConnected, addon: null, gpuLast: false, loading: false, losses: [], gaveUp: false, retry: null, gone: false, unwatch: null, held: [] };
+export function afterOpen(term: Terminal, el: HTMLElement, settings: TermSettings, remake?: Remake): () => void {
+  const now = Date.now();
+  gpuSetting = settings.gpu;
+  const c = carry;
+  carry = null;
+  // a parked terminal is made again away from the page (the bottom panel's element stays connected while the panel
+  // is hidden); the show that made it again says so right after
+  const shown = !c && el.isConnected;
+  const s: State = {
+    term,
+    gpu: settings.gpu,
+    shown,
+    addon: null,
+    gpuLast: c?.gpuLast ?? false,
+    loading: false,
+    losses: c?.losses ?? [],
+    gaveUp: c?.gaveUp ?? false,
+    retry: null,
+    gone: false,
+    unwatch: null,
+    held: [],
+    hiddenAt: shown ? null : (c?.hiddenAt ?? now),
+    lastOut: c?.lastOut ?? now,
+    pending: 0,
+    remake: remake ?? null,
+    el,
+    undo: () => undefined,
+  };
   states.set(term, s);
   // CJK, emoji and box drawing take the widths agents' TUIs expect. Output waits (in order) until they are active.
   const release = () => {
@@ -183,9 +272,31 @@ export function afterOpen(term: Terminal, el: HTMLElement, settings: TermSetting
     const detail: FindRequest = { term, finder };
     el.dispatchEvent(new CustomEvent<FindRequest>(FIND_EVENT, { bubbles: true, detail }));
   });
+  // Korean, Japanese and Chinese input methods: each committed text reaches the program once (engine-ime.ts)
+  const undoIme = attachIme(term, el);
+  // a font that arrives after the terminal drew (the symbols font loads on its first glyph, or JetBrains Mono came
+  // after the wait for it gave up): the cell is measured again in the font now drawn, and the GPU renderer's glyph
+  // cache, which holds the fallback's shapes, is cleared
+  const fonts = typeof document !== "undefined" ? document.fonts : undefined;
+  const fontsLoaded = () => {
+    if (s.gone) return;
+    try {
+      (term as unknown as { _core?: { _charSizeService?: { measure?(): void } } })._core?._charSizeService?.measure?.();
+      term.clearTextureAtlas();
+    } catch {
+      /* not drawable yet */
+    }
+    cellsChanged(s);
+    repaint(s);
+  };
+  fonts?.addEventListener?.("loadingdone", fontsLoaded);
   stopSettings ??= onTermSettings(reconsider);
+  if (!s.shown) hideRows(term);
   attach(s);
-  return () => {
+  s.undo = () => {
+    if (s.gone) return;
+    fonts?.removeEventListener?.("loadingdone", fontsLoaded);
+    undoIme();
     undoInput();
     undoLinks();
     finder.dispose();
@@ -194,42 +305,194 @@ export function afterOpen(term: Terminal, el: HTMLElement, settings: TermSetting
     if (s.retry) clearTimeout(s.retry);
     detach(s);
     states.delete(term);
-    if (!states.size) {
-      stopSettings?.();
-      stopSettings = null;
-    }
+    settingsWhileOpen();
+    sweepWhenHidden();
   };
+  sweepWhenHidden();
+  // a parked terminal's undo only forgets its snapshot (its add-ons went when it was parked)
+  return () => {
+    if (parked.delete(term)) settingsWhileOpen();
+    else s.undo();
+  };
+}
+
+/** The settings listener stays while any terminal is open, parked ones included (`rendererInUse` reads them). */
+function settingsWhileOpen(): void {
+  if (states.size || parked.size) return;
+  stopSettings?.();
+  stopSettings = null;
+}
+
+/** The terminal to use now: a parked one is made again first, from its snapshot, where it was (off the page unless it
+ *  is being shown). Its owner reads its terminal through this, so output, a show or a close reach the new one. */
+export function live(term: Terminal): Terminal {
+  const moved = remade.get(term);
+  if (moved) return live(moved);
+  const p = parked.get(term);
+  if (!p) return term;
+  parked.delete(term);
+  carry = p;
+  let next: Terminal;
+  try {
+    next = p.remake({ cols: p.cols, rows: p.rows });
+  } catch (e) {
+    parked.set(term, p); // the snapshot is kept for the next try
+    throw e;
+  } finally {
+    carry = null;
+  }
+  remade.set(term, next);
+  const s = states.get(next);
+  // the snapshot is not the program's output: it neither counts as output nor waits for an ack. It is pending, though:
+  // parked again before xterm has taken all of it, the next snapshot would miss the rest
+  if (!s) next.write(p.snapshot, () => putCarried(next, p.carried));
+  else {
+    s.pending++;
+    // the write callback runs before xterm parses the next write, so the program's next bytes see it all
+    const took = () => {
+      putCarried(next, p.carried);
+      s.pending--;
+    };
+    if (s.held) s.held.push(() => next.write(p.snapshot, took));
+    else next.write(p.snapshot, took); // xterm decodes UTF-8 bytes itself
+  }
+  return next;
+}
+
+/** Whether `term` is parked: it has no xterm (nothing to dispose) until `live` makes it again. */
+export const isParked = (term: Terminal): boolean => parked.has(term);
+
+const utf8 = new TextEncoder();
+let sweepTimer: ReturnType<typeof setInterval> | null = null;
+let serializeLoad: Promise<typeof import("@xterm/addon-serialize").SerializeAddon> | null = null;
+const loadSerialize = () =>
+  (serializeLoad ??= import("@xterm/addon-serialize").then(
+    (m) => m.SerializeAddon,
+    (e) => {
+      serializeLoad = null;
+      throw e;
+    },
+  ));
+
+/** One timer for every terminal, running only while some terminal is off the page. */
+function sweepWhenHidden(): void {
+  const need = [...states.values()].some((s) => !s.gone && !s.shown && s.remake);
+  if (need && !sweepTimer) sweepTimer = setInterval(sweep, limits.sweepMs);
+  else if (!need && sweepTimer) {
+    clearInterval(sweepTimer);
+    sweepTimer = null;
+  }
+}
+
+const due = (s: State, now: number) => !s.gone && !s.shown && !!s.remake && s.pending === 0 && !s.held && dueToPark({ hiddenAt: s.hiddenAt, lastOut: s.lastOut, now });
+
+function sweep(): void {
+  const now = Date.now();
+  if (![...states.values()].some((s) => due(s, now))) return;
+  void loadSerialize().then(
+    (Ctor) => {
+      const at = Date.now();
+      for (const s of [...states.values()]) if (due(s, at)) park(s, Ctor);
+    },
+    () => undefined, // the chunk would not load: nothing is parked
+  );
+}
+
+function park(s: State, Serialize: typeof import("@xterm/addon-serialize").SerializeAddon): void {
+  const term = s.term;
+  const inner = innerOf(term);
+  if (!inner || cannotPark(inner) !== null) return;
+  const carried = carriedOf(term);
+  if (!carried) return;
+  s.el.dispatchEvent(new Event(PARKING_EVENT));
+  let snapshot: string;
+  const ser = new Serialize();
+  try {
+    term.loadAddon(ser);
+    snapshot = ser.serialize() + extras(inner);
+  } catch {
+    return;
+  } finally {
+    ser.dispose();
+  }
+  const title = (term as unknown as { _core?: { _inputHandler?: { _windowTitle?: unknown } } })._core?._inputHandler?._windowTitle;
+  if (typeof title === "string" && title) snapshot += `\x1b]2;${title}\x07`;
+  parked.set(term, { snapshot: utf8.encode(snapshot), carried, cols: term.cols, rows: term.rows, remake: s.remake!, hiddenAt: s.hiddenAt, lastOut: s.lastOut, gpuLast: s.gpuLast, gaveUp: s.gaveUp, losses: s.losses });
+  // a find bar left open on it (the bottom panel keeps one while hidden) closes: its terminal is going
+  s.el.dispatchEvent(new CustomEvent(FIND_EVENT, { bubbles: true, detail: null }));
+  s.undo();
+  if (import.meta.env?.DEV && typeof window !== "undefined") (window as unknown as { __omherTerms?: Set<Terminal> }).__omherTerms?.delete(term);
+  // the disposed xterm object stays referenced (by its owner until it is made again) and dispose leaves its buffers
+  // in place: a reset first drops the scrollback to one empty screen
+  try {
+    term.reset();
+  } catch {
+    /* nothing to drop */
+  }
+  term.dispose();
 }
 
 /** Output from the program into the terminal. `done` runs once the terminal has taken these bytes. */
 export function feed(term: Terminal, data: string | Uint8Array, done?: () => void): void {
+  term = live(term);
   const s = states.get(term);
-  if (s?.held) s.held.push(() => term.write(data, done));
-  else term.write(data, done);
+  if (!s) return void term.write(data, done);
+  s.lastOut = Date.now();
+  s.pending++;
+  const cb = () => {
+    s.pending--;
+    done?.();
+  };
+  if (s.held) s.held.push(() => term.write(data, cb));
+  else term.write(data, cb);
 }
 
 /** What draws the terminals now: the GPU renderer, the standard one, or null while no terminal is open.
  *  Settings shows it, so a person (and a check of the real window) can see which is in use. Settings is itself a
  *  page no terminal is on, so a terminal that left the page counts as GPU when it drew with the GPU until then. */
 export function rendererInUse(): "gpu" | "standard" | null {
-  if (!states.size) return null;
+  if (!states.size && !parked.size) return null;
   for (const s of states.values()) if (!s.gone && (s.addon || (!s.shown && s.gpuLast && !s.gaveUp && s.gpu !== "off"))) return "gpu";
+  for (const p of parked.values()) if (p.gpuLast && !p.gaveUp && gpuSetting !== "off") return "gpu";
   return "standard";
 }
 
 /** A terminal came onto the page (`shown`) or left it while its program keeps running. */
 export function onVisible(term: Terminal, shown: boolean): void {
+  if (!shown && parked.has(term)) return; // already away
+  term = live(term);
   const s = states.get(term);
   if (!s || s.gone) return;
   s.shown = shown;
+  s.hiddenAt = shown ? null : (s.hiddenAt ?? Date.now());
+  sweepWhenHidden();
   if (!shown) {
     if (s.retry) {
       clearTimeout(s.retry);
       s.retry = null;
     }
     detach(s, true); // gives the GPU context back
+    hideRows(term); // and draws nothing until it is back
     return;
   }
+  showRows(term);
   if (s.addon) repaint(s);
   else attach(s);
+}
+
+/** e2e only (a dev build): shorter park thresholds, and how many terminals are parked. A release build has none. */
+if (import.meta.env?.DEV && typeof window !== "undefined") {
+  (window as unknown as { __omherPark?: unknown }).__omherPark = {
+    set(l: Partial<typeof limits>) {
+      Object.assign(limits, l);
+      if (sweepTimer) clearInterval(sweepTimer);
+      sweepTimer = null;
+      sweepWhenHidden();
+    },
+    parked: () => parked.size,
+    /** the parked (disposed) xterm objects, so a bench can count what they still hold */
+    held: () => [...parked.keys()],
+    /** what the snapshots take (bytes) */
+    snapshotBytes: () => [...parked.values()].reduce((n, p) => n + p.snapshot.byteLength, 0),
+  };
 }

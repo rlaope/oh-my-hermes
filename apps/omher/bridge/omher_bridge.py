@@ -41,7 +41,7 @@ from http import HTTPStatus
 from pathlib import Path
 from urllib.parse import parse_qs, urlsplit
 
-VERSION = "0.2.11"
+VERSION = "0.2.13"
 BOT_CHAT_TITLE = "Bot Chat"
 FOLDER_CHAT_PREFIX = "omher · "
 MAX_FOLDER_CHATS = 16
@@ -851,6 +851,77 @@ def skill_roots(profile_dir: Path) -> list[Path]:
         if p.is_dir() and os.path.realpath(p) not in {os.path.realpath(r) for r in roots}:
             roots.append(p)
     return roots
+
+
+
+def read_linear_mcp(profile_dir: Path) -> dict:
+    """`tasks.linear`: whether the bot's `config.yaml` has an MCP server under `mcp_servers` whose NAME has `linear`
+    in it, for the Tasks page's Linear source (`linear_server`). Read-only, and never through `_load_yaml`: the config
+    is not parsed whole nor put in the shared cache; `mcp_server_names` keeps only the names and each `enabled`."""
+    return linear_server(mcp_server_names(profile_dir / "config.yaml"))
+
+
+def mcp_server_names(path: Path) -> dict:
+    """`{name: {"enabled": bool}}` (or `{name: {}}` when it has no `enabled`) for each server under the top-level
+    `mcp_servers` mapping of the YAML file at *path*; {} when there is none or it does not parse. The file goes
+    through the safe loader's event stream and nothing is built from it: a scalar is kept only when it is a top-level
+    key equal to `mcp_servers`, a key directly under it (a server name), or the plain `enabled` value of one; every
+    other scalar (a url, headers, env, auth: a credential may sit there) is dropped as it passes, so no other value
+    of the file is kept, returned or cached."""
+    try:
+        import yaml  # Hermes' own dependency; absent only outside its venv
+        loader = getattr(yaml, "CSafeLoader", None) or yaml.SafeLoader
+        out: dict[str, dict] = {}
+        stack: list[list] = []  # one per open collection: [is_map, kept key or None, awaiting a key, was a key]
+        with path.open(encoding="utf-8") as f:
+            for ev in yaml.parse(f, Loader=loader):
+                if isinstance(ev, (yaml.MappingEndEvent, yaml.SequenceEndEvent)):
+                    was_key = stack.pop()[3]
+                    if stack and stack[-1][0]:
+                        stack[-1][2] = not was_key
+                    continue
+                if not isinstance(ev, (yaml.ScalarEvent, yaml.AliasEvent, yaml.MappingStartEvent, yaml.SequenceStartEvent)):
+                    continue
+                top = stack[-1] if stack else None
+                as_key = bool(top and top[0] and top[2])
+                depth = len(stack)
+                servers = depth >= 2 and stack[0][1] == "mcp_servers" and stack[1][0]
+                if as_key and isinstance(ev, yaml.ScalarEvent):
+                    if depth == 1:
+                        top[1] = "mcp_servers" if ev.value == "mcp_servers" else None
+                    elif depth == 2 and servers:
+                        top[1] = ev.value
+                        out.setdefault(ev.value, {})
+                    elif depth == 3 and servers and stack[1][1] is not None:
+                        top[1] = "enabled" if ev.value == "enabled" else None
+                    else:
+                        top[1] = None
+                elif as_key:
+                    top[1] = None
+                elif (depth == 3 and servers and isinstance(ev, yaml.ScalarEvent) and top[0] and top[1] == "enabled"
+                      and stack[1][1] is not None and ev.implicit[0]):
+                    out[stack[1][1]]["enabled"] = ev.value not in ("false", "False", "FALSE", "no", "No", "NO", "off", "Off", "OFF")
+                if isinstance(ev, (yaml.MappingStartEvent, yaml.SequenceStartEvent)):
+                    stack.append([isinstance(ev, yaml.MappingStartEvent), None, True, as_key])
+                elif top and top[0]:
+                    top[2] = not as_key
+        return out
+    except Exception:
+        return {}
+
+
+def linear_server(servers) -> dict:
+    """The first server in `servers` (the `mcp_servers` mapping) whose name has `linear` in it, and whether it is on.
+    Reads the names (the keys) and, of that one server only, its `enabled`; never a server's url, headers, env or
+    auth (a credential may sit there), so a server is Linear by its name alone."""
+    if not isinstance(servers, dict):
+        return {"configured": False, "server": ""}
+    for name in servers.keys():
+        if isinstance(name, str) and "linear" in name.lower():
+            cfg = servers[name]
+            on = not (isinstance(cfg, dict) and cfg.get("enabled") is False)
+            return {"configured": on, "server": name[:64]}
+    return {"configured": False, "server": ""}
 
 
 def read_skills(profile_dir: Path) -> list[dict]:
@@ -3236,13 +3307,46 @@ NS_CLIP = 4096             # bytes of one step's input or result sent to the UI
 NS_TEXT = 16000            # chars of one bubble
 NS_ITEMS = 400             # items of one session
 NS_REF = re.compile(r"^(hermes|claude|claude-sub|codex):([A-Za-z0-9_.:/@-]{1,300})$")
-_SECRET = re.compile(r"(sk-|ghp_|gho_|github_pat_|xox[bpas]-|AKIA)[A-Za-z0-9_-]{8,}")
+# omher's one masker: the same patterns as src/lib/secrets.json, which the page (src/lib/secrets.ts) and the
+# desktop shell (tasks.rs mask_secrets) read; bridge/tests pin these strings to that file.
+SECRET_MASK = "••••"
+SECRET_TOKENS = (
+    r"\b(?:gh[pousr]_|github_pat_|glpat-|sk-|xox[abprs]-|AKIA)(?:[A-Za-z0-9_-]{8,}(?:(?:[ \t]?\r?\n[ \t]?|[ \t])"
+    r"[a-z_-]*[A-Z0-9][a-z_-]*[A-Z0-9][A-Za-z0-9_-]*){0,4}|[a-z_-]*[A-Z0-9][A-Za-z0-9_-]*(?:(?:[ \t]?\r?\n[ \t]?|[ \t])"
+    r"[a-z_-]*[A-Z0-9][a-z_-]*[A-Z0-9][A-Za-z0-9_-]*){1,4})"
+)
+SECRET_SPLIT = (
+    (r"\b(?:gh[pousr]_)([A-Za-z0-9]+(?:(?:[ \t]?\r?\n[ \t]?|[ \t])[A-Za-z0-9]+){1,4})", 36),
+    (r"\b(?:glpat-)([A-Za-z0-9_-]+(?:(?:[ \t]?\r?\n[ \t]?|[ \t])[A-Za-z0-9_-]+){1,4})", 20),
+)
+SECRET_ASSIGNED = r"""\b([a-z_-]*(?:credentials?|token|password|passwd|secret|api[_-]?key))=[^\s"'<>&;,)\]]+"""
+_SECRET_SPLIT = tuple((re.compile(p), n) for p, n in SECRET_SPLIT)
+_SECRET = re.compile(SECRET_TOKENS)
+_SECRET_ASSIGNED = re.compile(SECRET_ASSIGNED, re.IGNORECASE)
 _HERMES_SID = re.compile(r"^[A-Za-z0-9_-]{1,80}$")
 
 
+def _split_token(m: re.Match, n: int) -> str:
+    """A `SECRET_SPLIT` match: the prefix and the body's pieces up to exactly *n* token characters become `••••` (the
+    pieces after stay); left as it is when the pieces do not make exactly *n* at the end of one."""
+    body, k = m.group(1), 0
+    for i, c in enumerate(body):
+        if c.isspace():
+            continue
+        k += 1
+        if k == n:
+            return SECRET_MASK + body[i + 1:] if i + 1 == len(body) or body[i + 1].isspace() else m.group(0)
+    return m.group(0)
+
+
 def mask_secrets(text: str) -> str:
-    """Token-like strings (`sk-…`, `ghp_…`, `xoxb-…`, `AKIA…`) with their body replaced by `•••`."""
-    return _SECRET.sub(lambda m: m.group(1) + "•••", text)
+    """Token-like strings (`sk-…`, `ghp_…`, `glpat-…`, `xoxb-…`, `AKIA…`) replaced by `••••`: also one broken by line
+    breaks or a space, taken by its known length for `gh?_` (36) and `glpat-` (20) in any letter case, or by its shape
+    for the rest; the value of a `token=` / `credential=` / `password=` / `secret=` / `api_key=` replaced the same way
+    (the name stays)."""
+    for rx, n in _SECRET_SPLIT:
+        text = rx.sub(lambda m: _split_token(m, n), text)
+    return _SECRET_ASSIGNED.sub(lambda m: m.group(1) + "=" + SECRET_MASK, _SECRET.sub(SECRET_MASK, text))
 
 
 def _ns_clip(text, n: int = NS_CLIP) -> str:
@@ -4525,7 +4629,7 @@ PEER_OPEN_TIMEOUT = 15.0
 PEER_FORWARD = frozenset({
     "chat.open", "chat.send", "chat.interrupt", "chat.steer", "approval.respond", "clarify.respond", "chat.attach", "chat.set_model",
     "models.options", "bots.ready", "bots.rename", "bots.avatar", "bots.set_avatar", "bots.info", "skills.list",
-    "links.places", "elsewhere.list", "elsewhere.peek", "routines.list", "runs.list", "runs.get", "runs.prs",
+    "links.places", "tasks.linear", "elsewhere.list", "elsewhere.peek", "routines.list", "runs.list", "runs.get", "runs.prs",
     "runs.node_session",
     "panel.terminal", "panel.worktrees", "panel.diff", "media.read", "automations.add", "automations.pause",
     "automations.resume", "automations.remove", "plugins.list", "plugins.catalog", "plugins.inspect",
@@ -4946,7 +5050,7 @@ class Bridge:
             "chat.set_model": self.op_set_model, "bots.ready": self.op_bots_ready,
             "bots.rename": self.op_bots_rename, "bots.avatar": self.op_bots_avatar,
             "bots.set_avatar": self.op_bots_set_avatar, "bots.info": self.op_bots_info,
-            "skills.list": self.op_skills_list, "links.places": self.op_links_places,
+            "skills.list": self.op_skills_list, "links.places": self.op_links_places, "tasks.linear": self.op_tasks_linear,
             "folder.open": self.op_folder_open, "folder.close": self.op_folder_close,
             "thread.create": self.op_thread_create, "thread.list": self.op_thread_list,
             "thread.open": self.op_thread_open, "thread.remove": self.op_thread_remove,
@@ -6239,6 +6343,12 @@ class Bridge:
     async def op_bots_info(self, p) -> dict:
         bot = self._bot(p.get("bot"))
         return await asyncio.to_thread(read_bot_facts, bot["path"])
+
+    async def op_tasks_linear(self, p) -> dict:
+        """Tasks › Linear: whether the bot has a Linear MCP server in its config (rule 33). Hermes' gateway offers no
+        call that runs an MCP tool for a client, so omher lists nothing from Linear itself."""
+        bot = self._bot(p.get("bot"))
+        return await asyncio.to_thread(read_linear_mcp, bot["path"])
 
     async def op_skills_list(self, p) -> dict:
         bot = self._bot(p.get("bot"))

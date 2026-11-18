@@ -42,9 +42,11 @@ test("one mark per provider above the user row; rings only where the source gave
   await expect(page.getByTestId("usage-codex").locator('[data-agent="codex"]')).toHaveCount(1);
   await expect(page.getByTestId("usage-claude").locator('[data-agent="claude"]')).toHaveCount(1);
   await expect(page.getByTestId("usage-grok").locator('[data-agent="grok"]')).toHaveCount(1);
-  // usage sits above the user row, inside the sidebar footer
-  const [u, me] = await Promise.all([usage.boundingBox(), page.locator(".side .me").boundingBox()]);
+  // usage sits above the user row, on the footer's one icon row after Settings (spacing, 2026-11-16)
+  const [u, me, gear] = await Promise.all([usage.boundingBox(), page.locator(".side .me").boundingBox(), page.getByTestId("nav-settings").boundingBox()]);
   expect(u!.y + u!.height).toBeLessThanOrEqual(me!.y + 1);
+  expect(u!.x).toBeGreaterThanOrEqual(gear!.x + gear!.width);
+  expect(Math.abs(u!.y + u!.height / 2 - (gear!.y + gear!.height / 2))).toBeLessThanOrEqual(2);
   // codex 73 %: amber ring; claude and grok: no ring fill, a state dot instead
   await expect(page.getByTestId("usage-codex").getByTestId("usage-fill")).toHaveClass(/lv-amber/);
   await expect(page.getByTestId("usage-claude").getByTestId("usage-fill")).toHaveCount(0);
@@ -54,13 +56,12 @@ test("one mark per provider above the user row; rings only where the source gave
   await expect(page.getByTestId("usage-grok").locator(".usage-ring")).toHaveCount(0);
   await expect(page.getByTestId("usage-grok").locator(".usage-dot")).toHaveCount(0);
   await expect(page.getByTestId("usage-claude").locator(".usage-ring")).toHaveCount(0);
-  // the marks sit on the nav icons' column: the first mark's centre matches the Settings icon's and the "Y"
-  const cx = await page.evaluate(() => {
-    const mid = (el: Element | null) => { const r = el!.getBoundingClientRect(); return r.left + r.width / 2; };
-    return [mid(document.querySelector(".usage-m .usage-mark")), mid(document.querySelector("[data-testid=nav-settings] svg")), mid(document.querySelector(".me-i"))];
+  // the marks share one centre line with the footer's icon buttons
+  const cy = await page.evaluate(() => {
+    const mid = (el: Element | null) => { const r = el!.getBoundingClientRect(); return r.top + r.height / 2; };
+    return [mid(document.querySelector(".usage-m .usage-mark")), mid(document.querySelector("[data-testid=nav-settings] svg"))];
   });
-  expect(Math.abs(cx[0] - cx[1]), `mark ${cx[0]} vs nav icon ${cx[1]}`).toBeLessThanOrEqual(1.5);
-  expect(Math.abs(cx[0] - cx[2]), `mark ${cx[0]} vs user initial ${cx[2]}`).toBeLessThanOrEqual(1.5);
+  expect(Math.abs(cy[0] - cy[1]), `mark ${cy[0]} vs nav icon ${cy[1]}`).toBeLessThanOrEqual(1.5);
   await expect(page.getByTestId("usage-codex")).toHaveAttribute("aria-label", "Codex usage: 73%");
   // the meter calls only the read op
   const ops = (await mock("mock.calls")).calls.map((c: { op: string }) => c.op);
@@ -117,12 +118,13 @@ test("hover shows the card: plan, then each window with % and reset", async ({ p
     }, id);
     expect(Math.abs(caret - mark), id).toBeLessThanOrEqual(1.5);
   }
-  // the card starts on the first mark's edge and covers the nav rows' counts whole (never cuts one in half)
-  const [cardBox, first, count] = await Promise.all([
-    page.getByTestId("usage-card").boundingBox(), page.getByTestId("usage-codex").boundingBox(),
+  // the card spans the footer's icon row (the marks sit at its right end) and covers the Automations count whole
+  const [cardBox, row, count] = await Promise.all([
+    page.getByTestId("usage-card").boundingBox(), page.getByTestId("foot-row").boundingBox(),
     page.locator("[data-testid=nav-automations] .nav-count").boundingBox(),
   ]);
-  expect(Math.abs(cardBox!.x - first!.x)).toBeLessThanOrEqual(0.5);
+  expect(Math.abs(cardBox!.x - row!.x)).toBeLessThanOrEqual(0.5);
+  expect(cardBox!.x).toBeLessThanOrEqual(count!.x);
   expect(cardBox!.x + cardBox!.width).toBeGreaterThanOrEqual(count!.x + count!.width);
   // moving away closes a hover card; a click pins it until outside click / Escape
   await page.getByTestId("bot-friren").hover();

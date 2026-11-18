@@ -1,15 +1,20 @@
-// The preview's live scenario: the window keeps moving with no input. Kami is ~9 minutes into the docs dark mode
-// plan with three Hermes subagents running; parts finish one by one, the next starts, the open part's detail grows,
-// Slack / Discord replies and other bots' messages land, Kami posts the PR with a before/after, and the loop
-// starts over (~55-65 s, a little different each time). Real clock: requestAnimationFrame plus Date.now, with a 250 ms timer when frames are held back.
+// The preview's live scenario: the window keeps moving with no input. Kami is a few minutes into the docs dark mode
+// plan: its chat is the person's short ask and one big answer, with the spinner and one or two plain Hermes lines
+// under it, while the Plans panel shows the parts; parts finish one by one, the next starts, the open part's detail
+// grows, Slack / Discord replies and other bots' messages land, Kami posts the PR, and the loop
+// starts over (~55-65 s, a little different each time). Since 0.2.12 the sidebar moves too: Kami's threads (one
+// working, one waiting on an approval, one done) change state and preview line, the PR message opens two threads
+// (the bridge's split path: `thread.split`), and in TERMINALS the Shell card runs Claude
+// Code for a while (its mark and name flip to Claude Code's and back) while the Codex card prints what it does. Real clock: requestAnimationFrame plus Date.now, with a 250 ms timer when frames are held back.
 // The visitor always wins: any click, key or wheel pauses the story for 8 s, and what they set off (a reply, the
 // plan built from scratch, Juno's deploy) plays on its own timers. Hidden tab or window off-screen: paused.
 // Everything is staged data inside the page; nothing runs anywhere.
 import { getStore } from "../src/state/store";
 import { getSessions } from "../src/sessions/sessions";
-import type { AgentId } from "../src/sessions/agents";
+import { SHELL, type AgentId } from "../src/sessions/agents";
+import { threadKey } from "../src/threads/types";
 import { refreshRuns } from "../src/runs/live";
-import { away, broadcast, history, hooks, kamiSeed, nowS, PR_REPO, runs } from "./host";
+import { addThread, away, broadcast, dropThread, history, hooks, nowS, PR_REPO, runs, threads, threadSaid } from "./host";
 
 type Ev = { event: string; [k: string]: unknown };
 const store = () => getStore();
@@ -23,7 +28,17 @@ const RUN_BASE = "dag:20261110_091904_d4a1c7e2/dark-mode";
 let runSeq = 0;
 let RUN = RUN_BASE;
 const runName = () => RUN.split("/").pop()!;
-const REQUEST = "Go ahead: add dark mode to the docs site and open a PR.";
+// Kami's chat at rest: the person's short ask, ONE big answer from Kami, and under it the spinner with one or two
+// plain grey Hermes lines (what the running parts do now) and the time. The answer names the places the way a person
+// would, by their links: the Discord and Slack chips take their #channel from host.ts links.places, the GitHub one
+// points at the staged acme/web-app (Tasks); guard.ts keeps every chip from opening anything.
+const REQUEST = "Can you add dark mode to the docs today? Open a PR when it's done.";
+const PROGRESS =
+  "I'm following Mina's notes in https://acme.slack.com/archives/C02DESIGN/p1794195216893139?thread_ts=1794195216.893139: links stay purple, and the theme follows the system. " +
+  "Sam asked for the same in https://discord.com/channels/1/900000000000000009, so I'll tell him there when it's live. " +
+  "The new code colors also fix https://github.com/acme/web-app/issues/139. " +
+  "I'll post the PR here once every page passes a contrast check in both themes.";
+const PR_URL = "https://github.com/acme/web-app/pull/146";
 // [id, label, deps, model, provider, effort, category, executor]. The cast: three Hermes subagents on GLM, Kimi and
 // DeepSeek, and three lanes handed to agent CLIs (Claude Code on Opus, Codex on GPT-6.1 Sol, omp on Sonnet), side by side.
 // Two parts to a row, then the fan-in (contrast after both styles, then verify): the graph the promo film and the
@@ -45,26 +60,8 @@ const SUMMARY: Record<string, string> = {
   "page-styles": "Body, sidebar and search moved to the new tokens.",
   "code-colors": "A dark code theme with the same contrast as the light one.",
   contrast: "Every token pair passes WCAG AA.",
-  "verify-pr": "Built the docs, checked 14 pages, opened PR #128.",
+  "verify-pr": "Built the docs, checked 14 pages, opened PR #146.",
 };
-// each part's subagent in the chat's fan-out card: its goal, and the step it is on while it runs
-const GOAL: Record<string, string> = {
-  "color-tokens": "Add light and dark color tokens to theme.css",
-  "theme-toggle": "Add a theme toggle to the docs header",
-  "page-styles": "Move the page styles to the new color tokens",
-  "code-colors": "Give code blocks a dark theme with the same contrast",
-  contrast: "Check every token pair against WCAG AA",
-  "verify-pr": "Build the docs, check the pages, open the PR",
-};
-const STEP: Record<string, [string, string]> = {
-  "color-tokens": ["patch", "docs/theme.css"],
-  "theme-toggle": ["patch", "docs/components/Header.tsx"],
-  "page-styles": ["patch", "docs/styles/search.css"],
-  "code-colors": ["patch", "docs/styles/code.css"],
-  contrast: ["terminal", "pnpm contrast:check"],
-  "verify-pr": ["terminal", "pnpm docs:build"],
-};
-const MODEL: Record<string, string> = {};
 // what the open part's subagent reports, line by line, while it works
 const STREAM: Record<string, string[]> = {
   "page-styles": [
@@ -78,10 +75,9 @@ const STREAM: Record<string, string[]> = {
     "- `pnpm docs:build` passes",
     "- Checked 14 pages in light and dark",
     "- Every token pair passes WCAG AA",
-    "- Opened **PR #128**: docs dark mode",
+    "- Opened **PR #146**: docs dark mode",
   ],
 };
-for (const [id, , , model] of NODES) MODEL[id] = model;
 type NodeSt = { state: string; started?: number; ended?: number };
 let st: Record<string, NodeSt> = {};
 let runStarted = 0;
@@ -118,22 +114,13 @@ function stream(id: string, n: number) {
   const lines = STREAM[id] ?? [];
   (runs.handoffs[RUN] ??= {})[id] = lines.slice(0, n).join("\n");
 }
-const dag = (ids: string[]) => ids.map((node) => ({ run: runName(), node }));
-
-/** Hermes' subagent events for one delegate_task: the chat shows one card per fan-out, a row per part. `state`
- *  per part: running (with its step), or done (with its result line and time). */
-function fan(key: string, ids: string[], states: Record<string, "running" | "done">, at = Date.now()) {
-  ids.forEach((id, index) => {
-    const state = states[id];
-    if (!state) return;
-    const s = st[id];
-    const [tool, step] = STEP[id];
-    ev("kami", {
-      event: "subagent", id: `${key}-${id}`, delegation: key, index, count: ids.length, goal: GOAL[id], dag: { run: runName(), node: id },
-      model: MODEL[id], state,
-      ...(state === "running" ? { tool, step } : { summary: SUMMARY[id], seconds: Math.max(1, Math.round((s?.ended ?? nowS()) - (s?.started ?? nowS()))) }),
-    }, at);
-  });
+/** Kami's working lines under the big bubble: the app's spinner line (Hermes' status and the turn's time) and, while a
+ *  second part runs, one more plain grey line: the turn's `plan` rows, which preview.css shows as bare text under the
+ *  status (no head, no boxes). The chat shows no per-part cards (no subagent events, no delegate_task rows): the Plans
+ *  panel and the threads already show the parts, and the middle stays calm. */
+function working(text: string, also = "", at = Date.now()) {
+  ev("kami", { event: "status", text }, at);
+  ev("kami", { event: "plan", items: also ? [{ text: also, status: "in_progress" }] : [] }, at);
 }
 
 // ---- the story clock -----------------------------------------------------------------------------------------
@@ -170,7 +157,7 @@ addEventListener("message", (e) => {
 /** Is the visitor on Kami's chat, so the story may open things in its panel? */
 const onKami = () => {
   const s = store().getState();
-  return !touched && !yielded() && s.selectedBot === "kami" && s.ui.view === "chat";
+  return !touched && !yielded() && s.selectedBot === "kami" && s.ui.view === "chat" && !s.ui.thread;
 };
 function openNode(id: string) {
   if (!onKami()) return;
@@ -202,16 +189,131 @@ function snapPanel() {
   }
 }
 
+// ---- Kami's threads ----------------------------------------------------------------------------------------------
+
+const WEB = "/Users/you/code/web-app";
+type RestThread = { id: string; title: string; ask: string; ago: number };
+/** The three threads every loop opens on: one working, one waiting on an approval, one done. */
+const REST: Record<"flake" | "notes" | "log", RestThread> = {
+  log: { id: "", title: "Changelog for 2.4", ask: "Add the 2.4 entries to CHANGELOG.md.", ago: 25 * 60 },
+  notes: { id: "", title: "Release notes 2.4", ask: "Draft the 2.4 release notes and push them to a branch.", ago: 4 * 60 },
+  flake: { id: "", title: "Flaky search test", ask: "The search test fails about 1 run in 10 on CI. Find out why and fix it.", ago: 6 * 60 },
+};
+for (const k of ["log", "notes", "flake"] as const) REST[k].id = addThread("kami", REST[k].title, WEB);
+/** Threads Kami opened during this loop (removed when the next loop starts). */
+let split: string[] = [];
+/** Open asks of threads, by request id: the thread and what happens once it is allowed. */
+const threadAsks = new Map<string, { thread: string; run: Step[] }>();
+
+/** A thread's event. Live ones go through the bridge socket, so the app's own thread handling runs (the row's state
+ *  and last activity); the seeded past is dispatched with its time. */
+const tev = (thread: string, e: Ev, at = Date.now()) =>
+  at < Date.now() - 1000 ? ev("kami", { ...e, session: thread }, at) : broadcast({ ...e, bot: "kami", session: thread });
+const said = (thread: string, role: "user" | "assistant", id: string, text: string, at = Date.now()) => {
+  threadSaid("kami", thread, { id, role, text, ts: at / 1000 });
+  if (role === "assistant") tev(thread, { event: "message", id, text }, at);
+};
+const threadStart = (thread: string, at = Date.now()) => {
+  threadSaid("kami", thread, null, true);
+  tev(thread, { event: "turn.start" }, at);
+};
+const threadEnd = (thread: string, at = Date.now()) => {
+  threadSaid("kami", thread, null, false);
+  tev(thread, { event: "turn.end", outcome: "done" }, at);
+};
+function threadAsk(thread: string, id: string, command: string, run: Step[], at = Date.now()) {
+  threadAsks.set(id, { thread, run });
+  tev(thread, { event: "approval.request", request_id: id, title: "Run shell command", command, choices: ["deny", "once", "session"] }, at);
+}
+/** The person allows a thread's ask (the story stands in for them while the visitor only watches). */
+function allow(id: string) {
+  const a = threadAsks.get(id);
+  if (!a) return;
+  void store().actions.respondApproval(id, "once", threadKey("kami", a.thread));
+}
+
+/** Every loop starts from the same three threads; the ones Kami opened last loop are gone (archived). */
+function resetThreads(t0: number) {
+  const s = store();
+  for (const th of split) {
+    dropThread("kami", th);
+    broadcast({ event: "thread.removed", bot: "kami", thread: th });
+  }
+  split = [];
+  threadAsks.clear();
+  for (const r of Object.values(REST)) {
+    const t = threads.kami.find((x) => x.thread === r.id);
+    if (t) {
+      t.msgs = [];
+      t.running = false;
+    }
+    s.dispatch({ type: "chat.forget", bot: threadKey("kami", r.id) });
+  }
+  const { log, notes, flake } = REST;
+  said(log.id, "user", `tl-u-${loop}`, log.ask, t0 - log.ago * 1000);
+  threadStart(log.id, t0 - log.ago * 1000 + 5_000);
+  said(log.id, "assistant", `tl-a-${loop}`, "Added 6 entries under **2.4** (2 fixes, 4 changes); the release PR picks them up.", t0 - log.ago * 1000 + 120_000);
+  threadEnd(log.id, t0 - log.ago * 1000 + 121_000);
+  said(notes.id, "user", `tn-u-${loop}`, notes.ask, t0 - notes.ago * 1000);
+  threadStart(notes.id, t0 - notes.ago * 1000 + 4_000);
+  said(notes.id, "assistant", `tn-a-${loop}`, "Drafted `docs/releases/2.4.md`: delta updates, faster search, the rate limits.", t0 - 70_000);
+  threadAsk(notes.id, `tn-ap-${loop}`, "git push origin release-notes-2.4", [
+    [0.3, () => tev(notes.id, { event: "tool.start", tool_id: `tn-p-${loop}`, name: "terminal", detail: "git push origin release-notes-2.4" })],
+    [1.7, () => tev(notes.id, { event: "tool.end", tool_id: `tn-p-${loop}`, name: "terminal", ok: true, ms: 1400 })],
+    [2.1, () => { said(notes.id, "assistant", `tn-b-${loop}`, "Pushed `release-notes-2.4` and opened **PR #131** for it."); threadEnd(notes.id); }],
+  ], t0 - 25_000);
+  said(flake.id, "user", `tf-u-${loop}`, flake.ask, t0 - flake.ago * 1000);
+  threadStart(flake.id, t0 - flake.ago * 1000 + 5_000);
+  tev(flake.id, { event: "tool.start", tool_id: `tf-t-${loop}`, name: "terminal", detail: "pnpm test search --repeat 50" }, t0 - 40_000);
+}
+
+/** Kami opens two threads from its PR message (the bridge's split path: `thread.split`; the main chat shows a link
+ *  line for each under that message), so the chat gets no extra ask and answer. */
+function splitThreads(msg: string) {
+  const post = addThread("kami", "Release post 2.4", WEB);
+  const links = addThread("kami", "Docs link check", WEB);
+  split = [post, links];
+  for (const [th, title, task] of [
+    [post, "Release post 2.4", "Draft the 2.4 release on GitHub from docs/releases/2.4.md. Leave it as a draft."],
+    [links, "Docs link check", "Check every link in the docs and fix what is broken."],
+  ] as const) {
+    broadcast({ event: "thread.split", bot: "kami", thread: th, title, message: msg });
+    said(th, "user", `${th}-u`, task);
+    threadStart(th);
+  }
+}
+
+// ---- TERMINALS ---------------------------------------------------------------------------------------------------
+
+/** The terminal cards in web-app: Codex at work, and a Shell that runs Claude Code for part of each loop. Two cards,
+ *  so TERMINALS and Kami's three threads both fit whole in the hero-sized window (the app's own auto split shows the
+ *  smaller region whole and cuts the other on a whole row: three cards left the third thread under the cut). */
+const term: Record<"codex" | "shell", string | null> = { codex: null, shell: null };
+const w = window as unknown as { __omherEmitSessionFg?: (p: { id: number; agent: string | null }) => void; __omherMockOut?: (id: number, d: string) => boolean };
+/** Print into a terminal card's program, as it would (its second line reads the last line). */
+function say(role: keyof typeof term, text: string) {
+  const id = term[role];
+  const pty = id ? getSessions().ptyOf(id) : null;
+  if (pty !== null) w.__omherMockOut?.(pty, text);
+}
+/** The CLI the shell sees in front of the Shell card (the shell's `session-fg` event): its mark follows it. */
+function shellFg(agent: string | null) {
+  const id = term.shell;
+  const pty = id ? getSessions().ptyOf(id) : null;
+  if (pty !== null) w.__omherEmitSessionFg?.({ id: pty, agent });
+}
+const SHELL_PROMPT = "\x1b[32myou@macbook\x1b[0m \x1b[34mweb-app\x1b[0m % ";
+
 // ---- one loop --------------------------------------------------------------------------------------------------
 
 let loop = 0;
 let junoAsk = "";
 let junoBusy = false;
 
-function resetKami(turnStart: number) {
-  const seedRows = kamiSeed();
-  const ask = { id: `ask-${loop}`, role: "user" as const, text: REQUEST, ts: turnStart / 1000 - 6 };
-  history.kami = [...seedRows, ask];
+function resetKami(asked: number, answered: number) {
+  const ask = { id: `ask-${loop}`, role: "user" as const, text: REQUEST, ts: asked / 1000 };
+  const answer = { id: `k-plan-${loop}`, role: "assistant" as const, text: PROGRESS, ts: answered / 1000 };
+  history.kami = [ask, answer];
   away.kami = [];
   const s = store();
   s.dispatch({ type: "chat.forget", bot: "kami" });
@@ -225,40 +327,30 @@ function startLoop() {
   const app = store();
   if (app.getState().ui.view !== "chat") app.actions.openSession(null);
   if (app.getState().ui.view === "settings") app.actions.closeSettings();
-  if (app.getState().ui.runsFull) app.actions.setRunsFull(false);
-  if (app.getState().selectedBot !== "kami") void app.actions.selectBot("kami");
+  if (app.getState().ui.panelMax) app.actions.setPanelMax(false);
+  if (app.getState().selectedBot !== "kami" || app.getState().ui.thread) void app.actions.selectBot("kami");
   touched = false;
   storyT = 0;
   const j = rand(0.94, 1.08); // each loop a little different
   const t0 = Date.now();
-  const elapsed = rand(540, 600) * 1000;
-  const T = t0 - elapsed; // when the turn started: the status timer reads 9m-10m on arrival
-  runStarted = T / 1000 + 40;
+  const asked = t0 - rand(540, 600) * 1000; // the ask came ~9-10 minutes ago: the plan started then
+  const T = t0 - rand(125, 145) * 1000; // Kami's answer and the working line under it: ~2m 14s on arrival
+  runStarted = asked / 1000 + 40;
   RUN = RUN_BASE;
   st = {};
   runs.handoffs[RUN] = {};
-  resetKami(T);
+  resetKami(asked, T - 1000);
+  resetThreads(t0);
+  setNode("color-tokens", "done", T / 1000 - 60);
+  st["color-tokens"].started = runStarted;
+  setNode("theme-toggle", "done", T / 1000 - 8);
+  st["theme-toggle"].started = runStarted;
+  // Page styles (the part the Plans panel opens) started with the turn, so its time and the working line's agree
+  setNode("page-styles", "running", T / 1000);
+  setNode("code-colors", "running", T / 1000 + rand(2, 6));
   ev("kami", { event: "bot.status", status: "online", running: true }, T);
   ev("kami", { event: "turn.start" }, T);
-  ev("kami", { event: "tool.start", tool_id: "k1", name: "skill_view", detail: "dag-ulw" }, T + 1500);
-  ev("kami", { event: "skill", name: "dag-ulw" }, T + 1500);
-  ev("kami", { event: "tool.end", tool_id: "k1", name: "skill_view", ok: true, ms: 900 }, T + 2400);
-  ev("kami", { event: "message", id: `k-plan-${loop}`, text: "Planned it in **6 parts**: 3 Hermes subagents on GLM, Kimi and DeepSeek, plus Claude Code, Codex and omp lanes. omp verifies and opens the PR." }, T + 30_000);
-  ev("kami", { event: "tool.start", tool_id: "k2", name: "delegate_task", detail: "Color tokens, Theme toggle", dag: dag(["color-tokens", "theme-toggle"]) }, T + 40_000);
-  setNode("color-tokens", "done", T / 1000 + 400);
-  st["color-tokens"].started = T / 1000 + 40;
-  setNode("theme-toggle", "done", T / 1000 + 455);
-  st["theme-toggle"].started = T / 1000 + 40;
-  const f1 = `deleg-${loop}-1`, f2 = `deleg-${loop}-2`, f3 = `deleg-${loop}-3`, f4 = `deleg-${loop}-4`;
-  fan(f1, ["color-tokens", "theme-toggle"], { "color-tokens": "running", "theme-toggle": "running" }, T + 41_000);
-  fan(f1, ["color-tokens", "theme-toggle"], { "color-tokens": "done" }, T + 400_000);
-  fan(f1, ["color-tokens", "theme-toggle"], { "theme-toggle": "done" }, T + 455_000);
-  ev("kami", { event: "tool.end", tool_id: "k2", name: "delegate_task", ok: true, ms: 415_000 }, T + 455_000);
-  const s3 = T / 1000 + 462;
-  ev("kami", { event: "tool.start", tool_id: "k3", name: "delegate_task", detail: "Page styles, Code block colors", dag: dag(["page-styles", "code-colors"]) }, s3 * 1000);
-  for (const id of ["page-styles", "code-colors"]) setNode(id, "running", s3 - rand(0, 20));
-  fan(f2, ["page-styles", "code-colors"], { "page-styles": "running", "code-colors": "running" }, s3 * 1000 + 1000);
-  ev("kami", { event: "status", text: "Running 2 parts" });
+  working("Editing docs/styles/code.css", "Moving the sidebar to the new colors", T + 500);
   stream("page-styles", 1);
   pushRun();
 
@@ -269,69 +361,91 @@ function startLoop() {
   if (!junoAsk && !junoBusy) raiseJuno(t0 - 60_000);
 
   const k = (s: number) => s * 1.1 * j;
+  const notesAsk = `tn-ap-${loop}`;
+  const { flake } = REST;
   steps = [
     [k(0.2), () => openNode("page-styles")],
+    [k(1), () => say("codex", "\r\n• Read api/search/index.go\r\n")],
     [k(1.8), () => { stream("page-styles", 2); pushRun(); }],
     [k(2.6), () => ev("friren", { event: "status", text: "Reading the updater section" })],
+    [k(3.2), () => working("Checking code blocks in light and dark", "Moving the sidebar to the new colors")],
+    [k(4), () => say("codex", "\r\n• Ran go test ./search/... (38 passed)\r\n")],
+    [k(5), () => allow(notesAsk)],
     [k(6), () => { stream("page-styles", 3); pushRun(); }],
-    [k(8.5), () => landAway("discord")],
-    [k(10.5), () => { stream("page-styles", 4); pushRun(); }],
+    [k(7), () => { say("shell", "claude\r\n"); shellFg("claude"); say("shell", "\x1b[38;2;217;119;87m✻\x1b[0m \x1b[1mClaude Code\x1b[0m\r\n\r\n› write the Filters section of docs/search.md\r\n"); }],
+    [k(7.6), () => working("Checking code blocks in light and dark", "Editing docs/styles/search.css")],
+    [k(9.5), () => say("shell", "\x1b[38;2;217;119;87m⏺\x1b[0m Read docs/search.md\r\n")],
+    [k(10.5), () => { stream("page-styles", 4); pushRun(); working("Writing the dark code theme", "Editing docs/styles/search.css"); }],
     [k(12.5), () => ev("pip", { event: "message", id: `pip-${loop}`, text: "Standup notes are filed: 4 updates, 1 blocker (the iOS build)." })],
-    [k(14), () => {
-      setNode("code-colors", "done"); pushRun();
-      fan(f2, ["page-styles", "code-colors"], { "code-colors": "done" });
-      ev("kami", { event: "status", text: "Running 1 part" });
+    [k(13.2), () => {
+      tev(flake.id, { event: "tool.end", tool_id: `tf-t-${loop}`, name: "terminal", ok: true, ms: 41_000 });
+      said(flake.id, "assistant", `tf-a-${loop}`, "Found it: the test raced the index refresh. It waits for the refresh now, and 50 of 50 runs pass.");
+      threadEnd(flake.id);
     }],
+    [k(14), () => { setNode("code-colors", "done"); pushRun(); working("Editing docs/styles/search.css"); }],
+    [k(15.5), () => say("shell", "\x1b[38;2;217;119;87m⏺\x1b[0m Read src/search/filters.ts\r\n")],
     [k(16), () => { stream("page-styles", 5); pushRun(); }],
-    [k(17.5), () => {
-      setNode("page-styles", "done"); setNode("contrast", "running"); pushRun();
-      fan(f2, ["page-styles", "code-colors"], { "page-styles": "done" });
-      ev("kami", { event: "tool.end", tool_id: "k3", name: "delegate_task", ok: true, ms: 560_000 });
-      ev("kami", { event: "tool.start", tool_id: "kc", name: "delegate_task", detail: "Contrast check", dag: dag(["contrast"]) });
-      fan(f3, ["contrast"], { contrast: "running" });
-      ev("kami", { event: "status", text: "Running 1 part" });
-    }],
+    [k(17.5), () => { setNode("page-styles", "done"); setNode("contrast", "running"); pushRun(); working("Checking contrast in light and dark"); }],
+    [k(18.5), () => say("codex", "\r\n• Running go test ./...\r\n")],
     [k(20.5), () => {
       setNode("contrast", "done"); setNode("verify-pr", "running");
       runs.handoffs[RUN]["verify-pr"] = STREAM["verify-pr"][0];
       pushRun();
-      fan(f3, ["contrast"], { contrast: "done" });
-      ev("kami", { event: "tool.end", tool_id: "kc", name: "delegate_task", ok: true, ms: 3_000 });
-      ev("kami", { event: "tool.start", tool_id: "k4", name: "delegate_task", detail: "Verify and open PR", dag: dag(["verify-pr"]) });
-      fan(f4, ["verify-pr"], { "verify-pr": "running" });
+      working("Building the docs");
       openNode("verify-pr");
     }],
+    [k(21), () => say("shell", "\x1b[38;2;217;119;87m⏺\x1b[0m Edited docs/search.md (+48 -2)\r\n")],
     [k(22.5), () => {
       ev("friren", { event: "tool.end", tool_id: `f${loop}`, name: "web_extract", ok: true, ms: 50_000 });
       ev("friren", { event: "message", id: `fr-${loop}`, text: "Wrote up the Tauri 2.4 notes: delta updates, smaller bundles, nothing breaking for us." });
       ev("friren", { event: "turn.end", outcome: "done" });
       ev("friren", { event: "bot.status", status: "online", running: false });
     }],
-    [k(23.5), () => { stream("verify-pr", 2); pushRun(); }],
-    [k(27), () => { stream("verify-pr", 3); pushRun(); }],
-    [k(31), () => {
-      stream("verify-pr", 4);
-      setNode("verify-pr", "done");
-      pushRun("done");
-      fan(f4, ["verify-pr"], { "verify-pr": "done" });
-      ev("kami", { event: "tool.end", tool_id: "k4", name: "delegate_task", ok: true, ms: 60_000 });
-    }],
-    [k(32.5), () => {
-      ev("kami", { event: "message", id: `k-pr-${loop}`, text: "PR #128 is open: the docs have a dark theme now. Before and after:\n\nMEDIA:/w/media/docs-light.webp\nMEDIA:/w/media/docs-dark.webp" });
+    [k(23.5), () => { stream("verify-pr", 2); pushRun(); working("Checking 14 pages in light and dark"); }],
+    [k(25), () => say("codex", "\r\n• Ran go test ./... (214 passed)\r\n")],
+    [k(27), () => { stream("verify-pr", 3); pushRun(); working("Opening the pull request"); }],
+    [k(28.5), () => say("shell", "\x1b[38;2;217;119;87m⏺\x1b[0m Ran pnpm docs:build (14 pages)\r\n")],
+    [k(31), () => { stream("verify-pr", 4); setNode("verify-pr", "done"); pushRun("done"); }],
+    [k(32), () => {
+      ev("kami", { event: "message", id: `k-pr-${loop}`, text: `The PR is up: ${PR_URL}. I told Sam in #releases, and I opened two threads, one for the 2.4 release post and one to check the docs links.` });
       ev("kami", { event: "turn.end", outcome: "done" });
       ev("kami", { event: "bot.status", status: "online", running: false });
+      splitThreads(`k-pr-${loop}`);
     }],
-    [k(39), () => landAway("slack")],
+    [k(33), () => { say("shell", "\r\n"); shellFg(null); say("shell", SHELL_PROMPT); }],
+    // replies elsewhere land once the turn is over (the header's places chip and the panel count them; preview.css
+    // keeps them out of Kami's chat, which stays the ask, the big answer and the PR)
+    [k(33.8), () => landAway("discord")],
+    [k(40), () => landAway("slack")],
+    [k(40.5), () => split[1] && tev(split[1], { event: "tool.start", tool_id: `tk-l-${loop}`, name: "terminal", detail: "lychee docs/" })],
+    [k(41.5), () => say("codex", "\r\n• Edited api/search/handler.go (+22 -6)\r\n")],
+    [k(42.5), () => {
+      const post = split[0];
+      if (!post) return;
+      threadAsk(post, `tp-ap-${loop}`, "gh release create v2.4 --draft --notes-file docs/releases/2.4.md", [
+        [0.3, () => tev(post, { event: "tool.start", tool_id: `tp-r-${loop}`, name: "terminal", detail: "gh release create v2.4 --draft" })],
+        [1.5, () => tev(post, { event: "tool.end", tool_id: `tp-r-${loop}`, name: "terminal", ok: true, ms: 1200 })],
+        [1.9, () => { said(post, "assistant", `tp-a-${loop}`, "The v2.4 release is drafted on GitHub, not published. It links PR #146 and PR #131."); threadEnd(post); }],
+      ]);
+    }],
+    [k(45.5), () => {
+      const links = split[1];
+      if (!links) return;
+      tev(links, { event: "tool.end", tool_id: `tk-l-${loop}`, name: "terminal", ok: true, ms: 6_000 });
+      said(links, "assistant", `tk-a-${loop}`, "All 214 docs links resolve. Fixed 2 that pointed at old redirects.");
+      threadEnd(links);
+    }],
+    [k(48.5), () => allow(`tp-ap-${loop}`)],
     [k(52), () => fadeThen(startLoop)],
-  ];
+  ].sort((a, b) => (a[0] as number) - (b[0] as number)) as Step[];
 }
 
 function landAway(source: "slack" | "discord") {
   const t = nowS();
   const row =
     source === "slack"
-      ? { id: "slack-design-docs", source: "slack", title: "docs theme", place: "#design", url: "slack://channel?team=T1&id=C2", target: "slack:C02DESIGN:1794200000.000100", reply: "Told Mina in #design that dark mode is in review as PR #128, with her purple on links.", startedAt: t - 300, lastAt: t, count: 8 }
-      : { id: "discord-releases", source: "discord", title: "release notes", place: "#releases", url: "https://discord.com/channels/1/9", target: "discord:900000000000000009", reply: "Sam asked if dark mode follows the system theme. It does, and it lands today.", startedAt: t - 200, lastAt: t, count: 5 };
+      ? { id: "slack-design-docs", source: "slack", title: "docs theme", place: "#design", url: "slack://channel?team=T1&id=C2", target: "slack:C02DESIGN:1794200000.000100", reply: "Told Mina the dark theme is in review as PR #146.", startedAt: t - 300, lastAt: t, count: 8 }
+      : { id: "discord-releases", source: "discord", title: "release notes", place: "#releases", url: "https://discord.com/channels/1/9", target: "discord:900000000000000009", reply: "Sam asked if dark mode follows the system theme. It does, and the PR is up.", startedAt: t - 200, lastAt: t, count: 5 };
   away.kami = [...away.kami.filter((a) => a.id !== row.id), row];
   void store().actions.loadElsewhere("kami");
 }
@@ -397,53 +511,32 @@ function planFromScratch() {
   runStarted = nowS();
   const k = store().getState().chats.kami;
   touched = true;
+  // the answer first, then the turn: its working line sits under the last bubble (a turn's line stays above what is
+  // said during it)
   after([
     [0, () => {
       if (k?.turn) ev("kami", { event: "turn.end", outcome: "done" });
       ev("kami", { event: "bot.status", status: "online", running: true });
-      ev("kami", { event: "turn.start" });
-      ev("kami", { event: "thinking" });
     }],
-    [0.7, () => { ev("kami", { event: "tool.start", tool_id: "p1", name: "skill_view", detail: "dag-ulw" }); ev("kami", { event: "skill", name: "dag-ulw" }); }],
-    [1.6, () => {
-      ev("kami", { event: "tool.end", tool_id: "p1", name: "skill_view", ok: true, ms: 900 });
+    [1.2, () => {
       pushRun();
       store().actions.openRun(runName());
-      ev("kami", { event: "message", id: `p-plan-${runSeq}`, text: "Planned it in **6 parts**: 3 Hermes subagents on GLM, Kimi and DeepSeek, plus Claude Code, Codex and omp lanes. Starting the first two now." });
+      ev("kami", { event: "message", id: `p-plan-${runSeq}`, text: "On it. The plan is on the right, and I'll post the PR here." });
+      ev("kami", { event: "turn.start" });
+      working("Editing docs/theme.css", "Adding the theme toggle");
     }],
-    [2.8, () => {
-      setNode("color-tokens", "running"); setNode("theme-toggle", "running"); pushRun();
-      ev("kami", { event: "tool.start", tool_id: "p2", name: "delegate_task", detail: "Color tokens, Theme toggle", dag: dag(["color-tokens", "theme-toggle"]) });
-      fan(`${RUN}-1`, ["color-tokens", "theme-toggle"], { "color-tokens": "running", "theme-toggle": "running" });
-      ev("kami", { event: "status", text: "Running 2 parts" });
-    }],
-    [4.6, () => { setNode("color-tokens", "done"); pushRun(); fan(`${RUN}-1`, ["color-tokens", "theme-toggle"], { "color-tokens": "done" }); ev("kami", { event: "status", text: "Running 1 part" }); }],
+    [2.8, () => { setNode("color-tokens", "running"); setNode("theme-toggle", "running"); pushRun(); }],
+    [4.6, () => { setNode("color-tokens", "done"); pushRun(); working("Adding the theme toggle"); }],
     [5.6, () => {
       setNode("theme-toggle", "done"); for (const id of ["page-styles", "code-colors"]) setNode(id, "running"); pushRun();
-      fan(`${RUN}-1`, ["color-tokens", "theme-toggle"], { "theme-toggle": "done" });
-      ev("kami", { event: "tool.end", tool_id: "p2", name: "delegate_task", ok: true, ms: 2800 });
-      ev("kami", { event: "tool.start", tool_id: "p3", name: "delegate_task", detail: "Page styles, Code block colors", dag: dag(["page-styles", "code-colors"]) });
-      fan(`${RUN}-2`, ["page-styles", "code-colors"], { "page-styles": "running", "code-colors": "running" });
-      ev("kami", { event: "status", text: "Running 2 parts" });
+      working("Editing docs/styles/code.css", "Moving the sidebar to the new colors");
     }],
-    [7.4, () => { setNode("code-colors", "done"); pushRun(); fan(`${RUN}-2`, ["page-styles", "code-colors"], { "code-colors": "done" }); ev("kami", { event: "status", text: "Running 1 part" }); }],
-    [8.4, () => {
-      setNode("page-styles", "done"); setNode("contrast", "running"); pushRun();
-      fan(`${RUN}-2`, ["page-styles", "code-colors"], { "page-styles": "done" });
-      ev("kami", { event: "tool.end", tool_id: "p3", name: "delegate_task", ok: true, ms: 2800 });
-      ev("kami", { event: "tool.start", tool_id: "pc", name: "delegate_task", detail: "Contrast check", dag: dag(["contrast"]) });
-      fan(`${RUN}-3`, ["contrast"], { contrast: "running" });
-    }],
-    [9.6, () => {
-      setNode("contrast", "done"); setNode("verify-pr", "running"); pushRun();
-      fan(`${RUN}-3`, ["contrast"], { contrast: "done" });
-      ev("kami", { event: "tool.end", tool_id: "pc", name: "delegate_task", ok: true, ms: 1200 });
-      ev("kami", { event: "tool.start", tool_id: "p4", name: "delegate_task", detail: "Verify and open PR", dag: dag(["verify-pr"]) });
-      fan(`${RUN}-4`, ["verify-pr"], { "verify-pr": "running" });
-    }],
-    [12, () => { setNode("verify-pr", "done"); pushRun("done"); fan(`${RUN}-4`, ["verify-pr"], { "verify-pr": "done" }); ev("kami", { event: "tool.end", tool_id: "p4", name: "delegate_task", ok: true, ms: 2400 }); }],
+    [7.4, () => { setNode("code-colors", "done"); pushRun(); working("Editing docs/styles/search.css"); }],
+    [8.4, () => { setNode("page-styles", "done"); setNode("contrast", "running"); pushRun(); working("Checking contrast in light and dark"); }],
+    [9.6, () => { setNode("contrast", "done"); setNode("verify-pr", "running"); pushRun(); working("Building the docs"); }],
+    [12, () => { setNode("verify-pr", "done"); pushRun("done"); }],
     [12.8, () => {
-      ev("kami", { event: "message", id: `p-pr-${runSeq}`, text: "Done in the preview: that is how a plan runs in omher. Before and after:\n\nMEDIA:/w/media/docs-light.webp\nMEDIA:/w/media/docs-dark.webp" });
+      ev("kami", { event: "message", id: `p-pr-${runSeq}`, text: "That's how a plan runs in omher. Nothing ran in this preview, but here's the before and after.\n\nMEDIA:/w/media/docs-light.webp\nMEDIA:/w/media/docs-dark.webp" });
       ev("kami", { event: "turn.end", outcome: "done" });
       ev("kami", { event: "bot.status", status: "online", running: false });
     }],
@@ -454,18 +547,36 @@ function planFromScratch() {
  *  bridge events a real folder chat sends. */
 hooks.folder = (bot, session) => {
   const name = bot === "juno-bot" ? "Juno" : bot.charAt(0).toUpperCase() + bot.slice(1);
-  const text = document.documentElement.lang === "ko"
-    ? `미리보기 세션이라 ${name}는 실행되지 않았어요. omher를 내려받으면 내 폴더에서 진짜 세션을 시작할 수 있어요.`
-    : `This session is a preview, so ${name} did not run. Download omher to start a real one in your own folder.`;
+  const isThread = (threads[bot] ?? []).some((t) => t.thread === session);
+  const ko = document.documentElement.lang === "ko";
+  const text = isThread
+    ? ko
+      ? `미리보기 스레드라 ${name}는 실행되지 않았어요. omher를 내려받으면 내 Hermes 봇과 진짜 스레드를 열 수 있어요.`
+      : `This thread is a preview, so ${name} did not run. Download omher to open real threads with your own Hermes bots.`
+    : ko
+      ? `미리보기 세션이라 ${name}는 실행되지 않았어요. omher를 내려받으면 내 폴더에서 진짜 세션을 시작할 수 있어요.`
+      : `This session is a preview, so ${name} did not run. Download omher to start a real one in your own folder.`;
   const id = `fv-${Math.random().toString(36).slice(2, 8)}`;
+  // mid-turn (a thread at work): the note lands in the thread without ending its work
+  const busy = !!store().getState().chats[threadKey(bot, session)]?.turn;
   after([
-    [0, () => { broadcast({ event: "turn.start", bot, session }); broadcast({ event: "thinking", bot, session }); }],
-    [0.9, () => broadcast({ event: "message", bot, session, id, text })],
-    [1.0, () => broadcast({ event: "turn.end", bot, session, outcome: "done" })],
+    ...(busy ? [] : ([[0, () => { broadcast({ event: "turn.start", bot, session }); broadcast({ event: "thinking", bot, session }); }]] as Step[])),
+    [0.9, () => { threadSaid(bot, session, { id, role: "assistant", text, ts: nowS() }); broadcast({ event: "message", bot, session, id, text }); }],
+    ...(busy ? [] : ([[1.0, () => broadcast({ event: "turn.end", bot, session, outcome: "done" })]] as Step[])),
   ]);
 };
 
-hooks.approve = (bot, requestId, choice) => {
+hooks.approve = (bot, requestId, choice, session) => {
+  const ta = session ? threadAsks.get(requestId) : undefined;
+  if (ta && ta.thread === session) {
+    threadAsks.delete(requestId);
+    if (choice === "deny") {
+      after([[0.4, () => { said(ta.thread, "assistant", `${requestId}-no`, "Okay, I won't run it. Tell me when it should go out."); threadEnd(ta.thread); }]]);
+      return;
+    }
+    after(ta.run);
+    return;
+  }
   if (bot !== "juno-bot" || requestId !== junoAsk) return;
   junoAsk = "";
   junoBusy = true;
@@ -540,25 +651,22 @@ function tick() {
 
 // ---- start ---------------------------------------------------------------------------------------------------
 
-async function seedSessions() {
+/** The TERMINALS cards, through the app's own + path (startTerminal): each starts in web-app and opens once so its
+ *  terminal runs, then the window goes back to Kami. Claude Code and Codex run in their own terminals; the Shell is
+ *  a login shell (the in-page one: nothing runs anywhere). */
+async function seedTerminals() {
   const S = getSessions();
-  const ids: Record<string, string> = {};
-  // two sessions: what fits whole under the four bots and the "needs you" strip in the hero-sized window (a third
-  // row was cut in half at 975x568)
-  // the app's own New session path: a draft, its folder, then start (no first message, so nothing is sent)
-  for (const [folder, agent] of [["api-server", "codex"], ["web-app", "claude"]] as [string, AgentId][]) {
-    const id = S.draft(agent);
-    S.setDraft(id, { cwd: `/Users/you/code/${folder}` });
-    if (await S.start(id)) ids[folder] = id;
+  const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+  for (const [role, agent, name] of [["shell", SHELL, ""], ["codex", "codex", "search API"]] as [keyof typeof term, AgentId, string][]) {
+    const id = S.startTerminal(agent, WEB);
+    if (!id) continue;
+    term[role] = id;
+    for (let i = 0; i < 100 && S.ptyOf(id) === null; i++) await sleep(40);
+    if (name) S.rename(id, name);
   }
+  await sleep(120);
+  say("codex", "• Read api/search/handler.go\r\n");
   store().actions.openSession(null);
-  const t = Date.now();
-  for (const [f, cmd, ago] of [["web-app", "pnpm build", 4], ["api-server", "go test ./...", 9]] as [string, string, number][]) {
-    const key = S.chatKey(ids[f]);
-    if (!key) continue;
-    ev(key, { event: "turn.start" }, t - ago * 60_000);
-    ev(key, { event: "tool.start", tool_id: "x", name: "terminal", detail: cmd }, t - 30_000);
-  }
 }
 
 export async function startStory(): Promise<void> {
@@ -567,7 +675,7 @@ export async function startStory(): Promise<void> {
   // its turn (Juno's ask, Friren reading) would replace that turn with the plain history
   const loaded = () => ["kami", "friren", "juno-bot", "pip"].every((b) => s.getState().chats[b]?.loaded);
   for (let i = 0; i < 150 && !loaded(); i++) await new Promise((r) => setTimeout(r, 30));
-  await seedSessions().catch(() => undefined);
+  await seedTerminals().catch(() => undefined);
   if (s.getState().selectedBot !== "kami") await s.actions.selectBot("kami");
   startLoop();
   // reduced motion: the settled state above with the running part open; nothing moves after it

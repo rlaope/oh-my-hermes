@@ -7,7 +7,7 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 from threading import Barrier, Lock
 
-from omh.coding.hermes_child_arm_setup import ArmSetup
+from omh.coding.hermes_child_arm_setup import DEFAULT_ARM_TOOLSETS, ArmSetup
 from omh.coding.hermes_child_dispatch import HermesChildRequest, HermesChildObservation, dispatch_hermes_child
 from omh.coding.hermes_child_evaluation import HermesChildEvaluationContext
 from omh.coding.hermes_child_receipts import hermes_child_run_dir, load_hermes_child_receipt, load_or_create_observation_key, write_signed_observation
@@ -57,7 +57,7 @@ def _event(
     # This smoke has no arm home; it records the setup each arm declares so
     # fan-in's signed arm-setup check sees a matching one.
     skills = () if cell.arm is ArmRole.BASELINE else ("qa-skill",)
-    setup = ArmSetup(cell.arm is ArmRole.VARIANT, exposure_digest(skills))
+    setup = ArmSetup(cell.arm is ArmRole.VARIANT, exposure_digest(skills), DEFAULT_ARM_TOOLSETS)
     return replace(events[-1], arm_setup=setup), not result.cleanup_verified
 
 

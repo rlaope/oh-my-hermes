@@ -9,10 +9,10 @@ const dark = termThemeById("omher-dark")!.theme;
 const light = termThemeById("omher-light")!.theme;
 
 describe("a terminal's look", () => {
-  it("with nothing changed, a terminal starts with the options it had before there were settings", () => {
+  it("with nothing changed, a terminal starts in the bundled JetBrains Mono at 13px (Otty's), the other options as before", () => {
     expect(termOptions(dark, TERM_DEFAULTS)).toEqual({
-      fontFamily: "monospace",
-      fontSize: 12.5,
+      fontFamily: '"JetBrains Mono", "Symbols Nerd Font Mono", monospace',
+      fontSize: 13,
       lineHeight: 1.2,
       cursorStyle: "block",
       cursorInactiveStyle: "outline",
@@ -53,7 +53,7 @@ describe("a terminal's look", () => {
       optionIsMeta: false,
     };
     expect(termOptions(light, s)).toMatchObject({
-      fontFamily: '"Menlo", monospace',
+      fontFamily: '"Menlo", "JetBrains Mono", "Symbols Nerd Font Mono", monospace',
       fontSize: 16,
       lineHeight: 1.5,
       cursorStyle: "bar",
@@ -83,13 +83,14 @@ describe("a terminal's look", () => {
     for (const t of TERM_THEMES) expect(termOptions(t.theme, { ...TERM_DEFAULTS, contrast: "auto" }).minimumContrastRatio, t.name).toBe(t.kind === "light" ? 4.5 : 3);
   });
 
-  it("puts the person's fonts first, each quoted, with the app's monospace stack behind", () => {
-    expect(termFont("", "M")).toBe("M");
-    expect(termFont("   ", "M")).toBe("M");
-    expect(termFont("JetBrains Mono", "M")).toBe('"JetBrains Mono", M');
-    expect(termFont(`'Fira  Code' , "Menlo",monospace,`, "M")).toBe('"Fira Code", "Menlo", monospace, M');
+  it("puts the person's fonts first, each quoted, then the bundled fonts, with the app's monospace stack behind", () => {
+    expect(termFont("", "M")).toBe('"JetBrains Mono", "Symbols Nerd Font Mono", M');
+    expect(termFont("   ", "M")).toBe('"JetBrains Mono", "Symbols Nerd Font Mono", M');
+    // a bundled name the person typed is not repeated
+    expect(termFont("jetbrains mono", "M")).toBe('"jetbrains mono", "Symbols Nerd Font Mono", M');
+    expect(termFont(`'Fira  Code' , "Menlo",monospace,`, "M")).toBe('"Fira Code", "Menlo", monospace, "JetBrains Mono", "Symbols Nerd Font Mono", M');
     // a half-typed list is still a valid one
-    expect(termFont('"Fira Co', "M")).toBe('"Fira Co", M');
+    expect(termFont('"Fira Co', "M")).toBe('"Fira Co", "JetBrains Mono", "Symbols Nerd Font Mono", M');
   });
 
   it("applies the look again to an open terminal: every option, the scrollback limit too", () => {
@@ -100,7 +101,7 @@ describe("a terminal's look", () => {
     expect(options).toEqual({
       scrollback: 50000,
       theme: light,
-      fontFamily: '"Menlo", monospace',
+      fontFamily: '"Menlo", "JetBrains Mono", "Symbols Nerd Font Mono", monospace',
       fontSize: 18,
       lineHeight: 1.4,
       cursorStyle: "underline",

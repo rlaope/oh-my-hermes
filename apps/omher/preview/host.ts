@@ -23,21 +23,9 @@ type Row = { id: string; role: "user" | "assistant"; text: string; ts: number };
 const seed = (bot: string, rows: [Row["role"], string, number][]): Row[] =>
   rows.map(([role, text, ago], i) => ({ id: `seed-${bot}-${i}`, role, text, ts: nowS() - ago }));
 
-export function kamiSeed(): Row[] {
-  return seed("kami", [
-    ["user", "Did the search filters land last night?", 15 * 3600],
-    ["assistant", "Yes: **PR #121** is merged. Tag and date filters are live on the docs, and 38 search tests pass.", 15 * 3600 - 60],
-    ["user", "Morning! What needs me today?", 62 * MIN],
-    ["assistant", "Three things today:\n\n1. **Review** the rate-limit PR in api-server (#126).\n2. **Answer** Mina in #design about the docs theme.\n3. **Approve** Juno's deploy once the tests pass.", 61 * MIN],
-    ["user", "Review #126 and merge it if it's clean.", 24 * MIN],
-    ["assistant", "Reviewed **#126**: fixed two nits, CI is green. Merged into main, and Juno's deploy picks it up.", 21 * MIN],
-    ["user", "Can the docs get a dark mode today? Mina keeps asking.", 3 * MIN],
-    ["assistant", "Yes. It's color tokens, a theme toggle, code colors and the page styles, then a contrast check, a final check and the PR. Say the word and I'll plan it.", 2.5 * MIN],
-  ]);
-}
-
 export const history: Record<string, Row[]> = {
-  kami: kamiSeed(),
+  // Kami's chat is staged by story.ts each loop: the person's short ask and one big answer (story.ts resetKami)
+  kami: [],
   friren: seed("friren", [
     ["user", "Read the Tauri 2.4 release notes for me.", 50 * MIN],
     ["assistant", "The updater got delta downloads; I'll write it up.", 48 * MIN],
@@ -242,13 +230,41 @@ const awayRows = (bot: string) =>
     }))
     .sort((x, y) => y.last_active - x.last_active);
 
+// ---- threads under a bot (0.2.12): the bridge's thread.* ops ------------------------------------------------------
+// A thread is a Hermes session of the bot in a folder; its events come tagged `session: <thread>`. The story opens
+// them (thread.split, the bot's own path), runs their turns and lets them finish. Rows are kept newest first.
+type ThreadSeed = { thread: string; title: string; cwd: string; started: number; msgs: Row[]; running?: boolean };
+export const threads: Record<string, ThreadSeed[]> = { kami: [], friren: [], "juno-bot": [], pip: [] };
+let threadSeq = 0;
+/** A new thread of `bot` (the story's split, never a visitor: New thread and Start in thread are held back in guard.ts). */
+export function addThread(bot: string, title: string, cwd: string, msgs: Row[] = []): string {
+  const thread = `th-${bot}-${(threadSeq += 1)}`;
+  threads[bot] = [{ thread, title, cwd, started: nowS(), msgs }, ...(threads[bot] ?? [])];
+  return thread;
+}
+/** What the thread holds now, so a visitor who opens it reads the same rows the live events drew. */
+export function threadSaid(bot: string, thread: string, row: Row | null, running?: boolean): void {
+  const t = (threads[bot] ?? []).find((x) => x.thread === thread);
+  if (!t) return;
+  if (row && !t.msgs.some((m) => m.id === row.id)) t.msgs.push(row);
+  if (running !== undefined) t.running = running;
+}
+export function dropThread(bot: string, thread: string): void {
+  threads[bot] = (threads[bot] ?? []).filter((t) => t.thread !== thread);
+}
+const threadOf = (bot: string, thread: unknown) => {
+  const t = (threads[bot] ?? []).find((x) => x.thread === thread);
+  if (!t) throw new OpError("not_found", "no such thread");
+  return t;
+};
+
 /** Hooks the story fills in: what a visitor's message or approval sets off. */
 export const hooks: {
   send: (bot: string, text: string) => void;
-  approve: (bot: string, requestId: string, choice: string) => void;
+  approve: (bot: string, requestId: string, choice: string, session?: string) => void;
   clarify: (bot: string, requestId: string) => void;
   interrupt: (bot: string) => void;
-  folder: (bot: string, session: string) => void;
+  folder: (bot: string, session: string, text: string) => void;
 } = { send: () => {}, approve: () => {}, clarify: () => {}, interrupt: () => {}, folder: () => {} };
 
 const OPS: Record<string, (p: Json) => unknown> = {
@@ -264,7 +280,9 @@ const OPS: Record<string, (p: Json) => unknown> = {
     const text = String(p.text ?? "").trim();
     if (!text) throw new OpError("bad_request", "missing text");
     if (p.session) {
-      setTimeout(() => hooks.folder(b.name, String(p.session)), 0);
+      const th = (threads[b.name] ?? []).find((x) => x.thread === p.session);
+      th?.msgs.push({ id: `u-${Math.random().toString(36).slice(2, 9)}`, role: "user", text, ts: nowS() });
+      setTimeout(() => hooks.folder(b.name, String(p.session), text), 0);
       return { input_id: "preview" };
     }
     history[b.name].push({ id: `u-${Math.random().toString(36).slice(2, 9)}`, role: "user", text, ts: nowS() });
@@ -277,7 +295,7 @@ const OPS: Record<string, (p: Json) => unknown> = {
     else hooks.interrupt(b.name);
     return {};
   },
-  "approval.respond": (p) => (hooks.approve(need(p).name, String(p.request_id), String(p.choice)), {}),
+  "approval.respond": (p) => (hooks.approve(need(p).name, String(p.request_id), String(p.choice), p.session ? String(p.session) : undefined), {}),
   "clarify.respond": (p) => (hooks.clarify(need(p).name, String(p.request_id)), {}),
   "elsewhere.list": (p) => ({ sessions: awayRows(need(p).name) }),
   "elsewhere.peek": (p) => ({ messages: [], total: (away[need(p).name] ?? []).find((a) => a.id === p.session_id)?.count ?? 0 }),
@@ -350,8 +368,33 @@ const OPS: Record<string, (p: Json) => unknown> = {
     const { sha, ...entry } = c;
     return { entry, sha, agent: c.tools.length + c.hooks.length > 0, desktop: c.category === "desktop", warnings: [] };
   },
-  "links.places": (p) => (need(p), { places: { slack: { C02DESIGN: "design", C03RELEASES: "releases" }, discord: { "900000000000000009": "releases", "900000000000000012": "ops" } } }),
+  // the bridge names a channel with its "#" (omher_bridge.read_link_places)
+  "links.places": (p) => (need(p), { places: { slack: { C02DESIGN: "#design", C03RELEASES: "#releases" }, discord: { "900000000000000009": "#releases", "900000000000000012": "#ops" } } }),
   "cli.title": () => ({ title: "" }),
+  // 0.2.11-0.2.12 reads: every staged bot is ready; a steer is taken into the running turn; a plan part's own session
+  // is not on this computer (the drawer says so); Linear: no MCP server set up (Tasks shows its connect screen)
+  "bots.ready": (p) => {
+    const b = need(p);
+    return { ok: true, provider: String(p.provider ?? b.provider), model: b.model, error: "" };
+  },
+  "chat.steer": (p) => (need(p), { status: "queued" }),
+  "runs.node_session": (p) => (need(p), { session: null }),
+  "tasks.linear": (p) => (need(p), { configured: false, server: "" }),
+  "thread.list": (p) => {
+    const b = need(p);
+    return {
+      threads: (threads[b.name] ?? []).map((t) => ({
+        thread: t.thread, title: t.title, cwd: t.cwd, started_at: t.started, running: !!t.running, needs: false, message_count: t.msgs.length,
+        preview: t.msgs.find((m) => m.role === "user")?.text ?? "",
+      })),
+    };
+  },
+  "thread.open": (p) => {
+    const b = need(p);
+    const t = threadOf(b.name, p.thread);
+    const m = models[b.name] as Json;
+    return { thread: t.thread, session_id: t.thread, title: t.title, cwd: t.cwd, messages: t.msgs, running: !!t.running, model: m.model, provider: m.provider, reasoning: m.reasoning };
+  },
   // an oh-my-hermes session: a Hermes chat of the bot in that folder (the story answers its first message)
   "folder.open": (p) => {
     const b = need(p);
@@ -378,6 +421,8 @@ for (const op of [
   "bots.rename", "bots.set_avatar", "chat.attach", "accounts.add", "accounts.set_active", "accounts.label", "accounts.remove", "accounts.discard",
   "automations.add", "automations.pause", "automations.resume", "automations.remove",
   "plugins.install", "plugins.toggle", "plugins.update", "plugins.remove", "plugins.reload", "bots.restart",
+  // a new thread or archiving one would start or change a Hermes session (guard.ts holds the buttons back)
+  "thread.create", "thread.remove",
 ])
   OPS[op] = () => {
     throw new OpError("preview", "This is a preview: download omher to do this for real.");

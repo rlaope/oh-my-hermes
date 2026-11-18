@@ -1,16 +1,16 @@
 import type { MessageItem, TimelineItem } from "../../state/store";
 
 /** What a bot answer at `at` (an index into the timeline, or its length for the answer still being written)
- *  replies to: the person's messages since the bot last spoke (an answer here, or a line from its other sessions),
+ *  replies to: the person's messages since the bot last spoke,
  *  oldest first. A send that failed or that Stop threw away was never read, so it is not answered. */
 export function answered(items: TimelineItem[], at: number): MessageItem[] {
   const out: MessageItem[] = [];
   for (let k = at - 1; k >= 0; k--) {
     const it = items[k];
-    // the bot spoke since: an answer here or a line from its other sessions. A SESSIONS agent (Claude Code, Codex)
+    // the bot spoke since. A SESSIONS agent (Claude Code, Codex)
     // sends each text block of one turn as its own bubble, so only the first bubble after the person's messages
     // carries the quote: the ones after it break here.
-    if (it.kind === "assistant" || it.kind === "away") break;
+    if (it.kind === "assistant") break;
     // a held message (steer queue) was never sent, so no answer replies to it
     if (it.kind === "user" && !it.error && it.wait !== "dropped" && !it.held) out.unshift(it);
   }

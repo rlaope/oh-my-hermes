@@ -87,7 +87,7 @@ class ModelRoutingJourneyTests(unittest.TestCase):
         # and the Opus 5.5 it repeats is listed once.
         self.assertEqual(
             missing["inactive_candidates"],
-            ["claude-fable-5-2", "gpt-6-astra", "claude-opus-5-5", "gpt-6.1-sol"],
+            ["claude-fable-5-2", "gpt-6.2-astra", "claude-opus-5-5", "gpt-6.2-sol"],
         )
         self.assertEqual(unavailable["status"], "choice_required")
         self.assertTrue(unavailable["setup_can_continue"])

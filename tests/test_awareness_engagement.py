@@ -43,6 +43,7 @@ from omh.plugin_bundle.omh.awareness import (
 )
 from omh.plugin_bundle.omh.awareness_delivery import read_awareness_delivery
 from omh.plugin_bundle.omh.hooks.llm_hooks import fence_omh_context, pre_llm_call
+from omh.plugin_bundle.omh.defect_fix_method import METHOD_BLOCK, asks_to_fix_code
 from omh.plugin_bundle.omh.skill_shortlist import skill_candidate_line, skill_candidates_for_turn
 from omh.routing.chat import public_chat_route_payload
 from test_kanban_board_reader import build_board, task
@@ -196,8 +197,10 @@ class FirstTurnCarriesAwarenessTests(unittest.TestCase):
 
         One of the eight does match the matcher on its own, so it is excluded
         here rather than asserted into a miss it never had. What such a turn
-        may carry is the skill candidate line (`skill_shortlist`), which reads
-        the request itself rather than OMH vocabulary -- and nothing else.
+        may carry is the skill candidate line (`skill_shortlist`) and, on a
+        request to fix code, the debugging method block (`defect_fix_method`),
+        both of which read the request itself rather than OMH vocabulary --
+        and nothing else.
         """
         with TemporaryDirectory() as omh_home:
             for index, message in enumerate(ORDINARY_WORK_REQUESTS):
@@ -211,11 +214,12 @@ class FirstTurnCarriesAwarenessTests(unittest.TestCase):
                         omh_home=omh_home,
                     )
                     line = skill_candidate_line(skill_candidates_for_turn(message))
-                    if not line:
+                    parts = [part for part in (line, METHOD_BLOCK if asks_to_fix_code(message) else "") if part]
+                    if not parts:
                         self.assertIsNone(result)
                         continue
                     assert result is not None
-                    self.assertEqual(result["context"], fence_omh_context([line]))
+                    self.assertEqual(result["context"], fence_omh_context(parts))
 
     def test_the_primer_is_not_repeated_once_it_is_in_the_history(self) -> None:
         primer = awareness_primer_context()

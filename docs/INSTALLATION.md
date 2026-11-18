@@ -1396,7 +1396,7 @@ Esc closes it):
 | --- | --- |
 | Enter | Sends the composer; while a turn runs, typed text goes into it now as a steer (shown as your prompt above the working row, read at the next tool call); a slash command, a `!` line, a prompt with images, one sent in plan mode or behind queued lines queues for the turn's end instead (`/stop`, `/steer`, `/queue`, `/btw`, `/bg`, `/yolo`, `/effort`, `/reasoning <level>` and the commands about this terminal run at once), whatever Hermes' `busy_input_mode` says |
 | `\` then Enter, Alt+Enter, Shift+Enter, Ctrl+J | Adds a line; with a list or menu focused, Ctrl+J moves down instead. Alt+Enter and Shift+Enter still add a line in an open menu; backslash then Enter may accept a completion |
-| Ctrl+Enter | While a turn runs, sends the composer's text into it now as a steer (`/steer <text>` too); idle, sends as Enter does |
+| Ctrl+Enter | While a turn runs, sends the composer's text into it now as a steer (`/steer <text>` too); with images, stops the turn and sends the prompt with them as soon as it ends; idle, sends as Enter does |
 | Ctrl+Enter, Ctrl+J | While a turn runs, on an empty composer, send the oldest queued prompt into it now as a steer; the row under the queue names the key (Ctrl+J where the terminal has not shown it tells Ctrl+Enter from Enter). A queued `!` line, slash command, skill prompt or plan prompt waits its turn |
 | Tab | Completes a slash command, or the `@` reference being typed; on an open menu, Enter takes the highlighted row too, and sends a command already typed in full |
 | Shift+Tab | Cycles the input mode: normal, accept all (Hermes asks no approvals in this session), plan (prompts go as /plan); while Hermes itself has approvals off, turns plan on and off |
@@ -1720,7 +1720,11 @@ A steer adds what you typed to the turn that is running, without interrupting
 it, as Claude Code does with text you send mid-turn: Enter sends one while a
 turn runs (so do Ctrl+Enter and `/steer <text>`), unless what you typed is a
 slash command, a `!` line, a prompt with images, a prompt in plan mode, or
-lines are already queued, which queue as before. Hermes reads it after its
+lines are already queued, which queue as before. Ctrl+Enter on a prompt with
+images stops the turn instead (Hermes takes text alone into a running turn):
+the prompt shows above the working row as a dim prompt and goes, with its
+images, as soon as that turn ends; Esc again gives it back to the composer.
+Hermes reads a steer after its
 next tool call, or, while it is compressing the
 context, queues it and sends it as the next prompt once compression is done.
 Hermes gives the same answer for both. The steer shows as a dim prompt row
@@ -2003,8 +2007,8 @@ effort its config sets and Vim mode), reading the command list and the
 the gateway itself exits mid-session with a failure, the TUI starts it again
 the way Hermes' launcher set it up and resumes the same session, saying so
 (`The Hermes gateway exited (code 1): starting it again and resuming session
-<id> (1 of 3 in 60 s); what you type waits until it is back, and ctrl+c
-leaves.`), as Hermes' own
+<id> (1 of 3 in 60 s); you can keep typing, Enter waits until it is back, and
+ctrl+c leaves.`), as Hermes' own
 TUI does; each attempt waits up to 15 s for the new gateway, the time Hermes'
 own TUI gives one before it reports a slow start (or what
 `HERMES_TUI_STARTUP_TIMEOUT_MS` sets, at least 5 s, as there). A question it had asked closes
@@ -2017,8 +2021,17 @@ before it resumed the session counts as one of them; after that, or when the
 new gateway refuses the resume or does not answer it, it leaves with the command that reopens
 the session, `omh --resume <id>` (`hermes --tui` when something other than `omh` opened the TUI),
 and Ctrl+C or Ctrl+D while it waits leaves the
-same way, the new gateway stopped. A gateway that exits normally, or after you
-quit, is not started again. A
+same way, the new gateway stopped. While it waits, or reattaches after a
+restart, what you type shows in the composer at once; Enter, a paste and the
+keys after them wait until it is back, in order. If it leaves instead, what
+you typed and never sent is printed under its last line, so nothing typed
+during a restart is lost. When the gateway's record
+says it was stopped with no restart asked, the TUI tries nothing (a try would
+start a gateway you stopped) and watches the record for up to 30 s, because
+Hermes' own `hermes gateway restart` without a service stops the gateway the
+same way and starts the new one seconds later: a new live record reattaches
+the session, and a record still stopped then leaves with the resume command.
+A gateway that exits normally, or after you quit, is not started again. A
 turn that brings no event the TUI shows, only types it does not know (Hermes
 renamed its turn events), gets one notice pointing at `omh doctor`, which
 prints the installed Hermes commit next to the one the TUI was declared
@@ -2148,10 +2161,10 @@ default to no:
   you pick Restart the TUI, it leaves after the running turn, once the work
   the session waits on has ended and what you typed is sent or cleared, then
   opens again on the new version and resumes the same session, as
-  `omh --resume <id>` would. If the gateway it attaches
-  to still runs the old plugin code, the reopened TUI then offers
-  `/gateway restart` once, with Cancel first. If you pick Not now, only the
-  info line hint stays.
+  `omh --resume <id>` would. That is the update's only question: if the
+  gateway it attaches to still runs the old plugin code, the reopened TUI
+  says so in one line and names `/gateway restart`, without asking. If you
+  pick Not now, only the info line hint stays.
 
 On a machine that never completed `omh setup`, `omh update` bootstraps OMH
 instead of skipping it: it installs the plugin bundle (which carries the
@@ -2633,9 +2646,9 @@ Agent/maintainer preview example:
 
 ```sh
 omh setup --model-setup \
-  --confirm-model openai-codex/gpt-6.1-sol \
+  --confirm-model openai-codex/gpt-6.2-sol \
   --confirm-model google/gemini-4-argon \
-  --model-alias main=openai-codex/gpt-6.1-sol \
+  --model-alias main=openai-codex/gpt-6.2-sol \
   --no-interactive --json
 ```
 
@@ -2653,7 +2666,7 @@ and ordered recommendation chains skip missing entries in favor of a confirmed
 compatible alternative, so a model that heads no chain stays a valid
 user-selected alternative. If no candidate is
 confirmed for the selected category, role-slot, and domain chains, the resolver
-consults one shared final order: Claude Opus 5.5, then GPT-6.1 Sol. These names
+consults one shared final order: Claude Opus 5.5, then GPT-6.2 Sol. These names
 remain editorial candidates filtered through caller-confirmed metadata; they
 do not prove subscription, entitlement, authentication, or runtime readiness.
 If no candidate is confirmed anywhere, the resolver records `owner_default`;
@@ -2668,27 +2681,27 @@ The shipped catalog is editorial policy, not benchmark output:
 <!-- omh:model-chain-table:begin (generated: uv run python -m omh.cli docs chain-table; source: src/coding/model_recommendations.py) -->
 | Surface | What it is for | Shipped editable order |
 | --- | --- | --- |
-| Hermes `main` suggestion | The session's own model | GPT-6.1 Sol (`high`), Claude Opus 5.5, Claude Fable 5.2, GPT-6 Astra (`xhigh`), Kimi K3.1 Pro |
-| `ultrabrain` | Deepest reasoning | Claude Fable 5.2 (`xhigh`), GPT-6 Astra (`xhigh`), Claude Opus 5.5 (`xhigh`) |
-| `deep` | Strong default tier | Claude Opus 5.5 (`high`), GPT-6.1 Sol (`high`), Kimi K3.1 Pro (`high`) |
-| `architect` | Architecture and system design | Claude Opus 5.5 (`xhigh`), GPT-6 Astra (`xhigh`), Claude Fable 5.2 (`xhigh`), Kimi K3.1 Pro (`xhigh`) |
-| `unspecified-high` | Default working model | GPT-6.1 Sol (`medium`), Claude Opus 5.5 (`medium`), Kimi K3.1 Pro (`medium`) |
-| `unspecified-low` | Cheaper fallback | GLM 5.3 (`low`), DeepSeek V4.1 Flash (`low`), GPT-6.1 Sol (`low`), Claude Sonnet 5.5 (`low`) |
+| Hermes `main` suggestion | The session's own model | GPT-6.2 Sol (`high`), Claude Opus 5.5, Claude Fable 5.2, GPT-6.2 Astra (`xhigh`), Kimi K3.1 Pro |
+| `ultrabrain` | Deepest reasoning | Claude Fable 5.2 (`xhigh`), GPT-6.2 Astra (`xhigh`), Claude Opus 5.5 (`xhigh`) |
+| `deep` | Strong default tier | Claude Opus 5.5 (`high`), GPT-6.2 Sol (`high`), Kimi K3.1 Pro (`high`) |
+| `architect` | Architecture and system design | Claude Opus 5.5 (`xhigh`), GPT-6.2 Astra (`xhigh`), Claude Fable 5.2 (`xhigh`), Kimi K3.1 Pro (`xhigh`) |
+| `unspecified-high` | Default working model | GPT-6.2 Sol (`medium`), Claude Opus 5.5 (`medium`), Kimi K3.1 Pro (`medium`) |
+| `unspecified-low` | Cheaper fallback | GLM 5.3 (`low`), DeepSeek V4.1 Flash (`low`), GPT-6.2 Sol (`low`), Claude Sonnet 5.5 (`low`) |
 | `quick` | Short tasks | GLM 5.3 Flash (`low`), GPT-6 Luna (`low`), Claude Haiku 5.5 (`low`), Kimi K3.1 Pro (`low`) |
 | `writing` | Prose and docs | Claude Opus 5.5 (`medium`), Claude Sonnet 5.5 (`medium`), Kimi K3.1 Pro (`medium`), Gemini 4 Argon (`medium`) |
 | `visual-engineering` | Frontend and visual | Claude Fable 5.2 (`high`), Claude Opus 5.5 (`high`), Gemini 4 Argon (`high`), Kimi K3.1 Pro (`high`) |
 | `artistry` | Unconventional work | Gemini 4 Argon (`high`), Claude Opus 5.5 (`high`), Claude Fable 5.2 (`high`), Kimi K3.1 Pro (`high`) |
-| `capable` | Strong general work | Claude Opus 5.5 (`medium`), GPT-6.1 Sol (`medium`), Claude Fable 5.2 (`medium`), Kimi K3.1 Pro (`medium`) |
+| `capable` | Strong general work | Claude Opus 5.5 (`medium`), GPT-6.2 Sol (`medium`), Claude Fable 5.2 (`medium`), Kimi K3.1 Pro (`medium`) |
 | `simple-work` | Small everyday tasks | GPT-6 Luna (`low`), Claude Haiku 5.5 (`low`), DeepSeek V4.1 Flash (`low`) |
-| `deep-work` | Long tasks at frontier depth | Claude Opus 5.5 (`max`), GPT-6.1 Sol (`max`) |
-| `google-search` | Research grounded in Google Search | Gemini 4 Argon (`medium`), GPT-6.1 Sol (`medium`), Claude Opus 5.5 (`medium`) |
+| `deep-work` | Long tasks at frontier depth | Claude Opus 5.5 (`max`), GPT-6.2 Sol (`max`) |
+| `google-search` | Research grounded in Google Search | Gemini 4 Argon (`medium`), GPT-6.2 Sol (`medium`), Claude Opus 5.5 (`medium`) |
 | `x-search` | Live search on X | Grok 4.7 (`high`), Kimi K3.1 Pro (`high`), Gemini 4 Argon (`high`) |
-| `review` | A different model tries to break the diff | GPT-6.1 Sol (`xhigh`), Claude Opus 5.5 (`xhigh`), Kimi K3.1 Pro (`xhigh`) |
+| `review` | A different model tries to break the diff | GPT-6.2 Sol (`xhigh`), Claude Opus 5.5 (`xhigh`), Kimi K3.1 Pro (`xhigh`) |
 | `swarm` | Many parallel workers on separate slices | DeepSeek V4.1 Flash (`low`), GLM 5.3 Flash (`low`), GPT-6 Luna (`low`) |
-| `forensics` | Root-causing a live symptom or a captured trace | GPT-6 Astra (`xhigh`), Claude Opus 5.5 (`xhigh`), Kimi K3.1 Pro (`xhigh`) |
-| `synthesize` | Merging many results into one answer | Claude Opus 5.5 (`xhigh`), GPT-6.1 Sol (`xhigh`), Gemini 4 Argon (`high`) |
+| `forensics` | Root-causing a live symptom or a captured trace | GPT-6.2 Astra (`xhigh`), Claude Opus 5.5 (`xhigh`), Kimi K3.1 Pro (`xhigh`) |
+| `synthesize` | Merging many results into one answer | Claude Opus 5.5 (`xhigh`), GPT-6.2 Sol (`xhigh`), Gemini 4 Argon (`high`) |
 | `x_platform_data` affinity | X-platform data affinity | Grok Build 0.1, Kimi K3.1 Pro, Gemini 4 Argon |
-| Shared final order (`last_resort.any`) | Last resort when a chain is exhausted | Claude Opus 5.5 (`medium`), GPT-6.1 Sol (`medium`) |
+| Shared final order (`last_resort.any`) | Last resort when a chain is exhausted | Claude Opus 5.5 (`medium`), GPT-6.2 Sol (`medium`) |
 <!-- omh:model-chain-table:end -->
 
 Chain customization is a config edit, not a source edit — bare
@@ -2753,7 +2766,7 @@ $ cat ~/.omh/routing/model-chains.json
   "categories": {
     "architect": [
       {"model": "claude-fable-5-2", "reasoning_effort": "xhigh"},
-      {"model": "gpt-6.1-sol", "reasoning_effort": "xhigh"}
+      {"model": "gpt-6.2-sol", "reasoning_effort": "xhigh"}
     ],
     "quick": [
       {"model": "deepseek-v4.1-flash-ultrafast", "reasoning_effort": "low"},
@@ -3485,7 +3498,7 @@ implicit default.
 3. **Optional: route per work category.** The Maestro lane resolves each
    unit's model from a category → model table (`ultrabrain`, `deep`, `quick`,
    `writing`, ...). Override it per profile with
-   `omh coding category-maestro set codex ultrabrain gpt-6.1-sol:xhigh`, walk
+   `omh coding category-maestro set codex ultrabrain gpt-6.2-sol:xhigh`, walk
    it guided with `omh coding category-maestro interview` (the interactive
    `omh setup` offers this walk too), and inspect the effective table with
    `omh coding category-maestro show`. A unit declares its category

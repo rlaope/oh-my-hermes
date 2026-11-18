@@ -10,7 +10,10 @@ import { t, type Key } from "../i18n";
 
 export const slot = "routineLine";
 
-const WORD: Record<string, "done" | "failed"> = {
+type Word = "done" | "failed" | "notDelivered" | "blocked";
+// Hermes' run states (the bridge's FAILED_RUN): delivery_failed = the job ran but its message could not be delivered;
+// blocked_config = the job's config stopped it from running.
+const WORD: Record<string, Word> = {
   ok: "done",
   success: "done",
   done: "done",
@@ -18,11 +21,16 @@ const WORD: Record<string, "done" | "failed"> = {
   error: "failed",
   failed: "failed",
   failure: "failed",
+  delivery_failed: "notDelivered",
+  blocked_config: "blocked",
 };
-const WORD_KEY: Record<"done" | "failed", Key> = { done: "rt.done", failed: "rt.failed" };
+const WORD_KEY: Record<Word, Key> = { done: "rt.done", failed: "rt.failed", notDelivered: "rt.notDelivered", blocked: "rt.blocked" };
 
 export const statusWord = (status: string): string => WORD[status.trim().toLowerCase()] ?? (status.trim() || "done");
-export const isFailure = (status: string): boolean => statusWord(status) === "failed";
+export const isFailure = (status: string): boolean => {
+  const w = WORD[status.trim().toLowerCase()];
+  return w === "failed" || w === "notDelivered" || w === "blocked";
+};
 /** The status word in the current language; a status omher does not know stays as Hermes wrote it. */
 const statusText = (status: string) => {
   const w = WORD[status.trim().toLowerCase()] ?? (status.trim() ? null : "done");
@@ -37,6 +45,8 @@ export default function RoutineLine({ bot, item }: SlotProps["routineLine"]) {
   const last = (known ?? item.status ?? "").toString();
   const word = statusText(item.status);
   const at = hhmm(new Date(item.ts * 1000));
+  // failed runs folded into this line: "×12 · 03:56–09:37"
+  const times = (item.count ?? 1) > 1 && item.since ? t("rt.times", { n: item.count!, from: hhmm(new Date(item.since * 1000)), to: at }) : at;
 
   return (
     <div className="routine" data-testid="routine-line" data-open={open}>
@@ -52,7 +62,8 @@ export default function RoutineLine({ bot, item }: SlotProps["routineLine"]) {
         </span>
         <span className="routine-t">
           {t("rt.routine")} · <span className="routine-name">{item.name}</span> ·{" "}
-          <span className={isFailure(item.status) ? "routine-bad" : undefined}>{word}</span> {at}
+          <span className={isFailure(item.status) ? "routine-bad" : undefined}>{word}</span>{" "}
+          <span data-testid="routine-when">{times}</span>
         </span>
         <span className="routine-chev" aria-hidden>
           {open ? <ChevronDown /> : <ChevronRight />}

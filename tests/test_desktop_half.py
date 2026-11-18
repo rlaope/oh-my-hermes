@@ -349,6 +349,22 @@ const local = {
   foldedEdges: (graph, folded) => {
     const dag = mod.dagModel(graph)
     return mod.foldedView(dag, new Set(folded), dag.edges, null).edges.map(edge => `${edge.from}>${edge.to}`)
+  },
+  // The lanes a graph marks `outside_dag`: out of the run's layers and edges, in their own block's list — with
+  // the aggregates the cards report, which keep the outside lane's usage, cost and time like any lane's.
+  outsideLanes: graph => {
+    const dag = mod.dagModel(graph)
+    return {
+      layers: dag.layers,
+      lanes: dag.lanes.map(lane => lane.id),
+      outside: dag.outside.map(lane => [lane.id, lane.title, lane.state, lane.layer]),
+      total: mod.allTokens(dag.total),
+      priced: dag.total.priced,
+      counted: dag.total.lanes,
+      seconds: dag.seconds,
+      timed: dag.timed,
+      models: dag.models.map(entry => [entry.model, entry.count, mod.allTokens(entry.total)])
+    }
   }
 }
 for (const [name, cases] of Object.entries(formatterCases)) {
@@ -813,6 +829,32 @@ FANOUT_GRAPH = {
     ],
 }
 FANOUT_GRAPH.pop("dag_topology")
+# The same run beside a ledger child no node of it owns: flagged `outside_dag`, kept out of the run's edges and
+# layers, drawn under its own Outside DAG block below them.
+OUTSIDE_DAG_GRAPH = {
+    **_dag_graph(
+        [
+            _dag_lane("a", "Write a.txt", state="done", status="accepted", model="anthropic/claude-haiku-5-5",
+                      elapsed_seconds=47),
+            _dag_lane("b", "Write b.txt", state="running", status="running", model="anthropic/claude-haiku-5-5",
+                      elapsed_seconds=31),
+        ],
+        [],
+        ["Write a.txt"],
+        [],
+    ),
+    "nodes": [
+        *[{ "id": "root", "kind": "root", "title": "main", "state": "running" }],
+        _dag_lane("a", "Write a.txt", state="done", status="accepted", model="anthropic/claude-haiku-5-5",
+                  elapsed_seconds=47),
+        _dag_lane("b", "Write b.txt", state="running", status="running", model="anthropic/claude-haiku-5-5",
+                  elapsed_seconds=31),
+        {"id": "s:sa-free", "kind": "lane", "title": "Fix the typo", "category": "?", "model": "glm-5.3-flash",
+         "effort": "low", "state": "done", "status": "done", "order": 3, "group": "wave 2 · 14:02", "waits_on": 0,
+         "session_tail": "a3f9c1e2", "outside_dag": True, "elapsed_seconds": 9,
+         "usage": {"input": 500, "cache_read": 300, "cache_write": 100, "output": 40, "cost_usd": 0.004}},
+    ],
+}
 # A large run under way: three layers done, the fourth running, eight more waiting.
 WORKING_DAG_GRAPH = _dag_graph(
     [_dag_lane(f"n{at}", f"Step {at}", state="done", status="accepted") if at < 3
@@ -861,6 +903,7 @@ for _name, _data in {
     "dag_cards": {**ESTABLISHED_PAYLOAD, "delegation_graph": DAG_GRAPH},
     "fanout_cards": {**ESTABLISHED_PAYLOAD, "delegation_graph": FANOUT_GRAPH},
     "dag_beyond_cards": {**ESTABLISHED_PAYLOAD, "delegation_graph": BEYOND_DAG_GRAPH, "delegation_drawing": DRAWING},
+    "dag_outside_cards": {**ESTABLISHED_PAYLOAD, "delegation_graph": OUTSIDE_DAG_GRAPH},
     "dag_cut_cards": {**ESTABLISHED_PAYLOAD, "delegation_graph": CUT_DAG_GRAPH},
     "dag_counts_only": {**ESTABLISHED_PAYLOAD, "delegation_graph": COUNTS_ONLY_GRAPH},
 }.items():
@@ -999,6 +1042,7 @@ FORMATTER_CASES = {
     "foldedEdges": [[DAG_GRAPH, [0]], [DAG_GRAPH, [1]], [DAG_GRAPH, []]],
     "cutLayers": [[CUT_DAG_GRAPH], [TAIL_CUT_DAG_GRAPH]],
     "elidedEdges": [[ELIDED_DAG_GRAPH]],
+    "outsideLanes": [[OUTSIDE_DAG_GRAPH]],
     "sharedOpenKeys": [["s1", "1,2"]],
     "dagViewOptions": [[None], [{"fold": "closed", "figures": False, "implied": True}], [{"fold": "sideways", "compact": "yes"}]],
     "dagModel": [
@@ -2161,6 +2205,25 @@ class DesktopPluginNodeTests(unittest.TestCase):
         self.assertEqual(self._classed(render, "omh-pane-dv-path-l"), [])
         self.assertEqual(self._classed(render, "omh-pane-dv-kpi-label"), ["Tokens", "Cache hit", "Cost", "Node time"])
         self.assertNotIn("omh-pane-dag", {node["className"] for node in render["structure"]})
+
+    def test_an_outside_lane_draws_under_its_own_block_never_as_a_start_node(self) -> None:
+        """A child the drawn run does not own (`outside_dag`): below the layers, labelled, and never in them."""
+        render = self._drive()["renders"]["dag_outside_cards"]
+        self.assertIn("Outside DAG", render["byId"]["hud"])
+        self.assertIn("Fix the typo", render["byId"]["hud"])
+        classes = {name for node in render["structure"] for name in node["className"].split()}
+        self.assertIn("omh-pane-dv-outside", classes)
+        # The run's two lanes still read Start node; the outside lane's card carries none.
+        self.assertEqual(" ".join(render["byId"]["hud"]).count("Start node"), 2)
+        model = self._drive()["formatters"]["outsideLanes"][0]
+        self.assertEqual(model["layers"], [["d:r:a", "d:r:b"]])
+        self.assertEqual(model["lanes"], ["d:r:a", "d:r:b"])
+        self.assertEqual(model["outside"], [["s:sa-free", "Fix the typo", "done", None]])
+        # The aggregates keep the whole roster: the outside lane's tokens, cost and time count like an inside
+        # lane's do (47 + 31 + 9 seconds, the one priced lane its 940 tokens), even though its card is outside.
+        self.assertEqual((model["total"], model["counted"], model["priced"]), (940, 1, 1))
+        self.assertEqual((model["seconds"], model["timed"]), (87, 3))
+        self.assertEqual(model["models"], [["glm-5.3-flash", 1, 940], ["claude-haiku-5-5", 2, 0]])
 
     def test_a_large_run_is_cards_folded_past_its_frontier(self) -> None:
         """Mutation: fall back to text past a lane count, or draw every far-off layer open by default."""

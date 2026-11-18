@@ -136,31 +136,31 @@ _HAIKU_55 = _candidate(
     ("ccapi", "anthropic", "openrouter"),
     reasoning="Editorial low-cost Claude candidate; not a benchmark claim.",
 )
-# GPT-6.1 Sol (2026-09-29) holds every slot GPT-6 Sol held (owner decision,
-# 2026-10-01). GPT-6 Sol itself had taken the slots of GPT-5.6 Sol and
-# GPT-5.6 Terra on 2026-09-23. The 2026-10-13 table widens it: the head of
-# `unspecified-high` (the one measured head, see that chain), the fallback
-# behind Opus 5.5 in `deep`, `capable`, and `deep-work`, and the GPT entry of
-# `unspecified-low`. Every rung it is named at (low, medium, high, max) is on
-# its ladder, which unlike GPT-6 Sol's has no `none`. Same list price as GPT-6
-# Sol with a cheaper cache read. GPT-6 Sol left the shipped chains under the
-# superseded-generation rule (owner decision, 2026-09-11).
+# GPT-6.2 Sol (2026-11-17) holds every slot GPT-6.1 Sol held, each at the
+# effort it carried (owner decision, 2026-11-18), and GPT-6.1 Sol left the
+# shipped chains under the superseded-generation rule (owner decision,
+# 2026-09-11). The line's history: GPT-6 Sol took the slots of GPT-5.6 Sol and
+# GPT-5.6 Terra on 2026-09-23, GPT-6.1 Sol took GPT-6 Sol's on 2026-10-01, and
+# the 2026-10-13 table widened it: the head of `unspecified-high` (the one
+# measured head, see that chain), the fallback behind Opus 5.5 in `deep`,
+# `capable`, and `deep-work`, and the GPT entry of `unspecified-low`. Every
+# rung it is named at (low, medium, high, xhigh, max) is on its ladder, which
+# has no `none`. Same list price as GPT-6.1 Sol, cached input included.
 _SOL = _candidate(
-    "gpt-6.1-sol",
+    "gpt-6.2-sol",
     "gpt",
     ("openai-codex", "openai"),
     reasoning_effort="medium",
     reasoning="Editorial reasoning recommendation; not a benchmark claim.",
 )
-# GPT-6 Astra (2026-09-03) heads the frontier GPT slots. The Luna lane is a
-# cost-tier pick below it: Astra lists at 5x Sol and 100x Luna. It stays the
-# Astra generation, the only Astra id OpenAI serves. Press coverage dated
-# 2026-09-28/29 (9to5Google, Engadget, The Register) reports that OpenAI
-# cancelled the GPT-6.1 Astra release; no OpenAI docs page states it: the
-# model page returns 404 and the models, pricing, and changelog pages do not
-# name it (read 2026-10-13).
+# GPT-6.2 Astra (2026-11-17) holds every slot GPT-6 Astra held, each at the
+# effort it carried (owner decision, 2026-11-18), and GPT-6 Astra left the
+# shipped chains under the superseded-generation rule. OpenAI shipped no
+# GPT-6.1 Astra (the 2026-10-13 read: the model page returned 404), so 6.2 is
+# the line's first successor. It heads the frontier GPT slots; the Luna lane
+# is a cost-tier pick below it: 6.2 Astra lists at 4x 6.2 Sol and 80x Luna.
 _ASTRA = _candidate(
-    "gpt-6-astra",
+    "gpt-6.2-astra",
     "gpt",
     ("openai-codex", "openai"),
     reasoning_effort="xhigh",
@@ -297,7 +297,8 @@ SHIPPED_MODEL_RECOMMENDATIONS: Final[dict[str, object]] = {
         # (visual-engineering is the other exception, 2026-11-10).
         # Claude Mythos stays out of every shipped chain.
         # Projection: (claude-fable-5-2, xhigh) labels "ultrabrain", and Astra
-        # at xhigh labels "forensics".
+        # at xhigh labels "forensics" (GPT-6.2 Astra since 2026-11-18, GPT-6
+        # Astra before; the retired id now labels nothing).
         "ultrabrain": [
             _with_effort(_FABLE_52, "xhigh"),
             _with_effort(_ASTRA, "xhigh"),
@@ -327,9 +328,9 @@ SHIPPED_MODEL_RECOMMENDATIONS: Final[dict[str, object]] = {
         # 2026-09-05) OMH routing passed 18/30 with gpt-5.6-sol at this head
         # and 12/30 with kimi-k3-ultrafast here (the other 24 tasks routed to
         # the quick head in both arms); Kimi passed 0/6 of the six search
-        # tasks the `exhaustive_search` signal lifts to this category. GPT-6.1
-        # Sol carries the GPT slot by the superseded-generation rule and is
-        # itself unmeasured on that corpus.
+        # tasks the `exhaustive_search` signal lifts to this category. GPT-6.2
+        # Sol carries the GPT slot by the superseded-generation rule (after
+        # GPT-6 Sol and GPT-6.1 Sol) and is itself unmeasured on that corpus.
         "unspecified-high": [
             _with_effort(_SOL, "medium"),
             _with_effort(_OPUS_55, "medium"),
@@ -424,9 +425,11 @@ SHIPPED_MODEL_RECOMMENDATIONS: Final[dict[str, object]] = {
         # A synthesize lane routed through `omh_delegate_route` keeps its own
         # label through its route-provenance record; only an unrecorded child
         # is labelled by projection. Six other projections moved with these
-        # chains; hermes_delegation.py lists them. (gpt-6-astra, xhigh) also
+        # chains; hermes_delegation.py lists them. Astra at xhigh also
         # collided with ultrabrain's head until Fable took it on
-        # 2026-11-09; it now labels "forensics".
+        # 2026-11-09; it now labels "forensics". Since 2026-11-18 the GPT
+        # entries are (gpt-6.2-astra, xhigh) and the gpt-6.2-sol pairs; each
+        # takes the label its gpt-6-astra / gpt-6.1-sol pair carried.
         #
         # google-search: research grounded in Google Search.
         "google-search": [
@@ -918,8 +921,8 @@ def _active_spellings(active: Mapping[str, str]) -> set[str]:
     """Every spelling a confirmed-active model answers to.
 
     As recorded, unqualified, and — when the provider serves a dated snapshot
-    (`gpt-6.1-sol-YYYY-MM-DD`) — the base alias it is a snapshot of, so the
-    chain entry `gpt-6.1-sol` still counts the model as available and the
+    (`gpt-6.2-sol-YYYY-MM-DD`) — the base alias it is a snapshot of, so the
+    chain entry `gpt-6.2-sol` still counts the model as available and the
     route keeps the id as served.
     """
     model_id = active["model_id"]

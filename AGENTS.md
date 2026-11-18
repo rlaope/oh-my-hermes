@@ -105,20 +105,28 @@ and evidence obvious to a reviewer reading the PR without the chat history.
   isolated local Hermes single-query process (`hermes chat --query-file -`,
   the Hermes transport that reads a prompt from stdin). It requires
   `--confirm-dispatch`, takes prompts only through stdin/files, enforces a
-  depth-one recursion limit, runs safe-mode file tools by default, records
+  depth-one recursion limit (OMH dispatch depth; inside a paired-run arm,
+  Hermes' own one-level `delegate_task` children are allowed when the run's
+  `--arm-toolsets` names `delegation`), runs safe-mode file tools by default, records
   authenticated `routing_observation/v1` evidence, and never runs
   automatically. Two front doors reuse it without adding a process authority:
   - `omh coding paired-run dispatch` for confirmed evaluation cells: one
     digest-matching task file per frozen task, task bytes over child stdin,
     detached per-cell worktrees under an atomically unique invocation-owned
     parent, signed evaluation bindings, removal of only the paths that
-    invocation reserved, and no persisted task body. Executors without a
+    invocation reserved, and no persisted task body. Both arms run
+    `--toolsets file,skills`; only the explicit `--arm-toolsets` opt-in may
+    add `terminal` and `delegation`, to both arms identically, signed into
+    each cell and checked at fan-in, with Hermes' command approval left on;
+    with `delegation` both arm homes pin the same child cap and the arm's
+    model for every child, and fan-in refuses a cell whose child sessions ran
+    another model. Executors without a
     receipt-capable adapter are refused without substitution;
     caller-injected adapters stay the executor-neutral seam. It is the one
     caller that leaves safe mode: each arm runs a declared, receipt-signed
     arm setup in its own disposable Hermes home (the variant with the OMH
     plugin, a disposable OMH home and its frozen `exposed_skills`, the
-    baseline with neither; both `file,skills` tools), served by a
+    baseline with neither; both the run's declared toolsets), served by a
     harness-owned `hermes gateway run` in its own process group that the
     invocation warms before timing and stops on exit, never a service
     manager. A custom provider is declared by base URL (https, or http to a

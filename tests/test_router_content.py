@@ -4816,8 +4816,8 @@ class RouterContentTests(unittest.TestCase):
                 "ru": "## Что вы получаете", "es": "## Qué obtienes", "fr": "## Ce que vous obtenez",
                 "de": "## Was du bekommst", "pt-BR": "## O que você ganha", "it": "## Cosa ottieni",
             }),
-            ("## DAG-ULW", {
-                locale: "## DAG-ULW"
+            ("## Graph Engineering", {
+                locale: "## Graph Engineering"
                 for locale in ("ko", "ja", "zh", "ru", "es", "fr", "de", "pt-BR", "it")
             }),
             ("## Others", {

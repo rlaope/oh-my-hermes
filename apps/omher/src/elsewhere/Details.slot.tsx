@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import type { SlotProps } from "../features";
 import type { ReactNode as JSXChild } from "react";
 import type { Away, Bot, Routine } from "../lib/protocol";
-import { useStore } from "../state/store";
+import { replyChipFor, useStore } from "../state/store";
 import { openExternal } from "../lib/openExternal";
 import { shortTime } from "../app/time";
 import { Avatar, CloseIcon, IconButton, SourceIcon } from "../ui";
@@ -160,10 +160,25 @@ function DetailsTab({ bot, open, head }: { bot: Bot; open: boolean; head: JSXChi
           </li>
           {shown.map((a) => {
             const src = sourceName(a.source);
+            // "Reply there" lives here now that these sessions are not in the chat: it points the next message at
+            // that thread (the chip above the composer), and sends nothing by itself
+            const chip = replyChipFor(a);
+            const reply = chip && (
+              <button
+                type="button"
+                className="ew-reply"
+                data-testid="where-reply"
+                title={tr("aw.replyTip")}
+                onClick={() => s.setReplyTo(chip, bot.name)}
+              >
+                {tr("aw.reply")}
+              </button>
+            );
+            const name = a.label?.trim() || a.title?.trim() || tr("aw.session", { app: src });
             const row = (
               <>
-                <span className="t1" title={a.label}>
-                  {a.label}
+                <span className="t1" title={name}>
+                  {name}
                 </span>
                 <span className={`st${a.running ? " run" : ""}`}>
                   {a.running && <i className="ew-live" aria-hidden />}
@@ -179,7 +194,7 @@ function DetailsTab({ bot, open, head }: { bot: Bot; open: boolean; head: JSXChi
               </>
             );
             return (
-              <li key={a.id} data-testid="where-row" data-session={a.id}>
+              <li key={a.id} className={reply ? "ew-has-reply" : undefined} data-testid="where-row" data-session={a.id}>
                 {a.url ? (
                   <a
                     className="ew-ss link"
@@ -197,6 +212,7 @@ function DetailsTab({ bot, open, head }: { bot: Bot; open: boolean; head: JSXChi
                     {row}
                   </div>
                 )}
+                {reply}
               </li>
             );
           })}

@@ -41,7 +41,8 @@ DEFINITION = SkillDefinition(
         "ultrawork dag",
     ),
     "Use when the request is a job of several parts that can run in parallel or in an order (a feature across "
-    "modules, a migration, a broad cleanup, research then build then verify), or when the person says dag ulw.",
+    "modules, a migration, a broad cleanup, a listed backlog of four or more separate code changes, research then "
+    "build then verify), or when the person says dag ulw.",
     category="agent-coordination",
     phase="dag-delivery",
     hermes_role="tracker",
@@ -147,7 +148,9 @@ DEFINITION = SkillDefinition(
         "that it succeeded (a refusal or exhausted chain stops dispatch), then "
         "`delegate_task` with the tasks unchanged; never more calls than it returned. A call whose route names a "
         "`backend` (Hermes' model_map or profile_routes) runs no route tool: its tasks already carry what that "
-        "backend takes. Then end the turn with one status line; never wait or poll.",
+        "backend takes. Then end the turn with one status line; never wait or poll. When `delegate_task` returns "
+        "the children's results inside the call (a one-shot or other finite session), settle them and dispatch what "
+        "settle returns in the same turn instead: no completion comes back as a later turn there.",
         "On each completion read the node's handoff file and call `omh_dag action=settle` (accepted, failed, or "
         "blocked; a provider error is failed with provider_error); a verify node with criteria is accepted only when "
         "every `CRITERION` line says met, failed when one is unmet, blocked when one could not be checked here. "
@@ -278,7 +281,9 @@ def run_loop_reference() -> str:
    `for_parent: [...]` and the say tells you to do each node yourself, write its handoff at the path
    the say gives, and settle it, without `delegate_task` -- those nodes are never offered to a child again.
    `held_for_slots` also lists ready nodes left for the next turn when no free background slot remains.
-4. End the turn with one status line. Each completion re-enters as a new turn.
+4. End the turn with one status line. Each completion re-enters as a new turn. When `delegate_task` returns the
+   children's results inside the call instead (a finite one-shot session joins them there), nothing re-enters:
+   settle each node from its handoff and dispatch what settle returns in the same turn, until the run is done.
 5. On a completion, read the node's handoff file, then `omh_dag action=settle node=<id> outcome=<...>`.
    `accepted` is refused while the handoff file is missing or when Hermes reported the child failed.
    On a Docker or SSH terminal the handoff files live in that terminal, under its user's home, and OMH

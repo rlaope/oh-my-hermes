@@ -52,7 +52,9 @@ HERMES_MIXTURE_CATEGORY_CHAINS: dict[str, tuple[tuple[str, str], ...]] = {
     # where a comment cites a measurement. Superseded generations leave every
     # shipped chain (owner decision, 2026-09-11): on 2026-10-13 Claude Haiku
     # 4.5 left behind Haiku 5.5, and the 2025 Qwen3-Coder left with no Qwen
-    # successor. A machine whose provider still serves only an older id keeps
+    # successor; on 2026-11-18 GPT-6 Astra and GPT-6.1 Sol left behind GPT-6.2
+    # Astra and GPT-6.2 Sol, each successor at the slot and effort its
+    # predecessor held, so every projection label moved with its pair. A machine whose provider still serves only an older id keeps
     # it through ~/.omh/routing/model-chains.json, not through the public
     # table.
     #
@@ -102,21 +104,21 @@ HERMES_MIXTURE_CATEGORY_CHAINS: dict[str, tuple[tuple[str, str], ...]] = {
     # xhigh still labels "ultrabrain" there.
     "ultrabrain": (
         ("claude-fable-5-2", "xhigh"),
-        ("gpt-6-astra", "xhigh"),
+        ("gpt-6.2-astra", "xhigh"),
         ("claude-opus-5-5", "xhigh"),
     ),
     # DeepSeek V4.1 Flash left `deep`: a Flash budget model does not fit the
     # strong tier, and Opus 5.5 and Kimi K3.1 Pro now carry its cross-ecosystem
     # fallback. (claude-opus-5-5, high), second in visual-engineering, labels
     # "deep".
-    "deep": (("claude-opus-5-5", "high"), ("gpt-6.1-sol", "high"), ("kimi-k3.1-pro", "high")),
+    "deep": (("claude-opus-5-5", "high"), ("gpt-6.2-sol", "high"), ("kimi-k3.1-pro", "high")),
     # Architecture/system-design lanes: full-depth effort across three
     # provider ecosystems. A fall-through child is labelled by the chain its
     # pair heads: Astra at xhigh projects to forensics and Fable at xhigh to
     # ultrabrain (both since 2026-11-09).
     "architect": (
         ("claude-opus-5-5", "xhigh"),
-        ("gpt-6-astra", "xhigh"),
+        ("gpt-6.2-astra", "xhigh"),
         ("claude-fable-5-2", "xhigh"),
         ("kimi-k3.1-pro", "xhigh"),
     ),
@@ -125,10 +127,11 @@ HERMES_MIXTURE_CATEGORY_CHAINS: dict[str, tuple[tuple[str, str], ...]] = {
     # routing passed 18/30 with gpt-5.6-sol at this head and 12/30 with
     # kimi-k3-ultrafast here (the other 24 tasks routed to the quick head in
     # both arms); Kimi passed 0/6 of the six search tasks `exhaustive_search`
-    # lifts here. GPT-6.1 Sol carries the GPT slot by the superseded-generation
-    # rule and is itself unmeasured on that corpus.
+    # lifts here. GPT-6.2 Sol carries the GPT slot by the superseded-generation
+    # rule (after GPT-6 Sol and GPT-6.1 Sol) and is itself unmeasured on that
+    # corpus.
     "unspecified-high": (
-        ("gpt-6.1-sol", "medium"),
+        ("gpt-6.2-sol", "medium"),
         ("claude-opus-5-5", "medium"),
         ("kimi-k3.1-pro", "medium"),
     ),
@@ -139,7 +142,7 @@ HERMES_MIXTURE_CATEGORY_CHAINS: dict[str, tuple[tuple[str, str], ...]] = {
     "unspecified-low": (
         ("glm-5.3", "low"),
         ("deepseek-flash", "low"),
-        ("gpt-6.1-sol", "low"),
+        ("gpt-6.2-sol", "low"),
         ("claude-sonnet-5-5", "low"),
     ),
     # Fable left the tail for the same cost-order reason; Haiku 5.5 is
@@ -186,7 +189,7 @@ HERMES_MIXTURE_CATEGORY_CHAINS: dict[str, tuple[tuple[str, str], ...]] = {
     # collision).
     "capable": (
         ("claude-opus-5-5", "medium"),
-        ("gpt-6.1-sol", "medium"),
+        ("gpt-6.2-sol", "medium"),
         ("claude-fable-5-2", "medium"),
         ("kimi-k3.1-pro", "medium"),
     ),
@@ -207,7 +210,7 @@ HERMES_MIXTURE_CATEGORY_CHAINS: dict[str, tuple[tuple[str, str], ...]] = {
     # deep's, and because a head match resolves in canonical order deep-work
     # would be a label nothing could ever carry. `max` is a documented rung of
     # both entries' ladders.
-    "deep-work": (("claude-opus-5-5", "max"), ("gpt-6.1-sol", "max")),
+    "deep-work": (("claude-opus-5-5", "max"), ("gpt-6.2-sol", "max")),
     # The six routing-recipe categories (owner recipe, 2026-10-28), appended
     # after deep-work for the same tie-break reason. Heads are the owner's;
     # each tail crosses into another provider ecosystem (owner rule above).
@@ -219,20 +222,21 @@ HERMES_MIXTURE_CATEGORY_CHAINS: dict[str, tuple[tuple[str, str], ...]] = {
     # Routing is unaffected, and a lane routed through `omh_delegate_route`
     # keeps its own category through the route-provenance record; only a
     # child with no matching record is labelled by projection, so synthesize
-    # is a label only a routed lane carries. (gpt-6-astra, xhigh) collided
+    # is a label only a routed lane carries. Astra at xhigh collided
     # with ultrabrain's head the same way until 2026-11-09, when Fable
     # took that head; forensics now carries the Astra xhigh label.
     # Six projections move (diffed over every shipped (model, effort) pair):
     # (deepseek-flash, low) unspecified-low -> swarm and (gemini-4-argon,
     # medium) writing -> google-search, because each now heads a chain;
-    # (gpt-6.1-sol, xhigh) and (grok-4.7, high) had no label and now head
+    # Sol at xhigh (then gpt-6.1-sol, gpt-6.2-sol since 2026-11-18) and
+    # (grok-4.7, high) had no label and now head
     # review and x-search; (kimi-k3.1-pro, high) deep -> x-search and
     # (kimi-k3.1-pro, xhigh) architect -> review, because the shallower
     # chain position wins (second in x-search against third in deep; third
     # in review against fourth in architect).
     "google-search": (
         ("gemini-4-argon", "medium"),
-        ("gpt-6.1-sol", "medium"),
+        ("gpt-6.2-sol", "medium"),
         ("claude-opus-5-5", "medium"),
     ),
     # Grok 4.7 is a separate entry from the x_platform_data affinity, which
@@ -245,7 +249,7 @@ HERMES_MIXTURE_CATEGORY_CHAINS: dict[str, tuple[tuple[str, str], ...]] = {
     # A category, not the `review` role: the role still resolves through
     # unspecified-high/unspecified-low and never reaches this chain.
     "review": (
-        ("gpt-6.1-sol", "xhigh"),
+        ("gpt-6.2-sol", "xhigh"),
         ("claude-opus-5-5", "xhigh"),
         ("kimi-k3.1-pro", "xhigh"),
     ),
@@ -255,18 +259,19 @@ HERMES_MIXTURE_CATEGORY_CHAINS: dict[str, tuple[tuple[str, str], ...]] = {
         ("gpt-6-luna", "low"),
     ),
     # Since 2026-11-09 its head no longer collides in the shipped chains:
-    # (gpt-6-astra, xhigh) labels "forensics", including a child that fell
+    # (gpt-6.2-astra, xhigh) labels "forensics" (gpt-6-astra did until it
+    # retired on 2026-11-18 and now labels nothing), including a child that fell
     # through ultrabrain or architect to Astra, unless the machine's recorded
     # providers shape ultrabrain so that Astra leads it (see ultrabrain).
     "forensics": (
-        ("gpt-6-astra", "xhigh"),
+        ("gpt-6.2-astra", "xhigh"),
         ("claude-opus-5-5", "xhigh"),
         ("kimi-k3.1-pro", "xhigh"),
     ),
     # Labelled "architect" by projection: its head is architect's.
     "synthesize": (
         ("claude-opus-5-5", "xhigh"),
-        ("gpt-6.1-sol", "xhigh"),
+        ("gpt-6.2-sol", "xhigh"),
         ("gemini-4-argon", "high"),
     ),
 }
@@ -483,6 +488,14 @@ HERMES_MIXTURE_ALIAS_PROVIDER_FAMILIES: dict[str, tuple[str, ...]] = {
     "kimi-k3.1-pro-highspeed": ("kimi-coding",),
     # Recognition-only, retired 2026-10-24 behind kimi-k3.1-pro.
     "kimi-k3": ("apitopia", "kimi-coding", "openrouter", "opencode"),
+    # GPT-6.2 Astra and GPT-6.2 Sol (released 2026-11-17) hold every slot
+    # GPT-6 Astra and GPT-6.1 Sol held (owner decision, 2026-11-18). The
+    # families are the vendor's statement: the API serves both ids, and the
+    # Codex client's served catalog (0.169.0, read 2026-11-18) lists both.
+    "gpt-6.2-astra": ("openai-codex", "openai"),
+    "gpt-6.2-sol": ("openai-codex", "openai"),
+    # Recognition-only, retired 2026-11-18 behind gpt-6.2-astra and
+    # gpt-6.2-sol under the superseded-generation rule.
     "gpt-6-astra": ("openai-codex", "openai"),
     "gpt-6.1-sol": ("openai-codex", "openai"),
     # Recognition-only until an owner places it (released 2026-10-26).
@@ -589,7 +602,8 @@ HERMES_MIXTURE_ALIAS_PROVIDER_FAMILIES: dict[str, tuple[str, ...]] = {
 # stale provider/category metadata until its own rows are added here.
 EXACT_MODEL_CONTRACT_ALIASES: frozenset[str] = frozenset(
     {
-        "gpt-6-astra", "gpt-6-sol", "gpt-6.1-sol", "gpt-6.1-terra", "gpt-6-cyber", "gpt-6-luna",
+        "gpt-6-astra", "gpt-6-sol", "gpt-6.1-sol", "gpt-6.2-astra", "gpt-6.2-sol", "gpt-6.1-terra",
+        "gpt-6-cyber", "gpt-6-luna",
         "claude-opus-5-5", "claude-sonnet-5-5", "claude-haiku-5-5", "claude-fable-5-1", "claude-fable-5-2",
         "deepseek-v4.1-flash",
         "kimi-k3.1-pro", "kimi-k3.1-pro-highspeed", "gemini-4-argon", "grok-4.7",
@@ -1555,6 +1569,8 @@ APPROX_PRICE_PER_MTOK: dict[str, tuple[float, float]] = {
     # 2026-09): 10/50; cached input 1 (the default tenth). The $12.5 cache
     # write and the 2x/1.5x multiplier above 272K input have no column in
     # this table and stay documented in `src/coding/model_contracts.py`.
+    # The id left the shipped chains on 2026-11-18 (superseded by
+    # gpt-6.2-astra) and stays priced for overrides.
     "gpt-6-astra": (10.0, 50.0),
     # OpenAI list price (developers.openai.com/api/docs/models/gpt-5.6-terra,
     # read 2026-09-23): 2/12, cached input 0.20. The earlier 1.25/10 did not
@@ -1583,7 +1599,8 @@ APPROX_PRICE_PER_MTOK: dict[str, tuple[float, float]] = {
     # Cache write, long-context, and service-tier rates stay documented in
     # `src/coding/model_contracts.py`. `gpt-6.1-sol-pro` has no row: it
     # inherits this one through its declared projection (pro mode bills at
-    # the selected model's standard rates).
+    # the selected model's standard rates). The id left the shipped chains on
+    # 2026-11-18 (superseded by gpt-6.2-sol) and stays priced for overrides.
     "gpt-6.1-sol": (2.0, 10.0),
     # OpenAI list price (developers.openai.com/api/docs/models/gpt-6.1-terra
     # and /api/docs/pricing, read 2026-10-27): 1/5, no promotion mark; cached
@@ -1591,6 +1608,15 @@ APPROX_PRICE_PER_MTOK: dict[str, tuple[float, float]] = {
     # long-context, and service-tier rates stay documented in
     # `src/coding/model_contracts.py`. GPT-5.6 Terra keeps its own 2/12 row.
     "gpt-6.1-terra": (1.0, 5.0),
+    # OpenAI list prices (developers.openai.com/api/docs/models/gpt-6.2-astra,
+    # /gpt-6.2-sol, and /api/docs/pricing, read 2026-11-18): Astra 8/40 and
+    # Sol 2/10, no promotion mark; cached input is 5% of input on both
+    # (APPROX_CACHE_READ_RATIO). Cache writes (30-minute and 12-hour), the
+    # >272K long-context multiplier, Batch, Fast, and the dated Ultrafast
+    # multipliers stay documented in `src/coding/model_contracts.py`. The
+    # retired gpt-6-astra and gpt-6.1-sol keep their own rows above.
+    "gpt-6.2-astra": (8.0, 40.0),
+    "gpt-6.2-sol": (2.0, 10.0),
     # OpenAI list prices for the access-gated models (developers.openai.com
     # /api/docs/pricing and each model page, read 2026-11-06), in no shipped
     # chain. GPT-6 Cyber 20/100, cached input 2 (the default tenth); only a
@@ -1980,6 +2006,10 @@ APPROX_CACHE_READ_RATIO: dict[str, float] = {
     "gpt-6.1-sol": 0.05,
     # GPT-6.1 Terra: the same 5% wording on its model page (read 2026-10-27).
     "gpt-6.1-terra": 0.05,
+    # GPT-6.2 Astra 0.40 against 8 and GPT-6.2 Sol 0.10 against 2 (each model
+    # page and the pricing page, read 2026-11-18).
+    "gpt-6.2-astra": 0.05,
+    "gpt-6.2-sol": 0.05,
 }
 _DEFAULT_CACHE_READ_RATIO = 0.1
 

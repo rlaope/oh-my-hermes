@@ -228,7 +228,6 @@ export type ClarifyItem = {
   answers?: ClarifyAnswers;
   expired?: AskExpiry;
 };
-export type AwayItem = { kind: "away"; id: string; ts: number; away: Away };
 export type RoutineItem = {
   kind: "routine";
   id: string;
@@ -236,6 +235,10 @@ export type RoutineItem = {
   routine_id: string;
   name: string;
   status: string;
+  /** Failed runs of this routine folded into this one line, back to back with nothing between them (1 = this run). */
+  count?: number;
+  /** The first of those runs (`ts` is the latest). */
+  since?: number;
 };
 /** A card for an automation the bot made from this chat (`routine.added`): what, when, where it delivers. */
 export type RoutineAddedItem = {
@@ -279,7 +282,7 @@ export type ChatItem =
   | SystemItem
   | ThreadLinkItem
   | ThreadRouteItem;
-export type TimelineItem = ChatItem | AwayItem;
+export type TimelineItem = ChatItem;
 
 export interface Chat {
   /** user / assistant / activity / approval / clarify / routine rows in arrival order. */
@@ -356,7 +359,7 @@ export interface Ui {
   look: Look;
   /** "session" = a terminal session (SESSIONS in the sidebar) fills the main column; `session` names it.
    *  "automations" and "plugins" are the two pages of the sidebar's foot. */
-  view: "chat" | "settings" | "session" | "automations" | "plugins";
+  view: "chat" | "settings" | "session" | "automations" | "plugins" | "tasks";
   /** Where a page's back arrow (and Settings' ×) returns: the chat or the session the page was opened from. */
   back: "chat" | "session";
   /** Automations: the job the detail panel shows (`<bot>:<id>`); Plugins: the bot whose plugins the page shows. */
@@ -884,6 +887,7 @@ export type Action =
   | { type: "automations"; automations: Automation[] }
   | { type: "ui.automations"; job?: string | null }
   | { type: "ui.plugins"; bot?: string | null }
+  | { type: "ui.tasks" }
   | { type: "ui.lang"; lang: Lang }
   | { type: "models"; bot: string; options: ModelOptions }
   | { type: "model.set"; bot: string; current: ModelCurrent }
@@ -1158,6 +1162,18 @@ function reduceEvent(state: AppState, ev: BridgeEvent, now: number): AppState {
       // a run that went fine says nothing in the chat (a 30-minute job would fill it); Automations shows its last run.
       // Only a failed run draws a line and an unread.
       if (!FAILED_ROUTINE.has(String(ev.status ?? "").trim().toLowerCase())) return state;
+      // the same routine failing again with nothing between: one line counts the runs (×12 · 03:56–09:37), no new
+      // unread; the first failure drew the unread already
+      const tail = state.chats[bot]?.items.at(-1);
+      if (tail?.kind === "routine" && tail.routine_id === ev.routine_id) {
+        if (ev.ts <= tail.ts) return state;
+        return touchChat(state, bot, (c) =>
+          withItems(c, [
+            ...c.items.slice(0, -1),
+            { ...tail, ts: ev.ts, status: ev.status, count: (tail.count ?? 1) + 1, since: tail.since ?? tail.ts },
+          ]),
+        );
+      }
       const next = touchChat(state, bot, (c) =>
         withItems(c, [
           ...c.items,
@@ -1381,6 +1397,8 @@ export function reduce(state: AppState, a: Action): AppState {
       return { ...state, ui: { ...state.ui, view: "automations", back: backOf(state.ui), ...(a.job !== undefined ? { automation: a.job } : {}) } };
     case "ui.plugins":
       return { ...state, ui: { ...state.ui, view: "plugins", back: backOf(state.ui), ...(a.bot ? { pluginsBot: a.bot } : {}) } };
+    case "ui.tasks":
+      return { ...state, ui: { ...state.ui, view: "tasks", back: backOf(state.ui) } };
     case "ui.lang":
       return { ...state, ui: { ...state.ui, lang: a.lang } };
     case "models":
@@ -1602,29 +1620,13 @@ export function mustHold(state: AppState, bot: string): boolean {
 
 // ---- selectors ------------------------------------------------------------------------------
 
-const timelineCache = new Map<string, { items: ChatItem[]; away: Away[] | undefined; max: number; out: TimelineItem[] }>();
-
 /**
- * The bot's timeline: chat rows in order with its elsewhere sessions placed by `last_active`.
- * Only the `maxAway` most recent elsewhere sessions go in (the UI shows the rest in the panel).
- * The result is memoised, so it is safe to call from render.
+ * The bot's timeline: its chat rows in order. The bot's sessions elsewhere (Slack, Discord, cron) are not placed in
+ * it: the header's "N other places" and the side panel show them (khope: answers from other channels in this chat,
+ * with nothing saying where they came from, made the chat hard to follow).
  */
-export function selectTimeline(state: AppState, bot: string, maxAway = 2): TimelineItem[] {
-  const items = state.chats[bot]?.items ?? EMPTY_ITEMS;
-  const away = state.elsewhere[bot];
-  const hit = timelineCache.get(bot);
-  if (hit && hit.items === items && hit.away === away && hit.max === maxAway) return hit.out;
-  const recent = [...(away ?? [])].sort((a, b) => b.last_active - a.last_active).slice(0, maxAway);
-  const out: TimelineItem[] = [...items];
-  // oldest first so equal timestamps keep newest-last
-  for (const a of recent.reverse()) {
-    const row: AwayItem = { kind: "away", id: `away-${a.id}`, ts: a.last_active, away: a };
-    let idx = out.length;
-    while (idx > 0 && out[idx - 1].ts > row.ts) idx -= 1;
-    out.splice(idx, 0, row);
-  }
-  timelineCache.set(bot, { items, away, max: maxAway, out });
-  return out;
+export function selectTimeline(state: AppState, bot: string): TimelineItem[] {
+  return state.chats[bot]?.items ?? EMPTY_ITEMS;
 }
 const EMPTY_ITEMS: ChatItem[] = [];
 
@@ -1743,6 +1745,12 @@ export interface Actions {
   openAutomations(job?: string | null): void;
   /** Open the Plugins page, scoped to `bot` when given (else the last one, else the selected bot). */
   openPlugins(bot?: string | null): void;
+  /** Open the Tasks page (src/tasks: issues and pull requests, read-only). */
+  openTasks(): void;
+  /** Tasks › Linear: whether `bot`'s config names a Linear MCP server (bridge `tasks.linear`, config only). */
+  tasksLinear(bot: string): Promise<{ configured: boolean; server: string }>;
+  /** Tasks › Start in thread: a new thread under `bot` titled `title`, opened, whose first message is `text`. */
+  startTaskThread(bot: string, title: string, text: string): Promise<string | null>;
   /** Open `bot`'s main chat and send `text` there (the pages' "say it in words" box, Run now). */
   sendTo(bot: string, text: string): Promise<void>;
   /** The bot's own `cron.manage` through the bridge: pause, resume or remove one job, or add one. Rejects with
@@ -2351,7 +2359,7 @@ export function createStore(bridge: BridgeLike, opts: StoreOptions = {}): Store 
         const loading = first ? selectBot(first) : Promise.resolve();
         if (back?.bot && back.bot === first) {
           const { panelOpen, panelTab, runsFull, runId } = back;
-          // a SESSIONS chat does not come back while SESSIONS is hidden (sessions/entry.ts)
+          // a TERMINALS session comes back open (sessions/entry.ts)
           const session = SESSIONS_ENTRY ? back.session : null;
           dispatch({ type: "ui.restore", ui: { panelOpen, panelTab, runsFull, runId, session } });
         } else if (back?.session && SESSIONS_ENTRY) dispatch({ type: "ui.session", id: back.session });
@@ -2542,6 +2550,24 @@ export function createStore(bridge: BridgeLike, opts: StoreOptions = {}): Store 
     openAutomations: (job) => {
       dispatch({ type: "ui.automations", job });
       void loadAutomations();
+    },
+    openTasks: () => dispatch({ type: "ui.tasks" }),
+    tasksLinear: (bot) => (bridge.request as unknown as (op: string, p: unknown) => Promise<{ configured: boolean; server: string }>)("tasks.linear", { bot }),
+    async startTaskThread(bot, title, text) {
+      try {
+        const key = `t${Date.now().toString(36)}${(threadSeq += 1)}`;
+        const r = await threadReq("thread.create", { bot, key, title });
+        const { model, provider, reasoning, ...row } = r;
+        dispatch({ type: "thread.upsert", bot, row: { ...row, title: row.title || title, last: now() / 1000 } });
+        const ck = threadRoute(bot, row.thread);
+        dispatch({ type: "chat.opened", bot: ck, res: { session_id: row.thread, messages: [], running: false, model, provider, reasoning }, now: now() });
+        dispatch({ type: "ui.thread", bot, thread: row.thread });
+        await actions.threadSend(bot, row.thread, text);
+        return row.thread;
+      } catch (e) {
+        fail(e);
+        return null;
+      }
     },
     openPlugins: (bot) => dispatch({ type: "ui.plugins", bot: bot ?? state.ui.pluginsBot ?? state.selectedBot ?? state.bots[0]?.name ?? null }),
     async sendTo(bot, text) {

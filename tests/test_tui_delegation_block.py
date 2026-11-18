@@ -19,7 +19,7 @@ from _local_package import load_local_package
 
 load_local_package()
 
-from _delegation_graphs import dag_export_run, owner_mock, parallel, with_tokens  # noqa: E402
+from _delegation_graphs import dag_export_run, lane, owner_mock, parallel, with_tokens  # noqa: E402
 from _tui_lines import lines_text  # noqa: E402
 from omh.plugin_bundle.omh import delegation_view  # noqa: E402
 from omh.plugin_bundle.omh.delegation_view import render_delegation_view  # noqa: E402
@@ -65,6 +65,19 @@ def panel(graph: dict, rows: int, cols: int) -> list[str]:
 
 
 class TreeTests(unittest.TestCase):
+    def test_an_outside_lane_stays_out_of_the_tree_and_draws_under_its_own_group(self) -> None:
+        # A ledger child the drawn dag run does not own is no tree lane: its own `outside DAG` group after the tree.
+        run = dag_export_run()
+        run["nodes"].append({**lane("s:sa-free", "Fix the typo", "quick", "glm-5.3-flash", "low", "done",
+                                    order=6), "outside_dag": True})
+        drawn = panel(run, 24, 100)
+        text = "\n".join(drawn)
+        self.assertIn("outside DAG", text)
+        self.assertIn("Fix the typo", text)
+        typo = next(row for row in drawn if "Fix the typo" in row)
+        self.assertGreater(drawn.index(typo), drawn.index(next(row for row in drawn if "outside DAG" in row)))
+        self.assertNotIn("layer", typo)
+
     def test_every_common_size_gets_the_tree_and_never_a_box(self) -> None:
         for name, graph in GRAPHS.items():
             for rows, cols in SIZES:

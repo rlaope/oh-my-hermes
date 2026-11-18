@@ -84,7 +84,7 @@ class ModelChainsSetTests(unittest.TestCase):
             self.assertEqual(status, 0)
             self.assertIn("quick: kimi-k3-ultrafast:low, glm-5.2-ultrafast:low (override)", stdout)
             # Untouched categories keep the shipped default.
-            self.assertNotIn("architect: claude-fable-5-2:xhigh, gpt-6-astra:xhigh, kimi-k3.1-pro:xhigh (override)", stdout)
+            self.assertNotIn("architect: claude-fable-5-2:xhigh, gpt-6.2-astra:xhigh, kimi-k3.1-pro:xhigh (override)", stdout)
 
     def test_clear_returns_the_category_to_the_shipped_default(self) -> None:
         with TemporaryDirectory() as tmp:
@@ -94,7 +94,7 @@ class ModelChainsSetTests(unittest.TestCase):
                 _base(root) + ["model-chains", "set", "deep", "--clear"], output_json=False
             )
             self.assertEqual((status, stderr), (0, ""))
-            self.assertIn("deep: claude-opus-5-5:high, gpt-6.1-sol:high, kimi-k3.1-pro:high (default)", stdout)
+            self.assertIn("deep: claude-opus-5-5:high, gpt-6.2-sol:high, kimi-k3.1-pro:high (default)", stdout)
             document = json.loads(_chains_path(root).read_text(encoding="utf-8"))
             self.assertNotIn("deep", document["categories"])
 
@@ -652,21 +652,21 @@ class PickerPaletteTests(unittest.TestCase):
     """The picker paints with the theme the OMH TUI opens with."""
 
     def test_the_saved_theme_wins_over_the_hermes_skin_and_the_default_is_the_floor(self) -> None:
-        from omh.commands.model_chains import _active_palette
+        from omh.commands.model_chains import _picker_theme
         from omh.paths import OmhPaths
-        from omh.skin_pack import skin_colors, theme_for_name, write_theme_choice
+        from omh.skin_pack import default_theme, theme_for_name, write_theme_choice
 
         with TemporaryDirectory() as tmp:
             root = Path(tmp)
             (root / ".hermes").mkdir()
             paths = OmhPaths(root / ".omh", root / ".hermes")
-            self.assertEqual(_active_palette(paths), skin_colors("omh"))
+            self.assertEqual(_picker_theme(paths)[0].name, default_theme().short_name)
             (root / ".hermes" / "config.yaml").write_text("display:\n  skin: omh-amber\n", encoding="utf-8")
-            self.assertEqual(_active_palette(paths), skin_colors("omh-amber"))
+            self.assertEqual(_picker_theme(paths)[0].name, "amber")
             mono = theme_for_name("mono")
             assert mono is not None
             write_theme_choice(root / ".omh", mono)
-            self.assertEqual(_active_palette(paths), skin_colors("omh-mono"))
+            self.assertEqual(_picker_theme(paths)[0].name, "mono")
 
 
 if __name__ == "__main__":

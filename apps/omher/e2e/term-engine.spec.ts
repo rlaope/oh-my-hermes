@@ -47,11 +47,9 @@ async function open(page: Page, gpu: Gpu) {
 /** A new Claude Code session opened as a terminal; returns its session id. */
 async function newTerminal(page: Page): Promise<string> {
   await page.getByTestId("session-new").click();
-  await page.getByTestId("session-agent-claude").click();
   await page.getByTestId("session-folder").click();
   await page.getByTestId("session-choose").click();
-  await page.getByTestId("session-way-terminal").click();
-  await page.getByTestId("session-go").click();
+  await page.getByTestId("session-agent-claude").click();
   const term = page.getByTestId("terminal");
   await expect(term).toBeVisible();
   const id = (await term.getAttribute("data-session")) as string;
@@ -90,8 +88,7 @@ test.beforeEach(async () => {
   await mock("mock.reset");
 });
 
-// SESSIONS hidden in favour of bot threads (plan 2026-11-15)
-test.skip("gpu on: a canvas under the terminal, the renderer is the GPU, and the text is still there", async ({ page }) => {
+test("gpu on: a canvas under the terminal, the renderer is the GPU, and the text is still there", async ({ page }) => {
   await open(page, "on");
   await newTerminal(page);
   await expect.poll(() => renderer(page)).toBe("gpu");
@@ -99,8 +96,7 @@ test.skip("gpu on: a canvas under the terminal, the renderer is the GPU, and the
   expect(await lineText(page, "last")).toContain("(mock)");
 });
 
-// SESSIONS hidden in favour of bot threads (plan 2026-11-15)
-test.skip("gpu off: no canvas, the add-on's chunk is never requested", async ({ page }) => {
+test("gpu off: no canvas, the add-on's chunk is never requested", async ({ page }) => {
   const requested: string[] = [];
   page.on("request", (r) => {
     if (/addon-webgl/.test(r.url())) requested.push(r.url());
@@ -113,8 +109,7 @@ test.skip("gpu off: no canvas, the add-on's chunk is never requested", async ({ 
   expect(requested).toEqual([]);
 });
 
-// SESSIONS hidden in favour of bot threads (plan 2026-11-15)
-test.skip("gpu auto: where the rule says no (a software renderer, or macOS) the standard renderer draws and the chunk is never requested", async ({ page }) => {
+test("gpu auto: where the rule says no (a software renderer, or macOS) the standard renderer draws and the chunk is never requested", async ({ page }) => {
   const requested: string[] = [];
   page.on("request", (r) => {
     if (/addon-webgl/.test(r.url())) requested.push(r.url());
@@ -126,8 +121,7 @@ test.skip("gpu auto: where the rule says no (a software renderer, or macOS) the 
   expect(requested).toEqual([]);
 });
 
-// SESSIONS hidden in favour of bot threads (plan 2026-11-15)
-test.skip("the add-on's chunk is not loaded with the app", async ({ page }) => {
+test("the add-on's chunk is not loaded with the app", async ({ page }) => {
   const requested: string[] = [];
   page.on("request", (r) => {
     if (/addon-webgl/.test(r.url())) requested.push(r.url());
@@ -140,8 +134,7 @@ test.skip("the add-on's chunk is not loaded with the app", async ({ page }) => {
   expect(requested.length).toBeGreaterThan(0);
 });
 
-// SESSIONS hidden in favour of bot threads (plan 2026-11-15)
-test.skip("a lost context: the terminal draws with the standard renderer at once and its text is readable", async ({ page }) => {
+test("a lost context: the terminal draws with the standard renderer at once and its text is readable", async ({ page }) => {
   await open(page, "on");
   await newTerminal(page);
   await expect.poll(() => renderer(page)).toBe("gpu");
@@ -161,8 +154,7 @@ test.skip("a lost context: the terminal draws with the standard renderer at once
   await expect(page.locator(".xterm-rows")).toContainText("hello");
 });
 
-// SESSIONS hidden in favour of bot threads (plan 2026-11-15)
-test.skip("20 terminal sessions one after another: none blank, none without its renderer", async ({ page }) => {
+test("20 terminal sessions one after another: none blank, none without its renderer", async ({ page }) => {
   test.setTimeout(180_000);
   await open(page, "on");
   const ids: string[] = [];
@@ -180,8 +172,7 @@ test.skip("20 terminal sessions one after another: none blank, none without its 
   expect(held).toBe(1);
 });
 
-// SESSIONS hidden in favour of bot threads (plan 2026-11-15)
-test.skip("Unicode 11 widths: 한글 😀 表 puts the cursor where Unicode 11 says", async ({ page }) => {
+test("Unicode 11 widths: 한글 😀 表 puts the cursor where Unicode 11 says", async ({ page }) => {
   await open(page, "off");
   await newTerminal(page);
   const r = await page.evaluate(async () => {
@@ -194,8 +185,7 @@ test.skip("Unicode 11 widths: 한글 😀 表 puts the cursor where Unicode 11 s
   expect(r).toEqual({ x: 10, version: "11" });
 });
 
-// SESSIONS hidden in favour of bot threads (plan 2026-11-15)
-test.skip("feed: every done runs once, in order", async ({ page }) => {
+test("feed: every done runs once, in order", async ({ page }) => {
   await open(page, "off");
   await newTerminal(page);
   const r = await page.evaluate(async () => {

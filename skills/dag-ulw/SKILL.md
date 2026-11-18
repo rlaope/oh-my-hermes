@@ -28,7 +28,7 @@ This is a Hermes-native `dag-ulw` workflow skill.
 - Plan the graph and call `omh_dag action=define` with the complete run `goal` and each node's id, label, category, prompt, depends_on, write_scope and role (`build` by default; `baseline`, `verify`, `review`); fix every refusal and read the lint before going on. Never `delegate_task` before `define` returns its calls. The saved goal reaches every native task; local VERIFY does not replace goal acceptance.
 - Keep the plan todo as the run's layers in ONE tool: `todo_list` when `todo_list` is in your tool list or tool_search finds it (OMH mirrors it), else `omh_todo`; an accepted plan stays in `omh_todo`. One item per layer, named for what it delivers, never a list of its nodes (the panel draws those); advance it as each layer settles.
 - Before defining nodes, read `omh_role action=list` and compare built-in and custom identity responsibilities equally. User instructions and project ownership win. Read suitable definitions with `action=read identity=REFERENCE`; record the choice in each node's optional `identity` (`builtin:name` or `custom:name`). Omit it when none fits. Identity is prompt guidance; `role` remains build/baseline/verify/review and `category` describes the work.
-- For each call `omh_dag` returns, run its route (`omh_delegate_route`, set or fallback as given), check that it succeeded (a refusal or exhausted chain stops dispatch), then `delegate_task` with the tasks unchanged; never more calls than it returned. A call whose route names a `backend` (Hermes' model_map or profile_routes) runs no route tool: its tasks already carry what that backend takes. Then end the turn with one status line; never wait or poll.
+- For each call `omh_dag` returns, run its route (`omh_delegate_route`, set or fallback as given), check that it succeeded (a refusal or exhausted chain stops dispatch), then `delegate_task` with the tasks unchanged; never more calls than it returned. A call whose route names a `backend` (Hermes' model_map or profile_routes) runs no route tool: its tasks already carry what that backend takes. Then end the turn with one status line; never wait or poll. When `delegate_task` returns the children's results inside the call (a one-shot or other finite session), settle them and dispatch what settle returns in the same turn instead: no completion comes back as a later turn there.
 - On each completion read the node's handoff file and call `omh_dag action=settle` (accepted, failed, or blocked; a provider error is failed with provider_error); a verify node with criteria is accepted only when every `CRITERION` line says met, failed when one is unmet, blocked when one could not be checked here. Dispatch what it returns in the same turn.
 - When the run reports done, check each node against its SCOPE and the goal criteria: extend the run when work is missing, otherwise report.
 
@@ -75,7 +75,7 @@ Bad example:
 
 ## When to Use
 
-Use when the request is a job of several parts that can run in parallel or in an order (a feature across modules, a migration, a broad cleanup, research then build then verify), or when the person says dag ulw.
+Use when the request is a job of several parts that can run in parallel or in an order (a feature across modules, a migration, a broad cleanup, a listed backlog of four or more separate code changes, research then build then verify), or when the person says dag ulw.
 
     Strong routing signals: `dag-ulw`, `$dag-ulw`, `dag ulw`, `ulw dag`, `dag ultrawork`, `ultrawork dag`, `даг ультраворк`, `граф задач`, `задачи графом`
 

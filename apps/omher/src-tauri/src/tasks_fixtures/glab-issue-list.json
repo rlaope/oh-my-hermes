@@ -1,0 +1,8 @@
+[
+ {"id": 1001, "iid": 42, "project_id": 7, "title": "Login page loops after SSO", "state": "opened", "labels": ["bug", "area::auth"],
+  "author": {"id": 1, "username": "person1", "name": "Person1"}, "created_at": "2026-11-10T09:00:00.000Z", "updated_at": "2026-11-14T10:12:00.000Z",
+  "web_url": "https://gitlab.com/group/sub/proj/-/issues/42", "description": "Steps: open /login"},
+ {"id": 1002, "iid": 41, "project_id": 7, "title": "Docs: install on Windows", "state": "opened", "labels": [],
+  "author": {"id": 2, "username": "person2", "name": "Person2"}, "created_at": "2026-11-09T09:00:00.000Z", "updated_at": "2026-11-09T09:00:00.000Z",
+  "web_url": "https://gitlab.com/group/sub/proj/-/issues/41", "description": ""}
+]

@@ -14,8 +14,9 @@ import { useMates } from "./restart";
 import { SshMarker } from "../peers/SshMarker";
 import type { RowDrag } from "./useRowDrag";
 
-/** The newest thing a bot's threads did: when, and a line of it (the thread's latest answer, else its preview or
- *  title). The bot row shows it when it is newer than the main chat's own last line. */
+/** The newest thing said in a bot's threads: when, and the line. The bot row shows it when it is newer than the main
+ *  chat's own last line. A thread with nothing said yet gives nothing: its title is listed right under the bot, so
+ *  the bot row keeps its main chat's line (tidy, 2026-11-16). */
 export function threadsLatest(rows: { thread: string; title: string; preview?: string; last?: number; started_at: number }[], chatOf: (thread: string) => Chat | undefined): { text: string; ts: number } | null {
   let best: { text: string; ts: number } | null = null;
   for (const r of rows) {
@@ -28,9 +29,10 @@ export function threadsLatest(rows: { thread: string; title: string; preview?: s
         break;
       }
     }
-    const ts = Math.max(r.last ?? 0, r.started_at ?? 0, said?.ts ?? 0);
+    if (!said?.text) continue;
+    const ts = Math.max(r.last ?? 0, said.ts);
     if (!ts || (best && best.ts >= ts)) continue;
-    best = { text: said?.text || r.preview || r.title, ts };
+    best = { text: said.text, ts };
   }
   return best;
 }
@@ -83,7 +85,7 @@ const flat = (t: string) =>
     .trim();
 
 const MENU_W = 188;
-const MENU_H = 196;
+const MENU_H = 224;
 
 export interface RowMenu {
   /** "New thread · <name>": a new, empty thread under this bot, opened with the composer focused. */

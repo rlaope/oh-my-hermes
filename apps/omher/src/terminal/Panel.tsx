@@ -12,6 +12,7 @@ import { FindBar } from "../sessions/term/find-bar";
 import { FIND_EVENT, type FindRequest } from "../sessions/term/engine-find";
 import { addTerminalTab, closeTerminalTab, leafName, pickTerminalTab, toggleTerminal, useTermPanel, type TermTab } from "./state";
 import { attachTerm, disposeTerm, focusTerm, relookTerms, showTerm } from "./terms";
+import { fgName, TermRowMark } from "../sessions/TermRowMark";
 
 /** The thread view's hook (re-exported from ./state, which loads no terminal code): the open thread's folder. */
 export { setTerminalCwd } from "./state";
@@ -167,9 +168,11 @@ export function TerminalPanel() {
                   role="tab"
                   aria-selected={tab.key === p.active}
                   className="termpanel-tab-name"
-                  title={tab.cwd ?? tab.want ?? t("termpanel.home")}
+                  title={tab.fg ? `${t("term.fgRunning", { name: fgName(tab.fg) })}\n${tab.cwd ?? tab.want ?? t("termpanel.home")}` : (tab.cwd ?? tab.want ?? t("termpanel.home"))}
                   onClick={() => pickTerminalTab(tab.key)}
+                  data-fg={tab.fg ?? undefined}
                 >
+                  {tab.fg && <TermRowMark agent={tab.fg} live size={12} />}
                   {name}
                 </button>
                 <button

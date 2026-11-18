@@ -173,7 +173,11 @@ composer), which takes the oldest one. A steer Hermes does not take waits in
 the TUI's own queue for the running turn to end, as everything sent during a
 turn does, so it never interrupts that turn. A steer Hermes does not answer within its answer
 budget (120 s, longer when held behind a /compress) goes back to the composer
-and is never re-sent.
+and is never re-sent. The one stop the send-now key asks for is the person's
+own: Ctrl+Enter on a prompt with images, which a steer cannot carry, sends
+`session.interrupt` and then that prompt, with its images, once the stopped
+turn ends; a second stop, a session switch or a new gateway gives it back to
+the composer unsent.
 
 ## Look
 
@@ -470,9 +474,9 @@ scope and profile and `--resume <id>` (`src/commands/bare_launch.py`, in
 INVARIANT 1's `PROCESS_SPAWN_ALLOWLIST`), and holds its own generation until
 that exits. A 78 without the marker is an ordinary exit code. A new TUI is not
 told to restart again: the generation it runs is the one `current` names.
-`UPDATED_ENV` in that launch makes the new TUI offer `/gateway restart` once,
-with Cancel first, when the shared gateway still runs older OMH plugin code. It
-never restarts the gateway without the person's pick. Each such restart leaves
+`UPDATED_ENV` in that launch makes the new TUI say in one line, asking nothing,
+that the shared gateway still runs older OMH plugin code and that `/gateway
+restart` loads the new code. It never restarts the gateway itself. Each such restart leaves
 one waiting `omh` holding its generation until the session ends.
 
 ## Job control, and what OMH does not do

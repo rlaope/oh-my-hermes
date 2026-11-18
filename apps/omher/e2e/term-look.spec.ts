@@ -67,11 +67,9 @@ async function open(page: Page) {
 /** A Claude Code session opened as a terminal, its program's first output on screen. */
 async function terminalClaude(page: Page) {
   await page.getByTestId("session-new").click();
-  await page.getByTestId("session-agent-claude").click();
   await page.getByTestId("session-folder").click();
   await page.getByTestId("session-choose").click();
-  await page.getByTestId("session-way-terminal").click();
-  await page.getByTestId("session-go").click();
+  await page.getByTestId("session-agent-claude").click();
   await expect(page.getByTestId("terminal")).toBeVisible();
   await expect(page.locator(".xterm-rows")).toContainText("(mock)");
 }
@@ -125,8 +123,7 @@ test("Terminal is a Settings page after General; omher's own two themes lead the
   expect(new Set(sw.ansi).size).toBe(8);
 });
 
-// SESSIONS hidden in favour of bot threads (plan 2026-11-15)
-test.skip("Dracula picked for dark reaches the open terminal at once and is still there after a restart", async ({ page }) => {
+test("Dracula picked for dark reaches the open terminal at once and is still there after a restart", async ({ page }) => {
   await open(page);
   await terminalClaude(page);
   expect((await look(page))?.background).toBe("#0b090d");
@@ -157,8 +154,7 @@ test.skip("Dracula picked for dark reaches the open terminal at once and is stil
   await expect(page.getByTestId("term-theme-dracula")).toHaveAttribute("aria-checked", "true");
 });
 
-// SESSIONS hidden in favour of bot threads (plan 2026-11-15)
-test.skip("a light app theme uses the light pick, a dark one the dark pick", async ({ page }) => {
+test("a light app theme uses the light pick, a dark one the dark pick", async ({ page }) => {
   await open(page);
   await terminalClaude(page);
   await settings(page);
@@ -185,8 +181,7 @@ test.skip("a light app theme uses the light pick, a dark one the dark pick", asy
   await expect.poll(async () => (await look(page))?.background).toBe("#282a36");
 });
 
-// SESSIONS hidden in favour of bot threads (plan 2026-11-15)
-test.skip("with the app theme on System, an open terminal follows the OS when it goes light or dark", async ({ page }) => {
+test("with the app theme on System, an open terminal follows the OS when it goes light or dark", async ({ page }) => {
   await open(page);
   // nothing stored: the app theme is System, and the OS is dark
   expect(await page.evaluate(() => localStorage.getItem("omher.theme"))).toBeNull();
@@ -217,8 +212,7 @@ const wordColour = (page: Page, word: string) =>
     return `#${[m[1], m[2], m[3]].map((v) => Number(v).toString(16).padStart(2, "0")).join("")}`;
   }, word);
 
-// SESSIONS hidden in favour of bot threads (plan 2026-11-15)
-test.skip("bold green stays green on Solarized, whose bright slots are greys; on Dracula it takes the bright green", async ({ page }) => {
+test("bold green stays green on Solarized, whose bright slots are greys; on Dracula it takes the bright green", async ({ page }) => {
   await open(page);
   const pick = (themeDark: string) =>
     page.evaluate(async (id) => {
@@ -243,12 +237,11 @@ test.skip("bold green stays green on Solarized, whose bright slots are greys; on
   await expect.poll(() => wordColour(page, "boldword")).toBe("#859900");
 });
 
-// SESSIONS hidden in favour of bot threads (plan 2026-11-15)
-test.skip("font size 16 changes how many columns fit, and the program is told the new size", async ({ page }) => {
+test("font size 16 changes how many columns fit, and the program is told the new size", async ({ page }) => {
   await open(page);
   await terminalClaude(page);
   const before = await look(page);
-  expect(before?.fontSize).toBe(12.5);
+  expect(before?.fontSize).toBe(13);
   expect(before!.cols).toBeGreaterThan(40);
 
   await settings(page);
@@ -282,8 +275,7 @@ test.skip("font size 16 changes how many columns fit, and the program is told th
   await expect(size).toHaveValue("16.5");
 });
 
-// SESSIONS hidden in favour of bot threads (plan 2026-11-15)
-test.skip("cursor, contrast and the other options reach the open terminal and are kept", async ({ page }) => {
+test("cursor, contrast and the other options reach the open terminal and are kept", async ({ page }) => {
   await open(page);
   await terminalClaude(page);
   expect(await look(page)).toMatchObject({ cursorStyle: "block", contrast: 4.5, pad: "16px", optionIsMeta: true, blink: true });
@@ -345,8 +337,7 @@ const wordContrast = (page: Page, word: string) =>
     return Math.round(contrastRatio(`#${shown.map((v) => v.toString(16).padStart(2, "0")).join("")}`, bgHex) * 100) / 100;
   }, word);
 
-// SESSIONS hidden in favour of bot threads (plan 2026-11-15)
-test.skip("the contrast hints are true: High lifts a text colour to 4.5:1 and leaves dim text below it, and the row says so", async ({ page }) => {
+test("the contrast hints are true: High lifts a text colour to 4.5:1 and leaves dim text below it, and the row says so", async ({ page }) => {
   await open(page);
   // Solarized Light: its yellow is 2.98:1 on its background, and dim text is the faintest of the catalog
   await page.evaluate(async () => {
@@ -395,8 +386,7 @@ const buffer = (page: Page) =>
   });
 const numbered = (from: number, to: number) => Array.from({ length: to - from }, (_, i) => `row ${from + i}\r\n`).join("");
 
-// SESSIONS hidden in favour of bot threads (plan 2026-11-15)
-test.skip("a new scrollback limit reaches a terminal that is already open: more rows are kept, and a smaller limit keeps the newest", async ({ page }) => {
+test("a new scrollback limit reaches a terminal that is already open: more rows are kept, and a smaller limit keeps the newest", async ({ page }) => {
   await open(page);
   await terminalClaude(page);
   expect((await buffer(page)).limit).toBe(5000);

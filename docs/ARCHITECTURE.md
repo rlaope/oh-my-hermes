@@ -224,7 +224,11 @@ against OMH's own routing corpora with `omh chat route-questions score`. The
 `pre_llm_call` hook can also add
 `omh_context_brief/v1` plus `omh_route_hint/v1` for messages that look like
 planning, research, ops, materials, visual summary, automation,
-workflow-learning, or coding-handoff work. That hook payload carries only
+workflow-learning, or coding-handoff work. On a request to fix a code defect
+(`defect_fix_method.asks_to_fix_code`: a change verb with a code object), it
+also adds a short debugging method block once per session, condensed from
+`omh-app-debugging` and `omh-verification-gate`, because Hermes' skills index
+tells the model not to open process skills; no other turn gets it. That hook payload carries only
 hash/length metadata, matched cue labels, candidate workflow names, next
 actions, generic-tool checkpoint rules, and boundaries; it does not include the
 raw user message or prove a workflow executed. For capability/catalog questions,
@@ -955,7 +959,7 @@ cannot define the new slot. Overrides cannot extend the vocabularies or contain
 secret/provider configuration. Resolution filters order against
 caller-confirmed active models. A missing head falls through to the next
 eligible candidate, then the shared final order tries Claude Opus 5.5 followed by
-GPT-6.1 Sol. No eligible candidate anywhere returns `owner_default` without
+GPT-6.2 Sol. No eligible candidate anywhere returns `owner_default` without
 blocking setup or preparing a model-config write. An unavailable explicit model
 instead returns `choice_required` and freezes fallthrough.
 

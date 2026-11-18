@@ -188,6 +188,67 @@ The 2026-08-13 evaluation run completed the full offline fake matrix:
 This proves the pinned corpus, controller validators, pairing, analysis, and
 audit pipeline execute end to end. It is not model-performance evidence.
 
+### 2026-11-17 `deepseek-v4.1-flash-eco`: an answer-shape sentence in the `deepseek` block
+
+Route: og `deepseek/deepseek-v4.1-flash-eco` (the gateway's discount serving of
+V4.1 Flash, 90% off list), effort `high`, `hermes_current_session` through a
+dedicated bench profile (`agent.max_turns` 150), Hermes Agent 0.23.1, OMH at
+`0c7ef61d8` plus the arm's edit. The eco id is not a declared projection, so it
+receives the family `deepseek` block, not the `deepseek-v4.1-flash` override:
+`family` and `optimized` sent byte-identical prompts on all 30 instances.
+
+Baseline, `--split evaluation`, 3 reps (90 runs per condition):
+
+| Condition | Passed | Median tokens |
+| --- | ---: | ---: |
+| baseline (no calibration) | 46 / 90 | 69,451 |
+| family = optimized (`deepseek` block) | 47 / 90 · 45 / 90 | 65,973 · 62,727 |
+
+Four templates scored 0 in every condition and were excluded in writing before
+any candidate ran: PRECEDENCE and CALLFLOW (the golden requires one citation
+`{path, line: 1}` and fact spellings the task text never names; the answers were
+right in substance, so a rule aimed at them fits the grader) and DEFINITION and
+DIAGNOSTICS (the run exposes `file,terminal`, no LSP toolset). The fixable
+failure was answer shape: on PREDICATE and REFERENCES the model wrote a bare
+JSON list, or wrapped the locations in a key of its own (`results`,
+`functions`), so the validator found no `locations`.
+
+Candidates on the other six templates (3 seeds x 5 reps = 90 runs per arm), gate
+fixed before the first candidate run: at least +5 passes over a control run in
+the same window, no template losing more than one pass, median tokens at most
+1.3x, no single run over 3x the control's template median.
+
+| Arm | What changed | Passed | Median tokens |
+| --- | --- | ---: | ---: |
+| K0 control | none | 78 / 90 | 56,377 |
+| K1 | eco projected onto the `deepseek-v4.1-flash` override | 79 / 90 | 50,816 |
+| K2 | `deepseek` block + answer-shape sentence | 89 / 90 | 54,594 |
+| K3 | K1 + the same sentence | 86 / 90 | 47,956 |
+| K0b control (re-run) | none | 76 / 90 | 54,263 |
+| **K2b (shipped)** | K2 reworded to three directive sentences | **90 / 90** | 54,976 |
+
+K2 passed the gate but carried a fourth directive sentence ("never a bare
+list"), over `BLOCK_MAX_CONSTRAINTS`; K2b says "not a bare list and not a
+wrapper key" and was measured fresh against a fresh control (+14, PREDICATE
+5 -> 15 / 15, REFERENCES 11 -> 15 / 15, no template lost, tokens 1.01x, worst
+run 1.85x). One K2b launch was killed by an operator error after two records
+per arm; those four records were set aside unread and the arm restarted.
+
+Held-out confirmation on `benchmarks/product-ab/v1` (40 merged-PR tasks, one run
+per task per arm, same model): OMH on `main` 20 / 40, OMH with K2b 19 / 40,
+false completions 18 and 18; Hermes alone 20 / 40 with 8 false completions and
+11 timeouts, 8 of them at host load 80+. The two OMH arms disagree on 15 tasks
+(7 one way, 8 the other), so at one run per task product-ab shows neither a
+gain nor a loss from the sentence. The pre-registered rule (K2b >= main - 1,
+false completions not higher) holds.
+
+Spend for the whole round (baseline, four candidates, re-run, both product-ab
+arms and Hermes alone): $1.64 at og's eco rates (0.03 / 0.12 / 0.0006 per
+MTok), priced from the bench profile's `sessions` rows because og reports no
+cost. Not measured: any other DeepSeek id. The sentence lives in the family
+block, so V3.2, V4 Flash and V4 Pro receive it as well; V4.1 Flash does not,
+because its exact-model override replaces the family block.
+
 ### 2026-08-14 `hermes_current_session` live evaluation
 
 Live runs through the `hermes_current_session` path on the pinned evaluation
