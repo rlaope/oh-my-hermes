@@ -6,7 +6,7 @@ import { getStore, useStore } from "../state/store";
 import { shortTime } from "../app/time";
 import { t, tx, type Key } from "../i18n";
 import { SourceIcon, Spinner } from "../ui";
-import { cadence, nextRun, sourceName } from "./format";
+import { cadence, isFailure, nextRun, sourceName, statusText } from "./format";
 import "./panel.css";
 
 export type PanelTab = "details" | "terminal" | "schedule" | "worktrees" | "diff" | "runs";
@@ -413,8 +413,8 @@ export function ScheduleTab({ bot }: { bot: Bot }) {
             {cadence(r.schedule)}
             {r.last_run_at ? t("pn.lastRan", { when: shortTime(toSec(r.last_run_at)) }) : ""}
           </span>
-          <span className={`pn-st ${r.last_status && r.last_status !== "ok" ? "bad" : r.last_status ? "ok" : ""}`}>
-            {r.enabled ? r.last_status || t("pn.notRun") : t("pn.paused")}
+          <span className={`pn-st ${r.last_status && isFailure(r.last_status) ? "bad" : r.last_status ? "ok" : ""}`}>
+            {r.enabled ? (r.last_status ? statusText(r.last_status) : t("pn.notRun")) : t("pn.paused")}
           </span>
         </div>
       ))}
