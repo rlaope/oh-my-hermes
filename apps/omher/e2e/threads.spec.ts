@@ -142,6 +142,8 @@ test("New thread · Kami opens an empty thread under Kami; a send lands on that 
   expect(id).toBeTruthy();
   await expect(page.getByTestId("thread-chat")).toHaveAttribute("data-thread", id!);
   await expect(page.getByTestId("thread-empty")).toBeVisible();
+  // one empty line, not two: the main chat's "Say hi to …" does not also show in a new thread
+  await expect(page.getByTestId("thread-chat").getByText(/Say hi to/)).toHaveCount(0);
   // the composer is focused: typing goes straight in
   await page.keyboard.type("OG 대시보드 502 원인 찾기");
   await page.keyboard.press("Enter");
