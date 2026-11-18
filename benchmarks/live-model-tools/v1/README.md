@@ -246,8 +246,9 @@ Spend for the whole round (baseline, four candidates, re-run, both product-ab
 arms and Hermes alone): $1.64 at og's eco rates (0.03 / 0.12 / 0.0006 per
 MTok), priced from the bench profile's `sessions` rows because og reports no
 cost. Not measured: any other DeepSeek id. The sentence lives in the family
-block, so V3.2, V4 Flash and V4 Pro receive it as well; V4.1 Flash does not,
-because its exact-model override replaces the family block.
+block, so V3.2, V4 Flash and V4 Pro receive it as well. V4.1 Flash's
+exact-model override replaces the family block, so the override was given the
+same sentence and measured on its own route (next section).
 
 ### 2026-11-18 `deepseek-flash`: the same sentence in the V4.1 Flash override
 

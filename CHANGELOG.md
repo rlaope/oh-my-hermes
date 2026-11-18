@@ -146,7 +146,7 @@ All notable changes will be documented here.
   `locations`; with the sentence the six fixable templates passed 90 / 90 against 76 / 90 for a control run in the
   same window (3 seeds x 5 reps, gate fixed before the run). The held-out `product-ab` corpus showed no difference
   either way (19 / 40 against 20 / 40, one run per task). The block also reaches DeepSeek V3.2, V4 Flash and V4 Pro,
-  which were not measured; V4.1 Flash keeps its own override and does not get the sentence.
+  which were not measured; V4.1 Flash keeps its own override, which gains the same sentence in the entry below.
 
 - **A subagent that is not part of the running dag-ulw run no longer shows up inside it.** A subagent sent without
   the run's `[dag:<run>/<node>]` marker (a hand-made repair, a child of an earlier cancelled run) used to sit in layer
