@@ -55,22 +55,53 @@ export function threadEvent(ev: { event: string }): ThreadEvent | null {
   return THREAD_EVENTS.has(ev.event) ? (ev as unknown as ThreadEvent) : null;
 }
 
-/** A top-level ```omher-thread``` / ```omher-thread-route``` fence of an answer being written (closed, or still open
- *  at the end): the bridge acts on it and the final answer comes without it, so the streaming bubble hides it too. */
-const SPLIT_FENCE = /^ {0,3}(`{3,}|~{3,})[ \t]*omher-thread(?:-route)?[ \t]*(?:\r?\n[\s\S]*?\r?\n {0,3}\1[ \t]*$|\r?\n[\s\S]*$|$)/gm;
-const SPLIT_INLINE = /^ {0,3}(`{3,})omher-thread(?:-route)?[ \t]+\{[^\n]*\}[ \t]*\1[ \t]*$/gm;
-/** The JSON on the opening fence line, closed on the next line (or that close, or anything after the line, not
- *  streamed yet). */
-const SPLIT_OPEN_LINE = /^ {0,3}(`{3,}|~{3,})[ \t]*omher-thread(?:-route)?[ \t]+\{[^\n]*(?:\r?\n {0,3}[`~]+[ \t]*$|\s*(?![\s\S]))/gm;
+// The ```omher-thread``` / ```omher-thread-route``` blocks of an answer being written: the bridge acts on the top-level
+// ones and the final answer comes without them, so the streaming bubble hides them too. The same line walk as the
+// bridge's `split_blocks`: only a top-level fence counts (not in a `>` quote, not inside another fence such as a
+// ```` or ~~~ fence quoting one as an example); a block still open at the end is hidden while it streams.
+const SPLIT_KINDS = new Set(["omher-thread", "omher-thread-route"]);
+const SPLIT_FENCE = /^( {0,3})(`{3,}|~{3,})[ \t]*([^\s`]*)[ \t]*(.*?)\s*$/;
+const SPLIT_CLOSE = /^ {0,3}(`{3,}|~{3,})[ \t]*$/;
+const SPLIT_INLINE = /^ {0,3}(`{3,})(omher-thread|omher-thread-route)[ \t]+(\{.*\})[ \t]*\1[ \t]*$/;
+const closes = (line: string | undefined, fence: string) => {
+  const c = line === undefined ? null : SPLIT_CLOSE.exec(line.replace(/\r$/, ""));
+  return !!c && c[1][0] === fence[0] && c[1].length >= fence.length;
+};
+
+/** What follows an opening line with its JSON is, so far, nothing or the start of its closing fence. */
+const streamingClose = (after: string[]) => after.length <= 1 && /^ {0,3}[`~]*[ \t]*\r?$/.test(after[0] ?? "");
 
 export function hideSplitBlocks(text: string): string {
   if (!text.includes("omher-thread")) return text;
-  return text
-    .replace(SPLIT_INLINE, "")
-    .replace(SPLIT_OPEN_LINE, "")
-    .replace(SPLIT_FENCE, "")
-    .replace(/\n{3,}/g, "\n\n")
-    .trim();
+  const lines = text.split("\n");
+  const keep: string[] = [];
+  for (let i = 0; i < lines.length; ) {
+    const line = lines[i].replace(/\r$/, "");
+    if (SPLIT_INLINE.test(line)) {
+      i += 1;
+      continue;
+    }
+    const m = SPLIT_FENCE.exec(line);
+    if (!m || line.trimStart().startsWith(">")) {
+      keep.push(lines[i]);
+      i += 1;
+      continue;
+    }
+    const [, , fence, info, rest] = m;
+    const kind = SPLIT_KINDS.has(info);
+    // the JSON on the opening fence line, closed on the very next line, or the last line so far (still streaming)
+    const oneLine = kind && rest.startsWith("{") && (closes(lines[i + 1], fence) || streamingClose(lines.slice(i + 1)));
+    if (fence[0] === "`" && rest.includes("`") && !oneLine) {
+      keep.push(lines[i]); // an inline code span, not a fence
+      i += 1;
+      continue;
+    }
+    let j = i + 1;
+    while (j < lines.length && !closes(lines[j], fence)) j += 1;
+    if (!(kind && (!rest || oneLine))) keep.push(...lines.slice(i, j + 1));
+    i = j + 1;
+  }
+  return keep.join("\n").replace(/\n{3,}/g, "\n\n").trim();
 }
 
 /** Store key of a thread's chat: the same `fold:<bot>:<id>` the bridge's `session`-tagged events land under. */

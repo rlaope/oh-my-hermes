@@ -1125,6 +1125,41 @@ body.row-dragging * {
 .bot-w.menu-open .bot-r1 .bot-t {
   visibility: hidden;
 }
+/* "+" for a new thread, left of ⋯ on hover (bots that can have one); the name gives way so neither covers it */
+.bot-new {
+  position: absolute;
+  right: 30px;
+  top: 6px;
+  width: 22px;
+  height: 20px;
+  border-radius: var(--r-sm);
+  display: grid;
+  place-items: center;
+  color: var(--muted);
+  background: var(--raise2);
+  opacity: 0;
+}
+.bot-w:hover .bot-new,
+.bot-new:focus-visible,
+.bot-w.menu-open .bot-new {
+  opacity: 1;
+}
+.bot-new:hover {
+  color: var(--ink);
+  background: var(--line-strong);
+}
+.bot-new .nt-ic {
+  display: block;
+}
+.bot-w.can-new:hover .bot-r1,
+.bot-w.can-new.menu-open .bot-r1,
+.bot-w.can-new:focus-within .bot-r1 {
+  padding-right: 26px;
+}
+body.row-dragging .bot-w .bot-new {
+  opacity: 0;
+  pointer-events: none;
+}
 .row-menu {
   position: fixed;
   z-index: 40;
@@ -1151,6 +1186,36 @@ body.row-dragging * {
   background: var(--raise2);
   color: var(--ink);
   outline: 0;
+}
+/* New thread: its own group above the bot's management items, with its icon and a divider under it */
+.row-mg {
+  display: flex;
+  flex-direction: column;
+}
+.row-mi.row-mi-new {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+.row-mi-new .nt-ic {
+  flex: none;
+  color: var(--muted);
+}
+.row-mi-new:hover .nt-ic,
+.row-mi-new:focus-visible .nt-ic {
+  color: var(--ink);
+}
+.row-mi-l {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.row-sep {
+  height: 1px;
+  margin: 5px 4px;
+  background: var(--line-strong);
 }
 /* Remove from list on the last listed bot: shown, not pressable; its tooltip says why */
 .row-mi[aria-disabled="true"] {

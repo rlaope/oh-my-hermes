@@ -7,6 +7,8 @@ import { AttachButton, Chips, chipsFor, pluginName, useDropZone, type Chip } fro
 import "./attach.css";
 import { CommandPicker, SkillPicker, mirrorText } from "./Skills";
 import { SIGIL, findTokens, fragmentAt, leadRow, matchSkills } from "./skillTokens";
+import { THREAD_CMD, threadCommand, threadFragment } from "./threadCommand";
+import { ThreadPicker } from "./ThreadPicker";
 import { commandQuery, matchCommands, pickText, type AgentCommand } from "./commands";
 import { getDraft, setDraft } from "../../app/drafts";
 import { t, tx } from "../../i18n";
@@ -20,7 +22,9 @@ const MAX_H = 200;
  * next message points the bot at that thread (omher posts nothing). With `skills`, `$` at the start or after a
  * space opens the bot's skills, anywhere in the message, and only while one matches; a `$name` token is drawn as a
  * gray pill by a mirror layer under the textarea (same font, padding and wrapping, scrolled with it), and goes out
- * hoisted to the front as `/name` (store `send`). `/name` and `./name` go out as typed. */
+ * hoisted to the front as `/name` (store `send`). `/name` and `./name` go out as typed, except `./thread` at the start
+ * when `onNewThread` is given: `./` opens a one-row picker for it, and a send makes a new thread of this bot with the
+ * rest of the message as its first message (threadCommand.ts); the token never reaches the bot. */
 export function Composer({
   bot,
   running,
@@ -39,6 +43,7 @@ export function Composer({
   action,
   foot,
   heldNote,
+  onNewThread,
 }: {
   bot: Bot;
   running: boolean;
@@ -68,6 +73,8 @@ export function Composer({
   /** A quiet line shown while the box holds unsent text or files that the draft will not send (a New session that
    *  opens as a terminal). */
   heldNote?: string;
+  /** `./thread [text]`: a new thread of this bot, `text` its first message (absent: `./thread` goes out as typed). */
+  onNewThread?: (first: string) => void;
 }) {
   // unsent text survives switching chats and restarts (drafts.ts; the composer is keyed by its chat)
   const [text, setText] = useState(() => getDraft(bot.name));
@@ -114,7 +121,22 @@ export function Composer({
     };
   }, [wantSkills, skills, loadSkills, bot.name]);
   const names = useMemo(() => (skills ?? []).map((s) => s.name), [skills]);
-  const tokens = useMemo(() => findTokens(text, names), [text, names]);
+  const threadCmd = onNewThread ? threadCommand(text) : null;
+  const tokens = useMemo(() => {
+    const found = findTokens(text, names);
+    return threadCmd ? [{ name: "thread", start: threadCmd.start, end: threadCmd.end }, ...found.filter((k) => k.start >= threadCmd.end)] : found;
+  }, [text, names, threadCmd?.start, threadCmd?.end]); // eslint-disable-line react-hooks/exhaustive-deps
+  // `./` at the start: the built-in ./thread row (no skill list needed; skills are `$name`)
+  const tFrag = onNewThread ? threadFragment(text) : null;
+  const [tDismissed, setTDismissed] = useState<string | null>(null);
+  const threadPicking = tFrag !== null && focused && tDismissed !== text;
+  const tPop = useRef<HTMLDivElement>(null);
+  const pickThread = () => {
+    const next = `${THREAD_CMD} `;
+    placeCaret.current = next.length;
+    setText(next);
+    ref.current?.focus();
+  };
   const frag = skills && caret !== null ? fragmentAt(text, caret) : null;
   const fragKey = frag ? `${frag.start}:${frag.query}` : null;
   const items = useMemo(() => (frag && skills ? matchSkills(skills, frag.query) : []), [skills, fragKey]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -246,6 +268,12 @@ export function Composer({
 
   const send = async () => {
     if (!has || offline || sending) return;
+    if (threadCmd && onNewThread) {
+      if (good.length) return setErr(t("thread.cmdFiles"));
+      setText("");
+      onNewThread(threadCmd.first);
+      return;
+    }
     if (!good.length || !onSendFiles) {
       onSend(text);
       setText("");
@@ -282,6 +310,7 @@ export function Composer({
   return (
     <div className="cw" ref={wrap}>
       {overlay}
+      {threadPicking && <ThreadPicker bot={bot.display_name} active onPick={pickThread} popRef={tPop} />}
       {picking && <SkillPicker items={items} active={at} onPick={pick} onHover={setActive} popRef={pop} />}
       {cmdOpen && cmd && <CommandPicker items={cmd.shown} more={cmd.total - cmd.shown.length} active={cmdAt} onPick={pickCommand} onHover={setCmdActive} popRef={cmdPop} />}
       {hint && (
@@ -366,6 +395,19 @@ export function Composer({
               }}
               onKeyDown={(e) => {
                 const composing = imeComposing(e);
+                if (threadPicking && !composing) {
+                  // Enter or Tab puts `./thread ` in; Enter on a finished `./thread` sends (a new empty thread)
+                  if ((e.key === "Tab" || (e.key === "Enter" && !e.shiftKey && tFrag !== "thread")) && !e.shiftKey) {
+                    e.preventDefault();
+                    pickThread();
+                    return;
+                  }
+                  if (e.key === "Escape") {
+                    e.preventDefault();
+                    setTDismissed(text);
+                    return;
+                  }
+                }
                 if (cmdOpen && cmd && !composing) {
                   const n = cmd.shown.length;
                   if ((e.key === "ArrowDown" || e.key === "ArrowUp") && n) {

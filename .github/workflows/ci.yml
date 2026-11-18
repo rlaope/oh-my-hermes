@@ -416,6 +416,22 @@ jobs:
         if: matrix.shard == 0
         shell: powershell
         run: ./tests/powershell/Test-OmhPythonSelection.ps1 -InjectRegression
+      - name: Windows installer Hermes lookup (PowerShell 7)
+        if: matrix.shard == 0
+        shell: pwsh
+        run: ./tests/powershell/Test-OmhHermesPython.ps1
+      - name: Windows installer Hermes lookup mutation (PowerShell 7)
+        if: matrix.shard == 0
+        shell: pwsh
+        run: ./tests/powershell/Test-OmhHermesPython.ps1 -InjectRegression
+      - name: Windows installer Hermes lookup (Windows PowerShell 5.1)
+        if: matrix.shard == 0
+        shell: powershell
+        run: ./tests/powershell/Test-OmhHermesPython.ps1
+      - name: Windows installer Hermes lookup mutation (Windows PowerShell 5.1)
+        if: matrix.shard == 0
+        shell: powershell
+        run: ./tests/powershell/Test-OmhHermesPython.ps1 -InjectRegression
       - name: Windows installer --uninstall (PowerShell 7)
         if: matrix.shard == 0
         shell: pwsh
