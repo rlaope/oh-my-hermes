@@ -23,6 +23,13 @@ body {
   background: var(--bg);
   overflow: hidden;
 }
+/* Korean breaks between words (eojeol), never inside one: the default per-syllable break split "보관되며" and "이름"
+   across lines in the thread remove confirm and the rename hint. Long tokens (paths, URLs) still wrap. Set on the
+   window App.tsx marks with the UI language, so it reaches every page, popover and hint in one place. */
+[lang="ko"] {
+  word-break: keep-all;
+  overflow-wrap: anywhere;
+}
 button {
   font: inherit;
   color: inherit;

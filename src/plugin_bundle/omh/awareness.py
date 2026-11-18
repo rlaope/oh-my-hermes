@@ -6013,18 +6013,20 @@ def _awareness_route_hint_cached(
             if len(hints) >= hint_limit:
                 break
         links = reference_regions(message).links
-        backlog = bool(hint_limit) and lists_several_code_changes(matching_message, links)
-        if (
+        if hint_limit and not direct_hint and lists_several_code_changes(matching_message, links):
+            # A backlog of separate code changes handed over as a list is made in this session, as the router answers
+            # it (`CODE_BACKLOG_REASON`): no lane a word in one item scored ("stock", "price", "crash") is offered, and
+            # no dag-ulw graph is started, since paired runs measured one slower than Hermes alone at equal quality.
+            hints = []
+        elif (
             hint_limit
-            and (backlog or dispatches_dag_ulw(matching_message, links))
+            and dispatches_dag_ulw(matching_message, links)
             and direct_hint.get("workflow", "dag-ulw") == "dag-ulw"
         ):
             # The router dispatches dag-ulw on this reading whichever lane scored ("열린 PR들 전부 리베이스해줘"), so the
             # hint starts it first; a start is never the hint's alone. A workflow invoked by name keeps the request, as
-            # the router's explicit invocation does ("use git-workflow: 열린 PR들 전부 리베이스해줘"). A backlog of separate
-            # code changes handed over as a list starts it the same way, with each item as its own node.
-            started = _dag_ulw_backlog_hint() if backlog else _dag_ulw_by_size_hint()
-            hints = [started, *(hint for hint in hints if hint.get("workflow") != "dag-ulw")][:hint_limit]
+            # the router's explicit invocation does ("use git-workflow: 열린 PR들 전부 리베이스해줘").
+            hints = [_dag_ulw_by_size_hint(), *(hint for hint in hints if hint.get("workflow") != "dag-ulw")][:hint_limit]
         elif (
             hint_limit
             and not direct_hint
@@ -6696,8 +6698,6 @@ def awareness_route_hint_context_from_payload(payload: dict[str, object]) -> str
             if hint.get("workflow") == "dag-ulw":
                 if hint.get("id") == _DAG_ULW_OFFER_HINT_ID:
                     first_response_shape = _DAG_ULW_OFFER_RESPONSE
-                elif hint.get("id") == DAG_ULW_BACKLOG_HINT_ID:
-                    first_response_shape = _DAG_ULW_BACKLOG_RESPONSE
                 elif hint.get("id") != _DAG_ULW_CONTROL_HINT_ID:
                     first_response_shape = _DAG_ULW_FIRST_RESPONSE
                 elif hint.get("next_action") == _DAG_ULW_CONTROL_NEXT_ACTIONS["cancel_or_run"]:
@@ -8000,30 +8000,6 @@ def _dag_ulw_by_size_hint() -> dict[str, object]:
         "adjacent_workflows": [],
         "workflow_context_card": context_card,
         "not_evidence_yet": _workflow_not_evidence_yet("dag-ulw", context_card) if isinstance(context_card, dict) else [],
-    }
-
-
-DAG_ULW_BACKLOG_HINT_ID = "dag_ulw_backlog"
-_DAG_ULW_BACKLOG_REASON = (
-    "The request hands over a backlog of separate code changes, so each runs as its own node of a dag-ulw graph."
-)
-# What a backlog's hint asks of the first response: a node per item, and, where `delegate_task` joins its children
-# inside the call (a one-shot or other finite session), the settle and the next dispatch in the same turn, since no
-# completion comes back as a later turn there.
-_DAG_ULW_BACKLOG_RESPONSE = (
-    "Start at once: give each listed change its own build node (changes that touch the same files share one), add a "
-    "verify node after all of them that runs the full test suite, call omh_dag define and dispatch the calls it "
-    "returns. When delegate_task returns the children's results inside the call, settle each node and dispatch what "
-    "settle returns in this same turn; ask only for scope, spend or an irreversible step."
-)
-
-
-def _dag_ulw_backlog_hint() -> dict[str, object]:
-    return {
-        **_dag_ulw_by_size_hint(),
-        "id": DAG_ULW_BACKLOG_HINT_ID,
-        "reason": _DAG_ULW_BACKLOG_REASON,
-        "matched_cues": ["backlog of code changes"],
     }
 
 

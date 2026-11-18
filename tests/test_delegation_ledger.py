@@ -110,6 +110,53 @@ class BindingTests(unittest.TestCase):
             self.assertEqual(record["unjoined_stops"][0]["child_session_id"], "child-0-continued")
 
 
+class ResumeTests(unittest.TestCase):
+    """Hermes 0.23.2 `delegation.auto_resume` (and `action='continue'`) starts a stopped child again under the same
+    subagent id and session, and that run's own stop is the one that counts."""
+
+    def test_a_resumed_child_drops_its_earlier_stop_and_takes_the_resumed_runs(self) -> None:
+        """Mutation: keep refusing a repeated start, or keep the old stop on a resume."""
+        goal = "Edit file 4 [dag:run1/n4]"
+        with homes() as home:
+            self.assertTrue(start(home, "child-a", "sa-0-aaaa", goal, now=NOW))
+            self.assertTrue(stop(home, "child-a", "error", now=NOW + 60))
+            self.assertTrue(start(home, "child-a", "sa-0-aaaa", goal, now=NOW + 3600))
+            waiting = read_ledger(home.omh, PARENT)["children"]
+            self.assertTrue(stop(home, "child-a", "completed", now=NOW + 3700))
+            record = read_ledger(home.omh, PARENT)
+        self.assertEqual(len(waiting), 1)
+        self.assertNotIn("stop", waiting[0])
+        self.assertEqual((waiting[0]["resumed_at"], waiting[0]["resumes"], waiting[0]["started_at"]),
+                         (NOW + 3600, 1, NOW))
+        self.assertEqual(record["children"][0]["stop"]["status"], "completed")
+        self.assertEqual(record["unjoined_stops"], [])
+
+    def test_a_repeated_start_under_another_session_is_still_refused(self) -> None:
+        """Mutation: take any repeated subagent id as a resume."""
+        with homes() as home:
+            start(home, "child-a", "sa-0-aaaa", "goal", now=NOW)
+            self.assertFalse(start(home, "child-b", "sa-0-aaaa", "goal", now=NOW + 5))
+            children = read_ledger(home.omh, PARENT)["children"]
+        self.assertEqual([(c["child_session_id"], "resumed_at" in c) for c in children], [("child-a", False)])
+
+    def test_a_resumed_child_takes_only_a_stop_from_its_resumed_run(self) -> None:
+        """Mutation: let an unjoined stop older than the resume answer for the resumed run."""
+        child = {"child_session_id": "child-0", "started_at": NOW, "resumed_at": NOW + 100}
+        old = [{"child_session_id": "child-0", "status": "error", "observed_at": NOW + 50}]
+        self.assertNotIn("stop", with_unjoined_stop(child, old))
+        new = old + [{"child_session_id": "child-0", "status": "completed", "observed_at": NOW + 150}]
+        self.assertEqual(with_unjoined_stop(child, new)["stop"]["status"], "completed")
+
+    def test_the_resume_marks_survive_a_read_back(self) -> None:
+        with homes() as home:
+            start(home, "child-a", "sa-0-aaaa", "goal", now=NOW)
+            stop(home, "child-a", "error", now=NOW + 1)
+            start(home, "child-a", "sa-0-aaaa", "goal", now=NOW + 2)
+            start(home, "child-a", "sa-0-aaaa", "goal", now=NOW + 3)
+            child = read_ledger(home.omh, PARENT)["children"][0]
+        self.assertEqual((child["resumed_at"], child["resumes"]), (NOW + 3, 2))
+
+
 class HookEntryTests(unittest.TestCase):
     def test_the_registered_hooks_write_the_ledger(self) -> None:
         from omh.plugin_bundle.omh.hooks import session_hooks, tool_hooks
