@@ -99,10 +99,16 @@ MAIN_VERIFY_CONTEXT = (
     "producer claims are not verification evidence.\n"
     "In the handoff, name for each failing check the producer whose declared write_scope holds its failing path, or "
     "`unattributed`: by declared scope, not proven cause. Scopes: api: src/api.py; docs: docs/api.md\n"
+    # The verify node is on unspecified-high, a rung of dag_run.ESCALATION_LADDER, so it carries the escalate line.
+    "If the task turns on a judgement you cannot settle with confidence (a design choice, a root cause you cannot pin "
+    "down), do not guess: before editing, write ESCALATE: <the question> and what you found into the handoff, and "
+    "stop.\n"
     "Stay inside your SCOPE: other parts of this run work at the same time. If you cannot finish, say plainly that "
     "you are blocked and why; do not report blocked work as done."
 )
-MAIN_API_CONTEXT_SHA = "fd8a3794061b97010042cb5340cbcf4991630164ce58ed990667ccfbb5bc146c"
+# The api node is quick, so its task carries the escalate line (dag_run.ESCALATION_LADDER); removing that line alone
+# reproduces main's pin fd8a3794061b97010042cb5340cbcf4991630164ce58ed990667ccfbb5bc146c.
+MAIN_API_CONTEXT_SHA = "fa272bdff1d7b1f0ae032829a98236fa6239cbc0497bdd11885818b345dbb276"
 # The two tool-result pins hold the reply as the model reads it: non-ASCII kept as written (#2884), so the `·` of the
 # status line is one character, not `\u00b7`; the ASCII re-encoding of these bytes gives the pins main captured.
 MAIN_RESULT_RUNNING_SHA = "c53744ae5ca1a204693922fbc67dc5eb8b44cc9eb6ae714ac10955ba4fd03d50"

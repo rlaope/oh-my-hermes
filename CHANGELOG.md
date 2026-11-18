@@ -4,6 +4,24 @@ All notable changes will be documented here.
 
 ## Unreleased
 
+- **A cheap dag-ulw node that hits a hard judgement asks for a stronger model instead of guessing.** When a node's
+  child cannot settle a design choice or a root cause, it stops before editing and writes `ESCALATE: <question>` into
+  its handoff; the node is settled `escalated` and offered again one category up (quick, unspecified-low,
+  unspecified-high, ultrabrain), at most twice, briefed with the question the first child stopped on. Nodes already on
+  ultrabrain, review or deep never get the option, nor does a node pinned to an identity, which keeps that
+  identity's own model chain.
+
+- **omher: a waiting message is sent or taken back in one click, with no menu.** A message typed while the bot
+  answers waits with buttons before it instead of a ↵ that opened Send now / Steer / Edit / Delete. ↵ sends it:
+  Steer into the running answer, or, for an agent with no steer of its own, Send now (stop the answer, this one
+  first). ↓ puts it back in the message box to fix or add to. × (on hover or focus) drops it. A button that cannot
+  act (the agent has the message already) says why in its tooltip.
+
+- **omher: a message steered into a running answer reads as you typed it after the chat reopens.** Hermes keeps
+  a mid-turn steer wrapped in a frame for the model (`[OUT-OF-BAND USER MESSAGE — …]` … `[/OUT-OF-BAND USER
+  MESSAGE]`), and a reopened Bot Chat showed that frame in your bubble. The bridge now shows only the typed text,
+  keeps the "Sent to …" line under it, and drops stray frame lines from any other row.
+
 - **The Start Guide lists long-term memory among the main features.** It moves from the closing list to a fourth card
   in "What OMH does" (owner request, 2026-11-18): nothing is remembered silently, and the next session gets only the
   memories that fit its task, within a token budget. The closing list is now one row of three.

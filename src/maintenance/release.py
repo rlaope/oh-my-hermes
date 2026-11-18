@@ -451,7 +451,12 @@ SKILL_INDEX_LINE_CHAR_LIMIT = 100
 # directory description and `identity` argument on omh_role (+220, 921 ->
 # 1141). Measured by per_turn_context.plugin_tool_schema_chars_by_tool()
 # against base 8c70948f6. No headroom.
-PLUGIN_TOOL_SCHEMA_CHAR_LIMIT = 62744
+# 62744 -> 62968: omh_dag settles a node escalated when its child stops on a
+# judgement it cannot settle (+224; omh_dag 3671 -> 3895): one description
+# sentence (+211) and the outcome enum's "escalated" (+13). Measured by
+# per_turn_context.plugin_tool_schema_chars_by_tool() against main 8f09d0147.
+# No headroom.
+PLUGIN_TOOL_SCHEMA_CHAR_LIMIT = 62968
 # PRE_LLM_CALL_CONTEXT_CHAR_LIMIT, PRE_LLM_CALL_CONTEXT_FALLBACK_CHAR_LIMIT: moved with
 # their history to src/plugin_bundle/omh/turn_budget.py; imported at the top of this file.
 # 340000 -> 349637: three capability-skill sections were added by the domain

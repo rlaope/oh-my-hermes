@@ -98,6 +98,12 @@ At the deadline call `ready`: the same node gets a fresh attempt naming the hand
 work. OMH starts no timer or poll. After three parks per node, another park is refused with
 `park_limit_reached`; settle accepted, failed or blocked instead. Cancel turns parked nodes cancelled.
 
+A child that stopped before editing and wrote an `ESCALATE: <question>` line into its handoff asked for a
+stronger model. Settle it `outcome=escalated reason=<that question>` and dispatch what settle returns: the node
+comes back one category up (quick, unspecified-low, unspecified-high, ultrabrain), at most twice, briefed with
+the question. Never answer the question yourself and accept. A node pinned to an `identity` keeps
+that identity's model chain, so it cannot escalate; pick another identity for it instead.
+
 ## Goal criteria
 
 Split the goal into the outcomes that can each be checked on their own, from what the request names, and

@@ -752,6 +752,21 @@ class PluginToolSchemaProducerTests(unittest.TestCase):
             properties["goal"]["description"] = "define: the run's goal criteria, one line."
             return before - len(json.dumps(target, sort_keys=True, ensure_ascii=False))
 
+        # The escalated outcome (+224, its own PLUGIN_TOOL_SCHEMA_CHAR_LIMIT entry) is stripped first: its enum value
+        # and its description sentence.
+        def without_escalation(target: dict) -> int:
+            before = len(json.dumps(target, sort_keys=True, ensure_ascii=False))
+            outcomes = target["parameters"]["properties"]["outcome"]["enum"]
+            self.assertEqual(outcomes.count("escalated"), 1)
+            outcomes.remove("escalated")
+            sentence = ("A child whose handoff starts a line with ESCALATE: settles escalated with the question as "
+                        "reason; the node is offered again one category up (quick, unspecified-low, unspecified-high, "
+                        "ultrabrain), at most twice. ")
+            self.assertEqual(target["description"].count(sentence), 1)
+            target["description"] = target["description"].replace(sentence, "", 1)
+            return before - len(json.dumps(target, sort_keys=True, ensure_ascii=False))
+
+        self.assertEqual(without_escalation(legacy), 224)
         self.assertEqual(without_criteria(legacy), 226 + 95 + 8)
         self.assertEqual(without_identity(legacy), 122)
         self.assertEqual(without_read_only(legacy), 45)
@@ -771,6 +786,7 @@ class PluginToolSchemaProducerTests(unittest.TestCase):
         # category values, so category growth cannot spend the parked cap.
         live = copy.deepcopy(schema)
         del live["parameters"]["properties"]["nodes"]["items"]["properties"]["category"]["enum"][-len(recipe):]
+        self.assertEqual(without_escalation(live), 224)
         self.assertEqual(without_criteria(live), 226 + 95 + 8)
         self.assertEqual(without_identity(live), 122)
         self.assertEqual(without_read_only(live), 45)
@@ -780,7 +796,7 @@ class PluginToolSchemaProducerTests(unittest.TestCase):
         delta = len(json.dumps(live, sort_keys=True, ensure_ascii=False)) - len(encoded)
         self.assertEqual(
             per_turn_context.plugin_tool_schema_chars_by_tool()["omh_dag"] - len(encoded) - delta,
-            75 + 85 + 70 + 37 + 226 + 95 + 8 + 45 + 122,
+            75 + 85 + 70 + 37 + 226 + 95 + 8 + 45 + 122 + 224,
         )
         self.assertGreater(delta, 0)
         self.assertLessEqual(delta, 429)  # Measured feature cap, not general headroom.

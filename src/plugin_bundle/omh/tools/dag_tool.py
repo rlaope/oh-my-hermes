@@ -185,6 +185,8 @@ OMH_DAG_SCHEMA = {
         "child, read the node's handoff and settle it accepted, failed or blocked; a child saying it is "
         "blocked is blocked, never accepted. A still-running wait may settle parked with "
         "handle and wake_at (future UTC ISO-8601 or epoch, within 24h); ready reoffers it then, at most three parks. "
+        "A child whose handoff starts a line with ESCALATE: settles escalated with the question as reason; the node is "
+        "offered again one category up (quick, unspecified-low, unspecified-high, ultrabrain), at most twice. "
         "settle returns what is next. repair adds nodes for a failed "
         "node, at most two cycles. extend adds nodes to an all-passed run when the goal check finds work "
         "missing, at most two rounds. Past either limit, report what is open. criteria (define, extend): the "
@@ -348,6 +350,9 @@ def omh_dag_handler(args: Mapping[str, object], **kwargs: object) -> str:
                 derived = dag_run.derive(record, children, now)
                 say = ("The child hit a provider error: its node is offered once more on the route's fallback."
                        if happened == "retry" else "")
+                if happened == "escalated":
+                    higher = next(item for item in record["nodes"] if item["id"] == node)["category"]
+                    say = f"Node {node} goes up to {higher}; it is offered again with the question it stopped on."
                 unread = str(next(item for item in record["nodes"] if item["id"] == node)["attempts"][-1]
                              .get("handoff_unread") or "")
                 if happened == "accepted" and unread:
