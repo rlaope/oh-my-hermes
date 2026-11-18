@@ -4,6 +4,9 @@ All notable changes will be documented here.
 
 ## Unreleased
 
+- **The Start Guide lists long-term memory among the main features.** It moves from the closing list to a fourth card
+  in "What OMH does" (owner request, 2026-11-18): nothing is remembered silently, and the next session gets only the
+  memories that fit its task, within a token budget. The closing list is now one row of three.
 - **omher: Run now no longer looks like the button you must press.** On an automation's detail it was the first,
   filled button; on the "New automation" card in chat, the first button. It is now a quiet text action at the end of
   the row, after Delete or Remove, and a click only asks "Run it now, outside its schedule?" with Run and Cancel.
