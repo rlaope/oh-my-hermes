@@ -193,6 +193,15 @@ All notable changes will be documented here.
   `... install.ps1))) omher` on Windows); `curl -fsSL https://omher.app/omher | sh` stays the short form and now passes
   `omher`. The old argument `omher@beta` keeps working, because every omher app up to 0.2.13 sends it from its
   first-run Install button. The README and install docs drop "(beta)".
+- **omher's main screens say what they mean in every language and show whole names (1.0 usability pass).** A sidebar
+  search that finds no bot now shows its "No bot named …" line instead of drawing it under TERMINALS. Settings ›
+  Providers shows the in-use model whole (it was cut to "Sonnet …"), and a bot card's profile id no longer breaks at
+  its hyphen. Korean wraps between words everywhere, not inside one. A new thread has one empty line, not two. An
+  agent added in Settings › Agents is no longer offered in TERMINALS, where the shell could not start it. The side
+  panel's "now" / "working", a routine's cadence and its last run read in the UI language, never Hermes' raw
+  `ok` / `delivery_failed`, and a bot with nothing elsewhere gets a note that fits it. Copy that still named the old
+  SESSIONS section (search label, ⌘N, Settings › Agents, Plans) says Terminals, and the sidebar preview drops
+  markdown list markers. (#2960)
 - **omher: start a thread from the chat box with `./thread`, or from a "+ New thread" line under the bot.** In a
   bot's chat, `./` opens one row, `./thread`. `./thread` alone opens a new empty thread with its box focused, as the
   bot's right-click New thread does; `./thread <text>` opens one and sends the text there as its first message, which

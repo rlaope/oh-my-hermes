@@ -360,6 +360,10 @@
   font-size: 10.5px;
   color: var(--muted);
 }
+/* a card's profile id is one token: never split at its hyphen ("omh-" / "tui") */
+.bc-id code {
+  white-space: nowrap;
+}
 .be-desc {
   margin: 6px 0 0;
   font-size: 12px;
@@ -865,6 +869,11 @@
   padding: 5px 0;
   font-size: 12px;
   line-height: 18px;
+}
+/* models with no vendor prefix ("Opus 5.5"): no vendor cell, so the chips take the whole row instead of the 84px
+   vendor column, where they stacked one per line and the in-use one (with its check) was cut to "Sonnet …" */
+.pv-g:not(:has(> .pv-v)) {
+  grid-template-columns: minmax(0, 1fr);
 }
 .pv-g + .pv-g {
   border-top: 1px solid var(--line);

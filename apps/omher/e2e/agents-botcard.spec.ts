@@ -174,7 +174,7 @@ test("Ask the bot fills the current bot's composer and sends nothing", async ({ 
   await page.getByTestId("agents-ask-bot").click();
   // back in the chat, the request is in the composer, focused, not sent
   await expect(page.getByTestId("settings")).toHaveCount(0);
-  await expect(page.getByTestId("composer")).toHaveValue(/^Add an ACP coding agent to omher SESSIONS for me \(reply with one omher-agent block/);
+  await expect(page.getByTestId("composer")).toHaveValue(/^Add an ACP coding agent to omher Terminals for me \(reply with one omher-agent block/);
   await expect(page.getByTestId("composer")).toBeFocused();
   await page.waitForTimeout(300);
   expect((await mock("mock.submits")).submits.length).toBe(before);

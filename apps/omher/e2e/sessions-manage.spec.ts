@@ -120,7 +120,7 @@ test("the sidebar search filters sessions by name and folder, and says when none
   await start(page, "/home/you/code/web-app", "Fix the login redirect");
   await start(page, "/home/you/code/api", "Add rate limits");
   await expect(rows(page)).toHaveCount(2);
-  const search = page.getByRole("searchbox", { name: "Search bots and sessions" });
+  const search = page.getByRole("searchbox", { name: "Search bots and terminals" });
   await search.fill("login");
   await expect(rows(page)).toHaveCount(1);
   await expect(rows(page).first().getByTestId("session-name")).toHaveText("Fix the login redirect");
@@ -149,7 +149,16 @@ for (const theme of ["dark", "light"] as const) {
       const head = document.querySelector("[data-testid=side-sessions] .side-sh")!.getBoundingClientRect();
       return head.top - line.bottom;
     });
+    // the line is above TERMINALS, not drawn under it (a 0px BOTS section put it there and the gap went negative)
+    expect(gap).toBeGreaterThanOrEqual(0);
     expect(gap).toBeLessThanOrEqual(24);
+    await expect(empty).toBeInViewport();
+    const covered = await page.evaluate(() => {
+      const r = document.querySelector("[data-testid=side-bots] .bot-empty")!.getBoundingClientRect();
+      const hit = document.elementFromPoint(r.left + 20, r.top + r.height / 2);
+      return !hit?.closest(".bot-empty");
+    });
+    expect(covered).toBe(false);
   });
 }
 

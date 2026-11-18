@@ -9,7 +9,7 @@ import { openExternal } from "../lib/openExternal";
 import { shortTime } from "../app/time";
 import { Avatar, CloseIcon, IconButton, SourceIcon } from "../ui";
 import logo from "../assets/omher-mark.png";
-import { awayTime, cadence, nextRun, sourceList, sourceName } from "./format";
+import { awayTime, cadence, isFailure, nextRun, sourceList, sourceName, statusText } from "./format";
 import {
   DiffTab,
   onPanelRowDoubleClick,
@@ -117,7 +117,7 @@ function DetailsTab({ bot, open, head }: { bot: Bot; open: boolean; head: JSXChi
 
   const model = chat?.model || bot.model;
   const last = chat?.messages[chat.messages.length - 1];
-  const hereTime = chat?.turn ? "working" : last ? shortTime(last.ts, now) : "now";
+  const hereTime = chat?.turn ? tr("act.dag.working") : last ? shortTime(last.ts, now) : tr("time.now");
   const sources = sourceList(away.map((a) => a.source));
 
   return (
@@ -225,7 +225,10 @@ function DetailsTab({ bot, open, head }: { bot: Bot; open: boolean; head: JSXChi
           )}
         </ul>
         <div className="ew-note" data-testid="where-note">
-          {tr("pn.note", { bot: bot.display_name, places: sources || tr("pn.slackDiscord") })}
+          {/* nothing elsewhere yet: no thread to reply to and nothing to open, so the note does not talk about them */}
+          {away.length
+            ? tr("pn.note", { bot: bot.display_name, places: sources || tr("pn.slackDiscord") })
+            : tr("pn.noteHere", { bot: bot.display_name })}
         </div>
         <div className="ew-sec" data-testid="routines-sec">
           {tr("pn.routines")}
@@ -241,7 +244,7 @@ function DetailsTab({ bot, open, head }: { bot: Bot; open: boolean; head: JSXChi
                 <span className="st">{nextRun(r, now)}</span>
                 <span className="t2">
                   <span className="ew-src">{cadence(r.schedule)}</span>
-                  {r.last_status && r.last_status !== "ok" && <span className="st bad">{tr("pn.lastRun", { status: r.last_status })}</span>}
+                  {r.last_status && isFailure(r.last_status) && <span className="st bad">{tr("pn.lastRun", { status: statusText(r.last_status) })}</span>}
                 </span>
               </li>
             ))}
