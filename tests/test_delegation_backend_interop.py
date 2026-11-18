@@ -326,6 +326,106 @@ class DagCallsPerBackendTest(unittest.TestCase):
             self.assertTrue(all(set(task) == {"goal", "context"} for task in row["tasks"]))
         self.assertIn("profile_routes backend", result["say"])
 
+    def _identity_doc(self, home, chains: dict) -> None:
+        routing = home.omh / "routing"
+        routing.mkdir(parents=True, exist_ok=True)
+        (routing / "identities.json").write_text(
+            json.dumps({"schema_version": "omh_identity_profiles/v1", "identities": chains}),
+            encoding="utf-8",
+        )
+
+    def test_model_map_identity_chain_selects_and_retries_within_it(self):
+        from test_dag_tool import node
+
+        home, call, _defined = self._dag(DAG_CONFIG)
+        self._identity_doc(home, {
+            "qa": {"prompt": "p", "model_chain": [
+                {"model_id": "glm-5.3-flash", "reasoning_effort": "low"},
+                {"model_id": "claude-haiku-5-5", "reasoning_effort": ""},
+            ]},
+        })
+        defined = call(action="define", run="feat2", nodes=[
+            {**node("a2", scope=("a2.py",)), "identity": "custom:qa"},
+            node("b2", scope=("b2.py",)),
+        ])
+        calls = {tuple(row["nodes"]): row for row in defined["calls"]}
+        identity_call = calls[("a2",)]
+        # The identity's own chain picks the option: its position, not the
+        # category's or another node's.
+        self.assertEqual(identity_call["route"],
+                         {"backend": "model_map", "category": "quick", "identity": "custom:qa",
+                          "attempt": 0, "status": "option_selected", "option": "glm-low"})
+        self.assertEqual(identity_call["tasks"][0]["option"], "glm-low")
+        retried = call(action="settle", run="feat2", node="a2", outcome="failed", provider_error=True)
+        (retry_call,) = retried["calls"]
+        self.assertEqual((retry_call["route"]["attempt"], retry_call["route"]["option"],
+                          retry_call["tasks"][0]["option"]), (1, "haiku", "haiku"))
+
+    def test_identity_route_refused_when_the_backend_cannot_apply_it(self):
+        from test_dag_tool import node
+
+        for config in (PROFILE_ROUTES_CONFIG, "delegation:\n  backend: someone-elses\n"):
+            with self.subTest(config=config.splitlines()[-1]):
+                home, call, _defined = self._dag(config)
+                result = call(action="define", run="ident", nodes=[
+                    {**node("a", scope=("a.py",)), "identity": "builtin:builder"}])
+                self.assertEqual((result["status"], result["reason"]),
+                                 ("refused", "identity_route_unavailable"), result)
+                self.assertEqual(result.get("calls", []), [])
+
+    def test_model_map_without_a_matching_option_for_the_chain_is_refused(self):
+        from test_dag_tool import node
+
+        home, call, _defined = self._dag(DAG_CONFIG)
+        self._identity_doc(home, {
+            "exotic": {"prompt": "p", "model_chain": [{"model_id": "no-such-model", "reasoning_effort": "x"}]},
+        })
+        result = call(action="define", run="ident", nodes=[
+            {**node("a", scope=("a.py",)), "identity": "custom:exotic"}])
+        # No model_map option serves the chain entry: a typed refusal, never a
+        # category default or another option standing in.
+        self.assertEqual((result["status"], result["reason"]),
+                         ("refused", "identity_route_unavailable"), result)
+
+    def test_a_local_nodes_identity_chain_offers_only_local_options(self):
+        from test_dag_tool import node
+
+        local_map = """\
+delegation:
+  backend: model_map
+  backends:
+    model_map:
+      default: any
+      options:
+        - name: local-llm
+          provider: llamacpp
+          model: local-model
+        - name: cloud-fast
+          provider: og
+          model: glm-5.3-flash
+          reasoning_effort: low
+"""
+        home, call, _defined = self._dag(local_map)
+        self._identity_doc(home, {
+            "qa": {"prompt": "p", "model_chain": [
+                {"model_id": "glm-5.3-flash", "reasoning_effort": "low"},
+                {"model_id": "local-model", "reasoning_effort": ""},
+            ]},
+        })
+        defined = call(action="define", run="feat2", nodes=[
+            {**node("a2", scope=("a2.py",)), "local": True, "identity": "custom:qa"}])
+        (row,) = defined["calls"]
+        # The cloud chain entry is not a local substitute: the local option the
+        # chain's other entry maps to is handed out instead.
+        self.assertEqual(row["route"]["option"], "local-llm")
+        self.assertEqual(row["route"]["local"], True)
+        self.assertEqual(row["tasks"][0]["option"], "local-llm")
+        retried = call(action="settle", run="feat2", node="a2", outcome="failed", provider_error=True)
+        # Position 1 is the cloud entry: no local option serves it, so the node
+        # is held — never a cloud model stand-in.
+        self.assertEqual(retried.get("calls", []), [])
+        self.assertEqual(retried["held_for_local_model"], ["a2"])
+
 
 OBSERVED = {"backend": "model_map", "label": "haiku", "provider": "anthropic", "model": "claude-haiku-5-5",
             "reasoning_effort": "", "service_tier": None, "fallback_activated": False}

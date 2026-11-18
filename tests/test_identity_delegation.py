@@ -580,7 +580,15 @@ class DelegateRouteIdentityDefaultBackendTest(unittest.TestCase):
         self.assertEqual(result["status"], "choice_required")
         self.assertEqual(result["reason"], "unknown_identity")
         self.assertEqual(result["identity"], "ghost")
-        self.assertEqual(result["available_identities"], ["alpha", "beta"])
+        # The common directory answers with qualified references: the legacy
+        # custom names plus every shipped built-in, never a silent substitute.
+        available = result["available_identities"]
+        self.assertIn("custom:alpha", available)
+        self.assertIn("custom:beta", available)
+        self.assertIn("builtin:reviewer", available)
+        # The legacy unqualified chain names keep working, so they stay listed.
+        self.assertIn("alpha", available)
+        self.assertIn("beta", available)
         self.assertEqual(read_delegation_route(self.homes.hermes), {})
         self.assertEqual(load_delegation_route_provenance(self.homes.omh), [])
 
@@ -688,6 +696,48 @@ class DelegateRouteIdentityDefaultBackendTest(unittest.TestCase):
         cleared = self._call(session="S", task="t1", action="clear")
         self.assertEqual(cleared["status"], "cleared", cleared)
         self.assertEqual(read_delegation_route(self.homes.hermes), {})
+
+    def test_attempt_selects_the_chain_position_and_is_set_only(self):
+        document = {
+            "schema_version": "omh_identity_profiles/v1",
+            "identities": {
+                "lane": {
+                    "prompt": "p",
+                    "model_chain": [
+                        {"model_id": "lane-head", "reasoning_effort": "high"},
+                        {"model_id": "lane-next", "reasoning_effort": "low"},
+                    ],
+                },
+            },
+        }
+        self.homes.write_identities(document)
+        head = self._call(session="S", task="t1", action="set", identity="lane", attempt=1)
+        self.assertEqual(head["status"], "routed", head)
+        self.assertEqual(read_delegation_route(self.homes.hermes)["model"], "lane-next")
+        past_end = self._call(session="S", task="t2", action="set", identity="lane", attempt=2)
+        self.assertEqual(past_end["status"], "chain_exhausted")
+        for bad in (-1, True, "x"):
+            with self.subTest(attempt=bad):
+                refused = self._call(session="S", task="t3", action="set", identity="lane", attempt=bad)
+                self.assertEqual(refused["status"], "error")
+        for action in ("fallback", "status", "clear"):
+            with self.subTest(action=action):
+                refused = self._call(session="S", task="t4", action=action, identity="lane", attempt=1)
+                self.assertEqual(refused["status"], "error")
+                self.assertIn("attempt applies only to action=set", refused["error"])
+
+    def test_a_builtin_without_a_chain_needs_a_category_lane(self):
+        # A configured chain wins; a definition without one leaves the model to
+        # the category — a typed refusal, never an invented route.
+        alone = self._call(session="S", task="t1", action="set", identity="builtin:reviewer")
+        self.assertEqual(alone["status"], "chain_exhausted", alone)
+        routed = self._call(session="S", task="t1", action="set",
+                            identity="builtin:reviewer", category="quick")
+        self.assertEqual(routed["status"], "routed", routed)
+        self.assertEqual(routed["identity"], "builtin:reviewer")
+        self.assertTrue(routed["identity_digest"])
+        provenance = load_delegation_route_provenance(self.homes.omh)[-1]
+        self.assertEqual(provenance["identity"], "builtin:reviewer")
 
 
 class DelegateRouteIdentityPerConversationTest(unittest.TestCase):

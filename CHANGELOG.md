@@ -10,6 +10,12 @@ All notable changes will be documented here.
   unspecified-high, ultrabrain), at most twice, briefed with the question the first child stopped on. Nodes already on
   ultrabrain, review or deep never get the option.
 
+- **omher: a waiting message is sent or taken back in one click, with no menu.** A message typed while the bot
+  answers waits with buttons before it instead of a ↵ that opened Send now / Steer / Edit / Delete. ↵ sends it:
+  Steer into the running answer, or, for an agent with no steer of its own, Send now (stop the answer, this one
+  first). ↓ puts it back in the message box to fix or add to. × (on hover or focus) drops it. A button that cannot
+  act (the agent has the message already) says why in its tooltip.
+
 - **omher: a message steered into a running answer reads as you typed it after the chat reopens.** Hermes keeps
   a mid-turn steer wrapped in a frame for the model (`[OUT-OF-BAND USER MESSAGE — …]` … `[/OUT-OF-BAND USER
   MESSAGE]`), and a reopened Bot Chat showed that frame in your bubble. The bridge now shows only the typed text,
@@ -194,6 +200,13 @@ All notable changes will be documented here.
   cards, the text tree and the TUI block alike. Usage and cost still count it, and it no longer holds a finished
   run's one-line summary open. While a run is active, such a dispatch is stopped once per turn with a pointer to
   `omh_dag` (ready, settle, repair, extend); sending it again goes through. Contributed by @yqm-307 (#2914).
+
+- **A dag-ulw node can pick a built-in role or a custom identity by name.** `omh_role action=list` now shows
+  built-in roles and custom identity profiles together, and a node sets `identity: builtin:<name>` or
+  `custom:<name>` independently of its `role` and `category`. The chosen definition supplies the child's prompt
+  guidance and its model chain; retries count per node, so two nodes no longer use up each other's place in the chain.
+  A missing, disabled or changed identity stops the dispatch instead of quietly swapping in another one.
+  Contributed by @yqm-307 (#2939).
 
 - **`omh_delegate_route set` refuses a model id pinned to a provider that does not serve it.** A `set` with
   `model=ANT-claude-opus-5-5 provider=openai-codex` used to reach `config.yaml`, and every delegated child after it
