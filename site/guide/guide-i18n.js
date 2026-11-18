@@ -104,7 +104,7 @@
   },
   "guide.what.c2.d": {
     en: "Type <code>/dag-ulw</code> and a goal. It becomes small steps, the ready ones run in parallel, and a separate step checks the result.",
-    ko: "<code>/dag-ulw</code>와 목표를 적으면 작은 단계로 쪼개지고, 준비된 단계부터 동시에 돌며, 마지막에 별도 단계가 결과를 확인합니다.",
+    ko: "<code>/dag-ulw</code>에 목표를 적으면 작은 단계로 쪼개지고, 준비된 단계부터 동시에 돌며, 마지막에 별도 단계가 결과를 확인합니다.",
     ja: "<code>/dag-ulw</code> と目標を書くと小さなステップに分かれ、準備できたものから並行して動き、最後に別のステップが結果を確かめます。",
     zh: "输入 <code>/dag-ulw</code> 加上目标，它会拆成小步骤，就绪的并行运行，最后由单独一步检查结果。"
   },
@@ -119,6 +119,18 @@
     ko: "프론트엔드, 백엔드, Rust, 보안 리뷰 등 100개가 넘는 전문 스킬. 부를 필요 없이 라우터가 맞는 스킬을 붙입니다.",
     ja: "フロントエンド、バックエンド、Rust、セキュリティレビューなど 100 を超える専門スキル。呼ばなくても、ルーターが合うものを取り込みます。",
     zh: "前端、后端、Rust、安全审查等 100 多个专家技能。不用你点名，路由器会把合适的带进来。"
+  },
+  "guide.what.c4.t": {
+    en: "Long-term memory",
+    ko: "장기 메모리",
+    ja: "長期記憶",
+    zh: "长期记忆"
+  },
+  "guide.what.c4.d": {
+    en: "Nothing is remembered silently: each candidate is kept, refused or deferred with a written reason. The next session gets the memories that fit its task, cut to a token budget.",
+    ko: "조용히 기억하지 않습니다. 기억할 후보마다 남기기·거절·보류를 이유와 함께 적습니다. 다음 세션은 그 작업에 맞는 기억만 토큰 예산 안에서 받습니다.",
+    ja: "黙って覚えることはありません。候補ごとに記憶・拒否・保留を理由とともに残します。次のセッションには、その作業に合う記憶だけがトークン予算の範囲で渡ります。",
+    zh: "不会悄悄记住任何东西：每个候选都会写明理由，记住、拒绝或暂缓。下一个会话只拿到与任务相关的记忆，并控制在 token 预算内。"
   },
   "guide.install.title": {
     en: "Install",
@@ -491,18 +503,6 @@
     ko: "코딩 작업을 Claude Code나 Codex에 넘기고, 도는 동안 방향을 바꿀 수 있습니다.",
     ja: "コーディング作業を Claude Code や Codex に渡し、動いている間も舵を切れます。",
     zh: "把编码任务交给 Claude Code 或 Codex，运行中也能随时调整方向。"
-  },
-  "guide.more.memory.t": {
-    en: "Long-term memory",
-    ko: "장기 메모리",
-    ja: "長期記憶",
-    zh: "长期记忆"
-  },
-  "guide.more.memory": {
-    en: "Nothing is remembered silently: each candidate is kept, refused or deferred with a written reason.",
-    ko: "조용히 기억하지 않습니다. 후보마다 기억·거절·보류를 이유와 함께 남깁니다.",
-    ja: "黙って覚えることはありません。候補ごとに記憶・拒否・保留を理由とともに残します。",
-    zh: "不会悄悄记住任何东西：每个候选都会写明理由，记住、拒绝或暂缓。"
   },
   "guide.more.evidence.t": {
     en: "Verification status",

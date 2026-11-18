@@ -35,12 +35,18 @@ export function ThreadChat({ bot, thread }: { bot: Bot; thread: string }) {
         </span>
       </header>
       <div className="pane" data-pane={key} data-testid="thread-chat" data-thread={thread}>
-        <Timeline bot={as} face={<Avatar bot={bot.name} size={28} />} connectionNotice={false} />
-        {chat?.loaded && chat.items.length === 0 && !chat.turn && (
-          <div className="th-empty" data-testid="thread-empty">
-            {t("thread.newHint", { name: bot.display_name })}
-          </div>
-        )}
+        <Timeline
+          bot={as}
+          face={<Avatar bot={bot.name} size={28} />}
+          connectionNotice={false}
+          emptyHint={
+            !chat?.turn && (
+              <div className="th-empty" data-testid="thread-empty">
+                {t("thread.newHint", { name: bot.display_name })}
+              </div>
+            )
+          }
+        />
         <Composer
           key={key}
           bot={as}

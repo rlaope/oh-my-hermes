@@ -544,7 +544,10 @@ def _children(omh_home: Path, segments: list[str], hermes_home: Path | None = No
     names first (`with_unjoined_stop`), so a child that came back is not
     taken for one a restart ended. One with no stop whose Hermes process is
     gone is marked ``lost``: a restart ended it, and Hermes fires no
-    `subagent_stop` for it. Only a process Hermes' own probes say ended
+    `subagent_stop` for it. A dag child Hermes promised to resume
+    (`_resume_promises`), whether a restart ended it or it stopped on a
+    failure such as a usage limit, is marked ``waiting_resume`` instead, with
+    no stop: its node stays running until the resumed run reports. Only a process Hermes' own probes say ended
     counts (`host_process.process_alive`). Before that mark, with
     ``hermes_home``, a child's own lineage is read: a child Hermes rotated
     since it started stops under its continuation's id, and a stop naming a
@@ -561,6 +564,7 @@ def _children(omh_home: Path, segments: list[str], hermes_home: Path | None = No
     if stops:
         children = [with_unjoined_stop(child, stops) for child in children]
     alive: dict[tuple[int, int | None, str], bool | None] = {}
+    gone: list[int] = []
     for index, child in enumerate(children):
         host = child.get("host")
         if "stop" in child or host is None:
@@ -577,8 +581,77 @@ def _children(omh_home: Path, segments: list[str], hermes_home: Path | None = No
             if "stop" in returned:
                 children[index] = returned
                 continue
-        child["lost"] = True
+        gone.append(index)
+    # A dag child that stopped on a failure, or that a restart ended, may be one Hermes promised to resume
+    # (`delegation.auto_resume`): it is waiting, not lost or returned, and offering its node again would run the
+    # same work twice beside the resumed child.
+    asked = [index for index, child in enumerate(children) if "dag" in child and (
+        index in gone or (isinstance(child.get("stop"), dict)
+                          and child["stop"].get("status") in dag_run.CHILD_FAILURE_STOPS))]
+    waiting = _resume_promises(hermes_home, [children[index]["subagent_id"] for index in asked]) if asked else {}
+    for index in asked:
+        promise = waiting.get(children[index]["subagent_id"])
+        if promise is None:
+            continue
+        child = {key: value for key, value in children[index].items() if key != "stop"}
+        child["waiting_resume"] = promise
+        children[index] = child
+    for index in gone:
+        if "waiting_resume" not in children[index]:
+            children[index]["lost"] = True
     return children
+
+
+def _resume_promises(hermes_home: Path | None, subagent_ids: list[str]) -> dict[str, dict[str, Any]]:
+    """The children among ``subagent_ids`` Hermes promised an automatic resume, by subagent id. Read-only.
+
+    Hermes 0.23.2+ keeps a durable record per child (`state.db` ``resumable_subagents``, written by
+    `tools/delegate_tool_resumable.py`). With `delegation.auto_resume` on, a child stopped by a usage limit or a
+    restart is ``resumable`` (or ``claimed`` while its resume starts) with ``auto_promised`` and no
+    ``auto_gave_up``: the gateway will continue it under the same subagent id and session, and its parent hears
+    nothing until then. Each answer is ``{"at": <epoch or None>, "attempt": n}``: ``at`` is when the limit resets
+    (None: as soon as the gateway is up). A Hermes without the table, a store this cannot read, or no
+    ``hermes_home`` answers nothing, which leaves the restart and failure rules as they were.
+    """
+    ids = sorted({str(sid) for sid in subagent_ids if sid})
+    if hermes_home is None or not ids:
+        return {}
+    state_db = Path(hermes_home) / "state.db"
+    if not state_db.is_file():
+        return {}
+    try:
+        connection = connect_readonly(state_db, timeout=0.25)
+        try:
+            rows = connection.execute(
+                "SELECT subagent_id, state, record_json, expires_at FROM resumable_subagents "
+                f"WHERE subagent_id IN ({', '.join('?' for _ in ids)})", ids,
+            ).fetchall()
+        finally:
+            connection.close()
+    except sqlite3.Error:
+        return {}
+    now = time.time()
+    found: dict[str, dict[str, Any]] = {}
+    for sid, state, raw, expires in rows:
+        if state not in RESUME_WAITING_STATES or (isinstance(expires, (int, float)) and expires <= now):
+            continue
+        try:
+            record = json.loads(raw or "{}")
+        except ValueError:
+            continue
+        if (not isinstance(record, dict) or record.get("auto_promised") is not True or record.get("auto_gave_up")
+                or record.get("auto_off")):
+            continue
+        attempts = record.get("auto_attempts")
+        attempts = attempts if isinstance(attempts, int) and not isinstance(attempts, bool) and attempts >= 0 else 0
+        at = record.get("next_attempt_at") if record.get("resume_mode") == "AUTO_AT" else None
+        found[str(sid)] = {"at": float(at) if isinstance(at, (int, float)) and not isinstance(at, bool) else None,
+                           "attempt": attempts + (0 if state == "claimed" else 1)}
+    return found
+
+
+# `resumable_subagents` states of a child still owed its automatic resume: stopped and waiting, or being continued.
+RESUME_WAITING_STATES = ("resumable", "claimed")
 
 
 def free_slots(hermes_home: Path, *, pid: int | None = None) -> dict[str, Any]:
@@ -1196,6 +1269,14 @@ def _result(action: str, record: Mapping[str, Any], derived: Mapping[str, Mappin
             f"Hermes restarted while {'node' if one else 'nodes'} {', '.join(lost)} ran, "
             f"{limits.max_lost_reoffers + 1} times, so {'it is' if one else 'they are'} not offered again: "
             f"settle {'it' if one else 'each'} failed or blocked.")) if part)
+    resuming = [str(node["id"]) for node in record["nodes"] if derived[str(node["id"])].get("waiting_resume")]
+    if resuming:
+        # Added to whatever else the reply says, on every action: Hermes holds these, and a second child would race.
+        one = len(resuming) == 1
+        say = " ".join(part for part in (say, (
+            f"Hermes will resume the child of {'node' if one else 'nodes'} {', '.join(resuming)} on its own "
+            f"(delegation.auto_resume): do not dispatch {'it' if one else 'them'} again; "
+            f"{'its' if one else 'each'} result arrives as a normal completion.")) if part)
     found = dag_run.stuck(record, derived, now, limits=limits)
     if found:
         # Added to whatever else the reply says, on every action: a silent child gives no other signal.

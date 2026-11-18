@@ -223,6 +223,7 @@ class AppTests(unittest.TestCase):
     def app(depth: str = TRUECOLOR, *, motion: bool = True):
         clock = [10.0]
         app, client = make_app(clock=lambda: clock[0])
+        # Automatic proofreading is opt-in (OMH_PROOFREAD=1), so aura deadlines carry no prose debounce here.
         app.color_depth, app.motion = depth, motion
         return app, client, clock
 

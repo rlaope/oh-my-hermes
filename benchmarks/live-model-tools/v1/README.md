@@ -246,8 +246,27 @@ Spend for the whole round (baseline, four candidates, re-run, both product-ab
 arms and Hermes alone): $1.64 at og's eco rates (0.03 / 0.12 / 0.0006 per
 MTok), priced from the bench profile's `sessions` rows because og reports no
 cost. Not measured: any other DeepSeek id. The sentence lives in the family
-block, so V3.2, V4 Flash and V4 Pro receive it as well; V4.1 Flash does not,
-because its exact-model override replaces the family block.
+block, so V3.2, V4 Flash and V4 Pro receive it as well. V4.1 Flash's
+exact-model override replaces the family block, so the override was given the
+same sentence and measured on its own route (next section).
+
+### 2026-11-18 `deepseek-flash`: the same sentence in the V4.1 Flash override
+
+Route: og `deepseek/deepseek-flash` (the declared pointer, which projects to the
+`deepseek-v4.1-flash` exact-model override), effort `high`, a dedicated bench
+profile (`agent.max_turns` 150), Hermes Agent 0.23.1, OMH at `32571ffc6` (#2947
+merged) plus the arm's edit. Same six templates, 3 seeds x 5 reps, both arms in
+one window, gate written before the first run and identical to the eco round's.
+
+| Arm | What changed | Passed | Median tokens |
+| --- | --- | ---: | ---: |
+| V0 control | the override as shipped | 76 / 90 | 50,747 |
+| **V1 (shipped)** | override + the answer-shape sentence | **85 / 90** | 49,430 |
+
++9 (gate +5); PREDICATE 8 -> 15 / 15, REFERENCES 8 -> 10 / 15, the other four
+15 / 15 in both; tokens 0.97x; worst single run 1.35x the control's template
+median. Spend $0.34 at og list (0.15 / 0.60 / 0.003 per MTok). No product-ab
+re-run: the same sentence already showed no loss there in the family block.
 
 ### 2026-08-14 `hermes_current_session` live evaluation
 

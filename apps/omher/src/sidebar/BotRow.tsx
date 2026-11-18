@@ -80,6 +80,8 @@ export const plain = (raw: string) => {
 const flat = (t: string) =>
   t
     .replace(/```[\s\S]*?```/g, " ")
+    // list markers at a line's start ("- Fix PR", "* a", "+ b", "1. c", "- [ ] task"): the preview read "…work: - Fi…"
+    .replace(/^[ \t]*(?:[-*+]|\d{1,3}[.)])[ \t]+(?:\[[ xX]\][ \t]+)?/gm, "")
     .replace(/[`*_>#]/g, "")
     .replace(/\[([^\]]*)\]\([^)]*\)/g, "$1")
     .replace(/\s+/g, " ")

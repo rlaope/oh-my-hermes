@@ -1167,13 +1167,15 @@ class ArmTests(unittest.TestCase):
         5ddf4d61..., 742a3d95..., ce81f8ca.... Re-derived again when the unit
         scope became the whole checkout; the earlier scope (`src/`, `tests/`,
         the completion file) reproduces ad293b0f..., 94513d23...,
-        8c509a9f..., c8035549....
+        8c509a9f..., c8035549.... Re-derived again for `deepseek-v4.1-flash`
+        only, when its override gained the answer-shape sentence; the shipped
+        override without it reproduces 71bd7ad0....
         """
 
         recorded = {
             ("gpt-6-astra", "high", "gpt"): "dc2410dcc9e7c243f7deaa19481444e4ee4ca15648f4905c53e58b1a6cea645c",
             ("gpt-6.1-sol", "medium", "gpt"): "d46fdef21925fbea17832a4190d9e0d11118db80eb28b834a7377bdc5c47b0e8",
-            ("deepseek-v4.1-flash", "high", "deepseek"): "71bd7ad09207a2484bcbf887375b12cd13f7d0a238fae24eba46efbe57a85f6f",
+            ("deepseek-v4.1-flash", "high", "deepseek"): "945cfd3cc479d355cb9528ecf92c335c3d95f356a793f459f12b557278e3e464",
             ("claude-fable-5-1", "xhigh", "claude"): "b4ca61c10c8a4b9e98a77f2e3a407d98b7078f0c50821be496c747840167d7e0",
         }
         for (model, effort, family), digest in recorded.items():

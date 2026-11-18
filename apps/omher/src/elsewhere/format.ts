@@ -1,7 +1,7 @@
 // Small formatters for the read-only elsewhere view. Timestamps are seconds since epoch.
 import { hhmm, shortTime } from "../app/time";
 import { sourceName } from "../chat/parts/fallbacks";
-import { listText, t } from "../i18n";
+import { listText, t, type Key } from "../i18n";
 import { monthDay, weekdayName } from "../app/time";
 
 /** "38s", "4m", "1h 4m": how long an away session has been working. */
@@ -40,12 +40,14 @@ export function nextRun(r: { next_run_at: number | string | null; enabled: boole
   return t("ew.next", { when: monthDay(d) });
 }
 
-const CADENCE = ["hourly", "daily", "weekly", "monthly", "yearly"];
+const CADENCE = ["hourly", "daily", "weekly", "monthly", "yearly"] as const;
+const CADENCE_KEY: Record<(typeof CADENCE)[number], Key> = { hourly: "ew.hourly", daily: "ew.daily", weekly: "ew.weekly", monthly: "ew.monthly", yearly: "ew.yearly" };
 
-/** "Daily 09:00" → "daily", "Weekly (Mon 09:00)" → "weekly"; anything else (cron text, "every 30m") as is. */
+/** "Daily 09:00" → "daily" ("매일" in Korean), "Weekly (Mon 09:00)" → "weekly"; anything else (cron text, "every 30m")
+ *  as is. The word is the UI language's: a Korean panel read "다음 05:06 · daily" before. */
 export function cadence(schedule: string): string {
   const first = schedule.trim().split(/[\s(]/)[0]?.toLowerCase() ?? "";
-  return CADENCE.includes(first) ? first : schedule.trim();
+  return (CADENCE as readonly string[]).includes(first) ? t(CADENCE_KEY[first as (typeof CADENCE)[number]]) : schedule.trim();
 }
 
 /** "Slack", "Slack and Discord", "Slack, Discord and Telegram" (unique, in order). */
@@ -55,3 +57,34 @@ export function sourceList(sources: string[]): string {
 }
 
 export { sourceName };
+
+// ---- a routine run's status (Hermes' run states) ---------------------------------------------
+
+type Word = "done" | "failed" | "notDelivered" | "blocked";
+// Hermes' run states (the bridge's FAILED_RUN): delivery_failed = the job ran but its message could not be delivered;
+// blocked_config = the job's config stopped it from running.
+const WORD: Record<string, Word> = {
+  ok: "done",
+  success: "done",
+  done: "done",
+  completed: "done",
+  error: "failed",
+  failed: "failed",
+  failure: "failed",
+  delivery_failed: "notDelivered",
+  blocked_config: "blocked",
+};
+const WORD_KEY: Record<Word, Key> = { done: "rt.done", failed: "rt.failed", notDelivered: "rt.notDelivered", blocked: "rt.blocked" };
+
+export const statusWord = (status: string): string => WORD[status.trim().toLowerCase()] ?? (status.trim() || "done");
+export const isFailure = (status: string): boolean => {
+  const w = WORD[status.trim().toLowerCase()];
+  return w === "failed" || w === "notDelivered" || w === "blocked";
+};
+/** The status word in the current language; a status omher does not know stays as Hermes wrote it. Every place a
+ *  routine's last run shows (the chat line, Details › Routines, the Schedule tab) says it this way, never the raw
+ *  state ("ok", "delivery_failed"). */
+export const statusText = (status: string) => {
+  const w = WORD[status.trim().toLowerCase()] ?? (status.trim() ? null : "done");
+  return w ? t(WORD_KEY[w]) : status.trim();
+};

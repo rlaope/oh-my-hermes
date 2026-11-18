@@ -1644,7 +1644,12 @@ effort, in both lanes, the shared final order included.
   criterion, report the blocker from that evidence rather than widening the
   search, and leave a passed criterion closed; and the family block's
   closing rule, verbatim — make the smallest correct change, verify once,
-  and stop. Four sentences; under the per-block ceiling. Nothing in it asks
+  and stop; then the family block's answer-shape sentence, verbatim — the
+  answer file is one JSON object keyed by the task's own field names, not a
+  bare list and not a wrapper key of the model's own (measured on
+  `deepseek/deepseek-flash` 2026-11-18: 85/90 against 76/90 on the six
+  fixable live-model-tools templates). Five sentences, two of them
+  directive; under the per-block ceiling. Nothing in it asks
   the model for more output: the first wording asked the reply to carry
   "the verification output" and the blocker report to carry "the observed
   output", and the measurement below found that those two phrases cost 25%

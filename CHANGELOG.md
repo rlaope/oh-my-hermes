@@ -9,6 +9,9 @@ All notable changes will be documented here.
   MESSAGE]`), and a reopened Bot Chat showed that frame in your bubble. The bridge now shows only the typed text,
   keeps the "Sent to …" line under it, and drops stray frame lines from any other row.
 
+- **The Start Guide lists long-term memory among the main features.** It moves from the closing list to a fourth card
+  in "What OMH does" (owner request, 2026-11-18): nothing is remembered silently, and the next session gets only the
+  memories that fit its task, within a token budget. The closing list is now one row of three.
 - **omher: Run now no longer looks like the button you must press.** On an automation's detail it was the first,
   filled button; on the "New automation" card in chat, the first button. It is now a quiet text action at the end of
   the row, after Delete or Remove, and a click only asks "Run it now, outside its schedule?" with Run and Cancel.
@@ -171,7 +174,13 @@ All notable changes will be documented here.
   `locations`; with the sentence the six fixable templates passed 90 / 90 against 76 / 90 for a control run in the
   same window (3 seeds x 5 reps, gate fixed before the run). The held-out `product-ab` corpus showed no difference
   either way (19 / 40 against 20 / 40, one run per task). The block also reaches DeepSeek V3.2, V4 Flash and V4 Pro,
-  which were not measured; V4.1 Flash keeps its own override and does not get the sentence.
+  which were not measured; V4.1 Flash keeps its own override, which gains the same sentence in the entry below.
+
+- **DeepSeek V4.1 Flash units also write their answer in the shape the task asked for.** The V4.1 Flash override
+  replaces the `deepseek` family block, so it did not get the answer-shape sentence the family block gained; it now
+  carries the same sentence verbatim. On og `deepseek/deepseek-flash` the six fixable `live-model-tools` templates
+  passed 85 / 90 with it against 76 / 90 for the shipped override in the same window (3 seeds x 5 reps), at 0.97x
+  the tokens.
 
 - **A subagent that is not part of the running dag-ulw run no longer shows up inside it.** A subagent sent without
   the run's `[dag:<run>/<node>]` marker (a hand-made repair, a child of an earlier cancelled run) used to sit in layer
@@ -192,6 +201,15 @@ All notable changes will be documented here.
   `... install.ps1))) omher` on Windows); `curl -fsSL https://omher.app/omher | sh` stays the short form and now passes
   `omher`. The old argument `omher@beta` keeps working, because every omher app up to 0.2.13 sends it from its
   first-run Install button. The README and install docs drop "(beta)".
+- **omher's main screens say what they mean in every language and show whole names (1.0 usability pass).** A sidebar
+  search that finds no bot now shows its "No bot named …" line instead of drawing it under TERMINALS. Settings ›
+  Providers shows the in-use model whole (it was cut to "Sonnet …"), and a bot card's profile id no longer breaks at
+  its hyphen. Korean wraps between words everywhere, not inside one. A new thread has one empty line, not two. An
+  agent added in Settings › Agents is no longer offered in TERMINALS, where the shell could not start it. The side
+  panel's "now" / "working", a routine's cadence and its last run read in the UI language, never Hermes' raw
+  `ok` / `delivery_failed`, and a bot with nothing elsewhere gets a note that fits it. Copy that still named the old
+  SESSIONS section (search label, ⌘N, Settings › Agents, Plans) says Terminals, and the sidebar preview drops
+  markdown list markers. (#2960)
 - **omher: start a thread from the chat box with `./thread`, or from a "+ New thread" line under the bot.** In a
   bot's chat, `./` opens one row, `./thread`. `./thread` alone opens a new empty thread with its box focused, as the
   bot's right-click New thread does; `./thread <text>` opens one and sends the text there as its first message, which
@@ -228,6 +246,32 @@ All notable changes will be documented here.
   and `omh doctor` warned about it with a fix that hit the same refusal. Uninstall could not take back
   `plugins.enabled` or `memory.provider`. Comments are now ignored by that check; a quoted key in the YAML itself is
   still left alone.
+- **dag-ulw waits for a helper Hermes will resume instead of running its node twice** (Hermes 0.23.2
+  `delegation.auto_resume`). Hermes now continues a helper a usage limit or a restart stopped, under the same
+  subagent id and session. The delegation ledger took that second `subagent_start` for a duplicate and dropped it,
+  so the helper kept its old `error` stop and a node whose resumed run finished could not be settled accepted
+  (`child_reported_failure`); after a restart `omh_dag` also marked the node lost and handed it out again beside the
+  resumed helper. A repeated start with the same session now counts as a resume (the old stop is dropped, the
+  process it resumed in is recorded, and only a stop since the resume answers for it), and `omh_dag` reads Hermes'
+  own `resumable_subagents` record read-only: a node whose helper Hermes promised to resume stays running with
+  `waiting_resume` (`at`, `attempt`), is not offered again or named stuck, refuses a settle with
+  `child_resume_pending` until it reports, and every reply says not to dispatch it again. A Hermes without that
+  table, or a helper it gave up on, keeps the restart and failure rules as they were.
+
+- **The OMH TUI can proofread a draft on a local LanguageTool server.** Press Alt+P in the main or clarify text
+  field and issues are underlined; Alt+P on an underlined word offers replacements, Enter applies one (normal Ctrl+_
+  undo), Skip or Esc closes, and nothing is ever sent or rewritten on its own. Automatic checks after 600 ms of quiet
+  are off by default and turn on with `OMH_PROOFREAD=1`. Only plain HTTP to a loopback address is accepted
+  (`OMH_PROOFREAD_URL`, default `http://127.0.0.1:8081/v2/check`); masked fields, commands, code, images and paste
+  chips are never sent. OMH does not install or start LanguageTool (`brew install languagetool`). Contributed by
+  @DanRioDev (#2948).
+
+- **A listed backlog of code changes is made in the session, not split into child agents.** A request that hands
+  over four or more separate code changes and asks for all of them is still recognized, so it no longer lands on an
+  unrelated workflow because of one item's word. It now gets an answer in the same session (`code_backlog`): the
+  changes are made one after another, with no dag-ulw graph and no child agents. In paired runs on a five-part,
+  six-thousand-line job, splitting such a backlog finished later than Hermes alone at the same quality. Asking for
+  dag-ulw by name still runs the list as a graph.
 
 ## 4.0.8 - 2026-11-15
 

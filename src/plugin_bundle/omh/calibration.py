@@ -300,7 +300,10 @@ MODEL_HIGH_EFFORT_CALIBRATIONS: Final[dict[str, str]] = {
         "reasoning. Edit by exact literal strings — a unique match with exact whitespace — as this "
         "family's edit training expects. When the evidence already in hand cannot satisfy a "
         "criterion, report the blocker from that evidence rather than widening the search, and leave "
-        "a passed criterion closed. Make the smallest correct change, verify once, and stop."
+        "a passed criterion closed. Make the smallest correct change, verify once, and stop. Write "
+        "the answer file in the exact shape the task names: one JSON object whose top-level keys are "
+        "the field names the task uses (for example `locations`, `changed_paths`, `facts`), not a "
+        "bare list and not a wrapper key of your own."
     ),
 }
 MODEL_COMPOSITION_CALIBRATIONS: Final[dict[str, str]] = {
