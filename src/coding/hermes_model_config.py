@@ -8,7 +8,7 @@ checks only whether the key variable that entry names is set, never its value.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field as dataclass_field
 from hashlib import sha256
 import json
 import os
@@ -47,6 +47,9 @@ _HOST_GATED_KEY_ENV: Final = (
 )
 _COMMAND_TIMEOUT_SECONDS: Final = 10
 _APPLY_LOCK: Final = Lock()
+_ALIAS_KEY_PREFIX: Final = "model.aliases."
+_FALLBACK_KEY: Final = "fallback_model"
+_FALLBACK_FIELDS: Final = ("provider", "model")
 
 
 class HermesModelConfigError(RuntimeError):
@@ -122,6 +125,13 @@ class HermesModelConfigInspection:
     model_dot_aliases: Mapping[str, str]
     providers: tuple[ProviderPresence, ...]
     commands: tuple[tuple[str, ...], ...]
+    # The configured main model as `provider/model` (the bare model id when no
+    # provider is set), "" when unreadable or unsafe to echo.
+    main_model: str = ""
+    # Hermes' `fallback_model` as `config get` returned it: None, one
+    # `{provider, model}` dict, or a list of them. Never printed or serialized
+    # whole; only `describe_fallback_entries` renders it.
+    fallback_model: object = dataclass_field(default=None, repr=False)
 
 
 @dataclass(frozen=True, slots=True)
@@ -132,6 +142,25 @@ class HermesModelConfigPreview:
     before_aliases: Mapping[str, str]
     changes: Mapping[str, str | None]
     commands: tuple[tuple[str, ...], ...]
+    # The one `provider/model` the preview writes as `fallback_model`, or None
+    # when the run does not touch it.
+    fallback: str | None = None
+    before_fallback: object = dataclass_field(default=None, repr=False)
+
+    @property
+    def alias_commands(self) -> tuple[tuple[str, ...], ...]:
+        return tuple(command for command in self.commands if _is_alias_command(command))
+
+    @property
+    def fallback_commands(self) -> tuple[tuple[str, ...], ...]:
+        return tuple(command for command in self.commands if not _is_alias_command(command))
+
+    @property
+    def fallback_replaces_chain(self) -> bool:
+        """True when the write replaces a `fallback_model` list with one entry."""
+        return self.fallback is not None and isinstance(self.before_fallback, list) and bool(
+            self.before_fallback
+        )
 
 
 @dataclass(frozen=True, slots=True)
@@ -160,6 +189,10 @@ def inspect_hermes_model_config(
     )
     provider = _optional_json_value(
         (hermes, "config", "get", "model.provider", "--json"), env, commands
+    )
+    main_model = _optional_json_value((hermes, "config", "get", "model", "--json"), env, commands)
+    fallback_model = _optional_json_value(
+        (hermes, "config", "get", _FALLBACK_KEY, "--json"), env, commands
     )
     plugins = _optional_json_value(
         (hermes, "config", "get", "plugins", "--json"), env, commands
@@ -220,6 +253,8 @@ def inspect_hermes_model_config(
         model_dot_aliases=model_dot_aliases,
         providers=tuple(presence),
         commands=tuple(commands),
+        main_model=_main_model_ref(main_model, provider),
+        fallback_model=fallback_model,
     )
 
 
@@ -228,8 +263,13 @@ def preview_hermes_model_config(
     changes: Mapping[str, str | None],
     *,
     allow_collisions: bool = False,
+    fallback: str | None = None,
 ) -> HermesModelConfigPreview:
-    """Build exact nested-alias Hermes commands without executing them."""
+    """Build exact nested-alias Hermes commands without executing them.
+
+    `fallback` is one `provider/model` for Hermes' `fallback_model`; it is
+    previewed beside the alias changes and bound to the same config digest.
+    """
     if not inspection.config_check_ok:
         raise HermesModelConfigError("Hermes config check failed; mutation preview refused")
     commands: list[tuple[str, ...]] = []
@@ -244,27 +284,20 @@ def preview_hermes_model_config(
                 f"Hermes model alias {alias!r} already points to {existing!r}; collision refused"
             )
         if target is not None:
-            provider_id = target.split("/", 1)[0]
-            if (
-                _safe_metadata(target)
-                and provider_id == "custom"
-                and not _provider_has_auth(inspection, provider_id)
-            ):
-                raise HermesModelConfigError(
-                    f"Hermes model target {target!r} uses bare 'custom', which names no "
-                    "configured endpoint or credential pool; write it as '<name>/<model>' "
-                    "with the custom provider's configured name"
-                )
-            if not _safe_metadata(target) or not _provider_has_auth(inspection, provider_id):
-                raise HermesModelConfigError(
-                    _missing_auth_message(inspection, target, provider_id)
-                )
+            _require_target_auth(inspection, target)
         normalized[alias] = target
-        key = f"model.aliases.{alias}"
+        key = f"{_ALIAS_KEY_PREFIX}{alias}"
         if target is None:
             commands.append((inspection.hermes, "config", "unset", key))
         elif existing != target:
             commands.append((inspection.hermes, "config", "set", key, target))
+    if fallback is not None:
+        # The configured main model, and the `main` alias as this run leaves it.
+        main_refs = (
+            inspection.main_model,
+            normalized.get("main", inspection.model_dot_aliases.get("main")) or "",
+        )
+        commands.extend(_fallback_commands(inspection, fallback, main_refs))
     return HermesModelConfigPreview(
         hermes=inspection.hermes,
         config_path=inspection.config_path,
@@ -272,7 +305,93 @@ def preview_hermes_model_config(
         before_aliases=dict(inspection.model_dot_aliases),
         changes=normalized,
         commands=tuple(commands),
+        fallback=fallback,
+        before_fallback=inspection.fallback_model,
     )
+
+
+def split_fallback_target(target: str) -> tuple[str, str]:
+    """`provider/model` as the two `fallback_model` fields; the model may hold slashes."""
+    provider, separator, model = str(target or "").partition("/")
+    if (
+        not separator
+        or not provider
+        or not model
+        or any(character.isspace() for character in target)
+        or not _safe_metadata(target)
+    ):
+        raise HermesModelConfigError(
+            f"Hermes fallback model {target!r} must be a safe <provider>/<model> identifier"
+        )
+    return provider, model
+
+
+def fallback_entries(value: object) -> tuple[str, ...]:
+    """The `provider/model` of each entry in a `fallback_model` value, for display.
+
+    Entries that are not a dict with string provider and model, or whose text is
+    not safe metadata, are left out: the value is never echoed whole.
+    """
+    items = value if isinstance(value, list) else [value]
+    entries: list[str] = []
+    for item in items:
+        if not isinstance(item, dict):
+            continue
+        provider, model = item.get("provider"), item.get("model")
+        if isinstance(provider, str) and isinstance(model, str) and provider and model:
+            ref = f"{provider}/{model}"
+            if _safe_metadata(ref):
+                entries.append(ref)
+    return tuple(entries)
+
+
+def _fallback_commands(
+    inspection: HermesModelConfigInspection, target: str, main_refs: tuple[str, ...]
+) -> list[tuple[str, ...]]:
+    provider, model = split_fallback_target(target)
+    _require_target_auth(inspection, target)
+    if any(ref and ref.casefold() == target.casefold() for ref in main_refs):
+        raise HermesModelConfigError(
+            f"Hermes fallback model {target!r}: fallback is the same as the main model"
+        )
+    before = inspection.fallback_model
+    if isinstance(before, dict) and before.get("provider") == provider and before.get("model") == model:
+        return []
+    hermes = inspection.hermes
+    commands: list[tuple[str, ...]] = []
+    # One fallback replaces whatever is there, a chain included: never append.
+    # Unsetting first also drops fields of an old entry (a base_url) that would
+    # no longer belong to the new provider.
+    if before is not None:
+        commands.append((hermes, "config", "unset", _FALLBACK_KEY))
+    for field_name, value in zip(_FALLBACK_FIELDS, (provider, model)):
+        commands.append((hermes, "config", "set", f"{_FALLBACK_KEY}.{field_name}", value))
+    return commands
+
+
+def _is_alias_command(command: tuple[str, ...]) -> bool:
+    return len(command) > 3 and command[3].startswith(_ALIAS_KEY_PREFIX)
+
+
+def _main_model_ref(model: object, provider: object) -> str:
+    """The main model as `provider/model`, or "" when it cannot be named safely."""
+    if isinstance(model, dict):
+        model_id = next(
+            (
+                value.strip()
+                for name in ("default", "model")
+                if isinstance(value := model.get(name), str) and value.strip()
+            ),
+            "",
+        )
+    elif isinstance(model, str):
+        model_id = model.strip()
+    else:
+        model_id = ""
+    if not model_id:
+        return ""
+    ref = f"{provider}/{model_id}" if isinstance(provider, str) and provider else model_id
+    return ref if _safe_metadata(ref) else ""
 
 
 def apply_hermes_model_config(
@@ -297,6 +416,12 @@ def apply_hermes_model_config(
             raise HermesVerificationError(
                 f"Hermes alias {alias!r} verification mismatch: expected {target!r}, got {observed!r}"
             )
+    if preview.fallback is not None and not _fallback_matches(
+        inspection.fallback_model, preview.fallback
+    ):
+        raise HermesVerificationError(
+            f"Hermes fallback_model verification mismatch: expected {preview.fallback!r}"
+        )
     return HermesModelConfigReceipt(
         verified=True,
         before_digest=preview.config_digest,
@@ -312,13 +437,14 @@ def _apply_locked(
 ) -> HermesModelConfigInspection:
     expected_digest = preview.config_digest
     attempted: list[str] = []
+    in_fallback = False
     try:
-        for command in preview.commands:
+        for command in preview.alias_commands:
             if _config_digest(preview.config_path) != expected_digest:
                 raise ConfigDigestMismatchError(
                     "Hermes config changed during apply; remaining mutations refused"
                 )
-            alias = command[3].removeprefix("model.aliases.")
+            alias = command[3].removeprefix(_ALIAS_KEY_PREFIX)
             result = _run(command, env)
             if result.returncode != 0:
                 observed = _optional_json_mapping(
@@ -341,8 +467,15 @@ def _apply_locked(
             attempted.append(alias)
             expected_digest = _config_digest(preview.config_path)
             _require_expected_alias_state(preview, attempted, env)
+        if preview.fallback_commands:
+            in_fallback = True
+            _apply_fallback(preview, env, expected_digest)
         return inspect_hermes_model_config(hermes=preview.hermes, env=env)
     except HermesModelConfigError:
+        if in_fallback:
+            # `_apply_fallback` restored its own writes before re-raising, which
+            # can reformat the file; the alias rollback checks against that.
+            expected_digest = _config_digest(preview.config_path)
         _rollback_aliases(
             preview,
             attempted,
@@ -350,6 +483,111 @@ def _apply_locked(
             expected_config_digest=expected_digest,
         )
         raise
+
+
+def _apply_fallback(
+    preview: HermesModelConfigPreview,
+    env: Mapping[str, str] | None,
+    expected_digest: str,
+) -> None:
+    """Run the `fallback_model` commands; on any failure restore the prior value, then re-raise."""
+    try:
+        for command in preview.fallback_commands:
+            if _config_digest(preview.config_path) != expected_digest:
+                raise ConfigDigestMismatchError(
+                    "Hermes config changed during apply; remaining mutations refused"
+                )
+            result = _run(command, env)
+            if result.returncode != 0:
+                # A failed command may still have written; the rollback below
+                # decides from the observed value, so the digest is re-read first.
+                expected_digest = _require_owned_fallback(preview, env, expected_digest)
+                raise HermesCommandError(
+                    f"Hermes config command failed ({result.returncode}): {' '.join(command[1:])}"
+                )
+            expected_digest = _require_owned_fallback(preview, env, expected_digest)
+    except HermesModelConfigError:
+        _rollback_fallback(preview, env, expected_digest)
+        raise
+
+
+def _observed_fallback(
+    preview: HermesModelConfigPreview, env: Mapping[str, str] | None
+) -> object:
+    return _optional_json_value(
+        (preview.hermes, "config", "get", _FALLBACK_KEY, "--json"), env, []
+    )
+
+
+def _fallback_state_is_ours(preview: HermesModelConfigPreview, observed: object) -> bool:
+    """Whether `observed` is the prior value or a state this apply's own writes pass through."""
+    if observed == preview.before_fallback:
+        return True
+    if observed is None:
+        return True
+    if not isinstance(observed, dict) or not preview.fallback:
+        return False
+    provider, model = split_fallback_target(preview.fallback)
+    return set(observed) <= set(_FALLBACK_FIELDS) and observed.get("provider") in (
+        None,
+        provider,
+    ) and observed.get("model") in (None, model)
+
+
+def _require_owned_fallback(
+    preview: HermesModelConfigPreview,
+    env: Mapping[str, str] | None,
+    expected_digest: str,
+) -> str:
+    if not _fallback_state_is_ours(preview, _observed_fallback(preview, env)):
+        raise ConfigDigestMismatchError(
+            "Hermes fallback_model changed concurrently during apply; rollback required"
+        )
+    return _config_digest(preview.config_path)
+
+
+def _fallback_matches(observed: object, target: str) -> bool:
+    provider, model = split_fallback_target(target)
+    return (
+        isinstance(observed, dict)
+        and observed.get("provider") == provider
+        and observed.get("model") == model
+    )
+
+
+def _rollback_fallback(
+    preview: HermesModelConfigPreview,
+    env: Mapping[str, str] | None,
+    expected_digest: str,
+) -> None:
+    before = preview.before_fallback
+    observed = _observed_fallback(preview, env)
+    if not _fallback_state_is_ours(preview, observed):
+        raise ConfigDigestMismatchError(
+            "Hermes fallback_model ownership changed during apply; rollback refused"
+        )
+    if observed != before:
+        commands: list[tuple[str, ...]] = []
+        if observed is not None:
+            commands.append((preview.hermes, "config", "unset", _FALLBACK_KEY))
+        if before is not None:
+            commands.append(
+                (preview.hermes, "config", "set", _FALLBACK_KEY, json.dumps(before))
+            )
+        for command in commands:
+            if _config_digest(preview.config_path) != expected_digest:
+                raise ConfigDigestMismatchError(
+                    "Hermes config changed during rollback; remaining rollback refused"
+                )
+            result = _run(command, env)
+            if result.returncode != 0:
+                raise HermesVerificationError(
+                    f"Hermes rollback command failed ({result.returncode}): "
+                    f"{' '.join(command[1:2])} {_FALLBACK_KEY}"
+                )
+            expected_digest = _config_digest(preview.config_path)
+    if _observed_fallback(preview, env) != before:
+        raise HermesVerificationError("Hermes fallback_model rollback verification mismatch")
 
 
 def _require_expected_alias_state(
@@ -398,7 +636,7 @@ def _rollback_aliases(
                 "Hermes config changed during rollback; remaining rollback refused"
             )
         prior = preview.before_aliases.get(alias)
-        key = f"model.aliases.{alias}"
+        key = f"{_ALIAS_KEY_PREFIX}{alias}"
         command = (
             (preview.hermes, "config", "unset", key)
             if prior is None
@@ -705,6 +943,23 @@ def providers_entry_remedy(presence: ProviderPresence) -> str:
     else:
         remedy = "name the variable holding its key with key_env"
     return f"{remedy}, or add a pool with `hermes auth add {presence.provider_id}`"
+
+
+def _require_target_auth(inspection: HermesModelConfigInspection, target: str) -> None:
+    """Refuse a `provider/model` target whose provider has no observable auth."""
+    provider_id = target.split("/", 1)[0]
+    if (
+        _safe_metadata(target)
+        and provider_id == "custom"
+        and not _provider_has_auth(inspection, provider_id)
+    ):
+        raise HermesModelConfigError(
+            f"Hermes model target {target!r} uses bare 'custom', which names no "
+            "configured endpoint or credential pool; write it as '<name>/<model>' "
+            "with the custom provider's configured name"
+        )
+    if not _safe_metadata(target) or not _provider_has_auth(inspection, provider_id):
+        raise HermesModelConfigError(_missing_auth_message(inspection, target, provider_id))
 
 
 def _missing_auth_message(

@@ -21,6 +21,15 @@ def print_model_preview_review(
     if isinstance(changes, dict):
         for alias, model in changes.items():
             print(f"  {alias} -> {model}")
+    fallback = payload.get("fallback_model")
+    if isinstance(fallback, dict):
+        before = fallback.get("before")
+        shown = ", ".join(str(item) for item in before) if isinstance(before, list) and before else "(none)"
+        print(f"  fallback_model: {shown} -> {fallback.get('after', '')}")
+        if fallback.get("replaces_chain"):
+            print("  The existing fallback_model chain is replaced by this one entry.")
+        if fallback.get("unchanged"):
+            print("  fallback_model already holds this entry; nothing to write.")
 
 
 def print_model_activation_summary(

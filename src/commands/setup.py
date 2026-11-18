@@ -7136,9 +7136,20 @@ def _add_top_level_commands(sub) -> None:
         help="Preview one editable Hermes model alias. Repeat for multiple aliases.",
     )
     setup.add_argument(
+        "--fallback-model",
+        action="append",
+        default=[],
+        metavar="PROVIDER/MODEL",
+        help=(
+            "Preview one Hermes fallback_model (with --model-setup). Applied only by "
+            "--apply-model-config with the preview's digest; replaces a fallback chain "
+            "with this single entry."
+        ),
+    )
+    setup.add_argument(
         "--apply-model-config",
         action="store_true",
-        help="Apply the model-alias preview after explicit confirmation and digest binding.",
+        help="Apply the model-alias and fallback_model preview after explicit confirmation and digest binding.",
     )
     setup.add_argument(
         "--model-config-digest",

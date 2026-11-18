@@ -8,6 +8,7 @@ from typing import Callable
 
 from ..coding.hermes_model_config import (
     AliasCollisionError,
+    fallback_entries,
     HermesCommandError,
     HermesConfigUnreadableError,
     HermesModelConfigError,
@@ -22,6 +23,7 @@ from .language import tr
 from .model_setup_inputs import (
     classified_model_candidates,
     confirmed_model_ids,
+    fallback_model_target,
     model_alias_changes,
 )
 from .model_setup_overrides import load_category_overrides
@@ -100,6 +102,7 @@ def model_activation_result(
             details={"reason": str(exc)},
         )
     aliases = model_alias_changes(getattr(args, "model_alias", []))
+    fallback = fallback_model_target(getattr(args, "fallback_model", []))
 
     if getattr(args, "interactive", False):
         confirmed = _confirm_discovered_models(
@@ -152,21 +155,24 @@ def model_activation_result(
 
     preview = None
     apply_status: dict[str, object] = {
-        "status": "declined" if aliases else "not_requested",
+        "status": "declined" if aliases or fallback else "not_requested",
         "commands": [],
     }
     verification: dict[str, object] = {"status": "not_run", "verified": False}
     status = "unconfigured"
     next_action = "confirm_active_model"
 
-    if recommendation["status"] == "choice_required":
+    # A fallback-only run names no main alias, so an unresolved main choice
+    # does not block it; with aliases the choice still comes first.
+    if recommendation["status"] == "choice_required" and (aliases or not fallback):
         status = "choice_required"
-    elif aliases:
+    elif aliases or fallback:
         try:
             model_preview = dependencies.preview_hermes_model_config(
                 inspection,
                 aliases,
                 allow_collisions=bool(getattr(args, "allow_model_alias_collision", False)),
+                fallback=fallback,
             )
         except AliasCollisionError as exc:
             if not getattr(args, "interactive", False):
@@ -182,6 +188,7 @@ def model_activation_result(
                 inspection,
                 aliases,
                 allow_collisions=True,
+                fallback=fallback,
             )
         except HermesModelConfigError as exc:
             raise OmhError(str(exc)) from exc
@@ -341,7 +348,21 @@ def _model_preview_payload(preview) -> dict[str, object]:
         "config_path": str(preview.config_path),
         "config_digest": preview.config_digest,
         "changes": dict(preview.changes),
+        "fallback_model": _fallback_payload(preview),
         "commands": [list(command) for command in preview.commands],
+    }
+
+
+def _fallback_payload(preview) -> dict[str, object] | None:
+    """The fallback_model change before -> after; None when the run left it alone."""
+    if preview.fallback is None:
+        return None
+    before = list(fallback_entries(preview.before_fallback))
+    return {
+        "before": before,
+        "after": preview.fallback,
+        "replaces_chain": preview.fallback_replaces_chain,
+        "unchanged": not preview.fallback_commands,
     }
 
 
@@ -351,6 +372,8 @@ def _model_inspection_payload(inspection) -> dict[str, object]:
         "config_digest": inspection.config_digest,
         "config_check_ok": inspection.config_check_ok,
         "aliases": dict(inspection.model_dot_aliases),
+        "main_model": inspection.main_model,
+        "fallback_model": list(fallback_entries(inspection.fallback_model)),
         "providers": [
             {
                 "provider_id": provider.provider_id,
