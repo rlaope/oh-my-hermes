@@ -244,7 +244,7 @@ class InstallerUninstallTests(unittest.TestCase):
             ("--purge",),
             ("--dry-run",),
             ("--purge", "--dry-run"),
-            ("--uninstall", "omher@beta"),
+            ("--uninstall", "omher"),
             ("omher@beta", "--uninstall"),
             ("--uninstall", "--force"),
             ("--uninstall", "--all"),
@@ -257,7 +257,7 @@ class InstallerUninstallTests(unittest.TestCase):
                 self.assertEqual(result.returncode, 2, result.stdout + result.stderr)
                 self.assertIn("omh installer:", result.stderr)
                 self.assertIn("--uninstall [--purge] [--dry-run]", result.stderr)
-                self.assertIn("omher@beta", result.stderr)
+                self.assertIn("sh -s -- omher\n", result.stderr)
                 self.assertEqual(self._calls("omh-argv"), [])
                 self._assert_nothing_installed()
                 self.assertEqual(self._home_files(), before)

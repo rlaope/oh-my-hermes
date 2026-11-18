@@ -1,7 +1,7 @@
-# Behavioural coverage for install.ps1's omher@beta helpers. Like the other
+# Behavioural coverage for install.ps1's omher helpers. Like the other
 # files here it parses install.ps1 and evaluates only the function
 # definitions, so no installer flow runs and no request leaves the host.
-#   Read-OmhInstallerArgs  : no argument, omher@beta, and a refused unknown one
+#   Read-OmhInstallerArgs  : no argument, omher (and its pre-1.0 name omher@beta), and a refused unknown one
 #   Select-OmherAssetUrl   : newest omher-v* release only, never the OMH package
 #   Get-OmherInstallerArguments : the NSIS silent switches
 #   Get-OmhHermesRoot      : a profile HERMES_HOME resolves to its root (the bridge's rule)
@@ -18,7 +18,7 @@ $script:OmhFailures = @()
 
 function Write-OmhLine { param([string]$Text = '') $script:OmhLines += $Text }
 $script:OmhLines = @()
-$OmhOmherBetaOneLiner = '& ([scriptblock]::Create((irm https://raw.githubusercontent.com/rlaope/oh-my-hermes/main/install.ps1))) omher@beta'
+$OmhOmherOneLiner = '& ([scriptblock]::Create((irm https://raw.githubusercontent.com/rlaope/oh-my-hermes/main/install.ps1))) omher'
 $OmhUninstallOneLiner = '& ([scriptblock]::Create((irm https://raw.githubusercontent.com/rlaope/oh-my-hermes/main/install.ps1))) --uninstall [--purge] [--dry-run]'
 
 function Stop-OmhInstall {
@@ -74,17 +74,18 @@ try {
 
     # -- arguments ---------------------------------------------------------------------------
     Assert-Omh 'no argument keeps the plain install' (Read-OmhInstallerArgs @()) $false
-    Assert-Omh 'omher@beta opts in' (Read-OmhInstallerArgs @('omher@beta')) $true
+    Assert-Omh 'omher opts in' (Read-OmhInstallerArgs @('omher')) $true
+    Assert-Omh 'omher@beta (every app up to 0.2.13 sends it) still opts in' (Read-OmhInstallerArgs @('omher@beta')) $true
     $refused = $false
     try { Read-OmhInstallerArgs @('omher@stable') | Out-Null } catch { $refused = $true }
     Assert-Omh 'an unknown argument is refused' $refused $true
     Assert-Omh 'the refusal names the argument' ([bool]($script:OmhLines -match "unknown argument 'omher@stable'")) $true
-    Assert-Omh 'the refusal shows the one-liner' ([bool]($script:OmhLines -match [regex]::Escape($OmhOmherBetaOneLiner))) $true
+    Assert-Omh 'the refusal shows the one-liner' ([bool]($script:OmhLines -match [regex]::Escape($OmhOmherOneLiner))) $true
 
     # -- the scriptblock form really hands the argument over ----------------------------------
     $probe = [scriptblock]::Create('return @($args)')
-    $seen = & $probe omher@beta
-    Assert-Omh 'scriptblock form passes omher@beta' ($seen -join ',') 'omher@beta'
+    $seen = & $probe omher
+    Assert-Omh 'scriptblock form passes omher' ($seen -join ',') 'omher'
 
     # -- asset selection ---------------------------------------------------------------------
     $app = New-OmhRelease 'omher-v0.1.0' @('omher-0.1.0-macos-arm64.dmg', 'omher-0.1.0-windows-x64-setup.exe', 'omher-0.1.0-windows-x64.msi')
@@ -153,7 +154,7 @@ try {
     } elseif ($script:OmhFailures.Count -gt 0) {
         throw ($script:OmhFailures -join "`n")
     } else {
-        Write-Host 'PASS: omher@beta helper cases'
+        Write-Host 'PASS: omher helper cases'
     }
 } catch {
     [Console]::Error.WriteLine("FAIL: $($_.Exception.Message)")
