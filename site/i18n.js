@@ -65,6 +65,12 @@ window.OMH_I18N = {
       ja: "ドキュメント",
       zh: "文档"
     },
+    "nav.guide": {
+      en: "Start Guide",
+      ko: "시작 가이드",
+      ja: "スタートガイド",
+      zh: "入门指南"
+    },
     "hero.badge": {
       en: "For Hermes Agent · v4.0.8",
       ko: "Hermes Agent 전용 · v4.0.8",
