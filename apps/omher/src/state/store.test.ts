@@ -412,6 +412,25 @@ describe("chat.opened merging", () => {
     expect(s.chats.kami.messages.map((m) => m.id)).toEqual(["srv-1"]);
   });
 
+  it("a reopened chat keeps a steered row's Sent-to line (the bridge marks it; the text is what was typed)", () => {
+    const s = reduce(initialState(), {
+      type: "chat.opened",
+      bot: "kami",
+      res: opened({
+        messages: [
+          { id: "srv-1", role: "user", text: "fix the terminal", ts: T0 / 1000 },
+          { id: "srv-2", role: "user", text: "it looks cut off", ts: T0 / 1000 + 5, steered: true },
+        ],
+      }),
+      now: T0 + 2000,
+    });
+    const rows = s.chats.kami.items.flatMap((i) => (i.kind === "user" ? [i] : []));
+    expect(rows.map((i) => [i.text, i.steered])).toEqual([
+      ["fix the terminal", undefined],
+      ["it looks cut off", true],
+    ]);
+  });
+
   it("running chat starts a turn; idle chat closes a stale one", () => {
     let s = reduce(initialState(), { type: "chat.opened", bot: "kami", res: opened({ running: true }), now: T0 });
     expect(s.chats.kami.turn).not.toBeNull();

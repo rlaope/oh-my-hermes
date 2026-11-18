@@ -814,6 +814,7 @@ function applyOpened(chat: Chat, res: ChatOpenResult, now: number, bot: string, 
     text: m.text,
     ...(m.reply_to ? { reply: replyOf(m.reply_to) } : {}),
     ...(m.watch ? { watch: m.watch } : {}),
+    ...(m.steered && m.role === "user" ? { steered: true } : {}),
   }));
   const ids = new Set(server.map((m) => m.id));
   const lastServerTs = server.length ? server[server.length - 1].ts : 0;
