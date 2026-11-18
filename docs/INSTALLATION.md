@@ -2671,9 +2671,11 @@ The guided flow is deliberately staged:
    entries to undo a fallback write; aliases written in the same apply are
    still rolled back.
 4. **Apply.** No preview writes. An apply requires both
-   `--apply-model-config` and the preview's `--model-config-digest`; an
-   interactive flow asks after showing the preview. Hermes' own `config set`
-   command owns the mutation.
+   `--apply-model-config` and `--model-config-digest` set to the preview's
+   `approval_digest`, which names the Hermes config file and the exact change
+   shown (every alias and fallback write), so approving one preview never
+   applies a different change; an interactive flow asks after showing the
+   preview. Hermes' own `config set` command owns the mutation.
 5. **Verify.** The adapter re-inspects the native Hermes alias and reports a
    verified receipt. Preview, apply, and verification remain separate states.
 
@@ -2689,12 +2691,14 @@ omh setup --model-setup \
 ```
 
 Show the resulting `steps.model_activation.preview.changes` and
-`config_digest` to the user. Apply only after approval by repeating the same
+`fallback_model` to the user. Apply only after approval by repeating the same
 arguments with:
 
 ```sh
---apply-model-config --model-config-digest <preview-digest>
+--apply-model-config --model-config-digest <preview approval_digest>
 ```
+
+A digest from a preview of different arguments is refused before any write.
 
 An explicit unavailable model returns `choice_required` and never silently
 falls through. A missing recommended model is different: setup remains usable

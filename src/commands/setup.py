@@ -7158,7 +7158,7 @@ def _add_top_level_commands(sub) -> None:
     setup.add_argument(
         "--model-config-digest",
         default="",
-        help="Expected Hermes config digest printed by the model-alias preview.",
+        help="The preview's approval_digest: it names the Hermes config file and the exact previewed change.",
     )
     setup.add_argument(
         "--allow-model-alias-collision",

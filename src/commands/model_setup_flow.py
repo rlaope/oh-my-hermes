@@ -215,14 +215,20 @@ def model_activation_result(
                 raise OmhError(model_preview.fallback_refusal)
             expected_digest = str(getattr(args, "model_config_digest", "") or "")
             if getattr(args, "interactive", False) and not expected_digest:
-                expected_digest = model_preview.config_digest
+                expected_digest = model_preview.approval_digest
             if not expected_digest:
                 raise OmhError("--apply-model-config requires --model-config-digest from this preview.")
+            # The digest names the file AND the change the person approved: a
+            # preview of one change never authorizes a different one.
+            if expected_digest != model_preview.approval_digest:
+                raise OmhError(
+                    "expected digest does not match the preview digest: rerun the preview with the "
+                    "same arguments and pass its approval_digest"
+                )
+            expected_digest = model_preview.config_digest
             if getattr(args, "dry_run", False):
                 # A dry run never spawns a mutating Hermes command: report the
                 # exact argv the apply would run, checked against the same digest.
-                if expected_digest != model_preview.config_digest:
-                    raise OmhError("expected digest does not match the preview digest")
                 apply_status = {
                     "status": "dry_run",
                     "commands": [list(command) for command in model_preview.commands],
@@ -351,6 +357,8 @@ def _model_preview_payload(preview) -> dict[str, object]:
     return {
         "config_path": str(preview.config_path),
         "config_digest": preview.config_digest,
+        # What `--model-config-digest` must name to apply exactly this preview.
+        "approval_digest": preview.approval_digest,
         "changes": dict(preview.changes),
         "fallback_model": _fallback_payload(preview),
         "commands": [list(command) for command in preview.commands],

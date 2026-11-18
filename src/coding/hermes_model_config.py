@@ -183,6 +183,23 @@ class HermesModelConfigPreview:
         return _legacy_present(self.before_fallback)
 
     @property
+    def approval_digest(self) -> str:
+        """What an approval of this preview names: the config file AND the exact change.
+
+        `config_digest` alone only says the file did not move, so a preview of
+        one change could authorize another on the same file. This hashes the
+        file digest with every command the apply runs (without the `hermes`
+        path, which is not part of the change), so the same digest only
+        applies the same change.
+        """
+        payload = json.dumps(
+            {"config_digest": self.config_digest, "commands": [list(command[1:]) for command in self.commands]},
+            sort_keys=True,
+            separators=(",", ":"),
+        )
+        return sha256(payload.encode("utf-8")).hexdigest()
+
+    @property
     def alias_commands(self) -> tuple[tuple[str, ...], ...]:
         return tuple(command for command in self.commands if _is_alias_command(command))
 
@@ -586,7 +603,13 @@ def _apply_locked(
         if preview.fallback_commands:
             in_fallback = True
             _apply_fallback(preview, env, expected_digest)
-        return inspect_hermes_model_config(hermes=preview.hermes, env=env)
+        inspection = inspect_hermes_model_config(hermes=preview.hermes, env=env)
+        if preview.fallback is not None and inspection.fallback_read_error is not None:
+            # Inside the rollback boundary, so the aliases this apply wrote are
+            # undone as the docs promise; the fallback write is never replayed.
+            in_fallback = True
+            raise HermesVerificationError(_fallback_unverified_message(preview))
+        return inspection
     except HermesModelConfigError:
         if in_fallback:
             # A fallback write that failed may still have changed the file;
@@ -640,6 +663,12 @@ def _apply_fallback(
 
 
 def _fallback_unverified_message(preview: HermesModelConfigPreview) -> str:
+    if not preview.fallback_commands:
+        # The chain already was this one entry, so the apply wrote no fallback.
+        return (
+            f"OMH wrote no fallback (Hermes' chain already was {preview.fallback!r}) but could not "
+            "read it back to verify; check it with `hermes fallback list`."
+        )
     return (
         f"OMH made one write (config set {_FALLBACK_PROVIDERS_KEY}) but could not verify "
         f"that Hermes' fallback chain is only {preview.fallback!r}; check it with "

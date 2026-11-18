@@ -16,7 +16,7 @@ def print_model_preview_review(
     print("")
     print(color(tr(language, "model_setup_preview_title"), "1;32", use_color()))
     print(f"  config: {payload.get('config_path', '')}")
-    print(f"  digest: {payload.get('config_digest', '')}")
+    print(f"  digest: {payload.get('approval_digest', '') or payload.get('config_digest', '')}")
     changes = payload.get("changes", {})
     if isinstance(changes, dict):
         for alias, model in changes.items():

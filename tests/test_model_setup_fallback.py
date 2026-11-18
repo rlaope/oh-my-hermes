@@ -79,6 +79,13 @@ def read_fault(key):
     if os.environ.get("HERMES_BAD_JSON") == key:
         print("not json")
         raise SystemExit(0)
+    name, _, nth = os.environ.get("HERMES_FAIL_READ_FROM", "").partition(":")
+    if name == key:
+        counter = home / f"reads-{key}"
+        count = int(counter.read_text()) + 1 if counter.exists() else 1
+        counter.write_text(str(count))
+        if count >= int(nth):
+            raise SystemExit(9)
 
 if args == ["config", "path"]:
     print(state_path)
@@ -169,6 +176,12 @@ class FallbackModelTests(unittest.TestCase):
 
     def args(self, *extra: str):
         return build_parser().parse_args(["setup", "--model-setup", *extra])
+
+    def approval(self, *preview_args: str) -> str:
+        """The `approval_digest` a preview with these arguments shows (what an apply must name)."""
+        return model_activation_result(
+            self.args(*preview_args), language="en", dependencies=self.dependencies()
+        )["preview"]["approval_digest"]
 
     def dependencies(self, env: dict[str, str] | None = None) -> ModelSetupFlowDependencies:
         run_env = env or self.env
@@ -318,7 +331,7 @@ class FallbackModelTests(unittest.TestCase):
     def test_apply_writes_one_fallback_providers_list(self) -> None:
         args = self.args(
             "--fallback-model", "alpha/backup", "--apply-model-config", "--model-config-digest",
-            self.inspect().config_digest,
+            self.approval("--fallback-model", "alpha/backup"),
         )
 
         result = model_activation_result(args, language="en", dependencies=self.dependencies())
@@ -330,7 +343,9 @@ class FallbackModelTests(unittest.TestCase):
         self.assertEqual(self.state()["model"], _BASE_CONFIG["model"])
 
     def test_apply_writes_the_alias_and_the_fallback_under_one_digest(self) -> None:
-        digest = self.inspect().config_digest
+        digest = self.approval(
+            "--confirm-model", "alpha/main-1", "--model-alias", "main=alpha/main-1", "--fallback-model", "alpha/backup",
+        )
         args = self.args(
             "--confirm-model", "alpha/main-1", "--model-alias", "main=alpha/main-1", "--fallback-model", "alpha/backup",
             "--apply-model-config", "--model-config-digest", digest,
@@ -353,6 +368,53 @@ class FallbackModelTests(unittest.TestCase):
 
         self.assertEqual(self.writes(), [])
         self.assertNotIn("fallback_providers", self.state())
+
+    def test_a_preview_of_one_fallback_never_applies_another(self) -> None:
+        # The reviewer's repro: preview fb-1, then apply fb-2 with fb-1's digest on an unchanged file.
+        digest = self.approval("--fallback-model", "alpha/fb-1")
+        args = self.args("--fallback-model", "alpha/fb-2", "--apply-model-config", "--model-config-digest", digest)
+
+        with self.assertRaisesRegex(OmhError, "does not match the preview digest"):
+            model_activation_result(args, language="en", dependencies=self.dependencies())
+
+        self.assertEqual(self.writes(), [])
+        self.assertNotIn("fallback_providers", self.state())
+
+    def test_a_preview_of_one_alias_never_applies_another(self) -> None:
+        digest = self.approval("--confirm-model", "alpha/main-1", "--model-alias", "main=alpha/main-1")
+        args = self.args(
+            "--confirm-model", "alpha/main-2", "--model-alias", "main=alpha/main-2",
+            "--apply-model-config", "--model-config-digest", digest,
+        )
+
+        with self.assertRaisesRegex(OmhError, "does not match the preview digest"):
+            model_activation_result(args, language="en", dependencies=self.dependencies())
+
+        self.assertEqual(self.writes(), [])
+
+    def test_the_bare_config_digest_no_longer_approves_a_change(self) -> None:
+        args = self.args(
+            "--fallback-model", "alpha/backup", "--apply-model-config", "--model-config-digest",
+            self.inspect().config_digest,
+        )
+
+        with self.assertRaisesRegex(OmhError, "does not match the preview digest"):
+            model_activation_result(args, language="en", dependencies=self.dependencies())
+
+        self.assertEqual(self.writes(), [])
+
+    def test_the_approval_digest_names_the_file_and_the_change(self) -> None:
+        inspection = self.inspect()
+        one = preview_hermes_model_config(inspection, {}, fallback="alpha/fb-1")
+        other = preview_hermes_model_config(inspection, {}, fallback="alpha/fb-2")
+        again = preview_hermes_model_config(self.inspect(), {}, fallback="alpha/fb-1")
+
+        self.assertEqual(one.config_digest, other.config_digest)
+        self.assertNotEqual(one.approval_digest, other.approval_digest)
+        self.assertEqual(one.approval_digest, again.approval_digest)
+        self.write_config({**_BASE_CONFIG, "plugins": {"enabled": []}})
+        moved = preview_hermes_model_config(self.inspect(), {}, fallback="alpha/fb-1")
+        self.assertNotEqual(one.approval_digest, moved.approval_digest)
 
     def test_apply_refuses_when_the_config_drifted_after_the_preview(self) -> None:
         inspection = self.inspect()
@@ -396,7 +458,7 @@ class FallbackModelTests(unittest.TestCase):
 
     def test_existing_fallback_providers_are_previewed_and_replaced_by_one_entry(self) -> None:
         self.write_config({**_BASE_CONFIG, "fallback_providers": _CHAIN})
-        digest = self.inspect().config_digest
+        digest = self.approval("--fallback-model", "alpha/backup")
 
         preview = model_activation_result(
             self.args("--fallback-model", "alpha/backup"), language="en", dependencies=self.dependencies()
@@ -601,6 +663,45 @@ class FallbackModelTests(unittest.TestCase):
                 self.assertIn("OMH made one write", str(raised.exception))
                 self.assertIn("hermes fallback list", str(raised.exception))
                 self.assertEqual(self.writes(), [_SET_BACKUP])
+
+    def test_a_failed_read_on_a_no_op_apply_never_claims_a_write(self) -> None:
+        # The chain already is the approved entry, so the apply writes nothing; its read-back then fails.
+        self.write_config({**_BASE_CONFIG, "fallback_providers": [{"provider": "alpha", "model": "backup"}]})
+        inspection = self.inspect()
+        preview = preview_hermes_model_config(inspection, {}, fallback="alpha/backup")
+        self.assertEqual(preview.fallback_commands, ())
+
+        with self.assertRaises(HermesVerificationError) as raised:
+            apply_hermes_model_config(
+                preview,
+                confirmed=True,
+                expected_config_digest=inspection.config_digest,
+                env={**self.env, "HERMES_FAIL_READ": "fallback_providers"},
+            )
+
+        self.assertIn("OMH wrote no fallback", str(raised.exception))
+        self.assertNotIn("OMH made one write", str(raised.exception))
+        self.assertEqual(self.writes(), [])
+
+    def test_a_late_read_failure_still_rolls_back_the_alias(self) -> None:
+        # Reads of fallback_model: 1 preview, 2 the write's own check, 3 the receipt inspection.
+        inspection = self.inspect()
+        preview = preview_hermes_model_config(
+            inspection, {"main": "alpha/main-1"}, fallback="alpha/backup"
+        )
+        (self.home / "reads-fallback_model").write_text("1")
+
+        with self.assertRaises(HermesVerificationError) as raised:
+            apply_hermes_model_config(
+                preview,
+                confirmed=True,
+                expected_config_digest=inspection.config_digest,
+                env={**self.env, "HERMES_FAIL_READ_FROM": "fallback_model:3"},
+            )
+
+        self.assertIn("OMH made one write", str(raised.exception))
+        self.assertNotIn("main", self.state()["model"]["aliases"])
+        self.assertEqual(self.state()["fallback_providers"], _BACKUP)
 
     def test_a_failed_fallback_write_also_restores_the_alias_written_before_it(self) -> None:
         inspection = self.inspect()
