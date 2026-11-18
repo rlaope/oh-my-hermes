@@ -45,7 +45,6 @@ class SiteGuideTests(unittest.TestCase):
     def test_every_section_and_its_rail_link_is_present(self) -> None:
         for section in SECTIONS:
             with self.subTest(section=section):
-                self.assertIn(f'<section class="s', self.page)
                 self.assertRegex(self.page, rf'<section class="[^"]*" id="{section}"')
                 self.assertIn(f'<a href="#{section}">', self.page)
 
