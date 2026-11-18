@@ -1435,7 +1435,9 @@ pairing so a benchmark claim can never mix in other prompt changes.
   context across tool results only on a reasoning-capable route; otherwise
   use the same explicit goal/boundaries/criteria without thinking tags; edit
   by exact literal strings (a unique match with exact whitespace); make
-  the smallest correct change, verify once, stop.
+  the smallest correct change, verify once, stop; write the answer file in
+  the exact shape the task names (one JSON object keyed by the task's own
+  field names, not a bare list and not a wrapper key of the model's own).
 - **What OMH injects (composer):** keep the DeepSeek version and thinking
   mode explicit in the prepared route; no synthetic thinking instructions on
   non-reasoning routes; validate once and stop. The family residue of the
