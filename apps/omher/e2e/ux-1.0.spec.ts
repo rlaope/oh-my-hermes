@@ -55,6 +55,8 @@ test("Details on a bot with nothing elsewhere: no Slack-thread note, and its tim
   await page.getByTestId("bot-omh-tui").click();
   await expect(page.getByTestId("bot-omh-tui")).toHaveAttribute("aria-current", "true");
   await page.getByTestId("panel-button").click();
+  // the panel opens on the tab used last (Plans on a fresh start): pick Details
+  await page.getByTestId("panel-tab-details").click();
   const panel = page.getByTestId("details-panel");
   await expect(panel.getByTestId("where-row")).toHaveCount(1);
   // "now" was English in every language
@@ -69,6 +71,7 @@ test("Details on a bot with nothing elsewhere: no Slack-thread note, and its tim
 test("Details › Routines and the Schedule tab say cadence and last run in the UI language", async ({ page }) => {
   await open(page, "ko");
   await page.getByTestId("panel-button").click();
+  await page.getByTestId("panel-tab-details").click();
   const routines = page.getByTestId("details-panel").getByTestId("routine-row");
   await expect(routines).toHaveCount(2);
   await expect(routines.nth(0)).toContainText("매일");
