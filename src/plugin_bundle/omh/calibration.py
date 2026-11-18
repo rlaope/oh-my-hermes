@@ -247,6 +247,33 @@ MODEL_HIGH_EFFORT_CALIBRATIONS: Final[dict[str, str]] = {
         "assumption and proceed. Size tests to the change: a reversible, low-impact edit that mirrors "
         "its implementation needs no new test, and a green check is re-run only when its inputs changed."
     ),
+    # GPT-6.2 Astra and GPT-6.2 Sol: Astra's wording, byte for byte (owner
+    # decision, 2026-11-18: no new sentence). The latest-model guide's 6.2
+    # traits are that writing is more concise by default, that the model may
+    # propose a next step and wait for confirmation when intent is unclear,
+    # that it writes efficient code, and that it can carry reasoning
+    # shorthand into a final answer. The second is what Astra's "state the
+    # assumption and proceed" clause already counters; the first and third
+    # need no counter, and the fourth meets the structured return every unit
+    # already ends on. The guide's "persist until you've completed the task"
+    # and "verify that it has completed the requested work" prompts push the
+    # model to keep working and are not imported. Editorial and unmeasured
+    # for 6.2; the Codex client gives both ids a new base prompt rather than
+    # Astra's, so a `family` vs `optimized` pair is the named follow-up.
+    "gpt-6.2-astra": (
+        "High-effort calibration: the user's instructions outrank any skill or guideline text, and "
+        "the numbered criteria are the complete task — nothing outside them is owed. Ask one focused "
+        "question only when a missing input would materially change the result; otherwise state the "
+        "assumption and proceed. Size tests to the change: a reversible, low-impact edit that mirrors "
+        "its implementation needs no new test, and a green check is re-run only when its inputs changed."
+    ),
+    "gpt-6.2-sol": (
+        "High-effort calibration: the user's instructions outrank any skill or guideline text, and "
+        "the numbered criteria are the complete task — nothing outside them is owed. Ask one focused "
+        "question only when a missing input would materially change the result; otherwise state the "
+        "assumption and proceed. Size tests to the change: a reversible, low-impact edit that mirrors "
+        "its implementation needs no new test, and a green check is re-run only when its inputs changed."
+    ),
     # DeepSeek V4.1 Flash, per the vendor's API guides and model card
     # (2026-09-10): thinking on by default, reasoning_content returned on
     # every tool-calling turn, post-trained on synthesized long-horizon agent
@@ -299,6 +326,28 @@ MODEL_COMPOSITION_CALIBRATIONS: Final[dict[str, str]] = {
     # GPT-6.1 Sol: Astra's composer wording, byte for byte, on the evidence
     # above; its documented floor is `low`, as Astra's is.
     "gpt-6.1-sol": (
+        "Composition calibration: write the user's intent into each unit prompt above any skill "
+        "text, so a delegate that meets conflicting guidance follows the unit contract rather than "
+        "pausing. Delegate every unit that is independent of the work you keep — this model "
+        "delegates less than a fanout expects, and an undelegated independent unit is latency you "
+        "chose. Set each unit's effort from its task state: the documented floor for routine "
+        "follow-ups, deeper only while a criterion holds unresolved hard reasoning or contradictory "
+        "evidence, and a change of effort lands on the next prepared unit rather than on a claimed "
+        "mid-conversation switch."
+    ),
+    # GPT-6.2 Astra and GPT-6.2 Sol: Astra's composer wording, byte for byte,
+    # on the evidence above; the documented floor of both is `low`.
+    "gpt-6.2-astra": (
+        "Composition calibration: write the user's intent into each unit prompt above any skill "
+        "text, so a delegate that meets conflicting guidance follows the unit contract rather than "
+        "pausing. Delegate every unit that is independent of the work you keep — this model "
+        "delegates less than a fanout expects, and an undelegated independent unit is latency you "
+        "chose. Set each unit's effort from its task state: the documented floor for routine "
+        "follow-ups, deeper only while a criterion holds unresolved hard reasoning or contradictory "
+        "evidence, and a change of effort lands on the next prepared unit rather than on a claimed "
+        "mid-conversation switch."
+    ),
+    "gpt-6.2-sol": (
         "Composition calibration: write the user's intent into each unit prompt above any skill "
         "text, so a delegate that meets conflicting guidance follows the unit contract rather than "
         "pausing. Delegate every unit that is independent of the work you keep — this model "

@@ -49,7 +49,7 @@ class ModelRoutingStatusTests(unittest.TestCase):
         )
         _write(
             discovery_home / ".codex" / "sessions" / "seen.jsonl",
-            json.dumps({"payload": {"model_provider": "openai", "model": "gpt-6.1-sol"}}) + "\n",
+            json.dumps({"payload": {"model_provider": "openai", "model": "gpt-6.2-sol"}}) + "\n",
         )
         _write(
             hermes_home / "config.yaml",
@@ -78,18 +78,18 @@ class ModelRoutingStatusTests(unittest.TestCase):
         )
         self.assertEqual(
             [entry["model_id"] for entry in payload["models"]["discovered_only"]],
-            ["gpt-6.1-sol"],
+            ["gpt-6.2-sol"],
         )
         # A discovered-only model is not confirmed. Since 2026-10-13 `deep`
         # ends on Kimi K3.1 Pro and resolves, so the owner-default case is
-        # unspecified-low: it names gpt-6.1-sol and still falls through, and
-        # unspecified-high reports gpt-6.1-sol as its missing head.
+        # unspecified-low: it names gpt-6.2-sol and still falls through, and
+        # unspecified-high reports gpt-6.2-sol as its missing head.
         low = payload["maestro"]["categories"]["unspecified-low"]
         self.assertEqual(low["status"], "owner_default")
         self.assertEqual(low["missing_head"], "glm-5.3")
         unspecified = payload["maestro"]["categories"]["unspecified-high"]
         self.assertEqual(unspecified["selected_model"], "kimi-k3.1-pro")
-        self.assertEqual(unspecified["missing_head"], "gpt-6.1-sol")
+        self.assertEqual(unspecified["missing_head"], "gpt-6.2-sol")
         self.assertIn("metadata", payload["claim_boundary"])
         self.assertNotIn("execution confirmed", json.dumps(payload).lower())
 

@@ -587,6 +587,10 @@ pairing so a benchmark claim can never mix in other prompt changes.
   gated to `*-sol` (GPT-6 Sol and GPT-6.1 Sol included, by decision) and the Hermes
   `ultrawork` overlay stays family-wide;
   neither has an Astra measurement, so Astra on codex gets the base rules.
+- **Retired 2026-11-18:** GPT-6.2 Astra took every slot below, each at its
+  effort (see `gpt-6.2-astra` and `gpt-6.2-sol`). GPT-6 Astra keeps its
+  contract, override, declared aliases, price, and Codex option row for a
+  machine-level override.
 - **Routing:** heads `ultrabrain` and the GPT slot of `architect` in both
   lanes. GPT-5.6 Sol trailed it as fall-through until 2026-09-11, when the
   superseded generations left every shipped chain (owner decision). Since
@@ -691,6 +695,10 @@ pairing so a benchmark claim can never mix in other prompt changes.
     and 14% fewer tool calls (351 vs 409) for the same pass set. That
     supports the slot swap.
   - Full tables are in the benchmark README.
+- **Retired 2026-11-18:** GPT-6.2 Sol took every slot below, each at its
+  effort (see `gpt-6.2-astra` and `gpt-6.2-sol` below). 6.1 Sol keeps its
+  contract, override, price, and Codex option row for a machine-level
+  override.
 - **Version rule:** the override is keyed to `gpt-6.1-sol` only (and the
   forms that project onto it). GPT-6 Sol keeps the `gpt` family block
   unchanged; a later Sol generation gets this block only through its own
@@ -725,6 +733,111 @@ pairing so a benchmark claim can never mix in other prompt changes.
   `high` (the `deep` rung), and `gpt-6-sol` vs `gpt-6.1-sol` at `medium`
   (the last-resort rung).
 
+
+### `gpt-6.2-astra` (GPT-6.2 Astra, exact-model override on the `gpt` family; shared with GPT-6.2 Sol)
+
+One record covers both GPT-6.2 ids, because the vendor documents them together
+(one migration and prompting guide, one changelog entry, one Codex base prompt)
+and OMH treats them alike; the next section names what differs for Sol.
+
+
+- **Documented contract (official, developers.openai.com, read
+  2026-11-18):** both released 2026-11-17 (API changelog), one id each
+  (`gpt-6.2-astra`, `gpt-6.2-sol`; no dated snapshot listed, and a dated
+  `-YYYY-MM-DD` form still projects onto the base). Text and image in, text
+  out; 1,050,000-token context, 922,000 max input, 128,000 max output;
+  knowledge cutoff 2026-05-18 (Astra) and 2026-06-01 (Sol). Both pages say
+  "The API rejects requests that set reasoning effort to `none`", and the
+  migration guide sends `none` and `minimal` callers to `low`, so the ladder
+  is `low` through `max` and `off` / `minimal` are raised to the `low` floor
+  on record (`floor_raised`), Astra's and 6.1 Sol's shape. No API default
+  effort is stated for either id, so `effort_default` is empty, as for GPT-6
+  Astra. Tool calling requires the Responses API; Chat Completions serves
+  requests without tools. `temperature`, `top_p`, `logprobs` /
+  `top_logprobs` are unsupported. No `-pro` / `-fast` / `-flex` row is
+  declared; the reasoning guide's pro-mode example names `gpt-6.2-sol` and
+  the contract records it as a documented, unobserved mechanism.
+- **Surfaces (official-client and observed):** Codex CLI 0.169.0's served
+  catalog lists `low` through `max` plus the Codex-only `ultra` (kept out of
+  every OMH ladder), a `low` default, and a 500K (Sol) / 272K (Astra)
+  context window with an 872K maximum; both ids share one new base prompt,
+  not GPT-6 Astra's. The installed Hermes build (v0.23.1) and its
+  origin/main (`da9c2bd62f`, 2026-11-17) carry no `gpt-6.2` id, so the
+  Codex route takes the legacy `none`..`xhigh` ladder and clamps `max` to
+  `xhigh` until Hermes adds the ids to its no-disable tier list.
+- **Model trait (official, latest-model guide):** writing is more concise
+  and direct by default; when intent is unclear the model may propose a
+  next step and wait for confirmation; it writes more efficient code; in
+  long tasks it can carry reasoning shorthand into its final answer. New
+  wire behaviour: the API drops reasoning items on a mid-conversation prefix
+  edit, a `safety_identifier` change, or a model downgrade, and recommends
+  keeping the prefix unchanged.
+- **What OMH injects:** GPT-6 Astra's two blocks, byte for byte, keyed to
+  both ids (`MODEL_HIGH_EFFORT_CALIBRATIONS` and
+  `MODEL_COMPOSITION_CALIBRATIONS`; a test pins the equality), so each id
+  receives exactly what its predecessor received in the slots it took. No
+  new sentence (owner decision, 2026-11-18). Trait by trait:
+  - "may propose a next step and wait for confirmation" is the trait
+    Astra's "Ask one focused question only when a missing input would
+    materially change the result; otherwise state the assumption and
+    proceed" already counters, without pushing.
+  - "more concise and direct" and "more efficient code" need no counter.
+    The guide's advice is to revisit existing "be concise" instructions;
+    OMH's blocks carry none.
+  - "reasoning shorthand in the final answer" meets the structured return
+    every unit already ends on (`fanout_unit_result/v1`), which is read by
+    a machine, not a human who missed the progress updates.
+  - Dropped reasoning items on a prefix edit is a rule of the host's
+    conversation handling, which a prompt cannot counter; it is recorded in
+    the contract's `runtime_mechanisms` as documented, not observed.
+- **Explicitly not imported:** the guide's "Bias towards action, and
+  persist until you've completed the task", "Avoid stopping to end the turn
+  while the task is incomplete", "Ask the model to verify that it has
+  completed the requested work", and the Codex prompt's "collaborate with
+  them until their intended goal is completely achieved". Each pushes the
+  model to keep working, the reading the 2026-09-05 Astra measurement cut
+  (+5,419 tokens per instance for the same pass set).
+- **Throughput overlay:** `gpt_sol_codex_handoff` matches `*-sol`, so 6.2
+  Sol as a Codex main agent inherits it, as 6.1 Sol did;
+  `tests/test_executor_prompting.py` names `gpt-6.2-sol` so the
+  inheritance is reviewed. 6.2 Astra gets the base rules, as GPT-6 Astra
+  does.
+- **Routing (owner decision, 2026-11-18):** GPT-6.2 Astra takes every slot
+  GPT-6 Astra held and GPT-6.2 Sol every slot GPT-6.1 Sol held, each at the
+  same effort, in both lanes, the shared final order included (Claude Opus
+  5.5, then GPT-6.2 Sol). Chain order is otherwise unchanged. Each
+  `mixture_category_for` label moves with its pair: Astra at `xhigh` labels
+  `forensics`, Sol at `xhigh` `review`, Sol at `medium` `unspecified-high`.
+  GPT-6 Astra and GPT-6.1 Sol leave every shipped chain under the
+  superseded-generation rule and stay recognized, contracted, priced,
+  provider-mapped, and adjudicated by their Codex option rows.
+- **Pricing (official):** Astra 8 / 40 per MTok, cached input 0.40, cache
+  writes 10 (30 minutes) and 20 (12 hours). Sol keeps 6.1 Sol's card: 2 / 10,
+  cached 0.10, writes 2.5 / 5. Both cache at 5% of input (an
+  `APPROX_CACHE_READ_RATIO` row). Above 272K input: 2x input and cache, 1.5x
+  output. Batch 0.5x, Fast 2x, Ultrafast 3x through 2027-02-28 and 6x from
+  2027-03-01; these multipliers stay in the contract.
+- **Editorial, unmeasured.** Named follow-up, optional and unrun (no paid
+  measurement): the old-vs-new pairs on `benchmarks/live-model-tools/v1`,
+  `gpt-6.1-sol` vs `gpt-6.2-sol` at `high` (the `deep` rung) and
+  `gpt-6-astra` vs `gpt-6.2-astra` at `xhigh` (the `ultrabrain` rung), plus
+  `family` vs `optimized` on each new id. A calibration that measures worse
+  than the family block is revised or removed in the change that reports it.
+- **Source:** official (both model pages, the latest-model and reasoning
+  guides, pricing page, and API changelog, read 2026-11-18); official-client
+  (Codex CLI 0.169.0 served catalog); observed (Hermes v0.23.1 and
+  origin/main source).
+
+### `gpt-6.2-sol` (GPT-6.2 Sol, exact-model override on the `gpt` family)
+
+Everything in the `gpt-6.2-astra` section above applies; the differences are
+the record's own values. Knowledge cutoff 2026-06-01. List price 2 / 10 per
+MTok with cached input 0.10 and cache writes 2.5 / 5, GPT-6.1 Sol's card. The
+Codex catalog lists a 500K context window, the Ultrafast speed tier, and audio
+input, which the API page lists as unsupported. The reasoning guide's pro-mode
+example names this id, recorded as a documented, unobserved mechanism with no
+declared `-pro` row. It took every GPT-6.1 Sol slot on 2026-11-18, each at its
+effort, in both lanes, the shared final order included.
 
 ### `gpt-6-cyber` (GPT-6 Cyber, access-gated, exact-model override on the `gpt` family)
 
@@ -2031,6 +2144,7 @@ choose models by, not a guarantee for another persona or skill.
 | `deepseek-v4.1-flash` (exact-model override) | yes → `deepseek` | yes, both override tables, resolved before the family block | exact documented contract (three-rung ladder, no floor) plus stop-shaped counters for the documented traits; the family-vs-optimized pair is the named follow-up, blocked on a served route |
 | `deepseek-flash` (declared pointer alias) | yes → `deepseek` | yes, inherited from canonical `deepseek-v4.1-flash` | the vendor's moving "current Flash" id, declared with a read date; `deepseek-v4-flash`, `deepseek-v4-pro`, and every other DeepSeek id keep the family block |
 | `gpt-6.1-sol` (exact-model override) | yes → `gpt` | yes, both override tables (Astra's wording, byte for byte), resolved before the family block | exact documented contract (Astra's `low`-floor ladder, no `none`; the Codex client's ladder recorded beside it without the Codex-only `ultra`); `gpt-6.1-sol-pro` inherits through a declared projection; editorial for 6.1 Sol, the `family` vs `optimized` pair is the named follow-up |
+| `gpt-6.2-astra`, `gpt-6.2-sol` (exact-model overrides) | yes → `gpt` | yes, both override tables (Astra's wording, byte for byte), resolved before the family block | exact documented contracts (`low`-floor ladder, no `none`; the Codex client's ladder recorded beside each without `ultra`); hold every former GPT-6 Astra / GPT-6.1 Sol slot since 2026-11-18; editorial, the old-vs-new and `family` vs `optimized` pairs are the named follow-up |
 | `gpt-6-sol` (exact contract, no exact calibration; retired from the shipped chains 2026-10-01) | yes → `gpt` | yes, through the family block | exact documented contract (the API `none`-to-`max` ladder; the Codex client's ladder recorded beside it without `none` and without the Codex-only `ultra`); no exact counter: while it held `deep@high` and `main` (until 2026-10-01) those slots reached the calibrated tiers, and none was added because the Codex Sol prompt's keep-working sentence is not importable and no `family` vs `optimized` pair has run; the three generation pairs are the named follow-up |
 | `claude-fable-5-2` (exact contract, no exact calibration) | yes → `claude` | yes, through the family block | exact documented contract (Fable 5.1's request shape: always-on thinking, `low` floor, `high` default, no prefill, sampling parameters, or forced tool choice; $8 / $40 and 0.025x cache reads); heads `ultrabrain` and holds every former Fable 5.1 slot since 2026-11-10; `claude-fable-5.2` is a declared projection; Claude Code needs v2.1.290 or newer for it (observed); `claude-mythos-5-2` is recognized and priced without a contract and in no shipped chain; the 5.1-vs-5.2 pair is the named, unrun follow-up |
 | `gpt-6-luna`, `claude-opus-5-5` (exact contracts, no exact calibration) | yes → `gpt` / `claude` | yes, through the family block | exact documented contracts (Luna's `none`-to-`max` ladder; Opus 5.5's always-on thinking, forced-`tool_choice` 400, and 0.05x cache reads); no exact counter because neither shipped placement reaches the high-effort tier on the subagent side and the Opus composer block is kept byte-stable per the vendor's Opus 5.5 prompting guide; the old-vs-new generation pairs are the named follow-up |
@@ -2105,7 +2219,9 @@ not an observed model failure. Retirements carry successor, scope, and owner
 decision date. GPT-5.6 Sol's 2026-09-11 frontier-slot retirement was widened
 on 2026-09-23 to every shipped chain (successor `gpt-6-sol`), and GPT-5.6
 Terra was retired the same day to the same successor. GPT-6 Sol was retired
-from every shipped chain on 2026-10-01 (successor `gpt-6.1-sol`). Older ids stay
+from every shipped chain on 2026-10-01 (successor `gpt-6.1-sol`), and GPT-6
+Astra and GPT-6.1 Sol on 2026-11-18 (successors `gpt-6.2-astra` and
+`gpt-6.2-sol`). Older ids stay
 routable, priced, and provider-mapped.
 
 The report imports the contract audit's inventory parser, unions `models`,
@@ -2164,6 +2280,7 @@ not a stronger design-brief expectation, governs these boundaries:
   that inventory, with the owner-decision evidence in onboarding section 4.
   GPT-5.6 Sol's frontier-slot retirement was widened to every shipped chain
   on 2026-09-23, when GPT-6 Sol took its last-resort slot; GPT-6.1 Sol took
-  that slot from GPT-6 Sol on 2026-10-01.
+  that slot from GPT-6 Sol on 2026-10-01, and GPT-6.2 Sol from GPT-6.1 Sol on
+  2026-11-18.
   Tests pin zero unsupported dominance findings separately from those honest,
   evidence-linked retirement decisions.

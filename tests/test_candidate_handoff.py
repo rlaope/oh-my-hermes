@@ -321,7 +321,7 @@ class WrapperPathParityTests(unittest.TestCase):
             interaction["delegation"]["runtime_handoff"]["hermes_native_model_binding"][
                 "inactive_candidates"
             ],
-            ["gpt-6.1-sol", "claude-opus-5-5", "kimi-k3.1-pro"],
+            ["gpt-6.2-sol", "claude-opus-5-5", "kimi-k3.1-pro"],
         )
         self.assertNotIn(
             "gpt-5.6-sol",
@@ -374,7 +374,7 @@ class WrapperPathParityTests(unittest.TestCase):
         self.assertEqual(empty_overlay["mode"], "parallel_handoff")
         self.assertNotIn("eval_strategy", claude_overlay)
         self.assertNotIn("eval_strategy", empty_overlay)
-        expected_inactive = ["gpt-6.1-sol", "claude-opus-5-5", "kimi-k3.1-pro"]
+        expected_inactive = ["gpt-6.2-sol", "claude-opus-5-5", "kimi-k3.1-pro"]
         for interaction in (gpt_interaction, claude_interaction, empty_interaction):
             self.assertEqual(
                 interaction["delegation"]["runtime_handoff"]["hermes_native_model_binding"][

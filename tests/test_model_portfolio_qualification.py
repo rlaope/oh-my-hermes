@@ -108,8 +108,11 @@ class PortfolioTests(unittest.TestCase):
         ids = ("gpt-6-astra", "gpt-6-astra-pro-flex", "gpt-6-astra-pro-max",
                "gpt-6-astra-turbo", "anthropic.claude-fable-5-1", "claude-fable-5-1",
                "gpt-6-astra-2026-09-03", "gpt-6-astra-pro-fast", "anthropic/claude-fable-5.1")
-        rows = rows_for(*ids)
-        self.assertEqual(rows[ids[0]]["calibration_coverage"], "exact")
+        rows = rows_for(*ids, "gpt-6.2-astra")
+        # GPT-6 Astra retired on 2026-11-18, so its own row reads as the
+        # retirement; its successor carries the exact calibration pair.
+        self.assertEqual(rows[ids[0]]["disposition"], "excluded_superseded")
+        self.assertEqual(rows["gpt-6.2-astra"]["calibration_coverage"], "exact")
         self.assertEqual(rows[ids[1]]["contract_coverage"], "declared_inheritance")
         self.assertEqual(rows[ids[1]]["contract_projection"]["reasoning_mode"], "pro")
         self.assertEqual(rows[ids[1]]["evidence"]["cost"]["service_tier_multiplier"], 0.5)
@@ -169,7 +172,8 @@ class PortfolioTests(unittest.TestCase):
         retired = {row["canonical_model_id"] for row in rows if row["disposition"] == "excluded_superseded"}
         self.assertEqual(
             retired,
-            {"claude-fable-5", "glm-5.2", "claude-opus-5", "gpt-5.6-luna", "gpt-5.6-sol", "gpt-5.6-terra", "kimi-k3"},
+            {"claude-fable-5", "glm-5.2", "claude-opus-5", "gpt-5.6-luna", "gpt-5.6-sol", "gpt-5.6-terra", "kimi-k3",
+             "gpt-6-astra"},
         )
         # List-price multipliers alone cannot prove role-specific efficiency.
         tiers = [row for row in rows if row["canonical_model_id"].startswith("gpt-6-astra-")]
@@ -198,6 +202,10 @@ class PortfolioTests(unittest.TestCase):
             "qwen3-coder": ("", "2026-10-13"),
             # Fable 5.2 took every Fable 5.1 slot, the ultrabrain head included.
             "claude-fable-5-1": ("claude-fable-5-2", "2026-11-10"),
+            # GPT-6.2 Astra and GPT-6.2 Sol took every slot of their line's
+            # previous generation.
+            "gpt-6-astra": ("gpt-6.2-astra", "2026-11-18"),
+            "gpt-6.1-sol": ("gpt-6.2-sol", "2026-11-18"),
         }
         rows = rows_for(*successors)
         self.assertIn("is now held by claude-sonnet-5-5", rows["qwen3-coder"]["decision"]["reason"])
@@ -217,8 +225,8 @@ class PortfolioTests(unittest.TestCase):
         # `all_shipped_chains` scope changes the disposition is held on a
         # patched row shaped like GPT-5.6 Sol's 2026-09-11 decision.
         scoped = {**RETIREMENT_DECISIONS["gpt-5.6-sol"], "successor": "gpt-6-astra", "scope": "frontier_slots"}
-        with patch.dict(RETIREMENT_DECISIONS, {"gpt-6.1-sol": scoped}):
-            sol = rows_for("gpt-6.1-sol")["gpt-6.1-sol"]
+        with patch.dict(RETIREMENT_DECISIONS, {"gpt-6.2-sol": scoped}):
+            sol = rows_for("gpt-6.2-sol")["gpt-6.2-sol"]
         self.assertEqual(sol["disposition"], "recommended")
         self.assertEqual(sol["retirement_decisions"][0]["successor"], "gpt-6-astra")
         self.assertEqual(sol["retirement_decisions"][0]["disposition"], "excluded_superseded")
@@ -228,7 +236,7 @@ class PortfolioTests(unittest.TestCase):
         report = build_model_portfolio_qualification(
             {"models": ["anthropic/claude-opus-5", "claude-opus-5-5", "gpt-5.6-luna",
                         "deepseek-v3.2", "deepseek-flash", "gpt-5.6-sol", "gpt-5.6-terra", "gpt-6-sol",
-                        "gpt-6.1-sol", "gpt-6-luna-9"]},
+                        "gpt-6.1-sol", "gpt-6.2-sol", "gpt-6-luna-9"]},
             required_models=["claude-opus-5-5"],
         )
         rows = {row["requested_model"]: row for row in report["comparison"]["models"]}
@@ -253,10 +261,15 @@ class PortfolioTests(unittest.TestCase):
             "successor": "gpt-6.1-sol", "scope": "all_shipped_chains",
             "decision_date": "2026-10-01", "successor_in_inventory": True, "advisory": True,
         })
+        # GPT-6.1 Sol's own successor (2026-11-18), present in this inventory.
+        self.assertEqual(rows["gpt-6.1-sol"]["superseded_by"], {
+            "successor": "gpt-6.2-sol", "scope": "all_shipped_chains",
+            "decision_date": "2026-11-18", "successor_in_inventory": True, "advisory": True,
+        })
         # No version-string parsing: the successor and an id that merely
         # sorts later carry no link of their own.
         self.assertIsNone(rows["claude-opus-5-5"]["superseded_by"])
-        self.assertIsNone(rows["gpt-6.1-sol"]["superseded_by"])
+        self.assertIsNone(rows["gpt-6.2-sol"]["superseded_by"])
         self.assertIsNone(rows["gpt-6-luna-9"]["superseded_by"])
         # Advisory only: the link neither blocks the report nor fails the command.
         self.assertFalse(report["blocking"])
@@ -274,6 +287,8 @@ class PortfolioTests(unittest.TestCase):
         self.assertIn("gpt-5.6-sol", retirees)
         self.assertIn("gpt-5.6-terra", retirees)
         self.assertIn("claude-fable-5-1", retirees)
+        self.assertIn("gpt-6-astra", retirees)
+        self.assertIn("gpt-6.1-sol", retirees)
         hermes = {candidate["model_alias"].rsplit("/", 1)[-1].casefold()
                   for section in SECTIONS for chain in SHIPPED_MODEL_RECOMMENDATIONS[section].values()
                   for candidate in chain}

@@ -3722,7 +3722,7 @@ class FanoutBriefCliTests(unittest.TestCase):
             by_unit = {entry["unit_id"]: entry for entry in brief["units"]}
             core = by_unit["core"]
             self.assertEqual(core["owner"], "codex")
-            self.assertEqual(core["model"], "gpt-6-astra")
+            self.assertEqual(core["model"], "gpt-6.2-astra")
             self.assertEqual(core["status"], "completed")
             self.assertEqual(core["session_ref"], "unknown")
             self.assertEqual(core["tokens_total"], "unknown")
@@ -3774,7 +3774,7 @@ class FanoutBriefCliTests(unittest.TestCase):
             # separator around a parenthetical.
             self.assertIn("claude-code (claude-opus-5-5 xhigh, alt: claude-fable-5-2)", stdout)
             self.assertNotIn(" — (", stdout)
-            self.assertNotIn("(gpt-6.1-sol, alt:", stdout)
+            self.assertNotIn("(gpt-6.2-sol, alt:", stdout)
 
     def test_brief_degrades_silently_for_v1_routes(self) -> None:
         # A persisted v1 route carries no chain[]: the alternative must be

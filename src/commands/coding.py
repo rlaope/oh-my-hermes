@@ -3952,7 +3952,7 @@ def _add_coding_commands(sub) -> None:
         "chain",
         nargs="+",
         help=(
-            "Chain entries in order, each `model[:effort]`, e.g. gpt-6.1-sol:xhigh. The tail after the "
+            "Chain entries in order, each `model[:effort]`, e.g. gpt-6.2-sol:xhigh. The tail after the "
             "last colon is taken as the effort only when it is a known level (off, minimal, low, medium, "
             "high, xhigh, max, auto); other colon tags stay part of the model id."
         ),
@@ -4106,7 +4106,7 @@ def _add_coding_commands(sub) -> None:
     model_contract.add_argument(
         "--model",
         required=True,
-        help="Exact or explicitly declared model id, provider prefix welcome (for example gpt-6-astra, openai/gpt-6-astra-pro-fast).",
+        help="Exact or explicitly declared model id, provider prefix welcome (for example gpt-6.2-astra, openai/gpt-6-astra-pro-fast).",
     )
     model_contract.add_argument(
         "--executor",
