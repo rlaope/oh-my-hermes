@@ -1,0 +1,138 @@
+{
+  "summary": {
+    "label": "head-int2-bg-r1",
+    "engine": "chromium",
+    "scenario": "bg",
+    "n": 20,
+    "mb": 2,
+    "secs": 8,
+    "runs": 1,
+    "load": "5.6",
+    "measuredOn": "Playwright browser + vite dev + mock host (not the Tauri window)",
+    "heapOpenMB": {
+      "median": 14.5,
+      "min": 14.5,
+      "max": 14.5
+    },
+    "heapFillMB": {
+      "median": 34,
+      "min": 34,
+      "max": 34
+    },
+    "bufMB": {
+      "median": 170.9,
+      "min": 170.9,
+      "max": 170.9
+    },
+    "bufParkMB": null,
+    "snapMB": null,
+    "heapParkMB": null,
+    "parked": null,
+    "parkMs": null,
+    "terms": {
+      "median": 20,
+      "min": 20,
+      "max": 20
+    },
+    "lines": {
+      "median": 100900,
+      "min": 100900,
+      "max": 100900
+    },
+    "renders": {
+      "median": 0,
+      "min": 0,
+      "max": 0
+    },
+    "rendersHidden": {
+      "median": 0,
+      "min": 0,
+      "max": 0
+    },
+    "selHidden": {
+      "median": 0,
+      "min": 0,
+      "max": 0
+    },
+    "domMutations": {
+      "median": 502,
+      "min": 502,
+      "max": 502
+    },
+    "nodes": {
+      "median": 771,
+      "min": 771,
+      "max": 771
+    },
+    "canvases": {
+      "median": 0,
+      "min": 0,
+      "max": 0
+    },
+    "updates": {
+      "median": 0,
+      "min": 0,
+      "max": 0
+    },
+    "scriptMs": {
+      "median": 124,
+      "min": 124,
+      "max": 124
+    },
+    "taskMs": {
+      "median": 227,
+      "min": 227,
+      "max": 227
+    },
+    "layoutMs": {
+      "median": 11,
+      "min": 11,
+      "max": 11
+    },
+    "styleMs": {
+      "median": 21,
+      "min": 21,
+      "max": 21
+    },
+    "layouts": {
+      "median": 16,
+      "min": 16,
+      "max": 16
+    },
+    "longFrames": {
+      "median": 71,
+      "min": 71,
+      "max": 71
+    },
+    "maxGapMs": {
+      "median": 133,
+      "min": 133,
+      "max": 133
+    }
+  },
+  "runs": [
+    {
+      "run": 1,
+      "heapOpenMB": 14.5,
+      "heapFillMB": 34,
+      "bufMB": 170.9,
+      "terms": 20,
+      "lines": 100900,
+      "nodes": 771,
+      "canvases": 0,
+      "updates": 0,
+      "renders": 0,
+      "rendersHidden": 0,
+      "selHidden": 0,
+      "domMutations": 502,
+      "ticks": 79,
+      "longFrames": 71,
+      "maxGapMs": 133,
+      "scriptMs": 124,
+      "taskMs": 227,
+      "layoutMs": 11,
+      "styleMs": 21,
+      "layouts": 16
+    }
+  ]
+}

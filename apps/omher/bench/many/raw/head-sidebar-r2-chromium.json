@@ -1,0 +1,126 @@
+{
+  "summary": {
+    "label": "head-sidebar-r2",
+    "engine": "chromium",
+    "n": 20,
+    "mb": 1,
+    "secs": 8,
+    "runs": 1,
+    "load": "21.9",
+    "measuredOn": "Playwright browser + vite dev + mock host (not the Tauri window)",
+    "heapOpenMB": {
+      "median": 14.8,
+      "min": 14.8,
+      "max": 14.8
+    },
+    "heapFillMB": {
+      "median": 34.5,
+      "min": 34.5,
+      "max": 34.5
+    },
+    "bufMB": {
+      "median": 170.9,
+      "min": 170.9,
+      "max": 170.9
+    },
+    "terms": {
+      "median": 20,
+      "min": 20,
+      "max": 20
+    },
+    "lines": {
+      "median": 100900,
+      "min": 100900,
+      "max": 100900
+    },
+    "renders": {
+      "median": 0,
+      "min": 0,
+      "max": 0
+    },
+    "rendersHidden": {
+      "median": 0,
+      "min": 0,
+      "max": 0
+    },
+    "domMutations": {
+      "median": 464,
+      "min": 464,
+      "max": 464
+    },
+    "nodes": {
+      "median": 771,
+      "min": 771,
+      "max": 771
+    },
+    "canvases": {
+      "median": 0,
+      "min": 0,
+      "max": 0
+    },
+    "updates": {
+      "median": 0,
+      "min": 0,
+      "max": 0
+    },
+    "scriptMs": {
+      "median": 1436,
+      "min": 1436,
+      "max": 1436
+    },
+    "taskMs": {
+      "median": 1867,
+      "min": 1867,
+      "max": 1867
+    },
+    "layoutMs": {
+      "median": 23,
+      "min": 23,
+      "max": 23
+    },
+    "styleMs": {
+      "median": 78,
+      "min": 78,
+      "max": 78
+    },
+    "layouts": {
+      "median": 17,
+      "min": 17,
+      "max": 17
+    },
+    "longFrames": {
+      "median": 62,
+      "min": 62,
+      "max": 62
+    },
+    "maxGapMs": {
+      "median": 183,
+      "min": 183,
+      "max": 183
+    }
+  },
+  "runs": [
+    {
+      "run": 1,
+      "heapOpenMB": 14.8,
+      "heapFillMB": 34.5,
+      "bufMB": 170.9,
+      "terms": 20,
+      "lines": 100900,
+      "nodes": 771,
+      "canvases": 0,
+      "updates": 0,
+      "renders": 0,
+      "rendersHidden": 0,
+      "domMutations": 464,
+      "ticks": 78,
+      "longFrames": 62,
+      "maxGapMs": 183,
+      "scriptMs": 1436,
+      "taskMs": 1867,
+      "layoutMs": 23,
+      "styleMs": 78,
+      "layouts": 17
+    }
+  ]
+}

@@ -4,6 +4,15 @@ All notable changes will be documented here.
 
 ## Unreleased
 
+- **omher stays light with many terminal sessions open.** A hidden terminal's output now re-renders only its own
+  TERMINALS row, never the list. A terminal that is not on the page draws nothing, not even the selection redraw that
+  xterm's own pause misses. One hidden and quiet for two minutes gives its scrollback back as a snapshot and is made
+  again when shown or when its program prints. One shared thread watches every session's foreground program, instead
+  of one per session. With 20 terminals of 2 MiB each and 19 hidden ones printing, main-thread script time over 8 s
+  drops from 1333 ms to 124 ms. After the park wait, buffers, snapshots and heap hold 35.5 MB instead of 205.5 MB.
+  A parked terminal comes back with its saved cursor, tab stops and scroll position. Frames over 50 ms and DOM
+  changes were worse at the median in one bench set and not in an independent re-measure; the ranges overlap. Details
+  and both sets in `apps/omher/bench/many/README.md`.
 - **OMH starts faster in a fresh Hermes process and its tools cost fewer tokens to open.** The chat router no longer
   imports the whole loop engine for one loop-command check, and the dag-ulw cue patterns compile on first use instead
   of all at import, so the plugin's start before a one-shot `chat -q`, a cron run or a delegated child's first reply

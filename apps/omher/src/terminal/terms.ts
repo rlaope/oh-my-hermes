@@ -1,9 +1,9 @@
 // The xterm side of the bottom terminal panel: one terminal per tab, kept for the page's life so a hidden panel (or
 // a tab in the back) keeps its scrollback while its shell runs on. Built from the SESSIONS terminal engine
 // (src/sessions/term: look, Orca themes, renderer, find, links, clipboard settings), imported, not copied.
-import type { Terminal } from "@xterm/xterm";
+import type { ITerminalInitOnlyOptions, ITerminalOptions, Terminal } from "@xterm/xterm";
 import type { FitAddon } from "@xterm/addon-fit";
-import { afterOpen, feed, onVisible } from "../sessions/term/engine";
+import { afterOpen, CELLS_EVENT, feed, isParked, live, onVisible, type Remake } from "../sessions/term/engine";
 import { applyLook, termOptions } from "../sessions/term/look";
 import { termFontsReady } from "../sessions/term/fonts";
 import { onTermSettings, readTermSettings } from "../sessions/term/settings";
@@ -23,8 +23,13 @@ const loadXterm = () =>
   (load ??= Promise.all([import("@xterm/xterm"), import("@xterm/addon-fit"), import("@xterm/xterm/css/xterm.css"), termFontsReady()]).then(([x, f]) => [x, f] as Xterm));
 
 interface PanelTerm {
-  term: Terminal;
+  /** the terminal now: reading it makes a parked one again (sessions/term/park.ts) */
+  readonly term: Terminal;
+  /** the xterm it has, parked or not */
+  raw: Terminal;
   fit: FitAddon;
+  /** makes it again after it was parked */
+  remake: Remake;
   el: HTMLDivElement;
   /** the shell's session id, once started */
   id: number | null;
@@ -54,22 +59,54 @@ function create([{ Terminal }, { FitAddon }]: Xterm, key: number, want: string |
   const theme = termTheme(look, settings);
   const el = document.createElement("div");
   el.className = "term-host";
-  const term = new Terminal(termOptions(theme, settings));
-  const fit = new FitAddon();
-  term.loadAddon(fit);
-  const p: PanelTerm = { term, fit, el, id: null, owed: 0, ended: false, settle: null, undo: () => undefined };
-  terms.set(key, p);
+  const make = (opts: ITerminalOptions & ITerminalInitOnlyOptions) => {
+    const term = new Terminal(opts);
+    const fit = new FitAddon();
+    term.loadAddon(fit);
+    return { term, fit };
+  };
+  const first = make(termOptions(theme, settings));
   const host = getShellHost();
-  term.onData((d) => {
-    if (p.id !== null && !p.ended) void host.write(p.id, d).catch(() => undefined);
-  });
-  term.onResize(({ cols, rows }) => {
-    if (p.settle !== null) clearTimeout(p.settle);
-    p.settle = setTimeout(() => {
-      p.settle = null;
-      if (p.id !== null && !p.ended) void host.resize(p.id, cols, rows).catch(() => undefined);
-    }, RESIZE_SETTLE_MS);
-  });
+  const wire = (term: Terminal) => {
+    term.onData((d) => {
+      if (p.id !== null && !p.ended) void host.write(p.id, d).catch(() => undefined);
+    });
+    term.onResize(({ cols, rows }) => {
+      if (p.settle !== null) clearTimeout(p.settle);
+      p.settle = setTimeout(() => {
+        p.settle = null;
+        if (p.id !== null && !p.ended) void host.resize(p.id, cols, rows).catch(() => undefined);
+      }, RESIZE_SETTLE_MS);
+    });
+  };
+  const p: PanelTerm = {
+    get term() {
+      return live(this.raw);
+    },
+    raw: first.term,
+    fit: first.fit,
+    // a parked terminal made again: the same options and handlers, at the size it had, where it was
+    remake: ({ cols, rows }) => {
+      const s = readTermSettings();
+      const th = termTheme(look, s);
+      const next = make({ ...termOptions(th, s), cols, rows });
+      p.raw = next.term;
+      p.fit = next.fit;
+      wire(next.term);
+      next.term.open(p.el);
+      p.undo = afterOpen(next.term, p.el, s, p.remake);
+      applyLook(next.term, th, s);
+      return next.term;
+    },
+    el,
+    id: null,
+    owed: 0,
+    ended: false,
+    settle: null,
+    undo: () => undefined,
+  };
+  terms.set(key, p);
+  wire(first.term);
   return p;
 }
 
@@ -91,7 +128,7 @@ function start(key: number, p: PanelTerm, want: string | null): void {
       (code) => {
         p.ended = true;
         setTabFg(key, null);
-        p.term.write(`\r\n\x1b[2m[${code ? t("termpanel.endedCode", { code }) : t("termpanel.ended")}]\x1b[0m\r\n`);
+        feed(p.term, `\r\n\x1b[2m[${code ? t("termpanel.endedCode", { code }) : t("termpanel.ended")}]\x1b[0m\r\n`);
       },
     )
     .then(
@@ -110,7 +147,7 @@ function start(key: number, p: PanelTerm, want: string | null): void {
       },
       (e) => {
         p.ended = true;
-        p.term.write(`\x1b[31m${t("termpanel.couldNotStart", { error: e instanceof Error ? e.message : String(e) })}\x1b[0m\r\n`);
+        feed(p.term, `\x1b[31m${t("termpanel.couldNotStart", { error: e instanceof Error ? e.message : String(e) })}\x1b[0m\r\n`);
       },
     );
 }
@@ -127,20 +164,24 @@ export function attachTerm(key: number, want: string | null, box: HTMLElement, m
     const pt = p;
     box.appendChild(pt.el);
     if (fresh) {
-      pt.term.open(pt.el);
-      pt.undo = afterOpen(pt.term, pt.el, readTermSettings());
+      pt.raw.open(pt.el);
+      pt.undo = afterOpen(pt.raw, pt.el, readTermSettings(), pt.remake);
     }
     applyLook(pt.term, termTheme(look, readTermSettings()), readTermSettings());
     refit(pt);
     if (fresh) start(key, pt, want);
     const ro = new ResizeObserver(() => refit(pt));
     ro.observe(box);
+    // and when its cells change size (the GPU renderer arrived after this fit, or went)
+    const cells = () => refit(pt);
+    pt.el.addEventListener(CELLS_EVENT, cells);
     onVisible(pt.term, true);
     // a tab is made when it comes to the front: once xterm has loaded, it takes the keyboard
     if (fresh) pt.term.focus();
     detach = () => {
       ro.disconnect();
-      onVisible(pt.term, false);
+      pt.el.removeEventListener(CELLS_EVENT, cells);
+      onVisible(pt.raw, false);
       if (pt.el.parentElement === box) box.removeChild(pt.el);
     };
   };
@@ -165,7 +206,7 @@ export function focusTerm(key: number): void {
 export function showTerm(key: number, shown: boolean): void {
   const p = terms.get(key);
   if (!p) return;
-  onVisible(p.term, shown);
+  onVisible(shown ? p.term : p.raw, shown);
   if (shown) refit(p);
 }
 
@@ -177,9 +218,10 @@ export function disposeTerm(key: number): void {
   if (p.id !== null && !p.ended) void getShellHost().close(p.id).catch(() => undefined);
   p.ended = true;
   if (p.settle !== null) clearTimeout(p.settle);
+  const wasParked = isParked(p.raw);
   p.undo();
   p.fgOff?.();
-  p.term.dispose();
+  if (!wasParked) p.raw.dispose(); // a parked one was disposed when it was parked
   p.el.remove();
 }
 
@@ -189,6 +231,7 @@ export function relookTerms(mode: "dark" | "light" = look): void {
   const settings = readTermSettings();
   const theme = termTheme(look, settings);
   for (const p of terms.values()) {
+    if (isParked(p.raw)) continue; // takes the look when it is made again
     applyLook(p.term, theme, settings);
     refit(p);
   }
