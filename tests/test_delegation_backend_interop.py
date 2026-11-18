@@ -48,7 +48,7 @@ delegation:
         - name: sol
           description: GPT Sol # trailing comment
           provider: openrouter
-          model: openai/gpt-6.1-sol
+          model: openai/gpt-6.2-sol
           reasoning_effort: high
           api_key: never-copied
         - name: everyday
@@ -92,7 +92,7 @@ class BackendModeReaderTest(unittest.TestCase):
         mode = self._read(MODEL_MAP_CONFIG)
         self.assertEqual((mode["backend"], mode["status"], mode["default"]), ("model_map", "read", "everyday"))
         self.assertEqual([option["name"] for option in mode["options"]], ["deep-opus", "sol", "everyday"])
-        self.assertEqual(mode["options"][1]["model"], "openai/gpt-6.1-sol")
+        self.assertEqual(mode["options"][1]["model"], "openai/gpt-6.2-sol")
         self.assertEqual(mode["options"][2]["reasoning_effort"], "")
         self.assertNotIn("never-copied", json.dumps(mode))
 
@@ -130,13 +130,13 @@ class BackendModeReaderTest(unittest.TestCase):
 class OptionMatcherTest(unittest.TestCase):
     OPTIONS = [
         {"name": "deep-opus", "provider": "claude-proxy", "model": "claude-opus-5-5", "reasoning_effort": "high"},
-        {"name": "sol", "provider": "openrouter", "model": "openai/gpt-6.1-sol", "reasoning_effort": "high"},
+        {"name": "sol", "provider": "openrouter", "model": "openai/gpt-6.2-sol", "reasoning_effort": "high"},
         {"name": "kimi", "provider": "og", "model": "kimi-k3.1-pro", "reasoning_effort": ""},
     ]
 
     def test_alias_and_wire_model_match(self):
         self.assertEqual(option_for(self.OPTIONS, "claude-opus-5-5", "high"), "deep-opus")
-        self.assertEqual(option_for(self.OPTIONS, "gpt-6.1-sol", "high"), "sol")
+        self.assertEqual(option_for(self.OPTIONS, "gpt-6.2-sol", "high"), "sol")
 
     def test_different_effort_is_not_the_same_lane(self):
         self.assertEqual(option_for(self.OPTIONS, "claude-opus-5-5", "medium"), "")
@@ -148,7 +148,7 @@ class OptionMatcherTest(unittest.TestCase):
         self.assertEqual(option_for(self.OPTIONS, "kimi-k3.1-pro", "high", provider="openrouter"), "")
 
     def test_chain_keeps_order_and_drops_unserved(self):
-        chain = (("claude-opus-5-5", "high"), ("gpt-6-astra", "xhigh"), ("kimi-k3.1-pro", "high"))
+        chain = (("claude-opus-5-5", "high"), ("gpt-6.2-astra", "xhigh"), ("kimi-k3.1-pro", "high"))
         self.assertEqual(
             [entry["option"] for entry in option_chain(chain, self.OPTIONS)],
             ["deep-opus", "kimi"],
@@ -201,7 +201,7 @@ class RouteToolPerBackendTest(unittest.TestCase):
     def test_model_map_without_matching_option_is_not_applied(self):
         self.config.write_text(
             MODEL_MAP_CONFIG.replace("claude-opus-5-5\n          reasoning_effort: high", "other-model")
-            .replace("openai/gpt-6.1-sol", "other/model")
+            .replace("openai/gpt-6.2-sol", "other/model")
             .replace("kimi-k3.1-pro", "other-kimi"),
             encoding="utf-8",
         )

@@ -52,7 +52,7 @@ export interface Harness {
 export const HARNESSES: readonly Harness[] = [
   { id: "hermes", label: "Hermes", mark: "hermes-agent.png", aliases: ["hermes-agent", "hermes"] },
   { id: "claude", label: "Claude Code", mark: "claudecode-color.svg", aliases: ["claude-code", "claudecode", "claude-agent", "claude-code-acp", "claude-agent-acp"] },
-  { id: "codex", label: "Codex", mark: "codex-color.svg", aliases: ["openai-codex", "codex-cli"] },
+  { id: "codex", label: "Codex", mark: "openai.svg", aliases: ["openai-codex", "codex-cli"] },
   { id: "gemini", label: "Gemini CLI", mark: "geminicli-color.svg", aliases: ["gemini-cli", "geminicli"] },
   { id: "opencode", label: "OpenCode", mark: "opencode.svg", aliases: ["open-code"] },
   { id: "kimi", label: "Kimi Code", mark: "kimi-code.png", aliases: ["kimi-code", "kimi-cli"] },

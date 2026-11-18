@@ -376,8 +376,10 @@ Rules that have held across every onboarding so far:
   same-line successor: its row is written out with an empty `successor` and
   a reason naming the model that now holds its only slot; and on 2026-10-24
   to Kimi K3 behind Kimi K3.1 Pro; on 2026-10-28 to Gemini 3.1 Pro
-  behind Gemini 4 Argon; and on 2026-11-10 to Claude Fable 5.1 behind
-  Fable 5.2, the `ultrabrain` head included).
+  behind Gemini 4 Argon; on 2026-11-10 to Claude Fable 5.1 behind
+  Fable 5.2, the `ultrabrain` head included; and on 2026-11-18 to GPT-6
+  Astra behind GPT-6.2 Astra and GPT-6.1 Sol behind GPT-6.2 Sol, two lines
+  of one family moved in one pass, the shared final order included).
   Record each retirement as a `RETIREMENT_DECISIONS` row with its
   own `decision_date`. The table is keyed by model id, so a second
   retirement of the same id rewrites its row rather than adding one: GPT-5.6
@@ -446,7 +448,8 @@ Rules that have held across every onboarding so far:
   decision, 2026-10-13, then for Fable 5.1), which reverses the 2026-09-06
   Fable → Opus order. The Hermes lane and the Maestro lane are different
   surfaces and both follow it, with two explicit exceptions. The Hermes-lane
-  `ultrabrain` chain is Fable 5.2 → GPT-6 Astra → Opus 5.5. It was GPT-6
+  `ultrabrain` chain is Fable 5.2 → GPT-6.2 Astra → Opus 5.5 (GPT-6.2
+  Astra in GPT-6 Astra's slot since 2026-11-18). It was GPT-6
   Astra alone, so the Claude entries give a user without OpenAI access a
   frontier fallback; putting Fable ahead of Astra is the owner's choice
   (2026-11-09, for Fable 5.1; Fable 5.2 took the head on 2026-11-10). The

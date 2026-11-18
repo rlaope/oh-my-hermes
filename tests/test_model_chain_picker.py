@@ -195,9 +195,9 @@ class PickerModelTests(unittest.TestCase):
         self.assertEqual(by_name["deep"]["origin"], "default")
         self.assertEqual(by_name["deep"]["purpose"], CHAIN_SURFACE_PURPOSES["deep"])
         models = {row["alias"]: row for row in payload["models"]}
-        self.assertEqual(models["gpt-6-astra"]["efforts"], ["low", "medium", "high", "xhigh", "max"])
-        self.assertEqual(models["gpt-6-astra"]["efforts_source"], "contract")
-        self.assertTrue(models["gpt-6-astra"]["efforts_configured"])
+        self.assertEqual(models["gpt-6.2-astra"]["efforts"], ["low", "medium", "high", "xhigh", "max"])
+        self.assertEqual(models["gpt-6.2-astra"]["efforts_source"], "contract")
+        self.assertTrue(models["gpt-6.2-astra"]["efforts_configured"])
         self.assertEqual(models["glm-5.3"]["efforts"], list(PICKER_EFFORT_RING))
         self.assertEqual(models["glm-5.3"]["efforts_source"], "unknown")
         self.assertFalse(models["glm-5.3"]["efforts_configured"])
@@ -254,11 +254,11 @@ class PickerModelTests(unittest.TestCase):
         # or a save would freeze that reordering into the override document.
         with TemporaryDirectory() as tmp:
             root = Path(tmp)
-            _write_overrides(root, {"quick": (("gpt-6-astra", "low"), ("glm-5.3", "low"))})
+            _write_overrides(root, {"quick": (("gpt-6.2-astra", "low"), ("glm-5.3", "low"))})
             _write_entitlements(root, {"zai": "zai"})
             payload = _payload(root)
         quick = next(row for row in payload["categories"] if row["category"] == "quick")
-        self.assertEqual(chain_from_entries(quick["chain"]), (("gpt-6-astra", "low"), ("glm-5.3", "low")))
+        self.assertEqual(chain_from_entries(quick["chain"]), (("gpt-6.2-astra", "low"), ("glm-5.3", "low")))
         self.assertEqual([entry["served"] for entry in quick["chain"]], [False, True])
 
     def test_ring_names_only_what_chains_name_and_joins_override_members(self) -> None:
@@ -280,7 +280,7 @@ class PickerModelTests(unittest.TestCase):
             _write_entitlements(root, {"zai": "zai"})
             payload = _payload(root)
             entitlements = {"providers": {"zai": "zai"}, "subscription_clis": []}
-            self.assertFalse(alias_is_served("gpt-6-astra", entitlements))
+            self.assertFalse(alias_is_served("gpt-6.2-astra", entitlements))
             self.assertTrue(alias_is_served("glm-5.3", entitlements))
         served_flags = [row["served"] for row in payload["models"]]
         self.assertIn(False, served_flags)
@@ -288,7 +288,7 @@ class PickerModelTests(unittest.TestCase):
         served_aliases = [row["alias"] for row in payload["models"] if row["served"]]
         self.assertEqual(served_aliases, sorted(served_aliases))
         self.assertIn("glm-5.3", served_aliases)
-        self.assertNotIn("gpt-6-astra", served_aliases)
+        self.assertNotIn("gpt-6.2-astra", served_aliases)
 
     def test_without_entitlements_everything_is_served(self) -> None:
         with TemporaryDirectory() as tmp:
@@ -302,8 +302,8 @@ class PickerModelTests(unittest.TestCase):
             labelled = _payload(Path(tmp))
         self.assertTrue(all(row["label"] == row["alias"] for row in bare["models"]))
         self.assertTrue(all(row["purpose"] == "" for row in bare["categories"]))
-        astra = next(row for row in labelled["models"] if row["alias"] == "gpt-6-astra")
-        self.assertEqual(astra["label"], MODEL_DISPLAY_LABELS["gpt-6-astra"])
+        astra = next(row for row in labelled["models"] if row["alias"] == "gpt-6.2-astra")
+        self.assertEqual(astra["label"], MODEL_DISPLAY_LABELS["gpt-6.2-astra"])
 
     def test_effort_ladder_mirrors_model_routing(self) -> None:
         # The bundle cannot import src/coding, so it carries a copy; this is
@@ -387,11 +387,11 @@ class PickerModelTests(unittest.TestCase):
             document,
             {
                 "quick": HERMES_MIXTURE_CATEGORY_CHAINS["quick"],
-                "deep": (("gpt-6-astra", "high"),),
+                "deep": (("gpt-6.2-astra", "high"),),
             },
         )
         self.assertEqual(set(composed["categories"]), {"writing", "deep"})
-        self.assertEqual(composed["categories"]["deep"], [{"model": "gpt-6-astra", "reasoning_effort": "high"}])
+        self.assertEqual(composed["categories"]["deep"], [{"model": "gpt-6.2-astra", "reasoning_effort": "high"}])
         self.assertEqual(composed["categories"]["writing"], document["categories"]["writing"])
         # The input document is left alone: a caller that then cancels has
         # nothing to undo.
@@ -452,13 +452,13 @@ class PickerModelTests(unittest.TestCase):
                     },
                 },
             )
-            result = apply_picker_changes(_omh_home(root), PickerChanges({"identity:custom-one": {"chain": (("gpt-6.1-sol", "high"),), "enabled": False}}), contract_option=contract_effort_option)
+            result = apply_picker_changes(_omh_home(root), PickerChanges({"identity:custom-one": {"chain": (("gpt-6.2-sol", "high"),), "enabled": False}}), contract_option=contract_effort_option)
             document = json.loads((_omh_home(root) / "routing" / "identities.json").read_text(encoding="utf-8"))
         self.assertEqual(result["identities_changed"], ["custom-one"])
         self.assertEqual(document["identities"]["custom-one"]["prompt"], "keep this prompt")
         self.assertEqual(
             document["identities"]["custom-one"]["model_chain"],
-            [{"model_id": "gpt-6.1-sol", "reasoning_effort": "high"}],
+            [{"model_id": "gpt-6.2-sol", "reasoning_effort": "high"}],
         )
         self.assertFalse(document["identities"]["custom-one"]["enabled"])
 
@@ -567,7 +567,7 @@ class PickerNavigationTests(unittest.TestCase):
             self.assertIn("…", visible[0])
 
     def test_the_frame_shows_labels_effort_bar_chain_and_default_for_the_cursor_row(self) -> None:
-        _write_overrides(self.root, {"ultrabrain": (("glm-5.3", "medium"), ("gpt-6-astra", "xhigh"))})
+        _write_overrides(self.root, {"ultrabrain": (("glm-5.3", "medium"), ("gpt-6.2-astra", "xhigh"))})
         payload = _payload(self.root)
         chains = _chains(payload)
         lines = render_frame(payload, chains, 0, use_color=False, width=200)
@@ -576,7 +576,7 @@ class PickerNavigationTests(unittest.TestCase):
         self.assertIn(f"◂ {MODEL_DISPLAY_LABELS['glm-5.3']} ▸", row)
         self.assertIn(f"− {effort_bar('medium')} +   medium?", row)
         self.assertTrue(row.rstrip().endswith("◆ customized"))
-        self.assertIn("   chain             glm-5.3:medium, gpt-6-astra:xhigh", lines)
+        self.assertIn("   chain             glm-5.3:medium, gpt-6.2-astra:xhigh", lines)
         self.assertIn(
             f"   shipped default   {', '.join(m + ':' + e for m, e in HERMES_MIXTURE_CATEGORY_CHAINS['ultrabrain'])}",
             lines,
@@ -869,7 +869,7 @@ class EffortPickerTests(unittest.TestCase):
         self.assertIn(" -? ", _row_of(frame, "swarm"))
 
     def test_an_unset_effort_on_a_contract_head_is_not_off_its_list(self) -> None:
-        _write_overrides(self.root, {"swarm": (("gpt-6-astra", ""),)})
+        _write_overrides(self.root, {"swarm": (("gpt-6.2-astra", ""),)})
         payload = _payload(self.root)
         frame = _frame(payload, "swarm")
         row = _row_of(frame, "swarm")
@@ -878,7 +878,7 @@ class EffortPickerTests(unittest.TestCase):
         self.assertFalse(any(line.lstrip().startswith("! ") for line in frame), frame)
 
     def test_a_contract_head_shows_neither_mark_on_a_rung_of_its_own(self) -> None:
-        _write_overrides(self.root, {"swarm": (("gpt-6-astra", "xhigh"),)})
+        _write_overrides(self.root, {"swarm": (("gpt-6.2-astra", "xhigh"),)})
         payload = _payload(self.root)
         frame = _frame(payload, "swarm")
         row = _row_of(frame, "swarm")
@@ -983,7 +983,7 @@ class EffortPickerTests(unittest.TestCase):
         path = _omh_home(self.root) / "routing" / "model-efforts.json"
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text("{", encoding="utf-8")
-        _write_overrides(self.root, {"swarm": (("gpt-6-astra", "high"),)})
+        _write_overrides(self.root, {"swarm": (("gpt-6.2-astra", "high"),)})
         payload = _payload(self.root)
         moves = _down_to(payload, "swarm")
         result, frames = _drive(payload, moves + [KEY_PLUS, KEY_MINUS, KEY_ENTER])
@@ -1001,7 +1001,7 @@ class EffortPickerTests(unittest.TestCase):
         _write_overrides(
             self.root,
             {
-                "ultrabrain": (("gpt-6-astra", "xhigh"),),
+                "ultrabrain": (("gpt-6.2-astra", "xhigh"),),
                 "deep": (("my-custom", "minimal"),),
                 "quick": (("deepseek-flash", "medium"),),
                 "swarm": (("claude-opus-5-5", "off"),),
@@ -1088,7 +1088,7 @@ class EnterStaysOpenTests(unittest.TestCase):
         # Only the head's effort moves; the rest of the shipped chain stays.
         self.assertEqual(
             result["ultrabrain"],
-            (("claude-fable-5-2", "max"), ("gpt-6-astra", "xhigh"), ("claude-opus-5-5", "xhigh")),
+            (("claude-fable-5-2", "max"), ("gpt-6.2-astra", "xhigh"), ("claude-opus-5-5", "xhigh")),
         )
         self.assertEqual(result.effort_edits, frozenset({"deep", "ultrabrain"}))
 
@@ -1098,7 +1098,7 @@ class EnterStaysOpenTests(unittest.TestCase):
         result, _ = _drive(payload, keys)
         self.assertEqual(
             result,
-            {"ultrabrain": (("claude-fable-5-2", "max"), ("gpt-6-astra", "xhigh"), ("claude-opus-5-5", "xhigh"))},
+            {"ultrabrain": (("claude-fable-5-2", "max"), ("gpt-6.2-astra", "xhigh"), ("claude-opus-5-5", "xhigh"))},
         )
 
     def test_switching_the_head_onto_a_list_holding_the_value_also_saves(self) -> None:
@@ -1112,7 +1112,7 @@ class EnterStaysOpenTests(unittest.TestCase):
         # up, and stepped back, the row is what the file already holds.
         _write_overrides(self.root, {"swarm": (("gemini-4-argon", "xhigh"),)})
         payload = _payload(self.root)
-        out = _rights_to(payload, "gemini-4-argon", "gpt-6-astra")
+        out = _rights_to(payload, "gemini-4-argon", "gpt-6.2-astra")
         back = [KEY_LEFT] * len(out)
         result, _ = _drive(payload, _down_to(payload, "swarm") + out + [KEY_MINUS, KEY_PLUS] + back + [KEY_ENTER])
         self.assertEqual(result, {})
@@ -1234,16 +1234,16 @@ class EffortSaveTests(unittest.TestCase):
                 self.assertEqual(self.document.read_bytes(), before)
 
     def test_an_effort_press_saves_over_a_tail_off_its_own_ladder(self) -> None:
-        # Only the head was pressed. Shipped: gpt-6.1-sol:medium leads a tail
+        # Only the head was pressed. Shipped: gpt-6.2-sol:medium leads a tail
         # with kimi-k3.1-pro:medium, a rung Kimi's contract does not list.
         tail = HERMES_MIXTURE_CATEGORY_CHAINS["unspecified-high"][1:]
         self.assertIn(("kimi-k3.1-pro", "medium"), tail)
         self.assertNotIn("medium", contract_effort_option("kimi-k3.1-pro")["efforts"])
         payload = _payload(self.root)
         changes, _ = _drive(payload, _down_to(payload, "unspecified-high") + [KEY_PLUS, KEY_ENTER])
-        self.assertEqual(changes, {"unspecified-high": (("gpt-6.1-sol", "high"),) + tail})
+        self.assertEqual(changes, {"unspecified-high": (("gpt-6.2-sol", "high"),) + tail})
         self.assertNotIn("error", self._apply(changes))
-        self.assertEqual(self._stored("unspecified-high")[0], {"model": "gpt-6.1-sol", "reasoning_effort": "high"})
+        self.assertEqual(self._stored("unspecified-high")[0], {"model": "gpt-6.2-sol", "reasoning_effort": "high"})
 
     def test_a_model_only_switch_preserves_a_shifted_old_tail(self) -> None:
         _write_overrides(

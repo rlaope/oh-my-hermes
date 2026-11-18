@@ -915,6 +915,36 @@ class TreeTests(unittest.TestCase):
         self.assertEqual(row, "└─ ● Render the landing pag…  visual-engineering  glm-5.3…  running 5s",
                          "the model keeps TREE_MODEL_MIN (8) cells; the title gives the rest")
 
+    def test_the_hidden_count_says_what_the_reader_left_out_not_the_outside_lanes(self) -> None:
+        """Mutation: subtract the drawn outside lanes from `hidden_nodes`, which erased genuinely hidden run lanes."""
+        payload = graph(
+            [root(),
+             lane("a", "Export API", "quick", "glm-5.3-flash", "low", "running", elapsed=30, group="layer 1", order=1),
+             lane("v", "Verify", "inherit", "?", "", "waiting", order=2, group="layer 2", waits=2)],
+            [("root", "a", "dispatch"), ("a", "v", "depends_on")],
+            source="dag",
+        )
+        payload["nodes"] += [
+            {"id": "s:sa-free", "kind": "lane", "title": "Fix the typo", "category": "?", "model": "glm-5.3-flash",
+             "effort": "low", "state": "done", "status": "done", "elapsed_seconds": None, "order": 3,
+             "group": "wave 2 · 14:02", "waits_on": 0},
+            {"id": "s:sa-leaf", "kind": "lane", "title": "Sweep the cache", "category": "quick",
+             "model": "glm-5.3-flash", "effort": "low", "state": "done", "status": "done", "elapsed_seconds": None,
+             "order": 4, "group": "wave 2 · 14:02", "waits_on": 0},
+        ]
+        for node in payload["nodes"][-2:]:
+            node["outside_dag"] = True
+        # The reader's own bounds: three run lanes it left out, named beside the two outside lanes it drew.
+        payload["hidden_nodes"] = 3
+        payload["hidden_by_state"] = {"waiting": 3}
+        payload["layer_hidden"] = [{"layer": 2, "count": 3, "states": {"waiting": 3}}]
+        drawn = text(payload, width=100, layout="tree")
+        self.assertIn("+3 more nodes", drawn)
+        self.assertNotIn("+1 more nodes", drawn)
+        self.assertNotIn("+2 more nodes", drawn, "the drawn outside lanes are no part of the omitted count")
+        self.assertIn("outside DAG", drawn)
+        self.assertIn("Fix the typo", drawn)
+
     def test_a_cut_that_hides_only_nested_children_of_the_last_group_is_counted_under_it(self) -> None:
         nested_cut = graph(
             [root(),

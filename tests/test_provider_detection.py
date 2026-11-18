@@ -515,7 +515,7 @@ class SurfaceTests(unittest.TestCase):
             payload = picker_rows(root / "omh", hermes_home=root / "hermes")
         self.assertEqual(payload["providers"], [{"id": "openai-codex", "kind": "openai-codex", "source": "login", "evidence": "auth.json"}])
         served = {row["alias"]: row["served"] for row in payload["models"]}
-        self.assertTrue(served["gpt-6-astra"])
+        self.assertTrue(served["gpt-6.2-astra"])
         self.assertFalse(served["kimi-k3.1-pro"])
         self.assertNotIn(TOKEN, json.dumps(payload))
 

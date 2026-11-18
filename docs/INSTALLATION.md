@@ -284,19 +284,20 @@ environment the wheel cannot be installed into. With nothing suitable found and
 versions it did find. `OMH_PYTHON=/path/to/python3.12` overrides the search
 entirely.
 
-### Hermes, OMH and the omher desktop app in one command (beta)
+### Hermes, OMH and the omher desktop app in one command
 
 ```sh
 curl -fsSL https://omher.app/omher | sh
-# same as: curl -fsSL https://raw.githubusercontent.com/rlaope/oh-my-hermes/main/install.sh | sh -s -- omher@beta
+# same as: curl -fsSL https://raw.githubusercontent.com/rlaope/oh-my-hermes/main/install.sh | sh -s -- omher
 ```
 
 ```powershell
 irm https://omher.app/omher.ps1 | iex
-# same as: & ([scriptblock]::Create((irm https://raw.githubusercontent.com/rlaope/oh-my-hermes/main/install.ps1))) omher@beta
+# same as: & ([scriptblock]::Create((irm https://raw.githubusercontent.com/rlaope/oh-my-hermes/main/install.ps1))) omher
 ```
 
-The `omher@beta` argument adds three things to the plain install, and only with it:
+The `omher` argument adds three things to the plain install, and only with it
+(`omher@beta`, its name before omher 1.0, is still accepted):
 
 | Starting point | What runs |
 | --- | --- |
@@ -315,8 +316,8 @@ shell (`HERMES_HOME=<root>/profiles/<name>`), the installer looks for Hermes und
 
 The release lookup reads GitHub's API ten releases at a time and stops at the first omher one. Without a token
 GitHub allows 60 API requests an hour per network; when that runs out the installer stops with exit 1 and says so
-(set `GITHUB_TOKEN` to raise the limit). A Hermes installed this way skipped its setup wizard: open omher and pick a
-model from the model menu at the top of the chat (without the app, run `hermes setup`). `irm ... | iex` cannot
+(set `GITHUB_TOKEN` to raise the limit). A Hermes installed this way skipped its setup wizard: open omher and sign it in
+to an AI account from the line above the chat box (without the app, run `hermes setup`). `irm ... | iex` cannot
 pass an argument, which is why the PowerShell form runs the downloaded script as a script block; a failed run
 leaves its exit code in `$LASTEXITCODE`.
 
@@ -2647,9 +2648,9 @@ Agent/maintainer preview example:
 
 ```sh
 omh setup --model-setup \
-  --confirm-model openai-codex/gpt-6.1-sol \
+  --confirm-model openai-codex/gpt-6.2-sol \
   --confirm-model google/gemini-4-argon \
-  --model-alias main=openai-codex/gpt-6.1-sol \
+  --model-alias main=openai-codex/gpt-6.2-sol \
   --no-interactive --json
 ```
 
@@ -2667,7 +2668,7 @@ and ordered recommendation chains skip missing entries in favor of a confirmed
 compatible alternative, so a model that heads no chain stays a valid
 user-selected alternative. If no candidate is
 confirmed for the selected category, role-slot, and domain chains, the resolver
-consults one shared final order: Claude Opus 5.5, then GPT-6.1 Sol. These names
+consults one shared final order: Claude Opus 5.5, then GPT-6.2 Sol. These names
 remain editorial candidates filtered through caller-confirmed metadata; they
 do not prove subscription, entitlement, authentication, or runtime readiness.
 If no candidate is confirmed anywhere, the resolver records `owner_default`;
@@ -2682,27 +2683,27 @@ The shipped catalog is editorial policy, not benchmark output:
 <!-- omh:model-chain-table:begin (generated: uv run python -m omh.cli docs chain-table; source: src/coding/model_recommendations.py) -->
 | Surface | What it is for | Shipped editable order |
 | --- | --- | --- |
-| Hermes `main` suggestion | The session's own model | GPT-6.1 Sol (`high`), Claude Opus 5.5, Claude Fable 5.2, GPT-6 Astra (`xhigh`), Kimi K3.1 Pro |
-| `ultrabrain` | Deepest reasoning | Claude Fable 5.2 (`xhigh`), GPT-6 Astra (`xhigh`), Claude Opus 5.5 (`xhigh`) |
-| `deep` | Strong default tier | Claude Opus 5.5 (`high`), GPT-6.1 Sol (`high`), Kimi K3.1 Pro (`high`) |
-| `architect` | Architecture and system design | Claude Opus 5.5 (`xhigh`), GPT-6 Astra (`xhigh`), Claude Fable 5.2 (`xhigh`), Kimi K3.1 Pro (`xhigh`) |
-| `unspecified-high` | Default working model | GPT-6.1 Sol (`medium`), Claude Opus 5.5 (`medium`), Kimi K3.1 Pro (`medium`) |
-| `unspecified-low` | Cheaper fallback | GLM 5.3 (`low`), DeepSeek V4.1 Flash (`low`), GPT-6.1 Sol (`low`), Claude Sonnet 5.5 (`low`) |
+| Hermes `main` suggestion | The session's own model | GPT-6.2 Sol (`high`), Claude Opus 5.5, Claude Fable 5.2, GPT-6.2 Astra (`xhigh`), Kimi K3.1 Pro |
+| `ultrabrain` | Deepest reasoning | Claude Fable 5.2 (`xhigh`), GPT-6.2 Astra (`xhigh`), Claude Opus 5.5 (`xhigh`) |
+| `deep` | Strong default tier | Claude Opus 5.5 (`high`), GPT-6.2 Sol (`high`), Kimi K3.1 Pro (`high`) |
+| `architect` | Architecture and system design | Claude Opus 5.5 (`xhigh`), GPT-6.2 Astra (`xhigh`), Claude Fable 5.2 (`xhigh`), Kimi K3.1 Pro (`xhigh`) |
+| `unspecified-high` | Default working model | GPT-6.2 Sol (`medium`), Claude Opus 5.5 (`medium`), Kimi K3.1 Pro (`medium`) |
+| `unspecified-low` | Cheaper fallback | GLM 5.3 (`low`), DeepSeek V4.1 Flash (`low`), GPT-6.2 Sol (`low`), Claude Sonnet 5.5 (`low`) |
 | `quick` | Short tasks | GLM 5.3 Flash (`low`), GPT-6 Luna (`low`), Claude Haiku 5.5 (`low`), Kimi K3.1 Pro (`low`) |
 | `writing` | Prose and docs | Claude Opus 5.5 (`medium`), Claude Sonnet 5.5 (`medium`), Kimi K3.1 Pro (`medium`), Gemini 4 Argon (`medium`) |
 | `visual-engineering` | Frontend and visual | Claude Fable 5.2 (`high`), Claude Opus 5.5 (`high`), Gemini 4 Argon (`high`), Kimi K3.1 Pro (`high`) |
 | `artistry` | Unconventional work | Gemini 4 Argon (`high`), Claude Opus 5.5 (`high`), Claude Fable 5.2 (`high`), Kimi K3.1 Pro (`high`) |
-| `capable` | Strong general work | Claude Opus 5.5 (`medium`), GPT-6.1 Sol (`medium`), Claude Fable 5.2 (`medium`), Kimi K3.1 Pro (`medium`) |
+| `capable` | Strong general work | Claude Opus 5.5 (`medium`), GPT-6.2 Sol (`medium`), Claude Fable 5.2 (`medium`), Kimi K3.1 Pro (`medium`) |
 | `simple-work` | Small everyday tasks | GPT-6 Luna (`low`), Claude Haiku 5.5 (`low`), DeepSeek V4.1 Flash (`low`) |
-| `deep-work` | Long tasks at frontier depth | Claude Opus 5.5 (`max`), GPT-6.1 Sol (`max`) |
-| `google-search` | Research grounded in Google Search | Gemini 4 Argon (`medium`), GPT-6.1 Sol (`medium`), Claude Opus 5.5 (`medium`) |
+| `deep-work` | Long tasks at frontier depth | Claude Opus 5.5 (`max`), GPT-6.2 Sol (`max`) |
+| `google-search` | Research grounded in Google Search | Gemini 4 Argon (`medium`), GPT-6.2 Sol (`medium`), Claude Opus 5.5 (`medium`) |
 | `x-search` | Live search on X | Grok 4.7 (`high`), Kimi K3.1 Pro (`high`), Gemini 4 Argon (`high`) |
-| `review` | A different model tries to break the diff | GPT-6.1 Sol (`xhigh`), Claude Opus 5.5 (`xhigh`), Kimi K3.1 Pro (`xhigh`) |
+| `review` | A different model tries to break the diff | GPT-6.2 Sol (`xhigh`), Claude Opus 5.5 (`xhigh`), Kimi K3.1 Pro (`xhigh`) |
 | `swarm` | Many parallel workers on separate slices | DeepSeek V4.1 Flash (`low`), GLM 5.3 Flash (`low`), GPT-6 Luna (`low`) |
-| `forensics` | Root-causing a live symptom or a captured trace | GPT-6 Astra (`xhigh`), Claude Opus 5.5 (`xhigh`), Kimi K3.1 Pro (`xhigh`) |
-| `synthesize` | Merging many results into one answer | Claude Opus 5.5 (`xhigh`), GPT-6.1 Sol (`xhigh`), Gemini 4 Argon (`high`) |
+| `forensics` | Root-causing a live symptom or a captured trace | GPT-6.2 Astra (`xhigh`), Claude Opus 5.5 (`xhigh`), Kimi K3.1 Pro (`xhigh`) |
+| `synthesize` | Merging many results into one answer | Claude Opus 5.5 (`xhigh`), GPT-6.2 Sol (`xhigh`), Gemini 4 Argon (`high`) |
 | `x_platform_data` affinity | X-platform data affinity | Grok Build 0.1, Kimi K3.1 Pro, Gemini 4 Argon |
-| Shared final order (`last_resort.any`) | Last resort when a chain is exhausted | Claude Opus 5.5 (`medium`), GPT-6.1 Sol (`medium`) |
+| Shared final order (`last_resort.any`) | Last resort when a chain is exhausted | Claude Opus 5.5 (`medium`), GPT-6.2 Sol (`medium`) |
 <!-- omh:model-chain-table:end -->
 
 Chain customization is a config edit, not a source edit — bare
@@ -2762,7 +2763,7 @@ $ cat ~/.omh/routing/model-chains.json
   "categories": {
     "architect": [
       {"model": "claude-fable-5-2", "reasoning_effort": "xhigh"},
-      {"model": "gpt-6.1-sol", "reasoning_effort": "xhigh"}
+      {"model": "gpt-6.2-sol", "reasoning_effort": "xhigh"}
     ],
     "quick": [
       {"model": "deepseek-v4.1-flash-ultrafast", "reasoning_effort": "low"},
@@ -3476,7 +3477,7 @@ implicit default.
 3. **Optional: route per work category.** The Maestro lane resolves each
    unit's model from a category → model table (`ultrabrain`, `deep`, `quick`,
    `writing`, ...). Override it per profile with
-   `omh coding category-maestro set codex ultrabrain gpt-6.1-sol:xhigh`, walk
+   `omh coding category-maestro set codex ultrabrain gpt-6.2-sol:xhigh`, walk
    it guided with `omh coding category-maestro interview` (the interactive
    `omh setup` offers this walk too), and inspect the effective table with
    `omh coding category-maestro show`. A unit declares its category
@@ -6429,7 +6430,7 @@ curl -fsSL https://omher.app/install | sh -s -- --uninstall --purge     # omh un
 ```
 
 `--purge` and `--dry-run` are accepted only with `--uninstall`, and `--uninstall`
-cannot be combined with `omher@beta`; any other argument prints the usage and
+cannot be combined with `omher`; any other argument prints the usage and
 exits 2 without writing anything. `OMH_LANG` is passed on as `--language`.
 
 What it does not do: it downloads and installs nothing, deletes no file itself,

@@ -386,7 +386,8 @@ async fn shell_start(
     .map_err(|e| e.to_string())?
 }
 
-/// How often a terminal session's foreground program is looked at.
+/// How often the foreground watcher wakes: a terminal session that had output or input since its foreground program
+/// was last looked at is looked at on the next wake, an idle one every `sessions::FG_IDLE_TICKS` wakes (5 s).
 const FOREGROUND_EVERY: Duration = Duration::from_secs(1);
 
 /// The page hears `session-fg` `{id, agent}` when the agent CLI in the foreground of terminal session `id` changes:

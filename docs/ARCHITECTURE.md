@@ -946,7 +946,7 @@ cannot define the new slot. Overrides cannot extend the vocabularies or contain
 secret/provider configuration. Resolution filters order against
 caller-confirmed active models. A missing head falls through to the next
 eligible candidate, then the shared final order tries Claude Opus 5.5 followed by
-GPT-6.1 Sol. No eligible candidate anywhere returns `owner_default` without
+GPT-6.2 Sol. No eligible candidate anywhere returns `owner_default` without
 blocking setup or preparing a model-config write. An unavailable explicit model
 instead returns `choice_required` and freezes fallthrough.
 

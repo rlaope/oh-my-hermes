@@ -37,11 +37,11 @@ describe("agentIcon", () => {
   });
 
   it("monochrome marks draw in currentColor; colour marks keep their own fills", () => {
-    for (const id of ["grok", "grokbot", "openai", "cursor", "opencode", "cline", "copilot", "goose", "kilo", "roo", "windsurf"]) {
+    for (const id of ["grok", "grokbot", "openai", "codex", "cursor", "opencode", "cline", "copilot", "goose", "kilo", "roo", "windsurf"]) {
       const m = agentIcon(id);
       expect(m.kind === "svg" && m.mono, id).toBe(true);
     }
-    for (const id of ["claude", "codex", "gemini", "amp", "junie", "qwen", "trae", "pi", "omp"]) {
+    for (const id of ["claude", "gemini", "amp", "junie", "qwen", "trae", "pi", "omp"]) {
       const m = agentIcon(id);
       expect(m.kind === "svg" && !m.mono && /fill="/.test(m.body), id).toBe(true);
     }

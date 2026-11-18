@@ -4,6 +4,35 @@ All notable changes will be documented here.
 
 ## Unreleased
 
+- **Four OMH tool descriptions are shorter, and the model still picks the same calls.** `omh_todo`, `omh_loop`,
+  `omh_document_plan` and `omh_delegate_route` say the same rules in fewer words, so each costs fewer tokens the
+  first time Hermes loads it (24,943 -> 23,718 characters together; the registered OMH schemas 63,324 -> 62,099).
+  An A/B of the first tool call on 11 scenarios (Claude Haiku and Sonnet, 3 runs per arm) passed 33/33 on both the
+  old and the new text. A first draft that also cut "a route set in an earlier turn runs on the previous model" and
+  "OMH mirrors each todo_list write" lost passes and was restored.
+
+- **Gemini prices re-read ahead of Google's two increases.** Google's pricing page, re-read on 2026-11-18, still
+  lists Gemini 4 Argon and Gemini 4 Carbon at $2 / $10 per million tokens through 2026-11-30 and $4 / $20 from
+  2026-12-01, and Gemini 3.8 Flash and 3.6 Flash at $0.75 / $3.75 through 2026-12-31 and $1.50 / $7.50 from
+  2027-01-01, cached input moving with each. Hydrogen stays at $1.50 / $7.50. Cost estimates keep today's prices
+  until each date; the price rows now point at the current page, and Argon's row is pinned by the same list-price
+  test as Carbon's.
+
+- **GPT-6.2 Astra and GPT-6.2 Sol take every slot GPT-6 Astra and GPT-6.1 Sol held** (OpenAI released both on
+  2026-11-17; owner decision, 2026-11-18). In the Hermes chains, the Codex lane table and the shared final order
+  (Claude Opus 5.5, then GPT-6.2 Sol), each new id sits where its predecessor sat, at the same effort, and no chain
+  changes order. `ultrabrain` is now Claude Fable 5.2, GPT-6.2 Astra, then Claude Opus 5.5; `forensics` and the Codex
+  `ultrabrain`, `architect`, `deep-work` and `forensics` rows lead with GPT-6.2 Astra, and every Sol slot names GPT-6.2
+  Sol. A child with no route record is labelled by its new pair: GPT-6.2 Astra at `xhigh` reads `forensics`, GPT-6.2
+  Sol at `xhigh` `review`. `omh coding model-contract --model gpt-6.2-sol` (or `gpt-6.2-astra`) prints each record from
+  OpenAI's pages: the API rejects `none`, so a request for `off`, `none` or `minimal` is raised to `low` on record, and
+  tool calling needs the Responses API. Astra lists at $8 / $40 per million tokens against GPT-6 Astra's $10 / $50, Sol
+  at GPT-6.1 Sol's $2 / $10, both with cached input at 5%, and cost estimates use those prices. Both get GPT-6 Astra's
+  calibration text unchanged; OpenAI's "persist until the task is complete" prompts are not used. GPT-6 Astra and
+  GPT-6.1 Sol leave the shipped chains but stay recognized, priced and routable, so a chain you set yourself can still
+  name them. Hermes builds up to origin/main of 2026-11-17 do not know the 6.2 ids yet and clamp `max` to `xhigh` on
+  the Codex route.
+
 - **OMH starts faster in a fresh Hermes process and its tools cost fewer tokens to open.** The chat router no longer
   imports the whole loop engine for one loop-command check, and the dag-ulw cue patterns compile on first use instead
   of all at import, so the plugin's start before a one-shot `chat -q`, a cron run or a delegated child's first reply
@@ -114,6 +143,60 @@ All notable changes will be documented here.
   weekly or nightly counts as a recurring schedule only when it says how often the work runs ("fix these monthly",
   "rebase them nightly, then report"). Naming a thing ("the monthly report", "a weekly digest module") no longer stops
   a listed backlog of code changes from running as a dag-ulw graph.
+
+- **DeepSeek coding units write their answer in the shape the task asked for.** The `deepseek` calibration block gains
+  one sentence: the answer file is one JSON object keyed by the task's own field names, not a bare list and not a
+  wrapper key of the model's own. On og `deepseek/deepseek-v4.1-flash-eco` the search tasks of
+  `benchmarks/live-model-tools/v1` had been writing `[...]` or `{"results": [...]}` where the task asked for
+  `locations`; with the sentence the six fixable templates passed 90 / 90 against 76 / 90 for a control run in the
+  same window (3 seeds x 5 reps, gate fixed before the run). The held-out `product-ab` corpus showed no difference
+  either way (19 / 40 against 20 / 40, one run per task). The block also reaches DeepSeek V3.2, V4 Flash and V4 Pro,
+  which were not measured; V4.1 Flash keeps its own override and does not get the sentence.
+
+- **A subagent that is not part of the running dag-ulw run no longer shows up inside it.** A subagent sent without
+  the run's `[dag:<run>/<node>]` marker (a hand-made repair, a child of an earlier cancelled run) used to sit in layer
+  1 of the DAG pane, where Desktop labelled it "Start node". It now shows below the run as **Outside DAG**: Desktop
+  cards, the text tree and the TUI block alike. Usage and cost still count it, and it no longer holds a finished
+  run's one-line summary open. While a run is active, such a dispatch is stopped once per turn with a pointer to
+  `omh_dag` (ready, settle, repair, extend); sending it again goes through. Contributed by @yqm-307 (#2914).
+
+- **`omh_delegate_route set` refuses a model id pinned to a provider that does not serve it.** A `set` with
+  `model=ANT-claude-opus-5-5 provider=openai-codex` used to reach `config.yaml`, and every delegated child after it
+  died on its first call with HTTP 400 from the vendor. When `routing/model-providers.json` records that exact model
+  id only under other providers, the call now returns an error naming the alias, every provider that serves the id
+  and the two valid ways to route it, and writes nothing. Aliases may still be pinned to another provider, and ids no
+  route records pass unchanged. Contributed by @rafaelmoreiraai (#2915).
+
+- **The omher desktop app is no longer labelled beta.** The one-command install is now
+  `curl -fsSL https://raw.githubusercontent.com/rlaope/oh-my-hermes/main/install.sh | sh -s -- omher` (and
+  `... install.ps1))) omher` on Windows); `curl -fsSL https://omher.app/omher | sh` stays the short form and now passes
+  `omher`. The old argument `omher@beta` keeps working, because every omher app up to 0.2.13 sends it from its
+  first-run Install button. The README and install docs drop "(beta)".
+
+- **A new user's one-command install of omher finishes.** On a Mac with neither Hermes nor OMH,
+  `curl -fsSL https://omher.app/omher | sh` installed Hermes and then stopped with "Hermes' installer finished, but no
+  Hermes was found" (exit 1), before OMH, setup or the app. omher's own first-run Install button stopped the same way.
+  Hermes' installer now ships its own Python and a `hermes` launcher with no `venv` folder, and puts `hermes` in
+  `~/.local/bin`, which the running installer does not see. `install.sh` and `install.ps1` now find Hermes through
+  the launcher, as the omher app does. Measured on Hermes 0.23.2 in a sandboxed new home: the run finishes in about
+  two minutes with the app installed.
+
+- **The install's last lines point at the right next step.** After the installer had run `omh setup` and `omh doctor`
+  itself, it still ended with "Next: run 'omh setup' … then 'omh doctor'". It now says OMH is connected to Hermes, and
+  where to add `omh` to PATH. For a Hermes installed in the same run, it says to sign in to an AI account from the line
+  above omher's chat box. It no longer says to pick a model from the model menu, which is empty until an account is
+  signed in.
+
+- **omher's model menu says when the bot has no AI account.** For a bot that Hermes says cannot answer, the menu's
+  empty list now reads "Hermes has no AI account yet. Sign in below the chat, then its models show here." instead of
+  "No models match", and the dot on the model button is gray instead of the connected green.
+
+- **`omh setup` and `omh uninstall` can edit a config that Hermes' installer just wrote.** Hermes' config template has
+  comment lines with quotes in them (`# order: ["anthropic", "google"]`), and OMH's config editor read those as quoted
+  keys it must not touch. On a fresh Hermes, setup therefore never recorded `plugins.entries.omh.settings.omh_home`,
+  and `omh doctor` warned about it with a fix that hit the same refusal. Uninstall could not take back
+  `plugins.enabled` or `memory.provider`. Comments are now ignored by that check; a quoted key in the YAML itself is
+  still left alone.
 
 ## 4.0.8 - 2026-11-15
 
@@ -375,6 +458,15 @@ All notable changes will be documented here.
   refused; a plain-HTTP ask never goes through `HTTP_PROXY`, so the key is not
   sent in clear to a proxy; and `typesafe_model` never applies to TypeSafe's
   own host however it is spelled. Thanks @brentkearney. (#2716)
+- **omher 0.2.14.** Many open terminals stay light, and Codex's terminal rows show the plain OpenAI mark.
+  - **Many terminals:** a hidden terminal's output re-renders only its own TERMINALS row and draws nothing until shown;
+    one hidden and quiet for two minutes gives its scrollback back and comes back exactly as it was (cursor, tab stops,
+    scroll position); one shared thread watches every session's program. With 20 terminals and 19 hidden ones
+    printing, script time over 8 s drops from 1333 ms to 124 ms, and after the park wait memory drops from 205.5 MB
+    to 35.5 MB. A terminal is also fitted again when the GPU renderer arrives late, so it no longer stays a few
+    columns too narrow. (#2945)
+  - **Codex mark:** Codex rows show the bare OpenAI (GPT) mark, and terminal-row marks have no frame around them.
+    (#2949)
 - **omher 0.2.13.** Terminals behave like a real terminal, a routine that keeps failing is one line in the chat, and
   macOS installs from one Terminal command without the "Not Opened" warning.
   - **Terminals:** `exit` or Ctrl+D closes a shell row as its x does; when Claude Code, Codex or any CLI ends, the

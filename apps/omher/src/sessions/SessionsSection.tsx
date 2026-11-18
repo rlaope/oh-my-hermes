@@ -12,16 +12,16 @@
 // dot. A session that no longer runs steps back.
 // Line 1 is the session's name (the person's, the agent's own title, a summary of the first message, else the
 // folder) and line 2 the folder and the agent. Double-click the name, or right-click › Rename, to name it.
-import { Fragment, useEffect, useLayoutEffect, useRef, useState, type PointerEvent as ReactPointerEvent, type RefObject } from "react";
-import { useStore } from "../state/store";
+import { Fragment, memo, useCallback, useEffect, useLayoutEffect, useRef, useState, type PointerEvent as ReactPointerEvent, type RefObject } from "react";
+import { getStore, useStore } from "../state/store";
 import { CloseIcon, LiveRing, PlusIcon, Popover, TypingDots } from "../ui";
 import { busyFor, shortTime } from "../app/time";
-import { useNow } from "../elsewhere/useNow";
 import { t } from "../i18n";
 import { composing } from "../lib/ime";
 import { AgentMark } from "./AgentMark";
 import { agentDef, agentLabel, draftFolder, folderChoices, folderName, hermesOnly, installLine, isTerminalRec, menuFocus, menuOrder, missingNote, parentPath, SHELL, termActivity, termFallbackName, termGroups, terminalAgents, termMarkAgent, termStatus, tildePath, type AgentId, type AgentInfo, type RowMark, type SessionRec, type TermStatus, type Unseen } from "./agents";
 import { TermRowMark } from "./TermRowMark";
+import { countRender, useAnyFlowing, useTermFace } from "./termActivity";
 import { allCollapsed, collapseOthers, folderSummary, getFolderPrefs, moveFolder, orderFolders, revealFolder as openFolder, setAllFolders, setFolderPrefs, toggleFolder, useFolderPrefs } from "./folders";
 import { ChevronDown, ChevronRight } from "../ui/icons";
 import { CUE_PX, useEdgeFade } from "../sidebar/edgeFade";
@@ -663,13 +663,17 @@ export function SessionList({ needle = "", query = "" }: { needle?: string; quer
     setConfirm(null);
     setRefocus(id);
   };
-  const ask = (rec: SessionRec) => {
+  // one function for every row (a memoised row keeps its props)
+  const ask = useCallback((rec: SessionRec) => {
     if (rec.status === "running" || rec.status === "starting") setConfirm(rec.id);
     else getSessions().close(rec.id);
-  };
+  }, []);
+  countRender("SessionList");
   const terms = ss.list.filter((r) => isTerminalRec(ss.agents, r));
-  // a terminal row's spinner and age tick on their own (output marks arrive throttled)
-  const now = useNow(terms.some((r) => r.status === "running" || r.status === "starting"), 1_000);
+  // each row's spinner and age, and a collapsed folder's spinner, follow the terminal's output on their own
+  // (termActivity.ts): output never re-renders this list
+  // the ages tick while any terminal runs (as one list-wide clock did before)
+  const ticking = terms.some((r) => r.status === "running" || r.status === "starting");
   if (terms.length === 0) return <SessionStart />;
   const shown = terms.filter((r) => sessionMatches(r, needle));
   return (
@@ -690,7 +694,8 @@ export function SessionList({ needle = "", query = "" }: { needle?: string; quer
             shut={shut}
             index={gi}
             all={all.map((x) => x.cwd)}
-            summary={{ ...folderSummary(g.rows.map((r) => termStatus(r, ss.unseen[r.id], now))), running: g.rows.filter((r) => (r.status === "running" || r.status === "starting") && termMarkAgent(r) !== null).length }}
+            summary={{ ...folderSummary(g.rows.map((r) => termStatus(r, ss.unseen[r.id], 0))), running: g.rows.filter((r) => (r.status === "running" || r.status === "starting") && termMarkAgent(r) !== null).length }}
+            flowIds={shut ? g.rows.filter((r) => (r.status === "running" || r.status === "starting") && ss.unseen[r.id] !== "bell").map((r) => r.id) : NO_IDS}
           />
           {!shut && g.rows.map((rec) =>
             confirm === rec.id ? (
@@ -726,7 +731,7 @@ export function SessionList({ needle = "", query = "" }: { needle?: string; quer
                 </button>
               </div>
             ) : (
-              <TermRow key={rec.id} rec={rec} unseen={ss.unseen[rec.id]} active={current === rec.id} now={now} onClose={() => ask(rec)} />
+              <TermRow key={rec.id} rec={rec} agents={ss.agents} unseen={ss.unseen[rec.id]} active={current === rec.id} ticking={ticking} lang={s.ui.lang} onClose={ask} />
             ),
           )}
         </div>
@@ -807,11 +812,17 @@ function useFolderDrag(cwd: string, all: readonly string[]) {
   };
 }
 
+const NO_IDS: readonly string[] = [];
+
 /** A TERMINALS group's header, Orca-style: a chevron that collapses its sessions (kept on this computer), the
  *  folder's name (semibold) and its git branch in small grey; collapsed, it shows how many sessions it holds and
  *  their live summary (the spinner while one prints, the amber dot while one waits for you, a red dot when one
  *  failed). Right-click: New terminal here, Collapse others, Show in Finder. Drag to reorder. */
-function FolderHead({ cwd, home, shut, index, all, summary }: { cwd: string; home: string | null; shut: boolean; index: number; all: string[]; summary: ReturnType<typeof folderSummary> & { running: number } }) {
+function FolderHead({ cwd, home, shut, index, all, summary: base, flowIds }: { cwd: string; home: string | null; shut: boolean; index: number; all: string[]; summary: ReturnType<typeof folderSummary> & { running: number }; flowIds: readonly string[] }) {
+  // the spinner: output flows in one of its running sessions that is not waiting for the person (termStatus's
+  // "busy"), followed here and not through the list
+  const busy = useAnyFlowing(flowIds);
+  const summary = { ...base, busy };
   const [branch, setBranch] = useState("");
   const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
   const drag = useFolderDrag(cwd, all);
@@ -1146,18 +1157,21 @@ function ViewMark({ view }: { view: "chat" | "terminal" }) {
   );
 }
 
-function TermRow({ rec, unseen, active, now, onClose }: { rec: SessionRec; unseen?: Unseen; active: boolean; now: number; onClose: () => void }) {
-  const s = useStore();
-  const ss = useSessions();
+/** A TERMINALS row. Memoised: it re-renders when its own record, unseen mark, selection or the language change, or
+ *  when its terminal's output changes what it shows (useTermFace), never for another session's output. `lang` is
+ *  only a key: the strings read the current language at render. */
+const TermRow = memo(function TermRow({ rec, agents, unseen, active, ticking, onClose }: { rec: SessionRec; agents: AgentInfo[] | null; unseen?: Unseen; active: boolean; ticking: boolean; lang: string; onClose: (rec: SessionRec) => void }) {
+  countRender(`row:${rec.id}`);
   const [editing, setEditing] = useState(false);
   const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
   const wrap = useRef<HTMLDivElement>(null);
-  const title = pickTitle(rec, termFallbackName(rec, ss.agents));
-  const status = termStatus(rec, unseen, now);
   const live = rec.status === "running" || rec.status === "starting";
+  const { act, now } = useTermFace(rec.id, rec.startedAt, ticking);
+  const title = pickTitle(rec, termFallbackName(rec, agents));
+  const status = termStatus({ status: rec.status, exitCode: rec.exitCode, lastOut: act.lastOut }, unseen, now);
   const markAgent = termMarkAgent(rec);
-  const age = ageMs(rec.lastOut ?? rec.startedAt, now);
-  const activity = termActivity(rec);
+  const age = ageMs(act.lastOut ?? rec.startedAt, now);
+  const activity = termActivity({ agent: rec.agent, fgAgent: rec.fgAgent, lastLine: act.lastLine, oscTitle: act.oscTitle });
   // a CLI runs in it: the card's thin amber lane on its left edge (the folder summary's "running" counts the same)
   const running = live && markAgent !== null;
   const actions = termMenuItems(rec);
@@ -1167,7 +1181,7 @@ function TermRow({ rec, unseen, active, now, onClose }: { rec: SessionRec; unsee
     else if (a === "reveal") void sx.revealFolder(rec.id);
     else if (a === "terminal") void sx.openTerminal(rec.id);
     else if (a === "here") sx.startTerminal(rec.agent, rec.cwd);
-    else if (a === "close") onClose();
+    else if (a === "close") onClose(rec);
   };
   const endEdit = (name: string | null | undefined) => {
     setEditing(false);
@@ -1237,16 +1251,16 @@ function TermRow({ rec, unseen, active, now, onClose }: { rec: SessionRec; unsee
           {body}
         </div>
       ) : (
-        <button type="button" className="ss-open" onClick={() => s.openSession(rec.id)} aria-current={active ? "true" : undefined} title={`${title.title}\n${rec.cwd}`}>
+        <button type="button" className="ss-open" onClick={() => getStore().actions.openSession(rec.id)} aria-current={active ? "true" : undefined} title={`${title.title}\n${rec.cwd}`}>
           {body}
         </button>
       )}
       {!editing && (
-        <button type="button" className="ss-x" aria-label={t("ss.close")} title={t("ss.close")} onClick={onClose} data-testid="session-close">
+        <button type="button" className="ss-x" aria-label={t("ss.close")} title={t("ss.close")} onClick={() => onClose(rec)} data-testid="session-close">
           <CloseIcon />
         </button>
       )}
       {menu && <SessionMenu at={menu} name={title.title} actions={actions} onPick={pick} onDismiss={() => setMenu(null)} />}
     </div>
   );
-}
+});

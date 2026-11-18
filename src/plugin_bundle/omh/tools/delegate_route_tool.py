@@ -290,6 +290,68 @@ def _legacy_custom_provider_names(config_text: str) -> set[str]:
     return names
 
 
+def _provider_conflict(
+    wire_model: str,
+    provider: str,
+    routes: dict[str, tuple[str, str]],
+) -> tuple[str, str, tuple[str, ...]] | None:
+    """The (alias, provider, every serving provider) for ``wire_model``, when ``provider`` is not among them.
+
+    An explicit ``provider`` wins over ``routing/model-providers.json`` by
+    design, so a category head or an alias may be pinned to another provider
+    a person holds. A *wire id* is different: ``ANT-claude-opus-5-5`` is the
+    proxy's own name for the model a route already places on ``opencodex``,
+    and no other provider serves that string. Observed live: a `set`
+    carrying `model=ANT-claude-opus-5-5 provider=openai-codex` was accepted,
+    the pin reached config.yaml, and every delegated child of that window
+    died in seconds with `HTTP 400 ... not supported when using Codex with a
+    ChatGPT account`. Only a route that names another provider conflicts; a
+    wire id no route describes is dispatched unchanged (fail open).
+    """
+    wanted = str(wire_model or "").strip().casefold()
+    wanted_provider = str(provider or "").strip().casefold()
+    if not wanted:
+        return None
+    conflicts: list[tuple[str, str]] = []
+    serving_providers: dict[str, str] = {}
+    for route_alias, (route_provider, route_wire) in routes.items():
+        if not route_provider or str(route_wire or "").strip().casefold() != wanted:
+            continue
+        serving_providers.setdefault(route_provider.casefold(), str(route_provider))
+        if route_provider.casefold() != wanted_provider:
+            conflicts.append((str(route_alias), str(route_provider)))
+    # More than one alias may legitimately name the same wire id, including
+    # across providers. An explicit provider is not in conflict when at least
+    # one recorded route assigns that wire id to it; only reject providers the
+    # route document does not list at all.
+    if wanted_provider in serving_providers:
+        return None
+    if not conflicts:
+        return None
+    route_alias, route_provider = conflicts[0]
+    return route_alias, route_provider, tuple(serving_providers.values())
+
+
+def _provider_conflict_error(
+    alias: str, wire_model: str, provider: str, held_by: tuple[str, str, tuple[str, ...]]
+) -> dict[str, Any]:
+    route_alias, route_provider, serving = held_by
+    return {
+        "status": "error",
+        "error": (
+            f"{wire_model} is the wire id this OMH home routes {route_alias} to {route_provider}; "
+            f"provider {provider!r} does not serve that id, and a child sent there fails at the "
+            f"vendor on its first call. Pass provider {route_provider!r} with {wire_model}, or "
+            f"route the alias {route_alias} and let the provider come from "
+            "routing/model-providers.json."
+        ),
+        "alias": route_alias,
+        "wire_model": wire_model,
+        "provider": provider,
+        "providers_serving_model": list(serving),
+    }
+
+
 def _block_lists_alias(hermes_home: Any, provider_id: str, alias: str, wire_model: str) -> bool | None:
     """Whether the `providers.<name>` block behind ``provider_id`` lists the model.
 
@@ -543,32 +605,23 @@ def _fallback_position(
 OMH_DELEGATE_ROUTE_SCHEMA = {
     "name": "omh_delegate_route",
     "description": (
-        "Route the NEXT Hermes-native delegate_task dispatch onto a mixture model "
-        "category (ultrabrain, deep, deep-work, architect, capable, unspecified-high, "
-        "unspecified-low, quick, simple-work, writing, visual-engineering, artistry, "
-        "google-search, x-search, review, swarm, forensics, synthesize) by "
-        "writing the delegation.model / "
-        "delegation.reasoning_effort keys Hermes reads per dispatch. Sequence per lane: "
-        "set the route, call delegate_task for that lane, then set the next lane's route. "
-        "Under a model_map delegation backend nothing is written: set/fallback return the "
-        "`option` to put on the task; other backends: not_applied. "
-        "SET THE ROUTE IN THE SAME TURN THAT DISPATCHES. How long a route lives depends on "
-        "the surface: in the Hermes TUI and CLI it is put back when the turn ends, so a "
-        "route set in one turn and dispatched in the next runs on the previous model rather "
-        "than yours; on a chat platform it lasts the session. Routing in the dispatching "
-        "turn is correct on both, so do not rely on a route you set earlier. You do NOT "
-        "have to clear at the end; call clear only to put the previous values back sooner. "
-        "A restore is skipped, and says so, when the keys no longer hold what OMH wrote -- "
-        "a value someone else set is never overwritten. Children already running keep their model. "
-        "Unless delegation.fallback_providers is set, a child whose model the account "
-        "cannot serve dies on an HTTP 400 yet its delegation still reports completed with "
-        "the error text as the result — a completed child with no recorded model usage "
-        "means exactly this. When that happens call action=fallback to advance the route "
-        "and re-dispatch; it stays in the category this conversation set, or the one you "
-        "pass. An exhausted chain restores what the delegation keys "
-        "held before OMH first wrote them, which is the user's own pinned model when they "
-        "had one and parent inheritance when they did not; if it cannot prove OMH wrote "
-        "the current value it changes nothing and reports unrecorded_value_not_ours. "
+        "Route the NEXT Hermes-native delegate_task dispatch onto a mixture model category by "
+        "writing the delegation.model / delegation.reasoning_effort keys Hermes reads per dispatch. "
+        "Per lane: set the route, call delegate_task for that lane, then set the next lane's route. "
+        "Under a model_map backend nothing is written: set/fallback return the `option` to put on "
+        "the task; other backends: not_applied. "
+        "SET THE ROUTE IN THE SAME TURN THAT DISPATCHES: the Hermes TUI and CLI put it back when the "
+        "turn ends, so a route set in one turn and dispatched in the next runs on the previous model "
+        "rather than yours (a chat platform keeps it for the session). Route in the dispatching turn; "
+        "do not rely on a route you set earlier. "
+        "No clear is needed at the end. A value someone else set is never overwritten. Running "
+        "children keep their model. "
+        "Unless delegation.fallback_providers is set, a child whose model the account cannot serve "
+        "dies on an HTTP 400 yet reports completed with the error text as its result (completed with "
+        "no recorded model usage means exactly this): call action=fallback and re-dispatch; it stays "
+        "in this conversation's category. An exhausted chain restores the keys' value from before "
+        "OMH first wrote them; when it cannot prove OMH wrote the current value it changes nothing "
+        "and reports unrecorded_value_not_ours. "
         "Relay any `say` field to the user once, in their language and your own words."
     ),
     "parameters": {
@@ -1237,6 +1290,13 @@ def omh_delegate_route_handler(args: dict[str, Any], **kwargs) -> str:
         return json.dumps(attach_public_observation(payload, observation), ensure_ascii=False, sort_keys=True)
     if provider:
         wire_model = model
+        # A wire id carries its provider with it: the route this home already
+        # records for it is the only one that serves the string.
+        if args.get("provider"):
+            held_by = _provider_conflict(wire_model, provider, provider_routes)
+            if held_by is not None:
+                payload = _provider_conflict_error(alias, wire_model, provider, held_by)
+                return json.dumps(attach_public_observation(payload, observation), ensure_ascii=False, sort_keys=True)
     else:
         wire_model, provider = resolve_provider_model(alias, routes=provider_routes)
     pinned_for_inherited: dict[str, str] | None = None

@@ -211,7 +211,10 @@ class ExecutorPromptingTests(unittest.TestCase):
         # Owner decision (2026-10-01): GPT-6.1 Sol takes every GPT-6 Sol slot,
         # the `-sol` Codex handoff overlay included; this test names the id
         # so the inheritance is reviewed rather than a suffix accident.
-        for model in ("gpt-6.1-sol", "openai/gpt-6.1-sol", "openai-codex/gpt-6.1-sol"):
+        # GPT-6.2 Sol took every GPT-6.1 Sol slot on 2026-11-18, the overlay
+        # included (owner decision); named here on the same terms.
+        for model in ("gpt-6.1-sol", "openai/gpt-6.1-sol", "openai-codex/gpt-6.1-sol",
+                      "gpt-6.2-sol", "openai/gpt-6.2-sol", "openai-codex/gpt-6.2-sol"):
             with self.subTest(model=model):
                 payload = build_coding_delegation_payload(
                     "Implement src/example.py",
@@ -248,7 +251,7 @@ class ExecutorPromptingTests(unittest.TestCase):
                 overlay = payload["executor_handoff"]["executor_prompting_contract"]["throughput_overlay"]
                 self.assertEqual(overlay["mode"], "gpt_sol_codex_handoff")
         # A GPT id that projects to no Sol contract keeps the plain overlay.
-        for model in ("gpt-6-astra", "gpt-6-solar-preview"):
+        for model in ("gpt-6-astra", "gpt-6.2-astra", "gpt-6-solar-preview"):
             with self.subTest(model=model):
                 payload = build_coding_delegation_payload(
                     "Implement src/example.py",

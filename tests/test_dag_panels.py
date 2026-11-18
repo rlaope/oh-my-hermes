@@ -136,6 +136,19 @@ class DagPanelSplitTests(unittest.TestCase):
         self.assertEqual(dag_run_summary(graph), "")
         self.assertEqual(dag_run_summary({**graph, "dag_open": False}), "DAG · export feature · done 0/1 · 1 unknown")
 
+    def test_an_outside_lane_is_no_lane_of_the_runs_summary(self) -> None:
+        from omh.tui.panels import dag_run_summary
+
+        run = [{"id": "root", "kind": "root"}, {"id": "d:export:api", "kind": "lane", "state": "done"}]
+        graph = {"name": "export feature", "nodes": run}
+        self.assertEqual(dag_run_summary(graph), "DAG · export feature · done 1/1")
+        # A markerless child still running beside a finished run neither holds the run open nor joins its tally.
+        outside = {"id": "s:sa-fix", "kind": "lane", "state": "running", "outside_dag": True}
+        self.assertEqual(dag_run_summary({**graph, "nodes": [*run, outside]}), "DAG · export feature · done 1/1")
+        # The same child unflagged is a lane of the run, as before.
+        unflagged = {key: value for key, value in outside.items() if key != "outside_dag"}
+        self.assertEqual(dag_run_summary({**graph, "nodes": [*run, unflagged]}), "")
+
     def test_the_agent_strip_names_a_nodes_child_by_its_label(self) -> None:
         roster = Roster()
         roster.apply("subagent.start", {"subagent_id": "sa-api", "goal": "Export API [dag:export/api]"}, 0.0)

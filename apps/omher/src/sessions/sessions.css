@@ -1496,24 +1496,6 @@ body.side-resizing * {
   display: block;
   border-radius: 3px;
 }
-/* one frame for every mark in a row or tab, running or not (an exited pi and a running Codex read alike): a hairline
-   rounded square a few px outside the mark; running turns it the running colour. It never moves */
-.ss-row .trm::after,
-.termpanel-tab .trm::after,
-.ss-head-mark .trm::after {
-  content: "";
-  position: absolute;
-  inset: -3px;
-  border-radius: 5px;
-  box-shadow: 0 0 0 1px color-mix(in srgb, var(--muted) 45%, transparent);
-  pointer-events: none;
-}
-/* live (the program prints now): the same frame in the running colour, beside the row's amber spinner */
-.ss-row .trm.live::after,
-.termpanel-tab .trm.live::after,
-.ss-head-mark .trm.live::after {
-  box-shadow: 0 0 0 1px var(--term-run, #f2b705);
-}
 /* the + menu: rows below the cut get a visible cue, not only a fade */
 .ss-more-cue {
   display: flex;

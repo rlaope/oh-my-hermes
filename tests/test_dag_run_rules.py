@@ -1335,7 +1335,7 @@ class ReviewCategoryLintTests(unittest.TestCase):
                            ("flash", "glm-5.3-flash", "low"))
         architect_only = options(("sol", "openai/gpt-6.1-sol", "medium"), ("kimi-x", "kimi-k3.1-pro", "xhigh"),
                                  ("flash", "glm-5.3-flash", "low"))
-        served = options(("sol", "openai/gpt-6.1-sol", "medium"), ("astra", "openai/gpt-6-astra", "xhigh"),
+        served = options(("sol", "openai/gpt-6.1-sol", "medium"), ("astra", "openai/gpt-6.2-astra", "xhigh"),
                          ("flash", "glm-5.3-flash", "low"))
         definitions = [node("api", scope=("src/api.py",)), node("ui", category="unspecified-low", scope=("src/ui.py",)),
                        node("diff", category="review", depends_on=("api", "ui"), role="review"),

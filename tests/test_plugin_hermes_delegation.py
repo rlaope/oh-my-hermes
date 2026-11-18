@@ -312,17 +312,24 @@ class MixtureCategoryProjectionTest(unittest.TestCase):
     def test_an_astra_xhigh_child_is_labeled_forensics(self):
         # Astra at xhigh sits second in ultrabrain and architect and heads
         # only forensics since 2026-11-09, so the head match labels it there.
+        # GPT-6.2 Astra took every GPT-6 Astra slot on 2026-11-18, so the label
+        # moved with the pair and the retired id labels nothing.
         self.assertEqual(
-            mixture_category_for("gpt-6-astra", "xhigh", parent_model="kimi-k3"),
+            mixture_category_for("gpt-6.2-astra", "xhigh", parent_model="kimi-k3"),
             "forensics",
         )
+        self.assertEqual(mixture_category_for("gpt-6-astra", "xhigh", parent_model="kimi-k3"), "")
+        # Sol's pairs moved the same way: 6.2 Sol at xhigh heads review, and
+        # 6.1 Sol labels nothing.
+        self.assertEqual(mixture_category_for("gpt-6.2-sol", "xhigh", parent_model="kimi-k3"), "review")
+        self.assertEqual(mixture_category_for("gpt-6.1-sol", "xhigh", parent_model="kimi-k3"), "")
 
     def test_an_effort_mismatch_with_the_chain_entry_yields_no_category(self):
-        # gpt-6-astra appears only at xhigh (the forensics head and the GPT
+        # gpt-6.2-astra appears only at xhigh (the forensics head and the GPT
         # slot of ultrabrain and architect); a medium run on a different parent
         # matches nothing and must not be dressed up as a routed dispatch.
         self.assertEqual(
-            mixture_category_for("gpt-6-astra", "medium", parent_model="kimi-k3"), ""
+            mixture_category_for("gpt-6.2-astra", "medium", parent_model="kimi-k3"), ""
         )
 
     def test_head_match_beats_membership_match(self):
@@ -545,6 +552,9 @@ class MixtureCategoryProjectionTest(unittest.TestCase):
         # Catalog sync, 2026-11-11: Gemini 4 Carbon carries Argon's
         # introductory card (aistudio.google.com/docs/pricing).
         "gemini-4-carbon": (2.0, 10.0, 0.10),
+        # Re-read 2026-11-18: Argon's introductory card, which runs through
+        # 2026-11-30 (4/20, cache 0.20, from 2026-12-01).
+        "gemini-4-argon": (2.0, 10.0, 0.10),
         # Catalog sync, 2026-11-13: Gemini 4 Hydrogen's own card, cached
         # input a twentieth of input (aistudio.google.com/docs/pricing).
         "gemini-4-hydrogen": (1.5, 7.5, 0.075),
@@ -570,10 +580,11 @@ class MixtureCategoryProjectionTest(unittest.TestCase):
                     cost(f"vendor/{model_id}", 1_000, 1_000, 1_000), cost(model_id, 1_000, 1_000, 1_000)
                 )
                 # None of them borrows a category label from a chain, except
-                # Grok 4.7, which heads x-search since 2026-10-28.
+                # Grok 4.7, which heads x-search since 2026-10-28, and Gemini 4
+                # Argon, which heads artistry since 2026-10-28.
                 self.assertEqual(
                     mixture_category_for(model_id, "high", parent_model="gpt-6.1-sol"),
-                    "x-search" if model_id == "grok-4.7" else "",
+                    {"grok-4.7": "x-search", "gemini-4-argon": "artistry"}.get(model_id, ""),
                 )
 
     def test_mixed_case_served_ids_meet_the_lower_case_price_rows(self):
@@ -780,9 +791,11 @@ class MixtureCategoryProjectionTest(unittest.TestCase):
         # (claude-opus-5-5, medium) heads writing -- capable shares that head
         # and loses the label to the earlier category (accepted collision).
         contracts = {
-            # Astra at xhigh heads forensics alone since 2026-11-09.
-            "gpt-6-astra": ("openai", "xhigh", "forensics", "openai", "anthropic"),
-            "gpt-6.1-sol": ("openai", "high", "deep", "openai", "anthropic"),
+            # Astra at xhigh heads forensics alone since 2026-11-09 (GPT-6.2
+            # Astra since 2026-11-18), and Sol at high sits in deep (GPT-6.2
+            # Sol since 2026-11-18).
+            "gpt-6.2-astra": ("openai", "xhigh", "forensics", "openai", "anthropic"),
+            "gpt-6.2-sol": ("openai", "high", "deep", "openai", "anthropic"),
             "deepseek-v4.1-flash": ("deepseek", "low", "swarm", "deepseek", "anthropic"),
             "claude-opus-5-5": ("anthropic", "medium", "writing", "anthropic", "openai"),
             "claude-sonnet-5-5": ("anthropic", "medium", "writing", "anthropic", "openai"),
@@ -800,9 +813,11 @@ class MixtureCategoryProjectionTest(unittest.TestCase):
         # own test above checks pricing, provider eligibility, and `-pro`.
         # GPT-6 Cyber (2026-11-06) is access-gated and never chained; its own
         # test above checks the same three things.
-        # Claude Fable 5.1 left every shipped chain on 2026-11-10; its
-        # recognition-only provider row is checked in test_provider_entitlements.
-        unchained = {"jev-1.13.0", "gpt-6.1-terra", "gpt-6-cyber", "claude-fable-5-1"}
+        # Claude Fable 5.1 left every shipped chain on 2026-11-10, and GPT-6
+        # Astra and GPT-6.1 Sol on 2026-11-18 (with them their declared
+        # `-pro` / `-fast` / `-flex` aliases); their recognition-only provider
+        # rows are checked in test_provider_entitlements.
+        unchained = {"jev-1.13.0", "gpt-6.1-terra", "gpt-6-cyber", "claude-fable-5-1", "gpt-6-astra", "gpt-6.1-sol"}
         for model_id in (*contracts, *expected):
             contract_id = expected.get(model_id, (model_id,))[0]
             if contract_id in unchained:
@@ -932,21 +947,21 @@ class MixtureCategoryProjectionTest(unittest.TestCase):
                 )
 
     def test_dated_snapshot_labels_its_base_category_price_and_provider(self) -> None:
-        # GPT-6.1 Sol sits in the shipped deep chain; a provider that serves only
+        # GPT-6.2 Sol sits in the shipped deep chain; a provider that serves only
         # a dated id (a shape reported for GPT-5.6 Terra on 2026-09-11; Terra
         # left the shipped chains on 2026-09-23) must label the same category,
         # price, and provider family as the base, while an unknown base with a
         # date gains nothing.
-        for spelling in ("gpt-6.1-sol-2026-09-29", "openai/gpt-6.1-sol-2026-09-29"):
+        for spelling in ("gpt-6.2-sol-2026-11-17", "openai/gpt-6.2-sol-2026-11-17"):
             with self.subTest(spelling=spelling):
                 self.assertEqual(
                     mixture_category_for(spelling, "high", parent_model="kimi-k3"),
-                    mixture_category_for("gpt-6.1-sol", "high", parent_model="kimi-k3"),
+                    mixture_category_for("gpt-6.2-sol", "high", parent_model="kimi-k3"),
                 )
                 self.assertEqual(mixture_category_for(spelling, "high", parent_model="kimi-k3"), "deep")
                 self.assertEqual(
                     hermes_delegation_module._approximate_cost_usd(spelling, 1000.0, 1000.0, 100.0),
-                    hermes_delegation_module._approximate_cost_usd("gpt-6.1-sol", 1000.0, 1000.0, 100.0),
+                    hermes_delegation_module._approximate_cost_usd("gpt-6.2-sol", 1000.0, 1000.0, 100.0),
                 )
                 self.assertIs(provider_serves_alias(spelling, "openai"), True)
                 self.assertIs(provider_serves_alias(spelling, "anthropic"), False)
@@ -958,14 +973,14 @@ class MixtureCategoryProjectionTest(unittest.TestCase):
         )
         # The exact-contract label follows the snapshot too.
         self.assertEqual(
-            mixture_category_for("gpt-6-astra-2026-08-01", "xhigh", parent_model="kimi-k3"),
-            mixture_category_for("gpt-6-astra", "xhigh", parent_model="kimi-k3"),
+            mixture_category_for("gpt-6.2-astra-2026-11-17", "xhigh", parent_model="kimi-k3"),
+            mixture_category_for("gpt-6.2-astra", "xhigh", parent_model="kimi-k3"),
         )
         # A child on a dated snapshot of the parent's model is on the parent's
         # model; the parent's own id is the base the reader knows, so this
         # holds for an alias no table describes as well.
         self.assertEqual(
-            mixture_category_for("gpt-6.1-sol-2026-09-29", "high", parent_model="gpt-6.1-sol"), "inherit"
+            mixture_category_for("gpt-6.2-sol-2026-11-17", "high", parent_model="gpt-6.2-sol"), "inherit"
         )
         self.assertEqual(
             mixture_category_for("zzz-mystery-2026-08-01", "high", parent_model="zzz-mystery"), "inherit"
@@ -974,10 +989,10 @@ class MixtureCategoryProjectionTest(unittest.TestCase):
         # child under a date-pinned parent, or a different date, is not the
         # parent's run and falls through to the chain match.
         self.assertEqual(
-            mixture_category_for("gpt-6.1-sol", "high", parent_model="openai/gpt-6.1-sol-2026-09-29"), "deep"
+            mixture_category_for("gpt-6.2-sol", "high", parent_model="openai/gpt-6.2-sol-2026-11-17"), "deep"
         )
         self.assertEqual(
-            mixture_category_for("gpt-6.1-sol-2026-10-01", "high", parent_model="gpt-6.1-sol-2026-09-29"), "deep"
+            mixture_category_for("gpt-6.2-sol-2026-11-20", "high", parent_model="gpt-6.2-sol-2026-11-17"), "deep"
         )
         self.assertEqual(
             mixture_category_for("zzz-mystery-2026-08-01", "high", parent_model="zzz-mystery-2026-07-09"), ""
@@ -3111,8 +3126,8 @@ class HudMergeTest(unittest.TestCase):
                 [
                     {
                         "id": "20260818_100100_eeee55",
-                        "model": "gpt-6.1-sol",
-                        "prompt_model": "gpt-6.1-sol",
+                        "model": "gpt-6.2-sol",
+                        "prompt_model": "gpt-6.2-sol",
                         "effort": "high",
                         "started_at": time.time() - 30,
                         "usage": {
@@ -3132,9 +3147,10 @@ class HudMergeTest(unittest.TestCase):
             rows = payload["subagents"]["rows"]
             self.assertEqual(len(rows), 1)
             self.assertEqual(rows[0]["role"], "hermes-native")
-            # gpt-6.1-sol:high sits second in the deep chain (behind Opus 5.5
-            # since 2026-10-13), heads no chain, and differs from the parent
-            # model, so the projected category is visible in the HUD row.
+            # gpt-6.2-sol:high sits second in the deep chain (behind Opus 5.5
+            # since 2026-10-13; 6.2 Sol since 2026-11-18), heads no chain, and
+            # differs from the parent model, so the projected category is
+            # visible in the HUD row.
             self.assertEqual(rows[0]["category"], "deep")
             # Nothing was dropped, so the disclosed hidden-row count is zero.
             self.assertEqual(payload["subagents"]["hidden_rows"], 0)
