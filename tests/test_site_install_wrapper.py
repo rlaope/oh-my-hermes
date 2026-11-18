@@ -108,10 +108,10 @@ class ShortInstallWrapperTests(unittest.TestCase):
         self.assertEqual(list(self.tmp.iterdir()), [])
 
     def test_the_callers_arguments_are_forwarded_and_nothing_is_added(self) -> None:
-        self.assertEqual(self._run("omher@beta", "two words").returncode, 0)
-        self.assertEqual(self._args(), ["omher@beta", "two words"])
-        self.assertEqual(self._piped("omher@beta").returncode, 0)
-        self.assertEqual(self._args(), ["omher@beta"])
+        self.assertEqual(self._run("omher", "two words").returncode, 0)
+        self.assertEqual(self._args(), ["omher", "two words"])
+        self.assertEqual(self._piped("omher").returncode, 0)
+        self.assertEqual(self._args(), ["omher"])
 
     def test_the_installers_exit_code_is_passed_through(self) -> None:
         self.assertEqual(self._run(FAKE_RC="7").returncode, 7)
@@ -150,7 +150,7 @@ class ShortInstallWrapperSourceTests(unittest.TestCase):
             ps1,
             [f"& ([scriptblock]::Create((Invoke-RestMethod {INSTALL_PS1_URL}))) @args"],
         )
-        self.assertNotIn("omher@beta", "\n".join(ps1))
+        self.assertNotIn(" omher", "\n".join(ps1))
 
     def test_pages_serves_the_wrappers_as_committed_files(self) -> None:
         # pages.yml copies site/. verbatim; .nojekyll keeps an extensionless

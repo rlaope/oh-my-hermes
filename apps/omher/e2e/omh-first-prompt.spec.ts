@@ -91,7 +91,7 @@ async function open(page: Page, o: Open = {}) {
       w.__OMHER_GATE__ = {
         status: async () => (hermes ? { state: "ready" } : { state: "failed", error: "Hermes not found", missing: "hermes" }),
         retry: async () => {},
-        installCommand: async () => "curl -fsSL https://raw.githubusercontent.com/rlaope/oh-my-hermes/main/install.sh | sh -s -- omher@beta",
+        installCommand: async () => "curl -fsSL https://raw.githubusercontent.com/rlaope/oh-my-hermes/main/install.sh | sh -s -- omher",
         install: async (onEvent: (e: unknown) => void) => {
           calls.push("install");
           for (const text of ["[ok] Hermes Agent found", "[ok] omh installed to ~/.local/bin/omh", "[ok] OMH doctor: ok"]) {
