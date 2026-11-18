@@ -133,6 +133,13 @@ All notable changes will be documented here.
   either way (19 / 40 against 20 / 40, one run per task). The block also reaches DeepSeek V3.2, V4 Flash and V4 Pro,
   which were not measured; V4.1 Flash keeps its own override and does not get the sentence.
 
+- **A subagent that is not part of the running dag-ulw run no longer shows up inside it.** A subagent sent without
+  the run's `[dag:<run>/<node>]` marker (a hand-made repair, a child of an earlier cancelled run) used to sit in layer
+  1 of the DAG pane, where Desktop labelled it "Start node". It now shows below the run as **Outside DAG**: Desktop
+  cards, the text tree and the TUI block alike. Usage and cost still count it, and it no longer holds a finished
+  run's one-line summary open. While a run is active, such a dispatch is stopped once per turn with a pointer to
+  `omh_dag` (ready, settle, repair, extend); sending it again goes through. Contributed by @yqm-307 (#2914).
+
 ## 4.0.8 - 2026-11-15
 
 - **The OMH TUI shows a compression as one gauge row, and a prompt typed meanwhile goes on by itself.** `/compact`

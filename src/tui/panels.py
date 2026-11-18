@@ -1598,7 +1598,9 @@ def dag_run_summary(graph: Mapping[str, Any]) -> str:
     is still out, though its lane reads settled). `/dag` still draws the
     whole graph.
     """
-    lanes = [node for node in _rows(graph.get("nodes")) if node.get("kind") != "root"]
+    # An `outside_dag` lane (a ledger child the run did not bind) is no lane of the run: it neither counts toward
+    # the run's tally nor keeps a finished run's tree open.
+    lanes = [node for node in _rows(graph.get("nodes")) if node.get("kind") != "root" and node.get("outside_dag") is not True]
     if not lanes or _count(graph.get("hidden_nodes")) or graph.get("dag_open") or any(
         node.get("state") not in SETTLED_NODE_STATES for node in lanes
     ):

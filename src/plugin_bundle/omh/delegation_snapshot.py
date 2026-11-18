@@ -340,6 +340,8 @@ def _fenced(lines: Sequence[str]) -> str:
 
 def start_block(graph: Mapping[str, Any], lanes: Sequence[Mapping[str, Any]]) -> str:
     """The run's start: its size, then one line per layer listing its tasks, at most `MOMENT_LINES` lines."""
+    # An outside_dag lane is no lane of the run: it is not a layer's task, and the unplaced fallback never lands it.
+    lanes = [node for node in lanes if node.get("outside_dag") is not True]
     by_id = {str(node["id"]): node for node in lanes}
     layers = [
         [by_id[node_id] for node_id in layer if node_id in by_id]

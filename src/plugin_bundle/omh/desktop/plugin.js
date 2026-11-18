@@ -336,6 +336,7 @@ export const EN = {
   dgAfter: '← {nodes}',
   dgClose: 'Close',
   dgLayer: 'layer {count}',
+  dgOutsideDag: 'Outside DAG',
   dgNotStarted: 'model ? (not started)',
   dgNotStartedTip: 'No child has started this node; Hermes has recorded no model yet',
   dgModelTip: 'model recorded for the child session',
@@ -579,6 +580,7 @@ export const KO = {
   dgAfter: '← {nodes}',
   dgClose: '닫기',
   dgLayer: '{count}층',
+  dgOutsideDag: 'DAG 외부',
   dgNotStarted: '모델 ? (시작 전)',
   dgNotStartedTip: '아직 이 노드를 시작한 자식이 없어 Hermes가 모델을 기록하지 않았습니다',
   dgModelTip: '자식 세션에 기록된 모델',
@@ -1854,8 +1856,16 @@ export function dagModel(graph) {
   if (!graph || graph.status !== 'active') return null
   const records = lanesOf(graph)
   if (!records.length) return null
+  // A lane the backend marked `outside_dag` (a ledger child no node of the drawn run bound) is not part of the run:
+  // it joins no layer and no edge, and is drawn under its own Outside DAG block below the layers.
+  const inside = records.filter(function (record) {
+    return record.outside_dag !== true
+  })
+  const outsideRecords = records.filter(function (record) {
+    return record.outside_dag === true
+  })
   const ids = new Set(
-    records.map(function (record) {
+    inside.map(function (record) {
       return safeText(record.id)
     })
   )
@@ -1883,7 +1893,7 @@ export function dagModel(graph) {
     if (Number.isInteger(row.layer) && reaches(row.layer, 0)) hiddenRow[row.layer] = row
   })
   const layerCount = hiddenAt && Number.isInteger(graph.layer_count) && exceeds(graph.layer_count, 0) ? graph.layer_count : 0
-  const lanes = records.map(function (record) {
+  const lanes = inside.map(function (record) {
     const id = safeText(record.id)
     const state = humanState(record.state) || 'unknown'
     const model = safeText(record.model).split('/').pop()
@@ -1915,10 +1925,49 @@ export function dagModel(graph) {
       blocks: below(id, children).size
     }
   })
+  // The outside lanes: the same card fields as a run lane, minus what only the run gives (layer, parents, children).
+  const outside = outsideRecords.map(function (record) {
+    const id = safeText(record.id)
+    const state = humanState(record.state) || 'unknown'
+    const model = safeText(record.model).split('/').pop()
+    const category = safeText(record.category)
+    return {
+      id,
+      title: safeText(record.title) || id,
+      state,
+      glyph: laneMark(state).glyph,
+      word: stateWord(state),
+      status: safeText(record.status),
+      tone: segmentTone(`status:${state}`),
+      border: segmentTone(`node:${state}`),
+      category: category === '?' ? '' : category,
+      model: model === '?' ? '' : model,
+      effort: safeText(record.effort),
+      role: safeText(record.role),
+      origin: '',
+      outside: true,
+      waits: Number.isInteger(record.waits_on) ? record.waits_on : 0,
+      elapsed: Number.isFinite(record.elapsed_seconds) ? record.elapsed_seconds : null,
+      session: safeText(record.session_tail),
+      summary: longText(record.summary),
+      unchecked: record.handoff_checked === false,
+      usage: laneUsage(record),
+      layer: null,
+      parents: [],
+      children: [],
+      blocks: 0
+    }
+  })
   const index = {}
   lanes.forEach(function (lane) {
     index[lane.id] = lane
   })
+  outside.forEach(function (lane) {
+    index[lane.id] = lane
+  })
+  // The figures a card pane reports — per-model usage, totals, cost, elapsed time — are the lanes' own, the
+  // outside ones included: separation is where a lane draws, never which lanes the aggregates count.
+  const all = lanes.concat(outside)
   const depth = lanes.reduce(
     function (most, lane) {
       return Math.max(most, lane.layer)
@@ -1938,7 +1987,7 @@ export function dagModel(graph) {
     )
   }
   const byModel = new Map()
-  lanes.forEach(function (lane) {
+  all.forEach(function (lane) {
     if (lane.model) byModel.set(lane.model, (byModel.get(lane.model) || []).concat([lane]))
   })
   const models = Array.from(byModel, function (entry) {
@@ -1962,6 +2011,7 @@ export function dagModel(graph) {
   return {
     name: safeText(graph.name),
     lanes,
+    outside,
     index,
     layers,
     edges,
@@ -1970,16 +2020,17 @@ export function dagModel(graph) {
     bottlenecks,
     path: idsForTitles(lanes, topology && Array.isArray(topology.critical_path) ? topology.critical_path : []),
     total: sumUsage(
-      lanes.map(function (lane) {
+      all.map(function (lane) {
         return lane.usage
       })
     ),
-    seconds: lanes.reduce(function (sum, lane) {
+    seconds: all.reduce(function (sum, lane) {
       return sum + (lane.elapsed || 0)
     }, 0),
-    timed: countOf(lanes, function (lane) {
+    timed: countOf(all, function (lane) {
       return lane.elapsed !== null
     }),
+    all,
     hidden: Number(graph.hidden_nodes) || 0,
     // Per layer, the lanes the reader left out and their states; null where it cut nothing by layer.
     hiddenAt: hiddenAt
@@ -3061,7 +3112,7 @@ function UsageStack({ usage, big }) {
 function DagKpis({ dag }) {
   const total = dag.total
   // A share names the whole run, the lanes the reader cut included: `47/500 nodes priced`, not `47/47`.
-  const lanes = dag.lanes.length + dag.hidden
+  const lanes = dag.all.length + dag.hidden
   const prompt = promptTokens(total)
   const cells = [
     {
@@ -3125,15 +3176,17 @@ function routeText(lane) {
 }
 
 function LaneCard({ dag, lane, picked, dim, compact, onPick }) {
-  const after = lane.parents.length
-    ? t('dgAfter', {
-        nodes: lane.parents
-          .map(function (id) {
-            return dag.index[id].title
-          })
-          .join(', ')
-      })
-    : t('dgStart')
+  const after = lane.outside
+    ? ''
+    : lane.parents.length
+      ? t('dgAfter', {
+          nodes: lane.parents
+            .map(function (id) {
+              return dag.index[id].title
+            })
+            .join(', ')
+        })
+      : t('dgStart')
   const named = lane.tone === 'accent' || lane.tone === 'error' ? toneClass(lane.tone) : lane.state === 'waiting' ? 'omh-pane-secondary' : ''
   return node(
     'button',
@@ -3638,7 +3691,7 @@ function LaneDetail({ dag, lane, onPick, seat }) {
       lane.model
         ? chip('model', `${lane.model}${lane.effort ? ` · ${lane.effort}` : ''}`, t('dgModelTip'), 'model')
         : chip('model', t('dgNotStarted'), t('dgNotStartedTip')),
-      chip('layer', t('dgLayer', { count: lane.layer + 1 })),
+      Number.isInteger(lane.layer) ? chip('layer', t('dgLayer', { count: lane.layer + 1 })) : chip('layer', t('dgOutsideDag')),
       lane.role && lane.role !== 'build' ? chip('role', lane.role) : null,
       lane.origin ? chip('origin', t(lane.origin === 'repair' ? 'dgRepair' : 'dgExtend'), '', 'warn') : null,
       lane.unchecked ? chip('unchecked', t('dagUnchecked', { count: 1 }), '', 'warn') : null,
@@ -3955,6 +4008,7 @@ function DagView({ dag, options, onOptions, onOpen }) {
     if (mode !== options.fold) onOptions({ fold: mode })
   }
   const lane = dag.index[pick] || null
+  const lit = markedLanes(dag, mark)
   const toggle = function (next) {
     setMark(function (now) {
       return now && now.kind === next.kind && now.value === next.value ? null : next
@@ -3972,7 +4026,20 @@ function DagView({ dag, options, onOptions, onOpen }) {
       options.figures ? jsx(DagKpis, { dag }, 'kpis') : null,
       options.stats ? jsx(DagStats, { dag, mark, onMark: toggle, onPick: setPick, open: statsOpen, onOpen: setStatsOpen }, 'stats') : null,
       jsx(DagFoldBar, { fold: options.fold, onFold }, 'fold'),
-      jsx(DagCanvas, { dag, pick, lit: markedLanes(dag, mark), reduce: !options.implied, folded, compact: options.compact, onPick: setPick, onLayer }, 'canvas'),
+      jsx(DagCanvas, { dag, pick, lit, reduce: !options.implied, folded, compact: options.compact, onPick: setPick, onLayer }, 'canvas'),
+      // The lanes no node of the run owns, below the layers and out of its edges: their own small block.
+      dag.outside.length
+        ? div('omh-pane-dv-outside', [
+            div('omh-pane-dv-more omh-pane-dv-outside-label', t('dgOutsideDag'), 'label'),
+            ...dag.outside.map(function (lane) {
+              return jsx(
+                LaneCard,
+                { dag, lane, picked: lane.id === pick, dim: !!lit && lit.indexOf(lane.id) === -1, compact: options.compact, onPick: setPick },
+                lane.id
+              )
+            })
+          ], 'outside')
+        : null,
       exceeds(dag.hidden, 0) ? div('omh-pane-more', t('graphMore', { count: dag.hidden }), 'hidden') : null,
       lane ? jsx(LaneDetail, { dag, lane, onPick: setPick, seat: setSeat }, 'detail') : null
     ]
