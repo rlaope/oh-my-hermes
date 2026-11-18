@@ -149,7 +149,8 @@ DEFINITION = SkillDefinition(
         "On each completion read the node's handoff file and call `omh_dag action=settle` (accepted, failed, or "
         "blocked; a provider error is failed with provider_error); a verify node with criteria is accepted only when "
         "every `CRITERION` line says met, failed when one is unmet, blocked when one could not be checked here. "
-        "Dispatch what it returns in the same turn.",
+        "A handoff with an `ESCALATE:` line is settled `escalated`, that question as the reason; never answer it "
+        "yourself and accept. Dispatch what it returns in the same turn.",
         "When the run reports done, check each node against its SCOPE and the goal criteria: extend the run when "
         "work is missing, otherwise report.",
     ),
@@ -287,6 +288,11 @@ within 24 hours). The node stays live as `parked`, spends no repair cycle, and c
 At the deadline call `ready`: the same node gets a fresh attempt naming the handle, not replacement
 work. OMH starts no timer or poll. After three parks per node, another park is refused with
 `park_limit_reached`; settle accepted, failed or blocked instead. Cancel turns parked nodes cancelled.
+
+A child that stopped before editing and wrote an `ESCALATE: <question>` line into its handoff asked for a
+stronger model. Settle it `outcome=escalated reason=<that question>` and dispatch what settle returns: the node
+comes back one category up (quick, unspecified-low, unspecified-high, ultrabrain), at most twice, briefed with
+the question. Never answer the question yourself and accept.
 
 ## Goal criteria
 

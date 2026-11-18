@@ -4,6 +4,12 @@ All notable changes will be documented here.
 
 ## Unreleased
 
+- **A cheap dag-ulw node that hits a hard judgement asks for a stronger model instead of guessing.** When a node's
+  child cannot settle a design choice or a root cause, it stops before editing and writes `ESCALATE: <question>` into
+  its handoff; the node is settled `escalated` and offered again one category up (quick, unspecified-low,
+  unspecified-high, ultrabrain), at most twice, briefed with the question the first child stopped on. Nodes already on
+  ultrabrain, review or deep never get the option.
+
 - **Four OMH tool descriptions are shorter, and the model still picks the same calls.** `omh_todo`, `omh_loop`,
   `omh_document_plan` and `omh_delegate_route` say the same rules in fewer words, so each costs fewer tokens the
   first time Hermes loads it (24,943 -> 23,718 characters together; the registered OMH schemas 63,324 -> 62,099).

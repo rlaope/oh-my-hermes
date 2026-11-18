@@ -134,7 +134,13 @@ DEEP_CATEGORIES: Final = frozenset({"deep", "deep-work"})
 # trade-off); a graph this wide with none of them is told to give that node `ultrabrain` (`no_judgement_node`).
 JUDGEMENT_CATEGORIES: Final = frozenset({"ultrabrain", "architect", "forensics"})
 JUDGEMENT_GRAPH_NODES: Final = 4
-OUTCOMES: Final = ("accepted", "failed", "blocked", "parked")
+# ``escalated`` closes the attempt like a provider-error ``retry``: the node is pending again, one category up.
+OUTCOMES: Final = ("accepted", "failed", "blocked", "parked", "escalated")
+# The difficulty ladder a node climbs when its child stops on a judgement it cannot settle (`settle` escalated); a
+# category that is not a key cannot escalate. At most `MAX_ESCALATIONS` rungs per node.
+ESCALATION_LADDER: Final = {"quick": "unspecified-low", "unspecified-low": "unspecified-high",
+                            "unspecified-high": "ultrabrain"}
+MAX_ESCALATIONS: Final = 2
 # The ``origin`` kinds of a node added after define: ``repair:<root>`` and ``extend:<round>``.
 ADDED_ORIGIN_KINDS: Final = ("repair", "extend")
 PROMPT_MARKERS: Final = ("TASK", "DELIVERABLE", "SCOPE", "VERIFY", "STOP WHEN")
@@ -996,7 +1002,7 @@ def derive(record: Mapping[str, Any], children: Sequence[Mapping[str, Any]], now
         attempts = node.get("attempts") or []
         last = attempts[-1] if attempts else None
         info: dict[str, Any] = {"child": None, "attempts": len(attempts), "waits_on": [], "held_by": []}
-        if last is None or last.get("outcome") == "retry":
+        if last is None or last.get("outcome") in ("retry", "escalated"):
             info["state"] = "pending"
         elif last.get("outcome") in OUTCOMES:
             info["state"] = str(last["outcome"])
@@ -1510,6 +1516,17 @@ def task_for(
     if attempts and attempts[-1].get("resume_handle"):
         lines.extend([f"Resume the still-running wait: {attempts[-1]['resume_handle']}. "
                       "Check its result before starting any replacement work.", ""])
+    # A provider-error retry replaces the attempt it follows, so the brief looks past it to the escalated one.
+    closed = [item for item in attempts if item.get("outcome") and item.get("outcome") != "retry"]
+    if closed and closed[-1].get("outcome") == "escalated":
+        escalated = closed[-1]
+        question = str(escalated.get("reason") or "").rstrip()
+        # The question ends the sentence: add a full stop only when it carries no end mark of its own.
+        stop = "" if question.endswith((".", "?", "!")) else "."
+        lines.extend([f"Escalated from {escalated.get('escalated_from')} to {escalated.get('escalated_to')}. The "
+                      f"previous attempt stopped on this question: {question}{stop} Read its handoff at "
+                      f"{node_handoff(record, omh_home, str(node['id']))} for what it found, decide the question, "
+                      "then do the task.", ""])
     goal = record.get("goal")
     if isinstance(goal, str) and goal.strip():
         lines.extend([
@@ -1590,6 +1607,10 @@ def task_for(
                          f"its failing path, or `unattributed`: by declared scope, not proven cause. Scopes: {scopes}")
     if node.get("repairs") and node["write_scope"]:
         lines.append(_leftovers_line(record, node))
+    if can_escalate(node):
+        lines.append("If the task turns on a judgement you cannot settle with confidence (a design choice, a root "
+                     "cause you cannot pin down), do not guess: before editing, write ESCALATE: <the question> and "
+                     "what you found into the handoff, and stop.")
     lines.append("Stay inside your SCOPE: other parts of this run work at the same time. If you cannot finish, "
                  "say plainly that you are blocked and why; do not report blocked work as done.")
     # The marker ends the goal: Hermes previews each goal by its first 40 characters, and a person reads the label
@@ -1598,8 +1619,16 @@ def task_for(
 
 
 def retry_count(node: Mapping[str, Any]) -> int:
-    """How many of the node's attempts ended in a provider-error retry: the index of its next model_map option."""
-    return sum(1 for item in node.get("attempts") or [] if item.get("outcome") == "retry")
+    """How many of the node's attempts since its last escalation ended in a provider-error retry: the index of its
+    next model_map option. A new category starts from its first option."""
+    attempts = list(node.get("attempts") or [])
+    since = max((index for index, item in enumerate(attempts) if item.get("outcome") == "escalated"), default=-1)
+    return sum(1 for item in attempts[since + 1:] if item.get("outcome") == "retry")
+
+
+def can_escalate(node: Mapping[str, Any]) -> bool:
+    """True when the node's category has a rung above it and it escalated fewer than `MAX_ESCALATIONS` times."""
+    return str(node.get("category")) in ESCALATION_LADDER and len(node.get("escalations") or []) < MAX_ESCALATIONS
 
 
 def local_blocked(record: Mapping[str, Any], offered: Iterable[str], backend: Mapping[str, Any] | None) -> list[str]:
@@ -1764,7 +1793,7 @@ def settle(
     if record.get("cancelled_at") is not None:
         raise DagRefusal("run_cancelled", "The run was cancelled; nothing in it settles now.")
     if outcome not in OUTCOMES:
-        raise DagRefusal("invalid_outcome", "Settle a node as accepted, failed, blocked or parked.")
+        raise DagRefusal("invalid_outcome", "Settle a node as accepted, failed, blocked, parked or escalated.")
     info = derived[node_id]
     if info["state"] not in OPEN:
         raise DagRefusal("node_not_out", f"Node {node_id} is {info['state']}, not out with a child; nothing to settle.")
@@ -1777,6 +1806,8 @@ def settle(
                 or _CONTROL.search(handle) or any(char in handle for char in "\r\n\t")):
             raise DagRefusal("invalid_handle", "parked needs a nonempty handle of at most 120 characters on one line.")
         wake_at = _park_deadline(wake_at, now)
+    if outcome == "escalated":
+        return _escalate(nodes[node_id], reason, now)
     child = info["child"]
     stop = child.get("stop") if isinstance(child, Mapping) else None
     if outcome == "accepted" and isinstance(stop, Mapping) and stop.get("status") in CHILD_FAILURE_STOPS:
@@ -1846,6 +1877,30 @@ def settle(
     if statuses is not None:
         attempt["criteria"] = statuses  # the status words only: no evidence text, no handoff content
     return str(outcome)
+
+
+def _escalate(node: dict[str, Any], reason: object, now: float) -> str:
+    """Close the open attempt as escalated and move the node one rung up `ESCALATION_LADDER`. No handoff is read."""
+    node_id, category = str(node["id"]), str(node["category"])
+    if not isinstance(reason, str) or not reason.strip():
+        raise DagRefusal("escalation_needs_reason",
+                         "escalated needs the question the child stopped on as the reason, one short line.")
+    if category not in ESCALATION_LADDER:
+        raise DagRefusal("no_higher_category",
+                         f"Node {node_id} is on {category}, which has no category above it; settle it accepted, "
+                         "failed or blocked.")
+    if len(node.get("escalations") or []) >= MAX_ESCALATIONS:
+        raise DagRefusal("escalation_limit_reached",
+                         f"Node {node_id} has escalated {MAX_ESCALATIONS} times; settle it accepted, failed or "
+                         "blocked.")
+    note = _plain(reason, MAX_REASON_CHARS, "invalid_reason", "The reason is one short line.")
+    higher = ESCALATION_LADDER[category]
+    node["attempts"][-1].update(settled_at=now, outcome="escalated", reason=note, provider_error=False,
+                                escalated_from=category, escalated_to=higher)
+    node.setdefault("defined_category", category)
+    node.setdefault("escalations", []).append({"from": category, "to": higher, "at": now})
+    node["category"] = higher
+    return "escalated"
 
 
 def _checked_again(nodes: Mapping[str, Mapping[str, Any]], node: Mapping[str, Any]) -> str:
@@ -2048,6 +2103,10 @@ def node_rows(record: Mapping[str, Any], derived: Mapping[str, Mapping[str, Any]
             row.update(handle=attempts[-1]["handle"], wake_at=attempts[-1]["wake_at"])
         if info["state"] in ("failed", "blocked"):
             row["repair_cycles_left"] = cycles_left(record, node_id)
+        if node.get("escalations"):
+            row["escalations"] = len(node["escalations"])
+            if node.get("defined_category"):
+                row["defined_category"] = node["defined_category"]
         if node_id in ages:
             row["open_for_s"] = int(ages[node_id])
         rows.append(row)

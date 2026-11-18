@@ -445,7 +445,12 @@ SKILL_INDEX_LINE_CHAR_LIMIT = 100
 # OMH mirrors each todo_list write) lost passes and were restored. Measured by
 # per_turn_context.plugin_tool_schema_chars_by_tool() against base a3068c323.
 # No headroom.
-PLUGIN_TOOL_SCHEMA_CHAR_LIMIT = 62099
+# 62099 -> 62323: omh_dag settles a node escalated when its child stops on a
+# judgement it cannot settle (+224; omh_dag 3549 -> 3773): one description
+# sentence (+211) and the outcome enum's "escalated" (+13). Measured by
+# per_turn_context.plugin_tool_schema_chars_by_tool() against base 7ae0d7a2a.
+# No headroom.
+PLUGIN_TOOL_SCHEMA_CHAR_LIMIT = 62323
 # PRE_LLM_CALL_CONTEXT_CHAR_LIMIT, PRE_LLM_CALL_CONTEXT_FALLBACK_CHAR_LIMIT: moved with
 # their history to src/plugin_bundle/omh/turn_budget.py; imported at the top of this file.
 # 340000 -> 349637: three capability-skill sections were added by the domain
