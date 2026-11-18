@@ -284,19 +284,20 @@ environment the wheel cannot be installed into. With nothing suitable found and
 versions it did find. `OMH_PYTHON=/path/to/python3.12` overrides the search
 entirely.
 
-### Hermes, OMH and the omher desktop app in one command (beta)
+### Hermes, OMH and the omher desktop app in one command
 
 ```sh
 curl -fsSL https://omher.app/omher | sh
-# same as: curl -fsSL https://raw.githubusercontent.com/rlaope/oh-my-hermes/main/install.sh | sh -s -- omher@beta
+# same as: curl -fsSL https://raw.githubusercontent.com/rlaope/oh-my-hermes/main/install.sh | sh -s -- omher
 ```
 
 ```powershell
 irm https://omher.app/omher.ps1 | iex
-# same as: & ([scriptblock]::Create((irm https://raw.githubusercontent.com/rlaope/oh-my-hermes/main/install.ps1))) omher@beta
+# same as: & ([scriptblock]::Create((irm https://raw.githubusercontent.com/rlaope/oh-my-hermes/main/install.ps1))) omher
 ```
 
-The `omher@beta` argument adds three things to the plain install, and only with it:
+The `omher` argument adds three things to the plain install, and only with it
+(`omher@beta`, its name before omher 1.0, is still accepted):
 
 | Starting point | What runs |
 | --- | --- |
@@ -6428,7 +6429,7 @@ curl -fsSL https://omher.app/install | sh -s -- --uninstall --purge     # omh un
 ```
 
 `--purge` and `--dry-run` are accepted only with `--uninstall`, and `--uninstall`
-cannot be combined with `omher@beta`; any other argument prints the usage and
+cannot be combined with `omher`; any other argument prints the usage and
 exits 2 without writing anything. `OMH_LANG` is passed on as `--language`.
 
 What it does not do: it downloads and installs nothing, deletes no file itself,
