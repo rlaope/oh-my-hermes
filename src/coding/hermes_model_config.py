@@ -159,6 +159,10 @@ class HermesModelConfigInspection:
     # Set when either fallback key could not be read; a fallback preview is
     # then refused, since an unread key is not an absent one.
     fallback_read_error: str | None = None
+    # The file `config_path` resolved to when it was read (symlinks followed).
+    # A preview is approved for this destination; an apply whose path now
+    # resolves elsewhere is refused even when the bytes match.
+    config_target: str = ""
 
 
 @dataclass(frozen=True, slots=True)
@@ -177,6 +181,7 @@ class HermesModelConfigPreview:
     # Why an apply of this preview is refused before any write (the legacy
     # `fallback_model` key is set), or None.
     fallback_refusal: str | None = None
+    config_target: str = ""
 
     @property
     def fallback_is_legacy(self) -> bool:
@@ -188,19 +193,25 @@ class HermesModelConfigPreview:
 
         `config_digest` alone only says the file did not move, so a preview of
         one change could authorize another on the same file. This hashes the
-        resolved config path (a byte-identical config in another Hermes home
-        is another destination), the file digest, the requested alias changes
-        and fallback target (a plan whose fallback writes nothing, or is
-        refused, still differs from one without it), and every command the
-        apply runs without the `hermes` path. The same digest only applies
-        the same plan to the same file.
+        destination file as resolved at inspection (a byte-identical config in
+        another Hermes home, or a link retargeted since, is another
+        destination), the file digest, the aliases and fallback chain the
+        preview showed as Hermes resolved them, the requested alias changes and
+        fallback target (a plan whose fallback writes nothing, or is refused,
+        still differs from one without it), and every command the apply runs
+        without the `hermes` path. The same digest only applies the same plan,
+        shown from the same state, to the same file.
         """
         payload = json.dumps(
             {
-                "config_path": str(Path(self.config_path).expanduser().resolve()),
+                "config_target": self.config_target or _resolved_target(self.config_path),
                 "config_digest": self.config_digest,
+                "before_aliases": {alias: target for alias, target in sorted(self.before_aliases.items())},
                 "changes": {alias: target for alias, target in sorted(self.changes.items())},
                 "fallback": self.fallback,
+                # The chain the preview showed, as Hermes resolves it (env
+                # references included): bytes alone do not fix what it shows.
+                "before_fallback_chain": list(self.before_fallback_chain),
                 "commands": [list(command[1:]) for command in self.commands],
             },
             sort_keys=True,
@@ -248,6 +259,7 @@ def inspect_hermes_model_config(
     """Inspect aliases, auth presence/status, and provider plugins locally."""
     commands: list[tuple[str, ...]] = []
     config_path = Path(_required_output((hermes, "config", "path"), env, commands)).expanduser()
+    config_target = _resolved_target(config_path)
     digest = _config_digest(config_path)
     model_aliases = _optional_json_mapping(
         (hermes, "config", "get", "model_aliases", "--json"), env, commands
@@ -318,6 +330,7 @@ def inspect_hermes_model_config(
     return HermesModelConfigInspection(
         hermes=hermes,
         config_path=config_path,
+        config_target=config_target,
         config_digest=digest,
         config_check_ok=check.returncode == 0,
         model_aliases=model_aliases,
@@ -383,6 +396,7 @@ def preview_hermes_model_config(
         fallback=fallback,
         before_fallback=inspection.fallback_model,
         before_fallback_providers=inspection.fallback_providers,
+        config_target=inspection.config_target,
         fallback_refusal=(
             _LEGACY_FALLBACK_MESSAGE
             if fallback is not None and _legacy_present(inspection.fallback_model)
@@ -582,7 +596,7 @@ def _apply_locked(
     in_fallback = False
     try:
         for command in preview.alias_commands:
-            if _config_digest(preview.config_path) != expected_digest:
+            if _destination_digest(preview) != expected_digest:
                 raise ConfigDigestMismatchError(
                     "Hermes config changed during apply; remaining mutations refused"
                 )
@@ -602,12 +616,12 @@ def _apply_locked(
                 )
                 if mutation_is_owned:
                     attempted.append(alias)
-                    expected_digest = _config_digest(preview.config_path)
+                    expected_digest = _destination_digest(preview)
                 raise HermesCommandError(
                     f"Hermes config command failed ({result.returncode}): {' '.join(command[1:])}"
                 )
             attempted.append(alias)
-            expected_digest = _config_digest(preview.config_path)
+            expected_digest = _destination_digest(preview)
             _require_expected_alias_state(preview, attempted, env)
         if preview.fallback_commands:
             in_fallback = True
@@ -623,7 +637,7 @@ def _apply_locked(
         if in_fallback:
             # A fallback write that failed may still have changed the file;
             # the alias rollback checks its own ownership against that.
-            expected_digest = _config_digest(preview.config_path)
+            expected_digest = _destination_digest(preview)
         _rollback_aliases(
             preview,
             attempted,
@@ -644,7 +658,7 @@ def _apply_fallback(
     masked, and re-serialized), so a failure is reported, not undone.
     """
     (command,) = preview.fallback_commands
-    if _config_digest(preview.config_path) != expected_digest:
+    if _destination_digest(preview) != expected_digest:
         raise ConfigDigestMismatchError(
             "Hermes config changed during apply; remaining mutations refused"
         )
@@ -663,7 +677,7 @@ def _apply_fallback(
             if not _fallback_matches(providers, legacy, preview.fallback or ""):
                 raise HermesVerificationError(_fallback_unverified_message(preview))
             return
-    if _config_digest(preview.config_path) == expected_digest:
+    if _destination_digest(preview) == expected_digest:
         raise HermesCommandError(f"Hermes refused the fallback write ({exit_text}); nothing was changed.")
     raise HermesVerificationError(
         f"Hermes reported an error ({exit_text}) but the config file changed; "
@@ -779,7 +793,7 @@ def _rollback_aliases(
         )
     rollback_error: HermesModelConfigError | None = None
     for alias in reversed(attempted):
-        if _config_digest(preview.config_path) != expected_config_digest:
+        if _destination_digest(preview) != expected_config_digest:
             raise ConfigDigestMismatchError(
                 "Hermes config changed during rollback; remaining rollback refused"
             )
@@ -795,7 +809,7 @@ def _rollback_aliases(
             rollback_error = HermesVerificationError(
                 f"Hermes rollback command failed ({result.returncode}): {' '.join(command[1:])}"
             )
-        expected_config_digest = _config_digest(preview.config_path)
+        expected_config_digest = _destination_digest(preview)
     inspection = inspect_hermes_model_config(hermes=preview.hermes, env=env)
     for alias in attempted:
         if inspection.model_dot_aliases.get(alias) != preview.before_aliases.get(alias):
@@ -887,6 +901,20 @@ def _optional_json_mapping(
         for key, item in value.items()
         if isinstance(item, str) and _safe_metadata(str(key)) and _safe_metadata(item)
     }
+
+
+def _resolved_target(path: Path) -> str:
+    return str(Path(path).expanduser().resolve())
+
+
+def _destination_digest(preview: HermesModelConfigPreview) -> str:
+    """The config digest, after checking the path still names the approved file."""
+    if preview.config_target and _resolved_target(preview.config_path) != preview.config_target:
+        raise ConfigDigestMismatchError(
+            "Hermes config path now points to another file than the one previewed; "
+            "nothing more is written"
+        )
+    return _config_digest(preview.config_path)
 
 
 def _config_digest(path: Path) -> str:

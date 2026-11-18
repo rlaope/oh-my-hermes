@@ -2698,7 +2698,8 @@ arguments with:
 --apply-model-config --model-config-digest <preview approval_digest>
 ```
 
-A digest from a preview of different arguments is refused before any write.
+An approval from a preview of a different plan, another config file, or a changed
+starting state is refused before any write.
 
 An explicit unavailable model returns `choice_required` and never silently
 falls through. A missing recommended model is different: setup remains usable

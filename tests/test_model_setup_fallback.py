@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import io
 import json
+from dataclasses import replace
 import os
 from contextlib import redirect_stdout
 from pathlib import Path
@@ -457,6 +458,46 @@ class FallbackModelTests(unittest.TestCase):
 
                 self.assertEqual(self.writes(), [])
                 self.assertNotIn("main", self.state()["model"]["aliases"])
+
+    def test_a_config_link_retargeted_after_the_preview_is_refused_even_with_equal_bytes(self) -> None:
+        # The path the preview read now resolves to another, byte-identical file.
+        real = self.home / "config.yaml"
+        first = self.home / "config-first.yaml"
+        second = self.home / "config-second.yaml"
+        first.write_text(real.read_text(encoding="utf-8"), encoding="utf-8")
+        second.write_text(real.read_text(encoding="utf-8"), encoding="utf-8")
+        real.unlink()
+        real.symlink_to(first)
+        inspection = self.inspect()
+        preview = preview_hermes_model_config(inspection, {"main": "alpha/main-1"}, fallback="alpha/backup")
+        real.unlink()
+        real.symlink_to(second)
+
+        with self.assertRaisesRegex(HermesModelConfigError, "points to another file"):
+            apply_hermes_model_config(
+                preview, confirmed=True, expected_config_digest=inspection.config_digest, env=self.env
+            )
+
+        self.assertEqual(self.writes(), [])
+        self.assertEqual(first.read_text(encoding="utf-8"), second.read_text(encoding="utf-8"))
+
+    def test_a_changed_shown_chain_changes_the_approval_even_with_equal_bytes(self) -> None:
+        inspection = self.inspect()
+        shown_one = preview_hermes_model_config(
+            replace(inspection, fallback_providers=[{"provider": "alpha", "model": "old-1"}]), {}, fallback="alpha/backup"
+        )
+        shown_two = preview_hermes_model_config(
+            replace(
+                inspection,
+                fallback_providers=[{"provider": "alpha", "model": "old-1"}, {"provider": "alpha", "model": "old-2"}],
+            ),
+            {},
+            fallback="alpha/backup",
+        )
+
+        self.assertEqual(shown_one.config_digest, shown_two.config_digest)
+        self.assertEqual(shown_one.commands, shown_two.commands)
+        self.assertNotEqual(shown_one.approval_digest, shown_two.approval_digest)
 
     def test_apply_refuses_when_the_config_drifted_after_the_preview(self) -> None:
         inspection = self.inspect()

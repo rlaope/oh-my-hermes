@@ -546,8 +546,9 @@ Agent/maintainer procedure:
 3. Show the user `steps.model_activation.preview.changes` and
    `fallback_model`. After explicit approval, repeat the command with the same
    arguments plus `--apply-model-config --model-config-digest
-   <preview approval_digest>`; the approval names this Hermes home's config,
-   its bytes and this exact plan, so any other arguments or home are refused. A collision
+   <preview approval_digest>`; the approval names the config file the preview
+   read, its bytes, the aliases and fallback chain it showed, and this plan, so
+   a different plan, another config, or a changed starting state is refused. A collision
    requires a separate explicit `--allow-model-alias-collision` choice.
    If no candidate is confirmed and no alias is requested, verify
    `steps.model_activation.status == "defaulted"` and that no model-config
