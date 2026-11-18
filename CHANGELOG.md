@@ -21,6 +21,18 @@ All notable changes will be documented here.
   until each date; the price rows now point at the current page, and Argon's row is pinned by the same list-price
   test as Carbon's.
 
+- **omher.app has a Start Guide at `/guide/`, linked beside Docs in every header** (owner request, 2026-11-18). One
+  page for someone new, with plain section titles that say what each part covers: what OMH does in three cards (a model per kind of work, `dag-ulw`, expert skills), install in
+  three commands (`curl … | sh`, `omh setup`, `omh model`), categories and fallback shown on three real chains, plan
+  versus `dag-ulw` as a to-do list versus a flowchart (an animated graph: two steps at once, fix, test, a separate goal
+  check, and the loop back when it fails), how OMH stays current (a new model is checked before it joins a chain, the
+  plugin loads into stable and main Hermes every night, reconstructed skills record the upstream commit they were
+  reviewed against), the `omh` TUI, and omher desktop as an ADE for bots with a terminal panel. Everything else
+  (`ulw-maestro`, memory, evidence labels, LSP) sits in one short list at the end. It reads in English, Korean,
+  Japanese and Chinese through the site's language switch. The model names on the page come from the shipped
+  recommendation catalog through `tools/render_site_guide.py`, which Pages re-runs on every deploy, so a model
+  onboarding never leaves the guide naming a retired model; `tests/test_site_guide.py` pins the sections, the
+  installer commands, four-language coverage of every key, the header links and the catalog match.
 - **GPT-6.2 Astra and GPT-6.2 Sol take every slot GPT-6 Astra and GPT-6.1 Sol held** (OpenAI released both on
   2026-11-17; owner decision, 2026-11-18). In the Hermes chains, the Codex lane table and the shared final order
   (Claude Opus 5.5, then GPT-6.2 Sol), each new id sits where its predecessor sat, at the same effort, and no chain
