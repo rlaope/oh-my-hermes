@@ -54,7 +54,7 @@ def assert_word_motions_pty(testcase):
             env.update(HOME=str(root), HERMES_HOME=str(home), OMH_HOME=str(root / "omh"),
                        HERMES_CWD=str(root), TERM="xterm-256color", TERM_PROGRAM="Apple_Terminal",
                        PYTHONPATH=os.pathsep.join((str(repo), str(repo / "tests"))),
-                       OMH_NO_TUI="0", OMH_TUI_KEYBOARD="legacy", OMH_PROOFREAD="0")
+                       OMH_NO_TUI="0", OMH_TUI_KEYBOARD="legacy")
             master, slave = pty.openpty()
             termios.tcsetwinsize(slave, (40, width))
             screen = VTScreen(rows=40, cols=width)

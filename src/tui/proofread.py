@@ -1,6 +1,6 @@
 """Bounded local proofreading of the draft in the composer.
 
-App checks after 600 ms quiet (unless OMH_PROOFREAD=0), showing inline marks.
+With OMH_PROOFREAD=1 the App checks after 600 ms quiet, showing inline marks.
 Alt+P opens only the issue at the cursor. Nothing is applied without an explicit
 Enter on a replacement, and no submit ever follows. App owns scheduling and
 foreground state; this client has no automatic server installation or startup.

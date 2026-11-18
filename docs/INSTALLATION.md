@@ -6590,9 +6590,10 @@ On other platforms, run your own local LanguageTool server, for example
 Keep it bound to loopback; do not enable public access. OMH does not install or
 start Java or LanguageTool. Launch OMH with
 `OMH_PROOFREAD_URL=http://127.0.0.1:8081/v2/check` (the default) and optionally
-`OMH_PROOFREAD_LANGUAGE=en-US` (default `auto`). Main and clarify free-text
-fields check after 600 ms quiet and underline issues without interrupting typing.
-Set `OMH_PROOFREAD=0` to disable automatic checks. Move the cursor onto an
+`OMH_PROOFREAD_LANGUAGE=en-US` (default `auto`). Press Alt+P to check the
+draft. Automatic checks are off by default; set `OMH_PROOFREAD=1` and main and
+clarify free-text fields also check after 600 ms quiet and underline issues
+without interrupting typing. Move the cursor onto an
 underlined issue and press Alt+P, then pick a replacement with arrows and Enter,
 or Skip/Esc to close. Alt+P checks immediately if results are missing, and never
 opens an unrelated issue elsewhere in the draft. Corrections use normal Ctrl+_

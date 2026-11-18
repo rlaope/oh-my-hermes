@@ -26,7 +26,7 @@ def line_text(row):
 
 class AppTests(unittest.TestCase):
     def typo_app(self, text="teh cat", offsets=(0,)):
-        app, client = make_app()
+        app, client = make_app(environ={"OMH_PROOFREAD": "1"})
         app.transcript.add_notice("Prior conversation.")
         app.composer.replace(0, 0, text)
         payload = {"matches": [{"offset": i, "length": 3, "replacements": [{"value": "the"}]}
@@ -172,7 +172,7 @@ class AppTests(unittest.TestCase):
         self.assertEqual(client.calls, before)
 
     def app(self):
-        app, client = make_app()
+        app, client = make_app(environ={"OMH_PROOFREAD": "1"})
         app.proofread_worker = proofread.Worker(lambda where, sent: PAYLOAD)
         app.composer.replace(0, 0, SAMPLE)
         return app, client
@@ -417,6 +417,28 @@ class AppTests(unittest.TestCase):
             self.assertEqual(sent, ["teh cat", "txeh cat"])
             self.assertIsNone(app.proofread_review)
 
+    def test_automatic_checks_are_opt_in_and_alt_p_still_works(self):
+        for value in (None, "0", "", "yes", "true"):
+            with self.subTest(OMH_PROOFREAD=value):
+                app, client, payload = self.typo_app()
+                app.environ = {k: v for k, v in app.environ.items() if k != "OMH_PROOFREAD"}
+                if value is not None:
+                    app.environ["OMH_PROOFREAD"] = value
+                sent = []
+                app.proofread_worker = proofread.Worker(lambda where, text: (sent.append(text), payload)[1])
+                with patch.object(app, "clock", return_value=10) as clock:
+                    app._take_proofread()
+                    clock.return_value = 20
+                    app._take_proofread()
+                    self.assertFalse(app.proofread_worker.pending)
+                    self.assertEqual(sent, [])
+                    self.assertEqual(app._proofread_marks(), ())
+                    app._on_input(ALT_P)
+                    app.proofread_worker.wait()
+                    app._take_proofread()
+                self.assertEqual(sent, ["teh cat"])
+                self.assertEqual(client.calls, [])
+
     def test_auto_opt_out_protected_masked_and_owner(self):
         for text, masked, disabled in (("teh", False, True), ("secret", True, False),
                                        ("`teh`", False, False), ("/teh", False, False),
@@ -425,7 +447,7 @@ class AppTests(unittest.TestCase):
                 app, _, _ = self.typo_app(text)
                 app.composer.masked = masked
                 if disabled:
-                    app.environ = dict(app.environ, OMH_PROOFREAD="0")
+                    app.environ = {k: v for k, v in app.environ.items() if k != "OMH_PROOFREAD"}
                 sent = []
                 app.proofread_worker = proofread.Worker(lambda where, text: sent.append(text))
                 self._checked(app)

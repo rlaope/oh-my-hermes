@@ -40,9 +40,9 @@ held by the invariants in `tests/test_handoff_safety_contract_enforcement.py`:
   `NETWORK_CLIENT_BRIDGES`. Only `src/tui/app.py` and `src/commands/setup.py`
   may import it; the latter reads `latest` once in an explicit `omh update` on
   an installer-managed stable install to pick the release wheel to download.
-- Local proofreader (proposed scoped exception; the PR requests upstream
-  owner approval): automatic inline marks after 600 ms quiet in main/clarify
-  free-text fields (`OMH_PROOFREAD=0` disables automatic checks), with explicit
+- Local proofreader (scoped exception, owner-approved 2026-11-18, automatic
+  checks opt-in): inline marks in main/clarify free-text fields, on Alt+P or,
+  only with `OMH_PROOFREAD=1` (off by default), after 600 ms quiet, with explicit
   Alt+P correction only at the cursor, to a loopback-only local LanguageTool
   server using stdlib `http.client` and `socket`. No proxies or redirects;
   five-second elapsed deadline, 512 KiB reply cap, 20,000-character draft cap.

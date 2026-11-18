@@ -5024,11 +5024,15 @@ class App(ModesMixin, AgentViewMixin):
         self.proofread_status = ""
         self.proofread_due = None
         if (self._proofread_foreground() and not self.composer.masked and self.composer.text
-                and self.environ.get("OMH_PROOFREAD") != "0"
+                and self._proofread_auto()
                 and isinstance(proofread.prepare(self.composer, owner, self.environ), proofread.Job)):
             self.proofread_due = self.clock() + 0.6
         if had_display:
             self.dirty = True
+
+    def _proofread_auto(self) -> bool:
+        """Automatic checks are opt-in: only `OMH_PROOFREAD=1` sends a draft without Alt+P."""
+        return self.environ.get("OMH_PROOFREAD") == "1"
 
     def _start_proofread(self) -> None:
         if self.proofread_worker.pending:
@@ -5094,7 +5098,7 @@ class App(ModesMixin, AgentViewMixin):
             self.proofread_status = "Local proofreader unavailable · Alt+P retries"
             self.proofread_failures = min(self.proofread_failures + 1, 4)
             self.proofread_retry = self.clock() + min(5 * 2 ** (self.proofread_failures - 1), 30)
-            self.proofread_due = self.proofread_retry if self.environ.get("OMH_PROOFREAD") != "0" else None
+            self.proofread_due = self.proofread_retry if self._proofread_auto() else None
             self.proofread_intent = False
             return
         self.proofread_failures = 0

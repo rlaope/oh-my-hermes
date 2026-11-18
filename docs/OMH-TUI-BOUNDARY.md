@@ -12,10 +12,11 @@ what a user sees is in [Installation](INSTALLATION.md).
 
 ### Proofreading
 
-After 600 ms quiet in the main or clarify free-text composer, only unprotected
-draft text is sent to a local LanguageTool server for inline underlines (portable
-SGR 4, including NO_COLOR). `OMH_PROOFREAD=0` disables automatic checks; Alt+P
-can still explicitly request one. Cursor motion alone never starts a check.
+Proofreading is opt-in. Alt+P explicitly checks the draft. With
+`OMH_PROOFREAD=1`, the main or clarify free-text composer also checks after
+600 ms quiet; any other value, or none, sends nothing until Alt+P. Only
+unprotected draft text is sent to a local LanguageTool server for inline
+underlines (portable SGR 4, including NO_COLOR). Cursor motion alone never starts a check.
 Only plain HTTP to a loopback IP literal is accepted; `localhost` is pinned to
 127.0.0.1. Proxy variables are bypassed and redirects refused. A daemon worker
 allows one pending request with a five-second elapsed deadline, a 512 KiB reply
