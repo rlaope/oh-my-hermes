@@ -184,16 +184,25 @@ class HermesModelConfigPreview:
 
     @property
     def approval_digest(self) -> str:
-        """What an approval of this preview names: the config file AND the exact change.
+        """What an approval of this preview names: which config, its bytes, and the exact plan.
 
         `config_digest` alone only says the file did not move, so a preview of
         one change could authorize another on the same file. This hashes the
-        file digest with every command the apply runs (without the `hermes`
-        path, which is not part of the change), so the same digest only
-        applies the same change.
+        resolved config path (a byte-identical config in another Hermes home
+        is another destination), the file digest, the requested alias changes
+        and fallback target (a plan whose fallback writes nothing, or is
+        refused, still differs from one without it), and every command the
+        apply runs without the `hermes` path. The same digest only applies
+        the same plan to the same file.
         """
         payload = json.dumps(
-            {"config_digest": self.config_digest, "commands": [list(command[1:]) for command in self.commands]},
+            {
+                "config_path": str(Path(self.config_path).expanduser().resolve()),
+                "config_digest": self.config_digest,
+                "changes": {alias: target for alias, target in sorted(self.changes.items())},
+                "fallback": self.fallback,
+                "commands": [list(command[1:]) for command in self.commands],
+            },
             sort_keys=True,
             separators=(",", ":"),
         )

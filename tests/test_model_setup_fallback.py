@@ -416,6 +416,48 @@ class FallbackModelTests(unittest.TestCase):
         moved = preview_hermes_model_config(self.inspect(), {}, fallback="alpha/fb-1")
         self.assertNotEqual(one.approval_digest, moved.approval_digest)
 
+    def test_the_approval_names_the_hermes_home_not_only_its_bytes(self) -> None:
+        # A byte-identical config in another Hermes home is another destination.
+        other = make_test_tempdir(prefix="omh-fallback-other-")
+        self.addCleanup(other.cleanup)
+        other_home = Path(other.name) / ".hermes"
+        other_home.mkdir()
+        (other_home / "config.yaml").write_text((self.home / "config.yaml").read_text(encoding="utf-8"), encoding="utf-8")
+        other_env = {**self.env, "HERMES_HOME": str(other_home)}
+        mine = preview_hermes_model_config(self.inspect(), {}, fallback="alpha/backup")
+        theirs = preview_hermes_model_config(self.inspect(other_env), {}, fallback="alpha/backup")
+
+        self.assertEqual(mine.config_digest, theirs.config_digest)
+        self.assertNotEqual(mine.approval_digest, theirs.approval_digest)
+        args = self.args("--fallback-model", "alpha/backup", "--apply-model-config", "--model-config-digest",
+                         mine.approval_digest)
+        with self.assertRaisesRegex(OmhError, "does not match the preview digest"):
+            model_activation_result(args, language="en", dependencies=self.dependencies(other_env))
+        self.assertNotIn("fallback_providers", json.loads((other_home / "config.yaml").read_text(encoding="utf-8")))
+
+    def test_a_refused_or_no_op_fallback_plan_never_approves_the_plan_without_it(self) -> None:
+        for extra, label in (
+            ({"fallback_model": {"provider": "alpha", "model": "old-3"}}, "legacy-refused"),
+            ({"fallback_providers": [{"provider": "alpha", "model": "backup"}]}, "already-set"),
+        ):
+            with self.subTest(label):
+                self.write_config({**_BASE_CONFIG, **extra})
+                (self.home / "commands.jsonl").unlink(missing_ok=True)
+                digest = self.approval(
+                    "--confirm-model", "alpha/main-1", "--model-alias", "main=alpha/main-1",
+                    "--fallback-model", "alpha/backup",
+                )
+                alias_only = self.args(
+                    "--confirm-model", "alpha/main-1", "--model-alias", "main=alpha/main-1",
+                    "--apply-model-config", "--model-config-digest", digest,
+                )
+
+                with self.assertRaisesRegex(OmhError, "does not match the preview digest"):
+                    model_activation_result(alias_only, language="en", dependencies=self.dependencies())
+
+                self.assertEqual(self.writes(), [])
+                self.assertNotIn("main", self.state()["model"]["aliases"])
+
     def test_apply_refuses_when_the_config_drifted_after_the_preview(self) -> None:
         inspection = self.inspect()
         preview = preview_hermes_model_config(inspection, {}, fallback="alpha/backup")
