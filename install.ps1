@@ -973,10 +973,66 @@ function Get-OmhHermesHome {
     return ''
 }
 
+function Get-OmhLauncherPython {
+    <#
+        The interpreter a Hermes launcher starts, read from the file (never
+        run), as the omher app reads it (apps/omher/src-tauri/src/bridge.rs
+        `windows_launcher_python`). hermes.exe is distlib's native launcher:
+        a loader stub, then "#!<python> -I" before the zipped script, the path
+        unquoted. hermes.cmd is "@echo off", then '"<python>" -I -c ...'.
+    #>
+    param([string]$Path)
+    if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) { return '' }
+    try { $bytes = [System.IO.File]::ReadAllBytes($Path) } catch { return '' }
+    $exe = ''
+    if ($Path -like '*.exe') {
+        # The zip starts where its End of Central Directory record says (the
+        # directory's size and offset); the shebang ends the stub before it,
+        # after the stub's last NUL byte. Latin-1 keeps one char per byte.
+        $latin = [System.Text.Encoding]::GetEncoding(28591)
+        $eocd = $latin.GetString($bytes).LastIndexOf('PK' + [char]5 + [char]6)
+        if ($eocd -lt 0 -or $eocd + 20 -gt $bytes.Length) { return '' }
+        $zipStart = $eocd - [BitConverter]::ToUInt32($bytes, $eocd + 12) - [BitConverter]::ToUInt32($bytes, $eocd + 16)
+        if ($zipStart -lt 0) { return '' }
+        $head = $latin.GetString($bytes, 0, [int]$zipStart)
+        $afterNul = $head.LastIndexOf([char]0) + 1
+        $start = $head.IndexOf('#!', $afterNul)
+        if ($start -lt 0) { return '' }
+        $line = $head.Substring($start + 2).TrimEnd("`r", "`n")
+        if ($line.Contains("`n") -or -not $line.EndsWith(' -I')) { return '' }
+        $exe = [System.Text.Encoding]::UTF8.GetString($latin.GetBytes($line.Substring(0, $line.Length - 3))).Trim('"')
+    } else {
+        $lines = @([System.Text.Encoding]::UTF8.GetString($bytes).TrimStart([char]0xFEFF) -split "`r?`n")
+        if ($lines.Count -lt 2 -or $lines[0].Trim() -ne '@echo off') { return '' }
+        $command = @($lines | Select-Object -Skip 1 | Where-Object { $_.Trim() })[0]
+        if (-not $command) { return '' }
+        $command = $command.Trim()
+        if ($command.StartsWith('"')) {
+            $end = $command.IndexOf('"', 1)
+            if ($end -lt 1) { return '' }
+            $exe = $command.Substring(1, $end - 1)
+        } else {
+            $exe = ($command -split '\s+')[0]
+        }
+    }
+    if ($exe -match '^[A-Za-z]:[\\/]' -or $exe.StartsWith('\\')) { return $exe }
+    return ''
+}
+
 function Get-OmhHermesPython {
-    <#  Hermes' own Python, where Hermes' installer puts it; the omher app looks in the same places.  #>
+    <#
+        Hermes' own Python, where Hermes' installer puts it; the omher app looks
+        in the same places. First the interpreter Hermes' launcher starts (a
+        packaged install has no venv at all), then the venv of an older one.
+    #>
     $hermesHome = Get-OmhHermesHome
     if (-not $hermesHome) { return '' }
+    foreach ($bin in @((Join-Path $hermesHome 'hermes-agent\.hermes\bin'), (Join-Path $hermesHome 'bin'))) {
+        foreach ($name in @('hermes.exe', 'hermes.cmd')) {
+            $candidate = Get-OmhLauncherPython (Join-Path $bin $name)
+            if ($candidate -and (Test-Path -LiteralPath $candidate -PathType Leaf)) { return $candidate }
+        }
+    }
     foreach ($venv in @('venv', '.venv')) {
         $candidate = Join-Path $hermesHome "hermes-agent\$venv\Scripts\python.exe"
         if (Test-Path -LiteralPath $candidate -PathType Leaf) { return $candidate }
@@ -1373,7 +1429,14 @@ try {
 
     Write-OmhLine
     Write-OmhLine (Get-OmhColor '1;36' (Get-OmhMessage 'installed'))
-    if (Get-OmhCommandOnPath) {
+    if ($OmhRunSetup -eq '1' -and $OmhAutoApply -ne '0') {
+        # Setup and doctor already ran above: asking for them again is a wrong next step.
+        if ($OmhCommandPath -and -not (Get-OmhCommandOnPath)) {
+            Write-OmhLine "OMH is connected to Hermes. To use the omh command, add $(Split-Path -Parent $OmhCommandPath) to PATH."
+        } else {
+            Write-OmhLine 'OMH is connected to Hermes.'
+        }
+    } elseif (Get-OmhCommandOnPath) {
         Write-OmhLine (Get-OmhMessage 'next_path')
     } elseif ($OmhCommandPath) {
         Write-OmhLine (Get-OmhMessage 'next_command_path' $OmhCommandPath)
@@ -1385,7 +1448,7 @@ try {
             # With the app (installed now, or the app that runs this with
             # OMH_WITH_DESKTOP=0), the model is picked in the app, not in a terminal.
             if ($script:OmhOmherAppPath -or $OmhWithDesktop -eq '0') {
-                Write-OmhLine 'Hermes was installed without its setup wizard. Open omher and pick a model from the model menu at the top of the chat.'
+                Write-OmhLine 'Hermes was installed without its setup wizard. Open omher and sign it in to an AI account from the line above the chat box (ChatGPT / Codex, Nous Portal or an API key).'
             } else {
                 Write-OmhLine "Hermes was installed without its setup wizard: run 'hermes setup' to choose a model."
             }

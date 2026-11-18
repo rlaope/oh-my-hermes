@@ -2,6 +2,8 @@
 // and a reasoning control. Changes go to `chat.set_model` for the bot's main chat; when the bridge refuses
 // (e.g. `unsupported`) the old value stays and a one-line note says to change it in Hermes.
 // The list has a search field (focused on open; Up/Down/Enter pick, Esc closes) and one chip per vendor.
+// A bot Hermes says cannot answer (ready.ts, the chat's connect block) has a gray dot, not the green one, and an
+// empty list says so instead of "No models match": a new user sent here by the installer has nothing to pick yet.
 import { useEffect, useMemo, useRef, useState } from "react";
 import "./model.css";
 import type { SlotProps } from "../../features";
@@ -13,6 +15,7 @@ import { levelOptions, reasoningLabel } from "./levels";
 import { filterRows, modelRows, vendorsPresent, type ModelRow } from "./modelSearch";
 import { t, tx } from "../../i18n";
 import { composing } from "../../lib/ime";
+import { useBotReady } from "../connect/ready";
 
 export const slot = "modelPicker";
 
@@ -28,6 +31,7 @@ export default function ModelPicker({ bot, chat }: SlotProps["modelPicker"]) {
   const provider = chat?.provider || opts?.current.provider || bot.provider;
   const reasoning = chat?.reasoning || opts?.current.reasoning || "";
   const offline = bot.status === "offline";
+  const noAccount = useBotReady(bot.name).status === "not";
   const [query, setQuery] = useState("");
   const [vendor, setVendor] = useState("all");
   const [active, setActive] = useState(0);
@@ -114,9 +118,12 @@ export default function ModelPicker({ bot, chat }: SlotProps["modelPicker"]) {
         title={t("mp.title")}
         data-testid="model-pill"
       >
-        <span className="mp-mk" title={offline ? t("bot.offline") : t("bot.online")}>
+        <span
+          className="mp-mk"
+          title={offline ? t("bot.offline") : noAccount ? t("cn.needs", { bot: bot.display_name }) : t("bot.online")}
+        >
           <ModelIcon model={model} provider={provider} size={14} />
-          <span className={`mp-d${offline ? "" : " live"}`} aria-hidden="true" />
+          <span className={`mp-d${offline || noAccount ? "" : " live"}`} aria-hidden="true" data-testid="model-dot" />
         </span>
         <span className="mp-l" title={model || undefined} data-testid="model-label">
           {model || t("mp.pick")}
@@ -183,7 +190,7 @@ export default function ModelPicker({ bot, chat }: SlotProps["modelPicker"]) {
               <div className="mp-empty">{offline ? t("mp.offline", { bot: bot.display_name }) : t("mp.loading")}</div>
             ) : !shown.length ? (
               <div className="mp-empty" data-testid="model-empty">
-                {t("mp.none")}
+                {!rows.length && noAccount ? t("mp.noAccount", { bot: bot.display_name }) : t("mp.none")}
               </div>
             ) : (
               groups.map((g) => (

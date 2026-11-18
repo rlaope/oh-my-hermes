@@ -173,6 +173,31 @@ All notable changes will be documented here.
   `omher`. The old argument `omher@beta` keeps working, because every omher app up to 0.2.13 sends it from its
   first-run Install button. The README and install docs drop "(beta)".
 
+- **A new user's one-command install of omher finishes.** On a Mac with neither Hermes nor OMH,
+  `curl -fsSL https://omher.app/omher | sh` installed Hermes and then stopped with "Hermes' installer finished, but no
+  Hermes was found" (exit 1), before OMH, setup or the app. omher's own first-run Install button stopped the same way.
+  Hermes' installer now ships its own Python and a `hermes` launcher with no `venv` folder, and puts `hermes` in
+  `~/.local/bin`, which the running installer does not see. `install.sh` and `install.ps1` now find Hermes through
+  the launcher, as the omher app does. Measured on Hermes 0.23.2 in a sandboxed new home: the run finishes in about
+  two minutes with the app installed.
+
+- **The install's last lines point at the right next step.** After the installer had run `omh setup` and `omh doctor`
+  itself, it still ended with "Next: run 'omh setup' … then 'omh doctor'". It now says OMH is connected to Hermes, and
+  where to add `omh` to PATH. For a Hermes installed in the same run, it says to sign in to an AI account from the line
+  above omher's chat box. It no longer says to pick a model from the model menu, which is empty until an account is
+  signed in.
+
+- **omher's model menu says when the bot has no AI account.** For a bot that Hermes says cannot answer, the menu's
+  empty list now reads "Hermes has no AI account yet. Sign in below the chat, then its models show here." instead of
+  "No models match", and the dot on the model button is gray instead of the connected green.
+
+- **`omh setup` and `omh uninstall` can edit a config that Hermes' installer just wrote.** Hermes' config template has
+  comment lines with quotes in them (`# order: ["anthropic", "google"]`), and OMH's config editor read those as quoted
+  keys it must not touch. On a fresh Hermes, setup therefore never recorded `plugins.entries.omh.settings.omh_home`,
+  and `omh doctor` warned about it with a fix that hit the same refusal. Uninstall could not take back
+  `plugins.enabled` or `memory.provider`. Comments are now ignored by that check; a quoted key in the YAML itself is
+  still left alone.
+
 ## 4.0.8 - 2026-11-15
 
 - **The OMH TUI shows a compression as one gauge row, and a prompt typed meanwhile goes on by itself.** `/compact`
