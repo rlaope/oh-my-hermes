@@ -294,8 +294,8 @@ def _provider_conflict(
     wire_model: str,
     provider: str,
     routes: dict[str, tuple[str, str]],
-) -> tuple[str, str] | None:
-    """The (alias, provider) a recorded route owns ``wire_model`` under, when it is not ``provider``.
+) -> tuple[str, str, tuple[str, ...]] | None:
+    """The (alias, provider, every serving provider) for ``wire_model``, when ``provider`` is not among them.
 
     An explicit ``provider`` wins over ``routing/model-providers.json`` by
     design, so a category head or an alias may be pinned to another provider
@@ -313,11 +313,11 @@ def _provider_conflict(
     if not wanted:
         return None
     conflicts: list[tuple[str, str]] = []
-    serving_providers: set[str] = set()
+    serving_providers: dict[str, str] = {}
     for route_alias, (route_provider, route_wire) in routes.items():
         if not route_provider or str(route_wire or "").strip().casefold() != wanted:
             continue
-        serving_providers.add(route_provider.casefold())
+        serving_providers.setdefault(route_provider.casefold(), str(route_provider))
         if route_provider.casefold() != wanted_provider:
             conflicts.append((str(route_alias), str(route_provider)))
     # More than one alias may legitimately name the same wire id, including
@@ -326,11 +326,16 @@ def _provider_conflict(
     # route document does not list at all.
     if wanted_provider in serving_providers:
         return None
-    return conflicts[0] if conflicts else None
+    if not conflicts:
+        return None
+    route_alias, route_provider = conflicts[0]
+    return route_alias, route_provider, tuple(serving_providers.values())
 
 
-def _provider_conflict_error(alias: str, wire_model: str, provider: str, held_by: tuple[str, str]) -> dict[str, Any]:
-    route_alias, route_provider = held_by
+def _provider_conflict_error(
+    alias: str, wire_model: str, provider: str, held_by: tuple[str, str, tuple[str, ...]]
+) -> dict[str, Any]:
+    route_alias, route_provider, serving = held_by
     return {
         "status": "error",
         "error": (
@@ -343,7 +348,7 @@ def _provider_conflict_error(alias: str, wire_model: str, provider: str, held_by
         "alias": route_alias,
         "wire_model": wire_model,
         "provider": provider,
-        "providers_serving_model": [route_provider],
+        "providers_serving_model": list(serving),
     }
 
 

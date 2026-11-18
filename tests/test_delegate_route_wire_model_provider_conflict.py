@@ -112,6 +112,22 @@ class WireModelProviderConflictTest(unittest.TestCase):
         self.assertEqual(read_delegation_route(self.hermes_home)["provider"], "openai-codex")
         self.assertEqual(read_delegation_route(self.hermes_home)["model"], "ANT-claude-opus-5-5")
 
+    def test_a_refusal_names_every_provider_that_serves_the_wire_id(self) -> None:
+        self.write_routing("model-providers.json", {
+            "schema_version": "model_provider_routes/v1",
+            "models": {
+                "claude-opus-5-5": {"provider": "opencodex", "model": "ANT-claude-opus-5-5"},
+                "claude-opus-5-5-proxy": {"provider": "claude-proxy", "model": "ANT-claude-opus-5-5"},
+            },
+        })
+        before = self.config.read_bytes()
+
+        result = self.call(action="set", model="ANT-claude-opus-5-5", provider="openai-codex", reasoning_effort="medium")
+
+        self.assertEqual(result["status"], "error", result)
+        self.assertEqual(result["providers_serving_model"], ["opencodex", "claude-proxy"])
+        self.assertEqual(self.config.read_bytes(), before)
+
     def test_a_wire_id_no_route_describes_is_dispatched_unchanged(self) -> None:
         result = self.call(action="set", model="vendor/child-model", provider="openai-codex")
 

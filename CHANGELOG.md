@@ -155,6 +155,13 @@ All notable changes will be documented here.
   run's one-line summary open. While a run is active, such a dispatch is stopped once per turn with a pointer to
   `omh_dag` (ready, settle, repair, extend); sending it again goes through. Contributed by @yqm-307 (#2914).
 
+- **`omh_delegate_route set` refuses a model id pinned to a provider that does not serve it.** A `set` with
+  `model=ANT-claude-opus-5-5 provider=openai-codex` used to reach `config.yaml`, and every delegated child after it
+  died on its first call with HTTP 400 from the vendor. When `routing/model-providers.json` records that exact model
+  id only under other providers, the call now returns an error naming the alias, every provider that serves the id
+  and the two valid ways to route it, and writes nothing. Aliases may still be pinned to another provider, and ids no
+  route records pass unchanged. Contributed by @rafaelmoreiraai (#2915).
+
 ## 4.0.8 - 2026-11-15
 
 - **The OMH TUI shows a compression as one gauge row, and a prompt typed meanwhile goes on by itself.** `/compact`
