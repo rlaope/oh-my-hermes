@@ -26,15 +26,6 @@ All notable changes will be documented here.
   name them. Hermes builds up to origin/main of 2026-11-17 do not know the 6.2 ids yet and clamp `max` to `xhigh` on
   the Codex route.
 
-- **omher stays light with many terminal sessions open.** A hidden terminal's output now re-renders only its own
-  TERMINALS row, never the list. A terminal that is not on the page draws nothing, not even the selection redraw that
-  xterm's own pause misses. One hidden and quiet for two minutes gives its scrollback back as a snapshot and is made
-  again when shown or when its program prints. One shared thread watches every session's foreground program, instead
-  of one per session. With 20 terminals of 2 MiB each and 19 hidden ones printing, main-thread script time over 8 s
-  drops from 1333 ms to 124 ms. After the park wait, buffers, snapshots and heap hold 35.5 MB instead of 205.5 MB.
-  A parked terminal comes back with its saved cursor, tab stops and scroll position. Frames over 50 ms and DOM
-  changes were worse at the median in one bench set and not in an independent re-measure; the ranges overlap. Details
-  and both sets in `apps/omher/bench/many/README.md`.
 - **OMH starts faster in a fresh Hermes process and its tools cost fewer tokens to open.** The chat router no longer
   imports the whole loop engine for one loop-command check, and the dag-ulw cue patterns compile on first use instead
   of all at import, so the plugin's start before a one-shot `chat -q`, a cron run or a delegated child's first reply
@@ -428,6 +419,15 @@ All notable changes will be documented here.
   refused; a plain-HTTP ask never goes through `HTTP_PROXY`, so the key is not
   sent in clear to a proxy; and `typesafe_model` never applies to TypeSafe's
   own host however it is spelled. Thanks @brentkearney. (#2716)
+- **omher 0.2.14.** Many open terminals stay light, and Codex's terminal rows show the plain OpenAI mark.
+  - **Many terminals:** a hidden terminal's output re-renders only its own TERMINALS row and draws nothing until shown;
+    one hidden and quiet for two minutes gives its scrollback back and comes back exactly as it was (cursor, tab stops,
+    scroll position); one shared thread watches every session's program. With 20 terminals and 19 hidden ones
+    printing, script time over 8 s drops from 1333 ms to 124 ms, and after the park wait memory drops from 205.5 MB
+    to 35.5 MB. A terminal is also fitted again when the GPU renderer arrives late, so it no longer stays a few
+    columns too narrow. (#2945)
+  - **Codex mark:** Codex rows show the bare OpenAI (GPT) mark, and terminal-row marks have no frame around them.
+    (#2949)
 - **omher 0.2.13.** Terminals behave like a real terminal, a routine that keeps failing is one line in the chat, and
   macOS installs from one Terminal command without the "Not Opened" warning.
   - **Terminals:** `exit` or Ctrl+D closes a shell row as its x does; when Claude Code, Codex or any CLI ends, the
