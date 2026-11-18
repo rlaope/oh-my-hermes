@@ -405,3 +405,10 @@
   color: var(--quiet);
   text-align: center;
 }
+/* a new thread's one empty line, in the timeline where "Say hi to <bot>" stands in a main chat (it used to sit above
+   the composer while "Say hi" stayed at the top: two different empty lines in one view) */
+.thread > .th-empty {
+  margin: 10px auto 2px;
+  padding: 0 24px;
+  word-break: keep-all;
+}

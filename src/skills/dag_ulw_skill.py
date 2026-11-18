@@ -41,8 +41,7 @@ DEFINITION = SkillDefinition(
         "ultrawork dag",
     ),
     "Use when the request is a job of several parts that can run in parallel or in an order (a feature across "
-    "modules, a migration, a broad cleanup, a listed backlog of four or more separate code changes, research then "
-    "build then verify), or when the person says dag ulw.",
+    "modules, a migration, a broad cleanup, research then build then verify), or when the person says dag ulw.",
     category="agent-coordination",
     phase="dag-delivery",
     hermes_role="tracker",

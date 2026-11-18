@@ -2183,6 +2183,7 @@ class Composer:
         glow: Sequence[tuple[int, int]] = (),
         glow_style: Callable[[int, int], Style] | None = None,
         selection_style: Style = Style(reverse=True),
+        diagnostics: Sequence[tuple[int, int]] = (),
     ) -> tuple[list[Line], tuple[int, int]]:
         """The visible rows at `width` cells, and the caret as (row, col) within them; paste chips and image tokens in
         `chip_style`, the `marks` (str index ranges of the text, such as a `/name` that resolves) in `mark_style`, and
@@ -2203,6 +2204,7 @@ class Composer:
         if self.images:
             chips = sorted([*chips, *((at, at + 1) for at, ch in enumerate(self.text) if ch in self.images)])
         selection = self.visual_span
+        diagnostics = () if self.masked else diagnostics
         final_line_selected = False
         if self.visual_line and self.visual_anchor is not None and self.visual_head is not None:
             atoms, _bounds, _index = self._atoms()
@@ -2211,9 +2213,9 @@ class Composer:
         for number in range(scroll, min(len(rows), scroll + visible)):
             lead = Span(prompt, prompt_style) if number == 0 else indent
             start, end = rows[number].start, rows[number].end
-            if chips or marks or glow or selection is not None:
+            if chips or marks or glow or diagnostics or selection is not None:
                 body_spans = _chip_styled(shown, shape.bounds, start, end, chips, chip_style, marks, mark_style,
-                                          glow, glow_style, selection, selection_style)
+                                          glow, glow_style, selection, selection_style, diagnostics)
                 if selection is not None and rows[number].hard:
                     at = shape.bounds[end]
                     if end < len(shape.units) and shape.units[end] == NEWLINE and selection[0] <= at < selection[1]:
@@ -2234,6 +2236,7 @@ def _chip_styled(
     marks: Sequence[tuple[int, int]] = (), mark_style: Style = DEFAULT_STYLE,
     glow: Sequence[tuple[int, int]] = (), glow_style: Callable[[int, int], Style] | None = None,
     selection: tuple[int, int] | None = None, selection_style: Style = DEFAULT_STYLE,
+    diagnostics: Sequence[tuple[int, int]] = (),
 ) -> list[Span]:
     """Clusters `start` to `end` as spans, the ones inside a chip (by str index) in `style`, inside a glow range in
     `glow_style` of their offset in it, inside a mark in `mark_style`."""
@@ -2246,6 +2249,8 @@ def _chip_styled(
             None)
         marked = not inside and any(mark_start <= bounds[index] < mark_end for mark_start, mark_end in marks)
         wanted = style if inside else lit if lit is not None else mark_style if marked else DEFAULT_STYLE
+        if not inside and any(left <= bounds[index] < right for left, right in diagnostics):
+            wanted = replace(wanted, underline=True)
         if selection is not None and selection[0] <= bounds[index] < selection[1]:
             wanted = replace(wanted, bg=selection_style.bg, reverse=selection_style.reverse,
                              fg=selection_style.fg or wanted.fg)

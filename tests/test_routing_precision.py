@@ -106,7 +106,7 @@ class RoutingPrecisionTests(unittest.TestCase):
         # Its third review round adds four: two billions of money or data.
         # dag-ulw backlogs add thirteen: lists too short, looked at, held or put off, chores and reading, and
         # fixes in the current directory or branch that are no live lookup.
-        self.assertEqual(payload["summary"]["case_count"], 1525)
+        self.assertEqual(payload["summary"]["case_count"], 1530)
         self.assertEqual(payload["summary"]["passing_count"], payload["summary"]["case_count"])
         self.assertEqual(payload["summary"]["negative_case_count"], payload["summary"]["case_count"])
         self.assertEqual(payload["summary"]["negative_passing_count"], payload["summary"]["case_count"])
@@ -182,7 +182,7 @@ class RoutingPrecisionTests(unittest.TestCase):
         # show-reel's quoted idea-video ask is translation input, answered directly (+1).
         # A concept question under a busy-path gateway origin is answered directly (+1).
         # 356 -> 359: the reach round's negatives that the router answers directly.
-        self.assertEqual(payload["summary"]["direct_answer_count"], 359)
+        self.assertEqual(payload["summary"]["direct_answer_count"], 364)
         # show-reel's README-link control is answered as a file lookup (+1).
         # "Use OMH to fix the failing test in billing.py" names a file: a file lookup (+1).
         # Copying the skills OMH selected and summarizing the files it picked
@@ -275,7 +275,7 @@ class RoutingPrecisionTests(unittest.TestCase):
         # Its second review round drops the Korean 4-bit case, which falls back to main.
         # dag-ulw backlogs add eleven: five code backlogs that run as a graph, four listed look-alikes
         # that keep their owner, two live lookups said with "current".
-        self.assertEqual(payload["summary"]["intervention_case_count"], 1340)
+        self.assertEqual(payload["summary"]["intervention_case_count"], 1335)
         self.assertEqual(
             payload["summary"]["intervention_passing_count"], payload["summary"]["intervention_case_count"]
         )

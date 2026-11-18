@@ -21,6 +21,13 @@ writes what they say, metadata only, into one record per conversation
   call started, in the order Hermes built them.
 * `subagent_stop`: the child's own status and duration.
 
+A second `subagent_start` naming a child already held, with the same session,
+is Hermes continuing that child (`delegation.auto_resume` after a usage limit
+or a restart, or the parent's `delegate_task(action='continue')`): its earlier
+stop is dropped, ``resumed_at`` and ``resumes`` are kept, and a dag-ulw
+child's process is the one it resumed in, so the resumed run's own stop is
+the one that counts.
+
 Each top-level child (one whose parent is the session's own agent, not
 another child) is also counted in memory per conversation, whether or not its
 record is written (`oneshot_children_spawned`): Hermes charges a one-shot
@@ -84,6 +91,7 @@ TITLE_LIMIT: Final = 120
 TITLE_CACHE_LIMIT: Final = 512
 DURATION_MS_LIMIT: Final = 10**12  # about 31 years: a duration past it is not a duration
 ROOT_CACHE_LIMIT: Final = 1024
+RESUME_LIMIT: Final = 64  # times one child's resumes are counted; Hermes itself resumes a child at most twice
 SPAWNED_ID_LIMIT: Final = 512  # top-level subagent ids already counted, so a repeated start counts once
 CLOSED_LIMIT: Final = 256  # lane keys a chat end post closed: ledger children and team parts alike
 SEEN_LIMIT: Final = 256  # lane keys a chat post already showed, so a dag run names the nodes it added once
@@ -347,6 +355,10 @@ def _valid_child(value: object) -> dict[str, Any] | None:
             entry["dag"]["attempt"] = dag["attempt"]
     if (process := recorded_process(value.get("host"))) is not None:
         entry["host"] = process
+    resumed = _number(value.get("resumed_at"))
+    resumes = value.get("resumes")
+    if resumed is not None and isinstance(resumes, int) and not isinstance(resumes, bool) and 0 < resumes <= RESUME_LIMIT:
+        entry.update(resumed_at=resumed, resumes=resumes)
     index = value.get("task_index")
     if isinstance(index, int) and not isinstance(index, bool) and 0 <= index < 1024:
         entry["task_index"] = index
@@ -609,8 +621,22 @@ def observe_subagent_start(kwargs: dict[str, object], *, now: float | None = Non
             entry["host"] = process
 
     def add(record: dict[str, Any]) -> bool:
-        if any(item["subagent_id"] == subagent_id for item in record["children"]):
-            return False
+        for item in record["children"]:
+            if item["subagent_id"] != subagent_id:
+                continue
+            if item["child_session_id"] != child:
+                return False
+            # Hermes continued this child on its own conversation (`delegation.auto_resume`, or the parent's
+            # `delegate_task(action='continue')`): the same subagent id and session start again. The earlier
+            # stop (a usage limit, a restart) no longer describes it, and it now runs in this process.
+            item.pop("stop", None)
+            item["resumed_at"] = moment
+            item["resumes"] = min(int(item.get("resumes", 0)) + 1, RESUME_LIMIT)
+            if "host" in entry:
+                item["host"] = entry["host"]
+            else:
+                item.pop("host", None)
+            return True
         record["children"].append(entry)
         return True
 
@@ -749,12 +775,16 @@ def with_unjoined_stop(
     segment, whose record holds no start for the child, and a child rotated
     since then is named by its continuation. ``stops`` are the
     ``unjoined_stops`` of every segment of the conversation; the delegation
-    graph and `omh_dag` read a child's stop through this one rule.
+    graph and `omh_dag` read a child's stop through this one rule. A child
+    Hermes resumed (``resumed_at``) takes only a stop observed since then.
     """
     if isinstance(child.get("stop"), dict):
         return child
     names = {child["child_session_id"], *later}
-    found = [stop for stop in stops if stop["child_session_id"] in names]
+    # A resumed child is answered only by a stop of the run that resumed it, not one an earlier run left behind.
+    since = _number(child.get("resumed_at"))
+    found = [stop for stop in stops if stop["child_session_id"] in names
+             and (since is None or (_number(stop.get("observed_at")) or 0.0) >= since)]
     if not found:
         return child
     stop = max(found, key=lambda item: item["observed_at"])

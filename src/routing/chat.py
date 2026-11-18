@@ -183,6 +183,14 @@ LOOP_CONSTRUCT_REASON = (
     "A programming or media loop on a timer is a question about that loop, not a request to repeat a "
     "check; answer directly instead of opening an OMH workflow or goal loop."
 )
+# A backlog of separate code changes handed over as a list (`dag_ulw_cues.lists_several_code_changes`) is made in the
+# current session, one change after another. Paired runs measured a dag-ulw graph slower than Hermes alone on such a
+# backlog at equal quality (each child re-reads the shared code), so the list is neither split nor handed to the lane a
+# word in one item scores ("stock", "price", "crash").
+CODE_BACKLOG_REASON = (
+    "A listed backlog of separate code changes: make them in this session, one after another; do not split them "
+    "into a dag-ulw graph or child agents, and do not open an OMH workflow for one item's word."
+)
 # The stable name of each fallback above, carried as the decision's
 # `reason_code` beside its prose. A consumer branches on the code: the prose is
 # for a reader and may be reworded, and the compact `route_decision` contract
@@ -193,6 +201,7 @@ REASON_CODE_HOST_COMMAND_TURN = "host_command_turn"
 REASON_CODE_NATIVE_LOOP_CADENCE = "native_loop_cadence"
 REASON_CODE_TYPED_LOOP_GOAL = "typed_loop_goal"
 REASON_CODE_LOOP_CONSTRUCT = "loop_construct"
+REASON_CODE_CODE_BACKLOG = "code_backlog"
 # The fallbacks answered directly in chat, without a workflow or picker, by
 # code, with the prose each one carries.
 _DIRECT_ANSWER_REASONS = {
@@ -201,6 +210,7 @@ _DIRECT_ANSWER_REASONS = {
     REASON_CODE_NATIVE_LOOP_CADENCE: NATIVE_LOOP_CADENCE_REASON,
     REASON_CODE_TYPED_LOOP_GOAL: TYPED_LOOP_GOAL_REASON,
     REASON_CODE_LOOP_CONSTRUCT: LOOP_CONSTRUCT_REASON,
+    REASON_CODE_CODE_BACKLOG: CODE_BACKLOG_REASON,
 }
 DIRECT_ANSWER_REASON_CODES = frozenset(_DIRECT_ANSWER_REASONS)
 # The direct answers to a loop on a timer: Hermes' own /loop, or a question
@@ -220,8 +230,6 @@ _DAG_ULW_CANCEL_OR_RUN_CLARIFICATION = (
     "Ask one short question that names both readings: stop the dag-ulw run in progress, or start a dag-ulw run on "
     "the work those words name. Do neither until the user answers."
 )
-# A backlog of separate code changes handed over as a list (`dag_ulw_cues.lists_several_code_changes`).
-DAG_ULW_BACKLOG_REASON = "A backlog of separate code changes: plan each one as its own node and run them as a dag-ulw graph."
 ROUTE_EXPLANATION_SCHEMA_VERSION = "route_explanation/v1"
 MULTIPLE_COMPLETE_DOMAIN_INTENTS = "multiple_complete_domain_intents"
 _ROUTER_SKILL = "oh-my-hermes"
@@ -2277,16 +2285,24 @@ def _route_chat_message_cached(
     # starts a run the router did not dispatch. A request that invokes a skill or the loop is that skill's ("use
     # git-workflow: 열린 PR들 전부 리베이스해줘", "omh loop …").
     # A backlog of separate code changes handed over as a list (`lists_several_code_changes`: four or more items, a
-    # request to make them all) is the same evidence by its shape, read before a lane's word in one item ("stock",
-    # "pipeline", "crash") can claim the whole list.
-    backlog = lists_several_code_changes(routing_message, reference_regions(message).links)
+    # request to make them all) is made in this session (`CODE_BACKLOG_REASON`), read before a lane's word in one item
+    # ("stock", "pipeline", "crash") can claim the whole list. A skill or the loop invoked by name keeps it.
+    explicit_skill = explicit_skill_invocation(routing_message, query=query)
     if (
-        (backlog or dispatches_dag_ulw(routing_message, reference_regions(message).links))
-        and explicit_skill_invocation(routing_message, query=query) in (None, DAG_ULW)
+        explicit_skill is None
+        and not explicit_loop_invocation_signal(routing_message)
+        and lists_several_code_changes(routing_message, reference_regions(message).links)
+    ):
+        return _direct_answer_decision(
+            message, source=source, min_confidence=min_confidence, reason_code=REASON_CODE_CODE_BACKLOG
+        ).to_dict()
+    if (
+        dispatches_dag_ulw(routing_message, reference_regions(message).links)
+        and explicit_skill in (None, DAG_ULW)
         and not explicit_loop_invocation_signal(routing_message)
     ):
         return _dag_ulw_by_evidence_decision(
-            message, routing_message=routing_message, source=source, min_confidence=min_confidence, backlog=backlog
+            message, routing_message=routing_message, source=source, min_confidence=min_confidence
         ).to_dict()
     trivial_decision = _trivial_message_fast_path_decision(
         routing_message,
@@ -3289,20 +3305,16 @@ def _dag_ulw_by_evidence_decision(
     routing_message: str,
     source: str,
     min_confidence: str,
-    backlog: bool = False,
 ) -> ChatRouteDecision:
     """A dag-ulw dispatch for work over many targets with positive evidence (`dag_ulw_cues.dispatches_dag_ulw`: a
-    change verb from a closed allow list, in request form, on a breadth object), or for a backlog of separate code
-    changes handed over as a list (``backlog``: `dag_ulw_cues.lists_several_code_changes`)."""
+    change verb from a closed allow list, in request form, on a breadth object)."""
     selected_skill = DAG_ULW
     selected_harness = primary_harness_for_skill(selected_skill)
-    reason = (
-        DAG_ULW_BACKLOG_REASON if backlog else "Work over many targets: plan and run it as a dag-ulw graph."
-    )
+    reason = "Work over many targets: plan and run it as a dag-ulw graph."
     recommendation = recommendation_for_definition(
         _skill_definition_by_name(selected_skill),
         message,
-        matched=("dag_ulw_backlog" if backlog else "dag_ulw_by_evidence",),
+        matched=("dag_ulw_by_evidence",),
         score=12,
         why=reason,
     )
@@ -8169,6 +8181,8 @@ def _clarification(
     if action == "fallback":
         if reason_code == REASON_CODE_FILE_LOOKUP:
             return "Answer this as a file or text lookup, or ask for the target file/path if it is missing."
+        if reason_code == REASON_CODE_CODE_BACKLOG:
+            return "Make the listed code changes in this session, one after another; open no OMH workflow or child agents."
         if reason_code in DIRECT_ANSWER_REASON_CODES:
             return "Answer directly in the current chat; do not open an OMH workflow unless the user asks for one."
         return "Ask which workflow or outcome the user wants before choosing a specialist skill."
@@ -8217,6 +8231,11 @@ def _routing_instruction(action: str, selected_skill: str, candidate_skill: str,
         return f"Use the `oh-my-hermes` router before dispatching to `{candidate_skill}`."
     if reason_code == REASON_CODE_FILE_LOOKUP:
         return "Answer this as a file or text lookup; do not dispatch to a workflow keyword unless the user explicitly asks."
+    if reason_code == REASON_CODE_CODE_BACKLOG:
+        return (
+            "Make the listed code changes in this session, one after another; do not open an OMH workflow, picker, "
+            "dag-ulw graph, child agents, or coding handoff."
+        )
     if reason_code in DIRECT_ANSWER_REASON_CODES:
         return "Answer directly in chat; do not open an OMH workflow, picker, or coding handoff."
     return "Use the `oh-my-hermes` router and ask one concise clarification question."

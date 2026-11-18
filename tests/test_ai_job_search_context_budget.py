@@ -516,9 +516,11 @@ class AiJobSearchContextBudgetTests(unittest.TestCase):
         # model-setup's chain sentence then names GPT-6.2 Astra and GPT-6.2 Sol in every GPT-6 Astra and GPT-6.1
         # Sol slot and lists both among the superseded generations; only model-setup moves, and the pin before
         # it was 9cecce5a...a605.
+        # dag-ulw's when-to-use then drops the listed backlog of code changes, which is made in the session instead;
+        # only dag-ulw moves, and the pin before it was 58106a4e...4542.
         # dag-ulw's run-loop then names the common built-in/custom identity directory, the `identity` node
-        # field and its per-node retry position; only dag-ulw moves, and the pin before it was 58106a4e...7484542.
-        self.assertEqual(_digest(legacy_hashes), 'c8e5403dce6d76ea69558a4a38e5de582fdc5f03e29147555162b8e45b50ee63')
+        # field and its per-node retry position; only dag-ulw moves, and the pin before it was aa31d519...d31a1.
+        self.assertEqual(_digest(legacy_hashes), '26bd101260e212f334386d11fa15bfdf49ad3a956cccf6a860ad31ca2c41f890')
         legacy = _skill_context_cost_profile('full', legacy_templates, refs)
         current = _skill_context_cost_profile('full', templates, refs)
         # Main's search guidance adds 305; repro-audit's mandatory rails 1,943.

@@ -68,6 +68,11 @@ class ClassifiedSite(NamedTuple):
 
 CLASSIFIED_SITES: tuple[ClassifiedSite, ...] = (
     ClassifiedSite(
+        "src/tui/proofread.py", "_run", INTENTIONAL,
+        "The daemon worker surfaces an unexpected failure as Outcome.error naming the exception class; "
+        "the main loop displays that failure instead of claiming a clean draft or applying corrections.",
+    ),
+    ClassifiedSite(
         "src/skills/channel_watch_toolkit/scripts/channel_watch.py", "main", INTENTIONAL,
         "The cron collector's last guard: an unexpected error prints only its class name and exits 1, which Hermes "
         "reports as a Script Error the watch row shows as not readable; a traceback could quote the bot token.",
@@ -1133,8 +1138,9 @@ CLASSIFIED_SITES: tuple[ClassifiedSite, ...] = (
 # profile).
 # 114 -> 115 / 103 -> 104: the channel-watch collector's `main` (an unexpected error names its class only, exit 1;
 # a traceback could quote the bot token).
-EXPECTED_HANDLER_COUNT = 115
-EXPECTED_ANCHOR_COUNT = 104
+# 115 -> 116 / 104 -> 105: proofread.Worker._run reports unexpected failure as Outcome.error.
+EXPECTED_HANDLER_COUNT = 116
+EXPECTED_ANCHOR_COUNT = 105
 
 
 class DerivedSite(NamedTuple):

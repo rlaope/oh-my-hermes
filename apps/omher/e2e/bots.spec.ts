@@ -64,7 +64,7 @@ test("rename: pencil, type, Enter saves; the new name shows everywhere and the p
   await expect(page.getByTestId("bot-name")).toHaveText("Kami the Helper");
   await expect(page.getByTestId("bot-kami").locator(".bot-n")).toHaveText("Kami the Helper"); // sidebar
   await expect(page.getByTestId("settings-nav-bot-kami")).toContainText("Kami the Helper");
-  await expect(page.locator(".st-row", { hasText: "Profile id" })).toContainText("kami"); // the id is unchanged
+  await expect(page.locator(".st-row", { hasText: "Profile ID" })).toContainText("kami"); // the id is unchanged
   expect((await callsOf("bots.rename")).map((c) => c.params)).toEqual([{ bot: "kami", name: "Kami   the Helper" }]);
 
   // Escape cancels without a call; empty goes back to the profile's own name
