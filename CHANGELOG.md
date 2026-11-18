@@ -4,6 +4,13 @@ All notable changes will be documented here.
 
 ## Unreleased
 
+- **Four OMH tool descriptions are shorter, and the model still picks the same calls.** `omh_todo`, `omh_loop`,
+  `omh_document_plan` and `omh_delegate_route` say the same rules in fewer words, so each costs fewer tokens the
+  first time Hermes loads it (24,943 -> 23,718 characters together; the registered OMH schemas 63,324 -> 62,099).
+  An A/B of the first tool call on 11 scenarios (Claude Haiku and Sonnet, 3 runs per arm) passed 33/33 on both the
+  old and the new text. A first draft that also cut "a route set in an earlier turn runs on the previous model" and
+  "OMH mirrors each todo_list write" lost passes and was restored.
+
 - **Gemini prices re-read ahead of Google's two increases.** Google's pricing page, re-read on 2026-11-18, still
   lists Gemini 4 Argon and Gemini 4 Carbon at $2 / $10 per million tokens through 2026-11-30 and $4 / $20 from
   2026-12-01, and Gemini 3.8 Flash and 3.6 Flash at $0.75 / $3.75 through 2026-12-31 and $1.50 / $7.50 from
