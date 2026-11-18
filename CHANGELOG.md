@@ -25,9 +25,6 @@ All notable changes will be documented here.
 - **The Start Guide lists long-term memory among the main features.** It moves from the closing list to a fourth card
   in "What OMH does" (owner request, 2026-11-18): nothing is remembered silently, and the next session gets only the
   memories that fit its task, within a token budget. The closing list is now one row of three.
-- **omher: Run now no longer looks like the button you must press.** On an automation's detail it was the first,
-  filled button; on the "New automation" card in chat, the first button. It is now a quiet text action at the end of
-  the row, after Delete or Remove, and a click only asks "Run it now, outside its schedule?" with Run and Cancel.
 - **Four OMH tool descriptions are shorter, and the model still picks the same calls.** `omh_todo`, `omh_loop`,
   `omh_document_plan` and `omh_delegate_route` say the same rules in fewer words, so each costs fewer tokens the
   first time Hermes loads it (24,943 -> 23,718 characters together; the registered OMH schemas 63,324 -> 62,099).
@@ -215,50 +212,6 @@ All notable changes will be documented here.
   id only under other providers, the call now returns an error naming the alias, every provider that serves the id
   and the two valid ways to route it, and writes nothing. Aliases may still be pinned to another provider, and ids no
   route records pass unchanged. Contributed by @rafaelmoreiraai (#2915).
-
-- **The omher desktop app is no longer labelled beta.** The one-command install is now
-  `curl -fsSL https://raw.githubusercontent.com/rlaope/oh-my-hermes/main/install.sh | sh -s -- omher` (and
-  `... install.ps1))) omher` on Windows); `curl -fsSL https://omher.app/omher | sh` stays the short form and now passes
-  `omher`. The old argument `omher@beta` keeps working, because every omher app up to 0.2.13 sends it from its
-  first-run Install button. The README and install docs drop "(beta)".
-- **omher's main screens say what they mean in every language and show whole names (1.0 usability pass).** A sidebar
-  search that finds no bot now shows its "No bot named …" line instead of drawing it under TERMINALS. Settings ›
-  Providers shows the in-use model whole (it was cut to "Sonnet …"), and a bot card's profile id no longer breaks at
-  its hyphen. Korean wraps between words everywhere, not inside one. A new thread has one empty line, not two. An
-  agent added in Settings › Agents is no longer offered in TERMINALS, where the shell could not start it. The side
-  panel's "now" / "working", a routine's cadence and its last run read in the UI language, never Hermes' raw
-  `ok` / `delivery_failed`, and a bot with nothing elsewhere gets a note that fits it. Copy that still named the old
-  SESSIONS section (search label, ⌘N, Settings › Agents, Plans) says Terminals, and the sidebar preview drops
-  markdown list markers. (#2960)
-- **omher: start a thread from the chat box with `./thread`, or from a "+ New thread" line under the bot.** In a
-  bot's chat, `./` opens one row, `./thread`. `./thread` alone opens a new empty thread with its box focused, as the
-  bot's right-click New thread does; `./thread <text>` opens one and sends the text there as its first message, which
-  also names it. The command never reaches the bot, and the main chat gets nothing. It counts only at the start of the
-  message; mid-message, `./threads` or a path go out as typed. Inside a thread it opens a sibling thread under the same
-  bot. Skills stay `$name`, so a skill named `thread` is `$thread` and never collides. In the sidebar, each bot's
-  thread list ends in a quiet dashed "+ New thread" line on the same rail (a bot with no threads shows it while open),
-  and a hovered bot row shows a new-thread button beside ⋯. The row menu now sets New thread apart: its own group with
-  an icon and a divider above the bot's management items. Bots on another computer and offline bots get none of these.
-  While a bot's answer streams, a thread block it quotes as an example inside another fence or a `>` quote no longer
-  disappears and leaves an empty code block; only the blocks the bridge acts on are hidden.
-
-- **A new user's one-command install of omher finishes.** On a Mac with neither Hermes nor OMH,
-  `curl -fsSL https://omher.app/omher | sh` installed Hermes and then stopped with "Hermes' installer finished, but no
-  Hermes was found" (exit 1), before OMH, setup or the app. omher's own first-run Install button stopped the same way.
-  Hermes' installer now ships its own Python and a `hermes` launcher with no `venv` folder, and puts `hermes` in
-  `~/.local/bin`, which the running installer does not see. `install.sh` and `install.ps1` now find Hermes through
-  the launcher, as the omher app does. Measured on Hermes 0.23.2 in a sandboxed new home: the run finishes in about
-  two minutes with the app installed.
-
-- **The install's last lines point at the right next step.** After the installer had run `omh setup` and `omh doctor`
-  itself, it still ended with "Next: run 'omh setup' … then 'omh doctor'". It now says OMH is connected to Hermes, and
-  where to add `omh` to PATH. For a Hermes installed in the same run, it says to sign in to an AI account from the line
-  above omher's chat box. It no longer says to pick a model from the model menu, which is empty until an account is
-  signed in.
-
-- **omher's model menu says when the bot has no AI account.** For a bot that Hermes says cannot answer, the menu's
-  empty list now reads "Hermes has no AI account yet. Sign in below the chat, then its models show here." instead of
-  "No models match", and the dot on the model button is gray instead of the connected green.
 
 - **`omh setup` and `omh uninstall` can edit a config that Hermes' installer just wrote.** Hermes' config template has
   comment lines with quotes in them (`# order: ["anthropic", "google"]`), and OMH's config editor read those as quoted
@@ -553,6 +506,27 @@ All notable changes will be documented here.
   refused; a plain-HTTP ask never goes through `HTTP_PROXY`, so the key is not
   sent in clear to a proxy; and `typesafe_model` never applies to TypeSafe's
   own host however it is spelled. Thanks @brentkearney. (#2716)
+- **omher 1.0.0.** omher is out of beta: a new user's one command installs everything and ends in the bot's chat,
+  threads start from the chat box, and the main screens read right in every language.
+  - **Out of beta:** the install argument is `omher` (`curl -fsSL https://omher.app/omher | sh` is unchanged); the old
+    `omher@beta` still works, because every app up to 0.2.13 sends it from its first-run Install button. (#2956)
+  - **New users:** on a Mac with neither Hermes nor OMH the one-command install (and the app's first-run Install) no
+    longer stops right after Hermes: the installers find Hermes' new packaged layout (no `venv`) through its launcher,
+    as the app does, and finish in about two minutes with the app installed. The last lines say OMH is connected and
+    point at the sign-in line above the chat box; the model menu says the bot has no AI account yet, with a gray dot
+    instead of a green one. (#2962)
+  - **Threads:** `./thread` in the chat box opens a new thread (`./thread <text>` sends the text there as its first
+    message, never to the main chat); each bot's thread list ends in a "+ New thread" line, a hovered bot row shows a
+    new-thread button, and the row menu sets New thread apart from the bot's management items. A thread block the bot
+    quotes inside another code block no longer disappears from its answer. (#2961)
+  - **1.0 usability pass:** sidebar search shows "No bot named …"; model names and profile ids show whole; Korean wraps
+    between words; the side panel, routines and Schedule read in the UI language; leftover SESSIONS wording says
+    Terminals; sidebar previews drop markdown list markers; Settings › Agents entries are no longer offered in
+    TERMINALS. (#2960)
+  - **Automations:** Run now is a quiet text action that asks "Run it now, outside its schedule?" first. (#2966)
+  - **Waiting messages:** a message typed while the bot answers waits with buttons instead of a menu: ↵ steers it into
+    the running answer (or sends it now for an agent with no steer), ↓ puts it back in the box, × drops it; a steered
+    message reads as you typed it after the chat reopens, never in Hermes' model frame. (#2965, #2964)
 - **omher 0.2.14.** Many open terminals stay light, and Codex's terminal rows show the plain OpenAI mark.
   - **Many terminals:** a hidden terminal's output re-renders only its own TERMINALS row and draws nothing until shown;
     one hidden and quiet for two minutes gives its scrollback back and comes back exactly as it was (cursor, tab stops,
