@@ -4,17 +4,6 @@ All notable changes will be documented here.
 
 ## Unreleased
 
-- **dag-ulw waits for a helper Hermes will resume instead of running its node twice** (Hermes 0.23.2
-  `delegation.auto_resume`). Hermes now continues a helper a usage limit or a restart stopped, under the same
-  subagent id and session. The delegation ledger took that second `subagent_start` for a duplicate and dropped it,
-  so the helper kept its old `error` stop and a node whose resumed run finished could not be settled accepted
-  (`child_reported_failure`); after a restart `omh_dag` also marked the node lost and handed it out again beside the
-  resumed helper. A repeated start with the same session now counts as a resume (the old stop is dropped, the
-  process it resumed in is recorded, and only a stop since the resume answers for it), and `omh_dag` reads Hermes'
-  own `resumable_subagents` record read-only: a node whose helper Hermes promised to resume stays running with
-  `waiting_resume` (`at`, `attempt`), is not offered again or named stuck, refuses a settle with
-  `child_resume_pending` until it reports, and every reply says not to dispatch it again. A Hermes without that
-  table, or a helper it gave up on, keeps the restart and failure rules as they were.
 - **omher: Run now no longer looks like the button you must press.** On an automation's detail it was the first,
   filled button; on the "New automation" card in chat, the first button. It is now a quiet text action at the end of
   the row, after Delete or Remove, and a click only asks "Run it now, outside its schedule?" with Run and Cancel.
@@ -234,6 +223,17 @@ All notable changes will be documented here.
   and `omh doctor` warned about it with a fix that hit the same refusal. Uninstall could not take back
   `plugins.enabled` or `memory.provider`. Comments are now ignored by that check; a quoted key in the YAML itself is
   still left alone.
+- **dag-ulw waits for a helper Hermes will resume instead of running its node twice** (Hermes 0.23.2
+  `delegation.auto_resume`). Hermes now continues a helper a usage limit or a restart stopped, under the same
+  subagent id and session. The delegation ledger took that second `subagent_start` for a duplicate and dropped it,
+  so the helper kept its old `error` stop and a node whose resumed run finished could not be settled accepted
+  (`child_reported_failure`); after a restart `omh_dag` also marked the node lost and handed it out again beside the
+  resumed helper. A repeated start with the same session now counts as a resume (the old stop is dropped, the
+  process it resumed in is recorded, and only a stop since the resume answers for it), and `omh_dag` reads Hermes'
+  own `resumable_subagents` record read-only: a node whose helper Hermes promised to resume stays running with
+  `waiting_resume` (`at`, `attempt`), is not offered again or named stuck, refuses a settle with
+  `child_resume_pending` until it reports, and every reply says not to dispatch it again. A Hermes without that
+  table, or a helper it gave up on, keeps the restart and failure rules as they were.
 
 ## 4.0.8 - 2026-11-15
 
