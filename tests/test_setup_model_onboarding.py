@@ -157,6 +157,29 @@ class AskedMatrixTests(unittest.TestCase):
                 ask.assert_not_called()
                 launch.assert_not_called()
 
+    def test_interactive_never_overrides_yes_or_no_interactive_for_onboarding(self) -> None:
+        for flag in ("--yes", "--no-interactive"):
+            with self.subTest(flag=flag), TemporaryDirectory() as tmp, ExitStack() as stack:
+                root = Path(tmp)
+                write_update_check_policy(_paths(root), mode="off")
+                _machine(stack)
+                stack.enter_context(patch.object(setup_module, "_detect_external_cli_profiles",
+                                                 return_value=_NONE_DETECTED))
+                stack.enter_context(patch.object(setup_module, "_provider_candidates", return_value=[]))
+                stack.enter_context(patch.object(setup_module, "_wizard_has_terminal", return_value=True))
+                prompts: list[str] = []
+                stack.enter_context(patch.object(
+                    setup_module, "_ask_yes_no", side_effect=lambda prompt, **_k: prompts.append(prompt) or True))
+                launch = stack.enter_context(patch.object(setup_module, "_launch_model_onboarding", return_value=0))
+                status, _out, stderr = run_cli(
+                    ["--omh-home", str(root / ".omh"), "--hermes-home", str(root / ".hermes"), "setup",
+                     "--interactive", flag, "--scope", "user", "--no-menubar"],
+                    output_json=False,
+                )
+                self.assertEqual(status, 0, stderr)
+                self.assertNotIn(tr("en", "model_onboarding_prompt"), prompts)
+                launch.assert_not_called()
+
     def test_strings_exist_in_every_language(self) -> None:
         keys = ("wizard_step_model_onboarding", "model_onboarding_prompt", "model_onboarding_note",
                 "model_onboarding_running_hermes_model", "model_onboarding_no_model", "model_onboarding_later")

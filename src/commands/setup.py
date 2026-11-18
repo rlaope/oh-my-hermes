@@ -3944,6 +3944,10 @@ def _will_ask_model_onboarding(args: argparse.Namespace, paths: OmhPaths) -> boo
     """Whether `_ask_model_onboarding_choice` puts a question on screen."""
     if hasattr(args, "_model_onboarding_choice"):
         return False
+    # `--interactive` wins the older wizard gate, but never this question: a
+    # `--yes` or `--no-interactive` beside it still means no ask, no launch.
+    if getattr(args, "yes", False) or getattr(args, "no_interactive", False):
+        return False
     return _model_onboarding_available(paths)
 
 
