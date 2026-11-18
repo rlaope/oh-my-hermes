@@ -245,21 +245,22 @@ const presses = (page: Page) => page.evaluate(() => (window as unknown as { __pr
 // A control in the chat header the person actually hits during the restore slide is theirs (the model pill opens
 // its picker, the places chip closes the panel), at every delay; only the header's bare background can be claimed by
 // a double-click aimed at the tab row. The delay counts from the Esc keydown; the point is hit-tested right before a
-// real mouse click, and only a round whose real pointerdown landed inside the control counts. A round where the
-// control was still under the panel, or the press landed elsewhere, is sampled again: 20 actual hits, 0 lost.
+// real mouse click, and only a round whose real pointerdown landed inside the control counts. Still under the panel at
+// the delay (a loaded runner starts the slide late), the round clicks at the first moment after the delay the control
+// shows: the earliest press the slide could steal. A press that landed elsewhere is sampled again: 20 actual hits,
+// 0 lost.
 for (const control of ["model-pill", "places"] as const)
   for (const delay of [120, 180, 220, 280, 350, 450])
     test(`a real click on the header's ${control} ${delay}ms after Esc is never stolen by the slide, 20 actual hits`, async ({ page }) => {
-      // 20 actual hits: on a loaded runner the control is often still under the panel at 120-180ms (1 round in 9
-      // is a hit there), so up to 400 rounds
-      test.setTimeout(900_000);
+      // 20 actual hits; a round only misses when the press lands elsewhere, so 60 rounds is plenty
+      test.setTimeout(300_000);
       await page.setViewportSize({ width: 1440, height: 900 });
       await openPanel(page, "runs");
       await recordPresses(page);
       const own = (h: Press) => (control === "model-pill" ? h.model : h.places);
       const hits: { round: number; after: number; worked: boolean }[] = [];
       const left: { round: number; why: string }[] = [];
-      for (let round = 0; hits.length < 20 && round < 400; round++) {
+      for (let round = 0; hits.length < 20 && round < 60; round++) {
         await maxForRound(page);
         await page.evaluate(() => {
           const w = window as unknown as { __esc: number };
@@ -271,9 +272,13 @@ for (const control of ["model-pill", "places"] as const)
         const p = await page.getByTestId(control).evaluate(async (e, delay) => {
           const esc = (window as unknown as { __esc: number }).__esc;
           while (performance.now() - esc < delay) await new Promise((r) => setTimeout(r, 1));
-          const b = e.getBoundingClientRect();
-          for (const y of [b.y + b.height / 2, b.y + 2, b.bottom - 2])
-            for (let x = b.x + 2; x < b.right - 1; x += 2) if (e.contains(document.elementFromPoint(x, y))) return { x, y };
+          // from the delay on, the first moment the control shows (the slide is over well within 2 s)
+          while (performance.now() - esc < delay + 2000) {
+            const b = e.getBoundingClientRect();
+            for (const y of [b.y + b.height / 2, b.y + 2, b.bottom - 2])
+              for (let x = b.x + 2; x < b.right - 1; x += 2) if (e.contains(document.elementFromPoint(x, y))) return { x, y };
+            await new Promise((r) => setTimeout(r, 1));
+          }
           return null;
         }, delay);
         if (!p) {
