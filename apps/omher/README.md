@@ -16,22 +16,22 @@ Boundary: [`docs/OMHER-BOUNDARY.md`](../../docs/OMHER-BOUNDARY.md).
 
 ## Install
 
-**One command (beta).** It installs Hermes Agent and oh-my-hermes if they are missing, then omher
+**One command.** It installs Hermes Agent and oh-my-hermes if they are missing, then omher
 (macOS, Windows and Linux x86_64). Download buttons are on [omher.app](https://omher.app/).
 
 ```sh
 curl -fsSL https://omher.app/omher | sh
-# same as: curl -fsSL https://raw.githubusercontent.com/rlaope/oh-my-hermes/main/install.sh | sh -s -- omher@beta
+# same as: curl -fsSL https://raw.githubusercontent.com/rlaope/oh-my-hermes/main/install.sh | sh -s -- omher
 ```
 
 ```powershell
 irm https://omher.app/omher.ps1 | iex
-# same as: & ([scriptblock]::Create((irm https://raw.githubusercontent.com/rlaope/oh-my-hermes/main/install.ps1))) omher@beta
+# same as: & ([scriptblock]::Create((irm https://raw.githubusercontent.com/rlaope/oh-my-hermes/main/install.ps1))) omher
 ```
 
 The installer copies omher into `/Applications` (or `~/Applications`) on macOS, runs the Windows installer
 silently for your user, and on Linux puts the AppImage at `~/.local/bin/omher` with an app menu entry. `OMH_WITH_HERMES=0` skips installing Hermes; `OMH_WITH_DESKTOP=0` skips the app.
-Without `omher@beta` the one-liner installs only the `omh` command, as before.
+Without `omher` the one-liner installs only the `omh` command, as before.
 
 ![The omher desktop app in dark mode: a bot list on the left, and a chat with the bot Kami that reports a nightly digest from Discord, picks up a Slack thread about 502 errors, runs four steps and answers with the fix](../../assets/omher-in-use-dark.webp)
 

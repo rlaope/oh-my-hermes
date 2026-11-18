@@ -166,7 +166,7 @@ test("the first-run install of Hermes lands in the default bot's chat, where the
     (window as any).__OMHER_GATE__ = {
       status: async () => (hermes ? { state: "ready" } : { state: "failed", error: "Hermes not found", missing: "hermes" }),
       retry: async () => {},
-      installCommand: async () => "curl -fsSL https://omher.app/install.sh | sh -s -- omher@beta --no-app",
+      installCommand: async () => "curl -fsSL https://omher.app/install.sh | sh -s -- omher --no-app",
       install: async (on: (e: unknown) => void) => {
         on({ kind: "line", text: "[ok] Hermes Agent installed" });
         hermes = true;

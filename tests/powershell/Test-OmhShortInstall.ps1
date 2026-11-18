@@ -7,7 +7,7 @@
 #   arguments    : the scriptblock form forwards the caller's own, adding nothing
 #   exit status  : a failed install leaves its code in $LASTEXITCODE, and the wrapper
 #                  never calls exit (the user's window stays open)
-# -InjectRegression runs a wrapper that adds omher@beta; the no-argument case must catch it.
+# -InjectRegression runs a wrapper that adds omher; the no-argument case must catch it.
 param([switch]$InjectRegression)
 
 Set-StrictMode -Version 3.0
@@ -34,7 +34,7 @@ function Invoke-RestMethod {
 try {
     $wrapperPath = (Resolve-Path (Join-Path $PSScriptRoot '..\..\site\install.ps1')).ProviderPath
     $wrapperText = [System.IO.File]::ReadAllText($wrapperPath)
-    if ($InjectRegression) { $wrapperText = $wrapperText.Replace(') @args', ') omher@beta @args') }
+    if ($InjectRegression) { $wrapperText = $wrapperText.Replace(') @args', ') omher @args') }
     $errors = $null
     [void][System.Management.Automation.Language.Parser]::ParseInput($wrapperText, [ref]$null, [ref]$errors)
     if ($errors) { throw "site/install.ps1 does not parse: $($errors[0].Message)" }
@@ -48,8 +48,8 @@ try {
     Assert-Omh 'a clean install leaves LASTEXITCODE 0' $LASTEXITCODE 0
 
     # The scriptblock form forwards the caller's own arguments.
-    & $wrapper omher@beta 'two words'
-    Assert-Omh 'arguments are forwarded as given' ($global:OmhShortArgs -join '|') 'omher@beta|two words'
+    & $wrapper omher 'two words'
+    Assert-Omh 'arguments are forwarded as given' ($global:OmhShortArgs -join '|') 'omher|two words'
 
     # A failed install: its code stays in $LASTEXITCODE and this script keeps running,
     # which it would not if the wrapper called exit.
@@ -64,7 +64,7 @@ try {
 
     if ($InjectRegression) {
         if (-not ($script:OmhFailures -match 'irm \| iex passes no argument')) {
-            throw 'the injected omher@beta argument was not caught.'
+            throw 'the injected omher argument was not caught.'
         }
         Write-Host "PASS: injected argument caught ($($script:OmhFailures.Count) failing case(s))."
     } elseif ($script:OmhFailures.Count -gt 0) {

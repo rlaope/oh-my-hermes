@@ -4,6 +4,20 @@ All notable changes will be documented here.
 
 ## Unreleased
 
+- **Four OMH tool descriptions are shorter, and the model still picks the same calls.** `omh_todo`, `omh_loop`,
+  `omh_document_plan` and `omh_delegate_route` say the same rules in fewer words, so each costs fewer tokens the
+  first time Hermes loads it (24,943 -> 23,718 characters together; the registered OMH schemas 63,324 -> 62,099).
+  An A/B of the first tool call on 11 scenarios (Claude Haiku and Sonnet, 3 runs per arm) passed 33/33 on both the
+  old and the new text. A first draft that also cut "a route set in an earlier turn runs on the previous model" and
+  "OMH mirrors each todo_list write" lost passes and was restored.
+
+- **Gemini prices re-read ahead of Google's two increases.** Google's pricing page, re-read on 2026-11-18, still
+  lists Gemini 4 Argon and Gemini 4 Carbon at $2 / $10 per million tokens through 2026-11-30 and $4 / $20 from
+  2026-12-01, and Gemini 3.8 Flash and 3.6 Flash at $0.75 / $3.75 through 2026-12-31 and $1.50 / $7.50 from
+  2027-01-01, cached input moving with each. Hydrogen stays at $1.50 / $7.50. Cost estimates keep today's prices
+  until each date; the price rows now point at the current page, and Argon's row is pinned by the same list-price
+  test as Carbon's.
+
 - **GPT-6.2 Astra and GPT-6.2 Sol take every slot GPT-6 Astra and GPT-6.1 Sol held** (OpenAI released both on
   2026-11-17; owner decision, 2026-11-18). In the Hermes chains, the Codex lane table and the shared final order
   (Claude Opus 5.5, then GPT-6.2 Sol), each new id sits where its predecessor sat, at the same effort, and no chain
@@ -19,15 +33,6 @@ All notable changes will be documented here.
   name them. Hermes builds up to origin/main of 2026-11-17 do not know the 6.2 ids yet and clamp `max` to `xhigh` on
   the Codex route.
 
-- **omher stays light with many terminal sessions open.** A hidden terminal's output now re-renders only its own
-  TERMINALS row, never the list. A terminal that is not on the page draws nothing, not even the selection redraw that
-  xterm's own pause misses. One hidden and quiet for two minutes gives its scrollback back as a snapshot and is made
-  again when shown or when its program prints. One shared thread watches every session's foreground program, instead
-  of one per session. With 20 terminals of 2 MiB each and 19 hidden ones printing, main-thread script time over 8 s
-  drops from 1333 ms to 124 ms. After the park wait, buffers, snapshots and heap hold 35.5 MB instead of 205.5 MB.
-  A parked terminal comes back with its saved cursor, tab stops and scroll position. Frames over 50 ms and DOM
-  changes were worse at the median in one bench set and not in an independent re-measure; the ranges overlap. Details
-  and both sets in `apps/omher/bench/many/README.md`.
 - **OMH starts faster in a fresh Hermes process and its tools cost fewer tokens to open.** The chat router no longer
   imports the whole loop engine for one loop-command check, and the dag-ulw cue patterns compile on first use instead
   of all at import, so the plugin's start before a one-shot `chat -q`, a cron run or a delegated child's first reply
@@ -155,6 +160,11 @@ All notable changes will be documented here.
   run's one-line summary open. While a run is active, such a dispatch is stopped once per turn with a pointer to
   `omh_dag` (ready, settle, repair, extend); sending it again goes through. Contributed by @yqm-307 (#2914).
 
+- **The omher desktop app is no longer labelled beta.** The one-command install is now
+  `curl -fsSL https://raw.githubusercontent.com/rlaope/oh-my-hermes/main/install.sh | sh -s -- omher` (and
+  `... install.ps1))) omher` on Windows); `curl -fsSL https://omher.app/omher | sh` stays the short form and now passes
+  `omher`. The old argument `omher@beta` keeps working, because every omher app up to 0.2.13 sends it from its
+  first-run Install button. The README and install docs drop "(beta)".
 - **omher's main screens say what they mean in every language and show whole names (1.0 usability pass).** A sidebar
   search that finds no bot now shows its "No bot named …" line instead of drawing it under TERMINALS. Settings ›
   Providers shows the in-use model whole (it was cut to "Sonnet …"), and a bot card's profile id no longer breaks at
@@ -425,6 +435,15 @@ All notable changes will be documented here.
   refused; a plain-HTTP ask never goes through `HTTP_PROXY`, so the key is not
   sent in clear to a proxy; and `typesafe_model` never applies to TypeSafe's
   own host however it is spelled. Thanks @brentkearney. (#2716)
+- **omher 0.2.14.** Many open terminals stay light, and Codex's terminal rows show the plain OpenAI mark.
+  - **Many terminals:** a hidden terminal's output re-renders only its own TERMINALS row and draws nothing until shown;
+    one hidden and quiet for two minutes gives its scrollback back and comes back exactly as it was (cursor, tab stops,
+    scroll position); one shared thread watches every session's program. With 20 terminals and 19 hidden ones
+    printing, script time over 8 s drops from 1333 ms to 124 ms, and after the park wait memory drops from 205.5 MB
+    to 35.5 MB. A terminal is also fitted again when the GPU renderer arrives late, so it no longer stays a few
+    columns too narrow. (#2945)
+  - **Codex mark:** Codex rows show the bare OpenAI (GPT) mark, and terminal-row marks have no frame around them.
+    (#2949)
 - **omher 0.2.13.** Terminals behave like a real terminal, a routine that keeps failing is one line in the chat, and
   macOS installs from one Terminal command without the "Not Opened" warning.
   - **Terminals:** `exit` or Ctrl+D closes a shell row as its x does; when Claude Code, Codex or any CLI ends, the

@@ -35,17 +35,15 @@ OMH_DOCUMENT_PLAN_SCHEMA = {
     "description": (
         "Split a long document (PDF, paper, book, report) into numbered read ranges BEFORE reading it, "
         "so a document larger than one read_file window is walked range by range, resumed after "
-        "compression, or fanned out one delegate_task child per range. read_file extracts a document "
-        "to line-numbered text, returns about 100k characters / 2,000 lines per call, re-extracts the "
-        "whole file on every paginated read, and drops page numbers; a 300-page PDF is roughly five "
-        "windows that conversation compression later folds into one summary. Sequence: read the first "
-        "window once to learn total_lines (and the page count or outline from the front matter), call "
-        "action=plan with those numbers, then read each range's read_window and mark it covered. "
-        "Results are bounded: a plan or show result carries one page of ranges plus the next range "
-        "and a ledger summary, never the whole plan. OMH never opens or parses the document: every "
-        "page and character count in the plan is caller_supplied; only a local file's size and sha256 "
-        "are observed. The plan is a reading schedule and a ledger, never coverage or comprehension "
-        "evidence."
+        "compression, or fanned out one delegate_task child per range. read_file returns about 100k "
+        "characters / 2,000 lines per call and drops page numbers, so a 300-page PDF is about five "
+        "windows that compression later folds into one summary. Sequence: read the first window once "
+        "for total_lines (and the page count or outline), call action=plan with those numbers, then "
+        "read each range's read_window and mark it covered. A plan or show result carries one page "
+        "of ranges, the next range and a ledger summary, never the whole plan. OMH never opens or "
+        "parses the document: page and character counts are caller_supplied; only a local file's "
+        "size and sha256 are observed. The plan is a reading schedule and a ledger, never coverage "
+        "or comprehension evidence."
     ),
     "parameters": {
         "type": "object",
