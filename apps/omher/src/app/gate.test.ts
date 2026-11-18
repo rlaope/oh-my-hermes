@@ -19,7 +19,7 @@ describe("installer line tones", () => {
     expect(lineTone("  ERROR: could not reach github.com")).toBe("bad");
     expect(lineTone("curl: (56) The requested URL returned error: 404")).toBe("bad");
     expect(lineTone("      [ok] Hermes Agent")).toBe("ok");
-    expect(lineTone("[note] omher@beta: found Hermes")).toBe("plain");
+    expect(lineTone("[note] omher: found Hermes")).toBe("plain");
     expect(lineTone("No ERROR here")).toBe("plain");
   });
 });

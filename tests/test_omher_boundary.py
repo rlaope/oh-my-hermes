@@ -250,11 +250,11 @@ SHELL_SRC = ROOT / "apps" / "omher" / "src-tauri" / "src"
 # installer's exit status (a script block never reaches install.ps1's own `exit`).
 UNIX_RUN = (
     "f=$(mktemp) && trap 'rm -f \"$f\"' EXIT && curl -fsSL -o \"$f\" "
-    "https://raw.githubusercontent.com/rlaope/oh-my-hermes/main/install.sh && sh \"$f\" omher@beta"
+    "https://raw.githubusercontent.com/rlaope/oh-my-hermes/main/install.sh && sh \"$f\" omher"
 )
 WINDOWS_RUN = (
     "$ErrorActionPreference = 'Stop'; try { & ([scriptblock]::Create((irm "
-    "https://raw.githubusercontent.com/rlaope/oh-my-hermes/main/install.ps1))) omher@beta } "
+    "https://raw.githubusercontent.com/rlaope/oh-my-hermes/main/install.ps1))) omher } "
     "catch { $_.Exception.Message; exit 1 }; exit $LASTEXITCODE"
 )
 
@@ -409,7 +409,7 @@ class SignedSelfUpdateFromOneAddress(unittest.TestCase):
 class TheOneInstaller(unittest.TestCase):
     """Rule 12: the shell spawns the bridge and, on Install, one fixed installer; nothing else."""
 
-    def test_the_installer_is_the_omher_beta_one_liner_without_the_app(self) -> None:
+    def test_the_installer_is_the_omher_one_liner_without_the_app(self) -> None:
         setup = SETUP_RS.read_text(encoding="utf-8")
         # The definitions themselves, not the Rust tests that repeat them.
         unix = setup[setup.index("const UNIX: InstallCommand"):]
