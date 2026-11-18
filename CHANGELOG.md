@@ -4,6 +4,10 @@ All notable changes will be documented here.
 
 ## Unreleased
 
+- **omher: Run now no longer looks like the button you must press.** On an automation's detail it was the first,
+  filled button; on the "New automation" card in chat, the first button. It is now a quiet text action at the end of
+  the row, after Delete or Remove, and a click only asks "Run it now, outside its schedule?" with Run and Cancel.
+
 - **Gemini prices re-read ahead of Google's two increases.** Google's pricing page, re-read on 2026-11-18, still
   lists Gemini 4 Argon and Gemini 4 Carbon at $2 / $10 per million tokens through 2026-11-30 and $4 / $20 from
   2026-12-01, and Gemini 3.8 Flash and 3.6 Flash at $0.75 / $3.75 through 2026-12-31 and $1.50 / $7.50 from

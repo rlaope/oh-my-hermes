@@ -6,6 +6,7 @@ import { useState } from "react";
 import type { Automation } from "../lib/protocol";
 import { useStore, type PluginAddedItem, type RoutineAddedItem } from "../state/store";
 import { t } from "../i18n";
+import { RunOnce } from "./RunOnce";
 import { Avatar, SourceIcon } from "../ui";
 import { deliverParts } from "./Automations";
 import { addsOf } from "./Plugins";
@@ -73,20 +74,17 @@ export function RoutineAddedCard({ bot, item }: { bot: string; item: RoutineAdde
           </div>
         ) : (
           <div className="pg-btns">
-            <button
-              type="button"
-              className="pg-btn"
-              onClick={() => void s.sendTo(bot, t("auto.runMsg", { name: item.name, id: item.routine_id }))}
-              data-testid="card-run"
-            >
-              {t("card.runOnce")}
-            </button>
             <button type="button" className="pg-btn" onClick={() => s.openAutomations(`${bot}:${item.routine_id}`)} data-testid="card-open-auto">
               {t("card.openAuto")}
             </button>
             <button type="button" className="pg-btn danger" onClick={() => setState("confirm")} data-testid="card-undo">
               {t("card.undo")}
             </button>
+            <RunOnce
+              label={t("card.runOnce")}
+              onRun={() => void s.sendTo(bot, t("auto.runMsg", { name: item.name, id: item.routine_id }))}
+              testId="card-run"
+            />
           </div>
         ))}
     </div>

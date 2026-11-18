@@ -202,6 +202,8 @@ export const zh: Record<Key, string> = {
   "auto.lastNever": "尚未运行过",
   "auto.lastError": "错误：{error}",
   "auto.run": "立即运行",
+  "auto.runAsk": "在计划之外现在运行吗？",
+  "auto.runGo": "运行",
   "auto.edit": "编辑",
   "auto.pause": "暂停",
   "auto.resume": "恢复",
