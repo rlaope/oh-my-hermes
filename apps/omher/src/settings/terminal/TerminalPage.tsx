@@ -262,6 +262,9 @@ export function TerminalPage() {
         <Row title={t("term.rightClickPaste")} hints={[t("term.rightClickPasteHint")]} testId="term-right-paste-row">
           <Seg small label={t("term.rightClickPaste")} value={term.rightClickPaste ? "on" : "off"} options={ON_OFF()} onChange={(v) => set({ rightClickPaste: v === "on" })} testId="term-right-paste" />
         </Row>
+        <Row title={t("term.confirmPaste")} hints={[t("term.confirmPasteHint")]} testId="term-confirm-paste-row">
+          <Seg small label={t("term.confirmPaste")} value={term.confirmPaste ? "on" : "off"} options={ON_OFF()} onChange={(v) => set({ confirmPaste: v === "on" })} testId="term-confirm-paste" />
+        </Row>
       </div>
     </div>
   );

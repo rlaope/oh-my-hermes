@@ -1,6 +1,7 @@
-// What a terminal does with the person's keyboard and mouse beyond xterm's own: the find shortcut, and the two
-// clipboard settings (both off unless the person turned them on in Settings > Terminal). Settings are read when the
-// event happens, so a switch applies to terminals that are already open.
+// What a terminal does with the person's keyboard and mouse beyond xterm's own: the find shortcut, the two
+// clipboard settings (both off unless the person turned them on in Settings > Terminal) and the multi-line paste
+// confirm (paste-guard.ts, on unless turned off). Settings are read when the event happens, so a switch applies to
+// terminals that are already open.
 //
 // Find shortcut: Cmd+F on macOS. On Windows and Linux Ctrl+F opens find too, except while a full-screen program
 // (the alternate screen: vim, less, htop) is showing: there Ctrl+F is the program's (page down) and the alternate
@@ -8,11 +9,17 @@
 import type { Terminal } from "@xterm/xterm";
 import { isMacPlatform } from "./engine-links";
 import { readTermSettings } from "./settings";
+import { attachPasteGuard, guardedPaste } from "./paste-guard";
 
 type KeyLike = { key: string; code?: string; metaKey: boolean; ctrlKey: boolean; altKey: boolean; shiftKey: boolean };
 
+/** The key that stands for `letter`: itself on a Latin layout; otherwise (a non-Latin layout, or Option on a Mac,
+ *  which types ç or ®) the key in its place. */
+const isKey = (e: Pick<KeyLike, "key" | "code">, letter: string) =>
+  e.key.toLowerCase() === letter || (!/^[a-z]$/i.test(e.key) && e.code === `Key${letter.toUpperCase()}`);
+
 /** `f` on a Latin layout; on a non-Latin one (Korean, Japanese, Russian...) the key that stands where F does. */
-const isF = (e: Pick<KeyLike, "key" | "code">) => e.key.toLowerCase() === "f" || (!/^[a-z]$/i.test(e.key) && e.code === "KeyF");
+const isF = (e: Pick<KeyLike, "key" | "code">) => isKey(e, "f");
 
 /** Does this key press ask for find? `altScreen`: a full-screen program is showing. */
 export function isFindKey(e: KeyLike, mac: boolean, altScreen: boolean): boolean {
@@ -53,7 +60,8 @@ export function attachInput(term: Terminal, host: HTMLElement, onFind: () => voi
 
   // right-click pastes: the press is taken before xterm (and a program's mouse reporting) sees it, and the menu
   // does not open. Ctrl+right-click is left alone.
-  const claims = (e: MouseEvent) => e.button === 2 && !e.ctrlKey && readTermSettings().rightClickPaste;
+  // (not on the paste confirm, which keeps its own clicks)
+  const claims = (e: MouseEvent) => e.button === 2 && !e.ctrlKey && readTermSettings().rightClickPaste && !(e.target as Element | null)?.closest?.(".tpaste");
   const press = (e: MouseEvent) => {
     if (!claims(e)) return;
     e.preventDefault();
@@ -62,7 +70,7 @@ export function attachInput(term: Terminal, host: HTMLElement, onFind: () => voi
     void navigator.clipboard
       ?.readText()
       .then((text) => {
-        if (text) term.paste(text);
+        if (text) guardedPaste(term, text);
       })
       .catch(() => undefined);
   };
@@ -73,8 +81,11 @@ export function attachInput(term: Terminal, host: HTMLElement, onFind: () => voi
   };
   host.addEventListener("mousedown", press, true);
   host.addEventListener("contextmenu", menu, true);
+  // Cmd/Ctrl+V and the Edit menu's Paste: a paste of several lines asks first
+  const undoPaste = attachPasteGuard(term, host);
 
   return () => {
+    undoPaste();
     host.removeEventListener("mousedown", down);
     document.removeEventListener("mouseup", up);
     host.removeEventListener("mousedown", press, true);

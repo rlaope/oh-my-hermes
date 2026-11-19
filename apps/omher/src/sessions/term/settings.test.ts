@@ -61,6 +61,15 @@ describe("terminal settings", () => {
     expect(parseTermSettings({}).optionIsMeta).toBe(true);
   });
 
+  it("confirm multi-line paste: a boolean, on by default; settings saved before it existed read as on", () => {
+    expect(TERM_DEFAULTS.confirmPaste).toBe(true);
+    expect(parseTermSettings({ confirmPaste: false }).confirmPaste).toBe(false);
+    for (const bad of ["no", 0, null, [], {}]) expect(parseTermSettings({ confirmPaste: bad }).confirmPaste).toBe(true);
+    expect(parseTermSettings(JSON.stringify({ copyOnSelect: true, rightClickPaste: true })).confirmPaste).toBe(true);
+    expect(writeTermSettings({ confirmPaste: false })).toMatchObject({ confirmPaste: false, rightClickPaste: false });
+    expect(readTermSettings().confirmPaste).toBe(false);
+  });
+
   it("copy on select and right-click paste: booleans, off by default; anything else is the default (off)", () => {
     expect(TERM_DEFAULTS).toMatchObject({ copyOnSelect: false, rightClickPaste: false });
     expect(parseTermSettings({ copyOnSelect: true, rightClickPaste: true })).toMatchObject({ copyOnSelect: true, rightClickPaste: true });
