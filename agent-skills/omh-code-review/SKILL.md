@@ -17,7 +17,7 @@ This is an OMH `code-review` workflow skill, projected for Agent Skills hosts (C
 
 ## Why This Exists
 
-`code-review` exists to make review bug-first and evidence-grounded: findings must cite concrete files, diffs, commands, or artifacts before any summary or fix proposal.
+`code-review` exists to make review bug-first and evidence-grounded: findings must cite concrete files, diffs, commands, or artifacts before any summary or fix proposal. Its Hermes Bug Hunter discipline keeps only findings that can be shown step by step, drops intended or unreachable behavior, and ends every review with what was not checked.
 
 ## Do Not Use When
 
@@ -47,6 +47,7 @@ Bad example:
 - Both axes appear in the report: correctness/risk findings, and a spec-axis verdict naming its Claim source or the `not_assessed` reason.
 - No-issue reviews still name residual risk, missing tests, and independent review evidence if unavailable.
 - The closing carries the checked-and-clean list and the could-not-assess list, each naming its surfaces.
+- The result ends with a `Not checked` list, one reason per entry, or `Not checked: none` when coverage was complete.
 - The dispatch schema matches the return, candidate validation states remain distinct, and selected checks are not reported as observed coverage.
 - Fix implementation, architecture follow-up, and CI/merge claims stay separate from the review result.
 - A reply to the person uses plain words: the verdict as whether anything found blocks the change (blocking issues found / nothing blocking found), the spec axis as whether the change does what was asked, gaps as what could not be checked and why; `ship`, `no_ship`, `not_assessed`, `spec_axis`, `verification_gaps`, and `could_not_assess` stay out of it. A dispatched reviewer's structured return keeps those schema fields.
@@ -60,7 +61,7 @@ Bad example:
 - When findings arrive for work you own, load `omh-code-review/references/review-response.md` before changing anything.
 - For maintainability judgement calls, load `omh-code-review/references/smell-baseline.md`; it finds the repository's standards files first, then names the twelve baseline smells with their fixes and the repo-standards-override rule.
 - Load `omh-code-review/references/risk-selection.md` to select depth; when additional lenses are justified, load `omh-code-review/references/review-lenses.md` and run only those selected as separate passes.
-- Before final findings, load `omh-code-review/references/finding-validation.md` for candidate confirmation, rejection, and unresolved-risk handling; load `omh-code-review/references/architecture-delta.md` when ownership, contracts, dependencies, or shared-code extraction change.
+- Before final findings, load `omh-code-review/references/finding-validation.md` for its drop gate and candidate confirmation, rejection, and unresolved-risk handling; load `omh-code-review/references/architecture-delta.md` when ownership, contracts, dependencies, or shared-code extraction change.
 
 
 
@@ -90,6 +91,7 @@ Quality bar:
 - A read, parse, or hash that failed means unknown, never empty, none, or equal: keep what was read before, and a list that guards access fails closed, so a failed read of an allowlist denies instead of allowing.
 - Judge maintainability findings against the named baseline in `omh-code-review/references/smell-baseline.md`: a baseline smell is a judgement call to argue from evidence, never an automatic finding, and the reviewed repository's own standards override the baseline wherever they conflict.
 - Close with two lists beside the verdict: what was checked and found clean, and what could not be assessed with the reason. An absent finding is evidence only when the closing says the surface was actually checked.
+- End the result with a `Not checked` list: every file, path, behavior, or environment in scope that was not examined or could not run, each with a one-line reason. Write `Not checked: none` only when coverage was complete; never leave the list out, because a report that lists only findings reads as if everything else were clean.
 - Require structured `spec_axis`, `could_not_assess` (empty allowed), and unranked `verification_gaps` (empty allowed) under the dispatch schema; gaps carry `path`, `line_range`, and `evidence`, never finding priority or confidence. Check actual reads, revision, bounds, ordered ranges, and claim truth separately from shape.
 - Select depth by changed risk, not diff size; record selected and omitted checks, reasons, actual coverage, and budget. Deduplicate candidates by root cause and validate before final findings; retain unresolved protected risks separately. Say `independent validation unavailable` when no different reader participated.
 - When the reviewed work ran in a Hermes session, cite `session_file_activity/v1` (`omh quality-evidence file-activity --hermes-session <id> --json`) to scope which workspace files its read_file, write_file, and patch calls touched, with the outcome Hermes recorded; it is file lineage, never file-content, diff, test, review, CI, or merge evidence.
