@@ -196,9 +196,13 @@ test("the scrollback comes back dimmed, under a divider, before the program's ne
   await flush(page);
   await expect.poll(async () => (await history(page)).filter((c) => c.op === "history.save" && c.key === id).pop()?.data ?? "").toContain("before-restart-line");
 
+  // a slow computer: the shell answers the history read late, and the program still starts only after it is in
+  await page.addInitScript(() => ((window as unknown as Record<string, unknown>).__omherMockHistoryDelay = 400));
   await page.reload();
   await page.getByTestId(`session-${id}`).locator(".ss-open").click();
-  await expect(screen(page)).toContainText("(mock)");
+  // the kept text holds the old banner too: wait for the new program's own banner, below the divider
+  const below = (r: string[]) => r.findLastIndex((l) => l.includes("(mock)")) > r.findIndex((l) => /^--- restored .+ ---$/.test(l));
+  await expect.poll(async () => below(await rows(page))).toBe(true);
   const r = await rows(page);
   const old = r.findIndex((l) => l.includes("before-restart-line"));
   const line = r.findIndex((l) => /^--- restored .+ ---$/.test(l));
@@ -214,6 +218,9 @@ test("the scrollback comes back dimmed, under a divider, before the program's ne
   expect(dim).toContain("xterm-dim");
   // read once, as the startup prune kept it
   expect((await history(page)).filter((c) => c.op === "history.read").map((c) => c.key)).toEqual([id]);
+  // and before the program started
+  const order = (await calls(page)).filter((c) => c.op === "history.read" || c.op === "start").map((c) => c.op);
+  expect(order).toEqual(["history.read", "start"]);
   expect((await history(page)).find((c) => c.op === "history.prune")?.keep).toContain(id);
 
   // closing the row removes its kept text

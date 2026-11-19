@@ -392,6 +392,8 @@ type MockGlobals = {
   __omherMockNoOmh?: boolean;
   /** e2e: the next file saves fail with this message */
   __omherFileSaveError?: string;
+  /** e2e: the shell answers a history read this many ms late (a slow computer) */
+  __omherMockHistoryDelay?: number;
   /** e2e: the branch of each folder (none = not a repository) */
   __omherBranches?: Record<string, string>;
   /** e2e: these agents are an old version that never answers in chat mode (the shell's start deadline ends them) */
@@ -691,6 +693,8 @@ export class MockHost implements SessionHost {
   }
   async historyRead(key: string) {
     this.log({ op: "history.read", key });
+    const late = this.g.__omherMockHistoryDelay;
+    if (late) await new Promise((r) => setTimeout(r, late));
     return this.hist()[key] ?? null;
   }
   async historyRemove(key: string) {
