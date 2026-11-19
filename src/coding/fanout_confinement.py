@@ -14,7 +14,7 @@ import subprocess
 from typing import cast
 from uuid import uuid4
 
-from .pi_family_interop import PI_DISTRIBUTION_AGENT_DIR_ENV, PI_DISTRIBUTION_HOME, PI_DISTRIBUTION_HOST
+from .pi_family_interop import PI_DISTRIBUTION_AGENT_DIR_ENV, PI_DISTRIBUTION_HOME, PI_DISTRIBUTION_HOST, PI_FORK_HOME, PI_FORK_HOST
 from ..quality.cross_harness_adapter_backend import trusted_bwrap
 from ..quality.cross_harness_adapter_sandbox import (
     ChildContext,
@@ -105,6 +105,10 @@ _OWNER_STATE_DIRECTORIES: dict[str, dict[str | None, tuple[_OwnerStatePath, ...]
                 fallback_environment_variables=("PI_CODING_AGENT_DIR",),
             ),
         ),
+        # The fork host's agent dir defaults to `<config root>/agent` under its
+        # own home, and pi's agent-dir variable overrides it for the default
+        # profile (upstream docs/environment-variables.md).
+        PI_FORK_HOST: (_OwnerStatePath("PI_CODING_AGENT_DIR", Path(PI_FORK_HOME) / "agent"),),
         # UNVERIFIED against a running OpenCode CLI: it is absent on this
         # host. Lead-observed XDG data contains logs/repos and XDG state is
         # present; ~/.opencode is absent and ~/.config/opencode is empty.
