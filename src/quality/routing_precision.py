@@ -10615,6 +10615,20 @@ ROUTING_PRECISION_CASES: tuple[RoutingPrecisionCase, ...] = (
         "Here is this sprint's backlog for the repo; work through all of it and keep the tests green:\n- [ ] the cli crashes when the config file is empty\n- [ ] export_csv drops the header row for empty reports\n- [ ] add a --dry-run flag to the sync command\n- [ ] retry the upload three times on a timeout error",
         "answer_directly", "direct_answer", "dag-ulw",
     ),
+    # The same backlog said in one line: three or more separate code changes joined by commas, "and", 랑 or 하고, is
+    # made in the session too, not handed to a lane one item's word scores ("API", "login", "백엔드").
+    RoutingPrecisionCase("inline-korean-backlog-of-three-is-made-in-session", "Three Korean parts to fix at once in one line: made in this session, not toolbelt-readiness", "로그인 API, 설정 화면, 문서 페이지 세 개를 한 번에 고쳐줘", "answer_directly", "direct_answer", "dag-ulw"),
+    RoutingPrecisionCase("inline-four-bugs-after-a-colon-is-made-in-session", "Four bugs listed in one line after a colon: made in this session, not browser-operator", "Fix these four bugs: the export crash, the login redirect, the empty chart, and the broken docs link", "answer_directly", "direct_answer", "dag-ulw"),
+    RoutingPrecisionCase("inline-korean-rang-backlog-is-made-in-session", "Front, back end and tests joined by 랑: made in this session, not backend", "프론트 버튼 추가랑 백엔드 엔드포인트랑 테스트 다 해줘", "answer_directly", "direct_answer", "dag-ulw"),
+    RoutingPrecisionCase("inline-migrate-update-test-is-made-in-session", "Migrate, update callers and add tests in one line: made in this session, not ultrawork", "migrate the settings store to sqlite, update the three callers, and add tests", "answer_directly", "direct_answer", "dag-ulw"),
+    # One-line lists that are no code backlog keep their route: functions to explain, a shopping list, pull requests
+    # to review, a one-line typo, a list of questions, and files to read.
+    RoutingPrecisionCase("inline-functions-to-explain-are-no-backlog", "Three functions to explain is a question, not a backlog", "explain these three functions: parse_args, load_config, and run_main", "answer_directly", "direct_answer", "dag-ulw"),
+    RoutingPrecisionCase("inline-shopping-list-is-no-backlog", "A shopping list in one line names no code", "buy milk, eggs, bread and coffee", "answer_clarification", "", "dag-ulw"),
+    RoutingPrecisionCase("inline-prs-to-review-are-no-backlog", "Three pull requests to review stay review work, not a backlog", "review these 3 PRs: #101, #102, and #103", "answer_clarification", "", "dag-ulw"),
+    RoutingPrecisionCase("inline-one-typo-is-no-backlog", "One typo fix is one change", "fix the typo in README line 3", "answer_directly", "direct_answer", "dag-ulw"),
+    RoutingPrecisionCase("inline-list-of-questions-is-no-backlog", "Three questions in one line ask to be told, not changed", "what does parse_args return, why does load_config fail on an empty file, and how do I run the tests?", "answer_clarification", "", "dag-ulw"),
+    RoutingPrecisionCase("inline-files-to-read-are-no-backlog", "Three files to read are a file lookup, not a backlog", "read src/cli.py, src/config.py and src/runner.py and tell me how they fit together", "answer_file_lookup", "file_or_text", "dag-ulw"),
     # "current" said of the workspace is where the work is, not a live lookup: a fix in the current directory and a
     # check of the current branch are no live-information card.
     RoutingPrecisionCase("current-directory-fix-is-not-live-info", "A fix in the current directory with a price word is code, not a live lookup", "In the current directory, the invoice total in invoice.py rounds half cents down; fix it to round half up.", "answer_clarification", "", "live-info-operator"),
@@ -10650,6 +10664,9 @@ ROUTING_PRECISION_CASES: tuple[RoutingPrecisionCase, ...] = (
 ROUTING_INTERVENTION_CASES: tuple[RoutingInterventionCase, ...] = (
     # Lists that keep their own owner, not a graph: bug reports to file are GitHub work, a named coding agent's
     # backlog is its handoff, failing test files are one fault's lane, and one fault's notes are triage.
+    # One-line look-alikes of a code backlog keep their owner: one bug's symptoms, and one feature that names its parts.
+    RoutingInterventionCase("inline-one-bug-symptoms-keep-their-route", "One login bug with three symptoms in one line stays one change, not a backlog", "Fix the login bug: it crashes, shows a blank page, and logs a 500 error", "dispatch", "ultrawork", "choose_executor", "handoff"),
+    RoutingInterventionCase("inline-one-feature-parts-keep-their-route", "One login page that names its fields is one feature, not a backlog", "add a login page with email, password and a remember-me box", "dispatch", "browser-operator", "prepare_browser_operator_card", "browser_operator"),
     RoutingInterventionCase("backlog-to-file-as-issues-keeps-github", "Four bug reports to turn into GitHub issues stay GitHub work, not a graph", "Turn these bug reports into GitHub issues:\n1. parse_amount('0.2') gives 2 cents instead of 20\n2. export_csv breaks on names with commas\n3. oldest_lot_age crashes after load_lots\n4. the aging report counts invoices twice", "dispatch", "github-event-ops", "prepare_github_event_ops_card", "github_event_ops"),
     RoutingInterventionCase("backlog-for-codex-keeps-the-named-agent", "A backlog handed to codex by name stays that agent's, not a graph", "Have codex fix all of these bugs:\n1. parse_amount('0.2') gives 2 cents instead of 20\n2. export_csv breaks on names with commas\n3. oldest_lot_age crashes after load_lots\n4. the aging report counts invoices twice", "dispatch", "executor-runtime-readiness", "prepare_executor_runtime_readiness", "executor_runtime_readiness"),
     RoutingInterventionCase("failing-test-files-list-stays-on-ultrawork", "Four failing test files listed by path are one fault's lane, not a graph", "fix these failing tests:\n- tests/test_amounts.py\n- tests/test_lots.py\n- tests/test_export.py\n- tests/test_aging.py", "dispatch", "ultrawork", "choose_executor", "handoff"),

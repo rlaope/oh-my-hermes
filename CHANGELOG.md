@@ -4,6 +4,12 @@ All notable changes will be documented here.
 
 ## Unreleased
 
+- **A one-line list of three code changes is answered in the session, like a listed backlog.** "migrate the store to
+  sqlite, update the three callers, and add tests" or "프론트 버튼 추가랑 백엔드 엔드포인트랑 테스트 다 해줘" used to land on a
+  lane picked from one word (toolbelt-readiness, browser-operator, backend). They now get the `code_backlog` answer:
+  make the changes here, one after another, not as a dag-ulw graph. One bug's symptoms, one feature's fields, a list
+  of questions, an errand list with a single code word, and work the request itself splits keep their routes.
+
 - **A dag-ulw node that writes files is told to commit only its own paths.** Its task text now says to stage the
   paths in its SCOPE by name and never to run `git add -A`, `git add .`, `git commit -a` or `git stash`, so parallel
   nodes in one checkout stop committing each other's work. Verify, review and read-only nodes get no such line. This
@@ -380,6 +386,14 @@ All notable changes will be documented here.
     Terminal › "Confirm multi-line paste" (on by default).
   - **Find options.** The terminal find bar has Match case (Aa, Alt+C) and Regular expression (.\*, Alt+R) toggles.
     An invalid pattern marks the field and finds nothing.
+
+- **The OMH TUI's proofreader keeps a local dictionary.** On a spelling issue, Alt+P now offers Add to dictionary
+  beside the replacements: the word's spelling marks hide in every OMH TUI on that OMH home, and Alt+P on it later
+  offers Remove from dictionary. The picker's Skip row is gone (Cancel and Esc already did the same). Grammar
+  corrections are never hidden by a saved or unsaved spelling, the word list is read and saved off the screen's
+  thread, and a damaged dictionary file is never overwritten. Words are kept in
+  `<omh_home>/proofread/dictionary.txt`; a word with an apostrophe or hyphen gets no dictionary action. Contributed
+  by @DanRioDev (#2996).
 
 - **The OMH TUI's waiting row says what it waits on.** Between turns the row above the composer named nothing
   (`✻ Waiting… (33m 47s · 1 agent · terminal)`). It now names the longest wait from structure only: a background

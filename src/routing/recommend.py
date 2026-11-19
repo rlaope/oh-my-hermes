@@ -3404,6 +3404,24 @@ _WHOLE_PHRASE_ONLY_TRIGGER_TOKENS = {
             "verifiable",
         }
     ),
+    # `skill-eval` is built from "skill", "eval", "evaluate", "load", "good",
+    # "harness", "check" and "compatibility" -- "explain these three functions:
+    # parse_args, load_config, and run_main" reached it on `load` alone (main's
+    # inline-functions negative). Only its complete phrases score.
+    "skill-eval": frozenset(
+        {
+            "any",
+            "check",
+            "compatibility",
+            "eval",
+            "evaluate",
+            "good",
+            "harness",
+            "load",
+            "skill",
+            "will",
+        }
+    ),
     # `internal-audit` is built from "internal", "control", "audit", "test",
     # "sampling", "evidence", "material", "weakness", "significant",
     # "deficiency", "segregation", "duties" and "sox" -- a codebase audit, a

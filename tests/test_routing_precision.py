@@ -106,9 +106,10 @@ class RoutingPrecisionTests(unittest.TestCase):
         # Its third review round adds four: two billions of money or data.
         # dag-ulw backlogs add thirteen: lists too short, looked at, held or put off, chores and reading, and
         # fixes in the current directory or branch that are no live lookup.
+        # One-line code backlogs add ten: four made in the session, six one-line look-alikes that keep their route.
         # skill-eval adds four: a chess, tennis, interview and Korean sales skill are a person's ability.
         # Its review round adds one: a person's skill at using Codex.
-        self.assertEqual(payload["summary"]["case_count"], 1535)
+        self.assertEqual(payload["summary"]["case_count"], 1545)
         self.assertEqual(payload["summary"]["passing_count"], payload["summary"]["case_count"])
         self.assertEqual(payload["summary"]["negative_case_count"], payload["summary"]["case_count"])
         self.assertEqual(payload["summary"]["negative_passing_count"], payload["summary"]["case_count"])
@@ -184,7 +185,8 @@ class RoutingPrecisionTests(unittest.TestCase):
         # show-reel's quoted idea-video ask is translation input, answered directly (+1).
         # A concept question under a busy-path gateway origin is answered directly (+1).
         # 356 -> 359: the reach round's negatives that the router answers directly.
-        self.assertEqual(payload["summary"]["direct_answer_count"], 364)
+        # 364 -> 370: four one-line code backlogs, functions to explain and a one-line typo answer directly.
+        self.assertEqual(payload["summary"]["direct_answer_count"], 370)
         # show-reel's README-link control is answered as a file lookup (+1).
         # "Use OMH to fix the failing test in billing.py" names a file: a file lookup (+1).
         # Copying the skills OMH selected and summarizing the files it picked
@@ -194,7 +196,8 @@ class RoutingPrecisionTests(unittest.TestCase):
         # A recruiter question and a contract clause that quote an
         # architecture-deepening phrase are answered as file lookups (+2).
         # 19 -> 20: the reach round's `at the same time instead` sentence reads as a file lookup.
-        self.assertEqual(payload["summary"]["file_lookup_count"], 20)
+        # 20 -> 21: three files to read, said in one line, are a file lookup.
+        self.assertEqual(payload["summary"]["file_lookup_count"], 21)
         self.assertEqual(payload["summary"]["overroute_count"], 0)
         self.assertEqual(payload["summary"]["catalog_picker_count"], 0)
         self.assertEqual(payload["summary"]["generic_ack_count"], 0)
@@ -277,10 +280,11 @@ class RoutingPrecisionTests(unittest.TestCase):
         # Its second review round drops the Korean 4-bit case, which falls back to main.
         # dag-ulw backlogs add eleven: five code backlogs that run as a graph, four listed look-alikes
         # that keep their owner, two live lookups said with "current".
+        # One-line look-alikes add two: one bug's symptoms and one feature's parts keep their owner.
         # skill-eval adds seven host-fit checks (four English, three Korean) and five asks that keep
         # skill-health, skill-scout and agent-evaluation.
         # Its review round adds three: two artifact checks that dispatch, one staff assessment that does not.
-        self.assertEqual(payload["summary"]["intervention_case_count"], 1350)
+        self.assertEqual(payload["summary"]["intervention_case_count"], 1352)
         self.assertEqual(
             payload["summary"]["intervention_passing_count"], payload["summary"]["intervention_case_count"]
         )

@@ -1455,7 +1455,7 @@ Esc closes it):
 | Ctrl+N / Ctrl+P | Move down / up in lists, menus, pickers and prompts; scroll one line in pagers, including /dag. Also work in CLI theme, model-chain and setup pickers |
 | Ctrl+R | Searches the input history; Ctrl+R again finds an older match, Enter puts it in the composer, Esc leaves the composer as it was |
 | Ctrl+X | Opens the `/sessions` picker |
-| Alt+P | Corrects the underlined issue at cursor locally; Enter accepts, Skip/Esc closes; never sends |
+| Alt+P | Opens correction or dictionary actions at cursor; Cancel/Esc closes; never sends |
 | Ctrl+S | Opens the bot board, as `/bots` does: this machine's Hermes profiles, their gateways and sessions, read-only |
 | Ctrl+P | Folds the plan above the composer to its header and the item it is on, or expands it again, while a turn runs or between turns; the header says which on its right; on an open menu, Ctrl+P and Ctrl+N move the menu instead |
 | ↑ | On an empty composer with prompts queued, takes them back into the composer to edit; a queued shell line comes back on its own |
@@ -6688,8 +6688,12 @@ draft. Automatic checks are off by default; set `OMH_PROOFREAD=1` and main and
 clarify free-text fields also check after 600 ms quiet and underline issues
 without interrupting typing. Move the cursor onto an
 underlined issue and press Alt+P, then pick a replacement with arrows and Enter,
-or Skip/Esc to close. Alt+P checks immediately if results are missing, and never
-opens an unrelated issue elsewhere in the draft. Corrections use normal Ctrl+_
+or Cancel/Esc to close. With an OMH home, a spelling issue on one word of
+letters (not one with an apostrophe or hyphen, such as `don't` or `e-mail`)
+also offers Add to dictionary, which hides that word's spelling marks in every
+OMH TUI on that home; grammar corrections stay. Press Alt+P on the saved word
+and choose Remove from dictionary to restore them. Alt+P checks immediately if results are missing,
+and never opens an unrelated issue elsewhere in the draft. Corrections use normal Ctrl+_
 undo and never send. Missing servers leave the draft unchanged and show a quiet
 inline status, with bounded retry/backoff (Alt+P retries immediately).
 Masked fields, command lines, code, images and paste-chip contents are
