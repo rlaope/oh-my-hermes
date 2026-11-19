@@ -1,5 +1,5 @@
 {
-  "catalog_revision": "738adacf7dd3c5d1012dff40c64835f5081df59f2b49bffad4f7d768f1de4518",
+  "catalog_revision": "0b96ccc0776f76137be72c654a2a14d1fd79b091c8fcdf6b8e87396327054da6",
   "files": {
     "omh-accessibility-audit/SKILL.md": "01b41b6815463311a950c558300afeb4e2659a1bba44efcf741568cacac6f1d6",
     "omh-accessibility-audit/references/a11y-rules.md": "615cc9eaa24ee36089d395b215cc25b2d9b0d2549f228a5f81df0553f45d2f75",
@@ -232,7 +232,7 @@
     "omh-security-event-response/references/event-containment-order.md": "3a70ef5224ba6753308e2deb1c16d8025eaf1c293d6bb96539b8ab49bbf5cc0c",
     "omh-security-safety-review/SKILL.md": "a069fde040b97d8371601d10327562fa5a5be26e6b7594cf44798b2984cc9262",
     "omh-security-safety-review/references/credential-rotation.md": "56ea9c2caeb32657ed120c523e999332373405fad3a15303df69f4fe4f42a6aa",
-    "omh-show-reel/SKILL.md": "962f4fc7b1fea66fc2126708d477d6fb7bdabad27f89c6c494ad1f73761b5205",
+    "omh-show-reel/SKILL.md": "181a44623516b75d6afb9eaca40e1c6a400df67552426041300c93bb905a8718",
     "omh-show-reel/references/art-direction.md": "ca9de064cdfa74254338ed8bc0edaa1bb72f5855fee727d6290bafa5af8591d2",
     "omh-show-reel/references/assets-and-rights.md": "102fd2f6cee563a9bc03aaf7be302120564acf47705cf688af4e5a5b77bec3b7",
     "omh-show-reel/references/audio-production.md": "411801cdc7209054e01ee4b215e78f5e94aba1bc1be1b0dfccfdc09bccba1bed",
@@ -247,6 +247,7 @@
     "omh-show-reel/references/craft-techniques-2.md": "46daabad33a4867d49133c46c91bb027395707b05d7216e6bb323114c42017ab",
     "omh-show-reel/references/craft-techniques.md": "81c54219eb3dbb182808210805feb41f4120ad4144e29f123d24aa4d92b60e5d",
     "omh-show-reel/references/craft-workflow.md": "2cd46455de439d44f942d42b50729e3a4e1f792489db648d42819b2a85aafbb5",
+    "omh-show-reel/references/cut-sheet.md": "170ad01bb0be4836c2d7032b4054459c4158d66b411defee5d17ecd0f9cb6f48",
     "omh-show-reel/references/game-capture.md": "0edf452e09f37e19f6bff450b2ae16c1ca0c14a73a06c44c60362a9388e120ea",
     "omh-show-reel/references/genres.md": "37354a976a35b5cff232e89d930f580189d12c222002285a2527050a256c3de2",
     "omh-show-reel/references/kinetic-type.md": "d854f66fd65ae95dfad2ea30c53c194093c9d0b8e616b06141609092ae93f6c1",
