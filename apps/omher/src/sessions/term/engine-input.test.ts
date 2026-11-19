@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { isFindKey } from "./engine-input";
+import { findOptionKey, isFindKey } from "./engine-input";
+import { validPattern } from "./engine-find";
 
 const key = (o: Partial<{ key: string; code: string; metaKey: boolean; ctrlKey: boolean; altKey: boolean; shiftKey: boolean }>) => ({ key: "f", code: "KeyF", metaKey: false, ctrlKey: false, altKey: false, shiftKey: false, ...o });
 
@@ -30,5 +31,29 @@ describe("find shortcut", () => {
     expect(isFindKey(key({ metaKey: true, key: "ф", code: "KeyF" }), true, false)).toBe(true);
     // a Latin key that is not f on this layout is not find even when its physical place is F
     expect(isFindKey(key({ metaKey: true, key: "t", code: "KeyF" }), true, false)).toBe(false);
+  });
+});
+
+describe("find options", () => {
+  it("Alt+C flips Match case and Alt+R flips Regular expression, by the key's place too (Option+C types ç on a Mac)", () => {
+    expect(findOptionKey(key({ altKey: true, key: "c", code: "KeyC" }))).toBe("caseSensitive");
+    expect(findOptionKey(key({ altKey: true, key: "ç", code: "KeyC" }))).toBe("caseSensitive");
+    expect(findOptionKey(key({ altKey: true, key: "r", code: "KeyR" }))).toBe("regex");
+    expect(findOptionKey(key({ altKey: true, key: "®", code: "KeyR" }))).toBe("regex");
+    expect(findOptionKey(key({ altKey: true, key: "ㄱ", code: "KeyR" }))).toBe("regex");
+  });
+
+  it("anything else is not an option key: no Alt, another modifier with it, another letter", () => {
+    expect(findOptionKey(key({ key: "c", code: "KeyC" }))).toBeNull();
+    expect(findOptionKey(key({ altKey: true, ctrlKey: true, key: "c", code: "KeyC" }))).toBeNull();
+    expect(findOptionKey(key({ altKey: true, metaKey: true, key: "r", code: "KeyR" }))).toBeNull();
+    expect(findOptionKey(key({ altKey: true, key: "x", code: "KeyX" }))).toBeNull();
+    // a Latin layout whose C key types another letter: the letter counts, not the place
+    expect(findOptionKey(key({ altKey: true, key: "j", code: "KeyC" }))).toBeNull();
+  });
+
+  it("a pattern is valid when it compiles as the search add-on compiles it", () => {
+    for (const ok of ["fo+", "foo", "^a.*b$", "\\d{2,}", "(a|b)", "[x-z]"]) expect(validPattern(ok), ok).toBe(true);
+    for (const bad of ["(", "[", "a{2,1}", "*", "(?<", "\\"]) expect(validPattern(bad), bad).toBe(false);
   });
 });

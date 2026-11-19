@@ -148,6 +148,34 @@ pub fn dsh_turn_args(patch: &Path, session: Option<&str>) -> Result<Vec<OsString
     Ok(a)
 }
 
+/// The arguments a TERMINALS session of agent `id` starts with, besides none: `--session-id <uuid>` for a new Claude
+/// Code conversation whose id omher made (`new_session`), so the same conversation can be continued after omher
+/// restarts; `--resume <uuid>` (Claude Code) or `resume <uuid>` (Codex, a thread id it wrote) to continue one; and
+/// the chat-era `--session <uuid>` for OmO ([`resume_args`]). Never both; every id must be a UUID; any other agent
+/// or shape is refused.
+pub fn terminal_args(id: &str, new_session: Option<&str>, resume: Option<&str>) -> Result<Vec<OsString>, String> {
+    match (new_session, resume) {
+        (None, None) => Ok(Vec::new()),
+        (Some(_), Some(_)) => Err("a new conversation or one to continue, not both".into()),
+        (Some(s), None) => {
+            if id != "claude" {
+                return Err(format!("{id} sessions are not given a conversation id"));
+            }
+            if !is_uuid(s) {
+                return Err("not a conversation id".into());
+            }
+            Ok(vec!["--session-id".into(), s.into()])
+        }
+        (None, Some(r)) if id == "codex" => {
+            if !is_uuid(r) {
+                return Err("not a conversation id".into());
+            }
+            Ok(vec!["resume".into(), r.into()])
+        }
+        (None, Some(r)) => resume_args(id, r),
+    }
+}
+
 /// `8-4-4-4-12` hex digits, nothing else.
 pub fn is_uuid(s: &str) -> bool {
     let parts: Vec<&str> = s.split('-').collect();
@@ -689,6 +717,9 @@ struct Live {
     exited: Arc<AtomicBool>,
     /// Its output on the way to the page.
     out: Arc<Out>,
+    /// The account home variable it was started with (`account_env`): its Codex home, for
+    /// [`Sessions::codex_conversation`].
+    account_env: Vec<(String, String)>,
 }
 
 impl Live {
@@ -866,17 +897,19 @@ impl Sessions {
                 }
             });
         }
-        self.live.lock().unwrap().insert(id, Live { master: pair.master, input, writer_done, killer, pid, exited, out });
+        self.live.lock().unwrap().insert(id, Live { master: pair.master, input, writer_done, killer, pid, exited, out, account_env: account_env.to_vec() });
         Ok(id)
     }
 
     /// Start allow-listed agent `agent` in `cwd`. Anything not in [`AGENTS`] is refused before a process
     /// exists. `account_env` is `accounts::session_env` for that agent: the chosen account's home variable,
-    /// or nothing. `resume` (Claude Code) continues that conversation in the agent's own terminal UI.
+    /// or nothing. `new_session` (Claude Code) names the new conversation, `resume` (Claude Code, Codex) continues
+    /// one in the agent's own terminal UI ([`terminal_args`]).
     pub fn start_agent<F>(
         &self,
         agent_id: &str,
         cwd: &Path,
+        new_session: Option<&str>,
         resume: Option<&str>,
         account_env: &[(String, String)],
         cols: u16,
@@ -890,11 +923,23 @@ impl Sessions {
         if agent_id == "dsh" {
             return Err("DeepSeek Harness has no terminal view here".into());
         }
+        let extra = terminal_args(agent_id, new_session, resume)?;
         let (mut argv, path_env) = launch_for(agent_id)?;
-        if let Some(r) = resume {
-            argv.extend(resume_args(agent_id, r)?);
-        }
+        argv.extend(extra);
         self.spawn(argv, cwd, Some(path_env), account_env, cols, rows, sink)
+    }
+
+    /// The conversation the Codex in the foreground of session `id` holds open ([`crate::fg::codex_conversation`]), in
+    /// the Codex home the session started with (its account's, else the CLI's own: rule 30's
+    /// [`crate::past_chats::cli_home`]); `None` while it holds none, or once the session ended. Only the id comes back.
+    pub fn codex_conversation(&self, id: u32, user_home: &Path) -> Option<String> {
+        let (fg, env) = {
+            let g = self.live.lock().unwrap();
+            let l = g.get(&id).filter(|l| !l.exited.load(Ordering::SeqCst))?;
+            (l.foreground()?, l.account_env.clone())
+        };
+        let root = crate::past_chats::cli_home(user_home, "codex", &env, &|k| std::env::var(k).ok())?;
+        crate::fg::codex_conversation(fg, &root)
     }
 
     /// Start the terminal panel's shell ([`shell_argv`]: the person's login shell, never a program the page names)
@@ -1654,7 +1699,7 @@ mod tests {
             assert!(resume_args(agent, id).is_err(), "{agent}");
         }
         let s = Sessions::default();
-        assert!(s.start_agent("claude", &std::env::temp_dir(), Some("--yolo"), &[], 80, 24, |_| {}).is_err());
+        assert!(s.start_agent("claude", &std::env::temp_dir(), None, Some("--yolo"), &[], 80, 24, |_| {}).is_err());
         assert_eq!(s.count(), 0);
     }
 
@@ -1711,7 +1756,7 @@ mod tests {
         assert_eq!(dsh_harness(&env, &dirs, fs_of(&[&bot, &shim]), same, Os::Windows), None);
         // and DeepSeek Harness never opens in a terminal session
         let s = Sessions::default();
-        assert!(s.start_agent("dsh", &std::env::temp_dir(), None, &[], 80, 24, |_| {}).is_err());
+        assert!(s.start_agent("dsh", &std::env::temp_dir(), None, None, &[], 80, 24, |_| {}).is_err());
         assert_eq!(s.count(), 0);
     }
 
@@ -1725,13 +1770,41 @@ mod tests {
     }
 
     /// A New session may open any agent as its terminal (the person picks Chat or Terminal), so `start_agent` takes
+    #[test]
+    fn terminal_args_take_only_a_new_claude_id_or_a_claude_or_codex_one_to_continue() {
+        let id = "0e2c5a8e-6c1b-4f7e-9a3d-2b1c4d5e6f70";
+        let x = "01a1d060-4ab7-72b2-b02b-1dbee1d5f52c";
+        let os = |v: &[&str]| v.iter().map(OsString::from).collect::<Vec<_>>();
+        assert_eq!(terminal_args("claude", None, None).unwrap(), Vec::<OsString>::new());
+        assert_eq!(terminal_args("claude", Some(id), None).unwrap(), os(&["--session-id", id]));
+        assert_eq!(terminal_args("claude", None, Some(id)).unwrap(), os(&["--resume", id]));
+        assert_eq!(terminal_args("codex", None, Some(x)).unwrap(), os(&["resume", x]));
+        // never both, and a new id only for Claude Code
+        assert!(terminal_args("claude", Some(id), Some(id)).is_err());
+        for agent in ["codex", "grok", "pi", "omp", "omh", "opencode", "shell", "gemini"] {
+            assert!(terminal_args(agent, Some(id), None).is_err(), "{agent}");
+        }
+        for agent in ["grok", "pi", "omp", "omh", "opencode", "shell", "gemini"] {
+            assert!(terminal_args(agent, None, Some(id)).is_err(), "{agent}");
+        }
+        for bad in ["", "--yolo", "x", "0e2c5a8e-6c1b-4f7e-9a3d-2b1c4d5e6f7", "0e2c5a8e-6c1b-4f7e-9a3d-2b1c4d5e6f70 --yolo", "../0e2c5a8e-6c1b-4f7e-9a3d-2b1c4d5e6f70", "0e2c5a8e6c1b4f7e9a3d2b1c4d5e6f70"] {
+            assert!(terminal_args("claude", Some(bad), None).is_err(), "{bad:?}");
+            assert!(terminal_args("claude", None, Some(bad)).is_err(), "{bad:?}");
+            assert!(terminal_args("codex", None, Some(bad)).is_err(), "{bad:?}");
+        }
+        let s = Sessions::default();
+        assert!(s.start_agent("claude", &std::env::temp_dir(), Some("--dangerously-skip-permissions"), None, &[], 80, 24, |_| {}).is_err());
+        assert!(s.start_agent("codex", &std::env::temp_dir(), None, Some("--yolo"), &[], 80, 24, |_| {}).is_err());
+        assert_eq!(s.count(), 0);
+    }
+
     /// every allow-listed id except `dsh` (DeepSeek Harness ships no terminal profile). The folder is relative, so
     /// `spawn` refuses it after the program is resolved and no process ever starts, installed or not.
     #[test]
     fn start_agent_accepts_every_allow_listed_agent_for_a_terminal_except_dsh() {
         let s = Sessions::default();
         for a in AGENTS.iter().chain(crate::acp_agents::ACP_LIST.iter().map(|e| &e.agent)) {
-            let err = s.start_agent(a.id, Path::new("relative/dir"), None, &[], 80, 24, |_| {}).unwrap_err();
+            let err = s.start_agent(a.id, Path::new("relative/dir"), None, None, &[], 80, 24, |_| {}).unwrap_err();
             if a.id == "dsh" {
                 assert!(err.contains("no terminal view"), "{err}");
             } else {
@@ -1747,7 +1820,7 @@ mod tests {
         let s = Sessions::default();
         let tmp = std::env::temp_dir();
         for bad in ["/bin/sh", "kilo"] {
-            let err = s.start_agent(bad, &tmp, None, &[], 80, 24, |_| {}).unwrap_err();
+            let err = s.start_agent(bad, &tmp, None, None, &[], 80, 24, |_| {}).unwrap_err();
             assert_eq!(err, format!("unknown agent \"{bad}\""));
         }
         assert_eq!(s.count(), 0);
@@ -2788,7 +2861,7 @@ mod tests {
         for bad in ["shell", "zsh", "/bin/zsh", "bash -l", "powershell.exe", "cmd"] {
             assert!(agent(bad).is_none(), "{bad}");
             assert!(launch_for(bad).is_err(), "{bad}");
-            assert!(s.start_agent(bad, &std::env::temp_dir(), None, &[], 80, 24, |_| {}).unwrap_err().contains("unknown agent"));
+            assert!(s.start_agent(bad, &std::env::temp_dir(), None, None, &[], 80, 24, |_| {}).unwrap_err().contains("unknown agent"));
         }
         assert_eq!(s.count(), 0);
     }

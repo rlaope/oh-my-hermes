@@ -333,6 +333,34 @@ All notable changes will be documented here.
   cut), a remake measures the reference's cut times and audio onsets before any row is written, and a delegated
   build is reviewed in numbered, measurable FIX rounds. The brief, rights and the short-promo one-scene rule still
   apply.
+- **omher terminal: parity with Otty and Orca: split panes, restore, Kitty keys, images, prompt marks, paste guard.**
+  - **Split panes.** The bottom terminal panel splits into up to four panes (⌘D right, ⌘⇧D down, ⌘W close,
+    ⌘⌥arrows move; Ctrl+Shift+D / Alt+Shift+D / Ctrl+Shift+W / Ctrl+Alt+arrows elsewhere). Dividers drag and a double
+    click evens them. Two TERMINALS sessions open side by side (⌘D in a terminal, or "Split right with…").
+  - **Panel shells ring and take files.** A bottom-panel shell that rings shows a dot on its tab, as TERMINALS rows
+    do. A file dropped on a panel pane is saved and its path typed.
+  - **Restore.** Claude Code terminals start under a conversation id omher makes. If they were running when omher
+    quit, they continue that conversation by themselves after a restart (`claude --resume <id>`). Codex terminals
+    learn their conversation from the Codex process itself and continue it with `codex resume <id>`.
+  - **Scrollback comes back.** Each TERMINALS session and bottom-panel tab shows what it showed before a restart (last
+    2000 lines), dimmed, under a "restored <time>" line. It is kept in `~/.omher/term-history` (owner-only), and
+    Settings › Terminal › History turns it off and deletes it all. The bottom panel's tabs come back in their folders.
+  - **xterm 6.1.** Terminals moved to xterm 6.1 (beta 338). Shift+Enter reaches Claude Code and Codex as its own key
+    (Kitty keyboard protocol, Settings › Terminal › Modern key encoding). Sixel, iTerm2 and Kitty images show in the
+    terminal (Settings › Terminal › Show images, 32 MB per terminal). Emoji such as 👨‍👩‍👧 take two cells.
+    Powerline and Nerd glyphs fit their cell on the GPU renderer. Option+drag selects inside vim and tmux.
+  - **Prompt marks, folder and progress.** Terminals act on the escapes shells and CLIs already send. OSC 133 prompt
+    marks draw a gutter mark per prompt (red after a failed command), and Cmd+Up / Cmd+Down (Cmd+PageUp /
+    Cmd+PageDown) jump between prompts. OSC 7 keeps the bottom panel's tab name and the TERMINALS row's folder
+    current after `cd`, including the `file://$HOST/…` form macOS shells send. OSC 9;4 progress (Claude Code and
+    others) keeps the row working, and marks it when the work finishes while you are looking elsewhere. omher adds
+    no shell hook.
+  - **Paste guard.** Pasting more than one line into a terminal now asks first, showing the line count, the first
+    lines, and Paste / Cancel (Enter / Esc). It does not ask when the program has turned on bracketed paste. This
+    covers Cmd/Ctrl+V, the Edit menu and right-click paste, in session terminals and the bottom panel. Settings ›
+    Terminal › "Confirm multi-line paste" (on by default).
+  - **Find options.** The terminal find bar has Match case (Aa, Alt+C) and Regular expression (.\*, Alt+R) toggles.
+    An invalid pattern marks the field and finds nothing.
 
 - **The OMH TUI's waiting row says what it waits on.** Between turns the row above the composer named nothing
   (`✻ Waiting… (33m 47s · 1 agent · terminal)`). It now names the longest wait from structure only: a background

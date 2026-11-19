@@ -26,11 +26,14 @@ import { useSyncExternalStore } from "react";
 import type { ITerminalInitOnlyOptions, ITerminalOptions, Terminal } from "@xterm/xterm";
 import type { FitAddon } from "@xterm/addon-fit";
 import { afterOpen, CELLS_EVENT, feed, isParked, live, onVisible, PARKING_EVENT, type Remake } from "./term/engine";
+import { onCwd, onProgress } from "./term/engine-marks";
 import { applyLook, termOptions } from "./term/look";
 import { termFontsReady } from "./term/fonts";
 import { onTermSettings, readTermSettings } from "./term/settings";
+import { forgetHistory, pruneHistory, restoredText, trackHistory, watchHistorySetting } from "./term/history";
+import { savedPanelKeys } from "../terminal/state";
 import { termTheme } from "./term/themes";
-import { getShellHost } from "../terminal/host";
+import { getShellHost, learnThisHost } from "../terminal/host";
 import { onSessionFg } from "./fg";
 import { termActs } from "./termActivity";
 import { acpRow, agentDef, agentLabel, continues, draftAgent, draftFolder, draftOpen, hermesOnly, installLine, isBuiltin, isGone, isShell, isTerminalRec, LAST_LINE_MAX, SHELL, termEnd, lastPrintedLine, OPEN_KEY, opensAs, parseOpens, parseRecent, pushRecent, RECENT_KEY, registerAcp, sessionMode, type AgentId, type AgentInfo, type OpenAs, type Unseen, type Opens, type Recent, type SessionRec } from "./agents";
@@ -149,6 +152,23 @@ export const RESIZE_SETTLE_MS = 32;
 
 const utf8 = new TextEncoder();
 
+/** A random (version 4) UUID: the id omher gives a new Claude Code conversation in a terminal (`--session-id`). */
+export function newConversationId(): string {
+  const c = globalThis.crypto;
+  if (typeof c?.randomUUID === "function") return c.randomUUID();
+  const b = c.getRandomValues(new Uint8Array(16));
+  b[6] = (b[6] & 0x0f) | 0x40;
+  b[8] = (b[8] & 0x3f) | 0x80;
+  const h = [...b].map((x) => x.toString(16).padStart(2, "0")).join("");
+  return `${h.slice(0, 8)}-${h.slice(8, 12)}-${h.slice(12, 16)}-${h.slice(16, 20)}-${h.slice(20)}`;
+}
+
+/** TERMINALS agents that continue their own conversation after omher restarts (`claude --resume`, `codex resume`). */
+const TERM_CONTINUES: readonly AgentId[] = ["claude", "codex"];
+/** When a TERMINALS Codex session first asks for its conversation id, and how often after that until it has one. */
+const CODEX_ID_FIRST_MS = 5_000;
+const CODEX_ID_EVERY_MS = 15_000;
+
 type Xterm = [typeof import("@xterm/xterm"), typeof import("@xterm/addon-fit")];
 let xtermLoad: Promise<Xterm> | null = null;
 let xtermMods: Xterm | null = null;
@@ -253,6 +273,15 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
    *  sends no account; the shell uses the one picked for new sessions). */
   const fromBefore = new Set<string>();
   const accountOf = (r: SessionRec) => (fromBefore.has(r.id) ? r.account : undefined);
+  /** TERMINALS sessions put back after a restart whose agent continues its own conversation: their next start (once)
+   *  continues it (`--resume`, `codex resume`) instead of starting a new one. */
+  const termAgain = new Set<string>();
+  /** TERMINALS sessions put back after a restart whose kept history goes into their terminal before their program's
+   *  first output (once). */
+  const histBack = new Set<string>();
+  /** Each TERMINALS session's history keeping (term/history.ts). */
+  const histOf = new Map<string, { touch: () => void; stop: () => void; flush: () => void }>();
+  watchHistorySetting(host);
   /** drafts whose agent / folder the person picked: a late agent or home look-up no longer moves them */
   const picked = new Map<string, { agent?: boolean; cwd?: boolean }>();
   let notify: ((ev: BridgeEvent) => void) | null = null;
@@ -1217,6 +1246,32 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
   /** What stops following each session's foreground CLI (its pty's `session-fg` events). */
   const fgOff = new Map<string, () => void>();
 
+  /** TERMINALS Codex sessions that do not know their conversation id yet: the next ask. A running Codex holds its
+   *  own rollout open once its first prompt is answered, so while the row's Codex runs the shell is asked which
+   *  conversation the Codex in that terminal's foreground holds open (rule 11: only the pty id goes out, only a UUID
+   *  comes back), 5 s after it started and every 15 s after, until it names one; that is kept as the row's
+   *  `agentSession` so a restart continues it (`codex resume <id>`) and the asking stops. A row only ever hears of the
+   *  file its own process holds, so another row's conversation can never come to it. A Codex that ends stops the
+   *  asking and hands its id to no row (its row goes on as its shell and is not resumed); one that never learned it
+   *  comes back paused. */
+  const codexIdTimer = new Map<string, ReturnType<typeof setTimeout>>();
+  const findCodexId = (id: string, t: Term, run: number, pty: number, wait: number) => {
+    if (!host.codexConversation) return;
+    clearTimeout(codexIdTimer.get(id));
+    codexIdTimer.set(
+      id,
+      setTimeout(async () => {
+        codexIdTimer.delete(id);
+        const live = () => terms.get(id) === t && t.run === run && !t.closed && t.hostId === pty && rec(id)?.agent === "codex" && !rec(id)?.agentSession;
+        if (!live()) return;
+        const got = await host.codexConversation!(pty).catch(() => null);
+        if (!live()) return;
+        if (got) patchRec(id, { agentSession: got });
+        else findCodexId(id, t, run, pty, CODEX_ID_EVERY_MS);
+      }, wait),
+    );
+  };
+
   /**
    * Start session `id`'s program in its terminal `t`. A Shell row runs the person's login shell; a CLI row runs its
    * CLI and, when that ends, goes on as the login shell in the same terminal (same scrollback, size and folder), so
@@ -1237,8 +1292,25 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
     t.told = null;
     // the terminal view of a chat session does not decide the session's status; the chat does
     const ofChat = sessionMode(state.agents, r) !== "terminal";
-    // Claude Code's terminal continues the chat's conversation
-    const resume = r.agentSession && ofChat && r.agent === "claude" ? r.agentSession : undefined;
+    // a TERMINALS Claude Code or Codex session put back after a restart continues its own conversation (once);
+    // Claude Code's terminal view of a chat continues the chat's conversation
+    const again = !ofChat && termAgain.delete(id) && !!r.agentSession && TERM_CONTINUES.includes(r.agent);
+    const resume = again ? r.agentSession : r.agentSession && ofChat && r.agent === "claude" ? r.agentSession : undefined;
+    // any other Claude Code terminal starts a new conversation under an id omher makes, kept so a restart continues it
+    const sessionId = !ofChat && !resume && r.agent === "claude" ? newConversationId() : undefined;
+    if (sessionId) patchRec(id, { agentSession: sessionId });
+    // what this terminal showed before omher restarted comes first, dimmed, under a divider (once)
+    if (!ofChat && histBack.delete(id)) {
+      const back = await restoredText(host, id);
+      if (t.run !== run) return;
+      if (back) feed(t.term, back);
+    }
+    if (!ofChat && !histOf.has(id)) {
+      const h = trackHistory(host, id, () => (terms.get(id) === t && !isParked(t.raw) ? t.term : null));
+      const flush = () => h.flush();
+      t.el.addEventListener(PARKING_EVENT, flush);
+      histOf.set(id, { ...h, stop: () => (t.el.removeEventListener(PARKING_EVENT, flush), h.stop()) });
+    }
     const { cols, rows } = t.term;
     let marked = 0;
     // this program's pty id once known, and what was drawn of its output before that
@@ -1274,6 +1346,7 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
         if (pty === null) owed += bytes;
         else io.ack(pty, bytes);
       });
+      histOf.get(id)?.touch();
       // the TERMINALS row's spinner and age: when output last flowed (throttled)
       const now = Date.now();
       if (!ofChat && now - marked >= OUT_MARK_MS) {
@@ -1287,6 +1360,7 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
         // a program omher stopped (the row closed, Restart) or one already replaced says nothing more
         if (terms.get(id) !== t || t.run !== run) return;
         t.closed = true;
+        termActs.patch(id, { progress: undefined });
         if (lineTimer !== null) clearTimeout(lineTimer);
         lineTimer = null;
         fgOff.get(id)?.();
@@ -1313,9 +1387,11 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
         feed(t.term, `\r\n\x1b[2m[${code ? tr("ss.termEndedExit", { agent: label, code }) : tr("ss.termEnded", { agent: label })}]\x1b[0m\r\n`);
       };
       // a Shell row is the person's login shell (the bottom panel's `shell_start`: only a folder and a size go out)
+      // this computer's name first, so the program's first OSC 7 already counts as local
+      await learnThisHost();
       const hostId = shell
         ? (await getShellHost().start(r.cwd || null, cols, rows, onData, onExit)).id
-        : await host.start(r.agent, r.cwd, cols, rows, onData, onExit, resume, accountOf(r));
+        : await host.start(r.agent, r.cwd, cols, rows, onData, onExit, resume, accountOf(r), sessionId);
       if (t.run !== run) {
         // replaced while starting
         void io.close(hostId).catch(() => undefined);
@@ -1337,6 +1413,7 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
       t.told = { cols, rows };
       if (t.settle === null) tellSize(t);
       if (!ofChat) patchRec(id, { status: "running" });
+      if (!ofChat && r.agent === "codex" && !rec(id)?.agentSession) findCodexId(id, t, run, hostId, CODEX_ID_FIRST_MS);
     } catch (e) {
       if (t.run !== run) return;
       t.closed = true;
@@ -1362,6 +1439,11 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
   const disposeTerm = (id: string) => {
     const t = terms.get(id);
     if (!t) return;
+    // its history keeping follows the next terminal of the session (Restart), or ends with it
+    histOf.get(id)?.stop();
+    histOf.delete(id);
+    clearTimeout(codexIdTimer.get(id));
+    codexIdTimer.delete(id);
     fgOff.get(id)?.();
     fgOff.delete(id);
     if (t.hostId !== null && !t.closed) void t.io.close(t.hostId).catch(() => undefined);
@@ -1389,7 +1471,7 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
     };
   };
 
-  const mount = ([{ Terminal }, { FitAddon }]: Xterm, id: string, container: HTMLElement): (() => void) => {
+  const mount = ([{ Terminal }, { FitAddon }]: Xterm, id: string, container: HTMLElement, quiet = false): (() => void) => {
     const settings = readTermSettings();
     const theme = termTheme(look, settings);
     let t = terms.get(id);
@@ -1471,6 +1553,19 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
         });
       };
       wire(first.term);
+      // the folder its shell reports (OSC 7): the row's folder line. Progress (OSC 9;4): working while reported; done
+      // after working, unseen, marks the row as the bell does (no notification: a report is not a ring). Both come
+      // on the element, which a parked terminal made again keeps, and go with it.
+      onCwd(el, (path) => {
+        if (rec(id)) termActs.patch(id, { cwd: path });
+      });
+      onProgress(el, (st) => {
+        if (!rec(id) || tt.closed) return;
+        if (st === "busy") return termActs.patch(id, { progress: true });
+        if (!termActs.get(id).progress) return;
+        termActs.patch(id, { progress: undefined });
+        flag(id, "bell");
+      });
     }
     const tt = t;
     container.appendChild(tt.el);
@@ -1494,12 +1589,55 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
     // and when its cells change size (the GPU renderer arrived after this fit, or went)
     tt.el.addEventListener(CELLS_EVENT, refit);
     onVisible(tt.term, true);
-    tt.term.focus();
+    if (!quiet) tt.term.focus();
     return () => {
       ro.disconnect();
       tt.el.removeEventListener(CELLS_EVENT, refit);
       onVisible(tt.raw, false);
       if (tt.el.parentElement === container) container.removeChild(tt.el);
+    };
+  };
+
+  /** A paused TERMINALS session's kept history (dimmed, under its divider), shown read-only in `container` until the
+   *  person presses Resume: a terminal of its own that starts nothing, takes no keys and is not the session's
+   *  terminal (Resume makes that one, which writes the same history back first). `shown` hears whether there was any. */
+  const previewHistory = (id: string, container: HTMLElement, mode: "dark" | "light", shown: (has: boolean) => void): (() => void) => {
+    let gone = false;
+    let term: Terminal | null = null;
+    let ro: ResizeObserver | null = null;
+    if (!histBack.has(id)) {
+      shown(false);
+      return () => undefined;
+    }
+    void Promise.all([loadXterm(), restoredText(host, id)]).then(([[{ Terminal: Term }, { FitAddon }], text]) => {
+      if (gone) return;
+      if (!text) return shown(false);
+      const s = readTermSettings();
+      const theme = termTheme(mode, s);
+      const t = (term = new Term({ ...termOptions(theme, s), disableStdin: true, cursorBlink: false }));
+      const fit = new FitAddon();
+      t.loadAddon(fit);
+      t.open(container);
+      applyLook(t, theme, s);
+      const refit = () => {
+        if (!container.isConnected || container.clientWidth === 0) return;
+        try {
+          fit.fit();
+        } catch {
+          /* not measurable yet */
+        }
+      };
+      refit();
+      ro = new ResizeObserver(refit);
+      ro.observe(container);
+      // the kept text, and no cursor: nothing runs here
+      t.write(`${text}\x1b[?25l`);
+      shown(true);
+    });
+    return () => {
+      gone = true;
+      ro?.disconnect();
+      term?.dispose();
     };
   };
 
@@ -1642,6 +1780,7 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
     restored = true;
     if (!saved.length) {
       void ready().then(() => host.pruneFiles([]).catch(() => undefined));
+      void ready().then(() => pruneHistory(host, savedPanelKeys()));
       saveSentFiles({});
       return;
     }
@@ -1690,6 +1829,8 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
       // stay) but is not listed and never starts again
       const terminalOnly = !isTerminalRec(state.agents, { agent: s.agent, open: s.open, status: "exited" });
       const auto = !terminalOnly && s.running && mode === "chat" && continuesItself(s);
+      // a TERMINALS Claude Code or Codex session that was running continues its own conversation in a fresh terminal
+      const termAuto = !terminalOnly && s.running && mode === "terminal" && !!s.agentSession && TERM_CONTINUES.includes(s.agent);
       const r: SessionRec = {
         id: s.id,
         agent: s.agent,
@@ -1698,7 +1839,7 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
         // a chat agent comes back as its chat (its terminal view would start the program on sight)
         view: mode === "terminal" ? "terminal" : "chat",
         ...(s.open === "terminal" ? { open: s.open } : {}),
-        status: auto ? "starting" : s.failed ? "failed" : "exited",
+        status: auto || termAuto ? "starting" : s.failed ? "failed" : "exited",
         exitCode: s.running ? null : (s.exitCode ?? null),
         ...(s.error && !s.running ? { error: s.error } : {}),
         ...(s.agentSession ? { agentSession: s.agentSession } : {}),
@@ -1711,7 +1852,7 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
         ...(s.promptTitle ? { promptTitle: s.promptTitle } : {}),
         ...(s.mode ? { mode: s.mode } : {}),
         ...(s.effort ? { effort: s.effort } : {}),
-        ...(s.running && !auto ? { paused: true } : {}),
+        ...(s.running && !auto && !termAuto ? { paused: true } : {}),
       };
       list.push(r);
       fromBefore.add(s.id);
@@ -1724,6 +1865,8 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
         else openChat(s.id, s.model ?? "", msgs);
       }
       if (auto) again.push({ id: s.id, resume: s.agentSession! });
+      if (termAuto) termAgain.add(s.id);
+      if (!terminalOnly && mode === "terminal") histBack.add(s.id);
       else if (s.running && s.agentSession && !isBuiltin(s.agent) && !acpRow(s.agent) && !terminalOnly) later.push(s.id);
     }
     set({ list: [...list, ...state.list] });
@@ -1731,6 +1874,8 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
     // the saved copies of sessions that are gone go; the ones kept show again in their bubbles
     const ids = list.map((r) => r.id);
     void ready().then(() => host.pruneFiles(ids).catch(() => undefined));
+    // the kept history of terminals that are gone goes (the bottom panel's tabs keep theirs)
+    void ready().then(() => pruneHistory(host, [...ids, ...savedPanelKeys()]));
     saveSentFiles(Object.fromEntries(Object.entries(sentFiles).filter(([sid]) => ids.includes(sid))));
 
     // the home folder (for `~/…` paths) and each agent's mode, as a first launch would read them; then the generic ACP
@@ -1742,11 +1887,32 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
       }
     });
     if (again.length) void ready().then(() => Promise.all(again.map(({ id, resume: rid }) => (procs.has(id) ? undefined : startAgentChat(id, rid)))));
+    // their terminals are made and started now, off the page (a view that opens one later takes it as it is)
+    if (termAgain.size && typeof document !== "undefined") void loadXterm().then((m) => [...termAgain].forEach((id) => startOffPage(m, id)));
+  };
+
+  /** Make session `id`'s terminal and start its program without showing it: measured in a box off the page, then
+   *  taken off it, as a terminal whose view the person left. Nothing happens when its view already made it. */
+  const startOffPage = (m: Xterm, id: string) => {
+    if (terms.has(id) || !rec(id)) return;
+    const box = document.createElement("div");
+    box.style.cssText = "position:fixed;left:-10000px;top:0;width:960px;height:600px;visibility:hidden";
+    document.body.appendChild(box);
+    try {
+      mount(m, id, box, true)();
+    } finally {
+      box.remove();
+    }
   };
 
   /** Stop the program(s) and remove the session. */
   const close = (id: string) => {
     picked.delete(id);
+    histOf.get(id)?.stop();
+    histOf.delete(id);
+    histBack.delete(id);
+    termAgain.delete(id);
+    if (rec(id) && isTerminalRec(state.agents, { ...rec(id)!, status: "exited" })) forgetHistory(host, id);
     disposeTerm(id);
     void stopChat(id).then(() => host.removeFiles(id).catch(() => undefined));
     forgetSentFiles(id);
@@ -1928,6 +2094,7 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
     },
     /** Session `id` has a terminal in this page load (an ended one keeps its output until it is closed). */
     hasTerm: (id: string) => terms.has(id),
+    previewHistory,
     /** Changes each time Restart starts session `id`'s terminal program again. */
     termRun: (id: string) => termRuns.get(id) ?? 0,
     /** The session whose chat has app-store key `key`. */

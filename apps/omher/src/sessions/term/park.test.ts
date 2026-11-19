@@ -34,7 +34,9 @@ const base: Inner = {
     originMode: false,
     reverseWraparoundMode: false,
     sendFocusMode: false,
+    showCursor: true,
     synchronizedOutputMode: false,
+    win32InputMode: false,
     wraparoundMode: true,
   },
   selection: false,
@@ -174,5 +176,27 @@ describe("snapshot round trip (xterm 6 + addon-serialize 0.14)", () => {
 
   it("innerOf is null for a terminal that is not xterm 6's shape", () => {
     expect(innerOf({ modes: base.modes } as unknown as Terminal)).toBeNull();
+  });
+
+  it("Kitty keyboard modes pushed inside each other pop back to the outer one after the park", async () => {
+    const kitty = () => new Terminal({ cols: 60, rows: 12, allowProposedApi: true, vtExtensions: { kittyKeyboard: true } });
+    const flags = (t: Terminal) => (t as unknown as { _core: { coreService: { kittyKeyboard: { flags: number } } } })._core.coreService.kittyKeyboard.flags;
+    const a = kitty();
+    await write(a, "\x1b[>1u\x1b[>3u");
+    expect(flags(a)).toBe(3);
+    const carried = carriedOf(a)!;
+    expect(carried.kitty).toMatchObject({ flags: 3, mainStack: [0, 1] });
+    const ser = new SerializeAddon();
+    a.loadAddon(ser);
+    const snap = ser.serialize() + extras(innerOf(a)!);
+    a.dispose();
+    const b = kitty();
+    await write(b, snap);
+    putCarried(b, carried);
+    expect(flags(b)).toBe(3);
+    await write(b, "\x1b[<u");
+    expect(flags(b)).toBe(1);
+    await write(b, "\x1b[<u");
+    expect(flags(b)).toBe(0);
   });
 });

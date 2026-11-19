@@ -4,11 +4,35 @@
 // a mock shell echoes typing and answers a few commands, and records every call in `window.__omherShellCalls`.
 
 import { mockPtyOut, nextMockPty } from "../sessions/fg";
+import { setThisHost } from "../sessions/term/engine-marks";
 
 export interface ShellStarted {
   id: number;
   /** the folder the shell started in: the one asked for when it exists, else home */
   cwd: string;
+}
+
+/** `__omherShellHost` (e2e): the mock computer's name, as macOS reports it (with `.local`). */
+type HostGlobals = { __omherShellHost?: string };
+const MOCK_HOST = "mybox.local";
+
+/** This computer's name, asked once when the app starts (`host_name`), so OSC 7 `file://<name>/…` from any terminal
+ *  (a TERMINALS row or a panel shell) counts as local, with and without macOS's `.local`. Nothing else uses it.
+ *  Every terminal start waits for it, so no terminal parses output before the name is known. */
+let hostAsked: Promise<void> | null = null;
+export function learnThisHost(): Promise<void> {
+  return (hostAsked ??= (async () => {
+    let n = "";
+    try {
+      n = inTauri()
+        ? await (await import("@tauri-apps/api/core")).invoke<string>("host_name")
+        : ((globalThis as HostGlobals).__omherShellHost ?? MOCK_HOST);
+    } catch {
+      /* no name: only an empty host and `localhost` count */
+    }
+    n = typeof n === "string" ? n.trim() : "";
+    if (n) setThisHost([n, n.replace(/\.local\.?$/i, "")]);
+  })());
 }
 
 export interface ShellHost {
@@ -34,6 +58,7 @@ class TauriShellHost implements ShellHost {
     data.onmessage = (b) => onData(new Uint8Array(b));
     const exit = new Channel<number | null>();
     exit.onmessage = (c) => onExit(c);
+    await learnThisHost();
     return invoke<ShellStarted>("shell_start", { cwd, cols, rows, onData: data, onExit: exit });
   }
   async write(id: number, data: string) {
@@ -110,6 +135,7 @@ class MockShellHost implements ShellHost {
     return `\x1b[32myou@mock\x1b[0m \x1b[34m${cwd === home ? "~" : leafOf(cwd)}\x1b[0m % `;
   }
   async start(cwd: string | null, cols: number, rows: number, onData: (d: string) => void, onExit: (c: number | null) => void) {
+    await learnThisHost();
     const id = nextMockPty();
     const home = this.g.__omherShellHome ?? MOCK_HOME;
     // as the shell does: the folder when it exists (the mock's list; any absolute path when none is set), else home

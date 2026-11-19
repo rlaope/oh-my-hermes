@@ -1168,7 +1168,10 @@ const TermRow = memo(function TermRow({ rec, agents, unseen, active, ticking, on
   const live = rec.status === "running" || rec.status === "starting";
   const { act, now } = useTermFace(rec.id, rec.startedAt, ticking);
   const title = pickTitle(rec, termFallbackName(rec, agents));
-  const status = termStatus({ status: rec.status, exitCode: rec.exitCode, lastOut: act.lastOut }, unseen, now);
+  // a program reporting progress (OSC 9;4) is working for as long as it says so, printing or not
+  const status = termStatus({ status: rec.status, exitCode: rec.exitCode, lastOut: act.progress ? now : act.lastOut }, unseen, now);
+  // the folder its shell reports now (OSC 7), when that is not the folder it started in (its group's header)
+  const movedTo = act.cwd && act.cwd !== rec.cwd ? act.cwd : null;
   const markAgent = termMarkAgent(rec);
   const age = ageMs(act.lastOut ?? rec.startedAt, now);
   const activity = termActivity({ agent: rec.agent, fgAgent: rec.fgAgent, lastLine: act.lastLine, oscTitle: act.oscTitle });
@@ -1216,6 +1219,16 @@ const TermRow = memo(function TermRow({ rec, agents, unseen, active, ticking, on
       {/* line 2, muted: the CLI, then what it last printed (else the title it set) */}
       <span className="tr-sub" data-testid="term-meta" title={activity.line || undefined}>
         <span className="tr-cli">{activity.cli}</span>
+        {movedTo && (
+          <>
+            <span className="tr-dot" aria-hidden="true">
+              ·
+            </span>
+            <span className="tr-cwd" data-testid="term-cwd" title={movedTo}>
+              {folderName(movedTo)}
+            </span>
+          </>
+        )}
         {activity.line && (
           <>
             <span className="tr-dot" aria-hidden="true">
@@ -1251,7 +1264,7 @@ const TermRow = memo(function TermRow({ rec, agents, unseen, active, ticking, on
           {body}
         </div>
       ) : (
-        <button type="button" className="ss-open" onClick={() => getStore().actions.openSession(rec.id)} aria-current={active ? "true" : undefined} title={`${title.title}\n${rec.cwd}`}>
+        <button type="button" className="ss-open" onClick={() => getStore().actions.openSession(rec.id)} aria-current={active ? "true" : undefined} title={`${title.title}\n${act.cwd ?? rec.cwd}`}>
           {body}
         </button>
       )}
