@@ -16,12 +16,12 @@ from __future__ import annotations
 
 from .localization import normalized_phrase, phrase_is_spoken, routing_tokens
 
+# Each one is also a trigger of the skill (`EVERYDAY_SENSE_PHRASES` withdraws
+# a skill only on a phrase it claims).
 SKILL_EVAL_SHARED_PHRASES = (
     "skill eval",
     "evaluate my skill",
-    "evaluate this skill",
     "is my skill any good",
-    "is this skill any good",
     "skill compatibility",
 )
 
@@ -39,9 +39,11 @@ SKILL_EVAL_JOB_PHRASES = (
     "does my skill load",
 )
 
+# Only words the router keeps as tokens can anchor: "agent", "hermes" and
+# "skill.md" are dropped by `routing_tokens`, so listing them would read as
+# coverage no message can reach. SKILL.md is read by `_ARTIFACT_PHRASES` below.
 SKILL_EVAL_ANCHORS = frozenset(
     {
-        "agent",
         "agents",
         "claude",
         "codex",
@@ -49,7 +51,6 @@ SKILL_EVAL_ANCHORS = frozenset(
         "description",
         "folder",
         "frontmatter",
-        "hermes",
         "host",
         "hosts",
         "load",
@@ -58,7 +59,6 @@ SKILL_EVAL_ANCHORS = frozenset(
         "openclaw",
         "opencode",
         "plugin",
-        "skill.md",
     }
 )
 
