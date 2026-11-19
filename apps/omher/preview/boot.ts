@@ -4,22 +4,37 @@
 import { FakeSocket } from "./host";
 
 const w = window as unknown as Record<string, unknown>;
-// The preview speaks the site's language: the one picked on omher.app (?lang= or its switch), else English, the
-// site's own default; never the browser's, which the app would take on a first run.
-export const siteLang = (): string => {
+/** Whether this browser has WebGL2 on real hardware (not SwiftShader, llvmpipe and the like). */
+function hardwareWebgl(): boolean {
   try {
-    const l = (window.parent !== window ? parent.document.documentElement.lang : "").slice(0, 2);
-    return ["en", "ko", "ja", "zh"].includes(l) ? l : "en";
+    const gl = document.createElement("canvas").getContext("webgl2");
+    if (!gl) return false;
+    const dbg = gl.getExtension("WEBGL_debug_renderer_info");
+    const name = dbg ? `${gl.getParameter(dbg.UNMASKED_VENDOR_WEBGL) ?? ""} ${gl.getParameter(dbg.UNMASKED_RENDERER_WEBGL) ?? ""}` : "";
+    gl.getExtension("WEBGL_lose_context")?.loseContext();
+    return !/\b(swiftshader|llvmpipe|softpipe|software rasterizer|software adapter|basic render|microsoft basic|virgl|svga3d)\b/i.test(name);
   } catch {
-    return "en";
+    return false;
   }
-};
+}
+// The preview is always in English, whatever the site's language switch (?lang=, omh.lang) or the browser says. Its
+// story (chat, threads, terminals) is staged in English, so a translated app UI around it showed Korean labels next
+// to English messages. The app would otherwise take the browser's language on a first run.
+export const siteLang = (): string => "en";
 // The app keeps its look, pins and recent folders in localStorage; the preview keeps them for this tab only.
 try {
   const ss = window.sessionStorage;
   Object.defineProperty(window, "localStorage", { configurable: true, get: () => ss });
   if (!ss.getItem("omher.theme")) ss.setItem("omher.theme", "dark");
   ss.setItem("omher.notify", "off");
+  // The staged terminals draw Claude Code's block mascot and Codex's box frame. The standard renderer draws block and
+  // box characters from the font, a hair short of their cells, so both show dark seams; the GPU renderer draws them
+  // to fill the cell, as a real terminal does (it falls back to the standard one by itself).
+  // Only on a hardware WebGL2 (the app's own rule, engine-policy.ts decideHardware): a software rasterizer draws
+  // slowly, and the visitor's terminals then keep the standard renderer.
+  // Font 12.5 gives the hero's terminal pane exactly 75x31 cells with either renderer (13 gives 72 or 75 by renderer),
+  // the size the CLI recordings in media/terminals.json were made at, so each screen lands cell for cell.
+  if (!ss.getItem("omher.term")) ss.setItem("omher.term", JSON.stringify(hardwareWebgl() ? { fontSize: 12.5, gpu: "on" } : { fontSize: 12.5 }));
   ss.setItem("omher.sounds", "off");
   ss.setItem("omher.lang", siteLang());
   // From 0.2.10 the sidebar lists only the roster (one bot on a first run); the story plays on all four.
