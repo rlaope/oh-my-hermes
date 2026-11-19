@@ -4,6 +4,11 @@ All notable changes will be documented here.
 
 ## Unreleased
 
+- **The run summary shows how much of the prompt came from cache.** `omh_run_summary` adds a line after the token
+  count, such as `Prompt cache: 62% of input read from cache (1,234,567 tokens)` (en/ko/ja/zh), and
+  `breakdown.cache_read_share`. The share is cache reads over uncached input plus cache reads, which is how Hermes
+  stores them. No line appears when nothing was read from cache.
+
 - **Hermes Bug Hunter: code review keeps only findings it can show, and every review says what it did not check.**
   `code-review`'s finding validation gains a drop gate: a candidate stays out of the findings when it cannot be traced
   step by step from a concrete input to a wrong result, when the behaviour is intended or documented, when its trigger
