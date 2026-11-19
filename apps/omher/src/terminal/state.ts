@@ -4,6 +4,10 @@
 //
 // `setTerminalCwd(path | null)` is the hook the thread view calls with the open thread's folder (null: none, the
 // shell starts at home). It changes where the NEXT tab starts; a running shell keeps its own folder.
+//
+// The tabs (each one's folder) are kept on this computer (`omher.termpanel.tabs`) and come back after omher restarts,
+// hidden: the next time the panel shows, each starts a fresh login shell in its folder, with what it showed before
+// written back first (term/history.ts, key `panel-<n>`).
 import { useSyncExternalStore } from "react";
 import { windowWatched } from "../lib/notify";
 import { MAX_PANES, equalize, neighbor, panesOf, removePane, setRatioAt, splitLayout, type FocusDir, type Layout } from "./layout";
@@ -18,6 +22,8 @@ export interface TermPane {
   cwd: string | null;
   /** the CLI in the shell's foreground (`session-fg`), null for the shell itself */
   fg?: string | null;
+  /** put back after omher restarted: what it showed before is written into it first */
+  restored?: boolean;
 }
 
 export interface TermTab {
@@ -51,15 +57,70 @@ export interface TermPanelState {
   focus: number;
 }
 
-let state: TermPanelState = { open: false, mounted: false, tabs: [], active: null, cwd: null, focus: 0 };
-let nextKey = 0;
-let nextPane = 0;
+export const TABS_KEY = "omher.termpanel.tabs";
+const MAX_TABS = 20;
+
+/** The saved tabs: `{tabs: [{key, cwd}], active}`, checked; nothing when it is missing or malformed. `key` is the id
+ *  of the pane that had the keyboard (its history is `panel-<key>`); a tab comes back as that one pane, under the same
+ *  id, and the split layout is not kept. */
+export function parseSavedTabs(raw: string | null): { tabs: TermTab[]; active: number | null } {
+  let v: unknown;
+  try {
+    v = raw ? JSON.parse(raw) : null;
+  } catch {
+    v = null;
+  }
+  const o = v && typeof v === "object" && !Array.isArray(v) ? (v as { tabs?: unknown; active?: unknown }) : {};
+  const tabs: TermTab[] = [];
+  for (const t of Array.isArray(o.tabs) ? o.tabs : []) {
+    const key = (t as { key?: unknown })?.key;
+    const cwd = (t as { cwd?: unknown })?.cwd;
+    if (typeof key !== "number" || !Number.isInteger(key) || key < 1 || key > 999_999_999 || tabs.some((x) => x.key === key)) continue;
+    const want = typeof cwd === "string" && cwd.startsWith("/") && cwd.length <= 4096 ? cwd : typeof cwd === "string" && /^[A-Za-z]:[\\/]/.test(cwd) && cwd.length <= 4096 ? cwd : null;
+    tabs.push({ key, want, cwd: null, layout: { pane: key }, panes: [{ id: key, want, cwd: null, restored: true }], focus: key });
+    if (tabs.length >= MAX_TABS) break;
+  }
+  const active = typeof o.active === "number" && tabs.some((t) => t.key === o.active) ? o.active : (tabs[0]?.key ?? null);
+  return { tabs, active };
+}
+
+function readSaved(): { tabs: TermTab[]; active: number | null } {
+  try {
+    return parseSavedTabs(typeof localStorage !== "undefined" ? localStorage.getItem(TABS_KEY) : null);
+  } catch {
+    return { tabs: [], active: null };
+  }
+}
+
+function save(): void {
+  try {
+    if (typeof localStorage === "undefined") return;
+    if (!state.tabs.length) localStorage.removeItem(TABS_KEY);
+    else {
+      const front = state.tabs.find((t) => t.key === state.active)?.focus ?? null;
+      localStorage.setItem(TABS_KEY, JSON.stringify({ tabs: state.tabs.map((t) => ({ key: t.focus, cwd: t.cwd ?? t.want })), active: front }));
+    }
+  } catch {
+    /* no storage */
+  }
+}
+
+const saved0 = readSaved();
+let state: TermPanelState = { open: false, mounted: false, tabs: saved0.tabs, active: saved0.active, cwd: null, focus: 0 };
+let nextKey = saved0.tabs.reduce((m, t) => Math.max(m, t.key), 0);
+let nextPane = nextKey;
 const listeners = new Set<() => void>();
 
 function set(patch: Partial<TermPanelState>): void {
+  const before = state.tabs;
+  const was = state.active;
   state = { ...state, ...patch };
+  if (state.tabs !== before || state.active !== was) save();
   for (const fn of listeners) fn();
 }
+
+/** The history keys of the panes put back at load (`panel-<n>`): their kept text survives the startup prune. */
+export const savedPanelKeys = (): string[] => state.tabs.flatMap((t) => t.panes.filter((p) => p.restored).map((p) => `panel-${p.id}`));
 
 export const getTermPanel = (): TermPanelState => state;
 
@@ -229,5 +290,6 @@ export function resetTermPanel(): void {
   state = { open: false, mounted: false, tabs: [], active: null, cwd: null, focus: 0 };
   nextKey = 0;
   nextPane = 0;
+  save();
   for (const fn of listeners) fn();
 }

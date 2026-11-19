@@ -18,6 +18,7 @@ mod session_files;
 mod sessions;
 mod setup;
 mod tasks;
+mod term_history;
 
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -318,8 +319,9 @@ async fn custom_agent_remove(id: String) -> Result<(), String> {
 }
 
 /// Start allow-listed agent `agent` in folder `cwd` in a new pseudo-terminal (its own terminal UI). Only an
-/// agent id crosses from the UI: no program path, command line or argument; `resume` is a Claude Code
-/// session id or a DSH conversation id that the shell checks is a UUID (so the terminal continues it); `account` is the account a
+/// agent id crosses from the UI: no program path, command line or argument; `session_id` is a new Claude Code
+/// conversation id the page made, `resume` a Claude Code or Codex conversation id to continue, each checked to be a
+/// UUID (`sessions::terminal_args`); `account` is the account a
 /// session restarted after an app restart ran with (checked by `accounts::session_env_for`). Terminal output goes
 /// to `on_data` as raw bytes, the exit code (null after a signal) once to `on_exit`.
 #[tauri::command]
@@ -328,6 +330,7 @@ async fn session_start(
     shell: State<'_, Shell>,
     agent: String,
     cwd: String,
+    session_id: Option<String>,
     resume: Option<String>,
     account: Option<String>,
     cols: u16,
@@ -341,7 +344,7 @@ async fn session_start(
         // again after a restart, the one it ran with): its home variable, or nothing ("This computer").
         // chat_start passes the same.
         let account_env = user_home().map(|h| accounts::session_env_for(&h, &agent, account.as_deref())).unwrap_or_default();
-        sessions.start_agent(&agent, std::path::Path::new(&cwd), resume.as_deref(), &account_env, cols, rows, move |ev| match ev {
+        sessions.start_agent(&agent, std::path::Path::new(&cwd), session_id.as_deref(), resume.as_deref(), &account_env, cols, rows, move |ev| match ev {
             Output::Data(b) => {
                 let _ = on_data.send(InvokeResponseBody::Raw(b));
             }
@@ -566,6 +569,39 @@ async fn session_files_remove(session: String) -> Result<(), String> {
 #[tauri::command]
 async fn session_files_prune(keep: Vec<String>) -> Result<(), String> {
     session_files::prune(&user_home()?, &keep)
+}
+
+/// Keep what terminal `key` (a SESSIONS id or `panel-<n>`) shows, for after a restart:
+/// `~/.omher/term-history/<key>.txt`, owner-only, its newest 2000 lines / 1 MB (`term_history`).
+#[tauri::command]
+async fn term_history_save(key: String, text: String) -> Result<(), String> {
+    let home = user_home()?;
+    tauri::async_runtime::spawn_blocking(move || term_history::save(&home, &key, &text)).await.map_err(|e| e.to_string())?
+}
+
+/// What terminal `key` showed before omher restarted, and when it was kept (seconds); null when nothing was.
+#[tauri::command]
+async fn term_history_read(key: String) -> Result<Option<(String, f64)>, String> {
+    let home = user_home()?;
+    tauri::async_runtime::spawn_blocking(move || term_history::read(&home, &key)).await.map_err(|e| e.to_string())?
+}
+
+/// Remove terminal `key`'s kept text (it was closed).
+#[tauri::command]
+async fn term_history_remove(key: String) -> Result<(), String> {
+    term_history::remove(&user_home()?, &key)
+}
+
+/// Remove the kept text of every terminal not in `keep` (omher started; the others are gone).
+#[tauri::command]
+async fn term_history_prune(keep: Vec<String>) -> Result<(), String> {
+    term_history::prune(&user_home()?, &keep)
+}
+
+/// Remove every terminal's kept text (Settings › Terminal turned history off).
+#[tauri::command]
+async fn term_history_clear() -> Result<(), String> {
+    term_history::clear(&user_home()?)
 }
 
 /// Stop the chat's program and forget the session.
@@ -793,6 +829,11 @@ pub fn run() {
             session_file_read,
             session_files_remove,
             session_files_prune,
+            term_history_save,
+            term_history_read,
+            term_history_remove,
+            term_history_prune,
+            term_history_clear,
             session_branch,
             chat_close_all,
             open_media,

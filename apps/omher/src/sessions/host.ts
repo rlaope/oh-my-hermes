@@ -2,6 +2,7 @@
 // in a pseudo-terminal (src-tauri/src/sessions.rs) or in its structured chat mode on pipes
 // (src-tauri/src/agent_chat.rs). In a plain browser (dev, e2e against the mock bridge) there is no shell,
 // so a mock host echoes terminal typing and a mock agent answers chats with the same events.
+import type { HistoryHost } from "./term/history";
 import { AGENTS, acpRow, agentDef, HERMES_LABEL, type AcpRow, type AgentId, type AgentInfo } from "./agents";
 import { mockPtyOut, nextMockPty } from "./fg";
 import mockAcpAgents from "./mockAcpAgents.json";
@@ -51,7 +52,7 @@ export interface PastMsg {
   ts: number;
 }
 
-export interface SessionHost {
+export interface SessionHost extends HistoryHost {
   readonly kind: "tauri" | "mock";
   /** Stop anything an earlier page load left running (a webview reload keeps the shell alive). */
   reset(): Promise<void>;
@@ -60,9 +61,10 @@ export interface SessionHost {
   /** Native folder picker; null when the person cancels. */
   pickFolder(defaultPath: string): Promise<string | null>;
   /** Start `agent` in `cwd` in a terminal. Only the agent id goes to the shell: never a command line.
-   *  `resume` is a Claude Code session id (the terminal view of a chat); the shell checks it is a UUID. `account`
-   *  names the Settings › Accounts login it runs as (the one it ran with, after a restart); none = the one picked
-   *  for new sessions. */
+   *  `resume` is a Claude Code or Codex conversation id to continue (`--resume <id>`, `codex resume <id>`);
+   *  `sessionId` the id omher made for a new Claude Code conversation (`--session-id <id>`); the shell checks each is
+   *  a UUID. `account` names the Settings › Accounts login it runs as (the one it ran with, after a restart); none =
+   *  the one picked for new sessions. */
   start(
     agent: AgentId,
     cwd: string,
@@ -72,6 +74,7 @@ export interface SessionHost {
     onExit: (code: number | null) => void,
     resume?: string,
     account?: string,
+    sessionId?: string,
   ): Promise<number>;
   write(id: number, data: string): Promise<void>;
   /** The terminal has drawn `bytes` more of session `id`'s output. The shell stops reading the program while the
@@ -147,13 +150,13 @@ export class TauriHost implements SessionHost {
     const r = await open({ directory: true, multiple: false, defaultPath, title: t("ss.pickFolder") });
     return typeof r === "string" ? r : null;
   }
-  async start(agent: AgentId, cwd: string, cols: number, rows: number, onData: (d: Uint8Array) => void, onExit: (c: number | null) => void, resume?: string, account?: string) {
+  async start(agent: AgentId, cwd: string, cols: number, rows: number, onData: (d: Uint8Array) => void, onExit: (c: number | null) => void, resume?: string, account?: string, sessionId?: string) {
     const { invoke, Channel } = await this.core();
     const data = new Channel<ArrayBuffer>();
     data.onmessage = (b) => onData(new Uint8Array(b));
     const exit = new Channel<number | null>();
     exit.onmessage = (c) => onExit(c);
-    return invoke<number>("session_start", { agent, cwd, resume: resume ?? null, account: account ?? null, cols, rows, onData: data, onExit: exit });
+    return invoke<number>("session_start", { agent, cwd, sessionId: sessionId ?? null, resume: resume ?? null, account: account ?? null, cols, rows, onData: data, onExit: exit });
   }
   async chatStart(agent: AgentId, cwd: string, onEvent: (ev: ChatEvent) => void, resume?: string, account?: string, session?: string) {
     const { invoke, Channel } = await this.core();
@@ -181,6 +184,27 @@ export class TauriHost implements SessionHost {
   async removeFiles(session: string) {
     const { invoke } = await this.core();
     await invoke("session_files_remove", { session });
+  }
+  async historySave(key: string, text: string) {
+    const { invoke } = await this.core();
+    await invoke("term_history_save", { key, text });
+  }
+  async historyRead(key: string) {
+    const { invoke } = await this.core();
+    const got = await invoke<[string, number] | null>("term_history_read", { key });
+    return got ? { text: got[0], at: got[1] } : null;
+  }
+  async historyRemove(key: string) {
+    const { invoke } = await this.core();
+    await invoke("term_history_remove", { key });
+  }
+  async historyPrune(keep: string[]) {
+    const { invoke } = await this.core();
+    await invoke("term_history_prune", { keep });
+  }
+  async historyClear() {
+    const { invoke } = await this.core();
+    await invoke("term_history_clear");
   }
   async pruneFiles(keep: string[]) {
     const { invoke } = await this.core();
@@ -285,6 +309,11 @@ export interface MockCall {
     | "file.save"
     | "file.remove"
     | "file.prune"
+    | "history.save"
+    | "history.read"
+    | "history.remove"
+    | "history.prune"
+    | "history.clear"
     | "reveal"
     | "terminal"
     | "custom.preview"
@@ -300,6 +329,8 @@ export interface MockCall {
   cols?: number;
   rows?: number;
   resume?: string;
+  /** start: the id omher made for a new Claude Code conversation (`--session-id`) */
+  sessionId?: string;
   account?: string;
   input?: ChatInput;
   session?: string;
@@ -307,6 +338,8 @@ export interface MockCall {
   size?: number;
   path?: string;
   keep?: string[];
+  /** history: the terminal's key (a session id or `panel-<n>`) */
+  key?: string;
 }
 
 const BANNER: Record<string, string> = {
@@ -492,9 +525,9 @@ export class MockHost implements SessionHost {
     const v = this.g.__omherPickFolder;
     return v === undefined ? defaultPath : v;
   }
-  async start(agent: AgentId, cwd: string, cols: number, rows: number, onData: (d: string) => void, onExit: (c: number | null) => void, resume?: string, account?: string) {
+  async start(agent: AgentId, cwd: string, cols: number, rows: number, onData: (d: string) => void, onExit: (c: number | null) => void, resume?: string, account?: string, sessionId?: string) {
     const id = nextMockPty();
-    this.log({ op: "start", id, agent, cwd, cols, rows, ...(resume ? { resume } : {}), ...(account ? { account } : {}) });
+    this.log({ op: "start", id, agent, cwd, cols, rows, ...(resume ? { resume } : {}), ...(sessionId ? { sessionId } : {}), ...(account ? { account } : {}) });
     const out = (d: string) => {
       (this.g.__omherSessionFlow ??= []).push({ op: "feed", id, bytes: utf8.encode(d).length });
       onData(d);
@@ -617,6 +650,44 @@ export class MockHost implements SessionHost {
     const d = this.files.get(path);
     if (!d) throw new Error("not a file omher saved");
     return d;
+  }
+  /** History the mock shell keeps: in this page's storage, so it outlives a reload as the shell's files outlive a
+   *  restart (`__omherMockHistory`). */
+  private hist(): Record<string, { text: string; at: number }> {
+    try {
+      return JSON.parse(localStorage.getItem("__omherMockHistory") || "{}");
+    } catch {
+      return {};
+    }
+  }
+  private putHist(h: Record<string, { text: string; at: number }>) {
+    try {
+      localStorage.setItem("__omherMockHistory", JSON.stringify(h));
+    } catch {
+      /* no storage */
+    }
+  }
+  async historySave(key: string, text: string) {
+    this.log({ op: "history.save", key, data: text });
+    this.putHist({ ...this.hist(), [key]: { text, at: Date.now() / 1000 } });
+  }
+  async historyRead(key: string) {
+    this.log({ op: "history.read", key });
+    return this.hist()[key] ?? null;
+  }
+  async historyRemove(key: string) {
+    this.log({ op: "history.remove", key });
+    const h = this.hist();
+    delete h[key];
+    this.putHist(h);
+  }
+  async historyPrune(keep: string[]) {
+    this.log({ op: "history.prune", keep });
+    this.putHist(Object.fromEntries(Object.entries(this.hist()).filter(([k]) => keep.includes(k))));
+  }
+  async historyClear() {
+    this.log({ op: "history.clear" });
+    this.putHist({});
   }
   async removeFiles(session: string) {
     this.log({ op: "file.remove", session });

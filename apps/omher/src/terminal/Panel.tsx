@@ -71,7 +71,7 @@ function PaneBody({ pane, tab, front, shown, split, mode, focus }: NodeProps & {
   const [find, setFind] = useState<FindRequest | null>(null);
   useEffect(() => {
     if (!box.current) return;
-    return attachTerm(pane.id, pane.want, box.current, mode);
+    return attachTerm(pane.id, pane.want, box.current, mode, !!pane.restored);
     // made once per pane; theme changes go through relookTerms
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pane.id]);

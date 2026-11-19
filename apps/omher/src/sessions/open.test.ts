@@ -95,7 +95,7 @@ function setup(installed: string[], storedOpens?: Record<string, string>, more: 
     removeItem: (k: string) => void storage.delete(k),
   };
   const ss = createSessions(host, () => store);
-  const calls = () => ((g.__omherSessionCalls as MockCall[] | undefined) ?? []).filter((c) => c.op !== "reset" && !c.op.startsWith("file."));
+  const calls = () => ((g.__omherSessionCalls as MockCall[] | undefined) ?? []).filter((c) => c.op !== "reset" && !c.op.startsWith("file.") && !c.op.startsWith("history."));
   return { ss, calls, storage };
 }
 

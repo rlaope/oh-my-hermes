@@ -52,6 +52,9 @@ export interface TermSettings {
   /** A paste with more than one line asks first, unless the program turned on bracketed paste (it then takes the
    *  text as one paste and runs none of it by itself). On by default, as in Otty. */
   confirmPaste: boolean;
+  /** What each terminal showed comes back, dimmed, after omher restarts (kept in `~/.omher/term-history`). Off removes
+   *  every kept file at once. */
+  keepHistory: boolean;
 }
 
 export const TERM_KEY = "omher.term";
@@ -74,6 +77,7 @@ export const TERM_DEFAULTS: TermSettings = {
   kittyKeys: true,
   images: true,
   confirmPaste: true,
+  keepHistory: true,
 };
 
 const num = (v: unknown, lo: number, hi: number, d: number) => (typeof v === "number" && Number.isFinite(v) ? Math.min(hi, Math.max(lo, v)) : d);
@@ -114,6 +118,7 @@ export function parseTermSettings(raw: unknown): TermSettings {
     kittyKeys: bool(o.kittyKeys, d.kittyKeys),
     images: bool(o.images, d.images),
     confirmPaste: bool(o.confirmPaste, d.confirmPaste),
+    keepHistory: bool(o.keepHistory, d.keepHistory),
   };
 }
 
