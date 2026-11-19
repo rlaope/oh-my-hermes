@@ -3521,6 +3521,22 @@ PORTABLE_DETAILS_POINTER = (
     f"Read `{PORTABLE_DETAILS_PATH}` before you act: it holds this skill's quality bar and catalog "
     "metadata, kept out of this file so the whole of it fits in one read on every host.\n\n"
 )
+_TOOLKIT_CALL = re.compile(r"skill_view\(name='[^']+', file_path='toolkit/[^']+'\)")
+
+
+def details_pointer(details: str) -> str:
+    """What stands in SKILL.md for the moved `details`: the pointer, plus any toolkit call it held.
+
+    Hermes and the hosts that copy its layout find a `toolkit/` file only when
+    SKILL.md names it, so a `skill_view(..., file_path='toolkit/...')` call
+    inside the moved section is repeated beside the pointer.
+    """
+    calls = list(dict.fromkeys(_TOOLKIT_CALL.findall(details)))
+    if not calls:
+        return PORTABLE_DETAILS_POINTER
+    return PORTABLE_DETAILS_POINTER + "".join(f"Toolkit setup: `{call}`.\n\n" for call in calls)
+
+
 _CJK_RANGES = (
     (0x1100, 0x11FF), (0x2E80, 0x9FFF), (0xA000, 0xA4FF), (0xAC00, 0xD7FF),
     (0xF900, 0xFAFF), (0xFE10, 0xFE4F), (0xFF01, 0xFFE6), (0x20000, 0x3347F),
@@ -3536,7 +3552,7 @@ def openclaw_read_chars(text: str) -> int:
 def split_for_read_cap(content: str) -> tuple[str, str | None]:
     """`(SKILL.md, details)`: unchanged with `None` when it fits, else the catalog metadata moved out.
 
-    The moved section is kept byte for byte: replacing `PORTABLE_DETAILS_POINTER`
+    The moved section is kept byte for byte: replacing `details_pointer(details)`
     in the returned SKILL.md with the returned details gives back `content`.
     """
     if openclaw_read_chars(content) <= PORTABLE_READ_CAP:
@@ -3546,7 +3562,7 @@ def split_for_read_cap(content: str) -> tuple[str, str | None]:
         raise ValueError("portable SKILL.md over the read cap has no single catalog metadata section to move")
     following = content.find("\n## ", start + len(PORTABLE_SPLIT_SECTION))
     end = len(content) if following < 0 else following + 1
-    head = content[:start] + PORTABLE_DETAILS_POINTER + content[end:]
+    head = content[:start] + details_pointer(content[start:end]) + content[end:]
     if openclaw_read_chars(head) > PORTABLE_READ_CAP:
         raise ValueError("portable SKILL.md is over the read cap even without its catalog metadata")
     return head, content[start:end]

@@ -1,5 +1,5 @@
 {
-  "catalog_revision": "cc58d648fa57cb7461e3b108993e5184b577f0c1b0db592c653543880a023c1f",
+  "catalog_revision": "889ea18265b10b16da1278c583b387db7f95b74aee0b9428069fe0df4439d8be",
   "files": {
     "omh-accessibility-audit/SKILL.md": "01b41b6815463311a950c558300afeb4e2659a1bba44efcf741568cacac6f1d6",
     "omh-accessibility-audit/references/a11y-rules.md": "615cc9eaa24ee36089d395b215cc25b2d9b0d2549f228a5f81df0553f45d2f75",
@@ -102,7 +102,7 @@
     "omh-frontend-refactor/SKILL.md": "ab1bccec8e591b2c8cd4a6e9f3e9c300114194e04eeab8c55f095f9774b5fed7",
     "omh-frontend-refactor/references/refactor-passes.md": "ee0a085f00d03bb97ec0e9fc38729277a996420245978d7f18421f4279d47a8e",
     "omh-frontend-refactor/references/state-discipline.md": "2a02d8de8f85419132fb19a1558b0b59d564468590430a6900cf429e20d9722b",
-    "omh-frontend/SKILL.md": "03622bfed588713495789feecaddd0cb14333f006e9ddf22c9c9be2076dff822",
+    "omh-frontend/SKILL.md": "784a071b62e3cbc85ec65e7ef38989102f9c64eae74cf8213f9e414dcb34d0bd",
     "omh-frontend/references/chart-styling.md": "43994b54f2ac8de1209ec722f1348c937b74a04b71ee697285669ee67489208d",
     "omh-frontend/references/component-registry-adoption.md": "8ec6284a7ad4e25e41f662474c85f280bed69869194c53509a22e23f3a3bc96e",
     "omh-frontend/references/design-system-contract.md": "cb4e78cc66c0b6a7a6ea88bf0df536c5a0986a9f654359ce9f40927dad34ebe0",

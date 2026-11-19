@@ -32,6 +32,23 @@ class ToolkitReadmePointerTests(unittest.TestCase):
                 call = f"skill_view(name='{omh_skill_display_name(owner)}', file_path='toolkit/README.md')"
                 self.assertIn(call, bodies[owner])
 
+    def test_portable_packs_name_the_readme_in_skill_md_itself(self) -> None:
+        # The read-cap split moves a section into references/details.md; the
+        # toolkit path must still be named in the SKILL.md a host reads first.
+        # Portable hosts have no skill_view, so the path itself is the pointer.
+        from omh.install.agent_skills_projection import agent_skill_files, claude_skill_files
+
+        owners = sorted(
+            {template.skill_name for template in builtin_skill_support_templates() if template.relative_path.startswith("toolkit/")}
+        )
+        for pack, files in (("agent-skills", agent_skill_files()), (".claude/agent-skills", claude_skill_files())):
+            for owner in owners:
+                name = omh_skill_display_name(owner)
+                if f"{name}/SKILL.md" not in files:
+                    continue
+                with self.subTest(pack=pack, skill=name):
+                    self.assertIn("toolkit/README.md", files[f"{name}/SKILL.md"])
+
 
 if __name__ == "__main__":
     unittest.main()

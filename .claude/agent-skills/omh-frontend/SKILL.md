@@ -69,6 +69,8 @@ Use when Hermes should shape or improve a web/frontend or terminal (TUI) surface
 
 Read `references/details.md` before you act: it holds this skill's quality bar and catalog metadata, kept out of this file so the whole of it fits in one read on every host.
 
+Toolkit setup: `skill_view(name='omh-frontend', file_path='toolkit/README.md')`.
+
 ## Runtime Evidence
 
 Use the current host's own tools and subagent/task mechanism when available;

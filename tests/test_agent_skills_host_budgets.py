@@ -113,7 +113,8 @@ class ReadCapTests(unittest.TestCase):
         from omh.install.agent_skills_projection import agent_skill_files
         from omh.skills.catalog import builtin_definitions, omh_skill_display_name
         from omh.skills.render import (
-            PORTABLE_DETAILS_PATH, PORTABLE_DETAILS_POINTER, SkillTemplate, workflow_skill_from_definition,
+            PORTABLE_DETAILS_PATH, PORTABLE_DETAILS_POINTER, SkillTemplate, details_pointer,
+            workflow_skill_from_definition,
         )
 
         files = agent_skill_files()
@@ -131,7 +132,7 @@ class ReadCapTests(unittest.TestCase):
                     continue
                 split.append(name)
                 self.assertEqual(files[f"{name}/SKILL.md"].count(PORTABLE_DETAILS_POINTER), 1)
-                self.assertEqual(files[f"{name}/SKILL.md"].replace(PORTABLE_DETAILS_POINTER, details), full)
+                self.assertEqual(files[f"{name}/SKILL.md"].replace(details_pointer(details), details), full)
         # The seven bodies over the cap when the split landed; a new one must be split, not dropped.
         self.assertTrue({
             "omh-external-connector-readiness", "omh-frontend", "omh-llm-app-dev", "omh-visual-qa",
@@ -152,6 +153,10 @@ class ReadCapTests(unittest.TestCase):
         self.assertEqual(head.replace(PORTABLE_DETAILS_POINTER, details), big)
         with self.assertRaises(ValueError):
             split_for_read_cap("# X\n" + "word " * PORTABLE_READ_CAP)
+        call = "skill_view(name='x', file_path='toolkit/README.md')"
+        head, details = split_for_read_cap(big.replace("- rule\n", f"- setup in `{call}`\n", 1))
+        self.assertIn(call, details)
+        self.assertIn(f"Toolkit setup: `{call}`.", head)
 
 
 class HermesBodiesUnchangedTests(unittest.TestCase):
