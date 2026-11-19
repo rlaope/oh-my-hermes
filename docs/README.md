@@ -50,6 +50,7 @@ references rather than normal user steps.
 | Run optional polygon intersection, public biomedical reconciliation or prepared-input docking | [Domain science toolkits](domain-skills/README.md) |
 | Apply Apple UI design/review/improvement guidance | [Apple Design Guidance](APPLE-DESIGN.md) |
 | Track the external skill sources our skills reconstruct | [Skill Upstream Sources](SKILL-SOURCES.md) |
+| Check whether a skill folder loads in Hermes, Claude Code, Codex and other hosts, offline | [Skill Host-Fit Check](SKILL-EVAL.md) |
 | Prepare coding work for a selected executor | [Delegation-First Completeness](DELEGATION_FIRST_COMPLETENESS.md) |
 | Inspect an unattended handoff's advisory risk signals (agents/operators) | [Handoff Risk Scan](HANDOFF-RISK-SCAN.md) |
 | Integrate OMH into a Hermes wrapper | [Hermes Agent Integration Runbook](HERMES_AGENT_INTEGRATION_RUNBOOK.md) |
