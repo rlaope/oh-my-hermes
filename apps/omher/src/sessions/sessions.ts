@@ -36,6 +36,7 @@ import { termTheme } from "./term/themes";
 import { getShellHost, learnThisHost } from "../terminal/host";
 import { onSessionFg } from "./fg";
 import { termActs } from "./termActivity";
+import { LINK_COPIED_EVENT, newLinkId, termLinkUrl } from "./termLink";
 import { acpRow, agentDef, agentLabel, continues, draftAgent, draftFolder, draftOpen, hermesOnly, installLine, isBuiltin, isGone, isShell, isTerminalRec, LAST_LINE_MAX, SHELL, termEnd, lastPrintedLine, OPEN_KEY, opensAs, parseOpens, parseRecent, pushRecent, RECENT_KEY, registerAcp, sessionMode, type AgentId, type AgentInfo, type OpenAs, type Unseen, type Opens, type Recent, type SessionRec } from "./agents";
 import { NAME_MAX, parseTitles, promptTitle, putTitle, TITLES_KEY } from "./titles";
 import { getDraft, setDraft as setUnsent } from "../app/drafts";
@@ -292,6 +293,13 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
     for (const l of [...listeners]) l();
   };
   const rec = (id: string) => state.list.find((s) => s.id === id);
+  /** A link id no session in the list holds (termLink.ts). */
+  const freshLinkId = (taken: ReadonlySet<string> = new Set(state.list.map((r) => r.linkId).filter((x): x is string => !!x))): string => {
+    for (;;) {
+      const id = newLinkId();
+      if (!taken.has(id)) return id;
+    }
+  };
 
   // ---- what a session did while the person looked elsewhere --------------------------------
 
@@ -986,6 +994,7 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
     if (agent) picked.set(id, { agent: true });
     const r: SessionRec = {
       id,
+      linkId: freshLinkId(),
       agent: agent ?? draftAgent(state.recent, state.agents),
       cwd: draftFolder(state.recent, state.home),
       startedAt: Date.now(),
@@ -1026,6 +1035,7 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
     const account = isShell(agent) ? undefined : accountFor(accounts(), agent);
     const r: SessionRec = {
       id,
+      linkId: freshLinkId(),
       agent,
       cwd: at,
       startedAt,
@@ -1069,6 +1079,7 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
     const startedAt = Date.now();
     const r: SessionRec = {
       id,
+      linkId: freshLinkId(),
       agent: chat.agent,
       cwd: chat.cwd,
       startedAt,
@@ -1869,6 +1880,14 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
       if (!terminalOnly && mode === "terminal") histBack.add(s.id);
       else if (s.running && s.agentSession && !isBuiltin(s.agent) && !acpRow(s.agent) && !terminalOnly) later.push(s.id);
     }
+    // each keeps its link (a session saved before links existed, or a clash, gets a fresh one)
+    const taken = new Set(state.list.map((r) => r.linkId).filter((x): x is string => !!x));
+    for (const [i, r] of list.entries()) {
+      const was = saved.find((x) => x.id === r.id)?.linkId;
+      const linkId = was && !taken.has(was) ? was : freshLinkId(taken);
+      taken.add(linkId);
+      list[i] = { ...r, linkId };
+    }
     set({ list: [...list, ...state.list] });
     for (const r of list) if (keys.has(r.id)) registerRoute(r.id);
     // the saved copies of sessions that are gone go; the ones kept show again in their bubbles
@@ -2090,6 +2109,25 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
         await input(id, { kind: "rewind" });
       } catch (e) {
         note(id, errText(e));
+      }
+    },
+    /** The session whose link id is `linkId`, if it is in the list. */
+    byLink: (linkId: string): SessionRec | null => state.list.find((r) => r.linkId === linkId) ?? null,
+    /** Session `id`'s link (`omher://terminal/<id>`), null when it has none. */
+    linkOf: (id: string): string | null => {
+      const l = rec(id)?.linkId;
+      return l ? termLinkUrl(l) : null;
+    },
+    /** Copy session `id`'s link to the clipboard; false when it has none or the clipboard refused. */
+    copyLink: async (id: string): Promise<boolean> => {
+      const l = rec(id)?.linkId;
+      if (!l) return false;
+      try {
+        await navigator.clipboard.writeText(termLinkUrl(l));
+        window.dispatchEvent(new CustomEvent<string>(LINK_COPIED_EVENT, { detail: id }));
+        return true;
+      } catch {
+        return false;
       }
     },
     /** Session `id` has a terminal in this page load (an ended one keeps its output until it is closed). */

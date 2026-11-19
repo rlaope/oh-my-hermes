@@ -11,6 +11,8 @@ import type { LinkPlaces } from "../../lib/protocol";
 import { openExternal } from "../../lib/openExternal";
 import { getStore } from "../../state/store";
 import { classifyLink, findUrls, type LinkInfo } from "./linkKinds";
+import { findTermLinks } from "../../sessions/termLink";
+import { TermLinkChip } from "./TermLinkChip";
 import "./links.css";
 import { t } from "../../i18n";
 
@@ -132,14 +134,15 @@ export function isBare(href: string, text: string): boolean {
   }
 }
 
-/** Plain text (a sent message) with each http(s) URL drawn as a chip. */
+/** Plain text (a sent message) with each http(s) URL drawn as a chip, and each omher terminal link as an omher chip. */
 export function withLinks(text: string, key = "l"): ReactNode[] {
-  const urls = findUrls(text);
+  const urls = [...findUrls(text).map((u) => ({ ...u, term: false })), ...findTermLinks(text).map((u) => ({ ...u, term: true }))].sort((a, b) => a.start - b.start);
   if (!urls.length) return [text];
   const out: ReactNode[] = [];
   let at = 0;
   urls.forEach((u, i) => {
-    out.push(text.slice(at, u.start), <LinkChip key={`${key}${i}`} url={u.url} />);
+    if (u.start < at) return; // inside an earlier link
+    out.push(text.slice(at, u.start), u.term ? <TermLinkChip key={`${key}${i}`} url={u.url} /> : <LinkChip key={`${key}${i}`} url={u.url} />);
     at = u.end;
   });
   out.push(text.slice(at));
