@@ -36,7 +36,7 @@ from omh.coding.fanout_dispatch import (  # noqa: E402
     signal_safe_unit_runner,
 )
 from omh.system.paths import OmhPaths  # noqa: E402
-from omh.coding.pi_family_interop import PI_DISTRIBUTION_AGENT_DIR_ENV, PI_DISTRIBUTION_BRAND_ENV, PI_DISTRIBUTION_HOME, PI_DISTRIBUTION_HOST, RUNTIME_HOME, RUNTIME_SHORT_NAME
+from omh.coding.pi_family_interop import PI_DISTRIBUTION_AGENT_DIR_ENV, PI_DISTRIBUTION_BRAND_ENV, PI_DISTRIBUTION_HOME, PI_DISTRIBUTION_HOST, PI_FORK_HOME, PI_FORK_HOST, RUNTIME_HOME, RUNTIME_SHORT_NAME
 import json
 
 
@@ -344,6 +344,7 @@ class FanoutConfinementPolicyTests(unittest.TestCase):
             for host, expected in {
                 "pi": (home / ".pi" / "agent",),
                 PI_DISTRIBUTION_HOST: (home / PI_DISTRIBUTION_HOME / "agent",),
+                PI_FORK_HOST: (home / PI_FORK_HOME / "agent",),
                 "opencode": (
                     home / ".local" / "share" / "opencode",
                     home / ".local" / "state" / "opencode",
@@ -356,6 +357,11 @@ class FanoutConfinementPolicyTests(unittest.TestCase):
                 self.assertEqual(
                     owner_state_directories("pi-family-runtime", {"PI_CODING_AGENT_DIR": str(home / "pi-override")}),
                     (home / "pi-override",),
+                )
+            with mock.patch("omh.coding.fanout_dispatch.pi_family_host", return_value=PI_FORK_HOST):
+                self.assertEqual(
+                    owner_state_directories("pi-family-runtime", {"PI_CODING_AGENT_DIR": str(home / "fork-override")}),
+                    (home / "fork-override",),
                 )
             with mock.patch("omh.coding.fanout_dispatch.pi_family_host", return_value=PI_DISTRIBUTION_HOST):
                 self.assertEqual(
@@ -387,6 +393,7 @@ class FanoutConfinementPolicyTests(unittest.TestCase):
                 {"PI_CODING_AGENT_DIR": str(home / "legacy-distribution-override")},
                 home / "legacy-distribution-override",
             ),
+            PI_FORK_HOST: ("PI_CODING_AGENT_DIR", {}, home / PI_FORK_HOME / "agent"),
         }
         for host, (environment_variable, overrides, expected) in cases.items():
             with (

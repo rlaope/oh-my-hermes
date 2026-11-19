@@ -370,7 +370,10 @@ Rules, all applied at freeze time:
   DETECTED at dispatch/readiness time in the fixed host-candidate order declared
   in `src/coding/fanout_dispatch.py` — first on PATH wins, no personal stack is
   hardcoded, and the selected host is visible in the planned argv and the probed
-  command. The pi-family surface was validated in a live bridge dispatch; the
+  command. The pi fork host comes after pi and its distribution host and
+  before opencode; its argv has no permission preset (that host has none, and
+  its default approval mode applies) and puts the prompt after `--`. The
+  pi-family surface was validated in a live bridge dispatch; the
   opencode template is prepared from its verified flags and validates on first
   live dispatch (claude-template precedent). Profiles without a template
   (hermes, omx/omc runtimes, generic, unassigned) are reported

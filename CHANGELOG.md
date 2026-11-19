@@ -4,6 +4,13 @@ All notable changes will be documented here.
 
 ## Unreleased
 
+- **The pi-family coding lane runs on the omp CLI too.** With only `omp` on PATH, a pi-family coding unit now runs
+  `omp --print --no-session [--model <id>] [--thinking <level>] -- <prompt>`; when `pi` or its distribution host is
+  also installed, those still win. omp has no `--permission-preset`, so no approval flag is passed (omp's default
+  applies) and writes stay fenced by the worktree and fan-out confinement as for every host. Model discovery also reads
+  `~/.omp/agent/sessions`. omp keeps its sign-in in a SQLite store, so its login marker reads `absent`; that does not
+  block dispatch.
+
 - **Hermes Bug Hunter: code review keeps only findings it can show, and every review says what it did not check.**
   `code-review`'s finding validation gains a drop gate: a candidate stays out of the findings when it cannot be traced
   step by step from a concrete input to a wrong result, when the behaviour is intended or documented, when its trigger

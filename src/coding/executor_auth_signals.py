@@ -32,7 +32,9 @@ _CODEX_AUTH_RELATIVE: Final[str] = ".codex/auth.json"
 # first store found (fixed order mirroring PI_FAMILY_HOST_CANDIDATES: pi,
 # then pi's distribution host, then the opencode plugin host's store) is
 # the marker — key names and values are never read into state, and an
-# absent marker never vetoes.
+# absent marker never vetoes. The pi fork host has no entry: it keeps its
+# credentials in a database (`agent/agent.db`), not a JSON store, and this
+# reader does not open databases, so a fork-only install reads `absent`.
 _PI_FAMILY_HOST_AUTH_RELATIVES: Final[tuple[str, ...]] = (
     ".pi/agent/auth.json",
     f"{PI_DISTRIBUTION_HOME}/agent/auth.json",
