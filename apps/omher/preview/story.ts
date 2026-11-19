@@ -15,6 +15,7 @@ import { type AgentId } from "../src/sessions/agents";
 import { threadKey } from "../src/threads/types";
 import { refreshRuns } from "../src/runs/live";
 import { addThread, away, broadcast, dropThread, history, hooks, nowS, PR_REPO, runs, threads, threadSaid, visitorThreads } from "./host";
+import recordings from "./media/terminals.json";
 
 type Ev = { event: string; [k: string]: unknown };
 const store = () => getStore();
@@ -297,87 +298,40 @@ function say(role: keyof typeof term, text: string) {
   if (pty !== null) w.__omherMockOut?.(pty, text);
 }
 
-// What each CLI draws, in the shapes the real ones use (Codex CLI 0.169, Claude Code 2.1): Codex's header box, `›`
-// for the ask, `•` for its words, a green `•` with a bold verb for a tool and `└` for what it returned; Claude Code's
-// mascot header, `>` for the ask, `⏺` for its words, a green `⏺ Tool(arg)` and `⎿` for the result. Each step ends on
-// a line that says what the agent is doing, so the card's second line (the last line on screen) reads as a sentence.
-const B = "\x1b[1m", D = "\x1b[2m", G = "\x1b[32m", X = "\x1b[0m";
-const CC = "\x1b[38;2;217;119;87m"; // Claude Code's orange
-const NL = "\r\n";
-/** A terminal's screen cleared, as a CLI clears it when it starts. */
-const CLEAR = "\x1b[2J\x1b[3J\x1b[H";
-const boxRow = (s: string, plain: string, w: number) => `${D}│${X} ${s}${" ".repeat(Math.max(0, w - plain.length))} ${D}│${X}${NL}`;
-function codexHeader(): string {
-  const w = 44;
-  const rows: [string, string][] = [
-    [`${B}>_ OpenAI Codex${X} ${D}(v0.169.0)${X}`, ">_ OpenAI Codex (v0.169.0)"],
-    ["", ""],
-    [`${D}model:${X}     gpt-6.1-sol medium`, "model:     gpt-6.1-sol medium"],
-    [`${D}directory:${X} ~/code/web-app`, "directory: ~/code/web-app"],
-  ];
-  return `${D}╭${"─".repeat(w + 2)}╮${X}${NL}${rows.map(([s, p]) => boxRow(s, p, w)).join("")}${D}╰${"─".repeat(w + 2)}╯${X}${NL}`;
+// What each card shows is a recording, not a mock: Claude Code 2.1.327 and Codex CLI 0.169 were run for real in a
+// 75x31 pty (the size the hero's terminal pane gets at font 12.5, boot.ts) on a staged copy of web-app, each given
+// one task. The pty bytes were played into a virtual screen and sampled every 0.1-0.2 s; each sample keeps the rows
+// that changed, written whole (media/terminals.json; the temp home folder shown as /Users/you). A TUI repaints by
+// diff, so editing its raw bytes would break every later screen; whole rows keep each one exactly as the CLI drew it:
+// Claude Code's mascot header, spinner, diff and prompt box; Codex's header, tool groups, "• Working (12s • esc to
+// interrupt)", composer and footer. The story plays them on the real clock; each loop starts them over a few seconds
+// in, so a card opened at any moment shows work.
+type Rec = { cols: number; rows: number; frames: [number, string][] };
+const REC = recordings as unknown as Record<keyof typeof term, Rec>;
+/** Seconds into each recording where a loop picks it up: the prompt is already sent and the agent is at work. */
+const REC_FROM = { claude: 6, codex: 20 } as const;
+const recAt = { claude: 0, codex: 0 };
+let recT0 = 0;
+/** ms the page has been on screen: the recordings' clock (a hidden tab holds them where they are). */
+let recClock = 0;
+/** Plays each recording up to `now` on the recordings' clock (called every tick). */
+function playTerms(now: number) {
+  for (const role of ["codex", "claude"] as const) {
+    const r = REC[role];
+    const until = REC_FROM[role] + (now - recT0) / 1000;
+    let chunk = "";
+    while (recAt[role] < r.frames.length && r.frames[recAt[role]][0] <= until) chunk += r.frames[recAt[role]++][1];
+    if (chunk) say(role, chunk);
+  }
 }
-const codexAsk = (t: string) => `${NL}${D}›${X} ${t}${NL}`;
-const codexSays = (t: string) => `${NL}• ${t}${NL}`;
-const codexTool = (verb: string, what: string, out: string[] = []) =>
-  `${NL}${G}•${X} ${B}${verb}${X} ${what}${NL}${out.map((l, i) => `  ${D}${i ? " " : "└"} ${l}${X}${NL}`).join("")}`;
-// Claude Code's own header: its mascot beside the version, model and folder, with the colours the CLI prints
-// (captured from Claude Code 2.1.327 in a pty). The preview's terminals draw with the GPU renderer (boot.ts), which
-// draws block characters to fill their cells, so the mascot is solid as in a real terminal.
-const CC_ORANGE = "\x1b[38;2;215;119;87m", CC_GREY = "\x1b[38;2;153;153;153m", ON_BLACK = "\x1b[48;2;0;0;0m", BG0 = "\x1b[49m", FG0 = "\x1b[39m";
-const claudeHeader = () =>
-  `${CC_ORANGE} ▐${ON_BLACK}▛███▛█${BG0}${FG0}   ${B}Claude Code${X} ${CC_GREY}v2.1.327${X}${NL}` +
-  `${CC_ORANGE}▝▜${ON_BLACK}█████${BG0}█▀${FG0}  ${CC_GREY}Opus 5.5 · Claude Max${X}${NL}` +
-  `${CC_ORANGE} ▝▝   ▝▝${FG0}   ${CC_GREY}~/code/web-app${X}${NL}`;
-const claudeAsk = (t: string) => `${NL}${D}>${X} ${t}${NL}`;
-const claudeSays = (t: string) => `${NL}⏺ ${t}${NL}`;
-const claudeTool = (tool: string, arg: string, out: string) => `${NL}${G}⏺${X} ${B}${tool}${X}(${arg})${NL}  ${D}⎿  ${out}${X}${NL}`;
-const RED = "\x1b[31m";
-/** Each card's session, step by step. A loop opens with each one already a few minutes in (the first `AT_START`
- *  steps on screen, so a card opened at any moment shows real work, never a header alone), and the story adds the
- *  rest; the last step is the agent's summary. */
-const CODEX_STEPS: string[] = [
-  codexSays("I'll start with the search handler and the index it queries."),
-  codexTool("Explored", "", ["Read api/search/handler.go", "Read api/search/index.go"]) + codexSays("The index stores each page's lang; the handler ignores it."),
-  codexTool("Ran", "go test ./api/search/...", ["ok  acme/web-app/api/search  0.84s"]) + codexSays("Green before the change. Adding the filter now."),
-  codexTool("Edited", `api/search/handler.go (${G}+22${X} ${RED}-6${X})`) + codexSays("Reading ?lang= and passing it to the index query."),
-  codexTool("Edited", `api/search/handler_test.go (${G}+41${X} ${RED}-0${X})`) + codexSays("Four new tests. Running the whole suite."),
-  codexTool("Ran", "go test ./...", ["ok  acme/web-app/api/search  1.02s", "ok  acme/web-app/api/index   0.61s"]) + codexSays("All green: /search?lang=de returns only German pages."),
-  codexTool("Ran", "git diff --stat", ["2 files changed, 63 insertions(+), 6 deletions(-)"]) + codexSays("Done: /search takes ?lang= now, with 4 tests. Open a PR?"),
-];
-const CLAUDE_STEPS: string[] = [
-  claudeSays("I'll read the current page and the filter code first."),
-  claudeTool("Read", "docs/search.md", "Read 142 lines") + claudeSays("No Filters section yet. Checking the filter code."),
-  claudeTool("Read", "src/search/filters.ts", "Read 88 lines") + claudeSays("Three filters: lang, tag and date. Writing the section."),
-  claudeTool("Update", "docs/search.md", "Updated docs/search.md with 48 additions and 2 removals") + claudeSays("Building the docs to check the section."),
-  claudeTool("Bash", "pnpm docs:build", "Built 14 pages in 3.2s") + claudeSays("Done: a Filters section with an example for each."),
-];
-// While an agent works, its last line is a live status, as both CLIs draw one ("esc to interrupt"); the next step
-// erases it first. It names what the agent is doing, so the card's second line still reads as a sentence. After the
-// summary there is none: the agent is done.
-const CODEX_STATUS = ["Exploring the search code", "Running the search tests", "Adding the filter", "Writing tests", "Running the whole suite", "Checking the diff"];
-const CLAUDE_STATUS = ["Reading docs/search.md", "Reading the filter code", "Writing the Filters section", "Building the docs"];
-const status = (role: keyof typeof term, n: number): string => {
-  const t = (role === "codex" ? CODEX_STATUS : CLAUDE_STATUS)[n - 1];
-  if (!t) return "";
-  return role === "codex" ? `${NL}${D}•${X} ${t}… ${D}(esc to interrupt)${X}` : `${NL}${CC}✻${X} ${t}… ${D}(esc to interrupt)${X}`;
-};
-/** Erases the live status line and the blank line above it (the next step starts with its own blank line). */
-const UNSTATUS = "\r\x1b[2K\x1b[1A";
-const AT_START = { codex: 3, claude: 2 } as const;
-let termStep = { codex: 0, claude: 0 };
-/** The next step of a card's session. */
-function step(role: keyof typeof term) {
-  const all = role === "codex" ? CODEX_STEPS : CLAUDE_STEPS;
-  if (termStep[role] >= all.length) return;
-  const n = ++termStep[role];
-  say(role, UNSTATUS + all[n - 1] + status(role, n));
-}
-/** Both cards' screens at the start of a loop: the CLI's header, the person's ask and the steps already done. */
+/** Both cards at the start of a loop: a fresh screen with the recording played up to `REC_FROM` at once. */
 function termsAtStart() {
-  termStep = { codex: AT_START.codex, claude: AT_START.claude };
-  say("codex", CLEAR + codexHeader() + codexAsk("Add a lang filter to GET /search, with tests.") + CODEX_STEPS.slice(0, AT_START.codex).join("") + status("codex", AT_START.codex));
-  say("claude", CLEAR + claudeHeader() + claudeAsk("Write the Filters section of docs/search.md.") + CLAUDE_STEPS.slice(0, AT_START.claude).join("") + status("claude", AT_START.claude));
+  recT0 = recClock;
+  for (const role of ["codex", "claude"] as const) {
+    recAt[role] = 0;
+    say(role, "\x1bc");
+  }
+  playTerms(recClock);
 }
 
 // ---- one loop --------------------------------------------------------------------------------------------------
@@ -442,13 +396,6 @@ function startLoop() {
   const { flake } = REST;
   steps = [
     [k(0.2), () => openNode("page-styles")],
-    [k(4), () => step("codex")],
-    [k(8), () => step("claude")],
-    [k(11), () => step("codex")],
-    [k(17), () => step("claude")],
-    [k(19), () => step("codex")],
-    [k(26), () => step("codex")],
-    [k(29), () => step("claude")],
     [k(1.8), () => { stream("page-styles", 2); pushRun(); }],
     [k(2.6), () => ev("friren", { event: "status", text: "Reading the updater section" })],
     [k(3.2), () => working("Checking code blocks in light and dark", "Moving the sidebar to the new colors")],
@@ -703,6 +650,9 @@ function tick() {
   last = now;
   const on = visible && !document.hidden;
   if (on) {
+    // the terminals keep running while the visitor looks around, as real ones do; only a hidden page holds them
+    recClock += dt * 1000;
+    playTerms(recClock);
     liveT += dt;
     live.sort((a, b) => a[0] - b[0]);
     while (live.length && live[0][0] <= liveT) {

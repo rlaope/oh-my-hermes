@@ -32,7 +32,9 @@ try {
   // to fill the cell, as a real terminal does (it falls back to the standard one by itself).
   // Only on a hardware WebGL2 (the app's own rule, engine-policy.ts decideHardware): a software rasterizer draws
   // slowly, and the visitor's terminals then keep the standard renderer.
-  if (!ss.getItem("omher.term") && hardwareWebgl()) ss.setItem("omher.term", JSON.stringify({ gpu: "on" }));
+  // Font 12.5 gives the hero's terminal pane exactly 75x31 cells with either renderer (13 gives 72 or 75 by renderer),
+  // the size the CLI recordings in media/terminals.json were made at, so each screen lands cell for cell.
+  if (!ss.getItem("omher.term")) ss.setItem("omher.term", JSON.stringify(hardwareWebgl() ? { fontSize: 12.5, gpu: "on" } : { fontSize: 12.5 }));
   ss.setItem("omher.sounds", "off");
   ss.setItem("omher.lang", siteLang());
   // From 0.2.10 the sidebar lists only the roster (one bot on a first run); the story plays on all four.
