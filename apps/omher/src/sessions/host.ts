@@ -108,11 +108,9 @@ export interface SessionHost extends HistoryHost {
   pastChats(agent: "claude" | "codex", cwds: string[]): Promise<PastChat[]>;
   /** The last messages of `agent`'s conversation `id` in `cwd`. */
   pastMessages(agent: "claude" | "codex", id: string, cwd: string): Promise<PastMsg[]>;
-  /** The id of the first Codex conversation in `cwd` started at or after `since` (seconds since the epoch) that is not
-   *  one of `held` (the ids other rows keep), for a TERMINALS Codex session to continue after a restart; null when
-   *  there is none, or when one of `others` (the start times, in seconds, of the other Codex rows in that folder with
-   *  no id yet) is at or before it, as that row could own it too (read-only, rule 30). */
-  codexLatest?(cwd: string, since: number, held: string[], others: number[]): Promise<string | null>;
+  /** The conversation the Codex in the foreground of terminal session `id` (its pty) holds open: the UUID of the
+   *  rollout that process keeps open in its Codex home, or null while it holds none (rule 11; only the id comes back). */
+  codexConversation?(id: number): Promise<string | null>;
   /** How many asks wait: a Dock / launcher count, or a dot on the Windows taskbar button. 0 clears it. */
   badge(count: number): Promise<void>;
   /** Settings › Agents: the person's own agents, read and checked by the shell from omher's own file, and the broken
@@ -235,9 +233,9 @@ export class TauriHost implements SessionHost {
     const { invoke } = await this.core();
     return invoke<PastMsg[]>("past_chat_messages", { agent, id, cwd });
   }
-  async codexLatest(cwd: string, since: number, held: string[], others: number[]) {
+  async codexConversation(id: number) {
     const { invoke } = await this.core();
-    return invoke<string | null>("codex_latest", { cwd, sinceSecs: since, held, others });
+    return invoke<string | null>("codex_conversation", { id });
   }
   async badge(count: number) {
     const { invoke } = await this.core();
@@ -409,11 +407,9 @@ type MockGlobals = {
   /** e2e: the conversations Claude Code and Codex keep (none = the built-in ones) */
   __omherPastChats?: PastChat[];
   /** e2e: reads of those conversations, apart from the session calls (opening the + menu lists them) */
-  __omherPastReads?: { op: "list" | "read" | "latest"; agent: string; cwds?: string[]; id?: string; cwd?: string; since?: number; held?: string[]; others?: number[] }[];
-  /** e2e: the conversation id the next new TERMINALS Codex session writes its rollout under (none: it writes none) */
-  __omherMockCodexLatest?: string;
-  /** the rollouts the mock's Codex sessions wrote (the Codex lookup's files): id, folder, start time in ms */
-  __omherMockCodexRollouts?: { id: string; cwd: string; at: number }[];
+  __omherPastReads?: { op: "list" | "read" | "own"; agent: string; cwds?: string[]; id?: string; cwd?: string; pty?: number }[];
+  /** e2e: the conversation each mock pty's Codex holds open (pty id -> UUID), as a real Codex once its rollout exists */
+  __omherMockCodexOwn?: Record<number, string>;
   /** e2e: the Dock / taskbar count omher last set */
   __omherBadge?: number;
   /** e2e: the mock's copy of omher's custom-agents file (`agents` of `~/.omher/custom-agents.json`, as written) */
@@ -444,7 +440,7 @@ const MOCK_PAST_MSGS: Record<string, PastMsg[]> = {
 export class MockHost implements SessionHost {
   readonly kind = "mock" as const;
   private next = 0;
-  private live = new Map<number, { line: string; out: (d: string) => void; exit: (c: number | null) => void }>();
+  private live = new Map<number, { agent: string; line: string; out: (d: string) => void; exit: (c: number | null) => void }>();
   constructor(private g: MockGlobals = globalThis as MockGlobals) {}
 
   private log(c: MockCall) {
@@ -543,14 +539,13 @@ export class MockHost implements SessionHost {
   async start(agent: AgentId, cwd: string, cols: number, rows: number, onData: (d: string) => void, onExit: (c: number | null) => void, resume?: string, account?: string, sessionId?: string) {
     const id = nextMockPty();
     this.log({ op: "start", id, agent, cwd, cols, rows, ...(resume ? { resume } : {}), ...(sessionId ? { sessionId } : {}), ...(account ? { account } : {}) });
-    // a new Codex conversation writes its rollout as it starts (a resumed one goes on in its own)
-    const thread = this.g.__omherMockCodexLatest;
-    if (agent === "codex" && !resume && thread) (this.g.__omherMockCodexRollouts ??= []).push({ id: thread, cwd, at: Date.now() });
+    // a resumed Codex holds its own conversation's rollout open again
+    if (agent === "codex" && resume) (this.g.__omherMockCodexOwn ??= {})[id] = resume;
     const out = (d: string) => {
       (this.g.__omherSessionFlow ??= []).push({ op: "feed", id, bytes: utf8.encode(d).length });
       onData(d);
     };
-    this.live.set(id, { line: "", out, exit: onExit });
+    this.live.set(id, { agent, line: "", out, exit: onExit });
     mockPtyOut(id, out);
     setTimeout(() => {
       out(`${banner(agent)}\r\n\x1b[2m  ${agentDef(agent).program} in ${cwd}\x1b[0m\r\n\r\n${PROMPT}`);
@@ -741,15 +736,13 @@ export class MockHost implements SessionHost {
     if (!c) throw new Error("no such conversation");
     return MOCK_PAST_MSGS[id] ?? [{ role: "user" as const, text: c.title, ts: c.at }];
   }
-  /** As the shell's lookup: the oldest rollout in `cwd` started at or after `since` that no other row holds, unless
-   *  another row there without an id started by then (`others`, seconds). */
-  async codexLatest(cwd: string, since: number, held: string[], others: number[]) {
-    (this.g.__omherPastReads ??= []).push({ op: "latest", agent: "codex", cwd, since, held, others });
-    const found = (this.g.__omherMockCodexRollouts ?? [])
-      .filter((r) => r.cwd === cwd && r.at >= since * 1000 && !held.includes(r.id))
-      .sort((a, b) => a.at - b.at)[0];
-    if (!found || others.some((o) => o * 1000 <= found.at)) return null;
-    return found.id;
+  /** As the shell: the conversation the Codex running in pty `id` holds open (`__omherMockCodexOwn[id]`, set by the
+   *  test as that process's Codex writes its rollout), and nothing once that program ended or is not Codex. */
+  async codexConversation(id: number) {
+    (this.g.__omherPastReads ??= []).push({ op: "own", agent: "codex", pty: id });
+    const s = this.live.get(id);
+    if (!s || s.agent !== "codex") return null;
+    return this.g.__omherMockCodexOwn?.[id] ?? null;
   }
   async badge(count: number) {
     this.g.__omherBadge = count;
