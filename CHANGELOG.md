@@ -4,6 +4,13 @@ All notable changes will be documented here.
 
 ## Unreleased
 
+- **Hermes Bug Hunter: code review keeps only findings it can show, and every review says what it did not check.**
+  `code-review`'s finding validation gains a drop gate: a candidate stays out of the findings when it cannot be traced
+  step by step from a concrete input to a wrong result, when the behaviour is intended or documented, when its trigger
+  needs a privilege the user cannot have, when the harm is only theoretical, or when it is a style nit dressed as a
+  bug. `code-review`, `production-audit` and `verification-gate` now end every result with a `Not checked` list (each
+  entry with its reason, or `Not checked: none` only after full coverage), so a short findings list no longer reads as
+  "the rest is clean".
 - **A cheap dag-ulw node that hits a hard judgement asks for a stronger model instead of guessing.** When a node's
   child cannot settle a design choice or a root cause, it stops before editing and writes `ESCALATE: <question>` into
   its handoff; the node is settled `escalated` and offered again one category up (quick, unspecified-low,
@@ -34,6 +41,12 @@ All notable changes will be documented here.
 - **The Start Guide lists long-term memory among the main features.** It moves from the closing list to a fourth card
   in "What OMH does" (owner request, 2026-11-18): nothing is remembered silently, and the next session gets only the
   memories that fit its task, within a token budget. The closing list is now one row of three.
+- **A fail-closed leak guard keeps private identifiers out of the public repo (Hermes Bug Hunter).** CI now scans
+  every tracked file on each pull request and main push against a committed denylist of sha256 hashes, so the list
+  never carries the names it protects. A hit prints `path:line` and the hash; a missing or empty denylist fails the
+  job instead of passing. `tools/qa/identifier_guard.py --staged` runs the same check as a pre-commit hook, and
+  `--hash "name"` prints the line to add (see CONTRIBUTING.md).
+
 - **Four OMH tool descriptions are shorter, and the model still picks the same calls.** `omh_todo`, `omh_loop`,
   `omh_document_plan` and `omh_delegate_route` say the same rules in fewer words, so each costs fewer tokens the
   first time Hermes loads it (24,943 -> 23,718 characters together; the registered OMH schemas 63,324 -> 62,099).
