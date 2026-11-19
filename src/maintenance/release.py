@@ -200,10 +200,15 @@ CONCEPTUAL_AWARENESS_SURFACES = ("request-to-handoff", "executor selection", "co
 # measured from the producer; no headroom.
 # 13502 -> 13592: one `model-compression` index line plus newline (+90),
 # measured from the producer; no headroom.
-SKILL_INDEX_CHAR_LIMIT = 13592
+# 13592 -> 12970: the producer now cuts descriptions the way Hermes'
+# `clip_skill_description` does, at the last word boundary inside 58
+# characters with trailing punctuation dropped, instead of a fixed 57; every
+# line that was cut mid-word gets shorter. Measured from the producer; no headroom.
+SKILL_INDEX_CHAR_LIMIT = 12970
 # The longest single skill line in that index. Every description is already cut
 # to 60 characters, so what moves this is a longer skill name.
-SKILL_INDEX_LINE_CHAR_LIMIT = 100
+# 100 -> 99: same word-boundary cut as above, measured from the producer.
+SKILL_INDEX_LINE_CHAR_LIMIT = 99
 # The plugin bundle's registered tool schemas, 19 tools when the budget landed
 # (20 with `omh_jev_ask`), serialized as JSON with
 # sorted keys (`src/maintenance/per_turn_context.py`); `omh_todo` and `omh_loop`

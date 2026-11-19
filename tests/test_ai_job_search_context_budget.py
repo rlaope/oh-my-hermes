@@ -73,9 +73,12 @@ class AiJobSearchContextBudgetTests(unittest.TestCase):
         # Digest re-derived at the same size: twenty situation clauses were
         # shortened to end inside the 57-character window, so those index lines
         # change text at the same cut; the pin before it was a1761286...05af.
-        self.assertEqual(_digest(legacy), '7c4f6dc678d6bc28014a27ebbb37a01b11f4a4f6d23832ad8578a6711743b33a')
-        self.assertEqual(len('\n'.join(legacy)), 13506)
-        delta = len('\n'.join(lines)) - 13506
+        # 13506 -> 12894 and the digest re-derived: the producer cuts each line
+        # at a word boundary the way Hermes' `clip_skill_description` does, not
+        # at a fixed 57 characters; the pin before it was 7c4f6dc6...b33a.
+        self.assertEqual(_digest(legacy), '40241e3bc8770020d128fb84a6af35abd9c7ce85e7adaed006b4e6ed70c4ba76')
+        self.assertEqual(len('\n'.join(legacy)), 12894)
+        delta = len('\n'.join(lines)) - 12894
         self.assertGreater(delta, 0)
         self.assertLessEqual(delta, INDEX_DELTA_CAP)
         # A catalog ratchet is exact; do not carry the old row's unused slack.
@@ -580,7 +583,7 @@ class AiJobSearchContextBudgetTests(unittest.TestCase):
         # are covered by test_per_turn_budgets, not funded from career slack.
         from omh.maintenance.drift import budget_metrics
         expected = {
-            'skill_index_line_max_chars': 100,
+            'skill_index_line_max_chars': 99,  # Word-boundary cut matching Hermes' clip_skill_description (-1).
             'plugin_tool_schema_chars': 62968,  # Parked DAG waits (+429), delegation backends (+245), six routing-recipe categories (+213), opt-in omh-lsp tools (+2187), opt-in lsp_diagnostics (+396), identity argument (+143), dag node role (+85), dag node owner (+70), dag node local (+37) less the route fallback sentence (-1), then the ultrabrain head in the route example (+5), then omh_dag goal criteria (+226), then the criteria parameter's keep-the-condition description (+95), said in the positive form (+8), then dag node read_only (+45), then the observation parameter's field descriptions and the home-override wording trimmed (-9616), then four tool descriptions said in fewer words (-1225), then unified identities: the omh_dag identity reference (+122), omh_delegate_route `attempt` and identity description (+303), omh_role directory and `identity` argument (+220), then omh_dag escalation (+224).
             'pre_llm_call_context_chars_max': 5977,  # The pi-family runtime rename (+6), the route-hint dedup (-154), then the console choices line (+409).
             'pre_llm_call_context_fallback_chars_max': 7529,  # The same rename (+6), the human-voice primer sentence (+116), the route-hint dedup (-154), then the console choices line (+409).
