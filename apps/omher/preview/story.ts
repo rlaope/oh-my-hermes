@@ -299,7 +299,7 @@ function say(role: keyof typeof term, text: string) {
 
 // What each CLI draws, in the shapes the real ones use (Codex CLI 0.169, Claude Code 2.1): Codex's header box, `›`
 // for the ask, `•` for its words, a green `•` with a bold verb for a tool and `└` for what it returned; Claude Code's
-// welcome box, `>` for the ask, `⏺` for its words, a green `⏺ Tool(arg)` and `⎿` for the result. Each step ends on
+// mascot header, `>` for the ask, `⏺` for its words, a green `⏺ Tool(arg)` and `⎿` for the result. Each step ends on
 // a line that says what the agent is doing, so the card's second line (the last line on screen) reads as a sentence.
 const B = "\x1b[1m", D = "\x1b[2m", G = "\x1b[32m", X = "\x1b[0m";
 const CC = "\x1b[38;2;217;119;87m"; // Claude Code's orange
@@ -321,20 +321,14 @@ const codexAsk = (t: string) => `${NL}${D}›${X} ${t}${NL}`;
 const codexSays = (t: string) => `${NL}• ${t}${NL}`;
 const codexTool = (verb: string, what: string, out: string[] = []) =>
   `${NL}${G}•${X} ${B}${verb}${X} ${what}${NL}${out.map((l, i) => `  ${D}${i ? " " : "└"} ${l}${X}${NL}`).join("")}`;
-// Claude Code's welcome box, not its block-character mascot: the page's terminal draws block glyphs from the font
-// (the DOM renderer), which leaves dark seams between cells and rows, and the mascot read as sliced.
-function claudeHeader(): string {
-  const w = 44;
-  const rows: [string, string][] = [
-    [`${CC}✻${X} Welcome to ${B}Claude Code${X}!`, "✻ Welcome to Claude Code!"],
-    ["", ""],
-    [`  ${D}/help for help, /status for your current setup${X}`, "  /help for help, /status for your current setup"],
-    ["", ""],
-    [`  ${D}cwd: ~/code/web-app${X}`, "  cwd: ~/code/web-app"],
-  ];
-  const wide = Math.max(w, ...rows.map(([, p]) => p.length));
-  return `${CC}╭${"─".repeat(wide + 2)}╮${X}${NL}${rows.map(([s, p]) => `${CC}│${X} ${s}${" ".repeat(wide - p.length)} ${CC}│${X}${NL}`).join("")}${CC}╰${"─".repeat(wide + 2)}╯${X}${NL}`;
-}
+// Claude Code's own header: its mascot beside the version, model and folder, with the colours the CLI prints
+// (captured from Claude Code 2.1.327 in a pty). The preview's terminals draw with the GPU renderer (boot.ts), which
+// draws block characters to fill their cells, so the mascot is solid as in a real terminal.
+const CC_ORANGE = "\x1b[38;2;215;119;87m", CC_GREY = "\x1b[38;2;153;153;153m", ON_BLACK = "\x1b[48;2;0;0;0m", BG0 = "\x1b[49m", FG0 = "\x1b[39m";
+const claudeHeader = () =>
+  `${CC_ORANGE} ▐${ON_BLACK}▛███▛█${BG0}${FG0}   ${B}Claude Code${X} ${CC_GREY}v2.1.327${X}${NL}` +
+  `${CC_ORANGE}▝▜${ON_BLACK}█████${BG0}█▀${FG0}  ${CC_GREY}Opus 5.5 · Claude Max${X}${NL}` +
+  `${CC_ORANGE} ▝▝   ▝▝${FG0}   ${CC_GREY}~/code/web-app${X}${NL}`;
 const claudeAsk = (t: string) => `${NL}${D}>${X} ${t}${NL}`;
 const claudeSays = (t: string) => `${NL}⏺ ${t}${NL}`;
 const claudeTool = (tool: string, arg: string, out: string) => `${NL}${G}⏺${X} ${B}${tool}${X}(${arg})${NL}  ${D}⎿  ${out}${X}${NL}`;

@@ -4,6 +4,19 @@
 import { FakeSocket } from "./host";
 
 const w = window as unknown as Record<string, unknown>;
+/** Whether this browser has WebGL2 on real hardware (not SwiftShader, llvmpipe and the like). */
+function hardwareWebgl(): boolean {
+  try {
+    const gl = document.createElement("canvas").getContext("webgl2");
+    if (!gl) return false;
+    const dbg = gl.getExtension("WEBGL_debug_renderer_info");
+    const name = dbg ? `${gl.getParameter(dbg.UNMASKED_VENDOR_WEBGL) ?? ""} ${gl.getParameter(dbg.UNMASKED_RENDERER_WEBGL) ?? ""}` : "";
+    gl.getExtension("WEBGL_lose_context")?.loseContext();
+    return !/\b(swiftshader|llvmpipe|softpipe|software rasterizer|software adapter|basic render|microsoft basic|virgl|svga3d)\b/i.test(name);
+  } catch {
+    return false;
+  }
+}
 // The preview is always in English, whatever the site's language switch (?lang=, omh.lang) or the browser says. Its
 // story (chat, threads, terminals) is staged in English, so a translated app UI around it showed Korean labels next
 // to English messages. The app would otherwise take the browser's language on a first run.
@@ -14,9 +27,12 @@ try {
   Object.defineProperty(window, "localStorage", { configurable: true, get: () => ss });
   if (!ss.getItem("omher.theme")) ss.setItem("omher.theme", "dark");
   ss.setItem("omher.notify", "off");
-  // The staged terminals draw box frames (Codex's header, Claude Code's welcome box): at the app's default 1.2 line
-  // height the frame's │ sides break between rows. Line height 1 joins them.
-  if (!ss.getItem("omher.term")) ss.setItem("omher.term", JSON.stringify({ lineHeight: 1 }));
+  // The staged terminals draw Claude Code's block mascot and Codex's box frame. The standard renderer draws block and
+  // box characters from the font, a hair short of their cells, so both show dark seams; the GPU renderer draws them
+  // to fill the cell, as a real terminal does (it falls back to the standard one by itself).
+  // Only on a hardware WebGL2 (the app's own rule, engine-policy.ts decideHardware): a software rasterizer draws
+  // slowly, and the visitor's terminals then keep the standard renderer.
+  if (!ss.getItem("omher.term") && hardwareWebgl()) ss.setItem("omher.term", JSON.stringify({ gpu: "on" }));
   ss.setItem("omher.sounds", "off");
   ss.setItem("omher.lang", siteLang());
   // From 0.2.10 the sidebar lists only the roster (one bot on a first run); the story plays on all four.
