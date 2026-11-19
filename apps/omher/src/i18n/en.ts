@@ -1381,6 +1381,11 @@ export const en = {
   "panel.restore": "Restore",
   // watch notifications
   "watch.line": "Watch",
+  "brief.line": "Brief",
+  "brief.notice": "{bot} will brief you here when something in Slack needs you",
+  "brief.turnOff": "Turn off",
+  "brief.off": "Turned off",
+  "brief.when": "When something needs you",
   "note.watchMany": "{bot}: {n} watch alerts",
   "watch.notUseful": "Not useful",
   "watch.notUsefulTip": "Tell the bot this alert was not worth it",

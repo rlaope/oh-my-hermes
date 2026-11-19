@@ -1379,6 +1379,11 @@ export const ko: Record<Key, string> = {
   "panel.restore": "원래 크기로",
   // watch notifications
   "watch.line": "감시",
+  "brief.line": "브리핑",
+  "brief.notice": "Slack에서 챙길 일이 생기면 {bot}이(가) 여기서 알려 드려요",
+  "brief.turnOff": "끄기",
+  "brief.off": "껐어요",
+  "brief.when": "챙길 일이 생길 때",
   "note.watchMany": "{bot}: 감시 알림 {n}건",
   "watch.notUseful": "쓸모없었음",
   "watch.notUsefulTip": "이 알림은 필요 없었다고 봇에게 알려요",
