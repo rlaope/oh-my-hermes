@@ -301,7 +301,7 @@ All notable changes will be documented here.
   `omh skill-eval PATH` (offline, stdlib) reports per host whether Hermes, Claude Code, Codex, OpenClaw, OpenCode
   and Copilot CLI load a skill, load it degraded, or skip it, with each finding's source; `--catalog` checks a whole
   folder and `--strict` exits 1 on any degraded row. The `omh-skill-eval` skill runs it before a skill ships, and a
-  test now runs the same checker over the three shipped packs (#TBD).
+  test now runs the same checker over the three shipped packs (#2995).
 
 - **`show-reel` has a cut-sheet lane for films written as a shot contract.** A new opt-in reference, `cut-sheet.md`,
   covers cut-driven sequences of 30 s or less handed to a builder or a text-to-video generator, and remakes of a
