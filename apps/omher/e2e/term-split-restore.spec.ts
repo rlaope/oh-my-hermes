@@ -3,7 +3,7 @@
 // that came back paused show paused in their pane, with Resume, which starts that one in place. Settings › Terminal ›
 // Dim unfocused panes changes how bright the panes without the keyboard are, in TERMINALS and the bottom panel alike.
 import { expect, test, type Page } from "@playwright/test";
-import { mock } from "./term-find-helpers";
+import { mock, usePlatform } from "./term-find-helpers";
 
 type Sessions = { startTerminal(a: string, cwd: string): string };
 const start = (page: Page, cwd: string) => page.evaluate((c) => (window as unknown as { __omherSessions: Sessions }).__omherSessions.startTerminal("shell", c), cwd);
@@ -12,6 +12,7 @@ const pane = (page: Page, id: string) => page.locator(`[data-testid="split-pane"
 const mac = (page: Page) => page.evaluate(() => /Mac|iPhone|iPad/.test(navigator.platform));
 
 async function open(page: Page) {
+  await usePlatform(page);
   await page.addInitScript(() => {
     if (!sessionStorage.getItem("__kept")) {
       for (const k of ["omher.sessions.recent", "omher.sessions.open", "omher.resume", "omher.splits", "omher.termpanel.tabs", "__omherMockHistory", "omher.term"]) localStorage.removeItem(k);
@@ -113,7 +114,9 @@ test("Dim unfocused panes: the setting sets how bright panes without the keyboar
   const boxOpacity = (i: number) => panes.nth(i).locator(".term-box").evaluate((el) => getComputedStyle(el).opacity);
   await expect.poll(() => boxOpacity(0)).toBe("0.72");
   await expect.poll(() => boxOpacity(1)).toBe("1");
-  // Settings › Terminal: one step down (0.68), both follow at once
+  // Settings › Terminal: one step down (0.68), both follow at once. Off macOS Ctrl+, typed in a terminal is the
+  // program's (src/app/shortcuts.ts), so it is pressed outside it
+  if (!m) await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
   await page.keyboard.press(m ? "Meta+," : "Control+,");
   await page.getByTestId("settings-tab-terminal").or(page.getByRole("button", { name: /^Terminal$/ })).first().click();
   await page.getByTestId("term-dim").getByRole("button").first().click();

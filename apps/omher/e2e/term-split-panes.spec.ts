@@ -246,8 +246,16 @@ test("rows in the open split carry a glyph (the focused one marked); Plans draws
   await expect(page.getByTestId(`session-${b}`)).toHaveAttribute("data-split", "focused");
   await expect(page.getByTestId(`session-${a}`)).toHaveAttribute("data-split", "in");
   await expect(page.getByTestId(`session-${c}`).getByTestId("term-split-glyph")).toHaveCount(0);
-  // Plans: two boxes side by side, b filled
-  await page.keyboard.press((await platformIsMac(page)) ? "Meta+." : "Control+.");
+  // Plans: two boxes side by side, b filled. ⌘. works with the keyboard in a pane; off macOS Ctrl+. typed in a
+  // terminal is the program's (src/app/shortcuts.ts), in a split as in one terminal, so it is pressed outside it
+  if (await platformIsMac(page)) await page.keyboard.press("Meta+.");
+  else {
+    await page.keyboard.press("Control+.");
+    await page.waitForTimeout(300);
+    await expect(page.getByTestId("split-map")).toHaveCount(0);
+    await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
+    await page.keyboard.press("Control+.");
+  }
   await expect(page.getByTestId("split-map")).toBeVisible();
   await expect(page.getByTestId("split-map-box")).toHaveCount(2);
   const boxA = page.locator(`[data-testid="split-map-box"][data-session="${a}"]`);
