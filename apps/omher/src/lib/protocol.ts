@@ -683,6 +683,8 @@ export type BridgeEvent =
   /** A plugin folder appeared in the bot's profile (the bot installed it from chat). */
   | (EventBase & { event: "plugin.added"; name: string; title: string; tools: number; hooks: number; ts: number })
   | (EventBase & { event: "plugins.update" })
+  /** omher set up its Slack briefing for this bot (the `omher-brief` automation); `owner_name`: whom it briefs. */
+  | (EventBase & { event: "brief.ready"; owner_name: string | null })
   // a SESSIONS chat: a message sent while a turn ran waits until the agent takes it (or Stop drops it)
   | (EventBase & { event: "message.queued" | "message.taken" | "message.dropped"; id: string })
   /** A SESSIONS file edit's change, per file (replaces what an earlier `tool.diff` of the same step said). */

@@ -109,7 +109,7 @@ from __future__ import annotations
 
 from typing import Any, Final, NamedTuple
 
-from .pi_family_interop import LEGACY_RUNTIME_PROFILE_ID, PI_DISTRIBUTION_HOST
+from .pi_family_interop import LEGACY_RUNTIME_PROFILE_ID, PI_DISTRIBUTION_HOST, PI_FORK_HOST
 from ..plugin_bundle.omh.run_records import EXECUTOR_PROGRESS_EVENT_TYPES, UNMAPPED_SOURCE_EVENT
 from .executors import EXECUTOR_PROFILES
 
@@ -216,6 +216,7 @@ _OWNER_ALIASES: Final[dict[str, str]] = {
     "pi-family-runtime": "pi-family-runtime",
     "pi": "pi-family-runtime",
     PI_DISTRIBUTION_HOST: "pi-family-runtime",
+    PI_FORK_HOST: "pi-family-runtime",
     # Read-only: the id older releases wrote for this owner.
     LEGACY_RUNTIME_PROFILE_ID: "pi-family-runtime",
     "opencode": "pi-family-runtime",

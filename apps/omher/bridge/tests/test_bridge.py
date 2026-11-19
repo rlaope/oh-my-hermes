@@ -1241,7 +1241,8 @@ class ReadOnlyRule(BridgeCase):
                     if isinstance(n, ast.Attribute) and isinstance(n.value, ast.Name) and n.value.id == "subprocess" \
                             and n.attr in ("run", "Popen", "call", "check_call", "check_output"):
                         uses.append(fn.name)
-        self.assertEqual(uses, ["_git", "gh_pr_view", "run_hermes_restart"])
+        # _hermes_run: rule 24's one `hermes -p <bot> cron create` for the briefing (test_brief_setup pins its argv)
+        self.assertEqual(uses, ["_git", "_hermes_run", "gh_pr_view", "run_hermes_restart"])
         self.assertNotIn("create_subprocess", src)
         self.assertNotIn("os.system", src)
         self.assertEqual(ob.GIT_READS, {("worktree", "list"), ("rev-parse",), ("status",), ("diff",), ("log",),

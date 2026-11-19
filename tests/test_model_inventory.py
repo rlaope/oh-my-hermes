@@ -24,7 +24,7 @@ from omh.coding.model_inventory import (  # noqa: E402
     inventory_model_catalog,
     local_model_inventory,
 )
-from omh.coding.pi_family_interop import OPENCODE_RUNTIME_CONFIG_FILE, PI_DISTRIBUTION_HOME, PI_DISTRIBUTION_HOST, RUNTIME_CONFIG_FILES, RUNTIME_HOME
+from omh.coding.pi_family_interop import OPENCODE_RUNTIME_CONFIG_FILE, PI_DISTRIBUTION_HOME, PI_DISTRIBUTION_HOST, PI_FORK_HOME, PI_FORK_HOST, RUNTIME_CONFIG_FILES, RUNTIME_HOME
 from omh.coding.model_discovery_adapters import RUNTIME_CONFIG_SOURCE
 
 _SECRET = "sk-SECRET-VALUE-12345"
@@ -334,7 +334,7 @@ class MultiAgentModelDiscoveryTests(unittest.TestCase):
         self.assertEqual(discovery["schema_version"], "model_discovery/v1")
         self.assertEqual(
             set(discovery["sources"]),
-            {"codex", "claude-code", PI_DISTRIBUTION_HOST, "pi", RUNTIME_CONFIG_SOURCE, "opencode", "hermes", "omp"},
+            {"codex", "claude-code", PI_DISTRIBUTION_HOST, "pi", RUNTIME_CONFIG_SOURCE, "opencode", "hermes", PI_FORK_HOST},
         )
         observations = discovery["observations"]
         observed = {
@@ -365,8 +365,41 @@ class MultiAgentModelDiscoveryTests(unittest.TestCase):
                 encoding="utf-8",
             )
             discovery = local_model_inventory(home)["model_discovery"]
-        self.assertEqual(discovery["sources"]["omp"]["status"], "layout_unverified")
-        self.assertFalse(any(entry["source"] == "omp" for entry in discovery["observations"]))
+        self.assertEqual(discovery["sources"][PI_FORK_HOST]["status"], "layout_unverified")
+        self.assertFalse(any(entry["source"] == PI_FORK_HOST for entry in discovery["observations"]))
+
+    def test_fork_host_sessions_yield_model_changes_and_assistant_models_only(self) -> None:
+        with TemporaryDirectory() as tmp:
+            home = Path(tmp)
+            self._write_jsonl(
+                home / PI_FORK_HOME / "agent" / "sessions" / "-work-repo" / "2026_s1.jsonl",
+                {"type": "session", "id": "s1", "cwd": f"/{_SECRET}"},
+                {"type": "model_change", "timestamp": "2026-02-16T10:21:30.000Z", "model": "openai/gpt-4o"},
+                {"type": "thinking_level_change", "thinkingLevel": "high"},
+                {
+                    "type": "message",
+                    "timestamp": "2026-02-16T10:22:00.000Z",
+                    "message": {
+                        "role": "assistant",
+                        "provider": "anthropic",
+                        "model": "claude-sonnet-4-5",
+                        "content": [{"type": "text", "text": f"transcript {_SECRET}"}],
+                    },
+                },
+                {"type": "message", "message": {"role": "user", "content": f"prompt {_SECRET}"}},
+                {"type": "model_change", "model": "no-provider-separator"},
+            )
+            discovery = local_model_inventory(home)["model_discovery"]
+        source = discovery["sources"][PI_FORK_HOST]
+        self.assertEqual(source["status"], "observed_before")
+        self.assertTrue(source["supported_root"])
+        observed = {
+            (entry["source"], entry["provider"], entry["model_id"])
+            for entry in discovery["observations"]
+            if entry["source"] == PI_FORK_HOST
+        }
+        self.assertEqual(observed, {(PI_FORK_HOST, "openai", "gpt-4o"), (PI_FORK_HOST, "anthropic", "claude-sonnet-4-5")})
+        self.assertNotIn(_SECRET, json.dumps(discovery))
 
     def test_discovery_rejects_symlinks_to_credentials_outside_fixed_roots(self) -> None:
         with TemporaryDirectory() as tmp:

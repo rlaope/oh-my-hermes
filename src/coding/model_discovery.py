@@ -13,6 +13,8 @@ from typing import Final, Iterator
 from .pi_family_interop import (
     PI_DISTRIBUTION_HOME,
     PI_DISTRIBUTION_HOST,
+    PI_FORK_HOME,
+    PI_FORK_HOST,
     RUNTIME_CONFIG_FILES,
     RUNTIME_HOME,
     RUNTIME_MODELS_FILE,
@@ -35,6 +37,10 @@ _SOURCE_ROOTS: Final[dict[str, tuple[str, ...]]] = {
     ),
     PI_DISTRIBUTION_HOST: (f"{PI_DISTRIBUTION_HOME}/agent/sessions",),
     "pi": (".pi/agent/sessions",),
+    # The fork host writes `agent/sessions/<encoded-cwd>/<ts>_<id>.jsonl` under
+    # its own home (upstream docs/session.md). Any other layout under that home
+    # is reported `layout_unverified` and never read.
+    PI_FORK_HOST: (f"{PI_FORK_HOME}/agent/sessions",),
     RUNTIME_CONFIG_SOURCE: (
         *(f"{RUNTIME_HOME}/{name}" for name in RUNTIME_CONFIG_FILES),
         f"{RUNTIME_HOME}/{RUNTIME_MODELS_FILE}",
@@ -68,15 +74,15 @@ def discover_local_models(
         )
         observations.extend(source_observations)
         sources[source] = source_result
-    omp_present = (home / ".omp").exists()
-    sources["omp"] = source_payload(
-        "layout_unverified",
-        (),
-        scanned_records=0,
-        rejected=0,
-        supported_root=omp_present,
-        truncated_reasons=(),
-    )
+    if not sources[PI_FORK_HOST]["supported_root"] and (home / PI_FORK_HOME).exists():
+        sources[PI_FORK_HOST] = source_payload(
+            "layout_unverified",
+            (),
+            scanned_records=0,
+            rejected=0,
+            supported_root=False,
+            truncated_reasons=(),
+        )
     deduplicated = deduplicate(observations)
     return {
         "schema_version": MODEL_DISCOVERY_SCHEMA_VERSION,

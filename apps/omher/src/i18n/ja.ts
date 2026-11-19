@@ -1347,6 +1347,11 @@ export const ja: Record<Key, string> = {
   "panel.restore": "元のサイズに戻す",
   // watch notifications
   "watch.line": "ウォッチ",
+  "brief.line": "ブリーフ",
+  "brief.notice": "Slackで対応が必要なことがあれば、{bot}がここでお知らせします",
+  "brief.turnOff": "オフにする",
+  "brief.off": "オフにしました",
+  "brief.when": "対応が必要なとき",
   "note.watchMany": "{bot}: ウォッチ通知 {n} 件",
   "watch.notUseful": "役に立たなかった",
   "watch.notUsefulTip": "この通知は不要だったとボットに伝えます",

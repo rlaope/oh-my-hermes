@@ -8,6 +8,8 @@ import { scheduleWords } from "./schedule";
 export type WatchState = "ok" | "paused" | "not_readable";
 export interface WatchInfo {
   name: string;
+  /** `brief`: omher's own Slack briefing (the collector in brief mode); else a channel watch. */
+  kind?: "watch" | "brief";
   platform: "slack" | "discord" | null;
   channels: string[];
   /** The condition in the person's words (from the judging prompt), else the keywords. */
@@ -23,6 +25,15 @@ export interface WatchInfo {
 
 /** The watch facts of an automation, or null for any other job. */
 export const watchOf = (a: Automation): WatchInfo | null => (a as Automation & { watch?: WatchInfo | null }).watch ?? null;
+
+/** omher's own briefing job's name (BOUNDARY rule 24). */
+export const BRIEF_JOB = "omher-brief";
+
+/** True for omher's Slack briefing (`omher-brief`): it runs when something needs the person, not on a clock. */
+export const isBrief = (a: Automation): boolean => watchOf(a)?.kind === "brief" || a.name === BRIEF_JOB;
+
+/** The schedule line of a job: the briefing says when it speaks, not how often it checks. */
+export const scheduleOf = (a: Automation): string => (isBrief(a) ? t("brief.when") : scheduleWords(a.schedule));
 
 export const PLATFORM_NAME: Record<string, string> = { slack: "Slack", discord: "Discord" };
 
