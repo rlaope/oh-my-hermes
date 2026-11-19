@@ -220,10 +220,10 @@ test("live line: a long command is cut to a glance with the full text on hover, 
   const line = page.locator("[data-testid=activity][data-state=live]");
   const text = line.getByTestId("activity-text");
   await expect(text).toContainText("cd /Users/you/work");
-  expect(((await text.textContent()) ?? "").length).toBeLessThanOrEqual("Running ".length + 48);
+  expect(((await text.textContent()) ?? "").length).toBeLessThanOrEqual("Running ".length + 24);
   await expect(line.locator(".act-live")).toHaveAttribute("title", `Running ${long}`);
   const [h, tl] = await Promise.all([line.getByTestId("activity-toggle").boundingBox(), page.getByTestId("timeline").boundingBox()]);
-  expect(h!.width).toBeLessThanOrEqual(Math.min(0.6 * tl!.width, 520) + 1);
+  expect(h!.width).toBeLessThanOrEqual(Math.min(0.4 * tl!.width, 340) + 1);
   // the typing dots wait directly under it, with no ringed face of their own
   await expect(page.getByTestId("typing")).toBeVisible();
   await expect(page.getByTestId("typing-ring")).toHaveCount(0);
