@@ -456,7 +456,12 @@ SKILL_INDEX_LINE_CHAR_LIMIT = 100
 # sentence (+211) and the outcome enum's "escalated" (+13). Measured by
 # per_turn_context.plugin_tool_schema_chars_by_tool() against main 8f09d0147.
 # No headroom.
-PLUGIN_TOOL_SCHEMA_CHAR_LIMIT = 62968
+# 62968 -> 63156: omh_dag define takes the opt-in `carry_forward` base revision
+# that carries a re-run's unchanged accepted nodes (+188; omh_dag 3895 ->
+# 4083): one optional string property and its description. Measured by
+# per_turn_context.plugin_tool_schema_chars_by_tool() against main a5649293b.
+# No headroom.
+PLUGIN_TOOL_SCHEMA_CHAR_LIMIT = 63156
 # PRE_LLM_CALL_CONTEXT_CHAR_LIMIT, PRE_LLM_CALL_CONTEXT_FALLBACK_CHAR_LIMIT: moved with
 # their history to src/plugin_bundle/omh/turn_budget.py; imported at the top of this file.
 # 340000 -> 349637: three capability-skill sections were added by the domain
