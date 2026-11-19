@@ -2524,16 +2524,16 @@ _BACKLOG_ITEM: Final = _lazy_compile(r"^[ \t]*(?:\d{1,2}[.)]|[-*•]|\(?[a-h]\))
 _BACKLOG_ITEM_MIN_WORDS: Final = 3
 _BACKLOG_KOREAN_ITEM_MIN_WORDS: Final = 2
 # Code named: a source path, a dotted name or a call, a snake_case name, a test runner or test, an error, or a word for
-# code. A bare "issue" or "item" names nothing; "bug" and "crash" are code's. The code words end at the next Latin
-# letter, digit or underscore rather than at `\b`, because a Korean particle glued on ("API하고") is a word character
-# to `\b` and would hide the word.
+# code. A bare "issue" or "item" names nothing; "bug" and "crash" are code's. The code words end at a non-word character or a
+# Hangul syllable rather than at `\b`, because a Korean particle glued on ("API하고") is a word character to `\b`
+# and would hide the word; any other letter still continues the word ("apiño" is no API).
 _BACKLOG_CODE: Final = _lazy_compile(
     r"\b\w+\.(?:py|pyi|js|jsx|ts|tsx|go|rs|java|kt|rb|php|cs|c|cc|cpp|h|hpp|swift|scala|sh|sql|vue|svelte)\b"
     r"|\b[a-z_]\w*\.[a-z_]\w*(?:\.[a-z_]\w*)*\b|\b[a-z_]\w*\(|\b[a-z]+_[a-z_]+\b"
     r"|\b(?:tests?|unit\s?tests?|unittest|pytest|jest|vitest|traceback|stack\s?trace|exceptions?|segfault|regressions?)\b"
     r"|\b\w*(?:error|exception)\b"
     r"|\b(?:functions?|methods?|class(?:es)?|modules?|packages?|code|codebase|repo|repository|bugs?|crash(?:es|ing)?"
-    r"|endpoints?|api|cli|sdk|library|script|compiler|parser|schema|migration|build|ci)(?![a-z0-9_])"
+    r"|endpoints?|api|cli|sdk|library|script|compiler|parser|schema|migration|build|ci)(?=[^\w]|[가-힣]|$)"
     r"|코드|함수|메서드|클래스|모듈|패키지|테스트|에러|오류|예외|버그|크래시|엔드포인트|저장소|레포|빌드|파서|스키마"
 )
 # The request's own words ask for the change: a change verb, in English or Korean.
@@ -2592,6 +2592,9 @@ def _inline_backlog_parts(text: str) -> list[str]:
     """The parts of a one-line list of changes in ``text``, or none when it is no such list."""
     if "\n" in text.strip() or len(text) > _BACKLOG_INLINE_MAX_CHARS:
         return []
+    # One space per whitespace run keeps the unanchored `\s*` / `\s+` arms of the split from rescanning a long run at
+    # each of its spaces (quadratic in the run's length).
+    text = " ".join(text.split())
     head, colon, tail = text.partition(":")
     if colon and not _BACKLOG_SCOPE.search(_folded(head)):
         return []
@@ -2626,7 +2629,12 @@ def lists_several_code_changes(text: str, links: tuple[str, ...] = ()) -> bool:
             return False
         asks_for_change = bool(_BACKLOG_CHANGE.search(plain) or _BACKLOG_INLINE_DO_ALL.search(plain))
         # Three parts that each open on a change verb ("fix X, update Y, and add Z") already say there are several.
-        verb_led = sum(1 for part in inline if _BACKLOG_CHANGE.match(_folded(part))) >= BACKLOG_MIN_INLINE_ITEMS
+        # Only when two or more of those parts name code: one code word in the last part of an errand list ("add the
+        # dress code to the invitation") is no code backlog.
+        verb_led = (
+            sum(1 for part in inline if _BACKLOG_CHANGE.match(_folded(part))) >= BACKLOG_MIN_INLINE_ITEMS
+            and sum(1 for part in inline if _BACKLOG_CODE.search(_folded(part))) >= 2
+        )
     else:
         return False
     if not asks_for_change or _BACKLOG_NOT_THE_CHANGE.search(plain):

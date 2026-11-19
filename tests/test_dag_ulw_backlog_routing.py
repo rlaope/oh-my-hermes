@@ -171,6 +171,17 @@ class BacklogReadingTests(unittest.TestCase):
             with self.subTest(message=message):
                 self.assertFalse(lists_several_code_changes(executable_routing_text(message)))
 
+    def test_verb_led_errands_with_one_code_word_and_foreign_letters_are_not(self) -> None:
+        for message in (
+            "Fix the venue name, update the dates, and add the dress code to the invitation",
+            "Fix the typo, update the date, and add tests to the printed lab syllabus",
+            "Fix the foyer sign, update the opening hours, and add the library address",
+            "Fix the author name, update the cover date, and add a migration photo to the brochure",
+            "Fix the apiño spelling, update the cover date, and add page numbers",
+        ):
+            with self.subTest(message=message):
+                self.assertFalse(lists_several_code_changes(executable_routing_text(message)))
+
     def test_a_one_line_list_of_two_changes_is_too_small(self) -> None:
         self.assertFalse(lists_several_code_changes("migrate the settings store to sqlite and add tests"))
         self.assertFalse(lists_several_code_changes("로그인 API랑 설정 화면 둘 다 고쳐줘"))
