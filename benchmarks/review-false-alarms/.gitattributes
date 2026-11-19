@@ -1,0 +1,3 @@
+# bug_location line numbers and diff.patch hunks are checked against these
+# files by tests/test_review_false_alarms_benchmark.py; keep them LF everywhere.
+* text eol=lf

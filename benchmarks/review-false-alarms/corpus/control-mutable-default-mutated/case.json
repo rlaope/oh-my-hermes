@@ -1,0 +1,11 @@
+{
+  "id": "control-mutable-default-mutated",
+  "kind": "control",
+  "language": "python",
+  "expected": "bug",
+  "bug_location": {
+    "path": "app/tags.py",
+    "line": 1
+  },
+  "why": "The [] default is created once and with_tag appends to it, so every call that omits tags shares and grows one list: the second draft post created by app/posts.py carries two 'draft' tags."
+}

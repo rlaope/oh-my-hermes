@@ -1,0 +1,17 @@
+--- a/app/search.py
++++ b/app/search.py
+@@ -1,7 +1,10 @@
+ import sqlite3
+ 
+ 
+-def find_orders(conn: sqlite3.Connection, customer_id: int) -> list[tuple]:
+-    return conn.execute(
+-        "SELECT id, total FROM orders WHERE customer_id = ?", (customer_id,)
+-    ).fetchall()
++def find_orders(conn: sqlite3.Connection, customer_name: str) -> list[tuple]:
++    query = (
++        "SELECT orders.id, orders.total FROM orders "
++        "JOIN customers ON customers.id = orders.customer_id "
++        f"WHERE customers.name = '{customer_name}'"
++    )
++    return conn.execute(query).fetchall()

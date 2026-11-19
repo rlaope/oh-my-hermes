@@ -1,0 +1,11 @@
+--- a/app/settings.py
++++ b/app/settings.py
+@@ -1,7 +1,7 @@
+ DEFAULTS = {"theme": "light", "page_size": 25, "beta": False}
+ 
+ 
+-def merged(overrides: dict | None = None) -> dict:
++def merged(overrides: dict = {}) -> dict:
+     result = dict(DEFAULTS)
+     if overrides:
+         result.update(overrides)
