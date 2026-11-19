@@ -13,6 +13,11 @@ All notable changes will be documented here.
   unique placeholder and then renamed, because the gateway answers a create whose title an open session already has
   with that session. The bridge tests' fake gateway now refuses what the real one refuses. (#2980)
 
+- **omher: no "+ New thread" line sits under a bot any more.** The line closed every bot's thread list, and under the
+  open bot it showed even with no threads, so the sidebar always carried an empty row. Under a bot now there are only
+  its threads, the last one ending the tree; a new thread opens from the bot row's + on hover, its right-click menu, or
+  `./thread`.
+
 - **The run summary shows how much of the prompt came from cache.** `omh_run_summary` adds a line after the token
   count, such as `Prompt cache: 62% of input read from cache (1,234,567 tokens)` (en/ko/ja/zh), and
   `breakdown.cache_read_share`. The share is cache reads over uncached input plus cache reads, which is how Hermes
@@ -340,6 +345,20 @@ All notable changes will be documented here.
   draws them from the font, a hair short of their cells. Terminal › GPU renderer › Auto now uses the GPU renderer
   wherever the hardware allows it (WebGL2, not a software rasterizer), and it draws those characters to fill the cell
   as a real terminal does. Off keeps the standard renderer; a machine without hardware WebGL2 keeps it too.
+- **OMH skills load whole on every host they ship to, and `omh skill-eval` checks any skill folder the same way.**
+  Every situation clause now ends inside Hermes' 60-character index window. The portable descriptions
+  (`.agents/skills`, `.claude/skills`) are the situation clause plus the start of what the skill does, with the
+  trigger list kept in the body, so the pack fits Claude Code's and Codex's 8,000-character skill list. A portable
+  body over OpenClaw's read cap moves its Catalog Metadata into `references/details.md`, and the eight toolkit
+  skills name `toolkit/README.md` in SKILL.md itself. Measured with NVIDIA SkillEvaluator 1.0.1 on a5649293 →
+  this branch: Hermes clipped situation clauses 20 → 0; `.agents` pack descriptions 42,581 → 7,442 characters;
+  `.claude` copy 16,474 → 7,442; OpenClaw over-read-cap bodies 7 → 0; toolkit README named 0/8 → 8/8. The new
+  `omh skill-eval PATH` (offline, stdlib) reports per host whether Hermes, Claude Code, Codex, OpenClaw, OpenCode
+  and Copilot CLI load a skill, load it degraded, or skip it, with each finding's source, and marks a row
+  `unverified` when no recorded host fact covers the input (unparsed YAML, say); `--catalog` checks a whole
+  folder, category folders included, and `--strict` exits 1 on any degraded or unverified row. The
+  `omh-skill-eval` skill runs it before a skill ships, and a test now runs the same checker over the three shipped
+  packs (#2995).
 - **omher: a Slack briefing that sets itself up.** Add a bot whose Hermes profile has Slack connected and omher
   creates one automation for it, `omher-brief`: the channel-watch collector in a new brief mode checks the Slack
   channels you share with the bot every 15 minutes and wakes the model only when there is a reason (an unanswered

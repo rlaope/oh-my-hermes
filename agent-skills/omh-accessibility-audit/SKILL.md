@@ -1,6 +1,6 @@
 ---
 name: "omh-accessibility-audit"
-description: "[omh] Screen-reader or keyboard accessibility gaps: prepare WCAG, keyboard, focus, screen-reader, target-size, and reflow evidence gates for UI surfaces. Use when the user says: accessibility-audit, accessibility audit, a11y audit, a11y architect, wcag audit, wcag 2.2, wcag 2.2 aa, accessibility pass."
+description: "[omh] Screen-reader or keyboard accessibility gaps: prepare WCAG…"
 license: MIT
 metadata:
   hermes:

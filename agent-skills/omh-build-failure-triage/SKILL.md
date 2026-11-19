@@ -1,6 +1,6 @@
 ---
 name: "omh-build-failure-triage"
-description: "[omh] Build or CI failure to triage: classify build, typecheck, lint, test, CI, and DCO failures into minimal safe fix handoffs. Use when the user says: build-failure-triage, build failure triage, build failure, build-failure, build fix, build failed, build failing, compile error."
+description: "[omh] Build or CI failure to triage: classify build, typecheck…"
 license: MIT
 metadata:
   hermes:

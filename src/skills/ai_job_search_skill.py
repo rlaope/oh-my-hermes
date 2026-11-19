@@ -31,7 +31,7 @@ DEFINITION = SkillDefinition(
          '어떤 비공개 저장 위치, 출처 사용 권한, 정해진 조회 횟수 한도를 승인하셨나요?'),
     )),
     opening_steps=(
-        'Read `toolkit/README.md` and `references/execution-and-qa.md`; load only the relevant profile/discovery, fit/drafting or interview/outcomes reference for the current action.',
+        "Read `toolkit/README.md` (`skill_view(name='omh-ai-job-search', file_path='toolkit/README.md')`) and `references/execution-and-qa.md`; load only the relevant profile/discovery, fit/drafting or interview/outcomes reference for the current action.",
         'Confirm an approved private workspace outside the product checkout through the active profile; ask only action-specific questions and keep group replies public-safe.',
         'Actually invoke `toolkit/scripts/job_state.py` through the host terminal: validate captures, merge approved local tracking input, then summary and read-back; produce requested documents rather than stopping at a prepared card.',
     ),

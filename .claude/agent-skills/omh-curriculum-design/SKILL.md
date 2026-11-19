@@ -1,6 +1,6 @@
 ---
 name: "omh-curriculum-design"
-description: "[omh] Team training or course that needs a syllabus: turn a learning goal into a teachable curriculum, assessment plan, and learner-ready sequence."
+description: "[omh] Team training or course that needs a syllabus."
 license: MIT
 metadata:
   hermes:

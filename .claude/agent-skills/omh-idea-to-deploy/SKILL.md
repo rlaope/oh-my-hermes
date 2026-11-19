@@ -1,6 +1,6 @@
 ---
 name: "omh-idea-to-deploy"
-description: "[omh] App idea headed for launch: shape an app idea into decisions, delivery handoff, verification, release, and monitoring status."
+description: "[omh] App idea headed for launch: shape an app idea into decisions…"
 license: MIT
 metadata:
   hermes:

@@ -1,6 +1,6 @@
 ---
 name: "omh-materials-package"
-description: "[omh] PPT, PDF, Excel, or HWP output to produce: decks, PDFs, spreadsheets, documents, HWP, Markdown, and binary export handoffs."
+description: "[omh] PPT, PDF, Excel, or HWP output to produce."
 license: MIT
 metadata:
   hermes:

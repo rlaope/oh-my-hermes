@@ -3409,6 +3409,7 @@ _PRIMARY_HARNESSES = {
     "data-pipelines": "coding-handling",
     "model-finetuning": "research",
     "model-compression": "research",
+    "skill-eval": "verification-gate",
     "mobile-release": "app-delivery-loop",
     "internal-audit": "critic",
     "data-share-review": "critic",

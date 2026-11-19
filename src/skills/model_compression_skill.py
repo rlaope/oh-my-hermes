@@ -8,7 +8,7 @@ REFERENCE_PATH = "references/compression-method.md"
 
 DEFINITION = SkillDefinition(
     "model-compression",
-    "Making a model smaller or cheaper by changing its weights: quantization (GPTQ, AWQ, GGUF, bitsandbytes, FP8, "
+    "Making a model smaller or cheaper via its weights: quantization (GPTQ, AWQ, GGUF, bitsandbytes, FP8, "
     "quantization-aware training), pruning, or distillation into a smaller student, sized to the target hardware, "
     "calibrated on the task's own data, and kept only when it holds quality on the person's own eval.",
     (

@@ -1456,7 +1456,6 @@ export const ja: Record<Key, string> = {
   "thread.cmdList": "新しいスレッドのコマンド",
   "thread.cmdHint": "{name}との新しいスレッド",
   "thread.cmdFiles": "ファイルではスレッドを始められません。先に ./thread を送り、スレッドで添付してください。",
-  "thread.newRow": "新しいスレッド",
   "thread.newWith": "{name}との新しいスレッド",
   // tasks (sidebar Tasks row and page)
   "tasks.title": "タスク",

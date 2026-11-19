@@ -37,7 +37,7 @@ DEFINITION = SkillDefinition(
          "프레임을 담을 새 디렉터리는 어디이고, Pillow가 별도 환경에 설치돼 있으며, 실행 시간 제한은 얼마인가요?"),
     )),
     opening_steps=(
-        "Read `toolkit/README.md` and `references/execution-and-qa.md` before executing `toolkit/scripts/forge.py`; installation and skill discovery never run it.",
+        "Read `toolkit/README.md` (`skill_view(name='omh-sprite-forge', file_path='toolkit/README.md')`) and `references/execution-and-qa.md` before executing `toolkit/scripts/forge.py`; installation and skill discovery never run it.",
         "Obtain the raw sheet from the host's own image tool as a grid on flat #FF00FF; OMH generates no images, and a 1xN strip is regenerated as a grid, never processed.",
         "Record identity elements, rejected drafts, cell size and baseline in `references/character-art-direction.md` form before cutting frames.",
     ),

@@ -1,6 +1,6 @@
 ---
 name: "omh-cancel"
-description: "[omh] Aborting an active workflow: ending active workflow state cleanly."
+description: "[omh] Aborting an active workflow: ending active workflow state…"
 license: MIT
 compatibility: "Requires the omh CLI on PATH (pip install oh-my-hermes)."
 metadata:

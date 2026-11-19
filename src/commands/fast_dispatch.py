@@ -68,6 +68,7 @@ SUBCOMMAND_REGISTRARS: dict[str, tuple[str, str]] = {
     "runtime": ("runtime", "_add_runtime_commands"),
     "setup": ("setup", "_add_top_level_commands"),
     "setup-profile": ("setup", "_add_top_level_commands"),
+    "skill-eval": ("skill_eval", "_add_skill_eval_commands"),
     "skill-profile": ("setup", "_add_top_level_commands"),
     "snippet": ("setup", "_add_top_level_commands"),
     "state": ("state", "_add_state_commands"),
@@ -196,6 +197,9 @@ def _command_module(module: str):
         return loaded
     if module == "runtime":
         from . import runtime as loaded
+        return loaded
+    if module == "skill_eval":
+        from . import skill_eval as loaded
         return loaded
     if module == "setup":
         from . import setup as loaded

@@ -2,7 +2,7 @@
 
 Host-selected installs have one portable receipt; unselected installs write a
 receipt at each root, sharing `target_dirs`, each listing that root's bytes (the
-`.claude/skills` copy carries shortened descriptions). Updates reuse an
+`.claude/skills` copy bounds descriptions for Claude Code's listing). Updates reuse an
 installed user pack's receipt.
 A partial write cannot report fresh: status compares every destination's bytes.
 """
@@ -60,8 +60,11 @@ def agent_skill_files() -> dict[str, str]:
 
 # Claude Code lists every skill's name and description inside a budget and drops
 # descriptions past it (docs/AGENT-SKILLS.md#claude-code-skill-listing). The
-# Claude copy therefore carries shortened descriptions; the cap is measured there.
-CLAUDE_DESCRIPTION_CAP = 160
+# portable pack now lists only each skill's situation clause (and its picker
+# aliases), which already fits, so the Claude copy equals it today; the cut below
+# stays as the Claude copy's bound and matches the 220-character per-description
+# bound the portable budget test enforces (OpenClaw's compact listing cut).
+CLAUDE_DESCRIPTION_CAP = 220
 CLAUDE_TRIGGER_MARKER = " Use when the user says:"
 CLAUDE_CUT_MARK = "…"
 _CLAUSE_ENDS = (". ", ": ", "; ", ", ", " -- ")
@@ -90,8 +93,9 @@ def shorten_description(description: str, cap: int = CLAUDE_DESCRIPTION_CAP) -> 
     """The lead before the trigger list; over `cap`, cut at a clause or word boundary and marked with `…`."""
     lead = description.partition(CLAUDE_TRIGGER_MARKER)[0].strip()
     if len(lead) <= cap:
-        # Nothing is cut, so nothing is reworded: a lead that ends "you can act on." keeps its last word.
-        return lead.rstrip(" .,;:-") + "."
+        # Nothing is cut, so nothing is reworded: a lead that ends "you can act on." keeps its last word,
+        # and one the portable projection already marked as cut keeps its `…`.
+        return lead if lead.endswith(CLAUDE_CUT_MARK) else lead.rstrip(" .,;:-") + "."
     floor = int(cap * 0.6)
     cuts = [position for position in (lead.rfind(end, 0, cap) for end in _CLAUSE_ENDS) if position >= floor - 1]
     clause = max(cuts, default=-1)
@@ -103,12 +107,14 @@ def shorten_description(description: str, cap: int = CLAUDE_DESCRIPTION_CAP) -> 
 
 
 def claude_skill_files(files: dict[str, str] | None = None) -> dict[str, str]:
-    """The Claude Code copy of the portable pack: same files, shorter descriptions.
+    """The Claude Code copy of the portable pack: same files, descriptions bounded for its listing.
 
-    Only each SKILL.md's frontmatter `description:` value changes: the text
-    before the generated trigger list, cut to `CLAUDE_DESCRIPTION_CAP`. All
-    skills stay listed and model-invocable; references and toolkit files are
-    unchanged. A SKILL.md without a generated `description:` line is copied as is.
+    Only a SKILL.md's frontmatter `description:` value can change: the text
+    before a trigger list, cut to `CLAUDE_DESCRIPTION_CAP`. The portable
+    descriptions carry no trigger list and fit the cap, so today the copy is
+    byte-identical to the portable pack. All skills stay listed and
+    model-invocable; references and toolkit files are unchanged. A SKILL.md
+    without a generated `description:` line is copied as is.
     """
     source = agent_skill_files() if files is None else files
     result = dict(source)

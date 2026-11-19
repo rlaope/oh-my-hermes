@@ -1,6 +1,6 @@
 ---
 name: "ulw-plan"
-description: "[omh] High-stakes technical proposal needing approval: consensus planning with review gates."
+description: "[omh] High-stakes technical proposal needing approval."
 license: MIT
 metadata:
   hermes:

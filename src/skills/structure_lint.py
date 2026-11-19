@@ -26,6 +26,7 @@ STRUCTURE_LINT_RULE_IDS = (
     "SKILL_GENERATED_PARITY",
     "SKILL_HARNESS_RESOLVES",
     "SKILL_INDEX_OPENING_DISTINCT",
+    "SKILL_INDEX_SITUATION_VISIBLE",
     "SKILL_RECOVERY_SPECIFIC",
     "SKILL_RENDERED_IDENTITY_UNIQUE",
     "SKILL_TRIGGER_FORMAT",
@@ -243,12 +244,49 @@ def _definition_violations(
         ("SKILL_FRONTMATTER_FIELDS", _lint_frontmatter_fields(definition)),
         ("SKILL_GENERATED_PARITY", _lint_generated_parity(definition)),
         ("SKILL_HARNESS_RESOLVES", _lint_harness_resolves(definition, harness_names)),
+        ("SKILL_INDEX_SITUATION_VISIBLE", _lint_index_situation_visible(definition)),
         ("SKILL_RECOVERY_SPECIFIC", _lint_recovery_specific(definition)),
         ("SKILL_TRIGGER_FORMAT", _lint_trigger_format(definition)),
     ):
         if detail:
             found.append({"rule": rule, "skill": definition.name, "detail": detail})
     return found
+
+
+def _lint_index_situation_visible(definition: SkillDefinition) -> str:
+    """The situation clause must sit whole inside Hermes' visible index window.
+
+    Every OMH description opens `[omh] <situation>: <what it does>`, and the
+    situation is what a model reads to decide whether the skill applies. Hermes
+    shows only `skill_index.hermes_index_description` of it, so a clause cut
+    there is a skill the model cannot place. The clause is the text before the
+    first `: ` of the description lead (the trigger tail excluded), or the whole
+    lead when it has none. Only installable skills count, because a retired
+    definition contributes no index line.
+    """
+    from .catalog import installable_skill_names
+    from .catalog_types import OMH_DESCRIPTION_PREFIX, omh_description
+    from .render import frontmatter_description
+    from .skill_index import hermes_index_description
+
+    if definition.name not in installable_skill_names():
+        return ""
+    try:
+        description = frontmatter_description(definition)
+    except ValueError:
+        return ""  # SKILL_FRONTMATTER_FIELDS reports an unrenderable description.
+    lead = omh_description(definition.description)
+    prefix = OMH_DESCRIPTION_PREFIX if lead.lower().startswith(OMH_DESCRIPTION_PREFIX) else ""
+    clause = prefix + lead[len(prefix) :].partition(": ")[0]
+    visible = hermes_index_description(description)
+    if visible != description.strip().strip("'\""):
+        visible = visible.removesuffix("...")
+    if visible.startswith(clause):
+        return ""
+    return (
+        f"situation clause {clause!r} ({len(clause)} chars) is cut in the Hermes index, which shows "
+        f"{visible!r}; shorten the clause so it ends inside the window and move the detail after the colon"
+    )
 
 
 def _lint_recovery_specific(definition: SkillDefinition) -> str:

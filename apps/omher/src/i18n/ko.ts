@@ -1456,7 +1456,6 @@ export const ko: Record<Key, string> = {
   "thread.cmdList": "새 스레드 명령",
   "thread.cmdHint": "{name}와 새 스레드",
   "thread.cmdFiles": "파일로는 스레드를 시작할 수 없어요. ./thread를 먼저 보내고 스레드에서 첨부해 주세요.",
-  "thread.newRow": "새 스레드",
   "thread.newWith": "{name}와 새 스레드",
   // tasks (sidebar Tasks row and page)
   "tasks.title": "작업",

@@ -1,6 +1,6 @@
 ---
 name: "omh-run-efficiency"
-description: "[omh] Run efficiency and context usage report: report supplied local run efficiency while provider data stays unobserved."
+description: "[omh] Run efficiency and context usage report: report supplied…"
 license: MIT
 compatibility: "Requires the omh CLI on PATH (pip install oh-my-hermes)."
 metadata:

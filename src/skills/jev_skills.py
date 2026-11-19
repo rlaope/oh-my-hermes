@@ -117,7 +117,7 @@ def _definition(
 
 JEV_ASK_DEFINITION = _definition(
     "jev-ask",
-    "User named Jev for yes/no or pick-one probabilities: Jev ask: typed yes/no, pick-one, or scored questions to Jev with your own key; returns probabilities, never prose.",
+    "User asks Jev for yes/no or pick-one probabilities: Jev ask: typed yes/no, pick-one, or scored questions to Jev with your own key; returns probabilities, never prose.",
     ("jev-ask", "ask jev", "jev question", "jev score"),
     "Use when the user asks Jev a typed question about supplied text -- whether it does something, which of named options fits, or how it rates on an ordered scale -- or wants help writing such questions.",
     category="gateway",
