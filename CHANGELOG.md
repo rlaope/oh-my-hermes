@@ -301,8 +301,17 @@ All notable changes will be documented here.
   `omh skill-eval PATH` (offline, stdlib) reports per host whether Hermes, Claude Code, Codex, OpenClaw, OpenCode
   and Copilot CLI load a skill, load it degraded, or skip it, with each finding's source, and marks a row
   `unverified` when no recorded host fact covers the input (unparsed YAML, say); `--catalog` checks a whole
-  folder, category folders included, and `--strict` exits 1 on any degraded or unverified row. The `omh-skill-eval` skill runs it before a skill ships, and a
-  test now runs the same checker over the three shipped packs (#2995).
+  folder, category folders included, and `--strict` exits 1 on any degraded or unverified row. The
+  `omh-skill-eval` skill runs it before a skill ships, and a test now runs the same checker over the three shipped
+  packs (#2995).
+- **omher: a Slack briefing that sets itself up.** Add a bot whose Hermes profile has Slack connected and omher
+  creates one automation for it, `omher-brief`: the channel-watch collector in a new brief mode checks the Slack
+  channels you share with the bot every 15 minutes and wakes the model only when there is a reason (an unanswered
+  mention, a thread it already told you about moving on, your return after hours away, or enough new posts in your
+  active hours), at most six briefs a day; the bot then tells you one thing in its chat or stays silent. Its chat
+  says so once, with Turn off; removing the job in Automations means omher never creates it again. The briefing's
+  answers read "Brief" and the Automations row says "When something needs you". Slack only: Discord briefs and
+  GitHub events are not built yet.
 
 - **`show-reel` has a cut-sheet lane for films written as a shot contract.** A new opt-in reference, `cut-sheet.md`,
   covers cut-driven sequences of 30 s or less handed to a builder or a text-to-video generator, and remakes of a

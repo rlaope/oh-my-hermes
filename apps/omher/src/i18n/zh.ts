@@ -1347,6 +1347,11 @@ export const zh: Record<Key, string> = {
   "panel.restore": "还原",
   // watch notifications
   "watch.line": "监视",
+  "brief.line": "简报",
+  "brief.notice": "Slack 里有需要你处理的事时，{bot} 会在这里告诉你",
+  "brief.turnOff": "关闭",
+  "brief.off": "已关闭",
+  "brief.when": "有事需要你时",
   "note.watchMany": "{bot}：{n} 条监视提醒",
   "watch.notUseful": "没用",
   "watch.notUsefulTip": "告诉机器人这条提醒没有用",

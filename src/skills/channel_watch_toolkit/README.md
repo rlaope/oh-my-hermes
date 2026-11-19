@@ -46,6 +46,38 @@ See `examples/watch.json`.
 | `slack_workspace_url` | optional, e.g. `https://acme.slack.com`, for Slack permalinks |
 | `guild_id` | optional default `guild_id` for Discord channels |
 | `api_base` | tests only: overrides the API base and is refused unless the host is loopback (`127.0.0.1`, `::1`, `localhost`) |
+| `mode` | optional; `brief` (Slack only) makes it a briefing for one person, see below; any other value is a config error |
+
+### Brief mode (`"mode": "brief"`)
+
+omher installs one of these per bot that has Slack connected, as
+`scripts/channel_watch_omher-brief.py` with `channel_watch/omher-brief.json`.
+
+| key | meaning |
+|---|---|
+| `owner` | the Slack user id of the person the bot briefs |
+| `owner_name` | how the brief names them |
+| `max_per_day` | optional, default 6 briefs a day; at most that plus 2 runs a day wake the model |
+| `channels` | optional; left out, the bot's own channels (`users.conversations`) are used |
+
+It keeps only channels the owner is a member of (`conversations.members`,
+once a day, at most 40), the last 48 h of their posts (`posts.json`), the
+owner's post times for 14 days (`owner_hours.json`), author names
+(`users.info`, `users.json`) and a 3-day wake ledger (`ledger.json`). A thread
+is re-read (`conversations.replies`, at most 20 a run) only when its latest
+reply moved. The first run reads 6 h back. It wakes the model for one reason:
+`mention` (someone else called the owner 20+ min ago, within 6 h, and they
+have not answered in that thread), `followup` (a thread one of this job's
+briefs from the last 3 days linked got 2+ posts by people since, 3 h apart per
+thread), `back` (the owner posted within 30 min after 4+ h quiet, and 5+ posts
+came in meanwhile) or `discovery` (6 h since the last discovery/back, an
+active hour of the owner's, 5+ new posts, 2 h after the last brief); events
+are 30 min apart. The briefs already sent are this job's own Hermes run
+records (`cron/output/<job id>/*.md`, newest 40, each non-`[SILENT]` `##
+Response`). Output: a header line, `OWNER`, `REASON`, `TRIGGER - ...` and
+`RECENT_BRIEF - ...` lines, then `## #<channel>` groups of `- ` post lines
+(replies `- ↳ `) since the last brief, at most 12 h and 150 lines; otherwise
+`{"wakeAgent": false}`.
 
 Cursors: one file per channel, `<profile>/channel_watch/<watch>.state/cursor-<channel>.json`,
 plus `wakes.json` for the daily cap. The first run records "now" and reports
