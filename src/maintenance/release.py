@@ -456,7 +456,12 @@ SKILL_INDEX_LINE_CHAR_LIMIT = 100
 # sentence (+211) and the outcome enum's "escalated" (+13). Measured by
 # per_turn_context.plugin_tool_schema_chars_by_tool() against main 8f09d0147.
 # No headroom.
-PLUGIN_TOOL_SCHEMA_CHAR_LIMIT = 62968
+# 62968 -> 63636: omh_omher_terminal reads an omher terminal's status from its
+# link and asks omher to type a prompt the person allows (+668). Registered with
+# a check_fn on omher's own folder, so installs without omher never carry it.
+# Measured by per_turn_context.plugin_tool_schema_chars_by_tool() against
+# c16924f2a. No headroom.
+PLUGIN_TOOL_SCHEMA_CHAR_LIMIT = 63636
 # PRE_LLM_CALL_CONTEXT_CHAR_LIMIT, PRE_LLM_CALL_CONTEXT_FALLBACK_CHAR_LIMIT: moved with
 # their history to src/plugin_bundle/omh/turn_budget.py; imported at the top of this file.
 # 340000 -> 349637: three capability-skill sections were added by the domain
