@@ -198,12 +198,18 @@ listed and model-invocable; no flag and no extra skill is added.
 **Single-read cap.** OpenClaw 2026.9+ returns a `SKILL.md` read only up to
 16,000 weighted characters under a 100K-token context (each CJK character
 counts as 4 or more); past that the model gets a cut prefix. A portable body
-over 15,000 such characters therefore moves its `## Catalog Metadata` section
-(the quality bar) into `references/details.md` and keeps a heading with one
-line pointing at it. The moved text is byte-for-byte the section it replaced.
-Seven bodies are split (`omh-external-connector-readiness`, `omh-frontend`,
+over 15,000 such characters therefore moves whole sections into
+`references/details.md`, least needed first, until the rest fits: the required
+inputs and artifact expectations lists, then Examples, When to Use, Completion
+Checklist, Why This Exists, Do Not Use When, then First Steps (`ulw-work`) or,
+in a body without one, the expected outputs list (`ulw-loop`). Each moved
+section keeps its heading and a line pointing at the file; a moved When to Use
+keeps its prose and its first 4 routing signals. The quality bar, the safety
+rules, Recovery Notes and Runtime Evidence never move, so every mandatory rule
+a test pins is in the `SKILL.md` a host loads. The moved text is byte-for-byte the sections it replaced. Seven bodies
+are split (`omh-external-connector-readiness`, `omh-frontend`,
 `omh-llm-app-dev`, `omh-visual-qa`, `ulw-loop`, `ulw-research`, `ulw-work`);
-the largest portable `SKILL.md` now reads as 14,368. Hermes bodies are not
+the largest portable `SKILL.md` now reads as 14,945. Hermes bodies are not
 split.
 
 The host limits above come from SkillEvaluator 1.0.1's harness profiles,

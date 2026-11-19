@@ -3485,7 +3485,7 @@ def agent_skill_template(definition: SkillDefinition) -> SkillTemplate:
 def agent_skill_detail_templates(
     definitions: Iterable[SkillDefinition] | None = None,
 ) -> list[SkillReferenceTemplate]:
-    """The `references/details.md` each over-cap portable body moved its catalog metadata into.
+    """The `references/details.md` each over-cap portable body moved whole sections into.
 
     `definitions` defaults to every portable skill; a caller holding one skill
     passes that one definition and gets its slice.
@@ -3509,32 +3509,69 @@ def agent_skill_detail_templates(
 # characters counted as 4 or more (SkillEvaluator 1.0.1 openclaw profile,
 # verified 2026-11-01 against OpenClaw 2026.10.9). Past it the read is refused
 # or cut, and the model works from part of the instructions. A portable body
-# over `PORTABLE_READ_CAP` therefore moves its `## Catalog Metadata` section
-# (the quality bar, the longest part) into `references/details.md` and keeps
-# a pointer in its place. The Hermes `skills/` bodies are not split: Hermes'
-# skill_view budget is 100,000 characters.
+# over `PORTABLE_READ_CAP` therefore moves whole sections into
+# `references/details.md`, in `PORTABLE_MOVABLE_UNITS` order, until the rest
+# fits. The quality bar and the safety rules are never moved: they hold the
+# rules a host must apply, so they stay in the SKILL.md it loads. A moved
+# section keeps its heading and one line pointing at the file. The Hermes
+# `skills/` bodies are not split: Hermes' skill_view budget is 100,000
+# characters.
 PORTABLE_READ_CAP = 15_000
 PORTABLE_DETAILS_PATH = "references/details.md"
-PORTABLE_SPLIT_SECTION = "## Catalog Metadata\n"
-PORTABLE_DETAILS_POINTER = (
-    "## Catalog Metadata\n\n"
-    f"Read `{PORTABLE_DETAILS_PATH}` before you act: it holds this skill's quality bar and catalog "
-    "metadata, kept out of this file so the whole of it fits in one read on every host.\n"
+# Least needed at load time first. A `Label:` unit is one list of the
+# `## Catalog Metadata` block and runs to the label after it; a `##` unit is
+# the whole section. `## Runtime Evidence` never moves: it holds the reply
+# and evidence rules every portable body states. The last three hold named
+# outputs, steps and recovery rules that pinned rules point at (`ulw-research`
+# names references/search-method.md in First Steps, research_claims/v1 and
+# reference_study/v1 in its expected outputs, and its blocked-source recovery
+# rule in Recovery Notes); only `ulw-work` (First Steps; its quality bar
+# alone weighs 9,101) and `ulw-loop` (no First Steps, so Expected outputs)
+# reach them.
+PORTABLE_MOVABLE_UNITS = (
+    "Required inputs:",
+    "Artifact expectations:",
+    "## Examples",
+    "## When to Use",
+    "## Completion Checklist",
+    "## Why This Exists",
+    "## Do Not Use When",
+    "## First Steps",
+    "Expected outputs:",
+    "## Recovery Notes",
 )
+_CATALOG_UNIT_END = {
+    "Required inputs:": "Expected outputs:",
+    "Expected outputs:": "Artifact expectations:",
+    "Artifact expectations:": "Safety rules:",
+}
+_DETAILS_UNIT_START = re.compile(r"(?<=\n)\n(?=## |(?:Required inputs|Expected outputs|Artifact expectations):\n)")
 _TOOLKIT_CALL = re.compile(r"skill_view\(name='[^']+', file_path='toolkit/[^']+'\)")
+_ROUTING_SIGNALS = "    Strong routing signals: "
+# A moved `## When to Use` keeps its prose and this many of its routing signals.
+PORTABLE_KEPT_ROUTING_SIGNALS = 4
 
 
-def details_pointer(details: str) -> str:
-    """What stands in SKILL.md for the moved `details`: the pointer, plus any toolkit call it held.
+def details_pointer(unit: str) -> str:
+    """What stands in SKILL.md for one moved `unit`: its heading, the pointer, and any toolkit call it held.
 
-    Hermes and the hosts that copy its layout find a `toolkit/` file only when
-    SKILL.md names it, so a `skill_view(..., file_path='toolkit/...')` call
-    inside the moved section is repeated beside the pointer.
+    A moved `## When to Use` keeps its prose and its first routing signals, so
+    the body still says when it applies. Hermes and the hosts that copy its
+    layout find a `toolkit/` file only when SKILL.md names it, so a
+    `skill_view(..., file_path='toolkit/...')` call inside the moved text is
+    repeated beside the pointer.
     """
-    calls = list(dict.fromkeys(_TOOLKIT_CALL.findall(details)))
-    if not calls:
-        return PORTABLE_DETAILS_POINTER
-    return PORTABLE_DETAILS_POINTER + "".join(f"\nToolkit setup: `{call}`.\n" for call in calls)
+    first = unit.split("\n", 1)[0]
+    pointer = f"{first}\n\nRead `{PORTABLE_DETAILS_PATH}` first.\n"
+    signals = unit.find("\n" + _ROUTING_SIGNALS) + 1
+    if first == "## When to Use" and signals:
+        kept = re.findall(r"`[^`]+`", unit[signals:])[:PORTABLE_KEPT_ROUTING_SIGNALS]
+        pointer = (
+            f"{unit[:signals]}{_ROUTING_SIGNALS}{', '.join(kept)}; "
+            f"all of them in `{PORTABLE_DETAILS_PATH}`.\n"
+        )
+    calls = list(dict.fromkeys(_TOOLKIT_CALL.findall(unit)))
+    return pointer + "".join(f"\nToolkit setup: `{call}`.\n" for call in calls)
 
 
 _CJK_RANGES = (
@@ -3549,26 +3586,53 @@ def openclaw_read_chars(text: str) -> int:
     return units + sum(3 for ch in text if any(low <= ord(ch) <= high for low, high in _CJK_RANGES))
 
 
-def split_for_read_cap(content: str) -> tuple[str, str | None]:
-    """`(SKILL.md, details)`: unchanged with `None` when it fits, else the catalog metadata moved out.
+def _movable_span(content: str, label: str) -> tuple[int, int] | None:
+    """Where `label`'s unit sits in `content`: from its first line to its last text line, newline included."""
+    start = content.find("\n" + label + "\n") + 1
+    if start == 0 or content.find("\n" + label + "\n", start) >= 0:
+        return None
+    if label.startswith("## "):
+        following = content.find("\n## ", start + len(label))
+        stop = len(content) if following < 0 else following + 1
+    else:
+        stop = content.find("\n" + _CATALOG_UNIT_END[label] + "\n", start)
+        if stop < 0:
+            return None
+        stop += 1
+    # The unit ends at its last text line; the blank line after it stays in SKILL.md.
+    return start, start + len(content[start:stop].rstrip("\n")) + 1
 
-    The moved section is kept byte for byte: replacing `details_pointer(details)`
-    in the returned SKILL.md with the returned details gives back `content`.
+
+def details_units(details: str) -> list[str]:
+    """The moved units `details` holds, in document order; each ends with its last text line."""
+    return _DETAILS_UNIT_START.split(details)
+
+
+def split_for_read_cap(content: str) -> tuple[str, str | None]:
+    """`(SKILL.md, details)`: unchanged with `None` when it fits, else whole sections moved out.
+
+    Every moved unit is kept byte for byte: replacing `details_pointer(unit)`
+    in the returned SKILL.md with each unit of `details_units(details)` gives
+    back `content`.
     """
     if openclaw_read_chars(content) <= PORTABLE_READ_CAP:
         return content, None
-    start = content.find("\n" + PORTABLE_SPLIT_SECTION) + 1
-    if start == 0 or PORTABLE_DETAILS_POINTER in content:
-        raise ValueError("portable SKILL.md over the read cap has no single catalog metadata section to move")
-    following = content.find("\n## ", start + len(PORTABLE_SPLIT_SECTION))
-    # The section ends at its last text line; the blank line before the next
-    # heading stays in SKILL.md, so details.md ends without a blank line.
-    end = start + len(content[start: len(content) if following < 0 else following + 1].rstrip("\n")) + 1
-    details = content[start:end]
-    head = content[:start] + details_pointer(details) + content[end:]
-    if openclaw_read_chars(head) > PORTABLE_READ_CAP:
-        raise ValueError("portable SKILL.md is over the read cap even without its catalog metadata")
-    return head, details
+    moved: list[tuple[int, int]] = []
+    head = content
+    for label in PORTABLE_MOVABLE_UNITS:
+        span = _movable_span(content, label)
+        if span is None:
+            continue
+        moved.append(span)
+        moved.sort()
+        head, cursor = "", 0
+        for start, end in moved:
+            head += content[cursor:start] + details_pointer(content[start:end])
+            cursor = end
+        head += content[cursor:]
+        if openclaw_read_chars(head) <= PORTABLE_READ_CAP:
+            return head, "\n".join(content[start:end] for start, end in moved)
+    raise ValueError("portable SKILL.md is over the read cap even with every movable section moved out")
 
 
 def agent_skill_reference_templates() -> list[SkillReferenceTemplate]:

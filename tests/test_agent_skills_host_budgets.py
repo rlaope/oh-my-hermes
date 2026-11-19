@@ -113,8 +113,7 @@ class ReadCapTests(unittest.TestCase):
         from omh.install.agent_skills_projection import agent_skill_files
         from omh.skills.catalog import builtin_definitions, omh_skill_display_name
         from omh.skills.render import (
-            PORTABLE_DETAILS_PATH, PORTABLE_DETAILS_POINTER, SkillTemplate, details_pointer,
-            workflow_skill_from_definition,
+            PORTABLE_DETAILS_PATH, SkillTemplate, details_pointer, details_units, workflow_skill_from_definition,
         )
 
         files = agent_skill_files()
@@ -131,8 +130,15 @@ class ReadCapTests(unittest.TestCase):
                     self.assertEqual(files[f"{name}/SKILL.md"], full)
                     continue
                 split.append(name)
-                self.assertEqual(files[f"{name}/SKILL.md"].count(PORTABLE_DETAILS_POINTER), 1)
-                self.assertEqual(files[f"{name}/SKILL.md"].replace(details_pointer(details), details), full)
+                body = files[f"{name}/SKILL.md"]
+                for unit in details_units(details):
+                    self.assertEqual(body.count(details_pointer(unit)), 1, unit.split("\n", 1)[0])
+                    body = body.replace(details_pointer(unit), unit)
+                self.assertEqual(body, full)
+                # The rules a host must apply stay in the SKILL.md it loads.
+                for kept in ("Quality bar:\n", "Safety rules:\n", "## Runtime Evidence\n"):
+                    self.assertIn(kept, files[f"{name}/SKILL.md"])
+                    self.assertNotIn(kept, details)
         # The seven bodies over the cap when the split landed; a new one must be split, not dropped.
         self.assertTrue({
             "omh-external-connector-readiness", "omh-frontend", "omh-llm-app-dev", "omh-visual-qa",
@@ -140,19 +146,32 @@ class ReadCapTests(unittest.TestCase):
         } <= set(split), split)
 
     def test_split_rules(self):
-        from omh.skills.render import PORTABLE_DETAILS_POINTER, PORTABLE_READ_CAP, split_for_read_cap
+        from omh.skills.render import PORTABLE_READ_CAP, details_pointer, split_for_read_cap
 
         small = "---\nname: x\n---\n\n# X\n\n## Catalog Metadata\n\nbar\n"
         self.assertEqual(split_for_read_cap(small), (small, None))
-        meta = "## Catalog Metadata\n\n" + "- rule\n" * (PORTABLE_READ_CAP // 7)
-        big = "# X\n\n## When to Use\n\nnow\n\n" + meta + "\n## Runtime Evidence\n\ntail\n"
+        third = "- rule\n" * (PORTABLE_READ_CAP // 12)
+        examples = "## Examples\n\n" + third
+        inputs = "Required inputs:\n\n" + third
+        big = (
+            "# X\n\n" + examples + "\n## Catalog Metadata\n\nQuality bar:\n\n" + third + "\n" + inputs
+            + "\nExpected outputs:\n\n- out\n\nArtifact expectations:\n\n- art\n\nSafety rules:\n\n- safe\n"
+            + "\n## Runtime Evidence\n\ntail\n"
+        )
         head, details = split_for_read_cap(big)
-        self.assertEqual(details, meta)
-        self.assertIn(PORTABLE_DETAILS_POINTER, head)
+        # Required inputs and artifact expectations are not enough; examples, the third unit, are.
+        artifacts = "Artifact expectations:\n\n- art\n"
+        self.assertEqual(details, examples + "\n" + inputs + "\n" + artifacts)
+        self.assertIn("Quality bar:\n\n" + third, head)
+        self.assertIn("Safety rules:\n\n- safe\n", head)
+        self.assertIn("Expected outputs:\n\n- out\n", head)
         self.assertTrue(head.endswith("## Runtime Evidence\n\ntail\n"))
-        self.assertEqual(head.replace(PORTABLE_DETAILS_POINTER, details), big)
+        for unit in (examples, inputs, artifacts):
+            head = head.replace(details_pointer(unit), unit)
+        self.assertEqual(head, big)
+        # A quality bar over the cap on its own is never moved.
         with self.assertRaises(ValueError):
-            split_for_read_cap("# X\n" + "word " * PORTABLE_READ_CAP)
+            split_for_read_cap("# X\n\n## Catalog Metadata\n\nQuality bar:\n\n" + "- rule\n" * PORTABLE_READ_CAP)
         call = "skill_view(name='x', file_path='toolkit/README.md')"
         head, details = split_for_read_cap(big.replace("- rule\n", f"- setup in `{call}`\n", 1))
         self.assertIn(call, details)
