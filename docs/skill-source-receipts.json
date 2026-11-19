@@ -892,6 +892,17 @@
       "reviewed_on": "2026-11-07",
       "rationale": "Adopted pay and pay-cli as confirming 402 clients beside the typed yes and the hermes-mpp stop; vault commits in range leave card-fill rules unchanged; mpp-agent kept for older Hermes.",
       "supersedes": null
+    },
+    {
+      "receipt_id": "ssc-2026-11-19-skill-eval-nvidia-skillevaluator",
+      "candidate_key": "skill-eval@github.com/nvidia/skillevaluator",
+      "prior_checkpoint": null,
+      "next_checkpoint": "914c15cb3f31562ccffdc9a7166002a87ed2ce1e",
+      "disposition": "adopted",
+      "decision_ref": "#99999",
+      "reviewed_on": "2026-11-19",
+      "rationale": "Adopted per-host loader facts as cited data in harness_fit_hosts; upstream code and wording not used; code-span placeholders and toolkit paths SKILL.md names are not flagged.",
+      "supersedes": null
     }
   ]
 }
