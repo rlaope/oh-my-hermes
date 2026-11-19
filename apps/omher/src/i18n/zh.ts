@@ -523,7 +523,7 @@ export const zh: Record<Key, string> = {
   "term.optionMeta": "Option 作为 Meta",
   "term.optionMetaHint": "Option 会作为 Meta 发送给程序，可用 Option+B 和 Option+F 按单词移动。关闭后则输入该键对应的字符。",
   "term.gpu": "GPU renderer",
-  "term.gpuHint": "“自动”目前使用标准方式绘制：尚未测得 GPU 方式更快。“开”会尝试 GPU，不可用时自行回退到标准方式。",
+  "term.gpuHint": "“自动”在硬件支持时用 GPU 绘制，CLI 图案和边框不会出现缝隙，不可用时自行回退到标准方式。“关”始终使用标准方式。",
   "term.usingGpu": "当前使用：GPU",
   "term.usingStandard": "当前使用：标准",
   "term.dec": "减小{what}",

@@ -1,0 +1,10 @@
+--- a/app/tags.py
++++ b/app/tags.py
+@@ -1,4 +1,3 @@
+-def with_tag(tag: str, tags: list[str] | None = None) -> list[str]:
+-    result = list(tags or [])
+-    result.append(tag)
+-    return result
++def with_tag(tag: str, tags: list[str] = []) -> list[str]:
++    tags.append(tag)
++    return tags

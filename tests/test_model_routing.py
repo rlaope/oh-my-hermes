@@ -221,6 +221,18 @@ class FamilyPrefixParityTests(unittest.TestCase):
         for model in ("qwen3", "qwen3x-max", "qwen/abab-style"):
             self.assertEqual(model_family(model), "unknown")
 
+    def test_qwen4_generation_is_a_bounded_family_alias(self) -> None:
+        # Qwen4-Max (2026-11-16) as the vendor serves it, as OpenRouter spells
+        # it, and the Token Plan preview id: each reaches the qwen family
+        # instead of `unknown`. The prefix is bounded like Qwen3's, so a bare
+        # generation token or a near-miss concatenation stays unknown.
+        for model in ("qwen4-max", "qwen/qwen4-max", "qwen4-max-preview", "QWEN4-MAX", "qwen4-max-2026-11-16"):
+            with self.subTest(model=model):
+                self.assertEqual(model_family(model), "qwen")
+        for model in ("qwen4", "qwen4x-max", "qwen/qwen4"):
+            with self.subTest(model=model):
+                self.assertEqual(model_family(model), "unknown")
+
     def test_vendor_prefixed_model_ids_alias_to_design_families(self) -> None:
         self.assertEqual(model_family("digitalocean/openai-gpt-5.6-sol"), "gpt")
         self.assertEqual(model_family("digitalocean/anthropic-claude-opus-5"), "claude")

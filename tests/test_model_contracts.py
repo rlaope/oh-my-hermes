@@ -2499,5 +2499,153 @@ class FableTwoContractTests(unittest.TestCase):
         self.assertIn("reasoning efforts: low, medium, high, xhigh, max (floor `low`)", stdout)
 
 
+_QWEN4_MAX_FORMS = ("qwen4-max", "qwen/qwen4-max", "openrouter/qwen/qwen4-max", "QWEN4-MAX")
+
+
+class Qwen4MaxContractTests(unittest.TestCase):
+    """Qwen4-Max (GA 2026-11-16): the first exact Qwen contract, on DeepSeek
+    V4.1 Flash's effort shape -- three documented rungs and a published
+    mapping for every other one, so nothing is raised -- with no shipped chain
+    slot, because Qwen3.8-Max held none."""
+
+    def test_every_served_form_resolves_the_exact_contract(self) -> None:
+        base = model_contract("qwen4-max")
+        assert base is not None
+        for form in (*_QWEN4_MAX_FORMS, "qwen4-max-2026-11-16"):
+            with self.subTest(form=form):
+                self.assertEqual(model_family(form), "qwen")
+                self.assertEqual(contract_model_id(form), "qwen4-max")
+                self.assertIs(model_contract(form), base)
+        # The Token Plan preview has its own ladder (`low`/`medium`/`xhigh`,
+        # default `xhigh`) and no per-token price: recognized, never projected
+        # onto the GA contract. Qwen3.8 stays uncontracted.
+        for model_id in ("qwen4-max-preview", "qwen/qwen4-max-preview", "qwen3.8-max", "qwen4-plus", "qwen4"):
+            with self.subTest(model_id=model_id):
+                self.assertIsNone(model_contract_projection(model_id))
+        self.assertEqual(model_family("qwen4-max-preview"), "qwen")
+
+    def test_contract_records_the_ladder_mapping_and_limits(self) -> None:
+        contract = model_contract("qwen4-max")
+        assert contract is not None
+        self.assertEqual(contract["reasoning_efforts"], ("low", "high", "xhigh"))
+        self.assertEqual((contract["effort_floor"], contract["effort_default"]), ("low", "high"))
+        self.assertEqual(contract["unsupported_efforts"], {})
+        mapping = contract["effort_mapping"]
+        self.assertEqual(
+            {rung: mapping[rung] for rung in ("minimal", "medium", "max")},
+            {"minimal": "low", "medium": "high", "max": "xhigh"},
+        )
+        self.assertIn("`none`", mapping["note"])
+        self.assertIn("4097-131072 to `high`", mapping["note"])
+        self.assertEqual((contract["generation"], contract["released"]), ("qwen4", "2026-11-16"))
+        self.assertEqual(
+            (contract["context_window_tokens"], contract["max_input_tokens"], contract["max_output_tokens"]),
+            (1_000_000, 983_616, 131_072),
+        )
+        self.assertIn("262,144", contract["limits_note"])
+        self.assertIn("991,808", contract["limits_note"])
+        self.assertEqual(contract["served_ids"], {"first_party": "qwen4-max", "openrouter": "qwen/qwen4-max"})
+        self.assertIn("reasoning_content", contract["tool_calling"]["note"])
+        self.assertIn("never concatenated into `content`", contract["tool_calling"]["note"])
+        self.assertIn("runs at its default `high`", contract["surface_notes"]["hermes"])
+        self.assertEqual(contract["sources_read"], "2026-11-19")
+        for source in (
+            "https://docs.qwencloud.com/developer-guides/getting-started/latest-model",
+            "https://docs.qwencloud.com/developer-guides/text-generation/thinking",
+        ):
+            self.assertIn(source, contract["sources"])
+        self.assertEqual(contract["claim_boundary"], MODEL_CONTRACT_CLAIM_BOUNDARY)
+        self.assertNotIn("dynamic_effort", contract)
+
+    def test_price_row_mirrors_the_singapore_list_and_its_own_cache_rate(self) -> None:
+        from omh.plugin_bundle.omh.hermes_delegation import APPROX_CACHE_READ_RATIO, _approximate_cost_usd
+
+        contract = model_contract("qwen4-max")
+        assert contract is not None
+        pricing = contract["pricing_usd_per_mtok"]
+        self.assertEqual(
+            (pricing["input"], pricing["cached_input"], pricing["cache_write_5m"], pricing["cache_write_1h"],
+             pricing["output"]),
+            (1.50, 0.075, 1.875, 3.00, 4.50),
+        )
+        self.assertIn("1.413", pricing["regional"])
+        self.assertEqual(APPROX_PRICE_PER_MTOK["qwen4-max"], (pricing["input"], pricing["output"]))
+        self.assertAlmostEqual(pricing["input"] * APPROX_CACHE_READ_RATIO["qwen4-max"], pricing["cached_input"])
+        for model in ("qwen4-max", "qwen/qwen4-max", "qwen4-max-2026-11-16"):
+            with self.subTest(model=model):
+                self.assertAlmostEqual(_approximate_cost_usd(model, 1e6, 1e6, 1e6), 1.50 + 4.50 + 0.075)
+        # The Token Plan preview publishes no per-token price: no row, no estimate.
+        self.assertNotIn("qwen4-max-preview", APPROX_PRICE_PER_MTOK)
+        self.assertIsNone(_approximate_cost_usd("qwen4-max-preview", 1e6, 1e6, 0))
+        # The predecessor keeps its own list rate.
+        self.assertEqual(APPROX_PRICE_PER_MTOK["qwen3.8-max"], (2.0, 6.0))
+
+    def test_every_rung_passes_through_on_record(self) -> None:
+        # The vendor maps every undocumented rung and returns no error, so OMH
+        # raises nothing: the route keeps the requested rung and the contract's
+        # table says what it bought.
+        for effort in ("none", "off", "minimal", "low", "medium", "high", "xhigh", "max"):
+            self.assertIsNone(contract_effort_floor("qwen4-max", effort), effort)
+        for model in _QWEN4_MAX_FORMS:
+            for effort in ("minimal", "medium", "max"):
+                with self.subTest(model=model, effort=effort):
+                    route = resolve_model_route("hermes", requested_model=model, requested_effort=effort)
+                    self.assertEqual(route["model_family"], "qwen")
+                    self.assertEqual(route["selected_reasoning_effort"], effort)
+                    self.assertNotEqual(route["effort_change"]["kind"], EFFORT_FLOOR_KIND)
+
+    def test_calibration_is_version_aware_and_never_pushes(self) -> None:
+        # The `qwen` family block describes the non-thinking Qwen3-Coder and
+        # stays byte-stable for it; Qwen4-Max is hybrid with thinking on by
+        # default, so its exact override resolves first and does not forbid
+        # thinking.
+        family = HIGH_EFFORT_CALIBRATIONS["qwen"]
+        subagent = MODEL_HIGH_EFFORT_CALIBRATIONS["qwen4-max"]
+        composer = MODEL_COMPOSITION_CALIBRATIONS["qwen4-max"]
+        self.assertIn("current Qwen3-Coder is a non-thinking coding-agent model", family)
+        for model in ("qwen4-max", "qwen/qwen4-max", "qwen4-max-2026-11-16"):
+            route = {"selected_model": model, "model_family": "qwen", "selected_reasoning_effort": "high"}
+            with self.subTest(model=model):
+                self.assertEqual(calibration_for_route(route), subagent)
+                self.assertEqual(calibration_for_route(route, family_only=True), family)
+                self.assertEqual(composition_calibration_for_model(model), composer)
+                self.assertEqual(calibration_for_route({**route, "selected_reasoning_effort": "low"}), "")
+        for model in ("qwen3-coder", "qwen3.8-max", "qwen4-max-preview"):
+            route = {"selected_model": model, "model_family": "qwen", "selected_reasoning_effort": "high"}
+            with self.subTest(model=model):
+                self.assertEqual(calibration_for_route(route), family)
+                self.assertEqual(composition_calibration_for_model(model), MAIN_AGENT_COMPOSITION_CALIBRATIONS["qwen"])
+        self.assertIn("hybrid thinking on by default", subagent)
+        self.assertIn("routed effort rung", subagent)
+        self.assertIn("never in the visible text", subagent)
+        self.assertIn("stop after one passing verification run", subagent)
+        self.assertIn("low, high, or xhigh", composer)
+        self.assertIn("no synthetic thinking instructions", composer)
+        for text in (subagent, composer):
+            lowered = text.casefold()
+            self.assertNotIn("non-thinking", lowered)
+            self.assertNotIn("do not ask it to emit reasoning", lowered)
+            for word in _MONITORING_WORDS:
+                self.assertNotIn(word, lowered, word)
+            for push in ("to completion", "keep going", "keep working", "instead of pausing", "finish the whole"):
+                self.assertNotIn(push, lowered, push)
+
+    def test_no_shipped_chain_names_it(self) -> None:
+        from omh.coding.model_recommendations import SHIPPED_MODEL_RECOMMENDATIONS
+
+        for section in ("categories", "role_suggestions", "domain_affinities", "last_resort"):
+            for slot, chain in SHIPPED_MODEL_RECOMMENDATIONS[section].items():
+                with self.subTest(section=section, slot=slot):
+                    aliases = [candidate["model_alias"] for candidate in chain]
+                    self.assertNotIn("qwen4-max", aliases)
+                    self.assertNotIn("qwen4-max-preview", aliases)
+
+    def test_the_cli_prints_the_ladder(self) -> None:
+        status, stdout, _stderr = run_cli(["coding", "model-contract", "--model", "qwen4-max"], output_json=False)
+        self.assertEqual(status, 0)
+        self.assertIn("Documented contract for `qwen4-max` (qwen family)", stdout)
+        self.assertIn("reasoning efforts: low, high, xhigh (floor `low`)", stdout)
+
+
 if __name__ == "__main__":
     unittest.main()
