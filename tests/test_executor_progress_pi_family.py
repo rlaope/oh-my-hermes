@@ -25,12 +25,12 @@ from omh.executor_progress import (
     write_progress_binding,
 )
 from omh.paths import resolve_paths
-from omh.coding.pi_family_interop import PI_DISTRIBUTION_HOST
+from omh.coding.pi_family_interop import PI_DISTRIBUTION_HOST, PI_FORK_HOST
 
 
 class OmoRuntimeProgressProfileTests(unittest.TestCase):
     def test_every_pi_family_host_alias_normalizes_to_one_observable_lane(self) -> None:
-        for value in ("pi-family-runtime", "pi_family_runtime", "pi", PI_DISTRIBUTION_HOST, "opencode", f"  {PI_DISTRIBUTION_HOST.capitalize()}  ", "OPENCODE"):
+        for value in ("pi-family-runtime", "pi_family_runtime", "pi", PI_DISTRIBUTION_HOST, PI_FORK_HOST, "opencode", f"  {PI_DISTRIBUTION_HOST.capitalize()}  ", "OPENCODE"):
             with self.subTest(value=value):
                 self.assertEqual(normalize_executor_profile(value), "pi_family_runtime")
 

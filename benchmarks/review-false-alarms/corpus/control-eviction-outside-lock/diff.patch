@@ -1,0 +1,15 @@
+--- a/app/cache.py
++++ b/app/cache.py
+@@ -12,6 +12,9 @@
+         with self._lock:
+             if key in self._entries:
+                 return self._entries[key]
+-            value = self._loader(key)
+-            self._entries[key] = value
+-            return value
++        value = self._loader(key)
++        self._entries[key] = value
++        if len(self._entries) > self._max:
++            oldest = next(iter(self._entries))
++            del self._entries[oldest]
++        return value

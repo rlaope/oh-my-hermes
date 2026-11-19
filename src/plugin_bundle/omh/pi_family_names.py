@@ -18,6 +18,11 @@ PI_DISTRIBUTION_HOME: Final[str] = "." + PI_DISTRIBUTION_HOST
 PI_DISTRIBUTION_AGENT_DIR_ENV: Final[str] = PI_DISTRIBUTION_HOST.upper() + "_CODING_AGENT_DIR"
 PI_DISTRIBUTION_BRAND_ENV: Final[str] = PI_DISTRIBUTION_HOST.upper() + "_BRAND"
 
+# The pi fork host: its own binary with pi's print-mode surface, its own state
+# home, and pi's own agent-dir variable (`PI_CODING_AGENT_DIR`).
+PI_FORK_HOST: Final[str] = "o" + "mp"
+PI_FORK_HOME: Final[str] = "." + PI_FORK_HOST
+
 # The runtime itself: its short name, its state home, and its config files.
 RUNTIME_SHORT_NAME: Final[str] = "o" + "mo"
 RUNTIME_FULL_NAME: Final[str] = "oh-my-" + "open" + "agent"

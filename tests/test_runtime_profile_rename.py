@@ -38,6 +38,7 @@ from omh.coding.owner_progress_normalization import _normalized_owner
 from omh.coding.pi_family_interop import (
     LEGACY_RUNTIME_PROFILE_ID,
     LEGACY_RUNTIME_PROGRESS_LANE,
+    PI_FORK_HOST,
     RUNTIME_USER_PHRASE,
     canonical_runtime_record,
 )
@@ -189,7 +190,7 @@ class ExternalSpellingDetectionTests(unittest.TestCase):
     """One case per family of external spelling: detection behaves as before."""
 
     def test_the_distribution_host_binary_is_detected_and_spawned_by_its_own_name(self) -> None:
-        self.assertEqual(PI_FAMILY_HOST_CANDIDATES, ("pi", _HOST, "opencode"))
+        self.assertEqual(PI_FAMILY_HOST_CANDIDATES, ("pi", _HOST, PI_FORK_HOST, "opencode"))
         self.assertEqual(pi_family_host(lambda name: f"/x/{name}" if name == _HOST else None), _HOST)
         with mock.patch("omh.coding.fanout_dispatch.shutil.which", lambda name: f"/x/{name}" if name == _HOST else None):
             self.assertEqual(build_dispatch_argv(_PROFILE, "do the work")[0], _HOST)

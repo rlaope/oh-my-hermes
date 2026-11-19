@@ -1,0 +1,11 @@
+{
+  "id": "control-sql-injection-search",
+  "kind": "control",
+  "language": "python",
+  "expected": "bug",
+  "bug_location": {
+    "path": "app/search.py",
+    "line": 8
+  },
+  "why": "customer_name comes straight from the query string (see app/routes.py) and is formatted into the SQL text with an f-string, so a name like x' OR '1'='1 reads every order."
+}

@@ -527,7 +527,9 @@ class AiJobSearchContextBudgetTests(unittest.TestCase):
         # code-review, production-audit and verification-gate then end with a `Not checked` list, and code-review's
         # opening names the Hermes Bug Hunter discipline; only those three move, and the pin before it was
         # 4eaeeb79...958f.
-        self.assertEqual(_digest(legacy_hashes), 'bd2eeb27578b42bd8442121e61765adb48d571db15b653c5de4972e57886409b')
+        # show-reel then gains the cut-sheet lane pointer; only show-reel moves, and the pin before it was
+        # bd2eeb27...409b.
+        self.assertEqual(_digest(legacy_hashes), 'fbe730f467790a0ca73de0ce0d6f9fc1d35202bce366e506b2da348a7d2588bf')
         legacy = _skill_context_cost_profile('full', legacy_templates, refs)
         current = _skill_context_cost_profile('full', templates, refs)
         # Main's search guidance adds 305; repro-audit's mandatory rails 1,943.

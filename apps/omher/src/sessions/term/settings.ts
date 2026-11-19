@@ -35,8 +35,9 @@ export interface TermSettings {
   padding: number;
   /** macOS: Option sends Meta (Alt) to the program instead of typing a character. */
   optionIsMeta: boolean;
-  /** The GPU renderer: `on` tries it and falls back by itself, `off` never does. `auto` uses it only where it has
-   *  been measured faster, which so far is nowhere (engine-policy.ts), so today it is the standard renderer. */
+  /** The GPU renderer: `on` tries it and falls back by itself, `off` never does. `auto` uses it wherever the
+   *  hardware allows it (WebGL2, not a software rasterizer: engine-policy.ts), so a CLI's block art and frames draw
+   *  without seams. */
   gpu: TermGpu;
   /** Releasing the mouse on a selection copies it. Off: nothing is copied until the person copies. */
   copyOnSelect: boolean;
