@@ -55,11 +55,12 @@ Each node records where it came from (``origin``): ``define``,
 
 A re-run can carry work forward, only when the parent asks
 (``carry_forward``, the base revision the run builds on): a node accepted in
-an earlier run of the same goal and base, with the same id, prompt, write
+an earlier run of the same goal, base and workspace root, with the same id, prompt, write
 scope, depends_on and role, its handoff checked and still on this host, is
 recorded ``carried`` and never handed out; its dependents read the earlier
-handoff (`carry_forward`). A verify node is never carried, so it runs over
-the carried work, and a carried node whose parent runs again runs again too.
+handoff (`carry_forward`). The graph must hold a verify node, which is never
+carried, so it runs over the carried work; a carried node whose parent runs
+again runs again too.
 """
 
 from __future__ import annotations
@@ -2310,8 +2311,9 @@ def carry_forward(record: dict[str, Any], base: str, earlier: Sequence[Mapping[s
     """Record as ``carried`` the nodes an earlier run of the same goal and ``base`` already accepted. Returns what
     was carried, from which run, and why each other node was not.
 
-    Only an earlier run with the same goal (spaces and case aside) whose own
-    define passed the same ``base`` counts, and neither run may write its
+    Only an earlier run with the same goal (spaces and case aside) and the same
+    resolved workspace root (``workspace_root``; none known carries nothing),
+    whose own define passed the same ``base``, counts, and neither run may write its
     handoffs in a Docker or SSH terminal (``remote``; an earlier ``backend``).
     Of those, the run carrying the most nodes, then the newest, is used. A node
     is carried only when the earlier one has its id, prompt, write scope,
@@ -2322,17 +2324,19 @@ def carry_forward(record: dict[str, Any], base: str, earlier: Sequence[Mapping[s
     """
     record["carry_base"] = base
     goal = str(record.get("goal") or "").casefold()
-    runs = [] if remote or not goal else [
+    workspace = record.get("workspace_root")
+    runs = [] if remote or not goal or not workspace else [
         prior for prior in earlier
         if prior.get("carry_base") == base and str(prior.get("goal") or "").casefold() == goal
-        and not prior.get("backend") and not prior.get("handoff_root")]
+        and prior.get("workspace_root") == workspace and not prior.get("backend") and not prior.get("handoff_root")]
     best: tuple[Mapping[str, Any], dict[str, str], dict[str, str]] | None = None
     for prior in runs:
         carried, refused = _carry_from(record, prior, handoff_of, now)
         if best is None or len(carried) > len(best[1]):
             best = (prior, carried, refused)
     if best is None:
-        why = "remote_terminal" if remote else "no_goal" if not goal else "no_prior_run"
+        why = ("remote_terminal" if remote else "no_goal" if not goal else "no_workspace_root" if not workspace
+               else "no_prior_run")
         return {"base": base, "from_run": "", "carried": [],
                 "not_carried": [{"id": str(node["id"]), "reason": why} for node in record["nodes"]]}
     prior, carried, refused = best

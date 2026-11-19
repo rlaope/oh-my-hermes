@@ -12,6 +12,8 @@ from __future__ import annotations
 import json
 import os
 import unittest
+from tempfile import TemporaryDirectory
+from unittest import mock
 
 from _local_package import load_local_package
 
@@ -50,6 +52,14 @@ def offered(result: dict) -> list:
 
 
 class CarryForwardTests(unittest.TestCase):
+    def setUp(self) -> None:
+        # Carrying matches the run's resolved workspace root; every test works in one checkout unless it says not.
+        workspace = TemporaryDirectory()
+        self.addCleanup(workspace.cleanup)
+        cwd = mock.patch.dict(os.environ, {"TERMINAL_CWD": workspace.name})
+        cwd.start()
+        self.addCleanup(cwd.stop)
+
     def test_exact_match_carries_every_non_verify_node_and_hands_out_only_verify(self) -> None:
         with homes() as home:
             slots_table(home)
@@ -63,7 +73,7 @@ class CarryForwardTests(unittest.TestCase):
         self.assertEqual(not_carried(again), {"verify": "verify_runs_again"})
         self.assertEqual(offered(again), ["verify"])
         self.assertIn("Carried 3 of 4 nodes from run feat1", again["say"])
-        self.assertIn("verify node still runs", again["say"])
+        self.assertIn("The verify node (verify) still runs over every node", again["say"])
         for view in (again, status):
             self.assertEqual([row["id"] for row in view["carried"]], ["api", "ui", "docs"])
             self.assertTrue(all(row["from_run"] == "feat1" and "base " + BASE in row["reason"]
@@ -224,6 +234,52 @@ class CarryForwardTests(unittest.TestCase):
             call(action="define", run="feat2", goal=GOAL, nodes=FEATURE, carry_forward=BASE)
             refused = call(action="settle", run="feat2", node="api", outcome="accepted")
         self.assertEqual(refused["reason"], "node_not_out")
+
+    def test_a_graph_without_a_verify_node_is_refused_and_nothing_is_written(self) -> None:
+        single = [node("api", scope=("src/api.py",))]
+        with homes() as home:
+            slots_table(home)
+            finish(home, "feat1", single + [node("verify", depends_on=("api",), role="verify")])
+            refused = call(action="define", run="feat2", goal=GOAL, nodes=single, carry_forward=BASE)
+            written = dag_run.record_path(home.omh, PARENT, "feat2").exists()
+            plain = call(action="define", run="feat3", goal=GOAL, nodes=single)
+        self.assertEqual(refused["reason"], "carry_forward_requires_verify", refused)
+        self.assertFalse(written)
+        self.assertEqual(offered(plain), ["api"])  # without carry_forward a graph needs no verify node, as before
+
+    def test_with_a_verify_node_the_verify_node_is_handed_out(self) -> None:
+        graph = [node("api", scope=("src/api.py",)), node("verify", depends_on=("api",), role="verify")]
+        with homes() as home:
+            slots_table(home)
+            finish(home, "feat1", graph)
+            again = call(action="define", run="feat2", goal=GOAL, nodes=graph, carry_forward=BASE)
+        self.assertEqual([item["id"] for item in again["carry_forward"]["carried"]], ["api"])
+        self.assertEqual(offered(again), ["verify"])
+        self.assertEqual(rows(again)["verify"]["state"], "handed_out")
+
+    def test_another_workspace_root_carries_nothing(self) -> None:
+        with homes() as home, TemporaryDirectory() as first, TemporaryDirectory() as second:
+            slots_table(home)
+            with mock.patch.dict(os.environ, {"TERMINAL_CWD": first}):
+                finish(home, "feat1", FEATURE)
+            with mock.patch.dict(os.environ, {"TERMINAL_CWD": second}):
+                elsewhere = call(action="define", run="feat2", goal=GOAL, nodes=FEATURE, carry_forward=BASE)
+            with mock.patch.dict(os.environ, {"TERMINAL_CWD": first}):
+                same = call(action="define", run="feat3", goal=GOAL, nodes=FEATURE, carry_forward=BASE)
+        self.assertEqual(elsewhere["carry_forward"]["carried"], [])
+        self.assertEqual(set(not_carried(elsewhere).values()), {"no_prior_run"})
+        self.assertEqual(offered(elsewhere), ["api", "ui"])
+        self.assertEqual([item["id"] for item in same["carry_forward"]["carried"]], ["api", "ui", "docs"])
+
+    def test_an_unknown_workspace_root_carries_nothing(self) -> None:
+        with homes() as home:
+            slots_table(home)
+            finish(home, "feat1", FEATURE)
+            with mock.patch.dict(os.environ, {}, clear=False):
+                os.environ.pop("TERMINAL_CWD")
+                unknown = call(action="define", run="feat2", goal=GOAL, nodes=FEATURE, carry_forward=BASE)
+        self.assertEqual(unknown["carry_forward"]["carried"], [])
+        self.assertEqual(set(not_carried(unknown).values()), {"no_workspace_root"})
 
     def test_schema_adds_one_optional_string(self) -> None:
         from omh.plugin_bundle.omh.tools import dag_tool

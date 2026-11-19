@@ -491,6 +491,12 @@ def _define(args: Mapping[str, object], omh_home: Path, hermes_home: Path, durab
                                 oneshot_limit=budget["limit"] if budget else None,
                                 oneshot_spent=budget["spent"] if budget else 0, named_roles=False,
                                 criteria=args.get("criteria"))
+    if base is not None and not any(dag_run.is_verification(item) for item in record["nodes"]):
+        # Carried work counts only once a verifier checks it here; without one the run would finish unchecked.
+        raise dag_run.DagRefusal(
+            "carry_forward_requires_verify",
+            "carry_forward needs a node with role verify in the graph: carried nodes are not run again, so a verify "
+            "node must check them in this run. Add one, or define the run without carry_forward.")
     found = _find(omh_home, segments, run)
     if found is not None:
         existing, path = found
@@ -1069,10 +1075,11 @@ def _ready(
     if carry is not None:
         extra["carry_forward"] = dict(carry)
         moved = carry["carried"]
+        verifiers = [str(node["id"]) for node in record["nodes"] if dag_run.is_verification(node)]
         say = " ".join(part for part in (say, (
             f"Carried {len(moved)} of {len(record['nodes'])} nodes from run {carry['from_run']} without running them "
             f"({', '.join(item['id'] for item in moved)}); their dependents read the earlier handoffs. The verify node "
-            "still runs over every node, carried ones included." if moved else
+            f"({', '.join(verifiers)}) still runs over every node, carried ones included." if moved else
             f"carry_forward carried nothing: no earlier run of this goal at base {carry['base']} had an unchanged "
             "accepted node, so every node runs.")) if part)
     if mine:
