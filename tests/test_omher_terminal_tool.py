@@ -160,6 +160,15 @@ class SendTests(_Home):
         self.assertEqual(self.call(action="send", link=LID, prompt="x")["reason"], "not_sent")
         self.assertEqual(list(elsewhere.iterdir()), [])
 
+    def test_on_windows_the_tool_reads_and_writes_nothing(self) -> None:
+        inbox = self.session()
+        with mock.patch("sys.platform", "win32"):
+            status = json.loads(omh_omher_terminal_handler({"action": "status", "link": LID}))
+            sent = json.loads(omh_omher_terminal_handler({"action": "send", "link": LID, "prompt": "hi"}))
+        self.assertEqual(status, {"ok": False, "reason": "unavailable", "text": "not available"})
+        self.assertEqual(sent, {"ok": False, "reason": "unavailable", "text": "terminal sharing is not available on Windows"})
+        self.assertEqual(list(inbox.iterdir()), [])
+
     def test_send_never_writes_outside_the_terminals_folder(self) -> None:
         self.session()
         before = sorted(str(p.relative_to(self.tmp)) for p in self.tmp.rglob("*"))

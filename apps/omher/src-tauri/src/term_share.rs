@@ -13,6 +13,10 @@
 //! the user omher runs as, readable and writable by that user only (0600) and at most [`REQUEST_MAX`] bytes. Every
 //! file it looks at is removed, taken or refused. The prompt comes back with control characters taken out (a newline
 //! stays). Nothing here types anything: the page shows the request as a card, and only the person's Allow types it.
+//!
+//! Sharing is off on Windows ([`ENABLED`]): the owner-only folder, file mode, no-follow open and owner check above are
+//! POSIX, and Windows would leave the files to inherited permissions. There no status file or inbox is made and no
+//! inbox is read; Copy link and the link chip still work.
 
 use std::fs;
 use std::io::{Read, Write};
@@ -33,6 +37,9 @@ pub const FROM_MAX: usize = 64;
 pub const TAKE_MAX: usize = 16;
 /// The states a status file may say.
 pub const STATES: [&str; 4] = ["working", "waiting", "done", "ended"];
+
+/// Whether status files and inboxes are kept on this system (off on Windows, where the owner-only checks cannot hold).
+pub const ENABLED: bool = cfg!(not(windows));
 
 /// `<home>/.omher/terminals`.
 pub fn root(home: &Path) -> PathBuf {
@@ -176,6 +183,9 @@ pub fn status_file(id: &str, s: &Status, home: &Path, now: u64) -> Result<Status
 /// Write session `id`'s status file (owner-only, replacing the last one) and make its inbox.
 pub fn write(home: &Path, id: &str, s: &Status) -> Result<(), String> {
     let file = file_of(home, id)?;
+    if !ENABLED {
+        return Ok(()); // nothing is kept for bots on this system
+    }
     let body = serde_json::to_vec_pretty(&status_file(id, s, home, now_s())?).map_err(|e| e.to_string())?;
     let inbox = inbox_of(home, id);
     no_links(home, &[&file, &inbox])?;
@@ -334,6 +344,9 @@ fn inbox_ok(home: &Path, id: &str) -> Option<PathBuf> {
 pub fn take(home: &Path, links: &[String]) -> (Vec<Request>, Vec<(String, Refused)>) {
     let mut got = Vec::new();
     let mut refused = Vec::new();
+    if !ENABLED {
+        return (got, refused); // no inbox is read on this system
+    }
     let mut looked = 0;
     for id in links.iter().filter(|id| valid_id(id)) {
         let Some(inbox) = inbox_ok(home, id) else { continue };
@@ -361,6 +374,26 @@ pub fn take(home: &Path, links: &[String]) -> (Vec<Request>, Vec<(String, Refuse
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn sharing_is_off_on_windows_only() {
+        assert_eq!(ENABLED, !cfg!(windows));
+    }
+
+    /// Windows: no status file, no inbox, and an inbox file someone put there is never read.
+    #[cfg(windows)]
+    #[test]
+    fn windows_keeps_and_reads_nothing() {
+        let h = home("off");
+        write(&h, "abcdefgh23", &st(&h)).unwrap();
+        assert!(!root(&h).exists());
+        let inbox = root(&h).join("abcdefgh23.inbox");
+        fs::create_dir_all(&inbox).unwrap();
+        fs::write(inbox.join("1.json"), br#"{"prompt":"x","from":"b","session":""}"#).unwrap();
+        let (got, refused) = take(&h, &["abcdefgh23".into()]);
+        assert!(got.is_empty() && refused.is_empty());
+        assert!(inbox.join("1.json").exists());
+    }
 
     fn home(tag: &str) -> PathBuf {
         let h = std::env::temp_dir().join(format!("omher-term-share-{tag}-{}", std::process::id()));

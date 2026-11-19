@@ -6,6 +6,9 @@ imports omher and never talks to it. ``send`` puts one request file in the sessi
 (``~/.omher/terminals/<link id>.inbox/``). omher shows it to the person as a card, and only their Allow types the
 prompt. Nothing here can type into a terminal, and a link id that is not 10 base32 characters, or any path that
 would land outside ``~/.omher/terminals``, is refused before a file is touched.
+
+On Windows omher keeps no status files and reads no inbox (its owner-only checks are POSIX), so the tool touches no
+file there: ``status`` says it is not available and ``send`` that terminal sharing is not available on Windows.
 """
 
 from __future__ import annotations
@@ -14,6 +17,7 @@ import json
 import os
 import re
 import secrets
+import sys
 import time
 from pathlib import Path
 from typing import Any
@@ -47,6 +51,11 @@ OMH_OMHER_TERMINAL_SCHEMA = {
         "required": ["action", "link"],
     },
 }
+
+
+def sharing_available() -> bool:
+    """omher shares terminals with bots on this system (not on Windows)."""
+    return not sys.platform.startswith("win")
 
 
 def terminals_root() -> Path:
@@ -142,6 +151,10 @@ def omh_omher_terminal_handler(args: dict[str, Any], **kwargs: Any) -> str:
     lid = link_id(args.get("link"))
     if lid is None:
         return _refuse("bad_link", "That is not an omher terminal link (omher://terminal/ and a 10-character id).")
+    if not sharing_available():
+        if action == "send":
+            return _refuse("unavailable", "terminal sharing is not available on Windows")
+        return _refuse("unavailable", "not available")
     root = terminals_root()
     status = read_status(root, lid)
     if status is None:
