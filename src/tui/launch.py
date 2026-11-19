@@ -74,6 +74,11 @@ FALLBACK_SENTINEL_ENV = "OMH_TUI_FALLBACK_SENTINEL"
 SESSION_FILE_ENV = "OMH_TUI_SESSION_FILE"
 # Set to "1" by a bare `omh --resume` (no session named): the TUI opens the session picker as soon as it starts.
 PICK_SESSION_ENV = "OMH_TUI_PICK_SESSION"
+# Set by a bare `omh --onboard <name>` (only `omh setup`'s last question runs one): the TUI sends that packaged
+# onboarding prompt (`tui/onboarding.py`) once, as the first turn of the new session it opens, in the language
+# `ONBOARD_LANG_ENV` names. The one prompt the TUI sends that the person did not type; never on a resume.
+ONBOARD_ENV = "OMH_TUI_ONBOARD"
+ONBOARD_LANG_ENV = "OMH_TUI_ONBOARD_LANG"
 # How much of that file `closed_session` reads: an id, a path and the launch's earlier ids.
 SESSION_FILE_BYTES = 16384
 # What the TUI exits with, in place of 0, when the person closes a session `omh` launched (`SESSION_FILE_ENV`
@@ -120,6 +125,8 @@ TUI_LAUNCH_ENV_NAMES = (
     FALLBACK_SENTINEL_ENV,
     SESSION_FILE_ENV,
     PICK_SESSION_ENV,
+    ONBOARD_ENV,
+    ONBOARD_LANG_ENV,
     RELAUNCH_FILE_ENV,
     UPDATED_ENV,
     RUNTIME_ENV,
@@ -199,7 +206,7 @@ def omh_import_root() -> str:
 def omh_tui_environment(
     environ: Mapping[str, str], *, python: str, site: str, omh_home: Path, fallback_sentinel: Path,
     session_file: Path, pick_session: bool = False, relaunch_file: Path | None = None,
-    bots_home: Path | None = None,
+    bots_home: Path | None = None, onboard: str = "", onboard_language: str = "en",
 ) -> dict[str, str]:
     """The environment `hermes --tui` runs with when it should start the OMH TUI.
 
@@ -212,6 +219,9 @@ def omh_tui_environment(
     only a launch that can relaunch the TUI names one. `bots_home` is given
     only when the TUI opens on its own Hermes runtime: `RUNTIME_ENV` says so
     and `BOTS_HOME_ENV` names the bots' home; both are dropped otherwise.
+    `onboard` (a bare `omh --onboard <name>`) sets `ONBOARD_ENV` to it and
+    `ONBOARD_LANG_ENV` to `onboard_language`; without it both are dropped, so
+    an inherited value never sends an onboarding prompt.
     """
     env = dict(environ)
     env.pop(RUNTIME_ENV, None)
@@ -231,6 +241,11 @@ def omh_tui_environment(
     env.pop(RELAUNCH_FILE_ENV, None)
     if relaunch_file is not None:
         env[RELAUNCH_FILE_ENV] = str(relaunch_file)
+    env.pop(ONBOARD_ENV, None)
+    env.pop(ONBOARD_LANG_ENV, None)
+    if onboard:
+        env[ONBOARD_ENV] = onboard
+        env[ONBOARD_LANG_ENV] = onboard_language
     return env
 
 

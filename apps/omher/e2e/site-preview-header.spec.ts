@@ -84,6 +84,8 @@ async function watch(page: Page, lang: string): Promise<{ samples: Sample[]; pro
   await page.waitForFunction(() => (window as unknown as { __hero?: { ready: boolean } }).__hero?.ready, null, { timeout: 45_000 });
   const frame = page.frames().find((f) => f.url().includes("app-preview"));
   expect(frame, "the hero mounted the live preview").toBeTruthy();
+  // the preview's story is staged in English, so the app around it stays English whatever the site's language
+  expect(await frame!.evaluate(() => [document.documentElement.lang, /[\uac00-\ud7a3\u3040-\u30ff]/.test(document.body.innerText)]), `${lang}: preview language`).toEqual(["en", false]);
   const samples: Sample[] = [];
   const problems: string[] = [];
   const t0 = Date.now();

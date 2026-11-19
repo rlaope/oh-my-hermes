@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 
+from ..coding.hermes_model_config import HermesModelConfigError, split_fallback_target
 from ..installer import OmhError
 
 
@@ -13,11 +14,20 @@ def validate_model_setup_args(args: argparse.Namespace) -> None:
         getattr(args, "model_config_digest", ""),
         getattr(args, "allow_model_alias_collision", False),
         getattr(args, "import_category_overrides", False),
+        getattr(args, "fallback_model", []),
     )
     if any(model_flags) and not getattr(args, "model_setup", False):
         raise OmhError("model activation flags require --model-setup.")
-    if getattr(args, "apply_model_config", False) and not getattr(args, "model_alias", []):
-        raise OmhError("--apply-model-config requires at least one --model-alias ALIAS=MODEL.")
+    fallback_model_target(getattr(args, "fallback_model", []))
+    if (
+        getattr(args, "apply_model_config", False)
+        and not getattr(args, "model_alias", [])
+        and not getattr(args, "fallback_model", [])
+    ):
+        raise OmhError(
+            "--apply-model-config requires at least one --model-alias ALIAS=MODEL "
+            "or a --fallback-model PROVIDER/MODEL."
+        )
 
 
 def confirmed_model_ids(values: list[str]) -> set[str]:
@@ -76,3 +86,17 @@ def model_alias_changes(values: list[str]) -> dict[str, str]:
             raise OmhError("--model-alias requires ALIAS=MODEL.")
         changes[alias] = model
     return changes
+
+
+def fallback_model_target(values: list[str]) -> str | None:
+    """The one `--fallback-model` value as `provider/model`, or None when not given."""
+    if not values:
+        return None
+    if len(values) > 1:
+        raise OmhError("Onboarding keeps one fallback model.")
+    target = str(values[0] or "").strip()
+    try:
+        split_fallback_target(target)
+    except HermesModelConfigError as exc:
+        raise OmhError(f"--fallback-model requires a safe PROVIDER/MODEL identifier: {exc}") from exc
+    return target

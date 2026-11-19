@@ -16,11 +16,22 @@ def print_model_preview_review(
     print("")
     print(color(tr(language, "model_setup_preview_title"), "1;32", use_color()))
     print(f"  config: {payload.get('config_path', '')}")
-    print(f"  digest: {payload.get('config_digest', '')}")
+    print(f"  digest: {payload.get('approval_digest', '') or payload.get('config_digest', '')}")
     changes = payload.get("changes", {})
     if isinstance(changes, dict):
         for alias, model in changes.items():
             print(f"  {alias} -> {model}")
+    fallback = payload.get("fallback_model")
+    if isinstance(fallback, dict):
+        before = fallback.get("before")
+        shown = ", ".join(str(item) for item in before) if isinstance(before, list) and before else "(none)"
+        print(f"  fallback chain: {shown} -> {fallback.get('after', '')}")
+        if fallback.get("replaces_chain"):
+            print("  The existing fallback chain is replaced by this one entry.")
+        if fallback.get("unchanged"):
+            print("  The fallback chain already is this one entry; nothing to write.")
+        if fallback.get("refusal"):
+            print(f"  Apply is refused: {fallback['refusal']}")
 
 
 def print_model_activation_summary(

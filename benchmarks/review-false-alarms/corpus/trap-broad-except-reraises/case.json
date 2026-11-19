@@ -1,0 +1,7 @@
+{
+  "id": "trap-broad-except-reraises",
+  "kind": "trap",
+  "language": "python",
+  "expected": "clean",
+  "why": "except Exception looks like it swallows failures, but the handler only logs and then re-raises with a bare raise, so the caller sees the original exception and traceback unchanged."
+}

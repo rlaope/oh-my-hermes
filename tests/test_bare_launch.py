@@ -20,7 +20,8 @@ from unittest.mock import patch
 from omh.commands.bare_launch import bare_launch_args
 from omh.commands.main import build_parser
 
-TOP_LEVEL_DESTS = ("omh_home", "hermes_home", "scope", "pretty", "tui_resume", "tui_continue", "tui_profile")
+TOP_LEVEL_DESTS = ("omh_home", "hermes_home", "scope", "pretty", "tui_resume", "tui_continue", "tui_profile",
+                   "tui_onboard")
 
 BARE = (
     [],
@@ -36,6 +37,8 @@ BARE = (
     ["-c", "-p", "work"],
     ["--profile=work", "--continue=notes"],
     ["--omh", "/x"],  # an abbreviation of --omh-home, which the full parser accepts too
+    ["--onboard", "model-setup"],
+    ["--omh-home", "/x/omh", "--hermes-home", "/x/hermes", "--onboard", "model-setup"],  # as `omh setup` runs it
 )
 NOT_BARE = (
     ["doctor"],
@@ -49,6 +52,8 @@ NOT_BARE = (
     ["--omh-home"],
     ["--p", "x"],  # ambiguous between --pretty and --profile
     ["--", "doctor"],
+    ["--onboard", "provider-setup"],  # not an onboarding OMH ships
+    ["--onboard"],
 )
 
 
@@ -192,6 +197,82 @@ class LaunchHomeTests(unittest.TestCase):
                                    ([], [None, ["--tui"]])):
                 with self.subTest(argv=argv), patch.dict(os.environ, {"OMH_TUI_PICK_SESSION": "1"}), \
                         patch.object(bare_launch, "_omh_tui_blocker", return_value=""):
+                    bare_launch._run_terminal(str(hermes), bare_launch_args(argv), paths)
+                    self.assertEqual(json.loads(record.read_text()), expected)
+
+
+class OnboardTests(unittest.TestCase):
+    def test_onboard_beside_resume_or_continue_is_refused_before_anything_launches(self) -> None:
+        from omh.commands import bare_launch
+
+        for argv in (["--onboard", "model-setup", "--resume"], ["--onboard", "model-setup", "-r", "s-1"],
+                     ["--onboard", "model-setup", "-c"], ["--continue", "notes", "--onboard", "model-setup"]):
+            with self.subTest(argv=argv):
+                args = bare_launch_args(argv)
+                self.assertIsNotNone(args)
+                stderr = io.StringIO()
+                with patch.object(bare_launch, "_launch_hermes_tui") as launched, redirect_stderr(stderr):
+                    self.assertEqual(bare_launch.run_bare_launch(args), 2)
+                launched.assert_not_called()
+                self.assertIn("--onboard opens a new session", stderr.getvalue())
+
+    def test_an_unknown_onboarding_is_refused_by_the_full_parser(self) -> None:
+        stderr = io.StringIO()
+        with redirect_stderr(stderr):
+            self.assertIsNone(full_parse(["--onboard", "provider-setup"]))
+        self.assertIn("invalid choice", stderr.getvalue())
+
+    def test_onboard_with_a_subcommand_is_refused(self) -> None:
+        from omh.commands.main import main
+
+        stderr = io.StringIO()
+        with redirect_stderr(stderr):
+            self.assertEqual(main(["--onboard", "model-setup", "doctor"]), 2)
+        self.assertIn("--onboard opens the OH-MY-HERMES terminal and cannot be combined", stderr.getvalue())
+
+    def test_onboard_is_not_forwarded_to_hermes(self) -> None:
+        from omh.commands.bare_launch import _hermes_passthrough_argv
+
+        self.assertEqual(_hermes_passthrough_argv(bare_launch_args(["--onboard", "model-setup"]), tui=True), ["--tui"])
+
+    def test_the_language_is_omh_lang_when_the_prompt_has_it(self) -> None:
+        from omh.commands.bare_launch import _onboard_language
+
+        for value, expected in (("ko", "ko"), ("ja", "ja"), ("zh", "zh"), ("en", "en"), ("fr", "en"), ("", "en")):
+            with self.subTest(value=value), patch.dict(os.environ, {"OMH_LANG": value}):
+                self.assertEqual(_onboard_language(), expected)
+
+    @unittest.skipIf(os.name == "nt", "fixture executable uses a POSIX shebang")
+    def test_only_onboard_reaches_the_tui_and_the_fallback_never_carries_it(self) -> None:
+        from pathlib import Path
+        from tempfile import TemporaryDirectory
+        import json
+        from omh.commands import bare_launch
+        from omh.paths import resolve_paths
+
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            record = root / "child-env.json"
+            hermes = root / "hermes"
+            hermes.write_text(
+                f"#!{sys.executable}\nimport json, os, sys\n"
+                f"with open({str(record)!r}, 'w') as out: "
+                "json.dump([os.environ.get('OMH_TUI_ONBOARD'), os.environ.get('OMH_TUI_ONBOARD_LANG'), sys.argv[1:]], "
+                "out)\n",
+                encoding="utf-8",
+            )
+            hermes.chmod(0o755)
+            paths = resolve_paths(str(root / "omh"), str(root / "selected"))
+            inherited = {"OMH_TUI_ONBOARD": "model-setup", "OMH_TUI_ONBOARD_LANG": "ja", "OMH_LANG": "ko"}
+            for argv, blocker, expected in (
+                (["--onboard", "model-setup"], "", ["model-setup", "ko", ["--tui"]]),
+                ([], "", [None, None, ["--tui"]]),
+                (["--onboard", "model-setup"], "fixture fallback", [None, None, []]),
+            ):
+                with self.subTest(argv=argv, blocker=blocker), patch.dict(os.environ, inherited), \
+                        patch.object(bare_launch, "_omh_tui_blocker", return_value=blocker), \
+                        patch.object(bare_launch, "_node_available", return_value=False), \
+                        redirect_stderr(io.StringIO()):
                     bare_launch._run_terminal(str(hermes), bare_launch_args(argv), paths)
                     self.assertEqual(json.loads(record.read_text()), expected)
 

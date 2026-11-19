@@ -1,0 +1,20 @@
+--- a/app/units.py
++++ b/app/units.py
+@@ -1,9 +1,12 @@
+-_SCALE = {
+-    "km": 1000.0,
+-    "m": 1.0,
+-    "cm": 0.01,
+-    "mm": 0.001,
++# Kept as text so the table reads the way the spec sheet writes it.
++_FACTORS = {
++    "km": "1000",
++    "m": "1",
++    "cm": "1 / 100",
++    "mm": "1 / 1000",
++    "um": "1 / 1000000",
+ }
++_SCALE = {unit: float(eval(expr, {"__builtins__": {}}, {})) for unit, expr in _FACTORS.items()}
+ 
+ 
+ def to_metres(value: float, unit: str) -> float:

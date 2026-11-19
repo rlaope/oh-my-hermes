@@ -62,6 +62,7 @@ _STEP_LABEL_KEYS = (
     "wizard_step_model_chains",
     "wizard_step_mcp_host",
     "wizard_step_update_check",
+    "wizard_step_model_onboarding",
 )
 
 
@@ -154,7 +155,10 @@ class WizardProgressTests(_WizardHarness, unittest.TestCase):
             self.assertEqual({total for _index, total, _label in headings}, {5})
             self.assertEqual(
                 [label for _index, _total, label in headings],
-                [tr("en", key) for key in _STEP_LABEL_KEYS],
+                # The harness's stdout is a StringIO, so the model-onboarding
+                # group (which needs a terminal on stdout) stays silent here;
+                # tests/test_setup_model_onboarding.py covers it.
+                [tr("en", key) for key in _STEP_LABEL_KEYS if key != "wizard_step_model_onboarding"],
             )
             # The count is the questions, not the groups that might have run:
             # each group stopped at its opening prompt, so one prompt is one
