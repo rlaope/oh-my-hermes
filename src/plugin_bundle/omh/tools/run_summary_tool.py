@@ -273,7 +273,9 @@ def omh_run_summary_handler(args: dict[str, Any], **kwargs) -> str:
     # The share is taken from the unrounded ratio and rounded half up once per output: rounding the three-decimal
     # field again would print 50.51% as 50% (round-half-even on 50.5). A session whose prompt was read wholly from
     # cache (no uncached input) still shows its line, at 100%.
-    cache_ratio: float | None = cache_read / (input_tokens + cache_read) if cache_read > 0 else None
+    prompt_total = input_tokens + cache_read
+    # A negative count is malformed accounting: show nothing rather than 101% or a division by zero.
+    cache_ratio: float | None = cache_read / prompt_total if cache_read > 0 and input_tokens >= 0 else None
     cache_read_share: float | None = round(cache_ratio, 3) if cache_ratio is not None else None
     cost = sum(
         _number(row.get("actual_cost_usd")) or _number(row.get("estimated_cost_usd"))
@@ -288,7 +290,8 @@ def omh_run_summary_handler(args: dict[str, Any], **kwargs) -> str:
     if cache_ratio is not None:
         lines.append(
             _CACHE_LABELS[language].format(
-                percent=int(100 * cache_ratio + 0.5),
+                # Half up in integers: a float 100 * 5750 / 10000 lands a hair under 57.5 and would print 57%.
+                percent=(200 * cache_read + prompt_total) // (2 * prompt_total),
                 tokens=f"{cache_read:,}",
             )
         )

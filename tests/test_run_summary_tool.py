@@ -180,6 +180,17 @@ class RunSummaryToolTest(unittest.TestCase):
         self.assertIn("Prompt cache: 51% of input read from cache (5,051 tokens)", result["summary_text"].splitlines())
         self.assertEqual(result["breakdown"]["cache_read_share"], 0.505)
 
+    def test_an_exact_half_percent_rounds_up(self):
+        # 5,750 of 10,000 is exactly 57.5%; float math puts 100 * 0.575 just under 57.5.
+        connection = sqlite3.connect(self.home / "state.db")
+        connection.execute("UPDATE sessions SET input_tokens = 0, cache_read_tokens = 0")
+        connection.execute("UPDATE sessions SET input_tokens = 4250, cache_read_tokens = 5750 WHERE id = ?",
+                           ("20260819_100000_main01",))
+        connection.commit()
+        connection.close()
+        result = self._call(language="en")
+        self.assertIn("Prompt cache: 58% of input read from cache (5,750 tokens)", result["summary_text"].splitlines())
+
     def test_every_language_has_a_cache_label(self):
         self._set_cache_read("20260819_100000_main01", 900_000)
         expected = {
