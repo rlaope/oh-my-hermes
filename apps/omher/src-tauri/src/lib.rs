@@ -20,6 +20,7 @@ mod setup;
 mod tasks;
 mod term_history;
 mod term_link;
+mod term_share;
 mod this_host;
 
 use std::path::PathBuf;
@@ -614,6 +615,34 @@ async fn term_history_clear() -> Result<(), String> {
     term_history::clear(&user_home()?)
 }
 
+/// A TERMINALS session's status file for bots holding its link (`~/.omher/terminals/<link>.json`, owner-only) and its
+/// inbox folder (`term_share`). `status`: what the page shows of it (title, CLI, folder, state, last line).
+#[tauri::command]
+async fn term_share_write(link: String, status: term_share::Status) -> Result<(), String> {
+    let home = user_home()?;
+    tauri::async_runtime::spawn_blocking(move || term_share::write(&home, &link, &status)).await.map_err(|e| e.to_string())?
+}
+
+/// Remove session `link`'s status file and inbox (it was closed).
+#[tauri::command]
+async fn term_share_remove(link: String) -> Result<(), String> {
+    term_share::remove(&user_home()?, &link)
+}
+
+/// Remove the status files of every session not in `keep` (omher started; the others are gone).
+#[tauri::command]
+async fn term_share_prune(keep: Vec<String>) -> Result<(), String> {
+    term_share::prune(&user_home()?, &keep)
+}
+
+/// Bots' requests to type into sessions `links`, each inbox file taken once (removed); refused files are removed
+/// unread. The page shows each as a card: nothing is typed here.
+#[tauri::command]
+async fn term_share_take(links: Vec<String>) -> Result<Vec<term_share::Request>, String> {
+    let home = user_home()?;
+    tauri::async_runtime::spawn_blocking(move || term_share::take(&home, &links).0).await.map_err(|e| e.to_string())
+}
+
 /// Stop the chat's program and forget the session.
 #[tauri::command]
 async fn chat_close(shell: State<'_, Shell>, id: u32) -> Result<(), String> {
@@ -867,6 +896,10 @@ pub fn run() {
             term_history_remove,
             term_history_prune,
             term_history_clear,
+            term_share_write,
+            term_share_remove,
+            term_share_prune,
+            term_share_take,
             session_branch,
             chat_close_all,
             open_media,
@@ -943,6 +976,10 @@ pub fn run() {
                 shell.logins.cancel_all();
                 shell.peers.stop_all();
                 shell.bridge.stop();
+            }
+            // the sessions are gone: so are the status files bots read
+            if let Ok(home) = user_home() {
+                let _ = term_share::prune(&home, &[]);
             }
         }
     });
