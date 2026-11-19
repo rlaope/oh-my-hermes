@@ -1,6 +1,6 @@
 ---
 name: "omh-data-analysis"
-description: "[omh] Dataset or table to analyze: scope supplied data with provenance, causal-claim, and hallucination guards. Use when the user says: data-analysis, data analysis, dataset analysis, csv analysis, json analysis, log analysis, table analysis, analyze csv."
+description: "[omh] Dataset or table to analyze: scope supplied data…"
 license: MIT
 metadata:
   hermes:

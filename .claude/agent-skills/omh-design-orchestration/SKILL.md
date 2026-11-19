@@ -1,6 +1,6 @@
 ---
 name: "omh-design-orchestration"
-description: "[omh] Entire product design problem to delegate: prepare a bounded design direction, existing-lane composition, and executor-neutral handoff."
+description: "[omh] Entire product design problem to delegate: prepare a bounded…"
 license: MIT
 metadata:
   hermes:

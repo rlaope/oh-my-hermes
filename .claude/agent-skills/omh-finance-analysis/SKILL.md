@@ -1,6 +1,6 @@
 ---
 name: "omh-finance-analysis"
-description: "[omh] Company budget overrun, cash risk, or close issue: turn finance and accounting inputs into a decision-ready variance, cash, and close-risk brief."
+description: "[omh] Company budget overrun, cash risk, or close issue."
 license: MIT
 metadata:
   hermes:

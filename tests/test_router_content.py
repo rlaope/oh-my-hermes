@@ -328,7 +328,9 @@ class RouterContentTests(unittest.TestCase):
         # label (33,214 -> 33,252 measured); the same 22-byte allowance is kept.
         # 33,274 -> 33,622: `model-compression` adds its index entry (33,138 ->
         # 33,486 measured, +348); the existing allowance is kept, not widened.
-        self.assertLess(len(rendered.encode("utf-8")), 33_622)
+        # 33,622 -> 33,892: `skill-eval` adds its index entry (33,486 -> 33,756
+        # measured, +270); the existing allowance is kept, not widened.
+        self.assertLess(len(rendered.encode("utf-8")), 33_892)
         for line in rendered.splitlines():
             self.assertLess(len(line.encode("utf-8")), 400, line)
 
@@ -533,9 +535,11 @@ class RouterContentTests(unittest.TestCase):
                 # 33,841 -> 34,079: `model-compression` adds its 217-byte trigger
                 # row and 21-byte planner token (33,808 -> 34,046 measured, +238);
                 # the existing headroom is kept.
-                limit = 34_079
+                # 34,079 -> 34,283: `skill-eval` adds its 190-byte trigger row and
+                # 14-byte tracker token (34,046 -> 34,250 measured, +204).
+                limit = 34_283
             elif template.skill_name == "oh-my-hermes" and template.relative_path == "references/catalog-index.md":
-                limit = 33_622
+                limit = 33_892
             else:
                 limit = 33_100
             self.assertLess(len(template.content.encode("utf-8")), limit, template.relative_path)
@@ -1494,9 +1498,12 @@ class RouterContentTests(unittest.TestCase):
                 "result -> relevant evidence/limits -> observed accounting (when required) -> "
                 "specific question (if useful)", templates[name].content, name,
             )
-        from omh.skills.render import agent_skill_templates
+        from omh.skills.render import agent_skill_detail_templates, agent_skill_templates
 
+        # A body over the OpenClaw read cap moves its quality bar into references/details.md.
         portable = {template.name: template.content for template in agent_skill_templates()}
+        for detail in agent_skill_detail_templates():
+            portable[detail.skill_name] += detail.content
         for name in ("loop", "ultrawork", "ultraqa"):
             with self.subTest(portable=name):
                 content = portable[omh_skill_display_name(name)]
@@ -1517,11 +1524,13 @@ class RouterContentTests(unittest.TestCase):
 
     def test_delegated_runs_place_observed_accounting_before_optional_question(self) -> None:
         """DAG, work and maestro retain accounting without competing final lines."""
-        from omh.skills.render import agent_skill_templates
+        from omh.skills.render import agent_skill_detail_templates, agent_skill_templates
 
         definitions = {definition.name: definition for definition in installable_skill_definitions()}
         native = {template.name: template.content for template in builtin_skill_templates()}
         portable = {template.name: template.content for template in agent_skill_templates()}
+        for detail in agent_skill_detail_templates():
+            portable[detail.skill_name] += detail.content
         for name in ("ultrawork", "maestro", "dag-ulw"):
             definition = definitions[name]
             sections = [

@@ -1,6 +1,6 @@
 ---
 name: "omh-support-operations"
-description: "[omh] Support ticket your team must answer or escalate: turn a support case into a clear customer reply, severity path, and owned next step."
+description: "[omh] Support ticket your team must answer or escalate."
 license: MIT
 metadata:
   hermes:

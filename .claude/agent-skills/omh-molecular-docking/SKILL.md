@@ -1,6 +1,6 @@
 ---
 name: "omh-molecular-docking"
-description: "[omh] Prepared PDBQT inputs: run bounded standalone Vina docking with real poses, scores and replay provenance; never infer efficacy or safety."
+description: "[omh] Prepared PDBQT inputs: run bounded standalone Vina docking…"
 license: MIT
 metadata:
   hermes:
@@ -21,7 +21,7 @@ Input validation and tutorial numbers are not measured docking. Require a real e
 
 ## First Steps
 
-- Read `toolkit/README.md` and `references/execution-and-qa.md`. Use the explicitly invoked standalone Vina Python helper, not an invented ToolUniverse tool or hidden core execution service.
+- Read `toolkit/README.md` (`skill_view(name='omh-molecular-docking', file_path='toolkit/README.md')`) and `references/execution-and-qa.md`. Use the explicitly invoked standalone Vina Python helper, not an invented ToolUniverse tool or hidden core execution service.
 - Recover prepared file paths, source/license and preparation receipts, angstrom binding box, seed, CPU, new output directory and host deadline. Never guess a site, silently prepare a molecule or install dependencies on skill load. If the person has a SMILES or a PDB id rather than PDBQT, stop and list the preparation steps they must approve (protonation state, charges, tautomer, receptor cleanup, box) with a named converter such as Meeko or ADFR; do not convert silently.
 - Use `--validate-only` for dependency-free prerequisites, or explicitly invoke actual docking in an approved environment with a host-enforced timeout and stdout/stderr capture. Missing dependencies must refuse, not produce guessed findings.
 

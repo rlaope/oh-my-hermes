@@ -148,6 +148,22 @@ class SkillStructureLintRuleIsolationTests(unittest.TestCase):
         payload = self._lint_with(self._mutated("skill-health", use_when="x" * 200_000))
         self.assertOnlyRule(payload, "SKILL_CONTEXT_BUDGET", "skill-health")
 
+    # A 70-character situation clause: Hermes' 60-character window cuts it.
+    _LONG_SITUATION = "Quokka lemur tapir wombat clause that runs well past the index windows"
+
+    def test_index_situation_visible_rule_fails_alone(self) -> None:
+        self.assertEqual(len(self._LONG_SITUATION), 70)
+        description = f"{self._LONG_SITUATION}: health overview."
+        payload = self._lint_with(self._mutated("skill-health", description=description))
+        self.assertOnlyRule(payload, "SKILL_INDEX_SITUATION_VISIBLE", "skill-health")
+        (violation,) = payload["violations"]
+        self.assertIn(self._LONG_SITUATION, violation["detail"])
+
+    def test_index_situation_visible_rule_passes_a_clause_inside_the_window(self) -> None:
+        description = "Quokka lemur tapir health check: " + "a long tail past the window " * 4
+        payload = self._lint_with(self._mutated("skill-health", description=description))
+        self.assertEqual(payload["violations"], [])
+
 
 if __name__ == "__main__":
     unittest.main()

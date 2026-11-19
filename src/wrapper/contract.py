@@ -482,6 +482,7 @@ VISIBLE_ACTIONS = (
     "route_to_skill_creator_or_skill_health",
     "prepare_skill_health",
     "show_skill_health",
+    "prepare_skill_eval",
     "record_skill_health_signal",
     "record_skill_amendment_review",
     "route_to_doctor_skill_or_workflow_learning",
@@ -1146,6 +1147,7 @@ _ACK_PRIMARY_ACTIONS_BY_NEXT_ACTION = {
     "prepare_instinct_ledger": ("prepare_instinct_ledger", "Prepare instincts"),
     "prepare_skill_scout": ("prepare_skill_scout", "Prepare skill scout"),
     "prepare_skill_health": ("prepare_skill_health", "Prepare skill health"),
+    "prepare_skill_eval": ("prepare_skill_eval", "Check the skill"),
     "prepare_context_budget_review": ("prepare_context_budget_review", "Review context"),
     "show_run_efficiency_report": ("show_run_efficiency_report", "Show run efficiency"),
     "prepare_security_safety_review": ("prepare_security_safety_review", "Review safety"),
@@ -3075,6 +3077,35 @@ _WORKFLOW_OPERATIONS_CHAT_CARDS: dict[str, dict[str, object]] = {
             "review",
             "CI",
             "future routing fix",
+        ],
+    },
+    "skill-eval": {
+        "kind": "skill_eval",
+        "headline": "I can check whether each agent host will load this skill.",
+        "body": (
+            "I will run `omh skill-eval` on the folder, offline, and read each host's row: loads, degraded or not "
+            "loaded, with the finding behind it. Then I list the fixes at their source, not_loaded first. Whether the "
+            "skill improves answers is a separate with/without run on your own model."
+        ),
+        "phase": "skill_eval_prepared",
+        "next_action": "prepare_skill_eval",
+        "artifact_schema": "omh_skill_eval/v1",
+        "claim_boundary_suffix": "It is not a host verdict until the command output is observed, and a host verdict is not proof the skill improves results.",
+        "actions": [
+            {"id": "prepare_skill_eval", "label": "Check the skill", "style": "primary"},
+            {"id": "show_status", "label": "Show status", "style": "secondary"},
+        ],
+        "recommended_flow": [
+            "name_the_folder_and_install_root",
+            "run_omh_skill_eval_offline",
+            "read_each_host_row",
+            "fix_findings_at_their_source",
+            "measure_lift_with_and_without_only_on_request",
+        ],
+        "evidence_not_observed": [
+            "host verdict",
+            "skill file edit",
+            "with/without lift",
         ],
     },
     "skill-scout": {

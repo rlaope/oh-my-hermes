@@ -1,6 +1,6 @@
 ---
 name: "omh-biomedical-evidence"
-description: "[omh] Public variant claims to cross-check: retrieve and reconcile source-labelled biomedical evidence with identity, conflict and freshness checks. Use when the user says: biomedical-evidence, biomedical evidence reconciliation, ClinVar cross-check, variant evidence matrix, BioMCP capture reconciliation."
+description: "[omh] Public variant claims to cross-check: retrieve and reconcile…"
 license: MIT
 metadata:
   hermes:
@@ -21,7 +21,7 @@ Public sources can disagree about a variant while describing different alleles, 
 
 ## First Steps
 
-- Read `toolkit/README.md` and `references/execution-and-qa.md`; inspect the installed BioMCP version and help before any public retrieval.
+- Read `toolkit/README.md` (`skill_view(name='omh-biomedical-evidence', file_path='toolkit/README.md')`) and `references/execution-and-qa.md`; inspect the installed BioMCP version and help before any public retrieval.
 - Require public entities only; name exact identifiers, source terms, isolated workspace and a 40-second per-retrieval host timeout before capturing unmodified stdout/stderr.
 - Run `toolkit/scripts/reconcile.py` only against a hash-checked local capture envelope; never execute provider text or install an upstream skill pack.
 

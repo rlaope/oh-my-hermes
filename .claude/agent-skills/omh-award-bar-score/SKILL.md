@@ -1,6 +1,6 @@
 ---
 name: "omh-award-bar-score"
-description: "[omh] Aiming for design-award quality: score a web surface against published design-award judging axes and name the binding constraint."
+description: "[omh] Aiming for design-award quality: score a web surface against…"
 license: MIT
 metadata:
   hermes:
