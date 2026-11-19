@@ -58,22 +58,26 @@ describe("a bot's request to type into a terminal", () => {
     expect(w.typed).toHaveLength(1);
   });
 
-  it("Allow for this session types later requests to it without a card, until it is gone", async () => {
-    const w = world([rec(), rec({ id: "s2", linkId: "zzzzzzzzzz" })]);
+  it("every request asks on its own card: two from Kami are two cards, and the second types nothing until its own Allow", async () => {
+    const w = world([rec()]);
     await w.share.publish();
-    w.ask("one");
+    w.ask("one", "abcdefgh23", "Kami");
     await w.share.poll();
-    await w.share.answer(w.share.pending()[0]!.key, "session");
-    w.ask("two");
-    w.ask("other", "zzzzzzzzzz");
+    await w.share.answer(w.share.pending()[0]!.key, "once");
+    expect(w.typed.map((x) => x.text)).toEqual(["one"]);
+    w.ask("two", "abcdefgh23", "Kami");
+    w.ask("three", "abcdefgh23", "Kami");
     await w.share.poll();
+    expect(w.share.pending().map((p) => [p.from, p.prompt])).toEqual([["Kami", "two"], ["Kami", "three"]]);
+    // more looks: nothing more typed
+    await w.share.publish();
+    await w.share.poll();
+    expect(w.typed.map((x) => x.text)).toEqual(["one"]);
+    await w.share.answer(w.share.pending()[0]!.key, "once");
     expect(w.typed.map((x) => x.text)).toEqual(["one", "two"]);
-    // the other session was not allowed: it asks
-    expect(w.share.pending().map((p) => p.sessionId)).toEqual(["s2"]);
-    expect(w.share.granted("s1", "Kami")).toBe(true);
-    w.st.list = w.st.list.filter((r) => r.id !== "s1");
-    await w.share.publish();
-    expect(w.share.granted("s1", "Kami")).toBe(false);
+    expect(w.share.pending().map((p) => p.prompt)).toEqual(["three"]);
+    // there is no standing grant to give
+    expect("granted" in w.share).toBe(false);
   });
 
   it("drops requests for unknown links, chat sessions and drafts, and takes control characters out", async () => {
@@ -91,32 +95,16 @@ describe("a bot's request to type into a terminal", () => {
     expect(cleanPrompt("a\tb\x00c\x7fd\ne")).toBe("abcd\ne");
   });
 
-  it("Allow for this session holds for the sender name it was given to; another name gets a card", async () => {
-    const w = world([rec()]);
-    await w.share.publish();
-    w.ask("one", "abcdefgh23", "Kami");
-    await w.share.poll();
-    await w.share.answer(w.share.pending()[0]!.key, "session");
-    w.ask("from someone else", "abcdefgh23", "Friren");
-    w.ask("two", "abcdefgh23", "Kami");
-    await w.share.poll();
-    expect(w.typed.map((x) => x.text)).toEqual(["one", "two"]);
-    expect(w.share.pending().map((p) => [p.from, p.prompt])).toEqual([["Friren", "from someone else"]]);
-    expect(w.share.granted("s1", "Kami")).toBe(true);
-    expect(w.share.granted("s1", "Friren")).toBe(false);
-  });
-
-  it("an Allow that types nothing keeps the card with its line and adds no grant", async () => {
+  it("an Allow that types nothing keeps the card with its line", async () => {
     const w = world([rec()], { types: false });
     await w.share.publish();
     w.ask("run the tests");
     await w.share.poll();
     const key = w.share.pending()[0]!.key;
-    await w.share.answer(key, "session");
+    await w.share.answer(key, "once");
     expect(w.typed).toEqual([]);
     expect(w.share.pending()).toHaveLength(1);
     expect(w.share.pending()[0]).toMatchObject({ key, failed: true });
-    expect(w.share.granted("s1", "Kami")).toBe(false);
     await w.share.answer(key, "once");
     expect(w.share.pending()).toHaveLength(1);
     // it types once the terminal takes input again
@@ -126,20 +114,15 @@ describe("a bot's request to type into a terminal", () => {
     expect(w.share.pending()).toEqual([]);
   });
 
-  it("a granted session that takes no input now shows the card instead of using the grant", async () => {
+  it("Allow on a terminal that takes no input now types nothing and keeps the card", async () => {
     const w = world([rec()]);
     await w.share.publish();
-    w.ask("one");
-    await w.share.poll();
-    await w.share.answer(w.share.pending()[0]!.key, "session");
     w.io.canType = false;
     w.ask("two");
     await w.share.poll();
-    expect(w.typed.map((x) => x.text)).toEqual(["one"]);
     expect(w.share.pending().map((p) => p.prompt)).toEqual(["two"]);
-    // Allow on a terminal that takes no input types nothing either
     await w.share.answer(w.share.pending()[0]!.key, "once");
-    expect(w.typed.map((x) => x.text)).toEqual(["one"]);
+    expect(w.typed).toEqual([]);
     expect(w.share.pending()[0]?.failed).toBe(true);
   });
 

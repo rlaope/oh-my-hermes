@@ -1450,7 +1450,6 @@ export const ja: Record<Key, string> = {
   "tlink.st.done": "完了",
   "tlink.st.ended": "終了",
   "tshare.wants": "{bot} が {title} に入力しようとしています",
-  "tshare.thisSession": "このセッション中は許可",
   "tshare.resumeSend": "再開して送信",
   "tshare.notTyped": "入力できませんでした: ターミナルが入力を受け付けていません。再開するか、拒否してください。",
   "term.empty": "フォルダでシェルやコーディング CLI を開きます:",

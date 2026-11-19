@@ -1450,7 +1450,6 @@ export const ko: Record<Key, string> = {
   "tlink.st.done": "완료",
   "tlink.st.ended": "끝남",
   "tshare.wants": "{bot}이(가) {title}에 입력하려고 해요",
-  "tshare.thisSession": "이 세션 동안 허용",
   "tshare.resumeSend": "이어서 보내기",
   "tshare.notTyped": "입력하지 못했어요: 터미널이 입력을 받지 않아요. 이어하거나 거부하세요.",
   "term.empty": "폴더에서 셸이나 코딩 CLI를 열어요:",

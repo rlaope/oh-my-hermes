@@ -31,9 +31,10 @@ RULES = (
     "that is the third and last writer to a terminal's pseudo-terminal (`typeAllowed`).",
     "Without the person's Allow, nothing a bot sent is typed.",
     "The sender name is what the requesting local process wrote in the request, and any process of the same OS user"
-    " can write any name: it scopes the grant, it does not authenticate a bot.",
-    "a request under any other sender name shows a card.",
-    "an Allow that types nothing keeps the card, with a line saying so, and adds no grant.",
+    " can write any name: omher shows it on the card and never treats it as proof of which bot asked.",
+    "Each prompt asks: every request shows its own card and types nothing until the person allows that one, and omher"
+    " keeps no standing grant, for a session, a sender name or a bot.",
+    "an Allow that types nothing keeps the card, with a line saying so.",
     "On Windows, where these owner-only checks cannot be held, sharing is off: omher writes no status file, makes no"
     " inbox and reads none,",
     "it closes the split pane that holds the keyboard (the same pane the ⌘W key in it closes)",
@@ -1758,7 +1759,7 @@ class SessionFilesStayInOmhersFolder(unittest.TestCase):
         allowed = self.ui.split("const typeAllowed = async", 1)[1].split("\n  };\n", 1)[0]
         self.assertEqual(allowed.count("io.write("), 1)
         # typeAllowed is called from one place only: termShare.ts's `type`, reached by the card's Allow (or Resume and
-        # send) or a grant; its false (nothing typed) keeps the card and adds no grant
+        # send) on that request's own card; its false (nothing typed) keeps the card
         callers = []
         for path in sorted((UI_SRC).rglob("*.ts*")):
             if path.name.endswith((".test.ts", ".test.tsx")):
@@ -2328,12 +2329,19 @@ class TerminalLinksAndBotRequests(unittest.TestCase):
         self.assertLess(handler.index("if not sharing_available():"), handler.index("root = terminals_root()"))
         self.assertIn('"terminal sharing is not available on Windows"', handler)
 
-    def test_a_standing_grant_is_keyed_by_session_and_sender_name(self) -> None:
+    def test_every_bot_prompt_asks_and_no_grant_is_kept(self) -> None:
+        # the sender name is self-reported, so nothing may stand in for the person's Allow on each request's own card
         share = (UI_SRC / "sessions" / "termShare.ts").read_text(encoding="utf-8")
-        self.assertIn("const grantKey = (sessionId: string, from: string) => JSON.stringify([sessionId, from]);", share)
-        self.assertIn("granted.has(grantKey(rec.id, p.from))", share)
-        self.assertIn('if (choice === "session") granted.add(grantKey(r.sessionId, r.from));', share)
-        self.assertNotIn("granted.add(r.sessionId)", share)
+        card = (UI_SRC / "sessions" / "TermShareCard.tsx").read_text(encoding="utf-8")
+        self.assertIn('const answer = async (key: string, choice: "deny" | "once" | "resume") => {', share)
+        for bad in ("granted", "grantKey", '"session"'):
+            self.assertNotIn(bad, share, bad)
+            self.assertNotIn(bad, card, bad)
+        # a request that arrives only ever becomes a card: arrive() types nothing
+        arrive = share.split("const arrive = (reqs: ShareRequest[]) => {", 1)[1].split("\n  };\n", 1)[0]
+        self.assertNotIn("type(", arrive)
+        for lang in ("en", "ja", "ko", "zh"):
+            self.assertNotIn('"tshare.thisSession"', (UI_SRC / "i18n" / f"{lang}.ts").read_text(encoding="utf-8"), lang)
 
     def test_the_inbox_is_read_owner_only_and_never_types(self) -> None:
         for needle in ("libc::O_NOFOLLOW", "meta.mode() & 0o7777 != 0o600", "meta.uid() != my_uid()",

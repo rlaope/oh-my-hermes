@@ -19,11 +19,11 @@ All notable changes will be documented here.
   - **Bots read a linked terminal and ask to type into it.** A bot that gets a terminal link, in omher or in Slack or
     Discord, can read that session's title, CLI, folder, state and last line through the new OMH tool
     `omh_omher_terminal`, and can ask omher to type a prompt into it. omher shows the request as a card on the
-    terminal (Deny, Allow once, Allow for this session), and nothing is typed without the person's Allow. A message
+    terminal (Deny, Allow once), and nothing is typed without the person's Allow. A message
     in a bot's main chat that holds a terminal link carries that terminal's status to the bot. A bot's sidebar
-    preview shows a linked terminal's title instead of the raw link. Allow for this session holds for that terminal
-    and the sender name the request carried; a request under another name asks again. The name is what the local
-    requesting process wrote, not proof of which bot asked. A request to a paused or ended terminal shows its card
+    preview shows a linked terminal's title instead of the raw link. Each prompt asks: every request has its own
+    card, and there is no allow-for-this-session, because the sender name on a request is what the local requesting
+    process wrote, not proof of which bot asked. A request to a paused or ended terminal shows its card
     there with Deny and Resume and send, and an Allow that could not type keeps the card. Terminal sharing is off on
     Windows (the owner-only file checks are POSIX): the tool answers that it is not available there, and Copy link
     and the chip still work.

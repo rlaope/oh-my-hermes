@@ -1,6 +1,6 @@
 // The card a bot's request to type into a TERMINALS session shows on that session's terminal: "<bot> wants to type
-// into <title>", the prompt as it would be typed, then Deny, Allow once and Allow for this session (the approval
-// cards' order, weight and colours). Only Allow types it (termShare.ts). Several requests wait one under another.
+// into <title>", the prompt as it would be typed, then Deny and Allow once (the approval cards' order, weight and
+// colours). Only Allow types it, and each request asks on its own card (termShare.ts). Several wait one under another.
 // A session that cannot take input now (paused, ended) shows the card on its idle view with Deny and "Resume and
 // send" only; a prompt that could not be typed keeps its card with a line saying so.
 import { useEffect, useRef } from "react";
@@ -38,14 +38,9 @@ export function TermShareCards({ sessionId, title }: { sessionId: string; title:
               {t("card.deny")}
             </button>
             {live ? (
-              <>
-                <button type="button" className="card-btn soft once" data-choice="once" onClick={() => void getTermShare().answer(r.key, "once")}>
-                  {t("card.allowOnce")}
-                </button>
-                <button type="button" className="card-btn soft session" data-choice="session" onClick={() => void getTermShare().answer(r.key, "session")}>
-                  {t("tshare.thisSession")}
-                </button>
-              </>
+              <button type="button" className="card-btn soft once" data-choice="once" onClick={() => void getTermShare().answer(r.key, "once")}>
+                {t("card.allowOnce")}
+              </button>
             ) : (
               <button type="button" className="card-btn soft once" data-choice="resume" disabled={r.busy} onClick={() => void getTermShare().answer(r.key, "resume")}>
                 {t("tshare.resumeSend")}

@@ -1,6 +1,6 @@
 // A bot and a TERMINALS session it holds a link to (mock host): omher keeps the session's status file for the bot to
 // read, and a bot's request to type into it shows as a card on its terminal. Nothing is typed unless the person
-// presses Allow once or Allow for this session; Deny, or no answer, types nothing.
+// presses Allow once on that request's own card; Deny, or no answer, types nothing.
 // Shots: OMHER_SHOTS=<dir> -> term-link-bot-card-{dark,light}.png
 import { expect, test, type Page } from "@playwright/test";
 import { mkdirSync } from "node:fs";
@@ -119,7 +119,7 @@ test("a bot's request shows a card and types nothing until Allow; Deny types not
   await expect(card).toHaveCount(1);
   await expect(card.locator(".card-title")).toHaveText("Kami wants to type into Shell");
   await expect(card.getByTestId("term-share-prompt")).toHaveText("rm -rf build\nmake");
-  await expect(card.locator("button")).toHaveText(["Deny", "Allow once", "Allow for this session"]);
+  await expect(card.locator("button")).toHaveText(["Deny", "Allow once"]);
   // Deny has the focus: a stray Enter is not an Allow
   await expect(card.locator("button").first()).toBeFocused();
   // the row and the Dock count show it waits on the person
@@ -151,32 +151,28 @@ test("Allow once types the prompt and Enter once; the next request asks again", 
   expect((await writes(page, id)).slice(before)).toEqual(["echo hi[2J\r"]);
 });
 
-test("Allow for this session types later requests without a card; another session still asks", async ({ page }) => {
+test("every request asks: two from Kami are two cards, and the second types nothing until its own Allow", async ({ page }) => {
   await open(page);
   const a = await newTerm(page, "shell");
   const la = await linkId(page, a);
   await expect.poll(async () => Object.keys(await files(page))).toContain(la);
+  const ours = async () => (await writes(page, a)).filter((d) => d === "one\r" || d === "two\r");
   await ask(page, la, "one");
-  await page.getByTestId("term-share-card").getByRole("button", { name: "Allow for this session" }).click();
-  await expect.poll(async () => (await writes(page, a)).filter((d) => d === "one\r" || d === "two\r")).toEqual(["one\r"]);
+  const card = page.getByTestId("term-share-card");
+  await expect(card.locator("button")).toHaveText(["Deny", "Allow once"]);
+  await card.getByRole("button", { name: "Allow once" }).click();
+  await expect.poll(ours).toEqual(["one\r"]);
+  await expect(card).toHaveCount(0);
+  // the same sender name again: its own card, nothing typed while it waits
   await ask(page, la, "two");
-  await expect.poll(async () => (await writes(page, a)).filter((d) => d === "one\r" || d === "two\r")).toEqual(["one\r", "two\r"]);
-  await expect(page.getByTestId("term-share-card")).toHaveCount(0);
-  // the grant is Kami's: a request under another sender name asks, and nothing of it is typed
-  await ask(page, la, "from friren", "Friren");
-  const other = page.getByTestId("term-share-card");
-  await expect(other).toHaveCount(1);
-  await expect(other.locator(".card-title")).toHaveText("Friren wants to type into Shell");
-  await page.waitForTimeout(2000);
-  expect((await writes(page, a)).filter((d) => d.includes("friren"))).toEqual([]);
-  await other.getByRole("button", { name: "Deny" }).click();
-  await expect(other).toHaveCount(0);
-  const b = await newTerm(page, "shell");
-  const lb = await linkId(page, b);
-  await expect.poll(async () => Object.keys(await files(page))).toContain(lb);
-  await ask(page, lb, "three");
-  await expect(page.getByTestId("term-share-card")).toHaveCount(1);
-  expect((await writes(page, b)).filter((d) => d === "three\r")).toEqual([]);
+  await expect(card).toHaveCount(1);
+  await expect(card.locator(".card-title")).toHaveText("Kami wants to type into Shell");
+  await expect(card.getByTestId("term-share-prompt")).toHaveText("two");
+  await page.waitForTimeout(3500);
+  expect(await ours()).toEqual(["one\r"]);
+  await card.getByRole("button", { name: "Allow once" }).click();
+  await expect.poll(ours).toEqual(["one\r", "two\r"]);
+  await expect(card).toHaveCount(0);
 });
 
 test("an allowed many-line prompt is one bracketed paste while its terminal is parked", async ({ page }) => {
@@ -190,13 +186,14 @@ test("an allowed many-line prompt is one bracketed paste while its terminal is p
     w.__omherMockOut(w.__omherSessions.ptyOf(i)!, "\x1b[?2004h");
   }, a);
   await ask(page, la, "first prompt");
-  await page.getByTestId("term-share-card").getByRole("button", { name: "Allow for this session" }).click();
+  await page.getByTestId("term-share-card").getByRole("button", { name: "Allow once" }).click();
   await expect.poll(async () => (await writes(page, a)).filter((d) => d.includes("prompt"))).toEqual(["\x1b[200~first prompt\x1b[201~\r"]);
   // another session on the page; the first one is parked (short thresholds, as the park tests use)
   await newTerm(page, "shell");
   await page.evaluate(() => (window as unknown as { __omherPark: { set(o: object): void } }).__omherPark.set({ hiddenMs: 200, idleMs: 200, sweepMs: 100 }));
   await expect.poll(() => page.evaluate(() => (window as unknown as { __omherPark: { parked(): number } }).__omherPark.parked())).toBe(1);
   await ask(page, la, "first line\nsecond line");
+  await page.getByTestId("term-share-card").getByRole("button", { name: "Allow once" }).click();
   await expect.poll(async () => (await writes(page, a)).filter((d) => d.includes("line"))).toEqual(["\x1b[200~first line\nsecond line\x1b[201~\r"]);
 });
 
@@ -214,7 +211,7 @@ test("a request to a paused terminal shows its card there: Deny, or Resume and s
   const card = page.getByTestId("term-share-card");
   await expect(card).toHaveCount(1);
   await expect(page.getByTestId(`session-${a}`)).toHaveAttribute("data-term-status", "bell");
-  // no Allow for this session where nothing runs
+  // no Allow once where nothing runs: only Resume and send
   await expect(card.locator("button")).toHaveText(["Deny", "Resume and send"]);
   await expect(card.locator("button").first()).toBeFocused();
   await card.getByRole("button", { name: "Deny" }).click();

@@ -1661,7 +1661,7 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
     t.term.focus();
   };
 
-  /** Type a bot's prompt the person allowed (termShare.ts: the card's Allow, or Allow for this session) into session
+  /** Type a bot's prompt the person allowed (termShare.ts: the card's Allow, each request its own) into session
    *  `id`'s terminal, then Enter. A bracketed paste when the program turned that on, so a many-line prompt arrives as
    *  one (a parked terminal keeps the mode it had: term/engine.ts `bracketedPaste`); else its lines are typed as a
    *  paste types them. Control characters never reach the program (the prompt is
