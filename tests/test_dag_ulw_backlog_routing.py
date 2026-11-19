@@ -97,6 +97,10 @@ INLINE_BACKLOGS = (
     "Fix these four bugs: the export crash, the login redirect, the empty chart, and the broken docs link",
     "프론트 버튼 추가랑 백엔드 엔드포인트랑 테스트 다 해줘",
     "migrate the settings store to sqlite, update the three callers, and add tests",
+    # A Korean connector right after a Latin word, and three verb-led parts with no count word.
+    "로그인 API하고 설정 화면하고 문서 페이지 세 개 다 고쳐줘",
+    "로그인 API와 설정 화면과 문서 페이지 세 개 다 고쳐줘",
+    "Fix the login redirect, update the API handler, and add tests",
 )
 
 # One-line lists that are no backlog keep the route they had: (message, (action, selected skill, reason code)).

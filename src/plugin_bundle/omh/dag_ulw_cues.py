@@ -2524,14 +2524,16 @@ _BACKLOG_ITEM: Final = _lazy_compile(r"^[ \t]*(?:\d{1,2}[.)]|[-*•]|\(?[a-h]\))
 _BACKLOG_ITEM_MIN_WORDS: Final = 3
 _BACKLOG_KOREAN_ITEM_MIN_WORDS: Final = 2
 # Code named: a source path, a dotted name or a call, a snake_case name, a test runner or test, an error, or a word for
-# code. A bare "issue" or "item" names nothing; "bug" and "crash" are code's.
+# code. A bare "issue" or "item" names nothing; "bug" and "crash" are code's. The code words end at the next Latin
+# letter, digit or underscore rather than at `\b`, because a Korean particle glued on ("API하고") is a word character
+# to `\b` and would hide the word.
 _BACKLOG_CODE: Final = _lazy_compile(
     r"\b\w+\.(?:py|pyi|js|jsx|ts|tsx|go|rs|java|kt|rb|php|cs|c|cc|cpp|h|hpp|swift|scala|sh|sql|vue|svelte)\b"
     r"|\b[a-z_]\w*\.[a-z_]\w*(?:\.[a-z_]\w*)*\b|\b[a-z_]\w*\(|\b[a-z]+_[a-z_]+\b"
     r"|\b(?:tests?|unit\s?tests?|unittest|pytest|jest|vitest|traceback|stack\s?trace|exceptions?|segfault|regressions?)\b"
     r"|\b\w*(?:error|exception)\b"
     r"|\b(?:functions?|methods?|class(?:es)?|modules?|packages?|code|codebase|repo|repository|bugs?|crash(?:es|ing)?"
-    r"|endpoints?|api|cli|sdk|library|script|compiler|parser|schema|migration|build|ci)\b"
+    r"|endpoints?|api|cli|sdk|library|script|compiler|parser|schema|migration|build|ci)(?![a-z0-9_])"
     r"|코드|함수|메서드|클래스|모듈|패키지|테스트|에러|오류|예외|버그|크래시|엔드포인트|저장소|레포|빌드|파서|스키마"
 )
 # The request's own words ask for the change: a change verb, in English or Korean.
@@ -2578,7 +2580,7 @@ def _backlog_parts(text: str) -> tuple[list[str], str]:
 BACKLOG_MIN_INLINE_ITEMS: Final = 3
 _BACKLOG_INLINE_MAX_CHARS: Final = 400
 _BACKLOG_INLINE_SPLIT: Final = _lazy_compile(
-    r"\s*[,，、]\s*(?:and\s+|then\s+)?|\s+and\s+|(?<=[가-힣])(?:이랑|랑|하고|와|과)\s+"
+    r"\s*[,，、]\s*(?:and\s+|then\s+)?|\s+and\s+|(?<=[가-힣A-Za-z0-9])(?:이랑|랑|하고|와|과)\s+"
 )
 # The first part holds what the rest belong to: one thing and its parts, not separate changes.
 _BACKLOG_INLINE_PARTS_OF_ONE: Final = _lazy_compile(r"\b(?:with|including|containing|that\s+has)\b")
@@ -2609,22 +2611,27 @@ def lists_several_code_changes(text: str, links: tuple[str, ...] = ()) -> bool:
     if not isinstance(text, str) or len(text) > _BACKLOG_MAX_CHARS:
         return False
     items, frame = _backlog_parts(text)
+    verb_led = False
     if len(items) >= BACKLOG_MIN_ITEMS:
         plain = _folded(frame)
         code_items = sum(1 for item in items if _BACKLOG_CODE.search(_folded(item)))
         if not (_BACKLOG_CODE.search(plain) or code_items >= 2):
             return False
         asks_for_change = bool(_BACKLOG_CHANGE.search(plain))
-    elif not items and _inline_backlog_parts(text):
+    elif not items and (inline := _inline_backlog_parts(text)):
         plain = _folded(text)
         # Work the request itself splits, runs in parallel or spreads over many targets keeps the route it had ("api
         # 모듈과 ui 모듈 테스트가 깨졌어, 병렬로 각각 고쳐줘" still reaches dag-ulw).
         if not _BACKLOG_CODE.search(plain) or work_has_several_parts(text):
             return False
         asks_for_change = bool(_BACKLOG_CHANGE.search(plain) or _BACKLOG_INLINE_DO_ALL.search(plain))
+        # Three parts that each open on a change verb ("fix X, update Y, and add Z") already say there are several.
+        verb_led = sum(1 for part in inline if _BACKLOG_CHANGE.match(_folded(part))) >= BACKLOG_MIN_INLINE_ITEMS
     else:
         return False
-    if not asks_for_change or not _BACKLOG_SCOPE.search(plain) or _BACKLOG_NOT_THE_CHANGE.search(plain):
+    if not asks_for_change or _BACKLOG_NOT_THE_CHANGE.search(plain):
+        return False
+    if not (_BACKLOG_SCOPE.search(plain) or verb_led):
         return False
     request = " ".join(plain.split())
     if _asks_to_be_told(request) or any(link and _PULL_REQUEST_ADDRESS.search(link.casefold()) for link in links):
