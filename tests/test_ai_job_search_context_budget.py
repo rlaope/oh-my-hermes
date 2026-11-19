@@ -78,9 +78,11 @@ class AiJobSearchContextBudgetTests(unittest.TestCase):
         # at a fixed 57 characters; the pin before it was 7c4f6dc6...b33a.
         # skill-eval then adds one index line; dropping only that line
         # reproduces 40241e3b...ba76 / 12894.
-        self.assertEqual(_digest(legacy), 'c370d495d5e44f5f9d639eb7c72b038f7cbb851f5ba7bf6f18f3450c8abe0d2c')
-        self.assertEqual(len('\n'.join(legacy)), 12975)
-        delta = len('\n'.join(lines)) - 12975
+        # 12975 -> 12978 and the digest re-derived: model-compression's clause says "smaller or cheaper" again
+        # (+3 in its index line); the pin before it was c370d495...0d2c.
+        self.assertEqual(_digest(legacy), '934f22855f11c51758742087aea63159916dba0b7532ad208ed5a436d3b623b4')
+        self.assertEqual(len('\n'.join(legacy)), 12978)
+        delta = len('\n'.join(lines)) - 12978
         self.assertGreater(delta, 0)
         self.assertLessEqual(delta, INDEX_DELTA_CAP)
         # A catalog ratchet is exact; do not carry the old row's unused slack.
@@ -202,8 +204,10 @@ class AiJobSearchContextBudgetTests(unittest.TestCase):
             # window (the detail moves after the colon), 542640 -> 542611; the pin before it was bc66d6c0...eb7d.
             # skill-eval then adds one row to each producer; dropping only that row reproduces
             # bc088218...5df4 at 542611 and 57ef3e89...0794e at 145483.
-            (skill_capabilities, 546469, FULL_ROW_DELTA_CAP,
-             'db592e2145246163ab15265c2a02ec9bc483fe4d5e79b98691cd53b06be1ccc6',
+            # 546469 -> 546456 and the digest re-derived: model-compression's description says "smaller or
+            # cheaper" again (-13); no other row moved, and the pin before it was db592e21...1ccc6.
+            (skill_capabilities, 546456, FULL_ROW_DELTA_CAP,
+             '59c3f3d0942895064422126b0ff33528b919d3eab127ca06ea630d402a0a38b0',
              release.FULL_CAPABILITY_SKILL_SECTION_CHAR_LIMIT),
             (standalone_skill_capability_items, 146420, STANDALONE_ROW_DELTA_CAP,
              '7bf537036d7224bf9054e4fc91773dc033d063546267031ea8bbec7f1872578d',
@@ -550,7 +554,9 @@ class AiJobSearchContextBudgetTests(unittest.TestCase):
         # branch's pin was 9b9505bb...aad3, and main's was bd2eeb27...409b.
         # Merged with main again: show-reel then gains the cut-sheet lane pointer; only show-reel moves. This
         # branch's pin was fd5cef40...10fe, and main's was fbe730f4...88bf.
-        self.assertEqual(_digest(legacy_hashes), '280bbdfb370417742fc585c45f283d48ee0908870039a192f4fdf70d1b1cce74')
+        # model-compression's description says "smaller or cheaper" again; only its body moves, and the pin
+        # before it was 280bbdfb...7cee74.
+        self.assertEqual(_digest(legacy_hashes), 'a92e709fb2056174da50e0aec5e9904f598e28189b9a0c8186d47f07345ba555')
         legacy = _skill_context_cost_profile('full', legacy_templates, refs)
         current = _skill_context_cost_profile('full', templates, refs)
         # Main's search guidance adds 305; repro-audit's mandatory rails 1,943.

@@ -1,6 +1,6 @@
 ---
 name: "omh-model-compression"
-description: "[omh] Making a model smaller by changing its weights."
+description: "[omh] Making a model smaller or cheaper via its weights."
 license: MIT
 metadata:
   hermes:

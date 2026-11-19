@@ -9031,7 +9031,7 @@ These surfaces are generated command references, not installed Hermes workflow s
 
 ### model-compression
 
-[omh] Making a model smaller by changing its weights: cheaper through quantization (GPTQ, AWQ, GGUF, bitsandbytes, FP8, quantization-aware training), pruning, or distillation into a smaller student, sized to the target hardware, calibrated on the task's own data, and kept only when it holds quality on the person's own eval.
+[omh] Making a model smaller or cheaper via its weights: quantization (GPTQ, AWQ, GGUF, bitsandbytes, FP8, quantization-aware training), pruning, or distillation into a smaller student, sized to the target hardware, calibrated on the task's own data, and kept only when it holds quality on the person's own eval.
 
 - Category: `planning`
 - Phase: `model-compression`

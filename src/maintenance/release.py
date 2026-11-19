@@ -206,7 +206,9 @@ CONCEPTUAL_AWARENESS_SURFACES = ("request-to-handoff", "executor selection", "co
 # line that was cut mid-word gets shorter. Measured from the producer; no headroom.
 # 12970 -> 13051: one `skill-eval` index line plus newline, measured from
 # the producer after merging fix/skill-harness-fit; no headroom.
-SKILL_INDEX_CHAR_LIMIT = 13051
+# 13051 -> 13054: model-compression's clause says "smaller or cheaper via its
+# weights" again (+3 in its index line), measured from the producer; no headroom.
+SKILL_INDEX_CHAR_LIMIT = 13054
 # The longest single skill line in that index. Every description is already cut
 # to 60 characters, so what moves this is a longer skill name.
 # 100 -> 99: same word-boundary cut as above, measured from the producer.
@@ -1096,7 +1098,9 @@ PLUGIN_TOOL_SCHEMA_CHAR_LIMIT = 62968
 # window, the detail moved after the colon (-29 across those rows); measured from the producer. No headroom.
 # 545683 -> 549541: one `skill-eval` capability row plus its separator; dropping only that row
 # reproduces 545683. Measured from the producer.
-FULL_CAPABILITY_SKILL_SECTION_CHAR_LIMIT = 549541
+# 549541 -> 549528: model-compression's description says "smaller or cheaper via its weights" in place of
+# "smaller by changing its weights: cheaper through" (-13); measured from the producer. No headroom.
+FULL_CAPABILITY_SKILL_SECTION_CHAR_LIMIT = 549528
 FULL_CAPABILITY_SKILL_ITEM_CHAR_LIMIT = 9000
 # 100000 -> 102070: the same three domain workflows each add one standalone
 # capability row, again measured on the merged tree; warranted growth for three

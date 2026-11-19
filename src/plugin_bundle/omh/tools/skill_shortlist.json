@@ -1824,9 +1824,9 @@
 "hangul_anchors":"가지 루닝 모델 양자 인식 자화 증류 지치 치기 프루 학습",
 "label":"omh-model-compression",
 "name":"model-compression",
-"situation":"Making a model smaller by changing its weights",
+"situation":"Making a model smaller or cheaper via its weights",
 "terms":{
-"1":"baselin budget calibrat chang comparison data fit gated gguf hold kept making memory noth quality sized target through uncompress",
+"1":"baselin budget calibrat comparison data fit gated gguf hold kept making memory noth quality sized target uncompress",
 "2":"accelerator answer cheaper compact copy datacenter distill eval fewer full hardwar int8 knowledg lose macbook magnitud mimic overflow person quantiz question size sparsegpt task version vram without",
 "3":"awq bitsandbyt compress fp8 gptq post run structur unstructur",
 "4":"awar bit distillation prun quantization smaller student train",
