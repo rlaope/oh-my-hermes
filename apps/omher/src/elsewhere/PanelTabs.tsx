@@ -191,15 +191,23 @@ function freeBox(row: HTMLElement): Box | null {
   const x1 = Math.min(rest.length ? Math.min(...rest) : b.right, window.innerWidth);
   return x1 > x0 ? { at: performance.now(), x0, x1, y0: b.top, y1: b.bottom } : null;
 }
-/** The row moved more than a pixel in the last MOVE_MS: what is under the pointer is not what the person aimed at. */
+/** The row moved more than a pixel in the last MOVE_MS, or the slide itself still runs (the window's grid, or the
+ *  overlay panel): what is under the pointer is not what the person aimed at. A busy main thread draws the slide's
+ *  frames further apart than MOVE_MS, so two samples alone can miss a row that is still moving. */
 const MOVE_MS = 60;
+const sliding = () =>
+  [document.querySelector(".window"), document.querySelector(".details")].some((el) => el?.getAnimations().some((a) => a instanceof CSSTransition));
 const moving = (now: number) => {
+  if (sliding()) return true;
   const last = swept.filter((b) => now - b.at <= MOVE_MS).map((b) => b.x0);
   return last.length > 1 && Math.max(...last) - Math.min(...last) > 1;
 };
 
 function onSweptPress(e: PointerEvent) {
-  if (armed || e === paired || e.button !== 0 || performance.now() > sweepEnd + AIM_MS) return;
+  // the press's own time, not when this handler runs: a busy main thread hands it over late, and the person aimed at
+  // the frame they saw when they pressed
+  const now = e.timeStamp;
+  if (armed || e === paired || e.button !== 0 || now > sweepEnd + AIM_MS) return;
   const hit = e.target as Element | null;
   const row = hit?.closest('[data-testid="panel-tabs"]');
   // on the row's free space now: the row's own handler arms; on the row's maximise / close buttons: theirs
@@ -207,7 +215,6 @@ function onSweptPress(e: PointerEvent) {
   // a control the person actually hit outside the row (the model pill, the places chip) always wins: only the
   // header's bare background (and tabs still moving) can be claimed
   if (onControl(hit)) return;
-  const now = performance.now();
   if (row && !moving(now)) return;
   const aimed = (b: Box) => now - b.at <= AIM_MS && e.clientX >= b.x0 && e.clientX <= b.x1 && e.clientY >= b.y0 && e.clientY <= b.y1;
   if (!swept.some(aimed)) return;

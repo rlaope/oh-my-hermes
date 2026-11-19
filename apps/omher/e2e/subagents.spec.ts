@@ -2,6 +2,7 @@
 // events (mock `/delegate` sends them in the order the real kami turn did), on after its turn ends; done it folds
 // to "Ran 2 subagents · …". The run name opens that run in Plans. Read-only.
 import { expect, test, type Page } from "@playwright/test";
+import { motionDone } from "./motion";
 
 const MOCK = Number(process.env.OMHER_MOCK_PORT || 5308);
 const LIVE = "dag:20261102_235818_fcfb1bdd/codex-coexist-live";
@@ -91,6 +92,8 @@ test("the card's run name opens that run in Plans", async ({ page }) => {
   await expect(open).toHaveText("codex-coexist-live");
   // the panel opened by itself on this turn's fan-out; close it, then the card's link opens it on the run
   await expect(page.getByTestId("window")).toHaveClass(/\bpanel-open\b/);
+  // the button slides with the opening panel: press it once it has stopped
+  await motionDone(page);
   await page.getByTestId("panel-button").click();
   await expect(page.getByTestId("window")).not.toHaveClass(/\bpanel-open\b/);
   await open.click();

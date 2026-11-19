@@ -4,6 +4,7 @@
 // re-reads on its own, says plainly what it is for when empty, never opens on someone else's CLI run, and a run quiet
 // for a day is not live.
 import { expect, test, type Page } from "@playwright/test";
+import { motionDone } from "./motion";
 
 const MOCK = Number(process.env.OMHER_MOCK_PORT || 5308);
 const LIVE = "dag:20261102_235818_fcfb1bdd/codex-coexist-live";
@@ -61,13 +62,18 @@ test("the panel button sits right of the model control: closed it opens Plans, o
   const on = await btn.evaluate((e) => ({ bg: getComputedStyle(e).backgroundColor, img: getComputedStyle(e).backgroundImage }));
   expect(on.img).toBe("none");
   expect(on.bg).not.toBe("rgba(0, 0, 0, 0)");
+  // the button slides with the panel's edge: press it once the slide has stopped, so the release lands on it too
+  await motionDone(page);
   await btn.click();
   await expect(page.getByTestId("window")).not.toHaveClass(/\bpanel-open\b/);
   await expect(btn).toHaveAttribute("aria-pressed", "false");
   // once the person picks a tab, the button reopens on that tab
+  await motionDone(page);
   await btn.click();
+  await motionDone(page);
   await page.getByTestId("panel-tab-terminal").click();
   await btn.click();
+  await motionDone(page);
   await btn.click();
   await expect(page.getByTestId("panel-tab-terminal")).toHaveAttribute("aria-selected", "true");
   // the bot's name still toggles the panel, as before
@@ -163,6 +169,9 @@ test("a delegate_task opens the panel on Plans once per turn, and a close during
   });
   await expect(page.getByTestId("window")).toHaveClass(/\bpanel-open\b/);
   await expect(page.getByTestId("panel-tab-runs")).toHaveAttribute("aria-selected", "true");
+  // the auto-open slides the button left with the panel's edge: a press sent as the slide starts was released on the
+  // panel's tab row, and the browser clicked neither (the close never happened)
+  await motionDone(page);
   await page.getByTestId("panel-button").click();
   await expect(page.getByTestId("window")).not.toHaveClass(/\bpanel-open\b/);
   // a second fan-out in the same turn leaves it closed

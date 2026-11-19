@@ -4,6 +4,11 @@ All notable changes will be documented here.
 
 ## Unreleased
 
+- **omher: no "+ New thread" line sits under a bot any more.** The line closed every bot's thread list, and under the
+  open bot it showed even with no threads, so the sidebar always carried an empty row. Under a bot now there are only
+  its threads, the last one ending the tree; a new thread opens from the bot row's + on hover, its right-click menu, or
+  `./thread`.
+
 - **The run summary shows how much of the prompt came from cache.** `omh_run_summary` adds a line after the token
   count, such as `Prompt cache: 62% of input read from cache (1,234,567 tokens)` (en/ko/ja/zh), and
   `breakdown.cache_read_share`. The share is cache reads over uncached input plus cache reads, which is how Hermes

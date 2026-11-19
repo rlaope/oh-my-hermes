@@ -116,7 +116,6 @@ export function Sidebar() {
             const hasThreads = (s.threads[b.name]?.length ?? 0) > 0;
             // a new thread runs on this computer, on a bot that is up (host and offline bots get none, as in the menu)
             const onNew = b.host || b.status === "offline" ? undefined : () => void s.newThread(b.name);
-            const open = inChat && s.selectedBot === b.name;
             const groupId = `threads-of-${b.name.replace(/[^A-Za-z0-9_-]/g, "_")}`;
             return (
             <BotRow
@@ -144,8 +143,8 @@ export function Sidebar() {
                 onRemove: listed.length > 1 ? () => s.listBot(b.name, false) : undefined,
               }}
             >
-              {/* the threads and "+ New thread" under them; a bot with none shows that line only while it is open */}
-              {(hasThreads || (onNew && open)) && <ThreadTree bot={b.name} id={groupId} onNew={onNew} />}
+              {/* its threads; a new one opens from the row's + (hover), its menu, or ./thread */}
+              {hasThreads && <ThreadTree bot={b.name} id={groupId} />}
             </BotRow>
             );
           })}
