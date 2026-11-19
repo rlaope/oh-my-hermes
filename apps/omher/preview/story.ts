@@ -4,14 +4,14 @@
 // grows, Slack / Discord replies and other bots' messages land, Kami posts the PR, and the loop
 // starts over (~55-65 s, a little different each time). Since 0.2.12 the sidebar moves too: Kami's threads (one
 // working, one waiting on an approval; both finish) change state and preview line, the PR message opens two threads
-// (the bridge's split path: `thread.split`), and in TERMINALS the Shell card runs Claude
-// Code for a while (its mark and name flip to Claude Code's and back) while the Codex card prints what it does. Real clock: requestAnimationFrame plus Date.now, with a 250 ms timer when frames are held back.
+// (the bridge's split path: `thread.split`), and in TERMINALS a Codex card and a Claude Code card each work through
+// their own task, drawn the way those CLIs draw it. Real clock: requestAnimationFrame plus Date.now, with a 250 ms timer when frames are held back.
 // The visitor always wins: any click, key or wheel pauses the story for 8 s, and what they set off (a reply, the
 // plan built from scratch, Juno's deploy) plays on its own timers. Hidden tab or window off-screen: paused.
 // Everything is staged data inside the page; nothing runs anywhere.
 import { getStore } from "../src/state/store";
 import { getSessions } from "../src/sessions/sessions";
-import { SHELL, type AgentId } from "../src/sessions/agents";
+import { type AgentId } from "../src/sessions/agents";
 import { threadKey } from "../src/threads/types";
 import { refreshRuns } from "../src/runs/live";
 import { addThread, away, broadcast, dropThread, history, hooks, nowS, PR_REPO, runs, threads, threadSaid, visitorThreads } from "./host";
@@ -285,24 +285,54 @@ function splitThreads(msg: string) {
 
 // ---- TERMINALS ---------------------------------------------------------------------------------------------------
 
-/** The terminal cards in web-app: Codex at work, and a Shell that runs Claude Code for part of each loop. Two cards,
- *  so TERMINALS and Kami's threads both fit whole in the hero-sized window (the app's own auto split shows the
- *  smaller region whole and cuts the other on a whole row: three cards left the third thread under the cut). */
-const term: Record<"codex" | "shell", string | null> = { codex: null, shell: null };
-const w = window as unknown as { __omherEmitSessionFg?: (p: { id: number; agent: string | null }) => void; __omherMockOut?: (id: number, d: string) => boolean };
+/** The terminal cards in web-app: Codex and Claude Code, each in its own terminal and at work on its own task, side
+ *  by side. Two cards, so TERMINALS and Kami's threads both fit whole in the hero-sized window (the app's own auto
+ *  split shows the smaller region whole and cuts the other on a whole row: three cards left a thread under the cut). */
+const term: Record<"codex" | "claude", string | null> = { codex: null, claude: null };
+const w = window as unknown as { __omherMockOut?: (id: number, d: string) => boolean };
 /** Print into a terminal card's program, as it would (its second line reads the last line). */
 function say(role: keyof typeof term, text: string) {
   const id = term[role];
   const pty = id ? getSessions().ptyOf(id) : null;
   if (pty !== null) w.__omherMockOut?.(pty, text);
 }
-/** The CLI the shell sees in front of the Shell card (the shell's `session-fg` event): its mark follows it. */
-function shellFg(agent: string | null) {
-  const id = term.shell;
-  const pty = id ? getSessions().ptyOf(id) : null;
-  if (pty !== null) w.__omherEmitSessionFg?.({ id: pty, agent });
+
+// What each CLI draws, in the shapes the real ones use (Codex CLI 0.169, Claude Code 2.1): Codex's header box, `›`
+// for the ask, `•` for its words, a green `•` with a bold verb for a tool and `└` for what it returned; Claude Code's
+// mascot header, `>` for the ask, `⏺` for its words, a green `⏺ Tool(arg)` and `⎿` for the result. Each step ends on
+// a line that says what the agent is doing, so the card's second line (the last line on screen) reads as a sentence.
+const B = "\x1b[1m", D = "\x1b[2m", G = "\x1b[32m", X = "\x1b[0m";
+const CC = "\x1b[38;2;217;119;87m"; // Claude Code's orange
+const NL = "\r\n";
+/** A terminal's screen cleared, as a CLI clears it when it starts. */
+const CLEAR = "\x1b[2J\x1b[3J\x1b[H";
+const boxRow = (s: string, plain: string, w: number) => `${D}│${X} ${s}${" ".repeat(Math.max(0, w - plain.length))} ${D}│${X}${NL}`;
+function codexHeader(): string {
+  const w = 44;
+  const rows: [string, string][] = [
+    [`${B}>_ OpenAI Codex${X} ${D}(v0.169.0)${X}`, ">_ OpenAI Codex (v0.169.0)"],
+    ["", ""],
+    [`${D}model:${X}     gpt-6.1-sol medium`, "model:     gpt-6.1-sol medium"],
+    [`${D}directory:${X} ~/code/web-app`, "directory: ~/code/web-app"],
+  ];
+  return `${D}╭${"─".repeat(w + 2)}╮${X}${NL}${rows.map(([s, p]) => boxRow(s, p, w)).join("")}${D}╰${"─".repeat(w + 2)}╯${X}${NL}`;
 }
-const SHELL_PROMPT = "\x1b[32myou@macbook\x1b[0m \x1b[34mweb-app\x1b[0m % ";
+const codexAsk = (t: string) => `${NL}${D}›${X} ${t}${NL}`;
+const codexSays = (t: string) => `${NL}• ${t}${NL}`;
+const codexTool = (verb: string, what: string, out: string[] = []) =>
+  `${NL}${G}•${X} ${B}${verb}${X} ${what}${NL}${out.map((l, i) => `  ${D}${i ? " " : "└"} ${l}${X}${NL}`).join("")}`;
+const claudeHeader = () =>
+  `${CC} ▐▛███▜▌${X}   ${B}Claude Code${X} ${D}v2.1.327${X}${NL}` +
+  `${CC}▝▜█████▛▘${X}  ${D}Opus 5.5 · Claude Max${X}${NL}` +
+  `${CC}  ▘▘ ▝▝${X}    ${D}~/code/web-app${X}${NL}`;
+const claudeAsk = (t: string) => `${NL}${D}>${X} ${t}${NL}`;
+const claudeSays = (t: string) => `${NL}⏺ ${t}${NL}`;
+const claudeTool = (tool: string, arg: string, out: string) => `${NL}${G}⏺${X} ${B}${tool}${X}(${arg})${NL}  ${D}⎿  ${out}${X}${NL}`;
+/** Both cards' screens at the start of a loop: the CLI's header, the person's ask and the agent's first words. */
+function termsAtStart() {
+  say("codex", CLEAR + codexHeader() + codexAsk("Add a lang filter to GET /search, with tests.") + codexSays("I'll start with the search handler and the index it queries."));
+  say("claude", CLEAR + claudeHeader() + claudeAsk("Write the Filters section of docs/search.md.") + claudeSays("I'll read the current page and the filter code first."));
+}
 
 // ---- one loop --------------------------------------------------------------------------------------------------
 
@@ -353,6 +383,7 @@ function startLoop() {
   working("Editing docs/styles/code.css", "Moving the sidebar to the new colors", T + 500);
   stream("page-styles", 1);
   pushRun();
+  termsAtStart();
 
   // the others: Friren reading, Juno waiting on an approval, two coding sessions busy
   ev("friren", { event: "bot.status", status: "online", running: true }, t0 - 50_000);
@@ -365,16 +396,16 @@ function startLoop() {
   const { flake } = REST;
   steps = [
     [k(0.2), () => openNode("page-styles")],
-    [k(1), () => say("codex", "\r\n• Read api/search/index.go\r\n")],
+    [k(1), () => say("codex", codexTool("Explored", "", ["Read api/search/handler.go", "Read api/search/index.go"]) + codexSays("The index stores each page's lang; the handler ignores it."))],
     [k(1.8), () => { stream("page-styles", 2); pushRun(); }],
     [k(2.6), () => ev("friren", { event: "status", text: "Reading the updater section" })],
     [k(3.2), () => working("Checking code blocks in light and dark", "Moving the sidebar to the new colors")],
-    [k(4), () => say("codex", "\r\n• Ran go test ./search/... (38 passed)\r\n")],
+    [k(4), () => say("codex", codexTool("Ran", "go test ./api/search/...", ["ok  acme/web-app/api/search  0.84s"]) + codexSays("Green before the change. Adding the filter now."))],
     [k(5), () => allow(notesAsk)],
     [k(6), () => { stream("page-styles", 3); pushRun(); }],
-    [k(7), () => { say("shell", "claude\r\n"); shellFg("claude"); say("shell", "\x1b[38;2;217;119;87m✻\x1b[0m \x1b[1mClaude Code\x1b[0m\r\n\r\n› write the Filters section of docs/search.md\r\n"); }],
+    [k(7), () => say("claude", claudeTool("Read", "docs/search.md", "Read 142 lines") + claudeSays("No Filters section yet. Checking the filter code."))],
     [k(7.6), () => working("Checking code blocks in light and dark", "Editing docs/styles/search.css")],
-    [k(9.5), () => say("shell", "\x1b[38;2;217;119;87m⏺\x1b[0m Read docs/search.md\r\n")],
+    [k(10), () => say("codex", codexTool("Edited", `api/search/handler.go (${G}+22${X} ${"\x1b[31m"}-6${X})`) + codexSays("Reading ?lang= and passing it to the index query."))],
     [k(10.5), () => { stream("page-styles", 4); pushRun(); working("Writing the dark code theme", "Editing docs/styles/search.css"); }],
     [k(12.5), () => ev("pip", { event: "message", id: `pip-${loop}`, text: "Standup notes are filed: 4 updates, 1 blocker (the iOS build)." })],
     [k(13.2), () => {
@@ -383,10 +414,11 @@ function startLoop() {
       threadEnd(flake.id);
     }],
     [k(14), () => { setNode("code-colors", "done"); pushRun(); working("Editing docs/styles/search.css"); }],
-    [k(15.5), () => say("shell", "\x1b[38;2;217;119;87m⏺\x1b[0m Read src/search/filters.ts\r\n")],
+    [k(12.5), () => say("claude", claudeTool("Read", "src/search/filters.ts", "Read 88 lines") + claudeSays("Three filters: lang, tag and date. Writing the section."))],
+    [k(15.5), () => say("codex", codexTool("Edited", `api/search/handler_test.go (${G}+41${X} ${"\x1b[31m"}-0${X})`) + codexSays("Four new tests. Running the whole suite."))],
     [k(16), () => { stream("page-styles", 5); pushRun(); }],
     [k(17.5), () => { setNode("page-styles", "done"); setNode("contrast", "running"); pushRun(); working("Checking contrast in light and dark"); }],
-    [k(18.5), () => say("codex", "\r\n• Running go test ./...\r\n")],
+    [k(19), () => say("codex", codexTool("Ran", "go test ./...", ["ok  acme/web-app/api/search  1.02s", "ok  acme/web-app/api/index   0.61s"]) + codexSays("All green: /search?lang=de returns only German pages."))],
     [k(20.5), () => {
       setNode("contrast", "done"); setNode("verify-pr", "running");
       runs.handoffs[RUN]["verify-pr"] = STREAM["verify-pr"][0];
@@ -394,7 +426,7 @@ function startLoop() {
       working("Building the docs");
       openNode("verify-pr");
     }],
-    [k(21), () => say("shell", "\x1b[38;2;217;119;87m⏺\x1b[0m Edited docs/search.md (+48 -2)\r\n")],
+    [k(21), () => say("claude", claudeTool("Update", "docs/search.md", "Updated docs/search.md with 48 additions and 2 removals") + claudeSays("Building the docs to check the section."))],
     [k(22.5), () => {
       ev("friren", { event: "tool.end", tool_id: `f${loop}`, name: "web_extract", ok: true, ms: 50_000 });
       ev("friren", { event: "message", id: `fr-${loop}`, text: "Wrote up the Tauri 2.4 notes: delta updates, smaller bundles, nothing breaking for us." });
@@ -402,9 +434,9 @@ function startLoop() {
       ev("friren", { event: "bot.status", status: "online", running: false });
     }],
     [k(23.5), () => { stream("verify-pr", 2); pushRun(); working("Checking 14 pages in light and dark"); }],
-    [k(25), () => say("codex", "\r\n• Ran go test ./... (214 passed)\r\n")],
+    [k(25), () => say("codex", codexTool("Ran", "git diff --stat", ["2 files changed, 63 insertions(+), 6 deletions(-)"]) + codexSays("Done: /search takes ?lang= now, with 4 tests. Open a PR?"))],
     [k(27), () => { stream("verify-pr", 3); pushRun(); working("Opening the pull request"); }],
-    [k(28.5), () => say("shell", "\x1b[38;2;217;119;87m⏺\x1b[0m Ran pnpm docs:build (14 pages)\r\n")],
+    [k(28.5), () => say("claude", claudeTool("Bash", "pnpm docs:build", "Built 14 pages in 3.2s") + claudeSays("Done: a Filters section with an example for each."))],
     [k(31), () => { stream("verify-pr", 4); setNode("verify-pr", "done"); pushRun("done"); }],
     [k(32), () => {
       ev("kami", { event: "message", id: `k-pr-${loop}`, text: `The PR is up: ${PR_URL}. I told Sam in #releases, and I opened two threads, one for the 2.4 release post and one to check the docs links.` });
@@ -412,13 +444,11 @@ function startLoop() {
       ev("kami", { event: "bot.status", status: "online", running: false });
       splitThreads(`k-pr-${loop}`);
     }],
-    [k(33), () => { say("shell", "\r\n"); shellFg(null); say("shell", SHELL_PROMPT); }],
     // replies elsewhere land once the turn is over (the header's places chip and the panel count them; preview.css
     // keeps them out of Kami's chat, which stays the ask, the big answer and the PR)
     [k(33.8), () => landAway("discord")],
     [k(40), () => landAway("slack")],
     [k(40.5), () => split[1] && tev(split[1], { event: "tool.start", tool_id: `tk-l-${loop}`, name: "terminal", detail: "lychee docs/" })],
-    [k(41.5), () => say("codex", "\r\n• Edited api/search/handler.go (+22 -6)\r\n")],
     [k(42.5), () => {
       const post = split[0];
       if (!post) return;
@@ -657,7 +687,7 @@ function tick() {
 async function seedTerminals() {
   const S = getSessions();
   const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
-  for (const [role, agent, name] of [["shell", SHELL, ""], ["codex", "codex", "search API"]] as [keyof typeof term, AgentId, string][]) {
+  for (const [role, agent, name] of [["codex", "codex", "Search lang filter"], ["claude", "claude", "Search filters docs"]] as [keyof typeof term, AgentId, string][]) {
     const id = S.startTerminal(agent, WEB);
     if (!id) continue;
     term[role] = id;
@@ -665,7 +695,6 @@ async function seedTerminals() {
     if (name) S.rename(id, name);
   }
   await sleep(120);
-  say("codex", "• Read api/search/handler.go\r\n");
   store().actions.openSession(null);
 }
 
