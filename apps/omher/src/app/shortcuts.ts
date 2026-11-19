@@ -5,6 +5,7 @@
 //   ⌘⇧G   maximise the side panel in place, or restore it (Esc restores; a closed panel opens on Plans)
 //   ⌘N ⌘T  the TERMINALS + menu (Shell or a CLI, in a terminal)
 //   ⌘⇧]    the next terminal session (sidebar order, wrapping)  ⌘⇧[  the previous one
+//   ⌘W     (the menu's Close Window) closes the focused split pane while a split has the keyboard, else the window
 //   Esc    stop the running answer (only when no popover, field or dialog wants Esc first)
 //   Ctrl+` the bottom terminal panel, show or hide, on every OS (Ctrl on macOS too, as in VS Code; a maximised side
 //          panel goes back to its own width first, so the terminal shows); taken before a
@@ -20,6 +21,7 @@ import { SESSIONS_ENTRY } from "../sessions/entry";
 import { isTerminalRec, termGroups } from "../sessions/agents";
 import { composing } from "../lib/ime";
 import { getTermPanel, toggleTerminal } from "../terminal/state";
+import { listenMenuClose } from "./menuClose";
 
 export const isMac = () => typeof navigator !== "undefined" && /Mac|iPhone|iPad/.test(navigator.platform);
 
@@ -83,6 +85,8 @@ function stepTerminal(step: 1 | -1) {
 
 export function useShortcuts(): void {
   useEffect(() => {
+    // Close Window (⌘W) from the menu bar: a split pane with the keyboard closes before the window does
+    listenMenuClose();
     // Ctrl+` is taken on the way down, before a focused terminal (xterm stops the keys it handles) can claim it. The
     // panel lives under the chat column, which a maximised side panel hides: showing it restores the side panel first
     const onTerminalKey = (e: KeyboardEvent) => {

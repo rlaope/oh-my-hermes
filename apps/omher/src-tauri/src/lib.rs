@@ -2,6 +2,7 @@ mod accounts;
 mod acp_agents;
 mod acp_chat;
 mod agent_chat;
+mod app_menu;
 mod appimage;
 mod bridge;
 mod custom_agents;
@@ -741,6 +742,12 @@ async fn asks_badge(window: tauri::WebviewWindow, count: u32) -> Result<(), Stri
     }
 }
 
+/// Close the window: the page's answer to Close Window (⌘W) when no split pane has the keyboard (app_menu.rs).
+#[tauri::command]
+fn window_close(window: tauri::WebviewWindow) -> Result<(), String> {
+    window.close().map_err(|e| e.to_string())
+}
+
 /// The remote machines (`~/.omher/peers.json`, checked on read) and each link's state.
 #[tauri::command]
 async fn peers_list(shell: State<'_, Shell>) -> Result<Vec<peers::PeerStatus>, String> {
@@ -809,7 +816,12 @@ async fn bridge_retry(shell: State<'_, Shell>) -> Result<(), String> {
 }
 
 pub fn run() {
-    let app = tauri::Builder::default()
+    let builder = tauri::Builder::default();
+    // macOS: Close Window (⌘W) asks the page first, so a split pane closes instead of the window (app_menu.rs). Other
+    // systems keep no menu, as before.
+    #[cfg(target_os = "macos")]
+    let builder = builder.menu(|app| app_menu::build(app));
+    let app = builder
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_dialog::init())
@@ -817,6 +829,11 @@ pub fn run() {
         // build signed with the key whose public half is pinned there; process restarts into it.
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_process::init())
+        .on_menu_event(|app, event| {
+            if app_menu::is_close(event.id().as_ref()) {
+                let _ = app.emit(app_menu::CLOSE_EVENT, ());
+            }
+        })
         .invoke_handler(tauri::generate_handler![
             bridge_url,
             bridge_status,
@@ -878,7 +895,8 @@ pub fn run() {
             tasks_status,
             tasks_list,
             tasks_view,
-            tasks_remote
+            tasks_remote,
+            window_close
         ])
         .setup(|app| {
             let bridge = Bridge::new();
