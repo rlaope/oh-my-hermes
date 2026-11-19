@@ -51,6 +51,10 @@ const shownLabel = (l: Label): Label => (l.verb === WORKING ? { ...l, verb: tr("
 
 const labelText = (l: Label) => (l.code ? `${l.verb} ${l.code}` : l.verb);
 
+/** How much of a command the live line shows: a glance, not the whole line across the chat (full text on hover). */
+const CODE_MAX = 24;
+const clipCode = (l: Label): Label => (l.code && l.code.length > CODE_MAX ? { ...l, code: `${l.code.slice(0, CODE_MAX - 1).trimEnd()}…` } : l);
+
 function LabelView({ label }: { label: Label }) {
   return (
     <>
@@ -242,7 +246,9 @@ export default function Activity({ bot, item, live }: SlotProps["activity"]) {
             </span>
           ))}
         {live ? (
-          <Ticker label={shownLabel(liveLabel(t))} />
+          <span className="act-live" title={labelText(shownLabel(liveLabel(t)))}>
+            <Ticker label={clipCode(shownLabel(liveLabel(t)))} />
+          </span>
         ) : (
           <span className={`act-sum${state === "error" ? " wrap" : ""}`} data-testid="activity-text">
             {summary}

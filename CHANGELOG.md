@@ -38,6 +38,16 @@ All notable changes will be documented here.
   ultrabrain, review or deep never get the option, nor does a node pinned to an identity, which keeps that
   identity's own model chain.
 
+- **omher: every message you send shows Read once the bot has it, and a steer shows how the bot took it.** The last
+  message the bot received carries a small muted "Read · 16:41" under it, messenger style: as soon as the send went
+  through or its turn started, a steer as soon as Hermes queued it, and a held message once it actually goes out. A
+  failed send or a refused, uncertain or dropped steer never shows it. Under a steered message, the first line the
+  bot wrote after taking it (its note before the next tool call, or its answer) shows as "↳ …", so a change of course
+  is no longer silent; the rest of that note stays hidden as before. A reopened chat shows both, from the bridge.
+  While the bot works, the typing dots with its face stay put until the answer starts, and the live activity line
+  ("OMH — recalled 2 memories", "Running cd …") comes under them; that line is kept short (a command shows its first
+  24 characters, the whole text on hover).
+
 - **omher: a waiting message is sent or taken back in one click, with no menu.** A message typed while the bot
   answers waits with buttons before it instead of a ↵ that opened Send now / Steer / Edit / Delete. ↵ sends it:
   Steer into the running answer, or, for an agent with no steer of its own, Send now (stop the answer, this one
@@ -331,6 +341,16 @@ All notable changes will be documented here.
   thread, and a damaged dictionary file is never overwritten. Words are kept in
   `<omh_home>/proofread/dictionary.txt`; a word with an apostrophe or hyphen gets no dictionary action. Contributed
   by @DanRioDev (#2996).
+
+- **The OMH TUI's waiting row says what it waits on.** Between turns the row above the composer named nothing
+  (`✻ Waiting… (33m 47s · 1 agent · terminal)`). It now names the longest wait from structure only: a background
+  process by the words in command position of its command (`Waiting for CI` with the PR number, `Deploying`,
+  `Testing`, `Building`, `Installing`, `Rendering`, `Pushing`, `Downloading`, `Sleeping` with the time left), a
+  process woken on a match by its first pattern (`Watching for "READY"`), a dag-ulw run by its name with its nodes
+  done and failed, and a single child as `Reviewing`, `Researching` or `Writing` with its model. Other waits are
+  counted after it (`+1 test run · 1 agent`); a narrow terminal falls back to the old row. As the wait ends, one muted
+  row says so for 3 seconds (`✓ Review finished`, `✗ … failed`, `· Tests ended` for a process, which has no exit
+  code). During a turn, `? waiting on you` now reads `? waiting for your approval` or `? waiting for your answer`.
 
 ## 4.0.8 - 2026-11-15
 

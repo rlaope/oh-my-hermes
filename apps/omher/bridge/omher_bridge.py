@@ -4805,6 +4805,31 @@ def _turn_answers(rows, running: bool = False) -> set[int]:
     return keep
 
 
+STEER_REPLY_CHARS = 140
+
+
+def _steer_ack(rows, at: int) -> dict:
+    """What a reopened chat shows under a steered row: the first line of the next assistant row with text in the
+    same turn (the note the bot wrote after reading it, or its answer) and that row's time as when it was read.
+    Hermes keeps that note as commentary, which `_turn_answers` hides. No such row before the next real user row
+    (a steer is its own user row, so it does not end the turn): nothing, the bubble keeps "Sent to"."""
+    for row in rows[at + 1:]:
+        if not isinstance(row, dict):
+            continue
+        if row.get("role") == "user" and row.get("display_kind") != "steer" and not unwrap_steer(_row_text(row))[1]:
+            return {}
+        if row.get("role") != "assistant" or row.get("display_kind") == "hidden":
+            continue
+        line = next((ln.strip() for ln in split_blocks(_row_text(row))[2].splitlines() if ln.strip()), "")
+        if not line:
+            continue
+        out = {"steer_reply": _clip(line, STEER_REPLY_CHARS)}
+        if row.get("timestamp"):
+            out["steer_read"] = float(row["timestamp"])
+        return out
+    return {}
+
+
 def chat_messages(rows, watch_names: set[str] | frozenset[str] = frozenset(), running: bool = False,
                   main: bool = False) -> list[dict]:
     """`watch_names`: the channel watches delivering into this chat; their delivered row is hidden and the answer
@@ -4846,6 +4871,7 @@ def chat_messages(rows, watch_names: set[str] | frozenset[str] = frozenset(), ru
             m["reply_to"] = reply
         if row["role"] == "user" and steered:
             m["steered"] = True
+            m.update(_steer_ack(rows, i))
         if watch and row["role"] == "assistant":
             m["watch"], watch = watch, None
         out.append(m)

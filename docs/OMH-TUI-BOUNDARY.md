@@ -284,6 +284,14 @@ child, act on that agent, and only on the person's keypress: `x` interrupts it
 (`subagent.steer`) with text the person then types and sends; the TUI never
 interrupts, steers or answers for a subagent on its own.
 
+The waiting row above the composer between turns (`src/tui/wait_kinds.py`)
+names what the session waits on from what the TUI already holds, read-only:
+the words of a background process's command as Hermes' `processes.json`
+records it, the first watch pattern of the `terminal` result Hermes sent as
+it started the process, and the delegation graph's lane fields (state,
+category, role, model, the run's name) the HUD read. It reads no other file,
+runs nothing it names, sends nothing, and never reads what the model said.
+
 ## Shell commands, rewind and mouse
 
 A line the person sends that starts with `!` is their own shell command: the

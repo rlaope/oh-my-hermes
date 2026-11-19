@@ -1286,6 +1286,8 @@ export const ja: Record<Key, string> = {
   "sq.deleteTip": "送信しません",
   "sq.steering": "steer 中…",
   "sq.steered": "{bot} に送信 · 進行中の回答に加わるか、すぐ後に始まります",
+  "bub.read": "既読",
+  "bub.readAt": "既読 · {time}",
   "sq.unknown": "すでに回答に入っているかもしれません",
   "sq.unused": "使われませんでした · 回答が先に止まりました",
   "sq.send": "送信",
