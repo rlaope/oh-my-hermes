@@ -26,7 +26,16 @@ MAIN_RUNTIME = "rt-main"
 
 
 class GatewayRPCError(Exception):  # same class name Hermes uses; the bridge matches on the name
-    pass
+    def __init__(self, reason="request_failed", data=None):
+        super().__init__(reason)
+        self.data = data or {}
+
+
+# What Hermes' canonical gateway (`/api/ws`, the one `connect_gateway` dials) does not serve: these are the older
+# tui gateway's verbs. A FakeClient refuses them as that gateway does unless it is built with `legacy=True`.
+LEGACY_ONLY = frozenset({"session.title", "session.archive", "session.close"})
+# session.create params the canonical gateway refuses with `invalid_params` (its contract forbids unknown keys)
+CANONICAL_CREATE_REFUSES = frozenset({"idempotency_key"})
 
 
 class GatewayClientError(ValueError):
@@ -37,8 +46,9 @@ class FakeClient:
     """The slice of ``GatewayClient`` the bridge uses: ``rpc`` and ``events``."""
 
     def __init__(self, name: str, *, bot_chat: bool = True, sessions=None, history=None, caps=None, lacks=(), ready=None,
-                 model_replies=None, resume_bumps=False):
+                 model_replies=None, resume_bumps=False, legacy=False):
         self.name = name
+        self.legacy = legacy  # True: the older tui gateway (session.title/archive/close, idempotency_key)
         # session.mutate "model" answers in order (Hermes' selection guard refusals); the echo once they run out
         self.model_replies = list(model_replies or [])
         self.resume_bumps = resume_bumps  # each session.resume moves the revision, as a real gateway's may
@@ -58,10 +68,23 @@ class FakeClient:
     def find(self, method: str) -> list[dict]:
         return [p for m, p in self.calls if m == method]
 
+    def refuse(self, method: str, params: dict) -> None:
+        """Refuse what the gateway this fake stands for refuses, before answering anything."""
+        if method in self.lacks:
+            raise GatewayRPCError("unknown_method", {"reason": "unknown_method"})
+        if self.legacy:
+            if method == "session.mutate" or (method == "session.create" and "request_id" in params):
+                raise GatewayRPCError("unknown_method" if method == "session.mutate" else "request_failed")
+            return
+        if method in LEGACY_ONLY:
+            raise GatewayRPCError("unknown_method", {"reason": "unknown_method"})
+        bad = sorted(CANONICAL_CREATE_REFUSES & set(params)) if method == "session.create" else []
+        if bad:
+            raise GatewayRPCError("invalid_params", {"reason": "invalid_params", "fields": bad})
+
     async def rpc(self, method, *, _timeout=None, **params):
         self.calls.append((method, params))
-        if method in self.lacks:
-            raise GatewayRPCError("unknown_method")
+        self.refuse(method, params)
         if method == "session.list":
             if params.get("title") == ob.BOT_CHAT_TITLE:
                 rows = [{"id": MAIN_STORED, "title": ob.BOT_CHAT_TITLE, "source": "tui"}] if self.bot_chat else []
@@ -372,7 +395,10 @@ class BotsAndChat(BridgeCase):
             self.assertEqual(create[0]["title"], "Bot Chat")
             self.assertTrue(create[0]["follow_profile_config"])
             self.assertEqual(c.find("session.resume"), [])
-            self.assertEqual(c.find("session.title"), [{"session_id": MAIN_RUNTIME, "title": "Bot Chat"}])
+            self.assertEqual(c.find("session.title"), [])  # the canonical gateway has no session.title
+            [named] = c.find("session.mutate")
+            self.assertEqual((named["session_id"], named["operation"], named["payload"], named["expected_revision"]),
+                             (MAIN_RUNTIME, "rename", {"title": "Bot Chat"}, 0))
             self.assertEqual(r["result"]["session_id"], MAIN_RUNTIME)
             self.assertEqual(r["result"]["messages"], [])
 
@@ -1308,7 +1334,7 @@ class FolderChats(BridgeCase):
         subscription `session.create` gave, as a close (`end_reason`), so Hermes ends the conversation, and the
         close reports no error. A gateway that has no `session.detach` gets `session.close`, as before."""
         with tempfile.TemporaryDirectory() as folder:
-            async with Env(lacks={"session.close"}) as env:
+            async with Env() as env:  # the canonical gateway: no session.close at all
                 s = await self.open(env)
                 fid = (await s.req("folder.open", bot="kami", cwd=folder))["result"]["session"]
                 c = env.clients["kami"]
@@ -1317,7 +1343,7 @@ class FolderChats(BridgeCase):
                 self.assertEqual([m for m, _ in c.calls if m in ("session.detach", "session.close")], ["session.detach"])
                 self.assertEqual(c.find("session.detach")[0], {"session_id": "rt-folder-0", "subscription_id": "sub-folder-0",
                                                                "end_reason": "omher_close"})
-            async with Env(lacks={"session.detach"}) as env:
+            async with Env(lacks={"session.detach"}, legacy=True) as env:
                 s = await self.open(env)
                 fid = (await s.req("folder.open", bot="kami", cwd=folder))["result"]["session"]
                 c = env.clients["kami"]

@@ -4,6 +4,15 @@ All notable changes will be documented here.
 
 ## Unreleased
 
+- **omher: New thread under a bot opens a thread again, and removing or naming one works.** On Hermes' current
+  gateway, New thread did nothing and then failed: the bridge sent the press's retry key as `idempotency_key`, which
+  that gateway refuses (`invalid_params`), and it named and archived threads with `session.title` and
+  `session.archive`, which that gateway does not serve. The bridge now sends the key as `request_id` (the same press
+  again still returns the same thread), and names and archives through `session.mutate`, retrying once with the
+  revision a `revision_conflict` carries; an older gateway still gets its own verbs. A thread is created under a
+  unique placeholder and then renamed, because the gateway answers a create whose title an open session already has
+  with that session. The bridge tests' fake gateway now refuses what the real one refuses. (#2980)
+
 - **A cheap dag-ulw node that hits a hard judgement asks for a stronger model instead of guessing.** When a node's
   child cannot settle a design choice or a root cause, it stops before editing and writes `ESCALATE: <question>` into
   its handoff; the node is settled `escalated` and offered again one category up (quick, unspecified-low,
