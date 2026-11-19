@@ -193,7 +193,12 @@ test("an allowed many-line prompt is one bracketed paste while its terminal is p
   await page.evaluate(() => (window as unknown as { __omherPark: { set(o: object): void } }).__omherPark.set({ hiddenMs: 200, idleMs: 200, sweepMs: 100 }));
   await expect.poll(() => page.evaluate(() => (window as unknown as { __omherPark: { parked(): number } }).__omherPark.parked())).toBe(1);
   await ask(page, la, "first line\nsecond line");
-  await page.getByTestId("term-share-card").getByRole("button", { name: "Allow once" }).click();
+  // its card is on a's terminal, which is hidden and parked: the same Allow once, answered without showing it
+  await expect.poll(() => page.evaluate(() => (window as unknown as { __omherShare: { pending(): unknown[] } }).__omherShare.pending().length)).toBe(1);
+  await page.evaluate(() => {
+    const s = (window as unknown as { __omherShare: { pending(): { key: string }[]; answer(k: string, c: string): Promise<void> } }).__omherShare;
+    return s.answer(s.pending()[0]!.key, "once");
+  });
   await expect.poll(async () => (await writes(page, a)).filter((d) => d.includes("line"))).toEqual(["\x1b[200~first line\nsecond line\x1b[201~\r"]);
 });
 
