@@ -159,7 +159,11 @@ test("labels are readable at rest and ink on hover; no pill fill at rest", async
     }, theme);
     await expect(page.locator("html")).toHaveAttribute("data-theme", theme);
     await page.mouse.move(1, 1);
-    await page.waitForTimeout(300); // the colour eases over 0.12s after the theme switch
+    // the colour and the hover fill ease out over 0.12s; a loaded runner can still be mid-fade after a fixed wait
+    await expect
+      .poll(() => chip.evaluate((a) => getComputedStyle(a).backgroundColor), { timeout: 5000 })
+      .toMatch(/^(transparent|rgba\(0, 0, 0, 0\))$/);
+    await page.waitForTimeout(300); // the text colour has settled too
     const rest = await chip.evaluate((a) => {
       const bub = a.closest(".b")!;
       return { color: getComputedStyle(a).color, bg: getComputedStyle(a).backgroundColor, bubble: getComputedStyle(bub).backgroundColor, ink: getComputedStyle(bub).color, border: getComputedStyle(a).borderTopWidth };

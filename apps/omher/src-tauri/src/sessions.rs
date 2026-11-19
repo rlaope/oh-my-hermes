@@ -2328,7 +2328,9 @@ mod tests {
         let (idle, idle_wakes) = (probes() - p0, wakes() - w0);
         let most = (t0.elapsed().as_millis() / 200) as u64 + 1;
         assert!(idle >= 1 && idle <= most, "{idle} looks in {:?} idle ({idle_wakes} wakes)", t0.elapsed());
-        assert!(idle * 2 <= idle_wakes, "{idle} looks for {idle_wakes} wakes while idle");
+        // late wakes on a loaded machine each cover more time, so each is more often due: fewer looks than wakes,
+        // not a fixed ratio (CI saw 7 looks in 13 wakes over 2 s, inside the time bound above)
+        assert!(idle < idle_wakes, "{idle} looks for {idle_wakes} wakes while idle");
         // it prints every 10 ms: a look on (almost) every wake
         s.write(id, b"go\r").unwrap();
         thread::sleep(Duration::from_millis(300));

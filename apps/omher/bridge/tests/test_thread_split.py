@@ -170,11 +170,10 @@ class Effects(BridgeCase):
             subs = c.find("prompt.submit")
             self.assertEqual([x["session_id"] for x in subs], [f"rt-{e['thread']}" for e in splits])
             self.assertEqual([x["text"] for x in subs], [A["task"], B["task"]])  # the task, without any note
-            creates = c.find("session.create")
-            self.assertEqual([x["title"] for x in creates if x["title"].startswith(ob.THREAD_PREFIX)],
-                             ["omher · OG 502 원인", "omher · 릴리스 노트"])
-            self.assertTrue(all(x.get("idempotency_key", "").startswith("omher-thread:kami:split-") for x in creates
-                                if x["title"].startswith(ob.THREAD_PREFIX)))
+            creates = [x for x in c.find("session.create") if x["title"].startswith(ob.THREAD_PREFIX)]
+            self.assertEqual([env.store.rows[e["thread"]]["title"] for e in splits], ["omher · OG 502 원인", "omher · 릴리스 노트"])
+            self.assertEqual(len(creates), 2)
+            self.assertTrue(all(x.get("request_id", "").startswith("omher-thread:kami:split-") for x in creates))
             listed = ok(await s.req("thread.list", bot="kami"))["threads"]
             self.assertEqual(len(listed), 2)
 

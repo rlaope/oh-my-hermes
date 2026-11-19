@@ -52,8 +52,9 @@ RULES = (
     " one of the bot's own sessions;",
     "It never selects a reasoning or thinking field, clips each input and result to 4 KB and masks token-like strings in"
     " every field it returns.",
-    "then calls only Hermes' own `session.archive` for it (hidden, its messages kept, restorable in Hermes); omher never"
-    " deletes a session, and never removes the main chat or a session the bridge did not create or list as a thread.",
+    "and then only archives it through Hermes' own `session.mutate` `archive` operation (`session.archive` on an older"
+    " gateway that has no `session.mutate`; hidden, its messages kept, restorable in Hermes); omher never deletes a"
+    " session, and never removes the main chat or a session the bridge did not create or list as a thread.",
     "Files the person attaches go to that same chat only, as bytes through Hermes' own `image.attach_bytes`,",
     "the bridge never opens the person's files.",
     "on the person's press it may instead steer that chat's running turn through Hermes' own `session.steer` (`chat.steer`),"
@@ -385,8 +386,8 @@ class DocPins(unittest.TestCase):
         # conversation from its own files, read-only; a row's folder in the file manager or the system terminal; the
         # asks count on the Dock); 31: rule 31 (a Hermes on another computer over the person's own ssh, after a
         # Connect on the confirm card: one fixed ssh argv, key login only, remote writes only under ~/.omher/peer);
-        # 32: rule 32 (removing a thread interrupts it and archives it through Hermes' own `session.archive`, never
-        # a delete); 33: rule 33 (Tasks: open issues and pull / merge requests through the person's own `gh` / `glab`,
+        # 32: rule 32 (removing a thread interrupts it and archives it through Hermes' own `session.mutate` archive,
+        # `session.archive` on an older gateway, never a delete); 33: rule 33 (Tasks: open issues and pull / merge requests through the person's own `gh` / `glab`,
         # a fixed read-only argv, no token; Linear only as a config check). The rules stay numbered 1..n with no gap or
         # repeat.
         rules = re.findall(r"^(\d+)\. ", DOC.read_text(encoding="utf-8"), re.M)
@@ -2112,7 +2113,7 @@ class SshPeersOnlyOverTheOwnSsh(unittest.TestCase):
 
 
 class BotThreads(unittest.TestCase):
-    """Rules 3, 11 and 32 for bot threads: a thread is removed by interrupt + Hermes' own ``session.archive``, never a
+    """Rules 3, 11 and 32 for bot threads: a thread is removed by interrupt + Hermes' own archive, never a
     delete; the SESSIONS entry is back as TERMINALS (terminal sessions only, no chat mode); the terminal panel's and the
     Shell row's only program is the person's login shell."""
 
@@ -2123,12 +2124,21 @@ class BotThreads(unittest.TestCase):
         tree = ast.parse(src)
         op = [f for f in ast.walk(tree) if isinstance(f, ast.AsyncFunctionDef) and f.name == "op_thread_remove"][0]
         body = ast.get_source_segment(src, op) or ""
-        self.assertIn('"session.archive"', body)
+        self.assertIn('"archive"', body)
         self.assertIn("archived=True", body)
-        self.assertLess(body.index('"session.interrupt"'), body.index('"session.archive"'))
+        self.assertLess(body.index('"session.interrupt"'), body.index('"archive"'))
         self.assertNotIn("session.delete", src)
         for word in ("delete", "unlink", "rmtree"):
             self.assertNotIn(word, body.replace("never a delete", ""), word)
+        # the one archive path: session.mutate's `archive` (or rename), else the older gateway's own verb, and nothing else
+        meta = [f for f in ast.walk(tree) if isinstance(f, ast.AsyncFunctionDef) and f.name == "_set_meta"][0]
+        helper = ast.get_source_segment(src, meta) or ""
+        self.assertIn('"session.mutate"', helper)
+        self.assertIn('{"rename": "session.title", "archive": "session.archive"}[operation]', helper)
+        for word in ("delete", "reset", "rewind", "unlink", "rmtree"):
+            self.assertNotIn(word, helper, word)
+        operations = set(re.findall(r'await self\._set_meta\(conn, [^,]+, "(\w+)"', src))
+        self.assertEqual(operations, {"rename", "archive"})
 
     def test_sessions_entry_is_terminals_only(self) -> None:
         entry = (self.APP / "src" / "sessions" / "entry.ts").read_text(encoding="utf-8")
