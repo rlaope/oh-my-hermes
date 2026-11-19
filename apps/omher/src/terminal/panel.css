@@ -162,9 +162,20 @@
   background: var(--line-strong);
   outline: none;
 }
-/* the pane with the keyboard, when there are several: a subtle inset line */
+/* the pane with the keyboard, when there are several: a thin accent line; the others dimmed to the Settings ›
+   Terminal value with a soft inset shade (as TERMINALS splits) */
+.termpanel-layout {
+  --pane-dim: 0.72;
+}
 .termpanel .term-wrap.focused {
-  box-shadow: inset 0 0 0 1px var(--line-strong);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 55%, transparent);
+}
+.termpanel .term-wrap.dim {
+  box-shadow: inset 0 0 18px rgb(0 0 0 / 0.14);
+}
+.termpanel .term-wrap.dim > .term-box {
+  opacity: var(--pane-dim);
+  transition: opacity 0.12s ease;
 }
 .termpanel-tab-n {
   margin-left: 4px;
