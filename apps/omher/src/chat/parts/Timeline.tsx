@@ -20,7 +20,7 @@ import { liveFaceRow } from "./liveFace";
 import { ActivityFallback, CardFallback, RoutineFallback } from "./fallbacks";
 import { PluginAddedCard, RoutineAddedCard } from "../../pages/ChatCards";
 import { ThreadLinkLine, ThreadRouteCard } from "../cards/ThreadNotes";
-import { WatchLine } from "../../routines/WatchLine";
+import { BriefNotice, WatchLine } from "../../routines/WatchLine";
 import { t } from "../../i18n";
 import { useBotReady } from "../connect/ready";
 
@@ -71,6 +71,8 @@ export function Timeline({
   const lastUser = onEditLast ? [...items].reverse().find((i) => i.kind === "user") : undefined;
   // taking it back rewinds the conversation only: when its turn changed files, the Edit control says they stay
   const lastUserAt = lastUser ? items.indexOf(lastUser) : -1;
+  // the person's last message that went out: it carries the messenger-style "Read" mark
+  const lastSent = [...items].reverse().find((i) => i.kind === "user" && !i.held && !i.error && !i.steerUnknown)?.id;
   const keptFiles =
     lastUserAt >= 0 && items.slice(lastUserAt + 1).some((i) => i.kind === "activity" && i.turn.steps.some((st) => st.diff?.length));
 
@@ -126,6 +128,7 @@ export function Timeline({
             queueBusy={it.held && chat?.steering === it.id}
             queueOff={off ?? undefined}
             steeredTo={bot.display_name}
+            last={it.id === lastSent}
           />
         );
       }
@@ -161,6 +164,8 @@ export function Timeline({
         return <ThreadLinkLine item={it} />;
       case "threadRoute":
         return <ThreadRouteCard item={it} />;
+      case "briefNotice":
+        return <BriefNotice bot={bot} />;
       case "system":
         return (
           <div className="line sys" data-testid="system-line">
@@ -188,9 +193,13 @@ export function Timeline({
       />
     </div>
   ) : null;
-  // the typing dots too: where the answer will land
+  // the typing dots with the ringed face until the answer starts: where the answer will land, or, once the live
+  // activity line shows ("OMH — recalled 2 memories", "Running cd …"), directly above it, the line under the dots in
+  // the text column (owner 2026-11-19: the dots stay put and the lines come under them)
+  const liveId = chat?.turn && turnHasActivity(chat.turn) ? chat.turn.id : undefined;
+  const aboveLine = !!liveId && items.some((i) => i.kind === "activity" && i.id === liveId);
   const typingRow = typing ? (
-    <div className="row row-assistant row-typing" data-kind="typing">
+    <div className={`row row-assistant row-typing${aboveLine ? " above-line" : ""}`} data-kind="typing">
       <TypingRow bot={bot.name} name={bot.display_name} face={face} />
     </div>
   ) : null;
@@ -240,8 +249,9 @@ export function Timeline({
         return (
           <Fragment key={it.id}>
             {it.id === slotId && writingRow}
-            {it.id === slotId && typingRow}
+            {it.id === slotId && !aboveLine && typingRow}
             {label && <div className="day">{label}</div>}
+            {aboveLine && it.id === liveId && typingRow}
             <div className={`row row-${it.kind}${liveLine ? " live-line" : ""}`} data-kind={it.kind} {...(it.kind === "user" ? { "data-item": it.id } : {})}>
               {liveFace && <LiveFace bot={bot.name} face={face} />}
               {render(it, label ? undefined : items[i - 1], i)}
@@ -250,7 +260,7 @@ export function Timeline({
         );
       })}
       {!slotId && writingRow}
-      {!slotId && typingRow}
+      {!slotId && !aboveLine && typingRow}
     </div>
   );
 }

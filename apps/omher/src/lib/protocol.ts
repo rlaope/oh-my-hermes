@@ -87,6 +87,10 @@ export interface Msg {
   watch?: WatchTag;
   /** user rows: steered into a running turn (Hermes' mid-turn steer), shown with its "Sent to …" line. */
   steered?: boolean;
+  /** steered rows: when the turn read it (the bot's next row's time, unix s), when there is such a row. */
+  steer_read?: number;
+  /** steered rows: the first line the bot wrote after it in that turn (its note or its answer). */
+  steer_reply?: string;
 }
 
 /** The automation whose delivered result a Bot Chat answer replies to: its name and when it came in (unix s). */
@@ -683,6 +687,8 @@ export type BridgeEvent =
   /** A plugin folder appeared in the bot's profile (the bot installed it from chat). */
   | (EventBase & { event: "plugin.added"; name: string; title: string; tools: number; hooks: number; ts: number })
   | (EventBase & { event: "plugins.update" })
+  /** omher set up its Slack briefing for this bot (the `omher-brief` automation); `owner_name`: whom it briefs. */
+  | (EventBase & { event: "brief.ready"; owner_name: string | null })
   // a SESSIONS chat: a message sent while a turn ran waits until the agent takes it (or Stop drops it)
   | (EventBase & { event: "message.queued" | "message.taken" | "message.dropped"; id: string })
   /** A SESSIONS file edit's change, per file (replaces what an earlier `tool.diff` of the same step said). */

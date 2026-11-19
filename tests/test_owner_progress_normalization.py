@@ -80,7 +80,7 @@ from omh.owner_progress_normalization import (  # noqa: E402
     source_event_evidence_tier,
 )
 from omh.system.paths import OmhPaths  # noqa: E402
-from omh.coding.pi_family_interop import PI_DISTRIBUTION_HOST
+from omh.coding.pi_family_interop import PI_DISTRIBUTION_HOST, PI_FORK_HOST
 
 _FANOUT_ID = "fanout-0123456789ab"
 _NOW = "2026-08-06T12:00:00Z"
@@ -264,7 +264,7 @@ class DeterministicOwnerFixtureTests(unittest.TestCase):
             with self.subTest(source_event=source_event):
                 records = [
                     json.dumps(normalize_owner_progress_event(alias, source_event), sort_keys=True)
-                    for alias in ("pi-family-runtime", "pi_family_runtime", "pi", PI_DISTRIBUTION_HOST, "opencode", f"  {PI_DISTRIBUTION_HOST.capitalize()}  ", "OPENCODE")
+                    for alias in ("pi-family-runtime", "pi_family_runtime", "pi", PI_DISTRIBUTION_HOST, PI_FORK_HOST, "opencode", f"  {PI_DISTRIBUTION_HOST.capitalize()}  ", "OPENCODE")
                 ]
                 self.assertEqual(len(set(records)), 1)
         record = normalize_owner_progress_event(PI_DISTRIBUTION_HOST, "workflow_completed")

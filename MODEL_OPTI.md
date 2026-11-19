@@ -61,7 +61,7 @@ identical prompt. Nothing else about the pipeline changes per model.
 | `kimi` | `kimi-` | `kimi-k3`, `kimi-k3-ultrafast`, `kimi-k3.1-pro`, `kimi-k3.1-pro-highspeed`, `moonshotai/kimi-k3.1-pro` |
 | `glm` | `glm-` | `glm-5.3`, `glm-5.3-flash`, `glm-5.2-ultrafast` |
 | `grok` | `grok-` | `grok-build-0.1` |
-| `qwen` | `qwen-`, aliases `qwen3-` and `qwen3.` | `qwen3-coder`, `qwen/qwen3.8-flash` |
+| `qwen` | `qwen-`, aliases `qwen3-`, `qwen3.`, `qwen4-`, and `qwen4.` | `qwen3-coder`, `qwen/qwen3.8-flash`, `qwen4-max`, `qwen/qwen4-max`, `qwen4-max-preview` |
 | `deepseek` | `deepseek-` | `deepseek-v4.1-flash`, `deepseek-flash` (the first-party pointer), `deepseek/deepseek-v4.1-flash` |
 | `mistral` | `mistral-` | Mistral Large / Medium ids |
 | `llama` | `llama-` | open-weights Llama ids, any serving host |
@@ -1529,6 +1529,89 @@ effort, in both lanes, the shared final order included.
   commands instead of requesting reasoning output.
 - **Source:** provider-published model characteristics (Qwen3-Coder's
   non-thinking architecture); shipped with the benchmark harness.
+- **Version rule:** this block is Qwen3-Coder's, and every Qwen id without
+  an exact override still receives it (`qwen3.8-*`, `qwen4-max-preview`).
+  Qwen4-Max has its own override below because the block's non-thinking
+  rule is wrong for a hybrid model with thinking on by default; the block
+  itself stays byte-stable so Qwen3-Coder's prompts do not move.
+
+### `qwen4-max` (Qwen4-Max, exact-model override on the `qwen` family)
+
+- **Documented contract (official, docs.qwencloud.com, read 2026-11-19):**
+  GA 2026-11-16 on pay-as-you-go and Token Plan, the first Qwen4 model and
+  the successor to Qwen3.8-Max; OpenRouter lists it as `qwen/qwen4-max`.
+  1,000,000-token context; max input 983,616 with thinking and 991,808
+  without; max output 131,072 without thinking, while thinking and the
+  final answer share 262,144 (default thinking budget 131,072). Input text,
+  image, and video; output text. Chat Completions, Responses, Anthropic
+  Messages, and DashScope; function calling, parallel tool calls,
+  structured output, web search, prefix completion, explicit and implicit
+  cache, and CoT summary with encrypted reasoning; no batch inference.
+  Hybrid thinking, on by default. The effort ladder is `low` / `high` /
+  `xhigh` with `high` the default, and the vendor's table maps `minimal` →
+  `low`, `medium` → `high`, `max` → `xhigh` (and `none` turns thinking off)
+  without an error. That is DeepSeek V4.1 Flash's shape, so
+  `unsupported_efforts` is empty, the table sits in `effort_mapping`, and
+  the route passes `medium` or `max` through on record. `preserve_thinking`
+  is on by default: earlier thinking goes back in `reasoning_content`,
+  never concatenated into `content`. Full record in
+  `src/coding/model_contracts.py`; `omh coding model-contract --model
+  qwen4-max` prints it.
+- **Preview:** `qwen4-max-preview` (2026-11-11, Token Plan only, no
+  per-token price) has a different ladder (`low` / `medium` / `xhigh`,
+  default `xhigh`) and rejects `reasoning_effort` and `thinking_budget`
+  together. It is recognized (`qwen`) and keeps the family block, with no
+  contract, price row, or chain entry.
+- **Price (official):** Singapore (International) 1.50 / 4.50 per MTok for
+  both thinking modes, one tier up to 1M input; cache hit 0.075 (a 0.05
+  `APPROX_CACHE_READ_RATIO` row, since Qwen4-Max publishes its own cache
+  rate where Qwen3.8 did not), cache writes 1.875 (5m) / 3.00 (1h).
+  Beijing and Global bill 1.413 / 4.24 with cache 1.767 / 2.827 / 0.071;
+  that card stays a caveat in the contract.
+- **Surfaces (official-client and observed):** the vendor's Codex page lists
+  the same three rungs with a `high` default and
+  `supports_parallel_tool_calls: false`; its Claude Code page maps
+  `qwen4-max` onto the Opus slot with a 983,616-token context. Hermes Agent
+  at 3b42157858 and origin/main fe8b920cae (observed) sends no
+  `reasoning_effort` on its DashScope profiles, so the model runs at `high`
+  whatever effort is routed; its `preserve_thinking` list stops at qwen3.8,
+  and its context table reads the id through the 131,072-token `qwen`
+  catch-all.
+- **Model trait:** hybrid thinking on by default, so a counter that forbids
+  reasoning (the family block's) contradicts the served contract; earlier
+  thinking is kept in the reasoning channel, so restating it in the visible
+  reply is duplicate output.
+- **What OMH injects (subagent):** reasoning depth is the routed effort
+  rung, never a request to turn thinking off or to write reasoning into the
+  reply; earlier thinking stays in the reasoning channel and the visible
+  reply carries the change and the stop; then the family block's working
+  rules (exact goal, boundaries, tool schemas, criteria, one explicit plan,
+  observed-output recovery, stop after one passing verification run).
+- **What OMH injects (composer):** the visible composition is the ordered
+  split, not a replay of planning already in context, with no synthetic
+  thinking instructions; a unit takes `low`, `high`, or `xhigh`, because the
+  vendor's table turns `medium` into `high` and `max` into `xhigh`.
+- **Why an override, and why these sentences:** editorial, unmeasured. Each
+  new sentence counters a documented trait the family block does not cover
+  (hybrid thinking on by default; `preserve_thinking`), and none asks the
+  model to keep working or finish more: the launch page's "long-running
+  agents" framing is not imported, on the Astra rule (§8 of the onboarding
+  procedure). The ladder sentence reuses DeepSeek V4.1 Flash's composer
+  wording because the vendor publishes the same kind of mapping table.
+- **Community counter-signals (unconfirmed):** DataCamp's launch coverage
+  and Artificial Analysis / Vals as reported (2026-11-16) describe the model
+  as verbose (127M output tokens on the AA index against a 78.6M median)
+  and slow on Vals, and weak on Terminal-Bench 4.0 (48.5); Alibaba claims
+  about 35% fewer tokens than Qwen3.8-Max at `high`. None is turned into a
+  calibration claim. If a measurement confirms the verbosity signal, the
+  "change and the stop" sentence is the one it bears on.
+- **Placement:** none. Qwen3.8-Max holds no shipped chain slot, so there is
+  nothing for Qwen4-Max to inherit and no retirement row; placing it in a
+  category is an open owner decision. An operator places it with
+  `omh model-chains set <category> "qwen4-max:high, ..."`.
+- **Measurement (named, unrun):** `qwen3.8-max` vs `qwen4-max` at `high` on
+  `benchmarks/live-model-tools/v1`, plus the `family` vs `optimized` pair for
+  this override. Optional and paid; no arm is added in this change.
 
 ### `deepseek` (DeepSeek versioned line)
 
@@ -2163,6 +2246,7 @@ choose models by, not a guarantee for another persona or skill.
 | other `openai-`, `anthropic-` vendor-qualified ids | recognized as model targets, family `unknown` | no → `generic` | vendor qualification alone does not establish a design; O-series, image, and emerging ids remain uncalibrated |
 | `kimi-k3.1-pro`, `kimi-k3.1-pro-highspeed` (exact contracts, no exact calibration) | yes → `kimi` | yes, through the family block | exact documented contracts (three-rung `low`/`high`/`max` ladder with `max` as default, every other rung raised on record; Highspeed has its own rate card); K3.1 Pro holds every former Kimi K3 slot since 2026-10-24, Highspeed is recognition-only; the K3-vs-K3.1 pair is the named follow-up, blocked on a served route |
 | `gemini-4-argon` (exact contract, no exact calibration) | yes → `gemini` | yes, through the family block | exact documented contract (`low`/`medium`/`high` ladder with `medium` as default and no off switch; `off` and `minimal` raised on record, rungs above `high` passed through); holds every former Gemini 3.1 Pro slot since 2026-10-28; the 3.1-Pro-vs-Argon pair is the named follow-up, blocked on a served route |
+| `qwen4-max` (exact-model override) | yes → `qwen` | yes, both override tables, resolved before the family block | exact documented contract (`low`/`high`/`xhigh` ladder, `high` default, the vendor's mapping table for every other rung, so nothing is raised); hybrid thinking on by default, so the override replaces the Qwen3-Coder non-thinking rule for this id only; priced (Singapore list, own 5% cache rate), no provider row, in no shipped chain (placement is an open owner decision); editorial and unmeasured, the 3.8-Max-vs-4-Max and `family` vs `optimized` pairs are the named follow-up. `qwen4-max-preview` is recognized only and keeps the family block |
 | `jev` (non-generative) | yes | no, and none applies → no calibration pair | recognized, contracted (`jev-1.13.0`, with `jev-latest` and `jev-preview` as declared aliases), priced with a free output side, and in no chain by decision; the route answers `model_refused` and both chain editors refuse it. The coverage audit reports `effort`, `category_projection`, and `provider_eligibility` as `missing`, which is the honest reading for a model with no effort parameter and no chain membership — greening any of them would need an invented rung or an invented chain entry |
 | `minimax` | yes | no → `generic` | prefix landed in #1304 (`MiniMax-M3`, released 2026-05-31, and `MiniMax-M2.7`, 2026-03-18, per minimax.io release notes and the platform.minimax.io model list); the calibration pair waits on an observed failure mode or a provider-stated characteristic worth countering |
 | emerging families | no → `unknown` | no → `generic` | add a prefix and a calibration pair when one lands (the #1051/#1052 pattern) |
@@ -2192,6 +2276,8 @@ will resolve, not whether that generation has been optimized: `qwen3.8-*`
 now resolves to Qwen guidance, but remains unmeasured for placement. The
 existing Qwen guidance describes Qwen3-Coder; recognizing another minor
 version does not establish that it shares Coder's non-thinking contract.
+Qwen4-Max, whose documented contract is hybrid thinking, therefore gets its
+own exact override rather than the family block.
 
 The independent decision registry in
 `src/coding/model_portfolio_qualification.py` records existing owner-approved

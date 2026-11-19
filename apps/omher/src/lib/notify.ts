@@ -52,7 +52,8 @@ export function noteFor(
 /** An automation's answer: "<bot> · <watch>", its first line. */
 export function watchNote(who: string, bot: string, name: string, text: string): Note {
   const first = text.split("\n").find((l) => l.trim()) ?? text;
-  return { title: `${who} · ${name}`, body: clip(first), bot, tag: `${bot}:watch` };
+  // omher's own Slack briefing reads as "<bot> · Brief", not its job name
+  return { title: `${who} · ${name === "omher-brief" ? t("brief.line") : name}`, body: clip(first), bot, tag: `${bot}:watch` };
 }
 
 /** Answers that came in while omher was closed: one note for the bot, never one per answer. */

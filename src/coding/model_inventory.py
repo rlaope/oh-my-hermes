@@ -102,7 +102,8 @@ MODEL_DOMAIN_AFFINITY_CLAIM_BOUNDARY: Final[str] = (
 # path (`OPENCODE_RUNTIME_CONFIG_RELATIVE`). The separate reporting-only
 # discovery payload observes the runtime's canonical home config
 # (`RUNTIME_HOME` / `RUNTIME_CONFIG_FILES`, `RUNTIME_MODELS_FILE`) metadata, but never promotes those observations
-# into this catalog. Unknown `~/.omp` layouts remain explicitly unverified.
+# into this catalog. The pi fork host's sessions are scanned like pi's; any
+# other layout under its home remains explicitly unverified.
 MODEL_INVENTORY_CATALOG_PROFILE: Final[str] = "pi-family-runtime"
 
 LOCAL_MODEL_CATALOG_SCHEMA_VERSION: Final[str] = "local_model_catalog/v1"

@@ -80,7 +80,8 @@ RULES = (
     "and from `--version` only the version number (the first `digits.digits.digits` run with its suffix; never the rest of its text), shown beside the CLI's name.",
     "The browser sign-in happens inside the CLI: omher never asks for, accepts, reads, copies or shows a token or key.",
     "deletes only `~/.omher/accounts/<cli>/<id>/`. An account switch never stops a running session.",
-    "Besides rule 21's one GitHub CLI read, the only program the bridge runs is `git`, for reads (`worktree list`, `rev-parse`, `status`, `diff`, `log`,",
+    "Besides rule 21's one GitHub CLI read and rule 24's one `hermes -p <bot> cron create` for the briefing, the only"
+    " program the bridge runs is `git`, for reads (`worktree list`, `rev-parse`, `status`, `diff`, `log`,",
     "omher never commits, checks out, pushes or edits a repository.",
     "and OmO's subagent records (`~/.omo/agent/projects/*/senpi-task/tasks/st_*.json`, never the subagents' own"
     " transcripts under `children/`).",
@@ -213,7 +214,7 @@ RULES = (
     "Hermes asks for the key in that terminal and stores it itself: omher never sees the key.",
     "never runs this in its own pseudo-terminal, so no keystroke passes through omher.",
     "The two exceptions are a bot's automations and plugins, which omher changes only by asking that bot's own gateway"
-    " (rules 24 and 25); omher writes no file of either itself.",
+    " (rules 24 and 25); omher writes no file of either itself, with one exception of its own:",
     "omher changes a bot's automations only through Hermes' own `cron.manage` on that bot's gateway (`add`, `pause`,"
     " `resume`, `remove`), only when the person presses a button.",
     "It reads `cron/jobs.json` and never writes it;",
@@ -222,18 +223,50 @@ RULES = (
     "A job whose script is the channel-watch collector (`channel_watch_<watch>.py`) is listed as a watch:",
     "the newest 20 run records Hermes keeps in `cron/output/<job id>/`, bounded, read-only and never through a link.",
     "+ New watch only sends one sentence the person filled in to that bot's chat and opens it; it creates no job itself,",
+    "The one exception is the briefing: once per bridge run, after its first bot list, for each bot on this computer",
+    "whose profile `.env` names `SLACK_BOT_TOKEN` (the key name only: the value is never read)",
+    "`hermes -p <bot> cron create --name omher-brief --script channel_watch_omher-brief.py --deliver bot-chat:<bot>"
+    " --continuity \"every 15m\" <the fixed briefing prompt>`",
+    "When the person removes that job in Automations, omher adds the bot to `~/.omher/brief-optout.json` (omher's own"
+    " folder) and never sets it up again.",
+    "omher sets up exactly one briefing job by itself (rule 24), writing only the collector copy"
+    " `scripts/channel_watch_omher-brief.py` and its config `channel_watch/omher-brief.json`",
+    "rule 24's one `hermes -p <bot> cron create` for the briefing, the only program the bridge runs is `git`,",
     "omher changes a bot's plugins only through Hermes' own `plugins.manage` on that bot's gateway (`list`, `toggle`,"
     " `inspect`, `install` from the curated catalog by name, `update`, `remove`), only when the person presses a button,",
     "`install` carries the pin `inspect` returned.",
     "never installs from a Git URL or `owner/repo`, and never edits config itself.",
     "A refused install is read from Hermes' reason code (`exists`, `source_moved`), never from its message.",
     "Files the person attaches in a SESSIONS chat (paste, the + menu, a drop on the chat) or drops on a session's terminal"
-    " are saved by the desktop app under omher's own folder, one folder per session:",
+    " or on a bottom-panel terminal (saved under `~/.omher/session-files/s0<the shell's id>/`, removed when that pane"
+    " closes) are saved by the desktop app under omher's own folder, one folder per session:",
     "`~/.omher/session-files/<session id>/<n>-<name>`, never in the project folder and never in a Hermes profile;",
     "The shell reads back only plain files in that folder (no links, no other path), and the page never names a file outside it.",
     "A session's folder is removed when the session is closed, and the folders of sessions that are no longer in the list"
     " are removed when omher starts.",
     "An oh-my-hermes session takes no files: rule 3 keeps files to a bot's main chat.",
+    # terminal parity (2026-11-19): split panes, prompt marks / OSC 7 / OSC 9;4, images and Kitty keys, the paste
+    # confirm, terminal history and the Claude Code / Codex conversation ids a TERMINALS session continues
+    "each started by the same `shell_start` only when the person splits a pane,",
+    "When the app starts, the page asks the shell once for this computer's name (`host_name`, read from the system, no"
+    " program run), which it uses only to accept OSC 7 folders from this computer in any terminal (below); it is not"
+    " kept or sent anywhere.",
+    "a new Claude Code terminal gets `--session-id <id>`, a random UUID omher makes and keeps with the session,",
+    "The page sends only the id; the shell (`sessions::terminal_args`) checks it is a UUID, gives `--session-id` to"
+    " Claude Code only, never sends both, and refuses every other agent or shape.",
+    "omher also listens for three escapes a shell or CLI sends by itself, and puts no hook, script or variable into the"
+    " shell for them:",
+    "None of these is kept beyond the open terminal or sent anywhere, and nothing is run, opened or read from the"
+    " reported folder.",
+    "none of it is sent anywhere, and it is kept only as the terminal history of rule 26.",
+    "omher reads only the text being pasted and the terminal's own mode flag for it.",
+    "Kitty file and shared-memory transfers, where a program names a path for the terminal to read, are refused.",
+    "The Kitty keyboard protocol changes only how keys are encoded for a program that asks for it (`CSI > flags u`)."
+    " omher sends no keys of its own and reads nothing new from the program.",
+    "the desktop app writes it, only under omher's own folder, to `~/.omher/term-history/<key>.txt`,",
+    "the file is the owner's only (0600), holds at most 2000 lines and 1 MB, is never written or read through a link,",
+    "that file is not opened, and only its id (a UUID) is kept with the session so that a restart continues it.",
+    "no file is opened, and nothing else is shown, kept or sent; Windows does not do this.",
     "what it restarts is the gateway process that serves that bot, through Hermes' own command:",
     "never one profile's unserve and serve inside the host. The profile is always named, never left to Hermes'",
     "It adds `--yes` only when the person presses \"Restart anyway\" right after Hermes refused because something was running,",
@@ -523,6 +556,42 @@ class LinkChipsFetchNothing(unittest.TestCase):
             for bad in ("window.open", "fetch(", "XMLHttpRequest", "sendBeacon", "WebSocket", "confirm("):
                 self.assertNotIn(bad, text, f"{path.name}: {bad}")
 
+    def test_shell_escapes_are_read_passively_and_kept_in_the_page(self) -> None:
+        # rule 11: OSC 133 / 7 / 9;4 are listened to, never injected; the folder is from this computer only
+        marks = (UI_SRC / "sessions" / "term" / "engine-marks.ts").read_text(encoding="utf-8")
+        code = "\n".join(l for l in marks.splitlines() if not l.lstrip().startswith(("//", "*", "/**")))
+        self.assertEqual(sorted(re.findall(r"registerOscHandler\((\d+)", code)), ["133", "7", "9"])
+        osc7 = code[code.index("export function parseOsc7"):]
+        osc7 = osc7[: osc7.index("\n}\n")]
+        self.assertIn('!== "file://"', osc7)
+        self.assertIn('host !== "localhost"', osc7)
+        self.assertIn("[\\x00-\\x1f\\x7f]", osc7)
+        for bad in ("localStorage", "fetch(", "invoke(", "WebSocket", "write(", "paste("):
+            self.assertNotIn(bad, code)
+        engine = (UI_SRC / "sessions" / "term" / "engine.ts").read_text(encoding="utf-8")
+        self.assertEqual(engine.count("attachMarks(term, el)"), 1)
+        # no hook into the shell: the login shell's argv and env are unchanged
+        rs = (SHELL / "sessions.rs").read_text(encoding="utf-8")
+        for hook in ("133;", "OSC 7", "PROMPT_COMMAND", "precmd", "ZDOTDIR"):
+            self.assertNotIn(hook, rs)
+        # this computer's name comes from the system, never from a program, and the page hands it only to OSC 7
+        host = (SHELL / "this_host.rs").read_text(encoding="utf-8").split("#[cfg(test)]", 1)[0]
+        self.assertIn("libc::gethostname(", host)
+        self.assertIn("GetComputerNameExW(", host)
+        self.assertNotIn("Command::new", host)
+        lib = (SHELL / "lib.rs").read_text(encoding="utf-8")
+        self.assertEqual(lib.count("this_host::name()"), 1)
+        self.assertIn("fn host_name() -> String {\n    this_host::name()\n}", lib)
+        page = (UI_SRC / "terminal" / "host.ts").read_text(encoding="utf-8")
+        self.assertEqual(page.count("setThisHost("), 1)
+
+    def test_terminal_pictures_stay_in_the_terminals_memory(self) -> None:
+        # rule 11: decoded pictures only in memory, 32 MB per terminal; no Kitty file or shared-memory transfer
+        images = (UI_SRC / "sessions" / "term" / "engine-image.ts").read_text(encoding="utf-8")
+        self.assertIn("export const IMAGE_STORAGE_MB = 32;", images)
+        self.assertIn("storageLimit: IMAGE_STORAGE_MB,", images)
+        self.assertNotIn("readKittyFile", images)
+
     def test_terminal_settings_are_one_record_and_read_no_other_programs_files(self) -> None:
         term = UI_SRC / "sessions" / "term"
         settings = (term / "settings.ts").read_text(encoding="utf-8")
@@ -751,7 +820,8 @@ class BridgeSubmitsOnlyToTheMainChat(unittest.TestCase):
         fns = {f.name: f for f in ast.walk(self.tree) if isinstance(f, ast.FunctionDef)}
         calls = [(fn.name, c) for fn in fns.values() for c in ast.walk(fn)
                  if isinstance(c, ast.Call) and ast.unparse(c.func) == "subprocess.run"]
-        self.assertEqual(sorted(name for name, _ in calls), ["_git", "gh_pr_view", "run_hermes_restart"])
+        # _hermes_run: rule 24's one `hermes -p <bot> cron create` for the briefing
+        self.assertEqual(sorted(name for name, _ in calls), ["_git", "_hermes_run", "gh_pr_view", "run_hermes_restart"])
         fn = fns["gh_pr_view"]
         body = ast.unparse(ast.Module(body=fn.body[1:], type_ignores=[]))  # the code, without its docstring
         self.assertIn("timeout=timeout", body)
@@ -786,7 +856,8 @@ class BridgeSubmitsOnlyToTheMainChat(unittest.TestCase):
         runs = [c for c in ast.walk(self.tree) if isinstance(c, ast.Call) and ast.unparse(c.func).startswith("subprocess.")]
         self.assertEqual(sorted(ast.unparse(c.args[0]) for c in runs),
                          ["['git', *pre, *args]", "[gh, 'pr', 'view', str(number), '-R', repo, '--json', 'state,isDraft,mergedAt,url']",
-                          "argv"])  # argv: rule 29's restart_argv, checked in RestartOneBotOnAPress
+                          "argv", "argv"])  # argv: rule 29's restart_argv (RestartOneBotOnAPress) and rule 24's
+        # brief_create_argv (`hermes -p <bot> cron create`, pinned in bridge/tests/test_brief_setup.py)
         for host in ("slack.com/api", "discord.com/api", "api.telegram.org", "hooks.slack.com"):
             self.assertNotIn(host, self.source)
         hermes_send = [fn.name for fn in ast.walk(self.tree) if isinstance(fn, ast.FunctionDef)
@@ -1330,14 +1401,24 @@ class SessionsStartOnlyAllowListedAgents(unittest.TestCase):
         sig = re.search(r"async fn session_start\((.*?)\) -> ", self.lib, re.S)
         self.assertIsNotNone(sig)
         params = {p.split(":")[0].strip() for p in sig.group(1).split(",") if ":" in p}
-        # `resume` is the only extra input: a conversation id (Claude Code, DSH) that resume_args checks is a UUID.
+        # `resume` is a conversation id to continue (Claude Code, Codex, DSH), `session_id` a new Claude Code
+        # conversation id (2026-11-19, terminal restore); resume_args / sessions::terminal_args check both are UUIDs.
         # `app` is Tauri's handle, injected by the shell, not sent by the page: the `session-fg` event (the CLI in the
         # session's foreground) is emitted through it (2026-11-16, terminal sessions)
-        self.assertEqual(params, {"app", "shell", "agent", "cwd", "resume", "account", "cols", "rows", "on_data", "on_exit"})
+        self.assertEqual(params, {"app", "shell", "agent", "cwd", "session_id", "resume", "account", "cols", "rows", "on_data", "on_exit"})
         self.assertIn("app: AppHandle,", sig.group(1))
         body = self.lib[sig.end():].split("\n}\n", 1)[0]
-        self.assertIn("start_agent(&agent, std::path::Path::new(&cwd), resume.as_deref()", body)
+        self.assertIn("start_agent(&agent, std::path::Path::new(&cwd), session_id.as_deref(), resume.as_deref()", body)
         self.assertNotIn(".spawn(", body)
+
+    def test_terminal_args_are_only_a_checked_claude_or_codex_conversation_id(self) -> None:
+        # rule 11: a new Claude Code terminal gets `--session-id`, a restarted Claude Code / Codex one `--resume` /
+        # `resume`; each id is a UUID, never both, no other agent or shape
+        tf = self.prod.split("pub fn terminal_args", 1)[1].split("\n}\n", 1)[0]
+        for needle in ('(Some(s), None) => {', 'if id != "claude" {', 'Ok(vec!["--session-id".into(), s.into()])',
+                       'Ok(vec!["resume".into(), r.into()])', '(Some(_), Some(_)) => Err('):
+            self.assertIn(needle, tf)
+        self.assertEqual(tf.count("is_uuid("), 2)
 
     def test_a_session_gets_only_the_chosen_account_home(self) -> None:
         """Rule 11's account sentence: session_start and chat_start pass `accounts::session_env_for` (the saved
@@ -1348,7 +1429,9 @@ class SessionsStartOnlyAllowListedAgents(unittest.TestCase):
             sig = re.search(rf"async fn {command}\((.*?)\) -> ", self.lib, re.S)
             body = self.lib[sig.end():].split("\n}\n", 1)[0]
             self.assertEqual(body.count("accounts::session_env_for(&h, &agent, account.as_deref())"), 1, command)
-            self.assertIn("start_agent(&agent, std::path::Path::new(&cwd), resume.as_deref(), &account_env,", body)
+            # session_start also passes the new Claude Code conversation id (rule 11, terminal restore)
+            call = "session_id.as_deref(), resume.as_deref()" if command == "session_start" else "resume.as_deref()"
+            self.assertIn(f"start_agent(&agent, std::path::Path::new(&cwd), {call}, &account_env,", body)
         accounts = (SHELL / "accounts.rs").read_text(encoding="utf-8").split("#[cfg(test)]", 1)[0]
         cli = accounts.split("pub fn session_cli", 1)[1].split("\n}\n", 1)[0]
         self.assertEqual(re.findall(r'"(\w+)" => Some\("(\w+)"\)', cli), [("claude", "claude"), ("codex", "codex"), ("grok", "grok")])
@@ -1568,6 +1651,24 @@ class AutomationsAndPlugins(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TerminalHistoryStaysInOmhersFolder(unittest.TestCase):
+    """Rule 26: terminal history is written only under `~/.omher/term-history/<key>.txt`, owner-only, capped, by key
+    (a session id or `panel-<n>`), never through a link; the shell runs nothing for it."""
+
+    def test_one_folder_owner_only_and_capped(self) -> None:
+        src = (SHELL / "term_history.rs").read_text(encoding="utf-8").split("#[cfg(test)]", 1)[0]
+        for needle in ('home.join(".omher").join("term-history")', "mode(&mut o, 0o600)",
+                       "pub const MAX_LINES: usize = 2000;", "pub const MAX_BYTES: usize = 1024 * 1024;",
+                       'key.strip_prefix("panel-")'):
+            self.assertIn(needle, src)
+        self.assertNotIn("Command::new", src)
+        lib = (SHELL / "lib.rs").read_text(encoding="utf-8")
+        cmds = re.findall(r"async fn (term_history_\w+)\(", lib) + re.findall(r"\bfn (term_history_\w+)\(", lib)
+        self.assertEqual(sorted(set(cmds)), ["term_history_clear", "term_history_prune", "term_history_read",
+                                             "term_history_remove", "term_history_save"])
+        self.assertEqual(len(re.findall(r"term_history::\w+\(&(?:home|user_home\(\)\?)", lib)), 5)
 
 
 class SessionFilesStayInOmhersFolder(unittest.TestCase):
@@ -1847,7 +1948,8 @@ class PastConversationsAreOnlyRead(unittest.TestCase):
         self.assertIn("const TAIL: u64 = 1024 * 1024;", self.past)
         self.assertIn("pub const MSG_MAX: usize = 40;", self.past)
         # every file read goes through inside(): the listing and the messages
-        for fn in ("pub fn claude_list(", "pub fn claude_messages(", "pub fn codex_list(", "pub fn codex_messages(", "fn codex_names("):
+        for fn in ("pub fn claude_list(", "pub fn claude_messages(", "pub fn codex_list(", "pub fn codex_messages(", "fn codex_names(",
+                   "pub fn rollout_id("):
             body = self.past.split(fn, 1)[1].split("\n}\n", 1)[0]
             self.assertIn("inside(root, ", body, fn)
         # an id is a UUID before it names a file
@@ -1860,12 +1962,41 @@ class PastConversationsAreOnlyRead(unittest.TestCase):
 
     def test_the_commands_take_only_an_agent_folders_and_an_id(self) -> None:
         for cmd, params in (("past_chats_list", "agent: String, cwds: Vec<String>"), ("past_chat_messages", "agent: String, id: String, cwd: String"),
+                            ("codex_conversation", "shell: State<'_, Shell>, id: u32"),
                             ("session_reveal", "cwd: String"), ("session_open_terminal", "cwd: String"),
                             ("asks_badge", "window: tauri::WebviewWindow, count: u32")):
             sig = re.search(rf"async fn {cmd}\((.*?)\) -> ", self.lib, re.S)
             self.assertIsNotNone(sig, cmd)
             self.assertEqual(sig.group(1).strip(), params, cmd)
         self.assertIn('matches!(agent, "claude" | "codex")', self.past)
+        # a TERMINALS Codex session's conversation is the rollout its own Codex holds open (rule 11): only a path in
+        # the home, under sessions/YYYY/MM/DD/rollout-*-<uuid>.jsonl, and only its UUID; no file is opened
+        rid = self.past.split("pub fn rollout_id(", 1)[1].split("\n}\n", 1)[0]
+        for needle in ("let real = inside(root, path)?;", 'if top != "sessions" || !digits(y, 4) || !digits(m, 2) || !digits(d, 2) {',
+                       'name.strip_prefix("rollout-")?.strip_suffix(".jsonl")?', "is_uuid(id)"):
+            self.assertIn(needle, rid)
+        for banned in ("File::open", "read_to_", "lines_in(", "head(", "last_part("):
+            self.assertNotIn(banned, rid, banned)
+        self.assertNotIn("codex_latest", self.lib)
+        fg = (SHELL / "fg.rs").read_text(encoding="utf-8").split("#[cfg(test)]\nmod tests", 1)[0]
+        own = fg.split("pub fn codex_conversation(fg: u32, home: &Path)", 1)[1].split("\n}\n", 1)[0]
+        for needle in ('Probe::default().agent(pid) == Some("codex")', "if !is_codex(fg) {", ".filter(|p| is_codex(*p))",
+                       "crate::past_chats::rollout_id(home, &p)", "tree.len() < TREE_MAX"):
+            self.assertIn(needle, own)
+        self.assertIn("const TREE_MAX: usize = 64;", fg)
+        # the open files are listed, never opened: only proc_pidinfo / proc_pidfdinfo (macOS), /proc/<pid>/fd links (Linux)
+        listing = fg.split("fn open_paths(", 1)[1]
+        listing = listing[: listing.index("#[cfg(test)]")] if "#[cfg(test)]" in listing else listing
+        for banned in ("File::open", "OpenOptions", "read_to_string(&", "fs::write", "Command::new"):
+            self.assertNotIn(banned, listing, banned)
+        self.assertIn("libc::PROC_PIDLISTFDS", listing)
+        self.assertIn("PROC_PIDFDVNODEPATHINFO", listing)
+        self.assertIn('std::fs::read_link(e.ok()?.path())', listing)
+        self.assertIn("pub fn codex_conversation(_fg: u32, _home: &Path) -> Option<String> {\n    None\n}", fg)
+        doc = _flat(DOC.read_text(encoding="utf-8"))
+        self.assertIn("For a TERMINALS Codex session the shell also lists, when the page asks (`codex_conversation`, only the session id goes out), the open files of that foreground Codex process", doc)
+        self.assertIn("only the UUID is kept, as the session's conversation for `codex resume` after a restart; no file is opened, and nothing else is shown, kept or sent; Windows does not do this.", doc)
+        self.assertIn("a TERMINALS Codex session's conversation id comes from the rollout path its own Codex process holds open (rule 11)", doc)
 
     def test_the_system_terminal_runs_no_command_and_the_folder_is_no_shell_string(self) -> None:
         self.assertEqual(self.open.count("Command::new("), 1)

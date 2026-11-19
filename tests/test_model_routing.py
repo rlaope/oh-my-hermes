@@ -32,7 +32,7 @@ from omh.coding.model_routing import (  # noqa: E402
     resolve_model_route,
     route_provenance,
 )
-from omh.coding.pi_family_interop import PI_DISTRIBUTION_HOST
+from omh.coding.pi_family_interop import PI_DISTRIBUTION_HOST, PI_FORK_HOST
 
 
 class ResearchRoleTests(unittest.TestCase):
@@ -220,6 +220,18 @@ class FamilyPrefixParityTests(unittest.TestCase):
             )
         for model in ("qwen3", "qwen3x-max", "qwen/abab-style"):
             self.assertEqual(model_family(model), "unknown")
+
+    def test_qwen4_generation_is_a_bounded_family_alias(self) -> None:
+        # Qwen4-Max (2026-11-16) as the vendor serves it, as OpenRouter spells
+        # it, and the Token Plan preview id: each reaches the qwen family
+        # instead of `unknown`. The prefix is bounded like Qwen3's, so a bare
+        # generation token or a near-miss concatenation stays unknown.
+        for model in ("qwen4-max", "qwen/qwen4-max", "qwen4-max-preview", "QWEN4-MAX", "qwen4-max-2026-11-16"):
+            with self.subTest(model=model):
+                self.assertEqual(model_family(model), "qwen")
+        for model in ("qwen4", "qwen4x-max", "qwen/qwen4"):
+            with self.subTest(model=model):
+                self.assertEqual(model_family(model), "unknown")
 
     def test_vendor_prefixed_model_ids_alias_to_design_families(self) -> None:
         self.assertEqual(model_family("digitalocean/openai-gpt-5.6-sol"), "gpt")
@@ -1252,7 +1264,7 @@ class PiFamilyHostDetectionTests(unittest.TestCase):
         the runtime as a plugin. First on PATH wins, deterministically."""
         from omh.coding.fanout_dispatch import PI_FAMILY_HOST_CANDIDATES, pi_family_host
 
-        self.assertEqual(PI_FAMILY_HOST_CANDIDATES, ("pi", PI_DISTRIBUTION_HOST, "opencode"))
+        self.assertEqual(PI_FAMILY_HOST_CANDIDATES, ("pi", PI_DISTRIBUTION_HOST, PI_FORK_HOST, "opencode"))
         both = lambda name: f"/x/{name}" if name in ("pi", PI_DISTRIBUTION_HOST) else None
         self.assertEqual(pi_family_host(both), "pi")
         self.assertEqual(pi_family_host(lambda name: f"/x/{PI_DISTRIBUTION_HOST}" if name == PI_DISTRIBUTION_HOST else None), PI_DISTRIBUTION_HOST)
@@ -1272,6 +1284,32 @@ class PiFamilyHostDetectionTests(unittest.TestCase):
         with mock.patch("omh.coding.fanout_dispatch.shutil.which", lambda name: "/x/opencode" if name == "opencode" else None):
             oc_argv = build_dispatch_argv("pi-family-runtime", "work", route)
         self.assertEqual(oc_argv, ["opencode", "run", "--model", "zai/glm-5.2", "--variant", "high", "work"])
+
+    def test_fork_host_alone_on_path_is_picked_after_pi(self) -> None:
+        from omh.coding.fanout_dispatch import pi_family_host
+
+        self.assertEqual(pi_family_host(lambda name: f"/x/{name}" if name == PI_FORK_HOST else None), PI_FORK_HOST)
+        self.assertEqual(pi_family_host(lambda name: f"/x/{name}" if name in ("pi", PI_FORK_HOST) else None), "pi")
+        self.assertEqual(
+            pi_family_host(lambda name: f"/x/{name}" if name in (PI_FORK_HOST, "opencode") else None), PI_FORK_HOST
+        )
+
+    def test_fork_host_argv_prints_without_a_session_or_an_approval_flag(self) -> None:
+        on_path = lambda name: f"/x/{name}" if name == PI_FORK_HOST else None  # noqa: E731
+        with mock.patch("omh.coding.fanout_dispatch.shutil.which", on_path):
+            bare = build_dispatch_argv("pi-family-runtime", "-work", None)
+            routed = build_dispatch_argv(
+                "pi-family-runtime",
+                "-work",
+                {"selected_model": "zai/glm-5.2", "selected_reasoning_effort": "high"},
+            )
+        self.assertEqual(bare, [PI_FORK_HOST, "--print", "--no-session", "--", "-work"])
+        self.assertNotIn("--permission-preset", bare)
+        self.assertFalse(any(part.startswith("--approval") for part in bare))
+        self.assertEqual(
+            routed,
+            [PI_FORK_HOST, "--print", "--no-session", "--model", "zai/glm-5.2", "--thinking", "high", "--", "-work"],
+        )
 
     def test_no_host_on_path_means_no_argv(self) -> None:
         with mock.patch("omh.coding.fanout_dispatch.shutil.which", lambda name: None):

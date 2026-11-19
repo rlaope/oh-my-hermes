@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from typing import Any, Final, Mapping
 
-from .pi_family_interop import PI_DISTRIBUTION_HOST
+from .pi_family_interop import PI_DISTRIBUTION_HOST, PI_FORK_HOST
 from .executor_capability_snapshots import (
     EXECUTOR_CAPABILITY_SNAPSHOT_SCHEMA_VERSION,
     prepared_executor_capability_snapshot,
@@ -21,7 +21,7 @@ CAPABILITY_STATES: Final = ("supported", "unsupported", "unknown")
 EDIT_FORMAT_KEYS: Final = ("hashline", "str_replace", "patch")
 INPUT_MODALITY_KEYS: Final = ("text", "image", "audio", "video", "document")
 KNOWN_CAPABILITY_PROFILES: Final = ("codex", "claude-code", "pi-family-runtime")
-CAPABILITY_HOST_VARIANT_KEYS: Final = ("pi", PI_DISTRIBUTION_HOST, "opencode")
+CAPABILITY_HOST_VARIANT_KEYS: Final = ("pi", PI_DISTRIBUTION_HOST, PI_FORK_HOST, "opencode")
 EXECUTOR_CAPABILITY_CLAIM_BOUNDARY: Final = (
     "This deprecated compatibility projection is derived from "
     f"{EXECUTOR_CAPABILITY_SNAPSHOT_SCHEMA_VERSION}. It is not a benchmark, ranking, "

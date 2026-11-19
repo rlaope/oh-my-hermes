@@ -10,6 +10,18 @@ All notable changes will be documented here.
   make the changes here, one after another, not as a dag-ulw graph. One bug's symptoms, one feature's fields, a list
   of questions, an errand list with a single code word, and work the request itself splits keep their routes.
 
+- **A dag-ulw node that writes files is told to commit only its own paths.** Its task text now says to stage the
+  paths in its SCOPE by name and never to run `git add -A`, `git add .`, `git commit -a` or `git stash`, so parallel
+  nodes in one checkout stop committing each other's work. Verify, review and read-only nodes get no such line. This
+  is guidance; the write-scope guard on file tools stays the enforcement.
+
+- **The pi-family coding lane runs on the omp CLI too.** With only `omp` on PATH, a pi-family coding unit now runs
+  `omp --print --no-session [--model <id>] [--thinking <level>] -- <prompt>`; when `pi` or its distribution host is
+  also installed, those still win. omp has no `--permission-preset`, so no approval flag is passed (omp's default
+  applies) and writes stay fenced by the worktree and fan-out confinement as for every host. Model discovery also reads
+  `~/.omp/agent/sessions`. omp keeps its sign-in in a SQLite store, so its login marker reads `absent`; that does not
+  block dispatch.
+
 - **Hermes Bug Hunter: code review keeps only findings it can show, and every review says what it did not check.**
   `code-review`'s finding validation gains a drop gate: a candidate stays out of the findings when it cannot be traced
   step by step from a concrete input to a wrong result, when the behaviour is intended or documented, when its trigger
@@ -17,12 +29,35 @@ All notable changes will be documented here.
   bug. `code-review`, `production-audit` and `verification-gate` now end every result with a `Not checked` list (each
   entry with its reason, or `Not checked: none` only after full coverage), so a short findings list no longer reads as
   "the rest is clean".
+
+- **Qwen4-Max is onboarded.** Alibaba released it on 2026-11-16. Before this, every Qwen4 id (`qwen4-max`,
+  `qwen/qwen4-max`, `qwen4-max-preview`) classified `unknown` and got generic discipline; they now classify `qwen`.
+  `qwen4-max` has an exact contract read from docs.qwencloud.com: 1M context, hybrid thinking on by default, and a
+  `low` / `high` / `xhigh` ladder with `high` as the default. The vendor maps `minimal`, `medium` and `max` onto those
+  three without an error, so OMH raises nothing and the contract records the table. Cost estimates use the Singapore
+  list price, $1.50 / $4.50 per million tokens with cached input at $0.075. The Qwen calibration is now
+  version-aware: the family block still describes the non-thinking Qwen3-Coder, and Qwen4-Max gets its own block
+  that does not forbid thinking. That block is editorial and unmeasured. No shipped chain names Qwen4-Max, because
+  Qwen3.8-Max held no slot either; to try it, use `omh model-chains set <category> "qwen4-max:high, ..."`. The Token
+  Plan preview is recognized only, with no contract and no price. Hermes through origin/main `fe8b920cae` sends no
+  effort on its DashScope profiles, so the model runs at `high` there whatever effort is routed.
+
 - **A cheap dag-ulw node that hits a hard judgement asks for a stronger model instead of guessing.** When a node's
   child cannot settle a design choice or a root cause, it stops before editing and writes `ESCALATE: <question>` into
   its handoff; the node is settled `escalated` and offered again one category up (quick, unspecified-low,
   unspecified-high, ultrabrain), at most twice, briefed with the question the first child stopped on. Nodes already on
   ultrabrain, review or deep never get the option, nor does a node pinned to an identity, which keeps that
   identity's own model chain.
+
+- **omher: every message you send shows Read once the bot has it, and a steer shows how the bot took it.** The last
+  message the bot received carries a small muted "Read · 16:41" under it, messenger style: as soon as the send went
+  through or its turn started, a steer as soon as Hermes queued it, and a held message once it actually goes out. A
+  failed send or a refused, uncertain or dropped steer never shows it. Under a steered message, the first line the
+  bot wrote after taking it (its note before the next tool call, or its answer) shows as "↳ …", so a change of course
+  is no longer silent; the rest of that note stays hidden as before. A reopened chat shows both, from the bridge.
+  While the bot works, the typing dots with its face stay put until the answer starts, and the live activity line
+  ("OMH — recalled 2 memories", "Running cd …") comes under them; that line is kept short (a command shows its first
+  24 characters, the whole text on hover).
 
 - **omher: a waiting message is sent or taken back in one click, with no menu.** A message typed while the bot
   answers waits with buttons before it instead of a ↵ that opened Send now / Steer / Edit / Delete. ↵ sends it:
@@ -65,6 +100,14 @@ All notable changes will be documented here.
   2027-01-01, cached input moving with each. Hydrogen stays at $1.50 / $7.50. Cost estimates keep today's prices
   until each date; the price rows now point at the current page, and Argon's row is pinned by the same list-price
   test as Carbon's.
+
+- **A dag-ulw re-run can skip the nodes the last run already confirmed, and only when asked.**
+  `omh_dag action=define` takes an opt-in `carry_forward` with the base revision. A node an earlier run of the same
+  goal at that base accepted, with the same id, prompt, write scope and dependencies and its handoff still on disk, is
+  recorded `carried` and not handed out; its dependents read the earlier handoff. Verify nodes, nodes that failed or
+  were blocked, changed nodes and anything after a node that runs again always run. define and status list each
+  carried node with the run it came from, the status line says `carried N of M nodes from <run>`, and the goal
+  verdict still waits on the verify node, which is told which nodes were carried.
 
 - **omher.app has a Start Guide at `/guide/`, linked beside Docs in every header** (owner request, 2026-11-18). One
   page for someone new, with plain section titles that say what each part covers: what OMH does in three cards (a model per kind of work, `dag-ulw`, expert skills), install in
@@ -278,6 +321,67 @@ All notable changes will be documented here.
   changes are made one after another, with no dag-ulw graph and no child agents. In paired runs on a five-part,
   six-thousand-line job, splitting such a backlog finished later than Hermes alone at the same quality. Asking for
   dag-ulw by name still runs the list as a graph.
+- **omher: a CLI's block art draws solid in a terminal.** Claude Code's mascot (`▐▛███▜▌`) and other block and
+  box characters came out sliced in TERMINALS, with dark seams between cells and rows, because the standard renderer
+  draws them from the font, a hair short of their cells. Terminal › GPU renderer › Auto now uses the GPU renderer
+  wherever the hardware allows it (WebGL2, not a software rasterizer), and it draws those characters to fill the cell
+  as a real terminal does. Off keeps the standard renderer; a machine without hardware WebGL2 keeps it too.
+- **omher: a Slack briefing that sets itself up.** Add a bot whose Hermes profile has Slack connected and omher
+  creates one automation for it, `omher-brief`: the channel-watch collector in a new brief mode checks the Slack
+  channels you share with the bot every 15 minutes and wakes the model only when there is a reason (an unanswered
+  mention, a thread it already told you about moving on, your return after hours away, or enough new posts in your
+  active hours), at most six briefs a day; the bot then tells you one thing in its chat or stays silent. Its chat
+  says so once, with Turn off; removing the job in Automations means omher never creates it again. The briefing's
+  answers read "Brief" and the Automations row says "When something needs you". Slack only: Discord briefs and
+  GitHub events are not built yet.
+
+- **`show-reel` has a cut-sheet lane for films written as a shot contract.** A new opt-in reference, `cut-sheet.md`,
+  covers cut-driven sequences of 30 s or less handed to a builder or a text-to-video generator, and remakes of a
+  supplied reference video. It opens with one contract line (ratio, duration, exact cut count, fps, palette), locks
+  the subject in observable markers with a never-redesign clause repeated in every prompt chunk, and writes one
+  timecoded row per cut, each compositionally different from its neighbours with a named exit transition, inside a
+  closed editing vocabulary. Sound is written with the rows (a named peak, a cold ending, SFX onsets aligned to the
+  cut), a remake measures the reference's cut times and audio onsets before any row is written, and a delegated
+  build is reviewed in numbered, measurable FIX rounds. The brief, rights and the short-promo one-scene rule still
+  apply.
+- **omher terminal: parity with Otty and Orca: split panes, restore, Kitty keys, images, prompt marks, paste guard.**
+  - **Split panes.** The bottom terminal panel splits into up to four panes (⌘D right, ⌘⇧D down, ⌘W close,
+    ⌘⌥arrows move; Ctrl+Shift+D / Alt+Shift+D / Ctrl+Shift+W / Ctrl+Alt+arrows elsewhere). Dividers drag and a double
+    click evens them. Two TERMINALS sessions open side by side (⌘D in a terminal, or "Split right with…").
+  - **Panel shells ring and take files.** A bottom-panel shell that rings shows a dot on its tab, as TERMINALS rows
+    do. A file dropped on a panel pane is saved and its path typed.
+  - **Restore.** Claude Code terminals start under a conversation id omher makes. If they were running when omher
+    quit, they continue that conversation by themselves after a restart (`claude --resume <id>`). Codex terminals
+    learn their conversation from the Codex process itself and continue it with `codex resume <id>`.
+  - **Scrollback comes back.** Each TERMINALS session and bottom-panel tab shows what it showed before a restart (last
+    2000 lines), dimmed, under a "restored <time>" line. It is kept in `~/.omher/term-history` (owner-only), and
+    Settings › Terminal › History turns it off and deletes it all. The bottom panel's tabs come back in their folders.
+  - **xterm 6.1.** Terminals moved to xterm 6.1 (beta 338). Shift+Enter reaches Claude Code and Codex as its own key
+    (Kitty keyboard protocol, Settings › Terminal › Modern key encoding). Sixel, iTerm2 and Kitty images show in the
+    terminal (Settings › Terminal › Show images, 32 MB per terminal). Emoji such as 👨‍👩‍👧 take two cells.
+    Powerline and Nerd glyphs fit their cell on the GPU renderer. Option+drag selects inside vim and tmux.
+  - **Prompt marks, folder and progress.** Terminals act on the escapes shells and CLIs already send. OSC 133 prompt
+    marks draw a gutter mark per prompt (red after a failed command), and Cmd+Up / Cmd+Down (Cmd+PageUp /
+    Cmd+PageDown) jump between prompts. OSC 7 keeps the bottom panel's tab name and the TERMINALS row's folder
+    current after `cd`, including the `file://$HOST/…` form macOS shells send. OSC 9;4 progress (Claude Code and
+    others) keeps the row working, and marks it when the work finishes while you are looking elsewhere. omher adds
+    no shell hook.
+  - **Paste guard.** Pasting more than one line into a terminal now asks first, showing the line count, the first
+    lines, and Paste / Cancel (Enter / Esc). It does not ask when the program has turned on bracketed paste. This
+    covers Cmd/Ctrl+V, the Edit menu and right-click paste, in session terminals and the bottom panel. Settings ›
+    Terminal › "Confirm multi-line paste" (on by default).
+  - **Find options.** The terminal find bar has Match case (Aa, Alt+C) and Regular expression (.\*, Alt+R) toggles.
+    An invalid pattern marks the field and finds nothing.
+
+- **The OMH TUI's waiting row says what it waits on.** Between turns the row above the composer named nothing
+  (`✻ Waiting… (33m 47s · 1 agent · terminal)`). It now names the longest wait from structure only: a background
+  process by the words in command position of its command (`Waiting for CI` with the PR number, `Deploying`,
+  `Testing`, `Building`, `Installing`, `Rendering`, `Pushing`, `Downloading`, `Sleeping` with the time left), a
+  process woken on a match by its first pattern (`Watching for "READY"`), a dag-ulw run by its name with its nodes
+  done and failed, and a single child as `Reviewing`, `Researching` or `Writing` with its model. Other waits are
+  counted after it (`+1 test run · 1 agent`); a narrow terminal falls back to the old row. As the wait ends, one muted
+  row says so for 3 seconds (`✓ Review finished`, `✗ … failed`, `· Tests ended` for a process, which has no exit
+  code). During a turn, `? waiting on you` now reads `? waiting for your approval` or `? waiting for your answer`.
 
 ## 4.0.8 - 2026-11-15
 
