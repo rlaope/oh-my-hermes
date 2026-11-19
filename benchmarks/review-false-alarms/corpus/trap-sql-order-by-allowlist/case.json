@@ -1,0 +1,7 @@
+{
+  "id": "trap-sql-order-by-allowlist",
+  "kind": "trap",
+  "language": "python",
+  "expected": "clean",
+  "why": "The ORDER BY column is concatenated into the SQL, but it can only be one of the three constant strings in SORTABLE: an unknown key raises before the query is built, and the direction is one of two literals. The user value never reaches the SQL text; region stays a bound parameter."
+}

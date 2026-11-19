@@ -4,6 +4,13 @@ All notable changes will be documented here.
 
 ## Unreleased
 
+- **Hermes Bug Hunter: code review keeps only findings it can show, and every review says what it did not check.**
+  `code-review`'s finding validation gains a drop gate: a candidate stays out of the findings when it cannot be traced
+  step by step from a concrete input to a wrong result, when the behaviour is intended or documented, when its trigger
+  needs a privilege the user cannot have, when the harm is only theoretical, or when it is a style nit dressed as a
+  bug. `code-review`, `production-audit` and `verification-gate` now end every result with a `Not checked` list (each
+  entry with its reason, or `Not checked: none` only after full coverage), so a short findings list no longer reads as
+  "the rest is clean".
 - **A cheap dag-ulw node that hits a hard judgement asks for a stronger model instead of guessing.** When a node's
   child cannot settle a design choice or a root cause, it stops before editing and writes `ESCALATE: <question>` into
   its handoff; the node is settled `escalated` and offered again one category up (quick, unspecified-low,
@@ -17,6 +24,14 @@ All notable changes will be documented here.
   first). ↓ puts it back in the message box to fix or add to. × (on hover or focus) drops it. A button that cannot
   act (the agent has the message already) says why in its tooltip.
 
+- **Hermes Bug Hunter: a trap benchmark counts the bugs a reviewer invents.** `benchmarks/review-false-alarms`
+  holds 11 traps (changes that look wrong and are correct: SQL built from a constant allowlist, `eval` over a literal
+  table, an index guarded two lines up, a lock the caller holds) and 6 controls with one real, reachable bug each. A
+  reviewer ends with `VERDICT: clean` or `VERDICT: bug <path>:<line>`; a control counts as hit only within ±3 lines,
+  and a missing or garbled verdict is its own column, never clean. The table prints the false-alarm rate and the hit
+  rate side by side for `omh-on` and `omh-off`, and OMH wins only with fewer false alarms and no fewer hits.
+  `bench.py --dry-run` grades a recorded fixture with no model; live runs use `hermes -z` on two profiles.
+
 - **omher: a message steered into a running answer reads as you typed it after the chat reopens.** Hermes keeps
   a mid-turn steer wrapped in a frame for the model (`[OUT-OF-BAND USER MESSAGE — …]` … `[/OUT-OF-BAND USER
   MESSAGE]`), and a reopened Bot Chat showed that frame in your bubble. The bridge now shows only the typed text,
@@ -25,6 +40,12 @@ All notable changes will be documented here.
 - **The Start Guide lists long-term memory among the main features.** It moves from the closing list to a fourth card
   in "What OMH does" (owner request, 2026-11-18): nothing is remembered silently, and the next session gets only the
   memories that fit its task, within a token budget. The closing list is now one row of three.
+- **A fail-closed leak guard keeps private identifiers out of the public repo (Hermes Bug Hunter).** CI now scans
+  every tracked file on each pull request and main push against a committed denylist of sha256 hashes, so the list
+  never carries the names it protects. A hit prints `path:line` and the hash; a missing or empty denylist fails the
+  job instead of passing. `tools/qa/identifier_guard.py --staged` runs the same check as a pre-commit hook, and
+  `--hash "name"` prints the line to add (see CONTRIBUTING.md).
+
 - **Four OMH tool descriptions are shorter, and the model still picks the same calls.** `omh_todo`, `omh_loop`,
   `omh_document_plan` and `omh_delegate_route` say the same rules in fewer words, so each costs fewer tokens the
   first time Hermes loads it (24,943 -> 23,718 characters together; the registered OMH schemas 63,324 -> 62,099).
@@ -199,6 +220,12 @@ All notable changes will be documented here.
   run's one-line summary open. While a run is active, such a dispatch is stopped once per turn with a pointer to
   `omh_dag` (ready, settle, repair, extend); sending it again goes through. Contributed by @yqm-307 (#2914).
 
+- **`omh setup` ends by offering a guided model setup in the OMH TUI.** On a terminal, the last question is "Set up
+  your models now?" (default Yes). Yes opens the OMH TUI in a new session with a fixed onboarding prompt as its first
+  turn, and Hermes walks you through providers, keys, a main model and at most one fallback by conversation; if Hermes
+  has no main model yet, your own `hermes model` runs first. No prints how to come back later. The prompt is sent only
+  under the new `omh --onboard model-setup`, never on a resume, and `omh setup --model-setup --fallback-model
+  PROVIDER/MODEL` previews and writes one Hermes `fallback_model` under the same digest-bound approval.
 - **A dag-ulw node can pick a built-in role or a custom identity by name.** `omh_role action=list` now shows
   built-in roles and custom identity profiles together, and a node sets `identity: builtin:<name>` or
   `custom:<name>` independently of its `role` and `category`. The chosen definition supplies the child's prompt

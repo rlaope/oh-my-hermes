@@ -1,0 +1,15 @@
+--- a/web/api.js
++++ b/web/api.js
+@@ -3,6 +3,10 @@
+  * opts.limit: rows to return; 0 returns only the total count.
+  */
+ export function searchParams(opts) {
+-  const limit = opts.limit === undefined ? 50 : opts.limit;
+-  return new URLSearchParams({ q: opts.query, limit: String(limit) });
++  const limit = opts.limit || 50;
++  const params = new URLSearchParams({ q: opts.query, limit: String(limit) });
++  if (opts.cursor) {
++    params.set("cursor", opts.cursor);
++  }
++  return params;
+ }

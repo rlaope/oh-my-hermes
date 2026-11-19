@@ -1,0 +1,9 @@
+--- a/app/timeline.py
++++ b/app/timeline.py
+@@ -11,5 +11,4 @@
+     """The event after events[index], or None when there is none."""
+     if index < 0 or index >= len(events) - 1:
+         return None
+-    following = events[index + 1 : index + 2]
+-    return following[0]
++    return events[index + 1]
