@@ -1056,3 +1056,31 @@ describe("subagent events: one fan-out per delegate_task, one row per subagent",
     ]);
   });
 });
+
+describe("clarify keeps the words written before the question", () => {
+  const bot = "default";
+  const asked = (): BridgeEvent[] => [
+    { event: "turn.start", bot },
+    { event: "delta", bot, text: "적용 전에 이렇게 바뀝니다.\n\n1) 별칭 6개 추가" },
+    { event: "tool.start", bot, tool_id: "t-ask", name: "clarify", detail: "적용할까요?" },
+    { event: "clarify.request", bot, request_id: "c-1", question: "적용할까요?" },
+  ];
+
+  it("shows that commentary as its own row above the card", () => {
+    const s = run(initialState(), asked());
+    expect(s.chats[bot].items.map((i) => i.kind)).toEqual(["activity", "assistant", "clarify"]);
+    const note = s.chats[bot].items[1];
+    expect(note.kind === "assistant" && note.text).toBe("적용 전에 이렇게 바뀝니다.\n\n1) 별칭 6개 추가");
+  });
+
+  it("keeps it out of the answer once the turn resumes and ends", () => {
+    const s = run(initialState(), [
+      ...asked(),
+      { event: "delta", bot, text: "고맙습니다." },
+      { event: "message", bot, id: "m-2", text: "고맙습니다." },
+      { event: "turn.end", bot, outcome: "done" },
+    ]);
+    const texts = s.chats[bot].items.flatMap((i) => (i.kind === "assistant" ? [i.text] : []));
+    expect(texts).toEqual(["적용 전에 이렇게 바뀝니다.\n\n1) 별칭 6개 추가", "고맙습니다."]);
+  });
+});
