@@ -272,6 +272,11 @@ All notable changes will be documented here.
   changes are made one after another, with no dag-ulw graph and no child agents. In paired runs on a five-part,
   six-thousand-line job, splitting such a backlog finished later than Hermes alone at the same quality. Asking for
   dag-ulw by name still runs the list as a graph.
+- **omher: a CLI's block art draws solid in a terminal.** Claude Code's mascot (`▐▛███▜▌`) and other block and
+  box characters came out sliced in TERMINALS, with dark seams between cells and rows, because the standard renderer
+  draws them from the font, a hair short of their cells. Terminal › GPU renderer › Auto now uses the GPU renderer
+  wherever the hardware allows it (WebGL2, not a software rasterizer), and it draws those characters to fill the cell
+  as a real terminal does. Off keeps the standard renderer; a machine without hardware WebGL2 keeps it too.
 
 ## 4.0.8 - 2026-11-15
 
