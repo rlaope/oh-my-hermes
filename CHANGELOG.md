@@ -13,6 +13,13 @@ All notable changes will be documented here.
   unique placeholder and then renamed, because the gateway answers a create whose title an open session already has
   with that session. The bridge tests' fake gateway now refuses what the real one refuses. (#2980)
 
+- **The pi-family coding lane runs on the omp CLI too.** With only `omp` on PATH, a pi-family coding unit now runs
+  `omp --print --no-session [--model <id>] [--thinking <level>] -- <prompt>`; when `pi` or its distribution host is
+  also installed, those still win. omp has no `--permission-preset`, so no approval flag is passed (omp's default
+  applies) and writes stay fenced by the worktree and fan-out confinement as for every host. Model discovery also reads
+  `~/.omp/agent/sessions`. omp keeps its sign-in in a SQLite store, so its login marker reads `absent`; that does not
+  block dispatch.
+
 - **Hermes Bug Hunter: code review keeps only findings it can show, and every review says what it did not check.**
   `code-review`'s finding validation gains a drop gate: a candidate stays out of the findings when it cannot be traced
   step by step from a concrete input to a wrong result, when the behaviour is intended or documented, when its trigger
@@ -299,6 +306,24 @@ All notable changes will be documented here.
   draws them from the font, a hair short of their cells. Terminal › GPU renderer › Auto now uses the GPU renderer
   wherever the hardware allows it (WebGL2, not a software rasterizer), and it draws those characters to fill the cell
   as a real terminal does. Off keeps the standard renderer; a machine without hardware WebGL2 keeps it too.
+- **omher: a Slack briefing that sets itself up.** Add a bot whose Hermes profile has Slack connected and omher
+  creates one automation for it, `omher-brief`: the channel-watch collector in a new brief mode checks the Slack
+  channels you share with the bot every 15 minutes and wakes the model only when there is a reason (an unanswered
+  mention, a thread it already told you about moving on, your return after hours away, or enough new posts in your
+  active hours), at most six briefs a day; the bot then tells you one thing in its chat or stays silent. Its chat
+  says so once, with Turn off; removing the job in Automations means omher never creates it again. The briefing's
+  answers read "Brief" and the Automations row says "When something needs you". Slack only: Discord briefs and
+  GitHub events are not built yet.
+
+- **`show-reel` has a cut-sheet lane for films written as a shot contract.** A new opt-in reference, `cut-sheet.md`,
+  covers cut-driven sequences of 30 s or less handed to a builder or a text-to-video generator, and remakes of a
+  supplied reference video. It opens with one contract line (ratio, duration, exact cut count, fps, palette), locks
+  the subject in observable markers with a never-redesign clause repeated in every prompt chunk, and writes one
+  timecoded row per cut, each compositionally different from its neighbours with a named exit transition, inside a
+  closed editing vocabulary. Sound is written with the rows (a named peak, a cold ending, SFX onsets aligned to the
+  cut), a remake measures the reference's cut times and audio onsets before any row is written, and a delegated
+  build is reviewed in numbered, measurable FIX rounds. The brief, rights and the short-promo one-scene rule still
+  apply.
 
 ## 4.0.8 - 2026-11-15
 

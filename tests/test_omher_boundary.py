@@ -81,7 +81,8 @@ RULES = (
     "and from `--version` only the version number (the first `digits.digits.digits` run with its suffix; never the rest of its text), shown beside the CLI's name.",
     "The browser sign-in happens inside the CLI: omher never asks for, accepts, reads, copies or shows a token or key.",
     "deletes only `~/.omher/accounts/<cli>/<id>/`. An account switch never stops a running session.",
-    "Besides rule 21's one GitHub CLI read, the only program the bridge runs is `git`, for reads (`worktree list`, `rev-parse`, `status`, `diff`, `log`,",
+    "Besides rule 21's one GitHub CLI read and rule 24's one `hermes -p <bot> cron create` for the briefing, the only"
+    " program the bridge runs is `git`, for reads (`worktree list`, `rev-parse`, `status`, `diff`, `log`,",
     "omher never commits, checks out, pushes or edits a repository.",
     "and OmO's subagent records (`~/.omo/agent/projects/*/senpi-task/tasks/st_*.json`, never the subagents' own"
     " transcripts under `children/`).",
@@ -214,7 +215,7 @@ RULES = (
     "Hermes asks for the key in that terminal and stores it itself: omher never sees the key.",
     "never runs this in its own pseudo-terminal, so no keystroke passes through omher.",
     "The two exceptions are a bot's automations and plugins, which omher changes only by asking that bot's own gateway"
-    " (rules 24 and 25); omher writes no file of either itself.",
+    " (rules 24 and 25); omher writes no file of either itself, with one exception of its own:",
     "omher changes a bot's automations only through Hermes' own `cron.manage` on that bot's gateway (`add`, `pause`,"
     " `resume`, `remove`), only when the person presses a button.",
     "It reads `cron/jobs.json` and never writes it;",
@@ -223,6 +224,15 @@ RULES = (
     "A job whose script is the channel-watch collector (`channel_watch_<watch>.py`) is listed as a watch:",
     "the newest 20 run records Hermes keeps in `cron/output/<job id>/`, bounded, read-only and never through a link.",
     "+ New watch only sends one sentence the person filled in to that bot's chat and opens it; it creates no job itself,",
+    "The one exception is the briefing: once per bridge run, after its first bot list, for each bot on this computer",
+    "whose profile `.env` names `SLACK_BOT_TOKEN` (the key name only: the value is never read)",
+    "`hermes -p <bot> cron create --name omher-brief --script channel_watch_omher-brief.py --deliver bot-chat:<bot>"
+    " --continuity \"every 15m\" <the fixed briefing prompt>`",
+    "When the person removes that job in Automations, omher adds the bot to `~/.omher/brief-optout.json` (omher's own"
+    " folder) and never sets it up again.",
+    "omher sets up exactly one briefing job by itself (rule 24), writing only the collector copy"
+    " `scripts/channel_watch_omher-brief.py` and its config `channel_watch/omher-brief.json`",
+    "rule 24's one `hermes -p <bot> cron create` for the briefing, the only program the bridge runs is `git`,",
     "omher changes a bot's plugins only through Hermes' own `plugins.manage` on that bot's gateway (`list`, `toggle`,"
     " `inspect`, `install` from the curated catalog by name, `update`, `remove`), only when the person presses a button,",
     "`install` carries the pin `inspect` returned.",
@@ -752,7 +762,8 @@ class BridgeSubmitsOnlyToTheMainChat(unittest.TestCase):
         fns = {f.name: f for f in ast.walk(self.tree) if isinstance(f, ast.FunctionDef)}
         calls = [(fn.name, c) for fn in fns.values() for c in ast.walk(fn)
                  if isinstance(c, ast.Call) and ast.unparse(c.func) == "subprocess.run"]
-        self.assertEqual(sorted(name for name, _ in calls), ["_git", "gh_pr_view", "run_hermes_restart"])
+        # _hermes_run: rule 24's one `hermes -p <bot> cron create` for the briefing
+        self.assertEqual(sorted(name for name, _ in calls), ["_git", "_hermes_run", "gh_pr_view", "run_hermes_restart"])
         fn = fns["gh_pr_view"]
         body = ast.unparse(ast.Module(body=fn.body[1:], type_ignores=[]))  # the code, without its docstring
         self.assertIn("timeout=timeout", body)
@@ -787,7 +798,8 @@ class BridgeSubmitsOnlyToTheMainChat(unittest.TestCase):
         runs = [c for c in ast.walk(self.tree) if isinstance(c, ast.Call) and ast.unparse(c.func).startswith("subprocess.")]
         self.assertEqual(sorted(ast.unparse(c.args[0]) for c in runs),
                          ["['git', *pre, *args]", "[gh, 'pr', 'view', str(number), '-R', repo, '--json', 'state,isDraft,mergedAt,url']",
-                          "argv"])  # argv: rule 29's restart_argv, checked in RestartOneBotOnAPress
+                          "argv", "argv"])  # argv: rule 29's restart_argv (RestartOneBotOnAPress) and rule 24's
+        # brief_create_argv (`hermes -p <bot> cron create`, pinned in bridge/tests/test_brief_setup.py)
         for host in ("slack.com/api", "discord.com/api", "api.telegram.org", "hooks.slack.com"):
             self.assertNotIn(host, self.source)
         hermes_send = [fn.name for fn in ast.walk(self.tree) if isinstance(fn, ast.FunctionDef)

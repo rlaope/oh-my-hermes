@@ -934,7 +934,8 @@ or wrapper can record runtime observation. Maestro never writes Hermes aliases
 or owns provider credentials.
 
 The pi-family runtime's host CLIs (`CAPABILITY_HOST_VARIANT_KEYS` in
-`src/coding/executor_capabilities.py`) have allowlisted session metadata that
+`src/coding/executor_capabilities.py`: pi, its distribution and fork hosts, and
+opencode) have allowlisted session metadata that
 can contribute discovery observations, but they are not independent
 executor/model owners and do not authorize promotion into the Hermes-native
 lane.
