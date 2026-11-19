@@ -1,0 +1,15 @@
+/* A prompt's mark (OSC 133, engine-marks.ts): a thin bar in the space left of the line a prompt began on, neutral,
+   red when that prompt's command ended with an error. xterm puts the decoration over the line's first cell; it is
+   moved into the terminal's padding so it covers no text, and clicks go through it. */
+.xterm .xterm-decoration.term-mark {
+  width: 2px !important;
+  margin-left: -6px;
+  border-radius: 1px;
+  background: var(--quiet);
+  opacity: 0.7;
+  pointer-events: none;
+}
+.xterm .xterm-decoration.term-mark.err {
+  background: var(--danger);
+  opacity: 1;
+}

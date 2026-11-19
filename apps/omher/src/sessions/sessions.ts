@@ -26,6 +26,7 @@ import { useSyncExternalStore } from "react";
 import type { ITerminalInitOnlyOptions, ITerminalOptions, Terminal } from "@xterm/xterm";
 import type { FitAddon } from "@xterm/addon-fit";
 import { afterOpen, CELLS_EVENT, feed, isParked, live, onVisible, PARKING_EVENT, type Remake } from "./term/engine";
+import { onCwd, onProgress } from "./term/engine-marks";
 import { applyLook, termOptions } from "./term/look";
 import { termFontsReady } from "./term/fonts";
 import { onTermSettings, readTermSettings } from "./term/settings";
@@ -1287,6 +1288,7 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
         // a program omher stopped (the row closed, Restart) or one already replaced says nothing more
         if (terms.get(id) !== t || t.run !== run) return;
         t.closed = true;
+        termActs.patch(id, { progress: undefined });
         if (lineTimer !== null) clearTimeout(lineTimer);
         lineTimer = null;
         fgOff.get(id)?.();
@@ -1471,6 +1473,19 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
         });
       };
       wire(first.term);
+      // the folder its shell reports (OSC 7): the row's folder line. Progress (OSC 9;4): working while reported; done
+      // after working, unseen, marks the row as the bell does (no notification: a report is not a ring). Both come
+      // on the element, which a parked terminal made again keeps, and go with it.
+      onCwd(el, (path) => {
+        if (rec(id)) termActs.patch(id, { cwd: path });
+      });
+      onProgress(el, (st) => {
+        if (!rec(id) || tt.closed) return;
+        if (st === "busy") return termActs.patch(id, { progress: true });
+        if (!termActs.get(id).progress) return;
+        termActs.patch(id, { progress: undefined });
+        flag(id, "bell");
+      });
     }
     const tt = t;
     container.appendChild(tt.el);

@@ -4,6 +4,7 @@
 import type { ITerminalInitOnlyOptions, ITerminalOptions, Terminal } from "@xterm/xterm";
 import type { FitAddon } from "@xterm/addon-fit";
 import { afterOpen, CELLS_EVENT, feed, isParked, live, onVisible, type Remake } from "../sessions/term/engine";
+import { onCwd } from "../sessions/term/engine-marks";
 import { applyLook, termOptions } from "../sessions/term/look";
 import { termFontsReady } from "../sessions/term/fonts";
 import { onTermSettings, readTermSettings } from "../sessions/term/settings";
@@ -40,6 +41,10 @@ interface PanelTerm {
   undo: () => void;
   /** stops following the shell's foreground CLI */
   fgOff?: () => void;
+  /** stops following the folder its shell reports */
+  cwdOff?: () => void;
+  /** its shell reported a folder (OSC 7), which the folder it started in no longer overrides */
+  cwdSaid?: boolean;
 }
 
 const terms = new Map<number, PanelTerm>();
@@ -107,6 +112,11 @@ function create([{ Terminal }, { FitAddon }]: Xterm, key: number, want: string |
   };
   terms.set(key, p);
   wire(first.term);
+  // the folder its shell reports (OSC 7) names the tab; the element outlives a parked terminal made again
+  p.cwdOff = onCwd(el, (path) => {
+    p.cwdSaid = true;
+    setTabCwd(key, path);
+  });
   return p;
 }
 
@@ -143,7 +153,7 @@ function start(key: number, p: PanelTerm, want: string | null): void {
         p.fgOff = onSessionFg(started.id, (agent) => setTabFg(key, agent));
         if (p.owed) host.ack(p.id, p.owed);
         p.owed = 0;
-        setTabCwd(key, started.cwd);
+        if (!p.cwdSaid) setTabCwd(key, started.cwd);
       },
       (e) => {
         p.ended = true;
@@ -221,6 +231,7 @@ export function disposeTerm(key: number): void {
   const wasParked = isParked(p.raw);
   p.undo();
   p.fgOff?.();
+  p.cwdOff?.();
   if (!wasParked) p.raw.dispose(); // a parked one was disposed when it was parked
   p.el.remove();
 }

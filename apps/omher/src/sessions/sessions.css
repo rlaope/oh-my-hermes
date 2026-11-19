@@ -1428,6 +1428,14 @@ body.side-resizing * {
   flex: none;
   color: var(--quiet);
 }
+/* the folder its shell moved to (OSC 7): kept whole before the last line gives way */
+.tr-cwd {
+  flex: 0 1 auto;
+  min-width: 2em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 .tr-line {
   flex: 0 1 auto;
   min-width: 0;
