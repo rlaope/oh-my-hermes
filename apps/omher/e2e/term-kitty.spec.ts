@@ -95,6 +95,22 @@ test("a terminal parked and made again keeps the protocol its program asked for"
   expect(await sends(page, "Shift+Enter")).toBe("\x1b[13;2u");
 });
 
+test("nested Kitty modes survive parking: popping after the remake goes back to the outer mode", async ({ page }) => {
+  await openApp(page);
+  const first = await newTerminal(page);
+  await page.evaluate(() => (window as unknown as { __omherPark: { set(l: object): void } }).__omherPark.set({ hiddenMs: 200, idleMs: 200, sweepMs: 100 }));
+  await feed(page, "\x1b[>1u\x1b[>3u");
+  await expect.poll(() => flags(page)).toBe(3);
+  await newTerminal(page); // the first one leaves the page
+  await expect.poll(() => page.evaluate(() => (window as unknown as { __omherPark: { parked(): number } }).__omherPark.parked()), { timeout: 10_000 }).toBeGreaterThan(0);
+  await page.getByTestId(`session-${first}`).locator(".ss-open").click();
+  await expect(page.getByTestId("terminal")).toHaveAttribute("data-session", first);
+  await expect.poll(() => flags(page)).toBe(3);
+  await feed(page, "\x1b[<u");
+  await expect.poll(() => flags(page)).toBe(1);
+  expect(await sends(page, "Shift+Enter")).toBe("\x1b[13;2u");
+});
+
 test("Option+drag selects text inside a program that reports the mouse, and sends it no mouse report", async ({ page }) => {
   await openApp(page);
   test.skip(!(await platformIsMac(page)), "Option-click selection is xterm's macOS behaviour");

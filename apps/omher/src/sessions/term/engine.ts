@@ -443,7 +443,6 @@ function park(s: State, Serialize: typeof import("@xterm/addon-serialize").Seria
   }
   const title = (term as unknown as { _core?: { _inputHandler?: { _windowTitle?: unknown } } })._core?._inputHandler?._windowTitle;
   if (typeof title === "string" && title) snapshot += `\x1b]2;${title}\x07`;
-  snapshot += kittyAgain(term);
   parked.set(term, { snapshot: utf8.encode(snapshot), carried, cols: term.cols, rows: term.rows, remake: s.remake!, hiddenAt: s.hiddenAt, lastOut: s.lastOut, gpuLast: s.gpuLast, gaveUp: s.gaveUp, losses: s.losses });
   // a find bar left open on it (the bottom panel keeps one while hidden) closes: its terminal is going
   s.el.dispatchEvent(new CustomEvent(FIND_EVENT, { bubbles: true, detail: null }));
@@ -457,13 +456,6 @@ function park(s: State, Serialize: typeof import("@xterm/addon-serialize").Seria
     /* nothing to drop */
   }
   term.dispose();
-}
-
-/** The Kitty keyboard flags a program asked for, written again after the snapshot (a push, as the program did), so
- *  an agent that turned the protocol on still gets Shift+Enter as CSI-u after its terminal was parked and made again. */
-function kittyAgain(term: Terminal): string {
-  const flags = (term as unknown as { _core?: { coreService?: { kittyKeyboard?: { flags?: unknown } } } })._core?.coreService?.kittyKeyboard?.flags;
-  return typeof flags === "number" && flags > 0 ? `\x1b[>${flags}u` : "";
 }
 
 /** Output from the program into the terminal. `done` runs once the terminal has taken these bytes. */

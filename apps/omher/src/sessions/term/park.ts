@@ -81,13 +81,47 @@ interface BufferExtra {
   tabs: number[];
 }
 
+/** The Kitty keyboard protocol's state (xterm 6.1 `coreService.kittyKeyboard`): the flags in force, each screen's
+ *  flags while the other is shown, and each screen's stack of pushed flags (`CSI > flags u`), so a program that
+ *  pushed modes inside each other pops back to the outer one (`CSI < u`) after its terminal was parked. */
+export interface KittyState {
+  flags: number;
+  mainFlags: number;
+  altFlags: number;
+  mainStack: number[];
+  altStack: number[];
+}
+
 /** What the engine carries beside the snapshot and puts back once the new terminal has read it: each buffer's
- *  saved cursor and tab stops, and how far the person had scrolled up from the bottom. */
+ *  saved cursor and tab stops, how far the person had scrolled up from the bottom, and the Kitty keyboard state
+ *  (null when this xterm has none). */
 export interface Carried {
   normal: BufferExtra;
   alt: BufferExtra;
   /** rows between the viewport's top and the bottom screen's top (0: at the bottom) */
   scrolledUp: number;
+  kitty: KittyState | null;
+}
+
+type RawKitty = { flags?: unknown; mainFlags?: unknown; altFlags?: unknown; mainStack?: unknown; altStack?: unknown };
+const kittyOf = (term: Terminal) => (term as unknown as { _core?: { coreService?: { kittyKeyboard?: RawKitty } } })._core?.coreService?.kittyKeyboard;
+const nums = (v: unknown): v is number[] => Array.isArray(v) && v.every((n) => typeof n === "number");
+
+function readKitty(term: Terminal): KittyState | null {
+  const k = kittyOf(term);
+  if (!k || typeof k.flags !== "number" || typeof k.mainFlags !== "number" || typeof k.altFlags !== "number") return null;
+  if (!nums(k.mainStack) || !nums(k.altStack)) return null;
+  return { flags: k.flags, mainFlags: k.mainFlags, altFlags: k.altFlags, mainStack: [...k.mainStack], altStack: [...k.altStack] };
+}
+
+function writeKitty(term: Terminal, c: KittyState): void {
+  const k = kittyOf(term);
+  if (!k || !nums(k.mainStack) || !nums(k.altStack)) return;
+  k.flags = c.flags;
+  k.mainFlags = c.mainFlags;
+  k.altFlags = c.altFlags;
+  k.mainStack = [...c.mainStack];
+  k.altStack = [...c.altStack];
 }
 
 type RawBuffer = {
@@ -120,7 +154,7 @@ export function carriedOf(term: Terminal): Carried | null {
   const alt = readBuffer(bs?.alt);
   const act = bs?.active;
   if (!normal || !alt || !act || typeof act.ybase !== "number" || typeof act.ydisp !== "number") return null;
-  return { normal, alt, scrolledUp: act.ybase - act.ydisp };
+  return { normal, alt, scrolledUp: act.ybase - act.ydisp, kitty: readKitty(term) };
 }
 
 function writeBuffer(b: RawBuffer | undefined, e: BufferExtra): void {
@@ -140,6 +174,8 @@ export function putCarried(term: Terminal, c: Carried): void {
   const bs = buffersOf(term);
   writeBuffer(bs?.normal, c.normal);
   writeBuffer(bs?.alt, c.alt);
+  // after the snapshot: its switch to the alternate screen (when one was shown) moved the flags already
+  if (c.kitty) writeKitty(term, c.kitty);
   if (c.scrolledUp > 0) {
     try {
       term.scrollLines(-c.scrolledUp);
