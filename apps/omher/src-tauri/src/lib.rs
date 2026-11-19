@@ -19,6 +19,7 @@ mod sessions;
 mod setup;
 mod tasks;
 mod term_history;
+mod term_link;
 mod this_host;
 
 use std::path::PathBuf;
@@ -809,7 +810,18 @@ async fn bridge_retry(shell: State<'_, Shell>) -> Result<(), String> {
 }
 
 pub fn run() {
-    let app = tauri::Builder::default()
+    let builder = tauri::Builder::default();
+    // Windows and Linux: first, so a second launch carrying an omher:// link hands it over and quits
+    #[cfg(any(target_os = "windows", target_os = "linux"))]
+    let builder = builder.plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
+        if let Some(w) = app.get_webview_window("main") {
+            let _ = w.unminimize();
+            let _ = w.show();
+            let _ = w.set_focus();
+        }
+    }));
+    let app = builder
+        .plugin(tauri_plugin_deep_link::init())
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_dialog::init())
@@ -878,7 +890,8 @@ pub fn run() {
             tasks_status,
             tasks_list,
             tasks_view,
-            tasks_remote
+            tasks_remote,
+            term_link::term_link_take
         ])
         .setup(|app| {
             let bridge = Bridge::new();
@@ -891,6 +904,23 @@ pub fn run() {
             }
             peers.start_all();
             app.manage(Arc::new(tasks::Tasks::default()));
+            // omher://terminal/<id> links: the one omher was opened with, and each one after
+            app.manage(term_link::TermLinks::default());
+            {
+                use tauri_plugin_deep_link::DeepLinkExt;
+                // Windows and Linux: an installed build registers the scheme itself; a portable run (AppImage) does it here
+                #[cfg(any(target_os = "windows", target_os = "linux"))]
+                let _ = app.deep_link().register_all();
+                if let Ok(Some(urls)) = app.deep_link().get_current() {
+                    let urls: Vec<String> = urls.iter().map(|u| u.to_string()).collect();
+                    term_link::arrived(app.handle(), &urls);
+                }
+                let handle = app.handle().clone();
+                app.deep_link().on_open_url(move |event| {
+                    let urls: Vec<String> = event.urls().iter().map(|u| u.to_string()).collect();
+                    term_link::arrived(&handle, &urls);
+                });
+            }
             app.manage(Shell {
                 bridge,
                 peers,
