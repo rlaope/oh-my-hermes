@@ -522,7 +522,9 @@ class AiJobSearchContextBudgetTests(unittest.TestCase):
         # field and its per-node retry position; only dag-ulw moves, and the pin before it was aa31d519...d31a1.
         # Then dag-ulw's settle step names `escalated` (an ESCALATE: line in the handoff); only dag-ulw moves, and
         # the pin before it was 26bd1012...f890.
-        self.assertEqual(_digest(legacy_hashes), 'ad310846e1e8040be1b3f2499afd4d7a11b448f64d23209497b5017549be698b')
+        # model-setup's quality bar then gains the onboarding-mode line; only model-setup moves, and the pin
+        # before it was ad310846...698b.
+        self.assertEqual(_digest(legacy_hashes), '4eaeeb7940eff0e187bb6c7683ad69496f2609df37f8b6fee7144ea10705958f')
         legacy = _skill_context_cost_profile('full', legacy_templates, refs)
         current = _skill_context_cost_profile('full', templates, refs)
         # Main's search guidance adds 305; repro-audit's mandatory rails 1,943.

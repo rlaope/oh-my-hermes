@@ -199,6 +199,12 @@ All notable changes will be documented here.
   run's one-line summary open. While a run is active, such a dispatch is stopped once per turn with a pointer to
   `omh_dag` (ready, settle, repair, extend); sending it again goes through. Contributed by @yqm-307 (#2914).
 
+- **`omh setup` ends by offering a guided model setup in the OMH TUI.** On a terminal, the last question is "Set up
+  your models now?" (default Yes). Yes opens the OMH TUI in a new session with a fixed onboarding prompt as its first
+  turn, and Hermes walks you through providers, keys, a main model and at most one fallback by conversation; if Hermes
+  has no main model yet, your own `hermes model` runs first. No prints how to come back later. The prompt is sent only
+  under the new `omh --onboard model-setup`, never on a resume, and `omh setup --model-setup --fallback-model
+  PROVIDER/MODEL` previews and writes one Hermes `fallback_model` under the same digest-bound approval.
 - **A dag-ulw node can pick a built-in role or a custom identity by name.** `omh_role action=list` now shows
   built-in roles and custom identity profiles together, and a node sets `identity: builtin:<name>` or
   `custom:<name>` independently of its `role` and `category`. The chosen definition supplies the child's prompt
