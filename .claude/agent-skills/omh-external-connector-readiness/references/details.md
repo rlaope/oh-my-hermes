@@ -61,4 +61,3 @@ Safety rules:
 - Generic connector, voice-input, and media-input records are not realtime voice readiness; a turn that lost its onset, split, merged, dispatched twice, truncated, or replayed after audible output blocks the verdict rather than reporting latency.
 - A memory-provider trial reports retrieval quality, latency, and cost per candidate only from host-supplied observation; a dimension nobody measured is not_observed, never a default or a zero, and a corpus is never copied into the record.
 - A rollback is proven by exercising it during the trial and recording what came back; a documented rollback path is prepared, not reversible.
-

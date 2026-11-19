@@ -3519,7 +3519,7 @@ PORTABLE_SPLIT_SECTION = "## Catalog Metadata\n"
 PORTABLE_DETAILS_POINTER = (
     "## Catalog Metadata\n\n"
     f"Read `{PORTABLE_DETAILS_PATH}` before you act: it holds this skill's quality bar and catalog "
-    "metadata, kept out of this file so the whole of it fits in one read on every host.\n\n"
+    "metadata, kept out of this file so the whole of it fits in one read on every host.\n"
 )
 _TOOLKIT_CALL = re.compile(r"skill_view\(name='[^']+', file_path='toolkit/[^']+'\)")
 
@@ -3534,7 +3534,7 @@ def details_pointer(details: str) -> str:
     calls = list(dict.fromkeys(_TOOLKIT_CALL.findall(details)))
     if not calls:
         return PORTABLE_DETAILS_POINTER
-    return PORTABLE_DETAILS_POINTER + "".join(f"Toolkit setup: `{call}`.\n\n" for call in calls)
+    return PORTABLE_DETAILS_POINTER + "".join(f"\nToolkit setup: `{call}`.\n" for call in calls)
 
 
 _CJK_RANGES = (
@@ -3561,11 +3561,14 @@ def split_for_read_cap(content: str) -> tuple[str, str | None]:
     if start == 0 or PORTABLE_DETAILS_POINTER in content:
         raise ValueError("portable SKILL.md over the read cap has no single catalog metadata section to move")
     following = content.find("\n## ", start + len(PORTABLE_SPLIT_SECTION))
-    end = len(content) if following < 0 else following + 1
-    head = content[:start] + details_pointer(content[start:end]) + content[end:]
+    # The section ends at its last text line; the blank line before the next
+    # heading stays in SKILL.md, so details.md ends without a blank line.
+    end = start + len(content[start: len(content) if following < 0 else following + 1].rstrip("\n")) + 1
+    details = content[start:end]
+    head = content[:start] + details_pointer(details) + content[end:]
     if openclaw_read_chars(head) > PORTABLE_READ_CAP:
         raise ValueError("portable SKILL.md is over the read cap even without its catalog metadata")
-    return head, content[start:end]
+    return head, details
 
 
 def agent_skill_reference_templates() -> list[SkillReferenceTemplate]:

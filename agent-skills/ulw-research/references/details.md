@@ -79,4 +79,3 @@ Safety rules:
 - product_evidence_loop/v1 is prepared-only opaque references, not observed evidence or execution.
 - deep_research_dossier/v1 is prepared decision context, not observed evidence, execution, review, CI, or merge evidence.
 - research_briefing/v1 is prepared decision context; a rendered page is a page, and calling it a PDF needs observed file evidence.
-

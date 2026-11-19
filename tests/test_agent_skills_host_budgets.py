@@ -147,7 +147,7 @@ class ReadCapTests(unittest.TestCase):
         meta = "## Catalog Metadata\n\n" + "- rule\n" * (PORTABLE_READ_CAP // 7)
         big = "# X\n\n## When to Use\n\nnow\n\n" + meta + "\n## Runtime Evidence\n\ntail\n"
         head, details = split_for_read_cap(big)
-        self.assertEqual(details, meta + "\n")
+        self.assertEqual(details, meta)
         self.assertIn(PORTABLE_DETAILS_POINTER, head)
         self.assertTrue(head.endswith("## Runtime Evidence\n\ntail\n"))
         self.assertEqual(head.replace(PORTABLE_DETAILS_POINTER, details), big)

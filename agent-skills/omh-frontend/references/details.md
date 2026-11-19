@@ -84,4 +84,3 @@ Safety rules:
 - Do not report a Core Web Vitals number without the device class, route, and load shape it was measured under; a figure from a different profile than the baseline is not a comparison.
 - For Korean/CJK text, clipped glyphs, awkward line breaks, orphan particles, tiny copy, and overflow block visual QA.
 - Do not call external design, image, browser, LLM, or network services from OMH core.
-

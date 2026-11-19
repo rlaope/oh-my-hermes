@@ -96,4 +96,3 @@ Safety rules:
 - Do not let comprehension debt or cognitive surrender hide behind green-looking loop status.
 - Do not claim a goal is complete because the upstream judge said done, the turn budget ran out, or a gate paused the loop.
 - A loop step that would move money -- a purchase, a renewal, a top-up, or a transfer -- goes through `omh-spend-gate` before it runs, and the loop carries on around it. An agent run on a schedule never spends: a cycle nobody can answer, such as a queued tick or a delegated subagent, only prepares the card for the person's next interactive turn. A no-agent script that pays is a spend set up now, so its card, typed yes, and cap come before the script exists.
-
