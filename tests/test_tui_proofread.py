@@ -8,6 +8,8 @@ import os
 import threading
 import time
 import unittest
+from pathlib import Path
+from tempfile import TemporaryDirectory
 from unittest.mock import patch
 from urllib.parse import parse_qs
 
@@ -294,14 +296,13 @@ class ReviewKeyTests(unittest.TestCase):
         issue = proofread.Issue(0, 3, "teh", "typo", ("the", "ten"))
         return proofread.Review(job.snapshot, [issue])
 
-    def test_skip_cancel_and_nothing_else_acts(self) -> None:
+    def test_cancel_and_nothing_else_acts(self) -> None:
         review = self.review()
+        self.assertEqual(review.choices(), ["the", "ten", "Cancel"])
         self.assertIsNone(review.handle_key(Key(CHAR, "x")))
         self.assertIsNone(review.handle_key(Key(DOWN)))
         self.assertEqual(review.row, 1)
-        review.row = 2
-        self.assertEqual(review.handle_key(Key(ENTER)), ("skip", ""))
-        review.row = 3
+        self.assertIsNone(review.handle_key(Key(DOWN)))
         self.assertEqual(review.handle_key(Key(ENTER)), ("cancel", ""))
         self.assertEqual(review.handle_key(Key(ESCAPE)), ("cancel", ""))
 
@@ -361,6 +362,92 @@ class FailureTests(unittest.TestCase):
         ]}
         issues = proofread.issues_from(payload, job)
         self.assertEqual([(i.start, i.original) for i in issues], [(10, "teh")])
+
+
+class DictionaryTests(unittest.TestCase):
+    def test_key_limit_is_the_saved_key_so_every_saved_word_reads_back(self) -> None:
+        self.assertIsNone(proofread.word_key("ß" * 51))  # folds to 102 code points
+        self.assertEqual(proofread.word_key("ß" * 50), "ss" * 50)
+        self.assertEqual(proofread.word_key("Cafe\u0301"), proofread.word_key("CAFÉ"))  # NFD and case together
+        for text in ("don't", "don\u2019t", "e-mail"):  # internal punctuation gets no dictionary action
+            self.assertIsNone(proofread.word_key(text))
+        with TemporaryDirectory() as home:
+            path = Path(home) / proofread.DICTIONARY_FILE
+            proofread.update_dictionary(path, "teh", add=True)
+            before = path.read_bytes()
+            with self.assertRaises(ValueError):
+                proofread.update_dictionary(path, "ss" * 51, add=True)  # a key no word_key could give
+            self.assertEqual(path.read_bytes(), before)
+            proofread.update_dictionary(path, proofread.word_key("ß" * 50), add=True)
+            proofread.update_dictionary(path, proofread.word_key("Cafe\u0301"), add=True)
+            words, _ = proofread.read_dictionary(path)
+            self.assertEqual(words, {"teh", "ss" * 50, "café"})
+
+    def test_bad_files_are_refused_and_left_as_they_are(self) -> None:
+        with TemporaryDirectory() as home:
+            path = Path(home) / proofread.DICTIONARY_FILE
+            path.parent.mkdir()
+            for data in (b"\xff\xfe\n", b"x" * (proofread.DICTIONARY_LIMIT + 1), b"not a word\n"):
+                with self.subTest(data=data[:8]):
+                    path.write_bytes(data)
+                    with self.assertRaises(ValueError):
+                        proofread.read_dictionary(path)
+                    with self.assertRaises(ValueError):
+                        proofread.update_dictionary(path, "teh", add=True)
+                    self.assertEqual(path.read_bytes(), data)
+
+    @unittest.skipUnless(hasattr(os, "mkfifo"), "needs POSIX named pipes")
+    def test_a_fifo_dictionary_or_lock_is_refused_without_waiting(self) -> None:
+        with TemporaryDirectory() as home:
+            path = Path(home) / proofread.DICTIONARY_FILE
+            path.parent.mkdir()
+            os.mkfifo(path)
+            done: list[str] = []
+
+            def read() -> None:
+                try:
+                    proofread.read_dictionary(path)
+                except ValueError as error:
+                    done.append(str(error))
+
+            thread = threading.Thread(target=read, daemon=True)
+            thread.start()
+            thread.join(2)
+            self.assertEqual(done, ["dictionary is not a regular file"])  # a blocking open would still be waiting
+            path.unlink()
+            os.mkfifo(path.with_name(f".{path.name}.lock"))
+            started = time.monotonic()
+            with self.assertRaisesRegex(ValueError, "lock"):
+                proofread.update_dictionary(path, "teh", add=True)
+            self.assertLess(time.monotonic() - started, 1)
+            self.assertFalse(path.exists())
+
+    def test_unchanged_file_is_not_read_again(self) -> None:
+        with TemporaryDirectory() as home:
+            path = Path(home) / proofread.DICTIONARY_FILE
+            self.assertEqual(proofread.read_dictionary(path), (frozenset(), None))
+            self.assertIsNone(proofread.read_dictionary(path, None))
+            proofread.update_dictionary(path, "teh", add=True)
+            words, mark = proofread.read_dictionary(path)
+            self.assertEqual(words, {"teh"})
+            self.assertIsNone(proofread.read_dictionary(path, mark))
+            proofread.update_dictionary(path, "blorfle", add=True)
+            self.assertEqual(proofread.read_dictionary(path, mark)[0], {"teh", "blorfle"})
+
+    def test_spellings_without_replacements_never_push_corrections_out(self) -> None:
+        _, job = job_for("teh cat " + "zz " * 50 + "end")
+        spelling = {"rule": {"issueType": "misspelling"}, "replacements": []}
+        payload = {"matches": [
+            {"offset": 0, "length": 3, **spelling},
+            {"offset": 0, "length": 7, "replacements": [{"value": "the cat"}]},
+            *({"offset": 8 + 3 * n, "length": 2, **spelling} for n in range(50)),
+            {"offset": 158, "length": 3, "replacements": [{"value": "End"}]},
+        ]}
+        issues = proofread.issues_from(payload, job)
+        self.assertEqual([(i.start, i.end) for i in proofread.corrections(issues)], [(0, 7), (158, 161)])
+        self.assertEqual([i.original for i in proofread.corrections(issues, frozenset({"teh"}))], ["teh cat", "end"])
+        self.assertEqual(len(proofread.spellings(issues)), proofread.MAX_ISSUES)
+        self.assertEqual(proofread.spellings(issues)[0].word, "teh")
 
 
 class StaleTests(unittest.TestCase):
