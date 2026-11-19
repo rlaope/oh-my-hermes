@@ -1310,6 +1310,8 @@ export const en = {
   "sq.deleteTip": "Do not send it",
   "sq.steering": "Steering…",
   "sq.steered": "Sent to {bot} · joins the running answer or starts right after",
+  "bub.read": "Read",
+  "bub.readAt": "Read · {time}",
   "sq.unknown": "Might already be in the answer",
   "sq.unused": "Not used · the answer stopped first",
   "sq.send": "Send",

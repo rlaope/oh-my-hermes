@@ -83,7 +83,8 @@ class EscalationClimbsTheLadderTest(unittest.TestCase):
             # unspecified-low still has a rung above and one escalation left.
             self.assertIn(ESCALATE_LINE, context)
             self.assertEqual(context.index(ESCALATE_LINE) + len(ESCALATE_LINE) + 1,
-                             context.index("Stay inside your SCOPE"))
+                             context.index("Commit only your own SCOPE paths"))
+            self.assertLess(context.index("Commit only your own SCOPE paths"), context.index("Stay inside your SCOPE"))
 
             self.assertEqual(_settle(record, "escalated", "Which index wins?", now + 3), "escalated")
             self.assertEqual(node["category"], "unspecified-high")

@@ -766,6 +766,16 @@ class PluginToolSchemaProducerTests(unittest.TestCase):
             target["description"] = target["description"].replace(sentence, "", 1)
             return before - len(json.dumps(target, sort_keys=True, ensure_ascii=False))
 
+        # The define-only `carry_forward` base revision (+188, its own PLUGIN_TOOL_SCHEMA_CHAR_LIMIT entry) is stripped
+        # first: one optional string property, no description sentence.
+        def without_carry_forward(target: dict) -> int:
+            before = len(json.dumps(target, sort_keys=True, ensure_ascii=False))
+            carry = target["parameters"]["properties"].pop("carry_forward")
+            self.assertEqual(set(carry), {"type", "description"})
+            self.assertEqual(carry["type"], "string")
+            return before - len(json.dumps(target, sort_keys=True, ensure_ascii=False))
+
+        self.assertEqual(without_carry_forward(legacy), 188)
         self.assertEqual(without_escalation(legacy), 224)
         self.assertEqual(without_criteria(legacy), 226 + 95 + 8)
         self.assertEqual(without_identity(legacy), 122)
@@ -786,6 +796,7 @@ class PluginToolSchemaProducerTests(unittest.TestCase):
         # category values, so category growth cannot spend the parked cap.
         live = copy.deepcopy(schema)
         del live["parameters"]["properties"]["nodes"]["items"]["properties"]["category"]["enum"][-len(recipe):]
+        self.assertEqual(without_carry_forward(live), 188)
         self.assertEqual(without_escalation(live), 224)
         self.assertEqual(without_criteria(live), 226 + 95 + 8)
         self.assertEqual(without_identity(live), 122)
@@ -796,7 +807,7 @@ class PluginToolSchemaProducerTests(unittest.TestCase):
         delta = len(json.dumps(live, sort_keys=True, ensure_ascii=False)) - len(encoded)
         self.assertEqual(
             per_turn_context.plugin_tool_schema_chars_by_tool()["omh_dag"] - len(encoded) - delta,
-            75 + 85 + 70 + 37 + 226 + 95 + 8 + 45 + 122 + 224,
+            75 + 85 + 70 + 37 + 226 + 95 + 8 + 45 + 122 + 224 + 188,
         )
         self.assertGreater(delta, 0)
         self.assertLessEqual(delta, 429)  # Measured feature cap, not general headroom.

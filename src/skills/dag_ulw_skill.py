@@ -108,6 +108,8 @@ DEFINITION = SkillDefinition(
         "Goal loop: verify, repair, extend, verify. A failed check gets repair nodes (`omh_dag action=repair`, two "
         "cycles per node, the last re-plans); when every node passed but the goal check finds work missing, add it to the same run "
         "(`omh_dag action=extend`, two rounds per run). Past either limit, report what is still open.",
+        "A familiar re-run of the same goal may pass `carry_forward` (the base revision) at define: nodes an earlier "
+        "run at that base accepted unchanged are carried, not run again, and listed; the verify node always runs.",
         f"Unknown path: scout first; see 'When the path is unknown' in `{DAG_ULW_RUN_LOOP_REFERENCE}`.",
         "On a messenger, each completion turn's reply is the run's one status line, and dispatch goes one call "
         "per layer and category so the posts stay bounded; load "

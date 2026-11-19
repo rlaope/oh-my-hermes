@@ -1308,6 +1308,8 @@ export const ko: Record<Key, string> = {
   "sq.deleteTip": "보내지 않습니다",
   "sq.steering": "steer 중…",
   "sq.steered": "{bot}에게 보냄 · 진행 중인 답에 합쳐지거나 바로 이어서 시작해요",
+  "bub.read": "읽음",
+  "bub.readAt": "읽음 · {time}",
   "sq.unknown": "이미 답에 들어갔을 수 있어요",
   "sq.unused": "쓰이지 않음 · 답이 먼저 멈췄어요",
   "sq.send": "보내기",

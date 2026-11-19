@@ -13,7 +13,7 @@ const row = (s: AppState) => {
 };
 
 describe("liveFaceRow: one row of the live run holds the face", () => {
-  it("moves typing -> status line, stays there while the answer is written, and is gone once the turn ends", () => {
+  it("stays on the typing dots through statuses and tools, moves to the line once a line of the answer shows, gone at the end", () => {
     let s = reduce(initialState(), { type: "local.user", bot: "kami", id: "l1", text: "why?", now: T0 - 10 });
     const seen: (string | null)[] = [];
     const evs: BridgeEvent[] = [
@@ -31,9 +31,9 @@ describe("liveFaceRow: one row of the live run holds the face", () => {
       s = at(s, ev, i);
       seen.push(row(s));
     });
-    // the status line takes the face the moment it shows: never a step with none while the bot works
-    // the answer is not drawn while it is written: the line keeps the face until the whole answer lands
-    expect(seen).toEqual(["typing", "typing", "activity", "activity", "activity", "activity", "activity", null, null]);
+    // the dots keep the face through "recalled 2 memories" and the tool (the lines come under them, owner
+    // 2026-11-19); "It is" is not a whole line, so the dots stay; the turn's end takes the face away
+    expect(seen).toEqual(["typing", "typing", "typing", "typing", "typing", "typing", "typing", null, null]);
   });
 
   it("leaves the face to a bot bubble that landed after the line; keeps it on the line beside an open ask", () => {
@@ -52,6 +52,33 @@ describe("liveFaceRow: one row of the live run holds the face", () => {
     // the line says "Waiting for approval" beside the card, with the face; once the turn is over, no live face
     expect(row(s)).toBe("activity");
     expect(row({ ...s, chats: { ...s.chats, kami: { ...s.chats.kami, turn: null } } })).toBeNull();
+  });
+});
+
+describe("awaitingFirstToken: the typing dots stay until the answer starts", () => {
+  it("stays through status and tool steps, goes while an ask is open, ends at the first whole line of the answer", () => {
+    let s = initialState();
+    const seen: boolean[] = [];
+    const evs: BridgeEvent[] = [
+      { event: "turn.start", bot: "kami" },
+      { event: "status", bot: "kami", text: "OMH — recalled 2 memories" },
+      { event: "tool.start", bot: "kami", tool_id: "t1", name: "terminal", detail: "ls" },
+      { event: "tool.end", bot: "kami", tool_id: "t1", name: "terminal", ok: true, ms: 40 },
+      { event: "approval.request", bot: "kami", request_id: "r1", title: "Run", command: "rm x", choices: ["once", "deny"] },
+    ];
+    evs.forEach((ev, i) => {
+      s = at(s, ev, i);
+      seen.push(awaitingFirstToken(s.chats.kami));
+    });
+    s = reduce(s, { type: "approval.resolved", bot: "kami", request_id: "r1", choice: "once" } as Action);
+    seen.push(awaitingFirstToken(s.chats.kami));
+    s = at(s, { event: "delta", bot: "kami", text: "It is" }, 9);
+    seen.push(awaitingFirstToken(s.chats.kami));
+    s = at(s, { event: "delta", bot: "kami", text: " fine.\n" }, 10);
+    seen.push(awaitingFirstToken(s.chats.kami));
+    expect(seen).toEqual([true, true, true, true, false, true, true, false]);
+    // the line keeps the one ringed face while the dots sit under it
+    expect(row(s)).toBe("streaming");
   });
 });
 

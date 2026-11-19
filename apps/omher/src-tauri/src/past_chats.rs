@@ -434,44 +434,23 @@ pub fn codex_list(root: &Path, cwds: &[String]) -> Vec<PastChat> {
     newest(rows)
 }
 
-/// The milliseconds since the epoch a version 7 UUID was made at (Codex thread ids are v7), else `None`.
-fn uuid7_ms(id: &str) -> Option<f64> {
-    let hex: String = id.chars().filter(|c| *c != '-').collect();
-    if !is_uuid(id) || hex.as_bytes().get(12) != Some(&b'7') {
+/// The Codex conversation id a rollout path names: the path must be a real file (no link) inside `root` (the Codex
+/// home, [`cli_home`]) once both are resolved, at `sessions/YYYY/MM/DD/rollout-*-<uuid>.jsonl` there. A TERMINALS
+/// Codex session asks with the paths its Codex process holds open (`fg::codex_conversation`, rule 11); only the id
+/// comes back, and the file is not opened.
+pub fn rollout_id(root: &Path, path: &Path) -> Option<String> {
+    let real = inside(root, path)?;
+    let rel = real.strip_prefix(root.canonicalize().ok()?).ok()?;
+    let parts: Vec<&str> = rel.iter().map(|c| c.to_str()).collect::<Option<_>>()?;
+    let &[top, y, m, d, name] = parts.as_slice() else { return None };
+    let digits = |s: &str, n: usize| s.len() == n && s.bytes().all(|b| b.is_ascii_digit());
+    if top != "sessions" || !digits(y, 4) || !digits(m, 2) || !digits(d, 2) {
         return None;
     }
-    u64::from_str_radix(&hex[..12], 16).ok().map(|ms| ms as f64)
-}
-
-/// The id of the first Codex conversation in `cwd` that started at or after `since` (seconds since the epoch) and
-/// that no other session holds (`held`): a TERMINALS Codex session records it so that a restart can continue it
-/// (rule 30's reader, one more use). The oldest one is taken, and only when no other Codex session in that folder
-/// still without an id started at or before it (`others`, their start times in seconds): then the asking session is
-/// the only one that can own it. When another could (two sessions started before either conversation, which Codex may
-/// write in any order), nothing is given and the page asks again later; once the others have their ids, the last one
-/// is unambiguous. Only rollouts changed since then are read, through the same checks as [`codex_list`]; `held` and
-/// `others` are only compared with; only the id is returned.
-pub fn codex_latest(root: &Path, cwd: &str, since: f64, held: &[String], others: &[f64]) -> Option<String> {
-    if !absolute(cwd) {
-        return None;
-    }
-    let cwds = [cwd.to_string()];
-    let names = std::collections::HashMap::new();
-    let mut rows: Vec<(f64, String)> = codex_rollouts(root, CODEX_FILES_MAX)
-        .iter()
-        .filter(|p| mtime(p) >= since)
-        .filter_map(|p| inside(root, p))
-        .filter_map(|p| codex_row(&p, &cwds, &names))
-        .filter(|c| !held.iter().any(|h| h.eq_ignore_ascii_case(&c.id)))
-        .filter_map(|c| uuid7_ms(&c.id).filter(|ms| *ms >= since * 1000.0).map(|ms| (ms, c.id)))
-        .collect();
-    rows.sort_by(|a, b| a.0.total_cmp(&b.0));
-    let (ms, id) = rows.into_iter().next()?;
-    // another session without an id that started by then could own it as well: a distinct id is not ownership
-    if others.iter().any(|o| o * 1000.0 <= ms) {
-        return None;
-    }
-    Some(id)
+    let stem = name.strip_prefix("rollout-")?.strip_suffix(".jsonl")?;
+    let cut = stem.len().checked_sub(36)?;
+    let id = stem.get(cut..)?;
+    (cut > 0 && stem.as_bytes()[cut - 1] == b'-' && is_uuid(id)).then(|| id.to_string())
 }
 
 /// The last messages of Codex thread `id` (its rollout found by name; the folder is checked against `cwd`).
@@ -701,41 +680,47 @@ mod tests {
     }
 
     #[test]
-    fn codex_latest_is_the_first_thread_in_the_folder_started_since_that_no_one_holds_or_could_own() {
-        let root = tmp("codex-latest");
-        let cwd = "/Users/you/code/api";
-        let day = root.join("sessions/2026/11/12");
-        // X1 was made before `since`, X2 after it (v7 ids carry their time); both files were changed just now
-        let since = uuid7_ms(X2).unwrap() / 1000.0 - 1.0;
-        assert!(uuid7_ms(X1).unwrap() / 1000.0 < since);
-        write(&day.join(format!("rollout-2026-11-12T15-28-54-{X1}.jsonl")), &codex_file(X1, cwd));
-        write(&day.join(format!("rollout-2026-11-12T15-29-01-{X2}.jsonl")), &codex_file(X2, cwd));
-        // only rollouts changed since then are read: a since in the future finds nothing
-        let file_time = mtime(&day.join(format!("rollout-2026-11-12T15-29-01-{X2}.jsonl")));
-        assert!(codex_latest(&root, cwd, file_time + 3600.0, &[], &[]).is_none());
-        assert_eq!(codex_latest(&root, cwd, since, &[], &[]).as_deref(), Some(X2));
-        // another folder, a relative folder, and a since after both ids find nothing
-        assert!(codex_latest(&root, "/Users/you/code/web", since, &[], &[]).is_none());
-        assert!(codex_latest(&root, "code/api", since, &[], &[]).is_none());
-        assert!(codex_latest(&root, cwd, uuid7_ms(X2).unwrap() / 1000.0 + 1.0, &[], &[]).is_none());
-        // two sessions in one folder: the older conversation goes to the one asking first, the newer one to the next;
-        // an id another session holds is never taken, in any letter case
-        let both = uuid7_ms(X1).unwrap() / 1000.0 - 1.0;
-        assert_eq!(codex_latest(&root, cwd, both, &[], &[]).as_deref(), Some(X1));
-        assert_eq!(codex_latest(&root, cwd, both, &[X1.to_string()], &[]).as_deref(), Some(X2));
-        assert_eq!(codex_latest(&root, cwd, both, &[X1.to_uppercase()], &[]).as_deref(), Some(X2));
-        assert!(codex_latest(&root, cwd, both, &[X1.to_string(), X2.to_string()], &[]).is_none());
-        // another session in the folder without an id that started by the time a conversation did could own it too:
-        // nothing is given (Codex may write the second session's rollout first); one started after it is no rival,
-        // and once the rival holds its own id the asking session gets the one left
-        let x1 = uuid7_ms(X1).unwrap() / 1000.0;
-        assert!(codex_latest(&root, cwd, both, &[], &[x1 - 0.5]).is_none());
-        assert!(codex_latest(&root, cwd, both, &[], &[x1]).is_none());
-        assert_eq!(codex_latest(&root, cwd, both, &[], &[x1 + 0.5]).as_deref(), Some(X1));
-        assert!(codex_latest(&root, cwd, both, &[X1.to_string()], &[x1 - 0.5]).is_none());
-        assert_eq!(codex_latest(&root, cwd, both, &[X1.to_string()], &[]).as_deref(), Some(X2));
-        // a v4 id carries no time and is never taken
-        assert!(uuid7_ms(C1).is_none());
+    fn a_rollout_path_gives_its_id_only_inside_the_home_and_by_its_name() {
+        let root = tmp("rollout-id");
+        let day = root.join("sessions/2026/11/20");
+        let ok = day.join(format!("rollout-2026-11-20T00-23-46-{X1}.jsonl"));
+        write(&ok, &codex_file(X1, "/w"));
+        assert_eq!(rollout_id(&root, &ok).as_deref(), Some(X1));
+        // not a rollout's name, no UUID in it, not under sessions/YYYY/MM/DD
+        for bad in [
+            day.join(format!("{X1}.jsonl")),
+            day.join(format!("rollout-{X1}.jsonl")),
+            day.join(format!("rollout-2026-11-20T00-23-46-{X1}.json")),
+            day.join(format!("rollout-2026-11-20T00-23-46x{X1}.jsonl")),
+            day.join("rollout-2026-11-20T00-23-46-01a1d060-4ab7-72b2-b02b-1dbee1d5f52g.jsonl"),
+            day.join("history.jsonl"),
+            root.join(format!("sessions/2026/11/rollout-2026-11-20T00-23-46-{X1}.jsonl")),
+            root.join(format!("sessions/26/11/20/rollout-2026-11-20T00-23-46-{X1}.jsonl")),
+            root.join(format!("archived_sessions/2026/11/20/rollout-2026-11-20T00-23-46-{X1}.jsonl")),
+            root.join(format!("sessions/2026/11/20/x/rollout-2026-11-20T00-23-46-{X1}.jsonl")),
+        ] {
+            write(&bad, &codex_file(X1, "/w"));
+            assert!(rollout_id(&root, &bad).is_none(), "{}", bad.display());
+        }
+        // a folder, a path that does not exist
+        assert!(rollout_id(&root, &day).is_none());
+        assert!(rollout_id(&root, &day.join(format!("rollout-2026-11-20T00-23-47-{X2}.jsonl"))).is_none());
+        // a rollout outside the home, a link to it in the home, and a linked day folder
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::symlink;
+            let away = tmp("rollout-id-away");
+            let far = away.join(format!("sessions/2026/11/20/rollout-2026-11-20T00-23-46-{X2}.jsonl"));
+            write(&far, &codex_file(X2, "/w"));
+            assert!(rollout_id(&root, &far).is_none());
+            assert_eq!(rollout_id(&away, &far).as_deref(), Some(X2));
+            let link = day.join(format!("rollout-2026-11-20T00-23-48-{X2}.jsonl"));
+            symlink(&far, &link).unwrap();
+            assert!(rollout_id(&root, &link).is_none());
+            symlink(away.join("sessions/2026/11/20"), root.join("sessions/2026/11/21")).unwrap();
+            assert!(rollout_id(&root, &root.join(format!("sessions/2026/11/21/rollout-2026-11-20T00-23-46-{X2}.jsonl"))).is_none());
+            let _ = std::fs::remove_dir_all(away);
+        }
         let _ = std::fs::remove_dir_all(root);
     }
 

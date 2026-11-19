@@ -12,6 +12,7 @@ import { peerDraftsAllowed, stripPeerDrafts } from "../../peers/draft";
 import { AgentChips } from "./AgentChip";
 import { draftsAllowed, stripDrafts } from "./agentDraft";
 import { t } from "../../i18n";
+import { hhmm } from "../../app/time";
 import { QueueMark, type QueueChoice, type QueueOffReasons } from "./QueueMark";
 import type { Quote } from "./answers";
 
@@ -33,10 +34,11 @@ export const Bubble = memo(function Bubble({
   queueBusy,
   queueOff,
   steeredTo,
+  last,
   quote,
   onQuote,
 }: {
-  item: Pick<MessageItem, "kind" | "text" | "error" | "reply" | "files" | "skills" | "wait" | "held" | "steered" | "steerUnknown" | "steerUnused">;
+  item: Pick<MessageItem, "kind" | "text" | "error" | "reply" | "files" | "skills" | "wait" | "held" | "steered" | "readAt" | "steerReply" | "steerUnknown" | "steerUnused">;
   streaming?: boolean;
   /** The bot whose face sits beside its bubble; `face` false keeps the indent without repeating it. */
   bot?: string;
@@ -58,6 +60,8 @@ export const Bubble = memo(function Bubble({
   queueBusy?: boolean;
   /** The bot's name a steered message went to, for its line. */
   steeredTo?: string;
+  /** The person's last message in the chat: it carries the "Read" mark. */
+  last?: boolean;
   /** Menu items that are off, with their reasons (a SESSIONS chat's agent). */
   queueOff?: QueueOffReasons;
   /** A bot answer: the message of the person's it replies to, when that is not plain from where it sits; a click
@@ -112,9 +116,25 @@ export const Bubble = memo(function Bubble({
             {queueBusy ? t("sq.steering") : t("ctl.queued")}
           </div>
         )}
-        {item.steered && (
+        {/* steered, before the bot has it (a reopened row with nothing after it): where it went */}
+        {item.steered && item.readAt === undefined && (
           <div className="msg-wait msg-steered" data-testid="bubble-steered">
             {t("sq.steered", { bot: steeredTo ?? "" })}
+          </div>
+        )}
+        {/* messenger-style receipt: the bot has it (sent, its turn started, or the steer was queued); under the last
+            message only, and under every steered one, so a steer shows it reached the running answer */}
+        {item.readAt !== undefined && (last || item.steered) && (
+          <div className="msg-wait msg-read" data-testid="bubble-read">
+            {item.readAt ? t("bub.readAt", { time: hhmm(new Date(item.readAt)) }) : t("bub.read")}
+          </div>
+        )}
+        {item.steered && item.steerReply && (
+          <div className="msg-wait msg-steer-reply" data-testid="bubble-steer-reply">
+            <span className="msg-steer-arrow" aria-hidden>
+              ↳
+            </span>
+            {item.steerReply}
           </div>
         )}
         {item.steerUnknown && (

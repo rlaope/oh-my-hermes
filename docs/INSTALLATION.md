@@ -1200,7 +1200,9 @@ run and approval decision stays Hermes'; the screen is OMH's.
   `✻ 34s · 3 tools · ↓1.2k`, under the reply's words (a line too narrow for
   it drops the tokens, then the tools, then the wait, each whole, and keeps
   the time). While a question Hermes asked
-  waits on you, the working row reads `? waiting on you (11s)` instead, its
+  waits on you, the working row reads `? waiting for your approval (11s)`
+  for an approval, `? waiting for your answer (11s)` for a clarify question
+  and `? waiting on you (11s)` for anything else (a sudo password, a secret), its
   one clock counting that wait (the info line's OMH count of running tool
   calls, `1 tool · 9s`, drops its seconds meanwhile and leaves once the
   turn ends), and a tool's time on its row leaves the wait
@@ -1212,6 +1214,33 @@ run and approval decision stays Hermes'; the screen is OMH's.
   titles it after its first turn) and whether it is idle, running or waiting
   on you; on exit the title you had comes back where the terminal keeps a
   title stack.
+- Between turns, while the session waits on something that will wake it (a
+  background process Hermes will tell it about, a delegated child or dag-ulw
+  node), the working row's place says what the longest of those waits is:
+  `✻ Waiting for CI… (38m 0s · #2975 · +1 test run · 1 agent)`. It is named
+  from structure only, never from what the model said: a process by the words
+  in command position of its command (after `cd`, `export`, `VAR=value` and
+  wrappers such as `uv run`, `npx` or `time`), so `gh pr checks`,
+  `merge_when_green.sh` read `Waiting for CI` (with the PR number when one is
+  an argument), deploy commands `Deploying`, test runners `Testing`, builds
+  `Building`, installs `Installing`, `ffmpeg` and renderers `Rendering`,
+  `git push` `Pushing`, clones, fetches and downloads `Downloading`, and a
+  bare `sleep 240` `Sleeping` with the time left; a process woken on a
+  matching line reads `Watching for "<its first pattern>"`; a dag-ulw run
+  reads `Running <run name>` with its nodes done of all and any that failed;
+  a single child reads `Reviewing`, `Researching` or `Writing` by its
+  category or role, with its model, else `Running agent`. A command nothing
+  names (`echo pytest` names nothing: the word is an argument) keeps
+  `Waiting…`. The other waits are counted after it, and a narrow terminal
+  drops their kind words first, then the detail, then shows the plain
+  `Waiting… (38m 0s · 1 agent · 2 terminals)`. As the wait ends with nothing
+  else waiting, one muted row says so for 3 seconds: `✓ Review finished (5m 0s)`,
+  `✗ … failed` for a child or run whose graph says it failed, and
+  `· Tests ended (10m 0s)` for a process, whose record carries no exit code,
+  so it is never called passed or failed. A process this machine cannot ask
+  about (another pid namespace, or not POSIX) gets no end line, and a dag-ulw
+  run is said to have finished only once every node has settled. Nothing of
+  this shows during a turn or in another session.
 - Motion and colour follow one rule set, so scrollback reads at a glance:
   - Each block hangs on a continuous thin `┃` rail with no fill behind it
     (with `NO_COLOR` set your prompt's is the light `│`, so it is told apart
@@ -1426,7 +1455,7 @@ Esc closes it):
 | Ctrl+N / Ctrl+P | Move down / up in lists, menus, pickers and prompts; scroll one line in pagers, including /dag. Also work in CLI theme, model-chain and setup pickers |
 | Ctrl+R | Searches the input history; Ctrl+R again finds an older match, Enter puts it in the composer, Esc leaves the composer as it was |
 | Ctrl+X | Opens the `/sessions` picker |
-| Alt+P | Corrects the underlined issue at cursor locally; Enter accepts, Skip/Esc closes; never sends |
+| Alt+P | Opens correction or dictionary actions at cursor; Cancel/Esc closes; never sends |
 | Ctrl+S | Opens the bot board, as `/bots` does: this machine's Hermes profiles, their gateways and sessions, read-only |
 | Ctrl+P | Folds the plan above the composer to its header and the item it is on, or expands it again, while a turn runs or between turns; the header says which on its right; on an open menu, Ctrl+P and Ctrl+N move the menu instead |
 | ↑ | On an empty composer with prompts queued, takes them back into the composer to edit; a queued shell line comes back on its own |
@@ -6659,8 +6688,12 @@ draft. Automatic checks are off by default; set `OMH_PROOFREAD=1` and main and
 clarify free-text fields also check after 600 ms quiet and underline issues
 without interrupting typing. Move the cursor onto an
 underlined issue and press Alt+P, then pick a replacement with arrows and Enter,
-or Skip/Esc to close. Alt+P checks immediately if results are missing, and never
-opens an unrelated issue elsewhere in the draft. Corrections use normal Ctrl+_
+or Cancel/Esc to close. With an OMH home, a spelling issue on one word of
+letters (not one with an apostrophe or hyphen, such as `don't` or `e-mail`)
+also offers Add to dictionary, which hides that word's spelling marks in every
+OMH TUI on that home; grammar corrections stay. Press Alt+P on the saved word
+and choose Remove from dictionary to restore them. Alt+P checks immediately if results are missing,
+and never opens an unrelated issue elsewhere in the draft. Corrections use normal Ctrl+_
 undo and never send. Missing servers leave the draft unchanged and show a quiet
 inline status, with bounded retry/backoff (Alt+P retries immediately).
 Masked fields, command lines, code, images and paste-chip contents are
