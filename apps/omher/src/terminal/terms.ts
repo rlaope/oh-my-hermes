@@ -13,7 +13,7 @@ import { onTermSettings, readTermSettings } from "../sessions/term/settings";
 import { termTheme } from "../sessions/term/themes";
 import { t } from "../i18n";
 import { getShellHost } from "./host";
-import { closePane, ringPane, setPaneCwd, setPaneFg } from "./state";
+import { closePane, ringPane, setPaneCwd, setPaneFg, setPaneSaid } from "./state";
 import { onSessionFg } from "../sessions/fg";
 import { getHost } from "../sessions/host";
 import { shellQuote } from "../sessions/attach";
@@ -53,8 +53,6 @@ interface PanelTerm {
   fgOff?: () => void;
   /** stops following the folder its shell reports */
   cwdOff?: () => void;
-  /** its shell reported a folder (OSC 7), which the folder it started in no longer overrides */
-  cwdSaid?: boolean;
   /** its history keeping (term/history.ts), once its shell started */
   hist?: { touch: () => void; stop: () => void };
 }
@@ -145,10 +143,7 @@ function create([{ Terminal }, { FitAddon }]: Xterm, key: number, want: string |
   wire(first.term);
   // the folder its shell reports (OSC 7) names the pane, and so the tab while it is the focused one; the element
   // outlives a parked terminal made again
-  p.cwdOff = onCwd(el, (path) => {
-    p.cwdSaid = true;
-    setPaneCwd(key, path);
-  });
+  p.cwdOff = onCwd(el, (path) => setPaneSaid(key, path));
   return p;
 }
 
@@ -199,7 +194,7 @@ async function start(key: number, p: PanelTerm, want: string | null, restored: b
         p.fgOff = onSessionFg(started.id, (agent) => setPaneFg(key, agent));
         if (p.owed) host.ack(p.id, p.owed);
         p.owed = 0;
-        if (!p.cwdSaid) setPaneCwd(key, started.cwd);
+        setPaneCwd(key, started.cwd);
       },
       (e) => {
         p.ended = true;

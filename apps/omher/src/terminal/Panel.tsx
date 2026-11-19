@@ -311,7 +311,8 @@ export function TerminalPanel() {
       <div className="termpanel-bar">
         <div className="termpanel-tabs" role="tablist" aria-label={t("termpanel.tabs")}>
           {p.tabs.map((tab) => {
-            const name = leafName(tab.cwd ?? tab.want);
+            const where = tab.said ?? tab.cwd ?? tab.want;
+            const name = leafName(where);
             return (
               <div key={tab.key} className={`termpanel-tab${tab.key === p.active ? " on" : ""}`} data-testid="termpanel-tab" data-tab={tab.key}>
                 <button
@@ -319,7 +320,7 @@ export function TerminalPanel() {
                   role="tab"
                   aria-selected={tab.key === p.active}
                   className="termpanel-tab-name"
-                  title={tab.fg ? `${t("term.fgRunning", { name: fgName(tab.fg) })}\n${tab.cwd ?? tab.want ?? t("termpanel.home")}` : (tab.cwd ?? tab.want ?? t("termpanel.home"))}
+                  title={tab.fg ? `${t("term.fgRunning", { name: fgName(tab.fg) })}\n${where ?? t("termpanel.home")}` : (where ?? t("termpanel.home"))}
                   onClick={() => pickTerminalTab(tab.key)}
                   data-fg={tab.fg ?? undefined}
                 >

@@ -123,6 +123,26 @@ test("OSC 7: the bottom panel's tab follows the folder its shell reports, from t
   await expect(tab).toHaveText("api-server");
 });
 
+test("OSC 7: the reported folder only names the panel tab; after a restart the tab starts again where its shell started", async ({ page }) => {
+  await openApp(page);
+  await page.keyboard.press("Control+Backquote");
+  const shown = page.locator('[data-testid="termpanel-terminal"]:not([hidden]) .xterm-rows');
+  await expect(shown).toContainText("login shell in");
+  const starts = () => page.evaluate(() => (window as unknown as { __omherShellCalls: { op: string; id: number; at: string }[] }).__omherShellCalls.filter((c) => c.op === "start"));
+  const first = (await starts())[0];
+  const tab = page.getByTestId("termpanel-tab").locator(".termpanel-tab-name");
+  await out(page, first.id, OSC("7;file://localhost/home/you/code/api-server"));
+  await expect(tab).toHaveText("api-server");
+  // the kept tab names the folder the shell started in, never the reported one
+  expect(await page.evaluate(() => JSON.parse(localStorage.getItem("omher.termpanel.tabs") || "{}").tabs?.[0]?.cwd)).toBe(first.at);
+  await page.reload();
+  await expect(page.getByTestId("bot-kami")).toBeVisible();
+  await page.waitForTimeout(300);
+  if (!(await page.getByTestId("termpanel").isVisible())) await page.keyboard.press("Control+Backquote");
+  await expect(shown).toContainText("login shell in");
+  expect((await starts())[0].at).toBe(first.at);
+});
+
 test("OSC 7: a folder from this computer's own name counts, the name the shell start reported", async ({ page }) => {
   await openApp(page);
   await page.keyboard.press("Control+Backquote");

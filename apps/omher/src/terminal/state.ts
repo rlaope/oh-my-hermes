@@ -20,6 +20,8 @@ export interface TermPane {
   want: string | null;
   /** the folder the shell started in, once it has */
   cwd: string | null;
+  /** the folder its shell last reported (OSC 7): only names the pane, never kept or used to start a shell */
+  said?: string;
   /** the CLI in the shell's foreground (`session-fg`), null for the shell itself */
   fg?: string | null;
   /** put back after omher restarted: what it showed before is written into it first */
@@ -33,6 +35,8 @@ export interface TermTab {
   want: string | null;
   /** the focused pane's folder, once its shell started */
   cwd: string | null;
+  /** the folder the focused pane's shell last reported (OSC 7), for its name only */
+  said?: string;
   /** the focused pane's foreground CLI */
   fg?: string | null;
   /** how the tab's panes are laid out (one pane: `{ pane }`) */
@@ -146,7 +150,7 @@ export function setTerminalCwd(path: string | null): void {
 /** The tab with its name fields taken from its focused pane. */
 function mirror(tab: TermTab): TermTab {
   const f = tab.panes.find((p) => p.id === tab.focus) ?? tab.panes[0];
-  return f ? { ...tab, want: f.want, cwd: f.cwd, fg: f.fg } : tab;
+  return f ? { ...tab, want: f.want, cwd: f.cwd, said: f.said, fg: f.fg } : tab;
 }
 
 const tabOfPane = (pane: number) => state.tabs.find((t) => t.panes.some((p) => p.id === pane));
@@ -250,6 +254,14 @@ export function setPaneCwd(id: number, cwd: string): void {
   const tab = tabOfPane(id);
   if (!tab) return;
   putTab({ ...tab, panes: tab.panes.map((p) => (p.id === id ? { ...p, cwd } : p)) });
+}
+
+/** The folder pane `id`'s shell reports (OSC 7): it names the pane (and its tab), and nothing else. The tab is
+ *  saved, a split starts and a restart starts again in the folder the shell started in (`cwd`). */
+export function setPaneSaid(id: number, said: string): void {
+  const tab = tabOfPane(id);
+  if (!tab) return;
+  putTab({ ...tab, panes: tab.panes.map((p) => (p.id === id ? { ...p, said } : p)) });
 }
 
 /** The shell in pane `id` rang. Its tab carries a dot until it is picked, unless the person is looking at it now (the
