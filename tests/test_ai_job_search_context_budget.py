@@ -524,7 +524,10 @@ class AiJobSearchContextBudgetTests(unittest.TestCase):
         # the pin before it was 26bd1012...f890.
         # model-setup's quality bar then gains the onboarding-mode line; only model-setup moves, and the pin
         # before it was ad310846...698b.
-        self.assertEqual(_digest(legacy_hashes), '4eaeeb7940eff0e187bb6c7683ad69496f2609df37f8b6fee7144ea10705958f')
+        # code-review, production-audit and verification-gate then end with a `Not checked` list, and code-review's
+        # opening names the Hermes Bug Hunter discipline; only those three move, and the pin before it was
+        # 4eaeeb79...958f.
+        self.assertEqual(_digest(legacy_hashes), 'bd2eeb27578b42bd8442121e61765adb48d571db15b653c5de4972e57886409b')
         legacy = _skill_context_cost_profile('full', legacy_templates, refs)
         current = _skill_context_cost_profile('full', templates, refs)
         # Main's search guidance adds 305; repro-audit's mandatory rails 1,943.
