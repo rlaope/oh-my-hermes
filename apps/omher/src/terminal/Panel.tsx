@@ -53,7 +53,7 @@ function TabBody({ tab, active, open, mode, focus }: { tab: TermTab; active: boo
   const [find, setFind] = useState<FindRequest | null>(null);
   useEffect(() => {
     if (!box.current) return;
-    return attachTerm(tab.key, tab.want, box.current, mode);
+    return attachTerm(tab.key, tab.want, box.current, mode, !!tab.restored);
     // made once per tab; theme changes go through relookTerms
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tab.key]);

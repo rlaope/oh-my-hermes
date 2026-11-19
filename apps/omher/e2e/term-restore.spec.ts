@@ -3,7 +3,7 @@
 // conversation (`--resume <same id>`) in the same folder, once; an agent without its own conversation comes back
 // paused as before. Each terminal's scrollback is kept by the shell (`history.*` calls; the mock keeps it in this
 // page's storage) and written back, dimmed, under a "--- restored <time> ---" line before the new output; closing
-// removes it; Settings > Terminal turns it off.
+// removes it; Settings > Terminal turns it off. The bottom panel's tabs come back with their folders and scrollback.
 import { expect, test, type Page } from "@playwright/test";
 
 const MOCK = Number(process.env.OMHER_MOCK_PORT || 5308);
@@ -162,4 +162,44 @@ test("Keep terminal history off: one clear, and no history call after it", async
   expect(await history(page)).toEqual([]);
   expect(await rows(page)).not.toContainEqual(expect.stringMatching(/restored/));
   expect(before).toBeGreaterThan(0);
+});
+
+test("the bottom panel's tabs come back after a restart in their folders, with their scrollback", async ({ page }) => {
+  await open(page);
+  await page.evaluate(async () => {
+    const m = (await import("/src/terminal/state.ts" as string)) as { setTerminalCwd(p: string | null): void };
+    m.setTerminalCwd("/home/you/code/api");
+  });
+  await page.keyboard.press("Control+Backquote");
+  const shown = page.locator('[data-testid="termpanel-terminal"]:not([hidden]) .xterm-rows');
+  await expect(shown).toContainText("login shell in /home/you/code/api");
+  await page.keyboard.type("echo panel-before\r");
+  await expect(shown).toContainText("echo panel-before");
+  await page.getByTestId("termpanel-new").click();
+  await expect(page.getByTestId("termpanel-tab")).toHaveCount(2);
+  await flush(page);
+  await expect.poll(async () => (await history(page)).filter((c) => c.op === "history.save" && c.key === "panel-1").pop()?.data ?? "").toContain("panel-before");
+
+  await page.reload();
+  await expect(page.getByTestId("bot-kami")).toBeVisible();
+  // nothing starts until the panel shows
+  await page.waitForTimeout(300);
+  expect(await page.evaluate(() => (window as unknown as { __omherShellCalls?: unknown[] }).__omherShellCalls ?? [])).toEqual([]);
+  await page.keyboard.press("Control+Backquote");
+  await expect(page.getByTestId("termpanel-tab")).toHaveText(["api", "api"]);
+  await page.getByTestId("termpanel-tab").first().getByRole("tab").click();
+  await expect(shown).toContainText("login shell in /home/you/code/api");
+  const r = await rows(page, '[data-testid="termpanel-terminal"]:not([hidden]) .xterm-rows');
+  const old = r.findIndex((l) => l.includes("echo panel-before"));
+  const line = r.findIndex((l) => /^--- restored .+ ---$/.test(l));
+  const fresh = r.findLastIndex((l) => l.includes("login shell in"));
+  expect(old).toBeGreaterThanOrEqual(0);
+  expect(line).toBeGreaterThan(old);
+  expect(fresh).toBeGreaterThan(line);
+  const starts = await page.evaluate(() => ((window as unknown as { __omherShellCalls?: { op: string; cwd: string | null }[] }).__omherShellCalls ?? []).filter((c) => c.op === "start"));
+  // a fresh login shell per tab, in its own folder
+  expect(starts.map((c) => c.cwd)).toEqual(["/home/you/code/api", "/home/you/code/api"]);
+  // closing a tab removes its kept text
+  await page.getByTestId("termpanel-tab-close").first().click();
+  await expect.poll(async () => (await history(page)).filter((c) => c.op === "history.remove").map((c) => c.key)).toEqual(["panel-1"]);
 });

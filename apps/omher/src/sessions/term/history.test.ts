@@ -1,10 +1,11 @@
 // Terminal history across restarts: how kept text is drawn back (dim, under a divider), what is kept of a buffer
-// (its newest lines, no modes, no alternate screen), and the Settings switch.
+// (its newest lines, no modes, no alternate screen), the bottom panel's saved tabs, and the Settings switch.
 import { Terminal } from "@xterm/xterm";
 import { SerializeAddon } from "@xterm/addon-serialize";
 import { afterEach, describe, expect, it } from "vitest";
 import { dimmed, divider, HISTORY_LINES, restoredText, serializeTail, type HistoryHost } from "./history";
 import { parseTermSettings, resetTermSettings, TERM_DEFAULTS, writeTermSettings } from "./settings";
+import { parseSavedTabs } from "../../terminal/state";
 
 const write = (t: Terminal, d: string) => new Promise<void>((r) => t.write(d, r));
 const lines = (t: Terminal) => {
@@ -83,5 +84,21 @@ describe("terminal history", () => {
     const off = host({ text: "kept", at: 1 });
     expect(await restoredText(off, "s1")).toBe("");
     expect(off.calls).toEqual([]);
+  });
+});
+
+describe("the bottom panel's saved tabs", () => {
+  it("come back with their folders, checked, as restored tabs", () => {
+    const raw = JSON.stringify({ tabs: [{ key: 3, cwd: "/home/you/code/api" }, { key: 5, cwd: null }, { key: 3, cwd: "/dup" }, { key: "x" }, { key: 7, cwd: "relative/path" }], active: 5 });
+    expect(parseSavedTabs(raw)).toEqual({
+      tabs: [
+        { key: 3, want: "/home/you/code/api", cwd: null, restored: true },
+        { key: 5, want: null, cwd: null, restored: true },
+        { key: 7, want: null, cwd: null, restored: true },
+      ],
+      active: 5,
+    });
+    for (const bad of [null, "", "{", "[]", "42", JSON.stringify({ tabs: "x" })]) expect(parseSavedTabs(bad)).toEqual({ tabs: [], active: null });
+    expect(parseSavedTabs(JSON.stringify({ tabs: [{ key: 2, cwd: "/a" }], active: 9 })).active).toBe(2);
   });
 });

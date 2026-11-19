@@ -30,6 +30,7 @@ import { applyLook, termOptions } from "./term/look";
 import { termFontsReady } from "./term/fonts";
 import { onTermSettings, readTermSettings } from "./term/settings";
 import { forgetHistory, pruneHistory, restoredText, trackHistory, watchHistorySetting } from "./term/history";
+import { savedPanelKeys } from "../terminal/state";
 import { termTheme } from "./term/themes";
 import { getShellHost } from "../terminal/host";
 import { onSessionFg } from "./fg";
@@ -1687,7 +1688,7 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
     restored = true;
     if (!saved.length) {
       void ready().then(() => host.pruneFiles([]).catch(() => undefined));
-      void ready().then(() => pruneHistory(host, []));
+      void ready().then(() => pruneHistory(host, savedPanelKeys()));
       saveSentFiles({});
       return;
     }
@@ -1781,8 +1782,8 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
     // the saved copies of sessions that are gone go; the ones kept show again in their bubbles
     const ids = list.map((r) => r.id);
     void ready().then(() => host.pruneFiles(ids).catch(() => undefined));
-    // the kept history of terminals that are gone goes
-    void ready().then(() => pruneHistory(host, ids));
+    // the kept history of terminals that are gone goes (the bottom panel's tabs keep theirs)
+    void ready().then(() => pruneHistory(host, [...ids, ...savedPanelKeys()]));
     saveSentFiles(Object.fromEntries(Object.entries(sentFiles).filter(([sid]) => ids.includes(sid))));
 
     // the home folder (for `~/…` paths) and each agent's mode, as a first launch would read them; then the generic ACP

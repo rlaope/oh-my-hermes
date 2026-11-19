@@ -12,6 +12,8 @@ import { t } from "../i18n";
 import { getShellHost } from "./host";
 import { setTabCwd, setTabFg } from "./state";
 import { onSessionFg } from "../sessions/fg";
+import { getHost } from "../sessions/host";
+import { forgetHistory, restoredText, trackHistory } from "../sessions/term/history";
 
 /** A size goes to the shell once it has held this long (a drag gives one per frame). */
 const RESIZE_SETTLE_MS = 32;
@@ -40,6 +42,8 @@ interface PanelTerm {
   undo: () => void;
   /** stops following the shell's foreground CLI */
   fgOff?: () => void;
+  /** its history keeping (term/history.ts), once its shell started */
+  hist?: { touch: () => void; stop: () => void };
 }
 
 const terms = new Map<number, PanelTerm>();
@@ -110,8 +114,18 @@ function create([{ Terminal }, { FitAddon }]: Xterm, key: number, want: string |
   return p;
 }
 
-function start(key: number, p: PanelTerm, want: string | null): void {
+/** The history key of tab `key`. */
+const histKey = (key: number) => `panel-${key}`;
+
+async function start(key: number, p: PanelTerm, want: string | null, restored: boolean): Promise<void> {
   const host = getShellHost();
+  // a tab put back after a restart shows what it showed before first, dimmed, under a divider
+  if (restored) {
+    const back = await restoredText(getHost(), histKey(key));
+    if (!terms.has(key)) return;
+    if (back) feed(p.term, back);
+  }
+  p.hist = trackHistory(getHost(), histKey(key), () => (terms.get(key) === p && !isParked(p.raw) ? p.term : null));
   void host
     .start(
       want,
@@ -124,6 +138,7 @@ function start(key: number, p: PanelTerm, want: string | null): void {
           if (p.id === null) p.owed += bytes;
           else host.ack(p.id, bytes);
         });
+        p.hist?.touch();
       },
       (code) => {
         p.ended = true;
@@ -153,7 +168,7 @@ function start(key: number, p: PanelTerm, want: string | null): void {
 }
 
 /** Put tab `key`'s terminal into `box` (made and its shell started the first time). Returns what takes it out. */
-export function attachTerm(key: number, want: string | null, box: HTMLElement, mode: "dark" | "light"): () => void {
+export function attachTerm(key: number, want: string | null, box: HTMLElement, mode: "dark" | "light", restored = false): () => void {
   look = mode;
   let gone = false;
   let detach: (() => void) | null = null;
@@ -169,7 +184,7 @@ export function attachTerm(key: number, want: string | null, box: HTMLElement, m
     }
     applyLook(pt.term, termTheme(look, readTermSettings()), readTermSettings());
     refit(pt);
-    if (fresh) start(key, pt, want);
+    if (fresh) void start(key, pt, want, restored);
     const ro = new ResizeObserver(() => refit(pt));
     ro.observe(box);
     // and when its cells change size (the GPU renderer arrived after this fit, or went)
@@ -215,6 +230,8 @@ export function disposeTerm(key: number): void {
   const p = terms.get(key);
   if (!p) return;
   terms.delete(key);
+  p.hist?.stop();
+  forgetHistory(getHost(), histKey(key));
   if (p.id !== null && !p.ended) void getShellHost().close(p.id).catch(() => undefined);
   p.ended = true;
   if (p.settle !== null) clearTimeout(p.settle);
