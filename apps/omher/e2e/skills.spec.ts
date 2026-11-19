@@ -70,7 +70,7 @@ test("$ mid-message: the picker filters, Enter inserts a pill, Send hoists it to
   expect(submits.at(-1).text).toBe("/plan fix this now");
   // the bubble shows what was typed, the token as a monospace pill
   const mine = page.getByTestId("bubble-user").last();
-  await expect(mine).toHaveText("fix this $plan now");
+  await expect(mine.locator(".b")).toHaveText("fix this $plan now");
   await expect(mine.getByTestId("bubble-skill")).toHaveText("$plan");
   await expect(box).toHaveValue("");
 });
