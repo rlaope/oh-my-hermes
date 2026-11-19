@@ -56,6 +56,21 @@
 .tfind-b:disabled {
   opacity: 0.4;
 }
+/* the field when its pattern is not a valid regular expression */
+.tfind-q.tfind-bad {
+  color: var(--danger);
+  box-shadow: inset 0 -1px 0 var(--danger);
+}
+/* Aa and .*: the letters themselves are the icon; on, they take the segmented control's fill */
+.tfind-opt {
+  width: 24px;
+  font: 600 11px var(--mono);
+  letter-spacing: -0.02em;
+}
+.tfind-opt[aria-pressed="true"] {
+  background: var(--seg-on);
+  color: var(--ink);
+}
 .tfind-up {
   display: grid;
   transform: rotate(180deg);

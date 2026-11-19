@@ -10,6 +10,7 @@ import type { Terminal } from "@xterm/xterm";
 import { isMacPlatform } from "./engine-links";
 import { readTermSettings } from "./settings";
 import { attachPasteGuard, guardedPaste } from "./paste-guard";
+import type { FindOptions } from "./engine-find";
 
 type KeyLike = { key: string; code?: string; metaKey: boolean; ctrlKey: boolean; altKey: boolean; shiftKey: boolean };
 
@@ -27,6 +28,14 @@ export function isFindKey(e: KeyLike, mac: boolean, altScreen: boolean): boolean
   if (mac) return e.metaKey && !e.ctrlKey && !e.shiftKey;
   if (!e.ctrlKey || e.metaKey) return false;
   return e.shiftKey || !altScreen;
+}
+
+/** In the find bar, Alt+C flips Match case and Alt+R flips Regular expression; null for any other key. */
+export function findOptionKey(e: KeyLike): keyof FindOptions | null {
+  if (!e.altKey || e.ctrlKey || e.metaKey) return null;
+  if (isKey(e, "c")) return "caseSensitive";
+  if (isKey(e, "r")) return "regex";
+  return null;
 }
 
 /** Keyboard and mouse handling for one terminal; `onFind` runs when the person asks for find. Returns what undoes it. */
