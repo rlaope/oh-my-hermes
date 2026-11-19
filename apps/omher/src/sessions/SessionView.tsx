@@ -4,9 +4,10 @@
 // agent picked in the SESSIONS + menu: its composer shows that agent read-only and, under it, the folder chip; the
 // first message starts the agent there (Start, for an agent that opens in its terminal). After that the folder is
 // read-only too. A chat agent's composer takes files as the bot chat's does (paste, the + menu, a drop on the chat),
-// in a draft too; a file dropped or pasted on a terminal is saved and its path typed at the prompt.
+// in a draft too; a file dropped or pasted on a terminal is saved and its path typed at the prompt. A TERMINALS session
+// can show a second one beside it (SplitView: ⌘D in its terminal, or "Split right with…").
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { selectAsks, useStore, type OutFile } from "../state/store";
+import { getStore, selectAsks, useStore, type OutFile } from "../state/store";
 import { useResolvedTheme } from "../app/theme";
 import { Timeline } from "../chat/parts/Timeline";
 import { Composer } from "../chat/parts/Composer";
@@ -36,6 +37,10 @@ import { waitingSubs } from "../chat/activity/Subagents";
 import { subagentEnded } from "../state/store";
 import { useAccounts } from "../settings/accounts/useAccounts";
 import { t } from "../i18n";
+import { wireFileDrop, isWindows } from "../terminal/terms";
+import { paneKey } from "../terminal/layout";
+import { isMac } from "../app/shortcuts";
+import { openSplitPicker, SplitPicker, SplitView } from "./SplitView";
 
 const STATUS: Record<string, Key> = { starting: "ss.starting", running: "ss.running", exited: "ss.ended", failed: "ss.couldNotStart" };
 
@@ -43,12 +48,7 @@ const STATUS: Record<string, Key> = { starting: "ss.starting", running: "ss.runn
  *  `background_tasks_changed` lists them beside its background commands). OmO counts commands only. */
 const COUNTS_BACKGROUND_SUBAGENTS: readonly AgentId[] = ["claude"];
 
-const isWindows = () => typeof navigator !== "undefined" && /^Win/.test(navigator.platform);
-
-/** A file as the terminal's drop and paste hand it on. */
-const fileIn = (f: File) => ({ name: f.name || "pasted.png", read: async () => new Uint8Array(await f.arrayBuffer()) });
-
-function TerminalPane({ rec }: { rec: SessionRec }) {
+function TerminalPane({ rec, splits }: { rec: SessionRec; splits?: boolean }) {
   const s = useStore();
   const box = useRef<HTMLDivElement>(null);
   const wrap = useRef<HTMLDivElement>(null);
@@ -63,40 +63,27 @@ function TerminalPane({ rec }: { rec: SessionRec }) {
     return () => el.removeEventListener(FIND_EVENT, on);
   }, []);
   // A file dropped on the terminal, or a picture pasted there, is saved and its path typed at the prompt (as a
-  // system terminal types a dropped file's path). Plain text pastes stay xterm's own.
+  // system terminal types a dropped file's path). Plain text pastes stay xterm's own. The bottom panel's panes use the
+  // same wiring (terminal/terms.ts).
   useEffect(() => {
     const el = wrap.current;
     if (!el) return;
-    const hasFiles = (e: DragEvent) => !!e.dataTransfer && [...e.dataTransfer.types].includes("Files");
-    const over = (e: DragEvent) => {
-      if (!hasFiles(e)) return;
-      e.preventDefault();
-      if (e.dataTransfer) e.dataTransfer.dropEffect = "copy";
-    };
-    const drop = (e: DragEvent) => {
-      if (!hasFiles(e)) return;
-      e.preventDefault();
-      const files = [...(e.dataTransfer?.files ?? [])];
-      if (files.length) void getSessions().dropOnTerminal(rec.id, files.map(fileIn), isWindows());
-    };
-    const paste = (e: ClipboardEvent) => {
-      const files = [...(e.clipboardData?.files ?? [])];
-      if (!files.length) return;
+    return wireFileDrop(el, (files) => void getSessions().dropOnTerminal(rec.id, files, isWindows()));
+  }, [rec.id]);
+  // ⌘D (Ctrl+Shift+D off macOS) in a TERMINALS terminal: pick a session to show beside it. Taken before xterm.
+  useEffect(() => {
+    const el = wrap.current;
+    if (!el || !splits) return;
+    const on = (e: KeyboardEvent) => {
+      const k = paneKey(e, isMac());
+      if (k?.kind !== "split" || k.dir !== "right") return;
       e.preventDefault();
       e.stopPropagation();
-      void getSessions().dropOnTerminal(rec.id, files.map(fileIn), isWindows());
+      if (!e.repeat) openSplitPicker(getStore().getState().ui.session ?? rec.id);
     };
-    el.addEventListener("dragenter", over);
-    el.addEventListener("dragover", over);
-    el.addEventListener("drop", drop);
-    el.addEventListener("paste", paste, true);
-    return () => {
-      el.removeEventListener("dragenter", over);
-      el.removeEventListener("dragover", over);
-      el.removeEventListener("drop", drop);
-      el.removeEventListener("paste", paste, true);
-    };
-  }, [rec.id]);
+    el.addEventListener("keydown", on, true);
+    return () => el.removeEventListener("keydown", on, true);
+  }, [rec.id, splits]);
   useEffect(() => {
     if (!box.current) return;
     return getSessions().attach(rec.id, box.current, mode);
@@ -948,8 +935,16 @@ export function SessionView() {
         </div>
       ) : (
         <>
-          {/* a new key after Restart: a fresh terminal for the program started again */}
-          <TerminalPane key={`${rec.id}-term-${getSessions().termRun(rec.id)}`} rec={rec} />
+          {/* a new key after Restart: a fresh terminal for the program started again. A TERMINALS session can show
+              another beside it */}
+          {mode === "terminal" ? (
+            <>
+              <SplitView main={rec} pane={(r) => <TerminalPane key={`${r.id}-term-${getSessions().termRun(r.id)}`} rec={r} splits />} />
+              <SplitPicker main={rec} />
+            </>
+          ) : (
+            <TerminalPane key={`${rec.id}-term-${getSessions().termRun(rec.id)}`} rec={rec} />
+          )}
           {!canToggle && isEnded(rec) && <Ended rec={rec} />}
         </>
       )}

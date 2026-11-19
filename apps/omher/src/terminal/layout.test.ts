@@ -1,0 +1,85 @@
+import { describe, expect, it } from "vitest";
+import { clampRatio, equalize, MAX_PANES, neighbor, paneKey, panesOf, paneRects, removePane, setRatioAt, splitLayout, type Layout } from "./layout";
+
+const key = (k: Partial<{ key: string; code: string; metaKey: boolean; ctrlKey: boolean; altKey: boolean; shiftKey: boolean }>) => ({ key: "", metaKey: false, ctrlKey: false, altKey: false, shiftKey: false, ...k });
+
+describe("a panel tab's pane layout", () => {
+  it("splits a pane right or down, half each, and keeps reading order", () => {
+    let l: Layout = { pane: 1 };
+    l = splitLayout(l, 1, "row", 2)!;
+    expect(l).toEqual({ dir: "row", ratio: 0.5, a: { pane: 1 }, b: { pane: 2 } });
+    l = splitLayout(l, 2, "col", 3)!;
+    expect(l).toEqual({ dir: "row", ratio: 0.5, a: { pane: 1 }, b: { dir: "col", ratio: 0.5, a: { pane: 2 }, b: { pane: 3 } } });
+    expect(panesOf(l)).toEqual([1, 2, 3]);
+    expect(splitLayout(l, 9, "row", 4)).toBeNull(); // no such pane
+    expect(splitLayout(l, 1, "row", 3)).toBeNull(); // id already used
+  });
+
+  it("holds at most four panes", () => {
+    let l: Layout = { pane: 1 };
+    for (let id = 2; id <= MAX_PANES; id++) l = splitLayout(l, id - 1, id % 2 ? "row" : "col", id)!;
+    expect(panesOf(l)).toHaveLength(4);
+    expect(splitLayout(l, 1, "row", 5)).toBeNull();
+  });
+
+  it("closing a pane gives its room to the part beside it, and names who takes the keyboard", () => {
+    const l: Layout = { dir: "row", ratio: 0.3, a: { pane: 1 }, b: { dir: "col", ratio: 0.5, a: { pane: 2 }, b: { pane: 3 } } };
+    expect(removePane(l, 1)).toEqual({ layout: { dir: "col", ratio: 0.5, a: { pane: 2 }, b: { pane: 3 } }, heir: 2 });
+    expect(removePane(l, 3)).toEqual({ layout: { dir: "row", ratio: 0.3, a: { pane: 1 }, b: { pane: 2 } }, heir: 2 });
+    expect(removePane(l, 2).layout).toEqual({ dir: "row", ratio: 0.3, a: { pane: 1 }, b: { pane: 3 } });
+    expect(removePane({ pane: 1 }, 1)).toEqual({ layout: null, heir: null });
+    expect(removePane(l, 7)).toEqual({ layout: l, heir: null });
+  });
+
+  it("equalizes along each line of splits (three side by side get a third each)", () => {
+    const l: Layout = { dir: "row", ratio: 0.8, a: { pane: 1 }, b: { dir: "row", ratio: 0.2, a: { pane: 2 }, b: { pane: 3 } } };
+    const e = equalize(l);
+    const r = paneRects(e);
+    for (const id of [1, 2, 3]) expect(r.get(id)!.w).toBeCloseTo(1 / 3);
+    // a split the other way stays half and half
+    const m = equalize({ dir: "row", ratio: 0.9, a: { pane: 1 }, b: { dir: "col", ratio: 0.1, a: { pane: 2 }, b: { pane: 3 } } });
+    expect(m).toMatchObject({ ratio: 0.5, b: { ratio: 0.5 } });
+  });
+
+  it("moves a divider by its path", () => {
+    const l: Layout = { dir: "row", ratio: 0.5, a: { pane: 1 }, b: { dir: "col", ratio: 0.5, a: { pane: 2 }, b: { pane: 3 } } };
+    expect(setRatioAt(l, "", 0.7)).toMatchObject({ ratio: 0.7, b: { ratio: 0.5 } });
+    expect(setRatioAt(l, "b", 0.25)).toMatchObject({ ratio: 0.5, b: { ratio: 0.25 } });
+  });
+
+  it("keeps each side of a divider at its least size", () => {
+    expect(clampRatio(0.01, 1000, 120)).toBeCloseTo(0.12);
+    expect(clampRatio(0.99, 1000, 120)).toBeCloseTo(0.88);
+    expect(clampRatio(0.4, 1000, 120)).toBe(0.4);
+    expect(clampRatio(0.1, 200, 120)).toBe(0.5); // no room for both
+    expect(clampRatio(NaN, 1000, 120)).toBe(0.5);
+  });
+
+  it("finds the pane beside the focused one in each direction", () => {
+    // 1 | 2
+    //   | 3
+    const l: Layout = { dir: "row", ratio: 0.5, a: { pane: 1 }, b: { dir: "col", ratio: 0.5, a: { pane: 2 }, b: { pane: 3 } } };
+    expect(neighbor(l, 1, "right")).toBe(2);
+    expect(neighbor(l, 3, "left")).toBe(1);
+    expect(neighbor(l, 2, "down")).toBe(3);
+    expect(neighbor(l, 3, "up")).toBe(2);
+    expect(neighbor(l, 1, "left")).toBeNull();
+    expect(neighbor(l, 2, "right")).toBeNull();
+  });
+
+  it("reads the pane keys: ⌘D / ⌘⇧D / ⌘W / ⌘⌥arrows on macOS, Ctrl+Shift+D / Alt+Shift+D / Ctrl+Shift+W / Ctrl+Alt+arrows elsewhere", () => {
+    expect(paneKey(key({ key: "d", code: "KeyD", metaKey: true }), true)).toEqual({ kind: "split", dir: "right" });
+    expect(paneKey(key({ key: "D", code: "KeyD", metaKey: true, shiftKey: true }), true)).toEqual({ kind: "split", dir: "down" });
+    expect(paneKey(key({ key: "ㅇ", code: "KeyD", metaKey: true }), true)).toEqual({ kind: "split", dir: "right" }); // Korean layout
+    expect(paneKey(key({ key: "w", code: "KeyW", metaKey: true }), true)).toEqual({ kind: "close" });
+    expect(paneKey(key({ key: "ArrowLeft", metaKey: true, altKey: true }), true)).toEqual({ kind: "focus", dir: "left" });
+    expect(paneKey(key({ key: "d", code: "KeyD", ctrlKey: true }), true)).toBeNull(); // Ctrl+D is the shell's
+    expect(paneKey(key({ key: "k", code: "KeyK", metaKey: true }), true)).toBeNull();
+    expect(paneKey(key({ key: "d", code: "KeyD", ctrlKey: true }), false)).toBeNull(); // Ctrl+D off macOS: the shell's
+    expect(paneKey(key({ key: "w", code: "KeyW", ctrlKey: true }), false)).toBeNull(); // Ctrl+W: the shell's
+    expect(paneKey(key({ key: "D", code: "KeyD", ctrlKey: true, shiftKey: true }), false)).toEqual({ kind: "split", dir: "right" });
+    expect(paneKey(key({ key: "D", code: "KeyD", altKey: true, shiftKey: true }), false)).toEqual({ kind: "split", dir: "down" });
+    expect(paneKey(key({ key: "W", code: "KeyW", ctrlKey: true, shiftKey: true }), false)).toEqual({ kind: "close" });
+    expect(paneKey(key({ key: "ArrowUp", ctrlKey: true, altKey: true }), false)).toEqual({ kind: "focus", dir: "up" });
+  });
+});
