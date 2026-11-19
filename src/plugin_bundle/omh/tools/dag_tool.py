@@ -238,6 +238,9 @@ OMH_DAG_SCHEMA = {
             "owner": {"type": "string", "enum": list(EXTERNAL_OWNERS),
                       "description": "export: a coding owner named in the run's request."},
             "spawn_plan": {"type": "object"},
+            "carry_forward": {"type": "string", "description": (
+                "define, opt-in: base revision; unchanged nodes an earlier run of this goal accepted at it are "
+                "carried, not rerun. Verify still runs.")},
         },
         "required": ["action"],
         "additionalProperties": False,
@@ -481,11 +484,19 @@ def _define(args: Mapping[str, object], omh_home: Path, hermes_home: Path, durab
     if worktree_isolation_on(hermes_home, terminal_backend()):
         raise dag_run.DagRefusal("worktree_isolation_on", WORKTREE_ISOLATION_REFUSED)
     run = dag_run.valid_id(args.get("run"), "invalid_run_id", "Give the run a short lowercase id (a-z, 0-9, -).")
+    # Opt-in only: without carry_forward the record is what it always was.
+    base = dag_run.valid_base(args["carry_forward"]) if args.get("carry_forward") is not None else None
     budget = oneshot_budget(hermes_home, segments)
     record = dag_run.new_record(durable, run, args.get("name"), args.get("goal"), args.get("nodes"), now,
                                 oneshot_limit=budget["limit"] if budget else None,
                                 oneshot_spent=budget["spent"] if budget else 0, named_roles=False,
                                 criteria=args.get("criteria"))
+    if base is not None and not any(dag_run.is_verification(item) for item in record["nodes"]):
+        # Carried work counts only once a verifier checks it here; without one the run would finish unchecked.
+        raise dag_run.DagRefusal(
+            "carry_forward_requires_verify",
+            "carry_forward needs a node with role verify in the graph: carried nodes are not run again, so a verify "
+            "node must check them in this run. Add one, or define the run without carry_forward.")
     found = _find(omh_home, segments, run)
     if found is not None:
         existing, path = found
@@ -529,10 +540,23 @@ def _define(args: Mapping[str, object], omh_home: Path, hermes_home: Path, durab
             # The root a node's write_scope is read against (`dag_scope_guard`), fixed here so a child's `cd` cannot
             # move it.
             record["workspace_root"] = os.path.realpath(workspace)
+        carry = None
+        if base is not None:
+            carry = dag_run.carry_forward(
+                record, base,
+                [prior for prior, _path in dag_run.every_run(omh_home) if prior.get("run") != run or
+                 prior.get("session_id") != durable],
+                handoff_of=lambda prior, node: _prior_handoff(omh_home, prior, node), now=now, remote=bool(backend))
         dag_run.write_run(path, record)
         derived = dag_run.derive(record, [], now)
         return _ready("define", record, path, derived, [], omh_home, hermes_home, now, shown, task=task, budget=budget,
-                      limits=limits, ignored=ignored)
+                      limits=limits, ignored=ignored, carry=carry)
+
+
+def _prior_handoff(omh_home: Path, prior: Mapping[str, Any], node: str) -> str:
+    """An earlier run's handoff for ``node`` when it is a plain file on this host, else ""."""
+    path = dag_run.handoff_path(omh_home, str(prior["session_id"]), str(prior["run"]), node)
+    return str(path) if path.is_file() and not path.is_symlink() else ""
 
 
 def _find(omh_home: Path, segments: list[str], run: object) -> tuple[dict[str, Any], Path] | None:
@@ -981,8 +1005,10 @@ def _ready(
     children: list[dict[str, Any]], omh_home: Path, hermes_home: Path, now: float, shown: set[str] | None, *,
     task: str, say: str = "", settled: Mapping[str, Any] | None = None, budget: Mapping[str, int] | None = None,
     limits: dag_run.Limits = dag_run.DEFAULT_LIMITS, ignored: tuple[str, ...] = (), note: str = "",
+    carry: Mapping[str, Any] | None = None,
 ) -> str:
-    """``note`` is appended after every instruction the reply builds, so it never stands in for one of them."""
+    """``note`` is appended after every instruction the reply builds, so it never stands in for one of them.
+    ``carry``: what a define's ``carry_forward`` carried and did not (`dag_run.carry_forward`)."""
     slots = free_slots(hermes_home)
     if budget is not None:
         slots["oneshot"] = dict(budget)  # only in a one-shot session: an interactive payload is unchanged
@@ -1046,6 +1072,16 @@ def _ready(
         if action == "define" and not dag_run.run_criteria(record):
             # Advice on the define reply alone: the stored record stays as a run without criteria always was.
             extra["lint"] = [*extra["lint"], "no_goal_criteria"]
+    if carry is not None:
+        extra["carry_forward"] = dict(carry)
+        moved = carry["carried"]
+        verifiers = [str(node["id"]) for node in record["nodes"] if dag_run.is_verification(node)]
+        say = " ".join(part for part in (say, (
+            f"Carried {len(moved)} of {len(record['nodes'])} nodes from run {carry['from_run']} without running them "
+            f"({', '.join(item['id'] for item in moved)}); their dependents read the earlier handoffs. The verify node "
+            f"({', '.join(verifiers)}) still runs over every node, carried ones included." if moved else
+            f"carry_forward carried nothing: no earlier run of this goal at base {carry['base']} had an unchanged "
+            "accepted node, so every node runs.")) if part)
     if mine:
         say = " ".join(part for part in (say, (
             f"The one-shot child budget is spent (delegation.oneshot_max_children is {budget['limit']}, "
@@ -1229,6 +1265,9 @@ def _result(action: str, record: Mapping[str, Any], derived: Mapping[str, Mappin
     criteria = dag_run.criteria_view(record, derived)
     if criteria is not None:
         payload["criteria"] = criteria
+    carried = dag_run.carried_nodes(record, derived)
+    if carried:
+        payload["carried"] = carried  # every view lists them, with the run each came from and why
     if state == "needs_repair":
         payload["open"] = dag_run.open_failures(record, derived)
         say = say or ("A node failed: repair it (two cycles per node at most), or report what is open and cancel "

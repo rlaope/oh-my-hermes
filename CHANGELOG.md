@@ -13,6 +13,22 @@ All notable changes will be documented here.
   unique placeholder and then renamed, because the gateway answers a create whose title an open session already has
   with that session. The bridge tests' fake gateway now refuses what the real one refuses. (#2980)
 
+- **The run summary shows how much of the prompt came from cache.** `omh_run_summary` adds a line after the token
+  count, such as `Prompt cache: 62% of input read from cache (1,234,567 tokens)` (en/ko/ja/zh), and
+  `breakdown.cache_read_share`. The share is cache reads over uncached input plus cache reads, which is how Hermes
+  stores them. No line appears when nothing was read from cache.
+
+- **A one-line list of three code changes is answered in the session, like a listed backlog.** "migrate the store to
+  sqlite, update the three callers, and add tests" or "프론트 버튼 추가랑 백엔드 엔드포인트랑 테스트 다 해줘" used to land on a
+  lane picked from one word (toolbelt-readiness, browser-operator, backend). They now get the `code_backlog` answer:
+  make the changes here, one after another, not as a dag-ulw graph. One bug's symptoms, one feature's fields, a list
+  of questions, an errand list with a single code word, and work the request itself splits keep their routes.
+
+- **A dag-ulw node that writes files is told to commit only its own paths.** Its task text now says to stage the
+  paths in its SCOPE by name and never to run `git add -A`, `git add .`, `git commit -a` or `git stash`, so parallel
+  nodes in one checkout stop committing each other's work. Verify, review and read-only nodes get no such line. This
+  is guidance; the write-scope guard on file tools stays the enforcement.
+
 - **The pi-family coding lane runs on the omp CLI too.** With only `omp` on PATH, a pi-family coding unit now runs
   `omp --print --no-session [--model <id>] [--thinking <level>] -- <prompt>`; when `pi` or its distribution host is
   also installed, those still win. omp has no `--permission-preset`, so no approval flag is passed (omp's default
@@ -46,6 +62,16 @@ All notable changes will be documented here.
   unspecified-high, ultrabrain), at most twice, briefed with the question the first child stopped on. Nodes already on
   ultrabrain, review or deep never get the option, nor does a node pinned to an identity, which keeps that
   identity's own model chain.
+
+- **omher: every message you send shows Read once the bot has it, and a steer shows how the bot took it.** The last
+  message the bot received carries a small muted "Read · 16:41" under it, messenger style: as soon as the send went
+  through or its turn started, a steer as soon as Hermes queued it, and a held message once it actually goes out. A
+  failed send or a refused, uncertain or dropped steer never shows it. Under a steered message, the first line the
+  bot wrote after taking it (its note before the next tool call, or its answer) shows as "↳ …", so a change of course
+  is no longer silent; the rest of that note stays hidden as before. A reopened chat shows both, from the bridge.
+  While the bot works, the typing dots with its face stay put until the answer starts, and the live activity line
+  ("OMH — recalled 2 memories", "Running cd …") comes under them; that line is kept short (a command shows its first
+  24 characters, the whole text on hover).
 
 - **omher: a waiting message is sent or taken back in one click, with no menu.** A message typed while the bot
   answers waits with buttons before it instead of a ↵ that opened Send now / Steer / Edit / Delete. ↵ sends it:
@@ -88,6 +114,14 @@ All notable changes will be documented here.
   2027-01-01, cached input moving with each. Hydrogen stays at $1.50 / $7.50. Cost estimates keep today's prices
   until each date; the price rows now point at the current page, and Argon's row is pinned by the same list-price
   test as Carbon's.
+
+- **A dag-ulw re-run can skip the nodes the last run already confirmed, and only when asked.**
+  `omh_dag action=define` takes an opt-in `carry_forward` with the base revision. A node an earlier run of the same
+  goal at that base accepted, with the same id, prompt, write scope and dependencies and its handoff still on disk, is
+  recorded `carried` and not handed out; its dependents read the earlier handoff. Verify nodes, nodes that failed or
+  were blocked, changed nodes and anything after a node that runs again always run. define and status list each
+  carried node with the run it came from, the status line says `carried N of M nodes from <run>`, and the goal
+  verdict still waits on the verify node, which is told which nodes were carried.
 
 - **omher.app has a Start Guide at `/guide/`, linked beside Docs in every header** (owner request, 2026-11-18). One
   page for someone new, with plain section titles that say what each part covers: what OMH does in three cards (a model per kind of work, `dag-ulw`, expert skills), install in
@@ -324,6 +358,52 @@ All notable changes will be documented here.
   cut), a remake measures the reference's cut times and audio onsets before any row is written, and a delegated
   build is reviewed in numbered, measurable FIX rounds. The brief, rights and the short-promo one-scene rule still
   apply.
+- **omher terminal: parity with Otty and Orca: split panes, restore, Kitty keys, images, prompt marks, paste guard.**
+  - **Split panes.** The bottom terminal panel splits into up to four panes (⌘D right, ⌘⇧D down, ⌘W close,
+    ⌘⌥arrows move; Ctrl+Shift+D / Alt+Shift+D / Ctrl+Shift+W / Ctrl+Alt+arrows elsewhere). Dividers drag and a double
+    click evens them. Two TERMINALS sessions open side by side (⌘D in a terminal, or "Split right with…").
+  - **Panel shells ring and take files.** A bottom-panel shell that rings shows a dot on its tab, as TERMINALS rows
+    do. A file dropped on a panel pane is saved and its path typed.
+  - **Restore.** Claude Code terminals start under a conversation id omher makes. If they were running when omher
+    quit, they continue that conversation by themselves after a restart (`claude --resume <id>`). Codex terminals
+    learn their conversation from the Codex process itself and continue it with `codex resume <id>`.
+  - **Scrollback comes back.** Each TERMINALS session and bottom-panel tab shows what it showed before a restart (last
+    2000 lines), dimmed, under a "restored <time>" line. It is kept in `~/.omher/term-history` (owner-only), and
+    Settings › Terminal › History turns it off and deletes it all. The bottom panel's tabs come back in their folders.
+  - **xterm 6.1.** Terminals moved to xterm 6.1 (beta 338). Shift+Enter reaches Claude Code and Codex as its own key
+    (Kitty keyboard protocol, Settings › Terminal › Modern key encoding). Sixel, iTerm2 and Kitty images show in the
+    terminal (Settings › Terminal › Show images, 32 MB per terminal). Emoji such as 👨‍👩‍👧 take two cells.
+    Powerline and Nerd glyphs fit their cell on the GPU renderer. Option+drag selects inside vim and tmux.
+  - **Prompt marks, folder and progress.** Terminals act on the escapes shells and CLIs already send. OSC 133 prompt
+    marks draw a gutter mark per prompt (red after a failed command), and Cmd+Up / Cmd+Down (Cmd+PageUp /
+    Cmd+PageDown) jump between prompts. OSC 7 keeps the bottom panel's tab name and the TERMINALS row's folder
+    current after `cd`, including the `file://$HOST/…` form macOS shells send. OSC 9;4 progress (Claude Code and
+    others) keeps the row working, and marks it when the work finishes while you are looking elsewhere. omher adds
+    no shell hook.
+  - **Paste guard.** Pasting more than one line into a terminal now asks first, showing the line count, the first
+    lines, and Paste / Cancel (Enter / Esc). It does not ask when the program has turned on bracketed paste. This
+    covers Cmd/Ctrl+V, the Edit menu and right-click paste, in session terminals and the bottom panel. Settings ›
+    Terminal › "Confirm multi-line paste" (on by default).
+  - **Find options.** The terminal find bar has Match case (Aa, Alt+C) and Regular expression (.\*, Alt+R) toggles.
+    An invalid pattern marks the field and finds nothing.
+
+- **The OMH TUI's proofreader keeps a local dictionary.** On a spelling issue, Alt+P now offers Add to dictionary
+  beside the replacements: the word's spelling marks hide in every OMH TUI on that OMH home, and Alt+P on it later
+  offers Remove from dictionary. The picker's Skip row is gone (Cancel and Esc already did the same). Grammar
+  corrections are never hidden by a saved or unsaved spelling, the word list is read and saved off the screen's
+  thread, and a damaged dictionary file is never overwritten. Words are kept in
+  `<omh_home>/proofread/dictionary.txt`; a word with an apostrophe or hyphen gets no dictionary action. Contributed
+  by @DanRioDev (#2996).
+
+- **The OMH TUI's waiting row says what it waits on.** Between turns the row above the composer named nothing
+  (`✻ Waiting… (33m 47s · 1 agent · terminal)`). It now names the longest wait from structure only: a background
+  process by the words in command position of its command (`Waiting for CI` with the PR number, `Deploying`,
+  `Testing`, `Building`, `Installing`, `Rendering`, `Pushing`, `Downloading`, `Sleeping` with the time left), a
+  process woken on a match by its first pattern (`Watching for "READY"`), a dag-ulw run by its name with its nodes
+  done and failed, and a single child as `Reviewing`, `Researching` or `Writing` with its model. Other waits are
+  counted after it (`+1 test run · 1 agent`); a narrow terminal falls back to the old row. As the wait ends, one muted
+  row says so for 3 seconds (`✓ Review finished`, `✗ … failed`, `· Tests ended` for a process, which has no exit
+  code). During a turn, `? waiting on you` now reads `? waiting for your approval` or `? waiting for your answer`.
 
 ## 4.0.8 - 2026-11-15
 

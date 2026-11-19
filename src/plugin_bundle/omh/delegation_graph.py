@@ -1186,6 +1186,7 @@ DAG_OPEN_STATES: Final = frozenset({"running"})
 _DAG_VIEW: Final = {
     "accepted": ("done", "accepted"),
     "repaired": ("done", "repaired"),
+    "carried": ("done", "carried"),  # taken over from an earlier run's accepted node (`dag_run.carry_forward`)
     "failed": ("failed", "failed"),
     "blocked": ("failed", "blocked"),
     "handed_out": ("dispatched", "handed out"),

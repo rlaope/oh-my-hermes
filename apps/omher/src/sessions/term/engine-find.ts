@@ -14,6 +14,9 @@
 //
 // The selection is find's only while it is the active match. A person can click in the terminal or select other
 // text with find open; that selection (or none) is theirs, and neither a restyle nor closing find takes it.
+//
+// Two options go with every search: Match case and Regular expression. A pattern the add-on could not compile finds
+// nothing (the bar shows the field in an error state); it is never handed to the add-on, which would throw.
 import type { IBufferRange, IDecoration, IDisposable, IMarker, Terminal } from "@xterm/xterm";
 import type { SearchAddon } from "@xterm/addon-search";
 import { findColors, type FindColors } from "./find-colors";
@@ -28,6 +31,23 @@ export interface FindRequest {
 /** The add-on stops counting here; the bar then says "more than". */
 export const FIND_LIMIT = 2000;
 
+/** How a text is matched: letter case counts, and the text is a regular expression. */
+export interface FindOptions {
+  caseSensitive: boolean;
+  regex: boolean;
+}
+export const FIND_PLAIN: FindOptions = { caseSensitive: false, regex: false };
+
+/** Does `text` compile as the add-on compiles it (`RegExp(text, "g")`, no `u` flag)? */
+export function validPattern(text: string): boolean {
+  try {
+    RegExp(text, "g");
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 export interface FindResults {
   /** 0-based position of the active match, -1 when none is active */
   index: number;
@@ -38,7 +58,7 @@ export interface FindResults {
 
 export interface Finder {
   /** Look for `text`: from the current spot for typing (`incremental`), or one match on for Enter / Shift+Enter. */
-  search(text: string, direction: "next" | "previous", incremental?: boolean): void;
+  search(text: string, direction: "next" | "previous", incremental?: boolean, options?: FindOptions): void;
   /** Drop the highlights and the selection that find made. */
   clear(): void;
   /** The terminal's theme may have changed: the matches and the active one take its colours, where they are. */
@@ -61,9 +81,35 @@ const finders = new WeakMap<Terminal, Finder>();
 /** The finder of a terminal that has one (a session's terminal; the Settings preview has none). */
 export const finderOf = (term: Terminal): Finder | undefined => finders.get(term);
 
+/** xterm 6.1 (6.1.0-beta.338) finds a decoration to remove by its marker's line, in a list it keeps sorted by that
+ *  line. A marker that is disposed turns its line to -1 at once, so a decoration whose marker went first (the search
+ *  add-on disposes many fills in one go, a new active match drops the old one) can no longer be found: it stays in
+ *  xterm's line index and its fill stays drawn. Here a removal the keyed search misses finds the decoration by
+ *  identity instead. Applied once per terminal, only where xterm has that list; engine-find.test.ts fails when the
+ *  shape changes, and when xterm no longer needs it. */
+type SortedList = { delete(v: unknown): boolean; _array?: unknown[]; _flushCleanupDeleted?: () => void; __settled?: true };
+export function settleDecorationRemovals(term: Terminal): boolean {
+  const list = (term as unknown as { _core?: { _decorationService?: { _decorations?: SortedList } } })._core?._decorationService?._decorations;
+  if (!list || typeof list.delete !== "function" || typeof list._flushCleanupDeleted !== "function" || !Array.isArray(list._array)) return false;
+  if (list.__settled) return true;
+  const del = list.delete.bind(list);
+  const flush = list._flushCleanupDeleted.bind(list);
+  list.delete = (v: unknown) => {
+    if (del(v)) return true;
+    flush(); // removals still pending are applied first, so positions are current
+    const i = list._array!.indexOf(v);
+    if (i < 0) return false;
+    list._array!.splice(i, 1);
+    return true;
+  };
+  list.__settled = true;
+  return true;
+}
+
 const sameColors = (a: FindColors, b: FindColors) => (Object.keys(a) as (keyof FindColors)[]).every((k) => a[k] === b[k]);
 
 export function makeFinder(term: Terminal): Finder {
+  settleDecorationRemovals(term);
   let addon: SearchAddon | null = null;
   let loading: Promise<SearchAddon | null> | null = null;
   let gone = false;
@@ -79,7 +125,9 @@ export function makeFinder(term: Terminal): Finder {
    *  cells, as `term.select` takes them. */
   let match: { row: IMarker; x: number; length: number } | null = null;
   const unmark = () => {
-    for (const d of active) d.dispose();
+    // newest first: each decoration before its marker. A marker that goes first takes the decoration's key (its line)
+    // with it, and xterm 6.1 then cannot find the decoration to take its fill off the screen
+    for (const d of active.reverse()) d.dispose();
     active = [];
     match = null;
   };
@@ -128,8 +176,12 @@ export function makeFinder(term: Terminal): Finder {
   };
   /** The colours in use, so a result the add-on finds again by itself (new output, a resize) is marked the same. */
   let colors: FindColors | null = null;
-  /** What is being looked for ("" when nothing is). */
+  /** What is being looked for ("" when nothing is), and how. */
   let wanted = "";
+  let how: FindOptions = FIND_PLAIN;
+  /** the options the add-on last searched with */
+  let searched: FindOptions | null = null;
+  const same = (a: FindOptions, b: FindOptions) => a.caseSensitive === b.caseSensitive && a.regex === b.regex;
 
   const ready = (): Promise<SearchAddon | null> =>
     (loading ??= loadSearch().then(
@@ -151,9 +203,10 @@ export function makeFinder(term: Terminal): Finder {
       () => null,
     ));
 
-  const run = (text: string, direction: "next" | "previous", incremental: boolean) => {
+  const run = (text: string, direction: "next" | "previous", incremental = false, options: FindOptions = FIND_PLAIN) => {
     wanted = text;
-    if (!text) {
+    how = { caseSensitive: options.caseSensitive, regex: options.regex };
+    if (!text || (how.regex && !validPattern(text))) {
       const own = selectionIsFinds();
       unmark();
       addon?.clearDecorations();
@@ -163,9 +216,13 @@ export function makeFinder(term: Terminal): Finder {
     }
     void ready().then((a) => {
       // closed, or looking for something else by now (the add-on's chunk loads on the first search)
-      if (!a || gone || wanted !== text) return;
+      if (!a || gone || wanted !== text || !same(how, options)) return;
       colors = findColors(term.options.theme ?? {});
-      const opts = { incremental, decorations: colors };
+      // the add-on stores the new options before it compares them with the last ones, so a change of option alone
+      // would keep the old matches: dropping its cached text makes it find them all again
+      if (searched && !same(searched, how)) a.clearDecorations();
+      searched = how;
+      const opts = { ...how, incremental, decorations: colors };
       const found = direction === "next" ? a.findNext(text, opts) : a.findPrevious(text, opts);
       // nothing matched: the add-on fires no event then
       if (!found) {
@@ -194,6 +251,8 @@ export function makeFinder(term: Terminal): Finder {
       // a font size or a padding is a new look too, and no new colour
       if (sameColors(next, colors)) return;
       colors = next;
+      // a pattern that does not compile has no matches to recolour, and the add-on would throw on it
+      if (how.regex && !validPattern(wanted)) return;
       // the add-on keeps the fills of a text it has searched: drop them, then find the same match again. It
       // searches from the selection, so the active match is selected first (a click or the person's own selection
       // may have replaced find's), and what the person had selected, or nothing, is put back afterwards. A person
@@ -204,7 +263,7 @@ export function makeFinder(term: Terminal): Finder {
       const m = matchNow();
       a.clearDecorations();
       if (m) term.select(m.x, m.y, m.length);
-      if (!a.findNext(wanted, { incremental: true, decorations: colors })) {
+      if (!a.findNext(wanted, { ...how, incremental: true, decorations: colors })) {
         unmark();
         emit({ index: -1, count: 0, capped: false });
       }

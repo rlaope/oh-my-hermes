@@ -1822,9 +1822,28 @@ class VerifyAttributionAndRepairLeftoversTests(unittest.TestCase):
             "If the task turns on a judgement you cannot settle with confidence (a design choice, a root cause you "
             "cannot pin down), do not guess: before editing, write ESCALATE: <the question> and what you found into "
             "the handoff, and stop.",
+            "Commit only your own SCOPE paths: stage them by name (`git add -- <paths>`), never `git add -A`, "
+            "`git add .` or `git commit -a`, and never `git stash`; the index and stash are shared with the "
+            "parallel parts.",
             "Stay inside your SCOPE: other parts of this run work at the same time. If you cannot finish, "
             "say plainly that you are blocked and why; do not report blocked work as done.",
         ]))
+
+    def test_a_writing_node_is_told_to_commit_only_its_own_scope_paths(self) -> None:
+        with homes() as home:
+            record = dag_run.new_record(PARENT, "feat", "Feature", "", [
+                node("api", scope=("src/api.py",)), node("verify", role="verify", depends_on=("api",)),
+            ], time.time())
+            derived = dag_run.derive(record, [], time.time())
+            build = dag_run.task_for(record, record["nodes"][0], home.omh, derived)["context"]
+            check = dag_run.task_for(record, record["nodes"][1], home.omh, derived)["context"]
+        line = ("Commit only your own SCOPE paths: stage them by name (`git add -- <paths>`), never `git add -A`, "
+                "`git add .` or `git commit -a`, and never `git stash`; the index and stash are shared with the "
+                "parallel parts.")
+        self.assertIn(line, build)
+        self.assertLess(len(line), 260)
+        self.assertLess(build.index(line), build.index("Stay inside your SCOPE"))
+        self.assertNotIn("Commit only your own SCOPE paths", check)
 
 
 if __name__ == "__main__":

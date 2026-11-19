@@ -360,6 +360,9 @@ const SHORTCUTS: [string, Key][] = [
   [`${MOD},`, "key.settings"],
   [`${MOD}J`, "key.nextAsk"],
   [MOD === "⌘" ? `${MOD}N · ${MOD}T` : `${MOD}N`, "key.newSession"],
+  [MOD === "⌘" ? "⌘D · ⌘⇧D" : "Ctrl+Shift+D · Alt+Shift+D", "key.splitPane"],
+  [MOD === "⌘" ? "⌘W" : "Ctrl+Shift+W", "key.closePane"],
+  [MOD === "⌘" ? "⌘⌥ ←↑↓→" : "Ctrl+Alt+ ←↑↓→", "key.focusPane"],
   ["1 · 2 · 3", "key.cardKeys"],
   ["Esc", "key.stop"],
 ];

@@ -184,7 +184,7 @@ test(`a bot asked to connect the Mac mini drafts it (${theme}): the chip opens t
   await page.getByTestId("send").click();
   // the bridge added its one note to the turn; the person's bubble shows only what they typed
   await expect.poll(async () => (await mock("mock.submits")).result.submits.at(-1)?.text ?? "").toContain("```omher-peer");
-  await expect(page.getByTestId("bubble-user").last()).toHaveText("맥미니 헤르메스 붙여줘");
+  await expect(page.getByTestId("bubble-user").last().locator(".b")).toHaveText("맥미니 헤르메스 붙여줘");
   const chip = page.getByTestId("peer-chip");
   await expect(chip).toBeVisible();
   await expect(chip).toContainText("Connect over SSH");

@@ -256,11 +256,11 @@ class AppTests(unittest.TestCase):
         return app, now
 
     def test_the_wait_moves_from_its_own_row_to_the_key_row_after_a_minute(self) -> None:
-        from omh.tui.app import STATE_WAITING
+        from omh.tui.app import WAITING_ANSWER
 
         app, now = self.open(KOREAN)
         tail = [line_text(row) for row in app._tail(150)]
-        self.assertFalse([row for row in tail if STATE_WAITING in row], tail)
+        self.assertFalse([row for row in tail if WAITING_ANSWER in row], tail)
         footer = line_text(app._slot_lines(150, 30)[-1])
         self.assertEqual(footer, "  Enter to select · ↑↓ to navigate · Esc to cancel")
         now[0] += 14 * 60 + 42
@@ -268,13 +268,13 @@ class AppTests(unittest.TestCase):
         self.assertNotIn("Esc", line_text(app._info_line(150)))
 
     def test_an_approval_keeps_its_waiting_row_and_info_line_keys(self) -> None:
-        from omh.tui.app import STATE_WAITING
+        from omh.tui.app import WAITING_APPROVAL
         from omh.tui.gateway import ServerRequest
         from test_tui_modes import make_app
 
         app, _client = make_app(busy=True, rows=30, cols=150)
         app._on_server_request(ServerRequest("srq-9", "approval", {"command": "rm -rf ./build", "description": "x"}))
-        self.assertTrue([row for row in app._tail(150) if STATE_WAITING in line_text(row)])
+        self.assertTrue([row for row in app._tail(150) if WAITING_APPROVAL in line_text(row)])
         self.assertIn("esc denies", line_text(app._info_line(150)))
 
     def test_the_tool_row_counts_the_choices_instead_of_repeating_the_question(self) -> None:

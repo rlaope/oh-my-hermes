@@ -644,6 +644,106 @@ body.side-resizing * {
   scrollbar-color: var(--scrollbar) transparent;
 }
 
+/* two TERMINALS sessions side by side (SplitView): each side a bar with its name and x over its own terminal */
+.ss-split {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+}
+.ss-split.dragging,
+.ss-split.dragging * {
+  user-select: none;
+}
+.ss-split-side {
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+.ss-split-bar {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 26px;
+  padding: 0 6px 0 12px;
+  font-size: 12px;
+  color: var(--muted);
+  border-bottom: 1px solid var(--line-soft);
+  min-width: 0;
+}
+.ss-split-name {
+  color: var(--ink);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+.ss-split-path {
+  flex: 1;
+  min-width: 0;
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--quiet);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.ss-split-x {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  border-radius: var(--r-sm);
+  color: var(--quiet);
+}
+.ss-split-x svg {
+  width: 9px;
+  height: 9px;
+}
+.ss-split-x:hover {
+  color: var(--ink);
+  background: var(--hover);
+}
+.ss-split-divider {
+  flex: none;
+  width: 1px;
+  position: relative;
+  background: var(--line-soft);
+  cursor: col-resize;
+  z-index: 2;
+}
+.ss-split-divider::after {
+  content: "";
+  position: absolute;
+  inset: 0 -3px;
+}
+.ss-split-divider:hover,
+.ss-split-divider:focus-visible,
+.ss-split.dragging .ss-split-divider {
+  background: var(--line-strong);
+  outline: none;
+}
+/* the picker: under the header, at the main column's right (placed by SplitPicker) */
+.ss-split-pick {
+  top: 56px;
+  right: 16px;
+  width: 260px;
+}
+.ss-split-pick-h,
+.ss-split-pick-none {
+  padding: 4px 8px 6px;
+  font-size: 11px;
+  color: var(--quiet);
+}
+.ss-split-pick-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
 /* chat sessions */
 /* the controls give way last: only once the path and the name are down to their least does the model's label
    ellipsize (as in the bot header); the toggle and the panel button never shrink. (A shrink factor under 1 would
@@ -1427,6 +1527,14 @@ body.side-resizing * {
 .tr-dot {
   flex: none;
   color: var(--quiet);
+}
+/* the folder its shell moved to (OSC 7): kept whole before the last line gives way */
+.tr-cwd {
+  flex: 0 1 auto;
+  min-width: 2em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .tr-line {
   flex: 0 1 auto;
