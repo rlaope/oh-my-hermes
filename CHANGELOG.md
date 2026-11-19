@@ -11,6 +11,19 @@ All notable changes will be documented here.
   bug. `code-review`, `production-audit` and `verification-gate` now end every result with a `Not checked` list (each
   entry with its reason, or `Not checked: none` only after full coverage), so a short findings list no longer reads as
   "the rest is clean".
+
+- **Qwen4-Max is onboarded.** Alibaba released it on 2026-11-16. Before this, every Qwen4 id (`qwen4-max`,
+  `qwen/qwen4-max`, `qwen4-max-preview`) classified `unknown` and got generic discipline; they now classify `qwen`.
+  `qwen4-max` has an exact contract read from docs.qwencloud.com: 1M context, hybrid thinking on by default, and a
+  `low` / `high` / `xhigh` ladder with `high` as the default. The vendor maps `minimal`, `medium` and `max` onto those
+  three without an error, so OMH raises nothing and the contract records the table. Cost estimates use the Singapore
+  list price, $1.50 / $4.50 per million tokens with cached input at $0.075. The Qwen calibration is now
+  version-aware: the family block still describes the non-thinking Qwen3-Coder, and Qwen4-Max gets its own block
+  that does not forbid thinking. That block is editorial and unmeasured. No shipped chain names Qwen4-Max, because
+  Qwen3.8-Max held no slot either; to try it, use `omh model-chains set <category> "qwen4-max:high, ..."`. The Token
+  Plan preview is recognized only, with no contract and no price. Hermes through origin/main `fe8b920cae` sends no
+  effort on its DashScope profiles, so the model runs at `high` there whatever effort is routed.
+
 - **A cheap dag-ulw node that hits a hard judgement asks for a stronger model instead of guessing.** When a node's
   child cannot settle a design choice or a root cause, it stops before editing and writes `ESCALATE: <question>` into
   its handoff; the node is settled `escalated` and offered again one category up (quick, unspecified-low,
@@ -278,6 +291,15 @@ All notable changes will be documented here.
   wherever the hardware allows it (WebGL2, not a software rasterizer), and it draws those characters to fill the cell
   as a real terminal does. Off keeps the standard renderer; a machine without hardware WebGL2 keeps it too.
 
+- **`show-reel` has a cut-sheet lane for films written as a shot contract.** A new opt-in reference, `cut-sheet.md`,
+  covers cut-driven sequences of 30 s or less handed to a builder or a text-to-video generator, and remakes of a
+  supplied reference video. It opens with one contract line (ratio, duration, exact cut count, fps, palette), locks
+  the subject in observable markers with a never-redesign clause repeated in every prompt chunk, and writes one
+  timecoded row per cut, each compositionally different from its neighbours with a named exit transition, inside a
+  closed editing vocabulary. Sound is written with the rows (a named peak, a cold ending, SFX onsets aligned to the
+  cut), a remake measures the reference's cut times and audio onsets before any row is written, and a delegated
+  build is reviewed in numbered, measurable FIX rounds. The brief, rights and the short-promo one-scene rule still
+  apply.
 - **omher terminal: parity with Otty and Orca: split panes, restore, Kitty keys, images, prompt marks, paste guard.**
   - **Split panes.** The bottom terminal panel splits into up to four panes (⌘D right, ⌘⇧D down, ⌘W close,
     ⌘⌥arrows move; Ctrl+Shift+D / Alt+Shift+D / Ctrl+Shift+W / Ctrl+Alt+arrows elsewhere). Dividers drag and a double
