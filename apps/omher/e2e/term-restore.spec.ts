@@ -118,6 +118,27 @@ test("a Codex terminal learns its conversation id from the shell and continues i
   expect(again).toEqual([]);
 });
 
+test("two Codex terminals started in one folder each keep their own conversation and continue it after a restart", async ({ page }) => {
+  const A = "01a1f29c-c5b1-7301-a199-2dd07ff4b024";
+  const B = "01a1f29c-c5b1-7301-a199-2dd07ff4b025";
+  const next = (thread: string) => page.evaluate((v) => void ((window as unknown as { __omherMockCodexLatest?: string }).__omherMockCodexLatest = v), thread);
+  const agentSession = async (id: string) => (await saved(page))?.sessions?.find((s: { id: string }) => s.id === id)?.agentSession;
+  await open(page);
+  // each mock Codex writes its own rollout as it starts, A first, then B, in the same folder within a second
+  await next(A);
+  const a = await newTerm(page, "codex");
+  await next(B);
+  const b = await newTerm(page, "codex");
+  await expect.poll(() => agentSession(b), { timeout: 15_000 }).toBe(B);
+  expect(await agentSession(a)).toBe(A);
+  // the second lookup told the shell which id the first row already holds
+  const reads = await page.evaluate(() => ((window as unknown as { __omherPastReads?: { op: string; held?: string[] }[] }).__omherPastReads ?? []).filter((r) => r.op === "latest"));
+  expect(reads.map((r) => r.held)).toEqual([[], [A]]);
+  await page.reload();
+  await expect.poll(async () => (await starts(page)).length).toBe(2);
+  expect((await starts(page)).map((c) => c.resume).sort()).toEqual([A, B]);
+});
+
 test("an agent with no conversation of its own (Grok) still comes back paused and starts only on Resume", async ({ page }) => {
   await open(page);
   const id = await newTerm(page, "grok");

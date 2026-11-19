@@ -108,9 +108,10 @@ export interface SessionHost extends HistoryHost {
   pastChats(agent: "claude" | "codex", cwds: string[]): Promise<PastChat[]>;
   /** The last messages of `agent`'s conversation `id` in `cwd`. */
   pastMessages(agent: "claude" | "codex", id: string, cwd: string): Promise<PastMsg[]>;
-  /** The id of the newest Codex conversation in `cwd` started at or after `since` (seconds since the epoch), for a
-   *  TERMINALS Codex session to continue after a restart; null when there is none (read-only, rule 30). */
-  codexLatest?(cwd: string, since: number): Promise<string | null>;
+  /** The id of the first Codex conversation in `cwd` started at or after `since` (seconds since the epoch) that is not
+   *  one of `held` (the ids other rows keep), for a TERMINALS Codex session to continue after a restart; null when
+   *  there is none (read-only, rule 30). */
+  codexLatest?(cwd: string, since: number, held: string[]): Promise<string | null>;
   /** How many asks wait: a Dock / launcher count, or a dot on the Windows taskbar button. 0 clears it. */
   badge(count: number): Promise<void>;
   /** Settings › Agents: the person's own agents, read and checked by the shell from omher's own file, and the broken
@@ -233,9 +234,9 @@ export class TauriHost implements SessionHost {
     const { invoke } = await this.core();
     return invoke<PastMsg[]>("past_chat_messages", { agent, id, cwd });
   }
-  async codexLatest(cwd: string, since: number) {
+  async codexLatest(cwd: string, since: number, held: string[]) {
     const { invoke } = await this.core();
-    return invoke<string | null>("codex_latest", { cwd, sinceSecs: since });
+    return invoke<string | null>("codex_latest", { cwd, sinceSecs: since, held });
   }
   async badge(count: number) {
     const { invoke } = await this.core();
@@ -405,9 +406,11 @@ type MockGlobals = {
   /** e2e: the conversations Claude Code and Codex keep (none = the built-in ones) */
   __omherPastChats?: PastChat[];
   /** e2e: reads of those conversations, apart from the session calls (opening the + menu lists them) */
-  __omherPastReads?: { op: "list" | "read" | "latest"; agent: string; cwds?: string[]; id?: string; cwd?: string; since?: number }[];
-  /** e2e: the id the Codex conversation lookup finds for a TERMINALS Codex session (none: it finds nothing) */
+  __omherPastReads?: { op: "list" | "read" | "latest"; agent: string; cwds?: string[]; id?: string; cwd?: string; since?: number; held?: string[] }[];
+  /** e2e: the conversation id the next new TERMINALS Codex session writes its rollout under (none: it writes none) */
   __omherMockCodexLatest?: string;
+  /** the rollouts the mock's Codex sessions wrote (the Codex lookup's files): id, folder, start time in ms */
+  __omherMockCodexRollouts?: { id: string; cwd: string; at: number }[];
   /** e2e: the Dock / taskbar count omher last set */
   __omherBadge?: number;
   /** e2e: the mock's copy of omher's custom-agents file (`agents` of `~/.omher/custom-agents.json`, as written) */
@@ -537,6 +540,9 @@ export class MockHost implements SessionHost {
   async start(agent: AgentId, cwd: string, cols: number, rows: number, onData: (d: string) => void, onExit: (c: number | null) => void, resume?: string, account?: string, sessionId?: string) {
     const id = nextMockPty();
     this.log({ op: "start", id, agent, cwd, cols, rows, ...(resume ? { resume } : {}), ...(sessionId ? { sessionId } : {}), ...(account ? { account } : {}) });
+    // a new Codex conversation writes its rollout as it starts (a resumed one goes on in its own)
+    const thread = this.g.__omherMockCodexLatest;
+    if (agent === "codex" && !resume && thread) (this.g.__omherMockCodexRollouts ??= []).push({ id: thread, cwd, at: Date.now() });
     const out = (d: string) => {
       (this.g.__omherSessionFlow ??= []).push({ op: "feed", id, bytes: utf8.encode(d).length });
       onData(d);
@@ -726,9 +732,13 @@ export class MockHost implements SessionHost {
     if (!c) throw new Error("no such conversation");
     return MOCK_PAST_MSGS[id] ?? [{ role: "user" as const, text: c.title, ts: c.at }];
   }
-  async codexLatest(cwd: string, since: number) {
-    (this.g.__omherPastReads ??= []).push({ op: "latest", agent: "codex", cwd, since });
-    return this.g.__omherMockCodexLatest ?? null;
+  /** As the shell's lookup: the oldest rollout in `cwd` started at or after `since` that no other row holds. */
+  async codexLatest(cwd: string, since: number, held: string[]) {
+    (this.g.__omherPastReads ??= []).push({ op: "latest", agent: "codex", cwd, since, held });
+    const found = (this.g.__omherMockCodexRollouts ?? [])
+      .filter((r) => r.cwd === cwd && r.at >= since * 1000 && !held.includes(r.id))
+      .sort((a, b) => a.at - b.at)[0];
+    return found?.id ?? null;
   }
   async badge(count: number) {
     this.g.__omherBadge = count;

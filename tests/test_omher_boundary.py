@@ -1950,7 +1950,7 @@ class PastConversationsAreOnlyRead(unittest.TestCase):
 
     def test_the_commands_take_only_an_agent_folders_and_an_id(self) -> None:
         for cmd, params in (("past_chats_list", "agent: String, cwds: Vec<String>"), ("past_chat_messages", "agent: String, id: String, cwd: String"),
-                            ("codex_latest", "cwd: String, since_secs: f64"),
+                            ("codex_latest", "cwd: String, since_secs: f64, held: Vec<String>"),
                             ("session_reveal", "cwd: String"), ("session_open_terminal", "cwd: String"),
                             ("asks_badge", "window: tauri::WebviewWindow, count: u32")):
             sig = re.search(rf"async fn {cmd}\((.*?)\) -> ", self.lib, re.S)

@@ -1249,21 +1249,27 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
   /** TERMINALS Codex sessions that do not know their conversation id yet: the next lookup. Codex writes its rollout
    *  once the conversation starts, so the shell is asked after the program has run 5 s and every 30 s after, until it
    *  names one (rule 30's reader: only the id comes back); it is kept as the row's `agentSession` so a restart
-   *  continues it (`codex resume <id>`). */
+   *  continues it (`codex resume <id>`). The shell gives the first conversation started since the session did that
+   *  no other row holds, and the lookups run one at a time, so two Codex terminals started in the same folder each
+   *  get their own conversation; an id another row holds by the time the answer comes is not taken either. */
   const codexIdTimer = new Map<string, ReturnType<typeof setTimeout>>();
+  let codexAsking: Promise<unknown> = Promise.resolve();
+  const heldIds = (id: string) => state.list.filter((x) => x.id !== id && x.agentSession).map((x) => x.agentSession!);
   const findCodexId = (id: string, t: Term, run: number, since: number, wait: number) => {
     if (!host.codexLatest) return;
     clearTimeout(codexIdTimer.get(id));
     codexIdTimer.set(
       id,
-      setTimeout(async () => {
+      setTimeout(() => {
         codexIdTimer.delete(id);
         const live = () => terms.get(id) === t && t.run === run && !t.closed && rec(id)?.agent === "codex" && !rec(id)?.agentSession;
-        if (!live()) return;
-        const got = await host.codexLatest!(rec(id)!.cwd, since).catch(() => null);
-        if (!live()) return;
-        if (got) patchRec(id, { agentSession: got });
-        else findCodexId(id, t, run, since, CODEX_ID_EVERY_MS);
+        codexAsking = codexAsking.then(async () => {
+          if (!live()) return;
+          const got = await host.codexLatest!(rec(id)!.cwd, since, heldIds(id)).catch(() => null);
+          if (!live()) return;
+          if (got && !heldIds(id).includes(got)) patchRec(id, { agentSession: got });
+          else findCodexId(id, t, run, since, CODEX_ID_EVERY_MS);
+        });
       }, wait),
     );
   };

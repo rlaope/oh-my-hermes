@@ -443,23 +443,27 @@ fn uuid7_ms(id: &str) -> Option<f64> {
     u64::from_str_radix(&hex[..12], 16).ok().map(|ms| ms as f64)
 }
 
-/// The id of the newest Codex conversation of its own in `cwd` that started at or after `since` (seconds since the
-/// epoch): a TERMINALS Codex session records it so that a restart can continue it (rule 30's reader, one more use).
-/// Only rollouts changed since then are read, through the same checks as [`codex_list`]; only the id is returned.
-pub fn codex_latest(root: &Path, cwd: &str, since: f64) -> Option<String> {
+/// The id of the first Codex conversation in `cwd` that started at or after `since` (seconds since the epoch) and
+/// that no other session holds (`held`): a TERMINALS Codex session records it so that a restart can continue it
+/// (rule 30's reader, one more use). The oldest one is taken, so two sessions started in the same folder each get
+/// their own conversation rather than both the newest. Only rollouts changed since then are read, through the same
+/// checks as [`codex_list`]; `held` is only compared with; only the id is returned.
+pub fn codex_latest(root: &Path, cwd: &str, since: f64, held: &[String]) -> Option<String> {
     if !absolute(cwd) {
         return None;
     }
     let cwds = [cwd.to_string()];
     let names = std::collections::HashMap::new();
-    let rows = codex_rollouts(root, CODEX_FILES_MAX)
+    let mut rows: Vec<(f64, String)> = codex_rollouts(root, CODEX_FILES_MAX)
         .iter()
         .filter(|p| mtime(p) >= since)
         .filter_map(|p| inside(root, p))
         .filter_map(|p| codex_row(&p, &cwds, &names))
-        .filter(|c| uuid7_ms(&c.id).is_some_and(|ms| ms >= since * 1000.0))
+        .filter(|c| !held.iter().any(|h| h.eq_ignore_ascii_case(&c.id)))
+        .filter_map(|c| uuid7_ms(&c.id).filter(|ms| *ms >= since * 1000.0).map(|ms| (ms, c.id)))
         .collect();
-    newest(rows).into_iter().next().map(|c| c.id)
+    rows.sort_by(|a, b| a.0.total_cmp(&b.0));
+    rows.into_iter().next().map(|(_, id)| id)
 }
 
 /// The last messages of Codex thread `id` (its rollout found by name; the folder is checked against `cwd`).
@@ -689,7 +693,7 @@ mod tests {
     }
 
     #[test]
-    fn codex_latest_is_the_newest_thread_in_the_folder_started_since() {
+    fn codex_latest_is_the_first_thread_in_the_folder_started_since_that_no_one_holds() {
         let root = tmp("codex-latest");
         let cwd = "/Users/you/code/api";
         let day = root.join("sessions/2026/11/12");
@@ -700,12 +704,19 @@ mod tests {
         write(&day.join(format!("rollout-2026-11-12T15-29-01-{X2}.jsonl")), &codex_file(X2, cwd));
         // only rollouts changed since then are read: a since in the future finds nothing
         let file_time = mtime(&day.join(format!("rollout-2026-11-12T15-29-01-{X2}.jsonl")));
-        assert!(codex_latest(&root, cwd, file_time + 3600.0).is_none());
-        assert_eq!(codex_latest(&root, cwd, since).as_deref(), Some(X2));
+        assert!(codex_latest(&root, cwd, file_time + 3600.0, &[]).is_none());
+        assert_eq!(codex_latest(&root, cwd, since, &[]).as_deref(), Some(X2));
         // another folder, a relative folder, and a since after both ids find nothing
-        assert!(codex_latest(&root, "/Users/you/code/web", since).is_none());
-        assert!(codex_latest(&root, "code/api", since).is_none());
-        assert!(codex_latest(&root, cwd, uuid7_ms(X2).unwrap() / 1000.0 + 1.0).is_none());
+        assert!(codex_latest(&root, "/Users/you/code/web", since, &[]).is_none());
+        assert!(codex_latest(&root, "code/api", since, &[]).is_none());
+        assert!(codex_latest(&root, cwd, uuid7_ms(X2).unwrap() / 1000.0 + 1.0, &[]).is_none());
+        // two sessions in one folder: the older conversation goes to the one asking first, the newer one to the next;
+        // an id another session holds is never taken, in any letter case
+        let both = uuid7_ms(X1).unwrap() / 1000.0 - 1.0;
+        assert_eq!(codex_latest(&root, cwd, both, &[]).as_deref(), Some(X1));
+        assert_eq!(codex_latest(&root, cwd, both, &[X1.to_string()]).as_deref(), Some(X2));
+        assert_eq!(codex_latest(&root, cwd, both, &[X1.to_uppercase()]).as_deref(), Some(X2));
+        assert!(codex_latest(&root, cwd, both, &[X1.to_string(), X2.to_string()]).is_none());
         // a v4 id carries no time and is never taken
         assert!(uuid7_ms(C1).is_none());
         let _ = std::fs::remove_dir_all(root);
