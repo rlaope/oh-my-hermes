@@ -1,6 +1,7 @@
 """Exercise production App input, polling and review without a live gateway."""
 
 import threading
+import time
 import unittest
 import os
 from pathlib import Path
@@ -24,6 +25,17 @@ ALT_P = Key(CHAR, "p", alt=True)
 
 def line_text(row):
     return "".join(span.text for span in row)
+
+
+def settle_dictionary(app):
+    """Until the dictionary read or save in flight, and a save queued behind it, has landed."""
+    task = getattr(app, "proofread_dictionary_task", None)  # a TUI reading the dictionary on its own thread
+    for _ in range(4):
+        if task is None or not (task.pending or app.proofread_dictionary_save is not None):
+            return
+        task.wait()
+        app._take_proofread()
+    raise AssertionError("the dictionary task did not settle")
 
 
 class AppTests(unittest.TestCase):
@@ -184,6 +196,7 @@ class AppTests(unittest.TestCase):
         app._on_input(ALT_P)
         app.proofread_worker.wait()
         app._take_proofread()
+        settle_dictionary(app)
         self.assertIsNotNone(app.proofread_review)
 
     def test_accept_arming_undo_and_no_submit(self):
@@ -240,6 +253,7 @@ class AppTests(unittest.TestCase):
                 app._on_input(Key(DOWN))
             app._on_input(Key(ENTER))
             self.assertIsNone(app.proofread_review)
+            settle_dictionary(app)
 
         with TemporaryDirectory() as home:
             path = Path(home) / "proofread" / "dictionary.txt"
@@ -263,6 +277,7 @@ class AppTests(unittest.TestCase):
             reopened._on_input(Key(ESCAPE))
             reopened.composer.caret = 9
             reopened._on_input(ALT_P)
+            settle_dictionary(reopened)
             self.assertEqual(reopened._proofread_marks(), ((16, 18),))
             self.assertEqual(reopened.proofread_review.choices(), ["Remove from dictionary", "Cancel"])
             before = proofread.Snapshot.capture(reopened.composer, reopened._proofread_owner())
@@ -275,10 +290,119 @@ class AppTests(unittest.TestCase):
 
             path.write_bytes(b"not a word\n")
             reopened._on_input(ALT_P)
+            settle_dictionary(reopened)
             pick(reopened, "Add to dictionary")
             self.assertEqual(path.read_bytes(), b"not a word\n")
             self.assertEqual(reopened._proofread_marks(), ((0, 7), (8, 15), (16, 18)))
             self.assertEqual(reopened.proofread_status, "Could not update the local dictionary")
+
+    def test_grammar_correction_survives_overlapping_spellings_with_or_without_a_home(self):
+        text = "teh cat " + "zz " * 50 + "end"
+        spelling = {"rule": {"issueType": "misspelling"}, "replacements": []}
+        payload = {"matches": [
+            {"offset": 0, "length": 3, **spelling},  # same start as the grammar correction
+            {"offset": 4, "length": 3, **spelling},  # inside it
+            {"offset": 0, "length": 7, "message": "Grammar", "replacements": [{"value": "the cat"}]},
+            *({"offset": 8 + 3 * n, "length": 2, **spelling} for n in range(50)),
+            {"offset": 158, "length": 3, "message": "Case", "replacements": [{"value": "End"}]},
+        ]}
+        for saved in (None, b"", b"teh\n"):
+            with self.subTest(saved=saved), TemporaryDirectory() as home:
+                if saved is not None:
+                    (Path(home) / "proofread").mkdir()
+                    (Path(home) / "proofread" / "dictionary.txt").write_bytes(saved)
+                app, client = make_app(environ={"OMH_HOME": home} if saved is not None else {})
+                app.composer.replace(0, 0, text)
+                app.proofread_worker = proofread.Worker(lambda _endpoint, _draft: payload)
+                self.open(app)
+                marks = app._proofread_marks()
+                self.assertIn((0, 7), marks)
+                self.assertIn((158, 161), marks)
+                review = app.proofread_review
+                expected = {None: ["the cat", "Cancel"], b"": ["the cat", "Add to dictionary", "Cancel"],
+                            b"teh\n": ["the cat", "Remove from dictionary", "Cancel"]}[saved]
+                self.assertEqual(review.choices(), expected)
+                if saved == b"teh\n":
+                    review.armed_until = 0
+                    app._on_input(Key(DOWN))
+                    app._on_input(Key(ENTER))
+                    settle_dictionary(app)
+                    self.assertEqual((Path(home) / "proofread" / "dictionary.txt").read_bytes(), b"")
+                    self.assertEqual(app.composer.text, text)
+                    self.open(app)
+                    app.proofread_review.armed_until = 0
+                app.proofread_review.armed_until = 0
+                app._on_input(Key(ENTER))
+                self.assertTrue(app.composer.text.startswith("the cat "))
+                app.composer.caret = len(app.composer.text) - 1
+                app._on_input(ALT_P)
+                app.proofread_worker.wait()
+                app._take_proofread()
+                settle_dictionary(app)
+                self.assertEqual(app.proofread_review.choices()[0], "End")
+                self.assertEqual(client.calls, [])
+
+    def test_dictionary_only_hint_names_the_action(self):
+        payload = {"matches": [{"offset": 0, "length": 7, "rule": {"issueType": "misspelling"}, "replacements": []},
+                               {"offset": 8, "length": 2, "replacements": [{"value": "goes"}]}]}
+        with TemporaryDirectory() as home:
+            app, _ = make_app(environ={"OMH_HOME": home})
+            app.composer.replace(0, 0, "Blorfle go")
+            app.proofread_worker = proofread.Worker(lambda _endpoint, _draft: payload)
+            self.open(app)
+            app._on_input(Key(ESCAPE))
+            hints = {}
+            for caret in (3, 9):
+                app.composer.caret = caret
+                hints[caret] = line_text(app._info_line(120))
+            self.assertIn("Alt+P adds word to dictionary", hints[3])
+            self.assertIn("Alt+P corrects at cursor", hints[9])
+
+    def test_dictionary_io_never_holds_the_loop_and_other_windows_saves_show(self):
+        payload = {"matches": [{"offset": 0, "length": 3, "rule": {"issueType": "misspelling"},
+                                "replacements": [{"value": "the"}]}]}
+        with TemporaryDirectory() as home:
+            path = Path(home) / "proofread" / "dictionary.txt"
+
+            def window():
+                app, client = make_app(environ={"OMH_HOME": home})
+                app.composer.replace(0, 0, "teh cat")
+                app.proofread_worker = proofread.Worker(lambda _endpoint, _draft: payload)
+                return app, client
+
+            first, _ = window()
+            second, second_client = window()
+            self.assertFalse(path.exists())  # starting reads nothing
+            self.open(first)
+            self.open(second)
+            self.assertEqual(second.proofread_review.choices(), ["the", "Add to dictionary", "Cancel"])
+            second._on_input(Key(ESCAPE))
+            first.proofread_review.armed_until = 0
+            first._on_input(Key(DOWN))
+            gate, entered = threading.Event(), threading.Event()
+            real = proofread.update_dictionary
+
+            def held(*args, **kwargs):
+                entered.set()
+                gate.wait(5)
+                return real(*args, **kwargs)
+
+            with patch.object(proofread, "update_dictionary", held):
+                started = time.monotonic()
+                first._on_input(Key(ENTER))
+                self.assertTrue(entered.wait(2))
+                self.assertLess(time.monotonic() - started, 0.1)  # the key returned while the save is held
+                first._on_input(Key(CHAR, "x"))  # typing and repainting go on
+                first._render()
+                self.assertEqual(first.composer.text, "xteh cat")
+                gate.set()
+                settle_dictionary(first)
+            self.assertEqual(path.read_bytes(), b"teh\n")
+            self.assertEqual(first.proofread_words, {"teh"})
+            second._on_input(ALT_P)
+            settle_dictionary(second)
+            self.assertEqual(second.proofread_review.choices(), ["Remove from dictionary", "Cancel"])
+            self.assertEqual(second_client.calls, [])
 
     def test_pending_typing_and_aba_results_rejected(self):
         app, _ = self.app()

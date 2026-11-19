@@ -24,18 +24,24 @@ What keeps the read narrow (`docs/OMH-TUI-BOUNDARY.md`, "Proofreading"):
   composer object, its edit generation, its text, its chip and image metadata
   and who owns it (session, question). Text equality alone is not enough, since
   an edit away and back is the same text and a different draft.
+* The dictionary (`DICTIONARY_FILE` under the OMH home) is read and saved only
+  on `DictionaryTask`'s short-lived thread, never on the screen's: a file that
+  is not regular (a FIFO, a symlink) is refused without waiting on it, and a
+  save rereads under the lock before its atomic replacement.
 """
 
 from __future__ import annotations
 
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
 import http.client
 import ipaddress
 import json
+import os
 from pathlib import Path
 import re
 import socket
+import stat
 import threading
 import time
 import unicodedata
@@ -72,7 +78,12 @@ CANCEL_NOTICE = "Proofread cancelled."
 
 DICTIONARY_FILE = Path("proofread") / "dictionary.txt"
 DICTIONARY_LIMIT = 64 * 1024
+DICTIONARY_KEY_LIMIT = 100  # code points of the saved (folded) word, so every key that is written reads back
 DICTIONARY_ERROR = "Could not update the local dictionary"
+UNKNOWN: tuple = ()  # the fingerprint of a dictionary not read yet; matches no file
+HINT_CORRECT = "Alt+P corrects at cursor"
+HINT_ADD = "Alt+P adds word to dictionary"
+HINT_REMOVE = "Alt+P removes word from dictionary"
 ADD_WORD = "Add to dictionary"
 REMOVE_WORD = "Remove from dictionary"
 CANCEL = "Cancel"
@@ -332,41 +343,118 @@ def post_check(where: Endpoint, sent: str) -> Mapping[str, object]:
 
 
 def word_key(text: str) -> str | None:
+    """The dictionary key of one word of letters (and their combining marks): NFC, casefolded. None for anything
+    else, and for a word whose folded key is longer than `DICTIONARY_KEY_LIMIT` (`ß` folds to `ss`), so a key that
+    is offered and saved always reads back."""
     word = unicodedata.normalize("NFC", text)
-    if not (0 < len(word) <= 100 and word[0].isalpha() and all(
+    if not (0 < len(word) <= DICTIONARY_KEY_LIMIT and word[0].isalpha() and all(
         char.isalpha() or unicodedata.category(char).startswith("M") for char in word
     )):
         return None
-    return unicodedata.normalize("NFC", word.casefold())
+    key = unicodedata.normalize("NFC", word.casefold())
+    return key if len(key) <= DICTIONARY_KEY_LIMIT else None
 
 
-def read_dictionary(path: Path) -> frozenset[str]:
+def read_dictionary(path: Path, known: tuple | None = UNKNOWN) -> tuple[frozenset[str], tuple | None] | None:
+    """The saved words and the file's fingerprint (None: no file), or None when the fingerprint is still `known`.
+
+    Only a regular file is read: a symlink is not followed and a FIFO is opened without waiting for a writer and
+    then refused, as `history.load_history` does. Too large, not UTF-8 or a bad entry raise ValueError."""
+    flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_NONBLOCK", 0) | getattr(os, "O_BINARY", 0)
     try:
-        with path.open("rb") as handle:
-            data = handle.read(DICTIONARY_LIMIT + 1)
+        descriptor = os.open(path, flags)
     except FileNotFoundError:
-        return frozenset()
+        return None if known is None else (frozenset(), None)
+    with os.fdopen(descriptor, "rb") as handle:  # closes the descriptor whatever happens below
+        info = os.fstat(handle.fileno())
+        if not stat.S_ISREG(info.st_mode):
+            raise ValueError("dictionary is not a regular file")
+        fingerprint = (info.st_dev, info.st_ino, info.st_size, info.st_mtime_ns)
+        if fingerprint == known:
+            return None
+        data = handle.read(DICTIONARY_LIMIT + 1)
     if len(data) > DICTIONARY_LIMIT:
         raise ValueError("dictionary is too large")
     entries = [word_key(line) for line in data.decode("utf-8").splitlines()]
     if any(word is None for word in entries):
         raise ValueError("invalid dictionary entry")
-    return frozenset(word for word in entries if word is not None)
+    return frozenset(word for word in entries if word is not None), fingerprint
 
 
-def update_dictionary(path: Path, word: str, *, add: bool) -> frozenset[str]:
+def update_dictionary(path: Path, word: str, *, add: bool) -> tuple[frozenset[str], tuple | None]:
+    """Add or remove one key; the words saved after it and the fingerprint to compare a later read with."""
+    if word_key(word) != word:
+        raise ValueError("not a dictionary key")
+    sidecar = path.with_name(f".{path.name}.lock")
+    try:
+        mode = os.lstat(sidecar).st_mode
+    except FileNotFoundError:
+        pass
+    else:
+        if not stat.S_ISREG(mode):  # opening a FIFO to lock it would wait for a reader
+            raise ValueError("dictionary lock is not a regular file")
     # Reread under the lock so an already-open TUI cannot erase another TUI's changes.
     with file_lock(path, private=True, timeout_seconds=0.15) as lock:
         if not lock["enforced"]:
             raise OSError("dictionary lock unavailable")
-        before = read_dictionary(path)
+        before, fingerprint = read_dictionary(path) or (frozenset(), None)
         words = before | {word} if add else before - {word}
         if words != before:
             text = "".join(entry + "\n" for entry in sorted(words))
             if len(text.encode("utf-8")) > DICTIONARY_LIMIT:
                 raise ValueError("dictionary is too large")
             atomic_write_text(path, text, private=True)
-    return words
+            fingerprint = UNKNOWN  # the next refresh reads what was written
+    return words, fingerprint
+
+
+class DictionaryTask:
+    """Dictionary reads and saves on one short-lived daemon thread at a time; the loop takes the result and never
+    waits on the file or its lock. The result is (True, value) or (False, None) for an OSError or ValueError."""
+
+    def __init__(self) -> None:
+        self._lock = threading.Lock()
+        self._thread: threading.Thread | None = None
+        self._outcome: tuple[bool, object] | None = None
+        self._started = False
+
+    @property
+    def pending(self) -> bool:
+        return self._started
+
+    def start(self, run: Callable[[], object], wake: Callable[[], None] | None = None) -> bool:
+        with self._lock:
+            if self._started:
+                return False
+            self._started = True
+        self._thread = threading.Thread(target=self._run, args=(run, wake), name="omh-proofread-dictionary",
+                                        daemon=True)
+        self._thread.start()
+        return True
+
+    def _run(self, run: Callable[[], object], wake: Callable[[], None] | None) -> None:
+        outcome: tuple[bool, object] = (False, None)  # what anything else leaves, after the thread's fault hook
+        try:
+            outcome = (True, run())
+        except (OSError, ValueError):
+            outcome = (False, None)  # said as DICTIONARY_ERROR for a save; a read keeps what was known
+        finally:
+            with self._lock:
+                self._outcome = outcome
+            if wake is not None:
+                wake()
+
+    def take(self) -> tuple[bool, object] | None:
+        with self._lock:
+            outcome, self._outcome = self._outcome, None
+            if outcome is not None:
+                self._started = False
+        return outcome
+
+    def wait(self, timeout: float = 5.0) -> None:
+        """For tests: until the thread is done."""
+        if self._thread is not None:
+            self._thread.join(timeout)
 
 
 @dataclass(frozen=True)
@@ -380,8 +468,9 @@ class Issue:
 
 
 def issues_from(payload: Mapping[str, object], job: Job) -> list[Issue]:
-    """The corrections the draft can take: each mapped from UTF-16 back to the draft, none touching a protected
-    character, none without a replacement or dictionary action, none overlapping an earlier one."""
+    """The candidates the draft can take, in draft order: each mapped from UTF-16 back to the draft, none touching a
+    protected character, none without a replacement or dictionary key. Overlaps stay: `corrections` and `spellings`
+    reduce them, so a spelling with no replacement never pushes a correction out."""
     matches = payload.get("matches")
     if not isinstance(matches, list):
         raise ProofreadError("The proofread server's reply has no matches.")
@@ -412,11 +501,26 @@ def issues_from(payload: Mapping[str, object], job: Job) -> list[Issue]:
         if values or word is not None:
             found.append(Issue(start, end, original, message if isinstance(message, str) else "", tuple(values), word))
     found.sort(key=lambda issue: issue.start)
-    issues: list[Issue] = []
-    for issue in found:
-        if not issues or issue.start >= issues[-1].end:
-            issues.append(issue)
-    return issues[:MAX_ISSUES]
+    return found
+
+
+def corrections(issues: Sequence[Issue], saved: frozenset[str] = frozenset()) -> list[Issue]:
+    """The replacements shown, as before the dictionary: first span wins, at most `MAX_ISSUES`. A saved spelling
+    drops out before the overlap test, so it never hides a correction it overlaps."""
+    kept: list[Issue] = []
+    for issue in issues:
+        if issue.replacements and issue.word not in saved and (not kept or issue.start >= kept[-1].end):
+            kept.append(issue)
+    return kept[:MAX_ISSUES]
+
+
+def spellings(issues: Sequence[Issue]) -> list[Issue]:
+    """The single-word spellings a dictionary action can take, reduced and capped on their own."""
+    kept: list[Issue] = []
+    for issue in issues:
+        if issue.word is not None and (not kept or issue.start >= kept[-1].end):
+            kept.append(issue)
+    return kept[:MAX_ISSUES]
 
 
 @dataclass(frozen=True, eq=False)
@@ -487,6 +591,7 @@ class Review:
     position: int = 0
     row: int = 0
     dictionary_action: str = ""
+    word: str | None = None  # the dictionary key the action saves or removes
 
     @property
     def issue(self) -> Issue:
@@ -494,7 +599,9 @@ class Review:
 
     @property
     def replacements(self) -> tuple[str, ...]:
-        return () if self.dictionary_action == "remove_word" else self.issue.replacements
+        # The saved word's own replacements are not offered; a correction it overlaps keeps its own.
+        hidden = self.dictionary_action == "remove_word" and self.issue.word == self.word
+        return () if hidden else self.issue.replacements
 
     def choices(self) -> list[str]:
         rows = list(self.replacements)

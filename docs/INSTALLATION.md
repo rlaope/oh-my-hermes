@@ -6659,9 +6659,11 @@ draft. Automatic checks are off by default; set `OMH_PROOFREAD=1` and main and
 clarify free-text fields also check after 600 ms quiet and underline issues
 without interrupting typing. Move the cursor onto an
 underlined issue and press Alt+P, then pick a replacement with arrows and Enter,
-or Cancel/Esc to close. For a spelling issue, choose Add to dictionary to hide
-that word's spelling marks. Press Alt+P on the saved word and choose Remove from
-dictionary to restore them. Alt+P checks immediately if results are missing,
+or Cancel/Esc to close. With an OMH home, a spelling issue on one word of
+letters (not one with an apostrophe or hyphen, such as `don't` or `e-mail`)
+also offers Add to dictionary, which hides that word's spelling marks in every
+OMH TUI on that home; grammar corrections stay. Press Alt+P on the saved word
+and choose Remove from dictionary to restore them. Alt+P checks immediately if results are missing,
 and never opens an unrelated issue elsewhere in the draft. Corrections use normal Ctrl+_
 undo and never send. Missing servers leave the draft unchanged and show a quiet
 inline status, with bounded retry/backoff (Alt+P retries immediately).
