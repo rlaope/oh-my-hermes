@@ -1,6 +1,6 @@
 ---
 name: "omh-skill-eval"
-description: "[omh] Agent skill to check before shipping it: run `omh skill-eval` on the folder to see, host by host, whether Hermes, Claude Code, Codex, OpenClaw, OpenCode and Copilot CLI load it, load it degraded, or skip it, and fix each finding at its source. Use when the user says: skill-eval, skill eval, evaluate my skill, is my skill any good, skill harness check, will my skill load, skill compatibility, 스킬 평가."
+description: "[omh] Agent skill to check before shipping it."
 license: MIT
 compatibility: "Requires the omh CLI on PATH (pip install oh-my-hermes)."
 metadata:

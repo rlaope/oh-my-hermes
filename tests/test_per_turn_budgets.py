@@ -208,6 +208,32 @@ class SkillIndexRenderingTests(unittest.TestCase):
         # Surrounding whitespace, then surrounding quote characters, are stripped first.
         self.assertEqual(skill_index.hermes_index_description('  "quoted"  '), "quoted")
 
+    def test_description_cut_matches_hermes_on_real_descriptions(self) -> None:
+        # Expected values are the output of hermes-agent
+        # `agent/skill_utils.py::clip_skill_description` (Nov 2026 main) on
+        # the openings of three shipped descriptions, pasted as literals: the cut lands
+        # on a word boundary, trailing punctuation is stripped, and `...` is
+        # appended. OMH does not import Hermes, so the literals are the pin.
+        cases = (
+            (
+                "[omh] Git branch in trouble: a merge conflict, a commit that broke something, "
+                "history to repair; plan the resolution.",
+                "[omh] Git branch in trouble: a merge conflict, a commit...",
+            ),
+            (
+                "[omh] Accumulated tech debt or architecture deepening: rank it; build the "
+                "severity-by-effort debt ledger.",
+                "[omh] Accumulated tech debt or architecture deepening...",
+            ),
+            (
+                "[omh] Current tech or business fact to cite from web: web lookup lane - settle a question.",
+                "[omh] Current tech or business fact to cite from web: web...",
+            ),
+        )
+        for description, expected in cases:
+            with self.subTest(description=description[:40]):
+                self.assertEqual(skill_index.hermes_index_description(description), expected)
+
     def test_one_line_per_installable_skill_under_sorted_category_headers(self) -> None:
         lines = skill_index.full_profile_skill_index_lines()
         skill_lines = [line for line in lines if line.startswith("    - ")]
@@ -552,9 +578,12 @@ class IndexOpeningLintTests(unittest.TestCase):
         self.assertEqual(skill_index.index_opening("Hermes Code Review workflow: bug-first"), "hermes code review")
 
     def test_the_prefix_costs_six_characters_of_the_visible_window(self) -> None:
-        # The window is 57 characters either way; the prefix sits inside it.
-        self.assertEqual(skill_index.index_opening("[omh] " + "a" * 60 + " b c"), "a" * 51)
-        self.assertEqual(skill_index.index_opening("a" * 60 + " b c"), "a" * 57)
+        # The window is the same either way and the prefix sits inside it: a
+        # third word that ends at character 57 is whole without the prefix
+        # and cut at the word boundary with it.
+        body = "a" * 24 + " " + "b" * 24 + " " + "c" * 7 + " d e"
+        self.assertEqual(skill_index.index_opening("[omh] " + body), "a" * 24 + " " + "b" * 24)
+        self.assertEqual(skill_index.index_opening(body), "a" * 24 + " " + "b" * 24 + " " + "c" * 7)
 
     def test_openings_that_differ_by_the_third_word_do_not_collide(self) -> None:
         pairs = [("one", "[omh] Hermes frontend workflow: x"), ("two", "[omh] Hermes frontend refactor: y")]

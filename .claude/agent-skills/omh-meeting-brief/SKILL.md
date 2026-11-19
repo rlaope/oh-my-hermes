@@ -1,6 +1,6 @@
 ---
 name: "omh-meeting-brief"
-description: "[omh] Upcoming work meeting that lacks an agenda: agenda, prompts, decisions, and record template."
+description: "[omh] Upcoming work meeting that lacks an agenda."
 license: MIT
 metadata:
   hermes:

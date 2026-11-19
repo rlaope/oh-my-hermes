@@ -1,6 +1,6 @@
 ---
 name: "omh-github-event-ops"
-description: "[omh] Incoming GitHub PR, issue, or CI event: GitHub event operations: route PR, issue, CI, and review webhook events into triage, review, or fix handoff cards."
+description: "[omh] Incoming GitHub PR, issue, or CI event."
 license: MIT
 metadata:
   hermes:

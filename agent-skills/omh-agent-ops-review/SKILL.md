@@ -1,6 +1,6 @@
 ---
 name: "omh-agent-ops-review"
-description: "[omh] AI agent progress for managers: help managers inspect AI-agent progress, blockers, quality gates, and throughput levers. Use when the user says: agent-ops-review, agent ops review, tracing audit, telemetry audit, instrumentation audit, agent productivity, operator productivity, manager view."
+description: "[omh] AI agent progress for managers."
 license: MIT
 metadata:
   hermes:

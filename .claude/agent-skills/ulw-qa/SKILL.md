@@ -1,6 +1,6 @@
 ---
 name: "ulw-qa"
-description: "[omh] Hostile scenario testing: adversarial QA and fix loops."
+description: "[omh] Hostile scenario testing."
 license: MIT
 metadata:
   hermes:

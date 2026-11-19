@@ -1,6 +1,6 @@
 ---
 name: "omh-provider-profile-posture"
-description: "[omh] Provider credentials without exposure: prepare provider-profile metadata without reading secrets or calling providers."
+description: "[omh] Provider credentials without exposure."
 license: MIT
 metadata:
   hermes:

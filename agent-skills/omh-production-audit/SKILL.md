@@ -1,6 +1,6 @@
 ---
 name: "omh-production-audit"
-description: "[omh] Imminent production launch or release: evaluate release, deploy, security, observability, rollback, docs, and support readiness without claiming production access. Use when the user says: production-audit, production audit, production readiness, prod audit, prod readiness, ready for production, ready to ship, ship readiness."
+description: "[omh] Imminent production launch or release."
 license: MIT
 metadata:
   hermes:

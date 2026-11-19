@@ -1,6 +1,6 @@
 ---
 name: "omh-reliability-review"
-description: "[omh] Postmortem for an outage or SLO miss: postmortems, SLOs, error budgets, incident follow-ups, and service reliability evidence."
+description: "[omh] Postmortem for an outage or SLO miss."
 license: MIT
 metadata:
   hermes:

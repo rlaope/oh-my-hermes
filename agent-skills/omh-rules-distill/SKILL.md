@@ -1,6 +1,6 @@
 ---
 name: "omh-rules-distill"
-description: "[omh] Turn repeated lessons into written rules: extract repeated principles from skills, prompts, traces, reviews, and failures into reviewed rule candidates without auto-mutating guidance. Use when the user says: rules-distill, rules distill, distill rules, rule distillation, principle distill, skill principles, extract agent rules, turn traces into rules."
+description: "[omh] Turn repeated lessons into written rules."
 license: MIT
 metadata:
   hermes:

@@ -1,6 +1,6 @@
 ---
 name: "omh-internal-audit"
-description: "[omh] Testing an internal control -- SOX, ICFR or ITGC: define the population and the sample, name the evidence that proves each item, re-perform the control, and grade any deficiency from stated likelihood, magnitude and compensating-control criteria, never by assertion. Use when the user says: internal-audit, internal audit, internal control, internal controls, internal control audit, control testing, test of controls, tests of controls."
+description: "[omh] Testing an internal control -- SOX, ICFR or ITGC."
 license: MIT
 metadata:
   hermes:

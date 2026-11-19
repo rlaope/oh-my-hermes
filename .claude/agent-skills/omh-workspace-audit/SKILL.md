@@ -1,6 +1,6 @@
 ---
 name: "omh-workspace-audit"
-description: "[omh] Workspace setup inventory and gaps: map repository, skill, prompt, plugin, MCP, hook, config, and runtime surfaces before strengthening or operating OMH."
+description: "[omh] Workspace setup inventory and gaps."
 license: MIT
 metadata:
   hermes:

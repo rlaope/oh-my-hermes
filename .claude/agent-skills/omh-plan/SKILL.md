@@ -1,6 +1,6 @@
 ---
 name: "omh-plan"
-description: "[omh] Software feature or bugfix not yet planned: structured planning before execution."
+description: "[omh] Software feature or bugfix not yet planned."
 license: MIT
 metadata:
   hermes:

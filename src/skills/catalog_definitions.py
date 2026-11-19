@@ -1898,7 +1898,7 @@ _DEFINITIONS = [
     ),
     SkillDefinition(
         "web-research",
-        "Current technical or business fact to cite from web: web lookup lane - settle a current-facts question in one cited retrieval round with retrieval dates and source-quality notes; for pre-spec grounding across reference implementations use `research`.",
+        "Current tech or business fact to cite from web: web lookup lane - settle a current-facts question in one cited retrieval round with retrieval dates and source-quality notes; for pre-spec grounding across reference implementations use `research`.",
         (
             # The lookup half of the pre-split `research` trigger list. Every
             # phrase here names retrieval or citation; the phrases naming depth,
@@ -4107,7 +4107,7 @@ _DEFINITIONS = [
     ),
     SkillDefinition(
         "img-summary",
-        "Infographic card for meeting notes, a report, or PR: image prompt cards - turn meetings, reports, PRs, issues, research, and releases into domain-aware image prompt cards.",
+        "Infographic card for meeting notes, a report or PR: image prompt cards - turn meetings, reports, PRs, issues, research, and releases into domain-aware image prompt cards.",
         (
             "img-summary",
             "img summary",
@@ -4282,7 +4282,7 @@ _DEFINITIONS = [
     ),
     SkillDefinition(
         "apple-design",
-        "Designing or reviewing an iOS, macOS, or Apple-style UI: prepare native Apple UI or Apple marketing product-visual direction, review, and improvement briefs with evidence-backed remediation handoffs.",
+        "Designing or reviewing an iOS, macOS or Apple UI: prepare native Apple UI or Apple marketing product-visual direction, review, and improvement briefs with evidence-backed remediation handoffs.",
         (
             "apple-design",
             "apple design",
@@ -4847,7 +4847,7 @@ _DEFINITIONS = [
             "For first-time UI creation, name the initial generation branch, reference direction, reusable primitives, state coverage, and required visual QA path.",
             "Cover responsive layout, empty/loading/error states, hover/focus/active states, CJK text, accessibility, and performance expectations.",
             "For a new page or a redesign, load `references/editorial-layout.md` before choosing the layout.",
-            "For a surface people use on a phone, load `references/mobile-density-gate.md`; measure with `toolkit/scripts/phone_check.py` when a browser is available, otherwise the measurement is `not_observed`.",
+            "For a surface people use on a phone, load `references/mobile-density-gate.md`; measure with `toolkit/scripts/phone_check.py` (setup in `toolkit/README.md`: `skill_view(name='omh-frontend', file_path='toolkit/README.md')`) when a browser is available, otherwise the measurement is `not_observed`.",
             "When the surface reads or writes remote data, load the `frontend-refactor` skill's `omh-frontend-refactor/references/state-discipline.md` (sections 1 and 4-6) before writing the component: server state lives in a query cache, each mutation names the query keys it invalidates, and an optimistic write ships with its rollback.",
             "When the surface has a form, a text composer, or a dialog, load `references/forms-and-input.md` before writing it: labelled controls, errors shown after the user commits a value, server field errors mapped onto their fields, one submit in flight, an Enter-to-send that waits for IME composition, and focus returned when a dialog closes.",
             "Check the browser-support target before using a newer platform feature: a feature newer than the target (by default, anything only Baseline Newly available) needs feature detection plus a fallback, or a deliberate target change; suggest recording the target in the repository's agent instruction file (`omh-agent-instructions` owns that file).",
@@ -7016,7 +7016,7 @@ _DEFINITIONS = [
             "Map overlap, missed-run, retry, backfill, and failure-pause onto what Hermes cron does natively and say which choices it cannot honour, so nobody is asked for a policy the runtime ignores; the map is in `references/recurring-surface-choice.md`.",
             f"After activation, read status from Hermes, not from the blueprint: `{NATIVE_CRON_TOOL}` list (state, last_status, next_run_at), `hermes cron runs`, and open `hermes cron incidents` (detected or alerted).",
             "Expose whether a no-agent watchdog is a candidate without claiming it exists or ran.",
-            "When the person asks to watch a Slack or Discord channel and be told first when a post matches a condition, follow `references/channel-watch.md`: confirm where, what, how often, and where it reports in one line, then install the collector from `toolkit/`, write its config, and create the job yourself.",
+            "When the person asks to watch a Slack or Discord channel and be told first when a post matches a condition, follow `references/channel-watch.md`: confirm where, what, how often, and where it reports in one line, then install the collector from `toolkit/` as `toolkit/README.md` describes (`skill_view(name='omh-automation-blueprint', file_path='toolkit/README.md')`), write its config, and create the job yourself.",
             "List host automation, gateway delivery, source retrieval, and no-agent execution as not evidence until observed.",
         ),
         why_this_exists=(
@@ -8270,7 +8270,7 @@ _DEFINITIONS = [
     ),
     SkillDefinition(
         "tech-debt-audit",
-        "Accumulated tech debt or architecture deepening to rank: build the severity-by-effort debt ledger from observed repo evidence - orient, audit the named dimensions with file:line citations, rank fixes and quick wins - and reconcile RESOLVED/NEW/CARRIED on rerun.",
+        "Accumulated tech debt or architecture deepening: rank it; build the severity-by-effort debt ledger from observed repo evidence - orient, audit the named dimensions with file:line citations, rank fixes and quick wins - and reconcile RESOLVED/NEW/CARRIED on rerun.",
         (
             "tech-debt-audit",
             "tech debt",
@@ -10531,7 +10531,7 @@ _DEFINITIONS.append(
 _DEFINITIONS.append(
     SkillDefinition(
         "app-debugging",
-        "Application code misbehaves -- a wrong value, a flaky test, a lost update: reproduce it first, form competing hypotheses, discriminate them with the cheapest observation, and only then fix the demonstrated root cause.",
+        "Application code misbehaves: a wrong value, a flaky test, a lost update; reproduce it first, form competing hypotheses, discriminate them with the cheapest observation, and only then fix the demonstrated root cause.",
         (
             "app-debugging",
             "app debugging",
@@ -10680,7 +10680,7 @@ _DEFINITIONS.append(
 _DEFINITIONS.append(
     SkillDefinition(
         "commit-pr-authoring",
-        "Commit message or pull-request body to write for a change: draft it in the repository's own convention, with `Tested:` listing only commands observed to run and everything prepared but not run under `Not-tested:`.",
+        "Commit message or pull-request body to write: draft it for the change in the repository's own convention, with `Tested:` listing only commands observed to run and everything prepared but not run under `Not-tested:`.",
         (
             "commit-pr-authoring",
             "commit message",
@@ -10805,7 +10805,7 @@ _DEFINITIONS.append(
 _DEFINITIONS.append(
     SkillDefinition(
         "git-workflow",
-        "Git branch in trouble -- a merge conflict, a commit that broke something, history to repair: plan the resolution, the bisect, or the rewrite, name what is already pushed first, and force-push only with `--force-with-lease`.",
+        "Git branch in trouble: a merge conflict, a commit that broke something, history to repair; plan the resolution, the bisect, or the rewrite, name what is already pushed first, and force-push only with `--force-with-lease`.",
         (
             "git-workflow",
             "git workflow",
@@ -10944,7 +10944,7 @@ _DEFINITIONS.append(
 _DEFINITIONS.append(
     SkillDefinition(
         "relational-db",
-        "Database work on a relational store -- a slow query, an index to size, a migration on a big table, a lock taken during deploy, N+1 queries: plan it with the checks that prove it safe, and never call a migration ready without its lock behaviour and rollback.",
+        "Database work on a relational store: a slow query, an index to size, a migration on a big table, a lock taken during deploy, N+1 queries; plan it with the checks that prove it safe, and never call a migration ready without its lock behaviour and rollback.",
         (
             "relational-db",
             "relational database",
@@ -11085,7 +11085,7 @@ _DEFINITIONS.append(
 _DEFINITIONS.append(
     SkillDefinition(
         "security-event-response",
-        "Security event on the code already shipped -- a CVE in a dependency, a secret committed to the repo, a license question, an advisory: triage reachability and severity, contain in order, and never close a leaked secret before its rotation is observed.",
+        "Security event on the code already shipped: a CVE in a dependency, a secret committed to the repo, a license question, an advisory; triage reachability and severity, contain in order, and never close a leaked secret before its rotation is observed.",
         (
             "security-event-response",
             "security event response",
@@ -11229,7 +11229,7 @@ _DEFINITIONS.append(
 _DEFINITIONS.append(
     SkillDefinition(
         "agent-instructions",
-        "Agent instruction file for a repo -- AGENTS.md, CLAUDE.md, a Cursor rule: write or update what an agent cannot derive from the code, inside a marked region, with every command verified or marked unverified and no counts that drift.",
+        "Agent instruction file for a repo: AGENTS.md, CLAUDE.md, or a Cursor rule; write or update what an agent cannot derive from the code, inside a marked region, with every command verified or marked unverified and no counts that drift.",
         (
             "agent-instructions",
             "agents.md",
@@ -11348,7 +11348,7 @@ _DEFINITIONS.append(
 _DEFINITIONS.append(
     SkillDefinition(
         "iac-change",
-        "Infrastructure-as-code change -- Terraform, OpenTofu, Pulumi, a Kubernetes manifest, a Helm chart: read the drift, the blast radius and the cost delta from the saved plan, then stage the apply behind a health gate with a rollback per stage.",
+        "Infrastructure-as-code change: Terraform, OpenTofu, Pulumi, a Kubernetes manifest, a Helm chart; read the drift, the blast radius and the cost delta from the saved plan, then stage the apply behind a health gate with a rollback per stage.",
         (
             "iac-change",
             "iac change",
@@ -11493,7 +11493,7 @@ _DEFINITIONS.append(
 _DEFINITIONS.append(
     SkillDefinition(
         "data-pipelines",
-        "Data pipeline work -- an ETL or streaming job, a backfill or replay, duplicate events, a schema change downstream, a lineage question, a data-quality regression: make every rerun idempotent, bound every replay, and gate each load on observed checks.",
+        "Data pipeline work on an ETL or streaming job: a backfill or replay, duplicate events, a schema change downstream, a lineage question, a data-quality regression; make every rerun idempotent, bound every replay, and gate each load on observed checks.",
         (
             "data-pipelines",
             "data pipeline",
@@ -11638,7 +11638,7 @@ _DEFINITIONS.append(
 _DEFINITIONS.append(
     SkillDefinition(
         "model-finetuning",
-        "Fine-tuning a model on your own data -- SFT, DPO, RLVR or a LoRA adapter: decide first whether prompting or retrieval already closes the gap, choose the method from the data you have, and promote a checkpoint only when it beats the untuned baseline on a held-out eval.",
+        "Fine-tuning a model on your own data: SFT, DPO, RLVR or a LoRA adapter; decide first whether prompting or retrieval already closes the gap, choose the method from the data you have, and promote a checkpoint only when it beats the untuned baseline on a held-out eval.",
         (
             "model-finetuning",
             "model finetuning",
@@ -11784,7 +11784,7 @@ _DEFINITIONS.append(
 _DEFINITIONS.append(
     SkillDefinition(
         "mobile-release",
-        "Releasing an iOS or Android app through the stores -- signing, the privacy manifest, a TestFlight or Play beta, a staged rollout, a hotfix: prepare each gate the store enforces, and plan the halt and the next build before the rollout starts, because a store release cannot be rolled back.",
+        "Releasing an iOS or Android app through a store: signing, the privacy manifest, a TestFlight or Play beta, a staged rollout, a hotfix; prepare each gate the store enforces, and plan the halt and the next build before the rollout starts, because a store release cannot be rolled back.",
         (
             "mobile-release",
             "mobile release",
@@ -12063,7 +12063,7 @@ _DEFINITIONS.append(
 _DEFINITIONS.append(
     SkillDefinition(
         "data-share-review",
-        "Before data leaves the team -- a dataset, log, ticket export or transcript excerpt bound for a vendor, a public issue, a model provider or a training corpus: classify every field, minimize first, pseudonymize with the mapping kept local, and call it redacted only after an observed residual scan.",
+        "Before data leaves the team: a dataset, log, ticket export or transcript excerpt bound for a vendor, a public issue, a model provider or a training corpus; classify every field, minimize first, pseudonymize with the mapping kept local, and call it redacted only after an observed residual scan.",
         DATA_SHARE_REVIEW_PHRASES,
         (
             "Use when a dataset, log bundle, ticket or CRM export, or transcript excerpt is about to leave the team -- to a "
@@ -12190,7 +12190,7 @@ _DEFINITIONS.append(
 _DEFINITIONS.append(
     SkillDefinition(
         "release-cut",
-        "Shipping a versioned release -- tag it, stage it behind a canary, or roll back the last deploy: decide what goes in, the version, the rollout stages, and a rollback with its trigger and exact command before it is needed.",
+        "Shipping a versioned release: tag it, stage it behind a canary, or roll back the last deploy; decide what goes in, the version, the rollout stages, and a rollback with its trigger and exact command before it is needed.",
         (
             "release-cut",
             "release cut",
@@ -12323,7 +12323,7 @@ _DEFINITIONS.append(
 _DEFINITIONS.append(
     SkillDefinition(
         "spend-gate",
-        "Spending money on the user's behalf -- a card checkout, an HTTP 402 or pay-per-request call, a wallet transfer, a booking, a paid data endpoint: show a pre-spend card (payee, total with fees, cap, refund terms, approver) first, and call it done only on an observed receipt.",
+        "Spending money on the user's behalf: a card checkout, an HTTP 402 or pay-per-request call, a wallet transfer, a booking, a paid data endpoint; show a pre-spend card (payee, total with fees, cap, refund terms, approver) first, and call it done only on an observed receipt.",
         SPEND_GATE_PHRASES,
         (
             "Use before the agent moves money on any rail: a card checkout in the browser, an HTTP 402 or pay-per-request "

@@ -1,6 +1,6 @@
 ---
 name: "omh-commit-pr-authoring"
-description: "[omh] Commit message or pull-request body to write for a change: draft it in the repository's own convention, with `Tested:` listing only commands observed to run and everything prepared but not run under `Not-tested:`. Use when the user says: commit-pr-authoring, commit message, commit messages, write the commit message, draft the commit message, commit body, squash message, pr body."
+description: "[omh] Commit message or pull-request body to write: draft it for the change in the repository's own convention, with `Tested:` listing only commands observed to run and everything prepared but not run under `Not-tested:`. Use when the user says: commit-pr-authoring, commit message, commit messages, write the commit message, draft the commit message, commit body, squash message, pr body."
 license: MIT
 author: "oh-my-hermes maintainers"
 metadata:

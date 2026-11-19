@@ -154,9 +154,9 @@
 "hangul_anchors":"검색 색해 서치 웹서 인터 자료 찾아 최신 출처 터넷",
 "label":"omh-web-research",
 "name":"web-research",
-"situation":"Current technical or business fact to cite from web",
+"situation":"Current tech or business fact to cite from web",
 "terms":{
-"1":"across answer budget business date declar depend depth external ground lane lookup note pre quality question spec study technical",
+"1":"across answer budget business date declar depend depth external ground lane lookup note pre quality question spec study tech",
 "2":"back best chang citation cited claim diversity doc documentation evidenc fact fresh gap guidanc implementation internet library onlin practic pric referenc round say scan settl still today true upstream version week",
 "3":"cite",
 "4":"check current find latest official retrieval search",
@@ -499,7 +499,7 @@
 "hangul_anchors":"경쟁 고서 공유 그래 기능 내용 네일 노트 뉴스 데이 드로 드백 래픽 로우 록을 리서 리아 리즈 리포 리핑 릴리 명하 미지 발표 배경 버그 보고 보기 뷰어 브리 사진 생성 서치 설명 성해 세로 소개 썸네 아지 안내 약해 어에 업데 에게 용을 워크 유용 유할 의록 이미 이슈 이트 인포 일로 쟁사 제거 좋은 지로 진처 처럼 카드 크론 크플 트리 편집 포그 포트 플로 피드 하나 회의",
 "label":"omh-image-cards",
 "name":"img-summary",
-"situation":"Infographic card for meeting notes, a report, or PR",
+"situation":"Infographic card for meeting notes, a report or PR",
 "terms":{
 "1":"awar claim domain herm prepar prs sourc specific suppli transformation turn without",
 "2":"backdrop background brief bug competitor conversation cron cut digest explain explainer explanation featur feedback multilingual news page photo product pull remov removal request review sum support tool triag vertical",
@@ -515,13 +515,14 @@
 "hangul_anchors":"",
 "label":"omh-apple-design",
 "name":"apple-design",
-"situation":"Designing or reviewing an iOS, macOS, or Apple-style UI",
+"situation":"Designing or reviewing an iOS, macOS or Apple UI",
 "terms":{
 "1":"awar befor explicit handoff implementation ipado market nativ prepar remediation surfac verification",
 "2":"3d back brief direction evidenc feedback follow guidelin human imag improvement interfac ipad iphon land layout light page polish render screen studio swiftui",
 "3":"inspir ui web",
 "4":"app glass hero hig ios liquid visual",
-"6":"maco product review styl",
+"5":"styl",
+"6":"maco product review",
 "8":"design",
 "9":"appl"
 }
@@ -1094,7 +1095,7 @@
 "hangul_anchors":"감사 개선 기술 드베 베이 부채 사해 선해 술부 아키 원장 이스 장부 점검 키텍 텍처",
 "label":"omh-tech-debt-audit",
 "name":"tech-debt-audit",
-"situation":"Accumulated tech debt or architecture deepening to rank",
+"situation":"Accumulated tech debt or architecture deepening",
 "terms":{
 "1":"big build carri citation diff dimension evidenc find judg measur named new observ orient rather reconcil rerun resolv separat spot",
 "2":"accumulat budget cleanup effort file first fix improv line modul opportunity plan problem severity shallow technical week worst",
@@ -1439,7 +1440,7 @@
 "hangul_anchors":"",
 "label":"omh-app-debugging",
 "name":"app-debugging",
-"situation":"Application code misbehaves -- a wrong value, a flaky test, a lost update",
+"situation":"Application code misbehaves",
 "terms":{
 "1":"behav dependent discriminat first form jvm library misbehav move observ order python separat servic typescript unknown wrongly",
 "2":"analysis answer away cannot cheapest code compet condition demonstrat disappear failur fifth figur find fix function give goes heisenbug hypothes intermittently log minimal negativ number observation overwrit pass print request return",
@@ -1455,7 +1456,7 @@
 "hangul_anchors":"",
 "label":"omh-commit-pr-authoring",
 "name":"commit-pr-authoring",
-"situation":"Commit message or pull-request body to write for a change",
+"situation":"Commit message or pull-request body to write",
 "terms":{
 "1":"executor first line push read ready recent record repo requir subject text user want written",
 "2":"branch command convention describ description diff everyth fill list lore observ prepar put repository reviewer run say squash summariz word",
@@ -1473,7 +1474,7 @@
 "hangul_anchors":"",
 "label":"omh-git-workflow",
 "name":"git-workflow",
-"situation":"Git branch in trouble -- a merge conflict, a commit that broke something, history to repair",
+"situation":"Git branch in trouble",
 "terms":{
 "1":"back code first includ introduc new rather regression resolution step troubl work",
 "2":"after already befor bottom chang cherry clean detach failur head interactiv last line marker name pick plan prs reflog repair restack review start tidy undo",
@@ -1490,7 +1491,7 @@
 "hangul_anchors":"",
 "label":"omh-relational-db",
 "name":"relational-db",
-"situation":"Database work on a relational store -- a slow query, an index to size, a migration on a big table, a lock taken during deploy, N+1 queries",
+"situation":"Database work on a relational store",
 "terms":{
 "1":"behaviour big call connect engin fix itself output plus ready rollback stor take taken without",
 "2":"add alter analyz bloat check column concurrently creat enough explain grew hundr hung item million miss never next order prov row scan seq sequential wait work year",
@@ -1507,7 +1508,7 @@
 "hangul_anchors":"",
 "label":"omh-security-event-response",
 "name":"security-event-response",
-"situation":"Security event on the code already shipped -- a CVE in a dependency, a secret committed to the repo, a license question, an advisory",
+"situation":"Security event on the code already shipped",
 "terms":{
 "1":"call contact contain containment exist fit forc happen major noth output question registry rotat rotation scan step version",
 "2":"access account agpl alert already analysis audit aws befor clos code compatibility compatibl critical customer data dependabot ended env exfiltrat file flag git github history issu key library log4j never npm observ ok order packag public reachabl scanner servic severity suspect takeover token unauthoriz vulnerability vulnerabl",
@@ -1523,7 +1524,7 @@
 "hangul_anchors":"",
 "label":"omh-agent-instructions",
 "name":"agent-instructions",
-"situation":"Agent instruction file for a repo -- AGENTS.md, CLAUDE.md, a Cursor rule",
+"situation":"Agent instruction file for a repo",
 "terms":{
 "1":"byte cannot code cost count delimit deriv drift exact gate hand kept map marker output pitfall regenerat repository section surviv time written",
 "2":"ai assistant codex coding cursorrul date document edit insid keep mark region run set stop tell unverifi verifi wrong",
@@ -1539,7 +1540,7 @@
 "hangul_anchors":"",
 "label":"omh-iac-change",
 "name":"iac-change",
-"situation":"Infrastructure-as-code change -- Terraform, OpenTofu, Pulumi, a Kubernetes manifest, a Helm chart",
+"situation":"Infrastructure-as-code change",
 "terms":{
 "1":"appli behind between declar kustomization noth output reality valu",
 "2":"blast cloud cluster come config databas detection diff environment gate happen health infra infracost k8s kubectl kustomiz longer match modul month pod preview radius read resourc roll rollback saved set time tofu undo upgrad",
@@ -1556,7 +1557,7 @@
 "hangul_anchors":"",
 "label":"omh-data-pipelines",
 "name":"data-pipelines",
-"situation":"Data pipeline work -- an ETL or streaming job, a backfill or replay, duplicate events, a schema change downstream, a lineage question, a data-quality regression",
+"situation":"Data pipeline work on an ETL or streaming job",
 "terms":{
 "1":"contract impact miss observ output pass past plan read reader repair unknown work",
 "2":"after arriv behind bound break catch chang column count dag dagster dashboard dead doubl downstream drop evolution exactly fell gate last late letter model nightly number question queu regression report topic twic week without",
@@ -1572,7 +1573,7 @@
 "hangul_anchors":"",
 "label":"omh-model-finetuning",
 "name":"model-finetuning",
-"situation":"Fine-tuning a model on your own data -- SFT, DPO, RLVR or a LoRA adapter",
+"situation":"Fine-tuning a model on your own data",
 "terms":{
 "1":"against already availabl beat choos chosen clos comparison decision first gap gate learn noth output plan promot promotion reinforcement retrieval run split their want",
 "2":"actually answer automatically base botch check decid direct favor format higher improv keep matter method one optimization problem qlora rated regress reply say scor ship solv teach thousand user version well whether word worth",
@@ -1588,7 +1589,7 @@
 "hangul_anchors":"",
 "label":"omh-mobile-release",
 "name":"mobile-release",
-"situation":"Releasing an iOS or Android app through the stores -- signing, the privacy manifest, a TestFlight or Play beta, a staged rollout, a hotfix",
+"situation":"Releasing an iOS or Android app through a store",
 "terms":{
 "1":"already back becaus cannot check declaration enforc gate noth output prepar roll start threshold",
 "2":"api appl ask bad boot cert certificat clos connect consol creat devic everyon expedit expir external fastlan fifty halt hotfix internal key keystor know launch misbehav month new nobody older plan privacyinfo profil reach read reason reject replacement requir resubmit review rollout ship stag stop submission tester through time today version week xcprivacy",
@@ -1621,7 +1622,7 @@
 "hangul_anchors":"가명 감정 개인 객정 거래 계좌 고객 구기 구자 기관 너사 대행 드번 등록 락처 래처 력사 록번 메일 명처 명화 민감 민등 민번 번호 벤더 별자 별정 비식 식별 실명 업체 에이 연구 연락 외부 외주 이메 이전 익명 인정 전시 전화 정보 좌번 주민 주소 처리 카드 트너 파트 행사 협력 화번",
 "label":"omh-data-share-review",
 "name":"data-share-review",
-"situation":"Before data leaves the team -- a dataset, log, ticket export or transcript excerpt bound for a vendor, a public issue, a model provider or a training corpus",
+"situation":"Before data leaves the team",
 "terms":{
 "1":"after befor bound bundl call class classify come count crm file inventory keep kept left local map metadata minimiz minimization noth observ output plan raw record secret upload",
 "2":"anonymiz asked attach bug chat copy corpus customer de deidentify direct email excerpt field first hand identify issu leav list mask model number phon pii provider pseudonymis pseudonymisation pseudonymization quasi redaction remov report researcher safe scrub server set spreadsheet still strip support team ticket transcript usag want",
@@ -1638,7 +1639,7 @@
 "hangul_anchors":"",
 "label":"omh-release-cut",
 "name":"release-cut",
-"situation":"Shipping a versioned release -- tag it, stage it behind a canary, or roll back the last deploy",
+"situation":"Shipping a versioned release",
 "terms":{
 "1":"already befor ci execut host named need output perform plan publish undon",
 "2":"bad behind build bump candidat decid exact first five note number percent percentag previous progressiv restor semver send set user week yesterday",
@@ -1655,7 +1656,7 @@
 "hangul_anchors":"갑에 갱신 결제 계좌 구독 구매 구입 기부 납부 드로 보내 사주 송금 예매 예약 이체 입금 좌에 주문 지갑 지불 충전 카드 후원",
 "label":"omh-spend-gate",
 "name":"spend-gate",
-"situation":"Spending money on the user's behalf -- a card checkout, an HTTP 402 or pay-per-request call, a wallet transfer, a booking, a paid data endpoint",
+"situation":"Spending money on the user's behalf",
 "terms":{
 "1":"against approver browser confirm credential deposit first hold ledger metadata move never nobody observ output payee person prov rail refund renewal run term their total user",
 "2":"approv approval call challeng click complet cost credit limit month plac purchas really receipt renew requir retry saved send servic sign sure want went",
@@ -1823,9 +1824,9 @@
 "hangul_anchors":"가지 루닝 모델 양자 인식 자화 증류 지치 치기 프루 학습",
 "label":"omh-model-compression",
 "name":"model-compression",
-"situation":"Making a model smaller or cheaper by changing its weights",
+"situation":"Making a model smaller by changing its weights",
 "terms":{
-"1":"baselin budget calibrat chang comparison data fit gated gguf hold kept making memory noth quality sized target uncompress",
+"1":"baselin budget calibrat chang comparison data fit gated gguf hold kept making memory noth quality sized target through uncompress",
 "2":"accelerator answer cheaper compact copy datacenter distill eval fewer full hardwar int8 knowledg lose macbook magnitud mimic overflow person quantiz question size sparsegpt task version vram without",
 "3":"awq bitsandbyt compress fp8 gptq post run structur unstructur",
 "4":"awar bit distillation prun quantization smaller student train",
@@ -1935,10 +1936,10 @@
 "hangul_anchors":"",
 "label":"omh-jev-ask",
 "name":"jev-ask",
-"situation":"User named Jev for yes/no or pick-one probabilities",
+"situation":"User asks Jev for yes/no or pick-one probabilities",
 "terms":{
-"1":"fit key never order pros return suppli want whether writ",
-"2":"named true user",
+"1":"fit key named never order pros return suppli want whether writ",
+"2":"true user",
 "3":"option pick probability rate scal scor text",
 "4":"typed",
 "6":"question",
@@ -2252,7 +2253,7 @@
 "hangul_anchors":"그인 기기 기준 넥터 도입 라우 러그 리스 마트 멀티 모달 비도 비용 생성 스마 스턴 시스 어시 연동 영상 외부 우팅 인증 자동 제어 채택 커넥 턴트 트홈 티모 플러 홈어",
 "label":"omh-external-connector-readiness",
 "name":"external-connector-readiness",
-"situation":"Evaluating a plugin, connector, or API for adoption",
+"situation":"Evaluating a plugin, connector or API for adoption",
 "terms":{
 "1":"answer assess automatic befor choic coding deletion enabl evidenc executor fallback fresh freshness herm hook inventory miss modality named optional owner paus remov runtim scop toolbelt whether",
 "2":"agent agentchat agy antigravity assistant audio auto awar backend barg behavior benchmark blockchain bridg capability chainlink chat clawsocial cli comparison composio control crustocean crypto cryptocurrency delet devic disabl discovery enough failur gateway genai generation graph handl home integration integrity keychain lifecycl maco mailbox matrix messag microsoft migration minivers new nextcloud oauth observabl oci onequery oracl pair peer platform portability postur privat read real realtim receipt reliabl risk rollback screenshot smart social solana spoken sql stack sync text time tool transaction turn universal video voic weather websocket windy windymail wire workspac wxtrain xmr",

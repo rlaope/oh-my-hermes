@@ -1,6 +1,6 @@
 ---
 name: "omh-running-work-board"
-description: "[omh] Live view of running coding units: showing which coding units are running right now, on which runtime and model, with observed tokens and elapsed time."
+description: "[omh] Live view of running coding units."
 license: MIT
 compatibility: "Requires the omh CLI on PATH (pip install oh-my-hermes)."
 metadata:

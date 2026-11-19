@@ -1,6 +1,6 @@
 ---
 name: "omh-app-debugging"
-description: "[omh] Application code misbehaves -- a wrong value, a flaky test, a lost update: reproduce it first, form competing hypotheses…"
+description: "[omh] Application code misbehaves."
 license: MIT
 metadata:
   hermes:

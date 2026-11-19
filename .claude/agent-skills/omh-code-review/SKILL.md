@@ -1,6 +1,6 @@
 ---
 name: "omh-code-review"
-description: "[omh] Pull request or changes to vet: bug-first review with evidence."
+description: "[omh] Pull request or changes to vet."
 license: MIT
 metadata:
   hermes:

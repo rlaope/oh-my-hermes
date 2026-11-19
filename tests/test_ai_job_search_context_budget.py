@@ -70,12 +70,17 @@ class AiJobSearchContextBudgetTests(unittest.TestCase):
         # 13416 -> 13506 and the digest re-derived: model-compression adds one
         # index line (+90 with its newline); dropping only that line reproduces
         # 4b82ff50...d5ca5 / 13416.
-        # 13506 -> 13589 and the digest re-derived: skill-eval adds one index
-        # line (+83 with its newline); dropping only that line reproduces
-        # a1761286...d05af / 13506.
-        self.assertEqual(_digest(legacy), 'afd66eb537c7bfa5b6f0fc58f9559843ef8d05d09791cfd3acd66651e8af2813')
-        self.assertEqual(len('\n'.join(legacy)), 13589)
-        delta = len('\n'.join(lines)) - 13589
+        # Digest re-derived at the same size: twenty situation clauses were
+        # shortened to end inside the 57-character window, so those index lines
+        # change text at the same cut; the pin before it was a1761286...05af.
+        # 13506 -> 12894 and the digest re-derived: the producer cuts each line
+        # at a word boundary the way Hermes' `clip_skill_description` does, not
+        # at a fixed 57 characters; the pin before it was 7c4f6dc6...b33a.
+        # skill-eval then adds one index line; dropping only that line
+        # reproduces 40241e3b...ba76 / 12894.
+        self.assertEqual(_digest(legacy), 'c370d495d5e44f5f9d639eb7c72b038f7cbb851f5ba7bf6f18f3450c8abe0d2c')
+        self.assertEqual(len('\n'.join(legacy)), 12975)
+        delta = len('\n'.join(lines)) - 12975
         self.assertGreater(delta, 0)
         self.assertLessEqual(delta, INDEX_DELTA_CAP)
         # A catalog ratchet is exact; do not carry the old row's unused slack.
@@ -193,11 +198,12 @@ class AiJobSearchContextBudgetTests(unittest.TestCase):
             # FULL_CAPABILITY_SKILL_SECTION_CHAR_LIMIT); no other row moved, and the pin before it was d09dd42e...786f.
             # Digest re-derived at the same size: agent-evaluation's row names paired_run_decision/v2 where it named
             # v1; no other row moved, and the pin before it was 2da9f59b...f6c9.
-            # skill-eval adds one row to each producer (+3858 full, +937
-            # standalone); dropping only that row reproduces bc66d6c0...eb7d and
-            # 57ef3e89...0794e at the old bases 542640 and 145483.
-            (skill_capabilities, 546498, FULL_ROW_DELTA_CAP,
-             '060360a64ba139ff9ded665e2d44f35da8261d15343fa65a34c5ecc858c96b54',
+            # Digest re-derived: twenty rows' descriptions now end their situation clause inside the Hermes index
+            # window (the detail moves after the colon), 542640 -> 542611; the pin before it was bc66d6c0...eb7d.
+            # skill-eval then adds one row to each producer; dropping only that row reproduces
+            # bc088218...5df4 at 542611 and 57ef3e89...0794e at 145483.
+            (skill_capabilities, 546469, FULL_ROW_DELTA_CAP,
+             'db592e2145246163ab15265c2a02ec9bc483fe4d5e79b98691cd53b06be1ccc6',
              release.FULL_CAPABILITY_SKILL_SECTION_CHAR_LIMIT),
             (standalone_skill_capability_items, 146420, STANDALONE_ROW_DELTA_CAP,
              '7bf537036d7224bf9054e4fc91773dc033d063546267031ea8bbec7f1872578d',
@@ -534,8 +540,12 @@ class AiJobSearchContextBudgetTests(unittest.TestCase):
         # the pin before it was 26bd1012...f890.
         # model-setup's quality bar then gains the onboarding-mode line; only model-setup moves, and the pin
         # before it was ad310846...698b.
+        # Twenty skills' frontmatter descriptions then end their situation clause inside the Hermes index window;
+        # only those twenty bodies move, and the pin before it was 4eaeeb79...958f.
+        # The seven other toolkit owners then name `toolkit/README.md` with its skill_view call; only those
+        # bodies move, and the pin before it was 5bddd1d2...440d.
         # Re-derived for skill-eval: its body joins the legacy set; no existing body moves.
-        self.assertEqual(_digest(legacy_hashes), '0e222d57730bfdf10382aa747d2ef4fd230d7dc7fa7defd4333124a1046a7b0b')
+        self.assertEqual(_digest(legacy_hashes), '9b9505bbff37ff4e7090be71c6f97a1d930bdce197bff28191398d21458faad3')
         legacy = _skill_context_cost_profile('full', legacy_templates, refs)
         current = _skill_context_cost_profile('full', templates, refs)
         # Main's search guidance adds 305; repro-audit's mandatory rails 1,943.
@@ -585,7 +595,7 @@ class AiJobSearchContextBudgetTests(unittest.TestCase):
         # are covered by test_per_turn_budgets, not funded from career slack.
         from omh.maintenance.drift import budget_metrics
         expected = {
-            'skill_index_line_max_chars': 100,
+            'skill_index_line_max_chars': 99,  # Word-boundary cut matching Hermes' clip_skill_description (-1).
             'plugin_tool_schema_chars': 62968,  # Parked DAG waits (+429), delegation backends (+245), six routing-recipe categories (+213), opt-in omh-lsp tools (+2187), opt-in lsp_diagnostics (+396), identity argument (+143), dag node role (+85), dag node owner (+70), dag node local (+37) less the route fallback sentence (-1), then the ultrabrain head in the route example (+5), then omh_dag goal criteria (+226), then the criteria parameter's keep-the-condition description (+95), said in the positive form (+8), then dag node read_only (+45), then the observation parameter's field descriptions and the home-override wording trimmed (-9616), then four tool descriptions said in fewer words (-1225), then unified identities: the omh_dag identity reference (+122), omh_delegate_route `attempt` and identity description (+303), omh_role directory and `identity` argument (+220), then omh_dag escalation (+224).
             'pre_llm_call_context_chars_max': 5977,  # The pi-family runtime rename (+6), the route-hint dedup (-154), then the console choices line (+409).
             'pre_llm_call_context_fallback_chars_max': 7529,  # The same rename (+6), the human-voice primer sentence (+116), the route-hint dedup (-154), then the console choices line (+409).

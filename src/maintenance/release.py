@@ -200,12 +200,17 @@ CONCEPTUAL_AWARENESS_SURFACES = ("request-to-handoff", "executor selection", "co
 # measured from the producer; no headroom.
 # 13502 -> 13592: one `model-compression` index line plus newline (+90),
 # measured from the producer; no headroom.
-# 13592 -> 13675: one `skill-eval` index line plus newline (+83),
-# measured from the producer; no headroom.
-SKILL_INDEX_CHAR_LIMIT = 13675
+# 13592 -> 12970: the producer now cuts descriptions the way Hermes'
+# `clip_skill_description` does, at the last word boundary inside 58
+# characters with trailing punctuation dropped, instead of a fixed 57; every
+# line that was cut mid-word gets shorter. Measured from the producer; no headroom.
+# 12970 -> 13051: one `skill-eval` index line plus newline, measured from
+# the producer after merging fix/skill-harness-fit; no headroom.
+SKILL_INDEX_CHAR_LIMIT = 13051
 # The longest single skill line in that index. Every description is already cut
 # to 60 characters, so what moves this is a longer skill name.
-SKILL_INDEX_LINE_CHAR_LIMIT = 100
+# 100 -> 99: same word-boundary cut as above, measured from the producer.
+SKILL_INDEX_LINE_CHAR_LIMIT = 99
 # The plugin bundle's registered tool schemas, 19 tools when the budget landed
 # (20 with `omh_jev_ask`), serialized as JSON with
 # sorted keys (`src/maintenance/per_turn_context.py`); `omh_todo` and `omh_loop`
@@ -1087,9 +1092,11 @@ PLUGIN_TOOL_SCHEMA_CHAR_LIMIT = 62968
 # 545582 -> 545712 (2026-11-12): design-orchestration's quality bar had three items, so its new fourth line
 # (direction options shown as rendered images) enters the capability row's first-four slice (+130, only that
 # row, 3915 -> 4045); measured from the producer against main 2fcbef29f. No headroom.
-# 545712 -> 549570: one `skill-eval` capability row (3856) plus its separator
-# (+3858); dropping only that row reproduces 545712. Measured from the producer.
-FULL_CAPABILITY_SKILL_SECTION_CHAR_LIMIT = 549570
+# 545712 -> 545683: twenty descriptions end their situation clause inside Hermes' 60-character index
+# window, the detail moved after the colon (-29 across those rows); measured from the producer. No headroom.
+# 545683 -> 549541: one `skill-eval` capability row plus its separator; dropping only that row
+# reproduces 545683. Measured from the producer.
+FULL_CAPABILITY_SKILL_SECTION_CHAR_LIMIT = 549541
 FULL_CAPABILITY_SKILL_ITEM_CHAR_LIMIT = 9000
 # 100000 -> 102070: the same three domain workflows each add one standalone
 # capability row, again measured on the merged tree; warranted growth for three

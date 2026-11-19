@@ -1,6 +1,6 @@
 ---
 name: "omh-adversarial-consensus"
-description: "[omh] Technical proposal facing adversarial scrutiny: independent perspectives attack a proposal, then distill into a bundle a separate planner consumes."
+description: "[omh] Technical proposal facing adversarial scrutiny."
 license: MIT
 metadata:
   hermes:

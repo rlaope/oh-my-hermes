@@ -1498,9 +1498,12 @@ class RouterContentTests(unittest.TestCase):
                 "result -> relevant evidence/limits -> observed accounting (when required) -> "
                 "specific question (if useful)", templates[name].content, name,
             )
-        from omh.skills.render import agent_skill_templates
+        from omh.skills.render import agent_skill_detail_templates, agent_skill_templates
 
+        # A body over the OpenClaw read cap moves its quality bar into references/details.md.
         portable = {template.name: template.content for template in agent_skill_templates()}
+        for detail in agent_skill_detail_templates():
+            portable[detail.skill_name] += detail.content
         for name in ("loop", "ultrawork", "ultraqa"):
             with self.subTest(portable=name):
                 content = portable[omh_skill_display_name(name)]
@@ -1521,11 +1524,13 @@ class RouterContentTests(unittest.TestCase):
 
     def test_delegated_runs_place_observed_accounting_before_optional_question(self) -> None:
         """DAG, work and maestro retain accounting without competing final lines."""
-        from omh.skills.render import agent_skill_templates
+        from omh.skills.render import agent_skill_detail_templates, agent_skill_templates
 
         definitions = {definition.name: definition for definition in installable_skill_definitions()}
         native = {template.name: template.content for template in builtin_skill_templates()}
         portable = {template.name: template.content for template in agent_skill_templates()}
+        for detail in agent_skill_detail_templates():
+            portable[detail.skill_name] += detail.content
         for name in ("ultrawork", "maestro", "dag-ulw"):
             definition = definitions[name]
             sections = [
