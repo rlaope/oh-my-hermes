@@ -3,24 +3,16 @@ import { canRetry, decideHardware, decidePlatform, decideWebgl, LOSS_LIMIT, LOSS
 
 const info = (o: Partial<Parameters<typeof decideWebgl>[0]> = {}) => ({ webgl2: true, renderer: "ANGLE (Apple, Apple M4 Pro, OpenGL 4.1)", vendor: "Google Inc. (Apple)", linux: false, mac: false, ...o });
 
-describe("auto: the standard renderer on every platform until the add-on is measured faster there", () => {
-  it("stays on the standard renderer on macOS, where the bench measured the GPU slower on full-screen redraws", () => {
-    expect(decideWebgl(info({ mac: true }))).toEqual({ allow: false, reason: "macos-measured-slower" });
-    expect(decideWebgl(info({ mac: true, renderer: null, vendor: null })).allow).toBe(false);
+describe("auto: the GPU renderer wherever the hardware allows it, so CLI block art draws without seams", () => {
+  it("lets the hardware rule decide on every platform", () => {
+    for (const mac of [true, false]) expect(decidePlatform({ mac }), JSON.stringify({ mac })).toBeNull();
+    expect(decideWebgl(info({ mac: true }))).toEqual({ allow: true, reason: "hardware" });
+    expect(decideWebgl(info({ mac: true, renderer: null, vendor: null })).allow).toBe(true);
+    expect(decideWebgl(info({ renderer: "ANGLE (NVIDIA, NVIDIA GeForce RTX 4070 Direct3D11 vs_5_0 ps_5_0, D3D11)", vendor: "Google Inc. (NVIDIA)" })).allow).toBe(true);
   });
-  it("stays on the standard renderer with a hardware renderer on Windows and Linux too: nothing was measured there", () => {
-    expect(decideWebgl(info())).toEqual({ allow: false, reason: "not-measured" });
-    expect(decideWebgl(info({ linux: true, renderer: "Mesa Intel(R) UHD Graphics 620 (KBL GT2)", vendor: "Intel" }))).toEqual({ allow: false, reason: "not-measured" });
-    expect(decideWebgl(info({ renderer: "ANGLE (NVIDIA, NVIDIA GeForce RTX 4070 Direct3D11 vs_5_0 ps_5_0, D3D11)", vendor: "Google Inc. (NVIDIA)" }))).toEqual({ allow: false, reason: "not-measured" });
-  });
-  it("never allows the add-on, whatever the machine", () => {
-    for (const webgl2 of [true, false])
-      for (const mac of [true, false])
-        for (const linux of [true, false])
-          for (const renderer of [null, "Apple M4 Pro", "llvmpipe", "ANGLE (Intel, Intel(R) Iris(R) Xe Graphics Direct3D11)"]) {
-            expect(decidePlatform({ mac }), JSON.stringify({ mac })).not.toBeNull();
-            expect(decideWebgl({ webgl2, mac, linux, renderer, vendor: null }).allow, JSON.stringify({ webgl2, mac, linux, renderer })).toBe(false);
-          }
+  it("still keeps the standard renderer without WebGL2 or on a software rasterizer", () => {
+    expect(decideWebgl(info({ mac: true, webgl2: false, renderer: null, vendor: null }))).toEqual({ allow: false, reason: "no-webgl2" });
+    expect(decideWebgl(info({ linux: true, renderer: "llvmpipe (LLVM 15.0.7, 256 bits)", vendor: "" }))).toEqual({ allow: false, reason: "software-renderer" });
   });
 
   describe("the probe", () => {
@@ -28,21 +20,28 @@ describe("auto: the standard renderer on every platform until the add-on is meas
       vi.unstubAllGlobals();
       resetWebglProbe();
     });
-    it.each(["MacIntel", "Win32", "Linux x86_64"])("makes no WebGL context to say no on %s", (platform) => {
+    it("asks one throw-away WebGL2 canvas what the hardware is, then remembers", () => {
       resetWebglProbe();
-      const createElement = vi.fn(() => {
-        throw new Error("auto asked the page for a canvas");
-      });
-      vi.stubGlobal("navigator", { platform, userAgent: platform });
+      const lose = vi.fn();
+      const gl = { getExtension: (n: string) => (n === "WEBGL_lose_context" ? { loseContext: lose } : null), getParameter: () => null };
+      const createElement = vi.fn(() => ({ getContext: () => gl }));
+      vi.stubGlobal("navigator", { platform: "MacIntel", userAgent: "Mac" });
       vi.stubGlobal("document", { createElement });
-      expect(probeWebgl().allow).toBe(false);
-      expect(probeWebgl().reason).toBe(platform === "MacIntel" ? "macos-measured-slower" : "not-measured");
-      expect(createElement).not.toHaveBeenCalled();
+      expect(probeWebgl()).toEqual({ allow: true, reason: "hardware" });
+      expect(probeWebgl().allow).toBe(true);
+      expect(createElement).toHaveBeenCalledTimes(1);
+      expect(lose).toHaveBeenCalledTimes(1);
+    });
+    it("keeps the standard renderer when the page has no WebGL2", () => {
+      resetWebglProbe();
+      vi.stubGlobal("navigator", { platform: "MacIntel", userAgent: "Mac" });
+      vi.stubGlobal("document", { createElement: () => ({ getContext: () => null }) });
+      expect(probeWebgl()).toEqual({ allow: false, reason: "no-webgl2" });
     });
   });
 });
 
-describe("the hardware rule, for a platform that has been measured", () => {
+describe("the hardware rule", () => {
   it("allows a hardware renderer", () => {
     expect(decideHardware(info())).toEqual({ allow: true, reason: "hardware" });
   });

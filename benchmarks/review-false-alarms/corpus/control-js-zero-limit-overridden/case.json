@@ -1,0 +1,11 @@
+{
+  "id": "control-js-zero-limit-overridden",
+  "kind": "control",
+  "language": "javascript",
+  "expected": "bug",
+  "bug_location": {
+    "path": "web/api.js",
+    "line": 6
+  },
+  "why": "opts.limit || 50 replaces a deliberate limit of 0 with 50. The doc comment says 0 asks for the count only, and web/summary.js passes limit: 0, so the summary now downloads 50 rows."
+}

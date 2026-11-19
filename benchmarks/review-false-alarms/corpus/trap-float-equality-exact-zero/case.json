@@ -1,0 +1,7 @@
+{
+  "id": "trap-float-equality-exact-zero",
+  "kind": "trap",
+  "language": "python",
+  "expected": "clean",
+  "why": "Comparing a float with == is usually fragile, but used and limit are ints and limit > 0 here, so used / limit is exactly 0.0 precisely when used == 0 for any quota that fits in a float. The comparison has no rounding path to a near-zero value."
+}
