@@ -2,7 +2,9 @@
 // session started (`runs.cli` for its agent and folder, the run whose owner is the session's agent id), drawn with
 // the same header, graph and node detail as a bot's Plans, re-read while the session works and when a subagent
 // moves. Before the agent's record exists, the subagents the chat has seen are listed from the chat itself.
-// Read-only: nothing here assigns, steers or stops a subagent.
+// Read-only: nothing here assigns, steers or stops a subagent. A TERMINALS session in a split gets the split drawn
+// small at the top (each pane a rounded box in the layout's proportions with its CLI mark and title, the focused one
+// filled); a click on a box focuses that pane, and the Plans below follow it.
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { Bot } from "../lib/protocol";
 import type { AgentRun, AgentRunSummary, CliAgent, RunDetail } from "../lib/runs";
@@ -18,7 +20,11 @@ import { LIVE_POLL_MS } from "../runs/live";
 import { SubagentLine, waitingSubs } from "../chat/activity/Subagents";
 import { getSessions, useSessions } from "./sessions";
 import type { SessionRec } from "./agents";
-import { folderName } from "./agents";
+import { folderName, termFallbackName, termMarkAgent } from "./agents";
+import { TermRowMark } from "./TermRowMark";
+import { focusSplitPane } from "./SplitView";
+import { groupOf, sessionOf, useSplit } from "./splitState";
+import { paneRects } from "../terminal/layout";
 import { pickTitle } from "./titles";
 import "../runs/runs.css";
 
@@ -135,6 +141,7 @@ export function SessionPlans({ rec, chat, onClose }: { rec: SessionRec; chat: Ch
         </IconButton>
       </div>
       <div className="pn-body rn" data-testid="panel-runs" data-session={rec.id}>
+        <SplitMap rec={rec} />
         <div className="pn-sec">{t("plans.session")}</div>
         {summary && run ? (
           <div className="rn-run" data-testid="run-graph-box" data-run={summary.id} data-state={summary.state}>
@@ -155,6 +162,50 @@ export function SessionPlans({ rec, chat, onClose }: { rec: SessionRec; chat: Ch
         )}
       </div>
     </div>
+  );
+}
+
+/** The split the session is in, drawn small: a box per pane in the layout's proportions (CLI mark and title), the
+ *  focused one filled; a click focuses that pane. Nothing when the session is not in a split. */
+function SplitMap({ rec }: { rec: SessionRec }) {
+  const sp = useSplit();
+  const ss = useSessions();
+  const g = groupOf(sp.groups, rec.id);
+  if (!g) return null;
+  const rects = [...paneRects(g.layout)];
+  return (
+    <>
+      <div className="pn-sec">{t("split.map")}</div>
+      <div className="ss-map" data-testid="split-map" data-panes={rects.length}>
+        {rects.map(([n, r]) => {
+          const id = sessionOf(n);
+          const row = ss.list.find((x) => x.id === id);
+          if (!row) return null;
+          const name = pickTitle(row, termFallbackName(row, ss.agents)).title;
+          const on = id === rec.id;
+          return (
+            <button
+              key={id}
+              type="button"
+              className={`ss-map-box${on ? " on" : ""}`}
+              style={{ left: `${r.x * 100}%`, top: `${r.y * 100}%`, width: `${r.w * 100}%`, height: `${r.h * 100}%` }}
+              aria-pressed={on}
+              aria-label={t("split.mapFocus", { name })}
+              title={name}
+              data-testid="split-map-box"
+              data-session={id}
+              data-focused={on ? "true" : "false"}
+              onClick={() => focusSplitPane(id)}
+            >
+              <span className="ss-map-in">
+                <TermRowMark agent={termMarkAgent(row)} size={12} />
+                <span className="ss-map-name">{name}</span>
+              </span>
+            </button>
+          );
+        })}
+      </div>
+    </>
   );
 }
 
