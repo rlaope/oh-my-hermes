@@ -524,7 +524,9 @@ class AiJobSearchContextBudgetTests(unittest.TestCase):
         # the pin before it was 26bd1012...f890.
         # model-setup's quality bar then gains the onboarding-mode line; only model-setup moves, and the pin
         # before it was ad310846...698b.
-        self.assertEqual(_digest(legacy_hashes), '4eaeeb7940eff0e187bb6c7683ad69496f2609df37f8b6fee7144ea10705958f')
+        # show-reel then gains the cut-sheet lane pointer; only show-reel moves, and the pin before it was
+        # 4eaeeb79...958f.
+        self.assertEqual(_digest(legacy_hashes), '8613df8c427001b785a363e3774c4efa180a9bb0359993c67c1550ac129d38fb')
         legacy = _skill_context_cost_profile('full', legacy_templates, refs)
         current = _skill_context_cost_profile('full', templates, refs)
         # Main's search guidance adds 305; repro-audit's mandatory rails 1,943.
