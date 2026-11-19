@@ -674,6 +674,10 @@ _MODEL_FAMILY_ALIASES: Final[tuple[tuple[str, str], ...]] = (
     ("anthropic-claude-", "claude"),
     ("qwen3-", "qwen"),
     ("qwen3.", "qwen"),
+    # Qwen4-Max (2026-11-16) opens the Qwen4 generation; bounded the same way
+    # as Qwen3, so `qwen4x-max` and a bare `qwen4` stay unknown.
+    ("qwen4-", "qwen"),
+    ("qwen4.", "qwen"),
 )
 _MODEL_FAMILY_ALIAS_EXCLUSIONS: Final[tuple[str, ...]] = ("openai-gpt-image-",)
 _CLAUDE_TIER_ALIASES: Final[frozenset[str]] = frozenset({"opus", "sonnet", "haiku", "fable", "mythos"})

@@ -11,6 +11,19 @@ All notable changes will be documented here.
   bug. `code-review`, `production-audit` and `verification-gate` now end every result with a `Not checked` list (each
   entry with its reason, or `Not checked: none` only after full coverage), so a short findings list no longer reads as
   "the rest is clean".
+
+- **Qwen4-Max is onboarded.** Alibaba released it on 2026-11-16. Before this, every Qwen4 id (`qwen4-max`,
+  `qwen/qwen4-max`, `qwen4-max-preview`) classified `unknown` and got generic discipline; they now classify `qwen`.
+  `qwen4-max` has an exact contract read from docs.qwencloud.com: 1M context, hybrid thinking on by default, and a
+  `low` / `high` / `xhigh` ladder with `high` as the default. The vendor maps `minimal`, `medium` and `max` onto those
+  three without an error, so OMH raises nothing and the contract records the table. Cost estimates use the Singapore
+  list price, $1.50 / $4.50 per million tokens with cached input at $0.075. The Qwen calibration is now
+  version-aware: the family block still describes the non-thinking Qwen3-Coder, and Qwen4-Max gets its own block
+  that does not forbid thinking. That block is editorial and unmeasured. No shipped chain names Qwen4-Max, because
+  Qwen3.8-Max held no slot either; to try it, use `omh model-chains set <category> "qwen4-max:high, ..."`. The Token
+  Plan preview is recognized only, with no contract and no price. Hermes through origin/main `fe8b920cae` sends no
+  effort on its DashScope profiles, so the model runs at `high` there whatever effort is routed.
+
 - **A cheap dag-ulw node that hits a hard judgement asks for a stronger model instead of guessing.** When a node's
   child cannot settle a design choice or a root cause, it stops before editing and writes `ESCALATE: <question>` into
   its handoff; the node is settled `escalated` and offered again one category up (quick, unspecified-low,

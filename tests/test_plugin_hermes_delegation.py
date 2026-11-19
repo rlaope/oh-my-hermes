@@ -542,6 +542,9 @@ class MixtureCategoryProjectionTest(unittest.TestCase):
         # Alibaba publishes no per-model cache-hit rate: the default tenth.
         "qwen3.8-max": (2.0, 6.0, 0.20),
         "qwen3.8-flash": (0.15, 0.47, 0.015),
+        # Catalog sync, 2026-11-19: Qwen4-Max publishes its own cache rate,
+        # a twentieth of input (Singapore list).
+        "qwen4-max": (1.5, 4.5, 0.075),
         "solar-pro4": (0.30, 1.20, 0.06),
         "minimax-m3": (0.30, 1.20, 0.06),
         "minimax-m3.1-flash": (0.15, 0.60, 0.015),
@@ -630,12 +633,12 @@ class MixtureCategoryProjectionTest(unittest.TestCase):
                 self.assertNotIn(
                     "opencode", hermes_delegation_module.HERMES_MIXTURE_ALIAS_PROVIDER_FAMILIES[model_id]
                 )
-        # Qwen 3.8, Solar Pro 4, and MiniMax have no first-party family in the
+        # Qwen 3.8, Qwen4-Max, Solar Pro 4, and MiniMax have no first-party family in the
         # vocabulary that was observed serving them. OpenRouter lists some of
         # these ids, but a relay-only row would turn every first-party
         # provider's verdict into False, so there is no row and the verdict
         # stays unknown.
-        for model_id in ("qwen3.8-max", "qwen3.8-flash", "solar-pro4", "minimax-m3", "minimax-m3.1-flash"):
+        for model_id in ("qwen3.8-max", "qwen3.8-flash", "qwen4-max", "solar-pro4", "minimax-m3", "minimax-m3.1-flash"):
             with self.subTest(model_id=model_id):
                 self.assertNotIn(model_id, hermes_delegation_module.HERMES_MIXTURE_ALIAS_PROVIDER_FAMILIES)
                 self.assertIsNone(provider_serves_alias(model_id, "qwen-oauth"))
@@ -817,7 +820,12 @@ class MixtureCategoryProjectionTest(unittest.TestCase):
         # Astra and GPT-6.1 Sol on 2026-11-18 (with them their declared
         # `-pro` / `-fast` / `-flex` aliases); their recognition-only provider
         # rows are checked in test_provider_entitlements.
-        unchained = {"jev-1.13.0", "gpt-6.1-terra", "gpt-6-cyber", "claude-fable-5-1", "gpt-6-astra", "gpt-6.1-sol"}
+        # Qwen4-Max (onboarded 2026-11-19) is in no shipped chain and has no
+        # provider row, on the Qwen 3.8 terms checked in the catalog-sync test.
+        unchained = {
+            "jev-1.13.0", "gpt-6.1-terra", "gpt-6-cyber", "claude-fable-5-1", "gpt-6-astra", "gpt-6.1-sol",
+            "qwen4-max",
+        }
         for model_id in (*contracts, *expected):
             contract_id = expected.get(model_id, (model_id,))[0]
             if contract_id in unchained:
