@@ -12,6 +12,7 @@ question.
 from __future__ import annotations
 
 import unittest
+from unittest.mock import patch
 
 from _delegation_graphs import graph, lane, root
 from test_tui_agent_view import with_graph
@@ -271,6 +272,13 @@ class RowTests(unittest.TestCase):
 
 class EndLineTests(unittest.TestCase):
     """As the longest wait ends between turns with nothing else waiting, one muted row says so for 3 s."""
+
+    def setUp(self) -> None:
+        # `askable` as on POSIX, so a host process's end can be asked on Windows too (`test_tui_background_row`'s
+        # `ask_on_any_platform`); the rows are what is tested here.
+        patcher = patch("omh.tui.background.ON_POSIX", True)
+        patcher.start()
+        self.addCleanup(patcher.stop)
 
     def test_a_process_end_is_never_called_passed_or_failed(self) -> None:
         app, clock, _wall = waiting_app(procs=(TESTS,))
