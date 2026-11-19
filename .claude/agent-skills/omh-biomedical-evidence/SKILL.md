@@ -1,6 +1,6 @@
 ---
 name: "omh-biomedical-evidence"
-description: "[omh] Public variant claims to cross-check: retrieve and reconcile source-labelled biomedical evidence with identity, conflict and freshness checks."
+description: "[omh] Public variant claims to cross-check."
 license: MIT
 metadata:
   hermes:

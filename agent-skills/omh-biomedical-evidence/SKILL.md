@@ -1,6 +1,6 @@
 ---
 name: "omh-biomedical-evidence"
-description: "[omh] Public variant claims to cross-check: retrieve and reconcile source-labelled biomedical evidence with identity, conflict and freshness checks. Use when the user says: biomedical-evidence, biomedical evidence reconciliation, ClinVar cross-check, variant evidence matrix, BioMCP capture reconciliation."
+description: "[omh] Public variant claims to cross-check."
 license: MIT
 metadata:
   hermes:

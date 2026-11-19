@@ -39,6 +39,7 @@ from .catalog_types import (
     HERMES_SCANNER_EXCLUDED_TERMS,
     HermesReferenceLine,
     HermesSkillLine,
+    OMH_DESCRIPTION_PREFIX,
     LLM_APP_DEV_EVAL_DELIVERABLES,
     LLM_APP_DEV_PUBLIC_BOARD_ACTIONS,
     LLM_APP_DEV_RAILS,
@@ -612,12 +613,25 @@ def frontmatter_description(definition: SkillDefinition) -> str:
 
 
 def agent_frontmatter_description(definition: SkillDefinition) -> str:
-    """Keep catalog meaning; drop the optional trigger tail before a host hides it."""
+    """The portable listing description: `[omh] <situation clause>.` and nothing else.
+
+    Codex and Claude Code list every skill's description inside about 8,000
+    characters and OpenClaw inside 18,000, so the full catalog text with its
+    trigger tail (42,581 characters for 123 skills) was shortened, dropped or
+    left out of the list. The situation clause, the text before the first `: `
+    of the catalog description, is what a model reads to decide whether the skill
+    applies; the "what it does" part and the trigger list stay in the body
+    ("Why This Exists" and the "Strong routing signals" list). A description
+    with no clause separator is kept whole. Picker aliases stay, since a body
+    need not name them (two skills carry any).
+    """
     base = omh_description(definition.description)
     if not definition.description.strip() or not 1 <= len(base) <= 1024:
         raise ValueError(f"{definition.name}: Agent Skills description must be 1-1024 characters")
-    full = frontmatter_description(definition)
-    return full if len(full) <= 1024 else base
+    prefix = OMH_DESCRIPTION_PREFIX if base.lower().startswith(OMH_DESCRIPTION_PREFIX) else ""
+    clause = base[len(prefix):].partition(": ")[0].rstrip(" .,;:-")
+    aliases = _safe_aliases(definition) if definition.name != "oh-my-hermes" else []
+    return f"{prefix}{clause}." + (" Aliases: " + ", ".join(aliases) + "." if aliases else "")
 
 
 def _frontmatter(
@@ -3438,16 +3452,85 @@ def agent_skill_template(definition: SkillDefinition) -> SkillTemplate:
     The per-skill unit of `agent_skill_templates`; the caller decides
     portability, so this renders whatever definition it is given.
     """
-    return SkillTemplate(omh_skill_display_name(definition.name), workflow_skill_from_definition(
-        definition, definition.name, target="agent-skills",
-    ).content)
+    content = workflow_skill_from_definition(definition, definition.name, target="agent-skills").content
+    return SkillTemplate(omh_skill_display_name(definition.name), split_for_read_cap(content)[0])
+
+
+def agent_skill_detail_templates(
+    definitions: Iterable[SkillDefinition] | None = None,
+) -> list[SkillReferenceTemplate]:
+    """The `references/details.md` each over-cap portable body moved its catalog metadata into.
+
+    `definitions` defaults to every portable skill; a caller holding one skill
+    passes that one definition and gets its slice.
+    """
+    if definitions is None:
+        from .catalog_portable import portable_skill_names
+
+        names = frozenset(portable_skill_names())
+        definitions = [d for d in builtin_definitions() if omh_skill_display_name(d.name) in names]
+    result = []
+    for definition in definitions:
+        content = workflow_skill_from_definition(definition, definition.name, target="agent-skills").content
+        details = split_for_read_cap(content)[1]
+        if details is not None:
+            result.append(SkillReferenceTemplate(omh_skill_display_name(definition.name), PORTABLE_DETAILS_PATH, details))
+    return result
+
+
+# OpenClaw 2026.9+ hands a skill read back only up to a cap that depends on
+# the model context: 16,000 weighted characters under 100K tokens, with CJK
+# characters counted as 4 or more (SkillEvaluator 1.0.1 openclaw profile,
+# verified 2026-11-01 against OpenClaw 2026.10.9). Past it the read is refused
+# or cut, and the model works from part of the instructions. A portable body
+# over `PORTABLE_READ_CAP` therefore moves its `## Catalog Metadata` section
+# (the quality bar, the longest part) into `references/details.md` and keeps
+# a pointer in its place. The Hermes `skills/` bodies are not split: Hermes'
+# skill_view budget is 100,000 characters.
+PORTABLE_READ_CAP = 15_000
+PORTABLE_DETAILS_PATH = "references/details.md"
+PORTABLE_SPLIT_SECTION = "## Catalog Metadata\n"
+PORTABLE_DETAILS_POINTER = (
+    "## Catalog Metadata\n\n"
+    f"Read `{PORTABLE_DETAILS_PATH}` before you act: it holds this skill's quality bar and catalog "
+    "metadata, kept out of this file so the whole of it fits in one read on every host.\n\n"
+)
+_CJK_RANGES = (
+    (0x1100, 0x11FF), (0x2E80, 0x9FFF), (0xA000, 0xA4FF), (0xAC00, 0xD7FF),
+    (0xF900, 0xFAFF), (0xFE10, 0xFE4F), (0xFF01, 0xFFE6), (0x20000, 0x3347F),
+)
+
+
+def openclaw_read_chars(text: str) -> int:
+    """`text` as OpenClaw's read cap counts it: UTF-16 units, each CJK character as 4."""
+    units = len(text.encode("utf-16-le", "surrogatepass")) // 2
+    return units + sum(3 for ch in text if any(low <= ord(ch) <= high for low, high in _CJK_RANGES))
+
+
+def split_for_read_cap(content: str) -> tuple[str, str | None]:
+    """`(SKILL.md, details)`: unchanged with `None` when it fits, else the catalog metadata moved out.
+
+    The moved section is kept byte for byte: replacing `PORTABLE_DETAILS_POINTER`
+    in the returned SKILL.md with the returned details gives back `content`.
+    """
+    if openclaw_read_chars(content) <= PORTABLE_READ_CAP:
+        return content, None
+    start = content.find("\n" + PORTABLE_SPLIT_SECTION) + 1
+    if start == 0 or PORTABLE_DETAILS_POINTER in content:
+        raise ValueError("portable SKILL.md over the read cap has no single catalog metadata section to move")
+    following = content.find("\n## ", start + len(PORTABLE_SPLIT_SECTION))
+    end = len(content) if following < 0 else following + 1
+    head = content[:start] + PORTABLE_DETAILS_POINTER + content[end:]
+    if openclaw_read_chars(head) > PORTABLE_READ_CAP:
+        raise ValueError("portable SKILL.md is over the read cap even without its catalog metadata")
+    return head, content[start:end]
 
 
 def agent_skill_reference_templates() -> list[SkillReferenceTemplate]:
     """Only reviewed reference contracts; new references fail closed."""
     from .packaging import builtin_skill_reference_templates
 
-    return portable_reference_templates(builtin_skill_reference_templates())
+    return [*portable_reference_templates(builtin_skill_reference_templates()), *agent_skill_detail_templates()]
 
 
 def portable_reference_templates(

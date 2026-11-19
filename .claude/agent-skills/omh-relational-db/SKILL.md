@@ -1,6 +1,6 @@
 ---
 name: "omh-relational-db"
-description: "[omh] Database work on a relational store: a slow query, an index to size, a migration on a big table, a lock taken during deploy, N+1 queries…"
+description: "[omh] Database work on a relational store."
 license: MIT
 metadata:
   hermes:

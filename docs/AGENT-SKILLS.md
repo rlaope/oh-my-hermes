@@ -162,20 +162,52 @@ skills, Claude Code drops some descriptions to fit the listing's character
 budget, which removes the keywords Claude needs to match your request. The
 budget scales at 1% of the model's context window."
 
-The whole portable pack did not fit. So the Claude copy, generated into
-`.claude/agent-skills/` and installed by `.claude/install.sh`, `.ps1` and the
-CLI's `.claude/skills` root, changes one thing: each `SKILL.md`'s frontmatter
-`description:` is cut to its lead (the text before the generated ` Use when the
-user says:` trigger list) and, if that is still longer than
-`CLAUDE_DESCRIPTION_CAP` (160 characters, `src/install/agent_skills_projection.py`),
-to the last clause boundary under the cap, else the last word, never ending on
-a function word, and marked with `…` so a cut reads as a cut. A lead that already
-fits is kept whole. The leading `[omh] ` stays. All 123
-skills stay listed and model-invocable; no flag and no extra skill is added.
-The trigger phrases remain in the portable pack and in the skill bodies.
-Bodies, references and toolkit files are byte-identical to `agent-skills/`,
-and `.agents/skills` and the Hermes `skills/` tree do not change. The built
-descriptions run from 61 to 160 characters (mean 134).
+The whole portable pack did not fit. Codex (about 8,000 characters, 2% of the
+context window) and OpenClaw (18,000 characters or 150 skills, then every
+description cut to 220 and some skills left out) list descriptions inside a
+budget too. So every portable `SKILL.md` frontmatter `description:` is now only
+`[omh] <situation clause>.`: the text before the first `: ` of the catalog
+description, which names the situation the skill is for. A skill with picker
+aliases keeps an ` Aliases: …` tail (two skills). The rest of the catalog text,
+what the skill does and its ` Use when the user says:` trigger list, is in the
+body: "Why This Exists" and the "Strong routing signals" list. The Hermes
+`skills/` tree keeps its full descriptions.
+
+| Pack (123 skills) | Description chars before | After | Longest |
+| --- | --- | --- | --- |
+| `agent-skills/` → `.agents/skills` | 42,581 | 5,633 | 103 |
+| `.claude/agent-skills/` → `.claude/skills` | 16,474 | 5,633 | 103 |
+
+That leaves about 2,300 characters (about 40 skills at the mean of 46) before
+the 8,000 budget. `tests/test_agent_skills_host_budgets.py` holds both packs to
+8,000 total characters, 150 skills and 220 characters per description.
+
+The Claude copy, generated into `.claude/agent-skills/` and installed by
+`.claude/install.sh`, `.ps1` and the CLI's `.claude/skills` root, still passes
+each description through `CLAUDE_DESCRIPTION_CAP` (220 characters,
+`src/install/agent_skills_projection.py`): the text before a trigger list, cut at
+the last clause boundary under the cap, else the last word, never ending on a
+function word, and marked with `…`. No portable description reaches the cap
+today, so the copy is byte-identical to `agent-skills/`. All 123 skills stay
+listed and model-invocable; no flag and no extra skill is added.
+
+**Single-read cap.** OpenClaw 2026.9+ returns a `SKILL.md` read only up to
+16,000 weighted characters under a 100K-token context (each CJK character
+counts as 4 or more); past that the model gets a cut prefix. A portable body
+over 15,000 such characters therefore moves its `## Catalog Metadata` section
+(the quality bar) into `references/details.md` and keeps a heading with one
+line pointing at it. The moved text is byte-for-byte the section it replaced.
+Seven bodies are split (`omh-external-connector-readiness`, `omh-frontend`,
+`omh-llm-app-dev`, `omh-visual-qa`, `ulw-loop`, `ulw-research`, `ulw-work`);
+the largest portable `SKILL.md` now reads as 14,368. Hermes bodies are not
+split.
+
+The host limits above come from SkillEvaluator 1.0.1's harness profiles,
+verified 2026-11-01 against Claude Code 2.1.316, Codex 0.166.0 and OpenClaw
+2026.10.9. Its `harness-check` on the regenerated packs reports none of
+CC-LIST-BUDGET, CX-LIST-BUDGET, OW-COMPACT, OW-PROMPT-CAP or OW-READ-BUDGET.
+The live measurement below was taken on the earlier 160-character Claude copy
+and has not been repeated on this pack.
 
 Measured on 2026-11-13 with Claude Code 2.1.322 and `claude-opus-5-5` (1M
 context), in a fresh git project after `.claude/install.sh`, with an empty
@@ -183,23 +215,23 @@ context), in a fresh git project after `.claude/install.sh`, with an empty
 
 | Pack | Skills listing | OMH rows | With a description | Name-only (`< 20`) |
 | --- | --- | --- | --- | --- |
-| before this change | 9.9k | 123 | 61 | 62 |
-| this pack (cap 160) | 8.5k | 123 | 123 | 0 |
+| before the cap-160 copy | 9.9k | 123 | 61 | 62 |
+| cap-160 copy | 8.5k | 123 | 123 | 0 |
 
 The same pack in user scope (`install.sh --user`, scratch `HOME`) lists 123 of
-123 with a description. Before this change, the rows that lost their
+123 with a description. Before the cap-160 copy, the rows that lost their
 description were everything from `omh-localization-review` on, `omh-plan` and
 all eight `ulw-*` among them. A `< 20` row can also be a description of about
-45 characters or less; the shortest description here is 61, so `< 20` means
+45 characters or less; the shortest description in that copy was 61, so `< 20` means
 dropped.
 
 **What a model picks is a different measurement.** Four task prompts were run
 with `claude -p --setting-sources project --tools "Read,Skill" --max-turns 4`
 (same version and model, 2026-11-12 and 2026-11-13). For three of them the model
-loaded the fitting skill in every run: 3 of 3 on the pack before this change and
-6 of 6 on this pack. For the fourth, a slow Postgres query whose fitting skill is
-`omh-relational-db`, it loaded the skill in 0 of 1 runs before this change and in
-2 of 8 on this pack (four runs with each of the two endings tried for a cut
+loaded the fitting skill in every run: 3 of 3 on the pack before the cap-160 copy and
+6 of 6 on the cap-160 copy. For the fourth, a slow Postgres query whose fitting skill is
+`omh-relational-db`, it loaded the skill in 0 of 1 runs before the cap-160 copy and in
+2 of 8 on the cap-160 copy (four runs with each of the two endings tried for a cut
 description, `.` and `…`; one load with each). These runs show no difference
 between the two packs in what a model picks, and they are too few to give a rate.
 
@@ -222,12 +254,12 @@ The script prints, per source, how many skills are listed, how many have a
 description, and how many are name-only. It reads the saved file and does not
 run `claude`.
 
-**When your own listing is already full.** The shorter descriptions do not
+**When your own listing is already full.** Shorter descriptions do not
 create budget. With the owner's real home on 2026-11-13 (55 user skills, 124
 plugin skills, listing 9.9k), an empty project kept 35 of 55 user
-descriptions; with the pack before this change the user skills kept 25 of 55
-and the project 5 of 123 OMH descriptions; with this pack, 28 of 55 and 6 of
-123. A full listing is not fixed by this change. Claude Code documents these
+descriptions; with the pack before the cap-160 copy the user skills kept 25 of 55
+and the project 5 of 123 OMH descriptions; with the cap-160 copy, 28 of 55 and 6 of
+123. A full listing is not fixed by shorter descriptions. Claude Code documents these
 settings for it:
 
 - `skillListingBudgetFraction` raises the share of the context window the
@@ -477,10 +509,10 @@ surfaces. Resolve reference paths from the loaded skill's base directory
 (`{baseDir}` where supplied), not a hardcoded home. Host precedence and existing
 same-name skills can affect nomination; installation does not settle it.
 
-The renderer enforces 1-1024-character descriptions. If the catalog description
-plus its optional trigger/alias tail exceeds that budget, this target drops the
-tail; an over-budget base description fails generation. Hermes bytes are pinned
-and unchanged.
+The renderer enforces 1-1024-character catalog descriptions; an over-budget
+one fails generation. The portable description is the situation clause (see
+[Claude Code skill listing](#claude-code-skill-listing)). Hermes bytes are
+pinned and unchanged.
 
 ## Host evidence matrix
 

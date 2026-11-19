@@ -1,6 +1,6 @@
 ---
 name: "omh-repro-audit"
-description: "[omh] Evaluation logs versus reported paper conditions: audit supplied HellaSwag results with exact scores and review-gated evidence; never run a model."
+description: "[omh] Evaluation logs versus reported paper conditions."
 license: MIT
 compatibility: "Requires the omh CLI on PATH (pip install oh-my-hermes)."
 metadata:

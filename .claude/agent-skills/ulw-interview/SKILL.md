@@ -1,6 +1,6 @@
 ---
 name: "ulw-interview"
-description: "[omh] Vague, underspecified request: one-question-at-a-time clarification."
+description: "[omh] Vague, underspecified request."
 license: MIT
 metadata:
   hermes:

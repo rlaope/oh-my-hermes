@@ -1,6 +1,6 @@
 ---
 name: "omh-release-cut"
-description: "[omh] Shipping a versioned release: tag it, stage it behind a canary, or roll back the last deploy; decide what goes in, the version, the rollout stages, and a rollback with its trigger and exact command before it is needed. Use when the user says: release-cut, release cut, cut a release, cut the release, cut a new release, tag a release, tag the release, release candidate."
+description: "[omh] Shipping a versioned release."
 license: MIT
 metadata:
   hermes:

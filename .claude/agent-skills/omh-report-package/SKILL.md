@@ -1,6 +1,6 @@
 ---
 name: "omh-report-package"
-description: "[omh] Periodic report for executives: weekly/monthly reports, executive briefs, PPT-ready outlines, and upload packages."
+description: "[omh] Periodic report for executives."
 license: MIT
 metadata:
   hermes:

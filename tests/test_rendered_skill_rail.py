@@ -20,6 +20,7 @@ from omh.skills.render import (
     _CANONICAL_LINE_PREFIXES,
     _ROUTER_CANONICAL_REFERENCES,
     _UPSTREAM_ATTRIBUTION,
+    agent_skill_detail_templates,
     agent_skill_templates,
     builtin_skill_templates,
     portable_reference_templates,
@@ -91,7 +92,8 @@ class RenderedSkillRailTests(unittest.TestCase):
         self.hermes_refs = builtin_skill_reference_templates()
         self.hermes = {t.name: t.content for t in builtin_skill_templates()}
         self.portable = {t.name: t.content for t in agent_skill_templates()}
-        self.portable_refs = portable_reference_templates(self.hermes_refs)
+        # Plus the `references/details.md` an over-read-cap portable body moved its metadata into.
+        self.portable_refs = [*portable_reference_templates(self.hermes_refs), *agent_skill_detail_templates()]
 
     def _projections(self):
         yield "hermes", self.hermes, [(r.skill_name, r.relative_path, r.content) for r in self.hermes_refs]

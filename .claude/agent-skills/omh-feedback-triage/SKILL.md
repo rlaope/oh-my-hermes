@@ -1,6 +1,6 @@
 ---
 name: "omh-feedback-triage"
-description: "[omh] Unsorted customer feedback and bug reports: cluster customer signals and choose the next workflow."
+description: "[omh] Unsorted customer feedback and bug reports."
 license: MIT
 metadata:
   hermes:

@@ -1,6 +1,6 @@
 ---
 name: "omh-geospatial-analysis"
-description: "[omh] Spatial layers to intersect: execute CRS-safe polygon overlay with measured areas, validated geometry and reproducible GeoJSON outputs."
+description: "[omh] Spatial layers to intersect."
 license: MIT
 metadata:
   hermes:

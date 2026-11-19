@@ -1,6 +1,6 @@
 ---
 name: "omh-molecular-docking"
-description: "[omh] Prepared PDBQT inputs: run bounded standalone Vina docking with real poses, scores and replay provenance; never infer efficacy or safety."
+description: "[omh] Prepared PDBQT inputs."
 license: MIT
 metadata:
   hermes:

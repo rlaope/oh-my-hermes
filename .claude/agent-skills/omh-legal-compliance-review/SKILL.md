@@ -1,6 +1,6 @@
 ---
 name: "omh-legal-compliance-review"
-description: "[omh] Business contract, NDA, or policy with legal risk: surface contract and compliance risks, questions…"
+description: "[omh] Business contract, NDA, or policy with legal risk."
 license: MIT
 metadata:
   hermes:

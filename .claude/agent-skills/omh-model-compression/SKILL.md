@@ -1,6 +1,6 @@
 ---
 name: "omh-model-compression"
-description: "[omh] Making a model smaller by changing its weights: cheaper through quantization (GPTQ, AWQ, GGUF, bitsandbytes, FP8, quantization-aware training), pruning…"
+description: "[omh] Making a model smaller by changing its weights."
 license: MIT
 metadata:
   hermes:

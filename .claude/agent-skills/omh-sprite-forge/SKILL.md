@@ -1,6 +1,6 @@
 ---
 name: "omh-sprite-forge"
-description: "[omh] Character art to animate in a game: turn image-model sprite sheets into aligned, QC-gated frames with a fail-closed Pillow helper."
+description: "[omh] Character art to animate in a game."
 license: MIT
 metadata:
   hermes:
