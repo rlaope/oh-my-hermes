@@ -524,9 +524,10 @@ class AiJobSearchContextBudgetTests(unittest.TestCase):
         # the pin before it was 26bd1012...f890.
         # model-setup's quality bar then gains the onboarding-mode line; only model-setup moves, and the pin
         # before it was ad310846...698b.
-        # dag-ulw's quality bar then names the opt-in `carry_forward` re-run flag and that verify always runs; only
-        # dag-ulw moves, and the pin before it was 4eaeeb79...958f.
-        self.assertEqual(_digest(legacy_hashes), '13fe36d5983391fa91278cceadc560d3a10f84b19ae471309d5ef5382ffa8dc9')
+        # code-review, production-audit and verification-gate then end with a `Not checked` list, and code-review's
+        # opening names the Hermes Bug Hunter discipline; dag-ulw gains the opt-in `carry_forward` quality-bar line.
+        # Only those four move, and the pin before both changes was 4eaeeb79...958f.
+        self.assertEqual(_digest(legacy_hashes), '29d728e6d1b55ab7b0bbd897e264eae29b1b300d11ae97c80f56181a2746945c')
         legacy = _skill_context_cost_profile('full', legacy_templates, refs)
         current = _skill_context_cost_profile('full', templates, refs)
         # Main's search guidance adds 305; repro-audit's mandatory rails 1,943.

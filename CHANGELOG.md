@@ -4,6 +4,13 @@ All notable changes will be documented here.
 
 ## Unreleased
 
+- **Hermes Bug Hunter: code review keeps only findings it can show, and every review says what it did not check.**
+  `code-review`'s finding validation gains a drop gate: a candidate stays out of the findings when it cannot be traced
+  step by step from a concrete input to a wrong result, when the behaviour is intended or documented, when its trigger
+  needs a privilege the user cannot have, when the harm is only theoretical, or when it is a style nit dressed as a
+  bug. `code-review`, `production-audit` and `verification-gate` now end every result with a `Not checked` list (each
+  entry with its reason, or `Not checked: none` only after full coverage), so a short findings list no longer reads as
+  "the rest is clean".
 - **A cheap dag-ulw node that hits a hard judgement asks for a stronger model instead of guessing.** When a node's
   child cannot settle a design choice or a root cause, it stops before editing and writes `ESCALATE: <question>` into
   its handoff; the node is settled `escalated` and offered again one category up (quick, unspecified-low,
