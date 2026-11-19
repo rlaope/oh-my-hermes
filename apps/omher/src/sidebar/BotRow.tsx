@@ -14,6 +14,7 @@ import { useMates } from "./restart";
 import { SshMarker } from "../peers/SshMarker";
 import type { RowDrag } from "./useRowDrag";
 import { NewThreadIcon } from "../threads/NewThreadIcon";
+import { termLinkText } from "../sessions/termShare";
 
 /** The newest thing said in a bot's threads: when, and the line. The bot row shows it when it is newer than the main
  *  chat's own last line. A thread with nothing said yet gives nothing: its title is listed right under the bot, so
@@ -72,10 +73,11 @@ function LiveStep({ chat, text }: { chat: Chat | undefined; text: string }) {
   );
 }
 
-/** Markdown-ish text to one plain line; a file the bot sent shows as its name. */
+/** Markdown-ish text to one plain line; a file the bot sent shows as its name, and an omher terminal link as that
+ *  terminal's title (as its chip reads), never the raw `omher://terminal/…` address. */
 export const plain = (raw: string) => {
   const { text, paths } = splitMedia(raw);
-  return text ? flat(text) : paths.map(fileName).join(", ");
+  return text ? flat(termLinkText(text)) : paths.map(fileName).join(", ");
 };
 const flat = (t: string) =>
   t

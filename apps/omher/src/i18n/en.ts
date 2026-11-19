@@ -1451,6 +1451,8 @@ export const en = {
   "tlink.st.waiting": "waiting",
   "tlink.st.done": "done",
   "tlink.st.ended": "ended",
+  "tshare.wants": "{bot} wants to type into {title}",
+  "tshare.thisSession": "Allow for this session",
   "term.empty": "Open a shell or a coding CLI in a folder:",
   "dock.label": "Pinned",
   "dock.pin": "Pin to dock",

@@ -1449,6 +1449,8 @@ export const ko: Record<Key, string> = {
   "tlink.st.waiting": "대기 중",
   "tlink.st.done": "완료",
   "tlink.st.ended": "끝남",
+  "tshare.wants": "{bot}이(가) {title}에 입력하려고 해요",
+  "tshare.thisSession": "이 세션 동안 허용",
   "term.empty": "폴더에서 셸이나 코딩 CLI를 열어요:",
   "dock.label": "고정됨",
   "dock.pin": "독에 고정",

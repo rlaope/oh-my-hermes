@@ -1661,6 +1661,21 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
     t.term.focus();
   };
 
+  /** Type a bot's prompt the person allowed (termShare.ts: the card's Allow, or Allow for this session) into session
+   *  `id`'s terminal, then Enter. A bracketed paste when the program turned that on, so a many-line prompt arrives as
+   *  one; else its lines are typed as a paste types them. Control characters never reach the program (the prompt is
+   *  cleaned before and here). Nothing else calls this. */
+  const typeAllowed = async (id: string, prompt: string) => {
+    const t = terms.get(id);
+    if (!t || t.hostId === null || t.closed) return false;
+    // eslint-disable-next-line no-control-regex
+    const text = prompt.replace(/\r\n/g, "\n").replace(/[\u0000-\u0009\u000b-\u001f\u007f-\u009f]/g, "");
+    if (!text.trim()) return false;
+    const bracketed = !isParked(t.raw) && t.term.modes.bracketedPasteMode;
+    await t.io.write(t.hostId, bracketed ? `\x1b[200~${text}\x1b[201~\r` : `${text.replace(/\n/g, "\r")}\r`);
+    return true;
+  };
+
   /** Files dropped or pasted on session `id`'s terminal: each saved under the session's own folder (the page
    *  never sees a dropped file's own path), then the saved paths typed at the prompt, shell-quoted. */
   const dropOnTerminal = async (id: string, files: { name: string; read: () => Promise<Uint8Array> }[], windows: boolean) => {
@@ -2099,6 +2114,7 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
     send,
     sendFiles,
     dropOnTerminal,
+    typeAllowed,
     /** The ↵ ↓ × buttons of a waiting message (steer queue sessions): Send now or Steer, Edit, Delete. */
     queuePick,
     /** Esc / Stop: the agent's own interrupt. */

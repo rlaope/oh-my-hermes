@@ -1449,6 +1449,8 @@ export const ja: Record<Key, string> = {
   "tlink.st.waiting": "待機中",
   "tlink.st.done": "完了",
   "tlink.st.ended": "終了",
+  "tshare.wants": "{bot} が {title} に入力しようとしています",
+  "tshare.thisSession": "このセッション中は許可",
   "term.empty": "フォルダでシェルやコーディング CLI を開きます:",
   "dock.label": "ピン留め",
   "dock.pin": "ドックに固定",

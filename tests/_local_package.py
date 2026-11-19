@@ -46,6 +46,8 @@ def _redirect_home_env_to_temp_root() -> None:
     # `omh update` refreshes and `omh doctor` reads the user-scope `.agents/skills` pack Codex loads;
     # without this every update test rewrote the developer's real ~/.agents/skills.
     os.environ["OMH_AGENT_SKILLS_HOME"] = str(root / "agent-skills-home")
+    # omh_omher_terminal reads and writes omher's ~/.omher/terminals: never the developer's real one.
+    os.environ["OMH_OMHER_TERMINALS"] = str(root / "omher" / "terminals")
 
 
 _redirect_home_env_to_temp_root()

@@ -24,6 +24,7 @@ import { TermRowMark } from "./TermRowMark";
 import { SplitGlyph, useSplit, useSplitPrune } from "./SplitView";
 import { groupOf, groupSessions, paneOf } from "./splitState";
 import type { Layout } from "../terminal/layout";
+import { usePendingRequests } from "./termShare";
 import { countRender, useAnyFlowing, useTermFace } from "./termActivity";
 import { allCollapsed, collapseOthers, folderSummary, getFolderPrefs, moveFolder, orderFolders, revealFolder as openFolder, setAllFolders, setFolderPrefs, toggleFolder, useFolderPrefs } from "./folders";
 import { ChevronDown, ChevronRight } from "../ui/icons";
@@ -1180,7 +1181,9 @@ const TermRow = memo(function TermRow({ rec, agents, unseen, active, ticking, on
   const { act, now } = useTermFace(rec.id, rec.startedAt, ticking);
   const title = pickTitle(rec, termFallbackName(rec, agents));
   // a program reporting progress (OSC 9;4) is working for as long as it says so, printing or not
-  const status = termStatus({ status: rec.status, exitCode: rec.exitCode, lastOut: act.progress ? now : act.lastOut }, unseen, now);
+  // a bot's request to type into it waits on the person: the row says so as a ring does
+  const asked = usePendingRequests().some((r) => r.sessionId === rec.id);
+  const status = asked ? "bell" : termStatus({ status: rec.status, exitCode: rec.exitCode, lastOut: act.progress ? now : act.lastOut }, unseen, now);
   // the folder its shell reports now (OSC 7), when that is not the folder it started in (its group's header)
   const movedTo = act.cwd && act.cwd !== rec.cwd ? act.cwd : null;
   const markAgent = termMarkAgent(rec);

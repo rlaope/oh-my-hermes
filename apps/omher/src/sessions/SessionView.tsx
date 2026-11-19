@@ -23,7 +23,7 @@ import type { Bot } from "../lib/protocol";
 import { AgentMark } from "./AgentMark";
 import { fgName, TermRowMark } from "./TermRowMark";
 import { SessionFace } from "./SessionFace";
-import { agentDef, agentLabel, continues, GONE, isCustom, isGone, STOPS_BACKGROUND, draftOpen, folderChoices, folderName, hermesOnly, missingNote, opensAs, parentPath, sessionMode, termMarkAgent, terminalNote, tildePath, type AgentId, type OpenAs, type SessionRec } from "./agents";
+import { agentDef, agentLabel, continues, GONE, isCustom, isGone, STOPS_BACKGROUND, draftOpen, folderChoices, folderName, hermesOnly, missingNote, opensAs, parentPath, sessionMode, termFallbackName, termMarkAgent, terminalNote, tildePath, type AgentId, type OpenAs, type SessionRec } from "./agents";
 import { pickTitle } from "./titles";
 import { t as tr, tx, type Key } from "../i18n";
 import { windowWatched } from "../lib/notify";
@@ -42,6 +42,7 @@ import { isMac } from "../app/shortcuts";
 import { SplitPicker, SplitView, useSplit, useSplitKeys } from "./SplitView";
 import { groupOf } from "./splitState";
 import { isCopyLinkKey, LINK_COPIED_EVENT } from "./termLink";
+import { TermShareCards } from "./TermShareCard";
 
 const STATUS: Record<string, Key> = { starting: "ss.starting", running: "ss.running", exited: "ss.ended", failed: "ss.couldNotStart" };
 
@@ -120,6 +121,7 @@ function TerminalPane({ rec, splits }: { rec: SessionRec; splits?: boolean }) {
           {t("tlink.copied")}
         </div>
       )}
+      <TermShareCards sessionId={rec.id} title={pickTitle(rec, termFallbackName(rec, getSessions().getState().agents)).title} />
     </div>
   );
 }
