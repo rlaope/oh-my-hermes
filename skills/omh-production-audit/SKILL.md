@@ -45,6 +45,7 @@ Bad example:
 
 - Each of the nine matrix rows reads observed, failed, or missing, with its evidence id, and the verdict follows the GO, BLOCK, HOLD rule.
 - The rollback plan names signals, owner, threshold, and recovery path; OMH deployed and scanned nothing.
+- The result ends with a `Not checked` list, one reason per entry, or `Not checked: none` when coverage was complete.
 
 ## Recovery Notes
 
@@ -79,6 +80,7 @@ Quality bar:
 - Convert remediation into explicit follow-up workflows instead of silently patching.
 - Verdict: GO only when all nine rows are observed, BLOCK when any row failed an observed check, else HOLD naming the rows lacking evidence.
 - Evidence floor: rollback = command exercised, restore tested, RPO/RTO; performance = load result at peak; observability = alerts to a named on-call with a runbook; security_privacy = secrets store, least privilege, cert expiry.
+- End the result with a `Not checked` list: every file, path, behavior, or environment in scope that was not examined or could not run, each with a one-line reason. Write `Not checked: none` only when coverage was complete; never leave the list out, because a report that lists only findings reads as if everything else were clean.
 
 Handoff policy:
 

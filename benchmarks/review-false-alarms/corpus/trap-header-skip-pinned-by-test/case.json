@@ -1,0 +1,7 @@
+{
+  "id": "trap-header-skip-pinned-by-test",
+  "kind": "trap",
+  "language": "python",
+  "expected": "clean",
+  "why": "range(1, len(rows)) skips row 0 on purpose, exactly as the rows[1:] it replaces did: exports always start with a header row, and tests/test_csv_import.py pins both the skip and the blank-line drop. Starting at 0 would import the header as data."
+}

@@ -1,0 +1,11 @@
+{
+  "id": "control-go-defer-before-error-check",
+  "kind": "control",
+  "language": "go",
+  "expected": "bug",
+  "bug_location": {
+    "path": "internal/store/store.go",
+    "line": 14
+  },
+  "why": "defer rows.Close() runs before err is checked. When QueryContext fails, rows is nil and the deferred Close dereferences it, so a database error becomes a panic instead of a returned error."
+}

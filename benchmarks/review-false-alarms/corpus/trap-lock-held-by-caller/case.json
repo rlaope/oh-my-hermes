@@ -1,0 +1,7 @@
+{
+  "id": "trap-lock-held-by-caller",
+  "kind": "trap",
+  "language": "python",
+  "expected": "clean",
+  "why": "_bump mutates shared state with no lock in sight, but its only caller is record(), which holds self._lock for the whole call; total() takes the same lock. The lock sits outside the hunk."
+}

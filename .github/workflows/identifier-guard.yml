@@ -1,0 +1,31 @@
+name: Identifier guard
+
+# Fail-closed scan of every tracked file against the hashed private-identifier
+# denylist (tools/qa/identifier-denylist.sha256). No path filter: a leak can
+# ride in with any file. A missing or empty denylist fails the job (exit 2).
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: identifier-guard-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7
+        with:
+          python-version: "3.12"
+      - name: Self-test
+        run: python -m unittest tests.test_identifier_guard
+      - name: Scan tracked files
+        run: python tools/qa/identifier_guard.py

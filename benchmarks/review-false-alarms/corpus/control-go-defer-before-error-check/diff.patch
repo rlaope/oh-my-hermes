@@ -1,0 +1,16 @@
+--- a/internal/store/store.go
++++ b/internal/store/store.go
+@@ -10,11 +10,11 @@
+ }
+ 
+ func (s *Store) Names(ctx context.Context) ([]string, error) {
+-	rows, err := s.db.QueryContext(ctx, "SELECT name FROM users ORDER BY name")
++	rows, err := s.db.QueryContext(ctx, "SELECT name FROM users WHERE active ORDER BY name")
++	defer rows.Close()
+ 	if err != nil {
+ 		return nil, err
+ 	}
+-	defer rows.Close()
+ 	var names []string
+ 	for rows.Next() {
+ 		var name string

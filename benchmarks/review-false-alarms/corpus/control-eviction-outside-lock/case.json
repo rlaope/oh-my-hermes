@@ -1,0 +1,11 @@
+{
+  "id": "control-eviction-outside-lock",
+  "kind": "control",
+  "language": "python",
+  "expected": "bug",
+  "bug_location": {
+    "path": "app/cache.py",
+    "line": 17
+  },
+  "why": "get() is called from many worker threads (app/workers.py). The new eviction block runs after the lock is released, so two threads can pick the same oldest key and the second del raises KeyError, or both insert past max_entries."
+}

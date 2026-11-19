@@ -1,0 +1,11 @@
+--- a/app/quota.py
++++ b/app/quota.py
+@@ -1,4 +1,7 @@
+ def usage_label(used: int, limit: int) -> str:
+     if limit <= 0:
+         return "unlimited"
+-    return f"{used / limit:.0%} used"
++    ratio = used / limit
++    if ratio == 0.0:
++        return "unused"
++    return f"{ratio:.0%} used"

@@ -129,6 +129,17 @@ _MODEL_SETUP_FIVE_STEP_BAR = (
     "applicable item.",
 )
 
+# Shared by code-review, production-audit and verification-gate (Hermes Bug
+# Hunter): a report that lists only findings must not read as "everything else
+# is clean", so each result ends with what was not examined. Placed after each
+# bar's first four items so the capability rows do not move.
+_NOT_CHECKED_BAR = (
+    "End the result with a `Not checked` list: every file, path, behavior, or environment in scope that was not examined or could not run, each with a one-line reason. Write `Not checked: none` only when coverage was complete; never leave the list out, because a report that lists only findings reads as if everything else were clean."
+)
+_NOT_CHECKED_CHECKLIST = (
+    "The result ends with a `Not checked` list, one reason per entry, or `Not checked: none` when coverage was complete."
+)
+
 # Shared by ralplan's Hermes quality_bar and its portable override, which
 # replaces that section wholesale; one literal keeps the two from drifting.
 _RALPLAN_IDEAL_STATE_BAR = (
@@ -6015,10 +6026,12 @@ _DEFINITIONS = [
             "Convert remediation into explicit follow-up workflows instead of silently patching.",
             "Verdict: GO only when all nine rows are observed, BLOCK when any row failed an observed check, else HOLD naming the rows lacking evidence.",
             "Evidence floor: rollback = command exercised, restore tested, RPO/RTO; performance = load result at peak; observability = alerts to a named on-call with a runbook; security_privacy = secrets store, least privilege, cert expiry.",
+            _NOT_CHECKED_BAR,
         ),
         final_checklist=(
             "Each of the nine matrix rows reads observed, failed, or missing, with its evidence id, and the verdict follows the GO, BLOCK, HOLD rule.",
             "The rollback plan names signals, owner, threshold, and recovery path; OMH deployed and scanned nothing.",
+            _NOT_CHECKED_CHECKLIST,
         ),
         why_this_exists=(
             "`production-audit` gives OMH a preflight release surface so operators can see production risks before launch "
@@ -6131,6 +6144,14 @@ _DEFINITIONS = [
             "Take the required set from the repository, not from what happened to run: branch protection or ruleset required status checks (a repository that uses rulesets has none: `gh api repos/{owner}/{repo}/branches/{base}/protection/required_status_checks` answers 404 there; read `gh api repos/{owner}/{repo}/rules/branches/{base}` and take the contexts of its `required_status_checks` rule), the CI workflow, and the contributor docs; name which source defined required. Then compare those contexts with the results (`gh pr view <n> --json statusCheckRollup`): a required context with no result is missing evidence, not a pass. `gh pr checks --required` lists only checks that already exist, so it can read green while a required check has not started.",
             f"Return PASS only when required checks pass and stale or missing evidence is resolved; PASS never stands beside a failing required check, whatever its origin. A required check that fails `{_PRE_EXISTING}` is HOLD worded as not charged to the change, naming the merge-base run that proves it, and only when the failing run's scope still covered the change: a failure that stopped the check before it exercised the change, such as a collection or import error, leaves that check as missing evidence. `{_UNKNOWN_ORIGIN}` is HOLD with the merge-base run named as the missing evidence (for a failing test, the failure rate at head and at the merge-base).",
             "Keep fixes, reruns, review, CI, and merge as separate observed states.",
+            _NOT_CHECKED_BAR,
+        ),
+        # The verification category's default checklist plus the `Not checked` line.
+        final_checklist=(
+            "The scenario, expected behavior, observed result, and pass/fail basis are named.",
+            "Proposed fixes are separated from observed QA evidence.",
+            "Missing or failed verification routes back to `plan`, fix, or a narrower test.",
+            _NOT_CHECKED_CHECKLIST,
         ),
         why_this_exists=(
             "`verification-gate` gives OMH a deterministic evidence surface before done/merge claims: every claim maps to a check that was "
@@ -8007,6 +8028,7 @@ _DEFINITIONS = [
             "A read, parse, or hash that failed means unknown, never empty, none, or equal: keep what was read before, and a list that guards access fails closed, so a failed read of an allowlist denies instead of allowing.",
             "Judge maintainability findings against the named baseline in `omh-code-review/references/smell-baseline.md`: a baseline smell is a judgement call to argue from evidence, never an automatic finding, and the reviewed repository's own standards override the baseline wherever they conflict.",
             "Close with two lists beside the verdict: what was checked and found clean, and what could not be assessed with the reason. An absent finding is evidence only when the closing says the surface was actually checked.",
+            _NOT_CHECKED_BAR,
             "Require structured `spec_axis`, `could_not_assess` (empty allowed), and unranked `verification_gaps` (empty allowed) under the dispatch schema; gaps carry `path`, `line_range`, and `evidence`, never finding priority or confidence. Check actual reads, revision, bounds, ordered ranges, and claim truth separately from shape.",
             "Select depth by changed risk, not diff size; record selected and omitted checks, reasons, actual coverage, and budget. Deduplicate candidates by root cause and validate before final findings; retain unresolved protected risks separately. Say `independent validation unavailable` when no different reader participated.",
             HermesReferenceLine(
@@ -8019,7 +8041,7 @@ _DEFINITIONS = [
                 "On Hermes, for native `omh_todo` checkpoints, `record` then `recall` this review declaration. Stored declarations are not proof.",
             ),
         ),
-        why_this_exists="`code-review` exists to make review bug-first and evidence-grounded: findings must cite concrete files, diffs, commands, or artifacts before any summary or fix proposal.",
+        why_this_exists="`code-review` exists to make review bug-first and evidence-grounded: findings must cite concrete files, diffs, commands, or artifacts before any summary or fix proposal. Its Hermes Bug Hunter discipline keeps only findings that can be shown step by step, drops intended or unreachable behavior, and ends every review with what was not checked.",
         do_not_use_when=(
             "The user asks to implement the fix rather than review existing code or claims.",
             "There is no diff, file set, claim, artifact, or expected behavior to review.",
@@ -8050,6 +8072,7 @@ _DEFINITIONS = [
             "Both axes appear in the report: correctness/risk findings, and a spec-axis verdict naming its Claim source or the `not_assessed` reason.",
             "No-issue reviews still name residual risk, missing tests, and independent review evidence if unavailable.",
             "The closing carries the checked-and-clean list and the could-not-assess list, each naming its surfaces.",
+            _NOT_CHECKED_CHECKLIST,
             "The dispatch schema matches the return, candidate validation states remain distinct, and selected checks are not reported as observed coverage.",
             "Fix implementation, architecture follow-up, and CI/merge claims stay separate from the review result.",
             "A reply to the person uses plain words: the verdict as whether anything found blocks the change (blocking issues "
@@ -8065,7 +8088,7 @@ _DEFINITIONS = [
             "When findings arrive for work you own, load `omh-code-review/references/review-response.md` before changing anything.",
             "For maintainability judgement calls, load `omh-code-review/references/smell-baseline.md`; it finds the repository's standards files first, then names the twelve baseline smells with their fixes and the repo-standards-override rule.",
             "Load `omh-code-review/references/risk-selection.md` to select depth; when additional lenses are justified, load `omh-code-review/references/review-lenses.md` and run only those selected as separate passes.",
-            "Before final findings, load `omh-code-review/references/finding-validation.md` for candidate confirmation, rejection, and unresolved-risk handling; load `omh-code-review/references/architecture-delta.md` when ownership, contracts, dependencies, or shared-code extraction change.",
+            "Before final findings, load `omh-code-review/references/finding-validation.md` for its drop gate and candidate confirmation, rejection, and unresolved-risk handling; load `omh-code-review/references/architecture-delta.md` when ownership, contracts, dependencies, or shared-code extraction change.",
         ),
         situations=(
             "review my pull request",
@@ -9514,6 +9537,7 @@ _DEFINITIONS = [
             "For X/Twitter scraping or trend analysis, keep x_platform_data as a domain affinity rather than a role alias: prefer confirmed-active Grok, then Kimi K3.1 Pro, then Gemini, without removing the rest of the route or overriding an explicit model.",
             "When a recommendation head is missing, choose the first confirmed-active owner-compatible candidate in that chain. Only after every selected category, role-slot, and domain chain is exhausted, consult the shared final order Claude Opus 5.5 then GPT-6.2 Sol. If no candidate is confirmed active anywhere, keep the selector on its owner's native default model and let the rest of OMH setup finish without a model-config write.",
             "Give provider-specific native next actions without claiming provider readiness: use installed Hermes flows for OpenAI OAuth/OpenAI Codex, Anthropic or an existing Claude provider, Qwen OAuth or Alibaba, Gemini/Google/Vertex, Grok/xAI, Kimi, GLM/Z.AI, DeepSeek, or an already-working custom provider; preserve working alternatives.",
+            "Onboarding mode: when the conversation opens with OMH's onboarding message (the person ran `omh setup` and accepted model setup), run these steps in order, one question at a time: (1) inventory Hermes' main model, configured providers, credential pools, and the provider key environment variable NAMES that are present, never values; (2) ask which of those to use and whether to add one; (3) for a provider with no key, name the exact command for another terminal (`hermes auth add <provider>`, or `hermes model` for OAuth/login), wait until the person says done, then re-check; (4) set the main model and at most one fallback with `omh setup --model-setup ... --fallback-model <provider>/<model>`, previewed and digest-bound like aliases (no fallback when only one provider exists); (5) set the category chains from the shipped recommendations, ordered to the providers present, with `omh model-chains provider set` and `omh model-chains show`; (6) show one combined preview, apply only after a yes, then re-read the configuration and show it; (7) close by saying that to change any of this later, the person can just say it in chat. The rules above still hold: no secrets in chat, diff approval, no network probes.",
             "Closing step: once model routing/chains are confirmed, ask once whether the user also wants to set up coding delegation (the `maestro` lane) for an external coding CLI -- do not ask before model setup is done and never auto-enable it. Point at `omh coding executor-skills --profile <profile>` for skill-set discovery, `~/.omh/routing/dispatch-models.json` for an optional per-owner model preference, and the `ulw-maestro` skill for the handoff itself; name Codex and Claude Code neutrally rather than favoring either.",
         ),
         why_this_exists=(

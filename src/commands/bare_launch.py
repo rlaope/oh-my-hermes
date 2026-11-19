@@ -82,12 +82,25 @@ def add_top_level_options(parser: argparse.ArgumentParser) -> None:
         metavar="NAME",
         help="Bare launch only: open the terminal on this Hermes bot profile.",
     )
+    # Not a Hermes flag: the OMH TUI reads it from its environment (`ONBOARD_ENV`). `omh setup`'s last question
+    # runs it; the TUI then sends that packaged prompt once, as the first turn of a new session.
+    from ..tui.onboarding import ONBOARDING_NAMES
+
+    parser.add_argument(
+        "--onboard",
+        dest="tui_onboard",
+        choices=ONBOARDING_NAMES,
+        default=None,
+        metavar="NAME",
+        help="Bare launch only: open a new session that starts with OMH's guided NAME conversation (model-setup).",
+    )
 
 
 _TUI_PASSTHROUGH_OPTIONS: tuple[tuple[str, str], ...] = (
     ("tui_resume", "--resume"),
     ("tui_continue", "--continue"),
     ("tui_profile", "--profile"),
+    ("tui_onboard", "--onboard"),
 )
 
 
@@ -124,7 +137,15 @@ def bare_launch_args(argv: list[str]) -> argparse.Namespace | None:
 
 
 def run_bare_launch(args: argparse.Namespace) -> int:
-    """Open the terminal for a bare launch; the welcome text when there is nothing to launch."""
+    """Open the terminal for a bare launch; the welcome text when there is nothing to launch.
+
+    `--onboard` opens a new session, so it is refused beside `--resume` or `--continue`, which open an old one.
+    """
+    if getattr(args, "tui_onboard", None) and (
+        getattr(args, "tui_resume", None) is not None or getattr(args, "tui_continue", None) is not None
+    ):
+        print("omh: --onboard opens a new session and cannot be combined with --resume or --continue.", file=sys.stderr)
+        return 2
     launched = _launch_hermes_tui(args)
     if launched is not None:
         return launched
@@ -697,6 +718,8 @@ def _run_terminal(
                 pick_session=getattr(args, "tui_resume", None) == "",
                 relaunch_file=marker if generation is not None else None,
                 bots_home=Path(paths.hermes_home) if hermes_home is not None else None,
+                onboard=getattr(args, "tui_onboard", None) or "",
+                onboard_language=_onboard_language(),
             )
             child = subprocess.Popen([hermes, *_hermes_passthrough_argv(args, tui=True)], env=environment)
             returncode = int(child.wait())
@@ -712,6 +735,15 @@ def _run_terminal(
         blocker = "the OMH TUI did not start (its reason is above)"
     return _run_hermes_fallback(hermes, args, paths, blocker, said, hermes_home=launch_home,
                                 scrub=hermes_home is not None)
+
+
+def _onboard_language() -> str:
+    """The onboarding prompt's language: `OMH_LANG` when it names one the prompt is written in (`omh setup` sets it to
+    the setup's language), else English."""
+    from ..tui.onboarding import ONBOARDING_LANGUAGES
+
+    language = os.environ.get("OMH_LANG", "")
+    return language if language in ONBOARDING_LANGUAGES else "en"
 
 
 def _fallback_environment(scrub: bool) -> dict[str, str]:

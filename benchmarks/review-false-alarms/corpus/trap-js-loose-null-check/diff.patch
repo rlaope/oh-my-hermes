@@ -1,0 +1,9 @@
+--- a/web/format.js
++++ b/web/format.js
+@@ -1,5 +1,5 @@
+ export function displayName(user) {
+-  if (user.nickname === undefined || user.nickname === null) {
++  if (user.nickname == null) {
+     return user.fullName;
+   }
+   return user.nickname;
