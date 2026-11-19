@@ -110,3 +110,55 @@ a.lk-web {
 .lk-more:hover {
   color: var(--ink);
 }
+
+/* an omher terminal link (omher://terminal/<id>): the omher face, the session's CLI mark, its title and a state dot */
+a.lk.lk-term,
+span.lk.lk-term {
+  cursor: pointer;
+}
+span.lk.lk-term.gone {
+  cursor: default;
+  color: var(--quiet);
+}
+.lk-term .lk-term-omh {
+  display: inline-block;
+  vertical-align: -1px;
+  margin-right: 3px;
+  border-radius: 3px;
+}
+.lk-term .trm {
+  display: inline-grid;
+  vertical-align: -1px;
+  margin-right: 4px;
+}
+.lk-term .lk-term-dot {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  margin-left: 5px;
+  border-radius: 50%;
+  vertical-align: 1px;
+  background: var(--quiet);
+}
+.lk-term .lk-term-dot.working {
+  background: #e0a106;
+}
+.lk-term .lk-term-dot.waiting {
+  background: var(--link);
+}
+.lk-term .lk-term-dot.done {
+  background: var(--ok);
+}
+.lk-term .lk-term-dot.ended {
+  background: var(--quiet);
+}
+@media (prefers-reduced-motion: no-preference) {
+  .lk-term .lk-term-dot.working {
+    animation: lk-term-pulse 1.4s ease-in-out infinite;
+  }
+}
+@keyframes lk-term-pulse {
+  50% {
+    opacity: 0.45;
+  }
+}

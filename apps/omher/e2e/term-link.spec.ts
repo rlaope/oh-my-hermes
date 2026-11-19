@@ -1,7 +1,9 @@
 // Terminal links (mock host): every TERMINALS session has a link id, kept across a restart, and a link
 // `omher://terminal/<id>`. The row menu's "Copy link" and ⌘⇧C (Alt+Shift+C off macOS) in its terminal copy it, and
 // the terminal says "Link copied" for a moment.
-// Shots: OMHER_SHOTS=<dir> -> term-link-menu-{dark,light}.png
+// A link in a message is an omher chip: the omher face, the session's CLI mark, its title and its live state; a click
+// opens it; an id this computer does not have reads "Terminal not on this computer".
+// Shots: OMHER_SHOTS=<dir> -> term-link-{menu,copied,chip}-{dark,light}.png
 import { expect, test, type Page } from "@playwright/test";
 import { mkdirSync } from "node:fs";
 import { join } from "node:path";
@@ -119,6 +121,47 @@ test("⌘⇧C (Alt+Shift+C off macOS) in a terminal copies its link and types no
   expect(after).toBe(before);
 });
 
+// ---- the omher chip -------------------------------------------------------------------------------------------
+
+/** A bot answer in Kami's chat holding `text`. */
+async function answer(page: Page, id: string, text: string) {
+  await page.getByTestId("bot-kami").click();
+  await mock("mock.emit", { events: [{ event: "message", bot: "kami", id, text }] });
+}
+
+test("a terminal link in a bot's answer is an omher chip with the session's mark, title and live state; a click opens it", async ({ page }) => {
+  await open(page);
+  const id = await newTerm(page, "claude");
+  const link = (await linkOf(page, id))!;
+  await page.evaluate(([i]) => (window as unknown as { __omherSessions: { rename(id: string, n: string): void } }).__omherSessions.rename(i!, "checkout build"), [id] as const);
+  await answer(page, "tl-a1", `The build runs in ${link} now.`);
+  const chip = page.getByTestId("bubble-bot").filter({ hasText: "The build runs in" }).getByTestId("term-link-chip");
+  await expect(chip).toHaveCount(1);
+  await expect(chip).toHaveAttribute("data-session", id);
+  await expect(chip.locator(".lk-t")).toHaveText("checkout build");
+  await expect(chip.locator(".lk-term-omh")).toHaveCount(1);
+  await expect(chip.getByTestId("term-row-mark")).toHaveAttribute("data-agent", "claude");
+  expect(await chip.getAttribute("title")).toContain(link);
+  // live: output flowing is working, then it settles to waiting at its prompt
+  const pty = (await page.evaluate((i) => (window as unknown as { __omherSessions: { ptyOf(id: string): number | null } }).__omherSessions.ptyOf(i), id))!;
+  await page.evaluate(([p]) => (window as unknown as { __omherMockOut(p: number, d: string): boolean }).__omherMockOut(p!, "compiling…\r\n"), [pty] as const);
+  await expect(chip).toHaveAttribute("data-state", "working");
+  await expect(chip).toHaveAttribute("data-state", "waiting", { timeout: 6000 });
+  // a click opens the session's terminal
+  await chip.click();
+  await expect(page.getByTestId("terminal")).toHaveAttribute("data-session", id);
+});
+
+test("a link to a terminal this computer does not have reads so and opens nothing", async ({ page }) => {
+  await open(page);
+  await answer(page, "tl-a2", "Old one: omher://terminal/zzzzzzzzzz");
+  const chip = page.getByTestId("bubble-bot").filter({ hasText: "Old one:" }).getByTestId("term-link-chip");
+  await expect(chip).toHaveAttribute("data-state", "gone");
+  await expect(chip).toHaveText("Terminal not on this computer");
+  await chip.click();
+  await expect(page.getByTestId("terminal")).toHaveCount(0);
+});
+
 test.describe("shots", () => {
   test.use({ deviceScaleFactor: 2 });
   for (const theme of ["dark", "light"] as const) {
@@ -134,6 +177,12 @@ test.describe("shots", () => {
       await page.getByTestId("session-copy-link").click();
       await expect(page.getByTestId("term-link-copied")).toBeVisible();
       await shot(page, `term-link-copied-${theme}`);
+      // the chip in a bot answer: one live, one not on this computer
+      await page.evaluate(([i]) => (window as unknown as { __omherSessions: { rename(id: string, n: string): void } }).__omherSessions.rename(i!, "checkout build"), [id] as const);
+      await answer(page, "tl-shot", `The build runs in ${await linkOf(page, id)}; last week's was omher://terminal/zzzzzzzzzz.`);
+      await expect(page.getByTestId("term-link-chip")).toHaveCount(2);
+      await page.getByTestId("bubble-bot").filter({ hasText: "The build runs in" }).scrollIntoViewIfNeeded();
+      await shot(page, `term-link-chip-${theme}`);
     });
   }
 });
