@@ -2594,6 +2594,42 @@ class Qwen4MaxContractTests(unittest.TestCase):
                     self.assertEqual(route["selected_reasoning_effort"], effort)
                     self.assertNotEqual(route["effort_change"]["kind"], EFFORT_FLOOR_KIND)
 
+    def test_calibration_is_version_aware_and_never_pushes(self) -> None:
+        # The `qwen` family block describes the non-thinking Qwen3-Coder and
+        # stays byte-stable for it; Qwen4-Max is hybrid with thinking on by
+        # default, so its exact override resolves first and does not forbid
+        # thinking.
+        family = HIGH_EFFORT_CALIBRATIONS["qwen"]
+        subagent = MODEL_HIGH_EFFORT_CALIBRATIONS["qwen4-max"]
+        composer = MODEL_COMPOSITION_CALIBRATIONS["qwen4-max"]
+        self.assertIn("current Qwen3-Coder is a non-thinking coding-agent model", family)
+        for model in ("qwen4-max", "qwen/qwen4-max", "qwen4-max-2026-11-16"):
+            route = {"selected_model": model, "model_family": "qwen", "selected_reasoning_effort": "high"}
+            with self.subTest(model=model):
+                self.assertEqual(calibration_for_route(route), subagent)
+                self.assertEqual(calibration_for_route(route, family_only=True), family)
+                self.assertEqual(composition_calibration_for_model(model), composer)
+                self.assertEqual(calibration_for_route({**route, "selected_reasoning_effort": "low"}), "")
+        for model in ("qwen3-coder", "qwen3.8-max", "qwen4-max-preview"):
+            route = {"selected_model": model, "model_family": "qwen", "selected_reasoning_effort": "high"}
+            with self.subTest(model=model):
+                self.assertEqual(calibration_for_route(route), family)
+                self.assertEqual(composition_calibration_for_model(model), MAIN_AGENT_COMPOSITION_CALIBRATIONS["qwen"])
+        self.assertIn("hybrid thinking on by default", subagent)
+        self.assertIn("routed effort rung", subagent)
+        self.assertIn("never in the visible text", subagent)
+        self.assertIn("stop after one passing verification run", subagent)
+        self.assertIn("low, high, or xhigh", composer)
+        self.assertIn("no synthetic thinking instructions", composer)
+        for text in (subagent, composer):
+            lowered = text.casefold()
+            self.assertNotIn("non-thinking", lowered)
+            self.assertNotIn("do not ask it to emit reasoning", lowered)
+            for word in _MONITORING_WORDS:
+                self.assertNotIn(word, lowered, word)
+            for push in ("to completion", "keep going", "keep working", "instead of pausing", "finish the whole"):
+                self.assertNotIn(push, lowered, push)
+
     def test_no_shipped_chain_names_it(self) -> None:
         from omh.coding.model_recommendations import SHIPPED_MODEL_RECOMMENDATIONS
 

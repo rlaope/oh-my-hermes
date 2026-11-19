@@ -305,6 +305,27 @@ MODEL_HIGH_EFFORT_CALIBRATIONS: Final[dict[str, str]] = {
         "the field names the task uses (for example `locations`, `changed_paths`, `facts`), not a "
         "bare list and not a wrapper key of your own."
     ),
+    # Qwen4-Max (QwenCloud latest-model page and thinking guide, read
+    # 2026-11-19): hybrid thinking, on by default at `high`, on a documented
+    # `low`/`high`/`xhigh` ladder, and `preserve_thinking` on by default, so
+    # earlier thinking travels in `reasoning_content`, never in `content`. The
+    # `qwen` family block describes the 2025 Qwen3-Coder as non-thinking and
+    # tells the reader not to ask for reasoning, which is wrong for this model;
+    # the family block stays byte-stable for Qwen3-Coder and this override
+    # carries the generation's own contract. The family block's working rules
+    # (exact goal and boundaries, one explicit plan, observed-output recovery,
+    # stop after one passing verification run) are kept verbatim in meaning; the
+    # two new sentences counter documented traits only and ask for no extra
+    # work. Editorial and unmeasured (MODEL_OPTI.md).
+    "qwen4-max": (
+        "High-effort calibration: this is Qwen4-Max with hybrid thinking on by default, so reasoning "
+        "depth is the routed effort rung, never a request to turn thinking off or to write reasoning "
+        "into the reply. Your earlier thinking belongs in the reasoning channel, never in the visible "
+        "text, so the visible reply carries the change and the stop rather than a restatement of "
+        "reasoning the context already holds. Work from the exact goal, repository state, allowed "
+        "boundaries, tool schemas, and completion criteria along one explicit plan; recover from "
+        "failures using observed tool output and stop after one passing verification run."
+    ),
 }
 MODEL_COMPOSITION_CALIBRATIONS: Final[dict[str, str]] = {
     "gpt-6-astra": (
@@ -371,6 +392,18 @@ MODEL_COMPOSITION_CALIBRATIONS: Final[dict[str, str]] = {
         "routed to this model takes low, high, or max — its documented ladder; the vendor's own table "
         "turns medium and xhigh into high, so an undocumented rung is a rung you did not choose. "
         "Validate once and stop."
+    ),
+    # Qwen4-Max, on the evidence above; the ladder sentence follows DeepSeek
+    # V4.1 Flash's composer wording because the vendor publishes the same
+    # kind of mapping table (`medium` to `high`, `max` to `xhigh`).
+    "qwen4-max": (
+        "Composition calibration: the composer runs on Qwen4-Max with hybrid thinking on by default "
+        "and its earlier thinking kept in the reasoning channel, so the visible composition is the "
+        "ordered split — exact owners, boundaries, tool contracts, dependencies, roles, and "
+        "verification commands — not a replay of planning already in context, and it carries no "
+        "synthetic thinking instructions. A unit routed to this model takes low, high, or xhigh — its "
+        "documented ladder; the vendor's own table turns medium into high and max into xhigh, so an "
+        "undocumented rung is a rung you did not choose. Validate once and move to dispatch."
     ),
 }
 
