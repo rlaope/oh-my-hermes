@@ -252,6 +252,12 @@ export function TerminalPage() {
         <Row title={t("term.gpu")} hints={[t("term.gpuHint"), using ? t(IN_USE[using]) : null]} testId="term-gpu-row">
           <Seg small label={t("term.gpu")} value={term.gpu} options={TERM_GPUS.map((g) => ({ value: g, label: t(GPU[g]) }))} onChange={(v) => set({ gpu: v as TermGpu })} testId="term-gpu" />
         </Row>
+        <Row title={t("term.kittyKeys")} hints={[t("term.kittyKeysHint")]} testId="term-kitty-row">
+          <Seg small label={t("term.kittyKeys")} value={term.kittyKeys ? "on" : "off"} options={ON_OFF()} onChange={(v) => set({ kittyKeys: v === "on" })} testId="term-kitty" />
+        </Row>
+        <Row title={t("term.images")} hints={[t("term.imagesHint")]} testId="term-images-row">
+          <Seg small label={t("term.images")} value={term.images ? "on" : "off"} options={ON_OFF()} onChange={(v) => set({ images: v === "on" })} testId="term-images" />
+        </Row>
       </div>
 
       <div className="st-gh">{t("term.clipboard")}</div>
