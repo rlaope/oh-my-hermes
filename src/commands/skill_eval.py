@@ -7,11 +7,12 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 from pathlib import Path
 
 from ..skills.harness_fit import check_catalog, check_skill
 
-_MARK = {"loads": "✅", "degraded": "⚠️", "not_loaded": "❌"}
+_MARK = {"loads": "✅", "unverified": "❔", "degraded": "⚠️", "not_loaded": "❌"}
 
 
 class SkillEvalArguments(argparse.Namespace):
@@ -30,7 +31,8 @@ def _is_catalog(path: Path, forced: bool) -> bool:
         return True
     if (path / "SKILL.md").is_file():
         return False
-    return any((child / "SKILL.md").is_file() for child in path.iterdir() if child.is_dir())
+    # Skills may sit in category folders below PATH, as Hermes lays them out.
+    return any("SKILL.md" in files for _directory, _dirs, files in os.walk(path, followlinks=True))
 
 
 def _host_lines(result: dict[str, object], indent: str = "") -> list[str]:
@@ -67,12 +69,16 @@ def _print_skill(result: dict[str, object]) -> None:
                  *_overlap_lines(result["overlap"]), *_static_lines(result["static"])):
         print(line)
     summary = result["summary"]
-    print(f"{len(result['hosts'])} hosts: {summary['not_loaded']} not_loaded, {summary['degraded']} degraded")
+    print(f"{len(result['hosts'])} hosts: {summary['not_loaded']} not_loaded, {summary['degraded']} degraded, "
+          f"{summary['unverified']} unverified")
 
 
 def _print_catalog(result: dict[str, object]) -> None:
     print(f"OMH skill-eval: {result['target']} (catalog)")
     print(_catalog_line(result["catalog"]))
+    if result["catalog"]["grouped"]:
+        print(f"grouped: {result['catalog']['grouped']} skills sit in category folders; hosts that read only the "
+              "root's own folders are checked against the part they list")
     for line in _root_lines([row for skill in result["skills"] for row in skill["hosts"]]):
         print(line)
     for skill in result["skills"]:
@@ -86,8 +92,8 @@ def _print_catalog(result: dict[str, object]) -> None:
         print(line)
     summary = result["summary"]
     counts = ", ".join(f"{key} {value}" for key, value in summary["findings"].items()) or "none"
-    print(f"{summary['skills']} skills: {summary['not_loaded']} not_loaded and {summary['degraded']} degraded "
-          f"host rows; findings: {counts}")
+    print(f"{summary['skills']} skills: {summary['not_loaded']} not_loaded, {summary['degraded']} degraded and "
+          f"{summary['unverified']} unverified host rows; findings: {counts}")
 
 
 def cmd_skill_eval(args: SkillEvalArguments) -> int:
@@ -95,7 +101,12 @@ def cmd_skill_eval(args: SkillEvalArguments) -> int:
     if not path.is_dir():
         print(f"omh skill-eval: {path} is not a folder")
         return 2
-    hosts = [name.strip() for name in args.host.split(",") if name.strip()] if args.host else None
+    hosts = None
+    if args.host is not None:
+        hosts = [name.strip() for name in args.host.split(",") if name.strip()]
+        if not hosts:
+            print(f"omh skill-eval: --host {args.host!r} names no host; leave it out to check all hosts")
+            return 2
     as_catalog = _is_catalog(path, args.catalog)
     check = check_catalog if as_catalog else check_skill
     try:
@@ -107,7 +118,7 @@ def cmd_skill_eval(args: SkillEvalArguments) -> int:
         Path(args.json).write_text(json.dumps(result, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     (_print_catalog if as_catalog else _print_skill)(result)
     summary = result["summary"]
-    return int(args.strict and bool(summary["not_loaded"] or summary["degraded"]))
+    return int(args.strict and bool(summary["not_loaded"] or summary["degraded"] or summary["unverified"]))
 
 
 def _add_skill_eval_commands(sub: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
@@ -125,9 +136,11 @@ def _add_skill_eval_commands(sub: argparse._SubParsersAction[argparse.ArgumentPa
                             help="The model's context window in tokens; 0 uses each host's unknown-context budget.")
     _ = parser.add_argument("--install-root", metavar="ROOT",
                             help="Where the folder is installed (.agents/skills, .claude/skills, ~/.hermes/skills); "
-                                 "inferred from a dotted path, else roots read not_checked.")
+                                 "inferred from the path as given (a dotted root, a root under ~, a Hermes profile "
+                                 "or skills.external_dirs folder), else roots read not_checked.")
     _ = parser.add_argument("--catalog", action="store_true",
-                            help="Check every skill folder directly under PATH (automatic when PATH has no SKILL.md).")
+                            help="Check every skill folder below PATH, category folders included (automatic when PATH has "
+                                 "no SKILL.md).")
     _ = parser.add_argument("--json", metavar="FILE", help="Also write the omh_skill_eval/v1 payload to FILE.")
-    _ = parser.add_argument("--strict", action="store_true", help="Exit 1 when any host row is not_loaded or degraded.")
+    _ = parser.add_argument("--strict", action="store_true", help="Exit 1 when any host row is not_loaded, degraded or unverified.")
     parser.set_defaults(func=cmd_skill_eval)

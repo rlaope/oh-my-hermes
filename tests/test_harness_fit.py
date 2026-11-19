@@ -14,6 +14,7 @@ import json
 import os
 import tempfile
 import unittest
+from unittest import mock
 from dataclasses import fields as dataclass_fields
 from pathlib import Path
 
@@ -97,7 +98,7 @@ class CleanSkillTests(_Fixture):
                 self.assertEqual((row["status"], row["findings"], row["root"]), ("loads", [], "not_checked"))
                 self.assertTrue(row["verified"]["version"] and row["verified"]["date"] and row["verified"]["source"])
         self.assertEqual((result["static"], result["overlap"]), ([], []))
-        self.assertEqual(result["summary"], {"not_loaded": 0, "degraded": 0})
+        self.assertEqual(result["summary"], {"not_loaded": 0, "degraded": 0, "unverified": 0})
         self.assertEqual(result["catalog"]["size"], 1)
 
     def test_host_selection_and_unknown_hosts(self):
@@ -448,6 +449,208 @@ class UpstreamParityTests(_Fixture):
         self.assertNotIn("70", message)
         self.assertIn("OPENCODE_PLACEHOLDER_POSITIONAL", self.ids(result))
         self.assertIn("HERMES_PLACEHOLDER_ARGUMENTS", self.ids(result))
+
+
+def _link(test: unittest.TestCase, link: Path, target: Path) -> None:
+    link.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        os.symlink(target, link, target_is_directory=True)
+    except (OSError, NotImplementedError) as error:
+        test.skipTest(f"symlinks unavailable: {error}")
+
+
+class FrontmatterTypeTests(_Fixture):
+    """Typed, quoted, listed, tab-indented and unparsed frontmatter per host (R2)."""
+
+    def statuses(self, meta: str) -> dict[str, str]:
+        path = self.tmp / "pack" / "demo"
+        path.mkdir(parents=True, exist_ok=True)
+        (path / "SKILL.md").write_text("---\n" + meta + "---\n\n# Demo\n", encoding="utf-8")
+        return {row["host"]: row["status"] for row in check_skill(path)["hosts"]}
+
+    def test_an_unquoted_number_is_no_string_description(self):
+        # codex.yaml CX-DESC-MISSING, copilot-cli.yaml CP-STRICT-YAML, opencode.yaml OC-DESC-MISSING and
+        # claude-code.yaml CC-DESC-MISSING read `description_type != 'str'`; no fact covers Hermes or OpenClaw.
+        self.assertEqual(self.statuses("name: demo\ndescription: 123\n"), {
+            "hermes": "unverified", "claude-code": "degraded", "codex": "not_loaded", "openclaw": "unverified",
+            "opencode": "not_loaded", "copilot-cli": "not_loaded",
+        })
+        for typed in ("true", "1.5", "2026-11-19", "0x1F", "no"):
+            with self.subTest(value=typed):
+                self.assertEqual(self.statuses(f"name: demo\ndescription: {typed}\n")["codex"], "not_loaded")
+        quoted = self.statuses('name: demo\ndescription: "123"\n')
+        self.assertEqual(set(quoted.values()), {"loads"})
+
+    def test_quoted_keys_are_keys(self):
+        result = self.statuses('"name": demo\n\'description\': Assemble demo artifacts.\n')
+        self.assertEqual(set(result.values()), {"loads"})
+
+    def test_a_list_description_follows_each_host(self):
+        # openclaw.yaml notes: a list description is stringified and listed; copilot-cli.yaml CP-STRICT-YAML
+        # rejects a non-string type.
+        for meta in ("name: demo\ndescription: [Build, test]\n", "name: demo\ndescription:\n  - Build\n  - test\n",
+                     "name: demo\ndescription:\n- Build\n- test\n"):
+            with self.subTest(meta=meta):
+                self.assertEqual(self.statuses(meta), {
+                    "hermes": "unverified", "claude-code": "degraded", "codex": "not_loaded", "openclaw": "loads",
+                    "opencode": "not_loaded", "copilot-cli": "not_loaded",
+                })
+
+    def test_a_tab_indented_line_is_invalid_yaml_where_hosts_are_strict(self):
+        # codex.yaml CX-STRICT-YAML, openclaw.yaml OW-STRICT-YAML, copilot-cli.yaml CP-STRICT-YAML; opencode.yaml
+        # and claude-code.yaml notes: tabs tolerated.
+        self.assertEqual(self.statuses("name: demo\ndescription: Assemble demo artifacts.\nmetadata:\n\tauthor: omh\n"), {
+            "hermes": "unverified", "claude-code": "loads", "codex": "not_loaded", "openclaw": "not_loaded",
+            "opencode": "loads", "copilot-cli": "not_loaded",
+        })
+
+    def test_yaml_this_reader_does_not_parse_is_unverified_never_loads(self):
+        for meta in ("name: demo\ndescription: &d Assemble demo artifacts.\n",
+                     "name: demo\ndescription: Use when: the user says demo\n",
+                     'name: demo\ndescription: "unclosed\n',
+                     "name: demo\ndescription: Assemble demo artifacts.\n? complex key\n"):
+            with self.subTest(meta=meta):
+                statuses = self.statuses(meta)
+                self.assertNotIn("loads", statuses.values())
+                self.assertEqual(statuses["opencode"], "unverified")
+        path = self.tmp / "pack" / "demo"
+        result = check_skill(path, hosts=["codex"])
+        self.assertIn("CODEX_YAML_UNSUPPORTED", self.ids(result))
+        self.assertEqual(result["summary"]["unverified"], 1)
+        self.assertIn("STATIC_YAML_UNSUPPORTED", {item["id"] for item in result["static"]})
+
+    def test_block_scalars_and_comments_still_read_as_strings(self):
+        for meta in ("name: demo\ndescription: >-\n  Assemble demo\n  artifacts.\n",
+                     "name: demo\ndescription: Assemble demo artifacts. # trailing note\n",
+                     "# leading comment\nname: demo\ndescription: 'It''s a demo.'\n"):
+            with self.subTest(meta=meta):
+                self.assertEqual(set(self.statuses(meta).values()), {"loads"})
+
+
+class InstallRootTests(_Fixture):
+    """The install root is read off the path as given, and a catalog is walked as Hermes walks it (R1)."""
+
+    def setUp(self) -> None:
+        super().setUp()
+        self.home = self.tmp / "home"
+        self.profile = self.home / ".hermes" / "profiles" / "work"
+        self.skills = self.profile / "skills"
+        self.agents = self.home / ".agents" / "skills"
+        for folder in ("top", "devops/deploy", "devops/cloud/aws", "research/arxiv"):
+            self.skill(folder.split("/")[-1], root=self.skills / Path(folder).parent)
+        # Never skills: a support folder of a skill and a dependency folder.
+        self.skill("inner", root=self.skills / "devops" / "deploy" / "references")
+        self.skill("dep", root=self.skills / "node_modules")
+        self.skill("shared", root=self.agents)
+        _link(self, self.skills / "aaa-linked", self.agents / "shared")
+        patcher = mock.patch.dict(os.environ, {"HOME": str(self.home), "USERPROFILE": str(self.home),
+                                               "HERMES_HOME": str(self.profile)})
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
+    def test_the_catalog_is_every_skill_hermes_walks(self):
+        result = check_catalog(self.skills, hosts=["hermes"])
+        found = sorted(Path(skill["target"]).relative_to(self.skills).as_posix() for skill in result["skills"])
+        self.assertEqual(found, ["aaa-linked", "devops/cloud/aws", "devops/deploy", "research/arxiv", "top"])
+        self.assertEqual(result["catalog"]["grouped"], 3)
+        rows = [row for skill in result["skills"] for row in skill["hosts"]]
+        self.assertEqual({(row["root"], row["status"]) for row in rows}, {("scanned", "loads")})
+
+    def test_a_linked_skill_in_the_profile_is_listed_where_the_link_sits(self):
+        result = check_skill(self.skills / "aaa-linked", hosts=["hermes", "claude-code"])
+        self.assertEqual(self.row(result, "hermes")["root"], "scanned")
+        self.assertEqual(self.row(result, "hermes")["status"], "loads")
+        self.assertIn("CLAUDE_ROOT", self.ids(result))
+        self.assertEqual(result["catalog"]["size"], 5)
+
+    def test_a_profile_root_is_found_without_hermes_home_and_a_grouped_skill_is_checked(self):
+        with mock.patch.dict(os.environ, {"HERMES_HOME": str(self.home / ".hermes")}):
+            result = check_skill(self.skills / "devops" / "deploy", hosts=["hermes", "codex", "copilot-cli"])
+        self.assertEqual(self.row(result, "hermes")["root"], "scanned")
+        self.assertEqual(self.row(result, "codex")["root"], "not_scanned")
+        self.assertNotIn("HERMES_GROUPING", self.ids(result))
+        self.assertNotIn("COPILOT_GROUPING", self.ids(result))
+
+    def test_grouping_deeper_than_a_host_looks(self):
+        nested = self.home / "repo" / ".claude" / "skills"
+        self.skill("grouped", root=nested / "category")
+        result = check_skill(nested / "category" / "grouped", hosts=["claude-code", "opencode"])
+        self.assertEqual(self.finding(result, "CLAUDE_GROUPING")["effect"], "not_loaded")
+        self.assertEqual(self.row(result, "opencode")["status"], "loads")
+
+    def test_external_dirs_count_as_hermes_roots_only(self):
+        external = self.tmp / "shared-pack"
+        self.skill("ext", root=external)
+        (self.profile / "config.yaml").write_text(f"skills:\n  external_dirs:\n    - {external}\n", encoding="utf-8")
+        result = check_skill(external / "ext", hosts=["hermes", "codex"])
+        self.assertEqual(self.row(result, "hermes")["root"], "scanned")
+        self.assertEqual(self.row(result, "codex")["root"], "not_scanned")
+
+    def test_a_linked_first_child_does_not_stamp_its_root_on_the_catalog(self):
+        pack = self.home / "repo" / ".claude" / "skills"
+        self.skill("zzz-plain", root=pack)
+        _link(self, pack / "aaa-linked", self.agents / "shared")
+        result = check_catalog(pack, hosts=["claude-code"])
+        self.assertEqual({row["root"] for skill in result["skills"] for row in skill["hosts"]}, {"scanned"})
+
+
+class FolderLinkTests(_Fixture):
+    """OpenClaw rejects a skill folder linked from outside its root; Codex follows it (R4)."""
+
+    def test_in_root_and_out_of_root_folder_links(self):
+        root = self.tmp / "repo" / ".agents" / "skills"
+        self.skill("real", root=root / "group")
+        self.skill("outside", root=self.tmp / "elsewhere")
+        _link(self, root / "inside-link", root / "group" / "real")
+        _link(self, root / "outside-link", self.tmp / "elsewhere" / "outside")
+
+        inside = check_skill(root / "inside-link", hosts=["codex", "openclaw"])
+        outside = check_skill(root / "outside-link", hosts=["codex", "openclaw"])
+        named = check_skill(root / "outside-link", hosts=["codex", "openclaw"], install_root=".agents/skills")
+
+        self.assertEqual({row["status"] for row in inside["hosts"]}, {"loads"})
+        for result in (outside, named):
+            self.assertEqual(self.row(result, "codex")["status"], "loads")
+            self.assertEqual(self.finding(result, "OPENCLAW_DIR_LINK_ESCAPE")["effect"], "not_loaded")
+
+
+class MultilineCodeSpanTests(_Fixture):
+    """A code span may cross a line ending; masking keeps every line number (R3)."""
+
+    def test_a_multiline_span_is_documentation_and_bare_prose_after_it_is_not(self):
+        body = "Example: `sample\n$ARGUMENTS` here.\nThen pass $ARGUMENTS on.\n"
+        result = check_skill(self.skill("multi", body=body), hosts=["hermes"])
+        message = self.finding(result, "HERMES_PLACEHOLDER_ARGUMENTS")["message"]
+        # Frontmatter is lines 1-4, so the body opens on line 5.
+        self.assertIn("line 7", message)
+        self.assertNotIn("6", message)
+
+    def test_unpaired_runs_and_paragraph_breaks_leave_the_text_live(self):
+        cases = {
+            "lone backtick": "A lone ` then $ARGUMENTS.\n",
+            "different run widths": "``open $ARGUMENTS` close`\n",
+            "blank line ends the paragraph": "Start `a\n\n$ARGUMENTS` b\n",
+        }
+        for label, body in cases.items():
+            with self.subTest(case=label):
+                self.assertIn("HERMES_PLACEHOLDER_ARGUMENTS",
+                              self.ids(check_skill(self.skill("x", body=body), hosts=["hermes"])))
+        self.assertEqual(self.ids(check_skill(self.skill("y", body="``a `$ARGUMENTS` b``\n"), hosts=["hermes"])), set())
+
+
+class OpenCodeBodyCapTests(_Fixture):
+    """OpenCode's skill tool cuts the delivered body at 2,000 lines or 51,200 bytes (R5)."""
+
+    def test_line_and_byte_caps(self):
+        many = check_skill(self.skill("many", body="Short line.\n" * 2_050), hosts=["opencode"])
+        heavy = check_skill(self.skill("heavy", body=("x" * 1_000 + "\n") * 60), hosts=["opencode"])
+        fits = check_skill(self.skill("fits", body="Short line.\n" * 1_990), hosts=["opencode"])
+
+        self.assertEqual(self.finding(many, "OPENCODE_BODY_CAP")["effect"], "degraded")
+        self.assertIn("2,050 lines", self.finding(many, "OPENCODE_BODY_CAP")["message"])
+        self.assertIn("OPENCODE_BODY_CAP", self.ids(heavy))
+        self.assertNotIn("OPENCODE_LONG_LINES", self.ids(many))
+        self.assertEqual(self.ids(fits), set())
 
 
 if __name__ == "__main__":

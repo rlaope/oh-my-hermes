@@ -299,8 +299,9 @@ All notable changes will be documented here.
   this branch: Hermes clipped situation clauses 20 → 0; `.agents` pack descriptions 42,581 → 7,442 characters;
   `.claude` copy 16,474 → 7,442; OpenClaw over-read-cap bodies 7 → 0; toolkit README named 0/8 → 8/8. The new
   `omh skill-eval PATH` (offline, stdlib) reports per host whether Hermes, Claude Code, Codex, OpenClaw, OpenCode
-  and Copilot CLI load a skill, load it degraded, or skip it, with each finding's source; `--catalog` checks a whole
-  folder and `--strict` exits 1 on any degraded row. The `omh-skill-eval` skill runs it before a skill ships, and a
+  and Copilot CLI load a skill, load it degraded, or skip it, with each finding's source, and marks a row
+  `unverified` when no recorded host fact covers the input (unparsed YAML, say); `--catalog` checks a whole
+  folder, category folders included, and `--strict` exits 1 on any degraded or unverified row. The `omh-skill-eval` skill runs it before a skill ships, and a
   test now runs the same checker over the three shipped packs (#2995).
 
 - **`show-reel` has a cut-sheet lane for films written as a shot contract.** A new opt-in reference, `cut-sheet.md`,

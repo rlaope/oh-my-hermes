@@ -31,7 +31,9 @@ SOURCES: dict[str, str] = {
     ),
     HERMES_SOURCE: (
         "NousResearch/hermes-agent 3b4215785882 (main, committed 2026-11-09), read on 2026-11-19: "
-        "agent/skill_utils.py clip_skill_description, tools/skills_tool.py linked-file globs, "
+        "agent/skill_utils.py clip_skill_description, iter_skill_index_files (nested walk, followed "
+        "links, pruned support and cache folders) and get_external_skills_dirs, hermes_cli profiles "
+        "(each profile's HERMES_HOME holds its own skills/), tools/skills_tool.py linked-file globs, "
         "tools/budget_config.py DEFAULT_RESULT_SIZE_CHARS."
     ),
     OMH_FIT: (
@@ -55,6 +57,18 @@ class HostFacts:
     project_roots: tuple[str, ...]
     user_roots: tuple[str, ...]
     project_roots_need_trust: bool = False
+    # Further user roots as `/`-separated globs, one `*` per folder name.
+    root_globs: tuple[str, ...] = ()
+    # The host also reads its active home's skills/ and the folders its config
+    # adds (Hermes: `$HERMES_HOME/skills` and `skills.external_dirs`).
+    config_roots: bool = False
+    # The host finds SKILL.md at any depth below a root. Otherwise it is known
+    # to find skills up to `max_grouping_depth` grouping folders below the root
+    # (`None`: only directly under it), and a deeper skill gets
+    # `grouping_effect` (`None`: no recorded fact, so `unverified`).
+    walks_nested: bool = False
+    max_grouping_depth: int | None = None
+    grouping_effect: str | None = None
     # How much of one description the skill list shows. `listing_unit` is
     # `hermes_clip` (word-boundary clip), `codepoints`, `codepoints_with_when_to_use`,
     # `utf16` (UTF-16 code units) or `compact` (a cut applied only over the catalog cap).
@@ -79,24 +93,30 @@ class HostFacts:
     read_wide_weight: int | None = None
     read_overhead_chars: int | None = None
     long_line_chars: int | None = None
+    # The skill tool's own output cap on the body it delivers (frontmatter
+    # stripped), separate from the per-line cut of the file-read tool.
+    body_cap_lines: int | None = None
+    body_cap_bytes: int | None = None
     # Folders whose files the skill view lists: (folder, name globs, recursive).
     linked_files: tuple[tuple[str, tuple[str, ...], bool], ...] = ()
     file_cap_bytes: int | None = None
     # Token class (`arguments`, `skill_dir`, `positional`) -> effect when it is
     # live prose in the body. A class the host substitutes correctly is absent.
     placeholder_effects: Mapping[str, str] = field(default_factory=dict)
-    # Frontmatter or file defect -> effect on this host.
+    # Frontmatter or file defect -> effect on this host; absent means the host
+    # is recorded as unaffected, `unverified` that no fact says what it does.
     defect_effects: Mapping[str, str] = field(default_factory=dict)
     provenance: Mapping[str, str] = field(default_factory=dict)
 
 
 FACT_FIELDS = (
-    "project_roots", "user_roots", "project_roots_need_trust",
+    "project_roots", "user_roots", "project_roots_need_trust", "root_globs", "config_roots",
+    "walks_nested", "max_grouping_depth", "grouping_effect",
     "listing_unit", "listing_limit", "listing_effect",
     "budget_kind", "budget_effect", "budget_context_share", "budget_unit", "budget_per_token",
     "budget_unknown_context", "budget_max_tokens", "budget_max_skills", "budget_max_chars",
     "view_budget_chars", "read_caps", "read_wide_weight", "read_overhead_chars",
-    "long_line_chars", "linked_files", "file_cap_bytes", "placeholder_effects", "defect_effects",
+    "long_line_chars", "body_cap_lines", "body_cap_bytes", "linked_files", "file_cap_bytes", "placeholder_effects", "defect_effects",
 )
 
 
@@ -118,6 +138,9 @@ _HOSTS = (
         project_roots=(".hermes/skills", ".agents/skills"),
         user_roots=("~/.hermes/skills",),
         project_roots_need_trust=True,
+        root_globs=("~/.hermes/profiles/*/skills",),
+        config_roots=True,
+        walks_nested=True,
         listing_unit="hermes_clip",
         listing_limit=60,
         listing_effect="advisory",
@@ -132,11 +155,14 @@ _HOSTS = (
         defect_effects={
             "desc_missing": "degraded", "desc_empty": "degraded", "duplicate_key": "advisory",
             "casing": "not_loaded", "symlink": "not_loaded",
+            "desc_typed": "unverified", "desc_list": "unverified", "desc_map": "unverified",
+            "tab_indent": "unverified", "yaml_unsupported": "unverified",
         },
         provenance={
             **_cite(SKILLEVALUATOR, "project_roots", "user_roots", "project_roots_need_trust",
                     "listing_effect", "placeholder_effects", "defect_effects"),
-            **_cite(HERMES_SOURCE, "listing_unit", "listing_limit", "view_budget_chars", "linked_files"),
+            **_cite(HERMES_SOURCE, "root_globs", "config_roots", "walks_nested", "listing_unit", "listing_limit",
+                    "view_budget_chars", "linked_files"),
         },
     ),
     HostFacts(
@@ -148,6 +174,8 @@ _HOSTS = (
         verified_source="closed source, bundled JS inspected (SkillEvaluator 1.0.1 profile)",
         project_roots=(".claude/skills",),
         user_roots=("~/.claude/skills",),
+        max_grouping_depth=0,
+        grouping_effect="not_loaded",
         listing_unit="codepoints_with_when_to_use",
         listing_limit=1536,
         listing_effect="degraded",
@@ -162,10 +190,12 @@ _HOSTS = (
         defect_effects={
             "desc_missing": "degraded", "desc_empty": "degraded", "duplicate_key": "advisory",
             "casing": "degraded",
+            "desc_typed": "degraded", "desc_list": "degraded", "desc_map": "degraded",
+            "yaml_unsupported": "unverified",
         },
         provenance=_cite(
-            SKILLEVALUATOR, "project_roots", "user_roots", "listing_unit", "listing_limit",
-            "listing_effect", "budget_kind", "budget_effect", "budget_context_share", "budget_unit",
+            SKILLEVALUATOR, "project_roots", "user_roots", "max_grouping_depth", "grouping_effect", "listing_unit",
+            "listing_limit", "listing_effect", "budget_kind", "budget_effect", "budget_context_share", "budget_unit",
             "budget_per_token", "budget_unknown_context", "file_cap_bytes", "placeholder_effects",
             "defect_effects",
         ),
@@ -179,6 +209,8 @@ _HOSTS = (
         verified_source="rust-v0.166.0 @ 593389380740 (SkillEvaluator 1.0.1 profile)",
         project_roots=(".agents/skills", ".codex/skills"),
         user_roots=("~/.agents/skills", "~/.codex/skills"),
+        max_grouping_depth=5,
+        grouping_effect="not_loaded",
         listing_unit="codepoints",
         listing_limit=1024,
         listing_effect="degraded",
@@ -193,10 +225,12 @@ _HOSTS = (
         defect_effects={
             "desc_missing": "not_loaded", "desc_empty": "not_loaded", "duplicate_key": "not_loaded",
             "casing": "not_loaded", "symlink": "not_loaded",
+            "desc_typed": "not_loaded", "desc_list": "not_loaded", "desc_map": "not_loaded",
+            "tab_indent": "not_loaded", "yaml_unsupported": "unverified",
         },
         provenance=_cite(
-            SKILLEVALUATOR, "project_roots", "user_roots", "listing_unit", "listing_limit",
-            "listing_effect", "budget_kind", "budget_effect", "budget_context_share", "budget_unit",
+            SKILLEVALUATOR, "project_roots", "user_roots", "max_grouping_depth", "grouping_effect", "listing_unit",
+            "listing_limit", "listing_effect", "budget_kind", "budget_effect", "budget_context_share", "budget_unit",
             "budget_per_token", "budget_unknown_context", "budget_max_tokens", "placeholder_effects",
             "defect_effects",
         ),
@@ -224,7 +258,9 @@ _HOSTS = (
         placeholder_effects={"arguments": "degraded", "skill_dir": "degraded"},
         defect_effects={
             "desc_missing": "not_loaded", "desc_empty": "not_loaded", "duplicate_key": "not_loaded",
-            "casing": "degraded", "symlink": "not_loaded",
+            "casing": "degraded", "symlink": "not_loaded", "dir_link_escape": "not_loaded",
+            "desc_typed": "unverified", "desc_map": "unverified",
+            "tab_indent": "not_loaded", "yaml_unsupported": "unverified",
         },
         provenance={
             **_cite(SKILLEVALUATOR, "project_roots", "user_roots", "listing_unit", "listing_limit",
@@ -243,15 +279,20 @@ _HOSTS = (
         verified_source="v1.19.5 @ 810c0eba1a73 (SkillEvaluator 1.0.1 profile)",
         project_roots=(".opencode/skills", ".opencode/skill", ".claude/skills", ".agents/skills"),
         user_roots=("~/.config/opencode/skills", "~/.claude/skills", "~/.agents/skills"),
+        walks_nested=True,
         long_line_chars=2_000,
+        body_cap_lines=2_000,
+        body_cap_bytes=51_200,
         placeholder_effects={"arguments": "degraded", "skill_dir": "degraded", "positional": "degraded"},
         defect_effects={
             "name_missing": "not_loaded", "desc_missing": "not_loaded", "desc_empty": "degraded",
             "duplicate_key": "not_loaded", "casing": "degraded",
+            "desc_typed": "not_loaded", "desc_list": "not_loaded", "desc_map": "not_loaded",
+            "yaml_unsupported": "unverified",
         },
         provenance=_cite(
-            SKILLEVALUATOR, "project_roots", "user_roots", "long_line_chars", "placeholder_effects",
-            "defect_effects",
+            SKILLEVALUATOR, "project_roots", "user_roots", "walks_nested", "long_line_chars", "body_cap_lines",
+            "body_cap_bytes", "placeholder_effects", "defect_effects",
         ),
     ),
     HostFacts(
@@ -263,6 +304,7 @@ _HOSTS = (
         verified_source="closed source, cli-main.js inspected (SkillEvaluator 1.0.1 profile)",
         project_roots=(".github/skills", ".agents/skills", ".claude/skills"),
         user_roots=("~/.copilot/skills", "~/.agents/skills"),
+        max_grouping_depth=3,
         listing_unit="utf16",
         listing_limit=1024,
         listing_effect="not_loaded",
@@ -273,9 +315,11 @@ _HOSTS = (
         defect_effects={
             "no_frontmatter": "not_loaded", "desc_missing": "degraded", "desc_empty": "degraded",
             "duplicate_key": "not_loaded", "casing": "degraded",
+            "desc_typed": "not_loaded", "desc_list": "not_loaded", "desc_map": "not_loaded",
+            "tab_indent": "not_loaded", "yaml_unsupported": "unverified",
         },
         provenance=_cite(
-            SKILLEVALUATOR, "project_roots", "user_roots", "listing_unit", "listing_limit",
+            SKILLEVALUATOR, "project_roots", "user_roots", "max_grouping_depth", "listing_unit", "listing_limit",
             "listing_effect", "budget_kind", "budget_effect", "budget_max_skills",
             "placeholder_effects", "defect_effects",
         ),

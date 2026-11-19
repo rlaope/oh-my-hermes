@@ -1,8 +1,9 @@
 """Offline check of how six agent hosts load one skill folder or a catalog of them.
 
 `check_skill` and `check_catalog` read SKILL.md files and the files beside them
-and say, per host, whether the skill loads, loads degraded, or is not loaded,
-with one finding per reason and its fix. Nothing here runs a host, calls a
+and say, per host, whether the skill loads, loads degraded, is not loaded, or is
+unverified (the input is one no recorded host fact covers, such as YAML this
+reader does not parse), with one finding per reason and its fix. Nothing here runs a host, calls a
 model, or opens a network connection: every verdict comes from the host facts
 in `harness_fit_hosts`, which carry their own provenance.
 
@@ -10,8 +11,15 @@ The checks come in eight classes: the listing window (how much of one
 description a host's skill list shows), the catalog budget (how much of the
 whole folder the list holds), body read caps, the linked-file layout Hermes
 lists, live placeholders, install roots, frontmatter and file defects, and
-openings that two skills share. Placeholder tokens inside code spans or fenced
-blocks are documentation, not live text, and never count.
+openings that two skills share. Placeholder tokens inside code spans (which
+may run across lines) or fenced blocks are documentation, not live text, and
+never count.
+
+The install root is read off the path as given, without resolving links: a
+linked skill folder is listed where its link sits. Link targets matter only for
+a host's own link rule (OpenClaw rejects a folder linked from outside its
+root). A catalog is every SKILL.md below the folder, walked the way Hermes walks
+it; hosts that read only the root's own folders see that part of it.
 
 Output schema `omh_skill_eval/v1`. `context_tokens=0` means the model context
 is unknown, which selects each host's smallest budget.
@@ -28,6 +36,7 @@ from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 from pathlib import Path
 
+from ..install.config_adapter import external_dirs
 from .catalog_types import OMH_DESCRIPTION_PREFIX
 from .harness_fit_hosts import HOSTS, HostFacts
 from .skill_index import index_opening_collisions
@@ -35,7 +44,17 @@ from .skill_index import index_opening_collisions
 SCHEMA = "omh_skill_eval/v1"
 MANIFEST = "SKILL.md"
 
-_EFFECT_RANK = {"advisory": 0, "degraded": 1, "not_loaded": 2}
+_EFFECT_RANK = {"advisory": 0, "unverified": 1, "degraded": 2, "not_loaded": 3}
+_STATUS = {0: "loads", 1: "unverified", 2: "degraded", 3: "not_loaded"}
+
+# Hermes' catalog walk (agent/skill_utils.py `iter_skill_index_files`): every
+# SKILL.md below the root, following links, never entering these folders, nor
+# a skill's own support folders.
+_WALK_SKIPPED = frozenset({
+    ".git", ".github", ".hub", ".archive", ".curator_backups", ".locks", ".hermes-dist", ".venv", "venv",
+    "node_modules", "site-packages", "__pycache__", ".tox", ".nox", ".pytest_cache", ".mypy_cache", ".ruff_cache",
+})
+_SUPPORT_FOLDERS = frozenset({"references", "templates", "assets", "scripts"})
 
 # Hermes' index clip (agent/skill_utils.py `clip_skill_description` on main):
 # over 60 characters, keep the words that end within the first 57, drop
@@ -54,7 +73,8 @@ _WHEN_CUE = re.compile(
 )
 
 _FENCE = re.compile(r"^\s{0,3}(`{3,}|~{3,})")
-_CODE_SPAN = re.compile(r"(`+)(?!`).+?(?<!`)\1(?!`)")
+_FENCE_CLOSE = re.compile(r"^\s{0,3}(`{3,}|~{3,})\s*$")
+_BACKTICKS = re.compile(r"`+")
 _PLACEHOLDERS = {
     "arguments": re.compile(r"(?<!\\)\$ARGUMENTS\b"),
     "skill_dir": re.compile(r"(?<!\\)\$\{?CLAUDE_SKILL_DIR\b\}?"),
@@ -93,7 +113,42 @@ _DEFECTS = {
         "SYMLINK", "SKILL.md is a symlink.",
         "Copy SKILL.md into the folder; a symlinked folder is fine where a symlinked file is not.",
     ),
+    "dir_link_escape": (
+        "DIR_LINK_ESCAPE", "The skill folder is a link whose target lies outside its install root.",
+        "Copy the skill folder into the root instead of linking it from another place.",
+    ),
+    "desc_typed": (
+        "DESC_TYPE", "The description is an unquoted YAML number, boolean or similar, not a string.",
+        "Quote the description so YAML reads it as a string.",
+    ),
+    "desc_list": ("DESC_LIST", "The description is a YAML list, not a string.", "Write the description as one string."),
+    "desc_map": ("DESC_MAP", "The description is a YAML mapping, not a string.", "Write the description as one string."),
+    "tab_indent": (
+        "TAB_INDENT", "Frontmatter indents a line with a tab, which YAML does not allow.",
+        "Indent frontmatter with spaces only.",
+    ),
+    "yaml_unsupported": (
+        "YAML_UNSUPPORTED", "Frontmatter uses YAML this check does not read (anchors, tags, a bare ': ' in a plain "
+        "value, an unclosed quote or a line that is not a key).",
+        "Keep frontmatter to key: value lines with quoted strings, block scalars and simple lists.",
+    ),
 }
+
+
+@dataclass(frozen=True)
+class _Typed:
+    """A frontmatter value that is not a string: `scalar` (number, boolean), `list` or `map`."""
+
+    kind: str
+
+
+@dataclass(frozen=True)
+class _Root:
+    """Where a folder is installed: the root's label as hosts name it, its folder, how it was found."""
+
+    label: str
+    path: Path | None
+    hermes_config: bool = False
 
 
 @dataclass(frozen=True)
@@ -109,6 +164,8 @@ class _Skill:
     fields: Mapping[str, object]
     body: str
     body_offset: int
+    yaml_issues: tuple[str, ...] = ()
+    depth: int = 0
 
     @property
     def name(self) -> str:
@@ -126,6 +183,13 @@ class _Catalog:
     folder: str
     skills: tuple[_Skill, ...]
 
+    def seen_by(self, facts: HostFacts) -> _Catalog:
+        """The part of the catalog a host lists: all of it, or the skills no deeper than it looks."""
+        if facts.walks_nested:
+            return self
+        limit = facts.max_grouping_depth or 0
+        return _Catalog(self.folder, tuple(skill for skill in self.skills if skill.depth <= limit))
+
     @property
     def size(self) -> int:
         return len(self.skills)
@@ -139,65 +203,141 @@ class _Catalog:
         return sum(len((skill.description or "").encode("utf-8")) for skill in self.skills)
 
     def as_dict(self) -> dict[str, object]:
-        return {"size": self.size, "desc_chars": self.desc_chars, "folder": self.folder}
+        grouped = sum(1 for skill in self.skills if skill.depth > 0)
+        return {"size": self.size, "desc_chars": self.desc_chars, "folder": self.folder, "grouped": grouped}
 
 
 # --- reading ---------------------------------------------------------------
+#
+# Frontmatter is read as the YAML subset skills use: `key: value` lines with
+# plain, quoted or block scalars, nested blocks and lists. A plain value YAML
+# types (a number, a boolean, a date) comes back as `_Typed("scalar")`, a list
+# or mapping as `_Typed("list")` / `_Typed("map")`, and `null` or nothing as
+# None. YAML outside the subset (anchors, tags, a bare ": " in a plain value,
+# an unclosed quote, a top-level line that is no key) is recorded as an issue
+# and its value as `_Typed("unknown")`, which no host verdict reads as a string.
 
-def _scalar(lines: list[str], index: int, value: str) -> tuple[object, int]:
-    """One top-level frontmatter value starting at `lines[index]`; returns (value, next index)."""
+_KEY = re.compile(r"""^(?:"((?:[^"\\]|\\.)*)"|'((?:[^']|'')*)'|([A-Za-z0-9_][\w.-]*))[ \t]*:(?:[ \t]+(.*)|$)""")
+_DOUBLE_QUOTED = re.compile(r'^"((?:[^"\\]|\\.)*)"[ \t]*(?:#.*)?$', re.DOTALL)
+_SINGLE_QUOTED = re.compile(r"^'((?:[^']|'')*)'[ \t]*(?:#.*)?$", re.DOTALL)
+_TYPED_PLAIN = re.compile(
+    r"^(?:[-+]?(?:\d[\d_]*|0x[0-9a-fA-F_]+|0o?[0-7_]+)"
+    r"|[-+]?(?:\.\d+|\d[\d_]*(?:\.\d*)?)(?:[eE][-+]?\d+)?"
+    r"|[-+]?\.(?:inf|Inf|INF)|\.(?:nan|NaN|NAN)"
+    r"|true|True|TRUE|false|False|FALSE|yes|Yes|YES|no|No|NO|on|On|ON|off|Off|OFF"
+    r"|\d{4}-\d\d?-\d\d?(?:[Tt ].*)?)$"
+)
+_NULL_PLAIN = frozenset({"~", "null", "Null", "NULL"})
+_TAB_INDENT = re.compile(r"^ *\t")
+
+
+def _plain(value: str) -> str:
+    """A plain scalar without its trailing comment."""
+    return re.sub(r"[ \t]+#.*$", "", value).strip()
+
+
+def _scalar(lines: list[str], index: int, value: str) -> tuple[object, int, tuple[str, ...]]:
+    """One top-level frontmatter value starting at `lines[index]`; returns (value, next index, issues)."""
     following = index + 1
     continuation: list[str] = []
-    while following < len(lines) and (lines[following][:1] in (" ", "\t") or not lines[following].strip()):
-        continuation.append(lines[following])
-        following += 1
+    value = value.strip()
+    while following < len(lines):
+        line = lines[following]
+        # A list may sit at the key's own indentation ("key:" then "- item").
+        if line[:1] in (" ", "\t") or not line.strip() or (not value and line.startswith("- ")):
+            continuation.append(line)
+            following += 1
+            continue
+        break
     while continuation and not continuation[-1].strip():
         continuation.pop()
         following -= 1
-    value = value.strip()
+    parts = [line.strip() for line in continuation if line.strip() and not line.strip().startswith("#")]
     if value[:1] in ("|", ">"):
-        parts = [line.strip() for line in continuation]
-        return ("\n" if value[0] == "|" else " ").join(parts).strip(), following
-    if not value:
-        return (None if not continuation else object()), following
+        if not re.fullmatch(r"[|>][-+0-9]*(?:[ \t]+#.*)?", value):
+            return _Typed("unknown"), following, ("yaml_unsupported",)
+        text = [line.strip() for line in continuation]
+        return ("\n" if value[0] == "|" else " ").join(text).strip(), following, ()
+    if value[:1] in ("&", "*", "!"):
+        return _Typed("unknown"), following, ("yaml_unsupported",)
+    if not value or value.startswith("#"):
+        if not parts:
+            return None, following, ()
+        if parts[0].startswith("- ") or parts[0] == "-":
+            return _Typed("list"), following, ()
+        if _KEY.match(parts[0]):
+            return _Typed("map"), following, ()
+        return " ".join(parts), following, ()
     if value[0] == '"':
-        joined = " ".join([value] + [line.strip() for line in continuation])
+        match = _DOUBLE_QUOTED.match(" ".join([value, *parts]))
+        if match is None:
+            return _Typed("unknown"), following, ("yaml_unsupported",)
         try:
-            return json.loads(joined), following
+            return json.loads(f'"{match.group(1)}"'), following, ()
         except json.JSONDecodeError:
-            return joined.strip('"'), following
+            return _Typed("unknown"), following, ("yaml_unsupported",)
     if value[0] == "'":
-        joined = " ".join([value] + [line.strip() for line in continuation])
-        return joined[1:-1].replace("''", "'") if joined.endswith("'") else joined[1:], following
-    if value[0] in ("[", "{"):
-        return object(), following
-    return " ".join([value] + [line.strip() for line in continuation]), following
+        match = _SINGLE_QUOTED.match(" ".join([value, *parts]))
+        if match is None:
+            return _Typed("unknown"), following, ("yaml_unsupported",)
+        return match.group(1).replace("''", "'"), following, ()
+    if value[0] == "[":
+        return _Typed("list"), following, ()
+    if value[0] == "{":
+        return _Typed("map"), following, ()
+    joined = " ".join([_plain(value), *(_plain(part) for part in parts)]).strip()
+    if ": " in joined or joined.endswith(":"):
+        return _Typed("unknown"), following, ("yaml_unsupported",)
+    if not parts:
+        if joined in _NULL_PLAIN:
+            return None, following, ()
+        if _TYPED_PLAIN.match(joined):
+            return _Typed("scalar"), following, ()
+    return joined, following, ()
 
 
-def _frontmatter(text: str) -> tuple[bool, tuple[str, ...], dict[str, object], str, int]:
-    """(closed block found, keys in order, top-level fields, body, file lines before the body)."""
+def _frontmatter(text: str) -> tuple[bool, tuple[str, ...], dict[str, object], str, int, tuple[str, ...]]:
+    """(closed block found, keys in order, top-level fields, body, file lines before the body, YAML issues)."""
     lines = text.removeprefix("\ufeff").splitlines()
     if not lines or lines[0].strip() != "---":
-        return False, (), {}, text, 0
+        return False, (), {}, text, 0, ()
     end = next((index for index in range(1, len(lines)) if lines[index].strip() == "---"), None)
     if end is None:
-        return False, (), {}, text, 0
+        return False, (), {}, text, 0, ()
     block = lines[1:end]
     keys: list[str] = []
     fields: dict[str, object] = {}
+    issues: list[str] = []
+    if any(line.strip() and _TAB_INDENT.match(line) for line in block):
+        issues.append("tab_indent")
     index = 0
     while index < len(block):
-        match = re.match(r"^([A-Za-z0-9_][\w.-]*)\s*:(.*)$", block[index])
-        if match is None:
+        line = block[index]
+        if not line.strip() or line.lstrip().startswith("#"):
             index += 1
             continue
-        keys.append(match.group(1))
-        value, index = _scalar(block, index, match.group(2))
-        fields[match.group(1)] = value
-    return True, tuple(keys), fields, "\n".join(lines[end + 1:]), end + 1
+        match = _KEY.match(line)
+        if match is None:
+            issues.append("yaml_unsupported")
+            index += 1
+            continue
+        if match.group(1) is not None:
+            try:
+                key = json.loads(f'"{match.group(1)}"')
+            except json.JSONDecodeError:
+                key = match.group(1)
+        elif match.group(2) is not None:
+            key = match.group(2).replace("''", "'")
+        else:
+            key = match.group(3)
+        keys.append(key)
+        value, index, found = _scalar(block, index, match.group(4) or "")
+        issues.extend(found)
+        fields[key] = value
+    return True, tuple(keys), fields, "\n".join(lines[end + 1:]), end + 1, tuple(dict.fromkeys(issues))
 
 
-def _read_skill(path: Path) -> _Skill:
+def _read_skill(path: Path, depth: int = 0) -> _Skill:
     try:
         names = sorted(os.listdir(path))
     except OSError:
@@ -213,23 +353,47 @@ def _read_skill(path: Path) -> _Skill:
             raw = b""
         raw_bytes = len(raw)
         text = raw.decode("utf-8", errors="replace")
-    has_frontmatter, keys, fields, body, offset = _frontmatter(text)
-    return _Skill(path, path.name, manifest, symlinked, text, raw_bytes, has_frontmatter, keys, fields, body, offset)
+    has_frontmatter, keys, fields, body, offset, issues = _frontmatter(text)
+    return _Skill(path, path.name, manifest, symlinked, text, raw_bytes, has_frontmatter, keys, fields, body, offset,
+                  issues, depth)
 
 
-def _has_manifest(folder: Path) -> bool:
-    try:
-        return any(name.lower() == "skill.md" for name in os.listdir(folder))
-    except OSError:
-        return False
+def _has_manifest(names: Iterable[str]) -> bool:
+    return any(name.lower() == "skill.md" for name in names)
 
 
-def _catalog(folder: Path) -> _Catalog:
-    try:
-        children = sorted(child for child in folder.iterdir() if child.is_dir() and not child.name.startswith("."))
-    except OSError:
-        children = []
-    return _Catalog(str(folder), tuple(_read_skill(child) for child in children if _has_manifest(child)))
+def _catalog(folder: Path, root: Path | None = None) -> _Catalog:
+    """Every skill folder below `folder`, walked as Hermes walks a skills root.
+
+    Links are followed (a link back into its own ancestry is not), the cache and VCS folders
+    Hermes skips are never entered, and a skill's own support folders are not
+    searched for further skills. `depth` counts grouping folders between
+    `root` (the install root, else `folder`) and the skill.
+    """
+    base = Path(os.path.abspath(root if root is not None else folder))
+    found: list[Path] = []
+    # Real paths of each folder's own ancestors: a link back up the tree would loop.
+    chains: dict[str, frozenset[str]] = {}
+    for directory, dirs, files in os.walk(folder, followlinks=True):
+        real = os.path.realpath(directory)
+        above = chains.get(os.path.dirname(directory), frozenset())
+        if real in above:
+            dirs[:] = []
+            continue
+        chains[directory] = above | {real}
+        here = Path(directory)
+        is_skill = _has_manifest(files) and here != folder
+        dirs[:] = sorted(name for name in dirs if name not in _WALK_SKIPPED and not (is_skill and name in _SUPPORT_FOLDERS))
+        if is_skill:
+            found.append(here)
+    skills = []
+    for path in sorted(found, key=lambda item: item.as_posix()):
+        try:
+            depth = len(Path(os.path.abspath(path)).relative_to(base).parts) - 1
+        except ValueError:
+            depth = 0
+        skills.append(_read_skill(path, max(depth, 0)))
+    return _Catalog(str(folder), tuple(skills))
 
 
 def _text_files(skill: _Skill) -> Iterable[tuple[str, str]]:
@@ -280,20 +444,62 @@ def _hermes_window_hides_when(description: str) -> tuple[bool, str]:
     return True, listed
 
 
+def _mask_spans(lines: list[str]) -> list[str]:
+    """Blank inline code spans across `lines`, keeping every line and its length (CommonMark pairing).
+
+    A run of N backticks opens a span that the next run of exactly N closes,
+    on the same line or a later one; a run with no closer is literal text.
+    """
+    text = "\n".join(lines)
+    out = list(text)
+    position = 0
+    while True:
+        opener = _BACKTICKS.search(text, position)
+        if opener is None:
+            break
+        width = len(opener.group(0))
+        closer = next((run for run in _BACKTICKS.finditer(text, opener.end()) if len(run.group(0)) == width), None)
+        if closer is None:
+            position = opener.end()
+            continue
+        for index in range(opener.start(), closer.end()):
+            if out[index] != "\n":
+                out[index] = " "
+        position = closer.end()
+    return "".join(out).split("\n")
+
+
 def _live_text(body: str, offset: int = 0) -> list[tuple[int, str]]:
     """Body lines with fenced blocks dropped and code spans blanked, numbered as SKILL.md lines."""
     live: list[tuple[int, str]] = []
+    paragraph: list[tuple[int, str]] = []
+
+    def flush() -> None:
+        # A code span never crosses a fence, so pair backticks within each run of prose lines.
+        if paragraph:
+            masked = _mask_spans([line for _number, line in paragraph])
+            live.extend((number, line) for (number, _line), line in zip(paragraph, masked))
+            paragraph.clear()
+
     fence: str | None = None
     for number, line in enumerate(body.splitlines(), offset + 1):
         opener = _FENCE.match(line)
         if fence is not None:
-            if opener and opener.group(1)[0] == fence[0] and len(opener.group(1)) >= len(fence):
+            # A closing fence carries nothing after its run (CommonMark).
+            closer = _FENCE_CLOSE.match(line)
+            if closer and closer.group(1)[0] == fence[0] and len(closer.group(1)) >= len(fence):
                 fence = None
             continue
         if opener:
+            flush()
             fence = opener.group(1)
             continue
-        live.append((number, _CODE_SPAN.sub(" ", line)))
+        if not line.strip():
+            # A blank line ends the paragraph, and a span never crosses a paragraph.
+            flush()
+            continue
+        paragraph.append((number, line))
+    flush()
     return live
 
 
@@ -331,24 +537,94 @@ def _linked(facts: HostFacts, relative: str) -> bool:
     return False
 
 
-def _install_root(skill_dir: Path, install_root: str | None) -> str | None:
-    if install_root is not None:
-        return install_root.strip().rstrip("/")
-    parent = skill_dir.resolve().parent
+def _lexical(path: Path) -> Path:
+    """`path` made absolute without resolving links: a linked skill folder stays where its link sits."""
+    return Path(os.path.abspath(os.path.expanduser(str(path))))
+
+
+def _home_label(path: Path) -> str | None:
     try:
-        relative = parent.relative_to(Path.home().resolve()).as_posix()
+        return "~/" + path.relative_to(_lexical(Path.home())).as_posix()
     except ValueError:
-        relative = None
-    user_roots = {root for facts in HOSTS.values() for root in facts.user_roots}
-    if relative is not None and f"~/{relative}" in user_roots:
-        return f"~/{relative}"
-    # Only dotted roots are inferred from the path: a bare `skills/` folder is
-    # also the usual name of a source pack, so it counts as OpenClaw's
-    # workspace root only when the caller says so.
-    project_roots = {root for facts in HOSTS.values() for root in facts.project_roots if root.startswith(".")}
-    posix = parent.as_posix()
-    matches = [root for root in project_roots if posix == root or posix.endswith("/" + root)]
-    return max(matches, key=len) if matches else None
+        return None
+
+
+def _glob_match(label: str, pattern: str) -> bool:
+    parts, wanted = label.split("/"), pattern.split("/")
+    return len(parts) == len(wanted) and all(fnmatch.fnmatchcase(part, want) for part, want in zip(parts, wanted))
+
+
+def _hermes_config_roots() -> list[Path]:
+    """The skills folders the active Hermes home lists: `$HERMES_HOME/skills` (default `~/.hermes`) and its
+    `skills.external_dirs`, read from config.yaml the way OMH's installer reads them."""
+    home = _lexical(Path(os.environ.get("HERMES_HOME") or Path.home() / ".hermes"))
+    roots = [home / "skills"]
+    try:
+        config = (home / "config.yaml").read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError):
+        return roots
+    for entry in external_dirs(config):
+        expanded = Path(os.path.expandvars(os.path.expanduser(entry)))
+        roots.append(_lexical(expanded if expanded.is_absolute() else home / expanded))
+    return roots
+
+
+def _same_folder(left: Path, right: Path) -> bool:
+    return left == right or os.path.realpath(left) == os.path.realpath(right)
+
+
+def _root_at(folder: Path, hermes_roots: list[Path]) -> _Root | None:
+    """The install root `folder` is, if any host scans it."""
+    label = _home_label(folder)
+    if label is not None:
+        for facts in HOSTS.values():
+            if label in facts.user_roots or any(_glob_match(label, pattern) for pattern in facts.root_globs):
+                return _Root(label, folder)
+    if any(_same_folder(folder, root) for root in hermes_roots):
+        return _Root(label or folder.as_posix(), folder, hermes_config=True)
+    # Only dotted roots are read off the path: a bare `skills/` folder is also
+    # the usual name of a source pack, so it counts as OpenClaw's workspace
+    # root only when the caller says so.
+    posix = folder.as_posix()
+    project = [root for facts in HOSTS.values() for root in facts.project_roots
+               if root.startswith(".") and (posix == root or posix.endswith("/" + root))]
+    return _Root(max(project, key=len), folder) if project else None
+
+
+def _install_root(start: Path, install_root: str | None, *, include_start: bool = False) -> _Root | None:
+    """The root a folder is installed under, read lexically from `start` upward (`start` itself when asked).
+
+    A named `install_root` is taken as given and sits at `start` (a catalog) or
+    its parent (one skill).
+    """
+    start = _lexical(start)
+    if install_root is not None:
+        return _Root(install_root.strip().rstrip("/"), start if include_start else start.parent)
+    hermes_roots = _hermes_config_roots()
+    folders = ([start] if include_start else []) + list(start.parents)
+    for folder in folders:
+        if folder == folder.parent:
+            break
+        found = _root_at(folder, hermes_roots)
+        if found is not None:
+            return found
+    return None
+
+
+def _scans(facts: HostFacts, root: _Root) -> bool:
+    if root.label in facts.project_roots or root.label in facts.user_roots:
+        return True
+    if any(_glob_match(root.label, pattern) for pattern in facts.root_globs):
+        return True
+    return facts.config_roots and root.hermes_config
+
+
+def _link_escapes(skill: _Skill, root: _Root | None) -> bool:
+    """The skill folder is a link whose target lies outside the root it is installed under."""
+    if root is None or root.path is None or not os.path.islink(skill.path):
+        return False
+    target = Path(os.path.realpath(skill.path))
+    return not target.is_relative_to(Path(os.path.realpath(root.path)))
 
 
 # --- findings ----------------------------------------------------------------
@@ -357,7 +633,7 @@ def _finding(finding_id: str, effect: str, message: str, fix: str) -> dict[str, 
     return {"id": finding_id, "effect": effect, "message": message, "fix": fix}
 
 
-def _defects(skill: _Skill) -> list[str]:
+def _defects(skill: _Skill, root: _Root | None = None) -> list[str]:
     if skill.manifest is None:
         return ["no_skill_md"]
     found: list[str] = []
@@ -365,44 +641,66 @@ def _defects(skill: _Skill) -> list[str]:
         found.append("casing")
     if skill.symlinked:
         found.append("symlink")
+    if _link_escapes(skill, root):
+        found.append("dir_link_escape")
     if not skill.has_frontmatter:
         found.append("no_frontmatter")
     name = skill.fields.get("name")
     if not isinstance(name, str) or not name.strip():
         found.append("name_missing")
-    if skill.description is None:
+    value = skill.fields.get("description")
+    if isinstance(value, _Typed):
+        # An `unknown` value is YAML this reader does not parse, reported once as yaml_unsupported.
+        if value.kind != "unknown":
+            found.append({"scalar": "desc_typed", "list": "desc_list", "map": "desc_map"}[value.kind])
+    elif skill.description is None:
         found.append("desc_missing")
     elif not skill.description:
         found.append("desc_empty")
     if len(skill.keys) != len(set(skill.keys)):
         found.append("duplicate_key")
+    found.extend(skill.yaml_issues)
     return found
 
 
 def _host_findings(
-    facts: HostFacts, skill: _Skill, catalog: _Catalog, context_tokens: int, root: str | None,
+    facts: HostFacts, skill: _Skill, catalog: _Catalog, context_tokens: int, root: _Root | None,
     defects: list[str], live: list[tuple[int, str]], files: list[tuple[str, str]],
 ) -> tuple[str, list[dict[str, str]]]:
     name = facts.display_name
     prefix = facts.prefix
     findings: list[dict[str, str]] = []
+    catalog = catalog.seen_by(facts)
 
     root_state = "not_checked"
     if root is not None:
-        scanned = root in facts.project_roots or root in facts.user_roots
+        scanned = _scans(facts, root)
         root_state = "scanned" if scanned else "not_scanned"
+        reads = ", ".join(facts.project_roots + facts.user_roots + facts.root_globs)
+        if facts.config_roots:
+            reads += ", its home's skills/ and skills.external_dirs"
         if not scanned:
             findings.append(_finding(
                 f"{prefix}_ROOT", "not_loaded",
-                f"{name} does not scan {root}; it reads {', '.join(facts.project_roots + facts.user_roots)}.",
+                f"{name} does not scan {root.label}; it reads {reads}.",
                 f"Install the skill under one of the roots {name} scans.",
             ))
-        elif facts.project_roots_need_trust and root in facts.project_roots:
+        elif facts.project_roots_need_trust and root.label in facts.project_roots:
             findings.append(_finding(
                 f"{prefix}_ROOT_TRUST", "advisory",
-                f"{name} lists skills under {root} only after the repository is trusted.",
+                f"{name} lists skills under {root.label} only after the repository is trusted.",
                 "Trust the repository in Hermes, or install the skill under ~/.hermes/skills.",
             ))
+    if not facts.walks_nested and skill.depth > (facts.max_grouping_depth or 0):
+        effect = facts.grouping_effect or "unverified"
+        looks = (f"up to {facts.max_grouping_depth} grouping folders below its root"
+                 if facts.max_grouping_depth else "only directly under its root")
+        known = "" if facts.grouping_effect else "; no recorded fact says whether it finds one deeper"
+        findings.append(_finding(
+            f"{prefix}_GROUPING", effect,
+            f"This skill sits {skill.depth} grouping folder(s) deep; {name} is known to find skills {looks}{known}.",
+            f"Move the skill folder directly under the root {name} scans.",
+        ))
 
     if "no_skill_md" in defects:
         findings.append(_finding(f"{prefix}_NO_SKILL_MD", "not_loaded", *_DEFECTS["no_skill_md"][1:]))
@@ -411,6 +709,8 @@ def _host_findings(
         effect = facts.defect_effects.get(defect)
         if effect is not None:
             suffix, message, fix = _DEFECTS[defect]
+            if effect == "unverified":
+                message += f" No recorded {name} fact says what it does with this, so the verdict is unverified."
             findings.append(_finding(f"{prefix}_{suffix}", effect, f"{name}: {message}", fix))
 
     description = skill.description or ""
@@ -504,6 +804,21 @@ def _host_findings(
                 f"{facts.read_wide_weight}); {name} caps a skill read at {cap:,} at {basis}.",
                 "Keep SKILL.md within about 15,000 characters and move detail into references/ files.",
             ))
+    if facts.body_cap_lines is not None or facts.body_cap_bytes is not None:
+        # The skill tool strips frontmatter and returns the body; output past
+        # either cap is cut and the rest spilled to a file the model must page.
+        body_lines = len(skill.body.splitlines())
+        body_bytes = len(skill.body.encode("utf-8"))
+        over_lines = facts.body_cap_lines is not None and body_lines > facts.body_cap_lines
+        over_bytes = facts.body_cap_bytes is not None and body_bytes > facts.body_cap_bytes
+        if over_lines or over_bytes:
+            findings.append(_finding(
+                f"{prefix}_BODY_CAP", "degraded",
+                f"{name}'s skill tool delivers the body as {body_lines:,} lines / {body_bytes:,} bytes and cuts its "
+                f"output at {facts.body_cap_lines:,} lines or {facts.body_cap_bytes:,} bytes, so the model pages the "
+                "rest from a spill file.",
+                "Keep the SKILL.md body under both caps; move detail into references/ files.",
+            ))
     if facts.long_line_chars is not None:
         # SKILL.md itself arrives through the skill tool, which cuts whole
         # output, not lines; the per-line cut is the read tool's.
@@ -571,8 +886,7 @@ def _all_files(skill: _Skill) -> Iterable[str]:
 
 
 def _status(findings: list[dict[str, str]]) -> str:
-    worst = max((_EFFECT_RANK[item["effect"]] for item in findings), default=0)
-    return {0: "loads", 1: "degraded", 2: "not_loaded"}[worst]
+    return _STATUS[max((_EFFECT_RANK[item["effect"]] for item in findings), default=0)]
 
 
 def _static(skill: _Skill, defects: list[str], selected: list[HostFacts]) -> list[dict[str, str]]:
@@ -610,6 +924,8 @@ def _overlap(catalog: _Catalog) -> list[dict[str, object]]:
 
 def _selected(hosts: Iterable[str] | None) -> list[HostFacts]:
     names = list(HOSTS) if hosts is None else list(hosts)
+    if not names:
+        raise ValueError(f"no host named; known: {', '.join(HOSTS)} (leave the option out to check all)")
     unknown = [name for name in names if name not in HOSTS]
     if unknown:
         raise ValueError(f"unknown host(s) {', '.join(unknown)}; known: {', '.join(HOSTS)}")
@@ -618,13 +934,12 @@ def _selected(hosts: Iterable[str] | None) -> list[HostFacts]:
 
 def _evaluate(
     skill: _Skill, catalog: _Catalog, overlap: list[dict[str, object]], selected: list[HostFacts],
-    context_tokens: int, install_root: str | None,
+    context_tokens: int, root: _Root | None,
 ) -> dict[str, object]:
-    defects = _defects(skill)
+    defects = _defects(skill, root)
     live = _live_text(skill.body, skill.body_offset)
     needs_files = any(facts.long_line_chars is not None for facts in selected)
     files = list(_text_files(skill)) if needs_files and skill.manifest else []
-    root = _install_root(skill.path, install_root)
     rows: list[dict[str, object]] = []
     for facts in selected:
         root_state, findings = _host_findings(facts, skill, catalog, context_tokens, root, defects, live, files)
@@ -647,6 +962,7 @@ def _evaluate(
         "summary": {
             "not_loaded": sum(1 for row in rows if row["status"] == "not_loaded"),
             "degraded": sum(1 for row in rows if row["status"] == "degraded"),
+            "unverified": sum(1 for row in rows if row["status"] == "unverified"),
         },
     }
 
@@ -655,32 +971,41 @@ def check_skill(
     skill_dir: Path, *, hosts: Iterable[str] | None = None, context_tokens: int = 0,
     install_root: str | None = None,
 ) -> dict[str, object]:
-    """Per-host verdict for one skill folder; its parent folder is the catalog it is listed in.
+    """Per-host verdict for one skill folder, listed in the catalog of the root it is installed under.
 
     `install_root` names the root the skill is installed under (`.claude/skills`,
-    `~/.hermes/skills`, `skills`); by default it is read off a dotted parent
-    path, and otherwise roots are reported `not_checked`.
+    `~/.hermes/skills`, `skills`) and sits at the skill's parent. By default the
+    root is read off the path as given (a dotted root, a root under `~`, a
+    Hermes profile or `skills.external_dirs` folder); otherwise roots are
+    reported `not_checked` and the parent folder is the catalog.
     """
     skill_dir = Path(skill_dir)
     selected = _selected(hosts)
-    catalog = _catalog(skill_dir.parent)
-    skill = next((item for item in catalog.skills if item.path.name == skill_dir.name), None) or _read_skill(skill_dir)
-    return _evaluate(skill, catalog, _overlap(catalog), selected, context_tokens, install_root)
+    root = _install_root(skill_dir, install_root)
+    lexical = _lexical(skill_dir)
+    folder = root.path if root is not None and root.path is not None else lexical.parent
+    catalog = _catalog(folder)
+    skill = next((item for item in catalog.skills if _lexical(item.path) == lexical), None)
+    if skill is None:
+        skill = _read_skill(skill_dir)
+    return _evaluate(skill, catalog, _overlap(catalog), selected, context_tokens, root)
 
 
 def check_catalog(
     root: Path, *, hosts: Iterable[str] | None = None, context_tokens: int = 0,
     install_root: str | None = None,
 ) -> dict[str, object]:
-    """Per-skill verdicts for every skill folder directly under `root`, plus catalog totals."""
+    """Per-skill verdicts for every skill folder below `root` (walked as Hermes walks it), plus catalog totals.
+
+    The install root is read off `root` itself or a folder above it, never off
+    a skill inside it; `install_root` names it and places it at `root`.
+    """
     root = Path(root)
     selected = _selected(hosts)
-    catalog = _catalog(root)
+    installed = _install_root(root, install_root, include_start=True)
+    catalog = _catalog(root, installed.path if installed is not None else None)
     overlap = _overlap(catalog)
-    if install_root is None:
-        probe = catalog.skills[0].path if catalog.skills else root / "_"
-        install_root = _install_root(probe, None)
-    results = [_evaluate(skill, catalog, overlap, selected, context_tokens, install_root) for skill in catalog.skills]
+    results = [_evaluate(skill, catalog, overlap, selected, context_tokens, installed) for skill in catalog.skills]
     counts: dict[str, int] = {}
     for result in results:
         for row in result["hosts"]:
@@ -698,6 +1023,7 @@ def check_catalog(
             "skills": len(results),
             "not_loaded": sum(r["summary"]["not_loaded"] for r in results),
             "degraded": sum(r["summary"]["degraded"] for r in results),
+            "unverified": sum(r["summary"]["unverified"] for r in results),
             "findings": dict(sorted(counts.items())),
         },
     }

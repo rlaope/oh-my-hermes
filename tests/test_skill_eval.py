@@ -60,7 +60,7 @@ class SkillEvalCommandTests(unittest.TestCase):
         self.assertEqual(code, 0)
         self.assertTrue(lines[1].startswith("❌ hermes not_loaded — HERMES_ROOT"), lines[1])
         self.assertEqual(lines[2], "✅ claude-code loads")
-        self.assertEqual(lines[-1], "2 hosts: 1 not_loaded, 0 degraded")
+        self.assertEqual(lines[-1], "2 hosts: 1 not_loaded, 0 degraded, 0 unverified")
 
     def test_strict_exits_one_on_a_not_loaded_row_and_json_writes_the_payload(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -81,13 +81,35 @@ class SkillEvalCommandTests(unittest.TestCase):
         self.assertEqual(code, 0)
         self.assertIn("(catalog)", out.splitlines()[0])
         self.assertIn("roots: not checked; pass --install-root", out)
-        self.assertTrue(out.splitlines()[-1].startswith("2 skills: 0 not_loaded and 0 degraded host rows"))
+        self.assertTrue(out.splitlines()[-1].startswith("2 skills: 0 not_loaded, 0 degraded and 0 unverified host rows"))
 
     def test_an_unknown_host_or_a_missing_folder_exits_two(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             skill = _write_skill(Path(tmp), "alpha", "Use when alpha work comes up.")
             self.assertEqual(_run(str(skill), "--host", "nope")[0], 2)
             self.assertEqual(_run(str(Path(tmp) / "missing"))[0], 2)
+
+    def test_a_host_option_that_names_no_host_exits_two_and_an_absent_one_checks_all(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            skill = _write_skill(Path(tmp), "alpha", "Use when alpha work comes up.")
+            for value in (",", "", " , "):
+                for strict in ((), ("--strict",)):
+                    with self.subTest(host=value, strict=bool(strict)):
+                        code, out = _run(str(skill), "--host", value, *strict)
+                        self.assertEqual(code, 2)
+                        self.assertIn("names no host", out)
+            code, out = _run(str(skill), "--strict")
+        self.assertEqual(code, 0)
+        self.assertEqual(out.splitlines()[-1], "6 hosts: 0 not_loaded, 0 degraded, 0 unverified")
+
+    def test_strict_counts_an_unverified_row(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            skill = Path(tmp) / "alpha"
+            skill.mkdir()
+            (skill / "SKILL.md").write_text("---\nname: alpha\ndescription: &a Use when alpha.\n---\n", encoding="utf-8")
+            code, out = _run(str(skill), "--host", "opencode", "--strict")
+        self.assertEqual(code, 1)
+        self.assertIn("❔ opencode unverified", out)
 
 
 class SkillEvalCatalogTests(unittest.TestCase):
