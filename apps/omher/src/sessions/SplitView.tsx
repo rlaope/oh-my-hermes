@@ -310,19 +310,22 @@ export function SplitPicker({ main }: { main: SessionRec }) {
   const from = pick?.at ?? main.id;
   const rows = open ? splitChoices(ss.list, ss.agents, from, sp.groups) : [];
   const fromRec = ss.list.find((r) => r.id === from) ?? main;
-  // under the main column's header, at its right edge (the menu is fixed to the window)
+  // under the main column's header, at its right edge (the menu is fixed to the window); in a split, under the
+  // focused pane's bar instead, so the bar's x stays in view and clickable
   const [at, setAt] = useState<{ left: number; top: number } | null>(null);
   useLayoutEffect(() => {
     if (!open) return;
     const place = () => {
       const m = document.querySelector("main.main")?.getBoundingClientRect();
       const w = ref.current?.offsetWidth ?? 260;
-      if (m) setAt({ left: Math.max(6, m.right - w - 16), top: m.top + 56 });
+      const bar = document.querySelector(`[data-testid="split-bar"][data-session="${from}"]`)?.getBoundingClientRect();
+      if (bar) setAt({ left: Math.max(6, bar.right - w - 8), top: bar.bottom + 4 });
+      else if (m) setAt({ left: Math.max(6, m.right - w - 16), top: m.top + 56 });
     };
     place();
     addEventListener("resize", place);
     return () => removeEventListener("resize", place);
-  }, [open]);
+  }, [open, from]);
   useEffect(() => {
     if (!open) return;
     // the first running session when there is one, else New Shell

@@ -227,9 +227,14 @@ test("rows in the open split carry a glyph (the focused one marked); Plans draws
   await expect(boxA).toHaveAttribute("title", "a");
   await expect(boxB).toHaveAttribute("title", "b");
   await expect(page.getByTestId(`session-${a}`).getByTestId("term-split-glyph")).toHaveAttribute("aria-label", /: a$/);
-  const [ba, bb] = [(await boxA.boundingBox())!, (await boxB.boundingBox())!];
-  expect(bb.x).toBeGreaterThan(ba.x + ba.width - 2);
-  expect(Math.abs(bb.y - ba.y)).toBeLessThan(2);
+  // both boxes measured in one frame, polled while the panel opens: b's left edge meets a's right edge, same top
+  const beside = () =>
+    page.evaluate(([ia, ib]) => {
+      const r = (i: string) => document.querySelector(`[data-testid="split-map-box"][data-session="${i}"]`)!.getBoundingClientRect();
+      const [ra, rb] = [r(ia), r(ib)];
+      return rb.x > ra.x + ra.width - 2 && Math.abs(rb.y - ra.y) < 2;
+    }, [a, b] as const);
+  await expect.poll(beside).toBe(true);
   // the session's own plans are still below it
   await expect(page.getByTestId("plans-empty")).toBeVisible();
   await boxA.click();
@@ -240,6 +245,29 @@ test("rows in the open split carry a glyph (the focused one marked); Plans draws
   await page.getByTestId(`session-${c}`).locator(".ss-open").click();
   await expect(page.getByTestId("split-map")).toHaveCount(0);
   await expect(page.getByTestId(`session-${a}`).getByTestId("term-split-glyph")).toHaveCount(0);
+});
+
+test("the picker opens under the focused pane's bar, so the bar's x stays clickable", async ({ page }) => {
+  await openApp(page);
+  const k = await keys(page);
+  const [a, b, c] = await sessions(page, ["/w/a", "/w/b", "/w/c"]);
+  await page.getByTestId(`session-${a}`).locator(".ss-open").click();
+  await splitWith(page, a, k.right, b);
+  // b has the keyboard; split again from it
+  await textarea(page, b).focus();
+  await page.keyboard.press(k.down);
+  const picker = page.getByTestId("split-picker");
+  await expect(picker).toBeVisible();
+  const x = pane(page, b).getByTestId("split-close");
+  const [p, xb] = [(await picker.boundingBox())!, (await x.boundingBox())!];
+  const overlaps = p.x < xb.x + xb.width && xb.x < p.x + p.width && p.y < xb.y + xb.height && xb.y < p.y + p.height;
+  expect(overlaps).toBe(false);
+  expect(p.y).toBeGreaterThanOrEqual(xb.y + xb.height);
+  // the x at the centre of its box is the x itself, not the picker
+  const hit = await page.evaluate(([cx, cy]) => !!document.elementFromPoint(cx, cy)?.closest('[data-testid="split-close"]'), [xb.x + xb.width / 2, xb.y + xb.height / 2] as const);
+  expect(hit).toBe(true);
+  await page.locator(`[data-testid="split-pick"][data-session="${c}"]`).click();
+  await expect(page.getByTestId("split-pane")).toHaveCount(3);
 });
 
 test("bot chats never split: the keys do nothing there, and the picker lists TERMINALS sessions only", async ({ page }) => {
