@@ -17,6 +17,7 @@ import { onTermSettings, type TermSettings } from "./settings";
 import { attachLinks } from "./engine-links";
 import { attachInput } from "./engine-input";
 import { attachIme } from "./engine-ime";
+import { attachMarks } from "./engine-marks";
 import { FIND_EVENT, makeFinder, type FindRequest } from "./engine-find";
 
 /** The add-on's chunk loads the first time a terminal wants it, never with the app and never while `gpu` is off. */
@@ -274,6 +275,8 @@ export function afterOpen(term: Terminal, el: HTMLElement, settings: TermSetting
   });
   // Korean, Japanese and Chinese input methods: each committed text reaches the program once (engine-ime.ts)
   const undoIme = attachIme(term, el);
+  // what the shell says of itself: prompt marks (OSC 133), its folder (OSC 7), progress (OSC 9;4) (engine-marks.ts)
+  const undoMarks = attachMarks(term, el);
   // a font that arrives after the terminal drew (the symbols font loads on its first glyph, or JetBrains Mono came
   // after the wait for it gave up): the cell is measured again in the font now drawn, and the GPU renderer's glyph
   // cache, which holds the fallback's shapes, is cleared
@@ -296,6 +299,7 @@ export function afterOpen(term: Terminal, el: HTMLElement, settings: TermSetting
   s.undo = () => {
     if (s.gone) return;
     fonts?.removeEventListener?.("loadingdone", fontsLoaded);
+    undoMarks();
     undoIme();
     undoInput();
     undoLinks();
