@@ -21,7 +21,12 @@ All notable changes will be documented here.
     `omh_omher_terminal`, and can ask omher to type a prompt into it. omher shows the request as a card on the
     terminal (Deny, Allow once, Allow for this session), and nothing is typed without the person's Allow. A message
     in a bot's main chat that holds a terminal link carries that terminal's status to the bot. A bot's sidebar
-    preview shows a linked terminal's title instead of the raw link.
+    preview shows a linked terminal's title instead of the raw link. Allow for this session holds for that terminal
+    and the sender name the request carried; a request under another name asks again. The name is what the local
+    requesting process wrote, not proof of which bot asked. A request to a paused or ended terminal shows its card
+    there with Deny and Resume and send, and an Allow that could not type keeps the card. Terminal sharing is off on
+    Windows (the owner-only file checks are POSIX): the tool answers that it is not available there, and Copy link
+    and the chip still work.
 
 - **The run summary shows how much of the prompt came from cache.** `omh_run_summary` adds a line after the token
   count, such as `Prompt cache: 62% of input read from cache (1,234,567 tokens)` (en/ko/ja/zh), and

@@ -30,6 +30,13 @@ RULES = (
     "omher never patches Hermes.",
     "that is the third and last writer to a terminal's pseudo-terminal (`typeAllowed`).",
     "Without the person's Allow, nothing a bot sent is typed.",
+    "The sender name is what the requesting local process wrote in the request, and any process of the same OS user"
+    " can write any name: it scopes the grant, it does not authenticate a bot.",
+    "a request under any other sender name shows a card.",
+    "an Allow that types nothing keeps the card, with a line saying so, and adds no grant.",
+    "On Windows, where these owner-only checks cannot be held, sharing is off: omher writes no status file, makes no"
+    " inbox and reads none,",
+    "it closes the split pane that holds the keyboard (the same pane the ⌘W key in it closes)",
     "Copy link (the row menu, ⌘⇧C, Alt+Shift+C off macOS) writes only `omher://terminal/<id>` to the clipboard,",
     "On macOS, Close Window (⌘W) is omher's own menu item:",
     "Opening a link brings omher's window forward and nothing else: it starts, resumes, types into, reads or closes"
@@ -2311,6 +2318,22 @@ class TerminalLinksAndBotRequests(unittest.TestCase):
         # in markdown only the exact terminal-link shape passes; everything else keeps react-markdown's own transform
         remark = (UI_SRC / "chat" / "parts" / "remarkTermLinks.ts").read_text(encoding="utf-8")
         self.assertIn("return parseTermLink(url) ? url.trim() : defaultUrlTransform(url);", remark)
+
+    def test_sharing_is_off_on_windows_in_the_shell_and_the_tool(self) -> None:
+        self.assertIn("pub const ENABLED: bool = cfg!(not(windows));", self.share)
+        for fn in ("pub fn write(", "pub fn take("):
+            body = self.share.split(fn, 1)[1].split("\n}\n", 1)[0]
+            self.assertIn("if !ENABLED {", body, fn)
+        handler = self.tool.split("def omh_omher_terminal_handler(", 1)[1]
+        self.assertLess(handler.index("if not sharing_available():"), handler.index("root = terminals_root()"))
+        self.assertIn('"terminal sharing is not available on Windows"', handler)
+
+    def test_a_standing_grant_is_keyed_by_session_and_sender_name(self) -> None:
+        share = (UI_SRC / "sessions" / "termShare.ts").read_text(encoding="utf-8")
+        self.assertIn("const grantKey = (sessionId: string, from: string) => JSON.stringify([sessionId, from]);", share)
+        self.assertIn("granted.has(grantKey(rec.id, p.from))", share)
+        self.assertIn('if (choice === "session") granted.add(grantKey(r.sessionId, r.from));', share)
+        self.assertNotIn("granted.add(r.sessionId)", share)
 
     def test_the_inbox_is_read_owner_only_and_never_types(self) -> None:
         for needle in ("libc::O_NOFOLLOW", "meta.mode() & 0o7777 != 0o600", "meta.uid() != my_uid()",
