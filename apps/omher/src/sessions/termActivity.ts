@@ -12,6 +12,10 @@ export interface TermAct {
   lastLine?: string;
   /** The window title the program set (OSC 0/2), when it set one: the second line while nothing is printed yet. */
   oscTitle?: string;
+  /** The folder its shell last reported (OSC 7), when it reported one: the row's folder, which the start folder was. */
+  cwd?: string;
+  /** Its program reports progress (OSC 9;4 working) and has not reported done: the row shows it working. */
+  progress?: boolean;
 }
 
 const NONE: TermAct = Object.freeze({});
@@ -45,8 +49,8 @@ export type TermActivityStore = ReturnType<typeof createTermActivity>;
 /** The app's one store (session ids are unique for the page's life). */
 export const termActs: TermActivityStore = createTermActivity();
 
-/** Output flowed within BUSY_MS of `now` (the row's spinner, while its program runs). */
-export const flowing = (a: TermAct, now: number): boolean => !!a.lastOut && now - a.lastOut < BUSY_MS;
+/** Output flowed within BUSY_MS of `now`, or its program reports progress (the row's spinner, while it runs). */
+export const flowing = (a: TermAct, now: number): boolean => !!a.progress || (!!a.lastOut && now - a.lastOut < BUSY_MS);
 
 /** Which label `ageOf(at, now)` shows ("now", "5m", "3h", "2d"), as a key: equal keys, equal labels. */
 export function ageBucket(at: number, now: number): string {
@@ -64,13 +68,14 @@ export function ageChangeAt(at: number, now: number): number {
 
 /** What a TERMINALS row shows from its activity at `now` (spinner, age label, second line), as a key. */
 export function faceKey(a: TermAct, startedAt: number, now: number): string {
-  return `${flowing(a, now) ? 1 : 0}|${ageBucket(a.lastOut ?? startedAt, now)}|${a.lastLine ?? ""}|${a.oscTitle ?? ""}`;
+  return `${flowing(a, now) ? 1 : 0}|${ageBucket(a.lastOut ?? startedAt, now)}|${a.lastLine ?? ""}|${a.oscTitle ?? ""}|${a.cwd ?? ""}`;
 }
 
 /** When `faceKey` next changes by the clock alone (the spinner stops, the age label steps): ms since epoch. */
 export function nextFaceAt(a: TermAct, startedAt: number, now: number): number {
   const age = ageChangeAt(a.lastOut ?? startedAt, now);
-  return flowing(a, now) ? Math.min(age, a.lastOut! + BUSY_MS) : age;
+  // progress holds the spinner until the program says otherwise (a store change), not until a time
+  return flowing(a, now) && !a.progress ? Math.min(age, a.lastOut! + BUSY_MS) : age;
 }
 
 /** Session `id`'s activity, read at render time with the time it was read. The row re-renders only when what it shows
@@ -112,10 +117,10 @@ export function useAnyFlowing(ids: readonly string[], store: TermActivityStore =
       let until = 0;
       for (const id of list) {
         const a = store.get(id);
-        if (flowing(a, now)) until = Math.max(until, a.lastOut! + BUSY_MS);
+        if (flowing(a, now)) until = Math.max(until, a.progress ? Infinity : a.lastOut! + BUSY_MS);
       }
       setOn(until > 0);
-      if (until) timer = setTimeout(check, until - now + 5);
+      if (until && until !== Infinity) timer = setTimeout(check, until - now + 5);
     };
     check();
     const offs = list.map((id) => store.subscribe(id, check));

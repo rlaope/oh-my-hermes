@@ -114,6 +114,77 @@
 .termpanel .term-wrap[hidden] {
   display: none;
 }
+/* a tab's panes: nested flex boxes, a thin divider between each two */
+.termpanel-layout {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+}
+.termpanel-layout[hidden] {
+  display: none;
+}
+.termpanel-split {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+}
+.termpanel-split.col {
+  flex-direction: column;
+}
+.termpanel-part {
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+}
+.termpanel-divider {
+  flex: none;
+  position: relative;
+  background: var(--line-soft);
+  z-index: 2;
+}
+.termpanel-split.row > .termpanel-divider {
+  width: 1px;
+  cursor: col-resize;
+}
+.termpanel-split.col > .termpanel-divider {
+  height: 1px;
+  cursor: row-resize;
+}
+/* a wider grab area than the hairline it draws */
+.termpanel-divider::after {
+  content: "";
+  position: absolute;
+  inset: -3px;
+}
+.termpanel-divider:hover,
+.termpanel-divider:focus-visible {
+  background: var(--line-strong);
+  outline: none;
+}
+/* the pane with the keyboard, when there are several: a subtle inset line */
+.termpanel .term-wrap.focused {
+  box-shadow: inset 0 0 0 1px var(--line-strong);
+}
+.termpanel-tab-n {
+  margin-left: 4px;
+  font-size: 10px;
+  color: var(--quiet);
+}
+/* a shell in the tab rang while the tab was not in front (TERMINALS' bell colour) */
+.termpanel-ring {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  margin-left: 5px;
+  border-radius: 50%;
+  background: #e8a33c;
+  vertical-align: middle;
+}
+.termpanel-ib:disabled {
+  opacity: 0.4;
+  pointer-events: none;
+}
 .termpanel .term-box {
   flex: 1;
   min-width: 0;

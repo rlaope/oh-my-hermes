@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { answerSlot, answerSoFar, activityText, chatRoute, createStore, folderKey, setChatRoute, initialState, reduce, replyChipFor, selectTimeline, type Action, type AppState, type BridgeLike } from "./store";
+import { answerSlot, answerSoFar, activityText, chatRoute, createStore, folderKey, setChatRoute, initialState, reduce, replyChipFor, selectTimeline, type Action, type AppState, type BridgeLike, type MessageItem } from "./store";
 import type { Away, BridgeEvent, ChatOpenResult } from "../lib/protocol";
 import type { BridgeStatus } from "../lib/bridge";
 
@@ -321,6 +321,104 @@ describe("reducer: approvals and clarifications", () => {
   });
 });
 
+describe("read receipts and the steer reply", () => {
+  const bot = "kami";
+  /** kami's turn running with "A" (and "B" when asked) held, then steered in (Hermes queued each). */
+  const steeredIn = (ids = ["A"]) => {
+    let s = run(initialState(), [{ event: "turn.start", bot }, { event: "delta", bot, text: "Looking at the retry code.\n" }]);
+    for (const id of ids) {
+      s = reduce(s, { type: "local.user", bot, id, text: `steer ${id}`, now: T0 + 1000, held: true });
+      s = reduce(s, { type: "queue.steered", bot, id, ok: true, now: T0 + 1500 });
+    }
+    return s;
+  };
+  const row = (s: AppState, id: string) => s.chats[bot].items.find((i) => i.kind === "user" && i.id === id) as MessageItem;
+
+  it("a send is read once chat.send went through, or once its turn started; a failed send never is", () => {
+    let s = reduce(initialState(), { type: "local.user", bot, id: "l1", text: "hi", now: T0 });
+    expect(row(s, "l1").readAt).toBeUndefined();
+    s = reduce(s, { type: "send.ok", bot, id: "l1", now: T0 + 200 });
+    expect(row(s, "l1").readAt).toBe(T0 + 200);
+    s = reduce(s, { type: "local.user", bot, id: "l2", text: "again", now: T0 + 300 });
+    s = run(s, [{ event: "turn.start", bot }], T0 + 400);
+    expect(row(s, "l2").readAt).toBe(T0 + 400);
+    s = reduce(s, { type: "send.ok", bot, id: "l2", now: T0 + 900 });
+    expect(row(s, "l2").readAt).toBe(T0 + 400); // the first mark keeps its time
+    s = reduce(s, { type: "local.user", bot, id: "l3", text: "lost", now: T0 + 1000 });
+    s = reduce(s, { type: "send.failed", bot, id: "l3", error: "bridge connection lost" });
+    s = reduce(s, { type: "send.ok", bot, id: "l3", now: T0 + 1100 });
+    expect(row(s, "l3").readAt).toBeUndefined();
+  });
+
+  it("a held message is not read until it goes out; a refused or uncertain steer is not read", () => {
+    let s = run(initialState(), [{ event: "turn.start", bot }]);
+    s = reduce(s, { type: "local.user", bot, id: "H", text: "later", now: T0 + 100, held: true });
+    s = run(s, [{ event: "turn.start", bot }], T0 + 200);
+    expect(row(s, "H").readAt).toBeUndefined();
+    s = reduce(s, { type: "queue.steered", bot, id: "H", ok: false, now: T0 + 300 });
+    expect(row(s, "H").readAt).toBeUndefined();
+    s = reduce(s, { type: "queue.steered", bot, id: "H", ok: false, unknown: true, now: T0 + 400 });
+    expect(row(s, "H").readAt).toBeUndefined();
+    // a held one that goes out after the turn: read once its send went through
+    s = reduce(s, { type: "local.user", bot, id: "H2", text: "after", now: T0 + 500, held: true });
+    s = run(s, [{ event: "turn.end", bot, outcome: "done" }], T0 + 600);
+    s = reduce(s, { type: "queue.take", bot, id: "H2", now: T0 + 700 });
+    expect(row(s, "H2").readAt).toBeUndefined();
+    s = reduce(s, { type: "send.ok", bot, id: "H2", now: T0 + 800 });
+    expect(row(s, "H2").readAt).toBe(T0 + 800);
+  });
+
+  it("a steer is read as soon as Hermes queued it; the note before the next tool call is its reply", () => {
+    let s = steeredIn();
+    expect(row(s, "A").readAt).toBe(T0 + 1500);
+    s = run(s, [{ event: "tool.start", bot, tool_id: "t1", name: "terminal", detail: "ls" }, { event: "tool.end", bot, tool_id: "t1", name: "terminal", ok: true, ms: 10 }], T0 + 2000);
+    expect(row(s, "A").steerReply).toBeUndefined();
+    s = run(s, [
+      { event: "delta", bot, text: "  Got it, keeping the old timeout.\nThen I rerun the tests." },
+      { event: "tool.start", bot, tool_id: "t2", name: "terminal", detail: "pnpm test" },
+      { event: "tool.end", bot, tool_id: "t2", name: "terminal", ok: true, ms: 10 },
+      { event: "delta", bot, text: "Later commentary." },
+      { event: "tool.start", bot, tool_id: "t3", name: "terminal", detail: "git diff" },
+    ], T0 + 4000);
+    expect(row(s, "A").steerReply).toBe("Got it, keeping the old timeout.");
+    // the rest stays commentary: never a bubble
+    expect(s.chats[bot].items.filter((i) => i.kind === "assistant")).toHaveLength(0);
+  });
+
+  it("with no tool call after it, the answer's first line is the reply; a long one is clipped", () => {
+    let s = steeredIn();
+    s = run(s, [{ event: "tool.start", bot, tool_id: "t1", name: "read", detail: "a" }, { event: "tool.end", bot, tool_id: "t1", name: "read", ok: true, ms: 1 }], T0 + 2000);
+    const long = "Done ".repeat(60).trim();
+    s = run(s, [{ event: "message", bot, id: "m1", text: `${long}\nsecond line` }, { event: "turn.end", bot, outcome: "done" }], T0 + 5000);
+    const reply = row(s, "A").steerReply!;
+    expect(reply.length).toBe(140);
+    expect(reply.endsWith("…")).toBe(true);
+    expect(reply).not.toContain("second line");
+  });
+
+  it("a steer the answer itself consumed (no tool step): the answer is its reply", () => {
+    let s = steeredIn();
+    s = run(s, [{ event: "message", bot, id: "m1", text: "Sure, keeping it.\nMore." }], T0 + 6000);
+    expect(row(s, "A")).toMatchObject({ readAt: T0 + 1500, steerReply: "Sure, keeping it." });
+  });
+
+  it("several steers consumed together: only the last gets the reply", () => {
+    let s = steeredIn(["A", "B"]);
+    s = run(s, [{ event: "tool.start", bot, tool_id: "t1", name: "read", detail: "a" }, { event: "tool.end", bot, tool_id: "t1", name: "read", ok: true, ms: 1 }], T0 + 2000);
+    s = run(s, [{ event: "delta", bot, text: "Both noted.\n" }, { event: "tool.start", bot, tool_id: "t2", name: "read", detail: "b" }], T0 + 3000);
+    expect([row(s, "A").steerReply, row(s, "B").steerReply]).toEqual([undefined, "Both noted."]);
+  });
+
+  it("an interrupt before the turn consumed it: Hermes dropped it, so no read mark and no reply", () => {
+    let s = steeredIn();
+    expect(row(s, "A").readAt).toBe(T0 + 1500);
+    s = run(s, [{ event: "delta", bot, text: "half a thought\n" }, { event: "turn.end", bot, outcome: "interrupted" }], T0 + 2000);
+    expect(row(s, "A").readAt).toBeUndefined();
+    expect(row(s, "A").steerReply).toBeUndefined();
+    expect(row(s, "A")).toMatchObject({ steerUnused: true });
+  });
+});
+
 describe("elsewhere ordering", () => {
   it("keeps the bot's sessions elsewhere out of the chat timeline; the list itself is newest first", () => {
     const base = T0 / 1000;
@@ -401,6 +499,28 @@ describe("unread", () => {
 });
 
 describe("chat.opened merging", () => {
+  it("a reopened row with a bot row after it is read at that row's time; a steered one at its reply's time", () => {
+    const s = reduce(initialState(), {
+      type: "chat.opened",
+      bot: "kami",
+      res: opened({
+        messages: [
+          { id: "srv-1", role: "user", text: "fix the terminal", ts: T0 / 1000 },
+          { id: "srv-2", role: "user", text: "keep the old timeout", ts: T0 / 1000 + 5, steered: true, steer_read: T0 / 1000 + 9, steer_reply: "Keeping it." },
+          { id: "srv-3", role: "assistant", text: "Done.", ts: T0 / 1000 + 12 },
+          { id: "srv-4", role: "user", text: "also the logs", ts: T0 / 1000 + 20 },
+        ],
+      }),
+      now: T0 + 30_000,
+    });
+    const rows = s.chats.kami.items.flatMap((i) => (i.kind === "user" ? [i] : []));
+    expect(rows.map((i) => [i.readAt, i.steerReply])).toEqual([
+      [T0 + 12_000, undefined],
+      [T0 + 9000, "Keeping it."],
+      [undefined, undefined],
+    ]);
+  });
+
   it("drops a local user row once the server history has it", () => {
     let s = reduce(initialState(), { type: "local.user", bot: "kami", id: "local-1", text: "ping", now: T0 });
     s = reduce(s, {

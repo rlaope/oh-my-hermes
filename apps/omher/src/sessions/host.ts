@@ -2,6 +2,7 @@
 // in a pseudo-terminal (src-tauri/src/sessions.rs) or in its structured chat mode on pipes
 // (src-tauri/src/agent_chat.rs). In a plain browser (dev, e2e against the mock bridge) there is no shell,
 // so a mock host echoes terminal typing and a mock agent answers chats with the same events.
+import type { HistoryHost } from "./term/history";
 import { AGENTS, acpRow, agentDef, HERMES_LABEL, type AcpRow, type AgentId, type AgentInfo } from "./agents";
 import { mockPtyOut, nextMockPty } from "./fg";
 import mockAcpAgents from "./mockAcpAgents.json";
@@ -51,7 +52,7 @@ export interface PastMsg {
   ts: number;
 }
 
-export interface SessionHost {
+export interface SessionHost extends HistoryHost {
   readonly kind: "tauri" | "mock";
   /** Stop anything an earlier page load left running (a webview reload keeps the shell alive). */
   reset(): Promise<void>;
@@ -60,9 +61,10 @@ export interface SessionHost {
   /** Native folder picker; null when the person cancels. */
   pickFolder(defaultPath: string): Promise<string | null>;
   /** Start `agent` in `cwd` in a terminal. Only the agent id goes to the shell: never a command line.
-   *  `resume` is a Claude Code session id (the terminal view of a chat); the shell checks it is a UUID. `account`
-   *  names the Settings › Accounts login it runs as (the one it ran with, after a restart); none = the one picked
-   *  for new sessions. */
+   *  `resume` is a Claude Code or Codex conversation id to continue (`--resume <id>`, `codex resume <id>`);
+   *  `sessionId` the id omher made for a new Claude Code conversation (`--session-id <id>`); the shell checks each is
+   *  a UUID. `account` names the Settings › Accounts login it runs as (the one it ran with, after a restart); none =
+   *  the one picked for new sessions. */
   start(
     agent: AgentId,
     cwd: string,
@@ -72,6 +74,7 @@ export interface SessionHost {
     onExit: (code: number | null) => void,
     resume?: string,
     account?: string,
+    sessionId?: string,
   ): Promise<number>;
   write(id: number, data: string): Promise<void>;
   /** The terminal has drawn `bytes` more of session `id`'s output. The shell stops reading the program while the
@@ -105,6 +108,9 @@ export interface SessionHost {
   pastChats(agent: "claude" | "codex", cwds: string[]): Promise<PastChat[]>;
   /** The last messages of `agent`'s conversation `id` in `cwd`. */
   pastMessages(agent: "claude" | "codex", id: string, cwd: string): Promise<PastMsg[]>;
+  /** The conversation the Codex in the foreground of terminal session `id` (its pty) holds open: the UUID of the
+   *  rollout that process keeps open in its Codex home, or null while it holds none (rule 11; only the id comes back). */
+  codexConversation?(id: number): Promise<string | null>;
   /** How many asks wait: a Dock / launcher count, or a dot on the Windows taskbar button. 0 clears it. */
   badge(count: number): Promise<void>;
   /** Settings › Agents: the person's own agents, read and checked by the shell from omher's own file, and the broken
@@ -147,13 +153,13 @@ export class TauriHost implements SessionHost {
     const r = await open({ directory: true, multiple: false, defaultPath, title: t("ss.pickFolder") });
     return typeof r === "string" ? r : null;
   }
-  async start(agent: AgentId, cwd: string, cols: number, rows: number, onData: (d: Uint8Array) => void, onExit: (c: number | null) => void, resume?: string, account?: string) {
+  async start(agent: AgentId, cwd: string, cols: number, rows: number, onData: (d: Uint8Array) => void, onExit: (c: number | null) => void, resume?: string, account?: string, sessionId?: string) {
     const { invoke, Channel } = await this.core();
     const data = new Channel<ArrayBuffer>();
     data.onmessage = (b) => onData(new Uint8Array(b));
     const exit = new Channel<number | null>();
     exit.onmessage = (c) => onExit(c);
-    return invoke<number>("session_start", { agent, cwd, resume: resume ?? null, account: account ?? null, cols, rows, onData: data, onExit: exit });
+    return invoke<number>("session_start", { agent, cwd, sessionId: sessionId ?? null, resume: resume ?? null, account: account ?? null, cols, rows, onData: data, onExit: exit });
   }
   async chatStart(agent: AgentId, cwd: string, onEvent: (ev: ChatEvent) => void, resume?: string, account?: string, session?: string) {
     const { invoke, Channel } = await this.core();
@@ -182,6 +188,27 @@ export class TauriHost implements SessionHost {
     const { invoke } = await this.core();
     await invoke("session_files_remove", { session });
   }
+  async historySave(key: string, text: string, since: number) {
+    const { invoke } = await this.core();
+    await invoke("term_history_save", { key, text, since });
+  }
+  async historyRead(key: string) {
+    const { invoke } = await this.core();
+    const got = await invoke<[string, number] | null>("term_history_read", { key });
+    return got ? { text: got[0], at: got[1] } : null;
+  }
+  async historyRemove(key: string) {
+    const { invoke } = await this.core();
+    await invoke("term_history_remove", { key });
+  }
+  async historyPrune(keep: string[]) {
+    const { invoke } = await this.core();
+    await invoke("term_history_prune", { keep });
+  }
+  async historyClear() {
+    const { invoke } = await this.core();
+    await invoke("term_history_clear");
+  }
   async pruneFiles(keep: string[]) {
     const { invoke } = await this.core();
     await invoke("session_files_prune", { keep });
@@ -205,6 +232,10 @@ export class TauriHost implements SessionHost {
   async pastMessages(agent: "claude" | "codex", id: string, cwd: string) {
     const { invoke } = await this.core();
     return invoke<PastMsg[]>("past_chat_messages", { agent, id, cwd });
+  }
+  async codexConversation(id: number) {
+    const { invoke } = await this.core();
+    return invoke<string | null>("codex_conversation", { id });
   }
   async badge(count: number) {
     const { invoke } = await this.core();
@@ -285,6 +316,11 @@ export interface MockCall {
     | "file.save"
     | "file.remove"
     | "file.prune"
+    | "history.save"
+    | "history.read"
+    | "history.remove"
+    | "history.prune"
+    | "history.clear"
     | "reveal"
     | "terminal"
     | "custom.preview"
@@ -300,6 +336,8 @@ export interface MockCall {
   cols?: number;
   rows?: number;
   resume?: string;
+  /** start: the id omher made for a new Claude Code conversation (`--session-id`) */
+  sessionId?: string;
   account?: string;
   input?: ChatInput;
   session?: string;
@@ -307,6 +345,8 @@ export interface MockCall {
   size?: number;
   path?: string;
   keep?: string[];
+  /** history: the terminal's key (a session id or `panel-<n>`) */
+  key?: string;
 }
 
 const BANNER: Record<string, string> = {
@@ -351,6 +391,8 @@ type MockGlobals = {
   __omherMockNoOmh?: boolean;
   /** e2e: the next file saves fail with this message */
   __omherFileSaveError?: string;
+  /** e2e: the shell answers a history read this many ms late (a slow computer) */
+  __omherMockHistoryDelay?: number;
   /** e2e: the branch of each folder (none = not a repository) */
   __omherBranches?: Record<string, string>;
   /** e2e: these agents are an old version that never answers in chat mode (the shell's start deadline ends them) */
@@ -365,7 +407,9 @@ type MockGlobals = {
   /** e2e: the conversations Claude Code and Codex keep (none = the built-in ones) */
   __omherPastChats?: PastChat[];
   /** e2e: reads of those conversations, apart from the session calls (opening the + menu lists them) */
-  __omherPastReads?: { op: "list" | "read"; agent: string; cwds?: string[]; id?: string; cwd?: string }[];
+  __omherPastReads?: { op: "list" | "read" | "own"; agent: string; cwds?: string[]; id?: string; cwd?: string; pty?: number }[];
+  /** e2e: the conversation each mock pty's Codex holds open (pty id -> UUID), as a real Codex once its rollout exists */
+  __omherMockCodexOwn?: Record<number, string>;
   /** e2e: the Dock / taskbar count omher last set */
   __omherBadge?: number;
   /** e2e: the mock's copy of omher's custom-agents file (`agents` of `~/.omher/custom-agents.json`, as written) */
@@ -396,7 +440,7 @@ const MOCK_PAST_MSGS: Record<string, PastMsg[]> = {
 export class MockHost implements SessionHost {
   readonly kind = "mock" as const;
   private next = 0;
-  private live = new Map<number, { line: string; out: (d: string) => void; exit: (c: number | null) => void }>();
+  private live = new Map<number, { agent: string; line: string; out: (d: string) => void; exit: (c: number | null) => void }>();
   constructor(private g: MockGlobals = globalThis as MockGlobals) {}
 
   private log(c: MockCall) {
@@ -492,14 +536,16 @@ export class MockHost implements SessionHost {
     const v = this.g.__omherPickFolder;
     return v === undefined ? defaultPath : v;
   }
-  async start(agent: AgentId, cwd: string, cols: number, rows: number, onData: (d: string) => void, onExit: (c: number | null) => void, resume?: string, account?: string) {
+  async start(agent: AgentId, cwd: string, cols: number, rows: number, onData: (d: string) => void, onExit: (c: number | null) => void, resume?: string, account?: string, sessionId?: string) {
     const id = nextMockPty();
-    this.log({ op: "start", id, agent, cwd, cols, rows, ...(resume ? { resume } : {}), ...(account ? { account } : {}) });
+    this.log({ op: "start", id, agent, cwd, cols, rows, ...(resume ? { resume } : {}), ...(sessionId ? { sessionId } : {}), ...(account ? { account } : {}) });
+    // a resumed Codex holds its own conversation's rollout open again
+    if (agent === "codex" && resume) (this.g.__omherMockCodexOwn ??= {})[id] = resume;
     const out = (d: string) => {
       (this.g.__omherSessionFlow ??= []).push({ op: "feed", id, bytes: utf8.encode(d).length });
       onData(d);
     };
-    this.live.set(id, { line: "", out, exit: onExit });
+    this.live.set(id, { agent, line: "", out, exit: onExit });
     mockPtyOut(id, out);
     setTimeout(() => {
       out(`${banner(agent)}\r\n\x1b[2m  ${agentDef(agent).program} in ${cwd}\x1b[0m\r\n\r\n${PROMPT}`);
@@ -618,6 +664,50 @@ export class MockHost implements SessionHost {
     if (!d) throw new Error("not a file omher saved");
     return d;
   }
+  /** History the mock shell keeps: in this page's storage, so it outlives a reload as the shell's files outlive a
+   *  restart (`__omherMockHistory`). */
+  private hist(): Record<string, { text: string; at: number }> {
+    try {
+      return JSON.parse(localStorage.getItem("__omherMockHistory") || "{}");
+    } catch {
+      return {};
+    }
+  }
+  private putHist(h: Record<string, { text: string; at: number }>) {
+    try {
+      localStorage.setItem("__omherMockHistory", JSON.stringify(h));
+    } catch {
+      /* no storage */
+    }
+  }
+  /** when history was last cleared (ms), as the shell keeps it: a write sent before then is dropped */
+  private clearedAt = 0;
+  async historySave(key: string, text: string, since: number) {
+    this.log({ op: "history.save", key, data: text });
+    if (!(since > this.clearedAt)) return;
+    this.putHist({ ...this.hist(), [key]: { text, at: Date.now() / 1000 } });
+  }
+  async historyRead(key: string) {
+    this.log({ op: "history.read", key });
+    const late = this.g.__omherMockHistoryDelay;
+    if (late) await new Promise((r) => setTimeout(r, late));
+    return this.hist()[key] ?? null;
+  }
+  async historyRemove(key: string) {
+    this.log({ op: "history.remove", key });
+    const h = this.hist();
+    delete h[key];
+    this.putHist(h);
+  }
+  async historyPrune(keep: string[]) {
+    this.log({ op: "history.prune", keep });
+    this.putHist(Object.fromEntries(Object.entries(this.hist()).filter(([k]) => keep.includes(k))));
+  }
+  async historyClear() {
+    this.log({ op: "history.clear" });
+    this.clearedAt = Math.max(this.clearedAt, Date.now());
+    this.putHist({});
+  }
   async removeFiles(session: string) {
     this.log({ op: "file.remove", session });
     for (const k of [...this.files.keys()]) if (k.includes(`/session-files/${session}/`)) this.files.delete(k);
@@ -645,6 +735,14 @@ export class MockHost implements SessionHost {
     const c = (this.g.__omherPastChats ?? MOCK_PAST).find((x) => x.agent === agent && x.id === id && x.cwd === cwd);
     if (!c) throw new Error("no such conversation");
     return MOCK_PAST_MSGS[id] ?? [{ role: "user" as const, text: c.title, ts: c.at }];
+  }
+  /** As the shell: the conversation the Codex running in pty `id` holds open (`__omherMockCodexOwn[id]`, set by the
+   *  test as that process's Codex writes its rollout), and nothing once that program ended or is not Codex. */
+  async codexConversation(id: number) {
+    (this.g.__omherPastReads ??= []).push({ op: "own", agent: "codex", pty: id });
+    const s = this.live.get(id);
+    if (!s || s.agent !== "codex") return null;
+    return this.g.__omherMockCodexOwn?.[id] ?? null;
   }
   async badge(count: number) {
     this.g.__omherBadge = count;

@@ -1,6 +1,6 @@
 // What a person can change about SESSIONS terminals, kept on this computer (localStorage). One record for every
-// terminal: the look reads it when a terminal is made and again when it changes; the engine reads `gpu` and
-// `scrollback`. Anything stored that is missing, of the wrong type or out of range falls back to the default.
+// terminal: the look reads it when a terminal is made and again when it changes; the engine reads `gpu`,
+// `scrollback` and `images`. Anything stored that is missing, of the wrong type or out of range falls back to the default.
 
 export type TermGpu = "auto" | "on" | "off";
 export type TermCursor = "block" | "bar" | "underline";
@@ -43,6 +43,18 @@ export interface TermSettings {
   copyOnSelect: boolean;
   /** A right click pastes the clipboard (Ctrl+right-click keeps the menu). Off: right click is the program's or the menu's. */
   rightClickPaste: boolean;
+  /** The Kitty keyboard protocol: a program that asks for it (`CSI > flags u`) gets keys as CSI-u codes, so it can tell
+   *  Shift+Enter from Enter. A program that does not ask gets the bytes it always got. Off: no program can turn it on. */
+  kittyKeys: boolean;
+  /** Pictures a program prints (sixel, iTerm2's OSC 1337, Kitty graphics) are drawn in the terminal. Off: they are
+   *  dropped, as before. */
+  images: boolean;
+  /** A paste with more than one line asks first, unless the program turned on bracketed paste (it then takes the
+   *  text as one paste and runs none of it by itself). On by default, as in Otty. */
+  confirmPaste: boolean;
+  /** What each terminal showed comes back, dimmed, after omher restarts (kept in `~/.omher/term-history`). Off removes
+   *  every kept file at once. */
+  keepHistory: boolean;
 }
 
 export const TERM_KEY = "omher.term";
@@ -62,6 +74,10 @@ export const TERM_DEFAULTS: TermSettings = {
   gpu: "auto",
   copyOnSelect: false,
   rightClickPaste: false,
+  kittyKeys: true,
+  images: true,
+  confirmPaste: true,
+  keepHistory: true,
 };
 
 const num = (v: unknown, lo: number, hi: number, d: number) => (typeof v === "number" && Number.isFinite(v) ? Math.min(hi, Math.max(lo, v)) : d);
@@ -99,6 +115,10 @@ export function parseTermSettings(raw: unknown): TermSettings {
     gpu: one(o.gpu, TERM_GPUS, d.gpu),
     copyOnSelect: bool(o.copyOnSelect, d.copyOnSelect),
     rightClickPaste: bool(o.rightClickPaste, d.rightClickPaste),
+    kittyKeys: bool(o.kittyKeys, d.kittyKeys),
+    images: bool(o.images, d.images),
+    confirmPaste: bool(o.confirmPaste, d.confirmPaste),
+    keepHistory: bool(o.keepHistory, d.keepHistory),
   };
 }
 

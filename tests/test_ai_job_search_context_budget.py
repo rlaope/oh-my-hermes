@@ -556,7 +556,9 @@ class AiJobSearchContextBudgetTests(unittest.TestCase):
         # branch's pin was fd5cef40...10fe, and main's was fbe730f4...88bf.
         # model-compression's description says "smaller or cheaper" again; only its body moves, and the pin
         # before it was 280bbdfb...7cee74.
-        self.assertEqual(_digest(legacy_hashes), 'a92e709fb2056174da50e0aec5e9904f598e28189b9a0c8186d47f07345ba555')
+        # Merged with main a third time: dag-ulw then gains the opt-in `carry_forward` quality-bar line; only
+        # dag-ulw moves. This branch's pin was a92e709f...a555, and main's was 2d788500...c459.
+        self.assertEqual(_digest(legacy_hashes), '891b61cd2c942249a4a37ee5dfbb5aa24577d5ed14cb2cdd6167f4c56f49f061')
         legacy = _skill_context_cost_profile('full', legacy_templates, refs)
         current = _skill_context_cost_profile('full', templates, refs)
         # Main's search guidance adds 305; repro-audit's mandatory rails 1,943.
@@ -607,7 +609,7 @@ class AiJobSearchContextBudgetTests(unittest.TestCase):
         from omh.maintenance.drift import budget_metrics
         expected = {
             'skill_index_line_max_chars': 99,  # Word-boundary cut matching Hermes' clip_skill_description (-1).
-            'plugin_tool_schema_chars': 62968,  # Parked DAG waits (+429), delegation backends (+245), six routing-recipe categories (+213), opt-in omh-lsp tools (+2187), opt-in lsp_diagnostics (+396), identity argument (+143), dag node role (+85), dag node owner (+70), dag node local (+37) less the route fallback sentence (-1), then the ultrabrain head in the route example (+5), then omh_dag goal criteria (+226), then the criteria parameter's keep-the-condition description (+95), said in the positive form (+8), then dag node read_only (+45), then the observation parameter's field descriptions and the home-override wording trimmed (-9616), then four tool descriptions said in fewer words (-1225), then unified identities: the omh_dag identity reference (+122), omh_delegate_route `attempt` and identity description (+303), omh_role directory and `identity` argument (+220), then omh_dag escalation (+224).
+            'plugin_tool_schema_chars': 63156,  # Parked DAG waits (+429), delegation backends (+245), six routing-recipe categories (+213), opt-in omh-lsp tools (+2187), opt-in lsp_diagnostics (+396), identity argument (+143), dag node role (+85), dag node owner (+70), dag node local (+37) less the route fallback sentence (-1), then the ultrabrain head in the route example (+5), then omh_dag goal criteria (+226), then the criteria parameter's keep-the-condition description (+95), said in the positive form (+8), then dag node read_only (+45), then the observation parameter's field descriptions and the home-override wording trimmed (-9616), then four tool descriptions said in fewer words (-1225), then unified identities: the omh_dag identity reference (+122), omh_delegate_route `attempt` and identity description (+303), omh_role directory and `identity` argument (+220), then omh_dag escalation (+224), then omh_dag carry_forward (+188).
             'pre_llm_call_context_chars_max': 5977,  # The pi-family runtime rename (+6), the route-hint dedup (-154), then the console choices line (+409).
             'pre_llm_call_context_fallback_chars_max': 7529,  # The same rename (+6), the human-voice primer sentence (+116), the route-hint dedup (-154), then the console choices line (+409).
             'awareness_primer_markdown_chars': 4051,  # Human-voice reply sentence (+110), full skill names in the checkpoint (+55), then loadable labels there (+49), on the card and cue lines (+239) and in the lane keys (+78).

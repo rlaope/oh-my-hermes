@@ -162,7 +162,7 @@ describe("sessions restore", () => {
     expect(old.paused).toBeUndefined();
     expect(old.agentSession).toBeUndefined();
     expect(now).toMatchObject({ id: "s8", view: "chat", status: "exited", agentSession: "session-8c11e2bc-9f55-4bcb-a597-19ea472184e8" });
-    expect(((g.__omherSessionCalls ?? []) as { op: string }[]).filter((c) => c.op !== "reset" && !c.op.startsWith("file."))).toEqual([]);
+    expect(((g.__omherSessionCalls ?? []) as { op: string }[]).filter((c) => c.op !== "reset" && !c.op.startsWith("file.") && !c.op.startsWith("history."))).toEqual([]);
     // Restart: the old one starts DeepSeek Harness fresh in its folder, the new one continues its harness session
     await ss.restart("s7");
     await ss.restart("s8");
@@ -183,7 +183,7 @@ describe("sessions restore", () => {
     ss.restore(saved()); // a second restore in the same page load does nothing
     await new Promise((r) => setTimeout(r, 30));
     // file housekeeping (the saved attachments of sessions that are gone) starts no program
-    const calls = (g.__omherSessionCalls as { op: string; agent?: string; cwd?: string; resume?: string; account?: string }[]).filter((c) => c.op !== "reset" && !c.op.startsWith("file."));
+    const calls = (g.__omherSessionCalls as { op: string; agent?: string; cwd?: string; resume?: string; account?: string }[]).filter((c) => c.op !== "reset" && !c.op.startsWith("file.") && !c.op.startsWith("history."));
     expect(calls).toEqual([]);
     const by = (id: string) => ss.getState().list.find((r) => r.id === id)!;
     expect(by("s2")).toMatchObject({ status: "exited", view: "chat", paused: true });
@@ -247,7 +247,7 @@ describe("sessions restore", () => {
     await ss2.loadAgents();
     await new Promise((res) => setTimeout(res, 30));
     expect(ss2.getState().list).toEqual([expect.objectContaining({ id, status: "draft", agent: "codex", cwd: "/w/api" })]);
-    expect(((g2.__omherSessionCalls as { op: string }[] | undefined) ?? []).filter((c) => c.op !== "reset" && !c.op.startsWith("file."))).toEqual([]);
+    expect(((g2.__omherSessionCalls as { op: string }[] | undefined) ?? []).filter((c) => c.op !== "reset" && !c.op.startsWith("file.") && !c.op.startsWith("history."))).toEqual([]);
     // + reuses it rather than opening a second one
     expect(ss2.draft()).toBe(id);
   });

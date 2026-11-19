@@ -1,17 +1,24 @@
-// The xterm side of the bottom terminal panel: one terminal per tab, kept for the page's life so a hidden panel (or
-// a tab in the back) keeps its scrollback while its shell runs on. Built from the SESSIONS terminal engine
-// (src/sessions/term: look, Orca themes, renderer, find, links, clipboard settings), imported, not copied.
+// The xterm side of the bottom terminal panel: one terminal per pane (a tab holds up to four), kept for the page's life
+// so a hidden panel (or a tab in the back) keeps its scrollback while its shell runs on. Built from the SESSIONS
+// terminal engine (src/sessions/term: look, Orca themes, renderer, find, links, clipboard settings), imported, not
+// copied. As a TERMINALS terminal does, a pane rings (bell, OSC 9 message, OSC 777 notify: the tab's dot, no text
+// kept), takes a dropped file (saved, its path typed), and closes when its shell ends.
 import type { ITerminalInitOnlyOptions, ITerminalOptions, Terminal } from "@xterm/xterm";
 import type { FitAddon } from "@xterm/addon-fit";
 import { afterOpen, CELLS_EVENT, feed, isParked, live, onVisible, type Remake } from "../sessions/term/engine";
+import { onCwd } from "../sessions/term/engine-marks";
 import { applyLook, termOptions } from "../sessions/term/look";
 import { termFontsReady } from "../sessions/term/fonts";
 import { onTermSettings, readTermSettings } from "../sessions/term/settings";
 import { termTheme } from "../sessions/term/themes";
 import { t } from "../i18n";
 import { getShellHost } from "./host";
-import { setTabCwd, setTabFg } from "./state";
+import { closePane, ringPane, setPaneCwd, setPaneFg, setPaneSaid } from "./state";
 import { onSessionFg } from "../sessions/fg";
+import { getHost } from "../sessions/host";
+import { shellQuote } from "../sessions/attach";
+import { termEnd } from "../sessions/agents";
+import { forgetHistory, restoredText, trackHistory } from "../sessions/term/history";
 
 /** A size goes to the shell once it has held this long (a drag gives one per frame). */
 const RESIZE_SETTLE_MS = 32;
@@ -36,10 +43,18 @@ interface PanelTerm {
   /** output drawn before the id came back, acknowledged once it does */
   owed: number;
   ended: boolean;
+  /** the person typed into it (a shell that ends after that closes its pane) */
+  typed: boolean;
+  /** files dropped on it were saved (removed with the pane) */
+  saved: boolean;
   settle: ReturnType<typeof setTimeout> | null;
   undo: () => void;
   /** stops following the shell's foreground CLI */
   fgOff?: () => void;
+  /** stops following the folder its shell reports */
+  cwdOff?: () => void;
+  /** its history keeping (term/history.ts), once its shell started */
+  hist?: { touch: () => void; stop: () => void };
 }
 
 const terms = new Map<number, PanelTerm>();
@@ -69,7 +84,9 @@ function create([{ Terminal }, { FitAddon }]: Xterm, key: number, want: string |
   const host = getShellHost();
   const wire = (term: Terminal) => {
     term.onData((d) => {
-      if (p.id !== null && !p.ended) void host.write(p.id, d).catch(() => undefined);
+      if (p.id === null || p.ended) return;
+      p.typed = true;
+      void host.write(p.id, d).catch(() => undefined);
     });
     term.onResize(({ cols, rows }) => {
       if (p.settle !== null) clearTimeout(p.settle);
@@ -77,6 +94,21 @@ function create([{ Terminal }, { FitAddon }]: Xterm, key: number, want: string |
         p.settle = null;
         if (p.id !== null && !p.ended) void host.resize(p.id, cols, rows).catch(() => undefined);
       }, RESIZE_SETTLE_MS);
+    });
+    // The bell, and the notification escapes agents send instead (OSC 9 with a message, not a `9;<n>` report such as
+    // the 9;4 progress bar; OSC 777 `notify`), ring as a TERMINALS terminal's do (sessions.ts): the tab's dot. Their
+    // text is never shown or kept.
+    const ring = () => {
+      if (!p.ended) ringPane(key);
+    };
+    term.onBell(ring);
+    term.parser.registerOscHandler(9, (d) => {
+      if (!/^\d+(;|$)/.test(d)) ring();
+      return false; // not consumed: another handler may want the escape
+    });
+    term.parser.registerOscHandler(777, (d) => {
+      if (d.startsWith("notify;")) ring();
+      return false;
     });
   };
   const p: PanelTerm = {
@@ -102,16 +134,31 @@ function create([{ Terminal }, { FitAddon }]: Xterm, key: number, want: string |
     id: null,
     owed: 0,
     ended: false,
+    typed: false,
+    saved: false,
     settle: null,
     undo: () => undefined,
   };
   terms.set(key, p);
   wire(first.term);
+  // the folder its shell reports (OSC 7) names the pane, and so the tab while it is the focused one; the element
+  // outlives a parked terminal made again
+  p.cwdOff = onCwd(el, (path) => setPaneSaid(key, path));
   return p;
 }
 
-function start(key: number, p: PanelTerm, want: string | null): void {
+/** The history key of pane `key`. */
+const histKey = (key: number) => `panel-${key}`;
+
+async function start(key: number, p: PanelTerm, want: string | null, restored: boolean): Promise<void> {
   const host = getShellHost();
+  // a tab put back after a restart shows what it showed before first, dimmed, under a divider
+  if (restored) {
+    const back = await restoredText(getHost(), histKey(key));
+    if (!terms.has(key)) return;
+    if (back) feed(p.term, back);
+  }
+  p.hist = trackHistory(getHost(), histKey(key), () => (terms.get(key) === p && !isParked(p.raw) ? p.term : null));
   void host
     .start(
       want,
@@ -124,11 +171,15 @@ function start(key: number, p: PanelTerm, want: string | null): void {
           if (p.id === null) p.owed += bytes;
           else host.ack(p.id, bytes);
         });
+        p.hist?.touch();
       },
       (code) => {
         p.ended = true;
-        setTabFg(key, null);
-        feed(p.term, `\r\n\x1b[2m[${code ? t("termpanel.endedCode", { code }) : t("termpanel.ended")}]\x1b[0m\r\n`);
+        setPaneFg(key, null);
+        // as a TERMINALS shell: one that ends (exit, Ctrl+D, any code once the person typed) closes its pane and the
+        // pane beside it takes the room; one that ended with an error before any typing stays, saying so
+        if (termEnd({ ofChat: false, shell: true, typed: p.typed, code }) === "close") closePane(key);
+        else feed(p.term, `\r\n\x1b[2m[${code ? t("termpanel.endedCode", { code }) : t("termpanel.ended")}]\x1b[0m\r\n`);
       },
     )
     .then(
@@ -140,10 +191,10 @@ function start(key: number, p: PanelTerm, want: string | null): void {
         }
         p.id = started.id;
         // the tab's mark follows the CLI in the shell's foreground
-        p.fgOff = onSessionFg(started.id, (agent) => setTabFg(key, agent));
+        p.fgOff = onSessionFg(started.id, (agent) => setPaneFg(key, agent));
         if (p.owed) host.ack(p.id, p.owed);
         p.owed = 0;
-        setTabCwd(key, started.cwd);
+        setPaneCwd(key, started.cwd);
       },
       (e) => {
         p.ended = true;
@@ -152,8 +203,8 @@ function start(key: number, p: PanelTerm, want: string | null): void {
     );
 }
 
-/** Put tab `key`'s terminal into `box` (made and its shell started the first time). Returns what takes it out. */
-export function attachTerm(key: number, want: string | null, box: HTMLElement, mode: "dark" | "light"): () => void {
+/** Put pane `key`'s terminal into `box` (made and its shell started the first time). Returns what takes it out. */
+export function attachTerm(key: number, want: string | null, box: HTMLElement, mode: "dark" | "light", restored = false): () => void {
   look = mode;
   let gone = false;
   let detach: (() => void) | null = null;
@@ -169,14 +220,14 @@ export function attachTerm(key: number, want: string | null, box: HTMLElement, m
     }
     applyLook(pt.term, termTheme(look, readTermSettings()), readTermSettings());
     refit(pt);
-    if (fresh) start(key, pt, want);
+    if (fresh) void start(key, pt, want, restored);
     const ro = new ResizeObserver(() => refit(pt));
     ro.observe(box);
     // and when its cells change size (the GPU renderer arrived after this fit, or went)
     const cells = () => refit(pt);
     pt.el.addEventListener(CELLS_EVENT, cells);
     onVisible(pt.term, true);
-    // a tab is made when it comes to the front: once xterm has loaded, it takes the keyboard
+    // a pane is made when it comes to the front (a new tab, a split): once xterm has loaded, it takes the keyboard
     if (fresh) pt.term.focus();
     detach = () => {
       ro.disconnect();
@@ -194,7 +245,7 @@ export function attachTerm(key: number, want: string | null, box: HTMLElement, m
   };
 }
 
-/** Give tab `key`'s terminal the keyboard (after the panel opens or a tab is picked). */
+/** Give pane `key`'s terminal the keyboard (after the panel opens, or a tab or pane is picked). */
 export function focusTerm(key: number): void {
   const p = terms.get(key);
   if (!p) return;
@@ -210,17 +261,21 @@ export function showTerm(key: number, shown: boolean): void {
   if (shown) refit(p);
 }
 
-/** Close tab `key`: its shell is stopped and its terminal thrown away. */
+/** Close pane `key`: its shell is stopped, its terminal thrown away and the files dropped on it removed. */
 export function disposeTerm(key: number): void {
   const p = terms.get(key);
   if (!p) return;
   terms.delete(key);
+  p.hist?.stop();
+  forgetHistory(getHost(), histKey(key));
   if (p.id !== null && !p.ended) void getShellHost().close(p.id).catch(() => undefined);
+  if (p.saved && p.id !== null) void getHost().removeFiles(filesId(p.id)).catch(() => undefined);
   p.ended = true;
   if (p.settle !== null) clearTimeout(p.settle);
   const wasParked = isParked(p.raw);
   p.undo();
   p.fgOff?.();
+  p.cwdOff?.();
   if (!wasParked) p.raw.dispose(); // a parked one was disposed when it was parked
   p.el.remove();
 }
@@ -237,3 +292,71 @@ export function relookTerms(mode: "dark" | "light" = look): void {
   }
 }
 onTermSettings(() => relookTerms());
+
+/** The folder name a panel shell's saved files go under (`~/.omher/session-files/<this>/`): `s0` and the shell's
+ *  session id. A TERMINALS session's ids are `s1`, `s2`... (never a leading zero), so the two never share a folder. */
+export const filesId = (shellId: number): string => `s0${shellId}`;
+
+/** A file as a terminal's drop and paste hand it on. */
+export interface DroppedFile {
+  name: string;
+  read: () => Promise<Uint8Array>;
+}
+export const fileIn = (f: File): DroppedFile => ({ name: f.name || "pasted.png", read: async () => new Uint8Array(await f.arrayBuffer()) });
+export const isWindows = (): boolean => typeof navigator !== "undefined" && /^Win/.test(navigator.platform);
+
+/** A file dropped on `el`, or a picture pasted there, goes to `onFiles` (as a system terminal types a dropped file's
+ *  path). Plain text pastes stay xterm's own. Shared by TERMINALS (SessionView) and the bottom panel's panes. */
+export function wireFileDrop(el: HTMLElement, onFiles: (files: DroppedFile[]) => void): () => void {
+  const hasFiles = (e: DragEvent) => !!e.dataTransfer && [...e.dataTransfer.types].includes("Files");
+  const over = (e: DragEvent) => {
+    if (!hasFiles(e)) return;
+    e.preventDefault();
+    if (e.dataTransfer) e.dataTransfer.dropEffect = "copy";
+  };
+  const drop = (e: DragEvent) => {
+    if (!hasFiles(e)) return;
+    e.preventDefault();
+    const files = [...(e.dataTransfer?.files ?? [])];
+    if (files.length) onFiles(files.map(fileIn));
+  };
+  const paste = (e: ClipboardEvent) => {
+    const files = [...(e.clipboardData?.files ?? [])];
+    if (!files.length) return;
+    e.preventDefault();
+    e.stopPropagation();
+    onFiles(files.map(fileIn));
+  };
+  el.addEventListener("dragenter", over);
+  el.addEventListener("dragover", over);
+  el.addEventListener("drop", drop);
+  el.addEventListener("paste", paste, true);
+  return () => {
+    el.removeEventListener("dragenter", over);
+    el.removeEventListener("dragover", over);
+    el.removeEventListener("drop", drop);
+    el.removeEventListener("paste", paste, true);
+  };
+}
+
+/** Files dropped or pasted on pane `key`: each saved under its shell's own folder (the page never sees a dropped file's
+ *  own path), then the saved paths typed at its prompt, shell-quoted, as TERMINALS does (sessions.ts dropOnTerminal). */
+export async function dropOnPane(key: number, files: DroppedFile[], windows = isWindows()): Promise<void> {
+  const p = terms.get(key);
+  if (!p || p.id === null || p.ended) return;
+  const id = p.id;
+  const paths: string[] = [];
+  for (const f of files) {
+    try {
+      paths.push(shellQuote(await getHost().saveFile(filesId(id), f.name, await f.read()), windows));
+      p.saved = true;
+    } catch (e) {
+      feed(p.term, `\r\n\x1b[31m${t("att.failed", { name: f.name, error: e instanceof Error ? e.message : String(e) })}\x1b[0m\r\n`);
+      return;
+    }
+  }
+  if (!paths.length || p.ended) return;
+  p.typed = true;
+  await getShellHost().write(id, `${paths.join(" ")} `);
+  p.term.focus();
+}

@@ -108,7 +108,9 @@ MAIN_VERIFY_CONTEXT = (
 )
 # The api node is quick, so its task carries the escalate line (dag_run.ESCALATION_LADDER); removing that line alone
 # reproduces main's pin fd8a3794061b97010042cb5340cbcf4991630164ce58ed990667ccfbb5bc146c.
-MAIN_API_CONTEXT_SHA = "fa272bdff1d7b1f0ae032829a98236fa6239cbc0497bdd11885818b345dbb276"
+# Re-pinned after dag_run.task_for gained the commit-scope line for writing nodes (T2 dag-commit-scope); the
+# previous main pin was fa272bdff1d7b1f0ae032829a98236fa6239cbc0497bdd11885818b345dbb276.
+MAIN_API_CONTEXT_SHA = "21c6f77532532a3aef495c180dd84688c362d23564aa9255bd0cada09e3aaef0"
 # The two tool-result pins hold the reply as the model reads it: non-ASCII kept as written (#2884), so the `·` of the
 # status line is one character, not `\u00b7`; the ASCII re-encoding of these bytes gives the pins main captured.
 MAIN_RESULT_RUNNING_SHA = "c53744ae5ca1a204693922fbc67dc5eb8b44cc9eb6ae714ac10955ba4fd03d50"
