@@ -367,6 +367,14 @@ All notable changes will be documented here.
   - **Find options.** The terminal find bar has Match case (Aa, Alt+C) and Regular expression (.\*, Alt+R) toggles.
     An invalid pattern marks the field and finds nothing.
 
+- **The OMH TUI's proofreader keeps a local dictionary.** On a spelling issue, Alt+P now offers Add to dictionary
+  beside the replacements: the word's spelling marks hide in every OMH TUI on that OMH home, and Alt+P on it later
+  offers Remove from dictionary. The picker's Skip row is gone (Cancel and Esc already did the same). Grammar
+  corrections are never hidden by a saved or unsaved spelling, the word list is read and saved off the screen's
+  thread, and a damaged dictionary file is never overwritten. Words are kept in
+  `<omh_home>/proofread/dictionary.txt`; a word with an apostrophe or hyphen gets no dictionary action. Contributed
+  by @DanRioDev (#2996).
+
 - **The OMH TUI's waiting row says what it waits on.** Between turns the row above the composer named nothing
   (`✻ Waiting… (33m 47s · 1 agent · terminal)`). It now names the longest wait from structure only: a background
   process by the words in command position of its command (`Waiting for CI` with the PR number, `Deploying`,

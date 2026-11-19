@@ -2318,6 +2318,16 @@ class App(ModesMixin, AgentViewMixin):
         self.escape_armed: tuple[str, float] | None = None  # (what a second Esc does, when the first came)
         self.rewind_picker: RewindPicker | None = None
         self.proofread_worker = proofread.Worker()
+        omh_home = self._omh_home()
+        self.proofread_dictionary = omh_home / proofread.DICTIONARY_FILE if omh_home is not None else None
+        # Read on the first check and again as results come in, off the screen's thread (`proofread.DictionaryTask`):
+        # a bad dictionary never blocks ordinary proofreading or gets overwritten on save.
+        self.proofread_words: frozenset[str] = frozenset()
+        self.proofread_words_print: tuple | None = proofread.UNKNOWN
+        self.proofread_dictionary_task = proofread.DictionaryTask()
+        self.proofread_dictionary_kind = ""  # "read" or "save": what the pending task does
+        self.proofread_dictionary_save: tuple[str, bool] | None = None  # (word, add) waiting for the task
+        self.proofread_open_waits = False  # Alt+P's review opens once the dictionary read in flight lands
         self.proofread_review: proofread.Review | None = None
         self.proofread_job: proofread.Job | None = None
         self.proofread_snapshot: proofread.Snapshot | None = None
@@ -4953,6 +4963,7 @@ class App(ModesMixin, AgentViewMixin):
                 and (self.slot is None or (self.slot.method == "clarify" and not self.slot.picking))):
             self._sync_proofread()
             if self.proofread_checked:
+                self._refresh_proofread_dictionary()  # another window may have saved a word since
                 self._open_proofread_issue()
             else:
                 self.proofread_intent = True
@@ -5077,6 +5088,7 @@ class App(ModesMixin, AgentViewMixin):
         self.proofread_issues = ()
         self.proofread_checked = False
         self.proofread_intent = False
+        self.proofread_open_waits = False
         self.proofread_status = ""
         self.proofread_due = None
         if (self._proofread_foreground() and not self.composer.masked and self.composer.text
@@ -5104,33 +5116,88 @@ class App(ModesMixin, AgentViewMixin):
             return
         self.proofread_job = job
         self.proofread_worker.start(job, self._wake_loop)
+        self._refresh_proofread_dictionary()  # read beside the request, not before it
 
-    def _proofread_issue(self) -> proofread.Issue | None:
+    def _proofread_spellings(self) -> list[proofread.Issue]:
+        return proofread.spellings(self.proofread_issues) if self.proofread_dictionary is not None else []
+
+    def _proofread_at_cursor(self) -> tuple[proofread.Issue | None, proofread.Issue | None]:
+        """The correction and the dictionary spelling at the cursor, each chosen from its own list, so a spelling
+        with no replacement never hides a correction and a saved one stays reachable to remove."""
         if (not self._proofread_foreground() or self.composer.masked or self.proofread_snapshot is None
                 or not self.proofread_snapshot.matches(self.composer, self._proofread_owner())):
-            return None
+            return None, None
         caret = self.composer.caret
-        return (next((issue for issue in self.proofread_issues if issue.start <= caret < issue.end), None)
-                or next((issue for issue in self.proofread_issues if issue.end == caret), None))
+
+        def at(issues: list[proofread.Issue]) -> proofread.Issue | None:
+            return (next((issue for issue in issues if issue.start <= caret < issue.end), None)
+                    or next((issue for issue in issues if issue.end == caret), None))
+
+        return at(proofread.corrections(self.proofread_issues, self.proofread_words)), at(self._proofread_spellings())
 
     def _proofread_marks(self) -> tuple[tuple[int, int], ...]:
         self._sync_proofread()
-        return tuple((issue.start, issue.end) for issue in self.proofread_issues)
+        shown = proofread.corrections(self.proofread_issues, self.proofread_words) + [
+            issue for issue in self._proofread_spellings() if issue.word not in self.proofread_words]
+        return tuple(sorted({(issue.start, issue.end) for issue in shown}))
 
     def _open_proofread_issue(self) -> None:
         self.proofread_intent = False
-        issue = self._proofread_issue()
+        self.proofread_open_waits = self.proofread_dictionary_task.pending or self.proofread_dictionary_save is not None
+        if self.proofread_open_waits:
+            return  # opens when the dictionary lands (`_take_proofread_dictionary`)
+        correction, spelling = self._proofread_at_cursor()
+        issue = correction or spelling
         if issue is None:
             self.proofread_status = "No correction at cursor · Alt+P checks"
         else:
+            word = spelling.word if spelling is not None else None
+            action = "" if word is None else "remove_word" if word in self.proofread_words else "add_word"
             self.proofread_review = proofread.Review(
                 proofread.Snapshot.capture(self.composer, self._proofread_owner()), [issue],
-                self.clock() + proofread.ARM_SECONDS,
+                self.clock() + proofread.ARM_SECONDS, dictionary_action=action, word=word,
             )
         self.dirty = True
 
+    def _refresh_proofread_dictionary(self) -> None:
+        """Reread the dictionary on its own thread when the file changed, another window's save included."""
+        path = self.proofread_dictionary
+        if path is None or self.proofread_dictionary_task.pending:
+            return
+        known = self.proofread_words_print
+        self.proofread_dictionary_kind = "read"
+        self.proofread_dictionary_task.start(lambda: proofread.read_dictionary(path, known), self._wake_loop)
+
+    def _take_proofread_dictionary(self) -> None:
+        """A finished dictionary read or save, then the save waiting for it, or the review Alt+P asked for."""
+        result = self.proofread_dictionary_task.take()
+        if result is not None:
+            ok, value = result
+            if ok and value is not None:
+                self.proofread_words, self.proofread_words_print = value  # type: ignore[misc]
+            elif not ok:
+                self.proofread_words_print = proofread.UNKNOWN  # read again next time; keep what was known
+            if self.proofread_dictionary_kind == "save":
+                if not ok:
+                    self.proofread_status = proofread.DICTIONARY_ERROR
+                elif self.proofread_status == proofread.DICTIONARY_ERROR:
+                    self.proofread_status = ""
+            self.dirty = True
+        path = self.proofread_dictionary
+        if self.proofread_dictionary_save is not None and path is not None:
+            if not self.proofread_dictionary_task.pending:
+                word, add = self.proofread_dictionary_save
+                self.proofread_dictionary_save = None
+                self.proofread_dictionary_kind = "save"
+                self.proofread_dictionary_task.start(
+                    lambda: proofread.update_dictionary(path, word, add=add), self._wake_loop)
+        elif (result is not None and self.proofread_open_waits and self.proofread_checked
+              and self.proofread_review is None and not self.proofread_dictionary_task.pending):
+            self._open_proofread_issue()
+
     def _take_proofread(self) -> None:
         self._sync_proofread()
+        self._take_proofread_dictionary()
         review = self.proofread_review
         if review is not None and not review.snapshot.matches(self.composer, self._proofread_owner()):
             self._close_proofread()
@@ -5162,6 +5229,7 @@ class App(ModesMixin, AgentViewMixin):
         self.proofread_status = ""
         self.proofread_checked = True
         self.proofread_issues = tuple(outcome.issues)
+        self._refresh_proofread_dictionary()
         if self.proofread_intent:
             self._open_proofread_issue()
 
@@ -5182,12 +5250,12 @@ class App(ModesMixin, AgentViewMixin):
         if action is None:
             return
         kind, value = action
-        if kind == "cancel":
-            self._close_proofread()
-            return
+        issue = review.issue
         if kind == "accept":
-            issue = review.issue
             self.composer.replace(issue.start, issue.end, value)
+        elif kind in ("add_word", "remove_word") and review.word is not None and self.proofread_dictionary is not None:
+            self.proofread_dictionary_save = (review.word, kind == "add_word")
+            self._take_proofread_dictionary()  # saves on the dictionary's thread; the key never waits on its lock
         self._close_proofread()
 
     def _edit(self, composer: Composer, event: Key | Paste) -> ComposerAction:
@@ -10050,7 +10118,13 @@ class App(ModesMixin, AgentViewMixin):
         elif self._newline_keys_due():
             say = NEWLINE_KEYS
         if not say and self._proofread_foreground():
-            say = "Alt+P corrects at cursor" if self._proofread_issue() is not None else self.proofread_status
+            correction, spelling = self._proofread_at_cursor()
+            if (correction is None and spelling is None) or self.proofread_status == proofread.DICTIONARY_ERROR:
+                say = self.proofread_status
+            elif correction is not None:
+                say = proofread.HINT_CORRECT
+            else:
+                say = proofread.HINT_REMOVE if spelling.word in self.proofread_words else proofread.HINT_ADD
         badge = self._badge_forms()
         # A tiny terminal keeps its one line for the keys, as it does without the badge (`_badge_forms`).
         background = self._background_forms() if badge and not self._background_hidden() else ()
