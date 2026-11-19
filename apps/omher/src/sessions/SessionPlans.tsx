@@ -20,7 +20,7 @@ import { LIVE_POLL_MS } from "../runs/live";
 import { SubagentLine, waitingSubs } from "../chat/activity/Subagents";
 import { getSessions, useSessions } from "./sessions";
 import type { SessionRec } from "./agents";
-import { folderName, termFallbackName, termMarkAgent } from "./agents";
+import { folderName, splitPaneName, termMarkAgent } from "./agents";
 import { TermRowMark } from "./TermRowMark";
 import { focusSplitPane } from "./SplitView";
 import { groupOf, sessionOf, useSplit } from "./splitState";
@@ -181,7 +181,7 @@ function SplitMap({ rec }: { rec: SessionRec }) {
           const id = sessionOf(n);
           const row = ss.list.find((x) => x.id === id);
           if (!row) return null;
-          const name = pickTitle(row, termFallbackName(row, ss.agents)).title;
+          const name = splitPaneName(row, ss.agents);
           const on = id === rec.id;
           return (
             <button

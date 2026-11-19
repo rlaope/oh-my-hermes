@@ -223,6 +223,10 @@ test("rows in the open split carry a glyph (the focused one marked); Plans draws
   const boxA = page.locator(`[data-testid="split-map-box"][data-session="${a}"]`);
   const boxB = page.locator(`[data-testid="split-map-box"][data-session="${b}"]`);
   await expect(boxB).toHaveAttribute("data-focused", "true");
+  // bare shells are named by their folder in the map and in the row glyph's label, not "Shell" each
+  await expect(boxA).toHaveAttribute("title", "a");
+  await expect(boxB).toHaveAttribute("title", "b");
+  await expect(page.getByTestId(`session-${a}`).getByTestId("term-split-glyph")).toHaveAttribute("aria-label", /: a$/);
   const [ba, bb] = [(await boxA.boundingBox())!, (await boxB.boundingBox())!];
   expect(bb.x).toBeGreaterThan(ba.x + ba.width - 2);
   expect(Math.abs(bb.y - ba.y)).toBeLessThan(2);

@@ -19,7 +19,7 @@ import { busyFor, shortTime } from "../app/time";
 import { t } from "../i18n";
 import { composing } from "../lib/ime";
 import { AgentMark } from "./AgentMark";
-import { agentDef, agentLabel, draftFolder, folderChoices, folderName, hermesOnly, installLine, isTerminalRec, menuFocus, menuOrder, missingNote, parentPath, SHELL, termActivity, termFallbackName, termGroups, terminalAgents, termMarkAgent, termStatus, tildePath, type AgentId, type AgentInfo, type RowMark, type SessionRec, type TermStatus, type Unseen } from "./agents";
+import { agentDef, agentLabel, draftFolder, folderChoices, folderName, hermesOnly, installLine, isTerminalRec, menuFocus, menuOrder, missingNote, parentPath, SHELL, splitPaneName, termActivity, termFallbackName, termGroups, terminalAgents, termMarkAgent, termStatus, tildePath, type AgentId, type AgentInfo, type RowMark, type SessionRec, type TermStatus, type Unseen } from "./agents";
 import { TermRowMark } from "./TermRowMark";
 import { SplitGlyph, useSplit, useSplitPrune } from "./SplitView";
 import { groupOf, groupSessions, paneOf } from "./splitState";
@@ -1227,7 +1227,7 @@ const TermRow = memo(function TermRow({ rec, agents, unseen, active, ticking, on
         >
           {split ? <span className="tr-nt">{title.title}</span> : title.title}
           {split && (
-            <span className="tr-split" data-testid="term-split-glyph" role="img" aria-label={t(active ? "split.focusedPane" : "split.inSplit")} title={t(active ? "split.focusedPane" : "split.inSplit")}>
+            <span className="tr-split" data-testid="term-split-glyph" role="img" aria-label={t(active ? "split.focusedPane" : "split.inSplit", { name: splitPaneName(rec, agents) })} title={t(active ? "split.focusedPane" : "split.inSplit", { name: splitPaneName(rec, agents) })}>
               <SplitGlyph layout={split} mine={paneOf(rec.id) ?? -1} size={11} />
             </span>
           )}
