@@ -108,6 +108,51 @@ class ScanTests(GuardCase):
             for name in (NAME, OTHER, "quartz", "heron", "marble", "finch"):
                 self.assertNotIn(name, text.lower())
 
+    def assert_no_plaintext(self, *texts: str) -> None:
+        for text in texts:
+            for word in ("quartz", "heron"):
+                self.assertNotIn(word, text.lower())
+
+    def test_path_and_content_hit_never_prints_the_path(self) -> None:
+        self.denylist(NAME)
+        self.track("notes/quartz-heron.md", f"{NAME}\n")
+        code, out, err = self.scan()
+        self.assertEqual(code, 1)
+        self.assert_no_plaintext(out, err)
+        self.assertIn("<redacted path #1>", out)
+        self.assertIn(f"<redacted path #1>:1: private identifier hash {guard.hash_line(NAME)}", out)
+
+    def test_path_only_hit_fails(self) -> None:
+        self.denylist(NAME)
+        self.track("a.md", "clean\n")
+        self.track("b/Quartz_Heron.md", "clean\n")
+        code, out, err = self.scan()
+        self.assertEqual(code, 1)
+        self.assert_no_plaintext(out, err)
+        self.assertIn(f"<redacted path #2> (hash {guard.hash_line(NAME)})", out)
+
+    def test_path_hit_in_binary_file_fails(self) -> None:
+        self.denylist(NAME)
+        self.track("quartzheron.png", b"\0")
+        code, out, err = self.scan()
+        self.assertEqual(code, 1)
+        self.assert_no_plaintext(out, err)
+
+    def test_staged_and_explicit_modes_check_paths(self) -> None:
+        self.denylist(NAME)
+        self.track("quartz-heron.md", "clean\n")
+        for kwargs in ({"staged": True}, {"paths": ["quartz-heron.md"]}):
+            with self.subTest(**kwargs):
+                code, out, err = self.scan(**kwargs)
+                self.assertEqual(code, 1)
+                self.assert_no_plaintext(out, err)
+
+    def test_unreadable_explicit_path_is_redacted(self) -> None:
+        self.denylist(NAME)
+        code, out, err = self.scan(paths=["quartz-heron.md"])
+        self.assertEqual(code, 2)
+        self.assert_no_plaintext(out, err)
+
 
 class FailClosedTests(GuardCase):
     def test_missing_denylist_exits_2(self) -> None:
@@ -129,6 +174,14 @@ class FailClosedTests(GuardCase):
     def test_local_override_alone_does_not_replace_the_committed_list(self) -> None:
         (self.root / guard.LOCAL_OVERRIDE).write_text(f"{NAME}\n", encoding="utf-8")
         self.assertEqual(self.scan()[0], 2)
+
+    def test_empty_committed_list_fails_even_with_a_local_override(self) -> None:
+        self.denylist(raw="# only a comment\n")
+        (self.root / guard.LOCAL_OVERRIDE).write_text(f"{NAME}\n", encoding="utf-8")
+        self.track("doc.md", "clean\n")
+        code, _, err = self.scan()
+        self.assertEqual(code, 2)
+        self.assertIn("denylist empty", err)
 
     def test_not_a_git_repo_exits_2(self) -> None:
         with tempfile.TemporaryDirectory() as bare:

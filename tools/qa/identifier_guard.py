@@ -5,8 +5,10 @@ The committed denylist holds only sha256 hashes of lowercased identifiers, so
 the repo never carries the names it protects. Every git-tracked text file is
 lowercased and split into `[a-z0-9]+` words; every 1-, 2- and 3-word shingle is
 hashed (2- and 3-word shingles in space, hyphen and joined forms, so `foo-bar`,
-`foo bar` and `foobar` meet one entry, which `--hash` writes as the joined form) and looked up. A hit is reported as
-path:line plus the hash, never the name.
+`foo bar` and `foobar` meet one entry, which `--hash` writes as the joined form) and looked up. Every path
+is checked the same way, binary files included. A hit is reported as path:line
+plus the hash, never the name; a path that itself holds a name is shown only as
+`<redacted path #n>`, n being its position in the scanned listing.
 
 Exit codes: 0 clean, 1 hit, 2 the guard could not run (no/empty/malformed
 denylist, git failure, unreadable file). A guard that cannot look must not pass.
@@ -25,7 +27,7 @@ from pathlib import Path
 import re
 import subprocess
 import sys
-from typing import Iterator
+from typing import Callable, Iterator
 
 ROOT = Path(__file__).resolve().parents[2]
 DENYLIST = Path("tools/qa/identifier-denylist.sha256")
@@ -63,14 +65,14 @@ def load_hashes(root: Path) -> set[str]:
         if not HEX_HASH.fullmatch(line):
             raise GuardError(f"{DENYLIST}:{number}: not a sha256 hex hash")
         hashes.add(line)
+    if not hashes:  # before the local merge: CI never has the local list
+        raise GuardError(f"denylist empty: {DENYLIST} has no entries (the guard fails closed)")
     local = root / LOCAL_OVERRIDE
     if local.is_file():
         for raw in local.read_text(encoding="utf-8").splitlines():
             name = raw.split("#", 1)[0].strip().lower()
             if name:
                 hashes.add(digest("".join(WORD.findall(name))))
-    if not hashes:
-        raise GuardError(f"denylist empty: {DENYLIST} has no entries (the guard fails closed)")
     return hashes
 
 
@@ -116,15 +118,15 @@ def tracked_files(root: Path) -> list[str]:
     return [p for p in git(root, "ls-files", "-z").decode("utf-8", "surrogateescape").split("\0") if p]
 
 
-def staged_blobs(root: Path) -> list[tuple[str, str]]:
-    blobs = []
+def staged_blobs(root: Path) -> list[tuple[str, str | None]]:
+    blobs: list[tuple[str, str | None]] = []
     for entry in git(root, "ls-files", "-z", "--stage").decode("utf-8", "surrogateescape").split("\0"):
         if not entry:
             continue
         meta, path = entry.split("\t", 1)
         mode, blob, _stage = meta.split()
-        if mode in {"100644", "100755"}:  # skip symlinks and submodules
-            blobs.append((path, blob))
+        # Symlinks and submodules have no text of their own, but their paths are checked.
+        blobs.append((path, blob if mode in {"100644", "100755"} else None))
     return blobs
 
 
@@ -137,24 +139,26 @@ def read_disk(root: Path, path: str) -> bytes | None:
     try:
         return target.read_bytes()
     except OSError as error:
-        raise GuardError(f"cannot read {path}: {error.strerror}") from error
+        raise GuardError(f"cannot read: {error.strerror}") from error
 
 
-def collect(root: Path, staged: bool, paths: list[str]) -> Iterator[tuple[str, bytes]]:
+def read_required(root: Path, path: str) -> bytes:
+    data = read_disk(root, path)
+    if data is None:
+        raise GuardError("cannot read")
+    return data
+
+
+def listing(root: Path, staged: bool, paths: list[str]) -> list[tuple[str, Callable[[], bytes | None]]]:
+    """Every path to check, in listing order, with a reader for its text (None: no text)."""
     if paths:
-        for path in paths:
-            data = read_disk(root, path)
-            if data is None:
-                raise GuardError(f"cannot read {path}")
-            yield path, data
-    elif staged:
-        for path, blob in staged_blobs(root):
-            yield path, git(root, "cat-file", "blob", blob)
-    else:
-        for path in tracked_files(root):
-            data = read_disk(root, path)
-            if data is not None:
-                yield path, data
+        return [(path, lambda path=path: read_required(root, path)) for path in paths]
+    if staged:
+        return [
+            (path, (lambda blob=blob: git(root, "cat-file", "blob", blob)) if blob else (lambda: None))
+            for path, blob in staged_blobs(root)
+        ]
+    return [(path, lambda path=path: read_disk(root, path)) for path in tracked_files(root)]
 
 
 def run(root: Path, staged: bool = False, paths: list[str] | None = None) -> int:
@@ -162,18 +166,33 @@ def run(root: Path, staged: bool = False, paths: list[str] | None = None) -> int
         hashes = load_hashes(root)
         hits = 0
         scanned = 0
-        for path, data in collect(root, staged, paths or []):
-            if is_binary(path, data):
+        for number, (path, read) in enumerate(listing(root, staged, paths or []), 1):
+            path_hits = scan_text(path, hashes)
+            # A path holding a name is never printed, in hits or in errors.
+            shown = f"<redacted path #{number}>" if path_hits else path
+            for _line, value in path_hits:
+                hits += 1
+                print(f"{shown} (hash {value})")
+            try:
+                data = read()
+            except GuardError as error:
+                raise GuardError(f"{shown}: {error}") from error
+            if data is None or is_binary(path, data):
                 continue
             scanned += 1
             for line, value in scan_text(data.decode("utf-8", "replace"), hashes):
                 hits += 1
-                print(f"{path}:{line}: private identifier hash {value}")
+                print(f"{shown}:{line}: private identifier hash {value}")
     except GuardError as error:
         print(f"identifier-guard: BLOCKED: {error}", file=sys.stderr)
         return 2
     if hits:
-        print(f"identifier-guard: {hits} hit(s) in {scanned} files; remove the identifier", file=sys.stderr)
+        print(
+            f"identifier-guard: {hits} hit(s) in {scanned} files; remove the identifier"
+            " (redacted path #n is entry n of `git ls-files`, `git ls-files --stage` with --staged,"
+            " or the arguments)",
+            file=sys.stderr,
+        )
         return 1
     print(f"identifier-guard: clean ({scanned} text files, {len(hashes)} denylist entries)")
     return 0

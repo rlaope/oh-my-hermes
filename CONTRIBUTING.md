@@ -64,8 +64,10 @@ The repo is public, so private names (internal hosts, codenames, people,
 customers) must never appear in a tracked file. CI runs
 `tools/qa/identifier_guard.py` on every pull request and main push. It checks
 each tracked text file against `tools/qa/identifier-denylist.sha256`, which
-holds only sha256 hashes of lowercased names. A hit prints `path:line` and the
-hash. A missing or empty denylist exits 2 and fails the job.
+holds only sha256 hashes of lowercased names. File paths are checked too. A hit
+prints `path:line` and the hash; a path that itself holds a name prints as
+`<redacted path #n>` (entry n of `git ls-files`). A missing or empty committed
+denylist exits 2 and fails the job, even with a local list.
 
 - Add a name: `uv run python tools/qa/identifier_guard.py --hash "name"`, then
   append the printed line to the denylist. Names are one to three words; the
