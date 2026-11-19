@@ -607,6 +607,7 @@ EXACT_MODEL_CONTRACT_ALIASES: frozenset[str] = frozenset(
         "claude-opus-5-5", "claude-sonnet-5-5", "claude-haiku-5-5", "claude-fable-5-1", "claude-fable-5-2",
         "deepseek-v4.1-flash",
         "kimi-k3.1-pro", "kimi-k3.1-pro-highspeed", "gemini-4-argon", "grok-4.7",
+        "qwen4-max",
         "jev-1.13.0",
     }
 )

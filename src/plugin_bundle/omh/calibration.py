@@ -386,7 +386,8 @@ def _calibration_family(model: str) -> str:
     if key.startswith("openai-gpt-image-"):
         return "generic"
     for prefix, family in (("openai-gpt-", "gpt"), ("anthropic-claude-", "claude"),
-                           ("qwen3-", "qwen"), ("qwen3.", "qwen")):
+                           ("qwen3-", "qwen"), ("qwen3.", "qwen"),
+                           ("qwen4-", "qwen"), ("qwen4.", "qwen")):
         if key.startswith(prefix):
             return family
     for family in HIGH_EFFORT_CALIBRATIONS:
