@@ -15,6 +15,7 @@ load_local_package()
 from omh.commands.main import build_parser  # noqa: E402
 from omh.routing.localization import normalized_phrase  # noqa: E402
 from omh.routing.policy import everyday_sense_phrase_unanchored  # noqa: E402
+from omh.routing.chat import public_chat_route_payload  # noqa: E402
 from omh.routing.skill_eval_cues import skill_eval_korean_match  # noqa: E402
 from omh.skills.catalog import builtin_definitions  # noqa: E402
 from omh.skills.packaging import builtin_skill_reference_templates, builtin_skill_templates  # noqa: E402
@@ -154,6 +155,24 @@ class SkillEvalRoutingGuardTests(unittest.TestCase):
         ):
             with self.subTest(message=message):
                 self.assertEqual(skill_eval_korean_match(normalized_phrase(message)), matched)
+
+    def test_the_route_dispatches_only_when_a_skill_artifact_is_the_object(self) -> None:
+        # Base a5649293 / review head 16174cbae: the first two dispatched here; the last two did not
+        # (clarify, then a file-lookup fallback).
+        for message, dispatched in (
+            ("evaluate my skill at using Codex for Python", False),
+            ("이 스킬로 일하는 직원 스킬 평가 기준 만들어줘", False),
+            ("evaluate my skills at interviewing candidates", False),
+            ("Please evaluate whether this agent skill loads in Codex", True),
+            ("check SKILL.md compatibility", True),
+            ("does this skill load in copilot", True),
+        ):
+            with self.subTest(message=message):
+                route = public_chat_route_payload(message)
+                self.assertEqual(route["selected_skill"] == "skill-eval", dispatched, route["selected_skill"])
+                if dispatched:
+                    self.assertEqual(route["action"], "dispatch")
+        self.assertEqual(public_chat_route_payload("where is SKILL.md in this repo")["action"], "fallback")
 
 
 if __name__ == "__main__":

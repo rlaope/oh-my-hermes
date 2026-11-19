@@ -10637,6 +10637,11 @@ ROUTING_PRECISION_CASES: tuple[RoutingPrecisionCase, ...] = (
         "ko-sales-skill-scorecard-is-not-skill-eval", "A Korean sales skill scorecard is not an agent skill check",
         "영업 스킬 평가표", "answer_clarification", "", "skill-eval",
     ),
+    # A host word beside a person's skill does not make it an agent skill.
+    RoutingPrecisionCase(
+        "skill-at-using-codex-is-not-skill-eval", "A person's skill at using Codex is not an agent skill check",
+        "evaluate my skill at using Codex for Python", "answer_clarification", "", "skill-eval",
+    ),
 )
 
 
@@ -21739,6 +21744,12 @@ ROUTING_INTERVENTION_CASES: tuple[RoutingInterventionCase, ...] = (
     RoutingInterventionCase("find-a-skill-keeps-skill-scout", "Looking for a skill to adopt stays with the skill scout", "skill scout for changelog", "dispatch", "skill-scout", "prepare_skill_scout", "skill_scout"),
     RoutingInterventionCase("coding-agent-comparison-keeps-agent-evaluation", "Comparing coding agents on one task stays with agent evaluation", "compare codex and claude code on the same bug fix task", "dispatch", "agent-evaluation", "prepare_agent_evaluation", "agent_evaluation"),
     RoutingInterventionCase("ko-find-a-skill-keeps-skill-scout", "A Korean ask to find a skill stays with the skill scout", "스킬 찾기", "dispatch", "skill-scout", "prepare_skill_scout", "skill_scout"),
+    # The skill artifact is the object of the check: natural wording reaches it
+    # (base: clarify, file-lookup fallback), and a staff assessment that names
+    # "this skill" keeps its base owner.
+    RoutingInterventionCase("skill-eval-agent-skill-loads-in-codex", "Asking whether this agent skill loads in Codex reaches the host-fit check", "Please evaluate whether this agent skill loads in Codex", "dispatch", "skill-eval", "prepare_skill_eval", "skill_eval", "skill-eval"),
+    RoutingInterventionCase("skill-eval-skill-md-compatibility", "SKILL.md compatibility reaches the host-fit check, not a file lookup", "check SKILL.md compatibility", "dispatch", "skill-eval", "prepare_skill_eval", "skill_eval", "skill-eval"),
+    RoutingInterventionCase("ko-staff-skill-criteria-keeps-deep-interview", "A Korean staff skill assessment beside this skill keeps deep interview", "이 스킬로 일하는 직원 스킬 평가 기준 만들어줘", "dispatch", "deep-interview", "answer_clarification", "clarification", "deep-interview"),
 )
 
 

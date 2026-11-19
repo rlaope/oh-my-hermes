@@ -126,6 +126,7 @@ from .route_plan import (
     with_public_skill_names,
 )
 from .task_cards import classify_task, task_card_recommendation
+from .skill_eval_cues import skill_eval_names_the_check
 from .ulw_alias import _retired_name_and_alias_index, resolve_codex_owner_choice_cue, resolve_ulw_alias
 from .visual_qa_cues import (
     BROWSER_VISUAL_QA_COMMAND_PHRASES,
@@ -2630,6 +2631,7 @@ def _route_chat_message_cached(
     explicit_loop_signal = _explicit_loop_signal(routing_message, full_recommendations)
     file_or_text_lookup = is_file_or_text_lookup_question(routing_message) and not (
         (candidate_skill == "source-finder" and "source-finder" in normalized_phrase(routing_message))
+        or (candidate_skill == "skill-eval" and skill_eval_names_the_check(normalized_phrase(routing_message)))
         or (
             candidate_skill == "idea-to-deploy"
             and _greenfield_project_bootstrap_requested(
@@ -3731,6 +3733,10 @@ def _file_lookup_fast_path_decision(
     if _operator_surface_fast_path_match(routing_message) is not None:
         return None
     if not is_file_or_text_lookup_question(routing_message):
+        return None
+    # "check SKILL.md compatibility" names a file, but asks for the host-fit
+    # check of the skill it belongs to, not a lookup in it.
+    if skill_eval_names_the_check(normalized_phrase(routing_message)):
         return None
     # A fully-specified bootstrap-file request ("set up the standard project
     # files for this empty repo") shares vocabulary with a file-lookup

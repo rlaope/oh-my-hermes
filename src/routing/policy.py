@@ -31,7 +31,12 @@ from .jev_addressing import jev_addressed_skill
 from .localization import normalized_phrase, phrase_is_spoken, routing_terms, routing_tokens
 from .materials_cues import OFFICE_FILE_MATERIAL_PHRASES
 from .model_compression_cues import MODEL_COMPRESSION_ANCHORS, MODEL_COMPRESSION_SHARED_PHRASES
-from .skill_eval_cues import SKILL_EVAL_ANCHORS, SKILL_EVAL_SHARED_PHRASES, skill_eval_phrase_spoken
+from .skill_eval_cues import (
+    SKILL_EVAL_ANCHORS,
+    SKILL_EVAL_SHARED_PHRASES,
+    skill_eval_person_sense,
+    skill_eval_phrase_spoken,
+)
 from ..plugin_bundle.omh.dag_ulw_cues import DAG_ULW, asks_about_dag_ulw, dag_ulw_control, declines_dag_ulw, invokes_dag_ulw
 from ..plugin_bundle.omh.invocation_cues import invoked_instruction
 from ..coding.pi_family_interop import PI_DISTRIBUTION_HOST, RUNTIME_SHORT_NAME
@@ -2396,6 +2401,12 @@ def everyday_sense_phrase_unanchored(skill: str, normalized_query: str) -> bool:
     # names; `spend_signals`' clause rule skips the check for it too.
     if skill == "spend-gate" and spend_gate_named_as_command(normalized_query):
         return False
+    # "evaluate my skill at using Codex for Python": a host word sits beside
+    # the phrase, but the skill is the person's (`skill_eval_person_sense`).
+    if skill == "skill-eval" and skill_eval_phrase_spoken(normalized_query) and skill_eval_person_sense(
+        normalized_query
+    ):
+        return True
     phrases, anchors = entry
     spoken = tuple(phrase for phrase in phrases if phrase_is_spoken(normalized_query, phrase))
     if not spoken:
