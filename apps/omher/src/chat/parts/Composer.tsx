@@ -483,14 +483,16 @@ export function Composer({
                     return;
                   }
                 }
-                // shell-like history: an arrow with no line left to move to recalls the person's earlier prompts
+                // shell-like history: an arrow with no line left to move to recalls the person's earlier prompts;
+                // Alt+arrow recalls from any line, so a multi-line draft need not be walked to its edge first
                 const plain = !e.shiftKey && !e.altKey && !e.ctrlKey && !e.metaKey;
-                if ((e.key === "ArrowUp" || e.key === "ArrowDown") && plain && history?.length && !composing && !threadPicking && !cmdOpen && !picking) {
+                const alt = e.altKey && !e.shiftKey && !e.ctrlKey && !e.metaKey;
+                if ((e.key === "ArrowUp" || e.key === "ArrowDown") && (plain || alt) && history?.length && !composing && !threadPicking && !cmdOpen && !picking) {
                   const el = e.currentTarget;
                   const step =
                     e.key === "ArrowUp"
-                      ? onFirstLine(text, el.selectionStart) ? older(history, recall.current, text) : null
-                      : onLastLine(text, el.selectionEnd) ? newer(history, recall.current) : null;
+                      ? alt || onFirstLine(text, el.selectionStart) ? older(history, recall.current, text) : null
+                      : alt || onLastLine(text, el.selectionEnd) ? newer(history, recall.current) : null;
                   if (step) {
                     e.preventDefault();
                     showRecalled(el, step);
