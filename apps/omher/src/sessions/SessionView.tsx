@@ -560,13 +560,31 @@ function Paused({ rec }: { rec: SessionRec }) {
   );
 }
 
+/** What a paused terminal showed before omher restarted, read-only (dimmed, under its divider); nothing starts. */
+function PausedHistory({ rec }: { rec: SessionRec }) {
+  const s = useStore();
+  const mode = useResolvedTheme(s.ui.theme);
+  const box = useRef<HTMLDivElement>(null);
+  const [has, setHas] = useState(true);
+  useEffect(() => {
+    if (!box.current) return;
+    return getSessions().previewHistory(rec.id, box.current, mode, setHas);
+  }, [rec.id, mode]);
+  // with nothing kept it is the same empty space the paused line always had above it
+  return (
+    <div className={has ? "term-wrap" : "chat-empty"} data-testid="session-paused-history">
+      <div className="term-box" ref={box} hidden={!has} />
+    </div>
+  );
+}
+
 /** A restored terminal session that is not running: no terminal is started until the person asks (Resume, or
- *  Restart once it has ended). */
+ *  Restart once it has ended). A paused one shows what it showed before the restart. */
 function TerminalIdle({ rec }: { rec: SessionRec }) {
   const label = agentDef(rec.agent).label;
   return (
     <div className="pane ss-chat ss-idle" data-testid="session-idle">
-      <div className="chat-empty">{rec.paused ? null : tr("ss.agentEnded", { agent: label })}</div>
+      {rec.paused ? <PausedHistory rec={rec} /> : <div className="chat-empty">{tr("ss.agentEnded", { agent: label })}</div>}
       {rec.paused ? <Paused rec={rec} /> : <Ended rec={rec} />}
     </div>
   );

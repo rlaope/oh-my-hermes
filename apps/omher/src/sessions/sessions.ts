@@ -1601,6 +1601,49 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
     };
   };
 
+  /** A paused TERMINALS session's kept history (dimmed, under its divider), shown read-only in `container` until the
+   *  person presses Resume: a terminal of its own that starts nothing, takes no keys and is not the session's
+   *  terminal (Resume makes that one, which writes the same history back first). `shown` hears whether there was any. */
+  const previewHistory = (id: string, container: HTMLElement, mode: "dark" | "light", shown: (has: boolean) => void): (() => void) => {
+    let gone = false;
+    let term: Terminal | null = null;
+    let ro: ResizeObserver | null = null;
+    if (!histBack.has(id)) {
+      shown(false);
+      return () => undefined;
+    }
+    void Promise.all([loadXterm(), restoredText(host, id)]).then(([[{ Terminal: Term }, { FitAddon }], text]) => {
+      if (gone) return;
+      if (!text) return shown(false);
+      const s = readTermSettings();
+      const theme = termTheme(mode, s);
+      const t = (term = new Term({ ...termOptions(theme, s), disableStdin: true, cursorBlink: false }));
+      const fit = new FitAddon();
+      t.loadAddon(fit);
+      t.open(container);
+      applyLook(t, theme, s);
+      const refit = () => {
+        if (!container.isConnected || container.clientWidth === 0) return;
+        try {
+          fit.fit();
+        } catch {
+          /* not measurable yet */
+        }
+      };
+      refit();
+      ro = new ResizeObserver(refit);
+      ro.observe(container);
+      // the kept text, and no cursor: nothing runs here
+      t.write(`${text}\x1b[?25l`);
+      shown(true);
+    });
+    return () => {
+      gone = true;
+      ro?.disconnect();
+      term?.dispose();
+    };
+  };
+
   /** Type text at session `id`'s terminal prompt, as if the person had (a dropped file's path). */
   const typeAt = async (id: string, text: string) => {
     const t = terms.get(id);
@@ -2054,6 +2097,7 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
     },
     /** Session `id` has a terminal in this page load (an ended one keeps its output until it is closed). */
     hasTerm: (id: string) => terms.has(id),
+    previewHistory,
     /** Changes each time Restart starts session `id`'s terminal program again. */
     termRun: (id: string) => termRuns.get(id) ?? 0,
     /** The session whose chat has app-store key `key`. */

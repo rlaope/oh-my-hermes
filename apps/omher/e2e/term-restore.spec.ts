@@ -151,6 +151,34 @@ test("an agent with no conversation of its own (Grok) still comes back paused an
   expect(await starts(page)).toEqual([]);
 });
 
+test("a paused terminal shows what it showed before the restart, dimmed under the divider, and starts nothing", async ({ page }) => {
+  await open(page);
+  const id = await newTerm(page, "grok");
+  await page.evaluate(() => window.dispatchEvent(new Event("pagehide")));
+  await expect.poll(async () => (await calls(page)).some((c) => c.op === "history.save" && c.key === id && !!c.data?.includes("(mock)"))).toBe(true);
+  await page.reload();
+  await page.getByTestId(`session-${id}`).locator(".ss-open").click();
+  await expect(page.getByTestId("session-paused")).toBeVisible();
+  const kept = page.getByTestId("session-paused-history").locator(".xterm-rows");
+  await expect(kept).toContainText("(mock)");
+  await expect(kept).toContainText(/--- restored .+ ---/);
+  const dim = await page.evaluate(() => {
+    const span = [...document.querySelectorAll("[data-testid=session-paused-history] .xterm-rows span")].find((s) => s.textContent?.includes("(mock)"));
+    return span ? span.className : "";
+  });
+  expect(dim).toContain("xterm-dim");
+  // nothing started and no session terminal was made; typing there goes nowhere
+  await page.getByTestId("session-paused-history").click();
+  await page.keyboard.type("ls\r");
+  await page.waitForTimeout(300);
+  expect(await starts(page)).toEqual([]);
+  expect((await calls(page)).filter((c) => c.op === "write")).toEqual([]);
+  // Resume starts it, with the same history written back first
+  await page.getByTestId("session-resume").click();
+  await expect.poll(async () => (await starts(page)).length).toBe(1);
+  await expect(screen(page)).toContainText(/--- restored .+ ---/);
+});
+
 const history = async (page: Page) => (await calls(page)).filter((c) => c.op.startsWith("history."));
 /** The page saves history every 30 s and when it goes away; the test asks for it now, as the page going away does. */
 const flush = (page: Page) => page.evaluate(() => window.dispatchEvent(new Event("pagehide")));
