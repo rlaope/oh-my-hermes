@@ -1,7 +1,9 @@
 import { answerSoFar, turnHasActivity, type TimelineItem, type Turn } from "../../state/store";
 
-/** Which row of a running turn carries the bot's ringed face: the typing bubble until the turn has something to
- *  show, then the live activity line, then the answer being written (once a whole line of it shows). One face in the live run at every moment, in the
+/** Which row of a running turn carries the bot's ringed face: the typing bubble until the answer starts (it stays
+ *  through statuses and tool steps, the activity line under it; owner 2026-11-19), the live activity line while an
+ *  ask card hides the dots, then the answer being written (once a whole line of it shows). One face in the live
+ *  run at every moment, in the
  *  same column, so the face never blinks out when the first status ("OMH — recalled 2 memories") arrives. While an
  *  ask card waits on the person the line keeps it (it says "Waiting for approval"). A bot bubble that landed after
  *  the line (an answer mid-turn, an away session) carries its own face, so the line then has none. */

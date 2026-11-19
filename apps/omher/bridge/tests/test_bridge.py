@@ -2142,6 +2142,35 @@ class ReplyThere(BridgeCase):
                           ("Fixed.", None)])
         self.assertFalse(any("OUT-OF-BAND" in m["text"] for m in rows))
 
+    def test_a_steered_row_carries_the_bots_next_words_as_its_reply(self):
+        """A steer Hermes read joins the next tool result; the bot's note after it ("Got it, keeping the timeout") is
+        a commentary row the reopened chat hides. The steered row carries that note's first line and its time, so
+        the bubble shows it was read and how it was taken. A steer with no bot row after it in its turn gets none."""
+        o = "[OUT-OF-BAND USER MESSAGE — a direct message from the user]"
+        c = "[/OUT-OF-BAND USER MESSAGE]"
+        rows = ob.chat_messages([
+            {"role": "user", "text": "fix the retry code", "row_id": 1, "timestamp": 100.0},
+            {"role": "assistant", "text": "Reading it.", "tool_calls": [{"id": "a"}], "row_id": 2, "timestamp": 101.0},
+            {"role": "tool", "text": "ok", "row_id": 3},
+            {"role": "user", "content": f"{o}\nkeep the old timeout\n{c}", "display_kind": "steer", "row_id": 4,
+             "timestamp": 102.0},
+            {"role": "assistant", "text": "", "tool_calls": [{"id": "b"}], "row_id": 5, "timestamp": 103.0},
+            {"role": "assistant", "text": "\n  Got it, keeping the old timeout.\nRunning the tests.",
+             "tool_calls": [{"id": "c"}], "row_id": 6, "timestamp": 104.5},
+            {"role": "assistant", "text": "Done.", "row_id": 7, "timestamp": 106.0},
+            {"role": "user", "text": "thanks", "row_id": 8, "timestamp": 110.0},
+            {"role": "user", "content": f"{o}\nand the logs\n{c}", "display_kind": "steer", "row_id": 9},
+            {"role": "user", "text": "next", "row_id": 10},
+            {"role": "assistant", "text": "x" * 200, "row_id": 11},
+        ])
+        steered = [m for m in rows if m.get("steered")]
+        self.assertEqual([(m["text"], m.get("steer_reply"), m.get("steer_read")) for m in steered],
+                         [("keep the old timeout", "Got it, keeping the old timeout.", 104.5),
+                          ("and the logs", None, None)])
+        # the note itself stays hidden as a bubble; only its first line shows, under the steered row
+        self.assertNotIn("Got it", " ".join(m["text"] for m in rows if m["role"] == "assistant"))
+        self.assertEqual(rows[-1]["text"], "x" * 200)
+
     def test_a_reopened_chat_shows_one_bubble_per_turn_its_answer(self):
         """kami's real Bot Chat: a turn stores the commentary Hermes writes beside each tool call as assistant rows of
         their own (14 of the 20 with text in one evening). The live chat shows only the answer; a reopened one too."""
