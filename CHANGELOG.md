@@ -4,6 +4,12 @@ All notable changes will be documented here.
 
 ## Unreleased
 
+- **A one-line list of three code changes is answered in the session, like a listed backlog.** "migrate the store to
+  sqlite, update the three callers, and add tests" or "프론트 버튼 추가랑 백엔드 엔드포인트랑 테스트 다 해줘" used to land on a
+  lane picked from one word (toolbelt-readiness, browser-operator, backend). They now get the `code_backlog` answer:
+  make the changes here, one after another, not as a dag-ulw graph. One bug's symptoms, one feature's fields, a list
+  of questions, an errand list with a single code word, and work the request itself splits keep their routes.
+
 - **Hermes Bug Hunter: code review keeps only findings it can show, and every review says what it did not check.**
   `code-review`'s finding validation gains a drop gate: a candidate stays out of the findings when it cannot be traced
   step by step from a concrete input to a wrong result, when the behaviour is intended or documented, when its trigger
