@@ -71,7 +71,10 @@ test("a file dropped on a panel pane is saved under its shell's folder and its q
     for (const type of ["dragenter", "dragover", "drop"]) el.dispatchEvent(new DragEvent(type, { dataTransfer: dt, bubbles: true, cancelable: true }));
   });
   await expect.poll(async () => (await sessionCalls(page)).filter((c) => c.op === "file.save").map((c) => [c.session, c.name])).toEqual([[`s0${b}`, "my notes.txt"]]);
-  const want = `'/home/you/.omher/session-files/s0${b}/1-my notes.txt' `;
+  // the shell's own quoting: single quotes on macOS and Linux, double quotes on Windows (the page's platform); the
+  // picture's path below needs none on either
+  const q = process.platform === "win32" ? '"' : "'";
+  const want = `${q}/home/you/.omher/session-files/s0${b}/1-my notes.txt${q} `;
   await expect.poll(async () => (await shellCalls(page)).filter((c) => c.op === "write" && c.id === b).map((c) => c.data).join("")).toBe(want);
   // the other tab's shell got nothing
   expect((await shellCalls(page)).filter((c) => c.op === "write" && c.id !== b)).toEqual([]);
