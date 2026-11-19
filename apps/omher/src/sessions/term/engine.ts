@@ -18,6 +18,8 @@ import { attachLinks } from "./engine-links";
 import { attachInput } from "./engine-input";
 import { attachIme } from "./engine-ime";
 import { FIND_EVENT, makeFinder, type FindRequest } from "./engine-find";
+import { attachImages, detachImages, loadImages } from "./engine-image";
+import { GPU_OPTIONS } from "./look";
 
 /** The add-on's chunk loads the first time a terminal wants it, never with the app and never while `gpu` is off. */
 let webglLoad: Promise<typeof WebglAddon> | null = null;
@@ -30,9 +32,10 @@ const loadWebgl = () =>
     },
   ));
 
-/** The Unicode 11 add-on loads with the first terminal (with xterm), not with the app. */
-let unicodeLoad: Promise<typeof import("@xterm/addon-unicode11").Unicode11Addon> | null = null;
-const loadUnicode = () => (unicodeLoad ??= import("@xterm/addon-unicode11").then((m) => m.Unicode11Addon));
+/** The grapheme-aware widths (Unicode 15, a ZWJ family or a flag is one wide cell, not one per code point) load with
+ *  the first terminal (with xterm), not with the app. */
+let unicodeLoad: Promise<typeof import("@xterm/addon-unicode-graphemes").UnicodeGraphemesAddon> | null = null;
+const loadUnicode = () => (unicodeLoad ??= import("@xterm/addon-unicode-graphemes").then((m) => m.UnicodeGraphemesAddon));
 
 /** Pause before a terminal tries the GPU renderer again after losing its context. */
 const RETRY_AFTER_MS = 2000;
@@ -55,7 +58,7 @@ interface State {
   gone: boolean;
   /** drops the listeners of the attached add-on */
   unwatch: (() => void) | null;
-  /** output that came before the Unicode 11 widths were active, in order; null once they are */
+  /** output that came before the grapheme widths were active, in order; null once they are */
   held: (() => void)[] | null;
   /** when it left the page (ms); null while it is on it */
   hiddenAt: number | null;
@@ -68,6 +71,8 @@ interface State {
   el: HTMLElement;
   /** the undo `afterOpen` returned, run once */
   undo: () => void;
+  /** Settings > Terminal > Show images, as this terminal last read it */
+  images: boolean;
 }
 
 /** Makes a parked terminal again: a new `Terminal` at this size with its owner's options and handlers, opened on the
@@ -147,7 +152,7 @@ function attach(s: State): void {
     (Ctor) => {
       s.loading = false;
       if (!wants(s)) return; // hidden, switched off or closed while the chunk came
-      const addon = new Ctor();
+      const addon = new Ctor(GPU_OPTIONS);
       const before = new Set(s.term.element?.querySelectorAll("canvas") ?? []);
       try {
         const off = addon.onContextLoss(() => lost(s, addon));
@@ -200,10 +205,24 @@ function lost(s: State, addon: WebglAddon): void {
   }, RETRY_AFTER_MS);
 }
 
+/** Pictures on or off for one terminal: the add-on's chunk loads the first time one wants it. Off drops the pictures
+ *  it kept; output that comes while the chunk loads is drawn as before (a picture in it is skipped). */
+function images(s: State, on: boolean): void {
+  s.images = on;
+  if (!on) return detachImages(s.term);
+  void loadImages().then(
+    (Ctor) => {
+      if (!s.gone && s.images) attachImages(s.term, Ctor);
+    },
+    () => undefined, // the chunk would not load: no pictures
+  );
+}
+
 function reconsider(settings: TermSettings): void {
   if (settings.gpu !== gpuSetting) for (const p of parked.values()) p.gaveUp = false;
   gpuSetting = settings.gpu;
   for (const s of states.values()) {
+    if (!s.gone && s.images !== settings.images) images(s, settings.images);
     if (s.gpu !== settings.gpu) s.gaveUp = false;
     s.gpu = settings.gpu;
     if (s.gpu === "off" || (s.gpu === "auto" && !probeWebgl().allow)) {
@@ -243,20 +262,21 @@ export function afterOpen(term: Terminal, el: HTMLElement, settings: TermSetting
     remake: remake ?? null,
     el,
     undo: () => undefined,
+    images: false,
   };
   states.set(term, s);
-  // CJK, emoji and box drawing take the widths agents' TUIs expect. Output waits (in order) until they are active.
+  // CJK, emoji (a ZWJ family, a flag, a skin tone: one wide cell) and box drawing take the widths agents' TUIs
+  // expect. Output waits (in order) until they are active.
   const release = () => {
     const q = s.held;
     s.held = null;
     for (const w of q ?? []) w();
   };
   void loadUnicode().then(
-    (Unicode11Addon) => {
+    (UnicodeGraphemesAddon) => {
       if (!s.gone) {
         try {
-          term.loadAddon(new Unicode11Addon());
-          term.unicode.activeVersion = "11";
+          term.loadAddon(new UnicodeGraphemesAddon()); // makes "15-graphemes" the active version
         } catch {
           /* proposed API off: keep xterm's own widths */
         }
@@ -293,6 +313,7 @@ export function afterOpen(term: Terminal, el: HTMLElement, settings: TermSetting
   stopSettings ??= onTermSettings(reconsider);
   if (!s.shown) hideRows(term);
   attach(s);
+  if (settings.images) images(s, true);
   s.undo = () => {
     if (s.gone) return;
     fonts?.removeEventListener?.("loadingdone", fontsLoaded);
@@ -304,6 +325,7 @@ export function afterOpen(term: Terminal, el: HTMLElement, settings: TermSetting
     s.held = null;
     if (s.retry) clearTimeout(s.retry);
     detach(s);
+    detachImages(term);
     states.delete(term);
     settingsWhileOpen();
     sweepWhenHidden();
@@ -417,6 +439,7 @@ function park(s: State, Serialize: typeof import("@xterm/addon-serialize").Seria
   }
   const title = (term as unknown as { _core?: { _inputHandler?: { _windowTitle?: unknown } } })._core?._inputHandler?._windowTitle;
   if (typeof title === "string" && title) snapshot += `\x1b]2;${title}\x07`;
+  snapshot += kittyAgain(term);
   parked.set(term, { snapshot: utf8.encode(snapshot), carried, cols: term.cols, rows: term.rows, remake: s.remake!, hiddenAt: s.hiddenAt, lastOut: s.lastOut, gpuLast: s.gpuLast, gaveUp: s.gaveUp, losses: s.losses });
   // a find bar left open on it (the bottom panel keeps one while hidden) closes: its terminal is going
   s.el.dispatchEvent(new CustomEvent(FIND_EVENT, { bubbles: true, detail: null }));
@@ -430,6 +453,13 @@ function park(s: State, Serialize: typeof import("@xterm/addon-serialize").Seria
     /* nothing to drop */
   }
   term.dispose();
+}
+
+/** The Kitty keyboard flags a program asked for, written again after the snapshot (a push, as the program did), so
+ *  an agent that turned the protocol on still gets Shift+Enter as CSI-u after its terminal was parked and made again. */
+function kittyAgain(term: Terminal): string {
+  const flags = (term as unknown as { _core?: { coreService?: { kittyKeyboard?: { flags?: unknown } } } })._core?.coreService?.kittyKeyboard?.flags;
+  return typeof flags === "number" && flags > 0 ? `\x1b[>${flags}u` : "";
 }
 
 /** Output from the program into the terminal. `done` runs once the terminal has taken these bytes. */

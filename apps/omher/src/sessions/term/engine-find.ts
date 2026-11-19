@@ -61,9 +61,35 @@ const finders = new WeakMap<Terminal, Finder>();
 /** The finder of a terminal that has one (a session's terminal; the Settings preview has none). */
 export const finderOf = (term: Terminal): Finder | undefined => finders.get(term);
 
+/** xterm 6.1 (6.1.0-beta.338) finds a decoration to remove by its marker's line, in a list it keeps sorted by that
+ *  line. A marker that is disposed turns its line to -1 at once, so a decoration whose marker went first (the search
+ *  add-on disposes many fills in one go, a new active match drops the old one) can no longer be found: it stays in
+ *  xterm's line index and its fill stays drawn. Here a removal the keyed search misses finds the decoration by
+ *  identity instead. Applied once per terminal, only where xterm has that list; engine-find.test.ts fails when the
+ *  shape changes, and when xterm no longer needs it. */
+type SortedList = { delete(v: unknown): boolean; _array?: unknown[]; _flushCleanupDeleted?: () => void; __settled?: true };
+export function settleDecorationRemovals(term: Terminal): boolean {
+  const list = (term as unknown as { _core?: { _decorationService?: { _decorations?: SortedList } } })._core?._decorationService?._decorations;
+  if (!list || typeof list.delete !== "function" || typeof list._flushCleanupDeleted !== "function" || !Array.isArray(list._array)) return false;
+  if (list.__settled) return true;
+  const del = list.delete.bind(list);
+  const flush = list._flushCleanupDeleted.bind(list);
+  list.delete = (v: unknown) => {
+    if (del(v)) return true;
+    flush(); // removals still pending are applied first, so positions are current
+    const i = list._array!.indexOf(v);
+    if (i < 0) return false;
+    list._array!.splice(i, 1);
+    return true;
+  };
+  list.__settled = true;
+  return true;
+}
+
 const sameColors = (a: FindColors, b: FindColors) => (Object.keys(a) as (keyof FindColors)[]).every((k) => a[k] === b[k]);
 
 export function makeFinder(term: Terminal): Finder {
+  settleDecorationRemovals(term);
   let addon: SearchAddon | null = null;
   let loading: Promise<SearchAddon | null> | null = null;
   let gone = false;
@@ -79,7 +105,9 @@ export function makeFinder(term: Terminal): Finder {
    *  cells, as `term.select` takes them. */
   let match: { row: IMarker; x: number; length: number } | null = null;
   const unmark = () => {
-    for (const d of active) d.dispose();
+    // newest first: each decoration before its marker. A marker that goes first takes the decoration's key (its line)
+    // with it, and xterm 6.1 then cannot find the decoration to take its fill off the screen
+    for (const d of active.reverse()) d.dispose();
     active = [];
     match = null;
   };

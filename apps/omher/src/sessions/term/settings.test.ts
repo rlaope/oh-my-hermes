@@ -77,6 +77,20 @@ describe("terminal settings", () => {
     expect(writeTermSettings({ rightClickPaste: true })).toMatchObject({ copyOnSelect: true, rightClickPaste: true });
   });
 
+  it("Kitty keys and images: booleans, on by default; anything else is the default (on)", () => {
+    expect(TERM_DEFAULTS).toMatchObject({ kittyKeys: true, images: true });
+    expect(parseTermSettings({ kittyKeys: false, images: false })).toMatchObject({ kittyKeys: false, images: false });
+    for (const bad of ["no", 0, null, [false], {}]) {
+      expect(parseTermSettings({ kittyKeys: bad }).kittyKeys).toBe(true);
+      expect(parseTermSettings({ images: bad }).images).toBe(true);
+    }
+    // settings saved before these fields existed read as on
+    expect(parseTermSettings(JSON.stringify({ themeDark: "dracula", copyOnSelect: true }))).toMatchObject({ kittyKeys: true, images: true, copyOnSelect: true });
+    // one does not switch the other
+    expect(writeTermSettings({ kittyKeys: false })).toMatchObject({ kittyKeys: false, images: true });
+    expect(writeTermSettings({ images: false })).toMatchObject({ kittyKeys: false, images: false });
+  });
+
   it("font size 9 to 24, line height 1 to 2, scrollback 1,000 to 50,000 rows: clamped, or the default for a wrong type", () => {
     expect(parseTermSettings({ fontSize: 2, lineHeight: 0.4, scrollback: 9e9 })).toMatchObject({ fontSize: 9, lineHeight: 1, scrollback: 50000 });
     expect(parseTermSettings({ fontSize: 99, lineHeight: 7, scrollback: 25000.4 })).toMatchObject({ fontSize: 24, lineHeight: 2, scrollback: 25000 });

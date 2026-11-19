@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { Terminal } from "@xterm/xterm";
-import { applyLook, DARK_BG_MIN_CONTRAST, LIGHT_BG_MIN_CONTRAST, termContrast, termFont, termOptions } from "./look";
+import { applyLook, DARK_BG_MIN_CONTRAST, GPU_OPTIONS, LIGHT_BG_MIN_CONTRAST, termContrast, termFont, termOptions } from "./look";
 import { SAMPLE_COLS, SAMPLE_ROWS, SAMPLE_SELECT, SAMPLE_WIDE_COLS, termSample } from "./look-sample";
 import { TERM_DEFAULTS, type TermSettings } from "./settings";
 import { TERM_THEMES, termThemeById } from "./themes";
@@ -22,8 +22,28 @@ describe("a terminal's look", () => {
       minimumContrastRatio: 4.5,
       drawBoldTextInBrightColors: true,
       macOptionIsMeta: true,
+      macOptionClickForcesSelection: true,
+      rescaleOverlappingGlyphs: true,
+      vtExtensions: { kittyKeyboard: true },
       theme: dark,
     });
+  });
+
+  it("Option+drag selects inside a program that reports the mouse; wide glyphs fit their cell; the GPU renderer draws box and Powerline glyphs itself", () => {
+    expect(termOptions(dark, TERM_DEFAULTS)).toMatchObject({ macOptionClickForcesSelection: true, rescaleOverlappingGlyphs: true });
+    // both whatever Option sends
+    expect(termOptions(dark, { ...TERM_DEFAULTS, optionIsMeta: false })).toMatchObject({ macOptionClickForcesSelection: true, macOptionIsMeta: false });
+    expect(GPU_OPTIONS).toEqual({ customGlyphs: true });
+  });
+
+  it("the Kitty keyboard protocol follows its setting, on a new terminal and on an open one", () => {
+    expect(termOptions(dark, { ...TERM_DEFAULTS, kittyKeys: false }).vtExtensions).toEqual({ kittyKeyboard: false });
+    const options: Record<string, unknown> = {};
+    const term = { options } as unknown as Terminal;
+    applyLook(term, dark, { ...TERM_DEFAULTS, kittyKeys: false });
+    expect(options.vtExtensions).toEqual({ kittyKeyboard: false });
+    applyLook(term, dark, TERM_DEFAULTS);
+    expect(options.vtExtensions).toEqual({ kittyKeyboard: true });
   });
 
   it("bold text takes the theme's bright colour, except on a theme whose bright slots are greys (Solarized), where it keeps its own", () => {
@@ -110,6 +130,7 @@ describe("a terminal's look", () => {
       minimumContrastRatio: 4.5,
       drawBoldTextInBrightColors: true,
       macOptionIsMeta: false,
+      vtExtensions: { kittyKeyboard: true },
     });
     applyLook(term, dark, { ...s, contrast: "auto" });
     expect(options.minimumContrastRatio).toBe(3);
