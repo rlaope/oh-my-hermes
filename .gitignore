@@ -48,3 +48,6 @@ uv.lock
 omh-qa-*.png
 omh-qa-*-snapshot.md
 *-1440.png
+
+# Private identifier guard: local plaintext override (hashed at runtime)
+tools/qa/identifier-denylist.local.txt

@@ -545,7 +545,10 @@ class AiJobSearchContextBudgetTests(unittest.TestCase):
         # The seven other toolkit owners then name `toolkit/README.md` with its skill_view call; only those
         # bodies move, and the pin before it was 5bddd1d2...440d.
         # Re-derived for skill-eval: its body joins the legacy set; no existing body moves.
-        self.assertEqual(_digest(legacy_hashes), '9b9505bbff37ff4e7090be71c6f97a1d930bdce197bff28191398d21458faad3')
+        # Merged with main: code-review, production-audit and verification-gate then end with a `Not checked`
+        # list, and code-review's opening names the Hermes Bug Hunter discipline; only those three move. This
+        # branch's pin was 9b9505bb...aad3, and main's was bd2eeb27...409b.
+        self.assertEqual(_digest(legacy_hashes), 'fd5cef40ac3ddef4b981bf7e299ed6c1180011854db46fe0e1ea6902531010fe')
         legacy = _skill_context_cost_profile('full', legacy_templates, refs)
         current = _skill_context_cost_profile('full', templates, refs)
         # Main's search guidance adds 305; repro-audit's mandatory rails 1,943.

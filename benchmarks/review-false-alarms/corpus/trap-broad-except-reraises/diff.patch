@@ -1,0 +1,14 @@
+--- a/app/jobs.py
++++ b/app/jobs.py
+@@ -6,6 +6,10 @@
+ 
+ def run_job(job):
+     started = time.monotonic()
+-    result = job.execute()
++    try:
++        result = job.execute()
++    except Exception:
++        log.exception("job %s failed after %.1fs", job.id, time.monotonic() - started)
++        raise
+     log.info("job %s finished in %.1fs", job.id, time.monotonic() - started)
+     return result

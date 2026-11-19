@@ -109,7 +109,7 @@ test("gpu off: no canvas, the add-on's chunk is never requested", async ({ page 
   expect(requested).toEqual([]);
 });
 
-test("gpu auto: where the rule says no (a software renderer, or macOS) the standard renderer draws and the chunk is never requested", async ({ page }) => {
+test("gpu auto: where the rule says no (a software renderer, as the test browser has) the standard renderer draws and the chunk is never requested", async ({ page }) => {
   const requested: string[] = [];
   page.on("request", (r) => {
     if (/addon-webgl/.test(r.url())) requested.push(r.url());
