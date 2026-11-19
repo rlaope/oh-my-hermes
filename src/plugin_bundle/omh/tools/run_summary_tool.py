@@ -270,9 +270,11 @@ def omh_run_summary_handler(args: dict[str, Any], **kwargs) -> str:
     # input reported directly, and on the Codex/Chat shapes the cache buckets are subtracted back out
     # (agent/usage_pricing.py:667-673; CanonicalUsage.prompt_tokens at :77 sums input + cache_read + cache_write).
     # So the prompt total, and the denominator of the cached share, is input + cache_read.
-    cache_read_share: float | None = None
-    if input_tokens > 0 and cache_read > 0:
-        cache_read_share = round(cache_read / (input_tokens + cache_read), 3)
+    # The share is taken from the unrounded ratio and rounded half up once per output: rounding the three-decimal
+    # field again would print 50.51% as 50% (round-half-even on 50.5). A session whose prompt was read wholly from
+    # cache (no uncached input) still shows its line, at 100%.
+    cache_ratio: float | None = cache_read / (input_tokens + cache_read) if cache_read > 0 else None
+    cache_read_share: float | None = round(cache_ratio, 3) if cache_ratio is not None else None
     cost = sum(
         _number(row.get("actual_cost_usd")) or _number(row.get("estimated_cost_usd"))
         for row in scope
@@ -283,10 +285,10 @@ def omh_run_summary_handler(args: dict[str, Any], **kwargs) -> str:
         elapsed_line.format(elapsed=elapsed_text),
         tokens_line.format(tokens=f"{tokens_used:,}"),
     ]
-    if cache_read_share is not None:
+    if cache_ratio is not None:
         lines.append(
             _CACHE_LABELS[language].format(
-                percent=round(100 * cache_read_share),
+                percent=int(100 * cache_ratio + 0.5),
                 tokens=f"{cache_read:,}",
             )
         )

@@ -160,12 +160,25 @@ class RunSummaryToolTest(unittest.TestCase):
         self.assertNotIn("Prompt cache", result["summary_text"])
         self.assertIsNone(result["breakdown"]["cache_read_share"])
 
-    def test_the_cache_line_is_absent_without_input_tokens(self):
+    def test_a_prompt_read_wholly_from_cache_shows_one_hundred_percent(self):
         self._zero_input_everywhere()
         self._set_cache_read("20260819_100000_main01", 900_000)
         result = self._call(language="en")
-        self.assertNotIn("Prompt cache", result["summary_text"])
-        self.assertIsNone(result["breakdown"]["cache_read_share"])
+        self.assertIn("Prompt cache: 100% of input read from cache (900,000 tokens)", result["summary_text"].splitlines())
+        self.assertEqual(result["breakdown"]["cache_read_share"], 1.0)
+
+    def test_the_percent_is_rounded_once_from_the_unrounded_share(self):
+        # 5,051 read of 10,000 prompt tokens is 50.51%: rounding the 0.505 field again would print 50%.
+        self._zero_input_everywhere()
+        connection = sqlite3.connect(self.home / "state.db")
+        connection.execute("UPDATE sessions SET input_tokens = 0, cache_read_tokens = 0")
+        connection.execute("UPDATE sessions SET input_tokens = 4949, cache_read_tokens = 5051 WHERE id = ?",
+                           ("20260819_100000_main01",))
+        connection.commit()
+        connection.close()
+        result = self._call(language="en")
+        self.assertIn("Prompt cache: 51% of input read from cache (5,051 tokens)", result["summary_text"].splitlines())
+        self.assertEqual(result["breakdown"]["cache_read_share"], 0.505)
 
     def test_every_language_has_a_cache_label(self):
         self._set_cache_read("20260819_100000_main01", 900_000)
