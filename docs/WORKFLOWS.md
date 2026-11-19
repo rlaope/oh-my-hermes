@@ -3719,9 +3719,11 @@ These surfaces are generated command references, not installed Hermes workflow s
   - Convert remediation into explicit follow-up workflows instead of silently patching.
   - Verdict: GO only when all nine rows are observed, BLOCK when any row failed an observed check, else HOLD naming the rows lacking evidence.
   - Evidence floor: rollback = command exercised, restore tested, RPO/RTO; performance = load result at peak; observability = alerts to a named on-call with a runbook; security_privacy = secrets store, least privilege, cert expiry.
+  - End the result with a `Not checked` list: every file, path, behavior, or environment in scope that was not examined or could not run, each with a one-line reason. Write `Not checked: none` only when coverage was complete; never leave the list out, because a report that lists only findings reads as if everything else were clean.
 - Completion checklist:
   - Each of the nine matrix rows reads observed, failed, or missing, with its evidence id, and the verdict follows the GO, BLOCK, HOLD rule.
   - The rollback plan names signals, owner, threshold, and recovery path; OMH deployed and scanned nothing.
+  - The result ends with a `Not checked` list, one reason per entry, or `Not checked: none` when coverage was complete.
 - Recovery notes:
   - If build or CI evidence is missing for the target release, retain the evidenced readiness_matrix/v1 rows, mark readiness unresolved, and hand back release_gate_verdict/v1 on HOLD with the missing evidence list.
   - If rollback owner, health thresholds, or recovery path is missing, retain the evidenced readiness_matrix/v1 rows, mark rollback readiness unresolved, and hand back rollback_and_monitoring_plan/v1 with the exact gaps.
@@ -3792,10 +3794,12 @@ These surfaces are generated command references, not installed Hermes workflow s
   - Take the required set from the repository, not from what happened to run: branch protection or ruleset required status checks (a repository that uses rulesets has none: `gh api repos/{owner}/{repo}/branches/{base}/protection/required_status_checks` answers 404 there; read `gh api repos/{owner}/{repo}/rules/branches/{base}` and take the contexts of its `required_status_checks` rule), the CI workflow, and the contributor docs; name which source defined required. Then compare those contexts with the results (`gh pr view <n> --json statusCheckRollup`): a required context with no result is missing evidence, not a pass. `gh pr checks --required` lists only checks that already exist, so it can read green while a required check has not started.
   - Return PASS only when required checks pass and stale or missing evidence is resolved; PASS never stands beside a failing required check, whatever its origin. A required check that fails `pre_existing` is HOLD worded as not charged to the change, naming the merge-base run that proves it, and only when the failing run's scope still covered the change: a failure that stopped the check before it exercised the change, such as a collection or import error, leaves that check as missing evidence. `unknown` is HOLD with the merge-base run named as the missing evidence (for a failing test, the failure rate at head and at the merge-base).
   - Keep fixes, reruns, review, CI, and merge as separate observed states.
+  - End the result with a `Not checked` list: every file, path, behavior, or environment in scope that was not examined or could not run, each with a one-line reason. Write `Not checked: none` only when coverage was complete; never leave the list out, because a report that lists only findings reads as if everything else were clean.
 - Completion checklist:
   - The scenario, expected behavior, observed result, and pass/fail basis are named.
   - Proposed fixes are separated from observed QA evidence.
   - Missing or failed verification routes back to `plan`, fix, or a narrower test.
+  - The result ends with a `Not checked` list, one reason per entry, or `Not checked: none` when coverage was complete.
 - Recovery notes:
   - If a required check fails with an unknown origin, keep the other fresh results, mark the claim unresolved on HOLD, and hand back the same check rerun at the merge base as the missing evidence.
   - If a fix test has only a fresh green result, retain that result within its scope, mark the claim unresolved on HOLD with regression_witness_missing, and hand back the required pre-fix red witness and its source.
@@ -5101,7 +5105,7 @@ These surfaces are generated command references, not installed Hermes workflow s
 - Lifecycle stage: `canonical`
 - Preferred usage: Use as an installed Hermes workflow skill when this explicit workflow is the clearest user-facing handle.
 - Handoff policy: Hermes may frame and summarize review evidence; fixes or code mutations found during review should be delegated to the selected coding executor.
-- Why this exists: `code-review` exists to make review bug-first and evidence-grounded: findings must cite concrete files, diffs, commands, or artifacts before any summary or fix proposal.
+- Why this exists: `code-review` exists to make review bug-first and evidence-grounded: findings must cite concrete files, diffs, commands, or artifacts before any summary or fix proposal. Its Hermes Bug Hunter discipline keeps only findings that can be shown step by step, drops intended or unreachable behavior, and ends every review with what was not checked.
 - Use when: Use for review-shaped requests; findings come first and must cite concrete evidence.
 - Do not use when:
   - The user asks to implement the fix rather than review existing code or claims.
@@ -5131,6 +5135,7 @@ These surfaces are generated command references, not installed Hermes workflow s
   - A read, parse, or hash that failed means unknown, never empty, none, or equal: keep what was read before, and a list that guards access fails closed, so a failed read of an allowlist denies instead of allowing.
   - Judge maintainability findings against the named baseline in `omh-code-review/references/smell-baseline.md`: a baseline smell is a judgement call to argue from evidence, never an automatic finding, and the reviewed repository's own standards override the baseline wherever they conflict.
   - Close with two lists beside the verdict: what was checked and found clean, and what could not be assessed with the reason. An absent finding is evidence only when the closing says the surface was actually checked.
+  - End the result with a `Not checked` list: every file, path, behavior, or environment in scope that was not examined or could not run, each with a one-line reason. Write `Not checked: none` only when coverage was complete; never leave the list out, because a report that lists only findings reads as if everything else were clean.
   - Require structured `spec_axis`, `could_not_assess` (empty allowed), and unranked `verification_gaps` (empty allowed) under the dispatch schema; gaps carry `path`, `line_range`, and `evidence`, never finding priority or confidence. Check actual reads, revision, bounds, ordered ranges, and claim truth separately from shape.
   - Select depth by changed risk, not diff size; record selected and omitted checks, reasons, actual coverage, and budget. Deduplicate candidates by root cause and validate before final findings; retain unresolved protected risks separately. Say `independent validation unavailable` when no different reader participated.
   - Hermes handles two parts of a review itself; load `omh-code-review/references/native-review-contract.md` for both. When `delegate_task` is in your tool list or tool_search finds it, pass the findings schema as the reviewer task's `output_schema`. The host validates the return, but its `schema_valid` record reaches you only when the call returns its results in the same turn; a result that arrives later as a completion message carries none, so check that summary against the schema yourself and never read `completed` as validated. A return that fails the contract is `not_observed`, never a pass. Inside a kanban review worker, `no_ship` becomes the request-changes transition that `sdlc-review` makes.
@@ -5142,6 +5147,7 @@ These surfaces are generated command references, not installed Hermes workflow s
   - Both axes appear in the report: correctness/risk findings, and a spec-axis verdict naming its Claim source or the `not_assessed` reason.
   - No-issue reviews still name residual risk, missing tests, and independent review evidence if unavailable.
   - The closing carries the checked-and-clean list and the could-not-assess list, each naming its surfaces.
+  - The result ends with a `Not checked` list, one reason per entry, or `Not checked: none` when coverage was complete.
   - The dispatch schema matches the return, candidate validation states remain distinct, and selected checks are not reported as observed coverage.
   - Fix implementation, architecture follow-up, and CI/merge claims stay separate from the review result.
   - A reply to the person uses plain words: the verdict as whether anything found blocks the change (blocking issues found / nothing blocking found), the spec axis as whether the change does what was asked, gaps as what could not be checked and why; `ship`, `no_ship`, `not_assessed`, `spec_axis`, `verification_gaps`, and `could_not_assess` stay out of it. A dispatched reviewer's structured return keeps those schema fields.
@@ -5153,7 +5159,7 @@ These surfaces are generated command references, not installed Hermes workflow s
   - When findings arrive for work you own, load `omh-code-review/references/review-response.md` before changing anything.
   - For maintainability judgement calls, load `omh-code-review/references/smell-baseline.md`; it finds the repository's standards files first, then names the twelve baseline smells with their fixes and the repo-standards-override rule.
   - Load `omh-code-review/references/risk-selection.md` to select depth; when additional lenses are justified, load `omh-code-review/references/review-lenses.md` and run only those selected as separate passes.
-  - Before final findings, load `omh-code-review/references/finding-validation.md` for candidate confirmation, rejection, and unresolved-risk handling; load `omh-code-review/references/architecture-delta.md` when ownership, contracts, dependencies, or shared-code extraction change.
+  - Before final findings, load `omh-code-review/references/finding-validation.md` for its drop gate and candidate confirmation, rejection, and unresolved-risk handling; load `omh-code-review/references/architecture-delta.md` when ownership, contracts, dependencies, or shared-code extraction change.
 - Required inputs:
   - diff or files
   - expected behavior

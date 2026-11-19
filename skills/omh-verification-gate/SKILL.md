@@ -46,6 +46,7 @@ Bad example:
 - The scenario, expected behavior, observed result, and pass/fail basis are named.
 - Proposed fixes are separated from observed QA evidence.
 - Missing or failed verification routes back to `omh-plan`, fix, or a narrower test.
+- The result ends with a `Not checked` list, one reason per entry, or `Not checked: none` when coverage was complete.
 
 ## Recovery Notes
 
@@ -86,6 +87,7 @@ Quality bar:
 - Take the required set from the repository, not from what happened to run: branch protection or ruleset required status checks (a repository that uses rulesets has none: `gh api repos/{owner}/{repo}/branches/{base}/protection/required_status_checks` answers 404 there; read `gh api repos/{owner}/{repo}/rules/branches/{base}` and take the contexts of its `required_status_checks` rule), the CI workflow, and the contributor docs; name which source defined required. Then compare those contexts with the results (`gh pr view <n> --json statusCheckRollup`): a required context with no result is missing evidence, not a pass. `gh pr checks --required` lists only checks that already exist, so it can read green while a required check has not started.
 - Return PASS only when required checks pass and stale or missing evidence is resolved; PASS never stands beside a failing required check, whatever its origin. A required check that fails `pre_existing` is HOLD worded as not charged to the change, naming the merge-base run that proves it, and only when the failing run's scope still covered the change: a failure that stopped the check before it exercised the change, such as a collection or import error, leaves that check as missing evidence. `unknown` is HOLD with the merge-base run named as the missing evidence (for a failing test, the failure rate at head and at the merge-base).
 - Keep fixes, reruns, review, CI, and merge as separate observed states.
+- End the result with a `Not checked` list: every file, path, behavior, or environment in scope that was not examined or could not run, each with a one-line reason. Write `Not checked: none` only when coverage was complete; never leave the list out, because a report that lists only findings reads as if everything else were clean.
 
 Handoff policy:
 
