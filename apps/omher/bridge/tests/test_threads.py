@@ -1,5 +1,7 @@
 """Threads under a bot (`thread.*`): create, list (also after a bridge restart), open, send, remove = interrupt +
-withdraw asks + Hermes `session.archive`. A FakeGateway stands in for Hermes; no Hermes, no network beyond loopback."""
+withdraw asks + archive in Hermes. The fake stands in for Hermes' canonical gateway (`session.mutate` rename/archive,
+`request_id` as the create's retry key) and refuses what it refuses; `legacy=True` is the older tui gateway
+(`session.title`, `session.archive`, `idempotency_key`). No Hermes, no network beyond loopback."""
 from __future__ import annotations
 
 import asyncio
@@ -12,7 +14,7 @@ sys.path.insert(0, str(HERE))
 sys.path.insert(0, str(HERE.parent))
 
 import omher_bridge as ob  # noqa: E402
-from test_bridge import BridgeCase, Env, FakeClient, GatewayRPCError, MAIN_STORED  # noqa: E402
+from test_bridge import BridgeCase, Env, FakeClient, GatewayRPCError, LEGACY_ONLY, MAIN_STORED  # noqa: E402
 
 
 class HermesStore:
@@ -20,7 +22,7 @@ class HermesStore:
 
     def __init__(self):
         self.rows: dict[str, dict] = {}   # stored id -> {id, title, started_at, message_count, archived}
-        self.keys: dict[str, str] = {}    # idempotency_key -> stored id
+        self.keys: dict[str, str] = {}    # retry key (request_id, or idempotency_key on the legacy gateway) -> stored id
         self.n = 0
 
 
@@ -33,11 +35,22 @@ class ThreadClient(FakeClient):
         self.running: set[str] = set()   # runtime ids whose turn runs
         self.pending_prompts: dict[str, list] = {}
 
+    def _rename(self, sid: str, title: str) -> dict:
+        if any(r["title"] == title and r["id"] != sid for r in self.store.rows.values()):
+            raise GatewayRPCError("request_failed")  # the canonical gateway's answer to a taken title
+        self.store.rows[sid]["title"] = title
+        return {"title": title}
+
+    def _thread_sid(self, session_id: str) -> str | None:
+        sid = session_id[3:] if session_id.startswith("rt-stored-th-") else session_id
+        return sid if sid in self.store.rows else None
+
     async def rpc(self, method, *, _timeout=None, **params):
         st = self.store
         if method == "session.create" and str(params.get("title", "")).startswith(ob.THREAD_PREFIX):
             self.calls.append((method, params))
-            key = params.get("idempotency_key")
+            self.refuse(method, params)
+            key = params.get("idempotency_key") if self.legacy else params.get("request_id")
             if key and key in st.keys:
                 sid = st.keys[key]
             else:
@@ -62,8 +75,27 @@ class ThreadClient(FakeClient):
             st.rows[params["session_id"][3:]]["saved"] = True
             st.rows[params["session_id"][3:]]["message_count"] += 1
             return {"status": "started", "admission_id": "adm", "execution_generation": 4}
+        if method == "session.mutate" and self._thread_sid(params["session_id"]) and not self.legacy:
+            self.calls.append((method, params))
+            self.refuse(method, params)
+            sid = self._thread_sid(params["session_id"])
+            row = st.rows[sid]
+            if params["expected_revision"] != row.get("revision", 0):
+                raise GatewayRPCError("revision_conflict", {"reason": "revision_conflict",
+                                                            "revision": row.get("revision", 0)})
+            op, payload = params["operation"], params["payload"]
+            if op == "rename" and set(payload) == {"title"}:
+                out = self._rename(sid, payload["title"])
+            elif op == "archive" and set(payload) == {"archived"}:
+                row["archived"] = payload["archived"]
+                out = {"archived": payload["archived"]}
+            else:
+                raise GatewayRPCError("invalid_params")
+            row["revision"] = row.get("revision", 0) + 1
+            return {"session_id": params["session_id"], "operation": op, "revision": row["revision"], **out}
         if method == "session.title" and params["session_id"].startswith("rt-stored-th-"):
             self.calls.append((method, params))
+            self.refuse(method, params)
             if any(r["title"] == params["title"] for r in st.rows.values()):
                 raise GatewayRPCError("Title already in use")
             st.rows[params["session_id"][3:]]["title"] = params["title"]
@@ -78,6 +110,7 @@ class ThreadClient(FakeClient):
                     "prompts": self.pending_prompts.get(sid, [])}
         if method == "session.archive":
             self.calls.append((method, params))
+            self.refuse(method, params)
             st.rows[params["session_id"]]["archived"] = params.get("archived", True)
             return {"archived": True, "session_key": params["session_id"]}
         return await super().rpc(method, _timeout=_timeout, **params)
@@ -118,7 +151,8 @@ class Threads(BridgeCase):
             create = env.clients["kami"].find("session.create")[-1]
             self.assertTrue(create["title"].startswith("omher · new thread "))
             self.assertNotIn("cwd", create)  # no cwd: the profile's own default
-            self.assertEqual(create["idempotency_key"], "omher-thread:kami:press1")
+            self.assertEqual(create["request_id"], "omher-thread:kami:press1")  # the canonical gateway's retry key
+            self.assertNotIn("idempotency_key", create)  # which it refuses with invalid_params
             # the same press again (a retry racing a restart) is the same thread, listed once
             again = ok(await s.req("thread.create", bot="kami", key="press1"))
             self.assertEqual(again["thread"], tid)
@@ -127,7 +161,8 @@ class Threads(BridgeCase):
             ok(await s.req("chat.send", bot="kami", session=tid, text="OG 대시보드 502 원인 찾기 — gateway 로그부터 봐줘"))
             c = env.clients["kami"]
             self.assertEqual(c.find("prompt.submit")[-1]["session_id"], "rt-stored-th-1")
-            self.assertEqual(c.find("session.title")[-1]["title"], "omher · OG 대시보드 502 원인 찾기 — gateway 로그부터 봐줘")
+            self.assertEqual(c.find("session.mutate")[-1]["payload"], {"title": "omher · OG 대시보드 502 원인 찾기 — gateway 로그부터 봐줘"})
+            self.assertEqual(c.find("session.title"), [])
             await s.until(lambda ev: any(e["event"] == "session.title" and e.get("session") == tid for e in ev))
         # a new bridge on the same Hermes: the thread comes back from session.list, once, named
         async with ThreadEnv(store) as env2:
@@ -142,7 +177,7 @@ class Threads(BridgeCase):
             self.assertEqual([m["text"] for m in opened["messages"]], ["first", "answer"])
             ok(await s2.req("chat.send", bot="kami", session=tid, text="and the retry policy?"))
             self.assertEqual(env2.clients["kami"].find("prompt.submit")[-1]["session_id"], "rt-stored-th-1")
-            self.assertEqual(env2.clients["kami"].find("session.title"), [])  # already named
+            self.assertEqual(env2.clients["kami"].find("session.mutate"), [])  # already named
 
     async def test_a_listed_thread_carries_the_folder_hermes_saved(self):
         """F6: after a restart a thread is listed before it is attached; its row carries the cwd Hermes saved for the
@@ -181,6 +216,7 @@ class Threads(BridgeCase):
             self.assertEqual(r["error"]["code"], "not_found")
             c = env.clients["kami"]
             self.assertEqual(c.find("session.archive"), [])
+            self.assertEqual(c.find("session.mutate"), [])
             self.assertEqual([x["session_id"] for x in c.find("prompt.submit")], [])
 
     async def test_steer_in_a_thread_carries_that_threads_generation_and_a_foreign_id_is_refused(self):
@@ -216,10 +252,13 @@ class Threads(BridgeCase):
             await s.until(lambda ev: any(e["event"] == "turn.start" and e.get("session") == tid for e in ev))
             res = ok(await s.req("thread.remove", bot="kami", thread=tid))
             self.assertEqual(res, {"thread": tid, "archived": True})
-            order = [m for m, _ in c.calls if m in ("session.interrupt", "session.archive", "session.detach")]
-            self.assertEqual(order, ["session.interrupt", "session.archive", "session.detach"])
+            order = [m if m != "session.mutate" else p["operation"] for m, p in c.calls
+                     if m in ("session.interrupt", "session.detach") or (m == "session.mutate" and p["operation"] == "archive")]
+            self.assertEqual(order, ["session.interrupt", "archive", "session.detach"])
             self.assertEqual(c.find("session.interrupt")[-1]["session_id"], "rt-" + tid)
-            self.assertEqual(c.find("session.archive")[-1], {"session_id": tid, "archived": True})
+            archive = c.find("session.mutate")[-1]
+            self.assertEqual((archive["session_id"], archive["operation"], archive["payload"]),
+                             (tid, "archive", {"archived": True}))
             self.assertEqual(c.find("session.detach")[-1]["end_reason"], "omher_archive")
             await s.until(lambda ev: any(e["event"] == "thread.removed" and e["thread"] == tid for e in ev))
             ends = [e for e in s.events if e["event"] == "turn.end" and e.get("session") == tid]
@@ -238,7 +277,8 @@ class Threads(BridgeCase):
             ok(await s.req("thread.remove", bot="kami", thread=tid))
             c = env.clients["kami"]
             self.assertEqual(c.find("session.interrupt"), [])
-            self.assertEqual(len(c.find("session.archive")), 1)
+            self.assertEqual([m["operation"] for m in c.find("session.mutate")], ["archive"])
+            self.assertTrue(env.store.rows[tid]["archived"])
 
     async def test_remove_withdraws_a_waiting_approval(self):
         async with ThreadEnv() as env:
@@ -280,8 +320,14 @@ class Threads(BridgeCase):
             r = await s.req("thread.create", bot="kami", cwd=str(HERE), title="Docs dark mode")
             res = ok(r)
             self.assertEqual(res["title"], "Docs dark mode")
-            create = env.clients["kami"].find("session.create")[-1]
-            self.assertEqual((create["cwd"], create["cwd_explicit"], create["title"]), (str(HERE), True, "omher · Docs dark mode"))
+            c = env.clients["kami"]
+            create = c.find("session.create")[-1]
+            # created under a unique placeholder, then named: the canonical gateway answers a create whose title an
+            # open session already has with that session, so creating under the name could reuse another thread
+            self.assertEqual((create["cwd"], create["cwd_explicit"]), (str(HERE), True))
+            self.assertTrue(create["title"].startswith("omher · new thread "))
+            self.assertEqual(c.find("session.mutate")[-1]["payload"], {"title": "omher · Docs dark mode"})
+            self.assertEqual(env.store.rows[res["thread"]]["title"], "omher · Docs dark mode")
 
     async def test_folder_chats_are_not_threads(self):
         async with ThreadEnv() as env:
@@ -290,6 +336,60 @@ class Threads(BridgeCase):
             r = await s.req("thread.remove", bot="kami", thread=fid)
             self.assertEqual(r["error"]["code"], "not_found")
             self.assertEqual(ok(await s.req("thread.list", bot="kami"))["threads"], [])
+
+    async def test_canonical_gateway_creates_names_and_removes_a_thread(self):
+        """#2980: the canonical gateway refuses `idempotency_key` (invalid_params) and has no `session.title` or
+        `session.archive` (unknown_method). One press opens one thread; the same press again is the same thread;
+        naming and removing go through `session.mutate`; nothing the gateway refuses is ever sent."""
+        async with ThreadEnv() as env:
+            s = await self.open(env)
+            made = ok(await s.req("thread.create", bot="kami", key="t1"))
+            self.assertEqual(ok(await s.req("thread.create", bot="kami", key="t1"))["thread"], made["thread"])
+            self.assertEqual(len(env.store.rows), 1)
+            ok(await s.req("chat.send", bot="kami", session=made["thread"], text="retry policy for the 502s"))
+            c = env.clients["kami"]
+            self.assertEqual(env.store.rows[made["thread"]]["title"], "omher · retry policy for the 502s")
+            ok(await s.req("thread.remove", bot="kami", thread=made["thread"]))
+            self.assertTrue(env.store.rows[made["thread"]]["archived"])
+            sent = {m for m, _ in c.calls}
+            self.assertFalse(sent & LEGACY_ONLY, sent & LEGACY_ONLY)
+            self.assertFalse(any("idempotency_key" in p for m, p in c.calls if m == "session.create"))
+            # no message went to the main chat
+            self.assertEqual({x["session_id"] for x in c.find("prompt.submit")}, {"rt-" + made["thread"]})
+
+    async def test_a_taken_title_gets_a_tail_and_a_stale_revision_is_retried_once(self):
+        async with ThreadEnv() as env:
+            s = await self.open(env)
+            a = ok(await s.req("thread.create", bot="kami", title="Docs"))["thread"]
+            b = ok(await s.req("thread.create", bot="kami", title="Docs"))["thread"]
+            self.assertNotEqual(a, b)
+            self.assertEqual(env.store.rows[a]["title"], "omher · Docs")
+            self.assertEqual(env.store.rows[b]["title"], f"omher · Docs · {b[-4:]}")
+            env.store.rows[a]["revision"] = 5  # someone else moved it since the bridge named it (revision 1)
+            ok(await s.req("thread.remove", bot="kami", thread=a))
+            self.assertTrue(env.store.rows[a]["archived"])
+            tries = [m["expected_revision"] for m in env.clients["kami"].find("session.mutate")
+                     if m["session_id"] == a and m["operation"] == "archive"]
+            self.assertEqual(tries, [1, 5])  # the revision it last saw, then the one the refusal carried
+            # the revision it saw is kept: archiving the other thread needs no retry
+            ok(await s.req("thread.remove", bot="kami", thread=b))
+            self.assertEqual([m["expected_revision"] for m in env.clients["kami"].find("session.mutate")
+                              if m["session_id"] == b and m["operation"] == "archive"], [1])
+
+    async def test_an_older_gateway_still_gets_its_own_verbs(self):
+        """The older tui gateway has no `session.mutate` and refuses `request_id`: it gets `idempotency_key`,
+        `session.title` and `session.archive`, as before."""
+        async with ThreadEnv(legacy=True) as env:
+            s = await self.open(env)
+            tid = ok(await s.req("thread.create", bot="kami", key="old1"))["thread"]
+            self.assertEqual(ok(await s.req("thread.create", bot="kami", key="old1"))["thread"], tid)
+            c = env.clients["kami"]
+            self.assertEqual(c.find("session.create")[-1]["idempotency_key"], "omher-thread:kami:old1")
+            ok(await s.req("chat.send", bot="kami", session=tid, text="name me"))
+            self.assertEqual(c.find("session.title")[-1]["title"], "omher · name me")
+            ok(await s.req("thread.remove", bot="kami", thread=tid))
+            self.assertEqual(c.find("session.archive")[-1], {"session_id": tid, "archived": True})
+            self.assertTrue(env.store.rows[tid]["archived"])
 
     def test_thread_name(self):
         self.assertEqual(ob.thread_name("omher · new thread 1a2b3c"), "")

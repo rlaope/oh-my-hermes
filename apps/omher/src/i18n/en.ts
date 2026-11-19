@@ -1483,7 +1483,6 @@ export const en = {
   "thread.cmdList": "New thread command",
   "thread.cmdHint": "New thread with {name}",
   "thread.cmdFiles": "Files cannot start a thread. Send ./thread first, then add them in the thread.",
-  "thread.newRow": "New thread",
   "thread.newWith": "New thread with {name}",
   // tasks (sidebar Tasks row and page)
   "tasks.title": "Tasks",

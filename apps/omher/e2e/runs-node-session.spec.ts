@@ -6,6 +6,7 @@
 // (breadcrumb Kami › child › grandchild). The answer is the last left bubble. The chat's own subagent cards open the
 // same view. Mock data: e2e/mock-bridge.mjs `runs.node_session`.
 import { expect, test, type Locator, type Page } from "@playwright/test";
+import { motionDone } from "./motion";
 import { mkdirSync } from "node:fs";
 import { join } from "node:path";
 
@@ -48,6 +49,8 @@ async function openFull(page: Page, theme: "dark" | "light" = "dark") {
   await page.goto("/");
   await expect(page.getByTestId("bot-kami")).toHaveAttribute("aria-current", "true");
   await page.getByTestId("places").click();
+  // the tabs slide in with the panel: press one once it has stopped
+  await motionDone(page);
   await page.getByTestId("panel-tab-runs").click();
   await expect(page.getByTestId("run-graph-box")).toHaveAttribute("data-run", DEMO);
   await page.getByTestId("run-graph-box").getByTestId("run-node").first().waitFor();

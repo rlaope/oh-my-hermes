@@ -4,6 +4,7 @@
 // Claude adapter emitted for a real run (src-tauri/tests/fixtures/real/claude-9-*.jsonl). Read-only: nothing in
 // these views assigns, steers or stops a subagent.
 import { expect, test, type Page } from "@playwright/test";
+import { motionDone } from "./motion";
 import { mkdirSync } from "node:fs";
 import { join } from "node:path";
 
@@ -106,7 +107,10 @@ test("the session header's panel button opens Plans for that session alone", asy
   await expect(panel.getByTestId("session-plans-rows").getByTestId("subagent-row")).toHaveCount(2);
   // the agent wrote its record: the session's own run, as a graph with each subagent's node
   await mock("mock.sessionRun");
+  // the button slides with the panel's edge: each press waits for the last toggle's slide to stop
+  await motionDone(page);
   await page.getByTestId("panel-button").click();
+  await motionDone(page);
   await page.getByTestId("panel-button").click();
   const box = panel.getByTestId("run-graph-box");
   await expect(box).toHaveAttribute("data-run", "claude:11111111-2222-4333-8444-555555555555");
@@ -116,6 +120,7 @@ test("the session header's panel button opens Plans for that session alone", asy
   await expect(panel.getByTestId("cli-run-row")).toHaveCount(0);
   await expect(panel.getByTestId("run-row")).toHaveCount(0);
   // the fan-out card's Plans button opens the same panel
+  await motionDone(page);
   await page.getByTestId("panel-button").click();
   await expect(panel).toHaveCount(0);
   await page.getByTestId("fanout-open").click();

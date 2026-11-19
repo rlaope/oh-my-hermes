@@ -189,12 +189,10 @@ test("thread rows are a two-level tree under their bot, joined by a thin connect
     expect(l.bottom).toBe("1px");
     expect(parseFloat(l.radius)).toBeGreaterThan(0);
   }
-  // "+ New thread" closes the tree now: every card carries the rail on to it, and it is the last line
-  expect(lines.map((l) => l.stem)).toEqual([true, true, true, true, true]);
-  expect(lines.map((l) => l.last)).toEqual([false, false, false, false, false]);
-  const end = group.locator(":scope > li.th-new");
-  await expect(end).toHaveClass(/th-last/);
-  await expect(end.locator(".th-branch")).toHaveCount(1);
+  // the last card ends the tree (no "+ New thread" line after it, owner 2026-11-19): the stem stops there
+  expect(lines.map((l) => l.stem)).toEqual([true, true, true, true, false]);
+  expect(lines.map((l) => l.last)).toEqual([false, false, false, false, true]);
+  await expect(group.locator(":scope > li.th-new")).toHaveCount(0);
   const lineGray = await page.evaluate(() => {
     const probe = document.createElement("div");
     probe.style.color = "var(--th-line)";
@@ -219,10 +217,10 @@ test("more than five threads fold under Show N more, on the same tree line", asy
   const more = page.getByTestId("thread-more");
   await expect(more).toHaveText("Show 2 more");
   const moreRow = group.locator(":scope > li.th-more");
-  // on the rail, followed by "+ New thread", which ends the tree
-  await expect(moreRow).not.toHaveClass(/th-last/);
+  // on the rail, and the last line of the tree
+  await expect(moreRow).toHaveClass(/th-last/);
   await expect(moreRow.locator(".th-branch")).toHaveCount(1);
-  await expect(group.locator(":scope > li").last()).toHaveClass(/th-new th-last/);
+  await expect(group.locator(":scope > li").last()).toHaveClass(/th-more th-last/);
   await more.click();
   await expect(group.locator(":scope > [role=treeitem]")).toHaveCount(7);
 });

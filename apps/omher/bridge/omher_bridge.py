@@ -5305,6 +5305,7 @@ class FolderChat:
         self.stored_id = stored_id
         self.subscription_id = subscription_id  # from session.create: what session.detach closes
         self.generation = None
+        self.revision = 0  # the session's metadata revision as last seen (session.mutate fences rename/archive on it)
         self.in_turn = False
         self.last_thinking = -1e9
         self.prompts: dict[str, int | None] = {}
@@ -5957,11 +5958,11 @@ class Bridge:
         else:
             snap = await self._call(conn, "session.create", title=BOT_CHAT_TITLE, hidden=True, follow_profile_config=True)
             try:  # materialise the row now, like Hermes' own desktop, so a second open finds it
-                await self._call(conn, "session.title", session_id=snap["session_id"], title=BOT_CHAT_TITLE)
+                await self._set_meta(conn, snap["session_id"], "rename", title=BOT_CHAT_TITLE)
             except Exception as e:
                 if _named(e, "GatewayClientError") and not _named(e, "GatewayRPCError"):
                     raise
-                log.debug("session.title after create failed: %s", e)
+                log.debug("naming the Bot Chat after create failed: %s", e)
         conn.main_id = snap["session_id"]
         conn.main_stored = snap.get("stored_session_id") or conn.main_id
         if snap.get("execution_generation") is not None:
@@ -6241,15 +6242,42 @@ class Bridge:
         """The one place a chat the bridge created (or listed and attached) joins ``conn.folders``."""
         conn.folders[chat.id] = chat
 
-    async def _name_thread(self, conn: Conn, chat: FolderChat, text: str) -> None:
-        """A new thread takes its first message's first words as its title (Hermes' own titler may rename it later;
-        a clash with another session's title adds a short tail)."""
-        name = _one_line(split_peer_hint(text), THREAD_TITLE)
-        if not name:
-            return
+    async def _set_meta(self, conn: Conn, session_id: str, operation: str, chat: FolderChat | None = None,
+                        **payload) -> dict:
+        """Rename (``title``) or archive (``archived``) one session the bridge owns.
+
+        Hermes' canonical gateway (``/api/ws``, what ``connect_gateway`` dials) has no ``session.title`` or
+        ``session.archive``: both are ``session.mutate`` operations there, fenced by the session's revision. The
+        first try sends the revision ``chat`` last saw (0 without one); a ``revision_conflict`` refusal carries the
+        current revision, and the one retry sends that. A gateway without ``session.mutate`` (``unknown_method``,
+        the older tui gateway) gets its own verb instead. Any other refusal is the caller's error."""
+        legacy = {"rename": "session.title", "archive": "session.archive"}[operation]
+        revision = chat.revision if chat is not None else 0
+        for attempt in range(2):
+            try:
+                out = await self._call(conn, "session.mutate", session_id=session_id, request_id=uuid.uuid4().hex,
+                                       expected_revision=revision, operation=operation, payload=payload) or {}
+                if chat is not None and type(out.get("revision")) is int:
+                    chat.revision = out["revision"]
+                return out
+            except Exception as e:
+                if not _named(e, "GatewayRPCError"):
+                    raise
+                data = getattr(e, "data", None) or {}
+                if str(e) == "unknown_method":
+                    return await self._call(conn, legacy, session_id=session_id, **payload) or {}
+                if str(e) == "revision_conflict" and attempt == 0 and type(data.get("revision")) is int:
+                    revision = data["revision"]
+                    continue
+                raise
+        return {}
+
+    async def _title_thread(self, conn: Conn, chat: FolderChat, name: str) -> None:
+        """Give a thread its name (a clash with another session's title adds a short tail). A name Hermes refuses
+        both ways leaves the thread as it is; a lost gateway is the caller's error."""
         for title in (name, f"{name} · {chat.id[-4:]}"):
             try:
-                await self._call(conn, "session.title", session_id=chat.runtime_id, title=THREAD_PREFIX + title)
+                await self._set_meta(conn, chat.runtime_id, "rename", chat, title=THREAD_PREFIX + title)
             except BridgeError:
                 raise
             except Exception as e:
@@ -6260,6 +6288,13 @@ class Bridge:
             await self.emit("session.title", conn.name, session=chat.id, title=title)
             return
 
+    async def _name_thread(self, conn: Conn, chat: FolderChat, text: str) -> None:
+        """A new thread takes its first message's first words as its title (Hermes' own titler may rename it
+        later)."""
+        name = _one_line(split_peer_hint(text), THREAD_TITLE)
+        if name:
+            await self._title_thread(conn, chat, name)
+
     def _thread_row(self, chat: FolderChat) -> dict:
         return {"thread": chat.id, "title": chat.title, "cwd": chat.cwd, "started_at": chat.started,
                 "running": chat.in_turn, "needs": bool(chat.prompts or chat.batches), "message_count": 0, "preview": ""}
@@ -6267,7 +6302,13 @@ class Bridge:
     async def op_thread_create(self, p) -> dict:
         """A new thread for the bot: an empty Hermes session in ``cwd`` (an existing folder) or, without one, where
         the profile's own config starts it. ``key`` (optional) is the app's id for this press: a retry with the same
-        key gets the same session back (Hermes' ``idempotency_key``), never a second thread."""
+        key gets the same session back, never a second thread. The canonical gateway takes that key as
+        ``request_id``; an older gateway that refuses it gets ``idempotency_key``, its own name for it (a refused
+        create made nothing, so sending it again is safe).
+
+        The session is created under a unique placeholder title and then renamed to ``title``: the canonical
+        gateway answers a create whose title an open session already has with THAT session, so creating under the
+        name would put a new thread into an old one."""
         title, cwd, key = p.get("title"), p.get("cwd"), p.get("key")
         if title is not None and (not isinstance(title, str) or not title.strip()):
             raise BridgeError("bad_request", "title must be text")
@@ -6280,20 +6321,28 @@ class Bridge:
             raise BridgeError("bad_request", f"at most {MAX_THREADS} open threads per bot")
         name = _one_line(title, THREAD_TITLE * 2) if title else ""
         extra = {"cwd": cwd, "cwd_explicit": True} if cwd else {}
-        if key:
-            extra["idempotency_key"] = f"omher-thread:{conn.name}:{key}"
-        placeholder = f"new thread {uuid.uuid4().hex[:6]}"
-        snap = await self._call(conn, "session.create", title=THREAD_PREFIX + (name or placeholder),
-                                follow_profile_config=True, **extra)
+        retry_key = f"omher-thread:{conn.name}:{key}" if key else ""
+        create = {"title": THREAD_PREFIX + f"new thread {uuid.uuid4().hex[:6]}", "follow_profile_config": True, **extra}
+        try:
+            snap = await self._call(conn, "session.create", **create, **({"request_id": retry_key} if retry_key else {}))
+        except Exception as e:
+            if not (retry_key and _named(e, "GatewayRPCError") and str(e) in ("invalid_params", "request_failed")):
+                raise
+            snap = await self._call(conn, "session.create", **create, idempotency_key=retry_key)
         stored = str(snap.get("stored_session_id") or snap["session_id"])
         info = snap.get("info") if isinstance(snap.get("info"), dict) else {}
         chat = conn.folders.get(stored)
         if chat is None:  # a retried key answers the session it already made: kept once, with the name it has
             known = thread_name((conn.threads.get(stored) or {}).get("title") or "")
             chat = FolderChat(stored, str(info.get("cwd") or cwd or ""), str(snap["session_id"]), stored,
-                              str(snap.get("subscription_id") or ""), kind="thread", title=name or known)
+                              str(snap.get("subscription_id") or ""), kind="thread", title=known)
             if snap.get("execution_generation") is not None:
                 chat.generation = snap["execution_generation"]
+            if type(snap.get("revision")) is int:
+                chat.revision = snap["revision"]
+            if name and not known:
+                await self._title_thread(conn, chat, name)
+                chat.title = chat.title or name
             self._keep_chat(conn, chat)
             await self.emit("thread.added", conn.name, thread=chat.id, title=chat.title)
         return {**self._thread_row(chat), "model": str(info.get("model") or conn.bot["model"]),
@@ -6361,6 +6410,8 @@ class Bridge:
             chat.runtime_id = str(snap.get("session_id") or chat.runtime_id)
         if snap.get("execution_generation") is not None:
             chat.generation = snap["execution_generation"]
+        if type(snap.get("revision")) is int:
+            chat.revision = snap["revision"]
         chat.in_turn = running
         result = {"thread": tid, "session_id": tid, "title": chat.title, "cwd": chat.cwd,
                   "messages": chat_messages(snap.get("messages"), running=running), "running": running,
@@ -6425,9 +6476,10 @@ class Bridge:
                 log.exception("opening a thread from the bot's answer failed")
 
     async def op_thread_remove(self, p) -> dict:
-        """Take a thread out of the bot's list: interrupt it when it runs, withdraw the asks it holds, then Hermes'
-        own ``session.archive`` (hidden, messages kept, restorable in Hermes). Never the main chat, never a
-        session this bridge did not create or list as a thread, never a delete."""
+        """Take a thread out of the bot's list: interrupt it when it runs, withdraw the asks it holds, then archive it
+        in Hermes (``session.mutate`` archive, or ``session.archive`` on an older gateway: hidden, messages kept,
+        restorable in Hermes). Never the main chat, never a session this bridge did not create or list as a thread,
+        never a delete."""
         conn = await self._conn(p.get("bot"))
         tid = self._thread_known(conn, p.get("thread"))
         chat = conn.folders.get(tid)
@@ -6440,7 +6492,7 @@ class Bridge:
             chat.prompts.clear()
             chat.batches.clear()
             chat.asked.clear()
-        await self._call(conn, "session.archive", session_id=chat.stored_id if chat else tid, archived=True)
+        await self._set_meta(conn, chat.stored_id if chat else tid, "archive", chat, archived=True)
         conn.threads.pop(tid, None)
         if chat is not None:
             conn.folders.pop(tid, None)

@@ -219,43 +219,6 @@
   color: var(--body);
 }
 
-/* "+ New thread": the tree's last line, on the rail like a card. An action, not a chat: one line, no fill at rest, a
-   dashed edge that turns solid with the hover fill, gray text that turns ink */
-.th-row.th-new {
-  border: 1px dashed var(--line-strong);
-  border-radius: 6px;
-}
-/* the cards' own columns: a 20px icon slot at the card's padding, the label where their titles start */
-.th-new .th-open {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  padding: 3px 8px;
-  color: var(--muted);
-  font-size: 12px;
-  line-height: 18px;
-}
-.th-new .nt-ic {
-  flex: none;
-  display: block;
-  margin-right: 4px; /* 16px glyph in the cards' 20px icon slot, flush left like their bubble */
-}
-.th-row.th-new:hover,
-.th-row.th-new:focus-within {
-  border-style: solid;
-  border-color: var(--line-strong);
-  background: var(--hover);
-}
-.th-new:hover .th-open,
-.th-new .th-open:focus-visible {
-  color: var(--ink);
-}
-/* a bot with no threads yet: the tree is this line only */
-.th-solo {
-  display: flex;
-  flex-direction: column;
-}
-
 [data-theme="light"] .th-tree {
   --th-line: color-mix(in srgb, var(--quiet) 45%, transparent);
 }
