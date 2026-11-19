@@ -60,9 +60,10 @@ export interface SessionHost {
   /** Native folder picker; null when the person cancels. */
   pickFolder(defaultPath: string): Promise<string | null>;
   /** Start `agent` in `cwd` in a terminal. Only the agent id goes to the shell: never a command line.
-   *  `resume` is a Claude Code session id (the terminal view of a chat); the shell checks it is a UUID. `account`
-   *  names the Settings › Accounts login it runs as (the one it ran with, after a restart); none = the one picked
-   *  for new sessions. */
+   *  `resume` is a Claude Code or Codex conversation id to continue (`--resume <id>`, `codex resume <id>`);
+   *  `sessionId` the id omher made for a new Claude Code conversation (`--session-id <id>`); the shell checks each is
+   *  a UUID. `account` names the Settings › Accounts login it runs as (the one it ran with, after a restart); none =
+   *  the one picked for new sessions. */
   start(
     agent: AgentId,
     cwd: string,
@@ -72,6 +73,7 @@ export interface SessionHost {
     onExit: (code: number | null) => void,
     resume?: string,
     account?: string,
+    sessionId?: string,
   ): Promise<number>;
   write(id: number, data: string): Promise<void>;
   /** The terminal has drawn `bytes` more of session `id`'s output. The shell stops reading the program while the
@@ -147,13 +149,13 @@ export class TauriHost implements SessionHost {
     const r = await open({ directory: true, multiple: false, defaultPath, title: t("ss.pickFolder") });
     return typeof r === "string" ? r : null;
   }
-  async start(agent: AgentId, cwd: string, cols: number, rows: number, onData: (d: Uint8Array) => void, onExit: (c: number | null) => void, resume?: string, account?: string) {
+  async start(agent: AgentId, cwd: string, cols: number, rows: number, onData: (d: Uint8Array) => void, onExit: (c: number | null) => void, resume?: string, account?: string, sessionId?: string) {
     const { invoke, Channel } = await this.core();
     const data = new Channel<ArrayBuffer>();
     data.onmessage = (b) => onData(new Uint8Array(b));
     const exit = new Channel<number | null>();
     exit.onmessage = (c) => onExit(c);
-    return invoke<number>("session_start", { agent, cwd, resume: resume ?? null, account: account ?? null, cols, rows, onData: data, onExit: exit });
+    return invoke<number>("session_start", { agent, cwd, sessionId: sessionId ?? null, resume: resume ?? null, account: account ?? null, cols, rows, onData: data, onExit: exit });
   }
   async chatStart(agent: AgentId, cwd: string, onEvent: (ev: ChatEvent) => void, resume?: string, account?: string, session?: string) {
     const { invoke, Channel } = await this.core();
@@ -300,6 +302,8 @@ export interface MockCall {
   cols?: number;
   rows?: number;
   resume?: string;
+  /** start: the id omher made for a new Claude Code conversation (`--session-id`) */
+  sessionId?: string;
   account?: string;
   input?: ChatInput;
   session?: string;
@@ -492,9 +496,9 @@ export class MockHost implements SessionHost {
     const v = this.g.__omherPickFolder;
     return v === undefined ? defaultPath : v;
   }
-  async start(agent: AgentId, cwd: string, cols: number, rows: number, onData: (d: string) => void, onExit: (c: number | null) => void, resume?: string, account?: string) {
+  async start(agent: AgentId, cwd: string, cols: number, rows: number, onData: (d: string) => void, onExit: (c: number | null) => void, resume?: string, account?: string, sessionId?: string) {
     const id = nextMockPty();
-    this.log({ op: "start", id, agent, cwd, cols, rows, ...(resume ? { resume } : {}), ...(account ? { account } : {}) });
+    this.log({ op: "start", id, agent, cwd, cols, rows, ...(resume ? { resume } : {}), ...(sessionId ? { sessionId } : {}), ...(account ? { account } : {}) });
     const out = (d: string) => {
       (this.g.__omherSessionFlow ??= []).push({ op: "feed", id, bytes: utf8.encode(d).length });
       onData(d);
