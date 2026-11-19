@@ -2157,6 +2157,10 @@ export function createStore(bridge: BridgeLike, opts: StoreOptions = {}): Store 
     if (!mustHold(state, key)) return false;
     held.set(id, { bot: key, ...p });
     dispatch({ ...row, held: true });
+    // "steer" in Settings presses this row's Steer: only when it is the one row waiting and a turn runs, so it never
+    // goes ahead of a message held before it; a refused steer still goes out after the turn, as from the button
+    const c = state.chats[key];
+    if (busySend() === "steer" && c?.turn && !c.steering && c.queue?.length === 1 && c.queue[0] === id) void actions.queueSteer(id, key);
     return true;
   };
   const fail = (e: unknown) => dispatch({ type: "error", message: errText(e) });
@@ -3011,6 +3015,26 @@ export function notifyErrorsEnabled(): boolean {
 export function setNotifyErrorsEnabled(on: boolean): void {
   try {
     localStorage.setItem("omher.notifyErrors", on ? "on" : "off");
+  } catch {
+    /* no storage */
+  }
+}
+
+/** "While it answers" (Settings › General): what a message typed during a turn does. "queue" (the default) holds it
+ *  until the turn ends; "steer" presses the held row's Steer for the person. Saved on this computer. */
+export type BusySend = "queue" | "steer";
+
+export function busySend(): BusySend {
+  try {
+    return typeof localStorage !== "undefined" && localStorage.getItem("omher.busySend") === "steer" ? "steer" : "queue";
+  } catch {
+    return "queue";
+  }
+}
+
+export function setBusySend(mode: BusySend): void {
+  try {
+    localStorage.setItem("omher.busySend", mode);
   } catch {
     /* no storage */
   }

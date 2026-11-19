@@ -124,6 +124,11 @@ export const ko: Record<Key, string> = {
   "sounds.play": "재생",
   "sounds.on": "켬",
   "sounds.off": "끔",
+  // while it answers (Settings › General)
+  "busySend.title": "답하는 중에 보내면",
+  "busySend.hint": "봇이 답하는 동안 보낸 메시지를 답이 끝날 때까지 기다렸다 보내거나, 바로 지금 답에 steer해요",
+  "busySend.queue": "대기",
+  "busySend.steer": "Steer",
   // update (the sidebar's Update button and its confirm) and resume after a restart
   "update.title": "{version}(으)로 업데이트할까요?",
   "update.body": "omher가 다시 시작됩니다. 채팅, 패널, 세션은 하던 곳에서 이어집니다.",

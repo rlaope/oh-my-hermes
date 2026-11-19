@@ -118,6 +118,9 @@ UI (React in a Tauri window)  ⇄  bridge (Python, loopback WebSocket)  ⇄  the
   held message joins the history once it is sent, a message Stop dropped never does, and a failed send stays in it to
   try again. An open picker (`$` skill, `/` command, `./thread`) keeps its arrows, and inside a multi-line draft the
   arrows move between lines (`src/chat/parts/promptHistory.ts`, `e2e/prompt-history.spec.ts`).
+- **While it answers** (Settings › General): a message sent while a bot is answering waits in the steer queue until
+  the turn ends (the default), or, set to Steer, is steered into the running answer at once, as its Steer button
+  would; a message behind another held one still waits its turn (`e2e/steer-queue.spec.ts`).
 - **Remote machines over SSH** (`src-tauri/src/peers.rs`, `src/peers/`): the sidebar `+` › Connect over SSH (or the
   chip under a bot's `omher-peer` reply, or Settings › Remote machines) takes a host from `~/.ssh/config` or
   `user@host`, checks it and shows the exact `ssh` command, the Hermes found there and its bots; only Connect saves it

@@ -124,6 +124,11 @@ export const ja: Record<Key, string> = {
   "sounds.play": "再生",
   "sounds.on": "オン",
   "sounds.off": "オフ",
+  // while it answers (Settings › General)
+  "busySend.title": "回答中に送ると",
+  "busySend.hint": "ボットの回答中に送ったメッセージを、終わるまで待たせるか、すぐ今の回答に steer します",
+  "busySend.queue": "待つ",
+  "busySend.steer": "Steer",
   // update (the sidebar's Update button and its confirm) and resume after a restart
   "update.title": "{version} にアップデートしますか？",
   "update.body": "omher が再起動します。チャット、パネル、セッションは中断したところから続きます。",
