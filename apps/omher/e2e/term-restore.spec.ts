@@ -327,6 +327,8 @@ test("the bottom panel's tabs come back after a restart in their folders, with t
   await flush(page);
   await expect.poll(async () => (await history(page)).filter((c) => c.op === "history.save" && c.key === "panel-1").pop()?.data ?? "").toContain("panel-before");
 
+  // a slow computer: the shell answers the history read late
+  await page.addInitScript(() => ((window as unknown as Record<string, unknown>).__omherMockHistoryDelay = 400));
   await page.reload();
   await expect(page.getByTestId("bot-kami")).toBeVisible();
   // nothing starts until the panel shows
@@ -335,8 +337,15 @@ test("the bottom panel's tabs come back after a restart in their folders, with t
   await page.keyboard.press("Control+Backquote");
   await expect(page.getByTestId("termpanel-tab")).toHaveText(["api", "api"]);
   await page.getByTestId("termpanel-tab").first().getByRole("tab").click();
-  await expect(shown).toContainText("login shell in /home/you/code/api");
-  const r = await rows(page, '[data-testid="termpanel-terminal"]:not([hidden]) .xterm-rows');
+  // the kept text holds the old shell's first line too: wait for the new shell's, below the divider
+  const sel = '[data-testid="termpanel-terminal"]:not([hidden]) .xterm-rows';
+  await expect
+    .poll(async () => {
+      const r = await rows(page, sel);
+      return r.findLastIndex((l) => l.includes("login shell in")) > r.findIndex((l) => /^--- restored .+ ---$/.test(l));
+    })
+    .toBe(true);
+  const r = await rows(page, sel);
   const old = r.findIndex((l) => l.includes("echo panel-before"));
   const line = r.findIndex((l) => /^--- restored .+ ---$/.test(l));
   const fresh = r.findLastIndex((l) => l.includes("login shell in"));
