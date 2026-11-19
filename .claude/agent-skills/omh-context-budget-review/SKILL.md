@@ -1,6 +1,6 @@
 ---
 name: "omh-context-budget-review"
-description: "[omh] Context window or token budget at risk."
+description: "[omh] Context window or token budget at risk: plan compact context…"
 license: MIT
 compatibility: "Requires the omh CLI on PATH (pip install oh-my-hermes)."
 metadata:

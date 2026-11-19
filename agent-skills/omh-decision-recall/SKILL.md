@@ -1,6 +1,6 @@
 ---
 name: "omh-decision-recall"
-description: "[omh] Previously rejected options to revisit."
+description: "[omh] Previously rejected options to revisit: recall scoped…"
 license: MIT
 compatibility: "Requires the omh CLI on PATH (pip install oh-my-hermes)."
 metadata:

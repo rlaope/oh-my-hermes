@@ -1,6 +1,6 @@
 ---
 name: "omh-apps"
-description: "[omh] Email, Slack, or Jira action to perform."
+description: "[omh] Email, Slack, or Jira action to perform: external app actions…"
 license: MIT
 metadata:
   hermes:

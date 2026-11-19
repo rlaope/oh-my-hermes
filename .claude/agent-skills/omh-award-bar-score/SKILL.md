@@ -1,6 +1,6 @@
 ---
 name: "omh-award-bar-score"
-description: "[omh] Aiming for design-award quality."
+description: "[omh] Aiming for design-award quality: score a web surface against…"
 license: MIT
 metadata:
   hermes:

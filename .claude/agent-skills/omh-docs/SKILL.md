@@ -1,6 +1,6 @@
 ---
 name: "omh-docs"
-description: "[omh] Explaining OMH itself."
+description: "[omh] Explaining OMH itself: current-source-first documentation…"
 license: MIT
 compatibility: "Requires the omh CLI on PATH (pip install oh-my-hermes)."
 metadata:

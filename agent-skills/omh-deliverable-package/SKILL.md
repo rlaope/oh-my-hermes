@@ -1,6 +1,6 @@
 ---
 name: "omh-deliverable-package"
-description: "[omh] Attachment and deliverable status tracking."
+description: "[omh] Attachment and deliverable status tracking: track PPT, PDF…"
 license: MIT
 metadata:
   hermes:

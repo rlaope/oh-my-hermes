@@ -1,6 +1,6 @@
 ---
 name: "omh-decision-prototype"
-description: "[omh] Uncertain technical choice for a spike."
+description: "[omh] Uncertain technical choice for a spike: bounded decision…"
 license: MIT
 metadata:
   hermes:

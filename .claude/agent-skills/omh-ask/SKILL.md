@@ -1,6 +1,6 @@
 ---
 name: "omh-ask"
-description: "[omh] Outside AI critique wanted."
+description: "[omh] Outside AI critique wanted: consulting an external advisor…"
 license: MIT
 metadata:
   hermes:

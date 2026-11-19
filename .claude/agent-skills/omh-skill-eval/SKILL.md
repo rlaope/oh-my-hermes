@@ -1,6 +1,6 @@
 ---
 name: "omh-skill-eval"
-description: "[omh] Agent skill to check before shipping it."
+description: "[omh] Agent skill to check before shipping it: run `omh skill-eval`…"
 license: MIT
 compatibility: "Requires the omh CLI on PATH (pip install oh-my-hermes)."
 metadata:

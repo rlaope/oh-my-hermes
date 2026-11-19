@@ -1,6 +1,6 @@
 ---
 name: "omh-spend-gate"
-description: "[omh] Spending money on the user's behalf."
+description: "[omh] Spending money on the user's behalf: a card checkout, an HTTP…"
 license: MIT
 metadata:
   hermes:

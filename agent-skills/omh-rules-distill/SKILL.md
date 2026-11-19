@@ -1,6 +1,6 @@
 ---
 name: "omh-rules-distill"
-description: "[omh] Turn repeated lessons into written rules."
+description: "[omh] Turn repeated lessons into written rules: extract repeated…"
 license: MIT
 metadata:
   hermes:

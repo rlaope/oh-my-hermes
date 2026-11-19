@@ -1,6 +1,6 @@
 ---
 name: "omh-ai-slop-cleaner"
-description: "[omh] Messy or AI-generated code to clean up."
+description: "[omh] Messy or AI-generated code to clean up: delete AI-generated…"
 license: MIT
 metadata:
   hermes:

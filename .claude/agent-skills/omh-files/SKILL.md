@@ -1,6 +1,6 @@
 ---
 name: "omh-files"
-description: "[omh] Folder cleanup, renames, or deletions."
+description: "[omh] Folder cleanup, renames, or deletions: policy overlay…"
 license: MIT
 metadata:
   hermes:

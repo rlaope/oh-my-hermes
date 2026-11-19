@@ -1,6 +1,6 @@
 ---
 name: "omh-localization-review"
-description: "[omh] Translated product or content release."
+description: "[omh] Translated product or content release: make a product…"
 license: MIT
 metadata:
   hermes:

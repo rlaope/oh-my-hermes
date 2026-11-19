@@ -1,6 +1,6 @@
 ---
 name: "omh-biomedical-evidence"
-description: "[omh] Public variant claims to cross-check."
+description: "[omh] Public variant claims to cross-check: retrieve and reconcile…"
 license: MIT
 metadata:
   hermes:

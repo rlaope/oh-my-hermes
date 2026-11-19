@@ -1,6 +1,6 @@
 ---
 name: "omh-codebase-uml"
-description: "[omh] Architecture picture of a codebase."
+description: "[omh] Architecture picture of a codebase: turn a repository…"
 license: MIT
 compatibility: "Requires the omh CLI on PATH (pip install oh-my-hermes)."
 metadata:

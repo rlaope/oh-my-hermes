@@ -1,6 +1,6 @@
 ---
 name: "omh-model-finetuning"
-description: "[omh] Fine-tuning a model on your own data."
+description: "[omh] Fine-tuning a model on your own data: SFT, DPO, RLVR…"
 license: MIT
 metadata:
   hermes:

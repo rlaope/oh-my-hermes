@@ -165,21 +165,25 @@ budget scales at 1% of the model's context window."
 The whole portable pack did not fit. Codex (about 8,000 characters, 2% of the
 context window) and OpenClaw (18,000 characters or 150 skills, then every
 description cut to 220 and some skills left out) list descriptions inside a
-budget too. So every portable `SKILL.md` frontmatter `description:` is now only
-`[omh] <situation clause>.`: the text before the first `: ` of the catalog
-description, which names the situation the skill is for. A skill with picker
-aliases keeps an ` Aliases: …` tail (two skills). The rest of the catalog text,
-what the skill does and its ` Use when the user says:` trigger list, is in the
-body: "Why This Exists" and the "Strong routing signals" list. The Hermes
-`skills/` tree keeps its full descriptions.
+budget too. So every portable `SKILL.md` frontmatter `description:` now starts
+with `[omh] <situation clause>`: the text before the first `: ` of the catalog
+description, which names the situation the skill is for, always kept whole. The
+start of what the skill does follows it after a colon, cut at a word boundary
+and marked with `…` so the whole description, ` Aliases: …` tail included (two
+skills), stays inside 68 characters (`PORTABLE_DESCRIPTION_CHARS` in
+`src/skills/render.py`). A clause that leaves less than 12 characters of room
+ends with a full stop alone (46 of 124 skills). The full catalog text and its
+` Use when the user says:` trigger list are in the body: "Why This Exists" and
+the "Strong routing signals" list. The Hermes `skills/` tree keeps its full
+descriptions.
 
-| Pack (123 skills) | Description chars before | After | Longest |
-| --- | --- | --- | --- |
-| `agent-skills/` → `.agents/skills` | 42,581 | 5,633 | 103 |
-| `.claude/agent-skills/` → `.claude/skills` | 16,474 | 5,633 | 103 |
+| Pack | Description chars before | Clause only (123 skills) | Now (124 skills) | Longest |
+| --- | --- | --- | --- | --- |
+| `agent-skills/` → `.agents/skills` | 42,581 | 5,633 | 7,442 | 103 |
+| `.claude/agent-skills/` → `.claude/skills` | 16,474 | 5,633 | 7,442 | 103 |
 
-That leaves about 2,300 characters (about 40 skills at the mean of 46) before
-the 8,000 budget. `tests/test_agent_skills_host_budgets.py` holds both packs to
+That leaves about 550 characters before the 8,000 budget, so a new skill must
+fit there or the cap comes down. `tests/test_agent_skills_host_budgets.py` holds both packs to
 8,000 total characters, 150 skills and 220 characters per description.
 
 The Claude copy, generated into `.claude/agent-skills/` and installed by
@@ -510,7 +514,7 @@ surfaces. Resolve reference paths from the loaded skill's base directory
 same-name skills can affect nomination; installation does not settle it.
 
 The renderer enforces 1-1024-character catalog descriptions; an over-budget
-one fails generation. The portable description is the situation clause (see
+one fails generation. The portable description is the situation clause and the start of what the skill does (see
 [Claude Code skill listing](#claude-code-skill-listing)). Hermes bytes are
 pinned and unchanged.
 

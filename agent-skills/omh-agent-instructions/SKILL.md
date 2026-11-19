@@ -1,6 +1,6 @@
 ---
 name: "omh-agent-instructions"
-description: "[omh] Agent instruction file for a repo."
+description: "[omh] Agent instruction file for a repo: AGENTS.md, CLAUDE.md…"
 license: MIT
 metadata:
   hermes:

@@ -1,6 +1,6 @@
 ---
 name: "omh-design-quality-gate"
-description: "[omh] Deliverable demands premium polish."
+description: "[omh] Deliverable demands premium polish: enforce superior content…"
 license: MIT
 metadata:
   hermes:

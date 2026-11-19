@@ -1,6 +1,6 @@
 ---
 name: "omh-sales-development"
-description: "[omh] Prospect or account worth pursuing."
+description: "[omh] Prospect or account worth pursuing: turn an account or market…"
 license: MIT
 metadata:
   hermes:

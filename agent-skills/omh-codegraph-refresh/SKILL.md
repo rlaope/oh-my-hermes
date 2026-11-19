@@ -1,6 +1,6 @@
 ---
 name: "omh-codegraph-refresh"
-description: "[omh] Outdated code index or codemap."
+description: "[omh] Outdated code index or codemap: refresh local code…"
 license: MIT
 compatibility: "Requires the omh CLI on PATH (pip install oh-my-hermes)."
 metadata:

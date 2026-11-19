@@ -1,6 +1,6 @@
 ---
 name: "omh-design-orchestration"
-description: "[omh] Entire product design problem to delegate."
+description: "[omh] Entire product design problem to delegate: prepare a bounded…"
 license: MIT
 metadata:
   hermes:

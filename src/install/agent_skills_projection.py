@@ -93,8 +93,9 @@ def shorten_description(description: str, cap: int = CLAUDE_DESCRIPTION_CAP) -> 
     """The lead before the trigger list; over `cap`, cut at a clause or word boundary and marked with `…`."""
     lead = description.partition(CLAUDE_TRIGGER_MARKER)[0].strip()
     if len(lead) <= cap:
-        # Nothing is cut, so nothing is reworded: a lead that ends "you can act on." keeps its last word.
-        return lead.rstrip(" .,;:-") + "."
+        # Nothing is cut, so nothing is reworded: a lead that ends "you can act on." keeps its last word,
+        # and one the portable projection already marked as cut keeps its `…`.
+        return lead if lead.endswith(CLAUDE_CUT_MARK) else lead.rstrip(" .,;:-") + "."
     floor = int(cap * 0.6)
     cuts = [position for position in (lead.rfind(end, 0, cap) for end in _CLAUSE_ENDS) if position >= floor - 1]
     clause = max(cuts, default=-1)

@@ -1,6 +1,6 @@
 ---
 name: "omh-media-input"
-description: "[omh] Audio, video, or screenshot to process."
+description: "[omh] Audio, video, or screenshot to process: user-sent media…"
 license: MIT
 metadata:
   hermes:

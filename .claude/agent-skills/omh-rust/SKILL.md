@@ -1,6 +1,6 @@
 ---
 name: "omh-rust"
-description: "[omh] Rust ownership, lifetime, or unsafe trouble."
+description: "[omh] Rust ownership, lifetime, or unsafe trouble: prepare Rust…"
 license: MIT
 metadata:
   hermes:

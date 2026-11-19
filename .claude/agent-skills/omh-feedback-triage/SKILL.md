@@ -1,6 +1,6 @@
 ---
 name: "omh-feedback-triage"
-description: "[omh] Unsorted customer feedback and bug reports."
+description: "[omh] Unsorted customer feedback and bug reports: cluster customer…"
 license: MIT
 metadata:
   hermes:

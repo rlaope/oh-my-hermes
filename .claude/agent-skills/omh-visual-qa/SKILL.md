@@ -1,6 +1,6 @@
 ---
 name: "omh-visual-qa"
-description: "[omh] Rendered UI needing a visual verdict."
+description: "[omh] Rendered UI needing a visual verdict: prepare observed-only…"
 license: MIT
 compatibility: "Requires the omh CLI on PATH (pip install oh-my-hermes)."
 metadata:

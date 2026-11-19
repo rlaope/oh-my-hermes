@@ -1,6 +1,6 @@
 ---
 name: "omh-deploy-and-monitor"
-description: "[omh] Release rollout needing health signals."
+description: "[omh] Release rollout needing health signals: release checklist…"
 license: MIT
 metadata:
   hermes:

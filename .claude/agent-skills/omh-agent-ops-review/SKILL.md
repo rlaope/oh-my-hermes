@@ -1,6 +1,6 @@
 ---
 name: "omh-agent-ops-review"
-description: "[omh] AI agent progress for managers."
+description: "[omh] AI agent progress for managers: help managers inspect…"
 license: MIT
 metadata:
   hermes:

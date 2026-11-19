@@ -1,6 +1,6 @@
 ---
 name: "omh-build-failure-triage"
-description: "[omh] Build or CI failure to triage."
+description: "[omh] Build or CI failure to triage: classify build, typecheck…"
 license: MIT
 metadata:
   hermes:

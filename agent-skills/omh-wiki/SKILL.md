@@ -1,6 +1,6 @@
 ---
 name: "omh-wiki"
-description: "[omh] Scattered knowledge needing a wiki."
+description: "[omh] Scattered knowledge needing a wiki: wiki construction…"
 license: MIT
 metadata:
   hermes:

@@ -1,6 +1,6 @@
 ---
 name: "omh-running-work-board"
-description: "[omh] Live view of running coding units."
+description: "[omh] Live view of running coding units: showing which coding units…"
 license: MIT
 compatibility: "Requires the omh CLI on PATH (pip install oh-my-hermes)."
 metadata:

@@ -1,6 +1,6 @@
 ---
 name: "omh-sprite-forge"
-description: "[omh] Character art to animate in a game."
+description: "[omh] Character art to animate in a game: turn image-model sprite…"
 license: MIT
 metadata:
   hermes:

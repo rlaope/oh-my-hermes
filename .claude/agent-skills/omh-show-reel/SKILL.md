@@ -1,6 +1,6 @@
 ---
 name: "omh-show-reel"
-description: "[omh] Video to make from an idea or a product."
+description: "[omh] Video to make from an idea or a product: an explainer, motion…"
 license: MIT
 metadata:
   hermes:

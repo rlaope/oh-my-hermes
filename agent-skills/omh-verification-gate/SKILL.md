@@ -1,6 +1,6 @@
 ---
 name: "omh-verification-gate"
-description: "[omh] Proof a change is done before merge."
+description: "[omh] Proof a change is done before merge: define and record build…"
 license: MIT
 metadata:
   hermes:

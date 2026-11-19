@@ -1,6 +1,6 @@
 ---
 name: "omh-product-discovery-validation"
-description: "[omh] Unvalidated early product idea."
+description: "[omh] Unvalidated early product idea: test whether a customer…"
 license: MIT
 metadata:
   hermes:

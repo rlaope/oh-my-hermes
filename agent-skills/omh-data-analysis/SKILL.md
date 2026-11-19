@@ -1,6 +1,6 @@
 ---
 name: "omh-data-analysis"
-description: "[omh] Dataset or table to analyze."
+description: "[omh] Dataset or table to analyze: scope supplied data…"
 license: MIT
 metadata:
   hermes:

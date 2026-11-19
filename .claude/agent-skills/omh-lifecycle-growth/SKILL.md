@@ -1,6 +1,6 @@
 ---
 name: "omh-lifecycle-growth"
-description: "[omh] Churn or weak activation among users."
+description: "[omh] Churn or weak activation among users: turn an observed…"
 license: MIT
 metadata:
   hermes:

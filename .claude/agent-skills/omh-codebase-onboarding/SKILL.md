@@ -1,6 +1,6 @@
 ---
 name: "omh-codebase-onboarding"
-description: "[omh] Unfamiliar repository needing a guided tour."
+description: "[omh] Unfamiliar repository needing a guided tour: create a repo…"
 license: MIT
 metadata:
   hermes:

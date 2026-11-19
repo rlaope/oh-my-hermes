@@ -1,6 +1,6 @@
 ---
 name: "omh-terminal"
-description: "[omh] Shell command or test-suite execution."
+description: "[omh] Shell command or test-suite execution: policy overlay…"
 license: MIT
 metadata:
   hermes:

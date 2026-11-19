@@ -1,6 +1,6 @@
 ---
 name: "omh-ops-review"
-description: "[omh] Recurring operating status and blockers."
+description: "[omh] Recurring operating status and blockers: status, risks…"
 license: MIT
 metadata:
   hermes:

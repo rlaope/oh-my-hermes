@@ -1,6 +1,6 @@
 ---
 name: "omh-paper-learning"
-description: "[omh] Paper or paper PDF to understand."
+description: "[omh] Paper or paper PDF to understand: explain a supplied paper…"
 license: MIT
 metadata:
   hermes:

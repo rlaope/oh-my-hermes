@@ -1,6 +1,6 @@
 ---
 name: "omh-inference-serving"
-description: "[omh] Self-hosted LLM serving on GPUs."
+description: "[omh] Self-hosted LLM serving on GPUs: choose the serving engine…"
 license: MIT
 metadata:
   hermes:

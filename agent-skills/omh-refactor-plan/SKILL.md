@@ -1,6 +1,6 @@
 ---
 name: "omh-refactor-plan"
-description: "[omh] Decided cross-module refactor to phase."
+description: "[omh] Decided cross-module refactor to phase: refactor planning…"
 license: MIT
 metadata:
   hermes:

@@ -1,6 +1,6 @@
 ---
 name: "omh-accessibility-audit"
-description: "[omh] Screen-reader or keyboard accessibility gaps."
+description: "[omh] Screen-reader or keyboard accessibility gaps: prepare WCAG…"
 license: MIT
 metadata:
   hermes:

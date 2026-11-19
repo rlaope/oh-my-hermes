@@ -1,6 +1,6 @@
 ---
 name: "omh-application-threat-model"
-description: "[omh] Attack paths into an operated system."
+description: "[omh] Attack paths into an operated system: turn a system's…"
 license: MIT
 metadata:
   hermes:

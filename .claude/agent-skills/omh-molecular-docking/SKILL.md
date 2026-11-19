@@ -1,6 +1,6 @@
 ---
 name: "omh-molecular-docking"
-description: "[omh] Prepared PDBQT inputs."
+description: "[omh] Prepared PDBQT inputs: run bounded standalone Vina docking…"
 license: MIT
 metadata:
   hermes:

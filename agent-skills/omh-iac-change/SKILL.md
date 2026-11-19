@@ -1,6 +1,6 @@
 ---
 name: "omh-iac-change"
-description: "[omh] Infrastructure-as-code change."
+description: "[omh] Infrastructure-as-code change: Terraform, OpenTofu, Pulumi…"
 license: MIT
 metadata:
   hermes:

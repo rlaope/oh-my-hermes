@@ -1,6 +1,6 @@
 ---
 name: "omh-security-safety-review"
-description: "[omh] Agent or automation safety risks."
+description: "[omh] Agent or automation safety risks: review prompt, tool…"
 license: MIT
 metadata:
   hermes:

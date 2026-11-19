@@ -1,6 +1,6 @@
 ---
 name: "omh-frontend-refactor"
-description: "[omh] Oversized or tangled UI component."
+description: "[omh] Oversized or tangled UI component: behavior-preserving…"
 license: MIT
 metadata:
   hermes:

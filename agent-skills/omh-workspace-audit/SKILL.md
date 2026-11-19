@@ -1,6 +1,6 @@
 ---
 name: "omh-workspace-audit"
-description: "[omh] Workspace setup inventory and gaps."
+description: "[omh] Workspace setup inventory and gaps: map repository, skill…"
 license: MIT
 metadata:
   hermes:

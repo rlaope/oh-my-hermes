@@ -612,26 +612,52 @@ def frontmatter_description(definition: SkillDefinition) -> str:
     return omh_description(definition.description) + _frontmatter_trigger_tail(definition)
 
 
+# Each portable description, aliases tail included, is cut to this many
+# characters unless its situation clause alone is longer: 124 skills then list
+# 7,442 description characters, under the 8,000 Claude Code / Codex budget.
+PORTABLE_DESCRIPTION_CHARS = 68
+_PORTABLE_MIN_DETAIL_CHARS = 12
+_PORTABLE_CUT_MARK = "…"
+_PORTABLE_JOINING_WORDS = frozenset("a an the and or of to for with in on into by from before after that which when".split())
+
+
 def agent_frontmatter_description(definition: SkillDefinition) -> str:
-    """The portable listing description: `[omh] <situation clause>.` and nothing else.
+    """The portable listing description: the situation clause, then the start of what the skill does.
 
     Codex and Claude Code list every skill's description inside about 8,000
     characters and OpenClaw inside 18,000, so the full catalog text with its
     trigger tail (42,581 characters for 123 skills) was shortened, dropped or
     left out of the list. The situation clause, the text before the first `: `
     of the catalog description, is what a model reads to decide whether the skill
-    applies; the "what it does" part and the trigger list stay in the body
-    ("Why This Exists" and the "Strong routing signals" list). A description
-    with no clause separator is kept whole. Picker aliases stay, since a body
-    need not name them (two skills carry any).
+    applies, so it is always kept whole. The "what it does" part follows it when
+    `PORTABLE_DESCRIPTION_CHARS` leaves room, cut at a word boundary and marked
+    with `…`; the full text and the trigger list stay in the body ("Why This
+    Exists" and the "Strong routing signals" list). A clause too long to leave
+    `_PORTABLE_MIN_DETAIL_CHARS` of room ends with a full stop alone. A
+    description with no clause separator is kept whole. Picker aliases stay,
+    since a body need not name them (two skills carry any).
     """
     base = omh_description(definition.description)
     if not definition.description.strip() or not 1 <= len(base) <= 1024:
         raise ValueError(f"{definition.name}: Agent Skills description must be 1-1024 characters")
     prefix = OMH_DESCRIPTION_PREFIX if base.lower().startswith(OMH_DESCRIPTION_PREFIX) else ""
-    clause = base[len(prefix):].partition(": ")[0].rstrip(" .,;:-")
+    clause, _, detail = base[len(prefix):].partition(": ")
+    head = prefix + clause.rstrip(" .,;:-")
+    detail = detail.strip().rstrip(" .,;:-")
     aliases = _safe_aliases(definition) if definition.name != "oh-my-hermes" else []
-    return f"{prefix}{clause}." + (" Aliases: " + ", ".join(aliases) + "." if aliases else "")
+    tail = " Aliases: " + ", ".join(aliases) + "." if aliases else ""
+    room = PORTABLE_DESCRIPTION_CHARS - len(head) - len(tail) - len(": ") - len(".")
+    if len(detail) <= room:
+        lead = f"{head}: {detail}." if detail else f"{head}."
+    elif room < _PORTABLE_MIN_DETAIL_CHARS:
+        lead = f"{head}."
+    else:
+        cut = detail[: room + 1].rsplit(" ", 1)[0].rstrip(" .,;:-–—(/") if " " in detail[: room + 1] else ""
+        # A cut never ends on a joining word ("…, or…" reads as a dropped list item).
+        while " " in cut and cut.rsplit(" ", 1)[1].lower() in _PORTABLE_JOINING_WORDS:
+            cut = cut.rsplit(" ", 1)[0].rstrip(" .,;:-–—(/")
+        lead = f"{head}: {cut}{_PORTABLE_CUT_MARK}" if len(cut) >= _PORTABLE_MIN_DETAIL_CHARS else f"{head}."
+    return lead + tail
 
 
 def _frontmatter(

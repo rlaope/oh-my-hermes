@@ -1,6 +1,6 @@
 ---
 name: "omh-llm-app-dev"
-description: "[omh] LLM-powered feature to build."
+description: "[omh] LLM-powered feature to build: LLM app development: prepare…"
 license: MIT
 metadata:
   hermes:

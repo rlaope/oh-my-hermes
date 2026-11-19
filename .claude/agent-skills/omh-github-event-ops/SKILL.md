@@ -1,6 +1,6 @@
 ---
 name: "omh-github-event-ops"
-description: "[omh] Incoming GitHub PR, issue, or CI event."
+description: "[omh] Incoming GitHub PR, issue, or CI event: GitHub event…"
 license: MIT
 metadata:
   hermes:

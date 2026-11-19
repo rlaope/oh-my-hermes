@@ -1,6 +1,6 @@
 ---
 name: "omh-failure-signal-audit"
-description: "[omh] Hidden or swallowed errors suspected."
+description: "[omh] Hidden or swallowed errors suspected: find swallowed errors…"
 license: MIT
 metadata:
   hermes:

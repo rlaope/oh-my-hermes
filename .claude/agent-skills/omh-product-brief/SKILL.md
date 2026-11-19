@@ -1,6 +1,6 @@
 ---
 name: "omh-product-brief"
-description: "[omh] PRD or roadmap priorities to decide."
+description: "[omh] PRD or roadmap priorities to decide: turn product evidence…"
 license: MIT
 metadata:
   hermes:

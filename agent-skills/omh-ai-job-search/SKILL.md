@@ -1,6 +1,6 @@
 ---
 name: "omh-ai-job-search"
-description: "[omh] Career search to interview."
+description: "[omh] Career search to interview: find verified opportunities…"
 license: MIT
 metadata:
   hermes:

@@ -1,6 +1,6 @@
 ---
 name: "omh-github-issue-intake"
-description: "[omh] Chat report that should become a GitHub issue."
+description: "[omh] Chat report that should become a GitHub issue: turn a public…"
 license: MIT
 metadata:
   hermes:

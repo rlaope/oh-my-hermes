@@ -60,7 +60,32 @@ class ListingBudgetTests(unittest.TestCase):
                 continue
             clause = omh_description(definition.description).partition(": ")[0].rstrip(" .,;:-")
             with self.subTest(skill=path):
-                self.assertTrue(_description(portable[path]).startswith(clause + "."), _description(portable[path]))
+                text = _description(portable[path])
+                self.assertTrue(text.startswith((clause + ".", clause + ": ")), text)
+
+    def test_descriptions_keep_headroom_and_add_what_the_skill_does(self):
+        # 7,600 leaves room for new skills under the 8,000 budget; 120 keeps one description to a line.
+        descriptions = [_description(content) for content in _skill_files(self.packs[".agents/skills"]).values()]
+        self.assertLessEqual(sum(map(len, descriptions)), 7_600)
+        self.assertLessEqual(max(map(len, descriptions)), 120)
+        self.assertFalse([text for text in descriptions if text.endswith((".…", "…."))])
+
+    def test_portable_description_cut_rules(self):
+        from dataclasses import replace
+
+        from omh.skills.catalog import builtin_definitions
+        from omh.skills.render import PORTABLE_DESCRIPTION_CHARS, agent_frontmatter_description
+
+        definition = next(d for d in builtin_definitions() if d.name == "data-share-review")
+        short = replace(definition, description="Data to share: check it first.", aliases=())
+        self.assertEqual(agent_frontmatter_description(short), "[omh] Data to share: check it first.")
+        long = replace(definition, description="Data to share: check the dataset, the log and the ticket export or a sample before it goes.")
+        text = agent_frontmatter_description(long)
+        self.assertTrue(text.startswith("[omh] Data to share: check the dataset"), text)
+        self.assertTrue(text.endswith("…") and len(text) <= PORTABLE_DESCRIPTION_CHARS, text)
+        self.assertNotRegex(text, r"\b(and|or|the|a)…$")
+        wide = replace(definition, description="A situation clause that is already too long to leave room: x y z.")
+        self.assertEqual(agent_frontmatter_description(wide), "[omh] A situation clause that is already too long to leave room.")
 
     def test_descriptions_stay_distinct(self):
         for root, files in self.packs.items():

@@ -1,6 +1,6 @@
 ---
 name: "omh-instinct-ledger"
-description: "[omh] Recurring lessons worth promoting."
+description: "[omh] Recurring lessons worth promoting: turn repeated project…"
 license: MIT
 metadata:
   hermes:

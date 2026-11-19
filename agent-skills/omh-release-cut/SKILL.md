@@ -1,6 +1,6 @@
 ---
 name: "omh-release-cut"
-description: "[omh] Shipping a versioned release."
+description: "[omh] Shipping a versioned release: tag it, stage it behind…"
 license: MIT
 metadata:
   hermes:

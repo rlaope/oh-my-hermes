@@ -1,6 +1,6 @@
 ---
 name: "ulw-research"
-description: "[omh] Deep dive before a decision."
+description: "[omh] Deep dive before a decision: deep research engine - grounding…"
 license: MIT
 metadata:
   hermes:
