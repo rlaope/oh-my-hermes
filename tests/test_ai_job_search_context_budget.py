@@ -70,7 +70,10 @@ class AiJobSearchContextBudgetTests(unittest.TestCase):
         # 13416 -> 13506 and the digest re-derived: model-compression adds one
         # index line (+90 with its newline); dropping only that line reproduces
         # 4b82ff50...d5ca5 / 13416.
-        self.assertEqual(_digest(legacy), 'a1761286649df00a74f79cd49acb7284e6ea4480e2cdc9bf3e1cf6c45f2d05af')
+        # Digest re-derived at the same size: twenty situation clauses were
+        # shortened to end inside the 57-character window, so those index lines
+        # change text at the same cut; the pin before it was a1761286...05af.
+        self.assertEqual(_digest(legacy), '7c4f6dc678d6bc28014a27ebbb37a01b11f4a4f6d23832ad8578a6711743b33a')
         self.assertEqual(len('\n'.join(legacy)), 13506)
         delta = len('\n'.join(lines)) - 13506
         self.assertGreater(delta, 0)
@@ -190,8 +193,10 @@ class AiJobSearchContextBudgetTests(unittest.TestCase):
             # FULL_CAPABILITY_SKILL_SECTION_CHAR_LIMIT); no other row moved, and the pin before it was d09dd42e...786f.
             # Digest re-derived at the same size: agent-evaluation's row names paired_run_decision/v2 where it named
             # v1; no other row moved, and the pin before it was 2da9f59b...f6c9.
-            (skill_capabilities, 542640, FULL_ROW_DELTA_CAP,
-             'bc66d6c09d24ee56ed41248e0a613be24079be3310898968b0c8be3e67adeb7d',
+            # Digest re-derived: twenty rows' descriptions now end their situation clause inside the Hermes index
+            # window (the detail moves after the colon), 542640 -> 542611; the pin before it was bc66d6c0...eb7d.
+            (skill_capabilities, 542611, FULL_ROW_DELTA_CAP,
+             'bc088218dca013bb5df7ef0a0087afb2a1c87b8a6650a935f0eeb53b93775df4',
              release.FULL_CAPABILITY_SKILL_SECTION_CHAR_LIMIT),
             (standalone_skill_capability_items, 145483, STANDALONE_ROW_DELTA_CAP,
              '57ef3e89e97c4ed9dc45338c18f01ce384842bad7cfa16b37fb9a4e5a7d0794e',
@@ -524,7 +529,9 @@ class AiJobSearchContextBudgetTests(unittest.TestCase):
         # the pin before it was 26bd1012...f890.
         # model-setup's quality bar then gains the onboarding-mode line; only model-setup moves, and the pin
         # before it was ad310846...698b.
-        self.assertEqual(_digest(legacy_hashes), '4eaeeb7940eff0e187bb6c7683ad69496f2609df37f8b6fee7144ea10705958f')
+        # Twenty skills' frontmatter descriptions then end their situation clause inside the Hermes index window;
+        # only those twenty bodies move, and the pin before it was 4eaeeb79...958f.
+        self.assertEqual(_digest(legacy_hashes), '5bddd1d26effac5d19be6391d8c2242f01e872e4dc931344cfeadd3fae43440d')
         legacy = _skill_context_cost_profile('full', legacy_templates, refs)
         current = _skill_context_cost_profile('full', templates, refs)
         # Main's search guidance adds 305; repro-audit's mandatory rails 1,943.

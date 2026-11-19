@@ -1085,7 +1085,9 @@ PLUGIN_TOOL_SCHEMA_CHAR_LIMIT = 62968
 # 545582 -> 545712 (2026-11-12): design-orchestration's quality bar had three items, so its new fourth line
 # (direction options shown as rendered images) enters the capability row's first-four slice (+130, only that
 # row, 3915 -> 4045); measured from the producer against main 2fcbef29f. No headroom.
-FULL_CAPABILITY_SKILL_SECTION_CHAR_LIMIT = 545712
+# 545712 -> 545683: twenty descriptions end their situation clause inside Hermes' 60-character index
+# window, the detail moved after the colon (-29 across those rows); measured from the producer. No headroom.
+FULL_CAPABILITY_SKILL_SECTION_CHAR_LIMIT = 545683
 FULL_CAPABILITY_SKILL_ITEM_CHAR_LIMIT = 9000
 # 100000 -> 102070: the same three domain workflows each add one standalone
 # capability row, again measured on the merged tree; warranted growth for three

@@ -872,7 +872,7 @@ These surfaces are generated command references, not installed Hermes workflow s
 
 ### web-research
 
-[omh] Current technical or business fact to cite from web: web lookup lane - settle a current-facts question in one cited retrieval round with retrieval dates and source-quality notes; for pre-spec grounding across reference implementations use `research`.
+[omh] Current tech or business fact to cite from web: web lookup lane - settle a current-facts question in one cited retrieval round with retrieval dates and source-quality notes; for pre-spec grounding across reference implementations use `research`.
 
 - Category: `research`
 - Phase: `web-evidence`
@@ -2497,7 +2497,7 @@ These surfaces are generated command references, not installed Hermes workflow s
 
 ### img-summary
 
-[omh] Infographic card for meeting notes, a report, or PR: image prompt cards - turn meetings, reports, PRs, issues, research, and releases into domain-aware image prompt cards.
+[omh] Infographic card for meeting notes, a report or PR: image prompt cards - turn meetings, reports, PRs, issues, research, and releases into domain-aware image prompt cards.
 
 - Category: `materials`
 - Phase: `visual-prompt-card`
@@ -2597,7 +2597,7 @@ These surfaces are generated command references, not installed Hermes workflow s
 
 ### apple-design
 
-[omh] Designing or reviewing an iOS, macOS, or Apple-style UI: prepare native Apple UI or Apple marketing product-visual direction, review, and improvement briefs with evidence-backed remediation handoffs.
+[omh] Designing or reviewing an iOS, macOS or Apple UI: prepare native Apple UI or Apple marketing product-visual direction, review, and improvement briefs with evidence-backed remediation handoffs.
 
 - Category: `materials`
 - Phase: `apple-design`
@@ -5315,7 +5315,7 @@ These surfaces are generated command references, not installed Hermes workflow s
 
 ### tech-debt-audit
 
-[omh] Accumulated tech debt or architecture deepening to rank: build the severity-by-effort debt ledger from observed repo evidence - orient, audit the named dimensions with file:line citations, rank fixes and quick wins - and reconcile RESOLVED/NEW/CARRIED on rerun.
+[omh] Accumulated tech debt or architecture deepening: rank it; build the severity-by-effort debt ledger from observed repo evidence - orient, audit the named dimensions with file:line citations, rank fixes and quick wins - and reconcile RESOLVED/NEW/CARRIED on rerun.
 
 - Category: `maintenance`
 - Phase: `tech-debt-audit`
@@ -6821,7 +6821,7 @@ These surfaces are generated command references, not installed Hermes workflow s
 
 ### app-debugging
 
-[omh] Application code misbehaves -- a wrong value, a flaky test, a lost update: reproduce it first, form competing hypotheses, discriminate them with the cheapest observation, and only then fix the demonstrated root cause.
+[omh] Application code misbehaves: a wrong value, a flaky test, a lost update; reproduce it first, form competing hypotheses, discriminate them with the cheapest observation, and only then fix the demonstrated root cause.
 
 - Category: `verification`
 - Phase: `app-root-cause`
@@ -6906,7 +6906,7 @@ These surfaces are generated command references, not installed Hermes workflow s
 
 ### commit-pr-authoring
 
-[omh] Commit message or pull-request body to write for a change: draft it in the repository's own convention, with `Tested:` listing only commands observed to run and everything prepared but not run under `Not-tested:`.
+[omh] Commit message or pull-request body to write: draft it for the change in the repository's own convention, with `Tested:` listing only commands observed to run and everything prepared but not run under `Not-tested:`.
 
 - Category: `verification`
 - Phase: `commit-pr-authoring`
@@ -6982,7 +6982,7 @@ These surfaces are generated command references, not installed Hermes workflow s
 
 ### git-workflow
 
-[omh] Git branch in trouble -- a merge conflict, a commit that broke something, history to repair: plan the resolution, the bisect, or the rewrite, name what is already pushed first, and force-push only with `--force-with-lease`.
+[omh] Git branch in trouble: a merge conflict, a commit that broke something, history to repair; plan the resolution, the bisect, or the rewrite, name what is already pushed first, and force-push only with `--force-with-lease`.
 
 - Category: `verification`
 - Phase: `git-repair`
@@ -7058,7 +7058,7 @@ These surfaces are generated command references, not installed Hermes workflow s
 
 ### relational-db
 
-[omh] Database work on a relational store -- a slow query, an index to size, a migration on a big table, a lock taken during deploy, N+1 queries: plan it with the checks that prove it safe, and never call a migration ready without its lock behaviour and rollback.
+[omh] Database work on a relational store: a slow query, an index to size, a migration on a big table, a lock taken during deploy, N+1 queries; plan it with the checks that prove it safe, and never call a migration ready without its lock behaviour and rollback.
 
 - Category: `planning`
 - Phase: `relational-db`
@@ -7138,7 +7138,7 @@ These surfaces are generated command references, not installed Hermes workflow s
 
 ### security-event-response
 
-[omh] Security event on the code already shipped -- a CVE in a dependency, a secret committed to the repo, a license question, an advisory: triage reachability and severity, contain in order, and never close a leaked secret before its rotation is observed.
+[omh] Security event on the code already shipped: a CVE in a dependency, a secret committed to the repo, a license question, an advisory; triage reachability and severity, contain in order, and never close a leaked secret before its rotation is observed.
 
 - Category: `review`
 - Phase: `security-event-response`
@@ -7216,7 +7216,7 @@ These surfaces are generated command references, not installed Hermes workflow s
 
 ### agent-instructions
 
-[omh] Agent instruction file for a repo -- AGENTS.md, CLAUDE.md, a Cursor rule: write or update what an agent cannot derive from the code, inside a marked region, with every command verified or marked unverified and no counts that drift.
+[omh] Agent instruction file for a repo: AGENTS.md, CLAUDE.md, or a Cursor rule; write or update what an agent cannot derive from the code, inside a marked region, with every command verified or marked unverified and no counts that drift.
 
 - Category: `planning`
 - Phase: `agent-instructions`
@@ -7289,7 +7289,7 @@ These surfaces are generated command references, not installed Hermes workflow s
 
 ### iac-change
 
-[omh] Infrastructure-as-code change -- Terraform, OpenTofu, Pulumi, a Kubernetes manifest, a Helm chart: read the drift, the blast radius and the cost delta from the saved plan, then stage the apply behind a health gate with a rollback per stage.
+[omh] Infrastructure-as-code change: Terraform, OpenTofu, Pulumi, a Kubernetes manifest, a Helm chart; read the drift, the blast radius and the cost delta from the saved plan, then stage the apply behind a health gate with a rollback per stage.
 
 - Category: `planning`
 - Phase: `iac-change`
@@ -7366,7 +7366,7 @@ These surfaces are generated command references, not installed Hermes workflow s
 
 ### data-pipelines
 
-[omh] Data pipeline work -- an ETL or streaming job, a backfill or replay, duplicate events, a schema change downstream, a lineage question, a data-quality regression: make every rerun idempotent, bound every replay, and gate each load on observed checks.
+[omh] Data pipeline work on an ETL or streaming job: a backfill or replay, duplicate events, a schema change downstream, a lineage question, a data-quality regression; make every rerun idempotent, bound every replay, and gate each load on observed checks.
 
 - Category: `planning`
 - Phase: `data-pipelines`
@@ -7441,7 +7441,7 @@ These surfaces are generated command references, not installed Hermes workflow s
 
 ### model-finetuning
 
-[omh] Fine-tuning a model on your own data -- SFT, DPO, RLVR or a LoRA adapter: decide first whether prompting or retrieval already closes the gap, choose the method from the data you have, and promote a checkpoint only when it beats the untuned baseline on a held-out eval.
+[omh] Fine-tuning a model on your own data: SFT, DPO, RLVR or a LoRA adapter; decide first whether prompting or retrieval already closes the gap, choose the method from the data you have, and promote a checkpoint only when it beats the untuned baseline on a held-out eval.
 
 - Category: `planning`
 - Phase: `model-finetuning`
@@ -7517,7 +7517,7 @@ These surfaces are generated command references, not installed Hermes workflow s
 
 ### mobile-release
 
-[omh] Releasing an iOS or Android app through the stores -- signing, the privacy manifest, a TestFlight or Play beta, a staged rollout, a hotfix: prepare each gate the store enforces, and plan the halt and the next build before the rollout starts, because a store release cannot be rolled back.
+[omh] Releasing an iOS or Android app through a store: signing, the privacy manifest, a TestFlight or Play beta, a staged rollout, a hotfix; prepare each gate the store enforces, and plan the halt and the next build before the rollout starts, because a store release cannot be rolled back.
 
 - Category: `planning`
 - Phase: `mobile-release`
@@ -7668,7 +7668,7 @@ These surfaces are generated command references, not installed Hermes workflow s
 
 ### data-share-review
 
-[omh] Before data leaves the team -- a dataset, log, ticket export or transcript excerpt bound for a vendor, a public issue, a model provider or a training corpus: classify every field, minimize first, pseudonymize with the mapping kept local, and call it redacted only after an observed residual scan.
+[omh] Before data leaves the team: a dataset, log, ticket export or transcript excerpt bound for a vendor, a public issue, a model provider or a training corpus; classify every field, minimize first, pseudonymize with the mapping kept local, and call it redacted only after an observed residual scan.
 
 - Category: `review`
 - Phase: `data-share-review`
@@ -7743,7 +7743,7 @@ These surfaces are generated command references, not installed Hermes workflow s
 
 ### release-cut
 
-[omh] Shipping a versioned release -- tag it, stage it behind a canary, or roll back the last deploy: decide what goes in, the version, the rollout stages, and a rollback with its trigger and exact command before it is needed.
+[omh] Shipping a versioned release: tag it, stage it behind a canary, or roll back the last deploy; decide what goes in, the version, the rollout stages, and a rollback with its trigger and exact command before it is needed.
 
 - Category: `planning`
 - Phase: `release-cut`
@@ -7819,7 +7819,7 @@ These surfaces are generated command references, not installed Hermes workflow s
 
 ### spend-gate
 
-[omh] Spending money on the user's behalf -- a card checkout, an HTTP 402 or pay-per-request call, a wallet transfer, a booking, a paid data endpoint: show a pre-spend card (payee, total with fees, cap, refund terms, approver) first, and call it done only on an observed receipt.
+[omh] Spending money on the user's behalf: a card checkout, an HTTP 402 or pay-per-request call, a wallet transfer, a booking, a paid data endpoint; show a pre-spend card (payee, total with fees, cap, refund terms, approver) first, and call it done only on an observed receipt.
 
 - Category: `spend-control`
 - Phase: `pre-spend`
@@ -9024,7 +9024,7 @@ These surfaces are generated command references, not installed Hermes workflow s
 
 ### model-compression
 
-[omh] Making a model smaller or cheaper by changing its weights: quantization (GPTQ, AWQ, GGUF, bitsandbytes, FP8, quantization-aware training), pruning, or distillation into a smaller student, sized to the target hardware, calibrated on the task's own data, and kept only when it holds quality on the person's own eval.
+[omh] Making a model smaller by changing its weights: cheaper through quantization (GPTQ, AWQ, GGUF, bitsandbytes, FP8, quantization-aware training), pruning, or distillation into a smaller student, sized to the target hardware, calibrated on the task's own data, and kept only when it holds quality on the person's own eval.
 
 - Category: `planning`
 - Phase: `model-compression`
@@ -9626,7 +9626,7 @@ These surfaces are generated command references, not installed Hermes workflow s
 
 ### jev-ask
 
-[omh] User named Jev for yes/no or pick-one probabilities: Jev ask: typed yes/no, pick-one, or scored questions to Jev with your own key; returns probabilities, never prose.
+[omh] User asks Jev for yes/no or pick-one probabilities: Jev ask: typed yes/no, pick-one, or scored questions to Jev with your own key; returns probabilities, never prose.
 
 - Category: `gateway`
 - Phase: `jev-ask`
@@ -10818,7 +10818,7 @@ These surfaces are generated command references, not installed Hermes workflow s
 
 ### external-connector-readiness
 
-[omh] Evaluating a plugin, connector, or API for adoption: external connector readiness - assess whether a named plugin, connector, API, data provider, or multimodal route is safe, affordable, fresh, and observable; use `executor-runtime-readiness` for coding-owner choice and `toolbelt-readiness` for missing capability inventory.
+[omh] Evaluating a plugin, connector or API for adoption: external connector readiness - assess whether a named plugin, connector, API, data provider, or multimodal route is safe, affordable, fresh, and observable; use `executor-runtime-readiness` for coding-owner choice and `toolbelt-readiness` for missing capability inventory.
 
 - Category: `connector`
 - Phase: `connector-readiness`
