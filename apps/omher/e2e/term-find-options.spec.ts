@@ -110,6 +110,30 @@ test("an invalid pattern (an open bracket) shows the field in an error state and
   expect(errors).toEqual([]);
 });
 
+test("a theme change while the bar holds an invalid pattern does not throw", async ({ page }) => {
+  await openFind(page);
+  await regexBtn(page).click();
+  await input(page).fill("foo");
+  await expect(count(page)).toHaveText(/^\d of 4$/);
+  await input(page).fill("(");
+  await expect(count(page)).toHaveText("Invalid pattern");
+  const error = await page.evaluate(async () => {
+    const host = document.querySelector('[data-testid="terminal"] .xterm');
+    const w = window as unknown as { __omherTerms: Set<{ element?: HTMLElement; options: { theme?: unknown } }> };
+    const term = [...w.__omherTerms].find((t) => t.element === host)!;
+    const { finderOf } = (await import("/src/sessions/term/engine-find.ts" as string)) as { finderOf(t: unknown): { restyle(): void } | undefined };
+    term.options.theme = { background: "#ffffff", foreground: "#000000" };
+    try {
+      finderOf(term)!.restyle();
+      return null;
+    } catch (e) {
+      return String(e);
+    }
+  });
+  expect(error).toBeNull();
+  await expect(count(page)).toHaveText("Invalid pattern");
+});
+
 test("Alt+C and Alt+R flip the toggles from the field; they hold for the next bar in the page load", async ({ page }) => {
   await openFind(page);
   await input(page).fill("fo+");

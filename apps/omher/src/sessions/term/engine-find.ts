@@ -251,6 +251,8 @@ export function makeFinder(term: Terminal): Finder {
       // a font size or a padding is a new look too, and no new colour
       if (sameColors(next, colors)) return;
       colors = next;
+      // a pattern that does not compile has no matches to recolour, and the add-on would throw on it
+      if (how.regex && !validPattern(wanted)) return;
       // the add-on keeps the fills of a text it has searched: drop them, then find the same match again. It
       // searches from the selection, so the active match is selected first (a click or the person's own selection
       // may have replaced find's), and what the person had selected, or nothing, is put back afterwards. A person
