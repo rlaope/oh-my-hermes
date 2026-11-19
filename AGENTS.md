@@ -215,7 +215,10 @@ and evidence obvious to a reviewer reading the PR without the chat history.
   Hermes cron job runs it on Hermes' interpreter before the judging step. It is
   stdlib only and read-only: GETs to Slack `auth.test` and
   `conversations.history`, or Discord `/users/@me` and
-  `/channels/{id}/messages`, nothing posted, edited or joined. Hermes strips bot
+  `/channels/{id}/messages`, nothing posted, edited or joined. Its Slack-only
+  brief mode (the omher briefing, `"mode": "brief"`) also GETs
+  `users.conversations`, `conversations.members`, `conversations.replies` and
+  `users.info`, and reads its own job's Hermes run records. Hermes strips bot
   tokens from a cron script's environment, so it reads exactly
   `SLACK_BOT_TOKEN` or `DISCORD_BOT_TOKEN` by key name: from the environment
   first, else that key from `$HERMES_HOME/.env`. It never prints or stores it
