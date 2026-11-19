@@ -168,14 +168,52 @@ def _load_yaml(path: Path) -> dict:
     if hit is not None and hit[0] == st.st_mtime_ns and hit[1] == st.st_size:
         return hit[2]
     try:
-        import yaml  # Hermes' own dependency; absent only outside its venv
-        loader = getattr(yaml, "CSafeLoader", None) or yaml.SafeLoader
-        data = yaml.load(path.read_text(encoding="utf-8"), Loader=loader)  # noqa: S506 - a safe loader
+        data = _yaml_safe_load(path.read_text(encoding="utf-8"))
         data = data if isinstance(data, dict) else {}
     except Exception:
         data = {}
     _YAML_CACHE[key] = (st.st_mtime_ns, st.st_size, data)
     return data
+
+
+def _yaml_safe_load(text: str):
+    """*text* parsed the way the Hermes this bridge serves parses its config. Hermes 0.22 and later read YAML with
+    ruamel.yaml in YAML 1.1 mode through their own `hermes_yaml` module and no longer depend on PyYAML, so an
+    environment without an extra that happens to pull PyYAML in has no `yaml` module; Hermes 0.21.x read it with
+    PyYAML. `hermes_yaml` sits at the top of the Hermes checkout that `ensure_hermes_on_path` puts on sys.path."""
+    try:
+        import hermes_yaml
+    except ImportError:  # Hermes 0.21.x, or ruamel missing from this interpreter
+        import yaml
+        loader = getattr(yaml, "CSafeLoader", None) or yaml.SafeLoader
+        return yaml.load(text, Loader=loader)  # noqa: S506 - a safe loader
+    return hermes_yaml.safe_load(text)
+
+
+def _yaml_safe_dump(data: dict) -> str:
+    """*data* as YAML text, written by the same library `_yaml_safe_load` reads with."""
+    try:
+        import hermes_yaml
+    except ImportError:
+        import yaml
+        return yaml.safe_dump(data, sort_keys=False, allow_unicode=True)
+    return hermes_yaml.safe_dump(data, sort_keys=False)
+
+
+def _yaml_events(stream):
+    """`(events, kinds)`: the parse events of the YAML *stream*, and the module holding their classes
+    (`ScalarEvent`, `MappingStartEvent`, ...), from the library the config loader above picks: ruamel.yaml where
+    Hermes has `hermes_yaml` (its pure parser, the one `hermes_yaml` lets define what parses), else PyYAML. A
+    parser only: nothing is built from the stream."""
+    try:
+        import hermes_yaml  # noqa: F401 - only says that this Hermes reads YAML with ruamel
+        from ruamel.yaml import YAML
+        from ruamel.yaml import events as kinds
+    except ImportError:
+        import yaml
+        loader = getattr(yaml, "CSafeLoader", None) or yaml.SafeLoader
+        return yaml.parse(stream, Loader=loader), yaml
+    return YAML(typ="safe", pure=True).parse(stream), kinds
 
 
 def discover_bots(home: Path) -> list[dict]:
@@ -281,7 +319,6 @@ def write_display_name(profile_dir: Path, name: str) -> None:
         return
     except ImportError:
         pass  # Hermes' writer (or its lazy `utils` import) is not reachable: it failed before writing anything
-    import yaml
     path = profile_dir / "profile.yaml"
     data = dict(_load_yaml(path))  # a copy: the parsed mapping is cached and shared
     if name:
@@ -289,7 +326,7 @@ def write_display_name(profile_dir: Path, name: str) -> None:
     else:
         data.pop("display_name", None)
     tmp = path.with_name(f".profile.yaml.{uuid.uuid4().hex}.tmp")
-    tmp.write_text(yaml.safe_dump(data, sort_keys=False, allow_unicode=True), encoding="utf-8")
+    tmp.write_text(_yaml_safe_dump(data), encoding="utf-8")
     tmp.replace(path)
 
 
@@ -869,12 +906,11 @@ def mcp_server_names(path: Path) -> dict:
     other scalar (a url, headers, env, auth: a credential may sit there) is dropped as it passes, so no other value
     of the file is kept, returned or cached."""
     try:
-        import yaml  # Hermes' own dependency; absent only outside its venv
-        loader = getattr(yaml, "CSafeLoader", None) or yaml.SafeLoader
         out: dict[str, dict] = {}
         stack: list[list] = []  # one per open collection: [is_map, kept key or None, awaiting a key, was a key]
         with path.open(encoding="utf-8") as f:
-            for ev in yaml.parse(f, Loader=loader):
+            events, yaml = _yaml_events(f)  # `yaml`: the module of the event classes
+            for ev in events:
                 if isinstance(ev, (yaml.MappingEndEvent, yaml.SequenceEndEvent)):
                     was_key = stack.pop()[3]
                     if stack and stack[-1][0]:

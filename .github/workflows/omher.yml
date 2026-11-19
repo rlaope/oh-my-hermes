@@ -33,7 +33,7 @@ jobs:
         with:
           python-version: "3.11"
       - name: Install the bridge's test dependencies
-        run: python -m pip install "websockets>=14" pyyaml
+        run: python -m pip install "websockets>=14" pyyaml "ruamel.yaml>=0.18"  # ruamel: the YAML of Hermes 0.22+
       - name: Bridge unit tests (FakeGateway)
         working-directory: apps/omher
         run: python -m unittest discover -s bridge/tests -v
