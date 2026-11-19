@@ -56,7 +56,10 @@
 .tfind-b:disabled {
   opacity: 0.4;
 }
-/* the field when its pattern is not a valid regular expression */
+/* the field when its pattern is not a valid regular expression, and the words that say so */
+.tfind-n.tfind-bad {
+  color: var(--danger);
+}
 .tfind-q.tfind-bad {
   color: var(--danger);
   box-shadow: inset 0 -1px 0 var(--danger);
@@ -67,8 +70,12 @@
   font: 600 11px var(--mono);
   letter-spacing: -0.02em;
 }
-.tfind-opt[aria-pressed="true"] {
-  background: var(--seg-on);
+/* on: a fill and a hairline that show on the popover in both themes (the segmented fill is the popover's own white
+   in the light theme) */
+.tfind-opt[aria-pressed="true"],
+.tfind-opt[aria-pressed="true"]:hover {
+  background: var(--raise2);
+  box-shadow: inset 0 0 0 1px var(--line-strong);
   color: var(--ink);
 }
 .tfind-up {

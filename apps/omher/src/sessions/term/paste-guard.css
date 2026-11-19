@@ -38,7 +38,7 @@
   text-overflow: ellipsis;
 }
 .tpaste-m {
-  color: var(--quiet);
+  color: var(--muted);
 }
 .tpaste-r {
   display: flex;
@@ -57,11 +57,14 @@
 .tpaste-b:hover {
   background: var(--raise2);
 }
-.tpaste-ok {
-  background: var(--seg-on);
-  border-color: transparent;
+.tpaste-ok,
+.tpaste-ok:hover {
+  background: var(--raise2);
+  border-color: var(--line-strong);
+  font-weight: 600;
 }
-.tpaste-b:focus-visible {
+/* the confirm opens with Paste focused (Enter pastes): the ring says so, also when the paste came from the mouse */
+.tpaste-b:focus {
   outline: 2px solid var(--accent);
   outline-offset: 1px;
 }

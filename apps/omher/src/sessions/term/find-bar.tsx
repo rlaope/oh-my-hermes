@@ -115,7 +115,7 @@ export function FindBar({ req, onClose }: { req: FindRequest; onClose: () => voi
           }
         }}
       />
-      <span className="tfind-n" aria-live="polite" data-testid="term-find-count">
+      <span className={bad ? "tfind-n tfind-bad" : "tfind-n"} aria-live="polite" data-testid="term-find-count">
         {bad ? t("find.badRegex") : findCountText(res, text)}
       </span>
       <button
