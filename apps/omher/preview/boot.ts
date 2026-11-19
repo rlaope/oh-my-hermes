@@ -14,6 +14,9 @@ try {
   Object.defineProperty(window, "localStorage", { configurable: true, get: () => ss });
   if (!ss.getItem("omher.theme")) ss.setItem("omher.theme", "dark");
   ss.setItem("omher.notify", "off");
+  // The staged terminals draw box frames (Codex's header, Claude Code's welcome box): at the app's default 1.2 line
+  // height the frame's │ sides break between rows. Line height 1 joins them.
+  if (!ss.getItem("omher.term")) ss.setItem("omher.term", JSON.stringify({ lineHeight: 1 }));
   ss.setItem("omher.sounds", "off");
   ss.setItem("omher.lang", siteLang());
   // From 0.2.10 the sidebar lists only the roster (one bot on a first run); the story plays on all four.

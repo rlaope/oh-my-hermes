@@ -299,7 +299,7 @@ function say(role: keyof typeof term, text: string) {
 
 // What each CLI draws, in the shapes the real ones use (Codex CLI 0.169, Claude Code 2.1): Codex's header box, `›`
 // for the ask, `•` for its words, a green `•` with a bold verb for a tool and `└` for what it returned; Claude Code's
-// mascot header, `>` for the ask, `⏺` for its words, a green `⏺ Tool(arg)` and `⎿` for the result. Each step ends on
+// welcome box, `>` for the ask, `⏺` for its words, a green `⏺ Tool(arg)` and `⎿` for the result. Each step ends on
 // a line that says what the agent is doing, so the card's second line (the last line on screen) reads as a sentence.
 const B = "\x1b[1m", D = "\x1b[2m", G = "\x1b[32m", X = "\x1b[0m";
 const CC = "\x1b[38;2;217;119;87m"; // Claude Code's orange
@@ -321,17 +321,69 @@ const codexAsk = (t: string) => `${NL}${D}›${X} ${t}${NL}`;
 const codexSays = (t: string) => `${NL}• ${t}${NL}`;
 const codexTool = (verb: string, what: string, out: string[] = []) =>
   `${NL}${G}•${X} ${B}${verb}${X} ${what}${NL}${out.map((l, i) => `  ${D}${i ? " " : "└"} ${l}${X}${NL}`).join("")}`;
-const claudeHeader = () =>
-  `${CC} ▐▛███▜▌${X}   ${B}Claude Code${X} ${D}v2.1.327${X}${NL}` +
-  `${CC}▝▜█████▛▘${X}  ${D}Opus 5.5 · Claude Max${X}${NL}` +
-  `${CC}  ▘▘ ▝▝${X}    ${D}~/code/web-app${X}${NL}`;
+// Claude Code's welcome box, not its block-character mascot: the page's terminal draws block glyphs from the font
+// (the DOM renderer), which leaves dark seams between cells and rows, and the mascot read as sliced.
+function claudeHeader(): string {
+  const w = 44;
+  const rows: [string, string][] = [
+    [`${CC}✻${X} Welcome to ${B}Claude Code${X}!`, "✻ Welcome to Claude Code!"],
+    ["", ""],
+    [`  ${D}/help for help, /status for your current setup${X}`, "  /help for help, /status for your current setup"],
+    ["", ""],
+    [`  ${D}cwd: ~/code/web-app${X}`, "  cwd: ~/code/web-app"],
+  ];
+  const wide = Math.max(w, ...rows.map(([, p]) => p.length));
+  return `${CC}╭${"─".repeat(wide + 2)}╮${X}${NL}${rows.map(([s, p]) => `${CC}│${X} ${s}${" ".repeat(wide - p.length)} ${CC}│${X}${NL}`).join("")}${CC}╰${"─".repeat(wide + 2)}╯${X}${NL}`;
+}
 const claudeAsk = (t: string) => `${NL}${D}>${X} ${t}${NL}`;
 const claudeSays = (t: string) => `${NL}⏺ ${t}${NL}`;
 const claudeTool = (tool: string, arg: string, out: string) => `${NL}${G}⏺${X} ${B}${tool}${X}(${arg})${NL}  ${D}⎿  ${out}${X}${NL}`;
-/** Both cards' screens at the start of a loop: the CLI's header, the person's ask and the agent's first words. */
+const RED = "\x1b[31m";
+/** Each card's session, step by step. A loop opens with each one already a few minutes in (the first `AT_START`
+ *  steps on screen, so a card opened at any moment shows real work, never a header alone), and the story adds the
+ *  rest; the last step is the agent's summary. */
+const CODEX_STEPS: string[] = [
+  codexSays("I'll start with the search handler and the index it queries."),
+  codexTool("Explored", "", ["Read api/search/handler.go", "Read api/search/index.go"]) + codexSays("The index stores each page's lang; the handler ignores it."),
+  codexTool("Ran", "go test ./api/search/...", ["ok  acme/web-app/api/search  0.84s"]) + codexSays("Green before the change. Adding the filter now."),
+  codexTool("Edited", `api/search/handler.go (${G}+22${X} ${RED}-6${X})`) + codexSays("Reading ?lang= and passing it to the index query."),
+  codexTool("Edited", `api/search/handler_test.go (${G}+41${X} ${RED}-0${X})`) + codexSays("Four new tests. Running the whole suite."),
+  codexTool("Ran", "go test ./...", ["ok  acme/web-app/api/search  1.02s", "ok  acme/web-app/api/index   0.61s"]) + codexSays("All green: /search?lang=de returns only German pages."),
+  codexTool("Ran", "git diff --stat", ["2 files changed, 63 insertions(+), 6 deletions(-)"]) + codexSays("Done: /search takes ?lang= now, with 4 tests. Open a PR?"),
+];
+const CLAUDE_STEPS: string[] = [
+  claudeSays("I'll read the current page and the filter code first."),
+  claudeTool("Read", "docs/search.md", "Read 142 lines") + claudeSays("No Filters section yet. Checking the filter code."),
+  claudeTool("Read", "src/search/filters.ts", "Read 88 lines") + claudeSays("Three filters: lang, tag and date. Writing the section."),
+  claudeTool("Update", "docs/search.md", "Updated docs/search.md with 48 additions and 2 removals") + claudeSays("Building the docs to check the section."),
+  claudeTool("Bash", "pnpm docs:build", "Built 14 pages in 3.2s") + claudeSays("Done: a Filters section with an example for each."),
+];
+// While an agent works, its last line is a live status, as both CLIs draw one ("esc to interrupt"); the next step
+// erases it first. It names what the agent is doing, so the card's second line still reads as a sentence. After the
+// summary there is none: the agent is done.
+const CODEX_STATUS = ["Exploring the search code", "Running the search tests", "Adding the filter", "Writing tests", "Running the whole suite", "Checking the diff"];
+const CLAUDE_STATUS = ["Reading docs/search.md", "Reading the filter code", "Writing the Filters section", "Building the docs"];
+const status = (role: keyof typeof term, n: number): string => {
+  const t = (role === "codex" ? CODEX_STATUS : CLAUDE_STATUS)[n - 1];
+  if (!t) return "";
+  return role === "codex" ? `${NL}${D}•${X} ${t}… ${D}(esc to interrupt)${X}` : `${NL}${CC}✻${X} ${t}… ${D}(esc to interrupt)${X}`;
+};
+/** Erases the live status line and the blank line above it (the next step starts with its own blank line). */
+const UNSTATUS = "\r\x1b[2K\x1b[1A";
+const AT_START = { codex: 3, claude: 2 } as const;
+let termStep = { codex: 0, claude: 0 };
+/** The next step of a card's session. */
+function step(role: keyof typeof term) {
+  const all = role === "codex" ? CODEX_STEPS : CLAUDE_STEPS;
+  if (termStep[role] >= all.length) return;
+  const n = ++termStep[role];
+  say(role, UNSTATUS + all[n - 1] + status(role, n));
+}
+/** Both cards' screens at the start of a loop: the CLI's header, the person's ask and the steps already done. */
 function termsAtStart() {
-  say("codex", CLEAR + codexHeader() + codexAsk("Add a lang filter to GET /search, with tests.") + codexSays("I'll start with the search handler and the index it queries."));
-  say("claude", CLEAR + claudeHeader() + claudeAsk("Write the Filters section of docs/search.md.") + claudeSays("I'll read the current page and the filter code first."));
+  termStep = { codex: AT_START.codex, claude: AT_START.claude };
+  say("codex", CLEAR + codexHeader() + codexAsk("Add a lang filter to GET /search, with tests.") + CODEX_STEPS.slice(0, AT_START.codex).join("") + status("codex", AT_START.codex));
+  say("claude", CLEAR + claudeHeader() + claudeAsk("Write the Filters section of docs/search.md.") + CLAUDE_STEPS.slice(0, AT_START.claude).join("") + status("claude", AT_START.claude));
 }
 
 // ---- one loop --------------------------------------------------------------------------------------------------
@@ -396,16 +448,19 @@ function startLoop() {
   const { flake } = REST;
   steps = [
     [k(0.2), () => openNode("page-styles")],
-    [k(1), () => say("codex", codexTool("Explored", "", ["Read api/search/handler.go", "Read api/search/index.go"]) + codexSays("The index stores each page's lang; the handler ignores it."))],
+    [k(4), () => step("codex")],
+    [k(8), () => step("claude")],
+    [k(11), () => step("codex")],
+    [k(17), () => step("claude")],
+    [k(19), () => step("codex")],
+    [k(26), () => step("codex")],
+    [k(29), () => step("claude")],
     [k(1.8), () => { stream("page-styles", 2); pushRun(); }],
     [k(2.6), () => ev("friren", { event: "status", text: "Reading the updater section" })],
     [k(3.2), () => working("Checking code blocks in light and dark", "Moving the sidebar to the new colors")],
-    [k(4), () => say("codex", codexTool("Ran", "go test ./api/search/...", ["ok  acme/web-app/api/search  0.84s"]) + codexSays("Green before the change. Adding the filter now."))],
     [k(5), () => allow(notesAsk)],
     [k(6), () => { stream("page-styles", 3); pushRun(); }],
-    [k(7), () => say("claude", claudeTool("Read", "docs/search.md", "Read 142 lines") + claudeSays("No Filters section yet. Checking the filter code."))],
     [k(7.6), () => working("Checking code blocks in light and dark", "Editing docs/styles/search.css")],
-    [k(10), () => say("codex", codexTool("Edited", `api/search/handler.go (${G}+22${X} ${"\x1b[31m"}-6${X})`) + codexSays("Reading ?lang= and passing it to the index query."))],
     [k(10.5), () => { stream("page-styles", 4); pushRun(); working("Writing the dark code theme", "Editing docs/styles/search.css"); }],
     [k(12.5), () => ev("pip", { event: "message", id: `pip-${loop}`, text: "Standup notes are filed: 4 updates, 1 blocker (the iOS build)." })],
     [k(13.2), () => {
@@ -414,11 +469,8 @@ function startLoop() {
       threadEnd(flake.id);
     }],
     [k(14), () => { setNode("code-colors", "done"); pushRun(); working("Editing docs/styles/search.css"); }],
-    [k(12.5), () => say("claude", claudeTool("Read", "src/search/filters.ts", "Read 88 lines") + claudeSays("Three filters: lang, tag and date. Writing the section."))],
-    [k(15.5), () => say("codex", codexTool("Edited", `api/search/handler_test.go (${G}+41${X} ${"\x1b[31m"}-0${X})`) + codexSays("Four new tests. Running the whole suite."))],
     [k(16), () => { stream("page-styles", 5); pushRun(); }],
     [k(17.5), () => { setNode("page-styles", "done"); setNode("contrast", "running"); pushRun(); working("Checking contrast in light and dark"); }],
-    [k(19), () => say("codex", codexTool("Ran", "go test ./...", ["ok  acme/web-app/api/search  1.02s", "ok  acme/web-app/api/index   0.61s"]) + codexSays("All green: /search?lang=de returns only German pages."))],
     [k(20.5), () => {
       setNode("contrast", "done"); setNode("verify-pr", "running");
       runs.handoffs[RUN]["verify-pr"] = STREAM["verify-pr"][0];
@@ -426,7 +478,6 @@ function startLoop() {
       working("Building the docs");
       openNode("verify-pr");
     }],
-    [k(21), () => say("claude", claudeTool("Update", "docs/search.md", "Updated docs/search.md with 48 additions and 2 removals") + claudeSays("Building the docs to check the section."))],
     [k(22.5), () => {
       ev("friren", { event: "tool.end", tool_id: `f${loop}`, name: "web_extract", ok: true, ms: 50_000 });
       ev("friren", { event: "message", id: `fr-${loop}`, text: "Wrote up the Tauri 2.4 notes: delta updates, smaller bundles, nothing breaking for us." });
@@ -434,9 +485,7 @@ function startLoop() {
       ev("friren", { event: "bot.status", status: "online", running: false });
     }],
     [k(23.5), () => { stream("verify-pr", 2); pushRun(); working("Checking 14 pages in light and dark"); }],
-    [k(25), () => say("codex", codexTool("Ran", "git diff --stat", ["2 files changed, 63 insertions(+), 6 deletions(-)"]) + codexSays("Done: /search takes ?lang= now, with 4 tests. Open a PR?"))],
     [k(27), () => { stream("verify-pr", 3); pushRun(); working("Opening the pull request"); }],
-    [k(28.5), () => say("claude", claudeTool("Bash", "pnpm docs:build", "Built 14 pages in 3.2s") + claudeSays("Done: a Filters section with an example for each."))],
     [k(31), () => { stream("verify-pr", 4); setNode("verify-pr", "done"); pushRun("done"); }],
     [k(32), () => {
       ev("kami", { event: "message", id: `k-pr-${loop}`, text: `The PR is up: ${PR_URL}. I told Sam in #releases, and I opened two threads, one for the 2.4 release post and one to check the docs links.` });
