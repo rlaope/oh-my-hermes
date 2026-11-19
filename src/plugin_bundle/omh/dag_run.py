@@ -52,6 +52,14 @@ superseded. ``extend`` adds a round of nodes to a run whose every node passed
 when the goal check finds work missing, at most `MAX_EXTEND_ROUNDS` per run.
 Each node records where it came from (``origin``): ``define``,
 ``repair:<root>`` or ``extend:<round>``.
+
+A re-run can carry work forward, only when the parent asks
+(``carry_forward``, the base revision the run builds on): a node accepted in
+an earlier run of the same goal and base, with the same id, prompt, write
+scope, depends_on and role, its handoff checked and still on this host, is
+recorded ``carried`` and never handed out; its dependents read the earlier
+handoff (`carry_forward`). A verify node is never carried, so it runs over
+the carried work, and a carried node whose parent runs again runs again too.
 """
 
 from __future__ import annotations
@@ -204,8 +212,13 @@ _MARKER_PATTERNS: Final = {
     for marker in PROMPT_MARKERS
 }
 
+# A node a re-run took over from an earlier run's accepted node (`carry_forward`): not an outcome settle takes.
+CARRIED: Final = "carried"
+# The base revision `carry_forward` matches runs on, as the parent passes it (a commit sha, a tag, a branch@sha).
+_BASE: Final = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._/@-]{0,63}$")
+
 # Node states the derivation produces.
-SATISFIED: Final = frozenset({"accepted", "repaired"})
+SATISFIED: Final = frozenset({"accepted", "repaired", CARRIED})
 OPEN: Final = frozenset({"handed_out", "running", "returned"})
 LIVE: Final = OPEN | {"parked"}
 
@@ -349,7 +362,21 @@ def locked(path: Path) -> AbstractContextManager[str]:
 
 def session_runs(omh_home: Path, session_id: str) -> list[tuple[dict[str, Any], Path]]:
     """Every readable run stored under one session, newest change first."""
-    directory = session_dir(omh_home, session_id)
+    return _runs_in(session_dir(omh_home, session_id))
+
+
+def every_run(omh_home: Path) -> list[tuple[dict[str, Any], Path]]:
+    """Every readable run of this OMH home, any session, newest change first: what `carry_forward` matches."""
+    root = Path(omh_home) / "runtime" / DAG_DIRNAME
+    try:
+        folders = [path for path in root.iterdir() if path.is_dir() and not path.is_symlink()]
+    except OSError:
+        return []
+    runs = [item for folder in folders for item in _runs_in(folder)]
+    return sorted(runs, key=lambda item: _number(item[0].get("updated_at")) or 0.0, reverse=True)
+
+
+def _runs_in(directory: Path) -> list[tuple[dict[str, Any], Path]]:
     try:
         paths = [path for path in directory.iterdir()
                  if path.suffix == ".json" and not path.name.startswith(".") and not path.is_symlink()]
@@ -1014,6 +1041,8 @@ def derive(record: Mapping[str, Any], children: Sequence[Mapping[str, Any]], now
         info: dict[str, Any] = {"child": None, "attempts": len(attempts), "waits_on": [], "held_by": []}
         if last is None or last.get("outcome") in ("retry", "escalated"):
             info["state"] = "pending"
+        elif last.get("outcome") == CARRIED:
+            info["state"] = CARRIED
         elif last.get("outcome") in OUTCOMES:
             info["state"] = str(last["outcome"])
             info["child"] = attempt_child(last, bound.get(node_id, []))
@@ -1230,7 +1259,9 @@ def counts(record: Mapping[str, Any], derived: Mapping[str, Mapping[str, Any]]) 
     live = {node_id: info for node_id, info in derived.items() if info["state"] != "superseded"}
     failures = open_failures(record, derived)
     labels = {str(node["id"]): str(node["label"]) for node in record["nodes"]}
+    carried = sum(1 for info in live.values() if info["state"] == CARRIED)
     return {
+        **({"carried": carried} if carried else {}),
         "total": len(live),
         "done": sum(1 for info in live.values() if info["state"] in SATISFIED),
         "running": sum(1 for info in live.values() if info["state"] == "running"),
@@ -1252,6 +1283,8 @@ def status_line(record: Mapping[str, Any], derived: Mapping[str, Mapping[str, An
     """
     tally = counts(record, derived)
     parts = [f"DAG {record['name']}", f"{tally['done']}/{tally['total']} done", f"{tally['running']} running"]
+    if tally.get("carried"):
+        parts.append(f"carried {tally['carried']} of {tally['total']} nodes from {record.get('carried_from')}")
     if tally["parked"]:
         parts.append(f"{tally['parked']} parked")
     if tally["failed"]:
@@ -1492,6 +1525,15 @@ def reads_for(record: Mapping[str, Any], derived: Mapping[str, Mapping[str, Any]
     return reads
 
 
+def read_handoff_path(record: Mapping[str, Any], omh_home: Path, node_id: str) -> str:
+    """Where a dependent reads ``node_id``'s handoff: the earlier run's file for a carried node, else its own."""
+    node = next((item for item in record["nodes"] if str(item["id"]) == node_id), None)
+    last = (node.get("attempts") or [None])[-1] if node is not None else None
+    if isinstance(last, Mapping) and last.get("outcome") == CARRIED and isinstance(last.get("carried_from"), Mapping):
+        return str(last["carried_from"]["handoff"])
+    return node_handoff(record, omh_home, node_id)
+
+
 def _fit(items: Sequence[str], limit: int, sep: str) -> tuple[list[str], int]:
     """The leading ``items`` whose ``sep`` join fits ``limit`` (the first always), and how many were left out."""
     shown = list(items[:1])
@@ -1599,14 +1641,14 @@ def task_for(
         "file and your final message.",
     ])
     if node["depends_on"]:
-        reads = ", ".join(node_handoff(record, omh_home, parent) for parent in reads_for(record, derived, node))
+        reads = ", ".join(read_handoff_path(record, omh_home, parent) for parent in reads_for(record, derived, node))
         lines.append(f"Read first: {reads}. A missing file means that part did not finish: stop and say so.")
     if is_verification(node):
         parents = {str(item["id"]): item["depends_on"] for item in record["nodes"]}
         preceding = ancestors(str(node["id"]), parents)
         for baseline in record["nodes"]:
             if str(baseline["id"]) in preceding and is_baseline(baseline):
-                lines.append(f"Baseline: Read {node_handoff(record, omh_home, str(baseline['id']))}. Exempt only a "
+                lines.append(f"Baseline: Read {read_handoff_path(record, omh_home, str(baseline['id']))}. Exempt only a "
                              "failure it lists that you re-ran here with the same test id and assertion/error "
                              "signature, under a comparable command and environment at the pinned base and candidate "
                              "revisions; report it as pre-existing. A same-id failure that changed, missing evidence, "
@@ -1615,6 +1657,11 @@ def task_for(
                              "goal done.")
         lines.append("Check the complete run goal, not only this node's local VERIFY. "
                      "Name each unmet or unobserved goal criterion; producer claims are not verification evidence.")
+        carried = [str(item["id"]) for item in record["nodes"]
+                   if str(item["id"]) in preceding and derived[str(item["id"])]["state"] == CARRIED]
+        if carried:
+            lines.append(f"Carried from run {record.get('carried_from')} without running again: {', '.join(carried)}. "
+                         "Check their work as you check the rest; an earlier run's acceptance is no evidence here.")
         criteria = run_criteria(record)
         if criteria:
             # The engine reads these lines from the handoff (`criterion_statuses`); a criterion without one is unobserved.
@@ -2175,6 +2222,8 @@ def node_rows(record: Mapping[str, Any], derived: Mapping[str, Mapping[str, Any]
             row["identity"] = node["identity"]
         if attempts and attempts[-1].get("reason"):
             row["reason"] = attempts[-1]["reason"]
+        if info["state"] == CARRIED and isinstance(attempts[-1].get("carried_from"), Mapping):
+            row["carried_from"] = dict(attempts[-1]["carried_from"])
         if info["state"] == "accepted" and handoff_unchecked(node):
             row.update(handoff_checked=False, handoff_unread=str(attempts[-1].get("handoff_unread") or ""))
         if info["state"] == "parked":
@@ -2190,4 +2239,124 @@ def node_rows(record: Mapping[str, Any], derived: Mapping[str, Mapping[str, Any]
         if node_id in ages:
             row["open_for_s"] = int(ages[node_id])
         rows.append(row)
+    return rows
+
+
+# ── carrying accepted nodes forward on a re-run ──────────────────────────
+
+
+def valid_base(value: object) -> str:
+    """The base revision ``carry_forward`` names, or a refusal."""
+    if not isinstance(value, str) or not _BASE.fullmatch(value.strip()):
+        raise DagRefusal("invalid_carry_forward",
+                         "carry_forward is the base revision this run builds on (a commit sha or tag, at most 64 "
+                         "characters, no spaces); pass the same value on every run a later one may carry from.")
+    return value.strip()
+
+
+def _carry_key(node: Mapping[str, Any]) -> tuple[str, list[str], list[str], str]:
+    """What must be equal for a node to be the same work: prompt digest, write scope, depends_on and role."""
+    return (hashlib.sha256(str(node["prompt"]).encode("utf-8")).hexdigest(), sorted(node["write_scope"]),
+            sorted(node["depends_on"]), node_role(node))
+
+
+def _carry_from(record: Mapping[str, Any], prior: Mapping[str, Any], handoff_of: Callable[[Mapping[str, Any], str], str],
+                now: float) -> tuple[dict[str, str], dict[str, str]]:
+    """``({node: earlier handoff}, {node: why not})`` for carrying ``record``'s nodes from one earlier run."""
+    earlier = {str(node["id"]): node for node in prior["nodes"]}
+    states = derive(prior, [], now)
+    carried: dict[str, str] = {}
+    refused: dict[str, str] = {}
+    for node in record["nodes"]:
+        node_id = str(node["id"])
+        old = earlier.get(node_id)
+        key, old_key = _carry_key(node), _carry_key(old) if old is not None else None
+        if is_verification(node) or node.get("role_guess") == "verify":
+            refused[node_id] = "verify_runs_again"
+        elif old is None or old.get("origin", "define") != "define":
+            refused[node_id] = "not_in_prior_run"
+        elif old_key is not None and key[0] != old_key[0]:
+            refused[node_id] = "prompt_changed"
+        elif old_key is not None and key[1] != old_key[1]:
+            refused[node_id] = "write_scope_changed"
+        elif old_key is not None and key[2] != old_key[2]:
+            refused[node_id] = "depends_on_changed"
+        elif old_key is not None and key[3] != old_key[3]:
+            refused[node_id] = "role_changed"
+        elif states[node_id]["state"] != "accepted":
+            refused[node_id] = f"prior_{states[node_id]['state']}"
+        elif handoff_unchecked(old):
+            refused[node_id] = "prior_handoff_not_checked"
+        elif not handoff_of(prior, node_id):
+            refused[node_id] = "prior_handoff_missing"
+        else:
+            carried[node_id] = handoff_of(prior, node_id)
+    # A node whose parent runs again builds on new work, so it runs again too.
+    parents = {str(node["id"]): node["depends_on"] for node in record["nodes"]}
+    moved = True
+    while moved:
+        moved = False
+        for node_id in list(carried):
+            if any(parent not in carried for parent in parents[node_id]):
+                del carried[node_id]
+                refused[node_id] = "parent_runs_again"
+                moved = True
+    return carried, refused
+
+
+def carry_forward(record: dict[str, Any], base: str, earlier: Sequence[Mapping[str, Any]], *,
+                  handoff_of: Callable[[Mapping[str, Any], str], str], now: float,
+                  remote: bool = False) -> dict[str, Any]:
+    """Record as ``carried`` the nodes an earlier run of the same goal and ``base`` already accepted. Returns what
+    was carried, from which run, and why each other node was not.
+
+    Only an earlier run with the same goal (spaces and case aside) whose own
+    define passed the same ``base`` counts, and neither run may write its
+    handoffs in a Docker or SSH terminal (``remote``; an earlier ``backend``).
+    Of those, the run carrying the most nodes, then the newest, is used. A node
+    is carried only when the earlier one has its id, prompt, write scope,
+    depends_on and role, was settled accepted with its handoff checked, and
+    ``handoff_of`` finds that handoff (its path, or ``""``); never a verify
+    node, and never a node whose parent runs again. ``record`` keeps ``base``
+    either way, so a later run can carry from it.
+    """
+    record["carry_base"] = base
+    goal = str(record.get("goal") or "").casefold()
+    runs = [] if remote or not goal else [
+        prior for prior in earlier
+        if prior.get("carry_base") == base and str(prior.get("goal") or "").casefold() == goal
+        and not prior.get("backend") and not prior.get("handoff_root")]
+    best: tuple[Mapping[str, Any], dict[str, str], dict[str, str]] | None = None
+    for prior in runs:
+        carried, refused = _carry_from(record, prior, handoff_of, now)
+        if best is None or len(carried) > len(best[1]):
+            best = (prior, carried, refused)
+    if best is None:
+        why = "remote_terminal" if remote else "no_goal" if not goal else "no_prior_run"
+        return {"base": base, "from_run": "", "carried": [],
+                "not_carried": [{"id": str(node["id"]), "reason": why} for node in record["nodes"]]}
+    prior, carried, refused = best
+    run = str(prior["run"])
+    reason = f"accepted in run {run} with the same prompt, write_scope, depends_on and base {base}"
+    for node in record["nodes"]:
+        node_id = str(node["id"])
+        if node_id in carried:
+            node["attempts"] = [{"n": 1, "outcome": CARRIED, "settled_at": now, "reason": reason,
+                                 "carried_from": {"run": run, "handoff": carried[node_id]}}]
+    if carried:
+        record["carried_from"] = run
+    return {"base": base, "from_run": run,
+            "carried": [{"id": node_id, "from_run": run, "reason": reason, "handoff": carried[node_id]}
+                        for node_id in (str(node["id"]) for node in record["nodes"]) if node_id in carried],
+            "not_carried": [{"id": node_id, "reason": why} for node_id, why in refused.items()]}
+
+
+def carried_nodes(record: Mapping[str, Any], derived: Mapping[str, Mapping[str, Any]]) -> list[dict[str, str]]:
+    """Every carried node with the run it came from and why, as define and status list them."""
+    rows = []
+    for node in record["nodes"]:
+        if derived[str(node["id"])]["state"] == CARRIED:
+            last = node["attempts"][-1]
+            rows.append({"id": str(node["id"]), "from_run": str(last["carried_from"]["run"]),
+                         "reason": str(last.get("reason") or ""), "handoff": str(last["carried_from"]["handoff"])})
     return rows

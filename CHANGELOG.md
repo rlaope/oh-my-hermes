@@ -39,6 +39,14 @@ All notable changes will be documented here.
   until each date; the price rows now point at the current page, and Argon's row is pinned by the same list-price
   test as Carbon's.
 
+- **A dag-ulw re-run can skip the nodes the last run already confirmed, and only when asked.**
+  `omh_dag action=define` takes an opt-in `carry_forward` with the base revision. A node an earlier run of the same
+  goal at that base accepted, with the same id, prompt, write scope and dependencies and its handoff still on disk, is
+  recorded `carried` and not handed out; its dependents read the earlier handoff. Verify nodes, nodes that failed or
+  were blocked, changed nodes and anything after a node that runs again always run. define and status list each
+  carried node with the run it came from, the status line says `carried N of M nodes from <run>`, and the goal
+  verdict still waits on the verify node, which is told which nodes were carried.
+
 - **omher.app has a Start Guide at `/guide/`, linked beside Docs in every header** (owner request, 2026-11-18). One
   page for someone new, with plain section titles that say what each part covers: what OMH does in three cards (a model per kind of work, `dag-ulw`, expert skills), install in
   three commands (`curl … | sh`, `omh setup`, `omh model`), categories and fallback shown on three real chains, plan
