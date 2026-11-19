@@ -47,13 +47,20 @@ async function tagged(page: Page, gpu = false): Promise<string> {
     if (before) await expect(term).not.toHaveAttribute("data-session", before);
     id = (await term.getAttribute("data-session")) as string;
   }
-  await page.evaluate((sid) => {
-    const w = window as unknown as { __omherTerms: Set<{ element?: HTMLElement; __sid?: string }> };
-    const host = document.querySelector('[data-testid="terminal"] .xterm');
-    const t = [...w.__omherTerms].find((x) => x.element === host);
-    if (!t) throw new Error("no terminal");
-    t.__sid = sid;
-  }, id);
+  // the dev-only terminal set fills when the terminal's look is first applied, which a loaded runner can reach
+  // after the session id is on the element: wait for this terminal to be in it, then tag it
+  await expect
+    .poll(() =>
+      page.evaluate((sid) => {
+        const w = window as unknown as { __omherTerms?: Set<{ element?: HTMLElement; __sid?: string }> };
+        const host = document.querySelector('[data-testid="terminal"] .xterm');
+        const t = [...(w.__omherTerms ?? [])].find((x) => x.element === host);
+        if (!t) return false;
+        t.__sid = sid;
+        return true;
+      }, id),
+    )
+    .toBe(true);
   await expect.poll(async () => (await screenOf(page, id)).lines.join("\n")).toContain("(mock)");
   return id;
 }
