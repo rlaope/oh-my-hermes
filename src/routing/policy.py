@@ -31,6 +31,7 @@ from .jev_addressing import jev_addressed_skill
 from .localization import normalized_phrase, phrase_is_spoken, routing_terms, routing_tokens
 from .materials_cues import OFFICE_FILE_MATERIAL_PHRASES
 from .model_compression_cues import MODEL_COMPRESSION_ANCHORS, MODEL_COMPRESSION_SHARED_PHRASES
+from .skill_eval_cues import SKILL_EVAL_ANCHORS, SKILL_EVAL_SHARED_PHRASES, skill_eval_phrase_spoken
 from ..plugin_bundle.omh.dag_ulw_cues import DAG_ULW, asks_about_dag_ulw, dag_ulw_control, declines_dag_ulw, invokes_dag_ulw
 from ..plugin_bundle.omh.invocation_cues import invoked_instruction
 from ..coding.pi_family_interop import PI_DISTRIBUTION_HOST, RUNTIME_SHORT_NAME
@@ -2250,6 +2251,10 @@ EVERYDAY_SENSE_PHRASES: dict[str, tuple[tuple[str, ...], frozenset[str]]] = {
     # the model smaller in Blender" name a conceptual, statistical or 3D model;
     # each phrase keeps this route only beside a word of model weights.
     "model-compression": (MODEL_COMPRESSION_SHARED_PHRASES, MODEL_COMPRESSION_ANCHORS),
+    # "is my skill any good at chess" and "my tennis skill evaluation" name a
+    # person's ability; each phrase keeps this route only alone or beside a
+    # word of agent skills or their hosts.
+    "skill-eval": (SKILL_EVAL_SHARED_PHRASES, SKILL_EVAL_ANCHORS),
     # "we need to backfill the open position on the team", "my family lineage
     # goes back to scotland", "duplicate events in my calendar" and "the batch
     # job at the bakery" are not pipelines; each phrase keeps this route only
@@ -6509,6 +6514,10 @@ def _bare_first_word_names_a_longer_skill(
         for name in names
         if name.startswith(f"{candidate}-")
     )
+    # "skill harness check" and "skill compatibility" name `skill-eval` by its
+    # job rather than its name.
+    if candidate == "skill" and "skill-eval" in names and skill_eval_phrase_spoken(normalized):
+        return True
     return _contains_phrase(normalized, longer_names)
 
 

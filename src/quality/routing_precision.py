@@ -10619,6 +10619,24 @@ ROUTING_PRECISION_CASES: tuple[RoutingPrecisionCase, ...] = (
     # check of the current branch are no live-information card.
     RoutingPrecisionCase("current-directory-fix-is-not-live-info", "A fix in the current directory with a price word is code, not a live lookup", "In the current directory, the invoice total in invoice.py rounds half cents down; fix it to round half up.", "answer_clarification", "", "live-info-operator"),
     RoutingPrecisionCase("current-branch-check-is-not-live-info", "The current branch and when it was made is a repository question, not a live lookup", "Check the current branch and the time it was created", "answer_clarification", ""),
+    # skill-eval: "skill" as a person's ability -- chess, tennis, an interview,
+    # a staff assessment -- stays off the host-fit check.
+    RoutingPrecisionCase(
+        "chess-skill-is-not-skill-eval", "A chess skill question is not an agent skill check",
+        "is my skill any good at chess", "answer_clarification", "", "skill-eval",
+    ),
+    RoutingPrecisionCase(
+        "tennis-skill-evaluation-is-not-skill-eval", "A tennis skill evaluation is not an agent skill check",
+        "my tennis skill evaluation", "answer_clarification", "", "skill-eval",
+    ),
+    RoutingPrecisionCase(
+        "interview-skill-level-is-not-skill-eval", "Evaluating a person's skill level is not an agent skill check",
+        "evaluate my skill level in python for a job interview", "answer_clarification", "", "skill-eval",
+    ),
+    RoutingPrecisionCase(
+        "ko-sales-skill-scorecard-is-not-skill-eval", "A Korean sales skill scorecard is not an agent skill check",
+        "영업 스킬 평가표", "answer_clarification", "", "skill-eval",
+    ),
 )
 
 
@@ -21707,6 +21725,20 @@ ROUTING_INTERVENTION_CASES: tuple[RoutingInterventionCase, ...] = (
     RoutingInterventionCase("korean-market-size-with-softener", "A softener before the verb keeps a market sizing request", "치과 시장 규모 좀 추정해줘", "clarify", "oh-my-hermes", "answer_clarification", "clarification", "market-research"),
     RoutingInterventionCase("release-gate-in-a-film-stays-out", "A release gate in a film asks at most", "the movie had a scene with a release gate at a racetrack", "clarify", "oh-my-hermes", "answer_clarification", "clarification", "deploy-and-monitor"),
     RoutingInterventionCase("native-debugging-dap-still-asks-for-it", "Asking for a dap debugger still reaches native debugging though no route promises one", "use a dap debugger on this core dump", "dispatch", "native-debugging", "prepare_native_debug_plan", "native_debug_plan"),
+    # skill-eval: checking an agent skill against its hosts, in English and Korean,
+    # and the asks its siblings own stay with them.
+    RoutingInterventionCase("skill-eval-is-my-skill-any-good", "Asking whether a skill is any good reaches the host-fit check", "is my skill any good", "dispatch", "skill-eval", "prepare_skill_eval", "skill_eval", "skill-eval"),
+    RoutingInterventionCase("skill-eval-will-it-load-in-claude-code", "Asking whether a skill loads in Claude Code reaches the host-fit check", "will my skill load in claude code", "dispatch", "skill-eval", "prepare_skill_eval", "skill_eval", "skill-eval"),
+    RoutingInterventionCase("skill-eval-harness-check", "A skill harness check reaches the host-fit check, not skill management", "skill harness check", "dispatch", "skill-eval", "prepare_skill_eval", "skill_eval", "skill-eval"),
+    RoutingInterventionCase("skill-eval-compatibility", "Skill compatibility reaches the host-fit check, not skill management", "skill compatibility", "dispatch", "skill-eval", "prepare_skill_eval", "skill_eval", "skill-eval"),
+    RoutingInterventionCase("ko-skill-eval-is-my-skill-ok", "A Korean ask to check whether my skill is fine reaches the host-fit check", "내 스킬 괜찮은지 점검해줘", "dispatch", "skill-eval", "prepare_skill_eval", "skill_eval", "skill-eval"),
+    RoutingInterventionCase("ko-skill-eval-assess", "The Korean pack phrase for evaluating a skill reaches the host-fit check", "스킬 평가해줘", "dispatch", "skill-eval", "prepare_skill_eval", "skill_eval", "skill-eval"),
+    RoutingInterventionCase("ko-skill-eval-compatibility", "The Korean pack phrase for skill compatibility reaches the host-fit check", "스킬 호환성 확인해줘", "dispatch", "skill-eval", "prepare_skill_eval", "skill_eval", "skill-eval"),
+    RoutingInterventionCase("skill-portfolio-dashboard-keeps-skill-health", "A skill portfolio dashboard stays with skill health", "show me the skill portfolio health dashboard", "dispatch", "skill-health", "prepare_skill_health", "skill_health"),
+    RoutingInterventionCase("ko-skill-dashboard-keeps-skill-health", "A Korean skill dashboard ask stays with skill health", "스킬 대시보드 보여줘", "dispatch", "skill-health", "prepare_skill_health", "skill_health"),
+    RoutingInterventionCase("find-a-skill-keeps-skill-scout", "Looking for a skill to adopt stays with the skill scout", "skill scout for changelog", "dispatch", "skill-scout", "prepare_skill_scout", "skill_scout"),
+    RoutingInterventionCase("coding-agent-comparison-keeps-agent-evaluation", "Comparing coding agents on one task stays with agent evaluation", "compare codex and claude code on the same bug fix task", "dispatch", "agent-evaluation", "prepare_agent_evaluation", "agent_evaluation"),
+    RoutingInterventionCase("ko-find-a-skill-keeps-skill-scout", "A Korean ask to find a skill stays with the skill scout", "스킬 찾기", "dispatch", "skill-scout", "prepare_skill_scout", "skill_scout"),
 )
 
 

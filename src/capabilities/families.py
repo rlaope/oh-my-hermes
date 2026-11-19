@@ -157,6 +157,7 @@ _FAMILY_DEFINITIONS = (
             "physical-device-readiness",
             "skill-scout",
             "skill-health",
+            "skill-eval",
             "workflow-learning",
         ),
         "next_action": "show_status_or_prepare_operating_card",

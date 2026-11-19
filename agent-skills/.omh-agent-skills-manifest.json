@@ -1,5 +1,5 @@
 {
-  "catalog_revision": "2daa360f90e10c95b96fcda7a7b2ffe70077f53e8b75b2a290e785150085c68f",
+  "catalog_revision": "fba0dcf792bddec46b911c0f5cf1a3cd1629a36ebf24fa710ec8f66235977812",
   "files": {
     "omh-accessibility-audit/SKILL.md": "7f48005d7fd6e9e1b2b30f03eb412145e09971fcc629393a27c1a3c5e29d6cef",
     "omh-accessibility-audit/references/a11y-rules.md": "615cc9eaa24ee36089d395b215cc25b2d9b0d2549f228a5f81df0553f45d2f75",
@@ -282,6 +282,8 @@
     "omh-show-reel/toolkit/scripts/timeline.py": "7bacdb971c2d02c1c2ebf604ef81e0fc39bd8033175de0fd70e367df2358c7dc",
     "omh-show-reel/toolkit/scripts/tools/cutout.swift": "7050d5764aa724691c9982c51dc73fc10cc0b70483c9df77092614b195bda837",
     "omh-show-reel/toolkit/upstream-manifest.json": "45a999baaeb042ffdb27b5c125c6d3466ff560c00c5d38e1726540765601418d",
+    "omh-skill-eval/SKILL.md": "967e0c3eb629a25a545ff8b77b673c697feb44ba5e008de29e9e2feb9cc159fe",
+    "omh-skill-eval/references/with-without-eval.md": "3086f67ffab63bd366843424b259ec53212f17d9330380c9854ef7e23f1ea27b",
     "omh-skill-health/SKILL.md": "def96d05aa58781ff63a67cfcb7f3a9b883ce9401a9a69e42ca89cfc6531badb",
     "omh-skill-scout/SKILL.md": "d36ede48896860734608557e7da94b71d54a448bb9d39ed3690452184cde5752",
     "omh-source-finder/SKILL.md": "d41b2a70030cee3b1a7c786a7cbcf736b179efb096c17f7daac7136db7d829bb",

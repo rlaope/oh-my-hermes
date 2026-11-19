@@ -200,7 +200,9 @@ CONCEPTUAL_AWARENESS_SURFACES = ("request-to-handoff", "executor selection", "co
 # measured from the producer; no headroom.
 # 13502 -> 13592: one `model-compression` index line plus newline (+90),
 # measured from the producer; no headroom.
-SKILL_INDEX_CHAR_LIMIT = 13592
+# 13592 -> 13675: one `skill-eval` index line plus newline (+83),
+# measured from the producer; no headroom.
+SKILL_INDEX_CHAR_LIMIT = 13675
 # The longest single skill line in that index. Every description is already cut
 # to 60 characters, so what moves this is a longer skill name.
 SKILL_INDEX_LINE_CHAR_LIMIT = 100
@@ -1085,7 +1087,9 @@ PLUGIN_TOOL_SCHEMA_CHAR_LIMIT = 62968
 # 545582 -> 545712 (2026-11-12): design-orchestration's quality bar had three items, so its new fourth line
 # (direction options shown as rendered images) enters the capability row's first-four slice (+130, only that
 # row, 3915 -> 4045); measured from the producer against main 2fcbef29f. No headroom.
-FULL_CAPABILITY_SKILL_SECTION_CHAR_LIMIT = 545712
+# 545712 -> 549570: one `skill-eval` capability row (3856) plus its separator
+# (+3858); dropping only that row reproduces 545712. Measured from the producer.
+FULL_CAPABILITY_SKILL_SECTION_CHAR_LIMIT = 549570
 FULL_CAPABILITY_SKILL_ITEM_CHAR_LIMIT = 9000
 # 100000 -> 102070: the same three domain workflows each add one standalone
 # capability row, again measured on the merged tree; warranted growth for three
@@ -1197,7 +1201,9 @@ FULL_CAPABILITY_SKILL_ITEM_CHAR_LIMIT = 9000
 # separator (+947); the procedure stays in the skill body.
 # 145471 -> 146418: one 945-character standalone `model-compression` row plus
 # separator (+947); the method stays in its on-demand reference.
-STANDALONE_CAPABILITY_SKILL_SECTION_CHAR_LIMIT = 146418
+# 146418 -> 147355: one 935-character standalone `skill-eval` row plus
+# separator (+937); the lift method stays in its on-demand reference.
+STANDALONE_CAPABILITY_SKILL_SECTION_CHAR_LIMIT = 147355
 STANDALONE_CAPABILITY_SKILL_ITEM_CHAR_LIMIT = 2200
 # ULW fold context ceiling (issue #954, PR D). The limit is the pre-D measured
 # value of the full profile's `skill_body` chars on `main` @ acb9a060, in the

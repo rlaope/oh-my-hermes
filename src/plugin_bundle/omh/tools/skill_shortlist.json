@@ -116,7 +116,7 @@
 }
 },
 {
-"anchors":"chos claud cli codex compos delegation instruction maestro ulw",
+"anchors":"chos cli codex compos delegation instruction maestro ulw",
 "hangul":"넘기 넘길 드오 롬프 실행 에이 오프 외부 위임 이전 전트 준비 코딩 트에 프롬 프트 핸드 행기",
 "hangul_anchors":"넘기 넘길 드오 롬프 실행 에이 오프 외부 위임 이전 전트 코딩 트에 프롬 프트 핸드 행기",
 "label":"ulw-maestro",
@@ -758,7 +758,7 @@
 }
 },
 {
-"anchors":"bake benchmark better between claud codex comparison default eval evaluation fair real tournament",
+"anchors":"bake benchmark better between codex comparison default eval evaluation fair real tournament",
 "hangul":"덱스 로드 비교 실행 에이 이전 전트 코덱 클로 평가 행자",
 "hangul_anchors":"덱스 로드 비교 실행 에이 이전 전트 코덱 클로 평가 행자",
 "label":"omh-agent-evaluation",
@@ -1122,7 +1122,7 @@
 }
 },
 {
-"anchors":"came claud glm gpt latest",
+"anchors":"came glm gpt latest",
 "hangul":"",
 "hangul_anchors":"",
 "label":"omh-model-optimization",
@@ -1154,7 +1154,7 @@
 }
 },
 {
-"anchors":"base driv googl knowledg live markdown notion obsidian organiz shar stor system vault wiki",
+"anchors":"base driv googl knowledg live markdown notion obsidian organiz stor system vault wiki",
 "hangul":"노션 다운 디언 마크 문서 베이 볼트 수인 시디 식베 옵시 위키 이스 인계 인수 정리 지식 체계 크다",
 "hangul_anchors":"노션 다운 디언 마크 문서 베이 볼트 수인 시디 식베 옵시 위키 이스 인계 인수 정리 지식 체계 크다",
 "label":"omh-wiki",
@@ -1170,7 +1170,7 @@
 }
 },
 {
-"anchors":"advisor ai another claud consult critiqu cross different gemini opinion outsid say second",
+"anchors":"advisor ai another consult critiqu cross different gemini opinion outsid say second",
 "hangul":"의견",
 "hangul_anchors":"의견",
 "label":"omh-ask",
@@ -1835,7 +1835,23 @@
 }
 },
 {
-"anchors":"authoritativ conversion coordinat cover coverag declar declaration differ footprint geojson geospatial measurement pair parcel polygon shar sum uniqu wrong",
+"anchors":"actually codex compatibility description eval evaluat folder good harness load long md publish",
+"hangul":"스킬 점검 평가 호환 환성",
+"hangul_anchors":"스킬 점검 평가 호환 환성",
+"label":"omh-skill-eval",
+"name":"skill-eval",
+"situation":"Agent skill to check before shipping it",
+"terms":{
+"1":"call cli copilot degrad file fix herm install key model network openclaw opencod question read run shar ship skip sourc",
+"2":"actually agent compatibility description evaluat find good harness host long pick publish whether",
+"3":"befor claud code codex list md",
+"4":"folder",
+"5":"check load",
+"7":"eval"
+}
+},
+{
+"anchors":"authoritativ conversion coordinat cover coverag declar declaration differ footprint geojson geospatial measurement pair parcel polygon sum uniqu wrong",
 "hangul":"",
 "hangul_anchors":"",
 "label":"omh-geospatial-analysis",
@@ -2099,7 +2115,7 @@
 }
 },
 {
-"anchors":"claud codex helper lack machin migration mode omc omx subagent vs worktree",
+"anchors":"codex helper lack machin migration mode omc omx subagent vs worktree",
 "hangul":"길지 넘겨 넘길 덱스 런타 로드 브에 비성 서브 실행 업트 에이 이전 임으 작업 전트 준비 코덱 코드 코딩 클로 타임 트리",
 "hangul_anchors":"길지 넘겨 넘길 덱스 런타 로드 브에 비성 서브 실행 업트 에이 이전 임으 작업 전트 코덱 코딩 클로 타임 트리",
 "label":"omh-executor-runtime-readiness",
@@ -2249,7 +2265,7 @@
 }
 },
 {
-"anchors":"arg argument bring clash claud cli codex collision compatibility directory folder frontmatter gemini import interpolation library name opencod reus slash",
+"anchors":"arg argument bring clash cli codex collision compatibility directory folder frontmatter gemini import interpolation library name opencod reus slash",
 "hangul":"가져 디렉 래시 렉터 롬프 매핑 명령 슬래 오기 인자 져오 터리 폴더 프롬 프트",
 "hangul_anchors":"가져 디렉 래시 렉터 롬프 매핑 명령 슬래 오기 인자 져오 터리 폴더 프롬 프트",
 "label":"omh-prompt-import-readiness",
@@ -2350,7 +2366,7 @@
 }
 },
 {
-"anchors":"adapter around between claud codex config control differ drift earlier harness inventory last lifecycl mcp pane previous recall recover still worktree",
+"anchors":"adapter around between codex config control differ drift earlier harness inventory last lifecycl mcp pane previous recall recover still worktree",
 "hangul":"기억 네스 넥터 드리 리프 벤토 복구 설정 세션 워크 인벤 지난 커넥 코딩 크트 토리 트리 프트 하네",
 "hangul_anchors":"기억 네스 넥터 드리 리프 벤토 복구 설정 세션 워크 인벤 지난 커넥 코딩 크트 토리 트리 프트 하네",
 "label":"omh-harness-session-inventory",
@@ -2384,7 +2400,7 @@
 }
 },
 {
-"anchors":"achievement badg card clos earn newest progress recent shar tier unlock",
+"anchors":"achievement badg card clos earn newest progress recent tier unlock",
 "hangul":"과제 도전 배지 뱃지 업적 요약 전과",
 "hangul_anchors":"과제 도전 배지 뱃지 업적 전과",
 "label":"omh-achievements",
