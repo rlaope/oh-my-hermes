@@ -4,6 +4,11 @@ All notable changes will be documented here.
 
 ## Unreleased
 
+- **omher: no "+ New thread" line sits under a bot any more.** The line closed every bot's thread list, and under the
+  open bot it showed even with no threads, so the sidebar always carried an empty row. Under a bot now there are only
+  its threads, the last one ending the tree; a new thread opens from the bot row's + on hover, its right-click menu, or
+  `./thread`.
+
 - **A cheap dag-ulw node that hits a hard judgement asks for a stronger model instead of guessing.** When a node's
   child cannot settle a design choice or a root cause, it stops before editing and writes `ESCALATE: <question>` into
   its handoff; the node is settled `escalated` and offered again one category up (quick, unspecified-low,
