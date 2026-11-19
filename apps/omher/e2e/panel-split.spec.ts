@@ -86,9 +86,9 @@ test("dragging the divider resizes both shells; a double click evens the panes a
   await page.keyboard.press((await keys(page)).right);
   await expect.poll(async () => (await starts(page)).length).toBe(2);
   const [a, b] = await starts(page);
-  // let the split's own sizes settle first
-  await expect.poll(async () => (await calls(page)).filter((c) => c.op === "resize" && c.id === a.id).length).toBeGreaterThan(0);
-  const before = await calls(page);
+  // let the split's own sizes settle first: the left shell was told it is narrower than the whole width now
+  await expect.poll(async () => (await calls(page)).filter((c) => c.op === "resize" && c.id === a.id).at(-1)?.cols ?? 999).toBeLessThan(a.cols!);
+  await page.waitForTimeout(150);
   const left0 = (await panes(page).nth(0).boundingBox())!;
   const d = (await page.getByTestId("termpanel-divider").boundingBox())!;
   await page.mouse.move(d.x + d.width / 2, d.y + d.height / 2);
@@ -96,16 +96,23 @@ test("dragging the divider resizes both shells; a double click evens the panes a
   await page.mouse.move(d.x - 200, d.y + d.height / 2, { steps: 6 });
   await page.mouse.up();
   await expect.poll(async () => Math.round((await panes(page).nth(0).boundingBox())!.width)).toBeLessThan(Math.round(left0.width - 150));
-  // each shell hears its new size once it settles
+  // each shell hears its new size once it settles: the last size each was told, once those stop changing (a slow
+  // machine is still sending the drag's steps after the mouse is up), has the left shell narrower than the right
+  const last = async () => {
+    const c = (await calls(page)).filter((x) => x.op === "resize");
+    return [c.filter((x) => x.id === a.id).at(-1)?.cols ?? 0, c.filter((x) => x.id === b.id).at(-1)?.cols ?? 0];
+  };
+  let seen = "";
   await expect
     .poll(async () => {
-      const after = (await calls(page)).slice(before.length).filter((c) => c.op === "resize");
-      return [after.some((c) => c.id === a.id), after.some((c) => c.id === b.id)];
-    })
-    .toEqual([true, true]);
-  const lastA = (await calls(page)).filter((c) => c.op === "resize" && c.id === a.id).at(-1)!;
-  const lastB = (await calls(page)).filter((c) => c.op === "resize" && c.id === b.id).at(-1)!;
-  expect(lastA.cols!).toBeLessThan(lastB.cols!);
+      const now = JSON.stringify(await last());
+      const still = now === seen;
+      seen = now;
+      return still;
+    }, { intervals: [250] })
+    .toBe(true);
+  const [lastA, lastB] = JSON.parse(seen) as number[];
+  expect(lastA).toBeLessThan(lastB);
   // a pane keeps at least 120px
   await page.mouse.move(d.x - 200, d.y + d.height / 2);
   await page.mouse.down();
