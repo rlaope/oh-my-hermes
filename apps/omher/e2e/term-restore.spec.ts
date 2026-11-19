@@ -239,9 +239,10 @@ const history = async (page: Page) => (await calls(page)).filter((c) => c.op.sta
 /** The page saves history every 30 s and when it goes away; the test asks for it now, as the page going away does. */
 const flush = (page: Page) => page.evaluate(() => window.dispatchEvent(new Event("pagehide")));
 const screen = (page: Page) => page.locator("[data-testid=terminal] .xterm-rows");
-/** Rows of the open terminal, top to bottom, with text. */
+/** Rows of the open terminal, top to bottom, with text; none while its rows are not in the page yet (a slow
+ *  computer mounts the terminal after the row opens). */
 const rows = (page: Page, sel = "[data-testid=terminal] .xterm-rows") =>
-  page.evaluate((s) => [...document.querySelector(s)!.children].map((r) => (r.textContent ?? "").replace(/\u00a0/g, " ").trimEnd()).filter(Boolean), sel);
+  page.evaluate((s) => [...(document.querySelector(s)?.children ?? [])].map((r) => (r.textContent ?? "").replace(/\u00a0/g, " ").trimEnd()).filter(Boolean), sel);
 
 test("the scrollback comes back dimmed, under a divider, before the program's new output; closing removes it", async ({ page }) => {
   await open(page);
@@ -256,6 +257,7 @@ test("the scrollback comes back dimmed, under a divider, before the program's ne
   await page.addInitScript(() => ((window as unknown as Record<string, unknown>).__omherMockHistoryDelay = 400));
   await page.reload();
   await page.getByTestId(`session-${id}`).locator(".ss-open").click();
+  await expect(screen(page)).toBeAttached();
   // the kept text holds the old banner too: wait for the new program's own banner, below the divider
   const below = (r: string[]) => r.findLastIndex((l) => l.includes("(mock)")) > r.findIndex((l) => /^--- restored .+ ---$/.test(l));
   await expect.poll(async () => below(await rows(page))).toBe(true);
