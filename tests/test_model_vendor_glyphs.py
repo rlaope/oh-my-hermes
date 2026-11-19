@@ -64,6 +64,8 @@ class VendorResolutionTests(unittest.TestCase):
         """`qwen3-coder` is why the token table is written out rather than
         matched by prefix."""
         self.assertEqual(vendor_for_model("qwen3-coder"), "qwen")
+        self.assertEqual(vendor_for_model("qwen4-max"), "qwen")
+        self.assertEqual(vendor_for_model("qwen/qwen4-max-preview high"), "qwen")
 
     def test_siblings_share_one_glyph(self) -> None:
         self.assertEqual(vendor_glyph("claude-opus-5"), vendor_glyph("claude-fable-5-1"))

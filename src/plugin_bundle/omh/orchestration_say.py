@@ -73,6 +73,7 @@ MODEL_DISPLAY_LABELS: Final[dict[str, str]] = {
     "kimi-k3.1-pro": "Kimi K3.1 Pro",
     "kimi-k3.1-pro-highspeed": "Kimi K3.1 Pro Highspeed",
     "qwen3-coder": "Qwen3-Coder",
+    "qwen4-max": "Qwen4-Max",
 }
 
 # What a routed part is FOR, keyed on the bundle's routable categories

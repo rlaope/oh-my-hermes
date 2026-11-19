@@ -1,0 +1,13 @@
+--- a/app/csv_import.py
++++ b/app/csv_import.py
+@@ -3,4 +3,9 @@
+ 
+ def data_rows(lines):
+     rows = list(csv.reader(lines))
+-    return [row for row in rows[1:] if row]
++    # TODO(export-v2): revisit if exports ever drop the header row.
++    kept = []
++    for i in range(1, len(rows)):
++        if rows[i]:
++            kept.append(rows[i])
++    return kept

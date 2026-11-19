@@ -72,6 +72,7 @@ _VENDOR_BY_TOKEN: Final[Mapping[str, str]] = {
     "kimi": "kimi",
     "qwen": "qwen",
     "qwen3": "qwen",
+    "qwen4": "qwen",
     "llama": "llama",
     "llama4": "llama",
     "mistral": "mistral",

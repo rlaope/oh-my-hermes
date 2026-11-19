@@ -350,7 +350,13 @@ exact-model table when the new generation's documented traits differ from
 the family's and the older generation's prompts must stay byte-stable (GPT-6
 Astra over GPT-5.6) — and keep counters the guide says to keep even when it
 reads as redundant (for Claude 5.1: the single verification pass). Do not
-restate universal protocol rules inside a family entry. Then:
+restate universal protocol rules inside a family entry. A family block
+written for one generation can state a rule that a later generation's
+contract contradicts. The `qwen` block says the non-thinking Qwen3-Coder
+must not be asked for reasoning, and Qwen4-Max is hybrid with thinking on
+by default. Grepping the family block for the old generation's name
+(`Qwen3-Coder`, "non-thinking") finds it. The counter then goes in the
+exact-model table and the family block stays byte-stable. Then:
 
 - Update the family's section in `MODEL_OPTI.md` (trait, injected text,
   version rule, source). `tests/test_unit_prompt_protocol.py` fails when a
@@ -412,6 +418,14 @@ Rules that have held across every onboarding so far:
   Terra slot is a fresh placement decision, not an undo of the retirement.
   Copy the ladder from the new model page, not from the sibling released
   just before it. 6.1 Terra keeps `none` where 6.1 Sol dropped it.
+- A successor of a model that held no slot takes none either. Qwen3.8-Max
+  was priced and recognized but never chained, so Qwen4-Max (2026-11-16)
+  was onboarded with an exact contract, a price row, and calibration, but
+  no chain entry and no retirement row: there is nothing to retire and no
+  slot to inherit, and joining a chain is a fresh owner decision. A
+  Token Plan or similar preview id that publishes a different ladder and no
+  per-token price (`qwen4-max-preview`) is recognized only: it keeps the
+  family block and gets no contract, no price row, and no chain entry.
 - A chain names the id the vendor's own API serves, not the spelling a
   gateway or a model card uses. DeepSeek serves `deepseek-flash` and
   rejects `deepseek-v4.1-flash` with HTTP 400, so the chain names the

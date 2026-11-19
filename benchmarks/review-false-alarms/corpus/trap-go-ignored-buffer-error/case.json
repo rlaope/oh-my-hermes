@@ -1,0 +1,7 @@
+{
+  "id": "trap-go-ignored-buffer-error",
+  "kind": "trap",
+  "language": "go",
+  "expected": "clean",
+  "why": "The discarded errors come from bytes.Buffer writes, which are documented to always return a nil error (a too-large buffer panics instead). Nothing is lost by ignoring them."
+}

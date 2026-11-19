@@ -1,0 +1,7 @@
+{
+  "id": "trap-eval-on-literal-table",
+  "kind": "trap",
+  "language": "python",
+  "expected": "clean",
+  "why": "eval runs only on the values of _FACTORS, a module-level literal dict of arithmetic strings, with builtins removed. No caller-supplied text is ever evaluated; to_metres only indexes the precomputed table, and an unknown unit raises KeyError as it did before."
+}
