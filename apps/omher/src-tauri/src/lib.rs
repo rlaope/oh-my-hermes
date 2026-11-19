@@ -704,12 +704,13 @@ async fn past_chats_list(agent: String, cwds: Vec<String>) -> Result<Vec<past_ch
 }
 
 /// The id of the first Codex conversation in `cwd` started at or after `since_secs` that no other session holds
-/// (`held`, the ids the other TERMINALS Codex rows keep, only compared with), for a TERMINALS Codex session to
-/// continue after a restart (rule 30): only the id, checked as a UUID, read from the same home and by the same rules
-/// as the listing.
+/// (`held`, the ids the other TERMINALS Codex rows keep) and that no other Codex row there still without an id could
+/// own (`others`, their start times in seconds), both only compared with, for a TERMINALS Codex session to continue
+/// after a restart (rule 30): only the id, checked as a UUID, read from the same home and by the same rules as the
+/// listing.
 #[tauri::command]
-async fn codex_latest(cwd: String, since_secs: f64, held: Vec<String>) -> Result<Option<String>, String> {
-    tauri::async_runtime::spawn_blocking(move || Ok(past_chats::codex_latest(&past_home("codex")?, &cwd, since_secs, &held).filter(|id| sessions::is_uuid(id))))
+async fn codex_latest(cwd: String, since_secs: f64, held: Vec<String>, others: Vec<f64>) -> Result<Option<String>, String> {
+    tauri::async_runtime::spawn_blocking(move || Ok(past_chats::codex_latest(&past_home("codex")?, &cwd, since_secs, &held, &others).filter(|id| sessions::is_uuid(id))))
         .await
         .map_err(|e| e.to_string())?
 }

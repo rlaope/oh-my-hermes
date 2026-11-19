@@ -445,10 +445,13 @@ fn uuid7_ms(id: &str) -> Option<f64> {
 
 /// The id of the first Codex conversation in `cwd` that started at or after `since` (seconds since the epoch) and
 /// that no other session holds (`held`): a TERMINALS Codex session records it so that a restart can continue it
-/// (rule 30's reader, one more use). The oldest one is taken, so two sessions started in the same folder each get
-/// their own conversation rather than both the newest. Only rollouts changed since then are read, through the same
-/// checks as [`codex_list`]; `held` is only compared with; only the id is returned.
-pub fn codex_latest(root: &Path, cwd: &str, since: f64, held: &[String]) -> Option<String> {
+/// (rule 30's reader, one more use). The oldest one is taken, and only when no other Codex session in that folder
+/// still without an id started at or before it (`others`, their start times in seconds): then the asking session is
+/// the only one that can own it. When another could (two sessions started before either conversation, which Codex may
+/// write in any order), nothing is given and the page asks again later; once the others have their ids, the last one
+/// is unambiguous. Only rollouts changed since then are read, through the same checks as [`codex_list`]; `held` and
+/// `others` are only compared with; only the id is returned.
+pub fn codex_latest(root: &Path, cwd: &str, since: f64, held: &[String], others: &[f64]) -> Option<String> {
     if !absolute(cwd) {
         return None;
     }
@@ -463,7 +466,12 @@ pub fn codex_latest(root: &Path, cwd: &str, since: f64, held: &[String]) -> Opti
         .filter_map(|c| uuid7_ms(&c.id).filter(|ms| *ms >= since * 1000.0).map(|ms| (ms, c.id)))
         .collect();
     rows.sort_by(|a, b| a.0.total_cmp(&b.0));
-    rows.into_iter().next().map(|(_, id)| id)
+    let (ms, id) = rows.into_iter().next()?;
+    // another session without an id that started by then could own it as well: a distinct id is not ownership
+    if others.iter().any(|o| o * 1000.0 <= ms) {
+        return None;
+    }
+    Some(id)
 }
 
 /// The last messages of Codex thread `id` (its rollout found by name; the folder is checked against `cwd`).
@@ -693,7 +701,7 @@ mod tests {
     }
 
     #[test]
-    fn codex_latest_is_the_first_thread_in_the_folder_started_since_that_no_one_holds() {
+    fn codex_latest_is_the_first_thread_in_the_folder_started_since_that_no_one_holds_or_could_own() {
         let root = tmp("codex-latest");
         let cwd = "/Users/you/code/api";
         let day = root.join("sessions/2026/11/12");
@@ -704,19 +712,28 @@ mod tests {
         write(&day.join(format!("rollout-2026-11-12T15-29-01-{X2}.jsonl")), &codex_file(X2, cwd));
         // only rollouts changed since then are read: a since in the future finds nothing
         let file_time = mtime(&day.join(format!("rollout-2026-11-12T15-29-01-{X2}.jsonl")));
-        assert!(codex_latest(&root, cwd, file_time + 3600.0, &[]).is_none());
-        assert_eq!(codex_latest(&root, cwd, since, &[]).as_deref(), Some(X2));
+        assert!(codex_latest(&root, cwd, file_time + 3600.0, &[], &[]).is_none());
+        assert_eq!(codex_latest(&root, cwd, since, &[], &[]).as_deref(), Some(X2));
         // another folder, a relative folder, and a since after both ids find nothing
-        assert!(codex_latest(&root, "/Users/you/code/web", since, &[]).is_none());
-        assert!(codex_latest(&root, "code/api", since, &[]).is_none());
-        assert!(codex_latest(&root, cwd, uuid7_ms(X2).unwrap() / 1000.0 + 1.0, &[]).is_none());
+        assert!(codex_latest(&root, "/Users/you/code/web", since, &[], &[]).is_none());
+        assert!(codex_latest(&root, "code/api", since, &[], &[]).is_none());
+        assert!(codex_latest(&root, cwd, uuid7_ms(X2).unwrap() / 1000.0 + 1.0, &[], &[]).is_none());
         // two sessions in one folder: the older conversation goes to the one asking first, the newer one to the next;
         // an id another session holds is never taken, in any letter case
         let both = uuid7_ms(X1).unwrap() / 1000.0 - 1.0;
-        assert_eq!(codex_latest(&root, cwd, both, &[]).as_deref(), Some(X1));
-        assert_eq!(codex_latest(&root, cwd, both, &[X1.to_string()]).as_deref(), Some(X2));
-        assert_eq!(codex_latest(&root, cwd, both, &[X1.to_uppercase()]).as_deref(), Some(X2));
-        assert!(codex_latest(&root, cwd, both, &[X1.to_string(), X2.to_string()]).is_none());
+        assert_eq!(codex_latest(&root, cwd, both, &[], &[]).as_deref(), Some(X1));
+        assert_eq!(codex_latest(&root, cwd, both, &[X1.to_string()], &[]).as_deref(), Some(X2));
+        assert_eq!(codex_latest(&root, cwd, both, &[X1.to_uppercase()], &[]).as_deref(), Some(X2));
+        assert!(codex_latest(&root, cwd, both, &[X1.to_string(), X2.to_string()], &[]).is_none());
+        // another session in the folder without an id that started by the time a conversation did could own it too:
+        // nothing is given (Codex may write the second session's rollout first); one started after it is no rival,
+        // and once the rival holds its own id the asking session gets the one left
+        let x1 = uuid7_ms(X1).unwrap() / 1000.0;
+        assert!(codex_latest(&root, cwd, both, &[], &[x1 - 0.5]).is_none());
+        assert!(codex_latest(&root, cwd, both, &[], &[x1]).is_none());
+        assert_eq!(codex_latest(&root, cwd, both, &[], &[x1 + 0.5]).as_deref(), Some(X1));
+        assert!(codex_latest(&root, cwd, both, &[X1.to_string()], &[x1 - 0.5]).is_none());
+        assert_eq!(codex_latest(&root, cwd, both, &[X1.to_string()], &[]).as_deref(), Some(X2));
         // a v4 id carries no time and is never taken
         assert!(uuid7_ms(C1).is_none());
         let _ = std::fs::remove_dir_all(root);

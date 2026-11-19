@@ -1250,11 +1250,18 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
    *  once the conversation starts, so the shell is asked after the program has run 5 s and every 30 s after, until it
    *  names one (rule 30's reader: only the id comes back); it is kept as the row's `agentSession` so a restart
    *  continues it (`codex resume <id>`). The shell gives the first conversation started since the session did that
-   *  no other row holds, and the lookups run one at a time, so two Codex terminals started in the same folder each
-   *  get their own conversation; an id another row holds by the time the answer comes is not taken either. */
+   *  no other row holds, and the lookups run one at a time; an id another row holds by the time the answer comes is
+   *  not taken either. A distinct id is not ownership: Codex may write a later terminal's rollout first, so the shell
+   *  gives a conversation only when no other Codex terminal in that folder still without an id had started by then
+   *  (`codexStart`, sent as `others`). While two could own it neither gets it and both keep asking; once all but one
+   *  have their ids the last one is unambiguous. One that never learns its id comes back paused after a restart. */
   const codexIdTimer = new Map<string, ReturnType<typeof setTimeout>>();
+  /** TERMINALS Codex sessions still looking for their conversation id: when their program started (seconds). */
+  const codexStart = new Map<string, number>();
   let codexAsking: Promise<unknown> = Promise.resolve();
   const heldIds = (id: string) => state.list.filter((x) => x.id !== id && x.agentSession).map((x) => x.agentSession!);
+  const rivals = (id: string) =>
+    [...codexStart].filter(([o]) => o !== id && rec(o)?.cwd === rec(id)?.cwd && rec(o)?.agent === "codex" && !rec(o)?.agentSession).map(([, at]) => at);
   const findCodexId = (id: string, t: Term, run: number, since: number, wait: number) => {
     if (!host.codexLatest) return;
     clearTimeout(codexIdTimer.get(id));
@@ -1264,11 +1271,13 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
         codexIdTimer.delete(id);
         const live = () => terms.get(id) === t && t.run === run && !t.closed && rec(id)?.agent === "codex" && !rec(id)?.agentSession;
         codexAsking = codexAsking.then(async () => {
-          if (!live()) return;
-          const got = await host.codexLatest!(rec(id)!.cwd, since, heldIds(id)).catch(() => null);
-          if (!live()) return;
-          if (got && !heldIds(id).includes(got)) patchRec(id, { agentSession: got });
-          else findCodexId(id, t, run, since, CODEX_ID_EVERY_MS);
+          if (!live()) return void codexStart.delete(id);
+          const got = await host.codexLatest!(rec(id)!.cwd, since, heldIds(id), rivals(id)).catch(() => null);
+          if (!live()) return void codexStart.delete(id);
+          if (got && !heldIds(id).includes(got)) {
+            codexStart.delete(id);
+            patchRec(id, { agentSession: got });
+          } else findCodexId(id, t, run, since, CODEX_ID_EVERY_MS);
         });
       }, wait),
     );
@@ -1416,7 +1425,10 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
       t.told = { cols, rows };
       if (t.settle === null) tellSize(t);
       if (!ofChat) patchRec(id, { status: "running" });
-      if (!ofChat && r.agent === "codex" && !r.agentSession) findCodexId(id, t, run, Math.floor(startedAt / 1000) - 1, CODEX_ID_FIRST_MS);
+      if (!ofChat && r.agent === "codex" && !r.agentSession) {
+        codexStart.set(id, startedAt / 1000);
+        findCodexId(id, t, run, Math.floor(startedAt / 1000) - 1, CODEX_ID_FIRST_MS);
+      }
     } catch (e) {
       if (t.run !== run) return;
       t.closed = true;
@@ -1447,6 +1459,7 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
     histOf.delete(id);
     clearTimeout(codexIdTimer.get(id));
     codexIdTimer.delete(id);
+    codexStart.delete(id);
     fgOff.get(id)?.();
     fgOff.delete(id);
     if (t.hostId !== null && !t.closed) void t.io.close(t.hostId).catch(() => undefined);

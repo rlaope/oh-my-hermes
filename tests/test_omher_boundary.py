@@ -1950,13 +1950,17 @@ class PastConversationsAreOnlyRead(unittest.TestCase):
 
     def test_the_commands_take_only_an_agent_folders_and_an_id(self) -> None:
         for cmd, params in (("past_chats_list", "agent: String, cwds: Vec<String>"), ("past_chat_messages", "agent: String, id: String, cwd: String"),
-                            ("codex_latest", "cwd: String, since_secs: f64, held: Vec<String>"),
+                            ("codex_latest", "cwd: String, since_secs: f64, held: Vec<String>, others: Vec<f64>"),
                             ("session_reveal", "cwd: String"), ("session_open_terminal", "cwd: String"),
                             ("asks_badge", "window: tauri::WebviewWindow, count: u32")):
             sig = re.search(rf"async fn {cmd}\((.*?)\) -> ", self.lib, re.S)
             self.assertIsNotNone(sig, cmd)
             self.assertEqual(sig.group(1).strip(), params, cmd)
         self.assertIn('matches!(agent, "claude" | "codex")', self.past)
+        # a Codex conversation goes to a session only when no other session there without an id could own it
+        latest = self.past.split("pub fn codex_latest(", 1)[1].split("\n}\n", 1)[0]
+        self.assertIn("if others.iter().any(|o| o * 1000.0 <= ms) {", latest)
+        self.assertIn("gives it only when no other Codex session in that folder still without an id had started by then", _flat(DOC.read_text(encoding="utf-8")))
 
     def test_the_system_terminal_runs_no_command_and_the_folder_is_no_shell_string(self) -> None:
         self.assertEqual(self.open.count("Command::new("), 1)

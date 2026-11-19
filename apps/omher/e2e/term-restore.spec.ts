@@ -139,6 +139,32 @@ test("two Codex terminals started in one folder each keep their own conversation
   expect((await starts(page)).map((c) => c.resume).sort()).toEqual([A, B]);
 });
 
+test("two Codex terminals in one folder whose second writes its conversation first never swap conversations", async ({ page }) => {
+  const A = "01a1f29c-c5b1-7301-a199-2dd07ff4b024";
+  const B = "01a1f29c-c5b1-7301-a199-2dd07ff4b025";
+  type Rollout = { id: string; cwd: string; at: number };
+  const rollout = (r: { id: string; cwd: string }) =>
+    page.evaluate((x) => void ((window as unknown as { __omherMockCodexRollouts?: Rollout[] }).__omherMockCodexRollouts ??= []).push({ ...x, at: Date.now() }), r);
+  const latest = () =>
+    page.evaluate(() => ((window as unknown as { __omherPastReads?: { op: string; others?: number[] }[] }).__omherPastReads ?? []).filter((r) => r.op === "latest"));
+  const agentSession = async (id: string) => (await saved(page))?.sessions?.find((s: { id: string }) => s.id === id)?.agentSession;
+  await open(page);
+  // both started before either conversation was written; Codex writes the second terminal's rollout first
+  const a = await newTerm(page, "codex");
+  const b = await newTerm(page, "codex");
+  await rollout({ id: B, cwd: FOLDER });
+  await expect.poll(async () => (await latest()).length, { timeout: 15_000 }).toBeGreaterThanOrEqual(2);
+  await rollout({ id: A, cwd: FOLDER });
+  // each lookup named the other terminal as one that could own the conversation, and so neither took one
+  expect((await latest()).map((r) => r.others?.length)).toEqual([1, 1]);
+  expect([await agentSession(a), await agentSession(b)]).toEqual([undefined, undefined]);
+  // after a restart neither continues the other's conversation: both come back paused, as before
+  await page.reload();
+  await expect(page.getByTestId(`session-${a}`)).toBeVisible();
+  await page.waitForTimeout(300);
+  expect(await starts(page)).toEqual([]);
+});
+
 test("an agent with no conversation of its own (Grok) still comes back paused and starts only on Resume", async ({ page }) => {
   await open(page);
   const id = await newTerm(page, "grok");
