@@ -21,6 +21,9 @@ import { composing } from "../lib/ime";
 import { AgentMark } from "./AgentMark";
 import { agentDef, agentLabel, draftFolder, folderChoices, folderName, hermesOnly, installLine, isTerminalRec, menuFocus, menuOrder, missingNote, parentPath, SHELL, termActivity, termFallbackName, termGroups, terminalAgents, termMarkAgent, termStatus, tildePath, type AgentId, type AgentInfo, type RowMark, type SessionRec, type TermStatus, type Unseen } from "./agents";
 import { TermRowMark } from "./TermRowMark";
+import { SplitGlyph, useSplit, useSplitPrune } from "./SplitView";
+import { groupOf, groupSessions, paneOf } from "./splitState";
+import type { Layout } from "../terminal/layout";
 import { countRender, useAnyFlowing, useTermFace } from "./termActivity";
 import { allCollapsed, collapseOthers, folderSummary, getFolderPrefs, moveFolder, orderFolders, revealFolder as openFolder, setAllFolders, setFolderPrefs, toggleFolder, useFolderPrefs } from "./folders";
 import { ChevronDown, ChevronRight } from "../ui/icons";
@@ -603,9 +606,13 @@ export function sessionMatches(rec: SessionRec, needle: string): boolean {
 export function SessionList({ needle = "", query = "" }: { needle?: string; query?: string }) {
   const s = useStore();
   const ss = useSessions();
+  const sp = useSplit();
+  useSplitPrune();
   const [confirm, setConfirm] = useState<string | null>(null);
   const [refocus, setRefocus] = useState<string | null>(null);
   const current = s.ui.view === "session" ? s.ui.session : null;
+  // the split the open session is in: its rows carry the split's shape
+  const openSplit = current ? groupOf(sp.groups, current) : null;
   useEffect(() => {
     if (!refocus) return;
     // the row itself (its × shows only on hover, so it cannot hold focus)
@@ -731,7 +738,7 @@ export function SessionList({ needle = "", query = "" }: { needle?: string; quer
                 </button>
               </div>
             ) : (
-              <TermRow key={rec.id} rec={rec} agents={ss.agents} unseen={ss.unseen[rec.id]} active={current === rec.id} ticking={ticking} lang={s.ui.lang} onClose={ask} />
+              <TermRow key={rec.id} rec={rec} agents={ss.agents} unseen={ss.unseen[rec.id]} active={current === rec.id} ticking={ticking} lang={s.ui.lang} onClose={ask} split={openSplit && paneOf(rec.id) !== null && groupSessions(openSplit).includes(rec.id) ? openSplit.layout : null} />
             ),
           )}
         </div>
@@ -1160,7 +1167,7 @@ function ViewMark({ view }: { view: "chat" | "terminal" }) {
 /** A TERMINALS row. Memoised: it re-renders when its own record, unseen mark, selection or the language change, or
  *  when its terminal's output changes what it shows (useTermFace), never for another session's output. `lang` is
  *  only a key: the strings read the current language at render. */
-const TermRow = memo(function TermRow({ rec, agents, unseen, active, ticking, onClose }: { rec: SessionRec; agents: AgentInfo[] | null; unseen?: Unseen; active: boolean; ticking: boolean; lang: string; onClose: (rec: SessionRec) => void }) {
+const TermRow = memo(function TermRow({ rec, agents, unseen, active, ticking, onClose, split }: { rec: SessionRec; agents: AgentInfo[] | null; unseen?: Unseen; active: boolean; ticking: boolean; lang: string; onClose: (rec: SessionRec) => void; split?: Layout | null }) {
   countRender(`row:${rec.id}`);
   const [editing, setEditing] = useState(false);
   const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
@@ -1201,7 +1208,7 @@ const TermRow = memo(function TermRow({ rec, agents, unseen, active, ticking, on
         <NameInput initial={title.title} auto={title.source !== "person"} onDone={endEdit} />
       ) : (
         <span
-          className="tr-n"
+          className={`tr-n${split ? " has-split" : ""}`}
           data-testid="session-name"
           data-source={title.source}
           title={title.title}
@@ -1210,7 +1217,12 @@ const TermRow = memo(function TermRow({ rec, agents, unseen, active, ticking, on
             setEditing(true);
           }}
         >
-          {title.title}
+          {split ? <span className="tr-nt">{title.title}</span> : title.title}
+          {split && (
+            <span className="tr-split" data-testid="term-split-glyph" role="img" aria-label={t(active ? "split.focusedPane" : "split.inSplit")} title={t(active ? "split.focusedPane" : "split.inSplit")}>
+              <SplitGlyph layout={split} mine={paneOf(rec.id) ?? -1} size={11} />
+            </span>
+          )}
         </span>
       )}
       <span className="tr-age" data-testid="term-age">
@@ -1245,7 +1257,8 @@ const TermRow = memo(function TermRow({ rec, agents, unseen, active, ticking, on
   return (
     <div
       ref={wrap}
-      className={`ss-row tr${active ? " active" : ""}${running ? " run" : ""}${menu ? " menu-open" : ""}`}
+      className={`ss-row tr${active ? " active" : ""}${running ? " run" : ""}${menu ? " menu-open" : ""}${split ? (active ? " split-focus" : " split") : ""}`}
+      data-split={split ? (active ? "focused" : "in") : undefined}
       data-testid={`session-${rec.id}`}
       data-status={rec.status}
       data-term-status={status ?? "idle"}

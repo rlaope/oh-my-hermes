@@ -644,21 +644,78 @@ body.side-resizing * {
   scrollbar-color: var(--scrollbar) transparent;
 }
 
-/* two TERMINALS sessions side by side (SplitView): each side a bar with its name and x over its own terminal */
+/* TERMINALS splits (SplitView): up to four sessions right of or under each other, each pane a bar with its name and x
+   over its own terminal. The pane with the keyboard carries a thin accent line; the others are dimmed to the
+   Settings › Terminal value (--pane-dim, Otty's unfocused-split-opacity) with a soft inset shade */
 .ss-split {
+  --pane-dim: 0.72;
   flex: 1;
   min-height: 0;
   display: flex;
+  position: relative;
 }
-.ss-split.dragging,
-.ss-split.dragging * {
-  user-select: none;
+.ss-split-node {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+}
+.ss-split-node.col {
+  flex-direction: column;
+}
+.ss-split-part {
+  min-width: 0;
+  min-height: 0;
+  display: flex;
 }
 .ss-split-side {
+  flex: 1;
   min-width: 0;
   min-height: 0;
   display: flex;
   flex-direction: column;
+  position: relative;
+}
+.ss-split-side > .term-wrap,
+.ss-split-side > .ss-idle {
+  transition: opacity 0.12s ease;
+}
+.ss-split-side.dim > .term-wrap,
+.ss-split-side.dim > .ss-idle,
+.ss-split-side.dim > .ss-ended {
+  opacity: var(--pane-dim);
+}
+.ss-split-side.dim::after {
+  content: "";
+  position: absolute;
+  inset: 26px 0 0 0;
+  pointer-events: none;
+  box-shadow: inset 0 0 18px rgb(0 0 0 / 0.14);
+}
+.ss-split-side.focused::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 55%, transparent);
+  border-radius: 2px;
+  z-index: 1;
+}
+.ss-split.zoomed .ss-split-side.focused::after {
+  box-shadow: none;
+}
+.ss-split-zoomed {
+  position: absolute;
+  right: 10px;
+  bottom: 8px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  color: var(--muted);
+  background: var(--panel, var(--bg));
+  border: 1px solid var(--line-soft);
+  pointer-events: none;
+  z-index: 2;
 }
 .ss-split-bar {
   flex: none;
@@ -671,6 +728,12 @@ body.side-resizing * {
   color: var(--muted);
   border-bottom: 1px solid var(--line-soft);
   min-width: 0;
+}
+.ss-split-side.dim .ss-split-bar {
+  opacity: 0.8;
+}
+.ss-split-side.focused .ss-split-name {
+  font-weight: 600;
 }
 .ss-split-name {
   color: var(--ink);
@@ -713,17 +776,114 @@ body.side-resizing * {
   background: var(--line-soft);
   cursor: col-resize;
   z-index: 2;
+  user-select: none;
+}
+.ss-split-divider.col {
+  width: auto;
+  height: 1px;
+  cursor: row-resize;
 }
 .ss-split-divider::after {
   content: "";
   position: absolute;
   inset: 0 -3px;
 }
+.ss-split-divider.col::after {
+  inset: -3px 0;
+}
 .ss-split-divider:hover,
 .ss-split-divider:focus-visible,
-.ss-split.dragging .ss-split-divider {
+.ss-split-divider.on {
   background: var(--line-strong);
   outline: none;
+}
+.ss-split-pick-plus {
+  display: grid;
+  place-items: center;
+  width: 13px;
+  height: 13px;
+  color: var(--muted);
+}
+.ss-split-pick .row-sep {
+  height: 1px;
+  margin: 4px 6px;
+  background: var(--line-soft);
+}
+/* Plans: the open split drawn small (SessionPlans SplitMap), boxes in the layout's proportions */
+.ss-map {
+  position: relative;
+  height: 112px;
+  margin: 2px 0 14px;
+}
+.ss-map-box {
+  position: absolute;
+  padding: 2px;
+  display: flex;
+  background: none;
+  border: 0;
+  cursor: pointer;
+}
+.ss-map-in {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  padding: 0 6px;
+  border-radius: 7px;
+  border: 1px solid var(--line);
+  background: var(--bg);
+  color: var(--muted);
+  font-size: 11px;
+  transition: background 0.12s ease, border-color 0.12s ease;
+}
+.ss-map-box:hover .ss-map-in {
+  border-color: var(--line-strong);
+  color: var(--ink);
+}
+.ss-map-box:focus-visible {
+  outline: none;
+}
+.ss-map-box:focus-visible .ss-map-in {
+  outline: 2px solid var(--muted);
+  outline-offset: -2px;
+}
+.ss-map-box.on .ss-map-in {
+  background: color-mix(in srgb, var(--accent) 16%, var(--bg));
+  border-color: color-mix(in srgb, var(--accent) 60%, transparent);
+  color: var(--ink);
+  font-weight: 500;
+}
+.ss-map-name {
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+/* a TERMINALS row in the open split: the split's shape, its own pane filled */
+.ss-split-glyph {
+  display: block;
+}
+.tr-n.has-split {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+.tr-nt {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.tr-split {
+  flex: none;
+  display: inline-grid;
+  place-items: center;
+  color: var(--quiet);
+  vertical-align: -1px;
+}
+.ss-row.tr.split-focus .tr-split {
+  color: var(--accent);
 }
 /* the picker: under the header, at the main column's right (placed by SplitPicker) */
 .ss-split-pick {

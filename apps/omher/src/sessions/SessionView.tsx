@@ -5,7 +5,7 @@
 // first message starts the agent there (Start, for an agent that opens in its terminal). After that the folder is
 // read-only too. A chat agent's composer takes files as the bot chat's does (paste, the + menu, a drop on the chat),
 // in a draft too; a file dropped or pasted on a terminal is saved and its path typed at the prompt. A TERMINALS session
-// can show a second one beside it (SplitView: ⌘D in its terminal, or "Split right with…").
+// can split with up to three others, right or down (SplitView: ⌘D / ⌘⇧D in its terminal, or "Split right with…").
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { getStore, selectAsks, useStore, type OutFile } from "../state/store";
 import { useResolvedTheme } from "../app/theme";
@@ -38,9 +38,8 @@ import { subagentEnded } from "../state/store";
 import { useAccounts } from "../settings/accounts/useAccounts";
 import { t } from "../i18n";
 import { wireFileDrop, isWindows } from "../terminal/terms";
-import { paneKey } from "../terminal/layout";
-import { isMac } from "../app/shortcuts";
-import { openSplitPicker, SplitPicker, SplitView } from "./SplitView";
+import { SplitPicker, SplitView, useSplit, useSplitKeys } from "./SplitView";
+import { groupOf } from "./splitState";
 
 const STATUS: Record<string, Key> = { starting: "ss.starting", running: "ss.running", exited: "ss.ended", failed: "ss.couldNotStart" };
 
@@ -70,20 +69,8 @@ function TerminalPane({ rec, splits }: { rec: SessionRec; splits?: boolean }) {
     if (!el) return;
     return wireFileDrop(el, (files) => void getSessions().dropOnTerminal(rec.id, files, isWindows()));
   }, [rec.id]);
-  // ⌘D (Ctrl+Shift+D off macOS) in a TERMINALS terminal: pick a session to show beside it. Taken before xterm.
-  useEffect(() => {
-    const el = wrap.current;
-    if (!el || !splits) return;
-    const on = (e: KeyboardEvent) => {
-      const k = paneKey(e, isMac());
-      if (k?.kind !== "split" || k.dir !== "right") return;
-      e.preventDefault();
-      e.stopPropagation();
-      if (!e.repeat) openSplitPicker(getStore().getState().ui.session ?? rec.id);
-    };
-    el.addEventListener("keydown", on, true);
-    return () => el.removeEventListener("keydown", on, true);
-  }, [rec.id, splits]);
+  // the split keys in a TERMINALS terminal (⌘D, ⌘⇧D, ⌘W, ⌘⌥arrows...; SplitView), taken before xterm
+  useSplitKeys(wrap, rec.id, !!splits);
   useEffect(() => {
     if (!box.current) return;
     return getSessions().attach(rec.id, box.current, mode);
@@ -590,6 +577,19 @@ function TerminalIdle({ rec }: { rec: SessionRec }) {
   );
 }
 
+/** One TERMINALS session in a split pane: its terminal (with the Ended line once it ended), or what a paused or
+ *  ended session without a terminal shows (Resume, Restart). */
+function SplitPane({ rec }: { rec: SessionRec }) {
+  const ended = isEnded(rec);
+  if (rec.paused || (ended && !getSessions().hasTerm(rec.id))) return <TerminalIdle rec={rec} />;
+  return (
+    <>
+      <TerminalPane key={`${rec.id}-term-${getSessions().termRun(rec.id)}`} rec={rec} splits />
+      {ended && <Ended rec={rec} />}
+    </>
+  );
+}
+
 /** Model options grouped by provider in the order they came (a model's `provider`, else the agent's own options
  *  under one group), filtered by a search over label, id and provider. */
 export function groupModels(options: ModelOption[], query: string): { provider: string; rows: ModelOption[] }[] {
@@ -778,6 +778,7 @@ function SessionModel({ rec, options, note }: { rec: SessionRec; options: ModelO
 export function SessionView() {
   const s = useStore();
   const ss = useSessions();
+  const sp = useSplit();
   const rec = ss.list.find((r) => r.id === s.ui.session) ?? null;
   // looking at a session sees what its row carried for the person (it rang, it finished): at once when it is opened,
   // and when the window comes back to it
@@ -940,7 +941,13 @@ export function SessionView() {
           </div>
         )}
       </header>
-      {showChat ? (
+      {mode === "terminal" && !showChat && groupOf(sp.groups, rec.id) ? (
+        // a TERMINALS session in a split: every pane shows, each as its session is (running, paused, ended)
+        <>
+          <SplitView main={rec} pane={(r) => <SplitPane rec={r} />} />
+          <SplitPicker main={rec} />
+        </>
+      ) : showChat ? (
         <ChatPane rec={rec} chatKey={chatKey!} />
       ) : rec.paused || ((rec.status === "exited" || rec.status === "failed") && !getSessions().hasTerm(rec.id)) ? (
         <TerminalIdle rec={rec} />
@@ -953,11 +960,11 @@ export function SessionView() {
         </div>
       ) : (
         <>
-          {/* a new key after Restart: a fresh terminal for the program started again. A TERMINALS session can show
-              another beside it */}
+          {/* a new key after Restart: a fresh terminal for the program started again. A TERMINALS session can split
+              (its picker opens here; once split, the branch above draws every pane) */}
           {mode === "terminal" ? (
             <>
-              <SplitView main={rec} pane={(r) => <TerminalPane key={`${r.id}-term-${getSessions().termRun(r.id)}`} rec={r} splits />} />
+              <TerminalPane key={`${rec.id}-term-${getSessions().termRun(rec.id)}`} rec={rec} splits />
               <SplitPicker main={rec} />
             </>
           ) : (

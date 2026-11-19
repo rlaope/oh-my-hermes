@@ -1,8 +1,9 @@
 // The bottom terminal panel (VSCode-style): spans the main column under the open view, toggled by Ctrl+` from
 // anywhere (src/app/shortcuts.ts). Tabs (+ adds one in the open thread's folder, x stops it), each split into up to
 // four panes, one login shell each: ⌘D splits the focused pane right, ⌘⇧D down, ⌘W closes it, ⌘⌥arrows move between
-// panes (layout.ts paneKey; Ctrl+Shift+D, Alt+Shift+D, Ctrl+Shift+W, Ctrl+Alt+arrows off macOS). Dividers drag, a
-// double click evens them out. A tab whose shell rang while it was not in front carries a dot. The top edge drags to
+// panes, ⌘] / ⌘[ step through them, ⌘⇧⌥arrows move the pane, ⌘⇧↩ zooms it, ⌘⌃= evens them out (layout.ts paneKey
+// has the keys off macOS). Panes without the keyboard are dimmed (Settings › Terminal). Dividers drag, a double click
+// evens them out. A tab whose shell rang while it was not in front carries a dot. The top edge drags to
 // resize, the height is saved on this computer. Hiding it stops nothing: shells keep running and keep their
 // scrollback. Esc stays the shell's.
 import { useEffect, useRef, useState, type KeyboardEvent, type PointerEvent, type ReactNode } from "react";
@@ -13,11 +14,14 @@ import { CloseIcon, PlusIcon, ChevronDown } from "../ui";
 import { t } from "../i18n";
 import { FindBar } from "../sessions/term/find-bar";
 import { FIND_EVENT, type FindRequest } from "../sessions/term/engine-find";
-import { addTerminalTab, closePane, closeTerminalTab, equalizePanes, focusPane, getTermPanel, leafName, movePaneFocus, pickTerminalTab, seenTerminalTab, setPaneRatio, splitPane, toggleTerminal, useTermPanel, type TermPane, type TermTab } from "./state";
+import { addTerminalTab, closePane, closeTerminalTab, equalizePanes, focusPane, getTermPanel, leafName, movePane, movePaneFocus, pickTerminalTab, seenTerminalTab, setPaneRatio, splitPane, stepPaneFocus, toggleTerminal, useTermPanel, zoomPane, type TermPane, type TermTab } from "./state";
 import { attachTerm, disposeTerm, dropOnPane, focusTerm, relookTerms, showTerm, wireFileDrop } from "./terms";
-import { clampRatio, isPane, MAX_PANES, paneKey, PANE_MIN_ROWS, PANE_MIN_W, type Layout } from "./layout";
+import { clampRatio, isPane, MAX_PANES, paneKey, panesOf, PANE_MIN_ROWS, PANE_MIN_W, type Layout } from "./layout";
 import { readTermSettings } from "../sessions/term/settings";
+import { useDimStyle } from "../sessions/SplitView";
 import { isMac } from "../app/shortcuts";
+import { composing } from "../lib/ime";
+import { markPaneClosed } from "../app/menuClose";
 import { fgName, TermRowMark } from "../sessions/TermRowMark";
 
 /** The thread view's hook (re-exported from ./state, which loads no terminal code): the open thread's folder. */
@@ -97,7 +101,7 @@ function PaneBody({ pane, tab, front, shown, split, mode, focus }: NodeProps & {
   }, [shown, focus, focused, pane.id]);
   return (
     <div
-      className={`term-wrap termpanel-body${split && focused ? " focused" : ""}`}
+      className={`term-wrap termpanel-body${split && focused ? " focused" : ""}${split && !focused ? " dim" : ""}`}
       ref={wrap}
       hidden={!front}
       data-testid="termpanel-terminal"
@@ -165,6 +169,11 @@ function LayoutNode({ l, path, ...props }: NodeProps & { l: Layout; path: string
     const pane = props.tab.panes.find((p) => p.id === l.pane);
     return pane ? <PaneBody key={pane.id} pane={pane} {...props} /> : null;
   }
+  // zoomed: the part holding the focused pane fills the tab (the others keep running behind it)
+  if (props.tab.zoom) {
+    const inA = panesOf(l.a).includes(props.tab.focus);
+    return <LayoutNode l={inA ? l.a : l.b} path={`${path}${inA ? "a" : "b"}`} {...props} />;
+  }
   const part = (share: number, child: Layout, p: string) => (
     <div className="termpanel-part" style={{ flex: `${share} 1 0px` }}>
       <LayoutNode l={child} path={p} {...props} />
@@ -180,8 +189,9 @@ function LayoutNode({ l, path, ...props }: NodeProps & { l: Layout; path: string
 }
 
 function TabBody({ tab, active, open, mode, focus }: { tab: TermTab; active: boolean; open: boolean; mode: "dark" | "light"; focus: number }) {
+  const dim = useDimStyle();
   return (
-    <div className="termpanel-layout" hidden={!active} data-testid="termpanel-layout" data-tab={tab.key} data-panes={tab.panes.length}>
+    <div className="termpanel-layout" hidden={!active} style={dim} data-testid="termpanel-layout" data-tab={tab.key} data-panes={tab.panes.length} data-zoom={tab.zoom ? "true" : "false"}>
       <LayoutNode l={tab.layout} path="" tab={tab} front={active} shown={open && active} split={tab.panes.length > 1} mode={mode} focus={focus} />
     </div>
   );
@@ -189,6 +199,7 @@ function TabBody({ tab, active, open, mode, focus }: { tab: TermTab; active: boo
 
 /** The pane keys, taken on the way down inside the panel (before xterm, which would send ⌘D/Ctrl+Shift+D on). */
 function onPaneKey(e: globalThis.KeyboardEvent): void {
+  if (composing(e)) return;
   const k = paneKey(e, isMac());
   if (!k) return;
   e.preventDefault();
@@ -198,8 +209,15 @@ function onPaneKey(e: globalThis.KeyboardEvent): void {
   const tab = s.tabs.find((x) => x.key === s.active);
   if (!tab) return;
   if (k.kind === "split") splitPane(k.dir);
-  else if (k.kind === "close") closePane(tab.focus);
-  else movePaneFocus(k.dir);
+  else if (k.kind === "close") {
+    markPaneClosed();
+    closePane(tab.focus);
+  }
+  else if (k.kind === "focus") movePaneFocus(k.dir);
+  else if (k.kind === "step") stepPaneFocus(k.step);
+  else if (k.kind === "move") movePane(k.dir);
+  else if (k.kind === "zoom") zoomPane();
+  else equalizePanes(tab.key);
 }
 
 const SplitIcon = () => (
