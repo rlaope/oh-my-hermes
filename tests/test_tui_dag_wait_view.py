@@ -32,6 +32,11 @@ from test_tui_modes import drawn, make_app
 from omh.tui.background import BackgroundProcess, tool_call
 from omh.tui.keys import CHAR, Key
 
+
+def after_glyph(row: str) -> str:
+    """A wait row's words after its spinner frame and the space (a frame can be two code points, `✳︎`)."""
+    return row.split(" ", 1)[1] if " " in row else row
+
 RUN = "pr-a"
 SONNET = "claude-sonnet-5-5"
 PARKED_AT = 1_800_000_000.0
@@ -470,8 +475,8 @@ class WaitingRowTests(unittest.TestCase):
                 screen = drawn(app)
                 rule = next(at for at, row in enumerate(screen) if row.startswith("─"))
                 (row,) = self.waiting(app)
-                self.assertEqual(row[2:], "Testing… (10m 6s)")
-                self.assertIn(row[0], WORKING_GLYPHS)
+                self.assertEqual(after_glyph(row), "Testing… (10m 6s)")
+                self.assertTrue(row.startswith(WORKING_GLYPHS))
                 self.assertLess(screen.index(row), rule, "above the composer, where the working row stands")
                 self.assertEqual(app._working_rows(), 1)
                 self.assertIn("🔔 will ping you", mode_row(app), "the info line says what main says")
@@ -533,7 +538,7 @@ class WaitingAgentsTests(unittest.TestCase):
     def waiting(app) -> list[str]:
         from omh.tui.app import WORKING_GLYPHS
 
-        return [row[2:] for row in drawn(app) if row[:1] in WORKING_GLYPHS and "… (" in row and "Working…" not in row]
+        return [after_glyph(row) for row in drawn(app) if row.startswith(WORKING_GLYPHS) and "… (" in row and "Working…" not in row]
 
     def test_a_running_dag_node_alone_is_one_agent_with_its_time(self) -> None:
         app, _clock, wall = self.app(lanes=(2027.0,))

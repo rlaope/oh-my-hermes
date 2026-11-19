@@ -22,6 +22,11 @@ from omh.tui.gateway import Event, ServerRequest
 from omh.tui.panels import HudSnapshot
 from omh.tui.wait_kinds import classify
 
+
+def after_glyph(row: str) -> str:
+    """A wait row's words after its spinner frame and the space (a frame can be two code points, `✳︎`)."""
+    return row.split(" ", 1)[1] if " " in row else row
+
 NOW = 1_800_000_000.0
 CI = ("bash ~/.hermes/skills/oh-my-hermes-contribution/scripts/merge_when_green.sh 2975 /tmp/w.log", 2280)
 TESTS = ("cd wt && uv run python -m unittest discover -s tests", 600)
@@ -126,6 +131,27 @@ class ClassifierTests(unittest.TestCase):
         self.assertEqual(kind_of("make || vercel"), ("Deploying", ""))
         self.assertEqual(kind_of("git fetch && git push"), ("Pushing", ""))
 
+    def test_quoted_operators_and_heredoc_bodies_are_data(self) -> None:
+        # Review round 1: a quoted `;`, or a heredoc body, is data; a newline ends a command as `;` does.
+        self.assertIsNone(classify('printf "%s\\n" ";" pytest'))
+        self.assertIsNone(classify('echo "a && pytest"'))
+        self.assertIsNone(classify("cat <<'EOF'\ndocumentation; pytest\nEOF"))
+        self.assertIsNone(classify("cat <<-EOF\n\tgh pr checks 7\n\tEOF"))
+        self.assertEqual(kind_of("cat <<'EOF'\nrun; gh pr checks 7\nEOF\ncd wt && uv run python -m unittest"),
+                         ("Testing", ""), "the real command after the body, not the body's")
+        self.assertEqual(kind_of("echo setup\nuv run python -m unittest"), ("Testing", ""))
+        self.assertIsNone(classify("command -v pytest"), "a lookup, not a run")
+        self.assertEqual(kind_of("bash -e scripts/run_test_modules.sh wt log t"), ("Testing", ""))
+        self.assertIsNone(classify('bash -c "pytest"'), "an inline string is not read as commands")
+
+    def test_a_pr_number_is_the_positional_argument_not_an_option_value(self) -> None:
+        self.assertEqual(kind_of("gh pr checks --watch --interval 5 2975"), ("Waiting for CI", "#2975"))
+        self.assertEqual(kind_of("gh pr checks --interval=5 2975"), ("Waiting for CI", "#2975"))
+        self.assertEqual(kind_of("gh pr checks -R rlaope/x --watch 12"), ("Waiting for CI", "#12"))
+        self.assertEqual(kind_of("gh pr merge --match-head-commit 1234567 2975"), ("Waiting for CI", "#2975"))
+        self.assertEqual(kind_of("gh pr checks --watch --interval 5"), ("Waiting for CI", ""), "no PR: none guessed")
+        self.assertEqual(kind_of("gh pr checks feature/x"), ("Waiting for CI", ""), "a branch is no number")
+
     def test_the_sleep_says_how_long_is_left_never_below_zero(self) -> None:
         self.assertEqual(classify("sleep 240", started_at=NOW, now=NOW + 100).detail, "2m 20s left")
         self.assertEqual(classify("sleep 2m", started_at=NOW, now=NOW + 119.5).detail, "1s left", "rounded up")
@@ -135,21 +161,22 @@ class ClassifierTests(unittest.TestCase):
         self.assertIsNone(classify("sleep 30 && echo x"), "only a command that is only a sleep")
 
 
-def waiting_app(*, procs=(), built=None, cols=120, rows=30, busy=False):
-    """An app between turns whose session waits on `procs` (command, seconds) and the lanes of `built`."""
+def waiting_app(*, procs=(), built=None, cols=120, rows=30, busy=False, host=True):
+    """An app between turns whose session waits on `procs` (command, seconds) and the lanes of `built`. Its processes
+    are host processes OMH can ask about (`askable`) unless `host` is false."""
     clock, wall = [100.0], [NOW]
     app, client = make_app(busy=busy, rows=rows, cols=cols, clock=lambda: clock[0], wall_clock=lambda: wall[0])
     app.bg_session = app.stored_id
-    app.bg_running = tuple(BackgroundProcess(f"proc_{number}", None, False, None, command, NOW - age, True, False)
-                           for number, (command, age) in enumerate(procs))
+    app.bg_running = tuple(BackgroundProcess(f"proc_{number}", 4000 + number if host else None, host, None, command,
+                                             NOW - age, True, False) for number, (command, age) in enumerate(procs))
     with_graph(app, built)
     app.hud = HudSnapshot(app.hud.session_id, app.hud.payload, wall[0])  # read just now
     return app, clock, wall
 
 
 def wait_rows(app) -> list[str]:
-    """The tail's rows that say a wait: the spinner's, the end line's."""
-    return [row for row in drawn(app) if row[:1] in (*WORKING_GLYPHS, "✓", "✗", "·") and " (" in row
+    """The tail's rows that say a wait: the spinner's (a frame can be two code points, `✳︎`), the end line's."""
+    return [row for row in drawn(app) if row.startswith((*WORKING_GLYPHS, "✓", "✗", "·")) and " (" in row
             and "background" not in row]
 
 
@@ -179,7 +206,7 @@ class RowTests(unittest.TestCase):
             with self.subTest(cols=cols):
                 app, _clock, _wall = waiting_app(procs=(CI,), cols=cols)
                 (row,) = wait_rows(app)
-                self.assertEqual(row[2:], "Waiting for CI… (38m 0s · #2975)")
+                self.assertEqual(after_glyph(row), "Waiting for CI… (38m 0s · #2975)")
                 self.assertEqual(app._working_rows(), 1)
 
     def test_tests_and_an_agent_beside_ci_are_counted(self) -> None:
@@ -190,7 +217,7 @@ class RowTests(unittest.TestCase):
         for cols, said in expected.items():
             with self.subTest(cols=cols):
                 app, _clock, _wall = waiting_app(procs=(CI, TESTS), built=agent, cols=cols)
-                self.assertEqual([row[2:] for row in wait_rows(app)], [said])
+                self.assertEqual([after_glyph(row) for row in wait_rows(app)], [said])
 
     def test_a_narrow_row_drops_the_kind_words_then_the_detail_then_reads_as_before(self) -> None:
         agent = single("quick", model="glm-5.3-flash")
@@ -200,7 +227,7 @@ class RowTests(unittest.TestCase):
                            (46, "Waiting… (38m 0s · 1 agent · 2 terminals)")):
             with self.subTest(cols=cols):
                 app, _clock, _wall = waiting_app(procs=(CI, TESTS), built=agent, cols=cols)
-                self.assertEqual([row[2:] for row in wait_rows(app)], [said])
+                self.assertEqual([after_glyph(row) for row in wait_rows(app)], [said])
 
     def test_a_dag_run_with_a_failed_node(self) -> None:
         built = dag_run({"a": "done", "b": "failed", "c": "running", "d": "waiting"})
@@ -209,13 +236,13 @@ class RowTests(unittest.TestCase):
                            (40, "Running tui waiting kinds… (15m 0s)")):
             with self.subTest(cols=cols):
                 app, _clock, _wall = waiting_app(built=built, cols=cols)
-                self.assertEqual([row[2:] for row in wait_rows(app)], [said])
+                self.assertEqual([after_glyph(row) for row in wait_rows(app)], [said])
 
     def test_a_review_child_with_its_model(self) -> None:
         for cols in (40, 80, 120):
             with self.subTest(cols=cols):
                 app, _clock, _wall = waiting_app(built=single("review"), cols=cols)
-                self.assertEqual([row[2:] for row in wait_rows(app)], ["Reviewing… (5m 0s · claude-sonnet-5-5)"])
+                self.assertEqual([after_glyph(row) for row in wait_rows(app)], ["Reviewing… (5m 0s · claude-sonnet-5-5)"])
 
     def test_a_child_by_its_category_or_role(self) -> None:
         for category, role, model, said in (("google-search", "", SONNET, "Researching… (5m 0s · claude-sonnet-5-5)"),
@@ -224,18 +251,18 @@ class RowTests(unittest.TestCase):
                                             ("quick", "", "?", "Running agent… (5m 0s)")):
             with self.subTest(category=category, role=role):
                 app, _clock, _wall = waiting_app(built=single(category, role=role, model=model))
-                self.assertEqual([row[2:] for row in wait_rows(app)], [said])
+                self.assertEqual([after_glyph(row) for row in wait_rows(app)], [said])
 
     def test_an_unnamed_command_keeps_todays_row(self) -> None:
         app, _clock, _wall = waiting_app(procs=(("./run-the-thing.py --long", 65),))
-        self.assertEqual([row[2:] for row in wait_rows(app)], ["Waiting… (1m 5s · terminal)"])
+        self.assertEqual([after_glyph(row) for row in wait_rows(app)], ["Waiting… (1m 5s · terminal)"])
 
     def test_a_watched_process_names_its_first_pattern_cut(self) -> None:
         app, _clock, _wall = waiting_app(procs=(("tail -f server.log", 30),))
         app._take_waking({"name": "terminal", "result": {"session_id": "proc_0", "notify_on_complete": False,
                                                          "watch_patterns": ["", "Listening on http://127.0.0.1:8000/ready",
                                                                             "x"]}})
-        self.assertEqual([row[2:] for row in wait_rows(app)], ['Watching for "Listening on http://127…"… (30s)'])
+        self.assertEqual([after_glyph(row) for row in wait_rows(app)], ['Watching for "Listening on http://127…"… (30s)'])
 
     def test_never_during_a_turn(self) -> None:
         app, _clock, _wall = waiting_app(procs=(CI,), busy=True)
@@ -247,7 +274,7 @@ class EndLineTests(unittest.TestCase):
 
     def test_a_process_end_is_never_called_passed_or_failed(self) -> None:
         app, clock, _wall = waiting_app(procs=(TESTS,))
-        self.assertEqual([row[2:] for row in wait_rows(app)], ["Testing… (10m 0s)"])
+        self.assertEqual([after_glyph(row) for row in wait_rows(app)], ["Testing… (10m 0s)"])
         app.bg_running = ()
         self.assertEqual(wait_rows(app), ["· Tests ended (10m 0s)"])
         self.assertEqual(app._working_rows(), 1)
@@ -282,7 +309,7 @@ class EndLineTests(unittest.TestCase):
         app, _clock, _wall = waiting_app(procs=(CI, TESTS))
         self.assertIn("Waiting for CI…", wait_rows(app)[0])
         app.bg_running = app.bg_running[1:]
-        self.assertEqual([row[2:] for row in wait_rows(app)], ["Testing… (10m 0s)"])
+        self.assertEqual([after_glyph(row) for row in wait_rows(app)], ["Testing… (10m 0s)"])
         self.assertIsNone(app.wait_end)
 
     def test_not_during_a_turn_and_not_after_one(self) -> None:
@@ -293,6 +320,44 @@ class EndLineTests(unittest.TestCase):
         self.assertFalse([row for row in drawn(app) if "ended" in row])
         app._on_event(Event("message.complete", SID, {"text": "done"}))
         self.assertFalse([row for row in drawn(app) if "ended" in row], "the turn saw it end; no late end line")
+
+    def test_a_parked_or_partial_dag_ticks_no_run_and_keeps_an_earlier_failure(self) -> None:
+        # Review round 1: a parked node is waiting, not over; the run ticks only when the panel's summary says over.
+        app, _clock, _wall = waiting_app(built=dag_run({"a": "running", "b": "waiting"}))
+        self.assertTrue(wait_rows(app))
+        with_graph(app, dag_run({"a": "waiting", "b": "waiting"}))
+        self.assertEqual(wait_rows(app), [], "a parked node has not ended")
+        app, _clock, _wall = waiting_app(built=dag_run({"a": "failed", "b": "running"}))
+        self.assertTrue(wait_rows(app))
+        with_graph(app, dag_run({"a": "failed", "b": "done"}, open_run=False))
+        self.assertEqual(wait_rows(app), ["✗ tui waiting kinds failed (15m 0s)"], "the earlier failure counts")
+        app, _clock, _wall = waiting_app(built=dag_run({"a": "done", "b": "running"}))
+        self.assertTrue(wait_rows(app))
+        partial = dag_run({"a": "done", "b": "done"}, open_run=False)
+        partial["hidden_nodes"] = 1
+        with_graph(app, partial)
+        self.assertEqual(wait_rows(app), ["✓ tui waiting kinds: 1 node finished (15m 0s)"], "a partial graph: no run tick")
+
+    def test_an_end_line_stays_with_its_session_and_its_idle_stretch(self) -> None:
+        app, _clock, _wall = waiting_app(procs=(TESTS,))
+        drawn(app)
+        app.bg_running = ()
+        self.assertEqual(wait_rows(app), ["· Tests ended (10m 0s)"])
+        app._adopt_stored("another-session")
+        self.assertEqual(wait_rows(app), [], "not drawn in the session switched to")
+        # A whole turn between two frames: its start forgets the wait, so no end line follows it.
+        app, _clock, _wall = waiting_app(procs=(TESTS,))
+        drawn(app)
+        app._on_event(Event("message.start", SID, {}))
+        app._on_event(Event("message.complete", SID, {"text": "done"}))
+        app.bg_running = ()
+        self.assertEqual(wait_rows(app), [])
+
+    def test_a_process_omh_cannot_ask_about_never_ends_on_screen(self) -> None:
+        app, _clock, _wall = waiting_app(procs=(TESTS,), host=False)
+        self.assertEqual([after_glyph(row) for row in wait_rows(app)], ["Testing… (10m 0s)"])
+        app.bg_running = ()
+        self.assertEqual(wait_rows(app), [], "its row may be one another writer dropped")
 
     def test_working_rows_counts_exactly_the_rows_drawn(self) -> None:
         # Every state of the row: none, the wait, its end line, after the end line.

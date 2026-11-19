@@ -238,10 +238,12 @@ from .dag_tree import TreeState
 from .turn_ends import TURN_DONE, TURN_INTERRUPTED, TURN_OPEN, TURN_STOPPED, read_turn_end, record_turn_end
 from .panels import (
     CATCH_MARK,
+    SETTLED_NODE_STATES,
     HudPoller,
     HudSnapshot,
     catch_lines,
     dag_page_lines,
+    dag_run_summary,
     graph_is_dag,
     hud_chips,
     panel_lines,
@@ -2618,6 +2620,7 @@ class App(ModesMixin, AgentViewMixin):
         # (glyph, words, when on `clock`) while nothing else waits (`_wait_state`).
         self.wait_primary: tuple[str, Wait] | None = None
         self.wait_end: tuple[str, str, float] | None = None
+        self.wait_askable: dict[str, bool] = {}  # whether each waited-on process's end can be seen (`askable`)
         self.tree_state: TreeState | None = None  # what the tree's keys need, as the agent view last drew it
         # The dag run that is over, which the view no longer draws, and when its graph had last moved (`_run_gone`)
         self.retired_run: tuple[str, float] | None = None
@@ -3037,6 +3040,7 @@ class App(ModesMixin, AgentViewMixin):
         if self.stored_id and self.stored_id not in self.opened_ids:
             self.opened_ids = [*self.opened_ids, self.stored_id][-OPENED_IDS_KEPT:]
         self.stored_id = stored
+        self._forget_waits()  # the waits and their end line were the session being left
         write_active_session(self.environ.get("HERMES_TUI_ACTIVE_SESSION_FILE", ""), stored)
         hermes_home = self.environ.get("HERMES_HOME", "")
         if hermes_home:  # `omh` reads the session's row there once the TUI exits
@@ -3862,6 +3866,7 @@ class App(ModesMixin, AgentViewMixin):
         elif running and not self._busy():  # a turn started while the events did not arrive
             self.turn_pending = True
             self.busy_since = self.clock()
+            self._forget_waits()  # a turn starts: the last wait and its end line were the idle session's
         elif running:  # it runs on, but a tool's end may have been lost with the events
             self.transcript.lose_running_tools()
 
@@ -4444,6 +4449,7 @@ class App(ModesMixin, AgentViewMixin):
                 self._note_turn(TURN_OPEN)  # its end, once seen, says how it ended (`turn_ends`)
                 if not self.turn_pending:  # a turn this TUI did not start (a resumed one, a server queue)
                     self.busy_since = self.clock()
+                    self._forget_waits()  # a turn starts: the last wait and its end line were the idle session's
                     self.turn_waited = 0.0
                     self._count_from_here()
                 self.turn_pending = False
@@ -6567,6 +6573,7 @@ class App(ModesMixin, AgentViewMixin):
         self._settle_claim()
         self.turn_pending = True  # a prompt sent meanwhile goes behind this one
         self.busy_since = self.clock()
+        self._forget_waits()  # a turn starts: the last wait and its end line were the idle session's
         unsent = UnsentPrompt(typed or text, tuple(images))
         self.unsent.append(unsent)
         self._after_claim(lambda: self._stage_images(
@@ -6594,6 +6601,7 @@ class App(ModesMixin, AgentViewMixin):
         self._clear_roster()  # the agents shown were the last turn's
         self.bg_done = None  # a turn starts: the finished row's offer was for an idle session
         self.turn_pending = True
+        self._forget_waits()  # a turn starts: the last wait and its end line were the idle session's
         self.turn_unknown, self.turn_unknown_count = [], 0
         self.busy_since = self.clock()
         self.turn_waited = 0.0
@@ -10318,6 +10326,9 @@ class App(ModesMixin, AgentViewMixin):
                 kind = watching(pattern) if pattern else classify(process.command, started_at=process.started_at,
                                                                      now=wall)
                 waits.append(Wait(process.proc_id, wall - process.started_at, kind))
+                self.wait_askable[process.proc_id] = askable(process)
+                while len(self.wait_askable) > BG_WAKING_KEPT:
+                    del self.wait_askable[next(iter(self.wait_askable))]
         payload = self.hud.payload if self.hud is not None else None
         graph = payload.get("delegation_graph") if isinstance(payload, Mapping) and not payload.get("error") else None
         # A run its end print retired is over, whatever this read of the HUD still says (`_run_gone`).
@@ -10358,22 +10369,38 @@ class App(ModesMixin, AgentViewMixin):
         if not wait.agent:
             if any(process.proc_id == wait.key for process in self.bg_running):
                 return None
+            # Only a process OMH could ask about (`askable`, pid and start time) is said to have ended: off that,
+            # a row gone from the checkpoint may be one another Hermes writer dropped while it runs.
+            if not self.wait_askable.get(wait.key, False):
+                return None
             return WAIT_ENDED, f"{label} ended ({took})", self.clock()
         payload = self.hud.payload if self.hud is not None else None
         graph = payload.get("delegation_graph") if isinstance(payload, Mapping) and not payload.get("error") else None
         states = {str(node.get("id")): node.get("state") for node in (graph.get("nodes") or [] if isinstance(
             graph, Mapping) else []) if isinstance(node, Mapping)}
         now = [states.get(lane) for lane in wait.lanes]
-        if any(state is None or state in ("running", "stuck") for state in now):
+        # Only a settled lane has ended: a parked or held dag node reads `waiting`, which is not over (`_DAG_VIEW`).
+        if any(state not in SETTLED_NODE_STATES for state in now):
             return None
-        if wait.key.startswith(DAG_WAIT_KEY) and isinstance(graph, Mapping) and graph.get("dag_open") is True:
-            # The run goes on (a node ready, or out and not yet running): its running nodes ended, not the run.
-            label = f"{label}: {len(now)} node{'' if len(now) == 1 else 's'}"
+        if wait.key.startswith(DAG_WAIT_KEY):
+            # The whole run ticks only when the panel's own summary would call it over (every lane settled, none
+            # hidden, the run not open), and then with every lane's state, an earlier failure included.
+            if not isinstance(graph, Mapping) or not dag_run_summary(graph):
+                label = f"{label}: {len(now)} node{'' if len(now) == 1 else 's'}"
+            else:
+                now = [node.get("state") for node in graph.get("nodes") or [] if isinstance(node, Mapping)
+                       and node.get("kind") != "root" and node.get("outside_dag") is not True]
         if "failed" in now:
             return WAIT_FAILED, f"{label} failed ({took})", self.clock()
         if any(state in ("interrupted", "unknown") for state in now):
             return WAIT_ENDED, f"{label} ended ({took})", self.clock()
         return WAIT_FINISHED, f"{label} finished ({took})", self.clock()
+
+    def _forget_waits(self) -> None:
+        """Drop the wait last seen and its end line: a turn started or the session changed, so neither is this idle
+        stretch's any more. Called where the change happens, not on a repaint, since several events (a whole turn,
+        start to end) can arrive between two frames."""
+        self.wait_primary, self.wait_end = None, None
 
     def _wait_end_shown(self) -> tuple[str, str, float] | None:
         """The end line `_tail` draws (`wait_end`) while its WAIT_END_SECONDS last, between turns; else None."""

@@ -112,26 +112,66 @@ class Wait:
         return bool(self.lanes)
 
 
-def _words(command: str) -> list[str]:
-    """The command's shell words with `&&`, `||`, `;`, `|` as words of their own; a line shlex cannot read (an open
-    quote) is split on blanks."""
-    lexer = shlex.shlex(command, posix=True, punctuation_chars=True)
-    lexer.whitespace_split = True
+# A word the tokenizer saw outside any quote, so `";"` (quoted data) never splits a chain the way `;` does.
+_OPERATOR = object()
+_HEREDOC = re.compile(r"<<-?\s*(['\"]?)([A-Za-z_][A-Za-z0-9_]*)\1")
+
+
+def _strip_heredocs(command: str) -> str:
+    """The command without heredoc bodies: the lines after a `<<WORD` line up to the line that is only WORD. A body
+    is data fed to a command's stdin, never a command, so a keyword in it names nothing."""
+    lines = command.split("\n")
+    kept: list[str] = []
+    ends: list[tuple[str, bool]] = []
+    for line in lines:
+        if ends:
+            word, dash = ends[0]
+            if (line.lstrip("\t") if dash else line) == word:
+                ends.pop(0)
+            continue
+        kept.append(line)
+        ends.extend((found.group(2), found.group(0).startswith("<<-")) for found in _HEREDOC.finditer(line))
+    return "\n".join(kept)
+
+
+def _unquote(word: str) -> str:
     try:
-        return list(lexer)
+        parts = shlex.split(word)
     except ValueError:
-        return command.split()
+        return word
+    return parts[0] if len(parts) == 1 else word
+
+
+def _words(command: str) -> list[object]:
+    """The command's shell words, each chain operator (`&&`, `||`, `;`, `|`, `&`, a newline) as `_OPERATOR` and
+    never a quoted `;` or `&&`; heredoc bodies dropped. A line shlex cannot read (an open quote) names nothing.
+
+    The line is read in shlex's non-POSIX mode, which keeps a word's quotes, so a quoted `";"` stays a word (POSIX
+    mode would hand it back as a bare `;`); each word is then unquoted on its own."""
+    words: list[object] = []
+    for line in _strip_heredocs(command).split("\n"):
+        lexer = shlex.shlex(line, posix=False, punctuation_chars=True)
+        lexer.whitespace_split = True
+        lexer.commenters = ""
+        try:
+            tokens = list(lexer)
+        except ValueError:
+            return []
+        for token in tokens:
+            words.append(_OPERATOR if token in CHAIN else _unquote(token))
+        words.append(_OPERATOR)  # a newline ends a command as `;` does
+    return words
 
 
 def _segments(command: str) -> list[list[str]]:
     segments: list[list[str]] = [[]]
     for word in _words(command):
-        if word in CHAIN:
+        if word is _OPERATOR:
             segments.append([])
         elif word in ("(", ")", "{", "}"):
             continue
         else:
-            segments[-1].append(word)
+            segments[-1].append(str(word))
     return [segment for segment in segments if segment]
 
 
@@ -154,14 +194,21 @@ def command_words(segment: list[str]) -> list[str]:
         if not words or words[0] in SKIPPED:
             return []
         head = words[0]
+        if head == "command" and any(word in ("-v", "-V") for word in words[1:2]):
+            return []  # a lookup of where the command is, not a run of it
         if head in ("time", "nice", "env", "uvx", "npx", "bunx", "command", "exec", "nohup"):
             words = words[_skip_options(words, 1):]
         elif head in ("uv", "poetry") and words[1:2] == ["run"]:
             words = words[_skip_options(words, 2):]
         elif head == "pnpm" and words[1:2] == ["exec"]:
             words = words[_skip_options(words, 2):]
-        elif head in ("bash", "sh", "zsh") and len(words) > 1 and not words[1].startswith("-"):
-            words = words[1:]  # the script it runs is the command
+        elif head in ("bash", "sh", "zsh") and len(words) > 1:
+            at = 1
+            while at < len(words) and words[at].startswith("-") and words[at] not in ("-c", "--"):
+                at += 2 if words[at] in ("-o", "+o", "-O", "+O") else 1
+            if at >= len(words) or words[at] == "-c":
+                return words  # a shell running an inline string: its text is not read as commands
+            words = words[at + (words[at] == "--"):]  # the script it runs is the command
         else:
             return words
 
@@ -170,13 +217,41 @@ def _base(word: str) -> str:
     return posixpath.basename(word)
 
 
+# `gh pr checks` / `gh pr merge` options that take a value (`gh <cmd> --help`): their value is never the PR.
+GH_VALUE_OPTIONS = frozenset({"-i", "--interval", "-R", "--repo", "-q", "--jq", "-t", "--template", "--json",
+                              "-b", "--body", "-F", "--body-file", "-A", "--author-email", "--match-head-commit",
+                              "-s", "--subject"})
+
+
 def _number(args: Sequence[str]) -> str:
-    """`#<n>` for the first argument that is a PR number, else ""."""
+    """`#<n>` for the PR a merge script waits on: `merge_train.sh`'s `--after <n>`, else the first argument that is
+    a number (`merge_when_green.sh <pr> <log> <repo>`); "" when none is."""
+    for at, arg in enumerate(args):
+        if arg == "--after" and at + 1 < len(args):
+            found = NUMBER.fullmatch(args[at + 1])
+            return f"#{found.group(1)}" if found else ""
     for arg in args:
         found = NUMBER.fullmatch(arg)
         if found:
             return f"#{found.group(1)}"
     return ""
+
+
+def _positional_number(args: Sequence[str], value_options: frozenset[str]) -> str:
+    at = 0
+    while at < len(args):
+        arg = args[at]
+        if arg == "--":
+            at += 1
+            break
+        if arg.startswith("-") and arg != "-":
+            at += 1 if "=" in arg or arg not in value_options else 2
+            continue
+        break
+    if at >= len(args):
+        return ""
+    found = NUMBER.fullmatch(args[at])
+    return f"#{found.group(1)}" if found else ""
 
 
 def _python_module(words: list[str]) -> list[str]:
@@ -207,7 +282,7 @@ def _match(kind: str, words: list[str]) -> str | None:
     module = _python_module(words)
     if kind == CI:
         if head == "gh" and pair in (["pr", "checks"], ["pr", "merge"]):
-            return _number(rest[2:])
+            return _positional_number(rest[2:], GH_VALUE_OPTIONS)
         if head == "gh" and pair == ["run", "watch"]:
             return ""  # a run id, not a PR number
         if head in ("merge_when_green.sh", "merge_train.sh"):

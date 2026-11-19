@@ -65,7 +65,7 @@ class WaitingRowTests(unittest.TestCase):
         self.app._take_background(snapshot)  # what `_take_hud` does with a delivered read
 
     def waiting(self) -> str:
-        return next((line for line in drawn(self.app) if "…" in line and line[:1] in WORKING_GLYPHS), "")
+        return next((line for line in drawn(self.app) if "…" in line and line.startswith(WORKING_GLYPHS)), "")
 
     def run_turn(self, *events: Event) -> None:
         self.app._on_event(Event("message.start", SID, {}))

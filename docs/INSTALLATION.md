@@ -1237,7 +1237,10 @@ run and approval decision stays Hermes'; the screen is OMH's.
   else waiting, one muted row says so for 3 seconds: `✓ Review finished (5m 0s)`,
   `✗ … failed` for a child or run whose graph says it failed, and
   `· Tests ended (10m 0s)` for a process, whose record carries no exit code,
-  so it is never called passed or failed. Nothing of this shows during a turn.
+  so it is never called passed or failed. A process this machine cannot ask
+  about (another pid namespace, or not POSIX) gets no end line, and a dag-ulw
+  run is said to have finished only once every node has settled. Nothing of
+  this shows during a turn or in another session.
 - Motion and colour follow one rule set, so scrollback reads at a glance:
   - Each block hangs on a continuous thin `┃` rail with no fill behind it
     (with `NO_COLOR` set your prompt's is the light `│`, so it is told apart
