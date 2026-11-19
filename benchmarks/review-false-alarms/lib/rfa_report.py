@@ -54,16 +54,51 @@ def summarize(graded: Iterable[Mapping[str, Any]]) -> dict[str, dict[str, Any]]:
             "flip_total": sum(flips.values()),
             "cases_with_flips": sum(1 for count in flips.values() if count),
             "min_runs_per_case": min(runs_per_case.values()),
+            "runs_per_case": dict(sorted(runs_per_case.items())),
         }
     return summary
 
 
+def _names(cases: Iterable[str]) -> str:
+    ordered = sorted(cases)
+    shown = ", ".join(ordered[:3])
+    return shown + (f" and {len(ordered) - 3} more" if len(ordered) > 3 else "")
+
+
+def coverage_mismatch(on: Mapping[str, Any], off: Mapping[str, Any]) -> str | None:
+    """Why two arms cannot be compared, or None when they ran the same cases
+    the same number of times. Rates over different cases are not a contest."""
+
+    on_runs, off_runs = on["runs_per_case"], off["runs_per_case"]
+    only_on = set(on_runs) - set(off_runs)
+    only_off = set(off_runs) - set(on_runs)
+    if only_on or only_off:
+        parts = []
+        if only_on:
+            parts.append(f"{len(only_on)} cases only in omh-on ({_names(only_on)})")
+        if only_off:
+            parts.append(f"{len(only_off)} cases only in omh-off ({_names(only_off)})")
+        return "; ".join(parts)
+    uneven = [case for case in on_runs if on_runs[case] != off_runs[case]]
+    if uneven:
+        first = sorted(uneven)[0]
+        return (
+            f"run counts differ on {len(uneven)} cases ({_names(uneven)}; "
+            f"{first}: omh-on {on_runs[first]}, omh-off {off_runs[first]})"
+        )
+    return None
+
+
 def verdict_on_win_rule(summary: Mapping[str, Mapping[str, Any]]) -> str:
-    """The two-sided rule: fewer false alarms on traps AND no fewer hits on controls."""
+    """The two-sided rule: fewer false alarms on traps AND no fewer hits on
+    controls, judged only when both arms cover the same cases equally often."""
 
     on, off = summary.get("omh-on"), summary.get("omh-off")
     if not on or not off:
         return "not decided: both arms are needed"
+    mismatch = coverage_mismatch(on, off)
+    if mismatch:
+        return f"not comparable: {mismatch}"
     rates = (on["false_alarm_rate"], off["false_alarm_rate"], on["hit_rate"], off["hit_rate"])
     if any(rate is None for rate in rates):
         return "not decided: an arm has no trap runs or no control runs"

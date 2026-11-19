@@ -1,3 +1,7 @@
 # bug_location line numbers and diff.patch hunks are checked against these
 # files by tests/test_review_false_alarms_benchmark.py; keep them LF everywhere.
 * text eol=lf
+# A unified diff keeps the one-space prefix of a blank context line, which
+# `git diff --check` (the CI whitespace gate) reports as trailing whitespace.
+# Only the fixture patches opt out; everything else here stays checked.
+corpus/*/diff.patch -whitespace

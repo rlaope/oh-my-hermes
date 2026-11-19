@@ -9,6 +9,7 @@ from __future__ import annotations
 import json
 import os
 from pathlib import Path
+import secrets
 import shutil
 import subprocess
 from tempfile import TemporaryDirectory
@@ -42,10 +43,12 @@ REFUSED_PROVIDERS = frozenset({"og"})
 def stage_workspace(case: Case, root: Path) -> Path:
     """Copy one case's diff and context into a fresh directory.
 
-    case.json stays behind: it holds the answer.
+    case.json stays behind: it holds the answer. The directory gets a random
+    name, never the case id: the id says trap or control and names the bug, and
+    Hermes shows the reviewer its working directory.
     """
 
-    workspace = root / case.id
+    workspace = root / secrets.token_hex(6)
     workspace.mkdir(parents=True)
     shutil.copy2(case.directory / "diff.patch", workspace / "diff.patch")
     shutil.copytree(case.directory / "context", workspace / "context")

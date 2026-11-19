@@ -10,12 +10,15 @@ from contextlib import contextmanager, redirect_stderr, redirect_stdout
 import importlib.util
 import io
 import json
+import os
 from pathlib import Path
 import re
+import subprocess
 import sys
 from tempfile import TemporaryDirectory
 from typing import Iterator
 import unittest
+from unittest import mock
 
 ROOT = Path(__file__).resolve().parents[1]
 LANE = ROOT / "benchmarks" / "review-false-alarms"
@@ -96,6 +99,25 @@ class CorpusSchemaTests(unittest.TestCase):
                     ["case.json", "context", "diff.patch"],
                 )
                 self.assertTrue(any((directory / "context").rglob("*")))
+
+    def test_only_the_corpus_patches_skip_the_whitespace_gate(self) -> None:
+        # A patch keeps the leading space of a blank context line, which the CI
+        # `git diff --check` reads as trailing whitespace. Only the corpus
+        # patches opt out; the harness code and the context files stay checked.
+        patches = sorted(path.relative_to(ROOT).as_posix() for path in CORPUS.glob("*/diff.patch"))
+        checked = [
+            (LANE / "bench.py").relative_to(ROOT).as_posix(),
+            (LANE_LIB / "rfa_harness.py").relative_to(ROOT).as_posix(),
+            next(path for path in CORPUS.glob("*/context/**/*") if path.is_file()).relative_to(ROOT).as_posix(),
+            "tests/test_review_false_alarms_benchmark.py",
+        ]
+        result = subprocess.run(
+            ["git", "check-attr", "whitespace", "--", *patches, *checked],
+            cwd=ROOT, capture_output=True, text=True, timeout=20, check=True,
+        )
+        values = dict(line.rsplit(": whitespace: ", 1) for line in result.stdout.splitlines())
+        self.assertEqual({path: values[path] for path in patches}, {path: "unset" for path in patches})
+        self.assertEqual({path: values[path] for path in checked}, {path: "unspecified" for path in checked})
 
     def test_every_case_expected_matches_its_kind(self) -> None:
         for case in self.cases.values():
@@ -302,15 +324,50 @@ class ReportTests(unittest.TestCase):
 
     def test_win_rule_is_two_sided(self) -> None:
         def arm(fa: int, hits: int, runs: int = 3) -> dict:
-            return {"false_alarm_rate": fa / 10, "hit_rate": hits / 10, "min_runs_per_case": runs}
+            return {"false_alarm_rate": fa / 10, "hit_rate": hits / 10, "min_runs_per_case": runs,
+                    "runs_per_case": {"t": runs, "c": runs}}
 
         rule = report.verdict_on_win_rule
         self.assertEqual(rule({"omh-on": arm(1, 9), "omh-off": arm(3, 9)}), "omh-on wins: fewer false alarms, hit rate held")
         self.assertEqual(rule({"omh-on": arm(1, 8), "omh-off": arm(3, 9)}), "no win: fewer false alarms, but fewer controls hit")
         self.assertEqual(rule({"omh-on": arm(3, 9), "omh-off": arm(3, 9)}), "no win: false alarms not lower")
         self.assertEqual(rule({"omh-on": arm(4, 8), "omh-off": arm(3, 9)}), "no win: false alarms not lower, and fewer controls hit")
-        self.assertTrue(rule({"omh-on": arm(1, 9, runs=1), "omh-off": arm(3, 9)}).startswith("noise"))
+        self.assertTrue(rule({"omh-on": arm(1, 9, runs=1), "omh-off": arm(3, 9, runs=1)}).startswith("noise"))
         self.assertTrue(rule({"omh-on": arm(1, 9)}).startswith("not decided"))
+
+
+    def _records(self, keep) -> list[dict]:
+        records = grading.load_records(FIXTURE)
+        return [record for record in records if keep(record)]
+
+    def test_disjoint_coverage_is_not_comparable(self) -> None:
+        cases = grading.load_corpus(CORPUS)
+        names = sorted(cases)
+        on_cases = set(names[::2])
+        records = self._records(lambda r: (r["case"] in on_cases) == (r["arm"] == "omh-on"))
+        summary = report.summarize(grading.grade_records(cases, records))
+        self.assertEqual(summary["omh-on"]["min_runs_per_case"], 3)
+        self.assertEqual(summary["omh-off"]["min_runs_per_case"], 3)
+        rule = report.verdict_on_win_rule(summary)
+        self.assertTrue(rule.startswith("not comparable: "), rule)
+        self.assertNotIn("wins", rule)
+        with TemporaryDirectory() as scratch:
+            path = Path(scratch) / "records.json"
+            path.write_text(json.dumps({"schema": grading.RECORDS_SCHEMA, "records": records}), encoding="utf-8")
+            code, out, _ = _run(analyze, [str(path)])
+            json_code, json_out, _ = _run(analyze, [str(path), "--json"])
+        self.assertEqual((code, json_code), (0, 0))
+        self.assertIn("Win rule: not comparable: ", out)
+        self.assertNotIn("wins", out)
+        self.assertTrue(json.loads(json_out)["win_rule"].startswith("not comparable: "))
+
+    def test_unequal_runs_on_one_case_are_not_comparable(self) -> None:
+        cases = grading.load_corpus(CORPUS)
+        dropped = ("omh-off", "trap-eval-on-literal-table", 3)
+        records = self._records(lambda r: (r["arm"], r["case"], r["run"]) != dropped)
+        rule = report.verdict_on_win_rule(report.summarize(grading.grade_records(cases, records)))
+        self.assertTrue(rule.startswith("not comparable: "), rule)
+        self.assertIn("trap-eval-on-literal-table", rule)
 
 
 class CommandLineTests(unittest.TestCase):
@@ -384,6 +441,49 @@ class HarnessTests(unittest.TestCase):
         self.assertIn("diff.patch", names)
         self.assertIn("context/app/search.py", names)
         self.assertNotIn("case.json", names)
+
+
+    def test_live_review_is_blind_to_the_case_label(self) -> None:
+        case = grading.load_corpus(CORPUS)["trap-lock-held-by-caller"]
+        seen = {}
+
+        def fake_run(argv, **kwargs):
+            seen["argv"] = list(argv)
+            seen["cwd"] = str(kwargs["cwd"])
+            seen["env"] = dict(kwargs["env"])
+            seen["files"] = sorted(
+                path.relative_to(kwargs["cwd"]).as_posix() for path in Path(kwargs["cwd"]).rglob("*")
+            )
+            return subprocess.CompletedProcess(argv, 0, stdout="VERDICT: clean\n", stderr="")
+
+        with mock.patch.dict(os.environ, {"PATH": "/usr/bin:/bin"}, clear=True), \
+                mock.patch.object(harness.subprocess, "run", side_effect=fake_run):
+            result = harness.review_once(
+                case, hermes_executable="hermes", profile="p", provider=None, model=None,
+                toolsets="file", ignore_rules=False, timeout=5,
+            )
+        self.assertEqual(result["exit_code"], 0)
+        exposed = [seen["cwd"], *seen["argv"], *seen["files"], *seen["env"], *seen["env"].values()]
+        slug_words = {"lock", "held", "caller"}
+        for text in exposed:
+            folded = text.casefold()
+            with self.subTest(text=text[:80]):
+                self.assertNotIn("trap", folded)
+                self.assertNotIn("control", folded)
+                self.assertNotIn(case.id, folded)
+                if text != harness.REVIEW_PROMPT:
+                    self.assertFalse(slug_words & set(re.split(r"[^a-z0-9]+", folded)))
+        self.assertIn("diff.patch", seen["files"])
+        self.assertNotIn("case.json", seen["files"])
+
+    def test_each_staging_gets_a_fresh_neutral_name(self) -> None:
+        case = grading.load_corpus(CORPUS)["control-sql-injection-search"]
+        with TemporaryDirectory() as scratch:
+            first = harness.stage_workspace(case, Path(scratch))
+            second = harness.stage_workspace(case, Path(scratch))
+        self.assertNotEqual(first.name, second.name)
+        for name in (first.name, second.name):
+            self.assertRegex(name, r"^[0-9a-f]{12}$")
 
 
 if __name__ == "__main__":

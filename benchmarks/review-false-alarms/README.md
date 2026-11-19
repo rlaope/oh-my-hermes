@@ -93,6 +93,11 @@ OMH's review discipline wins only when **both** hold against `omh-off`:
 Fewer false alarms bought with fewer hits is not a win; it is a quieter
 reviewer. The last line of the table states which case applies.
 
+The rule is only applied to matched runs: both arms must cover the same cases,
+each the same number of times. Otherwise the last line reads
+`not comparable: <reason>` and names the cases that differ, because rates over
+different case sets say nothing about the arms.
+
 **Single runs are noise.** One reply per case says little about a model that
 answers the same diff differently from run to run. Report at least 3 runs per
 case per arm; the win-rule line is prefixed with `noise` when any case has fewer.
@@ -134,7 +139,9 @@ uv run python benchmarks/review-false-alarms/analyze.py /path/to/new-records.jso
 - The model is each profile's own default. `--provider` and `--model` override it
   for both arms; the `og` provider is refused.
 - Each review runs in a fresh scratch directory holding only `diff.patch` and
-  `context/`; `case.json` is never copied.
+  `context/`; `case.json` is never copied. The directory has a random name,
+  and no case id or kind reaches the reviewer's argv, environment or working
+  directory.
 - `--toolsets` defaults to `file`, so the reviewer can read files but not run
   them. `--ignore-rules` drops AGENTS.md, memory and preloaded skills in both
   arms when the profiles carry rules that would differ.
