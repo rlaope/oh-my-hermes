@@ -23,6 +23,11 @@ All notable changes will be documented here.
     in a bot's main chat that holds a terminal link carries that terminal's status to the bot. A bot's sidebar
     preview shows a linked terminal's title instead of the raw link.
 
+- **The run summary shows how much of the prompt came from cache.** `omh_run_summary` adds a line after the token
+  count, such as `Prompt cache: 62% of input read from cache (1,234,567 tokens)` (en/ko/ja/zh), and
+  `breakdown.cache_read_share`. The share is cache reads over uncached input plus cache reads, which is how Hermes
+  stores them. No line appears when nothing was read from cache.
+
 - **A one-line list of three code changes is answered in the session, like a listed backlog.** "migrate the store to
   sqlite, update the three callers, and add tests" or "프론트 버튼 추가랑 백엔드 엔드포인트랑 테스트 다 해줘" used to land on a
   lane picked from one word (toolbelt-readiness, browser-operator, backend). They now get the `code_backlog` answer:
