@@ -12,6 +12,7 @@ import json
 import os
 import shutil
 import stat
+import sys
 import tempfile
 import unittest
 from pathlib import Path
@@ -33,6 +34,9 @@ from omh.plugin_bundle.omh.tools.omher_terminal_tool import (  # noqa: E402
 )
 
 LID = "abcdefgh23"
+# The tool answers `unavailable` on Windows before it reads or writes anything (omher does not share terminals there),
+# so the tests of what it reads and writes run off Windows only; the faked-win32 test below runs everywhere.
+UNIX_ONLY = unittest.skipIf(sys.platform == "win32", "terminal sharing is off on Windows: the tool answers unavailable")
 STATUS = {
     "link": f"omher://terminal/{LID}",
     "title": "fix the login redirect",
@@ -100,12 +104,14 @@ class LinkTests(unittest.TestCase):
 
 
 class StatusTests(_Home):
+    @UNIX_ONLY
     def test_status_reads_the_listed_fields(self) -> None:
         self.session(extra={"secret": "never shown"})
         got = self.call(action="status", link=f"omher://terminal/{LID}")
         self.assertTrue(got["ok"])
         self.assertEqual(got["status"], STATUS)
 
+    @UNIX_ONLY
     def test_an_unknown_or_malformed_link_reads_nothing(self) -> None:
         self.assertEqual(self.call(action="status", link=LID)["reason"], "not_found")
         self.assertEqual(self.call(action="status", link="../../etc/passwd")["reason"], "bad_link")
@@ -125,6 +131,7 @@ class StatusTests(_Home):
 
 
 class SendTests(_Home):
+    @UNIX_ONLY
     def test_send_writes_one_owner_only_request_and_says_it_waits_for_the_person(self) -> None:
         inbox = self.session()
         got = self.call(action="send", link=f"omher://terminal/{LID}", prompt="run the tests\x1b[2J\r\nthen stop")
@@ -140,6 +147,7 @@ class SendTests(_Home):
         if os.name != "nt":
             self.assertEqual(stat.S_IMODE((inbox / files[0]).stat().st_mode), 0o600)
 
+    @UNIX_ONLY
     def test_send_refuses_without_a_session_an_empty_prompt_or_a_long_one(self) -> None:
         self.assertEqual(self.call(action="send", link=LID, prompt="hi")["reason"], "not_found")
         inbox = self.session()
