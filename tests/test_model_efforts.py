@@ -85,6 +85,14 @@ class ContractEffortOptionTests(unittest.TestCase):
     def test_deepseek_mapping_aliases_are_not_independent_rungs(self) -> None:
         self.assertEqual(contract_effort_option("deepseek-flash")["efforts"], ("none", "low", "high", "max"))
 
+    def test_qwen4_max_offers_its_three_rungs_and_the_disable_rung(self) -> None:
+        # Qwen4-Max is hybrid: `none` turns thinking off, and the vendor's
+        # mapping rungs (`minimal`, `medium`, `max`) are not offered as rungs.
+        for model_id in ("qwen4-max", "qwen/qwen4-max"):
+            with self.subTest(model_id=model_id):
+                self.assertEqual(contract_effort_option(model_id)["efforts"], ("none", "low", "high", "xhigh"))
+        self.assertIsNone(contract_effort_option("qwen4-max-preview"))
+
     def test_declared_and_dated_snapshot_aliases_resolve_to_their_contract(self) -> None:
         self.assertEqual(
             contract_effort_option("anthropic.claude-opus-5-5")["efforts"],

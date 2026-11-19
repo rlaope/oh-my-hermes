@@ -22,6 +22,8 @@
 // a hit = `routine.ran {delivered}` then the Bot Chat turn whose `message` carries `watch`; silent = routines.update
 // only), mock.watchQueued {bot, name, n} (n automation answers landed in the bot's Bot Chat while omher was closed:
 // only its history grows, no event),
+// mock.brief {bot} (omher set up its Slack briefing for `bot`, as the bridge's setup does after the first bots.list:
+// the `omher-brief` collector job joins the automations, then `routines.update` and `brief.ready {owner_name}`),
 // mock.watches {} (adds three channel watches to the automations, as `read_automations` reports collector jobs: friren's
 // "og-outage" ok on Slack, kami's "deploy-talk" paused on Discord, kami's "support-escalations" not readable),
 // SSH peers: peers.probe / peers.attach / peers.detach as the bridge's multiplexer answers them; an attached peer's
@@ -223,6 +225,12 @@ const WATCH_SEED = [
     watch: { name: "support-escalations", platform: "slack", channels: ["#support-vip"], what: "a customer asks to escalate",
       interval: "every 5m", last_alert: null, state: "not_readable", reason: { code: "not_in_channel", channel: "#support-vip" } } },
 ];
+// What `mock.brief` adds: omher's own Slack briefing job (the collector in brief mode, every 15m to the Bot Chat).
+const BRIEF_JOB = (bot) => ({ bot, id: `brief${bot}0001`.slice(0, 16), name: "omher-brief", schedule: "every 15m", next: 15 * MIN,
+  last: null, status: null, prompt: "You brief the person this bot works for.", script: "channel_watch_omher-brief.py",
+  deliver: `bot-chat:${bot}`, created: 0, repeat: { times: null, completed: 0 },
+  watch: { name: "omher-brief", kind: "brief", platform: "slack", channels: [], what: "", interval: "every 15m", last_alert: null,
+    state: "ok", reason: null } });
 // What `mock.botMade {kind: "routine"}` adds: a job the bot made from its chat.
 const BOT_MADE_JOB = { id: "a9c1e7f30d12", name: "CI watch on my PRs", schedule: "every 15m", next: 15 * MIN, last: null, status: null,
   prompt: "Check my open PRs in rlaope/oh-my-hermes. If a CI run failed since the last check, tell me which and why.",
@@ -1941,6 +1949,15 @@ const OPS = {
     ev(b.name, "message", { id, text, watch: { name, ts: at } });
     ev(b.name, "turn.end", { outcome: "done" });
     return { id };
+  },
+  "mock.brief": (p) => {
+    const b = needBot(p);
+    const j = { ...BRIEF_JOB(b.name), created: now() - BOOT };
+    automations = automations.filter((x) => x.id !== j.id);
+    automations.push(j);
+    broadcast({ event: "routines.update", bot: b.name });
+    broadcast({ event: "brief.ready", bot: b.name, owner_name: "Hope" });
+    return { id: j.id };
   },
   "mock.watches": () => {
     for (const w of WATCH_SEED) if (!automations.some((x) => x.id === w.id)) automations.push(structuredClone(w));

@@ -27,7 +27,7 @@ from omh.coding.executor_capability_snapshots import (
     build_executor_capability_snapshot,
     write_executor_capability_snapshot,
 )
-from omh.coding.pi_family_interop import PI_DISTRIBUTION_HOST
+from omh.coding.pi_family_interop import PI_DISTRIBUTION_HOST, PI_FORK_HOST
 
 
 class DynamicWorkflowTests(unittest.TestCase):
@@ -183,7 +183,7 @@ class DynamicWorkflowTests(unittest.TestCase):
         self.assertEqual(stages["pi-agent"]["runtime"], "")
 
     def test_pi_family_hosts_tier_as_operator_selected_runtimes(self) -> None:
-        """pi, its distribution host, and opencode route operator-selected
+        """pi, its distribution and fork hosts, and opencode route operator-selected
         models, so they tier exactly like gpt/claude-code/codex; the pi-family
         runtime surface itself stays runtime-variable."""
         workflow = build_dynamic_coding_workflow(
@@ -191,13 +191,14 @@ class DynamicWorkflowTests(unittest.TestCase):
             implementers=(
                 "pi:auto:Pi host",
                 f"{PI_DISTRIBUTION_HOST}:auto:Distribution host",
+                f"{PI_FORK_HOST}:auto:Fork host",
                 "opencode:auto:Opencode host",
                 "pi-family-runtime:auto:Pi-family runtime",
             ),
         )
         stages = {stage["target"]: stage for stage in workflow["stages"]}
 
-        for host in ("pi", PI_DISTRIBUTION_HOST, "opencode"):
+        for host in ("pi", PI_DISTRIBUTION_HOST, PI_FORK_HOST, "opencode"):
             self.assertEqual(stages[host]["target_type"], "runtime")
             self.assertEqual(stages[host]["cost_tier"], "operator-selected")
         self.assertEqual(stages["pi-family-runtime"]["target_type"], "runtime")

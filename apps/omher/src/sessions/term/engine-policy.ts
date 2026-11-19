@@ -13,20 +13,21 @@ export interface WebglInfo {
 
 export interface WebglDecision {
   allow: boolean;
-  reason: "hardware" | "no-webgl2" | "software-renderer" | "linux-renderer-unknown" | "macos-measured-slower" | "not-measured";
+  reason: "hardware" | "no-webgl2" | "software-renderer" | "linux-renderer-unknown";
 }
 
 /** Software rasterizers: drawing with these is slower than the standard renderer. */
 export const SOFTWARE_RENDERER = /\b(swiftshader|llvmpipe|softpipe|software rasterizer|software adapter|basic render|microsoft basic|virgl|svga3d)\b/i;
 
-/** `auto` by platform alone, before anything is asked of WebGL: the standard renderer everywhere, for now.
- *  macOS was measured (bench/render): the add-on is about 2 to 3 times slower on a full-screen redraw (scenarios C
- *  and C2, in WebKit and in Chromium on Metal) and only a few percent faster on streaming text (WebKit). Windows
- *  and Linux were never measured, so `auto` does not use the add-on there either until somebody measures it
- *  faster; that platform then returns null here and the hardware rule below decides. `gpu: "on"` still tries the
- *  add-on everywhere. */
-export function decidePlatform(info: Pick<WebglInfo, "mac">): WebglDecision | null {
-  return { allow: false, reason: info.mac ? "macos-measured-slower" : "not-measured" };
+/** `auto` by platform alone, before anything is asked of WebGL: no platform is ruled out, so the hardware rule below
+ *  decides everywhere. The standard (DOM) renderer draws block and box characters from the font, a hair short of
+ *  their cells, so a CLI's block art (Claude Code's mascot, `▐▛███▜▌`) and frames show dark seams between cells and
+ *  rows. The GPU renderer draws those characters itself to fill the cell, as a real terminal does. The render bench
+ *  (bench/render) measured it slower on macOS on a full-screen redraw with 200 colours (C: 112 → 379 ms for 2,000
+ *  frames) and close on a real TUI's palette (C3: +29%) and on streaming text; a terminal that draws a CLI right
+ *  wins over that. `gpu: "off"` keeps the standard renderer. */
+export function decidePlatform(_info: Pick<WebglInfo, "mac">): WebglDecision | null {
+  return null;
 }
 
 /** The hardware rule (Orca's), for a platform `decidePlatform` lets through: yes unless there is no WebGL2 or the
