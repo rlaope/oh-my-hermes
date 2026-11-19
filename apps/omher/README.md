@@ -111,13 +111,14 @@ UI (React in a Tauri window)  ⇄  bridge (Python, loopback WebSocket)  ⇄  the
   127.0.0.1 only and refuses any connection without the launch token.
 - **Mock bridge** (`e2e/mock-bridge.mjs`): the same protocol, scripted, for the Playwright tests.
 - **Chat bubbles and composer** (`src/chat/parts/`): an answer and a message you sent each carry a quiet copy button,
-  shown on hover, that puts only that message's text on the clipboard; a message still held in the steer queue has
-  none until it goes out (`e2e/copy-prompt.spec.ts`). In a bot's main chat and its threads, ArrowUp on the composer's
-  first line recalls that chat's earlier prompts, newest first, and ArrowDown on the last line steps back to newer
-  ones and then to the unsent draft; editing a recalled prompt makes it the draft and leaves the history as it was. A
-  held message joins the history once it is sent, a message Stop dropped never does, and a failed send stays in it to
-  try again. An open picker (`$` skill, `/` command, `./thread`) keeps its arrows, and inside a multi-line draft the
-  arrows move between lines (`src/chat/parts/promptHistory.ts`, `e2e/prompt-history.spec.ts`).
+  shown on hover, that puts only that message's text on the clipboard; a message still held in the steer queue has none
+  until it goes out (`e2e/copy-prompt.spec.ts`). In a bot's main chat and its threads, ArrowUp on the composer's first
+  line recalls that chat's earlier prompts, newest first, and ArrowDown on the last line steps back to newer ones and
+  then to the unsent draft (Alt+ArrowUp/ArrowDown do the same from any line); editing a recalled prompt makes it the
+  draft and leaves the history as it was. A held message joins the history once it is sent, a message Stop dropped
+  never does, and a failed send stays in it to try again. An open picker (`$` skill, `/` command, `./thread`) keeps its
+  arrows, and inside a multi-line draft the arrows move between lines (`src/chat/parts/promptHistory.ts`,
+  `e2e/prompt-history.spec.ts`).
 - **While it answers** (Settings › General): a message sent while a bot is answering waits in the steer queue until
   the turn ends (the default), or, set to Steer, is steered into the running answer at once, as its Steer button
   would; a message behind another held one still waits its turn (`e2e/steer-queue.spec.ts`).

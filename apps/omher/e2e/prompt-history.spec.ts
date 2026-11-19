@@ -1,6 +1,7 @@
 // ArrowUp/ArrowDown in a bot chat's composer recall the person's earlier prompts of that chat, like a shell: ArrowUp on
 // the first line shows the previous one (newest first, caret at the end), ArrowDown on the last line goes newer and past
-// the newest gives back the draft. Open pickers keep their arrows; middle lines of a multi-line draft only move the caret.
+// the newest gives back the draft. Open pickers keep their arrows; middle lines of a multi-line draft only move the caret
+// (Alt+arrow recalls from any line).
 // A prompt held in omher's queue joins the history once it is sent; text the app puts in the box ends a walk.
 import { expect, test, type Page } from "@playwright/test";
 
@@ -116,6 +117,19 @@ test("arrows on the middle line of a multi-line draft only move the caret", asyn
   await box.press("ArrowUp");
   await expect(box).toHaveValue("an earlier prompt");
   await box.press("ArrowDown");
+  await expect(box).toHaveValue(draft);
+});
+
+test("Alt+ArrowUp/Down recall from any line of a multi-line draft", async ({ page }) => {
+  await openFriren(page);
+  const box = page.getByTestId("composer");
+  await say(page, "an earlier prompt");
+  const draft = "line one\nline two\nline three";
+  await box.fill(draft);
+  await box.evaluate((el: HTMLTextAreaElement) => el.setSelectionRange(13, 13)); // inside "line two"
+  await box.press("Alt+ArrowUp");
+  await expect(box).toHaveValue("an earlier prompt");
+  await box.press("Alt+ArrowDown");
   await expect(box).toHaveValue(draft);
 });
 
