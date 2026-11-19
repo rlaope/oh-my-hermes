@@ -35,12 +35,18 @@ export function ThreadChat({ bot, thread }: { bot: Bot; thread: string }) {
         </span>
       </header>
       <div className="pane" data-pane={key} data-testid="thread-chat" data-thread={thread}>
-        <Timeline bot={as} face={<Avatar bot={bot.name} size={28} />} connectionNotice={false} />
-        {chat?.loaded && chat.items.length === 0 && !chat.turn && (
-          <div className="th-empty" data-testid="thread-empty">
-            {t("thread.newHint", { name: bot.display_name })}
-          </div>
-        )}
+        <Timeline
+          bot={as}
+          face={<Avatar bot={bot.name} size={28} />}
+          connectionNotice={false}
+          emptyHint={
+            !chat?.turn && (
+              <div className="th-empty" data-testid="thread-empty">
+                {t("thread.newHint", { name: bot.display_name })}
+              </div>
+            )
+          }
+        />
         <Composer
           key={key}
           bot={as}
@@ -50,6 +56,8 @@ export function ThreadChat({ bot, thread }: { bot: Bot; thread: string }) {
           offlineText={away ? t("chat.connecting") : undefined}
           onSend={(text) => void s.threadSend(bot.name, thread, text)}
           onStop={() => void s.threadInterrupt(bot.name, thread)}
+          // `./thread` here opens a sibling thread under the same bot, as it does in the bot's main chat
+          onNewThread={bot.host || bot.status === "offline" ? undefined : (first) => void s.newThreadWith(bot.name, first)}
         />
       </div>
     </>

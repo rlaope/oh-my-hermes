@@ -32,7 +32,22 @@
    on), and a graph of 5+ nodes where at least 80% of its two or more build nodes sit on one chain
    (`serial_graph`; baseline, review and verify nodes do not count: split the build work into parallel
    lanes where it allows, or fold a small step that only follows another into the node it follows).
-2. The result carries `calls`. Each call is one category (and route: a node retried after a provider error
+2. Before defining nodes, call `omh_role action=list`: its bounded common directory includes built-in and custom
+   identities, with omissions disclosed. Compare responsibilities without an origin preference; user instructions
+   and project ownership take precedence. Read a suitable definition with `omh_role action=read identity=REFERENCE`
+   and record `identity: builtin:name` or `identity: custom:name` on its node; omit it when none fits. Keep `role`
+   (build/baseline/verify/review) and `category` independent. Define, repair and extend accept the same identity field.
+   The result carries `calls`. Each call groups category, identity and its own retry position. Run the complete
+   returned route arguments unchanged and dispatch only after success: structured identity calls use `set` with
+   `attempt` (zero-based chain position),
+   so interleaved nodes never use another node's fallback position. A configured chain supplies models; a definition
+   without a chain uses category. The child's verified direct-node binding supplies its prompt through the fenced
+   hook channel before any example markers; continuations retain it, grandchildren do not inherit it. Missing,
+   disabled or changed selections block delivery. `profile_routes` and unknown backends cannot apply a selected
+   identity; DAG external-owner export also refuses selected identities because its contract cannot carry both
+   prompt and model policy. A spent child budget cannot substitute the parent session for a selected identity.
+   Old exports and parent fallback without identity keep their existing behavior.
+   Each call is one category (and route: a node retried after a provider error
    goes in a call of its own): run its `route` with `omh_delegate_route` (`set`, or `fallback`), then one
    `delegate_task` with its `tasks` unchanged. The goal ends with `[dag:<run>/<node>]`; that marker is how
    OMH ties the child to its node. A node after a repaired one is told to read the repair's handoff files.
@@ -45,7 +60,8 @@
    normal one; elsewhere the normal one leads. Mark a node `local: true` when its material must not leave the
    machine (customer data, keys, private documents): it runs only on a `model_map` option whose `base_url` is
    on this machine or its private network (or provider `lmstudio`/`llamacpp`), a retry takes the next local
-   one, and with none left it is listed in `held_for_local_model`, never sent to a cloud model. Tell the
+   one. With an identity chain only matching local options in that chain qualify; no unrelated local model
+   substitutes for it. With none left it is listed in `held_for_local_model`, never sent to a cloud model. Tell the
    person; they add a local option or the node is settled blocked.
 3. `calls` never exceeds the free background slots (`slots.free`): a call past them would run blocking.
    In a one-shot session, `calls` also never carries more tasks than the remaining one-shot budget;
@@ -81,6 +97,12 @@ within 24 hours). The node stays live as `parked`, spends no repair cycle, and c
 At the deadline call `ready`: the same node gets a fresh attempt naming the handle, not replacement
 work. OMH starts no timer or poll. After three parks per node, another park is refused with
 `park_limit_reached`; settle accepted, failed or blocked instead. Cancel turns parked nodes cancelled.
+
+A child that stopped before editing and wrote an `ESCALATE: <question>` line into its handoff asked for a
+stronger model. Settle it `outcome=escalated reason=<that question>` and dispatch what settle returns: the node
+comes back one category up (quick, unspecified-low, unspecified-high, ultrabrain), at most twice, briefed with
+the question. Never answer the question yourself and accept. A node pinned to an `identity` keeps
+that identity's model chain, so it cannot escalate; pick another identity for it instead.
 
 ## Goal criteria
 

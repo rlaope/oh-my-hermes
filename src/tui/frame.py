@@ -114,6 +114,7 @@ def build_frame(
     gap_reserve: int = 0,
     tail_spacer: bool = False,
     slot_limit: int = 0,
+    diagnostics: Sequence[tuple[int, int]] = (),
 ) -> Frame:
     """The region for one repaint; `min_height` rows at least, pad rows under the live block making up the rest.
 
@@ -159,6 +160,7 @@ def build_frame(
         input_lines, (caret_line, caret_col) = composer.render(
             cols, cap, prompt, mark, theme.muted, marks, theme.slash,
             glow, lambda offset, length: aura_style(base, glint, offset, length, aura),
+            diagnostics=diagnostics,
         )
         if placeholder and not composer.text and input_lines:
             input_lines[0] = truncate_line((*input_lines[0], Span(placeholder, replace(theme.hint, gutter=True))), cols)

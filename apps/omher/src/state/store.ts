@@ -814,6 +814,7 @@ function applyOpened(chat: Chat, res: ChatOpenResult, now: number, bot: string, 
     text: m.text,
     ...(m.reply_to ? { reply: replyOf(m.reply_to) } : {}),
     ...(m.watch ? { watch: m.watch } : {}),
+    ...(m.steered && m.role === "user" ? { steered: true } : {}),
   }));
   const ids = new Set(server.map((m) => m.id));
   const lastServerTs = server.length ? server[server.length - 1].ts : 0;
@@ -1857,6 +1858,9 @@ export interface Actions {
   loadThreads(bot: string): Promise<void>;
   /** A new, empty thread under `bot`, opened in the main column (the composer takes focus). */
   newThread(bot: string): Promise<string | null>;
+  /** `./thread <text>`: a new thread under `bot`, opened, with `first` sent as its first message (it names the
+   *  thread); an empty `first` is the same as newThread. Nothing goes to the bot's main chat. */
+  newThreadWith(bot: string, first: string): Promise<string | null>;
   /** Show thread `thread` of `bot` (reads its messages the first time); null = the bot's main chat. */
   openThread(bot: string, thread: string | null): Promise<void>;
   /** Send in a thread; the first message names it. */
@@ -2780,6 +2784,11 @@ export function createStore(bridge: BridgeLike, opts: StoreOptions = {}): Store 
         return null;
       }
     },
+    async newThreadWith(bot, first) {
+      const thread = await actions.newThread(bot);
+      if (thread && first.trim()) await actions.threadSend(bot, thread, first);
+      return thread;
+    },
     async openThread(bot, thread) {
       if (state.ui.roster && state.bots.some((b) => b.name === bot)) listBot(bot, true);
       if (!thread) return selectBot(bot);
@@ -2790,7 +2799,7 @@ export function createStore(bridge: BridgeLike, opts: StoreOptions = {}): Store 
       const key = threadRoute(bot, thread);
       const id = `local-${++localSeq}`;
       const t = text.trim();
-      // typed while the thread's turn runs: the same steer queue as the main chat (held, ↵ menu, sent in order)
+      // typed while the thread's turn runs: the same steer queue as the main chat (held, ↵ ↓ × buttons, sent in order)
       if (holdIfBusy(key, id, { text: t, wire: t }, { type: "local.user", bot: key, id, text: t, now: now() })) return;
       dispatch({ type: "local.user", bot: key, id, text: t, now: now() });
       const row = (state.threads[bot] ?? []).find((r) => r.thread === thread);

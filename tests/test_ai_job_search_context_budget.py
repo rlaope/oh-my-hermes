@@ -516,9 +516,15 @@ class AiJobSearchContextBudgetTests(unittest.TestCase):
         # model-setup's chain sentence then names GPT-6.2 Astra and GPT-6.2 Sol in every GPT-6 Astra and GPT-6.1
         # Sol slot and lists both among the superseded generations; only model-setup moves, and the pin before
         # it was 9cecce5a...a605.
+        # dag-ulw's when-to-use then drops the listed backlog of code changes, which is made in the session instead;
+        # only dag-ulw moves, and the pin before it was 58106a4e...4542.
+        # dag-ulw's run-loop then names the common built-in/custom identity directory, the `identity` node
+        # field and its per-node retry position; only dag-ulw moves, and the pin before it was aa31d519...d31a1.
+        # Then dag-ulw's settle step names `escalated` (an ESCALATE: line in the handoff); only dag-ulw moves, and
+        # the pin before it was 26bd1012...f890.
         # model-setup's quality bar then gains the onboarding-mode line; only model-setup moves, and the pin
-        # before it was 58106a4e...4542.
-        self.assertEqual(_digest(legacy_hashes), 'bd1d10780046bcdab3af1ede18db6114b20099e607f7d58ad3948894b36ee878')
+        # before it was ad310846...698b.
+        self.assertEqual(_digest(legacy_hashes), '4eaeeb7940eff0e187bb6c7683ad69496f2609df37f8b6fee7144ea10705958f')
         legacy = _skill_context_cost_profile('full', legacy_templates, refs)
         current = _skill_context_cost_profile('full', templates, refs)
         # Main's search guidance adds 305; repro-audit's mandatory rails 1,943.
@@ -568,7 +574,7 @@ class AiJobSearchContextBudgetTests(unittest.TestCase):
         from omh.maintenance.drift import budget_metrics
         expected = {
             'skill_index_line_max_chars': 100,
-            'plugin_tool_schema_chars': 63324,  # Parked DAG waits (+429), delegation backends (+245), six routing-recipe categories (+213), opt-in omh-lsp tools (+2187), opt-in lsp_diagnostics (+396), identity argument (+143), dag node role (+85), dag node owner (+70), dag node local (+37) less the route fallback sentence (-1), then the ultrabrain head in the route example (+5), then omh_dag goal criteria (+226), then the criteria parameter's keep-the-condition description (+95), said in the positive form (+8), then dag node read_only (+45), then the observation parameter's field descriptions and the home-override wording trimmed (-9616).
+            'plugin_tool_schema_chars': 62968,  # Parked DAG waits (+429), delegation backends (+245), six routing-recipe categories (+213), opt-in omh-lsp tools (+2187), opt-in lsp_diagnostics (+396), identity argument (+143), dag node role (+85), dag node owner (+70), dag node local (+37) less the route fallback sentence (-1), then the ultrabrain head in the route example (+5), then omh_dag goal criteria (+226), then the criteria parameter's keep-the-condition description (+95), said in the positive form (+8), then dag node read_only (+45), then the observation parameter's field descriptions and the home-override wording trimmed (-9616), then four tool descriptions said in fewer words (-1225), then unified identities: the omh_dag identity reference (+122), omh_delegate_route `attempt` and identity description (+303), omh_role directory and `identity` argument (+220), then omh_dag escalation (+224).
             'pre_llm_call_context_chars_max': 5977,  # The pi-family runtime rename (+6), the route-hint dedup (-154), then the console choices line (+409).
             'pre_llm_call_context_fallback_chars_max': 7529,  # The same rename (+6), the human-voice primer sentence (+116), the route-hint dedup (-154), then the console choices line (+409).
             'awareness_primer_markdown_chars': 4051,  # Human-voice reply sentence (+110), full skill names in the checkpoint (+55), then loadable labels there (+49), on the card and cue lines (+239) and in the lane keys (+78).

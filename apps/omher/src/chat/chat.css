@@ -246,8 +246,9 @@
   opacity: 0.72;
 }
 .sq-w {
-  position: relative;
   flex: none;
+  display: inline-flex;
+  gap: 4px;
   margin-top: calc((var(--fs-msg) * var(--lh-msg) + 18px - 24px) / 2);
 }
 .sq-mark {
@@ -255,13 +256,13 @@
   height: 24px;
   border-radius: var(--r-sm);
   font-size: 14px;
-  line-height: 24px;
+  line-height: 22px;
   color: var(--muted);
   background: var(--raise);
   border: 1px solid var(--line);
 }
 .sq-mark:hover,
-.sq-mark.on {
+.sq-mark:focus-visible {
   color: var(--ink);
   background: var(--raise2);
 }
@@ -269,74 +270,26 @@
   opacity: 0.5;
   cursor: default;
 }
-.sq-menu {
-  position: absolute;
-  z-index: 30;
-  top: 0;
-  right: calc(100% + 6px);
-  width: 150px;
-  display: flex;
-  flex-direction: column;
-  background: var(--pop);
-  border: 1px solid var(--line);
-  border-radius: var(--r);
-  padding: 4px;
-  box-shadow: var(--pop-shadow);
-}
-.sq-menu.up {
-  top: auto;
-  bottom: 0;
-}
-.sq-mi {
-  height: 26px;
-  padding: 0 8px;
-  border-radius: var(--r-sm);
-  font-size: 12px;
-  color: var(--body);
-  text-align: left;
-}
-.sq-mi:hover,
-.sq-mi:focus-visible {
-  background: var(--raise2);
-  color: var(--ink);
-  outline: 0;
-}
-.sq-mi.danger:hover,
-.sq-mi.danger:focus-visible {
-  color: var(--danger);
-}
-/* steer queue sessions: an item that is off says why, on its own line under its name */
-.sq-menu.why {
-  width: 220px;
-}
-.sq-mi.off {
-  height: auto;
-  min-height: 26px;
-  padding: 4px 8px;
+/* an action that is off (an agent with no steer; a message the agent has already) says why in its tooltip */
+.sq-mark.off {
   color: var(--quiet);
   cursor: not-allowed;
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
 }
-.sq-mi.off:hover,
-.sq-mi.off:focus-visible {
+.sq-mark.off:hover {
   color: var(--quiet);
-  background: transparent;
+  background: var(--raise);
 }
-.sq-mi.off:focus-visible {
-  box-shadow: inset 0 0 0 1px var(--line);
+/* × drops the message: only while the pointer is on its row or a button there has focus */
+.sq-x {
+  opacity: 0;
+  transition: opacity 0.12s ease;
 }
-.sq-why {
-  font-size: 11px;
-  line-height: 1.35;
-  color: var(--muted);
-  white-space: normal;
+.msg.u:hover .sq-x,
+.sq-w:focus-within .sq-x {
+  opacity: 1;
 }
-.sq-why-all {
-  padding: 4px 8px 6px;
-  margin-bottom: 4px;
-  border-bottom: 1px solid var(--line);
+.sq-x:hover:not(.off) {
+  color: var(--danger);
 }
 /* Markdown in bubbles. One rhythm (8px between blocks), headings by size, code blocks as their own surface,
    tables that keep numbers on one line, GFM task lists without a second marker. */

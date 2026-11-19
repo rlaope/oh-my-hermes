@@ -144,7 +144,7 @@ function ChatPane({ rec, chatKey }: { rec: SessionRec; chatKey: string }) {
         : tr("ss.hasEnded", { agent: label });
   // one element per chat: the bubbles are memoized on it
   const face = useMemo(() => <SessionFace chatKey={chatKey} size={28} />, [chatKey]);
-  // steer queue sessions: the ↵ menu of an agent chat's waiting message (a Hermes folder chat has none)
+  // steer queue sessions: the ↵ ↓ × buttons of an agent chat's waiting message (a Hermes folder chat has none)
   const queue = useMemo<SessionQueue | undefined>(
     () =>
       takesFiles

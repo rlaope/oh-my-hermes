@@ -68,6 +68,7 @@ import re
 import secrets
 import shlex
 import shutil
+import time
 from typing import Any, Final
 import unicodedata
 
@@ -76,6 +77,7 @@ from .awareness_delivery import _awareness_delivery_lock
 from .delegation_ledger import ledger_key
 from .hermes_delegation import HERMES_MIXTURE_CATEGORY_CHAINS
 from .iso_datetime import strict_fromisoformat
+from .omh_identities import IDENTITY_REFERENCE_RE, resolve_identity
 
 DAG_SCHEMA_VERSION: Final = "omh_dag/v1"
 DAG_RESULT_SCHEMA_VERSION: Final = "omh_dag_result/v1"
@@ -134,7 +136,13 @@ DEEP_CATEGORIES: Final = frozenset({"deep", "deep-work"})
 # trade-off); a graph this wide with none of them is told to give that node `ultrabrain` (`no_judgement_node`).
 JUDGEMENT_CATEGORIES: Final = frozenset({"ultrabrain", "architect", "forensics"})
 JUDGEMENT_GRAPH_NODES: Final = 4
-OUTCOMES: Final = ("accepted", "failed", "blocked", "parked")
+# ``escalated`` closes the attempt like a provider-error ``retry``: the node is pending again, one category up.
+OUTCOMES: Final = ("accepted", "failed", "blocked", "parked", "escalated")
+# The difficulty ladder a node climbs when its child stops on a judgement it cannot settle (`settle` escalated); a
+# category that is not a key cannot escalate. At most `MAX_ESCALATIONS` rungs per node.
+ESCALATION_LADDER: Final = {"quick": "unspecified-low", "unspecified-low": "unspecified-high",
+                            "unspecified-high": "ultrabrain"}
+MAX_ESCALATIONS: Final = 2
 # The ``origin`` kinds of a node added after define: ``repair:<root>`` and ``extend:<round>``.
 ADDED_ORIGIN_KINDS: Final = ("repair", "extend")
 PROMPT_MARKERS: Final = ("TASK", "DELIVERABLE", "SCOPE", "VERIFY", "STOP WHEN")
@@ -148,7 +156,7 @@ CHILD_FAILURE_STOPS: Final = frozenset({"failed", "error", "timeout", "interrupt
 HANDOFF_NOT_CHECKED: Final = "handoff not checked"
 EXTERNAL_OWNERS: Final = ("claude-code", "codex")
 NODE_FIELDS: Final = frozenset({"id", "label", "category", "prompt", "depends_on", "write_scope", "role", "owner",
-                                "local", "read_only"})
+                                "local", "read_only", "identity"})
 # What a node is for, as the parent declares it (``build`` when it names none). A ``build`` node with a write scope is a
 # producer; baseline, verify and review nodes stay native whoever builds, and only a ``verify`` node verifies the goal.
 ROLES: Final = ("build", "baseline", "verify", "review")
@@ -395,7 +403,7 @@ def _validated_node(raw: object) -> dict[str, Any]:
     if not isinstance(raw, Mapping) or set(raw) - NODE_FIELDS:
         raise DagRefusal("invalid_node",
                          "Each node takes only id, label, category, prompt, depends_on, write_scope, role, owner, "
-                         "local and read_only.")
+                         "local, read_only and identity.")
     node_id = valid_id(raw.get("id"), "invalid_node_id", "Each node needs a short lowercase id (a-z, 0-9, -).")
     label = _plain(raw.get("label"), MAX_LABEL_CHARS, "invalid_label", f"Node {node_id} needs a short label.")
     # Either lane's reader also takes a marker that opens a goal (one handed out before an update), so a label holding
@@ -422,6 +430,12 @@ def _validated_node(raw: object) -> dict[str, Any]:
     role = raw.get("role", DEFAULT_ROLE)
     if role not in ROLES:
         raise DagRefusal("invalid_role", f"Node {node_id}: role is one of {', '.join(ROLES)}.")
+    identity = raw.get("identity")
+    if "identity" in raw:
+        if (not isinstance(identity, str) or ":" not in identity
+                or not IDENTITY_REFERENCE_RE.fullmatch(identity.strip())):
+            raise DagRefusal("invalid_identity",
+                             f"Node {node_id}: identity is a qualified builtin:<name> or custom:<name> reference.")
     validated = {
         "id": node_id,
         "label": label,
@@ -436,6 +450,8 @@ def _validated_node(raw: object) -> dict[str, Any]:
         "found_by": "",
         "attempts": [],
     }
+    if "identity" in raw:
+        validated["identity"] = identity.strip()
     guess = guessed_role(validated) if "role" not in raw else DEFAULT_ROLE
     if guess == DEFAULT_ROLE and "role" not in raw and _DOUBLE_CHECK.search(label.casefold()):
         guess = "verify"
@@ -996,7 +1012,7 @@ def derive(record: Mapping[str, Any], children: Sequence[Mapping[str, Any]], now
         attempts = node.get("attempts") or []
         last = attempts[-1] if attempts else None
         info: dict[str, Any] = {"child": None, "attempts": len(attempts), "waits_on": [], "held_by": []}
-        if last is None or last.get("outcome") == "retry":
+        if last is None or last.get("outcome") in ("retry", "escalated"):
             info["state"] = "pending"
         elif last.get("outcome") in OUTCOMES:
             info["state"] = str(last["outcome"])
@@ -1007,6 +1023,8 @@ def derive(record: Mapping[str, Any], children: Sequence[Mapping[str, Any]], now
                 child = None
                 info["lost"] = True
             info["child"] = child
+            if child is not None and isinstance(child.get("waiting_resume"), Mapping):
+                info["waiting_resume"] = dict(child["waiting_resume"])
             if child is None:
                 info["state"] = "handed_out"
             elif isinstance(child.get("stop"), Mapping):
@@ -1318,16 +1336,23 @@ def stuck(record: Mapping[str, Any], derived: Mapping[str, Mapping[str, Any]], n
           limits: Limits = DEFAULT_LIMITS) -> list[tuple[str, float]]:
     """Open nodes past ``limits.stuck_after_s``, oldest first, as ``(node id, seconds open)``; none when the mark is 0.
 
-    Left out: a node whose child a restart ended (offered again, or settled past the bound, on its own line), and
-    one exported to a coding owner or left to the parent, which no delegate_task child runs.
+    Left out: a node whose child a restart ended (offered again, or settled past the bound, on its own line), one
+    whose child Hermes will resume (a usage limit can hold it for hours), and one exported to a coding owner or
+    left to the parent, which no delegate_task child runs.
     """
     if limits.stuck_after_s <= 0:
         return []
     lanes = {str(node["id"]): (node.get("attempts") or [{}])[-1].get("lane") for node in record["nodes"]}
     found = [(node_id, age) for node_id, age in open_for(record, derived, now).items()
              if age > limits.stuck_after_s and not derived[node_id].get("lost")
+             and not derived[node_id].get("waiting_resume")
              and lanes[node_id] not in ("fanout", "parent")]
     return sorted(found, key=lambda item: (-item[1], item[0]))
+
+
+def _clock(epoch: float) -> str:
+    """``HH:MM`` local time, as Hermes writes a resume time."""
+    return time.strftime("%H:%M", time.localtime(epoch))
 
 
 def age_text(seconds: float) -> str:
@@ -1418,8 +1443,8 @@ def resume_handle_for(attempts: Sequence[Mapping[str, Any]]) -> str:
     return ""
 
 
-def hand_out(node: dict[str, Any], derived_state: str, now: float, *, lost: bool = False,
-             token: bool = False) -> dict[str, Any]:
+def hand_out(node: dict[str, Any], derived_state: str, now: float, *, lost: bool = False, token: bool = False,
+             omh_home: Path | None = None) -> dict[str, Any]:
     """Write-ahead: the attempt exists before its goal leaves this tool, so a marker always finds it.
 
     ``lost``: the attempt is offered again because a restart ended its child, which the attempt counts.
@@ -1427,6 +1452,13 @@ def hand_out(node: dict[str, Any], derived_state: str, now: float, *, lost: bool
     for another attempt, earlier or later, counts for it. Offering the same attempt again keeps its token.
     """
     attempts = node.setdefault("attempts", [])
+    selected = resolve_identity(str(node["identity"]), omh_home) if node.get("identity") else None
+    if node.get("identity"):
+        if selected is None:
+            raise DagRefusal("identity_unavailable", "The selected identity is missing, disabled or ambiguous.")
+        digest = selected["fingerprint"]["digest"]
+        if any(item.get("identity_digest") and item["identity_digest"] != digest for item in attempts):
+            raise DagRefusal("identity_config_changed", "The selected identity changed since this node was prepared.")
     if derived_state == "handed_out" and attempts:
         attempts[-1].setdefault("opened_at", attempts[-1].get("handed_out_at"))
         attempts[-1]["handed_out_at"] = now
@@ -1442,6 +1474,8 @@ def hand_out(node: dict[str, Any], derived_state: str, now: float, *, lost: bool
         attempt["resume_handle"] = handle
     if token:
         attempt["token"] = secrets.token_hex(ATTEMPT_TOKEN_BYTES)
+    if selected is not None:
+        attempt.update(identity=selected["reference"], identity_digest=selected["fingerprint"]["digest"])
     attempts.append(attempt)
     return attempt
 
@@ -1510,6 +1544,17 @@ def task_for(
     if attempts and attempts[-1].get("resume_handle"):
         lines.extend([f"Resume the still-running wait: {attempts[-1]['resume_handle']}. "
                       "Check its result before starting any replacement work.", ""])
+    # A provider-error retry replaces the attempt it follows, so the brief looks past it to the escalated one.
+    closed = [item for item in attempts if item.get("outcome") and item.get("outcome") != "retry"]
+    if closed and closed[-1].get("outcome") == "escalated":
+        escalated = closed[-1]
+        question = str(escalated.get("reason") or "").rstrip()
+        # The question ends the sentence: add a full stop only when it carries no end mark of its own.
+        stop = "" if question.endswith((".", "?", "!")) else "."
+        lines.extend([f"Escalated from {escalated.get('escalated_from')} to {escalated.get('escalated_to')}. The "
+                      f"previous attempt stopped on this question: {question}{stop} Read its handoff at "
+                      f"{node_handoff(record, omh_home, str(node['id']))} for what it found, decide the question, "
+                      "then do the task.", ""])
     goal = record.get("goal")
     if isinstance(goal, str) and goal.strip():
         lines.extend([
@@ -1590,6 +1635,10 @@ def task_for(
                          f"its failing path, or `unattributed`: by declared scope, not proven cause. Scopes: {scopes}")
     if node.get("repairs") and node["write_scope"]:
         lines.append(_leftovers_line(record, node))
+    if can_escalate(node):
+        lines.append("If the task turns on a judgement you cannot settle with confidence (a design choice, a root "
+                     "cause you cannot pin down), do not guess: before editing, write ESCALATE: <the question> and "
+                     "what you found into the handoff, and stop.")
     lines.append("Stay inside your SCOPE: other parts of this run work at the same time. If you cannot finish, "
                  "say plainly that you are blocked and why; do not report blocked work as done.")
     # The marker ends the goal: Hermes previews each goal by its first 40 characters, and a person reads the label
@@ -1598,8 +1647,21 @@ def task_for(
 
 
 def retry_count(node: Mapping[str, Any]) -> int:
-    """How many of the node's attempts ended in a provider-error retry: the index of its next model_map option."""
-    return sum(1 for item in node.get("attempts") or [] if item.get("outcome") == "retry")
+    """How many of the node's attempts since its last escalation ended in a provider-error retry: the index of its
+    next model_map option. A new category starts from its first option."""
+    attempts = list(node.get("attempts") or [])
+    since = max((index for index, item in enumerate(attempts) if item.get("outcome") == "escalated"), default=-1)
+    return sum(1 for item in attempts[since + 1:] if item.get("outcome") == "retry")
+
+
+def can_escalate(node: Mapping[str, Any]) -> bool:
+    """True when the node's category has a rung above it and it escalated fewer than `MAX_ESCALATIONS` times.
+
+    A node pinned to an `identity` runs on that identity's own model chain whatever its category, so a climb would
+    change only the label; such a node cannot escalate (the parent picks another identity instead)."""
+    if node.get("identity"):
+        return False
+    return str(node.get("category")) in ESCALATION_LADDER and len(node.get("escalations") or []) < MAX_ESCALATIONS
 
 
 def local_blocked(record: Mapping[str, Any], offered: Iterable[str], backend: Mapping[str, Any] | None) -> list[str]:
@@ -1618,14 +1680,20 @@ def local_blocked(record: Mapping[str, Any], offered: Iterable[str], backend: Ma
         node = nodes[node_id]
         if not node.get("local"):
             continue
-        names = list(local_options.get(str(node["category"])) or []) if readable else []
+        identity = str(node.get("identity") or "")
+        has_chain = bool(((backend or {}).get("identity_chains") or {}).get(identity))
+        key = identity if has_chain else str(node["category"])
+        identity_local = (backend or {}).get("identity_local_options") or {}
+        source = identity_local if has_chain else local_options
+        names = list(source.get(key) or []) if readable else []
         if retry_count(node) >= len(names):
             blocked.append(node_id)
     return blocked
 
 
 def _call_route(
-    category: str, fallback: bool, retries: int, backend: Mapping[str, Any] | None, local: bool = False
+    category: str, fallback: bool, retries: int, backend: Mapping[str, Any] | None, local: bool = False,
+    identity: str = ""
 ) -> tuple[dict[str, Any], str]:
     """The call's ``route`` and the model_map option its tasks carry (``""`` for none).
 
@@ -1639,14 +1707,22 @@ def _call_route(
     """
     name = str((backend or {}).get("backend") or "default")
     if name == "default":
+        if identity:
+            return {"tool": "omh_delegate_route", "action": "set", "category": category,
+                    "identity": identity, "attempt": retries}, ""
         return {"tool": "omh_delegate_route", "action": "fallback" if fallback else "set", "category": category}, ""
     route: dict[str, Any] = {"backend": name, "category": category}
+    if identity:
+        route.update(identity=identity, attempt=retries)
     if local:
         route["local"] = True
     if name != "model_map" or (backend or {}).get("status") != "read":
         route["status"] = "not_applied"
         return route, ""
-    names = list(((backend or {}).get("local_options" if local else "options") or {}).get(category) or [])
+    has_chain = bool(((backend or {}).get("identity_chains") or {}).get(identity))
+    option_key = ("identity_local_options" if local else "identity_options") if has_chain else (
+        "local_options" if local else "options")
+    names = list(((backend or {}).get(option_key) or {}).get(identity if has_chain else category) or [])
     if retries < len(names):
         route.update(status="option_selected", option=names[retries])
         return route, names[retries]
@@ -1676,21 +1752,31 @@ def calls_for(
     by_option = str((backend or {}).get("backend") or "") == "model_map"
     # A local node no local model can take is never handed out, whatever the caller skips.
     skipped |= set(local_blocked(record, offerable(record, derived, now, limits=limits), backend))
-    groups: dict[tuple[str, bool, int, bool], list[str]] = {}
+    groups: dict[tuple[str, bool, int, bool, str], list[str]] = {}
     for node_id in offerable(record, derived, now, limits=limits):
         if node_id in skipped:
             continue
         node = nodes[node_id]
         attempts = node.get("attempts") or []
         fallback = bool(attempts) and attempts[-1].get("outcome") == "retry"
-        retries = retry_count(node) if by_option else 0
-        groups.setdefault((str(node["category"]), fallback, retries, bool(node.get("local"))), []).append(node_id)
+        identity = str(node.get("identity") or "")
+        selected = resolve_identity(identity, omh_home) if identity else None
+        if identity and selected is None:
+            raise DagRefusal("identity_unavailable", "The selected identity is missing, disabled or ambiguous.")
+        retries = retry_count(node) if by_option or identity else 0
+        if (selected and selected["model_chain"] and not by_option
+                and retries >= len(selected["model_chain"])):
+            raise DagRefusal("identity_chain_exhausted", "This node has tried every entry in its identity chain.")
+        groups.setdefault((str(node["category"]), fallback, retries, bool(node.get("local")), identity),
+                          []).append(node_id)
     calls: list[dict[str, Any]] = []
     held: list[str] = []
     size = max(1, per_call)
     left = None if task_budget is None else max(0, task_budget)
-    for (category, fallback, retries, local), members in groups.items():
-        route, option = _call_route(category, fallback, retries, backend, local)
+    for (category, fallback, retries, local, identity), members in groups.items():
+        route, option = _call_route(category, fallback, retries, backend, local, identity)
+        if identity and "backend" in route and route.get("status") != "option_selected":
+            raise DagRefusal("identity_route_unavailable", "The backend cannot apply the selected identity's route.")
         for start in range(0, len(members), size):
             chunk = members[start:start + size]
             if left is not None:
@@ -1705,13 +1791,17 @@ def calls_for(
                 left -= len(chunk)
             for node_id in chunk:
                 attempt = hand_out(nodes[node_id], derived[node_id]["state"], now,
-                                   lost=bool(derived[node_id].get("lost")), token=wants_token(record, nodes[node_id]))
+                                   lost=bool(derived[node_id].get("lost")), token=wants_token(record, nodes[node_id]),
+                                   omh_home=omh_home)
                 if "backend" in route:
                     attempt.update(backend=route["backend"], option=option)
             tasks = [task_for(record, nodes[node_id], omh_home, derived) for node_id in chunk]
             if option:
                 tasks = [{**task, "option": option} for task in tasks]
-            calls.append({"category": category, "route": dict(route), "nodes": chunk, "tasks": tasks})
+            call = {"category": category, "route": dict(route), "nodes": chunk, "tasks": tasks}
+            if identity:
+                call["identity"] = identity
+            calls.append(call)
     return calls, held
 
 
@@ -1764,7 +1854,7 @@ def settle(
     if record.get("cancelled_at") is not None:
         raise DagRefusal("run_cancelled", "The run was cancelled; nothing in it settles now.")
     if outcome not in OUTCOMES:
-        raise DagRefusal("invalid_outcome", "Settle a node as accepted, failed, blocked or parked.")
+        raise DagRefusal("invalid_outcome", "Settle a node as accepted, failed, blocked, parked or escalated.")
     info = derived[node_id]
     if info["state"] not in OPEN:
         raise DagRefusal("node_not_out", f"Node {node_id} is {info['state']}, not out with a child; nothing to settle.")
@@ -1777,7 +1867,20 @@ def settle(
                 or _CONTROL.search(handle) or any(char in handle for char in "\r\n\t")):
             raise DagRefusal("invalid_handle", "parked needs a nonempty handle of at most 120 characters on one line.")
         wake_at = _park_deadline(wake_at, now)
+    if outcome == "escalated":
+        return _escalate(nodes[node_id], reason, now)
     child = info["child"]
+    waiting = info.get("waiting_resume")
+    if isinstance(waiting, Mapping) and isinstance(child, Mapping):
+        sid = child.get("subagent_id")
+        when = (f"after its limit resets ({_clock(waiting['at'])})" if isinstance(waiting.get("at"), (int, float))
+                else "once the gateway is up")
+        raise DagRefusal(
+            "child_resume_pending",
+            f"Hermes will resume node {node_id}'s child {sid} {when}, on its own conversation and worktree, and its "
+            f"result settles the node then. Wait for it; to give it up, call delegate_task(action='stop', "
+            f"subagent_id='{sid}') first, then settle the node.",
+        )
     stop = child.get("stop") if isinstance(child, Mapping) else None
     if outcome == "accepted" and isinstance(stop, Mapping) and stop.get("status") in CHILD_FAILURE_STOPS:
         raise DagRefusal(
@@ -1846,6 +1949,34 @@ def settle(
     if statuses is not None:
         attempt["criteria"] = statuses  # the status words only: no evidence text, no handoff content
     return str(outcome)
+
+
+def _escalate(node: dict[str, Any], reason: object, now: float) -> str:
+    """Close the open attempt as escalated and move the node one rung up `ESCALATION_LADDER`. No handoff is read."""
+    node_id, category = str(node["id"]), str(node["category"])
+    if not isinstance(reason, str) or not reason.strip():
+        raise DagRefusal("escalation_needs_reason",
+                         "escalated needs the question the child stopped on as the reason, one short line.")
+    if node.get("identity"):
+        raise DagRefusal("identity_node_cannot_escalate",
+                         f"Node {node_id} runs on identity {node['identity']}, whose own model chain a category climb "
+                         "would not change; settle it accepted, failed or blocked.")
+    if category not in ESCALATION_LADDER:
+        raise DagRefusal("no_higher_category",
+                         f"Node {node_id} is on {category}, which has no category above it; settle it accepted, "
+                         "failed or blocked.")
+    if len(node.get("escalations") or []) >= MAX_ESCALATIONS:
+        raise DagRefusal("escalation_limit_reached",
+                         f"Node {node_id} has escalated {MAX_ESCALATIONS} times; settle it accepted, failed or "
+                         "blocked.")
+    note = _plain(reason, MAX_REASON_CHARS, "invalid_reason", "The reason is one short line.")
+    higher = ESCALATION_LADDER[category]
+    node["attempts"][-1].update(settled_at=now, outcome="escalated", reason=note, provider_error=False,
+                                escalated_from=category, escalated_to=higher)
+    node.setdefault("defined_category", category)
+    node.setdefault("escalations", []).append({"from": category, "to": higher, "at": now})
+    node["category"] = higher
+    return "escalated"
 
 
 def _checked_again(nodes: Mapping[str, Mapping[str, Any]], node: Mapping[str, Any]) -> str:
@@ -2040,6 +2171,8 @@ def node_rows(record: Mapping[str, Any], derived: Mapping[str, Mapping[str, Any]
             row["origin"] = node["origin"]
         if node.get("found_by"):
             row["found_by"] = node["found_by"]
+        if node.get("identity"):
+            row["identity"] = node["identity"]
         if attempts and attempts[-1].get("reason"):
             row["reason"] = attempts[-1]["reason"]
         if info["state"] == "accepted" and handoff_unchecked(node):
@@ -2048,6 +2181,12 @@ def node_rows(record: Mapping[str, Any], derived: Mapping[str, Mapping[str, Any]
             row.update(handle=attempts[-1]["handle"], wake_at=attempts[-1]["wake_at"])
         if info["state"] in ("failed", "blocked"):
             row["repair_cycles_left"] = cycles_left(record, node_id)
+        if node.get("escalations"):
+            row["escalations"] = len(node["escalations"])
+            if node.get("defined_category"):
+                row["defined_category"] = node["defined_category"]
+        if info.get("waiting_resume"):
+            row["waiting_resume"] = dict(info["waiting_resume"])
         if node_id in ages:
             row["open_for_s"] = int(ages[node_id])
         rows.append(row)

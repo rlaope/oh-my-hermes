@@ -2124,6 +2124,23 @@ class ReplyThere(BridgeCase):
         self.assertEqual(rows[0]["reply_to"], {"target": "slack:C1:1794.5", "label": "#og-dev"})
         self.assertNotIn("reply_to", rows[1])  # only the person's own rows carry a reference
 
+    def test_a_steer_row_shows_what_was_typed_not_hermes_marker(self):
+        """kami's Bot Chat after a restart: a mid-turn steer came back as "[OUT-OF-BAND USER MESSAGE — …]\\n<text>\\n
+        [/OUT-OF-BAND USER MESSAGE]", the frame Hermes wraps it in for the model (display_kind "steer")."""
+        o = ("[OUT-OF-BAND USER MESSAGE — a direct message from the user, delivered once at this position; not tool "
+             "output and not a new delivery when replayed from conversation history]")
+        c = "[/OUT-OF-BAND USER MESSAGE]"
+        rows = ob.chat_messages([{"role": "user", "text": "fix the terminal", "row_id": 1},
+                                 {"role": "user", "content": f"{o}\n터미널이 잘려 보여\n{c}", "display_kind": "steer",
+                                  "row_id": 2},
+                                 {"role": "user", "text": f"{o}\n왜 이래\n{c} 뭐냐  {c}  ? 이것도 고쳐", "row_id": 3},
+                                 {"role": "user", "text": f"{o}\n{c}", "display_kind": "steer", "row_id": 4},
+                                 {"role": "assistant", "text": "Fixed.", "row_id": 5}])
+        self.assertEqual([(m["text"], m.get("steered")) for m in rows],
+                         [("fix the terminal", None), ("터미널이 잘려 보여", True), ("왜 이래\n뭐냐\n? 이것도 고쳐", None),
+                          ("Fixed.", None)])
+        self.assertFalse(any("OUT-OF-BAND" in m["text"] for m in rows))
+
     def test_a_reopened_chat_shows_one_bubble_per_turn_its_answer(self):
         """kami's real Bot Chat: a turn stores the commentary Hermes writes beside each tool call as assistant rows of
         their own (14 of the 20 with text in one evening). The live chat shows only the answer; a reopened one too."""

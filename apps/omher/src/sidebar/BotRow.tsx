@@ -13,6 +13,7 @@ import { RestartLine } from "./RestartLine";
 import { useMates } from "./restart";
 import { SshMarker } from "../peers/SshMarker";
 import type { RowDrag } from "./useRowDrag";
+import { NewThreadIcon } from "../threads/NewThreadIcon";
 
 /** The newest thing said in a bot's threads: when, and the line. The bot row shows it when it is newer than the main
  *  chat's own last line. A thread with nothing said yet gives nothing: its title is listed right under the bot, so
@@ -79,13 +80,15 @@ export const plain = (raw: string) => {
 const flat = (t: string) =>
   t
     .replace(/```[\s\S]*?```/g, " ")
+    // list markers at a line's start ("- Fix PR", "* a", "+ b", "1. c", "- [ ] task"): the preview read "…work: - Fi…"
+    .replace(/^[ \t]*(?:[-*+]|\d{1,3}[.)])[ \t]+(?:\[[ xX]\][ \t]+)?/gm, "")
     .replace(/[`*_>#]/g, "")
     .replace(/\[([^\]]*)\]\([^)]*\)/g, "$1")
     .replace(/\s+/g, " ")
     .trim();
 
 const MENU_W = 188;
-const MENU_H = 224;
+const MENU_H = 236;
 
 export interface RowMenu {
   /** "New thread · <name>": a new, empty thread under this bot, opened with the composer focused. */
@@ -102,8 +105,9 @@ export interface RowMenu {
   onRemove?: () => void;
 }
 
-/** Right-click or ⋯ menu of a bot row: New thread · <name> first, then Pin to top, Edit bot, Restart (Start when
- *  offline), Remove from list. Nothing that would create, stop or delete a Hermes profile, and no "restart all". */
+/** Right-click or ⋯ menu of a bot row: New thread · <name> first, in a group of its own (its icon, a divider under
+ *  it: it is work with the bot, not managing the bot; owner, 2026-11-18), then Pin to top, Edit bot, Restart (Start
+ *  when offline), Remove from list. Nothing that would create, stop or delete a Hermes profile, and no "restart all". */
 function Menu({ menu, onClose, name, bot, at }: { menu: RowMenu; onClose: () => void; name: string; bot: string; at: { x: number; y: number } }) {
   const ref = useRef<HTMLDivElement>(null);
   // Restart restarts the gateway process that serves this bot: say who else goes down with it, before the press
@@ -152,9 +156,13 @@ function Menu({ menu, onClose, name, bot, at }: { menu: RowMenu; onClose: () => 
         // the fixed items keep their places (Restart is 2, Remove 3) after the New thread line
         const i = at - (menu.onNewThread ? 1 : 0);
         return i === -1 && fn ? (
-          <button key={label} type="button" role="menuitem" className="row-mi row-mi-new" onClick={run(fn)} data-testid="row-new-thread">
-            {label}
-          </button>
+          <div key={label} role="none" className="row-mg">
+            <button type="button" role="menuitem" className="row-mi row-mi-new" onClick={run(fn)} data-testid="row-new-thread">
+              <NewThreadIcon size={14} />
+              <span className="row-mi-l">{label}</span>
+            </button>
+            <div role="separator" className="row-sep" data-testid="row-menu-sep" />
+          </div>
         ) : i === 2 && mates.length && fn ? (
           <button key={label} type="button" role="menuitem" className="row-mi two" onClick={run(fn)} data-testid="row-restart">
             {label}
@@ -242,7 +250,7 @@ export function BotRow({
   return (
     <div
       ref={wrap}
-      className={`bot-w${open ? " menu-open" : ""}${drag?.lifted ? " lifted" : ""}${drag?.active ? " sliding" : ""}`}
+      className={`bot-w${menu?.onNewThread ? " can-new" : ""}${open ? " menu-open" : ""}${drag?.lifted ? " lifted" : ""}${drag?.active ? " sliding" : ""}`}
       style={drag?.dy ? { transform: `translateY(${drag.dy}px)` } : undefined}
       onContextMenu={onContext}
       onPointerDown={drag?.onPointerDown}
@@ -310,6 +318,19 @@ export function BotRow({
           </span>
         </span>
       </button>
+      {menu?.onNewThread && (
+        // a new thread one press away on hover, beside ⋯ (the same action as the menu's first line)
+        <button
+          type="button"
+          className="bot-new"
+          aria-label={t("thread.new", { name: bot.display_name })}
+          title={t("thread.new", { name: bot.display_name })}
+          data-testid={`bot-new-${bot.name}`}
+          onClick={menu.onNewThread}
+        >
+          <NewThreadIcon size={14} />
+        </button>
+      )}
       {menu && (
         <button
           type="button"

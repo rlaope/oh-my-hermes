@@ -57,7 +57,7 @@ import stat
 import time
 from typing import Any
 
-from .. import dag_run, runtime_paths
+from .. import dag_run, omh_identities as _omh_identities, runtime_paths
 from ..delegation_graph import closing_usage, run_usage_text
 from ..delegation_ledger import oneshot_children_spawned, read_ledger, with_unjoined_stop
 from ..delegation_snapshot import dag_added_clause, shown_lanes
@@ -68,6 +68,7 @@ from ..delegation_backend_mode import (
     category_local_options,
     category_options,
     delegation_section,
+    is_local_option,
     read_backend_mode,
 )
 from ..delegation_routing import _config_path, _read_config_snapshot, read_delegation_settings
@@ -177,13 +178,15 @@ OMH_DAG_SCHEMA = {
     "description": (
         "Keep a dag-ulw run: small nodes the parent dispatches via delegate_task. define records nodes "
         "(id, label, category, prompt with TASK / DELIVERABLE / SCOPE / VERIFY / STOP WHEN, depends_on, "
-        "write_scope, role, owner, local, read_only) and refuses cycles, unknown or self-edges, write scopes shared without an edge, more "
+        "write_scope, role, owner, local, read_only, identity) and refuses cycles, unknown or self-edges, write scopes shared without an edge, more "
         "than 48 nodes, and prompts naming none of the markers; a one-shot session caps nodes at "
         "delegation.oneshot_max_children. Lint is advice. ready returns delegate_task calls per category "
         "within the free slots: route each via omh_delegate_route, then delegate_task unchanged. After each "
         "child, read the node's handoff and settle it accepted, failed or blocked; a child saying it is "
         "blocked is blocked, never accepted. A still-running wait may settle parked with "
         "handle and wake_at (future UTC ISO-8601 or epoch, within 24h); ready reoffers it then, at most three parks. "
+        "A child whose handoff starts a line with ESCALATE: settles escalated with the question as reason; the node is "
+        "offered again one category up (quick, unspecified-low, unspecified-high, ultrabrain), at most twice. "
         "settle returns what is next. repair adds nodes for a failed "
         "node, at most two cycles. extend adds nodes to an all-passed run when the goal check finds work "
         "missing, at most two rounds. Past either limit, report what is open. criteria (define, extend): the "
@@ -214,6 +217,8 @@ OMH_DAG_SCHEMA = {
                         "owner": {"type": "string", "enum": list(EXTERNAL_OWNERS)},
                         "local": {"type": "boolean"},
                         "read_only": {"type": "boolean"},
+                        "identity": {"type": "string",
+                                     "description": "Optional identity reference: builtin:<name> or custom:<name>."},
                     },
                     "required": ["id", "label", "category", "prompt"],
                 },
@@ -345,6 +350,9 @@ def omh_dag_handler(args: Mapping[str, object], **kwargs: object) -> str:
                 derived = dag_run.derive(record, children, now)
                 say = ("The child hit a provider error: its node is offered once more on the route's fallback."
                        if happened == "retry" else "")
+                if happened == "escalated":
+                    higher = next(item for item in record["nodes"] if item["id"] == node)["category"]
+                    say = f"Node {node} goes up to {higher}; it is offered again with the question it stopped on."
                 unread = str(next(item for item in record["nodes"] if item["id"] == node)["attempts"][-1]
                              .get("handoff_unread") or "")
                 if happened == "accepted" and unread:
@@ -544,7 +552,10 @@ def _children(omh_home: Path, segments: list[str], hermes_home: Path | None = No
     names first (`with_unjoined_stop`), so a child that came back is not
     taken for one a restart ended. One with no stop whose Hermes process is
     gone is marked ``lost``: a restart ended it, and Hermes fires no
-    `subagent_stop` for it. Only a process Hermes' own probes say ended
+    `subagent_stop` for it. A dag child Hermes promised to resume
+    (`_resume_promises`), whether a restart ended it or it stopped on a
+    failure such as a usage limit, is marked ``waiting_resume`` instead, with
+    no stop: its node stays running until the resumed run reports. Only a process Hermes' own probes say ended
     counts (`host_process.process_alive`). Before that mark, with
     ``hermes_home``, a child's own lineage is read: a child Hermes rotated
     since it started stops under its continuation's id, and a stop naming a
@@ -561,6 +572,7 @@ def _children(omh_home: Path, segments: list[str], hermes_home: Path | None = No
     if stops:
         children = [with_unjoined_stop(child, stops) for child in children]
     alive: dict[tuple[int, int | None, str], bool | None] = {}
+    gone: list[int] = []
     for index, child in enumerate(children):
         host = child.get("host")
         if "stop" in child or host is None:
@@ -577,8 +589,77 @@ def _children(omh_home: Path, segments: list[str], hermes_home: Path | None = No
             if "stop" in returned:
                 children[index] = returned
                 continue
-        child["lost"] = True
+        gone.append(index)
+    # A dag child that stopped on a failure, or that a restart ended, may be one Hermes promised to resume
+    # (`delegation.auto_resume`): it is waiting, not lost or returned, and offering its node again would run the
+    # same work twice beside the resumed child.
+    asked = [index for index, child in enumerate(children) if "dag" in child and (
+        index in gone or (isinstance(child.get("stop"), dict)
+                          and child["stop"].get("status") in dag_run.CHILD_FAILURE_STOPS))]
+    waiting = _resume_promises(hermes_home, [children[index]["subagent_id"] for index in asked]) if asked else {}
+    for index in asked:
+        promise = waiting.get(children[index]["subagent_id"])
+        if promise is None:
+            continue
+        child = {key: value for key, value in children[index].items() if key != "stop"}
+        child["waiting_resume"] = promise
+        children[index] = child
+    for index in gone:
+        if "waiting_resume" not in children[index]:
+            children[index]["lost"] = True
     return children
+
+
+def _resume_promises(hermes_home: Path | None, subagent_ids: list[str]) -> dict[str, dict[str, Any]]:
+    """The children among ``subagent_ids`` Hermes promised an automatic resume, by subagent id. Read-only.
+
+    Hermes 0.23.2+ keeps a durable record per child (`state.db` ``resumable_subagents``, written by
+    `tools/delegate_tool_resumable.py`). With `delegation.auto_resume` on, a child stopped by a usage limit or a
+    restart is ``resumable`` (or ``claimed`` while its resume starts) with ``auto_promised`` and no
+    ``auto_gave_up``: the gateway will continue it under the same subagent id and session, and its parent hears
+    nothing until then. Each answer is ``{"at": <epoch or None>, "attempt": n}``: ``at`` is when the limit resets
+    (None: as soon as the gateway is up). A Hermes without the table, a store this cannot read, or no
+    ``hermes_home`` answers nothing, which leaves the restart and failure rules as they were.
+    """
+    ids = sorted({str(sid) for sid in subagent_ids if sid})
+    if hermes_home is None or not ids:
+        return {}
+    state_db = Path(hermes_home) / "state.db"
+    if not state_db.is_file():
+        return {}
+    try:
+        connection = connect_readonly(state_db, timeout=0.25)
+        try:
+            rows = connection.execute(
+                "SELECT subagent_id, state, record_json, expires_at FROM resumable_subagents "
+                f"WHERE subagent_id IN ({', '.join('?' for _ in ids)})", ids,
+            ).fetchall()
+        finally:
+            connection.close()
+    except sqlite3.Error:
+        return {}
+    now = time.time()
+    found: dict[str, dict[str, Any]] = {}
+    for sid, state, raw, expires in rows:
+        if state not in RESUME_WAITING_STATES or (isinstance(expires, (int, float)) and expires <= now):
+            continue
+        try:
+            record = json.loads(raw or "{}")
+        except ValueError:
+            continue
+        if (not isinstance(record, dict) or record.get("auto_promised") is not True or record.get("auto_gave_up")
+                or record.get("auto_off")):
+            continue
+        attempts = record.get("auto_attempts")
+        attempts = attempts if isinstance(attempts, int) and not isinstance(attempts, bool) and attempts >= 0 else 0
+        at = record.get("next_attempt_at") if record.get("resume_mode") == "AUTO_AT" else None
+        found[str(sid)] = {"at": float(at) if isinstance(at, (int, float)) and not isinstance(at, bool) else None,
+                           "attempt": attempts + (0 if state == "claimed" else 1)}
+    return found
+
+
+# `resumable_subagents` states of a child still owed its automatic resume: stopped and waiting, or being continued.
+RESUME_WAITING_STATES = ("resumable", "claimed")
 
 
 def free_slots(hermes_home: Path, *, pid: int | None = None) -> dict[str, Any]:
@@ -931,9 +1012,13 @@ def _ready(
     mine: list[str] = []
     if spent_out and not calls and not any(info["state"] in dag_run.LIVE for info in derived.values()):
         mine = list(held)
+        if any(nodes[node_id].get("identity") for node_id in mine):
+            raise dag_run.DagRefusal(
+                "identity_capability_unavailable",
+                "The child budget is spent; this session cannot apply a selected node's prompt and model policy.")
         for node_id in mine:
             attempt = dag_run.hand_out(nodes[node_id], derived[node_id]["state"], now,
-                                       token=dag_run.wants_token(record, nodes[node_id]))
+                                       token=dag_run.wants_token(record, nodes[node_id]), omh_home=omh_home)
             attempt["lane"] = "parent"
         held = []
     if calls or pinned or mine:
@@ -1059,9 +1144,17 @@ def delegation_backend(omh_home: Path, hermes_home: Path) -> dict[str, Any] | No
         return None
     routes, _status = load_model_provider_routes(omh_home)
     chains = effective_mixture_category_chains(omh_home, hermes_home)
+    definitions = _omh_identities.identity_definitions(omh_home)
+    identity_chains = {name: definition["model_chain"]
+                       for name, definition in definitions.items()
+                       if definition.get("model_chain")}
+    local_mode = {**mode, "options": [option for option in mode.get("options", []) if is_local_option(option)]}
     return {"backend": mode["backend"], "status": mode["status"],
             "options": category_options(mode, chains, routes),
-            "local_options": category_local_options(mode, chains, routes)}
+            "local_options": category_local_options(mode, chains, routes),
+            "identity_chains": identity_chains,
+            "identity_options": category_options(mode, identity_chains, routes),
+            "identity_local_options": category_options(local_mode, identity_chains, routes)}
 
 
 # The profile settings that move `dag_run.Limits`: `plugins.entries.omh.settings.<name>`, in seconds or a count.
@@ -1196,6 +1289,14 @@ def _result(action: str, record: Mapping[str, Any], derived: Mapping[str, Mappin
             f"Hermes restarted while {'node' if one else 'nodes'} {', '.join(lost)} ran, "
             f"{limits.max_lost_reoffers + 1} times, so {'it is' if one else 'they are'} not offered again: "
             f"settle {'it' if one else 'each'} failed or blocked.")) if part)
+    resuming = [str(node["id"]) for node in record["nodes"] if derived[str(node["id"])].get("waiting_resume")]
+    if resuming:
+        # Added to whatever else the reply says, on every action: Hermes holds these, and a second child would race.
+        one = len(resuming) == 1
+        say = " ".join(part for part in (say, (
+            f"Hermes will resume the child of {'node' if one else 'nodes'} {', '.join(resuming)} on its own "
+            f"(delegation.auto_resume): do not dispatch {'it' if one else 'them'} again; "
+            f"{'its' if one else 'each'} result arrives as a normal completion.")) if part)
     found = dag_run.stuck(record, derived, now, limits=limits)
     if found:
         # Added to whatever else the reply says, on every action: a silent child gives no other signal.
@@ -1311,6 +1412,10 @@ def export_units(record: Mapping[str, Any], derived: Mapping[str, Mapping[str, A
         raise dag_run.DagRefusal("nothing_to_export", "No coding node is ready for the coding owner yet.")
     units = []
     for node in exportable:
+        if node.get("identity"):
+            raise dag_run.DagRefusal(
+                "identity_capability_unavailable",
+                "DAG export cannot carry a selected prompt and model policy through this external owner's contract.")
         units.append({
             "unit_id": str(node["id"]),
             "title": str(node["label"]),

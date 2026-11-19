@@ -62,14 +62,18 @@ test("a message sent while the bot answers waits with a ↵ mark and a Waiting l
   const bub = (await b.locator(".b").boundingBox())!;
   expect(mark.x + mark.width).toBeLessThanOrEqual(bub.x);
   expect(await sent()).toEqual(["Refactor the gateway retry code"]);
-  // the menu: Send now, Steer, Edit, Delete
-  await b.getByTestId("queue-mark").click();
-  await expect(page.getByTestId("queue-menu").getByRole("menuitem")).toHaveText(["Send now", "Steer", "Edit", "Delete"]);
-  // the menu of the last waiting message stays inside the chat's scroll box (it opens upward there)
-  const menu = (await page.getByTestId("queue-menu").boundingBox())!;
-  const tl = (await page.getByTestId("timeline").boundingBox())!;
-  expect(menu.y).toBeGreaterThanOrEqual(tl.y);
-  expect(menu.y + menu.height).toBeLessThanOrEqual(tl.y + tl.height);
+  // no menu: ↵ (Steer here), ↓ (back to the box) and × (drop, shown on hover) sit before the bubble
+  await expect(b.getByTestId("queue-acts").getByRole("button")).toHaveText(["×", "↵", "↓"]);
+  // ↓ sits right beside the bubble, whether or not × shows
+  const down = (await b.getByTestId("queue-edit").boundingBox())!;
+  expect(Math.abs((await b.locator(".b").boundingBox())!.x - (down.x + down.width) - 6)).toBeLessThanOrEqual(1);
+  await expect(b.getByTestId("queue-mark")).toHaveAttribute("aria-label", "Steer");
+  await expect(b.getByTestId("queue-edit")).toHaveAttribute("aria-label", "Edit");
+  await expect(page.getByTestId("queue-menu")).toHaveCount(0);
+  await page.mouse.move(0, 0);
+  await expect(b.getByTestId("queue-delete")).toHaveCSS("opacity", "0");
+  await b.hover();
+  await expect(b.getByTestId("queue-delete")).toHaveCSS("opacity", "1");
   // a waiting bubble is muted
   expect(Number(await b.locator(".b").evaluate((el) => getComputedStyle(el).opacity))).toBeLessThan(1);
 });
@@ -90,27 +94,11 @@ test("auto-send: untouched messages go out after the turn ends, one per turn, in
   await expect(page.locator("[data-testid=bubble-user][data-held]")).toHaveCount(0);
 });
 
-test("Send now: one interrupt, then this message goes out first", async ({ page }) => {
-  await running(page);
-  await say(page, "older one");
-  await say(page, "urgent one");
-  const b = held(page, "urgent one");
-  await b.getByTestId("queue-mark").click();
-  await page.getByTestId("queue-now").click();
-  await expect.poll(async () => (await calls("chat.interrupt")).length).toBe(1);
-  await expect.poll(sent).toEqual(["Refactor the gateway retry code", "urgent one"]);
-  await expect(page.getByTestId("timeline")).toContainText(/Stopped/);
-  await endTurn();
-  await expect.poll(sent).toEqual(["Refactor the gateway retry code", "urgent one", "older one"]);
-  expect((await calls("chat.interrupt")).length).toBe(1);
-});
-
-test("Steer: one chat.steer, a Steered line, the message leaves the queue and is never sent again", async ({ page }) => {
+test("↵ steers in one click: one chat.steer, a Steered line, never sent again, no interrupt", async ({ page }) => {
   await running(page);
   await say(page, "also keep the old timeout");
   const b = held(page, "also keep the old timeout");
   await b.getByTestId("queue-mark").click();
-  await page.getByTestId("queue-steer").click();
   const row = page.locator("[data-testid=bubble-user][data-steered]", { hasText: "also keep the old timeout" });
   await expect(row.getByTestId("bubble-steered")).toHaveText("Sent to Kami · joins the running answer or starts right after");
   await expect(row.getByTestId("queue-mark")).toHaveCount(0);
@@ -120,6 +108,7 @@ test("Steer: one chat.steer, a Steered line, the message leaves the queue and is
   await endTurn();
   await page.waitForTimeout(400);
   expect(await sent()).toEqual(["Refactor the gateway retry code"]);
+  expect((await calls("chat.interrupt")).length).toBe(0);
 });
 
 test("Steer refused: the message stays waiting and is sent normally after the turn", async ({ page }) => {
@@ -128,7 +117,6 @@ test("Steer refused: the message stays waiting and is sent normally after the tu
   await say(page, "a");
   await say(page, "b goes first");
   await held(page, "b goes first").getByTestId("queue-mark").click();
-  await page.getByTestId("queue-steer").click();
   await expect.poll(async () => (await calls("chat.steer")).length).toBe(1);
   await expect(held(page, "b goes first")).toBeVisible();
   await expect(page.getByTestId("bubble-steered")).toHaveCount(0);
@@ -138,17 +126,16 @@ test("Steer refused: the message stays waiting and is sent normally after the tu
   await expect.poll(sent).toEqual(["Refactor the gateway retry code", "b goes first", "a"]);
 });
 
-test("Edit puts the text back in the box; Delete drops it; neither is sent", async ({ page }) => {
+test("↓ puts the text back in the box; × drops it; neither is sent", async ({ page }) => {
   await running(page);
   await say(page, "fix teh typo");
   await say(page, "never mind this");
-  await held(page, "fix teh typo").getByTestId("queue-mark").click();
-  await page.getByTestId("queue-edit").click();
+  await held(page, "fix teh typo").getByTestId("queue-edit").click();
   await expect(page.getByTestId("composer")).toHaveValue("fix teh typo");
   await expect(page.getByTestId("composer")).toBeFocused();
   await expect(held(page, "fix teh typo")).toHaveCount(0);
-  await held(page, "never mind this").getByTestId("queue-mark").click();
-  await page.getByTestId("queue-delete").click();
+  await held(page, "never mind this").hover();
+  await held(page, "never mind this").getByTestId("queue-delete").click();
   await expect(page.getByTestId("bubble-user").filter({ hasText: "never mind this" })).toHaveCount(0);
   await page.getByTestId("composer").fill("");
   await endTurn();
@@ -165,32 +152,24 @@ test("Stop keeps the waiting messages; they go out after the stopped turn", asyn
   expect((await calls("chat.interrupt")).length).toBe(1);
 });
 
-test("keyboard: the ↵ is a button, the menu takes arrows, Enter and Esc (Esc does not stop the answer)", async ({ page }) => {
+test("keyboard: ↵, ↓ and × are buttons in tab order; Enter on × drops it without touching the answer", async ({ page }) => {
   await running(page);
   await say(page, "keyboard one");
-  const mark = held(page, "keyboard one").getByTestId("queue-mark");
-  await expect(mark).toHaveAttribute("aria-haspopup", "menu");
+  const b = held(page, "keyboard one");
+  const mark = b.getByTestId("queue-mark");
+  await expect(mark).not.toHaveAttribute("aria-haspopup", /.+/);
   await mark.focus();
-  await page.keyboard.press("Enter");
-  const menu = page.getByTestId("queue-menu");
-  await expect(menu).toBeVisible();
-  await expect(page.getByTestId("queue-now")).toBeFocused();
-  await page.keyboard.press("ArrowDown");
-  await expect(page.getByTestId("queue-steer")).toBeFocused();
-  await page.keyboard.press("ArrowUp");
-  await page.keyboard.press("ArrowUp");
-  await expect(page.getByTestId("queue-delete")).toBeFocused();
-  await page.keyboard.press("Escape");
-  await expect(menu).toHaveCount(0);
-  await expect(mark).toBeFocused();
-  await expect(page.getByTestId("stop")).toBeVisible();
-  expect((await calls("chat.interrupt")).length).toBe(0);
-  await page.keyboard.press("Enter");
-  await page.keyboard.press("End");
-  await expect(page.getByTestId("queue-delete")).toBeFocused();
+  await page.keyboard.press("Tab");
+  await expect(b.getByTestId("queue-edit")).toBeFocused();
+  await page.keyboard.press("Shift+Tab");
+  await page.keyboard.press("Shift+Tab");
+  const x = b.getByTestId("queue-delete");
+  await expect(x).toBeFocused();
+  await expect(x).toHaveCSS("opacity", "1"); // focus shows it, as hover does
   await page.keyboard.press("Enter");
   await expect(page.getByTestId("bubble-user").filter({ hasText: "keyboard one" })).toHaveCount(0);
   expect((await calls("chat.interrupt")).length).toBe(0);
+  expect((await calls("chat.steer")).length).toBe(0);
 });
 
 test("shots: a waiting bubble and its menu, dark/light, en/ko, 900x600", async ({ page }) => {
@@ -209,19 +188,16 @@ test("shots: a waiting bubble and its menu, dark/light, en/ko, 900x600", async (
       const steer = lang === "ko" ? "기존 타임아웃 값은 그대로 둬" : "keep the old timeout as it is";
       await say(page, steer);
       await held(page, steer).getByTestId("queue-mark").click();
-      await page.getByTestId("queue-steer").click();
       await expect(page.getByTestId("bubble-steered")).toBeVisible();
       await say(page, lang === "ko" ? "끝나면 테스트도 돌려줘" : "run the tests when you are done");
       await say(page, lang === "ko" ? "그리고 PR 설명도 써줘" : "and write the PR description");
-      await page.locator("[data-testid=bubble-user][data-held]").last().getByTestId("queue-mark").click();
-      await expect(page.getByTestId("queue-menu")).toBeVisible();
-      await page.getByTestId("queue-now").hover();
-      const menu = (await page.getByTestId("queue-menu").boundingBox())!;
-      const tl = (await page.getByTestId("timeline").boundingBox())!;
-      expect(menu.y + menu.height).toBeLessThanOrEqual(tl.y + tl.height - 12);
-      // it covers no bubble of the person's
+      // the last waiting message hovered: its three buttons, none over a bubble of the person's
+      const last = page.locator("[data-testid=bubble-user][data-held]").last();
+      await last.hover();
+      await expect(last.getByTestId("queue-delete")).toHaveCSS("opacity", "1");
+      const acts = (await last.getByTestId("queue-acts").boundingBox())!;
       for (const box of await page.locator("[data-testid=bubble-user] .b").evaluateAll((els) => els.map((el) => el.getBoundingClientRect().toJSON())))
-        expect(menu.x + menu.width <= box.x || menu.y + menu.height <= box.y || box.y + box.height <= menu.y, JSON.stringify({ menu, box })).toBe(true);
+        expect(acts.x + acts.width <= box.x || acts.y + acts.height <= box.y || box.y + box.height <= acts.y, JSON.stringify({ acts, box })).toBe(true);
       // contrast of a waiting bubble's text and of its Waiting line, as drawn (opacity included)
       console.log(lang, theme, JSON.stringify(await page.evaluate(() => {
         const rgb = (c: string) => (c.match(/[\d.]+/g) ?? []).map(Number);

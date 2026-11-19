@@ -8,7 +8,7 @@ import { Bubble } from "./Bubble";
 import type { QueueChoice, QueueOffReasons } from "./QueueMark";
 import type { MessageItem } from "../../state/store";
 
-/** steer queue sessions: a SESSIONS chat's own ↵ menu. `off` says which items are off and why for a user row, or
+/** steer queue sessions: a SESSIONS chat's own ↵ ↓ × buttons. `off` says which items are off and why for a user row, or
  *  null for a row with no menu; `pick` runs the choice. */
 export interface SessionQueue {
   off(it: MessageItem): QueueOffReasons | null;
@@ -44,12 +44,15 @@ export function Timeline({
   onEditLast,
   connectionNotice = true,
   queue,
+  emptyHint,
 }: {
   bot: Bot;
   face?: ReactNode;
   onEditLast?: () => void;
   connectionNotice?: boolean;
   queue?: SessionQueue;
+  /** what an empty chat says instead of "Say hi to <bot>" (a new thread asks what it is about): one line, not two */
+  emptyHint?: ReactNode;
 }) {
   const s = useStore();
   const items = selectTimeline(s, bot.name);
@@ -91,7 +94,7 @@ export function Timeline({
     return () => ro.disconnect();
   }, [bot.name, items]);
 
-  // steer queue: the ↵ menu of a held message (Edit puts it back in this chat's box)
+  // steer queue: the ↵ ↓ × buttons of a held message (↓ = Edit puts it back in this chat's box)
   const queuePick = (id: string) => (c: QueueChoice) => {
     if (c === "now") void s.queueSendNow(id, bot.name);
     else if (c === "steer") void s.queueSteer(id, bot.name);
@@ -225,7 +228,7 @@ export function Timeline({
           {t("tl.noModel", { bot: bot.display_name })}
         </div>
       )}
-      {chat?.loaded && !chat.openError && items.length === 0 && <div className="day">{t("tl.sayHi", { bot: bot.display_name })}</div>}
+      {chat?.loaded && !chat.openError && items.length === 0 && (emptyHint ?? <div className="day">{t("tl.sayHi", { bot: bot.display_name })}</div>)}
       {items.map((it, i) => {
         // the live activity line with nothing to say yet: the typing bubble below stands in for it
         if (it.kind === "activity" && chat?.turn?.id === it.turn.id && !turnHasActivity(it.turn)) return null;

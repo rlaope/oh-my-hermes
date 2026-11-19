@@ -41,7 +41,7 @@ from http import HTTPStatus
 from pathlib import Path
 from urllib.parse import parse_qs, urlsplit
 
-VERSION = "0.2.13"
+VERSION = "1.0.0"
 BOT_CHAT_TITLE = "Bot Chat"
 FOLDER_CHAT_PREFIX = "omher · "
 MAX_FOLDER_CHATS = 16
@@ -4551,6 +4551,24 @@ def _row_text(row: dict) -> str:
     return ""
 
 
+# Hermes stores a mid-turn steer as its own user row (display_kind "steer") wrapped in a marker the model reads, not
+# the person: agent/prompt_builder.py STEER_MARKER_OPEN / STEER_MARKER_CLOSE. A reopened chat shows only what was typed.
+STEER_ROW = re.compile(r"^\s*\[OUT-OF-BAND USER MESSAGE\b[^\]\n]*\]\s*\n?(.*?)\s*\[/OUT-OF-BAND USER MESSAGE\]\s*$", re.S)
+STEER_MARK_ANY = re.compile(r"\[/?OUT-OF-BAND USER MESSAGE\b[^\]\n]*\]")
+
+
+def unwrap_steer(text: str) -> tuple[str, bool]:
+    """(what the person typed, whether the row was a steer). A row that is exactly one wrapped steer gives its inner
+    text. A row carrying stray marker lines (a steer pasted back, as happened in kami's chat) loses the marker lines
+    and keeps the rest. Any other text is returned as it is."""
+    m = STEER_ROW.match(text)
+    if m:
+        return m.group(1).strip(), True
+    if "OUT-OF-BAND USER MESSAGE" not in text:
+        return text, False
+    return re.sub(r"[ \t]*\n?[ \t]*" + STEER_MARK_ANY.pattern + r"[ \t]*", "\n", text).strip(), False
+
+
 def _turn_answers(rows, running: bool = False) -> set[int]:
     """The index of each turn's answer: its last assistant row with text. Hermes stores the commentary it writes
     beside its tool calls ("Now I'll run the tests") as assistant rows of their own; the live chat never shows them
@@ -4592,10 +4610,15 @@ def chat_messages(rows, watch_names: set[str] | frozenset[str] = frozenset(), ru
             continue
         rid = row.get("row_id")
         reply = None
+        steered = False
         if row["role"] == "user":
             name = watch_of(text) if row.get("display_kind") in (None, "internal_notification") else None
             watch = {"name": name, "ts": float(row.get("timestamp") or 0.0)} if name in watch_names else None
             if watch:
+                continue
+            text, steered = unwrap_steer(text)
+            steered = steered or row.get("display_kind") == "steer"
+            if not text:
                 continue
             text, reply = split_reply_block(split_peer_hint(split_thread_hint(text)))
         elif main and "omher-thread" in text:
@@ -4606,6 +4629,8 @@ def chat_messages(rows, watch_names: set[str] | frozenset[str] = frozenset(), ru
              "ts": float(row.get("timestamp") or 0.0)}
         if reply:
             m["reply_to"] = reply
+        if row["role"] == "user" and steered:
+            m["steered"] = True
         if watch and row["role"] == "assistant":
             m["watch"], watch = watch, None
         out.append(m)
@@ -6995,6 +7020,10 @@ class Bridge:
             text = _row_text(r)
             if not text.strip():
                 continue
+            if r["role"] == "user":
+                text = unwrap_steer(text)[0]
+                if not text:
+                    continue
             author, text = split_author(text) if r["role"] == "user" else (None, text)
             m = {"role": r["role"], "text": _clip(text), "ts": float(r.get("timestamp") or 0.0)}
             if author:

@@ -1818,6 +1818,10 @@ class VerifyAttributionAndRepairLeftoversTests(unittest.TestCase):
             f"Handoff: before you stop, write your report to {handoff_path}: what you did, the files you changed, "
             "what VERIFY showed, and anything still open. The parent reads that file and your final message.",
             f"Read first: {read_path}. A missing file means that part did not finish: stop and say so.",
+            # A quick node can escalate (dag_run.ESCALATION_LADDER), so it carries the escalate line.
+            "If the task turns on a judgement you cannot settle with confidence (a design choice, a root cause you "
+            "cannot pin down), do not guess: before editing, write ESCALATE: <the question> and what you found into "
+            "the handoff, and stop.",
             "Stay inside your SCOPE: other parts of this run work at the same time. If you cannot finish, "
             "say plainly that you are blocked and why; do not report blocked work as done.",
         ]))

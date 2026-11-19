@@ -3,7 +3,7 @@
 // Add; a person's own agent joins the + menu's ACP tier and opens a chat through the generic ACP adapter; removing
 // it ends its open sessions.
 import { describe, expect, it } from "vitest";
-import { acpRow, isCustom, menuOrder, missingNote, parseAcpRow, registerAcp, type AgentInfo } from "./agents";
+import { acpRow, isCustom, menuOrder, missingNote, opensAs, parseAcpRow, registerAcp, terminalAgents, type AgentInfo } from "./agents";
 import { agentsPageModel, cardCommand, mockCheck, whyOf, whyText, type CustomPreview } from "./custom";
 import { MockHost, type MockCall } from "./host";
 import { createSessions } from "./sessions";
@@ -120,6 +120,11 @@ describe("the confirm card", () => {
     registerAcp(list);
     expect(isCustom("cursor-agent")).toBe(true);
     expect(isCustom("gemini")).toBe(false);
+    // TERMINALS offers no agent of the person's own: the shell starts only allow-listed programs in a terminal
+    // (a custom one there failed with `unknown agent "cursor-agent"`)
+    expect(opensAs("cursor-agent", list)).toEqual({ chat: true, terminal: false });
+    expect(ids(terminalAgents(list, []).shown.concat(terminalAgents(list, []).more))).not.toContain("cursor-agent");
+    expect(ids(terminalAgents(list, []).shown.concat(terminalAgents(list, []).more))).toContain("gemini");
     // the + menu: installed first as always, and inside that after the generic ACP agents
     expect(ids(menuOrder(list, []).filter((a) => a.path))).toEqual(["claude", "gemini", "cursor-agent"]);
     // its install line when it is missing; with none, the note names only what is missing

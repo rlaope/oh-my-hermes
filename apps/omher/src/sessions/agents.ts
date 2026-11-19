@@ -269,6 +269,9 @@ export function opensAs(agent: AgentId, agents?: AgentInfo[] | null): Record<Ope
   if (agent === "dsh") return { chat: true, terminal: false };
   if (agent === "grok") return { chat: false, terminal: true };
   if (agent === "omh" && hermesOnly(agents)) return { chat: true, terminal: false };
+  // an agent the person added (Settings › Agents) runs only through ACP on pipes: the shell's terminal start knows
+  // the allow-list alone and answers `unknown agent`, so TERMINALS must not offer it
+  if (isCustom(agent)) return { chat: true, terminal: false };
   return { chat: true, terminal: true };
 }
 

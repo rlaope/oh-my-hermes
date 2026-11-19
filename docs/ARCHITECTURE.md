@@ -297,7 +297,20 @@ the child's own turn by `pre_llm_call`, since Hermes reads only `action` from a
 `pre_tool_call` result. A `[omh-identity:name]` marker in the person's request
 or a delegated child's goal adds that user-defined identity's prompt to the
 turn's fenced OMH context (an unknown name warns); host-written text never
-selects one. The hook does not inject generic-tool checkpoint
+selects one. `omh_role` also exposes a common bounded directory of qualified
+`builtin:name` and `custom:name` definitions. DAG nodes may select either with
+`identity`; calls group by identity and retry count as well as category.
+The existing attempt freezes the definition fingerprint and the direct-child
+ledger binding names that attempt. The hook resolves this binding before text
+markers and vetoes missing, disabled or drifting selections. Compaction
+continuations keep their child's selection; grandchildren never inherit it.
+Configured chains, independent of origin, supply default routes and matching
+model_map options. No-chain definitions use category routes; local nodes
+intersect configured chains with local options. Unsupported identity routing
+under profile/unknown backends, DAG external-owner exports or a spent child
+budget's parent fallback refuses explicitly.
+No new identity store or delivery receipt is introduced.
+The hook does not inject generic-tool checkpoint
 metadata or raw tool input.
 `omh hud`
 exposes the same status-line payload for local operator smoke tests. The HUD

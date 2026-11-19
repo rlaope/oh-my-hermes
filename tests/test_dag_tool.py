@@ -461,6 +461,147 @@ class SlotTests(unittest.TestCase):
             self.assertEqual(dag_tool._cap(None), dag_tool.DEFAULT_MAX_CONCURRENT_CHILDREN)
 
 
+class IdentityNodeTests(unittest.TestCase):
+    """A node's optional ``identity`` rides the same dispatch machinery as categories."""
+
+    @staticmethod
+    def _identities(home, document: dict) -> None:
+        routing = home.omh / "routing"
+        routing.mkdir(parents=True, exist_ok=True)
+        (routing / "identities.json").write_text(json.dumps(document), encoding="utf-8")
+
+    DOCUMENT = {
+        "schema_version": "omh_identity_profiles/v1",
+        "identities": {
+            "qa": {"prompt": "QA prompt body", "model_chain": [{"model_id": "m1"}, {"model_id": "m2"}]},
+            "dev": {"prompt": "dev prompt", "model_chain": [{"model_id": "x"}]},
+        },
+    }
+
+    def test_define_hands_out_both_origins_with_their_digests(self) -> None:
+        with homes() as home:
+            slots_table(home)
+            self._identities(home, self.DOCUMENT)
+            result = call(action="define", run="feat", nodes=[
+                {**node("a", scope=("a.py",)), "identity": "custom:qa"},
+                {**node("b", scope=("b.py",)), "identity": "builtin:builder"},
+                node("c", scope=("c.py",)),
+            ])
+            record = dag_run.read_run(dag_run.record_path(home.omh, PARENT, "feat"))
+            status = call(action="status", run="feat")
+        self.assertEqual(result["status"], "ok", result)
+        self.assertIsNotNone(record)
+        calls = {row["nodes"][0]: row for row in result["calls"]}
+        self.assertEqual(calls["a"]["identity"], "custom:qa")
+        self.assertEqual(calls["a"]["route"]["identity"], "custom:qa")
+        self.assertEqual(calls["a"]["route"]["attempt"], 0)
+        self.assertEqual(calls["b"]["identity"], "builtin:builder")
+        self.assertNotIn("identity", calls["c"])
+        # Same category, different selection: grouped by identity as well.
+        attempts = {item["id"]: item["attempts"][-1] for item in record["nodes"]}
+        self.assertEqual(attempts["a"]["identity"], "custom:qa")
+        self.assertTrue(attempts["a"]["identity_digest"])
+        self.assertEqual(attempts["b"]["identity"], "builtin:builder")
+        self.assertNotIn("identity", attempts["c"])
+        rows = {row["id"]: row for row in status["nodes"]}
+        self.assertEqual(rows["a"]["identity"], "custom:qa")
+        self.assertNotIn("identity", rows["c"])
+
+    def test_unqualified_or_unknown_selection_is_refused(self) -> None:
+        for identity, reason in ((("qa", "invalid_identity"), ("custom:ghost", "identity_unavailable"),
+                                 ("builtin:ghost", "identity_unavailable"), ("QA:LOUD", "invalid_identity"))):
+            with self.subTest(identity=identity), homes() as home:
+                slots_table(home)
+                self._identities(home, self.DOCUMENT)
+                result = call(action="define", run="feat", nodes=[{**node("a"), "identity": identity}])
+            self.assertEqual((result["status"], result["reason"]), ("refused", reason), result)
+
+    def test_each_node_retries_from_its_own_chain_position(self) -> None:
+        with homes() as home:
+            slots_table(home)
+            self._identities(home, self.DOCUMENT)
+            call(action="define", run="feat", nodes=[
+                {**node("a", scope=("a.py",)), "identity": "custom:qa"},
+                {**node("b", scope=("b.py",)), "identity": "custom:qa"},
+                {**node("c", scope=("c.py",)), "identity": "custom:dev"},
+            ])
+            first = call(action="settle", run="feat", node="a", outcome="failed", provider_error=True)
+            second = call(action="settle", run="feat", node="c", outcome="failed", provider_error=True)
+        # a's retry continues its own chain at position 1 — never the position
+        # another same-category node last used.
+        (call_a,) = first["calls"]
+        self.assertEqual((call_a["identity"], call_a["route"]["attempt"]), ("custom:qa", 1))
+        # dev's chain has one entry: position 1 is exhausted, a typed refusal,
+        # not a silent hop onto qa's lane or the category's.
+        self.assertEqual((second["status"], second["reason"]), ("refused", "identity_chain_exhausted"), second)
+        self.assertEqual(second.get("calls", []), [])
+
+    def test_disabled_or_changed_selection_refuses_the_next_dispatch(self) -> None:
+        for mutate, reason in (
+            (lambda doc: doc["identities"]["qa"].update(enabled=False), "identity_unavailable"),
+            (lambda doc: doc["identities"]["qa"].update(prompt="edited"), "identity_config_changed"),
+        ):
+            with self.subTest(reason=reason), homes() as home:
+                slots_table(home)
+                document = json.loads(json.dumps(self.DOCUMENT))
+                self._identities(home, document)
+                call(action="define", run="feat", nodes=[{**node("a"), "identity": "custom:qa"}])
+                mutate(document)
+                self._identities(home, document)
+                result = call(action="settle", run="feat", node="a", outcome="failed", provider_error=True)
+            self.assertEqual((result["status"], result["reason"]), ("refused", reason), result)
+            self.assertEqual(result.get("calls", []), [])
+
+    def test_export_cannot_carry_a_selected_identity(self) -> None:
+        nodes = [node("plan", category="unspecified-low", label="Plan the change"),
+                 {**node("api", depends_on=("plan",), scope=("src/api.py",), owner="codex"),
+                  "identity": "builtin:builder"}]
+        with homes() as home:
+            slots_table(home)
+            choose(home, "codex")
+            call(action="define", run="feat", nodes=nodes)
+            handoff(home, "feat", "plan")
+            call(action="settle", run="feat", node="plan", outcome="accepted")
+            refused = call(action="export", run="feat", owner="codex")
+        self.assertEqual((refused["status"], refused["reason"]),
+                         ("refused", "identity_capability_unavailable"), refused)
+
+    def test_a_spent_child_budget_cannot_substitute_the_parent(self) -> None:
+        with homes() as home, patch.object(dag_tool, "_single_query_session", return_value=True):
+            oneshot_config(home, 3)
+            document = json.loads(json.dumps(self.DOCUMENT))
+            # Two chain entries so the provider-error retry has a position to take.
+            document["identities"]["qa"]["model_chain"].append({"model_id": "m3"})
+            self._identities(home, document)
+            call(action="define", run="feat", nodes=[
+                {**node("a", scope=("a.py",)), "identity": "custom:qa"},
+                node("b", scope=("b.py",)), node("c", scope=("c.py",)),
+            ])
+            for node_id in ("a", "b", "c"):
+                child_started(home, "feat", node_id)
+            retried = call(action="settle", run="feat", node="a", outcome="failed", provider_error=True)
+            for node_id in ("b", "c"):
+                handoff(home, "feat", node_id)
+            call(action="settle", run="feat", node="b", outcome="accepted")
+            left = call(action="settle", run="feat", node="c", outcome="accepted")
+        # a's retry is held only while siblings run; once the child budget is
+        # spent the parent cannot stand in for a selected prompt and policy.
+        self.assertEqual(retried["held_for_slots"], ["a"])
+        self.assertEqual((left["status"], left["reason"]),
+                         ("refused", "identity_capability_unavailable"), left)
+        self.assertEqual(left.get("calls", []), [])
+
+    def test_nodes_without_identity_keep_their_legacy_calls(self) -> None:
+        # No identity configured at all: the same graph as before unifies.
+        with homes() as home:
+            slots_table(home)
+            result = call(action="define", run="feat", nodes=FEATURE)
+        self.assertEqual(result["status"], "ok", result)
+        for row in result["calls"]:
+            self.assertNotIn("identity", row)
+            self.assertNotIn("attempt", row["route"])
+
+
 class SettleTests(unittest.TestCase):
     def _run(self, home) -> None:
         slots_table(home)
@@ -2159,6 +2300,115 @@ class RestartTests(unittest.TestCase):
         self.assertEqual((ready["calls"], ready["held_for_slots"]), ([], ["api"]))
         self.assertEqual(ready["say"], "No delegate_task slot is free; end the turn and call ready again after a "
                                        "completion.")
+
+
+def resumable_table(home, rows: list[tuple[str, str, dict]], *, expires_at: float | None = None) -> None:
+    """Hermes 0.23.2's `resumable_subagents` rows: (subagent id, state, record)."""
+    home.execute("CREATE TABLE IF NOT EXISTS resumable_subagents (subagent_id TEXT PRIMARY KEY, state TEXT NOT NULL, "
+                 "pinned INTEGER NOT NULL DEFAULT 0, stop_cause TEXT, owner_pid INTEGER, owner_started_at INTEGER, "
+                 "record_json TEXT NOT NULL, created_at REAL NOT NULL, updated_at REAL NOT NULL, expires_at REAL)")
+    for sid, state, record in rows:
+        home.execute("INSERT OR REPLACE INTO resumable_subagents (subagent_id, state, record_json, created_at, "
+                     "updated_at, expires_at) VALUES (?, ?, ?, 0, 0, ?)", (sid, state, json.dumps(record), expires_at))
+
+
+def promised(**extra) -> dict:
+    return {"auto_promised": True, "resume_mode": "AUTO_AT", "next_attempt_at": 1_900_000_000.0, "auto_attempts": 0,
+            **extra}
+
+
+class AutoResumeTests(unittest.TestCase):
+    """Hermes' `delegation.auto_resume` continues a child a usage limit or a restart stopped, under the same id.
+
+    Mutation: drop the `waiting_resume` read in `dag_tool._children`, mark such a child lost, let settle accept
+    over it, or name it stuck.
+    """
+
+    def out(self, home, moment: float, *, probes: dict) -> None:
+        slots_table(home)
+        with patch.object(dag_tool.time, "time", return_value=moment), patch_modules(probes):
+            call(action="define", run="feat", nodes=[node("api")])
+            child_started(home, "feat", "api", now=moment + 1)
+
+    def test_a_limit_stopped_child_hermes_will_resume_keeps_its_node_running(self) -> None:
+        moment = time.time()
+        with homes() as home:
+            self.out(home, moment, probes=hermes_process(1000))
+            stop(home, "child-api", "error", now=moment + 30)
+            resumable_table(home, [("sa-api", "resumable", promised())])
+            with patch.object(dag_tool.time, "time", return_value=moment + 60), patch_modules(hermes_process(1000)):
+                ready = call(action="ready", run="feat")
+                refused = call(action="settle", run="feat", node="api", outcome="failed", reason="limit")
+        self.assertEqual((ready["nodes"][0]["state"], ready["calls"]), ("running", []))
+        self.assertEqual(ready["nodes"][0]["waiting_resume"], {"at": 1_900_000_000.0, "attempt": 1})
+        self.assertIn("do not dispatch it again", ready["say"])
+        self.assertEqual(refused["status"], "refused")
+        self.assertEqual(refused["reason"], "child_resume_pending")
+
+    def test_a_restart_ended_child_hermes_will_resume_is_not_lost_or_offered_again(self) -> None:
+        moment = time.time()
+        with homes() as home:
+            self.out(home, moment, probes=hermes_process(1000))
+            resumable_table(home, [("sa-api", "claimed", promised(resume_mode="AUTO_ON_BOOT", auto_attempts=1))])
+            with patch.object(dag_tool.time, "time", return_value=moment + 60), patch_modules(hermes_process(5000)):
+                ready = call(action="ready", run="feat")
+            attempts = dag_run.read_run(dag_run.record_path(home.omh, PARENT, "feat"))["nodes"][0]["attempts"]
+        self.assertEqual((ready["nodes"][0]["state"], ready["calls"]), ("running", []))
+        self.assertEqual(ready["nodes"][0]["waiting_resume"], {"at": None, "attempt": 1})
+        self.assertNotIn("lost", attempts[0])
+
+    def test_the_resumed_runs_success_settles_as_accepted(self) -> None:
+        """The whole path: limit stop, resume under the same id, completed stop, accepted."""
+        moment = time.time()
+        with homes() as home:
+            self.out(home, moment, probes=hermes_process(1000))
+            stop(home, "child-api", "error", now=moment + 30)
+            resumable_table(home, [("sa-api", "resumable", promised())])
+            with patch_modules(hermes_process(1000)):
+                start(home, "child-api", "sa-api", "Node api [dag:feat/api]", now=moment + 3600)
+            resumable_table(home, [("sa-api", "running", {"auto_promised": False})])
+            stop(home, "child-api", "completed", now=moment + 3700)
+            handoff(home, "feat", "api")
+            with patch.object(dag_tool.time, "time", return_value=moment + 3800), patch_modules(hermes_process(1000)):
+                settled = call(action="settle", run="feat", node="api", outcome="accepted")
+        self.assertEqual(settled["nodes"][0]["state"], "accepted")
+
+    def test_no_promise_keeps_the_old_rules(self) -> None:
+        """A child Hermes gave up on, never promised, or whose record expired: lost after a restart, failed stop."""
+        moment = time.time()
+        cases = (("gave up", "resumable", promised(auto_gave_up="gave up after 2 automatic attempts"), None),
+                 ("never promised", "resumable", promised(auto_promised=False), None),
+                 ("stopped by the parent", "stopped", promised(), None),
+                 ("expired", "resumable", promised(), moment - 1))
+        for name, state, record, expires in cases:
+            with self.subTest(case=name), homes() as home:
+                self.out(home, moment, probes=hermes_process(1000))
+                resumable_table(home, [("sa-api", state, record)], expires_at=expires)
+                with patch.object(dag_tool.time, "time", return_value=moment + 60), \
+                        patch_modules(hermes_process(5000)):
+                    ready = call(action="ready", run="feat")
+                self.assertEqual([c["nodes"] for c in ready["calls"]], [["api"]])
+                self.assertNotIn("waiting_resume", ready["nodes"][0])
+
+    def test_a_hermes_without_the_table_reads_nothing(self) -> None:
+        """Hermes before 0.23.2: no `resumable_subagents`, the restart rule as it was."""
+        moment = time.time()
+        with homes() as home:
+            self.out(home, moment, probes=hermes_process(1000))
+            with patch.object(dag_tool.time, "time", return_value=moment + 60), patch_modules(hermes_process(5000)):
+                ready = call(action="ready", run="feat")
+        self.assertEqual([c["nodes"] for c in ready["calls"]], [["api"]])
+
+    def test_a_waiting_node_is_not_named_stuck(self) -> None:
+        moment = time.time()
+        with homes() as home:
+            self.out(home, moment, probes=hermes_process(1000))
+            stop(home, "child-api", "error", now=moment + 30)
+            resumable_table(home, [("sa-api", "resumable", promised())])
+            with patch.object(dag_tool.time, "time", return_value=moment + 5 * 3600), \
+                    patch_modules(hermes_process(1000)):
+                status = call(action="status", run="feat")
+        self.assertNotIn("stuck", status)
 
 
 CODING = [

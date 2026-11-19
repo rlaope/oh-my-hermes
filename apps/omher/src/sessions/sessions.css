@@ -32,7 +32,9 @@
   max-height: none;
 }
 .side-sec.side-sec-fit {
-  flex-grow: 0;
+  /* auto basis: with the base rule's 0 basis the section came out 0px tall and its "No bot named …" line was drawn
+     under TERMINALS, so a search that found no bot showed nothing at all */
+  flex: 0 0 auto;
   min-height: 0;
 }
 .side-sec + .side-sec {

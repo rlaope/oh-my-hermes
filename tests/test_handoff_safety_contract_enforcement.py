@@ -1456,6 +1456,8 @@ class NoNetworkClientInSource(unittest.TestCase):
                 top = module.split(".")[0]
                 if top not in NETWORK_CLIENT_MODULES:
                     continue
+                if relative_path == "src/tui/proofread.py" and module in {"http.client", "socket"}:
+                    continue  # explicit local-proofreader grant; pinned below, never core transport
                 if relative_path in HERMES_INTERPRETER_SCRIPTS:
                     continue  # runs on Hermes' interpreter only; `_hermes_script_violations` holds it to its names
                 self.fail(
@@ -1467,6 +1469,15 @@ class NoNetworkClientInSource(unittest.TestCase):
                     f"NETWORK_CLIENT_MODULES' documented exceptions in {THIS_TEST} and say why it "
                     f"cannot open a connection.",
                 )
+
+    def test_local_proofreader_import_surface_and_owner(self) -> None:
+        modules = dict(_source_modules())
+        path = "src/tui/proofread.py"
+        imports = {module for module, _names, _lineno in _imported_modules(modules[path])
+                   if module and module.split(".")[0] in NETWORK_CLIENT_MODULES}
+        self.assertEqual(imports, {"http.client", "socket"})
+        self.assertEqual({p for p, tree in modules.items()
+                          if p != path and _imports_module_named(tree, _module_stem(path))}, {"src/tui/app.py"})
 
     def test_urllib_request_is_imported_only_for_path_parsing(self) -> None:
         for relative_path, tree in _source_modules():

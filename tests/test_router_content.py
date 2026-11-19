@@ -4036,7 +4036,7 @@ class RouterContentTests(unittest.TestCase):
         for path in paths:
             if path.is_dir():
                 continue
-            if path.suffix in {".png", ".jpg", ".jpeg", ".webp", ".ico", ".pyc", ".gif", ".mp4", ".webm"}:
+            if path.suffix in {".png", ".jpg", ".jpeg", ".webp", ".ico", ".pyc", ".gif", ".mp4", ".webm", ".woff2"}:
                 continue
             text = path.read_text(encoding="utf-8").lower()
             for term in forbidden:

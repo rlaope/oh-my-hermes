@@ -6,36 +6,12 @@ import type { SlotProps } from "../features";
 import { useStore } from "../state/store";
 import { hhmm } from "../app/time";
 import { ChevronDown, ChevronRight } from "../ui";
-import { t, type Key } from "../i18n";
+import { t } from "../i18n";
+import { isFailure, statusText } from "../elsewhere/format";
+
+export { isFailure, statusWord } from "../elsewhere/format";
 
 export const slot = "routineLine";
-
-type Word = "done" | "failed" | "notDelivered" | "blocked";
-// Hermes' run states (the bridge's FAILED_RUN): delivery_failed = the job ran but its message could not be delivered;
-// blocked_config = the job's config stopped it from running.
-const WORD: Record<string, Word> = {
-  ok: "done",
-  success: "done",
-  done: "done",
-  completed: "done",
-  error: "failed",
-  failed: "failed",
-  failure: "failed",
-  delivery_failed: "notDelivered",
-  blocked_config: "blocked",
-};
-const WORD_KEY: Record<Word, Key> = { done: "rt.done", failed: "rt.failed", notDelivered: "rt.notDelivered", blocked: "rt.blocked" };
-
-export const statusWord = (status: string): string => WORD[status.trim().toLowerCase()] ?? (status.trim() || "done");
-export const isFailure = (status: string): boolean => {
-  const w = WORD[status.trim().toLowerCase()];
-  return w === "failed" || w === "notDelivered" || w === "blocked";
-};
-/** The status word in the current language; a status omher does not know stays as Hermes wrote it. */
-const statusText = (status: string) => {
-  const w = WORD[status.trim().toLowerCase()] ?? (status.trim() ? null : "done");
-  return w ? t(WORD_KEY[w]) : status.trim();
-};
 
 export default function RoutineLine({ bot, item }: SlotProps["routineLine"]) {
   const s = useStore();
@@ -72,7 +48,7 @@ export default function RoutineLine({ bot, item }: SlotProps["routineLine"]) {
       {open && (
         <div className="routine-detail" data-testid="routine-detail">
           <span className="routine-k">{t("rt.last")}</span>
-          <span className={isFailure(last) ? "routine-bad" : undefined}>{last || t("rt.unknown")}</span>
+          <span className={isFailure(last) ? "routine-bad" : undefined}>{last ? statusText(last) : t("rt.unknown")}</span>
         </div>
       )}
     </div>

@@ -21,6 +21,13 @@ writes what they say, metadata only, into one record per conversation
   call started, in the order Hermes built them.
 * `subagent_stop`: the child's own status and duration.
 
+A second `subagent_start` naming a child already held, with the same session,
+is Hermes continuing that child (`delegation.auto_resume` after a usage limit
+or a restart, or the parent's `delegate_task(action='continue')`): its earlier
+stop is dropped, ``resumed_at`` and ``resumes`` are kept, and a dag-ulw
+child's process is the one it resumed in, so the resumed run's own stop is
+the one that counts.
+
 Each top-level child (one whose parent is the session's own agent, not
 another child) is also counted in memory per conversation, whether or not its
 record is written (`oneshot_children_spawned`): Hermes charges a one-shot
@@ -61,6 +68,11 @@ from .hermes_delegation import load_delegation_route_provenance
 from .host_process import recorded_process, this_process
 from .sqlite_readonly import connect_readonly
 
+# A module binding, not a name import: importing kanban_board_reader first runs
+# hermes_delegation, whose last line imports this module while the reader is
+# still half built. The attribute is read at call time, after both finish.
+from . import kanban_board_reader as _kanban_board_reader  # noqa: E402
+
 LEDGER_SCHEMA_VERSION: Final = "delegation_ledger/v1"
 LEDGER_DIRNAME: Final = "delegation"
 LEDGER_CALL_LIMIT: Final = 32
@@ -79,6 +91,7 @@ TITLE_LIMIT: Final = 120
 TITLE_CACHE_LIMIT: Final = 512
 DURATION_MS_LIMIT: Final = 10**12  # about 31 years: a duration past it is not a duration
 ROOT_CACHE_LIMIT: Final = 1024
+RESUME_LIMIT: Final = 64  # times one child's resumes are counted; Hermes itself resumes a child at most twice
 SPAWNED_ID_LIMIT: Final = 512  # top-level subagent ids already counted, so a repeated start counts once
 CLOSED_LIMIT: Final = 256  # lane keys a chat end post closed: ledger children and team parts alike
 SEEN_LIMIT: Final = 256  # lane keys a chat post already showed, so a dag run names the nodes it added once
@@ -89,7 +102,7 @@ LEDGER_CLAIM_BOUNDARY: Final = (
     "times, status words and the route OMH had prepared. It holds no goal, summary, prompt or tool history, and "
     "it is not execution, verification, review, CI or merge evidence."
 )
-ROUTE_FIELDS: Final = ("category", "alias", "wire_model", "reasoning_effort", "origin")
+ROUTE_FIELDS: Final = ("category", "alias", "wire_model", "reasoning_effort", "origin", "identity", "identity_digest")
 # What Hermes' own result says a backend-routed child ran on (`delegate_tool_child_run._route_report`).
 OBSERVED_ROUTE_FIELDS: Final = ("backend", "label", "provider", "model", "reasoning_effort", "service_tier")
 # What a chat reply last carried (`delegation_snapshot.py`): the moment, and whether its run is still open.
@@ -338,8 +351,14 @@ def _valid_child(value: object) -> dict[str, Any] | None:
     dag = value.get("dag")
     if isinstance(dag, dict) and all(re.fullmatch(_DAG_ID, str(dag.get(key))) for key in ("run", "node")):
         entry["dag"] = {"run": str(dag["run"]), "node": str(dag["node"])}
+        if isinstance(dag.get("attempt"), int) and dag["attempt"] > 0:
+            entry["dag"]["attempt"] = dag["attempt"]
     if (process := recorded_process(value.get("host"))) is not None:
         entry["host"] = process
+    resumed = _number(value.get("resumed_at"))
+    resumes = value.get("resumes")
+    if resumed is not None and isinstance(resumes, int) and not isinstance(resumes, bool) and 0 < resumes <= RESUME_LIMIT:
+        entry.update(resumed_at=resumed, resumes=resumes)
     index = value.get("task_index")
     if isinstance(index, int) and not isinstance(index, bool) and 0 <= index < 1024:
         entry["task_index"] = index
@@ -585,14 +604,39 @@ def observe_subagent_start(kwargs: dict[str, object], *, now: float | None = Non
     binding = dag_binding(kwargs.get("child_goal"))
     if binding:
         entry["dag"] = binding
+        # Bind only a direct child of the run owner, never an inherited scope.
+        for owner in sorted({parent, *_kanban_board_reader.conversation_session_ids(hermes_home, parent)}):
+            run = _dag_run.read_run(_dag_run.record_path(omh_home, owner, binding["run"]))
+            node = next((item for item in run["nodes"] if item["id"] == binding["node"]), None) if run else None
+            attempts = node.get("attempts") or [] if node else []
+            if attempts:
+                attempt = attempts[-1]
+                binding["attempt"] = attempt["n"]
+                if node.get("identity"):
+                    entry["route"].update(identity=node["identity"], identity_digest=attempt.get("identity_digest", ""))
+                break
         # The Hermes process the child runs in and ends with: a restart fires no `subagent_stop`, so `omh_dag`
         # tells a node whose child it ended from one still running by this.
         if (process := this_process()) is not None:
             entry["host"] = process
 
     def add(record: dict[str, Any]) -> bool:
-        if any(item["subagent_id"] == subagent_id for item in record["children"]):
-            return False
+        for item in record["children"]:
+            if item["subagent_id"] != subagent_id:
+                continue
+            if item["child_session_id"] != child:
+                return False
+            # Hermes continued this child on its own conversation (`delegation.auto_resume`, or the parent's
+            # `delegate_task(action='continue')`): the same subagent id and session start again. The earlier
+            # stop (a usage limit, a restart) no longer describes it, and it now runs in this process.
+            item.pop("stop", None)
+            item["resumed_at"] = moment
+            item["resumes"] = min(int(item.get("resumes", 0)) + 1, RESUME_LIMIT)
+            if "host" in entry:
+                item["host"] = entry["host"]
+            else:
+                item.pop("host", None)
+            return True
         record["children"].append(entry)
         return True
 
@@ -731,12 +775,16 @@ def with_unjoined_stop(
     segment, whose record holds no start for the child, and a child rotated
     since then is named by its continuation. ``stops`` are the
     ``unjoined_stops`` of every segment of the conversation; the delegation
-    graph and `omh_dag` read a child's stop through this one rule.
+    graph and `omh_dag` read a child's stop through this one rule. A child
+    Hermes resumed (``resumed_at``) takes only a stop observed since then.
     """
     if isinstance(child.get("stop"), dict):
         return child
     names = {child["child_session_id"], *later}
-    found = [stop for stop in stops if stop["child_session_id"] in names]
+    # A resumed child is answered only by a stop of the run that resumed it, not one an earlier run left behind.
+    since = _number(child.get("resumed_at"))
+    found = [stop for stop in stops if stop["child_session_id"] in names
+             and (since is None or (_number(stop.get("observed_at")) or 0.0) >= since)]
     if not found:
         return child
     stop = max(found, key=lambda item: item["observed_at"])
@@ -811,3 +859,7 @@ def note_skipped(omh_home: Path, session_id: str, fingerprint: str, reason: str,
         return True
 
     return _update(omh_home, session_id, mark, now=moment)
+
+
+# Bind the module after ledger_key exists; handlers survive Hermes' module eviction.
+from . import dag_run as _dag_run

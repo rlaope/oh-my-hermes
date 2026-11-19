@@ -4,6 +4,53 @@ All notable changes will be documented here.
 
 ## Unreleased
 
+- **A cheap dag-ulw node that hits a hard judgement asks for a stronger model instead of guessing.** When a node's
+  child cannot settle a design choice or a root cause, it stops before editing and writes `ESCALATE: <question>` into
+  its handoff; the node is settled `escalated` and offered again one category up (quick, unspecified-low,
+  unspecified-high, ultrabrain), at most twice, briefed with the question the first child stopped on. Nodes already on
+  ultrabrain, review or deep never get the option, nor does a node pinned to an identity, which keeps that
+  identity's own model chain.
+
+- **omher: a waiting message is sent or taken back in one click, with no menu.** A message typed while the bot
+  answers waits with buttons before it instead of a ↵ that opened Send now / Steer / Edit / Delete. ↵ sends it:
+  Steer into the running answer, or, for an agent with no steer of its own, Send now (stop the answer, this one
+  first). ↓ puts it back in the message box to fix or add to. × (on hover or focus) drops it. A button that cannot
+  act (the agent has the message already) says why in its tooltip.
+
+- **omher: a message steered into a running answer reads as you typed it after the chat reopens.** Hermes keeps
+  a mid-turn steer wrapped in a frame for the model (`[OUT-OF-BAND USER MESSAGE — …]` … `[/OUT-OF-BAND USER
+  MESSAGE]`), and a reopened Bot Chat showed that frame in your bubble. The bridge now shows only the typed text,
+  keeps the "Sent to …" line under it, and drops stray frame lines from any other row.
+
+- **The Start Guide lists long-term memory among the main features.** It moves from the closing list to a fourth card
+  in "What OMH does" (owner request, 2026-11-18): nothing is remembered silently, and the next session gets only the
+  memories that fit its task, within a token budget. The closing list is now one row of three.
+- **Four OMH tool descriptions are shorter, and the model still picks the same calls.** `omh_todo`, `omh_loop`,
+  `omh_document_plan` and `omh_delegate_route` say the same rules in fewer words, so each costs fewer tokens the
+  first time Hermes loads it (24,943 -> 23,718 characters together; the registered OMH schemas 63,324 -> 62,099).
+  An A/B of the first tool call on 11 scenarios (Claude Haiku and Sonnet, 3 runs per arm) passed 33/33 on both the
+  old and the new text. A first draft that also cut "a route set in an earlier turn runs on the previous model" and
+  "OMH mirrors each todo_list write" lost passes and was restored.
+
+- **Gemini prices re-read ahead of Google's two increases.** Google's pricing page, re-read on 2026-11-18, still
+  lists Gemini 4 Argon and Gemini 4 Carbon at $2 / $10 per million tokens through 2026-11-30 and $4 / $20 from
+  2026-12-01, and Gemini 3.8 Flash and 3.6 Flash at $0.75 / $3.75 through 2026-12-31 and $1.50 / $7.50 from
+  2027-01-01, cached input moving with each. Hydrogen stays at $1.50 / $7.50. Cost estimates keep today's prices
+  until each date; the price rows now point at the current page, and Argon's row is pinned by the same list-price
+  test as Carbon's.
+
+- **omher.app has a Start Guide at `/guide/`, linked beside Docs in every header** (owner request, 2026-11-18). One
+  page for someone new, with plain section titles that say what each part covers: what OMH does in three cards (a model per kind of work, `dag-ulw`, expert skills), install in
+  three commands (`curl … | sh`, `omh setup`, `omh model`), categories and fallback shown on three real chains, plan
+  versus `dag-ulw` as a to-do list versus a flowchart (an animated graph: two steps at once, fix, test, a separate goal
+  check, and the loop back when it fails), how OMH stays current (a new model is checked before it joins a chain, the
+  plugin loads into stable and main Hermes every night, reconstructed skills record the upstream commit they were
+  reviewed against), the `omh` TUI, and omher desktop as an ADE for bots with a terminal panel. Everything else
+  (`ulw-maestro`, memory, evidence labels, LSP) sits in one short list at the end. It reads in English, Korean,
+  Japanese and Chinese through the site's language switch. The model names on the page come from the shipped
+  recommendation catalog through `tools/render_site_guide.py`, which Pages re-runs on every deploy, so a model
+  onboarding never leaves the guide naming a retired model; `tests/test_site_guide.py` pins the sections, the
+  installer commands, four-language coverage of every key, the header links and the catalog match.
 - **GPT-6.2 Astra and GPT-6.2 Sol take every slot GPT-6 Astra and GPT-6.1 Sol held** (OpenAI released both on
   2026-11-17; owner decision, 2026-11-18). In the Hermes chains, the Codex lane table and the shared final order
   (Claude Opus 5.5, then GPT-6.2 Sol), each new id sits where its predecessor sat, at the same effort, and no chain
@@ -19,15 +66,6 @@ All notable changes will be documented here.
   name them. Hermes builds up to origin/main of 2026-11-17 do not know the 6.2 ids yet and clamp `max` to `xhigh` on
   the Codex route.
 
-- **omher stays light with many terminal sessions open.** A hidden terminal's output now re-renders only its own
-  TERMINALS row, never the list. A terminal that is not on the page draws nothing, not even the selection redraw that
-  xterm's own pause misses. One hidden and quiet for two minutes gives its scrollback back as a snapshot and is made
-  again when shown or when its program prints. One shared thread watches every session's foreground program, instead
-  of one per session. With 20 terminals of 2 MiB each and 19 hidden ones printing, main-thread script time over 8 s
-  drops from 1333 ms to 124 ms. After the park wait, buffers, snapshots and heap hold 35.5 MB instead of 205.5 MB.
-  A parked terminal comes back with its saved cursor, tab stops and scroll position. Frames over 50 ms and DOM
-  changes were worse at the median in one bench set and not in an independent re-measure; the ranges overlap. Details
-  and both sets in `apps/omher/bench/many/README.md`.
 - **OMH starts faster in a fresh Hermes process and its tools cost fewer tokens to open.** The chat router no longer
   imports the whole loop engine for one loop-command check, and the dag-ulw cue patterns compile on first use instead
   of all at import, so the plugin's start before a one-shot `chat -q`, a cron run or a delegated child's first reply
@@ -146,7 +184,13 @@ All notable changes will be documented here.
   `locations`; with the sentence the six fixable templates passed 90 / 90 against 76 / 90 for a control run in the
   same window (3 seeds x 5 reps, gate fixed before the run). The held-out `product-ab` corpus showed no difference
   either way (19 / 40 against 20 / 40, one run per task). The block also reaches DeepSeek V3.2, V4 Flash and V4 Pro,
-  which were not measured; V4.1 Flash keeps its own override and does not get the sentence.
+  which were not measured; V4.1 Flash keeps its own override, which gains the same sentence in the entry below.
+
+- **DeepSeek V4.1 Flash units also write their answer in the shape the task asked for.** The V4.1 Flash override
+  replaces the `deepseek` family block, so it did not get the answer-shape sentence the family block gained; it now
+  carries the same sentence verbatim. On og `deepseek/deepseek-flash` the six fixable `live-model-tools` templates
+  passed 85 / 90 with it against 76 / 90 for the shipped override in the same window (3 seeds x 5 reps), at 0.97x
+  the tokens.
 
 - **A subagent that is not part of the running dag-ulw run no longer shows up inside it.** A subagent sent without
   the run's `[dag:<run>/<node>]` marker (a hand-made repair, a child of an earlier cancelled run) used to sit in layer
@@ -161,6 +205,52 @@ All notable changes will be documented here.
   has no main model yet, your own `hermes model` runs first. No prints how to come back later. The prompt is sent only
   under the new `omh --onboard model-setup`, never on a resume, and `omh setup --model-setup --fallback-model
   PROVIDER/MODEL` previews and writes one Hermes `fallback_model` under the same digest-bound approval.
+- **A dag-ulw node can pick a built-in role or a custom identity by name.** `omh_role action=list` now shows
+  built-in roles and custom identity profiles together, and a node sets `identity: builtin:<name>` or
+  `custom:<name>` independently of its `role` and `category`. The chosen definition supplies the child's prompt
+  guidance and its model chain; retries count per node, so two nodes no longer use up each other's place in the chain.
+  A missing, disabled or changed identity stops the dispatch instead of quietly swapping in another one.
+  Contributed by @yqm-307 (#2939).
+
+- **`omh_delegate_route set` refuses a model id pinned to a provider that does not serve it.** A `set` with
+  `model=ANT-claude-opus-5-5 provider=openai-codex` used to reach `config.yaml`, and every delegated child after it
+  died on its first call with HTTP 400 from the vendor. When `routing/model-providers.json` records that exact model
+  id only under other providers, the call now returns an error naming the alias, every provider that serves the id
+  and the two valid ways to route it, and writes nothing. Aliases may still be pinned to another provider, and ids no
+  route records pass unchanged. Contributed by @rafaelmoreiraai (#2915).
+
+- **`omh setup` and `omh uninstall` can edit a config that Hermes' installer just wrote.** Hermes' config template has
+  comment lines with quotes in them (`# order: ["anthropic", "google"]`), and OMH's config editor read those as quoted
+  keys it must not touch. On a fresh Hermes, setup therefore never recorded `plugins.entries.omh.settings.omh_home`,
+  and `omh doctor` warned about it with a fix that hit the same refusal. Uninstall could not take back
+  `plugins.enabled` or `memory.provider`. Comments are now ignored by that check; a quoted key in the YAML itself is
+  still left alone.
+- **dag-ulw waits for a helper Hermes will resume instead of running its node twice** (Hermes 0.23.2
+  `delegation.auto_resume`). Hermes now continues a helper a usage limit or a restart stopped, under the same
+  subagent id and session. The delegation ledger took that second `subagent_start` for a duplicate and dropped it,
+  so the helper kept its old `error` stop and a node whose resumed run finished could not be settled accepted
+  (`child_reported_failure`); after a restart `omh_dag` also marked the node lost and handed it out again beside the
+  resumed helper. A repeated start with the same session now counts as a resume (the old stop is dropped, the
+  process it resumed in is recorded, and only a stop since the resume answers for it), and `omh_dag` reads Hermes'
+  own `resumable_subagents` record read-only: a node whose helper Hermes promised to resume stays running with
+  `waiting_resume` (`at`, `attempt`), is not offered again or named stuck, refuses a settle with
+  `child_resume_pending` until it reports, and every reply says not to dispatch it again. A Hermes without that
+  table, or a helper it gave up on, keeps the restart and failure rules as they were.
+
+- **The OMH TUI can proofread a draft on a local LanguageTool server.** Press Alt+P in the main or clarify text
+  field and issues are underlined; Alt+P on an underlined word offers replacements, Enter applies one (normal Ctrl+_
+  undo), Skip or Esc closes, and nothing is ever sent or rewritten on its own. Automatic checks after 600 ms of quiet
+  are off by default and turn on with `OMH_PROOFREAD=1`. Only plain HTTP to a loopback address is accepted
+  (`OMH_PROOFREAD_URL`, default `http://127.0.0.1:8081/v2/check`); masked fields, commands, code, images and paste
+  chips are never sent. OMH does not install or start LanguageTool (`brew install languagetool`). Contributed by
+  @DanRioDev (#2948).
+
+- **A listed backlog of code changes is made in the session, not split into child agents.** A request that hands
+  over four or more separate code changes and asks for all of them is still recognized, so it no longer lands on an
+  unrelated workflow because of one item's word. It now gets an answer in the same session (`code_backlog`): the
+  changes are made one after another, with no dag-ulw graph and no child agents. In paired runs on a five-part,
+  six-thousand-line job, splitting such a backlog finished later than Hermes alone at the same quality. Asking for
+  dag-ulw by name still runs the list as a graph.
 
 ## 4.0.8 - 2026-11-15
 
@@ -422,6 +512,36 @@ All notable changes will be documented here.
   refused; a plain-HTTP ask never goes through `HTTP_PROXY`, so the key is not
   sent in clear to a proxy; and `typesafe_model` never applies to TypeSafe's
   own host however it is spelled. Thanks @brentkearney. (#2716)
+- **omher 1.0.0.** omher is out of beta: a new user's one command installs everything and ends in the bot's chat,
+  threads start from the chat box, and the main screens read right in every language.
+  - **Out of beta:** the install argument is `omher` (`curl -fsSL https://omher.app/omher | sh` is unchanged); the old
+    `omher@beta` still works, because every app up to 0.2.13 sends it from its first-run Install button. (#2956)
+  - **New users:** on a Mac with neither Hermes nor OMH the one-command install (and the app's first-run Install) no
+    longer stops right after Hermes: the installers find Hermes' new packaged layout (no `venv`) through its launcher,
+    as the app does, and finish in about two minutes with the app installed. The last lines say OMH is connected and
+    point at the sign-in line above the chat box; the model menu says the bot has no AI account yet, with a gray dot
+    instead of a green one. (#2962)
+  - **Threads:** `./thread` in the chat box opens a new thread (`./thread <text>` sends the text there as its first
+    message, never to the main chat); each bot's thread list ends in a "+ New thread" line, a hovered bot row shows a
+    new-thread button, and the row menu sets New thread apart from the bot's management items. A thread block the bot
+    quotes inside another code block no longer disappears from its answer. (#2961)
+  - **1.0 usability pass:** sidebar search shows "No bot named …"; model names and profile ids show whole; Korean wraps
+    between words; the side panel, routines and Schedule read in the UI language; leftover SESSIONS wording says
+    Terminals; sidebar previews drop markdown list markers; Settings › Agents entries are no longer offered in
+    TERMINALS. (#2960)
+  - **Automations:** Run now is a quiet text action that asks "Run it now, outside its schedule?" first. (#2966)
+  - **Waiting messages:** a message typed while the bot answers waits with buttons instead of a menu: ↵ steers it into
+    the running answer (or sends it now for an agent with no steer), ↓ puts it back in the box, × drops it; a steered
+    message reads as you typed it after the chat reopens, never in Hermes' model frame. (#2965, #2964)
+- **omher 0.2.14.** Many open terminals stay light, and Codex's terminal rows show the plain OpenAI mark.
+  - **Many terminals:** a hidden terminal's output re-renders only its own TERMINALS row and draws nothing until shown;
+    one hidden and quiet for two minutes gives its scrollback back and comes back exactly as it was (cursor, tab stops,
+    scroll position); one shared thread watches every session's program. With 20 terminals and 19 hidden ones
+    printing, script time over 8 s drops from 1333 ms to 124 ms, and after the park wait memory drops from 205.5 MB
+    to 35.5 MB. A terminal is also fitted again when the GPU renderer arrives late, so it no longer stays a few
+    columns too narrow. (#2945)
+  - **Codex mark:** Codex rows show the bare OpenAI (GPT) mark, and terminal-row marks have no frame around them.
+    (#2949)
 - **omher 0.2.13.** Terminals behave like a real terminal, a routine that keeps failing is one line in the chat, and
   macOS installs from one Terminal command without the "Not Opened" warning.
   - **Terminals:** `exit` or Ctrl+D closes a shell row as its x does; when Claude Code, Codex or any CLI ends, the
