@@ -937,7 +937,8 @@ NETWORK_CLIENT_BRIDGES: dict[str, str] = {
     "src/skills/channel_watch_toolkit/scripts/channel_watch.py": (
         "the channel watch collector -- inert package data that only a Hermes cron job runs, from a copy the person "
         "installed into `<profile>/scripts/`, on Hermes' interpreter; read-only GETs to Slack (`auth.test`, "
-        "`conversations.history`) or Discord (`/users/@me`, `/channels/{id}/messages`) with the bot token read by its "
+        "`conversations.history`; in brief mode also `users.conversations`, `conversations.members`, "
+        "`conversations.replies`, `users.info`) or Discord (`/users/@me`, `/channels/{id}/messages`) with the bot token read by its "
         "one key name, never printed; redirects refused, bounded reply, a 15 s timeout; `api_base` only to a loopback "
         "host (tests), sent direct and never through a proxy. Nothing in src/ imports it; owner approved as a scoped "
         "integration 2026-11-15, documented in AGENTS.md."

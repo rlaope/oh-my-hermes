@@ -94,3 +94,24 @@
 .watch-nu:disabled {
   cursor: default;
 }
+
+/* the one-time "will brief you here" line: Turn off sits after the text, never clipped with it */
+.brief-notice {
+  gap: 6px;
+}
+.brief-off {
+  flex: none;
+  border: 0;
+  padding: 0;
+  background: none;
+  color: var(--muted);
+  font: inherit;
+  cursor: pointer;
+}
+.brief-off:hover:not(:disabled) {
+  color: var(--body);
+  text-decoration: underline;
+}
+.brief-off:disabled {
+  cursor: default;
+}

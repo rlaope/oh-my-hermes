@@ -10,7 +10,7 @@ from typing import Any
 
 from ..local_store import atomic_write_json, ensure_dir, ensure_file, read_json_object, read_jsonl_objects, utc_now
 from ..paths import OmhPaths
-from .pi_family_interop import LEGACY_RUNTIME_PROFILE_ID, PI_DISTRIBUTION_HOST, canonical_progress_record
+from .pi_family_interop import LEGACY_RUNTIME_PROFILE_ID, PI_DISTRIBUTION_HOST, PI_FORK_HOST, canonical_progress_record
 from ..plugin_bundle.omh.run_records import (
     DELEGATION_FILE,
     EVENTS_FILE,
@@ -163,6 +163,7 @@ def normalize_executor_profile(value: str, *, observed_hermes_execution: bool = 
         "pi-family-runtime": "pi_family_runtime",
         "pi": "pi_family_runtime",
         PI_DISTRIBUTION_HOST: "pi_family_runtime",
+        PI_FORK_HOST: "pi_family_runtime",
         # Read-only: the profile id and lane older releases wrote (the fold
         # above makes the lane spelling equal the profile id).
         LEGACY_RUNTIME_PROFILE_ID: "pi_family_runtime",

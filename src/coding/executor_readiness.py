@@ -166,8 +166,8 @@ _COMMANDS: dict[str, tuple[str, tuple[str, ...]]] = {
     # The pi-family runtime ships as an extension of a host agent CLI, not as its own binary.
     # This static entry is NEVER read for pi-family-runtime: `_resolved_command`
     # always overrides it with the DETECTED host (`pi_family_host` in
-    # fanout_dispatch — pi first, then its distribution host, then the
-    # opencode plugin host). The entry mirrors PI_FAMILY_HOST_CANDIDATES[0]
+    # fanout_dispatch — pi first, then its distribution host, then the pi
+    # fork host, then the opencode plugin host). The entry mirrors PI_FAMILY_HOST_CANDIDATES[0]
     # so a future second consumer of this table sees the same pi-first
     # default the detector promises — do not repin it to one distribution.
     # No host on PATH probes the first candidate and truthfully reads

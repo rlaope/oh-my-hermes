@@ -232,6 +232,7 @@ from .pi_family_interop import (
     PI_DISTRIBUTION_AGENT_DIR_ENV,
     PI_DISTRIBUTION_BRAND_ENV,
     PI_DISTRIBUTION_HOST,
+    PI_FORK_HOST,
 )
 from ..plugin_bundle.omh.run_records import FANOUT_DISPATCH_SCHEMA_VERSION, RUN_FILE
 
@@ -685,7 +686,11 @@ def fanout_child_environment(
     }
     if owner == "pi-family-runtime" and purpose == "owner":
         host = pi_family_host()
-        environment_variable = {"pi": "PI_CODING_AGENT_DIR", PI_DISTRIBUTION_HOST: PI_DISTRIBUTION_AGENT_DIR_ENV}.get(host)
+        environment_variable = {
+            "pi": "PI_CODING_AGENT_DIR",
+            PI_DISTRIBUTION_HOST: PI_DISTRIBUTION_AGENT_DIR_ENV,
+            PI_FORK_HOST: "PI_CODING_AGENT_DIR",
+        }.get(host)
         if environment_variable is not None:
             state_directories = owner_state_directories(owner, child_env)
             if len(state_directories) == 1:
@@ -838,13 +843,13 @@ DISPATCH_COMMAND_TEMPLATES: dict[str, tuple[str, ...]] = {
 
 # Fixed detection order for the pi-family runtime's local host CLI: first on PATH
 # wins ("usually pi" — user-stated common case; then pi's distribution host;
-# opencode hosts the runtime as a plugin). Both layouts — pi-family host CLI and
+# then the pi fork host; opencode hosts the runtime as a plugin). Both layouts — pi-family host CLI and
 # opencode plugin — are first-class dispatch hosts. Detection is
 # presence-only and recorded implicitly by argv[0]/probe command. Model
 # CONFIG, by contrast, is currently read only from the opencode config path
 # (see MODEL_INVENTORY_CATALOG_PROFILE in model_inventory): a pi-only
 # install still dispatches, but its routes degrade to `no_model_catalog`.
-PI_FAMILY_HOST_CANDIDATES: tuple[str, ...] = ("pi", PI_DISTRIBUTION_HOST, "opencode")
+PI_FAMILY_HOST_CANDIDATES: tuple[str, ...] = ("pi", PI_DISTRIBUTION_HOST, PI_FORK_HOST, "opencode")
 
 _PI_FAMILY_HOST_TEMPLATES: dict[str, dict[str, tuple[str, ...] | int | None]] = {
     "pi": {
@@ -858,6 +863,20 @@ _PI_FAMILY_HOST_TEMPLATES: dict[str, dict[str, tuple[str, ...] | int | None]] = 
         "model": ("--model", "{model}"),
         "effort": ("--thinking", "{effort}"),
         "insert": 5,
+    },
+    # The fork host's print mode (`--print`, `--no-session`) matches pi's, but
+    # it has no `--permission-preset`: approvals are `--approval-mode`, whose
+    # default is `yolo`. Print mode cannot answer an approval prompt, so a
+    # stricter mode would refuse the first shell call; no approval flag is
+    # passed and the default applies. Write confinement does not come from a
+    # flag on any host: it is the dispatcher's unit worktree cwd plus the
+    # fanout filesystem confinement. `--` ends flag parsing, so a prompt that
+    # starts with `-` stays message text.
+    PI_FORK_HOST: {
+        "argv": (PI_FORK_HOST, "--print", "--no-session", "--", "{prompt}"),
+        "model": ("--model", "{model}"),
+        "effort": ("--thinking", "{effort}"),
+        "insert": 3,
     },
     "opencode": {
         "argv": ("opencode", "run", "{prompt}"),

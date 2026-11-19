@@ -33,7 +33,7 @@ from omh.coding.executor_readiness import (
     executor_readiness_contract,
 )
 from omh.coding.fanout_dispatch import PI_FAMILY_HOST_CANDIDATES
-from omh.coding.pi_family_interop import PI_DISTRIBUTION_HOST
+from omh.coding.pi_family_interop import PI_DISTRIBUTION_HOST, PI_FORK_HOST
 
 
 def _fake_binary(directory: str, name: str, version: str) -> Path:
@@ -167,6 +167,15 @@ class OmoRuntimeProbeCommandTests(unittest.TestCase):
         ):
             contract = executor_readiness_contract("pi-family-runtime")
         self.assertEqual(contract["probe"]["command"], PI_DISTRIBUTION_HOST)
+
+    def test_detected_fork_host_is_probed_by_its_own_name(self) -> None:
+        with patch(
+            "omh.coding.fanout_dispatch.shutil.which",
+            lambda name: f"/x/{PI_FORK_HOST}" if name == PI_FORK_HOST else None,
+        ):
+            contract = executor_readiness_contract("pi-family-runtime")
+        self.assertEqual(contract["probe"]["command"], PI_FORK_HOST)
+        self.assertEqual(contract["probe"]["args"], ["--version"])
 
     def test_no_host_on_path_falls_back_to_the_first_candidate(self) -> None:
         with patch("omh.coding.fanout_dispatch.shutil.which", lambda name: None):

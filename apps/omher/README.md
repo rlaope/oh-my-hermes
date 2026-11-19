@@ -199,6 +199,13 @@ Rules the code keeps:
   `cron/jobs.json` and changes a job only with that bot's `cron.manage` (add, pause, resume, remove); Run now and
   Edit are chat messages. The Plugins page reads the catalog cache and the profile's plugin folder names and changes
   a plugin only with the bot's `plugins.manage`; installs are catalog-only, inspected first and confirmed.
+- **A Slack briefing with nothing to set up.** For a bot whose Hermes profile has Slack connected, omher sets up one
+  automation, `omher-brief`, by itself: every 15 minutes the channel-watch collector checks the Slack channels the bot
+  shares with you and wakes the bot only when something needs you (someone asked you and got no answer, a thread it
+  told you about moved, you just came back, or enough happened in your working hours). The bot then tells you one
+  thing in its chat, or nothing. A line in that chat says so once, with Turn off; removing the job in Automations
+  stops omher from ever creating it again. A Mac that sleeps pauses it; a bot on an SSH remote is set up there by
+  its own bridge. Slack only for now.
 - **Four languages.** English, Korean, Japanese and Chinese (`src/i18n/`), picked in Settings › General › Language.
 
 ## Develop
