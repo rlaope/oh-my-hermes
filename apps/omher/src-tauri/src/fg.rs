@@ -356,6 +356,128 @@ mod win {
     }
 }
 
+// ---------------------------------------------------------------------------------------------
+// The conversation a terminal's Codex holds open (rule 11)
+// ---------------------------------------------------------------------------------------------
+
+/// Processes looked at in a terminal's foreground Codex and under it.
+#[cfg(unix)]
+const TREE_MAX: usize = 64;
+
+/// The Codex conversation the Codex in the foreground of a terminal holds open. `fg` (the terminal's foreground
+/// process) must be Codex by the allow-list match above; it and the Codex processes under it (at most [`TREE_MAX`]
+/// processes: npm's `codex.js` runs the native binary as its child) have their open files listed, and a path
+/// [`crate::past_chats::rollout_id`] accepts in `home` (the session's Codex home) names the conversation. Codex creates
+/// its rollout once the first prompt is answered and keeps it open while it runs, so a process only ever names its
+/// own. No file is opened or read, and only the id comes back; when a process holds several (a subagent's thread),
+/// the earliest id. Windows lists no open files: `None` there.
+#[cfg(unix)]
+pub fn codex_conversation(fg: u32, home: &Path) -> Option<String> {
+    let is_codex = |pid: u32| Probe::default().agent(pid) == Some("codex");
+    if !is_codex(fg) {
+        return None;
+    }
+    let mut tree = vec![fg];
+    let mut i = 0;
+    while i < tree.len() && tree.len() < TREE_MAX {
+        for c in children(tree[i]) {
+            if tree.len() < TREE_MAX && !tree.contains(&c) {
+                tree.push(c);
+            }
+        }
+        i += 1;
+    }
+    tree.into_iter()
+        .filter(|p| is_codex(*p))
+        .flat_map(open_paths)
+        .filter_map(|p| crate::past_chats::rollout_id(home, &p))
+        .map(|id| id.to_ascii_lowercase())
+        .min()
+}
+
+#[cfg(windows)]
+pub fn codex_conversation(_fg: u32, _home: &Path) -> Option<String> {
+    None
+}
+
+/// The processes whose parent is `pid`.
+#[cfg(target_os = "macos")]
+fn children(pid: u32) -> Vec<u32> {
+    let mut buf = [0 as libc::pid_t; TREE_MAX];
+    let n = unsafe { libc::proc_listchildpids(pid as libc::pid_t, buf.as_mut_ptr().cast(), std::mem::size_of_val(&buf) as libc::c_int) };
+    if n <= 0 {
+        return Vec::new();
+    }
+    buf.iter().take(n as usize).filter(|p| **p > 0).map(|p| *p as u32).collect()
+}
+
+/// Linux: every `/proc/<n>/stat` whose parent field is `pid`.
+#[cfg(all(unix, not(target_os = "macos")))]
+fn children(pid: u32) -> Vec<u32> {
+    let Ok(dir) = std::fs::read_dir("/proc") else { return Vec::new() };
+    let parent = |c: u32| {
+        let stat = std::fs::read_to_string(format!("/proc/{c}/stat")).ok()?;
+        stat.rsplit_once(')')?.1.split_whitespace().nth(1)?.parse::<u32>().ok()
+    };
+    dir.filter_map(|e| e.ok()?.file_name().to_str()?.parse::<u32>().ok()).filter(|c| parent(*c) == Some(pid)).collect()
+}
+
+/// The paths of the regular files process `pid` holds open (macOS: `proc_pidinfo` PROC_PIDLISTFDS, then
+/// `proc_pidfdinfo` PROC_PIDFDVNODEPATHINFO for each vnode). Nothing is opened.
+#[cfg(target_os = "macos")]
+fn open_paths(pid: u32) -> Vec<std::path::PathBuf> {
+    use std::os::unix::ffi::OsStrExt;
+    /// sys/proc_info.h
+    const PROC_PIDFDVNODEPATHINFO: libc::c_int = 2;
+    const VREG: libc::c_int = 1;
+    #[repr(C)]
+    #[allow(dead_code)]
+    struct FileInfo {
+        openflags: u32,
+        status: u32,
+        offset: libc::off_t,
+        kind: i32,
+        guardflags: u32,
+    }
+    #[repr(C)]
+    struct VnodeWithPath {
+        pfi: FileInfo,
+        pvip: libc::vnode_info_path,
+    }
+    let pid = pid as libc::c_int;
+    let need = unsafe { libc::proc_pidinfo(pid, libc::PROC_PIDLISTFDS, 0, std::ptr::null_mut(), 0) };
+    if need <= 0 {
+        return Vec::new();
+    }
+    let each = std::mem::size_of::<libc::proc_fdinfo>();
+    let mut fds: Vec<libc::proc_fdinfo> = vec![unsafe { std::mem::zeroed() }; need as usize / each + 16];
+    let got = unsafe { libc::proc_pidinfo(pid, libc::PROC_PIDLISTFDS, 0, fds.as_mut_ptr().cast(), (fds.len() * each) as libc::c_int) };
+    if got <= 0 {
+        return Vec::new();
+    }
+    fds.truncate(got as usize / each);
+    let size = std::mem::size_of::<VnodeWithPath>() as libc::c_int;
+    let mut out = Vec::new();
+    for fd in fds.iter().filter(|f| f.proc_fdtype == libc::PROX_FDTYPE_VNODE as u32) {
+        let mut info: VnodeWithPath = unsafe { std::mem::zeroed() };
+        let n = unsafe { libc::proc_pidfdinfo(pid, fd.proc_fd, PROC_PIDFDVNODEPATHINFO, (&mut info as *mut VnodeWithPath).cast(), size) };
+        if n != size || info.pvip.vip_vi.vi_type != VREG {
+            continue;
+        }
+        let raw: &[u8; 1024] = unsafe { &*info.pvip.vip_path.as_ptr().cast() };
+        let len = raw.iter().position(|b| *b == 0).unwrap_or(raw.len());
+        out.push(std::path::PathBuf::from(std::ffi::OsStr::from_bytes(&raw[..len])));
+    }
+    out
+}
+
+/// Linux: where each `/proc/<pid>/fd/*` link points.
+#[cfg(all(unix, not(target_os = "macos")))]
+fn open_paths(pid: u32) -> Vec<std::path::PathBuf> {
+    let Ok(dir) = std::fs::read_dir(format!("/proc/{pid}/fd")) else { return Vec::new() };
+    dir.filter_map(|e| std::fs::read_link(e.ok()?.path()).ok()).collect()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -474,5 +596,66 @@ mod tests {
         assert!(!p.exe.is_empty());
         // a pid nobody has
         assert_eq!(p.agent(0x7fff_fff0), None);
+    }
+
+    /// A Codex stand-in: `sh <dir>/codex <file>` is Codex by its script's name, and holds `<file>` open (fd 3) while
+    /// it waits on a `sleep`. `body` replaces that when given.
+    #[cfg(unix)]
+    fn fake_codex(dir: &Path, file: &Path, body: Option<String>) -> std::process::Child {
+        let script = dir.join("codex");
+        std::fs::create_dir_all(dir).unwrap();
+        std::fs::write(&script, body.unwrap_or_else(|| "exec 3<\"$1\"\nsleep 30\nexit 0\n".into())).unwrap();
+        std::process::Command::new("/bin/sh").arg(&script).arg(file).stdin(std::process::Stdio::null()).spawn().unwrap()
+    }
+
+    #[cfg(unix)]
+    fn wait_for(mut f: impl FnMut() -> Option<String>) -> Option<String> {
+        for _ in 0..100 {
+            if let Some(v) = f() {
+                return Some(v);
+            }
+            std::thread::sleep(std::time::Duration::from_millis(50));
+        }
+        None
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_running_codex_names_the_rollout_it_holds_open_and_nothing_else() {
+        let tmp = std::env::temp_dir().join(format!("omher-fg-codex-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&tmp);
+        let home = tmp.join("codex-home");
+        let id = "01a1f468-1e1a-7ef3-903a-6d156e670edf";
+        let rollout = home.join(format!("sessions/2026/01/01/rollout-x-{id}.jsonl"));
+        std::fs::create_dir_all(rollout.parent().unwrap()).unwrap();
+        std::fs::write(&rollout, "{}\n").unwrap();
+        let mut codex = fake_codex(&tmp.join("bin"), &rollout, None);
+        let pid = codex.id();
+        assert_eq!(Probe::default().agent(pid), Some("codex"));
+        assert_eq!(wait_for(|| codex_conversation(pid, &home)).as_deref(), Some(id));
+        // only the open files of that process count, and only in its own Codex home
+        assert!(open_paths(pid).iter().any(|p| p.ends_with(format!("rollout-x-{id}.jsonl"))));
+        assert_eq!(codex_conversation(pid, &tmp.join("other-home")), None);
+        // a program that is not Codex holds nothing for it, even with a rollout open: this test, after opening one
+        let held = std::fs::File::open(&rollout).unwrap();
+        assert_eq!(codex_conversation(std::process::id(), &home), None);
+        drop(held);
+        // Codex started by something that is Codex too (npm's codex.js runs the binary as its child)
+        let inner = tmp.join("inner");
+        std::fs::create_dir_all(&inner).unwrap();
+        std::fs::write(inner.join("codex"), "exec 3<\"$1\"\nsleep 30\nexit 0\n").unwrap();
+        let mut parent = fake_codex(&tmp.join("outer"), &rollout, Some(format!("/bin/sh {} \"$1\"\nexit 0\n", inner.join("codex").display())));
+        assert!(!open_paths(parent.id()).iter().any(|p| p.ends_with(format!("rollout-x-{id}.jsonl"))));
+        assert_eq!(wait_for(|| codex_conversation(parent.id(), &home)).as_deref(), Some(id));
+        // a process that ended holds nothing
+        let _ = codex.kill();
+        let _ = codex.wait();
+        assert_eq!(codex_conversation(pid, &home), None);
+        for c in children(parent.id()) {
+            unsafe { libc::kill(c as libc::pid_t, libc::SIGKILL) };
+        }
+        let _ = parent.kill();
+        let _ = parent.wait();
+        let _ = std::fs::remove_dir_all(&tmp);
     }
 }

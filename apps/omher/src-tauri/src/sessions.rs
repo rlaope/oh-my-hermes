@@ -717,6 +717,9 @@ struct Live {
     exited: Arc<AtomicBool>,
     /// Its output on the way to the page.
     out: Arc<Out>,
+    /// The account home variable it was started with (`account_env`): its Codex home, for
+    /// [`Sessions::codex_conversation`].
+    account_env: Vec<(String, String)>,
 }
 
 impl Live {
@@ -894,7 +897,7 @@ impl Sessions {
                 }
             });
         }
-        self.live.lock().unwrap().insert(id, Live { master: pair.master, input, writer_done, killer, pid, exited, out });
+        self.live.lock().unwrap().insert(id, Live { master: pair.master, input, writer_done, killer, pid, exited, out, account_env: account_env.to_vec() });
         Ok(id)
     }
 
@@ -924,6 +927,19 @@ impl Sessions {
         let (mut argv, path_env) = launch_for(agent_id)?;
         argv.extend(extra);
         self.spawn(argv, cwd, Some(path_env), account_env, cols, rows, sink)
+    }
+
+    /// The conversation the Codex in the foreground of session `id` holds open ([`crate::fg::codex_conversation`]), in
+    /// the Codex home the session started with (its account's, else the CLI's own: rule 30's
+    /// [`crate::past_chats::cli_home`]); `None` while it holds none, or once the session ended. Only the id comes back.
+    pub fn codex_conversation(&self, id: u32, user_home: &Path) -> Option<String> {
+        let (fg, env) = {
+            let g = self.live.lock().unwrap();
+            let l = g.get(&id).filter(|l| !l.exited.load(Ordering::SeqCst))?;
+            (l.foreground()?, l.account_env.clone())
+        };
+        let root = crate::past_chats::cli_home(user_home, "codex", &env, &|k| std::env::var(k).ok())?;
+        crate::fg::codex_conversation(fg, &root)
     }
 
     /// Start the terminal panel's shell ([`shell_argv`]: the person's login shell, never a program the page names)
