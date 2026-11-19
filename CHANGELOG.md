@@ -316,7 +316,7 @@ All notable changes will be documented here.
     do. A file dropped on a panel pane is saved and its path typed.
   - **Restore.** Claude Code terminals start under a conversation id omher makes. If they were running when omher
     quit, they continue that conversation by themselves after a restart (`claude --resume <id>`). Codex terminals
-    learn their thread id from Codex's own files and continue it with `codex resume <id>`.
+    learn their conversation from the Codex process itself and continue it with `codex resume <id>`.
   - **Scrollback comes back.** Each TERMINALS session and bottom-panel tab shows what it showed before a restart (last
     2000 lines), dimmed, under a "restored <time>" line. It is kept in `~/.omher/term-history` (owner-only), and
     Settings › Terminal › History turns it off and deletes it all. The bottom panel's tabs come back in their folders.

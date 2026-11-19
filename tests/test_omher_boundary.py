@@ -265,8 +265,8 @@ RULES = (
     " omher sends no keys of its own and reads nothing new from the program.",
     "the desktop app writes it, only under omher's own folder, to `~/.omher/term-history/<key>.txt`,",
     "the file is the owner's only (0600), holds at most 2000 lines and 1 MB, is never written or read through a link,",
-    "and only its id (a UUID) comes back, to be kept with the session so that a restart continues it (rule 11);"
-    " nothing else is read or kept.",
+    "that file is not opened, and only its id (a UUID) is kept with the session so that a restart continues it.",
+    "no file is opened, and nothing else is shown, kept or sent; Windows does not do this.",
     "what it restarts is the gateway process that serves that bot, through Hermes' own command:",
     "never one profile's unserve and serve inside the host. The profile is always named, never left to Hermes'",
     "It adds `--yes` only when the person presses \"Restart anyway\" right after Hermes refused because something was running,",
@@ -1949,7 +1949,7 @@ class PastConversationsAreOnlyRead(unittest.TestCase):
         self.assertIn("pub const MSG_MAX: usize = 40;", self.past)
         # every file read goes through inside(): the listing and the messages
         for fn in ("pub fn claude_list(", "pub fn claude_messages(", "pub fn codex_list(", "pub fn codex_messages(", "fn codex_names(",
-                   "pub fn codex_latest("):
+                   "pub fn rollout_id("):
             body = self.past.split(fn, 1)[1].split("\n}\n", 1)[0]
             self.assertIn("inside(root, ", body, fn)
         # an id is a UUID before it names a file
@@ -1962,17 +1962,41 @@ class PastConversationsAreOnlyRead(unittest.TestCase):
 
     def test_the_commands_take_only_an_agent_folders_and_an_id(self) -> None:
         for cmd, params in (("past_chats_list", "agent: String, cwds: Vec<String>"), ("past_chat_messages", "agent: String, id: String, cwd: String"),
-                            ("codex_latest", "cwd: String, since_secs: f64, held: Vec<String>, others: Vec<f64>"),
+                            ("codex_conversation", "shell: State<'_, Shell>, id: u32"),
                             ("session_reveal", "cwd: String"), ("session_open_terminal", "cwd: String"),
                             ("asks_badge", "window: tauri::WebviewWindow, count: u32")):
             sig = re.search(rf"async fn {cmd}\((.*?)\) -> ", self.lib, re.S)
             self.assertIsNotNone(sig, cmd)
             self.assertEqual(sig.group(1).strip(), params, cmd)
         self.assertIn('matches!(agent, "claude" | "codex")', self.past)
-        # a Codex conversation goes to a session only when no other session there without an id could own it
-        latest = self.past.split("pub fn codex_latest(", 1)[1].split("\n}\n", 1)[0]
-        self.assertIn("if others.iter().any(|o| o * 1000.0 <= ms) {", latest)
-        self.assertIn("gives it only when no other Codex session in that folder still without an id had started by then", _flat(DOC.read_text(encoding="utf-8")))
+        # a TERMINALS Codex session's conversation is the rollout its own Codex holds open (rule 11): only a path in
+        # the home, under sessions/YYYY/MM/DD/rollout-*-<uuid>.jsonl, and only its UUID; no file is opened
+        rid = self.past.split("pub fn rollout_id(", 1)[1].split("\n}\n", 1)[0]
+        for needle in ("let real = inside(root, path)?;", 'if top != "sessions" || !digits(y, 4) || !digits(m, 2) || !digits(d, 2) {',
+                       'name.strip_prefix("rollout-")?.strip_suffix(".jsonl")?', "is_uuid(id)"):
+            self.assertIn(needle, rid)
+        for banned in ("File::open", "read_to_", "lines_in(", "head(", "last_part("):
+            self.assertNotIn(banned, rid, banned)
+        self.assertNotIn("codex_latest", self.lib)
+        fg = (SHELL / "fg.rs").read_text(encoding="utf-8").split("#[cfg(test)]\nmod tests", 1)[0]
+        own = fg.split("pub fn codex_conversation(fg: u32, home: &Path)", 1)[1].split("\n}\n", 1)[0]
+        for needle in ('Probe::default().agent(pid) == Some("codex")', "if !is_codex(fg) {", ".filter(|p| is_codex(*p))",
+                       "crate::past_chats::rollout_id(home, &p)", "tree.len() < TREE_MAX"):
+            self.assertIn(needle, own)
+        self.assertIn("const TREE_MAX: usize = 64;", fg)
+        # the open files are listed, never opened: only proc_pidinfo / proc_pidfdinfo (macOS), /proc/<pid>/fd links (Linux)
+        listing = fg.split("fn open_paths(", 1)[1]
+        listing = listing[: listing.index("#[cfg(test)]")] if "#[cfg(test)]" in listing else listing
+        for banned in ("File::open", "OpenOptions", "read_to_string(&", "fs::write", "Command::new"):
+            self.assertNotIn(banned, listing, banned)
+        self.assertIn("libc::PROC_PIDLISTFDS", listing)
+        self.assertIn("PROC_PIDFDVNODEPATHINFO", listing)
+        self.assertIn('std::fs::read_link(e.ok()?.path())', listing)
+        self.assertIn("pub fn codex_conversation(_fg: u32, _home: &Path) -> Option<String> {\n    None\n}", fg)
+        doc = _flat(DOC.read_text(encoding="utf-8"))
+        self.assertIn("For a TERMINALS Codex session the shell also lists, when the page asks (`codex_conversation`, only the session id goes out), the open files of that foreground Codex process", doc)
+        self.assertIn("only the UUID is kept, as the session's conversation for `codex resume` after a restart; no file is opened, and nothing else is shown, kept or sent; Windows does not do this.", doc)
+        self.assertIn("a TERMINALS Codex session's conversation id comes from the rollout path its own Codex process holds open (rule 11)", doc)
 
     def test_the_system_terminal_runs_no_command_and_the_folder_is_no_shell_string(self) -> None:
         self.assertEqual(self.open.count("Command::new("), 1)
