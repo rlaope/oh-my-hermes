@@ -2557,6 +2557,29 @@ class Qwen4MaxContractTests(unittest.TestCase):
         self.assertEqual(contract["claim_boundary"], MODEL_CONTRACT_CLAIM_BOUNDARY)
         self.assertNotIn("dynamic_effort", contract)
 
+    def test_price_row_mirrors_the_singapore_list_and_its_own_cache_rate(self) -> None:
+        from omh.plugin_bundle.omh.hermes_delegation import APPROX_CACHE_READ_RATIO, _approximate_cost_usd
+
+        contract = model_contract("qwen4-max")
+        assert contract is not None
+        pricing = contract["pricing_usd_per_mtok"]
+        self.assertEqual(
+            (pricing["input"], pricing["cached_input"], pricing["cache_write_5m"], pricing["cache_write_1h"],
+             pricing["output"]),
+            (1.50, 0.075, 1.875, 3.00, 4.50),
+        )
+        self.assertIn("1.413", pricing["regional"])
+        self.assertEqual(APPROX_PRICE_PER_MTOK["qwen4-max"], (pricing["input"], pricing["output"]))
+        self.assertAlmostEqual(pricing["input"] * APPROX_CACHE_READ_RATIO["qwen4-max"], pricing["cached_input"])
+        for model in ("qwen4-max", "qwen/qwen4-max", "qwen4-max-2026-11-16"):
+            with self.subTest(model=model):
+                self.assertAlmostEqual(_approximate_cost_usd(model, 1e6, 1e6, 1e6), 1.50 + 4.50 + 0.075)
+        # The Token Plan preview publishes no per-token price: no row, no estimate.
+        self.assertNotIn("qwen4-max-preview", APPROX_PRICE_PER_MTOK)
+        self.assertIsNone(_approximate_cost_usd("qwen4-max-preview", 1e6, 1e6, 0))
+        # The predecessor keeps its own list rate.
+        self.assertEqual(APPROX_PRICE_PER_MTOK["qwen3.8-max"], (2.0, 6.0))
+
     def test_every_rung_passes_through_on_record(self) -> None:
         # The vendor maps every undocumented rung and returns no error, so OMH
         # raises nothing: the route keeps the requested rung and the contract's

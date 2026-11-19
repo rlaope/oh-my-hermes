@@ -1833,6 +1833,17 @@ APPROX_PRICE_PER_MTOK: dict[str, tuple[float, float]] = {
     # Recognition-only, in no shipped chain.
     "qwen3.8-max": (2.0, 6.0),
     "qwen3.8-flash": (0.15, 0.47),
+    # QwenCloud list price (docs.qwencloud.com/developer-guides/getting-started/
+    # model-prices and /run-and-scale/explicit-cache-qwen4, Singapore
+    # (International), "Non-thinking and thinking modes", one tier up to 1M
+    # input tokens, read 2026-11-19): Qwen4-Max 1.50/4.50. Unlike Qwen3.8,
+    # Qwen4-Max publishes its own cache rates, so its ratio row below is
+    # documented rather than the default tenth. Beijing and Global bill
+    # 1.413/4.24 with a 0.071 cache read; cache-write rates (5m 1.875, 1h
+    # 3.00) stay in `src/coding/model_contracts.py`. `qwen4-max-preview` is
+    # Token Plan only with no per-token price, so it has no row. No provider
+    # row, on the Qwen 3.8 terms above. Recognition-only, in no shipped chain.
+    "qwen4-max": (1.5, 4.5),
     # Upstage list price (upstage.ai pricing, 2026-08): every Solar Pro 2
     # version reached end of service on 2026-10-30 KST, and Upstage
     # recommends Solar Pro 4 (upstage.ai/pricing and
@@ -2013,6 +2024,10 @@ APPROX_CACHE_READ_RATIO: dict[str, float] = {
     # page and the pricing page, read 2026-11-18).
     "gpt-6.2-astra": 0.05,
     "gpt-6.2-sol": 0.05,
+    # Qwen4-Max explicit/implicit cache hit 0.075 against 1.50 input
+    # (Singapore; docs.qwencloud.com explicit-cache-qwen4 billing, read
+    # 2026-11-19). Beijing/Global's 0.071 against 1.413 is the same 5%.
+    "qwen4-max": 0.05,
 }
 _DEFAULT_CACHE_READ_RATIO = 0.1
 
