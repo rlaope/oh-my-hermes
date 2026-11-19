@@ -51,7 +51,7 @@ class ClaudeDescriptionProducerTests(unittest.TestCase):
 
     def test_no_skill_added_or_removed_and_only_skill_files_differ(self):
         self.assertEqual(self.claude.keys(), self.portable.keys())
-        self.assertEqual(len(self.skills), 123)
+        self.assertEqual(len(self.skills), 124)
         for relative, content in self.portable.items():
             if relative not in self.skills:
                 self.assertEqual(self.claude[relative], content, relative)
@@ -80,8 +80,9 @@ class ClaudeDescriptionProducerTests(unittest.TestCase):
                 self.assertNotIn("Use when the user says", text)
                 lead = description(self.portable[relative]).partition(" Use when the user says:")[0].strip()
                 if len(lead) <= CLAUDE_DESCRIPTION_CAP:
-                    # Nothing was cut, so nothing is reworded: a lead that ends "act on." keeps its last word.
-                    self.assertEqual(text, lead.rstrip(" .,;:-") + ".")
+                    # Nothing was cut, so nothing is reworded: a lead that ends "act on." keeps its last word,
+                    # and one the portable projection already cut keeps its `…` with no full stop after it.
+                    self.assertEqual(text, lead if lead.endswith("…") else lead.rstrip(" .,;:-") + ".")
                     continue
                 # A cut says it is one, and is a prefix of the lead it was cut from.
                 self.assertTrue(text.endswith("…"), text)
