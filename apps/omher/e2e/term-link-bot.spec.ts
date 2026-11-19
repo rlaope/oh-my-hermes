@@ -170,6 +170,27 @@ test("Allow for this session types later requests without a card; another sessio
   expect((await writes(page, b)).filter((d) => d === "three\r")).toEqual([]);
 });
 
+test("an allowed many-line prompt is one bracketed paste while its terminal is parked", async ({ page }) => {
+  await open(page);
+  const a = await newTerm(page, "shell");
+  const la = await linkId(page, a);
+  await expect.poll(async () => Object.keys(await files(page))).toContain(la);
+  // the program turns bracketed paste on
+  await page.evaluate((i) => {
+    const w = window as unknown as W & { __omherMockOut(id: number, d: string): boolean };
+    w.__omherMockOut(w.__omherSessions.ptyOf(i)!, "\x1b[?2004h");
+  }, a);
+  await ask(page, la, "first prompt");
+  await page.getByTestId("term-share-card").getByRole("button", { name: "Allow for this session" }).click();
+  await expect.poll(async () => (await writes(page, a)).filter((d) => d.includes("prompt"))).toEqual(["\x1b[200~first prompt\x1b[201~\r"]);
+  // another session on the page; the first one is parked (short thresholds, as the park tests use)
+  await newTerm(page, "shell");
+  await page.evaluate(() => (window as unknown as { __omherPark: { set(o: object): void } }).__omherPark.set({ hiddenMs: 200, idleMs: 200, sweepMs: 100 }));
+  await expect.poll(() => page.evaluate(() => (window as unknown as { __omherPark: { parked(): number } }).__omherPark.parked())).toBe(1);
+  await ask(page, la, "first line\nsecond line");
+  await expect.poll(async () => (await writes(page, a)).filter((d) => d.includes("line"))).toEqual(["\x1b[200~first line\nsecond line\x1b[201~\r"]);
+});
+
 test.describe("shots", () => {
   test.use({ deviceScaleFactor: 2 });
   for (const theme of ["dark", "light"] as const) {

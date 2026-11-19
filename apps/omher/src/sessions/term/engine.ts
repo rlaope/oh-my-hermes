@@ -94,10 +94,15 @@ interface Parked {
   gpuLast: boolean;
   gaveUp: boolean;
   losses: number[];
+  /** the program had turned on bracketed paste (DECSET 2004) when it was parked; the snapshot turns it on again. Its
+   *  output makes the terminal again before it is read, so the mode cannot change while parked */
+  paste: boolean;
 }
 const parked = new Map<Terminal, Parked>();
 /** a parked terminal that was made again: the one that replaced it */
 const remade = new WeakMap<Terminal, Terminal>();
+/** a terminal made again whose snapshot xterm has not read yet: the paste mode it had (its own reads the old one) */
+const restoring = new WeakMap<Terminal, boolean>();
 /** what the next `afterOpen` takes over from the parked terminal it replaces */
 let carry: Parked | null = null;
 
@@ -368,15 +373,21 @@ export function live(term: Terminal): Terminal {
     carry = null;
   }
   remade.set(term, next);
+  restoring.set(next, p.paste);
   const s = states.get(next);
   // the snapshot is not the program's output: it neither counts as output nor waits for an ack. It is pending, though:
   // parked again before xterm has taken all of it, the next snapshot would miss the rest
-  if (!s) next.write(p.snapshot, () => putCarried(next, p.carried));
+  if (!s)
+    next.write(p.snapshot, () => {
+      putCarried(next, p.carried);
+      restoring.delete(next);
+    });
   else {
     s.pending++;
     // the write callback runs before xterm parses the next write, so the program's next bytes see it all
     const took = () => {
       putCarried(next, p.carried);
+      restoring.delete(next);
       s.pending--;
     };
     if (s.held) s.held.push(() => next.write(p.snapshot, took));
@@ -387,6 +398,16 @@ export function live(term: Terminal): Terminal {
 
 /** Whether `term` is parked: it has no xterm (nothing to dispose) until `live` makes it again. */
 export const isParked = (term: Terminal): boolean => parked.has(term);
+
+/** Whether the program in `term` turned on bracketed paste, read without making a parked terminal again (a parked one
+ *  says what it had when it was parked). */
+export function bracketedPaste(term: Terminal): boolean {
+  const moved = remade.get(term);
+  if (moved) return bracketedPaste(moved);
+  const p = parked.get(term);
+  if (p) return p.paste;
+  return restoring.get(term) ?? term.modes.bracketedPasteMode;
+}
 
 const utf8 = new TextEncoder();
 let sweepTimer: ReturnType<typeof setInterval> | null = null;
@@ -443,7 +464,7 @@ function park(s: State, Serialize: typeof import("@xterm/addon-serialize").Seria
   }
   const title = (term as unknown as { _core?: { _inputHandler?: { _windowTitle?: unknown } } })._core?._inputHandler?._windowTitle;
   if (typeof title === "string" && title) snapshot += `\x1b]2;${title}\x07`;
-  parked.set(term, { snapshot: utf8.encode(snapshot), carried, cols: term.cols, rows: term.rows, remake: s.remake!, hiddenAt: s.hiddenAt, lastOut: s.lastOut, gpuLast: s.gpuLast, gaveUp: s.gaveUp, losses: s.losses });
+  parked.set(term, { snapshot: utf8.encode(snapshot), carried, cols: term.cols, rows: term.rows, remake: s.remake!, hiddenAt: s.hiddenAt, lastOut: s.lastOut, gpuLast: s.gpuLast, gaveUp: s.gaveUp, losses: s.losses, paste: inner.modes.bracketedPasteMode });
   // a find bar left open on it (the bottom panel keeps one while hidden) closes: its terminal is going
   s.el.dispatchEvent(new CustomEvent(FIND_EVENT, { bubbles: true, detail: null }));
   s.undo();

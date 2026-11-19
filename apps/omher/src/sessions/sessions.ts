@@ -25,7 +25,7 @@
 import { useSyncExternalStore } from "react";
 import type { ITerminalInitOnlyOptions, ITerminalOptions, Terminal } from "@xterm/xterm";
 import type { FitAddon } from "@xterm/addon-fit";
-import { afterOpen, CELLS_EVENT, feed, isParked, live, onVisible, PARKING_EVENT, type Remake } from "./term/engine";
+import { afterOpen, bracketedPaste, CELLS_EVENT, feed, isParked, live, onVisible, PARKING_EVENT, type Remake } from "./term/engine";
 import { onCwd, onProgress } from "./term/engine-marks";
 import { applyLook, termOptions } from "./term/look";
 import { termFontsReady } from "./term/fonts";
@@ -1663,7 +1663,8 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
 
   /** Type a bot's prompt the person allowed (termShare.ts: the card's Allow, or Allow for this session) into session
    *  `id`'s terminal, then Enter. A bracketed paste when the program turned that on, so a many-line prompt arrives as
-   *  one; else its lines are typed as a paste types them. Control characters never reach the program (the prompt is
+   *  one (a parked terminal keeps the mode it had: term/engine.ts `bracketedPaste`); else its lines are typed as a
+   *  paste types them. Control characters never reach the program (the prompt is
    *  cleaned before and here). Nothing else calls this. */
   const typeAllowed = async (id: string, prompt: string) => {
     const t = terms.get(id);
@@ -1671,7 +1672,7 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
     // eslint-disable-next-line no-control-regex
     const text = prompt.replace(/\r\n/g, "\n").replace(/[\u0000-\u0009\u000b-\u001f\u007f-\u009f]/g, "");
     if (!text.trim()) return false;
-    const bracketed = !isParked(t.raw) && t.term.modes.bracketedPasteMode;
+    const bracketed = bracketedPaste(t.raw);
     await t.io.write(t.hostId, bracketed ? `\x1b[200~${text}\x1b[201~\r` : `${text.replace(/\n/g, "\r")}\r`);
     return true;
   };
