@@ -1200,7 +1200,9 @@ run and approval decision stays Hermes'; the screen is OMH's.
   `✻ 34s · 3 tools · ↓1.2k`, under the reply's words (a line too narrow for
   it drops the tokens, then the tools, then the wait, each whole, and keeps
   the time). While a question Hermes asked
-  waits on you, the working row reads `? waiting on you (11s)` instead, its
+  waits on you, the working row reads `? waiting for your approval (11s)`
+  for an approval, `? waiting for your answer (11s)` for a clarify question
+  and `? waiting on you (11s)` for anything else (a sudo password, a secret), its
   one clock counting that wait (the info line's OMH count of running tool
   calls, `1 tool · 9s`, drops its seconds meanwhile and leaves once the
   turn ends), and a tool's time on its row leaves the wait
@@ -1212,6 +1214,30 @@ run and approval decision stays Hermes'; the screen is OMH's.
   titles it after its first turn) and whether it is idle, running or waiting
   on you; on exit the title you had comes back where the terminal keeps a
   title stack.
+- Between turns, while the session waits on something that will wake it (a
+  background process Hermes will tell it about, a delegated child or dag-ulw
+  node), the working row's place says what the longest of those waits is:
+  `✻ Waiting for CI… (38m 0s · #2975 · +1 test run · 1 agent)`. It is named
+  from structure only, never from what the model said: a process by the words
+  in command position of its command (after `cd`, `export`, `VAR=value` and
+  wrappers such as `uv run`, `npx` or `time`), so `gh pr checks`,
+  `merge_when_green.sh` read `Waiting for CI` (with the PR number when one is
+  an argument), deploy commands `Deploying`, test runners `Testing`, builds
+  `Building`, installs `Installing`, `ffmpeg` and renderers `Rendering`,
+  `git push` `Pushing`, clones, fetches and downloads `Downloading`, and a
+  bare `sleep 240` `Sleeping` with the time left; a process woken on a
+  matching line reads `Watching for "<its first pattern>"`; a dag-ulw run
+  reads `Running <run name>` with its nodes done of all and any that failed;
+  a single child reads `Reviewing`, `Researching` or `Writing` by its
+  category or role, with its model, else `Running agent`. A command nothing
+  names (`echo pytest` names nothing: the word is an argument) keeps
+  `Waiting…`. The other waits are counted after it, and a narrow terminal
+  drops their kind words first, then the detail, then shows the plain
+  `Waiting… (38m 0s · 1 agent · 2 terminals)`. As the wait ends with nothing
+  else waiting, one muted row says so for 3 seconds: `✓ Review finished (5m 0s)`,
+  `✗ … failed` for a child or run whose graph says it failed, and
+  `· Tests ended (10m 0s)` for a process, whose record carries no exit code,
+  so it is never called passed or failed. Nothing of this shows during a turn.
 - Motion and colour follow one rule set, so scrollback reads at a glance:
   - Each block hangs on a continuous thin `┃` rail with no fill behind it
     (with `NO_COLOR` set your prompt's is the light `│`, so it is told apart

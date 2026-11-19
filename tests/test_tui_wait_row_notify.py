@@ -20,6 +20,7 @@ import unittest
 from pathlib import Path
 
 from test_tui_modes import SID, drawn, make_app
+from omh.tui.app import WORKING_GLYPHS
 from omh.tui.background import PROCESSES_FILE
 from omh.tui.gateway import Event
 from omh.tui.panels import HudSnapshot
@@ -64,7 +65,7 @@ class WaitingRowTests(unittest.TestCase):
         self.app._take_background(snapshot)  # what `_take_hud` does with a delivered read
 
     def waiting(self) -> str:
-        return next((line for line in drawn(self.app) if "Waiting…" in line), "")
+        return next((line for line in drawn(self.app) if "…" in line and line[:1] in WORKING_GLYPHS), "")
 
     def run_turn(self, *events: Event) -> None:
         self.app._on_event(Event("message.start", SID, {}))
@@ -100,7 +101,7 @@ class WaitingRowTests(unittest.TestCase):
     def test_watch_patterns_in_the_result_wake_it_too(self) -> None:
         self.run_turn(complete({**STARTED, "notify_on_complete": False, "watch_patterns": ["READY"]}))
         self.checkpoint(checkpoint_row())
-        self.assertIn("· terminal)", self.waiting())
+        self.assertIn('Watching for "READY"… (2m 49s)', self.waiting())
 
     def test_another_tools_result_or_another_process_counts_for_nothing(self) -> None:
         self.run_turn(complete(STARTED, name="process_manage"), complete({**STARTED, "session_id": "proc_other"}))

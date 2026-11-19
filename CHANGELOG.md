@@ -252,6 +252,16 @@ All notable changes will be documented here.
   six-thousand-line job, splitting such a backlog finished later than Hermes alone at the same quality. Asking for
   dag-ulw by name still runs the list as a graph.
 
+- **The OMH TUI's waiting row says what it waits on.** Between turns the row above the composer named nothing
+  (`✻ Waiting… (33m 47s · 1 agent · terminal)`). It now names the longest wait from structure only: a background
+  process by the words in command position of its command (`Waiting for CI` with the PR number, `Deploying`,
+  `Testing`, `Building`, `Installing`, `Rendering`, `Pushing`, `Downloading`, `Sleeping` with the time left), a
+  process woken on a match by its first pattern (`Watching for "READY"`), a dag-ulw run by its name with its nodes
+  done and failed, and a single child as `Reviewing`, `Researching` or `Writing` with its model. Other waits are
+  counted after it (`+1 test run · 1 agent`); a narrow terminal falls back to the old row. As the wait ends, one muted
+  row says so for 3 seconds (`✓ Review finished`, `✗ … failed`, `· Tests ended` for a process, which has no exit
+  code). During a turn, `? waiting on you` now reads `? waiting for your approval` or `? waiting for your answer`.
+
 ## 4.0.8 - 2026-11-15
 
 - **The OMH TUI shows a compression as one gauge row, and a prompt typed meanwhile goes on by itself.** `/compact`
