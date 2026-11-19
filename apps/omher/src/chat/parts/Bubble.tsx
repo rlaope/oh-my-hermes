@@ -73,6 +73,11 @@ export const Bubble = memo(function Bubble({
     const held = !!item.held;
     // a SESSIONS chat's waiting message carries the mark too (held by omher, or already with the agent)
     const marked = (held || item.wait === "queued" || !!item.steerUnknown) && !!onQueue;
+    // copy the prompt, as typed (on hover; it takes no room). Not a held one: it is not sent yet, and its ↓ puts it
+    // back in the box; one whose steer never answered may have reached the bot, so it has it (promptHistory.ts)
+    const copy = item.text.trim() && !(held && !item.steerUnknown) && (
+      <CopyButton className="msg-prompt" text={() => item.text} testId="copy-prompt" />
+    );
     return (
       <div
         className={`msg u${item.wait ? ` ${item.wait}` : ""}${held ? " held" : ""}`}
@@ -90,6 +95,7 @@ export const Bubble = memo(function Bubble({
           (marked && onQueue ? (
             // a held message: its ↵ mark before the bubble, on the bubble's first line
             <div className="msg-line">
+              {copy}
               <QueueMark onPick={onQueue} busy={queueBusy} off={queueOff} unknown={!!item.steerUnknown} />
               <div className="b">
                 <SkillText text={item.text} skills={item.skills} />
@@ -98,6 +104,7 @@ export const Bubble = memo(function Bubble({
           ) : (
             <div className="b">
               <SkillText text={item.text} skills={item.skills} />
+              {copy}
             </div>
           ))}
         {item.files?.length ? <SentFiles files={item.files} /> : null}

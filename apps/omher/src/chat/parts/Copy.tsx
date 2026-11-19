@@ -1,5 +1,6 @@
 // A quiet copy control: an icon that shows on hover of its row (CSS), copies its text, and says "Copied" for a
-// moment. Used on a bot answer and on each code block, in the bot chat and SESSIONS chats alike.
+// moment. Used on an answer, on a message the person sent, and on each code block, in the bot chat and SESSIONS
+// chats alike.
 import { useEffect, useRef, useState } from "react";
 import { t } from "../../i18n";
 import "./copy.css";

@@ -1,4 +1,4 @@
-/* The copy control: an icon that shows on hover of its answer or code block, quiet until hovered itself. */
+/* The copy control: an icon that shows on hover of its bubble or code block, quiet until hovered itself. */
 .copy-btn {
   display: inline-flex;
   align-items: center;
@@ -40,6 +40,28 @@
   left: auto;
   right: 0;
   bottom: -22px;
+}
+
+/* beside the person's own message, on its left: their bubble is right-aligned, so the quiet side is the left;
+   like the answer's it takes no room, so nothing moves when it shows */
+.msg.u .b {
+  position: relative;
+}
+.msg-prompt {
+  position: absolute;
+  right: 100%;
+  bottom: 2px;
+  margin-right: 4px;
+}
+.msg.u:hover .msg-prompt {
+  opacity: 1;
+}
+/* a row with the steer queue's marks before its bubble: the copy goes before the marks, centred on the first line
+   like them, so the two never overlap */
+.msg-line > .msg-prompt {
+  position: static;
+  flex: none;
+  margin: calc((var(--fs-msg) * var(--lh-msg) + 18px - 22px) / 2) 0 0;
 }
 
 /* a code block's own, in its top right corner */
