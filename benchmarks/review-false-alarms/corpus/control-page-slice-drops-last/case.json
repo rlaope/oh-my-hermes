@@ -1,0 +1,11 @@
+{
+  "id": "control-page-slice-drops-last",
+  "kind": "control",
+  "language": "python",
+  "expected": "bug",
+  "bug_location": {
+    "path": "app/pagination.py",
+    "line": 6
+  },
+  "why": "The slice end is start + size - 1, so every page returns size - 1 items and the last item of each page is never shown; the docstring and the API view promise up to size items."
+}

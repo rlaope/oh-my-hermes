@@ -11,6 +11,19 @@ All notable changes will be documented here.
   bug. `code-review`, `production-audit` and `verification-gate` now end every result with a `Not checked` list (each
   entry with its reason, or `Not checked: none` only after full coverage), so a short findings list no longer reads as
   "the rest is clean".
+
+- **Qwen4-Max is onboarded.** Alibaba released it on 2026-11-16. Before this, every Qwen4 id (`qwen4-max`,
+  `qwen/qwen4-max`, `qwen4-max-preview`) classified `unknown` and got generic discipline; they now classify `qwen`.
+  `qwen4-max` has an exact contract read from docs.qwencloud.com: 1M context, hybrid thinking on by default, and a
+  `low` / `high` / `xhigh` ladder with `high` as the default. The vendor maps `minimal`, `medium` and `max` onto those
+  three without an error, so OMH raises nothing and the contract records the table. Cost estimates use the Singapore
+  list price, $1.50 / $4.50 per million tokens with cached input at $0.075. The Qwen calibration is now
+  version-aware: the family block still describes the non-thinking Qwen3-Coder, and Qwen4-Max gets its own block
+  that does not forbid thinking. That block is editorial and unmeasured. No shipped chain names Qwen4-Max, because
+  Qwen3.8-Max held no slot either; to try it, use `omh model-chains set <category> "qwen4-max:high, ..."`. The Token
+  Plan preview is recognized only, with no contract and no price. Hermes through origin/main `fe8b920cae` sends no
+  effort on its DashScope profiles, so the model runs at `high` there whatever effort is routed.
+
 - **A cheap dag-ulw node that hits a hard judgement asks for a stronger model instead of guessing.** When a node's
   child cannot settle a design choice or a root cause, it stops before editing and writes `ESCALATE: <question>` into
   its handoff; the node is settled `escalated` and offered again one category up (quick, unspecified-low,
@@ -24,6 +37,14 @@ All notable changes will be documented here.
   first). ↓ puts it back in the message box to fix or add to. × (on hover or focus) drops it. A button that cannot
   act (the agent has the message already) says why in its tooltip.
 
+- **Hermes Bug Hunter: a trap benchmark counts the bugs a reviewer invents.** `benchmarks/review-false-alarms`
+  holds 11 traps (changes that look wrong and are correct: SQL built from a constant allowlist, `eval` over a literal
+  table, an index guarded two lines up, a lock the caller holds) and 6 controls with one real, reachable bug each. A
+  reviewer ends with `VERDICT: clean` or `VERDICT: bug <path>:<line>`; a control counts as hit only within ±3 lines,
+  and a missing or garbled verdict is its own column, never clean. The table prints the false-alarm rate and the hit
+  rate side by side for `omh-on` and `omh-off`, and OMH wins only with fewer false alarms and no fewer hits.
+  `bench.py --dry-run` grades a recorded fixture with no model; live runs use `hermes -z` on two profiles.
+
 - **omher: a message steered into a running answer reads as you typed it after the chat reopens.** Hermes keeps
   a mid-turn steer wrapped in a frame for the model (`[OUT-OF-BAND USER MESSAGE — …]` … `[/OUT-OF-BAND USER
   MESSAGE]`), and a reopened Bot Chat showed that frame in your bubble. The bridge now shows only the typed text,
@@ -32,6 +53,12 @@ All notable changes will be documented here.
 - **The Start Guide lists long-term memory among the main features.** It moves from the closing list to a fourth card
   in "What OMH does" (owner request, 2026-11-18): nothing is remembered silently, and the next session gets only the
   memories that fit its task, within a token budget. The closing list is now one row of three.
+- **A fail-closed leak guard keeps private identifiers out of the public repo (Hermes Bug Hunter).** CI now scans
+  every tracked file on each pull request and main push against a committed denylist of sha256 hashes, so the list
+  never carries the names it protects. A hit prints `path:line` and the hash; a missing or empty denylist fails the
+  job instead of passing. `tools/qa/identifier_guard.py --staged` runs the same check as a pre-commit hook, and
+  `--hash "name"` prints the line to add (see CONTRIBUTING.md).
+
 - **Four OMH tool descriptions are shorter, and the model still picks the same calls.** `omh_todo`, `omh_loop`,
   `omh_document_plan` and `omh_delegate_route` say the same rules in fewer words, so each costs fewer tokens the
   first time Hermes loads it (24,943 -> 23,718 characters together; the registered OMH schemas 63,324 -> 62,099).
@@ -266,6 +293,29 @@ All notable changes will be documented here.
   changes are made one after another, with no dag-ulw graph and no child agents. In paired runs on a five-part,
   six-thousand-line job, splitting such a backlog finished later than Hermes alone at the same quality. Asking for
   dag-ulw by name still runs the list as a graph.
+- **omher: a CLI's block art draws solid in a terminal.** Claude Code's mascot (`▐▛███▜▌`) and other block and
+  box characters came out sliced in TERMINALS, with dark seams between cells and rows, because the standard renderer
+  draws them from the font, a hair short of their cells. Terminal › GPU renderer › Auto now uses the GPU renderer
+  wherever the hardware allows it (WebGL2, not a software rasterizer), and it draws those characters to fill the cell
+  as a real terminal does. Off keeps the standard renderer; a machine without hardware WebGL2 keeps it too.
+- **omher: a Slack briefing that sets itself up.** Add a bot whose Hermes profile has Slack connected and omher
+  creates one automation for it, `omher-brief`: the channel-watch collector in a new brief mode checks the Slack
+  channels you share with the bot every 15 minutes and wakes the model only when there is a reason (an unanswered
+  mention, a thread it already told you about moving on, your return after hours away, or enough new posts in your
+  active hours), at most six briefs a day; the bot then tells you one thing in its chat or stays silent. Its chat
+  says so once, with Turn off; removing the job in Automations means omher never creates it again. The briefing's
+  answers read "Brief" and the Automations row says "When something needs you". Slack only: Discord briefs and
+  GitHub events are not built yet.
+
+- **`show-reel` has a cut-sheet lane for films written as a shot contract.** A new opt-in reference, `cut-sheet.md`,
+  covers cut-driven sequences of 30 s or less handed to a builder or a text-to-video generator, and remakes of a
+  supplied reference video. It opens with one contract line (ratio, duration, exact cut count, fps, palette), locks
+  the subject in observable markers with a never-redesign clause repeated in every prompt chunk, and writes one
+  timecoded row per cut, each compositionally different from its neighbours with a named exit transition, inside a
+  closed editing vocabulary. Sound is written with the rows (a named peak, a cold ending, SFX onsets aligned to the
+  cut), a remake measures the reference's cut times and audio onsets before any row is written, and a delegated
+  build is reviewed in numbered, measurable FIX rounds. The brief, rights and the short-promo one-scene rule still
+  apply.
 
 ## 4.0.8 - 2026-11-15
 

@@ -1,0 +1,21 @@
+--- a/app/metrics.py
++++ b/app/metrics.py
+@@ -7,6 +7,7 @@
+     def __init__(self) -> None:
+         self._lock = threading.Lock()
+         self._counts: dict[str, int] = {}
++        self._total = 0
+ 
+     def record(self, name: str, amount: int = 1) -> None:
+         with self._lock:
+@@ -24,5 +25,10 @@
+         with self._lock:
+             return sorted(self._counts)
+ 
++    def total(self) -> int:
++        with self._lock:
++            return self._total
++
+     def _bump(self, name: str, amount: int) -> None:
+         self._counts[name] = self._counts.get(name, 0) + amount
++        self._total += amount

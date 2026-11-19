@@ -2114,6 +2114,143 @@ _JEV_1_13: Final[dict[str, object]] = {
     "claim_boundary": MODEL_CONTRACT_CLAIM_BOUNDARY,
 }
 
+# Qwen4-Max (Alibaba QwenCloud / Model Studio, GA 2026-11-16), the first model
+# of the Qwen4 family and the successor to Qwen3.8-Max, which has no contract.
+# Read from the QwenCloud developer guides on 2026-11-19: the latest-model page
+# (limits, defaults, the per-API effort table), the thinking guide's "Qwen4-Max
+# thinking configuration" section, the pricing page, the Qwen4 explicit-cache
+# page, and the model change log.
+#
+# The effort shape is DeepSeek V4.1 Flash's: three documented rungs, and the
+# vendor publishes a mapping for every other rung instead of returning an
+# error, so nothing is raised on record and `unsupported_efforts` is empty.
+# `qwen4-max-preview` (Token Plan only, its own `low`/`medium`/`xhigh` ladder
+# with an `xhigh` default) is a different ladder and gets no contract here.
+_QWEN4_MAX: Final[dict[str, object]] = {
+    "schema_version": MODEL_CONTRACT_SCHEMA_VERSION,
+    "model_id": "qwen4-max",
+    "reasoning_mode": "thinking",
+    "service_tier": "standard",
+    "family": "qwen",
+    "generation": "qwen4",
+    "released": "2026-11-16",
+    "rollout": (
+        "generally available on pay-as-you-go and Token Plan from 2026-11-16 in Singapore "
+        "(International), Beijing, and the Global regions; `qwen4-max-preview` opened on "
+        "2026-11-11 on Token Plan only, with its own ladder and no per-token price; a released "
+        "id is not account-level readiness evidence"
+    ),
+    "served_ids": {
+        "first_party": "qwen4-max",
+        "openrouter": "qwen/qwen4-max",
+    },
+    "knowledge_cutoff": "",
+    # The window is 1M; the page lists the input ceiling per mode, and the
+    # output side differs by mode too: 131,072 without thinking, and thinking
+    # plus the final answer share 262,144. The field carries the thinking-mode
+    # input ceiling (the default mode) and the non-thinking answer cap, and
+    # the note says the rest.
+    "context_window_tokens": 1_000_000,
+    "max_input_tokens": 983_616,
+    "max_output_tokens": 131_072,
+    "limits_note": (
+        "1,000,000-token context; max input 983,616 with thinking (the default) and 991,808 "
+        "without; max output 131,072 without thinking, while thinking and the final answer share "
+        "262,144; the default thinking budget is 131,072"
+    ),
+    "reasoning_efforts": ("low", "high", "xhigh"),
+    "effort_floor": "low",
+    "effort_default": "high",
+    "unsupported_efforts": {},
+    "effort_mapping": {
+        "minimal": "low",
+        "medium": "high",
+        "max": "xhigh",
+        "note": (
+            "documented for Chat Completions and DashScope `reasoning_effort` and Responses "
+            "`reasoning.effort`; Anthropic Messages `output_config.effort` takes `low`, `high` "
+            "(default), and `xhigh`, maps `medium` to `high` and `max` to `xhigh`; no value returns "
+            "an error. Thinking is disabled by `none`, or by `enable_thinking=false` on Chat "
+            "Completions, not by a rung of the ladder. A "
+            "`thinking_budget` sent alone maps 1-4096 to `low`, 4097-131072 to `high`, and "
+            "131073-262144 to `xhigh`"
+        ),
+    },
+    "tool_calling": {
+        "api": "chat_completions",
+        "note": (
+            "function calling, parallel tool calls, structured output, and prefix completion are "
+            "served on Chat Completions, Responses, Anthropic Messages, and DashScope; "
+            "`preserve_thinking` is on by default, so every earlier assistant turn's thinking goes "
+            "back in its `reasoning_content` field and is never concatenated into `content`"
+        ),
+    },
+    "unsupported_parameters": (),
+    "runtime_mechanisms": {
+        "reasoning_content_passback": "documented_not_observed",
+        "encrypted_reasoning_passback": "documented_not_observed",
+        "reasoning_summaries": "documented_not_observed",
+        "explicit_prompt_cache": "documented_not_observed",
+        "native_image_input": "documented_not_observed",
+        "json_output": "documented_not_observed",
+    },
+    "surface_notes": {
+        "hermes": (
+            "Hermes Agent at 3b42157858 (and origin/main fe8b920cae) sends no `reasoning_effort` "
+            "on its DashScope profiles, so the model runs at its default `high` whatever effort is "
+            "asked; its `preserve_thinking` list names qwen3.6 to qwen3.8 but not qwen4, and its "
+            "context table reads `qwen4-max` through the 131,072-token `qwen` catch-all; observed "
+            "in the Hermes source, not a vendor statement"
+        ),
+        "codex": (
+            "the vendor's Codex page lists `qwen4-max` with `low`, `high`, `xhigh`, a `high` "
+            "default, a 1,000,000-token window, and `supports_parallel_tool_calls: false`"
+        ),
+        "claude_code": (
+            "the vendor's Claude Code page sets `ANTHROPIC_DEFAULT_OPUS_MODEL=qwen4-max`, keeps "
+            "`CLAUDE_CODE_MAX_CONTEXT_TOKENS` at 983,616, and suggests "
+            "`CLAUDE_CODE_MAX_OUTPUT_TOKENS=131072` when long output is cut off"
+        ),
+    },
+    "documented_traits": (
+        "hybrid thinking, on by default at `high`; the ladder is `low`, `high`, `xhigh`, and the "
+        "guide maps every other rung (`minimal` to `low`, `medium` to `high`, `max` to `xhigh`) "
+        "without an error, while `none` turns thinking off",
+        "`preserve_thinking` is on by default: in multi-turn and tool-call conversations every "
+        "earlier assistant turn's thinking is returned in `reasoning_content`, never in `content`",
+        "can return a readable thinking summary with the encrypted full thinking in its place; "
+        "the encrypted content is replayed unchanged to restore reasoning history",
+        "explicit and implicit prompt cache with `5m` and `1h` TTLs, billed at the model's own "
+        "cache rates; batch inference is not supported",
+        "input text, image, and video; output text",
+    ),
+    # QwenCloud list price, Singapore (International) deployment, "Non-thinking
+    # and thinking modes", one tier up to 1M input tokens (pricing page and the
+    # Qwen4 explicit-cache billing table, read 2026-11-19). Unlike Qwen3.8-Max,
+    # Qwen4-Max publishes its own cache rates.
+    "pricing_usd_per_mtok": {
+        "input": 1.50,
+        "cached_input": 0.075,
+        "cache_write_5m": 1.875,
+        "cache_write_1h": 3.00,
+        "output": 4.50,
+        "regional": (
+            "Beijing and the Global deployments bill input 1.413, output 4.24, cache write 1.767 "
+            "(5m) and 2.827 (1h), and cache read 0.071"
+        ),
+    },
+    "data_handling": _DATA_HANDLING_NOT_READ,
+    "sources": (
+        "https://docs.qwencloud.com/developer-guides/getting-started/latest-model",
+        "https://docs.qwencloud.com/developer-guides/text-generation/thinking",
+        "https://docs.qwencloud.com/developer-guides/getting-started/model-prices",
+        "https://docs.qwencloud.com/developer-guides/run-and-scale/explicit-cache-qwen4",
+        "https://docs.qwencloud.com/changelog/models",
+    ),
+    "sources_read": "2026-11-19",
+    "claim_boundary": MODEL_CONTRACT_CLAIM_BOUNDARY,
+}
+
 MODEL_CONTRACTS: Final[dict[str, Mapping[str, object]]] = {
     "gpt-6-astra": _GPT_6_ASTRA,
     "gpt-6-sol": _GPT_6_SOL,
@@ -2133,6 +2270,7 @@ MODEL_CONTRACTS: Final[dict[str, Mapping[str, object]]] = {
     "kimi-k3.1-pro-highspeed": _KIMI_K3_1_PRO_HIGHSPEED,
     "gemini-4-argon": _GEMINI_4_ARGON,
     "grok-4.7": _GROK_4_7,
+    "qwen4-max": _QWEN4_MAX,
     "jev-1.13.0": _JEV_1_13,
 }
 
@@ -2532,9 +2670,9 @@ def dynamic_effort_guidance(model_id: str, executor_profile: str) -> dict[str, o
 
 
 # Contracts that document turning thinking off without listing `none` as a
-# rung: Haiku 5.5's documented_traits and DeepSeek V4.1 Flash's
+# rung: Haiku 5.5's documented_traits, and DeepSeek V4.1 Flash's and Qwen4-Max's
 # effort_mapping.note. Named here rather than parsed out of English prose.
-_THINKING_DISABLE_WITHOUT_A_RUNG = frozenset({"claude-haiku-5-5", "deepseek-v4.1-flash"})
+_THINKING_DISABLE_WITHOUT_A_RUNG = frozenset({"claude-haiku-5-5", "deepseek-v4.1-flash", "qwen4-max"})
 
 
 def contract_effort_option(model_id: str) -> dict[str, object] | None:

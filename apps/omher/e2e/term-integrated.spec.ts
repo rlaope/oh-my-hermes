@@ -166,10 +166,11 @@ test.describe("the renderer, from Settings", () => {
     await settings(page);
     await expect(row.getByRole("radio")).toHaveText(["Auto", "On", "Off"]);
     await expect(row.getByRole("radio", { name: "Auto" })).toHaveAttribute("aria-checked", "true");
-    await expect(row).toContainText("Auto uses the standard renderer for now");
+    await expect(row).toContainText("Auto draws with the GPU where the hardware allows it");
     await expect(row).not.toContainText("In use now");
 
-    // Auto, the default: the standard renderer, and the GPU add-on is never fetched
+    // Auto, the default, on the test browser's software WebGL (SwiftShader): the standard renderer, and the GPU
+    // add-on is never fetched (on real hardware Auto draws with the GPU: engine-policy.test.ts)
     await page.getByTestId("bot-kami").click();
     await newTerminal(page);
     expect(await inUse(page)).toBe("standard");
@@ -203,8 +204,8 @@ test.describe("the renderer, from Settings", () => {
     expect(await canvases(page)).toBe(0);
   });
 
-  for (const platform of ["Win32", "Linux x86_64"]) {
-        test(`Auto stays on the standard renderer on ${platform} too, and never asks for a WebGL context to decide`, async ({ page }) => {
+  for (const platform of ["MacIntel", "Win32", "Linux x86_64"]) {
+    test(`Auto on ${platform} asks one WebGL2 context what the hardware is; on a software rasterizer it keeps the standard renderer`, async ({ page }) => {
       const requested: string[] = [];
       page.on("request", (r) => {
         if (/addon-webgl/.test(r.url())) requested.push(r.url());
@@ -221,10 +222,11 @@ test.describe("the renderer, from Settings", () => {
       }, platform);
       await openApp(page);
       await newTerminal(page);
+      // the test browser's WebGL is SwiftShader, software: the hardware rule says no on every platform
       expect(await inUse(page)).toBe("standard");
       expect(await canvases(page)).toBe(0);
       expect(requested).toEqual([]);
-      expect(await page.evaluate(() => (window as unknown as { __glAsked: number }).__glAsked)).toBe(0);
+      expect(await page.evaluate(() => (window as unknown as { __glAsked: number }).__glAsked)).toBe(1);
     });
   }
 });

@@ -1,0 +1,7 @@
+{
+  "id": "trap-shell-true-constant-command",
+  "kind": "trap",
+  "language": "python",
+  "expected": "clean",
+  "why": "shell=True is only dangerous with interpolated input; here the command is a fixed string literal with nothing from the caller, and a failed git call falls back to 'unknown' as before."
+}

@@ -254,6 +254,8 @@ export type RoutineAddedItem = {
 };
 /** A card for a plugin the bot installed from this chat (`plugin.added`). */
 export type PluginAddedItem = { kind: "pluginAdded"; id: string; ts: number; name: string; title: string; tools: number; hooks: number };
+/** omher set up its Slack briefing for this bot: one gray line, once per bot, with Turn off (the job's pause). */
+export type BriefNoticeItem = { kind: "briefNotice"; id: string; ts: number; bot: string };
 /** One quiet line from omher itself (e.g. "Switched to Claude #2 (limit on #1)"); never sent to the bot. */
 export type SystemItem = { kind: "system"; id: string; ts: number; text: string };
 /** "→ thread: <title>" under a main-chat answer: the bot opened `thread` (or the person sent a message there). */
@@ -280,6 +282,7 @@ export type ChatItem =
   | RoutineAddedItem
   | PluginAddedItem
   | SystemItem
+  | BriefNoticeItem
   | ThreadLinkItem
   | ThreadRouteItem;
 export type TimelineItem = ChatItem;
@@ -967,6 +970,24 @@ export function chatTarget(key: string): { bot: string; session?: string } {
   return { bot: rest.slice(0, at), session: rest.slice(at + 1) };
 }
 
+/** The bots whose "will brief you here" line was already shown (`localStorage["omher.briefNoticed"]`). */
+export function briefNoticed(): string[] {
+  try {
+    const raw = typeof localStorage !== "undefined" ? localStorage.getItem("omher.briefNoticed") : null;
+    const v = raw ? JSON.parse(raw) : [];
+    return Array.isArray(v) ? v.filter((x): x is string => typeof x === "string") : [];
+  } catch {
+    return [];
+  }
+}
+function saveBriefNoticed(bots: string[]): void {
+  try {
+    if (typeof localStorage !== "undefined") localStorage.setItem("omher.briefNoticed", JSON.stringify([...new Set(bots)]));
+  } catch {
+    /* storage is best effort */
+  }
+}
+
 function reduceEvent(state: AppState, ev: BridgeEvent, now: number): AppState {
   if (ev.session && ev.event !== "folder.closed") {
     if (ev.event === "bot.status") return state; // a folder chat's turn never moves the bot's own status
@@ -1150,6 +1171,13 @@ function reduceEvent(state: AppState, ev: BridgeEvent, now: number): AppState {
         origin: ev.origin,
       };
       return bumpUnread(touchChat(state, bot, (c) => withItems(c, [...c.items, item])), bot);
+    }
+    case "brief.ready": {
+      // once per bot on this computer: the line never comes back after it was shown
+      if (briefNoticed().includes(bot) || state.chats[bot]?.items.some((i) => i.kind === "briefNotice")) return state;
+      saveBriefNoticed([...briefNoticed(), bot]);
+      const item: BriefNoticeItem = { kind: "briefNotice", id: `brief-notice-${bot}`, ts: now / 1000, bot };
+      return touchChat(state, bot, (c) => withItems(c, [...c.items, item]));
     }
     case "plugin.added": {
       const id = `plugin-added-${ev.name}-${ev.ts}`;
@@ -2295,7 +2323,8 @@ export function createStore(bridge: BridgeLike, opts: StoreOptions = {}): Store 
         if (ev.event === "turn.end" && lastUserReplied(state, ev.bot)) void loadElsewhere(ev.bot);
         if (ev.event === "routine.ran") void loadRoutines(ev.bot);
         if (ev.event === "message" && ev.watch && !ev.session && ev.bot === state.selectedBot) markWatchSeen(ev.bot);
-        if (ev.event === "routine.ran" || ev.event === "routines.update" || ev.event === "routine.added") void loadAutomations();
+        if (ev.event === "routine.ran" || ev.event === "routines.update" || ev.event === "routine.added" || ev.event === "brief.ready")
+          void loadAutomations();
         if (ev.event === "bots.update") void reloadBots();
         const tev = threadEvent(ev);
         if (tev) {

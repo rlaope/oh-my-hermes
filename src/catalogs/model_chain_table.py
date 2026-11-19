@@ -98,6 +98,7 @@ MODEL_DISPLAY_LABELS: Final[dict[str, str]] = {
     "kimi-k3.1-pro": "Kimi K3.1 Pro",
     "kimi-k3.1-pro-highspeed": "Kimi K3.1 Pro Highspeed",
     "qwen3-coder": "Qwen3-Coder",
+    "qwen4-max": "Qwen4-Max",
 }
 
 # One editorial phrase per chain surface, keyed by the row id built below.

@@ -1,0 +1,7 @@
+{
+  "id": "trap-index-guarded-above",
+  "kind": "trap",
+  "language": "python",
+  "expected": "clean",
+  "why": "events[index + 1] looks unchecked, but the guard two lines above returns None unless 0 <= index < len(events) - 1, so index + 1 is always a valid position. The change only replaces a one-element slice with a direct index; behaviour is identical."
+}
