@@ -49,6 +49,9 @@ export interface TermSettings {
   /** Pictures a program prints (sixel, iTerm2's OSC 1337, Kitty graphics) are drawn in the terminal. Off: they are
    *  dropped, as before. */
   images: boolean;
+  /** A paste with more than one line asks first, unless the program turned on bracketed paste (it then takes the
+   *  text as one paste and runs none of it by itself). On by default, as in Otty. */
+  confirmPaste: boolean;
 }
 
 export const TERM_KEY = "omher.term";
@@ -70,6 +73,7 @@ export const TERM_DEFAULTS: TermSettings = {
   rightClickPaste: false,
   kittyKeys: true,
   images: true,
+  confirmPaste: true,
 };
 
 const num = (v: unknown, lo: number, hi: number, d: number) => (typeof v === "number" && Number.isFinite(v) ? Math.min(hi, Math.max(lo, v)) : d);
@@ -109,6 +113,7 @@ export function parseTermSettings(raw: unknown): TermSettings {
     rightClickPaste: bool(o.rightClickPaste, d.rightClickPaste),
     kittyKeys: bool(o.kittyKeys, d.kittyKeys),
     images: bool(o.images, d.images),
+    confirmPaste: bool(o.confirmPaste, d.confirmPaste),
   };
 }
 

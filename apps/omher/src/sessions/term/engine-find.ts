@@ -14,6 +14,9 @@
 //
 // The selection is find's only while it is the active match. A person can click in the terminal or select other
 // text with find open; that selection (or none) is theirs, and neither a restyle nor closing find takes it.
+//
+// Two options go with every search: Match case and Regular expression. A pattern the add-on could not compile finds
+// nothing (the bar shows the field in an error state); it is never handed to the add-on, which would throw.
 import type { IBufferRange, IDecoration, IDisposable, IMarker, Terminal } from "@xterm/xterm";
 import type { SearchAddon } from "@xterm/addon-search";
 import { findColors, type FindColors } from "./find-colors";
@@ -28,6 +31,23 @@ export interface FindRequest {
 /** The add-on stops counting here; the bar then says "more than". */
 export const FIND_LIMIT = 2000;
 
+/** How a text is matched: letter case counts, and the text is a regular expression. */
+export interface FindOptions {
+  caseSensitive: boolean;
+  regex: boolean;
+}
+export const FIND_PLAIN: FindOptions = { caseSensitive: false, regex: false };
+
+/** Does `text` compile as the add-on compiles it (`RegExp(text, "g")`, no `u` flag)? */
+export function validPattern(text: string): boolean {
+  try {
+    RegExp(text, "g");
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 export interface FindResults {
   /** 0-based position of the active match, -1 when none is active */
   index: number;
@@ -38,7 +58,7 @@ export interface FindResults {
 
 export interface Finder {
   /** Look for `text`: from the current spot for typing (`incremental`), or one match on for Enter / Shift+Enter. */
-  search(text: string, direction: "next" | "previous", incremental?: boolean): void;
+  search(text: string, direction: "next" | "previous", incremental?: boolean, options?: FindOptions): void;
   /** Drop the highlights and the selection that find made. */
   clear(): void;
   /** The terminal's theme may have changed: the matches and the active one take its colours, where they are. */
@@ -156,8 +176,12 @@ export function makeFinder(term: Terminal): Finder {
   };
   /** The colours in use, so a result the add-on finds again by itself (new output, a resize) is marked the same. */
   let colors: FindColors | null = null;
-  /** What is being looked for ("" when nothing is). */
+  /** What is being looked for ("" when nothing is), and how. */
   let wanted = "";
+  let how: FindOptions = FIND_PLAIN;
+  /** the options the add-on last searched with */
+  let searched: FindOptions | null = null;
+  const same = (a: FindOptions, b: FindOptions) => a.caseSensitive === b.caseSensitive && a.regex === b.regex;
 
   const ready = (): Promise<SearchAddon | null> =>
     (loading ??= loadSearch().then(
@@ -179,9 +203,10 @@ export function makeFinder(term: Terminal): Finder {
       () => null,
     ));
 
-  const run = (text: string, direction: "next" | "previous", incremental: boolean) => {
+  const run = (text: string, direction: "next" | "previous", incremental = false, options: FindOptions = FIND_PLAIN) => {
     wanted = text;
-    if (!text) {
+    how = { caseSensitive: options.caseSensitive, regex: options.regex };
+    if (!text || (how.regex && !validPattern(text))) {
       const own = selectionIsFinds();
       unmark();
       addon?.clearDecorations();
@@ -191,9 +216,13 @@ export function makeFinder(term: Terminal): Finder {
     }
     void ready().then((a) => {
       // closed, or looking for something else by now (the add-on's chunk loads on the first search)
-      if (!a || gone || wanted !== text) return;
+      if (!a || gone || wanted !== text || !same(how, options)) return;
       colors = findColors(term.options.theme ?? {});
-      const opts = { incremental, decorations: colors };
+      // the add-on stores the new options before it compares them with the last ones, so a change of option alone
+      // would keep the old matches: dropping its cached text makes it find them all again
+      if (searched && !same(searched, how)) a.clearDecorations();
+      searched = how;
+      const opts = { ...how, incremental, decorations: colors };
       const found = direction === "next" ? a.findNext(text, opts) : a.findPrevious(text, opts);
       // nothing matched: the add-on fires no event then
       if (!found) {
@@ -232,7 +261,7 @@ export function makeFinder(term: Terminal): Finder {
       const m = matchNow();
       a.clearDecorations();
       if (m) term.select(m.x, m.y, m.length);
-      if (!a.findNext(wanted, { incremental: true, decorations: colors })) {
+      if (!a.findNext(wanted, { ...how, incremental: true, decorations: colors })) {
         unmark();
         emit({ index: -1, count: 0, capped: false });
       }
