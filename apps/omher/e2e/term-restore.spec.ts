@@ -1,7 +1,8 @@
 // TERMINALS restore (mock host): a Claude Code terminal starts under an id omher made (`--session-id`), and after
 // omher restarts (a reload with the same storage; the mock host starts empty, as the shell does) it continues that
-// conversation (`--resume <same id>`) in the same folder, once; a Codex terminal asks the shell for its conversation id
-// after 5 s and continues it (`codex resume <id>`) the same way; an agent without its own conversation comes back
+// conversation (`--resume <same id>`) in the same folder, once; a Codex terminal asks the shell which conversation its
+// own Codex holds open (5 s after it starts, then every 15 s) and continues it (`codex resume <id>`) the same way; no
+// other terminal's conversation ever comes to it, whatever order Codex writes in or rows close or exit; an agent without its own conversation comes back
 // paused as before. Each terminal's scrollback is kept by the shell (`history.*` calls; the mock keeps it in this
 // page's storage) and written back, dimmed, under a "--- restored <time> ---" line before the new output; closing
 // removes it; Settings > Terminal turns it off. The bottom panel's tabs come back with their folders and scrollback.
@@ -88,111 +89,161 @@ test("a Claude Code terminal starts under an id omher made and continues it afte
   await expect.poll(() => starts(page)).toEqual([expect.objectContaining({ agent: "claude", resume: conv })]);
 });
 
-test("a Codex terminal learns its conversation id from the shell and continues it after a restart", async ({ page }) => {
-  const THREAD = "01a1f29c-c5b1-7301-a199-2dd07ff4b024";
-  await page.addInitScript((thread) => {
-    (window as unknown as { __omherMockCodexLatest?: string }).__omherMockCodexLatest = thread;
-  }, THREAD);
+const A = "01a1f29c-c5b1-7301-a199-2dd07ff4b024";
+const B = "01a1f29c-c5b1-7301-a199-2dd07ff4b025";
+const C = "01a1f29c-c5b1-7301-a199-2dd07ff4b026";
+const ptyOf = (page: Page, id: string) => page.evaluate((i) => (window as unknown as { __omherSessions: { ptyOf(id: string): number | null } }).__omherSessions.ptyOf(i), id);
+/** The Codex now running in session `id`'s terminal holds conversation `conv`'s rollout open, as a real one does once
+ *  it answered its first prompt. */
+async function holds(page: Page, id: string, conv: string) {
+  const pty = await ptyOf(page, id);
+  expect(pty).not.toBeNull();
+  await page.evaluate(([p, c]) => void (((window as unknown as { __omherMockCodexOwn?: Record<number, string> }).__omherMockCodexOwn ??= {})[p as number] = c as string), [pty, conv] as const);
+}
+/** What the page asked the shell about its Codex terminals' conversations. */
+const asks = (page: Page) => page.evaluate(() => ((window as unknown as { __omherPastReads?: { op: string; pty?: number }[] }).__omherPastReads ?? []).filter((r) => r.op === "own"));
+const conv = async (page: Page, id: string) => (await saved(page))?.sessions?.find((s: { id: string }) => s.id === id)?.agentSession;
+async function closeRow(page: Page, id: string) {
+  const card = page.getByTestId(`session-${id}`);
+  await card.hover();
+  await card.getByTestId("session-close").click();
+  await page.getByTestId(`session-confirm-${id}`).getByTestId("session-stop").click();
+  await expect(card).toHaveCount(0);
+}
+
+test("a Codex terminal learns its conversation from its own Codex and continues it after a restart", async ({ page }) => {
   await open(page);
-  const t0 = Date.now() / 1000;
   const id = await newTerm(page, "codex");
   const first = await starts(page);
   expect(first).toEqual([expect.objectContaining({ agent: "codex", cwd: FOLDER })]);
   expect(first[0].resume).toBeUndefined();
   expect(first[0].sessionId).toBeUndefined();
-  // after the program has run 5 s the page asks for the newest Codex conversation in its folder started since then
-  await expect.poll(async () => (await saved(page))?.sessions?.find((s: { id: string }) => s.id === id)?.agentSession, { timeout: 15_000 }).toBe(THREAD);
-  const reads = await page.evaluate(() => (window as unknown as { __omherPastReads?: { op: string; cwd?: string; since?: number }[] }).__omherPastReads ?? []);
-  const latest = reads.filter((r) => r.op === "latest");
-  expect(latest).toHaveLength(1);
-  expect(latest[0].cwd).toBe(FOLDER);
-  expect(latest[0].since!).toBeGreaterThanOrEqual(Math.floor(t0) - 2);
-  expect(latest[0].since!).toBeLessThanOrEqual(Date.now() / 1000);
+  // its Codex answers the first prompt and holds its rollout open; 5 s after the start the page asks the shell
+  await holds(page, id, A);
+  await expect.poll(() => conv(page, id), { timeout: 15_000 }).toBe(A);
+  // the ask named only this terminal's pty, and asking stopped once it was answered
+  const pty = await ptyOf(page, id);
+  await page.waitForTimeout(300);
+  expect(await asks(page)).toEqual([{ op: "own", agent: "codex", pty }]);
 
   await page.reload();
   await expect(page.getByTestId(`session-${id}`)).toBeVisible();
-  // it starts by itself as `codex resume <id>` in the same folder, and asks for no id again
-  await expect.poll(() => starts(page)).toEqual([expect.objectContaining({ agent: "codex", cwd: FOLDER, resume: THREAD })]);
+  // it starts by itself as `codex resume <id>` in the same folder, and asks for nothing again
+  await expect.poll(() => starts(page)).toEqual([expect.objectContaining({ agent: "codex", cwd: FOLDER, resume: A })]);
   await page.waitForTimeout(6_000);
-  const again = await page.evaluate(() => ((window as unknown as { __omherPastReads?: { op: string }[] }).__omherPastReads ?? []).filter((r) => r.op === "latest"));
-  expect(again).toEqual([]);
+  expect(await asks(page)).toEqual([]);
 });
 
-test("two Codex terminals started in one folder each keep their own conversation and continue it after a restart", async ({ page }) => {
-  const A = "01a1f29c-c5b1-7301-a199-2dd07ff4b024";
-  const B = "01a1f29c-c5b1-7301-a199-2dd07ff4b025";
-  const next = (thread: string) => page.evaluate((v) => void ((window as unknown as { __omherMockCodexLatest?: string }).__omherMockCodexLatest = v), thread);
-  const agentSession = async (id: string) => (await saved(page))?.sessions?.find((s: { id: string }) => s.id === id)?.agentSession;
+test("two Codex terminals in one folder each learn only their own conversation, whichever Codex writes first", async ({ page }) => {
+  test.setTimeout(60_000);
   await open(page);
-  // each mock Codex writes its own rollout as it starts, A first, then B, in the same folder within a second
-  await next(A);
   const a = await newTerm(page, "codex");
-  await next(B);
   const b = await newTerm(page, "codex");
-  await expect.poll(() => agentSession(b), { timeout: 15_000 }).toBe(B);
-  expect(await agentSession(a)).toBe(A);
-  // the second lookup told the shell which id the first row already holds
-  const reads = await page.evaluate(() => ((window as unknown as { __omherPastReads?: { op: string; held?: string[] }[] }).__omherPastReads ?? []).filter((r) => r.op === "latest"));
-  expect(reads.map((r) => r.held)).toEqual([[], [A]]);
+  // the second terminal's Codex answers first; the first one's has no rollout yet when both ask
+  await holds(page, b, B);
+  await expect.poll(() => conv(page, b), { timeout: 15_000 }).toBe(B);
+  await expect.poll(async () => (await asks(page)).length, { timeout: 15_000 }).toBeGreaterThanOrEqual(2);
+  await flush(page);
+  expect(await conv(page, a)).toBeUndefined();
+  // then the first one's writes its own: it learns that one at its next ask, never the other's
+  await holds(page, a, A);
+  await expect.poll(() => conv(page, a), { timeout: 20_000 }).toBe(A);
+  expect(await conv(page, b)).toBe(B);
+  // each ask named one of the two terminals' own ptys, nothing else
+  const ptys = [await ptyOf(page, a), await ptyOf(page, b)];
+  expect([...new Set((await asks(page)).map((r) => r.pty))].sort()).toEqual([...ptys].sort());
   await page.reload();
   await expect.poll(async () => (await starts(page)).length).toBe(2);
   expect((await starts(page)).map((c) => c.resume).sort()).toEqual([A, B]);
+  expect([await conv(page, a), await conv(page, b)]).toEqual([A, B]);
 });
 
-test("two Codex terminals in one folder whose second writes its conversation first never swap conversations", async ({ page }) => {
-  const A = "01a1f29c-c5b1-7301-a199-2dd07ff4b024";
-  const B = "01a1f29c-c5b1-7301-a199-2dd07ff4b025";
-  type Rollout = { id: string; cwd: string; at: number };
-  const rollout = (r: { id: string; cwd: string }) =>
-    page.evaluate((x) => void ((window as unknown as { __omherMockCodexRollouts?: Rollout[] }).__omherMockCodexRollouts ??= []).push({ ...x, at: Date.now() }), r);
-  const latest = () =>
-    page.evaluate(() => ((window as unknown as { __omherPastReads?: { op: string; others?: number[] }[] }).__omherPastReads ?? []).filter((r) => r.op === "latest"));
-  const agentSession = async (id: string) => (await saved(page))?.sessions?.find((s: { id: string }) => s.id === id)?.agentSession;
+test("closing one of two Codex terminals in a folder never hands its conversation to the other", async ({ page }) => {
+  test.setTimeout(60_000);
   await open(page);
-  // both started before either conversation was written; Codex writes the second terminal's rollout first
   const a = await newTerm(page, "codex");
   const b = await newTerm(page, "codex");
-  await rollout({ id: B, cwd: FOLDER });
-  await expect.poll(async () => (await latest()).length, { timeout: 15_000 }).toBeGreaterThanOrEqual(2);
-  await rollout({ id: A, cwd: FOLDER });
-  // each lookup named the other terminal as one that could own the conversation, and so neither took one
-  expect((await latest()).map((r) => r.others?.length)).toEqual([1, 1]);
-  expect([await agentSession(a), await agentSession(b)]).toEqual([undefined, undefined]);
-  // after a restart neither continues the other's conversation: both come back paused, as before
+  // the second one's Codex wrote its conversation, and that terminal is closed before it asked
+  await holds(page, b, B);
+  const closedPty = await ptyOf(page, b);
+  await closeRow(page, b);
+  await expect.poll(async () => (await asks(page)).length, { timeout: 15_000 }).toBeGreaterThanOrEqual(1);
+  await flush(page);
+  expect(await conv(page, a)).toBeUndefined();
+  // the one left learns its own once its Codex writes it
+  await holds(page, a, A);
+  await expect.poll(() => conv(page, a), { timeout: 20_000 }).toBe(A);
+  expect((await asks(page)).map((r) => r.pty)).not.toContain(closedPty);
+  await page.reload();
+  await expect.poll(() => starts(page)).toEqual([expect.objectContaining({ agent: "codex", resume: A })]);
+});
+
+test("a Codex that exits to the shell gives its conversation to no other terminal, and its shell row is not resumed", async ({ page }) => {
+  await open(page);
+  const a = await newTerm(page, "codex");
+  const b = await newTerm(page, "codex");
+  // the second one's Codex wrote its conversation, then ends (/exit) before it asked: its row goes on as its shell
+  await holds(page, b, B);
+  const codexPty = await ptyOf(page, b);
+  await page.evaluate(async (p) => {
+    const m = await import("/src/sessions/host.ts" as string);
+    await m.getHost().write(p, "/exit\r");
+  }, codexPty);
+  await expect.poll(async () => (await saved(page))?.sessions?.find((s: { id: string }) => s.id === b)?.agent).toBe("shell");
+  await expect.poll(() => ptyOf(page, b)).not.toBe(codexPty);
+  // the person types codex in that shell: the row shows Codex, but it is a shell row and asks nothing
+  const shellPty = await ptyOf(page, b);
+  await page.evaluate((p) => (window as unknown as { __omherEmitSessionFg(x: { id: number; agent: string }): void }).__omherEmitSessionFg({ id: p!, agent: "codex" }), shellPty);
+  await expect(page.getByTestId(`session-${b}`).getByTestId("term-row-mark")).toHaveAttribute("data-agent", "codex");
+  // the first one asks after 5 s: its Codex holds nothing yet, so it learns nothing, and never the other's
+  await expect.poll(async () => (await asks(page)).length, { timeout: 15_000 }).toBeGreaterThanOrEqual(1);
+  await flush(page);
+  expect([await conv(page, a), await conv(page, b)]).toEqual([undefined, undefined]);
+  expect((await asks(page)).map((r) => r.pty)).toEqual([await ptyOf(page, a)]);
+  // after a restart neither continues anything: both come back paused
   await page.reload();
   await expect(page.getByTestId(`session-${a}`)).toBeVisible();
   await page.waitForTimeout(300);
   expect(await starts(page)).toEqual([]);
 });
 
-test("closing one of two Codex terminals in a folder does not hand its conversation to the other", async ({ page }) => {
-  // the next lookup comes 30 s after the last one
-  test.setTimeout(90_000);
-  const B = "01a1f29c-c5b1-7301-a199-2dd07ff4b025";
-  type Rollout = { id: string; cwd: string; at: number };
-  const latest = () =>
-    page.evaluate(() => ((window as unknown as { __omherPastReads?: { op: string }[] }).__omherPastReads ?? []).filter((r) => r.op === "latest"));
-  const agentSession = async (id: string) => (await saved(page))?.sessions?.find((s: { id: string }) => s.id === id)?.agentSession;
+test("a Codex terminal started after another closed in its folder learns its own conversation", async ({ page }) => {
+  await open(page);
+  // the first one never wrote a conversation and is closed
+  const first = await newTerm(page, "codex");
+  await closeRow(page, first);
+  const second = await newTerm(page, "codex");
+  expect(second).not.toBe(first);
+  await holds(page, second, B);
+  await expect.poll(() => conv(page, second), { timeout: 15_000 }).toBe(B);
+  await page.reload();
+  await expect.poll(() => starts(page)).toEqual([expect.objectContaining({ agent: "codex", resume: B })]);
+});
+
+test("Resume right after a restart learns only the new Codex's own conversation", async ({ page }) => {
+  test.setTimeout(60_000);
   await open(page);
   const a = await newTerm(page, "codex");
   const b = await newTerm(page, "codex");
-  // one conversation was written while both ran: it may be either one's, so neither takes it
-  await page.evaluate((x) => void ((window as unknown as { __omherMockCodexRollouts?: Rollout[] }).__omherMockCodexRollouts ??= []).push({ ...x, at: Date.now() }), { id: B, cwd: FOLDER });
-  await expect.poll(async () => (await latest()).length, { timeout: 15_000 }).toBeGreaterThanOrEqual(2);
-  expect([await agentSession(a), await agentSession(b)]).toEqual([undefined, undefined]);
-  // the second one is closed; its conversation stays unclaimed: the one left still could not tell it is its own
-  const closing = page.getByTestId(`session-${b}`);
-  await closing.hover();
-  await closing.getByTestId("session-close").click();
-  await page.getByTestId(`session-confirm-${b}`).getByTestId("session-stop").click();
-  await expect(closing).toHaveCount(0);
-  await expect.poll(async () => (await latest()).length, { timeout: 40_000 }).toBeGreaterThanOrEqual(3);
-  await page.evaluate(() => window.dispatchEvent(new Event("pagehide")));
-  expect(await agentSession(a)).toBeUndefined();
+  // the second one's Codex wrote a conversation and was closed; the first never learned one
+  await holds(page, b, B);
+  await closeRow(page, b);
+  await flush(page);
+  expect(await conv(page, a)).toBeUndefined();
   await page.reload();
-  await expect(page.getByTestId(`session-${a}`)).toBeVisible();
-  await page.waitForTimeout(300);
-  expect((await starts(page)).map((c) => c.resume)).not.toContain(B);
+  await page.getByTestId(`session-${a}`).locator(".ss-open").click();
+  await expect(page.getByTestId("session-paused")).toBeVisible();
+  expect(await starts(page)).toEqual([]);
+  // Resume at once: a new Codex, which holds nothing until it answers, so nothing is learned
+  await page.getByTestId("session-resume").click();
+  await expect.poll(() => starts(page)).toEqual([expect.objectContaining({ agent: "codex" })]);
+  expect((await starts(page))[0].resume).toBeUndefined();
+  await expect.poll(async () => (await asks(page)).length, { timeout: 15_000 }).toBe(1);
+  await flush(page);
+  expect(await conv(page, a)).toBeUndefined();
+  // once it answers, its own conversation is the one kept
+  await holds(page, a, C);
+  await expect.poll(() => conv(page, a), { timeout: 20_000 }).toBe(C);
 });
 
 test("an agent with no conversation of its own (Grok) still comes back paused and starts only on Resume", async ({ page }) => {
