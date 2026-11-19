@@ -92,10 +92,14 @@ class CarryForwardTests(unittest.TestCase):
             own = str(dag_run.handoff_path(home.omh, PARENT, "feat2", "verify"))
         task = again["calls"][0]["tasks"][0]["context"]
         read_first = next(line for line in task.splitlines() if line.startswith("Read first:"))
+        # Compare resolved paths: on Windows the temp root can arrive as an 8.3 short name
+        # (RUNNER~1) on one side and the long name on the other.
+        listed = {os.path.normcase(os.path.realpath(part.strip().rstrip(".")))
+                  for part in read_first.split(":", 1)[1].split(". ", 1)[0].split(",")}
         for path in earlier.values():
-            self.assertIn(path, read_first)
+            self.assertIn(os.path.normcase(os.path.realpath(path)), listed)
         self.assertNotIn("/feat2/api.md", read_first)
-        self.assertIn(own, task)  # the verify node writes its own handoff in the new run
+        self.assertIn(os.path.normcase(os.path.realpath(own)), os.path.normcase(task))  # verify writes its own handoff
         self.assertIn("Carried from run feat1 without running again: api, ui, docs.", task)
         self.assertEqual({item["id"]: os.path.realpath(item["handoff"]) for item in again["carry_forward"]["carried"]},
                          {key: os.path.realpath(path) for key, path in earlier.items()})
