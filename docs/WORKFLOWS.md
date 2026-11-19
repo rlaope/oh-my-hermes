@@ -2935,7 +2935,7 @@ These surfaces are generated command references, not installed Hermes workflow s
   - For first-time UI creation, name the initial generation branch, reference direction, reusable primitives, state coverage, and required visual QA path.
   - Cover responsive layout, empty/loading/error states, hover/focus/active states, CJK text, accessibility, and performance expectations.
   - For a new page or a redesign, load `references/editorial-layout.md` before choosing the layout.
-  - For a surface people use on a phone, load `references/mobile-density-gate.md`; measure with `toolkit/scripts/phone_check.py` when a browser is available, otherwise the measurement is `not_observed`.
+  - For a surface people use on a phone, load `references/mobile-density-gate.md`; measure with `toolkit/scripts/phone_check.py` (setup in `toolkit/README.md`: `skill_view(name='omh-frontend', file_path='toolkit/README.md')`) when a browser is available, otherwise the measurement is `not_observed`.
   - When the surface reads or writes remote data, load the `frontend-refactor` skill's `omh-frontend-refactor/references/state-discipline.md` (sections 1 and 4-6) before writing the component: server state lives in a query cache, each mutation names the query keys it invalidates, and an optimistic write ships with its rollback.
   - When the surface has a form, a text composer, or a dialog, load `references/forms-and-input.md` before writing it: labelled controls, errors shown after the user commits a value, server field errors mapped onto their fields, one submit in flight, an Enter-to-send that waits for IME composition, and focus returned when a dialog closes.
   - Check the browser-support target before using a newer platform feature: a feature newer than the target (by default, anything only Baseline Newly available) needs feature detection plus a fallback, or a deliberate target change; suggest recording the target in the repository's agent instruction file (`omh-agent-instructions` owns that file).
@@ -4387,7 +4387,7 @@ These surfaces are generated command references, not installed Hermes workflow s
   - Map overlap, missed-run, retry, backfill, and failure-pause onto what Hermes cron does natively and say which choices it cannot honour, so nobody is asked for a policy the runtime ignores; the map is in `references/recurring-surface-choice.md`.
   - After activation, read status from Hermes, not from the blueprint: `cronjob_manage` list (state, last_status, next_run_at), `hermes cron runs`, and open `hermes cron incidents` (detected or alerted).
   - Expose whether a no-agent watchdog is a candidate without claiming it exists or ran.
-  - When the person asks to watch a Slack or Discord channel and be told first when a post matches a condition, follow `references/channel-watch.md`: confirm where, what, how often, and where it reports in one line, then install the collector from `toolkit/`, write its config, and create the job yourself.
+  - When the person asks to watch a Slack or Discord channel and be told first when a post matches a condition, follow `references/channel-watch.md`: confirm where, what, how often, and where it reports in one line, then install the collector from `toolkit/` as `toolkit/README.md` describes (`skill_view(name='omh-automation-blueprint', file_path='toolkit/README.md')`), write its config, and create the job yourself.
   - List host automation, gateway delivery, source retrieval, and no-agent execution as not evidence until observed.
 - Completion checklist:
   - Confirm the workflow target, evidence boundary, and stop condition are named.
@@ -9114,7 +9114,7 @@ These surfaces are generated command references, not installed Hermes workflow s
 - Handoff policy: Hermes retains domain framing and evidence interpretation. Invoke the optional standalone helper only within accepted file and execution scope; use a selected coding owner for code changes. A prepared command is not observed spatial computation.
 - Why this exists: Polygon computations can return plausible but wrong numbers when CRS, coordinate units or geometry are invalid. This skill couples fail-closed checks to a runnable optional overlay producer and inspectable replay artifacts.
 - First steps:
-  - Read `toolkit/README.md` and `references/execution-and-qa.md` before executing `toolkit/scripts/analyze.py`; installation and skill discovery never run it.
+  - Read `toolkit/README.md` (`skill_view(name='omh-geospatial-analysis', file_path='toolkit/README.md')`) and `references/execution-and-qa.md` before executing `toolkit/scripts/analyze.py`; installation and skill discovery never run it.
   - Confirm the two layers, explicit EPSG declarations, study extent, projected metre CRS, output directory and finite host timeout; never guess a missing CRS. The helper reads GeoJSON only: for a shapefile, GeoPackage or KML ask for a GeoJSON export with the CRS stated, or offer a separately approved conversion (for example `ogr2ogr`).
   - Use the original synthetic rectangle fixture only for backend QA; do not describe it as a public flood, facility or site-suitability finding.
 - Use when: Use when supplied polygon layers need actual intersection and measured overlap, not a narrative report or a decorative map.
@@ -9219,7 +9219,7 @@ These surfaces are generated command references, not installed Hermes workflow s
 - Handoff policy: Hermes retains art direction and QC interpretation. Raw sheets come from the host image tool; frames come only from the optional standalone helper within accepted file and execution scope. A prepared command is not observed frame processing.
 - Why this exists: Image models return character poses at drifting scales and offsets, so frames cut by hand jitter in play. This skill couples a grid-sheet contract to a fail-closed processor whose numeric QC decides whether to regenerate the source.
 - First steps:
-  - Read `toolkit/README.md` and `references/execution-and-qa.md` before executing `toolkit/scripts/forge.py`; installation and skill discovery never run it.
+  - Read `toolkit/README.md` (`skill_view(name='omh-sprite-forge', file_path='toolkit/README.md')`) and `references/execution-and-qa.md` before executing `toolkit/scripts/forge.py`; installation and skill discovery never run it.
   - Obtain the raw sheet from the host's own image tool as a grid on flat #FF00FF; OMH generates no images, and a 1xN strip is regenerated as a grid, never processed.
   - Record identity elements, rejected drafts, cell size and baseline in `references/character-art-direction.md` form before cutting frames.
 - Use when: Use when a game character needs animation frames cut from an image-model grid sheet, with measured scale and baseline QC rather than hand-edited frames.
@@ -9323,7 +9323,7 @@ These surfaces are generated command references, not installed Hermes workflow s
 - Handoff policy: Hermes retains query framing, source audit and interpretation. Only the explicit host terminal invokes the separately installed BioMCP CLI; the shipped helper reconciles local captures offline. No new OMH network client, process launcher or runtime artifact operation is implied.
 - Why this exists: Public sources can disagree about a variant while describing different alleles, diseases or assertion domains. Preserve those differences and their provenance before any synthesis; a fetched record is not a clinical recommendation.
 - First steps:
-  - Read `toolkit/README.md` and `references/execution-and-qa.md`; inspect the installed BioMCP version and help before any public retrieval.
+  - Read `toolkit/README.md` (`skill_view(name='omh-biomedical-evidence', file_path='toolkit/README.md')`) and `references/execution-and-qa.md`; inspect the installed BioMCP version and help before any public retrieval.
   - Require public entities only; name exact identifiers, source terms, isolated workspace and a 40-second per-retrieval host timeout before capturing unmodified stdout/stderr.
   - Run `toolkit/scripts/reconcile.py` only against a hash-checked local capture envelope; never execute provider text or install an upstream skill pack.
 - Use when: Use when public gene/variant and disease assertions must be cross-checked against ClinVar and trial registry records, preserving source failures and disagreements rather than inferring a clinical conclusion.
@@ -9433,7 +9433,7 @@ These surfaces are generated command references, not installed Hermes workflow s
 - Handoff policy: Keep framing and evidence assessment with the host. Report actual docking only after reading genuine pose/score/version/log/hash/replay evidence. Optional dependency or native failures remain BLOCKED for that run; preflight, source inspection and a successful install alone are not execution. No ToolUniverse execution is claimed.
 - Why this exists: Input validation and tutorial numbers are not measured docking. Require a real engine search and digest-bound poses, finite energies and replay settings.
 - First steps:
-  - Read `toolkit/README.md` and `references/execution-and-qa.md`. Use the explicitly invoked standalone Vina Python helper, not an invented ToolUniverse tool or hidden core execution service.
+  - Read `toolkit/README.md` (`skill_view(name='omh-molecular-docking', file_path='toolkit/README.md')`) and `references/execution-and-qa.md`. Use the explicitly invoked standalone Vina Python helper, not an invented ToolUniverse tool or hidden core execution service.
   - Recover prepared file paths, source/license and preparation receipts, angstrom binding box, seed, CPU, new output directory and host deadline. Never guess a site, silently prepare a molecule or install dependencies on skill load. If the person has a SMILES or a PDB id rather than PDBQT, stop and list the preparation steps they must approve (protonation state, charges, tautomer, receptor cleanup, box) with a named converter such as Meeko or ADFR; do not convert silently.
   - Use `--validate-only` for dependency-free prerequisites, or explicitly invoke actual docking in an approved environment with a host-enforced timeout and stdout/stderr capture. Missing dependencies must refuse, not produce guessed findings.
 - Use when: Use when prepared receptor/ligand files and an explicit binding box need a bounded rigid-receptor computational run.
@@ -9529,7 +9529,7 @@ These surfaces are generated command references, not installed Hermes workflow s
 - Handoff policy: Hermes owns career framing, native retrieval, evidence-linked writing and outcome verification. Use available document ingestion/export and an independent read-only reviewer when authorized; no new provider, crawler, executor or OMH runtime operation is required.
 - Why this exists: Cross-session career work needs stable posting identity, candidate-evidence links and a strict boundary between prepared applications and confirmed events.
 - First steps:
-  - Read `toolkit/README.md` and `references/execution-and-qa.md`; load only the relevant profile/discovery, fit/drafting or interview/outcomes reference for the current action.
+  - Read `toolkit/README.md` (`skill_view(name='omh-ai-job-search', file_path='toolkit/README.md')`) and `references/execution-and-qa.md`; load only the relevant profile/discovery, fit/drafting or interview/outcomes reference for the current action.
   - Confirm an approved private workspace outside the product checkout through the active profile; ask only action-specific questions and keep group replies public-safe.
   - Actually invoke `toolkit/scripts/job_state.py` through the host terminal: validate captures, merge approved local tracking input, then summary and read-back; produce requested documents rather than stopping at a prepared card.
 - Use when: Use for AI-assisted job hunting across professions, from supported career facts to source-aware opportunities, truthful drafts, interview preparation and confirmed outcomes.

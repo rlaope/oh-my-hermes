@@ -4846,7 +4846,7 @@ _DEFINITIONS = [
             "For first-time UI creation, name the initial generation branch, reference direction, reusable primitives, state coverage, and required visual QA path.",
             "Cover responsive layout, empty/loading/error states, hover/focus/active states, CJK text, accessibility, and performance expectations.",
             "For a new page or a redesign, load `references/editorial-layout.md` before choosing the layout.",
-            "For a surface people use on a phone, load `references/mobile-density-gate.md`; measure with `toolkit/scripts/phone_check.py` when a browser is available, otherwise the measurement is `not_observed`.",
+            "For a surface people use on a phone, load `references/mobile-density-gate.md`; measure with `toolkit/scripts/phone_check.py` (setup in `toolkit/README.md`: `skill_view(name='omh-frontend', file_path='toolkit/README.md')`) when a browser is available, otherwise the measurement is `not_observed`.",
             "When the surface reads or writes remote data, load the `frontend-refactor` skill's `omh-frontend-refactor/references/state-discipline.md` (sections 1 and 4-6) before writing the component: server state lives in a query cache, each mutation names the query keys it invalidates, and an optimistic write ships with its rollback.",
             "When the surface has a form, a text composer, or a dialog, load `references/forms-and-input.md` before writing it: labelled controls, errors shown after the user commits a value, server field errors mapped onto their fields, one submit in flight, an Enter-to-send that waits for IME composition, and focus returned when a dialog closes.",
             "Check the browser-support target before using a newer platform feature: a feature newer than the target (by default, anything only Baseline Newly available) needs feature detection plus a fallback, or a deliberate target change; suggest recording the target in the repository's agent instruction file (`omh-agent-instructions` owns that file).",
@@ -7015,7 +7015,7 @@ _DEFINITIONS = [
             "Map overlap, missed-run, retry, backfill, and failure-pause onto what Hermes cron does natively and say which choices it cannot honour, so nobody is asked for a policy the runtime ignores; the map is in `references/recurring-surface-choice.md`.",
             f"After activation, read status from Hermes, not from the blueprint: `{NATIVE_CRON_TOOL}` list (state, last_status, next_run_at), `hermes cron runs`, and open `hermes cron incidents` (detected or alerted).",
             "Expose whether a no-agent watchdog is a candidate without claiming it exists or ran.",
-            "When the person asks to watch a Slack or Discord channel and be told first when a post matches a condition, follow `references/channel-watch.md`: confirm where, what, how often, and where it reports in one line, then install the collector from `toolkit/`, write its config, and create the job yourself.",
+            "When the person asks to watch a Slack or Discord channel and be told first when a post matches a condition, follow `references/channel-watch.md`: confirm where, what, how often, and where it reports in one line, then install the collector from `toolkit/` as `toolkit/README.md` describes (`skill_view(name='omh-automation-blueprint', file_path='toolkit/README.md')`), write its config, and create the job yourself.",
             "List host automation, gateway delivery, source retrieval, and no-agent execution as not evidence until observed.",
         ),
         why_this_exists=(

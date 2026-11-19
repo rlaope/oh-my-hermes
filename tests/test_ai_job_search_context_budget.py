@@ -534,7 +534,9 @@ class AiJobSearchContextBudgetTests(unittest.TestCase):
         # before it was ad310846...698b.
         # Twenty skills' frontmatter descriptions then end their situation clause inside the Hermes index window;
         # only those twenty bodies move, and the pin before it was 4eaeeb79...958f.
-        self.assertEqual(_digest(legacy_hashes), '5bddd1d26effac5d19be6391d8c2242f01e872e4dc931344cfeadd3fae43440d')
+        # The seven other toolkit owners then name `toolkit/README.md` with its skill_view call; only those
+        # bodies move, and the pin before it was 5bddd1d2...440d.
+        self.assertEqual(_digest(legacy_hashes), '63b921fb9c5ec1518a8dbbd6918a6e55df8b093f683c2c6ae0b7f7c5b06e4ca5')
         legacy = _skill_context_cost_profile('full', legacy_templates, refs)
         current = _skill_context_cost_profile('full', templates, refs)
         # Main's search guidance adds 305; repro-audit's mandatory rails 1,943.
