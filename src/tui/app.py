@@ -2299,6 +2299,14 @@ class App(ModesMixin, AgentViewMixin):
         self.escape_armed: tuple[str, float] | None = None  # (what a second Esc does, when the first came)
         self.rewind_picker: RewindPicker | None = None
         self.proofread_worker = proofread.Worker()
+        omh_home = self._omh_home()
+        self.proofread_dictionary = omh_home / proofread.DICTIONARY_FILE if omh_home is not None else None
+        self.proofread_words: frozenset[str] = frozenset()
+        if self.proofread_dictionary is not None:
+            try:
+                self.proofread_words = proofread.read_dictionary(self.proofread_dictionary)
+            except (OSError, ValueError):
+                pass  # A bad dictionary never blocks ordinary proofreading or gets overwritten on save.
         self.proofread_review: proofread.Review | None = None
         self.proofread_job: proofread.Job | None = None
         self.proofread_snapshot: proofread.Snapshot | None = None
@@ -5077,12 +5085,16 @@ class App(ModesMixin, AgentViewMixin):
                 or not self.proofread_snapshot.matches(self.composer, self._proofread_owner())):
             return None
         caret = self.composer.caret
-        return (next((issue for issue in self.proofread_issues if issue.start <= caret < issue.end), None)
-                or next((issue for issue in self.proofread_issues if issue.end == caret), None))
+        issues = [issue for issue in self.proofread_issues
+                  if issue.replacements or (issue.word is not None and self.proofread_dictionary is not None)]
+        return (next((issue for issue in issues if issue.start <= caret < issue.end), None)
+                or next((issue for issue in issues if issue.end == caret), None))
 
     def _proofread_marks(self) -> tuple[tuple[int, int], ...]:
         self._sync_proofread()
-        return tuple((issue.start, issue.end) for issue in self.proofread_issues)
+        return tuple((issue.start, issue.end) for issue in self.proofread_issues
+                     if issue.word not in self.proofread_words
+                     and (issue.replacements or (issue.word is not None and self.proofread_dictionary is not None)))
 
     def _open_proofread_issue(self) -> None:
         self.proofread_intent = False
@@ -5090,9 +5102,12 @@ class App(ModesMixin, AgentViewMixin):
         if issue is None:
             self.proofread_status = "No correction at cursor · Alt+P checks"
         else:
+            action = ""
+            if issue.word is not None and self.proofread_dictionary is not None:
+                action = "remove_word" if issue.word in self.proofread_words else "add_word"
             self.proofread_review = proofread.Review(
                 proofread.Snapshot.capture(self.composer, self._proofread_owner()), [issue],
-                self.clock() + proofread.ARM_SECONDS,
+                self.clock() + proofread.ARM_SECONDS, dictionary_action=action,
             )
         self.dirty = True
 
@@ -5149,12 +5164,17 @@ class App(ModesMixin, AgentViewMixin):
         if action is None:
             return
         kind, value = action
-        if kind == "cancel":
-            self._close_proofread()
-            return
+        issue = review.issue
         if kind == "accept":
-            issue = review.issue
             self.composer.replace(issue.start, issue.end, value)
+        elif kind in ("add_word", "remove_word") and issue.word is not None and self.proofread_dictionary is not None:
+            try:
+                self.proofread_words = proofread.update_dictionary(
+                    self.proofread_dictionary, issue.word, add=kind == "add_word",
+                )
+                self.proofread_status = ""
+            except (OSError, ValueError):
+                self.proofread_status = proofread.DICTIONARY_ERROR
         self._close_proofread()
 
     def _edit(self, composer: Composer, event: Key | Paste) -> ComposerAction:
@@ -10012,7 +10032,11 @@ class App(ModesMixin, AgentViewMixin):
         elif self._newline_keys_due():
             say = NEWLINE_KEYS
         if not say and self._proofread_foreground():
-            say = "Alt+P corrects at cursor" if self._proofread_issue() is not None else self.proofread_status
+            issue = self._proofread_issue()
+            if issue is None or self.proofread_status == proofread.DICTIONARY_ERROR:
+                say = self.proofread_status
+            else:
+                say = "Alt+P manages saved word" if issue.word in self.proofread_words else "Alt+P corrects at cursor"
         badge = self._badge_forms()
         # A tiny terminal keeps its one line for the keys, as it does without the badge (`_badge_forms`).
         background = self._background_forms() if badge and not self._background_hidden() else ()

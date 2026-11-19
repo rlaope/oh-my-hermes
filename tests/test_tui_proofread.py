@@ -294,14 +294,13 @@ class ReviewKeyTests(unittest.TestCase):
         issue = proofread.Issue(0, 3, "teh", "typo", ("the", "ten"))
         return proofread.Review(job.snapshot, [issue])
 
-    def test_skip_cancel_and_nothing_else_acts(self) -> None:
+    def test_cancel_and_nothing_else_acts(self) -> None:
         review = self.review()
+        self.assertEqual(review.choices(), ["the", "ten", "Cancel"])
         self.assertIsNone(review.handle_key(Key(CHAR, "x")))
         self.assertIsNone(review.handle_key(Key(DOWN)))
         self.assertEqual(review.row, 1)
-        review.row = 2
-        self.assertEqual(review.handle_key(Key(ENTER)), ("skip", ""))
-        review.row = 3
+        self.assertIsNone(review.handle_key(Key(DOWN)))
         self.assertEqual(review.handle_key(Key(ENTER)), ("cancel", ""))
         self.assertEqual(review.handle_key(Key(ESCAPE)), ("cancel", ""))
 

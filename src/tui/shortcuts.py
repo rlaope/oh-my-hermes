@@ -49,7 +49,7 @@ SHORTCUTS: tuple[tuple[str, str], ...] = (
     ("Ctrl+R", "Searches the input history; Ctrl+R again finds an older match, Enter puts it in the composer, "
                "Esc leaves the composer as it was"),
     ("Ctrl+X", "Opens the /sessions picker"),
-    ("Alt+P", "Corrects the underlined issue at cursor locally; Enter accepts, Skip/Esc closes; never sends"),
+    ("Alt+P", "Opens correction or dictionary actions at cursor; Cancel/Esc closes; never sends"),
     ("Ctrl+S", "Opens the bot board, as /bots does: this machine's Hermes profiles, their gateways and sessions, "
                "read-only"),
     ("Ctrl+P", "Folds the plan above the composer to its header and the item it is on, or expands it again, while "

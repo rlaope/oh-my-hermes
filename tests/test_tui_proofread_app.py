@@ -3,6 +3,8 @@
 import threading
 import unittest
 import os
+from pathlib import Path
+from tempfile import TemporaryDirectory
 from unittest.mock import patch
 
 from test_tui_modes import make_app
@@ -199,7 +201,7 @@ class AppTests(unittest.TestCase):
         self.assertEqual(app.composer.text, SAMPLE)
         self.assertEqual(client.calls, calls)
 
-    def test_skip_cancel_and_render(self):
+    def test_cancel_and_render(self):
         app, client = self.app()
         self.open(app)
         self.assertTrue(app._slot_lines(80, 24))
@@ -213,6 +215,70 @@ class AppTests(unittest.TestCase):
         self.assertIsNone(app.proofread_review)
         self.assertEqual(app.composer.text, SAMPLE)
         self.assertEqual(client.named("turn.start"), [])
+
+    def test_dictionary_picker_saves_and_restores_spelling_without_editing_or_sending(self):
+        text = "Blorfle blorfle go"
+        payload = {"matches": [
+            {"offset": 0, "length": 7, "rule": {"issueType": "misspelling"}, "replacements": []},
+            {"offset": 8, "length": 7, "rule": {"issueType": "misspelling"}, "replacements": [{"value": "blowfly"}]},
+            {"offset": 16, "length": 2, "rule": {"issueType": "grammar"}, "replacements": [{"value": "goes"}]},
+        ]}
+        queries = []
+
+        def start(home):
+            app, client = make_app(environ={"OMH_HOME": home})
+            app.composer.replace(0, 0, text)
+            app.proofread_worker = proofread.Worker(lambda _endpoint, draft: (queries.append(draft), payload)[1])
+            self.open(app)
+            return app, client
+
+        def pick(app, label):
+            review = app.proofread_review
+            review.armed_until = 0
+            self.assertEqual(review.choices().count(label), 1)
+            for _ in range(review.choices().index(label)):
+                app._on_input(Key(DOWN))
+            app._on_input(Key(ENTER))
+            self.assertIsNone(app.proofread_review)
+
+        with TemporaryDirectory() as home:
+            path = Path(home) / "proofread" / "dictionary.txt"
+            app, client = start(home)
+            self.assertEqual(app.proofread_review.choices(), ["Add to dictionary", "Cancel"])
+            self.assertEqual(app._proofread_marks(), ((0, 7), (8, 15), (16, 18)))
+            before = proofread.Snapshot.capture(app.composer, app._proofread_owner())
+            app._on_input(Key(ENTER))  # arming cannot save a word, even with Add on the first row
+            self.assertFalse(path.exists())
+            pick(app, "Cancel")
+            self.assertFalse(path.exists())
+            self.open(app)
+            pick(app, "Add to dictionary")
+            self.assertEqual(path.read_bytes(), b"blorfle\n")
+            self.assertEqual(app._proofread_marks(), ((16, 18),))
+            self.assertTrue(before.matches(app.composer, app._proofread_owner()))
+            self.assertEqual(queries, [text])
+            self.assertEqual(client.calls, [])
+
+            reopened, second_client = start(home)
+            reopened._on_input(Key(ESCAPE))
+            reopened.composer.caret = 9
+            reopened._on_input(ALT_P)
+            self.assertEqual(reopened._proofread_marks(), ((16, 18),))
+            self.assertEqual(reopened.proofread_review.choices(), ["Remove from dictionary", "Cancel"])
+            before = proofread.Snapshot.capture(reopened.composer, reopened._proofread_owner())
+            pick(reopened, "Remove from dictionary")
+            self.assertEqual(path.read_bytes(), b"")
+            self.assertEqual(reopened._proofread_marks(), ((0, 7), (8, 15), (16, 18)))
+            self.assertTrue(before.matches(reopened.composer, reopened._proofread_owner()))
+            self.assertEqual(queries, [text, text])
+            self.assertEqual(second_client.calls, [])
+
+            path.write_bytes(b"not a word\n")
+            reopened._on_input(ALT_P)
+            pick(reopened, "Add to dictionary")
+            self.assertEqual(path.read_bytes(), b"not a word\n")
+            self.assertEqual(reopened._proofread_marks(), ((0, 7), (8, 15), (16, 18)))
+            self.assertEqual(reopened.proofread_status, "Could not update the local dictionary")
 
     def test_pending_typing_and_aba_results_rejected(self):
         app, _ = self.app()

@@ -157,8 +157,9 @@ and evidence obvious to a reviewer reading the PR without the chat history.
   or redirects, a five-second elapsed deadline, a 512 KiB reply cap and a
   20,000-character draft cap. Masked fields send nothing; code, commands,
   image tokens and paste chips are excluded. No automatic server installation
-  or startup, silent rewrite or submission. Accept/skip is explicit per issue;
-  accepted edits use `Composer.replace` and its normal undo. Only `tui/app.py`
+  or startup, silent rewrite or submission. Replacement and local dictionary
+  changes are explicit per issue; accepted edits use `Composer.replace` and its
+  normal undo. Only `tui/app.py`
   may import the client, pinned by
   `NoNetworkClientInSource.test_local_proofreader_import_surface_and_owner` in
   `tests/test_handoff_safety_contract_enforcement.py`.

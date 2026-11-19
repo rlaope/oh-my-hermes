@@ -34,9 +34,12 @@ containing the cursor, or the immediately preceding issue at its exact end when
 none contains it. Without fresh results it remembers this explicit intent for
 the exact snapshot; editing or changing owner cancels it. Without an issue at
 the cursor it shows a local hint. Enter explicitly accepts the selected replacement
-after the 300 ms arming guard; Skip and Esc leave text unchanged. Each action
-closes review without advancing elsewhere. Each accepted edit uses
-Composer.replace and its existing undo. No action submits a prompt.
+after the 300 ms arming guard; Cancel and Esc leave text unchanged. Single-word
+spelling issues can add to the private `proofread/dictionary.txt` under the OMH
+home. Saved words hide spelling marks, not grammar marks. Alt+P on the saved
+spelling issue offers removal without changing the draft. Each action closes
+review without advancing elsewhere. Each accepted edit uses Composer.replace
+and its existing undo. No action submits a prompt.
 Unavailable servers leave the draft untouched and produce a quiet inline status,
 with retries backing off from 5 to at most 30 seconds; Alt+P retries immediately.
 One in-flight request finishes before the latest eligible generation is checked.

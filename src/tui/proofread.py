@@ -33,12 +33,15 @@ from dataclasses import dataclass, field
 import http.client
 import ipaddress
 import json
+from pathlib import Path
 import re
 import socket
 import threading
 import time
+import unicodedata
 from urllib.parse import urlencode, urlsplit
 
+from ..system.local_store import atomic_write_text, file_lock
 from .composer import Composer, _is_token
 from .keys import CHAR, DOWN, ENTER, ESCAPE, UP, Key, Paste, list_nav_step
 from .session_picker import picker_row
@@ -67,7 +70,11 @@ CLEAN_NOTICE = "Proofread: nothing to fix."
 DONE_NOTICE = "Proofread: done."
 CANCEL_NOTICE = "Proofread cancelled."
 
-SKIP = "Skip"
+DICTIONARY_FILE = Path("proofread") / "dictionary.txt"
+DICTIONARY_LIMIT = 64 * 1024
+DICTIONARY_ERROR = "Could not update the local dictionary"
+ADD_WORD = "Add to dictionary"
+REMOVE_WORD = "Remove from dictionary"
 CANCEL = "Cancel"
 KEYS = ("↑↓ move · enter picks · esc cancels", "↑↓ enter picks · esc cancels", "esc cancels")
 
@@ -324,6 +331,44 @@ def post_check(where: Endpoint, sent: str) -> Mapping[str, object]:
     return payload
 
 
+def word_key(text: str) -> str | None:
+    word = unicodedata.normalize("NFC", text)
+    if not (0 < len(word) <= 100 and word[0].isalpha() and all(
+        char.isalpha() or unicodedata.category(char).startswith("M") for char in word
+    )):
+        return None
+    return unicodedata.normalize("NFC", word.casefold())
+
+
+def read_dictionary(path: Path) -> frozenset[str]:
+    try:
+        with path.open("rb") as handle:
+            data = handle.read(DICTIONARY_LIMIT + 1)
+    except FileNotFoundError:
+        return frozenset()
+    if len(data) > DICTIONARY_LIMIT:
+        raise ValueError("dictionary is too large")
+    entries = [word_key(line) for line in data.decode("utf-8").splitlines()]
+    if any(word is None for word in entries):
+        raise ValueError("invalid dictionary entry")
+    return frozenset(word for word in entries if word is not None)
+
+
+def update_dictionary(path: Path, word: str, *, add: bool) -> frozenset[str]:
+    # Reread under the lock so an already-open TUI cannot erase another TUI's changes.
+    with file_lock(path, private=True, timeout_seconds=0.15) as lock:
+        if not lock["enforced"]:
+            raise OSError("dictionary lock unavailable")
+        before = read_dictionary(path)
+        words = before | {word} if add else before - {word}
+        if words != before:
+            text = "".join(entry + "\n" for entry in sorted(words))
+            if len(text.encode("utf-8")) > DICTIONARY_LIMIT:
+                raise ValueError("dictionary is too large")
+            atomic_write_text(path, text, private=True)
+    return words
+
+
 @dataclass(frozen=True)
 class Issue:
     start: int  # in the draft, Python indices
@@ -331,11 +376,12 @@ class Issue:
     original: str
     message: str
     replacements: tuple[str, ...]
+    word: str | None = None  # normalized dictionary key for a single-word spelling diagnostic
 
 
 def issues_from(payload: Mapping[str, object], job: Job) -> list[Issue]:
     """The corrections the draft can take: each mapped from UTF-16 back to the draft, none touching a protected
-    character, none without a replacement, none overlapping an earlier one."""
+    character, none without a replacement or dictionary action, none overlapping an earlier one."""
     matches = payload.get("matches")
     if not isinstance(matches, list):
         raise ProofreadError("The proofread server's reply has no matches.")
@@ -361,8 +407,10 @@ def issues_from(payload: Mapping[str, object], job: Job) -> list[Issue]:
             if (isinstance(value, str) and value != original and value not in values
                     and len(value) <= MAX_REPLACEMENT_CHARS and not any(_is_token(c) for c in value)):
                 values.append(value)
-        if values:
-            found.append(Issue(start, end, original, message if isinstance(message, str) else "", tuple(values)))
+        rule = match.get("rule")
+        word = word_key(original) if isinstance(rule, dict) and rule.get("issueType") == "misspelling" else None
+        if values or word is not None:
+            found.append(Issue(start, end, original, message if isinstance(message, str) else "", tuple(values), word))
     found.sort(key=lambda issue: issue.start)
     issues: list[Issue] = []
     for issue in found:
@@ -431,23 +479,31 @@ class Worker:
 
 @dataclass
 class Review:
-    """The corrections of one draft, one at a time: each replacement, Skip, Cancel."""
+    """Cursor-targeted corrections, an optional dictionary action, and Cancel."""
 
     snapshot: Snapshot
     issues: list[Issue]
     armed_until: float = 0.0
     position: int = 0
     row: int = 0
+    dictionary_action: str = ""
 
     @property
     def issue(self) -> Issue:
         return self.issues[self.position]
 
+    @property
+    def replacements(self) -> tuple[str, ...]:
+        return () if self.dictionary_action == "remove_word" else self.issue.replacements
+
     def choices(self) -> list[str]:
-        return [*self.issue.replacements, SKIP, CANCEL]
+        rows = list(self.replacements)
+        if self.dictionary_action:
+            rows.append(ADD_WORD if self.dictionary_action == "add_word" else REMOVE_WORD)
+        return [*rows, CANCEL]
 
     def handle_key(self, event: Key | Paste, now: float | None = None) -> tuple[str, str] | None:
-        """("accept", replacement), ("skip", ""), ("cancel", "") or None. Every key is swallowed: nothing is typed."""
+        """Return a row action or None. Every key is swallowed: nothing is typed."""
         if isinstance(event, Paste):
             return None
         if event.name == ESCAPE or (event.name == CHAR and event.ctrl and event.char == "c"):
@@ -456,9 +512,9 @@ class Review:
             return None
         rows = self.choices()
         if event.name == ENTER and not (event.alt or event.shift or event.ctrl):
-            if self.row == len(self.issue.replacements):
-                return ("skip", "")
-            return ("cancel", "") if self.row == len(rows) - 1 else ("accept", rows[self.row])
+            if self.row < len(self.replacements):
+                return ("accept", rows[self.row])
+            return ("cancel" if self.row == len(rows) - 1 else self.dictionary_action, "")
         step = list_nav_step(event) or {UP: -1, DOWN: 1}.get(event.name, 0)
         if step:
             self.row = min(max(self.row + step, 0), len(rows) - 1)
@@ -476,7 +532,7 @@ class Review:
         done = self.issues[self.position]
         later = [i for i in self.issues[self.position + 1:] if i.start >= done.end]
         self.issues[self.position + 1:] = [
-            Issue(i.start + delta, i.end + delta, i.original, i.message, i.replacements) for i in later
+            Issue(i.start + delta, i.end + delta, i.original, i.message, i.replacements, i.word) for i in later
         ]
         self.snapshot = snapshot
         return self.advance()
