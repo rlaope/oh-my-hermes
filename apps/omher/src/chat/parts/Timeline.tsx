@@ -191,13 +191,14 @@ export function Timeline({
       />
     </div>
   ) : null;
-  // the typing dots until the answer starts: on their own with the ringed face where the answer will land, or, once
-  // the live activity line shows (it holds the face), directly under that line in the text column, faceless
+  // the typing dots with the ringed face until the answer starts: where the answer will land, or, once the live
+  // activity line shows ("OMH — recalled 2 memories", "Running cd …"), directly above it, the line under the dots in
+  // the text column (owner 2026-11-19: the dots stay put and the lines come under them)
   const liveId = chat?.turn && turnHasActivity(chat.turn) ? chat.turn.id : undefined;
-  const underLine = !!liveId && items.some((i) => i.kind === "activity" && i.id === liveId);
+  const aboveLine = !!liveId && items.some((i) => i.kind === "activity" && i.id === liveId);
   const typingRow = typing ? (
-    <div className={`row row-assistant row-typing${underLine ? " under-line" : ""}`} data-kind="typing">
-      <TypingRow bot={bot.name} name={bot.display_name} face={face} under={underLine} />
+    <div className={`row row-assistant row-typing${aboveLine ? " above-line" : ""}`} data-kind="typing">
+      <TypingRow bot={bot.name} name={bot.display_name} face={face} />
     </div>
   ) : null;
 
@@ -246,18 +247,18 @@ export function Timeline({
         return (
           <Fragment key={it.id}>
             {it.id === slotId && writingRow}
-            {it.id === slotId && !underLine && typingRow}
+            {it.id === slotId && !aboveLine && typingRow}
             {label && <div className="day">{label}</div>}
+            {aboveLine && it.id === liveId && typingRow}
             <div className={`row row-${it.kind}${liveLine ? " live-line" : ""}`} data-kind={it.kind} {...(it.kind === "user" ? { "data-item": it.id } : {})}>
               {liveFace && <LiveFace bot={bot.name} face={face} />}
               {render(it, label ? undefined : items[i - 1], i)}
             </div>
-            {underLine && it.id === liveId && typingRow}
           </Fragment>
         );
       })}
       {!slotId && writingRow}
-      {!slotId && !underLine && typingRow}
+      {!slotId && !aboveLine && typingRow}
     </div>
   );
 }

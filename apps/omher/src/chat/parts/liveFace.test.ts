@@ -13,7 +13,7 @@ const row = (s: AppState) => {
 };
 
 describe("liveFaceRow: one row of the live run holds the face", () => {
-  it("moves typing -> status line, stays there while the answer is written, and is gone once the turn ends", () => {
+  it("stays on the typing dots through statuses and tools, moves to the line once a line of the answer shows, gone at the end", () => {
     let s = reduce(initialState(), { type: "local.user", bot: "kami", id: "l1", text: "why?", now: T0 - 10 });
     const seen: (string | null)[] = [];
     const evs: BridgeEvent[] = [
@@ -31,9 +31,9 @@ describe("liveFaceRow: one row of the live run holds the face", () => {
       s = at(s, ev, i);
       seen.push(row(s));
     });
-    // the status line takes the face the moment it shows: never a step with none while the bot works
-    // the answer is not drawn while it is written: the line keeps the face until the whole answer lands
-    expect(seen).toEqual(["typing", "typing", "activity", "activity", "activity", "activity", "activity", null, null]);
+    // the dots keep the face through "recalled 2 memories" and the tool (the lines come under them, owner
+    // 2026-11-19); "It is" is not a whole line, so the dots stay; the turn's end takes the face away
+    expect(seen).toEqual(["typing", "typing", "typing", "typing", "typing", "typing", "typing", null, null]);
   });
 
   it("leaves the face to a bot bubble that landed after the line; keeps it on the line beside an open ask", () => {

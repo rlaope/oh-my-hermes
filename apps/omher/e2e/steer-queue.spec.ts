@@ -224,9 +224,9 @@ test("live line: a long command is cut to a glance with the full text on hover, 
   await expect(line.locator(".act-live")).toHaveAttribute("title", `Running ${long}`);
   const [h, tl] = await Promise.all([line.getByTestId("activity-toggle").boundingBox(), page.getByTestId("timeline").boundingBox()]);
   expect(h!.width).toBeLessThanOrEqual(Math.min(0.4 * tl!.width, 340) + 1);
-  // the typing dots wait directly under it, with no ringed face of their own
+  // the typing dots stay above it, with the one ringed face
   await expect(page.getByTestId("typing")).toBeVisible();
-  await expect(page.getByTestId("typing-ring")).toHaveCount(0);
+  await expect(page.getByTestId("typing-ring")).toHaveCount(1);
 });
 
 test("shots: a waiting bubble and its menu, dark/light, en/ko, 900x600", async ({ page }) => {

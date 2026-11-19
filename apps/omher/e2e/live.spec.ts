@@ -282,23 +282,23 @@ test("chat: a typing bubble with the ringed face waits for the first delta, whic
   // the face is centred on the bubble
   const [fb, bb] = await Promise.all([typing.locator(".msg-face").boundingBox(), typing.getByTestId("typing-bubble").boundingBox()]);
   expect(Math.abs(fb!.y + fb!.height / 2 - (bb!.y + bb!.height / 2))).toBeLessThan(1.5);
-  // it sits under the activity line, last in the thread
+  // last in the thread
   const last = await tl.locator(":scope > .row").last().getAttribute("data-kind");
   expect(last).toBe("typing");
 
-  // the first tool.start brings the activity line, which takes the ringed face; the dots stay, directly under the
-  // line, faceless in the text column, until the answer starts (owner: the person always sees the bot is writing)
+  // the first tool.start brings the activity line; the dots stay where they are with the ringed face, and the line
+  // comes under them in the text column, until the answer starts (owner 2026-11-19: the lines come under the dots)
   await emit(ev("kami", "tool.start", { tool_id: "k1", name: "terminal", detail: "pnpm test" }));
   const line = tl.locator("[data-testid=activity][data-state=live]");
   await expect(line.getByTestId("activity-text")).toContainText("pnpm test");
   await expect(tl.getByTestId("typing")).toBeVisible();
-  await expect(tl.getByTestId("typing-ring")).toHaveCount(0);
-  await expect(tl.getByTestId("face-ring")).toHaveCount(1);
+  await expect(tl.getByTestId("typing-ring")).toHaveCount(1);
+  await expect(tl.getByTestId("face-ring")).toHaveCount(0);
   const under = async () => {
     const [lb, tb] = await Promise.all([line.boundingBox(), tl.getByTestId("typing-bubble").boundingBox()]);
-    expect(tb!.y).toBeGreaterThanOrEqual(lb!.y + lb!.height - 1);
-    expect(Math.abs(tb!.x - lb!.x)).toBeLessThan(4); // the line's text column
-    expect(await tl.locator(":scope > .row").last().getAttribute("data-kind")).toBe("typing");
+    expect(lb!.y).toBeGreaterThanOrEqual(tb!.y + tb!.height - 1);
+    expect(Math.abs(tb!.x - lb!.x)).toBeLessThan(4); // the bubble's text column
+    expect(await tl.locator(":scope > .row").last().getAttribute("data-kind")).toBe("activity");
   };
   await under();
   // and stays under it through the tool's end and the next one
@@ -393,10 +393,10 @@ for (const theme of ["dark", "light"] as const) {
     await expect(page.getByTestId("bot-kami").getByTestId("bot-time")).toHaveText(/^1[23]s$/);
     await expect(page.getByTestId("bot-friren").getByTestId("bot-time")).toHaveText("1m");
     await expect(page.getByTestId("bot-default").getByTestId("bot-time")).toHaveText("waiting");
-    // the activity line holds the ringed face; the typing dots wait under it, with no face of their own
+    // the typing dots keep the ringed face; the activity line sits under them
     await expect(page.locator("[data-testid=activity][data-state=live]")).toBeVisible();
     await expect(page.getByTestId("typing")).toBeVisible();
-    await expect(page.getByTestId("typing-ring")).toHaveCount(0);
+    await expect(page.getByTestId("typing-ring")).toHaveCount(1);
     await page.mouse.move(700, 400);
     await page.waitForTimeout(400);
     // hold every animation at a mid frame (ring part-way round, dots mid-hop) instead of turning them off
