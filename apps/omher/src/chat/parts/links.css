@@ -120,6 +120,14 @@ span.lk.lk-term.gone {
   cursor: default;
   color: var(--quiet);
 }
+/* nothing to open: no underline, no hover */
+span.lk.lk-term.gone .lk-t {
+  text-decoration: none;
+}
+span.lk.lk-term.gone:hover {
+  background: none;
+  color: var(--quiet);
+}
 .lk-term .lk-term-omh {
   display: inline-block;
   vertical-align: -1px;
@@ -135,7 +143,7 @@ span.lk.lk-term.gone {
   display: inline-block;
   width: 6px;
   height: 6px;
-  margin-left: 5px;
+  margin: 0 3px 0 5px;
   border-radius: 50%;
   vertical-align: 1px;
   background: var(--quiet);

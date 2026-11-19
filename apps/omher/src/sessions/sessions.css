@@ -1662,15 +1662,13 @@ body.side-resizing * {
 /* "Link copied" on a terminal for a moment after its link went to the clipboard (⌘⇧C, the row menu) */
 .term-wrap .tlink-copied {
   position: absolute;
-  bottom: 10px;
-  right: 16px;
+  top: 10px;
+  right: 22px;
   z-index: 5;
-  padding: 4px 10px;
+  padding: 5px 10px;
   border-radius: var(--r-sm);
-  background: var(--pop);
-  border: 1px solid var(--line);
-  box-shadow: var(--pop-shadow);
-  color: var(--body);
+  background: var(--ink);
+  color: var(--bg);
   font-size: 12px;
   pointer-events: none;
   animation: pop 0.14s ease both;

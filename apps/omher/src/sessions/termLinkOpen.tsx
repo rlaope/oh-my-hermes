@@ -13,14 +13,21 @@ const inTauri = () => typeof window !== "undefined" && "__TAURI_INTERNALS__" in 
 type Gone = () => void;
 const goneListeners = new Set<Gone>();
 
-/** Open the session holding link id `id`; false (and the "not on this computer" note) when none does. */
+/** The app has put back what was open before the restart (after that, nothing moves the view on its own). */
+let resumedDone = false;
+
+/** Open the session holding link id `id`; false (and the "not on this computer" note) when none does. A link that
+ *  arrives while omher is still putting back the last view (it was opened with the link) is opened again once that is
+ *  done, so the restored view does not cover it. */
 export function openTermLinkId(id: string): boolean {
   const r = isLinkId(id) ? getSessions().byLink(id) : null;
   if (!r || r.status === "draft") {
     for (const f of [...goneListeners]) f();
     return false;
   }
-  getStore().actions.openSession(r.id);
+  const store = getStore();
+  store.actions.openSession(r.id);
+  if (!resumedDone) void store.resumed.then(() => store.actions.openSession(r.id));
   return true;
 }
 
@@ -30,6 +37,7 @@ let started = false;
 export function startTermLinks(): void {
   if (started || typeof window === "undefined") return;
   started = true;
+  void getStore().resumed.then(() => (resumedDone = true));
   if (!inTauri()) {
     (window as unknown as { __omherOpenTermLink?: (url: string) => boolean }).__omherOpenTermLink = (url) => {
       const id = parseTermLink(url);
