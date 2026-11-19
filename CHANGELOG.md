@@ -4,6 +4,11 @@ All notable changes will be documented here.
 
 ## Unreleased
 
+- **A dag-ulw node that writes files is told to commit only its own paths.** Its task text now says to stage the
+  paths in its SCOPE by name and never to run `git add -A`, `git add .`, `git commit -a` or `git stash`, so parallel
+  nodes in one checkout stop committing each other's work. Verify, review and read-only nodes get no such line. This
+  is guidance; the write-scope guard on file tools stays the enforcement.
+
 - **The pi-family coding lane runs on the omp CLI too.** With only `omp` on PATH, a pi-family coding unit now runs
   `omp --print --no-session [--model <id>] [--thinking <level>] -- <prompt>`; when `pi` or its distribution host is
   also installed, those still win. omp has no `--permission-preset`, so no approval flag is passed (omp's default

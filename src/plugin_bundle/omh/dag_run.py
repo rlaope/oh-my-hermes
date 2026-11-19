@@ -1687,6 +1687,11 @@ def task_for(
         lines.append("If the task turns on a judgement you cannot settle with confidence (a design choice, a root "
                      "cause you cannot pin down), do not guess: before editing, write ESCALATE: <the question> and "
                      "what you found into the handoff, and stop.")
+    if node["write_scope"] and not node.get("read_only"):
+        # Parallel parts share the checkout's index and stash, so a whole-tree add or stash takes their files too.
+        lines.append("Commit only your own SCOPE paths: stage them by name (`git add -- <paths>`), never `git add -A`, "
+                     "`git add .` or `git commit -a`, and never `git stash`; the index and stash are shared with the "
+                     "parallel parts.")
     lines.append("Stay inside your SCOPE: other parts of this run work at the same time. If you cannot finish, "
                  "say plainly that you are blocked and why; do not report blocked work as done.")
     # The marker ends the goal: Hermes previews each goal by its first 40 characters, and a person reads the label
