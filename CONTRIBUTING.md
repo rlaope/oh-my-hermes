@@ -58,6 +58,26 @@ uv run python -P tools/benchmarks/tui_perf.py --compare ../other-checkout
 sessions. `tests/test_tui_perf_bench.py` runs every case at a tiny size so the
 output schema cannot rot; it asserts counts only, never wall-clock time.
 
+## Private Identifier Guard
+
+The repo is public, so private names (internal hosts, codenames, people,
+customers) must never appear in a tracked file. CI runs
+`tools/qa/identifier_guard.py` on every pull request and main push. It checks
+each tracked text file against `tools/qa/identifier-denylist.sha256`, which
+holds only sha256 hashes of lowercased names. A hit prints `path:line` and the
+hash. A missing or empty denylist exits 2 and fails the job.
+
+- Add a name: `uv run python tools/qa/identifier_guard.py --hash "name"`, then
+  append the printed line to the denylist. Names are one to three words; the
+  space, hyphen and joined spellings all match one entry.
+- Do not add a name that legitimately appears in the repo today; the guard
+  would fail on the next run.
+- Local check: `uv run python tools/qa/identifier_guard.py` (all tracked files)
+  or `--staged`. As a pre-commit hook, put
+  `uv run python tools/qa/identifier_guard.py --staged` in `.git/hooks/pre-commit`.
+- Names you cannot even hash into the shared list can go, one per line, in the
+  gitignored `tools/qa/identifier-denylist.local.txt`; they are hashed at runtime.
+
 ## Contribution Rules
 
 - Keep Hermes as the runtime boundary.

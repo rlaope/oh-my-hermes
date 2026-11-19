@@ -1,0 +1,4 @@
+# sha256 of lowercased private identifiers; plaintext never lives in this repo.
+# Add a line with: uv run python tools/qa/identifier_guard.py --hash "name"
+9e98bf4fc074a67db8a3c0d5326411d791f06ae156ffc3300a296d598bdb5c42
+ab260ed4710b6095a7965103a701be3c7461f3fd0c46547027e279af2c96bd9a
