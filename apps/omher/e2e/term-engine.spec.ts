@@ -172,7 +172,7 @@ test("20 terminal sessions one after another: none blank, none without its rende
   expect(held).toBe(1);
 });
 
-test("Unicode 11 widths: 한글 😀 表 puts the cursor where Unicode 11 says", async ({ page }) => {
+test("grapheme widths (Unicode 15, xterm's unicode-graphemes): 한글 😀 表 puts the cursor where Unicode 11 did", async ({ page }) => {
   await open(page, "off");
   await newTerminal(page);
   const r = await page.evaluate(async () => {
@@ -182,7 +182,7 @@ test("Unicode 11 widths: 한글 😀 表 puts the cursor where Unicode 11 says",
     return { x: t.buffer.active.cursorX, version: t.unicode.activeVersion };
   });
   // 한 2 + 글 2 + space 1 + 😀 2 + space 1 + 表 2
-  expect(r).toEqual({ x: 10, version: "11" });
+  expect(r).toEqual({ x: 10, version: "15-graphemes" });
 });
 
 test("feed: every done runs once, in order", async ({ page }) => {
