@@ -92,8 +92,9 @@ describe("engine-hidden", () => {
       // a row render with _needsSelectionRefresh set gives the renderer the kept selection
       ["_renderRows + _needsSelectionRefresh", /this\._needsSelectionRefresh&&\(this\._renderer\.value\.handleSelectionChanged\(this\._selectionState\.start,this\._selectionState\.end,this\._selectionState\.columnSelectMode\),this\._needsSelectionRefresh=!1\)/],
       // and the public refresh is held while xterm's own pause is on, then done in full when the terminal is seen
-      ["paused refreshRows", /refreshRows\(\w+,\w+,\w+=!1\)\{if\(this\._isPaused\)\{this\._needsFullRefresh=!0;return\}/],
-      ["Terminal.refresh -> refreshRows", /refresh\((\w+),(\w+)\)\{this\._renderService\?\.refreshRows\(\1,\2\)\}/],
+      // (xterm 6.1 added a defaulted `isRedrawOnly` after `sync`, and `refresh` passes `sync` through: same path)
+      ["paused refreshRows", /refreshRows\(\w+,\w+(?:,\w+=!1)+\)\{if\(this\._isPaused\)\{this\._needsFullRefresh=!0;return\}/],
+      ["Terminal.refresh -> refreshRows", /refresh\((\w+),(\w+)(?:,(\w+)=!1)?\)\{this\._renderService\?\.refreshRows\(\1,\2(?:,\3)?\)\}/],
     ];
     const missing = paths.filter(([, re]) => !re.test(src)).map(([name]) => name);
     expect(missing).toEqual([]);

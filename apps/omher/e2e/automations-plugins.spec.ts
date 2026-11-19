@@ -158,7 +158,7 @@ test("Run now is a chat message to the bot and opens its chat; Edit fills the bo
   await page.getByTestId("auto-run").click();
   await page.getByTestId("auto-run-confirm").click();
   await expect(page.getByTestId("bot-friren")).toHaveAttribute("aria-current", "true");
-  await expect(page.getByTestId("bubble-user").last()).toHaveText('Run my automation "Weekly product-ab report" (id e5c2a9b81d40) now.');
+  await expect(page.getByTestId("bubble-user").last().locator(".b")).toHaveText('Run my automation "Weekly product-ab report" (id e5c2a9b81d40) now.');
   expect(await submitted("friren")).toEqual(['Run my automation "Weekly product-ab report" (id e5c2a9b81d40) now.']);
   expect((await calls("automations.")).filter((c) => c.op !== "automations.list")).toEqual([]);
 });
@@ -173,7 +173,7 @@ test("the top box sends to the picked bot's chat; a suggestion only fills it", a
   await page.getByTestId("ask-bot-default").click();
   await page.getByTestId("ask-send").click();
   await expect(page.getByTestId("bot-default")).toHaveAttribute("aria-current", "true");
-  await expect(page.getByTestId("bubble-user").last()).toHaveText("Tell me when CI fails on one of my PRs");
+  await expect(page.getByTestId("bubble-user").last().locator(".b")).toHaveText("Tell me when CI fails on one of my PRs");
   expect(await submitted("default")).toEqual(["Tell me when CI fails on one of my PRs"]);
 });
 

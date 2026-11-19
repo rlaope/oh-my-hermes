@@ -1081,7 +1081,7 @@ class PromptSlotTests(AppTestCase):
         self.assert_denied(run)
         slot = "\n".join(run.terminal.captures["slot"])
         self.assertIn("rm -rf ./omh-m0-probe-dir", slot)
-        self.assertIn("waiting on you", slot)
+        self.assertIn("waiting for your approval", slot)
         self.assertEqual(json.loads(run.active_session_file.read_text(encoding="utf-8")), {"session_id": APPROVAL_STORED_ID})
 
     def test_esc_on_an_approval_sends_the_explicit_deny(self) -> None:

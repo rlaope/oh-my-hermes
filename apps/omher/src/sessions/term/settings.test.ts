@@ -61,6 +61,15 @@ describe("terminal settings", () => {
     expect(parseTermSettings({}).optionIsMeta).toBe(true);
   });
 
+  it("confirm multi-line paste: a boolean, on by default; settings saved before it existed read as on", () => {
+    expect(TERM_DEFAULTS.confirmPaste).toBe(true);
+    expect(parseTermSettings({ confirmPaste: false }).confirmPaste).toBe(false);
+    for (const bad of ["no", 0, null, [], {}]) expect(parseTermSettings({ confirmPaste: bad }).confirmPaste).toBe(true);
+    expect(parseTermSettings(JSON.stringify({ copyOnSelect: true, rightClickPaste: true })).confirmPaste).toBe(true);
+    expect(writeTermSettings({ confirmPaste: false })).toMatchObject({ confirmPaste: false, rightClickPaste: false });
+    expect(readTermSettings().confirmPaste).toBe(false);
+  });
+
   it("copy on select and right-click paste: booleans, off by default; anything else is the default (off)", () => {
     expect(TERM_DEFAULTS).toMatchObject({ copyOnSelect: false, rightClickPaste: false });
     expect(parseTermSettings({ copyOnSelect: true, rightClickPaste: true })).toMatchObject({ copyOnSelect: true, rightClickPaste: true });
@@ -75,6 +84,20 @@ describe("terminal settings", () => {
     // one does not switch the other
     expect(writeTermSettings({ copyOnSelect: true })).toMatchObject({ copyOnSelect: true, rightClickPaste: false });
     expect(writeTermSettings({ rightClickPaste: true })).toMatchObject({ copyOnSelect: true, rightClickPaste: true });
+  });
+
+  it("Kitty keys and images: booleans, on by default; anything else is the default (on)", () => {
+    expect(TERM_DEFAULTS).toMatchObject({ kittyKeys: true, images: true });
+    expect(parseTermSettings({ kittyKeys: false, images: false })).toMatchObject({ kittyKeys: false, images: false });
+    for (const bad of ["no", 0, null, [false], {}]) {
+      expect(parseTermSettings({ kittyKeys: bad }).kittyKeys).toBe(true);
+      expect(parseTermSettings({ images: bad }).images).toBe(true);
+    }
+    // settings saved before these fields existed read as on
+    expect(parseTermSettings(JSON.stringify({ themeDark: "dracula", copyOnSelect: true }))).toMatchObject({ kittyKeys: true, images: true, copyOnSelect: true });
+    // one does not switch the other
+    expect(writeTermSettings({ kittyKeys: false })).toMatchObject({ kittyKeys: false, images: true });
+    expect(writeTermSettings({ images: false })).toMatchObject({ kittyKeys: false, images: false });
   });
 
   it("font size 9 to 24, line height 1 to 2, scrollback 1,000 to 50,000 rows: clamped, or the default for a wrong type", () => {

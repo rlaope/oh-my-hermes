@@ -32,6 +32,11 @@ from test_tui_modes import drawn, make_app
 from omh.tui.background import BackgroundProcess, tool_call
 from omh.tui.keys import CHAR, Key
 
+
+def after_glyph(row: str) -> str:
+    """A wait row's words after its spinner frame and the space (a frame can be two code points, `✳︎`)."""
+    return row.split(" ", 1)[1] if " " in row else row
+
 RUN = "pr-a"
 SONNET = "claude-sonnet-5-5"
 PARKED_AT = 1_800_000_000.0
@@ -459,7 +464,7 @@ class WaitingRowTests(unittest.TestCase):
 
     @staticmethod
     def waiting(app) -> list[str]:
-        return [row for row in drawn(app) if "Waiting…" in row]
+        return [row for row in drawn(app) if "Testing…" in row]  # the process runs the tests (`wait_kinds`)
 
     def test_it_shows_in_the_working_rows_place_while_the_process_runs(self) -> None:
         from omh.tui.app import WORKING_GLYPHS
@@ -470,8 +475,8 @@ class WaitingRowTests(unittest.TestCase):
                 screen = drawn(app)
                 rule = next(at for at, row in enumerate(screen) if row.startswith("─"))
                 (row,) = self.waiting(app)
-                self.assertEqual(row[2:], "Waiting… (10m 6s · terminal)")
-                self.assertIn(row[0], WORKING_GLYPHS)
+                self.assertEqual(after_glyph(row), "Testing… (10m 6s)")
+                self.assertTrue(row.startswith(WORKING_GLYPHS))
                 self.assertLess(screen.index(row), rule, "above the composer, where the working row stands")
                 self.assertEqual(app._working_rows(), 1)
                 self.assertIn("🔔 will ping you", mode_row(app), "the info line says what main says")
@@ -497,7 +502,7 @@ class WaitingRowTests(unittest.TestCase):
         self.assertNotEqual(self.waiting(app)[0][0], first[0], "the spinner turned")
         clock[0] += 1
         wall[0] += 1
-        self.assertIn("(10m 7s ·", self.waiting(app)[0], "the clock ticked")
+        self.assertIn("(10m 7s)", self.waiting(app)[0], "the clock ticked")
         app.decoder.unfocused_at = clock[0]
         held = self.waiting(app)[0]
         clock[0] += 0.5
@@ -531,19 +536,23 @@ class WaitingAgentsTests(unittest.TestCase):
 
     @staticmethod
     def waiting(app) -> list[str]:
-        return [row[2:] for row in drawn(app) if "Waiting…" in row]
+        from omh.tui.app import WORKING_GLYPHS
+
+        return [after_glyph(row) for row in drawn(app) if row.startswith(WORKING_GLYPHS) and "… (" in row and "Working…" not in row]
 
     def test_a_running_dag_node_alone_is_one_agent_with_its_time(self) -> None:
         app, _clock, wall = self.app(lanes=(2027.0,))
-        self.assertEqual(self.waiting(app), ["Waiting… (33m 47s · 1 agent)"])
+        self.assertEqual(self.waiting(app), ["Running 인용 영수증 (PR A)… (33m 47s · 3/7 nodes)"])
         wall[0] += 1
-        self.assertEqual(self.waiting(app), ["Waiting… (33m 48s · 1 agent)"], "counted on since the HUD read it")
+        self.assertEqual(self.waiting(app), ["Running 인용 영수증 (PR A)… (33m 48s · 3/7 nodes)"],
+                         "counted on since the HUD read it")
 
     def test_agents_and_terminals_together_the_longest_wait_and_plural_counts(self) -> None:
         app, _clock, _wall = self.app(lanes=(2027.0, 30.0), terminals=2)
-        self.assertEqual(self.waiting(app), ["Waiting… (33m 47s · 2 agents · 2 terminals)"])
+        # The run is one wait (its two running nodes), the two test runs are counted after it.
+        self.assertEqual(self.waiting(app), ["Running 인용 영수증 (PR A)… (33m 47s · 3/8 nodes · +2 test runs)"])
         app, _clock, _wall = self.app(lanes=(5.0,), terminals=1)
-        self.assertEqual(self.waiting(app), ["Waiting… (33m 20s · 1 agent · terminal)"], "the terminal waited longer")
+        self.assertEqual(self.waiting(app), ["Testing… (33m 20s · 1 agent)"], "the terminal waited longer")
 
     def test_the_rosters_agents_alone_draw_no_row(self) -> None:
         # The count is the HUD reader's: its delegation graph's running lanes. The roster's frames alone (no graph read
