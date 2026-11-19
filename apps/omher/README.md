@@ -115,9 +115,12 @@ UI (React in a Tauri window)  ⇄  bridge (Python, loopback WebSocket)  ⇄  the
   `user@host`, checks it and shows the exact `ssh` command, the Hermes found there and its bots; only Connect saves it
   to `~/.omher/peers.json`. The shell runs the person's own `ssh` with a fixed argv (`BatchMode=yes`, so a key or the
   ssh agent only; a host that wants a password is told to run `ssh-copy-id`), copies omher's bridge to the other
-  computer's `~/.omher/peer/` (nothing else is written there) and forwards its loopback port. The local bridge then
-  lists that computer's bots as `<peer>:<name>`, marked **SSH · <name>** in the sidebar, header and Settings; folder
-  chats and Restart stay on this computer. The link reconnects with backoff when it drops. `BOUNDARY.md` rule 31.
+  computer's `~/.omher/peer/` (nothing else is written there) and forwards its loopback port. The other computer may
+  be macOS, Linux, or Windows with an OpenSSH server whose login shell is POSIX (Git Bash, MSYS2 or Cygwin as
+  `DefaultShell`); on Windows the remote side finds the Hermes the Windows app installed under `%LOCALAPPDATA%\hermes`.
+  The local bridge then lists that computer's bots as `<peer>:<name>`, marked **SSH · <name>** in the sidebar, header
+  and Settings; folder chats and Restart stay on this computer. The link reconnects with backoff when it drops.
+  `BOUNDARY.md` rule 31.
 - **Threads, TERMINALS and Tasks** (`src/threads/`, `src-tauri/src/sessions.rs` with `src/sessions/`, `src-tauri/src/tasks.rs`
   with `src/tasks/`): work you hand a bot goes into threads under that bot's row (see the top of this file). Below the
   bots, TERMINALS holds terminal sessions only; chat-mode CLI sessions are replaced by bot threads, so there is no
