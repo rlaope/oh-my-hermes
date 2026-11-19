@@ -2614,32 +2614,22 @@ def lists_several_code_changes(text: str, links: tuple[str, ...] = ()) -> bool:
     if not isinstance(text, str) or len(text) > _BACKLOG_MAX_CHARS:
         return False
     items, frame = _backlog_parts(text)
-    verb_led = False
     if len(items) >= BACKLOG_MIN_ITEMS:
         plain = _folded(frame)
         code_items = sum(1 for item in items if _BACKLOG_CODE.search(_folded(item)))
         if not (_BACKLOG_CODE.search(plain) or code_items >= 2):
             return False
         asks_for_change = bool(_BACKLOG_CHANGE.search(plain))
-    elif not items and (inline := _inline_backlog_parts(text)):
+    elif not items and _inline_backlog_parts(text):
         plain = _folded(text)
         # Work the request itself splits, runs in parallel or spreads over many targets keeps the route it had ("api
         # 모듈과 ui 모듈 테스트가 깨졌어, 병렬로 각각 고쳐줘" still reaches dag-ulw).
         if not _BACKLOG_CODE.search(plain) or work_has_several_parts(text):
             return False
         asks_for_change = bool(_BACKLOG_CHANGE.search(plain) or _BACKLOG_INLINE_DO_ALL.search(plain))
-        # Three parts that each open on a change verb ("fix X, update Y, and add Z") already say there are several.
-        # Only when two or more of those parts name code: one code word in the last part of an errand list ("add the
-        # dress code to the invitation") is no code backlog.
-        verb_led = (
-            sum(1 for part in inline if _BACKLOG_CHANGE.match(_folded(part))) >= BACKLOG_MIN_INLINE_ITEMS
-            and sum(1 for part in inline if _BACKLOG_CODE.search(_folded(part))) >= 2
-        )
     else:
         return False
-    if not asks_for_change or _BACKLOG_NOT_THE_CHANGE.search(plain):
-        return False
-    if not (_BACKLOG_SCOPE.search(plain) or verb_led):
+    if not asks_for_change or not _BACKLOG_SCOPE.search(plain) or _BACKLOG_NOT_THE_CHANGE.search(plain):
         return False
     request = " ".join(plain.split())
     if _asks_to_be_told(request) or any(link and _PULL_REQUEST_ADDRESS.search(link.casefold()) for link in links):
