@@ -1,0 +1,618 @@
+{
+  "schema": "review-false-alarms/records/v1",
+  "note": "Synthetic replies written by hand to exercise every grading path (clean, bug in and out of the +-3 window, markdown-wrapped and prefixed verdicts, garbled, missing and non-final verdict lines). Not a measurement of any model or arm; do not quote its numbers.",
+  "records": [
+    {
+      "arm": "omh-on",
+      "case": "control-eviction-outside-lock",
+      "run": 1,
+      "output": "I read diff.patch and the files under context/ that the change touches.\n\nThis line is wrong.\n\nVERDICT: bug app/cache.py:19"
+    },
+    {
+      "arm": "omh-off",
+      "case": "control-eviction-outside-lock",
+      "run": 1,
+      "output": "I read diff.patch and the files under context/ that the change touches.\n\nThis line is wrong.\n\nVERDICT: bug app/cache.py:19"
+    },
+    {
+      "arm": "omh-on",
+      "case": "control-go-defer-before-error-check",
+      "run": 1,
+      "output": "I read diff.patch and the files under context/ that the change touches.\n\nThis line is wrong.\n\nVERDICT: bug internal/store/store.go:14"
+    },
+    {
+      "arm": "omh-off",
+      "case": "control-go-defer-before-error-check",
+      "run": 1,
+      "output": "I read diff.patch and the files under context/ that the change touches.\n\nThis line is wrong.\n\nVERDICT: bug internal/store/store.go:14"
+    },
+    {
+      "arm": "omh-on",
+      "case": "control-js-zero-limit-overridden",
+      "run": 1,
+      "output": "I read diff.patch and the files under context/ that the change touches.\n\nThis line is wrong.\n\nVERDICT: bug web/api.js:6"
+    },
+    {
+      "arm": "omh-off",
+      "case": "control-js-zero-limit-overridden",
+      "run": 1,
+      "output": "I read diff.patch and the files under context/ that the change touches.\n\nThis line is wrong.\n\nVERDICT: bug web/api.js:6"
+    },
+    {
+      "arm": "omh-on",
+      "case": "control-mutable-default-mutated",
+      "run": 1,
+      "output": "I read diff.patch and the files under context/ that the change touches.\n\nThis line is wrong.\n\nVERDICT: bug app/tags.py:1"
+    },
+    {
+      "arm": "omh-off",
+      "case": "control-mutable-default-mutated",
+      "run": 1,
+      "output": "I read diff.patch and the files under context/ that the change touches.\n\nThis line is wrong.\n\nVERDICT: bug app/tags.py:2"
+    },
+    {
+      "arm": "omh-on",
+      "case": "control-page-slice-drops-last",
+      "run": 1,
+      "output": "I read diff.patch and the files under context/ that the change touches.\n\nThis line is wrong.\n\nVERDICT: bug app/pagination.py:6"
+    },
+    {
+      "arm": "omh-off",
+      "case": "control-page-slice-drops-last",
+      "run": 1,
+      "output": "I read diff.patch and the files under context/ that the change touches.\n\nThis line is wrong.\n\nVERDICT: bug app/pagination.py:5"
+    },
+    {
+      "arm": "omh-on",
+      "case": "control-sql-injection-search",
+      "run": 1,
+      "output": "I read diff.patch and the files under context/ that the change touches.\n\nThis line is wrong.\n\nVERDICT: bug app/search.py:8"
+    },
+    {
+      "arm": "omh-off",
+      "case": "control-sql-injection-search",
+      "run": 1,
+      "output": "I read diff.patch and the files under context/ that the change touches.\n\nThis line is wrong.\n\nVERDICT: bug app/search.py:8"
+    },
+    {
+      "arm": "omh-on",
+      "case": "trap-broad-except-reraises",
+      "run": 1,
+      "output": "I read diff.patch and the files under context/ that the change touches.\n\nThe change is correct as written.\n\nVERDICT: clean"
+    },
+    {
+      "arm": "omh-off",
+      "case": "trap-broad-except-reraises",
+      "run": 1,
+      "output": "I read diff.patch and the files under context/ that the change touches.\n\nThe change is correct as written.\n\nVERDICT: clean"
+    },
+    {
+      "arm": "omh-on",
+      "case": "trap-eval-on-literal-table",
+      "run": 1,
+      "output": "I read diff.patch and the files under context/ that the change touches.\n\neval on module data.\n\nVERDICT: bug app/units.py:9"
+    },
+    {
+      "arm": "omh-off",
+      "case": "trap-eval-on-literal-table",
+      "run": 1,
+      "output": "I read diff.patch and the files under context/ that the change touches.\n\neval is arbitrary code execution.\n\nVERDICT: bug app/units.py:9"
+    },
+    {
+      "arm": "omh-on",
+      "case": "trap-float-equality-exact-zero",
+      "run": 1,
+      "output": "I read diff.patch and the files under context/ that the change touches.\n\nThe change is correct as written.\n\nVERDICT: clean"
+    },
+    {
+      "arm": "omh-off",
+      "case": "trap-float-equality-exact-zero",
+      "run": 1,
+      "output": "I read diff.patch and the files under context/ that the change touches.\n\nThe change is correct as written.\n\nVERDICT: clean"
+    },
+    {
+      "arm": "omh-on",
+      "case": "trap-go-ignored-buffer-error",
+      "run": 1,
+      "output": "I read diff.patch and the files under context/ that the change touches.\n\nThe change is correct as written.\n\nVERDICT: clean"
+    },
+    {
+      "arm": "omh-off",
+      "case": "trap-go-ignored-buffer-error",
+      "run": 1,
+      "output": "I read diff.patch and the files under context/ that the change touches.\n\nThe change is correct as written.\n\nVERDICT: clean"
+    },
+    {
+      "arm": "omh-on",
+      "case": "trap-header-skip-pinned-by-test",
+      "run": 1,
+      "output": "I read diff.patch and the files under context/ that the change touches.\n\nThe change is correct as written.\n\nVERDICT: clean"
+    },
+    {
+      "arm": "omh-off",
+      "case": "trap-header-skip-pinned-by-test",
+      "run": 1,
+      "output": "I read diff.patch and the files under context/ that the change touches.\n\nOff by one: row 0 is skipped.\n\nVERDICT: bug context/app/csv_import.py:8"
+    },
+    {
+      "arm": "omh-on",
+      "case": "trap-index-guarded-above",
+      "run": 1,
+      "output": "I read diff.patch and the files under context/ that the change touches.\n\nThe change is correct as written.\n\nVERDICT: clean"
+    },
+    {
+      "arm": "omh-off",
+      "case": "trap-index-guarded-above",
+      "run": 1,
+      "output": "I read diff.patch and the files under context/ that the change touches.\n\nThe change is correct as written.\n\nVERDICT: clean"
+    },
+    {
+      "arm": "omh-on",
+      "case": "trap-js-loose-null-check",
+      "run": 1,
+      "output": "I read diff.patch and the files under context/ that the change touches.\n\nThe change is correct as written.\n\nVERDICT: clean"
+    },
+    {
+      "arm": "omh-off",
+      "case": "trap-js-loose-null-check",
+      "run": 1,
+      "output": "I read diff.patch and the files under context/ that the change touches.\n\nThe change is correct as written.\n\nVERDICT: clean"
+    },
+    {
+      "arm": "omh-on",
+      "case": "trap-lock-held-by-caller",
+      "run": 1,
+      "output": "I read diff.patch and the files under context/ that the change touches.\n\nThe change is correct as written.\n\nVERDICT: clean"
+    },
+    {
+      "arm": "omh-off",
+      "case": "trap-lock-held-by-caller",
+      "run": 1,
+      "output": "I read diff.patch and the files under context/ that the change touches.\n\n_total is updated without the lock.\n\nVERDICT: bug app/metrics.py:33"
+    },
+    {
+      "arm": "omh-on",
+      "case": "trap-mutable-default-read-only",
+      "run": 1,
+      "output": "I read diff.patch and the files under context/ that the change touches.\n\nThe change is correct as written.\n\nVERDICT: clean"
+    },
+    {
+      "arm": "omh-off",
+      "case": "trap-mutable-default-read-only",
+      "run": 1,
+      "output": "I read diff.patch and the files under context/ that the change touches.\n\nMutable default argument.\n\nVERDICT: bug app/settings.py:4"
+    },
+    {
+      "arm": "omh-on",
+      "case": "trap-shell-true-constant-command",
+      "run": 1,
+      "output": "I read diff.patch and the files under context/ that the change touches.\n\nThe change is correct as written.\n\nVERDICT: clean"
+    },
+    {
+      "arm": "omh-off",
+      "case": "trap-shell-true-constant-command",
+      "run": 1,
+      "output": "I read diff.patch and the files under context/ that the change touches.\n\nshell=True allows command injection.\n\nVERDICT: bug app/version.py:9"
+    },
+    {
+      "arm": "omh-on",
+      "case": "trap-sql-order-by-allowlist",
+      "run": 1,
+      "output": "I read diff.patch and the files under context/ that the change touches.\n\nThe change is correct as written.\n\nVERDICT: clean"
+    },
+    {
+      "arm": "omh-off",
+      "case": "trap-sql-order-by-allowlist",
+      "run": 1,
+      "output": "I read diff.patch and the files under context/ that the change touches.\n\nORDER BY is built by concatenation: SQL injection.\n\nVERDICT: bug app/reports.py:22"
+    },
+    {
+      "arm": "omh-on",
+      "case": "control-eviction-outside-lock",
+      "run": 2,
+      "output": "I read diff.patch and the files under context/ that the change touches.\n\nThis line is wrong.\n\nVERDICT: bug context/app/cache.py:17"
+    },
+    {
+      "arm": "omh-off",
+      "case": "control-eviction-outside-lock",
+      "run": 2,
+      "output": "I read diff.patch and the files under context/ that the change touches.\n\nThreads share the cache.\n\nVERDICT: bug app/workers.py:9"
+    },
+    {
+      "arm": "omh-on",
+      "case": "control-go-defer-before-error-check",
+      "run": 2,
+      "output": "I read diff.patch and the files under context/ that the change touches.\n\nThis line is wrong.\n\nVERDICT: bug internal/store/store.go:14"
+    },
+    {
+      "arm": "omh-off",
+      "case": "control-go-defer-before-error-check",
+      "run": 2,
+      "output": "I read diff.patch and the files under context/ that the change touches.\n\nThis line is wrong.\n\nVERDICT: bug internal/store/store.go:14"
+    },
+    {
+      "arm": "omh-on",
+      "case": "control-js-zero-limit-overridden",
+      "run": 2,
+      "output": "I read diff.patch and the files under context/ that the change touches.\n\nThis line is wrong.\n\nVERDICT: bug web/api.js:6"
+    },
+    {
+      "arm": "omh-off",
+      "case": "control-js-zero-limit-overridden",
+      "run": 2,
+      "output": "I read diff.patch and the files under context/ that the change touches.\n\nThis line is wrong.\n\nVERDICT: bug web/api.js:6"
+    },
+    {
+      "arm": "omh-on",
+      "case": "control-mutable-default-mutated",
+      "run": 2,
+      "output": "I read diff.patch and the files under context/ that the change touches.\n\nThis line is wrong.\n\nVERDICT: bug app/tags.py:1"
+    },
+    {
+      "arm": "omh-off",
+      "case": "control-mutable-default-mutated",
+      "run": 2,
+      "output": "I read diff.patch and the files under context/ that the change touches.\n\nThis line is wrong.\n\nVERDICT: bug app/tags.py:1"
+    },
+    {
+      "arm": "omh-on",
+      "case": "control-page-slice-drops-last",
+      "run": 2,
+      "output": "**VERDICT: bug `app/pagination.py:7`**"
+    },
+    {
+      "arm": "omh-off",
+      "case": "control-page-slice-drops-last",
+      "run": 2,
+      "output": "I read diff.patch and the files under context/ that the change touches.\n\nThis line is wrong.\n\nVERDICT: bug app/pagination.py:10"
+    },
+    {
+      "arm": "omh-on",
+      "case": "control-sql-injection-search",
+      "run": 2,
+      "output": "I read diff.patch and the files under context/ that the change touches.\n\nThis line is wrong.\n\nVERDICT: bug app/search.py:8"
+    },
+    {
+      "arm": "omh-off",
+      "case": "control-sql-injection-search",
+      "run": 2,
+      "output": "I read diff.patch and the files under context/ that the change touches.\n\nThis line is wrong.\n\nVERDICT: bug app/search.py:8"
+    },
+    {
+      "arm": "omh-on",
+      "case": "trap-broad-except-reraises",
+      "run": 2,
+      "output": "I read diff.patch and the files under context/ that the change touches.\n\nThe change is correct as written.\n\nVERDICT: clean"
+    },
+    {
+      "arm": "omh-off",
+      "case": "trap-broad-except-reraises",
+      "run": 2,
+      "output": "I read diff.patch and the files under context/ that the change touches.\n\nThe change is correct as written.\n\nVERDICT: clean"
+    },
+    {
+      "arm": "omh-on",
+      "case": "trap-eval-on-literal-table",
+      "run": 2,
+      "output": "I read diff.patch and the files under context/ that the change touches.\n\nThe change is correct as written.\n\nVERDICT: clean"
+    },
+    {
+      "arm": "omh-off",
+      "case": "trap-eval-on-literal-table",
+      "run": 2,
+      "output": "I read diff.patch and the files under context/ that the change touches.\n\neval is arbitrary code execution.\n\nVERDICT: bug app/units.py:9"
+    },
+    {
+      "arm": "omh-on",
+      "case": "trap-float-equality-exact-zero",
+      "run": 2,
+      "output": "I read diff.patch and the files under context/ that the change touches.\n\nThe change is correct as written.\n\nVERDICT: clean"
+    },
+    {
+      "arm": "omh-off",
+      "case": "trap-float-equality-exact-zero",
+      "run": 2,
+      "output": "I read diff.patch and the files under context/ that the change touches.\n\nFloat equality is risky here."
+    },
+    {
+      "arm": "omh-on",
+      "case": "trap-go-ignored-buffer-error",
+      "run": 2,
+      "output": "I read diff.patch and the files under context/ that the change touches.\n\nThe change is correct as written.\n\nVERDICT: clean"
+    },
+    {
+      "arm": "omh-off",
+      "case": "trap-go-ignored-buffer-error",
+      "run": 2,
+      "output": "I read diff.patch and the files under context/ that the change touches.\n\nThe change is correct as written.\n\nVERDICT: clean"
+    },
+    {
+      "arm": "omh-on",
+      "case": "trap-header-skip-pinned-by-test",
+      "run": 2,
+      "output": "I read diff.patch and the files under context/ that the change touches.\n\nThe change is correct as written.\n\nVERDICT: clean"
+    },
+    {
+      "arm": "omh-off",
+      "case": "trap-header-skip-pinned-by-test",
+      "run": 2,
+      "output": "I read diff.patch and the files under context/ that the change touches.\n\nThe change is correct as written.\n\nVERDICT: clean"
+    },
+    {
+      "arm": "omh-on",
+      "case": "trap-index-guarded-above",
+      "run": 2,
+      "output": "I read diff.patch and the files under context/ that the change touches.\n\nThe change is correct as written.\n\nVERDICT: clean"
+    },
+    {
+      "arm": "omh-off",
+      "case": "trap-index-guarded-above",
+      "run": 2,
+      "output": "I read diff.patch and the files under context/ that the change touches.\n\nThe change is correct as written.\n\nVERDICT: clean"
+    },
+    {
+      "arm": "omh-on",
+      "case": "trap-js-loose-null-check",
+      "run": 2,
+      "output": "I read diff.patch and the files under context/ that the change touches.\n\nLooks fine to me.\n\n**VERDICT:** maybe"
+    },
+    {
+      "arm": "omh-off",
+      "case": "trap-js-loose-null-check",
+      "run": 2,
+      "output": "I read diff.patch and the files under context/ that the change touches.\n\nThe change is correct as written.\n\nVERDICT: clean"
+    },
+    {
+      "arm": "omh-on",
+      "case": "trap-lock-held-by-caller",
+      "run": 2,
+      "output": "I read diff.patch and the files under context/ that the change touches.\n\nThe change is correct as written.\n\nVERDICT: clean"
+    },
+    {
+      "arm": "omh-off",
+      "case": "trap-lock-held-by-caller",
+      "run": 2,
+      "output": "I read diff.patch and the files under context/ that the change touches.\n\nThe change is correct as written.\n\nVERDICT: clean"
+    },
+    {
+      "arm": "omh-on",
+      "case": "trap-mutable-default-read-only",
+      "run": 2,
+      "output": "I read diff.patch and the files under context/ that the change touches.\n\nThe change is correct as written.\n\nVERDICT: clean"
+    },
+    {
+      "arm": "omh-off",
+      "case": "trap-mutable-default-read-only",
+      "run": 2,
+      "output": "I read diff.patch and the files under context/ that the change touches.\n\nMutable default argument.\n\nVERDICT: bug app/settings.py:4"
+    },
+    {
+      "arm": "omh-on",
+      "case": "trap-shell-true-constant-command",
+      "run": 2,
+      "output": "I read diff.patch and the files under context/ that the change touches.\n\nThe change is correct as written.\n\nVERDICT: clean"
+    },
+    {
+      "arm": "omh-off",
+      "case": "trap-shell-true-constant-command",
+      "run": 2,
+      "output": "I read diff.patch and the files under context/ that the change touches.\n\nshell=True allows command injection.\n\nVERDICT: bug app/version.py:9"
+    },
+    {
+      "arm": "omh-on",
+      "case": "trap-sql-order-by-allowlist",
+      "run": 2,
+      "output": "I read diff.patch and the files under context/ that the change touches.\n\nThe change is correct as written.\n\nVERDICT: clean"
+    },
+    {
+      "arm": "omh-off",
+      "case": "trap-sql-order-by-allowlist",
+      "run": 2,
+      "output": "I read diff.patch and the files under context/ that the change touches.\n\nORDER BY is built by concatenation: SQL injection.\n\nVERDICT: bug app/reports.py:22"
+    },
+    {
+      "arm": "omh-on",
+      "case": "control-eviction-outside-lock",
+      "run": 3,
+      "output": "I read diff.patch and the files under context/ that the change touches.\n\nThis line is wrong.\n\nVERDICT: bug app/cache.py:15"
+    },
+    {
+      "arm": "omh-off",
+      "case": "control-eviction-outside-lock",
+      "run": 3,
+      "output": "I read diff.patch and the files under context/ that the change touches.\n\nThis line is wrong.\n\nVERDICT: bug app/cache.py:17"
+    },
+    {
+      "arm": "omh-on",
+      "case": "control-go-defer-before-error-check",
+      "run": 3,
+      "output": ""
+    },
+    {
+      "arm": "omh-off",
+      "case": "control-go-defer-before-error-check",
+      "run": 3,
+      "output": "I read diff.patch and the files under context/ that the change touches.\n\nThis line is wrong.\n\nVERDICT: bug internal/store/store.go:14"
+    },
+    {
+      "arm": "omh-on",
+      "case": "control-js-zero-limit-overridden",
+      "run": 3,
+      "output": "I read diff.patch and the files under context/ that the change touches.\n\nThis line is wrong.\n\nVERDICT: bug web/api.js:6"
+    },
+    {
+      "arm": "omh-off",
+      "case": "control-js-zero-limit-overridden",
+      "run": 3,
+      "output": "I read diff.patch and the files under context/ that the change touches.\n\nThis line is wrong.\n\nVERDICT: bug web/api.js:6"
+    },
+    {
+      "arm": "omh-on",
+      "case": "control-mutable-default-mutated",
+      "run": 3,
+      "output": "I read diff.patch and the files under context/ that the change touches.\n\nThis line is wrong.\n\nVERDICT: bug app/tags.py:1"
+    },
+    {
+      "arm": "omh-off",
+      "case": "control-mutable-default-mutated",
+      "run": 3,
+      "output": "VERDICT: bug app/tags.py:2\n\nOn reflection the list is copied, so it may be fine."
+    },
+    {
+      "arm": "omh-on",
+      "case": "control-page-slice-drops-last",
+      "run": 3,
+      "output": "I read diff.patch and the files under context/ that the change touches.\n\nThis line is wrong.\n\nVERDICT: bug app/pagination.py:9"
+    },
+    {
+      "arm": "omh-off",
+      "case": "control-page-slice-drops-last",
+      "run": 3,
+      "output": "I read diff.patch and the files under context/ that the change touches.\n\nThe change is correct as written.\n\nVERDICT: clean"
+    },
+    {
+      "arm": "omh-on",
+      "case": "control-sql-injection-search",
+      "run": 3,
+      "output": "I read diff.patch and the files under context/ that the change touches.\n\nThis line is wrong.\n\nVERDICT: bug app/search.py:8"
+    },
+    {
+      "arm": "omh-off",
+      "case": "control-sql-injection-search",
+      "run": 3,
+      "output": "I read diff.patch and the files under context/ that the change touches.\n\nThis line is wrong.\n\nVERDICT: bug app/search.py:8"
+    },
+    {
+      "arm": "omh-on",
+      "case": "trap-broad-except-reraises",
+      "run": 3,
+      "output": "I read diff.patch and the files under context/ that the change touches.\n\nThe change is correct as written.\n\nVERDICT: clean"
+    },
+    {
+      "arm": "omh-off",
+      "case": "trap-broad-except-reraises",
+      "run": 3,
+      "output": "I read diff.patch and the files under context/ that the change touches.\n\nThe change is correct as written.\n\nVERDICT: clean"
+    },
+    {
+      "arm": "omh-on",
+      "case": "trap-eval-on-literal-table",
+      "run": 3,
+      "output": "I read diff.patch and the files under context/ that the change touches.\n\nThe change is correct as written.\n\nVERDICT: clean"
+    },
+    {
+      "arm": "omh-off",
+      "case": "trap-eval-on-literal-table",
+      "run": 3,
+      "output": "I read diff.patch and the files under context/ that the change touches.\n\neval is arbitrary code execution.\n\nVERDICT: bug app/units.py:9"
+    },
+    {
+      "arm": "omh-on",
+      "case": "trap-float-equality-exact-zero",
+      "run": 3,
+      "output": "I read diff.patch and the files under context/ that the change touches.\n\nThe change is correct as written.\n\nVERDICT: clean"
+    },
+    {
+      "arm": "omh-off",
+      "case": "trap-float-equality-exact-zero",
+      "run": 3,
+      "output": "I read diff.patch and the files under context/ that the change touches.\n\nThe change is correct as written.\n\nVERDICT: clean"
+    },
+    {
+      "arm": "omh-on",
+      "case": "trap-go-ignored-buffer-error",
+      "run": 3,
+      "output": "I read diff.patch and the files under context/ that the change touches.\n\nThe change is correct as written.\n\nVERDICT: clean"
+    },
+    {
+      "arm": "omh-off",
+      "case": "trap-go-ignored-buffer-error",
+      "run": 3,
+      "output": "I read diff.patch and the files under context/ that the change touches.\n\nThe change is correct as written.\n\nVERDICT: clean"
+    },
+    {
+      "arm": "omh-on",
+      "case": "trap-header-skip-pinned-by-test",
+      "run": 3,
+      "output": "I read diff.patch and the files under context/ that the change touches.\n\nThe change is correct as written.\n\nVERDICT: clean"
+    },
+    {
+      "arm": "omh-off",
+      "case": "trap-header-skip-pinned-by-test",
+      "run": 3,
+      "output": "I read diff.patch and the files under context/ that the change touches.\n\nThe change is correct as written.\n\nVERDICT: clean"
+    },
+    {
+      "arm": "omh-on",
+      "case": "trap-index-guarded-above",
+      "run": 3,
+      "output": "I read diff.patch and the files under context/ that the change touches.\n\nThe change is correct as written.\n\nVERDICT: clean"
+    },
+    {
+      "arm": "omh-off",
+      "case": "trap-index-guarded-above",
+      "run": 3,
+      "output": "I read diff.patch and the files under context/ that the change touches.\n\nThe change is correct as written.\n\nVERDICT: clean"
+    },
+    {
+      "arm": "omh-on",
+      "case": "trap-js-loose-null-check",
+      "run": 3,
+      "output": "I read diff.patch and the files under context/ that the change touches.\n\nThe change is correct as written.\n\nVERDICT: clean"
+    },
+    {
+      "arm": "omh-off",
+      "case": "trap-js-loose-null-check",
+      "run": 3,
+      "output": "I read diff.patch and the files under context/ that the change touches.\n\nThe change is correct as written.\n\nVERDICT: clean"
+    },
+    {
+      "arm": "omh-on",
+      "case": "trap-lock-held-by-caller",
+      "run": 3,
+      "output": "I read diff.patch and the files under context/ that the change touches.\n\nThe change is correct as written.\n\nVERDICT: clean"
+    },
+    {
+      "arm": "omh-off",
+      "case": "trap-lock-held-by-caller",
+      "run": 3,
+      "output": "I read diff.patch and the files under context/ that the change touches.\n\nThe change is correct as written.\n\nVERDICT: clean"
+    },
+    {
+      "arm": "omh-on",
+      "case": "trap-mutable-default-read-only",
+      "run": 3,
+      "output": "I read diff.patch and the files under context/ that the change touches.\n\nThe change is correct as written.\n\nVERDICT: clean"
+    },
+    {
+      "arm": "omh-off",
+      "case": "trap-mutable-default-read-only",
+      "run": 3,
+      "output": "I read diff.patch and the files under context/ that the change touches.\n\nThe change is correct as written.\n\nVERDICT: clean"
+    },
+    {
+      "arm": "omh-on",
+      "case": "trap-shell-true-constant-command",
+      "run": 3,
+      "output": "I read diff.patch and the files under context/ that the change touches.\n\nThe change is correct as written.\n\nVERDICT: clean"
+    },
+    {
+      "arm": "omh-off",
+      "case": "trap-shell-true-constant-command",
+      "run": 3,
+      "output": "I read diff.patch and the files under context/ that the change touches.\n\nshell=True allows command injection.\n\nVERDICT: bug app/version.py:9"
+    },
+    {
+      "arm": "omh-on",
+      "case": "trap-sql-order-by-allowlist",
+      "run": 3,
+      "output": "I read diff.patch and the files under context/ that the change touches.\n\nThe change is correct as written.\n\nVERDICT: clean"
+    },
+    {
+      "arm": "omh-off",
+      "case": "trap-sql-order-by-allowlist",
+      "run": 3,
+      "output": "I read diff.patch and the files under context/ that the change touches.\n\nThe change is correct as written.\n\nVERDICT: clean"
+    }
+  ]
+}

@@ -24,6 +24,14 @@ All notable changes will be documented here.
   first). ↓ puts it back in the message box to fix or add to. × (on hover or focus) drops it. A button that cannot
   act (the agent has the message already) says why in its tooltip.
 
+- **Hermes Bug Hunter: a trap benchmark counts the bugs a reviewer invents.** `benchmarks/review-false-alarms`
+  holds 11 traps (changes that look wrong and are correct: SQL built from a constant allowlist, `eval` over a literal
+  table, an index guarded two lines up, a lock the caller holds) and 6 controls with one real, reachable bug each. A
+  reviewer ends with `VERDICT: clean` or `VERDICT: bug <path>:<line>`; a control counts as hit only within ±3 lines,
+  and a missing or garbled verdict is its own column, never clean. The table prints the false-alarm rate and the hit
+  rate side by side for `omh-on` and `omh-off`, and OMH wins only with fewer false alarms and no fewer hits.
+  `bench.py --dry-run` grades a recorded fixture with no model; live runs use `hermes -z` on two profiles.
+
 - **omher: a message steered into a running answer reads as you typed it after the chat reopens.** Hermes keeps
   a mid-turn steer wrapped in a frame for the model (`[OUT-OF-BAND USER MESSAGE — …]` … `[/OUT-OF-BAND USER
   MESSAGE]`), and a reopened Bot Chat showed that frame in your bubble. The bridge now shows only the typed text,

@@ -1,0 +1,29 @@
+--- a/internal/render/render.go
++++ b/internal/render/render.go
+@@ -1,8 +1,8 @@
+ package render
+ 
+ import (
+-	"fmt"
+-	"strings"
++	"bytes"
++	"strconv"
+ )
+ 
+ type Row struct {
+@@ -11,9 +11,12 @@
+ }
+ 
+ func Rows(rows []Row) string {
+-	var b strings.Builder
++	var buf bytes.Buffer
+ 	for _, r := range rows {
+-		fmt.Fprintf(&b, "%s\t%d\n", r.Name, r.Count)
++		_, _ = buf.WriteString(r.Name)
++		_ = buf.WriteByte('\t')
++		_, _ = buf.WriteString(strconv.Itoa(r.Count))
++		_ = buf.WriteByte('\n')
+ 	}
+-	return b.String()
++	return buf.String()
+ }

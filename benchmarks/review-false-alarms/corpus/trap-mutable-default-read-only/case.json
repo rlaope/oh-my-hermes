@@ -1,0 +1,7 @@
+{
+  "id": "trap-mutable-default-read-only",
+  "kind": "trap",
+  "language": "python",
+  "expected": "clean",
+  "why": "The {} default is shared between calls, but merged() never mutates overrides: it copies DEFAULTS into a fresh dict and only reads overrides through update(). Every call returns a new dict, and an explicit None still takes the if-branch and is skipped."
+}
