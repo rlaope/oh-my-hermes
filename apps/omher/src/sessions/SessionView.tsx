@@ -611,6 +611,8 @@ function TerminalIdle({ rec }: { rec: SessionRec }) {
     <div className="pane ss-chat ss-idle" data-testid="session-idle">
       {rec.paused ? <PausedHistory rec={rec} /> : <div className="chat-empty">{tr("ss.agentEnded", { agent: label })}</div>}
       {rec.paused ? <Paused rec={rec} /> : <Ended rec={rec} />}
+      {/* a bot's request waits here too: Deny, or Resume and send (termShare.ts) */}
+      <TermShareCards sessionId={rec.id} title={pickTitle(rec, termFallbackName(rec, getSessions().getState().agents)).title} />
     </div>
   );
 }

@@ -1453,6 +1453,8 @@ export const en = {
   "tlink.st.ended": "ended",
   "tshare.wants": "{bot} wants to type into {title}",
   "tshare.thisSession": "Allow for this session",
+  "tshare.resumeSend": "Resume and send",
+  "tshare.notTyped": "Not typed: the terminal is not taking input. Resume it, or Deny.",
   "term.empty": "Open a shell or a coding CLI in a folder:",
   "dock.label": "Pinned",
   "dock.pin": "Pin to dock",

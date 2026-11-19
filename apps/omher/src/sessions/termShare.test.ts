@@ -5,8 +5,9 @@ import type { getSessions } from "./sessions";
 
 const rec = (over: Partial<SessionRec> = {}): SessionRec => ({ id: "s1", linkId: "abcdefgh23", agent: "shell", cwd: "/home/you/code/web-app", startedAt: 1_700_000_000_000, status: "running", view: "terminal", ...over });
 
-function world(list: SessionRec[]) {
+function world(list: SessionRec[], o: { canType?: boolean; types?: boolean } = {}) {
   const typed: { id: string; text: string }[] = [];
+  const io = { canType: o.canType ?? true, types: o.types ?? true };
   const files: Record<string, ShareStatus> = {};
   const inbox: ShareRequest[] = [];
   const g = { __omherShareFiles: files, __omherMockInbox: inbox };
@@ -16,13 +17,15 @@ function world(list: SessionRec[]) {
     getState: () => st,
     byLink: (l: string) => st.list.find((r) => r.linkId === l) ?? null,
     typeAllowed: vi.fn(async (id: string, text: string) => {
+      if (!io.types) return false;
       typed.push({ id, text });
       return true;
     }),
+    canType: () => io.canType,
   } as unknown as ReturnType<typeof getSessions>;
   const share = createTermShare(host, () => sessions);
   const ask = (prompt: string, link = "abcdefgh23") => g.__omherMockInbox.push({ id: `${g.__omherMockInbox.length}`, link, prompt, from: "Kami", session: "x" });
-  return { share, typed, g, st, ask };
+  return { share, typed, g, st, ask, io };
 }
 
 describe("a bot's request to type into a terminal", () => {
@@ -37,7 +40,7 @@ describe("a bot's request to type into a terminal", () => {
     await w.share.publish();
     await w.share.poll();
     expect(w.typed).toEqual([]);
-    w.share.answer(w.share.pending()[0]!.key, "deny");
+    await w.share.answer(w.share.pending()[0]!.key, "deny");
     expect(w.share.pending()).toEqual([]);
     expect(w.typed).toEqual([]);
   });
@@ -47,7 +50,7 @@ describe("a bot's request to type into a terminal", () => {
     await w.share.publish();
     w.ask("run the tests");
     await w.share.poll();
-    w.share.answer(w.share.pending()[0]!.key, "once");
+    await w.share.answer(w.share.pending()[0]!.key, "once");
     expect(w.typed).toEqual([{ id: "s1", text: "run the tests" }]);
     w.ask("again");
     await w.share.poll();
@@ -60,7 +63,7 @@ describe("a bot's request to type into a terminal", () => {
     await w.share.publish();
     w.ask("one");
     await w.share.poll();
-    w.share.answer(w.share.pending()[0]!.key, "session");
+    await w.share.answer(w.share.pending()[0]!.key, "session");
     w.ask("two");
     w.ask("other", "zzzzzzzzzz");
     await w.share.poll();
@@ -86,6 +89,43 @@ describe("a bot's request to type into a terminal", () => {
     ]);
     expect(w.share.pending().map((p) => [p.id, p.prompt])).toEqual([["f", "go[2J\nnow"]]);
     expect(cleanPrompt("a\tb\x00c\x7fd\ne")).toBe("abcd\ne");
+  });
+
+  it("an Allow that types nothing keeps the card with its line and adds no grant", async () => {
+    const w = world([rec()], { types: false });
+    await w.share.publish();
+    w.ask("run the tests");
+    await w.share.poll();
+    const key = w.share.pending()[0]!.key;
+    await w.share.answer(key, "session");
+    expect(w.typed).toEqual([]);
+    expect(w.share.pending()).toHaveLength(1);
+    expect(w.share.pending()[0]).toMatchObject({ key, failed: true });
+    expect(w.share.granted("s1")).toBe(false);
+    await w.share.answer(key, "once");
+    expect(w.share.pending()).toHaveLength(1);
+    // it types once the terminal takes input again
+    w.io.types = true;
+    await w.share.answer(key, "once");
+    expect(w.typed.map((x) => x.text)).toEqual(["run the tests"]);
+    expect(w.share.pending()).toEqual([]);
+  });
+
+  it("a granted session that takes no input now shows the card instead of using the grant", async () => {
+    const w = world([rec()]);
+    await w.share.publish();
+    w.ask("one");
+    await w.share.poll();
+    await w.share.answer(w.share.pending()[0]!.key, "session");
+    w.io.canType = false;
+    w.ask("two");
+    await w.share.poll();
+    expect(w.typed.map((x) => x.text)).toEqual(["one"]);
+    expect(w.share.pending().map((p) => p.prompt)).toEqual(["two"]);
+    // Allow on a terminal that takes no input types nothing either
+    await w.share.answer(w.share.pending()[0]!.key, "once");
+    expect(w.typed.map((x) => x.text)).toEqual(["one"]);
+    expect(w.share.pending()[0]?.failed).toBe(true);
   });
 
   it("a request that waits goes when its session is closed", async () => {

@@ -1451,6 +1451,8 @@ export const zh: Record<Key, string> = {
   "tlink.st.ended": "已结束",
   "tshare.wants": "{bot} 想在 {title} 中输入",
   "tshare.thisSession": "本会话内允许",
+  "tshare.resumeSend": "继续并发送",
+  "tshare.notTyped": "未能输入：终端当前不接受输入。请继续该会话，或拒绝。",
   "term.empty": "在文件夹中打开 shell 或编程 CLI：",
   "dock.label": "已固定",
   "dock.pin": "固定到 Dock",

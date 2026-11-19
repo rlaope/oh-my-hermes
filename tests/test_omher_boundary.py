@@ -1750,7 +1750,8 @@ class SessionFilesStayInOmhersFolder(unittest.TestCase):
         self.assertEqual(self.ui.count("io.write("), 3)
         allowed = self.ui.split("const typeAllowed = async", 1)[1].split("\n  };\n", 1)[0]
         self.assertEqual(allowed.count("io.write("), 1)
-        # typeAllowed is called from one place only: termShare.ts's `type`, reached by the card's Allow or a grant
+        # typeAllowed is called from one place only: termShare.ts's `type`, reached by the card's Allow (or Resume and
+        # send) or a grant; its false (nothing typed) keeps the card and adds no grant
         callers = []
         for path in sorted((UI_SRC).rglob("*.ts*")):
             if path.name.endswith((".test.ts", ".test.tsx")):
@@ -1759,7 +1760,7 @@ class SessionFilesStayInOmhersFolder(unittest.TestCase):
                 if "typeAllowed(" in line and "const typeAllowed" not in line:
                     callers.append((path.relative_to(UI_SRC).as_posix(), line.strip()))
         self.assertEqual(callers, [("sessions/termShare.ts",
-                                    "const type = (r: PendingRequest) => void sessions().typeAllowed(r.sessionId, cleanPrompt(r.prompt));")])
+                                    "const type = (r: PendingRequest) => sessions().typeAllowed(r.sessionId, cleanPrompt(r.prompt));")])
         # files go to chat agents only: an oh-my-hermes session's composer has no onSendFiles
         self.assertIn('onSendFiles={takesFiles ? (t, files) => getSessions().sendFiles(rec.id, t, files) : undefined}', self.view)
         self.assertIn("=== \"chat\";", self.view.split("const takesFiles", 1)[1].split("\n", 1)[0])

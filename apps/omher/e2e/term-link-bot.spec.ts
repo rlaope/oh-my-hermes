@@ -191,6 +191,35 @@ test("an allowed many-line prompt is one bracketed paste while its terminal is p
   await expect.poll(async () => (await writes(page, a)).filter((d) => d.includes("line"))).toEqual(["\x1b[200~first line\nsecond line\x1b[201~\r"]);
 });
 
+test("a request to a paused terminal shows its card there: Deny, or Resume and send, which types it once", async ({ page }) => {
+  await open(page);
+  const a = await newTerm(page, "shell");
+  const la = await linkId(page, a);
+  await expect.poll(async () => Object.keys(await files(page))).toContain(la);
+  // omher restarts: the shell comes back paused, nothing runs
+  await page.reload();
+  await page.getByTestId(`session-${a}`).locator(".ss-open").click();
+  await expect(page.getByTestId("session-paused")).toBeVisible();
+  await expect.poll(async () => (await files(page))[la]?.state).toBe("ended");
+  await ask(page, la, "first request");
+  const card = page.getByTestId("term-share-card");
+  await expect(card).toHaveCount(1);
+  await expect(page.getByTestId(`session-${a}`)).toHaveAttribute("data-term-status", "bell");
+  // no Allow for this session where nothing runs
+  await expect(card.locator("button")).toHaveText(["Deny", "Resume and send"]);
+  await expect(card.locator("button").first()).toBeFocused();
+  await card.getByRole("button", { name: "Deny" }).click();
+  await expect(card).toHaveCount(0);
+  expect(await page.evaluate(() => ((window as unknown as W).__omherShellCalls ?? []).filter((c) => c.op === "start").length)).toBe(0);
+  await ask(page, la, "second request");
+  await card.getByRole("button", { name: "Resume and send" }).click();
+  await expect(page.getByTestId("terminal")).toBeVisible();
+  await expect.poll(async () => (await writes(page, a)).filter((d) => d.includes("request")), { timeout: 15_000 }).toEqual(["second request\r"]);
+  await expect(card).toHaveCount(0);
+  await page.waitForTimeout(1500);
+  expect((await writes(page, a)).filter((d) => d.includes("request"))).toEqual(["second request\r"]);
+});
+
 test.describe("shots", () => {
   test.use({ deviceScaleFactor: 2 });
   for (const theme of ["dark", "light"] as const) {
@@ -204,6 +233,19 @@ test.describe("shots", () => {
       await ask(page, link, "Run the payment tests again and tell me which one fails:\npnpm test payments --reporter=dot");
       await expect(page.getByTestId("term-share-card")).toBeVisible();
       await shot(page, `term-link-bot-card-${theme}`);
+    });
+    test(`shots: a request card on a paused terminal (${theme})`, async ({ page }) => {
+      test.skip(!SHOTS, "no shot folder");
+      await open(page, theme);
+      const id = await newTerm(page, "shell");
+      const link = await linkId(page, id);
+      await expect.poll(async () => Object.keys(await files(page))).toContain(link);
+      await page.reload();
+      await page.getByTestId(`session-${id}`).locator(".ss-open").click();
+      await expect(page.getByTestId("session-paused")).toBeVisible();
+      await ask(page, link, "Run the payment tests again and tell me which one fails:\npnpm test payments --reporter=dot");
+      await expect(page.getByTestId("term-share-card")).toBeVisible();
+      await shot(page, `term-link-bot-paused-card-${theme}`);
     });
   }
 });

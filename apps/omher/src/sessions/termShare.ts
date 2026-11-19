@@ -5,8 +5,10 @@
 // own owner-only plain file, 16 KB at most, never a link) and hands the page the request; the page shows it as a card
 // on the session ("<bot> wants to type into <title>"), with Deny, Allow once and Allow for this session. Only Allow
 // types it (the prompt, then Enter; a bracketed paste when the program asked for one). "Allow for this session" lets
-// later requests to that session type without a card until it is closed or omher restarts. Nothing else types a
-// bot's prompt.
+// later requests to that session type without a card until it is closed or omher restarts. A session that cannot take
+// input now (paused, ended, its program not started) shows the card too, with Deny and "Resume and send" (it starts
+// again, and the prompt is typed once its program runs). A prompt that could not be typed keeps its card, with a line
+// saying so; it never uses up the request or a grant. Nothing else types a bot's prompt.
 import { useSyncExternalStore } from "react";
 import { getStore } from "../state/store";
 import { isTerminalRec, termFallbackName, type SessionRec } from "./agents";
@@ -41,7 +43,17 @@ export interface ShareRequest {
 export interface PendingRequest extends ShareRequest {
   key: string;
   sessionId: string;
+  /** the last Allow could not type it (the terminal took no input) */
+  failed?: boolean;
+  /** "Resume and send" is starting the session; the card waits */
+  busy?: boolean;
 }
+
+/** How long "Resume and send" waits for the session's program to run and print, and how often it looks. */
+export const RESUME_WAIT_MS = 20_000;
+const RESUME_LOOK_MS = 100;
+/** After the program's first output, a moment for it to turn on what it asks for (bracketed paste) first. */
+const RESUME_SETTLE_MS = 300;
 
 export interface ShareHost {
   write(link: string, status: ShareStatus): Promise<void>;
@@ -136,8 +148,17 @@ export function createTermShare(host: ShareHost, sessions: () => ReturnType<type
     for (const fn of [...subs]) fn();
   };
 
-  /** Type an allowed prompt into session `id`. The only way a bot's prompt reaches a terminal. */
-  const type = (r: PendingRequest) => void sessions().typeAllowed(r.sessionId, cleanPrompt(r.prompt));
+  /** Type an allowed prompt into session `id`. The only way a bot's prompt reaches a terminal. False: not typed. */
+  const type = (r: PendingRequest) => sessions().typeAllowed(r.sessionId, cleanPrompt(r.prompt));
+  const update = (key: string, p: Partial<PendingRequest>) => {
+    pending = pending.map((x) => (x.key === key ? { ...x, ...p } : x));
+    emit();
+  };
+  /** Request `r` is done: its card goes. */
+  const drop = (key: string) => {
+    pending = pending.filter((p) => p.key !== key);
+    emit();
+  };
 
   /** Write what changed, remove the files of sessions that are gone. */
   const publish = async (now = Date.now()) => {
@@ -176,8 +197,13 @@ export function createTermShare(host: ShareHost, sessions: () => ReturnType<type
       if (!rec || !isTerminalRec(sessions().getState().agents, rec)) continue;
       const p: PendingRequest = { ...r, prompt: cleanPrompt(r.prompt), key: `rq${++seq}`, sessionId: rec.id };
       if (!p.prompt.trim()) continue;
-      if (granted.has(rec.id)) {
-        type(p);
+      if (granted.has(rec.id) && sessions().canType(rec.id)) {
+        // typed without a card; one that could not be typed after all shows its card
+        void type(p).then((ok) => {
+          if (ok) return;
+          pending = [...pending, { ...p, failed: true }];
+          emit();
+        });
         continue;
       }
       pending = [...pending, p];
@@ -193,14 +219,39 @@ export function createTermShare(host: ShareHost, sessions: () => ReturnType<type
     if (got.length) arrive(got);
   };
 
-  /** The person's answer to request `key`. */
-  const answer = (key: string, choice: "deny" | "once" | "session") => {
+  /** The session's program runs and has printed since `since` (ms), within RESUME_WAIT_MS. */
+  const ready = async (id: string, since: number): Promise<boolean> => {
+    const end = Date.now() + RESUME_WAIT_MS;
+    while (Date.now() < end) {
+      if (!sessions().getState().list.some((r) => r.id === id)) return false;
+      if (sessions().canType(id) && (termActs.get(id).lastOut ?? 0) >= since) {
+        await new Promise((res) => setTimeout(res, RESUME_SETTLE_MS));
+        return sessions().canType(id);
+      }
+      await new Promise((res) => setTimeout(res, RESUME_LOOK_MS));
+    }
+    return false;
+  };
+
+  /** The person's answer to request `key`. An Allow that types nothing keeps the card (with its line) and adds no
+   *  grant. "resume": start the session again, wait for its program, then type the prompt once. */
+  const answer = async (key: string, choice: "deny" | "once" | "session" | "resume") => {
     const r = pending.find((p) => p.key === key);
-    if (!r) return;
-    pending = pending.filter((p) => p.key !== key);
+    if (!r || r.busy) return;
+    if (choice === "deny") return drop(key);
+    if (choice === "resume") {
+      update(key, { busy: true, failed: false });
+      const since = Date.now();
+      const rec = sessions().getState().list.find((x) => x.id === r.sessionId);
+      if (rec?.paused) await sessions().resume(r.sessionId);
+      else if (rec && !sessions().canType(r.sessionId)) await sessions().restart(r.sessionId);
+      const ok = (await ready(r.sessionId, since)) && (await type(r));
+      if (!pending.some((p) => p.key === key)) return; // the session went meanwhile
+      return ok ? drop(key) : update(key, { busy: false, failed: true });
+    }
+    if (!sessions().canType(r.sessionId) || !(await type(r))) return update(key, { failed: true });
     if (choice === "session") granted.add(r.sessionId);
-    if (choice !== "deny") type(r);
-    emit();
+    drop(key);
   };
 
   return {

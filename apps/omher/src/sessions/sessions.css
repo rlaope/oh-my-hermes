@@ -1859,7 +1859,8 @@ body.side-resizing * {
 
 /* a bot's request to type into this terminal (termShare.ts): approval cards over the terminal's top right, the
    person's Allow the only way it is typed */
-.term-wrap .tshare-cards {
+.term-wrap .tshare-cards,
+.ss-idle > .tshare-cards {
   position: absolute;
   top: 10px;
   right: 22px;
@@ -1871,11 +1872,13 @@ body.side-resizing * {
   max-height: calc(100% - 20px);
   overflow-y: auto;
 }
-.term-wrap .tshare-card {
+.term-wrap .tshare-card,
+.ss-idle > .tshare-cards .tshare-card {
   max-width: none;
   box-shadow: 0 6px 22px rgba(0, 0, 0, 0.28);
   animation: pop 0.14s ease both;
 }
-[data-theme="light"] .term-wrap .tshare-card {
+[data-theme="light"] .term-wrap .tshare-card,
+[data-theme="light"] .ss-idle > .tshare-cards .tshare-card {
   box-shadow: 0 6px 22px rgba(0, 0, 0, 0.12);
 }

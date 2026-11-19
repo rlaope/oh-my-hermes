@@ -2116,6 +2116,11 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
     sendFiles,
     dropOnTerminal,
     typeAllowed,
+    /** Session `id`'s terminal program runs and takes input now (what `typeAllowed` needs). */
+    canType: (id: string): boolean => {
+      const t = terms.get(id);
+      return !!t && t.hostId !== null && !t.closed;
+    },
     /** The ↵ ↓ × buttons of a waiting message (steer queue sessions): Send now or Steer, Edit, Delete. */
     queuePick,
     /** Esc / Stop: the agent's own interrupt. */
