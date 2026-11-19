@@ -180,7 +180,7 @@ test("Keep terminal history off: one clear, and no history call after it", async
   await page.getByTestId("nav-settings").click();
   await page.getByTestId("settings-nav-terminal").click();
   const sw = page.getByTestId("term-keep-history");
-  await expect(page.getByTestId("term-keep-history-row")).toContainText("Keep terminal history across restarts");
+  await expect(page.getByTestId("term-keep-history-row")).toContainText("Keep history across restarts");
   await expect(sw.getByRole("radio", { name: "On" })).toHaveAttribute("aria-checked", "true");
   await sw.getByRole("radio", { name: "Off" }).click();
   await expect.poll(async () => (await history(page)).filter((c) => c.op === "history.clear")).toHaveLength(1);

@@ -538,7 +538,7 @@ export const ja: Record<Key, string> = {
   "term.images": "ターミナルに画像を表示",
   "term.imagesHint": "プログラムが出力した画像 (sixel、iTerm2、Kitty) をターミナルに描画します。画像はそのターミナルのメモリにのみ、32 MB まで保持されます。",
   "term.history": "履歴",
-  "term.keepHistory": "再起動後もターミナルの履歴を残す",
+  "term.keepHistory": "再起動後も履歴を残す",
   "term.keepHistoryHint": "omher を再起動すると、各ターミナルの表示内容が薄く表示されて戻ります。オフにするとすべて消去します。",
   "term.restored": "{time} に復元",
   "term.linkHint": "{key}+クリックで開く",

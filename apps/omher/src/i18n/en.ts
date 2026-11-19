@@ -540,7 +540,7 @@ export const en = {
   "term.images": "Show images in the terminal",
   "term.imagesHint": "Pictures a program prints (sixel, iTerm2, Kitty) are drawn in the terminal and kept only in its memory, up to 32 MB.",
   "term.history": "History",
-  "term.keepHistory": "Keep terminal history across restarts",
+  "term.keepHistory": "Keep history across restarts",
   "term.keepHistoryHint": "What each terminal showed comes back, dimmed, after omher restarts. Off removes it all.",
   "term.restored": "restored {time}",
   "term.linkHint": "{key}+click to open",

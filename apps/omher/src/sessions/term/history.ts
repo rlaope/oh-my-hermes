@@ -3,7 +3,7 @@
 // dimmed, into the new terminal after omher restarts, under a one-line divider, before the program's own output.
 // The text is the terminal's buffer serialized with `@xterm/addon-serialize` (its last HISTORY_LINES lines, no modes
 // and no full-screen program's alternate screen), saved every HISTORY_EVERY_MS while it changed and when the page
-// goes away. Settings › Terminal "Keep terminal history across restarts" (`keepHistory`) turns all of it off, and
+// goes away. Settings › Terminal › History "Keep history across restarts" (`keepHistory`) turns all of it off, and
 // turning it off removes every kept file at once.
 import type { Terminal } from "@xterm/xterm";
 import { locale, t } from "../../i18n";

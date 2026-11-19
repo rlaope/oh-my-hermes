@@ -142,11 +142,11 @@ test("Dracula picked for dark reaches the open terminal at once and is still the
   expect(now?.wrapBg).toBe("rgb(40, 42, 54)");
   await expect(page.locator(".xterm-rows")).toContainText("(mock)");
 
-  // restart: the session comes back not running; resumed, its terminal is made with the pick
+  // restart: a Claude Code terminal continues its conversation by itself (rule 11); opened, its terminal has the pick
   await expect.poll(async () => (await page.evaluate(() => JSON.parse(localStorage.getItem("omher.resume") || "null")))?.sessions?.[0]?.open).toBe("terminal");
   await page.evaluate(() => sessionStorage.setItem("__kept", "1"));
   await page.reload();
-  await page.getByTestId("session-resume").click();
+  await session(page);
   await expect(page.getByTestId("terminal")).toBeVisible();
   await expect(page.locator(".xterm-rows")).toContainText("(mock)");
   expect((await look(page))?.background).toBe("#282a36");
