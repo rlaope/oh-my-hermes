@@ -179,6 +179,63 @@ def _read_session_provider_text(text: str) -> str:
     return provider
 
 
+_ROUTE_WRITE_ATTEMPTS = 5
+
+
+def _apply_route_delta(text: str, desired: Mapping[str, str]) -> str:
+    """Return text with only the routable delegation keys set to desired.
+
+    Pure transformation: every other byte passes through unchanged. Returns
+    text itself when there is nothing to add or remove, so the caller can skip
+    a byte-identical write.
+    """
+    bom = BOM if text.startswith(BOM) else ""
+    lines = text[len(bom):].splitlines()
+    child_indents = _delegation_child_indents(lines)
+    output: list[str] = []
+    inserted = False
+    in_section = False
+    section_seen = False
+    child_indent = 2
+    for index, line in enumerate(lines):
+        if _SECTION_RE.match(line):
+            in_section = True
+            section_seen = True
+            output.append(line)
+            child_indent = child_indents.get(index, 2)
+            prefix = " " * child_indent
+            for key in ROUTABLE_KEYS:
+                value = desired.get(key, "")
+                if value:
+                    output.append(f"{prefix}{key}: '{value}'")
+            inserted = True
+            continue
+        if in_section and _top_level_key(line) is not None:
+            in_section = False
+        if in_section and any(
+            _managed_key_re(key, child_indent).match(line)
+            for key in ROUTABLE_KEYS
+        ):
+            continue
+        output.append(line)
+    wanted = {key: value for key, value in desired.items() if value}
+    if wanted and not inserted:
+        if output and output[-1].strip():
+            output.append("")
+        output.append("delegation:")
+        for key in ROUTABLE_KEYS:
+            value = wanted.get(key, "")
+            if value:
+                output.append(f"  {key}: '{value}'")
+        section_seen = True
+    if not section_seen and not wanted:
+        return text
+    new_text = bom + "\n".join(output)
+    if text.endswith("\n") or not text:
+        new_text += "\n"
+    return new_text
+
+
 def write_delegation_route(
     hermes_home: str | Path | None = None,
     *,
@@ -196,8 +253,9 @@ def write_delegation_route(
 
     `guard_route_endpoint` is for a route: it refuses one Hermes would not
     send where it says (`route_endpoint_guard.route_endpoint_refusal`),
-    judged on the same snapshot the write replaces. A restore leaves it off,
-    because putting back the person's own values is not a switch.
+    judged on the config the write replaces, re-read just before the rename.
+    A restore leaves it off, because putting back the person's own values is
+    not a switch.
     """
     desired = {} if clear else {
         "model": model.strip(),
@@ -239,80 +297,70 @@ def write_delegation_route(
         )
         if refusal:
             return refusal
-    child_indents = _delegation_child_indents(lines)
-    output: list[str] = []
-    inserted = False
-    in_section = False
-    section_seen = False
-    child_indent = 2
-    for index, line in enumerate(lines):
-        if _SECTION_RE.match(line):
-            in_section = True
-            section_seen = True
-            output.append(line)
-            child_indent = child_indents.get(index, 2)
-            prefix = " " * child_indent
-            for key in ROUTABLE_KEYS:
-                value = desired.get(key, "")
-                if value:
-                    output.append(f"{prefix}{key}: '{value}'")
-            inserted = True
-            continue
-        if in_section and _top_level_key(line) is not None:
-            in_section = False
-        if in_section and any(
-            _managed_key_re(key, child_indent).match(line)
-            for key in ROUTABLE_KEYS
-        ):
-            continue
-        output.append(line)
     wanted = {key: value for key, value in desired.items() if value}
-    if wanted and not inserted:
-        if output and output[-1].strip():
-            output.append("")
-        output.append("delegation:")
-        for key in ROUTABLE_KEYS:
-            value = wanted.get(key, "")
-            if value:
-                output.append(f"  {key}: '{value}'")
-        section_seen = True
-    if not section_seen and not wanted:
-        # Nothing to remove and nothing to add: leave the file untouched.
-        return {"status": "cleared" if clear else "routed", "previous": previous, "applied": {}}
-
-    new_text = bom + "\n".join(output)
-    if text.endswith("\n") or not text:
-        new_text += "\n"
-    try:
-        config_path.parent.mkdir(parents=True, exist_ok=True)
-        descriptor, temp_name = tempfile.mkstemp(
-            prefix=".omh-delegation-route-", dir=str(config_path.parent)
-        )
+    # Write from the latest config, not the validation snapshot. A writer
+    # outside the OMH lock (hermes config set) may have added an unrelated key
+    # since the snapshot; re-reading and re-applying only the delegation delta
+    # just before the rename preserves every unrelated byte and closes the
+    # lost update that dropped such keys. A byte-identical result is not written.
+    for _attempt in range(_ROUTE_WRITE_ATTEMPTS):
+        fresh_text, fresh_signature, fresh_error = _read_config_snapshot(config_path)
+        if fresh_error:
+            return {"status": "error", "error": fresh_error}
+        fresh_bom = BOM if fresh_text.startswith(BOM) else ""
+        if _has_unsupported_delegation(fresh_text[len(fresh_bom):].splitlines()):
+            return {
+                "status": "error",
+                "error": (
+                    "unsupported delegation mapping; refusing to rewrite it — "
+                    "no route was written, so the next delegate_task dispatch "
+                    "inherits the parent model"
+                ),
+            }
+        if guard_route_endpoint:
+            refusal = route_endpoint_refusal(
+                fresh_text,
+                provider=desired.get("provider", ""),
+                current_provider=previous.get("provider", ""),
+                managed=managed_config_layer(),
+            )
+            if refusal:
+                return refusal
+        new_text = _apply_route_delta(fresh_text, desired)
+        if new_text == fresh_text:
+            return {
+                "status": "cleared" if clear else "routed",
+                "previous": previous,
+                "applied": wanted,
+            }
         try:
-            with os.fdopen(descriptor, "w", encoding="utf-8") as handle:
-                handle.write(new_text)
-            if _file_signature(config_path) != signature:
-                os.unlink(temp_name)
-                return {
-                    "status": "error",
-                    "error": "config changed during route update",
-                }
-            if config_path.exists():
-                os.chmod(temp_name, config_path.stat().st_mode & 0o7777)
-            os.replace(temp_name, config_path)
-        except OSError:
+            config_path.parent.mkdir(parents=True, exist_ok=True)
+            descriptor, temp_name = tempfile.mkstemp(
+                prefix=".omh-delegation-route-", dir=str(config_path.parent)
+            )
             try:
-                os.unlink(temp_name)
+                with os.fdopen(descriptor, "w", encoding="utf-8") as handle:
+                    handle.write(new_text)
+                if _file_signature(config_path) != fresh_signature:
+                    os.unlink(temp_name)
+                    continue
+                if config_path.exists():
+                    os.chmod(temp_name, config_path.stat().st_mode & 0o7777)
+                os.replace(temp_name, config_path)
             except OSError:
-                pass
-            raise
-    except OSError as exc:
-        return {"status": "error", "error": f"config write failed: {type(exc).__name__}"}
-    return {
-        "status": "cleared" if clear else "routed",
-        "previous": previous,
-        "applied": wanted,
-    }
+                try:
+                    os.unlink(temp_name)
+                except OSError:
+                    pass
+                raise
+        except OSError as exc:
+            return {"status": "error", "error": f"config write failed: {type(exc).__name__}"}
+        return {
+            "status": "cleared" if clear else "routed",
+            "previous": previous,
+            "applied": wanted,
+        }
+    return {"status": "error", "error": "config kept changing during route update"}
 
 
 def delegation_config_path(hermes_home: str | Path | None = None) -> Path:
