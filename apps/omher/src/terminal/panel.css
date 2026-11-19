@@ -209,7 +209,7 @@
 .termpanel .term-host .xterm {
   height: 100%;
 }
-.termpanel .term-host .xterm .xterm-viewport {
+.termpanel .term-host .xterm:not(.allow-transparency) .xterm-viewport {
   background-color: transparent;
   scrollbar-width: thin;
   scrollbar-color: var(--scrollbar) transparent;

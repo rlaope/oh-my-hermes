@@ -637,8 +637,11 @@ body.side-resizing * {
 .term-host .xterm {
   height: 100%;
 }
-.term-host .xterm .xterm-viewport {
-  /* xterm.css paints it #000; the theme background (on the scrollable element) shows through instead */
+.term-host .xterm:not(.allow-transparency) .xterm-viewport {
+  /* xterm.css paints it #000 with `.xterm:not(.allow-transparency) .xterm-viewport`, as specific as a plain
+     `.term-host .xterm .xterm-viewport` and loaded later, so the :not() is repeated here: else the few pixels under the
+     last row, where the rows do not fill the box, show as a black bar. The theme background (on the scrollable
+     element) shows through instead */
   background-color: transparent;
   scrollbar-width: thin;
   scrollbar-color: var(--scrollbar) transparent;
