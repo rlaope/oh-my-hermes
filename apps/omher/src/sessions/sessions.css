@@ -1693,3 +1693,26 @@ body.side-resizing * {
   font-weight: 400;
   pointer-events: none;
 }
+
+/* a bot's request to type into this terminal (termShare.ts): approval cards over the terminal's top right, the
+   person's Allow the only way it is typed */
+.term-wrap .tshare-cards {
+  position: absolute;
+  top: 10px;
+  right: 22px;
+  z-index: 6;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: min(420px, calc(100% - 44px));
+  max-height: calc(100% - 20px);
+  overflow-y: auto;
+}
+.term-wrap .tshare-card {
+  max-width: none;
+  box-shadow: 0 6px 22px rgba(0, 0, 0, 0.28);
+  animation: pop 0.14s ease both;
+}
+[data-theme="light"] .term-wrap .tshare-card {
+  box-shadow: 0 6px 22px rgba(0, 0, 0, 0.12);
+}

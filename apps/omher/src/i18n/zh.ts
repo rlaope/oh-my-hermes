@@ -1434,6 +1434,8 @@ export const zh: Record<Key, string> = {
   "tlink.st.waiting": "等待中",
   "tlink.st.done": "完成",
   "tlink.st.ended": "已结束",
+  "tshare.wants": "{bot} 想在 {title} 中输入",
+  "tshare.thisSession": "本会话内允许",
   "term.empty": "在文件夹中打开 shell 或编程 CLI：",
   "dock.label": "已固定",
   "dock.pin": "固定到 Dock",
