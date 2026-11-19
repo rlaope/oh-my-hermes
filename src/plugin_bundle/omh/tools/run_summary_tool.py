@@ -80,8 +80,7 @@ OMH_RUN_SUMMARY_SCHEMA = {
     "name": "omh_run_summary",
     "description": (
         "Run summary and cost receipt from Hermes' own accounting. Render "
-        "the localized end-of-run summary (elapsed seconds, token usage, and "
-        "the prompt-cache share of input when cache reads were recorded) — "
+        "the localized end-of-run summary (elapsed seconds and token usage) — "
         "the calling session plus its delegate_task children. Call it once "
         "when a workflow run (e.g. ulw-work) completes, pass the language the "
         "conversation is in, and print summary_text verbatim as the closing "
