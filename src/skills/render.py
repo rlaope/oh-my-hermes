@@ -39,6 +39,7 @@ from .catalog_types import (
     HERMES_SCANNER_EXCLUDED_TERMS,
     HermesReferenceLine,
     HermesSkillLine,
+    OMH_DESCRIPTION_PREFIX,
     LLM_APP_DEV_EVAL_DELIVERABLES,
     LLM_APP_DEV_PUBLIC_BOARD_ACTIONS,
     LLM_APP_DEV_RAILS,
@@ -611,13 +612,52 @@ def frontmatter_description(definition: SkillDefinition) -> str:
     return omh_description(definition.description) + _frontmatter_trigger_tail(definition)
 
 
+# Each portable description, aliases tail included, is cut to this many
+# characters unless its situation clause alone is longer: 124 skills then list
+# 7,442 description characters, under the 8,000 Claude Code / Codex budget.
+PORTABLE_DESCRIPTION_CHARS = 68
+_PORTABLE_MIN_DETAIL_CHARS = 12
+_PORTABLE_CUT_MARK = "…"
+_PORTABLE_JOINING_WORDS = frozenset("a an the and or of to for with in on into by from before after that which when".split())
+
+
 def agent_frontmatter_description(definition: SkillDefinition) -> str:
-    """Keep catalog meaning; drop the optional trigger tail before a host hides it."""
+    """The portable listing description: the situation clause, then the start of what the skill does.
+
+    Codex and Claude Code list every skill's description inside about 8,000
+    characters and OpenClaw inside 18,000, so the full catalog text with its
+    trigger tail (42,581 characters for 123 skills) was shortened, dropped or
+    left out of the list. The situation clause, the text before the first `: `
+    of the catalog description, is what a model reads to decide whether the skill
+    applies, so it is always kept whole. The "what it does" part follows it when
+    `PORTABLE_DESCRIPTION_CHARS` leaves room, cut at a word boundary and marked
+    with `…`; the full text and the trigger list stay in the body ("Why This
+    Exists" and the "Strong routing signals" list). A clause too long to leave
+    `_PORTABLE_MIN_DETAIL_CHARS` of room ends with a full stop alone. A
+    description with no clause separator is kept whole. Picker aliases stay,
+    since a body need not name them (two skills carry any).
+    """
     base = omh_description(definition.description)
     if not definition.description.strip() or not 1 <= len(base) <= 1024:
         raise ValueError(f"{definition.name}: Agent Skills description must be 1-1024 characters")
-    full = frontmatter_description(definition)
-    return full if len(full) <= 1024 else base
+    prefix = OMH_DESCRIPTION_PREFIX if base.lower().startswith(OMH_DESCRIPTION_PREFIX) else ""
+    clause, _, detail = base[len(prefix):].partition(": ")
+    head = prefix + clause.rstrip(" .,;:-")
+    detail = detail.strip().rstrip(" .,;:-")
+    aliases = _safe_aliases(definition) if definition.name != "oh-my-hermes" else []
+    tail = " Aliases: " + ", ".join(aliases) + "." if aliases else ""
+    room = PORTABLE_DESCRIPTION_CHARS - len(head) - len(tail) - len(": ") - len(".")
+    if len(detail) <= room:
+        lead = f"{head}: {detail}." if detail else f"{head}."
+    elif room < _PORTABLE_MIN_DETAIL_CHARS:
+        lead = f"{head}."
+    else:
+        cut = detail[: room + 1].rsplit(" ", 1)[0].rstrip(" .,;:-–—(/") if " " in detail[: room + 1] else ""
+        # A cut never ends on a joining word ("…, or…" reads as a dropped list item).
+        while " " in cut and cut.rsplit(" ", 1)[1].lower() in _PORTABLE_JOINING_WORDS:
+            cut = cut.rsplit(" ", 1)[0].rstrip(" .,;:-–—(/")
+        lead = f"{head}: {cut}{_PORTABLE_CUT_MARK}" if len(cut) >= _PORTABLE_MIN_DETAIL_CHARS else f"{head}."
+    return lead + tail
 
 
 def _frontmatter(
@@ -3309,7 +3349,7 @@ An explainer, motion graphics, kinetic type, a logo or title intro, a 3D scene, 
 
 - Defaults, each labeled as an assumption and overridden by anything the user said: 16:9 1920x1080, 30 fps, 20-30 s when no duration is given (about 2.5 s per beat), muted unless music is asked for, on-screen text in the user's language. Ask only for a fact that cannot be recovered.
 - Pick one concept from its genre recipe in `references/genres.md` and record its assumptions. Then probe the renderer, because the file you write depends on it.
-- Probe the renderer read-only, in the order `references/genres.md` gives: the `hyperframes` CLI only when `command -v hyperframes` finds it (`npx` would download it), then `toolkit/scripts/render.mjs` with a local Chrome, `puppeteer-core` and FFmpeg, then a frame renderer already installed (such as Python with Pillow) piped to FFmpeg. If none runs, HOLD with the exact install command and ask for consent once; never install, download fonts or call a paid API on your own.
+- Probe the renderer read-only, in the order `references/genres.md` gives: the `hyperframes` CLI only when `command -v hyperframes` finds it (`npx` would download it), then `toolkit/scripts/render.mjs` (setup in `toolkit/README.md`: `skill_view(name='omh-show-reel', file_path='toolkit/README.md')`) with a local Chrome, `puppeteer-core` and FFmpeg, then a frame renderer already installed (such as Python with Pillow) piped to FFmpeg. If none runs, HOLD with the exact install command and ask for consent once; never install, download fonts or call a paid API on your own.
 - Author for the renderer found, with a deterministic seek and no `Math.random()` or wall clock: HyperFrames takes `data-*` timing and a paused GSAP timeline; `render.mjs` renders only a `new_project.py NEW --font FILE` scaffold, not a standalone HTML.
 - Render 3 style frames and view them, render a draft, view its contact sheet, and rebuild the weakest beat once. Export, then measure codec, dimensions, fps, duration, size and sha256 with `ffprobe`; deliver the path with those facts. A storyboard or an HTML file alone is HOLD, not delivery.
 - Fill the frame, use one hue family plus at most one accent, add no meta text (window titles, dimension labels, invented paths), draw no rounded "document" cards as a metaphor, and move the camera on one continuous path rather than stopping at every beat.
@@ -3438,16 +3478,177 @@ def agent_skill_template(definition: SkillDefinition) -> SkillTemplate:
     The per-skill unit of `agent_skill_templates`; the caller decides
     portability, so this renders whatever definition it is given.
     """
-    return SkillTemplate(omh_skill_display_name(definition.name), workflow_skill_from_definition(
-        definition, definition.name, target="agent-skills",
-    ).content)
+    content = workflow_skill_from_definition(definition, definition.name, target="agent-skills").content
+    return SkillTemplate(omh_skill_display_name(definition.name), split_for_read_cap(content)[0])
+
+
+def agent_skill_detail_templates(
+    definitions: Iterable[SkillDefinition] | None = None,
+) -> list[SkillReferenceTemplate]:
+    """The `references/details.md` each over-cap portable body moved whole sections into.
+
+    `definitions` defaults to every portable skill; a caller holding one skill
+    passes that one definition and gets its slice.
+    """
+    if definitions is None:
+        from .catalog_portable import portable_skill_names
+
+        names = frozenset(portable_skill_names())
+        definitions = [d for d in builtin_definitions() if omh_skill_display_name(d.name) in names]
+    result = []
+    for definition in definitions:
+        content = workflow_skill_from_definition(definition, definition.name, target="agent-skills").content
+        details = split_for_read_cap(content)[1]
+        if details is not None:
+            result.append(SkillReferenceTemplate(omh_skill_display_name(definition.name), PORTABLE_DETAILS_PATH, details))
+    return result
+
+
+# OpenClaw 2026.9+ hands a skill read back only up to a cap that depends on
+# the model context: 16,000 weighted characters under 100K tokens, with CJK
+# characters counted as 4 or more (SkillEvaluator 1.0.1 openclaw profile,
+# verified 2026-11-01 against OpenClaw 2026.10.9). Past it the read is refused
+# or cut, and the model works from part of the instructions. A portable body
+# over `PORTABLE_READ_CAP` therefore moves whole sections into
+# `references/details.md`, in `PORTABLE_MOVABLE_UNITS` order, until the rest
+# fits. The quality bar and the safety rules are never moved: they hold the
+# rules a host must apply, so they stay in the SKILL.md it loads. A moved
+# section keeps its heading and one line pointing at the file. The Hermes
+# `skills/` bodies are not split: Hermes' skill_view budget is 100,000
+# characters.
+PORTABLE_READ_CAP = 15_000
+PORTABLE_DETAILS_PATH = "references/details.md"
+# Least needed at load time first. A `Label:` unit is one list of the
+# `## Catalog Metadata` block and runs to the label after it; a `##` unit is
+# the whole section. `## Runtime Evidence` never moves: it holds the reply
+# and evidence rules every portable body states. The last three hold named
+# outputs, steps and recovery rules that pinned rules point at (`ulw-research`
+# names references/search-method.md in First Steps, research_claims/v1 and
+# reference_study/v1 in its expected outputs, and its blocked-source recovery
+# rule in Recovery Notes); only `ulw-work` (First Steps; its quality bar
+# alone weighs 9,101) and `ulw-loop` (no First Steps, so Expected outputs)
+# reach them.
+PORTABLE_MOVABLE_UNITS = (
+    "Required inputs:",
+    "Artifact expectations:",
+    "## Examples",
+    "## When to Use",
+    "## Completion Checklist",
+    "## Why This Exists",
+    "## Do Not Use When",
+    "## First Steps",
+    "Expected outputs:",
+    "## Recovery Notes",
+)
+_CATALOG_UNIT_END = {
+    "Required inputs:": "Expected outputs:",
+    "Expected outputs:": "Artifact expectations:",
+    "Artifact expectations:": "Safety rules:",
+}
+_DETAILS_UNIT_START = re.compile(r"(?<=\n)\n(?=## |(?:Required inputs|Expected outputs|Artifact expectations):\n)")
+_TOOLKIT_CALL = re.compile(r"skill_view\(name='[^']+', file_path='toolkit/[^']+'\)")
+_ROUTING_SIGNALS = "    Strong routing signals: "
+# A moved `## When to Use` keeps its prose and this many of its routing signals.
+PORTABLE_KEPT_ROUTING_SIGNALS = 4
+
+
+def details_pointer(unit: str) -> str:
+    """What stands in SKILL.md for one moved `unit`: its heading, the pointer, and any toolkit call it held.
+
+    A moved `## When to Use` keeps its prose and its first routing signals, so
+    the body still says when it applies. Hermes and the hosts that copy its
+    layout find a `toolkit/` file only when SKILL.md names it, so a
+    `skill_view(..., file_path='toolkit/...')` call inside the moved text is
+    repeated beside the pointer.
+    """
+    first = unit.split("\n", 1)[0]
+    pointer = f"{first}\n\nRead `{PORTABLE_DETAILS_PATH}` first.\n"
+    signals = unit.find("\n" + _ROUTING_SIGNALS) + 1
+    if first == "## When to Use" and signals:
+        kept = re.findall(r"`[^`]+`", unit[signals:])[:PORTABLE_KEPT_ROUTING_SIGNALS]
+        pointer = (
+            f"{unit[:signals]}{_ROUTING_SIGNALS}{', '.join(kept)}; "
+            f"all of them in `{PORTABLE_DETAILS_PATH}`.\n"
+        )
+    calls = list(dict.fromkeys(_TOOLKIT_CALL.findall(unit)))
+    return pointer + "".join(f"\nToolkit setup: `{call}`.\n" for call in calls)
+
+
+_CJK_RANGES = (
+    (0x1100, 0x11FF), (0x2E80, 0x9FFF), (0xA000, 0xA4FF), (0xAC00, 0xD7FF),
+    (0xF900, 0xFAFF), (0xFE10, 0xFE4F), (0xFF01, 0xFFE6), (0x20000, 0x3347F),
+)
+
+
+# One character class over `_CJK_RANGES`, so counting is a C-level scan, not a
+# Python loop per character (that loop cost ~40 s per full pack render and timed
+# a Windows CLI test out at 60 s).
+_CJK_CHARACTER = re.compile(
+    "[" + "".join(f"{chr(low)}-{chr(high)}" for low, high in _CJK_RANGES) + "]"
+)
+
+
+def openclaw_read_chars(text: str) -> int:
+    """`text` as OpenClaw's read cap counts it: UTF-16 units, each CJK character as 4."""
+    units = len(text.encode("utf-16-le", "surrogatepass")) // 2
+    return units + 3 * len(_CJK_CHARACTER.findall(text))
+
+
+def _movable_span(content: str, label: str) -> tuple[int, int] | None:
+    """Where `label`'s unit sits in `content`: from its first line to its last text line, newline included."""
+    start = content.find("\n" + label + "\n") + 1
+    if start == 0 or content.find("\n" + label + "\n", start) >= 0:
+        return None
+    if label.startswith("## "):
+        following = content.find("\n## ", start + len(label))
+        stop = len(content) if following < 0 else following + 1
+    else:
+        stop = content.find("\n" + _CATALOG_UNIT_END[label] + "\n", start)
+        if stop < 0:
+            return None
+        stop += 1
+    # The unit ends at its last text line; the blank line after it stays in SKILL.md.
+    return start, start + len(content[start:stop].rstrip("\n")) + 1
+
+
+def details_units(details: str) -> list[str]:
+    """The moved units `details` holds, in document order; each ends with its last text line."""
+    return _DETAILS_UNIT_START.split(details)
+
+
+@lru_cache(maxsize=512)
+def split_for_read_cap(content: str) -> tuple[str, str | None]:
+    """`(SKILL.md, details)`: unchanged with `None` when it fits, else whole sections moved out.
+
+    Every moved unit is kept byte for byte: replacing `details_pointer(unit)`
+    in the returned SKILL.md with each unit of `details_units(details)` gives
+    back `content`.
+    """
+    if openclaw_read_chars(content) <= PORTABLE_READ_CAP:
+        return content, None
+    moved: list[tuple[int, int]] = []
+    head = content
+    for label in PORTABLE_MOVABLE_UNITS:
+        span = _movable_span(content, label)
+        if span is None:
+            continue
+        moved.append(span)
+        moved.sort()
+        head, cursor = "", 0
+        for start, end in moved:
+            head += content[cursor:start] + details_pointer(content[start:end])
+            cursor = end
+        head += content[cursor:]
+        if openclaw_read_chars(head) <= PORTABLE_READ_CAP:
+            return head, "\n".join(content[start:end] for start, end in moved)
+    raise ValueError("portable SKILL.md is over the read cap even with every movable section moved out")
 
 
 def agent_skill_reference_templates() -> list[SkillReferenceTemplate]:
     """Only reviewed reference contracts; new references fail closed."""
     from .packaging import builtin_skill_reference_templates
 
-    return portable_reference_templates(builtin_skill_reference_templates())
+    return [*portable_reference_templates(builtin_skill_reference_templates()), *agent_skill_detail_templates()]
 
 
 def portable_reference_templates(

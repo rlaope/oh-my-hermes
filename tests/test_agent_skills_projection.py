@@ -423,7 +423,10 @@ class AgentSkillsProjectionTests(unittest.TestCase):
         from dataclasses import fields
         from omh.skills.catalog import installable_skill_definitions, omh_skill_display_name
         from omh.skills.catalog_types import SkillDefinition
-        from omh.skills.render import agent_skill_template, translate_sibling_mentions
+        from dataclasses import replace
+        from omh.skills.render import (
+            agent_frontmatter_description, agent_skill_detail_templates, agent_skill_template, translate_sibling_mentions,
+        )
         from omh.skills.catalog_portable import portable_skill_names
 
         sections = {field.name for field in fields(SkillDefinition)} - {"portable_overrides"}
@@ -440,12 +443,24 @@ class AgentSkillsProjectionTests(unittest.TestCase):
             if name not in portable:
                 problems.append(f"{name} (overrides a skill with no Agent Skills projection)")
                 continue
-            body = agent_skill_template(definition).content
+            # A body over the read cap keeps its quality bar in references/details.md.
+            body = agent_skill_template(definition).content + "".join(
+                detail.content for detail in agent_skill_detail_templates([definition])
+            )
             # Every rendered line names its siblings under loadable labels
             # (`translate_sibling_mentions`), so that is the line to find.
+            # A description override reaches the listing only as its situation clause
+            # (`agent_frontmatter_description`), so that projection is the line to find.
+            rendered = {
+                section: (
+                    [json.dumps(agent_frontmatter_description(replace(definition, description=lines[0])), ensure_ascii=False)]
+                    if section == "description" else lines
+                )
+                for section, lines in definition.portable_overrides.items()
+            }
             problems.extend(
                 f"{name}::{section} (replacement line absent from the portable body)"
-                for section, lines in definition.portable_overrides.items()
+                for section, lines in rendered.items()
                 if any(
                     translate_sibling_mentions(line, owner=definition.name) not in body
                     for line in lines
@@ -542,7 +557,8 @@ class AgentSkillsProjectionTests(unittest.TestCase):
             self.assertEqual(
                 (mirror / "ulw-work/SKILL.md").read_bytes(), claude_skill_files()["ulw-work/SKILL.md"].encode("utf-8")
             )
-            self.assertNotEqual((target / "ulw-work/SKILL.md").read_bytes(), (mirror / "ulw-work/SKILL.md").read_bytes())
+            # The portable descriptions already fit Claude Code's listing, so the copies match today.
+            self.assertEqual((target / "ulw-work/SKILL.md").read_bytes(), (mirror / "ulw-work/SKILL.md").read_bytes())
             (mirror / "ulw-work/SKILL.md").write_bytes(b"local mirror edit")
             status = agent_skills_status(target, mirror=mirror)
             self.assertEqual(status["drift"], "locally_modified")

@@ -1,6 +1,6 @@
 ---
 name: "omh-ai-slop-cleaner"
-description: "[omh] Messy or AI-generated code to clean up: delete AI-generated slop, dead code, and duplication while observable behavior stays identical."
+description: "[omh] Messy or AI-generated code to clean up: delete AI-generated…"
 license: MIT
 metadata:
   hermes:

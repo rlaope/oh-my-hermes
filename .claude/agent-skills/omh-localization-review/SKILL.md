@@ -1,6 +1,6 @@
 ---
 name: "omh-localization-review"
-description: "[omh] Translated product or content release: make a product or content release locale-ready with terminology, cultural-fit, and quality-review guidance."
+description: "[omh] Translated product or content release: make a product…"
 license: MIT
 metadata:
   hermes:

@@ -1,4 +1,4 @@
-"""The Claude Code copy shortens every description; other packs keep their bytes."""
+"""The Claude Code copy bounds every description for its listing; other packs keep their bytes."""
 from __future__ import annotations
 
 from contextlib import chdir
@@ -51,7 +51,7 @@ class ClaudeDescriptionProducerTests(unittest.TestCase):
 
     def test_no_skill_added_or_removed_and_only_skill_files_differ(self):
         self.assertEqual(self.claude.keys(), self.portable.keys())
-        self.assertEqual(len(self.skills), 123)
+        self.assertEqual(len(self.skills), 124)
         for relative, content in self.portable.items():
             if relative not in self.skills:
                 self.assertEqual(self.claude[relative], content, relative)
@@ -62,8 +62,10 @@ class ClaudeDescriptionProducerTests(unittest.TestCase):
                 before, after = self.portable[relative].split("\n"), self.claude[relative].split("\n")
                 self.assertEqual(len(before), len(after))
                 changed = [i for i, (x, y) in enumerate(zip(before, after)) if x != y]
-                self.assertEqual(len(changed), 1)
-                self.assertTrue(before[changed[0]].startswith("description: "))
+                # The portable description already fits the cap, so nothing changes today;
+                # if one ever does, it may only be the description line.
+                self.assertLessEqual(len(changed), 1)
+                self.assertTrue(all(before[i].startswith("description: ") for i in changed))
                 self.assertTrue(description(self.claude[relative]).startswith("[omh] "))
 
     def test_every_description_is_short_whole_and_ends_cleanly(self):
@@ -73,12 +75,14 @@ class ClaudeDescriptionProducerTests(unittest.TestCase):
             text = description(self.claude[relative])
             with self.subTest(relative=relative):
                 self.assertLessEqual(len(text), CLAUDE_DESCRIPTION_CAP)
-                self.assertGreaterEqual(len(text), 40)
+                # The shortest situation clause plus `[omh] ` and the full stop.
+                self.assertGreaterEqual(len(text), 25)
                 self.assertNotIn("Use when the user says", text)
                 lead = description(self.portable[relative]).partition(" Use when the user says:")[0].strip()
                 if len(lead) <= CLAUDE_DESCRIPTION_CAP:
-                    # Nothing was cut, so nothing is reworded: a lead that ends "act on." keeps its last word.
-                    self.assertEqual(text, lead.rstrip(" .,;:-") + ".")
+                    # Nothing was cut, so nothing is reworded: a lead that ends "act on." keeps its last word,
+                    # and one the portable projection already cut keeps its `…` with no full stop after it.
+                    self.assertEqual(text, lead if lead.endswith("…") else lead.rstrip(" .,;:-") + ".")
                     continue
                 # A cut says it is one, and is a prefix of the lead it was cut from.
                 self.assertTrue(text.endswith("…"), text)
@@ -87,11 +91,13 @@ class ClaudeDescriptionProducerTests(unittest.TestCase):
                 self.assertNotIn(words[-1].lower(), FUNCTION_WORDS, text)
                 self.assertNotIn(" ".join(words[-2:]).lower(), FUNCTION_WORDS, text)
 
-    def test_every_portable_description_has_the_trigger_marker(self):
+    def test_no_portable_description_carries_the_trigger_list(self):
+        # The trigger list lives in the body's routing-signals list, not the listing.
         from omh.install.agent_skills_projection import CLAUDE_TRIGGER_MARKER
 
         for relative in self.skills:
-            self.assertIn(CLAUDE_TRIGGER_MARKER, description(self.portable[relative]), relative)
+            self.assertNotIn(CLAUDE_TRIGGER_MARKER, description(self.portable[relative]), relative)
+            self.assertIn("routing signals:", self.portable[relative].split("\n---\n", 1)[1].lower(), relative)
 
     def test_shorten_description_rules(self):
         from omh.install.agent_skills_projection import shorten_description
@@ -158,13 +164,14 @@ class InstallTests(unittest.TestCase):
 
     def test_unselected_install_mirrors_the_claude_copy_and_status_stays_truthful(self):
         from omh.install.agent_skills_projection import (
-            MANIFEST_NAME, agent_skill_files, agent_skills_status, claude_skill_files, install_agent_skills,
+            MANIFEST_NAME, agent_skill_files, agent_skills_manifest, agent_skills_status, claude_skill_files,
+            install_agent_skills,
         )
 
         with tempfile.TemporaryDirectory() as tmp:
             home = Path(tmp).resolve()
             target, mirror = home / ".agents/skills", home / ".claude/skills"
-            # A mirror written before this change holds the portable bytes: stale, clean drift.
+            # A mirror holding the portable bytes: the Claude copy equals them today, so it reads fresh.
             old = install_agent_skills(target, mirror=None)
             self.assertEqual(old["projection"], "fresh")
             shutil.copytree(target, mirror)
@@ -173,7 +180,7 @@ class InstallTests(unittest.TestCase):
             for root in (target, mirror):
                 (root / MANIFEST_NAME).write_text(json.dumps(receipt, indent=2, sort_keys=True) + "\n")
             status = agent_skills_status(target, mirror=mirror)
-            self.assertEqual((status["primary"], status["mirror"], status["drift"]), ("fresh", "stale", "clean"))
+            self.assertEqual((status["primary"], status["mirror"], status["drift"]), ("fresh", "fresh", "clean"))
             # Reinstall: each root gets its own bytes and its own receipt.
             status = install_agent_skills(target, mirror=mirror)
             self.assertEqual((status["projection"], status["drift"]), ("fresh", "clean"))
@@ -181,7 +188,9 @@ class InstallTests(unittest.TestCase):
             self.assertEqual({k: v.decode() for k, v in tree(mirror).items() if k != MANIFEST_NAME}, claude_skill_files())
             receipts = [json.loads((root / MANIFEST_NAME).read_text()) for root in (target, mirror)]
             self.assertEqual(receipts[0]["target_dirs"], receipts[1]["target_dirs"])
-            self.assertNotEqual(receipts[0]["files"], receipts[1]["files"])
+            # Each root lists its own pack's bytes; the two packs are identical today.
+            self.assertEqual(receipts[0]["files"], agent_skills_manifest(agent_skill_files())["files"])
+            self.assertEqual(receipts[1]["files"], agent_skills_manifest(claude_skill_files())["files"])
             # Mirror drift is still named per file.
             (mirror / "omh-plan/SKILL.md").write_bytes(b"edited")
             status = agent_skills_status(target, mirror=mirror)

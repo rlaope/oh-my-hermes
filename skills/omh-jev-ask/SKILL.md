@@ -1,6 +1,6 @@
 ---
 name: "omh-jev-ask"
-description: "[omh] User named Jev for yes/no or pick-one probabilities: Jev ask: typed yes/no, pick-one, or scored questions to Jev with your own key; returns probabilities, never prose. Use when the user says: jev-ask, ask jev, jev question, jev score."
+description: "[omh] User asks Jev for yes/no or pick-one probabilities: Jev ask: typed yes/no, pick-one, or scored questions to Jev with your own key; returns probabilities, never prose. Use when the user says: jev-ask, ask jev, jev question, jev score."
 license: MIT
 author: "oh-my-hermes maintainers"
 metadata:

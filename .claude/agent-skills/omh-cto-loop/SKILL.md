@@ -1,6 +1,6 @@
 ---
 name: "omh-cto-loop"
-description: "[omh] Engineering leadership over roadmap and risk: roadmap, PM, technical tradeoffs, risk, delivery, release, and follow-up operating cadence."
+description: "[omh] Engineering leadership over roadmap and risk."
 license: MIT
 metadata:
   hermes:

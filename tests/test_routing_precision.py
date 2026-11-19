@@ -107,7 +107,9 @@ class RoutingPrecisionTests(unittest.TestCase):
         # dag-ulw backlogs add thirteen: lists too short, looked at, held or put off, chores and reading, and
         # fixes in the current directory or branch that are no live lookup.
         # One-line code backlogs add ten: four made in the session, six one-line look-alikes that keep their route.
-        self.assertEqual(payload["summary"]["case_count"], 1540)
+        # skill-eval adds four: a chess, tennis, interview and Korean sales skill are a person's ability.
+        # Its review round adds one: a person's skill at using Codex.
+        self.assertEqual(payload["summary"]["case_count"], 1545)
         self.assertEqual(payload["summary"]["passing_count"], payload["summary"]["case_count"])
         self.assertEqual(payload["summary"]["negative_case_count"], payload["summary"]["case_count"])
         self.assertEqual(payload["summary"]["negative_passing_count"], payload["summary"]["case_count"])
@@ -279,7 +281,10 @@ class RoutingPrecisionTests(unittest.TestCase):
         # dag-ulw backlogs add eleven: five code backlogs that run as a graph, four listed look-alikes
         # that keep their owner, two live lookups said with "current".
         # One-line look-alikes add two: one bug's symptoms and one feature's parts keep their owner.
-        self.assertEqual(payload["summary"]["intervention_case_count"], 1337)
+        # skill-eval adds seven host-fit checks (four English, three Korean) and five asks that keep
+        # skill-health, skill-scout and agent-evaluation.
+        # Its review round adds three: two artifact checks that dispatch, one staff assessment that does not.
+        self.assertEqual(payload["summary"]["intervention_case_count"], 1352)
         self.assertEqual(
             payload["summary"]["intervention_passing_count"], payload["summary"]["intervention_case_count"]
         )

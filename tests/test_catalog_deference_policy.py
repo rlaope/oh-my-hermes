@@ -377,9 +377,13 @@ NON_SKILL_BACKTICKS = frozenset(
 # Its review round gives model-optimization back one line each for serving
 # (`inference-serving`) and training (`model-finetuning`): two cases, and the
 # two pairs it had lost.
-EXPECTED_DEFERENCE_CASES = 469
-EXPECTED_DEFERENCE_PAIRS = 496
-EXPECTED_DEFERRING_OWNERS = 139
+# `skill-eval` defers the portfolio dashboard to `skill-health`, finding a skill
+# to `skill-scout`, comparing agents to `agent-evaluation` and a broken install
+# to `doctor`; no sibling gains a line pointing back. Four cases, four pairs,
+# one new owner.
+EXPECTED_DEFERENCE_CASES = 473
+EXPECTED_DEFERENCE_PAIRS = 500
+EXPECTED_DEFERRING_OWNERS = 140
 
 # The ratchet. Recording a new inversion must be a visible edit to this number,
 # not one more dict line with a plausible sentence attached.

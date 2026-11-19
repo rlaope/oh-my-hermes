@@ -39,7 +39,10 @@ from .catalog_types import OMH_DESCRIPTION_PREFIX
 from .packaging import builtin_skill_templates
 
 # Copied from hermes-agent `agent/skill_utils.py` (`SKILL_PROMPT_DESC_LIMIT = 60`,
-# used by `extract_skill_description` as `desc[:SKILL_PROMPT_DESC_LIMIT - 3] + "..."`).
+# used by `clip_skill_description`: a longer description is cut at the last
+# whitespace inside its first 58 characters, trailing punctuation is dropped,
+# and `...` is appended; a single word with no boundary falls back to
+# `desc[:SKILL_PROMPT_DESC_LIMIT - 3] + "..."`).
 # Copied rather than imported because OMH never imports Hermes at runtime: the
 # maintenance CLI and CI run without a Hermes checkout.
 # `UpstreamDescriptionLimitPinTests` in `tests/test_per_turn_budgets.py`
@@ -48,6 +51,10 @@ from .packaging import builtin_skill_templates
 # `skill_index_chars` silently.
 SKILL_PROMPT_DESC_LIMIT = 60
 _TRUNCATION_SUFFIX = "..."
+# The same two patterns `clip_skill_description` uses: the last whitespace run
+# and the word after it, and the punctuation stripped from the cut's end.
+_LAST_WHITESPACE = re.compile(r"\s\S*$")
+_CLIP_TRAIL = re.compile(r"[\s.,;:\-\u2013\u2014(/]+$")
 
 # How many leading words of the visible description make its "opening" for the
 # distinctness lint. Measured on the catalog when the lint landed: at two words
@@ -75,13 +82,19 @@ def hermes_index_description(description: str) -> str:
     """The description text Hermes shows in the index for one skill.
 
     Mirrors `extract_skill_description`: strip whitespace, strip surrounding
-    quote characters, then cut to 57 characters plus `...` when longer than
-    the limit.
+    quote characters, then, when longer than the limit, cut at the last
+    whitespace inside the first 58 characters (so no word is shown half),
+    drop trailing punctuation, and append `...`. A description with no
+    whitespace to cut at is cut to 57 characters plus `...`.
     """
     text = description.strip().strip("'\"")
-    if len(text) > SKILL_PROMPT_DESC_LIMIT:
+    if len(text) <= SKILL_PROMPT_DESC_LIMIT:
+        return text
+    head = text[: SKILL_PROMPT_DESC_LIMIT - 2]
+    boundary = _LAST_WHITESPACE.search(head)
+    if boundary is None or boundary.start() == 0:
         return text[: SKILL_PROMPT_DESC_LIMIT - len(_TRUNCATION_SUFFIX)] + _TRUNCATION_SUFFIX
-    return text
+    return _CLIP_TRAIL.sub("", head[: boundary.start()]) + _TRUNCATION_SUFFIX
 
 
 def index_opening(description: str) -> str:

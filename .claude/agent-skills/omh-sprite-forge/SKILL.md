@@ -1,6 +1,6 @@
 ---
 name: "omh-sprite-forge"
-description: "[omh] Character art to animate in a game: turn image-model sprite sheets into aligned, QC-gated frames with a fail-closed Pillow helper."
+description: "[omh] Character art to animate in a game: turn image-model sprite…"
 license: MIT
 metadata:
   hermes:
@@ -21,7 +21,7 @@ Image models return character poses at drifting scales and offsets, so frames cu
 
 ## First Steps
 
-- Read `toolkit/README.md` and `references/execution-and-qa.md` before executing `toolkit/scripts/forge.py`; installation and skill discovery never run it.
+- Read `toolkit/README.md` (`skill_view(name='omh-sprite-forge', file_path='toolkit/README.md')`) and `references/execution-and-qa.md` before executing `toolkit/scripts/forge.py`; installation and skill discovery never run it.
 - Obtain the raw sheet from the host's own image tool as a grid on flat #FF00FF; OMH generates no images, and a 1xN strip is regenerated as a grid, never processed.
 - Record identity elements, rejected drafts, cell size and baseline in `references/character-art-direction.md` form before cutting frames.
 

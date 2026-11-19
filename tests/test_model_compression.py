@@ -49,6 +49,16 @@ class ModelCompressionCatalogTests(unittest.TestCase):
         self.assertTrue(mine.safety_rules[0].endswith("perplexity alone never keeps a compressed model."))
         self.assertIn("held-out eval", mine.safety_rules[2])
 
+    def test_the_hermes_listing_names_size_and_cost(self) -> None:
+        # A lower serving cost at the same parameter count is a use too; base a5649293 listed
+        # "smaller or cheaper", and the listing must keep both inside Hermes' index window.
+        from omh.skills.render import frontmatter_description
+        from omh.skills.skill_index import hermes_index_description
+
+        listed = hermes_index_description(frontmatter_description(_definition(SKILL)))
+        self.assertIn("smaller or cheaper", listed)
+        self.assertIn("weights", listed)
+
     def test_every_command_in_the_reference_names_its_source_page(self) -> None:
         commands = _reference().split("## 3. Commands", 1)[1].split("## 4.", 1)[0]
         sections = [section for section in commands.split("\n### ")[1:]]

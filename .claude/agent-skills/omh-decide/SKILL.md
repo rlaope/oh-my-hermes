@@ -1,6 +1,6 @@
 ---
 name: "omh-decide"
-description: "[omh] Team or business decision between options: tradeoffs, a recommendation, and a decision note you can act on."
+description: "[omh] Team or business decision between options."
 license: MIT
 metadata:
   hermes:
