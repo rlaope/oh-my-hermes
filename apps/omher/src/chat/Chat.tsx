@@ -3,6 +3,7 @@ import { selectAsks, useStore } from "../state/store";
 import { Header } from "./parts/Header";
 import { Timeline } from "./parts/Timeline";
 import { Composer } from "./parts/Composer";
+import { promptsOf } from "./parts/promptHistory";
 import { OmhPromptLine } from "../onboarding/OmhPromptLine";
 import { ConnectBlock } from "./connect/ConnectBlock";
 import { t } from "../i18n";
@@ -51,6 +52,7 @@ export function Chat() {
           offlineText={away ? t("chat.connecting") : undefined}
           skills
           plugins
+          history={promptsOf(chat?.items)}
           onSend={(text) => void s.send(text)}
           onSendFiles={(text, files) => s.sendWithFiles(text, files)}
           onStop={() => void s.interrupt()}
