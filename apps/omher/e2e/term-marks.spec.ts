@@ -4,7 +4,8 @@
 //      earlier prompt in turn, Cmd+Down / Cmd+PageDown back; each prompt has a gutter mark, the failed one red;
 //   2. a terminal that sent no marks: Cmd+Up moves nothing (as before);
 //   3. OSC 7: `file:///tmp/x%20y` renames the bottom panel's tab to "x y"; a TERMINALS row shows that folder on its
-//      second line; another computer's folder, a relative path or a non-file address changes neither;
+//      second line; another computer's folder, a relative path or a non-file address changes neither; this computer's
+//      own name (the mock shell's start reply says `mybox.local`) counts, with and without `.local`;
 //   4. OSC 9;4: `9;4;3` keeps the row working while nothing prints; `9;4;0` while the person looks at another session
 //      marks the row as the bell does (and raises no notification); done without working first marks nothing.
 // Chromium (Playwright's headless shell); nothing here ran in the Tauri window.
@@ -120,6 +121,24 @@ test("OSC 7: the bottom panel's tab follows the folder its shell reports, from t
   await expect(tab).toHaveText("x y");
   await out(page, shellPty, OSC("7;file://localhost/home/you/code/api-server"));
   await expect(tab).toHaveText("api-server");
+});
+
+test("OSC 7: a folder from this computer's own name counts, the name the shell start reported", async ({ page }) => {
+  await openApp(page);
+  await page.keyboard.press("Control+Backquote");
+  await expect(page.locator('[data-testid="termpanel-terminal"]:not([hidden]) .xterm-rows')).toContainText("login shell in");
+  const shellPty = await page.evaluate(() => (window as unknown as { __omherShellCalls: { op: string; id: number }[] }).__omherShellCalls.filter((c) => c.op === "start").at(-1)!.id);
+  const tab = page.getByTestId("termpanel-tab").locator(".termpanel-tab-name");
+  await expect(tab).toHaveText("you");
+  // the mock computer is "mybox.local": its short name, as zsh's $HOST gives it, counts
+  await out(page, shellPty, OSC("7;file://mybox/tmp/x%20y"));
+  await expect(tab).toHaveText("x y");
+  await out(page, shellPty, OSC("7;file://MyBox.local/tmp/full"));
+  await expect(tab).toHaveText("full");
+  // another computer's name still does not
+  await out(page, shellPty, OSC("7;file://otherbox/tmp/elsewhere"));
+  await page.waitForTimeout(100);
+  await expect(tab).toHaveText("full");
 });
 
 test("OSC 7: a TERMINALS row's folder line follows the folder its shell reports, from this computer only", async ({ page }) => {

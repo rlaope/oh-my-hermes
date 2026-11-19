@@ -19,6 +19,7 @@ mod sessions;
 mod setup;
 mod tasks;
 mod term_history;
+mod this_host;
 
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -383,7 +384,7 @@ async fn shell_start(
             }
         })?;
         watch_foreground(&sessions, &app, id);
-        Ok(ShellStarted { id, cwd: at.to_string_lossy().into_owned() })
+        Ok(ShellStarted { id, cwd: at.to_string_lossy().into_owned(), host: this_host::name() })
     })
     .await
     .map_err(|e| e.to_string())?
@@ -410,11 +411,13 @@ struct SessionFg {
     agent: Option<&'static str>,
 }
 
-/// A started terminal-panel shell: its session id and the folder it started in.
+/// A started terminal-panel shell: its session id, the folder it started in, and this computer's name (empty when
+/// the system gives none), which the page uses only to accept a shell's OSC 7 folder from this computer.
 #[derive(serde::Serialize)]
 struct ShellStarted {
     id: u32,
     cwd: String,
+    host: String,
 }
 
 /// Keystrokes (and pastes) from the terminal view into session `id`.

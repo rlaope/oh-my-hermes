@@ -87,8 +87,8 @@ interface State {
 
 const states = new Map<Terminal, State>();
 
-/** This computer's own names: OSC 7 from these counts as local. Set by whoever learns them (none yet: until then
- *  only an empty host and `localhost` count). */
+/** This computer's own names: OSC 7 from these counts as local. The first started panel shell sets them (its start
+ *  reply carries the name, terminal/host.ts); until then only an empty host and `localhost` count. */
 let thisHost: string[] = [];
 export function setThisHost(names: readonly string[]): void {
   thisHost = names.filter((n) => typeof n === "string" && !!n.trim()).map((n) => n.trim());
