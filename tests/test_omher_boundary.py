@@ -2459,7 +2459,13 @@ class TasksReadOnly(unittest.TestCase):
         names = src.split("def mcp_server_names(", 1)[1].split("\ndef ", 1)[0]
         for word in ("_load_yaml", "_YAML_CACHE", "yaml.load(", "safe_load", "compose", "read_text"):
             self.assertNotIn(word, names, word)
-        self.assertIn("yaml.parse(f, Loader=loader)", names)
+        self.assertIn("events, yaml = _yaml_events(f)", names)
+        # its events come from a parser of the library Hermes reads YAML with, never from a loader
+        events = src.split("def _yaml_events(", 1)[1].split("\ndef ", 1)[0]
+        for word in ("_load_yaml", "_YAML_CACHE", "load(", "safe_load", "compose", "read_text"):
+            self.assertNotIn(word, events, word)
+        self.assertIn("yaml.parse(stream, Loader=loader)", events)
+        self.assertIn('YAML(typ="safe", pure=True).parse(stream)', events)
         self.assertEqual(sorted(set(re.findall(r'== "([a-z_]+)"', names))), ["enabled", "mcp_servers"])
         body = src.split("def linear_server(", 1)[1].split("\ndef ", 1)[0].split('"""', 2)[2]
         # the keys, then of the Linear-named server only its `enabled`: no url, no values(), no items()
