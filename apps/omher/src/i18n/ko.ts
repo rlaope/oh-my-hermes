@@ -1425,6 +1425,10 @@ export const ko: Record<Key, string> = {
   "term.shellTip": "아래 폴더에서 로그인 셸을 열어요",
   "term.st.busy": "출력 중",
   "term.here": "여기서 새 터미널",
+  // terminal links (omher://terminal/<id>)
+  "tlink.copy": "링크 복사",
+  "tlink.copied": "링크를 복사했어요",
+  "key.copyLink": "터미널 링크 복사",
   "term.empty": "폴더에서 셸이나 코딩 CLI를 열어요:",
   "dock.label": "고정됨",
   "dock.pin": "독에 고정",

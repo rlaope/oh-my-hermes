@@ -1425,6 +1425,10 @@ export const ja: Record<Key, string> = {
   "term.shellTip": "下のフォルダでログインシェルを開きます",
   "term.st.busy": "出力中",
   "term.here": "ここで新しいターミナル",
+  // terminal links (omher://terminal/<id>)
+  "tlink.copy": "リンクをコピー",
+  "tlink.copied": "リンクをコピーしました",
+  "key.copyLink": "ターミナルのリンクをコピー",
   "term.empty": "フォルダでシェルやコーディング CLI を開きます:",
   "dock.label": "ピン留め",
   "dock.pin": "ドックに固定",

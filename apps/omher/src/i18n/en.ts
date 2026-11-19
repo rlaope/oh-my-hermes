@@ -1427,6 +1427,10 @@ export const en = {
   "term.shellTip": "Your login shell in the folder below",
   "term.st.busy": "Printing output",
   "term.here": "New terminal here",
+  // terminal links (omher://terminal/<id>)
+  "tlink.copy": "Copy link",
+  "tlink.copied": "Link copied",
+  "key.copyLink": "Copy the terminal's link",
   "term.empty": "Open a shell or a coding CLI in a folder:",
   "dock.label": "Pinned",
   "dock.pin": "Pin to dock",

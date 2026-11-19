@@ -41,6 +41,7 @@ import { wireFileDrop, isWindows } from "../terminal/terms";
 import { paneKey } from "../terminal/layout";
 import { isMac } from "../app/shortcuts";
 import { openSplitPicker, SplitPicker, SplitView } from "./SplitView";
+import { isCopyLinkKey, LINK_COPIED_EVENT } from "./termLink";
 
 const STATUS: Record<string, Key> = { starting: "ss.starting", running: "ss.running", exited: "ss.ended", failed: "ss.couldNotStart" };
 
@@ -84,6 +85,35 @@ function TerminalPane({ rec, splits }: { rec: SessionRec; splits?: boolean }) {
     el.addEventListener("keydown", on, true);
     return () => el.removeEventListener("keydown", on, true);
   }, [rec.id, splits]);
+  // ⌘⇧C (Alt+Shift+C off macOS) in a TERMINALS terminal: its link to the clipboard. Taken before xterm.
+  useEffect(() => {
+    const el = wrap.current;
+    if (!el || !splits) return;
+    const on = (e: KeyboardEvent) => {
+      if (composing(e) || !isCopyLinkKey(e, isMac())) return;
+      e.preventDefault();
+      e.stopPropagation();
+      if (!e.repeat) void getSessions().copyLink(rec.id);
+    };
+    el.addEventListener("keydown", on, true);
+    return () => el.removeEventListener("keydown", on, true);
+  }, [rec.id, splits]);
+  // a copied link says so on the terminal for a moment (the row menu's Copy link too, while this one shows)
+  const [copied, setCopied] = useState(false);
+  useEffect(() => {
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    const on = (e: Event) => {
+      if ((e as CustomEvent<string>).detail !== rec.id) return;
+      setCopied(true);
+      if (timer) clearTimeout(timer);
+      timer = setTimeout(() => setCopied(false), 1600);
+    };
+    window.addEventListener(LINK_COPIED_EVENT, on);
+    return () => {
+      window.removeEventListener(LINK_COPIED_EVENT, on);
+      if (timer) clearTimeout(timer);
+    };
+  }, [rec.id]);
   useEffect(() => {
     if (!box.current) return;
     return getSessions().attach(rec.id, box.current, mode);
@@ -97,6 +127,11 @@ function TerminalPane({ rec, splits }: { rec: SessionRec; splits?: boolean }) {
     <div className="term-wrap" ref={wrap} data-testid="terminal" data-session={rec.id}>
       <div className="term-box" ref={box} />
       {find && <FindBar req={find} onClose={() => setFind(null)} />}
+      {copied && (
+        <div className="tlink-copied" role="status" data-testid="term-link-copied">
+          {t("tlink.copied")}
+        </div>
+      )}
     </div>
   );
 }

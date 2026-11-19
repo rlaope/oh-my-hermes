@@ -297,6 +297,8 @@ export type SessionStatus = "draft" | "starting" | "running" | "exited" | "faile
 
 export interface SessionRec {
   id: string;
+  /** The session's link id (`omher://terminal/<linkId>`, termLink.ts): drawn when it is made, kept across restarts. */
+  linkId?: string;
   agent: AgentId;
   cwd: string;
   /** ms since epoch */

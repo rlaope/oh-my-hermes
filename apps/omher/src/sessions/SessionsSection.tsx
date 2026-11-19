@@ -982,12 +982,12 @@ const ageMs = (ms: number, now: number) => ageOf(ms / 1000, now);
 export function rowMenuItems(rec: Pick<SessionRec, "cwd" | "agentSession">): RowAction[] {
   return ["rename", ...(rec.cwd ? (["reveal", "terminal"] as const) : []), ...(rec.agentSession ? (["copy"] as const) : []), "here", "close"];
 }
-/** A TERMINALS row's menu: Rename, Reveal, Open in the system terminal, New terminal here,
- *  Close. */
-export function termMenuItems(rec: Pick<SessionRec, "cwd">): RowAction[] {
-  return ["rename", ...(rec.cwd ? (["reveal", "terminal"] as const) : []), "here", "close"];
+/** A TERMINALS row's menu: Rename, Reveal, Open in the system terminal, Copy link (its `omher://terminal/…`),
+ *  New terminal here, Close. */
+export function termMenuItems(rec: Pick<SessionRec, "cwd" | "linkId">): RowAction[] {
+  return ["rename", ...(rec.cwd ? (["reveal", "terminal"] as const) : []), ...(rec.linkId ? (["link"] as const) : []), "here", "close"];
 }
-export type RowAction = "rename" | "reveal" | "terminal" | "copy" | "here" | "close";
+export type RowAction = "rename" | "reveal" | "terminal" | "copy" | "link" | "here" | "close";
 
 /** \"Show in Finder\" on macOS, \"Show in Explorer\" on Windows, \"Show in file manager\" elsewhere. */
 const revealWord = () => {
@@ -1000,6 +1000,7 @@ const ROW_ACTION_LABEL: Record<RowAction, () => string> = {
   reveal: revealWord,
   terminal: () => t("ss.menu.terminal"),
   copy: () => t("ss.menu.copyId"),
+  link: () => t("tlink.copy"),
   here: () => t("term.here"),
   close: () => t("ss.close"),
 };
@@ -1008,6 +1009,7 @@ const ROW_ACTION_ID: Record<RowAction, string> = {
   reveal: "session-reveal",
   terminal: "session-system-terminal",
   copy: "session-copy-id",
+  link: "session-copy-link",
   here: "session-new-here",
   close: "session-menu-close",
 };
@@ -1183,6 +1185,7 @@ const TermRow = memo(function TermRow({ rec, agents, unseen, active, ticking, on
     if (a === "rename") setEditing(true);
     else if (a === "reveal") void sx.revealFolder(rec.id);
     else if (a === "terminal") void sx.openTerminal(rec.id);
+    else if (a === "link") void sx.copyLink(rec.id);
     else if (a === "here") sx.startTerminal(rec.agent, rec.cwd);
     else if (a === "close") onClose(rec);
   };

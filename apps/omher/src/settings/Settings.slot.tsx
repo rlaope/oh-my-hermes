@@ -363,6 +363,7 @@ const SHORTCUTS: [string, Key][] = [
   [MOD === "⌘" ? "⌘D · ⌘⇧D" : "Ctrl+Shift+D · Alt+Shift+D", "key.splitPane"],
   [MOD === "⌘" ? "⌘W" : "Ctrl+Shift+W", "key.closePane"],
   [MOD === "⌘" ? "⌘⌥ ←↑↓→" : "Ctrl+Alt+ ←↑↓→", "key.focusPane"],
+  [MOD === "⌘" ? "⌘⇧C" : "Alt+Shift+C", "key.copyLink"],
   ["1 · 2 · 3", "key.cardKeys"],
   ["Esc", "key.stop"],
 ];
