@@ -4201,6 +4201,63 @@ class PeerHint(BridgeCase):
             self.assertEqual(rows[0]["text"], "맥미니 헤르메스 붙여줘")
 
 
+class TermLinkStatus(BridgeCase):
+    """A main-chat message holding an omher terminal link gets that terminal's status (from the file omher keeps,
+    `~/.omher/terminals/<id>.json`) as one `[omher]` block; a link to a terminal not here says so; the block never
+    shows back as the person's words; only that file is read, never through a link."""
+
+    LID = "abcdefgh23"
+    STATUS = {"link": "omher://terminal/abcdefgh23", "title": "checkout build", "agent": "claude",
+              "folder": "~/code/web-app", "state": "waiting", "started": 1700000000,
+              "last_line": "All 42 tests passed", "updated_at": 1700000100}
+
+    def _omher(self) -> Path:
+        d = Path(tempfile.mkdtemp())
+        (d / "terminals").mkdir()
+        (d / "terminals" / f"{self.LID}.json").write_text(json.dumps(self.STATUS), encoding="utf-8")
+        return d
+
+    def test_the_block_names_the_terminal_and_one_not_here(self):
+        home = self._omher()
+        blocks = ob.term_link_blocks(f"look at omher://terminal/{self.LID} and omher://terminal/zzzzzzzzzz", home)
+        self.assertEqual(blocks.split("\n"), [
+            f'[omher] Terminal omher://terminal/{self.LID}: "checkout build"; CLI claude; folder ~/code/web-app; '
+            f"state waiting; last line: All 42 tests passed. {ob.TERM_LINK_TAIL}",
+            "[omher] Terminal omher://terminal/zzzzzzzzzz: not open on this computer.",
+        ])
+        self.assertEqual(ob.term_link_blocks("no link here, omher://terminal/ABCDEFGH23 or xomher://terminal/abcdefgh23", home), "")
+        many = " ".join(f"omher://terminal/{c * 10}" for c in "abcde")
+        self.assertEqual(len(ob.term_link_blocks(many, home).split("\n")), ob.TERM_LINK_MAX)
+
+    @unittest.skipIf(os.name == "nt", "symlinks need privileges on Windows")
+    def test_a_linked_or_oversized_status_file_is_not_read(self):
+        home = self._omher()
+        f = home / "terminals" / f"{self.LID}.json"
+        outside = home / "outside.json"
+        f.rename(outside)
+        os.symlink(outside, f)
+        self.assertIsNone(ob.read_term_status(home, self.LID))
+        f.unlink()
+        f.write_text("x" * (17 * 1024), encoding="utf-8")
+        self.assertIsNone(ob.read_term_status(home, self.LID))
+        self.assertIsNone(ob.read_term_status(home, "../../etc"))
+
+    async def test_the_block_rides_a_main_chat_turn_and_is_stripped_on_read(self):
+        async with Env() as env:
+            env.bridge.omher_home = self._omher()
+            s = await self.open(env)
+            await s.req("chat.open", bot="kami")
+            typed = f"what is omher://terminal/{self.LID} doing?"
+            await s.req("chat.send", bot="kami", text=typed)
+            await s.req("chat.send", bot="kami", text="hello")
+            sent = [x["text"] for x in env.clients["kami"].find("prompt.submit")]
+            self.assertTrue(sent[0].startswith(typed + "\n\n[omher] Terminal omher://terminal/abcdefgh23: \"checkout build\""), sent[0])
+            self.assertIn("last line: All 42 tests passed", sent[0])
+            self.assertEqual(sent[1], "hello")
+            rows = ob.chat_messages([{"role": "user", "text": sent[0], "row_id": 9}])
+            self.assertEqual(rows[0]["text"], typed)
+
+
 class TasksLinear(unittest.TestCase):
     """`tasks.linear`: the Tasks page's Linear source asks only whether the bot's config has an MCP server whose name
     has `linear` in it; the reader reads the names and that server's `enabled`, never a url, headers, env or auth."""
