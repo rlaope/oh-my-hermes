@@ -277,6 +277,14 @@ All notable changes will be documented here.
   draws them from the font, a hair short of their cells. Terminal › GPU renderer › Auto now uses the GPU renderer
   wherever the hardware allows it (WebGL2, not a software rasterizer), and it draws those characters to fill the cell
   as a real terminal does. Off keeps the standard renderer; a machine without hardware WebGL2 keeps it too.
+- **omher: a Slack briefing that sets itself up.** Add a bot whose Hermes profile has Slack connected and omher
+  creates one automation for it, `omher-brief`: the channel-watch collector in a new brief mode checks the Slack
+  channels you share with the bot every 15 minutes and wakes the model only when there is a reason (an unanswered
+  mention, a thread it already told you about moving on, your return after hours away, or enough new posts in your
+  active hours), at most six briefs a day; the bot then tells you one thing in its chat or stays silent. Its chat
+  says so once, with Turn off; removing the job in Automations means omher never creates it again. The briefing's
+  answers read "Brief" and the Automations row says "When something needs you". Slack only: Discord briefs and
+  GitHub events are not built yet.
 
 ## 4.0.8 - 2026-11-15
 
