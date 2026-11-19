@@ -165,6 +165,36 @@ test("two Codex terminals in one folder whose second writes its conversation fir
   expect(await starts(page)).toEqual([]);
 });
 
+test("closing one of two Codex terminals in a folder does not hand its conversation to the other", async ({ page }) => {
+  // the next lookup comes 30 s after the last one
+  test.setTimeout(90_000);
+  const B = "01a1f29c-c5b1-7301-a199-2dd07ff4b025";
+  type Rollout = { id: string; cwd: string; at: number };
+  const latest = () =>
+    page.evaluate(() => ((window as unknown as { __omherPastReads?: { op: string }[] }).__omherPastReads ?? []).filter((r) => r.op === "latest"));
+  const agentSession = async (id: string) => (await saved(page))?.sessions?.find((s: { id: string }) => s.id === id)?.agentSession;
+  await open(page);
+  const a = await newTerm(page, "codex");
+  const b = await newTerm(page, "codex");
+  // one conversation was written while both ran: it may be either one's, so neither takes it
+  await page.evaluate((x) => void ((window as unknown as { __omherMockCodexRollouts?: Rollout[] }).__omherMockCodexRollouts ??= []).push({ ...x, at: Date.now() }), { id: B, cwd: FOLDER });
+  await expect.poll(async () => (await latest()).length, { timeout: 15_000 }).toBeGreaterThanOrEqual(2);
+  expect([await agentSession(a), await agentSession(b)]).toEqual([undefined, undefined]);
+  // the second one is closed; its conversation stays unclaimed: the one left still could not tell it is its own
+  const closing = page.getByTestId(`session-${b}`);
+  await closing.hover();
+  await closing.getByTestId("session-close").click();
+  await page.getByTestId(`session-confirm-${b}`).getByTestId("session-stop").click();
+  await expect(closing).toHaveCount(0);
+  await expect.poll(async () => (await latest()).length, { timeout: 40_000 }).toBeGreaterThanOrEqual(3);
+  await page.evaluate(() => window.dispatchEvent(new Event("pagehide")));
+  expect(await agentSession(a)).toBeUndefined();
+  await page.reload();
+  await expect(page.getByTestId(`session-${a}`)).toBeVisible();
+  await page.waitForTimeout(300);
+  expect((await starts(page)).map((c) => c.resume)).not.toContain(B);
+});
+
 test("an agent with no conversation of its own (Grok) still comes back paused and starts only on Resume", async ({ page }) => {
   await open(page);
   const id = await newTerm(page, "grok");

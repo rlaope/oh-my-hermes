@@ -1254,14 +1254,24 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
    *  not taken either. A distinct id is not ownership: Codex may write a later terminal's rollout first, so the shell
    *  gives a conversation only when no other Codex terminal in that folder still without an id had started by then
    *  (`codexStart`, sent as `others`). While two could own it neither gets it and both keep asking; once all but one
-   *  have their ids the last one is unambiguous. One that never learns its id comes back paused after a restart. */
+   *  have their ids the last one is unambiguous. One that never learns its id comes back paused after a restart.
+   *  Closing a row does not settle the question: a conversation id a closed row held is still never given out
+   *  (`gaveIds`), and a closed Codex row that never learned its id stays a rival for the rest of this page load
+   *  (`goneRivals`), since the conversation that started while it ran may be its own (the same row started again,
+   *  Restart, is not its own rival). */
   const codexIdTimer = new Map<string, ReturnType<typeof setTimeout>>();
   /** TERMINALS Codex sessions still looking for their conversation id: when their program started (seconds). */
   const codexStart = new Map<string, number>();
+  /** Conversation ids a Codex row learned this page load, kept after the row closes. */
+  const gaveIds = new Set<string>();
+  /** Codex rows closed before they learned their id: their folder and when their program started (seconds). */
+  const goneRivals: { id: string; cwd: string; at: number }[] = [];
   let codexAsking: Promise<unknown> = Promise.resolve();
-  const heldIds = (id: string) => state.list.filter((x) => x.id !== id && x.agentSession).map((x) => x.agentSession!);
-  const rivals = (id: string) =>
-    [...codexStart].filter(([o]) => o !== id && rec(o)?.cwd === rec(id)?.cwd && rec(o)?.agent === "codex" && !rec(o)?.agentSession).map(([, at]) => at);
+  const heldIds = (id: string) => [...new Set([...state.list.filter((x) => x.id !== id && x.agentSession).map((x) => x.agentSession!), ...gaveIds])];
+  const rivals = (id: string) => [
+    ...[...codexStart].filter(([o]) => o !== id && rec(o)?.cwd === rec(id)?.cwd && rec(o)?.agent === "codex" && !rec(o)?.agentSession).map(([, at]) => at),
+    ...goneRivals.filter((g) => g.id !== id && g.cwd === rec(id)?.cwd).map((g) => g.at),
+  ];
   const findCodexId = (id: string, t: Term, run: number, since: number, wait: number) => {
     if (!host.codexLatest) return;
     clearTimeout(codexIdTimer.get(id));
@@ -1276,6 +1286,7 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
           if (!live()) return void codexStart.delete(id);
           if (got && !heldIds(id).includes(got)) {
             codexStart.delete(id);
+            gaveIds.add(got);
             patchRec(id, { agentSession: got });
           } else findCodexId(id, t, run, since, CODEX_ID_EVERY_MS);
         });
@@ -1459,6 +1470,9 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
     histOf.delete(id);
     clearTimeout(codexIdTimer.get(id));
     codexIdTimer.delete(id);
+    const started = codexStart.get(id);
+    const was = rec(id);
+    if (started !== undefined && was?.agent === "codex" && !was.agentSession) goneRivals.push({ id, cwd: was.cwd, at: started });
     codexStart.delete(id);
     fgOff.get(id)?.();
     fgOff.delete(id);
