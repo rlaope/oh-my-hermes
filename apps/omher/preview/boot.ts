@@ -4,16 +4,10 @@
 import { FakeSocket } from "./host";
 
 const w = window as unknown as Record<string, unknown>;
-// The preview speaks the site's language: the one picked on omher.app (?lang= or its switch), else English, the
-// site's own default; never the browser's, which the app would take on a first run.
-export const siteLang = (): string => {
-  try {
-    const l = (window.parent !== window ? parent.document.documentElement.lang : "").slice(0, 2);
-    return ["en", "ko", "ja", "zh"].includes(l) ? l : "en";
-  } catch {
-    return "en";
-  }
-};
+// The preview is always in English, whatever the site's language switch (?lang=, omh.lang) or the browser says. Its
+// story (chat, threads, terminals) is staged in English, so a translated app UI around it showed Korean labels next
+// to English messages. The app would otherwise take the browser's language on a first run.
+export const siteLang = (): string => "en";
 // The app keeps its look, pins and recent folders in localStorage; the preview keeps them for this tab only.
 try {
   const ss = window.sessionStorage;
