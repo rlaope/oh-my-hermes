@@ -3580,10 +3580,18 @@ _CJK_RANGES = (
 )
 
 
+# One character class over `_CJK_RANGES`, so counting is a C-level scan, not a
+# Python loop per character (that loop cost ~40 s per full pack render and timed
+# a Windows CLI test out at 60 s).
+_CJK_CHARACTER = re.compile(
+    "[" + "".join(f"{chr(low)}-{chr(high)}" for low, high in _CJK_RANGES) + "]"
+)
+
+
 def openclaw_read_chars(text: str) -> int:
     """`text` as OpenClaw's read cap counts it: UTF-16 units, each CJK character as 4."""
     units = len(text.encode("utf-16-le", "surrogatepass")) // 2
-    return units + sum(3 for ch in text if any(low <= ord(ch) <= high for low, high in _CJK_RANGES))
+    return units + 3 * len(_CJK_CHARACTER.findall(text))
 
 
 def _movable_span(content: str, label: str) -> tuple[int, int] | None:
@@ -3608,6 +3616,7 @@ def details_units(details: str) -> list[str]:
     return _DETAILS_UNIT_START.split(details)
 
 
+@lru_cache(maxsize=512)
 def split_for_read_cap(content: str) -> tuple[str, str | None]:
     """`(SKILL.md, details)`: unchanged with `None` when it fits, else whole sections moved out.
 
