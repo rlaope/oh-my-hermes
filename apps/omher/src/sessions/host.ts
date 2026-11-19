@@ -108,6 +108,9 @@ export interface SessionHost extends HistoryHost {
   pastChats(agent: "claude" | "codex", cwds: string[]): Promise<PastChat[]>;
   /** The last messages of `agent`'s conversation `id` in `cwd`. */
   pastMessages(agent: "claude" | "codex", id: string, cwd: string): Promise<PastMsg[]>;
+  /** The id of the newest Codex conversation in `cwd` started at or after `since` (seconds since the epoch), for a
+   *  TERMINALS Codex session to continue after a restart; null when there is none (read-only, rule 30). */
+  codexLatest?(cwd: string, since: number): Promise<string | null>;
   /** How many asks wait: a Dock / launcher count, or a dot on the Windows taskbar button. 0 clears it. */
   badge(count: number): Promise<void>;
   /** Settings › Agents: the person's own agents, read and checked by the shell from omher's own file, and the broken
@@ -229,6 +232,10 @@ export class TauriHost implements SessionHost {
   async pastMessages(agent: "claude" | "codex", id: string, cwd: string) {
     const { invoke } = await this.core();
     return invoke<PastMsg[]>("past_chat_messages", { agent, id, cwd });
+  }
+  async codexLatest(cwd: string, since: number) {
+    const { invoke } = await this.core();
+    return invoke<string | null>("codex_latest", { cwd, sinceSecs: since });
   }
   async badge(count: number) {
     const { invoke } = await this.core();
@@ -398,7 +405,9 @@ type MockGlobals = {
   /** e2e: the conversations Claude Code and Codex keep (none = the built-in ones) */
   __omherPastChats?: PastChat[];
   /** e2e: reads of those conversations, apart from the session calls (opening the + menu lists them) */
-  __omherPastReads?: { op: "list" | "read"; agent: string; cwds?: string[]; id?: string; cwd?: string }[];
+  __omherPastReads?: { op: "list" | "read" | "latest"; agent: string; cwds?: string[]; id?: string; cwd?: string; since?: number }[];
+  /** e2e: the id the Codex conversation lookup finds for a TERMINALS Codex session (none: it finds nothing) */
+  __omherMockCodexLatest?: string;
   /** e2e: the Dock / taskbar count omher last set */
   __omherBadge?: number;
   /** e2e: the mock's copy of omher's custom-agents file (`agents` of `~/.omher/custom-agents.json`, as written) */
@@ -716,6 +725,10 @@ export class MockHost implements SessionHost {
     const c = (this.g.__omherPastChats ?? MOCK_PAST).find((x) => x.agent === agent && x.id === id && x.cwd === cwd);
     if (!c) throw new Error("no such conversation");
     return MOCK_PAST_MSGS[id] ?? [{ role: "user" as const, text: c.title, ts: c.at }];
+  }
+  async codexLatest(cwd: string, since: number) {
+    (this.g.__omherPastReads ??= []).push({ op: "latest", agent: "codex", cwd, since });
+    return this.g.__omherMockCodexLatest ?? null;
   }
   async badge(count: number) {
     this.g.__omherBadge = count;

@@ -434,6 +434,34 @@ pub fn codex_list(root: &Path, cwds: &[String]) -> Vec<PastChat> {
     newest(rows)
 }
 
+/// The milliseconds since the epoch a version 7 UUID was made at (Codex thread ids are v7), else `None`.
+fn uuid7_ms(id: &str) -> Option<f64> {
+    let hex: String = id.chars().filter(|c| *c != '-').collect();
+    if !is_uuid(id) || hex.as_bytes().get(12) != Some(&b'7') {
+        return None;
+    }
+    u64::from_str_radix(&hex[..12], 16).ok().map(|ms| ms as f64)
+}
+
+/// The id of the newest Codex conversation of its own in `cwd` that started at or after `since` (seconds since the
+/// epoch): a TERMINALS Codex session records it so that a restart can continue it (rule 30's reader, one more use).
+/// Only rollouts changed since then are read, through the same checks as [`codex_list`]; only the id is returned.
+pub fn codex_latest(root: &Path, cwd: &str, since: f64) -> Option<String> {
+    if !absolute(cwd) {
+        return None;
+    }
+    let cwds = [cwd.to_string()];
+    let names = std::collections::HashMap::new();
+    let rows = codex_rollouts(root, CODEX_FILES_MAX)
+        .iter()
+        .filter(|p| mtime(p) >= since)
+        .filter_map(|p| inside(root, p))
+        .filter_map(|p| codex_row(&p, &cwds, &names))
+        .filter(|c| uuid7_ms(&c.id).is_some_and(|ms| ms >= since * 1000.0))
+        .collect();
+    newest(rows).into_iter().next().map(|c| c.id)
+}
+
 /// The last messages of Codex thread `id` (its rollout found by name; the folder is checked against `cwd`).
 pub fn codex_messages(root: &Path, id: &str, cwd: &str) -> Result<Vec<PastMsg>, String> {
     if !is_uuid(id) {
@@ -658,6 +686,29 @@ mod tests {
             serde_json::json!({"timestamp": "2026-11-12T15:29:08.000Z", "type": "response_item", "payload": {"type": "message", "role": "assistant", "content": [{"type": "output_text", "text": "[external_agent_tool_result]\n{}\n[/external_agent_tool_result]"}]}}),
             serde_json::json!({"timestamp": "2026-11-12T15:29:09.000Z", "type": "response_item", "payload": {"type": "message", "role": "assistant", "content": [{"type": "output_text", "text": "Remembered."}]}}),
         ]
+    }
+
+    #[test]
+    fn codex_latest_is_the_newest_thread_in_the_folder_started_since() {
+        let root = tmp("codex-latest");
+        let cwd = "/Users/you/code/api";
+        let day = root.join("sessions/2026/11/12");
+        // X1 was made before `since`, X2 after it (v7 ids carry their time); both files were changed just now
+        let since = uuid7_ms(X2).unwrap() / 1000.0 - 1.0;
+        assert!(uuid7_ms(X1).unwrap() / 1000.0 < since);
+        write(&day.join(format!("rollout-2026-11-12T15-28-54-{X1}.jsonl")), &codex_file(X1, cwd));
+        write(&day.join(format!("rollout-2026-11-12T15-29-01-{X2}.jsonl")), &codex_file(X2, cwd));
+        // only rollouts changed since then are read: a since in the future finds nothing
+        let file_time = mtime(&day.join(format!("rollout-2026-11-12T15-29-01-{X2}.jsonl")));
+        assert!(codex_latest(&root, cwd, file_time + 3600.0).is_none());
+        assert_eq!(codex_latest(&root, cwd, since).as_deref(), Some(X2));
+        // another folder, a relative folder, and a since after both ids find nothing
+        assert!(codex_latest(&root, "/Users/you/code/web", since).is_none());
+        assert!(codex_latest(&root, "code/api", since).is_none());
+        assert!(codex_latest(&root, cwd, uuid7_ms(X2).unwrap() / 1000.0 + 1.0).is_none());
+        // a v4 id carries no time and is never taken
+        assert!(uuid7_ms(C1).is_none());
+        let _ = std::fs::remove_dir_all(root);
     }
 
     #[test]

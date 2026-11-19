@@ -1,6 +1,7 @@
 // TERMINALS restore (mock host): a Claude Code terminal starts under an id omher made (`--session-id`), and after
 // omher restarts (a reload with the same storage; the mock host starts empty, as the shell does) it continues that
-// conversation (`--resume <same id>`) in the same folder, once; an agent without its own conversation comes back
+// conversation (`--resume <same id>`) in the same folder, once; a Codex terminal asks the shell for its conversation id
+// after 5 s and continues it (`codex resume <id>`) the same way; an agent without its own conversation comes back
 // paused as before. Each terminal's scrollback is kept by the shell (`history.*` calls; the mock keeps it in this
 // page's storage) and written back, dimmed, under a "--- restored <time> ---" line before the new output; closing
 // removes it; Settings > Terminal turns it off. The bottom panel's tabs come back with their folders and scrollback.
@@ -85,6 +86,36 @@ test("a Claude Code terminal starts under an id omher made and continues it afte
   await expect.poll(async () => (await saved(page))?.sessions?.find((s: { id: string }) => s.id === id)?.agentSession).toBe(conv);
   await page.reload();
   await expect.poll(() => starts(page)).toEqual([expect.objectContaining({ agent: "claude", resume: conv })]);
+});
+
+test("a Codex terminal learns its conversation id from the shell and continues it after a restart", async ({ page }) => {
+  const THREAD = "01a1f29c-c5b1-7301-a199-2dd07ff4b024";
+  await page.addInitScript((thread) => {
+    (window as unknown as { __omherMockCodexLatest?: string }).__omherMockCodexLatest = thread;
+  }, THREAD);
+  await open(page);
+  const t0 = Date.now() / 1000;
+  const id = await newTerm(page, "codex");
+  const first = await starts(page);
+  expect(first).toEqual([expect.objectContaining({ agent: "codex", cwd: FOLDER })]);
+  expect(first[0].resume).toBeUndefined();
+  expect(first[0].sessionId).toBeUndefined();
+  // after the program has run 5 s the page asks for the newest Codex conversation in its folder started since then
+  await expect.poll(async () => (await saved(page))?.sessions?.find((s: { id: string }) => s.id === id)?.agentSession, { timeout: 15_000 }).toBe(THREAD);
+  const reads = await page.evaluate(() => (window as unknown as { __omherPastReads?: { op: string; cwd?: string; since?: number }[] }).__omherPastReads ?? []);
+  const latest = reads.filter((r) => r.op === "latest");
+  expect(latest).toHaveLength(1);
+  expect(latest[0].cwd).toBe(FOLDER);
+  expect(latest[0].since!).toBeGreaterThanOrEqual(Math.floor(t0) - 2);
+  expect(latest[0].since!).toBeLessThanOrEqual(Date.now() / 1000);
+
+  await page.reload();
+  await expect(page.getByTestId(`session-${id}`)).toBeVisible();
+  // it starts by itself as `codex resume <id>` in the same folder, and asks for no id again
+  await expect.poll(() => starts(page)).toEqual([expect.objectContaining({ agent: "codex", cwd: FOLDER, resume: THREAD })]);
+  await page.waitForTimeout(6_000);
+  const again = await page.evaluate(() => ((window as unknown as { __omherPastReads?: { op: string }[] }).__omherPastReads ?? []).filter((r) => r.op === "latest"));
+  expect(again).toEqual([]);
 });
 
 test("an agent with no conversation of its own (Grok) still comes back paused and starts only on Resume", async ({ page }) => {

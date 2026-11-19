@@ -697,6 +697,16 @@ async fn past_chats_list(agent: String, cwds: Vec<String>) -> Result<Vec<past_ch
     tauri::async_runtime::spawn_blocking(move || past_chats::list(&past_home(&agent)?, &agent, &cwds)).await.map_err(|e| e.to_string())?
 }
 
+/// The id of the newest Codex conversation in `cwd` started at or after `since_secs`, for a TERMINALS Codex session
+/// to continue after a restart (rule 30): only the id, checked as a UUID, read from the same home and by the same
+/// rules as the listing.
+#[tauri::command]
+async fn codex_latest(cwd: String, since_secs: f64) -> Result<Option<String>, String> {
+    tauri::async_runtime::spawn_blocking(move || Ok(past_chats::codex_latest(&past_home("codex")?, &cwd, since_secs).filter(|id| sessions::is_uuid(id))))
+        .await
+        .map_err(|e| e.to_string())?
+}
+
 /// The last messages of one of those conversations, shown before the agent continues it (rule 30).
 #[tauri::command]
 async fn past_chat_messages(agent: String, id: String, cwd: String) -> Result<Vec<past_chats::PastMsg>, String> {
@@ -846,6 +856,7 @@ pub fn run() {
             session_open_terminal,
             past_chats_list,
             past_chat_messages,
+            codex_latest,
             asks_badge,
             peers_list,
             peers_watch,

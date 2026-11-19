@@ -165,6 +165,9 @@ export function newConversationId(): string {
 
 /** TERMINALS agents that continue their own conversation after omher restarts (`claude --resume`, `codex resume`). */
 const TERM_CONTINUES: readonly AgentId[] = ["claude", "codex"];
+/** When a TERMINALS Codex session first asks for its conversation id, and how often after that until it has one. */
+const CODEX_ID_FIRST_MS = 5_000;
+const CODEX_ID_EVERY_MS = 30_000;
 
 type Xterm = [typeof import("@xterm/xterm"), typeof import("@xterm/addon-fit")];
 let xtermLoad: Promise<Xterm> | null = null;
@@ -1243,6 +1246,28 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
   /** What stops following each session's foreground CLI (its pty's `session-fg` events). */
   const fgOff = new Map<string, () => void>();
 
+  /** TERMINALS Codex sessions that do not know their conversation id yet: the next lookup. Codex writes its rollout
+   *  once the conversation starts, so the shell is asked after the program has run 5 s and every 30 s after, until it
+   *  names one (rule 30's reader: only the id comes back); it is kept as the row's `agentSession` so a restart
+   *  continues it (`codex resume <id>`). */
+  const codexIdTimer = new Map<string, ReturnType<typeof setTimeout>>();
+  const findCodexId = (id: string, t: Term, run: number, since: number, wait: number) => {
+    if (!host.codexLatest) return;
+    clearTimeout(codexIdTimer.get(id));
+    codexIdTimer.set(
+      id,
+      setTimeout(async () => {
+        codexIdTimer.delete(id);
+        const live = () => terms.get(id) === t && t.run === run && !t.closed && rec(id)?.agent === "codex" && !rec(id)?.agentSession;
+        if (!live()) return;
+        const got = await host.codexLatest!(rec(id)!.cwd, since).catch(() => null);
+        if (!live()) return;
+        if (got) patchRec(id, { agentSession: got });
+        else findCodexId(id, t, run, since, CODEX_ID_EVERY_MS);
+      }, wait),
+    );
+  };
+
   /**
    * Start session `id`'s program in its terminal `t`. A Shell row runs the person's login shell; a CLI row runs its
    * CLI and, when that ends, goes on as the login shell in the same terminal (same scrollback, size and folder), so
@@ -1358,6 +1383,7 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
         feed(t.term, `\r\n\x1b[2m[${code ? tr("ss.termEndedExit", { agent: label, code }) : tr("ss.termEnded", { agent: label })}]\x1b[0m\r\n`);
       };
       // a Shell row is the person's login shell (the bottom panel's `shell_start`: only a folder and a size go out)
+      const startedAt = Date.now();
       const hostId = shell
         ? (await getShellHost().start(r.cwd || null, cols, rows, onData, onExit)).id
         : await host.start(r.agent, r.cwd, cols, rows, onData, onExit, resume, accountOf(r), sessionId);
@@ -1382,6 +1408,7 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
       t.told = { cols, rows };
       if (t.settle === null) tellSize(t);
       if (!ofChat) patchRec(id, { status: "running" });
+      if (!ofChat && r.agent === "codex" && !r.agentSession) findCodexId(id, t, run, Math.floor(startedAt / 1000) - 1, CODEX_ID_FIRST_MS);
     } catch (e) {
       if (t.run !== run) return;
       t.closed = true;
@@ -1410,6 +1437,8 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
     // its history keeping follows the next terminal of the session (Restart), or ends with it
     histOf.get(id)?.stop();
     histOf.delete(id);
+    clearTimeout(codexIdTimer.get(id));
+    codexIdTimer.delete(id);
     fgOff.get(id)?.();
     fgOff.delete(id);
     if (t.hostId !== null && !t.closed) void t.io.close(t.hostId).catch(() => undefined);
