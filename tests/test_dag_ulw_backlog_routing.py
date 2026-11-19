@@ -25,7 +25,7 @@ from omh.plugin_bundle.omh.hooks import llm_hooks  # noqa: E402
 from omh.plugin_bundle.omh.plan_follow_on import reset_plan_follow_on_state  # noqa: E402
 from omh.plugin_bundle.omh.reference_regions import executable_routing_text  # noqa: E402
 from omh.plugin_bundle.omh.skill_shortlist import reset_candidate_line_state  # noqa: E402
-from omh.routing.chat import route_chat_message  # noqa: E402
+from omh.routing.chat import recommend_route_summary, route_chat_message  # noqa: E402
 
 _LEDGER_ITEMS = (
     "parse_amount('0.2') gives 2 cents instead of 20",
@@ -89,6 +89,37 @@ NOT_BACKLOGS = (
     "오늘 할 일 전부 정리해줘\n1. 우유랑 계란 사기\n2. 치과 예약 전화하기\n3. 세탁소 옷 찾기\n4. 토요일 저녁 식당 예약",
 )
 
+# The same backlog said in one line: three or more separate code changes joined by commas, "and", 랑, 하고, 이랑 or
+# 와·과. Without the reading, each landed on a lane one item's word scored (toolbelt-readiness on "API",
+# browser-operator on "login", backend on "백엔드").
+INLINE_BACKLOGS = (
+    "로그인 API, 설정 화면, 문서 페이지 세 개를 한 번에 고쳐줘",
+    "Fix these four bugs: the export crash, the login redirect, the empty chart, and the broken docs link",
+    "프론트 버튼 추가랑 백엔드 엔드포인트랑 테스트 다 해줘",
+    "migrate the settings store to sqlite, update the three callers, and add tests",
+    # A Korean connector right after a Latin word.
+    "로그인 API하고 설정 화면하고 문서 페이지 세 개 다 고쳐줘",
+    "로그인 API와 설정 화면과 문서 페이지 세 개 다 고쳐줘",
+)
+
+# One-line lists that are no backlog keep the route they had: (message, (action, selected skill, reason code)).
+INLINE_NOT_BACKLOGS = (
+    # One bug, its symptoms listed.
+    ("Fix the login bug: it crashes, shows a blank page, and logs a 500 error", ("dispatch", "ultrawork", None)),
+    ("explain these three functions: parse_args, load_config, and run_main",
+     ("fallback", "oh-my-hermes", "direct_answer")),
+    ("buy milk, eggs, bread and coffee", ("fallback", "oh-my-hermes", None)),
+    ("review these 3 PRs: #101, #102, and #103", ("clarify", "oh-my-hermes", None)),
+    ("fix the typo in README line 3", ("fallback", "oh-my-hermes", "direct_answer")),
+    # One feature that names its parts.
+    ("add a login page with email, password and a remember-me box", ("dispatch", "browser-operator", None)),
+    # A list of questions, and a list of files to read.
+    ("what does parse_args return, why does load_config fail on an empty file, and how do I run the tests?",
+     ("clarify", "oh-my-hermes", None)),
+    ("read src/cli.py, src/config.py and src/runner.py and tell me how they fit together",
+     ("fallback", "oh-my-hermes", "file_lookup")),
+)
+
 _HINT_HEAD = "first_response_shape=Start at once: give each listed change its own build node"
 _IN_SESSION = "Make the listed code changes in this session, one after another"
 
@@ -129,6 +160,34 @@ class BacklogReadingTests(unittest.TestCase):
         self.assertTrue(lists_several_code_changes(message))
         self.assertFalse(lists_several_code_changes(message, ("https://github.com/o/r/pull/12",)))
 
+    def test_a_one_line_list_of_three_code_changes_is_read_as_one(self) -> None:
+        for message in INLINE_BACKLOGS:
+            with self.subTest(message=message):
+                self.assertTrue(lists_several_code_changes(executable_routing_text(message)))
+
+    def test_one_line_symptoms_parts_questions_and_reading_lists_are_not(self) -> None:
+        for message, _route in INLINE_NOT_BACKLOGS:
+            with self.subTest(message=message):
+                self.assertFalse(lists_several_code_changes(executable_routing_text(message)))
+
+    def test_verb_led_errands_with_one_code_word_and_foreign_letters_are_not(self) -> None:
+        for message in (
+            "Fix the venue name, update the dates, and add the dress code to the invitation",
+            "Fix the typo, update the date, and add tests to the printed lab syllabus",
+            "Fix the foyer sign, update the opening hours, and add the library address",
+            "Fix the author name, update the cover date, and add a migration photo to the brochure",
+            "Fix the apiño spelling, update the cover date, and add page numbers",
+            "Fix the dress code, update the library hours, and add a reception sign",
+            # "and" joining two verbs of one change is no list separator.
+            "Run a loop to find and fix OMH router context-loss and coding handoff bugs with progress evidence.",
+        ):
+            with self.subTest(message=message):
+                self.assertFalse(lists_several_code_changes(executable_routing_text(message)))
+
+    def test_a_one_line_list_of_two_changes_is_too_small(self) -> None:
+        self.assertFalse(lists_several_code_changes("migrate the settings store to sqlite and add tests"))
+        self.assertFalse(lists_several_code_changes("로그인 API랑 설정 화면 둘 다 고쳐줘"))
+
     def test_a_non_string_or_an_oversized_message_is_not_read(self) -> None:
         self.assertFalse(lists_several_code_changes(None))  # type: ignore[arg-type]
         self.assertFalse(lists_several_code_changes(_listed("Fix all of these bugs:", 4) + "\n" + "x " * 7000))
@@ -145,6 +204,25 @@ class BacklogRoutingTests(unittest.TestCase):
                 )
                 self.assertTrue(route["routing_prompt"].startswith(_IN_SESSION))
                 self.assertEqual(awareness_route_hint(message)["hints"], [])
+
+    def test_a_one_line_backlog_is_answered_in_the_session_too(self) -> None:
+        for message in INLINE_BACKLOGS:
+            with self.subTest(message=message):
+                route = route_chat_message(message, source="discord")
+                self.assertEqual(
+                    (route["action"], route["selected_skill"], route.get("reason_code")),
+                    ("fallback", "oh-my-hermes", "code_backlog"),
+                )
+                self.assertTrue(route["routing_prompt"].startswith(_IN_SESSION))
+                self.assertEqual(awareness_route_hint(message)["hints"], [])
+                self.assertEqual(recommend_route_summary(message)["action"], "fallback")
+
+    def test_one_line_look_alikes_keep_their_route(self) -> None:
+        for message, expected in INLINE_NOT_BACKLOGS:
+            with self.subTest(message=message):
+                route = route_chat_message(message, source="discord")
+                self.assertEqual((route["action"], route["selected_skill"], route.get("reason_code")), expected)
+                self.assertNotIn("dag-ulw", [hint.get("workflow") for hint in awareness_route_hint(message)["hints"]])
 
     def test_no_negative_is_started_or_offered_a_graph(self) -> None:
         for message in NOT_BACKLOGS:

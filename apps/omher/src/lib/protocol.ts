@@ -87,6 +87,10 @@ export interface Msg {
   watch?: WatchTag;
   /** user rows: steered into a running turn (Hermes' mid-turn steer), shown with its "Sent to …" line. */
   steered?: boolean;
+  /** steered rows: when the turn read it (the bot's next row's time, unix s), when there is such a row. */
+  steer_read?: number;
+  /** steered rows: the first line the bot wrote after it in that turn (its note or its answer). */
+  steer_reply?: string;
 }
 
 /** The automation whose delivered result a Bot Chat answer replies to: its name and when it came in (unix s). */
