@@ -206,6 +206,36 @@ test("⌘W closes the focused pane (its session keeps running), the nearest pane
   expect(closes).toEqual([]);
 });
 
+test("the menu's Close Window and the ⌘W key close the pane that holds the keyboard, not the pane last clicked", async ({ page }) => {
+  await openApp(page);
+  const k = await keys(page);
+  const [a, b, c] = await sessions(page, ["/w/a", "/w/b", "/w/c"]);
+  await page.getByTestId(`session-${a}`).locator(".ss-open").click();
+  await splitWith(page, a, k.right, b);
+  await splitWith(page, b, k.down, c);
+  await pane(page, a).click();
+  await expect(pane(page, a)).toHaveAttribute("data-focused", "true");
+  await expect(textarea(page, a)).toBeFocused();
+  // the keyboard moves into b without a click there (Tab from its close button)
+  await pane(page, b).getByTestId("split-close").focus();
+  await page.keyboard.press("Tab");
+  await expect(textarea(page, b)).toBeFocused();
+  await expect(pane(page, a)).toHaveAttribute("data-focused", "true");
+  await page.evaluate(() => (window as unknown as { __omherMenuClose(): Promise<void> }).__omherMenuClose());
+  await expect(pane(page, b)).toHaveCount(0);
+  await expect(pane(page, a)).toHaveCount(1);
+  await expect(pane(page, c)).toHaveCount(1);
+  // the same for the key: c holds the keyboard, a is still the pane last clicked
+  await page.waitForTimeout(400);
+  await pane(page, c).getByTestId("split-close").focus();
+  await page.keyboard.press("Tab");
+  await expect(textarea(page, c)).toBeFocused();
+  await page.keyboard.press(k.close);
+  await expect(page.getByTestId("session-split")).toHaveCount(0);
+  await expect(page.getByTestId("terminal")).toHaveAttribute("data-session", a);
+  expect(await page.evaluate(() => (window as unknown as { __omherWindowCloses?: number }).__omherWindowCloses ?? 0)).toBe(0);
+});
+
 test("rows in the open split carry a glyph (the focused one marked); Plans draws the split small and a click there focuses that pane", async ({ page }) => {
   await openApp(page);
   const k = await keys(page);

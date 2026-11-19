@@ -4,7 +4,7 @@
 // page already took as a pane key does not close a second pane when the menu hears the same press.
 import { getStore } from "../state/store";
 import { closePane, getTermPanel } from "../terminal/state";
-import { getSplit, groupOf } from "../sessions/splitState";
+import { getSplit, groupOf, splitPaneOf } from "../sessions/splitState";
 
 /** How long after a pane closed on the key the menu's Close counts as the same press. */
 const SAME_PRESS_MS = 300;
@@ -29,8 +29,9 @@ export function closeTarget(active: Element | null): Target {
     return { kind: "window" };
   }
   const ui = getStore().getState().ui;
-  const inSplit = active?.closest?.('[data-testid="session-split"]');
-  if (inSplit && ui.view === "session" && ui.session && groupOf(getSplit().groups, ui.session)) return { kind: "split", session: ui.session };
+  // the pane that holds the keyboard, as the ⌘W key in it decides (not the pane last clicked)
+  const at = ui.view === "session" ? splitPaneOf(active, ui.session) : null;
+  if (at && groupOf(getSplit().groups, at)) return { kind: "split", session: at };
   return { kind: "window" };
 }
 

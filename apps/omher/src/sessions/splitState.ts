@@ -24,6 +24,14 @@ export interface SplitState {
   picking: { at: string; dir: SplitDirName } | null;
 }
 
+/** The split pane that holds `active` (the element with the keyboard): that pane's session. Focus in the split's own
+ *  chrome (between panes, the zoomed note) falls back to `selected`, the pane last picked; focus outside a split is
+ *  null. The ⌘W key in a pane and the menu's Close Window both close the pane this names (one decision for both). */
+export function splitPaneOf(active: Element | null, selected: string | null): string | null {
+  if (!active?.closest?.('[data-testid="session-split"]')) return null;
+  return active.closest('[data-testid="split-pane"]')?.getAttribute("data-session") || selected;
+}
+
 export const SPLITS_KEY = "omher.splits";
 const MAX_GROUPS = 20;
 const ID = /^s(\d{1,9})$/;

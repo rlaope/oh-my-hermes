@@ -22,7 +22,7 @@ import { onTermSettings, readTermSettings } from "./term/settings";
 import { isMac } from "../app/shortcuts";
 import { composing } from "../lib/ime";
 import { markPaneClosed } from "../app/menuClose";
-import { equalizeIn, getSplit, groupOf, groupSessions, leaveIn, paneKeyIn, paneOf, ratioIn, sessionOf, setSplit, splitIn, useSplit, type SplitDirName, type SplitGroup } from "./splitState";
+import { equalizeIn, getSplit, groupOf, groupSessions, leaveIn, paneKeyIn, paneOf, ratioIn, sessionOf, setSplit, splitIn, splitPaneOf, useSplit, type SplitDirName, type SplitGroup } from "./splitState";
 
 export { getSplit, resetSplit, useSplit } from "./splitState";
 
@@ -110,7 +110,8 @@ export function useSplitKeys(wrap: RefObject<HTMLElement | null>, id: string, on
         }
         return;
       }
-      if (!onSplitKey(id, k)) return;
+      // the pane the key is in (splitState `splitPaneOf`, the menu's Close Window asks the same)
+      if (!onSplitKey(splitPaneOf(e.target as Element | null, id) ?? id, k)) return;
       e.preventDefault();
       e.stopPropagation();
       // the menu's Close Window may hear the same ⌘W: it is not a second close
