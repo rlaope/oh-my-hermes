@@ -108,6 +108,18 @@ class RunSummaryToolTest(unittest.TestCase):
             )
         )
 
+    def _set_cache_read(self, session_id: str, tokens: int) -> None:
+        connection = sqlite3.connect(self.home / "state.db")
+        connection.execute("UPDATE sessions SET cache_read_tokens = ? WHERE id = ?", (tokens, session_id))
+        connection.commit()
+        connection.close()
+
+    def _zero_input_everywhere(self) -> None:
+        connection = sqlite3.connect(self.home / "state.db")
+        connection.execute("UPDATE sessions SET input_tokens = 0")
+        connection.commit()
+        connection.close()
+
     def test_the_korean_summary_matches_the_owner_format(self):
         result = self._call(language="ko")
         self.assertEqual(result["status"], "observed")
@@ -129,6 +141,45 @@ class RunSummaryToolTest(unittest.TestCase):
         for language, text in expected.items():
             with self.subTest(language=language):
                 self.assertEqual(self._call(language=language)["summary_text"], text)
+
+    def test_the_cache_line_shows_the_read_share_of_all_prompt_tokens(self):
+        # Fixture: input 4,100,000 uncached (4,000,000 + 100,000) + 900,000 cache_read.
+        self._set_cache_read("20260819_100000_main01", 900_000)
+        result = self._call(language="en")
+        # 900,000 / (4,100,000 + 900,000) = 18%
+        self.assertIn(
+            "Prompt cache: 18% of input read from cache (900,000 tokens)",
+            result["summary_text"].splitlines(),
+        )
+        self.assertEqual(result["breakdown"]["cache_read_share"], 0.18)
+        tokens_index = result["summary_text"].splitlines().index("Tokens used: 4,849,639")
+        self.assertTrue(result["summary_text"].splitlines()[tokens_index + 1].startswith("Prompt cache:"))
+
+    def test_the_cache_line_is_absent_without_cache_reads(self):
+        result = self._call(language="en")
+        self.assertNotIn("Prompt cache", result["summary_text"])
+        self.assertIsNone(result["breakdown"]["cache_read_share"])
+
+    def test_the_cache_line_is_absent_without_input_tokens(self):
+        self._zero_input_everywhere()
+        self._set_cache_read("20260819_100000_main01", 900_000)
+        result = self._call(language="en")
+        self.assertNotIn("Prompt cache", result["summary_text"])
+        self.assertIsNone(result["breakdown"]["cache_read_share"])
+
+    def test_every_language_has_a_cache_label(self):
+        self._set_cache_read("20260819_100000_main01", 900_000)
+        expected = {
+            "en": "Prompt cache: 18% of input read from cache (900,000 tokens)",
+            "ko": "프롬프트 캐시: 입력의 18%를 캐시에서 읽음 (900,000 토큰)",
+            "ja": "プロンプトキャッシュ: 入力の18%をキャッシュから読み込み (900,000 トークン)",
+            "zh": "提示缓存: 输入的18%从缓存读取 (900,000 Token)",
+        }
+        for language, text in expected.items():
+            with self.subTest(language=language):
+                lines = self._call(language=language)["summary_text"].splitlines()
+                self.assertEqual(lines[2], text)
+                self.assertEqual(len(lines), 4)
 
     def test_children_are_included_and_unrelated_sessions_are_not(self):
         breakdown = self._call(language="en")["breakdown"]

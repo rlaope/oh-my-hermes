@@ -66,13 +66,22 @@ _DAG_USAGE_LABELS: dict[str, str] = {
     "en": "DAG usage ({run}): {figures}", "ko": "DAG 사용량 ({run}): {figures}",
     "ja": "DAG の使用量 ({run}): {figures}", "zh": "DAG 用量 ({run}): {figures}",
 }
+# The cache line after the tokens line: the share of input read from the prompt cache. Percent is an integer, tokens
+# are the cache-read count, rendered with thousands separators like every other number here.
+_CACHE_LABELS: dict[str, str] = {
+    "en": "Prompt cache: {percent}% of input read from cache ({tokens} tokens)",
+    "ko": "프롬프트 캐시: 입력의 {percent}%를 캐시에서 읽음 ({tokens} 토큰)",
+    "ja": "プロンプトキャッシュ: 入力の{percent}%をキャッシュから読み込み ({tokens} トークン)",
+    "zh": "提示缓存: 输入的{percent}%从缓存读取 ({tokens} Token)",
+}
 _ELAPSED_UNKNOWN: str = "unknown"
 
 OMH_RUN_SUMMARY_SCHEMA = {
     "name": "omh_run_summary",
     "description": (
         "Run summary and cost receipt from Hermes' own accounting. Render "
-        "the localized end-of-run summary (elapsed seconds and token usage) — "
+        "the localized end-of-run summary (elapsed seconds, token usage, and "
+        "the prompt-cache share of input when cache reads were recorded) — "
         "the calling session plus its delegate_task children. Call it once "
         "when a workflow run (e.g. ulw-work) completes, pass the language the "
         "conversation is in, and print summary_text verbatim as the closing "
@@ -258,6 +267,13 @@ def omh_run_summary_handler(args: dict[str, Any], **kwargs) -> str:
     cache_read = int(sum(_number(row.get("cache_read_tokens")) for row in scope))
     reasoning = int(sum(_number(row.get("reasoning_tokens")) for row in scope))
     tokens_used = input_tokens + output_tokens
+    # Hermes' canonical usage keeps `input_tokens` as the uncached bucket: on the Anthropic shape it is the uncached
+    # input reported directly, and on the Codex/Chat shapes the cache buckets are subtracted back out
+    # (agent/usage_pricing.py:667-673; CanonicalUsage.prompt_tokens at :77 sums input + cache_read + cache_write).
+    # So the prompt total, and the denominator of the cached share, is input + cache_read.
+    cache_read_share: float | None = None
+    if input_tokens > 0 and cache_read > 0:
+        cache_read_share = round(cache_read / (input_tokens + cache_read), 3)
     cost = sum(
         _number(row.get("actual_cost_usd")) or _number(row.get("estimated_cost_usd"))
         for row in scope
@@ -268,6 +284,13 @@ def omh_run_summary_handler(args: dict[str, Any], **kwargs) -> str:
         elapsed_line.format(elapsed=elapsed_text),
         tokens_line.format(tokens=f"{tokens_used:,}"),
     ]
+    if cache_read_share is not None:
+        lines.append(
+            _CACHE_LABELS[language].format(
+                percent=round(100 * cache_read_share),
+                tokens=f"{cache_read:,}",
+            )
+        )
     if models:
         lines.append(models_line.format(models=", ".join(models)))
     goal = _dag_goal(runtime_paths.plugin_home(args.get("omh_home")), home, session_id)
@@ -287,6 +310,7 @@ def omh_run_summary_handler(args: dict[str, Any], **kwargs) -> str:
                 "input_tokens": input_tokens,
                 "output_tokens": output_tokens,
                 "cache_read_tokens": cache_read,
+                "cache_read_share": cache_read_share,
                 "reasoning_tokens": reasoning,
                 "api_calls": int(sum(_number(row.get("api_call_count")) for row in scope)),
                 "cost_usd": round(cost, 4),
