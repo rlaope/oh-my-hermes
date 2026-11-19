@@ -402,7 +402,7 @@ class WaitingTimeTests(unittest.TestCase):
         app._on_server_request(ServerRequest("srq-1", "approval", {"command": "rm -rf ./x"}))
         now[0] = 111.0
         screen = drawn(app)
-        self.assertIn("? waiting on you (11s)", screen)  # the wait's clock, not the turn's 21s
+        self.assertIn("? waiting for your approval (11s)", screen)  # the wait's clock, not the turn's 21s
         self.assertFalse([row for row in screen if "working" in row or "21s" in row], screen)
         armed(app)
         press(app, Key(ESCAPE))
@@ -429,7 +429,7 @@ class WaitingTimeTests(unittest.TestCase):
         app._on_server_request(ServerRequest("srq-1", "approval", {"command": "rm -rf ./x"}))
         now[0] = 114.0
         screen = drawn(app)
-        self.assertIn("? waiting on you (14s)", screen)
+        self.assertIn("? waiting for your approval (14s)", screen)
         self.assertIn("1 tool", status())  # one clock: the wait's, on the working row
         self.assertNotIn("9s", status())
         armed(app)

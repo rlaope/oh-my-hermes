@@ -238,10 +238,12 @@ from .dag_tree import TreeState
 from .turn_ends import TURN_DONE, TURN_INTERRUPTED, TURN_OPEN, TURN_STOPPED, read_turn_end, record_turn_end
 from .panels import (
     CATCH_MARK,
+    SETTLED_NODE_STATES,
     HudPoller,
     HudSnapshot,
     catch_lines,
     dag_page_lines,
+    dag_run_summary,
     graph_is_dag,
     hud_chips,
     panel_lines,
@@ -251,6 +253,7 @@ from .panels import (
 )
 from .dag_pager import DagPager
 from .background import BackgroundProcess, askable, finished_forms, report_prompt, running_forms, tool_call
+from .wait_kinds import Wait, classify, count_words, dag_wait, lane_wait, plain_counts, watching
 from .clipboard import COPY_OSC52, COPY_PBCOPY, COPY_TOO_LARGE, HERDR_TOO_LARGE, SSH_VARIABLES, copy_route, herdr_drops, pbcopy, tmux_client_over_ssh
 from .prompts import CLOSED_CHOICES, FRAMED_FOOTER_MIN_ROWS, Answer, ImmediateAnswer, PromptSlot, TypeIt, open_request
 from .faults import FaultLog
@@ -578,6 +581,7 @@ REFUSAL_SENTENCES = {
 }
 TODOS_NONE_NOTICE = "No plan in this session yet: Hermes' todo tool writes one."
 BG_WAKING_KEPT = 64  # the process ids `App.bg_waking` remembers, oldest dropped first
+WATCH_PATTERN_KEPT = 200  # the characters of a watch pattern it keeps beside each, for the waiting row
 QUESTION_VIEW_TITLE = "the open question (q goes back to it)"  # Ctrl+O's pager while Hermes asks something
 # `/compress` (and `/compact`, its alias) while it runs: Hermes summarizes the older turns with a model call.
 COMPRESS_COMMANDS = frozenset({"compress", "compact"})
@@ -594,8 +598,19 @@ COMPRESS_GAUGE_SECONDS = 30.0
 COMPRESS_GAUGE_CEILING = 0.9
 # Between turns, while something the session waits on still runs (a background process Hermes will wake it for, a
 # delegated child or dag-ulw node that wakes the parent as it ends), the working row says so, as it says a turn runs
-# (the owner, 2026-11-05: "걍 Musing마냥 … 계속 나오게"): `✻ Waiting… (33m 47s · 1 agent · terminal)`.
+# (the owner, 2026-11-05: "걍 Musing마냥 … 계속 나오게"): `✻ Waiting… (33m 47s · 1 agent · terminal)`. Since the
+# owner's call of 2026-11-19 it names what the longest wait is (`wait_kinds`): `✻ Waiting for CI… (38m 0s · #2975 ·
+# +1 test run · 1 agent)`; a wait nothing names keeps `Waiting`.
 ALERT_WAIT_VERB = "Waiting"
+# As the longest wait ends between turns and nothing else waits, one muted row says so for this long (on `clock`):
+# `✓ Review finished (3m 2s)`, `✗ Review failed (…)` for a lane the graph says failed, and `· Tests ended (…)` for a
+# process, whose checkpoint carries no exit code (`background.py`), so it is never called passed or failed.
+WAIT_END_SECONDS = 3.0
+WAIT_FINISHED = "✓"
+WAIT_FAILED = "✗"
+WAIT_ENDED = "·"
+WAIT_UNNAMED = "Terminal"  # what the end line calls a process whose command names no kind
+DAG_WAIT_KEY = "dag:"  # a dag-ulw run's wait, by the run's name (`App._waits`)
 # How long a `/compress` is waited for: Hermes' own budget for it (`hermes_cli/gateway_client.py` COMPRESS_RPC_TIMEOUT,
 # the compression ceiling plus slack), in place of `CALL_ANSWER_SECONDS`.
 COMPRESS_ANSWER_SECONDS = 660.0
@@ -785,6 +800,10 @@ WAIT_SHOWN_SECONDS = 60.0  # a framed clarify question's key row says how long i
 # What each state is in herdr's agent list, when the TUI runs in a herdr pane (`herdr.py`).
 HERDR_STATES = {STATE_IDLE: "idle", STATE_RUNNING: "working", STATE_WAITING: "blocked"}
 WAITING_GLYPH = "? "  # in place of the spinner while a question waits on the person
+# The working row's words while the turn waits on the person, by the open slot's method; any other slot says
+# STATE_WAITING. The title and herdr keep STATE_WAITING (`blocked`) for all of them.
+WAITING_APPROVAL = "waiting for your approval"
+WAITING_ANSWER = "waiting for your answer"
 
 # The prompts waiting for the running turn, listed above the composer's top rule.
 QUEUE_GLYPH = "⧗ "
@@ -2504,9 +2523,10 @@ class App(ModesMixin, AgentViewMixin):
         self.bg_running: tuple[BackgroundProcess, ...] = ()
         self.bg_quiet: dict[str, float] = {}
         # The background processes a `terminal` result said Hermes will wake the session for (`notify_on_complete`
-        # true, or watch patterns), by Hermes' process id: Hermes writes `processes.json` at the spawn, before it
-        # sets those flags, so the checkpoint says neither until something else rewrites it (`_take_waking`).
-        self.bg_waking: dict[str, None] = {}
+        # true, or watch patterns), by Hermes' process id, each with its first watch pattern ("" for none): Hermes
+        # writes `processes.json` at the spawn, before it sets those flags, so the checkpoint says neither until
+        # something else rewrites it (`_take_waking`).
+        self.bg_waking: dict[str, str] = {}
         self.bg_done: tuple[tuple[BackgroundProcess, ...], float] | None = None
         self.bg_drawn: int | None = None  # the row's clock second the last frame showed (`_background_second`)
         self.bg_on_info = False  # whether the info line `_info_line` last made has the row (it can give way: `info_line`)
@@ -2596,6 +2616,11 @@ class App(ModesMixin, AgentViewMixin):
         self.tree_run = ""  # the run those folds belong to (`dag_tree.run_key`); a new run, or session, starts none
         self.tree_second = -1  # the whole wall second the tree's clocks were last drawn at (`_tree_second_due`)
         self.alert_second = -1  # the same for the wait's row (`_pending_wait`)
+        # The longest wait the last frame named, with the session it was this one's in, and the end line its end left
+        # (glyph, words, when on `clock`) while nothing else waits (`_wait_state`).
+        self.wait_primary: tuple[str, Wait] | None = None
+        self.wait_end: tuple[str, str, float] | None = None
+        self.wait_askable: dict[str, bool] = {}  # whether each waited-on process's end can be seen (`askable`)
         self.tree_state: TreeState | None = None  # what the tree's keys need, as the agent view last drew it
         # The dag run that is over, which the view no longer draws, and when its graph had last moved (`_run_gone`)
         self.retired_run: tuple[str, float] | None = None
@@ -3015,6 +3040,7 @@ class App(ModesMixin, AgentViewMixin):
         if self.stored_id and self.stored_id not in self.opened_ids:
             self.opened_ids = [*self.opened_ids, self.stored_id][-OPENED_IDS_KEPT:]
         self.stored_id = stored
+        self._forget_waits()  # the waits and their end line were the session being left
         write_active_session(self.environ.get("HERMES_TUI_ACTIVE_SESSION_FILE", ""), stored)
         hermes_home = self.environ.get("HERMES_HOME", "")
         if hermes_home:  # `omh` reads the session's row there once the TUI exits
@@ -3249,6 +3275,8 @@ class App(ModesMixin, AgentViewMixin):
             due.append(tail)
         if self.notification is not None and self.notification.expires_at < math.inf:
             due.append(self.notification.expires_at)
+        if self.wait_end is not None:
+            due.append(self.wait_end[2] + WAIT_END_SECONDS)  # the wait's end line goes on time
         due.extend(until for _transcript, _block, until in self.preview_waits)
         if self.copy_noted_at is not None:
             due.append(self.copy_noted_at + COPY_NOTE_SECONDS)
@@ -3265,6 +3293,9 @@ class App(ModesMixin, AgentViewMixin):
         """Take a ttl notification off the screen once its time is up."""
         if self.notification is not None and self.clock() >= self.notification.expires_at:
             self.notification = None
+            self.dirty = True
+        if self.wait_end is not None and self.clock() >= self.wait_end[2] + WAIT_END_SECONDS:
+            self.wait_end = None
             self.dirty = True
         if self.copy_noted_at is not None and self.clock() - self.copy_noted_at >= COPY_NOTE_SECONDS:
             self.copy_noted_at = None
@@ -3835,6 +3866,7 @@ class App(ModesMixin, AgentViewMixin):
         elif running and not self._busy():  # a turn started while the events did not arrive
             self.turn_pending = True
             self.busy_since = self.clock()
+            self._forget_waits()  # a turn starts: the last wait and its end line were the idle session's
         elif running:  # it runs on, but a tool's end may have been lost with the events
             self.transcript.lose_running_tools()
 
@@ -4417,6 +4449,7 @@ class App(ModesMixin, AgentViewMixin):
                 self._note_turn(TURN_OPEN)  # its end, once seen, says how it ended (`turn_ends`)
                 if not self.turn_pending:  # a turn this TUI did not start (a resumed one, a server queue)
                     self.busy_since = self.clock()
+                    self._forget_waits()  # a turn starts: the last wait and its end line were the idle session's
                     self.turn_waited = 0.0
                     self._count_from_here()
                 self.turn_pending = False
@@ -6540,6 +6573,7 @@ class App(ModesMixin, AgentViewMixin):
         self._settle_claim()
         self.turn_pending = True  # a prompt sent meanwhile goes behind this one
         self.busy_since = self.clock()
+        self._forget_waits()  # a turn starts: the last wait and its end line were the idle session's
         unsent = UnsentPrompt(typed or text, tuple(images))
         self.unsent.append(unsent)
         self._after_claim(lambda: self._stage_images(
@@ -6567,6 +6601,7 @@ class App(ModesMixin, AgentViewMixin):
         self._clear_roster()  # the agents shown were the last turn's
         self.bg_done = None  # a turn starts: the finished row's offer was for an idle session
         self.turn_pending = True
+        self._forget_waits()  # a turn starts: the last wait and its end line were the idle session's
         self.turn_unknown, self.turn_unknown_count = [], 0
         self.busy_since = self.clock()
         self.turn_waited = 0.0
@@ -9391,7 +9426,10 @@ class App(ModesMixin, AgentViewMixin):
         wakes = result.get("notify_on_complete") is True or (
             isinstance(watch, list) and any(isinstance(item, str) and item for item in watch))
         if isinstance(proc_id, str) and proc_id.startswith("proc_") and wakes:
-            self.bg_waking[proc_id] = None
+            # The first pattern, for `Watching for "<pattern>"` (`wait_kinds.watching` cuts it to its cells).
+            pattern = next((item for item in watch if isinstance(item, str) and item), "") if isinstance(
+                watch, list) else ""
+            self.bg_waking[proc_id] = pattern[:WATCH_PATTERN_KEPT]
             while len(self.bg_waking) > BG_WAKING_KEPT:
                 del self.bg_waking[next(iter(self.bg_waking))]
             if self.bg_running:
@@ -10155,9 +10193,10 @@ class App(ModesMixin, AgentViewMixin):
             lines = [()]  # the spacer a block opens with, here between the transcript and the region under it
         compressing = self._compressing_since()
         alert = self._pending_wait() if compressing is None else None
+        ended = self._wait_end_shown() if compressing is None and alert is None else None
         # A blank row above the working row, as between two blocks; the frame drops it first when rows are short.
-        self.tail_spacer = (self._busy() or compressing is not None or alert is not None) and bool(lines) and bool(
-            lines[-1])
+        self.tail_spacer = (self._busy() or compressing is not None or alert is not None or ended is not None) and bool(
+            lines) and bool(lines[-1])
         if self.tail_spacer:
             lines.append(())
         if self._busy() and self.waiting_since is not None:
@@ -10166,7 +10205,7 @@ class App(ModesMixin, AgentViewMixin):
             # Hermes' 60-minute clarify timeout makes it worth seeing; this row would only repeat it.
             if not self._framed_wait():
                 waited = elapsed_text(now - self.waiting_since)
-                row = (Span(WAITING_GLYPH, self.theme.user), Span(STATE_WAITING, self.theme.text),
+                row = (Span(WAITING_GLYPH, self.theme.user), Span(self._waiting_words(), self.theme.text),
                        Span(f" ({waited})", self.theme.muted))
                 lines.append(truncate_line(row, cols))
         elif self._busy() and self.interrupting:
@@ -10218,55 +10257,163 @@ class App(ModesMixin, AgentViewMixin):
             lines.append(self._compress_row(now - compressing, cols))
             lines.append(())
         elif alert is not None:
-            # What the session waits on: the working row's spinner and words, the longest wait's clock, then how many
-            # agents and terminals. The spinner holds while the window is unfocused (#2542); the clock counts on.
-            longest, agents, terminals = alert
-            facts = [elapsed_text(longest)]
-            facts += [f"{agents} agent{'' if agents == 1 else 's'}"] if agents else []
-            facts += ["terminal" if terminals == 1 else f"{terminals} terminals"] if terminals else []
-            frame = self._held_frame()
-            row = (Span(WORKING_GLYPHS[frame % len(WORKING_GLYPHS)], self.theme.accent), Span(" "),
-                   *working_spans(f"{ALERT_WAIT_VERB}…", frame, self.theme),
-                   Span(f" ({' · '.join(facts)})", self.theme.muted))
-            lines.append(truncate_line(row, cols))
+            # What the session waits on between turns, named (`_wait_row`); then, for a moment, that it ended.
+            lines.append(self._wait_row(alert, cols))
             self.alert_second = int(self.wall_clock())
+        elif ended is not None:
+            glyph, words, _at = ended
+            lines.append(truncate_line((Span(f"{glyph} {words}", self.theme.muted),), cols))
         return lines
 
-    def _pending_wait(self) -> tuple[float, int, int] | None:
-        """What the session waits on between turns, as (the longest wait's seconds, agents, terminals); None during a
-        turn and when nothing it waits on runs. Read from structure only, never from what the model said:
+    def _wait_row(self, waits: tuple[Wait, ...], cols: int) -> Line:
+        """What the session waits on: the working row's spinner, the longest wait's verb (`Waiting for CI…`, plain
+        `Waiting…` where nothing names it, `wait_kinds`), then its clock, its detail and the other waits counted
+        (`+1 test run · 1 agent`; a primary nothing names is counted with them, as the row always counted). A narrow
+        row drops the counts' kind words (back to `1 agent · terminal`), then the detail, then reads as it did before
+        it named anything, `Waiting… (<clock> · 1 agent · terminal)`, cut at the edge only past that. The spinner
+        holds while the window is unfocused (#2542); the clock counts on."""
+        primary = waits[0]
+        counted = waits if primary.kind is None else waits[1:]
+        clock = elapsed_text(primary.seconds)
+        verb = primary.kind.verb if primary.kind is not None else ALERT_WAIT_VERB
+        detail = [primary.kind.detail] if primary.kind is not None and primary.kind.detail else []
+        frame = self._held_frame()
+        spinner = (Span(WORKING_GLYPHS[frame % len(WORKING_GLYPHS)], self.theme.accent), Span(" "))
+        forms = ((verb, [clock, *detail, *count_words(counted)]), (verb, [clock, *detail, *plain_counts(counted)]),
+                 (verb, [clock, *plain_counts(counted)]), (ALERT_WAIT_VERB, [clock, *plain_counts(waits)]))
+        row: Line = ()
+        for said, facts in forms:
+            row = (*spinner, *working_spans(f"{said}…", frame, self.theme),
+                   Span(f" ({' · '.join(facts)})", self.theme.muted))
+            if line_width(row) <= cols:
+                return row
+        return truncate_line(row, cols)
+
+    def _pending_wait(self) -> tuple[Wait, ...] | None:
+        """What the session waits on between turns, longest first (`wait_kinds.Wait`: its seconds and what it is);
+        None during a turn and when nothing it waits on runs. Read from structure only, never from what the model said:
         - the session's background processes still running that Hermes will wake it for (`notify_on_complete`, or
           `watch_patterns` on a match), as their checkpoint records, none once one ended unreported (the info line
-          offers its result);
+          offers its result): each named by its command's words in command position (`wait_kinds.classify`), or by
+          the first pattern its `terminal` result armed (`Watching for "<pattern>"`);
         - the delegated children still running, which wake the parent as they end: the running or stuck lanes of the
           delegation graph the HUD reads (a dag-ulw node, a `delegate_task` child), each with the graph's time
-          counted on since the HUD read it."""
+          counted on since the HUD read it. A dag-ulw run is one wait, `Running <run name>` with its nodes' states
+          counted (`wait_kinds.dag_wait`); a child is named by its category or role (`wait_kinds.lane_wait`).
+        As a side effect it keeps the longest wait it last saw, and when that wait ends with nothing else waiting it
+        leaves the end line `_tail` draws for WAIT_END_SECONDS (`wait_end`)."""
         if self._busy():
+            self.wait_primary, self.wait_end = None, None  # never shown during a turn, nor carried across one
             return None
+        waits = self._waits()
+        seen = self.wait_primary
+        if seen is not None and seen[0] == self.stored_id and all(wait.key != seen[1].key for wait in waits):
+            self.wait_end = None if waits else self._wait_ended(seen[1])
+        self.wait_primary = (self.stored_id, waits[0]) if waits else None
+        if waits:
+            self.wait_end = None  # a later wait still running: the row goes straight back to it
+        return tuple(waits) or None
+
+    def _waits(self) -> list[Wait]:
+        """Every wait `_pending_wait` names, longest first (a tie keeps processes first, then the graph's order)."""
         wall = self.wall_clock()
-        times: list[float] = []
-        terminals = 0
+        waits: list[Wait] = []
         if self.bg_done is None and self._background_live():
-            waking = [process for process in self.bg_running if process.notify or process.watched]
-            terminals = len(waking)
-            times += [wall - process.started_at for process in waking]
+            for process in self.bg_running:
+                if not (process.notify or process.watched):
+                    continue
+                pattern = self.bg_waking.get(process.proc_id, "")
+                kind = watching(pattern) if pattern else classify(process.command, started_at=process.started_at,
+                                                                     now=wall)
+                waits.append(Wait(process.proc_id, wall - process.started_at, kind))
+                self.wait_askable[process.proc_id] = askable(process)
+                while len(self.wait_askable) > BG_WAKING_KEPT:
+                    del self.wait_askable[next(iter(self.wait_askable))]
         payload = self.hud.payload if self.hud is not None else None
         graph = payload.get("delegation_graph") if isinstance(payload, Mapping) and not payload.get("error") else None
         # A run its end print retired is over, whatever this read of the HUD still says (`_run_gone`).
         live = isinstance(graph, Mapping) and graph.get("status") == "active" and not (
             graph_is_dag(payload) and self._run_gone(graph))
-        lanes = [node for node in graph.get("nodes") or [] if isinstance(node, Mapping) and node.get("kind") != "root"
-                 and node.get("state") in ("running", "stuck")] if live else []
+        nodes = [node for node in graph.get("nodes") or [] if isinstance(node, Mapping) and node.get("kind") != "root"
+                 ] if live else []
         read_at = self.hud.received_at if self.hud is not None else 0.0
         since = wall - read_at if 0 < read_at <= wall else 0.0
-        for lane in lanes:
+
+        def seconds(lane: Mapping[str, Any]) -> float:
             elapsed = lane.get("elapsed_seconds")
-            if isinstance(elapsed, int | float) and not isinstance(elapsed, bool):
-                times.append(float(elapsed) + since)
-        agents = len(lanes)
-        if not terminals and not agents:
+            return float(elapsed) + since if isinstance(elapsed, int | float) and not isinstance(elapsed, bool) else 0.0
+
+        def running(lane: Mapping[str, Any]) -> bool:
+            return lane.get("state") in ("running", "stuck")
+
+        dag = graph_is_dag(payload) and isinstance(graph, Mapping)
+        run = [node for node in nodes if dag and node.get("outside_dag") is not True]
+        if any(running(node) for node in run):
+            out = [node for node in run if running(node)]
+            name = str(graph.get("name") or "")  # type: ignore[union-attr]
+            waits.append(Wait(f"{DAG_WAIT_KEY}{name}", max(seconds(node) for node in out), dag_wait(name, run),
+                              tuple(str(node.get("id")) for node in out)))
+        for lane in nodes:
+            if running(lane) and not (dag and lane.get("outside_dag") is not True):
+                waits.append(Wait(f"lane:{lane.get('id')}", seconds(lane), lane_wait(lane), (str(lane.get("id")),)))
+        return sorted(waits, key=lambda wait: -wait.seconds)
+
+    def _wait_ended(self, wait: Wait) -> tuple[str, str, float] | None:
+        """The end line for `wait`, which left the waits: `✓ <Kind> finished (<elapsed>)`, `✗ <Kind> failed (…)` for a
+        lane the graph now says failed, `· <Kind> ended (…)` for a process (its checkpoint has no exit code) or a lane
+        interrupted or unknown. The elapsed is the wait's own time as the row last showed it. None where its end is
+        not seen: a process still in the checkpoint (it only stopped counting, as when another one ended unreported),
+        or a lane the graph no longer lists or still lists running (a HUD read that failed reads no graph)."""
+        label = wait.kind.label if wait.kind is not None else WAIT_UNNAMED
+        took = elapsed_text(wait.seconds)
+        if not wait.agent:
+            if any(process.proc_id == wait.key for process in self.bg_running):
+                return None
+            # Only a process OMH could ask about (`askable`, pid and start time) is said to have ended: off that,
+            # a row gone from the checkpoint may be one another Hermes writer dropped while it runs.
+            if not self.wait_askable.get(wait.key, False):
+                return None
+            return WAIT_ENDED, f"{label} ended ({took})", self.clock()
+        payload = self.hud.payload if self.hud is not None else None
+        graph = payload.get("delegation_graph") if isinstance(payload, Mapping) and not payload.get("error") else None
+        states = {str(node.get("id")): node.get("state") for node in (graph.get("nodes") or [] if isinstance(
+            graph, Mapping) else []) if isinstance(node, Mapping)}
+        now = [states.get(lane) for lane in wait.lanes]
+        # Only a settled lane has ended: a parked or held dag node reads `waiting`, which is not over (`_DAG_VIEW`).
+        if any(state not in SETTLED_NODE_STATES for state in now):
             return None
-        return max(times, default=0.0), agents, terminals
+        if wait.key.startswith(DAG_WAIT_KEY):
+            # The whole run ticks only when the panel's own summary would call it over (every lane settled, none
+            # hidden, the run not open), and then with every lane's state, an earlier failure included.
+            if not isinstance(graph, Mapping) or not dag_run_summary(graph):
+                label = f"{label}: {len(now)} node{'' if len(now) == 1 else 's'}"
+            else:
+                now = [node.get("state") for node in graph.get("nodes") or [] if isinstance(node, Mapping)
+                       and node.get("kind") != "root" and node.get("outside_dag") is not True]
+        if "failed" in now:
+            return WAIT_FAILED, f"{label} failed ({took})", self.clock()
+        if any(state in ("interrupted", "unknown") for state in now):
+            return WAIT_ENDED, f"{label} ended ({took})", self.clock()
+        return WAIT_FINISHED, f"{label} finished ({took})", self.clock()
+
+    def _forget_waits(self) -> None:
+        """Drop the wait last seen and its end line: a turn started or the session changed, so neither is this idle
+        stretch's any more. Called where the change happens, not on a repaint, since several events (a whole turn,
+        start to end) can arrive between two frames."""
+        self.wait_primary, self.wait_end = None, None
+
+    def _wait_end_shown(self) -> tuple[str, str, float] | None:
+        """The end line `_tail` draws (`wait_end`) while its WAIT_END_SECONDS last, between turns; else None."""
+        end = self.wait_end
+        if end is None or self._busy() or self.clock() - end[2] >= WAIT_END_SECONDS:
+            return None
+        return end
+
+    def _waiting_words(self) -> str:
+        """What the working row says while the turn waits on the person: an approval and a clarify question by name,
+        anything else (a sudo or secret prompt) STATE_WAITING."""
+        method = self.slot.method if self.slot is not None else ""
+        return WAITING_APPROVAL if method == "approval" else WAITING_ANSWER if method == "clarify" else STATE_WAITING
 
     def _compress_row(self, waited: float, cols: int) -> Line:
         """`✻ Compacting conversation… ━━━━━━────── (11s)`: the gauge is the time waited eased toward
@@ -10289,10 +10436,10 @@ class App(ModesMixin, AgentViewMixin):
         """The tail's last rows that say a turn runs, as `_tail` draws them: the working (or waiting, or
         interrupting) row, and the tip under the working row from TIP_MIN_ROWS rows. The agent view leaves the tail
         these (`layout.allocate`'s `tail_floor`), so a short terminal never loses the row saying a turn runs."""
-        if not self._busy():  # the compression's row and the blank row under it, or the wait's row, with no tip
+        if not self._busy():  # the compression's row and the blank row under it, or the wait's row or its end line
             if self._compressing_since() is not None:
                 return 2
-            return int(self._pending_wait() is not None)
+            return int(self._pending_wait() is not None or self._wait_end_shown() is not None)
         if self._framed_wait():
             return 0  # `_tail` draws no row: the framed question's key row carries the wait's clock
         return 1 + int(self.size[1] >= TIP_MIN_ROWS and self.waiting_since is None and not self.interrupting)
