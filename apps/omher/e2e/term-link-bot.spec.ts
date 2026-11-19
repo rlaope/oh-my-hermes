@@ -162,6 +162,15 @@ test("Allow for this session types later requests without a card; another sessio
   await ask(page, la, "two");
   await expect.poll(async () => (await writes(page, a)).filter((d) => d === "one\r" || d === "two\r")).toEqual(["one\r", "two\r"]);
   await expect(page.getByTestId("term-share-card")).toHaveCount(0);
+  // the grant is Kami's: a request under another sender name asks, and nothing of it is typed
+  await ask(page, la, "from friren", "Friren");
+  const other = page.getByTestId("term-share-card");
+  await expect(other).toHaveCount(1);
+  await expect(other.locator(".card-title")).toHaveText("Friren wants to type into Shell");
+  await page.waitForTimeout(2000);
+  expect((await writes(page, a)).filter((d) => d.includes("friren"))).toEqual([]);
+  await other.getByRole("button", { name: "Deny" }).click();
+  await expect(other).toHaveCount(0);
   const b = await newTerm(page, "shell");
   const lb = await linkId(page, b);
   await expect.poll(async () => Object.keys(await files(page))).toContain(lb);

@@ -5,7 +5,9 @@
 // own owner-only plain file, 16 KB at most, never a link) and hands the page the request; the page shows it as a card
 // on the session ("<bot> wants to type into <title>"), with Deny, Allow once and Allow for this session. Only Allow
 // types it (the prompt, then Enter; a bracketed paste when the program asked for one). "Allow for this session" lets
-// later requests to that session type without a card until it is closed or omher restarts. A session that cannot take
+// later requests to that session from the same sender name type without a card until it is closed or omher
+// restarts; a request under another name shows a card. The name is what the requesting local process wrote in the
+// request (any process of the same OS user can write any name): it scopes a grant, it does not prove who asked. A session that cannot take
 // input now (paused, ended, its program not started) shows the card too, with Deny and "Resume and send" (it starts
 // again, and the prompt is typed once its program runs). A prompt that could not be typed keeps its card, with a line
 // saying so; it never uses up the request or a grant. Nothing else types a bot's prompt.
@@ -140,8 +142,11 @@ export function createTermShare(host: ShareHost, sessions: () => ReturnType<type
   /** what was last written, by link id (JSON) */
   const written = new Map<string, string>();
   let pending: PendingRequest[] = [];
-  /** sessions the person allowed for the rest of their life ("Allow for this session") */
+  /** (session, sender name) pairs the person allowed for the rest of the session's life ("Allow for this session"),
+   *  as `grantKey` writes them. Page memory only: they end with the session or the page. */
   const granted = new Set<string>();
+  const grantKey = (sessionId: string, from: string) => JSON.stringify([sessionId, from]);
+  const sessionOfGrant = (g: string) => (JSON.parse(g) as [string, string])[0];
   const subs = new Set<() => void>();
   let seq = 0;
   const emit = () => {
@@ -180,7 +185,7 @@ export function createTermShare(host: ShareHost, sessions: () => ReturnType<type
     }
     // a request or grant for a session that is gone goes with it
     const ids = new Set(st.list.map((r) => r.id));
-    for (const g of [...granted]) if (!ids.has(g)) granted.delete(g);
+    for (const g of [...granted]) if (!ids.has(sessionOfGrant(g))) granted.delete(g);
     const keep = pending.filter((p) => ids.has(p.sessionId));
     if (keep.length !== pending.length) {
       pending = keep;
@@ -197,7 +202,7 @@ export function createTermShare(host: ShareHost, sessions: () => ReturnType<type
       if (!rec || !isTerminalRec(sessions().getState().agents, rec)) continue;
       const p: PendingRequest = { ...r, prompt: cleanPrompt(r.prompt), key: `rq${++seq}`, sessionId: rec.id };
       if (!p.prompt.trim()) continue;
-      if (granted.has(rec.id) && sessions().canType(rec.id)) {
+      if (granted.has(grantKey(rec.id, p.from)) && sessions().canType(rec.id)) {
         // typed without a card; one that could not be typed after all shows its card
         void type(p).then((ok) => {
           if (ok) return;
@@ -250,7 +255,7 @@ export function createTermShare(host: ShareHost, sessions: () => ReturnType<type
       return ok ? drop(key) : update(key, { busy: false, failed: true });
     }
     if (!sessions().canType(r.sessionId) || !(await type(r))) return update(key, { failed: true });
-    if (choice === "session") granted.add(r.sessionId);
+    if (choice === "session") granted.add(grantKey(r.sessionId, r.from));
     drop(key);
   };
 
@@ -261,7 +266,8 @@ export function createTermShare(host: ShareHost, sessions: () => ReturnType<type
     answer,
     prune: (keep: string[]) => host.prune(keep),
     pending: () => pending,
-    granted: (id: string) => granted.has(id),
+    /** Session `id` has a standing grant for sender name `from`. */
+    granted: (id: string, from: string) => granted.has(grantKey(id, from)),
     subscribe(fn: () => void) {
       subs.add(fn);
       return () => void subs.delete(fn);

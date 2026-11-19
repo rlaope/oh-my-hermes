@@ -24,7 +24,7 @@ function world(list: SessionRec[], o: { canType?: boolean; types?: boolean } = {
     canType: () => io.canType,
   } as unknown as ReturnType<typeof getSessions>;
   const share = createTermShare(host, () => sessions);
-  const ask = (prompt: string, link = "abcdefgh23") => g.__omherMockInbox.push({ id: `${g.__omherMockInbox.length}`, link, prompt, from: "Kami", session: "x" });
+  const ask = (prompt: string, link = "abcdefgh23", from = "Kami") => g.__omherMockInbox.push({ id: `${g.__omherMockInbox.length}`, link, prompt, from, session: "x" });
   return { share, typed, g, st, ask, io };
 }
 
@@ -70,10 +70,10 @@ describe("a bot's request to type into a terminal", () => {
     expect(w.typed.map((x) => x.text)).toEqual(["one", "two"]);
     // the other session was not allowed: it asks
     expect(w.share.pending().map((p) => p.sessionId)).toEqual(["s2"]);
-    expect(w.share.granted("s1")).toBe(true);
+    expect(w.share.granted("s1", "Kami")).toBe(true);
     w.st.list = w.st.list.filter((r) => r.id !== "s1");
     await w.share.publish();
-    expect(w.share.granted("s1")).toBe(false);
+    expect(w.share.granted("s1", "Kami")).toBe(false);
   });
 
   it("drops requests for unknown links, chat sessions and drafts, and takes control characters out", async () => {
@@ -91,6 +91,21 @@ describe("a bot's request to type into a terminal", () => {
     expect(cleanPrompt("a\tb\x00c\x7fd\ne")).toBe("abcd\ne");
   });
 
+  it("Allow for this session holds for the sender name it was given to; another name gets a card", async () => {
+    const w = world([rec()]);
+    await w.share.publish();
+    w.ask("one", "abcdefgh23", "Kami");
+    await w.share.poll();
+    await w.share.answer(w.share.pending()[0]!.key, "session");
+    w.ask("from someone else", "abcdefgh23", "Friren");
+    w.ask("two", "abcdefgh23", "Kami");
+    await w.share.poll();
+    expect(w.typed.map((x) => x.text)).toEqual(["one", "two"]);
+    expect(w.share.pending().map((p) => [p.from, p.prompt])).toEqual([["Friren", "from someone else"]]);
+    expect(w.share.granted("s1", "Kami")).toBe(true);
+    expect(w.share.granted("s1", "Friren")).toBe(false);
+  });
+
   it("an Allow that types nothing keeps the card with its line and adds no grant", async () => {
     const w = world([rec()], { types: false });
     await w.share.publish();
@@ -101,7 +116,7 @@ describe("a bot's request to type into a terminal", () => {
     expect(w.typed).toEqual([]);
     expect(w.share.pending()).toHaveLength(1);
     expect(w.share.pending()[0]).toMatchObject({ key, failed: true });
-    expect(w.share.granted("s1")).toBe(false);
+    expect(w.share.granted("s1", "Kami")).toBe(false);
     await w.share.answer(key, "once");
     expect(w.share.pending()).toHaveLength(1);
     // it types once the terminal takes input again
