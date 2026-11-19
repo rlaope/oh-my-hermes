@@ -1286,6 +1286,8 @@ export const zh: Record<Key, string> = {
   "sq.deleteTip": "不发送",
   "sq.steering": "steer 中…",
   "sq.steered": "已发给 {bot} · 并入进行中的回答,或紧接着开始",
+  "bub.read": "已读",
+  "bub.readAt": "已读 · {time}",
   "sq.unknown": "可能已经在回答里了",
   "sq.unused": "未使用 · 回答先停止了",
   "sq.send": "发送",

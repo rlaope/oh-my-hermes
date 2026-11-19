@@ -65,6 +65,17 @@
   animation: pop 0.22s ease both;
 }
 
+/* the live line stays short: a capped width with one line and an ellipsis; the full text is the hover title */
+.act[data-state="live"] > .act-h {
+  max-width: min(60%, 520px);
+}
+.act-live {
+  display: block;
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+}
+
 /* ticker: old text leaves upward, new text arrives from below */
 .act-tick {
   position: relative;

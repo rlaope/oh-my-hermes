@@ -55,6 +55,33 @@ describe("liveFaceRow: one row of the live run holds the face", () => {
   });
 });
 
+describe("awaitingFirstToken: the typing dots stay until the answer starts", () => {
+  it("stays through status and tool steps, goes while an ask is open, ends at the first whole line of the answer", () => {
+    let s = initialState();
+    const seen: boolean[] = [];
+    const evs: BridgeEvent[] = [
+      { event: "turn.start", bot: "kami" },
+      { event: "status", bot: "kami", text: "OMH — recalled 2 memories" },
+      { event: "tool.start", bot: "kami", tool_id: "t1", name: "terminal", detail: "ls" },
+      { event: "tool.end", bot: "kami", tool_id: "t1", name: "terminal", ok: true, ms: 40 },
+      { event: "approval.request", bot: "kami", request_id: "r1", title: "Run", command: "rm x", choices: ["once", "deny"] },
+    ];
+    evs.forEach((ev, i) => {
+      s = at(s, ev, i);
+      seen.push(awaitingFirstToken(s.chats.kami));
+    });
+    s = reduce(s, { type: "approval.resolved", bot: "kami", request_id: "r1", choice: "once" } as Action);
+    seen.push(awaitingFirstToken(s.chats.kami));
+    s = at(s, { event: "delta", bot: "kami", text: "It is" }, 9);
+    seen.push(awaitingFirstToken(s.chats.kami));
+    s = at(s, { event: "delta", bot: "kami", text: " fine.\n" }, 10);
+    seen.push(awaitingFirstToken(s.chats.kami));
+    expect(seen).toEqual([true, true, true, true, false, true, true, false]);
+    // the line keeps the one ringed face while the dots sit under it
+    expect(row(s)).toBe("streaming");
+  });
+});
+
 describe("ringDelay: a ring that moves to another row keeps its angle", () => {
   it("is a negative delay within one 1.2s turn that follows the page clock", () => {
     for (const now of [0, 333, 1199, 50_000.5]) {

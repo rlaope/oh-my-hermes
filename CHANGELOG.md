@@ -11,6 +11,15 @@ All notable changes will be documented here.
   ultrabrain, review or deep never get the option, nor does a node pinned to an identity, which keeps that
   identity's own model chain.
 
+- **omher: every message you send shows Read once the bot has it, and a steer shows how the bot took it.** The last
+  message the bot received carries a small muted "Read · 16:41" under it, messenger style: as soon as the send went
+  through or its turn started, a steer as soon as Hermes queued it, and a held message once it actually goes out. A
+  failed send or a refused, uncertain or dropped steer never shows it. Under a steered message, the first line the
+  bot wrote after taking it (its note before the next tool call, or its answer) shows as "↳ …", so a change of course
+  is no longer silent; the rest of that note stays hidden as before. A reopened chat shows both, from the bridge.
+  While the bot works, the typing dots now stay under the live activity line until the answer starts, and that line
+  is kept short (a command shows its first 48 characters, the whole text on hover).
+
 - **omher: a waiting message is sent or taken back in one click, with no menu.** A message typed while the bot
   answers waits with buttons before it instead of a ↵ that opened Send now / Steer / Edit / Delete. ↵ sends it:
   Steer into the running answer, or, for an agent with no steer of its own, Send now (stop the answer, this one

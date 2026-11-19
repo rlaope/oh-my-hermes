@@ -49,6 +49,9 @@ async function watchFaces(page: Page) {
       rows.forEach((r, i) => {
         if (r.classList.contains("row-user")) lastUser = i;
       });
+      // measured from the person's last bubble: the dots row under the live line makes the thread taller, and the
+      // pinned-to-bottom scroll moves every row up by it; what must not move is the face against the conversation
+      const base = rows[lastUser]?.getBoundingClientRect().bottom ?? 0;
       const faces: Face[] = [];
       for (const r of rows.slice(lastUser + 1))
         for (const f of r.querySelectorAll<HTMLElement>("img.msg-face, [data-testid=session-face]")) {
@@ -56,11 +59,11 @@ async function watchFaces(page: Page) {
           const b = f.getBoundingClientRect();
           const img = f instanceof HTMLImageElement ? f : null;
           const ok = b.width > 0 && b.height > 0 && getComputedStyle(f).visibility !== "hidden" && (!img || (img.complete && img.naturalWidth > 0));
-          faces.push({ left: b.left, top: b.top, ok, ring: !!f.closest(".ui-ring-w")?.querySelector(":scope > .ui-ring") });
+          faces.push({ left: b.left, top: b.top - base, ok, ring: !!f.closest(".ui-ring-w")?.querySelector(":scope > .ui-ring") });
         }
       const phase = tl.querySelector("[data-kind=streaming]")
         ? "streaming"
-        : tl.querySelector("[data-kind=typing]")
+        : tl.querySelector("[data-kind=typing]:not(.under-line)")
           ? "typing"
           : tl.querySelector("[data-testid=activity][data-state=live]")
             ? "status"
@@ -120,7 +123,9 @@ test("a bot's face stays put from send to answer: typing, a recalled-memories st
 
   await emit({ event: "status", bot: "kami", text: STATUS });
   await expect(tl.locator("[data-testid=activity][data-state=live]").getByTestId("activity-text")).toHaveText(STATUS);
-  await expect(tl.getByTestId("typing")).toHaveCount(0);
+  // the dots stay, under the line, without a face of their own: still one ringed face
+  await expect(tl.locator("[data-kind=typing].under-line")).toBeVisible();
+  await expect(tl.getByTestId("typing-ring")).toHaveCount(0);
   await settled(page);
 
   await emit({ event: "tool.start", bot: "kami", tool_id: "fb1", name: "terminal", detail: "grep 502 gateway.log" });

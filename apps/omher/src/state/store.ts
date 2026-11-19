@@ -157,6 +157,13 @@ export type MessageItem = {
   held?: boolean;
   /** user rows only: steered into the running turn (Hermes' `session.steer`) instead of sent as a new turn. */
   steered?: boolean;
+  /** user rows only: the bot has it (chat.send went through, its turn started, or Hermes queued the steer), at this
+   *  time (ms); 0 when the time is not known. Messenger-style "Read" under the person's last message. A send that
+   *  failed, a refused or uncertain steer, or one the turn dropped unread never carries it. */
+  readAt?: number;
+  /** user rows only, with `steered`: the first line the bot wrote after reading it (the note before its next tool
+   *  call, or the answer), so the person sees how it took the steer. */
+  steerReply?: string;
   /** user rows only (held): a steer whose answer never came back (the bridge dropped, the bot went offline, a
    *  timeout). Hermes may have taken it, so it is never sent again on its own: the person picks Send or Delete. */
   steerUnknown?: boolean;
@@ -313,6 +320,9 @@ export interface Chat {
   /** Rows steered into the running turn that it has not read yet (no tool step ended and no message came since):
    *  a Stop or Send now before then makes Hermes drop them, so they are marked not used (Send / Delete). */
   steeredUnread?: string[];
+  /** The last steered row the turn consumed, waiting for the bot's first words after it: they start at `from` in the
+   *  turn's `streaming` and end at its next tool call (or are the answer). */
+  steerAck?: { id: string; from: number } | null;
 }
 
 /** The composer's "Reply there" chip: a thread elsewhere the next message points the bot at. */
@@ -814,17 +824,33 @@ function applyOpened(chat: Chat, res: ChatOpenResult, now: number, bot: string, 
     text: m.text,
     ...(m.reply_to ? { reply: replyOf(m.reply_to) } : {}),
     ...(m.watch ? { watch: m.watch } : {}),
-    ...(m.steered && m.role === "user" ? { steered: true } : {}),
+    ...(m.steered && m.role === "user" ? { steered: true, ...(m.steer_reply ? { steerReply: m.steer_reply } : {}) } : {}),
   }));
+  // a reopened chat: a row of the person's with any bot row after it reached the bot (read at that row's time; a
+  // steer at the time of the bot's first words after it); in a turn still running, its last row did too
+  server.forEach((m, k) => {
+    if (m.kind !== "user") return;
+    const next = server.slice(k + 1).find((x) => x.kind === "assistant");
+    const steerAt = res.messages[k]?.steer_read;
+    if (next || steerAt) m.readAt = (steerAt ?? next?.ts ?? 0) * 1000;
+  });
+  const lastUser = [...server].reverse().find((m) => m.kind === "user");
+  if (res.running && lastUser && lastUser.readAt === undefined) lastUser.readAt = 0;
   const ids = new Set(server.map((m) => m.id));
   const lastServerTs = server.length ? server[server.length - 1].ts : 0;
   const keep = chat.items.filter((i) => {
     if (i.kind !== "user" && i.kind !== "assistant") return true;
     if (i.kind === "user" && i.held) return true; // never sent: no server row can be its twin
-    if (ids.has(i.id)) return false;
+    if (ids.has(i.id)) {
+      const twin = server.find((s) => s.id === i.id);
+      if (twin && i.kind === "user" && i.readAt !== undefined && twin.readAt === undefined) twin.readAt = i.readAt;
+      return false;
+    }
     if (i.id.startsWith("local-")) {
       const sent = i.sent ?? i.text;
       const twin = server.find((s) => s.kind === "user" && s.text === sent && s.ts >= i.ts - 120);
+      // what this app already saw (the send went through) stays read until the history says when
+      if (twin && i.readAt !== undefined && twin.readAt === undefined) twin.readAt = i.readAt;
       // keep the local pictures, and the text as typed with its skill tokens (they go out hoisted)
       if (twin && (i.files || i.sent || i.skills))
         Object.assign(twin, { text: i.text, sent, ...(i.files ? { files: i.files } : {}), ...(i.skills ? { skills: i.skills } : {}) });
@@ -877,6 +903,8 @@ export type Action =
   | { type: "reply.set"; bot: string; chip: ReplyChip | null }
   | QueueAction
   | { type: "send.failed"; bot: string; id: string; error: string }
+  /** chat.send went through: the bot has the message (its "Read" mark). */
+  | { type: "send.ok"; bot: string; id: string; now: number }
   | { type: "event"; ev: BridgeEvent; now: number }
   | { type: "approval.resolved"; bot: string; request_id: string; choice: ApprovalChoice }
   | { type: "clarify.resolved"; bot: string; request_id: string; answer: string; answers?: ClarifyAnswers }
@@ -980,7 +1008,9 @@ function reduceEvent(state: AppState, ev: BridgeEvent, now: number): AppState {
     case "turn.start":
       return touchChat(state, bot, (c) => {
         const early = c.early && now - c.early.at <= EARLY_STATUS_MS ? c.early.text : "";
-        return { ...newTurn(endTurn(c, now, "done"), bot, now, early)[0], early: null, pendingTurn: null, steeredUnread: undefined };
+        // its turn started: the bot has the person's last sent message
+        const got = markRead(c, lastSent(c)?.id, now);
+        return { ...newTurn(endTurn(got, now, "done"), bot, now, early)[0], early: null, pendingTurn: null, steeredUnread: undefined, steerAck: null };
       });
     case "status": {
       // the agent's own retry of this turn: the line says which try, in the person's language
@@ -1010,8 +1040,10 @@ function reduceEvent(state: AppState, ev: BridgeEvent, now: number): AppState {
     case "rewound":
       return touchChat(state, bot, (c) => rewind(c));
     case "tool.start":
-      return touchChat(state, bot, (c) =>
-        patchTurn(c, (t) => ({
+      return touchChat(state, bot, (c0) => {
+        // the note written before this call is the bot's first word on a steer it read
+        const c = c0.steerAck && c0.turn ? ackSteer(c0, c0.turn.streaming.slice(c0.steerAck.from)) : c0;
+        return patchTurn(c, (t) => ({
           ...t,
           status: activityText(ev.name, ev.detail),
           // what was written before this call was commentary on it, not the answer
@@ -1020,12 +1052,12 @@ function reduceEvent(state: AppState, ev: BridgeEvent, now: number): AppState {
             ...t.steps,
             { id: ev.tool_id, name: ev.name, detail: ev.detail, startedAt: now, ...(ev.dag?.length ? { dag: ev.dag } : {}) },
           ],
-        })),
-      );
+        }));
+      });
     case "tool.end":
       // a tool step ended: Hermes hands what was steered in to the model with its result
       return touchChat(state, bot, (c0) => {
-        const c = c0.steeredUnread ? { ...c0, steeredUnread: undefined } : c0;
+        const c = c0.steeredUnread ? consumeSteers({ ...c0, steeredUnread: undefined }, c0.steeredUnread) : c0;
         return c.turn?.steps.some((s) => s.id === ev.tool_id)
           ? patchTurn(c, (t) => ({
               ...t,
@@ -1047,7 +1079,10 @@ function reduceEvent(state: AppState, ev: BridgeEvent, now: number): AppState {
     case "message": {
       const next = touchChat(state, bot, (c) => {
         // the answer came: a steer Hermes took by now runs in this turn or right after it (never dropped by a Stop)
-        const cleared = patchTurn({ ...c, steeredUnread: undefined }, (t) => ({ ...t, streaming: "", cut: undefined }));
+        const read = c.steeredUnread ? consumeSteers(c, c.steeredUnread) : c;
+        // a steer read before this answer, with no note since: the answer is the bot's first word on it
+        const acked = read.steerAck ? ackSteer(read, ev.text) : read;
+        const cleared = patchTurn({ ...acked, steeredUnread: undefined, steerAck: null }, (t) => ({ ...t, streaming: "", cut: undefined }));
         const msg: MessageItem = { kind: "assistant", id: ev.id, ts: now / 1000, text: ev.text, ...(ev.watch ? { watch: ev.watch } : {}) };
         const exists = cleared.items.some((i) => i.kind === "assistant" && i.id === ev.id);
         const slot = answerSlot(cleared);
@@ -1121,9 +1156,11 @@ function reduceEvent(state: AppState, ev: BridgeEvent, now: number): AppState {
           base = withItems(c, [...c.items.slice(0, slot), { kind: "assistant", id: `${c.turn.id}-a`, ts: now / 1000, text }, ...c.items.slice(slot)]);
           base = patchTurn(base, (t) => ({ ...t, streaming: "", cut: undefined }));
         }
+        // a steer read with no note before the end: what the turn said last is the bot's word on it
+        if (ev.outcome === "done" && c.turn && c.steerAck) base = ackSteer(base, c.turn.streaming.slice(c.steerAck.from));
         // stopped before the turn read what was steered in: Hermes dropped it, so it says so and waits for Send / Delete
         if (ev.outcome === "interrupted" && c.steeredUnread?.length) base = unsteer(base, c.steeredUnread);
-        return { ...endTurn(base, now, ev.outcome, ev.error), early: null, pendingTurn: null, steeredUnread: undefined };
+        return { ...endTurn(base, now, ev.outcome, ev.error), early: null, pendingTurn: null, steeredUnread: undefined, steerAck: null };
       });
     case "bot.status":
       return {
@@ -1226,7 +1263,7 @@ export function reduce(state: AppState, a: Action): AppState {
       for (const [b, c] of Object.entries(state.chats)) {
         const ended = c.turn && !b.startsWith("agent:") ? endTurn(c, t, "interrupted", tr("live.lost")) : c;
         // what Hermes runs is not known until the chat is read again: the steer queue waits for that
-        chats[b] = isSessionChat(b) ? ended : { ...ended, stale: true, pendingTurn: null, steeredUnread: undefined };
+        chats[b] = isSessionChat(b) ? ended : { ...ended, stale: true, pendingTurn: null, steeredUnread: undefined, steerAck: null };
       }
       return { ...state, conn: a.status, chats };
     }
@@ -1325,11 +1362,13 @@ export function reduce(state: AppState, a: Action): AppState {
       });
     case "reply.set":
       return { ...state, replyTo: { ...state.replyTo, [a.bot]: a.chip } };
+    case "send.ok":
+      return state.chats[a.bot] ? touchChat(state, a.bot, (c) => markRead(c, a.id, a.now)) : state;
     case "send.failed":
       return touchChat(state, a.bot, (c) => ({
         ...withItems(
           c,
-          c.items.map((i) => (i.kind === "user" && i.id === a.id ? { ...i, error: a.error } : i)),
+          c.items.map((i) => (i.kind === "user" && i.id === a.id ? (({ readAt: _r, ...m }) => ({ ...m, error: a.error }))(i) : i)),
         ),
         ...(c.pendingTurn === a.id ? { pendingTurn: null } : {}),
       }));
@@ -1523,7 +1562,44 @@ function unsteer(c: Chat, ids: string[]): Chat {
     c.items.map((i) => (i.kind === "user" && ids.includes(i.id) && i.steered ? { ...withoutSteered(i), steerUnknown: true, steerUnused: true } : i)),
   );
 }
-const withoutSteered = ({ steered: _s, ...m }: MessageItem): MessageItem => m;
+const withoutSteered = ({ steered: _s, readAt: _r, ...m }: MessageItem): MessageItem => m;
+
+/** Rows steered in that the turn just consumed: the last one waits for the bot's first words after it (several
+ *  consumed together get one reply, on the last, the one the bot answers last). */
+function consumeSteers(c: Chat, ids: string[]): Chat {
+  const read = c.items.filter((i): i is MessageItem => i.kind === "user" && ids.includes(i.id) && !!i.steered);
+  if (!read.length) return c;
+  return { ...c, steerAck: { id: read[read.length - 1].id, from: c.turn?.streaming.length ?? 0 } };
+}
+
+/** The person's last row that went out (not held, not failed, not a steer left waiting for Send / Delete). */
+function lastSent(c: Chat): MessageItem | undefined {
+  for (let k = c.items.length - 1; k >= 0; k--) {
+    const i = c.items[k];
+    if (i.kind === "user" && !i.held && !i.error && !i.steerUnknown) return i;
+  }
+  return undefined;
+}
+
+/** Row `id` reached the bot at `now`: it reads "Read" (an earlier mark keeps its time). */
+function markRead(c: Chat, id: string | undefined, now: number): Chat {
+  if (!id || !c.items.some((i) => i.kind === "user" && i.id === id && i.readAt === undefined && !i.held && !i.error)) return c;
+  return withItems(c, c.items.map((i) => (i.kind === "user" && i.id === id ? { ...i, readAt: now } : i)));
+}
+
+/** How long a steer's reply line may be: one glance under the bubble. */
+const STEER_REPLY_MAX = 140;
+
+/** The bot's first words after it read a steer: their first line goes under that message. No words yet (a tool call
+ *  with nothing written before it), it keeps waiting for the next ones. The rest stays hidden as commentary. */
+function ackSteer(c: Chat, said: string): Chat {
+  const id = c.steerAck?.id;
+  const line = hideSplitBlocks(said).split("\n").map((l) => l.trim()).find(Boolean);
+  if (!id || !line) return c;
+  const reply = line.length <= STEER_REPLY_MAX ? line : `${line.slice(0, STEER_REPLY_MAX - 1).trimEnd()}…`;
+  const items = c.items.map((i) => (i.kind === "user" && i.id === id ? { ...i, steerReply: reply } : i));
+  return { ...withItems(c, items), steerAck: null };
+}
 
 /** The row the running answer goes before once `id` leaves: the next user row after it (one still waiting, or
  *  typed under the answer), or none. */
@@ -1566,7 +1642,8 @@ export function reduceQueue(c: Chat, a: QueueAction): Chat {
         return { ...marked, queue: without, steering: null };
       }
       if (!a.ok) return { ...c, queue: [a.id, ...without], steering: null };
-      const moved = toEnd(c, a.id, ({ held: _h, ...m }) => ({ ...m, steered: true, ts: a.now / 1000 }));
+      // Hermes queued it: the bot has it
+      const moved = toEnd(c, a.id, ({ held: _h, ...m }) => ({ ...m, steered: true, ts: a.now / 1000, readAt: a.now }));
       // it joined the running turn: it sits before the messages still waiting (they go out after this turn), and
       // the turn's answer lands after it, still above those waiting ones
       const items = [...moved.items];
@@ -2017,6 +2094,7 @@ export function createStore(bridge: BridgeLike, opts: StoreOptions = {}): Store 
         // queued: when Hermes is still busy (its own next turn: a steer it took during the final answer, or one held
         // through a compression), this waits behind it in Hermes' FIFO instead of steering or interrupting it
         await bridge.request("chat.send", p.reply_to ? { ...to, text: wire, reply_to: p.reply_to, queued: true } : { ...to, text: wire, queued: true });
+        dispatch({ type: "send.ok", bot, id, now: now() });
         idleLater(bot, id);
       } catch (e) {
         dispatch({ type: "send.failed", bot, id, error: errText(e) });
@@ -2403,6 +2481,7 @@ export function createStore(bridge: BridgeLike, opts: StoreOptions = {}): Store 
       if (chip) dispatch({ type: "reply.set", bot, chip: null });
       try {
         await bridge.request("chat.send", chip ? { bot, text: wire, reply_to: chip.session_id } : { bot, text: wire });
+        dispatch({ type: "send.ok", bot, id, now: now() });
       } catch (e) {
         dispatch({ type: "send.failed", bot, id, error: errText(e) });
       }
@@ -2437,6 +2516,7 @@ export function createStore(bridge: BridgeLike, opts: StoreOptions = {}): Store 
       dispatch({ type: "local.user", bot, id, text: text.trim(), now: now(), files: shown, sent, skills: tokenNames(text.trim(), bot) });
       try {
         await bridge.request("chat.send", { bot, text: sent });
+        dispatch({ type: "send.ok", bot, id, now: now() });
       } catch (e) {
         dispatch({ type: "send.failed", bot, id, error: errText(e) });
       }
@@ -2807,6 +2887,7 @@ export function createStore(bridge: BridgeLike, opts: StoreOptions = {}): Store 
       if (row && !row.title) dispatch({ type: "thread.upsert", bot, row: { ...row, title: firstWords(text), last: now() / 1000 } });
       try {
         await bridge.request("chat.send", { bot, session: thread, text: text.trim() });
+        dispatch({ type: "send.ok", bot: key, id, now: now() });
       } catch (e) {
         dispatch({ type: "send.failed", bot: key, id, error: errText(e) });
       }

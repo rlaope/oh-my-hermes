@@ -71,6 +71,8 @@ export function Timeline({
   const lastUser = onEditLast ? [...items].reverse().find((i) => i.kind === "user") : undefined;
   // taking it back rewinds the conversation only: when its turn changed files, the Edit control says they stay
   const lastUserAt = lastUser ? items.indexOf(lastUser) : -1;
+  // the person's last message that went out: it carries the messenger-style "Read" mark
+  const lastSent = [...items].reverse().find((i) => i.kind === "user" && !i.held && !i.error && !i.steerUnknown)?.id;
   const keptFiles =
     lastUserAt >= 0 && items.slice(lastUserAt + 1).some((i) => i.kind === "activity" && i.turn.steps.some((st) => st.diff?.length));
 
@@ -126,6 +128,7 @@ export function Timeline({
             queueBusy={it.held && chat?.steering === it.id}
             queueOff={off ?? undefined}
             steeredTo={bot.display_name}
+            last={it.id === lastSent}
           />
         );
       }
@@ -188,10 +191,13 @@ export function Timeline({
       />
     </div>
   ) : null;
-  // the typing dots too: where the answer will land
+  // the typing dots until the answer starts: on their own with the ringed face where the answer will land, or, once
+  // the live activity line shows (it holds the face), directly under that line in the text column, faceless
+  const liveId = chat?.turn && turnHasActivity(chat.turn) ? chat.turn.id : undefined;
+  const underLine = !!liveId && items.some((i) => i.kind === "activity" && i.id === liveId);
   const typingRow = typing ? (
-    <div className="row row-assistant row-typing" data-kind="typing">
-      <TypingRow bot={bot.name} name={bot.display_name} face={face} />
+    <div className={`row row-assistant row-typing${underLine ? " under-line" : ""}`} data-kind="typing">
+      <TypingRow bot={bot.name} name={bot.display_name} face={face} under={underLine} />
     </div>
   ) : null;
 
@@ -240,17 +246,18 @@ export function Timeline({
         return (
           <Fragment key={it.id}>
             {it.id === slotId && writingRow}
-            {it.id === slotId && typingRow}
+            {it.id === slotId && !underLine && typingRow}
             {label && <div className="day">{label}</div>}
             <div className={`row row-${it.kind}${liveLine ? " live-line" : ""}`} data-kind={it.kind} {...(it.kind === "user" ? { "data-item": it.id } : {})}>
               {liveFace && <LiveFace bot={bot.name} face={face} />}
               {render(it, label ? undefined : items[i - 1], i)}
             </div>
+            {underLine && it.id === liveId && typingRow}
           </Fragment>
         );
       })}
       {!slotId && writingRow}
-      {!slotId && typingRow}
+      {!slotId && !underLine && typingRow}
     </div>
   );
 }

@@ -231,6 +231,21 @@
   font-size: 11px;
   color: var(--quiet);
 }
+/* a steer's reply: the bot's first words after it read it, one line under the Read line; long ones end in an
+   ellipsis inside the bubble's width instead of wrapping */
+.msg-steer-reply {
+  margin-top: 1px;
+  max-width: min(100% - 40px, max(70%, 380px), 640px);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--muted);
+}
+/* the arrow in the UI font: a Korean font draws ↳ like the jamo ㄴ */
+.msg-steer-arrow {
+  margin-right: 4px;
+  font-family: var(--mono);
+}
 /* steer queue: a message held while the bot answers, with its ↵ mark before the bubble */
 .msg-line {
   display: flex;
@@ -519,6 +534,10 @@
   align-items: center;
   height: calc(var(--fs-msg) * var(--lh-msg) + 18px);
   padding: 0 14px;
+}
+/* under the live activity line: no face of its own (the line holds the ringed one), in the bubbles' text column */
+.msg.a.typing.under {
+  padding-left: calc(28px + 10px);
 }
 [data-bubbles="open"] .msg.a.typing .b {
   padding: 0 2px;

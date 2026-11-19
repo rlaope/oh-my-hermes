@@ -286,14 +286,26 @@ test("chat: a typing bubble with the ringed face waits for the first delta, whic
   const last = await tl.locator(":scope > .row").last().getAttribute("data-kind");
   expect(last).toBe("typing");
 
-  // the first tool.start brings the activity line, which takes over: the typing bubble goes
+  // the first tool.start brings the activity line, which takes the ringed face; the dots stay, directly under the
+  // line, faceless in the text column, until the answer starts (owner: the person always sees the bot is writing)
   await emit(ev("kami", "tool.start", { tool_id: "k1", name: "terminal", detail: "pnpm test" }));
-  await expect(tl.locator("[data-testid=activity][data-state=live]").getByTestId("activity-text")).toContainText("pnpm test");
-  await expect(tl.getByTestId("typing")).toHaveCount(0);
-  // and stays gone while the line is shown, through the tool's end and the next one
+  const line = tl.locator("[data-testid=activity][data-state=live]");
+  await expect(line.getByTestId("activity-text")).toContainText("pnpm test");
+  await expect(tl.getByTestId("typing")).toBeVisible();
+  await expect(tl.getByTestId("typing-ring")).toHaveCount(0);
+  await expect(tl.getByTestId("face-ring")).toHaveCount(1);
+  const under = async () => {
+    const [lb, tb] = await Promise.all([line.boundingBox(), tl.getByTestId("typing-bubble").boundingBox()]);
+    expect(tb!.y).toBeGreaterThanOrEqual(lb!.y + lb!.height - 1);
+    expect(Math.abs(tb!.x - lb!.x)).toBeLessThan(4); // the line's text column
+    expect(await tl.locator(":scope > .row").last().getAttribute("data-kind")).toBe("typing");
+  };
+  await under();
+  // and stays under it through the tool's end and the next one
   await emit(ev("kami", "tool.end", { tool_id: "k1", name: "terminal", ok: true }), ev("kami", "thinking"));
-  await expect(tl.locator("[data-testid=activity][data-state=live]")).toHaveCount(1);
-  await expect(tl.getByTestId("typing")).toHaveCount(0);
+  await expect(line).toHaveCount(1);
+  await expect(tl.getByTestId("typing")).toBeVisible();
+  await under();
 
   await emit(ev("kami", "delta", { text: "Found it: the" }));
   // a line still being typed does not show; a whole one does
@@ -381,9 +393,10 @@ for (const theme of ["dark", "light"] as const) {
     await expect(page.getByTestId("bot-kami").getByTestId("bot-time")).toHaveText(/^1[23]s$/);
     await expect(page.getByTestId("bot-friren").getByTestId("bot-time")).toHaveText("1m");
     await expect(page.getByTestId("bot-default").getByTestId("bot-time")).toHaveText("waiting");
-    // one live indicator in the chat: the activity line, no typing bubble beside it
+    // the activity line holds the ringed face; the typing dots wait under it, with no face of their own
     await expect(page.locator("[data-testid=activity][data-state=live]")).toBeVisible();
-    await expect(page.getByTestId("typing")).toHaveCount(0);
+    await expect(page.getByTestId("typing")).toBeVisible();
+    await expect(page.getByTestId("typing-ring")).toHaveCount(0);
     await page.mouse.move(700, 400);
     await page.waitForTimeout(400);
     // hold every animation at a mid frame (ring part-way round, dots mid-hop) instead of turning them off
@@ -446,7 +459,7 @@ test("chat: an answer to several messages quotes each one's first line; a click 
   await page.keyboard.press("Enter");
   const waiting = tl.getByTestId("bubble-user").filter({ hasText: "and too many bubbles per answer" });
   await waiting.getByTestId("queue-mark").click();
-  await expect(waiting.getByTestId("bubble-steered")).toBeVisible();
+  await expect(waiting.getByTestId("bubble-read")).toBeVisible();
   await emit(ev("kami", "message", { id: "q-a1", text: "Fixed both." }), ev("kami", "turn.end", { outcome: "done" }));
   const quote = tl.getByTestId("bubble-quote");
   await expect(quote).toHaveCount(1);
