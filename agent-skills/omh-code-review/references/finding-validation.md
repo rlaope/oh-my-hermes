@@ -26,6 +26,7 @@ question to inspect, not an instruction to agree.
    tests. Read the relevant implementation and assertions, including context
    outside changed lines. Try to disprove the candidate using an effective
    guard, unreachable precondition, preserved contract, or contrary test.
+   Then run the drop gate below.
 4. Record one result per deduplicated candidate: `confirmed`, `rejected`, or
    `unresolved`. Name the reader, inspected revisions/locations, triggering
    conditions, supporting or contradicting evidence, and any missing context.
@@ -34,6 +35,28 @@ question to inspect, not an instruction to agree.
    supported findings. Keep unresolved items separate with the missing fact
    and the next check or decision needed; retain unresolved security or
    data-loss risks explicitly in that risk list, not confirmed defects.
+
+## Drop gate
+
+A candidate stays out of the findings when any one of these holds:
+
+- No step-by-step trace now: you cannot write the concrete input or state, the
+  path it takes, and the wrong output or state it ends in.
+- Intended or documented: a spec, doc, test assertion, or code comment says the
+  behavior is meant to be this way.
+- Out-of-reach precondition: the trigger needs a privilege or precondition the
+  attacker or user in the threat model cannot have.
+- Theoretical only: the impact is that it could in theory go wrong, with no
+  reachable trigger.
+- Style as bug: a style or hygiene nit presented as a defect; mention it, if at
+  all, as a non-blocking maintainability note.
+
+The last four are contradictions: record the candidate as `rejected` with that
+reason. A candidate that fails only the first is `unresolved` when it is a
+security or data-loss risk and a named next check could supply the missing
+step; otherwise drop it with a one-line reason in the validation record. A
+dropped candidate never reaches the findings list, and only a candidate that
+clears all five can be `confirmed`.
 
 ## Evidence threshold
 
