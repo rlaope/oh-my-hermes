@@ -11,6 +11,7 @@
 // - maximised Plans: the graph starts at the plan title's x
 // Shots (first): OMHER_SHOTS=<dir> -> integrate-{sidebar-dark,sidebar-light,thread-with-harness,terminal}.png
 import { expect, test, type Page } from "@playwright/test";
+import { motionDone } from "./motion";
 import { mkdirSync } from "node:fs";
 
 const MOCK = Number(process.env.OMHER_MOCK_PORT || 5308);
@@ -331,6 +332,8 @@ test("agent chat: grandchild on the step indent, no 0.0s, a single command not r
   await mock("mock.demo");
   await setup(page);
   await page.getByTestId("places").click();
+  // the tabs slide in with the panel: press one once it has stopped
+  await motionDone(page);
   await page.getByTestId("panel-tab-runs").click();
   const graph = page.getByTestId("run-graph-box");
   await graph.locator('[data-testid="run-node"][data-node="contrast"]').click();
@@ -371,6 +374,8 @@ test("maximised Plans: the graph starts at the plan title's x", async ({ page })
   await mock("mock.demo");
   await setup(page);
   await page.getByTestId("places").click();
+  // the tabs slide in with the panel: press one once it has stopped
+  await motionDone(page);
   await page.getByTestId("panel-tab-runs").click();
   await page.getByTestId("graph-expand").click();
   const graph = page.getByTestId("run-graph-box");

@@ -1,6 +1,7 @@
 // The v0.2 polish pass: what each fix promises, measured. (The sidebar split is in sessions.spec.ts, the graph in
 // runs.spec.ts.)
 import { expect, test, type Page } from "@playwright/test";
+import { motionDone } from "./motion";
 
 const MOCK = Number(process.env.OMHER_MOCK_PORT || 5308);
 
@@ -126,6 +127,8 @@ test("a narrow chat column: a bubble may use the column, instead of a sentence i
   await page.setViewportSize({ width: 1100, height: 760 });
   await open(page);
   await page.getByTestId("places").click();
+  // the tabs slide in with the panel: press one once it has stopped
+  await motionDone(page);
   await page.getByTestId("panel-tab-terminal").click();
   // one long paragraph from the bot
   const text = "The upstream closes idle connections after sixty seconds while the gateway keeps them for seventy five, so a request that picks a stale one fails; ".repeat(3);
