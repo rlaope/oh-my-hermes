@@ -8,6 +8,8 @@ from typing import Callable
 
 from ..coding.hermes_model_config import (
     AliasCollisionError,
+    effective_fallback_entries,
+    fallback_entries,
     HermesCommandError,
     HermesConfigUnreadableError,
     HermesModelConfigError,
@@ -22,6 +24,7 @@ from .language import tr
 from .model_setup_inputs import (
     classified_model_candidates,
     confirmed_model_ids,
+    fallback_model_target,
     model_alias_changes,
 )
 from .model_setup_overrides import load_category_overrides
@@ -100,6 +103,7 @@ def model_activation_result(
             details={"reason": str(exc)},
         )
     aliases = model_alias_changes(getattr(args, "model_alias", []))
+    fallback = fallback_model_target(getattr(args, "fallback_model", []))
 
     if getattr(args, "interactive", False):
         confirmed = _confirm_discovered_models(
@@ -152,21 +156,24 @@ def model_activation_result(
 
     preview = None
     apply_status: dict[str, object] = {
-        "status": "declined" if aliases else "not_requested",
+        "status": "declined" if aliases or fallback else "not_requested",
         "commands": [],
     }
     verification: dict[str, object] = {"status": "not_run", "verified": False}
     status = "unconfigured"
     next_action = "confirm_active_model"
 
-    if recommendation["status"] == "choice_required":
+    # A fallback-only run names no main alias, so an unresolved main choice
+    # does not block it; with aliases the choice still comes first.
+    if recommendation["status"] == "choice_required" and (aliases or not fallback):
         status = "choice_required"
-    elif aliases:
+    elif aliases or fallback:
         try:
             model_preview = dependencies.preview_hermes_model_config(
                 inspection,
                 aliases,
                 allow_collisions=bool(getattr(args, "allow_model_alias_collision", False)),
+                fallback=fallback,
             )
         except AliasCollisionError as exc:
             if not getattr(args, "interactive", False):
@@ -182,6 +189,7 @@ def model_activation_result(
                 inspection,
                 aliases,
                 allow_collisions=True,
+                fallback=fallback,
             )
         except HermesModelConfigError as exc:
             raise OmhError(str(exc)) from exc
@@ -202,16 +210,25 @@ def model_activation_result(
                 language=language,
             )
         if getattr(args, "apply_model_config", False):
+            if model_preview.fallback_refusal is not None:
+                # Refused before any write, dry run included.
+                raise OmhError(model_preview.fallback_refusal)
             expected_digest = str(getattr(args, "model_config_digest", "") or "")
             if getattr(args, "interactive", False) and not expected_digest:
-                expected_digest = model_preview.config_digest
+                expected_digest = model_preview.approval_digest
             if not expected_digest:
                 raise OmhError("--apply-model-config requires --model-config-digest from this preview.")
+            # The digest names the file AND the change the person approved: a
+            # preview of one change never authorizes a different one.
+            if expected_digest != model_preview.approval_digest:
+                raise OmhError(
+                    "expected digest does not match the preview digest: rerun the preview with the "
+                    "same arguments and pass its approval_digest"
+                )
+            expected_digest = model_preview.config_digest
             if getattr(args, "dry_run", False):
                 # A dry run never spawns a mutating Hermes command: report the
                 # exact argv the apply would run, checked against the same digest.
-                if expected_digest != model_preview.config_digest:
-                    raise OmhError("expected digest does not match the preview digest")
                 apply_status = {
                     "status": "dry_run",
                     "commands": [list(command) for command in model_preview.commands],
@@ -340,8 +357,32 @@ def _model_preview_payload(preview) -> dict[str, object]:
     return {
         "config_path": str(preview.config_path),
         "config_digest": preview.config_digest,
+        # What `--model-config-digest` must name to apply exactly this preview.
+        "approval_digest": preview.approval_digest,
         "changes": dict(preview.changes),
+        "fallback_model": _fallback_payload(preview),
         "commands": [list(command) for command in preview.commands],
+    }
+
+
+def _fallback_payload(preview) -> dict[str, object] | None:
+    """The fallback chain before -> after; None when the run left it alone.
+
+    `before` is Hermes' effective chain (`fallback_providers`, then legacy
+    `fallback_model` entries not already present); `after` is its only entry.
+    """
+    if preview.fallback is None:
+        return None
+    before = list(preview.before_fallback_chain)
+    return {
+        "before": before,
+        "before_chain": before,
+        "after": preview.fallback,
+        "replaces_chain": preview.fallback_replaces_chain,
+        "unchanged": not preview.fallback_commands and preview.fallback_refusal is None,
+        # The chain is in Hermes' older `fallback_model` key; apply is refused.
+        "legacy": preview.fallback_is_legacy,
+        "refusal": preview.fallback_refusal,
     }
 
 
@@ -351,6 +392,11 @@ def _model_inspection_payload(inspection) -> dict[str, object]:
         "config_digest": inspection.config_digest,
         "config_check_ok": inspection.config_check_ok,
         "aliases": dict(inspection.model_dot_aliases),
+        "main_model": inspection.main_model,
+        "fallback_model": list(fallback_entries(inspection.fallback_model)),
+        "fallback_chain": list(
+            effective_fallback_entries(inspection.fallback_providers, inspection.fallback_model)
+        ),
         "providers": [
             {
                 "provider_id": provider.provider_id,

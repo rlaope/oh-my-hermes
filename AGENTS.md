@@ -229,7 +229,12 @@ and evidence obvious to a reviewer reading the PR without the chat history.
   gateway, not an execution surface: it relays only what the person types,
   answers no request on their behalf, and makes no model call; the one switch
   it makes on its own is the session's model, at a turn boundary, when Hermes'
-  configured default model moved (owner, 2026-10-25). Its gateway
+  configured default model moved (owner, 2026-10-25). The one prompt it sends
+  that the person did not type is OMH's fixed onboarding prompt
+  (`src/tui/onboarding.py`), once, in a new session, only under `omh --onboard
+  model-setup`; the accepted last question of an interactive `omh setup` is
+  its only automatic caller, and a person may run it themselves (owner,
+  2026-11-18). Its gateway
   child, `src/tui/attach/gateway_attach.py`, runs on Hermes' interpreter under
   INVARIANT 2's `HERMES_INTERPRETER_SCRIPTS` allow list. Inside a herdr pane
   only, gated on the same pane environment (`HERDR_ENV=1`, `HERDR_PANE_ID`)

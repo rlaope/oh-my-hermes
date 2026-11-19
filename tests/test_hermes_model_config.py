@@ -179,7 +179,8 @@ class HermesModelConfigTests(unittest.TestCase):
         self.assertFalse(providers["beta"].plugin_present)
         self.assertNotIn("SECRET_VALUE_MUST_NOT_ESCAPE", repr(inspection))
         flattened = [part for command in inspection.commands for part in command]
-        self.assertNotIn("model", flattened)
+        # Never the interactive `hermes model`; `config get model` is a read.
+        self.assertNotIn("model", [command[1] for command in inspection.commands])
         self.assertNotIn("--refresh", flattened)
         self.assertNotIn("env-path", flattened)
 

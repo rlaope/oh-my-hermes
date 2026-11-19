@@ -1,0 +1,7 @@
+{
+  "id": "trap-js-loose-null-check",
+  "kind": "trap",
+  "language": "javascript",
+  "expected": "clean",
+  "why": "== null looks like a loose-equality mistake, but it is the idiom for 'null or undefined' and is exactly equivalent to the two strict checks it replaces. Empty-string nicknames behave as before."
+}
