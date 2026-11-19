@@ -1,7 +1,9 @@
 // TERMINALS restore (mock host): a Claude Code terminal starts under an id omher made (`--session-id`), and after
 // omher restarts (a reload with the same storage; the mock host starts empty, as the shell does) it continues that
 // conversation (`--resume <same id>`) in the same folder, once; an agent without its own conversation comes back
-// paused as before.
+// paused as before. Each terminal's scrollback is kept by the shell (`history.*` calls; the mock keeps it in this
+// page's storage) and written back, dimmed, under a "--- restored <time> ---" line before the new output; closing
+// removes it; Settings > Terminal turns it off.
 import { expect, test, type Page } from "@playwright/test";
 
 const MOCK = Number(process.env.OMHER_MOCK_PORT || 5308);
@@ -21,7 +23,7 @@ async function mock(op: string): Promise<void> {
   ws.close();
 }
 
-type Call = { op: string; agent?: string; cwd?: string; resume?: string; sessionId?: string; account?: string };
+type Call = { op: string; agent?: string; cwd?: string; resume?: string; sessionId?: string; account?: string; key?: string; data?: string; keep?: string[] };
 const calls = (page: Page) => page.evaluate(() => ((window as unknown as { __omherSessionCalls?: Call[] }).__omherSessionCalls ?? []));
 const starts = async (page: Page) => (await calls(page)).filter((c) => c.op === "start");
 const saved = (page: Page) => page.evaluate(() => JSON.parse(localStorage.getItem("omher.resume") || "null"));
@@ -29,7 +31,7 @@ const saved = (page: Page) => page.evaluate(() => JSON.parse(localStorage.getIte
 async function open(page: Page) {
   await page.addInitScript((folder) => {
     if (!sessionStorage.getItem("__kept")) {
-      for (const k of ["omher.sessions.recent", "omher.sessions.open", "omher.resume", "omher.termpanel.tabs"]) localStorage.removeItem(k);
+      for (const k of ["omher.sessions.recent", "omher.sessions.open", "omher.resume", "omher.termpanel.tabs", "__omherMockHistory", "omher.term"]) localStorage.removeItem(k);
       sessionStorage.setItem("__kept", "1");
     }
     const w = window as unknown as Record<string, unknown>;
@@ -97,3 +99,67 @@ test("an agent with no conversation of its own (Grok) still comes back paused an
   expect(await starts(page)).toEqual([]);
 });
 
+const history = async (page: Page) => (await calls(page)).filter((c) => c.op.startsWith("history."));
+/** The page saves history every 30 s and when it goes away; the test asks for it now, as the page going away does. */
+const flush = (page: Page) => page.evaluate(() => window.dispatchEvent(new Event("pagehide")));
+const screen = (page: Page) => page.locator("[data-testid=terminal] .xterm-rows");
+/** Rows of the open terminal, top to bottom, with text. */
+const rows = (page: Page, sel = "[data-testid=terminal] .xterm-rows") =>
+  page.evaluate((s) => [...document.querySelector(s)!.children].map((r) => (r.textContent ?? "").replace(/\u00a0/g, " ").trimEnd()).filter(Boolean), sel);
+
+test("the scrollback comes back dimmed, under a divider, before the program's new output; closing removes it", async ({ page }) => {
+  await open(page);
+  const id = await newTerm(page, "claude");
+  const pty = await page.evaluate((i) => (window as unknown as { __omherSessions: { ptyOf(id: string): number | null } }).__omherSessions.ptyOf(i), id);
+  await page.evaluate((p) => (window as unknown as { __omherMockOut(id: number, d: string): boolean }).__omherMockOut(p!, "\x1b[32mbefore-restart-line\x1b[0m\r\n"), pty);
+  await expect(screen(page)).toContainText("before-restart-line");
+  await flush(page);
+  await expect.poll(async () => (await history(page)).filter((c) => c.op === "history.save" && c.key === id).pop()?.data ?? "").toContain("before-restart-line");
+
+  await page.reload();
+  await page.getByTestId(`session-${id}`).locator(".ss-open").click();
+  await expect(screen(page)).toContainText("(mock)");
+  const r = await rows(page);
+  const old = r.findIndex((l) => l.includes("before-restart-line"));
+  const line = r.findIndex((l) => /^--- restored .+ ---$/.test(l));
+  const fresh = r.findLastIndex((l) => l.includes("(mock)"));
+  expect(old).toBeGreaterThanOrEqual(0);
+  expect(line).toBeGreaterThan(old);
+  expect(fresh).toBeGreaterThan(line);
+  // the old text is drawn faint
+  const dim = await page.evaluate(() => {
+    const span = [...document.querySelectorAll("[data-testid=terminal] .xterm-rows span")].find((s) => s.textContent?.includes("before-restart-line"));
+    return span ? span.className : "";
+  });
+  expect(dim).toContain("xterm-dim");
+  // read once, as the startup prune kept it
+  expect((await history(page)).filter((c) => c.op === "history.read").map((c) => c.key)).toEqual([id]);
+  expect((await history(page)).find((c) => c.op === "history.prune")?.keep).toContain(id);
+
+  // closing the row removes its kept text
+  await page.getByTestId(`session-${id}`).hover();
+  await page.evaluate((i) => (window as unknown as { __omherSessions: { close(id: string): void } }).__omherSessions.close(i), id);
+  await expect.poll(async () => (await history(page)).filter((c) => c.op === "history.remove").map((c) => c.key)).toEqual([id]);
+  expect(await page.evaluate(() => JSON.parse(localStorage.getItem("__omherMockHistory") || "{}"))).not.toHaveProperty(id);
+});
+
+test("Keep terminal history off: one clear, and no history call after it", async ({ page }) => {
+  await open(page);
+  const id = await newTerm(page, "claude");
+  await page.getByTestId("nav-settings").click();
+  await page.getByTestId("settings-nav-terminal").click();
+  const sw = page.getByTestId("term-keep-history");
+  await expect(page.getByTestId("term-keep-history-row")).toContainText("Keep terminal history across restarts");
+  await expect(sw.getByRole("radio", { name: "On" })).toHaveAttribute("aria-checked", "true");
+  await sw.getByRole("radio", { name: "Off" }).click();
+  await expect.poll(async () => (await history(page)).filter((c) => c.op === "history.clear")).toHaveLength(1);
+  const before = (await history(page)).length;
+  await flush(page);
+  await page.reload();
+  await page.getByTestId(`session-${id}`).locator(".ss-open").click();
+  await expect(screen(page)).toContainText("(mock)");
+  await page.waitForTimeout(300);
+  expect(await history(page)).toEqual([]);
+  expect(await rows(page)).not.toContainEqual(expect.stringMatching(/restored/));
+  expect(before).toBeGreaterThan(0);
+});

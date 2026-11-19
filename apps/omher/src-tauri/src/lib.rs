@@ -18,6 +18,7 @@ mod session_files;
 mod sessions;
 mod setup;
 mod tasks;
+mod term_history;
 
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -570,6 +571,39 @@ async fn session_files_prune(keep: Vec<String>) -> Result<(), String> {
     session_files::prune(&user_home()?, &keep)
 }
 
+/// Keep what terminal `key` (a SESSIONS id or `panel-<n>`) shows, for after a restart:
+/// `~/.omher/term-history/<key>.txt`, owner-only, its newest 2000 lines / 1 MB (`term_history`).
+#[tauri::command]
+async fn term_history_save(key: String, text: String) -> Result<(), String> {
+    let home = user_home()?;
+    tauri::async_runtime::spawn_blocking(move || term_history::save(&home, &key, &text)).await.map_err(|e| e.to_string())?
+}
+
+/// What terminal `key` showed before omher restarted, and when it was kept (seconds); null when nothing was.
+#[tauri::command]
+async fn term_history_read(key: String) -> Result<Option<(String, f64)>, String> {
+    let home = user_home()?;
+    tauri::async_runtime::spawn_blocking(move || term_history::read(&home, &key)).await.map_err(|e| e.to_string())?
+}
+
+/// Remove terminal `key`'s kept text (it was closed).
+#[tauri::command]
+async fn term_history_remove(key: String) -> Result<(), String> {
+    term_history::remove(&user_home()?, &key)
+}
+
+/// Remove the kept text of every terminal not in `keep` (omher started; the others are gone).
+#[tauri::command]
+async fn term_history_prune(keep: Vec<String>) -> Result<(), String> {
+    term_history::prune(&user_home()?, &keep)
+}
+
+/// Remove every terminal's kept text (Settings › Terminal turned history off).
+#[tauri::command]
+async fn term_history_clear() -> Result<(), String> {
+    term_history::clear(&user_home()?)
+}
+
 /// Stop the chat's program and forget the session.
 #[tauri::command]
 async fn chat_close(shell: State<'_, Shell>, id: u32) -> Result<(), String> {
@@ -795,6 +829,11 @@ pub fn run() {
             session_file_read,
             session_files_remove,
             session_files_prune,
+            term_history_save,
+            term_history_read,
+            term_history_remove,
+            term_history_prune,
+            term_history_clear,
             session_branch,
             chat_close_all,
             open_media,

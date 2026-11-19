@@ -263,6 +263,13 @@ export function TerminalPage() {
           <Seg small label={t("term.rightClickPaste")} value={term.rightClickPaste ? "on" : "off"} options={ON_OFF()} onChange={(v) => set({ rightClickPaste: v === "on" })} testId="term-right-paste" />
         </Row>
       </div>
+
+      <div className="st-gh">{t("term.history")}</div>
+      <div className="st-grp">
+        <Row title={t("term.keepHistory")} hints={[t("term.keepHistoryHint")]} testId="term-keep-history-row">
+          <Seg small label={t("term.keepHistory")} value={term.keepHistory ? "on" : "off"} options={ON_OFF()} onChange={(v) => set({ keepHistory: v === "on" })} testId="term-keep-history" />
+        </Row>
+      </div>
     </div>
   );
 }

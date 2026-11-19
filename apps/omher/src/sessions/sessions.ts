@@ -29,6 +29,7 @@ import { afterOpen, CELLS_EVENT, feed, isParked, live, onVisible, PARKING_EVENT,
 import { applyLook, termOptions } from "./term/look";
 import { termFontsReady } from "./term/fonts";
 import { onTermSettings, readTermSettings } from "./term/settings";
+import { forgetHistory, pruneHistory, restoredText, trackHistory, watchHistorySetting } from "./term/history";
 import { termTheme } from "./term/themes";
 import { getShellHost } from "../terminal/host";
 import { onSessionFg } from "./fg";
@@ -270,6 +271,12 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
   /** TERMINALS sessions put back after a restart whose agent continues its own conversation: their next start (once)
    *  continues it (`--resume`, `codex resume`) instead of starting a new one. */
   const termAgain = new Set<string>();
+  /** TERMINALS sessions put back after a restart whose kept history goes into their terminal before their program's
+   *  first output (once). */
+  const histBack = new Set<string>();
+  /** Each TERMINALS session's history keeping (term/history.ts). */
+  const histOf = new Map<string, { touch: () => void; stop: () => void; flush: () => void }>();
+  watchHistorySetting(host);
   /** drafts whose agent / folder the person picked: a late agent or home look-up no longer moves them */
   const picked = new Map<string, { agent?: boolean; cwd?: boolean }>();
   let notify: ((ev: BridgeEvent) => void) | null = null;
@@ -1261,6 +1268,18 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
     // any other Claude Code terminal starts a new conversation under an id omher makes, kept so a restart continues it
     const sessionId = !ofChat && !resume && r.agent === "claude" ? newConversationId() : undefined;
     if (sessionId) patchRec(id, { agentSession: sessionId });
+    // what this terminal showed before omher restarted comes first, dimmed, under a divider (once)
+    if (!ofChat && histBack.delete(id)) {
+      const back = await restoredText(host, id);
+      if (t.run !== run) return;
+      if (back) feed(t.term, back);
+    }
+    if (!ofChat && !histOf.has(id)) {
+      const h = trackHistory(host, id, () => (terms.get(id) === t && !isParked(t.raw) ? t.term : null));
+      const flush = () => h.flush();
+      t.el.addEventListener(PARKING_EVENT, flush);
+      histOf.set(id, { ...h, stop: () => (t.el.removeEventListener(PARKING_EVENT, flush), h.stop()) });
+    }
     const { cols, rows } = t.term;
     let marked = 0;
     // this program's pty id once known, and what was drawn of its output before that
@@ -1296,6 +1315,7 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
         if (pty === null) owed += bytes;
         else io.ack(pty, bytes);
       });
+      histOf.get(id)?.touch();
       // the TERMINALS row's spinner and age: when output last flowed (throttled)
       const now = Date.now();
       if (!ofChat && now - marked >= OUT_MARK_MS) {
@@ -1384,6 +1404,9 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
   const disposeTerm = (id: string) => {
     const t = terms.get(id);
     if (!t) return;
+    // its history keeping follows the next terminal of the session (Restart), or ends with it
+    histOf.get(id)?.stop();
+    histOf.delete(id);
     fgOff.get(id)?.();
     fgOff.delete(id);
     if (t.hostId !== null && !t.closed) void t.io.close(t.hostId).catch(() => undefined);
@@ -1664,6 +1687,7 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
     restored = true;
     if (!saved.length) {
       void ready().then(() => host.pruneFiles([]).catch(() => undefined));
+      void ready().then(() => pruneHistory(host, []));
       saveSentFiles({});
       return;
     }
@@ -1749,6 +1773,7 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
       }
       if (auto) again.push({ id: s.id, resume: s.agentSession! });
       if (termAuto) termAgain.add(s.id);
+      if (!terminalOnly && mode === "terminal") histBack.add(s.id);
       else if (s.running && s.agentSession && !isBuiltin(s.agent) && !acpRow(s.agent) && !terminalOnly) later.push(s.id);
     }
     set({ list: [...list, ...state.list] });
@@ -1756,6 +1781,8 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
     // the saved copies of sessions that are gone go; the ones kept show again in their bubbles
     const ids = list.map((r) => r.id);
     void ready().then(() => host.pruneFiles(ids).catch(() => undefined));
+    // the kept history of terminals that are gone goes
+    void ready().then(() => pruneHistory(host, ids));
     saveSentFiles(Object.fromEntries(Object.entries(sentFiles).filter(([sid]) => ids.includes(sid))));
 
     // the home folder (for `~/…` paths) and each agent's mode, as a first launch would read them; then the generic ACP
@@ -1788,7 +1815,11 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
   /** Stop the program(s) and remove the session. */
   const close = (id: string) => {
     picked.delete(id);
+    histOf.get(id)?.stop();
+    histOf.delete(id);
+    histBack.delete(id);
     termAgain.delete(id);
+    if (rec(id) && isTerminalRec(state.agents, { ...rec(id)!, status: "exited" })) forgetHistory(host, id);
     disposeTerm(id);
     void stopChat(id).then(() => host.removeFiles(id).catch(() => undefined));
     forgetSentFiles(id);

@@ -42,6 +42,9 @@ export interface TermSettings {
   copyOnSelect: boolean;
   /** A right click pastes the clipboard (Ctrl+right-click keeps the menu). Off: right click is the program's or the menu's. */
   rightClickPaste: boolean;
+  /** What each terminal showed comes back, dimmed, after omher restarts (kept in `~/.omher/term-history`). Off removes
+   *  every kept file at once. */
+  keepHistory: boolean;
 }
 
 export const TERM_KEY = "omher.term";
@@ -61,6 +64,7 @@ export const TERM_DEFAULTS: TermSettings = {
   gpu: "auto",
   copyOnSelect: false,
   rightClickPaste: false,
+  keepHistory: true,
 };
 
 const num = (v: unknown, lo: number, hi: number, d: number) => (typeof v === "number" && Number.isFinite(v) ? Math.min(hi, Math.max(lo, v)) : d);
@@ -98,6 +102,7 @@ export function parseTermSettings(raw: unknown): TermSettings {
     gpu: one(o.gpu, TERM_GPUS, d.gpu),
     copyOnSelect: bool(o.copyOnSelect, d.copyOnSelect),
     rightClickPaste: bool(o.rightClickPaste, d.rightClickPaste),
+    keepHistory: bool(o.keepHistory, d.keepHistory),
   };
 }
 

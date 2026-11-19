@@ -2,6 +2,7 @@
 // in a pseudo-terminal (src-tauri/src/sessions.rs) or in its structured chat mode on pipes
 // (src-tauri/src/agent_chat.rs). In a plain browser (dev, e2e against the mock bridge) there is no shell,
 // so a mock host echoes terminal typing and a mock agent answers chats with the same events.
+import type { HistoryHost } from "./term/history";
 import { AGENTS, acpRow, agentDef, HERMES_LABEL, type AcpRow, type AgentId, type AgentInfo } from "./agents";
 import { mockPtyOut, nextMockPty } from "./fg";
 import mockAcpAgents from "./mockAcpAgents.json";
@@ -51,7 +52,7 @@ export interface PastMsg {
   ts: number;
 }
 
-export interface SessionHost {
+export interface SessionHost extends HistoryHost {
   readonly kind: "tauri" | "mock";
   /** Stop anything an earlier page load left running (a webview reload keeps the shell alive). */
   reset(): Promise<void>;
@@ -184,6 +185,27 @@ export class TauriHost implements SessionHost {
     const { invoke } = await this.core();
     await invoke("session_files_remove", { session });
   }
+  async historySave(key: string, text: string) {
+    const { invoke } = await this.core();
+    await invoke("term_history_save", { key, text });
+  }
+  async historyRead(key: string) {
+    const { invoke } = await this.core();
+    const got = await invoke<[string, number] | null>("term_history_read", { key });
+    return got ? { text: got[0], at: got[1] } : null;
+  }
+  async historyRemove(key: string) {
+    const { invoke } = await this.core();
+    await invoke("term_history_remove", { key });
+  }
+  async historyPrune(keep: string[]) {
+    const { invoke } = await this.core();
+    await invoke("term_history_prune", { keep });
+  }
+  async historyClear() {
+    const { invoke } = await this.core();
+    await invoke("term_history_clear");
+  }
   async pruneFiles(keep: string[]) {
     const { invoke } = await this.core();
     await invoke("session_files_prune", { keep });
@@ -287,6 +309,11 @@ export interface MockCall {
     | "file.save"
     | "file.remove"
     | "file.prune"
+    | "history.save"
+    | "history.read"
+    | "history.remove"
+    | "history.prune"
+    | "history.clear"
     | "reveal"
     | "terminal"
     | "custom.preview"
@@ -311,6 +338,8 @@ export interface MockCall {
   size?: number;
   path?: string;
   keep?: string[];
+  /** history: the terminal's key (a session id or `panel-<n>`) */
+  key?: string;
 }
 
 const BANNER: Record<string, string> = {
@@ -621,6 +650,44 @@ export class MockHost implements SessionHost {
     const d = this.files.get(path);
     if (!d) throw new Error("not a file omher saved");
     return d;
+  }
+  /** History the mock shell keeps: in this page's storage, so it outlives a reload as the shell's files outlive a
+   *  restart (`__omherMockHistory`). */
+  private hist(): Record<string, { text: string; at: number }> {
+    try {
+      return JSON.parse(localStorage.getItem("__omherMockHistory") || "{}");
+    } catch {
+      return {};
+    }
+  }
+  private putHist(h: Record<string, { text: string; at: number }>) {
+    try {
+      localStorage.setItem("__omherMockHistory", JSON.stringify(h));
+    } catch {
+      /* no storage */
+    }
+  }
+  async historySave(key: string, text: string) {
+    this.log({ op: "history.save", key, data: text });
+    this.putHist({ ...this.hist(), [key]: { text, at: Date.now() / 1000 } });
+  }
+  async historyRead(key: string) {
+    this.log({ op: "history.read", key });
+    return this.hist()[key] ?? null;
+  }
+  async historyRemove(key: string) {
+    this.log({ op: "history.remove", key });
+    const h = this.hist();
+    delete h[key];
+    this.putHist(h);
+  }
+  async historyPrune(keep: string[]) {
+    this.log({ op: "history.prune", keep });
+    this.putHist(Object.fromEntries(Object.entries(this.hist()).filter(([k]) => keep.includes(k))));
+  }
+  async historyClear() {
+    this.log({ op: "history.clear" });
+    this.putHist({});
   }
   async removeFiles(session: string) {
     this.log({ op: "file.remove", session });
