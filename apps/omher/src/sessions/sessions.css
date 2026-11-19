@@ -1675,3 +1675,23 @@ body.side-resizing * {
   pointer-events: none;
   animation: pop 0.14s ease both;
 }
+
+/* an omher://terminal link to a session this computer does not have: a note at the window's foot for a moment */
+.tlink-gone {
+  position: fixed;
+  left: 50%;
+  bottom: 24px;
+  transform: translateX(-50%);
+  z-index: 60;
+  padding: 7px 12px;
+  border-radius: var(--r);
+  background: var(--pop);
+  border: 1px solid var(--line);
+  box-shadow: var(--pop-shadow);
+  color: var(--body);
+  font-size: 12px;
+  text-transform: none;
+  letter-spacing: normal;
+  font-weight: 400;
+  pointer-events: none;
+}

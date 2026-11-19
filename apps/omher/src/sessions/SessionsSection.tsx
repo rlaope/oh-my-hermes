@@ -29,6 +29,7 @@ import { getHost, type PastChat } from "./host";
 import { getSessions, useSessions } from "./sessions";
 import { pickTitle } from "./titles";
 import { onOpenNewSessionMenu } from "./newMenu";
+import { TermLinkGone } from "./termLinkOpen";
 import { getAddOmh } from "./addOmh";
 import type { Account, AccountCli, AccountGroup } from "../lib/protocol";
 import { useAccounts } from "../settings/accounts/useAccounts";
@@ -76,6 +77,7 @@ export function SessionsHeader() {
         </button>
         {open && <NewSessionMenu onClose={() => setOpen(false)} trigger={plus} />}
       </span>
+      <TermLinkGone />
     </div>
   );
 }

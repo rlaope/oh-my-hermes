@@ -3,6 +3,7 @@
 // the terminal says "Link copied" for a moment.
 // A link in a message is an omher chip: the omher face, the session's CLI mark, its title and its live state; a click
 // opens it; an id this computer does not have reads "Terminal not on this computer".
+// Opened from outside (the OS hands omher the link): that session opens; an unknown one says so and opens nothing.
 // Shots: OMHER_SHOTS=<dir> -> term-link-{menu,copied,chip}-{dark,light}.png
 import { expect, test, type Page } from "@playwright/test";
 import { mkdirSync } from "node:fs";
@@ -160,6 +161,29 @@ test("a link to a terminal this computer does not have reads so and opens nothin
   await expect(chip).toHaveText("Terminal not on this computer");
   await chip.click();
   await expect(page.getByTestId("terminal")).toHaveCount(0);
+});
+
+// ---- opened from outside (the OS hands omher the link; the mock page stands in with __omherOpenTermLink) --------
+
+const openFromOutside = (page: Page, url: string) => page.evaluate((u) => (window as unknown as { __omherOpenTermLink(url: string): boolean }).__omherOpenTermLink(u), url);
+
+test("a link opened from outside omher opens that session; one it does not have, or a malformed one, says so and opens nothing", async ({ page }) => {
+  await open(page);
+  const a = await newTerm(page, "shell");
+  const b = await newTerm(page, "claude");
+  await expect(page.getByTestId("terminal")).toHaveAttribute("data-session", b);
+  expect(await openFromOutside(page, (await linkOf(page, a))!)).toBe(true);
+  await expect(page.getByTestId("terminal")).toHaveAttribute("data-session", a);
+  // the same after a restart: the link still points at it
+  await page.reload();
+  await expect(page.getByTestId(`session-${b}`)).toBeVisible();
+  expect(await openFromOutside(page, (await linkOf(page, b))!)).toBe(true);
+  await expect(page.getByTestId(`session-${b}`).locator(".ss-open")).toHaveAttribute("aria-current", "true");
+  for (const url of ["omher://terminal/zzzzzzzzzz", "omher://terminal/ZZZZZZZZZZ", "omher://terminal/abc", "omher://bot/kami"]) {
+    expect(await openFromOutside(page, url)).toBe(false);
+  }
+  await expect(page.getByTestId("term-link-gone")).toHaveText("Terminal not on this computer");
+  await expect(page.getByTestId(`session-${b}`).locator(".ss-open")).toHaveAttribute("aria-current", "true");
 });
 
 test.describe("shots", () => {
