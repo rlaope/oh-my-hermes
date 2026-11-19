@@ -4,6 +4,11 @@ All notable changes will be documented here.
 
 ## Unreleased
 
+- **A dag-ulw node that writes files is told to commit only its own paths.** Its task text now says to stage the
+  paths in its SCOPE by name and never to run `git add -A`, `git add .`, `git commit -a` or `git stash`, so parallel
+  nodes in one checkout stop committing each other's work. Verify, review and read-only nodes get no such line. This
+  is guidance; the write-scope guard on file tools stays the enforcement.
+
 - **Hermes Bug Hunter: code review keeps only findings it can show, and every review says what it did not check.**
   `code-review`'s finding validation gains a drop gate: a candidate stays out of the findings when it cannot be traced
   step by step from a concrete input to a wrong result, when the behaviour is intended or documented, when its trigger
