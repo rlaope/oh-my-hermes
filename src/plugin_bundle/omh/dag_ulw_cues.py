@@ -2598,7 +2598,12 @@ def _inline_backlog_parts(text: str) -> list[str]:
     head, colon, tail = text.partition(":")
     if colon and not _BACKLOG_SCOPE.search(_folded(head)):
         return []
-    parts = [part.strip() for part in _BACKLOG_INLINE_SPLIT.split(tail if colon else text)]
+    body = tail if colon else text
+    # A bare "and" also joins two verbs of one change ("find and fix the router bugs"), so a list said only with
+    # "and" is no list: at least one comma or Korean connector must separate its parts.
+    if not any(not separator.strip().casefold() == "and" for separator in _BACKLOG_INLINE_SPLIT.findall(body)):
+        return []
+    parts = [part.strip() for part in _BACKLOG_INLINE_SPLIT.split(body)]
     if len(parts) < BACKLOG_MIN_INLINE_ITEMS or any(len(part.split()) < 2 for part in parts):
         return []
     if _BACKLOG_INLINE_PARTS_OF_ONE.search(_folded(parts[0])):

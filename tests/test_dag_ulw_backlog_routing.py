@@ -178,6 +178,8 @@ class BacklogReadingTests(unittest.TestCase):
             "Fix the author name, update the cover date, and add a migration photo to the brochure",
             "Fix the apiño spelling, update the cover date, and add page numbers",
             "Fix the dress code, update the library hours, and add a reception sign",
+            # "and" joining two verbs of one change is no list separator.
+            "Run a loop to find and fix OMH router context-loss and coding handoff bugs with progress evidence.",
         ):
             with self.subTest(message=message):
                 self.assertFalse(lists_several_code_changes(executable_routing_text(message)))
