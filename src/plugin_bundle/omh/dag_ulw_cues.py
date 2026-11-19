@@ -2544,7 +2544,7 @@ _BACKLOG_CHANGE: Final = _lazy_compile(
 _BACKLOG_SCOPE: Final = _lazy_compile(
     r"\b(?:all|every|each|these|them|those|following|below|list|backlog|checklist|todos?|tickets|issues|bugs|items"
     r"|tasks|features|changes|requests|two|three|four|five|six|seven|eight|nine|ten|twelve|\d+)\b"
-    r"|전부|모두|각각|다\s|다$|아래|다음|이것들|목록|리스트|이슈들|버그들|\d+\s*개|여러|네\s*개|다섯|여섯|일곱"
+    r"|전부|모두|각각|다\s|다$|아래|다음|이것들|목록|리스트|이슈들|버그들|\d+\s*개|여러|세\s*개|네\s*개|다섯|여섯|일곱"
 )
 # The list is to be looked at, sorted, planned or turned into something else, not changed; or the change is refused.
 _BACKLOG_NOT_THE_CHANGE: Final = _lazy_compile(
@@ -2569,21 +2569,62 @@ def _backlog_parts(text: str) -> tuple[list[str], str]:
     return kept, frame
 
 
+# The same backlog said in one line: three or more separate code changes joined by commas, "and", 랑, 하고, 이랑 or
+# 와·과 ("migrate the store to sqlite, update the three callers, and add tests", "프론트 버튼 추가랑 백엔드
+# 엔드포인트랑 테스트 다 해줘"). Read only on one line with no list markers, and every part must be two words or more,
+# so a shopping list or one feature's fields ("with email, password and a remember-me box") is no backlog. After a
+# colon the list is the part after it, and the words before it must cover several ("fix these four bugs:"), so one
+# bug's symptoms ("fix the login bug: it crashes, shows a blank page, and logs a 500 error") stay one change.
+BACKLOG_MIN_INLINE_ITEMS: Final = 3
+_BACKLOG_INLINE_MAX_CHARS: Final = 400
+_BACKLOG_INLINE_SPLIT: Final = _lazy_compile(
+    r"\s*[,，、]\s*(?:and\s+|then\s+)?|\s+and\s+|(?<=[가-힣])(?:이랑|랑|하고|와|과)\s+"
+)
+# The first part holds what the rest belong to: one thing and its parts, not separate changes.
+_BACKLOG_INLINE_PARTS_OF_ONE: Final = _lazy_compile(r"\b(?:with|including|containing|that\s+has)\b")
+# "다 해줘" over listed code work asks for all of it, though no change verb is said.
+_BACKLOG_INLINE_DO_ALL: Final = _lazy_compile(r"(?:다|전부|모두)\s*해\s*(?:줘|주세요|줄래|라)")
+
+
+def _inline_backlog_parts(text: str) -> list[str]:
+    """The parts of a one-line list of changes in ``text``, or none when it is no such list."""
+    if "\n" in text.strip() or len(text) > _BACKLOG_INLINE_MAX_CHARS:
+        return []
+    head, colon, tail = text.partition(":")
+    if colon and not _BACKLOG_SCOPE.search(_folded(head)):
+        return []
+    parts = [part.strip() for part in _BACKLOG_INLINE_SPLIT.split(tail if colon else text)]
+    if len(parts) < BACKLOG_MIN_INLINE_ITEMS or any(len(part.split()) < 2 for part in parts):
+        return []
+    if _BACKLOG_INLINE_PARTS_OF_ONE.search(_folded(parts[0])):
+        return []
+    return parts
+
+
 def lists_several_code_changes(text: str, links: tuple[str, ...] = ()) -> bool:
     """Whether ``text`` hands over a backlog of separate code changes as a list (`BACKLOG_MIN_ITEMS` or more items, each
-    a change of its own) and asks, in its own words, for all of them to be made. The router dispatches dag-ulw on it and
-    the route hint starts it, each item its own node; ``links`` are the message's links, which the executable text
-    leaves out."""
+    a change of its own, or `BACKLOG_MIN_INLINE_ITEMS` or more said in one line) and asks, in its own words, for all of
+    them to be made. The router answers it in this session (`code_backlog`) and the route hint offers nothing; ``links``
+    are the message's links, which the executable text leaves out."""
     if not isinstance(text, str) or len(text) > _BACKLOG_MAX_CHARS:
         return False
     items, frame = _backlog_parts(text)
-    if len(items) < BACKLOG_MIN_ITEMS:
+    if len(items) >= BACKLOG_MIN_ITEMS:
+        plain = _folded(frame)
+        code_items = sum(1 for item in items if _BACKLOG_CODE.search(_folded(item)))
+        if not (_BACKLOG_CODE.search(plain) or code_items >= 2):
+            return False
+        asks_for_change = bool(_BACKLOG_CHANGE.search(plain))
+    elif not items and _inline_backlog_parts(text):
+        plain = _folded(text)
+        # Work the request itself splits, runs in parallel or spreads over many targets keeps the route it had ("api
+        # 모듈과 ui 모듈 테스트가 깨졌어, 병렬로 각각 고쳐줘" still reaches dag-ulw).
+        if not _BACKLOG_CODE.search(plain) or work_has_several_parts(text):
+            return False
+        asks_for_change = bool(_BACKLOG_CHANGE.search(plain) or _BACKLOG_INLINE_DO_ALL.search(plain))
+    else:
         return False
-    plain = _folded(frame)
-    code_items = sum(1 for item in items if _BACKLOG_CODE.search(_folded(item)))
-    if not (_BACKLOG_CODE.search(plain) or code_items >= 2):
-        return False
-    if not _BACKLOG_CHANGE.search(plain) or not _BACKLOG_SCOPE.search(plain) or _BACKLOG_NOT_THE_CHANGE.search(plain):
+    if not asks_for_change or not _BACKLOG_SCOPE.search(plain) or _BACKLOG_NOT_THE_CHANGE.search(plain):
         return False
     request = " ".join(plain.split())
     if _asks_to_be_told(request) or any(link and _PULL_REQUEST_ADDRESS.search(link.casefold()) for link in links):
