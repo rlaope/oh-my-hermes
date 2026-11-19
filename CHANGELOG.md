@@ -4,6 +4,25 @@ All notable changes will be documented here.
 
 ## Unreleased
 
+- **omher: TERMINALS sessions split like Otty and Orca, and bots can follow a terminal by its link.**
+  - **Split.** A TERMINALS session splits right (⌘D) or down (⌘⇧D), up to four sessions in any nesting. Each split
+    picks a running terminal or starts a new Shell in the focused pane's folder. Pane keys: close ⌘W, move focus
+    ⌘⌥arrows, next/previous ⌘] ⌘[, move pane ⌘⇧⌥arrows, zoom ⌘⇧↩, even out ⌘⌃= (Ctrl-based keys on Windows and
+    Linux). Unfocused panes dim (Settings › Terminal › Dim unfocused panes, default 0.72, the bottom panel too).
+    Rows in the split show its shape, Plans shows a clickable minimap, and the split comes back after a restart
+    (paused panes show Resume). Bot chats never split. On macOS the menu's Close Window closes the focused pane, not
+    the window, while a split has the keyboard.
+  - **Link to a terminal.** Every TERMINALS session has a stable link, `omher://terminal/<id>`, that stays the same
+    across restarts. Copy it from the row menu or with ⌘⇧C (Alt+Shift+C on Windows and Linux). A message that holds
+    one shows an omher chip with that session's CLI mark, title and live state (working, waiting, done, ended), and a
+    click opens it. Opening the link from another app brings omher forward on that session.
+  - **Bots read a linked terminal and ask to type into it.** A bot that gets a terminal link, in omher or in Slack or
+    Discord, can read that session's title, CLI, folder, state and last line through the new OMH tool
+    `omh_omher_terminal`, and can ask omher to type a prompt into it. omher shows the request as a card on the
+    terminal (Deny, Allow once, Allow for this session), and nothing is typed without the person's Allow. A message
+    in a bot's main chat that holds a terminal link carries that terminal's status to the bot. A bot's sidebar
+    preview shows a linked terminal's title instead of the raw link.
+
 - **A one-line list of three code changes is answered in the session, like a listed backlog.** "migrate the store to
   sqlite, update the three callers, and add tests" or "프론트 버튼 추가랑 백엔드 엔드포인트랑 테스트 다 해줘" used to land on a
   lane picked from one word (toolbelt-readiness, browser-operator, backend). They now get the `code_backlog` answer:

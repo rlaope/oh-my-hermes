@@ -28,6 +28,16 @@ DOCS_INDEX = ROOT / "docs" / "README.md"
 
 RULES = (
     "omher never patches Hermes.",
+    "that is the third and last writer to a terminal's pseudo-terminal (`typeAllowed`).",
+    "Without the person's Allow, nothing a bot sent is typed.",
+    "Copy link (the row menu, ⌘⇧C, Alt+Shift+C off macOS) writes only `omher://terminal/<id>` to the clipboard,",
+    "On macOS, Close Window (⌘W) is omher's own menu item:",
+    "Opening a link brings omher's window forward and nothing else: it starts, resumes, types into, reads or closes"
+    " nothing.",
+    "No other `omher://` address is accepted, and none is ever passed to the system opener.",
+    "omher reads an inbox file only if it is a plain file it opened without following a link, owned by the user omher"
+    " runs as, mode 0600 and at most 16 KB.",
+    "Every inbox file omher looks at is removed, whether taken or refused, and reading one never types anything:",
     "Stop sends only the agent's own interrupt, and for Claude Code with no turn running also its own `stop_task`",
     "omher never signals or kills an agent's process or the work it started.",
     "omher never writes to Slack, Discord or any other elsewhere session.",
@@ -387,10 +397,11 @@ class DocPins(unittest.TestCase):
         # Connect on the confirm card: one fixed ssh argv, key login only, remote writes only under ~/.omher/peer);
         # 32: rule 32 (removing a thread interrupts it and archives it through Hermes' own `session.archive`, never
         # a delete); 33: rule 33 (Tasks: open issues and pull / merge requests through the person's own `gh` / `glab`,
-        # a fixed read-only argv, no token; Linear only as a config check). The rules stay numbered 1..n with no gap or
-        # repeat.
+        # a fixed read-only argv, no token; Linear only as a config check); 34: rule 34 (a TERMINALS session's owner-only
+        # status file under ~/.omher/terminals and its inbox, which only shows rule 11's card). The rules stay numbered
+        # 1..n with no gap or repeat.
         rules = re.findall(r"^(\d+)\. ", DOC.read_text(encoding="utf-8"), re.M)
-        self.assertTrue(6 <= len(rules) <= 33, len(rules))
+        self.assertTrue(6 <= len(rules) <= 34, len(rules))
         self.assertEqual([int(n) for n in rules], list(range(1, len(rules) + 1)))
 
     def test_glossary_and_docs_index_name_omher(self) -> None:
@@ -1734,9 +1745,21 @@ class SessionFilesStayInOmhersFolder(unittest.TestCase):
     def test_a_terminal_gets_only_a_saved_quoted_path_and_hermes_sessions_take_no_files(self) -> None:
         drop = self.ui.split("const dropOnTerminal = async", 1)[1].split("\n  };\n", 1)[0]
         self.assertIn("shellQuote(await host.saveFile(id, f.name, await f.read()), windows)", drop)
-        # xterm's own typing, and the dropped path, through the terminal's PTY (the agent host, or the Shell row's
-        # login-shell host)
-        self.assertEqual(self.ui.count("io.write("), 2)
+        # xterm's own typing, the dropped path, and (rule 11) a bot's prompt the person allowed on its card
+        # (`typeAllowed`), through the terminal's PTY (the agent host, or the Shell row's login-shell host)
+        self.assertEqual(self.ui.count("io.write("), 3)
+        allowed = self.ui.split("const typeAllowed = async", 1)[1].split("\n  };\n", 1)[0]
+        self.assertEqual(allowed.count("io.write("), 1)
+        # typeAllowed is called from one place only: termShare.ts's `type`, reached by the card's Allow or a grant
+        callers = []
+        for path in sorted((UI_SRC).rglob("*.ts*")):
+            if path.name.endswith((".test.ts", ".test.tsx")):
+                continue
+            for line in path.read_text(encoding="utf-8").splitlines():
+                if "typeAllowed(" in line and "const typeAllowed" not in line:
+                    callers.append((path.relative_to(UI_SRC).as_posix(), line.strip()))
+        self.assertEqual(callers, [("sessions/termShare.ts",
+                                    "const type = (r: PendingRequest) => void sessions().typeAllowed(r.sessionId, cleanPrompt(r.prompt));")])
         # files go to chat agents only: an oh-my-hermes session's composer has no onSendFiles
         self.assertIn('onSendFiles={takesFiles ? (t, files) => getSessions().sendFiles(rec.id, t, files) : undefined}', self.view)
         self.assertIn("=== \"chat\";", self.view.split("const takesFiles", 1)[1].split("\n", 1)[0])
@@ -2255,3 +2278,62 @@ class TasksReadOnly(unittest.TestCase):
         self.assertIn("await actions.threadSend(bot, row.thread, text);", start)
         host = (UI_SRC / "tasks" / "host.ts").read_text(encoding="utf-8")
         self.assertEqual(sorted(set(re.findall(r'invoke<[^>]+>\("([a-z_]+)"', host))), ["tasks_list", "tasks_remote", "tasks_status", "tasks_view"])
+
+
+class TerminalLinksAndBotRequests(unittest.TestCase):
+    """Rules 11, 22 and 34: a TERMINALS session's `omher://terminal/<id>` link opens only inside omher and starts
+    nothing; its status file and inbox stay owner-only; a bot's request only shows a card, and only Allow types."""
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.link = (SHELL / "term_link.rs").read_text(encoding="utf-8").split("#[cfg(test)]", 1)[0]
+        cls.share = (SHELL / "term_share.rs").read_text(encoding="utf-8").split("#[cfg(test)]", 1)[0]
+        cls.tool = (ROOT / "src" / "plugin_bundle" / "omh" / "tools" / "omher_terminal_tool.py").read_text(encoding="utf-8")
+
+    def test_the_shell_takes_only_a_well_formed_terminal_link(self) -> None:
+        body = self.link.split("pub fn link_id", 1)[1].split("\n}\n", 1)[0]
+        self.assertIn('strip_prefix("omher://terminal/")', body)
+        self.assertIn("id.len() == 10", body)
+        import json
+        conf = json.loads((SHELL.parent / "tauri.conf.json").read_text(encoding="utf-8"))
+        self.assertEqual(conf["plugins"]["deep-link"]["desktop"]["schemes"], ["omher"])
+        # the link code runs, opens and types nothing
+        for bad in ("Command::new", "opener", "open_url", "write(", "shell_start"):
+            self.assertNotIn(bad, self.link, bad)
+
+    def test_the_page_only_opens_the_session_a_link_names(self) -> None:
+        page = (UI_SRC / "sessions" / "termLinkOpen.tsx").read_text(encoding="utf-8")
+        code = "\n".join(l for l in page.splitlines() if not l.lstrip().startswith(("//", "*", "/**")))
+        self.assertEqual(sorted(set(re.findall(r"actions\.(\w+)\(", code))), ["openSession"])
+        for bad in ("typeAllowed", ".write(", ".start(", "resume(", "send(", "openExternal"):
+            self.assertNotIn(bad, code, bad)
+        # in markdown only the exact terminal-link shape passes; everything else keeps react-markdown's own transform
+        remark = (UI_SRC / "chat" / "parts" / "remarkTermLinks.ts").read_text(encoding="utf-8")
+        self.assertIn("return parseTermLink(url) ? url.trim() : defaultUrlTransform(url);", remark)
+
+    def test_the_inbox_is_read_owner_only_and_never_types(self) -> None:
+        for needle in ("libc::O_NOFOLLOW", "meta.mode() & 0o7777 != 0o600", "meta.uid() != my_uid()",
+                       "pub const REQUEST_MAX: u64 = 16 * 1024;"):
+            self.assertIn(needle, self.share, needle)
+        for bad in ("sessions::", "Sessions", "pty::", "portable_pty", "Command::new", "TcpStream"):
+            self.assertNotIn(bad, self.share, bad)
+
+    def test_the_omh_tool_writes_only_the_files_and_never_imports_omher(self) -> None:
+        self.assertIn('_LINK = re.compile(r"^(?:omher://terminal/)?([a-z2-7]{10})/?$")', self.tool)
+        for bad in ("import omher", "from omher", "subprocess", "import socket", "urllib"):
+            self.assertNotIn(bad, self.tool, bad)
+
+    def test_the_bridge_reads_a_status_file_without_following_a_link(self) -> None:
+        src = BRIDGE.read_text(encoding="utf-8")
+        body = src.split("def read_term_status(", 1)[1].split("\ndef ", 1)[0]
+        self.assertIn('root = Path(omher_home) / "terminals"', body)
+        self.assertIn('os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0)', body)
+        for bad in ("write", "unlink", "rename", "replace("):
+            self.assertNotIn(bad, body.split('"""', 2)[2], bad)
+
+    def test_close_window_asks_the_page_and_splits_persist_only_numbers(self) -> None:
+        menu = (SHELL / "app_menu.rs").read_text(encoding="utf-8")
+        self.assertIn('pub const CLOSE_EVENT: &str = "menu-close";', menu)
+        self.assertIn("window_close,", (SHELL / "lib.rs").read_text(encoding="utf-8"))
+        split = (UI_SRC / "sessions" / "splitState.ts").read_text(encoding="utf-8")
+        self.assertIn('export const SPLITS_KEY = "omher.splits";', split)
