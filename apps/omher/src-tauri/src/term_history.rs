@@ -9,7 +9,17 @@
 use std::fs;
 use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
-use std::time::UNIX_EPOCH;
+use std::sync::Mutex;
+use std::time::{SystemTime, UNIX_EPOCH};
+
+/// When history was last turned off ([`clear`]), in milliseconds since the epoch; 0 when it was not since omher
+/// started. Writes and the clear take this lock, so a write the page sent before the person turned history off, but
+/// that arrives after the clear, is refused instead of making the file again.
+static CLEARED_AT: Mutex<f64> = Mutex::new(0.0);
+
+fn now_ms() -> f64 {
+    SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_secs_f64() * 1000.0).unwrap_or(0.0)
+}
 
 /// Lines kept of one terminal (its newest).
 pub const MAX_LINES: usize = 2000;
@@ -71,8 +81,14 @@ fn no_links(home: &Path, file: &Path) -> Result<(), String> {
     Ok(())
 }
 
-/// Write terminal `key`'s text (its newest part, [`tail`]), replacing what was kept, owner-only.
-pub fn save(home: &Path, key: &str, text: &str) -> Result<(), String> {
+/// Write terminal `key`'s text (its newest part, [`tail`]), replacing what was kept, owner-only. `since` is when
+/// history was last turned on in the page that sent it (milliseconds since the epoch): a write from before the last
+/// [`clear`] is dropped, writing nothing.
+pub fn save(home: &Path, key: &str, text: &str, since: f64) -> Result<(), String> {
+    let cleared = CLEARED_AT.lock().unwrap_or_else(|e| e.into_inner());
+    if !(since > *cleared) {
+        return Ok(());
+    }
     let file = file_of(home, key)?;
     no_links(home, &file)?;
     fs::create_dir_all(root(home)).map_err(|e| e.to_string())?;
@@ -137,14 +153,19 @@ pub fn prune(home: &Path, keep: &[String]) -> Result<(), String> {
     Ok(())
 }
 
-/// Remove every kept terminal (Settings › Terminal turned history off).
+/// Remove every kept terminal (Settings › Terminal turned history off); a write sent before now is refused from here on.
 pub fn clear(home: &Path) -> Result<(), String> {
+    let mut cleared = CLEARED_AT.lock().unwrap_or_else(|e| e.into_inner());
+    *cleared = now_ms().max(*cleared);
     prune(home, &[])
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// A page that turned history on long after any clear a test makes (the clear time is process-wide).
+    const ON: f64 = f64::MAX;
 
     fn home(tag: &str) -> PathBuf {
         let h = std::env::temp_dir().join(format!("omher-term-history-{tag}-{}", std::process::id()));
@@ -166,7 +187,7 @@ mod tests {
     #[test]
     fn saves_owner_only_inside_its_folder_and_reads_back() {
         let h = home("save");
-        save(&h, "s3", "one\r\ntwo\r\n").unwrap();
+        save(&h, "s3", "one\r\ntwo\r\n", ON).unwrap();
         let f = h.join(".omher/term-history/s3.txt");
         assert_eq!(fs::read_to_string(&f).unwrap(), "one\r\ntwo\r\n");
         #[cfg(unix)]
@@ -174,16 +195,16 @@ mod tests {
             use std::os::unix::fs::PermissionsExt;
             assert_eq!(fs::metadata(&f).unwrap().permissions().mode() & 0o777, 0o600);
         }
-        save(&h, "s3", "three").unwrap();
+        save(&h, "s3", "three", ON).unwrap();
         assert_eq!(read(&h, "s3").unwrap().unwrap().0, "three");
         assert!(read(&h, "s4").unwrap().is_none());
-        save(&h, "panel-2", "p").unwrap();
+        save(&h, "panel-2", "p", ON).unwrap();
         // only <key>.txt files sit in the folder: no temp file is left behind
         let mut names: Vec<String> = fs::read_dir(root(&h)).unwrap().flatten().map(|e| e.file_name().to_string_lossy().into_owned()).collect();
         names.sort();
         assert_eq!(names, ["panel-2.txt", "s3.txt"]);
         for bad in ["../s1", "s1/../../x", "/etc/passwd", "panel-../x"] {
-            assert!(save(&h, bad, "x").is_err(), "{bad}");
+            assert!(save(&h, bad, "x", ON).is_err(), "{bad}");
             assert!(read(&h, bad).is_err(), "{bad}");
             assert!(remove(&h, bad).is_err(), "{bad}");
         }
@@ -203,7 +224,7 @@ mod tests {
         assert!(t.len() <= MAX_BYTES);
         assert!(t.starts_with('가') && t.ends_with('\n'));
         let h = home("cap");
-        save(&h, "s1", &big).unwrap();
+        save(&h, "s1", &big, ON).unwrap();
         assert!(fs::metadata(h.join(".omher/term-history/s1.txt")).unwrap().len() as usize <= MAX_BYTES);
         let _ = fs::remove_dir_all(&h);
     }
@@ -212,7 +233,7 @@ mod tests {
     fn close_prune_and_clear_remove_only_terminal_files() {
         let h = home("prune");
         for k in ["s1", "s2", "panel-1", "panel-2"] {
-            save(&h, k, "x").unwrap();
+            save(&h, k, "x", ON).unwrap();
         }
         fs::write(root(&h).join("notes.md"), "keep").unwrap();
         remove(&h, "s1").unwrap();
@@ -226,6 +247,23 @@ mod tests {
         let _ = fs::remove_dir_all(&h);
     }
 
+    #[test]
+    fn a_write_sent_before_history_was_turned_off_never_makes_the_file_again() {
+        let h = home("off");
+        let before = now_ms();
+        save(&h, "s7", "kept", before).unwrap();
+        // the page sent a write while history was on; the person turns it off before it arrives
+        std::thread::sleep(std::time::Duration::from_millis(5));
+        clear(&h).unwrap();
+        save(&h, "s7", "late", before).unwrap();
+        assert!(!root(&h).join("s7.txt").exists());
+        // turned on again: writes sent from then on are kept
+        std::thread::sleep(std::time::Duration::from_millis(5));
+        save(&h, "s7", "again", now_ms()).unwrap();
+        assert_eq!(read(&h, "s7").unwrap().unwrap().0, "again");
+        let _ = fs::remove_dir_all(&h);
+    }
+
     #[cfg(unix)]
     #[test]
     fn refuses_links() {
@@ -234,7 +272,7 @@ mod tests {
         fs::create_dir_all(&away).unwrap();
         fs::create_dir_all(h.join(".omher")).unwrap();
         std::os::unix::fs::symlink(&away, root(&h)).unwrap();
-        assert!(save(&h, "s1", "x").is_err());
+        assert!(save(&h, "s1", "x", ON).is_err());
         assert!(read(&h, "s1").is_err());
         assert!(!away.join("s1.txt").exists());
         fs::remove_file(root(&h)).unwrap();
@@ -242,7 +280,7 @@ mod tests {
         let target = away.join("t.txt");
         fs::write(&target, "secret").unwrap();
         std::os::unix::fs::symlink(&target, root(&h).join("s2.txt")).unwrap();
-        assert!(save(&h, "s2", "x").is_err());
+        assert!(save(&h, "s2", "x", ON).is_err());
         assert!(read(&h, "s2").is_err());
         assert_eq!(fs::read_to_string(&target).unwrap(), "secret");
         let _ = fs::remove_dir_all(&h);

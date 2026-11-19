@@ -216,6 +216,40 @@ test("Keep terminal history off: one clear, and no history call after it", async
   expect(before).toBeGreaterThan(0);
 });
 
+test("a save already on its way when history is turned off does not make the file again", async ({ page }) => {
+  await open(page);
+  const id = await newTerm(page, "claude");
+  // hold the next save at the host's door, as a slow disk would, with the real history controller and Settings
+  await page.evaluate(async () => {
+    const w = window as unknown as Record<string, unknown>;
+    const h = ((await import("/src/sessions/host.ts" as string)) as { getHost(): { historySave(k: string, t: string, s: number): Promise<void> } }).getHost();
+    const real = h.historySave.bind(h);
+    h.historySave = async (k, t, s) => {
+      h.historySave = real;
+      w.__savePending = true;
+      await new Promise<void>((r) => (w.__releaseSave = r));
+      try {
+        await real(k, t, s);
+      } finally {
+        w.__saveDone = true;
+      }
+    };
+    window.dispatchEvent(new Event("pagehide"));
+  });
+  await expect.poll(() => page.evaluate(() => !!(window as unknown as { __savePending?: boolean }).__savePending)).toBe(true);
+  await page.getByTestId("nav-settings").click();
+  await page.getByTestId("settings-nav-terminal").click();
+  await page.getByTestId("term-keep-history").getByRole("radio", { name: "Off" }).click();
+  await expect.poll(async () => (await history(page)).some((c) => c.op === "history.clear")).toBe(true);
+  await page.evaluate(() => (window as unknown as { __releaseSave(): void }).__releaseSave());
+  await expect.poll(() => page.evaluate(() => !!(window as unknown as { __saveDone?: boolean }).__saveDone)).toBe(true);
+  expect(await page.evaluate(() => JSON.parse(localStorage.getItem("__omherMockHistory") || "{}"))).not.toHaveProperty(id);
+  // turned on again, the next save is kept
+  await page.getByTestId("term-keep-history").getByRole("radio", { name: "On" }).click();
+  await flush(page);
+  await expect.poll(() => page.evaluate(() => JSON.parse(localStorage.getItem("__omherMockHistory") || "{}"))).toHaveProperty(id);
+});
+
 test("the bottom panel's tabs come back after a restart in their folders, with their scrollback", async ({ page }) => {
   await open(page);
   await page.evaluate(async () => {

@@ -16,7 +16,9 @@ export const HISTORY_EVERY_MS = 30_000;
 
 /** The shell's history calls (SessionHost implements them). */
 export interface HistoryHost {
-  historySave(key: string, text: string): Promise<void>;
+  /** `since`: when history was last turned on in this page (ms since the epoch); the shell drops a write from
+   *  before its last clear, so a save still on its way when the person turns history off never makes a file again. */
+  historySave(key: string, text: string, since: number): Promise<void>;
   historyRead(key: string): Promise<{ text: string; at: number } | null>;
   historyRemove(key: string): Promise<void>;
   historyPrune(keep: string[]): Promise<void>;
@@ -67,6 +69,8 @@ interface Tracked {
 
 const tracked = new Map<string, Tracked>();
 let host: HistoryHost | null = null;
+/** When history was last turned on in this page (its load, or the switch): every save carries it. */
+let onSince = Date.now();
 let timer: ReturnType<typeof setInterval> | null = null;
 
 function save(key: string, tr: Tracked): void {
@@ -81,7 +85,7 @@ function save(key: string, tr: Tracked): void {
   }
   tr.dirty = false;
   try {
-    void host.historySave(key, text).catch(() => (tr.dirty = true));
+    void host.historySave(key, text, onSince).catch(() => (tr.dirty = true));
   } catch {
     tr.dirty = true;
   }
@@ -180,6 +184,7 @@ export function watchHistorySetting(h: HistoryHost): void {
     wasOn = s.keepHistory;
     tick();
     if (s.keepHistory) {
+      onSince = Date.now();
       void loadSer();
       for (const tr of tracked.values()) tr.dirty = true;
       return;

@@ -580,11 +580,12 @@ async fn session_files_prune(keep: Vec<String>) -> Result<(), String> {
 }
 
 /// Keep what terminal `key` (a SESSIONS id or `panel-<n>`) shows, for after a restart:
-/// `~/.omher/term-history/<key>.txt`, owner-only, its newest 2000 lines / 1 MB (`term_history`).
+/// `~/.omher/term-history/<key>.txt`, owner-only, its newest 2000 lines / 1 MB (`term_history`). `since`: when history
+/// was last turned on in the page (ms); a write from before the last clear is refused.
 #[tauri::command]
-async fn term_history_save(key: String, text: String) -> Result<(), String> {
+async fn term_history_save(key: String, text: String, since: f64) -> Result<(), String> {
     let home = user_home()?;
-    tauri::async_runtime::spawn_blocking(move || term_history::save(&home, &key, &text)).await.map_err(|e| e.to_string())?
+    tauri::async_runtime::spawn_blocking(move || term_history::save(&home, &key, &text, since)).await.map_err(|e| e.to_string())?
 }
 
 /// What terminal `key` showed before omher restarted, and when it was kept (seconds); null when nothing was.

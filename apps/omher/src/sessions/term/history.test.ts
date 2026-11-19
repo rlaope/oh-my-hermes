@@ -85,6 +85,30 @@ describe("terminal history", () => {
     expect(await restoredText(off, "s1")).toBe("");
     expect(off.calls).toEqual([]);
   });
+
+  it("each save carries when history was last turned on, so the shell can refuse one from before a clear", async () => {
+    const { flushHistory, trackHistory, watchHistorySetting } = await import("./history");
+    const sent: number[] = [];
+    const h: HistoryHost = { ...host(null), historySave: async (_k, _t, since) => void sent.push(since) };
+    watchHistorySetting(h);
+    const t = new Terminal({ cols: 20, rows: 3, allowProposedApi: true });
+    await write(t, "x");
+    const tr = trackHistory(h, "s1", () => t);
+    // the serializer loads on first use
+    await new Promise((r) => setTimeout(r, 50));
+    tr.touch();
+    flushHistory();
+    expect(sent).toHaveLength(1);
+    writeTermSettings({ keepHistory: false });
+    await new Promise((r) => setTimeout(r, 5));
+    writeTermSettings({ keepHistory: true });
+    tr.touch();
+    flushHistory();
+    expect(sent).toHaveLength(2);
+    expect(sent[1]).toBeGreaterThan(sent[0]);
+    tr.stop();
+    t.dispose();
+  });
 });
 
 describe("the bottom panel's saved tabs", () => {

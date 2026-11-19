@@ -189,9 +189,9 @@ export class TauriHost implements SessionHost {
     const { invoke } = await this.core();
     await invoke("session_files_remove", { session });
   }
-  async historySave(key: string, text: string) {
+  async historySave(key: string, text: string, since: number) {
     const { invoke } = await this.core();
-    await invoke("term_history_save", { key, text });
+    await invoke("term_history_save", { key, text, since });
   }
   async historyRead(key: string) {
     const { invoke } = await this.core();
@@ -682,8 +682,11 @@ export class MockHost implements SessionHost {
       /* no storage */
     }
   }
-  async historySave(key: string, text: string) {
+  /** when history was last cleared (ms), as the shell keeps it: a write sent before then is dropped */
+  private clearedAt = 0;
+  async historySave(key: string, text: string, since: number) {
     this.log({ op: "history.save", key, data: text });
+    if (!(since > this.clearedAt)) return;
     this.putHist({ ...this.hist(), [key]: { text, at: Date.now() / 1000 } });
   }
   async historyRead(key: string) {
@@ -702,6 +705,7 @@ export class MockHost implements SessionHost {
   }
   async historyClear() {
     this.log({ op: "history.clear" });
+    this.clearedAt = Math.max(this.clearedAt, Date.now());
     this.putHist({});
   }
   async removeFiles(session: string) {
