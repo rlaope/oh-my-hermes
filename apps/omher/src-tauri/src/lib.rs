@@ -384,7 +384,7 @@ async fn shell_start(
             }
         })?;
         watch_foreground(&sessions, &app, id);
-        Ok(ShellStarted { id, cwd: at.to_string_lossy().into_owned(), host: this_host::name() })
+        Ok(ShellStarted { id, cwd: at.to_string_lossy().into_owned() })
     })
     .await
     .map_err(|e| e.to_string())?
@@ -411,13 +411,18 @@ struct SessionFg {
     agent: Option<&'static str>,
 }
 
-/// A started terminal-panel shell: its session id, the folder it started in, and this computer's name (empty when
-/// the system gives none), which the page uses only to accept a shell's OSC 7 folder from this computer.
+/// A started terminal-panel shell: its session id and the folder it started in.
 #[derive(serde::Serialize)]
 struct ShellStarted {
     id: u32,
     cwd: String,
-    host: String,
+}
+
+/// This computer's name (empty when the system gives none), asked once when the page starts: the page uses it only to
+/// accept a terminal's OSC 7 folder from this computer.
+#[tauri::command]
+fn host_name() -> String {
+    this_host::name()
 }
 
 /// Keystrokes (and pastes) from the terminal view into session `id`.
@@ -857,6 +862,7 @@ pub fn run() {
             past_chats_list,
             past_chat_messages,
             codex_latest,
+            host_name,
             asks_badge,
             peers_list,
             peers_watch,

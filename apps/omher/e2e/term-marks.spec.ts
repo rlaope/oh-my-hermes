@@ -155,6 +155,17 @@ test("OSC 7: a TERMINALS row's folder line follows the folder its shell reports,
   await expect(row.getByTestId("term-cwd")).toHaveText("x y");
 });
 
+test("OSC 7: a TERMINALS row takes this computer's own name before the bottom panel ever opened", async ({ page }) => {
+  await openApp(page);
+  const id = await newTerminal(page);
+  const pty = (await ptyOf(page, id))!;
+  const row = page.getByTestId(`session-${id}`);
+  // the mock computer is "mybox.local"; no panel shell has started in this page load
+  expect(await page.evaluate(() => ((window as unknown as { __omherShellCalls?: { op: string }[] }).__omherShellCalls ?? []).filter((c) => c.op === "start").length)).toBe(0);
+  await out(page, pty, OSC("7;file://mybox/home/you/code/api-server"));
+  await expect(row.getByTestId("term-cwd")).toHaveText("api-server");
+});
+
 test("OSC 9;4: progress keeps the row working, and done while the person looks elsewhere marks it as the bell does", async ({ page }) => {
   await page.addInitScript(() => {
     const w = window as unknown as { __notes: string[]; Notification: unknown };

@@ -238,8 +238,9 @@ RULES = (
     # terminal parity (2026-11-19): split panes, prompt marks / OSC 7 / OSC 9;4, images and Kitty keys, the paste
     # confirm, terminal history and the Claude Code / Codex conversation ids a TERMINALS session continues
     "each started by the same `shell_start` only when the person splits a pane,",
-    "The first shell's start reply also carries this computer's name (read from the system, no program run), which the"
-    " page uses only to accept OSC 7 folders from this computer (below); it is not kept or sent anywhere.",
+    "When the app starts, the page asks the shell once for this computer's name (`host_name`, read from the system, no"
+    " program run), which it uses only to accept OSC 7 folders from this computer in any terminal (below); it is not"
+    " kept or sent anywhere.",
     "a new Claude Code terminal gets `--session-id <id>`, a random UUID omher makes and keeps with the session,",
     "The page sends only the id; the shell (`sessions::terminal_args`) checks it is a UUID, gives `--session-id` to"
     " Claude Code only, never sends both, and refuses every other agent or shape.",
@@ -568,7 +569,9 @@ class LinkChipsFetchNothing(unittest.TestCase):
         self.assertIn("libc::gethostname(", host)
         self.assertIn("GetComputerNameExW(", host)
         self.assertNotIn("Command::new", host)
-        self.assertEqual((SHELL / "lib.rs").read_text(encoding="utf-8").count("this_host::name()"), 1)
+        lib = (SHELL / "lib.rs").read_text(encoding="utf-8")
+        self.assertEqual(lib.count("this_host::name()"), 1)
+        self.assertIn("fn host_name() -> String {\n    this_host::name()\n}", lib)
         page = (UI_SRC / "terminal" / "host.ts").read_text(encoding="utf-8")
         self.assertEqual(page.count("setThisHost("), 1)
 

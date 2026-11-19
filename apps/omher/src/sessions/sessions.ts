@@ -33,7 +33,7 @@ import { onTermSettings, readTermSettings } from "./term/settings";
 import { forgetHistory, pruneHistory, restoredText, trackHistory, watchHistorySetting } from "./term/history";
 import { savedPanelKeys } from "../terminal/state";
 import { termTheme } from "./term/themes";
-import { getShellHost } from "../terminal/host";
+import { getShellHost, learnThisHost } from "../terminal/host";
 import { onSessionFg } from "./fg";
 import { termActs } from "./termActivity";
 import { acpRow, agentDef, agentLabel, continues, draftAgent, draftFolder, draftOpen, hermesOnly, installLine, isBuiltin, isGone, isShell, isTerminalRec, LAST_LINE_MAX, SHELL, termEnd, lastPrintedLine, OPEN_KEY, opensAs, parseOpens, parseRecent, pushRecent, RECENT_KEY, registerAcp, sessionMode, type AgentId, type AgentInfo, type OpenAs, type Unseen, type Opens, type Recent, type SessionRec } from "./agents";
@@ -1384,6 +1384,8 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
       };
       // a Shell row is the person's login shell (the bottom panel's `shell_start`: only a folder and a size go out)
       const startedAt = Date.now();
+      // this computer's name first, so the program's first OSC 7 already counts as local
+      await learnThisHost();
       const hostId = shell
         ? (await getShellHost().start(r.cwd || null, cols, rows, onData, onExit)).id
         : await host.start(r.agent, r.cwd, cols, rows, onData, onExit, resume, accountOf(r), sessionId);
