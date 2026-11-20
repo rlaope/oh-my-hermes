@@ -280,6 +280,7 @@ from .onboarding import ONBOARDING_NAMES, onboarding_prompt
 from .shortcuts import shortcut_lines
 from .silent_lead import read_silent_lead
 from .launch_card import Facts as LaunchFacts
+from .live_sessions import end_state_for_exit, record_end, record_live
 from .launch_card import Paint as LaunchPaint
 from .launch_card import (
     Skills,
@@ -3050,7 +3051,8 @@ class App(ModesMixin, AgentViewMixin):
             return
         if self.stored_id and self.stored_id not in self.opened_ids:
             self.opened_ids = [*self.opened_ids, self.stored_id][-OPENED_IDS_KEPT:]
-        self.stored_id = stored
+        left, self.stored_id = self.stored_id, stored
+        self._record_live(left)
         self._forget_waits()  # the waits and their end line were the session being left
         write_active_session(self.environ.get("HERMES_TUI_ACTIVE_SESSION_FILE", ""), stored)
         hermes_home = self.environ.get("HERMES_HOME", "")
@@ -3059,6 +3061,21 @@ class App(ModesMixin, AgentViewMixin):
             write_active_session(self.environ.get(SESSION_FILE_ENV, ""), stored,
                                  {"hermes_home": hermes_home, "opened": opened})
         self.poller.set_session(stored)
+
+    def _record_live(self, left: str) -> None:
+        """This TUI now runs `stored_id`, in the OMH home's session record (`live_sessions`); the session it left is
+        closed there. Without an OMH home or a Hermes home nothing is recorded."""
+        home, hermes_home = self._omh_home(), self.environ.get("HERMES_HOME", "")
+        if home is None or not hermes_home:
+            return
+        cwd = (self.environ.get("HERMES_TUI_CWD") or self.environ.get("HERMES_CWD") or self.environ.get("TERMINAL_CWD")
+               or self.transcript.cwd)
+        if not cwd:
+            try:
+                cwd = os.getcwd()
+            except OSError:
+                cwd = ""
+        record_live(home, self.stored_id, hermes_home, cwd, self.environ, previous=left)
 
     # ── loop ──
 
@@ -10969,13 +10986,15 @@ def _run(
     make_git: Callable[[str], GitWatcher] = GitWatcher,
     fetch_latest: Callable[[], str] = fetch_latest,
     contain_faults: bool = True,
+    built: list[App] | None = None,
 ) -> int:
     """Start the gateway, open the session, then run the loop on the raw terminal; the exit code.
 
     `make_client` spawns a gateway again after a crash (`App._respawn_gateway`), and, before the TUI draws, in
     place of one that was not answering yet (`_LaunchWait`). A session the person closed exits `CLOSED_EXIT`
     rather than 0 when `omh` launched the TUI (`SESSION_FILE_ENV` set): `omh` prints the exit card, Hermes'
-    launcher prints nothing, and the shell still sees 0.
+    launcher prints nothing, and the shell still sees 0. The `App` built here is appended to `built`, so `main` can
+    record how its session ended however `_run` leaves.
     """
     first = client
     # Past `_Told`: the countdown is not re-said. The record read is the gateway's that serves the launcher's home.
@@ -11016,6 +11035,8 @@ def _run(
                     fetch_latest=fetch_latest,
                     contain_faults=contain_faults,
                 )
+                if built is not None:
+                    built.append(app)
             app.client = client
             wait.phase = LAUNCH_OPENING
             try:
@@ -11122,20 +11143,37 @@ def main(
         _say(stderr, f"omh: the Hermes gateway did not start: {error}")
         return request_fallback(environ, stderr.said())
     previous_handlers = _install_exit_signals()
+    built: list[App] = []
+    code: int | None = None  # None past the end of `try`: an exit signal or an uncaught error ended the TUI
+    signalled = False
     try:
         # The terminal picks its key reports from the environment the TUI was given (TERM_PROGRAM and kin).
-        return _run(
+        code = _run(
             client, environ, stderr, open_terminal or (lambda: Terminal(environ=environ)), make_poller, make_client,
-            fetch_latest=fetch_latest, contain_faults=contain_faults,
+            fetch_latest=fetch_latest, contain_faults=contain_faults, built=built,
         )
+        return code
     except KeyboardInterrupt:
         # Ctrl+C is a signal, not a key, until the terminal goes raw: while the gateway starts
         # and the session opens. The child is reaped below either way.
         _say(stderr, "omh: the OMH TUI was interrupted.")
-        return INTERRUPTED_EXIT
+        code = INTERRUPTED_EXIT
+        return code
+    except SystemExit:
+        signalled = True  # `EXIT_SIGNALS`: a hang-up, SIGTERM or SIGBREAK (`_exit_on_signal`)
+        raise
     finally:
         # The screen has settled and the terminal is the shell's again; only now wait on the child.
         try:
             client.close(grace=CLOSE_GRACE_SECONDS, terminate_grace=TERMINATE_GRACE_SECONDS)
         finally:
             _restore_signals(previous_handlers)
+            _record_session_end(environ, built, code, signalled)
+
+
+def _record_session_end(environ: Mapping[str, str], built: Sequence[App], code: int | None, signalled: bool) -> None:
+    """How the open session ended, in the OMH home's session record: `dropped` after an exit signal or a crash, so
+    a reopen may run it again, else `closed` (`live_sessions.end_state_for_exit`). Best effort, bounded wait."""
+    home = environ.get("OMH_HOME") or ""
+    if home and built and built[-1].stored_id:
+        record_end(Path(home), built[-1].stored_id, end_state_for_exit(code, signalled))

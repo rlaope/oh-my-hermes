@@ -65,6 +65,7 @@ from omh.tui.keys import CHAR, DOWN, ENTER, ESCAPE, LEFT, RIGHT, UP, Key, Mouse,
 from omh.tui.launch import (
     BOTS_HOME_ENV, CLOSED_EXIT, FALLBACK_EXIT, FALLBACK_SENTINEL_ENV, RUNTIME_ENV, RUNTIME_OWN_VALUE, SESSION_FILE_ENV,
 )
+from omh.tui.live_sessions import LIVE_SESSIONS_FILE, PENDING_MARKER
 from omh.tui.modes import ACCEPT_LABEL, PLAN_LABEL, info_line
 from omh.tui.screen import CLEAR_SCREEN_AND_SCROLLBACK, ERASE_SCROLLBACK
 from omh.tui.style import Span
@@ -369,6 +370,8 @@ class AppTestCase(unittest.TestCase):
             "HERMES_TUI_CWD": "/fixture/project",
             # The input history file goes here, never into the person's own ~/.hermes.
             "HERMES_HOME": str(root),
+            # The session record, turn ends and theme too, never into the person's own ~/.omh (`live_sessions`).
+            "OMH_HOME": str(root / "omh"),
             "TERM": "xterm-256color",
             FALLBACK_SENTINEL_ENV: str(root / "fallback"),
             "OMH_TUI_WALLPAPER": "0",  # the living wallpaper paints the blank cells; its own tests turn it on
@@ -3019,6 +3022,65 @@ class TallTableCapTests(unittest.TestCase):
         drawn(app)
         self.assertEqual(set(seen), {app.size[1]})
         self.assertTrue(any("Value" in row for row in flushed), "a tall table was still held at the first frame")
+
+
+def live_record(run: Run) -> dict[str, str]:
+    """The session record `live_sessions` keeps under the run's OMH home: each stored id and its state."""
+    path = Path(run.environ["OMH_HOME"]) / "tui" / LIVE_SESSIONS_FILE
+    return {entry["session_id"]: entry["state"] for entry in json.loads(path.read_text(encoding="utf-8"))["sessions"]}
+
+
+@unittest.skipIf(NO_TERMIOS, "the OMH TUI needs termios")
+class LiveSessionRecordTests(AppTestCase):
+    """How each session ended, as `main` records it for a reopen (`live_sessions`): a hang-up drops it, anything the
+    person did closes it, and the session `/new` moved away from is closed."""
+
+    def test_a_clean_exit_closes_the_session(self) -> None:
+        run = self.prepare(Scenario("session", spans("session", "startup", "create"), answers=startup_answers()))
+        run.environ[SESSION_FILE_ENV] = str(run.root / "omh-session.json")
+        run.terminal.script(Step(b"\x04", when=run.terminal.idle, label="the first frame"))
+        self.run_main(run)
+        self.assert_clean_run(run, CLOSED_EXIT)
+        self.assertEqual(live_record(run), {STORED_ID: "closed"})
+        entry = json.loads((Path(run.environ["OMH_HOME"]) / "tui" / LIVE_SESSIONS_FILE).read_text())["sessions"][0]
+        self.assertEqual((entry["hermes_home"], entry["cwd"], entry["pid"]),
+                         (str(run.root), "/fixture/project", os.getpid()))
+        self.assertFalse((Path(run.environ["OMH_HOME"]) / "tui" / PENDING_MARKER).exists())
+
+    def test_a_hang_up_drops_the_session_and_leaves_the_pending_marker(self) -> None:
+        self.addCleanup(signal.signal, signal.SIGHUP, signal.getsignal(signal.SIGHUP))
+        run = self.prepare(Scenario("session", spans("session", "startup", "create"), answers=startup_answers()))
+        run.terminal = SignalledTerminal(signal.SIGHUP)
+        run.terminal.script(Step(b"\x04", when=run.terminal.idle, label="the first frame"))
+        with self.assertRaises(SystemExit):
+            self.run_main(run)
+        self.assertEqual(live_record(run), {STORED_ID: "dropped"})
+        self.assertTrue((Path(run.environ["OMH_HOME"]) / "tui" / PENDING_MARKER).is_file())
+
+    def test_new_closes_the_session_it_moves_away_from(self) -> None:
+        fresh = {"result": {"session_id": FRESH_LIVE_ID, "stored_session_id": FRESH_STORED_ID, "message_count": 0,
+                            "messages": [], "info": {"model": "deepseek/deepseek-v4.1-flash-ultrafast"}}}
+        answers = (*startup_answers(), ("session.create", recorded_answer("session", "create")),
+                   ("session.create", fresh), ("session.close", {"result": {"closed": True}}))
+        run = self.prepare(Scenario("session", spans("session", "startup"), answers=answers), cols=200)
+        terminal = run.terminal
+        terminal.script(
+            self.submit(run, "/new"),
+            Step(b"\x04", when=terminal.shows(f"New session {FRESH_STORED_ID}."), label="the new session"),
+        )
+        self.run_main(run)
+        self.assert_clean_run(run)
+        self.assertEqual(live_record(run), {STORED_ID: "closed", FRESH_STORED_ID: "closed"})
+        sessions = json.loads((Path(run.environ["OMH_HOME"]) / "tui" / LIVE_SESSIONS_FILE).read_text())["sessions"]
+        self.assertEqual([entry["session_id"] for entry in sessions], [STORED_ID, FRESH_STORED_ID])
+
+    def test_no_omh_home_writes_no_record(self) -> None:
+        run = self.prepare(Scenario("session", spans("session", "startup", "create"), answers=startup_answers()))
+        omh_home = Path(run.environ.pop("OMH_HOME"))
+        run.terminal.script(Step(b"\x04", when=run.terminal.idle, label="the first frame"))
+        self.run_main(run)
+        self.assert_clean_run(run)
+        self.assertFalse((omh_home / "tui" / LIVE_SESSIONS_FILE).exists())
 
 
 if __name__ == "__main__":
