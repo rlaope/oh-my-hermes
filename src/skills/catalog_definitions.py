@@ -10641,6 +10641,8 @@ _DEFINITIONS.append(
             "Load `references/hypothesis-and-race-method.md` for the hypothesis table, flaky-test tactics, and race patterns instead of improvising them.",
             "Pick the next observation by cost and by how many hypotheses its result eliminates, and record the eliminations.",
             "Keep reproduction, root cause, fix, and verification as separate observed states.",
+            # OpenAI "Prompting GPT-6.2 in Codex" (read 2026-11-20): effort follows investigation depth.
+            "Size the effort to the depth and name it: a quick survey of one area runs at medium; tracing one suspected cause across several systems runs at high (category `deep`); several causes that may interact run at xhigh (category `forensics`). Finished means the reported symptom's root cause is shown by an observation and the fix passes the same reproduction; be exhaustive in the hypothesis table and its eliminations, not in reading code no hypothesis touches.",
             "Count a fix as failed when an executed run of the same reproduction command still shows the original symptom or shows a new symptom the fix caused rather than unmasked; planned runs and other commands do not count. After the third failed fix, prepare no fourth; re-examine the architecture assumptions every fix shared, per the method reference, and offer the user the next step as a question.",
             shared_test_authoring_line(
                 "Before the fix handoff names a regression test, ",
