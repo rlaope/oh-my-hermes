@@ -61,6 +61,7 @@ test("scrolled up: the pill shows, counts new messages, and a click goes back to
   expect(st.border).toBe("0px");
   if (SHOTS) {
     mkdirSync(join(SHOTS), { recursive: true });
+    await page.waitForTimeout(300);
     await page.screenshot({ path: join(SHOTS, "chat-jump-dark.png") });
   }
   await pill.click();
@@ -113,6 +114,7 @@ test("the pinned own message: one line at the top while the answer below it is r
   expect(pb.y - tb.y).toBeLessThan(20);
   if (SHOTS) {
     mkdirSync(join(SHOTS), { recursive: true });
+    await page.waitForTimeout(300);
     await page.screenshot({ path: join(SHOTS, "chat-pinned-dark.png") });
   }
   // a click scrolls to the bubble, and the line goes when the bubble is back in view
@@ -133,11 +135,13 @@ test("shots: the pill and the pinned header, light", async ({ page }) => {
   await longAnswer(page, "light");
   await expect(page.getByTestId("pinned-own")).toBeVisible();
   mkdirSync(join(SHOTS), { recursive: true });
-  await page.screenshot({ path: join(SHOTS, "chat-pinned-light.png") });
+  await page.waitForTimeout(300);
+    await page.screenshot({ path: join(SHOTS, "chat-pinned-light.png") });
   await tl(page).hover();
   await page.mouse.wheel(0, -2500);
   await expect(page.getByTestId("jump-bottom")).toBeVisible();
   await mock("mock.emit", { events: [{ event: "message", bot: "kami", id: "late-1", text: "One more thing." }] });
   await expect(page.getByTestId("jump-bottom")).toHaveText("Jump to bottom · 1 new");
-  await page.screenshot({ path: join(SHOTS, "chat-jump-light.png") });
+  await page.waitForTimeout(300);
+    await page.screenshot({ path: join(SHOTS, "chat-jump-light.png") });
 });

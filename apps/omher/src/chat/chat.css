@@ -152,23 +152,24 @@
   /* centred without a transform: the pop animation owns transform */
   left: 0;
   right: 0;
-  bottom: 30px;
+  bottom: 32px;
   width: max-content;
   margin: 0 auto;
   padding: 5px 12px;
   border-radius: var(--r);
-  background: var(--raise2);
-  color: var(--body);
+  /* the raised segment surface, not the bubbles' grey: it has to read over a bot bubble */
+  background: var(--seg-on);
+  color: var(--ink);
   font: inherit;
   font-size: 12px;
   white-space: nowrap;
-  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.18);
+  /* lifted by a soft shadow only: no ring */
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.28);
   cursor: pointer;
   animation: pop 0.16s ease both;
 }
 .tl-jump:hover {
-  background: var(--seg-on);
-  color: var(--ink);
+  color: var(--accent);
 }
 .tl-jump:focus-visible,
 .tl-pin:focus-visible .tl-pin-t {
