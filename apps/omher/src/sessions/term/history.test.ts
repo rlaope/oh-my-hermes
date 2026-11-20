@@ -2,8 +2,8 @@
 // (its newest lines, no modes, no alternate screen), the bottom panel's saved tabs, and the Settings switch.
 import { Terminal } from "@xterm/xterm";
 import { SerializeAddon } from "@xterm/addon-serialize";
-import { afterEach, describe, expect, it } from "vitest";
-import { dimmed, divider, HISTORY_LINES, restoredText, serializeTail, type HistoryHost } from "./history";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { dimmed, divider, HISTORY_EVERY_MS, HISTORY_LINES, HISTORY_SPREAD_MS, restoredText, serializeTail, type HistoryHost } from "./history";
 import { parseTermSettings, resetTermSettings, TERM_DEFAULTS, writeTermSettings } from "./settings";
 import { parseSavedTabs } from "../../terminal/state";
 
@@ -108,6 +108,63 @@ describe("terminal history", () => {
     expect(sent[1]).toBeGreaterThan(sent[0]);
     tr.stop();
     t.dispose();
+  });
+
+  it("the 30-s tick saves each changed terminal in a task of its own, not all of them at once", async () => {
+    const { trackHistory, watchHistorySetting } = await import("./history");
+    const saved: string[] = [];
+    const h: HistoryHost = { ...host(null), historySave: async (k) => void saved.push(k) };
+    watchHistorySetting(h);
+    const ts = [0, 1, 2].map(() => new Terminal({ cols: 20, rows: 3, allowProposedApi: true }));
+    for (const t of ts) await write(t, "x");
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "setInterval", "clearInterval"] });
+    try {
+      const trs = ts.map((t, i) => trackHistory(h, `s${i}`, () => t));
+      await vi.dynamicImportSettled();
+      for (const tr of trs) tr.touch();
+      // + 1: a timer set during a fake tick with no delay runs 1 ms later
+      vi.advanceTimersByTime(HISTORY_EVERY_MS + 1);
+      expect(saved).toEqual(["s0"]);
+      vi.advanceTimersByTime(HISTORY_SPREAD_MS);
+      expect(saved).toEqual(["s0", "s1"]);
+      vi.advanceTimersByTime(HISTORY_SPREAD_MS);
+      expect(saved).toEqual(["s0", "s1", "s2"]);
+      // nothing printed since: the next tick saves nothing
+      vi.advanceTimersByTime(HISTORY_EVERY_MS + 3 * HISTORY_SPREAD_MS);
+      expect(saved).toHaveLength(3);
+      for (const tr of trs) tr.stop();
+    } finally {
+      vi.useRealTimers();
+      for (const t of ts) t.dispose();
+    }
+  });
+});
+
+describe("a cleared screen", () => {
+  it("is saved again on the next tick though nothing printed (Clear, Reset): a restart does not bring the cleared text back", async () => {
+    const { historyChanged, trackHistory, watchHistorySetting } = await import("./history");
+    const saved: string[] = [];
+    const h: HistoryHost = { ...host(null), historySave: async (k, text) => void saved.push(`${k}:${text.includes("secret") ? "secret" : "clean"}`) };
+    watchHistorySetting(h);
+    const t = new Terminal({ cols: 20, rows: 3, allowProposedApi: true });
+    await write(t, "secret");
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "setInterval", "clearInterval"] });
+    try {
+      const tr = trackHistory(h, "s7", () => t);
+      await vi.dynamicImportSettled();
+      tr.touch();
+      vi.advanceTimersByTime(HISTORY_EVERY_MS + 1);
+      expect(saved).toEqual(["s7:secret"]);
+      t.reset();
+      // nothing printed: without the mark the next tick would keep the old text
+      historyChanged(t);
+      vi.advanceTimersByTime(HISTORY_EVERY_MS + 1);
+      expect(saved).toEqual(["s7:secret", "s7:clean"]);
+      tr.stop();
+    } finally {
+      vi.useRealTimers();
+      t.dispose();
+    }
   });
 });
 
