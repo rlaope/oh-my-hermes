@@ -159,7 +159,7 @@ Load this reference when the candidates are scholarly papers: a related-work lis
 
 Query only the corpora the topic needs. Calling every corpus by habit spends the budget for nothing.
 
-| Topic | Corpus | Host route (checked 2026-11-20) |
+| Topic | Corpus | Host route |
 | --- | --- | --- |
 | ML, CS, math, physics preprints | arXiv | Hermes' bundled `arxiv` skill, or `export.arxiv.org/api/query?search_query=...` |
 | Journals, conferences, citation counts, any field | OpenAlex | `api.openalex.org/works?search=...` (no key needed; the shared free budget is small) |
