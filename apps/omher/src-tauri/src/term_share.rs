@@ -422,6 +422,8 @@ mod tests {
         p
     }
 
+    // sharing is off on Windows (`ENABLED`); `windows_keeps_and_reads_nothing` covers it there
+    #[cfg(not(windows))]
     #[test]
     fn writes_only_the_listed_fields_owner_only_and_removes_them() {
         let h = home("write");
@@ -455,6 +457,8 @@ mod tests {
         let _ = fs::remove_dir_all(&h);
     }
 
+    // sharing is off on Windows (`ENABLED`); `windows_keeps_and_reads_nothing` covers it there
+    #[cfg(not(windows))]
     #[test]
     fn refuses_bad_ids_states_and_links_on_the_way() {
         let h = home("bad");
@@ -477,6 +481,8 @@ mod tests {
         let _ = fs::remove_dir_all(&h);
     }
 
+    // sharing is off on Windows (`ENABLED`); `windows_keeps_and_reads_nothing` covers it there
+    #[cfg(not(windows))]
     #[test]
     fn prune_keeps_listed_sessions_and_other_files() {
         let h = home("prune");
@@ -566,6 +572,8 @@ mod tests {
         }
     }
 
+    // sharing is off on Windows (`ENABLED`); `windows_keeps_and_reads_nothing` covers it there
+    #[cfg(not(windows))]
     #[test]
     fn takes_at_most_a_few_files_per_look() {
         let h = home("many");
