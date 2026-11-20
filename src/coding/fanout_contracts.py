@@ -86,6 +86,12 @@ FANOUT_SPAWN_PLAN_CLAIM_BOUNDARY = (
 # can justify, and 240 chars is a command line rather than a pasted script.
 MAX_UNIT_VERIFICATION_COMMANDS = 8
 MAX_UNIT_VERIFICATION_COMMAND_CHARS = 240
+
+# Optional per-unit review focus: what the reviewer will look at when the
+# unit's work comes back (OpenAI "Prompting GPT-6.2 in Codex" guide: tell the
+# executor what you will look for in review). Prose beside
+# `integration_checks`, bounded like them: a few sentences, not a checklist.
+MAX_UNIT_REVIEW_FOCUS_CHARS = 400
 # Named once so the check rows the dispatcher writes, the journal event they
 # back, and the docs describing both cannot drift apart.
 UNIT_VERIFICATION_OBSERVATION_SOURCE = "dispatch_verification"

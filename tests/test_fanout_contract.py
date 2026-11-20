@@ -37,6 +37,7 @@ from omh.coding.fanout_contracts import (  # noqa: E402
     FANOUT_SPAWN_PLAN_THRESHOLD,
     FanoutContractError,
     MAX_SPAWN_PLAN_FIELD_CHARS,
+    MAX_UNIT_REVIEW_FOCUS_CHARS,
     MAX_UNIT_VERIFICATION_COMMAND_CHARS,
     MAX_UNIT_VERIFICATION_COMMANDS,
     verification_command_argv,
@@ -1823,6 +1824,31 @@ class FanoutVerificationChecksContractTests(unittest.TestCase):
             with self.subTest(checks=bad):
                 with self.assertRaises(FanoutContractError):
                     build_fanout_contract("split work", self._with_checks(bad))
+
+
+class FanoutReviewFocusTests(unittest.TestCase):
+    def _with_focus(self, focus: object) -> list[dict[str, object]]:
+        units = [dict(unit) for unit in _UNITS]
+        units[0]["review_focus"] = focus
+        return units
+
+    def test_absent_or_empty_focus_leaves_the_contract_byte_identical(self) -> None:
+        without = build_fanout_contract("split work", _UNITS)
+        self.assertEqual(without, build_fanout_contract("split work", self._with_focus("")))
+        for unit in without["units"]:
+            self.assertNotIn("review_focus", unit)
+
+    def test_declared_focus_is_normalized_onto_the_owning_unit_only(self) -> None:
+        contract = build_fanout_contract("split work", self._with_focus("  login  keeps\n its redirect "))
+        units = {unit["unit_id"]: unit for unit in contract["units"]}
+        self.assertEqual(units["core"]["review_focus"], "login keeps its redirect")
+        self.assertNotIn("review_focus", units["tests"])
+
+    def test_focus_over_the_ceiling_or_not_a_string_is_refused(self) -> None:
+        build_fanout_contract("split work", self._with_focus("x" * MAX_UNIT_REVIEW_FOCUS_CHARS))
+        for bad in ("x" * (MAX_UNIT_REVIEW_FOCUS_CHARS + 1), ["a list"]):
+            with self.subTest(bad=type(bad).__name__), self.assertRaisesRegex(FanoutContractError, "review_focus"):
+                build_fanout_contract("split work", self._with_focus(bad))
 
 
 if __name__ == "__main__":

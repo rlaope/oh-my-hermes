@@ -130,6 +130,17 @@ TOOL_BATCHING_PROTOCOL: Final[str] = (
     "capture is bounded and the noise displaces evidence."
 )
 
+# Shared-machine etiquette (2026-11-20, OpenAI "Prompting GPT-6.2 in Codex"
+# guide, official): sibling units share one host, so each limits its own
+# concurrent builds and tests and leaves no background job or temp file
+# behind. Unit section, not the frozen head, for the reason at
+# TOOL_BATCHING_PROTOCOL; it rides after that block, so it is the first unit
+# rule a weak lane drops and never displaces a stop rule.
+SHARED_MACHINE_PROTOCOL: Final[str] = (
+    "Shared machine: run only the builds and tests you need at once; before returning, stop background "
+    "jobs you started and delete temp files you created."
+)
+
 # The sidecar file is the primary machine-read return
 # (`fanout_dispatch._intake_unit_result`). The block restates the sidecar
 # object when a sidecar path was given, so the two returns cannot disagree,

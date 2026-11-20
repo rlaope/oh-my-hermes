@@ -61,7 +61,9 @@ BLOCK_NAMES: Final[frozenset[str]] = frozenset({
     "unit.input_budget",
     "unit.criteria",
     "unit.commit_criterion",
+    "unit.review_focus",
     "unit.tool_batching",
+    "unit.shared_machine",
     "unit.review_role",
     "unit.calibration",
     "unit.domain_bundle",
@@ -242,10 +244,11 @@ def _unit_blocks(
 
 
 def _protocol_blocks(unit: Mapping[str, Any], route: Mapping[str, Any] | None) -> list[PromptBlock]:
-    """Criteria, tool batching, role protocol, calibration, and domain bundle.
+    """Criteria, review focus, tool batching, shared-machine etiquette, role protocol, calibration, and domain bundle.
 
-    `TOOL_BATCHING_PROTOCOL` is unit-invariant but rides here because the
-    frozen head cannot afford it (see the note at that constant).
+    `TOOL_BATCHING_PROTOCOL` and `SHARED_MACHINE_PROTOCOL` are unit-invariant
+    but ride here because the frozen head cannot afford them (see the note at
+    `TOOL_BATCHING_PROTOCOL`).
     """
     criteria = list(_protocol.completion_criteria_for_unit(unit))
     numbered = [f"{index}. {criterion}" for index, criterion in enumerate(criteria, start=1)]
@@ -255,11 +258,17 @@ def _protocol_blocks(unit: Mapping[str, Any], route: Mapping[str, Any] | None) -
     blocks = [PromptBlock("unit.criteria", "unit", "\n".join(["Done means, and only means:", *numbered]))]
     if commit is not None:
         blocks.append(PromptBlock("unit.commit_criterion", "unit", commit))
+    # A declared review focus says what the reviewer will check; an absent one
+    # adds no block, so the prompt stays byte-identical to one without it.
+    review_focus = str(unit.get("review_focus", "") or "")
+    if review_focus:
+        blocks.append(PromptBlock("unit.review_focus", "unit", f"Review focus (what the reviewer will check): {review_focus}"))
     recorded = recorded_model_route(unit)
     # Contract units carry the declared role inside the recorded route, not as
     # a top-level key; accept both so pre-contract unit dicts behave the same.
     role = str(unit.get("role", "") or "") or (str(recorded.get("role", "") or "") if recorded else "")
     blocks.append(PromptBlock("unit.tool_batching", "unit", _protocol.TOOL_BATCHING_PROTOCOL))
+    blocks.append(PromptBlock("unit.shared_machine", "unit", _protocol.SHARED_MACHINE_PROTOCOL))
     if role == "review":
         blocks.append(PromptBlock("unit.review_role", "unit", _protocol.REVIEW_ROLE_PROTOCOL))
     calibration = _protocol.calibration_entry_for_route(route)

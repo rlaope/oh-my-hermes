@@ -12,7 +12,10 @@ prose, so whether an executor satisfied it is a reading, not a verdict. A
   a runnable check with a stable id rather than a sentence;
 - an optional `output_shape` — the fields the executor's final report carries;
 - `forbidden_actions[]` — rendered into the executor-facing prompt section,
-  never only into routing metadata.
+  never only into routing metadata;
+- optional `parts[]` — `id`, `title`, `depends_on`: the work split. When two
+  or more parts depend on nothing, the Codex prompt lists them and gives Codex
+  permission to use subagents (OpenAI's documented trigger phrase).
 
 OMH still executes nothing here. The executor or host runs each postcondition
 and reports its exit status; `build_handoff_contract_receipt` records those
@@ -29,6 +32,7 @@ import json
 import re
 from typing import Any, Mapping, Sequence
 
+from ..plugin_bundle.omh import dag_core
 from .fanout_contracts import FanoutContractError
 from .verification_plan import compile_verification_plan
 
@@ -55,6 +59,7 @@ MAX_INPUTS = 16
 MAX_POSTCONDITIONS = 16
 MAX_FORBIDDEN_ACTIONS = 16
 MAX_OUTPUT_FIELDS = 32
+MAX_PARTS = 16
 MAX_TEXT_CHARS = 300
 
 RECEIPT_STATUSES = ("observed", "prepared_not_observed")
@@ -89,7 +94,7 @@ def build_handoff_contract(declaration: Mapping[str, Any]) -> dict[str, Any]:
     """
     if not isinstance(declaration, Mapping):
         raise HandoffContractError("handoff_contract declaration must be a JSON object")
-    known = {"inputs", "postconditions", "output_shape", "forbidden_actions"}
+    known = {"inputs", "postconditions", "output_shape", "forbidden_actions", "parts"}
     unknown = sorted(str(key) for key in declaration if key not in known)
     if unknown:
         raise HandoffContractError(f"handoff_contract has unknown field(s): {', '.join(unknown)}")
@@ -106,7 +111,58 @@ def build_handoff_contract(declaration: Mapping[str, Any]) -> dict[str, Any]:
     output_shape = declaration.get("output_shape")
     if output_shape is not None:
         contract["output_shape"] = _output_shape(output_shape)
+    # Optional, and absent from the contract unless declared, so a contract
+    # without parts keeps its digest.
+    parts = declaration.get("parts")
+    if parts is not None:
+        contract["parts"] = _parts(parts)
     return contract
+
+
+def _parts(value: object) -> list[dict[str, Any]]:
+    """The declared work parts: `id`, `title`, and the `depends_on` edges between them.
+
+    The Codex handoff reads these as the structural signal for parallel work:
+    parts with no `depends_on` can move ahead independently.
+    """
+    if not isinstance(value, list) or not value or len(value) > MAX_PARTS:
+        raise HandoffContractError(f"handoff_contract parts must be a list of 1 to {MAX_PARTS} objects")
+    parts: list[dict[str, Any]] = []
+    for index, entry in enumerate(value):
+        if not isinstance(entry, Mapping) or set(entry) - {"id", "title", "depends_on"}:
+            raise HandoffContractError(
+                f"handoff_contract part at index {index} must be an object with only id, title, depends_on"
+            )
+        part_id = entry.get("id")
+        if not isinstance(part_id, str) or not _POSTCONDITION_ID_RE.match(part_id):
+            raise HandoffContractError(f"handoff_contract part at index {index} has an invalid id: {part_id!r}")
+        if any(part["id"] == part_id for part in parts):
+            raise HandoffContractError(f"handoff_contract part {part_id!r} is declared twice")
+        title = entry.get("title")
+        if not isinstance(title, str) or not title.strip() or len(title) > MAX_TEXT_CHARS:
+            raise HandoffContractError(
+                f"handoff_contract part {part_id!r} title must be a non-empty string of at most {MAX_TEXT_CHARS} chars"
+            )
+        depends_on = entry.get("depends_on", [])
+        if not isinstance(depends_on, list) or not all(isinstance(item, str) for item in depends_on):
+            raise HandoffContractError(f"handoff_contract part {part_id!r} depends_on must list other part ids")
+        parts.append({"id": part_id, "title": " ".join(title.split()), "depends_on": sorted(set(depends_on))})
+    ids = [part["id"] for part in parts]
+    for part in parts:
+        problem = dag_core.edge_problem(part["id"], part["depends_on"], ids)
+        if problem is not None:
+            raise HandoffContractError(f"handoff_contract part {part['id']!r} depends_on {problem[1]!r}: {problem[0]}")
+    if dag_core.layers(ids, {part["id"]: part["depends_on"] for part in parts}) is None:
+        raise HandoffContractError("handoff_contract parts depends_on contains a cycle")
+    return parts
+
+
+def independent_parts(contract: Mapping[str, Any] | None) -> list[Mapping[str, Any]]:
+    """The declared parts that depend on no other part, in declaration order."""
+    raw = contract.get("parts") if isinstance(contract, Mapping) else None
+    if not isinstance(raw, list):
+        return []
+    return [part for part in raw if isinstance(part, Mapping) and not part.get("depends_on")]
 
 
 def _inputs(value: object) -> list[dict[str, Any]]:

@@ -32,6 +32,7 @@ from .fanout_contracts import (
     MAX_UNIT_SOURCE_RANGE_SPAN_CHARS,
     MAX_UNIT_SOURCE_RANGES,
     MAX_UNIT_VERIFICATION_COMMANDS,
+    MAX_UNIT_REVIEW_FOCUS_CHARS,
     PREPARED_NOT_OBSERVED,
     REPRODUCTION_UNIT_KIND,
     UNIT_SOURCE_RANGE_KEYS,
@@ -537,7 +538,22 @@ def _normalized_unit(unit: Mapping[str, object], index: int) -> dict[str, object
         # How many times the dispatcher may re-dispatch this unit in its own
         # worktree after observing a declared check fail; 0 when undeclared.
         "max_repair_attempts": normalized_max_repair_attempts(unit, index),
+        # What the reviewer will check in the unit's result; '' when undeclared.
+        "review_focus": _normalized_review_focus(unit.get("review_focus"), index),
     }
+
+
+def _normalized_review_focus(value: object, index: int) -> str:
+    if value is None:
+        return ""
+    if not isinstance(value, str):
+        raise FanoutContractError(f"unit at index {index} review_focus must be a string")
+    text = " ".join(value.split())
+    if len(text) > MAX_UNIT_REVIEW_FOCUS_CHARS:
+        raise FanoutContractError(
+            f"unit at index {index} review_focus must be at most {MAX_UNIT_REVIEW_FOCUS_CHARS} chars"
+        )
+    return text
 
 
 def _budget_int(mapping: Mapping[str, object], key: str, *, index: int, where: str, minimum: int, maximum: int) -> int | None:
@@ -992,4 +1008,7 @@ def _contract_unit(
     # none freezes byte-identically to one frozen before the field existed.
     if unit.get("max_repair_attempts"):
         contract_unit["max_repair_attempts"] = int(unit["max_repair_attempts"])  # type: ignore[call-overload]
+    # A review focus rides only when declared, for the same byte-identity reason.
+    if unit.get("review_focus"):
+        contract_unit["review_focus"] = str(unit["review_focus"])
     return contract_unit

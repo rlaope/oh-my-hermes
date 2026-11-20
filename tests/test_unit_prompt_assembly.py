@@ -34,7 +34,9 @@ from omh.coding.unit_prompt_protocol import (  # noqa: E402
     HIGH_EFFORT_CALIBRATIONS,
     MODEL_HIGH_EFFORT_CALIBRATIONS,
     UNIT_PROMPT_APPEND_MAX_BYTES,
+    SHARED_MACHINE_PROTOCOL,
     UNIT_PROMPT_MAX_BYTES,
+    shared_unit_preamble_lines,
 )
 
 GOLDEN_FIXTURE = Path(__file__).resolve().parent / "fixtures" / "unit_prompt_golden_digests.json"
@@ -212,7 +214,7 @@ _HEAD = (
     "head.structural_search_discipline",
 )
 _FRAME = ("unit.title", "unit.scope", "unit.do_not_touch", "unit.branch")
-_CRITERIA = ("unit.criteria", "unit.commit_criterion", "unit.tool_batching")
+_CRITERIA = ("unit.criteria", "unit.commit_criterion", "unit.tool_batching", "unit.shared_machine")
 
 
 class BlockNameGoldenTests(unittest.TestCase):
@@ -465,6 +467,48 @@ class RepeatedSentenceTests(unittest.TestCase):
     def test_the_check_sees_a_planted_repeat(self) -> None:
         text = "Run the full suite once. Then stop.\nRun   the full suite ONCE."
         self.assertEqual(repeated_sentences(text), ["run the full suite once."])
+
+
+# Captured from origin/main c5a909c6 before `review_focus` and
+# `SHARED_MACHINE_PROTOCOL` existed: the bare claude-code dispatch prompt.
+_BASE_BARE_DIGEST = ("dispatch|claude-code|implementation|high|claude-fable-5-2|bare", 4594,
+                     "b6218d2ca1edd43a336582ec6ec37597fc2b5fe6689251a425f8f4b1baba0d59")
+_REVIEW_FOCUS = "The exporter flag defaults off and the CLI help names it; no other flag changes."
+
+
+class ReviewFocusAndSharedMachineTests(unittest.TestCase):
+    def _bare(self) -> tuple[dict[str, object], str, str]:
+        cases = {case[0]: case for case in golden_cases()}
+        _case, path, unit, variant = cases[_BASE_BARE_DIGEST[0]]
+        return dict(unit), path, variant
+
+    def test_unit_without_review_focus_matches_base_bytes_apart_from_the_etiquette_block(self) -> None:
+        unit, path, variant = self._bare()
+        self.assertNotIn("review_focus", unit)
+        route = unit["handoff"]["model_route"]  # type: ignore[index]
+        without = assemble_unit_prompt(unit, GOAL, route=route, omit=frozenset({"unit.shared_machine"}))
+        self.assertEqual(without.size_bytes, _BASE_BARE_DIGEST[1])
+        self.assertEqual(without.digest(), _BASE_BARE_DIGEST[2])
+        self.assertEqual(assemble(path, {**unit, "review_focus": ""}, variant).text, assemble(path, unit, variant).text)
+        self.assertNotIn("Review focus", assemble(path, unit, variant).text)
+
+    def test_declared_review_focus_renders_right_after_the_numbered_criteria(self) -> None:
+        unit, path, variant = self._bare()
+        assembled = assemble(path, {**unit, "review_focus": _REVIEW_FOCUS}, variant)
+        names = assembled.names()
+        self.assertEqual(names[names.index("unit.review_focus") - 1], "unit.commit_criterion")
+        block = next(block for block in assembled.blocks if block.name == "unit.review_focus")
+        self.assertEqual(block.text, f"Review focus (what the reviewer will check): {_REVIEW_FOCUS}")
+
+    def test_shared_machine_protocol_rides_the_unit_section_after_tool_batching_not_the_head(self) -> None:
+        for case_id, path, unit, variant in golden_cases():
+            assembled = assemble(path, unit, variant)
+            with self.subTest(case=case_id):
+                names = assembled.names()
+                self.assertEqual(names[names.index("unit.shared_machine") - 1], "unit.tool_batching")
+                block = next(block for block in assembled.blocks if block.name == "unit.shared_machine")
+                self.assertEqual((block.zone, block.text), ("unit", SHARED_MACHINE_PROTOCOL))
+        self.assertNotIn(SHARED_MACHINE_PROTOCOL, shared_unit_preamble_lines(GOAL))
 
 
 if __name__ == "__main__":

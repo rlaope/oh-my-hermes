@@ -682,5 +682,85 @@ class ExecutorPromptingTests(unittest.TestCase):
         )
 
 
+_PARTS_TASK = "Fix the failing parser test in src/parser.py"
+_PARTS_CONTRACT_BASE = {"postconditions": [{"id": "compile", "command": "python -m compileall -q src"}]}
+_SUBAGENT_LINE = "- Use subagents as needed: the parts listed above can move ahead independently."
+_SCOPING_LINE = "- Finished means every acceptance criterion above holds; be exhaustive on those, not beyond them."
+
+
+def _prompt(executor: str, parts: list[dict[str, object]] | None) -> str:
+    declaration = dict(_PARTS_CONTRACT_BASE, **({"parts": parts} if parts is not None else {}))
+    payload = build_coding_delegation_payload(_PARTS_TASK, executor_target=executor, handoff_contract=declaration)
+    for key in ("executor_handoff", "prompt_handoff", "runtime_handoff"):
+        if isinstance(payload.get(key), dict):
+            return str(payload[key]["prompt_template"])
+    raise AssertionError("payload carries no prepared handoff")
+
+
+class CodexSubagentPermissionTests(unittest.TestCase):
+    """The parallel-parts signal is `handoff_contract.parts[]` entries with no depends_on."""
+
+    TWO_INDEPENDENT = [
+        {"id": "parser", "title": "Fix the parser"},
+        {"id": "docs", "title": "Update the parser docs"},
+        {"id": "release", "title": "Tag the release", "depends_on": ["parser", "docs"]},
+    ]
+
+    def test_two_independent_parts_add_the_subagent_line_once_and_list_the_parts(self) -> None:
+        prompt = _prompt("codex", self.TWO_INDEPENDENT)
+        self.assertEqual(prompt.count(_SUBAGENT_LINE), 1)
+        self.assertIn("Parts that depend on no other part:\n- `parser`: Fix the parser\n- `docs`: Update the parser docs\n", prompt)
+        self.assertNotIn("`release`", prompt)
+
+    def test_one_independent_part_or_no_parts_adds_no_line(self) -> None:
+        chained = [{"id": "parser", "title": "Fix the parser"}, {"id": "docs", "title": "Docs", "depends_on": ["parser"]}]
+        for parts in (None, [{"id": "parser", "title": "Fix the parser"}], chained):
+            with self.subTest(parts=parts):
+                prompt = _prompt("codex", parts)
+                self.assertNotIn("Use subagents", prompt)
+                self.assertNotIn("Parts that depend on no other part", prompt)
+
+    def test_claude_code_template_never_carries_the_line(self) -> None:
+        self.assertNotIn("Use subagents", _prompt("claude-code", self.TWO_INDEPENDENT))
+
+    def test_parts_are_validated(self) -> None:
+        from omh.coding.handoff_contract import HandoffContractError, build_handoff_contract
+
+        for parts in ([], [{"id": "a", "title": "A", "depends_on": ["missing"]}],
+                      [{"id": "a", "title": "A", "depends_on": ["b"]}, {"id": "b", "title": "B", "depends_on": ["a"]}],
+                      [{"id": "a", "title": "A", "owner": "x"}]):
+            with self.subTest(parts=parts), self.assertRaises(HandoffContractError):
+                build_handoff_contract(dict(_PARTS_CONTRACT_BASE, parts=parts))
+        self.assertNotIn("parts", build_handoff_contract(_PARTS_CONTRACT_BASE))
+
+
+class AcceptanceScopingLineTests(unittest.TestCase):
+    def test_scoping_line_closes_the_criteria_for_every_executor(self) -> None:
+        for executor in ("codex", "claude-code", "hermes"):
+            with self.subTest(executor=executor):
+                payload = build_coding_delegation_payload(_PARTS_TASK, executor_target=executor)
+                handoff = next(payload[key] for key in ("executor_handoff", "prompt_handoff", "runtime_handoff") if key in payload)
+                criteria = list(handoff["acceptance_criteria"])
+                self.assertTrue(criteria)
+                prompt = str(handoff["prompt_template"])
+                self.assertEqual(prompt.count(_SCOPING_LINE), 1)
+                self.assertIn(f"- {criteria[-1]}\n{_SCOPING_LINE}\n", prompt)
+
+    def test_scoping_line_is_absent_without_acceptance_criteria(self) -> None:
+        from omh.coding.prompting import ACCEPTANCE_SCOPING_LINE, render_executor_prompt_sections
+
+        def render(criteria: tuple[str, ...]) -> str:
+            return render_executor_prompt_sections(
+                {}, recommended_workflow="w", recommended_harness="h",
+                acceptance_criteria=criteria, verification=(), review_required=False,
+            )
+
+        self.assertNotIn(ACCEPTANCE_SCOPING_LINE, render(()))
+        self.assertNotIn(ACCEPTANCE_SCOPING_LINE, render(("  ",)))
+        self.assertIn(ACCEPTANCE_SCOPING_LINE, render(("The parser test passes.",)))
+        for word in ("keep going", "don't stop", "do not stop", "persist"):
+            self.assertNotIn(word, ACCEPTANCE_SCOPING_LINE.casefold())
+
+
 if __name__ == "__main__":
     unittest.main()
