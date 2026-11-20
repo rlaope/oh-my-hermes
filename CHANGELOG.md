@@ -103,6 +103,14 @@ All notable changes will be documented here.
   `~/.omp/agent/sessions`. omp keeps its sign-in in a SQLite store, so its login marker reads `absent`; that does not
   block dispatch.
 
+- **Five skills take guidance from OpenAI's "Prompting GPT-6.2 in Codex" guide.** `visual-qa` and `frontend` judge
+  a capture against the reference at the size people will see it (the real viewport, a 24 px toolbar icon), not only a
+  large render, and exercise an interactive result with the actions it supports before a verdict. `app-debugging` sizes
+  effort to the investigation: a quick survey at medium, one cause traced across systems at high (`deep`), several
+  interacting causes at xhigh (`forensics`), and says what counts as finished. `agent-instructions` keeps a line only
+  when an agent cannot infer it from the code, tests or docs, and leaves routine how-to out. `dag-ulw` briefs each
+  node like a colleague who knows the project and gives build nodes a `review_focus`.
+
 - **Hermes Bug Hunter: code review keeps only findings it can show, and every review says what it did not check.**
   `code-review`'s finding validation gains a drop gate: a candidate stays out of the findings when it cannot be traced
   step by step from a concrete input to a wrong result, when the behaviour is intended or documented, when its trigger
