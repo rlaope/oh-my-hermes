@@ -188,7 +188,8 @@ class SharedMachineLineTests(unittest.TestCase):
 
 
 class ExportedBuilderTests(unittest.TestCase):
-    """A node exported to Codex or Claude Code gets the focus and the shared-machine line a native builder gets."""
+    """A node exported to Codex or Claude Code gets its focus in the goal; the shared-machine line comes from the
+    fanout unit prompt, so the goal section does not repeat it."""
 
     def _export_goal(self, owner: str) -> str:
         nodes = [focused(node("api", scope=("src/api.py",), owner=owner), "preserve the public parser names"),
@@ -201,16 +202,15 @@ class ExportedBuilderTests(unittest.TestCase):
             result = call(action="export", run="feat", owner=owner)
             return Path(result["fanout"]["goal_file"]).read_text(encoding="utf-8")
 
-    def test_the_exported_goal_carries_each_units_focus_and_the_shared_machine_line(self) -> None:
+    def test_the_exported_goal_carries_each_units_focus_once_and_no_shared_machine_copy(self) -> None:
         for owner in ("codex", "claude-code"):
             with self.subTest(owner=owner):
                 goal = self._export_goal(owner)
                 api = goal.split("## api", 1)[1].split("## ui", 1)[0]
                 ui = goal.split("## ui", 1)[1]
-                self.assertIn(FOCUS_PREFIX + "preserve the public parser names", api)
+                self.assertEqual(api.count(FOCUS_PREFIX + "preserve the public parser names"), 1)
                 self.assertNotIn(FOCUS_PREFIX, ui)
-                self.assertEqual(api.count(SHARED_MACHINE), 1)
-                self.assertEqual(ui.count(SHARED_MACHINE), 1)
+                self.assertNotIn(SHARED_MACHINE, goal)
 
 
 if __name__ == "__main__":

@@ -1476,11 +1476,11 @@ def export_goal(record: Mapping[str, Any], units: list[dict[str, Any]]) -> str:
     for unit in units:
         node = nodes[unit["unit_id"]]
         lines += ["", f"## {unit['unit_id']}", str(node["prompt"])]
-        # An exported builder gets what a native one gets in `task_for`: the focus the verifier will judge it on,
-        # and the shared-machine line (every exported unit is a coding node with a write scope).
+        # An exported builder gets the focus the verifier will judge it on, as a native one does in `task_for`.
+        # The shared-machine line is not repeated here: the fanout unit prompt carries its own
+        # (`unit.shared_machine`), and a second copy in the goal section was the g62 verifier's duplicate.
         if node.get("review_focus"):
             lines.append(f"{dag_run.REVIEW_FOCUS_PREFIX}{node['review_focus']}")
-        lines.append(dag_run.SHARED_MACHINE_LINE)
     return "\n".join(lines)
 
 

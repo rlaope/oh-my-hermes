@@ -168,7 +168,8 @@ HANDOFF_NOT_CHECKED: Final = "handoff not checked"
 EXTERNAL_OWNERS: Final = ("claude-code", "codex")
 # The line a builder gets for its `review_focus` (native task and external export alike).
 REVIEW_FOCUS_PREFIX: Final = "Review focus (what the parent will check when it reads your work): "
-# Every build node with a write scope gets this, native or exported (OpenAI's Codex guide, read 2026-11-20).
+# Every native build node with a write scope gets this (OpenAI's Codex guide, read 2026-11-20); an exported unit gets
+# the fanout prompt's own `unit.shared_machine` block instead.
 SHARED_MACHINE_LINE: Final = ("Other agents share this machine: run only the builds and tests you need at once, and before "
                               "you stop, stop the background jobs you started and remove the temporary files you "
                               "created.")
