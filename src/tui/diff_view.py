@@ -14,7 +14,12 @@ So the colour is stripped (`clean_text`, which drops whole escape sequences),
 the review header is dropped as Ink drops it, every other line is classified
 by its first characters, and the theme paints it: added and removed lines as
 bands from the gutter's edge to the right edge, the file header in the label
-style, context like code, anything else dim. Diff lines hard-wrap like fenced
+style, context like code, anything else dim. A code line also takes syntax
+colour after its mark, in the language the file header names (`language_of`,
+`highlight.highlight_line`), over its band; a colour that would not read on a
+band is lifted there (`_on_band`). Each side carries its own open string or
+comment (the new file reads added and context lines, the old one removed and
+context lines), and a hunk or file header resets both. Diff lines hard-wrap like fenced
 code, never splitting a glyph; the summary and other prose word-wrap.
 
 Hunk headers are not rows. Their `-a +c` starts number the lines after them
@@ -28,11 +33,13 @@ indent ends; a terminal too narrow for it gets neither gutter nor indent.
 from __future__ import annotations
 
 from collections.abc import Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
+from .highlight import highlight_line
 from .markdown import band_rows, clean_text, hard_wrap, wrap_prefixed
 from .style import Line, Span, Style
-from .theme import Theme
+from ..skin_pack import hex_to_rgb
+from .theme import BLACK, TEXT_CONTRAST, WHITE, Theme, is_light, lifted_colour
 from .width import line_width, truncate_left
 
 DIFF_FILE = "file"
@@ -185,10 +192,46 @@ def _gutter(label: str, gutter: int, theme: Theme) -> Line:
     return (Span(label.rjust(gutter - 1) + " ", theme.muted),) if gutter else ()
 
 
-def _code_rows(text: str, style: Style, width: int, band: bool, number: int | None, gutter: int, theme: Theme) -> list[Line]:
+def language_of(path: str) -> str:
+    """The `highlight.LANGUAGES` name for a file by its extension (or its name, for a Makefile), "" for none."""
+    name = path.rsplit("/", 1)[-1].lower()
+    if name in ("makefile", "dockerfile"):
+        return name
+    return name.rpartition(".")[2] if "." in name else ""
+
+
+def _coloured(text: str, style: Style, lang: str, carry: str, theme: Theme) -> tuple[list[Span], str]:
+    """A diff line's spans: its `+`, `-` or ` ` mark in `style`, its code in the language's syntax colours, each
+    over `style`'s band. A line of a language with no table is one span in `style`, as before."""
+    if not lang or len(text) < 2:
+        return [Span(text, style)], carry
+    code, carry = highlight_line(text[1:], lang, carry, theme)
+    if code == [Span(text[1:], theme.code)]:  # `highlight_line`'s answer for a language it has no table for
+        return [Span(text, style)], carry
+    # The language's plain text keeps the band's own ink (`diff_add`'s foreground on a dark one), else the terminal's;
+    # a syntax colour on a band is lifted until it reads there (`_on_band`), as the theme lifts it on the terminal.
+    return [Span(text[:1], style), *(Span(span.text, replace(span.style, fg=_on_band(span.style.fg, style) if span.style.fg
+                                                             else (style.fg if style.bg else None), bg=style.bg))
+                                     for span in code)], carry
+
+
+def _on_band(colour: str, style: Style) -> str:
+    """`colour` moved toward white on a dark band, black on a light one, only as far as `TEXT_CONTRAST` there takes."""
+    if not style.bg or not hex_to_rgb(style.bg) or not hex_to_rgb(colour):
+        return colour
+    return lifted_colour(colour, style.bg, TEXT_CONTRAST, BLACK if is_light(style.bg) else WHITE)
+
+
+def _code_rows(spans: list[Span], style: Style, width: int, band: bool, number: int | None, gutter: int,
+               theme: Theme) -> list[Line]:
     """A diff line hard-wrapped like fenced code after the gutter, its number on the first row; a band reaches the right edge."""
     cells = width - gutter
-    rows = band_rows(text, cells, style) if band else hard_wrap((Span(text, style),), cells)
+    if len(spans) == 1:  # one colour: wrapped and banded as one run, as before syntax colour
+        rows = band_rows(spans[0].text, cells, style) if band else hard_wrap(spans, cells)
+    else:
+        rows = hard_wrap(spans, cells)
+        if band:  # each row padded to the right edge in the band
+            rows = [(*row, Span(" " * max(0, cells - line_width(row)), style)) for row in rows]
     label = str(number) if number is not None else ""
     return [(*_gutter(label if index == 0 else "", gutter, theme), *row) for index, row in enumerate(rows)]
 
@@ -199,7 +242,7 @@ def _note_rows(text: str, style: Style, width: int) -> list[Line]:
     return wrap_prefixed((Span(text, style),), indent, indent, width)
 
 
-def _line_rows(line: DiffLine, number: int | None, width: int, gutter: int, theme: Theme) -> list[Line]:
+def _line_rows(line: DiffLine, number: int | None, width: int, gutter: int, theme: Theme, spans: list[Span]) -> list[Line]:
     style = _style(line.kind, theme)
     if line.kind == DIFF_NOTE:
         return _note_rows(line.text, style, width)
@@ -207,7 +250,7 @@ def _line_rows(line: DiffLine, number: int | None, width: int, gutter: int, them
         # One row, cut from the left: the end of a path names the file.
         indent = _indent(width)
         return [(*indent, Span(truncate_left(line.text, width - line_width(indent)), style))]
-    return _code_rows(line.text, style, width, line.kind in (DIFF_ADDED, DIFF_REMOVED), number, gutter, theme)
+    return _code_rows(spans, style, width, line.kind in (DIFF_ADDED, DIFF_REMOVED), number, gutter, theme)
 
 
 def _hidden_note(hidden: int) -> str:
@@ -230,13 +273,26 @@ def diff_rows(
     shown = numbered if full else numbered[:PREVIEW_LINES]
     rows: list[Line] = []
     hunks = 0
+    lang, carry = "", {DIFF_ADDED: "", DIFF_REMOVED: "", DIFF_CONTEXT: ""}
     for line, number in shown:
         if line.kind == DIFF_HUNK:
             hunks += 1
+            carry = dict.fromkeys(carry, "")
             if hunks > 1 and gutter:
                 rows.append((Span(HUNK_GAP_MARK.rjust(gutter - 1), theme.dim),))
             continue
-        rows.extend(_line_rows(line, number, width, gutter, theme))
+        if line.kind == DIFF_FILE:
+            lang, carry = language_of(line.text.rpartition(FILE_ARROW)[2] or line.text), dict.fromkeys(carry, "")
+        spans = [Span(line.text, _style(line.kind, theme))]
+        if line.kind in carry:
+            # The new file reads added and context lines in order, the old one removed and context lines: each side
+            # carries its own open string or comment, and a context line moves both.
+            side = DIFF_REMOVED if line.kind == DIFF_REMOVED else DIFF_ADDED
+            spans, after = _coloured(line.text, _style(line.kind, theme), lang, carry[side], theme)
+            carry[side] = after
+            if line.kind == DIFF_CONTEXT:
+                carry[DIFF_REMOVED] = after
+        rows.extend(_line_rows(line, number, width, gutter, theme, spans))
     hidden = sum(1 for line, _number in numbered[len(shown) :] if line.kind != DIFF_HUNK)
     if hidden:
         rows.extend(_note_rows(_hidden_note(hidden), theme.muted, width))

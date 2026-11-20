@@ -1188,7 +1188,11 @@ wake pipe on real Windows pipes.
   or, when it failed by its exit code alone (a test
   run, say), the last three lines it printed, under the
   count of the lines above them. An edit's diff hangs under the same `⎿`, and a long diff counts
-  its rest the same way. A resumed session's earlier calls (`omh --resume`,
+  its rest the same way. Its code lines take the same syntax colour as fenced
+  code, named by the file's extension (keywords, strings, numbers and comments
+  each in their own colour, over the line's green or red band); a colour that
+  would not read on a band is brightened there, and a file with no syntax
+  table keeps one colour per line. A resumed session's earlier calls (`omh --resume`,
   `/resume`, a switch) are drawn the same way, two blank rows between two,
   with a grey `●` on a grey rail, since Hermes' record of them keeps no
   outcome, and an edit's diff under it where Hermes kept the one it showed.
@@ -2138,7 +2142,8 @@ The OMH TUI opens with the theme `omh theme use` saved under the OMH home
 
 A fresh session's launch draws the block logo, the banner's title and a
 launch card in one of nine launch looks: `spectrum` (the logo swept through
-the tool kind hues, a box per section, the default), `violet` (one box),
+the tool kind hues, a box per section, soft violet labels and rails, the
+default), `violet` (one box),
 `gold` (one box in two columns), `graphite` (grey and white with turquoise
 hyphens, a rule above and below), `sakura` (pastel pink, sky blue and cream,
 one box), `moonlit` (moonlight yellow and silver over navy, a rule above and
