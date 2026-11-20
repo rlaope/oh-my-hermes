@@ -1,14 +1,15 @@
 """Stateless runtime roots shared by the copied plugin and the OMH package.
 
 Only trusted API parameters and host configuration select stores. Never feed
-model arguments or observation metadata into these overrides. Native tasks/threads
-carry their own Hermes scope; long-lived providers bind the returned pair before
-doing I/O. A validated configuration parse and its home binding are memoized
-against a witness of every input they read, so a change recomputes the same
-validation path instead of reusing a stale answer.
+model arguments or observation metadata into these overrides. No binding is
+cached here: native tasks/threads carry their own Hermes scope; long-lived
+providers bind the returned pair before doing I/O. The one thing remembered is
+the host validator's parse of a local profile `config.yaml`, keyed on a digest
+of the exact bytes it read; every path, scope and ownership check still runs on every call.
 """
 from __future__ import annotations
 
+import hashlib
 from importlib import import_module
 import os
 from pathlib import Path
@@ -237,14 +238,6 @@ def platform_default_hermes_home() -> Path:
 
 
 def default_hermes_home() -> Path:
-    try:
-        key = ("hermes_home", _host_state_key())
-    except Exception:
-        return _default_hermes_home_uncached()
-    return _witnessed_memo(key, _default_hermes_home_uncached)
-
-
-def _default_hermes_home_uncached() -> Path:
     host = _host()
     if host is not None:
         secrets = import_module("agent.secret_scope")
@@ -503,123 +496,69 @@ def _overlay_config(user: dict, managed: dict) -> dict:
     return result
 
 
-# A validated config parse plus the home binding it selects used to be recomputed
-# by every pre_tool_call/post_tool_call callback: two full validating parses of a
-# 47 KB config.yaml per tool call on this host. Remember each answer behind a
-# witness of everything it reads. Any file, identity, environment or loader
-# change re-runs the SAME validation path, so a validated read is never reused
-# across a change. The lock makes a miss single-flight when the hook pool
-# dispatches callbacks concurrently; it pins no binding across calls.
-_CONFIG_RESOLUTION_LOCK = threading.RLock()
-_CONFIG_RESOLUTION_MEMO: dict[tuple, object] = {}
-_CONFIG_RESOLUTION_MEMO_MAX = 8
+# Every pre_tool_call/post_tool_call callback resolves the binding, and the
+# host's validating parse of the profile config.yaml was nearly all of that
+# cost (#2973). Only that parse is remembered, per path, together with a
+# digest of the exact bytes it came from (never the bytes: a config can hold
+# credentials) and the validator that produced it. A hit needs the same bytes
+# read again on this call; anything else (absent or unreadable file,
+# a config backend other than the local file, another validator) runs the
+# validator itself. Path resolution, managed/effective comparison and secret
+# ownership are never cached. Callers only read the returned mapping.
+_VALIDATED_CONFIG_GUARD = threading.Lock()
+_VALIDATED_CONFIG: dict[str, list] = {}
+_VALIDATED_CONFIG_MAX = 8
 
 
-def _resolution_file_witness(path) -> tuple[str, tuple[int, int] | None]:
-    """``(spelling, (mtime_ns, size))`` for one file; None for an absent file."""
+def _config_digest(path: Path) -> bytes | None:
     try:
-        info = os.stat(path)
+        with open(path, "rb") as handle:
+            return hashlib.sha256(handle.read()).digest()
     except OSError:
-        return str(path), None
-    return str(path), (info.st_mtime_ns, info.st_size)
+        return None
 
 
-def _witnessed_memo(key: tuple, compute):
-    """Single-flight lookup: recompute only when *key* has never been seen."""
-    with _CONFIG_RESOLUTION_LOCK:
-        memo = _CONFIG_RESOLUTION_MEMO
-        if key in memo:
-            return memo[key]
-        result = compute()
-        if len(memo) >= _CONFIG_RESOLUTION_MEMO_MAX:
-            memo.pop(next(iter(memo)))
-        memo[key] = result
-        return result
-
-
-def _host_state_key() -> tuple:
-    """Cheap identity inputs: no file stats, for path/host-only resolutions."""
-    secrets = import_module("agent.secret_scope")
-    host = _host()
-    scope = secrets.current_secret_scope()
-    scope_items = None if scope is None else tuple(sorted((str(k), str(v)) for k, v in scope.items()))
-    return (
-        str(host.get_hermes_home()),
-        str(host.get_hermes_home_override()),
-        bool(secrets.is_multiplex_active()),
-        getattr(secrets, "current_secret_scope_home", lambda: None)(),
-        scope_items,
-        # Only the process variables a path/host resolution can read. The
-        # config loader's ${VAR} expansion is witnessed by the full environment
-        # in the config-backed keys below, not here.
-        tuple((name, os.environ.get(name)) for name in (
-            "HERMES_HOME", "HERMES_DATA_DIR_SUFFIX", "LOCALAPPDATA", "HOME",
-            "USERPROFILE", "HERMES_MANAGED_DIR", "PYTEST_CURRENT_TEST", "OMH_HOME",
-        )),
-    )
-
-
-def _resolution_file_witnesses(home: Path, config, managed) -> tuple:
-    """Distinct files whose bytes can change a resolved home binding."""
-    paths = [home / "config.yaml", config.get_config_path(), home / ".env"]
-    managed_dir = managed.get_managed_dir()
-    if managed_dir is not None:
-        paths += [managed_dir / "config.yaml", managed_dir / ".env"]
-    seen = {}
-    for path in paths:
-        seen[str(path)] = path
-    return tuple(_resolution_file_witness(path) for path in seen.values())
-
-
-def _resolution_key(home: Path, config, managed) -> tuple:
-    """Every input the validated parse and the home binding depend on.
-
-    Every entry is compared, never inspected: file witnesses for the user config,
-    the effective config path, managed config/env and the profile's own .env;
-    the loader callables themselves (tests and operators replace them); the host,
-    multiplexer and secret-scope identity; the process environment (the effective
-    config expands ${VAR} from it, and expand_path reads HERMES_HOME/HOME/... via
-    the scope); and the safe-worker config snapshot a loader may substitute.
-    """
-    worker = sys.modules.get("agent.safe_worker_policy")
-    snapshot = (getattr(worker, "worker_config_snapshot", lambda: None)()
-                if worker is not None else None)
-    return (
-        "configured_home",
-        str(home),
-        _host_state_key(),
-        tuple(sorted(os.environ.items())),  # ${VAR} expansion in the effective config
-        worker,
-        repr(snapshot),
-        config.require_readable_config_before_write,
-        config.load_config_readonly,
-        managed.load_managed_config,
-        _resolution_file_witnesses(home, config, managed),
-    )
+def _validated_config(config, path: Path):
+    validate = config.require_readable_config_before_write
+    backends = sys.modules.get("hermes_cli.config_backend")
+    selected = getattr(backends, "get_config_backend", None)
+    # A remote backend serves this logical path from elsewhere; its revision
+    # is not in the local bytes, so it always takes the host's own read.
+    if not callable(selected) or getattr(selected(), "name", None) != "file":
+        return validate(path)
+    content = _config_digest(path)
+    if content is None:
+        # Absent, a directory, permission or I/O failure: the host decides.
+        return validate(path)
+    with _VALIDATED_CONFIG_GUARD:
+        entry = _VALIDATED_CONFIG.get(str(path))
+        if entry is None:
+            if len(_VALIDATED_CONFIG) >= _VALIDATED_CONFIG_MAX:
+                _VALIDATED_CONFIG.pop(next(iter(_VALIDATED_CONFIG)))
+            # [single-flight lock, digest, validator, parse]
+            entry = _VALIDATED_CONFIG[str(path)] = [threading.Lock(), None, None, None]
+    with entry[0]:
+        if entry[2] is validate and entry[1] == content:
+            return entry[3]
+        parsed = validate(path)
+        # Publish only when the file still holds the bytes this key names;
+        # a write during validation leaves the next call to parse again.
+        if _config_digest(path) == content:
+            entry[1:] = [content, validate, parsed]
+        return parsed
 
 
 def _configured_home(home: Path):
     config = import_module("hermes_cli.config")
-    managed = import_module("hermes_cli.managed_scope")
-    try:
-        key = _resolution_key(home, config, managed)
-    except Exception:
-        # An unusual host (a partial scope stub, a missing API) keeps the
-        # original uncached behavior instead of losing its validated read.
-        return _configured_home_uncached(home, config, managed)
-    return _witnessed_memo(key, lambda: _configured_home_uncached(home, config, managed))
-
-
-def _configured_home_uncached(home: Path, config, managed):
     # This host validator preserves the source YAML (and may save a recovery
     # copy when it is malformed). The normal behavioral loader deliberately
     # tolerates malformed/unreadable YAML and can reuse last-known-good data;
     # neither is safe for selecting a state owner. Validate before using it.
     try:
-        raw = config.require_readable_config_before_write(home / "config.yaml")
+        raw = _validated_config(config, home / "config.yaml")
     except (RuntimeError, OSError, ValueError) as exc:
         raise RuntimeBindingError("OMH profile configuration is unreadable or invalid") from exc
-    original = _setting(_overlay_config(raw, managed.load_managed_config()))
+    original = _setting(_overlay_config(raw, import_module("hermes_cli.managed_scope").load_managed_config()))
     if original is not _MISSING:
         original_path = expand_path(original, hermes_home=home, relative_to=home)
     effective = _setting(config.load_config_readonly())
@@ -645,35 +584,6 @@ def resolve_homes(omh_home: str | Path | None = None, hermes_home: str | Path | 
     order in the shape it can afford: the home's own `config.yaml` setting,
     then the process `OMH_HOME`, then `~/.omh`.
     """
-    if omh_home is not None:
-        # An explicit pair is already trusted and performs no validated parse.
-        return _resolve_homes_uncached(omh_home, hermes_home)
-    try:
-        config = import_module("hermes_cli.config")
-        managed = import_module("hermes_cli.managed_scope")
-        home = default_hermes_home()
-        witness_home = expand_path(hermes_home) if hermes_home is not None else home
-        worker = sys.modules.get("agent.safe_worker_policy")
-        snapshot = (getattr(worker, "worker_config_snapshot", lambda: None)()
-                    if worker is not None else None)
-        key = (
-            "resolve_homes",
-            None if hermes_home is None else str(hermes_home),
-            _host_state_key(),
-            tuple(sorted(os.environ.items())),  # ${VAR} expansion in the effective config
-            _resolution_file_witnesses(witness_home, config, managed),
-            worker,
-            repr(snapshot),
-            config.require_readable_config_before_write,
-            config.load_config_readonly,
-            managed.load_managed_config,
-        )
-    except Exception:
-        return _resolve_homes_uncached(omh_home, hermes_home)
-    return _witnessed_memo(key, lambda: _resolve_homes_uncached(omh_home, hermes_home))
-
-
-def _resolve_homes_uncached(omh_home: str | Path | None = None, hermes_home: str | Path | None = None) -> tuple[Path, Path]:
     home = expand_path(hermes_home) if hermes_home is not None else default_hermes_home()
     if omh_home is not None:
         return expand_path(omh_home, hermes_home=home), home

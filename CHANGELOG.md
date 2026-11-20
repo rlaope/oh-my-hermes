@@ -448,6 +448,20 @@ All notable changes will be documented here.
   row says so for 3 seconds (`✓ Review finished`, `✗ … failed`, `· Tests ended` for a process, which has no exit
   code). During a turn, `? waiting on you` now reads `? waiting for your approval` or `? waiting for your answer`.
 
+- **A tool call no longer re-parses an unchanged profile `config.yaml` to bind its OMH home.** Every
+  `pre_tool_call`/`post_tool_call` callback resolves the profile's OMH home, and each resolution ran Hermes' validating
+  parse of the whole `config.yaml`. The plugin now keeps that one validated parse per file, keyed on a SHA-256 of the
+  bytes it read on that call, and reuses it only while the file still holds exactly those bytes and the same host
+  validator is installed. An absent or unreadable file, a config backend other than the local file, or a write during
+  the parse goes through Hermes' own validator. Path resolution, the managed and effective config comparison, launch
+  fallback and secret ownership still run on every call. Measured on a Mac16,7 (Apple M4 Pro, macOS 26.6.2, Hermes'
+  CPython 3.11.16) with Hermes' real file-backend validator and a 46,614-byte synthetic `config.yaml`, 12 alternating
+  fresh processes per arm, 20 warm calls each, medians of per-process medians: a warm `resolve_homes()` went from
+  5.91 ms to 0.22 ms, and the two bindings `pre_tool_call` resolves before any gate from 5.93 ms to 0.25 ms; the cold
+  first call is unchanged (about 20.5 ms). The contributor's version, which cached the whole binding, measured
+  0.03 ms warm in the same harness, but it could hand back a stale home after a same-size rewrite or a changed path
+  alias. Thanks @zangetsu787 (#2973).
+
 ## 4.0.8 - 2026-11-15
 
 - **The OMH TUI shows a compression as one gauge row, and a prompt typed meanwhile goes on by itself.** `/compact`
