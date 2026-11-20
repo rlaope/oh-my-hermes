@@ -3043,8 +3043,8 @@ class LiveSessionRecordTests(AppTestCase):
         self.assert_clean_run(run, CLOSED_EXIT)
         self.assertEqual(live_record(run), {STORED_ID: "closed"})
         entry = json.loads((Path(run.environ["OMH_HOME"]) / "tui" / LIVE_SESSIONS_FILE).read_text())["sessions"][0]
-        self.assertEqual((entry["hermes_home"], entry["cwd"], entry["pid"]),
-                         (str(run.root), "/fixture/project", os.getpid()))
+        self.assertEqual((entry["hermes_home"], entry["cwd"], entry["owners"]),
+                         (str(run.root), "/fixture/project", []))  # its one owner, this process, left
         self.assertFalse((Path(run.environ["OMH_HOME"]) / "tui" / PENDING_MARKER).exists())
 
     def test_a_hang_up_drops_the_session_and_leaves_the_pending_marker(self) -> None:

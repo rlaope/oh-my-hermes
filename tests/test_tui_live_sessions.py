@@ -12,7 +12,10 @@ from datetime import datetime, timedelta, timezone
 import json
 import os
 from pathlib import Path
+import signal
 import stat
+import subprocess
+import sys
 import time
 import unittest
 from unittest import mock
@@ -20,6 +23,7 @@ from unittest import mock
 from _test_temp_root import make_test_tempdir
 from omh.tui import live_sessions
 from omh.tui.live_sessions import (
+    LIVE_PIDS_FILE,
     LIVE_SESSIONS_FILE,
     LIVE_SESSIONS_SCHEMA,
     MAX_ENTRIES,
@@ -27,6 +31,7 @@ from omh.tui.live_sessions import (
     TERMINAL_KEY_ENV,
     claim_resumable,
     end_state_for_exit,
+    entries,
     pending,
     record_end,
     record_live,
@@ -79,6 +84,14 @@ class LiveSessionsCase(unittest.TestCase):
             "state": state, "pid": pid, "boot": boot, "updated_at": stamp(datetime.now(timezone.utc) - age),
         }
 
+    @property
+    def live_pids(self) -> Path:
+        return self.omh_home / "tui" / LIVE_PIDS_FILE
+
+    def as_pid(self, pid: int):
+        """Run the next store calls as process `pid` (what `os.getpid` answers inside the store)."""
+        return mock.patch.object(live_sessions.os, "getpid", return_value=pid)
+
     def claim(self, environ: dict | None = None, cwd: str = "", homes: tuple[str, ...] | None = None, **options):
         return claim_resumable(self.omh_home, hermes_homes=homes or (self.hermes_home,), cwd=cwd,
                                environ=environ or {}, **options)
@@ -117,7 +130,7 @@ class RecordTests(LiveSessionsCase):
         self.assertEqual({key: entry[key] for key in ("session_id", "hermes_home", "cwd", "terminal_key", "state")},
                          {"session_id": "s1", "hermes_home": self.hermes_home, "cwd": str(self.project),
                           "terminal_key": "TMUX_PANE=%7", "state": "live"})
-        self.assertEqual((entry["pid"], entry["boot"]), (os.getpid(), BOOT))
+        self.assertEqual(entry["owners"], [{"pid": os.getpid(), "boot": BOOT, "terminal_key": "TMUX_PANE=%7"}])
         self.assertTrue(entry["updated_at"].endswith("Z"))
         self.assertEqual(json.loads(self.store.read_text())["schema_version"], LIVE_SESSIONS_SCHEMA)
         if os.name == "posix":
@@ -286,6 +299,171 @@ class ClaimTests(LiveSessionsCase):
         self.assertEqual(claimed and claimed["session_id"], "s1")
 
 
+class OwnersTests(LiveSessionsCase):
+    """Two TUIs holding one session: the entry ends only when the last one leaves (R2 contract item 2)."""
+
+    def test_a_second_owner_joins_and_the_first_owners_drop_keeps_the_session_live(self) -> None:
+        here = str(self.project)
+        with self.as_pid(1001):
+            record_live(self.omh_home, "s1", self.hermes_home, here, {"TMUX_PANE": "%1"})
+        with self.as_pid(1002):
+            record_live(self.omh_home, "s1", self.hermes_home, here, {"TMUX_PANE": "%2"})
+        (entry,) = self.entries()
+        self.assertEqual([owner["pid"] for owner in entry["owners"]], [1001, 1002])
+        with self.as_pid(1002):
+            record_end(self.omh_home, "s1", "dropped")
+        self.assertEqual(self.states(), {"s1": "live"})  # 1001 still holds it
+        self.assertIsNone(self.claim({"TMUX_PANE": "%2"}, cwd=here))
+        self.assertIsNone(self.claim({}, cwd=here))
+        self.assertFalse(self.marker.exists())
+        self.assertEqual(self.live_pids.read_text(), "1001\n")
+
+    def test_the_last_owner_decides_how_the_entry_ends_and_whose_terminal_it_keeps(self) -> None:
+        with self.as_pid(1001):
+            record_live(self.omh_home, "s1", self.hermes_home, "", {"TMUX_PANE": "%1"})
+        with self.as_pid(1002):
+            record_live(self.omh_home, "s1", self.hermes_home, "", {"TMUX_PANE": "%2"})
+        record_end(self.omh_home, "s1", "dropped", pid=1001)
+        record_end(self.omh_home, "s1", "closed", pid=1002)
+        (entry,) = self.entries()
+        self.assertEqual((entry["state"], entry["terminal_key"], entry["owners"]), ("closed", "TMUX_PANE=%2", []))
+        self.assertFalse(self.live_pids.exists())
+
+    def test_the_last_owner_dropping_makes_it_claimable_by_that_owners_terminal(self) -> None:
+        with self.as_pid(1001):
+            record_live(self.omh_home, "s1", self.hermes_home, "", {"TMUX_PANE": "%1"})
+        with self.as_pid(1002):
+            record_live(self.omh_home, "s1", self.hermes_home, "", {"TMUX_PANE": "%2"})
+        record_end(self.omh_home, "s1", "closed", pid=1002)
+        record_end(self.omh_home, "s1", "dropped", pid=1001)
+        self.assertIsNone(self.claim({"TMUX_PANE": "%2"}))
+        claimed = self.claim({"TMUX_PANE": "%1"})
+        self.assertEqual(claimed and claimed["session_id"], "s1")
+
+    def test_an_end_by_a_pid_that_does_not_hold_the_session_changes_nothing(self) -> None:
+        with self.as_pid(1001):
+            record_live(self.omh_home, "s1", self.hermes_home, "", {})
+        record_end(self.omh_home, "s1", "dropped", pid=1002)
+        self.assertEqual(self.states(), {"s1": "live"})
+
+    def test_moving_away_leaves_only_this_owner(self) -> None:
+        with self.as_pid(1001):
+            record_live(self.omh_home, "s1", self.hermes_home, "", {})
+        with self.as_pid(1002):
+            record_live(self.omh_home, "s1", self.hermes_home, "", {})
+            record_live(self.omh_home, "s2", self.hermes_home, "", {}, previous="s1")
+        self.assertEqual(self.states(), {"s1": "live", "s2": "live"})
+        self.assertEqual([owner["pid"] for owner in self.entries()[0]["owners"]], [1001])
+
+    def test_the_sweep_removes_a_dead_owner_and_drops_only_an_entry_left_with_none(self) -> None:
+        with self.as_pid(1001):
+            record_live(self.omh_home, "s1", self.hermes_home, "", {})
+        with self.as_pid(1002):
+            record_live(self.omh_home, "s1", self.hermes_home, "", {})
+        self.alive[1001] = False
+        self.assertFalse(pending(self.omh_home))
+        self.assertEqual([owner["pid"] for owner in self.entries()[0]["owners"]], [1002])
+        self.alive[1002] = False
+        self.assertTrue(pending(self.omh_home))
+        self.assertEqual(self.states(), {"s1": "dropped"})
+        self.assertFalse(self.live_pids.exists())
+
+    def test_an_entry_written_with_one_pid_reads_as_one_owner(self) -> None:
+        self.write(self.entry("old", "live", pid=31337, key="TMUX_PANE=%4"))
+        (entry,) = entries(self.omh_home)
+        self.assertEqual(entry["owners"], [{"pid": 31337, "boot": BOOT, "terminal_key": "TMUX_PANE=%4"}])
+        self.alive[31337] = False
+        self.assertTrue(pending(self.omh_home))
+        self.assertEqual(self.states(), {"old": "dropped"})
+
+
+class LivePidsTests(LiveSessionsCase):
+    """`live-pids`: every live owner's pid on one line, so a shell can see a vanished TUI (R2 contract item 1)."""
+
+    def test_the_file_follows_the_live_owners_and_is_private(self) -> None:
+        with self.as_pid(1001):
+            record_live(self.omh_home, "s1", self.hermes_home, "", {})
+        with self.as_pid(1002):
+            record_live(self.omh_home, "s2", self.hermes_home, "", {})
+        self.assertEqual(self.live_pids.read_bytes(), b"1001 1002\n")
+        if os.name == "posix":
+            self.assertEqual(stat.S_IMODE(self.live_pids.stat().st_mode), 0o600)
+        record_end(self.omh_home, "s1", "closed", pid=1001)
+        self.assertEqual(self.live_pids.read_bytes(), b"1002\n")
+        record_end(self.omh_home, "s2", "dropped", pid=1002)
+        self.assertFalse(self.live_pids.exists())
+        self.assertTrue(self.marker.exists())
+
+    def test_a_reader_rewrites_a_stale_file_and_creates_nothing_without_a_store(self) -> None:
+        self.assertFalse(pending(self.omh_home))
+        self.assertFalse((self.omh_home / "tui").exists())
+        with self.as_pid(1001):
+            record_live(self.omh_home, "s1", self.hermes_home, "", {})
+        self.live_pids.write_text("9 9 9\n")
+        pending(self.omh_home)
+        self.assertEqual(self.live_pids.read_text(), "1001\n")
+
+    @unittest.skipUnless(hasattr(signal, "SIGKILL"), "SIGKILL is POSIX")
+    def test_a_killed_tui_stays_named_in_the_file_for_a_shell_to_find(self) -> None:
+        script = ("import sys, time; from pathlib import Path; from omh.tui import live_sessions as s; "
+                  "s.record_live(Path(sys.argv[1]), 'killed', sys.argv[2], '', {}); print('up', flush=True); "
+                  "time.sleep(60)")
+        child = subprocess.Popen([sys.executable, "-c", script, str(self.omh_home), self.hermes_home],
+                                 stdout=subprocess.PIPE, text=True)
+        self.addCleanup(lambda: child.poll() is None and (child.kill(), child.wait()))
+        self.assertEqual(child.stdout.readline().strip() if child.stdout else "", "up")
+        if child.stdout:
+            child.stdout.close()
+        child.send_signal(signal.SIGKILL)
+        child.wait(timeout=10)
+        self.assertEqual(self.live_pids.read_text().split(), [str(child.pid)])
+        self.assertFalse(self.marker.exists())  # nothing swept yet: only live-pids can tell
+        self.assertFalse(REAL_PID_ALIVE(child.pid))
+
+
+class StrictKeysTests(LiveSessionsCase):
+    """`strict_keys`: an unattended start never takes the same-folder drop another known terminal left."""
+
+    def test_a_drop_from_another_known_terminal_is_refused_only_when_strict(self) -> None:
+        here = str(self.project)
+        self.write(self.entry("theirs", "dropped", key="TMUX_PANE=%1", cwd=here))
+        self.assertIsNone(self.claim({"TMUX_PANE": "%2"}, cwd=here, strict_keys=True))
+        self.assertEqual(self.states(), {"theirs": "dropped"})
+        claimed = self.claim({"TMUX_PANE": "%2"}, cwd=here)
+        self.assertEqual(claimed and claimed["session_id"], "theirs")
+
+    def test_strict_still_takes_the_folder_when_either_key_is_unknown(self) -> None:
+        here = str(self.project)
+        self.write(self.entry("unkeyed", "dropped", cwd=here), self.entry("keyed", "dropped", key="TMUX_PANE=%1",
+                                                                          cwd=here, age=timedelta(hours=1)))
+        claimed = self.claim({"TMUX_PANE": "%2"}, cwd=here, strict_keys=True)
+        self.assertEqual(claimed and claimed["session_id"], "unkeyed")
+        claimed = self.claim({}, cwd=here, strict_keys=True)
+        self.assertEqual(claimed and claimed["session_id"], "keyed")
+
+
+class ReaderTests(LiveSessionsCase):
+    """`entries`: the read-only view `omh auto-resume status` shows."""
+
+    def test_it_reads_without_writing_and_marks_a_live_entry_whose_owners_are_gone(self) -> None:
+        self.write(self.entry("gone", "live", pid=31337), self.entry("up", "live", pid=31338),
+                   self.entry("d", "dropped"))
+        self.alive[31337] = False
+        before = self.store.read_bytes()
+        rows = entries(self.omh_home)
+        self.assertEqual([(row["session_id"], row["state"], row["gone"]) for row in rows],
+                         [("gone", "live", True), ("up", "live", False), ("d", "dropped", False)])
+        self.assertEqual(self.store.read_bytes(), before)
+        self.assertFalse(self.marker.exists())
+        self.assertFalse(self.live_pids.exists())
+        rows[0]["owners"].clear()
+        self.assertEqual(len(entries(self.omh_home)[0]["owners"]), 1)  # a copy
+
+    def test_nothing_to_read_is_an_empty_list(self) -> None:
+        self.assertEqual(entries(self.omh_home), [])
+        self.assertFalse((self.omh_home / "tui").exists())
+
+
 class DamagedStoreTests(LiveSessionsCase):
     def test_corrupt_wrong_schema_and_oversize_files_read_as_empty(self) -> None:
         self.store.parent.mkdir(parents=True)
@@ -327,6 +505,44 @@ class DamagedStoreTests(LiveSessionsCase):
         record_end(blocker, "s1", "dropped")
         self.assertFalse(pending(blocker))
         self.assertIsNone(claim_resumable(blocker, hermes_homes=(self.hermes_home,), cwd="", environ={}))
+
+    @unittest.skipUnless(hasattr(os, "mkfifo"), "FIFOs are POSIX")
+    def test_a_fifo_at_any_store_name_never_blocks_and_is_never_opened(self) -> None:
+        """A FIFO at the store, the marker, `live-pids` or the lock: every call returns within the lock bound (in a
+        child, so a hang fails the test instead of stalling it), and a FIFO at a data name is replaced by rename, never opened."""
+        names = (LIVE_SESSIONS_FILE, PENDING_MARKER, LIVE_PIDS_FILE, live_sessions.LOCK_FILE)
+        script = ("import sys; from pathlib import Path; from omh.tui import live_sessions as s; h = Path(sys.argv[1]); "
+                  "s.record_live(h, 'n', sys.argv[2], '', {}); s.record_end(h, 'n', 'dropped'); s.pending(h); "
+                  "s.claim_resumable(h, hermes_homes=[sys.argv[2]], cwd='', environ={}); s.entries(h)")
+        for name in names:
+            with self.subTest(name=name):
+                home = self.root / f"fifo-{name}"
+                (home / "tui").mkdir(parents=True)
+                if name in (PENDING_MARKER, LIVE_PIDS_FILE):
+                    (home / "tui" / LIVE_SESSIONS_FILE).write_text(json.dumps({
+                        "schema_version": LIVE_SESSIONS_SCHEMA,
+                        "sessions": [self.entry("d", "dropped"), self.entry("l", "live", pid=os.getpid(), boot="")]}))
+                os.mkfifo(home / "tui" / name)
+                started = time.monotonic()
+                try:
+                    done = subprocess.run([sys.executable, "-c", script, str(home), self.hermes_home], timeout=8,
+                                          capture_output=True, text=True)
+                except subprocess.TimeoutExpired:
+                    self.fail(f"a FIFO at {name} blocked the store")
+                self.assertEqual(done.returncode, 0, done.stderr)
+                self.assertLess(time.monotonic() - started, 8)
+                path = home / "tui" / name
+                if name == live_sessions.LOCK_FILE:
+                    self.assertTrue(stat.S_ISFIFO(os.lstat(path).st_mode))  # refused: nothing locked, nothing written
+                    self.assertFalse((home / "tui" / LIVE_SESSIONS_FILE).exists())
+                else:
+                    self.assertTrue(stat.S_ISREG(os.lstat(path).st_mode), name)  # replaced by rename, never opened
+
+    def test_a_directory_at_the_lock_name_gives_up_without_raising(self) -> None:
+        (self.omh_home / "tui" / live_sessions.LOCK_FILE).mkdir(parents=True)
+        record_live(self.omh_home, "s1", self.hermes_home, "", {})
+        self.assertFalse(self.store.exists())
+        self.assertFalse(pending(self.omh_home))
 
     def test_lock_contention_gives_up_within_the_bounded_wait(self) -> None:
         self.assertEqual(live_sessions.LOCK_WAIT_SECONDS, 2.0)
