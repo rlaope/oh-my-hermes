@@ -634,7 +634,11 @@ any of the three handoff schemas then carries it. The declaration holds typed
 `inputs[]` (`name`, `input_type`, `requirement`, `default`),
 `postconditions[]` (an `id` plus a command, compiled through the same
 `verification_plan/v1` compiler the fanout dispatcher uses), an optional
-`output_shape`, and `forbidden_actions[]`. The handoff is refused, with the
+`output_shape`, `forbidden_actions[]`, and optional `parts[]` (`id`, `title`,
+`depends_on`; validated as an acyclic graph). When two or more parts depend
+on nothing, the Codex prompt lists them and adds OpenAI's documented "Use
+subagents as needed" line; other executors' prompts do not carry it. The
+handoff is refused, with the
 offender named, when a declared input appears in no template or when a
 template variable (the builder declares `{message}` itself) has no
 declaration. Forbidden actions and postcondition commands are rendered in the

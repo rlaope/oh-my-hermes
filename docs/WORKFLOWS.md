@@ -229,6 +229,7 @@ These surfaces are generated command references, not installed Hermes workflow s
   - Keep the practical small-loop recipe visible: test as stop signal, plan -> execute -> verify, one task at a time.
   - Surface verification_gap, comprehension_debt, and cognitive_surrender as warnings before a loop starts looking self-steering.
   - Before a loop launches, or when asked whether one will hold, load `references/loop-design-review.md`: a finish line written beside the fence of files the loop may not edit, a judge other than the builder, and the pre-launch failure check.
+  - When a measured loop compares variants of code or config on branches (training runs, evals, sweeps), load `references/experiment-tree.md`: one fixed run command for every node, results freeze a node, a small fan of siblings per decision, then descend onto the winner.
   - Session-bound host_observed resumable_goal plus explicit coding ownership prepares one executor goal. Otherwise use native `/goal` and `/goal gate add`. Never prepare two controllers.
   - Ingest bounded snapshots via `omh loop goal-driver-observe`. External state guides recovery, not checkpoint decisions; native turns still require activation and contiguous same-session evidence.
   - Treat ticks as preparation only. Advance one legal role phase through loop_phase_transition/v1 only after its named gate has observed evidence.
@@ -1060,6 +1061,7 @@ These surfaces are generated command references, not installed Hermes workflow s
   - Separate candidate preparation, observed link, observed download, file hash, text extraction, license check, verification, and downstream selection.
   - Attach observation provenance before treating any acquisition state as evidence.
   - For `paper` candidates, when Hermes' bundled `arxiv` skill is available, search through it - by topic, author, category, or paper id - and record each entry it returns as `link_observed` with `hermes_tool` provenance. A search result is an observed link and nothing more: download, text extraction, and verification stay unclaimed until their own run is observed. Without the skill, a paper candidate stays `candidate_prepared` until a link is observed another way.
+  - When the candidates are scholarly papers, load `references/literature-retrieval.md`: pick arXiv, OpenAlex, bioRxiv or PubMed by topic, scale follow-up rounds to a stated difficulty within the plan's cap, dedupe by id, DOI, then title, and keep only papers a host result returned.
   - Vary search angles across official docs, academic work, implementations, datasets, and criticism within the plan's budget (3 queries, 10 external attempts and one follow-up for an explore search), and name the source kinds still without candidates when the budget ends.
   - Recommend the next downstream workflow without pretending that downstream work already ran.
 - Completion checklist:

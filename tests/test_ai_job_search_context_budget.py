@@ -563,7 +563,9 @@ class AiJobSearchContextBudgetTests(unittest.TestCase):
         # dag-ulw moves. This branch's pin was a92e709f...a555, and main's was 2d788500...c459.
         # OpenAI's GPT-6.2 Codex guide lines then reach visual-qa, frontend, app-debugging, agent-instructions
         # and dag-ulw; only those five bodies move, and the pin before it was 891b61cd...f061.
-        self.assertEqual(_digest(legacy_hashes), '66929abd2f52f05ff4d53a46f05565a2eadfd997101f92036e166bf7b25e07a7')
+        # Merged with the OpenResearch references branch: loop and source-finder gain reference pointers
+        # (experiment-tree, literature-retrieval); this branch's pin was 7c051fb0...7aaf, and main's was 66929abd...07a7.
+        self.assertEqual(_digest(legacy_hashes), 'a55761860310b5121f357c3ac03de780ed7f565da860711b6bab90ff448f5b9c')
         legacy = _skill_context_cost_profile('full', legacy_templates, refs)
         current = _skill_context_cost_profile('full', templates, refs)
         # Main's search guidance adds 305; repro-audit's mandatory rails 1,943.

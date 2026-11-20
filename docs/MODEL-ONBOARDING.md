@@ -330,6 +330,21 @@ official contract.
    only in the reasoning channel is rejected), and the preset the vendor
    benchmarks with says how much scaffolding the model wants (DeepSeek:
    Minimal — one shell tool, a one-line persona — scored above Standard).
+   The same lane reads the vendor's own coding client (Codex CLI, Claude
+   Code, Gemini CLI, Qwen Code, ZCode, the Kimi client, DeepSeek Harness)
+   for official-client facts. These come from the maintainer's
+   vendor-harness snapshot root: one directory per vendor and version,
+   holding the client's prompts, tools, model catalog, and policy lines
+   with a `meta.json` that pins the source. Refreshing that root when a
+   client releases (detect the version, extract it, diff against the
+   previous snapshot) is the maintainer's job. It runs outside this
+   repository and outside any user workspace, and no OMH command does it.
+   The rule for this step: copy a ladder or limit from the vendor client
+   at a pinned tag (or, for a closed binary, a pinned version), and record
+   the tag and commit sha (or the binary sha256) beside it. Never copy from
+   a branch head or from memory. A closed client is paraphrased, never
+   quoted. [Vendor Harness Review](VENDOR-HARNESS-REVIEW.md) is the
+   2026-11-20 pass.
 4. **Community harnesses** — OpenCode / models.dev, OpenRouter's endpoint
    listing, oh-my-pi, Aider, and the issue trackers. Use
    them for divergence (which ids 400, which harnesses drop the passback,

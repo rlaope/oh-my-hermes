@@ -77,6 +77,10 @@ HISTORY_FOVEATION_POLICY = (
     "source, never from an earlier summary, so successive re-briefs do not stack lossy layers. "
     "An unstated drop is missing evidence, not a shorter summary."
 )
+# Rides the Expected result section only when acceptance criteria exist.
+ACCEPTANCE_SCOPING_LINE = (
+    "Finished means every acceptance criterion above holds; be exhaustive on those, not beyond them."
+)
 
 
 def build_executor_prompting_contract(
@@ -222,7 +226,11 @@ def render_executor_prompt_sections(
         _task_source_context(task_source),
     ]
     expected_result = [str(item) for item in acceptance_criteria if str(item).strip()]
-    if not expected_result:
+    if expected_result:
+        # Scoping, not persistence (OpenAI "Prompting GPT-6.2 in Codex" guide,
+        # official): say what counts as finished and where to be exhaustive.
+        expected_result.append(ACCEPTANCE_SCOPING_LINE)
+    else:
         expected_result.append("A scoped change or review result aligned to the request.")
     expected_result.append(
         "A concise report with changed files, verification outcomes, blockers, and evidence refs."
@@ -344,6 +352,7 @@ def _section(title: str, items: Iterable[str]) -> str:
 
 
 __all__ = [
+    "ACCEPTANCE_SCOPING_LINE",
     "DOCS_CONSULTED_ARTIFACT_POLICY",
     "HISTORY_FOVEATION_POLICY",
     "SESSION_SUMMARY_SHAPE_POLICY",

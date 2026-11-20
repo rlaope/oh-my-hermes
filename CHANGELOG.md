@@ -4,6 +4,8 @@ All notable changes will be documented here.
 
 ## Unreleased
 
+- **Measured loops keep variants comparable, and paper searches pick the right corpus.** `loop` gains `references/experiment-tree.md`: every node runs one fixed command and environment, a node freezes once a run answers it, the options of one decision are siblings and the next round descends onto the winner, and each finished run ends in repair, refill, promote or stop. `source-finder` gains `references/literature-retrieval.md`: arXiv, OpenAlex, bioRxiv or PubMed chosen by topic, follow-up rounds scaled to a stated difficulty inside the existing search cap, cross-corpus dedupe by id, DOI and title, and no paper id that a host result did not return. Both adapt alphaXiv/OpenResearch practices (MIT) in OMH wording.
+
 - **Code in the OMH TUI reads in more than one colour, and the default accent is violet.** An edit's diff painted every code line in one turquoise, and
   the default `omh` look gave fenced code only turquoise shades, so keywords, strings and comments blurred together.
   Diff lines now take the same syntax colour as fenced code, chosen by the file's extension, over their green or red
@@ -105,6 +107,18 @@ All notable changes will be documented here.
   nodes in one checkout stop committing each other's work. Verify, review and read-only nodes get no such line. This
   is guidance; the write-scope guard on file tools stays the enforcement.
 
+- **Coding handoffs and fanout units pick up four lines from OpenAI's GPT-6.2 Codex guide.** A fanout unit may declare
+  `review_focus` (one sentence, at most 150 UTF-8 bytes; it is cut to fit rather than ever push the prompt over its
+  byte ceiling), which its prompt
+  states right after the numbered criteria; when it is absent, the contract is byte-identical and no focus block is
+  added. A `handoff_contract/v1` may declare `parts[]` (`id`, `title`,
+  `depends_on`). With two or more parts that depend on nothing, the Codex prompt lists them and adds "Use subagents as
+  needed", the guide's trigger phrase; Claude Code and Hermes prompts never get that line. Every handoff with acceptance criteria
+  ends its Expected result with one line saying what counts as finished, with no keep-going wording. Every unit
+  prompt carries a new shared-machine line after tool batching (limit concurrent builds and tests; stop your own
+  background jobs and delete your own temp files). It stays out of the frozen shared head, so the unit prompt golden
+  digests move.
+
 - **The pi-family coding lane runs on the omp CLI too.** With only `omp` on PATH, a pi-family coding unit now runs
   `omp --print --no-session [--model <id>] [--thinking <level>] -- <prompt>`; when `pi` or its distribution host is
   also installed, those still win. omp has no `--permission-preset`, so no approval flag is passed (omp's default
@@ -170,6 +184,15 @@ All notable changes will be documented here.
   An A/B of the first tool call on 11 scenarios (Claude Haiku and Sonnet, 3 runs per arm) passed 33/33 on both the
   old and the new text. A first draft that also cut "a route set in an earlier turn runs on the previous model" and
   "OMH mirrors each todo_list write" lost passes and was restored.
+
+- **Seven vendor coding clients reviewed against OMH; model notes gain their catalog facts.** Codex CLI 0.169.1,
+  Claude Code 2.1.329, Gemini CLI 0.70.0, Qwen Code 0.28.0, Kimi CLI 1.52.0, ZCode 3.18.2 and DeepSeek Harness
+  (master 2e39e704) were each read at a pinned tag, commit or binary hash. The new `docs/VENDOR-HARNESS-REVIEW.md`
+  lists, per vendor, what OMH already does, what it adopts, and what it leaves out and why. Every client's
+  keep-going push stays out, because a measured +5,419 tokens per instance bought no extra passes. MODEL_OPTI.md
+  records each client's catalog where it adds a fact: GPT-6.2 Astra and Sol share one Codex prompt, Claude Code
+  aliases older ids on third-party clouds, and Gemini CLI has no Gemini 4 id yet. Five prompt gaps are listed as
+  follow-ups; this entry changes no prompt text.
 
 - **Gemini prices re-read ahead of Google's two increases.** Google's pricing page, re-read on 2026-11-18, still
   lists Gemini 4 Argon and Gemini 4 Carbon at $2 / $10 per million tokens through 2026-11-30 and $4 / $20 from
@@ -475,6 +498,26 @@ All notable changes will be documented here.
   rules out, a map written only before the server starts, a depth the settings loader bounds), and 4 controls whose
   bug also shows only with a file outside the hunk, so an over-cautious reviewer still loses hits. The corpus goes
   from 11 traps and 6 controls to 23 and 10.
+- **The OMH TUI's send-now key reaches a queued prompt with images.** A prompt with an image sent with Enter during a
+  turn queued (`⧗`) with no `ctrl+enter to send now` row under it, and Ctrl+Enter on the empty composer did nothing, so
+  the only way to send it before the turn ended was to retype it. Its queue row now names the send-now key, as Claude
+  Code's `Queued · ctrl+enter to send now` does, and the key (Ctrl+J too) stops the turn and sends the prompt with its
+  images as soon as it ends, the same cut-in Ctrl+Enter already made from the composer. It is never sent as a text-only
+  steer; a queued slash command or `!` line still waits its turn, and so does a second image prompt while one cut-in
+  waits.
+
+- **A parked dag node past its wake time stops spinning under the composer.** A node parked on a background process
+  or a CI run kept its spinner and `until 16:30` hours after 16:30, so a run whose wait was long over read as still
+  moving. Past its `wake_at` the node now reads `due`, with its time since it became due, and its detail row says
+  `due · waits for the parent · since 16:30` instead of the handle it no longer waits on. Its row stops turning, and
+  the layer row, the header and the box view count it `due`, not `parked`. Before its wake time nothing changes.
+
+- **The OMH TUI folds consecutive calls of one tool into one row.** Six `terminal` calls in a row used to take about
+  twenty rows: a rail, a command row and an output row each, two blank rows between them. They now read as one
+  `● terminal · 6 calls  3.1s` row with each call's command and time under it, so the commands stay readable while
+  what each printed waits for Ctrl+O, which unfolds the run into the calls' own rows. A call with an answer under it,
+  a diff or recalled records, or a failed or refused call keeps its own row; a call of another tool ends the run.
+  Resumed sessions fold the same way.
 
 ## 4.0.8 - 2026-11-15
 
