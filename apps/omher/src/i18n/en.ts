@@ -1442,6 +1442,12 @@ export const en = {
   "term.shellTip": "Your login shell in the folder below",
   "term.st.busy": "Printing output",
   "term.here": "New terminal here",
+  "term.shellPick": "Choose a shell",
+  "term.shellDefault": "default",
+  "term.shellDefaultOf": "{shell} (default)",
+  "term.shellMissing": "{shell} not found, opened the default shell",
+  "term.defaultShell": "Default shell",
+  "term.defaultShellHint": "What a new Shell terminal runs",
   // terminal links (omher://terminal/<id>)
   "tlink.copy": "Copy link",
   "tlink.copied": "Link copied",

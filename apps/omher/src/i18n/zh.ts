@@ -1440,6 +1440,12 @@ export const zh: Record<Key, string> = {
   "term.shellTip": "在下方文件夹中打开登录 shell",
   "term.st.busy": "正在输出",
   "term.here": "在此新建终端",
+  "term.shellPick": "选择 shell",
+  "term.shellDefault": "默认",
+  "term.shellDefaultOf": "{shell}（默认）",
+  "term.shellMissing": "未找到 {shell}，已打开默认 shell",
+  "term.defaultShell": "默认 shell",
+  "term.defaultShellHint": "新建 Shell 终端时运行的 shell",
   // terminal links (omher://terminal/<id>)
   "tlink.copy": "复制链接",
   "tlink.copied": "已复制链接",

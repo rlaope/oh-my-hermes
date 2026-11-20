@@ -27,6 +27,7 @@ import {
   type TermGpu,
   type TermSettings,
 } from "../../sessions/term/settings";
+import { useShells } from "../../sessions/newMenu";
 import { ANSI_NORMAL, TERM_THEMES, termThemePick, type TermTheme } from "../../sessions/term/themes";
 import { TermPreview } from "./TermPreview";
 
@@ -133,6 +134,10 @@ export function TerminalPage() {
   const kinds: Mode[] = slot === "light" ? ["light", "dark"] : ["dark", "light"];
   const pick = (id: string) => writeTermSettings(slot === "light" ? { themeLight: id } : { themeDark: id });
   const set = (patch: Partial<TermSettings>) => void writeTermSettings(patch);
+  // Default shell: this computer's shells; the default one is stored as "" (the login shell, as before)
+  const shells = useShells();
+  const shellDefault = shells?.find((s) => s.default) ?? shells?.[0];
+  const shellValue = shells?.some((s) => s.id === term.defaultShell) ? term.defaultShell : (shellDefault?.id ?? "");
   const using = rendererInUse();
   const rows = (n: number) => n.toLocaleString(locale());
 
@@ -238,6 +243,23 @@ export function TerminalPage() {
 
       <div className="st-gh">{t("term.more")}</div>
       <div className="st-grp">
+        {shells && shells.length > 0 && (
+          <Row title={t("term.defaultShell")} hints={[t("term.defaultShellHint")]} testId="term-default-shell-row">
+            <select
+              className="tm-font tm-shell"
+              aria-label={t("term.defaultShell")}
+              value={shellValue}
+              onChange={(e) => set({ defaultShell: e.target.value === shellDefault?.id ? "" : e.target.value })}
+              data-testid="term-default-shell"
+            >
+              {shells.map((s) => (
+                <option key={s.id} value={s.id} title={s.path}>
+                  {s.default ? t("term.shellDefaultOf", { shell: s.label }) : s.label}
+                </option>
+              ))}
+            </select>
+          </Row>
+        )}
         <Row title={t("term.scrollback")} hints={[t("term.scrollbackHint")]} testId="term-scrollback-row">
           <Seg
             small
