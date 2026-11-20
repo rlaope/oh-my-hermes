@@ -297,6 +297,8 @@ export type SessionStatus = "draft" | "starting" | "running" | "exited" | "faile
 
 export interface SessionRec {
   id: string;
+  /** The session's link id (`omher://terminal/<linkId>`, termLink.ts): drawn when it is made, kept across restarts. */
+  linkId?: string;
   agent: AgentId;
   cwd: string;
   /** ms since epoch */
@@ -429,6 +431,14 @@ export function termFallbackName(rec: Pick<SessionRec, "agent" | "fgAgent">, age
     return h.id === "generic" ? rec.fgAgent : h.label;
   }
   return isShell(rec.agent) ? t("term.shell") : agentLabel(rec.agent, agents);
+}
+
+/** A pane's name in the split's small drawings (Plans minimap, the row glyph's label): its title, but its folder's name
+ *  when nothing named it, so three bare shells read `web-app`, `api-server`, `docs` and not "Shell" three times (the
+ *  row already sits under its folder group). */
+export function splitPaneName(rec: Pick<SessionRec, "agent" | "fgAgent" | "cwd" | "title" | "agentTitle" | "promptTitle">, agents: AgentInfo[] | null | undefined): string {
+  const got = pickTitle(rec, termFallbackName(rec, agents));
+  return got.source === "folder" ? folderName(rec.cwd) || got.title : got.title;
 }
 
 /** The row's grey mono meta: the CLI's program name (`claude`, `codex`, `shell`). */

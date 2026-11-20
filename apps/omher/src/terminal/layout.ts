@@ -116,29 +116,81 @@ export function clampRatio(ratio: number, total: number, min: number): number {
   return Math.min(1 - lo, Math.max(lo, ratio));
 }
 
+/** Pane `a` and pane `b` trade places (a pane moved with ⌘⇧⌥arrows); the layout is unchanged when either is missing. */
+export function swapPanes(l: Layout, a: number, b: number): Layout {
+  const all = panesOf(l);
+  if (a === b || !all.includes(a) || !all.includes(b)) return l;
+  const go = (n: Layout): Layout => (isPane(n) ? (n.pane === a ? { pane: b } : n.pane === b ? { pane: a } : n) : { ...n, a: go(n.a), b: go(n.b) });
+  return go(l);
+}
+
+/** The pane after (1) or before (-1) `from` in reading order, wrapping; null with one pane. */
+export function stepPane(l: Layout, from: number, step: 1 | -1): number | null {
+  const all = panesOf(l);
+  const at = all.indexOf(from);
+  if (all.length < 2 || at < 0) return null;
+  return all[(at + step + all.length) % all.length];
+}
+
+/** A layout read back from storage, checked: at most MAX_PANES distinct whole-number panes, ratios kept in (0, 1).
+ *  Null when it is anything else. */
+export function parseLayout(v: unknown, depth = 0): Layout | null {
+  if (!v || typeof v !== "object" || Array.isArray(v) || depth > MAX_PANES) return null;
+  const o = v as Record<string, unknown>;
+  let out: Layout | null = null;
+  if ("pane" in o) out = typeof o.pane === "number" && Number.isInteger(o.pane) && o.pane >= 0 && o.pane < 1_000_000 ? { pane: o.pane } : null;
+  else if ((o.dir === "row" || o.dir === "col") && typeof o.ratio === "number" && Number.isFinite(o.ratio)) {
+    const a = parseLayout(o.a, depth + 1);
+    const b = parseLayout(o.b, depth + 1);
+    if (a && b) out = { dir: o.dir, ratio: Math.min(0.95, Math.max(0.05, o.ratio)), a, b };
+  }
+  if (!out || depth > 0) return out;
+  const all = panesOf(out);
+  return all.length <= MAX_PANES && new Set(all).size === all.length ? out : null;
+}
+
 type KeyLike = { key: string; code?: string; metaKey: boolean; ctrlKey: boolean; altKey: boolean; shiftKey: boolean };
 
 const isKey = (e: KeyLike, letter: string) => e.code === `Key${letter.toUpperCase()}` || e.key.toLowerCase() === letter;
 const ARROWS: Record<string, FocusDir> = { ArrowLeft: "left", ArrowRight: "right", ArrowUp: "up", ArrowDown: "down" };
+const isBracket = (e: KeyLike, side: "[" | "]") => e.code === (side === "]" ? "BracketRight" : "BracketLeft") || (!e.code && e.key === side);
+const isEqual = (e: KeyLike) => e.code === "Equal" || (!e.code && (e.key === "=" || e.key === "+"));
 
-export type PaneKey = { kind: "split"; dir: "right" | "down" } | { kind: "close" } | { kind: "focus"; dir: FocusDir };
+export type PaneKey =
+  | { kind: "split"; dir: "right" | "down" }
+  | { kind: "close" }
+  | { kind: "focus"; dir: FocusDir }
+  | { kind: "move"; dir: FocusDir }
+  | { kind: "step"; step: 1 | -1 }
+  | { kind: "zoom" }
+  | { kind: "equalize" };
 
-/** A pane key, or null. macOS: ⌘D split right, ⌘⇧D split down, ⌘W close the pane, ⌘⌥arrows move between panes.
- *  Elsewhere Ctrl+<key> in a terminal is the program's (Ctrl+D, Ctrl+W), so: Ctrl+Shift+D right, Alt+Shift+D down
- *  (Orca's), Ctrl+Shift+W close, Ctrl+Alt+arrows move. */
+/** A pane key, or null. macOS: ⌘D split right, ⌘⇧D split down, ⌘W close the pane, ⌘⌥arrows move between panes,
+ *  ⌘⇧⌥arrows move the pane itself, ⌘] / ⌘[ the next / previous pane, ⌘⇧↩ zoom the pane (again: back), ⌘⌃= even
+ *  them out. Elsewhere Ctrl+<key> in a terminal is the program's (Ctrl+D, Ctrl+W), so: Ctrl+Shift+D right,
+ *  Alt+Shift+D down (Orca's), Ctrl+Shift+W close, Ctrl+Alt+arrows move between, Ctrl+Alt+Shift+arrows move the pane,
+ *  Ctrl+Tab / Ctrl+Shift+Tab next / previous, Ctrl+Shift+Enter zoom, Ctrl+Alt+= even out. */
 export function paneKey(e: KeyLike, mac: boolean): PaneKey | null {
   const dir = ARROWS[e.key];
   if (mac) {
-    if (!e.metaKey || e.ctrlKey) return null;
-    if (dir && e.altKey && !e.shiftKey) return { kind: "focus", dir };
+    if (!e.metaKey) return null;
+    if (e.ctrlKey) return !e.altKey && !e.shiftKey && isEqual(e) ? { kind: "equalize" } : null;
+    if (dir && e.altKey) return { kind: e.shiftKey ? "move" : "focus", dir };
     if (e.altKey) return null;
     if (isKey(e, "d")) return { kind: "split", dir: e.shiftKey ? "down" : "right" };
-    if (isKey(e, "w") && !e.shiftKey) return { kind: "close" };
+    if (e.shiftKey && e.key === "Enter") return { kind: "zoom" };
+    if (e.shiftKey) return null;
+    if (isKey(e, "w")) return { kind: "close" };
+    if (isBracket(e, "]")) return { kind: "step", step: 1 };
+    if (isBracket(e, "[")) return { kind: "step", step: -1 };
     return null;
   }
   if (e.metaKey) return null;
-  if (dir && e.ctrlKey && e.altKey && !e.shiftKey) return { kind: "focus", dir };
+  if (dir && e.ctrlKey && e.altKey) return { kind: e.shiftKey ? "move" : "focus", dir };
+  if (e.ctrlKey && e.altKey && !e.shiftKey && isEqual(e)) return { kind: "equalize" };
+  if (e.key === "Tab" && e.ctrlKey && !e.altKey) return { kind: "step", step: e.shiftKey ? -1 : 1 };
   if (!e.shiftKey) return null;
+  if (e.key === "Enter" && e.ctrlKey && !e.altKey) return { kind: "zoom" };
   if (isKey(e, "d") && e.ctrlKey && !e.altKey) return { kind: "split", dir: "right" };
   if (isKey(e, "d") && e.altKey && !e.ctrlKey) return { kind: "split", dir: "down" };
   if (isKey(e, "w") && e.ctrlKey && !e.altKey) return { kind: "close" };

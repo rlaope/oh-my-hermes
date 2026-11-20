@@ -3,6 +3,8 @@ import { App } from "./app/App";
 import { BridgeGate } from "./app/BridgeGate";
 import { getSessions } from "./sessions/sessions";
 import { bootResume } from "./app/resumeBoot";
+import { startTermLinks } from "./sessions/termLinkOpen";
+import { startTermShare } from "./sessions/termShare";
 import { resolveTheme } from "./app/theme";
 import { readTheme } from "./state/store";
 import { learnThisHost } from "./terminal/host";
@@ -18,6 +20,10 @@ void learnThisHost();
 // Then put back what was open before omher last closed (an update restart, a quit, a crash); the sessions that
 // continue by themselves start once that reset is done.
 bootResume();
+// omher://terminal/<id> links opened from outside: the ones waiting, then each new one (after the list is back)
+startTermLinks();
+// the status files bots holding a terminal link read, and the requests they leave (shown as cards, typed only on Allow)
+startTermShare();
 createRoot(document.getElementById("root")!).render(
   <BridgeGate>
     <App />

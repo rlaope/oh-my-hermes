@@ -18,6 +18,30 @@ All notable changes will be documented here.
   its threads, the last one ending the tree; a new thread opens from the bot row's + on hover, its right-click menu, or
   `./thread`.
 
+- **omher: TERMINALS sessions split like Otty and Orca, and bots can follow a terminal by its link.**
+  - **Split.** A TERMINALS session splits right (⌘D) or down (⌘⇧D), up to four sessions in any nesting. Each split
+    picks a running terminal or starts a new Shell in the focused pane's folder. Pane keys: close ⌘W, move focus
+    ⌘⌥arrows, next/previous ⌘] ⌘[, move pane ⌘⇧⌥arrows, zoom ⌘⇧↩, even out ⌘⌃= (Ctrl-based keys on Windows and
+    Linux). Unfocused panes dim (Settings › Terminal › Dim unfocused panes, default 0.72, the bottom panel too).
+    Rows in the split show its shape, Plans shows a clickable minimap, and the split comes back after a restart
+    (paused panes show Resume). Bot chats never split. On macOS the menu's Close Window closes the focused pane, not
+    the window, while a split has the keyboard.
+  - **Link to a terminal.** Every TERMINALS session has a stable link, `omher://terminal/<id>`, that stays the same
+    across restarts. Copy it from the row menu or with ⌘⇧C (Alt+Shift+C on Windows and Linux). A message that holds
+    one shows an omher chip with that session's CLI mark, title and live state (working, waiting, done, ended), and a
+    click opens it. Opening the link from another app brings omher forward on that session.
+  - **Bots read a linked terminal and ask to type into it.** A bot that gets a terminal link, in omher or in Slack or
+    Discord, can read that session's title, CLI, folder, state and last line through the new OMH tool
+    `omh_omher_terminal`, and can ask omher to type a prompt into it. omher shows the request as a card on the
+    terminal (Deny, Allow once), and nothing is typed without the person's Allow. A message
+    in a bot's main chat that holds a terminal link carries that terminal's status to the bot. A bot's sidebar
+    preview shows a linked terminal's title instead of the raw link. Each prompt asks: every request has its own
+    card, and there is no allow-for-this-session, because the sender name on a request is what the local requesting
+    process wrote, not proof of which bot asked. A request to a paused or ended terminal shows its card
+    there with Deny and Resume and send, and an Allow that could not type keeps the card. Terminal sharing is off on
+    Windows (the owner-only file checks are POSIX): the tool answers that it is not available there, and Copy link
+    and the chip still work.
+
 - **The run summary shows how much of the prompt came from cache.** `omh_run_summary` adds a line after the token
   count, such as `Prompt cache: 62% of input read from cache (1,234,567 tokens)` (en/ko/ja/zh), and
   `breakdown.cache_read_share`. The share is cache reads over uncached input plus cache reads, which is how Hermes

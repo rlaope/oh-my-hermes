@@ -13,6 +13,7 @@ import {
   RECENT_MAX,
   recentFolders,
   rowModel,
+  splitPaneName,
   termActivity,
   terminalNote,
   tildePath,
@@ -250,5 +251,20 @@ describe("TERMINALS card second line", () => {
     expect(termActivity({ agent: "shell", fgAgent: "claude", lastLine: "Running tests…" })).toEqual({ cli: "claude", line: "Running tests…" });
     expect(termActivity({ agent: "codex", oscTitle: "codex: webhook retry" })).toEqual({ cli: "codex", line: "codex: webhook retry" });
     expect(termActivity({ agent: "codex" })).toEqual({ cli: "codex", line: "" });
+  });
+});
+
+describe("splitPaneName", () => {
+  const shell = (cwd: string, extra: Partial<SessionRec> = {}) => ({ agent: "shell" as const, cwd, ...extra });
+  it("names a bare shell by its folder, so three shells in a split read apart", () => {
+    expect(["/home/you/code/web-app", "/home/you/code/api-server", "/home/you/code/docs/"].map((c) => splitPaneName(shell(c), null))).toEqual(["web-app", "api-server", "docs"]);
+  });
+  it("keeps a name the person, the agent or the first prompt gave", () => {
+    expect(splitPaneName(shell("/w/a", { title: "deploy" }), null)).toBe("deploy");
+    expect(splitPaneName(shell("/w/a", { agentTitle: "Fix login" }), null)).toBe("Fix login");
+    expect(splitPaneName(shell("/w/a", { promptTitle: "add tests" }), null)).toBe("add tests");
+  });
+  it("falls back to the agent's name when the folder has none", () => {
+    expect(splitPaneName(shell(""), null)).toBe("Shell");
   });
 });

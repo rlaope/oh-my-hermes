@@ -15,6 +15,7 @@ import {
   readTermSettings,
   TERM_CONTRASTS,
   TERM_CURSORS,
+  TERM_DIM,
   TERM_FONT_SIZE,
   TERM_GPUS,
   TERM_LINE_HEIGHT,
@@ -212,6 +213,9 @@ export function TerminalPage() {
         </Row>
         <Row title={t("term.padding")} hints={[t("term.paddingHint")]}>
           <Stepper value={term.padding} min={TERM_PADDING.min} max={TERM_PADDING.max} step={2} label={t("term.padding")} onChange={(n) => set({ padding: Math.round(n) })} testId="term-padding" />
+        </Row>
+        <Row title={t("term.dim")} hints={[t("term.dimHint")]} testId="term-dim-row">
+          <Stepper value={term.dimUnfocused} min={TERM_DIM.min} max={TERM_DIM.max} step={0.04} label={t("term.dim")} onChange={(n) => set({ dimUnfocused: n })} testId="term-dim" />
         </Row>
       </div>
 

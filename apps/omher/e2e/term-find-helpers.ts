@@ -34,13 +34,17 @@ type Spy = { __opened: unknown[][]; __clipWrites: string[]; __clipText: string }
  *  Unset, the page reports the machine's own. */
 const PLATFORM = process.env.OMHER_E2E_PLATFORM || "";
 
+/** Make the page report OMHER_E2E_PLATFORM, when it is set (before the page loads). */
+export async function usePlatform(page: Page) {
+  if (!PLATFORM) return;
+  await page.addInitScript((p) => {
+    Object.defineProperty(navigator, "platform", { configurable: true, get: () => p });
+  }, PLATFORM);
+}
+
 /** The app on the mock host. `window.open` and the clipboard are stubs that record into window.__opened / __clipWrites. */
 export async function openApp(page: Page, o: OpenOpts = {}) {
-  if (PLATFORM) {
-    await page.addInitScript((p) => {
-      Object.defineProperty(navigator, "platform", { configurable: true, get: () => p });
-    }, PLATFORM);
-  }
+  await usePlatform(page);
   await page.addInitScript(
     ([theme, term, clip]) => {
       if (!sessionStorage.getItem("__kept")) {

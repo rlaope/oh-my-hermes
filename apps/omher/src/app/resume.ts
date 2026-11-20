@@ -5,6 +5,7 @@
 // chat, which omher draws itself). These functions are pure; resumeBoot.ts reads, writes and applies them.
 import type { PanelTabId } from "../state/store";
 import { continues, isAgentId, type AgentId } from "../sessions/agents";
+import { isLinkId } from "../sessions/termLink";
 
 export const RESUME_KEY = "omher.resume";
 export const RESUME_VERSION = 1;
@@ -25,6 +26,8 @@ export interface SavedMsg {
 
 export interface SavedSession {
   id: string;
+  /** Its link id (`omher://terminal/<linkId>`); a session saved before links existed has none and gets one back. */
+  linkId?: string;
   agent: AgentId;
   cwd: string;
   startedAt: number;
@@ -97,6 +100,7 @@ function parseSession(v: unknown): SavedSession | null {
     view: v.view === "terminal" ? "terminal" : "chat",
     running: v.running === true,
   };
+  if (isLinkId(v.linkId)) out.linkId = v.linkId;
   if (v.open === "chat" || v.open === "terminal") out.open = v.open;
   if (v.failed === true) out.failed = true;
   if (v.draft === true) {

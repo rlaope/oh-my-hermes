@@ -631,7 +631,8 @@ mod tests {
         std::fs::write(&rollout, "{}\n").unwrap();
         let mut codex = fake_codex(&tmp.join("bin"), &rollout, None);
         let pid = codex.id();
-        assert_eq!(Probe::default().agent(pid), Some("codex"));
+        // right after spawn the child can still be the forked test binary (Linux: before its exec of /bin/sh)
+        assert_eq!(wait_for(|| Probe::default().agent(pid).map(String::from)).as_deref(), Some("codex"));
         assert_eq!(wait_for(|| codex_conversation(pid, &home)).as_deref(), Some(id));
         // only the open files of that process count, and only in its own Codex home
         assert!(open_paths(pid).iter().any(|p| p.ends_with(format!("rollout-x-{id}.jsonl"))));

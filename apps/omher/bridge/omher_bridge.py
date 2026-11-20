@@ -4860,7 +4860,7 @@ def chat_messages(rows, watch_names: set[str] | frozenset[str] = frozenset(), ru
             steered = steered or row.get("display_kind") == "steer"
             if not text:
                 continue
-            text, reply = split_reply_block(split_peer_hint(split_thread_hint(text)))
+            text, reply = split_reply_block(split_term_links(split_peer_hint(split_thread_hint(text))))
         elif main and "omher-thread" in text:
             text = split_blocks(text)[2]
             if not text:
@@ -5055,6 +5055,85 @@ def peer_hint_wanted(text: str) -> bool:
 def split_peer_hint(text: str) -> str:
     """A user row sent with the peer note, back as what the person typed."""
     m = _PEER_HINT_TAIL.search(text or "")
+    return text[: m.start()].rstrip() if m else text
+
+
+# ---------------------------------------------------------------- omher terminal links in a main-chat message
+# A message the person sends to a bot's main chat that holds an omher terminal link (`omher://terminal/<id>`) gets one
+# `[omher]` block per linked terminal (at most TERM_LINK_MAX), read from the status file omher keeps for it
+# (`~/.omher/terminals/<id>.json`, src-tauri/src/term_share.rs): its title, CLI, folder, state and last printed line,
+# so the bot knows what the link points at without a tool. Only that file is read, never through a link and never
+# over 16 KB; a link to a terminal not on this computer says so. The block never shows back as the person's words.
+
+TERM_LINK_HEAD = "[omher] Terminal "
+TERM_LINK_TAIL = ("The omh_omher_terminal tool reads its status again or asks omher to type a prompt into it, "
+                  "which the user must allow in omher.")
+TERM_LINK_MAX = 3
+_TERM_LINK = re.compile(r"(?<![A-Za-z0-9])omher://terminal/([a-z2-7]{10})(?![A-Za-z0-9])")
+_TERM_STATUS_MAX = 16 * 1024
+
+
+def term_links(text: str) -> list[str]:
+    """The distinct terminal link ids in ``text``, in order, at most TERM_LINK_MAX."""
+    out: list[str] = []
+    for m in _TERM_LINK.finditer(text or ""):
+        if m.group(1) not in out:
+            out.append(m.group(1))
+    return out[:TERM_LINK_MAX]
+
+
+def read_term_status(omher_home: Path, lid: str) -> dict | None:
+    """``<omher_home>/terminals/<lid>.json`` as omher wrote it, or None (no such file, a link, too big, not JSON)."""
+    if not re.fullmatch(r"[a-z2-7]{10}", lid or ""):
+        return None
+    root = Path(omher_home) / "terminals"
+    path = root / f"{lid}.json"
+    if Path(omher_home).is_symlink() or root.is_symlink():
+        return None
+    try:
+        fd = os.open(path, os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0))
+    except OSError:
+        return None
+    with os.fdopen(fd, "rb") as handle:
+        raw = handle.read(_TERM_STATUS_MAX + 1)
+    if len(raw) > _TERM_STATUS_MAX:
+        return None
+    try:
+        data = json.loads(raw.decode("utf-8"))
+    except (UnicodeDecodeError, ValueError):
+        return None
+    return data if isinstance(data, dict) else None
+
+
+def term_link_block(lid: str, status: dict | None) -> str:
+    """The one block for terminal ``lid``: its status in one line, or that it is not on this computer."""
+    link = f"omher://terminal/{lid}"
+    if status is None:
+        return f"{TERM_LINK_HEAD}{link}: not open on this computer."
+    parts = [f"\"{_one_line(status.get('title') or '', 80) or 'untitled'}\""]
+    for key, label in (("agent", "CLI"), ("folder", "folder"), ("state", "state")):
+        v = _one_line(status.get(key) or "", 120)
+        if v:
+            parts.append(f"{label} {v}")
+    last = _one_line(status.get("last_line") or "", 200)
+    if last:
+        parts.append(f"last line: {last}")
+    return f"{TERM_LINK_HEAD}{link}: " + "; ".join(parts) + f". {TERM_LINK_TAIL}"
+
+
+def term_link_blocks(text: str, omher_home: Path) -> str:
+    """The blocks for the terminal links in ``text`` (\"\" when it holds none)."""
+    return "\n".join(term_link_block(lid, read_term_status(omher_home, lid)) for lid in term_links(text))
+
+
+_TERM_BLOCK_TAIL = re.compile(r"(?:\n+\[omher\] Terminal omher://terminal/[a-z2-7]{10}: [^\n]*)+\s*$")
+
+
+def split_term_links(text: str) -> str:
+    """A user row sent with terminal blocks, back as what the person typed (the blocks are last)."""
+    if not isinstance(text, str):
+        return text
+    m = _TERM_BLOCK_TAIL.search(text)
     return text[: m.start()].rstrip() if m else text
 
 
@@ -5951,6 +6030,10 @@ class Bridge:
             if ref is None:
                 raise BridgeError("bad_request", "that session has no thread to reply in")
             text = f"{text.rstrip()}\n\n{reply_block(*ref)}"
+        if chat is None:
+            blocks = await asyncio.to_thread(term_link_blocks, text, self.omher_home)
+            if blocks:
+                text = f"{text.rstrip()}\n\n{blocks}"
         if peer_hint_wanted(text):
             text = f"{text.rstrip()}\n\n{PEER_HINT}"
         if chat is None and conn.threads_shown:
