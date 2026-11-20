@@ -162,6 +162,7 @@ findable only by knowing its filename.
 | Opt-in multi-unit work campaigns for the `ulw-work` engine | [Work Campaigns](WORK-CAMPAIGN.md) |
 | Bounded feedback rounds over a closed design-direction set | [Design Direction Iterations](DESIGN-DIRECTION-ITERATIONS.md) |
 | Deterministic comparison of submitted cross-harness machine facts | [Cross-Harness Benchmark](CROSS_HARNESS_BENCHMARK.md) |
+| What the vendors' own coding clients (Codex, Claude Code, Gemini CLI, Qwen Code, Kimi CLI, ZCode, DeepSeek Harness) say, and which of it OMH adopts | [Vendor Harness Review](VENDOR-HARNESS-REVIEW.md) |
 | Freshness identity behind `omh goal checkpoint` and quality-evidence assessment | [Working-Tree Fingerprint](WORKING-TREE-FINGERPRINT.md) |
 | Provider-neutral input fidelity and per-attempt sync receipts for an optional memory provider | [Memory Sync Fidelity](MEMORY-SYNC-FIDELITY.md) |
 | Bounded retry/replan/stop/escalate decisions for an observed error | [Failure Mender](failure-mender.md) |
