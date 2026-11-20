@@ -608,6 +608,7 @@ _DEFINITIONS = [
             "Keep the practical small-loop recipe visible: test as stop signal, plan -> execute -> verify, one task at a time.",
             "Surface verification_gap, comprehension_debt, and cognitive_surrender as warnings before a loop starts looking self-steering.",
             "Before a loop launches, or when asked whether one will hold, load `references/loop-design-review.md`: a finish line written beside the fence of files the loop may not edit, a judge other than the builder, and the pre-launch failure check.",
+            "When a measured loop compares variants of code or config on branches (training runs, evals, sweeps), load `references/experiment-tree.md`: one fixed run command for every node, results freeze a node, a small fan of siblings per decision, then descend onto the winner.",
             "Session-bound host_observed resumable_goal plus explicit coding ownership prepares one executor goal. Otherwise use native `/goal` and `/goal gate add`. Never prepare two controllers.",
             "Ingest bounded snapshots via `omh loop goal-driver-observe`. External state guides recovery, not checkpoint decisions; native turns still require activation and contiguous same-session evidence.",
             "Treat ticks as preparation only. Advance one legal role phase through loop_phase_transition/v1 only after its named gate has observed evidence.",
@@ -692,6 +693,7 @@ _DEFINITIONS = [
                 "Keep the practical small-loop recipe visible: test as stop signal, plan -> execute -> verify, one task at a time.",
                 "Surface verification_gap, comprehension_debt, and cognitive_surrender as warnings before a loop starts looking self-steering.",
                 "Before a loop launches, or when asked whether one will hold, load `references/loop-design-review.md`: a finish line written beside the fence of files the loop may not edit, a judge other than the builder, and the pre-launch failure check.",
+                "When a measured loop compares variants of code or config on branches (training runs, evals, sweeps), load `references/experiment-tree.md`: one fixed run command for every node, results freeze a node, a small fan of siblings per decision, then descend onto the winner.",
                 "Use `omh loop assess`, `start`, `status`, `tick`, and `feedback` as local metadata control-plane commands. Execute authorized work through the current host. The default hermes_goal driver label is prepared metadata, not an available host goal controller. Do not invoke native /goal controls on another host.",
                 "Only an explicitly selected coding owner with a session-bound host_observed resumable_goal capability may use the external goal-driver CLI path. Otherwise keep a host-owned evidence ledger; report unavailable native goal activation rather than fabricating it.",
                 "Treat ticks as preparation only. Record host phase results separately; never manufacture native phase-transition evidence from a host task declaration.",
@@ -772,7 +774,8 @@ _DEFINITIONS = [
         portable_override_shadows={
             "do_not_use_when": "2ba0707196aad88775b85e179de7daf89d7d869c7ec67550ce4c233d88837318",
             # Re-plan rule added to both copies; shadow was 90edd0de before it.
-            "quality_bar": "05c421837f219879c36ad4d801b4fb0ff007c8530f9e17728498b732a4787658",
+            # experiment-tree pointer added to both copies; shadow was 05c42183 before it.
+            "quality_bar": "b6bbf8288a78912a146c53f02644e465b83b7d59e6db22b5b99a61c48d41084a",
             "expected_outputs": "780eec788fe069700b05a39880a50a3813715f50fcd6401cb6fe486f1750616d",
             "artifact_expectations": "a0b60b9744a8ba2ea968e39cb84e90f2bc7125aaa4f40cee0996c658eeddc7ff",
             "final_checklist": "0e74ac3a35cd511b7db3310dc8040cfd5340bef69e367ee912228348616aa2c4",
