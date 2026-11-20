@@ -26,10 +26,10 @@ next record. A surrogate pair split across two reads is joined and the text
 queued as UTF-8 bytes, the bytes `keys.KeyDecoder` reads on POSIX. As the
 reader only ever waits in WaitForSingleObject, `restore` stops it with its
 flag; cancelling its I/O (CancelIoEx, then CancelSynchronousIo on its thread)
-stays as a belt. A reader that outlives even that (both cancels refused while
-a flush left it waiting) is abandoned: the one batch it reads after `restore` goes
-back to the end of the console's input with WriteConsoleInputW, never into the
-TUI's queue, and the reader ends; the shell still gets that key. `read(timeout, wake)` waits on that queue
+stays as a belt. Any batch a read returns once `restore` has begun goes back
+to the end of the console's input with WriteConsoleInputW, never into the
+TUI's queue, and the reader ends: so a reader that outlives both cancels (a
+flush left it waiting and Windows refused them) still leaves the shell its key. `read(timeout, wake)` waits on that queue
 and ends early when the gateway's wake pipe holds a byte (PeekNamedPipe, which
 never consumes it) or the console's size changed: Windows has no SIGWINCH, so
 the size is polled at most every `RESIZE_POLL_SECONDS` inside the wait. A
@@ -246,7 +246,6 @@ class WindowsConsole:
         self._chunks: deque[bytes] = deque()
         self._eof = False
         self._stop = False
-        self._abandoned = False  # set by `restore` for a reader it could not stop: what it reads is put back
         self._reader: threading.Thread | None = None
         self._size: tuple[int, int] | None = None
         self._size_checked = 0.0
@@ -269,7 +268,7 @@ class WindowsConsole:
             kernel32.SetConsoleOutputCP(CP_UTF8)
             self._size = self._measure()
             self._size_checked = time.monotonic()
-            self._stop = self._abandoned = False
+            self._stop = False
             reader = threading.Thread(target=self._pump, name="omh-tui-console-input", daemon=True)
             reader.start()
             self._reader = reader  # only a started thread: `restore` joins it
@@ -382,10 +381,9 @@ class WindowsConsole:
                     return
                 self._end()
                 return
-            if self._abandoned:  # `restore` returned while this read waited: the records are the shell's
+            if self._stop:  # `restore` began while this read ran: the console is going back to the shell, so are these
                 kernel32.WriteConsoleInputW(self._input, records, count.value, ctypes.c_uint32(0))
                 return
-            # Queued even if `restore` began meanwhile (it has not returned): these keys were typed for the TUI.
             units = record_units(records[: count.value])
             if high is not None:
                 units.insert(0, high)
@@ -412,8 +410,7 @@ class WindowsConsole:
         if reader.is_alive():  # CancelIoEx did not release it: cancel the I/O the thread itself waits in
             self._cancel_thread_io(reader)
             reader.join(STOP_JOIN_SECONDS)
-        if reader.is_alive():  # neither cancel took: the console is the shell's now, so is anything it reads
-            self._abandoned = True
+        # A reader neither cancel took is left behind: `_stop` makes it give what it reads back to the console.
 
     def _cancel_thread_io(self, reader: threading.Thread) -> None:
         kernel32 = self._kernel32
