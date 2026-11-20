@@ -825,7 +825,10 @@ and OMH treats them alike; the next section names what differs for Sol.
   - Review focus: a fanout unit may declare `review_focus` (one sentence,
     at most 150 UTF-8 bytes: the worst-case unit with the longest ASCII
     reproduction command renders 7,800 B without one, and 7,996 B with a
-    150-byte focus, under the 8,000-byte ceiling). The unit section states it right after
+    150-byte focus). The assembler also fits it to the bytes left, so it
+    never takes a prompt that is under the 8,000-byte ceiling over it; the
+    g62 re-verify found an input (7,805 B) where the fixed bound alone did.
+    The unit section states it right after
     the numbered criteria ("tell Codex what you'll look for when you
     review"). When it is absent, no focus block is added; the
     shared-machine line is the only byte every unit prompt gains.

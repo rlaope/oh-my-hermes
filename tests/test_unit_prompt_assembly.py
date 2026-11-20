@@ -414,6 +414,65 @@ class PromptCeilingTests(unittest.TestCase):
                         self.assertIn("unit.review_focus", assembled.names())
                         self.assertLessEqual(assembled.size_bytes, UNIT_PROMPT_MAX_BYTES)
 
+    def test_a_review_focus_never_tips_a_prompt_over_the_ceiling(self) -> None:
+        # The g62 re-verifier's counterexample: a 218-char ASCII reproduction command plus a one-range input budget
+        # renders 7,805 B with no focus, and a valid 150-byte focus took it to 8,001 B. The focus now yields to the
+        # bytes left, so the invariant is size(with) <= max(ceiling, size(without)) for every input, and a prompt
+        # already over the ceiling without a focus is exactly what it would be without one.
+        def render(command: str, focus: str | None, budget: bool) -> AssembledPrompt:
+            stated: dict[str, object] = {"unit_id": "target", "title": "Show a test failure",
+                                         "file_scope": ["src/target/"], "kind": "reproduction",
+                                         "reproduction_command": command}
+            if budget:
+                stated["input_budget"] = {"chars": 1000, "tokens": 250, "source_ranges": [
+                    {"source": "src/target/parser.py", "span": "public parser"}]}
+            frozen = build_fanout_contract(GOAL * 3, [stated])["units"][0]
+            unit = _worst_case_unit("deepseek-v4.1-flash", "deepseek")
+            unit.update({key: frozen[key] for key in
+                         ("kind", "reproduction_command", "integration_checks", "input_budget") if key in frozen})
+            if focus is not None:
+                unit["review_focus"] = focus
+            return assemble_unit_prompt(unit, GOAL * 3, route=unit["handoff"]["model_route"],  # type: ignore[index]
+                                        binding=_WORST_BINDING, discovery=_WORST_DISCOVERY)
+
+        tipped = cut = dropped = 0
+        for length in range(6, MAX_UNIT_VERIFICATION_COMMAND_CHARS + 1, 4):
+            for budget in (False, True):
+                command = "echo " + "x" * (length - 5)
+                without = render(command, None, budget)
+                for focus in ("x" * MAX_UNIT_REVIEW_FOCUS_BYTES, "가" * (MAX_UNIT_REVIEW_FOCUS_BYTES // 3), "short"):
+                    with_focus = render(command, focus, budget)
+                    with self.subTest(length=length, budget=budget, focus=focus[:3]):
+                        self.assertLessEqual(with_focus.size_bytes, max(UNIT_PROMPT_MAX_BYTES, without.size_bytes))
+                        if without.size_bytes > UNIT_PROMPT_MAX_BYTES:
+                            self.assertEqual(with_focus.text, without.text)
+                    if "unit.review_focus" not in with_focus.names():
+                        dropped += 1
+                    elif not with_focus.text.count(focus):
+                        cut += 1
+                    tipped += without.size_bytes <= UNIT_PROMPT_MAX_BYTES < with_focus.size_bytes
+        self.assertEqual(tipped, 0)
+        # The counterexample's shape: a prompt just under the ceiling without a focus, where the whole focus would
+        # cross it. The focus survives, cut to the bytes left, and ends in an ellipsis.
+        near = next(length for length in range(MAX_UNIT_VERIFICATION_COMMAND_CHARS, 5, -1)
+                    if render("echo " + "x" * (length - 5), None, True).size_bytes
+                    <= UNIT_PROMPT_MAX_BYTES - 60)
+        command = "echo " + "x" * (near - 5)
+        self.assertGreater(render(command, None, True).size_bytes + 46 + MAX_UNIT_REVIEW_FOCUS_BYTES,
+                           UNIT_PROMPT_MAX_BYTES)
+        fitted = render(command, "x" * MAX_UNIT_REVIEW_FOCUS_BYTES, True)
+        self.assertLessEqual(fitted.size_bytes, UNIT_PROMPT_MAX_BYTES)
+        block = next(block for block in fitted.blocks if block.base_name == "unit.review_focus")
+        self.assertTrue(block.text.endswith("\u2026"))
+        self.assertGreater(cut, 0)
+
+    def test_a_review_focus_that_fits_is_left_untouched(self) -> None:
+        unit = {**_worst_case_unit("deepseek-v4.1-flash", "deepseek"), "review_focus": "가나다 keeps its redirect"}
+        assembled = assemble_unit_prompt(unit, GOAL * 3, route=unit["handoff"]["model_route"],  # type: ignore[index]
+                                         binding=_WORST_BINDING, discovery=_WORST_DISCOVERY)
+        self.assertLessEqual(assembled.size_bytes, UNIT_PROMPT_MAX_BYTES)
+        self.assertIn("Review focus (what the reviewer will check): 가나다 keeps its redirect\n", assembled.text)
+
     def test_each_redispatch_section_stays_under_its_derived_ceiling(self) -> None:
         unit = _worst_case_unit("claude-fable-5-2", "claude")
         route = unit["handoff"]["model_route"]  # type: ignore[index]
