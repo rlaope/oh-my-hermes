@@ -561,6 +561,9 @@ class MixtureCategoryProjectionTest(unittest.TestCase):
         # Catalog sync, 2026-11-13: Gemini 4 Hydrogen's own card, cached
         # input a twentieth of input (aistudio.google.com/docs/pricing).
         "gemini-4-hydrogen": (1.5, 7.5, 0.075),
+        # Catalog sync, 2026-11-20: Gemini 4 Neon's own card, cached input a
+        # twentieth of input (aistudio.google.com/docs/pricing).
+        "gemini-4-neon": (3.0, 15.0, 0.15),
     }
 
     def test_catalog_sync_rows_cost_out_at_the_vendor_list_price(self):
@@ -618,6 +621,7 @@ class MixtureCategoryProjectionTest(unittest.TestCase):
             "glm-5.3-flashx": "zai",
             "gemini-4-carbon": "gemini",
             "gemini-4-hydrogen": "google",
+            "gemini-4-neon": "google",
         }
         for model_id, family in mapped.items():
             with self.subTest(model_id=model_id):
