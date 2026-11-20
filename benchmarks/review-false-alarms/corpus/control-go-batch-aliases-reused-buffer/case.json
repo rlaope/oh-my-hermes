@@ -1,0 +1,11 @@
+{
+  "id": "control-go-batch-aliases-reused-buffer",
+  "kind": "control",
+  "language": "go",
+  "expected": "bug",
+  "bug_location": {
+    "path": "internal/ingest/batch.go",
+    "line": 17
+  },
+  "why": "Add now keeps the caller's slice as the pending batch when nothing is pending, instead of copying it. The only caller, Ingest in internal/ingest/ingest.go, reuses one buffer for every read (buf = buf[:0]) and only flushes every 500 records, so the next read overwrites the records the batcher is holding: rows are duplicated and earlier ones lost before Flush writes them."
+}

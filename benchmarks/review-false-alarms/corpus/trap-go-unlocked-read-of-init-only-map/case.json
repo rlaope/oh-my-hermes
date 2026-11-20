@@ -1,0 +1,7 @@
+{
+  "id": "trap-go-unlocked-read-of-init-only-map",
+  "kind": "trap",
+  "language": "go",
+  "expected": "clean",
+  "why": "ServeHTTP now reads s.aliases with no lock while the same struct guards hits with a mutex, which looks like a data race. aliases is only written by LoadAliases, and its only caller, cmd/server/main.go, runs it before http.ListenAndServe starts any request goroutine. After that the map is only read, and concurrent map reads are safe."
+}

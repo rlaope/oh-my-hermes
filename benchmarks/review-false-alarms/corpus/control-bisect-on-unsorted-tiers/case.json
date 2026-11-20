@@ -1,0 +1,11 @@
+{
+  "id": "control-bisect-on-unsorted-tiers",
+  "kind": "control",
+  "language": "python",
+  "expected": "bug",
+  "bug_location": {
+    "path": "app/prices.py",
+    "line": 7
+  },
+  "why": "price_for bisects the tier thresholds, which is only right for a list sorted by min_quantity. Its caller app/quote.py passes catalog.load_tiers(), which keeps the order of data/tiers.json, and that file lists the tiers largest first. bisect_right on [100, 10, 1] picks the wrong tier for most quantities."
+}

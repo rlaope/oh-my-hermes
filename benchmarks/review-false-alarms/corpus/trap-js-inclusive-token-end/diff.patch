@@ -1,0 +1,13 @@
+--- a/web/highlight.js
++++ b/web/highlight.js
+@@ -11,8 +11,8 @@
+   for (const token of tokenize(text)) {
+     if (!wanted.has(token.text)) continue;
+     out += escapeHtml(text.slice(cursor, token.start));
+-    out += "<mark>" + escapeHtml(token.text) + "</mark>";
+-    cursor = token.start + token.text.length;
++    out += "<mark>" + escapeHtml(text.slice(token.start, token.end + 1)) + "</mark>";
++    cursor = token.end + 1;
+   }
+   return out + escapeHtml(text.slice(cursor));
+ }

@@ -7119,7 +7119,8 @@ def awareness_primer_payload() -> dict[str, object]:
             "sets no language, use the one the user wrote in. OMH shapes structure and content only; "
             "these lines and OMH's record terms are never quoted to the user unless they ask. "
             "Write like a person who did the work: result first, no chatbot openers or closers, "
-            "staged contrasts, or decoration."
+            "staged contrasts, or decoration. A message the user sends mid-turn gets one line, before "
+            "your next tool call: what you took from it and what changes."
         ),
         "lanes": lanes,
         "workflow_context_cards": workflow_context_cards(),

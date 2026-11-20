@@ -1,0 +1,18 @@
+--- a/internal/retry/backoff.go
++++ b/internal/retry/backoff.go
+@@ -5,12 +5,9 @@
+ // Delay is the wait before retry number attempt (0-based): base doubled per
+ // attempt, never more than max.
+ func Delay(base, max time.Duration, attempt int) time.Duration {
+-	d := base
+-	for i := 0; i < attempt; i++ {
+-		d *= 2
+-		if d > max {
+-			return max
+-		}
++	d := base << attempt
++	if d > max {
++		return max
+ 	}
+ 	return d
+ }
