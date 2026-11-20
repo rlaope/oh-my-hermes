@@ -27,8 +27,9 @@ import {
   type TermGpu,
   type TermSettings,
 } from "../../sessions/term/settings";
-import { ANSI_NORMAL, TERM_THEMES, termThemePick, type TermTheme } from "../../sessions/term/themes";
+import { ANSI_NORMAL, CUSTOM_THEME_ID, customTermTheme, TERM_THEMES, termThemePick, type TermTheme } from "../../sessions/term/themes";
 import { TermPreview } from "./TermPreview";
+import { TermImport, type ImportCandidate } from "./TermImport";
 
 type Mode = "dark" | "light";
 
@@ -125,6 +126,10 @@ export function TerminalPage() {
   useEffect(() => setSlot(appMode), [appMode]);
   const [q, setQ] = useState("");
   const [font, setFont] = useState(term.fontFamily);
+  useEffect(() => setFont(term.fontFamily), [term.fontFamily]);
+  // a profile being looked at in Import from…: the preview shows it until Use or Cancel
+  const [candidate, setCandidate] = useState<ImportCandidate>(null);
+  const mine = term.custom ? customTermTheme(term.custom) : null;
 
   const picked = termThemePick(slot, term);
   const needle = compact(q);
@@ -139,7 +144,7 @@ export function TerminalPage() {
   return (
     <div className="st-page st-wide tm" data-testid="term-settings">
       <div className="st-gh st-gh0">{t("term.theme")}</div>
-      <TermPreview theme={picked} settings={term} />
+      <TermPreview theme={candidate?.theme ?? picked} settings={candidate?.settings ?? term} />
       <div className="tm-bar">
         <div className="tm-slot">
           <Seg
@@ -151,9 +156,20 @@ export function TerminalPage() {
             testId="term-slot"
           />
         </div>
-        <input type="search" className="bots-q tm-q" placeholder={t("term.find")} aria-label={t("term.find")} value={q} onChange={(e) => setQ(e.target.value)} data-testid="term-search" />
+        <div className="tm-bar-r">
+          <input type="search" className="bots-q tm-q" placeholder={t("term.find")} aria-label={t("term.find")} value={q} onChange={(e) => setQ(e.target.value)} data-testid="term-search" />
+          {isMac() && <TermImport settings={term} slot={slot} onCandidate={setCandidate} />}
+        </div>
       </div>
       <div className="tm-list" role="radiogroup" aria-label={t(SLOT[slot])} data-testid="term-themes">
+        {mine && (!needle || compact(mine.name).includes(needle)) && (
+          <div data-testid="term-themes-custom">
+            <div className="tm-gh">{t("term.yours")}</div>
+            <div className="tm-grid">
+              <ThemeRow theme={mine} on={picked.id === CUSTOM_THEME_ID} onPick={() => pick(CUSTOM_THEME_ID)} />
+            </div>
+          </div>
+        )}
         {kinds.map((kind) => {
           const list = shown.filter((th) => th.kind === kind);
           if (!list.length) return null;
@@ -168,7 +184,7 @@ export function TerminalPage() {
             </div>
           );
         })}
-        {shown.length === 0 && (
+        {shown.length === 0 && !(mine && compact(mine.name).includes(needle)) && (
           <div className="tm-none" data-testid="term-themes-none">
             {t("term.noMatch", { q: q.trim() })}
           </div>

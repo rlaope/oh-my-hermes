@@ -2,7 +2,7 @@
 // the person's pick for the app theme in force (Settings), else omher's own. omher's two come first; the rest are
 // Orca's palettes, carried over by scripts/import-orca-themes.mjs into themes-orca.ts.
 import type { ITheme } from "@xterm/xterm";
-import type { TermSettings } from "./settings";
+import type { TermCustomTheme, TermSettings } from "./settings";
 import { ORCA_TERM_THEMES } from "./themes-orca";
 
 export interface TermTheme {
@@ -77,9 +77,26 @@ export const ANSI_BRIGHT = ["brightBlack", "brightRed", "brightGreen", "brightYe
 
 export const termThemeById = (id: string): TermTheme | undefined => TERM_THEMES.find((t) => t.id === id);
 
+/** The id the person's own theme (Settings › Terminal › Import from…) is picked by. */
+export const CUSTOM_THEME_ID = "custom";
+
+/** The person's own theme as a catalog entry: a slot it leaves out takes omher's own colour of its kind (dark or
+ *  light, read from its background); the cursor's text is the background. */
+export function customTermTheme(c: TermCustomTheme): TermTheme {
+  const kind = isLightBackground(c.colors.background ?? "#000000") ? "light" : "dark";
+  const base = kind === "light" ? OMHER_LIGHT : OMHER_DARK;
+  const theme: ITheme = { ...base, ...c.colors };
+  if (!c.colors.cursorAccent) theme.cursorAccent = theme.background;
+  // an imported selection is opaque; the inactive one is it, fainter
+  if (c.colors.selectionBackground) theme.selectionInactiveBackground = `${c.colors.selectionBackground}99`;
+  return { id: CUSTOM_THEME_ID, name: c.name, kind, theme };
+}
+
 /** The catalog entry a terminal uses under app theme `mode`: the pick for that mode, else omher's own for it. */
 export function termThemePick(mode: "dark" | "light", s: TermSettings): TermTheme {
-  const picked = termThemeById(mode === "light" ? s.themeLight : s.themeDark);
+  const id = mode === "light" ? s.themeLight : s.themeDark;
+  if (id === CUSTOM_THEME_ID && s.custom) return customTermTheme(s.custom);
+  const picked = termThemeById(id);
   return picked ?? termThemeById(mode === "light" ? "omher-light" : "omher-dark")!;
 }
 
