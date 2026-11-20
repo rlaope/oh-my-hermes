@@ -1,0 +1,14 @@
+--- a/internal/order/parse.go
++++ b/internal/order/parse.go
+@@ -16,10 +16,7 @@
+ 	if m == nil {
+ 		return Line{}, fmt.Errorf("order line %q: want SKU x QUANTITY", text)
+ 	}
+-	quantity, err := strconv.Atoi(m[2])
+-	if err != nil {
+-		return Line{}, fmt.Errorf("order line %q: %w", text, err)
+-	}
++	quantity, _ := strconv.Atoi(m[2])
+ 	if quantity == 0 {
+ 		return Line{}, fmt.Errorf("order line %q: quantity must be positive", text)
+ 	}

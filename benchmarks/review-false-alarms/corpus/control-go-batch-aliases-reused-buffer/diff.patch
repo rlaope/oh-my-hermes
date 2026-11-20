@@ -1,0 +1,13 @@
+--- a/internal/ingest/batch.go
++++ b/internal/ingest/batch.go
+@@ -13,6 +13,10 @@
+ func NewBatcher(write func([]Record) error) *Batcher { return &Batcher{write: write} }
+ 
+ func (b *Batcher) Add(records []Record) {
++	if len(b.pending) == 0 {
++		b.pending = records
++		return
++	}
+ 	b.pending = append(b.pending, records...)
+ }
+ 

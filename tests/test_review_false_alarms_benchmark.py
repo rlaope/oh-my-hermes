@@ -88,8 +88,8 @@ class CorpusSchemaTests(unittest.TestCase):
 
     def test_corpus_has_the_minimum_traps_and_controls(self) -> None:
         kinds = [case.kind for case in self.cases.values()]
-        self.assertGreaterEqual(kinds.count("trap"), 10)
-        self.assertGreaterEqual(kinds.count("control"), 5)
+        self.assertGreaterEqual(kinds.count("trap"), 23)
+        self.assertGreaterEqual(kinds.count("control"), 10)
 
     def test_every_case_directory_has_exactly_the_three_entries(self) -> None:
         for directory in sorted(path for path in CORPUS.iterdir() if path.is_dir()):
@@ -309,8 +309,8 @@ class ReportTests(unittest.TestCase):
 
     def test_summary_numbers_on_the_fixture(self) -> None:
         on, off = self.summary["omh-on"], self.summary["omh-off"]
-        self.assertEqual((on["false_alarms"], on["trap_runs"], on["hits"], on["control_runs"]), (1, 33, 17, 18))
-        self.assertEqual((off["false_alarms"], off["trap_runs"], off["hits"], off["control_runs"]), (12, 33, 14, 18))
+        self.assertEqual((on["false_alarms"], on["trap_runs"], on["hits"], on["control_runs"]), (1, 69, 29, 30))
+        self.assertEqual((off["false_alarms"], off["trap_runs"], off["hits"], off["control_runs"]), (12, 69, 26, 30))
         self.assertEqual((on["no_verdict"], off["no_verdict"], off["miss_location"]), (2, 2, 2))
         self.assertEqual(off["flips"]["control-page-slice-drops-last"], 2)
         self.assertEqual(off["flips"]["trap-eval-on-literal-table"], 0)
@@ -318,8 +318,8 @@ class ReportTests(unittest.TestCase):
 
     def test_markdown_table_prints_both_rates_on_every_arm_row(self) -> None:
         table = report.markdown_table(self.summary)
-        self.assertIn("| omh-on | 1/33 (3.0%) | 17/18 (94.4%) | 2 (traps 1, controls 1) | 0 | 3 | 4 |", table)
-        self.assertIn("| omh-off | 12/33 (36.4%) | 14/18 (77.8%) | 2 (traps 1, controls 1) | 2 | 8 | 11 |", table)
+        self.assertIn("| omh-on | 1/69 (1.4%) | 29/30 (96.7%) | 2 (traps 1, controls 1) | 0 | 3 | 4 |", table)
+        self.assertIn("| omh-off | 12/69 (17.4%) | 26/30 (86.7%) | 2 (traps 1, controls 1) | 2 | 8 | 11 |", table)
         self.assertTrue(table.endswith("Win rule: omh-on wins: fewer false alarms, hit rate held"))
 
     def test_win_rule_is_two_sided(self) -> None:

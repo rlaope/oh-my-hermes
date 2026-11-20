@@ -1,0 +1,10 @@
+--- a/web/errors.js
++++ b/web/errors.js
+@@ -1,3 +1,6 @@
+ export function describeError(source, error) {
+-  return `${error.message} at ${error.span.start}\n${source}`;
++  const { span } = error;
++  const bad = source.slice(span.start, span.end + 1);
++  const caret = " ".repeat(span.start) + "^".repeat(span.end - span.start + 1);
++  return `${error.message}: "${bad}"\n${source}\n${caret}`;
+ }

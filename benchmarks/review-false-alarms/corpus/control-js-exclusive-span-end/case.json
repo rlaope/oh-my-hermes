@@ -1,0 +1,11 @@
+{
+  "id": "control-js-exclusive-span-end",
+  "kind": "control",
+  "language": "javascript",
+  "expected": "bug",
+  "bug_location": {
+    "path": "web/errors.js",
+    "line": 3
+  },
+  "why": "The new underline takes source.slice(span.start, span.end + 1) and draws span.end - span.start + 1 carets. web/parser.js documents span.end as exclusive (one past the last character, like String.prototype.slice), and web/parser.test.js pins it, so both take one character too many: the quoted text and the carets run past the bad token."
+}

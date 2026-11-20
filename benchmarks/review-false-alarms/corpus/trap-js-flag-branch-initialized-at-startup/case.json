@@ -1,0 +1,7 @@
+{
+  "id": "trap-js-flag-branch-initialized-at-startup",
+  "kind": "trap",
+  "language": "javascript",
+  "expected": "clean",
+  "why": "The new branch calls splitter.plan while splitter starts as null, which reads as a TypeError. initCheckout creates the splitter whenever flags.splitPayments is on, and web/server.js calls initCheckout once with the same config before the server listens. web/config.js deep-freezes that config, so the flag cannot turn on later without a splitter. config/test.json sets the flag, so the branch is the tested path, not a dead one."
+}

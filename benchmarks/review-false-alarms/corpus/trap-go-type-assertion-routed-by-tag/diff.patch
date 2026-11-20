@@ -1,0 +1,31 @@
+--- a/internal/events/handlers.go
++++ b/internal/events/handlers.go
+@@ -1,7 +1,18 @@
+ package events
++
++import "fmt"
+ 
+ func handleOrder(l *Ledger, ev Event) error {
+ 	order := ev.Payload.(*Order)
+ 	l.Add(order.Account, order.AmountCents)
+ 	return nil
+ }
++
++func handleRefund(l *Ledger, ev Event) error {
++	refund := ev.Payload.(*Refund)
++	if refund.AmountCents <= 0 {
++		return fmt.Errorf("refund %s: amount must be positive", refund.ID)
++	}
++	l.Add(refund.Account, -refund.AmountCents)
++	return nil
++}
+--- a/internal/events/dispatch.go
++++ b/internal/events/dispatch.go
+@@ -4,6 +4,7 @@
+ 
+ var handlers = map[string]func(*Ledger, Event) error{
+ 	"order":  handleOrder,
++	"refund": handleRefund,
+ }
+ 
+ func Dispatch(l *Ledger, ev Event) error {
