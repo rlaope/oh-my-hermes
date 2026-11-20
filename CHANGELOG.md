@@ -4,6 +4,8 @@ All notable changes will be documented here.
 
 ## Unreleased
 
+## 4.0.9 - 2026-11-20
+
 - **Codex units can write inside the fanout fence on Linux and macOS.** `codex exec` is read-only by default, and
   `workspace-write` cannot start Codex's own sandbox inside an enforced bwrap or sandbox-exec fence, so every write
   a codex unit tried was refused. When the fence is enforced with one of those backends, the codex argv now gets
@@ -82,6 +84,13 @@ All notable changes will be documented here.
   make the changes here, one after another, not as a dag-ulw graph. One bug's symptoms, one feature's fields, a list
   of questions, an errand list with a single code word, and work the request itself splits keep their routes.
 
+- **A dag-ulw node can say what the parent will look for in its work.** A node takes an optional `review_focus`, one
+  line of up to 400 characters such as "the 24px toolbar icon is still recognizable". The node's task shows it right
+  after the prompt, and a verify node's task lists each producer's focus so the verifier judges the same things. A
+  build node that writes code without one gets a `no_review_focus` lint, which is advice only. Every build node with a
+  write scope is also told that other agents share the machine: run only the builds and tests it needs at once, and
+  before it stops, stop the background jobs it started and remove the temporary files it created.
+
 - **A dag-ulw node that writes files is told to commit only its own paths.** Its task text now says to stage the
   paths in its SCOPE by name and never to run `git add -A`, `git add .`, `git commit -a` or `git stash`, so parallel
   nodes in one checkout stop committing each other's work. Verify, review and read-only nodes get no such line. This
@@ -93,6 +102,14 @@ All notable changes will be documented here.
   applies) and writes stay fenced by the worktree and fan-out confinement as for every host. Model discovery also reads
   `~/.omp/agent/sessions`. omp keeps its sign-in in a SQLite store, so its login marker reads `absent`; that does not
   block dispatch.
+
+- **Five skills take guidance from OpenAI's "Prompting GPT-6.2 in Codex" guide.** `visual-qa` and `frontend` judge
+  a capture against the reference at the size people will see it (the real viewport, a 24 px toolbar icon), not only a
+  large render, and exercise an interactive result with the actions it supports before a verdict. `app-debugging` sizes
+  effort to the investigation: a quick survey at medium, one cause traced across systems at high (`deep`), several
+  interacting causes at xhigh (`forensics`), and says what counts as finished. `agent-instructions` keeps a line only
+  when an agent cannot infer it from the code, tests or docs, and leaves routine how-to out. `dag-ulw` briefs each
+  node like a colleague who knows the project and gives build nodes a `review_focus`.
 
 - **Hermes Bug Hunter: code review keeps only findings it can show, and every review says what it did not check.**
   `code-review`'s finding validation gains a drop gate: a candidate stays out of the findings when it cannot be traced

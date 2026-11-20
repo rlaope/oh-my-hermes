@@ -88,8 +88,11 @@ DEFINITION = SkillDefinition(
         "`deep` or `deep-work` is a routing failure. A `role=review` node takes category `review` where your routes serve it; a "
         "`role=baseline` node stays `quick` or `unspecified-low`; a `role=verify` node judges the run goal and "
         "baseline exemptions, so climb the ladder for it; it is not the `ultrabrain` node.",
-        "Write every node prompt self-contained, in order: TASK, DELIVERABLE, SCOPE (what it may read and write), "
-        "VERIFY (the literal command and expected result), STOP WHEN.",
+        # OpenAI "Prompting GPT-6.2 in Codex" (read 2026-11-20): brief like a colleague, say what you'll look for.
+        "Write every node prompt self-contained, as you would brief a colleague who knows the project but not this "
+        "conversation, in order: TASK, DELIVERABLE, SCOPE (what it may read and write), "
+        "VERIFY (the literal command and expected result), STOP WHEN. Give a build node `review_focus`: what you "
+        "will look for when you read its work.",
         "`depends_on` only orders nodes; data moves through the handoff files `omh_dag` names, never through "
         "the parent's memory.",
         "Before full-suite verification, run a `baseline` node before changes and record in its handoff each "
