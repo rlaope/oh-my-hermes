@@ -94,6 +94,16 @@ def add_top_level_options(parser: argparse.ArgumentParser) -> None:
         metavar="NAME",
         help="Bare launch only: open a new session that starts with OMH's guided NAME conversation (model-setup).",
     )
+    # Not a Hermes flag either: it only stops this launch from reopening the session this terminal dropped
+    # (`_claim_dropped_session`). `store_const` so it is None when absent, as `run_command`'s refusal reads it.
+    parser.add_argument(
+        "--new",
+        dest="tui_new",
+        action="store_const",
+        const=True,
+        default=None,
+        help="Bare launch only: open a new session even when this terminal dropped one that would reopen by itself.",
+    )
 
 
 _TUI_PASSTHROUGH_OPTIONS: tuple[tuple[str, str], ...] = (
@@ -101,6 +111,7 @@ _TUI_PASSTHROUGH_OPTIONS: tuple[tuple[str, str], ...] = (
     ("tui_continue", "--continue"),
     ("tui_profile", "--profile"),
     ("tui_onboard", "--onboard"),
+    ("tui_new", "--new"),
 )
 
 
@@ -140,11 +151,19 @@ def run_bare_launch(args: argparse.Namespace) -> int:
     """Open the terminal for a bare launch; the welcome text when there is nothing to launch.
 
     `--onboard` opens a new session, so it is refused beside `--resume` or `--continue`, which open an old one.
+    `--new` only says not to reopen a dropped session, so it is refused beside any of the three.
     """
     if getattr(args, "tui_onboard", None) and (
         getattr(args, "tui_resume", None) is not None or getattr(args, "tui_continue", None) is not None
     ):
         print("omh: --onboard opens a new session and cannot be combined with --resume or --continue.", file=sys.stderr)
+        return 2
+    if getattr(args, "tui_new", None) and (
+        getattr(args, "tui_resume", None) is not None or getattr(args, "tui_continue", None) is not None
+        or getattr(args, "tui_onboard", None)
+    ):
+        print("omh: --new opens a new session and cannot be combined with --resume, --continue or --onboard.",
+              file=sys.stderr)
         return 2
     launched = _launch_hermes_tui(args)
     if launched is not None:
@@ -454,6 +473,10 @@ def _launch_hermes_tui(args: argparse.Namespace) -> int | None:
         return None
     _run_startup_update_check(args)
     paths = _paths(args)
+    if _auto_resume_applies(args, paths):
+        dropped = _claim_dropped_session(args, paths)
+        if dropped:
+            args.tui_resume = dropped
     tui_home = _own_runtime_home(args, paths)
     started_at = time.time()
     closed: list[tuple[str, str, tuple[str, ...]]] = []
@@ -474,6 +497,91 @@ def _launch_hermes_tui(args: argparse.Namespace) -> int | None:
     _print_exit_card(args, paths, started_at, time.time(), returncode, closed[0] if closed else ("", "", ()),
                      hermes_home=tui_home)
     return returncode
+
+
+def _auto_resume_applies(args: argparse.Namespace, paths) -> bool:
+    """Whether this launch may reopen the session this terminal dropped (path A).
+
+    Only a bare launch that names no session of its own (no `--resume`, `--continue`, `--onboard` or `--new`),
+    with `auto_resume.mode` on and `OMH_AUTO_RESUME` not `0`. Both terminal ends are already settled by the caller.
+    """
+    if any(getattr(args, name, None) is not None for name in ("tui_resume", "tui_continue")):
+        return False
+    if getattr(args, "tui_onboard", None) or getattr(args, "tui_new", None):
+        return False
+    from ..maintenance.auto_resume_state import auto_resume_enabled
+
+    return auto_resume_enabled(_tui_omh_home(args, paths), os.environ)
+
+
+def _resume_homes(args: argparse.Namespace, paths) -> set[str]:
+    """Every Hermes home this launch may open a session in, so a dropped one recorded in any of them is found.
+
+    The resolved home, or the profile home `-p` names; the profile Hermes' sticky `active_profile` picks when no
+    profile is named; and the TUI's own runtime home where this launch could open there (`_own_runtime_home`, which
+    sends a `--resume <id>` to the home whose store has the id).
+    """
+    from ..maintenance.hermes_resume import hermes_profile_home
+    from ..tui.own_runtime import hermes_root, tui_home_path
+
+    shared = Path(paths.hermes_home)
+    profile = getattr(args, "tui_profile", None)
+    homes: set[str] = set()
+    named = hermes_profile_home(shared, profile) if profile else shared
+    if named is not None:
+        homes.add(str(named))
+    if not profile and shared.parent.name != "profiles":
+        try:
+            sticky = (hermes_root(shared) / "active_profile").read_text(encoding="utf-8-sig").strip()
+        except (OSError, UnicodeDecodeError):
+            sticky = ""
+        if sticky and sticky != "default":
+            home = hermes_profile_home(shared, sticky)
+            if home is not None:
+                homes.add(str(home))
+    if os.name != "nt" and not getattr(args, "hermes_home", None) and not profile:
+        homes.add(str(tui_home_path(shared)))
+    return homes
+
+
+# A claimed session nothing was said in is skipped and the next one claimed; each claim marks its entry `resumed`,
+# so this only bounds the work, it never decides an outcome.
+_MAX_RESUME_CLAIMS = 16
+
+
+def _claim_dropped_session(args: argparse.Namespace, paths, environ=None) -> str:
+    """The id of the session this terminal (else this folder) dropped, claimed so no other reopen takes it; "".
+
+    Claimed through `tui.live_sessions.claim_resumable` under its lock, so the entry is `resumed` before Hermes
+    opens it: a resume Hermes refuses (the TUI exits 1 having said why) is never tried again. A session nothing was
+    said in has nothing to reopen (Hermes keeps no such session) and is skipped. A hit prints one line naming the
+    session (its title, else its folder) and the way to a new one.
+    """
+    from ..maintenance.hermes_resume import _session_card_row
+    from ..tui.live_sessions import claim_resumable
+
+    environ = os.environ if environ is None else environ
+    omh_home = Path(_tui_omh_home(args, paths))
+    homes = _resume_homes(args, paths)
+    try:
+        cwd = os.getcwd()
+    except OSError:
+        cwd = ""
+    for _ in range(_MAX_RESUME_CLAIMS):
+        entry = claim_resumable(omh_home, hermes_homes=homes, cwd=cwd, environ=environ)
+        if entry is None:
+            return ""
+        session_id = str(entry["session_id"])
+        card = _session_card_row(Path(entry["hermes_home"]) / "state.db", session_id)
+        if card is None or (isinstance(card, tuple) and card[1] == 0):
+            continue  # nothing was said in it (Hermes stores the row with the first prompt)
+        title = card[0] if isinstance(card, tuple) and card[0].isprintable() else ""
+        named = title or str(entry.get("cwd") or "")
+        where = f"{session_id}, {named}" if named else session_id
+        print(f"omh: reopening the session this terminal left ({where}); run `omh --new` for a new one.",
+              file=sys.stderr)
+        return session_id
+    return ""
 
 
 def _own_runtime_home(args: argparse.Namespace, paths) -> Path | None:
