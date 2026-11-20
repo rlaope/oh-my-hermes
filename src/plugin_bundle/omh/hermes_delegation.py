@@ -580,6 +580,11 @@ HERMES_MIXTURE_ALIAS_PROVIDER_FAMILIES: dict[str, tuple[str, ...]] = {
     # models/gemini-4-hydrogen, stable), and OpenRouter lists
     # `google/gemini-4-hydrogen` (catalog snapshot, 2026-11-13).
     "gemini-4-hydrogen": ("google", "gemini", "openrouter"),
+    # Recognition-only, in no shipped chain (catalog sync, 2026-11-20):
+    # Google's own API serves `gemini-4-neon` (aistudio.google.com/docs/
+    # models/gemini-4-neon, stable), and OpenRouter lists
+    # `google/gemini-4-neon` (catalog snapshot, 2026-11-20).
+    "gemini-4-neon": ("google", "gemini", "openrouter"),
     # Retired on 2026-10-28 under the same rule (superseded by gemini-4-argon).
     "gemini-3.1-pro": ("google", "gemini", "openrouter"),
     # Recognition-only, in no shipped chain (catalog sync, 2026-10-28): the
@@ -1793,6 +1798,13 @@ APPROX_PRICE_PER_MTOK: dict[str, tuple[float, float]] = {
     # 65,536 output per synchronous request. Recognition-only, in no shipped
     # chain.
     "gemini-4-hydrogen": (1.5, 7.5),
+    # Google list price (aistudio.google.com/docs/pricing, read 2026-11-20),
+    # Standard paid tier, no prompt-size tier and no dated change on the
+    # card: Gemini 4 Neon 3/15, cached input 0.15 (APPROX_CACHE_READ_RATIO),
+    # implicit caching only. The model page lists a stable `gemini-4-neon`
+    # with a 1,048,576-token unified context and 65,536 output per
+    # synchronous request. Recognition-only, in no shipped chain.
+    "gemini-4-neon": (3.0, 15.0),
     # Google list price (aistudio.google.com/docs/pricing, re-read
     # 2026-11-18), paid tier, no prompt-size tier: Gemini 3.8 Flash and 3.6
     # Flash 0.75/3.75, cached input 0.075 (the default tenth). Both are an
@@ -1977,6 +1989,9 @@ APPROX_CACHE_READ_RATIO: dict[str, float] = {
     # Gemini 4 Hydrogen cached input 0.075 against 1.50 input
     # (aistudio.google.com/docs/pricing, re-read 2026-11-18).
     "gemini-4-hydrogen": 0.05,
+    # Gemini 4 Neon cached input 0.15 against 3.00 input
+    # (aistudio.google.com/docs/pricing, read 2026-11-20).
+    "gemini-4-neon": 0.05,
     # Kimi K3.1 Pro Highspeed cached input 0.20 against 4.00 input
     # (platform.kimi.ai/docs/pricing/chat, read 2026-10-24); the base model's
     # 0.20 against 2.00 is the default tenth and needs no row.
