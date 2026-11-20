@@ -13,6 +13,7 @@ mod git_branch;
 mod hermes_auth;
 mod past_chats;
 mod peers;
+mod power;
 #[cfg(all(test, unix))]
 mod pty_bench;
 mod session_files;
@@ -23,6 +24,7 @@ mod term_history;
 mod term_link;
 mod term_share;
 mod this_host;
+mod tray;
 
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -777,6 +779,25 @@ fn window_close(window: tauri::WebviewWindow) -> Result<(), String> {
     window.close().map_err(|e| e.to_string())
 }
 
+/// Settings › General "Keep the computer awake while agents work": the page's busy/idle edge (never one per output).
+/// `now`: the setting was turned off, so an idle edge lets go at once instead of a minute later (power.rs).
+#[tauri::command]
+fn power_busy(power: State<'_, power::Power>, busy: bool, now: Option<bool>) {
+    power.busy(busy, now.unwrap_or(false));
+}
+
+/// Settings › General "When the window closes": whether the close hides the window to the tray (the tray icon shows
+/// only then), and the tray menu's two labels in the page's language (tray.rs).
+#[tauri::command]
+fn window_prefs(app: AppHandle, hide: bool, open: Option<String>, quit: Option<String>) {
+    if let Some(s) = app.try_state::<tray::TrayState>() {
+        s.set_hides(hide);
+    }
+    if let Some(t) = app.try_state::<tray::TrayMenu<tauri::Wry>>() {
+        t.apply(hide, open.as_deref().unwrap_or(""), quit.as_deref().unwrap_or(""));
+    }
+}
+
 /// The remote machines (`~/.omher/peers.json`, checked on read) and each link's state.
 #[tauri::command]
 async fn peers_list(shell: State<'_, Shell>) -> Result<Vec<peers::PeerStatus>, String> {
@@ -873,6 +894,8 @@ pub fn run() {
                 let _ = app.emit(app_menu::CLOSE_EVENT, ());
             }
         })
+        // the window's close hides it while Settings › General says so (tray.rs)
+        .on_window_event(tray::window_event)
         .invoke_handler(tauri::generate_handler![
             bridge_url,
             bridge_status,
@@ -940,6 +963,8 @@ pub fn run() {
             tasks_view,
             tasks_remote,
             window_close,
+            power_busy,
+            window_prefs,
             term_link::term_link_take
         ])
         .setup(|app| {
@@ -953,6 +978,14 @@ pub fn run() {
             }
             peers.start_all();
             app.manage(Arc::new(tasks::Tasks::default()));
+            // close = hide to the tray / menu bar, and the keep-awake assertion's worker (tray.rs, power.rs)
+            app.manage(tray::TrayState::default());
+            app.manage(power::Power::start());
+            if let Err(e) = tray::build(app.handle()) {
+                // no tray (a Linux desktop without one): the close quits, as before
+                app.state::<tray::TrayState>().set_hides(false);
+                eprintln!("omher: no tray icon: {e}");
+            }
             // omher://terminal/<id> links: the one omher was opened with, and each one after
             app.manage(term_link::TermLinks::default());
             {
@@ -985,7 +1018,15 @@ pub fn run() {
         .expect("error while building omher");
 
     app.run(|handle, event| {
+        // macOS: the Dock icon of a hidden omher shows the window again
+        #[cfg(target_os = "macos")]
+        if let RunEvent::Reopen { .. } = event {
+            tray::show_main(handle);
+        }
         if let RunEvent::Exit = event {
+            if let Some(power) = handle.try_state::<power::Power>() {
+                power.quit();
+            }
             if let Some(shell) = handle.try_state::<Shell>() {
                 shell.sessions.close_all();
                 shell.chats.close_all();

@@ -20,6 +20,7 @@ import { SshMarker } from "../peers/SshMarker";
 import { RemoteMachines } from "../peers/RemoteMachines";
 import { setBar, useTasks } from "../tasks/state";
 import { Toggle } from "../pages/kit";
+import { awakeEnabled, closeHides, isMacPlatform, setAwakeEnabled, setCloseHides } from "../lib/power";
 import { AgentsPage } from "./agents/AgentsPage";
 import { AvatarEditor, BotFacts, NameEditor, PictureActions, placeName, useBotInfo, usePictureEditor } from "./BotIdentity";
 
@@ -422,6 +423,41 @@ function TasksBarToggle() {
   return <Toggle on={tk.bar} label={t("tasks.barSetting")} onChange={setBar} testId="set-tasks-bar" />;
 }
 
+function CloseSeg() {
+  const [hide, setHide] = useState(closeHides());
+  return (
+    <Seg
+      small
+      label={t("win.close")}
+      value={hide ? "tray" : "quit"}
+      options={[
+        { value: "tray", label: t(isMacPlatform() ? "win.closeTray" : "win.closeTrayOther") },
+        { value: "quit", label: t("win.closeQuit") },
+      ]}
+      onChange={(v) => {
+        setCloseHides(v === "tray");
+        setHide(v === "tray");
+      }}
+      testId="window-close-seg"
+    />
+  );
+}
+
+function AwakeToggle() {
+  const [on, setOn] = useState(awakeEnabled());
+  return (
+    <Toggle
+      on={on}
+      label={t("awake.title")}
+      onChange={(v) => {
+        setAwakeEnabled(v);
+        setOn(v);
+      }}
+      testId="set-awake"
+    />
+  );
+}
+
 function GeneralPage() {
   const s = useStore();
   const h = s.hello;
@@ -452,6 +488,15 @@ function GeneralPage() {
       <div className="st-grp">
         <Row title={t("tasks.barSetting")} hint={t("tasks.barSettingHint")}>
           <TasksBarToggle />
+        </Row>
+      </div>
+      <div className="st-gh">{t("set.system")}</div>
+      <div className="st-grp" data-testid="set-system">
+        <Row title={t("win.close")} hint={t("win.closeHint")}>
+          <CloseSeg />
+        </Row>
+        <Row title={t("awake.title")} hint={t("awake.hint")}>
+          <AwakeToggle />
         </Row>
       </div>
       <div className="st-gh">{t("set.keyboard")}</div>
