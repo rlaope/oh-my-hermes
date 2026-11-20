@@ -449,6 +449,46 @@ class LivePidsTests(LiveSessionsCase):
         self.assertFalse(REAL_PID_ALIVE(child.pid))
 
 
+class ResumablePreviewTests(LiveSessionsCase):
+    """`resumable`: what `claim_resumable` would hand out, read without writing (R5, R4-B3)."""
+
+    def test_it_names_the_claims_winner_and_writes_nothing(self) -> None:
+        self.write(self.entry("by-folder", "dropped", cwd=self.hermes_home),
+                   self.entry("by-key", "dropped", key="TMUX_PANE=%4"),
+                   self.entry("gone-owner", "live", pid=31337))
+        self.alive[31337] = False
+        before = self.store.read_bytes()
+        environ = {"TMUX_PANE": "%4"}
+        preview = live_sessions.resumable(self.omh_home, hermes_homes=(self.hermes_home,), cwd=self.hermes_home, environ=environ)
+        self.assertEqual(preview["session_id"], "by-key")
+        self.assertEqual(self.store.read_bytes(), before)
+        self.assertFalse(self.marker.exists())
+        self.assertFalse(self.live_pids.exists())
+        self.assertEqual(self.claim(environ, cwd=self.hermes_home)["session_id"], "by-key")
+
+    def test_it_applies_the_claims_rules(self) -> None:
+        self.write(self.entry("old", "dropped", key="TMUX_PANE=%4", age=timedelta(hours=80)),
+                   self.entry("other-home", "dropped", key="TMUX_PANE=%4", home="/elsewhere"),
+                   self.entry("other-key", "dropped", key="TMUX_PANE=%9", cwd=self.hermes_home))
+        environ = {"TMUX_PANE": "%4"}
+        self.assertIsNone(live_sessions.resumable(self.omh_home, hermes_homes=(self.hermes_home,), cwd=self.hermes_home,
+                                    environ=environ, strict_keys=True))
+        self.assertEqual(live_sessions.resumable(self.omh_home, hermes_homes=(self.hermes_home,), cwd=self.hermes_home,
+                                   environ=environ)["session_id"], "other-key")
+
+    def test_a_vanished_owner_is_swept_in_memory_only(self) -> None:
+        self.write(self.entry("killed", "live", pid=31337, key="TMUX_PANE=%4"))
+        self.alive[31337] = False
+        before = self.store.read_bytes()
+        preview = live_sessions.resumable(self.omh_home, hermes_homes=(self.hermes_home,), cwd="", environ={"TMUX_PANE": "%4"})
+        self.assertEqual((preview["session_id"], preview["state"]), ("killed", "dropped"))
+        self.assertEqual(self.store.read_bytes(), before)
+
+    def test_without_a_store_it_is_none_and_creates_nothing(self) -> None:
+        self.assertIsNone(live_sessions.resumable(self.omh_home, hermes_homes=(self.hermes_home,), cwd="", environ={}))
+        self.assertFalse((self.omh_home / "tui").exists())
+
+
 class StrictKeysTests(LiveSessionsCase):
     """`strict_keys`: an unattended start never takes the same-folder drop another known terminal left."""
 

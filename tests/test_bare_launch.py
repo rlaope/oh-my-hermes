@@ -610,16 +610,112 @@ class ClaimedHomeTests(unittest.TestCase):
         self.assertEqual(self.states(), {"own-1": "dropped"})
         self.assertTrue((self.omh / "tui" / "resume-pending").exists())
 
-    def test_an_own_home_that_cannot_be_built_is_never_claimed_from(self) -> None:
+    def test_an_own_home_whose_root_files_cannot_be_read_is_never_claimed_from(self) -> None:
+        # R5 (R4-B3): decided by the read-only preflight, before the claim; nothing is built.
+        from omh.tui import own_runtime
+
+        self.write_store([("own-1", self.own)])
+        for error in (OSError("unreadable"), ValueError("not UTF-8")):
+            with self.subTest(error=type(error).__name__), \
+                    patch.object(own_runtime, "preflight_tui_home", side_effect=error), \
+                    patch.object(own_runtime, "build_tui_home", side_effect=AssertionError("built")):
+                args, _paths = self.claim([])
+                self.assertIsNone(args.tui_resume)
+                self.assertEqual(self.states(), {"own-1": "dropped"})
+
+    def test_a_root_env_that_is_not_utf8_is_refused_read_only(self) -> None:
+        (self.hermes / ".env").write_bytes(b"MODEL=\xff\n")
+        self.write_store([("own-1", self.own)])
+        before = sorted(self.hermes.rglob("*"))
+        args, _paths = self.claim([])
+        self.assertIsNone(args.tui_resume)
+        self.assertEqual(self.states(), {"own-1": "dropped"})
+        self.assertEqual(sorted(self.hermes.rglob("*")), before)  # nothing built under the Hermes root
+
+    def test_an_own_home_that_fails_to_build_after_the_claim_gives_the_claim_back(self) -> None:
+        # The build runs only after the claim picked the own home; a failure there releases the claim as R3 did.
+        from omh.commands import bare_launch
         from omh.tui import own_runtime
 
         self.write_store([("own-1", self.own)])
         for error in (OSError("read-only"), ValueError("not UTF-8")):
             with self.subTest(error=type(error).__name__), \
                     patch.object(own_runtime, "build_tui_home", side_effect=error):
-                args, _paths = self.claim([])
+                self.write_store([("own-1", self.own)])
+                args, paths = self.claim([])
+                self.assertEqual(self.states(), {"own-1": "resumed"})
+                stderr = io.StringIO()
+                with redirect_stderr(stderr):
+                    self.assertIsNone(bare_launch._own_runtime_home(args, paths))
                 self.assertIsNone(args.tui_resume)
                 self.assertEqual(self.states(), {"own-1": "dropped"})
+                self.assertIn("opening a new session", stderr.getvalue())
+
+    def test_claiming_never_builds_or_writes_the_own_home(self) -> None:
+        # R5 (R4-B3): even for an own-home winner, the claim only reads; the build waits for the launch.
+        from omh.tui import own_runtime
+
+        self.write_store([("own-1", self.own)])
+        with patch.object(own_runtime, "build_tui_home", side_effect=AssertionError("built during the claim")):
+            args, _paths = self.claim([])
+        self.assertEqual((args.tui_resume, args.tui_resume_home), ("own-1", str(self.own)))
+
+    def own_config_with_local_edits(self) -> tuple:
+        """A root config and a newer, locally edited config in the TUI's own home: a build would replace the latter."""
+        (self.hermes / "config.yaml").write_text("# root config\n", encoding="utf-8")
+        config = self.own / "config.yaml"
+        config.write_text("# local edits in the unused runtime\n", encoding="utf-8")
+        stamp = (self.hermes / "config.yaml").stat().st_mtime_ns + 5_000_000_000
+        os.utime(config, ns=(stamp, stamp))
+        return config, config.read_bytes()
+
+    def test_a_shared_claim_leaves_an_unused_own_config_byte_for_byte(self) -> None:
+        # R5 (R4-B3, review2's witness): shared preference, a matching shared drop and another terminal's own drop.
+        import json
+        from datetime import datetime, timezone
+
+        from omh.commands import bare_launch
+        from omh.skin_pack import write_runtime_choice
+        from omh.tui import live_sessions, own_runtime
+
+        write_runtime_choice(self.omh, "shared")
+        config, sample = self.own_config_with_local_edits()
+        now = datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
+        rows = [{"session_id": sid, "hermes_home": str(home), "cwd": "", "terminal_key": key, "state": "dropped",
+                 "pid": 999_999, "boot": "", "updated_at": now}
+                for sid, home, key in (("own-1", self.own, "TMUX_PANE=%9"), ("root-1", self.hermes, "TMUX_PANE=%4"))]
+        (self.omh / "tui").mkdir(parents=True, exist_ok=True)
+        (self.omh / "tui" / live_sessions.LIVE_SESSIONS_FILE).write_text(
+            json.dumps({"schema_version": live_sessions.LIVE_SESSIONS_SCHEMA, "sessions": rows}), encoding="utf-8")
+        stderr = io.StringIO()
+        with patch.object(own_runtime, "preflight_tui_home", side_effect=AssertionError("checked a losing row")), \
+                redirect_stderr(stderr):
+            args = bare_launch_args([])
+            paths = bare_launch._paths(args)
+            bare_launch._claim_dropped_session(args, paths, {"TMUX_PANE": "%4"})
+            self.assertIsNone(bare_launch._own_runtime_home(args, paths))
+        self.assertEqual((args.tui_resume, args.tui_resume_home), ("root-1", str(self.hermes)))
+        self.assertEqual(self.states(), {"own-1": "dropped", "root-1": "resumed"})
+        self.assertEqual(config.read_bytes(), sample)
+        self.assertNotIn("had been changed", stderr.getvalue())
+
+    def test_no_match_with_shared_chosen_checks_and_builds_nothing(self) -> None:
+        from omh.commands import bare_launch
+        from omh.skin_pack import write_runtime_choice
+        from omh.tui import own_runtime
+
+        write_runtime_choice(self.omh, "shared")
+        config, sample = self.own_config_with_local_edits()
+        self.write_store([("own-1", self.own)])
+        with patch.object(own_runtime, "preflight_tui_home", side_effect=AssertionError("checked")), \
+                patch.object(own_runtime, "build_tui_home", side_effect=AssertionError("built")), \
+                redirect_stderr(io.StringIO()):
+            args = bare_launch_args([])
+            paths = bare_launch._paths(args)
+            self.assertEqual(bare_launch._claim_dropped_session(args, paths, {"TMUX_PANE": "%1"}), "")
+            self.assertIsNone(bare_launch._own_runtime_home(args, paths))
+        self.assertEqual(self.states(), {"own-1": "dropped"})
+        self.assertEqual(config.read_bytes(), sample)
 
     def test_a_shared_home_drop_is_still_claimed_when_the_own_home_is_refused(self) -> None:
         from omh.commands import bare_launch
@@ -662,8 +758,8 @@ class ClaimedHomeTests(unittest.TestCase):
         self.assertFalse(hasattr(args, bare_launch._OWN_HOME_PREPARED))
 
     def test_a_claim_the_launch_cannot_open_after_all_is_released_and_a_new_session_opens(self) -> None:
-        # Eligible when claimed, refused when the launch builds again (the root config changed in between, here
-        # by clearing the kept answer): the claim goes back to `dropped` and the id goes to no other home.
+        # Eligible when claimed, refused when the launch builds (the root config changed in between): the claim
+        # goes back to `dropped` and the id goes to no other home.
         from omh.commands import bare_launch
         from omh.tui import own_runtime
         from types import SimpleNamespace
@@ -673,7 +769,7 @@ class ClaimedHomeTests(unittest.TestCase):
         with patch.object(own_runtime, "build_tui_home", return_value=ok):
             args, paths = self.claim([])
         self.assertEqual((args.tui_resume, self.states()), ("own-1", {"own-1": "resumed"}))
-        delattr(args, bare_launch._OWN_HOME_PREPARED)
+        self.assertFalse(hasattr(args, bare_launch._OWN_HOME_PREPARED))  # R5: the claim built nothing
         self.ineligible_own_home()
         stderr = io.StringIO()
         with redirect_stderr(stderr):

@@ -584,9 +584,12 @@ else, outside omher, the newest one dropped in this folder, within 72 hours, in
 a Hermes home this launch opens: the one Hermes' launcher picks (`-p NAME`'s
 profile, `-p default` the root, else the sticky `active_profile`, else the
 resolved home) and the TUI's own runtime home when this launch can open it now
-(it builds, and the root config names no messaging token under `platforms:`;
-this is decided before anything is claimed). A session in any other home is
-left for a launch that opens there. Should the claimed home still fail to open
+(its root files read as UTF-8, and the root config names no messaging token
+under `platforms:`). That is checked read-only, before anything is claimed, and
+only when a session of the own home is the one that would win here; the home
+is built or refreshed only after the claim picked such a session, so a launch
+that reopens a shared session, or none, leaves the own home's files as they
+are. A session in any other home is left for a launch that opens there. Should the claimed home still fail to open
 after the claim, the claim is given back (the session is dropped again and
 `resume-pending` re-armed) and a new session opens; the id is never sent to
 another home. It runs at once, in the home it was

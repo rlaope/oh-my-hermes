@@ -548,6 +548,31 @@ def record_end(omh_home: Path, session_id: str, state: str, pid: int | None = No
     _update(omh_home, change, None, create=False)
 
 
+def _pick(
+    entries: list[dict[str, Any]], now: datetime, *, homes: set[str], key: str, here: str, allow_cwd: bool,
+    strict_keys: bool, max_age_hours: float,
+) -> dict[str, Any] | None:
+    """The entry `claim_resumable` hands out from these (swept) entries, or None; changes nothing."""
+    oldest = now - timedelta(hours=max_age_hours)
+
+    def candidate(entry: dict[str, Any]) -> bool:
+        moment = _parsed(entry["updated_at"])
+        # One entry per session id: a dropped session another TUI has taken again is `live`, never a candidate.
+        return (entry["state"] == DROPPED and moment is not None and moment >= oldest
+                and _real(entry["hermes_home"]) in homes)
+
+    def same_folder(entry: dict[str, Any]) -> bool:
+        if strict_keys and key and entry["terminal_key"] and entry["terminal_key"] != key:
+            return False
+        return bool(entry["cwd"]) and _real(entry["cwd"]) == here
+
+    candidates = [entry for entry in reversed(entries) if candidate(entry)]
+    chosen = next((entry for entry in candidates if key and entry["terminal_key"] == key), None)
+    if chosen is None and allow_cwd and here:
+        chosen = next((entry for entry in candidates if same_folder(entry)), None)
+    return chosen
+
+
 def claim_resumable(
     omh_home: Path, *, hermes_homes: Collection[str], cwd: str, environ: Mapping[str, str],
     max_age_hours: float = 72, strict_keys: bool = False,
@@ -560,29 +585,10 @@ def claim_resumable(
     terminals always carry their own key), the newest from the same directory. With `strict_keys` (an unattended
     start: the shell hook), the directory never hands over a session another known terminal left.
     """
-    homes = {_real(home) for home in hermes_homes if home}
-    key = terminal_key(environ)
-    here = _real(cwd)
-    allow_cwd = environ.get("TERM_PROGRAM") != "omher"
+    options = _pick_options(hermes_homes, cwd, environ, max_age_hours, strict_keys)
 
     def change(entries: list[dict[str, Any]], now: datetime) -> dict[str, Any] | None:
-        oldest = now - timedelta(hours=max_age_hours)
-
-        def candidate(entry: dict[str, Any]) -> bool:
-            moment = _parsed(entry["updated_at"])
-            # One entry per session id: a dropped session another TUI has taken again is `live`, never a candidate.
-            return (entry["state"] == DROPPED and moment is not None and moment >= oldest
-                    and _real(entry["hermes_home"]) in homes)
-
-        def same_folder(entry: dict[str, Any]) -> bool:
-            if strict_keys and key and entry["terminal_key"] and entry["terminal_key"] != key:
-                return False
-            return bool(entry["cwd"]) and _real(entry["cwd"]) == here
-
-        candidates = [entry for entry in reversed(entries) if candidate(entry)]
-        chosen = next((entry for entry in candidates if key and entry["terminal_key"] == key), None)
-        if chosen is None and allow_cwd and here:
-            chosen = next((entry for entry in candidates if same_folder(entry)), None)
+        chosen = _pick(entries, now, **options)
         if chosen is None:
             return None
         chosen["state"], chosen["updated_at"] = RESUMED, _stamp(now)
@@ -590,6 +596,32 @@ def claim_resumable(
         return copy.deepcopy(chosen)
 
     return _update(omh_home, change, None, create=False)
+
+
+def resumable(
+    omh_home: Path, *, hermes_homes: Collection[str], cwd: str, environ: Mapping[str, str],
+    max_age_hours: float = 72, strict_keys: bool = False,
+) -> dict[str, Any] | None:
+    """Read only: a copy of the entry `claim_resumable` would claim now with the same arguments, or None. Read
+    without the lock, swept in memory and never written back, so a launch can decide whether a home could win before
+    it claims; the claim itself selects again under the lock."""
+    try:
+        kept = _load(_directory(omh_home))
+        boot = boot_identity()
+    except _BEST_EFFORT:
+        return None
+    now = _utc_now()
+    _sweep(kept, now, boot)
+    chosen = _pick(kept, now, **_pick_options(hermes_homes, cwd, environ, max_age_hours, strict_keys))
+    return copy.deepcopy(chosen) if chosen is not None else None
+
+
+def _pick_options(
+    hermes_homes: Collection[str], cwd: str, environ: Mapping[str, str], max_age_hours: float, strict_keys: bool,
+) -> dict[str, Any]:
+    return {"homes": {_real(home) for home in hermes_homes if home}, "key": terminal_key(environ), "here": _real(cwd),
+            "allow_cwd": environ.get("TERM_PROGRAM") != "omher", "strict_keys": strict_keys,
+            "max_age_hours": max_age_hours}
 
 
 def release_claim(omh_home: Path, session_id: str) -> bool:
