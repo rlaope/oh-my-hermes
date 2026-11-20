@@ -553,6 +553,100 @@ that the shared gateway still runs older OMH plugin code and that `/gateway
 restart` loads the new code. It never restarts the gateway itself. Each such restart leaves
 one waiting `omh` holding its generation until the session ends.
 
+## Coming back after a closed terminal
+
+Every TUI that takes a stored session records it in
+`<omh_home>/tui/live-sessions.json` (`src/tui/live_sessions.py`, schema
+`omh_tui_live_sessions/v1`, written 0600, at most 64 entries): the session id,
+the Hermes home it runs in, the folder, the terminal it runs in as `NAME=value`
+of the first terminal variable set (`OMHER_TERMINAL_LINK`, `CMUX_SURFACE_ID`,
+`HERDR_PANE_ID`, `ITERM_SESSION_ID`, `TERM_SESSION_ID`, `KITTY_WINDOW_ID`,
+`WEZTERM_PANE`, `WT_SESSION`, `OTTY_PANE_ID`, `TMUX_PANE`; only read, no
+terminal's own files are written), the pid and boot of each TUI that holds it
+open, and how the session ended. Nothing said in a session is recorded, and nothing leaves
+the machine.
+
+A session the person left is closed: `/exit`, Ctrl+D, a normal close, `/new`
+or `/resume` moving away, a relaunch for an update. It never reopens by
+itself. A terminal hang-up (SIGHUP), SIGTERM, SIGBREAK, an uncaught crash, or a
+TUI whose process is gone (killed, power loss: a different boot or a pid that
+no longer runs) is dropped. `resume-pending` beside the record exists while a
+dropped session waits, and `live-pids` holds, on one line, `b:` and the boot
+its writer ran on (spaces removed, `-` when unknown; on Linux the kernel's boot
+id verbatim) and then the pids of the TUIs recorded as running, so a TUI killed
+outright shows before anything sweeps it. A line whose first word lacks `b:`
+was written by an older OMH and holds pids only; the shell hook reads every
+word of it as a pid. A dropped session reopens once: the reopen marks it
+`resumed` under the record's lock before Hermes opens it, so a resume Hermes
+refuses is not tried again.
+
+A bare `omh`, on by default, reopens the session this terminal dropped, or
+else, outside omher, the newest one dropped in this folder, within 72 hours, in
+a Hermes home this launch opens: the one Hermes' launcher picks (`-p NAME`'s
+profile, `-p default` the root, else the sticky `active_profile`, else the
+resolved home) and the TUI's own runtime home when this launch can open it now
+(its root files read as UTF-8, and the root config names no messaging token
+under `platforms:`). That is checked read-only, before anything is claimed, and
+only when a session of the own home is the one that would win here; the home
+is built or refreshed only after the claim picked such a session, so a launch
+that reopens a shared session, or none, leaves the own home's files as they
+are. An own-home winner this launch cannot open is passed over, and the claim
+chooses among the shared homes. When another launch takes the session that
+would have won first, the launch looks once more. A session in any other home is left for a launch that opens there. Should the claimed home still fail to open
+after the claim, the claim is given back (the session is dropped again and
+`resume-pending` re-armed) and the launch claims again among the shared homes
+only; with nothing there a new session opens. The id is never sent to
+another home. It runs at once, in the home it was
+recorded in, as `omh --resume <id>` would, and says so in one stderr line naming the session
+and `omh --new`. A session nothing was said in is skipped (Hermes keeps no
+such session). It applies only on a terminal and only when the launch names no
+session of its own (`--resume`, `--continue`, `--onboard`). Off switches:
+`omh --new` for one launch, `OMH_AUTO_RESUME=0` for one shell, and `omh
+auto-resume set --mode off` (`auto_resume.mode` in `setup-profile.json`;
+absent is on). `omh auto-resume status` shows the mode, the shell hooks and the
+dropped sessions waiting, naming each terminal variable without its value.
+
+A new terminal reopens it too only after an explicit opt-in: `omh auto-resume
+shell install [--shell zsh|bash|powershell] [--dry-run]`, or a Yes to `omh
+setup`'s question (default No, asked on a terminal while the shell's rc exists
+without the block). It appends one block between `# >>> omh auto-resume >>>`
+and `# <<< omh auto-resume <<<` at the end of `${ZDOTDIR:-$HOME}/.zshrc`,
+`~/.bashrc`, or PowerShell's current-user profile (`src/tui/shell_hook.py`),
+written through a temporary file and a rename with the file's mode kept; a
+symlinked rc is written at its target only when that is inside the home. `omh
+auto-resume shell remove` deletes exactly that block, and a file the block was
+appended to comes back byte for byte. The block, in an interactive shell where
+none of `OMH_AUTO_RESUME_DONE`, `HERMES_SESSION_ID`, `OMH_TUI_SESSION_FILE`
+and `CI` is set, exports `OMH_AUTO_RESUME_DONE=1` (a nested shell does
+nothing) and looks with the shell's own builtins for `resume-pending`, or for
+a pid in `live-pids` that no longer runs (`read`, `kill -0`; PowerShell
+`Get-Process`), so no process starts while nothing waits and every recorded
+TUI still runs. Where `/proc/sys/kernel/random/boot_id` can be read (Linux),
+the zsh and bash blocks also wake when it differs from the boot `live-pids`
+recorded, so a pid the new boot reused does not hide a TUI the reboot ended.
+macOS has no boot source a builtin can read, and the PowerShell block keeps the
+pid check too: after a reboot that hands a recorded pid to a live process, the
+hook stays quiet, and a later terminal, once that pid is gone, or a bare `omh`
+(which sweeps by boot) reopens the session. `kill -0` also fails for a pid
+another user now holds; that wakes the hook too, and `shell-start` finds
+nothing and exits 0 at once. The file lists only this user's TUIs, so that
+takes a recycled pid. When one holds and `omh` is on PATH, the first prompt runs
+`omh --omh-home <home> auto-resume shell-start`: zsh from its first
+`zle-line-init`, kept out of the history by a one-shot `zshaddhistory` hook
+that changes no history option, bash from its first `PROMPT_COMMAND` with both ends
+on the terminal (each then unhooks itself, leaving the rest of
+`PROMPT_COMMAND`), PowerShell at the end of the profile in the console host.
+The zsh and bash blocks are written with LF line ends in a CRLF rc too, which
+keeps its own bytes. `shell-start` checks the policy, the terminal and the same
+variables again, then reopens this terminal's dropped session in place with
+the same line, or exits 0 at once; it never asks anything. Unlike a bare
+`omh`, it does not take a same-folder session recorded under another
+terminal's key while this terminal has a key of its own.
+
+omher starts each `omh` terminal with `OMHER_TERMINAL_LINK=<linkId>` and
+`TERM_PROGRAM=omher` and no arguments, so a bare `omh` there reopens by that
+link alone and never by the folder another omher terminal shares.
+
 ## Job control, and what OMH does not do
 
 Ctrl+Z stops the process group, the gateway child with it, as Hermes' own CLI's

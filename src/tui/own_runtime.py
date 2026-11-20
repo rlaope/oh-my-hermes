@@ -391,6 +391,22 @@ def build_tui_home(omh_home: Path, hermes_home: Path, served: Sequence[str] | No
     return replace(built, path=final, refreshed=tuple(refreshed))
 
 
+def preflight_tui_home(hermes_home: Path) -> tuple[str, ...]:
+    """Read only: the root files `build_tui_home` would refuse on, checked without writing anything. Returns the
+    root config's `platforms.<name>.<key>` credentials (non-empty: the build copies no config and the launch stays
+    on the shared gateway); raises `ValueError` when the root's `config.yaml` or `.env` is not UTF-8 text and
+    `OSError` when either cannot be read, as the build does. A failure only writing would show stays for the build."""
+    root = hermes_root(hermes_home)
+    credentials: tuple[str, ...] = ()
+    for name in ("config.yaml", ".env"):
+        source = root / name
+        if source.is_file():
+            text = _decode(source.read_bytes(), source)
+            if name == "config.yaml":
+                credentials = config_platform_credentials(text)
+    return credentials
+
+
 def _build(home: Path, root: Path, served: tuple[str, ...]) -> TuiHome:
     """Write the profile's files into `home` (the final profile, or its staging directory); what was done."""
     refreshed: list[str] = []

@@ -569,9 +569,14 @@ function Ended({ rec }: { rec: SessionRec }) {
 /** A session that was running when omher restarted and does not continue by itself: one line and Resume, which
  *  starts it again in the same folder (and account). */
 function Paused({ rec }: { rec: SessionRec }) {
+  // why it did not come back by itself (an oh-my-hermes chat the bridge would not attach again), when known
+  const why = rec.error ? rec.error.trim().split("\n").pop() : "";
   return (
     <div className="ss-ended" role="status" data-testid="session-paused">
-      <span className="ss-ended-t">{t("resume.paused")}</span>
+      <span className="ss-ended-t" title={why || undefined}>
+        {t("resume.paused")}
+        {why ? ` · ${why}` : ""}
+      </span>
       <button
         type="button"
         className="ss-restart"
