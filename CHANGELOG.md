@@ -4,6 +4,25 @@ All notable changes will be documented here.
 
 ## Unreleased
 
+- **A closed terminal no longer loses the OMH session: it comes back by itself, in any terminal and in omher.**
+  Each OMH TUI now records how its session ended in `<omh_home>/tui/live-sessions.json`. `/exit`, Ctrl+D or moving
+  to another session is *closed* and never reopens. A closed window, SIGHUP, a crash, a kill, a reboot or a lost
+  gateway is *dropped*. A bare `omh` in that terminal (else, outside omher, the same folder) reopens the dropped
+  session at once, as `omh --resume <id>` would, and says so in one line. `omh --new`, `OMH_AUTO_RESUME=0` and
+  `omh auto-resume set --mode off` open a new one. `omh auto-resume status` shows the mode, the hooks and what waits.
+  - A new terminal can reopen it with nothing typed, after an opt-in: `omh auto-resume shell install` (zsh, bash,
+    PowerShell) or a Yes to `omh setup`'s new question (default No). It adds one marked block to the shell rc that
+    starts no process while nothing waits. `omh auto-resume shell remove` gives the file back byte for byte. The
+    hook notices a TUI killed outright, also one an earlier OMH started, and on Linux a reboot.
+  - A launch claims only from a Hermes home it opens and reopens the session in the home it was recorded in. It
+    decides whether the TUI's own runtime home can open it without writing, so a launch that reopens a shared-gateway
+    session leaves that home's files alone. When the own home cannot open after all, a dropped shared session still
+    reopens.
+  - omher: an `omh` terminal that was running when omher closed starts again in its own session
+    (`OMHER_TERMINAL_LINK`, rule 11), and folder chats come back through the bridge's `folder.resume`. Only a chat
+    omher recorded when it opened it can be reattached (rule 3). Records stay under a lock every bridge shares, and a
+    chat reattached while another bot's record write waits keeps its record.
+
 - **Measured loops keep variants comparable, and paper searches pick the right corpus.** `loop` gains `references/experiment-tree.md`: every node runs one fixed command and environment, a node freezes once a run answers it, the options of one decision are siblings and the next round descends onto the winner, and each finished run ends in repair, refill, promote or stop. `source-finder` gains `references/literature-retrieval.md`: arXiv, OpenAlex, bioRxiv or PubMed chosen by topic, follow-up rounds scaled to a stated difficulty inside the existing search cap, cross-corpus dedupe by id, DOI and title, and no paper id that a host result did not return. Both adapt alphaXiv/OpenResearch practices (MIT) in OMH wording.
 
 - **Code in the OMH TUI reads in more than one colour, and the default accent is violet.** An edit's diff painted every code line in one turquoise, and

@@ -147,6 +147,40 @@ stays in `AGENTS.md`, where `tests/test_paired_run_arm_home.py` reads it.
   launched it starts the installed generation's `omh --resume <id>`.
   Read [`docs/OMH-TUI-BOUNDARY.md`](OMH-TUI-BOUNDARY.md) before touching
   `src/tui/`.
+- **Auto-resume shell hook** (scoped opt-in exception, the one place OMH
+  writes outside its own and Hermes' homes): `omh auto-resume shell install
+  [--shell zsh|bash|powershell]`, or a Yes to `omh setup`'s question (default
+  No, asked only on a terminal while the shell's rc exists without the block),
+  appends one block between `# >>> omh auto-resume >>>` and `# <<< omh
+  auto-resume <<<` to the end of `${ZDOTDIR:-$HOME}/.zshrc`, `~/.bashrc` or
+  PowerShell's current-user profile. `src/tui/shell_hook.py` is its only
+  writer, and nothing in OMH runs a shell.
+  - The write goes through a temporary file and a rename and keeps the file's
+    mode; a symlinked rc is written at its target only inside the home. zsh
+    and bash blocks are LF even in a CRLF rc, whose own bytes are kept. `omh
+    auto-resume shell remove` deletes exactly that block and restores the file
+    byte for byte.
+  - The block starts no process unless `<omh_home>/tui/resume-pending` exists,
+    a pid listed in `<omh_home>/tui/live-pids` (`b:<boot> <pid> ...`; a line
+    from an older OMH without the `b:` word holds pids only and is read as
+    such) no longer runs, or, on Linux, `/proc/sys/kernel/random/boot_id`
+    differs from the recorded boot. It checks these with the shell's own
+    builtins (`[[ -e ]]`, `read`, `kill -0`; PowerShell `Test-Path`,
+    `Get-Content`, `Get-Process`). It runs only in interactive shells without
+    `OMH_AUTO_RESUME_DONE`, `HERMES_SESSION_ID`, `OMH_TUI_SESSION_FILE` or
+    `CI`, and runs `omh auto-resume shell-start` once at the first prompt (zsh
+    `zle-line-init`, kept out of the history by a one-shot `zshaddhistory`
+    hook; bash `PROMPT_COMMAND`; PowerShell console host). `shell-start`
+    reopens only a session recorded under this terminal's key.
+  - No third-party terminal's files are written; their pane ids are only read.
+  - Separately, a bare `omh` reopens the session its terminal (else, outside
+    omher, its folder) dropped, once, at once, as `omh --resume <id>` would. It
+    is on by default and off with `omh --new`, `OMH_AUTO_RESUME=0` or `omh
+    auto-resume set --mode off`, and runs no extra process. It claims only from
+    a Hermes home this launch opens, decided read-only before the claim, and
+    opens the session in the home it was recorded in. Full statement:
+    [`docs/OMH-TUI-BOUNDARY.md`](OMH-TUI-BOUNDARY.md), "Coming back after a
+    closed terminal".
 - **omher** (apps/omher/, the Tauri desktop app for macOS, Windows and Linux) is not part of core omh and nothing in src/ imports it. "omher" names the app only; "OMH" and "oh-my-hermes" name the harness. It shows Hermes bots, one main chat each, and the bot's other sessions read-only; it sends only to a bot's main chat and to folder chats its bridge opened itself, reaches only the person's own loopback gateway through a local bridge, and makes no model or API call itself. Its SESSIONS start only allow-listed local agent CLIs, when the person asks. Every widening is a numbered rule in [docs/OMHER-BOUNDARY.md](OMHER-BOUNDARY.md), pinned by `tests/test_omher_boundary.py`; read it before touching the app.
 
 ## Short form
@@ -201,6 +235,12 @@ The one-line form of the same exceptions, formerly under What This Repo Is in
   list of imports, names and name flows measured from the script. It is not a
   sandbox: an allowed Hermes function called with other arguments, and where
   the grant's url points, are beyond it.
+- The auto-resume shell hook: opt-in only (`omh auto-resume shell install` or a
+  Yes in `omh setup`, default No). One marked block at the end of the zsh, bash
+  or PowerShell rc, written only by `src/tui/shell_hook.py` and removed byte
+  for byte by `omh auto-resume shell remove`. It starts no process unless a
+  dropped OMH session waits, then runs `omh auto-resume shell-start` once at the
+  first prompt. A bare `omh` reopening a dropped session needs no hook.
 - omher, the desktop app under `apps/omher/`: not core. ("omher" is the app;
   "OMH"/"oh-my-hermes" is the harness.) Its Python bridge reaches only the
   person's own gateway over loopback, sends only to a bot's main chat and the

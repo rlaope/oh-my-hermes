@@ -590,9 +590,12 @@ under `platforms:`). That is checked read-only, before anything is claimed, and
 only when a session of the own home is the one that would win here; the home
 is built or refreshed only after the claim picked such a session, so a launch
 that reopens a shared session, or none, leaves the own home's files as they
-are. A session in any other home is left for a launch that opens there. Should the claimed home still fail to open
+are. An own-home winner this launch cannot open is passed over, and the claim
+chooses among the shared homes. When another launch takes the session that
+would have won first, the launch looks once more. A session in any other home is left for a launch that opens there. Should the claimed home still fail to open
 after the claim, the claim is given back (the session is dropped again and
-`resume-pending` re-armed) and a new session opens; the id is never sent to
+`resume-pending` re-armed) and the launch claims again among the shared homes
+only; with nothing there a new session opens. The id is never sent to
 another home. It runs at once, in the home it was
 recorded in, as `omh --resume <id>` would, and says so in one stderr line naming the session
 and `omh --new`. A session nothing was said in is skipped (Hermes keeps no
