@@ -235,6 +235,14 @@ Rules, all applied at freeze time:
   the prepared ceiling on what one unit may read; it is not evidence that the
   unit read the range, stayed within the budget, or covered it.
 
+Any unit may also declare an optional `review_focus`: one string, at most 400
+characters after whitespace collapse, saying what the reviewer will check in
+the unit's result. The executor prompt states it right after the numbered
+criteria as `Review focus (what the reviewer will check): <text>`. A unit
+that declares none (or an empty string) carries no key, and its contract and
+prompt stay byte-identical. A review focus is prepared guidance, not evidence
+of review.
+
 ## Dispatch bridge semantics
 
 - **Concurrency is fixed by default and adaptive only when requested.** The
