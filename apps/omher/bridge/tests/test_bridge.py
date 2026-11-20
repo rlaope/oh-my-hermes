@@ -2216,6 +2216,23 @@ class ReplyThere(BridgeCase):
         # opened while that last turn still runs: what it said so far is commentary, its answer comes live
         self.assertEqual(ob.chat_messages(rows, running=True)[-1], {"id": "9", "role": "user", "text": "still running?", "ts": 0.0})
 
+    def test_the_words_before_a_clarify_ask_stay_in_a_reopened_chat(self):
+        """The live chat keeps the words written right before a question as a row above its card (store.ts
+        `askNote`). Hermes stores them as a commentary row; a reopened chat keeps that one row, while the question
+        still waits and after it was answered, and still hides the other commentary."""
+        rows = [{"role": "user", "text": "add the aliases", "row_id": 1},
+                {"role": "assistant", "text": "Reading the config.", "row_id": 2},
+                {"role": "tool", "name": "read_file", "row_id": 3},
+                {"role": "assistant", "text": "Before I apply it:\n\n1) six aliases", "row_id": 4},
+                {"role": "tool", "name": "clarify", "row_id": 5}]
+        waiting = [(m["role"], m["text"]) for m in ob.chat_messages(rows, running=True)]
+        self.assertEqual(waiting, [("user", "add the aliases"), ("assistant", "Before I apply it:\n\n1) six aliases")])
+        done = rows + [{"role": "assistant", "text": "Applied.", "row_id": 6}]
+        got = [m["text"] for m in ob.chat_messages(done)]
+        self.assertEqual(got, ["add the aliases", "Before I apply it:\n\n1) six aliases", "Applied."])
+        # a row whose next tool is not clarify stays commentary
+        self.assertNotIn("Reading the config.", got)
+
     async def test_elsewhere_list_carries_the_target_only_for_threads(self):
         async with Env(sessions=[dict(r) for r in self.SESSIONS]) as env:
             self._db(env.home / "profiles" / "kami")
