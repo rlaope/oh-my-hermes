@@ -902,7 +902,7 @@ class NodeRoleTests(unittest.TestCase):
             node("frontend", label="frontend observe-each-change + visual-qa", scope=("ui.py",), role="build"),
             node("check", label="typecheck + pnpm test on the fix branch", depends_on=("frontend",), role="verify"),
         ], time.time())
-        self.assertEqual(named["lint"], ["no_review_node"])
+        self.assertEqual(named["lint"], ["no_review_node", "no_review_focus:frontend"])
 
     def test_a_file_writing_node_that_reads_like_a_check_must_name_its_role(self) -> None:
         for label, guess in (("Verify: typecheck + tests", "verify"), ("QA the build", "verify"),
@@ -1246,7 +1246,7 @@ class ReviewCategoryLintTests(unittest.TestCase):
             ])
         self.assertEqual(result["status"], "ok", result)
         # Defined without goal criteria: the define reply adds that advice, and the stored record does not.
-        self.assertEqual(result["lint"], ["review_not_review_category:diff", "no_goal_criteria"])
+        self.assertEqual(result["lint"], ["review_not_review_category:diff", "no_review_focus:api", "no_goal_criteria"])
         record = dag_run.new_record(PARENT, "feat", "", "", [
             node("api", scope=("src/api.py",)),
             node("diff", category="unspecified-high", depends_on=("api",), role="review"),
@@ -1274,7 +1274,8 @@ class ReviewCategoryLintTests(unittest.TestCase):
         for name, definitions in cases.items():
             with self.subTest(case=name):
                 record = dag_run.new_record(PARENT, "feat", "", "", definitions, time.time())
-                self.assertEqual(record["lint"], [])
+                # The code-writing build node names no review focus: that advice only, no category finding.
+                self.assertEqual(record["lint"], ["no_review_focus:api"])
 
     def test_a_review_only_guessed_from_a_label_or_a_stored_node_is_not_linted(self) -> None:
         """Only a declared `role=review` is asked to move: a role-less node whose label reads like a review runs as a
@@ -1357,7 +1358,7 @@ class ReviewCategoryLintTests(unittest.TestCase):
             node("api", category="unspecified-high", scope=("src/api.py",)),
             node("check", category="unspecified-high", depends_on=("api",), role="verify"),
         ], time.time())
-        self.assertEqual(record["lint"], ["no_review_node"])
+        self.assertEqual(record["lint"], ["no_review_node", "no_review_focus:api"])
 
 
 class GoalVerdictTests(unittest.TestCase):
@@ -1825,6 +1826,8 @@ class VerifyAttributionAndRepairLeftoversTests(unittest.TestCase):
             "Commit only your own SCOPE paths: stage them by name (`git add -- <paths>`), never `git add -A`, "
             "`git add .` or `git commit -a`, and never `git stash`; the index and stash are shared with the "
             "parallel parts.",
+            "Other agents share this machine: run only the builds and tests you need at once, and before you stop, "
+            "stop the background jobs you started and remove the temporary files you created.",
             "Stay inside your SCOPE: other parts of this run work at the same time. If you cannot finish, "
             "say plainly that you are blocked and why; do not report blocked work as done.",
         ]))

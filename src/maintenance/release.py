@@ -476,7 +476,10 @@ SKILL_INDEX_LINE_CHAR_LIMIT = 99
 # installs without omher never carry it. Measured by
 # per_turn_context.plugin_tool_schema_chars_by_tool() against c16924f2a, then
 # summed with main's carry_forward. No headroom.
-PLUGIN_TOOL_SCHEMA_CHAR_LIMIT = 63824
+# 63824 -> 63954: omh_dag node `review_focus` (+130): one optional string property
+# with its description, and the field named in the tool description. Measured by
+# per_turn_context.plugin_tool_schema_chars_by_tool() against c5a909c6b. No headroom.
+PLUGIN_TOOL_SCHEMA_CHAR_LIMIT = 63954
 # PRE_LLM_CALL_CONTEXT_CHAR_LIMIT, PRE_LLM_CALL_CONTEXT_FALLBACK_CHAR_LIMIT: moved with
 # their history to src/plugin_bundle/omh/turn_budget.py; imported at the top of this file.
 # 340000 -> 349637: three capability-skill sections were added by the domain

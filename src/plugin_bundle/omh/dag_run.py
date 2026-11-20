@@ -95,6 +95,8 @@ MAX_NODES: Final = 48
 MAX_RUNS_PER_SESSION: Final = 16
 MAX_PROMPT_CHARS: Final = 3_000
 MAX_LABEL_CHARS: Final = 80
+# A node's `review_focus`: one plain line saying what the parent will look for when it reads the node's work.
+MAX_REVIEW_FOCUS_CHARS: Final = 400
 MAX_NAME_CHARS: Final = 48
 MAX_GOAL_CHARS: Final = 240
 MAX_SCOPE_ENTRIES: Final = 16
@@ -165,7 +167,7 @@ CHILD_FAILURE_STOPS: Final = frozenset({"failed", "error", "timeout", "interrupt
 HANDOFF_NOT_CHECKED: Final = "handoff not checked"
 EXTERNAL_OWNERS: Final = ("claude-code", "codex")
 NODE_FIELDS: Final = frozenset({"id", "label", "category", "prompt", "depends_on", "write_scope", "role", "owner",
-                                "local", "read_only", "identity"})
+                                "local", "read_only", "identity", "review_focus"})
 # What a node is for, as the parent declares it (``build`` when it names none). A ``build`` node with a write scope is a
 # producer; baseline, verify and review nodes stay native whoever builds, and only a ``verify`` node verifies the goal.
 ROLES: Final = ("build", "baseline", "verify", "review")
@@ -431,7 +433,7 @@ def _validated_node(raw: object) -> dict[str, Any]:
     if not isinstance(raw, Mapping) or set(raw) - NODE_FIELDS:
         raise DagRefusal("invalid_node",
                          "Each node takes only id, label, category, prompt, depends_on, write_scope, role, owner, "
-                         "local, read_only and identity.")
+                         "local, read_only, identity and review_focus.")
     node_id = valid_id(raw.get("id"), "invalid_node_id", "Each node needs a short lowercase id (a-z, 0-9, -).")
     label = _plain(raw.get("label"), MAX_LABEL_CHARS, "invalid_label", f"Node {node_id} needs a short label.")
     # Either lane's reader also takes a marker that opens a goal (one handed out before an update), so a label holding
@@ -464,6 +466,7 @@ def _validated_node(raw: object) -> dict[str, Any]:
                 or not IDENTITY_REFERENCE_RE.fullmatch(identity.strip())):
             raise DagRefusal("invalid_identity",
                              f"Node {node_id}: identity is a qualified builtin:<name> or custom:<name> reference.")
+    focus = _review_focus(raw.get("review_focus"), node_id)
     validated = {
         "id": node_id,
         "label": label,
@@ -480,6 +483,9 @@ def _validated_node(raw: object) -> dict[str, Any]:
     }
     if "identity" in raw:
         validated["identity"] = identity.strip()
+    if focus:
+        # Stored only when given, so a node without one keeps the digest it had before the field existed.
+        validated["review_focus"] = focus
     guess = guessed_role(validated) if "role" not in raw else DEFAULT_ROLE
     if guess == DEFAULT_ROLE and "role" not in raw and _DOUBLE_CHECK.search(label.casefold()):
         guess = "verify"
@@ -515,6 +521,19 @@ def _validated_node(raw: object) -> dict[str, Any]:
         if raw["read_only"]:
             validated["read_only"] = True
     return validated
+
+
+def _review_focus(value: object, node_id: str) -> str:
+    """A node's review focus as one line: absent (``""``) when left out, null, empty or spaces only. Refused when it
+    is no string, holds a control character, is only line breaks or tabs, or runs past `MAX_REVIEW_FOCUS_CHARS`."""
+    if value is None or (isinstance(value, str) and not value.strip(" ")):
+        return ""
+    text = " ".join(value.split()) if isinstance(value, str) else ""
+    if not text or len(text) > MAX_REVIEW_FOCUS_CHARS or _CONTROL.search(str(value)):
+        raise DagRefusal("invalid_review_focus",
+                         f"Node {node_id}: review_focus is one line of at most {MAX_REVIEW_FOCUS_CHARS} characters "
+                         "saying what you will look for when you read its work; leave it out when there is none.")
+    return text
 
 
 def _validated_criteria(raw: object, taken: Sequence[str] = ()) -> list[dict[str, str]]:
@@ -811,6 +830,10 @@ def lint(nodes: Sequence[Mapping[str, Any]], *, defining: bool = True) -> list[s
     # alone: they judge the run goal, which can need a high category.
     findings += [f"review_not_review_category:{node['id']}" for node in nodes
                  if node.get("role") == "review" and node["category"] != "review"]
+    # A build node that writes code and says nothing about what the parent will check when it reads the work.
+    findings += [f"no_review_focus:{node['id']}" for node in nodes
+                 if node_role(node) == DEFAULT_ROLE and node["write_scope"] and writes_code(node)
+                 and not node.get("review_focus")]
     return findings
 
 
@@ -1545,6 +1568,15 @@ def _fit(items: Sequence[str], limit: int, sep: str) -> tuple[list[str], int]:
     return shown, len(items) - len(shown)
 
 
+def _producer_focus(record: Mapping[str, Any], node: Mapping[str, Any], preceding: set[str]) -> list[str]:
+    """``- id: focus`` for each producer a verify node follows (and their repairs) that was given a review focus, in
+    run order. The verify node's own focus is its task's first line, so it is not listed here again."""
+    holders = preceding | {str(node["id"])}
+    return [f"- {item['id']}: {item['review_focus']}" for item in record["nodes"]
+            if item.get("review_focus") and str(item["id"]) != str(node["id"]) and is_producer(item)
+            and (str(item["id"]) in preceding or item.get("repairs") in holders)]
+
+
 def _producer_scopes(record: Mapping[str, Any], node: Mapping[str, Any], preceding: set[str]) -> str:
     """``id: path, path; ...`` for the producers a verify node follows (and their repairs, and its own), cut at
     `SCOPE_MAP_CHARS` on whole paths and producers. Attribution by declared scope only: no write is observed."""
@@ -1583,6 +1615,8 @@ def task_for(
     """One `delegate_task` task: the marked goal, and the node's prompt with where to write and read handoffs."""
     run = str(record["run"])
     lines = [str(node["prompt"]), ""]
+    if node.get("review_focus"):
+        lines.extend([f"Review focus (what the parent will check when it reads your work): {node['review_focus']}", ""])
     attempts = node.get("attempts") or []
     if attempts and attempts[-1].get("resume_handle"):
         lines.extend([f"Resume the still-running wait: {attempts[-1]['resume_handle']}. "
@@ -1658,6 +1692,9 @@ def task_for(
                              "goal done.")
         lines.append("Check the complete run goal, not only this node's local VERIFY. "
                      "Name each unmet or unobserved goal criterion; producer claims are not verification evidence.")
+        focus = _producer_focus(record, node, preceding)
+        if focus:
+            lines.extend(["Review focus the producers were given (judge their work on these too):", *focus])
         carried = [str(item["id"]) for item in record["nodes"]
                    if str(item["id"]) in preceding and derived[str(item["id"])]["state"] == CARRIED]
         if carried:
@@ -1692,6 +1729,9 @@ def task_for(
         lines.append("Commit only your own SCOPE paths: stage them by name (`git add -- <paths>`), never `git add -A`, "
                      "`git add .` or `git commit -a`, and never `git stash`; the index and stash are shared with the "
                      "parallel parts.")
+        if node_role(node) == DEFAULT_ROLE:
+            lines.append("Other agents share this machine: run only the builds and tests you need at once, and before "
+                         "you stop, stop the background jobs you started and remove the temporary files you created.")
     lines.append("Stay inside your SCOPE: other parts of this run work at the same time. If you cannot finish, "
                  "say plainly that you are blocked and why; do not report blocked work as done.")
     # The marker ends the goal: Hermes previews each goal by its first 40 characters, and a person reads the label

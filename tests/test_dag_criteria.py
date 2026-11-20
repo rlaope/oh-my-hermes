@@ -110,12 +110,16 @@ MAIN_VERIFY_CONTEXT = (
 # reproduces main's pin fd8a3794061b97010042cb5340cbcf4991630164ce58ed990667ccfbb5bc146c.
 # Re-pinned after dag_run.task_for gained the commit-scope line for writing nodes (T2 dag-commit-scope); the
 # previous main pin was fa272bdff1d7b1f0ae032829a98236fa6239cbc0497bdd11885818b345dbb276.
-MAIN_API_CONTEXT_SHA = "21c6f77532532a3aef495c180dd84688c362d23564aa9255bd0cada09e3aaef0"
+# Re-pinned after the shared-machine line for writing build nodes (g62-dag); removing that line alone reproduces the
+# previous pin 21c6f77532532a3aef495c180dd84688c362d23564aa9255bd0cada09e3aaef0.
+MAIN_API_CONTEXT_SHA = "fbc73882476a927a6ebc4f8e69ac91c556a107cc38ee9a14c3b6ce19667b4dc6"
 # The two tool-result pins hold the reply as the model reads it: non-ASCII kept as written (#2884), so the `·` of the
 # status line is one character, not `\u00b7`; the ASCII re-encoding of these bytes gives the pins main captured.
 MAIN_RESULT_RUNNING_SHA = "c53744ae5ca1a204693922fbc67dc5eb8b44cc9eb6ae714ac10955ba4fd03d50"
 MAIN_RESULT_DONE_SHA = "23f7a0fbcc001ab6dc3968b0980e2ba0806fbf7aa85d0d136a3bdbff23237ec8"
-MAIN_RECORD_DONE_SHA = "73428d56e7eef59d8ab280603de5610873ab3e4018287c6f03d8bfb7da544deb"
+# Re-pinned after the record's lint gained `no_review_focus:api` (g62-dag); dropping that finding alone reproduces the
+# previous pin 73428d56e7eef59d8ab280603de5610873ab3e4018287c6f03d8bfb7da544deb.
+MAIN_RECORD_DONE_SHA = "cf1774f43efa50d84dcfb661f99144934c38615efc51ee23406d340b04376c57"
 
 
 def _sha(text: str) -> str:
@@ -1060,9 +1064,12 @@ def _settled_digest(home, settled: dict) -> str:
     return _sha(json.dumps({"record": _scrub(record), "result": _scrub(settled)}, sort_keys=True))
 
 
-# Captured from origin/main b201a490a (the same scenarios, before the probe read whole answers).
-MAIN_NO_CRITERIA_FILE_SHA = "ed430c1c1678785f79447f41f41c686e2dc654ef20e582b15b2c6c034469f5d9"
-MAIN_CRITERIA_SHELL_SHA = "3ae6c09b4b1eaaf64ab8c9029f4f23b5357b769f00045df6b91e7d8dea35d41a"
+# Captured from origin/main b201a490a (the same scenarios, before the probe read whole answers). Re-pinned after the
+# `no_review_focus` lint and the shared-machine line (g62-dag); dropping those two alone reproduces the previous pins
+# ed430c1c1678785f79447f41f41c686e2dc654ef20e582b15b2c6c034469f5d9 and
+# 3ae6c09b4b1eaaf64ab8c9029f4f23b5357b769f00045df6b91e7d8dea35d41a.
+MAIN_NO_CRITERIA_FILE_SHA = "f5887e062eea59ae5b33aa1d890ce976608abc48d8e720987518696945400074"
+MAIN_CRITERIA_SHELL_SHA = "48acf3751b456d69f27a299415f02279057d66ef7db1bb9b63c2ecae343f83f6"
 
 
 class ExistenceProbeTests(unittest.TestCase):
