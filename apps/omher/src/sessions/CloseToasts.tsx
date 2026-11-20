@@ -15,12 +15,12 @@ const inTextField = (el: Element | null): boolean =>
 export function CloseToasts() {
   const s = getSessions();
   const list = useSyncExternalStore(s.onClosing, s.closing, s.closing);
-  const [now, setNow] = useState(() => Date.now());
+  // one tick a second re-renders the countdown; the seconds are read from the clock at render
+  const [, setTick] = useState(0);
   const any = list.length > 0;
   useEffect(() => {
     if (!any) return;
-    setNow(Date.now());
-    const tick = setInterval(() => setNow(Date.now()), 1000);
+    const tick = setInterval(() => setTick((n) => n + 1), 1000);
     const onKey = (e: KeyboardEvent) => {
       if (e.repeat || !isUndoKey(e, isMac()) || inTextField(document.activeElement)) return;
       if (!getSessions().undoClose()) return;
@@ -34,10 +34,11 @@ export function CloseToasts() {
     };
   }, [any]);
   if (!any || typeof document === "undefined") return null;
+  const now = Date.now();
   return createPortal(
     <div className="ss-toasts" role="status" aria-live="polite" data-testid="close-toasts">
       {list.slice(0, GRACE_SHOWN).map((g) => {
-        const left = Math.max(1, Math.ceil((g.until - now) / 1000));
+        const left = Math.min(Math.ceil((g.until - g.closedAt) / 1000), Math.max(1, Math.ceil((g.until - now) / 1000)));
         return (
           <div key={g.id} className="ss-toast" data-testid={`close-toast-${g.id}`}>
             <span className="ss-toast-t" title={g.name}>

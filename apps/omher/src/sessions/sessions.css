@@ -1900,7 +1900,7 @@ body.side-resizing * {
   display: flex;
   align-items: center;
   gap: 10px;
-  max-width: min(380px, calc(100vw - 32px));
+  width: min(320px, calc(100vw - 32px));
   padding: 8px 8px 8px 14px;
   border: 1px solid var(--line);
   border-radius: var(--r-bubble);
@@ -1910,13 +1910,14 @@ body.side-resizing * {
   font-size: 13px;
 }
 .ss-toast-t {
+  flex: 1;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 .ss-toast-s {
-  color: var(--quiet);
+  color: var(--muted);
   font-variant-numeric: tabular-nums;
   flex: none;
 }
@@ -1924,10 +1925,11 @@ body.side-resizing * {
   flex: none;
   padding: 4px 10px;
   border-radius: var(--r-sm);
+  border: 1px solid var(--line);
   color: var(--ink);
-  background: var(--seg-on);
+  background: var(--active-row);
   font-weight: 600;
 }
 .ss-toast-undo:hover {
-  background: var(--active-row);
+  background: var(--seg-on);
 }
