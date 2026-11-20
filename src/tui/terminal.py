@@ -71,8 +71,12 @@ nothing. A process group with no shell to continue it (orphaned, as a
 program started straight in a tmux pane) is not stopped by the kernel, so
 the terminal is entered again at once.
 
-Windows has no termios; `terminal_supported` reports that, and the caller
-takes the fallback path instead of entering a `Terminal`.
+Windows has no termios: there `Terminal` enters the console through
+`terminal_windows.WindowsConsole` instead (virtual terminal input and output,
+UTF-8 code pages, input read on a thread, the size polled for a resize), and
+`terminal_blocker` asks the console whether it takes virtual terminal input
+and output, so a console that cannot (an old conhost) takes the fallback. Any
+other platform without termios takes the fallback too.
 """
 
 from __future__ import annotations
@@ -86,10 +90,13 @@ import signal
 import sys
 import time
 from types import FrameType, TracebackType
-from typing import Protocol
+from typing import TYPE_CHECKING, Protocol
 
 from .screen import AUTOWRAP_ON, CURSOR_SHAPE_DEFAULT, SHOW_CURSOR
 from .style import CSI, SGR_RESET
+
+if TYPE_CHECKING:
+    from .terminal_windows import WindowsConsole
 
 try:  # pragma: no cover - exercised by platform, not by a branch test
     import termios
@@ -208,8 +215,12 @@ def terminal_supported(stdin: _TtyProbe | None, stdout: _TtyProbe | None, enviro
 
 
 def terminal_blocker(stdin: _TtyProbe | None, stdout: _TtyProbe | None, environ: Mapping[str, str]) -> str:
-    """Why the OMH TUI cannot own this terminal, in one line, or "" when it can."""
-    if termios is None:
+    """Why the OMH TUI cannot own this terminal, in one line, or "" when it can.
+
+    On Windows, after the rules every platform shares, the console is asked
+    whether it takes virtual terminal input and output (`console_blocker`).
+    """
+    if termios is None and os.name != "nt":
         return "the OMH TUI needs termios, which this platform does not have"
     if environ.get("TERM", "") == "dumb":
         return "TERM=dumb cannot draw the OMH TUI"
@@ -224,6 +235,10 @@ def terminal_blocker(stdin: _TtyProbe | None, stdout: _TtyProbe | None, environ:
         except (OSError, ValueError):
             # A closed or detached stream is not a terminal.
             return "stdin or stdout is not a terminal"
+    if termios is None:
+        from .terminal_windows import console_blocker
+
+        return console_blocker(stdin, stdout)  # type: ignore[arg-type]
     return ""
 
 
@@ -377,7 +392,8 @@ class Terminal:
     ) -> None:
         self._input = input_fd if input_fd is not None else sys.stdin.fileno()
         self._output = output_fd if output_fd is not None else sys.stdout.fileno()
-        self._saved: list | None = None
+        self._saved: list | None = None  # the attributes to put back; [] while a Windows console is entered
+        self._console: WindowsConsole | None = None  # where there is no termios: the console's modes, input and size
         self._previous_winch: object = None
         self._winch_installed = False
         self._winch_pipe: tuple[int, int] | None = None  # the resize signal writes here to end a `read`'s wait
@@ -405,11 +421,18 @@ class Terminal:
 
     def __enter__(self) -> Terminal:
         if termios is None:
-            raise RuntimeError("the OMH TUI needs termios; check terminal_supported() first")
-        saved = termios.tcgetattr(self._input)
-        # TCSANOW, not TCSAFLUSH: flushing would throw away keys typed before start.
-        termios.tcsetattr(self._input, termios.TCSANOW, raw_attributes(saved))
-        self._saved = saved
+            if os.name != "nt":
+                raise RuntimeError("the OMH TUI needs termios; check terminal_supported() first")
+            from .terminal_windows import WindowsConsole
+
+            console = WindowsConsole(self._input, self._output)
+            console.enter()  # puts back whatever it set before it raises
+            self._console, self._saved = console, []
+        else:
+            saved = termios.tcgetattr(self._input)
+            # TCSANOW, not TCSAFLUSH: flushing would throw away keys typed before start.
+            termios.tcsetattr(self._input, termios.TCSANOW, raw_attributes(saved))
+            self._saved = saved
         entered = False
         try:
             self._install_winch()
@@ -443,15 +466,19 @@ class Terminal:
         # The shell's own cursor shape comes back only where this run changed it: a shell that chose one keeps it.
         reset, self.cursor_shape = (CURSOR_SHAPE_DEFAULT if self.cursor_shape is not None else ""), None
         hung_up = False
+        console, self._console = self._console, None
         try:
             self.write(reset + RESTORE_SEQUENCE)
         except OSError as error:
-            if error.errno != errno.EIO:
+            # A console that is gone refuses the write with whatever errno Windows maps its error to.
+            if error.errno != errno.EIO and console is None:
                 raise
             hung_up = True
         finally:
             try:
-                if not hung_up:
+                if console is not None:
+                    console.restore()  # stops its reader too, so it runs for a console that is gone as well
+                elif not hung_up:
                     termios.tcsetattr(self._input, termios.TCSANOW, saved)
             finally:
                 self._uninstall_winch()
@@ -484,6 +511,8 @@ class Terminal:
         else:
             switch = "" if drag == self.mouse_drag else MOUSE_DRAG_ON if drag else MOUSE_DRAG_OFF
             self.write(("" if self.mouse_reporting else MOUSE_REPORTING_ON) + switch)
+        if self._console is not None and enabled != self.mouse_reporting:
+            self._console.set_mouse(enabled)  # QuickEdit off while clicks are reports
         self.mouse_reporting, self.mouse_drag = enabled, drag
 
     def set_cursor_shape(self, shape: str | None) -> None:
@@ -558,6 +587,12 @@ class Terminal:
         """Input after `data` until the attributes answer arrives (the last a query asks for) or `timeout` passes."""
         deadline = time.monotonic() + timeout
         while not split_background_replies(data)[2] and (left := deadline - time.monotonic()) > 0:
+            if self._console is not None:
+                try:
+                    data += self._console.read(left)
+                except EOFError:
+                    break  # a console that is gone: the loop's first read says so
+                continue
             ready, _, _ = select.select([self._input], [], [], left)
             if not ready:
                 break
@@ -609,7 +644,9 @@ class Terminal:
             os.close(descriptor)
 
     def resized(self) -> bool:
-        """True once per SIGWINCH since the last call."""
+        """True once per SIGWINCH, or on Windows per size change the console's poll saw, since the last call."""
+        if self._console is not None:
+            return self._console.resized()
         resized, self._resized = self._resized, False
         return resized
 
@@ -627,8 +664,11 @@ class Terminal:
         The wait also ends, with b"", when `wake` becomes readable (the caller
         empties it) or a resize signal arrives. Raises EOFError when the
         terminal hung up, so a closed window ends the session instead of
-        spinning on empty reads.
+        spinning on empty reads. On Windows the console's reader thread
+        supplies the input and a size change ends the wait (`WindowsConsole.read`).
         """
+        if self._console is not None:
+            return self._console.read(timeout, wake)
         waits = [self._input, *(() if wake is None else (wake,))]
         if self._winch_pipe is not None:
             waits.append(self._winch_pipe[0])
