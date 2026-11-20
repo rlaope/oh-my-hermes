@@ -222,6 +222,25 @@ class ResolutionMemoTests(unittest.TestCase):
                 self.assertEqual(paths.resolve_homes()[0], self.root / "store")
         self.assertEqual(self.validate.call_count, 3)
 
+    def test_an_unprovable_comparison_skips_the_memo_and_keeps_the_binding(self):
+        # A recursive YAML alias makes the two independent parses compare by
+        # recursion; that must only decline publication, never veto the
+        # validator-approved read.
+        self._write(_setting(str(self.root / "store")))
+        left: list = []
+        left.append(left)
+        right: list = []
+        right.append(right)
+
+        class Unequal(dict):
+            def __eq__(self, other):
+                return left == right  # two distinct cycles: RecursionError, as aliased YAML cycles do
+
+        self.modules["hermes_yaml"].safe_load = lambda stream: Unequal(json.loads(stream.read() or "null"))
+        for _ in range(3):
+            self.assertEqual(paths.resolve_homes()[0], self.root / "store")
+        self.assertEqual(self.validate.call_count, 3)
+
     def test_path_alias_is_resolved_live_under_unchanged_config(self):
         first, second, alias = self.root / "first", self.root / "second", self.root / "alias"
         first.mkdir()

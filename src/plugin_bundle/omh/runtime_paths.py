@@ -537,7 +537,12 @@ def _parses_to(data: bytes, parsed) -> bool:
         return False
     # The validator reads an empty document as an empty mapping.
     own = {} if own is None else own
-    return isinstance(own, dict) and own == parsed
+    try:
+        return isinstance(own, dict) and own == parsed
+    except RecursionError:
+        # Cyclic aliases compare by recursion: unprovable, so not published.
+        # The validator's parse is still the answer for this call.
+        return False
 
 
 def _validated_config(config, path: Path):
