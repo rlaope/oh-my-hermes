@@ -364,6 +364,8 @@ class LastCheckBeforeReplaceTest(RouteWriteRaceTestCase):
     def test_an_edit_during_the_temp_file_chmod_survives_a_retry(self) -> None:
         self.write(START)
         self.config.chmod(0o640)
+        # Windows keeps only the read-only bit; compare with whatever mode the file really has.
+        mode = self.config.stat().st_mode & 0o777
         real_chmod = os.chmod
         done = False
 
@@ -380,7 +382,7 @@ class LastCheckBeforeReplaceTest(RouteWriteRaceTestCase):
         self.assertEqual(result["status"], "routed", result)
         self.assertIn("context_file_max_chars: 60000\n", self.text())
         self.assertEqual(read_delegation_route(self.home), {"model": "next", "provider": "og"})
-        self.assertEqual(self.config.stat().st_mode & 0o777, 0o640)
+        self.assertEqual(self.config.stat().st_mode & 0o777, mode)
         self.assertEqual(self.temp_files(), [])
 
     def test_a_file_that_keeps_changing_is_refused_without_leftovers(self) -> None:
