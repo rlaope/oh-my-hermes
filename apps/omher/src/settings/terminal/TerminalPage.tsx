@@ -130,6 +130,7 @@ export function TerminalPage() {
   // a profile being looked at in Import from…: the preview shows it until Use or Cancel
   const [candidate, setCandidate] = useState<ImportCandidate>(null);
   const mine = term.custom ? customTermTheme(term.custom) : null;
+  const [importAt, setImportAt] = useState<HTMLDivElement | null>(null);
 
   const picked = termThemePick(slot, term);
   const needle = compact(q);
@@ -158,9 +159,10 @@ export function TerminalPage() {
         </div>
         <div className="tm-bar-r">
           <input type="search" className="bots-q tm-q" placeholder={t("term.find")} aria-label={t("term.find")} value={q} onChange={(e) => setQ(e.target.value)} data-testid="term-search" />
-          {isMac() && <TermImport settings={term} slot={slot} onCandidate={setCandidate} />}
+          {isMac() && <TermImport settings={term} slot={slot} onCandidate={setCandidate} panelAt={importAt} />}
         </div>
       </div>
+      <div ref={setImportAt} />
       <div className="tm-list" role="radiogroup" aria-label={t(SLOT[slot])} data-testid="term-themes">
         {mine && (!needle || compact(mine.name).includes(needle)) && (
           <div data-testid="term-themes-custom">

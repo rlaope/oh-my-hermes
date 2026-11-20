@@ -39,13 +39,16 @@
   flex: none;
   padding: 0 10px;
 }
+.tm-slot {
+  flex: none;
+}
 .tm-bar-r {
   display: flex;
   align-items: center;
   gap: 8px;
-  flex: 1;
+  flex: 1 1 260px;
   justify-content: flex-end;
-  min-width: 0;
+  min-width: 260px;
 }
 .tm-q {
   flex: 1;
@@ -229,7 +232,11 @@
 }
 .tm-imp-btn {
   height: 28px;
+  border: 1px solid var(--line);
   white-space: nowrap;
+}
+.tm-imp-btn[aria-expanded="true"] {
+  background: var(--seg-on);
 }
 .tm-imp-none {
   padding: 4px 8px 8px;
