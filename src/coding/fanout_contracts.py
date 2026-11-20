@@ -86,6 +86,18 @@ FANOUT_SPAWN_PLAN_CLAIM_BOUNDARY = (
 # can justify, and 240 chars is a command line rather than a pasted script.
 MAX_UNIT_VERIFICATION_COMMANDS = 8
 MAX_UNIT_VERIFICATION_COMMAND_CHARS = 240
+
+# Optional per-unit review focus: what the reviewer will look at when the
+# unit's work comes back (OpenAI "Prompting GPT-6.2 in Codex" guide: tell the
+# executor what you will look for in review). Prose beside
+# `integration_checks`, bounded like them: a few sentences, not a checklist.
+# Bounded in UTF-8 bytes, not characters: the unit prompt has a byte ceiling
+# (UNIT_PROMPT_MAX_BYTES). The live-shaped worst case with the longest ASCII
+# reproduction command the contract accepts renders 7,800 B with no focus, and
+# the focus block costs its bytes plus a 46-byte label, so 150 bytes (one
+# sentence; about 50 Hangul characters) keeps that case at 7,996 B. Measured by
+# PromptCeilingTests; raise it only with that test.
+MAX_UNIT_REVIEW_FOCUS_BYTES = 150
 # Named once so the check rows the dispatcher writes, the journal event they
 # back, and the docs describing both cannot drift apart.
 UNIT_VERIFICATION_OBSERVATION_SOURCE = "dispatch_verification"

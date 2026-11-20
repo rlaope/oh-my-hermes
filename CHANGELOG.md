@@ -98,6 +98,18 @@ All notable changes will be documented here.
   nodes in one checkout stop committing each other's work. Verify, review and read-only nodes get no such line. This
   is guidance; the write-scope guard on file tools stays the enforcement.
 
+- **Coding handoffs and fanout units pick up four lines from OpenAI's GPT-6.2 Codex guide.** A fanout unit may declare
+  `review_focus` (one sentence, at most 150 UTF-8 bytes; it is cut to fit rather than ever push the prompt over its
+  byte ceiling), which its prompt
+  states right after the numbered criteria; when it is absent, the contract is byte-identical and no focus block is
+  added. A `handoff_contract/v1` may declare `parts[]` (`id`, `title`,
+  `depends_on`). With two or more parts that depend on nothing, the Codex prompt lists them and adds "Use subagents as
+  needed", the guide's trigger phrase; Claude Code and Hermes prompts never get that line. Every handoff with acceptance criteria
+  ends its Expected result with one line saying what counts as finished, with no keep-going wording. Every unit
+  prompt carries a new shared-machine line after tool batching (limit concurrent builds and tests; stop your own
+  background jobs and delete your own temp files). It stays out of the frozen shared head, so the unit prompt golden
+  digests move.
+
 - **The pi-family coding lane runs on the omp CLI too.** With only `omp` on PATH, a pi-family coding unit now runs
   `omp --print --no-session [--model <id>] [--thinking <level>] -- <prompt>`; when `pi` or its distribution host is
   also installed, those still win. omp has no `--permission-preset`, so no approval flag is passed (omp's default

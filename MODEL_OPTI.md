@@ -248,6 +248,16 @@ discipline for how those prompts are assembled:
   a batching rule is the first thing a weak lane may drop, so it must never
   displace a stop rule there. The `claude` family block used to carry the
   batching half itself; that sentence moved here.
+- **Shared-machine etiquette** — run only the builds and tests you need at
+  once; before returning, stop background jobs you started and delete temp
+  files you created (`SHARED_MACHINE_PROTOCOL`). *Why:* sibling units share
+  one host, and a unit that starts every suite at once, or leaves a watcher
+  or scratch tree behind, slows or breaks a sibling it cannot see. It rides
+  the unit section right after tool batching, outside the frozen head, so on
+  a weak lane it is the first unit rule dropped and never displaces a stop
+  rule. Source: OpenAI's "Prompting GPT-6.2 in Codex" guide (official, read
+  2026-11-20), generalized to every family because a shared host is not
+  model-specific. Editorial, unmeasured.
 
 The first three originate from the stop-condition techniques the
 upstream agent-harness research surfaced for high-effort models (terminal-condition
@@ -797,6 +807,31 @@ and OMH treats them alike; the next section names what differs for Sol.
   them until their intended goal is completely achieved". Each pushes the
   model to keep working, the reading the 2026-09-05 Astra measurement cut
   (+5,419 tokens per instance for the same pass set).
+- **Composer rules from the Codex guide (official, "Prompting GPT-6.2 in
+  Codex", read 2026-11-20):** two lines in the coding handoff, plus one
+  field. None is a calibration change: the two calibration blocks above stay
+  byte for byte, and the 2026-11-18 "no new sentence" decision stands.
+  - Subagent permission: when a `handoff_contract/v1` declares two or more
+    `parts[]` with no `depends_on`, the Codex template lists them and adds
+    "Use subagents as needed: the parts listed above can move ahead
+    independently", the guide's documented trigger phrase. Acceptance
+    criteria are never counted as parts. The Claude Code and other templates
+    are unchanged, and `ultra` stays out of every ladder.
+  - Scoping: every handoff with acceptance criteria closes Expected result
+    with "Finished means every acceptance criterion above holds; be
+    exhaustive on those, not beyond them". This is the guide's "say what
+    counts as finished and where to be exhaustive". It is not the
+    persistence wording cut above.
+  - Review focus: a fanout unit may declare `review_focus` (one sentence,
+    at most 150 UTF-8 bytes: the worst-case unit with the longest ASCII
+    reproduction command renders 7,800 B without one, and 7,996 B with a
+    150-byte focus). The assembler also fits it to the bytes left, so it
+    never takes a prompt that is under the 8,000-byte ceiling over it; the
+    g62 re-verify found an input (7,805 B) where the fixed bound alone did.
+    The unit section states it right after
+    the numbered criteria ("tell Codex what you'll look for when you
+    review"). When it is absent, no focus block is added; the
+    shared-machine line is the only byte every unit prompt gains.
 - **Throughput overlay:** `gpt_sol_codex_handoff` matches `*-sol`, so 6.2
   Sol as a Codex main agent inherits it, as 6.1 Sol did;
   `tests/test_executor_prompting.py` names `gpt-6.2-sol` so the

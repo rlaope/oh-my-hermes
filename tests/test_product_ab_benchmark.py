@@ -1169,14 +1169,17 @@ class ArmTests(unittest.TestCase):
         the completion file) reproduces ad293b0f..., 94513d23...,
         8c509a9f..., c8035549.... Re-derived again for `deepseek-v4.1-flash`
         only, when its override gained the answer-shape sentence; the shipped
-        override without it reproduces 71bd7ad0....
+        override without it reproduces 71bd7ad0.... Re-derived again when the
+        unit section gained `SHARED_MACHINE_PROTOCOL` after tool batching;
+        removing that one line reproduces dc2410dc..., d46fdef2...,
+        945cfd3c..., b4ca61c1....
         """
 
         recorded = {
-            ("gpt-6-astra", "high", "gpt"): "dc2410dcc9e7c243f7deaa19481444e4ee4ca15648f4905c53e58b1a6cea645c",
-            ("gpt-6.1-sol", "medium", "gpt"): "d46fdef21925fbea17832a4190d9e0d11118db80eb28b834a7377bdc5c47b0e8",
-            ("deepseek-v4.1-flash", "high", "deepseek"): "945cfd3cc479d355cb9528ecf92c335c3d95f356a793f459f12b557278e3e464",
-            ("claude-fable-5-1", "xhigh", "claude"): "b4ca61c10c8a4b9e98a77f2e3a407d98b7078f0c50821be496c747840167d7e0",
+            ("gpt-6-astra", "high", "gpt"): "0b03a16a8bbfab42f32867010f99df7fe2780e254294200e3d30791e24fcf4a3",
+            ("gpt-6.1-sol", "medium", "gpt"): "718b286878f09c2a773964df1a4b32d647dd8bdf746a465e1abba00c2e1b0878",
+            ("deepseek-v4.1-flash", "high", "deepseek"): "350738ad052a0bc0648efc5a63eb6552184f5cf24fa52c143ca6366cd1cb91b3",
+            ("claude-fable-5-1", "xhigh", "claude"): "05e17c5107a384f979cba6dba0e009481ac6f60ec89b5759c0c6706804670915",
         }
         for (model, effort, family), digest in recorded.items():
             route = {
