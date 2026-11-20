@@ -132,8 +132,9 @@ TUI_LAUNCH_ENV_NAMES = (
     RUNTIME_ENV,
     BOTS_HOME_ENV,
 )
-# Signals that end `omh` while the TUI runs: closing the terminal window sends SIGHUP.
-EXIT_SIGNALS = ("SIGTERM", "SIGHUP")
+# Signals that end `omh` while the TUI runs: closing the terminal window sends SIGHUP on POSIX; on Windows the
+# C runtime turns Ctrl+Break and a closed console window into SIGBREAK. A name the platform lacks is skipped.
+EXIT_SIGNALS = ("SIGTERM", "SIGHUP", "SIGBREAK")
 
 FRONTEND_DIR = Path(__file__).resolve().parent / "frontend"
 FRONTEND_ENTRY = FRONTEND_DIR / "dist" / "entry.js"

@@ -1600,7 +1600,7 @@ def attach_api() -> AttachApi | None:
         request = json.dumps({"protocol": 1, "id": 1, "verb": "session-ticket", "params": {
             "profile_id": endpoint.profile_id, "instance_id": endpoint.instance_id,
             "purpose": "interactive"}}).encode() + b"\n"
-        # POSIX only, as the OMH TUI is (termios).
+        # POSIX only: the gateway's control endpoint is a Unix-domain socket.
         with connect_private(control_home_for(home, endpoint), TICKET_TIMEOUT_SECONDS) as peer:
             peer.sendall(request)
             with peer.makefile("rb") as stream:

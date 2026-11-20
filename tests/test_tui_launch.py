@@ -212,16 +212,18 @@ class FallbackSentinelTests(unittest.TestCase):
             raise KeyboardInterrupt
         self.assertFalse(sentinel.parent.exists())
 
-    @unittest.skipIf(os.name == "nt", "SIGHUP is POSIX-only, and the OMH TUI is never attempted on Windows")
+    @unittest.skipIf(os.name == "nt", "os.kill with SIGTERM/SIGBREAK ends the process on Windows instead of signalling")
     def test_exit_on_signals_turns_the_pair_into_system_exit_and_puts_the_handlers_back(self) -> None:
-        before = {name: signal.getsignal(getattr(signal, name)) for name in launch.EXIT_SIGNALS}
+        present = [name for name in launch.EXIT_SIGNALS if hasattr(signal, name)]  # SIGBREAK is Windows-only
+        self.assertIn("SIGBREAK", launch.EXIT_SIGNALS)  # a closed console window unwinds too
+        before = {name: signal.getsignal(getattr(signal, name)) for name in present}
         with launch.exit_on_signals():
-            for name in launch.EXIT_SIGNALS:
+            for name in present:
                 with self.subTest(signal=name), self.assertRaises(SystemExit) as raised:
                     os.kill(os.getpid(), getattr(signal, name))
                     time.sleep(1)  # the handler raises before this returns
                 self.assertEqual(raised.exception.code, 128 + getattr(signal, name))
-        self.assertEqual({name: signal.getsignal(getattr(signal, name)) for name in launch.EXIT_SIGNALS}, before)
+        self.assertEqual({name: signal.getsignal(getattr(signal, name)) for name in present}, before)
 
     def test_only_the_fallback_code_with_the_file_is_a_request(self) -> None:
         with launch.fallback_sentinel() as sentinel:

@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import ctypes
 import os
+import signal
 import threading
 import time
 import unittest
@@ -416,6 +417,29 @@ class ConsoleRecordTests(unittest.TestCase):
             ("open", tw.THREAD_TERMINATE, reader.native_id), ("cancel_sync", 77), ("close", 77)])
         self.assertEqual(list(console._chunks), [])
         self.assertEqual(kernel32.modes, {IN: SAVED_IN, OUT: SAVED_OUT})
+
+
+class ExitSignalTests(unittest.TestCase):
+    """Ctrl+Break and a closed console window reach Python as SIGBREAK: both exit-signal sets unwind on it."""
+
+    def test_both_exit_signal_sets_name_sigbreak(self) -> None:
+        from omh.tui import app, launch
+
+        for module in (app, launch):
+            with self.subTest(module=module.__name__):
+                self.assertIn("SIGBREAK", module.EXIT_SIGNALS)
+
+    @unittest.skipIf(hasattr(signal, "SIGBREAK"), "POSIX has no SIGBREAK")
+    def test_posix_installs_skip_the_signal_it_lacks(self) -> None:
+        from omh.tui import app, launch
+
+        expected = {getattr(signal, name) for name in ("SIGTERM", "SIGHUP")}
+        with patch.object(signal, "signal", return_value=signal.SIG_DFL) as install:
+            app._install_exit_signals()
+            self.assertEqual({call.args[0] for call in install.call_args_list}, expected)
+            install.reset_mock()
+            with launch.exit_on_signals():
+                self.assertEqual({call.args[0] for call in install.call_args_list}, expected)
 
 
 class ConsoleBlockerTests(unittest.TestCase):
