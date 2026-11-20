@@ -35,6 +35,7 @@ impl<B: Backend> Awake<B> {
         Awake { backend, held: false, busy: false, release_at: None }
     }
 
+    #[cfg(test)]
     pub fn held(&self) -> bool {
         self.held
     }

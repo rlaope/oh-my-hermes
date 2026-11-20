@@ -431,7 +431,7 @@ function CloseSeg() {
       label={t("win.close")}
       value={hide ? "tray" : "quit"}
       options={[
-        { value: "tray", label: t(isMacPlatform() ? "win.closeTray" : "win.closeTrayOther") },
+        { value: "tray", label: t("win.closeTray") },
         { value: "quit", label: t("win.closeQuit") },
       ]}
       onChange={(v) => {
@@ -492,7 +492,7 @@ function GeneralPage() {
       </div>
       <div className="st-gh">{t("set.system")}</div>
       <div className="st-grp" data-testid="set-system">
-        <Row title={t("win.close")} hint={t("win.closeHint")}>
+        <Row title={t("win.close")} hint={t(isMacPlatform() ? "win.closeHint" : "win.closeHintOther")}>
           <CloseSeg />
         </Row>
         <Row title={t("awake.title")} hint={t("awake.hint")}>

@@ -790,10 +790,12 @@ fn power_busy(power: State<'_, power::Power>, busy: bool, now: Option<bool>) {
 /// only then), and the tray menu's two labels in the page's language (tray.rs).
 #[tauri::command]
 fn window_prefs(app: AppHandle, hide: bool, open: Option<String>, quit: Option<String>) {
+    let tray = app.try_state::<tray::TrayMenu<tauri::Wry>>();
+    // no tray icon (it could not be made): the close keeps quitting, or the window could not come back
     if let Some(s) = app.try_state::<tray::TrayState>() {
-        s.set_hides(hide);
+        s.set_hides(hide && tray.is_some());
     }
-    if let Some(t) = app.try_state::<tray::TrayMenu<tauri::Wry>>() {
+    if let Some(t) = tray {
         t.apply(hide, open.as_deref().unwrap_or(""), quit.as_deref().unwrap_or(""));
     }
 }
