@@ -4,6 +4,8 @@ All notable changes will be documented here.
 
 ## Unreleased
 
+- **Measured loops keep variants comparable, and paper searches pick the right corpus.** `loop` gains `references/experiment-tree.md`: every node runs one fixed command and environment, a node freezes once a run answers it, the options of one decision are siblings and the next round descends onto the winner, and each finished run ends in repair, refill, promote or stop. `source-finder` gains `references/literature-retrieval.md`: arXiv, OpenAlex, bioRxiv or PubMed chosen by topic, follow-up rounds scaled to a stated difficulty inside the existing search cap, cross-corpus dedupe by id, DOI and title, and no paper id that a host result did not return. Both adapt alphaXiv/OpenResearch practices (MIT) in OMH wording.
+
 ## 4.0.9 - 2026-11-20
 
 - **Codex units can write inside the fanout fence on Linux and macOS.** `codex exec` is read-only by default, and
