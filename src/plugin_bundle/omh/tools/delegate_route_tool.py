@@ -19,6 +19,7 @@ from ..delegation_route_restore import (
 # which pairs it with the baseline bookkeeping under one lock. Reaching for
 # the raw writer here again would reopen the window this PR closed.
 from ..delegation_routing import (
+    _read_delegation_route_text,
     read_child_endpoint,
     read_config_snapshot,
     read_delegation_route,
@@ -457,7 +458,9 @@ def _unconfigured_provider_error(
         refusal = route_endpoint_refusal(
             text,
             provider=provider,
-            current_provider=read_delegation_route(hermes_home).get("provider", ""),
+            # From the same read as `text`: the guard needs both to describe
+            # one state of the file.
+            current_provider=_read_delegation_route_text(text).get("provider", ""),
             managed=managed_config_layer(),
         )
         if refusal:

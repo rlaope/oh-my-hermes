@@ -991,7 +991,6 @@ def _write_route_locked(
 ) -> dict[str, Any]:
     """The route write and its baseline bookkeeping; the caller holds the lock."""
     record_path = delegation_route_restore_path(omh_home)
-    previous = read_delegation_route(hermes_home)
     record = load_route_restore_record(omh_home)
     if record and record["config_path"] != config_path:
         # The record describes another profile's config. Treat this
@@ -1009,6 +1008,10 @@ def _write_route_locked(
     result["lock_enforced"] = enforced
     if result.get("status") != "routed":
         return result
+    # The route the write actually replaced, from the writer's own accepted
+    # read: an earlier read here could predate a pin made in between, and a
+    # baseline taken from it would put the wrong value back at turn end.
+    previous = _routable_subset(result.get("previous") or {})
     written = _routable_subset(result.get("applied") or {})
     if record and record["written"] == previous:
         # OMH still owned the value it is overwriting: the baseline
