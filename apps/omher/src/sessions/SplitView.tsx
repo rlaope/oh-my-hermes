@@ -3,7 +3,8 @@
 // and Alt+Shift+D off macOS); either asks which session goes in the new pane: another running TERMINALS session, or a
 // new Shell in the focused pane's folder (the one its shell last reported, OSC 7). The pane with the keyboard is the
 // session open in the main column; the others are dimmed (Settings › Terminal › Dim unfocused panes) and the focused
-// one carries a thin accent line. ⌘W closes the pane (the session stays in TERMINALS), ⌘⌥arrows move between panes,
+// one shows by its cursor. Panes have no title bar (Ghostty / iTerm splits): a 1px divider between them, and a
+// zoom and an x that show in the pane's top right corner while the pointer is over it. ⌘W closes the pane (the session stays in TERMINALS), ⌘⌥arrows move between panes,
 // ⌘] / ⌘[ step through them, ⌘⇧⌥arrows move the pane, ⌘⇧↩ zooms it (the zoom follows the keyboard to another pane;
 // splitting, closing or moving a pane ends it, splitState.ts), ⌘⌃= evens them out (layout.ts paneKey has the
 // keys off macOS). Dividers drag and a double click evens them. Each pane is its session's own terminal (sessions.ts
@@ -11,7 +12,7 @@
 // chats never split: only TERMINALS sessions are offered, and the keys live in TERMINALS terminals only.
 import { useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore, type CSSProperties, type KeyboardEvent, type PointerEvent, type ReactNode, type RefObject } from "react";
 import { useStore, getStore } from "../state/store";
-import { CloseIcon, PlusIcon } from "../ui";
+import { CloseIcon, ExpandIcon, PlusIcon } from "../ui";
 import { t } from "../i18n";
 import { getSessions, useSessions } from "./sessions";
 import { folderName, isTerminalRec, SHELL, termFallbackName, termMarkAgent, tildePath, type SessionRec } from "./agents";
@@ -23,7 +24,7 @@ import { onTermSettings, readTermSettings } from "./term/settings";
 import { isMac } from "../app/shortcuts";
 import { composing } from "../lib/ime";
 import { markPaneClosed } from "../app/menuClose";
-import { equalizeIn, getSplit, groupOf, groupSessions, leaveIn, paneKeyIn, paneOf, ratioIn, sessionOf, setSplit, splitIn, splitPaneOf, useSplit, type SplitDirName, type SplitGroup } from "./splitState";
+import { equalizeIn, getSplit, groupOf, groupSessions, leaveIn, paneKeyIn, paneOf, ratioIn, sessionOf, setSplit, splitIn, splitPaneOf, useSplit, zoomIn, type SplitDirName, type SplitGroup } from "./splitState";
 
 export { getSplit, resetSplit, useSplit } from "./splitState";
 
@@ -131,22 +132,27 @@ export function useDimStyle(): CSSProperties {
   return { ["--pane-dim" as string]: String(dim) } as CSSProperties;
 }
 
-/** The least height a pane keeps under a divider: four rows of the terminal's font, its bar and its padding. */
+/** The least height a pane keeps under a divider: four rows of the terminal's font and its padding. */
 const paneMinH = () => {
   const s = readTermSettings();
-  return Math.ceil(s.fontSize * s.lineHeight) * PANE_MIN_ROWS + 26 + 12;
+  return Math.ceil(s.fontSize * s.lineHeight) * PANE_MIN_ROWS + 12;
 };
 
-function SideBar({ rec, focused, onClose }: { rec: SessionRec; focused: boolean; onClose: () => void }) {
+/** A pane's own buttons, floating in its top right corner over the terminal (no title bar): zoom and close. They show
+ *  while the pointer is over the pane or the keyboard is on them (sessions.css); the pane's name is their tooltip
+ *  and the sidebar row's split mark. */
+function PaneTools({ rec, focused, onClose }: { rec: SessionRec; focused: boolean; onClose: () => void }) {
   const ss = useSessions();
   const name = pickTitle(rec, termFallbackName(rec, ss.agents)).title;
+  const zoom = () => {
+    setSplit({ groups: zoomIn(getSplit().groups, rec.id) });
+    focusSplitPane(rec.id);
+  };
   return (
-    <div className="ss-split-bar" data-testid="split-bar" data-session={rec.id} data-focused={focused ? "true" : "false"}>
-      <TermRowMark agent={termMarkAgent(rec)} size={13} />
-      <span className="ss-split-name" title={rec.cwd}>
-        {name}
-      </span>
-      <span className="ss-split-path">{tildePath(rec.cwd, ss.home)}</span>
+    <div className="ss-split-tools" data-testid="split-tools" data-session={rec.id} data-focused={focused ? "true" : "false"} title={`${name} · ${tildePath(rec.cwd, ss.home)}`}>
+      <button type="button" className="ss-split-x" aria-label={t("key.zoomPane")} title={t("key.zoomPane")} onClick={zoom} data-testid="split-zoom">
+        <ExpandIcon size={11} />
+      </button>
       <button type="button" className="ss-split-x" aria-label={t("split.closeSide", { name })} title={t("split.closeSide", { name })} onClick={onClose} data-testid="split-close">
         <CloseIcon />
       </button>
@@ -219,7 +225,7 @@ function Pane({ rec, focus, pane }: NodeProps & { rec: SessionRec }) {
       // a click takes the pane; focus alone does not (a terminal that mounts focuses itself)
       onPointerDownCapture={take}
     >
-      <SideBar rec={rec} focused={focused} onClose={() => leaveSplit(rec.id)} />
+      <PaneTools rec={rec} focused={focused} onClose={() => leaveSplit(rec.id)} />
       {pane(rec)}
     </div>
   );
@@ -326,14 +332,14 @@ export function SplitPicker({ main }: { main: SessionRec }) {
   const rows = open ? splitChoices(ss.list, ss.agents, from, sp.groups) : [];
   const fromRec = ss.list.find((r) => r.id === from) ?? main;
   // under the main column's header, at its right edge (the menu is fixed to the window); in a split, under the
-  // focused pane's bar instead, so the bar's x stays in view and clickable
+  // focused pane's corner buttons instead, so its x stays in view and clickable
   const [at, setAt] = useState<{ left: number; top: number } | null>(null);
   useLayoutEffect(() => {
     if (!open) return;
     const place = () => {
       const m = document.querySelector("main.main")?.getBoundingClientRect();
       const w = ref.current?.offsetWidth ?? 260;
-      const bar = document.querySelector(`[data-testid="split-bar"][data-session="${from}"]`)?.getBoundingClientRect();
+      const bar = document.querySelector(`[data-testid="split-tools"][data-session="${from}"]`)?.getBoundingClientRect();
       if (bar) setAt({ left: Math.max(6, bar.right - w - 8), top: bar.bottom + 4 });
       else if (m) setAt({ left: Math.max(6, m.right - w - 16), top: m.top + 56 });
     };

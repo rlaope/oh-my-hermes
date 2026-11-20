@@ -4,6 +4,12 @@ All notable changes will be documented here.
 
 ## Unreleased
 
+- **omher: terminal splits without a title bar per pane.** A split pane no longer carries a bar with its name, path
+  and x, and the focused pane no longer gets an accent frame (the others an inset shade). Panes sit flush like
+  Ghostty or iTerm splits: a 1px line is the only edge, the cursor and the dim show which pane has the keyboard, and a
+  pane's zoom and x appear in its top right corner while the pointer is over it. The bottom panel's panes lose the
+  same frame and shade.
+
 - **The OMH TUI runs on native Windows, not only under WSL.** Bare `omh` on Windows used to open Hermes' own terminal
   every time, because the OMH TUI needed termios. Where there is no termios its terminal layer now enters the Windows
   console instead: VT input and output modes with UTF-8 code pages (all put back on exit, a failed start included),
