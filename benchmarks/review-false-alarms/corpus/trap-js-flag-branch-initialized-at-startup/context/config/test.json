@@ -1,0 +1,5 @@
+{
+  "port": 0,
+  "flags": { "splitPayments": true },
+  "splitPayments": { "roundingPayer": "first" }
+}

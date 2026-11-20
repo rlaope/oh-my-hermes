@@ -1,0 +1,11 @@
+--- a/web/checkout.js
++++ b/web/checkout.js
+@@ -12,5 +12,8 @@
+ }
+ 
+ export function paymentPlan(cart) {
++  if (settings.flags.splitPayments && cart.payers.length > 1) {
++    return splitter.plan(cart.totalCents, cart.payers);
++  }
+   return [{ payer: cart.payers[0], amountCents: cart.totalCents }];
+ }

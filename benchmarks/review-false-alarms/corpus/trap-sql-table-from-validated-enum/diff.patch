@@ -1,0 +1,14 @@
+--- a/app/events.py
++++ b/app/events.py
+@@ -4,10 +4,6 @@
+ 
+ 
+ def count_events(conn: sqlite3.Connection, kind: EventKind, since: str) -> int:
+-    table = {
+-        EventKind.CLICK: "click_events",
+-        EventKind.VIEW: "view_events",
+-        EventKind.PURCHASE: "purchase_events",
+-    }[kind]
++    table = f"{kind.value}_events"
+     row = conn.execute(f"SELECT count(*) FROM {table} WHERE created_at >= ?", (since,)).fetchone()
+     return row[0]

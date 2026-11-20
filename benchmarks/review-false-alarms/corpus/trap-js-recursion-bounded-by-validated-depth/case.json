@@ -1,0 +1,7 @@
+{
+  "id": "trap-js-recursion-bounded-by-validated-depth",
+  "kind": "trap",
+  "language": "javascript",
+  "expected": "clean",
+  "why": "flattenMenu recurses over children and stops only at depth === 0, and web/categories.js says the category graph can hold a cycle (a category may have several parents), so a negative or huge depth would recurse forever. The only caller, web/nav.js, passes settings.menuDepth, which web/settings.js rejects at load unless it is an integer from 1 to 4. Every call stops after at most four levels, cycles included."
+}

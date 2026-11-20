@@ -1,0 +1,11 @@
+{
+  "id": "control-aware-now-against-naive-column",
+  "kind": "control",
+  "language": "python",
+  "expected": "bug",
+  "bug_location": {
+    "path": "app/tokens.py",
+    "line": 7
+  },
+  "why": "The change swaps datetime.utcnow() for the app's utc_now(). app/clock.py returns an aware datetime (tzinfo=UTC), but app/models.py loads expires_at with datetime.fromisoformat from offset-less strings, so it is naive. Comparing naive with aware raises TypeError, so every is_valid call fails."
+}

@@ -1,0 +1,7 @@
+{
+  "id": "trap-go-atoi-error-ignored-after-pattern",
+  "kind": "trap",
+  "language": "go",
+  "expected": "clean",
+  "why": "The error from strconv.Atoi is dropped. Parse only reaches it after linePattern (internal/order/pattern.go) matched, and the quantity group is 1 to 4 ASCII digits, which Atoi always converts; pattern_test.go pins that the pattern rejects signs, spaces, an empty quantity and five digits. The error cannot be non-nil there."
+}

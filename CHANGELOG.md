@@ -448,6 +448,15 @@ All notable changes will be documented here.
   row says so for 3 seconds (`✓ Review finished`, `✗ … failed`, `· Tests ended` for a process, which has no exit
   code). During a turn, `? waiting on you` now reads `? waiting for your approval` or `? waiting for your answer`.
 
+- **Hermes Bug Hunter: the false-alarm benchmark gets traps a strong reviewer actually falls for.** In the first
+  live run (3 runs per case per arm) both arms raised 3 false alarms in 33 trap runs, all on the one trap whose proof
+  sits outside the hunk (a lock the caller holds); the other 10 traps were judged clean every time, so the set could
+  not show a difference. `benchmarks/review-false-alarms` adds 12 traps of that shape across Python, JavaScript and
+  Go, each with the files that prove it safe in `context/` (a sort done two files upstream, an `Atoi` error a regex
+  rules out, a map written only before the server starts, a depth the settings loader bounds), and 4 controls whose
+  bug also shows only with a file outside the hunk, so an over-cautious reviewer still loses hits. The corpus goes
+  from 11 traps and 6 controls to 23 and 10.
+
 ## 4.0.8 - 2026-11-15
 
 - **The OMH TUI shows a compression as one gauge row, and a prompt typed meanwhile goes on by itself.** `/compact`
