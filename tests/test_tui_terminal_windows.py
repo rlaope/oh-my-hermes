@@ -163,6 +163,15 @@ class WindowsConsoleTests(unittest.TestCase):
         self.assertEqual(kernel32.modes, {IN: SAVED_IN, OUT: SAVED_OUT})
         self.assertEqual((kernel32.input_cp, kernel32.output_cp), (SAVED_CP, SAVED_CP))
 
+    def test_a_reader_thread_that_cannot_start_restores_everything_and_raises_its_error(self) -> None:
+        kernel32 = FakeKernel32()
+        console = self.console(kernel32)
+        with patch.object(threading.Thread, "start", side_effect=RuntimeError("can't start new thread")), \
+                self.assertRaisesRegex(RuntimeError, "can't start new thread"):
+            console.enter()
+        self.assertEqual(kernel32.modes, {IN: SAVED_IN, OUT: SAVED_OUT})
+        self.assertEqual((kernel32.input_cp, kernel32.output_cp), (SAVED_CP, SAVED_CP))
+
     def test_mouse_reports_turn_quick_edit_off_and_back(self) -> None:
         kernel32 = FakeKernel32()
         console = self.console(kernel32)

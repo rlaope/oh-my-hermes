@@ -194,8 +194,9 @@ class WindowsConsole:
             self._size = self._measure()
             self._size_checked = time.monotonic()
             self._stop = False
-            self._reader = threading.Thread(target=self._pump, name="omh-tui-console-input", daemon=True)
-            self._reader.start()
+            reader = threading.Thread(target=self._pump, name="omh-tui-console-input", daemon=True)
+            reader.start()
+            self._reader = reader  # only a started thread: `restore` joins it
             entered = True
         finally:
             if not entered:
@@ -205,15 +206,16 @@ class WindowsConsole:
         """Stop the reader and put back the code pages and modes entering saved, in reverse order. Never raises
         for a console that is gone: there is nothing left to restore then."""
         saved, self._saved = self._saved, None
-        self._stop_reader()
-        if saved is None:
-            return
-        input_mode, output_mode, input_cp, output_cp = saved
-        kernel32 = self._kernel32
-        kernel32.SetConsoleOutputCP(output_cp)
-        kernel32.SetConsoleCP(input_cp)
-        kernel32.SetConsoleMode(self._output, output_mode)
-        kernel32.SetConsoleMode(self._input, input_mode)
+        try:
+            self._stop_reader()
+        finally:  # no reader failure may leave the console raw
+            if saved is not None:
+                input_mode, output_mode, input_cp, output_cp = saved
+                kernel32 = self._kernel32
+                kernel32.SetConsoleOutputCP(output_cp)
+                kernel32.SetConsoleCP(input_cp)
+                kernel32.SetConsoleMode(self._output, output_mode)
+                kernel32.SetConsoleMode(self._input, input_mode)
 
     def set_mouse(self, enabled: bool) -> None:
         """QuickEdit off while mouse reports are on, so a click is a report; back as it was when they go off."""
