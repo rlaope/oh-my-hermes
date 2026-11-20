@@ -3,15 +3,20 @@
 Only trusted API parameters and host configuration select stores. Never feed
 model arguments or observation metadata into these overrides. No binding is
 cached here: native tasks/threads carry their own Hermes scope; long-lived
-providers bind the returned pair before doing I/O.
+providers bind the returned pair before doing I/O. The one thing remembered is
+the host validator's parse of a local profile `config.yaml`, keyed on a digest
+of the exact bytes it read; every path, scope and ownership check still runs on every call.
 """
 from __future__ import annotations
 
+import hashlib
 from importlib import import_module
+import io
 import os
 from pathlib import Path
 import re
 import sys
+import threading
 
 
 class RuntimeBindingError(ValueError):
@@ -492,6 +497,85 @@ def _overlay_config(user: dict, managed: dict) -> dict:
     return result
 
 
+# Every pre_tool_call/post_tool_call callback resolves the binding, and the
+# host's validating parse of the profile config.yaml was nearly all of that
+# cost (#2973). Only that parse is remembered, per path, together with a
+# digest of the exact bytes it came from (never the bytes: a config can hold
+# credentials) and the validator that produced it. A hit needs the same bytes
+# read again on this call; anything else (absent or unreadable file,
+# a config backend other than the local file, another validator) runs the
+# validator itself. Path resolution, managed/effective comparison and secret
+# ownership are never cached. Callers only read the returned mapping.
+_VALIDATED_CONFIG_GUARD = threading.Lock()
+_VALIDATED_CONFIG: dict[str, list] = {}
+_VALIDATED_CONFIG_MAX = 8
+
+
+def _config_bytes(path: Path) -> bytes | None:
+    try:
+        with open(path, "rb") as handle:
+            return handle.read()
+    except OSError:
+        return None
+
+
+def _parses_to(data: bytes, parsed) -> bool:
+    """Whether Hermes' own YAML reader turns exactly ``data`` into ``parsed``.
+
+    The validator opens the path itself, so the file it parsed can differ from
+    the bytes this call read even when the file holds those bytes again by the
+    time it returns (A -> B -> A). Without the host reader nothing is proven.
+    """
+    yaml = sys.modules.get("hermes_yaml")
+    load, error = getattr(yaml, "safe_load", None), getattr(yaml, "YAMLError", None)
+    if not callable(load) or not (isinstance(error, type) and issubclass(error, BaseException)):
+        return False
+    try:
+        # The file backend's read: utf-8-sig text with universal newlines.
+        own = load(io.TextIOWrapper(io.BytesIO(data), encoding="utf-8-sig"))
+    except (error, ValueError, TypeError, RecursionError):
+        return False
+    # The validator reads an empty document as an empty mapping.
+    own = {} if own is None else own
+    try:
+        return isinstance(own, dict) and own == parsed
+    except RecursionError:
+        # Cyclic aliases compare by recursion: unprovable, so not published.
+        # The validator's parse is still the answer for this call.
+        return False
+
+
+def _validated_config(config, path: Path):
+    validate = config.require_readable_config_before_write
+    backends = sys.modules.get("hermes_cli.config_backend")
+    selected = getattr(backends, "get_config_backend", None)
+    # A remote backend serves this logical path from elsewhere; its revision
+    # is not in the local bytes, so it always takes the host's own read.
+    if not callable(selected) or getattr(selected(), "name", None) != "file":
+        return validate(path)
+    data = _config_bytes(path)
+    if data is None:
+        # Absent, a directory, permission or I/O failure: the host decides.
+        return validate(path)
+    content = hashlib.sha256(data).digest()
+    with _VALIDATED_CONFIG_GUARD:
+        entry = _VALIDATED_CONFIG.get(str(path))
+        if entry is None:
+            if len(_VALIDATED_CONFIG) >= _VALIDATED_CONFIG_MAX:
+                _VALIDATED_CONFIG.pop(next(iter(_VALIDATED_CONFIG)))
+            # [single-flight lock, digest, validator, parse]
+            entry = _VALIDATED_CONFIG[str(path)] = [threading.Lock(), None, None, None]
+    with entry[0]:
+        if entry[2] is validate and entry[1] == content:
+            return entry[3]
+        parsed = validate(path)
+        # Publish only a parse of the very bytes this key names; after any
+        # write during validation the next call parses again.
+        if _parses_to(data, parsed):
+            entry[1:] = [content, validate, parsed]
+        return parsed
+
+
 def _configured_home(home: Path):
     config = import_module("hermes_cli.config")
     # This host validator preserves the source YAML (and may save a recovery
@@ -499,7 +583,7 @@ def _configured_home(home: Path):
     # tolerates malformed/unreadable YAML and can reuse last-known-good data;
     # neither is safe for selecting a state owner. Validate before using it.
     try:
-        raw = config.require_readable_config_before_write(home / "config.yaml")
+        raw = _validated_config(config, home / "config.yaml")
     except (RuntimeError, OSError, ValueError) as exc:
         raise RuntimeBindingError("OMH profile configuration is unreadable or invalid") from exc
     original = _setting(_overlay_config(raw, import_module("hermes_cli.managed_scope").load_managed_config()))
