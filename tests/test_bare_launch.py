@@ -787,6 +787,60 @@ class ClaimedHomeTests(unittest.TestCase):
         self.assertEqual(args.tui_resume, "sticky-1")
         self.assertEqual(self.states(), {"root-1": "dropped", "own-1": "dropped", "sticky-1": "resumed"})
 
+    def test_a_shared_winner_taken_by_another_launch_lets_the_own_drop_reopen(self) -> None:
+        # review3 R6-B1: the read-only preview named the shared drop; another launch claimed it before this one's
+        # locked claim. The launch looks again and reopens the own-home drop the preview passed over.
+        from omh.tui import live_sessions
+
+        self.write_store([("own-1", self.own), ("root-1", self.hermes)])  # root-1 newest: the preview's winner
+        claim = live_sessions.claim_resumable
+        taken: list[str] = []
+
+        def another_launch_first(omh_home, **kwargs):
+            if not taken:
+                row = claim(omh_home, hermes_homes=[str(self.hermes)], cwd="", environ={"TMUX_PANE": "%4"})
+                taken.append(row["session_id"] if row else "")
+            return claim(omh_home, **kwargs)
+
+        with patch.object(live_sessions, "claim_resumable", side_effect=another_launch_first):
+            args, _paths = self.claim([])
+        self.assertEqual(taken, ["root-1"])
+        self.assertEqual((args.tui_resume, args.tui_resume_home), ("own-1", str(self.own)))
+        self.assertEqual(self.states(), {"own-1": "resumed", "root-1": "resumed"})
+
+    def test_an_own_home_that_cannot_be_built_hands_over_to_a_waiting_shared_drop(self) -> None:
+        # review3 R6-B2: the own drop wins, the read-only check passes, the build then fails on a shape it cannot
+        # see. The claim goes back and the shared drop this launch can open reopens, instead of a new session.
+        from omh.commands import bare_launch
+        from omh.tui import own_runtime
+
+        self.write_store([("root-1", self.hermes), ("own-1", self.own)])  # own-1 newest
+        args, paths = self.claim([])
+        self.assertEqual(args.tui_resume, "own-1")
+        stderr = io.StringIO()
+        with patch.object(own_runtime, "build_tui_home", side_effect=FileExistsError("plugins is a file")), \
+                redirect_stderr(stderr):
+            self.assertIsNone(bare_launch._own_runtime_home(args, paths))
+        self.assertEqual((args.tui_resume, args.tui_resume_home), ("root-1", str(self.hermes)))
+        self.assertEqual(self.states(), {"root-1": "resumed", "own-1": "dropped"})
+        self.assertNotIn("opening a new session", stderr.getvalue())
+        self.assertIn("--resume", bare_launch._hermes_passthrough_argv(args, tui=True))
+
+    def test_a_launch_that_finds_nothing_sweeps_the_store(self) -> None:
+        # review3 R6-N1: with nothing to reopen, the store is still swept so `live-pids` stops naming dead owners.
+        from omh.tui import live_sessions
+
+        self.write_store([("own-1", self.own)])
+        with patch.object(live_sessions, "pending", wraps=live_sessions.pending) as swept, \
+                redirect_stderr(io.StringIO()):
+            from omh.commands import bare_launch
+
+            args = bare_launch_args([])
+            self.assertEqual(bare_launch._claim_dropped_session(args, bare_launch._paths(args), {"TMUX_PANE": "%1"}),
+                             "")
+        self.assertEqual(swept.call_count, 1)
+        self.assertEqual(self.states(), {"own-1": "dropped"})
+
 
 class BareImportTests(unittest.TestCase):
     def test_a_bare_launch_does_not_import_the_command_tree(self) -> None:

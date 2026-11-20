@@ -603,6 +603,8 @@ def _own_home_messaging_line(credentials: tuple[str, ...]) -> str:
 # A claimed session nothing was said in is skipped and the next one claimed; each claim marks its entry `resumed`,
 # so this only bounds the work, it never decides an outcome.
 _MAX_RESUME_CLAIMS = 16
+# The environment and strictness a launch claimed with, for the shared-only claim after an own-home build failure.
+_RESUME_CLAIM_CONTEXT = "_omh_resume_claim_context"
 
 
 def _claim_dropped_session(args: argparse.Namespace, paths, environ=None, *, strict_keys: bool = False) -> str:
@@ -616,9 +618,11 @@ def _claim_dropped_session(args: argparse.Namespace, paths, environ=None, *, str
     hook) refuses the folder fallback for a session another terminal's key holds.
     """
     from ..maintenance.hermes_resume import _session_card_row
-    from ..tui.live_sessions import claim_resumable, resumable
+    from ..tui.live_sessions import claim_resumable, pending, resumable
 
     environ = os.environ if environ is None else environ
+    # Kept for `_own_runtime_home`, which claims again among the shared homes when the own home fails to build.
+    setattr(args, _RESUME_CLAIM_CONTEXT, (environ, strict_keys))
     omh_home = Path(_tui_omh_home(args, paths))
     shared = _resume_homes(args, paths)
     own = _own_claim_home(args, paths)
@@ -626,6 +630,7 @@ def _claim_dropped_session(args: argparse.Namespace, paths, environ=None, *, str
         cwd = os.getcwd()
     except OSError:
         cwd = ""
+    raced = False
     for _ in range(_MAX_RESUME_CLAIMS):
         homes = set(shared)
         if own is not None:
@@ -634,12 +639,22 @@ def _claim_dropped_session(args: argparse.Namespace, paths, environ=None, *, str
             preview = resumable(omh_home, hermes_homes=shared | {str(own)}, cwd=cwd, environ=environ,
                                 strict_keys=strict_keys)
             if preview is None:
+                pending(omh_home)  # sweep owners that died, so `live-pids` stops naming them; claims nothing
                 return ""
-            if _same_home(preview["hermes_home"], own) and _own_home_allowed(args, paths):
+            if _same_home(preview["hermes_home"], own):
+                if not _own_home_allowed(args, paths):
+                    own = None  # the own home's winner cannot open here: choose among the shared homes only
+                    continue
                 homes.add(str(own))
         entry = claim_resumable(omh_home, hermes_homes=homes, cwd=cwd, environ=environ, strict_keys=strict_keys)
         if entry is None:
-            return ""
+            if own is None or raced:
+                return ""
+            # Another launch may have claimed the previewed winner first: look once more, since a session of the
+            # own home the preview passed over may win now. Once only, so a store lock that keeps giving up (the
+            # claim's ~2 s bound) cannot hold the launch for many rounds.
+            raced = True
+            continue
         session_id = str(entry["session_id"])
         card = _session_card_row(Path(entry["hermes_home"]) / "state.db", session_id)
         if card is None or (isinstance(card, tuple) and card[1] == 0):
@@ -710,14 +725,22 @@ def _own_runtime_home(args: argparse.Namespace, paths) -> Path | None:
     built = _prepared_own_home(args, paths)
     if built is None and claimed and resume:
         # Claimed from this home, which cannot be opened after all: give the claim back for a launch that can, and
-        # open a new session rather than send the id to a home that never held it.
+        # never send the id to a home that never held it. A session waiting in a shared home this launch opens
+        # still reopens (the own home now counts as refused, so the claim passes it over); else a new session.
         from ..tui.live_sessions import release_claim
 
         release_claim(Path(_tui_omh_home(args, paths)), resume)
-        print(f"omh: session {resume} stays for a launch that can open the TUI's own runtime; opening a new session.",
-              file=sys.stderr)
         args.tui_resume = None
         args.tui_resume_home = None
+        context = getattr(args, _RESUME_CLAIM_CONTEXT, None)
+        again = ""
+        if context is not None:
+            environ, strict_keys = context
+            again = _claim_dropped_session(args, paths, environ, strict_keys=strict_keys)
+        if not again:
+            print(f"omh: session {resume} stays for a launch that can open the TUI's own runtime; "
+                  "opening a new session.", file=sys.stderr)
+        return None
     return built
 
 
