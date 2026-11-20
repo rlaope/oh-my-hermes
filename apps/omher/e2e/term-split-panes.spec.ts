@@ -216,11 +216,16 @@ test("the menu's Close Window and the ⌘W key close the pane that holds the key
   await pane(page, a).click();
   await expect(pane(page, a)).toHaveAttribute("data-focused", "true");
   await expect(textarea(page, a)).toBeFocused();
+  // let the split's own focus moves (a frame after each split and click) finish first, as the key half below does
+  await page.waitForTimeout(400);
   // the keyboard moves into b without a click there (Tab from its close button)
   await pane(page, b).getByTestId("split-close").focus();
   await page.keyboard.press("Tab");
   await expect(textarea(page, b)).toBeFocused();
   await expect(pane(page, a)).toHaveAttribute("data-focused", "true");
+  // still there a frame later, so Close Window reads it
+  await page.evaluate(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))));
+  await expect(textarea(page, b)).toBeFocused();
   await page.evaluate(() => (window as unknown as { __omherMenuClose(): Promise<void> }).__omherMenuClose());
   await expect(pane(page, b)).toHaveCount(0);
   await expect(pane(page, a)).toHaveCount(1);
