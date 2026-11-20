@@ -37,7 +37,7 @@ import { getShellHost, learnThisHost } from "../terminal/host";
 import { onSessionFg } from "./fg";
 import { termActs } from "./termActivity";
 import { LINK_COPIED_EVENT, newLinkId, termLinkUrl } from "./termLink";
-import { acpRow, agentDef, agentLabel, continues, draftAgent, draftFolder, draftOpen, hermesOnly, installLine, isBuiltin, isGone, isShell, isTerminalRec, LAST_LINE_MAX, SHELL, termEnd, lastPrintedLine, OPEN_KEY, opensAs, parseOpens, parseRecent, pushRecent, RECENT_KEY, registerAcp, sessionMode, type AgentId, type AgentInfo, type OpenAs, type Unseen, type Opens, type Recent, type SessionRec } from "./agents";
+import { acpRow, agentDef, agentLabel, continues, draftAgent, draftFolder, draftOpen, hermesOnly, installLine, isBuiltin, isGone, isShell, isTerminalRec, LAST_LINE_MAX, SHELL, termEnd, termMarkAgent, lastPrintedLine, OPEN_KEY, opensAs, parseOpens, parseRecent, pushRecent, RECENT_KEY, registerAcp, sessionMode, type AgentId, type AgentInfo, type OpenAs, type Unseen, type Opens, type Recent, type SessionRec } from "./agents";
 import { NAME_MAX, parseTitles, promptTitle, putTitle, TITLES_KEY } from "./titles";
 import { getDraft, setDraft as setUnsent } from "../app/drafts";
 import { getHost, type ChatEvent, type ChatInput, type PastChat, type SessionHost } from "./host";
@@ -1570,7 +1570,7 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
         // out, once, until the person comes back to the session.
         const ring = () => {
           const r = rec(id);
-          if (r && !tt.closed && flag(id, "bell")) notifyState?.(id, { kind: "bell", name: nameOf(r) });
+          if (r && !tt.closed && flag(id, "bell")) notifyState?.(id, { kind: "bell", name: nameOf(r), agent: termMarkAgent(r) !== null });
         };
         term.onBell(ring);
         // The notification escapes agents send instead of a bell count as a ring too: OSC 9 with a message (not a

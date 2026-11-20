@@ -61,7 +61,10 @@ describe("sessionRings: a program end notifies only when it went wrong", () => {
   });
   it("a start that failed and a ring always notify", () => {
     expect(sessionRings({ kind: "failed", name, error: "" })).toBe(true);
-    expect(sessionRings({ kind: "bell", name })).toBe(true);
+    // an agent's bell is it waiting for the person; a plain shell's bell (tab completion, a stray \\a) only marks the row
+    expect(sessionRings({ kind: "bell", name, agent: true })).toBe(true);
+    expect(sessionRings({ kind: "bell", name, agent: false })).toBe(false);
+    expect(sessionRings({ kind: "bell", name })).toBe(false);
   });
   it("an agent's reason reads as spoken", () => {
     expect(sessionNote("s1", { kind: "ended", name, code: 1, error: "Could not read /home/you/.config/app/auth.json (missing). Sign in again." }).body).toBe(

@@ -79,11 +79,26 @@ export function useDisk(): DiskState {
 
 let host: DiskHost | null = null;
 let started = false;
+let notify: ((n: Note) => void) | null = null;
+const RANK: Record<DiskLevel, number> = { ok: 0, low: 1, critical: 2 };
+/** The level the page last heard, from either source. */
+let noted: DiskLevel = "ok";
+
+/** One note per worse level, from whichever comes first: the shell's event, or a reading that already shows it
+ *  (the startup event can fire before the page's listener is registered, and the shell sends it only once). A level
+ *  heard from both sources notes once; a level that got better and worse again notes again. */
+function heard(s: DiskState | null | undefined): void {
+  if (!s || !(s.level in RANK)) return;
+  set(s);
+  const worse = RANK[s.level] > RANK[noted];
+  noted = s.level;
+  if (worse) notify?.(diskNote(s));
+}
 
 async function ask(): Promise<void> {
   if (!host) return;
   try {
-    set(await host.diskWatch(diskWarn()));
+    heard(await host.diskWatch(diskWarn()));
   } catch {
     /* an older shell without the command: no chip */
   }
@@ -95,10 +110,8 @@ export function startDiskWatch(h: DiskHost, note: (n: Note) => void, every = 60_
   if (started) return;
   started = true;
   host = h;
-  h.onDiskLevel((s) => {
-    set(s);
-    if (s.level !== "ok") note(diskNote(s));
-  });
+  notify = note;
+  h.onDiskLevel((s) => heard(s));
   void ask();
   if (typeof setInterval !== "undefined") setInterval(() => void ask(), every);
 }

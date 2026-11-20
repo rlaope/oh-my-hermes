@@ -11,8 +11,9 @@ All notable changes will be documented here.
   - **Quieter notifications.** Only approvals, questions and ends that went wrong ring, and the body is the bot's
     own first sentence (greetings skipped, code and markdown removed, paths shortened to their name, URLs to their
     host). A turn error only marks its chat; Settings › General › Also notify on errors (off by default) brings the
-    note back. A clean exit 0 only marks its row. A wordless ring waits 8 s so the texted question that follows
-    replaces it.
+    note back. A clean exit 0 only marks its row, and so does the bell of a plain shell (tab completion, a stray
+    `\a`); a terminal's bell notifies only while a coding agent runs in it. A wordless ring waits 8 s so the texted
+    question that follows replaces it.
   - **Disk space warning.** When the disk holding your home folder drops under 20 GB (Settings › General › Warn
     when disk space is below: 5/10/20/50 GB or Off), a sidebar chip shows the free space and one notification goes
     out. omher checks once a minute with one system call and never deletes anything. The terminal agent mark also

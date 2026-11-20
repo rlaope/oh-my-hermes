@@ -129,6 +129,9 @@ export interface SessionNote {
   ms?: number;
   /** The turn that failed with this end already said why (its own error notification, when those are on). */
   told?: boolean;
+  /** bell: the terminal's foreground program is a coding agent (an agent rings when it waits for the person; a plain
+   *  shell rings on a failed tab completion or a stray `\\a`, which only marks the row). */
+  agent?: boolean;
 }
 
 /** A program that ends this soon after it started did not really run. */
@@ -137,6 +140,7 @@ export const EARLY_END_MS = 5000;
 /** Whether `n` is worth a notification: a ring, a start that failed, and an end that went wrong (an exit code, a reason,
  *  or within its first 5 s). A clean exit only marks the row. Pure. */
 export function sessionRings(n: SessionNote): boolean {
+  if (n.kind === "bell") return !!n.agent;
   if (n.kind !== "ended") return true;
   if (n.error || (typeof n.code === "number" && n.code !== 0)) return true;
   return typeof n.ms === "number" && n.ms < EARLY_END_MS;

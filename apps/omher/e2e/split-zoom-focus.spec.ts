@@ -145,7 +145,12 @@ test("zoomed: a click on another pane's sidebar row, or on its notification, sho
   await expectZoomedOn(page, a);
   await page.keyboard.type("row-a");
   await expect.poll(async () => writesTo(page, await ptyOf(page, a))).toContain("row-a");
-  // b, hidden behind the zoom, rings: its notification's click shows b, zoomed, with the keyboard
+  // c, a plain shell hidden behind the zoom, rings (tab completion, a stray \a): the row is marked, no notification
+  await out(page, await ptyOf(page, c), "\x07");
+  await page.waitForTimeout(300);
+  expect(await page.evaluate(() => (window as unknown as { __notes: unknown[] }).__notes.length)).toBe(0);
+  // b, hidden behind the zoom, runs Claude Code and rings: its notification's click shows b, zoomed, with the keyboard
+  await page.evaluate((i) => (window as unknown as { __omherSessions: { setSessionFg(id: string, a: string | null): void } }).__omherSessions.setSessionFg(i, "claude"), b);
   await out(page, await ptyOf(page, b), "\x07");
   await expect.poll(() => page.evaluate(() => (window as unknown as { __notes: unknown[] }).__notes.length)).toBeGreaterThan(0);
   await page.evaluate(() => (window as unknown as { __notes: { n: { onclick: null | (() => void) } }[] }).__notes.at(-1)!.n.onclick?.());
