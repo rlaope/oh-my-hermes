@@ -126,13 +126,14 @@ test("at the end of the window the old close runs once: the pty is closed and th
 
 test("a split pane's row closed and undone comes back into its split, in the same slot", async ({ page }) => {
   await app(page);
-  const a = await shell(page, "/home/you/code/web-app");
   const b = await shell(page, "/home/you/code/api-server");
-  const pa = await ptyOf(page, a);
+  // ⌘D: a new Shell (a) in a new pane right of b
   await term(page, b).locator(".xterm-helper-textarea").focus();
   await page.keyboard.press((await platformIsMac(page)) ? "Meta+d" : "Control+Shift+D");
-  await page.locator(`[data-testid="split-pick"][data-session="${a}"]`).click();
   await expect(page.getByTestId("session-split")).toBeVisible();
+  const a = (await page.locator('[data-testid="split-pane"][data-focused="true"]').getAttribute("data-session"))!;
+  expect(a).not.toBe(b);
+  const pa = await ptyOf(page, a);
   const slots = () => page.locator('[data-testid="split-pane"]').evaluateAll((els) => els.map((e) => e.getAttribute("data-session")));
   const before = await slots();
   expect(before).toEqual([b, a]);

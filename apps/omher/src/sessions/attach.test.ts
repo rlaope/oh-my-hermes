@@ -2,7 +2,7 @@
 // names the other files, the shell quoting of a dropped path, the restart book), and the sessions store sending
 // files with the mock host, in a running chat and in a draft, failing without sending, and closing removing them.
 import { describe, expect, it } from "vitest";
-import { bytesOf, inlinePicture, INLINE_MAX, parseSentFiles, putSentFiles, shellQuote, wireText } from "./attach";
+import { bytesOf, inlinePicture, INLINE_MAX, parseSentFiles, pathsTyped, putSentFiles, shellQuote, wireText } from "./attach";
 import { MockHost, type MockCall } from "./host";
 import { createSessions } from "./sessions";
 import { createStore, type BridgeLike, type OutFile } from "../state/store";
@@ -30,6 +30,12 @@ describe("attach helpers", () => {
     expect(shellQuote("/home/you/My Shots/1-it's.png")).toBe("'/home/you/My Shots/1-it'\\''s.png'");
     expect(shellQuote("/a/$(rm -rf ~).png")).toBe("'/a/$(rm -rf ~).png'");
     expect(shellQuote("C:\\Users\\you\\.omher\\a b.png", true)).toBe('"C:\\Users\\you\\.omher\\a b.png"');
+  });
+
+  it("dropped or pasted paths go as a paste when the program turned bracketed paste on (Claude Code reads a picture only then), else typed", () => {
+    expect(pathsTyped(["/a/1-image.png"], true)).toBe("\x1b[200~/a/1-image.png \x1b[201~");
+    expect(pathsTyped(["/a/1-image.png", "'/a/2-my shot.png'"], true)).toBe("\x1b[200~/a/1-image.png '/a/2-my shot.png' \x1b[201~");
+    expect(pathsTyped(["/a/1-image.png", "/a/2-b.txt"], false)).toBe("/a/1-image.png /a/2-b.txt ");
   });
 
   it("base64 to bytes", () => {

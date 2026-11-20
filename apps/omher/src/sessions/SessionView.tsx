@@ -5,7 +5,7 @@
 // first message starts the agent there (Start, for an agent that opens in its terminal). After that the folder is
 // read-only too. A chat agent's composer takes files as the bot chat's does (paste, the + menu, a drop on the chat),
 // in a draft too; a file dropped or pasted on a terminal is saved and its path typed at the prompt. A TERMINALS session
-// can split with up to three others, right or down (SplitView: ⌘D / ⌘⇧D in its terminal, or "Split right with…").
+// can split with up to three others on any side (SplitView: ⌘D / ⌘⇧D in its terminal, or a TERMINALS row dragged onto it).
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { getStore, selectAsks, useStore, type OutFile } from "../state/store";
 import { useResolvedTheme } from "../app/theme";
@@ -39,7 +39,7 @@ import { useAccounts } from "../settings/accounts/useAccounts";
 import { t } from "../i18n";
 import { wireFileDrop, isWindows } from "../terminal/terms";
 import { isMac } from "../app/shortcuts";
-import { SplitPicker, SplitView, useSplit, useSplitKeys } from "./SplitView";
+import { SplitView, useSplit, useSplitKeys } from "./SplitView";
 import { groupOf } from "./splitState";
 import { isCopyLinkKey, LINK_COPIED_EVENT } from "./termLink";
 import { TermShareCards } from "./TermShareCard";
@@ -983,10 +983,7 @@ export function SessionView() {
       </header>
       {mode === "terminal" && !showChat && groupOf(sp.groups, rec.id) ? (
         // a TERMINALS session in a split: every pane shows, each as its session is (running, paused, ended)
-        <>
-          <SplitView main={rec} pane={(r) => <SplitPane rec={r} />} />
-          <SplitPicker main={rec} />
-        </>
+        <SplitView main={rec} pane={(r) => <SplitPane rec={r} />} />
       ) : showChat ? (
         <ChatPane rec={rec} chatKey={chatKey!} />
       ) : rec.paused || ((rec.status === "exited" || rec.status === "failed") && !getSessions().hasTerm(rec.id)) ? (
@@ -1001,12 +998,9 @@ export function SessionView() {
       ) : (
         <>
           {/* a new key after Restart: a fresh terminal for the program started again. A TERMINALS session can split
-              (its picker opens here; once split, the branch above draws every pane) */}
+              (once split, the branch above draws every pane) */}
           {mode === "terminal" ? (
-            <>
-              <TerminalPane key={`${rec.id}-term-${getSessions().termRun(rec.id)}`} rec={rec} splits />
-              <SplitPicker main={rec} />
-            </>
+            <TerminalPane key={`${rec.id}-term-${getSessions().termRun(rec.id)}`} rec={rec} splits />
           ) : (
             <TerminalPane key={`${rec.id}-term-${getSessions().termRun(rec.id)}`} rec={rec} />
           )}

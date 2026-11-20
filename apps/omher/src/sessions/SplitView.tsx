@@ -1,50 +1,35 @@
-// TERMINALS splits (Otty / Orca style): the open TERMINALS session with up to three others, right of or under each
-// other in any nesting (splitState.ts keeps the layout). ⌘D splits the focused pane right and ⌘⇧D down (Ctrl+Shift+D
-// and Alt+Shift+D off macOS); either asks which session goes in the new pane: another running TERMINALS session, or a
-// new Shell in the focused pane's folder (the one its shell last reported, OSC 7). The pane with the keyboard is the
-// session open in the main column; the others are dimmed (Settings › Terminal › Dim unfocused panes) and the focused
-// one shows by its cursor. Panes have no title bar (Ghostty / iTerm splits): a 1px divider between them, and a
-// zoom and an x that show in the pane's top right corner while the pointer is over it. ⌘W closes the pane (the session stays in TERMINALS), ⌘⌥arrows move between panes,
-// ⌘] / ⌘[ step through them, ⌘⇧⌥arrows move the pane, ⌘⇧↩ zooms it (the zoom follows the keyboard to another pane;
-// splitting, closing or moving a pane ends it, splitState.ts), ⌘⌃= evens them out (layout.ts paneKey has the
-// keys off macOS). Dividers drag and a double click evens them. Each pane is its session's own terminal (sessions.ts
-// attach), so each keeps its own engine; a pane whose session came back paused after a restart shows it paused. Bot
-// chats never split: only TERMINALS sessions are offered, and the keys live in TERMINALS terminals only.
-import { useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore, type CSSProperties, type KeyboardEvent, type PointerEvent, type ReactNode, type RefObject } from "react";
-import { useStore, getStore } from "../state/store";
-import { CloseIcon, ExpandIcon, PlusIcon } from "../ui";
+// TERMINALS splits (Otty / Orca style): the open TERMINALS session with up to three others, right of, left of, over or
+// under each other in any nesting (splitState.ts keeps the layout). ⌘D splits the focused pane right and ⌘⇧D down
+// (Ctrl+Shift+D and Alt+Shift+D off macOS) at once, with a new Shell in the focused pane's folder (the one its shell
+// last reported, OSC 7), as iTerm2 and Ghostty do; a full split does nothing. A TERMINALS row dragged from the sidebar
+// onto the open terminal puts that session in a pane on the side it is dropped (splitDrag.ts); a pane's grip (top
+// centre) drags the pane itself to another pane's side, and a click on it opens the pane's menu (zoom, even out,
+// close). The pane with the keyboard is the session open in the main column; the others are dimmed (Settings ›
+// Terminal › Dim unfocused panes) and the focused one shows by its cursor. Panes have no title bar (Ghostty / iTerm
+// splits): a 1px divider between them, the grip, and a zoom and an x in the top right corner, which show while the
+// pointer is over the pane. ⌘W closes the pane (the session stays in TERMINALS), ⌘⌥arrows move between panes, ⌘] / ⌘[
+// step through them, ⌘⇧⌥arrows move the pane, ⌘⇧↩ zooms it (the zoom follows the keyboard to another pane; splitting,
+// closing or moving a pane ends it, splitState.ts), ⌘⌃= evens them out (layout.ts paneKey has the keys off macOS).
+// Dividers drag and a double click evens them. Each pane is its session's own terminal (sessions.ts attach), so each
+// keeps its own engine; a pane whose session came back paused after a restart shows it paused. Bot chats never split:
+// only TERMINALS sessions go in a split, and the keys live in TERMINALS terminals only.
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore, type CSSProperties, type KeyboardEvent, type PointerEvent, type ReactNode, type RefObject } from "react";
+import { getStore } from "../state/store";
+import { CloseIcon, ExpandIcon } from "../ui";
 import { t } from "../i18n";
 import { getSessions, useSessions } from "./sessions";
-import { folderName, isTerminalRec, SHELL, termFallbackName, termMarkAgent, tildePath, type SessionRec } from "./agents";
+import { SHELL, termFallbackName, tildePath, type SessionRec } from "./agents";
 import { pickTitle } from "./titles";
-import { TermRowMark } from "./TermRowMark";
 import { termActs } from "./termActivity";
 import { clampRatio, isPane, MAX_PANES, paneKey, panesOf, paneRects, PANE_MIN_ROWS, PANE_MIN_W, type Layout, type PaneKey } from "../terminal/layout";
 import { onTermSettings, readTermSettings } from "./term/settings";
 import { isMac } from "../app/shortcuts";
 import { composing } from "../lib/ime";
 import { markPaneClosed } from "../app/menuClose";
-import { equalizeIn, getSplit, groupOf, groupSessions, leaveIn, paneKeyIn, paneOf, ratioIn, sessionOf, setSplit, splitIn, splitPaneOf, useSplit, zoomIn, type SplitDirName, type SplitGroup } from "./splitState";
+import { pressToSplit } from "./splitDrag";
+import { equalizeIn, getSplit, groupOf, groupSessions, leaveIn, paneKeyIn, paneOf, ratioIn, sessionOf, setSplit, splitIn, splitPaneOf, useSplit, zoomIn, type SplitDirName } from "./splitState";
 
 export { getSplit, resetSplit, useSplit } from "./splitState";
-
-/** The TERMINALS sessions that can go in a new pane of `at`'s split: listed, running, not paused, not in it already. */
-export function splitChoices(list: SessionRec[], agents: Parameters<typeof isTerminalRec>[0], at: string, groups: SplitGroup[] = getSplit().groups): SessionRec[] {
-  const g = groupOf(groups, at);
-  const inIt = new Set(g ? groupSessions(g) : [at]);
-  return list.filter((r) => !inIt.has(r.id) && paneOf(r.id) !== null && isTerminalRec(agents, r) && !r.paused && (r.status === "running" || r.status === "starting"));
-}
-
-/** Open the picker for the TERMINALS session open now (no-op elsewhere, and when its split is full). */
-export function openSplitPicker(at?: string, dir: SplitDirName = "right"): void {
-  const ui = getStore().getState().ui;
-  const id = at ?? (ui.view === "session" ? ui.session : null);
-  if (!id) return;
-  const g = groupOf(getSplit().groups, id);
-  if (g && panesOf(g.layout).length >= MAX_PANES) return;
-  setSplit({ picking: { at: id, dir } });
-}
-export const closeSplitPicker = (): void => setSplit({ picking: null });
 
 const textareaOf = (id: string) => document.querySelector<HTMLElement>(`[data-testid="terminal"][data-session="${id}"] .xterm-helper-textarea`);
 
@@ -54,12 +39,14 @@ export function focusSplitPane(id: string): void {
   requestAnimationFrame(() => textareaOf(id)?.focus({ preventScroll: true }));
 }
 
-/** Put `add` in a new pane of `at`'s split, right of it or under it; the new pane takes the keyboard. */
+/** Put `add` in a new pane on the `dir` side of `at`'s (moving it there when it is in that split already); it takes
+ *  the keyboard. */
 export function splitWith(at: string, add: string, dir: SplitDirName = "right"): void {
   if (at === add) return;
   const before = getSplit().groups;
   const groups = splitIn(before, at, dir, add);
-  setSplit({ groups, picking: null });
+  if (groups === before) return;
+  setSplit({ groups });
   if (groupOf(groups, add) && groupOf(groups, at)) focusSplitPane(add);
 }
 
@@ -67,10 +54,9 @@ export function splitWith(at: string, add: string, dir: SplitDirName = "right"):
  *  running the same shell as `at` when that is a Shell row (else the default shell). */
 export function splitNewShell(at: string, dir: SplitDirName): void {
   const rec = getSessions().getState().list.find((r) => r.id === at);
-  if (!rec) return closeSplitPicker();
+  if (!rec) return;
   const id = getSessions().startTerminal(SHELL, termActs.get(at).cwd ?? rec.cwd, rec.agent === SHELL ? rec.shell : undefined);
   if (id) splitWith(at, id, dir);
-  else closeSplitPicker();
 }
 
 /** Take session `id`'s pane out of its split (its session keeps running in TERMINALS); the pane nearest takes the
@@ -84,7 +70,8 @@ export function leaveSplit(id: string): void {
 /** A pane key pressed in TERMINALS session `id`'s terminal. True when it was the split's (the program never sees it). */
 export function onSplitKey(id: string, k: PaneKey): boolean {
   if (k.kind === "split") {
-    openSplitPicker(id, k.dir);
+    const g = groupOf(getSplit().groups, id);
+    if (!g || panesOf(g.layout).length < MAX_PANES) splitNewShell(id, k.dir);
     return true;
   }
   const before = getSplit().groups;
@@ -92,6 +79,19 @@ export function onSplitKey(id: string, k: PaneKey): boolean {
   if (!r.took) return false;
   if (r.groups !== before) setSplit({ groups: r.groups });
   if (r.focus) focusSplitPane(r.focus);
+  return true;
+}
+
+/** Close TERMINALS session `id` the way a terminal app closes a tab (⌘W or the menu's Close Window on a terminal that
+ *  is not split): as its row's x does, a running one only when the close can be undone (the toast brings it back),
+ *  an ended one at once. False when it was left alone (the undo window is Off and its program runs). */
+export function closeLone(id: string): boolean {
+  const ss = getSessions();
+  const r = ss.getState().list.find((x) => x.id === id);
+  if (!r) return false;
+  const running = r.status === "running" || r.status === "starting";
+  if (running && !ss.closeUndoable(id)) return false;
+  ss.close(id);
   return true;
 }
 
@@ -108,6 +108,15 @@ export function useSplitKeys(wrap: RefObject<HTMLElement | null>, id: string, on
       // a held key repeats only the moves between panes; the others happen once per press
       if (e.repeat && k.kind !== "focus" && k.kind !== "step") {
         if (inSplit || k.kind === "split") {
+          e.preventDefault();
+          e.stopPropagation();
+        }
+        return;
+      }
+      // a terminal on its own: Ctrl+Shift+W closes its session off macOS (on macOS ⌘W reaches the menu's Close
+      // Window, which does the same: app/menuClose.ts)
+      if (k.kind === "close" && !inSplit) {
+        if (!isMac() && closeLone(id)) {
           e.preventDefault();
           e.stopPropagation();
         }
@@ -210,6 +219,111 @@ function Divider({ at, path, dir, ratio }: { at: string; path: string; dir: "row
 
 type NodeProps = { focus: string; zoom: boolean; list: SessionRec[]; pane: (rec: SessionRec) => ReactNode };
 
+/** The shortcut of a pane menu item, named for this platform (layout.ts paneKey). */
+const paneShortcut = (k: "zoom" | "equalize" | "close"): string => {
+  const mac = isMac();
+  if (k === "zoom") return mac ? "⌘⇧↩" : "Ctrl+Shift+Enter";
+  if (k === "equalize") return mac ? "⌘⌃=" : "Ctrl+Alt+=";
+  return mac ? "⌘W" : "Ctrl+Shift+W";
+};
+
+/** A pane's menu, opened by a click on its grip: zoom, even out, close, each with its key. */
+function PaneMenu({ rec, name, at, onClose }: { rec: SessionRec; name: string; at: { x: number; y: number }; onClose: () => void }) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [pos, setPos] = useState(at);
+  useLayoutEffect(() => {
+    const w = ref.current?.offsetWidth ?? 0;
+    setPos({ x: Math.max(6, Math.min(at.x - w / 2, innerWidth - w - 6)), y: at.y });
+  }, [at]);
+  useEffect(() => {
+    ref.current?.querySelector<HTMLElement>("button")?.focus({ preventScroll: true });
+    // a press on its own grip is the grip's (a click there closes the menu)
+    const outside = (e: globalThis.PointerEvent) => {
+      if (!ref.current?.contains(e.target as Node) && !(e.target as Element).closest?.(`[data-testid="split-grip"][data-session="${rec.id}"]`)) onClose();
+    };
+    document.addEventListener("pointerdown", outside, true);
+    return () => document.removeEventListener("pointerdown", outside, true);
+  }, [onClose, rec.id]);
+  const act = (fn: () => void) => () => {
+    onClose();
+    fn();
+  };
+  const items: { key: "zoom" | "equalize" | "close"; label: string; run: () => void }[] = [
+    {
+      key: "zoom",
+      label: t("key.zoomPane"),
+      run: () => {
+        setSplit({ groups: zoomIn(getSplit().groups, rec.id) });
+        focusSplitPane(rec.id);
+      },
+    },
+    {
+      key: "equalize",
+      label: t("key.equalizePanes"),
+      run: () => {
+        setSplit({ groups: equalizeIn(getSplit().groups, rec.id) });
+        focusSplitPane(rec.id);
+      },
+    },
+    { key: "close", label: t("key.closePane"), run: () => leaveSplit(rec.id) },
+  ];
+  const keys = (e: KeyboardEvent<HTMLDivElement>) => {
+    const list = [...(ref.current?.querySelectorAll<HTMLElement>("button") ?? [])];
+    const i = list.indexOf(document.activeElement as HTMLElement);
+    if (e.key === "Escape" || e.key === "Tab") {
+      e.preventDefault();
+      e.stopPropagation();
+      onClose();
+      focusSplitPane(rec.id);
+    } else if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+      e.preventDefault();
+      list[(i + (e.key === "ArrowDown" ? 1 : list.length - 1)) % list.length]?.focus();
+    }
+  };
+  return (
+    <div ref={ref} className="row-menu ss-pane-menu" role="menu" aria-label={name} data-testid="split-pane-menu" data-session={rec.id} style={{ left: pos.x, top: pos.y }} onKeyDown={keys}>
+      {items.map((it) => (
+        <button key={it.key} type="button" role="menuitem" className="row-mi ss-pane-mi" data-testid={`split-menu-${it.key}`} onClick={act(it.run)}>
+          <span className="ss-pane-mi-l">{it.label}</span>
+          <kbd className="ss-pane-mi-k">{paneShortcut(it.key)}</kbd>
+        </button>
+      ))}
+    </div>
+  );
+}
+
+/** A pane's grip, at its top centre over the terminal: drag it to another pane's side to move the pane there
+ *  (splitDrag.ts), click it for the pane's menu. */
+function PaneGrip({ rec }: { rec: SessionRec }) {
+  const ss = useSessions();
+  const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
+  const close = useCallback(() => setMenu(null), []);
+  const name = pickTitle(rec, termFallbackName(rec, ss.agents)).title;
+  return (
+    <>
+      <button
+        type="button"
+        className={`ss-split-grip${menu ? " on" : ""}`}
+        aria-label={t("split.grip", { name })}
+        title={t("split.grip", { name })}
+        aria-haspopup="menu"
+        aria-expanded={!!menu}
+        data-testid="split-grip"
+        data-session={rec.id}
+        onPointerDown={(e) => pressToSplit(e, rec.id, (d) => splitWith(d.at, rec.id, d.side))}
+        onClick={(e) => {
+          if (menu) return setMenu(null);
+          const r = e.currentTarget.getBoundingClientRect();
+          setMenu({ x: r.left + r.width / 2, y: r.bottom + 4 });
+        }}
+      >
+        <span aria-hidden="true" />
+      </button>
+      {menu && <PaneMenu rec={rec} name={name} at={menu} onClose={close} />}
+    </>
+  );
+}
+
 function Pane({ rec, focus, pane }: NodeProps & { rec: SessionRec }) {
   const focused = rec.id === focus;
   const take = () => {
@@ -225,6 +339,7 @@ function Pane({ rec, focus, pane }: NodeProps & { rec: SessionRec }) {
       // a click takes the pane; focus alone does not (a terminal that mounts focuses itself)
       onPointerDownCapture={take}
     >
+      <PaneGrip rec={rec} />
       <PaneTools rec={rec} focused={focused} onClose={() => leaveSplit(rec.id)} />
       {pane(rec)}
     </div>
@@ -316,84 +431,6 @@ export function useSplitPrune(): void {
     for (const id of groups.flatMap(groupSessions)) if (!alive.has(id)) next = leaveIn(next, id).groups;
     if (next !== groups) setSplit({ groups: next });
   }, [ss.list]);
-}
-
-/** The picker: running TERMINALS sessions to put in the new pane, and a new Shell in this one's folder. */
-export function SplitPicker({ main }: { main: SessionRec }) {
-  const sp = useSplit();
-  const ss = useSessions();
-  const s = useStore();
-  const ref = useRef<HTMLDivElement>(null);
-  const pick = sp.picking;
-  // the picker of the focused pane, or of any pane of its split
-  const g = groupOf(sp.groups, main.id);
-  const open = !!pick && (pick.at === main.id || (!!g && groupSessions(g).includes(pick.at))) && s.ui.view === "session";
-  const from = pick?.at ?? main.id;
-  const rows = open ? splitChoices(ss.list, ss.agents, from, sp.groups) : [];
-  const fromRec = ss.list.find((r) => r.id === from) ?? main;
-  // under the main column's header, at its right edge (the menu is fixed to the window); in a split, under the
-  // focused pane's corner buttons instead, so its x stays in view and clickable
-  const [at, setAt] = useState<{ left: number; top: number } | null>(null);
-  useLayoutEffect(() => {
-    if (!open) return;
-    const place = () => {
-      const m = document.querySelector("main.main")?.getBoundingClientRect();
-      const w = ref.current?.offsetWidth ?? 260;
-      const bar = document.querySelector(`[data-testid="split-tools"][data-session="${from}"]`)?.getBoundingClientRect();
-      if (bar) setAt({ left: Math.max(6, bar.right - w - 8), top: bar.bottom + 4 });
-      else if (m) setAt({ left: Math.max(6, m.right - w - 16), top: m.top + 56 });
-    };
-    place();
-    addEventListener("resize", place);
-    return () => removeEventListener("resize", place);
-  }, [open, from]);
-  useEffect(() => {
-    if (!open) return;
-    // the first running session when there is one, else New Shell
-    (ref.current?.querySelector<HTMLElement>('[data-testid="split-pick"]') ?? ref.current?.querySelector<HTMLElement>("button"))?.focus({ preventScroll: true });
-    const outside = (e: globalThis.PointerEvent) => {
-      if (!ref.current?.contains(e.target as Node)) closeSplitPicker();
-    };
-    document.addEventListener("pointerdown", outside, true);
-    return () => document.removeEventListener("pointerdown", outside, true);
-  }, [open]);
-  if (!open || !pick) return null;
-  const move = (e: KeyboardEvent<HTMLDivElement>) => {
-    const items = [...(ref.current?.querySelectorAll<HTMLElement>("button") ?? [])];
-    const i = items.indexOf(document.activeElement as HTMLElement);
-    if (e.key === "Escape") {
-      e.preventDefault();
-      e.stopPropagation();
-      closeSplitPicker();
-      focusSplitPane(from);
-    } else if (e.key === "ArrowDown" || e.key === "ArrowUp") {
-      e.preventDefault();
-      items[(i + (e.key === "ArrowDown" ? 1 : items.length - 1)) % items.length]?.focus();
-    }
-  };
-  const where = termActs.get(from).cwd ?? fromRec.cwd;
-  const label = t(pick.dir === "down" ? "split.pickDown" : "split.pick");
-  return (
-    <div ref={ref} className="row-menu ss-split-pick" role="menu" aria-label={label} data-testid="split-picker" data-dir={pick.dir} style={at ?? undefined} onKeyDown={move}>
-      <div className="ss-split-pick-h">{label}</div>
-      {rows.length === 0 && <div className="ss-split-pick-none">{t("split.none")}</div>}
-      {rows.map((r) => (
-        <button key={r.id} type="button" role="menuitem" className="row-mi ss-split-pick-row" data-testid="split-pick" data-session={r.id} title={r.cwd} onClick={() => splitWith(from, r.id, pick.dir)}>
-          <TermRowMark agent={termMarkAgent(r)} size={13} />
-          <span className="ss-split-name">{pickTitle(r, termFallbackName(r, ss.agents)).title}</span>
-          <span className="ss-split-path">{folderName(r.cwd)}</span>
-        </button>
-      ))}
-      <div className="row-sep" aria-hidden="true" />
-      <button type="button" role="menuitem" className="row-mi ss-split-pick-row" data-testid="split-new-shell" title={where} onClick={() => splitNewShell(from, pick.dir)}>
-        <span className="ss-split-pick-plus" aria-hidden="true">
-          <PlusIcon size={12} />
-        </span>
-        <span className="ss-split-name">{t("split.newShell")}</span>
-        <span className="ss-split-path">{folderName(where)}</span>
-      </button>
-    </div>
-  );
 }
 
 /** A split's shape drawn small: each pane a box in the layout's proportions, `mine` filled (a TERMINALS row's glyph). */

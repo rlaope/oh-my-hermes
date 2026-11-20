@@ -40,6 +40,16 @@ RULES = (
     "it closes the split pane that holds the keyboard (the same pane the ⌘W key in it closes)",
     "Copy link (the row menu, ⌘⇧C, Alt+Shift+C off macOS) writes only `omher://terminal/<id>` to the clipboard,",
     "On macOS, Close Window (⌘W) is omher's own menu item:",
+    "Otherwise, including a running session with the undo window Off, it closes the window (`window_close`) and stops no"
+    " session.",
+    "One press closes one session: while ⌘W stays held, its repeats close nothing more.",
+    "Off macOS, Ctrl+Shift+C and Ctrl+Insert copy the selection, and Ctrl+Shift+V and Shift+Insert are the page's own"
+    " paste.",
+    "Reset puts back the terminal's own state in the page and sends nothing to the program,",
+    "On macOS, the person's Cmd+Left, Cmd+Right, Cmd+Backspace and Cmd+Delete reach the program as Ctrl+A, Ctrl+E,"
+    " Ctrl+U and Ctrl+K, and Option+Left and Option+Right as ESC b and ESC f",
+    "a dropped or pasted file's saved path is typed at a terminal's prompt, shell-quoted, as a bracketed paste when the"
+    " program asked for one.",
     "Opening a link brings omher's window forward and nothing else: it starts, resumes, types into, reads or closes"
     " nothing.",
     "No other `omher://` address is accepted, and none is ever passed to the system opener.",

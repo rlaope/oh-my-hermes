@@ -1,0 +1,40 @@
+/* A terminal's right-click menu (TermMenu.tsx), on the app's .row-menu: each item a label and its key; groups apart
+   by a hairline; Copy is dim with nothing selected. Its own file so the app shell does not load the sessions styles. */
+.term-menu {
+  z-index: 70;
+  width: 240px;
+}
+.term-mi {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.term-mi-l {
+  flex: 1;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.term-mi-k {
+  flex: none;
+  font-family: inherit;
+  font-size: 11px;
+  color: var(--quiet);
+}
+.term-mi-gap {
+  margin-top: 5px;
+  position: relative;
+}
+.term-mi-gap::before {
+  content: "";
+  position: absolute;
+  left: 6px;
+  right: 6px;
+  top: -3px;
+  border-top: 1px solid var(--line);
+}
+.term-menu .row-mi:disabled {
+  opacity: 0.45;
+  cursor: default;
+}

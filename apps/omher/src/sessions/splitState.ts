@@ -3,7 +3,7 @@
 // a layout names its sessions and comes back after a restart as it was. A session is in one split at most. The pane
 // with the keyboard is the session open in the main column (`ui.session`): focusing a pane opens its session, so the
 // header, the row and the Plans panel follow it. Taking a pane out of a split stops nothing: its session stays listed.
-// Bot chats and threads are never in a split: only TERMINALS sessions are offered.
+// Bot chats and threads are never in a split: only TERMINALS sessions go in one.
 //
 // Saved on this computer (`omher.splits`) on every change; read once at load. Panes whose session is gone are dropped
 // when the session list says so (SplitView prunes), and a split left with one pane ends.
@@ -16,12 +16,11 @@ export interface SplitGroup {
   zoom?: boolean;
 }
 
-export type SplitDirName = "right" | "down";
+/** Which side of a pane a new one goes: the keys split right and down; a drop on a pane's part may take any side. */
+export type SplitDirName = "right" | "down" | "left" | "up";
 
 export interface SplitState {
   groups: SplitGroup[];
-  /** the picker is open: which session splits, and which way */
-  picking: { at: string; dir: SplitDirName } | null;
 }
 
 /** The split pane that holds `active` (the element with the keyboard): that pane's session. Focus in the split's own
@@ -67,19 +66,18 @@ export function leaveIn(groups: SplitGroup[], id: string): { groups: SplitGroup[
   return { groups: tidy(layout ? next : groups.filter((x) => x !== g)), heir: heir === null ? null : sessionOf(heir) };
 }
 
-/** Split `at`'s pane, putting `add` right of it or under it (half each). `add` leaves any split it was in first. The
- *  same list back when `at` and `add` are one, either is not a session id, or `at`'s split already has MAX_PANES. */
+/** Split `at`'s pane, putting `add` on its `dir` side (half each). `add` leaves any split it was in first, so a pane of
+ *  `at`'s own split moves there. The same list back when `at` and `add` are one, either is not a session id, or `at`'s
+ *  split already has MAX_PANES and `add` is not one of them. */
 export function splitIn(groups: SplitGroup[], at: string, dir: SplitDirName, add: string): SplitGroup[] {
   const a = paneOf(at);
   const b = paneOf(add);
   if (a === null || b === null || a === b) return groups;
   const current = groupOf(groups, at);
-  if (current && panesOf(current.layout).length >= MAX_PANES) return groups;
-  // already beside it in this split: nothing to do
-  if (current && panesOf(current.layout).includes(b)) return groups;
+  if (current && panesOf(current.layout).length >= MAX_PANES && !panesOf(current.layout).includes(b)) return groups;
   const rest = leaveIn(groups, add).groups;
   const g = groupOf(rest, at);
-  const layout = splitLayout(g?.layout ?? { pane: a }, a, dir === "right" ? "row" : "col", b);
+  const layout = splitLayout(g?.layout ?? { pane: a }, a, dir === "right" || dir === "left" ? "row" : "col", b, dir === "left" || dir === "up");
   if (!layout) return groups;
   return g ? rest.map((x) => (x === g ? { layout } : x)) : [...rest, { layout }].slice(-MAX_GROUPS);
 }
@@ -141,7 +139,7 @@ function read(): SplitGroup[] {
   }
 }
 
-let state: SplitState = { groups: read(), picking: null };
+let state: SplitState = { groups: read() };
 const listeners = new Set<() => void>();
 
 export function setSplit(patch: Partial<SplitState>): void {
@@ -169,7 +167,7 @@ export const useSplit = (): SplitState => useSyncExternalStore(subscribe, getSpl
 
 /** Tests: start from nothing. */
 export function resetSplit(): void {
-  setSplit({ groups: [], picking: null });
+  setSplit({ groups: [] });
 }
 
 /** What a pane key does to the split holding `id` (the focused pane). `focus` is where the keyboard goes next, null

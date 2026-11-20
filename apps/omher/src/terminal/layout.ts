@@ -20,12 +20,12 @@ export function panesOf(l: Layout): number[] {
   return isPane(l) ? [l.pane] : [...panesOf(l.a), ...panesOf(l.b)];
 }
 
-/** Split pane `target`, putting pane `id` right of it (`row`) or under it (`col`), half each. Null when the tab is
- *  full or `target` is not in it. */
-export function splitLayout(l: Layout, target: number, dir: SplitDir, id: number): Layout | null {
+/** Split pane `target`, putting pane `id` right of it (`row`) or under it (`col`), half each; `before`: left of it or
+ *  over it instead. Null when the tab is full or `target` is not in it. */
+export function splitLayout(l: Layout, target: number, dir: SplitDir, id: number, before = false): Layout | null {
   const all = panesOf(l);
   if (all.length >= MAX_PANES || !all.includes(target) || all.includes(id)) return null;
-  const go = (n: Layout): Layout => (isPane(n) ? (n.pane === target ? { dir, ratio: 0.5, a: n, b: { pane: id } } : n) : { ...n, a: go(n.a), b: go(n.b) });
+  const go = (n: Layout): Layout => (isPane(n) ? (n.pane === target ? { dir, ratio: 0.5, a: before ? { pane: id } : n, b: before ? n : { pane: id } } : n) : { ...n, a: go(n.a), b: go(n.b) });
   return go(l);
 }
 

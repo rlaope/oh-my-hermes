@@ -43,7 +43,7 @@ import { getDraft, setDraft as setUnsent } from "../app/drafts";
 import { getHost, type ChatEvent, type ChatInput, type PastChat, type SessionHost } from "./host";
 import { localBot } from "../peers/peerKey";
 import { folderKey, getStore, notifySessionEvent, notifySessionNote, onBridgeEvent, selectAsks, setChatRoute, setSessionKeyLookup, type OutFile, type SentFile, type Store } from "../state/store";
-import { blobType, bytesOf, inlinePicture, parseSentFiles, putSentFiles, SENT_FILES_KEY, shellQuote, wireText, type SavedFile, type SentFilesBook } from "./attach";
+import { blobType, bytesOf, inlinePicture, parseSentFiles, pathsTyped, putSentFiles, SENT_FILES_KEY, shellQuote, wireText, type SavedFile, type SentFilesBook } from "./attach";
 import type { AccountCli, AccountGroup, ApprovalChoice, BridgeEvent, ClarifyAnswers, Msg } from "../lib/protocol";
 import { continuesItself, type SavedSession } from "../app/resume";
 import { accountGroups } from "../settings/accounts/useAccounts";
@@ -1699,7 +1699,8 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
   };
 
   /** Files dropped or pasted on session `id`'s terminal: each saved under the session's own folder (the page
-   *  never sees a dropped file's own path), then the saved paths typed at the prompt, shell-quoted. */
+   *  never sees a dropped file's own path), then the saved paths typed at the prompt, shell-quoted (a paste when the
+   *  program turned bracketed paste on: attach.ts `pathsTyped`). */
   const dropOnTerminal = async (id: string, files: { name: string; read: () => Promise<Uint8Array> }[], windows: boolean) => {
     const t = terms.get(id);
     if (t?.held) return; // closed, waiting to be undone: nothing is saved or typed
@@ -1712,7 +1713,8 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
         return;
       }
     }
-    if (paths.length) await typeAt(id, `${paths.join(" ")} `);
+    const now = terms.get(id);
+    if (paths.length && now) await typeAt(id, pathsTyped(paths, bracketedPaste(now.raw)));
   };
 
   const stopChat = async (id: string) => {
@@ -2176,8 +2178,13 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
       }
     }
   };
+  // Every session view calls this when it mounts and when the app theme changes: only a mode the terminals have not
+  // been given yet relooks them all (each mount used to re-apply the look and refit every open terminal)
+  let looked: "dark" | "light" | null = null;
   const setLook = (mode: "dark" | "light") => {
     look = mode;
+    if (mode === looked) return;
+    looked = mode;
     relook();
   };
   onTermSettings(relook);

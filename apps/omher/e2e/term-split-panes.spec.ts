@@ -1,12 +1,14 @@
 // TERMINALS splits like Otty / Orca: ⌘D splits right and ⌘⇧D down (Ctrl+Shift+D / Alt+Shift+D off macOS), up to four
-// sessions in any nesting; each split asks which session goes in the new pane (a running TERMINALS session, or a new
-// Shell in the focused pane's folder, the one its shell last reported). The focused pane is the session open in the
-// main column; the others are dimmed (Settings › Terminal › Dim unfocused panes). ⌘⌥arrows / ⌘] ⌘[ move the keyboard,
+// sessions in any nesting; each key splits at once with a new Shell in the focused pane's folder (the one its shell last
+// reported), no picker; a TERMINALS row dragged onto a pane's side puts that session there instead (split-drag spec).
+// The focused pane is the session open in the main column; the others are dimmed (Settings › Terminal › Dim unfocused
+// panes). ⌘⌥arrows / ⌘] ⌘[ move the keyboard,
 // ⌘⇧⌥arrows move the pane, ⌘⇧↩ zooms it, ⌘⌃= evens them out, ⌘W closes it (the session keeps running; the menu's
 // Close Window does the same while a split has the keyboard, and closes the window otherwise). Rows in the split
 // carry a glyph, Plans draws the split small, and the split comes back after a restart. Bot chats never split.
 import { expect, test, type Page } from "@playwright/test";
 import { mock, openApp, platformIsMac } from "./term-find-helpers";
+import { dragRowOnto, type Side } from "./split-drag-helpers";
 
 type Sessions = { startTerminal(a: string, cwd: string): string; ptyOf(id: string): number | null };
 type Call = { op: string; id?: number; agent?: string; cwd?: string | null; data?: string };
@@ -49,13 +51,24 @@ async function sessions(page: Page, folders: string[]): Promise<string[]> {
   return ids;
 }
 
-async function splitWith(page: Page, from: string, key: string, pick: string | "new") {
+/** ⌘D / ⌘⇧D in `from`'s pane: a new pane with a new Shell at once, no picker; its session id. */
+async function splitNew(page: Page, from: string, key: string): Promise<string> {
   await textarea(page, from).focus();
+  const panes = await page.getByTestId("split-pane").count();
   await page.keyboard.press(key);
-  await expect(page.getByTestId("split-picker")).toBeVisible();
-  if (pick === "new") await page.getByTestId("split-new-shell").click();
-  else await page.locator(`[data-testid="split-pick"][data-session="${pick}"]`).click();
-  await expect(page.getByTestId("split-picker")).toHaveCount(0);
+  await expect(page.getByTestId("split-pane")).toHaveCount(Math.max(2, panes + 1));
+  const id = (await page.locator('[data-testid="split-pane"][data-focused="true"]').getAttribute("data-session"))!;
+  expect(id).not.toBe(from);
+  await expect(term(page, id).locator(".xterm-rows")).toContainText("(mock)");
+  return id;
+}
+
+/** Running session `pick` in a new pane on `from`'s `side`: `from` opened, then `pick`'s row dragged onto that part of
+ *  its pane; `pick` has the keyboard. */
+async function splitWith(page: Page, from: string, pick: string, side: Side = "right") {
+  await page.getByTestId(`session-${from}`).locator(".ss-open").click();
+  await dragRowOnto(page, pick, from, side);
+  await expect(pane(page, pick)).toHaveAttribute("data-focused", "true");
 }
 
 test.beforeEach(async () => {
@@ -65,26 +78,37 @@ test.beforeEach(async () => {
 test("⌘D right and ⌘⇧D down: four TERMINALS sessions in a nested split, no fifth; each pane takes its own output", async ({ page }) => {
   await openApp(page);
   const k = await keys(page);
-  const [a, b, c, d, e] = await sessions(page, ["/w/a", "/w/b", "/w/c", "/w/d", "/w/e"]);
+  const [a, b, e] = await sessions(page, ["/w/a", "/w/b", "/w/e"]);
   await page.getByTestId(`session-${a}`).locator(".ss-open").click();
-  await splitWith(page, a, k.right, b);
-  // b went right of a and has the keyboard
+  // ⌘D: a new Shell right of a, in a's folder, at once
+  const n = await splitNew(page, a, k.right);
+  expect(n).not.toBe(b);
+  expect(n).not.toBe(e);
+  expect((await shellStarts(page)).at(-1)).toMatchObject({ cwd: "/w/a" });
+  await expect.poll(() => focusedTerm(page)).toBe(n);
+  // that pane leaves; b goes right of a (its row dragged there) and has the keyboard
+  await page.keyboard.press(k.close);
+  await expect(page.getByTestId("session-split")).toHaveCount(0);
+  await splitWith(page, a, b);
   await expect.poll(() => focusedTerm(page)).toBe(b);
-  await splitWith(page, b, k.down, c);
+  const c = await splitNew(page, b, k.down);
   await expect(page.getByTestId("session-split")).toHaveAttribute("data-panes", "3");
   // c is under b, both right of a
   const [ra, rb, rc] = [(await term(page, a).boundingBox())!, (await term(page, b).boundingBox())!, (await term(page, c).boundingBox())!];
   expect(rb.x).toBeGreaterThan(ra.x + ra.width - 2);
   expect(rc.y).toBeGreaterThan(rb.y + rb.height - 2);
   expect(Math.abs(rc.x - rb.x)).toBeLessThan(2);
-  await splitWith(page, a, k.down, d);
+  const d = await splitNew(page, a, k.down);
   await expect(page.getByTestId("session-split")).toHaveAttribute("data-panes", "4");
   await expect(page.getByTestId("terminal")).toHaveCount(4);
-  // the split is full: the key opens no picker, and nothing reaches the program
+  // the split is full: the key starts no shell and opens no picker, and nothing reaches the program
+  const started = (await shellStarts(page)).length;
   await textarea(page, d).focus();
   await page.keyboard.press(k.right);
+  await page.keyboard.press(k.down);
   await page.waitForTimeout(150);
-  await expect(page.getByTestId("split-picker")).toHaveCount(0);
+  await expect(page.getByTestId("session-split")).toHaveAttribute("data-panes", "4");
+  expect((await shellStarts(page)).length).toBe(started);
   await expect(term(page, e)).toHaveCount(0);
   // each pane its own program's output
   for (const id of [a, b, c, d]) await out(page, await ptyOf(page, id), `from-${id}-pane\r\n`);
@@ -99,14 +123,12 @@ test("New Shell here starts a shell in the folder the focused pane's shell repor
   const [a] = await sessions(page, ["/home/you/code/web-app"]);
   await out(page, await ptyOf(page, a), "\x1b]7;file:///home/you/code/web-app/packages/ui\x07");
   await expect(page.getByTestId(`session-${a}`).getByTestId("term-cwd")).toHaveText("ui");
-  await splitWith(page, a, k.down, "new");
+  const id = await splitNew(page, a, k.down);
   await expect(page.getByTestId("session-split")).toHaveAttribute("data-panes", "2");
   await expect.poll(async () => (await shellStarts(page)).length).toBe(2);
   expect((await shellStarts(page)).at(-1)).toMatchObject({ cwd: "/home/you/code/web-app/packages/ui" });
   // the new shell is under the first and has the keyboard
-  const id = await page.locator('[data-testid="split-pane"][data-focused="true"]').getAttribute("data-session");
-  expect(id).not.toBe(a);
-  const [ra, rn] = [(await term(page, a).boundingBox())!, (await term(page, id!).boundingBox())!];
+  const [ra, rn] = [(await term(page, a).boundingBox())!, (await term(page, id).boundingBox())!];
   expect(rn.y).toBeGreaterThan(ra.y + ra.height - 2);
   await expect.poll(() => focusedTerm(page)).toBe(id);
 });
@@ -115,9 +137,8 @@ test("the focused pane is the open session; the others are dimmed to the setting
   await openApp(page, { term: { dimUnfocused: 0.6 } });
   const k = await keys(page);
   const [a, b, c] = await sessions(page, ["/w/a", "/w/b", "/w/c"]);
-  await page.getByTestId(`session-${a}`).locator(".ss-open").click();
-  await splitWith(page, a, k.right, b);
-  await splitWith(page, b, k.down, c);
+  await splitWith(page, a, b);
+  await splitWith(page, b, c, "down");
   // c has the keyboard: it is the open session (header, row), drawn full; a and b are dimmed to 0.6
   await expect(page.getByTestId(`session-${c}`)).toHaveClass(/active/);
   await expect(pane(page, c)).toHaveAttribute("data-focused", "true");
@@ -172,13 +193,12 @@ test("the focused pane is the open session; the others are dimmed to the setting
   expect(await writes(page)).toEqual([]);
 });
 
-test("⌘W closes the focused pane (its session keeps running), the nearest pane takes the keyboard; the menu's Close Window does the same, then closes the window", async ({ page }) => {
+test("⌘W closes the focused pane (its session keeps running), the nearest pane takes the keyboard; the menu's Close Window does the same, then closes the lone terminal's session with undo", async ({ page }) => {
   await openApp(page);
   const k = await keys(page);
   const [a, b, c] = await sessions(page, ["/w/a", "/w/b", "/w/c"]);
-  await page.getByTestId(`session-${a}`).locator(".ss-open").click();
-  await splitWith(page, a, k.right, b);
-  await splitWith(page, b, k.down, c);
+  await splitWith(page, a, b);
+  await splitWith(page, b, c, "down");
   await page.keyboard.press(k.close);
   await expect(page.getByTestId("session-split")).toHaveAttribute("data-panes", "2");
   await expect(pane(page, c)).toHaveCount(0);
@@ -197,22 +217,39 @@ test("⌘W closes the focused pane (its session keeps running), the nearest pane
   await expect(page.getByTestId("terminal")).toHaveCount(1);
   await expect(page.getByTestId("terminal")).toHaveAttribute("data-session", a);
   expect(await page.evaluate(() => (window as unknown as { __omherWindowCloses?: number }).__omherWindowCloses ?? 0)).toBe(0);
-  // no split: ⌘W in a terminal is nothing of omher's here, and the menu's Close Window closes the window
+  // no split: the menu's Close Window closes the session the terminal shows, as a terminal app closes a tab, with
+  // the undo toast (its program keeps running through the undo window); the window stays
+  await page.waitForTimeout(400);
+  // the 10 s undo window a person has by default (a test browser closes at once unless it sets one)
+  await page.evaluate(() => void ((window as unknown as { __omherCloseGraceMs: number }).__omherCloseGraceMs = 10_000));
+  await textarea(page, a).focus();
+  await page.evaluate(() => (window as unknown as { __omherMenuClose(): Promise<void> }).__omherMenuClose());
+  await expect(page.getByTestId(`close-toast-${a}`)).toBeVisible();
+  await expect(page.getByTestId(`session-${a}`)).toHaveCount(0);
+  expect(await page.evaluate(() => (window as unknown as { __omherWindowCloses?: number }).__omherWindowCloses ?? 0)).toBe(0);
+  // nothing was stopped yet; Undo brings it back
+  const closes = await page.evaluate(() => ((window as unknown as { __omherSessionCalls?: Call[] }).__omherSessionCalls ?? []).filter((x) => x.op === "close"));
+  expect(closes).toEqual([]);
+  await page.getByTestId(`close-toast-${a}`).getByTestId("close-toast-undo").click();
+  await expect(page.getByTestId(`session-${a}`)).toBeVisible();
+});
+
+test("with the undo window Off, the menu's Close Window on a lone running terminal closes the window, never the agent", async ({ page }) => {
+  await openApp(page, { term: { undoClose: 0 } });
+  await page.evaluate(() => void ((window as unknown as { __omherCloseGraceMs: number }).__omherCloseGraceMs = 10_000));
+  const [a] = await sessions(page, ["/w/a"]);
   await textarea(page, a).focus();
   await page.evaluate(() => (window as unknown as { __omherMenuClose(): Promise<void> }).__omherMenuClose());
   expect(await page.evaluate(() => (window as unknown as { __omherWindowCloses?: number }).__omherWindowCloses ?? 0)).toBe(1);
-  // nothing was stopped
-  const closes = await page.evaluate(() => ((window as unknown as { __omherSessionCalls?: Call[] }).__omherSessionCalls ?? []).filter((x) => x.op === "close"));
-  expect(closes).toEqual([]);
+  await expect(page.getByTestId(`session-${a}`)).toHaveAttribute("data-status", "running");
 });
 
 test("the menu's Close Window and the ⌘W key close the pane that holds the keyboard, not the pane last clicked", async ({ page }) => {
   await openApp(page);
   const k = await keys(page);
   const [a, b, c] = await sessions(page, ["/w/a", "/w/b", "/w/c"]);
-  await page.getByTestId(`session-${a}`).locator(".ss-open").click();
-  await splitWith(page, a, k.right, b);
-  await splitWith(page, b, k.down, c);
+  await splitWith(page, a, b);
+  await splitWith(page, b, c, "down");
   await pane(page, a).click();
   await expect(pane(page, a)).toHaveAttribute("data-focused", "true");
   await expect(textarea(page, a)).toBeFocused();
@@ -245,8 +282,7 @@ test("rows in the open split carry a glyph (the focused one marked); Plans draws
   await openApp(page);
   const k = await keys(page);
   const [a, b, c] = await sessions(page, ["/w/a", "/w/b", "/w/c"]);
-  await page.getByTestId(`session-${a}`).locator(".ss-open").click();
-  await splitWith(page, a, k.right, b);
+  await splitWith(page, a, b);
   await expect(page.getByTestId(`session-${a}`).getByTestId("term-split-glyph")).toBeVisible();
   await expect(page.getByTestId(`session-${b}`)).toHaveAttribute("data-split", "focused");
   await expect(page.getByTestId(`session-${a}`)).toHaveAttribute("data-split", "in");
@@ -290,58 +326,37 @@ test("rows in the open split carry a glyph (the focused one marked); Plans draws
   await expect(page.getByTestId(`session-${a}`).getByTestId("term-split-glyph")).toHaveCount(0);
 });
 
-test("the picker opens under the focused pane's corner buttons, so its x stays clickable", async ({ page }) => {
-  await openApp(page);
-  const k = await keys(page);
-  const [a, b, c] = await sessions(page, ["/w/a", "/w/b", "/w/c"]);
-  await page.getByTestId(`session-${a}`).locator(".ss-open").click();
-  await splitWith(page, a, k.right, b);
-  // b has the keyboard; split again from it
-  await textarea(page, b).focus();
-  await page.keyboard.press(k.down);
-  const picker = page.getByTestId("split-picker");
-  await expect(picker).toBeVisible();
-  const x = pane(page, b).getByTestId("split-close");
-  const [p, xb] = [(await picker.boundingBox())!, (await x.boundingBox())!];
-  const overlaps = p.x < xb.x + xb.width && xb.x < p.x + p.width && p.y < xb.y + xb.height && xb.y < p.y + p.height;
-  expect(overlaps).toBe(false);
-  expect(p.y).toBeGreaterThanOrEqual(xb.y + xb.height);
-  // the x at the centre of its box is the x itself, not the picker
-  const hit = await page.evaluate(([cx, cy]) => !!document.elementFromPoint(cx, cy)?.closest('[data-testid="split-close"]'), [xb.x + xb.width / 2, xb.y + xb.height / 2] as const);
-  expect(hit).toBe(true);
-  await page.locator(`[data-testid="split-pick"][data-session="${c}"]`).click();
-  await expect(page.getByTestId("split-pane")).toHaveCount(3);
-});
-
-test("bot chats never split: the keys do nothing there, and the picker lists TERMINALS sessions only", async ({ page }) => {
+test("bot chats never split: the keys do nothing there, and a TERMINALS row dragged onto one finds no drop zone", async ({ page }) => {
   await openApp(page);
   const k = await keys(page);
   const [a, b] = await sessions(page, ["/w/a", "/w/b"]);
-  // the bot chat: ⌘D opens no picker and no split
+  // the bot chat: ⌘D starts no shell and makes no split
   await page.getByTestId("bot-kami").click();
   await page.getByTestId("composer-input").or(page.locator("textarea").first()).first().focus();
   await page.keyboard.press(k.right);
   await page.waitForTimeout(150);
-  await expect(page.getByTestId("split-picker")).toHaveCount(0);
   await expect(page.getByTestId("session-split")).toHaveCount(0);
-  // the picker in a TERMINALS session offers the other TERMINALS session and New Shell, nothing else
-  await page.getByTestId(`session-${a}`).locator(".ss-open").click();
-  await textarea(page, a).focus();
-  await page.keyboard.press(k.right);
-  await expect(page.getByTestId("split-pick")).toHaveCount(1);
-  await expect(page.getByTestId("split-pick")).toHaveAttribute("data-session", b);
-  await expect(page.getByTestId("split-new-shell")).toBeVisible();
-  await page.keyboard.press("Escape");
-  await expect(page.getByTestId("split-picker")).toHaveCount(0);
-  await expect.poll(() => focusedTerm(page)).toBe(a);
+  expect(await shellStarts(page)).toHaveLength(2);
+  // a TERMINALS row dragged onto the bot chat: no drop zone, no split, nothing started; the chat stays open
+  const row = (await page.getByTestId(`session-${a}`).locator(".ss-open").boundingBox())!;
+  const main = (await page.locator("main.main").boundingBox())!;
+  await page.mouse.move(row.x + 30, row.y + row.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(main.x + main.width * 0.9, main.y + main.height / 2, { steps: 12 });
+  await page.waitForTimeout(100);
+  await expect(page.getByTestId("split-drop")).toHaveCount(0);
+  await page.mouse.up();
+  await expect(page.getByTestId("session-split")).toHaveCount(0);
+  expect(await shellStarts(page)).toHaveLength(2);
+  await expect(page.getByTestId(`session-${a}`)).not.toHaveClass(/active/);
+  await expect(page.getByTestId(`session-${b}`)).not.toHaveClass(/active/);
 });
 
 test("panes have no title bar: a 1px line splits them, and the zoom and x show in the corner only under the pointer", async ({ page }) => {
   await openApp(page);
   const k = await keys(page);
   const [a, b] = await sessions(page, ["/w/a", "/w/b"]);
-  await page.getByTestId(`session-${a}`).locator(".ss-open").click();
-  await splitWith(page, a, k.right, b);
+  await splitWith(page, a, b);
   // the terminal starts at the pane's top edge: nothing is drawn above it
   for (const id of [a, b]) {
     const [p, t] = [(await pane(page, id).boundingBox())!, (await pane(page, id).locator(".term-wrap").boundingBox())!];
@@ -364,4 +379,47 @@ test("panes have no title bar: a 1px line splits them, and the zoom and x show i
   await expect.poll(() => focusedTerm(page)).toBe(a);
   await page.keyboard.press(k.zoom);
   await expect(page.getByTestId("split-pane")).toHaveCount(2);
+});
+
+test("⌘W (the menu's Close Window) / Ctrl+Shift+W on a lone running terminal closes its session with undo; the program gets no ^W", async ({ page }) => {
+  await openApp(page);
+  const mac = await platformIsMac(page);
+  await page.evaluate(() => void ((window as unknown as { __omherCloseGraceMs: number }).__omherCloseGraceMs = 10_000));
+  const [a] = await sessions(page, ["/w/a"]);
+  await textarea(page, a).focus();
+  // macOS: ⌘W is the menu's accelerator, which the shell turns into `menu-close`
+  if (mac) await page.evaluate(() => (window as unknown as { __omherMenuClose(): Promise<void> }).__omherMenuClose());
+  else await page.keyboard.press("Control+Shift+W");
+  await expect(page.getByTestId(`close-toast-${a}`)).toBeVisible();
+  await expect(page.getByTestId(`session-${a}`)).toHaveCount(0);
+  expect(await writes(page)).toEqual([]);
+});
+
+test("a held ⌘W closes one terminal, not one after another and then the window (macOS: the menu hears every repeat)", async ({ page }) => {
+  await openApp(page);
+  test.skip(!(await platformIsMac(page)), "the menu's Close Window and its key repeat are macOS's");
+  await page.evaluate(() => void ((window as unknown as { __omherCloseGraceMs: number }).__omherCloseGraceMs = 10_000));
+  const [a, b] = await sessions(page, ["/w/a", "/w/b"]);
+  await textarea(page, b).focus();
+  const menuClose = () => page.evaluate(() => (window as unknown as { __omherMenuClose(): Promise<void> }).__omherMenuClose());
+  await page.keyboard.down("Meta");
+  await page.keyboard.down("w");
+  // the press and three repeats reach the menu
+  for (let i = 0; i < 4; i++) await menuClose();
+  await page.keyboard.up("w");
+  await page.keyboard.up("Meta");
+  await expect(page.getByTestId(`close-toast-${b}`)).toBeVisible();
+  await expect(page.getByTestId(`session-${a}`)).toBeVisible();
+  expect(await page.evaluate(() => (window as unknown as { __omherWindowCloses?: number }).__omherWindowCloses ?? 0)).toBe(0);
+  // a new press closes the next one
+  await page.getByTestId(`session-${a}`).locator(".ss-open").click();
+  await textarea(page, a).focus();
+  // a person's next press comes later than the few ms by which the menu can hear a press before the page does
+  await page.waitForTimeout(150);
+  await page.keyboard.down("Meta");
+  await page.keyboard.down("w");
+  await menuClose();
+  await page.keyboard.up("w");
+  await page.keyboard.up("Meta");
+  await expect(page.getByTestId(`session-${a}`)).toHaveCount(0);
 });
