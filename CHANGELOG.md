@@ -4,6 +4,16 @@ All notable changes will be documented here.
 
 ## Unreleased
 
+- **The OMH TUI runs on native Windows, not only under WSL.** Bare `omh` on Windows used to open Hermes' own terminal
+  every time, because the OMH TUI needed termios. Where there is no termios its terminal layer now enters the Windows
+  console instead: VT input and output modes with UTF-8 code pages (all put back on exit, a failed start included),
+  keys read with ReadConsoleW on a thread and handed on as the same UTF-8 escape bytes a POSIX terminal sends, the
+  window size polled in place of SIGWINCH, and a closed console ending the session as a hung-up pty does. The
+  gateway's wake pipe now holds at most one byte, so it never blocks without the non-blocking mode Windows pipes lack
+  before Python 3.12, and the console peeks at it instead of select. `omh doctor` reports the real OMH TUI state on
+  Windows. It needs Windows Terminal or a VT-capable console (an old conhost falls back with one line saying why); a
+  Windows user still has to try it.
+
 - **A bot answers a mid-turn message before it acts on it.** A message sent while the bot works (a steer) used to
   change only its next command, with nothing said, so the person could not tell it was read. OMH's reply line, which
   every session carries once in its system prompt, now asks for one line before the next tool call: what was taken

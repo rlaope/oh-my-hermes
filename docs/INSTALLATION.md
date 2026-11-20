@@ -462,6 +462,18 @@ the working directory and whether the session is already open somewhere else,
 and then starts the OMH frontend in place of its own. Every model call, tool
 run and approval decision stays Hermes'; the screen is OMH's.
 
+On native Windows (no WSL) the OMH TUI runs in Windows Terminal or another
+console that takes virtual terminal input and output: it sets the console to
+VT input and output with UTF-8 code pages, reads keys as the same escape
+sequences a POSIX terminal sends, polls the window size in place of SIGWINCH,
+and puts every console mode back on exit. An old conhost that refuses virtual
+terminal input gets one line saying so, and bare `omh` opens Hermes' own
+terminal. Ctrl+Z does nothing there (no job control), and the TUI's own
+runtime home is not built on Windows (it is a tree of symbolic links, which
+needs Developer Mode), so sessions open on the shared gateway. No real Windows
+console run backs this yet: CI proves the console layer against a fake and the
+wake pipe on real Windows pipes.
+
 - Finished replies, tool summaries and notices go to your terminal's own
   scrollback, so selecting, copying and scrolling back work as they do in any
   shell. Only the region under the last line printed repaints, each repaint
@@ -1510,7 +1522,7 @@ integration rather than claiming exhaustive Vim parity.
 
 Ctrl+Enter and Shift+Enter reach the OMH TUI as keys of their own only where
 the terminal reports them. On start it asks iTerm2, kitty, WezTerm, tmux, VS
-Code's terminal and Windows Terminal (under WSL) for the kitty keyboard
+Code's terminal and Windows Terminal (native or under WSL) for the kitty keyboard
 protocol and xterm modifyOtherKeys, and Ghostty for modifyOtherKeys only: the
 terminals Hermes' own TUI asks, recognised as Hermes recognises them, from
 `TERM_PROGRAM`, `TERM`, `TMUX`, `KITTY_WINDOW_ID` or `WT_SESSION`. The
@@ -2030,7 +2042,8 @@ unchanged.
 
 When the OMH TUI cannot start, `omh` says why in one line on stderr and opens
 Hermes instead, so you lose the OMH screen, never the session. For a reason
-that is the OMH TUI's own — Windows or another terminal without `termios`,
+that is the OMH TUI's own — a Windows console that cannot take virtual
+terminal input (an old conhost), a non-Windows platform without `termios`,
 its frontend missing, or a Hermes whose gateway no longer speaks what the TUI
 was built for — that is Hermes' own TUI (`hermes --tui`). A gateway that is
 there but not answering is not such a reason, since Hermes' own TUI would ask
@@ -3719,7 +3732,6 @@ exist to make a safety claim that Windows cannot back:
 | Cross-harness benchmark sandbox | Linux `bwrap` process confinement | Reports `unsupported`; no real runs |
 | `0600` / `0700` artifact permissions | POSIX mode bits | `chmod` is close to a no-op on NTFS; private artifacts are not enforced private |
 | macOS menu bar helper | Darwin + `swiftc` | Skipped, and says so |
-| OMH TUI (bare `omh`) | `termios` raw mode | Not attempted; bare `omh` opens Hermes' own terminal |
 
 Generic record locking is **not** on that list: `local_store` uses
 `msvcrt.locking` on Windows, so shared-record updates get a real OS lock with

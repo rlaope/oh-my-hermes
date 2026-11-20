@@ -41,7 +41,6 @@ def _hermes_install(root: Path, *, hook: bool = True, gateway: bool = True) -> N
         (install / "tui_gateway" / "entry.py").write_text("", encoding="utf-8")
 
 
-@unittest.skipIf(os.name == "nt", "the OMH TUI is POSIX-only; on Windows the check reports that before any other step")
 class OmhTuiDoctorTests(unittest.TestCase):
     def test_all_parts_present_reports_the_omh_tui_reachable(self) -> None:
         with TemporaryDirectory() as tmp, patch("omh.tui.launch.node_available", return_value=True):
@@ -144,15 +143,15 @@ class InstalledHermesCommitTests(unittest.TestCase):
             self.assertEqual(installed_hermes_commit(Path(tmp)), "")
 
 
-@unittest.skipUnless(os.name == "nt", "the Windows message is only reachable on Windows")
+@unittest.skipUnless(os.name == "nt", "the Windows path is only reachable on Windows")
 class OmhTuiDoctorWindowsTests(unittest.TestCase):
-    def test_windows_reports_that_bare_omh_opens_hermes_own_terminal(self) -> None:
+    def test_windows_reports_the_real_state_not_a_fixed_termios_line(self) -> None:
+        # The OMH TUI runs on a Windows console with virtual terminal input (Windows Terminal), so the check walks
+        # the same steps as on POSIX: here no Hermes install, so it says so.
         with TemporaryDirectory() as tmp:
             check = _omh_tui_check(_paths(Path(tmp)))
         self.assertTrue(check.ok)
-        self.assertEqual(check.severity, "ok")
-        self.assertIn("Windows", check.message)
-        self.assertIn("Hermes' own terminal", check.message)
+        self.assertNotIn("termios", check.message)
 
 
 if __name__ == "__main__":

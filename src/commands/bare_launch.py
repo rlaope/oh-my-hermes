@@ -489,8 +489,9 @@ def _own_runtime_home(args: argparse.Namespace, paths) -> Path | None:
     the TUI recorded it; Hermes' title and prefix lookups are not consulted. A
     home that cannot be built, or whose root config names a messaging token
     under `platforms:` (the TUI runtime must never poll a bot's token), says
-    why in one line and opens on the shared gateway. Not on Windows, where
-    the OMH TUI does not run.
+    why in one line and opens on the shared gateway. Not on Windows: the home
+    is a tree of symbolic links, which Windows lets a process make only with
+    Developer Mode on, so the OMH TUI opens on the shared gateway there.
     """
     if os.name == "nt" or getattr(args, "hermes_home", None) or getattr(args, "tui_profile", None):
         return None

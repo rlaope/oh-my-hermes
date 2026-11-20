@@ -70,7 +70,7 @@ class EnvironmentTests(unittest.TestCase):
             self.assertTrue(name.startswith("OMH_TUI_"), name)  # the gateway child never sees them
 
 
-@unittest.skipIf(os.name == "nt", "the OMH TUI does not run on Windows: the launch stays on the shared gateway there")
+@unittest.skipIf(os.name == "nt", "no own runtime home on Windows (a symlink tree needs Developer Mode): the launch stays on the shared gateway")
 class DecisionTests(unittest.TestCase):
     def test_nothing_saved_builds_the_profile_and_names_it(self) -> None:
         with TemporaryDirectory() as tmp:

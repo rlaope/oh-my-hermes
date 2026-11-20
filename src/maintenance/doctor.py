@@ -717,11 +717,6 @@ def _omh_tui_check(paths: OmhPaths) -> Check:
     from ..tui.launch import FRONTEND_ENTRY, node_available
 
     fallback = "bare `omh` opens Hermes' own terminal until then"
-    if os.name == "nt":
-        return Check(
-            "omh_tui_support", True,
-            "Windows: the OMH TUI needs termios, so bare `omh` opens Hermes' own terminal",
-        )
     if not FRONTEND_ENTRY.is_file():
         return Check(
             "omh_tui_support", True, f"the OMH TUI shim is missing ({FRONTEND_ENTRY})",

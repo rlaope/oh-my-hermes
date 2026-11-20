@@ -183,7 +183,8 @@ def hermes_tui_fits(environ: Mapping[str, str]) -> bool:
     Not under `TERM=dumb`, where no TUI draws, and not under `OMH_NO_TUI=1`,
     the escape every OMH cursor UI honours beside it (the setup menu, the
     theme picker). The reasons that are the OMH TUI's alone, no `termios`
-    (Windows), its frontend missing, its own exit 75, leave Hermes' TUI
+    (a platform other than Windows) or a Windows console without virtual
+    terminal input, its frontend missing, its own exit 75, leave Hermes' TUI
     able to open. Node is the caller's separate check (`node_available`):
     Hermes' TUI needs it as much as the OMH TUI does.
     """
