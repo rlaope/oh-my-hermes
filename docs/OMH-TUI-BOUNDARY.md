@@ -564,3 +564,15 @@ call the gateway makes, is Hermes'. This is a foreground terminal the person
 launched, not a background runtime, a transport bot, or a third process bridge:
 the child relays one terminal's frames and executes nothing; a gateway it
 started is Hermes' own, which exits once idle.
+
+## Frame language
+
+Moved verbatim from `AGENTS.md` (Coding Style).
+
+- The OMH TUI and CLI frame is English for everyone: TUI labels, key hints,
+  picker rows, TUI notices and CLI output. Never switch it by the language of
+  the conversation or of text a model or a person wrote. That text keeps its
+  own language; the frame around it does not follow. The only exception is
+  the explicit `--language` / `OMH_LANG` opt-in above. Chat and messenger
+  reply copy (`src/wrapper/localized_copy.py`) is a separate surface. It
+  follows the person's message and is not covered by this rule.
