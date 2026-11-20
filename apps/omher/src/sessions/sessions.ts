@@ -663,8 +663,10 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
       keys.set(id, folderKey(bot, res.session));
       registerRoute(id);
       openChat(id, res.model);
-      // the row keeps Hermes' stored id (what `folder.resume` takes after a restart); the live bridge id is the proc's
-      patchRec(id, { status: "running", model: res.model, agentSession: res.stored || undefined });
+      // the row keeps Hermes' stored id (what `folder.resume` takes after a restart); the live bridge id is the proc's.
+      // A chat the bridge could not record (`recorded: false`) would be refused after a restart: the row keeps no id,
+      // so it comes back paused and Resume opens a new folder chat
+      patchRec(id, { status: "running", model: res.model, agentSession: (res.recorded !== false && res.stored) || undefined });
       void loadHermesModels(id, bot);
     } catch (e) {
       if (procs.get(id) === proc) procs.delete(id);

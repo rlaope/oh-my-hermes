@@ -279,6 +279,9 @@ export interface FolderOpenResult {
   session: string;
   /** Hermes' stored id of that session: what `folder.resume` takes after a restart (an older bridge sends none). */
   stored?: string;
+  /** False when omher's folder chat record could not be written: `folder.resume` will refuse it after a restart,
+   *  so the row is not attached again by itself (an older bridge sends none). */
+  recorded?: boolean;
   cwd: string;
   model: string;
   provider: string;

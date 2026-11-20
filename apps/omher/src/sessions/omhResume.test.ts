@@ -15,22 +15,22 @@ const LINK = "abcdefgh23";
 type Req = { op: string; params: Record<string, unknown> };
 
 /** A bridge that answers `folder.open` / `folder.resume` as the real one does, and records every request. */
-function bridge(resume: (p: Record<string, unknown>) => unknown): BridgeLike & { reqs: Req[] } {
+function bridge(resume: (p: Record<string, unknown>) => unknown, opened: Record<string, unknown> = {}): BridgeLike & { reqs: Req[] } {
   const reqs: Req[] = [];
   const request = (async (op: string, params: Record<string, unknown> = {}) => {
     reqs.push({ op, params });
     if (op === "bots.list") return { bots: [] };
     if (op === "models.options") return { providers: [{ slug: "claude-proxy", name: "Claude", models: ["claude-opus-5-5"] }], model: "claude-opus-5-5", provider: "claude-proxy" };
     if (op === "folder.resume") return resume(params);
-    if (op === "folder.open") return { session: "f-new", stored: "stored-new", cwd: params.cwd, model: "m", provider: "p", reasoning: "high" };
+    if (op === "folder.open") return { session: "f-new", stored: "stored-new", cwd: params.cwd, model: "m", provider: "p", reasoning: "high", ...opened };
     return {};
   }) as BridgeLike["request"];
   return { connect: async () => undefined, onAny: () => () => {}, onStatus: () => () => {}, request, reqs };
 }
 
-function setup(resume: (p: Record<string, unknown>) => unknown, more: Record<string, unknown> = {}) {
+function setup(resume: (p: Record<string, unknown>) => unknown, more: Record<string, unknown> = {}, opened: Record<string, unknown> = {}) {
   const g: Record<string, unknown> = { ...more };
-  const b = bridge(resume);
+  const b = bridge(resume, opened);
   const store = createStore(b);
   const ss = createSessions(new MockHost(g), () => store);
   const calls = () => ((g.__omherSessionCalls as MockCall[] | undefined) ?? []).filter((c) => c.op === "start" || c.op === "chat.start");
@@ -245,6 +245,40 @@ describe("an oh-my-hermes folder chat after a restart", () => {
     const three = setup(answer);
     three.ss.restore([omhChat({ id: "s6", running: true, agentSession: "stored-folder-6", bot: undefined })]);
     expect(three.ss.getState().list[0]).toMatchObject({ paused: true }); // no bot: nothing to attach it to
+  });
+});
+
+describe("a folder chat the bridge could not record", () => {
+  it("keeps no stored id, so after a restart it comes back paused and nothing is attached by itself", async () => {
+    const { ss, store, b } = setup(() => ({}), {}, { recorded: false });
+    ss.restore([omhChat({ id: "s3", agentSession: undefined })]);
+    await store.actions.init();
+    await wait(20);
+    await ss.resume("s3"); // no stored id: a new folder chat, which the bridge says it could not record
+    expect(b.reqs.filter((r) => r.op === "folder.open")).toHaveLength(1);
+    const r = ss.getState().list[0];
+    expect(r).toMatchObject({ status: "running" });
+    expect(r.agentSession).toBeUndefined();
+    // omher restarts: the row comes back paused and folder.resume is never asked
+    const snap = buildResume(
+      { bot: null, bots: [], view: "chat", session: null, panelOpen: false, panelTab: "details", runsFull: false, runId: null, drafts: {}, sessions: [{ ...omhChat(), agentSession: r.agentSession }], messages: () => undefined },
+      T,
+    );
+    const again = setup(() => ({}));
+    again.ss.restore(parseResume(JSON.stringify(snap))!.sessions);
+    await again.store.actions.init();
+    await wait(20);
+    expect(again.ss.getState().list[0]).toMatchObject({ status: "exited", paused: true });
+    expect(again.b.reqs.filter((x) => x.op === "folder.resume")).toEqual([]);
+  });
+
+  it("a recorded one (or an older bridge that says nothing) keeps its stored id", async () => {
+    const { ss, store } = setup(() => ({}), {}, { recorded: true });
+    ss.restore([omhChat({ id: "s3", agentSession: undefined })]);
+    await store.actions.init();
+    await wait(20);
+    await ss.resume("s3");
+    expect(ss.getState().list[0]).toMatchObject({ status: "running", agentSession: "stored-new" });
   });
 });
 

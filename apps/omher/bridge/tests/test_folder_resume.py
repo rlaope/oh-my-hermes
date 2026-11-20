@@ -12,10 +12,18 @@ import json
 import os
 import sqlite3
 import stat
+import subprocess
 import sys
 import tempfile
+import time
 import unittest
 from pathlib import Path
+from unittest import mock
+
+try:
+    import fcntl
+except ImportError:  # Windows: msvcrt; the lock tests below use flock
+    fcntl = None
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
@@ -26,6 +34,7 @@ from test_bridge import MAIN_STORED, BridgeCase, Env, FakeClient  # noqa: E402
 
 THREAD = "stored-th-1"
 SLACK = "20261108_235229_aaaf70c4"
+LOCK = "folder-chats.lock"  # beside the record; every omher bridge on the computer takes it to write
 
 
 class ResumeClient(FakeClient):
@@ -222,7 +231,10 @@ class FolderResume(BridgeCase):
             rows = json.loads(path.read_text(encoding="utf-8"))["chats"]
             self.assertEqual([(x["profile"], x["cwd"], x["stored"]) for x in rows],
                              [("kami", os.path.normcase(os.path.realpath(self.folder)), r["stored"])])
-            self.assertEqual([p.name for p in env.bridge.omher_home.iterdir()], [ob.FOLDER_CHATS_FILE])  # no temp left
+            # no temp left; the lock every omher on this computer takes sits beside the record
+            self.assertEqual(sorted(p.name for p in env.bridge.omher_home.iterdir()),
+                             sorted([ob.FOLDER_CHATS_FILE, LOCK]))
+            self.assertIs(r["recorded"], True)
             # a restarted bridge: nothing attached; the saved folder chat shows in session.list with the thread prefix
             conn = await env.bridge._conn("kami")
             conn.folders.clear()
@@ -338,6 +350,193 @@ class FolderResume(BridgeCase):
             self.assertIsNone(ob.read_session_title(Path(d), "b"))
             self.assertIsNone(ob.read_session_title(Path(d), ""))
             self.assertEqual(db.read_bytes(), before)
+
+
+
+def _rows(home: Path) -> list[dict]:
+    return json.loads((home / ob.FOLDER_CHATS_FILE).read_text(encoding="utf-8"))["chats"]
+
+
+def _backdate(home: Path, days: float) -> None:
+    """Every record in the file made `days` ago (the file written as the bridge writes it)."""
+    rows = _rows(home)
+    for r in rows:
+        r["created_at"] = time.time() - days * 86400
+    (home / ob.FOLDER_CHATS_FILE).write_text(json.dumps({"version": 1, "chats": rows}) + "\n", encoding="utf-8")
+
+
+# A second process that adds one record: it waits until every writer is ready, then reads, holds that snapshot
+# a moment, and replaces the file, so two such processes overlap unless the lock serializes them.
+_WRITER = r"""
+import sys, time
+from pathlib import Path
+sys.path.insert(0, sys.argv[1])
+import omher_bridge as ob
+home, cwd, label = Path(sys.argv[2]), sys.argv[3], sys.argv[4]
+read = ob.read_folder_chats
+def held(path):
+    rows = read(path)
+    time.sleep(0.4)
+    return rows
+ob.read_folder_chats = held
+(home / ("ready-" + label)).touch()
+deadline = time.monotonic() + 5
+while not all((home / ("ready-" + x)).exists() for x in sys.argv[5].split(",")):
+    if time.monotonic() > deadline:
+        raise SystemExit("the other writer never got ready")
+    time.sleep(0.005)
+ob.record_folder_chat(home, "kami", cwd, label)
+"""
+
+
+class FolderChatRecord(unittest.TestCase):
+    """The record's retention, size and cross-process write (review round 2, R2-B1 and R2-B2)."""
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.home = Path(self.tmp.name) / ".omher"
+        self.folder = Path(self.tmp.name) / "web-app"
+        self.folder.mkdir()
+
+    def test_records_made_in_the_last_30_days_are_all_kept(self):
+        """R2-B1: the count cap applies only to records older than 30 days (and not attached)."""
+        ob.record_folder_chat(self.home, "kami", str(self.folder), "closed-oldest")
+        _backdate(self.home, 40)
+        for i in range(ob.FOLDER_CHATS_MAX + 5):
+            ob.record_folder_chat(self.home, "other", str(self.folder), f"recent-{i}")
+        ids = [r["stored"] for r in ob.read_folder_chats(self.home)]
+        self.assertEqual(ids, ["closed-oldest"] + [f"recent-{i}" for i in range(ob.FOLDER_CHATS_MAX + 5)])
+        # once they are old, the newest 512 of them stay
+        _backdate(self.home, 40)
+        ob.record_folder_chat(self.home, "other", str(self.folder), "new")
+        ids = [r["stored"] for r in ob.read_folder_chats(self.home)]
+        self.assertEqual(ids, [f"recent-{i}" for i in range(5, ob.FOLDER_CHATS_MAX + 5)] + ["new"])  # "new" is recent: not counted
+
+    def test_the_writer_never_publishes_a_file_the_reader_refuses(self):
+        """R2-B1: with long folder paths the writer drops the oldest unprotected records to stay under the reader's
+        limit; when even the protected ones do not fit it fails and leaves the old file. The reader takes every file
+        the writer produced."""
+        deep = self.folder / ("a" * 190) / ("b" * 190) / ("c" * 190)
+        deep.mkdir(parents=True)
+        for i in range(400):
+            if i == 300:
+                _backdate(self.home, 40)
+            ob.record_folder_chat(self.home, "kami", str(deep), f"old-{i}")
+            self.assertLessEqual((self.home / ob.FOLDER_CHATS_FILE).stat().st_size, ob._FOLDER_CHATS_BYTES)
+            self.assertEqual(ob.read_folder_chats(self.home)[-1]["stored"], f"old-{i}")  # the reader takes it
+        ids = [r["stored"] for r in ob.read_folder_chats(self.home)]
+        self.assertNotIn("old-0", ids)  # the oldest went first
+        self.assertEqual(ids[-100:], [f"old-{i}" for i in range(300, 400)])  # recent ones all stay
+        # every record recent: nothing may go, so a write that would not fit fails and the file stays as it was
+        _backdate(self.home, 0)
+        before = (self.home / ob.FOLDER_CHATS_FILE).read_bytes()
+        with self.assertRaises(OSError):
+            for i in range(400):
+                ob.record_folder_chat(self.home, "kami", str(deep), f"recent-{i}")
+                before = (self.home / ob.FOLDER_CHATS_FILE).read_bytes()
+        self.assertEqual((self.home / ob.FOLDER_CHATS_FILE).read_bytes(), before)
+        self.assertTrue(ob.read_folder_chats(self.home))
+        self.assertEqual(sorted(p.name for p in self.home.iterdir()), sorted([ob.FOLDER_CHATS_FILE, LOCK]))
+
+    def test_two_processes_writing_at_once_both_keep_their_record(self):
+        """R2-B2: two bridge processes that add a record at the same moment, each holding what it read, both end
+        with their ids in the file."""
+        ob.record_folder_chat(self.home, "kami", str(self.folder), "seed")
+        labels = ("A", "B")
+        procs = [subprocess.Popen([sys.executable, "-B", "-c", _WRITER, str(HERE.parent), str(self.home),
+                                   str(self.folder), x, ",".join(labels)]) for x in labels]
+        try:
+            self.assertEqual([p.wait(timeout=10) for p in procs], [0, 0])
+        finally:
+            for p in procs:
+                if p.poll() is None:
+                    p.kill()
+                    p.wait(timeout=2)
+        self.assertEqual(sorted(r["stored"] for r in ob.read_folder_chats(self.home)), ["A", "B", "seed"])
+
+    @unittest.skipIf(fcntl is None, "POSIX flock")
+    def test_a_lock_held_too_long_fails_the_write_and_leaves_the_file(self):
+        ob.record_folder_chat(self.home, "kami", str(self.folder), "seed")
+        before = (self.home / ob.FOLDER_CHATS_FILE).read_bytes()
+        fd = os.open(self.home / LOCK, os.O_RDWR)
+        self.addCleanup(os.close, fd)
+        fcntl.flock(fd, fcntl.LOCK_EX)
+        with mock.patch.object(ob, "FOLDER_CHATS_LOCK_WAIT", 0.2, create=True):
+            started = time.monotonic()
+            with self.assertRaises(OSError):
+                ob.record_folder_chat(self.home, "kami", str(self.folder), "late")
+            self.assertLess(time.monotonic() - started, 2)
+        self.assertEqual((self.home / ob.FOLDER_CHATS_FILE).read_bytes(), before)
+        fcntl.flock(fd, fcntl.LOCK_UN)
+        ob.record_folder_chat(self.home, "kami", str(self.folder), "late")
+        self.assertTrue(ob.is_folder_chat(self.home, "kami", str(self.folder), "late"))
+
+    def test_the_lock_is_refused_when_it_is_not_a_plain_file(self):
+        self.home.mkdir()
+        (self.home / LOCK).mkdir()
+        with self.assertRaises(OSError):
+            ob.record_folder_chat(self.home, "kami", str(self.folder), "x")
+        self.assertFalse((self.home / ob.FOLDER_CHATS_FILE).exists())
+
+
+class AttachedChatKeepsItsRecord(BridgeCase):
+    async def test_the_oldest_record_survives_512_newer_while_its_chat_is_attached(self):
+        """R2-B1 (the reviewer's live-oldest): a folder chat folder.open made 40 days ago and still attached keeps
+        its record after 512 newer folder chats this bridge opened and closed; folder.resume still takes it, and an
+        old record no bridge holds is the one dropped. With its record gone, a chat attached in the bridge is still
+        never listed as a thread."""
+        with tempfile.TemporaryDirectory() as d:
+            folder = Path(d) / "web-app"
+            folder.mkdir()
+            async with ResumeEnv() as env:
+                b = env.bridge
+                p = {"bot": "kami", "cwd": str(folder)}
+                live = await b.op_folder_open(p)
+                ob.record_folder_chat(b.omher_home, "deepseek", str(folder), "closed-oldest")
+                _backdate(b.omher_home, 40)
+                for _ in range(ob.FOLDER_CHATS_MAX):
+                    churn = await b.op_folder_open(p)
+                    await b.op_folder_close({"bot": "kami", "session": churn["session"]})
+                _backdate(b.omher_home, 40)
+                await b.op_folder_close({"bot": "kami", "session": (await b.op_folder_open(p))["session"]})
+                ids = [r["stored"] for r in ob.read_folder_chats(b.omher_home)]
+                self.assertIn(live["stored"], ids)
+                self.assertNotIn("closed-oldest", ids)
+                env.saved([(live["stored"], "tui", "omher · web-app", str(folder))])
+                back = await b.op_folder_resume({**p, "stored": live["stored"]})
+                self.assertEqual(back.result["session"], live["session"])
+                # its record gone: still attached here, still not a thread
+                rows = [r for r in _rows(b.omher_home) if r["stored"] != live["stored"]]
+                (b.omher_home / ob.FOLDER_CHATS_FILE).write_text(json.dumps({"version": 1, "chats": rows}), encoding="utf-8")
+                env.clients["kami"].sessions = [{"id": live["stored"], "title": "omher · web-app", "started_at": 1}]
+                self.assertIn(live["session"], b.conns["kami"].folders)
+                self.assertEqual((await b.op_thread_list(p))["threads"], [])
+
+
+class FolderOpenUnrecorded(BridgeCase):
+    @unittest.skipIf(fcntl is None, "POSIX flock")
+    async def test_folder_open_still_opens_and_says_recorded_false_when_another_omher_holds_the_lock(self):
+        """R2-B2: the lock not free in time: the chat opens, the bridge log says loudly that it was not recorded,
+        and the reply carries ``recorded: false``."""
+        with tempfile.TemporaryDirectory() as d:
+            folder = Path(d) / "web-app"
+            folder.mkdir()
+            async with ResumeEnv() as env:
+                home = env.bridge.omher_home
+                home.mkdir(parents=True, exist_ok=True)
+                fd = os.open(home / LOCK, os.O_RDWR | os.O_CREAT, 0o600)
+                self.addCleanup(os.close, fd)
+                fcntl.flock(fd, fcntl.LOCK_EX)
+                s = await self.open(env)
+                with mock.patch.object(ob, "FOLDER_CHATS_LOCK_WAIT", 0.2, create=True), \
+                        self.assertLogs("omher.bridge", "ERROR") as logs:
+                    r = ok(await s.req("folder.open", bot="kami", cwd=str(folder)))
+                self.assertIs(r["recorded"], False)
+                self.assertTrue(r["session"].startswith("f"))
+                self.assertIn("NOT recorded", "\n".join(logs.output))
+                self.assertFalse((home / ob.FOLDER_CHATS_FILE).exists())
+                ok(await s.req("chat.send", bot="kami", session=r["session"], text="still works"))
 
 
 if __name__ == "__main__":

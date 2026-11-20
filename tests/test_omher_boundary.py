@@ -321,7 +321,18 @@ RULES = (
     "`folder.resume` takes a session only when that file holds it for this bot and this folder.",
     "the main chat, a thread (even one titled like the folder), a messenger session, a folder chat made before the"
     " record existed or any other id is refused (`not_found`) and nothing is attached.",
-    "The same record keeps a folder chat out of `thread.list`.",
+    "The same record keeps a folder chat out of `thread.list`, and a folder chat attached in the bridge stays out of"
+    " it whether or not its entry is still there.",
+    # the record survives other bridges and its own size (review round 2, R2-B1 and R2-B2)
+    "Every omher bridge on the computer writes it under `~/.omher/folder-chats.lock` beside it (a file lock, waited for"
+    " at most about 2 seconds), so two bridges opening folder chats at once both keep their entry;",
+    "when the lock is not free in time or the file cannot be replaced, the chat still opens, the bridge log records the"
+    " failure as an error, `folder.open` answers `recorded: false`, and the page keeps no stored id for that row, so"
+    " after a restart it comes back paused instead of being refused.",
+    "An entry whose chat is attached in that bridge, or made in the last 30 days, is never dropped; of the others the"
+    " newest 512 stay, and the oldest of the rest go first while the file would pass the 256 KB the reader accepts.",
+    "The bridge never writes a file its reader refuses: when even the kept entries do not fit, the file stays as it was"
+    " and that write fails the same way.",
     "`folder.open` and `folder.resume` are admitted one at a time per bot, so the cap of open folder chats holds for"
     " requests that overlap, and a `folder.resume` of a stored id already on its way gets that request's answer instead"
     " of a second `session.resume`: nothing is attached twice.",
@@ -840,6 +851,23 @@ class BridgeSubmitsOnlyToTheMainChat(unittest.TestCase):
         self.assertIn("os.replace(tmp, home / FOLDER_CHATS_FILE)", writer)
         self.assertIn("0o600)", self.source.split("def _write_new(", 1)[1].split("\n\n", 1)[0])
         self.assertIn("O_NOFOLLOW", ast.unparse(fns["read_folder_chats"]))
+        # one shape and one size policy for reader and writer; the write is under the cross-process lock and never
+        # publishes a document the reader refuses; folder.open passes every attached chat and says when it failed
+        self.assertIn("_folder_chat_row(r)", ast.unparse(fns["read_folder_chats"]))
+        self.assertIn("len(raw) > _FOLDER_CHATS_BYTES", ast.unparse(fns["read_folder_chats"]))
+        self.assertIn("len(data) <= _FOLDER_CHATS_BYTES", ast.unparse(fns["_folder_chats_doc"]))
+        self.assertIn('FOLDER_CHATS_LOCK = "folder-chats.lock"', self.source)
+        self.assertIn("FOLDER_CHATS_KEEP_SECONDS = 30 * 86400", self.source)
+        self.assertLess(writer.index("with _folder_chats_locked(home):"), writer.index("read_folder_chats(home)"))
+        self.assertLess(writer.index("_kept_folder_chats(rows, set(attached)"), writer.index("_write_new(tmp, data)"))
+        self.assertIn("if data is None:", writer)
+        locker = ast.unparse(fns["_folder_chats_locked"])
+        self.assertIn("fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)", locker)
+        self.assertIn("msvcrt.locking(fd, msvcrt.LK_NBLCK, 1)", locker)
+        self.assertIn("FOLDER_CHATS_LOCK_WAIT", locker)
+        self.assertIn("attached=attached", opener)
+        self.assertIn("log.error(", opener)
+        self.assertIn("'recorded': recorded", opener)
         # its one caller is folder.open
         callers = {f.name for f in ast.walk(self.tree) if isinstance(f, (ast.FunctionDef, ast.AsyncFunctionDef))
                    and any(isinstance(n, ast.Name) and n.id == "record_folder_chat" for n in ast.walk(f))}
