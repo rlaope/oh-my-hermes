@@ -1,0 +1,7 @@
+{
+  "widget": [
+    {"min": 100, "price": 70},
+    {"min": 10, "price": 90},
+    {"min": 1, "price": 100}
+  ]
+}

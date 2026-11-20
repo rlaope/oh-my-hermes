@@ -1,0 +1,7 @@
+{
+  "id": "trap-go-type-assertion-routed-by-tag",
+  "kind": "trap",
+  "language": "go",
+  "expected": "clean",
+  "why": "handleRefund asserts ev.Payload.(*Refund) without the two-value form, which would panic on any other payload. Dispatch in internal/events/dispatch.go calls handleRefund only for Type == \"refund\", and Decode in internal/events/decode.go is the only place an Event is built: it picks the payload type from the same Type through payloadTypes, so a refund event always carries *Refund."
+}
