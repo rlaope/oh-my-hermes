@@ -331,6 +331,11 @@ RULES = (
     " after a restart it comes back paused instead of being refused.",
     "An entry whose chat is attached in that bridge, or made in the last 30 days, is never dropped; of the others the"
     " newest 512 stay, and the oldest of the rest go first while the file would pass the 256 KB the reader accepts.",
+    # a chat attached while another bot's write waits keeps its entry (review round 4, R4-B1)
+    "A write asks the bridge which chats it holds only when it writes, under the lock, and a chat counts as held from"
+    " the moment `folder.resume` starts checking its entry until it is attached or refused, while that check waits for"
+    " a write already deciding what to keep; so a folder chat attached while another bot's entry is being written"
+    " keeps its entry.",
     "The bridge never writes a file its reader refuses: when even the kept entries do not fit, the file stays as it was"
     " and that write fails the same way.",
     "`folder.open` and `folder.resume` are admitted one at a time per bot, so the cap of open folder chats holds for"
@@ -859,13 +864,25 @@ class BridgeSubmitsOnlyToTheMainChat(unittest.TestCase):
         self.assertIn('FOLDER_CHATS_LOCK = "folder-chats.lock"', self.source)
         self.assertIn("FOLDER_CHATS_KEEP_SECONDS = 30 * 86400", self.source)
         self.assertLess(writer.index("with _folder_chats_locked(home):"), writer.index("read_folder_chats(home)"))
-        self.assertLess(writer.index("_kept_folder_chats(rows, set(attached)"), writer.index("_write_new(tmp, data)"))
+        self.assertLess(writer.index("_kept_folder_chats(rows, held"), writer.index("_write_new(tmp, data)"))
         self.assertIn("if data is None:", writer)
         locker = ast.unparse(fns["_folder_chats_locked"])
         self.assertIn("fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)", locker)
         self.assertIn("msvcrt.locking(fd, msvcrt.LK_NBLCK, 1)", locker)
         self.assertIn("FOLDER_CHATS_LOCK_WAIT", locker)
-        self.assertIn("attached=attached", opener)
+        self.assertIn("attached=held", opener)
+        # the held chats are asked under the lock, right before the write; a resume on its way counts, and its proof
+        # check reads the record under the same in-process lock the writer holds (R4-B1)
+        self.assertLess(writer.index("with _folder_chats_locked(home):"), writer.index("attached() if callable(attached)"))
+        self.assertLess(writer.index("attached() if callable(attached)"), writer.index("_kept_folder_chats(rows, held"))
+        self.assertIn("self._held_folder_chats()", opener)
+        held = ast.unparse(fns["_held_folder_chats"])
+        self.assertIn("c.folders.values()", held)
+        self.assertIn("c.resuming", held)
+        proof = ast.unparse(fns["is_folder_chat"])
+        self.assertLess(proof.index("_FOLDER_CHATS_LOCK.acquire("), proof.index("read_folder_chats(omher_home)"))
+        front = ast.unparse(fns["op_folder_resume"])
+        self.assertLess(front.index("conn.resuming[key] = fut"), front.index("await self._folder_resume(conn, cwd, stored)"))
         self.assertIn("log.error(", opener)
         self.assertIn("'recorded': recorded", opener)
         # its one caller is folder.open

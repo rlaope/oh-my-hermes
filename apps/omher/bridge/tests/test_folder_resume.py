@@ -15,6 +15,7 @@ import stat
 import subprocess
 import sys
 import tempfile
+import threading
 import time
 import unittest
 from pathlib import Path
@@ -537,6 +538,127 @@ class FolderOpenUnrecorded(BridgeCase):
                 self.assertIn("NOT recorded", "\n".join(logs.output))
                 self.assertFalse((home / ob.FOLDER_CHATS_FILE).exists())
                 ok(await s.req("chat.send", bot="kami", session=r["session"], text="still works"))
+
+
+class AnotherBotsWriteKeepsAResumedRecord(BridgeCase):
+    """R4-B1: bot kami's folder.resume checks its record and attaches while bot deepseek's folder.open write is on
+    its way in the same bridge. The write asks which chats the bridge holds when it publishes, under the lock, so
+    kami's row stays: after kami closes the chat, folder.resume takes it again."""
+
+    async def _setup(self, env, folder: Path):
+        """kami's closed folder chat, 40 days old, behind 512 newer unprotected rows of another bot: the next write
+        drops it unless the bridge holds it."""
+        b = env.bridge
+        p = {"bot": "kami", "cwd": str(folder)}
+        first = await b.op_folder_open(p)
+        await b.op_folder_close({**p, "session": first["session"]})
+        ancient = time.time() - 40 * 86400
+        rows = ob.read_folder_chats(b.omher_home)
+        rows[0]["created_at"] = ancient
+        rows.extend({"profile": "deepseek", "cwd": str(folder), "stored": f"old-{i}", "created_at": ancient + 1}
+                    for i in range(ob.FOLDER_CHATS_MAX))
+        (b.omher_home / ob.FOLDER_CHATS_FILE).write_bytes(ob._folder_chats_doc(rows))
+        env.saved([(first["stored"], "tui", "omher · web-app", str(folder))])
+        return p, first["stored"]
+
+    async def _after(self, env, p: dict, stored: str, written: dict, restored) -> None:
+        b = env.bridge
+        self.assertIs(written["recorded"], True)
+        self.assertIn(restored.result["session"], b.conns["kami"].folders)
+        self.assertTrue(ob.is_folder_chat(b.omher_home, "kami", p["cwd"], stored))
+        await b.op_folder_close({**p, "session": restored.result["session"]})
+        again = await b.op_folder_resume({**p, "stored": stored})
+        self.assertIn(again.result["session"], b.conns["kami"].folders)
+
+    async def test_a_resume_while_the_other_bots_write_is_queued_keeps_its_record(self):
+        """The reviewer's interleaving: deepseek's write is held before it takes the lock."""
+        with tempfile.TemporaryDirectory() as d:
+            folder = Path(d) / "web-app"
+            folder.mkdir()
+            async with ResumeEnv(("kami", "deepseek")) as env:
+                p, stored = await self._setup(env, folder)
+                entered, go = asyncio.Event(), asyncio.Event()
+                real = asyncio.to_thread
+
+                async def hold(func, /, *args, **kwargs):
+                    if func is ob.record_folder_chat and args[1] == "deepseek":
+                        entered.set()
+                        await asyncio.wait_for(go.wait(), 5)
+                    return await real(func, *args, **kwargs)
+
+                with mock.patch.object(ob.asyncio, "to_thread", hold):
+                    writer = asyncio.create_task(env.bridge.op_folder_open({**p, "bot": "deepseek"}))
+                    try:
+                        await asyncio.wait_for(entered.wait(), 5)
+                        restored = await env.bridge.op_folder_resume({**p, "stored": stored})
+                    finally:
+                        go.set()
+                        written = await asyncio.wait_for(writer, 5)
+                await self._after(env, p, stored, written, restored)
+
+    async def test_a_resume_while_the_other_bots_write_holds_its_snapshot_keeps_its_record(self):
+        """deepseek's write has read the record under the lock and not yet published when kami's resume starts."""
+        with tempfile.TemporaryDirectory() as d:
+            folder = Path(d) / "web-app"
+            folder.mkdir()
+            async with ResumeEnv(("kami", "deepseek")) as env:
+                p, stored = await self._setup(env, folder)
+                entered, go = threading.Event(), threading.Event()
+                real, armed = ob.read_folder_chats, [True]
+
+                def held_read(home):
+                    rows = real(home)
+                    if armed:
+                        armed.clear()
+                        entered.set()
+                        go.wait(5)
+                    return rows
+
+                with mock.patch.object(ob, "read_folder_chats", held_read):
+                    writer = asyncio.create_task(env.bridge.op_folder_open({**p, "bot": "deepseek"}))
+                    resume = None
+                    try:
+                        self.assertTrue(await asyncio.to_thread(entered.wait, 5))
+                        resume = asyncio.create_task(env.bridge.op_folder_resume({**p, "stored": stored}))
+                        await asyncio.sleep(0.1)
+                    finally:
+                        go.set()
+                        written = await asyncio.wait_for(writer, 5)
+                    restored = await asyncio.wait_for(resume, 5)
+                await self._after(env, p, stored, written, restored)
+
+    async def test_a_resume_after_the_write_looked_waits_for_it_and_never_attaches_a_dropped_record(self):
+        """deepseek's write has asked which chats the bridge holds (kami's is not) and not yet published when kami's
+        resume checks its record: the check waits for that write and reads what it published, so kami's dropped
+        row is refused and nothing is attached with no record behind it."""
+        with tempfile.TemporaryDirectory() as d:
+            folder = Path(d) / "web-app"
+            folder.mkdir()
+            async with ResumeEnv(("kami", "deepseek")) as env:
+                p, stored = await self._setup(env, folder)
+                entered, go = threading.Event(), threading.Event()
+                real = ob._kept_folder_chats
+
+                def held_keep(rows, attached, now):
+                    entered.set()
+                    go.wait(5)
+                    return real(rows, attached, now)
+
+                with mock.patch.object(ob, "_kept_folder_chats", held_keep):
+                    writer = asyncio.create_task(env.bridge.op_folder_open({**p, "bot": "deepseek"}))
+                    resume = None
+                    try:
+                        self.assertTrue(await asyncio.to_thread(entered.wait, 5))
+                        resume = asyncio.create_task(env.bridge.op_folder_resume({**p, "stored": stored}))
+                        await asyncio.sleep(0.1)
+                    finally:
+                        go.set()
+                        written = await asyncio.wait_for(writer, 5)
+                    out = await asyncio.wait_for(asyncio.gather(resume, return_exceptions=True), 5)
+                self.assertIs(written["recorded"], True)
+                self.assertEqual(getattr(out[0], "code", out[0]), "not_found")
+                self.assertFalse(ob.is_folder_chat(env.bridge.omher_home, "kami", str(folder), stored))
+                self.assertEqual([f for f in env.bridge.conns["kami"].folders.values() if f.stored_id == stored], [])
 
 
 if __name__ == "__main__":
