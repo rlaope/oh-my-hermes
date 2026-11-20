@@ -4,6 +4,14 @@ All notable changes will be documented here.
 
 ## Unreleased
 
+- **show-reel's cut-sheet lane checks a remake's genre and pace by numbers.** Remaking a supplied reference now
+  starts by naming its genre from a 5 fps sheet and 30 fps strips (the material, the motif that survives every cut,
+  art piece or promo), and measures pace on the reference and each render: cuts per second, mean frame difference,
+  motion inside shots and near-still share, with the targets written into the contract. The page also lists the
+  devices that carry pace (2-4 frame bursts, scale motion with ease-out, shard or smear frames from the outgoing
+  image, exit glitches, speed ramps, re-framed sub-shots), asks that a recurring motif act at every appearance, and
+  says to add real feature chapters, not stretched shots, when a film gets longer.
+
 - **A bot answers a mid-turn message before it acts on it.** A message sent while the bot works (a steer) used to
   change only its next command, with nothing said, so the person could not tell it was read. OMH's reply line, which
   every session carries once in its system prompt, now asks for one line before the next tool call: what was taken
