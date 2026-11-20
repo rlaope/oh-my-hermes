@@ -105,7 +105,7 @@ for (const theme of ["dark", "light"] as const) {
     await open(page, theme);
     await page.getByTestId("nav-settings").click();
     const row = page.getByTestId("notify-errors-seg");
-    await row.scrollIntoViewIfNeeded();
+    await row.evaluate((el) => el.scrollIntoView({ block: "center" }));
     await expect(row).toBeVisible();
     mkdirSync(SHOTS, { recursive: true });
     await page.waitForTimeout(300);
