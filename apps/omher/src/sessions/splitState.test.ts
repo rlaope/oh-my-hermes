@@ -68,8 +68,14 @@ describe("TERMINALS splits", () => {
     expect(paneKeyIn(g, "s1", { kind: "zoom" }).groups[0].zoom).toBe(true);
     expect(paneKeyIn(g, "s1", { kind: "equalize" }).groups[0].layout).toMatchObject({ ratio: 0.5 });
     expect(paneKeyIn(g, "s2", { kind: "close" })).toMatchObject({ groups: [{ layout: row(P(1), P(3), 0.7) }], focus: "s3", took: true });
-    // moving the keyboard out of a zoomed pane shows every pane again
-    expect(paneKeyIn(zoomIn(g, "s1", true), "s1", { kind: "focus", dir: "right" }).groups[0].zoom).toBe(false);
+    // moving the keyboard in a zoomed split keeps it zoomed: the zoom goes with the keyboard (SplitView draws the
+    // focused pane), on the arrows and on ⌘] / ⌘[
+    const z = zoomIn(g, "s1", true);
+    expect(paneKeyIn(z, "s1", { kind: "focus", dir: "right" })).toMatchObject({ focus: "s2", took: true });
+    expect(paneKeyIn(z, "s1", { kind: "focus", dir: "right" }).groups[0].zoom).toBe(true);
+    expect(paneKeyIn(z, "s1", { kind: "step", step: 1 })).toMatchObject({ focus: "s2", took: true });
+    expect(paneKeyIn(z, "s1", { kind: "step", step: 1 }).groups[0].zoom).toBe(true);
+    expect(paneKeyIn(z, "s1", { kind: "step", step: -1 }).groups[0].zoom).toBe(true);
     // a session alone: the key is not the split's
     expect(paneKeyIn(g, "s9", { kind: "close" }).took).toBe(false);
   });
@@ -87,5 +93,21 @@ describe("TERMINALS splits", () => {
     // a ratio out of range is kept inside it
     expect(parseSplits(JSON.stringify({ groups: [{ layout: { dir: "row", ratio: 7, a: P(1), b: P(2) } }] }))[0].layout).toMatchObject({ ratio: 0.95 });
     expect(parseSplits(JSON.stringify({ groups: [{ layout: { dir: "diag", ratio: 0.5, a: P(1), b: P(2) } }] }))).toEqual([]);
+  });
+
+  it("un-zooms when the zoomed split's layout changes: a split, a pane closed or moved (tmux)", () => {
+    const z: SplitGroup[] = [{ layout: row(P(1), col(P(2), P(3))), zoom: true }];
+    // splitting while zoomed shows every pane, the new one too
+    expect(splitIn(z, "s1", "down", "s4")[0].zoom).toBeUndefined();
+    // closing the zoomed pane (or any pane of the split): every pane shows again
+    expect(leaveIn(z, "s1").groups[0].zoom).toBeUndefined();
+    expect(paneKeyIn(z, "s2", { kind: "close" }).groups[0].zoom).toBeUndefined();
+    // moving the zoomed pane: seen, not made behind the zoom
+    expect(moveIn(z, "s1", "right")[0].zoom).toBeUndefined();
+    expect(paneKeyIn(z, "s1", { kind: "move", dir: "right" }).groups[0].zoom).toBeUndefined();
+    // a move that goes nowhere changes nothing
+    expect(moveIn(z, "s1", "left")[0].zoom).toBe(true);
+    // ratios and evening out keep the zoom
+    expect(paneKeyIn(z, "s1", { kind: "equalize" }).groups[0].zoom).toBe(true);
   });
 });
