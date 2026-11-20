@@ -6,6 +6,7 @@ mod app_menu;
 mod appimage;
 mod bridge;
 mod custom_agents;
+mod disk;
 mod dsh_chat;
 mod fg;
 mod folder_open;
@@ -940,7 +941,8 @@ pub fn run() {
             tasks_view,
             tasks_remote,
             window_close,
-            term_link::term_link_take
+            term_link::term_link_take,
+            disk::disk_watch
         ])
         .setup(|app| {
             let bridge = Bridge::new();
@@ -953,6 +955,8 @@ pub fn run() {
             }
             peers.start_all();
             app.manage(Arc::new(tasks::Tasks::default()));
+            // free space on the home folder's volume, read once a minute (disk.rs)
+            app.manage(disk::Disk::start(app.handle().clone(), user_home().ok()));
             // omher://terminal/<id> links: the one omher was opened with, and each one after
             app.manage(term_link::TermLinks::default());
             {
