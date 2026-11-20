@@ -51,6 +51,7 @@ from omh.tui import terminal as terminal_module
 from omh.skin_pack import default_theme, hex_to_rgb, theme_for_name, write_theme_choice
 from omh.tui.app import (
     EXIT_HINT,
+    RESPAWN_LEFT_REASON,
     SEND_NOW_HINT,
     SLOT_ARM_SECONDS,
     App,
@@ -3073,6 +3074,34 @@ class LiveSessionRecordTests(AppTestCase):
         self.assertEqual(live_record(run), {STORED_ID: "closed", FRESH_STORED_ID: "closed"})
         sessions = json.loads((Path(run.environ["OMH_HOME"]) / "tui" / LIVE_SESSIONS_FILE).read_text())["sessions"]
         self.assertEqual([entry["session_id"] for entry in sessions], [STORED_ID, FRESH_STORED_ID])
+
+    def test_a_gateway_lost_mid_session_drops_the_session(self) -> None:
+        """Exit 1 from a gateway the TUI lost (`_lose_gateway`) is not the person leaving: the session is `dropped`
+        and the pending marker is armed, by the explicit end reason rather than the exit number."""
+        run = self.prepare(
+            Scenario("session", spans("session", "startup", "create"), answers=startup_answers(), after=EXIT)
+        )
+        self.run_main(run)
+        self.assertEqual(run.code, 1)
+        self.assertEqual(live_record(run), {STORED_ID: "dropped"})
+        self.assertTrue((Path(run.environ["OMH_HOME"]) / "tui" / PENDING_MARKER).is_file())
+
+    def test_leaving_while_the_gateway_restarts_closes_the_session(self) -> None:
+        """Ctrl+C while a respawn waits (`RESPAWN_LEFT_REASON`) is the person leaving, even though it exits 1."""
+        run = self.prepare(Scenario("session", spans("session", "startup", "create"), answers=startup_answers()))
+        with patch.object(App, "_step", lambda live: live._lose_gateway(RESPAWN_LEFT_REASON)):
+            self.run_main(run)
+        self.assertEqual(run.code, 1)
+        self.assertEqual(live_record(run), {STORED_ID: "closed"})
+
+    def test_a_protocol_refusal_still_closes_the_session(self) -> None:
+        """Exit 1 from a gateway that answers but refuses the protocol: reopening would meet the same refusal."""
+        answers = (*startup_answers(), ("slash.exec", {"error": {"code": 4000, "message": "extra fields not permitted"}}))
+        run = self.prepare(Scenario("session", spans("session", "startup", "create"), answers=answers))
+        run.terminal.script(self.submit(run, "/xyz"))
+        self.run_main(run)
+        self.assertEqual(run.code, 1)
+        self.assertEqual(live_record(run), {STORED_ID: "closed"})
 
     def test_no_omh_home_writes_no_record(self) -> None:
         run = self.prepare(Scenario("session", spans("session", "startup", "create"), answers=startup_answers()))

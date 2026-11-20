@@ -280,6 +280,7 @@ from .onboarding import ONBOARDING_NAMES, onboarding_prompt
 from .shortcuts import shortcut_lines
 from .silent_lead import read_silent_lead
 from .launch_card import Facts as LaunchFacts
+from .live_sessions import DROPPED as SESSION_DROPPED
 from .live_sessions import end_state_for_exit, record_end, record_live
 from .launch_card import Paint as LaunchPaint
 from .launch_card import (
@@ -879,6 +880,10 @@ RESPAWN_NOTICE = (
 )
 RESPAWNED_NOTICE = "Resumed session {session} on a new Hermes gateway."
 RESPAWN_LEFT_REASON = "you left while the Hermes gateway was starting again"
+# Why a TUI that returned by itself still ended its session `dropped` (`App.end_reason`, `_record_session_end`): the
+# gateway was lost under it (`_lose_gateway`), not left by the person, so a reopen may run the session again.
+GATEWAY_LOST_END = "gateway_lost"
+DROPPING_END_REASONS = frozenset({GATEWAY_LOST_END})
 LEAVE_CHARS = ("c", "d")  # with Ctrl, read while a respawn waits: the person leaves (`App._respawn_cancel`)
 TURN_LOST_NOTICE = "The running turn was lost when the Hermes gateway exited; it was not sent again."
 # `/gateway restart` (`gateway_restart.py`): Hermes' own `hermes gateway restart`, run once the person confirms it in
@@ -2549,6 +2554,7 @@ class App(ModesMixin, AgentViewMixin):
         self.exit_armed_at: float | None = None
         self.exit_armed_by_interrupt = False  # whether the press that armed it interrupted a turn (`_exit_said`)
         self.exit_code: int | None = None
+        self.end_reason = ""  # set where the TUI ends a session it did not choose to leave (`DROPPING_END_REASONS`)
         self.farewell = ""
         self.banner_facts: dict[str, str] | None = None  # the header, flushed above the next frame
         self.banner_record: dict[str, str] | None = None  # kept, so a full redraw can print it again
@@ -4288,9 +4294,13 @@ class App(ModesMixin, AgentViewMixin):
             self._close_slot()
             self.transcript.add_notice(QUESTION_LOST_NOTICE.format(method=slot.method), NOTICE_WARN)
 
-    def _lose_gateway(self, reason: str) -> None:
+    def _lose_gateway(self, reason: str, *, dropped: bool = True) -> None:
+        """Leave with exit 1 because the gateway is gone; the session ends `dropped` (a reopen may run it), unless
+        the person left while it restarted or `dropped` is False (a gateway that answers but refuses the protocol)."""
         if self.exit_code is not None:
             return
+        if dropped and reason != RESPAWN_LEFT_REASON:
+            self.end_reason = GATEWAY_LOST_END
         self.transcript.add_notice(f"{reason}.", NOTICE_ERROR)
         omh_way = self._omh_resume_command()
         if omh_way:
@@ -4370,7 +4380,8 @@ class App(ModesMixin, AgentViewMixin):
         if contract.is_drift_error(error) and pending.method not in contract.OPTIONAL_METHODS:
             self._lose_gateway(
                 f"this Hermes refused {pending.method} ({error.get('code')}); "
-                "it no longer speaks the protocol the OMH TUI was built for"
+                "it no longer speaks the protocol the OMH TUI was built for",
+                dropped=False,  # it answers: reopening would meet the same refusal
             )
             return
         if pending.on_error is not None and pending.on_error(error):
@@ -11172,8 +11183,11 @@ def main(
 
 
 def _record_session_end(environ: Mapping[str, str], built: Sequence[App], code: int | None, signalled: bool) -> None:
-    """How the open session ended, in the OMH home's session record: `dropped` after an exit signal or a crash, so
-    a reopen may run it again, else `closed` (`live_sessions.end_state_for_exit`). Best effort, bounded wait."""
+    """How the open session ended, in the OMH home's session record: `dropped` after an exit signal, a crash or a
+    lost gateway (`DROPPING_END_REASONS`), so a reopen may run it again, else `closed`
+    (`live_sessions.end_state_for_exit`). Best effort, bounded wait."""
     home = environ.get("OMH_HOME") or ""
     if home and built and built[-1].stored_id:
-        record_end(Path(home), built[-1].stored_id, end_state_for_exit(code, signalled))
+        app = built[-1]
+        state = SESSION_DROPPED if app.end_reason in DROPPING_END_REASONS else end_state_for_exit(code, signalled)
+        record_end(Path(home), app.stored_id, state)
