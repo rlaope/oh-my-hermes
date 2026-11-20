@@ -4,6 +4,11 @@ All notable changes will be documented here.
 
 ## Unreleased
 
+- **A bot answers a mid-turn message before it acts on it.** A message sent while the bot works (a steer) used to
+  change only its next command, with nothing said, so the person could not tell it was read. OMH's reply line, which
+  every session carries once in its system prompt, now asks for one line before the next tool call: what was taken
+  from the message and what changes. The primer grows by 117 characters (compact rail 1550 -> 1667).
+
 - **omher: New thread under a bot opens a thread again, and removing or naming one works.** On Hermes' current
   gateway, New thread did nothing and then failed: the bridge sent the press's retry key as `idempotency_key`, which
   that gateway refuses (`invalid_params`), and it named and archived threads with `session.title` and
