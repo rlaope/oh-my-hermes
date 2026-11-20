@@ -97,9 +97,32 @@ export function flushHistory(): void {
   for (const [key, tr] of tracked) save(key, tr);
 }
 
+/** `term`'s screen changed without its program printing (the person cleared or reset it): it is saved again, so a
+ *  restart does not bring back what was cleared. */
+export function historyChanged(term: Terminal): void {
+  for (const tr of tracked.values()) if (tr.term() === term) tr.dirty = true;
+}
+
+/** Between two terminals' saves on the 30-s tick. */
+export const HISTORY_SPREAD_MS = 50;
+
+/** The 30-s tick: each terminal that changed is saved in a task of its own, HISTORY_SPREAD_MS apart. Serializing one
+ *  full terminal takes about 10 ms; all of them in one task held the page for 52 to 61 ms with six sessions that
+ *  printed and 86 to 99 ms with ten (Playwright WebKit): a dropped frame every 30 s while agents stream. The page
+ *  going away still saves all at once. */
+function flushSpread(): void {
+  if (!historyOn()) return;
+  let n = 0;
+  for (const [key, tr] of tracked)
+    if (tr.dirty)
+      setTimeout(() => {
+        if (tracked.get(key) === tr && historyOn()) save(key, tr);
+      }, n++ * HISTORY_SPREAD_MS);
+}
+
 function tick(): void {
   const need = tracked.size > 0 && historyOn();
-  if (need && !timer) timer = setInterval(flushHistory, HISTORY_EVERY_MS);
+  if (need && !timer) timer = setInterval(flushSpread, HISTORY_EVERY_MS);
   else if (!need && timer) {
     clearInterval(timer);
     timer = null;

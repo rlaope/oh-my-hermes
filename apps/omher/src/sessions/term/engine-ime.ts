@@ -121,7 +121,10 @@ export class ImeInput {
 /** Put the IME handling in front of xterm's for `term` (open, inside `host`). Returns what undoes it. */
 export function attachIme(term: Terminal, host: HTMLElement): () => void {
   const view = () => host.querySelector<HTMLElement>(".composition-view");
+  /** what the view shows now: it is placed again on every render while shown (below) */
+  let shown: string | null = null;
   const show = (text: string | null) => {
+    shown = text;
     const v = view();
     if (!v) return;
     if (text === null) {
@@ -171,7 +174,13 @@ export function attachIme(term: Terminal, host: HTMLElement): () => void {
   ];
   // capture on the terminal's own element: ahead of xterm's listeners on its textarea
   for (const [type, fn] of on) host.addEventListener(type, fn, true);
+  // The cursor moves after the view is placed: a syllable goes out as the next one starts, and the program's echo of
+  // it (or its redraw of the line) arrives later. Follow the cursor on every render, as xterm does for its own
+  // composition (CoreBrowserTerminal: onRender -> updateCompositionElements); placed once, the view sat on the
+  // syllable just echoed and hid it, then jumped two cells on the next keystroke.
+  const follow = term.onRender(() => shown !== null && show(shown));
   return () => {
     for (const [type, fn] of on) host.removeEventListener(type, fn, true);
+    follow.dispose();
   };
 }

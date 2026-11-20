@@ -1,5 +1,6 @@
 // App-wide keyboard shortcuts. ⌘ on macOS, Ctrl elsewhere:
-//   ⌘1…⌘9  open bot 1 to 9 (sidebar order)      ⌘K  focus the bot search
+//   ⌘1…⌘9  open bot 1 to 9 (sidebar order)      ⌘K  focus the bot search (in a terminal on macOS it clears the
+//          terminal instead: engine-input.ts)
 //   ⌘.     show or hide Details                    ⌘,  Settings
 //   ⌘J     jump to the next approval or question waiting on you (any bot or SESSIONS chat)
 //   ⌘⇧G   maximise the side panel in place, or restore it (Esc restores; a closed panel opens on Plans)

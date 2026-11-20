@@ -59,6 +59,10 @@ This is a process-environment boundary, not proof that a tool used a capability 
 
 The portable base includes the Windows system variables a native child needs to start: `SYSTEMDRIVE`, `SYSTEMROOT`, `WINDIR`, `COMSPEC`, `PATHEXT`, `HOMEDRIVE`, `HOMEPATH`, `USERPROFILE`, `APPDATA`, `LOCALAPPDATA`, `TEMP` and `TMP`. None of them carries a credential. `SYSTEMDRIVE` is required by Codex's MXC sandbox, which otherwise refuses every shell call with `MXC requires nonempty Unicode host SystemDrive` (#2471).
 
+## Codex inside the fanout fence
+
+`codex exec` runs its session read-only by default, and `-s workspace-write` starts Codex's own sandbox, which cannot start inside the bwrap (Linux) or sandbox-exec (macOS) fanout fence. So when the fence is enforced with one of those backends, a codex dispatch runs `codex exec --sandbox danger-full-access ...`: the fence, not Codex, is the write boundary, and a write outside the unit's roots is still refused. A dispatch that already chooses a sandbox (`-s`, `--sandbox`, `--full-auto`, `--dangerously-bypass-approvals-and-sandbox`, `-c sandbox_mode=...`) keeps its choice. Unfenced runs and native Windows are unchanged.
+
 ## Codex on native Windows
 
 On native Windows, `codex exec` runs its session read-only unless `config.toml` selects a sandbox backend, even with `-s workspace-write`. Every write the unit needs is then refused, and the unit ends without a result. Set one of the backends Codex documents in `~/.codex/config.toml` (or `$CODEX_HOME/config.toml`, or the project's `.codex/config.toml`):

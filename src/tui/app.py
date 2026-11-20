@@ -5079,7 +5079,7 @@ class App(ModesMixin, AgentViewMixin):
     def _send_now_key(self, event: Key | Paste) -> bool:
         """Keep empty-draft queued send policy shared by ordinary and visual input."""
         if event in (SEND_NOW_KEY, STEER_FALLBACK_KEY) and not self.composer.text and self._steer_keys_live() and (
-            self._queue_head_steers()
+            self._queue_head_sends_now()
         ):
             self.composer._clear_visual()
             self._send_queued_now()
@@ -7384,14 +7384,29 @@ class App(ModesMixin, AgentViewMixin):
         head = self.queued[0] if self.queued else None
         return head is not None and not head.shell and head.command is None and not head.typed and not head.images
 
+    def _queue_head_sends_now(self) -> bool:
+        """Whether the send-now key can send the oldest queued line now: a prompt it steers with
+        (`_queue_head_steers`), or a typed prompt with images, which cuts in (`_cut_in`) as the same key does on a
+        prompt with images in the composer. Enter queued it (a steer is text alone); the queue row says the key sends
+        it now, as Claude Code's does."""
+        if self._queue_head_steers():
+            return True
+        head = self.queued[0] if self.queued else None
+        return head is not None and bool(head.images) and not head.shell and head.command is None and not head.typed \
+            and bool(self.sid) and self.cut_in is None
+
     def _send_queued_now(self) -> None:
-        """The send-now key: the oldest queued prompt leaves the queue and goes into the running turn as a steer.
+        """The send-now key: the oldest queued prompt leaves the queue and goes into the running turn as a steer, or,
+        with images, cuts in (`_cut_in`): the turn stops and the prompt goes with its images when it ends.
 
         A steer Hermes does not take goes back to the head of the queue as
         it was (`_steer_refused`); one it took but had not read when the turn
         stopped goes back there too (`_requeue_unread_steers`).
         """
         line = self.queued.popleft()
+        if line.images:
+            self._cut_in(line.text, line.shown, line.chips, line.images)
+            return
         self._steer(line.text, line)
 
     def _steer_or_submit(
@@ -10628,7 +10643,7 @@ class App(ModesMixin, AgentViewMixin):
         # question or the picker hides them, since Up then does not edit the queue. The background-process row is on
         # the info line under the composer (`_info_line`).
         hint = QUEUE_HELD_HINT if self.queue_held else QUEUE_EDIT_HINT
-        send_now = self._steer_keys_live() and self._queue_head_steers()
+        send_now = self._steer_keys_live() and self._queue_head_sends_now()
         below = SEND_NOW_HINT.format(key=SEND_NOW_KEYS[self.keyboard_protocol]) if send_now else ""
         found = self._image_wait_line(cols)
         waiting = [found] if found is not None else []

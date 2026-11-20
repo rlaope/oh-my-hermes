@@ -29,9 +29,9 @@ SHORTCUTS: tuple[tuple[str, str], ...] = (
                    "images, stops the turn and sends the prompt with them as soon as it ends; idle, sends as Enter "
                    "does"),
     ("Ctrl+Enter, Ctrl+J", "While a turn runs, on an empty composer, send the oldest queued prompt into it now as a "
-                           "steer; the row under the queue names the key (Ctrl+J where the terminal has not shown it "
-                           "tells Ctrl+Enter from Enter). A queued ! line, slash command, skill prompt or plan prompt "
-                           "waits its turn"),
+                           "steer, or, with images, stop the turn and send it with them as soon as it ends; the row "
+                           "under the queue names the key (Ctrl+J where the terminal has not shown it tells Ctrl+Enter "
+                           "from Enter). A queued ! line, slash command, skill prompt or plan prompt waits its turn"),
     ("Tab", "Completes a slash command, or the @ reference being typed; on an open menu, Enter takes the "
              "highlighted row too, and sends a command already typed in full"),
     ("Shift+Tab", "Cycles the input mode: normal, accept all (Hermes asks no approvals in this session), plan "

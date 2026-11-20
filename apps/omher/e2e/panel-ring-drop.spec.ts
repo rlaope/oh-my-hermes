@@ -89,3 +89,20 @@ test("a file dropped on a panel pane is saved under its shell's folder and its q
   await page.getByTestId("termpanel-tab-close").nth(1).click();
   await expect.poll(async () => (await sessionCalls(page)).filter((c) => c.op === "file.remove").map((c) => c.session)).toEqual([`s0${b}`]);
 });
+
+test("a picture pasted on a panel pane whose program has bracketed paste on goes to it as a paste of the saved path", async ({ page }) => {
+  const [, b] = await twoTabs(page);
+  // Claude Code takes a picture's path as an image only inside a paste (DECSET 2004 on, as it turns it on)
+  await out(page, b, "\x1b[?2004h");
+  await expect
+    .poll(() => page.evaluate(() => [...((window as unknown as { __omherTerms?: Set<{ modes: { bracketedPasteMode: boolean } }> }).__omherTerms ?? [])].some((t) => t.modes.bracketedPasteMode)))
+    .toBe(true);
+  await page.evaluate(() => {
+    const dt = new DataTransfer();
+    dt.items.add(new File([new Uint8Array([137, 80, 78, 71])], "image.png", { type: "image/png" }));
+    document.querySelector('[data-testid="termpanel-terminal"]:not([hidden])')!.dispatchEvent(new ClipboardEvent("paste", { clipboardData: dt, bubbles: true, cancelable: true }));
+  });
+  await expect
+    .poll(async () => (await shellCalls(page)).filter((c) => c.op === "write" && c.id === b).map((c) => c.data).join(""))
+    .toBe(`\x1b[200~/home/you/.omher/session-files/s0${b}/1-image.png \x1b[201~`);
+});

@@ -10,6 +10,7 @@ import { Sidebar } from "../sidebar/Sidebar";
 import { Chat } from "../chat/Chat";
 import { DetailsFallback } from "./DetailsFallback";
 import { PanelResizer } from "./PanelResizer";
+import { TermMenu } from "../sessions/term/TermMenu";
 import { SettingsView } from "./SettingsView";
 import { AutomationsPage } from "../pages/Automations";
 import { PluginsPage } from "../pages/Plugins";
@@ -91,6 +92,7 @@ export function App() {
             <TerminalPanel />
           </Suspense>
         )}
+        <TermMenu />
       </main>
       {/* inert while closed: the off-screen panel takes no focus and no clicks */}
       <aside className="details" aria-hidden={!panelOpen} inert={!panelOpen} data-testid="details">
