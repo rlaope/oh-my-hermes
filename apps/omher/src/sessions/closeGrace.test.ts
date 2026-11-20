@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { createCloseGrace, graceMs, GRACE_SHOWN, isUndoKey } from "./closeGrace";
+import { createCloseGrace, graceMs, GRACE_SHOWN, isUndoKey, restoreSplitIn } from "./closeGrace";
 import { parseTermSettings, TERM_DEFAULTS, TERM_UNDO_CLOSE } from "./term/settings";
 
 function rig() {
@@ -139,5 +139,33 @@ describe("undo window setting", () => {
     expect(parseTermSettings({ undoClose: 5 }).undoClose).toBe(5);
     expect(parseTermSettings({ undoClose: 7 }).undoClose).toBe(10);
     expect(parseTermSettings({ undoClose: "5" }).undoClose).toBe(10);
+  });
+});
+
+describe("restoreSplitIn", () => {
+  const two = { layout: { dir: "row" as const, ratio: 0.4, a: { pane: 1 }, b: { pane: 2 } } };
+  const three = { layout: { dir: "row" as const, ratio: 0.5, a: { pane: 1 }, b: { dir: "col" as const, ratio: 0.5, a: { pane: 2 }, b: { pane: 3 } } } };
+  const alive = (...n: number[]) => new Set(n.map((x) => `s${x}`));
+
+  it("a split that ended when the pane left comes back as it was, sizes and all", () => {
+    expect(restoreSplitIn([], "s2", two, alive(1, 2))).toEqual([two]);
+  });
+
+  it("a split that went on with the other panes takes the pane back into its slot", () => {
+    const left = { layout: { dir: "row" as const, ratio: 0.5, a: { pane: 1 }, b: { pane: 3 } } };
+    expect(restoreSplitIn([left], "s2", three, alive(1, 2, 3))).toEqual([three]);
+  });
+
+  it("the slot is gone (the split took another pane, or its panes went elsewhere): the same list back", () => {
+    const other = { layout: { dir: "row" as const, ratio: 0.5, a: { pane: 1 }, b: { pane: 4 } } };
+    expect(restoreSplitIn([other], "s2", two, alive(1, 2, 4))).toEqual([other]);
+    // the other pane's session closed too: nothing to split with
+    expect(restoreSplitIn([], "s2", two, alive(2))).toEqual([]);
+    // already in a split
+    expect(restoreSplitIn([two], "s2", two, alive(1, 2))).toEqual([two]);
+  });
+
+  it("a pane whose session closed meanwhile is left out; the rest keep their places", () => {
+    expect(restoreSplitIn([], "s2", three, alive(2, 3))).toEqual([{ layout: { dir: "col", ratio: 0.5, a: { pane: 2 }, b: { pane: 3 } } }]);
   });
 });
