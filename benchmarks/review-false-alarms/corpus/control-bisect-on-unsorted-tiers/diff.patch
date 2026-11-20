@@ -1,0 +1,17 @@
+--- a/app/prices.py
++++ b/app/prices.py
+@@ -1,8 +1,8 @@
++import bisect
++
++
+ def price_for(tiers: list[tuple[int, int]], quantity: int) -> int:
+     """Unit price in cents for quantity; tiers are (min_quantity, unit_price) pairs."""
+-    price = tiers[0][1]
+-    for min_quantity, unit_price in tiers:
+-        if quantity >= min_quantity:
+-            price = unit_price
+-            break
+-    return price
++    thresholds = [min_quantity for min_quantity, _ in tiers]
++    index = bisect.bisect_right(thresholds, quantity) - 1
++    return tiers[max(index, 0)][1]

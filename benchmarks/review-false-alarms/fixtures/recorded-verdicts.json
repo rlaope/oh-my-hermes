@@ -4,6 +4,30 @@
   "records": [
     {
       "arm": "omh-on",
+      "case": "control-aware-now-against-naive-column",
+      "run": 1,
+      "output": "I read diff.patch and the files under context/ that the change touches.\n\nThis line is wrong.\n\nVERDICT: bug app/tokens.py:7"
+    },
+    {
+      "arm": "omh-off",
+      "case": "control-aware-now-against-naive-column",
+      "run": 1,
+      "output": "I read diff.patch and the files under context/ that the change touches.\n\nThis line is wrong.\n\nVERDICT: bug app/tokens.py:7"
+    },
+    {
+      "arm": "omh-on",
+      "case": "control-bisect-on-unsorted-tiers",
+      "run": 1,
+      "output": "I read diff.patch and the files under context/ that the change touches.\n\nThis line is wrong.\n\nVERDICT: bug app/prices.py:7"
+    },
+    {
+      "arm": "omh-off",
+      "case": "control-bisect-on-unsorted-tiers",
+      "run": 1,
+      "output": "I read diff.patch and the files under context/ that the change touches.\n\nThis line is wrong.\n\nVERDICT: bug app/prices.py:7"
+    },
+    {
+      "arm": "omh-on",
       "case": "control-eviction-outside-lock",
       "run": 1,
       "output": "I read diff.patch and the files under context/ that the change touches.\n\nThis line is wrong.\n\nVERDICT: bug app/cache.py:19"
@@ -16,6 +40,18 @@
     },
     {
       "arm": "omh-on",
+      "case": "control-go-batch-aliases-reused-buffer",
+      "run": 1,
+      "output": "I read diff.patch and the files under context/ that the change touches.\n\nThis line is wrong.\n\nVERDICT: bug internal/ingest/batch.go:17"
+    },
+    {
+      "arm": "omh-off",
+      "case": "control-go-batch-aliases-reused-buffer",
+      "run": 1,
+      "output": "I read diff.patch and the files under context/ that the change touches.\n\nThis line is wrong.\n\nVERDICT: bug internal/ingest/batch.go:17"
+    },
+    {
+      "arm": "omh-on",
       "case": "control-go-defer-before-error-check",
       "run": 1,
       "output": "I read diff.patch and the files under context/ that the change touches.\n\nThis line is wrong.\n\nVERDICT: bug internal/store/store.go:14"
@@ -25,6 +61,18 @@
       "case": "control-go-defer-before-error-check",
       "run": 1,
       "output": "I read diff.patch and the files under context/ that the change touches.\n\nThis line is wrong.\n\nVERDICT: bug internal/store/store.go:14"
+    },
+    {
+      "arm": "omh-on",
+      "case": "control-js-exclusive-span-end",
+      "run": 1,
+      "output": "I read diff.patch and the files under context/ that the change touches.\n\nThis line is wrong.\n\nVERDICT: bug web/errors.js:3"
+    },
+    {
+      "arm": "omh-off",
+      "case": "control-js-exclusive-span-end",
+      "run": 1,
+      "output": "I read diff.patch and the files under context/ that the change touches.\n\nThis line is wrong.\n\nVERDICT: bug web/errors.js:3"
     },
     {
       "arm": "omh-on",
@@ -112,6 +160,18 @@
     },
     {
       "arm": "omh-on",
+      "case": "trap-go-atoi-error-ignored-after-pattern",
+      "run": 1,
+      "output": "I read diff.patch and the files under context/ that the change touches.\n\nThe change is correct as written.\n\nVERDICT: clean"
+    },
+    {
+      "arm": "omh-off",
+      "case": "trap-go-atoi-error-ignored-after-pattern",
+      "run": 1,
+      "output": "I read diff.patch and the files under context/ that the change touches.\n\nThe change is correct as written.\n\nVERDICT: clean"
+    },
+    {
+      "arm": "omh-on",
       "case": "trap-go-ignored-buffer-error",
       "run": 1,
       "output": "I read diff.patch and the files under context/ that the change touches.\n\nThe change is correct as written.\n\nVERDICT: clean"
@@ -119,6 +179,54 @@
     {
       "arm": "omh-off",
       "case": "trap-go-ignored-buffer-error",
+      "run": 1,
+      "output": "I read diff.patch and the files under context/ that the change touches.\n\nThe change is correct as written.\n\nVERDICT: clean"
+    },
+    {
+      "arm": "omh-on",
+      "case": "trap-go-shift-bounded-by-policy",
+      "run": 1,
+      "output": "I read diff.patch and the files under context/ that the change touches.\n\nThe change is correct as written.\n\nVERDICT: clean"
+    },
+    {
+      "arm": "omh-off",
+      "case": "trap-go-shift-bounded-by-policy",
+      "run": 1,
+      "output": "I read diff.patch and the files under context/ that the change touches.\n\nThe change is correct as written.\n\nVERDICT: clean"
+    },
+    {
+      "arm": "omh-on",
+      "case": "trap-go-stat-then-write-in-private-dir",
+      "run": 1,
+      "output": "I read diff.patch and the files under context/ that the change touches.\n\nThe change is correct as written.\n\nVERDICT: clean"
+    },
+    {
+      "arm": "omh-off",
+      "case": "trap-go-stat-then-write-in-private-dir",
+      "run": 1,
+      "output": "I read diff.patch and the files under context/ that the change touches.\n\nThe change is correct as written.\n\nVERDICT: clean"
+    },
+    {
+      "arm": "omh-on",
+      "case": "trap-go-type-assertion-routed-by-tag",
+      "run": 1,
+      "output": "I read diff.patch and the files under context/ that the change touches.\n\nThe change is correct as written.\n\nVERDICT: clean"
+    },
+    {
+      "arm": "omh-off",
+      "case": "trap-go-type-assertion-routed-by-tag",
+      "run": 1,
+      "output": "I read diff.patch and the files under context/ that the change touches.\n\nThe change is correct as written.\n\nVERDICT: clean"
+    },
+    {
+      "arm": "omh-on",
+      "case": "trap-go-unlocked-read-of-init-only-map",
+      "run": 1,
+      "output": "I read diff.patch and the files under context/ that the change touches.\n\nThe change is correct as written.\n\nVERDICT: clean"
+    },
+    {
+      "arm": "omh-off",
+      "case": "trap-go-unlocked-read-of-init-only-map",
       "run": 1,
       "output": "I read diff.patch and the files under context/ that the change touches.\n\nThe change is correct as written.\n\nVERDICT: clean"
     },
@@ -148,6 +256,30 @@
     },
     {
       "arm": "omh-on",
+      "case": "trap-js-flag-branch-initialized-at-startup",
+      "run": 1,
+      "output": "I read diff.patch and the files under context/ that the change touches.\n\nThe change is correct as written.\n\nVERDICT: clean"
+    },
+    {
+      "arm": "omh-off",
+      "case": "trap-js-flag-branch-initialized-at-startup",
+      "run": 1,
+      "output": "I read diff.patch and the files under context/ that the change touches.\n\nThe change is correct as written.\n\nVERDICT: clean"
+    },
+    {
+      "arm": "omh-on",
+      "case": "trap-js-inclusive-token-end",
+      "run": 1,
+      "output": "I read diff.patch and the files under context/ that the change touches.\n\nThe change is correct as written.\n\nVERDICT: clean"
+    },
+    {
+      "arm": "omh-off",
+      "case": "trap-js-inclusive-token-end",
+      "run": 1,
+      "output": "I read diff.patch and the files under context/ that the change touches.\n\nThe change is correct as written.\n\nVERDICT: clean"
+    },
+    {
+      "arm": "omh-on",
       "case": "trap-js-loose-null-check",
       "run": 1,
       "output": "I read diff.patch and the files under context/ that the change touches.\n\nThe change is correct as written.\n\nVERDICT: clean"
@@ -155,6 +287,30 @@
     {
       "arm": "omh-off",
       "case": "trap-js-loose-null-check",
+      "run": 1,
+      "output": "I read diff.patch and the files under context/ that the change touches.\n\nThe change is correct as written.\n\nVERDICT: clean"
+    },
+    {
+      "arm": "omh-on",
+      "case": "trap-js-recursion-bounded-by-validated-depth",
+      "run": 1,
+      "output": "I read diff.patch and the files under context/ that the change touches.\n\nThe change is correct as written.\n\nVERDICT: clean"
+    },
+    {
+      "arm": "omh-off",
+      "case": "trap-js-recursion-bounded-by-validated-depth",
+      "run": 1,
+      "output": "I read diff.patch and the files under context/ that the change touches.\n\nThe change is correct as written.\n\nVERDICT: clean"
+    },
+    {
+      "arm": "omh-on",
+      "case": "trap-lazy-open-closed-by-exit",
+      "run": 1,
+      "output": "I read diff.patch and the files under context/ that the change touches.\n\nThe change is correct as written.\n\nVERDICT: clean"
+    },
+    {
+      "arm": "omh-off",
+      "case": "trap-lazy-open-closed-by-exit",
       "run": 1,
       "output": "I read diff.patch and the files under context/ that the change touches.\n\nThe change is correct as written.\n\nVERDICT: clean"
     },
@@ -172,6 +328,18 @@
     },
     {
       "arm": "omh-on",
+      "case": "trap-merge-drops-sort-sorted-upstream",
+      "run": 1,
+      "output": "I read diff.patch and the files under context/ that the change touches.\n\nThe change is correct as written.\n\nVERDICT: clean"
+    },
+    {
+      "arm": "omh-off",
+      "case": "trap-merge-drops-sort-sorted-upstream",
+      "run": 1,
+      "output": "I read diff.patch and the files under context/ that the change touches.\n\nThe change is correct as written.\n\nVERDICT: clean"
+    },
+    {
+      "arm": "omh-on",
       "case": "trap-mutable-default-read-only",
       "run": 1,
       "output": "I read diff.patch and the files under context/ that the change touches.\n\nThe change is correct as written.\n\nVERDICT: clean"
@@ -181,6 +349,18 @@
       "case": "trap-mutable-default-read-only",
       "run": 1,
       "output": "I read diff.patch and the files under context/ that the change touches.\n\nMutable default argument.\n\nVERDICT: bug app/settings.py:4"
+    },
+    {
+      "arm": "omh-on",
+      "case": "trap-naive-datetime-documented-utc",
+      "run": 1,
+      "output": "I read diff.patch and the files under context/ that the change touches.\n\nThe change is correct as written.\n\nVERDICT: clean"
+    },
+    {
+      "arm": "omh-off",
+      "case": "trap-naive-datetime-documented-utc",
+      "run": 1,
+      "output": "I read diff.patch and the files under context/ that the change touches.\n\nThe change is correct as written.\n\nVERDICT: clean"
     },
     {
       "arm": "omh-on",
@@ -208,6 +388,42 @@
     },
     {
       "arm": "omh-on",
+      "case": "trap-sql-table-from-validated-enum",
+      "run": 1,
+      "output": "I read diff.patch and the files under context/ that the change touches.\n\nThe change is correct as written.\n\nVERDICT: clean"
+    },
+    {
+      "arm": "omh-off",
+      "case": "trap-sql-table-from-validated-enum",
+      "run": 1,
+      "output": "I read diff.patch and the files under context/ that the change touches.\n\nThe change is correct as written.\n\nVERDICT: clean"
+    },
+    {
+      "arm": "omh-on",
+      "case": "control-aware-now-against-naive-column",
+      "run": 2,
+      "output": "I read diff.patch and the files under context/ that the change touches.\n\nThis line is wrong.\n\nVERDICT: bug app/tokens.py:7"
+    },
+    {
+      "arm": "omh-off",
+      "case": "control-aware-now-against-naive-column",
+      "run": 2,
+      "output": "I read diff.patch and the files under context/ that the change touches.\n\nThis line is wrong.\n\nVERDICT: bug app/tokens.py:7"
+    },
+    {
+      "arm": "omh-on",
+      "case": "control-bisect-on-unsorted-tiers",
+      "run": 2,
+      "output": "I read diff.patch and the files under context/ that the change touches.\n\nThis line is wrong.\n\nVERDICT: bug app/prices.py:7"
+    },
+    {
+      "arm": "omh-off",
+      "case": "control-bisect-on-unsorted-tiers",
+      "run": 2,
+      "output": "I read diff.patch and the files under context/ that the change touches.\n\nThis line is wrong.\n\nVERDICT: bug app/prices.py:7"
+    },
+    {
+      "arm": "omh-on",
       "case": "control-eviction-outside-lock",
       "run": 2,
       "output": "I read diff.patch and the files under context/ that the change touches.\n\nThis line is wrong.\n\nVERDICT: bug context/app/cache.py:17"
@@ -220,6 +436,18 @@
     },
     {
       "arm": "omh-on",
+      "case": "control-go-batch-aliases-reused-buffer",
+      "run": 2,
+      "output": "I read diff.patch and the files under context/ that the change touches.\n\nThis line is wrong.\n\nVERDICT: bug internal/ingest/batch.go:17"
+    },
+    {
+      "arm": "omh-off",
+      "case": "control-go-batch-aliases-reused-buffer",
+      "run": 2,
+      "output": "I read diff.patch and the files under context/ that the change touches.\n\nThis line is wrong.\n\nVERDICT: bug internal/ingest/batch.go:17"
+    },
+    {
+      "arm": "omh-on",
       "case": "control-go-defer-before-error-check",
       "run": 2,
       "output": "I read diff.patch and the files under context/ that the change touches.\n\nThis line is wrong.\n\nVERDICT: bug internal/store/store.go:14"
@@ -229,6 +457,18 @@
       "case": "control-go-defer-before-error-check",
       "run": 2,
       "output": "I read diff.patch and the files under context/ that the change touches.\n\nThis line is wrong.\n\nVERDICT: bug internal/store/store.go:14"
+    },
+    {
+      "arm": "omh-on",
+      "case": "control-js-exclusive-span-end",
+      "run": 2,
+      "output": "I read diff.patch and the files under context/ that the change touches.\n\nThis line is wrong.\n\nVERDICT: bug web/errors.js:3"
+    },
+    {
+      "arm": "omh-off",
+      "case": "control-js-exclusive-span-end",
+      "run": 2,
+      "output": "I read diff.patch and the files under context/ that the change touches.\n\nThis line is wrong.\n\nVERDICT: bug web/errors.js:3"
     },
     {
       "arm": "omh-on",
@@ -316,6 +556,18 @@
     },
     {
       "arm": "omh-on",
+      "case": "trap-go-atoi-error-ignored-after-pattern",
+      "run": 2,
+      "output": "I read diff.patch and the files under context/ that the change touches.\n\nThe change is correct as written.\n\nVERDICT: clean"
+    },
+    {
+      "arm": "omh-off",
+      "case": "trap-go-atoi-error-ignored-after-pattern",
+      "run": 2,
+      "output": "I read diff.patch and the files under context/ that the change touches.\n\nThe change is correct as written.\n\nVERDICT: clean"
+    },
+    {
+      "arm": "omh-on",
       "case": "trap-go-ignored-buffer-error",
       "run": 2,
       "output": "I read diff.patch and the files under context/ that the change touches.\n\nThe change is correct as written.\n\nVERDICT: clean"
@@ -323,6 +575,54 @@
     {
       "arm": "omh-off",
       "case": "trap-go-ignored-buffer-error",
+      "run": 2,
+      "output": "I read diff.patch and the files under context/ that the change touches.\n\nThe change is correct as written.\n\nVERDICT: clean"
+    },
+    {
+      "arm": "omh-on",
+      "case": "trap-go-shift-bounded-by-policy",
+      "run": 2,
+      "output": "I read diff.patch and the files under context/ that the change touches.\n\nThe change is correct as written.\n\nVERDICT: clean"
+    },
+    {
+      "arm": "omh-off",
+      "case": "trap-go-shift-bounded-by-policy",
+      "run": 2,
+      "output": "I read diff.patch and the files under context/ that the change touches.\n\nThe change is correct as written.\n\nVERDICT: clean"
+    },
+    {
+      "arm": "omh-on",
+      "case": "trap-go-stat-then-write-in-private-dir",
+      "run": 2,
+      "output": "I read diff.patch and the files under context/ that the change touches.\n\nThe change is correct as written.\n\nVERDICT: clean"
+    },
+    {
+      "arm": "omh-off",
+      "case": "trap-go-stat-then-write-in-private-dir",
+      "run": 2,
+      "output": "I read diff.patch and the files under context/ that the change touches.\n\nThe change is correct as written.\n\nVERDICT: clean"
+    },
+    {
+      "arm": "omh-on",
+      "case": "trap-go-type-assertion-routed-by-tag",
+      "run": 2,
+      "output": "I read diff.patch and the files under context/ that the change touches.\n\nThe change is correct as written.\n\nVERDICT: clean"
+    },
+    {
+      "arm": "omh-off",
+      "case": "trap-go-type-assertion-routed-by-tag",
+      "run": 2,
+      "output": "I read diff.patch and the files under context/ that the change touches.\n\nThe change is correct as written.\n\nVERDICT: clean"
+    },
+    {
+      "arm": "omh-on",
+      "case": "trap-go-unlocked-read-of-init-only-map",
+      "run": 2,
+      "output": "I read diff.patch and the files under context/ that the change touches.\n\nThe change is correct as written.\n\nVERDICT: clean"
+    },
+    {
+      "arm": "omh-off",
+      "case": "trap-go-unlocked-read-of-init-only-map",
       "run": 2,
       "output": "I read diff.patch and the files under context/ that the change touches.\n\nThe change is correct as written.\n\nVERDICT: clean"
     },
@@ -347,6 +647,30 @@
     {
       "arm": "omh-off",
       "case": "trap-index-guarded-above",
+      "run": 2,
+      "output": "I read diff.patch and the files under context/ that the change touches.\n\nThe change is correct as written.\n\nVERDICT: clean"
+    },
+    {
+      "arm": "omh-on",
+      "case": "trap-js-flag-branch-initialized-at-startup",
+      "run": 2,
+      "output": "I read diff.patch and the files under context/ that the change touches.\n\nThe change is correct as written.\n\nVERDICT: clean"
+    },
+    {
+      "arm": "omh-off",
+      "case": "trap-js-flag-branch-initialized-at-startup",
+      "run": 2,
+      "output": "I read diff.patch and the files under context/ that the change touches.\n\nThe change is correct as written.\n\nVERDICT: clean"
+    },
+    {
+      "arm": "omh-on",
+      "case": "trap-js-inclusive-token-end",
+      "run": 2,
+      "output": "I read diff.patch and the files under context/ that the change touches.\n\nThe change is correct as written.\n\nVERDICT: clean"
+    },
+    {
+      "arm": "omh-off",
+      "case": "trap-js-inclusive-token-end",
       "run": 2,
       "output": "I read diff.patch and the files under context/ that the change touches.\n\nThe change is correct as written.\n\nVERDICT: clean"
     },
@@ -364,6 +688,30 @@
     },
     {
       "arm": "omh-on",
+      "case": "trap-js-recursion-bounded-by-validated-depth",
+      "run": 2,
+      "output": "I read diff.patch and the files under context/ that the change touches.\n\nThe change is correct as written.\n\nVERDICT: clean"
+    },
+    {
+      "arm": "omh-off",
+      "case": "trap-js-recursion-bounded-by-validated-depth",
+      "run": 2,
+      "output": "I read diff.patch and the files under context/ that the change touches.\n\nThe change is correct as written.\n\nVERDICT: clean"
+    },
+    {
+      "arm": "omh-on",
+      "case": "trap-lazy-open-closed-by-exit",
+      "run": 2,
+      "output": "I read diff.patch and the files under context/ that the change touches.\n\nThe change is correct as written.\n\nVERDICT: clean"
+    },
+    {
+      "arm": "omh-off",
+      "case": "trap-lazy-open-closed-by-exit",
+      "run": 2,
+      "output": "I read diff.patch and the files under context/ that the change touches.\n\nThe change is correct as written.\n\nVERDICT: clean"
+    },
+    {
+      "arm": "omh-on",
       "case": "trap-lock-held-by-caller",
       "run": 2,
       "output": "I read diff.patch and the files under context/ that the change touches.\n\nThe change is correct as written.\n\nVERDICT: clean"
@@ -371,6 +719,18 @@
     {
       "arm": "omh-off",
       "case": "trap-lock-held-by-caller",
+      "run": 2,
+      "output": "I read diff.patch and the files under context/ that the change touches.\n\nThe change is correct as written.\n\nVERDICT: clean"
+    },
+    {
+      "arm": "omh-on",
+      "case": "trap-merge-drops-sort-sorted-upstream",
+      "run": 2,
+      "output": "I read diff.patch and the files under context/ that the change touches.\n\nThe change is correct as written.\n\nVERDICT: clean"
+    },
+    {
+      "arm": "omh-off",
+      "case": "trap-merge-drops-sort-sorted-upstream",
       "run": 2,
       "output": "I read diff.patch and the files under context/ that the change touches.\n\nThe change is correct as written.\n\nVERDICT: clean"
     },
@@ -385,6 +745,18 @@
       "case": "trap-mutable-default-read-only",
       "run": 2,
       "output": "I read diff.patch and the files under context/ that the change touches.\n\nMutable default argument.\n\nVERDICT: bug app/settings.py:4"
+    },
+    {
+      "arm": "omh-on",
+      "case": "trap-naive-datetime-documented-utc",
+      "run": 2,
+      "output": "I read diff.patch and the files under context/ that the change touches.\n\nThe change is correct as written.\n\nVERDICT: clean"
+    },
+    {
+      "arm": "omh-off",
+      "case": "trap-naive-datetime-documented-utc",
+      "run": 2,
+      "output": "I read diff.patch and the files under context/ that the change touches.\n\nThe change is correct as written.\n\nVERDICT: clean"
     },
     {
       "arm": "omh-on",
@@ -412,6 +784,42 @@
     },
     {
       "arm": "omh-on",
+      "case": "trap-sql-table-from-validated-enum",
+      "run": 2,
+      "output": "I read diff.patch and the files under context/ that the change touches.\n\nThe change is correct as written.\n\nVERDICT: clean"
+    },
+    {
+      "arm": "omh-off",
+      "case": "trap-sql-table-from-validated-enum",
+      "run": 2,
+      "output": "I read diff.patch and the files under context/ that the change touches.\n\nThe change is correct as written.\n\nVERDICT: clean"
+    },
+    {
+      "arm": "omh-on",
+      "case": "control-aware-now-against-naive-column",
+      "run": 3,
+      "output": "I read diff.patch and the files under context/ that the change touches.\n\nThis line is wrong.\n\nVERDICT: bug app/tokens.py:7"
+    },
+    {
+      "arm": "omh-off",
+      "case": "control-aware-now-against-naive-column",
+      "run": 3,
+      "output": "I read diff.patch and the files under context/ that the change touches.\n\nThis line is wrong.\n\nVERDICT: bug app/tokens.py:7"
+    },
+    {
+      "arm": "omh-on",
+      "case": "control-bisect-on-unsorted-tiers",
+      "run": 3,
+      "output": "I read diff.patch and the files under context/ that the change touches.\n\nThis line is wrong.\n\nVERDICT: bug app/prices.py:7"
+    },
+    {
+      "arm": "omh-off",
+      "case": "control-bisect-on-unsorted-tiers",
+      "run": 3,
+      "output": "I read diff.patch and the files under context/ that the change touches.\n\nThis line is wrong.\n\nVERDICT: bug app/prices.py:7"
+    },
+    {
+      "arm": "omh-on",
       "case": "control-eviction-outside-lock",
       "run": 3,
       "output": "I read diff.patch and the files under context/ that the change touches.\n\nThis line is wrong.\n\nVERDICT: bug app/cache.py:15"
@@ -424,6 +832,18 @@
     },
     {
       "arm": "omh-on",
+      "case": "control-go-batch-aliases-reused-buffer",
+      "run": 3,
+      "output": "I read diff.patch and the files under context/ that the change touches.\n\nThis line is wrong.\n\nVERDICT: bug internal/ingest/batch.go:17"
+    },
+    {
+      "arm": "omh-off",
+      "case": "control-go-batch-aliases-reused-buffer",
+      "run": 3,
+      "output": "I read diff.patch and the files under context/ that the change touches.\n\nThis line is wrong.\n\nVERDICT: bug internal/ingest/batch.go:17"
+    },
+    {
+      "arm": "omh-on",
       "case": "control-go-defer-before-error-check",
       "run": 3,
       "output": ""
@@ -433,6 +853,18 @@
       "case": "control-go-defer-before-error-check",
       "run": 3,
       "output": "I read diff.patch and the files under context/ that the change touches.\n\nThis line is wrong.\n\nVERDICT: bug internal/store/store.go:14"
+    },
+    {
+      "arm": "omh-on",
+      "case": "control-js-exclusive-span-end",
+      "run": 3,
+      "output": "I read diff.patch and the files under context/ that the change touches.\n\nThis line is wrong.\n\nVERDICT: bug web/errors.js:3"
+    },
+    {
+      "arm": "omh-off",
+      "case": "control-js-exclusive-span-end",
+      "run": 3,
+      "output": "I read diff.patch and the files under context/ that the change touches.\n\nThis line is wrong.\n\nVERDICT: bug web/errors.js:3"
     },
     {
       "arm": "omh-on",
@@ -520,6 +952,18 @@
     },
     {
       "arm": "omh-on",
+      "case": "trap-go-atoi-error-ignored-after-pattern",
+      "run": 3,
+      "output": "I read diff.patch and the files under context/ that the change touches.\n\nThe change is correct as written.\n\nVERDICT: clean"
+    },
+    {
+      "arm": "omh-off",
+      "case": "trap-go-atoi-error-ignored-after-pattern",
+      "run": 3,
+      "output": "I read diff.patch and the files under context/ that the change touches.\n\nThe change is correct as written.\n\nVERDICT: clean"
+    },
+    {
+      "arm": "omh-on",
       "case": "trap-go-ignored-buffer-error",
       "run": 3,
       "output": "I read diff.patch and the files under context/ that the change touches.\n\nThe change is correct as written.\n\nVERDICT: clean"
@@ -527,6 +971,54 @@
     {
       "arm": "omh-off",
       "case": "trap-go-ignored-buffer-error",
+      "run": 3,
+      "output": "I read diff.patch and the files under context/ that the change touches.\n\nThe change is correct as written.\n\nVERDICT: clean"
+    },
+    {
+      "arm": "omh-on",
+      "case": "trap-go-shift-bounded-by-policy",
+      "run": 3,
+      "output": "I read diff.patch and the files under context/ that the change touches.\n\nThe change is correct as written.\n\nVERDICT: clean"
+    },
+    {
+      "arm": "omh-off",
+      "case": "trap-go-shift-bounded-by-policy",
+      "run": 3,
+      "output": "I read diff.patch and the files under context/ that the change touches.\n\nThe change is correct as written.\n\nVERDICT: clean"
+    },
+    {
+      "arm": "omh-on",
+      "case": "trap-go-stat-then-write-in-private-dir",
+      "run": 3,
+      "output": "I read diff.patch and the files under context/ that the change touches.\n\nThe change is correct as written.\n\nVERDICT: clean"
+    },
+    {
+      "arm": "omh-off",
+      "case": "trap-go-stat-then-write-in-private-dir",
+      "run": 3,
+      "output": "I read diff.patch and the files under context/ that the change touches.\n\nThe change is correct as written.\n\nVERDICT: clean"
+    },
+    {
+      "arm": "omh-on",
+      "case": "trap-go-type-assertion-routed-by-tag",
+      "run": 3,
+      "output": "I read diff.patch and the files under context/ that the change touches.\n\nThe change is correct as written.\n\nVERDICT: clean"
+    },
+    {
+      "arm": "omh-off",
+      "case": "trap-go-type-assertion-routed-by-tag",
+      "run": 3,
+      "output": "I read diff.patch and the files under context/ that the change touches.\n\nThe change is correct as written.\n\nVERDICT: clean"
+    },
+    {
+      "arm": "omh-on",
+      "case": "trap-go-unlocked-read-of-init-only-map",
+      "run": 3,
+      "output": "I read diff.patch and the files under context/ that the change touches.\n\nThe change is correct as written.\n\nVERDICT: clean"
+    },
+    {
+      "arm": "omh-off",
+      "case": "trap-go-unlocked-read-of-init-only-map",
       "run": 3,
       "output": "I read diff.patch and the files under context/ that the change touches.\n\nThe change is correct as written.\n\nVERDICT: clean"
     },
@@ -556,6 +1048,30 @@
     },
     {
       "arm": "omh-on",
+      "case": "trap-js-flag-branch-initialized-at-startup",
+      "run": 3,
+      "output": "I read diff.patch and the files under context/ that the change touches.\n\nThe change is correct as written.\n\nVERDICT: clean"
+    },
+    {
+      "arm": "omh-off",
+      "case": "trap-js-flag-branch-initialized-at-startup",
+      "run": 3,
+      "output": "I read diff.patch and the files under context/ that the change touches.\n\nThe change is correct as written.\n\nVERDICT: clean"
+    },
+    {
+      "arm": "omh-on",
+      "case": "trap-js-inclusive-token-end",
+      "run": 3,
+      "output": "I read diff.patch and the files under context/ that the change touches.\n\nThe change is correct as written.\n\nVERDICT: clean"
+    },
+    {
+      "arm": "omh-off",
+      "case": "trap-js-inclusive-token-end",
+      "run": 3,
+      "output": "I read diff.patch and the files under context/ that the change touches.\n\nThe change is correct as written.\n\nVERDICT: clean"
+    },
+    {
+      "arm": "omh-on",
       "case": "trap-js-loose-null-check",
       "run": 3,
       "output": "I read diff.patch and the files under context/ that the change touches.\n\nThe change is correct as written.\n\nVERDICT: clean"
@@ -563,6 +1079,30 @@
     {
       "arm": "omh-off",
       "case": "trap-js-loose-null-check",
+      "run": 3,
+      "output": "I read diff.patch and the files under context/ that the change touches.\n\nThe change is correct as written.\n\nVERDICT: clean"
+    },
+    {
+      "arm": "omh-on",
+      "case": "trap-js-recursion-bounded-by-validated-depth",
+      "run": 3,
+      "output": "I read diff.patch and the files under context/ that the change touches.\n\nThe change is correct as written.\n\nVERDICT: clean"
+    },
+    {
+      "arm": "omh-off",
+      "case": "trap-js-recursion-bounded-by-validated-depth",
+      "run": 3,
+      "output": "I read diff.patch and the files under context/ that the change touches.\n\nThe change is correct as written.\n\nVERDICT: clean"
+    },
+    {
+      "arm": "omh-on",
+      "case": "trap-lazy-open-closed-by-exit",
+      "run": 3,
+      "output": "I read diff.patch and the files under context/ that the change touches.\n\nThe change is correct as written.\n\nVERDICT: clean"
+    },
+    {
+      "arm": "omh-off",
+      "case": "trap-lazy-open-closed-by-exit",
       "run": 3,
       "output": "I read diff.patch and the files under context/ that the change touches.\n\nThe change is correct as written.\n\nVERDICT: clean"
     },
@@ -580,6 +1120,18 @@
     },
     {
       "arm": "omh-on",
+      "case": "trap-merge-drops-sort-sorted-upstream",
+      "run": 3,
+      "output": "I read diff.patch and the files under context/ that the change touches.\n\nThe change is correct as written.\n\nVERDICT: clean"
+    },
+    {
+      "arm": "omh-off",
+      "case": "trap-merge-drops-sort-sorted-upstream",
+      "run": 3,
+      "output": "I read diff.patch and the files under context/ that the change touches.\n\nThe change is correct as written.\n\nVERDICT: clean"
+    },
+    {
+      "arm": "omh-on",
       "case": "trap-mutable-default-read-only",
       "run": 3,
       "output": "I read diff.patch and the files under context/ that the change touches.\n\nThe change is correct as written.\n\nVERDICT: clean"
@@ -587,6 +1139,18 @@
     {
       "arm": "omh-off",
       "case": "trap-mutable-default-read-only",
+      "run": 3,
+      "output": "I read diff.patch and the files under context/ that the change touches.\n\nThe change is correct as written.\n\nVERDICT: clean"
+    },
+    {
+      "arm": "omh-on",
+      "case": "trap-naive-datetime-documented-utc",
+      "run": 3,
+      "output": "I read diff.patch and the files under context/ that the change touches.\n\nThe change is correct as written.\n\nVERDICT: clean"
+    },
+    {
+      "arm": "omh-off",
+      "case": "trap-naive-datetime-documented-utc",
       "run": 3,
       "output": "I read diff.patch and the files under context/ that the change touches.\n\nThe change is correct as written.\n\nVERDICT: clean"
     },
@@ -611,6 +1175,18 @@
     {
       "arm": "omh-off",
       "case": "trap-sql-order-by-allowlist",
+      "run": 3,
+      "output": "I read diff.patch and the files under context/ that the change touches.\n\nThe change is correct as written.\n\nVERDICT: clean"
+    },
+    {
+      "arm": "omh-on",
+      "case": "trap-sql-table-from-validated-enum",
+      "run": 3,
+      "output": "I read diff.patch and the files under context/ that the change touches.\n\nThe change is correct as written.\n\nVERDICT: clean"
+    },
+    {
+      "arm": "omh-off",
+      "case": "trap-sql-table-from-validated-enum",
       "run": 3,
       "output": "I read diff.patch and the files under context/ that the change touches.\n\nThe change is correct as written.\n\nVERDICT: clean"
     }

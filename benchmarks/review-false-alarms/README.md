@@ -28,13 +28,30 @@ Two kinds:
   test pins as the header; `shell=True` on a fixed command; a `{}` default that
   is never mutated; float `==` that is exact for the inputs; JavaScript `== null`;
   Go errors discarded from `bytes.Buffer`, which never returns one.
+
+  The harder traps can only be proven safe from a file outside the hunk, the
+  way a lock the caller holds can: a sort dropped because the store two files
+  away already sorts; an ignored `strconv.Atoi` error after a regex that only
+  admits 1 to 4 digits; an unlocked Go map written only before the server
+  starts; a table name formatted from an enum the API boundary validates; a
+  `+ 1` that matches a lexer's inclusive end, pinned by its test; a file closed
+  by `__exit__` and the caller's `with`; a shift that the retry policy's
+  constructor bounds; a bare type assertion routed by the decoder's type tag; a
+  feature-flag branch whose object startup always builds; a stat-then-write
+  inside a private `MkdirTemp` dir; naive datetimes the app documents and tests
+  as UTC everywhere; recursion over a cyclic graph bounded by a depth the
+  settings loader validates.
 - **control** (`expected: bug`): a change with one real bug a caller can reach.
   `bug_location` is the line in the post-change file under `context/`.
+  Four of them are as hard as the harder traps: the bug shows only with a file
+  outside the hunk (tiers loaded largest first into a `bisect`, an aware `now`
+  against a naive stored column, a `+ 1` on an end-exclusive span, a batch that
+  keeps a buffer its caller reuses).
 
 `why` says why the case is what it is. It is for the person reading the
 results; the reviewer never sees `case.json`.
 
-The corpus has 11 traps and 6 controls today. `bench.py validate` checks every
+The corpus has 23 traps and 10 controls today (Python, JavaScript and Go). `bench.py validate` checks every
 case against the schema.
 
 ## How a run is graded
@@ -124,7 +141,7 @@ uv run python benchmarks/review-false-alarms/bench.py validate
 uv run python benchmarks/review-false-alarms/bench.py run --runs 3
 ```
 
-A live run calls `hermes -z` once per case, arm and run (17 × 2 × 3 = 102 calls
+A live run calls `hermes -z` once per case, arm and run (33 × 2 × 3 = 198 calls
 by default). It needs two Hermes profiles that differ only in whether the OMH
 plugin is enabled (for example clone a profile, then `hermes -p <clone> plugins
 disable omh`), and `--live`:

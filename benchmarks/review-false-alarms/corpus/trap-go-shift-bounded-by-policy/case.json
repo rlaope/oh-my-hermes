@@ -1,0 +1,7 @@
+{
+  "id": "trap-go-shift-bounded-by-policy",
+  "kind": "trap",
+  "language": "go",
+  "expected": "clean",
+  "why": "Delay shifts by attempt, and a shift of 40 or more would overflow time.Duration. Delay's only caller is Do in internal/retry/retry.go, whose attempt runs below p.MaxAttempts, and NewPolicy in internal/retry/policy.go refuses MaxAttempts above 8 and Base above 5s; Policy's fields are unexported, so no other value exists. The largest product is 5s << 7 = 10m40s, before the max cap."
+}

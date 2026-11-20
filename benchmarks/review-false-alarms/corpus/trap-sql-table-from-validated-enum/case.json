@@ -1,0 +1,7 @@
+{
+  "id": "trap-sql-table-from-validated-enum",
+  "kind": "trap",
+  "language": "python",
+  "expected": "clean",
+  "why": "The table name is formatted into the SQL from kind.value. kind is an EventKind (app/kinds.py: three fixed lowercase values), and the only caller, app/api.py, builds it with EventKind(request.args['kind']), which raises ValueError for anything else and answers 400 before count_events runs. No request text reaches the SQL; since stays a bound parameter."
+}

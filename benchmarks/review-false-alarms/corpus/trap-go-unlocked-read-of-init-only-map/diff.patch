@@ -1,0 +1,38 @@
+--- a/internal/short/server.go
++++ b/internal/short/server.go
+@@ -10,14 +10,25 @@
+ 	mu      sync.Mutex
+ 	hits    map[string]int
+ 	targets map[string]string
++	aliases map[string]string
+ }
+ 
+ func NewServer(targets map[string]string) *Server {
+-	return &Server{hits: map[string]int{}, targets: targets}
++	return &Server{hits: map[string]int{}, targets: targets, aliases: map[string]string{}}
++}
++
++// LoadAliases maps extra names onto existing short codes.
++func (s *Server) LoadAliases(aliases map[string]string) {
++	for name, code := range aliases {
++		s.aliases[name] = code
++	}
+ }
+ 
+ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+ 	code := strings.TrimPrefix(r.URL.Path, "/")
++	if alias, ok := s.aliases[code]; ok {
++		code = alias
++	}
+ 	target, ok := s.targets[code]
+ 	if !ok {
+ 		http.NotFound(w, r)
+--- a/cmd/server/main.go
++++ b/cmd/server/main.go
+@@ -23,5 +23,6 @@
+ 
+ func main() {
+ 	srv := short.NewServer(readMap("targets.json"))
++	srv.LoadAliases(readMap("aliases.json"))
+ 	log.Fatal(http.ListenAndServe(":8080", srv))
+ }
