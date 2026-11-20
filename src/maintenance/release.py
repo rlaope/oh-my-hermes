@@ -1111,7 +1111,10 @@ PLUGIN_TOOL_SCHEMA_CHAR_LIMIT = 63824
 # reproduces 545683. Measured from the producer.
 # 549541 -> 549528: model-compression's description says "smaller or cheaper via its weights" in place of
 # "smaller by changing its weights: cheaper through" (-13); measured from the producer. No headroom.
-FULL_CAPABILITY_SKILL_SECTION_CHAR_LIMIT = 549528
+# 549528 -> 549751 (2026-11-20): OpenAI's GPT-6.2 Codex guide lines: dag-ulw's node-prompt line briefs like a
+# colleague and names `review_focus` (+161), agent-instructions' infer-from-code rule enters its first-four
+# quality-bar slice (+62); only those two rows. Measured from the producer against main c5a909c6b. No headroom.
+FULL_CAPABILITY_SKILL_SECTION_CHAR_LIMIT = 549751
 FULL_CAPABILITY_SKILL_ITEM_CHAR_LIMIT = 9000
 # 100000 -> 102070: the same three domain workflows each add one standalone
 # capability row, again measured on the merged tree; warranted growth for three

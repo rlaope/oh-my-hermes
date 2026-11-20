@@ -206,8 +206,11 @@ class AiJobSearchContextBudgetTests(unittest.TestCase):
             # bc088218...5df4 at 542611 and 57ef3e89...0794e at 145483.
             # 546469 -> 546456 and the digest re-derived: model-compression's description says "smaller or
             # cheaper" again (-13); no other row moved, and the pin before it was db592e21...1ccc6.
-            (skill_capabilities, 546456, FULL_ROW_DELTA_CAP,
-             '59c3f3d0942895064422126b0ff33528b919d3eab127ca06ea630d402a0a38b0',
+            # 546456 -> 546679 and the digest re-derived: OpenAI's GPT-6.2 Codex guide lines move the dag-ulw row
+            # (+161) and the agent-instructions row (+62, itemized at FULL_CAPABILITY_SKILL_SECTION_CHAR_LIMIT); no
+            # other row moved, and the pin before it was 59c3f3d0...38b0.
+            (skill_capabilities, 546679, FULL_ROW_DELTA_CAP,
+             '8e3f5c83774996722ca3e5380fb393091eb113ecd5270ef4f6ef39f0f18dd898',
              release.FULL_CAPABILITY_SKILL_SECTION_CHAR_LIMIT),
             (standalone_skill_capability_items, 146420, STANDALONE_ROW_DELTA_CAP,
              '7bf537036d7224bf9054e4fc91773dc033d063546267031ea8bbec7f1872578d',
@@ -558,7 +561,9 @@ class AiJobSearchContextBudgetTests(unittest.TestCase):
         # before it was 280bbdfb...7cee74.
         # Merged with main a third time: dag-ulw then gains the opt-in `carry_forward` quality-bar line; only
         # dag-ulw moves. This branch's pin was a92e709f...a555, and main's was 2d788500...c459.
-        self.assertEqual(_digest(legacy_hashes), '891b61cd2c942249a4a37ee5dfbb5aa24577d5ed14cb2cdd6167f4c56f49f061')
+        # OpenAI's GPT-6.2 Codex guide lines then reach visual-qa, frontend, app-debugging, agent-instructions
+        # and dag-ulw; only those five bodies move, and the pin before it was 891b61cd...f061.
+        self.assertEqual(_digest(legacy_hashes), '66929abd2f52f05ff4d53a46f05565a2eadfd997101f92036e166bf7b25e07a7')
         legacy = _skill_context_cost_profile('full', legacy_templates, refs)
         current = _skill_context_cost_profile('full', templates, refs)
         # Main's search guidance adds 305; repro-audit's mandatory rails 1,943.
