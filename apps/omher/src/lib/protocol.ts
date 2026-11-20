@@ -277,10 +277,19 @@ export interface ChatOpenResult {
 /** A Hermes chat the bridge created in a picked folder (SESSIONS > oh-my-hermes). */
 export interface FolderOpenResult {
   session: string;
+  /** Hermes' stored id of that session: what `folder.resume` takes after a restart (an older bridge sends none). */
+  stored?: string;
   cwd: string;
   model: string;
   provider: string;
   reasoning: string;
+}
+
+/** A folder chat `folder.open` made before a restart, attached again (`folder.resume`): its messages come back. */
+export interface FolderResumeResult extends FolderOpenResult {
+  stored: string;
+  messages: Msg[];
+  running: boolean;
 }
 
 /** op name -> { params, result }. `bot` is always the profile name. `session` (optional) names a folder chat
@@ -310,6 +319,8 @@ export interface OpMap {
   };
   "folder.open": { params: { bot: string; cwd: string }; result: FolderOpenResult };
   "folder.close": { params: { bot: string; session: string }; result: Record<string, never> };
+  /** Only a session the bridge made for that folder (its saved title `omher · <folder name>`); any other: not_found. */
+  "folder.resume": { params: { bot: string; cwd: string; stored: string }; result: FolderResumeResult };
   "elsewhere.list": { params: { bot: string }; result: { sessions: Away[] } };
   "elsewhere.peek": {
     params: { bot: string; session_id: string; limit?: number };

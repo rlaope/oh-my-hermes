@@ -21,6 +21,11 @@ pub fn link_id(url: &str) -> Option<String> {
     ok.then(|| id.to_string())
 }
 
+/// A TERMINALS session's link id alone, as [`link_id`] checks it: exactly 10 characters of lowercase base32.
+pub fn is_link_id(id: &str) -> bool {
+    link_id(&format!("omher://terminal/{id}")).as_deref() == Some(id)
+}
+
 /// Links that arrived before the page asked for them.
 #[derive(Default)]
 pub struct TermLinks {

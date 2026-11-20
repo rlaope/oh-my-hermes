@@ -14,8 +14,9 @@ Boundary rules the code keeps:
 * One gateway connection per profile, opened lazily (``--eager`` opens them all at start).
 * The only sessions this bridge ever resumes, creates, submits to, interrupts or answers are the
   bot's main chat (the session titled ``Bot Chat``) and the folder chats it created itself for an
-  oh-my-hermes SESSIONS entry (``folder.open``; closed with ``folder.close``). Every other session is
-  only listed or read (list / history), never attached.
+  oh-my-hermes SESSIONS entry (``folder.open``; closed with ``folder.close``; after a restart reattached with
+  ``folder.resume``, only when the saved session's title is the one ``folder.open`` gave it). Every other session
+  is only listed or read (list / history), never attached.
   Files the person attaches go to the main chat only.
 """
 from __future__ import annotations
@@ -4527,6 +4528,26 @@ def read_session_cwds(profile_dir: Path, ids: list[str]) -> dict[str, str]:
     return {str(sid): str(cwd) for sid, cwd in rows if isinstance(cwd, str) and cwd}
 
 
+def read_session_title(profile_dir: Path, session_id: str) -> tuple[str, str] | None:
+    """One session's saved title and folder (`sessions.title`, `sessions.cwd`) from the profile's state.db, opened
+    read-only; None when it has no such row (or no state.db). Nothing is written."""
+    import sqlite3
+    db = profile_dir / "state.db"
+    if not session_id or not db.is_file():
+        return None
+    try:
+        con = sqlite3.connect(ro_uri(db), uri=True, timeout=1.0)
+        try:
+            row = con.execute("SELECT title, cwd FROM sessions WHERE id = ?", (session_id,)).fetchone()
+        finally:
+            con.close()
+    except sqlite3.Error:
+        return None
+    if row is None:
+        return None
+    return (row[0] if isinstance(row[0], str) else "", row[1] if isinstance(row[1], str) else "")
+
+
 def read_session_facts(profile_dir: Path, ids: list[str]) -> dict[str, dict]:
     """Per session: its origin and the bot's last answer there (`last_reply`, `last_reply_at`), read in two
     queries from the profile's state.db, opened read-only. Nothing is written."""
@@ -4905,6 +4926,7 @@ PEER_FORWARD = frozenset({
 PEER_REFUSED = {
     "folder.open": "Folder chats run in a folder on this computer; {label}'s bots run on another one.",
     "folder.close": "Folder chats run in a folder on this computer; {label}'s bots run on another one.",
+    "folder.resume": "Folder chats run in a folder on this computer; {label}'s bots run on another one.",
     "bots.restart": "omher does not restart Hermes on another computer. Restart it on {label} itself.",
 }
 
@@ -5404,6 +5426,7 @@ class Bridge:
             "bots.set_avatar": self.op_bots_set_avatar, "bots.info": self.op_bots_info,
             "skills.list": self.op_skills_list, "links.places": self.op_links_places, "tasks.linear": self.op_tasks_linear,
             "folder.open": self.op_folder_open, "folder.close": self.op_folder_close,
+            "folder.resume": self.op_folder_resume,
             "thread.create": self.op_thread_create, "thread.list": self.op_thread_list,
             "thread.open": self.op_thread_open, "thread.remove": self.op_thread_remove,
             "panel.terminal": self.op_panel_terminal, "panel.worktrees": self.op_panel_worktrees,
@@ -6202,10 +6225,68 @@ class Bridge:
             chat.generation = snap["execution_generation"]
         self._keep_chat(conn, chat)
         info = snap.get("info") if isinstance(snap.get("info"), dict) else {}
-        return {"session": fid, "cwd": str(info.get("cwd") or cwd),
+        return {"session": fid, "stored": chat.stored_id, "cwd": str(info.get("cwd") or cwd),
                 "model": str(info.get("model") or conn.bot["model"]),
                 "provider": str(info.get("provider") or conn.bot["provider"]),
                 "reasoning": str(info.get("reasoning_effort") or conn.bot["reasoning"])}
+
+    async def op_folder_resume(self, p) -> Reply:
+        """Reattach a folder chat ``folder.open`` made before omher (or this bridge) restarted, by its stored id.
+
+        Only a session the bridge made for this folder is taken: its saved title (the bot's state.db, read-only, before
+        anything is attached) must be exactly ``FOLDER_CHAT_PREFIX`` + the folder's name, as ``folder.open`` titled
+        it, and its saved folder, when it has one, this folder. The main chat, a thread, a messenger session or an
+        unknown id is ``not_found`` and nothing is attached. Then it is resumed through Hermes' own ``session.resume``,
+        kept as a folder chat (``MAX_FOLDER_CHATS`` holds), and its messages come back as ``thread.open``'s do;
+        prompts still waiting on the person are sent again after the reply."""
+        cwd, stored = p.get("cwd"), p.get("stored")
+        if not isinstance(cwd, str) or not cwd.strip() or not os.path.isabs(cwd) or not os.path.isdir(cwd):
+            raise BridgeError("bad_request", "cwd must be an existing folder")
+        if not isinstance(stored, str) or not stored or len(stored) > 200:
+            raise BridgeError("bad_request", "missing stored session")
+        conn = await self._conn(p.get("bot"))
+        if stored in conn.main_ids or stored in conn.threads:
+            raise BridgeError("not_found", "no such folder chat")
+        chat = next((f for f in conn.folders.values() if stored in f.ids), None)
+        if chat is not None and chat.kind != "folder":
+            raise BridgeError("not_found", "no such folder chat")
+        saved = await asyncio.to_thread(read_session_title, conn.bot["path"], stored)
+        leaf = Path(cwd).name or cwd
+        if saved is None or saved[0] != FOLDER_CHAT_PREFIX + leaf or (saved[1] and saved[1] != cwd):
+            raise BridgeError("not_found", "no such folder chat")
+        if chat is None and sum(1 for f in conn.folders.values() if f.kind == "folder") >= MAX_FOLDER_CHATS:
+            raise BridgeError("bad_request", f"at most {MAX_FOLDER_CHATS} folder chats per bot")
+        snap = await self._call(conn, "session.resume", session_id=stored)
+        info = snap.get("info") if isinstance(snap.get("info"), dict) else {}
+        running = bool(snap.get("running") if snap.get("running") is not None else info.get("running"))
+        if chat is None:
+            chat = FolderChat("f" + uuid.uuid4().hex[:10], cwd, str(snap["session_id"]), stored,
+                              str(snap.get("subscription_id") or ""))
+            self._keep_chat(conn, chat)
+        else:
+            chat.runtime_id = str(snap.get("session_id") or chat.runtime_id)
+        if snap.get("execution_generation") is not None:
+            chat.generation = snap["execution_generation"]
+        if type(snap.get("revision")) is int:
+            chat.revision = snap["revision"]
+        chat.in_turn = running
+        result = {"session": chat.id, "stored": stored, "cwd": str(info.get("cwd") or cwd),
+                  "model": str(info.get("model") or conn.bot["model"]),
+                  "provider": str(info.get("provider") or conn.bot["provider"]),
+                  "reasoning": str(info.get("reasoning_effort") or conn.bot["reasoning"]),
+                  "messages": chat_messages(snap.get("messages"), running=running), "running": running}
+        prompts = [x for x in (snap.get("prompts") or []) if isinstance(x, dict) and x.get("prompt_id")]
+        asks = [x for x in (snap.get("open_requests") or [])
+                if isinstance(x, dict) and x.get("method") == "clarify" and isinstance(x.get("id"), str)]
+
+        async def replay():
+            for x in prompts:
+                pid = str(x["prompt_id"])
+                chat.prompts[pid] = x.get("execution_generation")
+                await (self._emit_clarify if x.get("kind") == "clarify" else self._emit_approval)(conn, pid, x, chat)
+            for x in asks:
+                await self._batch_clarify(conn, x)
+        return Reply(result, replay if prompts or asks else None)
 
     async def op_folder_close(self, p) -> dict:
         """Close a folder chat this bridge created: Hermes stops its agent; the conversation stays saved.

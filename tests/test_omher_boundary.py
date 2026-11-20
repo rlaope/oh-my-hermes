@@ -1457,11 +1457,12 @@ class SessionsStartOnlyAllowListedAgents(unittest.TestCase):
         # `resume` is a conversation id to continue (Claude Code, Codex, DSH), `session_id` a new Claude Code
         # conversation id (2026-11-19, terminal restore); resume_args / sessions::terminal_args check both are UUIDs.
         # `app` is Tauri's handle, injected by the shell, not sent by the page: the `session-fg` event (the CLI in the
-        # session's foreground) is emitted through it (2026-11-16, terminal sessions)
-        self.assertEqual(params, {"app", "shell", "agent", "cwd", "session_id", "resume", "account", "cols", "rows", "on_data", "on_exit"})
+        # session's foreground) is emitted through it (2026-11-16, terminal sessions). `link` is an oh-my-hermes row's
+        # link id, which only that terminal gets as OMHER_TERMINAL_LINK (2026-11-20, sessions::terminal_env checks it)
+        self.assertEqual(params, {"app", "shell", "agent", "cwd", "session_id", "resume", "link", "account", "cols", "rows", "on_data", "on_exit"})
         self.assertIn("app: AppHandle,", sig.group(1))
         body = self.lib[sig.end():].split("\n}\n", 1)[0]
-        self.assertIn("start_agent(&agent, std::path::Path::new(&cwd), session_id.as_deref(), resume.as_deref()", body)
+        self.assertIn("start_agent(&agent, std::path::Path::new(&cwd), session_id.as_deref(), resume.as_deref(), link.as_deref()", body)
         self.assertNotIn(".spawn(", body)
 
     def test_terminal_args_are_only_a_checked_claude_or_codex_conversation_id(self) -> None:
@@ -1483,7 +1484,7 @@ class SessionsStartOnlyAllowListedAgents(unittest.TestCase):
             body = self.lib[sig.end():].split("\n}\n", 1)[0]
             self.assertEqual(body.count("accounts::session_env_for(&h, &agent, account.as_deref())"), 1, command)
             # session_start also passes the new Claude Code conversation id (rule 11, terminal restore)
-            call = "session_id.as_deref(), resume.as_deref()" if command == "session_start" else "resume.as_deref()"
+            call = "session_id.as_deref(), resume.as_deref(), link.as_deref()" if command == "session_start" else "resume.as_deref()"
             self.assertIn(f"start_agent(&agent, std::path::Path::new(&cwd), {call}, &account_env,", body)
         accounts = (SHELL / "accounts.rs").read_text(encoding="utf-8").split("#[cfg(test)]", 1)[0]
         cli = accounts.split("pub fn session_cli", 1)[1].split("\n}\n", 1)[0]
@@ -2172,9 +2173,9 @@ class SshPeersOnlyOverTheOwnSsh(unittest.TestCase):
 
     def test_the_bridge_refuses_this_computers_ops_and_probes_read_only(self) -> None:
         refused = self.bridge.split("PEER_REFUSED = {", 1)[1].split("\n}\n", 1)[0]
-        self.assertEqual(re.findall(r'^    "([a-z.]+)":', refused, re.M), ["folder.open", "folder.close", "bots.restart"])
+        self.assertEqual(re.findall(r'^    "([a-z.]+)":', refused, re.M), ["folder.open", "folder.close", "folder.resume", "bots.restart"])
         forward = self.bridge.split("PEER_FORWARD = frozenset({", 1)[1].split("})", 1)[0]
-        for op in ("folder.open", "folder.close", "bots.restart", "accounts.list", "sessions.start", "usage.read"):
+        for op in ("folder.open", "folder.close", "folder.resume", "bots.restart", "accounts.list", "sessions.start", "usage.read"):
             self.assertNotIn(f'"{op}"', forward, op)
         probe = self.bridge.split("async def op_peers_probe(", 1)[1].split("\n    async def ", 1)[0]
         self.assertEqual(sorted(set(re.findall(r'call\("([a-z.]+)"', probe))), ["bots.list", "hello"])
