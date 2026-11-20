@@ -84,6 +84,13 @@ All notable changes will be documented here.
   make the changes here, one after another, not as a dag-ulw graph. One bug's symptoms, one feature's fields, a list
   of questions, an errand list with a single code word, and work the request itself splits keep their routes.
 
+- **A dag-ulw node can say what the parent will look for in its work.** A node takes an optional `review_focus`, one
+  line of up to 400 characters such as "the 24px toolbar icon is still recognizable". The node's task shows it right
+  after the prompt, and a verify node's task lists each producer's focus so the verifier judges the same things. A
+  build node that writes code without one gets a `no_review_focus` lint, which is advice only. Every build node with a
+  write scope is also told that other agents share the machine: run only the builds and tests it needs at once, and
+  before it stops, stop the background jobs it started and remove the temporary files it created.
+
 - **A dag-ulw node that writes files is told to commit only its own paths.** Its task text now says to stage the
   paths in its SCOPE by name and never to run `git add -A`, `git add .`, `git commit -a` or `git stash`, so parallel
   nodes in one checkout stop committing each other's work. Verify, review and read-only nodes get no such line. This

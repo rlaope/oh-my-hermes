@@ -178,7 +178,7 @@ OMH_DAG_SCHEMA = {
     "description": (
         "Keep a dag-ulw run: small nodes the parent dispatches via delegate_task. define records nodes "
         "(id, label, category, prompt with TASK / DELIVERABLE / SCOPE / VERIFY / STOP WHEN, depends_on, "
-        "write_scope, role, owner, local, read_only, identity) and refuses cycles, unknown or self-edges, write scopes shared without an edge, more "
+        "write_scope, role, owner, local, read_only, identity, review_focus) and refuses cycles, unknown or self-edges, write scopes shared without an edge, more "
         "than 48 nodes, and prompts naming none of the markers; a one-shot session caps nodes at "
         "delegation.oneshot_max_children. Lint is advice. ready returns delegate_task calls per category "
         "within the free slots: route each via omh_delegate_route, then delegate_task unchanged. After each "
@@ -219,6 +219,8 @@ OMH_DAG_SCHEMA = {
                         "read_only": {"type": "boolean"},
                         "identity": {"type": "string",
                                      "description": "Optional identity reference: builtin:<name> or custom:<name>."},
+                        "review_focus": {"type": "string", "description": "What the parent will look for when it "
+                                                                          "reads this node's work."},
                     },
                     "required": ["id", "label", "category", "prompt"],
                 },
@@ -1468,11 +1470,17 @@ def export_units(record: Mapping[str, Any], derived: Mapping[str, Mapping[str, A
 
 def export_goal(record: Mapping[str, Any], units: list[dict[str, Any]]) -> str:
     """The goal text frozen into the contract: the run's goal, then each unit's own instructions under its id."""
-    prompts = {str(node["id"]): str(node["prompt"]) for node in record["nodes"]}
+    nodes = {str(node["id"]): node for node in record["nodes"]}
     lines = [f"dag-ulw run {record['name']}: {record.get('goal') or record['name']}",
              "Each unit's instructions follow under its unit id; do only your own unit's."]
     for unit in units:
-        lines += ["", f"## {unit['unit_id']}", prompts[unit["unit_id"]]]
+        node = nodes[unit["unit_id"]]
+        lines += ["", f"## {unit['unit_id']}", str(node["prompt"])]
+        # An exported builder gets the focus the verifier will judge it on, as a native one does in `task_for`.
+        # The shared-machine line is not repeated here: the fanout unit prompt carries its own
+        # (`unit.shared_machine`), and a second copy in the goal section was the g62 verifier's duplicate.
+        if node.get("review_focus"):
+            lines.append(f"{dag_run.REVIEW_FOCUS_PREFIX}{node['review_focus']}")
     return "\n".join(lines)
 
 
