@@ -28,6 +28,7 @@ import { useEdgeFade } from "./edgeFade";
 import { SplitDivider, useSideSplit } from "./SideSplit";
 import { useAutoSplit } from "./autoSplit";
 import { TasksBar } from "../tasks/TasksBar";
+import { DiskChip } from "./DiskChip";
 
 const sessionBackground = (target: EventTarget) => target instanceof Element && !target.closest(".ss-row, button, input, textarea, select, a, [contenteditable], [role=menu], [role=menuitem]");
 
@@ -180,6 +181,8 @@ export function Sidebar() {
       )}
       <Dock above={needle ? [] : above} />
       <div className="side-foot">
+        {/* little disk space left on the home folder's volume (src/lib/disk.ts); nothing while it is fine */}
+        <DiskChip />
         {/* one compact row: Automations, Plugins and Settings as icon buttons (their names in the tooltip and to a
             screen reader), the usage marks after them */}
         <div className="foot-row" data-testid="foot-row">
