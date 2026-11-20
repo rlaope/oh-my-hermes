@@ -98,6 +98,93 @@
   color: var(--muted);
   font-size: 12px;
 }
+/* the timeline's way back (TimelineJump.tsx): 0-high sticky anchors at the top and the bottom of the column, so the
+   pinned own message and the Jump to bottom pill take no room and never move the messages (the column's gap is undone) */
+.thread > .tl-anchor {
+  position: sticky;
+  height: 0;
+  z-index: 3;
+  pointer-events: none;
+}
+.thread > .tl-anchor-top {
+  top: -18px;
+  margin-bottom: -18px;
+}
+.thread > .tl-anchor-bottom {
+  bottom: -20px;
+  margin-top: -18px;
+}
+/* the top edge fades the messages under it; with the header there, it sits on a solid band instead */
+.thread.pin-on {
+  mask-image: none;
+}
+.tl-pin {
+  pointer-events: auto;
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  display: flex;
+  justify-content: flex-end;
+  padding: 6px 0 8px;
+  background: linear-gradient(to bottom, var(--bg) 70%, transparent);
+  font: inherit;
+  cursor: pointer;
+  animation: pop 0.16s ease both;
+}
+.tl-pin-t {
+  max-width: min(70%, 560px);
+  padding: 3px 10px;
+  border-radius: var(--r);
+  background: var(--raise2);
+  color: var(--muted);
+  font-size: 12px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.tl-pin:hover .tl-pin-t {
+  color: var(--body);
+}
+.tl-jump {
+  pointer-events: auto;
+  position: absolute;
+  /* centred without a transform: the pop animation owns transform */
+  left: 0;
+  right: 0;
+  bottom: 32px;
+  width: max-content;
+  margin: 0 auto;
+  padding: 5px 12px;
+  border-radius: var(--r);
+  /* the raised segment surface, not the bubbles' grey: it has to read over a bot bubble */
+  background: var(--seg-on);
+  color: var(--ink);
+  font: inherit;
+  font-size: 12px;
+  white-space: nowrap;
+  /* lifted by a soft shadow only: no ring */
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.28);
+  cursor: pointer;
+  animation: pop 0.16s ease both;
+}
+.tl-jump:hover {
+  color: var(--accent);
+}
+.tl-jump:focus-visible,
+.tl-pin:focus-visible .tl-pin-t {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+.thread:focus {
+  outline: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  .tl-pin,
+  .tl-jump {
+    animation: none;
+  }
+}
 /* consecutive messages from the same side sit close; a new turn gets air */
 .row-user + .row-user,
 .row-assistant + .row-assistant,

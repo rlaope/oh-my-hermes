@@ -62,7 +62,8 @@ export function leaveIn(groups: SplitGroup[], id: string): { groups: SplitGroup[
   const g = groupOf(groups, id);
   if (n === null || !g) return { groups, heir: null };
   const { layout, heir } = removePane(g.layout, n);
-  const next = groups.map((x) => (x === g ? { ...x, layout: layout ?? x.layout } : x));
+  // a pane leaving a zoomed split shows every pane again (tmux): the zoom was the focused pane's, and the layout changed
+  const next = groups.map((x) => (x === g ? { layout: layout ?? x.layout } : x));
   return { groups: tidy(layout ? next : groups.filter((x) => x !== g)), heir: heir === null ? null : sessionOf(heir) };
 }
 
@@ -89,11 +90,12 @@ function inGroup(groups: SplitGroup[], id: string, fn: (g: SplitGroup) => SplitG
   return g ? groups.map((x) => (x === g ? fn(x) : x)) : groups;
 }
 
-/** `id`'s pane trades places with the pane beside it in direction `dir`. */
+/** `id`'s pane trades places with the pane beside it in direction `dir`. A zoomed split shows every pane again (the
+ *  move is seen, not made behind the zoom). */
 export const moveIn = (groups: SplitGroup[], id: string, dir: FocusDir): SplitGroup[] =>
   inGroup(groups, id, (g) => {
     const to = neighbor(g.layout, paneOf(id)!, dir);
-    return to === null ? g : { ...g, layout: swapPanes(g.layout, paneOf(id)!, to) };
+    return to === null ? g : { layout: swapPanes(g.layout, paneOf(id)!, to) };
   });
 
 export const ratioIn = (groups: SplitGroup[], id: string, path: string, ratio: number): SplitGroup[] => inGroup(groups, id, (g) => ({ ...g, layout: setRatioAt(g.layout, path, ratio) }));
@@ -182,13 +184,15 @@ export function paneKeyIn(groups: SplitGroup[], id: string, k: PaneKey): { group
       const r = leaveIn(groups, id);
       return { groups: r.groups, focus: r.heir, took: true };
     }
+    // a zoomed split stays zoomed and the zoom goes with the keyboard: the split draws the focused pane's part
+    // (SplitView), so typing never goes to a pane behind the zoom
     case "focus": {
       const to = neighbor(g.layout, n, k.dir);
-      return to === null ? { ...none, took: true } : { groups: zoomIn(groups, id, false), focus: sessionOf(to), took: true };
+      return to === null ? { ...none, took: true } : { groups, focus: sessionOf(to), took: true };
     }
     case "step": {
       const to = stepPane(g.layout, n, k.step);
-      return to === null ? { ...none, took: true } : { groups: zoomIn(groups, id, false), focus: sessionOf(to), took: true };
+      return to === null ? { ...none, took: true } : { groups, focus: sessionOf(to), took: true };
     }
     case "move":
       return { groups: moveIn(groups, id, k.dir), focus: null, took: true };
