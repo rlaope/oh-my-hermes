@@ -19,6 +19,8 @@ export const TERM_LINE_HEIGHT = { min: 1, max: 2 } as const;
 export const TERM_PADDING = { min: 0, max: 24 } as const;
 /** How bright a split pane without the keyboard stays (Otty's unfocused-split-opacity, Orca's inactivePaneOpacity). */
 export const TERM_DIM = { min: 0.5, max: 1 } as const;
+/** The undo window after closing a TERMINALS row, in seconds (0: Off, the row's program ends at once). */
+export const TERM_UNDO_CLOSE: readonly number[] = [0, 5, 10];
 
 export interface TermSettings {
   /** Theme ids from the catalog, one per app theme. */
@@ -59,6 +61,8 @@ export interface TermSettings {
   keepHistory: boolean;
   /** How bright a split pane without the keyboard stays, TERMINALS and the bottom panel alike (1: not dimmed). */
   dimUnfocused: number;
+  /** Seconds a closed TERMINALS row's program keeps running so the close can be undone (closeGrace.ts); 0 = Off. */
+  undoClose: number;
 }
 
 export const TERM_KEY = "omher.term";
@@ -83,6 +87,7 @@ export const TERM_DEFAULTS: TermSettings = {
   confirmPaste: true,
   keepHistory: true,
   dimUnfocused: 0.72,
+  undoClose: 10,
 };
 
 const num = (v: unknown, lo: number, hi: number, d: number) => (typeof v === "number" && Number.isFinite(v) ? Math.min(hi, Math.max(lo, v)) : d);
@@ -125,6 +130,7 @@ export function parseTermSettings(raw: unknown): TermSettings {
     confirmPaste: bool(o.confirmPaste, d.confirmPaste),
     keepHistory: bool(o.keepHistory, d.keepHistory),
     dimUnfocused: Math.round(num(o.dimUnfocused, TERM_DIM.min, TERM_DIM.max, d.dimUnfocused) * 100) / 100,
+    undoClose: TERM_UNDO_CLOSE.includes(o.undoClose as number) ? (o.undoClose as number) : d.undoClose,
   };
 }
 
