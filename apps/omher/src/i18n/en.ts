@@ -940,6 +940,9 @@ export const en = {
   "note.session.failed": "{name} could not start",
   "note.session.bell": "{name} wants your attention",
   "note.session.bellBody": "It rang its terminal's bell.",
+  "note.waiting": "It is waiting for you.",
+  "set.notifyErrors": "Also notify on errors",
+  "set.notifyErrorsHint": "Off: a turn that ends with an error only marks its chat",
 
   // right panel, sessions, routines, runs drawer, setup gate (i18n 0.2.5)
   "pn.panel": "Panel",

@@ -938,6 +938,9 @@ export const ja: Record<Key, string> = {
   "note.session.failed": "{name} のセッションを開始できませんでした",
   "note.session.bell": "{name} のセッションが確認を待っています",
   "note.session.bellBody": "ターミナルのベルを鳴らしました。",
+  "note.waiting": "あなたを待っています。",
+  "set.notifyErrors": "エラーも通知",
+  "set.notifyErrorsHint": "オフのとき、エラーで終わったターンはチャットに印を付けるだけです",
 
   // right panel, sessions, routines, runs drawer, setup gate (i18n 0.2.5)
   "pn.panel": "パネル",

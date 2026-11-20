@@ -5,7 +5,7 @@ import { useEffect, useState } from "react";
 import "./settings.css";
 import type { SlotProps } from "../features";
 import type { Bot, ModelOptions } from "../lib/protocol";
-import { getStore, notifyEnabled, setNotifyEnabled, useStore } from "../state/store";
+import { getStore, notifyEnabled, notifyErrorsEnabled, setNotifyEnabled, setNotifyErrorsEnabled, useStore } from "../state/store";
 import { addToList } from "../addbot/bots";
 import { appSounds, setSoundsEnabled, soundsEnabled } from "../lib/sounds";
 import { LANG_NAMES, LANGS, t, type Key, type Lang } from "../i18n";
@@ -392,6 +392,26 @@ function NotifySeg() {
   );
 }
 
+function NotifyErrorsSeg() {
+  const [on, setOn] = useState(notifyErrorsEnabled());
+  return (
+    <Seg
+      small
+      label={t("set.notifyErrors")}
+      value={on ? "on" : "off"}
+      options={[
+        { value: "on", label: t("set.on") },
+        { value: "off", label: t("set.off") },
+      ]}
+      onChange={(v) => {
+        setNotifyErrorsEnabled(v === "on");
+        setOn(v === "on");
+      }}
+      testId="notify-errors-seg"
+    />
+  );
+}
+
 function SoundsSeg() {
   const [on, setOn] = useState(soundsEnabled());
   return (
@@ -444,6 +464,9 @@ function GeneralPage() {
       <div className="st-grp">
         <Row title={t("set.notify")} hint={t("set.notifyHint")}>
           <NotifySeg />
+        </Row>
+        <Row title={t("set.notifyErrors")} hint={t("set.notifyErrorsHint")}>
+          <NotifyErrorsSeg />
         </Row>
         <Row title={t("sounds.title")} hint={t("sounds.hint")}>
           <SoundsSeg />

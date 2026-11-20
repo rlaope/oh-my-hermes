@@ -330,8 +330,9 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
     const r = rec(id);
     if (!r || watching(id)) return;
     flag(id, "end");
-    // `told`: the turn that failed with it already raised a notification with the same reason
-    if (!told) notifyState?.(id, { kind, name: nameOf(r), ...detail });
+    // `told`: the turn that failed with it said the same reason (a notification only with "Also notify on errors");
+    // `ms`: a program that ends within its first seconds did not really run
+    notifyState?.(id, { kind, name: nameOf(r), ...detail, ms: Date.now() - r.startedAt, told });
   };
   const patchRec = (id: string, p: Partial<SessionRec>) => set({ list: state.list.map((s) => (s.id === id ? { ...s, ...p } : s)) });
   let titles = readTitles();

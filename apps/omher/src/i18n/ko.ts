@@ -938,6 +938,9 @@ export const ko: Record<Key, string> = {
   "note.session.failed": "{name} 세션을 시작하지 못했어요",
   "note.session.bell": "{name} 세션이 확인을 기다려요",
   "note.session.bellBody": "터미널 벨을 울렸어요.",
+  "note.waiting": "기다리고 있어요.",
+  "set.notifyErrors": "오류도 알림",
+  "set.notifyErrorsHint": "끄면 오류로 끝난 턴은 대화에 표시만 해요",
 
   // right panel, sessions, routines, runs drawer, setup gate (i18n 0.2.5)
   "pn.panel": "패널",
