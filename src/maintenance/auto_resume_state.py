@@ -16,6 +16,7 @@ from pathlib import Path
 from typing import Any
 
 from ..local_store import atomic_write_json, read_json_object_result
+from ..plugin_bundle.omh.iso_datetime import strict_fromisoformat
 
 AUTO_RESUME_POLICY_SCHEMA_VERSION = "omh_auto_resume_policy/v1"
 AUTO_RESUME_MODES = ("on", "off")
@@ -63,7 +64,7 @@ def auto_resume_enabled(omh_home: str | Path, environ: Mapping[str, str]) -> boo
 
 def _age_seconds(stamp: str, now: datetime) -> float | None:
     try:
-        moment = datetime.fromisoformat(stamp.replace("Z", "+00:00"))
+        moment = strict_fromisoformat(stamp.replace("Z", "+00:00"))
     except ValueError:
         return None
     if moment.tzinfo is None:

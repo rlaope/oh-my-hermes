@@ -52,6 +52,8 @@ import sys
 import time
 from typing import Any, TypeVar
 
+from ..plugin_bundle.omh.iso_datetime import strict_fromisoformat
+
 try:
     import fcntl
 except ImportError:  # Windows
@@ -211,7 +213,7 @@ def _stamp(moment: datetime) -> str:
 
 def _parsed(stamp: str) -> datetime | None:
     try:
-        moment = datetime.fromisoformat(stamp.replace("Z", "+00:00"))
+        moment = strict_fromisoformat(stamp.replace("Z", "+00:00"))
     except ValueError:
         return None
     return moment if moment.tzinfo is not None else moment.replace(tzinfo=timezone.utc)

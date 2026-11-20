@@ -431,7 +431,13 @@ class LivePidsTests(LiveSessionsCase):
                   "time.sleep(60)")
         child = subprocess.Popen([sys.executable, "-c", script, str(self.omh_home), self.hermes_home],
                                  stdout=subprocess.PIPE, text=True)
-        self.addCleanup(lambda: child.poll() is None and (child.kill(), child.wait()))
+
+        def kill_child() -> None:
+            if child.poll() is None:
+                child.kill()
+                child.wait(timeout=10)
+
+        self.addCleanup(kill_child)
         self.assertEqual(child.stdout.readline().strip() if child.stdout else "", "up")
         if child.stdout:
             child.stdout.close()

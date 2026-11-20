@@ -452,7 +452,12 @@ class InteractiveShellTests(unittest.TestCase):
 
     def test_a_dead_pid_among_live_ones_wakes_the_shell(self) -> None:
         gone = subprocess.Popen([sys.executable, "-c", "pass"])
-        gone.wait(timeout=30)
+        try:
+            gone.wait(timeout=30)
+        finally:
+            if gone.poll() is None:
+                gone.kill()
+                gone.wait(timeout=10)
 
         def mixed(omh: Path) -> None:
             (omh / "tui" / "live-pids").write_text(f"- {os.getpid()} {gone.pid}\n", encoding="ascii")
@@ -464,7 +469,12 @@ class InteractiveShellTests(unittest.TestCase):
 
     def test_the_first_word_is_the_boot_and_never_checked_as_a_pid(self) -> None:
         gone = subprocess.Popen([sys.executable, "-c", "pass"])
-        gone.wait(timeout=30)
+        try:
+            gone.wait(timeout=30)
+        finally:
+            if gone.poll() is None:
+                gone.kill()
+                gone.wait(timeout=10)
 
         def dead_boot_word(omh: Path) -> None:  # a gone pid in the boot slot is a boot word, not a pid
             (omh / "tui" / "live-pids").write_text(f"{gone.pid} {os.getpid()}\n", encoding="ascii")
