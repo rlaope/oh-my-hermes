@@ -11,9 +11,19 @@ when none of `OMH_AUTO_RESUME_DONE`, `HERMES_SESSION_ID`, `OMH_TUI_SESSION_FILE`
 or `CI` is set, it exports `OMH_AUTO_RESUME_DONE=1` (so a nested shell does
 nothing) and looks, with the shell's own builtins, for a session to reopen:
 the pending marker `<omh_home>/tui/resume-pending` (some session was dropped),
-or a pid in `<omh_home>/tui/live-pids` (the TUIs recorded as running) that no
-longer runs, which is how a TUI killed outright (SIGKILL, power loss) shows
-before anything has swept it (`tui/live_sessions.py`). No process starts
+or a pid in `<omh_home>/tui/live-pids` (the TUIs recorded as running, after
+the boot they ran on) that no longer runs, which is how a TUI killed outright
+(SIGKILL, power loss) shows before anything has swept it
+(`tui/live_sessions.py`). Where `/proc/sys/kernel/random/boot_id` can be read
+(Linux), zsh and bash also wake when it differs from the recorded boot, so a
+pid a new boot reused does not hide a TUI the reboot ended. macOS and
+PowerShell have no boot source a builtin can read and keep the pid check
+alone: after a reboot that hands a recorded pid to a live process, the hook
+stays quiet and a later terminal, or a bare `omh` (which sweeps by boot),
+reopens the session. `kill -0` cannot tell a pid that is gone from one another
+user now holds; the second also wakes, and `shell-start` then finds nothing
+and exits at once (the file lists only this user's TUIs, so that needs a
+recycled pid). No process starts
 unless one of the two holds and `omh` is on PATH. Then, at the first prompt,
 it runs `omh --omh-home <home> auto-resume shell-start`, which reopens the
 session this terminal dropped, or exits at once:
@@ -57,6 +67,9 @@ NEW_RC_MODE = 0o644
 MAX_RC_BYTES = 4 * 1024 * 1024
 PENDING_MARKER_PARTS = ("tui", "resume-pending")
 LIVE_PIDS_PARTS = ("tui", "live-pids")
+# Linux's boot id, read by the POSIX blocks with `read` when it exists; the store writes the same id verbatim as the
+# first word of `live-pids`. A module constant only so tests can point a rendered block at a fake boot file.
+LINUX_BOOT_ID_FILE = "/proc/sys/kernel/random/boot_id"
 
 
 class ShellHookError(ValueError):
@@ -138,27 +151,38 @@ def _ps_quote(text: str) -> str:
     return "'" + text.replace("'", "''") + "'"
 
 
-def _posix_wake(marker: str, live_pids: str, split: str) -> list[str]:
-    """Lines that set `_omh_wake` when the marker exists or a pid in `live_pids` no longer runs, by builtins only
-    (`read`, `kill -0`): no process starts here. `split` is how the shell word-splits `$_omh_pids`. A word that is
-    not a plain decimal of at most nine digits is skipped. `kill -0` failing for a pid another user now holds also
-    wakes: the TUI that wrote it is gone either way."""
+def _posix_wake(marker: str, live_pids: str, boot_file: str, split: str) -> list[str]:
+    """Lines that set `_omh_wake` when the marker exists, when `boot_file` reads as a boot other than the one
+    `live_pids` recorded, or when a pid in `live_pids` no longer runs, by builtins only (`read`, `kill -0`): no
+    process starts here. `live_pids` is `<boot> <pid> ...`; a recorded boot of `-` (unknown) or an unreadable
+    `boot_file` (not Linux) leaves the pid check alone. `split` is how the shell word-splits `$_omh_pids`. A word
+    that is not a plain decimal of at most nine digits is skipped. `kill -0` failing for a pid another user now
+    holds also wakes: the TUI that wrote it is gone either way, and `shell-start` finds nothing to reopen."""
     return [
-        "  _omh_wake= _omh_pids=",
+        "  _omh_wake= _omh_pids= _omh_rec= _omh_boot=",
         f"  if [[ -e {_sh_quote(marker)} ]]; then",
         "    _omh_wake=1",
         f"  elif [[ -f {_sh_quote(live_pids)} ]]; then",
         f"    read -r _omh_pids < {_sh_quote(live_pids)} || :",
-        f"    for _omh_p in {split}; do",
-        '      [[ $_omh_p == [0-9]* && $_omh_p != *[!0-9]* && ${#_omh_p} -le 9 ]] || continue',
-        "      kill -0 \"$_omh_p\" 2>/dev/null || { _omh_wake=1; break; }",
-        "    done",
+        "    _omh_rec=${_omh_pids%% *}",
+        "    if [[ $_omh_pids == *' '* ]]; then _omh_pids=${_omh_pids#* }; else _omh_pids=; fi",
+        f"    if [[ -n $_omh_rec && $_omh_rec != - && -r {_sh_quote(boot_file)} ]]; then",
+        f"      read -r _omh_boot < {_sh_quote(boot_file)} || :",
+        '      [[ -n $_omh_boot && $_omh_boot != "$_omh_rec" ]] && _omh_wake=1',
+        "    fi",
+        "    if [[ -z $_omh_wake ]]; then",
+        f"      for _omh_p in {split}; do",
+        '        [[ $_omh_p == [0-9]* && $_omh_p != *[!0-9]* && ${#_omh_p} -le 9 ]] || continue',
+        "        kill -0 \"$_omh_p\" 2>/dev/null || { _omh_wake=1; break; }",
+        "      done",
+        "    fi",
         "  fi",
     ]
 
 
 def render_block(shell: str, omh_home: str | Path) -> list[str]:
     """The block's lines, markers included, for `shell` and this OMH home (absolute)."""
+    boot_file = _printable(Path(LINUX_BOOT_ID_FILE), "boot id")
     home = Path(os.path.abspath(omh_home))
     home_text = _printable(home, "OMH home")
     marker = _printable(marker_path(home), "pending marker")
@@ -170,7 +194,7 @@ def render_block(shell: str, omh_home: str | Path) -> list[str]:
         body = [
             f'if [[ -o interactive && -z "{unset}" ]]; then',
             "  export OMH_AUTO_RESUME_DONE=1",
-            *_posix_wake(marker, live_pids, "${=_omh_pids}"),
+            *_posix_wake(marker, live_pids, boot_file, "${=_omh_pids}"),
             "  if [[ -n $_omh_wake ]] && (( $+commands[omh] )); then",
             "    _omh_auto_resume_history() {",
             "      add-zsh-hook -d zshaddhistory _omh_auto_resume_history",
@@ -185,7 +209,7 @@ def render_block(shell: str, omh_home: str | Path) -> list[str]:
             "    autoload -Uz add-zle-hook-widget add-zsh-hook && zle -N _omh_auto_resume &&",
             "      add-zle-hook-widget zle-line-init _omh_auto_resume",
             "  fi",
-            "  unset _omh_wake _omh_pids _omh_p",
+            "  unset _omh_wake _omh_pids _omh_p _omh_rec _omh_boot",
             "fi",
         ]
     elif shell == "bash":
@@ -194,7 +218,7 @@ def render_block(shell: str, omh_home: str | Path) -> list[str]:
         body = [
             f'if [[ $- == *i* && -z "{unset}" ]]; then',
             "  export OMH_AUTO_RESUME_DONE=1",
-            *_posix_wake(marker, live_pids, "$_omh_pids"),
+            *_posix_wake(marker, live_pids, boot_file, "$_omh_pids"),
             '  if [[ -n $_omh_wake ]] && command -v omh >/dev/null 2>&1; then',
             "    _omh_auto_resume() {",
             '      [[ -n "${_omh_auto_resume_ran-}" ]] && return 0',
@@ -221,7 +245,7 @@ def render_block(shell: str, omh_home: str | Path) -> list[str]:
             "      PROMPT_COMMAND=_omh_auto_resume",
             "    fi",
             "  fi",
-            "  unset _omh_wake _omh_pids _omh_p",
+            "  unset _omh_wake _omh_pids _omh_p _omh_rec _omh_boot",
             "fi",
         ]
     elif shell == "powershell":
@@ -232,7 +256,7 @@ def render_block(shell: str, omh_home: str | Path) -> list[str]:
             "  $env:OMH_AUTO_RESUME_DONE = '1'",
             f"  if (((Test-Path -LiteralPath {_ps_quote(marker)}) -or (& {{",
             f"        $line = Get-Content -LiteralPath {_ps_quote(live_pids)} -TotalCount 1 -ErrorAction SilentlyContinue",
-            "        foreach ($id in \"$line\" -split ' ') {",
+            "        foreach ($id in (\"$line\" -split ' ' | Select-Object -Skip 1)) {",
             "          if ($id -match '^[0-9]{1,9}$' -and -not (Get-Process -Id $id -ErrorAction SilentlyContinue)) {",
             "            return $true",
             "          }",

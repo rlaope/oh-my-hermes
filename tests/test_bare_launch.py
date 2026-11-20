@@ -592,6 +592,99 @@ class ClaimedHomeTests(unittest.TestCase):
         args, _paths = self.claim(["-p", "default"])
         self.assertEqual((args.tui_resume, args.tui_resume_home), ("root-1", str(self.hermes)))
 
+    def ineligible_own_home(self):
+        """The real builder, with a root config that connects a messaging platform: the own home is refused."""
+        (self.hermes / "config.yaml").write_text("platforms:\n  telegram:\n    token: fake-local-fixture\n",
+                                                 encoding="utf-8")
+
+    def test_an_own_home_the_safeguard_refuses_is_never_claimed_from(self) -> None:
+        # R3 (R2-B3): eligibility is decided before the claim, so the drop stays for a launch that can open it.
+        from omh.skin_pack import write_runtime_choice
+
+        write_runtime_choice(self.omh, "shared")
+        self.ineligible_own_home()
+        self.write_store([("own-1", self.own)])
+        args, paths = self.claim([])
+        self.assertIsNone(args.tui_resume)
+        self.assertIsNone(getattr(args, "tui_resume_home", None))
+        self.assertEqual(self.states(), {"own-1": "dropped"})
+        self.assertTrue((self.omh / "tui" / "resume-pending").exists())
+
+    def test_an_own_home_that_cannot_be_built_is_never_claimed_from(self) -> None:
+        from omh.tui import own_runtime
+
+        self.write_store([("own-1", self.own)])
+        for error in (OSError("read-only"), ValueError("not UTF-8")):
+            with self.subTest(error=type(error).__name__), \
+                    patch.object(own_runtime, "build_tui_home", side_effect=error):
+                args, _paths = self.claim([])
+                self.assertIsNone(args.tui_resume)
+                self.assertEqual(self.states(), {"own-1": "dropped"})
+
+    def test_a_shared_home_drop_is_still_claimed_when_the_own_home_is_refused(self) -> None:
+        from omh.commands import bare_launch
+
+        self.ineligible_own_home()
+        self.write_store([("root-1", self.hermes), ("own-1", self.own)])
+        args, paths = self.claim([])
+        self.assertEqual((args.tui_resume, args.tui_resume_home), ("root-1", str(self.hermes)))
+        self.assertEqual(self.states(), {"root-1": "resumed", "own-1": "dropped"})
+        with redirect_stderr(io.StringIO()):
+            self.assertIsNone(bare_launch._own_runtime_home(args, paths))
+        self.assertEqual(args.tui_resume, "root-1")
+
+    def test_the_own_home_is_built_once_for_the_claim_and_the_launch(self) -> None:
+        from types import SimpleNamespace
+
+        from omh.commands import bare_launch
+        from omh.tui import own_runtime
+
+        self.write_store([("own-1", self.own)])
+        built = SimpleNamespace(path=self.own, config_platform_credentials=(), overwritten=("config.yaml",))
+        stderr = io.StringIO()
+        with patch.object(own_runtime, "build_tui_home", return_value=built) as build, redirect_stderr(stderr):
+            args = bare_launch_args([])
+            paths = bare_launch._paths(args)
+            bare_launch._claim_dropped_session(args, paths, {"TMUX_PANE": "%4"})
+            self.assertEqual(bare_launch._own_runtime_home(args, paths), self.own)
+        self.assertEqual(build.call_count, 1)
+        self.assertEqual(args.tui_resume, "own-1")
+        self.assertEqual(stderr.getvalue().count("had been changed"), 1)
+
+    def test_nothing_is_built_while_no_own_home_drop_waits(self) -> None:
+        from omh.commands import bare_launch
+        from omh.tui import own_runtime
+
+        self.write_store([("root-1", self.hermes)])
+        with patch.object(own_runtime, "build_tui_home", side_effect=AssertionError("built")):
+            args, _paths = self.claim([])
+        self.assertEqual(args.tui_resume, "root-1")
+        self.assertFalse(hasattr(args, bare_launch._OWN_HOME_PREPARED))
+
+    def test_a_claim_the_launch_cannot_open_after_all_is_released_and_a_new_session_opens(self) -> None:
+        # Eligible when claimed, refused when the launch builds again (the root config changed in between, here
+        # by clearing the kept answer): the claim goes back to `dropped` and the id goes to no other home.
+        from omh.commands import bare_launch
+        from omh.tui import own_runtime
+        from types import SimpleNamespace
+
+        self.write_store([("own-1", self.own)])
+        ok = SimpleNamespace(path=self.own, config_platform_credentials=(), overwritten=())
+        with patch.object(own_runtime, "build_tui_home", return_value=ok):
+            args, paths = self.claim([])
+        self.assertEqual((args.tui_resume, self.states()), ("own-1", {"own-1": "resumed"}))
+        delattr(args, bare_launch._OWN_HOME_PREPARED)
+        self.ineligible_own_home()
+        stderr = io.StringIO()
+        with redirect_stderr(stderr):
+            self.assertIsNone(bare_launch._own_runtime_home(args, paths))
+        self.assertIsNone(args.tui_resume)
+        self.assertIsNone(args.tui_resume_home)
+        self.assertEqual(self.states(), {"own-1": "dropped"})
+        self.assertTrue((self.omh / "tui" / "resume-pending").exists())
+        self.assertIn("opening a new session", stderr.getvalue())
+        self.assertNotIn("--resume", bare_launch._hermes_passthrough_argv(args, tui=True))
+
     def test_a_named_profile_searches_only_that_profile(self) -> None:
         self.write_store([("root-1", self.hermes), ("own-1", self.own), ("sticky-1", self.sticky)])
         args, _paths = self.claim(["-p", "work"])

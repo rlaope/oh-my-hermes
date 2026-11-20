@@ -570,8 +570,10 @@ or `/resume` moving away, a relaunch for an update. It never reopens by
 itself. A terminal hang-up (SIGHUP), SIGTERM, SIGBREAK, an uncaught crash, or a
 TUI whose process is gone (killed, power loss: a different boot or a pid that
 no longer runs) is dropped. `resume-pending` beside the record exists while a
-dropped session waits, and `live-pids` lists the pids of the TUIs recorded as
-running, so a TUI killed outright shows before anything sweeps it. A dropped session reopens once: the reopen marks it
+dropped session waits, and `live-pids` holds, on one line, the boot its writer
+ran on (spaces removed, `-` when unknown; on Linux the kernel's boot id
+verbatim) and then the pids of the TUIs recorded as running, so a TUI killed
+outright shows before anything sweeps it. A dropped session reopens once: the reopen marks it
 `resumed` under the record's lock before Hermes opens it, so a resume Hermes
 refuses is not tried again.
 
@@ -579,8 +581,13 @@ A bare `omh`, on by default, reopens the session this terminal dropped, or
 else, outside omher, the newest one dropped in this folder, within 72 hours, in
 a Hermes home this launch opens: the one Hermes' launcher picks (`-p NAME`'s
 profile, `-p default` the root, else the sticky `active_profile`, else the
-resolved home) and the TUI's own runtime home. A session in any other home is
-left for a launch that opens there. It runs at once, in the home it was
+resolved home) and the TUI's own runtime home when this launch can open it now
+(it builds, and the root config names no messaging token under `platforms:`;
+this is decided before anything is claimed). A session in any other home is
+left for a launch that opens there. Should the claimed home still fail to open
+after the claim, the claim is given back (the session is dropped again and
+`resume-pending` re-armed) and a new session opens; the id is never sent to
+another home. It runs at once, in the home it was
 recorded in, as `omh --resume <id>` would, and says so in one stderr line naming the session
 and `omh --new`. A session nothing was said in is skipped (Hermes keeps no
 such session). It applies only on a terminal and only when the launch names no
@@ -605,7 +612,16 @@ and `CI` is set, exports `OMH_AUTO_RESUME_DONE=1` (a nested shell does
 nothing) and looks with the shell's own builtins for `resume-pending`, or for
 a pid in `live-pids` that no longer runs (`read`, `kill -0`; PowerShell
 `Get-Process`), so no process starts while nothing waits and every recorded
-TUI still runs. When one holds and `omh` is on PATH, the first prompt runs
+TUI still runs. Where `/proc/sys/kernel/random/boot_id` can be read (Linux),
+the zsh and bash blocks also wake when it differs from the boot `live-pids`
+recorded, so a pid the new boot reused does not hide a TUI the reboot ended.
+macOS has no boot source a builtin can read, and the PowerShell block keeps the
+pid check too: after a reboot that hands a recorded pid to a live process, the
+hook stays quiet, and a later terminal, once that pid is gone, or a bare `omh`
+(which sweeps by boot) reopens the session. `kill -0` also fails for a pid
+another user now holds; that wakes the hook too, and `shell-start` finds
+nothing and exits 0 at once. The file lists only this user's TUIs, so that
+takes a recycled pid. When one holds and `omh` is on PATH, the first prompt runs
 `omh --omh-home <home> auto-resume shell-start`: zsh from its first
 `zle-line-init`, kept out of the history by a one-shot `zshaddhistory` hook
 that changes no history option, bash from its first `PROMPT_COMMAND` with both ends

@@ -25,8 +25,10 @@ under `live-sessions.lock` (fcntl on POSIX, msvcrt on Windows), waited for at
 most `LOCK_WAIT_SECONDS` and then given up. Two small files beside it let a
 shell decide without Python whether a sweep could find anything:
 `resume-pending` exists exactly when some entry is `dropped`, and `live-pids`
-holds the pids of every live owner on one line (gone when there is none), so
-a pid no longer running there means a TUI vanished without a word. Every
+holds, on one line, the boot its writer ran on (`boot_identity()` without
+spaces, `-` when unknown) and then the pids of every live owner (gone when
+there is none), so a pid no longer running there, or on Linux a boot id other
+than the recorded one, means a TUI vanished without a word. Every
 function is best effort: an unreadable, corrupt, oversized or non-regular file
 (a symlink, a FIFO) reads as empty and is never opened in a way that could
 block, the small files are only ever replaced atomically or removed, and no OS
@@ -331,16 +333,24 @@ def _publish(path: Path, data: bytes | None) -> None:
         pass
 
 
-def _live_pids(entries: list[dict[str, Any]]) -> bytes | None:
+def boot_word(boot: str) -> str:
+    """`boot` as the first word of `LIVE_PIDS_FILE`: its spaces removed, `-` when unknown or not printable ASCII.
+    On Linux it is the boot id verbatim, which the shell hook compares with `/proc/sys/kernel/random/boot_id`."""
+    word = "".join(boot.split())
+    return word if word and word.isascii() and word.isprintable() else "-"
+
+
+def _live_pids(entries: list[dict[str, Any]], boot: str) -> bytes | None:
+    """`<boot> <pid> <pid> ...` for every live owner (all on `boot`: the sweep before it removed the others)."""
     pids = sorted({owner["pid"] for entry in entries if entry["state"] == LIVE for owner in entry["owners"]})
-    return (" ".join(map(str, pids)) + "\n").encode("ascii") if pids else None
+    return (" ".join([boot_word(boot), *map(str, pids)]) + "\n").encode("ascii") if pids else None
 
 
-def _sync_files(directory: Path, entries: list[dict[str, Any]]) -> None:
-    """`PENDING_MARKER` exists iff some entry is `dropped`; `LIVE_PIDS_FILE` names every live owner's pid, or is
-    gone when none is left."""
+def _sync_files(directory: Path, entries: list[dict[str, Any]], boot: str) -> None:
+    """`PENDING_MARKER` exists iff some entry is `dropped`; `LIVE_PIDS_FILE` names this boot and every live owner's
+    pid, or is gone when none is left."""
     _publish(directory / PENDING_MARKER, b"" if any(entry["state"] == DROPPED for entry in entries) else None)
-    _publish(directory / LIVE_PIDS_FILE, _live_pids(entries))
+    _publish(directory / LIVE_PIDS_FILE, _live_pids(entries, boot))
 
 
 def _owner_alive(owner: Mapping[str, Any], boot: str) -> bool:
@@ -353,10 +363,9 @@ def _leave(entry: dict[str, Any], owner: Mapping[str, Any]) -> None:
     entry["terminal_key"] = owner["terminal_key"]
 
 
-def _sweep(entries: list[dict[str, Any]], now: datetime) -> None:
-    """Owners whose process is gone (another boot, or the pid no longer runs) leave their `live` entry; an entry
-    left with no owner becomes `dropped`, stamped now (when it was found gone)."""
-    boot = boot_identity()
+def _sweep(entries: list[dict[str, Any]], now: datetime, boot: str) -> None:
+    """Owners whose process is gone (another boot than `boot`, or the pid no longer runs) leave their `live` entry;
+    an entry left with no owner becomes `dropped`, stamped now (when it was found gone)."""
     for entry in entries:
         if entry["state"] != LIVE:
             continue
@@ -446,13 +455,14 @@ def _update(
             entries = _load(directory)
             before = json.dumps(entries)
             now = _utc_now()
-            _sweep(entries, now)
+            boot = boot_identity()
+            _sweep(entries, now, boot)
             answer = change(entries, now)
             entries[:] = _pruned(entries, now)
             if json.dumps(entries) != before:
                 document = {"schema_version": LIVE_SESSIONS_SCHEMA, "sessions": entries}
                 _write_private(directory / LIVE_SESSIONS_FILE, (json.dumps(document, indent=2) + "\n").encode("utf-8"))
-            _sync_files(directory, entries)
+            _sync_files(directory, entries, boot)
             return answer
     except _BEST_EFFORT:
         return default
@@ -572,6 +582,23 @@ def claim_resumable(
         return copy.deepcopy(chosen)
 
     return _update(omh_home, change, None, create=False)
+
+
+def release_claim(omh_home: Path, session_id: str) -> bool:
+    """Give back a claim the launch could not open: the `resumed` entry of `session_id` is `dropped` again (stamped
+    now) and `PENDING_MARKER` re-armed, so a later launch that can open its home reopens it. Whether one was."""
+    if not session_id:
+        return False
+
+    def change(entries: list[dict[str, Any]], now: datetime) -> bool:
+        for kept in entries:
+            if kept["session_id"] == session_id and kept["state"] == RESUMED:
+                kept["state"], kept["updated_at"] = DROPPED, _stamp(now)
+                _move_last(entries, kept)
+                return True
+        return False
+
+    return _update(omh_home, change, False, create=False)
 
 
 def pending(omh_home: Path) -> bool:

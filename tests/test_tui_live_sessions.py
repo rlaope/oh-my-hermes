@@ -35,6 +35,7 @@ from omh.tui.live_sessions import (
     pending,
     record_end,
     record_live,
+    release_claim,
     terminal_key,
 )
 
@@ -316,7 +317,7 @@ class OwnersTests(LiveSessionsCase):
         self.assertIsNone(self.claim({"TMUX_PANE": "%2"}, cwd=here))
         self.assertIsNone(self.claim({}, cwd=here))
         self.assertFalse(self.marker.exists())
-        self.assertEqual(self.live_pids.read_text(), "1001\n")
+        self.assertEqual(self.live_pids.read_text(), "boot-1 1001\n")
 
     def test_the_last_owner_decides_how_the_entry_ends_and_whose_terminal_it_keeps(self) -> None:
         with self.as_pid(1001):
@@ -385,11 +386,11 @@ class LivePidsTests(LiveSessionsCase):
             record_live(self.omh_home, "s1", self.hermes_home, "", {})
         with self.as_pid(1002):
             record_live(self.omh_home, "s2", self.hermes_home, "", {})
-        self.assertEqual(self.live_pids.read_bytes(), b"1001 1002\n")
+        self.assertEqual(self.live_pids.read_bytes(), b"boot-1 1001 1002\n")
         if os.name == "posix":
             self.assertEqual(stat.S_IMODE(self.live_pids.stat().st_mode), 0o600)
         record_end(self.omh_home, "s1", "closed", pid=1001)
-        self.assertEqual(self.live_pids.read_bytes(), b"1002\n")
+        self.assertEqual(self.live_pids.read_bytes(), b"boot-1 1002\n")
         record_end(self.omh_home, "s2", "dropped", pid=1002)
         self.assertFalse(self.live_pids.exists())
         self.assertTrue(self.marker.exists())
@@ -401,7 +402,27 @@ class LivePidsTests(LiveSessionsCase):
             record_live(self.omh_home, "s1", self.hermes_home, "", {})
         self.live_pids.write_text("9 9 9\n")
         pending(self.omh_home)
-        self.assertEqual(self.live_pids.read_text(), "1001\n")
+        self.assertEqual(self.live_pids.read_text(), "boot-1 1001\n")
+
+    def test_the_first_word_is_the_writers_boot_without_spaces_or_a_dash(self) -> None:
+        # R3 (R2-B4): the shell compares the first word with Linux's boot id, so a pid a new boot reused cannot hide
+        # a TUI the reboot ended. The store writes Linux's id verbatim; anything it cannot write as one word is `-`.
+        for boot, word in (("8f1c-77 aa", "8f1c-77aa"), ("", "-"), ("bo\x01ot", "-"), ("bööt", "-"),
+                           ("e3b0c442-98fc-1c14-9afb-f4c8996fb924", "e3b0c442-98fc-1c14-9afb-f4c8996fb924")):
+            with self.subTest(boot=boot):
+                self.boot = boot
+                with self.as_pid(1001):
+                    record_live(self.omh_home, "s1", self.hermes_home, "", {})
+                self.assertEqual(self.live_pids.read_text(), f"{word} 1001\n")
+
+    def test_after_a_reboot_the_file_names_the_new_boot_and_only_its_owners(self) -> None:
+        with self.as_pid(1001):
+            record_live(self.omh_home, "old", self.hermes_home, "", {})
+        self.boot = "boot-2"  # the machine restarted; pid 1001 is a different process now (alive by default)
+        with self.as_pid(2002):
+            record_live(self.omh_home, "new", self.hermes_home, "", {})
+        self.assertEqual(self.live_pids.read_text(), "boot-2 2002\n")
+        self.assertEqual(self.states(), {"old": "dropped", "new": "live"})
 
     @unittest.skipUnless(hasattr(signal, "SIGKILL"), "SIGKILL is POSIX")
     def test_a_killed_tui_stays_named_in_the_file_for_a_shell_to_find(self) -> None:
@@ -416,7 +437,7 @@ class LivePidsTests(LiveSessionsCase):
             child.stdout.close()
         child.send_signal(signal.SIGKILL)
         child.wait(timeout=10)
-        self.assertEqual(self.live_pids.read_text().split(), [str(child.pid)])
+        self.assertEqual(self.live_pids.read_text().split()[1:], [str(child.pid)])
         self.assertFalse(self.marker.exists())  # nothing swept yet: only live-pids can tell
         self.assertFalse(REAL_PID_ALIVE(child.pid))
 
@@ -440,6 +461,32 @@ class StrictKeysTests(LiveSessionsCase):
         self.assertEqual(claimed and claimed["session_id"], "unkeyed")
         claimed = self.claim({}, cwd=here, strict_keys=True)
         self.assertEqual(claimed and claimed["session_id"], "keyed")
+
+
+class ReleaseClaimTests(LiveSessionsCase):
+    """`release_claim`: a claim the launch could not open goes back to `dropped` (R3, R2-B3)."""
+
+    def test_a_released_claim_is_dropped_again_and_rearms_the_marker(self) -> None:
+        self.write(self.entry("s1", "dropped", key="TMUX_PANE=%1"))
+        claimed = self.claim({"TMUX_PANE": "%1"})
+        self.assertEqual(claimed and claimed["session_id"], "s1")
+        self.assertFalse(self.marker.exists())
+        self.assertTrue(release_claim(self.omh_home, "s1"))
+        self.assertEqual(self.states(), {"s1": "dropped"})
+        self.assertTrue(self.marker.exists())
+        again = self.claim({"TMUX_PANE": "%1"})
+        self.assertEqual(again and again["session_id"], "s1")
+
+    def test_only_a_resumed_entry_is_released(self) -> None:
+        self.write(self.entry("up", "live"), self.entry("done", "closed"))
+        for session_id in ("up", "done", "missing", ""):
+            with self.subTest(session_id=session_id):
+                self.assertFalse(release_claim(self.omh_home, session_id))
+        self.assertEqual(self.states(), {"up": "live", "done": "closed"})
+
+    def test_without_a_store_nothing_is_created(self) -> None:
+        self.assertFalse(release_claim(self.omh_home, "s1"))
+        self.assertFalse((self.omh_home / "tui").exists())
 
 
 class ReaderTests(LiveSessionsCase):

@@ -540,22 +540,39 @@ def _resume_homes(args: argparse.Namespace, paths) -> set[str]:
     """The Hermes homes this launch can open a session in, so a dropped one is claimed only where it can reopen.
 
     The home the shared gateway opens (`_shared_launch_home`: the `-p` profile, else the sticky `active_profile`,
-    else the resolved home), and the TUI's own runtime home where this launch could open there (no `-p`, no
-    `--hermes-home`, not Windows; `_own_runtime_home` sends a claimed session to the home it was claimed from). A
-    home neither of these reaches, such as the root while a sticky profile is set, is never searched: the entry would
-    be used up by a launch that opens somewhere else.
+    else the resolved home), and the TUI's own runtime home only when this launch can open there now
+    (`_own_resume_home`). A home neither of these reaches, such as the root while a sticky profile is set, or an own
+    home the messaging safeguard refuses, is never searched: the entry would be used up by a launch that opens
+    somewhere else.
     """
-    from ..tui.own_runtime import tui_home_path
-
     shared = Path(paths.hermes_home)
     profile = getattr(args, "tui_profile", None)
     homes: set[str] = set()
     opened = _shared_launch_home(shared, profile)
     if opened is not None:
         homes.add(str(opened))
-    if os.name != "nt" and not getattr(args, "hermes_home", None) and not profile:
-        homes.add(str(tui_home_path(shared)))
+    own = _own_resume_home(args, paths)
+    if own is not None:
+        homes.add(own)
     return homes
+
+
+def _own_resume_home(args: argparse.Namespace, paths) -> str | None:
+    """The TUI's own runtime home as a place to claim from, when this launch could open a session there: no `-p`,
+    no `--hermes-home`, not Windows, a dropped (or vanished) session of that home waiting, and the home built and
+    allowed by `_prepared_own_home` (an own home whose root config names a messaging token, or that cannot be
+    built, is decided before the claim, never after it). None otherwise; nothing is built while nothing waits."""
+    if os.name == "nt" or getattr(args, "hermes_home", None) or getattr(args, "tui_profile", None):
+        return None
+    from ..tui.live_sessions import DROPPED, entries
+    from ..tui.own_runtime import tui_home_path
+
+    home = tui_home_path(Path(paths.hermes_home))
+    waiting = any((entry["state"] == DROPPED or entry["gone"]) and _same_home(entry["hermes_home"], home)
+                  for entry in entries(Path(_tui_omh_home(args, paths))))
+    if not waiting or _prepared_own_home(args, paths) is None:
+        return None
+    return str(home)
 
 
 # A claimed session nothing was said in is skipped and the next one claimed; each claim marks its entry `resumed`,
@@ -629,7 +646,7 @@ def _own_runtime_home(args: argparse.Namespace, paths) -> Path | None:
     if os.name == "nt" or getattr(args, "hermes_home", None) or getattr(args, "tui_profile", None):
         return None
     from ..skin_pack import RUNTIME_OWN, effective_runtime
-    from ..tui.own_runtime import build_tui_home, tui_home_path
+    from ..tui.own_runtime import tui_home_path
 
     own = effective_runtime(paths.omh_home) == RUNTIME_OWN
     home = tui_home_path(Path(paths.hermes_home))
@@ -654,20 +671,51 @@ def _own_runtime_home(args: argparse.Namespace, paths) -> Path | None:
             own = True
     if not own:
         return None
+    built = _prepared_own_home(args, paths)
+    if built is None and claimed and resume:
+        # Claimed from this home, which cannot be opened after all: give the claim back for a launch that can, and
+        # open a new session rather than send the id to a home that never held it.
+        from ..tui.live_sessions import release_claim
+
+        release_claim(Path(_tui_omh_home(args, paths)), resume)
+        print(f"omh: session {resume} stays for a launch that can open the TUI's own runtime; opening a new session.",
+              file=sys.stderr)
+        args.tui_resume = None
+        args.tui_resume_home = None
+    return built
+
+
+_OWN_HOME_PREPARED = "_omh_own_home_prepared"
+
+
+def _prepared_own_home(args: argparse.Namespace, paths) -> Path | None:
+    """The TUI's own runtime home, built or refreshed, once per launch (the answer is kept on `args`, so a claim
+    decided before the launch and the launch itself see one answer and its lines print once); None when it cannot
+    be built or its root config names a messaging token under `platforms:` (the TUI runtime must never poll a
+    bot's token), having said why in one line."""
+    prepared = getattr(args, _OWN_HOME_PREPARED, None)
+    if prepared is not None:
+        return prepared[0]
+    from ..tui.own_runtime import build_tui_home
+
+    path: Path | None = None
     try:
         built = build_tui_home(paths.omh_home, Path(paths.hermes_home))
     except (OSError, ValueError) as error:
         print(f"omh: could not prepare the TUI's own runtime home ({error}); opening on the shared gateway.",
               file=sys.stderr)
-        return None
-    if built.config_platform_credentials:
-        print(f"omh: the root config.yaml connects a messaging platform ({', '.join(built.config_platform_credentials)}), "
-              "which the TUI's own runtime must not poll beside the bots' gateway; opening on the shared gateway.",
-              file=sys.stderr)
-        return None
-    for name in built.overwritten:
-        print(f"omh: {name} in the TUI's own runtime home had been changed; the root's copy replaced it.", file=sys.stderr)
-    return built.path
+    else:
+        if built.config_platform_credentials:
+            print(f"omh: the root config.yaml connects a messaging platform "
+                  f"({', '.join(built.config_platform_credentials)}), which the TUI's own runtime must not poll "
+                  "beside the bots' gateway; opening on the shared gateway.", file=sys.stderr)
+        else:
+            for name in built.overwritten:
+                print(f"omh: {name} in the TUI's own runtime home had been changed; the root's copy replaced it.",
+                      file=sys.stderr)
+            path = built.path
+    setattr(args, _OWN_HOME_PREPARED, (path,))
+    return path
 
 
 def _installer_generation() -> Path | None:

@@ -18,6 +18,7 @@ import sys
 import time
 import unittest
 from collections.abc import Callable
+from unittest import mock
 from tempfile import TemporaryDirectory
 
 from _local_package import load_local_package
@@ -249,6 +250,9 @@ class BlockSyntaxTests(unittest.TestCase):
             self.assertIn("OMH_AUTO_RESUME_DONE", text)
             for guard in ("HERMES_SESSION_ID", "OMH_TUI_SESSION_FILE", "CI"):
                 self.assertIn(guard, text)
+        for shell in ("zsh", "bash"):
+            self.assertIn("/proc/sys/kernel/random/boot_id", "\n".join(render_block(shell, "/x")))
+        self.assertIn("Select-Object -Skip 1", "\n".join(render_block("powershell", "/x")))  # the boot word
         self.assertIn("ConsoleHost", "\n".join(render_block("powershell", "/x")))
         self.assertIn("zle-line-init", "\n".join(render_block("zsh", "/x")))
         self.assertNotIn("precmd", "\n".join(render_block("zsh", "/x")))
@@ -262,9 +266,10 @@ class InteractiveShellTests(unittest.TestCase):
     def _shell(self, shell: str, *, marker: bool, nested: bool = False, extra_env: dict[str, str] | None = None,
                before: str = "", expect_run: bool | None = None, enter: bool = False,
                prepare: Callable[[Path], None] | None = None, crlf: bool = False,
-               typed: tuple[bytes, ...] = ()) -> tuple[list[str], str]:
+               typed: tuple[bytes, ...] = (), boot_file: Path | None = None) -> tuple[list[str], str]:
         """`prepare(omh_home)` runs before the shell starts; `crlf` writes the person's rc lines with CRLF ends;
-        `typed` lines are entered at the prompt after the hook ran. `self.last_root` is the temporary root."""
+        `typed` lines are entered at the prompt after the hook ran; `boot_file` stands in for Linux's boot id file
+        in the rendered block. `self.last_root` is the temporary root."""
         import pty
         import select
 
@@ -292,7 +297,8 @@ class InteractiveShellTests(unittest.TestCase):
         prompt = "PROMPT='READY> '\n" if shell == "zsh" else "PS1='READY> '\n"
         mine = (prompt + before).encode("utf-8")
         (home / rc_name).write_bytes(mine.replace(b"\n", b"\r\n") if crlf else mine)
-        install(shell, omh, _env(home, ZDOTDIR=str(home)))
+        with mock.patch.object(shell_hook, "LINUX_BOOT_ID_FILE", str(boot_file or root / "no-boot-id")):
+            install(shell, omh, _env(home, ZDOTDIR=str(home)))
         argv = [binary, "-d", "-i"] if shell == "zsh" else [binary, "--noprofile", "--rcfile", str(home / rc_name), "-i"]
         environ = {
             "HOME": str(home), "ZDOTDIR": str(home), "PATH": f"{bindir}{os.pathsep}/usr/bin:/bin",
@@ -430,13 +436,16 @@ class InteractiveShellTests(unittest.TestCase):
 
     def test_live_pids_that_all_run_wake_nothing(self) -> None:
         def alive(omh: Path) -> None:
-            (omh / "tui" / "live-pids").write_text(f"{os.getpid()} {os.getppid()}\n", encoding="ascii")
+            (omh / "tui" / "live-pids").write_text(f"- {os.getpid()} {os.getppid()}\n", encoding="ascii")
 
         def junk(omh: Path) -> None:  # not pids: skipped, never handed to `kill`
-            (omh / "tui" / "live-pids").write_text("-1 0x10 $(touch x) 99999999999\n", encoding="ascii")
+            (omh / "tui" / "live-pids").write_text("- -1 0x10 $(touch x) 99999999999\n", encoding="ascii")
+
+        def boot_only(omh: Path) -> None:  # a boot word and no pid
+            (omh / "tui" / "live-pids").write_text("1795085221\n", encoding="ascii")
 
         for shell in ("zsh", "bash"):
-            for label, prepare in (("alive", alive), ("junk", junk)):
+            for label, prepare in (("alive", alive), ("junk", junk), ("boot only", boot_only)):
                 with self.subTest(shell=shell, live_pids=label):
                     lines, output = self._shell(shell, marker=False, prepare=prepare, expect_run=False)
                     self.assertEqual(lines, [], output)
@@ -446,11 +455,69 @@ class InteractiveShellTests(unittest.TestCase):
         gone.wait(timeout=30)
 
         def mixed(omh: Path) -> None:
-            (omh / "tui" / "live-pids").write_text(f"{os.getpid()} {gone.pid}\n", encoding="ascii")
+            (omh / "tui" / "live-pids").write_text(f"- {os.getpid()} {gone.pid}\n", encoding="ascii")
 
         for shell in ("zsh", "bash"):
             with self.subTest(shell=shell):
                 lines, output = self._shell(shell, marker=False, prepare=mixed)
+                self.assertEqual(len(lines), 1, output)
+
+    def test_the_first_word_is_the_boot_and_never_checked_as_a_pid(self) -> None:
+        gone = subprocess.Popen([sys.executable, "-c", "pass"])
+        gone.wait(timeout=30)
+
+        def dead_boot_word(omh: Path) -> None:  # a gone pid in the boot slot is a boot word, not a pid
+            (omh / "tui" / "live-pids").write_text(f"{gone.pid} {os.getpid()}\n", encoding="ascii")
+
+        for shell in ("zsh", "bash"):
+            with self.subTest(shell=shell):
+                lines, output = self._shell(shell, marker=False, prepare=dead_boot_word, expect_run=False)
+                self.assertEqual(lines, [], output)
+
+    def test_on_linux_a_boot_other_than_the_recorded_one_wakes_though_every_pid_runs(self) -> None:
+        # R3 (R2-B4): after a reboot a recorded pid can belong to a live process; Linux's boot id tells. The block
+        # reads the boot file with `read`; here a fake file stands in for /proc/sys/kernel/random/boot_id.
+        tmp = TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        boot_file = Path(tmp.name) / "boot_id"
+        boot_file.write_text("e3b0c442-98fc-1c14-9afb-f4c8996fb924\n", encoding="ascii")
+
+        def recorded(boot: str) -> Callable[[Path], None]:
+            def prepare(omh: Path) -> None:
+                (omh / "tui" / "live-pids").write_text(f"{boot} {os.getpid()}\n", encoding="ascii")
+            return prepare
+
+        cases = (("another boot", recorded("0b5e7d10-1111-2222-3333-444455556666"), True),
+                 ("this boot", recorded("e3b0c442-98fc-1c14-9afb-f4c8996fb924"), False),
+                 ("boot unknown when recorded", recorded("-"), False))
+        for shell in ("zsh", "bash"):
+            for label, prepare, wakes in cases:
+                with self.subTest(shell=shell, case=label):
+                    lines, output = self._shell(shell, marker=False, prepare=prepare, boot_file=boot_file,
+                                                expect_run=wakes)
+                    self.assertEqual(len(lines), 1 if wakes else 0, output)
+            with self.subTest(shell=shell, case="no boot file (macOS): the pid alone decides"):
+                lines, output = self._shell(shell, marker=False, prepare=cases[0][1], expect_run=False)
+                self.assertEqual(lines, [], output)
+
+    def test_a_store_written_file_wakes_a_shell_after_a_modeled_reboot(self) -> None:
+        # The store end to end: a live owner recorded on the old boot whose pid runs today (this process), then a
+        # new boot id in the boot file. Nothing has swept, so only the boot word can tell.
+        tmp = TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        boot_file = Path(tmp.name) / "boot_id"
+        boot_file.write_text("new-boot-id\n", encoding="ascii")
+
+        def old_boot_owner(omh: Path) -> None:
+            with mock.patch.object(live_sessions, "boot_identity", return_value="old-boot-id"):
+                live_sessions.record_live(omh, "before-reboot", str(omh.parent), str(omh.parent), {})
+            self.assertFalse((omh / "tui" / live_sessions.PENDING_MARKER).exists())
+            self.assertEqual((omh / "tui" / live_sessions.LIVE_PIDS_FILE).read_text(encoding="ascii"),
+                             f"old-boot-id {os.getpid()}\n")
+
+        for shell in ("zsh", "bash"):
+            with self.subTest(shell=shell):
+                lines, output = self._shell(shell, marker=False, prepare=old_boot_owner, boot_file=boot_file)
                 self.assertEqual(len(lines), 1, output)
 
     def test_an_installed_crlf_rc_starts_and_runs_the_hook(self) -> None:
