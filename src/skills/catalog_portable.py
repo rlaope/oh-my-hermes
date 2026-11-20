@@ -380,6 +380,7 @@ PORTABLE_REFERENCE_PATHS = frozenset({
     'loop/references/goal-constraint-discipline.md',
     'loop/references/measured-loop-discipline.md',
     'loop/references/loop-design-review.md',
+    'loop/references/experiment-tree.md',
     'adversarial-consensus/references/consensus-protocol.md',
     'ultrawork/references/dependency-topology.md',
     'idea-to-deploy/references/project-bootstrap.md',
