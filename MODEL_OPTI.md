@@ -823,9 +823,11 @@ and OMH treats them alike; the next section names what differs for Sol.
     counts as finished and where to be exhaustive". It is not the
     persistence wording cut above.
   - Review focus: a fanout unit may declare `review_focus` (at most 400
-    chars). The unit section states it right after the numbered criteria
-    ("tell Codex what you'll look for when you review"). When it is absent,
-    the prompt is byte-identical to base.
+    UTF-8 bytes, so the live worst-case unit stays under the 8,000-byte
+    prompt ceiling in any script). The unit section states it right after
+    the numbered criteria ("tell Codex what you'll look for when you
+    review"). When it is absent, no focus block is added; the
+    shared-machine line is the only byte every unit prompt gains.
 - **Throughput overlay:** `gpt_sol_codex_handoff` matches `*-sol`, so 6.2
   Sol as a Codex main agent inherits it, as 6.1 Sol did;
   `tests/test_executor_prompting.py` names `gpt-6.2-sol` so the

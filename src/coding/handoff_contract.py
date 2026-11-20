@@ -134,7 +134,7 @@ def _parts(value: object) -> list[dict[str, Any]]:
                 f"handoff_contract part at index {index} must be an object with only id, title, depends_on"
             )
         part_id = entry.get("id")
-        if not isinstance(part_id, str) or not _POSTCONDITION_ID_RE.match(part_id):
+        if not isinstance(part_id, str) or not _POSTCONDITION_ID_RE.fullmatch(part_id):
             raise HandoffContractError(f"handoff_contract part at index {index} has an invalid id: {part_id!r}")
         if any(part["id"] == part_id for part in parts):
             raise HandoffContractError(f"handoff_contract part {part_id!r} is declared twice")

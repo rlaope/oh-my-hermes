@@ -37,7 +37,7 @@ from omh.coding.fanout_contracts import (  # noqa: E402
     FANOUT_SPAWN_PLAN_THRESHOLD,
     FanoutContractError,
     MAX_SPAWN_PLAN_FIELD_CHARS,
-    MAX_UNIT_REVIEW_FOCUS_CHARS,
+    MAX_UNIT_REVIEW_FOCUS_BYTES,
     MAX_UNIT_VERIFICATION_COMMAND_CHARS,
     MAX_UNIT_VERIFICATION_COMMANDS,
     verification_command_argv,
@@ -1845,8 +1845,10 @@ class FanoutReviewFocusTests(unittest.TestCase):
         self.assertNotIn("review_focus", units["tests"])
 
     def test_focus_over_the_ceiling_or_not_a_string_is_refused(self) -> None:
-        build_fanout_contract("split work", self._with_focus("x" * MAX_UNIT_REVIEW_FOCUS_CHARS))
-        for bad in ("x" * (MAX_UNIT_REVIEW_FOCUS_CHARS + 1), ["a list"]):
+        build_fanout_contract("split work", self._with_focus("x" * MAX_UNIT_REVIEW_FOCUS_BYTES))
+        # Hangul is three bytes a character: 133 fit in 400 bytes, 134 do not.
+        build_fanout_contract("split work", self._with_focus("가" * (MAX_UNIT_REVIEW_FOCUS_BYTES // 3)))
+        for bad in ("x" * (MAX_UNIT_REVIEW_FOCUS_BYTES + 1), "가" * (MAX_UNIT_REVIEW_FOCUS_BYTES // 3 + 1), ["a list"]):
             with self.subTest(bad=type(bad).__name__), self.assertRaisesRegex(FanoutContractError, "review_focus"):
                 build_fanout_contract("split work", self._with_focus(bad))
 

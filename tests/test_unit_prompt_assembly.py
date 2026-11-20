@@ -28,6 +28,7 @@ from omh.coding.fanout_repair import (  # noqa: E402
     MAX_REPAIR_ATTEMPTS,
 )
 from omh.coding.executor_skill_discovery import ROLE_SEQUENCE_RECIPES  # noqa: E402
+from omh.coding.fanout_contracts import MAX_UNIT_REVIEW_FOCUS_BYTES  # noqa: E402
 from omh.coding.unit_prompt_assembly import BLOCK_NAMES, AssembledPrompt, assemble_unit_prompt  # noqa: E402
 from omh.coding.unit_prompt_protocol import (  # noqa: E402
     DOMAIN_SKILL_GUIDANCE,
@@ -389,6 +390,20 @@ class PromptCeilingTests(unittest.TestCase):
         self.assertLessEqual(
             sizes[worst], UNIT_PROMPT_MAX_BYTES, f"worst dispatch prompt {sizes[worst]} B ({worst})"
         )
+
+    def test_the_largest_allowed_review_focus_keeps_every_route_under_the_ceiling(self) -> None:
+        # A review_focus is bounded in UTF-8 bytes; the worst case is the full byte budget spent on a 3-byte script
+        # (and the ASCII form of the same budget), added to the live-shaped worst-case unit of every route.
+        for focus in ("x" * MAX_UNIT_REVIEW_FOCUS_BYTES, "가" * (MAX_UNIT_REVIEW_FOCUS_BYTES // 3)):
+            for key, model, family in _worst_case_routes():
+                unit = {**_worst_case_unit(model, family), "review_focus": focus}
+                assembled = assemble_unit_prompt(
+                    unit, GOAL * 3, route=unit["handoff"]["model_route"],  # type: ignore[index]
+                    binding=_WORST_BINDING, discovery=_WORST_DISCOVERY,
+                )
+                with self.subTest(key=key, script="ascii" if focus.isascii() else "hangul"):
+                    self.assertIn("unit.review_focus", assembled.names())
+                    self.assertLessEqual(assembled.size_bytes, UNIT_PROMPT_MAX_BYTES)
 
     def test_each_redispatch_section_stays_under_its_derived_ceiling(self) -> None:
         unit = _worst_case_unit("claude-fable-5-2", "claude")

@@ -91,7 +91,10 @@ MAX_UNIT_VERIFICATION_COMMAND_CHARS = 240
 # unit's work comes back (OpenAI "Prompting GPT-6.2 in Codex" guide: tell the
 # executor what you will look for in review). Prose beside
 # `integration_checks`, bounded like them: a few sentences, not a checklist.
-MAX_UNIT_REVIEW_FOCUS_CHARS = 400
+# Bounded in UTF-8 bytes, not characters: the unit prompt has a byte ceiling
+# (UNIT_PROMPT_MAX_BYTES), and 400 Hangul characters are 1,200 bytes. 400 bytes
+# keeps the live-shaped worst case under that ceiling for any script.
+MAX_UNIT_REVIEW_FOCUS_BYTES = 400
 # Named once so the check rows the dispatcher writes, the journal event they
 # back, and the docs describing both cannot drift apart.
 UNIT_VERIFICATION_OBSERVATION_SOURCE = "dispatch_verification"

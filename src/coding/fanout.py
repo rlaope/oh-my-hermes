@@ -32,7 +32,7 @@ from .fanout_contracts import (
     MAX_UNIT_SOURCE_RANGE_SPAN_CHARS,
     MAX_UNIT_SOURCE_RANGES,
     MAX_UNIT_VERIFICATION_COMMANDS,
-    MAX_UNIT_REVIEW_FOCUS_CHARS,
+    MAX_UNIT_REVIEW_FOCUS_BYTES,
     PREPARED_NOT_OBSERVED,
     REPRODUCTION_UNIT_KIND,
     UNIT_SOURCE_RANGE_KEYS,
@@ -549,9 +549,9 @@ def _normalized_review_focus(value: object, index: int) -> str:
     if not isinstance(value, str):
         raise FanoutContractError(f"unit at index {index} review_focus must be a string")
     text = " ".join(value.split())
-    if len(text) > MAX_UNIT_REVIEW_FOCUS_CHARS:
+    if len(text.encode("utf-8")) > MAX_UNIT_REVIEW_FOCUS_BYTES:
         raise FanoutContractError(
-            f"unit at index {index} review_focus must be at most {MAX_UNIT_REVIEW_FOCUS_CHARS} chars"
+            f"unit at index {index} review_focus must be at most {MAX_UNIT_REVIEW_FOCUS_BYTES} UTF-8 bytes"
         )
     return text
 

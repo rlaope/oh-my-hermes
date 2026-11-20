@@ -728,7 +728,9 @@ class CodexSubagentPermissionTests(unittest.TestCase):
 
         for parts in ([], [{"id": "a", "title": "A", "depends_on": ["missing"]}],
                       [{"id": "a", "title": "A", "depends_on": ["b"]}, {"id": "b", "title": "B", "depends_on": ["a"]}],
-                      [{"id": "a", "title": "A", "owner": "x"}]):
+                      [{"id": "a", "title": "A", "owner": "x"}],
+                      # A trailing newline used to pass `re.match(...$)` and split the prompt's part bullet in two.
+                      [{"id": "parse\n", "title": "Fix parser"}, {"id": "docs", "title": "Update docs"}]):
             with self.subTest(parts=parts), self.assertRaises(HandoffContractError):
                 build_handoff_contract(dict(_PARTS_CONTRACT_BASE, parts=parts))
         self.assertNotIn("parts", build_handoff_contract(_PARTS_CONTRACT_BASE))

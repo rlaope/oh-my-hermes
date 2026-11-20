@@ -236,11 +236,13 @@ Rules, all applied at freeze time:
   unit read the range, stayed within the budget, or covered it.
 
 Any unit may also declare an optional `review_focus`: one string, at most 400
-characters after whitespace collapse, saying what the reviewer will check in
+UTF-8 bytes after whitespace collapse (about 133 Hangul characters; the unit
+prompt has a byte ceiling), saying what the reviewer will check in
 the unit's result. The executor prompt states it right after the numbered
 criteria as `Review focus (what the reviewer will check): <text>`. A unit
-that declares none (or an empty string) carries no key, and its contract and
-prompt stay byte-identical. A review focus is prepared guidance, not evidence
+that declares none (or an empty string) carries no key: its contract is
+byte-identical and its prompt gains no focus block (every unit prompt does
+carry the shared-machine line, which is separate). A review focus is prepared guidance, not evidence
 of review.
 
 ## Dispatch bridge semantics
