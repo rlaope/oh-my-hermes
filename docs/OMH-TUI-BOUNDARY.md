@@ -561,8 +561,8 @@ the Hermes home it runs in, the folder, the terminal it runs in as `NAME=value`
 of the first terminal variable set (`OMHER_TERMINAL_LINK`, `CMUX_SURFACE_ID`,
 `HERDR_PANE_ID`, `ITERM_SESSION_ID`, `TERM_SESSION_ID`, `KITTY_WINDOW_ID`,
 `WEZTERM_PANE`, `WT_SESSION`, `OTTY_PANE_ID`, `TMUX_PANE`; only read, no
-terminal's own files are written), the TUI's pid, this machine's boot, and how
-the session ended. Nothing said in a session is recorded, and nothing leaves
+terminal's own files are written), the pid and boot of each TUI that holds it
+open, and how the session ended. Nothing said in a session is recorded, and nothing leaves
 the machine.
 
 A session the person left is closed: `/exit`, Ctrl+D, a normal close, `/new`
@@ -570,15 +570,18 @@ or `/resume` moving away, a relaunch for an update. It never reopens by
 itself. A terminal hang-up (SIGHUP), SIGTERM, SIGBREAK, an uncaught crash, or a
 TUI whose process is gone (killed, power loss: a different boot or a pid that
 no longer runs) is dropped. `resume-pending` beside the record exists while a
-dropped session waits. A dropped session reopens once: the reopen marks it
+dropped session waits, and `live-pids` lists the pids of the TUIs recorded as
+running, so a TUI killed outright shows before anything sweeps it. A dropped session reopens once: the reopen marks it
 `resumed` under the record's lock before Hermes opens it, so a resume Hermes
 refuses is not tried again.
 
 A bare `omh`, on by default, reopens the session this terminal dropped, or
 else, outside omher, the newest one dropped in this folder, within 72 hours, in
-a Hermes home this launch may open (the resolved or `-p` profile home,
-Hermes' sticky `active_profile`, the TUI's own runtime home). It runs at once,
-as `omh --resume <id>` would, and says so in one stderr line naming the session
+a Hermes home this launch opens: the one Hermes' launcher picks (`-p NAME`'s
+profile, `-p default` the root, else the sticky `active_profile`, else the
+resolved home) and the TUI's own runtime home. A session in any other home is
+left for a launch that opens there. It runs at once, in the home it was
+recorded in, as `omh --resume <id>` would, and says so in one stderr line naming the session
 and `omh --new`. A session nothing was said in is skipped (Hermes keeps no
 such session). It applies only on a terminal and only when the launch names no
 session of its own (`--resume`, `--continue`, `--onboard`). Off switches:
@@ -599,15 +602,21 @@ auto-resume shell remove` deletes exactly that block, and a file the block was
 appended to comes back byte for byte. The block, in an interactive shell where
 none of `OMH_AUTO_RESUME_DONE`, `HERMES_SESSION_ID`, `OMH_TUI_SESSION_FILE`
 and `CI` is set, exports `OMH_AUTO_RESUME_DONE=1` (a nested shell does
-nothing) and tests for `resume-pending` with the shell's own file test, so no
-process starts while no session waits. When it exists and `omh` is on PATH,
-the first prompt runs `omh --omh-home <home> auto-resume shell-start`: zsh from
-its first `zle-line-init`, bash from its first `PROMPT_COMMAND` with both ends
+nothing) and looks with the shell's own builtins for `resume-pending`, or for
+a pid in `live-pids` that no longer runs (`read`, `kill -0`; PowerShell
+`Get-Process`), so no process starts while nothing waits and every recorded
+TUI still runs. When one holds and `omh` is on PATH, the first prompt runs
+`omh --omh-home <home> auto-resume shell-start`: zsh from its first
+`zle-line-init`, kept out of the history by a one-shot `zshaddhistory` hook
+that changes no history option, bash from its first `PROMPT_COMMAND` with both ends
 on the terminal (each then unhooks itself, leaving the rest of
 `PROMPT_COMMAND`), PowerShell at the end of the profile in the console host.
-`shell-start` checks the policy, the terminal and the same variables again,
-then reopens this terminal's dropped session in place with the same line, or
-exits 0 at once; it never asks anything.
+The zsh and bash blocks are written with LF line ends in a CRLF rc too, which
+keeps its own bytes. `shell-start` checks the policy, the terminal and the same
+variables again, then reopens this terminal's dropped session in place with
+the same line, or exits 0 at once; it never asks anything. Unlike a bare
+`omh`, it does not take a same-folder session recorded under another
+terminal's key while this terminal has a key of its own.
 
 omher starts each `omh` terminal with `OMHER_TERMINAL_LINK=<linkId>` and
 `TERM_PROGRAM=omher` and no arguments, so a bare `omh` there reopens by that

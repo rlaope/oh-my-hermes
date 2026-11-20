@@ -82,13 +82,9 @@ def dropped_sessions(omh_home: str | Path, *, now: datetime | None = None) -> li
     from ..tui import live_sessions
 
     now = now or datetime.now(timezone.utc)
-    entries = live_sessions._load(Path(omh_home) / "tui")
-    boot = live_sessions.boot_identity()
     rows: list[dict[str, Any]] = []
-    for entry in reversed(entries):
-        gone = entry["state"] == live_sessions.LIVE and (
-            not live_sessions._same_boot(entry["boot"], boot) or not live_sessions.pid_alive(entry["pid"])
-        )
+    for entry in reversed(live_sessions.entries(Path(omh_home))):
+        gone = bool(entry.get("gone"))
         if entry["state"] != live_sessions.DROPPED and not gone:
             continue
         rows.append({

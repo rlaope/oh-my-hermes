@@ -478,6 +478,127 @@ class AutoResumeLaunchTests(unittest.TestCase):
         self.assertIn("--new opens the OH-MY-HERMES terminal and cannot be combined", stderr.getvalue())
 
 
+class ClaimedHomeTests(unittest.TestCase):
+    """A dropped session is claimed only from a Hermes home this launch opens, and opens in the home it came from."""
+
+    def setUp(self) -> None:
+        from pathlib import Path
+        from tempfile import TemporaryDirectory
+
+        from omh.tui import live_sessions
+
+        self._tmp = TemporaryDirectory()
+        self.addCleanup(self._tmp.cleanup)
+        self.root = Path(self._tmp.name).resolve()
+        self.omh, self.hermes = self.root / "omh", self.root / "hermes"
+        self.sticky = self.hermes / "profiles" / "work"
+        self.own = self.hermes / "profiles" / "omh-tui"
+        environ = patch.dict(os.environ, {"OMH_HOME": str(self.omh), "HERMES_HOME": str(self.hermes)})
+        environ.start()
+        self.addCleanup(environ.stop)
+        for name in ("OMH_AUTO_RESUME", "TERM_PROGRAM", *live_sessions.TERMINAL_KEY_ENV):
+            os.environ.pop(name, None)
+        for home, session_id in ((self.hermes, "root-1"), (self.sticky, "sticky-1"), (self.own, "own-1")):
+            self.write_db(home, session_id)
+
+    @staticmethod
+    def write_db(home, session_id: str) -> None:
+        import sqlite3
+
+        home.mkdir(parents=True, exist_ok=True)
+        connection = sqlite3.connect(home / "state.db")
+        try:
+            connection.execute("CREATE TABLE sessions (id TEXT PRIMARY KEY, title TEXT, message_count INT)")
+            connection.execute("INSERT INTO sessions VALUES (?, ?, 3)", (session_id, f"chat {session_id}"))
+            connection.commit()
+        finally:
+            connection.close()
+
+    def write_store(self, rows) -> None:
+        import json
+        from datetime import datetime, timezone
+
+        from omh.tui import live_sessions
+
+        now = datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
+        directory = self.omh / "tui"
+        directory.mkdir(parents=True, exist_ok=True)
+        sessions = [{"session_id": session_id, "hermes_home": str(home), "cwd": "", "terminal_key": "TMUX_PANE=%4",
+                     "state": "dropped", "pid": 999_999, "boot": "", "updated_at": now} for session_id, home in rows]
+        (directory / live_sessions.LIVE_SESSIONS_FILE).write_text(
+            json.dumps({"schema_version": live_sessions.LIVE_SESSIONS_SCHEMA, "sessions": sessions}), encoding="utf-8")
+
+    def states(self) -> dict[str, str]:
+        import json
+
+        from omh.tui import live_sessions
+
+        data = json.loads((self.omh / "tui" / live_sessions.LIVE_SESSIONS_FILE).read_text(encoding="utf-8"))
+        return {entry["session_id"]: entry["state"] for entry in data["sessions"]}
+
+    def claim(self, argv: list[str]):
+        from omh.commands import bare_launch
+
+        args = bare_launch_args(argv)
+        assert args is not None
+        paths = bare_launch._paths(args)
+        with redirect_stderr(io.StringIO()):
+            bare_launch._claim_dropped_session(args, paths, {"TMUX_PANE": "%4"})
+        return args, paths
+
+    def opened_home(self, args, paths):
+        """Where the launch opens: the TUI's own home, or None for the shared gateway (build stubbed, no I/O)."""
+        from types import SimpleNamespace
+
+        from omh.commands import bare_launch
+        from omh.tui import own_runtime
+
+        built = SimpleNamespace(path=self.own, config_platform_credentials=(), overwritten=())
+        with patch.object(own_runtime, "build_tui_home", return_value=built), redirect_stderr(io.StringIO()):
+            return bare_launch._own_runtime_home(args, paths)
+
+    def test_a_sticky_profile_session_reopens_on_the_shared_gateway_not_the_tui_home(self) -> None:
+        (self.hermes / "active_profile").write_text("work\n", encoding="utf-8")
+        self.write_store([("sticky-1", self.sticky)])
+        args, paths = self.claim([])
+        self.assertEqual((args.tui_resume, args.tui_resume_home), ("sticky-1", str(self.sticky)))
+        self.assertIsNone(self.opened_home(args, paths))  # Hermes' launcher applies the sticky profile itself
+
+    def test_with_a_sticky_profile_a_root_session_is_left_alone(self) -> None:
+        # The root is not where this launch opens while `active_profile` names another profile: never used up.
+        (self.hermes / "active_profile").write_text("work", encoding="utf-8")
+        self.write_store([("root-1", self.hermes)])
+        args, _paths = self.claim([])
+        self.assertIsNone(args.tui_resume)
+        self.assertEqual(self.states(), {"root-1": "dropped"})
+
+    def test_a_session_of_the_tui_home_reopens_there_even_with_shared_chosen(self) -> None:
+        from omh.skin_pack import write_runtime_choice
+
+        write_runtime_choice(self.omh, "shared")
+        self.write_store([("own-1", self.own)])
+        args, paths = self.claim([])
+        self.assertEqual((args.tui_resume, args.tui_resume_home), ("own-1", str(self.own)))
+        self.assertEqual(self.opened_home(args, paths), self.own)
+
+    def test_profile_default_is_the_root_home(self) -> None:
+        from omh.commands.bare_launch import _paths, _resume_homes
+
+        self.write_store([("root-1", self.hermes)])
+        for spelling in ("default", "Default"):
+            with self.subTest(spelling=spelling):
+                args = bare_launch_args(["-p", spelling])
+                self.assertEqual(_resume_homes(args, _paths(args)), {str(self.hermes)})
+        args, _paths = self.claim(["-p", "default"])
+        self.assertEqual((args.tui_resume, args.tui_resume_home), ("root-1", str(self.hermes)))
+
+    def test_a_named_profile_searches_only_that_profile(self) -> None:
+        self.write_store([("root-1", self.hermes), ("own-1", self.own), ("sticky-1", self.sticky)])
+        args, _paths = self.claim(["-p", "work"])
+        self.assertEqual(args.tui_resume, "sticky-1")
+        self.assertEqual(self.states(), {"root-1": "dropped", "own-1": "dropped", "sticky-1": "resumed"})
+
+
 class BareImportTests(unittest.TestCase):
     def test_a_bare_launch_does_not_import_the_command_tree(self) -> None:
         # stdin is not a terminal, so the launch has nothing to open and prints the welcome text.

@@ -160,10 +160,9 @@ def cmd_auto_resume_shell_start(args: argparse.Namespace) -> int:
     paths = _paths(args)
     if not auto_resume_enabled(_tui_omh_home(args, paths), os.environ):
         return 0
-    session_id = _claim_dropped_session(args, paths)
-    if not session_id:
+    # Unattended: a same-folder session another terminal's key holds stays for that terminal (`strict_keys`).
+    if not _claim_dropped_session(args, paths, strict_keys=True):
         return 0
-    args.tui_resume = session_id
     launched = _launch_hermes_tui(args)
     return 0 if launched is None else launched
 

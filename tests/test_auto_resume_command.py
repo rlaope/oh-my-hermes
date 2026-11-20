@@ -236,6 +236,38 @@ class CommandTests(unittest.TestCase):
         self.assertIn("omh: reopening the session this terminal left (s-1, fixing the build)", stderr.getvalue())
         self.assertEqual(read_store(self.omh), {"s-1": "resumed"})
 
+    def test_shell_start_leaves_another_terminals_same_folder_session_alone(self) -> None:
+        # A new tab in the same folder with a key of its own must not take the drop the other tab will reopen.
+        hermes = self.root / "hermes"
+        here = self.root / "project"
+        here.mkdir()
+        write_state_db(hermes, [("s-1", "fixing the build", 4), ("s-2", "unkeyed", 2)])
+        launched: list[str | None] = []
+
+        def run(environ: dict[str, str]) -> None:
+            with terminal_stdio(), redirect_stderr(io.StringIO()), patch.dict(os.environ, environ), \
+                    patch("shutil.which", return_value="/bin/hermes"), patch.object(os, "getcwd", return_value=str(here)), \
+                    patch("omh.commands.bare_launch._launch_hermes_tui",
+                          side_effect=lambda args: launched.append(args.tui_resume) or 0):
+                for name in ("HERMES_SESSION_ID", "OMH_TUI_SESSION_FILE", "CI"):
+                    os.environ.pop(name, None)
+                from omh.commands.main import main
+
+                self.assertEqual(main(["--omh-home", str(self.omh), "--hermes-home", str(hermes), "auto-resume",
+                                       "shell-start"]), 0)
+
+        write_store(self.omh, [{"session_id": "s-1", "hermes_home": str(hermes), "cwd": str(here),
+                                "terminal_key": "ITERM_SESSION_ID=pane-A"}])
+        run({"ITERM_SESSION_ID": "pane-B"})
+        self.assertEqual((launched, read_store(self.omh)), ([], {"s-1": "dropped"}))
+        run({"ITERM_SESSION_ID": "pane-A"})
+        self.assertEqual((launched, read_store(self.omh)), (["s-1"], {"s-1": "resumed"}))
+        # An unkeyed drop in the folder still reopens in a keyed tab (nothing says it was another terminal's).
+        launched.clear()
+        write_store(self.omh, [{"session_id": "s-2", "hermes_home": str(hermes), "cwd": str(here)}])
+        run({"ITERM_SESSION_ID": "pane-B"})
+        self.assertEqual(launched, ["s-2"])
+
     def test_shell_start_exits_silently_when_it_must_not_run(self) -> None:
         hermes = self.root / "hermes"
         write_state_db(hermes, [("s-1", "t", 4)])

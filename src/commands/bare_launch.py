@@ -474,9 +474,7 @@ def _launch_hermes_tui(args: argparse.Namespace) -> int | None:
     _run_startup_update_check(args)
     paths = _paths(args)
     if _auto_resume_applies(args, paths):
-        dropped = _claim_dropped_session(args, paths)
-        if dropped:
-            args.tui_resume = dropped
+        _claim_dropped_session(args, paths)
     tui_home = _own_runtime_home(args, paths)
     started_at = time.time()
     closed: list[tuple[str, str, tuple[str, ...]]] = []
@@ -514,31 +512,47 @@ def _auto_resume_applies(args: argparse.Namespace, paths) -> bool:
     return auto_resume_enabled(_tui_omh_home(args, paths), os.environ)
 
 
-def _resume_homes(args: argparse.Namespace, paths) -> set[str]:
-    """Every Hermes home this launch may open a session in, so a dropped one recorded in any of them is found.
-
-    The resolved home, or the profile home `-p` names; the profile Hermes' sticky `active_profile` picks when no
-    profile is named; and the TUI's own runtime home where this launch could open there (`_own_runtime_home`, which
-    sends a `--resume <id>` to the home whose store has the id).
-    """
+def _shared_launch_home(shared: Path, profile: str | None) -> Path | None:
+    """The Hermes home a launch on the shared gateway opens, picked as Hermes' own launcher picks it
+    (`hermes_cli/main.py:_apply_profile_override`, `hermes_cli/profiles.py:resolve_profile_env`): `-p default` is
+    the root, `-p NAME` is `<root>/profiles/<name>`; without `-p`, a profile-shaped home is itself, and a root opens
+    the profile its sticky `active_profile` names (`default` or none: the root). None for a name that cannot be a
+    directory (Hermes refuses it itself)."""
     from ..maintenance.hermes_resume import hermes_profile_home
-    from ..tui.own_runtime import hermes_root, tui_home_path
+    from ..tui.own_runtime import hermes_root
+
+    root = hermes_root(shared)
+    name = profile
+    if name is None:
+        if shared.parent.name == "profiles":
+            return shared
+        try:
+            name = (shared / "active_profile").read_text(encoding="utf-8-sig")
+        except (OSError, UnicodeDecodeError):
+            name = ""
+    name = name.strip()
+    if not name or name.casefold() == "default":
+        return root
+    return hermes_profile_home(root, name.lower())
+
+
+def _resume_homes(args: argparse.Namespace, paths) -> set[str]:
+    """The Hermes homes this launch can open a session in, so a dropped one is claimed only where it can reopen.
+
+    The home the shared gateway opens (`_shared_launch_home`: the `-p` profile, else the sticky `active_profile`,
+    else the resolved home), and the TUI's own runtime home where this launch could open there (no `-p`, no
+    `--hermes-home`, not Windows; `_own_runtime_home` sends a claimed session to the home it was claimed from). A
+    home neither of these reaches, such as the root while a sticky profile is set, is never searched: the entry would
+    be used up by a launch that opens somewhere else.
+    """
+    from ..tui.own_runtime import tui_home_path
 
     shared = Path(paths.hermes_home)
     profile = getattr(args, "tui_profile", None)
     homes: set[str] = set()
-    named = hermes_profile_home(shared, profile) if profile else shared
-    if named is not None:
-        homes.add(str(named))
-    if not profile and shared.parent.name != "profiles":
-        try:
-            sticky = (hermes_root(shared) / "active_profile").read_text(encoding="utf-8-sig").strip()
-        except (OSError, UnicodeDecodeError):
-            sticky = ""
-        if sticky and sticky != "default":
-            home = hermes_profile_home(shared, sticky)
-            if home is not None:
-                homes.add(str(home))
+    opened = _shared_launch_home(shared, profile)
+    if opened is not None:
+        homes.add(str(opened))
     if os.name != "nt" and not getattr(args, "hermes_home", None) and not profile:
         homes.add(str(tui_home_path(shared)))
     return homes
@@ -549,13 +563,15 @@ def _resume_homes(args: argparse.Namespace, paths) -> set[str]:
 _MAX_RESUME_CLAIMS = 16
 
 
-def _claim_dropped_session(args: argparse.Namespace, paths, environ=None) -> str:
+def _claim_dropped_session(args: argparse.Namespace, paths, environ=None, *, strict_keys: bool = False) -> str:
     """The id of the session this terminal (else this folder) dropped, claimed so no other reopen takes it; "".
 
     Claimed through `tui.live_sessions.claim_resumable` under its lock, so the entry is `resumed` before Hermes
     opens it: a resume Hermes refuses (the TUI exits 1 having said why) is never tried again. A session nothing was
-    said in has nothing to reopen (Hermes keeps no such session) and is skipped. A hit prints one line naming the
-    session (its title, else its folder) and the way to a new one.
+    said in has nothing to reopen (Hermes keeps no such session) and is skipped. A hit sets `args.tui_resume` and
+    `args.tui_resume_home`, the Hermes home it was claimed from, which `_own_runtime_home` opens; it prints one line
+    naming the session (its title, else its folder) and the way to a new one. `strict_keys` (the unattended shell
+    hook) refuses the folder fallback for a session another terminal's key holds.
     """
     from ..maintenance.hermes_resume import _session_card_row
     from ..tui.live_sessions import claim_resumable
@@ -568,7 +584,7 @@ def _claim_dropped_session(args: argparse.Namespace, paths, environ=None) -> str
     except OSError:
         cwd = ""
     for _ in range(_MAX_RESUME_CLAIMS):
-        entry = claim_resumable(omh_home, hermes_homes=homes, cwd=cwd, environ=environ)
+        entry = claim_resumable(omh_home, hermes_homes=homes, cwd=cwd, environ=environ, strict_keys=strict_keys)
         if entry is None:
             return ""
         session_id = str(entry["session_id"])
@@ -580,8 +596,17 @@ def _claim_dropped_session(args: argparse.Namespace, paths, environ=None) -> str
         where = f"{session_id}, {named}" if named else session_id
         print(f"omh: reopening the session this terminal left ({where}); run `omh --new` for a new one.",
               file=sys.stderr)
+        args.tui_resume = session_id
+        args.tui_resume_home = str(entry["hermes_home"])
         return session_id
     return ""
+
+
+def _same_home(left: str | Path, right: str | Path) -> bool:
+    try:
+        return os.path.realpath(left) == os.path.realpath(right)
+    except (OSError, ValueError):
+        return False
 
 
 def _own_runtime_home(args: argparse.Namespace, paths) -> Path | None:
@@ -609,11 +634,18 @@ def _own_runtime_home(args: argparse.Namespace, paths) -> Path | None:
     own = effective_runtime(paths.omh_home) == RUNTIME_OWN
     home = tui_home_path(Path(paths.hermes_home))
     resume = getattr(args, "tui_resume", None)
-    if resume and (home / "state.db").is_file():
+    claimed = getattr(args, "tui_resume_home", None)
+    located: tuple[bool, bool] | None = None  # (in the TUI's own home, in the shared one)
+    if resume and claimed:
+        # A reopened dropped session opens in the home it was claimed from, never where a lookup would guess.
+        located = (_same_home(claimed, home), not _same_home(claimed, home))
+    elif resume and (home / "state.db").is_file():
         from ..maintenance.hermes_resume import session_known
 
-        in_own = session_known(home / "state.db", resume)
-        in_shared = session_known(Path(paths.hermes_home) / "state.db", resume)
+        located = (session_known(home / "state.db", resume),
+                   session_known(Path(paths.hermes_home) / "state.db", resume))
+    if located is not None:
+        in_own, in_shared = located
         if own and in_shared and not in_own:
             print(f"omh: session {resume} lives on the shared Hermes gateway; opening it there.", file=sys.stderr)
             return None
