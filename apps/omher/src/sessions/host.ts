@@ -114,6 +114,9 @@ export interface SessionHost extends HistoryHost {
   codexConversation?(id: number): Promise<string | null>;
   /** How many asks wait: a Dock / launcher count, or a dot on the Windows taskbar button. 0 clears it. */
   badge(count: number): Promise<void>;
+  /** Keep the computer awake while agents work (src/lib/power.ts): a busy or idle edge. `now`: the setting went off,
+   *  so the shell lets go at once instead of a minute later. */
+  power?(busy: boolean, now: boolean): Promise<void>;
   /** Settings › Agents: the person's own agents, read and checked by the shell from omher's own file, and the broken
    *  entries. */
   customList(): Promise<CustomList>;
@@ -247,6 +250,10 @@ export class TauriHost implements SessionHost {
     const { invoke } = await this.core();
     await invoke("asks_badge", { count });
   }
+  async power(busy: boolean, now: boolean) {
+    const { invoke } = await this.core();
+    await invoke("power_busy", { busy, now });
+  }
   async customList() {
     const { invoke } = await this.core();
     return invoke<CustomList>("custom_agents_list");
@@ -348,8 +355,12 @@ export interface MockCall {
     | "custom.preview"
     | "custom.botPreview"
     | "custom.confirm"
-    | "custom.remove";
+    | "custom.remove"
+    | "power.busy";
   id?: number;
+  /** power.busy: the edge, and whether the shell lets go at once (the setting went off) */
+  busy?: boolean;
+  now?: boolean;
   /** ack: how many drawn bytes it acknowledges */
   bytes?: number;
   agent?: string;
@@ -791,6 +802,9 @@ export class MockHost implements SessionHost {
   }
   async badge(count: number) {
     this.g.__omherBadge = count;
+  }
+  async power(busy: boolean, now: boolean) {
+    this.log({ op: "power.busy", busy, now });
   }
 }
 
