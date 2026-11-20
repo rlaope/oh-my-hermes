@@ -4,6 +4,14 @@ All notable changes will be documented here.
 
 ## Unreleased
 
+- **show-reel's cut-sheet lane checks a remake's genre and pace by numbers.** Remaking a supplied reference now
+  starts by naming its genre from a 5 fps sheet and 30 fps strips (the material, the motif that survives every cut,
+  art piece or promo), and measures pace on the reference and each render: cuts per second, mean frame difference,
+  motion inside shots and near-still share, with the targets written into the contract. The page also lists the
+  devices that carry pace (2-4 frame bursts, scale motion with ease-out, shard or smear frames from the outgoing
+  image, exit glitches, speed ramps, re-framed sub-shots), asks that a recurring motif act at every appearance, and
+  says to add real feature chapters, not stretched shots, when a film gets longer.
+
 - **A bot answers a mid-turn message before it acts on it.** A message sent while the bot works (a steer) used to
   change only its next command, with nothing said, so the person could not tell it was read. OMH's reply line, which
   every session carries once in its system prompt, now asks for one line before the next tool call: what was taken
@@ -469,6 +477,17 @@ All notable changes will be documented here.
   contributor's version, which cached the whole binding, measured
   0.03 ms warm in the same harness, but it could hand back a stale home after a same-size rewrite or a changed path
   alias. Thanks @zangetsu787 (#2973).
+
+- **A delegation route write no longer drops a setting saved while it ran.** OMH built the new `config.yaml` from
+  the copy it validated, so a `hermes config set` landing in between (observed: `context_file_max_chars` reset to
+  unset, repeatedly) was overwritten. The route writer now re-reads the file just before replacing it and applies
+  only the three route keys (`delegation.model`, `provider`, `reasoning_effort`) to that read, retrying up to five
+  times while the file keeps changing, and leaves the file untouched when nothing would change. Every check (a
+  fallback's or restore's expected route, the endpoint guard, the unsupported-mapping refusal) runs on that same
+  read; a change to the route keys themselves is refused rather than overwritten, and the baseline put back at turn
+  end is the route the write really replaced. This is best effort: Hermes' CLI takes no OMH lock, so an edit landing
+  in the last moment between OMH's final check and the rename is still lost. Fixes #2998. Reported and first fixed
+  by @OptionalCoin in #2999.
 
 - **Hermes Bug Hunter: the false-alarm benchmark gets traps a strong reviewer actually falls for.** In the first
   live run (3 runs per case per arm) both arms raised 3 false alarms in 33 trap runs, all on the one trap whose proof

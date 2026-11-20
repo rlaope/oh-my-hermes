@@ -2376,7 +2376,7 @@ def update_config(
     caller and propagates unchanged, as it did before this function existed.
     """
     from ..plugin_bundle.omh.delegation_route_restore import route_write_lock
-    from ..plugin_bundle.omh.delegation_routing import config_file_signature, read_config_snapshot
+    from ..plugin_bundle.omh.delegation_routing import config_unchanged_since, read_config_snapshot
 
     def _attempt() -> ConfigUpdate | None:
         if path.is_symlink():
@@ -2410,7 +2410,7 @@ def update_config(
         if not change.changed or dry_run:
             return ConfigUpdate(change.changed, False, change.message, change.text, 1, False)
         if not atomic_replace_text(
-            path, change.text, guard=lambda: config_file_signature(path) == signature
+            path, change.text, guard=lambda: config_unchanged_since(path, signature, text)
         ):
             return None
         return ConfigUpdate(True, True, change.message, change.text, 1, False)
