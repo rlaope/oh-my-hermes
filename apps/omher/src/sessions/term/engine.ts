@@ -18,6 +18,7 @@ import { attachLinks } from "./engine-links";
 import { attachInput } from "./engine-input";
 import { attachIme } from "./engine-ime";
 import { attachMarks } from "./engine-marks";
+import { attachOsc52 } from "./engine-osc52";
 import { FIND_EVENT, makeFinder, type FindRequest } from "./engine-find";
 import { attachImages, detachImages, loadImages } from "./engine-image";
 import { GPU_OPTIONS } from "./look";
@@ -302,6 +303,8 @@ export function afterOpen(term: Terminal, el: HTMLElement, settings: TermSetting
   const undoIme = attachIme(term, el);
   // what the shell says of itself: prompt marks (OSC 133), its folder (OSC 7), progress (OSC 9;4) (engine-marks.ts)
   const undoMarks = attachMarks(term, el);
+  // a program's copy to the clipboard (OSC 52), copy only (engine-osc52.ts)
+  const undoOsc52 = attachOsc52(term, el);
   // a font that arrives after the terminal drew (the symbols font loads on its first glyph, or JetBrains Mono came
   // after the wait for it gave up): the cell is measured again in the font now drawn, and the GPU renderer's glyph
   // cache, which holds the fallback's shapes, is cleared
@@ -326,6 +329,7 @@ export function afterOpen(term: Terminal, el: HTMLElement, settings: TermSetting
     if (s.gone) return;
     fonts?.removeEventListener?.("loadingdone", fontsLoaded);
     undoMarks();
+    undoOsc52();
     undoIme();
     undoInput();
     undoLinks();

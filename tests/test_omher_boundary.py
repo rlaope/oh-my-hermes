@@ -43,6 +43,10 @@ RULES = (
     "Otherwise, including a running session with the undo window Off, it closes the window (`window_close`) and stops no"
     " session.",
     "One press closes one session: while ⌘W stays held, its repeats close nothing more.",
+    "38. A program in a terminal may put text on the clipboard, never read it.",
+    "A query (`?`) is never answered, so no program reads the clipboard;",
+    "A copy is taken only as the answer to the person: that terminal has the keyboard, and the person pressed a key or"
+    " clicked in the window within the last 3 seconds;",
     "Off macOS, Ctrl+Shift+C and Ctrl+Insert copy the selection, and Ctrl+Shift+V and Shift+Insert are the page's own"
     " paste.",
     "Reset puts back the terminal's own state in the page and sends nothing to the program,",
@@ -437,9 +441,10 @@ class DocPins(unittest.TestCase):
         # 34 (a TERMINALS session's owner-only status file under ~/.omher/terminals and its inbox, which only shows rule
         # 11's card); 35: rule 35 (one free-space statistic of the home volume a minute, `disk-level`, deletes
         # nothing); 36: rule 36 (the window's close hides to the tray, quitting stays explicit); 37: rule 37 (keep
-        # awake: one idle-sleep assertion while agents work). The rules stay numbered 1..n with no gap or repeat.
+        # awake: one idle-sleep assertion while agents work); 38: rule 38 (a program's OSC 52 copy to the clipboard,
+        # copy only, never a read, off in Settings › Terminal). The rules stay numbered 1..n with no gap or repeat.
         rules = re.findall(r"^(\d+)\. ", DOC.read_text(encoding="utf-8"), re.M)
-        self.assertTrue(6 <= len(rules) <= 37, len(rules))
+        self.assertTrue(6 <= len(rules) <= 38, len(rules))
         self.assertEqual([int(n) for n in rules], list(range(1, len(rules) + 1)))
 
     def test_glossary_and_docs_index_name_omher(self) -> None:
@@ -640,6 +645,23 @@ class LinkChipsFetchNothing(unittest.TestCase):
         self.assertIn("export const IMAGE_STORAGE_MB = 32;", images)
         self.assertIn("storageLimit: IMAGE_STORAGE_MB,", images)
         self.assertNotIn("readKittyFile", images)
+
+    def test_a_programs_clipboard_copy_is_write_only_and_capped(self) -> None:
+        # rule 38: OSC 52 writes decoded text to the clipboard, answers no query, reads nothing, is capped and can be
+        # turned off; it is the one OSC 52 handler in the page
+        osc = (UI_SRC / "sessions" / "term" / "engine-osc52.ts").read_text(encoding="utf-8")
+        self.assertIn("export const OSC52_MAX_CHARS = 1_000_000;", osc)
+        self.assertIn('b64 === "?") return null;', osc)
+        self.assertIn("if (!readTermSettings().osc52) return true;", osc)
+        self.assertIn("navigator.clipboard?.writeText(text)", osc)
+        # only the terminal with the keyboard, within moments of the person's key or click; no control characters
+        self.assertIn("export const OSC52_ACTIVE_MS = 3000;", osc)
+        self.assertIn("term.textarea === document.activeElement", osc)
+        self.assertIn("/[\\x00-\\x08\\x0b\\x0c\\x0e-\\x1f\\x7f-\\x9f]/", osc)
+        for bad in ("readText", "clipboard.read(", "term.input(", ".paste("):
+            self.assertNotIn(bad, osc, bad)
+        handlers = [p for p in [*UI_SRC.rglob("*.ts"), *UI_SRC.rglob("*.tsx")] if "registerOscHandler(52" in p.read_text(encoding="utf-8")]
+        self.assertEqual([p.name for p in handlers], ["engine-osc52.ts"])
 
     def test_terminal_settings_are_one_record_and_read_no_other_programs_files(self) -> None:
         term = UI_SRC / "sessions" / "term"

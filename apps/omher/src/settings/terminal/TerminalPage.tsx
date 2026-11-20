@@ -316,6 +316,9 @@ export function TerminalPage() {
         <Row title={t("term.confirmPaste")} hints={[t("term.confirmPasteHint")]} testId="term-confirm-paste-row">
           <Seg small label={t("term.confirmPaste")} value={term.confirmPaste ? "on" : "off"} options={ON_OFF()} onChange={(v) => set({ confirmPaste: v === "on" })} testId="term-confirm-paste" />
         </Row>
+        <Row title={t("term.osc52")} hints={[t("term.osc52Hint")]} testId="term-osc52-row">
+          <Seg small label={t("term.osc52")} value={term.osc52 ? "on" : "off"} options={ON_OFF()} onChange={(v) => set({ osc52: v === "on" })} testId="term-osc52" />
+        </Row>
       </div>
 
       <div className="st-gh">{t("term.history")}</div>
