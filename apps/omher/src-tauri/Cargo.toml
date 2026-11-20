@@ -25,6 +25,8 @@ tauri-plugin-updater = "2"
 tauri-plugin-process = "2"
 # omher://terminal/<id> links: the OS hands them to omher (term_link.rs takes only that shape)
 tauri-plugin-deep-link = "2"
+# Settings › Terminal › Import from…: iTerm2 / Apple Terminal prefs (term_import.rs); already in the tree via tauri
+plist = "1"
 
 [target.'cfg(unix)'.dependencies]
 libc = "0.2"

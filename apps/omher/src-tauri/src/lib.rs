@@ -20,6 +20,7 @@ mod sessions;
 mod setup;
 mod tasks;
 mod term_history;
+mod term_import;
 mod term_link;
 mod term_share;
 mod this_host;
@@ -616,6 +617,20 @@ async fn term_history_clear() -> Result<(), String> {
     term_history::clear(&user_home()?)
 }
 
+/// Settings › Terminal › Import from… (macOS): which of iTerm2 / Apple Terminal have a prefs file to read.
+#[tauri::command]
+async fn term_import_list() -> Result<Vec<&'static str>, String> {
+    Ok(term_import::list(&user_home()?))
+}
+
+/// The profiles (names, colours, font) of `app` (`iterm2` | `terminal`), read once from its fixed prefs file.
+#[tauri::command]
+async fn term_import_read(app: String) -> Result<Vec<term_import::Profile>, String> {
+    let app = term_import::App::parse(&app).ok_or("unknown app")?;
+    let home = user_home()?;
+    tauri::async_runtime::spawn_blocking(move || term_import::read(&home, app)).await.map_err(|e| e.to_string())?
+}
+
 /// A TERMINALS session's status file for bots holding its link (`~/.omher/terminals/<link>.json`, owner-only) and its
 /// inbox folder (`term_share`). `status`: what the page shows of it (title, CLI, folder, state, last line).
 #[tauri::command]
@@ -911,6 +926,8 @@ pub fn run() {
             term_history_remove,
             term_history_prune,
             term_history_clear,
+            term_import_list,
+            term_import_read,
             term_share_write,
             term_share_remove,
             term_share_prune,
