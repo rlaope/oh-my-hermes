@@ -929,6 +929,42 @@ with the brief's own. Reusing the reference's literal phrases or objects is
 overfitting, not a remake. Record the reference URL and that it was used for
 timing and grammar only.
 
+Name the genre before any row: what the material is (handheld real footage,
+3D, flat vector, screen capture), which motif survives every cut, and whether
+it is an art piece or a product promo. Read it from a 5 fps sheet and a few
+1 s strips at 30 fps (`fps=30,tile=6x5`); 2-4 fps sheets hide it. A remake that
+traces the layouts in another medium, or turns an art piece into a feature
+promo, misses even when its timing matches.
+
+Measure pace as numbers on the reference and on each candidate render, with the
+still end card cut off: hard cuts per second (frame-to-frame mean luma
+difference above about 25 at 160x90 grey, 30 fps), mean difference, the median
+difference inside shots, and the share of near-still frames (difference below
+about 1.5). A longer remake may run at half the reference's cut rate, which
+reads calmer, but motion inside shots should approach the reference's level.
+Put the targets in the contract and do not deliver a render that misses them.
+Fixing "too chaotic" by banning short cuts and effects tends to kill the pace;
+chaos usually came from clutter and tiny text, not from speed. The pace usually
+comes from these devices:
+
+- a new picture every 2-4 frames in bursts, with a 2-3 frame breath every
+  0.5-1 s
+- constant scale motion inside shots, with strong ease-out
+- 1-2 frame shard or smear transitions built from the outgoing image's own
+  pixels (a flat-colour smear reads as a render bug)
+- slice glitches on exit frames and pop-on type
+- speed ramps on footage
+- re-framed sub-shots of one plate (crop, mirror, invert), which raise the cut
+  rate without new footage
+
+A recurring motif needs a verb at every appearance (target lock, mask, wipe,
+letter, container); one that only floats on top reads as a template overlay.
+Check that it hands over across cuts within a stated position and size
+tolerance. When the film gets longer, add chapters drawn from the subject's
+real features instead of stretching shots. Grade every plate into one house
+look; one leftover plate in native colour makes the whole reel read as stock
+montage.
+
 ## Hand-off and review rounds for a delegated build
 
 The cut sheet becomes the builder's spec: the contract line, the locked subject

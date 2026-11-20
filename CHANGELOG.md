@@ -4,6 +4,14 @@ All notable changes will be documented here.
 
 ## Unreleased
 
+- **show-reel's cut-sheet lane checks a remake's genre and pace by numbers.** Remaking a supplied reference now
+  starts by naming its genre from a 5 fps sheet and 30 fps strips (the material, the motif that survives every cut,
+  art piece or promo), and measures pace on the reference and each render: cuts per second, mean frame difference,
+  motion inside shots and near-still share, with the targets written into the contract. The page also lists the
+  devices that carry pace (2-4 frame bursts, scale motion with ease-out, shard or smear frames from the outgoing
+  image, exit glitches, speed ramps, re-framed sub-shots), asks that a recurring motif act at every appearance, and
+  says to add real feature chapters, not stretched shots, when a film gets longer.
+
 - **A bot answers a mid-turn message before it acts on it.** A message sent while the bot works (a steer) used to
   change only its next command, with nothing said, so the person could not tell it was read. OMH's reply line, which
   every session carries once in its system prompt, now asks for one line before the next tool call: what was taken
@@ -452,6 +460,15 @@ All notable changes will be documented here.
   counted after it (`+1 test run · 1 agent`); a narrow terminal falls back to the old row. As the wait ends, one muted
   row says so for 3 seconds (`✓ Review finished`, `✗ … failed`, `· Tests ended` for a process, which has no exit
   code). During a turn, `? waiting on you` now reads `? waiting for your approval` or `? waiting for your answer`.
+
+- **Hermes Bug Hunter: the false-alarm benchmark gets traps a strong reviewer actually falls for.** In the first
+  live run (3 runs per case per arm) both arms raised 3 false alarms in 33 trap runs, all on the one trap whose proof
+  sits outside the hunk (a lock the caller holds); the other 10 traps were judged clean every time, so the set could
+  not show a difference. `benchmarks/review-false-alarms` adds 12 traps of that shape across Python, JavaScript and
+  Go, each with the files that prove it safe in `context/` (a sort done two files upstream, an `Atoi` error a regex
+  rules out, a map written only before the server starts, a depth the settings loader bounds), and 4 controls whose
+  bug also shows only with a file outside the hunk, so an over-cautious reviewer still loses hits. The corpus goes
+  from 11 traps and 6 controls to 23 and 10.
 
 ## 4.0.8 - 2026-11-15
 

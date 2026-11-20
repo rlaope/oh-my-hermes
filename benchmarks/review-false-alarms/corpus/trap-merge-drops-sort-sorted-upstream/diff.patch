@@ -1,0 +1,11 @@
+--- a/app/intervals.py
++++ b/app/intervals.py
+@@ -8,7 +8,7 @@
+ def merge_busy(intervals: list[tuple[int, int]]) -> list[tuple[int, int]]:
+     """Join overlapping or touching intervals."""
+     merged: list[tuple[int, int]] = []
+-    for start, end in sorted(intervals):
++    for start, end in intervals:
+         if merged and start <= merged[-1][1]:
+             merged[-1] = (merged[-1][0], max(merged[-1][1], end))
+         else:

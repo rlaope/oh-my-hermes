@@ -1,0 +1,7 @@
+{
+  "id": "trap-naive-datetime-documented-utc",
+  "kind": "trap",
+  "language": "python",
+  "expected": "clean",
+  "why": "expires_at is compared with a naive datetime, which looks like a timezone bug. app/clock.py documents that every timestamp in the app is naive UTC, app/models.py builds expires_at from the same utc_now(), and tests/test_sessions.py pins both sides as naive UTC. Both operands are naive UTC, so the comparison is exact and cannot raise."
+}

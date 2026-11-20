@@ -1,0 +1,7 @@
+{
+  "id": "trap-js-inclusive-token-end",
+  "kind": "trap",
+  "language": "javascript",
+  "expected": "clean",
+  "why": "text.slice(token.start, token.end + 1) and cursor = token.end + 1 look one past the token. web/lexer.js documents end as the index of the token's last character (inclusive), and web/lexer.test.js pins it (\"c\" at index 3 has start 3, end 3), so + 1 is exactly the token. The change shows the user's casing instead of the lexer's lowercased text."
+}

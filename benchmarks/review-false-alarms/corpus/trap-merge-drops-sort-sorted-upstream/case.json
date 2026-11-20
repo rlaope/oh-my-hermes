@@ -1,0 +1,7 @@
+{
+  "id": "trap-merge-drops-sort-sorted-upstream",
+  "kind": "trap",
+  "language": "python",
+  "expected": "clean",
+  "why": "merge_busy stops sorting its input, which would break the merge for unsorted intervals. Its only caller is free_slots in app/calendar.py, which passes Store.busy_intervals straight through, and app/store.py returns those intervals sorted by start. The sort happens two files away."
+}
