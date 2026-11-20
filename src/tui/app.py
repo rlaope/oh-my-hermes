@@ -703,7 +703,8 @@ CLOSE_GRACE_SECONDS = 0.5
 TERMINATE_GRACE_SECONDS = 2.0
 # By default these end the process without unwinding: the shell stays raw and the
 # gateway is orphaned. Raised as SystemExit, they restore and reap on the way out.
-EXIT_SIGNALS = ("SIGTERM", "SIGHUP")
+# SIGBREAK is Windows' (Ctrl+Break, or the console window closed); a name the platform lacks is skipped.
+EXIT_SIGNALS = ("SIGTERM", "SIGHUP", "SIGBREAK")
 
 BANNER_BRAND = "⚚ OH-MY-HERMES"
 NATIVE_WORD = "Native"  # the last word of the badge that starts the info line, in the launch look's colours

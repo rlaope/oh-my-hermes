@@ -15,7 +15,10 @@ a full pipe would block the gateway mid-write. Inbound items wait in memory
 until `poll` takes them, except the answer to a blocking `call`, which goes
 straight to its caller. `wake_fd` is a pipe that is readable while an item
 waits for `poll`, so the TUI's loop can select on it next to its input and
-sleep until either has something. Nothing here writes a frame to disk or to a
+sleep until either has something (on Windows, where select waits on sockets
+only, the console backend peeks at it instead). The pipe holds at most one
+byte, so signalling never blocks and draining reads only a byte that is
+there, without the non-blocking mode Windows pipes lack before Python 3.12. Nothing here writes a frame to disk or to a
 log.
 """
 
@@ -257,6 +260,7 @@ class GatewayClient:
         self._stderr_lock = threading.Lock()
         self._stderr: deque[str] = deque(maxlen=STDERR_TAIL_LINES)
         self._wake: tuple[int, int] | None = None  # (read end, write end) once `wake_fd` was asked for
+        self._wake_pending = False  # the wake pipe holds its one byte
         self.capabilities: dict[str, Any] = {}
 
     def start(self, ready_timeout: float = 60.0, cancel: Callable[[], bool] | None = None) -> Event:
@@ -353,17 +357,21 @@ class GatewayClient:
         self._write({"jsonrpc": "2.0", "id": request_id, **frame})
 
     def wake_fd(self) -> int:
-        """A descriptor that is readable while an item waits for `poll`; `poll` empties it. POSIX only.
+        """A descriptor that is readable while an item waits for `poll`; `poll` empties it.
 
         The pipe is made on the first call, and is readable at once if items
-        are already queued.
+        are already queued. Non-blocking where the platform allows it (not
+        Windows: `os.set_blocking` takes a pipe there only from 3.12); the
+        one-byte rule keeps either end from blocking anyway.
         """
         with self._inbox_ready:
             if self._wake is None:
                 read_end, write_end = os.pipe()
-                os.set_blocking(read_end, False)
-                os.set_blocking(write_end, False)
+                if os.name != "nt":
+                    os.set_blocking(read_end, False)
+                    os.set_blocking(write_end, False)
                 self._wake = (read_end, write_end)
+                self._wake_pending = False
                 if self._inbox:
                     self._signal_wake()
             return self._wake[0]
@@ -423,6 +431,7 @@ class GatewayClient:
                 stream.close()
         with self._inbox_ready:  # a reader still alive writes the wake pipe under this lock: none can after it
             wake, self._wake = self._wake, None
+            self._wake_pending = False
         for descriptor in wake or ():
             os.close(descriptor)
         return code
@@ -525,23 +534,19 @@ class GatewayClient:
             self._inbox_ready.notify_all()
 
     def _signal_wake(self) -> None:
-        """Make the wake pipe readable; called with `_inbox_ready` held. A full pipe is readable already."""
-        if self._wake is not None:
-            try:
-                os.write(self._wake[1], b"\0")
-            except BlockingIOError:
-                pass
+        """Make the wake pipe readable; called with `_inbox_ready` held. One that holds its byte is readable already."""
+        if self._wake is not None and not self._wake_pending:
+            os.write(self._wake[1], b"\0")
+            self._wake_pending = True
 
     def _drain_wake(self) -> None:
+        """Take the wake pipe's byte, if it holds one: never a read that could wait on an empty pipe."""
         with self._inbox_ready:
             wake = self._wake
-            if wake is None:
+            if wake is None or not self._wake_pending:
                 return
-            try:
-                while os.read(wake[0], 4096):
-                    pass
-            except BlockingIOError:
-                pass
+            os.read(wake[0], 1)
+            self._wake_pending = False
 
 
 def _is_ready(item: Inbound) -> bool:

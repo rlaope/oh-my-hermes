@@ -1461,7 +1461,8 @@ def _refresh_tui_home(args: argparse.Namespace) -> dict[str, object] | None:
 
     Unless the OMH home's saved choice is `shared` (None then, so a profile
     left behind by `omh theme runtime shared` is not refreshed), and not on
-    Windows, where the OMH TUI does not run. The plugin bundle the profile
+    Windows, where bare `omh` never builds that profile: it is a tree of
+    symbolic links, which needs Developer Mode there. The plugin bundle the profile
     links moved with this update, and a skill or credential the root gained
     since the last launch is carried now rather than at the next `omh`. A
     failure is noted and never fails the update: the next bare `omh` builds

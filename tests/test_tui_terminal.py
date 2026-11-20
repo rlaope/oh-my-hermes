@@ -129,7 +129,8 @@ class TerminalSupportedTests(unittest.TestCase):
             ):
                 with self.subTest(expected=expected):
                     self.assertEqual(terminal_blocker(stdin, stdout, environ), expected)
-        with patch.object(terminal_module, "termios", None):
+        # A platform with no termios that is not Windows (which has its console backend) falls back first of all.
+        with patch.object(terminal_module, "termios", None), patch.object(terminal_module.os, "name", "posix"):
             self.assertEqual(
                 terminal_blocker(_Stream(), _Stream(), {"TERM": "dumb"}),
                 "the OMH TUI needs termios, which this platform does not have",

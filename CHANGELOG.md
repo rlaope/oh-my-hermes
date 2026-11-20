@@ -4,6 +4,17 @@ All notable changes will be documented here.
 
 ## Unreleased
 
+- **The OMH TUI runs on native Windows, not only under WSL.** Bare `omh` on Windows used to open Hermes' own terminal
+  every time, because the OMH TUI needed termios. Where there is no termios its terminal layer now enters the Windows
+  console instead: VT input and output modes with UTF-8 code pages (all put back on exit, a failed start included),
+  console input records read on a thread and handed on as the same UTF-8 escape bytes a POSIX terminal sends, the
+  window size polled in place of SIGWINCH, and a closed console ending the session as a hung-up pty does (closing the
+  window or Ctrl+Break arrives as SIGBREAK, which now unwinds: console restored, gateway reaped). The
+  gateway's wake pipe now holds at most one byte, so it never blocks without the non-blocking mode Windows pipes lack
+  before Python 3.12, and the console peeks at it instead of select. `omh doctor` reports the real OMH TUI state on
+  Windows. It needs Windows Terminal or a VT-capable console (an old conhost falls back with one line saying why); a
+  Windows user still has to try it.
+
 - **omher: ideas from kasaterm.** Behaviour and numbers borrowed from 2rami/kasaterm (MIT), code written fresh.
   - **Undo a closed terminal.** Closing a running TERMINALS row can be undone for 10 seconds: the row leaves at
     once, a toast offers Undo (⌘Z / Ctrl+Shift+Z), and the same terminal comes back with its program and scrollback,
