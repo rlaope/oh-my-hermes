@@ -1,0 +1,7 @@
+{
+  "id": "trap-go-stat-then-write-in-private-dir",
+  "kind": "trap",
+  "language": "go",
+  "expected": "clean",
+  "why": "WriteOnce checks that a file does not exist and then creates it, a textbook check-then-use race. Every path it gets is inside the run's own scratch directory: internal/stage/workdir.go creates it with os.MkdirTemp, which makes it mode 0700 under a random name, and only this process writes there, one step at a time (Run in internal/stage/run.go). No other user can create or swap a file between the check and the write."
+}

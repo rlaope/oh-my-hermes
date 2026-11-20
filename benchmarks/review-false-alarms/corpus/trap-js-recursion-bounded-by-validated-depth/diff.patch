@@ -1,0 +1,30 @@
+--- a/web/menu.js
++++ b/web/menu.js
+@@ -1,6 +1,10 @@
+-export function flattenMenu(category) {
+-  return [
+-    { id: category.id, label: category.label, level: 0 },
+-    ...category.children.map((child) => ({ id: child.id, label: child.label, level: 1 })),
+-  ];
++export function flattenMenu(category, depth) {
++  const items = [{ id: category.id, label: category.label, level: 0 }];
++  if (depth === 0) return items;
++  for (const child of category.children) {
++    for (const item of flattenMenu(child, depth - 1)) {
++      items.push({ ...item, level: item.level + 1 });
++    }
++  }
++  return items;
+ }
+--- a/web/nav.js
++++ b/web/nav.js
+@@ -1,7 +1,8 @@
+ import { loadCategories } from "./categories.js";
+ import { flattenMenu } from "./menu.js";
++import { settings } from "./settings.js";
+ 
+ export async function navItems(db) {
+   const root = await loadCategories(db);
+-  return flattenMenu(root).slice(1);
++  return flattenMenu(root, settings.menuDepth).slice(1);
+ }

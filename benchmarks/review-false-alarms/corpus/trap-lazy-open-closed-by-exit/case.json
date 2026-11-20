@@ -1,0 +1,7 @@
+{
+  "id": "trap-lazy-open-closed-by-exit",
+  "kind": "trap",
+  "language": "python",
+  "expected": "clean",
+  "why": "write() now opens the output file on the first row and nothing on the write path closes it. close() closes self._fh, __exit__ (further down the file) calls close(), and the only user, app/jobs.py, holds the Exporter in a with block, so the file is closed on success and on error. Not creating a file for an empty export is the stated purpose (the docstring in the hunk)."
+}

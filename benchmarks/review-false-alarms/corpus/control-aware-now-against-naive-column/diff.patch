@@ -1,0 +1,12 @@
+--- a/app/tokens.py
++++ b/app/tokens.py
+@@ -1,7 +1,7 @@
+-from datetime import datetime
++from app.clock import utc_now
+ 
+ 
+ def is_valid(token) -> bool:
+     if token.revoked:
+         return False
+-    return token.expires_at > datetime.utcnow()
++    return token.expires_at > utc_now()
