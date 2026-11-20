@@ -18,6 +18,7 @@ import { useLookAttributes, useThemeAttribute } from "./theme";
 import { useShortcuts } from "./shortcuts";
 import { useAsksBadge } from "./badge";
 import { startPeers } from "../peers/links";
+import { startPower } from "../lib/power";
 import { setTerminalCwd, useTermPanel } from "../terminal/state";
 
 // The terminal view (and xterm with it) loads when a session is first opened.
@@ -36,6 +37,8 @@ export function App() {
   useEffect(() => {
     void s.init();
     void startPeers();
+    // close = hide to the tray, keep awake while agents work (Settings › General)
+    void startPower();
     // init is idempotent in the store; run once on mount
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);

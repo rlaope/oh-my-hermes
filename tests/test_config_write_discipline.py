@@ -170,8 +170,8 @@ class UpdateConfigDisciplineTests(unittest.TestCase):
                 return set_memory_provider(text, "omh")
 
             # Neutralise exactly the compare and nothing else: the guard
-            # is `config_file_signature(path) == signature`, so answering it
-            # with the signature this attempt read makes it always true.
+            # is `config_unchanged_since(path, signature, text)`, so
+            # answering it True makes it always pass.
             seen: list[object] = []
             real_snapshot = read_config_snapshot
 
@@ -184,8 +184,8 @@ class UpdateConfigDisciplineTests(unittest.TestCase):
                 "omh.plugin_bundle.omh.delegation_routing.read_config_snapshot",
                 _recording_snapshot,
             ), mock.patch(
-                "omh.plugin_bundle.omh.delegation_routing.config_file_signature",
-                lambda _path: seen[-1],
+                "omh.plugin_bundle.omh.delegation_routing.config_unchanged_since",
+                lambda _path, _signature, _text: True,
             ):
                 update = update_config(home.config, _claim, omh_home=home.omh)
 

@@ -10,6 +10,17 @@ export interface ShellStarted {
   id: number;
   /** the folder the shell started in: the one asked for when it exists, else home */
   cwd: string;
+  /** the shell asked for is not on this computer (any more): its name; the default shell started instead */
+  missing?: string;
+}
+
+/** One shell a Shell terminal may run (src-tauri `shells_available`: fixed candidates whose files exist, the default
+ *  first). Only `id` ever goes back to the shell; the program and its arguments are decided there. */
+export interface ShellInfo {
+  id: string;
+  label: string;
+  path: string;
+  default: boolean;
 }
 
 /** `__omherShellHost` (e2e): the mock computer's name, as macOS reports it (with `.local`). */
@@ -37,8 +48,11 @@ export function learnThisHost(): Promise<void> {
 
 export interface ShellHost {
   readonly kind: "tauri" | "mock";
-  /** Start the login shell in `cwd` (null: home). Only a folder and a size go to the shell: never a program. */
-  start(cwd: string | null, cols: number, rows: number, onData: (d: Uint8Array | string) => void, onExit: (code: number | null) => void): Promise<ShellStarted>;
+  /** Start a shell in `cwd` (null: home): `shell`, an id from `shells()`, else the login shell. Only a folder, a size
+   *  and that id go to the shell: never a program. */
+  start(cwd: string | null, cols: number, rows: number, onData: (d: Uint8Array | string) => void, onExit: (code: number | null) => void, shell?: string): Promise<ShellStarted>;
+  /** The shells this computer offers for a Shell terminal, the default first. */
+  shells(): Promise<ShellInfo[]>;
   write(id: number, data: string): Promise<void>;
   /** The terminal has drawn `bytes` more of shell `id`'s output (the PTY's output credit). */
   ack(id: number, bytes: number): void;
@@ -52,14 +66,18 @@ export interface ShellHost {
 class TauriShellHost implements ShellHost {
   readonly kind = "tauri" as const;
   private core = () => import("@tauri-apps/api/core");
-  async start(cwd: string | null, cols: number, rows: number, onData: (d: Uint8Array) => void, onExit: (c: number | null) => void) {
+  async start(cwd: string | null, cols: number, rows: number, onData: (d: Uint8Array) => void, onExit: (c: number | null) => void, shell?: string) {
     const { invoke, Channel } = await this.core();
     const data = new Channel<ArrayBuffer>();
     data.onmessage = (b) => onData(new Uint8Array(b));
     const exit = new Channel<number | null>();
     exit.onmessage = (c) => onExit(c);
     await learnThisHost();
-    return invoke<ShellStarted>("shell_start", { cwd, cols, rows, onData: data, onExit: exit });
+    return invoke<ShellStarted>("shell_start", { cwd, shellId: shell || null, cols, rows, onData: data, onExit: exit });
+  }
+  async shells() {
+    const { invoke } = await this.core();
+    return invoke<ShellInfo[]>("shells_available");
   }
   async write(id: number, data: string) {
     const { invoke } = await this.core();
@@ -96,14 +114,28 @@ class TauriShellHost implements ShellHost {
 // ---- Mock -----------------------------------------------------------------------------------
 
 export type MockShellCall =
-  | { op: "start"; id: number; cwd: string | null; at: string; cols: number; rows: number }
+  | { op: "start"; id: number; cwd: string | null; at: string; cols: number; rows: number; shell?: string }
   | { op: "write"; id: number; data: string }
   | { op: "resize"; id: number; cols: number; rows: number }
   | { op: "close"; id: number };
 
 /** `__omherShellDie` (e2e): the next shells cannot start (`error`: start fails with it) or end at once with `code`,
  *  as a broken login shell does. */
-type MockGlobals = { __omherShellCalls?: MockShellCall[]; __omherShellHome?: string; __omherShellFolders?: string[]; __omherShellDie?: { error?: string; code?: number } };
+type MockGlobals = {
+  __omherShellCalls?: MockShellCall[];
+  __omherShellHome?: string;
+  __omherShellFolders?: string[];
+  __omherShellDie?: { error?: string; code?: number };
+  /** e2e: the shells this mock computer has (default: zsh, bash, fish) */
+  __omherMockShells?: ShellInfo[];
+};
+
+/** The mock computer's shells, as `shells_available` sends them on a Mac with fish installed. */
+export const MOCK_SHELLS: ShellInfo[] = [
+  { id: "unix:/bin/zsh", label: "zsh", path: "/bin/zsh", default: true },
+  { id: "unix:/bin/bash", label: "bash", path: "/bin/bash", default: false },
+  { id: "unix:/opt/homebrew/bin/fish", label: "fish", path: "/opt/homebrew/bin/fish", default: false },
+];
 
 const MOCK_HOME = "/home/you";
 const leafOf = (p: string) => p.replace(/[\\/]+$/, "").split(/[\\/]/).pop() || p;
@@ -123,7 +155,7 @@ const TEST_RUN = [
   " \x1b[1mTest Files\x1b[0m  \x1b[1;31m1 failed\x1b[0m\x1b[2m | \x1b[0m\x1b[1;32m2 passed\x1b[0m \x1b[2m(3)\x1b[0m",
 ];
 
-class MockShellHost implements ShellHost {
+export class MockShellHost implements ShellHost {
   readonly kind = "mock" as const;
   private live = new Map<number, { line: string; cwd: string; out: (d: string) => void; exit: (c: number | null) => void }>();
   constructor(private g: MockGlobals = globalThis as MockGlobals) {}
@@ -134,8 +166,16 @@ class MockShellHost implements ShellHost {
     const home = this.g.__omherShellHome ?? MOCK_HOME;
     return `\x1b[32myou@mock\x1b[0m \x1b[34m${cwd === home ? "~" : leafOf(cwd)}\x1b[0m % `;
   }
-  async start(cwd: string | null, cols: number, rows: number, onData: (d: string) => void, onExit: (c: number | null) => void) {
+  async shells() {
+    return (this.g.__omherMockShells ?? MOCK_SHELLS).map((s) => ({ ...s }));
+  }
+  async start(cwd: string | null, cols: number, rows: number, onData: (d: string) => void, onExit: (c: number | null) => void, shell?: string) {
     await learnThisHost();
+    // as the shell does: the id is looked up in this computer's list again; one that is not there starts the default
+    const list = await this.shells();
+    const want = shell ? list.find((s) => s.id === shell) : undefined;
+    const missing = shell && !want ? shell.replace(/^unix:/, "").split("/").pop() || shell : undefined;
+    const name = want && !want.default ? `${want.label} ` : "";
     const id = nextMockPty();
     const home = this.g.__omherShellHome ?? MOCK_HOME;
     // as the shell does: the folder when it exists (the mock's list; any absolute path when none is set), else home
@@ -144,7 +184,7 @@ class MockShellHost implements ShellHost {
     const at = ok ? cwd! : home;
     const die = this.g.__omherShellDie;
     if (die?.error) throw new Error(die.error);
-    this.log({ op: "start", id, cwd, at, cols, rows });
+    this.log({ op: "start", id, cwd, at, cols, rows, ...(shell ? { shell } : {}) });
     this.live.set(id, { line: "", cwd: at, out: onData, exit: onExit });
     mockPtyOut(id, onData);
     if (typeof die?.code === "number") {
@@ -155,8 +195,8 @@ class MockShellHost implements ShellHost {
       }, 20);
       return { id, cwd: at };
     }
-    setTimeout(() => onData(`\x1b[2m(mock) login shell in ${at}\x1b[0m\r\n${this.prompt(at)}`), 20);
-    return { id, cwd: at };
+    setTimeout(() => onData(`\x1b[2m(mock) ${name}login shell in ${at}\x1b[0m\r\n${this.prompt(at)}`), 20);
+    return { id, cwd: at, ...(missing ? { missing } : {}) };
   }
   ack() {}
   async write(id: number, data: string) {

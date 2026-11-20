@@ -3,7 +3,7 @@
 import { SESSIONS_ENTRY } from "../sessions/entry";
 import { useSyncExternalStore } from "react";
 import { BridgeClient, type BridgeStatus } from "../lib/bridge";
-import { noteFor, sessionNote, showNote, watchMissedNote, windowWatched, type SessionNote } from "../lib/notify";
+import { createNoteGate, noteFor, sessionNote, sessionRings, showNote, watchMissedNote, windowWatched, type SessionNote } from "../lib/notify";
 import { appSounds, soundFor, type SoundBoard } from "../lib/sounds";
 import { promptText } from "../chat/parts/attachFiles";
 import { findTokens, toWire } from "../chat/parts/skillTokens";
@@ -2998,6 +2998,24 @@ export function setNotifyEnabled(on: boolean): void {
   }
 }
 
+/** "Also notify on errors" (Settings > General): a turn that ends with an error raises a notification too. Off unless
+ *  turned on: an error only marks its chat. */
+export function notifyErrorsEnabled(): boolean {
+  try {
+    return typeof localStorage !== "undefined" && localStorage.getItem("omher.notifyErrors") === "on";
+  } catch {
+    return false;
+  }
+}
+
+export function setNotifyErrorsEnabled(on: boolean): void {
+  try {
+    localStorage.setItem("omher.notifyErrors", on ? "on" : "off");
+  } catch {
+    /* no storage */
+  }
+}
+
 let singleton: Store | null = null;
 export function getStore(): Store {
   return (singleton ??= createStore(new BridgeClient(), {
@@ -3041,18 +3059,27 @@ export function soundOf(a: Action, state: AppState, board: SoundBoard): void {
   }
 }
 
+/** Rings with no words wait for the question that says what they want (notify.ts `createNoteGate`). */
+const noteGate = createNoteGate();
+
 /** A system notification for a chat event, unless the person is looking at that chat. SESSIONS chats
- *  (`fold:` / `agent:` keys) name themselves through their route and open their own view. */
+ *  (`fold:` / `agent:` keys) name themselves through their route and open their own view. A question with no text
+ *  waits for a texted one (8 s); an error notifies only with "Also notify on errors". */
 export function notifySessionEvent(ev: BridgeEvent, state: AppState): void {
   if (!notifyEnabled()) return;
   const watching = (bot: string) => watchingChat(state, bot);
   const name = (bot: string) => chatRoute(bot)?.label ?? state.bots.find((b) => b.name === bot)?.display_name ?? bot;
-  const note = noteFor(ev, { name, watching });
-  if (note) void showNote(note, () => {
-    const route = chatRoute(note.bot);
-    if (route) route.open();
-    else void singleton?.actions.selectBot(note.bot);
-  }, ev.event === "message" && !!ev.watch);
+  const note = noteFor(ev, { name, watching, errors: notifyErrorsEnabled() });
+  if (!note) return;
+  const asks = ev.event === "approval.request" || ev.event === "clarify.request";
+  const empty = ev.event === "clarify.request" && !ev.question.trim();
+  noteGate.offer(note.bot, empty ? "empty" : asks ? "ask" : "plain", () =>
+    void showNote(note, () => {
+      const route = chatRoute(note.bot);
+      if (route) route.open();
+      else void singleton?.actions.selectBot(note.bot);
+    }, ev.event === "message" && !!ev.watch),
+  );
 }
 
 /** One note for the automation answers `bot` got while omher was closed ("<bot>: N watch alerts"). */
@@ -3063,12 +3090,18 @@ export function notifyWatchMissed(bot: string, rows: Msg[], state: AppState): vo
   if (note) void showNote(note, () => void singleton?.actions.selectBot(bot), true);
 }
 
-/** A system notification for what session `id` did outside its chat (its program ended, it could not start, its
- *  terminal rang), unless the person is looking at that session. A click opens the session. */
+/** A system notification for what session `id` did outside its chat (its program ended badly, it could not start, its
+ *  terminal rang), unless the person is looking at that session. A clean exit only marks the row. A click opens the
+ *  session. */
 export function notifySessionNote(id: string, n: SessionNote, state: AppState): void {
-  if (!notifyEnabled()) return;
+  if (!notifyEnabled() || !sessionRings(n)) return;
+  if (n.told && notifyErrorsEnabled()) return; // the failed turn's own notification said it
   if (windowWatched() && state.ui.view === "session" && state.ui.session === id) return;
-  void showNote(sessionNote(id, n), () => singleton?.actions.openSession(id));
+  const fire = () => void showNote(sessionNote(id, n), () => singleton?.actions.openSession(id));
+  // a session with a chat can follow its ring with the question itself; a bare terminal never says more than the ring
+  const key = n.kind === "bell" ? (sessionKeyOf?.(id) ?? null) : null;
+  if (key) noteGate.offer(key, "empty", fire);
+  else fire();
 }
 
 /** Set by SESSIONS: the chat key shown for a session id (so its own notifications stay quiet). */

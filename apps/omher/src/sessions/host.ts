@@ -10,6 +10,8 @@ import { botRefusal, mockCheck, mockNewId, type CustomEntry, type CustomList, ty
 import type { ApprovalChoice, ClarifyAnswers } from "../lib/protocol";
 import { t } from "../i18n";
 import { steersOf } from "./controls";
+import type { DiskLevel, DiskState } from "../lib/disk";
+import type { ImportApp, ImportProfile } from "./term/import";
 
 /** What the person did in a chat. Mirrors `Input` in src-tauri/src/agent_chat.rs. `images`: saved copies
  *  (`saveFile`) of attached pictures, for the agent's own image input. */
@@ -113,6 +115,9 @@ export interface SessionHost extends HistoryHost {
   codexConversation?(id: number): Promise<string | null>;
   /** How many asks wait: a Dock / launcher count, or a dot on the Windows taskbar button. 0 clears it. */
   badge(count: number): Promise<void>;
+  /** Keep the computer awake while agents work (src/lib/power.ts): a busy or idle edge. `now`: the setting went off,
+   *  so the shell lets go at once instead of a minute later. */
+  power?(busy: boolean, now: boolean): Promise<void>;
   /** Settings › Agents: the person's own agents, read and checked by the shell from omher's own file, and the broken
    *  entries. */
   customList(): Promise<CustomList>;
@@ -126,6 +131,16 @@ export interface SessionHost extends HistoryHost {
   customConfirm(entry: CustomEntry): Promise<void>;
   /** The remove confirm: agent `id` leaves the file. */
   customRemove(id: string): Promise<void>;
+  /** Free space on the home folder's volume (src/lib/disk.ts): Settings' warn value in GB (0 = off), answered with
+   *  the level and the last reading. */
+  diskWatch(warnGb: number): Promise<DiskState>;
+  /** The shell's `disk-level` event: the level got worse. Returns what stops listening. */
+  onDiskLevel(fn: (s: DiskState) => void): () => void;
+  /** Settings › Terminal › Import from… (macOS): which of iTerm2 / Apple Terminal have a prefs file the shell can read
+   *  (its fixed file, not a symlink, at most 8 MB). Nothing is read until the person presses the button. */
+  termImportList(): Promise<ImportApp[]>;
+  /** The profiles of `app` (default first, at most 64): names, `#rrggbb` colours and a font, read once, read-only. */
+  termImportRead(app: ImportApp): Promise<ImportProfile[]>;
 }
 
 // ---- Tauri ----------------------------------------------------------------------------------
@@ -209,6 +224,14 @@ export class TauriHost implements SessionHost {
     const { invoke } = await this.core();
     await invoke("term_history_clear");
   }
+  async termImportList() {
+    const { invoke } = await this.core();
+    return invoke<ImportApp[]>("term_import_list");
+  }
+  async termImportRead(app: ImportApp) {
+    const { invoke } = await this.core();
+    return invoke<ImportProfile[]>("term_import_read", { app });
+  }
   async pruneFiles(keep: string[]) {
     const { invoke } = await this.core();
     await invoke("session_files_prune", { keep });
@@ -241,6 +264,10 @@ export class TauriHost implements SessionHost {
     const { invoke } = await this.core();
     await invoke("asks_badge", { count });
   }
+  async power(busy: boolean, now: boolean) {
+    const { invoke } = await this.core();
+    await invoke("power_busy", { busy, now });
+  }
   async customList() {
     const { invoke } = await this.core();
     return invoke<CustomList>("custom_agents_list");
@@ -260,6 +287,22 @@ export class TauriHost implements SessionHost {
   async customRemove(id: string) {
     const { invoke } = await this.core();
     await invoke("custom_agent_remove", { id });
+  }
+  async diskWatch(warnGb: number) {
+    const { invoke } = await this.core();
+    return invoke<DiskState>("disk_watch", { warnGb });
+  }
+  onDiskLevel(fn: (s: DiskState) => void) {
+    let stop: (() => void) | null = null;
+    let gone = false;
+    void import("@tauri-apps/api/event")
+      .then(({ listen }) => listen<DiskState>("disk-level", (e) => fn(e.payload)))
+      .then((un) => (gone ? un() : (stop = un)))
+      .catch(() => {});
+    return () => {
+      gone = true;
+      stop?.();
+    };
   }
   async write(id: number, data: string) {
     const { invoke } = await this.core();
@@ -321,13 +364,19 @@ export interface MockCall {
     | "history.remove"
     | "history.prune"
     | "history.clear"
+    | "import.list"
+    | "import.read"
     | "reveal"
     | "terminal"
     | "custom.preview"
     | "custom.botPreview"
     | "custom.confirm"
-    | "custom.remove";
+    | "custom.remove"
+    | "power.busy";
   id?: number;
+  /** power.busy: the edge, and whether the shell lets go at once (the setting went off) */
+  busy?: boolean;
+  now?: boolean;
   /** ack: how many drawn bytes it acknowledges */
   bytes?: number;
   agent?: string;
@@ -382,6 +431,8 @@ const utf8 = new TextEncoder();
 const FLOOD_MESSAGE = `${"build output ".repeat(5).slice(0, 62)}\r\n`.repeat(1024);
 
 type MockGlobals = {
+  /** Free bytes the mock's disk watch reads (src/lib/disk.ts); unset = 100 GB. */
+  __omherDiskFree?: number;
   __omherPickFolder?: string | null;
   __omherSessionCalls?: MockCall[];
   /** e2e: every message a mock terminal's program printed and every acknowledgement of one, in the order they happened */
@@ -393,6 +444,9 @@ type MockGlobals = {
   __omherFileSaveError?: string;
   /** e2e: the shell answers a history read this many ms late (a slow computer) */
   __omherMockHistoryDelay?: number;
+  /** e2e: the profiles each app's prefs file holds for Settings › Terminal › Import from… (none = MOCK_IMPORT; an app
+   *  left out has no prefs file) */
+  __omherMockImport?: Partial<Record<ImportApp, ImportProfile[]>>;
   /** e2e: the branch of each folder (none = not a repository) */
   __omherBranches?: Record<string, string>;
   /** e2e: these agents are an old version that never answers in chat mode (the shell's start deadline ends them) */
@@ -528,6 +582,28 @@ export class MockHost implements SessionHost {
   async customRemove(id: string) {
     this.log({ op: "custom.remove", agent: id });
     this.g.__omherCustomFile = (this.g.__omherCustomFile ?? []).filter((v) => (v as { id?: unknown })?.id !== id);
+  }
+  private disk: { level: DiskLevel; alerts: number; rev: number; heard: Set<(s: DiskState) => void> } = { level: "ok", alerts: 0, rev: 0, heard: new Set() };
+  /** The shell's rules (src-tauri/src/disk.rs) on `__omherDiskFree` bytes (unset: 100 GB free): the event only when
+   *  the level gets worse, better only 2 GB past a threshold. */
+  async diskWatch(warnGb: number) {
+    const free = this.g.__omherDiskFree ?? 100e9;
+    const warn = warnGb * 1e9;
+    const crit = warn < 20e9 ? warn / 4 : 5e9;
+    const raw: DiskLevel = !warnGb ? "ok" : free < crit ? "critical" : free < warn ? "low" : "ok";
+    const rank = { ok: 0, low: 1, critical: 2 } as const;
+    const prev = this.disk.level;
+    const level: DiskLevel =
+      !warnGb || rank[raw] >= rank[prev] || free >= warn + 2e9 ? raw : prev === "critical" && free >= crit + 2e9 ? "low" : prev;
+    this.disk.level = level;
+    if (rank[level] > rank[prev]) this.disk.alerts++;
+    const state: DiskState = { level, free_bytes: free, volume: "/", alerts: this.disk.alerts, rev: ++this.disk.rev };
+    if (rank[level] > rank[prev]) for (const f of this.disk.heard) f(state);
+    return state;
+  }
+  onDiskLevel(fn: (s: DiskState) => void) {
+    this.disk.heard.add(fn);
+    return () => void this.disk.heard.delete(fn);
   }
   async home() {
     return "/home/you";
@@ -703,6 +779,17 @@ export class MockHost implements SessionHost {
     this.log({ op: "history.prune", keep });
     this.putHist(Object.fromEntries(Object.entries(this.hist()).filter(([k]) => keep.includes(k))));
   }
+  async termImportList() {
+    this.log({ op: "import.list" });
+    const all = this.g.__omherMockImport ?? MOCK_IMPORT;
+    return (["iterm2", "terminal"] as const).filter((a) => !!all[a]);
+  }
+  async termImportRead(app: ImportApp) {
+    this.log({ op: "import.read", key: app });
+    const got = (this.g.__omherMockImport ?? MOCK_IMPORT)[app];
+    if (!got) throw new Error("missing");
+    return got.slice(0, 64);
+  }
   async historyClear() {
     this.log({ op: "history.clear" });
     this.clearedAt = Math.max(this.clearedAt, Date.now());
@@ -746,6 +833,9 @@ export class MockHost implements SessionHost {
   }
   async badge(count: number) {
     this.g.__omherBadge = count;
+  }
+  async power(busy: boolean, now: boolean) {
+    this.log({ op: "power.busy", busy, now });
   }
 }
 
@@ -1404,6 +1494,31 @@ class MockChat {
     }
   }
 }
+
+/** The mock's prefs files for Settings › Terminal › Import from…: an iTerm2 profile (the default first), and an Apple
+ *  Terminal one beside a profile that cannot be read. */
+const MOCK_IMPORT: Partial<Record<ImportApp, ImportProfile[]>> = {
+  iterm2: [
+    {
+      name: "Harbor Night",
+      default: true,
+      ok: true,
+      font: { name: "Menlo-Regular", size: 14 },
+      colors: {
+        foreground: "#d8dee9",
+        background: "#14202b",
+        cursor: "#f5c779",
+        selection: "#2e4a62",
+        ansi: ["#1c2a36", "#e06c75", "#98c379", "#e5c07b", "#61afef", "#c678dd", "#56b6c2", "#cfd8e3", "#4b5d6e", "#ff7a85", "#b5e08f", "#ffd68a", "#82c4ff", "#dd9cf0", "#7fd6e0", "#ffffff"],
+      },
+    },
+    { name: "Paper", default: false, ok: true, font: { name: "NoSuchFontAnywhere-Regular", size: 12 }, colors: { foreground: "#222222", background: "#fbf8f0", cursor: "#222222", selection: "#d8d2c0", ansi: [] } },
+  ],
+  terminal: [
+    { name: "Basic", default: true, ok: true, font: null, colors: { foreground: "#000000", background: "#ffffff", cursor: "#929292", selection: "#a4cdff", ansi: ["#000000", "#990000", "#00a600", "#999900", "#0000b2", "#b200b2", "#00a6b2", "#bfbfbf", "#666666", "#e50000", "#00d900", "#e5e500", "#0000ff", "#e500e5", "#00e5e5", "#e5e5e5"] } },
+    { name: "Archived", default: false, ok: false, font: null, colors: null },
+  ],
+};
 
 const inTauri = () => typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
 

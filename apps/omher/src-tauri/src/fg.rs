@@ -137,12 +137,55 @@ pub struct Probe {
     last: Option<&'static str>,
     #[cfg(unix)]
     scratch: Vec<u8>,
+    #[cfg(unix)]
+    argv: ArgvClock,
+}
+
+/// An interpreter's command line read on every probe in the first [`ARGV_FRESH`] after its process is first seen
+/// (`sh -c '…; exec ./claude'` changes it then), afterwards at most every [`ARGV_EVERY`]; at once again when the
+/// program or the parent changes (an exec, a reused pid).
+#[cfg(unix)]
+const ARGV_FRESH: std::time::Duration = std::time::Duration::from_secs(2);
+#[cfg(unix)]
+const ARGV_EVERY: std::time::Duration = std::time::Duration::from_secs(5);
+
+/// When [`Probe`] reads an interpreter's command line again.
+#[cfg(unix)]
+#[derive(Default)]
+struct ArgvClock {
+    /// (pid, parent pid, first seen, last read)
+    seen: Option<(u32, u32, std::time::Instant, std::time::Instant)>,
+}
+
+#[cfg(unix)]
+impl ArgvClock {
+    /// Whether to read process `pid`'s argv `now`; `same_exe`: its program is the one the last probe saw.
+    fn due(&mut self, pid: u32, ppid: u32, same_exe: bool, now: std::time::Instant) -> bool {
+        match &mut self.seen {
+            Some((p, pp, first, last)) if *p == pid && *pp == ppid && same_exe => {
+                if now.saturating_duration_since(*first) < ARGV_FRESH || now.saturating_duration_since(*last) >= ARGV_EVERY {
+                    *last = now;
+                    return true;
+                }
+                false
+            }
+            _ => {
+                self.seen = Some((pid, ppid, now, now));
+                true
+            }
+        }
+    }
 }
 
 #[cfg(unix)]
 impl Probe {
     /// The agent process `pid` (the terminal's foreground process group leader) is, or `None`.
     pub fn agent(&mut self, pid: u32) -> Option<&'static str> {
+        self.agent_at(pid, std::time::Instant::now(), &mut argv_bytes)
+    }
+
+    /// [`Probe::agent`] at `now`, reading command lines with `read` (a test counts the reads).
+    fn agent_at(&mut self, pid: u32, now: std::time::Instant, read: &mut dyn FnMut(u32, &mut Vec<u8>) -> bool) -> Option<&'static str> {
         let mut exe = [0u8; 4096];
         let Some(n) = exe_path(pid, &mut exe) else {
             self.pid = 0;
@@ -151,8 +194,17 @@ impl Probe {
         let exe = &exe[..n];
         let exe_str = String::from_utf8_lossy(exe);
         let interp = is_interpreter(stem(file_name(&exe_str)));
-        // an interpreter's command line can change under the same pid and program (`sh -c '…; exec ./claude'`)
-        let args_ok = if interp { argv_bytes(pid, &mut self.scratch) } else { self.scratch.clear(); true };
+        // an interpreter's command line can change under the same pid and program (`sh -c '…; exec ./claude'`): read
+        // again while it is new, then every few seconds ([`ArgvClock`]); otherwise the one kept stands
+        let args_ok = if !interp {
+            self.scratch.clear();
+            true
+        } else if self.argv.due(pid, parent_pid(pid), self.pid == pid && self.exe == exe, now) {
+            read(pid, &mut self.scratch)
+        } else {
+            self.scratch.clone_from(&self.args);
+            true
+        };
         if self.pid == pid && self.exe == exe && self.args == self.scratch {
             return self.last;
         }
@@ -170,6 +222,22 @@ impl Probe {
         self.last = agent;
         agent
     }
+}
+
+/// Process `pid`'s parent (macOS `proc_pidinfo` PROC_PIDTBSDINFO); 0 when it cannot be read.
+#[cfg(target_os = "macos")]
+fn parent_pid(pid: u32) -> u32 {
+    let mut info: libc::proc_bsdinfo = unsafe { std::mem::zeroed() };
+    let size = std::mem::size_of::<libc::proc_bsdinfo>() as libc::c_int;
+    let n = unsafe { libc::proc_pidinfo(pid as libc::c_int, libc::PROC_PIDTBSDINFO, 0, (&mut info as *mut libc::proc_bsdinfo).cast(), size) };
+    if n == size { info.pbi_ppid } else { 0 }
+}
+
+/// Linux: reading the parent costs a `/proc` file read, as much as the command line it would save; only a changed
+/// program reads the command line again at once there.
+#[cfg(all(unix, not(target_os = "macos")))]
+fn parent_pid(_pid: u32) -> u32 {
+    0
 }
 
 #[cfg(target_os = "macos")]
@@ -596,6 +664,61 @@ mod tests {
         assert!(!p.exe.is_empty());
         // a pid nobody has
         assert_eq!(p.agent(0x7fff_fff0), None);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn an_interpreters_argv_is_read_while_new_then_every_five_seconds() {
+        use std::time::{Duration, Instant};
+        let t0 = Instant::now();
+        let at = |s: u64| t0 + Duration::from_millis(s);
+        let mut c = ArgvClock::default();
+        assert!(c.due(7, 1, false, at(0)), "first seen");
+        assert!(c.due(7, 1, true, at(1000)), "within 2 s");
+        assert!(c.due(7, 1, true, at(1999)));
+        assert!(!c.due(7, 1, true, at(2000)), "past 2 s, 1 s after the last read");
+        assert!(!c.due(7, 1, true, at(6998)));
+        assert!(c.due(7, 1, true, at(6999)), "5 s after the last read");
+        assert!(!c.due(7, 1, true, at(8000)));
+        // an exec (other program), a reused pid (other parent) and another process: read at once, new again
+        assert!(c.due(7, 1, false, at(8100)));
+        assert!(c.due(7, 1, true, at(9000)));
+        assert!(!c.due(7, 1, true, at(10200)));
+        assert!(c.due(7, 2, true, at(10300)));
+        assert!(c.due(8, 2, true, at(10400)));
+        assert!(c.due(8, 2, true, at(12300)));
+        assert!(!c.due(8, 2, true, at(12500)));
+    }
+
+    /// 60 probes of one interpreter process a second apart (the poller's cadence while a terminal is busy): the argv
+    /// is read 13 times, not 60, and every answer is the one an uncached probe gives.
+    #[cfg(unix)]
+    #[test]
+    fn sixty_probes_of_an_interpreter_read_its_argv_thirteen_times() {
+        use std::time::{Duration, Instant};
+        let tmp = std::env::temp_dir().join(format!("omher-fg-argv-{}", std::process::id()));
+        std::fs::create_dir_all(&tmp).unwrap();
+        let script = tmp.join("claude");
+        std::fs::write(&script, "sleep 30\n").unwrap();
+        let mut child = std::process::Command::new("/bin/sh").arg(&script).stdin(std::process::Stdio::null()).spawn().unwrap();
+        let pid = child.id();
+        assert_eq!(wait_for(|| Probe::default().agent(pid).map(String::from)).as_deref(), Some("claude"));
+        let t0 = Instant::now();
+        let mut reads = 0;
+        let mut counted = |p: u32, out: &mut Vec<u8>| {
+            reads += 1;
+            argv_bytes(p, out)
+        };
+        let mut p = Probe::default();
+        for i in 0..60 {
+            let got = p.agent_at(pid, t0 + Duration::from_secs(i), &mut counted);
+            assert_eq!(got, Probe::default().agent(pid), "probe {i}");
+            assert_eq!(got, Some("claude"));
+        }
+        let _ = child.kill();
+        let _ = child.wait();
+        let _ = std::fs::remove_dir_all(&tmp);
+        assert_eq!(reads, 13, "argv reads over 60 probes (before this cache: 60)");
     }
 
     /// A Codex stand-in: `sh <dir>/codex <file>` is Codex by its script's name, and holds `<file>` open (fd 3) while

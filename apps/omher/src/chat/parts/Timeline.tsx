@@ -23,6 +23,8 @@ import { ThreadLinkLine, ThreadRouteCard } from "../cards/ThreadNotes";
 import { BriefNotice, WatchLine } from "../../routines/WatchLine";
 import { t } from "../../i18n";
 import { useBotReady } from "../connect/ready";
+import { isMac } from "../../app/shortcuts";
+import { JumpPill, PinnedOwn, useTimelineNav } from "./TimelineJump";
 
 /** A time label goes in when the day changes, or after a quiet gap within the same day. */
 const GAP = 30 * 60;
@@ -73,6 +75,8 @@ export function Timeline({
   const lastUserAt = lastUser ? items.indexOf(lastUser) : -1;
   // the person's last message that went out: it carries the messenger-style "Read" mark
   const lastSent = [...items].reverse().find((i) => i.kind === "user" && !i.held && !i.error && !i.steerUnknown)?.id;
+  // the way back: the Jump to bottom pill and the pinned own message (TimelineJump.tsx)
+  const nav = useTimelineNav(ref, items, bot.name, pinned);
   const keptFiles =
     lastUserAt >= 0 && items.slice(lastUserAt + 1).some((i) => i.kind === "activity" && i.turn.steps.some((st) => st.diff?.length));
 
@@ -82,7 +86,8 @@ export function Timeline({
     if (!el) return;
     if (lastBot.current !== bot.name || pinned.current) el.scrollTop = el.scrollHeight;
     lastBot.current = bot.name;
-  }, [bot.name, items, writing, typing]);
+    nav.measure();
+  }, [bot.name, items, writing, typing, nav.measure]);
 
   // Files the bot sent load after the row is drawn and make it taller: stay at the bottom if pinned.
   useEffect(() => {
@@ -206,18 +211,33 @@ export function Timeline({
 
   return (
     <div
-      className="thread"
+      className={`thread${nav.pin ? " pin-on" : ""}`}
       ref={ref}
       data-testid="timeline"
+      // focusable by a click, so End / ⌘↓ (Ctrl+End off macOS) can take the view back to the bottom
+      tabIndex={-1}
+      onKeyDown={(e) => {
+        const tgt = e.target as HTMLElement;
+        if (tgt.closest("input, textarea, select, [contenteditable]")) return;
+        const plainEnd = e.key === "End" && !e.altKey && !e.shiftKey && !e.metaKey && !e.ctrlKey;
+        const modEnd = isMac() ? e.key === "ArrowDown" && e.metaKey && !e.ctrlKey && !e.altKey && !e.shiftKey : e.key === "End" && e.ctrlKey && !e.altKey && !e.shiftKey && !e.metaKey;
+        if (!plainEnd && !modEnd) return;
+        e.preventDefault();
+        nav.jump();
+      }}
       onScroll={(e) => {
         const el = e.currentTarget;
+        const was = pinned.current;
         // only the person scrolling up lets go of the bottom: a reflow (the side panel opening narrows the column)
         // also fires scroll, with the bottom moved away but the position not moved up
         if (el.scrollHeight - el.scrollTop - el.clientHeight < 40) pinned.current = true;
         else if (el.scrollTop < lastTop.current) pinned.current = false;
         lastTop.current = el.scrollTop;
+        if (was !== pinned.current) nav.letGo(!pinned.current);
+        nav.measure();
       }}
     >
+      <PinnedOwn nav={nav} />
       {!chat?.loaded && items.length === 0 && <div className="day">{t("tl.loading")}</div>}
       {chat?.openError && (
         <div className="day note" data-testid="chat-error">
@@ -261,6 +281,7 @@ export function Timeline({
       })}
       {!slotId && writingRow}
       {!slotId && !aboveLine && typingRow}
+      <JumpPill nav={nav} />
     </div>
   );
 }

@@ -39,6 +39,17 @@
   flex: none;
   padding: 0 10px;
 }
+.tm-slot {
+  flex: none;
+}
+.tm-bar-r {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1 1 260px;
+  justify-content: flex-end;
+  min-width: 260px;
+}
 .tm-q {
   flex: 1;
   min-width: 140px;
@@ -212,4 +223,102 @@
 .tm .st-v .mseg button {
   flex: 1 0 auto;
   padding: 0 10px;
+}
+
+/* kshell: Settings › Terminal › Default shell */
+.tm-font.tm-shell {
+  width: 200px;
+  padding: 0 6px;
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  cursor: pointer;
+}
+/* Import from… (macOS): the button beside the search field, its menu, and the panel of another app's profiles */
+.tm-imp-at {
+  position: relative;
+  flex: none;
+}
+.tm-imp-btn {
+  height: 28px;
+  border: 1px solid var(--line);
+  white-space: nowrap;
+}
+.tm-imp-btn[aria-expanded="true"] {
+  background: var(--seg-on);
+}
+.tm-imp-none {
+  padding: 4px 8px 8px;
+  font-size: 12px;
+  color: var(--quiet);
+}
+.tm-imp {
+  margin: 0 0 10px;
+  padding: 8px 0 8px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-sm);
+  background: var(--raise);
+}
+.tm-imp-h {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 2px 12px 6px;
+  font-size: 12.5px;
+  color: var(--ink);
+}
+.tm-imp-h span {
+  font-size: 11.5px;
+  color: var(--quiet);
+}
+.tm-imp-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 1px 4px;
+  max-height: 200px;
+  overflow-y: auto;
+  scrollbar-width: thin;
+}
+.tm-row.off {
+  color: var(--quiet);
+  cursor: default;
+}
+.tm-row.off:hover {
+  background: none;
+}
+.tm-sw-none {
+  width: 74px;
+  background: repeating-linear-gradient(135deg, transparent 0 4px, var(--line) 4px 5px);
+}
+.tm-sw-none::before {
+  content: none;
+}
+.tm-imp-tag {
+  flex: none;
+  font-size: 10.5px;
+  color: var(--quiet);
+}
+.tm-imp-foot {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px 0;
+}
+.tm-imp-font {
+  flex: 1;
+  min-width: 0;
+  font-size: 11.5px;
+  color: var(--muted);
+}
+.tm-imp-use:not(:disabled) {
+  background: var(--ink);
+  color: var(--bg);
+}
+.tm-imp-use:hover:not(:disabled) {
+  background: var(--ink);
+  opacity: 0.9;
+}
+.tm-imp-done {
+  margin: 0 0 8px;
+  font-size: 12px;
+  color: var(--muted);
 }

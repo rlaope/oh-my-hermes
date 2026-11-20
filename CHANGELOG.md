@@ -15,6 +15,37 @@ All notable changes will be documented here.
   Windows. It needs Windows Terminal or a VT-capable console (an old conhost falls back with one line saying why); a
   Windows user still has to try it.
 
+- **omher: ideas from kasaterm.** Behaviour and numbers borrowed from 2rami/kasaterm (MIT), code written fresh.
+  - **Undo a closed terminal.** Closing a running TERMINALS row can be undone for 10 seconds: the row leaves at
+    once, a toast offers Undo (⌘Z / Ctrl+Shift+Z), and the same terminal comes back with its program and scrollback,
+    in its split if it was in one. Settings › Terminal › Undo window after closing: Off / 5 s / 10 s (default 10 s).
+  - **Quieter notifications.** Only approvals, questions and ends that went wrong ring, and the body is the bot's
+    own first sentence (greetings skipped, code and markdown removed, paths shortened to their name, URLs to their
+    host). A turn error only marks its chat; Settings › General › Also notify on errors (off by default) brings the
+    note back. A clean exit 0 only marks its row, and so does the bell of a plain shell (tab completion, a stray
+    `\a`); a terminal's bell notifies only while a coding agent runs in it. A wordless ring waits 8 s so the texted
+    question that follows replaces it.
+  - **Disk space warning.** When the disk holding your home folder drops under 20 GB (Settings › General › Warn
+    when disk space is below: 5/10/20/50 GB or Off), a sidebar chip shows the free space and one notification goes
+    out. omher checks once a minute with one system call and never deletes anything. The terminal agent mark also
+    reads a node/python program's command line about 4× less often (60 → 13 reads a minute).
+  - **Close keeps omher running.** Closing the window hides omher to the menu bar / notification area (on by
+    default; Settings › General › When the window closes). Terminals and agents keep working; reopen from the tray
+    icon or the Dock, quit from the icon's Quit omher or ⌘Q.
+  - **Keep awake while agents work.** omher keeps the computer from idle-sleeping while a TERMINALS agent prints or a
+    bot answers, until a minute after (on by default; Settings › General). Closing the lid still sleeps the computer.
+  - **Chat and split view.** Chats get a Jump to bottom pill when you scroll up (with "· N new"; End or ⌘↓ /
+    Ctrl+End also jump), and your last message stays pinned as one line at the top while you read a long answer. A
+    zoomed terminal split now follows focus, and splitting, closing or moving a pane un-zooms, so typing never goes
+    to a hidden pane.
+  - **Shell picker.** The TERMINALS `+` menu's Shell row has a Shell ▸ list of the shells installed on this computer
+    (Windows PowerShell, PowerShell 7, Command Prompt, Git Bash and WSL on Windows; the login shell and `/etc/shells`
+    on macOS and Linux). Settings › Terminal › Default shell sets the one a plain Shell row opens, a row keeps its
+    shell after a restart, and a missing shell falls back to the default with a note.
+  - **Theme import (macOS only).** Settings › Terminal › Import from… brings the colours and font of an iTerm2 or
+    Apple Terminal profile into omher as your own terminal theme. It reads the other app's prefs once when you press
+    it, keeps a copy, and never changes the other app.
+
 - **show-reel's cut-sheet lane checks a remake's genre and pace by numbers.** Remaking a supplied reference now
   starts by naming its genre from a 5 fps sheet and 30 fps strips (the material, the motif that survives every cut,
   art piece or promo), and measures pace on the reference and each render: cuts per second, mean frame difference,
@@ -27,44 +58,6 @@ All notable changes will be documented here.
   change only its next command, with nothing said, so the person could not tell it was read. OMH's reply line, which
   every session carries once in its system prompt, now asks for one line before the next tool call: what was taken
   from the message and what changes. The primer grows by 117 characters (compact rail 1550 -> 1667).
-
-- **omher: New thread under a bot opens a thread again, and removing or naming one works.** On Hermes' current
-  gateway, New thread did nothing and then failed: the bridge sent the press's retry key as `idempotency_key`, which
-  that gateway refuses (`invalid_params`), and it named and archived threads with `session.title` and
-  `session.archive`, which that gateway does not serve. The bridge now sends the key as `request_id` (the same press
-  again still returns the same thread), and names and archives through `session.mutate`, retrying once with the
-  revision a `revision_conflict` carries; an older gateway still gets its own verbs. A thread is created under a
-  unique placeholder and then renamed, because the gateway answers a create whose title an open session already has
-  with that session. The bridge tests' fake gateway now refuses what the real one refuses. (#2980)
-
-- **omher: no "+ New thread" line sits under a bot any more.** The line closed every bot's thread list, and under the
-  open bot it showed even with no threads, so the sidebar always carried an empty row. Under a bot now there are only
-  its threads, the last one ending the tree; a new thread opens from the bot row's + on hover, its right-click menu, or
-  `./thread`.
-
-- **omher: TERMINALS sessions split like Otty and Orca, and bots can follow a terminal by its link.**
-  - **Split.** A TERMINALS session splits right (⌘D) or down (⌘⇧D), up to four sessions in any nesting. Each split
-    picks a running terminal or starts a new Shell in the focused pane's folder. Pane keys: close ⌘W, move focus
-    ⌘⌥arrows, next/previous ⌘] ⌘[, move pane ⌘⇧⌥arrows, zoom ⌘⇧↩, even out ⌘⌃= (Ctrl-based keys on Windows and
-    Linux). Unfocused panes dim (Settings › Terminal › Dim unfocused panes, default 0.72, the bottom panel too).
-    Rows in the split show its shape, Plans shows a clickable minimap, and the split comes back after a restart
-    (paused panes show Resume). Bot chats never split. On macOS the menu's Close Window closes the focused pane, not
-    the window, while a split has the keyboard.
-  - **Link to a terminal.** Every TERMINALS session has a stable link, `omher://terminal/<id>`, that stays the same
-    across restarts. Copy it from the row menu or with ⌘⇧C (Alt+Shift+C on Windows and Linux). A message that holds
-    one shows an omher chip with that session's CLI mark, title and live state (working, waiting, done, ended), and a
-    click opens it. Opening the link from another app brings omher forward on that session.
-  - **Bots read a linked terminal and ask to type into it.** A bot that gets a terminal link, in omher or in Slack or
-    Discord, can read that session's title, CLI, folder, state and last line through the new OMH tool
-    `omh_omher_terminal`, and can ask omher to type a prompt into it. omher shows the request as a card on the
-    terminal (Deny, Allow once), and nothing is typed without the person's Allow. A message
-    in a bot's main chat that holds a terminal link carries that terminal's status to the bot. A bot's sidebar
-    preview shows a linked terminal's title instead of the raw link. Each prompt asks: every request has its own
-    card, and there is no allow-for-this-session, because the sender name on a request is what the local requesting
-    process wrote, not proof of which bot asked. A request to a paused or ended terminal shows its card
-    there with Deny and Resume and send, and an Allow that could not type keeps the card. Terminal sharing is off on
-    Windows (the owner-only file checks are POSIX): the tool answers that it is not available there, and Copy link
-    and the chip still work.
 
 - **The run summary shows how much of the prompt came from cache.** `omh_run_summary` adds a line after the token
   count, such as `Prompt cache: 62% of input read from cache (1,234,567 tokens)` (en/ko/ja/zh), and
@@ -116,22 +109,6 @@ All notable changes will be documented here.
   ultrabrain, review or deep never get the option, nor does a node pinned to an identity, which keeps that
   identity's own model chain.
 
-- **omher: every message you send shows Read once the bot has it, and a steer shows how the bot took it.** The last
-  message the bot received carries a small muted "Read · 16:41" under it, messenger style: as soon as the send went
-  through or its turn started, a steer as soon as Hermes queued it, and a held message once it actually goes out. A
-  failed send or a refused, uncertain or dropped steer never shows it. Under a steered message, the first line the
-  bot wrote after taking it (its note before the next tool call, or its answer) shows as "↳ …", so a change of course
-  is no longer silent; the rest of that note stays hidden as before. A reopened chat shows both, from the bridge.
-  While the bot works, the typing dots with its face stay put until the answer starts, and the live activity line
-  ("OMH — recalled 2 memories", "Running cd …") comes under them; that line is kept short (a command shows its first
-  24 characters, the whole text on hover).
-
-- **omher: a waiting message is sent or taken back in one click, with no menu.** A message typed while the bot
-  answers waits with buttons before it instead of a ↵ that opened Send now / Steer / Edit / Delete. ↵ sends it:
-  Steer into the running answer, or, for an agent with no steer of its own, Send now (stop the answer, this one
-  first). ↓ puts it back in the message box to fix or add to. × (on hover or focus) drops it. A button that cannot
-  act (the agent has the message already) says why in its tooltip.
-
 - **Hermes Bug Hunter: a trap benchmark counts the bugs a reviewer invents.** `benchmarks/review-false-alarms`
   holds 11 traps (changes that look wrong and are correct: SQL built from a constant allowlist, `eval` over a literal
   table, an index guarded two lines up, a lock the caller holds) and 6 controls with one real, reachable bug each. A
@@ -139,11 +116,6 @@ All notable changes will be documented here.
   and a missing or garbled verdict is its own column, never clean. The table prints the false-alarm rate and the hit
   rate side by side for `omh-on` and `omh-off`, and OMH wins only with fewer false alarms and no fewer hits.
   `bench.py --dry-run` grades a recorded fixture with no model; live runs use `hermes -z` on two profiles.
-
-- **omher: a message steered into a running answer reads as you typed it after the chat reopens.** Hermes keeps
-  a mid-turn steer wrapped in a frame for the model (`[OUT-OF-BAND USER MESSAGE — …]` … `[/OUT-OF-BAND USER
-  MESSAGE]`), and a reopened Bot Chat showed that frame in your bubble. The bridge now shows only the typed text,
-  keeps the "Sent to …" line under it, and drops stray frame lines from any other row.
 
 - **The Start Guide lists long-term memory among the main features.** It moves from the closing list to a fourth card
   in "What OMH does" (owner request, 2026-11-18): nothing is remembered silently, and the next session gets only the
@@ -388,11 +360,6 @@ All notable changes will be documented here.
   changes are made one after another, with no dag-ulw graph and no child agents. In paired runs on a five-part,
   six-thousand-line job, splitting such a backlog finished later than Hermes alone at the same quality. Asking for
   dag-ulw by name still runs the list as a graph.
-- **omher: a CLI's block art draws solid in a terminal.** Claude Code's mascot (`▐▛███▜▌`) and other block and
-  box characters came out sliced in TERMINALS, with dark seams between cells and rows, because the standard renderer
-  draws them from the font, a hair short of their cells. Terminal › GPU renderer › Auto now uses the GPU renderer
-  wherever the hardware allows it (WebGL2, not a software rasterizer), and it draws those characters to fill the cell
-  as a real terminal does. Off keeps the standard renderer; a machine without hardware WebGL2 keeps it too.
 - **OMH skills load whole on every host they ship to, and `omh skill-eval` checks any skill folder the same way.**
   Every situation clause now ends inside Hermes' 60-character index window. The portable descriptions
   (`.agents/skills`, `.claude/skills`) are the situation clause plus the start of what the skill does, with the
@@ -407,15 +374,6 @@ All notable changes will be documented here.
   folder, category folders included, and `--strict` exits 1 on any degraded or unverified row. The
   `omh-skill-eval` skill runs it before a skill ships, and a test now runs the same checker over the three shipped
   packs (#2995).
-- **omher: a Slack briefing that sets itself up.** Add a bot whose Hermes profile has Slack connected and omher
-  creates one automation for it, `omher-brief`: the channel-watch collector in a new brief mode checks the Slack
-  channels you share with the bot every 15 minutes and wakes the model only when there is a reason (an unanswered
-  mention, a thread it already told you about moving on, your return after hours away, or enough new posts in your
-  active hours), at most six briefs a day; the bot then tells you one thing in its chat or stays silent. Its chat
-  says so once, with Turn off; removing the job in Automations means omher never creates it again. The briefing's
-  answers read "Brief" and the Automations row says "When something needs you". Slack only: Discord briefs and
-  GitHub events are not built yet.
-
 - **`show-reel` has a cut-sheet lane for films written as a shot contract.** A new opt-in reference, `cut-sheet.md`,
   covers cut-driven sequences of 30 s or less handed to a builder or a text-to-video generator, and remakes of a
   supplied reference video. It opens with one contract line (ratio, duration, exact cut count, fps, palette), locks
@@ -425,35 +383,6 @@ All notable changes will be documented here.
   cut), a remake measures the reference's cut times and audio onsets before any row is written, and a delegated
   build is reviewed in numbered, measurable FIX rounds. The brief, rights and the short-promo one-scene rule still
   apply.
-- **omher terminal: parity with Otty and Orca: split panes, restore, Kitty keys, images, prompt marks, paste guard.**
-  - **Split panes.** The bottom terminal panel splits into up to four panes (⌘D right, ⌘⇧D down, ⌘W close,
-    ⌘⌥arrows move; Ctrl+Shift+D / Alt+Shift+D / Ctrl+Shift+W / Ctrl+Alt+arrows elsewhere). Dividers drag and a double
-    click evens them. Two TERMINALS sessions open side by side (⌘D in a terminal, or "Split right with…").
-  - **Panel shells ring and take files.** A bottom-panel shell that rings shows a dot on its tab, as TERMINALS rows
-    do. A file dropped on a panel pane is saved and its path typed.
-  - **Restore.** Claude Code terminals start under a conversation id omher makes. If they were running when omher
-    quit, they continue that conversation by themselves after a restart (`claude --resume <id>`). Codex terminals
-    learn their conversation from the Codex process itself and continue it with `codex resume <id>`.
-  - **Scrollback comes back.** Each TERMINALS session and bottom-panel tab shows what it showed before a restart (last
-    2000 lines), dimmed, under a "restored <time>" line. It is kept in `~/.omher/term-history` (owner-only), and
-    Settings › Terminal › History turns it off and deletes it all. The bottom panel's tabs come back in their folders.
-  - **xterm 6.1.** Terminals moved to xterm 6.1 (beta 338). Shift+Enter reaches Claude Code and Codex as its own key
-    (Kitty keyboard protocol, Settings › Terminal › Modern key encoding). Sixel, iTerm2 and Kitty images show in the
-    terminal (Settings › Terminal › Show images, 32 MB per terminal). Emoji such as 👨‍👩‍👧 take two cells.
-    Powerline and Nerd glyphs fit their cell on the GPU renderer. Option+drag selects inside vim and tmux.
-  - **Prompt marks, folder and progress.** Terminals act on the escapes shells and CLIs already send. OSC 133 prompt
-    marks draw a gutter mark per prompt (red after a failed command), and Cmd+Up / Cmd+Down (Cmd+PageUp /
-    Cmd+PageDown) jump between prompts. OSC 7 keeps the bottom panel's tab name and the TERMINALS row's folder
-    current after `cd`, including the `file://$HOST/…` form macOS shells send. OSC 9;4 progress (Claude Code and
-    others) keeps the row working, and marks it when the work finishes while you are looking elsewhere. omher adds
-    no shell hook.
-  - **Paste guard.** Pasting more than one line into a terminal now asks first, showing the line count, the first
-    lines, and Paste / Cancel (Enter / Esc). It does not ask when the program has turned on bracketed paste. This
-    covers Cmd/Ctrl+V, the Edit menu and right-click paste, in session terminals and the bottom panel. Settings ›
-    Terminal › "Confirm multi-line paste" (on by default).
-  - **Find options.** The terminal find bar has Match case (Aa, Alt+C) and Regular expression (.\*, Alt+R) toggles.
-    An invalid pattern marks the field and finds nothing.
-
 - **The OMH TUI's proofreader keeps a local dictionary.** On a spelling issue, Alt+P now offers Add to dictionary
   beside the replacements: the word's spelling marks hide in every OMH TUI on that OMH home, and Alt+P on it later
   offers Remove from dictionary. The picker's Skip row is gone (Cancel and Esc already did the same). Grammar
@@ -471,6 +400,34 @@ All notable changes will be documented here.
   counted after it (`+1 test run · 1 agent`); a narrow terminal falls back to the old row. As the wait ends, one muted
   row says so for 3 seconds (`✓ Review finished`, `✗ … failed`, `· Tests ended` for a process, which has no exit
   code). During a turn, `? waiting on you` now reads `? waiting for your approval` or `? waiting for your answer`.
+
+- **A tool call no longer re-parses an unchanged profile `config.yaml` to bind its OMH home.** Every
+  `pre_tool_call`/`post_tool_call` callback resolves the profile's OMH home, and each resolution ran Hermes' validating
+  parse of the whole `config.yaml`. The plugin now keeps that one validated parse per file, keyed on a SHA-256 of the
+  bytes it read on that call, and reuses it only while the file still holds exactly those bytes and the same host
+  validator is installed. A parse is kept only when Hermes' own YAML reader turns exactly those bytes into the same
+  mapping, so a file swapped and restored while the validator ran (A, then B, then A again) is never remembered as
+  B's parse. An absent or unreadable file, a config backend other than the local file, or a write during the parse
+  goes through Hermes' own validator. Path resolution, the managed and effective config comparison, launch fallback
+  and secret ownership still run on every call. Measured on a Mac16,7 (Apple M4 Pro, macOS 26.6.2, Hermes'
+  CPython 3.11.16) with Hermes' real file-backend validator and a 46,614-byte synthetic `config.yaml`, 12 alternating
+  fresh processes per arm, 20 warm calls each, medians of per-process medians: a warm `resolve_homes()` went from
+  5.76 ms to 0.22 ms, and the two bindings `pre_tool_call` resolves before any gate from 5.75 ms to 0.24 ms; the cold
+  first call, which now also parses the bytes it keyed on with Hermes' reader, went from 19.8 ms to 25.4 ms. The
+  contributor's version, which cached the whole binding, measured
+  0.03 ms warm in the same harness, but it could hand back a stale home after a same-size rewrite or a changed path
+  alias. Thanks @zangetsu787 (#2973).
+
+- **A delegation route write no longer drops a setting saved while it ran.** OMH built the new `config.yaml` from
+  the copy it validated, so a `hermes config set` landing in between (observed: `context_file_max_chars` reset to
+  unset, repeatedly) was overwritten. The route writer now re-reads the file just before replacing it and applies
+  only the three route keys (`delegation.model`, `provider`, `reasoning_effort`) to that read, retrying up to five
+  times while the file keeps changing, and leaves the file untouched when nothing would change. Every check (a
+  fallback's or restore's expected route, the endpoint guard, the unsupported-mapping refusal) runs on that same
+  read; a change to the route keys themselves is refused rather than overwritten, and the baseline put back at turn
+  end is the route the write really replaced. This is best effort: Hermes' CLI takes no OMH lock, so an edit landing
+  in the last moment between OMH's final check and the rename is still lost. Fixes #2998. Reported and first fixed
+  by @OptionalCoin in #2999.
 
 - **Hermes Bug Hunter: the false-alarm benchmark gets traps a strong reviewer actually falls for.** In the first
   live run (3 runs per case per arm) both arms raised 3 false alarms in 33 trap runs, all on the one trap whose proof
@@ -741,6 +698,24 @@ All notable changes will be documented here.
   refused; a plain-HTTP ask never goes through `HTTP_PROXY`, so the key is not
   sent in clear to a proxy; and `typesafe_model` never applies to TypeSafe's
   own host however it is spelled. Thanks @brentkearney. (#2716)
+- **omher 1.1.0.** TERMINALS split into panes and come back after a restart, bots can follow a terminal by its link,
+  and CLI art draws solid.
+  - **Split:** a TERMINALS session splits right (⌘D) or down (⌘⇧D) into up to four panes, with pane keys for close,
+    focus, zoom and even sizes (Ctrl-based on Windows and Linux); unfocused panes dim, Plans shows a clickable minimap,
+    and the split comes back after a restart. The bottom panel splits too, rings and takes dropped files. (#2993, #3000)
+  - **Restore:** Claude Code and Codex terminals that were running when omher quit continue their own conversation
+    after a restart, with the old output shown dimmed above (Settings › Terminal › History). (#2993)
+  - **Terminal links:** every TERMINALS session has an `omher://terminal/<id>` link (row menu or ⌘⇧C) shown as an omher
+    chip with the session's live state. A bot given the link can read the terminal's title, state and last line, and
+    can ask to type a prompt into it; nothing is typed until you press Allow on that request. Off on Windows. (#3000)
+  - **Terminal engine:** xterm 6.1 with Shift+Enter as its own key for Claude Code and Codex, inline images, prompt
+    marks with ⌘↑/⌘↓, folder and progress from the shell, a paste guard for multi-line pastes, and case and regex find.
+    Block art such as Claude Code's mascot draws solid (GPU renderer on Auto), and no dark bar sits under the last
+    row. (#2983, #2993, #3000)
+  - **Chat:** every message shows Read once the bot has it and a steer shows how the bot took it; a Slack briefing
+    sets itself up for a bot with Slack (`omher-brief`). (#2992, #2994)
+  - **Threads:** New thread works on Hermes' current gateway again, and the empty "+ New thread" line under each bot is
+    gone (the bot row's + and `./thread` open one). (#2987, #2990)
 - **omher 1.0.0.** omher is out of beta: a new user's one command installs everything and ends in the bot's chat,
   threads start from the chat box, and the main screens read right in every language.
   - **Out of beta:** the install argument is `omher` (`curl -fsSL https://omher.app/omher | sh` is unchanged); the old

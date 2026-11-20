@@ -2552,11 +2552,12 @@ dependencies = [
 
 [[package]]
 name = "omher"
-version = "1.0.0"
+version = "1.1.0"
 dependencies = [
  "getrandom 0.3.4",
  "libc",
  "open",
+ "plist",
  "portable-pty",
  "regex",
  "serde",
