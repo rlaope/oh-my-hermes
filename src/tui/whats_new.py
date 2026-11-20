@@ -34,6 +34,12 @@ SHORT_HINT = " · /whats-new lists it"
 EARLIER_TUI_STATE = ("tui/launch-skills.json",)
 
 WHATS_NEW: dict[str, tuple[str, ...]] = {
+    "4.0.9": (
+        "Code review drops findings it cannot show, and lists what it did not check",
+        "A review benchmark measures false alarms against real bugs, OMH on and off",
+        "A re-run of the same dag can skip the nodes that already passed",
+        "A message sent mid-turn gets a one-line answer before the next tool call",
+    ),
     "4.0.8": (
         "Enter during a turn steers it now, as in Claude Code",
         "A drag copies clean, and the wheel scrolls the terminal's scrollback",
