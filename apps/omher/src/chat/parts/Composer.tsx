@@ -309,8 +309,10 @@ export function Composer({
 
   // one line above the box while it holds a single `/word` or `$word`. "sigil": a bot chat's `/` is a command, a
   // skill is `$name`. "none": there is no list to pick from (a bot without skills, a bridge without skills.list),
-  // so the whole name goes at the start with a slash. A chat with its agent's own menu shows that instead.
-  const lead = menu ? undefined : /^([/$])[\w-]*$/.exec(text)?.[1];
+  // so the whole name goes at the start with a slash. A chat with its agent's own menu shows that instead; a bot
+  // chat's `/` menu (Hermes' commands) shows instead only while it is open, so `/pl` with no command left still
+  // says skills take `$`.
+  const lead = commands || cmdOpen ? undefined : /^([/$])[\w-]*$/.exec(text)?.[1];
   const hint: "sigil" | "none" | null = !lead
     ? null
     : !skillsOn
@@ -435,8 +437,10 @@ export function Composer({
                     pickCommand(cmd.shown[cmdAt]);
                     return;
                   }
-                  // Enter takes the highlighted command unless the text already names it exactly (then it is sent)
-                  if (e.key === "Enter" && !e.shiftKey && n && text !== `${cmd.shown[cmdAt].prefix}${cmd.shown[cmdAt].name}`) {
+                  // Enter takes the highlighted command unless the text already names it exactly, or (a bot chat, whose
+                  // menu lists Hermes' commands only) names one of the bot's skills the Hermes way: then it is sent
+                  const named = text === `${cmd.shown[cmdAt].prefix}${cmd.shown[cmdAt].name}` || (!commands && names.includes(text.slice(1)));
+                  if (e.key === "Enter" && !e.shiftKey && n && !named) {
                     e.preventDefault();
                     pickCommand(cmd.shown[cmdAt]);
                     return;

@@ -965,21 +965,37 @@ def _scan_skills(root: Path, found: dict[str, str], seen: set[str]) -> None:
         found[slug] = desc if len(desc) <= SKILL_DESC_MAX else desc[:SKILL_DESC_MAX - 1].rstrip() + "…"
 
 
-def read_commands() -> list[dict]:
+def _gate_on(cfg: dict, dotpath: str) -> bool:
+    """Whether the bot's config turns on a CLI-only command for the gateway (Hermes `_resolve_config_gates`:
+    the dotpath's value is truthy)."""
+    node: object = cfg
+    for key in dotpath.split("."):
+        if not isinstance(node, dict):
+            return False
+        node = node.get(key)
+    if isinstance(node, str):
+        return node.strip().lower() in ("1", "true", "yes", "on")
+    return bool(node) and node is not None
+
+
+def read_commands(profile_dir: Path | None = None) -> list[dict]:
     """`commands.list`: the slash commands a Hermes bot answers, from Hermes' own registry
     (`hermes_cli.commands.COMMAND_REGISTRY`), so the composer's `/` menu lists what the gateway really
-    dispatches instead of a list omher keeps. CLI-only commands are left out unless a config gate serves them;
-    each row is `name`, the localized `description`, the `hint` its arguments take, and `kind`/`prefix` in the
-    shape `parseCommands` reads. An import that fails (an older Hermes) yields no rows: the menu then stays
-    closed, as it does when the op is missing."""
+    dispatches instead of a list omher keeps. A CLI-only command is listed only when its `gateway_config_gate`
+    is on in this bot's `config.yaml` (as the gateway decides); each row is `name`, the localized `description`,
+    the `hint` its arguments take, and `kind`/`prefix` in the shape `parseCommands` reads. An import that fails
+    (an older Hermes) yields no rows: the menu then stays closed, as it does when the op is missing."""
     try:
         from hermes_cli.commands import COMMAND_REGISTRY
     except Exception:
         return []
+    cfg = _load_yaml(profile_dir / "config.yaml") if profile_dir else {}
     out: dict[str, dict] = {}
     for cmd in COMMAND_REGISTRY:
-        if getattr(cmd, "cli_only", False) and not getattr(cmd, "gateway_config_gate", None):
-            continue
+        if getattr(cmd, "cli_only", False):
+            gate = getattr(cmd, "gateway_config_gate", None)
+            if not gate or not _gate_on(cfg, str(gate)):
+                continue
         name = str(getattr(cmd, "name", "") or "").strip()
         if not name or name in out:
             continue
@@ -6821,8 +6837,8 @@ class Bridge:
         return {"skills": await asyncio.to_thread(read_skills, bot["path"])}
 
     async def op_commands_list(self, p) -> dict:
-        self._bot(p.get("bot"))
-        return {"commands": await asyncio.to_thread(read_commands)}
+        bot = self._bot(p.get("bot"))
+        return {"commands": await asyncio.to_thread(read_commands, bot["path"])}
 
     async def op_links_places(self, p) -> dict:
         bot = self._bot(p.get("bot"))

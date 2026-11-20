@@ -653,6 +653,14 @@ const SKILL_SEED = [
   { name: "research", description: "Find sources, read them and answer with citations." },
   { name: "review", description: "Review a diff for correctness, tests and risk, worst first." },
 ];
+// Hermes' slash commands for a bot chat's `/` menu (commands.list). `compress` names "research" in its description,
+// so `/research` (a skill) also matches it: Enter must still send the skill as typed.
+const COMMAND_SEED = [
+  { name: "compress", description: "Summarise the context so a long research run can go on", hint: "" },
+  { name: "help", description: "Show the commands", hint: "" },
+  { name: "model", description: "Switch the model for this chat", hint: "[model|reset] [--provider name]" },
+  { name: "new", description: "Start a new session", hint: "" },
+];
 // Skills that arrive later (mock.skills): an install that registers oh-my-hermes' skills, listed from the
 // `after`-th skills.list read on (0 = at once). Cleared by mock.reset.
 let skillsLater = { add: [], after: 0 };
@@ -1388,6 +1396,10 @@ const OPS = {
     if (noSkills.has(p.bot)) return { skills: [] };
     const late = skillsLater.after-- <= 0 ? skillsLater.add : [];
     return { skills: [...SKILL_SEED, ...late].sort((a, b) => a.name.localeCompare(b.name)).map((x) => ({ ...x })) };
+  },
+  "commands.list": (p) => {
+    needBot(p);
+    return { commands: COMMAND_SEED.map((x) => ({ ...x, kind: "command", prefix: "/" })) };
   },
   "tasks.linear": (p) => {
     const server = linearMcp.get(needBot(p).name);

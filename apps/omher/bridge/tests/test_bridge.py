@@ -2094,30 +2094,69 @@ class Skills(BridgeCase):
             self.assertEqual(env.connects, [])  # a file read: no gateway started for it
 
 
+class _Cmd:
+    def __init__(self, name, description="", args_hint="", cli_only=False, gateway_config_gate=None):
+        self.name, self.description, self.args_hint = name, description, args_hint
+        self.cli_only, self.gateway_config_gate = cli_only, gateway_config_gate
+
+    def describe(self):
+        return self.description
+
+
+def _fake_registry():
+    """A stand-in for `hermes_cli.commands`: the bridge CI installs only websockets and pyyaml, no Hermes."""
+    import types
+    pkg, mod = types.ModuleType("hermes_cli"), types.ModuleType("hermes_cli.commands")
+    mod.COMMAND_REGISTRY = [
+        _Cmd("model", "Switch  the\nmodel", "[model|reset] [--provider name]"),
+        _Cmd("help", "Show help"),
+        _Cmd("redraw", "Redraw the screen", cli_only=True),
+        _Cmd("verbose", "Tool progress", cli_only=True, gateway_config_gate="display.tool_progress_command"),
+        _Cmd("help", "a second help, later"),
+    ]
+    pkg.commands = mod
+    return mock.patch.dict(sys.modules, {"hermes_cli": pkg, "hermes_cli.commands": mod})
+
+
 class Commands(BridgeCase):
     """`commands.list`: the slash commands Hermes answers for a bot, from Hermes' own registry (read-only)."""
 
     async def test_lists_commands_sorted_with_hints_and_no_cli_only(self):
-        async with Env() as env:
-            s = await self.open(env)
-            r = await s.req("commands.list", bot="kami")
-            self.assertTrue(r["ok"], r)
-            rows = r["result"]["commands"]
-            names = [x["name"] for x in rows]
-            self.assertEqual(names, sorted(names))
-            self.assertEqual(len(names), len(set(names)))
-            for row in rows:
-                self.assertEqual((row["kind"], row["prefix"]), ("command", "/"))
-                self.assertFalse(row["name"].startswith("/"))
-                self.assertIsInstance(row["description"], str)
-                self.assertIsInstance(row["hint"], str)
-            # the commands a gateway really dispatches are listed; the editor-only ones are not
-            self.assertIn("model", names)
-            self.assertIn("help", names)
-            self.assertNotIn("redraw", names)  # cli_only, no config gate: the gateway never answers it
-            model = next(x for x in rows if x["name"] == "model")
-            self.assertTrue(model["hint"].startswith("[model|reset]"))
-            self.assertEqual(env.connects, [])  # a registry read: no gateway started for it
+        with _fake_registry():
+            async with Env() as env:
+                s = await self.open(env)
+                r = await s.req("commands.list", bot="kami")
+                self.assertTrue(r["ok"], r)
+                rows = r["result"]["commands"]
+                names = [x["name"] for x in rows]
+                self.assertEqual(names, sorted(names))
+                self.assertEqual(len(names), len(set(names)))
+                for row in rows:
+                    self.assertEqual((row["kind"], row["prefix"]), ("command", "/"))
+                    self.assertFalse(row["name"].startswith("/"))
+                    self.assertIsInstance(row["description"], str)
+                    self.assertIsInstance(row["hint"], str)
+                # the commands a gateway really dispatches are listed; the editor-only ones are not
+                self.assertIn("model", names)
+                self.assertIn("help", names)
+                self.assertNotIn("redraw", names)  # cli_only, no config gate: the gateway never answers it
+                model = next(x for x in rows if x["name"] == "model")
+                self.assertTrue(model["hint"].startswith("[model|reset]"))
+                self.assertEqual(model["description"], "Switch the model")
+                self.assertNotIn("verbose", names)  # its config gate is off for this bot
+                self.assertEqual(env.connects, [])  # a registry read: no gateway started for it
+                # the bot turns the gate on: the gateway answers /verbose, so the menu lists it
+                cfg = env.home / "profiles" / "kami" / "config.yaml"
+                cfg.write_text(cfg.read_text() + "display:\n  tool_progress_command: true\n")
+                r = await s.req("commands.list", bot="kami")
+                self.assertIn("verbose", [x["name"] for x in r["result"]["commands"]])
+
+    async def test_no_hermes_registry_gives_no_rows(self):
+        with mock.patch.dict(sys.modules, {"hermes_cli": None, "hermes_cli.commands": None}):
+            async with Env() as env:
+                s = await self.open(env)
+                r = await s.req("commands.list", bot="kami")
+                self.assertEqual(r["result"]["commands"], [])
 
     async def test_unknown_bot(self):
         async with Env() as env:
