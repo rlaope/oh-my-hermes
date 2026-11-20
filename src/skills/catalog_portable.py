@@ -359,6 +359,7 @@ PORTABLE_REFERENCE_PATHS = frozenset({
     'research/references/search-fields.md',
     'web-research/references/search-examples.md',
     'source-finder/references/search-examples.md',
+    'source-finder/references/literature-retrieval.md',
     'research/references/search-examples.md',
     'market-research/references/procedure.md',
     'market-research/references/market-sizing.md',
