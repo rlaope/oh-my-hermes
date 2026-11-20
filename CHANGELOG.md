@@ -449,6 +449,13 @@ All notable changes will be documented here.
   rules out, a map written only before the server starts, a depth the settings loader bounds), and 4 controls whose
   bug also shows only with a file outside the hunk, so an over-cautious reviewer still loses hits. The corpus goes
   from 11 traps and 6 controls to 23 and 10.
+- **The OMH TUI's send-now key reaches a queued prompt with images.** A prompt with an image sent with Enter during a
+  turn queued (`⧗`) with no `ctrl+enter to send now` row under it, and Ctrl+Enter on the empty composer did nothing, so
+  the only way to send it before the turn ended was to retype it. Its queue row now names the send-now key, as Claude
+  Code's `Queued · ctrl+enter to send now` does, and the key (Ctrl+J too) stops the turn and sends the prompt with its
+  images as soon as it ends, the same cut-in Ctrl+Enter already made from the composer. It is never sent as a text-only
+  steer; a queued slash command or `!` line still waits its turn, and so does a second image prompt while one cut-in
+  waits.
 
 ## 4.0.8 - 2026-11-15
 
