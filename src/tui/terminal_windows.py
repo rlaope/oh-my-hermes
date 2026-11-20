@@ -8,18 +8,30 @@ Enter as CR), and the output to virtual terminal processing without the
 automatic return after a line feed, with the UTF-8 code page. Every exit puts
 all four back, a failed enter too, as `Terminal._restore` does with termios.
 
-Input is read with ReadConsoleW, so it is UTF-16: a reader thread joins a
-surrogate pair split across two reads and queues UTF-8 bytes, the bytes
-`keys.KeyDecoder` reads on POSIX. Any input record wakes the wait, but
-ReadConsoleW skips records that are no text (focus, menu, a lone Shift) and
-then blocks, so the reader peeks first and calls it only when it will return
-at once; records that never become text are drained. A blocked reader would
-outlive `restore` and eat the shell's next key, so restore also cancels the
-reader thread's own I/O when CancelIoEx did not release it. `read(timeout, wake)` waits on that queue
+Input is read as console input records on a reader thread. With virtual
+terminal input every character the console delivers, each one of an arrow's
+or F-key's VT sequence, a paste and the replies to the startup queries, is a
+KEY_EVENT record carrying that UTF-16 unit, so the reader waits for the input
+handle (at most `INPUT_WAIT_MS`), asks how many records are queued, and reads
+only that many with ReadConsoleInputW, which returns at once because they
+exist; it never calls a read on an empty queue. Text is taken only from the
+records that read returned: a key-down's character (repeated as often as the
+key repeated) and the character an Alt key-up (Alt+numpad) or an IME key-up
+hands over; focus,
+menu, mouse and size records, key-ups and keys without a character are
+dropped. Nothing is decided on a snapshot of the queue, so a record that
+changes under the reader is never lost; the one window left is a flush
+exactly between counting and reading, which leaves that read waiting for the
+next record. A surrogate pair split across two reads is joined and the text
+queued as UTF-8 bytes, the bytes `keys.KeyDecoder` reads on POSIX. As the
+reader only ever waits in WaitForSingleObject, `restore` stops it with its
+flag; cancelling its I/O (CancelIoEx, then CancelSynchronousIo on its thread)
+stays as a belt. `read(timeout, wake)` waits on that queue
 and ends early when the gateway's wake pipe holds a byte (PeekNamedPipe, which
 never consumes it) or the console's size changed: Windows has no SIGWINCH, so
 the size is polled at most every `RESIZE_POLL_SECONDS` inside the wait. A
-console that is gone (ReadConsoleW fails) is EOFError, as a hung-up pty is.
+console that is gone (its input cannot be waited on, counted or read) is
+EOFError, as a hung-up pty is.
 
 `console_blocker` asks the console whether it takes VT input and output before
 the TUI is tried, so an old conhost that cannot falls back to Hermes' own
@@ -58,12 +70,11 @@ THREAD_TERMINATE = 0x0001  # the access CancelSynchronousIo needs on a thread ha
 WAIT_TIMEOUT = 0x0102
 ERROR_OPERATION_ABORTED = 995
 
-READ_UNITS = 1024  # UTF-16 code units per ReadConsoleW
 INPUT_WAIT_MS = 50  # how long the reader waits for input before it looks at its stop flag
 READ_SLICE_SECONDS = 0.02  # how often a `read` looks at the wake pipe while no input comes
 RESIZE_POLL_SECONDS = 0.1
 STOP_JOIN_SECONDS = 0.5
-PEEK_RECORDS = 64  # input records looked at per peek
+READ_RECORDS = 128  # input records read per ReadConsoleInputW
 
 # Input record event types.
 KEY_EVENT = 0x0001
@@ -71,9 +82,9 @@ MOUSE_EVENT = 0x0002
 WINDOW_BUFFER_SIZE_EVENT = 0x0004
 MENU_EVENT = 0x0008
 FOCUS_EVENT = 0x0010
-# Shift, Ctrl, Alt, Caps Lock, the Windows keys, Num Lock, Scroll Lock, and their left/right forms:
-# a key-down of one alone never becomes text.
-MODIFIER_KEYS = frozenset({0x10, 0x11, 0x12, 0x14, 0x5B, 0x5C, 0x90, 0x91, *range(0xA0, 0xA6)})
+VK_MENU = 0x12  # Alt: Alt+numpad hands its composed character over on this key's key-up
+VK_PROCESSKEY = 0xE5  # the IME's key: never a physical key-up, so a character on its key-up is no repeat
+KEY_UP_TEXT = frozenset({VK_MENU, VK_PROCESSKEY})  # the keys whose key-up can carry the only copy of a character
 
 NOT_A_TERMINAL = "stdin or stdout is not a terminal"
 NOT_A_CONSOLE = "stdin or stdout is not a Windows console"
@@ -104,18 +115,22 @@ class INPUT_RECORD(ctypes.Structure):
     _fields_ = [("EventType", ctypes.c_uint16), ("Event", _INPUT_EVENT)]
 
 
-def never_text(record: INPUT_RECORD) -> bool:
-    """Whether ReadConsoleW would skip this record: no key, a key-up without a character, or a modifier pressed alone.
-
-    A key-down without a character and any other key (an arrow, an F-key) is
-    turned into a VT sequence inside ReadConsoleW, so it is text.
-    """
-    if record.EventType != KEY_EVENT:
-        return True
-    key = record.Event.KeyEvent
-    if key.UnicodeChar:  # Alt+numpad and some IMEs hand the character over on the key-up
-        return False
-    return not key.bKeyDown or key.wVirtualKeyCode in MODIFIER_KEYS
+def record_units(records: Any) -> list[int]:
+    """The UTF-16 units typed in these input records: each key-down's character, repeated as the key repeated, and
+    the character an Alt (Alt+numpad) or IME key-up carries; every other record (focus, menu, mouse, size, any other key-up, a key
+    without a character such as a lone Shift) is no text."""
+    units: list[int] = []
+    for record in records:
+        if record.EventType != KEY_EVENT:
+            continue
+        key = record.Event.KeyEvent
+        if not key.UnicodeChar:
+            continue
+        if key.bKeyDown:
+            units.extend([key.UnicodeChar] * max(key.wRepeatCount, 1))
+        elif key.wVirtualKeyCode in KEY_UP_TEXT:
+            units.append(key.UnicodeChar)
+    return units
 
 
 class _Stream(Protocol):
@@ -160,11 +175,9 @@ def load_kernel32() -> Any:
             "GetConsoleOutputCP": ((), dword),
             "SetConsoleCP": ((dword,), bool_),
             "SetConsoleOutputCP": ((dword,), bool_),
-            "ReadConsoleW": ((handle, ctypes.POINTER(ctypes.c_uint16), dword, dword_p, ctypes.c_void_p), bool_),
             "WaitForSingleObject": ((handle, dword), dword),
             "CancelIoEx": ((handle, ctypes.c_void_p), bool_),
             "GetNumberOfConsoleInputEvents": ((handle, dword_p), bool_),
-            "PeekConsoleInputW": ((handle, ctypes.POINTER(INPUT_RECORD), dword, dword_p), bool_),
             "ReadConsoleInputW": ((handle, ctypes.POINTER(INPUT_RECORD), dword, dword_p), bool_),
             "OpenThread": ((dword, bool_, dword), handle),
             "CancelSynchronousIo": ((handle,), bool_),
@@ -347,7 +360,7 @@ class WindowsConsole:
     def _pump(self) -> None:
         """The reader thread: console input as UTF-8 chunks on the queue, then the end once the console is gone."""
         kernel32 = self._kernel32
-        buffer = (ctypes.c_uint16 * READ_UNITS)()
+        records = (INPUT_RECORD * READ_RECORDS)()
         high: int | None = None  # a high surrogate whose low half has not been read yet
         while not self._stop:
             state = kernel32.WaitForSingleObject(self._input, INPUT_WAIT_MS)
@@ -355,17 +368,19 @@ class WindowsConsole:
                 return
             if state == WAIT_TIMEOUT:
                 continue
-            if state == WAIT_OBJECT_0 and not self._text_ready():
-                continue
-            count = ctypes.c_uint32(0)
-            if state != WAIT_OBJECT_0 or not kernel32.ReadConsoleW(self._input, buffer, READ_UNITS, count, None):
+            pending, count = ctypes.c_uint32(0), ctypes.c_uint32(0)
+            if state != WAIT_OBJECT_0 or not kernel32.GetNumberOfConsoleInputEvents(self._input, pending):
+                self._end()
+                return
+            if pending.value == 0:
+                continue  # the signal's records are gone already: a read now would wait for the next one
+            if not kernel32.ReadConsoleInputW(self._input, records, min(pending.value, READ_RECORDS), count):
                 if self._stop:  # CancelIoEx from `restore`
                     return
-                with self._ready:
-                    self._eof = True
-                    self._ready.notify_all()
+                self._end()
                 return
-            units = list(buffer[: count.value])
+            # Queued even if `restore` began meanwhile: these keys were typed for the TUI.
+            units = record_units(records[: count.value])
             if high is not None:
                 units.insert(0, high)
                 high = None
@@ -376,41 +391,17 @@ class WindowsConsole:
                     self._chunks.append(utf16_to_utf8(units))
                     self._ready.notify_all()
 
-    def _text_ready(self) -> bool:
-        """Whether ReadConsoleW would return at once; when not, drain the leading records that never become text.
-
-        A console that cannot be peeked is left to ReadConsoleW, whose failure
-        is the end of the console.
-        """
-        kernel32 = self._kernel32
-        pending = ctypes.c_uint32(0)
-        if not kernel32.GetNumberOfConsoleInputEvents(self._input, pending):
-            return True
-        if pending.value == 0:
-            return False
-        length = min(pending.value, PEEK_RECORDS)
-        records = (INPUT_RECORD * length)()
-        seen = ctypes.c_uint32(0)
-        if not kernel32.PeekConsoleInputW(self._input, records, length, seen):
-            return True
-        peeked = records[: seen.value]
-        if any(record.EventType == KEY_EVENT and record.Event.KeyEvent.UnicodeChar for record in peeked):
-            return True
-        skippable = 0
-        for record in peeked:
-            if not never_text(record):
-                break
-            skippable += 1
-        if skippable == 0:
-            return True  # a key VT input turns into a sequence
-        return not kernel32.ReadConsoleInputW(self._input, records, skippable, seen)
+    def _end(self) -> None:
+        with self._ready:
+            self._eof = True
+            self._ready.notify_all()
 
     def _stop_reader(self) -> None:
         reader, self._reader = self._reader, None
         if reader is None:
             return
         self._stop = True
-        self._kernel32.CancelIoEx(self._input, None)  # a ReadConsoleW waiting on a key returns now
+        self._kernel32.CancelIoEx(self._input, None)  # a belt: the reader waits only in WaitForSingleObject
         reader.join(STOP_JOIN_SECONDS)
         if reader.is_alive():  # CancelIoEx did not release it: cancel the I/O the thread itself waits in
             self._cancel_thread_io(reader)

@@ -2,7 +2,7 @@
 
 The console layer runs on POSIX against a fake kernel32 that records every
 mode and code-page call, so the order modes are set and put back, the reader
-thread's surrogate joining, the wake, the resize poll and a vanished console
+thread's record reading and surrogate joining, the wake, the resize poll and a vanished console
 are proven here; the tests that need real Windows objects run only on Windows
 (the CI `test-windows` job).
 """
@@ -32,8 +32,10 @@ SAVED_CP = 437
 class FakeKernel32:
     """The kernel32 calls `terminal_windows` makes, recorded.
 
-    Input is a queue of console records, each with the UTF-16 units ReadConsoleW
-    turns it into (None: a record ReadConsoleW skips, as a real console does).
+    Input is a queue of console input records, `((type, down, VK, char[, repeat]), note)`; typed text is one
+    character key-down per UTF-16 unit, as virtual terminal input delivers it. ReadConsoleInputW behaves as a real
+    console's: it returns at once while records are queued and waits for one on an empty queue (`inside` is set
+    then) until a cancel ends the wait. ReadConsoleW is here only to prove it is never called (`read_calls`).
     """
 
     def __init__(self, *, refuse: int = 0, refuse_on: int | None = None) -> None:
@@ -42,8 +44,13 @@ class FakeKernel32:
         self.calls: list[tuple] = []
         self.refuse = refuse  # SetConsoleMode fails for a mode with any of these bits
         self.refuse_on = refuse_on  # ... on this handle only (None: either)
-        self.queue: list[tuple[tuple[int, int, int, int], list[int] | None]] = []  # (type, down, VK, char), units
-        self.read_calls = 0
+        self.queue: list[tuple[tuple[int, ...], object]] = []
+        self.read_calls = 0  # ReadConsoleW: must stay 0
+        self.record_reads: list[int] = []  # the length of each ReadConsoleInputW
+        self.read_limit: int | None = None  # at most this many records per ReadConsoleInputW
+        self.stale = 0  # records GetNumberOfConsoleInputEvents still counts after a flush took them
+        self.inside = threading.Event()  # a ReadConsoleInputW waits on an empty queue
+        self.aborted = threading.Event()  # ... and a cancel ended that wait
         self.thread_calls: list[tuple] = []  # OpenThread / CancelSynchronousIo / CloseHandle
         self.gone = False
         self.pipe_bytes: dict[int, int] = {}
@@ -84,26 +91,20 @@ class FakeKernel32:
             with self.lock:
                 if self.gone:
                     return WAIT_FAILED
-                if self.queue:
+                if self.queue or self.stale:
                     return tw.WAIT_OBJECT_0
             time.sleep(0.002)
         return tw.WAIT_TIMEOUT
 
     def ReadConsoleW(self, handle, buffer, size, count, reserved) -> int:  # noqa: N802
-        with self.lock:
-            self.read_calls += 1
-            while self.queue and self.queue[0][1] is None:
-                self.queue.pop(0)  # records that are no text are skipped
-            if self.gone or not self.queue:
-                return 0  # a real console would block here
-            units = self.queue.pop(0)[1]
-        for index, unit in enumerate(units):
-            buffer[index] = unit
-        count.value = len(units)
-        return 1
+        self.read_calls += 1
+        raise AssertionError("ReadConsoleW is never called: it blocks on records that are no text")
 
     def CancelIoEx(self, handle, overlapped) -> int:  # noqa: N802
         self.calls.append(("cancel", handle))
+        if not self.inside.is_set():
+            return 0  # ERROR_NOT_FOUND: no I/O to cancel
+        self.aborted.set()
         return 1
 
     def PeekNamedPipe(self, handle, buffer, size, read, available, left) -> int:  # noqa: N802
@@ -114,28 +115,35 @@ class FakeKernel32:
         with self.lock:
             if self.gone:
                 return 0
-            count.value = len(self.queue)
+            count.value = len(self.queue) + self.stale
         return 1
 
-    def _copy_records(self, records, length, seen, *, take: bool) -> int:
-        with self.lock:
-            if self.gone:
-                return 0
-            entries = self.queue[:length]
-            if take:
-                del self.queue[:length]
-        for index, ((event_type, down, vk, char), _units) in enumerate(entries):
+    def ReadConsoleInputW(self, handle, records, length, seen) -> int:  # noqa: N802
+        self.record_reads.append(length)
+        deadline = time.monotonic() + 5.0
+        while True:
+            with self.lock:
+                if self.gone:
+                    return 0
+                if self.queue:
+                    entries = self.queue[:min(length, self.read_limit or length)]
+                    del self.queue[:len(entries)]
+                    break
+                self.stale = 0  # the counted records were flushed: wait for the next one
+            self.inside.set()
+            if self.aborted.wait(0.002) or time.monotonic() > deadline:
+                self.aborted.clear()
+                self.inside.clear()
+                return 0  # ERROR_OPERATION_ABORTED
+        self.inside.clear()
+        for index, (fields, _note) in enumerate(entries):
+            event_type, down, vk, char, *repeat = fields
             records[index].EventType = event_type
             key = records[index].Event.KeyEvent
             key.bKeyDown, key.wVirtualKeyCode, key.UnicodeChar = down, vk, char
+            key.wRepeatCount = repeat[0] if repeat else 1
         seen.value = len(entries)
         return 1
-
-    def PeekConsoleInputW(self, handle, records, length, seen) -> int:  # noqa: N802
-        return self._copy_records(records, length, seen, take=False)
-
-    def ReadConsoleInputW(self, handle, records, length, seen) -> int:  # noqa: N802
-        return self._copy_records(records, length, seen, take=True)
 
     def OpenThread(self, access, inherit, thread_id) -> int:  # noqa: N802
         self.thread_calls.append(("open", access, thread_id))
@@ -143,6 +151,7 @@ class FakeKernel32:
 
     def CancelSynchronousIo(self, thread) -> int:  # noqa: N802
         self.thread_calls.append(("cancel_sync", thread))
+        self.aborted.set()
         return 1
 
     def CloseHandle(self, handle) -> int:  # noqa: N802
@@ -150,13 +159,13 @@ class FakeKernel32:
         return 1
 
     def feed(self, *reads: list[int]) -> None:
-        """Typed text: one character key-down per read, which ReadConsoleW returns as those units."""
+        """Typed text: one character key-down record per UTF-16 unit."""
         with self.lock:
-            self.queue.extend(((tw.KEY_EVENT, 1, 0, units[0] if units else 0), units) for units in reads)
+            self.queue.extend(((tw.KEY_EVENT, 1, 0, unit), None) for units in reads for unit in units)
 
-    def push(self, event_type: int, down: int = 0, vk: int = 0, char: int = 0, units: list[int] | None = None) -> None:
+    def push(self, event_type: int, down: int = 0, vk: int = 0, char: int = 0, repeat: int = 1) -> None:
         with self.lock:
-            self.queue.append(((event_type, down, vk, char), units))
+            self.queue.append(((event_type, down, vk, char, repeat), None))
 
     def mode_calls(self) -> list[tuple]:
         return [call for call in self.calls if call[0] != "cancel"]
@@ -242,12 +251,15 @@ class WindowsConsoleTests(unittest.TestCase):
         console = self.console(kernel32)
         console.enter()
         high, low = _units("\U0001F600")
+        kernel32.read_limit = 6  # "a", Ctrl+C, ESC [ A and the high half; the low half comes with the next read
         kernel32.feed([*_units("a\x03\x1b[A"), high], [low, *_units("é")])
         data = b""
         deadline = time.monotonic() + 2.0
         while len(data) < len("a\x03\x1b[A\U0001F600é".encode()) and time.monotonic() < deadline:
             data += console.read(0.2)
         self.assertEqual(data, "a\x03\x1b[A\U0001F600é".encode("utf-8"))
+        self.assertEqual(kernel32.record_reads[:2], [8, 2])  # only the records that were queued, each time
+        self.assertEqual(kernel32.read_calls, 0)
 
     def test_the_wake_pipe_ends_a_read_early_without_taking_its_byte(self) -> None:
         kernel32 = FakeKernel32()
@@ -295,31 +307,15 @@ VK_SHIFT, VK_UP, VK_MENU, VK_VOLUME_UP = 0x10, 0x26, 0x12, 0xAF
 
 
 class BlockingRead(FakeKernel32):
-    """A ReadConsoleW that blocks until cancelled; CancelIoEx does not release it, CancelSynchronousIo does."""
-
-    def __init__(self) -> None:
-        super().__init__()
-        self.inside = threading.Event()
-        self.aborted = threading.Event()
-
-    def ReadConsoleW(self, handle, buffer, size, count, reserved) -> int:  # noqa: N802
-        self.read_calls += 1
-        self.inside.set()
-        self.aborted.wait(5)
-        return 0  # ERROR_OPERATION_ABORTED
+    """CancelIoEx releases nothing; only CancelSynchronousIo on the reader's thread ends a waiting read."""
 
     def CancelIoEx(self, handle, overlapped) -> int:  # noqa: N802
         self.calls.append(("cancel", handle))
         return 0
 
-    def CancelSynchronousIo(self, thread) -> int:  # noqa: N802
-        super().CancelSynchronousIo(thread)
-        self.aborted.set()
-        return 1
-
 
 class ConsoleRecordTests(unittest.TestCase):
-    """ReadConsoleW is called only when it returns at once: records that never become text are drained."""
+    """The reader reads only records that are queued and takes text only from the key records that read returned."""
 
     def console(self, kernel32: FakeKernel32) -> tw.WindowsConsole:
         console = tw.WindowsConsole(IN, OUT, kernel32=kernel32, handle_of=_identity, size_of=lambda: (100, 30))
@@ -346,67 +342,109 @@ class ConsoleRecordTests(unittest.TestCase):
             "bKeyDown", "wRepeatCount", "wVirtualKeyCode", "wVirtualScanCode", "UnicodeChar", "dwControlKeyState")],
             [0, 4, 6, 8, 10, 12])
 
-    def test_focus_menu_and_size_records_are_drained_without_reading(self) -> None:
+    def test_an_arrow_arrives_as_its_three_character_records(self) -> None:
+        kernel32 = FakeKernel32()
+        console = self.console(kernel32)
+        console.enter()
+        for unit in _units("\x1b[A"):  # VT input: ESC, "[" and "A" as key-downs (VK_UP with each)
+            kernel32.push(tw.KEY_EVENT, down=1, vk=VK_UP, char=unit)
+        self.assertEqual(self.read_until(console, b"\x1b[A"), b"\x1b[A")
+        self.assertEqual(kernel32.read_calls, 0)
+
+    def test_a_held_key_repeats_its_character(self) -> None:
+        kernel32 = FakeKernel32()
+        console = self.console(kernel32)
+        console.enter()
+        kernel32.push(tw.KEY_EVENT, down=1, vk=0x41, char=ord("a"), repeat=3)
+        self.assertEqual(self.read_until(console, b"aaa"), b"aaa")
+
+    def test_only_an_alt_or_ime_key_up_hands_over_its_character(self) -> None:
+        kernel32 = FakeKernel32()  # Alt+numpad: the composed character comes with the Alt key-up
+        console = self.console(kernel32)
+        console.enter()
+        kernel32.push(tw.KEY_EVENT, down=1, vk=0x41, char=ord("a"))
+        kernel32.push(tw.KEY_EVENT, down=0, vk=0x41, char=ord("a"))  # an ordinary key-up carries it again
+        kernel32.push(tw.KEY_EVENT, down=0, vk=VK_MENU, char=ord("é"))
+        kernel32.push(tw.KEY_EVENT, down=0, vk=tw.VK_PROCESSKEY, char=ord("漢"))
+        self.assertEqual(self.read_until(console, "aé漢".encode()), "aé漢".encode())
+        self.assertEqual(console.read(0.1), b"")  # "a" is not doubled
+
+    def test_records_that_are_no_text_are_read_and_dropped_and_the_reader_stays_responsive(self) -> None:
         kernel32 = FakeKernel32()
         console = self.console(kernel32)
         console.enter()
         for event_type in (tw.FOCUS_EVENT, tw.MENU_EVENT, tw.WINDOW_BUFFER_SIZE_EVENT, tw.MOUSE_EVENT):
             kernel32.push(event_type)
+        kernel32.push(tw.KEY_EVENT, down=1, vk=VK_SHIFT)  # a modifier alone
+        kernel32.push(tw.KEY_EVENT, down=1, vk=VK_VOLUME_UP)  # a key without a character
+        kernel32.push(tw.KEY_EVENT, down=0, vk=VK_SHIFT)
         self.wait_drained(kernel32)
-        self.assertEqual(kernel32.read_calls, 0)
+        self.assertEqual(console.read(0.1), b"")
         kernel32.feed(_units("a"))
         self.assertEqual(self.read_until(console, b"a"), b"a")
-
-    def test_a_modifier_pressed_alone_and_a_key_up_are_drained_without_reading(self) -> None:
-        kernel32 = FakeKernel32()
-        console = self.console(kernel32)
-        console.enter()
-        kernel32.push(tw.KEY_EVENT, down=1, vk=VK_SHIFT)
-        kernel32.push(tw.KEY_EVENT, down=0, vk=0x41)  # the key-up of an "a" already read
-        self.wait_drained(kernel32)
         self.assertEqual(kernel32.read_calls, 0)
+        self.assertFalse(kernel32.inside.is_set())
 
-    def test_a_character_key_reaches_read_console_past_a_modifier(self) -> None:
+    def test_a_surrogate_pair_split_over_two_record_reads_arrives_whole(self) -> None:
         kernel32 = FakeKernel32()
         console = self.console(kernel32)
         console.enter()
-        kernel32.push(tw.KEY_EVENT, down=1, vk=VK_SHIFT)
-        kernel32.push(tw.KEY_EVENT, down=1, vk=0x41, char=ord("A"), units=_units("A"))
-        self.assertEqual(self.read_until(console, b"A"), b"A")
-        self.assertGreaterEqual(kernel32.read_calls, 1)
+        high, low = _units("\U0001F600")
+        kernel32.feed([high])
+        self.assertEqual(console.read(0.15), b"")  # the high half waits for its low half
+        kernel32.feed([low])
+        self.assertEqual(self.read_until(console, "\U0001F600".encode()), "\U0001F600".encode())
+        self.assertGreaterEqual(len(kernel32.record_reads), 2)
 
-    def test_an_arrow_key_without_a_character_reaches_read_console_as_its_sequence(self) -> None:
+    def test_records_flushed_after_the_signal_are_not_read_on_an_empty_queue(self) -> None:
         kernel32 = FakeKernel32()
+        signalled = kernel32.WaitForSingleObject
+
+        def flush_after_signal(handle, ms):
+            state = signalled(handle, ms)
+            with kernel32.lock:
+                kernel32.queue.clear()  # another reader or FlushConsoleInputBuffer takes the records
+            return state
+
+        kernel32.WaitForSingleObject = flush_after_signal
+        kernel32.push(tw.FOCUS_EVENT)
         console = self.console(kernel32)
         console.enter()
-        kernel32.push(tw.KEY_EVENT, down=1, vk=VK_UP, units=_units("\x1b[A"))
-        self.assertEqual(self.read_until(console, b"\x1b[A"), b"\x1b[A")
+        time.sleep(0.15)
+        self.assertFalse(kernel32.inside.is_set())
+        self.assertEqual(kernel32.record_reads, [])  # a count of 0 never reaches ReadConsoleInputW
 
-    def test_a_character_on_a_key_up_reaches_read_console(self) -> None:
-        kernel32 = FakeKernel32()  # Alt+numpad: the composed character comes with the Alt key-up
+    def test_a_read_only_takes_the_records_that_were_counted(self) -> None:
+        kernel32 = FakeKernel32()
+        kernel32.feed(_units("x" * (tw.READ_RECORDS + 3)))
         console = self.console(kernel32)
         console.enter()
-        kernel32.push(tw.KEY_EVENT, down=0, vk=VK_MENU, char=ord("é"), units=_units("é"))
-        self.assertEqual(self.read_until(console, "é".encode()), "é".encode())
+        self.assertEqual(self.read_until(console, b"x" * (tw.READ_RECORDS + 3)), b"x" * (tw.READ_RECORDS + 3))
+        self.assertEqual(kernel32.record_reads[:2], [tw.READ_RECORDS, 3])
 
-    def test_a_signal_with_no_text_and_a_failing_cancel_leaves_no_reader_after_restore(self) -> None:
+    def test_restore_with_no_input_stops_the_reader_at_once_without_a_cancel(self) -> None:
         kernel32 = BlockingRead()
         console = self.console(kernel32)
         console.enter()
         kernel32.push(tw.FOCUS_EVENT)
         self.wait_drained(kernel32)
         reader = console._reader
+        started = time.monotonic()
         console.restore()
+        self.assertLess(time.monotonic() - started, 0.2)
         self.assertFalse(reader.is_alive())
-        self.assertEqual(kernel32.read_calls, 0)
+        self.assertEqual(kernel32.thread_calls, [])  # no thread I/O to cancel
+        kernel32.feed(_units("X"))  # the shell's next key stays in the console
+        time.sleep(0.06)
+        self.assertEqual(len(kernel32.queue), 1)
         self.assertEqual(list(console._chunks), [])
-        self.assertEqual(kernel32.thread_calls, [])  # the reader stopped at once: no thread I/O to cancel
 
-    def test_a_read_cancel_io_ex_cannot_release_is_cancelled_on_the_reader_thread(self) -> None:
-        kernel32 = BlockingRead()  # a key-down VT input does not translate: ReadConsoleW skips it and blocks
+    def test_a_flush_between_count_and_read_is_cancelled_on_the_reader_thread(self) -> None:
+        kernel32 = BlockingRead()  # the one window left: the counted record is flushed before the read
         console = self.console(kernel32)
         console.enter()
-        kernel32.push(tw.KEY_EVENT, down=1, vk=VK_VOLUME_UP)
+        with kernel32.lock:
+            kernel32.stale = 1
         self.assertTrue(kernel32.inside.wait(2.0))
         reader = console._reader
         started = time.monotonic()
@@ -417,6 +455,22 @@ class ConsoleRecordTests(unittest.TestCase):
             ("open", tw.THREAD_TERMINATE, reader.native_id), ("cancel_sync", 77), ("close", 77)])
         self.assertEqual(list(console._chunks), [])
         self.assertEqual(kernel32.modes, {IN: SAVED_IN, OUT: SAVED_OUT})
+
+    def test_startup_query_replies_arrive_through_the_records(self) -> None:
+        kernel32 = FakeKernel32()
+        console = self.console(kernel32)
+        console.enter()
+        term = Terminal(IN, OUT, environ={"WT_SESSION": "1"})
+        term._console = console
+
+        def answer(query: str) -> None:
+            kernel32.feed(_units("\x1b[12;5R\x1b[?1u\x1b[?1;2c"))
+
+        with patch.object(term, "write", side_effect=answer), \
+                patch.object(terminal_module.select, "select", side_effect=AssertionError("no select on Windows")):
+            typed, row = term.query_cursor_row(0.5)
+        self.assertEqual(row, 12)
+        self.assertEqual(kernel32.read_calls, 0)
 
 
 class ExitSignalTests(unittest.TestCase):
