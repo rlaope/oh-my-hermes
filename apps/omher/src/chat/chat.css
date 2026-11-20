@@ -157,8 +157,9 @@
   margin: 0 auto;
   padding: 5px 12px;
   border-radius: var(--r);
-  /* the raised segment surface, not the bubbles' grey: it has to read over a bot bubble */
-  background: var(--seg-on);
+  /* a filled, accent-tinted surface, not the bubbles' grey or the plain raised white: it has to read over a bot
+     bubble in both themes */
+  background: color-mix(in srgb, var(--accent) 30%, var(--seg-on));
   color: var(--ink);
   font: inherit;
   font-size: 12px;
@@ -169,7 +170,14 @@
   animation: pop 0.16s ease both;
 }
 .tl-jump:hover {
-  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 42%, var(--seg-on));
+}
+[data-theme="light"] .tl-jump {
+  background: color-mix(in srgb, var(--accent) 22%, var(--seg-on));
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.16);
+}
+[data-theme="light"] .tl-jump:hover {
+  background: color-mix(in srgb, var(--accent) 32%, var(--seg-on));
 }
 .tl-jump:focus-visible,
 .tl-pin:focus-visible .tl-pin-t {
