@@ -447,7 +447,9 @@ class EfficiencyContractTests(unittest.TestCase):
         # language as the fallback; the rail measured 1434.
         # 1440 -> 1560: the reply line carries the human-voice pass (result
         # first, no chatbot openers or closers); the rail measured 1550.
-        self.assertLessEqual(len(primer_context), 1560)
+        # 1560 -> 1677: one sentence for a mid-turn message (one line before the
+        # next tool call); the rail measured 1667.
+        self.assertLessEqual(len(primer_context), 1677)
         self.assertLessEqual(len(awareness_primer_markdown()), _ledger_limit("awareness_primer_markdown_chars"))
         self.assertLessEqual(
             max(workflow_context_lengths.values()), _ledger_limit("awareness_workflow_context_chars_max")
