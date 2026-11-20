@@ -18,6 +18,8 @@ export interface DiskState {
   /** How many times the level has got worse since the shell started (src-tauri/src/disk.rs `Watch::alerts`). Each new
    *  count is noted once, whether the event or a reading brings it. Absent from an older shell. */
   alerts?: number;
+  /** Which shell reading this is (src-tauri/src/disk.rs); newer is larger. Absent from an older shell. */
+  rev?: number;
 }
 
 /** Settings › General's choices in GB; 0 = off. */
@@ -92,17 +94,25 @@ let noted: DiskLevel = "ok";
 /** Replies come back in any order: one asked before the newest applied reply is stale. */
 let asked = 0;
 let applied = 0;
+/** The newest shell reading shown (`DiskState.rev`); the event and a reply of one reading share it. */
+let shownRev = 0;
 
-/** One note per time the level got worse, from whichever comes first: the shell's event, or a reading that already
+/** One note per newly heard worse step, from whichever comes first: the shell's event, or a reading that already
  *  shows it. The startup event can fire before the page's listener is registered, a recovery and a new drop can both
- *  happen between two polls, and a slow reply can arrive after a newer one; the shell's count settles all three. */
+ *  happen between two polls, and the event and a reply travel on different channels, so either can arrive late. The
+ *  shell numbers its readings (`rev`) and counts its worse steps (`alerts`): an older reading than the one shown is
+ *  dropped, and a count the page has not seen notes once. Several steps learned at once (low then critical, heard only
+ *  as critical) give one note for where the disk is now, never a late note for a level already passed. */
 function heard(s: DiskState | null | undefined, seq?: number): void {
   if (!s || !(s.level in RANK)) return;
-  if (seq !== undefined) {
+  if (typeof s.rev === "number") {
+    if (s.rev < shownRev) return;
+    shownRev = s.rev;
+  } else if (seq !== undefined) {
+    // an older shell: replies only, by the order they were asked
     if (seq < applied) return;
     applied = seq;
   }
-  // a reading taken before a worse step the page already heard about is older than what the chip shows
   if (typeof s.alerts === "number" && s.alerts < seenAlerts) return;
   set(s);
   let worse: boolean;

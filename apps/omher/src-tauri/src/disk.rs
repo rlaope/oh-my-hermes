@@ -104,6 +104,9 @@ pub struct DiskState {
     pub volume: String,
     /// [`Watch::alerts`] at this reading.
     pub alerts: u64,
+    /// Which reading this is (1, 2, …). The event and the command reply travel on different channels and can arrive in
+    /// either order; the page applies a state only when its `rev` is newer than the one it shows.
+    pub rev: u64,
 }
 
 /// A warn value for the watcher and where its next reading goes.
@@ -138,6 +141,7 @@ impl Disk {
                             let mut s = shared.lock().unwrap();
                             s.level = watch.level();
                             s.alerts = watch.alerts();
+                            s.rev += 1;
                             if let Some((free, volume)) = read {
                                 s.free_bytes = free;
                                 s.volume = volume;
