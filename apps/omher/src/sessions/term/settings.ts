@@ -66,6 +66,39 @@ export interface TermSettings {
   /** The shell a new TERMINALS Shell row runs: an id from the shell's `shells_available` list. "" = the login shell
    *  (Windows PowerShell on Windows), as before. An id no longer on the list opens the default. */
   defaultShell: string;
+  /** The person's own theme (Settings › Terminal › Import from…: a copy of another terminal app's profile), picked
+   *  as `custom` in `themeDark` / `themeLight`. null: none. */
+  custom: TermCustomTheme | null;
+}
+
+/** Colour slots a custom theme keeps: the sixteen ANSI ones and the four of the screen. */
+export const TERM_CUSTOM_KEYS = [
+  "foreground",
+  "background",
+  "cursor",
+  "cursorAccent",
+  "selectionBackground",
+  "black",
+  "red",
+  "green",
+  "yellow",
+  "blue",
+  "magenta",
+  "cyan",
+  "white",
+  "brightBlack",
+  "brightRed",
+  "brightGreen",
+  "brightYellow",
+  "brightBlue",
+  "brightMagenta",
+  "brightCyan",
+  "brightWhite",
+] as const;
+export type TermCustomKey = (typeof TERM_CUSTOM_KEYS)[number];
+export interface TermCustomTheme {
+  name: string;
+  colors: Partial<Record<TermCustomKey, string>>;
 }
 
 export const TERM_KEY = "omher.term";
@@ -92,6 +125,7 @@ export const TERM_DEFAULTS: TermSettings = {
   dimUnfocused: 0.72,
   undoClose: 10,
   defaultShell: "",
+  custom: null,
 };
 
 /** A shell id as `shells_available` makes them: a Windows name or `unix:<absolute path>`; anything else is "". */
@@ -105,6 +139,20 @@ const str = (v: unknown, d: string, max = 200) => (typeof v === "string" && v.le
 export const cleanTermFont = (v: string): string => v.replace(/[^\p{L}\p{N} ,'"._-]/gu, "").slice(0, 200);
 const one = <T extends string>(v: unknown, list: readonly T[], d: T): T => (list.includes(v as T) ? (v as T) : d);
 const bool = (v: unknown, d: boolean) => (typeof v === "boolean" ? v : d);
+
+/** A stored custom theme, each colour a `#rrggbb`; anything else is dropped (no name or no colour: none). */
+export function parseCustomTheme(v: unknown): TermCustomTheme | null {
+  if (!v || typeof v !== "object" || Array.isArray(v)) return null;
+  const o = v as Record<string, unknown>;
+  const name = typeof o.name === "string" ? o.name.replace(/\p{Cc}/gu, "").trim().slice(0, 80) : "";
+  const raw = (o.colors && typeof o.colors === "object" ? o.colors : {}) as Record<string, unknown>;
+  const colors: TermCustomTheme["colors"] = {};
+  for (const k of TERM_CUSTOM_KEYS) {
+    const c = raw[k];
+    if (typeof c === "string" && /^#[0-9a-f]{6}$/i.test(c)) colors[k] = c.toLowerCase();
+  }
+  return name && Object.keys(colors).length ? { name, colors } : null;
+}
 
 /** Stored text or object -> settings, every field checked. */
 export function parseTermSettings(raw: unknown): TermSettings {
@@ -140,6 +188,7 @@ export function parseTermSettings(raw: unknown): TermSettings {
     dimUnfocused: Math.round(num(o.dimUnfocused, TERM_DIM.min, TERM_DIM.max, d.dimUnfocused) * 100) / 100,
     undoClose: TERM_UNDO_CLOSE.includes(o.undoClose as number) ? (o.undoClose as number) : d.undoClose,
     defaultShell: cleanShellId(o.defaultShell),
+    custom: parseCustomTheme(o.custom),
   };
 }
 

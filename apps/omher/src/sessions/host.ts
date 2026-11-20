@@ -11,6 +11,7 @@ import type { ApprovalChoice, ClarifyAnswers } from "../lib/protocol";
 import { t } from "../i18n";
 import { steersOf } from "./controls";
 import type { DiskLevel, DiskState } from "../lib/disk";
+import type { ImportApp, ImportProfile } from "./term/import";
 
 /** What the person did in a chat. Mirrors `Input` in src-tauri/src/agent_chat.rs. `images`: saved copies
  *  (`saveFile`) of attached pictures, for the agent's own image input. */
@@ -135,6 +136,11 @@ export interface SessionHost extends HistoryHost {
   diskWatch(warnGb: number): Promise<DiskState>;
   /** The shell's `disk-level` event: the level got worse. Returns what stops listening. */
   onDiskLevel(fn: (s: DiskState) => void): () => void;
+  /** Settings › Terminal › Import from… (macOS): which of iTerm2 / Apple Terminal have a prefs file the shell can read
+   *  (its fixed file, not a symlink, at most 8 MB). Nothing is read until the person presses the button. */
+  termImportList(): Promise<ImportApp[]>;
+  /** The profiles of `app` (default first, at most 64): names, `#rrggbb` colours and a font, read once, read-only. */
+  termImportRead(app: ImportApp): Promise<ImportProfile[]>;
 }
 
 // ---- Tauri ----------------------------------------------------------------------------------
@@ -217,6 +223,14 @@ export class TauriHost implements SessionHost {
   async historyClear() {
     const { invoke } = await this.core();
     await invoke("term_history_clear");
+  }
+  async termImportList() {
+    const { invoke } = await this.core();
+    return invoke<ImportApp[]>("term_import_list");
+  }
+  async termImportRead(app: ImportApp) {
+    const { invoke } = await this.core();
+    return invoke<ImportProfile[]>("term_import_read", { app });
   }
   async pruneFiles(keep: string[]) {
     const { invoke } = await this.core();
@@ -350,6 +364,8 @@ export interface MockCall {
     | "history.remove"
     | "history.prune"
     | "history.clear"
+    | "import.list"
+    | "import.read"
     | "reveal"
     | "terminal"
     | "custom.preview"
@@ -428,6 +444,9 @@ type MockGlobals = {
   __omherFileSaveError?: string;
   /** e2e: the shell answers a history read this many ms late (a slow computer) */
   __omherMockHistoryDelay?: number;
+  /** e2e: the profiles each app's prefs file holds for Settings › Terminal › Import from… (none = MOCK_IMPORT; an app
+   *  left out has no prefs file) */
+  __omherMockImport?: Partial<Record<ImportApp, ImportProfile[]>>;
   /** e2e: the branch of each folder (none = not a repository) */
   __omherBranches?: Record<string, string>;
   /** e2e: these agents are an old version that never answers in chat mode (the shell's start deadline ends them) */
@@ -758,6 +777,17 @@ export class MockHost implements SessionHost {
   async historyPrune(keep: string[]) {
     this.log({ op: "history.prune", keep });
     this.putHist(Object.fromEntries(Object.entries(this.hist()).filter(([k]) => keep.includes(k))));
+  }
+  async termImportList() {
+    this.log({ op: "import.list" });
+    const all = this.g.__omherMockImport ?? MOCK_IMPORT;
+    return (["iterm2", "terminal"] as const).filter((a) => !!all[a]);
+  }
+  async termImportRead(app: ImportApp) {
+    this.log({ op: "import.read", key: app });
+    const got = (this.g.__omherMockImport ?? MOCK_IMPORT)[app];
+    if (!got) throw new Error("missing");
+    return got.slice(0, 64);
   }
   async historyClear() {
     this.log({ op: "history.clear" });
@@ -1463,6 +1493,31 @@ class MockChat {
     }
   }
 }
+
+/** The mock's prefs files for Settings › Terminal › Import from…: an iTerm2 profile (the default first), and an Apple
+ *  Terminal one beside a profile that cannot be read. */
+const MOCK_IMPORT: Partial<Record<ImportApp, ImportProfile[]>> = {
+  iterm2: [
+    {
+      name: "Harbor Night",
+      default: true,
+      ok: true,
+      font: { name: "Menlo-Regular", size: 14 },
+      colors: {
+        foreground: "#d8dee9",
+        background: "#14202b",
+        cursor: "#f5c779",
+        selection: "#2e4a62",
+        ansi: ["#1c2a36", "#e06c75", "#98c379", "#e5c07b", "#61afef", "#c678dd", "#56b6c2", "#cfd8e3", "#4b5d6e", "#ff7a85", "#b5e08f", "#ffd68a", "#82c4ff", "#dd9cf0", "#7fd6e0", "#ffffff"],
+      },
+    },
+    { name: "Paper", default: false, ok: true, font: { name: "NoSuchFontAnywhere-Regular", size: 12 }, colors: { foreground: "#222222", background: "#fbf8f0", cursor: "#222222", selection: "#d8d2c0", ansi: [] } },
+  ],
+  terminal: [
+    { name: "Basic", default: true, ok: true, font: null, colors: { foreground: "#000000", background: "#ffffff", cursor: "#929292", selection: "#a4cdff", ansi: ["#000000", "#990000", "#00a600", "#999900", "#0000b2", "#b200b2", "#00a6b2", "#bfbfbf", "#666666", "#e50000", "#00d900", "#e5e500", "#0000ff", "#e500e5", "#00e5e5", "#e5e5e5"] } },
+    { name: "Archived", default: false, ok: false, font: null, colors: null },
+  ],
+};
 
 const inTauri = () => typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
 
