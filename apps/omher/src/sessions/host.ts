@@ -10,6 +10,7 @@ import { botRefusal, mockCheck, mockNewId, type CustomEntry, type CustomList, ty
 import type { ApprovalChoice, ClarifyAnswers } from "../lib/protocol";
 import { t } from "../i18n";
 import { steersOf } from "./controls";
+import type { DiskLevel, DiskState } from "../lib/disk";
 
 /** What the person did in a chat. Mirrors `Input` in src-tauri/src/agent_chat.rs. `images`: saved copies
  *  (`saveFile`) of attached pictures, for the agent's own image input. */
@@ -126,6 +127,11 @@ export interface SessionHost extends HistoryHost {
   customConfirm(entry: CustomEntry): Promise<void>;
   /** The remove confirm: agent `id` leaves the file. */
   customRemove(id: string): Promise<void>;
+  /** Free space on the home folder's volume (src/lib/disk.ts): Settings' warn value in GB (0 = off), answered with
+   *  the level and the last reading. */
+  diskWatch(warnGb: number): Promise<DiskState>;
+  /** The shell's `disk-level` event: the level got worse. Returns what stops listening. */
+  onDiskLevel(fn: (s: DiskState) => void): () => void;
 }
 
 // ---- Tauri ----------------------------------------------------------------------------------
@@ -261,6 +267,22 @@ export class TauriHost implements SessionHost {
     const { invoke } = await this.core();
     await invoke("custom_agent_remove", { id });
   }
+  async diskWatch(warnGb: number) {
+    const { invoke } = await this.core();
+    return invoke<DiskState>("disk_watch", { warnGb });
+  }
+  onDiskLevel(fn: (s: DiskState) => void) {
+    let stop: (() => void) | null = null;
+    let gone = false;
+    void import("@tauri-apps/api/event")
+      .then(({ listen }) => listen<DiskState>("disk-level", (e) => fn(e.payload)))
+      .then((un) => (gone ? un() : (stop = un)))
+      .catch(() => {});
+    return () => {
+      gone = true;
+      stop?.();
+    };
+  }
   async write(id: number, data: string) {
     const { invoke } = await this.core();
     await invoke("session_write", { id, data });
@@ -382,6 +404,8 @@ const utf8 = new TextEncoder();
 const FLOOD_MESSAGE = `${"build output ".repeat(5).slice(0, 62)}\r\n`.repeat(1024);
 
 type MockGlobals = {
+  /** Free bytes the mock's disk watch reads (src/lib/disk.ts); unset = 100 GB. */
+  __omherDiskFree?: number;
   __omherPickFolder?: string | null;
   __omherSessionCalls?: MockCall[];
   /** e2e: every message a mock terminal's program printed and every acknowledgement of one, in the order they happened */
@@ -528,6 +552,27 @@ export class MockHost implements SessionHost {
   async customRemove(id: string) {
     this.log({ op: "custom.remove", agent: id });
     this.g.__omherCustomFile = (this.g.__omherCustomFile ?? []).filter((v) => (v as { id?: unknown })?.id !== id);
+  }
+  private disk: { level: DiskLevel; heard: Set<(s: DiskState) => void> } = { level: "ok", heard: new Set() };
+  /** The shell's rules (src-tauri/src/disk.rs) on `__omherDiskFree` bytes (unset: 100 GB free): the event only when
+   *  the level gets worse, better only 2 GB past a threshold. */
+  async diskWatch(warnGb: number) {
+    const free = this.g.__omherDiskFree ?? 100e9;
+    const warn = warnGb * 1e9;
+    const crit = warn < 20e9 ? warn / 4 : 5e9;
+    const raw: DiskLevel = !warnGb ? "ok" : free < crit ? "critical" : free < warn ? "low" : "ok";
+    const rank = { ok: 0, low: 1, critical: 2 } as const;
+    const prev = this.disk.level;
+    const level: DiskLevel =
+      !warnGb || rank[raw] >= rank[prev] || free >= warn + 2e9 ? raw : prev === "critical" && free >= crit + 2e9 ? "low" : prev;
+    this.disk.level = level;
+    const state: DiskState = { level, free_bytes: free, volume: "/" };
+    if (rank[level] > rank[prev]) for (const f of this.disk.heard) f(state);
+    return state;
+  }
+  onDiskLevel(fn: (s: DiskState) => void) {
+    this.disk.heard.add(fn);
+    return () => void this.disk.heard.delete(fn);
   }
   async home() {
     return "/home/you";

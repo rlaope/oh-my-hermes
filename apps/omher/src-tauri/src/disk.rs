@@ -96,9 +96,12 @@ pub struct DiskState {
     pub volume: String,
 }
 
+/// A warn value for the watcher and where its next reading goes.
+type Ask = (u64, Sender<DiskState>);
+
 /// The watcher's handle in the app state.
 pub struct Disk {
-    tx: Mutex<Option<Sender<u64>>>,
+    tx: Mutex<Option<Sender<Ask>>>,
     sent: Mutex<Option<u64>>,
     now: Arc<Mutex<DiskState>>,
 }
@@ -107,7 +110,7 @@ impl Disk {
     /// Start the `omher-disk` thread for the volume holding `home`. It measures nothing until the page sends the
     /// warn value ([`disk_watch`]), so a person who turned the warning off never hears it at startup.
     pub fn start(app: AppHandle, home: Option<PathBuf>) -> Disk {
-        let (tx, rx) = channel::<u64>();
+        let (tx, rx) = channel::<Ask>();
         let now = Arc::new(Mutex::new(DiskState::default()));
         let shared = now.clone();
         let started = home.is_some()
@@ -115,7 +118,8 @@ impl Disk {
                 .name("omher-disk".into())
                 .spawn(move || {
                     let Some(home) = home else { return };
-                    let Ok(mut warn) = rx.recv() else { return };
+                    let Ok((mut warn, mut reply)) = rx.recv() else { return };
+                    let mut replies = vec![reply];
                     let mut watch = Watch::default();
                     loop {
                         let read = free_space(&home);
@@ -129,11 +133,21 @@ impl Disk {
                             }
                             s.clone()
                         };
+                        for r in replies.drain(..) {
+                            let _ = r.send(state.clone());
+                        }
                         if worse.is_some() {
                             let _ = app.emit(EVENT, state);
                         }
                         match rx.recv_timeout(EVERY) {
-                            Ok(w) => warn = rx.try_iter().last().unwrap_or(w),
+                            Ok(ask) => {
+                                (warn, reply) = ask;
+                                replies.push(reply);
+                                for (w, r) in rx.try_iter() {
+                                    warn = w;
+                                    replies.push(r);
+                                }
+                            }
                             Err(RecvTimeoutError::Timeout) => {}
                             Err(RecvTimeoutError::Disconnected) => return,
                         }
@@ -144,16 +158,25 @@ impl Disk {
     }
 }
 
-/// Settings › General's warn value in GB (0 = off) for the watcher; answers the last reading. A changed value is
-/// measured again at once (the answer to the next call has it).
+/// Settings › General's warn value in GB (0 = off) for the watcher, answered with the level and free space. A new
+/// value is measured at once and answered with that reading; the same value again answers the last reading.
 #[tauri::command]
 pub async fn disk_watch(warn_gb: u64, disk: State<'_, Disk>) -> Result<DiskState, String> {
-    let mut sent = disk.sent.lock().unwrap();
-    if *sent != Some(warn_gb) {
-        if let Some(tx) = disk.tx.lock().unwrap().as_ref() {
-            let _ = tx.send(warn_gb);
+    let wait = {
+        let mut sent = disk.sent.lock().unwrap();
+        if *sent == Some(warn_gb) {
+            None
+        } else {
+            *sent = Some(warn_gb);
+            let (tx, rx) = channel();
+            disk.tx.lock().unwrap().as_ref().and_then(|t| t.send((warn_gb, tx)).ok()).map(|_| rx)
         }
-        *sent = Some(warn_gb);
+    };
+    if let Some(rx) = wait {
+        let got = tauri::async_runtime::spawn_blocking(move || rx.recv_timeout(Duration::from_secs(5)).ok()).await.ok().flatten();
+        if let Some(state) = got {
+            return Ok(state);
+        }
     }
     Ok(disk.now.lock().unwrap().clone())
 }

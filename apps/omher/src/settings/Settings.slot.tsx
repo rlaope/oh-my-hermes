@@ -19,6 +19,7 @@ import { TerminalPage } from "./terminal/TerminalPage";
 import { SshMarker } from "../peers/SshMarker";
 import { RemoteMachines } from "../peers/RemoteMachines";
 import { setBar, useTasks } from "../tasks/state";
+import { DISK_WARN_CHOICES, diskWarn, setDiskWarn } from "../lib/disk";
 import { Toggle } from "../pages/kit";
 import { AgentsPage } from "./agents/AgentsPage";
 import { AvatarEditor, BotFacts, NameEditor, PictureActions, placeName, useBotInfo, usePictureEditor } from "./BotIdentity";
@@ -417,6 +418,24 @@ function SoundsSeg() {
   );
 }
 
+/** Settings › General: warn below 5/10/20/50 GB of free disk space, or not at all (src/lib/disk.ts). */
+function DiskWarnSeg() {
+  const [v, setV] = useState(diskWarn());
+  return (
+    <Seg
+      small
+      label={t("disk.setting")}
+      value={String(v)}
+      options={DISK_WARN_CHOICES.map((n) => ({ value: String(n), label: n ? t("disk.gb", { n }) : t("set.off") }))}
+      onChange={(x) => {
+        setV(Number(x));
+        setDiskWarn(Number(x));
+      }}
+      testId="set-disk-warn"
+    />
+  );
+}
+
 function TasksBarToggle() {
   const tk = useTasks();
   return <Toggle on={tk.bar} label={t("tasks.barSetting")} onChange={setBar} testId="set-tasks-bar" />;
@@ -447,6 +466,9 @@ function GeneralPage() {
         </Row>
         <Row title={t("sounds.title")} hint={t("sounds.hint")}>
           <SoundsSeg />
+        </Row>
+        <Row title={t("disk.setting")} hint={t("disk.settingHint")}>
+          <DiskWarnSeg />
         </Row>
       </div>
       <div className="st-grp">
