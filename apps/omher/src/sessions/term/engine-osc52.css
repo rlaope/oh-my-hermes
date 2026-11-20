@@ -1,0 +1,16 @@
+/* A program's copy (OSC 52) the webview refused: a note in the terminal's top right corner for a moment
+   (engine-osc52.ts), the same look as the link-copied note. */
+.osc52-note {
+  position: absolute;
+  top: 10px;
+  right: 22px;
+  z-index: 5;
+  max-width: calc(100% - 44px);
+  padding: 5px 10px;
+  border-radius: var(--r-sm);
+  background: var(--ink);
+  color: var(--bg);
+  font-size: 12px;
+  pointer-events: none;
+  animation: pop 0.14s ease both;
+}
