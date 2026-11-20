@@ -166,6 +166,12 @@ CHILD_FAILURE_STOPS: Final = frozenset({"failed", "error", "timeout", "interrupt
 # What every view says for a node accepted while its handoff could not be read where the child wrote it.
 HANDOFF_NOT_CHECKED: Final = "handoff not checked"
 EXTERNAL_OWNERS: Final = ("claude-code", "codex")
+# The line a builder gets for its `review_focus` (native task and external export alike).
+REVIEW_FOCUS_PREFIX: Final = "Review focus (what the parent will check when it reads your work): "
+# Every build node with a write scope gets this, native or exported (OpenAI's Codex guide, read 2026-11-20).
+SHARED_MACHINE_LINE: Final = ("Other agents share this machine: run only the builds and tests you need at once, and before "
+                              "you stop, stop the background jobs you started and remove the temporary files you "
+                              "created.")
 NODE_FIELDS: Final = frozenset({"id", "label", "category", "prompt", "depends_on", "write_scope", "role", "owner",
                                 "local", "read_only", "identity", "review_focus"})
 # What a node is for, as the parent declares it (``build`` when it names none). A ``build`` node with a write scope is a
@@ -1616,7 +1622,7 @@ def task_for(
     run = str(record["run"])
     lines = [str(node["prompt"]), ""]
     if node.get("review_focus"):
-        lines.extend([f"Review focus (what the parent will check when it reads your work): {node['review_focus']}", ""])
+        lines.extend([f"{REVIEW_FOCUS_PREFIX}{node['review_focus']}", ""])
     attempts = node.get("attempts") or []
     if attempts and attempts[-1].get("resume_handle"):
         lines.extend([f"Resume the still-running wait: {attempts[-1]['resume_handle']}. "
@@ -1730,8 +1736,7 @@ def task_for(
                      "`git add .` or `git commit -a`, and never `git stash`; the index and stash are shared with the "
                      "parallel parts.")
         if node_role(node) == DEFAULT_ROLE:
-            lines.append("Other agents share this machine: run only the builds and tests you need at once, and before "
-                         "you stop, stop the background jobs you started and remove the temporary files you created.")
+            lines.append(SHARED_MACHINE_LINE)
     lines.append("Stay inside your SCOPE: other parts of this run work at the same time. If you cannot finish, "
                  "say plainly that you are blocked and why; do not report blocked work as done.")
     # The marker ends the goal: Hermes previews each goal by its first 40 characters, and a person reads the label

@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import time
 import unittest
+from pathlib import Path
 
 from _local_package import load_local_package
 
@@ -16,7 +17,7 @@ load_local_package()
 
 from _delegation_state import PARENT, homes  # noqa: E402
 from omh.plugin_bundle.omh import dag_run  # noqa: E402
-from test_dag_tool import PROMPT, call, handoff, node, slots_table  # noqa: E402
+from test_dag_tool import PROMPT, call, choose, handoff, node, slots_table  # noqa: E402
 
 FOCUS_PREFIX = "Review focus (what the parent will check when it reads your work): "
 VERIFY_HEADING = "Review focus the producers were given (judge their work on these too):"
@@ -184,6 +185,32 @@ class SharedMachineLineTests(unittest.TestCase):
         for node_id, context in contexts.items():
             with self.subTest(node=node_id):
                 self.assertNotIn(SHARED_MACHINE, context)
+
+
+class ExportedBuilderTests(unittest.TestCase):
+    """A node exported to Codex or Claude Code gets the focus and the shared-machine line a native builder gets."""
+
+    def _export_goal(self, owner: str) -> str:
+        nodes = [focused(node("api", scope=("src/api.py",), owner=owner), "preserve the public parser names"),
+                 node("ui", scope=("src/ui.py",), owner=owner),
+                 node("verify", role="verify", depends_on=("api", "ui"))]
+        with homes() as home:
+            slots_table(home)
+            choose(home, owner)
+            call(action="define", run="feat", goal="ship the export feature", nodes=nodes)
+            result = call(action="export", run="feat", owner=owner)
+            return Path(result["fanout"]["goal_file"]).read_text(encoding="utf-8")
+
+    def test_the_exported_goal_carries_each_units_focus_and_the_shared_machine_line(self) -> None:
+        for owner in ("codex", "claude-code"):
+            with self.subTest(owner=owner):
+                goal = self._export_goal(owner)
+                api = goal.split("## api", 1)[1].split("## ui", 1)[0]
+                ui = goal.split("## ui", 1)[1]
+                self.assertIn(FOCUS_PREFIX + "preserve the public parser names", api)
+                self.assertNotIn(FOCUS_PREFIX, ui)
+                self.assertEqual(api.count(SHARED_MACHINE), 1)
+                self.assertEqual(ui.count(SHARED_MACHINE), 1)
 
 
 if __name__ == "__main__":

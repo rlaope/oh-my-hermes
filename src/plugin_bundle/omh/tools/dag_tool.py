@@ -1470,11 +1470,17 @@ def export_units(record: Mapping[str, Any], derived: Mapping[str, Mapping[str, A
 
 def export_goal(record: Mapping[str, Any], units: list[dict[str, Any]]) -> str:
     """The goal text frozen into the contract: the run's goal, then each unit's own instructions under its id."""
-    prompts = {str(node["id"]): str(node["prompt"]) for node in record["nodes"]}
+    nodes = {str(node["id"]): node for node in record["nodes"]}
     lines = [f"dag-ulw run {record['name']}: {record.get('goal') or record['name']}",
              "Each unit's instructions follow under its unit id; do only your own unit's."]
     for unit in units:
-        lines += ["", f"## {unit['unit_id']}", prompts[unit["unit_id"]]]
+        node = nodes[unit["unit_id"]]
+        lines += ["", f"## {unit['unit_id']}", str(node["prompt"])]
+        # An exported builder gets what a native one gets in `task_for`: the focus the verifier will judge it on,
+        # and the shared-machine line (every exported unit is a coding node with a write scope).
+        if node.get("review_focus"):
+            lines.append(f"{dag_run.REVIEW_FOCUS_PREFIX}{node['review_focus']}")
+        lines.append(dag_run.SHARED_MACHINE_LINE)
     return "\n".join(lines)
 
 
