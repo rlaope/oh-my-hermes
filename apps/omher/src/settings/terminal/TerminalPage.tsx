@@ -21,6 +21,7 @@ import {
   TERM_LINE_HEIGHT,
   TERM_PADDING,
   TERM_SCROLLBACKS,
+  TERM_UNDO_CLOSE,
   writeTermSettings,
   type TermContrast,
   type TermCursor,
@@ -281,6 +282,16 @@ export function TerminalPage() {
       <div className="st-grp">
         <Row title={t("term.keepHistory")} hints={[t("term.keepHistoryHint")]} testId="term-keep-history-row">
           <Seg small label={t("term.keepHistory")} value={term.keepHistory ? "on" : "off"} options={ON_OFF()} onChange={(v) => set({ keepHistory: v === "on" })} testId="term-keep-history" />
+        </Row>
+        <Row title={t("term.undoClose")} hints={[t("term.undoCloseHint")]} testId="term-undo-close-row">
+          <Seg
+            small
+            label={t("term.undoClose")}
+            value={String(term.undoClose)}
+            options={TERM_UNDO_CLOSE.map((n) => ({ value: String(n), label: n ? t("term.undoCloseSec", { n }) : t("set.off") }))}
+            onChange={(v) => set({ undoClose: Number(v) })}
+            testId="term-undo-close"
+          />
         </Row>
       </div>
     </div>

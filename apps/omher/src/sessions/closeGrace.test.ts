@@ -71,6 +71,7 @@ describe("close grace", () => {
     expect(graceMs(5)).toBe(5_000);
     expect(graceMs(10, 300)).toBe(300);
     expect(graceMs(10, "x")).toBe(10_000);
+    expect(graceMs(10, 0)).toBe(0);
   });
 
   it("keeps each close's own deadline, newest first; the sweep runs the ones that passed", () => {

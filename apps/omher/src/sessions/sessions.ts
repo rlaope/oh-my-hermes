@@ -51,6 +51,8 @@ import { modesOf, steersOf } from "./controls";
 import { parseCommands, type AgentCommand } from "../chat/parts/commands";
 import { t as tr } from "../i18n";
 import { windowWatched, type SessionNote } from "../lib/notify";
+import { createCloseGrace, graceMs, restoreSplitIn, type SplitWas } from "./closeGrace";
+import { getSplit, groupOf, setSplit } from "./splitState";
 
 /** The Accounts CLI a session of `agent` signs in as (mirrors `session_cli` in src-tauri/src/accounts.rs). */
 const ACCOUNT_CLI: Partial<Record<AgentId, AccountCli>> = { claude: "claude", codex: "codex", grok: "grok" };
@@ -138,6 +140,9 @@ interface Term {
   run: number;
   /** The person typed into the current program: a shell that ends before that, with an error, failed at start. */
   typed: boolean;
+  /** Its row was closed and waits out the undo window (closeGrace.ts): its program runs on, hidden, and takes no
+   *  input (keys, bot prompts, dropped files) until Undo puts the row back. */
+  held?: boolean;
 }
 
 /** The PTY calls a terminal makes once its program runs. */
@@ -1377,6 +1382,11 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
         fgOff.get(id)?.();
         fgOff.delete(id);
         if (rec(id)?.fgAgent) setSessionFg(id, null);
+        // its row was closed and waits to be undone: with the program gone there is nothing to undo
+        if (t.held) {
+          grace.finish(id);
+          return;
+        }
         const label = agentDef(r.agent).label;
         const end = termEnd({ ofChat, shell, typed: t.typed, code });
         if (end === "shell") {
@@ -1387,8 +1397,8 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
           return;
         }
         if (end === "close") {
-          // exit, Ctrl+D: the row goes, as closing it with its x does
-          close(id);
+          // exit, Ctrl+D: the row goes, as closing it with its x does (nothing runs, so no undo window)
+          close(id, true);
           return;
         }
         if (!ofChat) {
@@ -1530,7 +1540,7 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
       };
       const wire = (term: Terminal) => {
         term.onData((d) => {
-          if (tt.hostId === null || tt.closed) return;
+          if (tt.hostId === null || tt.closed || tt.held) return;
           tt.typed = true;
           void tt.io.write(tt.hostId, d).catch(() => undefined);
         });
@@ -1655,7 +1665,7 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
   /** Type text at session `id`'s terminal prompt, as if the person had (a dropped file's path). */
   const typeAt = async (id: string, text: string) => {
     const t = terms.get(id);
-    if (!t || t.hostId === null || t.closed) return;
+    if (!t || t.hostId === null || t.closed || t.held) return;
     t.typed = true;
     await t.io.write(t.hostId, text);
     t.term.focus();
@@ -1668,7 +1678,7 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
    *  cleaned before and here). Nothing else calls this. */
   const typeAllowed = async (id: string, prompt: string) => {
     const t = terms.get(id);
-    if (!t || t.hostId === null || t.closed) return false;
+    if (!t || t.hostId === null || t.closed || t.held) return false;
     // eslint-disable-next-line no-control-regex
     const text = prompt.replace(/\r\n/g, "\n").replace(/[\u0000-\u0009\u000b-\u001f\u007f-\u009f]/g, "");
     if (!text.trim()) return false;
@@ -1681,6 +1691,7 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
    *  never sees a dropped file's own path), then the saved paths typed at the prompt, shell-quoted. */
   const dropOnTerminal = async (id: string, files: { name: string; read: () => Promise<Uint8Array> }[], windows: boolean) => {
     const t = terms.get(id);
+    if (t?.held) return; // closed, waiting to be undone: nothing is saved or typed
     const paths: string[] = [];
     for (const f of files) {
       try {
@@ -1940,14 +1951,90 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
     }
   };
 
-  /** Stop the program(s) and remove the session. */
-  const close = (id: string) => {
+  /** What a closed row needs to come back: itself, where it stood in the list, and the split it was in. */
+  type Held = { rec: SessionRec; index: number; split: SplitWas | null };
+  /** Closed TERMINALS rows whose program still runs for the undo window; at its end the old close runs, once. */
+  const grace = createCloseGrace<Held>({ expire: (g) => closeNow(g.id, g.data.rec) });
+  if (typeof document !== "undefined") {
+    // a hidden window may hold timers back: whatever passed its deadline closes when the window shows again
+    document.addEventListener("visibilitychange", () => grace.sweep());
+    window.addEventListener("focus", () => grace.sweep());
+  }
+  /** The undo window now, in ms (0: Off). The mock host takes `window.__omherCloseGraceMs` for a window that is on;
+   *  a browser driven by a test (`navigator.webdriver`) that set none closes at once, as specs written before the
+   *  undo window expect (term-close-undo.spec.ts sets it). */
+  const graceNow = () => {
+    let w: unknown;
+    if (typeof window !== "undefined" && !("__TAURI_INTERNALS__" in window)) {
+      w = (window as unknown as { __omherCloseGraceMs?: unknown }).__omherCloseGraceMs;
+      if (w === undefined && typeof navigator !== "undefined" && navigator.webdriver) w = 0;
+    }
+    return graceMs(readTermSettings().undoClose, w);
+  };
+
+  /** Close TERMINALS row `id` so it can be undone: it leaves the list (and its split) now, its terminal takes no
+   *  input, its program runs on hidden. False when it closes as before: the setting is Off, it is not a TERMINALS row,
+   *  or its program is not running (ended, or still starting with nothing yet). */
+  const holdable = (id: string): boolean => {
+    const r = rec(id);
+    const t = terms.get(id);
+    return !!r && !!t && !t.closed && !t.held && t.hostId !== null && isTerminalRec(state.agents, r) && graceNow() > 0;
+  };
+  const holdClosed = (id: string): boolean => {
+    const r = rec(id);
+    const t = terms.get(id);
+    if (!r || !t || !holdable(id)) return false;
+    const ms = graceNow();
+    const g = groupOf(getSplit().groups, id);
+    const index = state.list.findIndex((s) => s.id === id);
+    const split: SplitWas | null = g ? { layout: g.layout, ...(g.zoom ? { zoom: true as const } : {}) } : null;
+    if (!grace.begin(id, r.title || nameOf(r), ms, { rec: r, index, split })) return false;
+    t.held = true;
+    const list = state.list.filter((s) => s.id !== id);
+    set({ list });
+    const ui = store().getState().ui;
+    if (ui.view === "session" && ui.session === id) {
+      const next = list[Math.min(index, list.length - 1)];
+      store().actions.openSession(next ? next.id : null);
+    }
+    return true;
+  };
+
+  /** Undo the close of row `id` (the newest when none is named): the same row, terminal and program back where it
+   *  was, in its split when that is still there. False when there is nothing to undo. */
+  const undoClose = (id?: string): boolean => {
+    const which = id ?? grace.list()[0]?.id;
+    const g = which ? grace.undo(which) : null;
+    if (!g) return false;
+    const t = terms.get(g.id);
+    if (t) t.held = false;
+    const list = [...state.list];
+    list.splice(Math.max(0, Math.min(g.data.index, list.length)), 0, g.data.rec);
+    set({ list });
+    if (g.data.split) {
+      const groups = restoreSplitIn(getSplit().groups, g.id, g.data.split, new Set(list.map((r) => r.id)));
+      if (groups !== getSplit().groups) setSplit({ groups });
+    }
+    store().actions.openSession(g.id);
+    return true;
+  };
+
+  /** Close session `id`. A running TERMINALS row waits out the undo window first (Settings › Terminal); `now` (the
+   *  shell ended by itself) closes at once. */
+  const close = (id: string, now = false) => {
+    if (!now && holdClosed(id)) return;
+    if (grace.finish(id)) return;
+    closeNow(id);
+  };
+
+  /** Stop the program(s) and remove the session. `r` is its row (a row waiting out its undo window is no longer listed). */
+  const closeNow = (id: string, r: SessionRec | undefined = rec(id)) => {
     picked.delete(id);
     histOf.get(id)?.stop();
     histOf.delete(id);
     histBack.delete(id);
     termAgain.delete(id);
-    if (rec(id) && isTerminalRec(state.agents, { ...rec(id)!, status: "exited" })) forgetHistory(host, id);
+    if (r && isTerminalRec(state.agents, { ...r, status: "exited" })) forgetHistory(host, id);
     disposeTerm(id);
     void stopChat(id).then(() => host.removeFiles(id).catch(() => undefined));
     forgetSentFiles(id);
@@ -2103,6 +2190,12 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
     start,
     attach,
     close,
+    /** Closing row `id` now could be undone (its row then closes without asking: the toast's Undo is the way back). */
+    closeUndoable: holdable,
+    undoClose,
+    /** Closed rows waiting out their undo window, newest first (the toasts). */
+    closing: grace.list,
+    onClosing: grace.subscribe,
     setLook,
     setView,
     setModel,
@@ -2119,7 +2212,7 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
     /** Session `id`'s terminal program runs and takes input now (what `typeAllowed` needs). */
     canType: (id: string): boolean => {
       const t = terms.get(id);
-      return !!t && t.hostId !== null && !t.closed;
+      return !!t && t.hostId !== null && !t.closed && !t.held;
     },
     /** The ↵ ↓ × buttons of a waiting message (steer queue sessions): Send now or Steer, Edit, Delete. */
     queuePick,
