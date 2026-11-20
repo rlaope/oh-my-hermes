@@ -562,6 +562,7 @@ def run_doctor(paths: OmhPaths, *, state_write: bool = True) -> list[Check]:
     checks.append(_plugin_ulw_lifecycle_check(paths))
     checks.append(_omh_tui_check(paths))
     checks.append(_tui_own_runtime_check(paths))
+    checks.append(_auto_resume_check(paths))
     checks.extend(_hermes_gateway_checks(paths))
     checks.append(_delegation_protocol_platform_check(paths))
     checks.append(_hermes_model_routing_check(paths))
@@ -748,6 +749,27 @@ def _omh_tui_check(paths: OmhPaths) -> Check:
         "omh_tui_support", True,
         "bare `omh` can open the OMH TUI: shim installed, Hermes launcher hook and gateway present, Node found"
         + versions,
+    )
+
+
+def _auto_resume_check(paths: OmhPaths) -> Check:
+    """Whether a bare `omh` reopens a dropped OMH session (`omh auto-resume`), and which shell rc holds the hook.
+
+    Read-only and informational: the stored mode, `OMH_AUTO_RESUME=0` in this environment, and whether each
+    supported shell's rc carries the marked block (`tui/shell_hook.hook_state`). Never a failure.
+    """
+    from ..maintenance.auto_resume_state import environment_off, read_auto_resume_mode
+    from ..tui.shell_hook import SHELLS, hook_state
+
+    mode = read_auto_resume_mode(paths.omh_home)
+    off_here = environment_off(os.environ)
+    hooks = [hook_state(shell, os.environ) for shell in SHELLS]
+    installed = [f"{state['shell']} ({state['rc']})" for state in hooks if state["installed"]]
+    effective = "off in this environment (OMH_AUTO_RESUME=0)" if mode == "on" and off_here else mode
+    hook_text = f"shell hook in {', '.join(installed)}" if installed else "no shell hook installed"
+    return Check(
+        "omh_auto_resume", True, f"auto-resume is {effective}; {hook_text}",
+        detail={"mode": mode, "environment_off": off_here, "shell_hooks": hooks},
     )
 
 

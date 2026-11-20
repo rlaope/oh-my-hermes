@@ -75,6 +75,7 @@ class FastDispatchTableTests(unittest.TestCase):
             ["chat", "route", "review this PR"],
             ["doctor"],
             ["update-check", "status"],
+            ["auto-resume", "shell", "install", "--shell", "bash", "--dry-run"],
         ]
         for argv in cases:
             with self.subTest(argv=argv):
