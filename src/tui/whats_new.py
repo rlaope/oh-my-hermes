@@ -35,8 +35,8 @@ EARLIER_TUI_STATE = ("tui/launch-skills.json",)
 
 WHATS_NEW: dict[str, tuple[str, ...]] = {
     "4.0.9": (
-        "Code review drops findings it cannot show, and lists what it did not check",
-        "A review benchmark measures false alarms against real bugs, OMH on and off",
+        "Code review drops findings it can't show and lists what it didn't check",
+        "A benchmark counts review false alarms and real bugs, OMH on vs off",
         "A re-run of the same dag can skip the nodes that already passed",
         "A message sent mid-turn gets a one-line answer before the next tool call",
     ),
