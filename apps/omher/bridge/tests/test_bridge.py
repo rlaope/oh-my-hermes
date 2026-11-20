@@ -2094,6 +2094,37 @@ class Skills(BridgeCase):
             self.assertEqual(env.connects, [])  # a file read: no gateway started for it
 
 
+class Commands(BridgeCase):
+    """`commands.list`: the slash commands Hermes answers for a bot, from Hermes' own registry (read-only)."""
+
+    async def test_lists_commands_sorted_with_hints_and_no_cli_only(self):
+        async with Env() as env:
+            s = await self.open(env)
+            r = await s.req("commands.list", bot="kami")
+            self.assertTrue(r["ok"], r)
+            rows = r["result"]["commands"]
+            names = [x["name"] for x in rows]
+            self.assertEqual(names, sorted(names))
+            self.assertEqual(len(names), len(set(names)))
+            for row in rows:
+                self.assertEqual((row["kind"], row["prefix"]), ("command", "/"))
+                self.assertFalse(row["name"].startswith("/"))
+                self.assertIsInstance(row["description"], str)
+                self.assertIsInstance(row["hint"], str)
+            # the commands a gateway really dispatches are listed; the editor-only ones are not
+            self.assertIn("model", names)
+            self.assertIn("help", names)
+            self.assertNotIn("redraw", names)  # cli_only, no config gate: the gateway never answers it
+            model = next(x for x in rows if x["name"] == "model")
+            self.assertTrue(model["hint"].startswith("[model|reset]"))
+            self.assertEqual(env.connects, [])  # a registry read: no gateway started for it
+
+    async def test_unknown_bot(self):
+        async with Env() as env:
+            s = await self.open(env)
+            self.assertEqual((await s.req("commands.list", bot="ghost"))["error"]["code"], "unknown_bot")
+
+
 class ReplyThere(BridgeCase):
     """"Reply there": omher passes a thread reference to the bot as one context block; it posts nothing."""
 

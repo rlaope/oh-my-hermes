@@ -965,6 +965,38 @@ def _scan_skills(root: Path, found: dict[str, str], seen: set[str]) -> None:
         found[slug] = desc if len(desc) <= SKILL_DESC_MAX else desc[:SKILL_DESC_MAX - 1].rstrip() + "…"
 
 
+def read_commands() -> list[dict]:
+    """`commands.list`: the slash commands a Hermes bot answers, from Hermes' own registry
+    (`hermes_cli.commands.COMMAND_REGISTRY`), so the composer's `/` menu lists what the gateway really
+    dispatches instead of a list omher keeps. CLI-only commands are left out unless a config gate serves them;
+    each row is `name`, the localized `description`, the `hint` its arguments take, and `kind`/`prefix` in the
+    shape `parseCommands` reads. An import that fails (an older Hermes) yields no rows: the menu then stays
+    closed, as it does when the op is missing."""
+    try:
+        from hermes_cli.commands import COMMAND_REGISTRY
+    except Exception:
+        return []
+    out: dict[str, dict] = {}
+    for cmd in COMMAND_REGISTRY:
+        if getattr(cmd, "cli_only", False) and not getattr(cmd, "gateway_config_gate", None):
+            continue
+        name = str(getattr(cmd, "name", "") or "").strip()
+        if not name or name in out:
+            continue
+        try:
+            description = cmd.describe()
+        except Exception:
+            description = str(getattr(cmd, "description", "") or "")
+        out[name] = {
+            "name": name,
+            "description": " ".join(description.split())[:SKILL_DESC_MAX],
+            "hint": str(getattr(cmd, "args_hint", "") or ""),
+            "kind": "command",
+            "prefix": "/",
+        }
+    return [out[n] for n in sorted(out)]
+
+
 # ---------------------------------------------------------------- usage meters (read-only)
 
 USAGE_FILES = 5               # newest session files read per CLI
@@ -4895,6 +4927,7 @@ PEER_OPEN_TIMEOUT = 15.0
 PEER_FORWARD = frozenset({
     "chat.open", "chat.send", "chat.interrupt", "chat.steer", "approval.respond", "clarify.respond", "chat.attach", "chat.set_model",
     "models.options", "bots.ready", "bots.rename", "bots.avatar", "bots.set_avatar", "bots.info", "skills.list",
+    "commands.list",
     "links.places", "tasks.linear", "elsewhere.list", "elsewhere.peek", "routines.list", "runs.list", "runs.get", "runs.prs",
     "runs.node_session",
     "panel.terminal", "panel.worktrees", "panel.diff", "media.read", "automations.add", "automations.pause",
@@ -5402,7 +5435,7 @@ class Bridge:
             "chat.set_model": self.op_set_model, "bots.ready": self.op_bots_ready,
             "bots.rename": self.op_bots_rename, "bots.avatar": self.op_bots_avatar,
             "bots.set_avatar": self.op_bots_set_avatar, "bots.info": self.op_bots_info,
-            "skills.list": self.op_skills_list, "links.places": self.op_links_places, "tasks.linear": self.op_tasks_linear,
+            "skills.list": self.op_skills_list, "commands.list": self.op_commands_list, "links.places": self.op_links_places, "tasks.linear": self.op_tasks_linear,
             "folder.open": self.op_folder_open, "folder.close": self.op_folder_close,
             "thread.create": self.op_thread_create, "thread.list": self.op_thread_list,
             "thread.open": self.op_thread_open, "thread.remove": self.op_thread_remove,
@@ -6786,6 +6819,10 @@ class Bridge:
     async def op_skills_list(self, p) -> dict:
         bot = self._bot(p.get("bot"))
         return {"skills": await asyncio.to_thread(read_skills, bot["path"])}
+
+    async def op_commands_list(self, p) -> dict:
+        self._bot(p.get("bot"))
+        return {"commands": await asyncio.to_thread(read_commands)}
 
     async def op_links_places(self, p) -> dict:
         bot = self._bot(p.get("bot"))

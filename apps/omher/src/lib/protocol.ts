@@ -75,6 +75,18 @@ export interface Skill {
   description: string;
 }
 
+/** One slash command a bot answers, from Hermes' own registry (`commands.list`): the composer's `/` menu. */
+export interface SlashCommand {
+  name: string;
+  description: string;
+  /** The arguments it takes (`<file>`, `[on|off]`), "" for none. */
+  hint?: string;
+  /** "command" or "skill"; omher lists commands only, the skills come from `skills.list`. */
+  kind?: string;
+  /** The sigil the person types before the name. */
+  prefix?: string;
+}
+
 /** One row of a bot's main chat. `ts` is seconds since epoch (float). */
 export interface Msg {
   id: string;
@@ -376,6 +388,8 @@ export interface OpMap {
   "bots.info": { params: { bot: string }; result: BotInfo };
   /** The bot's skills from its profile folder (read-only), sorted by name. */
   "skills.list": { params: { bot: string }; result: { skills: Skill[] } };
+  /** The slash commands Hermes answers for this bot, from Hermes' own registry (read-only). */
+  "commands.list": { params: { bot: string }; result: { commands: SlashCommand[] } };
   /** Channel names the bot already knows from its own Slack / Discord sessions, by channel id (read-only). */
   "links.places": { params: { bot: string }; result: { places: LinkPlaces } };
   /** Side panel, all read-only: the bot's latest terminal runs, the git worktrees it worked in, one diff. */

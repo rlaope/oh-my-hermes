@@ -615,6 +615,9 @@ function fakeBridge() {
         case "skills.list":
           if (params.bot === "friren") throw { code: "unknown_op", message: "no such op: skills.list" };
           return { skills: [{ name: "plan", description: "Plan it" }, { name: "review", description: "" }] };
+        case "commands.list":
+          if (params.bot === "friren") throw { code: "unknown_op", message: "no such op: commands.list" };
+          return { commands: [{ name: "model", description: "Pick the model", hint: "[model|reset]", kind: "command", prefix: "/" }, { name: "help", description: "Show help" }] };
         default:
           return {};
       }
@@ -737,6 +740,22 @@ describe("store", () => {
     expect(store.getState().lastError).toBeNull();
     await store.actions.skills("friren");
     expect(f.calls.filter((c) => c.op === "skills.list" && c.params.bot === "friren")).toHaveLength(2);
+  });
+
+  it("slashCommands reads the bot's `/` menu once, keeps what came, and survives a bridge without the op", async () => {
+    const f = fakeBridge();
+    const store = createStore(f.bridge, { now: () => T0 });
+    await store.actions.init();
+    const rows = await store.actions.slashCommands("kami");
+    expect(rows.map((r) => r.name)).toEqual(["model", "help"]);
+    expect(rows[0]).toMatchObject({ hint: "[model|reset]", kind: "command", prefix: "/" });
+    await store.actions.slashCommands("kami");
+    expect(f.calls.filter((c) => c.op === "commands.list")).toHaveLength(1); // read once per bot
+    // a bridge without the op: an empty list, no error, asked again next time
+    expect(await store.actions.slashCommands("friren")).toEqual([]);
+    expect(store.getState().lastError).toBeNull();
+    await store.actions.slashCommands("friren");
+    expect(f.calls.filter((c) => c.op === "commands.list" && c.params.bot === "friren")).toHaveLength(2);
   });
 
   it("sendWithFiles attaches each file in order, then sends once; a failed attach sends nothing", async () => {
