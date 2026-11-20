@@ -9,19 +9,28 @@ byte for byte. Nothing else writes a shell rc, and nothing here runs a shell.
 What the block does, in every shell: only in an interactive shell, and only
 when none of `OMH_AUTO_RESUME_DONE`, `HERMES_SESSION_ID`, `OMH_TUI_SESSION_FILE`
 or `CI` is set, it exports `OMH_AUTO_RESUME_DONE=1` (so a nested shell does
-nothing) and tests for the pending marker `<omh_home>/tui/resume-pending`
-(`tui/live_sessions.py`) with the shell's own file test: no process starts
-unless that file exists and `omh` is on PATH. Then, at the first prompt, it
-runs `omh --omh-home <home> auto-resume shell-start`, which reopens the session
-this terminal dropped, or exits at once:
+nothing) and looks, with the shell's own builtins, for a session to reopen:
+the pending marker `<omh_home>/tui/resume-pending` (some session was dropped),
+or a pid in `<omh_home>/tui/live-pids` (the TUIs recorded as running) that no
+longer runs, which is how a TUI killed outright (SIGKILL, power loss) shows
+before anything has swept it (`tui/live_sessions.py`). No process starts
+unless one of the two holds and `omh` is on PATH. Then, at the first prompt,
+it runs `omh --omh-home <home> auto-resume shell-start`, which reopens the
+session this terminal dropped, or exits at once:
 
 * zsh: from the first `zle-line-init` (`add-zle-hook-widget`), which puts the
-  command in the line and accepts it, then removes its hook. A `precmd` hook
-  would run under powerlevel10k's instant prompt, where stdin is /dev/null.
+  command in the line and accepts it, then removes its hook; a one-shot
+  `zshaddhistory` hook keeps that line out of the history, and nothing changes
+  the person's history options. A `precmd` hook would run under
+  powerlevel10k's instant prompt, where stdin is /dev/null.
 * bash: from the first `PROMPT_COMMAND` run, with stdin and stdout on the
   terminal; it then takes itself out of `PROMPT_COMMAND` (a string or, from
   bash 5.1, an array) and leaves whatever else was there.
 * PowerShell: at the end of the profile, in the console host.
+
+The zsh and bash blocks are written with LF line ends whatever the rc uses
+(a CR inside a shell keyword is a syntax error); the person's own bytes, and
+the line end added before the block, keep the rc's own convention.
 
 Stdlib only.
 """
@@ -47,6 +56,7 @@ CREATED_FILE = "# (omh created this file for this block)"
 NEW_RC_MODE = 0o644
 MAX_RC_BYTES = 4 * 1024 * 1024
 PENDING_MARKER_PARTS = ("tui", "resume-pending")
+LIVE_PIDS_PARTS = ("tui", "live-pids")
 
 
 class ShellHookError(ValueError):
@@ -109,6 +119,10 @@ def marker_path(omh_home: str | Path) -> Path:
     return Path(omh_home).joinpath(*PENDING_MARKER_PARTS)
 
 
+def live_pids_path(omh_home: str | Path) -> Path:
+    return Path(omh_home).joinpath(*LIVE_PIDS_PARTS)
+
+
 def _printable(path: Path, what: str) -> str:
     text = str(path)
     if not text or not text.isprintable():
@@ -124,27 +138,54 @@ def _ps_quote(text: str) -> str:
     return "'" + text.replace("'", "''") + "'"
 
 
+def _posix_wake(marker: str, live_pids: str, split: str) -> list[str]:
+    """Lines that set `_omh_wake` when the marker exists or a pid in `live_pids` no longer runs, by builtins only
+    (`read`, `kill -0`): no process starts here. `split` is how the shell word-splits `$_omh_pids`. A word that is
+    not a plain decimal of at most nine digits is skipped. `kill -0` failing for a pid another user now holds also
+    wakes: the TUI that wrote it is gone either way."""
+    return [
+        "  _omh_wake= _omh_pids=",
+        f"  if [[ -e {_sh_quote(marker)} ]]; then",
+        "    _omh_wake=1",
+        f"  elif [[ -f {_sh_quote(live_pids)} ]]; then",
+        f"    read -r _omh_pids < {_sh_quote(live_pids)} || :",
+        f"    for _omh_p in {split}; do",
+        '      [[ $_omh_p == [0-9]* && $_omh_p != *[!0-9]* && ${#_omh_p} -le 9 ]] || continue',
+        "      kill -0 \"$_omh_p\" 2>/dev/null || { _omh_wake=1; break; }",
+        "    done",
+        "  fi",
+    ]
+
+
 def render_block(shell: str, omh_home: str | Path) -> list[str]:
     """The block's lines, markers included, for `shell` and this OMH home (absolute)."""
     home = Path(os.path.abspath(omh_home))
     home_text = _printable(home, "OMH home")
     marker = _printable(marker_path(home), "pending marker")
+    live_pids = _printable(live_pids_path(home), "live pids")
     guard_names = ("OMH_AUTO_RESUME_DONE", "HERMES_SESSION_ID", "OMH_TUI_SESSION_FILE", "CI")
     if shell == "zsh":
-        command = f"command omh --omh-home {_sh_quote(home_text)} auto-resume shell-start"
+        line = " " + f"command omh --omh-home {_sh_quote(home_text)} auto-resume shell-start"
         unset = "".join(f"${{{name}-}}" for name in guard_names)
         body = [
             f'if [[ -o interactive && -z "{unset}" ]]; then',
             "  export OMH_AUTO_RESUME_DONE=1",
-            f"  if [[ -e {_sh_quote(marker)} ]] && (( $+commands[omh] )); then",
+            *_posix_wake(marker, live_pids, "${=_omh_pids}"),
+            "  if [[ -n $_omh_wake ]] && (( $+commands[omh] )); then",
+            "    _omh_auto_resume_history() {",
+            "      add-zsh-hook -d zshaddhistory _omh_auto_resume_history",
+            f"      [[ ${{1%$'\\n'}} != {_sh_quote(line)} ]]",
+            "    }",
             "    _omh_auto_resume() {",
             "      add-zle-hook-widget -d zle-line-init _omh_auto_resume",
-            f"      BUFFER={_sh_quote(' ' + command)}",
+            f"      BUFFER={_sh_quote(line)}",
+            "      add-zsh-hook zshaddhistory _omh_auto_resume_history",
             "      zle accept-line",
             "    }",
-            "    autoload -Uz add-zle-hook-widget && zle -N _omh_auto_resume &&",
+            "    autoload -Uz add-zle-hook-widget add-zsh-hook && zle -N _omh_auto_resume &&",
             "      add-zle-hook-widget zle-line-init _omh_auto_resume",
             "  fi",
+            "  unset _omh_wake _omh_pids _omh_p",
             "fi",
         ]
     elif shell == "bash":
@@ -153,7 +194,8 @@ def render_block(shell: str, omh_home: str | Path) -> list[str]:
         body = [
             f'if [[ $- == *i* && -z "{unset}" ]]; then',
             "  export OMH_AUTO_RESUME_DONE=1",
-            f"  if [[ -e {_sh_quote(marker)} ]] && command -v omh >/dev/null 2>&1; then",
+            *_posix_wake(marker, live_pids, "$_omh_pids"),
+            '  if [[ -n $_omh_wake ]] && command -v omh >/dev/null 2>&1; then',
             "    _omh_auto_resume() {",
             '      [[ -n "${_omh_auto_resume_ran-}" ]] && return 0',
             "      _omh_auto_resume_ran=1",
@@ -179,6 +221,7 @@ def render_block(shell: str, omh_home: str | Path) -> list[str]:
             "      PROMPT_COMMAND=_omh_auto_resume",
             "    fi",
             "  fi",
+            "  unset _omh_wake _omh_pids _omh_p",
             "fi",
         ]
     elif shell == "powershell":
@@ -187,8 +230,15 @@ def render_block(shell: str, omh_home: str | Path) -> list[str]:
             f"if ($Host.Name -eq 'ConsoleHost' -and -not ({set_any}) -and",
             "    -not ([Environment]::GetCommandLineArgs() -match '^-NonI')) {",
             "  $env:OMH_AUTO_RESUME_DONE = '1'",
-            f"  if ((Test-Path -LiteralPath {_ps_quote(marker)}) -and",
-            "      (Get-Command omh -CommandType Application -ErrorAction SilentlyContinue)) {",
+            f"  if (((Test-Path -LiteralPath {_ps_quote(marker)}) -or (& {{",
+            f"        $line = Get-Content -LiteralPath {_ps_quote(live_pids)} -TotalCount 1 -ErrorAction SilentlyContinue",
+            "        foreach ($id in \"$line\" -split ' ') {",
+            "          if ($id -match '^[0-9]{1,9}$' -and -not (Get-Process -Id $id -ErrorAction SilentlyContinue)) {",
+            "            return $true",
+            "          }",
+            "        }",
+            "        $false",
+            "      })) -and (Get-Command omh -CommandType Application -ErrorAction SilentlyContinue)) {",
             f"    & omh --omh-home {_ps_quote(home_text)} auto-resume shell-start",
             "  }",
             "}",
@@ -271,6 +321,12 @@ def _eol(data: bytes) -> bytes:
     return b"\r\n" if b"\r\n" in data else b"\n"
 
 
+def _block_eol(shell: str, data: bytes) -> bytes:
+    """The block's own line end: LF for zsh and bash, which read a CR as part of the word before it (`then\\r` is
+    a syntax error); PowerShell takes either, so its block follows the file."""
+    return b"\n" if shell in ("zsh", "bash") else _eol(data)
+
+
 def _encode(lines: list[str], eol: bytes) -> bytes:
     return b"".join(line.encode("utf-8") + eol for line in lines)
 
@@ -289,7 +345,7 @@ def install(
         kept = [_stripped(line).decode("utf-8", "replace") for line in inside
                 if _stripped(line).decode("utf-8", "replace") in (ADDED_LINE_END, CREATED_FILE)]
         fresh = lines[:2] + kept + lines[2:]
-        block = _encode(fresh, _eol(data))
+        block = _encode(fresh, _block_eol(shell, data))
         if data[start:stop] == block:
             return HookResult(shell, target, "unchanged", False, dry_run, "\n".join(fresh))
         if not dry_run:
@@ -300,12 +356,11 @@ def install(
         flags.append(CREATED_FILE)
     elif data and not data.endswith(b"\n"):
         flags.append(ADDED_LINE_END)
-    eol = _eol(data or b"")
     fresh = lines[:2] + flags + lines[2:]
-    prefix = eol if ADDED_LINE_END in flags else b""
+    prefix = _eol(data or b"") if ADDED_LINE_END in flags else b""  # the person's line, ended their way
     if not dry_run:
         mode = NEW_RC_MODE if data is None else target.stat().st_mode
-        _write(target, (data or b"") + prefix + _encode(fresh, eol), mode)
+        _write(target, (data or b"") + prefix + _encode(fresh, _block_eol(shell, data or b"")), mode)
     return HookResult(shell, target, "installed", True, dry_run, "\n".join(fresh))
 
 

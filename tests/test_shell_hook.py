@@ -17,13 +17,14 @@ import subprocess
 import sys
 import time
 import unittest
+from collections.abc import Callable
 from tempfile import TemporaryDirectory
 
 from _local_package import load_local_package
 
 load_local_package()
 
-from omh.tui import shell_hook  # noqa: E402
+from omh.tui import live_sessions, shell_hook  # noqa: E402
 from omh.tui.shell_hook import BEGIN, END, ShellHookError, install, remove, render_block  # noqa: E402
 
 
@@ -94,11 +95,33 @@ class InstallRemoveTests(unittest.TestCase):
                 with self.subTest(shell=shell, original=original):
                     self._round_trip(shell, original)
 
-    def test_crlf_files_get_a_crlf_block(self) -> None:
+    def test_a_crlf_rc_keeps_its_bytes_and_gets_an_lf_block_the_shells_parse(self) -> None:
+        # A CR inside `then` or `fi` is a syntax error to zsh and bash: the block is LF, the person's bytes are theirs.
+        for shell, binary in (("zsh", "zsh"), ("bash", "bash")):
+            for original in (b"# preexisting comment\r\n", b"a=1\r\nb=2"):
+                with self.subTest(shell=shell, original=original):
+                    rc = self.home / (".zshrc" if shell == "zsh" else ".bashrc")
+                    rc.write_bytes(original)
+                    install(shell, self.omh, _env(self.home, ZDOTDIR=str(self.home)))
+                    data = rc.read_bytes()
+                    head = original if original.endswith(b"\r\n") else original + b"\r\n"
+                    self.assertTrue(data.startswith(head + BEGIN.encode() + b"\n"), data)
+                    self.assertNotIn(b"\r", data[len(head):])
+                    path = shutil.which(binary)
+                    if path is not None:
+                        done = subprocess.run([path, "-n", str(rc)], capture_output=True, text=True, timeout=30)
+                        self.assertEqual(done.returncode, 0, done.stderr)
+                    self.assertEqual(install(shell, self.omh, _env(self.home, ZDOTDIR=str(self.home))).action,
+                                     "unchanged")
+                    remove(shell, _env(self.home, ZDOTDIR=str(self.home)))
+                    self.assertEqual(rc.read_bytes(), original)
+
+    def test_a_crlf_powershell_profile_gets_a_crlf_block(self) -> None:
         environ = _env(self.home)
-        rc = self.home / ".bashrc"
+        rc = shell_hook.rc_path("powershell", environ, platform="linux")
+        rc.parent.mkdir(parents=True)
         rc.write_bytes(b"a\r\nb")
-        install("bash", self.omh, environ)
+        install("powershell", self.omh, environ, platform="linux")
         data = rc.read_bytes()
         self.assertTrue(data.startswith(b"a\r\nb\r\n" + BEGIN.encode() + b"\r\n"))
         self.assertNotIn(b"\n", data.replace(b"\r\n", b""))
@@ -221,6 +244,7 @@ class BlockSyntaxTests(unittest.TestCase):
         for shell in shell_hook.SHELLS:
             text = "\n".join(render_block(shell, "/tmp/omh home"))
             self.assertIn("resume-pending", text)
+            self.assertIn("live-pids", text)
             self.assertIn("auto-resume shell-start", text)
             self.assertIn("OMH_AUTO_RESUME_DONE", text)
             for guard in ("HERMES_SESSION_ID", "OMH_TUI_SESSION_FILE", "CI"):
@@ -236,7 +260,11 @@ class InteractiveShellTests(unittest.TestCase):
     """A real interactive shell under a pty, with a fake `omh` that logs how it was called."""
 
     def _shell(self, shell: str, *, marker: bool, nested: bool = False, extra_env: dict[str, str] | None = None,
-               before: str = "", expect_run: bool = True, enter: bool = False) -> tuple[list[str], str]:
+               before: str = "", expect_run: bool | None = None, enter: bool = False,
+               prepare: Callable[[Path], None] | None = None, crlf: bool = False,
+               typed: tuple[bytes, ...] = ()) -> tuple[list[str], str]:
+        """`prepare(omh_home)` runs before the shell starts; `crlf` writes the person's rc lines with CRLF ends;
+        `typed` lines are entered at the prompt after the hook ran. `self.last_root` is the temporary root."""
         import pty
         import select
 
@@ -246,6 +274,7 @@ class InteractiveShellTests(unittest.TestCase):
         tmp = TemporaryDirectory()
         self.addCleanup(tmp.cleanup)
         root = Path(tmp.name)
+        self.last_root = root
         home, omh, bindir = root / "home", root / "omh", root / "bin"
         for directory in (home, omh / "tui", bindir):
             directory.mkdir(parents=True)
@@ -255,9 +284,14 @@ class InteractiveShellTests(unittest.TestCase):
         fake.chmod(0o755)
         if marker:
             (omh / "tui" / "resume-pending").touch()
+        if prepare is not None:
+            prepare(omh)
+        if expect_run is None:
+            expect_run = marker or prepare is not None
         rc_name = ".zshrc" if shell == "zsh" else ".bashrc"
         prompt = "PROMPT='READY> '\n" if shell == "zsh" else "PS1='READY> '\n"
-        (home / rc_name).write_text(prompt + before, encoding="utf-8")
+        mine = (prompt + before).encode("utf-8")
+        (home / rc_name).write_bytes(mine.replace(b"\n", b"\r\n") if crlf else mine)
         install(shell, omh, _env(home, ZDOTDIR=str(home)))
         argv = [binary, "-d", "-i"] if shell == "zsh" else [binary, "--noprofile", "--rcfile", str(home / rc_name), "-i"]
         environ = {
@@ -304,9 +338,13 @@ class InteractiveShellTests(unittest.TestCase):
 
         try:
             pump(lambda: prompts() >= 1, 15)
-            if marker and expect_run:
+            if expect_run:
                 pump(log.exists, 15)
             pump(lambda: False, 0.7)
+            for line in typed:
+                seen = prompts()
+                os.write(master, line + b"\n")
+                pump(lambda: prompts() > seen, 15)
             if enter:  # one more prompt, after the hook took itself out
                 seen = prompts()
                 os.write(master, b"\n")
@@ -354,6 +392,82 @@ class InteractiveShellTests(unittest.TestCase):
                 with self.subTest(shell=shell, guard=name):
                     lines, output = self._shell(shell, marker=True, extra_env={name: "1"}, expect_run=False)
                     self.assertEqual(lines, [], output)
+
+    def test_a_tui_killed_outright_wakes_a_new_shell_before_anything_swept(self) -> None:
+        # A real process records a live session through the store and is SIGKILLed: no exit code ran, so there is
+        # no `resume-pending`; only its pid in `live-pids`, which no longer runs, can tell the new shell.
+        script = (
+            "import sys; sys.path.insert(0, sys.argv[1])\n"
+            "from _local_package import load_local_package; load_local_package()\n"
+            "from pathlib import Path\n"
+            "from omh.tui.live_sessions import record_live\n"
+            "record_live(Path(sys.argv[2]), 's-killed', sys.argv[3], sys.argv[3], {'TMUX_PANE': '%9'})\n"
+            "print('recorded', flush=True)\n"
+            "sys.stdin.read()\n"
+        )
+        tests_dir = str(Path(__file__).resolve().parent)
+
+        def killed_tui(omh: Path) -> None:
+            child = subprocess.Popen([sys.executable, "-c", script, tests_dir, str(omh), str(omh.parent)],
+                                     stdin=subprocess.PIPE, stdout=subprocess.PIPE)
+            try:
+                self.assertEqual(child.stdout.readline(), b"recorded\n")
+            finally:
+                child.kill()
+                child.wait(timeout=10)
+                child.stdin.close()
+                child.stdout.close()
+            self.assertEqual(child.returncode, -9)
+            self.assertFalse((omh / "tui" / live_sessions.PENDING_MARKER).exists())
+            pids = (omh / "tui" / live_sessions.LIVE_PIDS_FILE).read_text(encoding="ascii").split()
+            self.assertIn(str(child.pid), pids)
+
+        for shell in ("zsh", "bash"):
+            with self.subTest(shell=shell):
+                lines, output = self._shell(shell, marker=False, prepare=killed_tui)
+                self.assertEqual(len(lines), 1, output)
+                self.assertTrue(lines[0].endswith("auto-resume shell-start DONE=1"), lines)
+
+    def test_live_pids_that_all_run_wake_nothing(self) -> None:
+        def alive(omh: Path) -> None:
+            (omh / "tui" / "live-pids").write_text(f"{os.getpid()} {os.getppid()}\n", encoding="ascii")
+
+        def junk(omh: Path) -> None:  # not pids: skipped, never handed to `kill`
+            (omh / "tui" / "live-pids").write_text("-1 0x10 $(touch x) 99999999999\n", encoding="ascii")
+
+        for shell in ("zsh", "bash"):
+            for label, prepare in (("alive", alive), ("junk", junk)):
+                with self.subTest(shell=shell, live_pids=label):
+                    lines, output = self._shell(shell, marker=False, prepare=prepare, expect_run=False)
+                    self.assertEqual(lines, [], output)
+
+    def test_a_dead_pid_among_live_ones_wakes_the_shell(self) -> None:
+        gone = subprocess.Popen([sys.executable, "-c", "pass"])
+        gone.wait(timeout=30)
+
+        def mixed(omh: Path) -> None:
+            (omh / "tui" / "live-pids").write_text(f"{os.getpid()} {gone.pid}\n", encoding="ascii")
+
+        for shell in ("zsh", "bash"):
+            with self.subTest(shell=shell):
+                lines, output = self._shell(shell, marker=False, prepare=mixed)
+                self.assertEqual(len(lines), 1, output)
+
+    def test_an_installed_crlf_rc_starts_and_runs_the_hook(self) -> None:
+        for shell in ("zsh", "bash"):
+            with self.subTest(shell=shell):
+                lines, output = self._shell(shell, marker=True, crlf=True, before="export MINE=1\n")
+                self.assertEqual(len(lines), 1, output)
+                self.assertNotIn("parse error", output)
+                self.assertNotIn("syntax error", output)
+
+    def test_zsh_keeps_the_injected_line_out_of_history_and_the_persons_lines_in(self) -> None:
+        history = "HISTFILE=$HOME/history\nSAVEHIST=50\nHISTSIZE=50\n"
+        lines, output = self._shell("zsh", marker=True, before=history, typed=(b"echo mine",))
+        self.assertEqual(len(lines), 1, output)
+        saved = (self.last_root / "home" / "history").read_text(encoding="utf-8", errors="replace")
+        self.assertIn("echo mine", saved)
+        self.assertNotIn("shell-start", saved)
 
     def test_bash_keeps_an_existing_prompt_command(self) -> None:
         lines, output = self._shell("bash", marker=True, before="PROMPT_COMMAND='echo PC''RAN'\n", enter=True)
