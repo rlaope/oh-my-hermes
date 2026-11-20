@@ -19,6 +19,8 @@ export const TERM_LINE_HEIGHT = { min: 1, max: 2 } as const;
 export const TERM_PADDING = { min: 0, max: 24 } as const;
 /** How bright a split pane without the keyboard stays (Otty's unfocused-split-opacity, Orca's inactivePaneOpacity). */
 export const TERM_DIM = { min: 0.5, max: 1 } as const;
+/** The undo window after closing a TERMINALS row, in seconds (0: Off, the row's program ends at once). */
+export const TERM_UNDO_CLOSE: readonly number[] = [0, 5, 10];
 
 export interface TermSettings {
   /** Theme ids from the catalog, one per app theme. */
@@ -59,6 +61,44 @@ export interface TermSettings {
   keepHistory: boolean;
   /** How bright a split pane without the keyboard stays, TERMINALS and the bottom panel alike (1: not dimmed). */
   dimUnfocused: number;
+  /** Seconds a closed TERMINALS row's program keeps running so the close can be undone (closeGrace.ts); 0 = Off. */
+  undoClose: number;
+  /** The shell a new TERMINALS Shell row runs: an id from the shell's `shells_available` list. "" = the login shell
+   *  (Windows PowerShell on Windows), as before. An id no longer on the list opens the default. */
+  defaultShell: string;
+  /** The person's own theme (Settings › Terminal › Import from…: a copy of another terminal app's profile), picked
+   *  as `custom` in `themeDark` / `themeLight`. null: none. */
+  custom: TermCustomTheme | null;
+}
+
+/** Colour slots a custom theme keeps: the sixteen ANSI ones and the four of the screen. */
+export const TERM_CUSTOM_KEYS = [
+  "foreground",
+  "background",
+  "cursor",
+  "cursorAccent",
+  "selectionBackground",
+  "black",
+  "red",
+  "green",
+  "yellow",
+  "blue",
+  "magenta",
+  "cyan",
+  "white",
+  "brightBlack",
+  "brightRed",
+  "brightGreen",
+  "brightYellow",
+  "brightBlue",
+  "brightMagenta",
+  "brightCyan",
+  "brightWhite",
+] as const;
+export type TermCustomKey = (typeof TERM_CUSTOM_KEYS)[number];
+export interface TermCustomTheme {
+  name: string;
+  colors: Partial<Record<TermCustomKey, string>>;
 }
 
 export const TERM_KEY = "omher.term";
@@ -83,7 +123,14 @@ export const TERM_DEFAULTS: TermSettings = {
   confirmPaste: true,
   keepHistory: true,
   dimUnfocused: 0.72,
+  undoClose: 10,
+  defaultShell: "",
+  custom: null,
 };
+
+/** A shell id as `shells_available` makes them: a Windows name or `unix:<absolute path>`; anything else is "". */
+export const cleanShellId = (v: unknown): string =>
+  typeof v === "string" && v.length <= 600 && /^(?:powershell|pwsh|cmd|gitbash|wsl|unix:\/[^\0-\x1f\x7f]*)$/.test(v) ? v : "";
 
 const num = (v: unknown, lo: number, hi: number, d: number) => (typeof v === "number" && Number.isFinite(v) ? Math.min(hi, Math.max(lo, v)) : d);
 const str = (v: unknown, d: string, max = 200) => (typeof v === "string" && v.length <= max ? v : d);
@@ -92,6 +139,20 @@ const str = (v: unknown, d: string, max = 200) => (typeof v === "string" && v.le
 export const cleanTermFont = (v: string): string => v.replace(/[^\p{L}\p{N} ,'"._-]/gu, "").slice(0, 200);
 const one = <T extends string>(v: unknown, list: readonly T[], d: T): T => (list.includes(v as T) ? (v as T) : d);
 const bool = (v: unknown, d: boolean) => (typeof v === "boolean" ? v : d);
+
+/** A stored custom theme, each colour a `#rrggbb`; anything else is dropped (no name or no colour: none). */
+export function parseCustomTheme(v: unknown): TermCustomTheme | null {
+  if (!v || typeof v !== "object" || Array.isArray(v)) return null;
+  const o = v as Record<string, unknown>;
+  const name = typeof o.name === "string" ? o.name.replace(/\p{Cc}/gu, "").trim().slice(0, 80) : "";
+  const raw = (o.colors && typeof o.colors === "object" ? o.colors : {}) as Record<string, unknown>;
+  const colors: TermCustomTheme["colors"] = {};
+  for (const k of TERM_CUSTOM_KEYS) {
+    const c = raw[k];
+    if (typeof c === "string" && /^#[0-9a-f]{6}$/i.test(c)) colors[k] = c.toLowerCase();
+  }
+  return name && Object.keys(colors).length ? { name, colors } : null;
+}
 
 /** Stored text or object -> settings, every field checked. */
 export function parseTermSettings(raw: unknown): TermSettings {
@@ -125,6 +186,9 @@ export function parseTermSettings(raw: unknown): TermSettings {
     confirmPaste: bool(o.confirmPaste, d.confirmPaste),
     keepHistory: bool(o.keepHistory, d.keepHistory),
     dimUnfocused: Math.round(num(o.dimUnfocused, TERM_DIM.min, TERM_DIM.max, d.dimUnfocused) * 100) / 100,
+    undoClose: TERM_UNDO_CLOSE.includes(o.undoClose as number) ? (o.undoClose as number) : d.undoClose,
+    defaultShell: cleanShellId(o.defaultShell),
+    custom: parseCustomTheme(o.custom),
   };
 }
 

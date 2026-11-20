@@ -2557,6 +2557,7 @@ dependencies = [
  "getrandom 0.3.4",
  "libc",
  "open",
+ "plist",
  "portable-pty",
  "regex",
  "serde",

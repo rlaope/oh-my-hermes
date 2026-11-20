@@ -21,14 +21,17 @@ import {
   TERM_LINE_HEIGHT,
   TERM_PADDING,
   TERM_SCROLLBACKS,
+  TERM_UNDO_CLOSE,
   writeTermSettings,
   type TermContrast,
   type TermCursor,
   type TermGpu,
   type TermSettings,
 } from "../../sessions/term/settings";
-import { ANSI_NORMAL, TERM_THEMES, termThemePick, type TermTheme } from "../../sessions/term/themes";
+import { useShells } from "../../sessions/newMenu";
+import { ANSI_NORMAL, CUSTOM_THEME_ID, customTermTheme, TERM_THEMES, termThemePick, type TermTheme } from "../../sessions/term/themes";
 import { TermPreview } from "./TermPreview";
+import { TermImport, type ImportCandidate } from "./TermImport";
 
 type Mode = "dark" | "light";
 
@@ -125,6 +128,11 @@ export function TerminalPage() {
   useEffect(() => setSlot(appMode), [appMode]);
   const [q, setQ] = useState("");
   const [font, setFont] = useState(term.fontFamily);
+  useEffect(() => setFont(term.fontFamily), [term.fontFamily]);
+  // a profile being looked at in Import from…: the preview shows it until Use or Cancel
+  const [candidate, setCandidate] = useState<ImportCandidate>(null);
+  const mine = term.custom ? customTermTheme(term.custom) : null;
+  const [importAt, setImportAt] = useState<HTMLDivElement | null>(null);
 
   const picked = termThemePick(slot, term);
   const needle = compact(q);
@@ -133,13 +141,17 @@ export function TerminalPage() {
   const kinds: Mode[] = slot === "light" ? ["light", "dark"] : ["dark", "light"];
   const pick = (id: string) => writeTermSettings(slot === "light" ? { themeLight: id } : { themeDark: id });
   const set = (patch: Partial<TermSettings>) => void writeTermSettings(patch);
+  // Default shell: this computer's shells; the default one is stored as "" (the login shell, as before)
+  const shells = useShells();
+  const shellDefault = shells?.find((s) => s.default) ?? shells?.[0];
+  const shellValue = shells?.some((s) => s.id === term.defaultShell) ? term.defaultShell : (shellDefault?.id ?? "");
   const using = rendererInUse();
   const rows = (n: number) => n.toLocaleString(locale());
 
   return (
     <div className="st-page st-wide tm" data-testid="term-settings">
       <div className="st-gh st-gh0">{t("term.theme")}</div>
-      <TermPreview theme={picked} settings={term} />
+      <TermPreview theme={candidate?.theme ?? picked} settings={candidate?.settings ?? term} />
       <div className="tm-bar">
         <div className="tm-slot">
           <Seg
@@ -151,9 +163,21 @@ export function TerminalPage() {
             testId="term-slot"
           />
         </div>
-        <input type="search" className="bots-q tm-q" placeholder={t("term.find")} aria-label={t("term.find")} value={q} onChange={(e) => setQ(e.target.value)} data-testid="term-search" />
+        <div className="tm-bar-r">
+          <input type="search" className="bots-q tm-q" placeholder={t("term.find")} aria-label={t("term.find")} value={q} onChange={(e) => setQ(e.target.value)} data-testid="term-search" />
+          {isMac() && <TermImport settings={term} slot={slot} onCandidate={setCandidate} panelAt={importAt} />}
+        </div>
       </div>
+      <div ref={setImportAt} />
       <div className="tm-list" role="radiogroup" aria-label={t(SLOT[slot])} data-testid="term-themes">
+        {mine && (!needle || compact(mine.name).includes(needle)) && (
+          <div data-testid="term-themes-custom">
+            <div className="tm-gh">{t("term.yours")}</div>
+            <div className="tm-grid">
+              <ThemeRow theme={mine} on={picked.id === CUSTOM_THEME_ID} onPick={() => pick(CUSTOM_THEME_ID)} />
+            </div>
+          </div>
+        )}
         {kinds.map((kind) => {
           const list = shown.filter((th) => th.kind === kind);
           if (!list.length) return null;
@@ -168,7 +192,7 @@ export function TerminalPage() {
             </div>
           );
         })}
-        {shown.length === 0 && (
+        {shown.length === 0 && !(mine && compact(mine.name).includes(needle)) && (
           <div className="tm-none" data-testid="term-themes-none">
             {t("term.noMatch", { q: q.trim() })}
           </div>
@@ -238,6 +262,23 @@ export function TerminalPage() {
 
       <div className="st-gh">{t("term.more")}</div>
       <div className="st-grp">
+        {shells && shells.length > 0 && (
+          <Row title={t("term.defaultShell")} hints={[t("term.defaultShellHint")]} testId="term-default-shell-row">
+            <select
+              className="tm-font tm-shell"
+              aria-label={t("term.defaultShell")}
+              value={shellValue}
+              onChange={(e) => set({ defaultShell: e.target.value === shellDefault?.id ? "" : e.target.value })}
+              data-testid="term-default-shell"
+            >
+              {shells.map((s) => (
+                <option key={s.id} value={s.id} title={s.path}>
+                  {s.default ? t("term.shellDefaultOf", { shell: s.label }) : s.label}
+                </option>
+              ))}
+            </select>
+          </Row>
+        )}
         <Row title={t("term.scrollback")} hints={[t("term.scrollbackHint")]} testId="term-scrollback-row">
           <Seg
             small
@@ -281,6 +322,16 @@ export function TerminalPage() {
       <div className="st-grp">
         <Row title={t("term.keepHistory")} hints={[t("term.keepHistoryHint")]} testId="term-keep-history-row">
           <Seg small label={t("term.keepHistory")} value={term.keepHistory ? "on" : "off"} options={ON_OFF()} onChange={(v) => set({ keepHistory: v === "on" })} testId="term-keep-history" />
+        </Row>
+        <Row title={t("term.undoClose")} hints={[t("term.undoCloseHint")]} testId="term-undo-close-row">
+          <Seg
+            small
+            label={t("term.undoClose")}
+            value={String(term.undoClose)}
+            options={TERM_UNDO_CLOSE.map((n) => ({ value: String(n), label: n ? t("term.undoCloseSec", { n }) : t("set.off") }))}
+            onChange={(v) => set({ undoClose: Number(v) })}
+            testId="term-undo-close"
+          />
         </Row>
       </div>
     </div>

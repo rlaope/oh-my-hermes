@@ -6,6 +6,7 @@ mod app_menu;
 mod appimage;
 mod bridge;
 mod custom_agents;
+mod disk;
 mod dsh_chat;
 mod fg;
 mod folder_open;
@@ -13,6 +14,7 @@ mod git_branch;
 mod hermes_auth;
 mod past_chats;
 mod peers;
+mod power;
 #[cfg(all(test, unix))]
 mod pty_bench;
 mod session_files;
@@ -20,9 +22,11 @@ mod sessions;
 mod setup;
 mod tasks;
 mod term_history;
+mod term_import;
 mod term_link;
 mod term_share;
 mod this_host;
+mod tray;
 
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -370,6 +374,7 @@ async fn shell_start(
     app: AppHandle,
     shell: State<'_, Shell>,
     cwd: Option<String>,
+    shell_id: Option<String>,
     cols: u16,
     rows: u16,
     on_data: Channel<InvokeResponseBody>,
@@ -378,7 +383,7 @@ async fn shell_start(
     let sessions = shell.sessions.clone();
     tauri::async_runtime::spawn_blocking(move || {
         let home = user_home()?;
-        let (id, at) = sessions.start_shell(cwd.as_deref(), &home, cols, rows, move |ev| match ev {
+        let (id, at, missing) = sessions.start_shell(cwd.as_deref(), shell_id.as_deref(), &home, cols, rows, move |ev| match ev {
             Output::Data(b) => {
                 let _ = on_data.send(InvokeResponseBody::Raw(b));
             }
@@ -387,10 +392,18 @@ async fn shell_start(
             }
         })?;
         watch_foreground(&sessions, &app, id);
-        Ok(ShellStarted { id, cwd: at.to_string_lossy().into_owned() })
+        Ok(ShellStarted { id, cwd: at.to_string_lossy().into_owned(), missing })
     })
     .await
     .map_err(|e| e.to_string())?
+}
+
+/// The shells a TERMINALS Shell row may run (`sessions::shells_available`: fixed candidates whose files exist, the
+/// default first). The page shows them and sends back an id only (`shell_start`'s `shell_id`).
+#[tauri::command]
+async fn shells_available(shell: State<'_, Shell>) -> Result<Vec<sessions::ShellEntry>, String> {
+    let sessions = shell.sessions.clone();
+    tauri::async_runtime::spawn_blocking(move || sessions.shells()).await.map_err(|e| e.to_string())
 }
 
 /// How often the foreground watcher wakes: a terminal session that had output or input since its foreground program
@@ -419,6 +432,9 @@ struct SessionFg {
 struct ShellStarted {
     id: u32,
     cwd: String,
+    /// the shell asked for was not on this machine's list: its name (the default shell started instead)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    missing: Option<String>,
 }
 
 /// This computer's name (empty when the system gives none), asked once when the page starts: the page uses it only to
@@ -616,6 +632,20 @@ async fn term_history_clear() -> Result<(), String> {
     term_history::clear(&user_home()?)
 }
 
+/// Settings › Terminal › Import from… (macOS): which of iTerm2 / Apple Terminal have a prefs file to read.
+#[tauri::command]
+async fn term_import_list() -> Result<Vec<&'static str>, String> {
+    Ok(term_import::list(&user_home()?))
+}
+
+/// The profiles (names, colours, font) of `app` (`iterm2` | `terminal`), read once from its fixed prefs file.
+#[tauri::command]
+async fn term_import_read(app: String) -> Result<Vec<term_import::Profile>, String> {
+    let app = term_import::App::parse(&app).ok_or("unknown app")?;
+    let home = user_home()?;
+    tauri::async_runtime::spawn_blocking(move || term_import::read(&home, app)).await.map_err(|e| e.to_string())?
+}
+
 /// A TERMINALS session's status file for bots holding its link (`~/.omher/terminals/<link>.json`, owner-only) and its
 /// inbox folder (`term_share`). `status`: what the page shows of it (title, CLI, folder, state, last line).
 #[tauri::command]
@@ -777,6 +807,27 @@ fn window_close(window: tauri::WebviewWindow) -> Result<(), String> {
     window.close().map_err(|e| e.to_string())
 }
 
+/// Settings › General "Keep the computer awake while agents work": the page's busy/idle edge (never one per output).
+/// `now`: the setting was turned off, so an idle edge lets go at once instead of a minute later (power.rs).
+#[tauri::command]
+fn power_busy(power: State<'_, power::Power>, busy: bool, now: Option<bool>) {
+    power.busy(busy, now.unwrap_or(false));
+}
+
+/// Settings › General "When the window closes": whether the close hides the window to the tray (the tray icon shows
+/// only then), and the tray menu's two labels in the page's language (tray.rs).
+#[tauri::command]
+fn window_prefs(app: AppHandle, hide: bool, open: Option<String>, quit: Option<String>) {
+    let tray = app.try_state::<tray::TrayMenu<tauri::Wry>>();
+    // no tray icon (it could not be made): the close keeps quitting, or the window could not come back
+    if let Some(s) = app.try_state::<tray::TrayState>() {
+        s.set_hides(hide && tray.is_some());
+    }
+    if let Some(t) = tray {
+        t.apply(hide, open.as_deref().unwrap_or(""), quit.as_deref().unwrap_or(""));
+    }
+}
+
 /// The remote machines (`~/.omher/peers.json`, checked on read) and each link's state.
 #[tauri::command]
 async fn peers_list(shell: State<'_, Shell>) -> Result<Vec<peers::PeerStatus>, String> {
@@ -873,6 +924,8 @@ pub fn run() {
                 let _ = app.emit(app_menu::CLOSE_EVENT, ());
             }
         })
+        // the window's close hides it while Settings › General says so (tray.rs)
+        .on_window_event(tray::window_event)
         .invoke_handler(tauri::generate_handler![
             bridge_url,
             bridge_status,
@@ -894,6 +947,7 @@ pub fn run() {
             custom_agent_remove,
             session_start,
             shell_start,
+            shells_available,
             session_write,
             session_ack,
             session_resize,
@@ -911,6 +965,8 @@ pub fn run() {
             term_history_remove,
             term_history_prune,
             term_history_clear,
+            term_import_list,
+            term_import_read,
             term_share_write,
             term_share_remove,
             term_share_prune,
@@ -940,7 +996,10 @@ pub fn run() {
             tasks_view,
             tasks_remote,
             window_close,
-            term_link::term_link_take
+            power_busy,
+            window_prefs,
+            term_link::term_link_take,
+            disk::disk_watch
         ])
         .setup(|app| {
             let bridge = Bridge::new();
@@ -953,6 +1012,16 @@ pub fn run() {
             }
             peers.start_all();
             app.manage(Arc::new(tasks::Tasks::default()));
+            // free space on the home folder's volume, read once a minute (disk.rs)
+            app.manage(disk::Disk::start(app.handle().clone(), user_home().ok()));
+            // close = hide to the tray / menu bar, and the keep-awake assertion's worker (tray.rs, power.rs)
+            app.manage(tray::TrayState::default());
+            app.manage(power::Power::start());
+            if let Err(e) = tray::build(app.handle()) {
+                // no tray (a Linux desktop without one): the close quits, as before
+                app.state::<tray::TrayState>().set_hides(false);
+                eprintln!("omher: no tray icon: {e}");
+            }
             // omher://terminal/<id> links: the one omher was opened with, and each one after
             app.manage(term_link::TermLinks::default());
             {
@@ -985,7 +1054,15 @@ pub fn run() {
         .expect("error while building omher");
 
     app.run(|handle, event| {
+        // macOS: the Dock icon of a hidden omher shows the window again
+        #[cfg(target_os = "macos")]
+        if let RunEvent::Reopen { .. } = event {
+            tray::show_main(handle);
+        }
         if let RunEvent::Exit = event {
+            if let Some(power) = handle.try_state::<power::Power>() {
+                power.quit();
+            }
             if let Some(shell) = handle.try_state::<Shell>() {
                 shell.sessions.close_all();
                 shell.chats.close_all();

@@ -4,7 +4,8 @@
 // new Shell in the focused pane's folder (the one its shell last reported, OSC 7). The pane with the keyboard is the
 // session open in the main column; the others are dimmed (Settings › Terminal › Dim unfocused panes) and the focused
 // one carries a thin accent line. ⌘W closes the pane (the session stays in TERMINALS), ⌘⌥arrows move between panes,
-// ⌘] / ⌘[ step through them, ⌘⇧⌥arrows move the pane, ⌘⇧↩ zooms it, ⌘⌃= evens them out (layout.ts paneKey has the
+// ⌘] / ⌘[ step through them, ⌘⇧⌥arrows move the pane, ⌘⇧↩ zooms it (the zoom follows the keyboard to another pane;
+// splitting, closing or moving a pane ends it, splitState.ts), ⌘⌃= evens them out (layout.ts paneKey has the
 // keys off macOS). Dividers drag and a double click evens them. Each pane is its session's own terminal (sessions.ts
 // attach), so each keeps its own engine; a pane whose session came back paused after a restart shows it paused. Bot
 // chats never split: only TERMINALS sessions are offered, and the keys live in TERMINALS terminals only.
@@ -61,11 +62,12 @@ export function splitWith(at: string, add: string, dir: SplitDirName = "right"):
   if (groupOf(groups, add) && groupOf(groups, at)) focusSplitPane(add);
 }
 
-/** A new Shell in a new pane of `at`'s split, in `at`'s folder (the one its shell last reported, else where it started). */
+/** A new Shell in a new pane of `at`'s split, in `at`'s folder (the one its shell last reported, else where it started),
+ *  running the same shell as `at` when that is a Shell row (else the default shell). */
 export function splitNewShell(at: string, dir: SplitDirName): void {
   const rec = getSessions().getState().list.find((r) => r.id === at);
   if (!rec) return closeSplitPicker();
-  const id = getSessions().startTerminal(SHELL, termActs.get(at).cwd ?? rec.cwd);
+  const id = getSessions().startTerminal(SHELL, termActs.get(at).cwd ?? rec.cwd, rec.agent === SHELL ? rec.shell : undefined);
   if (id) splitWith(at, id, dir);
   else closeSplitPicker();
 }
@@ -263,6 +265,7 @@ export function SplitView({ main, pane }: { main: SessionRec; pane: (rec: Sessio
   // the focused pane takes the keyboard when it changes (a row picked in the sidebar, a key, a click), unless the
   // keyboard is in a field, a menu or a dialog
   const inSplit = !!g;
+  const zoomed = !!g?.zoom;
   useEffect(() => {
     if (!inSplit) return;
     const r = requestAnimationFrame(() => {
@@ -272,6 +275,17 @@ export function SplitView({ main, pane }: { main: SessionRec; pane: (rec: Sessio
     });
     return () => cancelAnimationFrame(r);
   }, [main.id, inSplit]);
+  // a terminal that mounts focuses itself: when the zoom ends or the panes change, the panes drawn again must not keep
+  // the keyboard from the focused one (typing always goes to the pane that shows as focused)
+  useEffect(() => {
+    if (!inSplit) return;
+    const r = requestAnimationFrame(() => {
+      const other = (document.activeElement as HTMLElement | null)?.closest('[data-testid="terminal"]')?.getAttribute("data-session");
+      if (other && other !== main.id) textareaOf(main.id)?.focus({ preventScroll: true });
+    });
+    return () => cancelAnimationFrame(r);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [zoomed, ids.length]);
   if (!g) return <>{pane(main)}</>;
   return (
     <div className={`ss-split${g.zoom ? " zoomed" : ""}`} style={dim} data-testid="session-split" data-panes={ids.length} data-zoom={g.zoom ? "true" : "false"}>

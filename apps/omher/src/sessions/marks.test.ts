@@ -94,7 +94,8 @@ describe("a chat session the person is not looking at", () => {
     await wait(200);
     expect(ss.getState().list[0].status).toBe("exited");
     expect(ss.getState().unseen[id]).toBe("end");
-    expect(told).toEqual([[id, { kind: "ended", name: "web-app · Claude Code", code: null, error: "" }]]);
+    // how long it ran rides along: an end within its first seconds notifies, a clean one after a real run does not
+    expect(told).toEqual([[id, { kind: "ended", name: "web-app · Claude Code", code: null, error: "", ms: expect.any(Number), told: false }]]);
 
     // closing the session drops what its row carried
     ss.close(id);

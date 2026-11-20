@@ -6,6 +6,7 @@
 import type { PanelTabId } from "../state/store";
 import { continues, isAgentId, type AgentId } from "../sessions/agents";
 import { isLinkId } from "../sessions/termLink";
+import { cleanShellId } from "../sessions/term/settings";
 
 export const RESUME_KEY = "omher.resume";
 export const RESUME_VERSION = 1;
@@ -58,6 +59,8 @@ export interface SavedSession {
   effort?: string;
   /** The chat's last messages, text only. */
   messages?: SavedMsg[];
+  /** A Shell row's shell id (`shells_available`). */
+  shell?: string;
 }
 
 export interface ResumeSnap {
@@ -114,6 +117,8 @@ function parseSession(v: unknown): SavedSession | null {
     const s = str(v[k], 200);
     if (s) out[k] = s;
   }
+  const shell = cleanShellId(v.shell);
+  if (shell) out.shell = shell;
   if (Array.isArray(v.messages)) {
     const msgs = v.messages.map(parseMsg).filter((m): m is SavedMsg => !!m).slice(-MAX_MESSAGES);
     if (msgs.length) out.messages = msgs;

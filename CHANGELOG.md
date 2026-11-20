@@ -4,6 +4,37 @@ All notable changes will be documented here.
 
 ## Unreleased
 
+- **omher: ideas from kasaterm.** Behaviour and numbers borrowed from 2rami/kasaterm (MIT), code written fresh.
+  - **Undo a closed terminal.** Closing a running TERMINALS row can be undone for 10 seconds: the row leaves at
+    once, a toast offers Undo (⌘Z / Ctrl+Shift+Z), and the same terminal comes back with its program and scrollback,
+    in its split if it was in one. Settings › Terminal › Undo window after closing: Off / 5 s / 10 s (default 10 s).
+  - **Quieter notifications.** Only approvals, questions and ends that went wrong ring, and the body is the bot's
+    own first sentence (greetings skipped, code and markdown removed, paths shortened to their name, URLs to their
+    host). A turn error only marks its chat; Settings › General › Also notify on errors (off by default) brings the
+    note back. A clean exit 0 only marks its row, and so does the bell of a plain shell (tab completion, a stray
+    `\a`); a terminal's bell notifies only while a coding agent runs in it. A wordless ring waits 8 s so the texted
+    question that follows replaces it.
+  - **Disk space warning.** When the disk holding your home folder drops under 20 GB (Settings › General › Warn
+    when disk space is below: 5/10/20/50 GB or Off), a sidebar chip shows the free space and one notification goes
+    out. omher checks once a minute with one system call and never deletes anything. The terminal agent mark also
+    reads a node/python program's command line about 4× less often (60 → 13 reads a minute).
+  - **Close keeps omher running.** Closing the window hides omher to the menu bar / notification area (on by
+    default; Settings › General › When the window closes). Terminals and agents keep working; reopen from the tray
+    icon or the Dock, quit from the icon's Quit omher or ⌘Q.
+  - **Keep awake while agents work.** omher keeps the computer from idle-sleeping while a TERMINALS agent prints or a
+    bot answers, until a minute after (on by default; Settings › General). Closing the lid still sleeps the computer.
+  - **Chat and split view.** Chats get a Jump to bottom pill when you scroll up (with "· N new"; End or ⌘↓ /
+    Ctrl+End also jump), and your last message stays pinned as one line at the top while you read a long answer. A
+    zoomed terminal split now follows focus, and splitting, closing or moving a pane un-zooms, so typing never goes
+    to a hidden pane.
+  - **Shell picker.** The TERMINALS `+` menu's Shell row has a Shell ▸ list of the shells installed on this computer
+    (Windows PowerShell, PowerShell 7, Command Prompt, Git Bash and WSL on Windows; the login shell and `/etc/shells`
+    on macOS and Linux). Settings › Terminal › Default shell sets the one a plain Shell row opens, a row keeps its
+    shell after a restart, and a missing shell falls back to the default with a note.
+  - **Theme import (macOS only).** Settings › Terminal › Import from… brings the colours and font of an iTerm2 or
+    Apple Terminal profile into omher as your own terminal theme. It reads the other app's prefs once when you press
+    it, keeps a copy, and never changes the other app.
+
 - **show-reel's cut-sheet lane checks a remake's genre and pace by numbers.** Remaking a supplied reference now
   starts by naming its genre from a 5 fps sheet and 30 fps strips (the material, the motif that survives every cut,
   art piece or promo), and measures pace on the reference and each render: cuts per second, mean frame difference,

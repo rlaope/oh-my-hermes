@@ -335,6 +335,38 @@
 }
 /* spacing (2026-11-16): Automations, Plugins and Settings are one row of icon buttons (their names in the tooltip
    and for a screen reader), the usage marks at its right end; the user row under it. The footer was 172px tall. */
+/* little disk space left (src/sidebar/DiskChip.tsx): one compact quiet chip above the footer row; red when critical */
+.disk-chip {
+  display: inline-flex;
+  align-items: center;
+  justify-self: start;
+  gap: 6px;
+  margin: 0 var(--side-x) 6px;
+  padding: 3px 8px 3px 6px;
+  border: 1px solid var(--line-strong);
+  border-radius: 999px;
+  background: var(--raise2);
+  color: var(--body);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+.disk-chip svg {
+  flex: none;
+  color: var(--danger);
+}
+.disk-chip.critical {
+  background: color-mix(in srgb, var(--danger) 14%, transparent);
+  border-color: color-mix(in srgb, var(--danger) 55%, transparent);
+  color: var(--ink);
+}
+.disk-chip:hover {
+  border-color: color-mix(in srgb, var(--danger) 45%, transparent);
+}
+.disk-chip:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
 .foot-row {
   position: relative; /* the usage card spans this row */
   display: flex;

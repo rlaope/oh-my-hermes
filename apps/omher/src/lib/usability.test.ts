@@ -10,7 +10,8 @@ const ev = (e: Record<string, unknown>) => ({ bot: "kami", ...e }) as unknown as
 describe("noteFor", () => {
   it("a finished answer becomes a notification with the bot's name and a plain gist", () => {
     const n = noteFor(ev({ event: "message", id: "m1", text: "**Fixed.** The `502s` came from\n\nkeep-alive" }), ctx());
-    expect(n).toEqual({ title: "Kami", body: "Fixed. The 502s came from keep-alive", bot: "kami", tag: "kami:message" });
+    // spoken: "Fixed." alone is filler, so the next sentence comes too; a new line ends a sentence
+    expect(n).toEqual({ title: "Kami", body: "Fixed. The 502s came from", bot: "kami", tag: "kami:message" });
   });
   it("approvals and questions say what is waiting", () => {
     expect(noteFor(ev({ event: "approval.request", request_id: "a", title: "Delete", command: "rm -rf build", choices: [] }), ctx())?.title).toBe(
@@ -21,9 +22,10 @@ describe("noteFor", () => {
       body: "Which branch?",
     });
   });
-  it("only a failed turn end notifies", () => {
+  it("only a failed turn end notifies, and only with Also notify on errors", () => {
     expect(noteFor(ev({ event: "turn.end", outcome: "done" }), ctx())).toBeNull();
-    expect(noteFor(ev({ event: "turn.end", outcome: "error", error: "provider 500" }), ctx())?.body).toBe("provider 500");
+    expect(noteFor(ev({ event: "turn.end", outcome: "error", error: "provider 500" }), ctx())).toBeNull();
+    expect(noteFor(ev({ event: "turn.end", outcome: "error", error: "provider 500" }), { ...ctx(), errors: true })?.body).toBe("provider 500");
   });
   it("nothing while you are looking at that chat, and nothing for chatter events", () => {
     expect(noteFor(ev({ event: "message", id: "m", text: "hi" }), ctx(true))).toBeNull();
