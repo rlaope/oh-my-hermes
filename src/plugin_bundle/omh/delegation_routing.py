@@ -367,7 +367,7 @@ def write_delegation_route(
             }
         new_text = _apply_route_delta(fresh_text, desired)
         if new_text == fresh_text:
-            if _file_signature(config_path) != fresh_signature:
+            if not _unchanged_since(config_path, fresh_signature, fresh_text):
                 continue
             return {
                 "status": "cleared" if clear else "routed",
@@ -390,7 +390,7 @@ def write_delegation_route(
                     handle.write(new_text)
                 if mode is not None:
                     os.chmod(temp_name, mode)
-                if _file_signature(config_path) != fresh_signature:
+                if not _unchanged_since(config_path, fresh_signature, fresh_text):
                     os.unlink(temp_name)
                     continue
                 os.replace(temp_name, config_path)
@@ -477,6 +477,18 @@ def config_file_signature(path: Path) -> tuple[int, int, int, int] | None:
     return _file_signature(path)
 
 
+def config_unchanged_since(
+    path: Path, signature: tuple[int, int, int, int] | None, text: str
+) -> bool:
+    """The compare both writer families run right before their rename.
+
+    The stamp plus a re-read of the text: an in-place same-size rewrite
+    within the timestamp tick (NTFS keeps the write time coarsely) leaves
+    the stamp equal, so the stamp alone would call an edited file unchanged.
+    """
+    return _unchanged_since(path, signature, text)
+
+
 def read_config_snapshot(path: Path) -> tuple[str, tuple[int, int, int, int] | None, str]:
     """Read the config and its stamp together, the way this writer does.
 
@@ -492,6 +504,21 @@ def _file_signature(path: Path) -> tuple[int, int, int, int] | None:
     except FileNotFoundError:
         return None
     return (stat.st_dev, stat.st_ino, stat.st_size, stat.st_mtime_ns)
+
+
+def _unchanged_since(
+    path: Path, signature: tuple[int, int, int, int] | None, text: str
+) -> bool:
+    """Whether the file still holds what was read: same stamp AND same text.
+
+    The stamp alone misses an in-place rewrite of the same size within the
+    file system's timestamp tick (NTFS updates the write time lazily and
+    coarsely), so an equal stamp is confirmed by reading the text again.
+    """
+    if _file_signature(path) != signature:
+        return False
+    now_text, now_signature, error = _read_config_snapshot(path)
+    return not error and now_signature == signature and now_text == text
 
 
 def _read_config_snapshot(

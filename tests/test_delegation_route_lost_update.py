@@ -404,6 +404,29 @@ class LastCheckBeforeReplaceTest(RouteWriteRaceTestCase):
         self.assertEqual(self.text(), f"unrelated_{calls}: 1\n" + START)
         self.assertEqual(self.temp_files(), [])
 
+    def test_a_same_size_rewrite_within_the_timestamp_tick_is_still_seen(self) -> None:
+        # Windows CI: NTFS kept the write time across an in-place same-size
+        # rewrite, so a stamp-only check took the edited file for unchanged.
+        self.write("unrelated: 0\n" + START)
+        real = delegation_routing._read_config_snapshot
+        calls = 0
+
+        def read_then_edit_keeping_the_stamp(path):
+            nonlocal calls
+            calls += 1
+            result = real(path)
+            if calls > 1:
+                stamp = self.config.stat()
+                self.write(f"unrelated: {calls % 10}\n" + START)  # same size, same inode
+                os.utime(self.config, ns=(stamp.st_atime_ns, stamp.st_mtime_ns))
+            return result
+
+        with mock.patch.object(delegation_routing, "_read_config_snapshot", read_then_edit_keeping_the_stamp):
+            result = write_delegation_route(self.home, model="next", provider="og")
+        self.assertEqual(result, {"status": "error", "error": "config kept changing during route update"})
+        self.assertNotIn("model: 'next'", self.text())
+        self.assertEqual(self.temp_files(), [])
+
     def test_a_failed_rename_reports_an_error_and_leaves_no_temp_file(self) -> None:
         self.write(START)
         with mock.patch.object(delegation_routing.os, "replace", side_effect=PermissionError("denied")):
