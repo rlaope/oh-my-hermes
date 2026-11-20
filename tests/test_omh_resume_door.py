@@ -737,7 +737,8 @@ class FallbackTargetTests(unittest.TestCase):
         return recorded, environments, errors[0], status
 
     def test_no_termios_with_node_opens_hermes_own_tui(self) -> None:
-        with patch("omh.tui.terminal.termios", None):
+        # A platform with no termios that is not Windows (Windows has its console backend instead).
+        with patch("omh.tui.terminal.termios", None), patch("omh.tui.terminal.os.name", "posix"):
             reason = terminal_blocker(_TtyStream(), _TtyStream(), {})
         self.assertIn("termios", reason)
         recorded, environments, stderr, _status = self._fallback(INHERITED_TUI_ENV, blocker=reason, node=True)
