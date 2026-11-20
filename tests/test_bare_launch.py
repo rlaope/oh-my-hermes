@@ -478,6 +478,11 @@ class AutoResumeLaunchTests(unittest.TestCase):
         self.assertIn("--new opens the OH-MY-HERMES terminal and cannot be combined", stderr.getvalue())
 
 
+# The TUI never opens its own runtime home on Windows (`_own_claim_home`, `_own_runtime_home`), so a test of a
+# session waiting there has nothing to observe on that platform.
+_NO_OWN_HOME_ON_WINDOWS = "the TUI's own runtime home is never used on Windows"
+
+
 class ClaimedHomeTests(unittest.TestCase):
     """A dropped session is claimed only from a Hermes home this launch opens, and opens in the home it came from."""
 
@@ -572,6 +577,7 @@ class ClaimedHomeTests(unittest.TestCase):
         self.assertIsNone(args.tui_resume)
         self.assertEqual(self.states(), {"root-1": "dropped"})
 
+    @unittest.skipIf(os.name == "nt", _NO_OWN_HOME_ON_WINDOWS)
     def test_a_session_of_the_tui_home_reopens_there_even_with_shared_chosen(self) -> None:
         from omh.skin_pack import write_runtime_choice
 
@@ -632,6 +638,7 @@ class ClaimedHomeTests(unittest.TestCase):
         self.assertEqual(self.states(), {"own-1": "dropped"})
         self.assertEqual(sorted(self.hermes.rglob("*")), before)  # nothing built under the Hermes root
 
+    @unittest.skipIf(os.name == "nt", _NO_OWN_HOME_ON_WINDOWS)
     def test_an_own_home_that_fails_to_build_after_the_claim_gives_the_claim_back(self) -> None:
         # The build runs only after the claim picked the own home; a failure there releases the claim as R3 did.
         from omh.commands import bare_launch
@@ -651,6 +658,7 @@ class ClaimedHomeTests(unittest.TestCase):
                 self.assertEqual(self.states(), {"own-1": "dropped"})
                 self.assertIn("opening a new session", stderr.getvalue())
 
+    @unittest.skipIf(os.name == "nt", _NO_OWN_HOME_ON_WINDOWS)
     def test_claiming_never_builds_or_writes_the_own_home(self) -> None:
         # R5 (R4-B3): even for an own-home winner, the claim only reads; the build waits for the launch.
         from omh.tui import own_runtime
@@ -729,6 +737,7 @@ class ClaimedHomeTests(unittest.TestCase):
             self.assertIsNone(bare_launch._own_runtime_home(args, paths))
         self.assertEqual(args.tui_resume, "root-1")
 
+    @unittest.skipIf(os.name == "nt", _NO_OWN_HOME_ON_WINDOWS)
     def test_the_own_home_is_built_once_for_the_claim_and_the_launch(self) -> None:
         from types import SimpleNamespace
 
@@ -757,6 +766,7 @@ class ClaimedHomeTests(unittest.TestCase):
         self.assertEqual(args.tui_resume, "root-1")
         self.assertFalse(hasattr(args, bare_launch._OWN_HOME_PREPARED))
 
+    @unittest.skipIf(os.name == "nt", _NO_OWN_HOME_ON_WINDOWS)
     def test_a_claim_the_launch_cannot_open_after_all_is_released_and_a_new_session_opens(self) -> None:
         # Eligible when claimed, refused when the launch builds (the root config changed in between): the claim
         # goes back to `dropped` and the id goes to no other home.
@@ -787,6 +797,7 @@ class ClaimedHomeTests(unittest.TestCase):
         self.assertEqual(args.tui_resume, "sticky-1")
         self.assertEqual(self.states(), {"root-1": "dropped", "own-1": "dropped", "sticky-1": "resumed"})
 
+    @unittest.skipIf(os.name == "nt", _NO_OWN_HOME_ON_WINDOWS)
     def test_a_shared_winner_taken_by_another_launch_lets_the_own_drop_reopen(self) -> None:
         # review3 R6-B1: the read-only preview named the shared drop; another launch claimed it before this one's
         # locked claim. The launch looks again and reopens the own-home drop the preview passed over.
@@ -808,6 +819,7 @@ class ClaimedHomeTests(unittest.TestCase):
         self.assertEqual((args.tui_resume, args.tui_resume_home), ("own-1", str(self.own)))
         self.assertEqual(self.states(), {"own-1": "resumed", "root-1": "resumed"})
 
+    @unittest.skipIf(os.name == "nt", _NO_OWN_HOME_ON_WINDOWS)
     def test_an_own_home_that_cannot_be_built_hands_over_to_a_waiting_shared_drop(self) -> None:
         # review3 R6-B2: the own drop wins, the read-only check passes, the build then fails on a shape it cannot
         # see. The claim goes back and the shared drop this launch can open reopens, instead of a new session.
@@ -826,6 +838,7 @@ class ClaimedHomeTests(unittest.TestCase):
         self.assertNotIn("opening a new session", stderr.getvalue())
         self.assertIn("--resume", bare_launch._hermes_passthrough_argv(args, tui=True))
 
+    @unittest.skipIf(os.name == "nt", _NO_OWN_HOME_ON_WINDOWS)
     def test_a_launch_that_finds_nothing_sweeps_the_store(self) -> None:
         # review3 R6-N1: with nothing to reopen, the store is still swept so `live-pids` stops naming dead owners.
         from omh.tui import live_sessions

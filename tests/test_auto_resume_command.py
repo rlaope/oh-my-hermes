@@ -25,6 +25,9 @@ from _local_package import load_local_package
 load_local_package()
 
 from omh.commands import auto_resume as command  # noqa: E402
+# Imported here, before any test patches `bare_launch._launch_hermes_tui`: `main` binds that name at its first import,
+# and a first import under the patch would keep the mock for every later test module in the same process.
+import omh.commands.main  # noqa: E402,F401
 from omh.maintenance.auto_resume_state import (  # noqa: E402
     auto_resume_enabled,
     dropped_sessions,
@@ -195,7 +198,8 @@ class CommandTests(unittest.TestCase):
         status, out, err = self.cli("shell", "install")
         self.assertEqual(status, 0, err)
         self.assertIn("auto-resume shell-start", rc.read_text(encoding="utf-8"))
-        self.assertIn(str(self.omh), rc.read_text(encoding="utf-8"))
+        # The block bakes in the resolved home: on Windows a temp dir's 8.3 short name resolves to its long name.
+        self.assertIn(str(Path(self.omh).resolve()), rc.read_text(encoding="utf-8"))
         _status, out, _err = self.cli("status")
         self.assertIn("Shell hook (zsh): installed", out)
         status, out, err = self.cli("shell", "remove")

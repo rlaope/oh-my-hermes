@@ -51,7 +51,7 @@ from __future__ import annotations
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 import os
-from pathlib import Path
+from pathlib import Path, PurePath, PurePosixPath
 import secrets
 import shutil
 import stat
@@ -137,7 +137,7 @@ def live_pids_path(omh_home: str | Path) -> Path:
     return Path(omh_home).joinpath(*LIVE_PIDS_PARTS)
 
 
-def _printable(path: Path, what: str) -> str:
+def _printable(path: PurePath, what: str) -> str:
     text = str(path)
     if not text or not text.isprintable():
         raise ShellHookError(f"the {what} path {text!r} cannot be written into a shell rc")
@@ -187,7 +187,8 @@ def _posix_wake(marker: str, live_pids: str, boot_file: str, split: str) -> list
 
 def render_block(shell: str, omh_home: str | Path) -> list[str]:
     """The block's lines, markers included, for `shell` and this OMH home (absolute)."""
-    boot_file = _printable(Path(LINUX_BOOT_ID_FILE), "boot id")
+    # A literal POSIX path, never `Path`: on Windows `Path` would write `\proc\...`, which no Git Bash or WSL reads.
+    boot_file = _printable(PurePosixPath(LINUX_BOOT_ID_FILE), "boot id")
     home = Path(os.path.abspath(omh_home))
     home_text = _printable(home, "OMH home")
     marker = _printable(marker_path(home), "pending marker")

@@ -228,7 +228,8 @@ class FolderResume(BridgeCase):
             s = await self.open(env)
             r = ok(await s.req("folder.open", bot="kami", cwd=self.folder))
             path = env.bridge.omher_home / ob.FOLDER_CHATS_FILE
-            self.assertEqual(stat.S_IMODE(path.stat().st_mode), 0o600)
+            if os.name == "posix":  # Windows reports its own modes for a chmod
+                self.assertEqual(stat.S_IMODE(path.stat().st_mode), 0o600)
             rows = json.loads(path.read_text(encoding="utf-8"))["chats"]
             self.assertEqual([(x["profile"], x["cwd"], x["stored"]) for x in rows],
                              [("kami", os.path.normcase(os.path.realpath(self.folder)), r["stored"])])

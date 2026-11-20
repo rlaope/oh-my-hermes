@@ -5368,6 +5368,8 @@ def read_folder_chats(omher_home: Path) -> list[dict]:
     path = Path(omher_home) / FOLDER_CHATS_FILE
     if Path(omher_home).is_symlink():
         return []
+    if not hasattr(os, "O_NOFOLLOW") and path.is_symlink():
+        return []  # Windows has no O_NOFOLLOW: refuse a link to the record before opening it
     try:
         fd = os.open(path, os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_NONBLOCK", 0))
     except OSError:
