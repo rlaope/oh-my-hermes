@@ -4,6 +4,12 @@ All notable changes will be documented here.
 
 ## Unreleased
 
+- **Codex units can write inside the fanout fence on Linux and macOS.** `codex exec` is read-only by default, and
+  `workspace-write` cannot start Codex's own sandbox inside an enforced bwrap or sandbox-exec fence, so every write
+  a codex unit tried was refused. When the fence is enforced with one of those backends, the codex argv now gets
+  `--sandbox danger-full-access` before the prompt and the fence stays the write boundary. An explicit sandbox choice
+  in the argv is kept; unfenced runs, other owners and native Windows (#2471) are unchanged.
+
 - **omher: terminal splits without a title bar per pane.** A split pane no longer carries a bar with its name, path
   and x, and the focused pane no longer gets an accent frame (the others an inset shade). Panes sit flush like
   Ghostty or iTerm splits: a 1px line is the only edge, the cursor and the dim show which pane has the keyboard, and a

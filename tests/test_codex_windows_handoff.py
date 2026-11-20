@@ -6,6 +6,7 @@ import json
 import os
 import subprocess
 from pathlib import Path
+from types import SimpleNamespace
 from tempfile import TemporaryDirectory
 import unittest
 from unittest import mock
@@ -15,7 +16,12 @@ from _local_package import load_local_package
 load_local_package()
 
 from omh.coding.codex_windows_sandbox import codex_windows_sandbox_signal  # noqa: E402
-from omh.coding.fanout_dispatch import build_dispatch_argv, dispatch_fanout, with_codex_windows_sandbox  # noqa: E402
+from omh.coding.fanout_dispatch import (  # noqa: E402
+    build_dispatch_argv,
+    dispatch_fanout,
+    with_codex_fenced_sandbox,
+    with_codex_windows_sandbox,
+)
 from omh.coding.fanout_output import FanoutOutput  # noqa: E402
 from omh.coding.fanout_settings import (  # noqa: E402
     FANOUT_SETTINGS_SCHEMA_VERSION,
@@ -301,6 +307,63 @@ class CodexSandboxArgvTests(unittest.TestCase):
         import inspect
         self.assertEqual(list(inspect.signature(build_dispatch_argv).parameters),
                          ["owner", "prompt", "model_route"])
+
+
+def _fence(selected: str, enforced: bool = True) -> SimpleNamespace:
+    return SimpleNamespace(selected=selected, receipt={"enforced": enforced})
+
+
+class CodexFencedSandboxArgvTests(unittest.TestCase):
+    # `codex exec` is read-only by default and `workspace-write` cannot start
+    # Codex's own sandbox inside bwrap or sandbox-exec, so a fenced codex
+    # unit could never write.
+    _FULL = ["codex", "exec", "--sandbox", "danger-full-access", "do it"]
+
+    def test_a_bwrap_fence_turns_off_the_codex_sandbox(self) -> None:
+        argv = build_dispatch_argv("codex", "do it")
+        self.assertEqual(with_codex_fenced_sandbox(argv, "codex", _fence("bwrap")), self._FULL)
+
+    def test_a_sandbox_exec_fence_turns_off_the_codex_sandbox(self) -> None:
+        argv = build_dispatch_argv("codex", "do it")
+        self.assertEqual(with_codex_fenced_sandbox(argv, "codex", _fence("sandbox-exec")), self._FULL)
+
+    def test_the_prompt_stays_last_after_session_and_model_options(self) -> None:
+        argv = ["/usr/bin/codex", "exec", "--json", "--model", "m", "do it"]
+        self.assertEqual(with_codex_fenced_sandbox(argv, "codex", _fence("bwrap")),
+                         ["/usr/bin/codex", "exec", "--json", "--model", "m",
+                          "--sandbox", "danger-full-access", "do it"])
+
+    def test_no_fence_or_an_unenforced_fence_changes_nothing(self) -> None:
+        argv = build_dispatch_argv("codex", "do it")
+        self.assertEqual(with_codex_fenced_sandbox(argv, "codex", None), ["codex", "exec", "do it"])
+        self.assertEqual(with_codex_fenced_sandbox(argv, "codex", _fence("bwrap", enforced=False)),
+                         ["codex", "exec", "do it"])
+
+    def test_other_backends_change_nothing(self) -> None:
+        argv = build_dispatch_argv("codex", "do it")
+        self.assertEqual(with_codex_fenced_sandbox(argv, "codex", _fence("windows")), ["codex", "exec", "do it"])
+
+    def test_an_explicit_sandbox_choice_is_kept(self) -> None:
+        for options in (["-s", "read-only"], ["--sandbox", "workspace-write"], ["--sandbox=read-only"],
+                        ["-sread-only"], ["--full-auto"], ["--dangerously-bypass-approvals-and-sandbox"],
+                        ["-c", "sandbox_mode=read-only"]):
+            argv = ["codex", "exec", *options, "do it"]
+            with self.subTest(options=options):
+                self.assertEqual(with_codex_fenced_sandbox(argv, "codex", _fence("bwrap")), argv)
+
+    def test_a_prompt_that_looks_like_a_flag_is_not_a_choice(self) -> None:
+        argv = ["codex", "exec", "--sandbox"]
+        self.assertEqual(with_codex_fenced_sandbox(argv, "codex", _fence("bwrap")),
+                         ["codex", "exec", "--sandbox", "danger-full-access", "--sandbox"])
+
+    def test_other_owners_are_unchanged(self) -> None:
+        argv = build_dispatch_argv("claude-code", "do it")
+        self.assertEqual(with_codex_fenced_sandbox(argv, "claude-code", _fence("bwrap")), argv)
+
+    def test_the_windows_backend_override_is_unchanged(self) -> None:
+        argv = with_codex_windows_sandbox(build_dispatch_argv("codex", "do it"), "codex", "mxc")
+        self.assertEqual(with_codex_fenced_sandbox(argv, "codex", None),
+                         ["codex", "exec", "--config", "windows.sandbox=mxc", "do it"])
 
 
 class SandboxRefusalCaptureTests(unittest.TestCase):
