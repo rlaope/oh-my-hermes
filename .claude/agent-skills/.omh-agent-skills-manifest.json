@@ -1,5 +1,5 @@
 {
-  "catalog_revision": "ea8f35ce25a8cb5f3b2774db49c63cf39c3aba6f75e3e9c68270dde088f94568",
+  "catalog_revision": "063be1c785d02c8e544c86237c43c648e56ec3b76e03a09a226249d67d9f7808",
   "files": {
     "omh-accessibility-audit/SKILL.md": "01b41b6815463311a950c558300afeb4e2659a1bba44efcf741568cacac6f1d6",
     "omh-accessibility-audit/references/a11y-rules.md": "615cc9eaa24ee36089d395b215cc25b2d9b0d2549f228a5f81df0553f45d2f75",
@@ -290,7 +290,8 @@
     "omh-skill-eval/references/with-without-eval.md": "3086f67ffab63bd366843424b259ec53212f17d9330380c9854ef7e23f1ea27b",
     "omh-skill-health/SKILL.md": "d2d6b0b9fff581322a8b4f9f744d04d418d60bdc07982f225deffb42f12fb6e4",
     "omh-skill-scout/SKILL.md": "64e0442d62e4f017509d4c1e6ea1c34c76e3b552b84e1ae42824df83f5f90620",
-    "omh-source-finder/SKILL.md": "9d247536cf165f0ec84718d48bf0b8d5a9e49280caee12e5d374dff2e6ba50c4",
+    "omh-source-finder/SKILL.md": "e40d9ffbc07607ee199bd26a1a12dc9fe302b0dab4f5efe27d69aabbbba5eb5d",
+    "omh-source-finder/references/literature-retrieval.md": "7320c36b8d6205f7784a9b34c33b2534c177c5b46a4a53761a083fb7a7ef6a30",
     "omh-source-finder/references/search-examples.md": "2dd2c4cb91f0388a3fcf5ba6fb13094bbc6234edab6dce28ac036334d3718821",
     "omh-source-finder/references/search-fields.md": "a237da3fc2ab1db91f86056bd53e95e860e130255d4461888607d7f4295e526f",
     "omh-source-finder/references/search-method.md": "21a9dd7a59e1b0941ab055c80089890679a394cc67fa4ae320358cd09043df1f",
@@ -338,8 +339,9 @@
     "ulw-context/references/project-terms.md": "779d2f621cce9631d8974c8371e7a47ed34010628abd60339232a96cd51a1103",
     "ulw-interview/SKILL.md": "0dec8024ae4bd5a8fd733b33ef0b7999c39d63155ea46087c45236e590c5ec78",
     "ulw-interview/references/ambiguity-taxonomy.md": "d144585524d28f5a84bd686905bedba70c32d3fea1bb920e1c0700f323131c60",
-    "ulw-loop/SKILL.md": "b11f65e9d8c94993343d23acea65bcfe9d0ba2ceb7de0fdb557c03755d381297",
+    "ulw-loop/SKILL.md": "81d6dcc7356b0668119b29b22f2844521621571714a43a16329f1b999c2c54f2",
     "ulw-loop/references/details.md": "eb2e2b52ca0caf2b1df059cd0cdf51b516fd5d858b81a9876aac8493fd636ed4",
+    "ulw-loop/references/experiment-tree.md": "1f4cbc980af6b106f1dd6d1b450615db9d527b697be3a640c55f8841edc70ea8",
     "ulw-loop/references/goal-constraint-discipline.md": "e9755a82604a6b9d363716b6bf33bc980406ea40bce813d763eda9703e1a093f",
     "ulw-loop/references/loop-design-review.md": "d131bcab7823743cf7f91947048bb772e4a861b3478994c4c85d97c092e4d499",
     "ulw-loop/references/measured-loop-discipline.md": "857c7918fd278e8fca1d420c57e9ab4b6e337e44f039dcc6eb5e14ae5204b4fb",

@@ -558,7 +558,9 @@ class AiJobSearchContextBudgetTests(unittest.TestCase):
         # before it was 280bbdfb...7cee74.
         # Merged with main a third time: dag-ulw then gains the opt-in `carry_forward` quality-bar line; only
         # dag-ulw moves. This branch's pin was a92e709f...a555, and main's was 2d788500...c459.
-        self.assertEqual(_digest(legacy_hashes), '891b61cd2c942249a4a37ee5dfbb5aa24577d5ed14cb2cdd6167f4c56f49f061')
+        # 2026-11-20: loop and source-finder gain reference pointers (experiment-tree, literature-retrieval);
+        # only those two bodies move, and the pin before it was 891b61cd...f061.
+        self.assertEqual(_digest(legacy_hashes), '7c051fb064b6a3a785369dda85320d6ee323969665d22f67a519b83e3a617aaf')
         legacy = _skill_context_cost_profile('full', legacy_templates, refs)
         current = _skill_context_cost_profile('full', templates, refs)
         # Main's search guidance adds 305; repro-audit's mandatory rails 1,943.
