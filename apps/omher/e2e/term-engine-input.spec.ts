@@ -145,6 +145,21 @@ test("a picture pasted on a terminal still goes through the drop/paste path, not
   expect(await typed(page)).toMatch(/session-files\/s\d+\/1-image\.png/);
 });
 
+test("a picture pasted while the program has bracketed paste on (Claude Code, Codex) reaches it as a paste of its saved path", async ({ page }) => {
+  await openApp(page);
+  await newTerminal(page);
+  // the program turns bracketed paste on (DECSET 2004), as Claude Code and Codex do: Claude Code takes a picture's
+  // path as an image only inside a paste, typed key by key it stays text
+  await feed(page, "\x1b[?2004h");
+  const before = await typed(page);
+  await page.evaluate(() => {
+    const dt = new DataTransfer();
+    dt.items.add(new File([new Uint8Array([137, 80, 78, 71])], "image.png", { type: "image/png" }));
+    document.querySelector("[data-testid=terminal]")!.dispatchEvent(new ClipboardEvent("paste", { clipboardData: dt, bubbles: true, cancelable: true }));
+  });
+  await expect.poll(async () => (await typed(page)).slice(before.length)).toMatch(/^\x1b\[200~\/home\/you\/\.omher\/session-files\/s\d+\/1-image\.png \x1b\[201~$/);
+});
+
 test("the GPU row's second line says what draws the terminals: standard, then GPU when it is switched on, nothing with no terminal open", async ({ page }) => {
   await openApp(page, { term: { gpu: "off" } });
   const row = page.getByTestId("term-gpu-row");

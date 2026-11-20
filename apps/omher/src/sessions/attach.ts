@@ -27,6 +27,15 @@ export function shellQuote(path: string, windows = false): string {
   return windows ? `"${path.replace(/"/g, '""')}"` : `'${path.replace(/'/g, `'\\''`)}'`;
 }
 
+/** What a terminal sends for files dropped or pasted on it: their (quoted) paths and a space, as a bracketed paste
+ *  when the program turned that on (DECSET 2004), as a system terminal sends a drop. Claude Code takes a picture's
+ *  path as an image only inside a paste; typed key by key it stays text. The saved names hold no control
+ *  characters (session_files.rs `safe_name`), so a path cannot end the paste early. */
+export function pathsTyped(paths: string[], bracketed: boolean): string {
+  const text = `${paths.join(" ")} `;
+  return bracketed ? `\x1b[200~${text}\x1b[201~` : text;
+}
+
 /** The bytes of a base64 string (the composer's chips read files as base64). */
 export function bytesOf(b64: string): Uint8Array {
   const bin = atob(b64);
