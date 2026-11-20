@@ -822,9 +822,10 @@ and OMH treats them alike; the next section names what differs for Sol.
     exhaustive on those, not beyond them". This is the guide's "say what
     counts as finished and where to be exhaustive". It is not the
     persistence wording cut above.
-  - Review focus: a fanout unit may declare `review_focus` (at most 400
-    UTF-8 bytes, so the live worst-case unit stays under the 8,000-byte
-    prompt ceiling in any script). The unit section states it right after
+  - Review focus: a fanout unit may declare `review_focus` (one sentence,
+    at most 150 UTF-8 bytes: the worst-case unit with the longest ASCII
+    reproduction command renders 7,800 B without one, and 7,996 B with a
+    150-byte focus, under the 8,000-byte ceiling). The unit section states it right after
     the numbered criteria ("tell Codex what you'll look for when you
     review"). When it is absent, no focus block is added; the
     shared-machine line is the only byte every unit prompt gains.

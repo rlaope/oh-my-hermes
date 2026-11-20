@@ -235,9 +235,10 @@ Rules, all applied at freeze time:
   the prepared ceiling on what one unit may read; it is not evidence that the
   unit read the range, stayed within the budget, or covered it.
 
-Any unit may also declare an optional `review_focus`: one string, at most 400
-UTF-8 bytes after whitespace collapse (about 133 Hangul characters; the unit
-prompt has a byte ceiling), saying what the reviewer will check in
+Any unit may also declare an optional `review_focus`: one string, at most 150
+UTF-8 bytes after whitespace collapse (one sentence; about 50 Hangul
+characters), sized so the worst-case unit prompt, the longest reproduction
+command included, stays under its 8,000-byte ceiling. It says what the reviewer will check in
 the unit's result. The executor prompt states it right after the numbered
 criteria as `Review focus (what the reviewer will check): <text>`. A unit
 that declares none (or an empty string) carries no key: its contract is

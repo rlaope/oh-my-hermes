@@ -92,9 +92,12 @@ MAX_UNIT_VERIFICATION_COMMAND_CHARS = 240
 # executor what you will look for in review). Prose beside
 # `integration_checks`, bounded like them: a few sentences, not a checklist.
 # Bounded in UTF-8 bytes, not characters: the unit prompt has a byte ceiling
-# (UNIT_PROMPT_MAX_BYTES), and 400 Hangul characters are 1,200 bytes. 400 bytes
-# keeps the live-shaped worst case under that ceiling for any script.
-MAX_UNIT_REVIEW_FOCUS_BYTES = 400
+# (UNIT_PROMPT_MAX_BYTES). The live-shaped worst case with the longest ASCII
+# reproduction command the contract accepts renders 7,800 B with no focus, and
+# the focus block costs its bytes plus a 46-byte label, so 150 bytes (one
+# sentence; about 50 Hangul characters) keeps that case at 7,996 B. Measured by
+# PromptCeilingTests; raise it only with that test.
+MAX_UNIT_REVIEW_FOCUS_BYTES = 150
 # Named once so the check rows the dispatcher writes, the journal event they
 # back, and the docs describing both cannot drift apart.
 UNIT_VERIFICATION_OBSERVATION_SOURCE = "dispatch_verification"

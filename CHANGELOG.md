@@ -82,7 +82,7 @@ All notable changes will be documented here.
   is guidance; the write-scope guard on file tools stays the enforcement.
 
 - **Coding handoffs and fanout units pick up four lines from OpenAI's GPT-6.2 Codex guide.** A fanout unit may declare
-  `review_focus` (at most 400 UTF-8 bytes, so a Korean focus still fits the prompt's byte ceiling), which its prompt
+  `review_focus` (one sentence, at most 150 UTF-8 bytes, so the worst-case prompt stays under its byte ceiling), which its prompt
   states right after the numbered criteria; when it is absent, the contract is byte-identical and no focus block is
   added. A `handoff_contract/v1` may declare `parts[]` (`id`, `title`,
   `depends_on`). With two or more parts that depend on nothing, the Codex prompt lists them and adds "Use subagents as
