@@ -77,7 +77,7 @@ test("Split right with… from the TERMINALS background menu; the divider drags;
     })
     .toBeLessThan(80);
   // close the right side: b alone
-  await page.locator(`[data-testid="split-bar"][data-session="${a}"] [data-testid="split-close"]`).click();
+  await page.locator(`[data-testid="split-tools"][data-session="${a}"] [data-testid="split-close"]`).click();
   await expect(page.getByTestId("session-split")).toHaveCount(0);
   await expect(page.getByTestId("terminal")).toHaveCount(1);
   await expect(page.getByTestId("terminal")).toHaveAttribute("data-session", b);
@@ -86,7 +86,7 @@ test("Split right with… from the TERMINALS background menu; the divider drags;
   await page.keyboard.press(await splitKey(page));
   await page.locator(`[data-testid="split-pick"][data-session="${a}"]`).click();
   await expect(page.getByTestId("terminal")).toHaveCount(2);
-  await page.locator(`[data-testid="split-bar"][data-session="${b}"] [data-testid="split-close"]`).click();
+  await page.locator(`[data-testid="split-tools"][data-session="${b}"] [data-testid="split-close"]`).click();
   await expect(page.getByTestId("terminal")).toHaveCount(1);
   await expect(page.getByTestId("terminal")).toHaveAttribute("data-session", a);
   // nothing was stopped
@@ -109,6 +109,6 @@ test("the side beside counts as shown: it is not parked or hidden while both sho
   await expect(term(page, a).locator(".xterm-rows")).toContainText("still-drawn-on-the-right");
   await expect(term(page, a).locator(".xterm-rows")).toContainText("login shell in");
   // closing the split hides the side that left: it is parked like any hidden terminal, and comes back with its text
-  await page.locator(`[data-testid="split-bar"][data-session="${a}"] [data-testid="split-close"]`).click();
+  await page.locator(`[data-testid="split-tools"][data-session="${a}"] [data-testid="split-close"]`).click();
   await expect.poll(() => page.evaluate(() => (window as unknown as { __omherPark: Park }).__omherPark.parked())).toBe(1);
 });

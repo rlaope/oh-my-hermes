@@ -125,8 +125,8 @@ test("the focused pane is the open session; the others are dimmed to the setting
   await expect.poll(() => opacity(c)).toBe("1");
   await expect.poll(() => opacity(a)).toBe("0.6");
   await expect.poll(() => opacity(b)).toBe("0.6");
-  // the focused pane carries an accent line
-  expect(await pane(page, c).evaluate((el) => getComputedStyle(el, "::after").boxShadow)).toContain("inset");
+  // no frame or shade marks a pane (the cursor and the dim do): the 1px divider is the only edge
+  for (const id of [a, b, c]) expect(await pane(page, id).evaluate((el) => [getComputedStyle(el, "::after").boxShadow, getComputedStyle(el).boxShadow])).toEqual(["none", "none"]);
   // ⌘⌥← to a, ⌘⌥→ back to b (the nearest lined up), ⌘⌥↓ to c
   await page.keyboard.press(k.focus("Left"));
   await expect.poll(() => focusedTerm(page)).toBe(a);
@@ -290,7 +290,7 @@ test("rows in the open split carry a glyph (the focused one marked); Plans draws
   await expect(page.getByTestId(`session-${a}`).getByTestId("term-split-glyph")).toHaveCount(0);
 });
 
-test("the picker opens under the focused pane's bar, so the bar's x stays clickable", async ({ page }) => {
+test("the picker opens under the focused pane's corner buttons, so its x stays clickable", async ({ page }) => {
   await openApp(page);
   const k = await keys(page);
   const [a, b, c] = await sessions(page, ["/w/a", "/w/b", "/w/c"]);
@@ -334,4 +334,34 @@ test("bot chats never split: the keys do nothing there, and the picker lists TER
   await page.keyboard.press("Escape");
   await expect(page.getByTestId("split-picker")).toHaveCount(0);
   await expect.poll(() => focusedTerm(page)).toBe(a);
+});
+
+test("panes have no title bar: a 1px line splits them, and the zoom and x show in the corner only under the pointer", async ({ page }) => {
+  await openApp(page);
+  const k = await keys(page);
+  const [a, b] = await sessions(page, ["/w/a", "/w/b"]);
+  await page.getByTestId(`session-${a}`).locator(".ss-open").click();
+  await splitWith(page, a, k.right, b);
+  // the terminal starts at the pane's top edge: nothing is drawn above it
+  for (const id of [a, b]) {
+    const [p, t] = [(await pane(page, id).boundingBox())!, (await pane(page, id).locator(".term-wrap").boundingBox())!];
+    expect(Math.abs(t.y - p.y)).toBeLessThan(1);
+  }
+  expect(await page.locator(".ss-split-bar").count()).toBe(0);
+  const div = (await page.getByTestId("split-divider").boundingBox())!;
+  expect(div.width).toBeLessThanOrEqual(1);
+  // the corner buttons are hidden until the pointer is over the pane
+  const tools = pane(page, a).getByTestId("split-tools");
+  await page.mouse.move(2, 2);
+  await expect.poll(() => tools.evaluate((el) => getComputedStyle(el).opacity)).toBe("0");
+  const pb = (await pane(page, a).boundingBox())!;
+  await page.mouse.move(pb.x + pb.width / 2, pb.y + pb.height / 2);
+  await expect.poll(() => tools.evaluate((el) => getComputedStyle(el).opacity)).toBe("1");
+  // zoom from the corner: only a shows, with the keyboard; ⌘⇧↩ shows both again
+  await tools.getByTestId("split-zoom").click();
+  await expect(page.getByTestId("session-split")).toHaveAttribute("data-zoom", "true");
+  await expect(page.getByTestId("split-pane")).toHaveCount(1);
+  await expect.poll(() => focusedTerm(page)).toBe(a);
+  await page.keyboard.press(k.zoom);
+  await expect(page.getByTestId("split-pane")).toHaveCount(2);
 });
