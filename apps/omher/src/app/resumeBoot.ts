@@ -62,6 +62,7 @@ function snapshot(): ResumeSnap {
         ...(r.promptTitle ? { promptTitle: r.promptTitle } : {}),
         ...(r.mode ? { mode: r.mode } : {}),
         ...(r.effort ? { effort: r.effort } : {}),
+        ...(r.shell ? { shell: r.shell } : {}),
       })),
       messages: (id) => {
         const key = ss.chatKey(id);

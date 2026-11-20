@@ -59,6 +59,9 @@ export interface TermSettings {
   keepHistory: boolean;
   /** How bright a split pane without the keyboard stays, TERMINALS and the bottom panel alike (1: not dimmed). */
   dimUnfocused: number;
+  /** The shell a new TERMINALS Shell row runs: an id from the shell's `shells_available` list. "" = the login shell
+   *  (Windows PowerShell on Windows), as before. An id no longer on the list opens the default. */
+  defaultShell: string;
 }
 
 export const TERM_KEY = "omher.term";
@@ -83,7 +86,12 @@ export const TERM_DEFAULTS: TermSettings = {
   confirmPaste: true,
   keepHistory: true,
   dimUnfocused: 0.72,
+  defaultShell: "",
 };
+
+/** A shell id as `shells_available` makes them: a Windows name or `unix:<absolute path>`; anything else is "". */
+export const cleanShellId = (v: unknown): string =>
+  typeof v === "string" && v.length <= 600 && /^(?:powershell|pwsh|cmd|gitbash|wsl|unix:\/[^\0-\x1f\x7f]*)$/.test(v) ? v : "";
 
 const num = (v: unknown, lo: number, hi: number, d: number) => (typeof v === "number" && Number.isFinite(v) ? Math.min(hi, Math.max(lo, v)) : d);
 const str = (v: unknown, d: string, max = 200) => (typeof v === "string" && v.length <= max ? v : d);
@@ -125,6 +133,7 @@ export function parseTermSettings(raw: unknown): TermSettings {
     confirmPaste: bool(o.confirmPaste, d.confirmPaste),
     keepHistory: bool(o.keepHistory, d.keepHistory),
     dimUnfocused: Math.round(num(o.dimUnfocused, TERM_DIM.min, TERM_DIM.max, d.dimUnfocused) * 100) / 100,
+    defaultShell: cleanShellId(o.defaultShell),
   };
 }
 

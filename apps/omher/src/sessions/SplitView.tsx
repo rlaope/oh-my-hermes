@@ -61,11 +61,12 @@ export function splitWith(at: string, add: string, dir: SplitDirName = "right"):
   if (groupOf(groups, add) && groupOf(groups, at)) focusSplitPane(add);
 }
 
-/** A new Shell in a new pane of `at`'s split, in `at`'s folder (the one its shell last reported, else where it started). */
+/** A new Shell in a new pane of `at`'s split, in `at`'s folder (the one its shell last reported, else where it started),
+ *  running the same shell as `at` when that is a Shell row (else the default shell). */
 export function splitNewShell(at: string, dir: SplitDirName): void {
   const rec = getSessions().getState().list.find((r) => r.id === at);
   if (!rec) return closeSplitPicker();
-  const id = getSessions().startTerminal(SHELL, termActs.get(at).cwd ?? rec.cwd);
+  const id = getSessions().startTerminal(SHELL, termActs.get(at).cwd ?? rec.cwd, rec.agent === SHELL ? rec.shell : undefined);
   if (id) splitWith(at, id, dir);
   else closeSplitPicker();
 }
