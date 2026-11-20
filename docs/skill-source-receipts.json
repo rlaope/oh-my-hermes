@@ -903,6 +903,28 @@
       "reviewed_on": "2026-11-19",
       "rationale": "Adopted per-host loader facts as cited data in harness_fit_hosts; upstream code and wording not used; code-span placeholders and toolkit paths SKILL.md names are not flagged.",
       "supersedes": null
+    },
+    {
+      "receipt_id": "ssc-2026-11-20-loop-alphaxiv-openresearch",
+      "candidate_key": "loop@github.com/alphaxiv/openresearch",
+      "prior_checkpoint": null,
+      "next_checkpoint": "a9350059fef3ab52946f9a8ac71918d9dea35c75",
+      "disposition": "adopted",
+      "decision_ref": "#3029",
+      "reviewed_on": "2026-11-20",
+      "rationale": "Adopted the experiment-tree reference: fixed run contract, frozen nodes, sibling-vs-child rule, repair/refill/promote/stop; upstream wording and tooling not used.",
+      "supersedes": null
+    },
+    {
+      "receipt_id": "ssc-2026-11-20-source-finder-alphaxiv-openresearch",
+      "candidate_key": "source-finder@github.com/alphaxiv/openresearch",
+      "prior_checkpoint": null,
+      "next_checkpoint": "a9350059fef3ab52946f9a8ac71918d9dea35c75",
+      "disposition": "adopted",
+      "decision_ref": "#3029",
+      "reviewed_on": "2026-11-20",
+      "rationale": "Adopted the literature-retrieval reference: corpus routing, difficulty-scaled follow-ups inside the existing cap, cross-corpus dedupe; upstream wording and alphaXiv-only tools not used.",
+      "supersedes": null
     }
   ]
 }
