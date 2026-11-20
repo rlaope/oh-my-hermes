@@ -4,6 +4,8 @@ All notable changes will be documented here.
 
 ## Unreleased
 
+## 4.0.9 - 2026-11-20
+
 - **Codex units can write inside the fanout fence on Linux and macOS.** `codex exec` is read-only by default, and
   `workspace-write` cannot start Codex's own sandbox inside an enforced bwrap or sandbox-exec fence, so every write
   a codex unit tried was refused. When the fence is enforced with one of those backends, the codex argv now gets
