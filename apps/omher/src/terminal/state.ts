@@ -10,7 +10,7 @@
 // written back first (term/history.ts, key `panel-<n>`).
 import { useSyncExternalStore } from "react";
 import { windowWatched } from "../lib/notify";
-import { MAX_PANES, equalize, neighbor, panesOf, removePane, setRatioAt, splitLayout, type FocusDir, type Layout } from "./layout";
+import { MAX_PANES, equalize, neighbor, panesOf, removePane, setRatioAt, splitLayout, stepPane, swapPanes, type FocusDir, type Layout } from "./layout";
 
 /** One pane of a tab: one login shell. */
 export interface TermPane {
@@ -46,6 +46,8 @@ export interface TermTab {
   focus: number;
   /** a shell in it rang (bell, OSC 9 message, OSC 777 notify) while the tab was not in front; no text is kept */
   rang?: boolean;
+  /** the focused pane fills the tab (⌘⇧↩); the others keep running behind it */
+  zoom?: boolean;
 }
 
 export interface TermPanelState {
@@ -193,7 +195,7 @@ export function splitPane(dir: "right" | "down"): boolean {
   const layout = splitLayout(tab.layout, from.id, dir === "right" ? "row" : "col", pane.id);
   if (!layout) return false;
   nextPane = pane.id;
-  putTab({ ...tab, layout, panes: [...tab.panes, pane], focus: pane.id }, { open: true, focus: state.focus + 1 });
+  putTab({ ...tab, layout, panes: [...tab.panes, pane], focus: pane.id, zoom: false }, { open: true, focus: state.focus + 1 });
   return true;
 }
 
@@ -207,7 +209,7 @@ export function closePane(id: number): void {
   if (!layout) return closeTerminalTab(tab.key);
   const panes = tab.panes.filter((p) => p.id !== id);
   const focus = tab.focus === id ? (heir ?? panesOf(layout)[0]) : tab.focus;
-  putTab({ ...tab, layout, panes, focus }, { focus: state.focus + 1 });
+  putTab({ ...tab, layout, panes, focus, zoom: panes.length > 1 && tab.zoom }, { focus: state.focus + 1 });
 }
 
 /** Pane `id` has the keyboard (the person clicked in it). `take`: and give it the keyboard now (a focus key). */
@@ -223,8 +225,37 @@ export function movePaneFocus(dir: FocusDir): boolean {
   if (!tab) return false;
   const to = neighbor(tab.layout, tab.focus, dir);
   if (to === null) return false;
+  if (tab.zoom) putTab({ ...tab, zoom: false });
   focusPane(to, true);
   return true;
+}
+
+/** The keyboard to the next (1) or previous (-1) pane of the tab in front, wrapping (⌘] / ⌘[). A zoomed tab shows
+ *  all its panes again. False with one pane. */
+export function stepPaneFocus(step: 1 | -1): boolean {
+  const tab = state.tabs.find((t) => t.key === state.active);
+  if (!tab) return false;
+  const to = stepPane(tab.layout, tab.focus, step);
+  if (to === null) return false;
+  putTab({ ...tab, focus: to, zoom: false }, { focus: state.focus + 1 });
+  return true;
+}
+
+/** The focused pane trades places with the one beside it (⌘⇧⌥arrows); it keeps the keyboard. False at the edge. */
+export function movePane(dir: FocusDir): boolean {
+  const tab = state.tabs.find((t) => t.key === state.active);
+  if (!tab) return false;
+  const to = neighbor(tab.layout, tab.focus, dir);
+  if (to === null) return false;
+  putTab({ ...tab, layout: swapPanes(tab.layout, tab.focus, to) }, { focus: state.focus + 1 });
+  return true;
+}
+
+/** The focused pane fills the tab, or the tab shows all its panes again (⌘⇧↩). Nothing with one pane. */
+export function zoomPane(): void {
+  const tab = state.tabs.find((t) => t.key === state.active);
+  if (!tab || tab.panes.length < 2) return;
+  putTab({ ...tab, zoom: !tab.zoom }, { focus: state.focus + 1 });
 }
 
 /** The divider at `path` of tab `key` moved: its first part takes `ratio`. */

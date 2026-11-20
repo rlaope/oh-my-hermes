@@ -1020,7 +1020,7 @@ _FEATURE_SURFACE_SKILLS = (
     ),
     _feature_surface_skill(
         "external-connector-readiness",
-        "Evaluating a plugin, connector, or API for adoption: external connector readiness - assess whether a named plugin, connector, API, data provider, or multimodal route is safe, affordable, fresh, and observable; use `executor-runtime-readiness` for coding-owner choice and `toolbelt-readiness` for missing capability inventory.",
+        "Evaluating a plugin, connector or API for adoption: external connector readiness - assess whether a named plugin, connector, API, data provider, or multimodal route is safe, affordable, fresh, and observable; use `executor-runtime-readiness` for coding-owner choice and `toolbelt-readiness` for missing capability inventory.",
         (
             "external-connector-readiness",
             "external connector readiness",
@@ -1137,11 +1137,11 @@ _FEATURE_SURFACE_SKILLS = (
         # `executor-runtime-readiness` ships only on Hermes.
         portable_overrides={
             "description": (
-                "Evaluating a plugin, connector, or API for adoption: external connector readiness - assess whether a named plugin, connector, API, data provider, or multimodal route is safe, affordable, fresh, and observable; use `toolbelt-readiness` for missing capability inventory.",
+                "Evaluating a plugin, connector or API for adoption: external connector readiness - assess whether a named plugin, connector, API, data provider, or multimodal route is safe, affordable, fresh, and observable; use `toolbelt-readiness` for missing capability inventory.",
             ),
         },
         portable_override_shadows={
-            "description": "9132088527b4133b3d86b362839fd9f03fec62a2ff4630eeae89c14d6421f4fa",
+            "description": "66ac1c8723852e5d2f33a6f9dfabff6f5a6b00b8ab8d277bc51b8e4b33fd4407",
         },
         boundary="An external connector readiness card is not connector installation, credential validation, provider access, API invocation, multimodal capture, live-data retrieval, external mutation, cost authorization, or successful trial evidence unless observed connector-trial evidence records it.",
         good_why="Two named weather connectors need a cost, freshness, and fallback comparison before either is enabled; no provider has been called.",

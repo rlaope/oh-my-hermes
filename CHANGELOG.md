@@ -4,6 +4,55 @@ All notable changes will be documented here.
 
 ## Unreleased
 
+- **omher: New thread under a bot opens a thread again, and removing or naming one works.** On Hermes' current
+  gateway, New thread did nothing and then failed: the bridge sent the press's retry key as `idempotency_key`, which
+  that gateway refuses (`invalid_params`), and it named and archived threads with `session.title` and
+  `session.archive`, which that gateway does not serve. The bridge now sends the key as `request_id` (the same press
+  again still returns the same thread), and names and archives through `session.mutate`, retrying once with the
+  revision a `revision_conflict` carries; an older gateway still gets its own verbs. A thread is created under a
+  unique placeholder and then renamed, because the gateway answers a create whose title an open session already has
+  with that session. The bridge tests' fake gateway now refuses what the real one refuses. (#2980)
+
+- **omher: no "+ New thread" line sits under a bot any more.** The line closed every bot's thread list, and under the
+  open bot it showed even with no threads, so the sidebar always carried an empty row. Under a bot now there are only
+  its threads, the last one ending the tree; a new thread opens from the bot row's + on hover, its right-click menu, or
+  `./thread`.
+
+- **omher: TERMINALS sessions split like Otty and Orca, and bots can follow a terminal by its link.**
+  - **Split.** A TERMINALS session splits right (⌘D) or down (⌘⇧D), up to four sessions in any nesting. Each split
+    picks a running terminal or starts a new Shell in the focused pane's folder. Pane keys: close ⌘W, move focus
+    ⌘⌥arrows, next/previous ⌘] ⌘[, move pane ⌘⇧⌥arrows, zoom ⌘⇧↩, even out ⌘⌃= (Ctrl-based keys on Windows and
+    Linux). Unfocused panes dim (Settings › Terminal › Dim unfocused panes, default 0.72, the bottom panel too).
+    Rows in the split show its shape, Plans shows a clickable minimap, and the split comes back after a restart
+    (paused panes show Resume). Bot chats never split. On macOS the menu's Close Window closes the focused pane, not
+    the window, while a split has the keyboard.
+  - **Link to a terminal.** Every TERMINALS session has a stable link, `omher://terminal/<id>`, that stays the same
+    across restarts. Copy it from the row menu or with ⌘⇧C (Alt+Shift+C on Windows and Linux). A message that holds
+    one shows an omher chip with that session's CLI mark, title and live state (working, waiting, done, ended), and a
+    click opens it. Opening the link from another app brings omher forward on that session.
+  - **Bots read a linked terminal and ask to type into it.** A bot that gets a terminal link, in omher or in Slack or
+    Discord, can read that session's title, CLI, folder, state and last line through the new OMH tool
+    `omh_omher_terminal`, and can ask omher to type a prompt into it. omher shows the request as a card on the
+    terminal (Deny, Allow once), and nothing is typed without the person's Allow. A message
+    in a bot's main chat that holds a terminal link carries that terminal's status to the bot. A bot's sidebar
+    preview shows a linked terminal's title instead of the raw link. Each prompt asks: every request has its own
+    card, and there is no allow-for-this-session, because the sender name on a request is what the local requesting
+    process wrote, not proof of which bot asked. A request to a paused or ended terminal shows its card
+    there with Deny and Resume and send, and an Allow that could not type keeps the card. Terminal sharing is off on
+    Windows (the owner-only file checks are POSIX): the tool answers that it is not available there, and Copy link
+    and the chip still work.
+
+- **The run summary shows how much of the prompt came from cache.** `omh_run_summary` adds a line after the token
+  count, such as `Prompt cache: 62% of input read from cache (1,234,567 tokens)` (en/ko/ja/zh), and
+  `breakdown.cache_read_share`. The share is cache reads over uncached input plus cache reads, which is how Hermes
+  stores them. No line appears when nothing was read from cache.
+
+- **A one-line list of three code changes is answered in the session, like a listed backlog.** "migrate the store to
+  sqlite, update the three callers, and add tests" or "프론트 버튼 추가랑 백엔드 엔드포인트랑 테스트 다 해줘" used to land on a
+  lane picked from one word (toolbelt-readiness, browser-operator, backend). They now get the `code_backlog` answer:
+  make the changes here, one after another, not as a dag-ulw graph. One bug's symptoms, one feature's fields, a list
+  of questions, an errand list with a single code word, and work the request itself splits keep their routes.
+
 - **A dag-ulw node that writes files is told to commit only its own paths.** Its task text now says to stage the
   paths in its SCOPE by name and never to run `git add -A`, `git add .`, `git commit -a` or `git stash`, so parallel
   nodes in one checkout stop committing each other's work. Verify, review and read-only nodes get no such line. This
@@ -320,6 +369,20 @@ All notable changes will be documented here.
   draws them from the font, a hair short of their cells. Terminal › GPU renderer › Auto now uses the GPU renderer
   wherever the hardware allows it (WebGL2, not a software rasterizer), and it draws those characters to fill the cell
   as a real terminal does. Off keeps the standard renderer; a machine without hardware WebGL2 keeps it too.
+- **OMH skills load whole on every host they ship to, and `omh skill-eval` checks any skill folder the same way.**
+  Every situation clause now ends inside Hermes' 60-character index window. The portable descriptions
+  (`.agents/skills`, `.claude/skills`) are the situation clause plus the start of what the skill does, with the
+  trigger list kept in the body, so the pack fits Claude Code's and Codex's 8,000-character skill list. A portable
+  body over OpenClaw's read cap moves its Catalog Metadata into `references/details.md`, and the eight toolkit
+  skills name `toolkit/README.md` in SKILL.md itself. Measured with NVIDIA SkillEvaluator 1.0.1 on a5649293 →
+  this branch: Hermes clipped situation clauses 20 → 0; `.agents` pack descriptions 42,581 → 7,442 characters;
+  `.claude` copy 16,474 → 7,442; OpenClaw over-read-cap bodies 7 → 0; toolkit README named 0/8 → 8/8. The new
+  `omh skill-eval PATH` (offline, stdlib) reports per host whether Hermes, Claude Code, Codex, OpenClaw, OpenCode
+  and Copilot CLI load a skill, load it degraded, or skip it, with each finding's source, and marks a row
+  `unverified` when no recorded host fact covers the input (unparsed YAML, say); `--catalog` checks a whole
+  folder, category folders included, and `--strict` exits 1 on any degraded or unverified row. The
+  `omh-skill-eval` skill runs it before a skill ships, and a test now runs the same checker over the three shipped
+  packs (#2995).
 - **omher: a Slack briefing that sets itself up.** Add a bot whose Hermes profile has Slack connected and omher
   creates one automation for it, `omher-brief`: the channel-watch collector in a new brief mode checks the Slack
   channels you share with the bot every 15 minutes and wakes the model only when there is a reason (an unanswered

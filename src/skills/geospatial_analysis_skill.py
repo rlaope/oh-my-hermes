@@ -33,7 +33,7 @@ DEFINITION = SkillDefinition(
          "결과를 쓸 새 폴더는 어디이고, 어떤 선택 백엔드가 설치되어 있으며, 실행 제한 시간은 얼마인가요?"),
     )),
     opening_steps=(
-        "Read `toolkit/README.md` and `references/execution-and-qa.md` before executing `toolkit/scripts/analyze.py`; installation and skill discovery never run it.",
+        "Read `toolkit/README.md` (`skill_view(name='omh-geospatial-analysis', file_path='toolkit/README.md')`) and `references/execution-and-qa.md` before executing `toolkit/scripts/analyze.py`; installation and skill discovery never run it.",
         "Confirm the two layers, explicit EPSG declarations, study extent, projected metre CRS, output directory and finite host timeout; never guess a missing CRS. The helper reads GeoJSON only: for a shapefile, GeoPackage or KML ask for a GeoJSON export with the CRS stated, or offer a separately approved conversion (for example `ogr2ogr`).",
         "Use the original synthetic rectangle fixture only for backend QA; do not describe it as a public flood, facility or site-suitability finding.",
     ),

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { clampRatio, equalize, MAX_PANES, neighbor, paneKey, panesOf, paneRects, removePane, setRatioAt, splitLayout, type Layout } from "./layout";
+import { clampRatio, equalize, MAX_PANES, neighbor, paneKey, panesOf, paneRects, parseLayout, removePane, setRatioAt, splitLayout, stepPane, swapPanes, type Layout } from "./layout";
 
 const key = (k: Partial<{ key: string; code: string; metaKey: boolean; ctrlKey: boolean; altKey: boolean; shiftKey: boolean }>) => ({ key: "", metaKey: false, ctrlKey: false, altKey: false, shiftKey: false, ...k });
 
@@ -81,5 +81,36 @@ describe("a panel tab's pane layout", () => {
     expect(paneKey(key({ key: "D", code: "KeyD", altKey: true, shiftKey: true }), false)).toEqual({ kind: "split", dir: "down" });
     expect(paneKey(key({ key: "W", code: "KeyW", ctrlKey: true, shiftKey: true }), false)).toEqual({ kind: "close" });
     expect(paneKey(key({ key: "ArrowUp", ctrlKey: true, altKey: true }), false)).toEqual({ kind: "focus", dir: "up" });
+  });
+
+  it("reads the other pane keys: step, move, zoom, equalize (⌘] ⌘[ ⌘⇧⌥arrows ⌘⇧↩ ⌘⌃= / Ctrl+Tab Ctrl+Alt+Shift+arrows Ctrl+Shift+Enter Ctrl+Alt+=)", () => {
+    expect(paneKey(key({ key: "]", code: "BracketRight", metaKey: true }), true)).toEqual({ kind: "step", step: 1 });
+    expect(paneKey(key({ key: "[", code: "BracketLeft", metaKey: true }), true)).toEqual({ kind: "step", step: -1 });
+    expect(paneKey(key({ key: "}", code: "BracketRight", metaKey: true, shiftKey: true }), true)).toBeNull(); // ⌘⇧] is the next session
+    expect(paneKey(key({ key: "ArrowRight", metaKey: true, altKey: true, shiftKey: true }), true)).toEqual({ kind: "move", dir: "right" });
+    expect(paneKey(key({ key: "Enter", metaKey: true, shiftKey: true }), true)).toEqual({ kind: "zoom" });
+    expect(paneKey(key({ key: "Enter", metaKey: true }), true)).toBeNull();
+    expect(paneKey(key({ key: "=", code: "Equal", metaKey: true, ctrlKey: true }), true)).toEqual({ kind: "equalize" });
+    expect(paneKey(key({ key: "=", code: "Equal", metaKey: true }), true)).toBeNull(); // ⌘= stays the page's
+    expect(paneKey(key({ key: "Tab", ctrlKey: true }), false)).toEqual({ kind: "step", step: 1 });
+    expect(paneKey(key({ key: "Tab", ctrlKey: true, shiftKey: true }), false)).toEqual({ kind: "step", step: -1 });
+    expect(paneKey(key({ key: "ArrowLeft", ctrlKey: true, altKey: true, shiftKey: true }), false)).toEqual({ kind: "move", dir: "left" });
+    expect(paneKey(key({ key: "Enter", ctrlKey: true, shiftKey: true }), false)).toEqual({ kind: "zoom" });
+    expect(paneKey(key({ key: "=", code: "Equal", ctrlKey: true, altKey: true }), false)).toEqual({ kind: "equalize" });
+    expect(paneKey(key({ key: "Tab" }), false)).toBeNull();
+    expect(paneKey(key({ key: "]", code: "BracketRight", ctrlKey: true }), false)).toBeNull(); // Ctrl+] is the program's
+  });
+
+  it("swaps two panes, steps through them in reading order, and reads a saved layout back checked", () => {
+    const l: Layout = { dir: "row", ratio: 0.3, a: { pane: 1 }, b: { dir: "col", ratio: 0.5, a: { pane: 2 }, b: { pane: 3 } } };
+    expect(panesOf(swapPanes(l, 1, 3))).toEqual([3, 2, 1]);
+    expect(swapPanes(l, 1, 9)).toBe(l);
+    expect(stepPane(l, 3, 1)).toBe(1);
+    expect(stepPane(l, 1, -1)).toBe(3);
+    expect(stepPane({ pane: 1 }, 1, 1)).toBeNull();
+    expect(parseLayout(JSON.parse(JSON.stringify(l)))).toEqual(l);
+    expect(parseLayout({ dir: "row", ratio: 0.5, a: { pane: 1 }, b: { pane: 1 } })).toBeNull();
+    expect(parseLayout({ pane: 1.5 })).toBeNull();
+    expect(parseLayout("x")).toBeNull();
   });
 });

@@ -1,6 +1,6 @@
 ---
 name: "omh-deploy-and-monitor"
-description: "[omh] Release rollout needing health signals: release checklist, deploy decision, health signals, rollback gate, and post-deploy status."
+description: "[omh] Release rollout needing health signals: release checklist…"
 license: MIT
 metadata:
   hermes:

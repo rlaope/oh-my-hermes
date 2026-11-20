@@ -17,6 +17,8 @@ export const TERM_SCROLLBACKS: readonly number[] = [5000, 10000, 25000, 50000];
 export const TERM_FONT_SIZE = { min: 9, max: 24 } as const;
 export const TERM_LINE_HEIGHT = { min: 1, max: 2 } as const;
 export const TERM_PADDING = { min: 0, max: 24 } as const;
+/** How bright a split pane without the keyboard stays (Otty's unfocused-split-opacity, Orca's inactivePaneOpacity). */
+export const TERM_DIM = { min: 0.5, max: 1 } as const;
 
 export interface TermSettings {
   /** Theme ids from the catalog, one per app theme. */
@@ -55,6 +57,8 @@ export interface TermSettings {
   /** What each terminal showed comes back, dimmed, after omher restarts (kept in `~/.omher/term-history`). Off removes
    *  every kept file at once. */
   keepHistory: boolean;
+  /** How bright a split pane without the keyboard stays, TERMINALS and the bottom panel alike (1: not dimmed). */
+  dimUnfocused: number;
 }
 
 export const TERM_KEY = "omher.term";
@@ -78,6 +82,7 @@ export const TERM_DEFAULTS: TermSettings = {
   images: true,
   confirmPaste: true,
   keepHistory: true,
+  dimUnfocused: 0.72,
 };
 
 const num = (v: unknown, lo: number, hi: number, d: number) => (typeof v === "number" && Number.isFinite(v) ? Math.min(hi, Math.max(lo, v)) : d);
@@ -119,6 +124,7 @@ export function parseTermSettings(raw: unknown): TermSettings {
     images: bool(o.images, d.images),
     confirmPaste: bool(o.confirmPaste, d.confirmPaste),
     keepHistory: bool(o.keepHistory, d.keepHistory),
+    dimUnfocused: Math.round(num(o.dimUnfocused, TERM_DIM.min, TERM_DIM.max, d.dimUnfocused) * 100) / 100,
   };
 }
 

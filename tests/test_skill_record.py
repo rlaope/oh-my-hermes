@@ -57,7 +57,8 @@ class SkillRecordTests(unittest.TestCase):
         # sprite-forge adds a `_SKILL_POLICIES` entry (+1 skill).
         # systematic-review adds its own curated policy (+1 skill).
         # model-compression adds its own curated policy (+1 skill).
-        self.assertEqual(counts, Counter({"skill": 127, "category": 27, "role": 9}))
+        # skill-eval adds its own curated policy (+1 skill).
+        self.assertEqual(counts, Counter({"skill": 128, "category": 27, "role": 9}))
         self.assertEqual(counts["default"], 0)
 
     def test_next_action_label_is_the_action_copy_label(self) -> None:

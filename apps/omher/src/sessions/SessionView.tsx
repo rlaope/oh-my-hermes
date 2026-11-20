@@ -5,7 +5,7 @@
 // first message starts the agent there (Start, for an agent that opens in its terminal). After that the folder is
 // read-only too. A chat agent's composer takes files as the bot chat's does (paste, the + menu, a drop on the chat),
 // in a draft too; a file dropped or pasted on a terminal is saved and its path typed at the prompt. A TERMINALS session
-// can show a second one beside it (SplitView: ⌘D in its terminal, or "Split right with…").
+// can split with up to three others, right or down (SplitView: ⌘D / ⌘⇧D in its terminal, or "Split right with…").
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { getStore, selectAsks, useStore, type OutFile } from "../state/store";
 import { useResolvedTheme } from "../app/theme";
@@ -23,7 +23,7 @@ import type { Bot } from "../lib/protocol";
 import { AgentMark } from "./AgentMark";
 import { fgName, TermRowMark } from "./TermRowMark";
 import { SessionFace } from "./SessionFace";
-import { agentDef, agentLabel, continues, GONE, isCustom, isGone, STOPS_BACKGROUND, draftOpen, folderChoices, folderName, hermesOnly, missingNote, opensAs, parentPath, sessionMode, termMarkAgent, terminalNote, tildePath, type AgentId, type OpenAs, type SessionRec } from "./agents";
+import { agentDef, agentLabel, continues, GONE, isCustom, isGone, STOPS_BACKGROUND, draftOpen, folderChoices, folderName, hermesOnly, missingNote, opensAs, parentPath, sessionMode, termFallbackName, termMarkAgent, terminalNote, tildePath, type AgentId, type OpenAs, type SessionRec } from "./agents";
 import { pickTitle } from "./titles";
 import { t as tr, tx, type Key } from "../i18n";
 import { windowWatched } from "../lib/notify";
@@ -38,9 +38,11 @@ import { subagentEnded } from "../state/store";
 import { useAccounts } from "../settings/accounts/useAccounts";
 import { t } from "../i18n";
 import { wireFileDrop, isWindows } from "../terminal/terms";
-import { paneKey } from "../terminal/layout";
 import { isMac } from "../app/shortcuts";
-import { openSplitPicker, SplitPicker, SplitView } from "./SplitView";
+import { SplitPicker, SplitView, useSplit, useSplitKeys } from "./SplitView";
+import { groupOf } from "./splitState";
+import { isCopyLinkKey, LINK_COPIED_EVENT } from "./termLink";
+import { TermShareCards } from "./TermShareCard";
 
 const STATUS: Record<string, Key> = { starting: "ss.starting", running: "ss.running", exited: "ss.ended", failed: "ss.couldNotStart" };
 
@@ -70,20 +72,37 @@ function TerminalPane({ rec, splits }: { rec: SessionRec; splits?: boolean }) {
     if (!el) return;
     return wireFileDrop(el, (files) => void getSessions().dropOnTerminal(rec.id, files, isWindows()));
   }, [rec.id]);
-  // ⌘D (Ctrl+Shift+D off macOS) in a TERMINALS terminal: pick a session to show beside it. Taken before xterm.
+  // the split keys in a TERMINALS terminal (⌘D, ⌘⇧D, ⌘W, ⌘⌥arrows...; SplitView), taken before xterm
+  useSplitKeys(wrap, rec.id, !!splits);
+  // ⌘⇧C (Alt+Shift+C off macOS) in a TERMINALS terminal: its link to the clipboard. Taken before xterm.
   useEffect(() => {
     const el = wrap.current;
     if (!el || !splits) return;
     const on = (e: KeyboardEvent) => {
-      const k = paneKey(e, isMac());
-      if (k?.kind !== "split" || k.dir !== "right") return;
+      if (composing(e) || !isCopyLinkKey(e, isMac())) return;
       e.preventDefault();
       e.stopPropagation();
-      if (!e.repeat) openSplitPicker(getStore().getState().ui.session ?? rec.id);
+      if (!e.repeat) void getSessions().copyLink(rec.id);
     };
     el.addEventListener("keydown", on, true);
     return () => el.removeEventListener("keydown", on, true);
   }, [rec.id, splits]);
+  // a copied link says so on the terminal for a moment (the row menu's Copy link too, while this one shows)
+  const [copied, setCopied] = useState(false);
+  useEffect(() => {
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    const on = (e: Event) => {
+      if ((e as CustomEvent<string>).detail !== rec.id) return;
+      setCopied(true);
+      if (timer) clearTimeout(timer);
+      timer = setTimeout(() => setCopied(false), 1600);
+    };
+    window.addEventListener(LINK_COPIED_EVENT, on);
+    return () => {
+      window.removeEventListener(LINK_COPIED_EVENT, on);
+      if (timer) clearTimeout(timer);
+    };
+  }, [rec.id]);
   useEffect(() => {
     if (!box.current) return;
     return getSessions().attach(rec.id, box.current, mode);
@@ -97,6 +116,12 @@ function TerminalPane({ rec, splits }: { rec: SessionRec; splits?: boolean }) {
     <div className="term-wrap" ref={wrap} data-testid="terminal" data-session={rec.id}>
       <div className="term-box" ref={box} />
       {find && <FindBar req={find} onClose={() => setFind(null)} />}
+      {copied && (
+        <div className="tlink-copied" role="status" data-testid="term-link-copied">
+          {t("tlink.copied")}
+        </div>
+      )}
+      <TermShareCards sessionId={rec.id} title={pickTitle(rec, termFallbackName(rec, getSessions().getState().agents)).title} />
     </div>
   );
 }
@@ -586,7 +611,22 @@ function TerminalIdle({ rec }: { rec: SessionRec }) {
     <div className="pane ss-chat ss-idle" data-testid="session-idle">
       {rec.paused ? <PausedHistory rec={rec} /> : <div className="chat-empty">{tr("ss.agentEnded", { agent: label })}</div>}
       {rec.paused ? <Paused rec={rec} /> : <Ended rec={rec} />}
+      {/* a bot's request waits here too: Deny, or Resume and send (termShare.ts) */}
+      <TermShareCards sessionId={rec.id} title={pickTitle(rec, termFallbackName(rec, getSessions().getState().agents)).title} />
     </div>
+  );
+}
+
+/** One TERMINALS session in a split pane: its terminal (with the Ended line once it ended), or what a paused or
+ *  ended session without a terminal shows (Resume, Restart). */
+function SplitPane({ rec }: { rec: SessionRec }) {
+  const ended = isEnded(rec);
+  if (rec.paused || (ended && !getSessions().hasTerm(rec.id))) return <TerminalIdle rec={rec} />;
+  return (
+    <>
+      <TerminalPane key={`${rec.id}-term-${getSessions().termRun(rec.id)}`} rec={rec} splits />
+      {ended && <Ended rec={rec} />}
+    </>
   );
 }
 
@@ -778,6 +818,7 @@ function SessionModel({ rec, options, note }: { rec: SessionRec; options: ModelO
 export function SessionView() {
   const s = useStore();
   const ss = useSessions();
+  const sp = useSplit();
   const rec = ss.list.find((r) => r.id === s.ui.session) ?? null;
   // looking at a session sees what its row carried for the person (it rang, it finished): at once when it is opened,
   // and when the window comes back to it
@@ -940,7 +981,13 @@ export function SessionView() {
           </div>
         )}
       </header>
-      {showChat ? (
+      {mode === "terminal" && !showChat && groupOf(sp.groups, rec.id) ? (
+        // a TERMINALS session in a split: every pane shows, each as its session is (running, paused, ended)
+        <>
+          <SplitView main={rec} pane={(r) => <SplitPane rec={r} />} />
+          <SplitPicker main={rec} />
+        </>
+      ) : showChat ? (
         <ChatPane rec={rec} chatKey={chatKey!} />
       ) : rec.paused || ((rec.status === "exited" || rec.status === "failed") && !getSessions().hasTerm(rec.id)) ? (
         <TerminalIdle rec={rec} />
@@ -953,11 +1000,11 @@ export function SessionView() {
         </div>
       ) : (
         <>
-          {/* a new key after Restart: a fresh terminal for the program started again. A TERMINALS session can show
-              another beside it */}
+          {/* a new key after Restart: a fresh terminal for the program started again. A TERMINALS session can split
+              (its picker opens here; once split, the branch above draws every pane) */}
           {mode === "terminal" ? (
             <>
-              <SplitView main={rec} pane={(r) => <TerminalPane key={`${r.id}-term-${getSessions().termRun(r.id)}`} rec={r} splits />} />
+              <TerminalPane key={`${rec.id}-term-${getSessions().termRun(rec.id)}`} rec={rec} splits />
               <SplitPicker main={rec} />
             </>
           ) : (

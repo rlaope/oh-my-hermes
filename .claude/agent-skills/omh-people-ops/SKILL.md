@@ -1,6 +1,6 @@
 ---
 name: "omh-people-ops"
-description: "[omh] Company hiring or HR process to structure: turn hiring and people context into a fair, structured recruiting or people-operations brief."
+description: "[omh] Company hiring or HR process to structure."
 license: MIT
 metadata:
   hermes:

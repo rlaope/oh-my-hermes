@@ -26,7 +26,16 @@ MAIN_RUNTIME = "rt-main"
 
 
 class GatewayRPCError(Exception):  # same class name Hermes uses; the bridge matches on the name
-    pass
+    def __init__(self, reason="request_failed", data=None):
+        super().__init__(reason)
+        self.data = data or {}
+
+
+# What Hermes' canonical gateway (`/api/ws`, the one `connect_gateway` dials) does not serve: these are the older
+# tui gateway's verbs. A FakeClient refuses them as that gateway does unless it is built with `legacy=True`.
+LEGACY_ONLY = frozenset({"session.title", "session.archive", "session.close"})
+# session.create params the canonical gateway refuses with `invalid_params` (its contract forbids unknown keys)
+CANONICAL_CREATE_REFUSES = frozenset({"idempotency_key"})
 
 
 class GatewayClientError(ValueError):
@@ -37,8 +46,9 @@ class FakeClient:
     """The slice of ``GatewayClient`` the bridge uses: ``rpc`` and ``events``."""
 
     def __init__(self, name: str, *, bot_chat: bool = True, sessions=None, history=None, caps=None, lacks=(), ready=None,
-                 model_replies=None, resume_bumps=False):
+                 model_replies=None, resume_bumps=False, legacy=False):
         self.name = name
+        self.legacy = legacy  # True: the older tui gateway (session.title/archive/close, idempotency_key)
         # session.mutate "model" answers in order (Hermes' selection guard refusals); the echo once they run out
         self.model_replies = list(model_replies or [])
         self.resume_bumps = resume_bumps  # each session.resume moves the revision, as a real gateway's may
@@ -58,10 +68,23 @@ class FakeClient:
     def find(self, method: str) -> list[dict]:
         return [p for m, p in self.calls if m == method]
 
+    def refuse(self, method: str, params: dict) -> None:
+        """Refuse what the gateway this fake stands for refuses, before answering anything."""
+        if method in self.lacks:
+            raise GatewayRPCError("unknown_method", {"reason": "unknown_method"})
+        if self.legacy:
+            if method == "session.mutate" or (method == "session.create" and "request_id" in params):
+                raise GatewayRPCError("unknown_method" if method == "session.mutate" else "request_failed")
+            return
+        if method in LEGACY_ONLY:
+            raise GatewayRPCError("unknown_method", {"reason": "unknown_method"})
+        bad = sorted(CANONICAL_CREATE_REFUSES & set(params)) if method == "session.create" else []
+        if bad:
+            raise GatewayRPCError("invalid_params", {"reason": "invalid_params", "fields": bad})
+
     async def rpc(self, method, *, _timeout=None, **params):
         self.calls.append((method, params))
-        if method in self.lacks:
-            raise GatewayRPCError("unknown_method")
+        self.refuse(method, params)
         if method == "session.list":
             if params.get("title") == ob.BOT_CHAT_TITLE:
                 rows = [{"id": MAIN_STORED, "title": ob.BOT_CHAT_TITLE, "source": "tui"}] if self.bot_chat else []
@@ -372,7 +395,10 @@ class BotsAndChat(BridgeCase):
             self.assertEqual(create[0]["title"], "Bot Chat")
             self.assertTrue(create[0]["follow_profile_config"])
             self.assertEqual(c.find("session.resume"), [])
-            self.assertEqual(c.find("session.title"), [{"session_id": MAIN_RUNTIME, "title": "Bot Chat"}])
+            self.assertEqual(c.find("session.title"), [])  # the canonical gateway has no session.title
+            [named] = c.find("session.mutate")
+            self.assertEqual((named["session_id"], named["operation"], named["payload"], named["expected_revision"]),
+                             (MAIN_RUNTIME, "rename", {"title": "Bot Chat"}, 0))
             self.assertEqual(r["result"]["session_id"], MAIN_RUNTIME)
             self.assertEqual(r["result"]["messages"], [])
 
@@ -1309,7 +1335,7 @@ class FolderChats(BridgeCase):
         subscription `session.create` gave, as a close (`end_reason`), so Hermes ends the conversation, and the
         close reports no error. A gateway that has no `session.detach` gets `session.close`, as before."""
         with tempfile.TemporaryDirectory() as folder:
-            async with Env(lacks={"session.close"}) as env:
+            async with Env() as env:  # the canonical gateway: no session.close at all
                 s = await self.open(env)
                 fid = (await s.req("folder.open", bot="kami", cwd=folder))["result"]["session"]
                 c = env.clients["kami"]
@@ -1318,7 +1344,7 @@ class FolderChats(BridgeCase):
                 self.assertEqual([m for m, _ in c.calls if m in ("session.detach", "session.close")], ["session.detach"])
                 self.assertEqual(c.find("session.detach")[0], {"session_id": "rt-folder-0", "subscription_id": "sub-folder-0",
                                                                "end_reason": "omher_close"})
-            async with Env(lacks={"session.detach"}) as env:
+            async with Env(lacks={"session.detach"}, legacy=True) as env:
                 s = await self.open(env)
                 fid = (await s.req("folder.open", bot="kami", cwd=folder))["result"]["session"]
                 c = env.clients["kami"]
@@ -4228,6 +4254,63 @@ class PeerHint(BridgeCase):
             self.assertIn("```omher-peer", ob.PEER_HINT)
             rows = ob.chat_messages([{"role": "user", "text": sent[0], "row_id": 9}])
             self.assertEqual(rows[0]["text"], "맥미니 헤르메스 붙여줘")
+
+
+class TermLinkStatus(BridgeCase):
+    """A main-chat message holding an omher terminal link gets that terminal's status (from the file omher keeps,
+    `~/.omher/terminals/<id>.json`) as one `[omher]` block; a link to a terminal not here says so; the block never
+    shows back as the person's words; only that file is read, never through a link."""
+
+    LID = "abcdefgh23"
+    STATUS = {"link": "omher://terminal/abcdefgh23", "title": "checkout build", "agent": "claude",
+              "folder": "~/code/web-app", "state": "waiting", "started": 1700000000,
+              "last_line": "All 42 tests passed", "updated_at": 1700000100}
+
+    def _omher(self) -> Path:
+        d = Path(tempfile.mkdtemp())
+        (d / "terminals").mkdir()
+        (d / "terminals" / f"{self.LID}.json").write_text(json.dumps(self.STATUS), encoding="utf-8")
+        return d
+
+    def test_the_block_names_the_terminal_and_one_not_here(self):
+        home = self._omher()
+        blocks = ob.term_link_blocks(f"look at omher://terminal/{self.LID} and omher://terminal/zzzzzzzzzz", home)
+        self.assertEqual(blocks.split("\n"), [
+            f'[omher] Terminal omher://terminal/{self.LID}: "checkout build"; CLI claude; folder ~/code/web-app; '
+            f"state waiting; last line: All 42 tests passed. {ob.TERM_LINK_TAIL}",
+            "[omher] Terminal omher://terminal/zzzzzzzzzz: not open on this computer.",
+        ])
+        self.assertEqual(ob.term_link_blocks("no link here, omher://terminal/ABCDEFGH23 or xomher://terminal/abcdefgh23", home), "")
+        many = " ".join(f"omher://terminal/{c * 10}" for c in "abcde")
+        self.assertEqual(len(ob.term_link_blocks(many, home).split("\n")), ob.TERM_LINK_MAX)
+
+    @unittest.skipIf(os.name == "nt", "symlinks need privileges on Windows")
+    def test_a_linked_or_oversized_status_file_is_not_read(self):
+        home = self._omher()
+        f = home / "terminals" / f"{self.LID}.json"
+        outside = home / "outside.json"
+        f.rename(outside)
+        os.symlink(outside, f)
+        self.assertIsNone(ob.read_term_status(home, self.LID))
+        f.unlink()
+        f.write_text("x" * (17 * 1024), encoding="utf-8")
+        self.assertIsNone(ob.read_term_status(home, self.LID))
+        self.assertIsNone(ob.read_term_status(home, "../../etc"))
+
+    async def test_the_block_rides_a_main_chat_turn_and_is_stripped_on_read(self):
+        async with Env() as env:
+            env.bridge.omher_home = self._omher()
+            s = await self.open(env)
+            await s.req("chat.open", bot="kami")
+            typed = f"what is omher://terminal/{self.LID} doing?"
+            await s.req("chat.send", bot="kami", text=typed)
+            await s.req("chat.send", bot="kami", text="hello")
+            sent = [x["text"] for x in env.clients["kami"].find("prompt.submit")]
+            self.assertTrue(sent[0].startswith(typed + "\n\n[omher] Terminal omher://terminal/abcdefgh23: \"checkout build\""), sent[0])
+            self.assertIn("last line: All 42 tests passed", sent[0])
+            self.assertEqual(sent[1], "hello")
+            rows = ob.chat_messages([{"role": "user", "text": sent[0], "row_id": 9}])
+            self.assertEqual(rows[0]["text"], typed)
 
 
 class TasksLinear(unittest.TestCase):

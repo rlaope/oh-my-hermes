@@ -25,7 +25,7 @@ Polygon computations can return plausible but wrong numbers when CRS, coordinate
 
 ## First Steps
 
-- Read `toolkit/README.md` and `references/execution-and-qa.md` before executing `toolkit/scripts/analyze.py`; installation and skill discovery never run it.
+- Read `toolkit/README.md` (`skill_view(name='omh-geospatial-analysis', file_path='toolkit/README.md')`) and `references/execution-and-qa.md` before executing `toolkit/scripts/analyze.py`; installation and skill discovery never run it.
 - Confirm the two layers, explicit EPSG declarations, study extent, projected metre CRS, output directory and finite host timeout; never guess a missing CRS. The helper reads GeoJSON only: for a shapefile, GeoPackage or KML ask for a GeoJSON export with the CRS stated, or offer a separately approved conversion (for example `ogr2ogr`).
 - Use the original synthetic rectangle fixture only for backend QA; do not describe it as a public flood, facility or site-suitability finding.
 

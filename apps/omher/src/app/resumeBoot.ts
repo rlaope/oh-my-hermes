@@ -41,6 +41,7 @@ function snapshot(): ResumeSnap {
       drafts: heldDrafts(st, allDrafts()),
       sessions: list.map((r) => ({
         id: r.id,
+        ...(r.linkId ? { linkId: r.linkId } : {}),
         agent: r.agent,
         cwd: r.cwd,
         startedAt: r.startedAt,

@@ -38,6 +38,12 @@ from .trigger_language_packs import (
     shipped_trigger_language_packs,
 )
 from .model_compression_cues import names_a_model_by_parameter_count
+from .skill_eval_cues import (
+    SKILL_EVAL_JOB_PHRASES,
+    SKILL_EVAL_SHARED_PHRASES,
+    skill_eval_korean_match,
+    skill_eval_korean_unanchored,
+)
 from .path_signal import PATH_GLOB_SCORE, matching_path_glob, path_mentions
 from .query import RoutingQuery
 from ..plugin_bundle.omh.hermes_session_commands import LOOP_TIMER_NONE
@@ -444,6 +450,16 @@ _RELEASE_CUT_EXPLICIT_PHRASES = tuple(
 # bare "AGENTS.md" or "CLAUDE.md" is not boosted, because "distill these
 # lessons into AGENTS.md rule candidates" is `rules-distill` and "explain what
 # is in CLAUDE.md" is a question about the file, not a request to write it.
+# `skill-eval` names checking a skill folder against the hosts that load it.
+# Every word its triggers are built from is ordinary ("skill", "load", "good",
+# "harness"), so only complete phrases score. The shared ones are also said of a
+# person's ability and reach here only alone or beside a word of agent skills
+# (`EVERYDAY_SENSE_PHRASES`); the Korean ones pass `skill_eval_korean_match`.
+_SKILL_EVAL_EXPLICIT_PHRASES = tuple(
+    normalized_phrase(phrase)
+    for phrase in (*SKILL_EVAL_JOB_PHRASES, *SKILL_EVAL_SHARED_PHRASES)
+)
+
 _AGENT_INSTRUCTIONS_EXPLICIT_PHRASES = tuple(
     normalized_phrase(phrase)
     for phrase in (
@@ -1702,6 +1718,17 @@ _SKILL_POLICIES = {
             "Prepare the skill health card with catalog/generated/reference surface status, "
             "observed-only failure clusters, pending amendment review, and top safe actions while routing setup "
             "health to doctor and mutation work to reviewed implementation."
+        ),
+    ),
+    "skill-eval": RecommendationPolicy(
+        next_action="prepare_skill_eval",
+        evidence_boundary=(
+            "A skill eval is not a host verdict until `omh skill-eval` output is observed, and a host verdict is not "
+            "proof the skill improves results; lift needs a with/without run on the same tasks."
+        ),
+        wrapper_guidance=(
+            "Run `omh skill-eval <dir>` offline with the install root, quote each host row and the count line, list "
+            "fixes at their source (not_loaded first), and offer the with/without reference only for a lift question."
         ),
     ),
     "context-budget-review": RecommendationPolicy(
@@ -3377,6 +3404,24 @@ _WHOLE_PHRASE_ONLY_TRIGGER_TOKENS = {
             "verifiable",
         }
     ),
+    # `skill-eval` is built from "skill", "eval", "evaluate", "load", "good",
+    # "harness", "check" and "compatibility" -- "explain these three functions:
+    # parse_args, load_config, and run_main" reached it on `load` alone (main's
+    # inline-functions negative). Only its complete phrases score.
+    "skill-eval": frozenset(
+        {
+            "any",
+            "check",
+            "compatibility",
+            "eval",
+            "evaluate",
+            "good",
+            "harness",
+            "load",
+            "skill",
+            "will",
+        }
+    ),
     # `internal-audit` is built from "internal", "control", "audit", "test",
     # "sampling", "evidence", "material", "weakness", "significant",
     # "deficiency", "segregation", "duties" and "sox" -- a codebase audit, a
@@ -4759,6 +4804,10 @@ def _score_definition(
         return None
     if explicit_skill != definition.name and everyday_sense_phrase_unanchored(definition.name, normalized_query):
         return None
+    if explicit_skill != definition.name and definition.name == "skill-eval" and skill_eval_korean_unanchored(
+        normalized_query
+    ):
+        return None
 
     if definition.name == explicit_skill:
         score += 12
@@ -4953,6 +5002,9 @@ def _score_definition(
     if definition.name == "model-compression" and _model_compression_explicit_match(normalized_query, query_tokens):
         score += 30
         matched.add("direct:model_compression")
+    if definition.name == "skill-eval" and _skill_eval_explicit_match(normalized_query):
+        score += 30
+        matched.add("direct:skill_eval")
     if definition.name == "data-pipelines" and _data_pipelines_explicit_match(normalized_query):
         score += 30
         matched.add("direct:data_pipelines")
@@ -5871,6 +5923,13 @@ def _model_compression_explicit_match(normalized_query: str, query_tokens: set[s
         if weight_word or any(all(phrase_is_spoken(normalized_query, word) for word in words) for words in further):
             return True
     return False
+
+
+def _skill_eval_explicit_match(normalized_query: str) -> bool:
+    """A phrase that names checking a skill against its hosts, in English or anchored Korean."""
+    if any(phrase_is_spoken(normalized_query, phrase) for phrase in _SKILL_EVAL_EXPLICIT_PHRASES):
+        return True
+    return skill_eval_korean_match(normalized_query)
 
 
 def _data_pipelines_explicit_match(normalized_query: str) -> bool:

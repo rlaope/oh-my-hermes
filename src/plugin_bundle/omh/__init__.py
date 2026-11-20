@@ -253,6 +253,7 @@ def register(ctx: _PluginContext) -> None:
     )
     from .tools.loop_tool import OMH_LOOP_SCHEMA, omh_loop_handler
     from .tools.memory_tool import OMH_MEMORY_SCHEMA, omh_memory_handler
+    from .tools.omher_terminal_tool import OMH_OMHER_TERMINAL_SCHEMA, omh_omher_terminal_handler, omher_present
     from .tools.probe_tool import OMH_PROBE_SCHEMA, omh_probe_handler
     from .tools.recommend_tool import OMH_RECOMMEND_SCHEMA, omh_recommend_handler
     from .tools.resume_tool import OMH_RESUME_SCHEMA, omh_resume_handler
@@ -398,6 +399,15 @@ def register(ctx: _PluginContext) -> None:
         OMH_MEMORY_SCHEMA,
         omh_memory_handler,
         description=OMH_MEMORY_SCHEMA["description"],
+    )
+    # omher terminal links: only where omher keeps its folder, so other installs never carry the schema
+    _ = ctx.register_tool(
+        "omh_omher_terminal",
+        _TOOLSET,
+        OMH_OMHER_TERMINAL_SCHEMA,
+        omh_omher_terminal_handler,
+        check_fn=omher_present,
+        description=OMH_OMHER_TERMINAL_SCHEMA["description"],
     )
     _ = ctx.register_tool(
         "omh_probe",

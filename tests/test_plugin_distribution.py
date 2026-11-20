@@ -1163,6 +1163,7 @@ print(json.dumps(observed, ensure_ascii=False))
                     "omh_jev_ask",
                     "omh_loop",
                     "omh_memory",
+                    "omh_omher_terminal",
                     "omh_probe",
                     "omh_recommend",
                     "omh_resume",

@@ -1,6 +1,7 @@
 // Usability: notifications while omher is in the background, keyboard shortcuts, the risk line on an
 // approval card, and the sidebar's Automations and Plugins rows opening their pages.
 import { expect, test, type Page } from "@playwright/test";
+import { usePlatform } from "./term-find-helpers";
 
 const MOCK = Number(process.env.OMHER_MOCK_PORT || 5308);
 
@@ -46,6 +47,7 @@ const notes = (page: Page) => page.evaluate(() => (window as any).__notes.map((n
 const watched = (page: Page, v: boolean) => page.evaluate((x) => ((window as any).__watched = x), v);
 
 async function open(page: Page) {
+  await usePlatform(page);
   await page.goto("/");
   await expect(page.getByTestId("bot-kami")).toHaveAttribute("aria-current", "true");
   await expect(page.getByTestId("bubble-user").first()).toBeVisible();
@@ -131,7 +133,8 @@ test("shortcuts: Mod+2 opens the second bot, Mod+K searches, Mod+. toggles Detai
   await expect(page.getByTestId("settings-view")).toBeVisible();
   await expect(page.getByTestId("shortcuts")).toContainText(mac ? "⌘K" : "Ctrl+K");
   await expect(page.getByTestId("shortcuts")).toContainText(mac ? "⌘N · ⌘T" : "Ctrl+N");
-  if (!mac) await expect(page.getByTestId("shortcuts")).not.toContainText("Ctrl+T");
+  // no Ctrl+T new-tab key off macOS (Ctrl+Tab, the pane step, is another key)
+  if (!mac) await expect(page.getByTestId("shortcuts")).not.toContainText(/Ctrl\+T(?![a-z])/);
   await page.keyboard.press(`${key}+,`);
   await expect(page.getByTestId("settings-view")).toHaveCount(0);
 });

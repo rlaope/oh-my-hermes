@@ -4,9 +4,12 @@ import remarkGfm from "remark-gfm";
 import { MentionLink, useMentions } from "./Mention";
 import { remarkMentions } from "./remarkMentions";
 import { isBare, LinkChip } from "./LinkChip";
+import { keepTermLinks, remarkTermLinks } from "./remarkTermLinks";
+import { TermLinkChip } from "./TermLinkChip";
+import { parseTermLink } from "../../sessions/termLink";
 import { CopyButton } from "./Copy";
 
-const plain = [remarkGfm];
+const plain = [remarkGfm, remarkTermLinks];
 
 const HANGUL = /[\u1100-\u11ff\u3130-\u318f\uac00-\ud7af]/;
 
@@ -21,14 +24,18 @@ function textOf(node: ReactNode): string {
 /** Bot markdown. Inside a MentionContext (the app), `@name` of a known bot opens that bot's chat. */
 export const Markdown = memo(function Markdown({ text }: { text: string }) {
   const resolve = useMentions()?.resolve;
-  const plugins = useMemo(() => (resolve ? [remarkGfm, [remarkMentions, { resolve }] as const] : plain), [resolve]);
+  const plugins = useMemo(() => (resolve ? [remarkGfm, remarkTermLinks, [remarkMentions, { resolve }] as const] : plain), [resolve]);
   return (
     <ReactMarkdown
       remarkPlugins={plugins as typeof plain}
+      urlTransform={keepTermLinks}
       components={{
         // a bare URL becomes a chip (service mark + short label); a link with its own text keeps it, after the mark
+        // an omher terminal link: the omher chip (the session's mark, title and state), its own text kept as the label
         a: ({ node: _n, href, children, ...p }) =>
-          href && /^https?:\/\//i.test(href) ? (
+          href && parseTermLink(href) ? (
+            <TermLinkChip url={href} label={textOf(children).trim() && textOf(children).trim() !== href ? textOf(children).trim() : undefined} />
+          ) : href && /^https?:\/\//i.test(href) ? (
             <LinkChip url={href}>{isBare(href, textOf(children)) ? undefined : children}</LinkChip>
           ) : (
             <a {...p} href={href} target="_blank" rel="noreferrer">

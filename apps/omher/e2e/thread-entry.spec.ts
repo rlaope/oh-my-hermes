@@ -128,45 +128,26 @@ test("inside a thread, ./thread opens a sibling thread under the same bot", asyn
   await expect(page.getByTestId("threads-kami").locator("[data-thread]")).toHaveCount(2);
 });
 
-test("+ New thread closes the list on the rail and opens an empty thread with the composer focused", async ({ page }) => {
+test("no New thread line under a bot: the tree holds only its threads; the row's + is the way in", async ({ page }) => {
   await setup(page);
-  // Kami is open and has no threads yet: the line shows under it alone
-  const tree = page.getByTestId("threads-kami");
-  await expect(tree.getByTestId("thread-new")).toBeVisible();
-  // a bot that is not open and has no threads shows none
-  await expect(page.getByTestId("threads-friren")).toHaveCount(0);
-  await tree.getByTestId("thread-new").click();
+  // khope (2026-11-19): a "+ New thread" line always under the bot is too much. Kami is open with no threads: nothing
+  await expect(page.getByTestId("threads-kami")).toHaveCount(0);
+  await expect(page.getByTestId("thread-new")).toHaveCount(0);
+  await page.getByTestId("bot-row-kami").hover();
+  await page.getByTestId("bot-new-kami").click();
   const id = await created(page);
   await expect(page.getByTestId("thread-empty")).toBeVisible();
   await expect(page.getByTestId("composer")).toBeFocused();
-  // now the line closes the list, after the new thread, on the same rail
-  const rows = tree.locator(":scope > li");
-  await expect(rows).toHaveCount(2);
+  // the tree is the thread card alone, the last row on the rail
+  const rows = page.getByTestId("threads-kami").locator(":scope > li");
+  await expect(rows).toHaveCount(1);
   await expect(rows.nth(0)).toHaveAttribute("data-thread", id);
-  await expect(rows.nth(1)).toHaveClass(/th-new/);
-  await expect(rows.nth(1)).toHaveClass(/th-last/);
-  await expect(rows.nth(0)).not.toHaveClass(/th-last/);
-  const a = (await rows.nth(0).boundingBox())!;
-  const b = (await rows.nth(1).boundingBox())!;
-  expect(Math.abs(a.x - b.x)).toBeLessThanOrEqual(0.5); // same left edge as the cards
-  expect(Math.abs(a.x + a.width - (b.x + b.width))).toBeLessThanOrEqual(0.5);
-  // quiet: no fill at rest, 12px gray text, small corners
-  const look = await rows.nth(1).evaluate((el) => {
-    const s = getComputedStyle(el);
-    const btn = getComputedStyle(el.querySelector("button")!);
-    return { bg: s.backgroundColor, radius: parseFloat(s.borderTopLeftRadius), style: s.borderTopStyle, size: parseFloat(btn.fontSize) };
-  });
-  expect(look.bg).toBe("rgba(0, 0, 0, 0)");
-  expect(look.radius).toBeGreaterThanOrEqual(4);
-  expect(look.radius).toBeLessThanOrEqual(8);
-  expect(look.style).toBe("dashed");
-  expect(look.size).toBeGreaterThanOrEqual(11);
-  expect(look.size).toBeLessThanOrEqual(13);
-  // the sidebar keeps its width
+  await expect(rows.nth(0)).toHaveClass(/th-last/);
+  await expect(page.getByTestId("thread-new")).toHaveCount(0);
   expect(await page.evaluate(() => document.documentElement.scrollWidth - innerWidth)).toBe(0);
 });
 
-test("the row's + opens a new thread; an offline bot has no + and no New thread line", async ({ page }) => {
+test("the row's + opens a new thread; an offline bot has no + and no New thread in its menu", async ({ page }) => {
   await setup(page);
   await page.getByTestId("bot-row-friren").hover();
   const plus = page.getByTestId("bot-new-friren");
@@ -186,7 +167,6 @@ test("the row's + opens a new thread; an offline bot has no + and no New thread 
   await page.getByTestId("bot-omh-tui").click();
   await page.getByTestId("bot-row-omh-tui").hover();
   await expect(page.getByTestId("bot-new-omh-tui")).toHaveCount(0);
-  await expect(page.getByTestId("threads-omh-tui")).toHaveCount(0);
   await page.getByTestId("bot-omh-tui").click({ button: "right" });
   await expect(page.getByTestId("row-new-thread")).toHaveCount(0);
   await expect(page.getByTestId("row-menu-sep")).toHaveCount(0);
@@ -217,7 +197,7 @@ test("the row menu sets New thread apart: its own group with an icon and a divid
   expect(box.y + box.height).toBeLessThanOrEqual(900);
 });
 
-test("shots: sidebar with threads and the new line, the ./th picker, the row menu (ko, dark and light)", async ({ page }) => {
+test("shots: sidebar with threads (no New thread line), the ./th picker, the row menu (ko, dark and light)", async ({ page }) => {
   test.skip(!SHOTS, "OMHER_SHOTS not set");
   mkdirSync(SHOTS, { recursive: true });
   await page.setViewportSize({ width: 1440, height: 900 });
@@ -234,7 +214,8 @@ test("shots: sidebar with threads and the new line, the ./th picker, the row men
     await page.addInitScript(() => localStorage.setItem("omher.lang", "ko"));
     await page.goto("/");
     await expect(page.getByTestId("bot-kami")).toHaveAttribute("aria-current", "true");
-    await expect(page.getByTestId("threads-kami").getByTestId("thread-new")).toBeVisible();
+    await expect(page.getByTestId("threads-kami").locator("[data-thread]")).toHaveCount(3);
+    await expect(page.getByTestId("thread-new")).toHaveCount(0);
     const box = page.getByTestId("composer");
     await box.fill("");
     await page.getByTestId("bot-row-friren").hover();

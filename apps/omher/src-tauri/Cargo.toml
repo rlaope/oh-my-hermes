@@ -23,9 +23,15 @@ portable-pty = "0.9"
 tauri-plugin-dialog = "2"
 tauri-plugin-updater = "2"
 tauri-plugin-process = "2"
+# omher://terminal/<id> links: the OS hands them to omher (term_link.rs takes only that shape)
+tauri-plugin-deep-link = "2"
 
 [target.'cfg(unix)'.dependencies]
 libc = "0.2"
+
+# Windows and Linux: a link opened while omher runs starts a second omher; this hands its link to the first one.
+[target.'cfg(any(target_os = "windows", target_os = "linux"))'.dependencies]
+tauri-plugin-single-instance = { version = "2", features = ["deep-link"] }
 
 # Linux: the opener plugin's own launcher list, run with the AppImage environment taken out (src/appimage.rs).
 [target.'cfg(target_os = "linux")'.dependencies]

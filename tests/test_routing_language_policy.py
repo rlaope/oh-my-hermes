@@ -207,6 +207,11 @@ FROZEN_HANGUL_TRIGGERS_BY_SKILL: dict[str, int] = {
     "rules-distill": 4,
     "security-safety-review": 5,
     "skill-health": 6,
+    # 0 -> 3 (2026-11-19, new skill): skill-eval ships 스킬 평가, 스킬 점검 and
+    # 스킬 호환성 with its English base corpus in the same commit. Each counts
+    # alone or beside a word of agent skills (`skill_eval_korean_match`), since
+    # a staff skill assessment says them too. Frozen at what it carries.
+    "skill-eval": 3,
     "skill-scout": 13,
     "source-finder": 8,
     # 0 -> 24 (2026-10-15, owner decision D.4, KO-1): the other safety gate,

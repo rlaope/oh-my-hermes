@@ -19,6 +19,7 @@ from omh.skills.catalog_portable import portable_skill_names
 from omh.skills.catalog_types import HERMES_BUNDLED_SKILL_NAMES, HermesSkillLine, PortableLine
 from omh.skills.packaging import builtin_skill_reference_templates
 from omh.skills.render import (
+    agent_skill_detail_templates,
     agent_skill_template,
     builtin_skill_templates,
     loadable_skill_mentions,
@@ -179,7 +180,11 @@ class LoadableSiblingNameTests(unittest.TestCase):
         for name, definition in self.definitions.items():
             if omh_skill_display_name(name) not in portable:
                 continue
-            content = agent_skill_template(definition).content
+            # A body over the read cap may keep this section in references/details.md,
+            # leaving its heading and a pointer in SKILL.md; the moved text is read first.
+            content = "".join(
+                "\n" + detail.content + "\n\n" for detail in agent_skill_detail_templates([definition])
+            ) + agent_skill_template(definition).content
             rendered = _do_not_use_section(content)
             # A whole-section portable override replaces the lines; otherwise
             # the portable body keeps every line but a bundled-skill one, with

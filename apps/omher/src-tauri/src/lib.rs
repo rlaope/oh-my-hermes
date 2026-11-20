@@ -2,6 +2,7 @@ mod accounts;
 mod acp_agents;
 mod acp_chat;
 mod agent_chat;
+mod app_menu;
 mod appimage;
 mod bridge;
 mod custom_agents;
@@ -19,6 +20,8 @@ mod sessions;
 mod setup;
 mod tasks;
 mod term_history;
+mod term_link;
+mod term_share;
 mod this_host;
 
 use std::path::PathBuf;
@@ -613,6 +616,34 @@ async fn term_history_clear() -> Result<(), String> {
     term_history::clear(&user_home()?)
 }
 
+/// A TERMINALS session's status file for bots holding its link (`~/.omher/terminals/<link>.json`, owner-only) and its
+/// inbox folder (`term_share`). `status`: what the page shows of it (title, CLI, folder, state, last line).
+#[tauri::command]
+async fn term_share_write(link: String, status: term_share::Status) -> Result<(), String> {
+    let home = user_home()?;
+    tauri::async_runtime::spawn_blocking(move || term_share::write(&home, &link, &status)).await.map_err(|e| e.to_string())?
+}
+
+/// Remove session `link`'s status file and inbox (it was closed).
+#[tauri::command]
+async fn term_share_remove(link: String) -> Result<(), String> {
+    term_share::remove(&user_home()?, &link)
+}
+
+/// Remove the status files of every session not in `keep` (omher started; the others are gone).
+#[tauri::command]
+async fn term_share_prune(keep: Vec<String>) -> Result<(), String> {
+    term_share::prune(&user_home()?, &keep)
+}
+
+/// Bots' requests to type into sessions `links`, each inbox file taken once (removed); refused files are removed
+/// unread. The page shows each as a card: nothing is typed here.
+#[tauri::command]
+async fn term_share_take(links: Vec<String>) -> Result<Vec<term_share::Request>, String> {
+    let home = user_home()?;
+    tauri::async_runtime::spawn_blocking(move || term_share::take(&home, &links).0).await.map_err(|e| e.to_string())
+}
+
 /// Stop the chat's program and forget the session.
 #[tauri::command]
 async fn chat_close(shell: State<'_, Shell>, id: u32) -> Result<(), String> {
@@ -740,6 +771,12 @@ async fn asks_badge(window: tauri::WebviewWindow, count: u32) -> Result<(), Stri
     }
 }
 
+/// Close the window: the page's answer to Close Window (⌘W) when no split pane has the keyboard (app_menu.rs).
+#[tauri::command]
+fn window_close(window: tauri::WebviewWindow) -> Result<(), String> {
+    window.close().map_err(|e| e.to_string())
+}
+
 /// The remote machines (`~/.omher/peers.json`, checked on read) and each link's state.
 #[tauri::command]
 async fn peers_list(shell: State<'_, Shell>) -> Result<Vec<peers::PeerStatus>, String> {
@@ -808,7 +845,22 @@ async fn bridge_retry(shell: State<'_, Shell>) -> Result<(), String> {
 }
 
 pub fn run() {
-    let app = tauri::Builder::default()
+    let builder = tauri::Builder::default();
+    // macOS: Close Window (⌘W) asks the page first, so a split pane closes instead of the window (app_menu.rs). Other
+    // systems keep no menu, as before.
+    #[cfg(target_os = "macos")]
+    let builder = builder.menu(|app| app_menu::build(app));
+    // Windows and Linux: first, so a second launch carrying an omher:// link hands it over and quits
+    #[cfg(any(target_os = "windows", target_os = "linux"))]
+    let builder = builder.plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
+        if let Some(w) = app.get_webview_window("main") {
+            let _ = w.unminimize();
+            let _ = w.show();
+            let _ = w.set_focus();
+        }
+    }));
+    let app = builder
+        .plugin(tauri_plugin_deep_link::init())
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_dialog::init())
@@ -816,6 +868,11 @@ pub fn run() {
         // build signed with the key whose public half is pinned there; process restarts into it.
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_process::init())
+        .on_menu_event(|app, event| {
+            if app_menu::is_close(event.id().as_ref()) {
+                let _ = app.emit(app_menu::CLOSE_EVENT, ());
+            }
+        })
         .invoke_handler(tauri::generate_handler![
             bridge_url,
             bridge_status,
@@ -854,6 +911,10 @@ pub fn run() {
             term_history_remove,
             term_history_prune,
             term_history_clear,
+            term_share_write,
+            term_share_remove,
+            term_share_prune,
+            term_share_take,
             session_branch,
             chat_close_all,
             open_media,
@@ -877,7 +938,9 @@ pub fn run() {
             tasks_status,
             tasks_list,
             tasks_view,
-            tasks_remote
+            tasks_remote,
+            window_close,
+            term_link::term_link_take
         ])
         .setup(|app| {
             let bridge = Bridge::new();
@@ -890,6 +953,23 @@ pub fn run() {
             }
             peers.start_all();
             app.manage(Arc::new(tasks::Tasks::default()));
+            // omher://terminal/<id> links: the one omher was opened with, and each one after
+            app.manage(term_link::TermLinks::default());
+            {
+                use tauri_plugin_deep_link::DeepLinkExt;
+                // Windows and Linux: an installed build registers the scheme itself; a portable run (AppImage) does it here
+                #[cfg(any(target_os = "windows", target_os = "linux"))]
+                let _ = app.deep_link().register_all();
+                if let Ok(Some(urls)) = app.deep_link().get_current() {
+                    let urls: Vec<String> = urls.iter().map(|u| u.to_string()).collect();
+                    term_link::arrived(app.handle(), &urls);
+                }
+                let handle = app.handle().clone();
+                app.deep_link().on_open_url(move |event| {
+                    let urls: Vec<String> = event.urls().iter().map(|u| u.to_string()).collect();
+                    term_link::arrived(&handle, &urls);
+                });
+            }
             app.manage(Shell {
                 bridge,
                 peers,
@@ -912,6 +992,10 @@ pub fn run() {
                 shell.logins.cancel_all();
                 shell.peers.stop_all();
                 shell.bridge.stop();
+            }
+            // the sessions are gone: so are the status files bots read
+            if let Ok(home) = user_home() {
+                let _ = term_share::prune(&home, &[]);
             }
         }
     });

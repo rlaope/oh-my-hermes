@@ -1,6 +1,6 @@
 ---
 name: "omh-design-orchestration"
-description: "[omh] Entire product design problem to delegate: prepare a bounded design direction, existing-lane composition, and executor-neutral handoff. Use when the user says: design-orchestration, design orchestration, design ownership, handle this product design, take on the design, デザインを任せる, デザイン全体を任せ, プロダクトデザインを任せ."
+description: "[omh] Entire product design problem to delegate: prepare a bounded…"
 license: MIT
 metadata:
   hermes:

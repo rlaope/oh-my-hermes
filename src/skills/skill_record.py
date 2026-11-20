@@ -69,6 +69,7 @@ from .biomedical_evidence_skill import biomedical_evidence_reference_templates
 from .molecular_docking_skill import molecular_docking_reference_templates
 from .ai_job_search_skill import ai_job_search_reference_templates
 from .model_compression_skill import model_compression_reference_templates
+from .skill_eval_skill import skill_eval_reference_templates
 from .render import (
     SkillReferenceTemplate,
     SkillTemplate,
@@ -79,6 +80,7 @@ from .render import (
     agent_evaluation_reference_templates,
     agent_instructions_reference_templates,
     agent_ops_review_reference_templates,
+    agent_skill_detail_templates,
     agent_skill_template,
     ai_slop_cleaner_reference_templates,
     ai_slop_ui_review_reference_templates,
@@ -257,6 +259,7 @@ REFERENCE_PRODUCERS: tuple[Callable[[], list[SkillReferenceTemplate]], ...] = (
     data_pipelines_reference_templates,
     model_finetuning_reference_templates,
     model_compression_reference_templates,
+    skill_eval_reference_templates,
     mobile_release_reference_templates,
     internal_audit_reference_templates,
     data_share_review_reference_templates,
@@ -472,7 +475,7 @@ def _project_agent_skills(skill: SkillRecord) -> ProjectedFiles:
     files.update(
         {
             f"{template.skill_name}/{template.relative_path}": template.content
-            for template in portable_reference_templates(skill.references())
+            for template in (*portable_reference_templates(skill.references()), *agent_skill_detail_templates([skill.definition]))
         }
     )
     files.update({f"{t.skill_name}/{t.relative_path}": t.content for t in agent_skill_support_templates() if t.skill_name == skill.display_name})

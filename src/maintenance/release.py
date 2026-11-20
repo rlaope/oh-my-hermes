@@ -200,10 +200,19 @@ CONCEPTUAL_AWARENESS_SURFACES = ("request-to-handoff", "executor selection", "co
 # measured from the producer; no headroom.
 # 13502 -> 13592: one `model-compression` index line plus newline (+90),
 # measured from the producer; no headroom.
-SKILL_INDEX_CHAR_LIMIT = 13592
+# 13592 -> 12970: the producer now cuts descriptions the way Hermes'
+# `clip_skill_description` does, at the last word boundary inside 58
+# characters with trailing punctuation dropped, instead of a fixed 57; every
+# line that was cut mid-word gets shorter. Measured from the producer; no headroom.
+# 12970 -> 13051: one `skill-eval` index line plus newline, measured from
+# the producer after merging fix/skill-harness-fit; no headroom.
+# 13051 -> 13054: model-compression's clause says "smaller or cheaper via its
+# weights" again (+3 in its index line), measured from the producer; no headroom.
+SKILL_INDEX_CHAR_LIMIT = 13054
 # The longest single skill line in that index. Every description is already cut
 # to 60 characters, so what moves this is a longer skill name.
-SKILL_INDEX_LINE_CHAR_LIMIT = 100
+# 100 -> 99: same word-boundary cut as above, measured from the producer.
+SKILL_INDEX_LINE_CHAR_LIMIT = 99
 # The plugin bundle's registered tool schemas, 19 tools when the budget landed
 # (20 with `omh_jev_ask`), serialized as JSON with
 # sorted keys (`src/maintenance/per_turn_context.py`); `omh_todo` and `omh_loop`
@@ -461,7 +470,13 @@ SKILL_INDEX_LINE_CHAR_LIMIT = 100
 # 4083): one optional string property and its description. Measured by
 # per_turn_context.plugin_tool_schema_chars_by_tool() against main a5649293b.
 # No headroom.
-PLUGIN_TOOL_SCHEMA_CHAR_LIMIT = 63156
+# 63156 -> 63824: omh_omher_terminal reads an omher terminal's status from its
+# link and asks omher to type a prompt the person allows (+668; 62968 -> 63636
+# on its own branch). Registered with a check_fn on omher's own folder, so
+# installs without omher never carry it. Measured by
+# per_turn_context.plugin_tool_schema_chars_by_tool() against c16924f2a, then
+# summed with main's carry_forward. No headroom.
+PLUGIN_TOOL_SCHEMA_CHAR_LIMIT = 63824
 # PRE_LLM_CALL_CONTEXT_CHAR_LIMIT, PRE_LLM_CALL_CONTEXT_FALLBACK_CHAR_LIMIT: moved with
 # their history to src/plugin_bundle/omh/turn_budget.py; imported at the top of this file.
 # 340000 -> 349637: three capability-skill sections were added by the domain
@@ -1090,7 +1105,13 @@ PLUGIN_TOOL_SCHEMA_CHAR_LIMIT = 63156
 # 545582 -> 545712 (2026-11-12): design-orchestration's quality bar had three items, so its new fourth line
 # (direction options shown as rendered images) enters the capability row's first-four slice (+130, only that
 # row, 3915 -> 4045); measured from the producer against main 2fcbef29f. No headroom.
-FULL_CAPABILITY_SKILL_SECTION_CHAR_LIMIT = 545712
+# 545712 -> 545683: twenty descriptions end their situation clause inside Hermes' 60-character index
+# window, the detail moved after the colon (-29 across those rows); measured from the producer. No headroom.
+# 545683 -> 549541: one `skill-eval` capability row plus its separator; dropping only that row
+# reproduces 545683. Measured from the producer.
+# 549541 -> 549528: model-compression's description says "smaller or cheaper via its weights" in place of
+# "smaller by changing its weights: cheaper through" (-13); measured from the producer. No headroom.
+FULL_CAPABILITY_SKILL_SECTION_CHAR_LIMIT = 549528
 FULL_CAPABILITY_SKILL_ITEM_CHAR_LIMIT = 9000
 # 100000 -> 102070: the same three domain workflows each add one standalone
 # capability row, again measured on the merged tree; warranted growth for three
@@ -1202,7 +1223,9 @@ FULL_CAPABILITY_SKILL_ITEM_CHAR_LIMIT = 9000
 # separator (+947); the procedure stays in the skill body.
 # 145471 -> 146418: one 945-character standalone `model-compression` row plus
 # separator (+947); the method stays in its on-demand reference.
-STANDALONE_CAPABILITY_SKILL_SECTION_CHAR_LIMIT = 146418
+# 146418 -> 147355: one 935-character standalone `skill-eval` row plus
+# separator (+937); the lift method stays in its on-demand reference.
+STANDALONE_CAPABILITY_SKILL_SECTION_CHAR_LIMIT = 147355
 STANDALONE_CAPABILITY_SKILL_ITEM_CHAR_LIMIT = 2200
 # ULW fold context ceiling (issue #954, PR D). The limit is the pre-D measured
 # value of the full profile's `skill_body` chars on `main` @ acb9a060, in the

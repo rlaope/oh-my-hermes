@@ -21,7 +21,7 @@
 .term-pv-host {
   min-height: 150px;
 }
-.term-pv .xterm .xterm-viewport {
+.term-pv .xterm:not(.allow-transparency) .xterm-viewport {
   background-color: transparent;
 }
 .tm-bar {

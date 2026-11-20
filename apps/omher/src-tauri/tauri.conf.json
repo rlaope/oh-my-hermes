@@ -57,6 +57,11 @@
     "createUpdaterArtifacts": true
   },
   "plugins": {
+    "deep-link": {
+      "desktop": {
+        "schemes": ["omher"]
+      }
+    },
     "updater": {
       "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDFGMTRFOUQyNjMxNjQyNDUKUldSRlFoWmowdWtVSDZ1YTQ4VS9VcVZsNm9UcW03MUJKWU8zREw0cWlBTzA3TGw5K0RhdUpYR3gK",
       "endpoints": [
