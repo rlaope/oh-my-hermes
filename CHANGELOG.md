@@ -450,6 +450,13 @@ All notable changes will be documented here.
   bug also shows only with a file outside the hunk, so an over-cautious reviewer still loses hits. The corpus goes
   from 11 traps and 6 controls to 23 and 10.
 
+- **The OMH TUI folds consecutive calls of one tool into one row.** Six `terminal` calls in a row used to take about
+  twenty rows: a rail, a command row and an output row each, two blank rows between them. They now read as one
+  `● terminal · 6 calls  3.1s` row with each call's command and time under it, so the commands stay readable while
+  what each printed waits for Ctrl+O, which unfolds the run into the calls' own rows. A call with an answer under it,
+  a diff or recalled records, or a failed or refused call keeps its own row; a call of another tool ends the run.
+  Resumed sessions fold the same way.
+
 ## 4.0.8 - 2026-11-15
 
 - **The OMH TUI shows a compression as one gauge row, and a prompt typed meanwhile goes on by itself.** `/compact`

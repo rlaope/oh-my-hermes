@@ -291,6 +291,15 @@ class GapTests(unittest.TestCase):
         self.assertEqual(frame.budget.gaps, (0, 1))
 
 
+# Two tools taking turns: consecutive calls of one tool fold into one row (test_tui_same_tool_runs), and these tests
+# measure the gaps between calls that each keep their own row.
+CALL_NAMES = ("read_file", "search_files")
+
+
+def is_call_row(row: str) -> bool:
+    return any(f"{name}(" in row for name in CALL_NAMES)
+
+
 class GapsNeverCostALiveRowTests(unittest.TestCase):
     """#2342 review, HIGH: the plan's blank rows and the spacer over the working row once took the place of the
     running turn's tool rows on short terminals. Every tool row the layout without them showed is still shown."""
@@ -332,7 +341,7 @@ class GapsNeverCostALiveRowTests(unittest.TestCase):
         app._on_event(Event("message.start", SID, {}))
         for index in range(calls):
             now[0] += 0.2
-            app._on_event(Event("tool.start", SID, {"tool_id": f"t{index}", "name": "read_file",
+            app._on_event(Event("tool.start", SID, {"tool_id": f"t{index}", "name": CALL_NAMES[index % 2],
                                                     "context": f"f{index}.py"}))
         if agents:
             relay(app, STARTS)
@@ -343,7 +352,7 @@ class GapsNeverCostALiveRowTests(unittest.TestCase):
         for (rows, cols, agents), before in self.BEFORE.items():
             with self.subTest(rows=rows, cols=cols, agents=agents):
                 screen = self.scene(rows, cols, agents)
-                shown = sum("read_file" in row for row in screen)
+                shown = sum(is_call_row(row) for row in screen)
                 self.assertGreaterEqual(shown, before, "\n".join(screen))
 
     def test_as_many_running_calls_show_as_with_one_blank_row_between_them(self) -> None:
@@ -351,7 +360,7 @@ class GapsNeverCostALiveRowTests(unittest.TestCase):
             for calls, before in enumerate(counts, 4):
                 with self.subTest(rows=rows, cols=cols, plan=plan, agents=agents, calls=calls):
                     screen = self.scene(rows, cols, agents, calls, plan)
-                    shown = sum("read_file" in row for row in screen)
+                    shown = sum(is_call_row(row) for row in screen)
                     self.assertGreaterEqual(shown, before, "\n".join(screen))
 
     def test_running_calls_keep_two_blank_rows_where_they_fit_and_the_newest_where_the_tail_is_too_tall(self) -> None:
@@ -366,7 +375,7 @@ class GapsNeverCostALiveRowTests(unittest.TestCase):
         for (rows, cols, agents, count, plan), gaps in cases.items():
             with self.subTest(rows=rows, cols=cols, agents=agents, calls=count, plan=plan):
                 screen = self.scene(rows, cols, agents, count, plan)
-                calls = [index for index, row in enumerate(screen) if "read_file" in row]
+                calls = [index for index, row in enumerate(screen) if is_call_row(row)]
                 self.assertEqual([below - above - 1 for above, below in zip(calls, calls[1:])], gaps,
                                  "\n".join(screen))
                 between = [row for above, below in zip(calls, calls[1:]) for row in screen[above + 1 : below]]
@@ -420,14 +429,14 @@ class GapsNeverCostALiveRowTests(unittest.TestCase):
         app._on_event(Event("message.start", SID, {}))
         for index in range(16):
             now[0] += 0.2
-            app._on_event(Event("tool.start", SID, {"tool_id": f"t{index}", "name": "read_file",
+            app._on_event(Event("tool.start", SID, {"tool_id": f"t{index}", "name": CALL_NAMES[index % 2],
                                                     "context": f"f{index}.py"}))
         app._render()
         screen = app.terminal.screen.lines()
         working = next(index for index, row in enumerate(screen) if row.startswith("✻ Working"))
-        self.assertNotIn("read_file(f0.py)", "\n".join(screen))  # the tail is cut
+        self.assertNotIn("(f0.py)", "\n".join(screen))  # the tail is cut
         self.assertEqual(screen[working - 1], "", "\n".join(screen))
-        self.assertIn("read_file(f15.py)", screen[working - 2], "\n".join(screen))
+        self.assertIn("search_files(f15.py)", screen[working - 2], "\n".join(screen))
 
 
 class CallGapOverflowTests(unittest.TestCase):

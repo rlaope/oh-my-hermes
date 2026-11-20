@@ -60,7 +60,9 @@ dag-ulw aura sweeps as the call completes, while its group is live and only
 where the aura moves (`_glint_band`). A run of consecutive plumbing calls
 (`PLUMBING_TOOLS`: loading a skill, reading tool details) folds into one row,
 `● Loaded 4 skills + tool details · a, b, c, d  3.5s` (a failed one keeps its own
-row, and the details view unfolds the run), and a shell call that
+row, and the details view unfolds the run); a run of consecutive calls of one other tool folds into one row
+over each call's command, `● terminal · 3 calls  0.9s` (`_runs_with`, `_run_rows`; a call with an answer, a diff, a
+recall or a failure keeps its own row), and a shell call that
 feeds a script through a heredoc reads `terminal(python3 script · 23 lines)`
 (`_heredoc_summary`). A
 `tool.generating` row (`◌`) is a draft: a `tool.start` takes over the first
@@ -1497,12 +1499,22 @@ def _folds(tool: ToolRow) -> bool:
     return tool.name in PLUMBING_TOOLS and tool.status in FOLDED_STATUSES
 
 
+def _runs_with(tool: ToolRow, before: ToolRow) -> bool:
+    """Whether a call joins the run of same-tool calls `before` ends (the owner, 2026-11-20: six `terminal` calls in
+    a row took twenty rows): the same tool, not a plumbing one, both in `FOLDED_STATUSES`, and neither with an
+    answer under it, a diff, or recalled records (`_recall_lines`), which keep their own rows. A failed or refused
+    call keeps its row and says why."""
+    return (tool.name == before.name and not _folds(tool)
+            and all(call.status in FOLDED_STATUSES and not call.answers and not call.inline_diff
+                    and call.recalled_at is None for call in (tool, before)))
+
+
 def _units(tools: list[ToolRow], fold: bool = True) -> list[list[ToolRow]]:
-    """The calls as rows: each run of consecutive plumbing calls one unit (`fold`), every other call a unit of its
-    own."""
+    """The calls as rows: each run of consecutive plumbing calls one unit, and each run of consecutive calls of one
+    tool one unit (`_runs_with`), with `fold`; every other call a unit of its own."""
     units: list[list[ToolRow]] = []
     for tool in tools:
-        if fold and _folds(tool) and units and _folds(units[-1][-1]):
+        if fold and units and ((_folds(tool) and _folds(units[-1][-1])) or _runs_with(tool, units[-1][-1])):
             units[-1].append(tool)
         else:
             units.append([tool])
@@ -1542,6 +1554,30 @@ def _folded_row(unit: list[ToolRow], width: int, theme: Theme, now: float | None
     return truncate_line((*head, *args, *tail), width)
 
 
+def _run_rows(unit: list[ToolRow], width: int, theme: Theme, now: float | None) -> list[Line]:
+    """A run of same-tool calls: `● terminal · 6 calls  3.1s`, then each call's command on its own row under `⎿`,
+    its time after it. What each printed is left out; the details view (ctrl+o) unfolds the run with it."""
+    status = _unit_status(unit)
+    running = next((tool for tool in unit if tool.status == TOOL_RUNNING), None)
+    mark = _tool_mark(status, theme, running is not None and _pulse_dim(running, now))
+    name = unit[0].name
+    durations = [tool.duration_s for tool in unit if tool.duration_s is not None]
+    tail: Line = (Span(COLUMN_GAP + _seconds(sum(durations)), theme.faint),) if durations and running is None else ()
+    head: Line = (mark, Span(" "), Span(name, kind_style(name, theme)), Span(f"{LABEL_SEPARATOR}{len(unit)} calls",
+                                                                           theme.muted), *tail)
+    first, rest = _output_leads(theme)
+    rows = [truncate_line(head, width)]
+    for index, tool in enumerate(unit):
+        lead = rest if index else first
+        took: Line = (Span(COLUMN_GAP + _seconds(tool.duration_s), theme.faint),) if tool.duration_s is not None else ()
+        shown = tool.script or tool.args_summary or name
+        room = width - line_width(lead) - line_width(took)
+        cut = truncate_left if _is_path(shown) else truncate
+        style = theme.dim if tool.status == TOOL_RUNNING and _pulse_dim(tool, now) else theme.muted
+        rows.append(truncate_line((*lead, Span(cut(shown, max(room, 1)), style), *took), width))
+    return rows
+
+
 def _tool_rows(
     group: ToolGroup, width: int, theme: Theme, expanded: bool, now: float | None = None, glint: bool = False,
 ) -> list[Line]:
@@ -1555,6 +1591,8 @@ def _tool_rows(
         status = _unit_status(unit)
         if not expanded and _folds(unit[0]):
             own = [_folded_row(unit, inner, theme, now)]
+        elif not expanded and len(unit) > 1:
+            own = _run_rows(unit, inner, theme, now)
         else:
             tool = unit[0]
             own = [_tool_row(tool, inner, theme, now, expanded)]

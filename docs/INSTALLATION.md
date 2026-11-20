@@ -1166,7 +1166,19 @@ wake pipe on real Windows pipes.
   ends the run. A failed one keeps a row of its own with its error, and
   Ctrl+O unfolds the run, each load saying what it loaded (`loaded skill
   omh-docs`, `loaded references/api.md from skill omh-docs` for a file in
-  it). A shell call whose heredoc feeds an interpreter its script
+  it). Consecutive calls of any other one tool fold the same way, each
+  call's command on its own row under the first, its time after it:
+
+  ```text
+  ┃ ● terminal · 3 calls  0.9s
+  ┃   ⎿  rg DBGM src  0.2s
+  ┃      sed -n 1,9p app.py  0.3s
+  ┃      pnpm test  0.4s
+  ```
+
+  What each printed is left out until Ctrl+O unfolds the run. A call with an
+  answer under it, a diff, recalled records, or a failure keeps a row of its
+  own. A shell call whose heredoc feeds an interpreter its script
   (`python3 - <<'PY'`, `uv run python - <<'PY'`, `bash <<EOF`) names the
   interpreter and counts the script's lines and the commands around it
   (`terminal(python3 script · 23 lines)`), one a line: another heredoc's

@@ -250,6 +250,7 @@ skin's accent for a reply, a call's state colour for the call), a call's state
 in its mark's glyph and colour as the dag view draws it (running blue `○`, done
 green `●`, failed red `✗`), its name in its tool family's hue at 4.5:1 on dark
 and light, consecutive skill loads and tool-detail reads folded into one row,
+consecutive calls of one other tool folded into one row over their commands,
 and the composer between two full-width rules with no side edges; none of it
 changes what the TUI sends or answers.
 
