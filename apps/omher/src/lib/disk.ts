@@ -15,6 +15,9 @@ export interface DiskState {
   free_bytes: number;
   /** Where the home folder's volume is mounted (`/`, `C:\`). */
   volume: string;
+  /** How many times the level has got worse since the shell started (src-tauri/src/disk.rs `Watch::alerts`). Each new
+   *  count is noted once, whether the event or a reading brings it. Absent from an older shell. */
+  alerts?: number;
 }
 
 /** Settings › General's choices in GB; 0 = off. */
@@ -81,24 +84,43 @@ let host: DiskHost | null = null;
 let started = false;
 let notify: ((n: Note) => void) | null = null;
 const RANK: Record<DiskLevel, number> = { ok: 0, low: 1, critical: 2 };
-/** The level the page last heard, from either source. */
+/** The shell's worse-step count already noted (or passed over: a step that arrives as ok, after the warning was
+ *  turned off, is never noted later). */
+let seenAlerts = 0;
+/** An older shell without `alerts`: the level last heard. */
 let noted: DiskLevel = "ok";
+/** Replies come back in any order: one asked before the newest applied reply is stale. */
+let asked = 0;
+let applied = 0;
 
-/** One note per worse level, from whichever comes first: the shell's event, or a reading that already shows it
- *  (the startup event can fire before the page's listener is registered, and the shell sends it only once). A level
- *  heard from both sources notes once; a level that got better and worse again notes again. */
-function heard(s: DiskState | null | undefined): void {
+/** One note per time the level got worse, from whichever comes first: the shell's event, or a reading that already
+ *  shows it. The startup event can fire before the page's listener is registered, a recovery and a new drop can both
+ *  happen between two polls, and a slow reply can arrive after a newer one; the shell's count settles all three. */
+function heard(s: DiskState | null | undefined, seq?: number): void {
   if (!s || !(s.level in RANK)) return;
+  if (seq !== undefined) {
+    if (seq < applied) return;
+    applied = seq;
+  }
+  // a reading taken before a worse step the page already heard about is older than what the chip shows
+  if (typeof s.alerts === "number" && s.alerts < seenAlerts) return;
   set(s);
-  const worse = RANK[s.level] > RANK[noted];
-  noted = s.level;
+  let worse: boolean;
+  if (typeof s.alerts === "number") {
+    worse = s.alerts > seenAlerts && s.level !== "ok";
+    seenAlerts = Math.max(seenAlerts, s.alerts);
+  } else {
+    worse = RANK[s.level] > RANK[noted];
+    noted = s.level;
+  }
   if (worse) notify?.(diskNote(s));
 }
 
 async function ask(): Promise<void> {
   if (!host) return;
+  const seq = ++asked;
   try {
-    heard(await host.diskWatch(diskWarn()));
+    heard(await host.diskWatch(diskWarn()), seq);
   } catch {
     /* an older shell without the command: no chip */
   }

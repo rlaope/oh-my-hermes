@@ -68,6 +68,9 @@ pub fn level_for(prev: Level, free: u64, (warn, crit): (u64, u64)) -> Level {
 #[derive(Default)]
 pub struct Watch {
     level: Level,
+    /// How many times the level got worse: the page notes each new count once, from the event or a reading, so a
+    /// lost event, a recovery it never polled and a reply that arrives late all come out right.
+    alerts: u64,
 }
 
 impl Watch {
@@ -80,10 +83,15 @@ impl Watch {
             (Some(f), Some(l)) => level_for(self.level, f, l),
         };
         let prev = std::mem::replace(&mut self.level, next);
-        (next > prev).then_some(next)
+        let worse = next > prev;
+        self.alerts += u64::from(worse);
+        worse.then_some(next)
     }
     pub fn level(&self) -> Level {
         self.level
+    }
+    pub fn alerts(&self) -> u64 {
+        self.alerts
     }
 }
 
@@ -94,6 +102,8 @@ pub struct DiskState {
     pub free_bytes: u64,
     /// Where the home folder's volume is mounted (`/`, `C:\`).
     pub volume: String,
+    /// [`Watch::alerts`] at this reading.
+    pub alerts: u64,
 }
 
 /// A warn value for the watcher and where its next reading goes.
@@ -127,6 +137,7 @@ impl Disk {
                         let state = {
                             let mut s = shared.lock().unwrap();
                             s.level = watch.level();
+                            s.alerts = watch.alerts();
                             if let Some((free, volume)) = read {
                                 s.free_bytes = free;
                                 s.volume = volume;
@@ -295,6 +306,20 @@ mod tests {
         assert_eq!(w.step(Some(19 * GB), None), None);
         assert_eq!(w.level(), Ok);
         assert_eq!(w.step(Some(19 * GB), Some(L20)), Some(Low));
+    }
+
+    #[test]
+    fn every_worse_step_counts_once() {
+        let mut w = Watch::default();
+        w.step(Some(4 * GB), Some(L20)); // critical at startup
+        assert_eq!(w.alerts(), 1);
+        w.step(Some(8 * GB), Some(L20)); // better, silently
+        w.step(Some(8 * GB), Some(L20));
+        assert_eq!(w.alerts(), 1);
+        w.step(Some(4 * GB), Some(L20)); // critical again: a new count even though the page saw critical last
+        assert_eq!(w.alerts(), 2);
+        w.step(Some(19 * GB), None); // off
+        assert_eq!(w.alerts(), 2);
     }
 
     #[test]

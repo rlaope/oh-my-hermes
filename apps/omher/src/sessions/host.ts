@@ -583,7 +583,7 @@ export class MockHost implements SessionHost {
     this.log({ op: "custom.remove", agent: id });
     this.g.__omherCustomFile = (this.g.__omherCustomFile ?? []).filter((v) => (v as { id?: unknown })?.id !== id);
   }
-  private disk: { level: DiskLevel; heard: Set<(s: DiskState) => void> } = { level: "ok", heard: new Set() };
+  private disk: { level: DiskLevel; alerts: number; heard: Set<(s: DiskState) => void> } = { level: "ok", alerts: 0, heard: new Set() };
   /** The shell's rules (src-tauri/src/disk.rs) on `__omherDiskFree` bytes (unset: 100 GB free): the event only when
    *  the level gets worse, better only 2 GB past a threshold. */
   async diskWatch(warnGb: number) {
@@ -596,7 +596,8 @@ export class MockHost implements SessionHost {
     const level: DiskLevel =
       !warnGb || rank[raw] >= rank[prev] || free >= warn + 2e9 ? raw : prev === "critical" && free >= crit + 2e9 ? "low" : prev;
     this.disk.level = level;
-    const state: DiskState = { level, free_bytes: free, volume: "/" };
+    if (rank[level] > rank[prev]) this.disk.alerts++;
+    const state: DiskState = { level, free_bytes: free, volume: "/", alerts: this.disk.alerts };
     if (rank[level] > rank[prev]) for (const f of this.disk.heard) f(state);
     return state;
   }
