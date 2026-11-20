@@ -940,7 +940,7 @@ export const zh: Record<Key, string> = {
   "note.session.bellBody": "它响了终端铃。",
   "note.waiting": "正在等你。",
   "set.notifyErrors": "出错时也通知",
-  "set.notifyErrorsHint": "关闭时，以错误结束的回合只在对话上标记",
+  "set.notifyErrorsHint": "关闭时，以错误结束的回合只在对话上标记。",
 
   // right panel, sessions, routines, runs drawer, setup gate (i18n 0.2.5)
   "pn.panel": "面板",
