@@ -1473,6 +1473,12 @@ export const ja: Record<Key, string> = {
   "term.shellTip": "下のフォルダでログインシェルを開きます",
   "term.st.busy": "出力中",
   "term.here": "ここで新しいターミナル",
+  "term.shellPick": "シェルを選ぶ",
+  "term.shellDefault": "既定",
+  "term.shellDefaultOf": "{shell}（既定）",
+  "term.shellMissing": "{shell} が見つからないため、既定のシェルを開きました",
+  "term.defaultShell": "既定のシェル",
+  "term.defaultShellHint": "新しいシェルターミナルで開くシェル",
   // terminal links (omher://terminal/<id>)
   "tlink.copy": "リンクをコピー",
   "tlink.copied": "リンクをコピーしました",

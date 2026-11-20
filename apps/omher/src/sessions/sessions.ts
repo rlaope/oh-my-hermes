@@ -1031,14 +1031,16 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
   /**
    * TERMINALS +: start `agent` (or the Shell, `SHELL`) in a terminal in `cwd` (none: the last folder used, else home)
    * at once, and open it. Never a chat: an agent that usually opens as omher's chat is opened as its own terminal.
+   * A Shell runs `shell` (an id from the shell's list; none: Settings › Terminal › Default shell, else the login shell).
    */
-  const startTerminal = (agent: AgentId, cwd?: string): string | null => {
+  const startTerminal = (agent: AgentId, cwd?: string, shell?: string): string | null => {
     const at = cwd || draftFolder(state.recent, state.home);
     if (!at) return null;
     const id = `s${++seq}`;
     const startedAt = Date.now();
     const asTerminal = !isShell(agent) && sessionMode(state.agents, { agent }) !== "terminal";
     const account = isShell(agent) ? undefined : accountFor(accounts(), agent);
+    const shellId = isShell(agent) ? shell || readTermSettings().defaultShell || undefined : undefined;
     const r: SessionRec = {
       id,
       linkId: freshLinkId(),
@@ -1049,6 +1051,7 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
       view: "terminal",
       ...(asTerminal ? { open: "terminal" as const } : {}),
       ...(account ? { account } : {}),
+      ...(shellId ? { shell: shellId } : {}),
       fgAgent: null,
     };
     const recent = pushRecent(state.recent, { agent, cwd: at, at: startedAt });
@@ -1411,9 +1414,16 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
       // a Shell row is the person's login shell (the bottom panel's `shell_start`: only a folder and a size go out)
       // this computer's name first, so the program's first OSC 7 already counts as local
       await learnThisHost();
-      const hostId = shell
-        ? (await getShellHost().start(r.cwd || null, cols, rows, onData, onExit)).id
-        : await host.start(r.agent, r.cwd, cols, rows, onData, onExit, resume, accountOf(r), sessionId);
+      let hostId: number;
+      if (shell) {
+        const got = await getShellHost().start(r.cwd || null, cols, rows, onData, onExit, rec(id)?.shell);
+        hostId = got.id;
+        if (got.missing && t.run === run) {
+          // the shell it was made with is gone from this computer: the default one runs, and the row says so once
+          feed(t.term, `\x1b[33m${tr("term.shellMissing", { shell: got.missing })}\x1b[0m\r\n`);
+          patchRec(id, { shell: undefined });
+        }
+      } else hostId = await host.start(r.agent, r.cwd, cols, rows, onData, onExit, resume, accountOf(r), sessionId);
       if (t.run !== run) {
         // replaced while starting
         void io.close(hostId).catch(() => undefined);
@@ -1891,6 +1901,7 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
         ...(s.promptTitle ? { promptTitle: s.promptTitle } : {}),
         ...(s.mode ? { mode: s.mode } : {}),
         ...(s.effort ? { effort: s.effort } : {}),
+        ...(s.shell && isShell(s.agent) ? { shell: s.shell } : {}),
         ...(s.running && !auto && !termAuto ? { paused: true } : {}),
       };
       list.push(r);

@@ -349,6 +349,9 @@ export interface SessionRec {
   lastLine?: string;
   /** The window title the program set (OSC 0/2), when it set one: the second line while nothing is printed yet. */
   oscTitle?: string;
+  /** A Shell row: the shell it runs, an id from the shell's `shells_available` list (none: the login shell). Kept
+   *  across restarts, so it comes back as the same shell. */
+  shell?: string;
 }
 
 /** How long a TERMINALS card's second line may be (the card truncates it further with an ellipsis). */

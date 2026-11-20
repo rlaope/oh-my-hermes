@@ -373,6 +373,7 @@ async fn shell_start(
     app: AppHandle,
     shell: State<'_, Shell>,
     cwd: Option<String>,
+    shell_id: Option<String>,
     cols: u16,
     rows: u16,
     on_data: Channel<InvokeResponseBody>,
@@ -381,7 +382,7 @@ async fn shell_start(
     let sessions = shell.sessions.clone();
     tauri::async_runtime::spawn_blocking(move || {
         let home = user_home()?;
-        let (id, at) = sessions.start_shell(cwd.as_deref(), &home, cols, rows, move |ev| match ev {
+        let (id, at, missing) = sessions.start_shell(cwd.as_deref(), shell_id.as_deref(), &home, cols, rows, move |ev| match ev {
             Output::Data(b) => {
                 let _ = on_data.send(InvokeResponseBody::Raw(b));
             }
@@ -390,10 +391,18 @@ async fn shell_start(
             }
         })?;
         watch_foreground(&sessions, &app, id);
-        Ok(ShellStarted { id, cwd: at.to_string_lossy().into_owned() })
+        Ok(ShellStarted { id, cwd: at.to_string_lossy().into_owned(), missing })
     })
     .await
     .map_err(|e| e.to_string())?
+}
+
+/// The shells a TERMINALS Shell row may run (`sessions::shells_available`: fixed candidates whose files exist, the
+/// default first). The page shows them and sends back an id only (`shell_start`'s `shell_id`).
+#[tauri::command]
+async fn shells_available(shell: State<'_, Shell>) -> Result<Vec<sessions::ShellEntry>, String> {
+    let sessions = shell.sessions.clone();
+    tauri::async_runtime::spawn_blocking(move || sessions.shells()).await.map_err(|e| e.to_string())
 }
 
 /// How often the foreground watcher wakes: a terminal session that had output or input since its foreground program
@@ -422,6 +431,9 @@ struct SessionFg {
 struct ShellStarted {
     id: u32,
     cwd: String,
+    /// the shell asked for was not on this machine's list: its name (the default shell started instead)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    missing: Option<String>,
 }
 
 /// This computer's name (empty when the system gives none), asked once when the page starts: the page uses it only to
@@ -920,6 +932,7 @@ pub fn run() {
             custom_agent_remove,
             session_start,
             shell_start,
+            shells_available,
             session_write,
             session_ack,
             session_resize,

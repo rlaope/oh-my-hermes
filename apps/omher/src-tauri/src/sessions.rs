@@ -678,6 +678,119 @@ where
     }
 }
 
+/// One shell a new Shell terminal may run: a stable id (the only thing the page sends back), the name shown, the
+/// program's absolute path, and whether it is the one [`shell_argv`] picks. Its arguments are fixed here and never
+/// leave Rust.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct ShellEntry {
+    pub id: String,
+    pub label: String,
+    pub path: String,
+    pub default: bool,
+    #[serde(skip)]
+    pub args: Vec<&'static str>,
+}
+
+impl ShellEntry {
+    fn argv(&self) -> Vec<OsString> {
+        std::iter::once(OsString::from(&self.path)).chain(self.args.iter().map(OsString::from)).collect()
+    }
+}
+
+/// The shells a Shell terminal may run on this machine, the default ([`shell_argv`]) first. Fixed candidates only,
+/// each listed when its file is there:
+/// - Windows: Windows PowerShell (`powershell`, `-NoLogo`), PowerShell 7 (`pwsh`, `%ProgramFiles%\PowerShell\7`,
+///   `-NoLogo`), Command Prompt (`cmd`, `%COMSPEC%`), Git Bash (`gitbash`, `%ProgramFiles%\Git\bin\bash.exe --login -i`),
+///   WSL (`wsl`, `%SystemRoot%\System32\wsl.exe`).
+/// - macOS / Linux: the login shell, then every absolute path `/etc/shells` lists that is an executable file
+///   (`unix:<path>`, each with `-l`).
+///
+/// Pure: the environment, `/etc/shells`' text, the file check and the OS are passed in.
+pub fn shells_available<E, X>(env: &E, etc_shells: &str, is_program: X, os: Os) -> Vec<ShellEntry>
+where
+    E: Fn(&str) -> Option<String>,
+    X: Fn(&Path) -> bool,
+{
+    let set = |k: &str| env(k).filter(|v| !v.trim().is_empty());
+    let entry = |id: String, label: String, path: String, args: Vec<&'static str>| ShellEntry { id, label, path, default: false, args };
+    let mut list: Vec<ShellEntry> = Vec::new();
+    match os {
+        Os::Unix => {
+            let lines = etc_shells.lines().map(|l| l.split('#').next().unwrap_or("").trim()).filter(|l| l.starts_with('/'));
+            let login = shell_argv(env, etc_shells, &is_program, os).ok().and_then(|a| a.first().map(|p| p.to_string_lossy().into_owned()));
+            for p in login.into_iter().chain(lines.map(str::to_string)) {
+                if list.iter().any(|e| e.path == p) || !is_program(Path::new(&p)) {
+                    continue;
+                }
+                let label = p.rsplit('/').next().unwrap_or(&p).to_string();
+                list.push(entry(format!("unix:{p}"), label, p, vec!["-l"]));
+            }
+        }
+        Os::Windows => {
+            let root = set("SystemRoot").or_else(|| set("windir")).unwrap_or_else(|| r"C:\Windows".to_string());
+            let root = root.trim_end_matches('\\').to_string();
+            let pf = set("ProgramFiles").unwrap_or_else(|| r"C:\Program Files".to_string());
+            let pf = pf.trim_end_matches('\\').to_string();
+            let comspec = set("COMSPEC").filter(|c| is_windows_absolute(c));
+            let candidates: [(&str, &str, Option<String>, Vec<&'static str>); 5] = [
+                ("powershell", "Windows PowerShell", Some(format!(r"{root}\{POWERSHELL_UNDER_ROOT}")), vec!["-NoLogo"]),
+                ("pwsh", "PowerShell 7", Some(format!(r"{pf}\PowerShell\7\pwsh.exe")), vec!["-NoLogo"]),
+                ("cmd", "Command Prompt", comspec, vec![]),
+                ("gitbash", "Git Bash", Some(format!(r"{pf}\Git\bin\bash.exe")), vec!["--login", "-i"]),
+                ("wsl", "WSL", Some(format!(r"{root}\System32\wsl.exe")), vec![]),
+            ];
+            for (id, label, path, args) in candidates {
+                if let Some(p) = path.filter(|p| is_program(Path::new(p))) {
+                    list.push(entry(id.to_string(), label.to_string(), p, args));
+                }
+            }
+        }
+    }
+    // the default shell first, marked
+    if let Ok(def) = shell_argv(env, etc_shells, &is_program, os) {
+        if let Some(i) = list.iter().position(|e| e.argv() == def) {
+            let mut d = list.remove(i);
+            d.default = true;
+            list.insert(0, d);
+        }
+    }
+    list
+}
+
+/// What a Shell terminal runs for `id` (the page's choice, an id from [`shells_available`]): that entry's argv,
+/// looked up again here. No id: the default shell ([`shell_argv`]). An id that is not on this machine's list (a
+/// shell uninstalled since, or anything else) also gets the default, with the id's name back for the row's note.
+pub fn shell_argv_for<E, X>(id: Option<&str>, env: &E, etc_shells: &str, is_program: X, os: Os) -> Result<(Vec<OsString>, Option<String>), String>
+where
+    E: Fn(&str) -> Option<String>,
+    X: Fn(&Path) -> bool,
+{
+    let id = id.map(str::trim).filter(|i| !i.is_empty());
+    if let Some(id) = id {
+        if let Some(e) = shells_available(env, etc_shells, &is_program, os).into_iter().find(|e| e.id == id) {
+            return Ok((e.argv(), None));
+        }
+    }
+    let missing = id.map(shell_name_of_id);
+    Ok((shell_argv(env, etc_shells, &is_program, os)?, missing))
+}
+
+/// The name a shell id reads as when its shell is gone: the Windows names, a Unix path's file name, else the id
+/// itself (cut to 60 characters).
+fn shell_name_of_id(id: &str) -> String {
+    match id {
+        "powershell" => "Windows PowerShell".to_string(),
+        "pwsh" => "PowerShell 7".to_string(),
+        "cmd" => "Command Prompt".to_string(),
+        "gitbash" => "Git Bash".to_string(),
+        "wsl" => "WSL".to_string(),
+        _ => {
+            let name = id.strip_prefix("unix:").map(|p| p.rsplit('/').next().unwrap_or(p)).unwrap_or(id);
+            name.chars().filter(|c| !c.is_control()).take(60).collect()
+        }
+    }
+}
+
 /// `C:\…` or `\\server\…`: an absolute Windows path, whatever OS the check runs on.
 fn is_windows_absolute(p: &str) -> bool {
     let b = p.as_bytes();
@@ -946,14 +1059,22 @@ impl Sessions {
     /// in `cwd` when that is an existing folder, else in `home` ([`shell_cwd`]). Nothing is typed into it, and it
     /// gets no account variable. The session is an ordinary PTY session: write, ack, resize and close as any other.
     /// Returns the session id and the folder it started in (the tab names it).
-    pub fn start_shell<F>(&self, cwd: Option<&str>, home: &Path, cols: u16, rows: u16, sink: F) -> Result<(u32, PathBuf), String>
+    /// `shell`: an id from [`shells_available`] (none: the default); one that is not on the list starts the default
+    /// and its name comes back third, for the row's note.
+    pub fn start_shell<F>(&self, cwd: Option<&str>, shell: Option<&str>, home: &Path, cols: u16, rows: u16, sink: F) -> Result<(u32, PathBuf, Option<String>), String>
     where
         F: FnMut(Output) + Send + 'static,
     {
         let etc_shells = std::fs::read_to_string("/etc/shells").unwrap_or_default();
-        let argv = shell_argv(&host_env, &etc_shells, is_program_file, Os::current())?;
+        let (argv, missing) = shell_argv_for(shell, &host_env, &etc_shells, is_program_file, Os::current())?;
         let at = shell_cwd(cwd, home);
-        Ok((self.spawn(argv, &at, None, &[], cols, rows, sink)?, at))
+        Ok((self.spawn(argv, &at, None, &[], cols, rows, sink)?, at, missing))
+    }
+
+    /// The shells a Shell terminal may run here ([`shells_available`] on this machine).
+    pub fn shells(&self) -> Vec<ShellEntry> {
+        let etc_shells = std::fs::read_to_string("/etc/shells").unwrap_or_default();
+        shells_available(&host_env, &etc_shells, is_program_file, Os::current())
     }
 
     /// Queue `data` for session `id`'s writer thread. Never blocks: a program that is not reading its
@@ -2842,6 +2963,91 @@ mod tests {
         }
     }
 
+    const WIN_PS: &str = r"C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe";
+    const WIN_PWSH: &str = r"C:\Program Files\PowerShell\7\pwsh.exe";
+    const WIN_CMD: &str = r"C:\Windows\system32\cmd.exe";
+    const WIN_GITBASH: &str = r"C:\Program Files\Git\bin\bash.exe";
+    const WIN_WSL: &str = r"C:\Windows\System32\wsl.exe";
+
+    fn win_env() -> impl Fn(&str) -> Option<String> {
+        env_of(&[("SystemRoot", r"C:\Windows"), ("ProgramFiles", r"C:\Program Files"), ("COMSPEC", WIN_CMD), ("SHELL", "/bin/zsh")])
+    }
+
+    fn ids(list: &[ShellEntry]) -> Vec<&str> {
+        list.iter().map(|e| e.id.as_str()).collect()
+    }
+
+    #[test]
+    fn windows_shells_are_the_fixed_candidates_whose_files_exist_in_order() {
+        let every = [WIN_PS, WIN_PWSH, WIN_CMD, WIN_GITBASH, WIN_WSL].map(Path::new);
+        let list = shells_available(&win_env(), "", fs_of(&every), Os::Windows);
+        assert_eq!(ids(&list), ["powershell", "pwsh", "cmd", "gitbash", "wsl"]);
+        assert_eq!(list.iter().map(|e| e.label.as_str()).collect::<Vec<_>>(), ["Windows PowerShell", "PowerShell 7", "Command Prompt", "Git Bash", "WSL"]);
+        assert_eq!(list.iter().map(|e| e.path.as_str()).collect::<Vec<_>>(), [WIN_PS, WIN_PWSH, WIN_CMD, WIN_GITBASH, WIN_WSL]);
+        assert_eq!(list.iter().map(|e| e.default).collect::<Vec<_>>(), [true, false, false, false, false]);
+        // the argv each id maps to at spawn
+        let fs = fs_of(&every);
+        let argv = |id: &str| shell_argv_for(Some(id), &win_env(), "", &fs, Os::Windows).unwrap();
+        let os = |v: &[&str]| v.iter().map(OsString::from).collect::<Vec<_>>();
+        assert_eq!(argv("powershell"), (os(&[WIN_PS, "-NoLogo"]), None));
+        assert_eq!(argv("pwsh"), (os(&[WIN_PWSH, "-NoLogo"]), None));
+        assert_eq!(argv("cmd"), (os(&[WIN_CMD]), None));
+        assert_eq!(argv("gitbash"), (os(&[WIN_GITBASH, "--login", "-i"]), None));
+        assert_eq!(argv("wsl"), (os(&[WIN_WSL]), None));
+        // only the files that exist; without Windows PowerShell the default is %COMSPEC%, listed first
+        let list = shells_available(&win_env(), "", fs_of(&[Path::new(WIN_GITBASH), Path::new(WIN_CMD)]), Os::Windows);
+        assert_eq!(ids(&list), ["cmd", "gitbash"]);
+        assert!(list[0].default && !list[1].default);
+        // a relative %COMSPEC% is never listed
+        let env = env_of(&[("SystemRoot", r"C:\Windows"), ("COMSPEC", "cmd.exe")]);
+        assert_eq!(ids(&shells_available(&env, "", fs_of(&[Path::new("cmd.exe"), Path::new(WIN_WSL)]), Os::Windows)), ["wsl"]);
+        // the arguments never go to the page
+        let json = serde_json::to_value(&shells_available(&win_env(), "", fs_of(&every), Os::Windows)[3]).unwrap();
+        assert_eq!(json, serde_json::json!({"id": "gitbash", "label": "Git Bash", "path": WIN_GITBASH, "default": false}));
+    }
+
+    #[test]
+    fn unix_shells_are_the_login_shell_then_etc_shells_that_exist() {
+        let etc = "# List of acceptable shells\n\n/bin/bash\n/bin/csh # gone here\n/bin/zsh   # the default\nnot/absolute\n/opt/homebrew/bin/fish\n/bin/zsh\n";
+        let fs = fs_of(&[Path::new("/bin/bash"), Path::new("/bin/zsh"), Path::new("/opt/homebrew/bin/fish"), Path::new("not/absolute")]);
+        let list = shells_available(&env_of(&[("SHELL", "/bin/zsh")]), etc, &fs, Os::Unix);
+        assert_eq!(ids(&list), ["unix:/bin/zsh", "unix:/bin/bash", "unix:/opt/homebrew/bin/fish"]);
+        assert_eq!(list.iter().map(|e| e.label.as_str()).collect::<Vec<_>>(), ["zsh", "bash", "fish"]);
+        assert!(list[0].default && list[1..].iter().all(|e| !e.default));
+        assert_eq!(
+            shell_argv_for(Some("unix:/opt/homebrew/bin/fish"), &env_of(&[("SHELL", "/bin/zsh")]), etc, &fs, Os::Unix).unwrap(),
+            (vec![OsString::from("/opt/homebrew/bin/fish"), OsString::from("-l")], None)
+        );
+        // $SHELL not usable: the fallback (/bin/zsh) is the default, still first
+        let list = shells_available(&env_of(&[("SHELL", "/usr/local/bin/nope")]), "/bin/bash\n/bin/zsh\n", &fs, Os::Unix);
+        assert_eq!(ids(&list), ["unix:/bin/zsh", "unix:/bin/bash"]);
+        // no /etc/shells: the login shell alone
+        assert_eq!(ids(&shells_available(&env_of(&[]), "", &fs, Os::Unix)), ["unix:/bin/zsh"]);
+    }
+
+    #[test]
+    fn an_unknown_or_missing_shell_id_opens_the_default_and_says_which() {
+        let fs = fs_of(&[Path::new("/bin/zsh"), Path::new("/bin/bash")]);
+        let env = env_of(&[("SHELL", "/bin/zsh")]);
+        let zsh = vec![OsString::from("/bin/zsh"), OsString::from("-l")];
+        assert_eq!(shell_argv_for(None, &env, ETC_SHELLS, &fs, Os::Unix).unwrap(), (zsh.clone(), None));
+        assert_eq!(shell_argv_for(Some(" "), &env, ETC_SHELLS, &fs, Os::Unix).unwrap(), (zsh.clone(), None));
+        // fish is listed in /etc/shells but not installed here
+        assert_eq!(shell_argv_for(Some("unix:/opt/homebrew/bin/fish"), &env, ETC_SHELLS, &fs, Os::Unix).unwrap(), (zsh.clone(), Some("fish".into())));
+        // a command line, a path that is not on the list, a Windows id on Unix: never run, the default instead
+        for bad in ["/bin/zsh -c 'rm -rf ~'", "unix:/tmp/evil", "unix:/bin/zsh -c x", "pwsh", "/bin/bash"] {
+            let (argv, missing) = shell_argv_for(Some(bad), &env, ETC_SHELLS, &fs, Os::Unix).unwrap();
+            assert_eq!(argv, zsh, "{bad}");
+            assert!(missing.is_some(), "{bad}");
+        }
+        // Windows: Git Bash uninstalled since the row was made
+        let fs = fs_of(&[Path::new(WIN_PS), Path::new(WIN_CMD)]);
+        assert_eq!(
+            shell_argv_for(Some("gitbash"), &win_env(), "", &fs, Os::Windows).unwrap(),
+            (vec![OsString::from(WIN_PS), OsString::from("-NoLogo")], Some("Git Bash".into()))
+        );
+    }
+
     #[test]
     fn shell_cwd_is_the_folder_when_it_exists_else_home() {
         let home = std::env::temp_dir().join(format!("omher-shell-home-{}", std::process::id()));
@@ -2880,14 +3086,15 @@ mod tests {
             let s = Sessions::default();
             let out = Arc::new(Mutex::new(Vec::<u8>::new()));
             let o = out.clone();
-            let (id, at) = s
-                .start_shell(Some(&wanted), &home, 120, 24, move |ev| {
+            let (id, at, missing) = s
+                .start_shell(Some(&wanted), None, &home, 120, 24, move |ev| {
                     if let Output::Data(b) = ev {
                         o.lock().unwrap().extend(b);
                     }
                 })
                 .unwrap();
             assert_eq!(&at, expect);
+            assert_eq!(missing, None);
             assert_eq!(s.count(), 1);
             s.write(id, b"echo \"at:$(pwd -P)\"\r").unwrap();
             let want = format!("at:{}", std::fs::canonicalize(expect).unwrap().display());

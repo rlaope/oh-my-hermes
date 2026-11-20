@@ -12,7 +12,7 @@
 // dot. A session that no longer runs steps back.
 // Line 1 is the session's name (the person's, the agent's own title, a summary of the first message, else the
 // folder) and line 2 the folder and the agent. Double-click the name, or right-click › Rename, to name it.
-import { Fragment, memo, useCallback, useEffect, useLayoutEffect, useRef, useState, type PointerEvent as ReactPointerEvent, type RefObject } from "react";
+import { Fragment, memo, useCallback, useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore, type PointerEvent as ReactPointerEvent, type RefObject } from "react";
 import { getStore, useStore } from "../state/store";
 import { CloseIcon, LiveRing, PlusIcon, Popover, TypingDots } from "../ui";
 import { busyFor, shortTime } from "../app/time";
@@ -32,7 +32,8 @@ import { CUE_PX, useEdgeFade } from "../sidebar/edgeFade";
 import { getHost, type PastChat } from "./host";
 import { getSessions, useSessions } from "./sessions";
 import { pickTitle } from "./titles";
-import { onOpenNewSessionMenu } from "./newMenu";
+import { onOpenNewSessionMenu, useShells } from "./newMenu";
+import { onTermSettings, readTermSettings } from "./term/settings";
 import { TermLinkGone } from "./termLinkOpen";
 import { getAddOmh } from "./addOmh";
 import type { Account, AccountCli, AccountGroup } from "../lib/protocol";
@@ -250,6 +251,24 @@ function NewSessionMenu({ onClose, trigger }: { onClose: () => void; trigger: Re
     close("pick");
     getSessions().startTerminal(id, at || undefined);
   };
+  /** Shell ▸: a Shell row that runs shell `shell` (an id from the shell's own list). */
+  const pickShell = (shell: string) => {
+    close("pick");
+    getSessions().startTerminal(SHELL, at || undefined, shell);
+  };
+  // Shell ▸: the shells this computer offers, when there is more than one (the plain Shell row keeps the default)
+  const shells = useShells();
+  const [shellsOpen, setShellsOpen] = useState(false);
+  const shellMore = useRef<HTMLButtonElement>(null);
+  const shellList = useRef<HTMLDivElement>(null);
+  const defaultShell = useSyncExternalStore(onTermSettings, readTermSettings, readTermSettings).defaultShell;
+  useEffect(() => {
+    if (shellsOpen) shellList.current?.querySelector<HTMLButtonElement>("[role=menuitem]")?.focus({ preventScroll: true });
+  }, [shellsOpen]);
+  const closeShells = () => {
+    setShellsOpen(false);
+    shellMore.current?.focus({ preventScroll: true });
+  };
   const choose = async () => {
     const got = await getSessions().pickFolder(at || ss.home || "");
     if (got) setFolder(got);
@@ -325,6 +344,18 @@ function NewSessionMenu({ onClose, trigger }: { onClose: () => void; trigger: Re
         aria-label={t("term.new")}
         data-testid="session-menu"
         onKeyDown={(e) => {
+          // inside Shell ▸: Esc and ← close the list only, back on its chevron
+          if (shellsOpen && shellList.current?.contains(document.activeElement) && (e.key === "Escape" || e.key === "ArrowLeft")) {
+            e.preventDefault();
+            e.stopPropagation();
+            closeShells();
+            return;
+          }
+          if (e.key === "ArrowRight" && (document.activeElement === shellMore.current || (document.activeElement as HTMLElement | null)?.dataset.testid === "session-agent-shell") && shellMore.current) {
+            e.preventDefault();
+            setShellsOpen(true);
+            return;
+          }
           const items = [...(box.current?.querySelectorAll<HTMLButtonElement>("[role=menuitem]") ?? [])];
           const i = items.indexOf(document.activeElement as HTMLButtonElement);
           const to = e.key === "ArrowDown" ? i + 1 : e.key === "ArrowUp" ? i - 1 : e.key === "Home" ? 0 : e.key === "End" ? items.length - 1 : null;
@@ -381,14 +412,46 @@ function NewSessionMenu({ onClose, trigger }: { onClose: () => void; trigger: Re
         <div className="ss-sep" />
         <div ref={list} className={`ss-scroll${more ? " more" : ""}`} style={fit ? { maxHeight: fit.max } : undefined} data-testid="session-menu-list">
         {ready && (
-          <button key="shell" type="button" role="menuitem" className="ss-item" title={t("term.shellTip")} onClick={() => pick(SHELL)} data-testid="session-agent-shell">
-            <span className="ss-ic">
-              <TermRowMark agent={null} size={16} />
-            </span>
-            <span className="ss-n ss-n-as">
-              <span className="ss-l">{t("term.shell")}</span>
-            </span>
-          </button>
+          <div className="ss-shell-row" key="shell">
+            <button type="button" role="menuitem" className="ss-item" title={t("term.shellTip")} onClick={() => pick(SHELL)} data-testid="session-agent-shell">
+              <span className="ss-ic">
+                <TermRowMark agent={null} size={16} />
+              </span>
+              <span className="ss-n ss-n-as">
+                <span className="ss-l">{t("term.shell")}</span>
+              </span>
+            </button>
+            {shells && shells.length > 1 && (
+              <button
+                ref={shellMore}
+                type="button"
+                role="menuitem"
+                className={`ss-item ss-shell-more${shellsOpen ? " on" : ""}`}
+                aria-haspopup="menu"
+                aria-expanded={shellsOpen}
+                aria-label={t("term.shellPick")}
+                title={t("term.shellPick")}
+                onClick={() => setShellsOpen((v) => !v)}
+                data-testid="session-shell-more"
+              >
+                <ChevronRight size={10} />
+              </button>
+            )}
+          </div>
+        )}
+        {ready && shellsOpen && shells && shells.length > 1 && (
+          <div ref={shellList} className="ss-shells" role="group" aria-label={t("term.shellPick")} data-testid="session-shells">
+            {shells.map((s) => {
+              const isDefault = defaultShell ? s.id === defaultShell : s.default;
+              return (
+                <button key={s.id} type="button" role="menuitem" className="ss-item" title={s.path} onClick={() => pickShell(s.id)} data-testid="session-shell-pick" data-shell={s.id}>
+                  <span className="ss-ic" />
+                  <span className="ss-n">{s.label}</span>
+                  {isDefault && <span className="ss-missing">{t("term.shellDefault")}</span>}
+                </button>
+              );
+            })}
+          </div>
         )}
         {(parts?.shown ?? []).map(row)}
         {parts && parts.more.length > 0 && (
@@ -1201,7 +1264,7 @@ const TermRow = memo(function TermRow({ rec, agents, unseen, active, ticking, on
     else if (a === "reveal") void sx.revealFolder(rec.id);
     else if (a === "terminal") void sx.openTerminal(rec.id);
     else if (a === "link") void sx.copyLink(rec.id);
-    else if (a === "here") sx.startTerminal(rec.agent, rec.cwd);
+    else if (a === "here") sx.startTerminal(rec.agent, rec.cwd, rec.shell);
     else if (a === "close") onClose(rec);
   };
   const endEdit = (name: string | null | undefined) => {

@@ -213,3 +213,12 @@
   flex: 1 0 auto;
   padding: 0 10px;
 }
+
+/* kshell: Settings › Terminal › Default shell */
+.tm-font.tm-shell {
+  width: 200px;
+  padding: 0 6px;
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  cursor: pointer;
+}

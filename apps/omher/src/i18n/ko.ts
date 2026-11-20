@@ -1473,6 +1473,12 @@ export const ko: Record<Key, string> = {
   "term.shellTip": "아래 폴더에서 로그인 셸을 열어요",
   "term.st.busy": "출력 중",
   "term.here": "여기서 새 터미널",
+  "term.shellPick": "셸 고르기",
+  "term.shellDefault": "기본",
+  "term.shellDefaultOf": "{shell} (기본)",
+  "term.shellMissing": "{shell}을(를) 찾지 못해 기본 셸을 열었어요",
+  "term.defaultShell": "기본 셸",
+  "term.defaultShellHint": "새 셸 터미널이 여는 셸",
   // terminal links (omher://terminal/<id>)
   "tlink.copy": "링크 복사",
   "tlink.copied": "링크를 복사했어요",

@@ -1933,3 +1933,38 @@ body.side-resizing * {
 .ss-toast-undo:hover {
   background: var(--seg-on);
 }
+/* kshell: Shell ▸ in the TERMINALS + menu: the Shell row with a chevron that opens this computer's shells under it */
+.ss-shell-row {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+.ss-shell-row > .ss-item:first-child {
+  flex: 1;
+  min-width: 0;
+}
+.ss-item.ss-shell-more {
+  flex: none;
+  width: 26px;
+  justify-content: center;
+  padding: 0;
+  color: var(--muted);
+}
+.ss-item.ss-shell-more svg {
+  transition: transform 0.12s ease;
+}
+.ss-item.ss-shell-more.on svg {
+  transform: rotate(90deg);
+}
+.ss-item.ss-shell-more.on,
+.ss-item.ss-shell-more:hover {
+  color: var(--ink);
+}
+.ss-shells {
+  padding-left: 8px;
+}
+@media (prefers-reduced-motion: reduce) {
+  .ss-item.ss-shell-more svg {
+    transition: none;
+  }
+}
