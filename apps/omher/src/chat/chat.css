@@ -157,10 +157,10 @@
   margin: 0 auto;
   padding: 5px 12px;
   border-radius: var(--r);
-  /* a filled, accent-tinted surface, not the bubbles' grey or the plain raised white: it has to read over a bot
-     bubble in both themes */
-  background: color-mix(in srgb, var(--accent) 30%, var(--seg-on));
-  color: var(--ink);
+  /* filled with the accent, not the bubbles' grey or the raised surface: it has to read over a bot bubble in both
+     themes (dark: the pale accent with the page's dark ink) */
+  background: var(--accent);
+  color: var(--bg);
   font: inherit;
   font-size: 12px;
   white-space: nowrap;
@@ -170,14 +170,16 @@
   animation: pop 0.16s ease both;
 }
 .tl-jump:hover {
-  background: color-mix(in srgb, var(--accent) 42%, var(--seg-on));
+  background: color-mix(in srgb, var(--accent) 85%, #fff);
 }
+/* light: the deeper accent carries white text (about 5:1) */
 [data-theme="light"] .tl-jump {
-  background: color-mix(in srgb, var(--accent) 22%, var(--seg-on));
-  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.16);
+  background: var(--accent);
+  color: var(--on-accent);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.18);
 }
 [data-theme="light"] .tl-jump:hover {
-  background: color-mix(in srgb, var(--accent) 32%, var(--seg-on));
+  background: color-mix(in srgb, var(--accent) 85%, #000);
 }
 .tl-jump:focus-visible,
 .tl-pin:focus-visible .tl-pin-t {
