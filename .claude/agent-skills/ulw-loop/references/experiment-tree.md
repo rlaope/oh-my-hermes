@@ -45,6 +45,8 @@ Pick one move and record it in the ledger row's description:
 | promote | the result is a clear win beyond noise; it becomes the parent of the next round |
 | stop | the goal is met, or the branch is exhausted |
 
+Keep and discard still follow `measured-loop-discipline.md`: an equal metric keeps the simpler node, and a crash of the scoring command is logged as `crash` before any repair, never retried silently.
+
 Stop a line of work after about three runs in a row that fail or regress against their parent, then climb the idea-exhaustion ladder in `measured-loop-discipline.md`. When the loop stops, write the tree as an artifact: each node's branch, parent, what it changed, its metric, and its move.
 
 ## Ledger columns this adds
