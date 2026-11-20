@@ -2178,8 +2178,13 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
       }
     }
   };
+  // Every session view calls this when it mounts and when the app theme changes: only a mode the terminals have not
+  // been given yet relooks them all (each mount used to re-apply the look and refit every open terminal)
+  let looked: "dark" | "light" | null = null;
   const setLook = (mode: "dark" | "light") => {
     look = mode;
+    if (mode === looked) return;
+    looked = mode;
     relook();
   };
   onTermSettings(relook);

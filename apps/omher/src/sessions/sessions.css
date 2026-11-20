@@ -719,22 +719,85 @@ body.side-resizing * {
 .ss-split-tools:focus-within {
   opacity: 1;
 }
-.ss-split-name {
-  color: var(--ink);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  min-width: 0;
+/* a pane's grip (Otty's): a short pill at its top centre, faint on the focused pane, shown under the pointer; drag it
+   to another pane's side to move the pane (splitDrag.ts), click it for the pane's menu */
+.ss-split-grip {
+  position: absolute;
+  top: 3px;
+  left: 50%;
+  z-index: 3;
+  width: 44px;
+  height: 14px;
+  margin-left: -22px;
+  display: grid;
+  place-items: center;
+  border-radius: 999px;
+  cursor: grab;
+  touch-action: none;
+  opacity: 0;
+  transition: opacity 0.12s ease;
 }
-.ss-split-path {
+.ss-split-grip > span {
+  width: 28px;
+  height: 4px;
+  border-radius: 999px;
+  background: var(--quiet);
+}
+.ss-split-side.focused > .ss-split-grip {
+  opacity: 0.35;
+}
+.ss-split-side:hover > .ss-split-grip,
+.ss-split-grip:focus-visible,
+.ss-split-grip.on {
+  opacity: 1;
+}
+.ss-split-grip:hover > span,
+.ss-split-grip.on > span {
+  background: var(--ink);
+}
+.ss-split-grip:focus-visible {
+  outline: 2px solid var(--muted);
+  outline-offset: 1px;
+}
+.ss-pane-menu {
+  width: 260px;
+}
+.ss-pane-mi {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.ss-pane-mi-l {
   flex: 1;
   min-width: 0;
-  font-family: var(--mono);
-  font-size: 11px;
-  color: var(--quiet);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+.ss-pane-mi-k {
+  flex: none;
+  font-family: inherit;
+  font-size: 11px;
+  color: var(--quiet);
+}
+/* a drag onto the open terminal (splitDrag.ts): the half of the pane the drop would fill */
+.split-drop {
+  position: fixed;
+  z-index: 60;
+  pointer-events: none;
+  border-radius: var(--r-sm);
+  background: color-mix(in srgb, var(--accent) 18%, transparent);
+  border: 2px solid color-mix(in srgb, var(--accent) 55%, transparent);
+  transition: left 0.08s ease, top 0.08s ease, width 0.08s ease, height 0.08s ease;
+}
+body.split-dragging,
+body.split-dragging * {
+  cursor: grabbing !important;
+  user-select: none;
+}
+/* the terminal under a drag takes no pointer events (a program's mouse reporting would see the drag) */
+body.split-dragging .xterm {
+  pointer-events: none;
 }
 .ss-split-x {
   flex: none;
@@ -780,18 +843,6 @@ body.side-resizing * {
 .ss-split-divider.on {
   background: var(--line-strong);
   outline: none;
-}
-.ss-split-pick-plus {
-  display: grid;
-  place-items: center;
-  width: 13px;
-  height: 13px;
-  color: var(--muted);
-}
-.ss-split-pick .row-sep {
-  height: 1px;
-  margin: 4px 6px;
-  background: var(--line-soft);
 }
 /* Plans: the open split drawn small (SessionPlans SplitMap), boxes in the layout's proportions */
 .ss-map {
@@ -868,24 +919,6 @@ body.side-resizing * {
 }
 .ss-row.tr.split-focus .tr-split {
   color: var(--accent);
-}
-/* the picker: under the header, at the main column's right (placed by SplitPicker) */
-.ss-split-pick {
-  top: 56px;
-  right: 16px;
-  width: 260px;
-}
-.ss-split-pick-h,
-.ss-split-pick-none {
-  padding: 4px 8px 6px;
-  font-size: 11px;
-  color: var(--quiet);
-}
-.ss-split-pick-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  min-width: 0;
 }
 
 /* chat sessions */
