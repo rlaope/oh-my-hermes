@@ -195,12 +195,12 @@ A follow-up round targets one named gap: a missing method, benchmark, organizati
 4. Return 5 to 15 candidates, strongest first. Fewer strong papers beat padding.
 5. Every candidate must come from a result the host actually returned in this request. Never add a paper id from memory. If none survives, report the gap instead of filling it.
 
-Record each kept paper as a `paper` candidate in `link_observed` state with its corpus as provenance. A listing is not a read: abstract, full text and claims stay unclaimed until a read is observed.
+Record each kept paper as a `paper` candidate in `link_observed` state with `hermes_tool` provenance, the corpus named in `evidence_note`, and the query URL as `evidence_uri`. A listing is not a read: abstract, full text and claims stay unclaimed until a read is observed.
 
 ## Read after ranking, not before
 
 - A "find papers" or "what should I read" request ends at the ranked list.
-- When the request needs claims, methods or a comparison, finish ranking first, then hand the 3 to 5 papers that carry the answer to `research` (or `paper-learning` for one supplied paper) to read and cite.
+- When the request needs claims, methods or a comparison, finish ranking first, then hand to `research` the 3 to 5 papers that carry the answer, or to `paper-learning` for one supplied paper, to read and cite.
 
 ## Attribution
 

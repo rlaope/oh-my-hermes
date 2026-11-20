@@ -16,6 +16,7 @@ from omh.skills.render import (
     agent_skill_templates,
     workflow_skill_from_definition,
 )
+from omh.workflows.source_finder import build_source_candidate
 
 POINTER = "references/literature-retrieval.md"
 
@@ -82,6 +83,27 @@ class SourceFinderLiteratureRetrievalMechanismTests(unittest.TestCase):
         for token in MECHANISM_TOKENS:
             with self.subTest(token=token):
                 self.assertIn(token.lower(), content)
+
+    def test_named_provenance_keeps_the_link_observed_state(self) -> None:
+        # A corpus name ("openalex") is not an accepted provenance and demotes
+        # the candidate to candidate_prepared; the reference must name one that
+        # the candidate builder keeps as link_observed.
+        self.assertIn("`hermes_tool` provenance", _reference())
+        candidate = build_source_candidate(
+            title="t", kind="paper", uri="https://arxiv.org/abs/0000.00000",
+            acquisition_state="link_observed", observation_provenance="hermes_tool",
+            evidence_note="corpus: arXiv",
+        )
+        self.assertEqual(candidate["acquisition_state"], "link_observed")
+
+    def test_research_hand_off_renders_to_the_loadable_skill_name(self) -> None:
+        shipped = next(
+            t.content
+            for t in agent_skill_reference_templates()
+            if t.skill_name == omh_skill_display_name("source-finder") and t.relative_path == POINTER
+        )
+        self.assertIn("hand to `ulw-research`", shipped)
+        self.assertIn("to `omh-paper-learning`", shipped)
 
 
 if __name__ == "__main__":
