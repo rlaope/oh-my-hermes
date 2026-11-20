@@ -218,8 +218,25 @@ RULES = (
     "A link in a SESSIONS terminal's output follows the same rule, whether omher found the address in the printed text"
     " or the program marked it as a hyperlink itself (OSC 8):",
     "A plain click opens nothing, and the terminal library's own confirm-and-open path for marked hyperlinks is never used.",
-    "How terminals look and behave (themes, font, cursor, scrollback, renderer, those two clipboard switches) is one"
-    " record in this computer's storage for the app (`omher.term`); omher reads no other program's terminal settings or theme files.",
+    "How terminals look and behave (themes, font, cursor, scrollback, renderer, those two clipboard switches, and one"
+    " custom theme) is one record in this computer's storage for the app (`omher.term`). omher reads no other program's"
+    " terminal settings or theme files, with one exception: on macOS, Settings › Terminal › Import from… reads, only when"
+    " the person presses it and picks the app, exactly one of two fixed files,",
+    "The read is read-only, refuses a symlink (opened with `O_NOFOLLOW`) and a file over 8 MB, and hands the page only the"
+    " parsed profiles (at most 64: a name, `#rrggbb` colours and a font name and size), never the file.",
+    "omher never writes to either file and never reads them again by itself.",
+    "The page shows that list and sends back only an id (`shell_start`'s `shell_id`: `powershell`, `pwsh`, `cmd`,"
+    " `gitbash`, `wsl` or `unix:<path>`), which the shell looks up in the list again when it starts the shell;",
+    "no path, argument or command line is ever sent by the page.",
+    "When the person closes a running TERMINALS row, its program is stopped after an undo window counted from the close"
+    " (Settings › Terminal › Undo window after closing: Off, 5 s or 10 s, 10 s by default),",
+    "the shell reads one filesystem statistic of the volume that holds the home folder once a minute",
+    "It opens and reads no file, runs no program and deletes nothing. The page hears `disk-level`",
+    "Quitting is always explicit: tray Quit, ⌘Q / the app menu Quit, or the updater's restart, and each goes through the"
+    " one exit path that stops every pty and the bridge. If no tray icon can be made, the close quits.",
+    "omher holds one OS assertion against idle system sleep: `PreventUserIdleSystemSleep` on macOS, `ES_SYSTEM_REQUIRED`"
+    " on Windows, nothing on Linux.",
+    "It never prevents lid-close sleep or display sleep, needs no privilege, and the page sends edges only.",
     "Settings › Providers \"Add key\" may open the person's own system terminal running exactly"
     " `hermes auth add <provider> --type api-key`, only when the person picks a provider.",
     "The chat's connect block may open the same terminal running exactly `hermes auth add <id>` (no `--type`: Hermes"
@@ -408,9 +425,11 @@ class DocPins(unittest.TestCase):
         # `session.archive` on an older gateway, never a delete); 33: rule 33 (Tasks: open issues and pull / merge requests
         # through the person's own `gh` / `glab`, a fixed read-only argv, no token; Linear only as a config check); 34: rule
         # 34 (a TERMINALS session's owner-only status file under ~/.omher/terminals and its inbox, which only shows rule
-        # 11's card). The rules stay numbered 1..n with no gap or repeat.
+        # 11's card); 35: rule 35 (one free-space statistic of the home volume a minute, `disk-level`, deletes
+        # nothing); 36: rule 36 (the window's close hides to the tray, quitting stays explicit); 37: rule 37 (keep
+        # awake: one idle-sleep assertion while agents work). The rules stay numbered 1..n with no gap or repeat.
         rules = re.findall(r"^(\d+)\. ", DOC.read_text(encoding="utf-8"), re.M)
-        self.assertTrue(6 <= len(rules) <= 34, len(rules))
+        self.assertTrue(6 <= len(rules) <= 37, len(rules))
         self.assertEqual([int(n) for n in rules], list(range(1, len(rules) + 1)))
 
     def test_glossary_and_docs_index_name_omher(self) -> None:
@@ -627,6 +646,20 @@ class LinkChipsFetchNothing(unittest.TestCase):
                 self.assertNotIn(bad, text, f"{path.name}: {bad}")
             if path.name != "settings.ts":
                 self.assertNotIn("localStorage", text, path.name)
+
+    def test_term_import_opens_only_the_two_fixed_prefs_files(self) -> None:
+        # rule 11: Import from… reads one of two fixed prefs files, read-only, no symlink, capped, never writes
+        body = (SHELL / "term_import.rs").read_text(encoding="utf-8").split("#[cfg(test)]")[0]
+        self.assertIn('const ITERM2_PLIST: &str = "Library/Preferences/com.googlecode.iterm2.plist";', body)
+        self.assertIn('const TERMINAL_PLIST: &str = "Library/Preferences/com.apple.Terminal.plist";', body)
+        self.assertEqual(body.count("home.join("), 1)
+        self.assertEqual(body.count(".open("), 1)
+        self.assertIn("opts.read(true);", body)
+        self.assertIn("libc::O_NOFOLLOW", body)
+        self.assertIn("pub const MAX_BYTES: u64 = 8 * 1024 * 1024;", body)
+        self.assertIn("pub const MAX_PROFILES: usize = 64;", body)
+        for bad in ("write(", "File::create", "OpenOptions::new().write", "fs::write", "remove_file"):
+            self.assertNotIn(bad, body, bad)
 
 
 class OmhNeverReachesOmher(unittest.TestCase):
@@ -1704,6 +1737,11 @@ class SessionFilesStayInOmhersFolder(unittest.TestCase):
         cls.ui = (UI_SRC / "sessions" / "sessions.ts").read_text(encoding="utf-8")
         cls.view = (UI_SRC / "sessions" / "SessionView.tsx").read_text(encoding="utf-8")
 
+    def test_an_undone_close_expires_into_the_old_teardown(self) -> None:
+        # rule 11: the undo window's expiry runs the unchanged close(), so files and the pty go as before
+        expire = self.ui.split("const grace = createCloseGrace<Held>({ expire: (g) =>", 1)[1].split(")", 1)[0]
+        self.assertEqual(expire.strip(), "close(g.id")
+
     def test_the_one_folder_is_under_omhers_own_home(self) -> None:
         root = self.prod.split("pub fn root", 1)[1].split("\n}\n", 1)[0]
         self.assertIn('home.join(".omher").join("session-files")', root)
@@ -2188,8 +2226,16 @@ class BotThreads(unittest.TestCase):
         self.assertIn('view: "terminal"', start)
         self.assertNotIn("startAgentChat", start)
         self.assertNotIn("startFolderChat", start)
-        # the Shell row goes through the bottom panel's login-shell command: a folder and a size, never a program
-        self.assertIn("(await getShellHost().start(r.cwd || null, cols, rows, onData, onExit)).id", sessions)
+        # the Shell row goes through the bottom panel's login-shell command: a folder, a size and at most a shell id
+        # from the shell's own list, never a program, path or argument
+        self.assertIn("await getShellHost().start(r.cwd || null, cols, rows, onData, onExit, rec(id)?.shell)", sessions)
+        lib = (self.APP / "src-tauri" / "src" / "lib.rs").read_text(encoding="utf-8")
+        self.assertIn("shell_id: Option<String>,", lib)
+        self.assertIn("sessions.start_shell(cwd.as_deref(), shell_id.as_deref(), &home, cols, rows,", lib)
+        rs = (self.APP / "src-tauri" / "src" / "sessions.rs").read_text(encoding="utf-8")
+        self.assertIn("pub fn shells_available<E, X>(env: &E, etc_shells: &str, is_program: X, os: Os) -> Vec<ShellEntry>", rs)
+        self.assertIn("#[serde(skip)]\n    pub args: Vec<&'static str>,", rs)
+        self.assertIn("let (argv, missing) = shell_argv_for(shell, &host_env, &etc_shells, is_program_file, Os::current())?;", rs)
         # a saved chat-mode session restarts nothing
         restore = sessions.split("const restore = ", 1)[1].split("\n  };\n", 1)[0]
         self.assertIn("const auto = !terminalOnly &&", restore)
@@ -2379,3 +2425,36 @@ class TerminalLinksAndBotRequests(unittest.TestCase):
         self.assertIn("window_close,", (SHELL / "lib.rs").read_text(encoding="utf-8"))
         split = (UI_SRC / "sessions" / "splitState.ts").read_text(encoding="utf-8")
         self.assertIn('export const SPLITS_KEY = "omher.splits";', split)
+
+
+class DiskTrayAndKeepAwake(unittest.TestCase):
+    """Rules 35-37: one free-space statistic a minute and nothing deleted; the close hides to the tray and quitting
+    stays explicit; keep awake holds only an idle-sleep assertion, released on quit."""
+
+    def test_disk_watch_makes_only_the_free_space_call(self) -> None:
+        disk = (SHELL / "disk.rs").read_text(encoding="utf-8").split("#[cfg(test)]", 1)[0]
+        for bad in ("Command::new(", "std::fs::", "fs::", "File::", "remove"):
+            self.assertNotIn(bad, disk, bad)
+        for call in ("statfs(", "statvfs(", "GetDiskFreeSpaceExW("):
+            self.assertIn(call, disk, call)
+        self.assertIn('"disk-level"', disk)
+        self.assertIn("disk::disk_watch", (SHELL / "lib.rs").read_text(encoding="utf-8"))
+        doc = _flat(DOC.read_text(encoding="utf-8"))
+        self.assertIn("`disk-level`", doc)
+        self.assertIn("deletes nothing", doc)
+
+    def test_close_hides_and_tray_quit_really_quits(self) -> None:
+        tray = (SHELL / "tray.rs").read_text(encoding="utf-8").split("#[cfg(test)]", 1)[0]
+        self.assertIn("api.prevent_close()", tray)
+        self.assertIn("OnClose::Hide", tray)
+        self.assertIn("Item::Quit => app.exit(0)", tray)
+
+    def test_keep_awake_is_an_idle_sleep_assertion_released_on_quit(self) -> None:
+        power = (SHELL / "power.rs").read_text(encoding="utf-8").split("#[cfg(test)]", 1)[0]
+        self.assertIn("PreventUserIdleSystemSleep", power)
+        self.assertIn("LINGER: Duration = Duration::from_secs(60)", power)
+        for bad in ('PreventSystemSleep"', "NoDisplaySleep", "ES_DISPLAY_REQUIRED"):
+            self.assertNotIn(bad, power, bad)
+        lib = (SHELL / "lib.rs").read_text(encoding="utf-8")
+        exit_arm = lib.split("RunEvent::Exit = event {", 1)[1].split("shell.sessions.close_all();", 1)[0]
+        self.assertIn("power.quit();", exit_arm)
