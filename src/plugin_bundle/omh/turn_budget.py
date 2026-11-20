@@ -73,8 +73,14 @@ from .awareness import awareness_primer_context, awareness_primer_markdown
 # (`ulw-research`, `omh-routing`) instead of catalog names, so the primer no
 # longer shows `research` and `ulw-research` for one skill. It measured 4043
 # (standing headroom kept as above).
-AWARENESS_PRIMER_CONTEXT_CHAR_LIMIT = 1560
-AWARENESS_PRIMER_MARKDOWN_CHAR_LIMIT = 4051
+# 1560 -> 1677 and 4051 -> 4170: the reply line gains one sentence: a message
+# the user sends mid-turn (a steer) gets one line before the next tool call,
+# saying what was taken from it and what changes. Owner (2026-11-19): a bot
+# that took a steer only changed its next command, silently, and the person
+# could not tell it was read. The compact rail measured 1667 and the markdown
+# 4160 (re-derived from the producers, standing headroom kept as above).
+AWARENESS_PRIMER_CONTEXT_CHAR_LIMIT = 1677
+AWARENESS_PRIMER_MARKDOWN_CHAR_LIMIT = 4170
 AWARENESS_WORKFLOW_CONTEXT_CHAR_LIMIT = 1500
 ROLE_CONTEXT_CHAR_LIMIT = 2600
 # Per-request budgets, zero-slack: each is the value its producer measured,
@@ -194,7 +200,10 @@ PRE_LLM_CALL_CONTEXT_CHAR_LIMIT = 5977
 # 7184 -> 7593 (2026-11-05): the same console choices line on the same
 # console first turn (+409). Re-derived from the producer.
 # 7593 -> 7529: the same rule, same -64.
-PRE_LLM_CALL_CONTEXT_FALLBACK_CHAR_LIMIT = 7529
+# 7529 -> 7646: the primer's reply line gains its mid-turn steer sentence
+# (+117), and it rides the fenced context on this fallback. The section-host
+# limit above does not move. Re-derived from the producer.
+PRE_LLM_CALL_CONTEXT_FALLBACK_CHAR_LIMIT = 7646
 
 SLOT_LIMITS: dict[str, int] = {
     "primer": AWARENESS_PRIMER_CONTEXT_CHAR_LIMIT,
