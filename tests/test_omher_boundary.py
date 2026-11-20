@@ -307,6 +307,15 @@ RULES = (
     "never one profile's unserve and serve inside the host. The profile is always named, never left to Hermes'",
     "It adds `--yes` only when the person presses \"Restart anyway\" right after Hermes refused because something was running,",
     "omher never stops a bot, never restarts every gateway at once, never restarts anything by itself",
+    # oh-my-hermes comes back after a restart (2026-11-20): the omh terminal's one variable, folder.resume's title check
+    "A TERMINALS oh-my-hermes (`omh`) session that was running when omher closed also starts again by itself after the"
+    " restart, and on Restart, with no arguments; it is the one session that gets one more environment variable,"
+    " `OMHER_TERMINAL_LINK=<link id>`",
+    "The page sends only that id; the shell (`sessions::terminal_env`) checks its shape and refuses it for every other"
+    " agent, and omher types nothing into the terminal for it.",
+    "an oh-my-hermes session that was running is attached again (`folder.resume`) only by the stored session id"
+    " `folder.open` returned and its row kept, and only when that session is a folder chat the bridge made for that folder:",
+    "the main chat, a thread, a messenger session or any other id is refused (`not_found`) and nothing is attached.",
 )
 TAURI_CONF = ROOT / "apps" / "omher" / "src-tauri" / "tauri.conf.json"
 CAPABILITIES = ROOT / "apps" / "omher" / "src-tauri" / "capabilities" / "default.json"
@@ -785,6 +794,28 @@ class BridgeSubmitsOnlyToTheMainChat(unittest.TestCase):
         opener = [f for f in ast.walk(self.tree) if isinstance(f, ast.AsyncFunctionDef) and f.name == "op_folder_open"][0]
         self.assertIn("'session.create'", ast.unparse(opener))
         self.assertIn("cwd=cwd", ast.unparse(opener))
+
+    def test_folder_resume_checks_the_saved_title_before_it_attaches(self) -> None:
+        """Rule 3: ``folder.resume`` reads the stored session's saved title (state.db, read-only) and refuses anything
+        but ``FOLDER_CHAT_PREFIX`` + the folder's name, the main chat or a thread before its one ``session.resume``;
+        the chat it keeps is a folder chat through ``_keep_chat``, and the folder chat cap holds."""
+        fns = {f.name: f for f in ast.walk(self.tree) if isinstance(f, (ast.FunctionDef, ast.AsyncFunctionDef))}
+        body = ast.unparse(fns["op_folder_resume"])
+        self.assertIn("'folder.resume': self.op_folder_resume", ast.unparse(fns["__init__"]) if "__init__" in fns else self.source)
+        check = body.index("saved[0] != FOLDER_CHAT_PREFIX + leaf")
+        self.assertLess(body.index("stored in conn.main_ids or stored in conn.threads"), check)
+        self.assertLess(check, body.index("'session.resume'"))
+        self.assertEqual(body.count("self._call("), 1)
+        self.assertIn("self._call(conn, 'session.resume', session_id=stored)", body)
+        self.assertIn("chat.kind != 'folder'", body)
+        self.assertIn("MAX_FOLDER_CHATS", body)
+        self.assertIn("self._keep_chat(conn, chat)", body)
+        self.assertNotIn("session.create", body)
+        reader = ast.unparse(fns["read_session_title"])
+        self.assertIn("ro_uri(db)", reader)
+        self.assertIn("'SELECT title, cwd FROM sessions WHERE id = ?'", reader)
+        for write in ("INSERT", "UPDATE", "DELETE", "write", "commit"):
+            self.assertNotIn(write, reader, write)
 
     def test_media_read_checks_the_bots_own_messages_read_only(self) -> None:
         """`media.read` serves a path only after looking it up in state.db (opened with ``ro_uri``)."""
@@ -1473,6 +1504,21 @@ class SessionsStartOnlyAllowListedAgents(unittest.TestCase):
                        'Ok(vec!["resume".into(), r.into()])', '(Some(_), Some(_)) => Err('):
             self.assertIn(needle, tf)
         self.assertEqual(tf.count("is_uuid("), 2)
+
+    def test_only_an_omh_terminal_gets_its_checked_link_as_one_variable(self) -> None:
+        # rule 11: an oh-my-hermes terminal is told its row's link id (OMHER_TERMINAL_LINK) and nothing else; the shell
+        # checks the shape and refuses it for any other agent; start_agent adds it beside the account's variable
+        env = self.prod.split("pub fn terminal_env", 1)[1].split("\n}\n", 1)[0]
+        self.assertIn('if id != "omh" {', env)
+        self.assertIn("crate::term_link::is_link_id(link)", env)
+        self.assertIn('Ok(vec![("OMHER_TERMINAL_LINK".into(), link.into())])', env)
+        self.assertEqual(env.count("Ok(vec!["), 1)
+        start = self.prod.split("pub fn start_agent", 1)[1].split("\n    }\n", 1)[0]
+        self.assertIn("env.extend(terminal_env(agent_id, link)?);", start)
+        self.assertEqual(self.prod.count("OMHER_TERMINAL_LINK\""), 1)
+        # the page passes the row's link only for omh
+        ui = (UI_SRC / "sessions" / "sessions.ts").read_text(encoding="utf-8")
+        self.assertIn('const link = !ofChat && r.agent === "omh" && isLinkId(r.linkId) ? r.linkId : undefined;', ui)
 
     def test_a_session_gets_only_the_chosen_account_home(self) -> None:
         """Rule 11's account sentence: session_start and chat_start pass `accounts::session_env_for` (the saved
