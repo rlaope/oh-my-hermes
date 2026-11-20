@@ -598,5 +598,81 @@ class ParkedGraphTests(unittest.TestCase):
         self.assertIn("Parked 1m 27s", render_delegation_view(built, width=120).text())  # the box view too
 
 
+
+class DueParkTests(unittest.TestCase):
+    """A parked node past its wake time (the owner, 2026-11-20, of a node still spinning `until 16:30` hours after
+    16:30: "왜 하단에 계속 돌고있냐 버근가"): its wait is over, so it no longer spins or says `until`, and reads `due`,
+    with its time since it became due. Before the wake time it is the parked node it was."""
+
+    def _row(self, app, title: str) -> str:
+        return next(row for row in rows_of(app) if title in row)
+
+    def test_past_its_wake_time_the_parked_node_stops_spinning_and_reads_due(self) -> None:
+        from omh.tui.panels import SPINNER_FRAMES
+
+        late = WAKE_AT + 125
+        app, _client = waiting_app()
+        app.wall_clock = lambda: late
+        drawn(app)
+        row = self._row(app, "Full baseline check")
+        self.assertFalse(any(frame in row for frame in SPINNER_FRAMES), row)
+        self.assertIn("due 2m 5s", row)
+        self.assertNotIn("parked", row)
+        detail = rows_of(app)[rows_of(app).index(row) + 1]
+        self.assertIn(f"due · waits for the parent · since {until()}", detail)
+        self.assertNotIn("until", detail)
+        self.assertNotIn("waits on", detail)
+
+    def test_before_its_wake_time_it_still_spins_and_says_until(self) -> None:
+        from omh.tui.panels import SPINNER_FRAMES
+
+        app, _client = waiting_app()
+        app.wall_clock = lambda: WAKE_AT - 60
+        drawn(app)
+        row = self._row(app, "Full baseline check")
+        self.assertTrue(any(frame in row for frame in SPINNER_FRAMES), row)
+        self.assertIn("parked", row)
+        self.assertIn(f"until {until()}", "\n".join(rows_of(app)))
+
+    def test_a_due_nodes_row_is_the_same_from_frame_to_frame(self) -> None:
+        from omh.tui.dag_tree import tree_lines
+
+        app, _client = waiting_app()
+
+        def row(frame: int, wall: float) -> str:
+            lines, _state = tree_lines(app.hud.payload["delegation_graph"], app.roster, 120, 20, app.theme, frame, {},
+                                       None, wall=wall)
+            return next("".join(span.text for span in line) for line in lines
+                        if "Full baseline check" in "".join(span.text for span in line))
+
+        self.assertEqual(row(0, WAKE_AT + 1), row(1, WAKE_AT + 1), "a due node's row does not turn")
+        self.assertNotEqual(row(0, WAKE_AT - 1), row(1, WAKE_AT - 1), "a parked one's still does")
+
+    def test_a_shut_layer_and_the_header_count_it_due_not_parked(self) -> None:
+        from omh.tui.dag_tree import tree_lines
+        from omh.plugin_bundle.omh.delegation_view import header_text
+
+        built = owners_run()
+        baseline = next(node for node in built["nodes"] if node.get("dag_node") == "baseline")
+        baseline.update(parked_due=True, status="due")
+        self.assertIn("1 due", header_text(built))
+        self.assertNotIn("parked", header_text(built))
+        app, _client = waiting_app(built)
+        lines, _state = tree_lines(built, app.roster, 120, 20, app.theme, 0, {"layer:layer 4": False}, None)
+        shut = next("".join(span.text for span in line) for line in lines
+                    if "layer 4" in "".join(span.text for span in line))
+        self.assertIn("1 due", shut)
+
+    def test_the_graph_reader_marks_a_park_past_its_wake_at_due(self) -> None:
+        from omh.plugin_bundle.omh.delegation_graph import _parked_fields
+
+        node = {"attempts": [{"outcome": "parked", "settled_at": PARKED_AT, "wake_at": WAKE_AT, "handle": PROC}]}
+        before = _parked_fields(node, WAKE_AT - 1)
+        self.assertNotIn("parked_due", before)
+        self.assertNotIn("status", before)
+        after = _parked_fields(node, WAKE_AT + 90)
+        self.assertEqual((after["parked_due"], after["status"], after["elapsed_seconds"]), (True, "due", 90.0))
+
+
 if __name__ == "__main__":
     unittest.main()
