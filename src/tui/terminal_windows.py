@@ -16,8 +16,8 @@ handle (at most `INPUT_WAIT_MS`), asks how many records are queued, and reads
 only that many with ReadConsoleInputW, which returns at once because they
 exist; it never calls a read on an empty queue. Text is taken only from the
 records that read returned: a key-down's character (repeated as often as the
-key repeated) and the character an Alt key-up (Alt+numpad) or an IME key-up
-hands over; focus,
+key repeated) and the character an Alt key-up (Alt+numpad) hands over (an
+IME's key-down carries its character, as prompt_toolkit reads it); focus,
 menu, mouse and size records, key-ups and keys without a character are
 dropped. Nothing is decided on a snapshot of the queue, so a record that
 changes under the reader is never lost; the one window left is a flush
@@ -26,7 +26,10 @@ next record. A surrogate pair split across two reads is joined and the text
 queued as UTF-8 bytes, the bytes `keys.KeyDecoder` reads on POSIX. As the
 reader only ever waits in WaitForSingleObject, `restore` stops it with its
 flag; cancelling its I/O (CancelIoEx, then CancelSynchronousIo on its thread)
-stays as a belt. `read(timeout, wake)` waits on that queue
+stays as a belt. A reader that outlives even that (both cancels refused while
+a flush left it waiting) is abandoned: the one batch it reads after `restore` goes
+back to the end of the console's input with WriteConsoleInputW, never into the
+TUI's queue, and the reader ends; the shell still gets that key. `read(timeout, wake)` waits on that queue
 and ends early when the gateway's wake pipe holds a byte (PeekNamedPipe, which
 never consumes it) or the console's size changed: Windows has no SIGWINCH, so
 the size is polled at most every `RESIZE_POLL_SECONDS` inside the wait. A
@@ -82,9 +85,7 @@ MOUSE_EVENT = 0x0002
 WINDOW_BUFFER_SIZE_EVENT = 0x0004
 MENU_EVENT = 0x0008
 FOCUS_EVENT = 0x0010
-VK_MENU = 0x12  # Alt: Alt+numpad hands its composed character over on this key's key-up
-VK_PROCESSKEY = 0xE5  # the IME's key: never a physical key-up, so a character on its key-up is no repeat
-KEY_UP_TEXT = frozenset({VK_MENU, VK_PROCESSKEY})  # the keys whose key-up can carry the only copy of a character
+VK_MENU = 0x12  # Alt: Alt+numpad hands its composed character over on this key's key-up, its only copy
 
 NOT_A_TERMINAL = "stdin or stdout is not a terminal"
 NOT_A_CONSOLE = "stdin or stdout is not a Windows console"
@@ -117,7 +118,7 @@ class INPUT_RECORD(ctypes.Structure):
 
 def record_units(records: Any) -> list[int]:
     """The UTF-16 units typed in these input records: each key-down's character, repeated as the key repeated, and
-    the character an Alt (Alt+numpad) or IME key-up carries; every other record (focus, menu, mouse, size, any other key-up, a key
+    the character an Alt key-up (Alt+numpad) carries; every other record (focus, menu, mouse, size, any other key-up, a key
     without a character such as a lone Shift) is no text."""
     units: list[int] = []
     for record in records:
@@ -128,7 +129,7 @@ def record_units(records: Any) -> list[int]:
             continue
         if key.bKeyDown:
             units.extend([key.UnicodeChar] * max(key.wRepeatCount, 1))
-        elif key.wVirtualKeyCode in KEY_UP_TEXT:
+        elif key.wVirtualKeyCode == VK_MENU:
             units.append(key.UnicodeChar)
     return units
 
@@ -179,6 +180,7 @@ def load_kernel32() -> Any:
             "CancelIoEx": ((handle, ctypes.c_void_p), bool_),
             "GetNumberOfConsoleInputEvents": ((handle, dword_p), bool_),
             "ReadConsoleInputW": ((handle, ctypes.POINTER(INPUT_RECORD), dword, dword_p), bool_),
+            "WriteConsoleInputW": ((handle, ctypes.POINTER(INPUT_RECORD), dword, dword_p), bool_),
             "OpenThread": ((dword, bool_, dword), handle),
             "CancelSynchronousIo": ((handle,), bool_),
             "CloseHandle": ((handle,), bool_),
@@ -244,6 +246,7 @@ class WindowsConsole:
         self._chunks: deque[bytes] = deque()
         self._eof = False
         self._stop = False
+        self._abandoned = False  # set by `restore` for a reader it could not stop: what it reads is put back
         self._reader: threading.Thread | None = None
         self._size: tuple[int, int] | None = None
         self._size_checked = 0.0
@@ -266,7 +269,7 @@ class WindowsConsole:
             kernel32.SetConsoleOutputCP(CP_UTF8)
             self._size = self._measure()
             self._size_checked = time.monotonic()
-            self._stop = False
+            self._stop = self._abandoned = False
             reader = threading.Thread(target=self._pump, name="omh-tui-console-input", daemon=True)
             reader.start()
             self._reader = reader  # only a started thread: `restore` joins it
@@ -379,7 +382,10 @@ class WindowsConsole:
                     return
                 self._end()
                 return
-            # Queued even if `restore` began meanwhile: these keys were typed for the TUI.
+            if self._abandoned:  # `restore` returned while this read waited: the records are the shell's
+                kernel32.WriteConsoleInputW(self._input, records, count.value, ctypes.c_uint32(0))
+                return
+            # Queued even if `restore` began meanwhile (it has not returned): these keys were typed for the TUI.
             units = record_units(records[: count.value])
             if high is not None:
                 units.insert(0, high)
@@ -406,6 +412,8 @@ class WindowsConsole:
         if reader.is_alive():  # CancelIoEx did not release it: cancel the I/O the thread itself waits in
             self._cancel_thread_io(reader)
             reader.join(STOP_JOIN_SECONDS)
+        if reader.is_alive():  # neither cancel took: the console is the shell's now, so is anything it reads
+            self._abandoned = True
 
     def _cancel_thread_io(self, reader: threading.Thread) -> None:
         kernel32 = self._kernel32
