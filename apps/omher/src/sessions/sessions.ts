@@ -1398,7 +1398,7 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
         }
         if (end === "close") {
           // exit, Ctrl+D: the row goes, as closing it with its x does (nothing runs, so no undo window)
-          close(id, true);
+          close(id);
           return;
         }
         if (!ofChat) {
@@ -1954,7 +1954,9 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
   /** What a closed row needs to come back: itself, where it stood in the list, and the split it was in. */
   type Held = { rec: SessionRec; index: number; split: SplitWas | null };
   /** Closed TERMINALS rows whose program still runs for the undo window; at its end the old close runs, once. */
-  const grace = createCloseGrace<Held>({ expire: (g) => closeNow(g.id, g.data.rec) });
+  const grace = createCloseGrace<Held>({ expire: (g) => close(g.id) });
+  /** The rows of closes waiting out their window (no longer listed): what `close` reads when the window ends. */
+  const heldRecs = new Map<string, SessionRec>();
   if (typeof document !== "undefined") {
     // a hidden window may hold timers back: whatever passed its deadline closes when the window shows again
     document.addEventListener("visibilitychange", () => grace.sweep());
@@ -1989,6 +1991,7 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
     const index = state.list.findIndex((s) => s.id === id);
     const split: SplitWas | null = g ? { layout: g.layout, ...(g.zoom ? { zoom: true as const } : {}) } : null;
     if (!grace.begin(id, r.title || nameOf(r), ms, { rec: r, index, split })) return false;
+    heldRecs.set(id, r);
     t.held = true;
     const list = state.list.filter((s) => s.id !== id);
     set({ list });
@@ -2006,6 +2009,7 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
     const which = id ?? grace.list()[0]?.id;
     const g = which ? grace.undo(which) : null;
     if (!g) return false;
+    heldRecs.delete(g.id);
     const t = terms.get(g.id);
     if (t) t.held = false;
     const list = [...state.list];
@@ -2019,16 +2023,19 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
     return true;
   };
 
-  /** Close session `id`. A running TERMINALS row waits out the undo window first (Settings › Terminal); `now` (the
-   *  shell ended by itself) closes at once. */
-  const close = (id: string, now = false) => {
-    if (!now && holdClosed(id)) return;
+  /** The person closes session `id` (row x, its menu, ⌘W): a running TERMINALS row waits out the undo window first
+   *  (Settings › Terminal), anything else closes at once. A shell that ended by itself closes through `close`. */
+  const closeRow = (id: string) => {
+    if (holdClosed(id)) return;
     if (grace.finish(id)) return;
-    closeNow(id);
+    close(id);
   };
 
-  /** Stop the program(s) and remove the session. `r` is its row (a row waiting out its undo window is no longer listed). */
-  const closeNow = (id: string, r: SessionRec | undefined = rec(id)) => {
+  /** Stop the program(s) and remove the session. A row that waited out its undo window is no longer listed: its
+   *  kept row says what it was. */
+  const close = (id: string) => {
+    const r = rec(id) ?? heldRecs.get(id);
+    heldRecs.delete(id);
     picked.delete(id);
     histOf.get(id)?.stop();
     histOf.delete(id);
@@ -2189,7 +2196,7 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
     chooseFolder,
     start,
     attach,
-    close,
+    close: closeRow,
     /** Closing row `id` now could be undone (its row then closes without asking: the toast's Undo is the way back). */
     closeUndoable: holdable,
     undoClose,
