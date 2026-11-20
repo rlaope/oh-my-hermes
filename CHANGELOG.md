@@ -474,6 +474,12 @@ All notable changes will be documented here.
   steer; a queued slash command or `!` line still waits its turn, and so does a second image prompt while one cut-in
   waits.
 
+- **A parked dag node past its wake time stops spinning under the composer.** A node parked on a background process
+  or a CI run kept its spinner and `until 16:30` hours after 16:30, so a run whose wait was long over read as still
+  moving. Past its `wake_at` the node now reads `due`, with its time since it became due, and its detail row says
+  `due · waits for the parent · since 16:30` instead of the handle it no longer waits on. Its row stops turning, and
+  the layer row, the header and the box view count it `due`, not `parked`. Before its wake time nothing changes.
+
 ## 4.0.8 - 2026-11-15
 
 - **The OMH TUI shows a compression as one gauge row, and a prompt typed meanwhile goes on by itself.** `/compact`
