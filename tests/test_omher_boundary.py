@@ -314,8 +314,14 @@ RULES = (
     "The page sends only that id; the shell (`sessions::terminal_env`) checks its shape and refuses it for every other"
     " agent, and omher types nothing into the terminal for it.",
     "an oh-my-hermes session that was running is attached again (`folder.resume`) only by the stored session id"
-    " `folder.open` returned and its row kept, and only when that session is a folder chat the bridge made for that folder:",
-    "the main chat, a thread, a messenger session or any other id is refused (`not_found`) and nothing is attached.",
+    " `folder.open` returned and its row kept, and only when that session is a folder chat the bridge made for that folder.",
+    # folder.resume's proof is omher's own record, not the editable title (review round 1, 2026-11-21)
+    "The proof is omher's own record, not the session's title: each `folder.open` adds one entry to"
+    " `~/.omher/folder-chats.json` (owner-only, mode 600, replaced whole through a new temporary file;",
+    "`folder.resume` takes a session only when that file holds it for this bot and this folder.",
+    "the main chat, a thread (even one titled like the folder), a messenger session, a folder chat made before the"
+    " record existed or any other id is refused (`not_found`) and nothing is attached.",
+    "The same record keeps a folder chat out of `thread.list`.",
 )
 TAURI_CONF = ROOT / "apps" / "omher" / "src-tauri" / "tauri.conf.json"
 CAPABILITIES = ROOT / "apps" / "omher" / "src-tauri" / "capabilities" / "default.json"
@@ -796,14 +802,20 @@ class BridgeSubmitsOnlyToTheMainChat(unittest.TestCase):
         self.assertIn("cwd=cwd", ast.unparse(opener))
 
     def test_folder_resume_checks_the_saved_title_before_it_attaches(self) -> None:
-        """Rule 3: ``folder.resume`` reads the stored session's saved title (state.db, read-only) and refuses anything
-        but ``FOLDER_CHAT_PREFIX`` + the folder's name, the main chat or a thread before its one ``session.resume``;
-        the chat it keeps is a folder chat through ``_keep_chat``, and the folder chat cap holds."""
+        """Rule 3: ``folder.resume`` refuses the main chat, then takes a session only
+        when omher's own record holds it for this bot and folder, and its saved title (state.db, read-only) is still
+        ``FOLDER_CHAT_PREFIX`` + the folder's name, all before its one ``session.resume``; the chat it keeps is a
+        folder chat through ``_keep_chat``, and the folder chat cap holds."""
         fns = {f.name: f for f in ast.walk(self.tree) if isinstance(f, (ast.FunctionDef, ast.AsyncFunctionDef))}
-        body = ast.unparse(fns["op_folder_resume"])
+        front = ast.unparse(fns["op_folder_resume"])
         self.assertIn("'folder.resume': self.op_folder_resume", ast.unparse(fns["__init__"]) if "__init__" in fns else self.source)
+        self.assertIn("if stored in conn.main_ids:", front)
+        self.assertIn("return await self._folder_resume(conn, cwd, stored)", front)
+        self.assertNotIn("self._call(", front)
+        body = ast.unparse(fns["_folder_resume"])
+        proof = body.index("is_folder_chat, self.omher_home, conn.name, cwd, stored")
         check = body.index("saved[0] != FOLDER_CHAT_PREFIX + leaf")
-        self.assertLess(body.index("stored in conn.main_ids or stored in conn.threads"), check)
+        self.assertLess(proof, check)
         self.assertLess(check, body.index("'session.resume'"))
         self.assertEqual(body.count("self._call("), 1)
         self.assertIn("self._call(conn, 'session.resume', session_id=stored)", body)
@@ -811,6 +823,22 @@ class BridgeSubmitsOnlyToTheMainChat(unittest.TestCase):
         self.assertIn("MAX_FOLDER_CHATS", body)
         self.assertIn("self._keep_chat(conn, chat)", body)
         self.assertNotIn("session.create", body)
+        # folder.open records its chat; thread.list leaves every recorded one out
+        opener = ast.unparse(fns["op_folder_open"])
+        self.assertLess(opener.index("'session.create'"), opener.index("record_folder_chat, self.omher_home, conn.name, cwd, chat.stored_id"))
+        self.assertIn("folder_chat_ids, self.omher_home, conn.name", ast.unparse(fns["op_thread_list"]))
+        # the record: omher's own folder only, a new 600 temp file replaced over it, read without following a link
+        self.assertIn('FOLDER_CHATS_FILE = "folder-chats.json"', self.source)
+        writer = ast.unparse(fns["record_folder_chat"])
+        self.assertIn("tmp = home / f'.{FOLDER_CHATS_FILE}", writer)
+        self.assertIn("_write_new(tmp,", writer)
+        self.assertIn("os.replace(tmp, home / FOLDER_CHATS_FILE)", writer)
+        self.assertIn("0o600)", self.source.split("def _write_new(", 1)[1].split("\n\n", 1)[0])
+        self.assertIn("O_NOFOLLOW", ast.unparse(fns["read_folder_chats"]))
+        # its one caller is folder.open
+        callers = {f.name for f in ast.walk(self.tree) if isinstance(f, (ast.FunctionDef, ast.AsyncFunctionDef))
+                   and any(isinstance(n, ast.Name) and n.id == "record_folder_chat" for n in ast.walk(f))}
+        self.assertEqual(callers, {"op_folder_open"})
         reader = ast.unparse(fns["read_session_title"])
         self.assertIn("ro_uri(db)", reader)
         self.assertIn("'SELECT title, cwd FROM sessions WHERE id = ?'", reader)

@@ -15,7 +15,8 @@ Boundary rules the code keeps:
 * The only sessions this bridge ever resumes, creates, submits to, interrupts or answers are the
   bot's main chat (the session titled ``Bot Chat``) and the folder chats it created itself for an
   oh-my-hermes SESSIONS entry (``folder.open``; closed with ``folder.close``; after a restart reattached with
-  ``folder.resume``, only when the saved session's title is the one ``folder.open`` gave it). Every other session
+  ``folder.resume``, only a session ``folder.open`` recorded in omher's own ``folder-chats.json`` for that bot and
+  folder, whose saved title is still the one ``folder.open`` gave it). Every other session
   is only listed or read (list / history), never attached.
   Files the person attaches go to the main chat only.
 """
@@ -30,6 +31,7 @@ import logging
 import os
 import re
 import signal
+import stat
 import subprocess
 import sys
 import threading
@@ -5311,6 +5313,85 @@ def split_blocks(text: str) -> tuple[list[dict], dict | None, str]:
     return creates[:SPLIT_MAX], route, shown
 
 
+# ---------------------------------------------------------------- which saved sessions are folder chats
+# `folder.open` records each folder chat it makes in omher's own folder (`~/.omher/folder-chats.json`, owner-only,
+# replaced whole): the bot's profile name, the folder's real path and Hermes' stored session id, nothing else. That
+# record, not the session's editable title, is what lets `folder.resume` take a saved session back after a restart,
+# and what keeps a folder chat out of `thread.list` (threads carry the same title prefix). A session made before the
+# record existed has none and is never taken back by itself.
+
+FOLDER_CHATS_FILE = "folder-chats.json"
+FOLDER_CHATS_MAX = 512  # newest records kept
+_FOLDER_CHATS_BYTES = 256 * 1024
+_FOLDER_CHATS_LOCK = threading.Lock()
+
+
+def read_folder_chats(omher_home: Path) -> list[dict]:
+    """The folder chat records, oldest first; [] when there is no file, it is a link or not a plain file, too big or
+    not the shape this bridge writes."""
+    path = Path(omher_home) / FOLDER_CHATS_FILE
+    if Path(omher_home).is_symlink():
+        return []
+    try:
+        fd = os.open(path, os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_NONBLOCK", 0))
+    except OSError:
+        return []
+    try:
+        if not stat.S_ISREG(os.fstat(fd).st_mode):
+            return []
+        raw = b""
+        while len(raw) <= _FOLDER_CHATS_BYTES:
+            part = os.read(fd, _FOLDER_CHATS_BYTES + 1 - len(raw))
+            if not part:
+                break
+            raw += part
+    except OSError:
+        return []
+    finally:
+        os.close(fd)
+    if len(raw) > _FOLDER_CHATS_BYTES:
+        return []
+    try:
+        data = json.loads(raw.decode("utf-8"))
+    except (UnicodeDecodeError, ValueError):
+        return []
+    rows = data.get("chats") if isinstance(data, dict) else None
+    return [r for r in rows if isinstance(r, dict) and all(isinstance(r.get(k), str) and r.get(k)
+                                                            for k in ("profile", "cwd", "stored"))] \
+        if isinstance(rows, list) else []
+
+
+def record_folder_chat(omher_home: Path, profile: str, cwd: str, stored: str) -> None:
+    """Add one folder chat record (profile, the folder's real path, stored id), atomically: a temp file made new with
+    mode 600, then renamed over the record. Raises OSError when it cannot be written."""
+    home = Path(omher_home)
+    with _FOLDER_CHATS_LOCK:
+        rows = [r for r in read_folder_chats(home) if (r["profile"], r["stored"]) != (profile, stored)]
+        rows.append({"profile": profile, "cwd": _norm(cwd), "stored": stored, "created_at": time.time()})
+        home.mkdir(parents=True, exist_ok=True, mode=0o700)
+        if home.is_symlink():
+            raise OSError("omher's folder is a link")
+        tmp = home / f".{FOLDER_CHATS_FILE}.{uuid.uuid4().hex[:8]}.tmp"
+        try:
+            _write_new(tmp, (json.dumps({"version": 1, "chats": rows[-FOLDER_CHATS_MAX:]}) + "\n").encode("utf-8"))
+            os.replace(tmp, home / FOLDER_CHATS_FILE)
+        finally:
+            with contextlib.suppress(OSError):
+                tmp.unlink()
+
+
+def is_folder_chat(omher_home: Path, profile: str, cwd: str, stored: str) -> bool:
+    """True only when `folder.open` recorded `stored` for this bot in this folder (real paths compared)."""
+    where = _norm(cwd)
+    return any(r["profile"] == profile and r["stored"] == stored and r["cwd"] == where
+               for r in read_folder_chats(omher_home))
+
+
+def folder_chat_ids(omher_home: Path, profile: str) -> set[str]:
+    """The stored ids of every folder chat recorded for this bot."""
+    return {r["stored"] for r in read_folder_chats(omher_home) if r["profile"] == profile}
+
+
 # ---------------------------------------------------------------- one Hermes gateway connection
 
 class FolderChat:
@@ -6208,7 +6289,8 @@ class Bridge:
     # ------------------------------------------------------------ folder chats (SESSIONS > oh-my-hermes)
 
     async def op_folder_open(self, p) -> dict:
-        """Create a new Hermes chat for the bot in folder ``cwd`` (an existing absolute folder)."""
+        """Create a new Hermes chat for the bot in folder ``cwd`` (an existing absolute folder), and record it in
+        omher's own folder (``record_folder_chat``) as the proof ``folder.resume`` asks for after a restart."""
         cwd = p.get("cwd")
         if not isinstance(cwd, str) or not cwd.strip() or not os.path.isabs(cwd) or not os.path.isdir(cwd):
             raise BridgeError("bad_request", "cwd must be an existing folder")
@@ -6223,6 +6305,10 @@ class Bridge:
                           str(snap.get("subscription_id") or ""))
         if snap.get("execution_generation") is not None:
             chat.generation = snap["execution_generation"]
+        try:
+            await asyncio.to_thread(record_folder_chat, self.omher_home, conn.name, cwd, chat.stored_id)
+        except OSError as e:  # the chat works; it only cannot come back by itself after a restart
+            log.warning("folder chat %s not recorded: %s", chat.stored_id, e)
         self._keep_chat(conn, chat)
         info = snap.get("info") if isinstance(snap.get("info"), dict) else {}
         return {"session": fid, "stored": chat.stored_id, "cwd": str(info.get("cwd") or cwd),
@@ -6233,22 +6319,29 @@ class Bridge:
     async def op_folder_resume(self, p) -> Reply:
         """Reattach a folder chat ``folder.open`` made before omher (or this bridge) restarted, by its stored id.
 
-        Only a session the bridge made for this folder is taken: its saved title (the bot's state.db, read-only, before
-        anything is attached) must be exactly ``FOLDER_CHAT_PREFIX`` + the folder's name, as ``folder.open`` titled
-        it, and its saved folder, when it has one, this folder. The main chat, a thread, a messenger session or an
-        unknown id is ``not_found`` and nothing is attached. Then it is resumed through Hermes' own ``session.resume``,
-        kept as a folder chat (``MAX_FOLDER_CHATS`` holds), and its messages come back as ``thread.open``'s do;
-        prompts still waiting on the person are sent again after the reply."""
+        Only a session ``folder.open`` recorded for this bot and this folder in omher's own folder
+        (``is_folder_chat``) is taken; its saved title (the bot's state.db, read-only, before anything is attached)
+        must also still be exactly ``FOLDER_CHAT_PREFIX`` + the folder's name, and its saved folder, when it has one,
+        this folder. The main chat, a thread, a messenger session, a session made before the record existed or an
+        unknown id is ``not_found`` and nothing is attached. Then it is resumed through Hermes' own
+        ``session.resume``, kept as a folder chat (``MAX_FOLDER_CHATS`` holds), and its messages come back as
+        ``thread.open``'s do; prompts still waiting on the person are sent again after the reply."""
         cwd, stored = p.get("cwd"), p.get("stored")
         if not isinstance(cwd, str) or not cwd.strip() or not os.path.isabs(cwd) or not os.path.isdir(cwd):
             raise BridgeError("bad_request", "cwd must be an existing folder")
         if not isinstance(stored, str) or not stored or len(stored) > 200:
             raise BridgeError("bad_request", "missing stored session")
         conn = await self._conn(p.get("bot"))
-        if stored in conn.main_ids or stored in conn.threads:
+        if stored in conn.main_ids:
             raise BridgeError("not_found", "no such folder chat")
+        return await self._folder_resume(conn, cwd, stored)
+
+    async def _folder_resume(self, conn: Conn, cwd: str, stored: str) -> Reply:
+        """``folder.resume`` after its argument checks: the proof, the one ``session.resume``, the chat."""
         chat = next((f for f in conn.folders.values() if stored in f.ids), None)
         if chat is not None and chat.kind != "folder":
+            raise BridgeError("not_found", "no such folder chat")
+        if not await asyncio.to_thread(is_folder_chat, self.omher_home, conn.name, cwd, stored):
             raise BridgeError("not_found", "no such folder chat")
         saved = await asyncio.to_thread(read_session_title, conn.bot["path"], stored)
         leaf = Path(cwd).name or cwd
@@ -6259,6 +6352,7 @@ class Bridge:
         snap = await self._call(conn, "session.resume", session_id=stored)
         info = snap.get("info") if isinstance(snap.get("info"), dict) else {}
         running = bool(snap.get("running") if snap.get("running") is not None else info.get("running"))
+        conn.threads.pop(stored, None)  # a folder chat, never a thread
         if chat is None:
             chat = FolderChat("f" + uuid.uuid4().hex[:10], cwd, str(snap["session_id"]), stored,
                               str(snap.get("subscription_id") or ""))
@@ -6437,7 +6531,9 @@ class Bridge:
         conn.threads_shown = True  # this app shows the bot's threads: its main-chat turns carry the threads note
         rows = (await self._call(conn, "session.list", limit=200)).get("sessions") or []
         out: dict[str, dict] = {}
+        # folder chats share the prefix: the ones attached now and every one folder.open recorded are left out
         folder_ids = {f.stored_id for f in conn.folders.values() if f.kind == "folder"}
+        folder_ids |= await asyncio.to_thread(folder_chat_ids, self.omher_home, conn.name)
         for r in rows:
             if not isinstance(r, dict) or not isinstance(r.get("title"), str) or not r["title"].startswith(THREAD_PREFIX):
                 continue

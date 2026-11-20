@@ -1,10 +1,15 @@
 """`folder.resume`: after omher (or the bridge) restarts, an oh-my-hermes folder chat is reattached by the stored id
-`folder.open` returned. Only a session the bridge made for that folder is taken (its saved title in the bot's state.db,
-read-only, is `omher · <folder name>`); the main chat, a thread, a Slack session and an unknown id are refused before
-anything is attached. No Hermes, no network beyond loopback."""
+`folder.open` returned. Only a session `folder.open` recorded for that bot and folder in omher's own folder
+(`folder-chats.json`) is taken, and its saved title in the bot's state.db (read-only) must still be
+`omher · <folder name>`; the main chat, a thread (even one titled like the folder), a Slack session, a session made
+before the record existed and an unknown id are refused before anything is attached. No Hermes, no network beyond
+loopback."""
 from __future__ import annotations
 
+import json
+import os
 import sqlite3
+import stat
 import sys
 import tempfile
 import unittest
@@ -53,6 +58,11 @@ class ResumeEnv(Env):
         con.commit()
         con.close()
 
+    def recorded(self, *rows: tuple[str, str]) -> None:
+        """What `folder.open` would have recorded for the bot: (cwd, stored id) pairs."""
+        for cwd, stored in rows:
+            ob.record_folder_chat(self.bridge.omher_home, "kami", cwd, stored)
+
 
 def ok(r: dict) -> dict:
     assert r["ok"], r
@@ -76,6 +86,7 @@ class FolderResume(BridgeCase):
     async def test_its_own_folder_chat_resumes_and_takes_messages_again(self):
         async with ResumeEnv() as env:
             env.saved([("stored-folder-0", "tui", "omher · web-app", self.folder)])
+            env.recorded((self.folder, "stored-folder-0"))
             s = await self.open(env)
             r = ok(await s.req("folder.resume", bot="kami", cwd=self.folder, stored="stored-folder-0"))
             self.assertEqual(r["stored"], "stored-folder-0")
@@ -101,6 +112,7 @@ class FolderResume(BridgeCase):
     async def test_waiting_prompts_are_sent_again_after_the_reply(self):
         async with ResumeEnv() as env:
             env.saved([("stored-folder-0", "tui", "omher · web-app", None)])
+            env.recorded((self.folder, "stored-folder-0"))
             ResumeClient.pending_prompts = [{"prompt_id": "ap1", "kind": "approval", "command": "rm x",
                                              "description": "Delete", "choices": ["once", "deny"],
                                              "execution_generation": 6}]
@@ -150,6 +162,7 @@ class FolderResume(BridgeCase):
     async def test_the_folder_chat_cap_holds(self):
         async with ResumeEnv() as env:
             env.saved([("stored-folder-0", "tui", "omher · web-app", None)])
+            env.recorded((self.folder, "stored-folder-0"))
             s = await self.open(env)
             conn = await env.bridge._conn("kami")
             for n in range(ob.MAX_FOLDER_CHATS):
@@ -164,6 +177,76 @@ class FolderResume(BridgeCase):
             r = await s.req("folder.resume", bot="kami", cwd=self.folder, stored="stored-folder-0")
             self.assertEqual(r["error"]["code"], "not_found")
             self.assertEqual(env.clients["kami"].find("session.resume"), [])
+
+    async def test_a_thread_titled_like_the_folder_is_refused_on_a_fresh_connection(self):
+        """Finding 1: the title is not proof. A thread a person named for its own folder has the folder chat's title
+        and folder in state.db, and a fresh connection has listed no threads; without folder.open's record it is
+        refused before anything is attached."""
+        async with ResumeEnv() as env:
+            env.saved([(THREAD, "tui", "omher · web-app", self.folder)])
+            s = await self.open(env)
+            r = await s.req("folder.resume", bot="kami", cwd=self.folder, stored=THREAD)
+            self.assertEqual(r["error"]["code"], "not_found")
+            self.assertEqual(env.clients["kami"].find("session.resume"), [])
+            # a legacy folder chat (made before the record existed) is refused the same way: its row stays paused
+            self.assertFalse(ob.is_folder_chat(env.bridge.omher_home, "kami", self.folder, THREAD))
+
+    async def test_the_record_is_bound_to_the_bot_and_the_folder(self):
+        other = str(Path(self.tmp.name) / "other" / "web-app")
+        Path(other).mkdir(parents=True)
+        async with ResumeEnv() as env:
+            env.saved([("stored-folder-0", "tui", "omher · web-app", None)])
+            ob.record_folder_chat(env.bridge.omher_home, "deepseek", self.folder, "stored-folder-0")  # another bot
+            env.recorded((other, "stored-folder-0"))  # another folder of the same name
+            s = await self.open(env)
+            r = await s.req("folder.resume", bot="kami", cwd=self.folder, stored="stored-folder-0")
+            self.assertEqual(r["error"]["code"], "not_found")
+            self.assertEqual(env.clients["kami"].find("session.resume"), [])
+            # the folder is compared by its real path: a link to it is the same folder
+            link = Path(self.tmp.name) / "link-to-web-app"
+            os.symlink(self.folder, link)
+            env.recorded((str(link), "stored-folder-0"))
+            ok(await s.req("folder.resume", bot="kami", cwd=self.folder, stored="stored-folder-0"))
+
+    async def test_folder_open_records_its_chat_owner_only_and_thread_list_leaves_it_out(self):
+        """folder.open writes the record (bot, real folder, stored id) in omher's own folder, mode 600, replaced
+        whole; thread.list never lists a recorded folder chat as a thread, even on a fresh connection that has not
+        attached it, so folder.resume still takes it afterwards."""
+        async with ResumeEnv() as env:
+            s = await self.open(env)
+            r = ok(await s.req("folder.open", bot="kami", cwd=self.folder))
+            path = env.bridge.omher_home / ob.FOLDER_CHATS_FILE
+            self.assertEqual(stat.S_IMODE(path.stat().st_mode), 0o600)
+            rows = json.loads(path.read_text(encoding="utf-8"))["chats"]
+            self.assertEqual([(x["profile"], x["cwd"], x["stored"]) for x in rows],
+                             [("kami", os.path.normcase(os.path.realpath(self.folder)), r["stored"])])
+            self.assertEqual([p.name for p in env.bridge.omher_home.iterdir()], [ob.FOLDER_CHATS_FILE])  # no temp left
+            # a restarted bridge: nothing attached; the saved folder chat shows in session.list with the thread prefix
+            conn = await env.bridge._conn("kami")
+            conn.folders.clear()
+            env.clients["kami"].sessions = [{"id": r["stored"], "title": "omher · web-app", "started_at": 1},
+                                            {"id": THREAD, "title": "omher · Fix the 502", "started_at": 2}]
+            threads = ok(await s.req("thread.list", bot="kami"))["threads"]
+            self.assertEqual([t["thread"] for t in threads], [THREAD])
+            env.saved([(r["stored"], "tui", "omher · web-app", self.folder)])
+            back = ok(await s.req("folder.resume", bot="kami", cwd=self.folder, stored=r["stored"]))
+            self.assertEqual(back["stored"], r["stored"])
+
+    def test_the_record_file_is_refused_when_it_is_not_a_plain_file(self):
+        with tempfile.TemporaryDirectory() as d:
+            home = Path(d)
+            (home / ob.FOLDER_CHATS_FILE).mkdir()
+            self.assertEqual(ob.read_folder_chats(home), [])
+            (home / ob.FOLDER_CHATS_FILE).rmdir()
+            real = home / "elsewhere.json"
+            real.write_text(json.dumps({"chats": [{"profile": "kami", "cwd": d, "stored": "x"}]}), encoding="utf-8")
+            os.symlink(real, home / ob.FOLDER_CHATS_FILE)
+            self.assertEqual(ob.read_folder_chats(home), [])  # never through a link
+            (home / ob.FOLDER_CHATS_FILE).unlink()
+            (home / ob.FOLDER_CHATS_FILE).write_text("not json", encoding="utf-8")
+            self.assertEqual(ob.read_folder_chats(home), [])
+            ob.record_folder_chat(home, "kami", d, "x")  # a broken file is replaced whole, never appended to
+            self.assertTrue(ob.is_folder_chat(home, "kami", d, "x"))
 
     def test_the_reader_opens_state_db_read_only(self):
         with tempfile.TemporaryDirectory() as d:
