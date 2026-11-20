@@ -206,8 +206,11 @@ class AiJobSearchContextBudgetTests(unittest.TestCase):
             # bc088218...5df4 at 542611 and 57ef3e89...0794e at 145483.
             # 546469 -> 546456 and the digest re-derived: model-compression's description says "smaller or
             # cheaper" again (-13); no other row moved, and the pin before it was db592e21...1ccc6.
-            (skill_capabilities, 546456, FULL_ROW_DELTA_CAP,
-             '59c3f3d0942895064422126b0ff33528b919d3eab127ca06ea630d402a0a38b0',
+            # 546456 -> 546679 and the digest re-derived: OpenAI's GPT-6.2 Codex guide lines move the dag-ulw row
+            # (+161) and the agent-instructions row (+62, itemized at FULL_CAPABILITY_SKILL_SECTION_CHAR_LIMIT); no
+            # other row moved, and the pin before it was 59c3f3d0...38b0.
+            (skill_capabilities, 546679, FULL_ROW_DELTA_CAP,
+             '8e3f5c83774996722ca3e5380fb393091eb113ecd5270ef4f6ef39f0f18dd898',
              release.FULL_CAPABILITY_SKILL_SECTION_CHAR_LIMIT),
             (standalone_skill_capability_items, 146420, STANDALONE_ROW_DELTA_CAP,
              '7bf537036d7224bf9054e4fc91773dc033d063546267031ea8bbec7f1872578d',
@@ -558,9 +561,11 @@ class AiJobSearchContextBudgetTests(unittest.TestCase):
         # before it was 280bbdfb...7cee74.
         # Merged with main a third time: dag-ulw then gains the opt-in `carry_forward` quality-bar line; only
         # dag-ulw moves. This branch's pin was a92e709f...a555, and main's was 2d788500...c459.
-        # 2026-11-20: loop and source-finder gain reference pointers (experiment-tree, literature-retrieval);
-        # only those two bodies move, and the pin before it was 891b61cd...f061.
-        self.assertEqual(_digest(legacy_hashes), '7c051fb064b6a3a785369dda85320d6ee323969665d22f67a519b83e3a617aaf')
+        # OpenAI's GPT-6.2 Codex guide lines then reach visual-qa, frontend, app-debugging, agent-instructions
+        # and dag-ulw; only those five bodies move, and the pin before it was 891b61cd...f061.
+        # Merged with the OpenResearch references branch: loop and source-finder gain reference pointers
+        # (experiment-tree, literature-retrieval); this branch's pin was 7c051fb0...7aaf, and main's was 66929abd...07a7.
+        self.assertEqual(_digest(legacy_hashes), 'a55761860310b5121f357c3ac03de780ed7f565da860711b6bab90ff448f5b9c')
         legacy = _skill_context_cost_profile('full', legacy_templates, refs)
         current = _skill_context_cost_profile('full', templates, refs)
         # Main's search guidance adds 305; repro-audit's mandatory rails 1,943.
@@ -611,7 +616,7 @@ class AiJobSearchContextBudgetTests(unittest.TestCase):
         from omh.maintenance.drift import budget_metrics
         expected = {
             'skill_index_line_max_chars': 99,  # Word-boundary cut matching Hermes' clip_skill_description (-1).
-            'plugin_tool_schema_chars': 63824,  # Parked DAG waits (+429), delegation backends (+245), six routing-recipe categories (+213), opt-in omh-lsp tools (+2187), opt-in lsp_diagnostics (+396), identity argument (+143), dag node role (+85), dag node owner (+70), dag node local (+37) less the route fallback sentence (-1), then the ultrabrain head in the route example (+5), then omh_dag goal criteria (+226), then the criteria parameter's keep-the-condition description (+95), said in the positive form (+8), then dag node read_only (+45), then the observation parameter's field descriptions and the home-override wording trimmed (-9616), then four tool descriptions said in fewer words (-1225), then unified identities: the omh_dag identity reference (+122), omh_delegate_route `attempt` and identity description (+303), omh_role directory and `identity` argument (+220), then omh_dag escalation (+224), then omh_dag carry_forward (+188), then omh_omher_terminal (+668).
+            'plugin_tool_schema_chars': 63954,  # Parked DAG waits (+429), delegation backends (+245), six routing-recipe categories (+213), opt-in omh-lsp tools (+2187), opt-in lsp_diagnostics (+396), identity argument (+143), dag node role (+85), dag node owner (+70), dag node local (+37) less the route fallback sentence (-1), then the ultrabrain head in the route example (+5), then omh_dag goal criteria (+226), then the criteria parameter's keep-the-condition description (+95), said in the positive form (+8), then dag node read_only (+45), then the observation parameter's field descriptions and the home-override wording trimmed (-9616), then four tool descriptions said in fewer words (-1225), then unified identities: the omh_dag identity reference (+122), omh_delegate_route `attempt` and identity description (+303), omh_role directory and `identity` argument (+220), then omh_dag escalation (+224), then omh_dag carry_forward (+188), then omh_omher_terminal (+668), then the omh_dag node review_focus (+130).
             'pre_llm_call_context_chars_max': 5977,  # The pi-family runtime rename (+6), the route-hint dedup (-154), then the console choices line (+409).
             'pre_llm_call_context_fallback_chars_max': 7646,  # The same rename (+6), the human-voice primer sentence (+116), the route-hint dedup (-154), then the console choices line (+409), then the mid-turn steer sentence (+117).
             'awareness_primer_markdown_chars': 4170,  # Human-voice reply sentence (+110), full skill names in the checkpoint (+55), then loadable labels there (+49), on the card and cue lines (+239) and in the lane keys (+78), then the mid-turn steer line (+117).

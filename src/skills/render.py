@@ -5354,6 +5354,7 @@ When several exist, keep one source and point the others at it, so two files can
 | "the router is at line 212 of `chat.py`" | any edit above it moves it | the symbol name |
 | "we have 134 skills" | the catalog grows | the command or file that counts them |
 | a restatement of what a function does | the code already says it, and the two diverge | nothing |
+| "run the tests before committing", "use clear names" | routine how-to an agent decides anyway, paid for in every session | nothing, unless the project depends on a specific workflow; then that workflow |
 | a secret, a token, or a private hostname | the file is read by every agent and often published | the name of the variable that holds it |
 
 The injected copy of an instruction file is a snapshot of the session start. A long session re-reads the file from the default branch before relying on it.

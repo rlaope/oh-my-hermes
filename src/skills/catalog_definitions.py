@@ -4871,6 +4871,8 @@ _DEFINITIONS = [
             "Keep field and lab apart: a p75 claim needs field data, a lab audit is a diagnostic sample on one device profile, and a lab pass is never a statement about real users.",
             "While building, look at each change that affects what renders: after it, capture the affected surface and read the capture before the next change, for a 3D or canvas scene the default camera and each declared preset; a change not looked at is not done (`references/screenshot-loop.md`, section `During implementation`).",
             "After implementation lands on a web surface, load `references/screenshot-loop.md` and require the screenshot iteration loop live-environment-first: capture the running UI at 1440/768/375px, compare against the supplied target or DESIGN.md, list every difference triaged Blocker/High/Medium/Nit with its capture attached, fix, and recapture until the difference list is empty.",
+            # OpenAI "Prompting GPT-6.2 in Codex" (read 2026-11-20): review at the size people will see it.
+            "Judge each capture against the reference at the size and density people will see it (the real viewport, the real icon size such as a 24 px toolbar slot), not only a large render; exercise an interactive result with the actions it supports before calling it done.",
             "Prefer native UI controls, stable dimensions, and realistic content over decorative cards, blobs, and placeholder-heavy screens.",
             shared_test_authoring_line(
                 "When the handoff asks for component or interaction tests, ",
@@ -5662,6 +5664,8 @@ _DEFINITIONS = [
             "When a product surface is composed into a larger frame (promo, poster, slide, end card), measure it against the frame: a look-alike of a UI that exists, in place of its real renderer's output, is BLOCK, while an unbuilt UI labeled concept or a brief-requested stylised treatment labeled as such is not; with no subtitles a product-led shot is full-bleed, the full frame minus a 46 px edge inset (at least about 988 px tall at 1080p) with platform-UI zones still clear, and with subtitles it fills at least 90% of the width and height of the body safe area with the subtitle band clear; text rows are at least 2% of the frame's shorter side; a logo or identity mark keeps at least one of its own text rows from the frame and window edges, intentional crops excepted; meta text the product does not render (window title, dimension label, invented path) is removed; every count agrees with its noun in each plural category of the content locale. Each miss is one `differences` entry.",
             "Combine objective capture/diff evidence, hotspot review, alpha/transparent-background checks, and human-readable visual findings.",
             "Capture interaction, click-path, and motion states when the UI has transitions or controls that change state.",
+            # OpenAI "Prompting GPT-6.2 in Codex" (read 2026-11-20): review at the size people will see it.
+            "Compare against the reference at the size and density people will see it: the real viewport, the real icon or toolbar size (a 24 px toolbar slot), the real slide or card dimensions, not only an enlarged render, where detail that reads at large size can vanish. An interactive result is exercised with the actions it supports (click, type, scroll, key) before any verdict.",
             "For a 3D or canvas scene, capture the first frame exactly as booted, each camera preset, and every time of day the scene advertises; a claim in its own title or HUD that its first frame does not show, a small animated object that does not read as what it is, and flat light are each one `differences` entry (`omh-frontend/references/rendered-scene-craft.md`).",
             "A game or interactive scene passes only when captures show it boots (first frame neither blank nor one flat colour), answers its declared input (the frame after a key, click or touch differs from the frame before it where the input should move something), keeps running (frames seconds apart differ while idle, background-only animation not counting) and logs zero console errors across boot and input; a missing capture is BLOCK, reading code never passes it, and a run without a WebGL context is recorded as `environment: no_webgl`, not judged blank (`references/playable-check.md`).",
             "Separate design-system consistency, functional integrity, visual fidelity, responsive behavior, accessibility visibility, and CJK/text precision.",
@@ -5728,6 +5732,8 @@ _DEFINITIONS = [
                 "When a product surface is composed into a larger frame (promo, poster, slide, end card), measure it against the frame: a look-alike of a UI that exists, in place of its real renderer's output, is BLOCK, while an unbuilt UI labeled concept or a brief-requested stylised treatment labeled as such is not; with no subtitles a product-led shot is full-bleed, the full frame minus a 46 px edge inset (at least about 988 px tall at 1080p) with platform-UI zones still clear, and with subtitles it fills at least 90% of the width and height of the body safe area with the subtitle band clear; text rows are at least 2% of the frame's shorter side; a logo or identity mark keeps at least one of its own text rows from the frame and window edges, intentional crops excepted; meta text the product does not render (window title, dimension label, invented path) is removed; every count agrees with its noun in each plural category of the content locale. Each miss is one `differences` entry.",
                 "Combine objective capture/diff evidence, hotspot review, alpha/transparent-background checks, and human-readable visual findings.",
                 "Capture interaction, click-path, and motion states when the UI has transitions or controls that change state.",
+                # OpenAI "Prompting GPT-6.2 in Codex" (read 2026-11-20): review at the size people will see it.
+                "Compare against the reference at the size and density people will see it: the real viewport, the real icon or toolbar size (a 24 px toolbar slot), the real slide or card dimensions, not only an enlarged render, where detail that reads at large size can vanish. An interactive result is exercised with the actions it supports (click, type, scroll, key) before any verdict.",
                 "For a 3D or canvas scene, capture the first frame exactly as booted, each camera preset, and every time of day the scene advertises; a claim in its own title or HUD that its first frame does not show, a small animated object that does not read as what it is, and flat light are each one `differences` entry (`omh-frontend/references/rendered-scene-craft.md`).",
                 "A game or interactive scene passes only when captures show it boots (first frame neither blank nor one flat colour), answers its declared input (the frame after a key, click or touch differs from the frame before it where the input should move something), keeps running (frames seconds apart differ while idle, background-only animation not counting) and logs zero console errors across boot and input; a missing capture is BLOCK, reading code never passes it, and a run without a WebGL context is recorded as `environment: no_webgl`, not judged blank (`references/playable-check.md`).",
                 "Separate design-system consistency, functional integrity, visual fidelity, responsive behavior, accessibility visibility, and CJK/text precision.",
@@ -5743,7 +5749,7 @@ _DEFINITIONS = [
             ),
         },
         portable_override_shadows={
-            "quality_bar": "e0d897cd189f1b6915deb7aa67ee170e4e0f39e7858c2c6419a565e28aa75938",
+            "quality_bar": "4ad687fcb0a398946a0971b11a6ed189659de1b0b8bebcca08f7b3be5667f135",
         },
     ),
     SkillDefinition(
@@ -10639,6 +10645,8 @@ _DEFINITIONS.append(
             "Load `references/hypothesis-and-race-method.md` for the hypothesis table, flaky-test tactics, and race patterns instead of improvising them.",
             "Pick the next observation by cost and by how many hypotheses its result eliminates, and record the eliminations.",
             "Keep reproduction, root cause, fix, and verification as separate observed states.",
+            # OpenAI "Prompting GPT-6.2 in Codex" (read 2026-11-20): effort follows investigation depth.
+            "Size the effort to the depth and name it: a quick survey of one area runs at medium; tracing one suspected cause across several systems runs at high (category `deep`); several causes that may interact run at xhigh (category `forensics`). Finished means the reported symptom's root cause is shown by an observation and the fix passes the same reproduction; be exhaustive in the hypothesis table and its eliminations, not in reading code no hypothesis touches.",
             "Count a fix as failed when an executed run of the same reproduction command still shows the original symptom or shows a new symptom the fix caused rather than unmasked; planned runs and other commands do not count. After the third failed fix, prepare no fourth; re-examine the architecture assumptions every fix shared, per the method reference, and offer the user the next step as a question.",
             shared_test_authoring_line(
                 "Before the fix handoff names a regression test, ",
@@ -11318,6 +11326,8 @@ _DEFINITIONS.append(
         quality_bar=(
             "Inventory every instruction file first and respect closest-file-wins nesting.",
             "Load `references/instruction-file-method.md` for the section order, the marker convention, the verified and unverified command form, and the drift rules instead of recalling them.",
+            # OpenAI "Prompting GPT-6.2 in Codex" (read 2026-11-20): what belongs in AGENTS.md.
+            "Keep a line only if an agent cannot infer it from the code, tests or docs; keep the workflows the project depends on, and leave routine how-to decisions out.",
             "Record each pitfall with what it cost, so a reader can tell a scar from a preference.",
             "Pair every generated file with its source, its regenerate command, and the gate that checks it.",
             "Keep prepared, verified, and written as separate states for every command and section.",

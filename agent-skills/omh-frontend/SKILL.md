@@ -34,13 +34,7 @@ Read `references/details.md` first.
 
 ## Completion Checklist
 
-- The target page/component, audience, primary task, references, and quality bar are named.
-- Greenfield work includes frontend_initial_generation_contract/v1 before implementation handoff.
-- The design_system_contract/v1 covers typography, spacing, palette, components, layout, motion, and responsive rules.
-- The frontend_route_state_matrix/v1 covers pages, 375/768/1280-style breakpoints, empty/loading/error, interaction, and CJK/locale risks, plus submitting, submit-failed, optimistic-pending, stale/refetching, and conflict rows for remote writes.
-- The frontend_component_state_inventory/v1 covers reusable primitives and their default/hover/focus/active/disabled/loading/empty/error states.
-- The handoff names the executor/runtime owner and keeps code, browser, Lighthouse, accessibility, deployment, and visual QA evidence observed-only.
-- The next action is prepare_frontend_handoff, route to `omh-visual-qa`, or report the missing evidence blocker.
+Read `references/details.md` first.
 
 ## Recovery Notes
 
@@ -86,6 +80,7 @@ Quality bar:
 - Keep field and lab apart: a p75 claim needs field data, a lab audit is a diagnostic sample on one device profile, and a lab pass is never a statement about real users.
 - While building, look at each change that affects what renders: after it, capture the affected surface and read the capture before the next change, for a 3D or canvas scene the default camera and each declared preset; a change not looked at is not done (`references/screenshot-loop.md`, section `During implementation`).
 - After implementation lands on a web surface, load `references/screenshot-loop.md` and require the screenshot iteration loop live-environment-first: capture the running UI at 1440/768/375px, compare against the supplied target or DESIGN.md, list every difference triaged Blocker/High/Medium/Nit with its capture attached, fix, and recapture until the difference list is empty.
+- Judge each capture against the reference at the size and density people will see it (the real viewport, the real icon size such as a 24 px toolbar slot), not only a large render; exercise an interactive result with the actions it supports before calling it done.
 - Prefer native UI controls, stable dimensions, and realistic content over decorative cards, blobs, and placeholder-heavy screens.
 - When the handoff asks for component or interaction tests, read `../omh-verification-gate/references/test-authoring.md` and name the seam each test drives: assert through what a user perceives (role, accessible name, visible text) across the frontend_component_state_inventory/v1 states, never class names or component-internal state, and fake only at the boundaries the shared page lists (network, clock, randomness).
 - Keep implementation, browser verification, accessibility/performance checks, visual QA, and deployment as observed-only evidence.
