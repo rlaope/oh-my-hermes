@@ -27,9 +27,13 @@ queued as UTF-8 bytes, the bytes `keys.KeyDecoder` reads on POSIX. As the
 reader only ever waits in WaitForSingleObject, `restore` stops it with its
 flag; cancelling its I/O (CancelIoEx, then CancelSynchronousIo on its thread)
 stays as a belt. Any batch a read returns once `restore` has begun goes back
-to the end of the console's input with WriteConsoleInputW, never into the
-TUI's queue, and the reader ends: so a reader that outlives both cancels (a
-flush left it waiting and Windows refused them) still leaves the shell its key. `read(timeout, wake)` waits on that queue
+into the console with WriteConsoleInputW, never into the TUI's queue, and the
+reader ends: so a reader that outlives both cancels (a flush left it waiting
+and Windows refused them) still leaves the shell its keys. WriteConsoleInputW
+only appends, so whatever is still queued behind that batch (the rest of a
+paste) is taken first and written back after it, in typed order. A console
+that refuses the write (Windows forbids it to a lower-integrity process on a
+higher-integrity console) keeps nothing of that batch: the key is lost. `read(timeout, wake)` waits on that queue
 and ends early when the gateway's wake pipe holds a byte (PeekNamedPipe, which
 never consumes it) or the console's size changed: Windows has no SIGWINCH, so
 the size is polled at most every `RESIZE_POLL_SECONDS` inside the wait. A
@@ -78,6 +82,7 @@ READ_SLICE_SECONDS = 0.02  # how often a `read` looks at the wake pipe while no 
 RESIZE_POLL_SECONDS = 0.1
 STOP_JOIN_SECONDS = 0.5
 READ_RECORDS = 128  # input records read per ReadConsoleInputW
+GIVE_BACK_RECORDS = 4096  # at most this many records are put back into the console after `restore` began
 
 # Input record event types.
 KEY_EVENT = 0x0001
@@ -382,7 +387,7 @@ class WindowsConsole:
                 self._end()
                 return
             if self._stop:  # `restore` began while this read ran: the console is going back to the shell, so are these
-                kernel32.WriteConsoleInputW(self._input, records, count.value, ctypes.c_uint32(0))
+                self._give_back(records, count.value)
                 return
             units = record_units(records[: count.value])
             if high is not None:
@@ -394,6 +399,27 @@ class WindowsConsole:
                 with self._ready:
                     self._chunks.append(utf16_to_utf8(units))
                     self._ready.notify_all()
+
+    def _give_back(self, records: Any, count: int) -> None:
+        """Put `count` records a read took after `restore` began back into the console, in the order they were typed.
+
+        WriteConsoleInputW appends, so what is still queued behind them (the
+        rest of a paste) is taken first, without waiting, and written back
+        after them. Best effort: a key typed in the instant between the last
+        take and the write can still land ahead, and a console that refuses
+        the write keeps nothing.
+        """
+        kernel32 = self._kernel32
+        taken = list(records[:count])
+        pending = ctypes.c_uint32(0)
+        while len(taken) < GIVE_BACK_RECORDS and kernel32.GetNumberOfConsoleInputEvents(self._input, pending) \
+                and pending.value:
+            more, got = (INPUT_RECORD * min(pending.value, GIVE_BACK_RECORDS - len(taken)))(), ctypes.c_uint32(0)
+            if not kernel32.ReadConsoleInputW(self._input, more, len(more), got):
+                break
+            taken.extend(more[:got.value])
+        batch = (INPUT_RECORD * len(taken))(*taken)
+        kernel32.WriteConsoleInputW(self._input, batch, len(taken), ctypes.c_uint32(0))
 
     def _end(self) -> None:
         with self._ready:

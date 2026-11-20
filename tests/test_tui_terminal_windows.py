@@ -490,6 +490,23 @@ class ConsoleRecordTests(unittest.TestCase):
         self.assertEqual(list(console._chunks), [])  # nothing reached the TUI
         self.assertEqual([fields[3] for fields, _note in kernel32.queue], [ord("X")])  # the console has it again
 
+    def test_a_paste_a_stuck_reader_takes_the_start_of_goes_back_whole_and_in_order(self) -> None:
+        kernel32 = BlockingRead()  # the waiting read takes only the first record of the paste that ends it
+        kernel32.CancelSynchronousIo = lambda thread: 0
+        console = self.console(kernel32)
+        console.enter()
+        with kernel32.lock:
+            kernel32.stale = 1
+        self.assertTrue(kernel32.inside.wait(2.0))
+        reader = console._reader
+        console.restore()
+        kernel32.feed(*([unit] for unit in _units("echo OK\r")))  # pasted into the shell at once
+        reader.join(2.0)
+        self.assertFalse(reader.is_alive())
+        self.assertEqual(list(console._chunks), [])
+        shell = "".join(chr(fields[3]) for fields, _note in kernel32.queue)
+        self.assertEqual(shell, "echo OK\r")  # not "cho OK\re": what was behind the taken record goes back after it
+
     def test_startup_query_replies_arrive_through_the_records(self) -> None:
         kernel32 = FakeKernel32()
         console = self.console(kernel32)
