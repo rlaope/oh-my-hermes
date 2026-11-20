@@ -185,7 +185,8 @@ _ROUTE_WRITE_ATTEMPTS = 5
 def _apply_route_delta(text: str, desired: Mapping[str, str]) -> str:
     """Return text with only the routable delegation keys set to desired.
 
-    Pure transformation: every other byte passes through unchanged. Returns
+    Pure transformation: every other line passes through unchanged (line
+    endings come out as LF, as this writer has always written them). Returns
     text itself when there is nothing to add or remove, so the caller can skip
     a byte-identical write.
     """
@@ -236,6 +237,48 @@ def _apply_route_delta(text: str, desired: Mapping[str, str]) -> str:
     return new_text
 
 
+def _unsupported_mapping_error() -> dict[str, str]:
+    return {
+        "status": "error",
+        "error": (
+            "unsupported delegation mapping; refusing to rewrite it — "
+            "no route was written, so the next delegate_task dispatch "
+            "inherits the parent model"
+        ),
+    }
+
+
+def _route_candidate_refusal(
+    text: str,
+    previous: Mapping[str, str],
+    desired: Mapping[str, str],
+    *,
+    expected_previous: Mapping[str, str] | None,
+    guard_route_endpoint: bool,
+) -> dict[str, Any] | None:
+    """Every check a route write makes, judged on ONE read of the config.
+
+    `previous` is that same read's route, so the endpoint guard's
+    `current_provider` and a conditional write's predicate never mix two
+    states of the file.
+    """
+    if expected_previous is not None and dict(previous) != dict(expected_previous):
+        return {
+            "status": "error",
+            "error": "active route changed before fallback write",
+        }
+    if _has_unsupported_delegation(text.removeprefix(BOM).splitlines()):
+        return _unsupported_mapping_error()
+    if guard_route_endpoint:
+        return route_endpoint_refusal(
+            text,
+            provider=desired.get("provider", ""),
+            current_provider=previous.get("provider", ""),
+            managed=managed_config_layer(),
+        )
+    return None
+
+
 def write_delegation_route(
     hermes_home: str | Path | None = None,
     *,
@@ -253,9 +296,13 @@ def write_delegation_route(
 
     `guard_route_endpoint` is for a route: it refuses one Hermes would not
     send where it says (`route_endpoint_guard.route_endpoint_refusal`),
-    judged on the config the write replaces, re-read just before the rename.
-    A restore leaves it off, because putting back the person's own values is
-    not a switch.
+    judged on the same read of the config the write replaces. A restore
+    leaves it off, because putting back the person's own values is not a
+    switch.
+
+    `previous` in a successful result is the route of the read the write
+    replaced (or, when there was nothing to change, the read it confirmed),
+    so a caller recording a baseline records what was really there.
     """
     desired = {} if clear else {
         "model": model.strip(),
@@ -271,69 +318,69 @@ def write_delegation_route(
         return {"status": "error", "error": error}
     if _file_signature(config_path) != signature:
         return {"status": "error", "error": "config changed during route read"}
-    previous = _read_delegation_route_text(text)
-    if expected_previous is not None and previous != dict(expected_previous):
-        return {
-            "status": "error",
-            "error": "active route changed before fallback write",
-        }
-    bom = BOM if text.startswith(BOM) else ""
-    lines = text[len(bom):].splitlines()
-    if _has_unsupported_delegation(lines):
-        return {
-            "status": "error",
-            "error": (
-                "unsupported delegation mapping; refusing to rewrite it — "
-                "no route was written, so the next delegate_task dispatch "
-                "inherits the parent model"
-            ),
-        }
-    if guard_route_endpoint:
-        refusal = route_endpoint_refusal(
-            text,
-            provider=desired.get("provider", ""),
-            current_provider=previous.get("provider", ""),
-            managed=managed_config_layer(),
-        )
-        if refusal:
-            return refusal
+    first_route = _read_delegation_route_text(text)
+    refusal = _route_candidate_refusal(
+        text,
+        first_route,
+        desired,
+        expected_previous=expected_previous,
+        guard_route_endpoint=guard_route_endpoint,
+    )
+    if refusal:
+        return refusal
     wanted = {key: value for key, value in desired.items() if value}
     # Write from the latest config, not the validation snapshot. A writer
-    # outside the OMH lock (hermes config set) may have added an unrelated key
-    # since the snapshot; re-reading and re-applying only the delegation delta
-    # just before the rename preserves every unrelated byte and closes the
-    # lost update that dropped such keys. A byte-identical result is not written.
+    # outside the OMH lock (`hermes config set`) may change the file at any
+    # time, so each attempt re-reads it and that read is THE candidate: every
+    # check above runs again on it, and the delegation delta is applied to it.
+    # Drift in an unrelated key is merged. Drift in the routable keys
+    # themselves is refused, as it was before this loop existed, so a newer
+    # pin is never overwritten. The candidate's stamp is compared again right
+    # before success: before a no-op is reported, and after the temp file is
+    # written and its mode set, immediately before `os.replace` (the ordering
+    # of `system.local_store.atomic_write_text`).
+    #
+    # Best effort, not a transaction: Hermes' CLI takes no OMH lock, so a
+    # write landing after that last comparison and before the rename is
+    # still replaced. The loop narrows that window; it cannot close it.
     for _attempt in range(_ROUTE_WRITE_ATTEMPTS):
         fresh_text, fresh_signature, fresh_error = _read_config_snapshot(config_path)
         if fresh_error:
             return {"status": "error", "error": fresh_error}
-        fresh_bom = BOM if fresh_text.startswith(BOM) else ""
-        if _has_unsupported_delegation(fresh_text[len(fresh_bom):].splitlines()):
+        previous = _read_delegation_route_text(fresh_text)
+        refusal = _route_candidate_refusal(
+            fresh_text,
+            previous,
+            desired,
+            expected_previous=expected_previous,
+            guard_route_endpoint=guard_route_endpoint,
+        )
+        if refusal:
+            return refusal
+        if previous != first_route:
             return {
                 "status": "error",
                 "error": (
-                    "unsupported delegation mapping; refusing to rewrite it — "
-                    "no route was written, so the next delegate_task dispatch "
-                    "inherits the parent model"
+                    "active route changed during route update; no route was "
+                    "written, so the route already in place stays"
                 ),
             }
-        if guard_route_endpoint:
-            refusal = route_endpoint_refusal(
-                fresh_text,
-                provider=desired.get("provider", ""),
-                current_provider=previous.get("provider", ""),
-                managed=managed_config_layer(),
-            )
-            if refusal:
-                return refusal
         new_text = _apply_route_delta(fresh_text, desired)
         if new_text == fresh_text:
+            if _file_signature(config_path) != fresh_signature:
+                continue
             return {
                 "status": "cleared" if clear else "routed",
                 "previous": previous,
                 "applied": wanted,
             }
         try:
+            # The mode is read before the temp file exists, so nothing but
+            # the stamp comparison sits between the last check and the rename.
+            try:
+                mode: int | None = config_path.stat().st_mode & 0o7777
+            except FileNotFoundError:
+                mode = None
             config_path.parent.mkdir(parents=True, exist_ok=True)
             descriptor, temp_name = tempfile.mkstemp(
                 prefix=".omh-delegation-route-", dir=str(config_path.parent)
@@ -341,11 +388,11 @@ def write_delegation_route(
             try:
                 with os.fdopen(descriptor, "w", encoding="utf-8") as handle:
                     handle.write(new_text)
+                if mode is not None:
+                    os.chmod(temp_name, mode)
                 if _file_signature(config_path) != fresh_signature:
                     os.unlink(temp_name)
                     continue
-                if config_path.exists():
-                    os.chmod(temp_name, config_path.stat().st_mode & 0o7777)
                 os.replace(temp_name, config_path)
             except OSError:
                 try:

@@ -448,6 +448,17 @@ All notable changes will be documented here.
   row says so for 3 seconds (`✓ Review finished`, `✗ … failed`, `· Tests ended` for a process, which has no exit
   code). During a turn, `? waiting on you` now reads `? waiting for your approval` or `? waiting for your answer`.
 
+- **A delegation route write no longer drops a setting saved while it ran.** OMH built the new `config.yaml` from
+  the copy it validated, so a `hermes config set` landing in between (observed: `context_file_max_chars` reset to
+  unset, repeatedly) was overwritten. The route writer now re-reads the file just before replacing it and applies
+  only the three route keys (`delegation.model`, `provider`, `reasoning_effort`) to that read, retrying up to five
+  times while the file keeps changing, and leaves the file untouched when nothing would change. Every check (a
+  fallback's or restore's expected route, the endpoint guard, the unsupported-mapping refusal) runs on that same
+  read; a change to the route keys themselves is refused rather than overwritten, and the baseline put back at turn
+  end is the route the write really replaced. This is best effort: Hermes' CLI takes no OMH lock, so an edit landing
+  in the last moment between OMH's final check and the rename is still lost. Fixes #2998. Reported and first fixed
+  by @OptionalCoin in #2999.
+
 ## 4.0.8 - 2026-11-15
 
 - **The OMH TUI shows a compression as one gauge row, and a prompt typed meanwhile goes on by itself.** `/compact`
