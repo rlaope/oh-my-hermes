@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import hashlib
 from importlib import import_module
+import io
 import os
 from pathlib import Path
 import re
@@ -510,12 +511,33 @@ _VALIDATED_CONFIG: dict[str, list] = {}
 _VALIDATED_CONFIG_MAX = 8
 
 
-def _config_digest(path: Path) -> bytes | None:
+def _config_bytes(path: Path) -> bytes | None:
     try:
         with open(path, "rb") as handle:
-            return hashlib.sha256(handle.read()).digest()
+            return handle.read()
     except OSError:
         return None
+
+
+def _parses_to(data: bytes, parsed) -> bool:
+    """Whether Hermes' own YAML reader turns exactly ``data`` into ``parsed``.
+
+    The validator opens the path itself, so the file it parsed can differ from
+    the bytes this call read even when the file holds those bytes again by the
+    time it returns (A -> B -> A). Without the host reader nothing is proven.
+    """
+    yaml = sys.modules.get("hermes_yaml")
+    load, error = getattr(yaml, "safe_load", None), getattr(yaml, "YAMLError", None)
+    if not callable(load) or not (isinstance(error, type) and issubclass(error, BaseException)):
+        return False
+    try:
+        # The file backend's read: utf-8-sig text with universal newlines.
+        own = load(io.TextIOWrapper(io.BytesIO(data), encoding="utf-8-sig"))
+    except (error, ValueError, TypeError, RecursionError):
+        return False
+    # The validator reads an empty document as an empty mapping.
+    own = {} if own is None else own
+    return isinstance(own, dict) and own == parsed
 
 
 def _validated_config(config, path: Path):
@@ -526,10 +548,11 @@ def _validated_config(config, path: Path):
     # is not in the local bytes, so it always takes the host's own read.
     if not callable(selected) or getattr(selected(), "name", None) != "file":
         return validate(path)
-    content = _config_digest(path)
-    if content is None:
+    data = _config_bytes(path)
+    if data is None:
         # Absent, a directory, permission or I/O failure: the host decides.
         return validate(path)
+    content = hashlib.sha256(data).digest()
     with _VALIDATED_CONFIG_GUARD:
         entry = _VALIDATED_CONFIG.get(str(path))
         if entry is None:
@@ -541,9 +564,9 @@ def _validated_config(config, path: Path):
         if entry[2] is validate and entry[1] == content:
             return entry[3]
         parsed = validate(path)
-        # Publish only when the file still holds the bytes this key names;
-        # a write during validation leaves the next call to parse again.
-        if _config_digest(path) == content:
+        # Publish only a parse of the very bytes this key names; after any
+        # write during validation the next call parses again.
+        if _parses_to(data, parsed):
             entry[1:] = [content, validate, parsed]
         return parsed
 

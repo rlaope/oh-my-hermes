@@ -67,6 +67,10 @@ class ResolutionMemoTests(unittest.TestCase):
             "hermes_cli.managed_scope": types.SimpleNamespace(
                 load_managed_config=lambda: {}, get_managed_dir=lambda: None),
             "agent.runtime_cwd": types.SimpleNamespace(resolve_context_cwd=lambda: None, resolve_agent_cwd=Path.cwd),
+            # Hermes' YAML reader, which re-reads the keyed bytes before a
+            # parse is published; the fixture's configs are JSON, i.e. YAML.
+            "hermes_yaml": types.SimpleNamespace(
+                safe_load=lambda stream: json.loads(stream.read() or "null"), YAMLError=ValueError),
         }
         self.enterContext(patch_modules(self.modules))
 
@@ -181,6 +185,42 @@ class ResolutionMemoTests(unittest.TestCase):
         self.validate.side_effect = self._parse
         self.assertEqual(paths.resolve_homes()[0], self.root / "new")
         self.assertEqual(self.validate.call_count, 2)
+
+    def test_an_a_b_a_swap_during_validation_recovers_on_the_next_call(self):
+        a, b = _setting(str(self.root / "a")), _setting(str(self.root / "b"))
+        self._write(a)
+
+        def save(text):
+            staged = self.home / "config.yaml.stage"
+            staged.write_text(text, encoding="utf-8")
+            os.replace(staged, self.config_path)
+
+        def swapping(path):
+            # Two atomic saves: the validator opens B, the file reads A both
+            # before and after it.
+            save(b)
+            try:
+                return self._parse(path)
+            finally:
+                save(a)
+
+        self.validate.side_effect = swapping
+        with self.assertRaises(paths.RuntimeBindingError):
+            # The parse names `b`, the effective read sees `a`.
+            paths.resolve_homes()
+        self.validate.side_effect = self._parse
+        for _ in range(3):
+            self.assertEqual(paths.resolve_homes()[0], self.root / "a")
+        # B's parse was never published under A: the first stable call parses
+        # A once, and that parse is what later calls reuse.
+        self.assertEqual(self.validate.call_count, 2)
+
+    def test_without_the_host_yaml_reader_nothing_is_published(self):
+        self._write(_setting(str(self.root / "store")))
+        with patch_modules({"hermes_yaml": None}):
+            for _ in range(3):
+                self.assertEqual(paths.resolve_homes()[0], self.root / "store")
+        self.assertEqual(self.validate.call_count, 3)
 
     def test_path_alias_is_resolved_live_under_unchanged_config(self):
         first, second, alias = self.root / "first", self.root / "second", self.root / "alias"
