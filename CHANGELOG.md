@@ -139,6 +139,15 @@ All notable changes will be documented here.
   old and the new text. A first draft that also cut "a route set in an earlier turn runs on the previous model" and
   "OMH mirrors each todo_list write" lost passes and was restored.
 
+- **Seven vendor coding clients reviewed against OMH; model notes gain their catalog facts.** Codex CLI 0.169.1,
+  Claude Code 2.1.329, Gemini CLI 0.70.0, Qwen Code 0.28.0, Kimi CLI 1.52.0, ZCode 3.18.2 and DeepSeek Harness
+  (master 2e39e704) were each read at a pinned tag, commit or binary hash. The new `docs/VENDOR-HARNESS-REVIEW.md`
+  lists, per vendor, what OMH already does, what it adopts, and what it leaves out and why. Every client's
+  keep-going push stays out, because a measured +5,419 tokens per instance bought no extra passes. MODEL_OPTI.md
+  records each client's catalog where it adds a fact: GPT-6.2 Astra and Sol share one Codex prompt, Claude Code
+  aliases older ids on third-party clouds, and Gemini CLI has no Gemini 4 id yet. Five prompt gaps are listed as
+  follow-ups; this entry changes no prompt text.
+
 - **Gemini prices re-read ahead of Google's two increases.** Google's pricing page, re-read on 2026-11-18, still
   lists Gemini 4 Argon and Gemini 4 Carbon at $2 / $10 per million tokens through 2026-11-30 and $4 / $20 from
   2026-12-01, and Gemini 3.8 Flash and 3.6 Flash at $0.75 / $3.75 through 2026-12-31 and $1.50 / $7.50 from

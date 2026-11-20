@@ -374,6 +374,122 @@ versus final, heartbeats, async user messages, `notes`/`history` tools,
 for computer use are a candidate for the browser skills' boundaries, not
 this round.
 
+### Techniques compared (vendor harness snapshots, 2026-11-20)
+
+Seven vendor harnesses were snapshotted on 2026-11-20 from the vendors' own
+clients and compared with OMH the same way as the two reviews above. Every
+source here is **official-client**:
+
+- Codex CLI 0.169.1: openai/codex tag `rust-v0.169.1`, commit `c376cf73`,
+  Apache-2.0. 0.169.0 (`d32063f9`) was snapshotted as the diff base.
+- Claude Code 2.1.329: the installed binary, sha256 `8c172956…8725550`,
+  proprietary. It is paraphrased here and never quoted. 2.1.327 (sha256
+  `76d48205…bea91c5b`) is the diff base.
+- Gemini CLI 0.70.0: `v0.70.0` at `8468962e`, Apache-2.0.
+- Qwen Code 0.28.0: `v0.28.0` at `895dfca8`, Apache-2.0.
+- Kimi CLI 1.52.0: tag `1.52.0` at `9ab1286b`, Apache-2.0. The repository is
+  archived. Its successor, MoonshotAI/kimi-code (MIT), was not snapshotted.
+- ZCode 3.18.2: zai-org/ZCode `v3.18.2` at `fec97590`, Apache-2.0.
+- DeepSeek Harness: `master` at `2e39e704` (2026-11-18), MIT. That is 15,965
+  commits after the `3a46bd6` reviewed above, so only policy and prompt deltas
+  were re-read.
+
+No public xAI harness exists, so Grok has none. The per-vendor tables (item,
+location in the vendor text, OMH equivalent or gap, decision) and the
+follow-ups are in `docs/VENDOR-HARNESS-REVIEW.md`. This section is the summary.
+
+**Supersedes the community dump for the overlapping text.** The Codex Desktop
+sentences quoted in the section above are now covered by the official client
+at `rust-v0.169.1`:
+
+- the skills-precedence sentence and the persistence push, in every GPT-6.x
+  base prompt;
+- the test-sizing sentence, verbatim in the GPT-6 Astra, GPT-6 Sol, GPT-6.1
+  Sol and GPT-6.1 Terra prompts;
+- the assumptions sentence, in the default collaboration-mode template;
+- the safer-alternative rejection rule, in the auto-review rejection
+  instructions.
+
+For those sentences the official-client label replaces the community one. The
+old section stays as the record of what was adopted on 2026-09-11 and why.
+
+**Corroborated, already in OMH.** Several rules appear in two or more vendor
+clients, and OMH already carries each of them:
+
+- *Confirm risky actions, and approval does not carry over.* Claude Code and
+  ZCode both say to confirm hard-to-reverse or outward-facing actions unless
+  durably authorised, and that approval in one context does not extend to the
+  next. OMH has this as `ENGINE_FOLLOW_UP_AUTHORITY_RULE` and
+  `ENGINE_ENTRY_CONFIRMATION_RULE`.
+- *A denial is not routed around.* Qwen Code says so. Codex's auto-review
+  rejection asks for a safer alternative or shown authorisation. OMH has
+  `FAILURE_KIND_PROTOCOL` and the refused-escalation clause.
+- *Faithful outcome reports.* Qwen Code and Claude Code both say a failed check
+  comes with its output and a skipped step is named. OMH has this in the
+  delegated-child calibration.
+- *Verify with the project's own commands.* Qwen Code, Kimi CLI and DeepSeek
+  Harness all ask for it. OMH has `VERIFICATION_STOP_PROTOCOL`.
+- *Batch independent calls, serialize the rest.* Codex 6.2 says it at L145, and
+  DeepSeek Harness sends independent subagents together. OMH has
+  `TOOL_BATCHING_PROTOCOL`.
+- *A delegated agent reports only to its parent.* Kimi CLI's coder agent and
+  Gemini CLI's non-interactive mode both keep the child away from the user. OMH
+  has `PARENT_CLARIFICATION_PROTOCOL` and the sidecar `UNIT_RESULT_RETURN_PROTOCOL`.
+- *End the turn while waiting.* DeepSeek Harness ends the turn instead of
+  polling, which is the armed-wait clause of `ENGINE_INTERJECTION_RESUME_RULE`.
+- *Per-model prompt variants.* Claude Code gates per-model prompt bundles on
+  catalog capability flags, which is the structure of
+  `MODEL_HIGH_EFFORT_CALIBRATIONS`.
+- *No contrastive "X, not Y" framing.* Codex 6.2 says so at L17. It is the
+  house reply-style rule.
+
+**Adopted.** Two adoptions land in this change, both docs only:
+
+- The per-model surfaces lines below now record each client's catalog facts:
+  `gpt-6.2-astra`, `claude`, `gemini-4-argon`, `kimi-k3.1-pro`, `glm`,
+  `qwen4-max` and `deepseek`.
+- `docs/MODEL-ONBOARDING.md` §2 now carries the rule to copy a ladder and its
+  limits from the vendor client at a pinned tag and record the tag and sha.
+
+Five composer and harness gaps are adopted as numbered follow-ups in
+`docs/VENDOR-HARNESS-REVIEW.md`. Each touches a byte-budgeted or pinned prompt
+surface, so none of them ships in this change:
+
+1. When stopping for approval, name where the requirement came from (Codex 6.2,
+   L63).
+2. No check-bypass or destructive shortcut around an obstacle (Claude Code, Qwen
+   Code).
+3. A passing test is evidence about the code, not about the feature (Claude
+   Code).
+4. A delegated child does not hand its whole assignment to another agent
+   (Claude Code).
+5. The browser confirmation-policy tiers (Codex 0.169.1).
+
+**Deliberately not adopted.** These stay out:
+
+- *The persistence push, in every client that has one.* That is Codex 6.2's
+  end-to-end-ownership and do-not-stop-after-describing sentences (L45, L77),
+  Qwen Code's keep-going-until-resolved, Kimi CLI's do-not-give-up-too-early,
+  and Gemini CLI's persist-through-errors. The reason is the 2026-09-05 Astra
+  measurement: +5,419 tokens per instance at an unchanged pass rate.
+- *Gemini CLI's "always update related tests" rule.* It contradicts the
+  test-sizing rule that Codex itself narrowed in 6.2 (L98: new tests only when
+  requested, required by the repo, or catching a specific regression).
+- *Kimi CLI's blanket ban on git mutations.* In OMH a unit's brief owns local
+  commits, and external state is already gated.
+- *Host and executor surfaces.* Compaction prompts, between-tool text
+  visibility, tool-output truncation, re-read-after-edit advice and security
+  refusal scopes belong to Hermes, the executor or the provider, not OMH.
+- *Codex's `ultra` rung and its automatic delegation.* They stay Codex-only.
+
+**Candidate, unmeasured (no prompt change).** Claude Code 2.1.329 gives
+`claude-haiku-5-5` a capability flag for early-stopping guidance and a gated
+prompt section for it. That is the vendor's counter to the trait the Haiku 5.5
+guide documents: at `low` it stops early and hands the task back (see
+`claude-haiku-5-5`). The section's text was not reconstructed. If it is a
+keep-working push, it stays out for the reason above. Any other counter for
+that trait is the `family` vs `optimized` pair already named there.
+
 ## Per-family calibrations: what, why, and where each came from
 
 Two tables in `src/coding/unit_prompt_protocol.py` carry the family-specific
@@ -764,7 +880,14 @@ and OMH treats them alike; the next section names what differs for Sol.
   not GPT-6 Astra's. The installed Hermes build (v0.23.1) and its
   origin/main (`da9c2bd62f`, 2026-11-17) carry no `gpt-6.2` id, so the
   Codex route takes the legacy `none`..`xhigh` ladder and clamps `max` to
-  `xhigh` until Hermes adds the ids to its no-disable tier list.
+  `xhigh` until Hermes adds the ids to its no-disable tier list. The bundled
+  catalog at openai/codex `rust-v0.169.1` (`c376cf73`, the first tag that
+  ships the ids) agrees: `low` default, `low`..`max` plus `ultra`
+  ("automatic task delegation"), 272K (Astra) / 500K (Sol) with an 872K
+  maximum. The two ids' base prompts are byte-identical (25,959 B), so Sol
+  and Astra share one prompt and differ only in catalog rows. Both run
+  multi-agent v2 with sub-agents at `xhigh`, parallel tool calls, `low`
+  default verbosity, and tool output truncated at 10,000 tokens.
 - **Model trait (official, latest-model guide):** writing is more concise
   and direct by default; when intent is unclear the model may propose a
   next step and wait for confirmation; it writes more efficient code; in
@@ -825,8 +948,9 @@ and OMH treats them alike; the next section names what differs for Sol.
   than the family block is revised or removed in the change that reports it.
 - **Source:** official (both model pages, the latest-model and reasoning
   guides, pricing page, and API changelog, read 2026-11-18); official-client
-  (Codex CLI 0.169.0 served catalog); observed (Hermes v0.23.1 and
-  origin/main source).
+  (Codex CLI 0.169.0 served catalog; openai/codex `rust-v0.169.1` bundled
+  catalog and base prompts, 2026-11-20 snapshot); observed (Hermes v0.23.1
+  and origin/main source).
 
 ### `gpt-6.2-sol` (GPT-6.2 Sol, exact-model override on the `gpt` family)
 
@@ -1167,6 +1291,21 @@ effort, in both lanes, the shared final order included.
   calibration block fires at `medium`, and the vendor order is unchanged.
   Named follow-up: bench arm O4 (Opus 5.5 at `medium` on
   `benchmarks/live-model-tools/v1`), the arm skipped above.
+- **Surfaces (official-client, Claude Code 2.1.329, binary sha256
+  `8c172956…8725550`, catalog facts only):** the bundled catalog lists 24
+  ids. Its aliases resolve `opus` to Opus 5.5, `sonnet` to Sonnet 5.5,
+  `haiku` to Haiku 5.5 and `fable` to Fable 5.2 on the first-party API. Most
+  third-party providers resolve them to older ids instead (for example
+  `sonnet` and `haiku` to their 4.5 ids on Bedrock and Vertex). Fable 5.2,
+  Mythos 5.2, Opus 5.5, Sonnet 5.5 and Haiku 5.5 have a 1M native window and
+  128K output, a `medium` client default, `low`..`max` with `xhigh`, and
+  per-turn effort. Fable 5.2, Mythos 5.2, Opus 5.5 and Haiku 5.5 reject
+  disabled thinking. Per-model prompt variants are gated on capability flags:
+  a prompt bundle each for Opus 5, Opus 5.5, Fable 5.1 (shared with Mythos
+  5.1) and Fable 5.2 (shared with Mythos 5.2), a Fable 5 mitigation flag, a
+  lean-prompt flag on every 5.x id, and an early-stopping-guidance flag on
+  Haiku 5.5 only. The 2.1.327 → 2.1.329 catalog diff only adds capability
+  flags.
 - **Source:** the original checklist/fan-out counters are adapted research
   (same origin as `gpt`), the composer block was added after observing
   over-fan-out in live composition; the 5.1 additions follow the official
@@ -1363,6 +1502,10 @@ effort, in both lanes, the shared final order included.
   `thinking_budget`: AI Studio maps it to a level with a warning and Vertex
   AI returns HTTP 400, so only `thinkingLevel` is safe. OpenRouter's
   floating `~google/gemini-pro-latest` now points at Argon (community).
+  Gemini CLI `v0.70.0` (`8468962e`, 2026-11-20) still has no Argon or
+  Gemini 4 id: its model table stops at Gemini 3.1 Pro preview and 3.8
+  Flash, every Gemini id has a 1,048,576-token limit, and thinking is set per
+  alias rather than per model (official-client).
 - **Named follow-up:** Gemini 3.1 Pro vs Gemini 4 Argon at `high` on
   `benchmarks/live-model-tools/v1`. No served route existed on the
   onboarding machine (no Gemini, Google, or OpenRouter key), so neither the
@@ -1469,7 +1612,11 @@ effort, in both lanes, the shared final order included.
   `kimi-k3` context row and has no price row for them (observed). The Kimi
   Code plan serves bare `k3.1-pro` / `k3.1-pro-highspeed` slugs
   (models.dev, community). Those slugs classify `unknown` here, like bare
-  `k3`.
+  `k3`. The legacy Kimi CLI 1.52.0 (`9ab1286b`, archived) has no static model
+  table: it lists models at runtime and filters on the `kimi-k` prefix
+  (official-client). Its successor kimi-code is not yet snapshotted. Qwen
+  Code 0.28.0's Qwen Cloud preset serves `kimi-k3` with a 1M window, `low` /
+  `high` / `max` and a `max` default (official-client, a third-party host).
 - **Measurement (named follow-up):** the paired runs are `kimi-k3` vs
   `kimi-k3.1-pro` on `benchmarks/live-model-tools/v1` at the same effort,
   plus `baseline` vs `optimized` for the family block on K3.1 Pro. On
@@ -1512,6 +1659,12 @@ effort, in both lanes, the shared final order included.
   GLM-4.6 system-prompt rework; OpenCode long-context tool-call-format
   reports). The GLM guidance shipped with the baseline-vs-calibrated
   benchmark harness so its effect is measurable.
+- **Surfaces (official-client):** Z.ai's own harness, ZCode 3.18.2
+  (zai-org/ZCode `v3.18.2`, `fec97590`), carries only an id → display map
+  for 22 GLM ids, from `glm-5.3`, `glm-5.3-flash` and `glm-5v-turbo` back to
+  `glm-4-flash-250414`. There is no static context or effort table in its
+  core or provider sources. Qwen Code 0.28.0's Qwen Cloud preset lists
+  `glm-5.3` with a 1M window and no effort ladder (a third-party host).
 
 ### `qwen` (Qwen3-Coder)
 
@@ -1576,7 +1729,12 @@ effort, in both lanes, the shared final order included.
   `reasoning_effort` on its DashScope profiles, so the model runs at `high`
   whatever effort is routed; its `preserve_thinking` list stops at qwen3.8,
   and its context table reads the id through the 131,072-token `qwen`
-  catch-all.
+  catch-all. The vendor's own harness, Qwen Code 0.28.0 (QwenLM/qwen-code
+  `v0.28.0`, `895dfca8`), lists `qwen4-max` in its Qwen Cloud preset with a
+  1M window, efforts `low` / `high` / `xhigh` and a `high` default, which is
+  the same three rungs and default as the Codex page. The same preset gives
+  `qwen3.8-max` `low` / `medium` / `xhigh` with an `xhigh` default
+  (official-client).
 - **Model trait:** hybrid thinking on by default, so a counter that forbids
   reasoning (the family block's) contradicts the served contract; earlier
   thinking is kept in the reasoning channel, so restating it in the visible
@@ -1651,6 +1809,15 @@ effort, in both lanes, the shared final order included.
   on every tool turn) and the vendor documents a three-rung effort ladder.
   Every other DeepSeek id — V3.2, V4 Flash, V4 Pro, `deepseek-chat`,
   `deepseek-reasoner` — keeps this family block.
+- **Surfaces (official-client):** DeepSeek Harness `master` at `2e39e704`
+  (2026-11-18, MIT) declares two models. `deepseek-flash` is displayed as
+  DeepSeek-V4.1-Flash, text input only. `deepseek-v4-pro` is DeepSeek-V4-Pro.
+  Both have a 1,048,576-token window and no effort table. The flash entry
+  carries a system-prompt update policy of in-history and a tool update
+  policy of addition-only, which matches the cache-preserving rule above.
+  Qwen Code 0.28.0's Qwen Cloud preset lists `deepseek-v4.1-flash` and
+  `deepseek-v4-pro-0813` with `low` / `high` / `max` and a `high` default (a
+  third-party host).
 
 ### `deepseek-v4.1-flash` (DeepSeek V4.1 Flash, exact-model override on the `deepseek` family)
 
