@@ -113,7 +113,8 @@ test("/ is a command, not a skill: /name anywhere, ./name and Hermes' own comman
   const typed = "rename ./plan to ./plan-steps, then run /review on /plan";
   await expect.poll(sends).toEqual([typed]);
   const mine = page.getByTestId("bubble-user").last();
-  await expect(mine).toHaveText(typed);
+  // the bubble's text only: the "Read · hh:mm" receipt joins the bubble once the turn starts
+  await expect(mine.locator(".b")).toHaveText(typed);
   await expect(mine.getByTestId("bubble-skill")).toHaveCount(0);
 
   // at the start: Hermes' own commands, a skill typed the Hermes way, and a path: one Enter each, as typed.

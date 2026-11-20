@@ -48,6 +48,9 @@ test("the split comes back after a restart, its layout and sizes kept; paused se
   await split(page, a, m ? "Meta+d" : "Control+Shift+D", b);
   await split(page, b, m ? "Meta+Shift+D" : "Alt+Shift+D", c);
   // a divider moved: its size is kept too
+  // a split hands the keyboard to the new pane on the next frame (SplitView focusSplitPane); let that frame pass
+  // before the divider takes the keyboard, or it comes back to the terminal and swallows an arrow
+  await page.evaluate(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))));
   const div = page.locator('[data-testid="split-divider"][data-path=""]');
   await div.focus();
   await page.keyboard.press("ArrowLeft");
