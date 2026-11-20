@@ -1331,7 +1331,10 @@ class InlineDiffTests(LoopTestCase):
                 "┃    2 +print('안녕 🌏')" + " " * 36,
             ],
         )
-        self.assertEqual([row[-1].style for row in diff], [THEME.label, THEME.code, THEME.diff_remove, THEME.diff_add])
+        # The file header in the label style; each code line's last span on its line's band (a `.py` line is
+        # syntax-coloured, so its last span is code, padding or a closing bracket, never another band).
+        self.assertEqual(diff[0][-1].style, THEME.label)
+        self.assertEqual([row[-1].style.bg for row in diff[1:]], [THEME.code.bg, THEME.diff_remove.bg, THEME.diff_add.bg])
         self.assertEqual([line_width(row) for row in diff[-2:]], [WIDTH, WIDTH])
         self.assertFalse(any(is_control(ch) for row in self.taken for span in row for ch in span.text))
         self.assertEqual(self.history(details=False), lines_text(self.taken))

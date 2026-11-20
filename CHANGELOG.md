@@ -4,6 +4,15 @@ All notable changes will be documented here.
 
 ## Unreleased
 
+- **Code in the OMH TUI reads in more than one colour, and the default accent is violet.** An edit's diff painted every code line in one turquoise, and
+  the default `omh` look gave fenced code only turquoise shades, so keywords, strings and comments blurred together.
+  Diff lines now take the same syntax colour as fenced code, chosen by the file's extension, over their green or red
+  band, and a colour that would not read on a band is brightened there. The default look's code colours become one
+  hue per kind: keywords pink, strings yellow-green, numbers orange, comments grey. The other looks keep their own
+  code colours. Hermes' own terminal reads the same `omh` skin, so its code colours follow. The default `spectrum`
+  launch look's accent, which paints a tool call's rail, the working row's spinner and the card's labels, moves from
+  orange to a soft violet; the other looks keep theirs.
+
 ## 4.0.9 - 2026-11-20
 
 - **Codex units can write inside the fanout fence on Linux and macOS.** `codex exec` is read-only by default, and
