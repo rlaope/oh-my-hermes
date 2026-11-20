@@ -169,6 +169,32 @@ describe("an oh-my-hermes folder chat after a restart", () => {
     expect(calls()).toEqual([]);
   });
 
+  it("the restore asks folder.resume once per row and once per saved chat, however the restore is poked", async () => {
+    let release: () => void = () => {};
+    const held = new Promise<void>((r) => (release = r));
+    const { ss, store, b } = setup(async (p) => {
+      await held;
+      return answer(p);
+    });
+    // two rows that hold the same saved chat (a duplicated snapshot) and one of their own
+    ss.restore([omhChat({ id: "s3" }), omhChat({ id: "s4" }), omhChat({ id: "s5", agentSession: "stored-folder-5" })]);
+    ss.restore([omhChat({ id: "s3" })]); // a second restore does nothing
+    await store.actions.init();
+    await wait(20);
+    // while the first answers are on their way, Resume and Restart of the row being attached send nothing more
+    await ss.resume("s3");
+    await ss.restart("s3");
+    release();
+    await wait(20);
+    const asked = b.reqs.filter((r) => r.op === "folder.resume").map((r) => r.params.stored);
+    expect(asked).toEqual(["stored-folder-0", "stored-folder-5"]);
+    expect(b.reqs.filter((r) => r.op === "folder.open")).toEqual([]);
+    const rows = Object.fromEntries(ss.getState().list.map((r) => [r.id, r]));
+    expect(rows.s3).toMatchObject({ status: "running" });
+    expect(rows.s5).toMatchObject({ status: "running" });
+    expect(rows.s4).toMatchObject({ status: "exited", paused: true }); // the second holder waits for the person
+  });
+
   it("a refusal leaves it paused with the reason, and nothing new is opened by itself", async () => {
     const { ss, store, b } = setup(() => {
       throw { code: "not_found", message: "no such folder chat" };

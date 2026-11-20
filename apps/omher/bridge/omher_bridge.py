@@ -5444,6 +5444,10 @@ class Conn:
         self.elsewhere_sig = None
         self.prompts: dict[str, int | None] = {}  # open prompt_id -> execution_generation
         self.folders: dict[str, FolderChat] = {}  # folder chats and threads this bridge created or listed, by id
+        # folder.open and folder.resume take this one at a time (the folder chat cap is checked and filled under it);
+        # a folder.resume of a stored id already on its way waits for that one's answer instead of resuming again
+        self.admit = asyncio.Lock()
+        self.resuming: dict[str, asyncio.Future] = {}
         self.threads: dict[str, dict] = {}  # threads `thread.list` found (stored id -> row): what `thread.open` takes
         self.threads_shown = False  # an app that shows threads read them: main-chat turns carry the threads note
         self.split_done: set[str] = set()  # answers whose thread blocks were acted on (never twice)
@@ -6290,26 +6294,29 @@ class Bridge:
 
     async def op_folder_open(self, p) -> dict:
         """Create a new Hermes chat for the bot in folder ``cwd`` (an existing absolute folder), and record it in
-        omher's own folder (``record_folder_chat``) as the proof ``folder.resume`` asks for after a restart."""
+        omher's own folder (``record_folder_chat``) as the proof ``folder.resume`` asks for after a restart. Taken
+        one at a time with ``folder.resume`` (``conn.admit``), so the folder chat cap holds for calls that
+        overlap."""
         cwd = p.get("cwd")
         if not isinstance(cwd, str) or not cwd.strip() or not os.path.isabs(cwd) or not os.path.isdir(cwd):
             raise BridgeError("bad_request", "cwd must be an existing folder")
         conn = await self._conn(p.get("bot"))
-        if sum(1 for f in conn.folders.values() if f.kind == "folder") >= MAX_FOLDER_CHATS:
-            raise BridgeError("bad_request", f"at most {MAX_FOLDER_CHATS} folder chats per bot")
-        leaf = Path(cwd).name or cwd
-        snap = await self._call(conn, "session.create", title=FOLDER_CHAT_PREFIX + leaf, cwd=cwd, cwd_explicit=True,
-                                follow_profile_config=True)
-        fid = "f" + uuid.uuid4().hex[:10]
-        chat = FolderChat(fid, cwd, str(snap["session_id"]), str(snap.get("stored_session_id") or snap["session_id"]),
-                          str(snap.get("subscription_id") or ""))
-        if snap.get("execution_generation") is not None:
-            chat.generation = snap["execution_generation"]
-        try:
-            await asyncio.to_thread(record_folder_chat, self.omher_home, conn.name, cwd, chat.stored_id)
-        except OSError as e:  # the chat works; it only cannot come back by itself after a restart
-            log.warning("folder chat %s not recorded: %s", chat.stored_id, e)
-        self._keep_chat(conn, chat)
+        async with conn.admit:
+            if sum(1 for f in conn.folders.values() if f.kind == "folder") >= MAX_FOLDER_CHATS:
+                raise BridgeError("bad_request", f"at most {MAX_FOLDER_CHATS} folder chats per bot")
+            leaf = Path(cwd).name or cwd
+            snap = await self._call(conn, "session.create", title=FOLDER_CHAT_PREFIX + leaf, cwd=cwd,
+                                    cwd_explicit=True, follow_profile_config=True)
+            fid = "f" + uuid.uuid4().hex[:10]
+            chat = FolderChat(fid, cwd, str(snap["session_id"]), str(snap.get("stored_session_id") or snap["session_id"]),
+                              str(snap.get("subscription_id") or ""))
+            if snap.get("execution_generation") is not None:
+                chat.generation = snap["execution_generation"]
+            try:
+                await asyncio.to_thread(record_folder_chat, self.omher_home, conn.name, cwd, chat.stored_id)
+            except OSError as e:  # the chat works; it only cannot come back by itself after a restart
+                log.warning("folder chat %s not recorded: %s", chat.stored_id, e)
+            self._keep_chat(conn, chat)
         info = snap.get("info") if isinstance(snap.get("info"), dict) else {}
         return {"session": fid, "stored": chat.stored_id, "cwd": str(info.get("cwd") or cwd),
                 "model": str(info.get("model") or conn.bot["model"]),
@@ -6323,9 +6330,11 @@ class Bridge:
         (``is_folder_chat``) is taken; its saved title (the bot's state.db, read-only, before anything is attached)
         must also still be exactly ``FOLDER_CHAT_PREFIX`` + the folder's name, and its saved folder, when it has one,
         this folder. The main chat, a thread, a messenger session, a session made before the record existed or an
-        unknown id is ``not_found`` and nothing is attached. Then it is resumed through Hermes' own
-        ``session.resume``, kept as a folder chat (``MAX_FOLDER_CHATS`` holds), and its messages come back as
-        ``thread.open``'s do; prompts still waiting on the person are sent again after the reply."""
+        unknown id is ``not_found`` and nothing is attached. Admission is one at a time per bot (``conn.admit``, the
+        same lock ``folder.open`` takes, so ``MAX_FOLDER_CHATS`` holds), and a request for a stored id already on its
+        way gets that request's answer instead of a second resume. Then it is resumed through Hermes' own
+        ``session.resume``, kept as a folder chat, and its messages come back as ``thread.open``'s do; prompts still
+        waiting on the person are sent again after the reply."""
         cwd, stored = p.get("cwd"), p.get("stored")
         if not isinstance(cwd, str) or not cwd.strip() or not os.path.isabs(cwd) or not os.path.isdir(cwd):
             raise BridgeError("bad_request", "cwd must be an existing folder")
@@ -6334,10 +6343,35 @@ class Bridge:
         conn = await self._conn(p.get("bot"))
         if stored in conn.main_ids:
             raise BridgeError("not_found", "no such folder chat")
-        return await self._folder_resume(conn, cwd, stored)
+        key = f"{_norm(cwd)}\0{stored}"
+        pending = conn.resuming.get(key)
+        if pending is not None:  # the same chat is being attached: its answer, without sending its prompts twice
+            try:
+                return Reply(dict(await asyncio.shield(pending)))
+            except asyncio.CancelledError:
+                if not pending.cancelled():
+                    raise
+                raise BridgeError("unavailable", "the folder chat was not attached; try again") from None
+        fut = asyncio.get_running_loop().create_future()
+        conn.resuming[key] = fut
+        try:
+            async with conn.admit:
+                reply = await self._folder_resume(conn, cwd, stored)
+            fut.set_result(reply.result)
+            return reply
+        except asyncio.CancelledError:
+            fut.cancel()
+            raise
+        except Exception as e:
+            fut.set_exception(e)
+            fut.exception()  # read here: a request waiting on it re-raises it, none waiting is not an error
+            raise
+        finally:
+            if conn.resuming.get(key) is fut:
+                del conn.resuming[key]
 
     async def _folder_resume(self, conn: Conn, cwd: str, stored: str) -> Reply:
-        """``folder.resume`` after its argument checks: the proof, the one ``session.resume``, the chat."""
+        """``folder.resume`` once admitted (``conn.admit`` held): the checks, the one ``session.resume``, the chat."""
         chat = next((f for f in conn.folders.values() if stored in f.ids), None)
         if chat is not None and chat.kind != "folder":
             raise BridgeError("not_found", "no such folder chat")

@@ -1899,8 +1899,10 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
     const later: string[] = [];
     // oh-my-hermes terminals: started once the agents are known (an `omh` gone from this computer comes back paused)
     const omhLater: string[] = [];
-    // oh-my-hermes folder chats to attach again once the bridge is up
+    // oh-my-hermes folder chats to attach again once the bridge is up, each saved chat (bot and stored id) once: a
+    // second row holding the same one comes back paused, so one Hermes session is never attached for two rows
     const folderAgain: string[] = [];
+    const folderTaken = new Set<string>();
     for (const s of saved) {
       if (isGone(s.agent) && s.draft) {
         // a New session never started on an agent omher no longer offers: a draft again, on the usual agent
@@ -1945,7 +1947,8 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
       // an oh-my-hermes one starts again, and `omh` reopens what it dropped there
       const termAuto = !terminalOnly && s.running && mode === "terminal" && termComesBack(s);
       // an oh-my-hermes folder chat that was running is attached again (rule 3: only one the bridge made)
-      const folderAuto = s.running && mode === "hermes" && !!s.agentSession && !!s.bot;
+      const folderAuto = s.running && mode === "hermes" && !!s.agentSession && !!s.bot && !folderTaken.has(`${s.bot}\0${s.agentSession}`);
+      if (folderAuto) folderTaken.add(`${s.bot}\0${s.agentSession}`);
       const r: SessionRec = {
         id: s.id,
         agent: s.agent,

@@ -2,10 +2,12 @@
 `folder.open` returned. Only a session `folder.open` recorded for that bot and folder in omher's own folder
 (`folder-chats.json`) is taken, and its saved title in the bot's state.db (read-only) must still be
 `omher · <folder name>`; the main chat, a thread (even one titled like the folder), a Slack session, a session made
-before the record existed and an unknown id are refused before anything is attached. No Hermes, no network beyond
-loopback."""
+before the record existed and an unknown id are refused before anything is attached. Admission is one at a time per
+bot: overlapping resumes of one id attach it once, and the folder chat cap holds for overlapping requests. No Hermes,
+no network beyond loopback."""
 from __future__ import annotations
 
+import asyncio
 import json
 import os
 import sqlite3
@@ -231,6 +233,81 @@ class FolderResume(BridgeCase):
             env.saved([(r["stored"], "tui", "omher · web-app", self.folder)])
             back = ok(await s.req("folder.resume", bot="kami", cwd=self.folder, stored=r["stored"]))
             self.assertEqual(back["stored"], r["stored"])
+
+    async def test_overlapping_resumes_of_one_id_attach_it_once(self):
+        """Finding 2: two folder.resume requests for one stored id that overlap make one session.resume and get one
+        bridge id; the folder chat is kept once."""
+        async with ResumeEnv() as env:
+            env.saved([("stored-folder-0", "tui", "omher · web-app", self.folder)])
+            env.recorded((self.folder, "stored-folder-0"))
+            await env.bridge._conn("kami")
+            c = env.clients["kami"]
+            gate = asyncio.Event()
+            real = c.rpc
+
+            async def held(method, **params):
+                if method == "session.resume":
+                    await gate.wait()
+                return await real(method, **params)
+
+            c.rpc = held
+            p = {"bot": "kami", "cwd": self.folder, "stored": "stored-folder-0"}
+            a = asyncio.ensure_future(env.bridge.op_folder_resume(dict(p)))
+            b = asyncio.ensure_future(env.bridge.op_folder_resume(dict(p)))
+            for _ in range(20):
+                await asyncio.sleep(0)
+            gate.set()
+            ra, rb = await asyncio.wait_for(asyncio.gather(a, b), 5)
+            self.assertEqual(ra.result["session"], rb.result["session"])
+            self.assertEqual(len(c.find("session.resume")), 1)
+            folders = [f for f in env.bridge.conns["kami"].folders.values() if f.kind == "folder"]
+            self.assertEqual([f.stored_id for f in folders], ["stored-folder-0"])
+            self.assertEqual(env.bridge.conns["kami"].resuming, {})
+
+    async def test_a_refusal_reaches_every_overlapping_request(self):
+        async with ResumeEnv() as env:
+            env.saved([("stored-folder-0", "tui", "omher · web-app", self.folder)])
+            await env.bridge._conn("kami")
+            p = {"bot": "kami", "cwd": self.folder, "stored": "stored-folder-0"}
+            out = await asyncio.gather(env.bridge.op_folder_resume(dict(p)), env.bridge.op_folder_resume(dict(p)),
+                                       return_exceptions=True)
+            self.assertEqual([getattr(e, "code", e) for e in out], ["not_found", "not_found"])
+            self.assertEqual(env.bridge.conns["kami"].resuming, {})
+
+    async def test_overlapping_admissions_at_the_cap_admit_one(self):
+        """Finding 2: one slot left under MAX_FOLDER_CHATS and two overlapping requests for different ids (a resume
+        and a resume, then a resume and an open): one is admitted, the other refused, and the cap is never passed."""
+        async with ResumeEnv() as env:
+            env.saved([("stored-a", "tui", "omher · web-app", self.folder), ("stored-b", "tui", "omher · web-app", self.folder)])
+            env.recorded((self.folder, "stored-a"), (self.folder, "stored-b"))
+            conn = await env.bridge._conn("kami")
+            for n in range(ob.MAX_FOLDER_CHATS - 1):
+                conn.folders[f"f{n}"] = ob.FolderChat(f"f{n}", self.folder, f"rt-{n}", f"st-{n}")
+            c = env.clients["kami"]
+            real = c.rpc
+
+            async def slow(method, **params):
+                await asyncio.sleep(0.01)
+                return await real(method, **params)
+
+            c.rpc = slow
+            out = await asyncio.gather(
+                env.bridge.op_folder_resume({"bot": "kami", "cwd": self.folder, "stored": "stored-a"}),
+                env.bridge.op_folder_resume({"bot": "kami", "cwd": self.folder, "stored": "stored-b"}),
+                return_exceptions=True)
+            self.assertEqual(sorted(type(x).__name__ for x in out), ["BridgeError", "Reply"])
+            self.assertEqual([x.code for x in out if isinstance(x, ob.BridgeError)], ["bad_request"])
+            self.assertEqual(len(c.find("session.resume")), 1)
+            self.assertEqual(sum(1 for f in conn.folders.values() if f.kind == "folder"), ob.MAX_FOLDER_CHATS)
+            # one slot again: an open and a resume that overlap share the same admission
+            conn.folders.pop("f0")
+            out = await asyncio.gather(
+                env.bridge.op_folder_open({"bot": "kami", "cwd": self.folder}),
+                env.bridge.op_folder_resume({"bot": "kami", "cwd": self.folder,
+                                             "stored": "stored-b" if any(f.stored_id == "stored-a" for f in conn.folders.values()) else "stored-a"}),
+                return_exceptions=True)
+            self.assertEqual(sum(1 for x in out if isinstance(x, ob.BridgeError)), 1)
+            self.assertEqual(sum(1 for f in conn.folders.values() if f.kind == "folder"), ob.MAX_FOLDER_CHATS)
 
     def test_the_record_file_is_refused_when_it_is_not_a_plain_file(self):
         with tempfile.TemporaryDirectory() as d:

@@ -315,13 +315,16 @@ RULES = (
     " agent, and omher types nothing into the terminal for it.",
     "an oh-my-hermes session that was running is attached again (`folder.resume`) only by the stored session id"
     " `folder.open` returned and its row kept, and only when that session is a folder chat the bridge made for that folder.",
-    # folder.resume's proof is omher's own record, not the editable title (review round 1, 2026-11-21)
+    # folder.resume's proof is omher's own record, and admission is serialized (review round 1, 2026-11-21)
     "The proof is omher's own record, not the session's title: each `folder.open` adds one entry to"
     " `~/.omher/folder-chats.json` (owner-only, mode 600, replaced whole through a new temporary file;",
     "`folder.resume` takes a session only when that file holds it for this bot and this folder.",
     "the main chat, a thread (even one titled like the folder), a messenger session, a folder chat made before the"
     " record existed or any other id is refused (`not_found`) and nothing is attached.",
     "The same record keeps a folder chat out of `thread.list`.",
+    "`folder.open` and `folder.resume` are admitted one at a time per bot, so the cap of open folder chats holds for"
+    " requests that overlap, and a `folder.resume` of a stored id already on its way gets that request's answer instead"
+    " of a second `session.resume`: nothing is attached twice.",
 )
 TAURI_CONF = ROOT / "apps" / "omher" / "src-tauri" / "tauri.conf.json"
 CAPABILITIES = ROOT / "apps" / "omher" / "src-tauri" / "capabilities" / "default.json"
@@ -802,7 +805,7 @@ class BridgeSubmitsOnlyToTheMainChat(unittest.TestCase):
         self.assertIn("cwd=cwd", ast.unparse(opener))
 
     def test_folder_resume_checks_the_saved_title_before_it_attaches(self) -> None:
-        """Rule 3: ``folder.resume`` refuses the main chat, then takes a session only
+        """Rule 3: ``folder.resume`` refuses the main chat, then (admitted under ``conn.admit``) takes a session only
         when omher's own record holds it for this bot and folder, and its saved title (state.db, read-only) is still
         ``FOLDER_CHAT_PREFIX`` + the folder's name, all before its one ``session.resume``; the chat it keeps is a
         folder chat through ``_keep_chat``, and the folder chat cap holds."""
@@ -810,7 +813,8 @@ class BridgeSubmitsOnlyToTheMainChat(unittest.TestCase):
         front = ast.unparse(fns["op_folder_resume"])
         self.assertIn("'folder.resume': self.op_folder_resume", ast.unparse(fns["__init__"]) if "__init__" in fns else self.source)
         self.assertIn("if stored in conn.main_ids:", front)
-        self.assertIn("return await self._folder_resume(conn, cwd, stored)", front)
+        self.assertLess(front.index("conn.resuming.get(key)"), front.index("async with conn.admit:"))
+        self.assertLess(front.index("async with conn.admit:"), front.index("await self._folder_resume(conn, cwd, stored)"))
         self.assertNotIn("self._call(", front)
         body = ast.unparse(fns["_folder_resume"])
         proof = body.index("is_folder_chat, self.omher_home, conn.name, cwd, stored")
@@ -823,8 +827,9 @@ class BridgeSubmitsOnlyToTheMainChat(unittest.TestCase):
         self.assertIn("MAX_FOLDER_CHATS", body)
         self.assertIn("self._keep_chat(conn, chat)", body)
         self.assertNotIn("session.create", body)
-        # folder.open records its chat; thread.list leaves every recorded one out
+        # folder.open takes the same admission and records its chat; thread.list leaves every recorded one out
         opener = ast.unparse(fns["op_folder_open"])
+        self.assertLess(opener.index("async with conn.admit:"), opener.index("MAX_FOLDER_CHATS"))
         self.assertLess(opener.index("'session.create'"), opener.index("record_folder_chat, self.omher_home, conn.name, cwd, chat.stored_id"))
         self.assertIn("folder_chat_ids, self.omher_home, conn.name", ast.unparse(fns["op_thread_list"]))
         # the record: omher's own folder only, a new 600 temp file replaced over it, read without following a link
