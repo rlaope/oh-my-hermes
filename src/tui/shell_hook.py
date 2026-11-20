@@ -12,7 +12,8 @@ or `CI` is set, it exports `OMH_AUTO_RESUME_DONE=1` (so a nested shell does
 nothing) and looks, with the shell's own builtins, for a session to reopen:
 the pending marker `<omh_home>/tui/resume-pending` (some session was dropped),
 or a pid in `<omh_home>/tui/live-pids` (the TUIs recorded as running, after
-the boot they ran on) that no longer runs, which is how a TUI killed outright
+`b:` and the boot they ran on; a line from an older OMH, with no `b:` word,
+holds pids only and is read as such) that no longer runs, which is how a TUI killed outright
 (SIGKILL, power loss) shows before anything has swept it
 (`tui/live_sessions.py`). Where `/proc/sys/kernel/random/boot_id` can be read
 (Linux), zsh and bash also wake when it differs from the recorded boot, so a
@@ -67,8 +68,8 @@ NEW_RC_MODE = 0o644
 MAX_RC_BYTES = 4 * 1024 * 1024
 PENDING_MARKER_PARTS = ("tui", "resume-pending")
 LIVE_PIDS_PARTS = ("tui", "live-pids")
-# Linux's boot id, read by the POSIX blocks with `read` when it exists; the store writes the same id verbatim as the
-# first word of `live-pids`. A module constant only so tests can point a rendered block at a fake boot file.
+# Linux's boot id, read by the POSIX blocks with `read` when it exists; the store writes the same id verbatim after
+# `b:` as the first word of `live-pids`. A module constant only so tests can point a rendered block at a fake boot file.
 LINUX_BOOT_ID_FILE = "/proc/sys/kernel/random/boot_id"
 
 
@@ -154,8 +155,9 @@ def _ps_quote(text: str) -> str:
 def _posix_wake(marker: str, live_pids: str, boot_file: str, split: str) -> list[str]:
     """Lines that set `_omh_wake` when the marker exists, when `boot_file` reads as a boot other than the one
     `live_pids` recorded, or when a pid in `live_pids` no longer runs, by builtins only (`read`, `kill -0`): no
-    process starts here. `live_pids` is `<boot> <pid> ...`; a recorded boot of `-` (unknown) or an unreadable
-    `boot_file` (not Linux) leaves the pid check alone. `split` is how the shell word-splits `$_omh_pids`. A word
+    process starts here. `live_pids` is `b:<boot> <pid> ...`, or, written by an older OMH, `<pid> ...` with no `b:`
+    word, every word a pid; a recorded boot of `-` (unknown), none, or an unreadable `boot_file` (not Linux) leaves
+    the pid check alone. `split` is how the shell word-splits `$_omh_pids`. A word
     that is not a plain decimal of at most nine digits is skipped. `kill -0` failing for a pid another user now
     holds also wakes: the TUI that wrote it is gone either way, and `shell-start` finds nothing to reopen."""
     return [
@@ -164,8 +166,11 @@ def _posix_wake(marker: str, live_pids: str, boot_file: str, split: str) -> list
         "    _omh_wake=1",
         f"  elif [[ -f {_sh_quote(live_pids)} ]]; then",
         f"    read -r _omh_pids < {_sh_quote(live_pids)} || :",
-        "    _omh_rec=${_omh_pids%% *}",
-        "    if [[ $_omh_pids == *' '* ]]; then _omh_pids=${_omh_pids#* }; else _omh_pids=; fi",
+        "    if [[ $_omh_pids == b:* ]]; then",
+        "      _omh_rec=${_omh_pids%% *}",
+        "      _omh_rec=${_omh_rec#b:}",
+        "      if [[ $_omh_pids == *' '* ]]; then _omh_pids=${_omh_pids#* }; else _omh_pids=; fi",
+        "    fi",
         f"    if [[ -n $_omh_rec && $_omh_rec != - && -r {_sh_quote(boot_file)} ]]; then",
         f"      read -r _omh_boot < {_sh_quote(boot_file)} || :",
         '      [[ -n $_omh_boot && $_omh_boot != "$_omh_rec" ]] && _omh_wake=1',
@@ -256,7 +261,7 @@ def render_block(shell: str, omh_home: str | Path) -> list[str]:
             "  $env:OMH_AUTO_RESUME_DONE = '1'",
             f"  if (((Test-Path -LiteralPath {_ps_quote(marker)}) -or (& {{",
             f"        $line = Get-Content -LiteralPath {_ps_quote(live_pids)} -TotalCount 1 -ErrorAction SilentlyContinue",
-            "        foreach ($id in (\"$line\" -split ' ' | Select-Object -Skip 1)) {",
+            "        foreach ($id in (\"$line\" -split ' ')) {  # the b: boot word is no pid and is skipped",
             "          if ($id -match '^[0-9]{1,9}$' -and -not (Get-Process -Id $id -ErrorAction SilentlyContinue)) {",
             "            return $true",
             "          }",

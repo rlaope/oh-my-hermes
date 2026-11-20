@@ -25,10 +25,12 @@ under `live-sessions.lock` (fcntl on POSIX, msvcrt on Windows), waited for at
 most `LOCK_WAIT_SECONDS` and then given up. Two small files beside it let a
 shell decide without Python whether a sweep could find anything:
 `resume-pending` exists exactly when some entry is `dropped`, and `live-pids`
-holds, on one line, the boot its writer ran on (`boot_identity()` without
-spaces, `-` when unknown) and then the pids of every live owner (gone when
-there is none), so a pid no longer running there, or on Linux a boot id other
-than the recorded one, means a TUI vanished without a word. Every
+holds, on one line, the boot its writer ran on as `b:<boot>`
+(`boot_identity()` without spaces, `b:-` when unknown) and then the pids of
+every live owner (gone when there is none), so a pid no longer running there,
+or on Linux a boot id other than the recorded one, means a TUI vanished
+without a word. A line whose first word lacks `b:` was written by an older
+OMH and holds pids only; the shell hook reads both. Every
 function is best effort: an unreadable, corrupt, oversized or non-regular file
 (a symlink, a FIFO) reads as empty and is never opened in a way that could
 block, the small files are only ever replaced atomically or removed, and no OS
@@ -66,6 +68,8 @@ except ImportError:  # POSIX
 LIVE_SESSIONS_FILE = "live-sessions.json"
 PENDING_MARKER = "resume-pending"
 LIVE_PIDS_FILE = "live-pids"
+# Marks the first word of `LIVE_PIDS_FILE` as the writer's boot; a line without it is an older OMH's, all pids.
+BOOT_WORD_PREFIX = "b:"
 LOCK_FILE = "live-sessions.lock"
 LIVE_SESSIONS_SCHEMA = "omh_tui_live_sessions/v1"
 
@@ -336,16 +340,18 @@ def _publish(path: Path, data: bytes | None) -> None:
 
 
 def boot_word(boot: str) -> str:
-    """`boot` as the first word of `LIVE_PIDS_FILE`: its spaces removed, `-` when unknown or not printable ASCII.
-    On Linux it is the boot id verbatim, which the shell hook compares with `/proc/sys/kernel/random/boot_id`."""
+    """`boot` as written after `BOOT_WORD_PREFIX` in `LIVE_PIDS_FILE`: its spaces removed, `-` when unknown or not
+    printable ASCII. On Linux it is the boot id verbatim, which the shell hook compares with
+    `/proc/sys/kernel/random/boot_id`."""
     word = "".join(boot.split())
     return word if word and word.isascii() and word.isprintable() else "-"
 
 
 def _live_pids(entries: list[dict[str, Any]], boot: str) -> bytes | None:
-    """`<boot> <pid> <pid> ...` for every live owner (all on `boot`: the sweep before it removed the others)."""
+    """`b:<boot> <pid> <pid> ...` for every live owner (all on `boot`: the sweep before it removed the others). The
+    prefix tells this line from an older OMH's, whose every word is a pid."""
     pids = sorted({owner["pid"] for entry in entries if entry["state"] == LIVE for owner in entry["owners"]})
-    return (" ".join([boot_word(boot), *map(str, pids)]) + "\n").encode("ascii") if pids else None
+    return (" ".join([BOOT_WORD_PREFIX + boot_word(boot), *map(str, pids)]) + "\n").encode("ascii") if pids else None
 
 
 def _sync_files(directory: Path, entries: list[dict[str, Any]], boot: str) -> None:

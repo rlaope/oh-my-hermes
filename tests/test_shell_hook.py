@@ -252,7 +252,9 @@ class BlockSyntaxTests(unittest.TestCase):
                 self.assertIn(guard, text)
         for shell in ("zsh", "bash"):
             self.assertIn("/proc/sys/kernel/random/boot_id", "\n".join(render_block(shell, "/x")))
-        self.assertIn("Select-Object -Skip 1", "\n".join(render_block("powershell", "/x")))  # the boot word
+        for shell in ("zsh", "bash"):  # R5 (R4-B4): only a `b:` first word is the boot; else every word is a pid
+            self.assertIn("$_omh_pids == b:*", "\n".join(render_block(shell, "/x")))
+        self.assertNotIn("Select-Object -Skip", "\n".join(render_block("powershell", "/x")))
         self.assertIn("ConsoleHost", "\n".join(render_block("powershell", "/x")))
         self.assertIn("zle-line-init", "\n".join(render_block("zsh", "/x")))
         self.assertNotIn("precmd", "\n".join(render_block("zsh", "/x")))
@@ -436,16 +438,20 @@ class InteractiveShellTests(unittest.TestCase):
 
     def test_live_pids_that_all_run_wake_nothing(self) -> None:
         def alive(omh: Path) -> None:
-            (omh / "tui" / "live-pids").write_text(f"- {os.getpid()} {os.getppid()}\n", encoding="ascii")
+            (omh / "tui" / "live-pids").write_text(f"b:- {os.getpid()} {os.getppid()}\n", encoding="ascii")
+
+        def legacy_alive(omh: Path) -> None:  # an older OMH's line: pids only, all running
+            (omh / "tui" / "live-pids").write_text(f"{os.getpid()} {os.getppid()}\n", encoding="ascii")
 
         def junk(omh: Path) -> None:  # not pids: skipped, never handed to `kill`
-            (omh / "tui" / "live-pids").write_text("- -1 0x10 $(touch x) 99999999999\n", encoding="ascii")
+            (omh / "tui" / "live-pids").write_text("b:- -1 0x10 $(touch x) 99999999999\n", encoding="ascii")
 
         def boot_only(omh: Path) -> None:  # a boot word and no pid
-            (omh / "tui" / "live-pids").write_text("1795085221\n", encoding="ascii")
+            (omh / "tui" / "live-pids").write_text("b:1795085221\n", encoding="ascii")
 
         for shell in ("zsh", "bash"):
-            for label, prepare in (("alive", alive), ("junk", junk), ("boot only", boot_only)):
+            for label, prepare in (("alive", alive), ("legacy alive", legacy_alive), ("junk", junk),
+                                   ("boot only", boot_only)):
                 with self.subTest(shell=shell, live_pids=label):
                     lines, output = self._shell(shell, marker=False, prepare=prepare, expect_run=False)
                     self.assertEqual(lines, [], output)
@@ -460,12 +466,16 @@ class InteractiveShellTests(unittest.TestCase):
                 gone.wait(timeout=10)
 
         def mixed(omh: Path) -> None:
-            (omh / "tui" / "live-pids").write_text(f"- {os.getpid()} {gone.pid}\n", encoding="ascii")
+            (omh / "tui" / "live-pids").write_text(f"b:- {os.getpid()} {gone.pid}\n", encoding="ascii")
+
+        def legacy_mixed(omh: Path) -> None:  # an older OMH's line of pids only
+            (omh / "tui" / "live-pids").write_text(f"{os.getpid()} {gone.pid}\n", encoding="ascii")
 
         for shell in ("zsh", "bash"):
-            with self.subTest(shell=shell):
-                lines, output = self._shell(shell, marker=False, prepare=mixed)
-                self.assertEqual(len(lines), 1, output)
+            for label, prepare in (("prefixed", mixed), ("legacy", legacy_mixed)):
+                with self.subTest(shell=shell, live_pids=label):
+                    lines, output = self._shell(shell, marker=False, prepare=prepare)
+                    self.assertEqual(len(lines), 1, output)
 
     def test_the_first_word_is_the_boot_and_never_checked_as_a_pid(self) -> None:
         gone = subprocess.Popen([sys.executable, "-c", "pass"])
@@ -476,13 +486,39 @@ class InteractiveShellTests(unittest.TestCase):
                 gone.kill()
                 gone.wait(timeout=10)
 
-        def dead_boot_word(omh: Path) -> None:  # a gone pid in the boot slot is a boot word, not a pid
-            (omh / "tui" / "live-pids").write_text(f"{gone.pid} {os.getpid()}\n", encoding="ascii")
+        def dead_boot_word(omh: Path) -> None:  # a gone pid's digits after `b:` are a boot word, not a pid
+            (omh / "tui" / "live-pids").write_text(f"b:{gone.pid} {os.getpid()}\n", encoding="ascii")
 
         for shell in ("zsh", "bash"):
             with self.subTest(shell=shell):
                 lines, output = self._shell(shell, marker=False, prepare=dead_boot_word, expect_run=False)
                 self.assertEqual(lines, [], output)
+
+    def test_an_older_omhs_file_of_pids_only_wakes_on_its_one_dead_pid(self) -> None:
+        # R5 (R4-B4): a TUI an older OMH started can still write `live-pids` after this hook was installed. Its line
+        # has no `b:` word: every word is a pid, and its only one, gone, wakes the shell; on Linux too, where it
+        # names no boot to compare.
+        gone = subprocess.Popen([sys.executable, "-c", "pass"])
+        try:
+            gone.wait(timeout=30)
+        finally:
+            if gone.poll() is None:
+                gone.kill()
+                gone.wait(timeout=10)
+        tmp = TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        boot_file = Path(tmp.name) / "boot_id"
+        boot_file.write_text(f"{gone.pid}\n", encoding="ascii")  # even a boot id equal to the word changes nothing
+
+        def legacy_only_dead(omh: Path) -> None:
+            (omh / "tui" / "live-pids").write_text(f"{gone.pid}\n", encoding="ascii")
+
+        for shell in ("zsh", "bash"):
+            for label, boot in (("no boot file (macOS)", None), ("Linux boot file", boot_file)):
+                with self.subTest(shell=shell, case=label):
+                    lines, output = self._shell(shell, marker=False, prepare=legacy_only_dead, boot_file=boot)
+                    self.assertEqual(len(lines), 1, output)
+                    self.assertTrue(lines[0].endswith("auto-resume shell-start DONE=1"), lines)
 
     def test_on_linux_a_boot_other_than_the_recorded_one_wakes_though_every_pid_runs(self) -> None:
         # R3 (R2-B4): after a reboot a recorded pid can belong to a live process; Linux's boot id tells. The block
@@ -494,12 +530,16 @@ class InteractiveShellTests(unittest.TestCase):
 
         def recorded(boot: str) -> Callable[[Path], None]:
             def prepare(omh: Path) -> None:
-                (omh / "tui" / "live-pids").write_text(f"{boot} {os.getpid()}\n", encoding="ascii")
+                (omh / "tui" / "live-pids").write_text(f"b:{boot} {os.getpid()}\n", encoding="ascii")
             return prepare
+
+        def legacy(omh: Path) -> None:  # pids only; the first one is a pid, never compared as a boot
+            (omh / "tui" / "live-pids").write_text(f"{os.getpid()}\n", encoding="ascii")
 
         cases = (("another boot", recorded("0b5e7d10-1111-2222-3333-444455556666"), True),
                  ("this boot", recorded("e3b0c442-98fc-1c14-9afb-f4c8996fb924"), False),
-                 ("boot unknown when recorded", recorded("-"), False))
+                 ("boot unknown when recorded", recorded("-"), False),
+                 ("an older OMH's line names no boot", legacy, False))
         for shell in ("zsh", "bash"):
             for label, prepare, wakes in cases:
                 with self.subTest(shell=shell, case=label):
@@ -523,7 +563,7 @@ class InteractiveShellTests(unittest.TestCase):
                 live_sessions.record_live(omh, "before-reboot", str(omh.parent), str(omh.parent), {})
             self.assertFalse((omh / "tui" / live_sessions.PENDING_MARKER).exists())
             self.assertEqual((omh / "tui" / live_sessions.LIVE_PIDS_FILE).read_text(encoding="ascii"),
-                             f"old-boot-id {os.getpid()}\n")
+                             f"b:old-boot-id {os.getpid()}\n")
 
         for shell in ("zsh", "bash"):
             with self.subTest(shell=shell):

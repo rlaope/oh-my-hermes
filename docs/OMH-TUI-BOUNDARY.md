@@ -570,10 +570,12 @@ or `/resume` moving away, a relaunch for an update. It never reopens by
 itself. A terminal hang-up (SIGHUP), SIGTERM, SIGBREAK, an uncaught crash, or a
 TUI whose process is gone (killed, power loss: a different boot or a pid that
 no longer runs) is dropped. `resume-pending` beside the record exists while a
-dropped session waits, and `live-pids` holds, on one line, the boot its writer
-ran on (spaces removed, `-` when unknown; on Linux the kernel's boot id
-verbatim) and then the pids of the TUIs recorded as running, so a TUI killed
-outright shows before anything sweeps it. A dropped session reopens once: the reopen marks it
+dropped session waits, and `live-pids` holds, on one line, `b:` and the boot
+its writer ran on (spaces removed, `-` when unknown; on Linux the kernel's boot
+id verbatim) and then the pids of the TUIs recorded as running, so a TUI killed
+outright shows before anything sweeps it. A line whose first word lacks `b:`
+was written by an older OMH and holds pids only; the shell hook reads every
+word of it as a pid. A dropped session reopens once: the reopen marks it
 `resumed` under the record's lock before Hermes opens it, so a resume Hermes
 refuses is not tried again.
 
