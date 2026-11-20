@@ -169,6 +169,13 @@ All notable changes will be documented here.
   job instead of passing. `tools/qa/identifier_guard.py --staged` runs the same check as a pre-commit hook, and
   `--hash "name"` prints the line to add (see CONTRIBUTING.md).
 
+- **AGENTS.md and CLAUDE.md are about half their size; the detail moved to docs.** Every agent session loads both
+  files. The full text of each scoped exception now lives in `docs/IMPLEMENTATION-BOUNDARIES.md`, the long pitfall
+  list and working style in `docs/ENGINEERING-PITFALLS.md`, omher's repository rules in `apps/omher/README.md`, the
+  TUI frame-language rule in `docs/OMH-TUI-BOUNDARY.md` and the CodeGraph evidence note in `docs/CODEGRAPH.md`, all
+  moved verbatim. The two instruction files keep what an agent cannot infer from the code: product boundaries,
+  delivery grain, PR report shape, commit trailers, the gates and the generated-artifact map, with one pointer line
+  per moved part.
 - **Four OMH tool descriptions are shorter, and the model still picks the same calls.** `omh_todo`, `omh_loop`,
   `omh_document_plan` and `omh_delegate_route` say the same rules in fewer words, so each costs fewer tokens the
   first time Hermes loads it (24,943 -> 23,718 characters together; the registered OMH schemas 63,324 -> 62,099).
