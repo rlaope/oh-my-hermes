@@ -854,6 +854,12 @@ function applyOpened(chat: Chat, res: ChatOpenResult, now: number, bot: string, 
       if (twin && i.kind === "user" && i.readAt !== undefined && twin.readAt === undefined) twin.readAt = i.readAt;
       return false;
     }
+    // the words before a question, kept live above its card: the history now carries that row too (bridge
+    // `_ask_notes`), so the local copy goes once the server has it
+    if (i.kind === "assistant" && i.id.startsWith("clarify-note-")) {
+      const said = i.text.trim();
+      return !server.some((s) => s.kind === "assistant" && s.text.trim() === said);
+    }
     if (i.id.startsWith("local-")) {
       const sent = i.sent ?? i.text;
       const twin = server.find((s) => s.kind === "user" && s.text === sent && s.ts >= i.ts - 120);
