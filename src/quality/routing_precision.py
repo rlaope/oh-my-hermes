@@ -5454,7 +5454,10 @@ ROUTING_PRECISION_CASES: tuple[RoutingPrecisionCase, ...] = (
     RoutingPrecisionCase(
         "plain-pr-review-does-not-reach-slop-cleaner",
         "A plain review request does not credit the cleaner's review mode",
-        "review this PR",
+        # The bare "review this PR" now dispatches code-review through the
+        # code-review request guard; a trailing clause keeps the clarify this
+        # negative needs, and the claim (no cleaner credit) is unchanged.
+        "review this PR when you get a chance",
         "answer_clarification",
         "",
         "ai-slop-cleaner",
@@ -10730,7 +10733,8 @@ ROUTING_INTERVENTION_CASES: tuple[RoutingInterventionCase, ...] = (
     RoutingInterventionCase("sysrev-telehealth-scoping", "A scoping review of a topic reaches literature screening", "I need a scoping review of telehealth in rural clinics", "dispatch", "systematic-review", "prepare_systematic_review", "systematic_review"),
     # systematic-review negative controls that dispatch to their real owner.
     RoutingInterventionCase("sysrev-systematic-code-review", "A systematic code review stays code review", "do a systematic code review of this PR", "dispatch", "code-review", "choose_executor", "handoff"),
-    RoutingInterventionCase("sysrev-plain-pr-review", "A plain PR review clarifies toward code review", "review this PR", "clarify", "oh-my-hermes", "answer_clarification", "clarification", expected_candidate="code-review"),
+    # A whole-sentence review of a PR dispatches code-review (code-review request guard).
+    RoutingInterventionCase("sysrev-plain-pr-review", "A plain PR review dispatches code review", "review this PR", "dispatch", "code-review", "prepare_review_or_followup_handoff", "review_check"),
     RoutingInterventionCase("sysrev-find-papers", "Finding papers is source finding, not screening", "find papers about diffusion models", "dispatch", "source-finder", "prepare_source_finder_plan", "source_finder"),
     RoutingInterventionCase("sprite-game-character-sheet", "A game character sheet request reaches QC-gated frame processing", "Make a pixel sprite sheet for my game character.", "dispatch", "sprite-forge", "prepare_sprite_forge", "sprite_forge"),
     RoutingInterventionCase("gis-metric-overlay", "Supplied geometry requires actual metric computation", "Intersect these two GeoJSON layers in a metric CRS and compute overlap area.", "dispatch", "geospatial-analysis", "prepare_geospatial_analysis", "geospatial_analysis"),
