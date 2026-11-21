@@ -59,6 +59,13 @@ All notable changes will be documented here.
   images that Ctrl+Enter sends now shows its images while it waits for the stopped turn, and a steer sent before it
   that the stopped turn had not read goes with it, ahead of its text, instead of being dropped behind it.
 
+- **A delegation route is no longer refused for a Hermes config that opens with `%YAML 1.1` or lists a key's
+  items at column 0.** `omh_delegate_route` answered `config_unreadable` for a valid `config.yaml` that starts with a
+  `%YAML 1.1` line and `---`, or that writes a list such as `fallback_providers:` with its `- ` items at the left
+  edge, though Hermes' loader reads both. The route guard now reads those two shapes; a second directive, a
+  directive without `---`, `%YAML 1.2` or `%TAG`, a second document, and a column-0 list under `delegation`, `model`
+  or a root model key, or after a key that already has a value, are still refused. Reported by @mazzy89 in #2917.
+
 ## 4.0.9 - 2026-11-20
 
 - **Codex units can write inside the fanout fence on Linux and macOS.** `codex exec` is read-only by default, and
