@@ -8,6 +8,7 @@ import re
 import sys
 import tempfile
 import time
+import types
 import unittest
 from unittest import mock
 from pathlib import Path
@@ -4445,6 +4446,15 @@ class TasksLinear(unittest.TestCase):
         d = self._dir(f"mcp_servers:\n  work:\n    url: https://mcp.linear.app/sse?token={fake}\n    headers:\n      Authorization: {fake}\n")
         self.assertEqual(ob.read_linear_mcp(d), {"configured": False, "server": ""})
 
+    def test_enabled_reads_as_the_config_loader_reads_it(self):
+        # the event reader and the bridge's loader must agree on `enabled` for every plain word: under Hermes'
+        # own hermes_yaml (YAML 1.1 in ruamel) `n` and `N` are false too, under PyYAML they are strings (on)
+        for word in ("true", "false", "yes", "no", "on", "off", "y", "Y", "n", "N", "Off", "NO", "maybe", "0", "1"):
+            d = self._dir(f"mcp_servers:\n  linear:\n    enabled: {word}\n")
+            loaded = ob._load_yaml(d / "config.yaml")["mcp_servers"]["linear"]["enabled"]
+            ob._YAML_CACHE.clear()
+            self.assertEqual(ob.mcp_server_names(d / "config.yaml")["linear"].get("enabled"), loaded is not False, word)
+
     def test_reads_only_the_names_and_enabled(self):
         # the verifier's probe (V3 on PR #2908): every value read is recorded; only the Linear server's `enabled` may be
         touched = []
@@ -4492,12 +4502,11 @@ class TasksLinear(unittest.TestCase):
         # bot lookup parses the config whole for every op (`_load_yaml`, discover_bots); the Linear path adds nothing
         # to that cache, returns only the name and `enabled`, logs nothing, and only names / `enabled` leave its parser.
         import logging
-        import yaml
 
         fake = "ghp_" + "Q7" * 18
         for name, enabled, want in (("linear-work", True, True), ("work", True, False), ("linear", False, False)):
             home = Path(tempfile.mkdtemp())
-            (home / "config.yaml").write_text(yaml.safe_dump({"mcp_servers": {name: {
+            (home / "config.yaml").write_text(ob._yaml_safe_dump({"mcp_servers": {name: {
                 "enabled": enabled, "url": "https://example.org/sse", "headers": {"Authorization": fake},
                 "env": {"API_TOKEN": fake}, "args": ["--token", fake]}}}), encoding="utf-8")
             bridge = ob.Bridge(token=TOKEN, hermes_home=home)
@@ -4541,6 +4550,85 @@ class TasksLinear(unittest.TestCase):
     def test_is_an_op(self):
         self.assertIn("tasks.linear", ob.Bridge(token=TOKEN, hermes_home=Path(tempfile.gettempdir())).ops)
         self.assertIn("tasks.linear", ob.PEER_FORWARD)
+
+
+def hermes_yaml_stand_in():
+    """Hermes 0.22 and later's own `hermes_yaml`, as far as the bridge uses it: ruamel.yaml's safe loader in YAML 1.1
+    mode, and its safe dumper. Those Hermes releases do not depend on PyYAML."""
+    from io import StringIO
+
+    from ruamel.yaml import YAML
+
+    def safe_load(text):
+        y = YAML(typ="safe", pure=True)
+        y.version = (1, 1)
+        return y.load(text)
+
+    def safe_dump(data, *, sort_keys=True):
+        y = YAML(typ="safe", pure=True)
+        y.default_flow_style, y.allow_unicode, y.sort_base_mapping_type_on_output = False, True, sort_keys
+        out = StringIO()
+        y.dump(data, out)
+        return out.getvalue()
+
+    mod = types.ModuleType("hermes_yaml")
+    mod.safe_load, mod.safe_dump = safe_load, safe_dump
+    return mod
+
+
+try:
+    import ruamel.yaml  # noqa: F401
+    HAVE_RUAMEL = True
+except ImportError:
+    HAVE_RUAMEL = False
+
+
+class OnHermesYaml:
+    """Run a reader's tests the way the bridge runs on Hermes 0.22 and later: `hermes_yaml` importable, `yaml` not.
+    There `import yaml` failed and every config the bridge read answered `{}`: no bot's model, no oh-my-hermes skill
+    folder, no Linear server."""
+
+    def setUp(self):
+        super().setUp()
+        modules = mock.patch.dict(sys.modules, {"yaml": None, "hermes_yaml": hermes_yaml_stand_in()})
+        modules.start()
+        self.addCleanup(modules.stop)
+        ob._YAML_CACHE.clear()
+        self.addCleanup(ob._YAML_CACHE.clear)
+
+
+@unittest.skipUnless(HAVE_RUAMEL, "ruamel.yaml (the YAML library of Hermes 0.22 and later) is not installed")
+class DiscoveryOnHermesYaml(OnHermesYaml, Discovery):
+    def test_pyyaml_is_not_imported(self):
+        with self.assertRaises(ImportError):
+            import yaml  # noqa: F401
+
+    def test_skill_roots_and_yaml_1_1_values(self):
+        with tempfile.TemporaryDirectory() as t:
+            prof, omh = Path(t) / "kami", Path(t) / "omh-skills"
+            omh.mkdir()
+            prof.mkdir()
+            (prof / "config.yaml").write_text(f"skills:\n  external_dirs:\n    - '{omh}'\nagent:\n  reasoning_effort: high\n"
+                                              "model:\n  default: m\n  provider: p\nmcp_servers:\n  linear:\n"
+                                              "    enabled: off\n", encoding="utf-8")
+            self.assertEqual(ob.skill_roots(prof), [prof / "skills", omh])
+            bot = ob.discover_bots(prof)[0]
+            self.assertEqual((bot["model"], bot["provider"], bot["reasoning"]), ("m", "p", "high"))
+            # Hermes' YAML 1.1 reads `off` as false, as PyYAML did
+            self.assertIs(ob._load_yaml(prof / "config.yaml")["mcp_servers"]["linear"]["enabled"], False)
+
+    def test_display_name_fallback_writes_with_the_same_library(self):
+        with tempfile.TemporaryDirectory() as t:
+            prof = Path(t)
+            (prof / "profile.yaml").write_text("description: first\n", encoding="utf-8")
+            with mock.patch.dict(sys.modules, {"hermes_cli.profiles": None}):  # Hermes' writer is not reachable
+                ob.write_display_name(prof, "카미")
+            self.assertEqual(ob._load_yaml(prof / "profile.yaml"), {"description": "first", "display_name": "카미"})
+
+
+@unittest.skipUnless(HAVE_RUAMEL, "ruamel.yaml (the YAML library of Hermes 0.22 and later) is not installed")
+class TasksLinearOnHermesYaml(OnHermesYaml, TasksLinear):
+    pass
 
 
 class OneMasker(unittest.TestCase):

@@ -7,7 +7,8 @@
 //! The link is one `ssh` child per peer with a fixed argv built here ([`ssh_args`]): a loopback forward
 //! `127.0.0.1:<local>` -> the remote's `127.0.0.1:<remote>`, and one fixed `sh -c` script ([`remote_script`]) whose
 //! only inputs are numbers and hex this module made. On the remote it finds Hermes' Python the way the local shell
-//! does (`OMHER_HERMES_PYTHON`, the PM launcher's interpreter, `venv`, `.venv`), keeps omher's own bridge script at
+//! does (`OMHER_HERMES_PYTHON`, the PM launcher's interpreter, `venv`, `.venv`; on a Windows host reached through a
+//! POSIX login shell, under `%LOCALAPPDATA%\hermes` as the Windows app installs it), keeps omher's own bridge script at
 //! `~/.omher/peer/omher_bridge-<sha12>.py` (the only place it writes there; sent over stdin only when that file is
 //! missing or does not match), and starts it with `--exit-on-stdin-eof`. Closing the child's stdin (peer removed, app
 //! quit, this process gone) ends the remote bridge. The UI never supplies a command: it names a host the shell checks.
@@ -234,25 +235,54 @@ OMHER_BRIDGE_TOKEN={token} exec "$py" "$f" --port {remote_port} --exit-on-stdin-
     )
 }
 
-/// Find Hermes' Python on a macOS or Linux home, in the order the local shell uses (`bridge::discover_python_in`):
-/// `OMHER_HERMES_PYTHON`, then the interpreter the PM launcher `hermes-agent/.hermes/bin/hermes` execs (its first
-/// word, unquoted or in single quotes), then `venv`, then `.venv`. A `HERMES_HOME` that names a profile is raised to
-/// its root. Prints `OMHER_PEER_PYTHON`, `OMHER_PEER_PYVER`, or `OMHER_PEER_NO_HERMES` and exit 3.
-pub const DISCOVER_PYTHON: &str = r#"h="${HERMES_HOME:-$HOME/.hermes}"
-case "$h" in */profiles/*) r="${h%/profiles/*}"; [ -f "$r/config.yaml" ] && h="$r" ;; esac
+/// Find Hermes' Python on the remote home, in the order the local shell uses (`bridge::discover_python_in`):
+/// `OMHER_HERMES_PYTHON`, then the interpreter the PM launcher execs, then `venv`, then `.venv`. A `HERMES_HOME` that
+/// names a profile is raised to its root. Prints `OMHER_PEER_PYTHON`, `OMHER_PEER_PYVER`, or `OMHER_PEER_NO_HERMES`
+/// and exit 3.
+///
+/// On macOS and Linux the home is `~/.hermes`, the launcher `hermes-agent/.hermes/bin/hermes` (its `exec` line's first
+/// word, unquoted or in single quotes) and the venv Python `bin/python`. On Windows, which an OpenSSH server reaches
+/// through a POSIX login shell (Git Bash, MSYS2 or Cygwin as `DefaultShell`; `uname -s` says MINGW, MSYS or CYGWIN),
+/// it is the home the Windows app uses, `%LOCALAPPDATA%\hermes`: the launcher is the distlib `hermes.exe` in
+/// `hermes-agent/.hermes/bin` or `bin`, whose `#!<python.exe> -I` line names the interpreter, and the venv Python is
+/// `Scripts/python.exe`. The script holds no backslash and no `!`, so `#.` and `[[:punct:]]` stand in for them.
+pub const DISCOVER_PYTHON: &str = r#"wn=""
+case "$(uname -s 2>/dev/null)" in MINGW*|MSYS*|CYGWIN*) wn=1 ;; esac
+h="${HERMES_HOME:-}"
+if [ -z "$h" ]; then
+  if [ -n "$wn" ] && [ -n "${LOCALAPPDATA:-}" ]; then h="$LOCALAPPDATA/hermes"; else h="$HOME/.hermes"; fi
+fi
+if [ -z "$wn" ]; then
+  case "$h" in */profiles/*) r="${h%/profiles/*}"; [ -f "$r/config.yaml" ] && h="$r" ;; esac
+else
+  case "$h" in *[[:punct:]]profiles[[:punct:]]*) r="${h%[[:punct:]]profiles[[:punct:]]*}"; [ -f "$r/config.yaml" ] && h="$r" ;; esac
+fi
 py=""
 if [ -n "${OMHER_HERMES_PYTHON:-}" ] && [ -x "$OMHER_HERMES_PYTHON" ]; then py="$OMHER_HERMES_PYTHON"; fi
-l="$h/hermes-agent/.hermes/bin/hermes"
-if [ -z "$py" ] && [ -f "$l" ]; then
-  w=$(sed -n "s/^exec //p" "$l" | head -n 1)
-  case "$w" in
-    "'"*) w="${w#?}"; w="${w%%"'"*}" ;;
-    *) w="${w%% *}" ;;
-  esac
-  case "$w" in /*) [ -x "$w" ] && py="$w" ;; esac
+if [ -z "$wn" ]; then
+  l="$h/hermes-agent/.hermes/bin/hermes"
+  if [ -z "$py" ] && [ -f "$l" ]; then
+    w=$(sed -n "s/^exec //p" "$l" | head -n 1)
+    case "$w" in
+      "'"*) w="${w#?}"; w="${w%%"'"*}" ;;
+      *) w="${w%% *}" ;;
+    esac
+    case "$w" in /*) [ -x "$w" ] && py="$w" ;; esac
+  fi
+  x="bin/python"
+else
+  for l in "$h/hermes-agent/.hermes/bin/hermes.exe" "$h/bin/hermes.exe"; do
+    if [ -z "$py" ] && [ -f "$l" ]; then
+      w=$(grep -a -o -E '#."?([A-Za-z]:|/)[^[:cntrl:]]+ -I' "$l" | head -n 1)
+      w="${w#??}"; w="${w% -I}"
+      case "$w" in '"'*) w="${w#?}"; w="${w%?}" ;; esac
+      case "$w" in [A-Za-z]:*|/*) [ -x "$w" ] && py="$w" ;; esac
+    fi
+  done
+  x="Scripts/python.exe"
 fi
 for v in venv .venv; do
-  if [ -z "$py" ] && [ -x "$h/hermes-agent/$v/bin/python" ]; then py="$h/hermes-agent/$v/bin/python"; fi
+  if [ -z "$py" ] && [ -x "$h/hermes-agent/$v/$x" ]; then py="$h/hermes-agent/$v/$x"; fi
 done
 if [ -z "$py" ]; then echo "OMHER_PEER_NO_HERMES $h"; exit 3; fi
 echo "OMHER_PEER_PYTHON $py"
@@ -1069,6 +1099,13 @@ mod tests {
             run(&root.join("elsewhere"), &[("HERMES_HOME", prof.to_str().unwrap())]),
             format!("OMHER_PEER_PYTHON {}", old.join(".hermes/hermes-agent/venv/bin/python").display())
         );
+        // a profile whose own name ends in `profiles` is raised to the same root, not cut inside its name
+        let myp = old.join(".hermes/profiles/myprofiles");
+        std::fs::create_dir_all(&myp).unwrap();
+        assert_eq!(
+            run(&root.join("elsewhere"), &[("HERMES_HOME", myp.to_str().unwrap())]),
+            format!("OMHER_PEER_PYTHON {}", old.join(".hermes/hermes-agent/venv/bin/python").display())
+        );
         // the override wins
         let pinned = root.join("pinned/python");
         exe(&pinned);
@@ -1077,6 +1114,79 @@ mod tests {
         let none = root.join("none");
         std::fs::create_dir_all(&none).unwrap();
         assert!(run(&none, &[]).starts_with("OMHER_PEER_NO_HERMES "));
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    /// The same discovery on a Windows OpenSSH host, whose login shell is Git Bash / MSYS2 / Cygwin: a fake `uname`
+    /// says MINGW64. The home is `$LOCALAPPDATA/hermes` (never the `~/.hermes` a Windows home may also hold), the
+    /// interpreter is the one the distlib `hermes.exe` launcher's `#!<python.exe> -I` line names, plain or quoted,
+    /// in `hermes-agent/.hermes/bin` or `bin`, and the venv fallback is `Scripts/python.exe`.
+    #[cfg(unix)]
+    #[test]
+    fn remote_python_discovery_reads_a_windows_hermes_home() {
+        use std::os::unix::fs::PermissionsExt;
+        let root = std::env::temp_dir().join(format!("omher-peer-win-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        let exe = |p: &Path, body: &str| {
+            std::fs::create_dir_all(p.parent().unwrap()).unwrap();
+            std::fs::write(p, body).unwrap();
+            std::fs::set_permissions(p, std::fs::Permissions::from_mode(0o755)).unwrap();
+        };
+        let fake_bin = root.join("fakebin");
+        exe(&fake_bin.join("uname"), "#!/bin/sh\necho MINGW64_NT-10.0-26200\n");
+        let run = |home: &Path, env: &[(&str, &str)]| -> String {
+            let mut c = Command::new("/bin/sh");
+            c.arg("-c").arg(DISCOVER_PYTHON).env_clear().env("HOME", home).env("PATH", format!("{}:/usr/bin:/bin", fake_bin.display()));
+            for (k, v) in env {
+                c.env(k, v);
+            }
+            let out = c.output().unwrap();
+            String::from_utf8_lossy(&out.stdout).lines().next().unwrap_or("").to_string()
+        };
+        // a distlib launcher: a PE stub, then `#!<python> -I`, then the zip (only the shebang line matters here)
+        let launcher = |p: &Path, python: &str| {
+            std::fs::create_dir_all(p.parent().unwrap()).unwrap();
+            let mut b = b"MZ\x90\x00\x03\x00PE\x00\x00stub\x00".to_vec();
+            b.extend_from_slice(format!("#!{python} -I\r\n").as_bytes());
+            b.extend_from_slice(b"PK\x05\x06\x00\x00\x00");
+            std::fs::write(p, b).unwrap();
+        };
+        let user = root.join("kkjop");
+        let local = user.join("AppData/Local");
+        let home = local.join("hermes");
+        let store = home.join("tools/python-3.14.9/python.exe");
+        exe(&store, "#!/bin/sh\necho 3.14.9\n");
+        // the Windows app's HERMES_HOME also leaves a `~/.hermes` with only a config: it must not be chosen
+        std::fs::create_dir_all(user.join(".hermes")).unwrap();
+        std::fs::write(user.join(".hermes/config.yaml"), "x: 1\n").unwrap();
+        let la = [("LOCALAPPDATA", local.to_str().unwrap())];
+        launcher(&home.join("hermes-agent/.hermes/bin/hermes.exe"), store.to_str().unwrap());
+        assert_eq!(run(&user, &la), format!("OMHER_PEER_PYTHON {}", store.display()));
+        // the launcher in `bin`, its interpreter quoted
+        std::fs::remove_file(home.join("hermes-agent/.hermes/bin/hermes.exe")).unwrap();
+        launcher(&home.join("bin/hermes.exe"), &format!("\"{}\"", store.display()));
+        assert_eq!(run(&user, &la), format!("OMHER_PEER_PYTHON {}", store.display()));
+        // no launcher: venv/Scripts/python.exe
+        std::fs::remove_file(home.join("bin/hermes.exe")).unwrap();
+        let venv = home.join("hermes-agent/venv/Scripts/python.exe");
+        exe(&venv, "#!/bin/sh\necho 3.14.9\n");
+        assert_eq!(run(&user, &la), format!("OMHER_PEER_PYTHON {}", venv.display()));
+        // a profile HERMES_HOME is raised to its root
+        std::fs::write(home.join("config.yaml"), "x: 1\n").unwrap();
+        std::fs::create_dir_all(home.join("profiles/kami")).unwrap();
+        let prof = home.join("profiles/kami");
+        assert_eq!(run(&root.join("elsewhere"), &[("HERMES_HOME", prof.to_str().unwrap())]), format!("OMHER_PEER_PYTHON {}", venv.display()));
+        // ... written the Windows way, `<home>\profiles\kami`, as Hermes on Windows sets it
+        let win_prof = format!("{}\\profiles\\kami", home.display());
+        assert_eq!(run(&root.join("elsewhere"), &[("HERMES_HOME", &win_prof)]), format!("OMHER_PEER_PYTHON {}", venv.display()));
+        // a Windows account name outside ASCII (`C:\Users\김`): the launcher's line names its interpreter all the same
+        let kim = root.join("김/AppData/Local");
+        let kim_store = kim.join("hermes/tools/python-3.14.9/python.exe");
+        exe(&kim_store, "#!/bin/sh\necho 3.14.9\n");
+        launcher(&kim.join("hermes/hermes-agent/.hermes/bin/hermes.exe"), kim_store.to_str().unwrap());
+        assert_eq!(run(&user, &[("LOCALAPPDATA", kim.to_str().unwrap())]), format!("OMHER_PEER_PYTHON {}", kim_store.display()));
+        // without LOCALAPPDATA the home stays ~/.hermes, as before
+        assert!(run(&user, &[]).starts_with("OMHER_PEER_NO_HERMES "));
         let _ = std::fs::remove_dir_all(&root);
     }
 

@@ -13,6 +13,7 @@ import { commandQuery, matchCommands, parseCommands, pickText, type AgentCommand
 import { getDraft, setDraft } from "../../app/drafts";
 import { t, tx } from "../../i18n";
 import { composing as imeComposing } from "../../lib/ime";
+import { newer, older, onFirstLine, onLastLine, type Recall, type Step } from "./promptHistory";
 
 const MAX_H = 200;
 
@@ -24,7 +25,8 @@ const MAX_H = 200;
  * gray pill by a mirror layer under the textarea (same font, padding and wrapping, scrolled with it), and goes out
  * hoisted to the front as `/name` (store `send`). `/name` and `./name` go out as typed, except `./thread` at the start
  * when `onNewThread` is given: `./` opens a one-row picker for it, and a send makes a new thread of this bot with the
- * rest of the message as its first message (threadCommand.ts); the token never reaches the bot. */
+ * rest of the message as its first message (threadCommand.ts); the token never reaches the bot.
+ * ArrowUp on the first line and ArrowDown on the last walk the person's earlier prompts of this chat (promptHistory.ts). */
 export function Composer({
   bot,
   running,
@@ -44,6 +46,7 @@ export function Composer({
   foot,
   heldNote,
   onNewThread,
+  history,
 }: {
   bot: Bot;
   running: boolean;
@@ -75,6 +78,8 @@ export function Composer({
   heldNote?: string;
   /** `./thread [text]`: a new thread of this bot, `text` its first message (absent: `./thread` goes out as typed). */
   onNewThread?: (first: string) => void;
+  /** The person's earlier prompts of this chat, oldest first (promptHistory.ts): ArrowUp/ArrowDown recall them. */
+  history?: string[];
 }) {
   // unsent text survives switching chats and restarts (drafts.ts; the composer is keyed by its chat)
   const [text, setText] = useState(() => getDraft(bot.name));
@@ -90,6 +95,16 @@ export function Composer({
   const good = chips.filter((c) => !c.reason);
   const has = text.trim().length > 0 || good.length > 0;
   const store = useStore();
+  // where an ArrowUp/ArrowDown walk through `history` stands (promptHistory.ts)
+  const recall = useRef<Recall>(null);
+  // leaving this chat mid-walk keeps the text typed before the walk as the draft, not the prompt on show
+  useEffect(() => () => void (recall.current && setDraft(bot.name, recall.current.draft)), [bot.name]);
+  /** Every text change but a recall (typing, a pick, a plugin, Edit / Ask in chat, a send) goes through here: the
+   *  text is the person's own again, so the walk ends and a later ArrowUp keeps this text as the draft. */
+  const edit = (next: string) => {
+    recall.current = null;
+    setText(next);
+  };
 
   const listPlugins = store.pluginsList;
   const readPlugins = useCallback(() => listPlugins(bot.name), [listPlugins, bot.name]);
@@ -98,7 +113,7 @@ export function Composer({
     const lead = t("att.usePlugin", { plugin: pluginName(p) });
     const next = text.startsWith(lead) ? text : lead + text;
     placeCaret.current = next.length;
-    setText(next);
+    edit(next);
     ref.current?.focus();
   };
 
@@ -134,7 +149,7 @@ export function Composer({
   const pickThread = () => {
     const next = `${THREAD_CMD} `;
     placeCaret.current = next.length;
-    setText(next);
+    edit(next);
     ref.current?.focus();
   };
   const frag = skills && caret !== null ? fragmentAt(text, caret) : null;
@@ -178,8 +193,26 @@ export function Composer({
   const pickCommand = (c: AgentCommand) => {
     const next = pickText(c);
     placeCaret.current = next.length;
-    setText(next);
+    edit(next);
     setCmdDismissed(`${c.prefix}${c.name} `);
+  };
+
+  /** A recalled prompt (or the draft back) fills the box, caret at the end; a picker its text would open stays shut,
+   *  so the next arrow keeps walking. */
+  const showRecalled = (el: HTMLTextAreaElement, step: Step) => {
+    recall.current = step.recall;
+    const next = step.text;
+    const f = fragmentAt(next, next.length);
+    setDismissed(f ? `${f.start}:${f.query}` : null);
+    const q = commandQuery(next);
+    setCmdDismissed(q ? `${q.prefix}${q.query}` : null);
+    setTDismissed(next);
+    setCaret(next.length);
+    if (next === text) el.setSelectionRange(next.length, next.length);
+    else {
+      placeCaret.current = next.length; // the layout effect puts it there once the text renders
+      setText(next);
+    }
   };
 
   /** The mirror follows the textarea's box and scroll (its width leaves out a scrollbar). */
@@ -237,7 +270,7 @@ export function Composer({
     const next = text.slice(0, frag.start) + put + text.slice(end).replace(/^ /, "");
     placeCaret.current = frag.start + put.length;
     setCaret(frag.start + put.length);
-    setText(next);
+    edit(next);
   };
 
   useLayoutEffect(() => {
@@ -248,7 +281,7 @@ export function Composer({
   const draft = store.ui.draft;
   useLayoutEffect(() => {
     if (!draft || draft.bot !== bot.name) return;
-    setText(draft.text);
+    edit(draft.text);
     // text the app put here (Edit's old message too) does not open the command menu; typing in it does
     const q = commandQuery(draft.text);
     setCmdDismissed(q ? `${q.prefix}${q.query}` : null);
@@ -285,20 +318,20 @@ export function Composer({
     if (!has || offline || sending) return;
     if (threadCmd && onNewThread) {
       if (good.length) return setErr(t("thread.cmdFiles"));
-      setText("");
+      edit("");
       onNewThread(threadCmd.first);
       return;
     }
     if (!good.length || !onSendFiles) {
       onSend(text);
-      setText("");
+      edit("");
       return;
     }
     setSending(true);
     setErr(null);
     try {
       await onSendFiles(text, good);
-      setText("");
+      edit("");
       setChips((cur) => cur.filter((c) => c.reason)); // red chips stay: they were never sent
     } catch (e) {
       setErr(e instanceof Error ? e.message : String(e));
@@ -397,7 +430,7 @@ export function Composer({
               aria-label={t("cmp.message", { bot: bot.display_name })}
               data-testid="composer"
               onChange={(e) => {
-                setText(e.target.value);
+                edit(e.target.value);
                 trackCaret(e.target);
               }}
               onSelect={(e) => trackCaret(e.currentTarget)}
@@ -468,6 +501,22 @@ export function Composer({
                   if (e.key === "Escape") {
                     e.preventDefault(); // the picker takes Esc, not the running answer
                     setDismissed(fragKey);
+                    return;
+                  }
+                }
+                // shell-like history: an arrow with no line left to move to recalls the person's earlier prompts;
+                // Alt+arrow recalls from any line, so a multi-line draft need not be walked to its edge first
+                const plain = !e.shiftKey && !e.altKey && !e.ctrlKey && !e.metaKey;
+                const alt = e.altKey && !e.shiftKey && !e.ctrlKey && !e.metaKey;
+                if ((e.key === "ArrowUp" || e.key === "ArrowDown") && (plain || alt) && history?.length && !composing && !threadPicking && !cmdOpen && !picking) {
+                  const el = e.currentTarget;
+                  const step =
+                    e.key === "ArrowUp"
+                      ? alt || onFirstLine(text, el.selectionStart) ? older(history, recall.current, text) : null
+                      : alt || onLastLine(text, el.selectionEnd) ? newer(history, recall.current) : null;
+                  if (step) {
+                    e.preventDefault();
+                    showRecalled(el, step);
                     return;
                   }
                 }

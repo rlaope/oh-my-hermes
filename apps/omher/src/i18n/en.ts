@@ -125,6 +125,11 @@ export const en = {
   "sounds.play": "Play",
   "sounds.on": "On",
   "sounds.off": "Off",
+  // while it answers (Settings › General)
+  "busySend.title": "While it answers",
+  "busySend.hint": "A message you send while a bot is answering waits until it finishes, or steers into the answer at once",
+  "busySend.queue": "Wait",
+  "busySend.steer": "Steer",
   // update (the sidebar's Update button and its confirm) and resume after a restart
   "update.title": "Update to {version}?",
   "update.body": "omher will restart. Your chats, panels and sessions pick up where you left off.",

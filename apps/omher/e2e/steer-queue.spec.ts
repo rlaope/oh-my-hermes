@@ -130,6 +130,47 @@ test("Steer refused: the message stays waiting and is sent normally after the tu
   await expect.poll(sent).toEqual(["Refactor the gateway retry code", "b goes first", "a"]);
 });
 
+test("While it answers › Steer: a message sent mid-answer is steered at once; one behind a waiting message waits", async ({ page }) => {
+  await page.addInitScript(() => localStorage.setItem("omher.busySend", "steer"));
+  await mock("mock.steerMode", { bot: "kami", mode: "reject" });
+  await running(page);
+  // refused, like the button's steer: it waits and goes out after the turn
+  await say(page, "first, steered for me");
+  await expect.poll(async () => (await calls("chat.steer")).map((c) => c.params.text)).toEqual(["first, steered for me"]);
+  await expect(held(page, "first, steered for me")).toBeVisible();
+  // a second message never goes ahead of the one already waiting
+  await say(page, "second waits its turn");
+  await expect(held(page, "second waits its turn")).toBeVisible();
+  await page.waitForTimeout(300);
+  expect((await calls("chat.steer")).length).toBe(1);
+  await endTurn();
+  await expect.poll(sent).toEqual(["Refactor the gateway retry code", "first, steered for me"]);
+  await endTurn();
+  await expect.poll(sent).toEqual(["Refactor the gateway retry code", "first, steered for me", "second waits its turn"]);
+  expect((await calls("chat.interrupt")).length).toBe(0);
+});
+
+test("While it answers › Steer: taken by Hermes, it shows the Steered line and is never sent again", async ({ page }) => {
+  await page.goto("/");
+  await page.evaluate(() => localStorage.removeItem("omher.busySend"));
+  // the setting lives in Settings › General and defaults to Wait
+  await page.getByTestId("nav-settings").click();
+  const seg = page.getByTestId("busy-send-seg");
+  await expect(seg.getByRole("radio", { checked: true })).toHaveText("Wait");
+  await seg.getByRole("radio", { name: "Steer" }).click();
+  expect(await page.evaluate(() => localStorage.getItem("omher.busySend"))).toBe("steer");
+  await running(page);
+  await say(page, "keep the old timeout too");
+  // Hermes queued it: the bot has it, so the row is marked steered and reads Read, never sent again
+  const row = page.locator("[data-testid=bubble-user][data-steered]", { hasText: "keep the old timeout too" });
+  await expect(row.getByTestId("bubble-read")).toHaveText(/^Read · \d\d:\d\d$/);
+  await expect(row.getByTestId("bubble-steered")).toHaveCount(0);
+  expect((await calls("chat.steer")).map((c) => c.params)).toEqual([{ bot: "kami", text: "keep the old timeout too" }]);
+  await endTurn();
+  await page.waitForTimeout(400);
+  expect(await sent()).toEqual(["Refactor the gateway retry code"]);
+});
+
 test("↓ puts the text back in the box; × drops it; neither is sent", async ({ page }) => {
   await running(page);
   await say(page, "fix teh typo");

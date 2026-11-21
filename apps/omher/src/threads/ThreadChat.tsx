@@ -4,6 +4,7 @@ import { selectAsks, useStore } from "../state/store";
 import type { Bot } from "../lib/protocol";
 import { Timeline } from "../chat/parts/Timeline";
 import { Composer } from "../chat/parts/Composer";
+import { promptsOf } from "../chat/parts/promptHistory";
 import { Avatar } from "../ui";
 import { t } from "../i18n";
 import { threadKey } from "./types";
@@ -52,6 +53,7 @@ export function ThreadChat({ bot, thread }: { bot: Bot; thread: string }) {
           bot={as}
           running={!!chat?.turn}
           asking={selectAsks(s).some((a) => a.bot === key)}
+          history={promptsOf(chat?.items)}
           offline={bot.status === "offline" || away}
           offlineText={away ? t("chat.connecting") : undefined}
           onSend={(text) => void s.threadSend(bot.name, thread, text)}
