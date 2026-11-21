@@ -216,7 +216,7 @@ export const Bubble = memo(function Bubble({
             <path d="M9 14 4 9l5-5" />
             <path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11" />
           </svg>
-          {quote.lines.length + quote.more === 1 ? t("bub.repliedTo1") : t("bub.repliedTo", { n: quote.lines.length + quote.more })}
+          {t("bub.repliedTo", { n: quote.lines.length + quote.more })}
         </span>
         {quote.more > 0 && <span className="msg-quote-n">{t("bub.quoteMore", { n: quote.more })}</span>}
         {quote.lines.map((l) => (

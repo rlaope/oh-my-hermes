@@ -482,3 +482,19 @@ test("chat: an answer to several messages quotes each one's first line; a click 
   await expect(tl.getByTestId("bubble-bot").last()).toHaveText("Sure.");
   await expect(tl.getByTestId("bubble-quote")).toHaveCount(1);
 });
+
+test("chat: one message, then a card, then the answer: no quote header", async ({ page }) => {
+  await open(page);
+  const tl = page.getByTestId("timeline");
+  await emit(ev("kami", "message", { id: "qc-a0", text: "Will do." }));
+  await expect(tl.getByTestId("bubble-bot").last()).toContainText("Will do.");
+  await mock("mock.manual", { bot: "kami" });
+  await page.getByTestId("composer").fill("di");
+  await page.keyboard.press("Enter");
+  await expect(page.getByTestId("stop")).toBeVisible();
+  await emit(ev("kami", "clarify.request", { request_id: "qc-ask", question: "Which environment?", choices: ["staging", "production"] }));
+  await expect(tl.getByTestId("card-clarify")).toBeVisible();
+  await emit(ev("kami", "message", { id: "qc-a1", text: "Which one?" }), ev("kami", "turn.end", { outcome: "done" }));
+  await expect(tl.getByTestId("bubble-bot").last()).toContainText("Which one?");
+  await expect(tl.getByTestId("bubble-quote")).toHaveCount(0);
+});
