@@ -27,6 +27,11 @@ All notable changes will be documented here.
   - **Fixes:** Korean input no longer flickers or hides the syllable being typed, and a 50–100 ms stall every 30 s is
     gone. (#3031)
 
+- **omher reads more naturally in Korean.** A pass over the Korean UI copy: one register (해요체) on every screen
+  instead of 합니다체 in some hints and dialogs, `shell` instead of `셸`, and literal translations replaced with what
+  a Korean developer expects (`회원님에게 답장` is `내 메시지에 답장`, `붙는 것` is `추가되는 것`, `owner/repo` stays
+  as written). Labels that name a screen use its Korean name (`계획 탭`, `다시 시작`). Only string values changed.
+
 - **omher on Windows no longer reads a terminal's status file through a link.** The bridge reads
   `<omher_home>/terminals/<id>.json` for the status a main-chat message's `omher://terminal/` link carries. It
   refused a link only through `O_NOFOLLOW`, which Windows lacks, so there a link planted in that folder was
