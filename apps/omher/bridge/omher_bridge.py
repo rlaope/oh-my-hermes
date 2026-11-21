@@ -27,6 +27,7 @@ import asyncio
 import contextlib
 import errno
 import hmac
+import inspect
 import json
 import logging
 import os
@@ -95,9 +96,13 @@ PROFILE_ID = re.compile(r"[a-z0-9][a-z0-9_-]{0,63}")
 RESTART_TIMEOUT = 90.0   # seconds one `hermes -p <bot> gateway restart` may take (Hermes' own updater allows 90)
 RESTART_WAIT = 120.0     # seconds the bridge keeps trying to attach to a restarted bot
 RESTART_POLL = 2.0
-# A bot whose gateway went away without omher restarting it: the first wait and the longest one between two looks
-# at Hermes' own discovery (rule 39), so it is back within that long of its gateway being ready again.
+# A bot whose gateway went away without omher restarting it: the first wait before a look at Hermes' own discovery,
+# doubling after each look up to the second (rule 39), so it is back within that long of its gateway being ready.
 RECOVER_POLL = (2.0, 30.0)
+
+
+class RecoveryUnsupported(Exception):
+    """This Hermes' `connect_gateway` cannot dial a discovered owner as-is, so a reattach could start a gateway."""
 RESTART_ANYWAY_WINDOW = 600.0  # "Restart anyway" (`--yes`) is taken only this long after Hermes refused
 RESTART_LINES = 12
 _ANSI = re.compile(r"\x1b\[[0-9;?]*[A-Za-z]")
@@ -5684,6 +5689,7 @@ class Conn:
         # a folder.resume of a stored id already on its way waits for that one's answer instead of resuming again
         self.admit = asyncio.Lock()
         self.resuming: dict[str, asyncio.Future] = {}
+        self.main_lock = asyncio.Lock()  # finds or makes the Bot Chat one request at a time: never two of them
         self.threads: dict[str, dict] = {}  # threads `thread.list` found (stored id -> row): what `thread.open` takes
         self.threads_shown = False  # an app that shows threads read them: main-chat turns carry the threads note
         self.split_done: set[str] = set()  # answers whose thread blocks were acted on (never twice)
@@ -5896,19 +5902,25 @@ class Bridge:
 
     # ------------------------------------------------------------ connections
 
-    async def _default_connect(self, stack: AsyncExitStack, home: Path):
+    async def _default_connect(self, stack: AsyncExitStack, home: Path, endpoint=None):
+        """Attach through Hermes' own `connect_gateway`: with no ``endpoint`` it may start the profile's gateway; with
+        one (a ready owner discovery found) it dials that owner as-is and never starts one (rule 39)."""
         from hermes_cli.gateway_client import connect_gateway
         async with self._env_lock:  # connect_gateway reads HERMES_HOME when it is entered
             os.environ["HERMES_HOME"] = str(home)
-            return await stack.enter_async_context(connect_gateway())
+            gateway = connect_gateway() if endpoint is None else connect_gateway(endpoint=endpoint)
+            return await stack.enter_async_context(gateway)
 
-    async def _default_probe(self, home: Path) -> bool:
-        """Whether this profile's gateway is up and ready, from Hermes' own discovery, which only reads its control
-        socket and lock and never starts one (`connect_gateway` would start one). Draining for an update is not
-        ready."""
+    async def _default_probe(self, home: Path):
+        """The ready owner of this profile's gateway that Hermes' own discovery finds, or None. Discovery asks the
+        control socket (`identify`) and starts nothing; draining for an update is not ready. Raises
+        RecoveryUnsupported on a Hermes whose `connect_gateway` cannot dial that owner as-is."""
+        from hermes_cli.gateway_client import connect_gateway
         from hermes_cli.gateway_runtime import discover_gateway_endpoint
+        if "endpoint" not in inspect.signature(connect_gateway).parameters:
+            raise RecoveryUnsupported("connect_gateway takes no endpoint")
         found = await asyncio.to_thread(discover_gateway_endpoint, home)
-        return getattr(found, "state", None) == "ready" and getattr(found, "endpoint", None) is not None
+        return getattr(found, "endpoint", None) if getattr(found, "state", None) == "ready" else None
 
     def _bot(self, name) -> dict:
         if not isinstance(name, str) or not name:
@@ -5918,7 +5930,8 @@ class Bridge:
                 return b
         raise BridgeError("unknown_bot", f"no bot named {name}")
 
-    async def _conn(self, name) -> Conn:
+    async def _conn(self, name, endpoint=None) -> Conn:
+        """The bot's connection, attached when it is not. ``endpoint``: dial only that discovered owner (rule 39)."""
         bot = self._bot(name)
         conn = self.conns.get(name)
         if conn is None:
@@ -5935,7 +5948,8 @@ class Bridge:
             stack = AsyncExitStack()
             try:
                 async with asyncio.timeout(CONNECT_TIMEOUT):
-                    client = await self.gateway_factory(stack, bot["path"])
+                    client = await (self.gateway_factory(stack, bot["path"]) if endpoint is None
+                                    else self.gateway_factory(stack, bot["path"], endpoint=endpoint))
             except asyncio.CancelledError:
                 with contextlib.suppress(BaseException):
                     await stack.aclose()
@@ -5951,7 +5965,9 @@ class Bridge:
                 raise BridgeError("bot_offline", conn.failed_msg)
             conn.stack, conn.client, conn.connecting, conn.failed_msg = stack, client, False, ""
             conn.pump = self._spawn(self._pump(conn))
-            back, conn.lost = conn.lost, False
+            back = conn.lost and name not in self._reattaching
+            if back:
+                conn.lost = False
         await self.emit("bot.status", name, status="online", running=conn.in_turn)
         if back:  # attached again after its gateway went away: its open chats re-read, as after omher's own restart
             await self.emit("bot.restarted", name, ok=True)
@@ -5985,14 +6001,20 @@ class Bridge:
                     return  # the profile is gone
                 try:
                     ready = await self.gateway_probe(bot["path"])
+                except RecoveryUnsupported as e:
+                    log.info("not reattaching %s by itself: %s", name, e)
+                    return
                 except Exception as e:
                     log.debug("discovery for %s failed: %s", name, e)
-                    ready = False
-                if not ready:
+                    ready = None
+                if not ready or name in self._reattaching:
                     continue
                 conn.failed_at, conn.failed_msg = 0.0, ""
-                with contextlib.suppress(BridgeError):
-                    await self._conn(name)
+                try:
+                    await self._conn(name, endpoint=ready)
+                except BridgeError:
+                    continue
+                return  # back: a later loss starts a new look from the short wait
         finally:
             self._recovering.discard(name)
 
@@ -6346,7 +6368,12 @@ class Bridge:
     async def _ensure_main(self, conn: Conn, existing_only: bool = False) -> dict:
         """Find (or create) the bot's ``Bot Chat`` and attach to it. Returns the session snapshot. With
         ``existing_only`` a bot that has no Bot Chat yet gets none and the op answers ``not_found``: a bot outside
-        the sidebar list is asked for its waiting prompts this way, and asking must not make its Bot Chat."""
+        the sidebar list is asked for its waiting prompts this way, and asking must not make its Bot Chat. One at a
+        time per connection: two at once would both find none and make two."""
+        async with conn.main_lock:
+            return await self._attach_main(conn, existing_only)
+
+    async def _attach_main(self, conn: Conn, existing_only: bool) -> dict:
         rows = (await self._call(conn, "session.list", title=BOT_CHAT_TITLE, include_hidden=True, limit=5)).get("sessions") or []
         if rows:
             stored = rows[0].get("resolved_id") or rows[0]["id"]
@@ -6370,7 +6397,9 @@ class Bridge:
 
     async def _main(self, conn: Conn) -> str:
         if not conn.main_id:
-            await self._ensure_main(conn)
+            async with conn.main_lock:
+                if not conn.main_id:  # another request may have attached it while this one waited
+                    await self._attach_main(conn, False)
         return conn.main_id
 
     async def op_chat_open(self, p) -> Reply:
@@ -7271,6 +7300,9 @@ class Bridge:
         self._reattaching.update(down or [name])  # its bots come back through `_reattach`, not `_recover`
         try:
             out = await asyncio.to_thread(run_hermes_restart, hermes, gw, self.home, interrupt, RESTART_TIMEOUT, jobs)
+        except BaseException:
+            self._reattaching.difference_update(down or [name])
+            raise
         finally:
             self._restarting.discard(gw)
         self._refused.pop(gw, None)

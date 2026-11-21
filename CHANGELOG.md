@@ -8,9 +8,10 @@ All notable changes will be documented here.
   gateway, or it was relaunched or restarted from a terminal, the bot stayed "not connected" until the person
   picked it again, and an open chat kept its "not reachable (… Gateway draining: update_paused)" line and showed
   no earlier history, only the next message sent. The bridge reattached only after its own restart. It now looks
-  for a lost bot's gateway through Hermes' own discovery, which starts nothing (after 2 s, then at least 30 s
-  apart), attaches again once that says ready, and tells the app as after its own restart, so the open chat
-  re-reads its history and the stale line goes; a bot the person's next message reconnects says so too.
+  for a lost bot's gateway through Hermes' own discovery, which starts nothing (first after 2 s, the wait doubling
+  up to 30 s), dials only the ready gateway it found, and tells the app as after its own restart, so the open chat
+  re-reads its history and the stale line goes; a bot the person's next message reconnects says so too. Two
+  requests at once no longer make two Bot Chats.
   BOUNDARY rule 39.
 
 ## 5.0.0 - 2026-11-21
