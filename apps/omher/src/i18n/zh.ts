@@ -126,9 +126,9 @@ export const zh: Record<Key, string> = {
   "sounds.off": "关",
   // while it answers (Settings › General)
   "busySend.title": "回答时发送",
-  "busySend.hint": "机器人回答时发送的消息，等回答结束再发，或立即 steer 进当前回答。",
+  "busySend.hint": "机器人回答时发送的消息，等回答结束再发，或立即并入当前回答。",
   "busySend.queue": "等待",
-  "busySend.steer": "Steer",
+  "busySend.steer": "立即并入",
   // update (the sidebar's Update button and its confirm) and resume after a restart
   "update.title": "更新到 {version}？",
   "update.body": "omher 将重新启动。聊天、面板和会话会从中断处继续。",
