@@ -31,7 +31,8 @@ REACHES_THE_LEDGER = (
 
 # (message, action, selected_skill, candidate_skill) at the base commit.
 MUST_NOT_CHANGE = (
-    ('review this PR', 'clarify', 'oh-my-hermes', 'code-review'),
+    # A plain PR review request dispatches code-review since the code-review request guard (was clarify).
+    ('review this PR', 'dispatch', 'code-review', 'code-review'),
     ('review this pull request for bugs and missing tests', 'dispatch', 'ultraqa', 'ultraqa'),
     ('fix the merge conflict in my branch', 'dispatch', 'ultrawork', 'ultrawork'),
     ('resolve the merge conflict and push', 'dispatch', 'git-workflow', 'git-workflow'),
