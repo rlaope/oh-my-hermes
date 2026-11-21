@@ -5,6 +5,7 @@
 // Off macOS: OMHER_E2E_PLATFORM=Win32.
 import { expect, test, type Page } from "@playwright/test";
 import { mock, openApp, platformIsMac } from "./term-find-helpers";
+import { dragRowOnto, type Side } from "./split-drag-helpers";
 
 type Sessions = { startTerminal(a: string, cwd: string): string; ptyOf(id: string): number | null };
 type Call = { op: string; id?: number; data?: string };
@@ -50,12 +51,10 @@ async function sessions(page: Page, folders: string[]): Promise<string[]> {
   return ids;
 }
 
-async function splitWith(page: Page, from: string, key: string, pick: string) {
-  await textarea(page, from).focus();
-  await page.keyboard.press(key);
-  await expect(page.getByTestId("split-picker")).toBeVisible();
-  await page.locator(`[data-testid="split-pick"][data-session="${pick}"]`).click();
-  await expect(page.getByTestId("split-picker")).toHaveCount(0);
+/** `pick`'s TERMINALS row dragged onto the `side` part of `from`'s pane; `pick` has the keyboard. */
+async function splitWith(page: Page, from: string, side: Side, pick: string) {
+  await dragRowOnto(page, pick, from, side);
+  await expect.poll(() => focusedTerm(page)).toBe(pick);
 }
 
 /** a | (b over c), c focused; returns the ids and the keys */
@@ -64,8 +63,8 @@ async function threePanes(page: Page, extra: string[] = []) {
   const ids = await sessions(page, ["/w/a", "/w/b", "/w/c", ...extra]);
   const [a, b, c] = ids;
   await page.getByTestId(`session-${a}`).locator(".ss-open").click();
-  await splitWith(page, a, k.right, b);
-  await splitWith(page, b, k.down, c);
+  await splitWith(page, a, "right", b);
+  await splitWith(page, b, "down", c);
   await expect(split(page)).toHaveAttribute("data-panes", "3");
   await expect.poll(() => focusedTerm(page)).toBe(c);
   return { k, ids };
@@ -167,7 +166,7 @@ test("zoomed: splitting, closing the zoomed pane or moving it shows every pane a
   // split while zoomed: unzoomed, four panes, the new one has the keyboard
   await page.keyboard.press(k.zoom);
   await expectZoomedOn(page, c);
-  await splitWith(page, c, k.right, d);
+  await splitWith(page, c, "right", d);
   await expect(split(page)).toHaveAttribute("data-zoom", "false");
   await expect(split(page)).toHaveAttribute("data-panes", "4");
   await expect(page.getByTestId("terminal")).toHaveCount(4);

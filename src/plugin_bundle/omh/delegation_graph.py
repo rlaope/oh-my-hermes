@@ -1393,7 +1393,10 @@ def _dag_nodes(
 
 def _parked_fields(node: Mapping[str, Any], now: float) -> dict[str, Any]:
     """What a parked node's last attempt says it waits on, and how long it has: `settle` stamps `settled_at`,
-    `handle`, `wake_at` and `reason` on a park. A field the attempt does not carry is left out."""
+    `handle`, `wake_at` and `reason` on a park. A field the attempt does not carry is left out.
+
+    Past its `wake_at` the node is ``parked_due``: its wait is over by its own deadline and it now waits on the
+    parent to pick it up (`dag_run.offerable` offers it again), not on its handle, so no view draws it as moving."""
     attempts = node.get("attempts") if isinstance(node.get("attempts"), list) else []
     attempt = attempts[-1] if attempts and isinstance(attempts[-1], Mapping) else {}
     fields: dict[str, Any] = {"parked": True, "elapsed_seconds": None}  # never the child's run time
@@ -1402,6 +1405,9 @@ def _parked_fields(node: Mapping[str, Any], now: float) -> dict[str, Any]:
         fields.update(parked_at=float(parked_at), elapsed_seconds=now - float(parked_at))
     if isinstance(wake_at, int | float) and not isinstance(wake_at, bool) and wake_at > 0:
         fields["wake_at"] = float(wake_at)
+        if wake_at <= now:
+            # Its time since it became due, under the word `due`: how long it has waited on the parent.
+            fields.update(parked_due=True, status="due", elapsed_seconds=now - float(wake_at))
     handle, reason = _text(attempt.get("handle"), 120), _text(attempt.get("reason"), 120)
     if handle:
         fields["wait_handle"] = handle

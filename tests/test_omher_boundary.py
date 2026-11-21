@@ -40,6 +40,20 @@ RULES = (
     "it closes the split pane that holds the keyboard (the same pane the ⌘W key in it closes)",
     "Copy link (the row menu, ⌘⇧C, Alt+Shift+C off macOS) writes only `omher://terminal/<id>` to the clipboard,",
     "On macOS, Close Window (⌘W) is omher's own menu item:",
+    "Otherwise, including a running session with the undo window Off, it closes the window (`window_close`) and stops no"
+    " session.",
+    "One press closes one session: while ⌘W stays held, its repeats close nothing more.",
+    "38. A program in a terminal may put text on the clipboard, never read it.",
+    "A query (`?`) is never answered, so no program reads the clipboard;",
+    "A copy is taken only as the answer to the person: that terminal has the keyboard, and the person pressed a key or"
+    " clicked in the window within the last 3 seconds;",
+    "Off macOS, Ctrl+Shift+C and Ctrl+Insert copy the selection, and Ctrl+Shift+V and Shift+Insert are the page's own"
+    " paste.",
+    "Reset puts back the terminal's own state in the page and sends nothing to the program,",
+    "On macOS, the person's Cmd+Left, Cmd+Right, Cmd+Backspace and Cmd+Delete reach the program as Ctrl+A, Ctrl+E,"
+    " Ctrl+U and Ctrl+K, and Option+Left and Option+Right as ESC b and ESC f",
+    "a dropped or pasted file's saved path is typed at a terminal's prompt, shell-quoted, as a bracketed paste when the"
+    " program asked for one.",
     "Opening a link brings omher's window forward and nothing else: it starts, resumes, types into, reads or closes"
     " nothing.",
     "No other `omher://` address is accepted, and none is ever passed to the system opener.",
@@ -307,6 +321,40 @@ RULES = (
     "never one profile's unserve and serve inside the host. The profile is always named, never left to Hermes'",
     "It adds `--yes` only when the person presses \"Restart anyway\" right after Hermes refused because something was running,",
     "omher never stops a bot, never restarts every gateway at once, never restarts anything by itself",
+    # oh-my-hermes comes back after a restart (2026-11-20): the omh terminal's one variable, folder.resume's title check
+    "A TERMINALS oh-my-hermes (`omh`) session that was running when omher closed also starts again by itself after the"
+    " restart, and on Restart, with no arguments; it is the one session that gets one more environment variable,"
+    " `OMHER_TERMINAL_LINK=<link id>`",
+    "The page sends only that id; the shell (`sessions::terminal_env`) checks its shape and refuses it for every other"
+    " agent, and omher types nothing into the terminal for it.",
+    "an oh-my-hermes session that was running is attached again (`folder.resume`) only by the stored session id"
+    " `folder.open` returned and its row kept, and only when that session is a folder chat the bridge made for that folder.",
+    # folder.resume's proof is omher's own record, and admission is serialized (review round 1, 2026-11-21)
+    "The proof is omher's own record, not the session's title: each `folder.open` adds one entry to"
+    " `~/.omher/folder-chats.json` (owner-only, mode 600, replaced whole through a new temporary file;",
+    "`folder.resume` takes a session only when that file holds it for this bot and this folder.",
+    "the main chat, a thread (even one titled like the folder), a messenger session, a folder chat made before the"
+    " record existed or any other id is refused (`not_found`) and nothing is attached.",
+    "The same record keeps a folder chat out of `thread.list`, and a folder chat attached in the bridge stays out of"
+    " it whether or not its entry is still there.",
+    # the record survives other bridges and its own size (review round 2, R2-B1 and R2-B2)
+    "Every omher bridge on the computer writes it under `~/.omher/folder-chats.lock` beside it (a file lock, waited for"
+    " at most about 2 seconds), so two bridges opening folder chats at once both keep their entry;",
+    "when the lock is not free in time or the file cannot be replaced, the chat still opens, the bridge log records the"
+    " failure as an error, `folder.open` answers `recorded: false`, and the page keeps no stored id for that row, so"
+    " after a restart it comes back paused instead of being refused.",
+    "An entry whose chat is attached in that bridge, or made in the last 30 days, is never dropped; of the others the"
+    " newest 512 stay, and the oldest of the rest go first while the file would pass the 256 KB the reader accepts.",
+    # a chat attached while another bot's write waits keeps its entry (review round 4, R4-B1)
+    "A write asks the bridge which chats it holds only when it writes, under the lock, and a chat counts as held from"
+    " the moment `folder.resume` starts checking its entry until it is attached or refused, while that check waits for"
+    " a write already deciding what to keep; so a folder chat attached while another bot's entry is being written"
+    " keeps its entry.",
+    "The bridge never writes a file its reader refuses: when even the kept entries do not fit, the file stays as it was"
+    " and that write fails the same way.",
+    "`folder.open` and `folder.resume` are admitted one at a time per bot, so the cap of open folder chats holds for"
+    " requests that overlap, and a `folder.resume` of a stored id already on its way gets that request's answer instead"
+    " of a second `session.resume`: nothing is attached twice.",
 )
 TAURI_CONF = ROOT / "apps" / "omher" / "src-tauri" / "tauri.conf.json"
 CAPABILITIES = ROOT / "apps" / "omher" / "src-tauri" / "capabilities" / "default.json"
@@ -427,9 +475,10 @@ class DocPins(unittest.TestCase):
         # 34 (a TERMINALS session's owner-only status file under ~/.omher/terminals and its inbox, which only shows rule
         # 11's card); 35: rule 35 (one free-space statistic of the home volume a minute, `disk-level`, deletes
         # nothing); 36: rule 36 (the window's close hides to the tray, quitting stays explicit); 37: rule 37 (keep
-        # awake: one idle-sleep assertion while agents work). The rules stay numbered 1..n with no gap or repeat.
+        # awake: one idle-sleep assertion while agents work); 38: rule 38 (a program's OSC 52 copy to the clipboard,
+        # copy only, never a read, off in Settings › Terminal). The rules stay numbered 1..n with no gap or repeat.
         rules = re.findall(r"^(\d+)\. ", DOC.read_text(encoding="utf-8"), re.M)
-        self.assertTrue(6 <= len(rules) <= 37, len(rules))
+        self.assertTrue(6 <= len(rules) <= 38, len(rules))
         self.assertEqual([int(n) for n in rules], list(range(1, len(rules) + 1)))
 
     def test_glossary_and_docs_index_name_omher(self) -> None:
@@ -631,6 +680,23 @@ class LinkChipsFetchNothing(unittest.TestCase):
         self.assertIn("storageLimit: IMAGE_STORAGE_MB,", images)
         self.assertNotIn("readKittyFile", images)
 
+    def test_a_programs_clipboard_copy_is_write_only_and_capped(self) -> None:
+        # rule 38: OSC 52 writes decoded text to the clipboard, answers no query, reads nothing, is capped and can be
+        # turned off; it is the one OSC 52 handler in the page
+        osc = (UI_SRC / "sessions" / "term" / "engine-osc52.ts").read_text(encoding="utf-8")
+        self.assertIn("export const OSC52_MAX_CHARS = 1_000_000;", osc)
+        self.assertIn('b64 === "?") return null;', osc)
+        self.assertIn("if (!readTermSettings().osc52) return true;", osc)
+        self.assertIn("navigator.clipboard?.writeText(text)", osc)
+        # only the terminal with the keyboard, within moments of the person's key or click; no control characters
+        self.assertIn("export const OSC52_ACTIVE_MS = 3000;", osc)
+        self.assertIn("term.textarea === document.activeElement", osc)
+        self.assertIn("/[\\x00-\\x08\\x0b\\x0c\\x0e-\\x1f\\x7f-\\x9f]/", osc)
+        for bad in ("readText", "clipboard.read(", "term.input(", ".paste("):
+            self.assertNotIn(bad, osc, bad)
+        handlers = [p for p in [*UI_SRC.rglob("*.ts"), *UI_SRC.rglob("*.tsx")] if "registerOscHandler(52" in p.read_text(encoding="utf-8")]
+        self.assertEqual([p.name for p in handlers], ["engine-osc52.ts"])
+
     def test_terminal_settings_are_one_record_and_read_no_other_programs_files(self) -> None:
         term = UI_SRC / "sessions" / "term"
         settings = (term / "settings.ts").read_text(encoding="utf-8")
@@ -785,6 +851,81 @@ class BridgeSubmitsOnlyToTheMainChat(unittest.TestCase):
         opener = [f for f in ast.walk(self.tree) if isinstance(f, ast.AsyncFunctionDef) and f.name == "op_folder_open"][0]
         self.assertIn("'session.create'", ast.unparse(opener))
         self.assertIn("cwd=cwd", ast.unparse(opener))
+
+    def test_folder_resume_checks_the_saved_title_before_it_attaches(self) -> None:
+        """Rule 3: ``folder.resume`` refuses the main chat, then (admitted under ``conn.admit``) takes a session only
+        when omher's own record holds it for this bot and folder, and its saved title (state.db, read-only) is still
+        ``FOLDER_CHAT_PREFIX`` + the folder's name, all before its one ``session.resume``; the chat it keeps is a
+        folder chat through ``_keep_chat``, and the folder chat cap holds."""
+        fns = {f.name: f for f in ast.walk(self.tree) if isinstance(f, (ast.FunctionDef, ast.AsyncFunctionDef))}
+        front = ast.unparse(fns["op_folder_resume"])
+        self.assertIn("'folder.resume': self.op_folder_resume", ast.unparse(fns["__init__"]) if "__init__" in fns else self.source)
+        self.assertIn("if stored in conn.main_ids:", front)
+        self.assertLess(front.index("conn.resuming.get(key)"), front.index("async with conn.admit:"))
+        self.assertLess(front.index("async with conn.admit:"), front.index("await self._folder_resume(conn, cwd, stored)"))
+        self.assertNotIn("self._call(", front)
+        body = ast.unparse(fns["_folder_resume"])
+        proof = body.index("is_folder_chat, self.omher_home, conn.name, cwd, stored")
+        check = body.index("saved[0] != FOLDER_CHAT_PREFIX + leaf")
+        self.assertLess(proof, check)
+        self.assertLess(check, body.index("'session.resume'"))
+        self.assertEqual(body.count("self._call("), 1)
+        self.assertIn("self._call(conn, 'session.resume', session_id=stored)", body)
+        self.assertIn("chat.kind != 'folder'", body)
+        self.assertIn("MAX_FOLDER_CHATS", body)
+        self.assertIn("self._keep_chat(conn, chat)", body)
+        self.assertNotIn("session.create", body)
+        # folder.open takes the same admission and records its chat; thread.list leaves every recorded one out
+        opener = ast.unparse(fns["op_folder_open"])
+        self.assertLess(opener.index("async with conn.admit:"), opener.index("MAX_FOLDER_CHATS"))
+        self.assertLess(opener.index("'session.create'"), opener.index("record_folder_chat, self.omher_home, conn.name, cwd, chat.stored_id"))
+        self.assertIn("folder_chat_ids, self.omher_home, conn.name", ast.unparse(fns["op_thread_list"]))
+        # the record: omher's own folder only, a new 600 temp file replaced over it, read without following a link
+        self.assertIn('FOLDER_CHATS_FILE = "folder-chats.json"', self.source)
+        writer = ast.unparse(fns["record_folder_chat"])
+        self.assertIn("tmp = home / f'.{FOLDER_CHATS_FILE}", writer)
+        self.assertIn("_write_new(tmp,", writer)
+        self.assertIn("os.replace(tmp, home / FOLDER_CHATS_FILE)", writer)
+        self.assertIn("0o600)", self.source.split("def _write_new(", 1)[1].split("\n\n", 1)[0])
+        self.assertIn("O_NOFOLLOW", ast.unparse(fns["read_folder_chats"]))
+        # one shape and one size policy for reader and writer; the write is under the cross-process lock and never
+        # publishes a document the reader refuses; folder.open passes every attached chat and says when it failed
+        self.assertIn("_folder_chat_row(r)", ast.unparse(fns["read_folder_chats"]))
+        self.assertIn("len(raw) > _FOLDER_CHATS_BYTES", ast.unparse(fns["read_folder_chats"]))
+        self.assertIn("len(data) <= _FOLDER_CHATS_BYTES", ast.unparse(fns["_folder_chats_doc"]))
+        self.assertIn('FOLDER_CHATS_LOCK = "folder-chats.lock"', self.source)
+        self.assertIn("FOLDER_CHATS_KEEP_SECONDS = 30 * 86400", self.source)
+        self.assertLess(writer.index("with _folder_chats_locked(home):"), writer.index("read_folder_chats(home)"))
+        self.assertLess(writer.index("_kept_folder_chats(rows, held"), writer.index("_write_new(tmp, data)"))
+        self.assertIn("if data is None:", writer)
+        locker = ast.unparse(fns["_folder_chats_locked"])
+        self.assertIn("fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)", locker)
+        self.assertIn("msvcrt.locking(fd, msvcrt.LK_NBLCK, 1)", locker)
+        self.assertIn("FOLDER_CHATS_LOCK_WAIT", locker)
+        self.assertIn("attached=held", opener)
+        # the held chats are asked under the lock, right before the write; a resume on its way counts, and its proof
+        # check reads the record under the same in-process lock the writer holds (R4-B1)
+        self.assertLess(writer.index("with _folder_chats_locked(home):"), writer.index("attached() if callable(attached)"))
+        self.assertLess(writer.index("attached() if callable(attached)"), writer.index("_kept_folder_chats(rows, held"))
+        self.assertIn("self._held_folder_chats()", opener)
+        held = ast.unparse(fns["_held_folder_chats"])
+        self.assertIn("c.folders.values()", held)
+        self.assertIn("c.resuming", held)
+        proof = ast.unparse(fns["is_folder_chat"])
+        self.assertLess(proof.index("_FOLDER_CHATS_LOCK.acquire("), proof.index("read_folder_chats(omher_home)"))
+        front = ast.unparse(fns["op_folder_resume"])
+        self.assertLess(front.index("conn.resuming[key] = fut"), front.index("await self._folder_resume(conn, cwd, stored)"))
+        self.assertIn("log.error(", opener)
+        self.assertIn("'recorded': recorded", opener)
+        # its one caller is folder.open
+        callers = {f.name for f in ast.walk(self.tree) if isinstance(f, (ast.FunctionDef, ast.AsyncFunctionDef))
+                   and any(isinstance(n, ast.Name) and n.id == "record_folder_chat" for n in ast.walk(f))}
+        self.assertEqual(callers, {"op_folder_open"})
+        reader = ast.unparse(fns["read_session_title"])
+        self.assertIn("ro_uri(db)", reader)
+        self.assertIn("'SELECT title, cwd FROM sessions WHERE id = ?'", reader)
+        for write in ("INSERT", "UPDATE", "DELETE", "write", "commit"):
+            self.assertNotIn(write, reader, write)
 
     def test_media_read_checks_the_bots_own_messages_read_only(self) -> None:
         """`media.read` serves a path only after looking it up in state.db (opened with ``ro_uri``)."""
@@ -1457,11 +1598,12 @@ class SessionsStartOnlyAllowListedAgents(unittest.TestCase):
         # `resume` is a conversation id to continue (Claude Code, Codex, DSH), `session_id` a new Claude Code
         # conversation id (2026-11-19, terminal restore); resume_args / sessions::terminal_args check both are UUIDs.
         # `app` is Tauri's handle, injected by the shell, not sent by the page: the `session-fg` event (the CLI in the
-        # session's foreground) is emitted through it (2026-11-16, terminal sessions)
-        self.assertEqual(params, {"app", "shell", "agent", "cwd", "session_id", "resume", "account", "cols", "rows", "on_data", "on_exit"})
+        # session's foreground) is emitted through it (2026-11-16, terminal sessions). `link` is an oh-my-hermes row's
+        # link id, which only that terminal gets as OMHER_TERMINAL_LINK (2026-11-20, sessions::terminal_env checks it)
+        self.assertEqual(params, {"app", "shell", "agent", "cwd", "session_id", "resume", "link", "account", "cols", "rows", "on_data", "on_exit"})
         self.assertIn("app: AppHandle,", sig.group(1))
         body = self.lib[sig.end():].split("\n}\n", 1)[0]
-        self.assertIn("start_agent(&agent, std::path::Path::new(&cwd), session_id.as_deref(), resume.as_deref()", body)
+        self.assertIn("start_agent(&agent, std::path::Path::new(&cwd), session_id.as_deref(), resume.as_deref(), link.as_deref()", body)
         self.assertNotIn(".spawn(", body)
 
     def test_terminal_args_are_only_a_checked_claude_or_codex_conversation_id(self) -> None:
@@ -1473,6 +1615,21 @@ class SessionsStartOnlyAllowListedAgents(unittest.TestCase):
             self.assertIn(needle, tf)
         self.assertEqual(tf.count("is_uuid("), 2)
 
+    def test_only_an_omh_terminal_gets_its_checked_link_as_one_variable(self) -> None:
+        # rule 11: an oh-my-hermes terminal is told its row's link id (OMHER_TERMINAL_LINK) and nothing else; the shell
+        # checks the shape and refuses it for any other agent; start_agent adds it beside the account's variable
+        env = self.prod.split("pub fn terminal_env", 1)[1].split("\n}\n", 1)[0]
+        self.assertIn('if id != "omh" {', env)
+        self.assertIn("crate::term_link::is_link_id(link)", env)
+        self.assertIn('Ok(vec![("OMHER_TERMINAL_LINK".into(), link.into())])', env)
+        self.assertEqual(env.count("Ok(vec!["), 1)
+        start = self.prod.split("pub fn start_agent", 1)[1].split("\n    }\n", 1)[0]
+        self.assertIn("env.extend(terminal_env(agent_id, link)?);", start)
+        self.assertEqual(self.prod.count("OMHER_TERMINAL_LINK\""), 1)
+        # the page passes the row's link only for omh
+        ui = (UI_SRC / "sessions" / "sessions.ts").read_text(encoding="utf-8")
+        self.assertIn('const link = !ofChat && r.agent === "omh" && isLinkId(r.linkId) ? r.linkId : undefined;', ui)
+
     def test_a_session_gets_only_the_chosen_account_home(self) -> None:
         """Rule 11's account sentence: session_start and chat_start pass `accounts::session_env_for` (the saved
         account of a restarted session when its folder exists, else `session_env`) and nothing else;
@@ -1483,7 +1640,7 @@ class SessionsStartOnlyAllowListedAgents(unittest.TestCase):
             body = self.lib[sig.end():].split("\n}\n", 1)[0]
             self.assertEqual(body.count("accounts::session_env_for(&h, &agent, account.as_deref())"), 1, command)
             # session_start also passes the new Claude Code conversation id (rule 11, terminal restore)
-            call = "session_id.as_deref(), resume.as_deref()" if command == "session_start" else "resume.as_deref()"
+            call = "session_id.as_deref(), resume.as_deref(), link.as_deref()" if command == "session_start" else "resume.as_deref()"
             self.assertIn(f"start_agent(&agent, std::path::Path::new(&cwd), {call}, &account_env,", body)
         accounts = (SHELL / "accounts.rs").read_text(encoding="utf-8").split("#[cfg(test)]", 1)[0]
         cli = accounts.split("pub fn session_cli", 1)[1].split("\n}\n", 1)[0]
@@ -2172,9 +2329,9 @@ class SshPeersOnlyOverTheOwnSsh(unittest.TestCase):
 
     def test_the_bridge_refuses_this_computers_ops_and_probes_read_only(self) -> None:
         refused = self.bridge.split("PEER_REFUSED = {", 1)[1].split("\n}\n", 1)[0]
-        self.assertEqual(re.findall(r'^    "([a-z.]+)":', refused, re.M), ["folder.open", "folder.close", "bots.restart"])
+        self.assertEqual(re.findall(r'^    "([a-z.]+)":', refused, re.M), ["folder.open", "folder.close", "folder.resume", "bots.restart"])
         forward = self.bridge.split("PEER_FORWARD = frozenset({", 1)[1].split("})", 1)[0]
-        for op in ("folder.open", "folder.close", "bots.restart", "accounts.list", "sessions.start", "usage.read"):
+        for op in ("folder.open", "folder.close", "folder.resume", "bots.restart", "accounts.list", "sessions.start", "usage.read"):
             self.assertNotIn(f'"{op}"', forward, op)
         probe = self.bridge.split("async def op_peers_probe(", 1)[1].split("\n    async def ", 1)[0]
         self.assertEqual(sorted(set(re.findall(r'call\("([a-z.]+)"', probe))), ["bots.list", "hello"])

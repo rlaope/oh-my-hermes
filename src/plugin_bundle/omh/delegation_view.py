@@ -389,8 +389,16 @@ def _category(node: Mapping[str, Any]) -> str:
 
 
 STATE_ORDER: Final = (
-    "running", "stuck", "failed", "dispatched", "parked", "waiting", "interrupted", "unknown", "done",
+    "running", "stuck", "failed", "dispatched", "parked", "due", "waiting", "interrupted", "unknown", "done",
 )
+
+
+def parked_word(node: Mapping[str, Any]) -> str:
+    """``due`` for a parked node past its wake time (`delegation_graph._parked_fields`), ``parked`` for one still
+    waiting, \"\" for any other node."""
+    if node.get("parked") is not True:
+        return ""
+    return "due" if node.get("parked_due") is True else "parked"
 
 
 def header_parts(graph: Mapping[str, Any], charset: Charset = UNICODE) -> tuple[str, str]:
@@ -404,8 +412,9 @@ def header_parts(graph: Mapping[str, Any], charset: Charset = UNICODE) -> tuple[
     sep = charset.separator
     counts: dict[str, int] = {}
     for node in lanes:
-        # A parked node is a waiting one (`delegation_graph._parked_fields`), counted apart as its layer counts it.
-        state = "parked" if node.get("parked") is True else _state(node)
+        # A parked node is a waiting one (`delegation_graph._parked_fields`), counted apart as its layer counts it:
+        # `due` once its wake time passed, so a wait that is over is not counted as one still going.
+        state = parked_word(node) or _state(node)
         counts[state] = counts.get(state, 0) + 1
     tally = [f"{counts[state]:,} {state}" for state in STATE_ORDER if counts.get(state)]
     hidden = graph.get("hidden_nodes")

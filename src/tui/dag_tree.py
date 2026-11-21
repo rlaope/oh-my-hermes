@@ -38,7 +38,10 @@ or reply line, or, with none, drops that name (`_second_row`). A parked
 node's one detail row is what its park recorded it waits on (`wait_text`:
 `waits on terminal(uv run …) 10m 06s · until 14:05 · <reason>`, the
 process's own running time when the handle is one), and none when it
-recorded nothing.
+recorded nothing. Past its `wake_at` the node is due (`_due`, the owner,
+2026-11-20: a node still spinning `until 16:30` hours later): its status
+reads `due` and its time since then, its detail row `due · waits for the
+parent · since 14:05`, and it no longer spins.
 
 Motion (the owner, 2026-11-04: the rows under a waiting run sat still for ten
 minutes). The spinner turns on a running or parked node's row; a waiting
@@ -253,6 +256,18 @@ def _parked(node: Mapping[str, Any] | None) -> bool:
     return node is not None and node.get("parked") is True
 
 
+def _due(node: Mapping[str, Any] | None) -> bool:
+    """Whether a parked node's wake time has passed: the graph said so (`parked_due`), or the wall clock the row is
+    drawn at (`_ticked`) is past its `wake_at` since that read. Its wait is over and it waits on the parent now, so
+    it neither spins nor counts on as a wait still going."""
+    return _parked(node) and (node or {}).get("parked_due") is True
+
+
+def _waiting_on_park(node: Mapping[str, Any] | None) -> bool:
+    """A parked node whose wait is still going (`_parked`, not `_due`)."""
+    return _parked(node) and not _due(node)
+
+
 def wait_text(node: Mapping[str, Any], processes: Mapping[str, tuple[str, float]], wall: float | None = None) -> str:
     """What a parked node waits on, from what its park recorded and nothing else: `waits on <handle>`, the handle
     named by its call and its running time (`terminal(uv run …) 10m 06s`) when it is a background process of the
@@ -264,6 +279,14 @@ def wait_text(node: Mapping[str, Any], processes: Mapping[str, tuple[str, float]
     wake_at = node.get("wake_at")
     reason = node.get("wait_reason")
     said = []
+    if _due(node):
+        # The wait it parked on is over by its own deadline: it is the parent's to pick up, not the handle's.
+        said.append("due · waits for the parent")
+        if isinstance(wake_at, int | float) and not isinstance(wake_at, bool) and wake_at > 0:
+            said.append(f"since {time.strftime('%H:%M', time.localtime(wake_at))}")
+        if isinstance(reason, str) and reason:
+            said.append(reason)
+        return FACT_SEPARATOR.join(said)
     if isinstance(handle, str) and handle:
         call, started = processes.get(handle, (handle, None))
         ran = f" {running_text(wall - started)}" if started is not None and wall is not None and wall >= started else ""
@@ -299,6 +322,10 @@ def _ticked(node: Mapping[str, Any], wall: float | None, received_at: float | No
     if wall is None:
         return node
     parked_at, elapsed = _number(node.get("parked_at")), _number(node.get("elapsed_seconds"))
+    wake_at = _number(node.get("wake_at"))
+    if _parked(node) and wake_at is not None and wall >= wake_at:
+        # Due, as of now or of the graph's read: its time is since it became due (`_parked_fields`).
+        return {**node, "parked_due": True, "status": "due", "elapsed_seconds": wall - wake_at}
     if _parked(node) and parked_at is not None and wall >= parked_at:
         return {**node, "elapsed_seconds": wall - parked_at}
     if node.get("state") in ("running", "stuck") and elapsed is not None and received_at and 0 < received_at <= wall:
@@ -310,7 +337,7 @@ def _clocked(item: _Item) -> bool:
     """Whether a node row's time counts on (`_ticked`)."""
     node = item.node or {}
     if _parked(node):
-        return _number(node.get("parked_at")) is not None
+        return _number(node.get("parked_at")) is not None or _number(node.get("wake_at")) is not None
     return item.state in ("running", "stuck") and _number(node.get("elapsed_seconds")) is not None
 
 
@@ -399,8 +426,8 @@ def _active(item: _Item) -> bool:
 
 
 def _spins(item: _Item) -> bool:
-    """Whether a node row shows the spinner: it runs, or it is parked on a wait that is still going."""
-    return item.node is not None and (item.state == "running" or _parked(item.node))
+    """Whether a node row shows the spinner: it runs, or it is parked on a wait that is still going (not `_due`)."""
+    return item.node is not None and (item.state == "running" or _waiting_on_park(item.node))
 
 
 def _labelled(layers: Sequence[_Item]) -> bool:
@@ -697,14 +724,15 @@ def _layer_row(item: _Item, expanded: bool, theme: Theme, hidden: int = 0, beat:
     rest. A shut layer whose nodes wait carries the waiting dots (`beat`), as their own rows would."""
     counts: dict[str, int] = {}
     for kid in item.kids:
-        word = "running" if kid.state in ("running", "stuck") else "parked" if _parked(kid.node) else kid.state
-        word = word if word in ("running", "parked", "failed", "done") else "waiting"
+        word = "running" if kid.state in ("running", "stuck") else "due" if _due(kid.node) else \
+            "parked" if _parked(kid.node) else kid.state
+        word = word if word in ("running", "parked", "due", "failed", "done") else "waiting"
         counts[word] = counts.get(word, 0) + 1
     noun = "agent" if item.key == OTHERS_KEY else "node"
     total = len(item.kids) + hidden
     shown = f"{len(item.kids):,} of {total:,}" if hidden else f"{total:,}"
     said = [f"{shown} {noun}{'' if total == 1 else 's'}"]
-    said += [f"{counts[word]:,} {word}" for word in ("running", "parked", "failed", "waiting", "done")
+    said += [f"{counts[word]:,} {word}" for word in ("running", "parked", "due", "failed", "waiting", "done")
              if counts.get(word)]
     if whole and expanded and not hidden and item.key != OTHERS_KEY:
         said = said[:1] if total > 1 else []

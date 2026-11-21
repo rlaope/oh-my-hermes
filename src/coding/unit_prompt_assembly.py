@@ -61,7 +61,9 @@ BLOCK_NAMES: Final[frozenset[str]] = frozenset({
     "unit.input_budget",
     "unit.criteria",
     "unit.commit_criterion",
+    "unit.review_focus",
     "unit.tool_batching",
+    "unit.shared_machine",
     "unit.review_role",
     "unit.calibration",
     "unit.domain_bundle",
@@ -147,11 +149,13 @@ def assemble_unit_prompt(
         raise ValueError(f"unknown unit prompt blocks: {', '.join(unknown)}")
     if binding is not None and "head.failure_kind" in omit:
         raise ValueError("a prompt with the sidecar contract must carry head.failure_kind")
-    blocks = [
-        *_shared_head_blocks(goal_text),
-        *_unit_blocks(unit, route, discovery),
-        *_tail_blocks(binding),
-    ]
+    blocks = _fit_review_focus([
+        block for block in (
+            *_shared_head_blocks(goal_text),
+            *_unit_blocks(unit, route, discovery),
+            *_tail_blocks(binding),
+        ) if block.base_name not in omit
+    ])
     if repair is not None:
         blocks.append(_append_block("append.repair", repair_brief_prompt(
             attempt=int(repair["attempt"]),
@@ -160,7 +164,46 @@ def assemble_unit_prompt(
         )))
     if parent_decision is not None:
         blocks.append(_append_block("append.parent_decision", parent_decision_prompt(parent_decision)))
+    # The focus fit above already measured the dispatch prompt without omitted blocks; omit still applies to the
+    # redispatch appends.
     return AssembledPrompt(tuple(block for block in blocks if block.base_name not in omit))
+
+
+REVIEW_FOCUS_LABEL: Final[str] = "Review focus (what the reviewer will check): "
+_ELLIPSIS: Final[str] = "\u2026"
+
+
+def _fit_review_focus(blocks: list[PromptBlock]) -> list[PromptBlock]:
+    """Keep the review focus from ever pushing the dispatch prompt over its ceiling.
+
+    The focus is advisory and the only unit field sized by the person after the
+    contract's own bounds, so it yields: when the prompt with it would exceed
+    `UNIT_PROMPT_MAX_BYTES`, the focus is cut at a character boundary to the bytes
+    left (ending in an ellipsis), or dropped when not even the label fits. A prompt
+    already over the ceiling without a focus is left exactly as it would be
+    without one; the focus never makes the dispatch prompt larger than
+    max(ceiling, size without it). Redispatch appends have their own ceiling and
+    are not counted here.
+    """
+    index = next((i for i, block in enumerate(blocks) if block.base_name == "unit.review_focus"), None)
+    if index is None:
+        return blocks
+    whole = len("\n".join(block.text for block in blocks).encode("utf-8"))
+    if whole <= _protocol.UNIT_PROMPT_MAX_BYTES:
+        return blocks
+    rest = blocks[:index] + blocks[index + 1:]
+    without = len("\n".join(block.text for block in rest).encode("utf-8"))
+    # The block costs its text plus the one newline that joins it to its neighbour.
+    room = _protocol.UNIT_PROMPT_MAX_BYTES - without - 1 - len(REVIEW_FOCUS_LABEL.encode("utf-8"))
+    focus = blocks[index].text[len(REVIEW_FOCUS_LABEL):]
+    budget = room - len(_ELLIPSIS.encode("utf-8"))
+    if budget <= 0:
+        return rest
+    cut = focus.encode("utf-8")[:budget].decode("utf-8", errors="ignore").rstrip()
+    if not cut:
+        return rest
+    return [*blocks[:index], PromptBlock("unit.review_focus", "unit", REVIEW_FOCUS_LABEL + cut + _ELLIPSIS),
+            *blocks[index + 1:]]
 
 
 def recorded_model_route(unit: Mapping[str, Any]) -> Mapping[str, Any] | None:
@@ -242,10 +285,11 @@ def _unit_blocks(
 
 
 def _protocol_blocks(unit: Mapping[str, Any], route: Mapping[str, Any] | None) -> list[PromptBlock]:
-    """Criteria, tool batching, role protocol, calibration, and domain bundle.
+    """Criteria, review focus, tool batching, shared-machine etiquette, role protocol, calibration, and domain bundle.
 
-    `TOOL_BATCHING_PROTOCOL` is unit-invariant but rides here because the
-    frozen head cannot afford it (see the note at that constant).
+    `TOOL_BATCHING_PROTOCOL` and `SHARED_MACHINE_PROTOCOL` are unit-invariant
+    but ride here because the frozen head cannot afford them (see the note at
+    `TOOL_BATCHING_PROTOCOL`).
     """
     criteria = list(_protocol.completion_criteria_for_unit(unit))
     numbered = [f"{index}. {criterion}" for index, criterion in enumerate(criteria, start=1)]
@@ -255,11 +299,17 @@ def _protocol_blocks(unit: Mapping[str, Any], route: Mapping[str, Any] | None) -
     blocks = [PromptBlock("unit.criteria", "unit", "\n".join(["Done means, and only means:", *numbered]))]
     if commit is not None:
         blocks.append(PromptBlock("unit.commit_criterion", "unit", commit))
+    # A declared review focus says what the reviewer will check; an absent one
+    # adds no block, so the prompt stays byte-identical to one without it.
+    review_focus = str(unit.get("review_focus", "") or "")
+    if review_focus:
+        blocks.append(PromptBlock("unit.review_focus", "unit", REVIEW_FOCUS_LABEL + review_focus))
     recorded = recorded_model_route(unit)
     # Contract units carry the declared role inside the recorded route, not as
     # a top-level key; accept both so pre-contract unit dicts behave the same.
     role = str(unit.get("role", "") or "") or (str(recorded.get("role", "") or "") if recorded else "")
     blocks.append(PromptBlock("unit.tool_batching", "unit", _protocol.TOOL_BATCHING_PROTOCOL))
+    blocks.append(PromptBlock("unit.shared_machine", "unit", _protocol.SHARED_MACHINE_PROTOCOL))
     if role == "review":
         blocks.append(PromptBlock("unit.review_role", "unit", _protocol.REVIEW_ROLE_PROTOCOL))
     calibration = _protocol.calibration_entry_for_route(route)

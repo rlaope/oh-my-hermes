@@ -49,10 +49,14 @@ colors:
   completion_menu_current_bg: "#14444F"
   selection_bg: "#155E6B"
   voice_status_bg: "#0A2229"
-  syntax_string: "#00CED1"
-  syntax_number: "#E4FAFF"
-  syntax_keyword: "#7FDBFF"
-  syntax_comment: "#3E7C8A"
+  # Code colours (owner, 2026-11-21): one hue per kind of token, so a keyword,
+  # a string, a number and a comment read apart at a glance in fenced code and
+  # in edit diffs, where the old turquoise shades blurred into each other. The
+  # comment grey stays at 4.5:1 on the diff bands below as well as the terminal.
+  syntax_string: "#C3E88D"
+  syntax_number: "#F78C6C"
+  syntax_keyword: "#FF7AB6"
+  syntax_comment: "#94A3B0"
   # Diff line underlays. The engine defaults are light pastels tuned for
   # light terminals; on this dark identity palette they render as harsh
   # full-brightness bands behind the text (owner report, 2026-08-18). These

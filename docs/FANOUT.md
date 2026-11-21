@@ -235,6 +235,20 @@ Rules, all applied at freeze time:
   the prepared ceiling on what one unit may read; it is not evidence that the
   unit read the range, stayed within the budget, or covered it.
 
+Any unit may also declare an optional `review_focus`: one string, at most 150
+UTF-8 bytes after whitespace collapse (one sentence; about 50 Hangul
+characters). It never pushes the unit prompt over its 8,000-byte ceiling:
+when the whole focus would, it is cut at a character boundary to the bytes
+left and ends in an ellipsis, or dropped when not even its label fits, and a
+prompt already over the ceiling without it is sent exactly as it would be
+without it. It says what the reviewer will check in
+the unit's result. The executor prompt states it right after the numbered
+criteria as `Review focus (what the reviewer will check): <text>`. A unit
+that declares none (or an empty string) carries no key: its contract is
+byte-identical and its prompt gains no focus block (every unit prompt does
+carry the shared-machine line, which is separate). A review focus is prepared guidance, not evidence
+of review.
+
 ## Dispatch bridge semantics
 
 - **Concurrency is fixed by default and adaptive only when requested.** The

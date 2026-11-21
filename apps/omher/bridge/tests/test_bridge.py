@@ -192,7 +192,9 @@ class Env:
         self.client_kw = client_kw
         self.clients: dict[str, FakeClient] = {}
         self.connects: list[str] = []
-        self.bridge = ob.Bridge(token=TOKEN, hermes_home=self.home, gateway_factory=self.factory, poll_s=3600)
+        # omher's own folder inside the temp home: folder.open records its chats there, never in the real ~/.omher
+        self.bridge = ob.Bridge(token=TOKEN, hermes_home=self.home, gateway_factory=self.factory, poll_s=3600,
+                                omher_home=self.home / ".omher")
 
     async def factory(self, stack, path: Path):
         name = "default" if path == self.home else path.name

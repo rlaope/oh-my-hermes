@@ -1179,9 +1179,23 @@ const OPS = {
     const cwd = needStr(p, "cwd");
     if (!cwd.startsWith("/") && !/^[A-Za-z]:\\/.test(cwd)) throw new OpError("bad_request", "cwd must be an existing folder");
     const session = nextId("f");
-    folders.set(session, { bot: b.name, cwd, open: true });
+    const stored = nextId("stored-f");
+    folders.set(session, { bot: b.name, cwd, open: true, stored });
     const m = models[b.name];
-    return { session, cwd, model: m.model, provider: m.provider, reasoning: m.reasoning };
+    return { session, stored, cwd, model: m.model, provider: m.provider, reasoning: m.reasoning };
+  },
+  // a folder chat made before a restart, by the stored id folder.open returned (the real bridge also checks its saved
+  // title is `omher · <folder name>`); any other id is not_found
+  "folder.resume": (p) => {
+    const b = needBot(p);
+    if (b.host) throw remoteRefusal(b, "folder.resume");
+    const cwd = needStr(p, "cwd");
+    const stored = needStr(p, "stored");
+    const was = [...folders.entries()].find(([, f]) => !f.thread && f.stored === stored && f.bot === b.name && f.cwd === cwd);
+    if (!was) throw new OpError("not_found", "no such folder chat");
+    was[1].open = true;
+    const m = models[b.name];
+    return { session: was[0], stored, cwd, model: m.model, provider: m.provider, reasoning: m.reasoning, messages: [], running: false };
   },
   "thread.create": (p) => {
     const b = needBot(p);

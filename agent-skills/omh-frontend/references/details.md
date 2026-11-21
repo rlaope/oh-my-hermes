@@ -12,6 +12,16 @@ Bad example:
 - Expected behavior: Mark browser, performance, accessibility, and visual QA as not_observed and request the smallest observed evidence path.
 - Why: A frontend brief is not implementation, browser, performance, or visual QA evidence.
 
+## Completion Checklist
+
+- The target page/component, audience, primary task, references, and quality bar are named.
+- Greenfield work includes frontend_initial_generation_contract/v1 before implementation handoff.
+- The design_system_contract/v1 covers typography, spacing, palette, components, layout, motion, and responsive rules.
+- The frontend_route_state_matrix/v1 covers pages, 375/768/1280-style breakpoints, empty/loading/error, interaction, and CJK/locale risks, plus submitting, submit-failed, optimistic-pending, stale/refetching, and conflict rows for remote writes.
+- The frontend_component_state_inventory/v1 covers reusable primitives and their default/hover/focus/active/disabled/loading/empty/error states.
+- The handoff names the executor/runtime owner and keeps code, browser, Lighthouse, accessibility, deployment, and visual QA evidence observed-only.
+- The next action is prepare_frontend_handoff, route to `omh-visual-qa`, or report the missing evidence blocker.
+
 ## When to Use
 
 Use when Hermes should shape or improve a web/frontend or terminal (TUI) surface before implementation: layout, design system, responsive states, accessibility, performance, motion, and anti-generic visual quality.

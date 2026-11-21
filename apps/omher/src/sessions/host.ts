@@ -66,7 +66,8 @@ export interface SessionHost extends HistoryHost {
    *  `resume` is a Claude Code or Codex conversation id to continue (`--resume <id>`, `codex resume <id>`);
    *  `sessionId` the id omher made for a new Claude Code conversation (`--session-id <id>`); the shell checks each is
    *  a UUID. `account` names the Settings › Accounts login it runs as (the one it ran with, after a restart); none =
-   *  the one picked for new sessions. */
+   *  the one picked for new sessions. `link` (oh-my-hermes only) is the row's link id, which the terminal gets as
+   *  `OMHER_TERMINAL_LINK` so `omh` reopens the session it dropped there; the shell refuses it for any other agent. */
   start(
     agent: AgentId,
     cwd: string,
@@ -77,6 +78,7 @@ export interface SessionHost extends HistoryHost {
     resume?: string,
     account?: string,
     sessionId?: string,
+    link?: string,
   ): Promise<number>;
   write(id: number, data: string): Promise<void>;
   /** The terminal has drawn `bytes` more of session `id`'s output. The shell stops reading the program while the
@@ -168,13 +170,13 @@ export class TauriHost implements SessionHost {
     const r = await open({ directory: true, multiple: false, defaultPath, title: t("ss.pickFolder") });
     return typeof r === "string" ? r : null;
   }
-  async start(agent: AgentId, cwd: string, cols: number, rows: number, onData: (d: Uint8Array) => void, onExit: (c: number | null) => void, resume?: string, account?: string, sessionId?: string) {
+  async start(agent: AgentId, cwd: string, cols: number, rows: number, onData: (d: Uint8Array) => void, onExit: (c: number | null) => void, resume?: string, account?: string, sessionId?: string, link?: string) {
     const { invoke, Channel } = await this.core();
     const data = new Channel<ArrayBuffer>();
     data.onmessage = (b) => onData(new Uint8Array(b));
     const exit = new Channel<number | null>();
     exit.onmessage = (c) => onExit(c);
-    return invoke<number>("session_start", { agent, cwd, sessionId: sessionId ?? null, resume: resume ?? null, account: account ?? null, cols, rows, onData: data, onExit: exit });
+    return invoke<number>("session_start", { agent, cwd, sessionId: sessionId ?? null, resume: resume ?? null, link: link ?? null, account: account ?? null, cols, rows, onData: data, onExit: exit });
   }
   async chatStart(agent: AgentId, cwd: string, onEvent: (ev: ChatEvent) => void, resume?: string, account?: string, session?: string) {
     const { invoke, Channel } = await this.core();
@@ -612,9 +614,11 @@ export class MockHost implements SessionHost {
     const v = this.g.__omherPickFolder;
     return v === undefined ? defaultPath : v;
   }
-  async start(agent: AgentId, cwd: string, cols: number, rows: number, onData: (d: string) => void, onExit: (c: number | null) => void, resume?: string, account?: string, sessionId?: string) {
+  async start(agent: AgentId, cwd: string, cols: number, rows: number, onData: (d: string) => void, onExit: (c: number | null) => void, resume?: string, account?: string, sessionId?: string, link?: string) {
+    // the shell's own refusal (sessions::terminal_env): only an oh-my-hermes terminal is told its link
+    if (link !== undefined && agent !== "omh") throw new Error(`${agent} sessions are not given a terminal link`);
     const id = nextMockPty();
-    this.log({ op: "start", id, agent, cwd, cols, rows, ...(resume ? { resume } : {}), ...(sessionId ? { sessionId } : {}), ...(account ? { account } : {}) });
+    this.log({ op: "start", id, agent, cwd, cols, rows, ...(resume ? { resume } : {}), ...(sessionId ? { sessionId } : {}), ...(link ? { link } : {}), ...(account ? { account } : {}) });
     // a resumed Codex holds its own conversation's rollout open again
     if (agent === "codex" && resume) (this.g.__omherMockCodexOwn ??= {})[id] = resume;
     const out = (d: string) => {

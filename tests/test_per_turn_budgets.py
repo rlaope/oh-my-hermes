@@ -716,6 +716,18 @@ class PluginToolSchemaProducerTests(unittest.TestCase):
         # The node `role` field (+85, its own PLUGIN_TOOL_SCHEMA_CHAR_LIMIT entry) is stripped the same way, from
         # this and from the live schema below, so it can spend neither the approved schema nor the parked cap.
 
+        # The node `review_focus` field (+130, its own PLUGIN_TOOL_SCHEMA_CHAR_LIMIT entry) is stripped before
+        # `identity`: its property and its name in the description's field list.
+        def without_review_focus(target: dict) -> int:
+            before = len(json.dumps(target, sort_keys=True, ensure_ascii=False))
+            focus = target["parameters"]["properties"]["nodes"]["items"]["properties"].pop("review_focus")
+            self.assertEqual(focus, {"type": "string",
+                                     "description": "What the parent will look for when it reads this node's work."})
+            self.assertEqual(target["description"].count("read_only, identity, review_focus)"), 1)
+            target["description"] = target["description"].replace(
+                "read_only, identity, review_focus)", "read_only, identity)", 1)
+            return before - len(json.dumps(target, sort_keys=True, ensure_ascii=False))
+
         # The node `identity` field (+122, its own PLUGIN_TOOL_SCHEMA_CHAR_LIMIT entry; #2939) is stripped first,
         # from this and from the live schema below, so it can spend neither the approved schema nor the parked cap.
         def without_identity(target: dict) -> int:
@@ -805,6 +817,7 @@ class PluginToolSchemaProducerTests(unittest.TestCase):
             return before - len(json.dumps(target, sort_keys=True, ensure_ascii=False))
 
         self.assertEqual(without_carry_forward(legacy), 188)
+        self.assertEqual(without_review_focus(legacy), 130)
         self.assertEqual(without_escalation(legacy), 224)
         self.assertEqual(without_criteria(legacy), 226 + 95 + 8)
         self.assertEqual(without_identity(legacy), 122)
@@ -826,6 +839,7 @@ class PluginToolSchemaProducerTests(unittest.TestCase):
         live = copy.deepcopy(schema)
         del live["parameters"]["properties"]["nodes"]["items"]["properties"]["category"]["enum"][-len(recipe):]
         self.assertEqual(without_carry_forward(live), 188)
+        self.assertEqual(without_review_focus(live), 130)
         self.assertEqual(without_escalation(live), 224)
         self.assertEqual(without_criteria(live), 226 + 95 + 8)
         self.assertEqual(without_identity(live), 122)
@@ -836,7 +850,7 @@ class PluginToolSchemaProducerTests(unittest.TestCase):
         delta = len(json.dumps(live, sort_keys=True, ensure_ascii=False)) - len(encoded)
         self.assertEqual(
             per_turn_context.plugin_tool_schema_chars_by_tool()["omh_dag"] - len(encoded) - delta,
-            75 + 85 + 70 + 37 + 226 + 95 + 8 + 45 + 122 + 224 + 188,
+            75 + 85 + 70 + 37 + 226 + 95 + 8 + 45 + 122 + 224 + 188 + 130,
         )
         self.assertGreater(delta, 0)
         self.assertLessEqual(delta, 429)  # Measured feature cap, not general headroom.

@@ -608,6 +608,7 @@ _DEFINITIONS = [
             "Keep the practical small-loop recipe visible: test as stop signal, plan -> execute -> verify, one task at a time.",
             "Surface verification_gap, comprehension_debt, and cognitive_surrender as warnings before a loop starts looking self-steering.",
             "Before a loop launches, or when asked whether one will hold, load `references/loop-design-review.md`: a finish line written beside the fence of files the loop may not edit, a judge other than the builder, and the pre-launch failure check.",
+            "When a measured loop compares variants of code or config on branches (training runs, evals, sweeps), load `references/experiment-tree.md`: one fixed run command for every node, results freeze a node, a small fan of siblings per decision, then descend onto the winner.",
             "Session-bound host_observed resumable_goal plus explicit coding ownership prepares one executor goal. Otherwise use native `/goal` and `/goal gate add`. Never prepare two controllers.",
             "Ingest bounded snapshots via `omh loop goal-driver-observe`. External state guides recovery, not checkpoint decisions; native turns still require activation and contiguous same-session evidence.",
             "Treat ticks as preparation only. Advance one legal role phase through loop_phase_transition/v1 only after its named gate has observed evidence.",
@@ -692,6 +693,7 @@ _DEFINITIONS = [
                 "Keep the practical small-loop recipe visible: test as stop signal, plan -> execute -> verify, one task at a time.",
                 "Surface verification_gap, comprehension_debt, and cognitive_surrender as warnings before a loop starts looking self-steering.",
                 "Before a loop launches, or when asked whether one will hold, load `references/loop-design-review.md`: a finish line written beside the fence of files the loop may not edit, a judge other than the builder, and the pre-launch failure check.",
+                "When a measured loop compares variants of code or config on branches (training runs, evals, sweeps), load `references/experiment-tree.md`: one fixed run command for every node, results freeze a node, a small fan of siblings per decision, then descend onto the winner.",
                 "Use `omh loop assess`, `start`, `status`, `tick`, and `feedback` as local metadata control-plane commands. Execute authorized work through the current host. The default hermes_goal driver label is prepared metadata, not an available host goal controller. Do not invoke native /goal controls on another host.",
                 "Only an explicitly selected coding owner with a session-bound host_observed resumable_goal capability may use the external goal-driver CLI path. Otherwise keep a host-owned evidence ledger; report unavailable native goal activation rather than fabricating it.",
                 "Treat ticks as preparation only. Record host phase results separately; never manufacture native phase-transition evidence from a host task declaration.",
@@ -772,7 +774,8 @@ _DEFINITIONS = [
         portable_override_shadows={
             "do_not_use_when": "2ba0707196aad88775b85e179de7daf89d7d869c7ec67550ce4c233d88837318",
             # Re-plan rule added to both copies; shadow was 90edd0de before it.
-            "quality_bar": "05c421837f219879c36ad4d801b4fb0ff007c8530f9e17728498b732a4787658",
+            # experiment-tree pointer added to both copies; shadow was 05c42183 before it.
+            "quality_bar": "b6bbf8288a78912a146c53f02644e465b83b7d59e6db22b5b99a61c48d41084a",
             "expected_outputs": "780eec788fe069700b05a39880a50a3813715f50fcd6401cb6fe486f1750616d",
             "artifact_expectations": "a0b60b9744a8ba2ea968e39cb84e90f2bc7125aaa4f40cee0996c658eeddc7ff",
             "final_checklist": "0e74ac3a35cd511b7db3310dc8040cfd5340bef69e367ee912228348616aa2c4",
@@ -2236,6 +2239,7 @@ _DEFINITIONS = [
             "Separate candidate preparation, observed link, observed download, file hash, text extraction, license check, verification, and downstream selection.",
             "Attach observation provenance before treating any acquisition state as evidence.",
             "For `paper` candidates, when Hermes' bundled `arxiv` skill is available, search through it - by topic, author, category, or paper id - and record each entry it returns as `link_observed` with `hermes_tool` provenance. A search result is an observed link and nothing more: download, text extraction, and verification stay unclaimed until their own run is observed. Without the skill, a paper candidate stays `candidate_prepared` until a link is observed another way.",
+            "When the candidates are scholarly papers, load `references/literature-retrieval.md`: pick arXiv, OpenAlex, bioRxiv or PubMed by topic, scale follow-up rounds to a stated difficulty within the plan's cap, dedupe by id, DOI, then title, and keep only papers a host result returned.",
             "Vary search angles across official docs, academic work, implementations, datasets, and criticism within the plan's budget (3 queries, 10 external attempts and one follow-up for an explore search), and name the source kinds still without candidates when the budget ends.",
             "Recommend the next downstream workflow without pretending that downstream work already ran.",
         ),
@@ -4867,6 +4871,8 @@ _DEFINITIONS = [
             "Keep field and lab apart: a p75 claim needs field data, a lab audit is a diagnostic sample on one device profile, and a lab pass is never a statement about real users.",
             "While building, look at each change that affects what renders: after it, capture the affected surface and read the capture before the next change, for a 3D or canvas scene the default camera and each declared preset; a change not looked at is not done (`references/screenshot-loop.md`, section `During implementation`).",
             "After implementation lands on a web surface, load `references/screenshot-loop.md` and require the screenshot iteration loop live-environment-first: capture the running UI at 1440/768/375px, compare against the supplied target or DESIGN.md, list every difference triaged Blocker/High/Medium/Nit with its capture attached, fix, and recapture until the difference list is empty.",
+            # OpenAI "Prompting GPT-6.2 in Codex" (read 2026-11-20): review at the size people will see it.
+            "Judge each capture against the reference at the size and density people will see it (the real viewport, the real icon size such as a 24 px toolbar slot), not only a large render; exercise an interactive result with the actions it supports before calling it done.",
             "Prefer native UI controls, stable dimensions, and realistic content over decorative cards, blobs, and placeholder-heavy screens.",
             shared_test_authoring_line(
                 "When the handoff asks for component or interaction tests, ",
@@ -5658,6 +5664,8 @@ _DEFINITIONS = [
             "When a product surface is composed into a larger frame (promo, poster, slide, end card), measure it against the frame: a look-alike of a UI that exists, in place of its real renderer's output, is BLOCK, while an unbuilt UI labeled concept or a brief-requested stylised treatment labeled as such is not; with no subtitles a product-led shot is full-bleed, the full frame minus a 46 px edge inset (at least about 988 px tall at 1080p) with platform-UI zones still clear, and with subtitles it fills at least 90% of the width and height of the body safe area with the subtitle band clear; text rows are at least 2% of the frame's shorter side; a logo or identity mark keeps at least one of its own text rows from the frame and window edges, intentional crops excepted; meta text the product does not render (window title, dimension label, invented path) is removed; every count agrees with its noun in each plural category of the content locale. Each miss is one `differences` entry.",
             "Combine objective capture/diff evidence, hotspot review, alpha/transparent-background checks, and human-readable visual findings.",
             "Capture interaction, click-path, and motion states when the UI has transitions or controls that change state.",
+            # OpenAI "Prompting GPT-6.2 in Codex" (read 2026-11-20): review at the size people will see it.
+            "Compare against the reference at the size and density people will see it: the real viewport, the real icon or toolbar size (a 24 px toolbar slot), the real slide or card dimensions, not only an enlarged render, where detail that reads at large size can vanish. An interactive result is exercised with the actions it supports (click, type, scroll, key) before any verdict.",
             "For a 3D or canvas scene, capture the first frame exactly as booted, each camera preset, and every time of day the scene advertises; a claim in its own title or HUD that its first frame does not show, a small animated object that does not read as what it is, and flat light are each one `differences` entry (`omh-frontend/references/rendered-scene-craft.md`).",
             "A game or interactive scene passes only when captures show it boots (first frame neither blank nor one flat colour), answers its declared input (the frame after a key, click or touch differs from the frame before it where the input should move something), keeps running (frames seconds apart differ while idle, background-only animation not counting) and logs zero console errors across boot and input; a missing capture is BLOCK, reading code never passes it, and a run without a WebGL context is recorded as `environment: no_webgl`, not judged blank (`references/playable-check.md`).",
             "Separate design-system consistency, functional integrity, visual fidelity, responsive behavior, accessibility visibility, and CJK/text precision.",
@@ -5724,6 +5732,8 @@ _DEFINITIONS = [
                 "When a product surface is composed into a larger frame (promo, poster, slide, end card), measure it against the frame: a look-alike of a UI that exists, in place of its real renderer's output, is BLOCK, while an unbuilt UI labeled concept or a brief-requested stylised treatment labeled as such is not; with no subtitles a product-led shot is full-bleed, the full frame minus a 46 px edge inset (at least about 988 px tall at 1080p) with platform-UI zones still clear, and with subtitles it fills at least 90% of the width and height of the body safe area with the subtitle band clear; text rows are at least 2% of the frame's shorter side; a logo or identity mark keeps at least one of its own text rows from the frame and window edges, intentional crops excepted; meta text the product does not render (window title, dimension label, invented path) is removed; every count agrees with its noun in each plural category of the content locale. Each miss is one `differences` entry.",
                 "Combine objective capture/diff evidence, hotspot review, alpha/transparent-background checks, and human-readable visual findings.",
                 "Capture interaction, click-path, and motion states when the UI has transitions or controls that change state.",
+                # OpenAI "Prompting GPT-6.2 in Codex" (read 2026-11-20): review at the size people will see it.
+                "Compare against the reference at the size and density people will see it: the real viewport, the real icon or toolbar size (a 24 px toolbar slot), the real slide or card dimensions, not only an enlarged render, where detail that reads at large size can vanish. An interactive result is exercised with the actions it supports (click, type, scroll, key) before any verdict.",
                 "For a 3D or canvas scene, capture the first frame exactly as booted, each camera preset, and every time of day the scene advertises; a claim in its own title or HUD that its first frame does not show, a small animated object that does not read as what it is, and flat light are each one `differences` entry (`omh-frontend/references/rendered-scene-craft.md`).",
                 "A game or interactive scene passes only when captures show it boots (first frame neither blank nor one flat colour), answers its declared input (the frame after a key, click or touch differs from the frame before it where the input should move something), keeps running (frames seconds apart differ while idle, background-only animation not counting) and logs zero console errors across boot and input; a missing capture is BLOCK, reading code never passes it, and a run without a WebGL context is recorded as `environment: no_webgl`, not judged blank (`references/playable-check.md`).",
                 "Separate design-system consistency, functional integrity, visual fidelity, responsive behavior, accessibility visibility, and CJK/text precision.",
@@ -5739,7 +5749,7 @@ _DEFINITIONS = [
             ),
         },
         portable_override_shadows={
-            "quality_bar": "e0d897cd189f1b6915deb7aa67ee170e4e0f39e7858c2c6419a565e28aa75938",
+            "quality_bar": "4ad687fcb0a398946a0971b11a6ed189659de1b0b8bebcca08f7b3be5667f135",
         },
     ),
     SkillDefinition(
@@ -10635,6 +10645,8 @@ _DEFINITIONS.append(
             "Load `references/hypothesis-and-race-method.md` for the hypothesis table, flaky-test tactics, and race patterns instead of improvising them.",
             "Pick the next observation by cost and by how many hypotheses its result eliminates, and record the eliminations.",
             "Keep reproduction, root cause, fix, and verification as separate observed states.",
+            # OpenAI "Prompting GPT-6.2 in Codex" (read 2026-11-20): effort follows investigation depth.
+            "Size the effort to the depth and name it: a quick survey of one area runs at medium; tracing one suspected cause across several systems runs at high (category `deep`); several causes that may interact run at xhigh (category `forensics`). Finished means the reported symptom's root cause is shown by an observation and the fix passes the same reproduction; be exhaustive in the hypothesis table and its eliminations, not in reading code no hypothesis touches.",
             "Count a fix as failed when an executed run of the same reproduction command still shows the original symptom or shows a new symptom the fix caused rather than unmasked; planned runs and other commands do not count. After the third failed fix, prepare no fourth; re-examine the architecture assumptions every fix shared, per the method reference, and offer the user the next step as a question.",
             shared_test_authoring_line(
                 "Before the fix handoff names a regression test, ",
@@ -11314,6 +11326,8 @@ _DEFINITIONS.append(
         quality_bar=(
             "Inventory every instruction file first and respect closest-file-wins nesting.",
             "Load `references/instruction-file-method.md` for the section order, the marker convention, the verified and unverified command form, and the drift rules instead of recalling them.",
+            # OpenAI "Prompting GPT-6.2 in Codex" (read 2026-11-20): what belongs in AGENTS.md.
+            "Keep a line only if an agent cannot infer it from the code, tests or docs; keep the workflows the project depends on, and leave routine how-to decisions out.",
             "Record each pitfall with what it cost, so a reader can tell a scar from a preference.",
             "Pair every generated file with its source, its regenerate command, and the gate that checks it.",
             "Keep prepared, verified, and written as separate states for every command and section.",
