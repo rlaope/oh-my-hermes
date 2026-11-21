@@ -18,9 +18,19 @@ describe("quoteFor: what a bot answer replies to", () => {
     expect(quoteFor(items, 4)).toEqual({ lines: [{ id: "u1", text: "fix the tile" }, { id: "u2", text: "and the spinner with seconds" }], more: 0 });
   });
 
-  it("quotes when something else sits between the message and its answer", () => {
+  it("says nothing for one message even with a card or notice between it and its answer", () => {
     const card: TimelineItem = { kind: "system", id: "s1", ts: 0, text: "Switched model" };
-    expect(quoteFor([u("u1", "why 502?"), card, a("a1")], 2)).toEqual({ lines: [{ id: "u1", text: "why 502?" }], more: 0 });
+    expect(quoteFor([u("u1", "why 502?"), card, a("a1")], 2)).toBeNull();
+    expect(quoteFor([u("u1", "di"), card, act("t1"), a("a1")], 3)).toBeNull();
+  });
+
+  it("quotes two messages even when only activity sits between them and the answer", () => {
+    expect(quoteFor([u("u1", "one"), u("u2", "two"), act("t1"), a("a1")], 3)).toEqual({ lines: [{ id: "u1", text: "one" }, { id: "u2", text: "two" }], more: 0 });
+  });
+
+  it("a failed or held send does not make a second message", () => {
+    expect(quoteFor([u("u1", "one"), u("u2", "two", { error: "offline" }), a("a1")], 2)).toBeNull();
+    expect(quoteFor([u("u1", "one"), { ...u("u2", "two"), held: true } as TimelineItem, a("a1")], 2)).toBeNull();
   });
 
   it("the answer being written (at the end) quotes the same way; a failed or dropped send is not answered", () => {

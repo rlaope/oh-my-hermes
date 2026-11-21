@@ -27,15 +27,12 @@ export interface Quote {
 const QUOTE_CHARS = 140;
 const QUOTE_LINES = 3;
 
-/** The quote an answer carries, or null when it is plain which message it answers: exactly one message of the
- *  person's, right above the answer with only activity lines between. Several messages sent before one answer, or
- *  anything else in between (a card, a notice), and the answer says what it replies to: each message's first line. */
+/** The quote an answer carries, or null unless it covers two or more of the person's messages. One message is
+ *  plain enough, whatever sits between it and the answer (activity, a card, a notice). Several messages sent
+ *  before one answer, and the answer says what it replies to: each message's first line. */
 export function quoteFor(items: TimelineItem[], at: number): Quote | null {
   const asks = answered(items, at);
-  if (asks.length === 0) return null;
-  const from = items.indexOf(asks[0]);
-  const plain = asks.length === 1 && items.slice(from + 1, at).every((i) => i.kind === "activity");
-  if (plain) return null;
+  if (asks.length < 2) return null;
   const shown = asks.slice(-QUOTE_LINES);
   return { lines: shown.map((m) => ({ id: m.id, text: firstLine(m.text || m.files?.[0]?.name || "") })), more: asks.length - shown.length };
 }
