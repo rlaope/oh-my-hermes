@@ -4,6 +4,14 @@ All notable changes will be documented here.
 
 ## Unreleased
 
+- **A mise-managed `codex` or `python3` runs again in `omh coding run`.** mise links every tool it manages to one
+  `mise` binary and picks the tool from the name it was started by. The fanout fence, the dispatcher's own checks and
+  the Codex/Claude session probe resolved each command to its real file and ran that, so argv[0] was `mise`, mise ran
+  as itself, and the unit or check exited 2 (the session probe read mise's version). The real file is still what gets
+  hashed and fenced; it is now started under the command's own name (`exec -a`, through a `/bin/bash` that reads no
+  rc and no `$BASH_ENV`), and the session lane runs the PATH link while it still points at the observed file. The fix
+  for #1822 had been reverted with #1826. Reported by #3014.
+
 - **omher 1.1.1.** Terminal keys, menu and splits as in Orca and iTerm2, and copy and paste that work in Claude Code.
   - **Paste and copy:** ⌘V and ⌘C work again in a Claude Code or Codex terminal. These programs turn on the Kitty
     keyboard protocol, which sent ⌘V to them as a key code instead of pasting. On macOS every ⌘ key now stays the

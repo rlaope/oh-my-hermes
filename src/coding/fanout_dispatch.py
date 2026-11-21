@@ -38,7 +38,7 @@ from ..system.security_posture import resolve_security_posture
 from ..system.metadata_safety import redact_metadata_text
 from .fanout_output import FanoutOutput
 from .fanout_executor_sessions import SessionBinding, SessionDecoder, bound_session_fields, observe_session_workspace, read_session_receipt
-from .executor_readiness import negotiate_session_capability, observe_session_binary
+from .executor_readiness import negotiate_session_capability, observe_session_binary, session_launch_path
 from .executors import canonical_executor_profile
 from .fanout_capacity import (
     AdmissionBinding, CapacityBlocked, CapacityTrip, CodexAdmissionObserver, CodexAdmissionSource, LaunchCallable,
@@ -5102,7 +5102,9 @@ def _dispatch_unit(
             flags = ['--json'] if owner == 'codex' else ['--output-format', 'stream-json', '--verbose']
             # Keep the Codex positional prompt last and all original model/permission options.
             index = 2 if owner == 'codex' else 1
-            return [session_capability.binary_identity.resolved_path, *command[1:index], *flags, *command[index:]]
+            # The owner's own name, so a multi-call shim still picks its tool (#3014).
+            launch = session_launch_path(command[0], session_capability.binary_identity, env=child_env)
+            return [launch, *command[1:index], *flags, *command[index:]]
         if argv is not None:
             argv = session_argv(argv)
         verification_argv: list[list[str]] = []
