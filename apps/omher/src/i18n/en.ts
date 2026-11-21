@@ -884,7 +884,6 @@ export const en = {
   "bub.notSent": "Not sent · {error}",
   "bub.quoteTip": "Show the message this answers",
   "bub.quoteMore": "+{n} earlier",
-  "bub.repliedTo1": "Replied to you",
   "bub.repliedTo": "Replied to {n} of your messages",
   "lk.links": "Links",
   "lk.showAll": "Show all {n}",

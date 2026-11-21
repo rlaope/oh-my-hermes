@@ -4,6 +4,11 @@ All notable changes will be documented here.
 
 ## Unreleased
 
+- **omher shows "replied to you" only when an answer covers two or more of your messages.** A one-word message followed
+  by a clarify card used to get a "Replying to you / di" header above the answer, which was noise. With exactly one
+  message the header is now never shown, whatever sits between it and the answer; failed, dropped and held sends still
+  do not count. (apps/omher `chat/parts/answers.ts`)
+
 ## 5.0.0 - 2026-11-21
 
 - **A mise-managed `codex` or `python3` runs again in `omh coding run`.** mise links every tool it manages to one

@@ -882,7 +882,6 @@ export const ko: Record<Key, string> = {
   "bub.notSent": "보내지 못함 · {error}",
   "bub.quoteTip": "이 답장이 가리키는 메시지 보기",
   "bub.quoteMore": "이전 {n}개 더",
-  "bub.repliedTo1": "회원님에게 답장",
   "bub.repliedTo": "회원님의 메시지 {n}개에 답장",
   "lk.links": "링크",
   "lk.showAll": "전체 {n}개 보기",
