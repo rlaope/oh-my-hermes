@@ -177,8 +177,13 @@ class CanonicalRequestsAskWithTheRightSkillFirstTests(unittest.TestCase):
         ("deploy the app to production", "deploy-and-monitor"),
         ("file this bug on GitHub for the team", "github-issue-intake"),
         ("change the login page style to match the brand", "frontend"),
-        ("review PR 1234", "code-review"),
     )
+
+    def test_a_whole_sentence_pr_review_dispatches_code_review(self) -> None:
+        # Moved out of CASES: the code-review request guard reads a sentence
+        # that is wholly a review of a numbered PR and dispatches it.
+        route = route_chat_message("review PR 1234", source="discord")
+        self.assertEqual((route["action"], route["selected_skill"]), ("dispatch", "code-review"))
 
     def test_each_asks_with_the_intended_skill_first(self) -> None:
         for message, skill in self.CASES:

@@ -116,6 +116,9 @@ _GUARDRAIL_CANDIDATE_INJECTION_IDS = frozenset(
         # "슬랙 채널 지켜보다가 … 알려줘" scores on gateway-intent-card's platform
         # and notify triggers and on almost nothing of automation-blueprint's.
         "channel_watch_before_gateway_or_connector",
+        # "does this change introduce a bug?" names no word `code-review`
+        # triggers on, so the guard's boost needs a candidate to land on.
+        "code_review_request_before_generic_clarify",
         "coding_progress_status_before_clarify",
         "deep_interview_before_generic_plan",
         "direct_coding_task_before_fallback",

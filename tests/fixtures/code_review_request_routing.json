@@ -1,0 +1,458 @@
+{
+ "base_sha": "d7981d324",
+ "note": "Verdicts measured on the base tree with build_chat_interaction_payload(message, source='discord')['route']. must_not_change: look-alikes saved before the guard was written. overreach_probe: 25 negatives written after the guard, none in must_not_change.",
+ "must_not_change": [
+  {
+   "message": "review this NDA for risky clauses",
+   "action": "clarify",
+   "selected": "oh-my-hermes",
+   "top": "code-review"
+  },
+  {
+   "message": "contract review for the vendor agreement",
+   "action": "dispatch",
+   "selected": "legal-compliance-review",
+   "top": "legal-compliance-review"
+  },
+  {
+   "message": "review my Korean translation of the release notes",
+   "action": "dispatch",
+   "selected": "content-operator",
+   "top": "content-operator"
+  },
+  {
+   "message": "translation review for the Japanese UI strings",
+   "action": "clarify",
+   "selected": "oh-my-hermes",
+   "top": "code-review"
+  },
+  {
+   "message": "design review for the new onboarding screen",
+   "action": "clarify",
+   "selected": "oh-my-hermes",
+   "top": "code-review"
+  },
+  {
+   "message": "write a PR description for my branch",
+   "action": "dispatch",
+   "selected": "commit-pr-authoring",
+   "top": "commit-pr-authoring"
+  },
+  {
+   "message": "draft the pull request description",
+   "action": "dispatch",
+   "selected": "commit-pr-authoring",
+   "top": "commit-pr-authoring"
+  },
+  {
+   "message": "review my essay before I submit it",
+   "action": "clarify",
+   "selected": "oh-my-hermes",
+   "top": "code-review"
+  },
+  {
+   "message": "check my memory entries for stale facts",
+   "action": "dispatch",
+   "selected": "memory-sync",
+   "top": "memory-sync"
+  },
+  {
+   "message": "review my Hermes memories and remove duplicates",
+   "action": "dispatch",
+   "selected": "memory-sync",
+   "top": "memory-sync"
+  },
+  {
+   "message": "take notes from today's meeting",
+   "action": "clarify",
+   "selected": "oh-my-hermes",
+   "top": "meeting-brief"
+  },
+  {
+   "message": "what's the live score of the Lakers game",
+   "action": "fallback",
+   "selected": "oh-my-hermes",
+   "top": "oh-my-hermes"
+  },
+  {
+   "message": "triage the bug reports from users this week",
+   "action": "dispatch",
+   "selected": "feedback-triage",
+   "top": "feedback-triage"
+  },
+  {
+   "message": "fix this bug in the login handler",
+   "action": "dispatch",
+   "selected": "ultrawork",
+   "top": "ultrawork"
+  },
+  {
+   "message": "what changed in v4?",
+   "action": "fallback",
+   "selected": "oh-my-hermes",
+   "top": "agent-ops-review"
+  },
+  {
+   "message": "write a commit message for these changes",
+   "action": "dispatch",
+   "selected": "commit-pr-authoring",
+   "top": "commit-pr-authoring"
+  },
+  {
+   "message": "review the quarterly budget overrun",
+   "action": "clarify",
+   "selected": "oh-my-hermes",
+   "top": "code-review"
+  },
+  {
+   "message": "PR campaign review for the product launch",
+   "action": "clarify",
+   "selected": "oh-my-hermes",
+   "top": "code-review"
+  },
+  {
+   "message": "summarize the changes in the new pricing policy",
+   "action": "clarify",
+   "selected": "oh-my-hermes",
+   "top": "research-brief"
+  },
+  {
+   "message": "review the slides for tomorrow's meeting",
+   "action": "clarify",
+   "selected": "oh-my-hermes",
+   "top": "code-review"
+  },
+  {
+   "message": "CI is failing on my PR, why?",
+   "action": "clarify",
+   "selected": "oh-my-hermes",
+   "top": "build-failure-triage"
+  },
+  {
+   "message": "merge PR 123 after CI passes",
+   "action": "clarify",
+   "selected": "oh-my-hermes",
+   "top": "verification-gate"
+  },
+  {
+   "message": "이 계약서 검토해줘",
+   "action": "dispatch",
+   "selected": "legal-compliance-review",
+   "top": "legal-compliance-review"
+  },
+  {
+   "message": "번역 리뷰 해줘",
+   "action": "dispatch",
+   "selected": "code-review",
+   "top": "code-review"
+  },
+  {
+   "message": "디자인 리뷰 일정 잡아줘",
+   "action": "dispatch",
+   "selected": "code-review",
+   "top": "code-review"
+  },
+  {
+   "message": "PR 설명 써줘",
+   "action": "clarify",
+   "selected": "oh-my-hermes",
+   "top": "codebase-onboarding"
+  },
+  {
+   "message": "커밋 메시지 작성해줘",
+   "action": "clarify",
+   "selected": "oh-my-hermes",
+   "top": "buzz"
+  },
+  {
+   "message": "이 버그 고쳐줘",
+   "action": "dispatch",
+   "selected": "ultrawork",
+   "top": "ultrawork"
+  },
+  {
+   "message": "메모리 정리해줘",
+   "action": "dispatch",
+   "selected": "memory-sync",
+   "top": "memory-sync"
+  },
+  {
+   "message": "사용자 버그 리포트 분류해줘",
+   "action": "dispatch",
+   "selected": "feedback-triage",
+   "top": "feedback-triage"
+  },
+  {
+   "message": "v4에서 뭐가 바뀌었어?",
+   "action": "clarify",
+   "selected": "oh-my-hermes",
+   "top": "running-work-board"
+  },
+  {
+   "message": "에세이 첨삭해줘",
+   "action": "fallback",
+   "selected": "oh-my-hermes",
+   "top": "oh-my-hermes"
+  },
+  {
+   "message": "헤르메스가 기억하는 맥락 점검해줘",
+   "action": "dispatch",
+   "selected": "memory-sync",
+   "top": "memory-sync"
+  },
+  {
+   "message": "review stale memories and ask me what to keep",
+   "action": "dispatch",
+   "selected": "memory-sync",
+   "top": "memory-sync"
+  },
+  {
+   "message": "review PR #3021 and merge it if CI is green",
+   "action": "dispatch",
+   "selected": "verification-gate",
+   "top": "verification-gate"
+  },
+  {
+   "message": "open a PR for this fix",
+   "action": "dispatch",
+   "selected": "ultrawork",
+   "top": "ultrawork"
+  },
+  {
+   "message": "address the review comments on my PR",
+   "action": "clarify",
+   "selected": "oh-my-hermes",
+   "top": "code-review"
+  },
+  {
+   "message": "respond to the reviewer on pull request 42",
+   "action": "clarify",
+   "selected": "oh-my-hermes",
+   "top": "agent-board"
+  },
+  {
+   "message": "리뷰 코멘트 반영해줘",
+   "action": "dispatch",
+   "selected": "ultrawork",
+   "top": "ultrawork"
+  },
+  {
+   "message": "review the release notes draft",
+   "action": "dispatch",
+   "selected": "content-operator",
+   "top": "content-operator"
+  },
+  {
+   "message": "who should review my PR?",
+   "action": "clarify",
+   "selected": "oh-my-hermes",
+   "top": "code-review"
+  },
+  {
+   "message": "how do I review a pull request well?",
+   "action": "dispatch",
+   "selected": "ultrawork",
+   "top": "ultrawork"
+  },
+  {
+   "message": "코드 리뷰가 뭐야?",
+   "action": "fallback",
+   "selected": "oh-my-hermes",
+   "top": "oh-my-hermes"
+  },
+  {
+   "message": "review my resume for typos",
+   "action": "clarify",
+   "selected": "oh-my-hermes",
+   "top": "code-review"
+  },
+  {
+   "message": "check the diff between these two config files",
+   "action": "clarify",
+   "selected": "oh-my-hermes",
+   "top": "visual-qa"
+  },
+  {
+   "message": "commit these changes and push",
+   "action": "clarify",
+   "selected": "oh-my-hermes",
+   "top": "voice-operator"
+  },
+  {
+   "message": "이 PR 머지해줘",
+   "action": "fallback",
+   "selected": "oh-my-hermes",
+   "top": "oh-my-hermes"
+  },
+  {
+   "message": "변경사항 요약해줘",
+   "action": "fallback",
+   "selected": "oh-my-hermes",
+   "top": "oh-my-hermes"
+  },
+  {
+   "message": "review the API design doc",
+   "action": "dispatch",
+   "selected": "backend",
+   "top": "backend"
+  },
+  {
+   "message": "the code review bot keeps timing out",
+   "action": "dispatch",
+   "selected": "code-review",
+   "top": "code-review"
+  }
+ ],
+ "overreach_probe": [
+  {
+   "message": "review the change to our refund policy",
+   "action": "clarify",
+   "selected": "oh-my-hermes",
+   "top": "code-review"
+  },
+  {
+   "message": "review this change to the vacation schedule",
+   "action": "clarify",
+   "selected": "oh-my-hermes",
+   "top": "code-review"
+  },
+  {
+   "message": "check this patch of grass for weeds",
+   "action": "clarify",
+   "selected": "oh-my-hermes",
+   "top": "biomedical-evidence"
+  },
+  {
+   "message": "review my commit to the gym membership",
+   "action": "clarify",
+   "selected": "oh-my-hermes",
+   "top": "code-review"
+  },
+  {
+   "message": "review the PR plan for the press launch",
+   "action": "clarify",
+   "selected": "oh-my-hermes",
+   "top": "code-review"
+  },
+  {
+   "message": "review this pull request for budget approval",
+   "action": "clarify",
+   "selected": "oh-my-hermes",
+   "top": "code-review"
+  },
+  {
+   "message": "find bugs in the garden",
+   "action": "dispatch",
+   "selected": "code-review",
+   "top": "code-review"
+  },
+  {
+   "message": "does this change introduce a delay to the shipment?",
+   "action": "clarify",
+   "selected": "oh-my-hermes",
+   "top": "ralplan"
+  },
+  {
+   "message": "does the change affect my taxes?",
+   "action": "clarify",
+   "selected": "oh-my-hermes",
+   "top": "ralplan"
+  },
+  {
+   "message": "review the diff between my two résumés",
+   "action": "dispatch",
+   "selected": "code-review",
+   "top": "code-review"
+  },
+  {
+   "message": "can you review my PR strategy?",
+   "action": "clarify",
+   "selected": "oh-my-hermes",
+   "top": "code-review"
+  },
+  {
+   "message": "review this commit message",
+   "action": "dispatch",
+   "selected": "commit-pr-authoring",
+   "top": "commit-pr-authoring"
+  },
+  {
+   "message": "review this PR description",
+   "action": "clarify",
+   "selected": "oh-my-hermes",
+   "top": "code-review"
+  },
+  {
+   "message": "check this diff of the contract versions for typos",
+   "action": "clarify",
+   "selected": "oh-my-hermes",
+   "top": "visual-qa"
+  },
+  {
+   "message": "이 변경 사항 일정에 괜찮은지 봐줘",
+   "action": "clarify",
+   "selected": "oh-my-hermes",
+   "top": "ai-slop-cleaner"
+  },
+  {
+   "message": "이 계약 변경 검토해줘",
+   "action": "clarify",
+   "selected": "oh-my-hermes",
+   "top": "ai-slop-cleaner"
+  },
+  {
+   "message": "이 커밋 메시지 다듬어줘",
+   "action": "clarify",
+   "selected": "oh-my-hermes",
+   "top": "buzz"
+  },
+  {
+   "message": "PR 보도자료 검토해줘",
+   "action": "fallback",
+   "selected": "oh-my-hermes",
+   "top": "oh-my-hermes"
+  },
+  {
+   "message": "이 패치 노트 번역해줘",
+   "action": "clarify",
+   "selected": "oh-my-hermes",
+   "top": "content-operator"
+  },
+  {
+   "message": "코드 리뷰 일정 잡아줘",
+   "action": "dispatch",
+   "selected": "code-review",
+   "top": "code-review"
+  },
+  {
+   "message": "코드 리뷰 문화에 대해 알려줘",
+   "action": "dispatch",
+   "selected": "code-review",
+   "top": "code-review"
+  },
+  {
+   "message": "버그 있는지 봐줘",
+   "action": "clarify",
+   "selected": "oh-my-hermes",
+   "top": "feedback-triage"
+  },
+  {
+   "message": "내 패치 어디 있어?",
+   "action": "fallback",
+   "selected": "oh-my-hermes",
+   "top": "oh-my-hermes"
+  },
+  {
+   "message": "review the meeting notes for bugs in the plan",
+   "action": "clarify",
+   "selected": "oh-my-hermes",
+   "top": "plan"
+  },
+  {
+   "message": "check my commit to running every day for regressions in motivation",
+   "action": "dispatch",
+   "selected": "automation-blueprint",
+   "top": "automation-blueprint"
+  }
+ ]
+}
