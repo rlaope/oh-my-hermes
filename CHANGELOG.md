@@ -4,6 +4,21 @@ All notable changes will be documented here.
 
 ## Unreleased
 
+- **omher shows "replied to you" only when an answer covers two or more of your messages.** A one-word message followed
+  by a clarify card used to get a "Replying to you / di" header above the answer, which was noise. With exactly one
+  message the header is now never shown, whatever sits between it and the answer; failed, dropped and held sends still
+  do not count. (apps/omher `chat/parts/answers.ts`)
+
+- **omher's question card lists its choices one per row, numbered.** A choice used to be a chip in a flowing row, and
+  a long one ran past the card's edge. Each choice now takes a full-width row prefixed by its number, "Other…" is the
+  last number, and long text wraps inside the card. While the card has focus, pressing a number picks that row (in an
+  interview, within the focused question; never while you type in a field or an input method composes). A trailing
+  "(Recommended)" or "(권장)" shows as a small badge, and the text before the first " — " is the title with the rest
+  dimmer under it. Only the display changes: the answer sent back to Hermes is the choice as it was given. A
+  single-question card now offers "Other…" too.
+
+## 5.0.0 - 2026-11-21
+
 - **A mise-managed `codex` or `python3` runs again in `omh coding run`.** mise links every tool it manages to one
   `mise` binary and picks the tool from the name it was started by. The fanout fence, the dispatcher's own checks and
   the Codex/Claude session probe resolved each command to its real file and ran that, so argv[0] was `mise`, mise ran
@@ -107,14 +122,6 @@ All notable changes will be documented here.
   General › While it answers chooses whether a message sent during an answer waits for the turn to end (the
   default) or is steered into it at once, the same as pressing its Steer; a message behind another waiting one
   still waits its turn. Contributed by @jundev0001 (#3017).
-
-- **omher's question card lists its choices one per row, numbered.** A choice used to be a chip in a flowing row, and
-  a long one ran past the card's edge. Each choice now takes a full-width row prefixed by its number, "Other…" is the
-  last number, and long text wraps inside the card. While the card has focus, pressing a number picks that row (in an
-  interview, within the focused question; never while you type in a field or an input method composes). A trailing
-  "(Recommended)" or "(권장)" shows as a small badge, and the text before the first " — " is the title with the rest
-  dimmer under it. Only the display changes: the answer sent back to Hermes is the choice as it was given. A
-  single-question card now offers "Other…" too.
 
 ## 4.0.9 - 2026-11-20
 

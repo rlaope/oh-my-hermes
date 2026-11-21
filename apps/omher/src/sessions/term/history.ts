@@ -47,6 +47,26 @@ const loadSer = () =>
     () => (serLoad = null),
   ));
 
+/** `text` without the whitespace and colour escapes (`ESC [ digits ; m`) it ends with. Walked from the end: the
+ *  regex /(?:\s|\x1b\[[0-9;]*m)+$/ it replaces backtracked from every whitespace run, quadratic in the run's length
+ *  (79 ms on 2000 lines with one 200-space run each, as a full-width TUI footer prints). */
+export function trimTail(text: string): string {
+  let end = text.length;
+  while (end > 0) {
+    const c = text[end - 1];
+    if (/\s/.test(c)) {
+      end--;
+      continue;
+    }
+    if (c !== "m") break;
+    let i = end - 2;
+    while (i >= 0 && /[0-9;]/.test(text[i])) i--;
+    if (i < 1 || text[i] !== "[" || text[i - 1] !== "\x1b") break;
+    end = i - 1;
+  }
+  return text.slice(0, end);
+}
+
 /** The newest HISTORY_LINES lines of `term`'s main buffer, as text that redraws them: no modes, no full-screen
  *  program's alternate screen, no final cursor move, and no blank rows after the last line with text. */
 export function serializeTail(term: Terminal, S: Serialize): string {
@@ -55,7 +75,7 @@ export function serializeTail(term: Terminal, S: Serialize): string {
   try {
     const n = term.buffer.normal.length;
     const text = ser.serialize({ range: { start: Math.max(0, n - HISTORY_LINES), end: n - 1 }, excludeModes: true, excludeAltBuffer: true });
-    return text.replace(/(?:\s|\x1b\[[0-9;]*m)+$/, "");
+    return trimTail(text);
   } finally {
     ser.dispose();
   }

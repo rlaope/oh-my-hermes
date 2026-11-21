@@ -25,7 +25,7 @@
 import { useSyncExternalStore } from "react";
 import type { ITerminalInitOnlyOptions, ITerminalOptions, Terminal } from "@xterm/xterm";
 import type { FitAddon } from "@xterm/addon-fit";
-import { afterOpen, bracketedPaste, CELLS_EVENT, feed, isParked, live, onVisible, PARKING_EVENT, type Remake } from "./term/engine";
+import { afterOpen, bracketedPaste, CELLS_EVENT, feed, gpuComing, isParked, live, onVisible, PARKING_EVENT, type Remake } from "./term/engine";
 import { onCwd, onProgress } from "./term/engine-marks";
 import { applyLook, termOptions } from "./term/look";
 import { termFontsReady } from "./term/fonts";
@@ -37,7 +37,7 @@ import { getShellHost, learnThisHost } from "../terminal/host";
 import { onSessionFg } from "./fg";
 import { termActs } from "./termActivity";
 import { isLinkId, LINK_COPIED_EVENT, newLinkId, termLinkUrl } from "./termLink";
-import { acpRow, agentDef, agentLabel, continues, draftAgent, draftFolder, draftOpen, hermesOnly, installLine, isBuiltin, isGone, isShell, isTerminalRec, LAST_LINE_MAX, SHELL, termEnd, termMarkAgent, lastPrintedLine, OPEN_KEY, opensAs, parseOpens, parseRecent, pushRecent, RECENT_KEY, registerAcp, sessionMode, type AgentId, type AgentInfo, type OpenAs, type Unseen, type Opens, type Recent, type SessionRec } from "./agents";
+import { acpRow, agentDef, agentLabel, continues, draftAgent, draftFolder, draftOpen, hermesOnly, installLine, isBuiltin, isGone, isShell, isTerminalRec, LAST_LINE_MAX, SHELL, termEnd, termMarkAgent, lastPrintedLine, OPEN_KEY, opensAs, parseOpens, parseRecent, pushRecent, RECENT_KEY, registerAcp, sessionMode, termGroups, type AgentId, type AgentInfo, type OpenAs, type Unseen, type Opens, type Recent, type SessionRec } from "./agents";
 import { NAME_MAX, parseTitles, promptTitle, putTitle, TITLES_KEY } from "./titles";
 import { getDraft, setDraft as setUnsent } from "../app/drafts";
 import { getHost, type ChatEvent, type ChatInput, type PastChat, type SessionHost } from "./host";
@@ -52,7 +52,8 @@ import { parseCommands, type AgentCommand } from "../chat/parts/commands";
 import { t as tr } from "../i18n";
 import { windowWatched, type SessionNote } from "../lib/notify";
 import { createCloseGrace, graceMs, restoreSplitIn, type SplitWas } from "./closeGrace";
-import { getSplit, groupOf, setSplit } from "./splitState";
+import { getSplit, groupOf, leaveIn, setSplit } from "./splitState";
+import { getFolderPrefs, orderFolders } from "./folders";
 
 /** The Accounts CLI a session of `agent` signs in as (mirrors `session_cli` in src-tauri/src/accounts.rs). */
 const ACCOUNT_CLI: Partial<Record<AgentId, AccountCli>> = { claude: "claude", codex: "codex", grok: "grok" };
@@ -131,6 +132,9 @@ interface Term {
   undo: () => void;
   /** The size the program was last told (when it started, then each resize sent). */
   told: { cols: number; rows: number } | null;
+  /** xterm resized (and so reflowed or trimmed its screen) since the program was last told its size: set by every
+   *  resize, cleared by `tellSize`. A size that came back to `told` still needs the program to redraw. */
+  reflowed: boolean;
   /** A changed size waiting to be sent (`RESIZE_SETTLE_MS`). */
   settle: ReturnType<typeof setTimeout> | null;
   /** Where its program runs: the agent PTY host, or (a Shell row) the login-shell host of the bottom panel. */
@@ -1500,6 +1504,7 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
       owed = 0;
       // the program started at this size; one that changed while it started is sent now
       t.told = { cols, rows };
+      t.reflowed = false; // nothing was drawn by the program yet: no screen of its to redraw
       if (t.settle === null) tellSize(t);
       if (!ofChat) patchRec(id, { status: "running" });
       if (!ofChat && r.agent === "codex" && !rec(id)?.agentSession) findCodexId(id, t, run, hostId, CODEX_ID_FIRST_MS);
@@ -1520,9 +1525,24 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
     t.settle = null;
     if (t.hostId === null || t.closed) return;
     const { cols, rows } = t.term;
-    if (t.told?.cols === cols && t.told.rows === rows) return;
+    const same = t.told?.cols === cols && t.told.rows === rows;
+    const reflowed = t.reflowed;
+    t.reflowed = false;
+    if (same && !reflowed) return;
     t.told = { cols, rows };
-    void t.io.resize(t.hostId, cols, rows).catch(() => undefined);
+    const hostId = t.hostId;
+    // Back at the size the program knows after xterm changed it and back (a show re-fits in the DOM renderer's cells,
+    // then in the GPU's): xterm reflowed and trimmed its screen, the program saw no change and would never redraw it,
+    // and a pty resize to the size it has sends no SIGWINCH. One size off and then the real one does, in that order.
+    if (same) {
+      void t.io
+        .resize(hostId, cols + 1, rows)
+        .catch(() => undefined)
+        .then(() => t.io.resize(hostId, cols, rows))
+        .catch(() => undefined);
+      return;
+    }
+    void t.io.resize(hostId, cols, rows).catch(() => undefined);
   };
 
   const disposeTerm = (id: string) => {
@@ -1586,6 +1606,7 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
         closed: false,
         undo: () => undefined,
         told: null,
+        reflowed: false,
         settle: null,
         io: isShell(rec(id)?.agent) ? getShellHost() : host,
         run: 0,
@@ -1618,6 +1639,7 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
           if (rec(id)) termActs.patch(id, { oscTitle: v });
         });
         term.onResize(() => {
+          tt.reflowed = true;
           // the size it ends on is sent, once (a drag gives one size per frame)
           if (tt.settle !== null) clearTimeout(tt.settle);
           tt.settle = setTimeout(() => tellSize(tt), RESIZE_SETTLE_MS);
@@ -1665,19 +1687,23 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
     applyLook(tt.term, theme, settings);
     const refit = () => {
       if (!tt.el.isConnected || tt.el.clientWidth === 0) return;
+      // shown again with the GPU renderer on its way: fitted in the standard renderer's cells now, it is fitted again
+      // in the GPU's, and the screen is reflowed twice. The engine's CELLS_EVENT fits it once, when they are known.
+      if (!fresh && gpuComing(tt.raw)) return;
       try {
         tt.fit.fit();
       } catch {
         /* not measurable yet */
       }
     };
+    // shown first: the engine then knows a GPU renderer is coming (`gpuComing`) when the first fit is made, and the
+    // terminal is fitted again when its cells change size (CELLS_EVENT: the GPU renderer arrived, or went)
+    tt.el.addEventListener(CELLS_EVENT, refit);
+    onVisible(tt.term, true);
     refit();
     if (fresh) void ready().then(() => startTerm(id, tt));
     const ro = new ResizeObserver(refit);
     ro.observe(container);
-    // and when its cells change size (the GPU renderer arrived after this fit, or went)
-    tt.el.addEventListener(CELLS_EVENT, refit);
-    onVisible(tt.term, true);
     if (!quiet) tt.term.focus();
     return () => {
       ro.disconnect();
@@ -2092,6 +2118,21 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
     const t = terms.get(id);
     return !!r && !!t && !t.closed && !t.held && t.hostId !== null && isTerminalRec(state.agents, r) && graceNow() > 0;
   };
+  /** What opens when `id`, the session in view, goes away (its program ended, or it was closed): the pane of its
+   *  split that takes its place; else the row below it in the sidebar (the folder groups as shown, as ⌘⇧] steps),
+   *  or the nearest above when it was the last. `was` still holds `id`, `list` no longer does. */
+  const successor = (id: string, was: SessionRec[], list: SessionRec[]): string | null => {
+    const left = new Set(list.map((s) => s.id));
+    const heir = leaveIn(getSplit().groups, id).heir;
+    if (heir && left.has(heir)) return heir;
+    const order = orderFolders(termGroups(was.filter((r) => isTerminalRec(state.agents, r))), getFolderPrefs().order).flatMap((g) => g.rows.map((r) => r.id));
+    const at = order.indexOf(id);
+    const near = at < 0 ? undefined : [...order.slice(at + 1), ...order.slice(0, at).reverse()].find((x) => left.has(x));
+    if (near) return near;
+    const index = was.findIndex((s) => s.id === id);
+    return list[Math.min(index, list.length - 1)]?.id ?? null;
+  };
+
   const holdClosed = (id: string): boolean => {
     const r = rec(id);
     const t = terms.get(id);
@@ -2103,13 +2144,11 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
     if (!grace.begin(id, r.title || nameOf(r), ms, { rec: r, index, split })) return false;
     heldRecs.set(id, r);
     t.held = true;
-    const list = state.list.filter((s) => s.id !== id);
+    const was = state.list;
+    const list = was.filter((s) => s.id !== id);
     set({ list });
     const ui = store().getState().ui;
-    if (ui.view === "session" && ui.session === id) {
-      const next = list[Math.min(index, list.length - 1)];
-      store().actions.openSession(next ? next.id : null);
-    }
+    if (ui.view === "session" && ui.session === id) store().actions.openSession(successor(id, was, list));
     return true;
   };
 
@@ -2161,8 +2200,8 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
       store().dispatch({ type: "chat.forget", bot: key }); // its asks leave the Needs-you strip with it
     }
     keys.delete(id);
-    const idx = state.list.findIndex((s) => s.id === id);
-    const list = state.list.filter((s) => s.id !== id);
+    const was = state.list;
+    const list = was.filter((s) => s.id !== id);
     const models = { ...state.models };
     delete models[id];
     const notes = { ...state.notes };
@@ -2173,10 +2212,7 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
     delete unseen[id];
     set({ list, models, notes, live, unseen });
     const ui = store().getState().ui;
-    if (ui.view === "session" && ui.session === id) {
-      const next = list[Math.min(idx, list.length - 1)];
-      store().actions.openSession(next ? next.id : null);
-    }
+    if (ui.view === "session" && ui.session === id) store().actions.openSession(successor(id, was, list));
   };
 
   /** A person's own agent was removed on Settings › Agents: each open session of it ends cleanly (its program is
@@ -2204,6 +2240,20 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
 
   /** Name a session (Rename). Empty or null = back to the automatic name. Kept on this computer under the agent's
    *  own conversation id, so the name follows the conversation when it is resumed. */
+  /** Row `id` dragged in TERMINALS to just before (or after) row `to` of the same folder: the list keeps that order,
+   *  and so does the saved list (`omher.resume`). Rows of another folder, or the same place, change nothing. */
+  const moveRow = (id: string, to: string, after: boolean) => {
+    if (id === to) return;
+    const r = rec(id);
+    const at = rec(to);
+    if (!r || !at || r.cwd !== at.cwd) return;
+    const rest = state.list.filter((x) => x.id !== id);
+    const i = rest.findIndex((x) => x.id === to);
+    const list = [...rest.slice(0, after ? i + 1 : i), r, ...rest.slice(after ? i + 1 : i)];
+    if (list.every((x, k) => x === state.list[k])) return;
+    set({ list });
+  };
+
   const rename = (id: string, title: string | null) => {
     const r = rec(id);
     if (!r || r.status === "draft") return; // a draft is named once it starts
@@ -2324,6 +2374,7 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
     setMode,
     setEffort,
     rename,
+    moveRow,
     restart,
     resume,
     restore,
