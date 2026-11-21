@@ -790,6 +790,15 @@ body.side-resizing * {
   border: 2px solid color-mix(in srgb, var(--accent) 55%, transparent);
   transition: left 0.08s ease, top 0.08s ease, width 0.08s ease, height 0.08s ease;
 }
+/* where a TERMINALS row dragged in the sidebar would go: a line between rows */
+.row-drop {
+  position: fixed;
+  z-index: 60;
+  height: 2px;
+  pointer-events: none;
+  border-radius: 1px;
+  background: var(--accent);
+}
 body.split-dragging,
 body.split-dragging * {
   cursor: grabbing !important;
@@ -919,6 +928,10 @@ body.split-dragging .xterm {
 }
 .ss-row.tr.split-focus .tr-split {
   color: var(--accent);
+}
+/* a split that is not in view: its rows keep the shape, dimmer */
+.ss-row.tr.split-away .tr-split {
+  opacity: 0.55;
 }
 
 /* chat sessions */

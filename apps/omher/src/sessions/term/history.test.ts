@@ -3,7 +3,7 @@
 import { Terminal } from "@xterm/xterm";
 import { SerializeAddon } from "@xterm/addon-serialize";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { dimmed, divider, HISTORY_EVERY_MS, HISTORY_LINES, HISTORY_SPREAD_MS, restoredText, serializeTail, type HistoryHost } from "./history";
+import { dimmed, divider, HISTORY_EVERY_MS, HISTORY_LINES, HISTORY_SPREAD_MS, restoredText, serializeTail, trimTail, type HistoryHost } from "./history";
 import { parseTermSettings, resetTermSettings, TERM_DEFAULTS, writeTermSettings } from "./settings";
 import { parseSavedTabs } from "../../terminal/state";
 
@@ -181,5 +181,30 @@ describe("the bottom panel's saved tabs", () => {
     });
     for (const bad of [null, "", "{", "[]", "42", JSON.stringify({ tabs: "x" })]) expect(parseSavedTabs(bad)).toEqual({ tabs: [], active: null });
     expect(parseSavedTabs(JSON.stringify({ tabs: [{ key: 2, cwd: "/a" }], active: 9 })).active).toBe(2);
+  });
+});
+
+describe("trimTail", () => {
+  const old = (s: string) => s.replace(/(?:\s|\x1b\[[0-9;]*m)+$/, "");
+  it("drops the trailing whitespace and colour escapes, as the regex it replaces did", () => {
+    const cases = [
+      "",
+      "plain",
+      "line  \r\n  \r\n",
+      "text\x1b[0m",
+      "text \x1b[38;5;12m  \x1b[0m\r\n\x1b[m ",
+      "\x1b[0m   ",
+      "keep\x1b[2Jm",
+      "ends in m",
+      "a\x1b[1;2",
+      "[0m",
+      "x\u00a0\t",
+    ];
+    for (const c of cases) expect(trimTail(c)).toBe(old(c));
+  });
+  it("keeps every line of a footer padded with long space runs, in time linear in its length", () => {
+    const line = `status${" ".repeat(200)}right\r\n`;
+    const text = line.repeat(2000) + " ".repeat(300);
+    expect(trimTail(text)).toBe(line.repeat(2000).replace(/\r\n$/, ""));
   });
 });

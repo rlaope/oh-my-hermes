@@ -150,7 +150,7 @@ test("Cmd+V and Cmd+C stay the Edit menu's with the Kitty protocol on: no CSI u 
   });
   await focus(page);
   const before = await typed(page);
-  for (const key of ["Meta+v", "Meta+c", "Meta+a", "Meta+x"]) await page.keyboard.press(key);
+  for (const key of ["Meta+v", "Meta+c", "Meta+x"]) await page.keyboard.press(key);
   await settle(page, 150);
   // no key reaches the program as a CSI u code (Cmd is modifier 8, so 9 here); what the native Paste types, if the
   // clipboard holds text, is the person's paste
@@ -158,4 +158,33 @@ test("Cmd+V and Cmd+C stay the Edit menu's with the Kitty protocol on: no CSI u 
   expect(await page.evaluate(() => (window as unknown as { __cancelled: string[] }).__cancelled)).toEqual([]);
   // keys without Cmd still use the protocol
   expect(await sends(page, "Shift+Enter")).toBe("\x1b[13;2u");
+});
+
+test("Cmd+A selects the whole terminal (macOS), with the Kitty protocol on or off, and sends the program nothing", async ({ page }) => {
+  await openApp(page);
+  test.skip(!(await platformIsMac(page)), "Cmd+A is the macOS select-all key");
+  await newTerminal(page);
+  await feed(page, "first line\r\nsecond line\r\n");
+  const selection = () =>
+    page.evaluate(() => {
+      const host = document.querySelector('[data-testid="terminal"] .xterm');
+      const t = [...(window as unknown as { __omherTerms: Set<{ element?: HTMLElement; getSelection(): string; clearSelection(): void }> }).__omherTerms].find((x) => x.element === host);
+      return t?.getSelection() ?? "";
+    });
+  for (const kitty of [false, true]) {
+    if (kitty) {
+      await feed(page, "\x1b[>1u");
+      await expect.poll(() => flags(page)).toBe(1);
+    }
+    await focus(page);
+    const before = await typed(page);
+    await page.keyboard.press("Meta+a");
+    await expect.poll(selection).toContain("second line");
+    expect(await selection()).toContain("first line");
+    expect(await typed(page)).toBe(before);
+    await page.evaluate(() => {
+      const host = document.querySelector('[data-testid="terminal"] .xterm');
+      [...(window as unknown as { __omherTerms: Set<{ element?: HTMLElement; clearSelection(): void }> }).__omherTerms].find((x) => x.element === host)?.clearSelection();
+    });
+  }
 });
