@@ -820,6 +820,7 @@ export const zh: Record<Key, string> = {
   "card.otherN": "其他回答 {n}",
   "card.questions": "{n} 个问题",
   "card.pickAny": "可多选",
+  "card.recommended": "推荐",
   "card.pickOne": "单选",
   "card.submit": "提交",
   "card.answered": "已回答 {given}/{n}",

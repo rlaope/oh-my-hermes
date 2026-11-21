@@ -146,6 +146,106 @@ test("clarify: choose an answer -> clarify.respond sent, card collapses to 'Answ
   await expect(tl.getByTestId("bubble-bot").filter({ hasText: "Got it, using staging." })).toBeVisible();
 });
 
+const LONG_CHOICE =
+  "Slack 실패 스레드에 남기기 — 원인 요약(11-19부터 같은 모델 실패, #1188 무관)을 #deploy-common 스레드에 카미가 답글로 (Recommended)";
+
+/** Rewrites the mock's clarify.request on its way into the page. */
+async function rewriteClarify(page: Page, fn: (msg: any) => void) {
+  await page.routeWebSocket(new RegExp(`127\\.0\\.0\\.1:${MOCK}`), (ws) => {
+    const server = ws.connectToServer();
+    ws.onMessage((m) => server.send(m));
+    server.onMessage((m) => {
+      const msg = JSON.parse(String(m));
+      if (msg.event === "clarify.request") fn(msg);
+      ws.send(JSON.stringify(msg));
+    });
+  });
+}
+
+test("clarify: numbered rows, long text wraps inside the card, a digit picks, the answer is the original string", async ({ page }) => {
+  await rewriteClarify(page, (m) => {
+    m.choices = [LONG_CHOICE, "재시도", "건너뛰기"];
+  });
+  await open(page);
+  await send(page, "/clarify");
+  const card = page.getByTestId("card-clarify");
+  await expect(card).toBeVisible();
+  const rows = card.locator(".iv-chip");
+  await expect(rows).toHaveCount(4); // three choices and Other…
+  await expect(rows.nth(0).locator(".iv-num")).toHaveText("1");
+  await expect(rows.nth(3).locator(".iv-num")).toHaveText("4");
+  await expect(rows.nth(0).locator(".iv-title")).toContainText("Slack 실패 스레드에 남기기");
+  await expect(rows.nth(0).locator(".iv-title")).not.toContainText("(Recommended)");
+  await expect(rows.nth(0)).toHaveAccessibleName(/^Slack 실패 스레드에 남기기 Recommended 원인 요약/);
+  await expect(rows.nth(0).locator(".iv-badge")).toHaveText("Recommended");
+  await expect(rows.nth(0).locator(".iv-desc")).toContainText("원인 요약(11-19부터");
+  // one row per line, nothing past the card's right edge
+  const cardBox = (await card.boundingBox())!;
+  let prevBottom = -1;
+  for (let i = 0; i < 4; i++) {
+    const b = (await rows.nth(i).boundingBox())!;
+    expect(b.x + b.width).toBeLessThanOrEqual(cardBox.x + cardBox.width + 0.5);
+    expect(b.y).toBeGreaterThanOrEqual(prevBottom);
+    prevBottom = b.y + b.height;
+  }
+  expect(await card.evaluate((el) => el.scrollWidth <= el.clientWidth + 1)).toBe(true);
+  // a digit typed in the composer is text there and picks nothing
+  await page.getByTestId("composer").click();
+  await page.keyboard.press("1");
+  await expect(page.getByTestId("composer")).toHaveValue("1");
+  await expect(card).toBeVisible();
+  expect(await calls("clarify.respond")).toEqual([]);
+  await page.getByTestId("composer").fill("");
+  // a click on the card (its title) gives it focus; then the digit picks that row
+  await card.locator(".card-title").click();
+  await page.keyboard.press("1");
+  await expect(page.getByTestId("card-line")).toContainText("Slack 실패 스레드에 남기기");
+  expect(await calls("clarify.respond")).toEqual([
+    expect.objectContaining({ params: expect.objectContaining({ bot: "kami", answer: LONG_CHOICE }) }),
+  ]);
+});
+
+test("clarify: the last number opens Other…, digits typed in its field stay text", async ({ page }) => {
+  await open(page);
+  await send(page, "/clarify");
+  const card = page.getByTestId("card-clarify");
+  await card.locator(".card-title").click();
+  await page.keyboard.press("3"); // staging, production, Other…
+  const field = card.getByLabel("Other answer 1");
+  await expect(field).toBeFocused();
+  await page.keyboard.type("v2 on 3");
+  await expect(field).toHaveValue("v2 on 3");
+  await field.press("Enter");
+  await expect(page.getByTestId("card-line")).toHaveText(/Answered: v2 on 3/);
+  expect(await calls("clarify.respond")).toEqual([
+    expect.objectContaining({ params: expect.objectContaining({ answer: "v2 on 3" }) }),
+  ]);
+});
+
+test("interview: a digit picks within the focused question only", async ({ page }) => {
+  await open(page);
+  await mock("mock.ask", { bot: "friren", kind: "interview" });
+  await page.getByTestId("needs-strip").click();
+  await page.getByTestId("needs-item").first().click();
+  const card = page.getByTestId("card-interview");
+  await expect(card).toBeFocused();
+  await page.keyboard.press("2"); // the card itself is focused, no question: nothing picked
+  await expect(card.getByTestId("iv-count")).toHaveText(/^0 of 3/);
+  const q1 = card.getByRole("radiogroup", { name: "Who is the release note for?" });
+  const q2 = card.getByRole("group", { name: "Which sections should it have?" });
+  // clicking a row (focus must follow the click in WebKit too), then a digit picks within that question
+  await q1.getByRole("radio", { name: "Users" }).click();
+  await page.keyboard.press("2");
+  await expect(q1.getByRole("radio", { name: "Developers" })).toHaveAttribute("aria-checked", "true");
+  await q2.getByRole("checkbox", { name: "Fixes" }).click();
+  await page.keyboard.press("1");
+  await page.keyboard.press("4");
+  await expect(q2.getByRole("checkbox", { name: "Highlights" })).toHaveAttribute("aria-checked", "true");
+  await expect(q2.getByRole("checkbox", { name: "Thanks" })).toHaveAttribute("aria-checked", "true");
+  await expect(q2.getByRole("checkbox", { name: "Fixes" })).toHaveAttribute("aria-checked", "true"); // the click
+  await expect(q1.getByRole("radio", { name: "Developers" })).toHaveAttribute("aria-checked", "true");
+});
+
 test("clarify without choices: small input answers it", async ({ page }) => {
   // The mock always offers choices; drop them on the way in so the card shows its input.
   await page.routeWebSocket(new RegExp(`127\\.0\\.0\\.1:${MOCK}`), (ws) => {

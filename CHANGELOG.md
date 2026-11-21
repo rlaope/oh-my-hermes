@@ -4,6 +4,20 @@ All notable changes will be documented here.
 
 ## Unreleased
 
+- **omher 1.1.2.** Terminals keep their screen when you switch back, and splits and rows behave as expected.
+  - **Switching back:** a TUI shown again (omh, Codex, OmO, vim, htop) no longer shows a doubled line, a blank band or
+    a misplaced cursor. Showing a terminal now fits it once instead of twice, and when xterm had to reflow it the
+    program is told to redraw. A terminal put back from memory has its cursor where the program left it. (#3053)
+  - **Splits:** when one pane of a split ends, the other pane takes the focus instead of the first terminal in the
+    list. With no split, the next row in the sidebar takes it. Every split row shows its layout glyph; rows of a split
+    out of view show it dimmed. (#3050)
+  - **Rows:** press and drag a TERMINALS row onto another row of its folder to move it there. The order is kept across
+    restarts. (#3050)
+  - **Chat:** the "replied to you" header shows only when an answer covers two or more of your messages. (#3049)
+  - **Keys:** ⌘A selects the whole terminal, also in Claude Code and Codex. (#3050)
+  - **Speed:** saving a long scrollback no longer stalls on trailing blank lines (98 ms to 0.1 ms on the same input).
+    (#3050)
+
 - **omher reads more naturally in Korean.** A pass over the Korean UI copy: one register (해요체) on every screen
   instead of 합니다체 in some hints and dialogs, `shell` instead of `셸`, and literal translations replaced with what
   a Korean developer expects (`회원님의 메시지 N개에 답장` is `내 메시지 N개에 답장`, `붙는 것` is `추가되는 것`,
@@ -14,6 +28,14 @@ All notable changes will be documented here.
   by a clarify card used to get a "Replying to you / di" header above the answer, which was noise. With exactly one
   message the header is now never shown, whatever sits between it and the answer; failed, dropped and held sends still
   do not count. (apps/omher `chat/parts/answers.ts`)
+
+- **omher's question card lists its choices one per row, numbered.** A choice used to be a chip in a flowing row, and
+  a long one ran past the card's edge. Each choice now takes a full-width row prefixed by its number, "Other…" is the
+  last number, and long text wraps inside the card. While the card has focus, pressing a number picks that row (in an
+  interview, within the focused question; never while you type in a field or an input method composes). A trailing
+  "(Recommended)" or "(권장)" shows as a small badge, and the text before the first " — " is the title with the rest
+  dimmer under it. Only the display changes: the answer sent back to Hermes is the choice as it was given. A
+  single-question card now offers "Other…" too.
 
 ## 5.0.0 - 2026-11-21
 

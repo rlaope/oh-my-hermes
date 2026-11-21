@@ -297,12 +297,16 @@ test("question cards: a clarify's choices are the interview's chips, one control
   await mock("mock.ask", { bot: "kami", kind: "clarify" });
   await expect(page.getByTestId("card-clarify")).toBeVisible();
   const clarify = await style("[data-testid=card-clarify] button");
+  // the visible text is the title: medium weight, one for both cards
+  const title = (sel: string) => page.locator(sel).first().evaluate((e) => getComputedStyle(e).fontWeight);
+  expect(await title("[data-testid=card-clarify] .iv-title")).toBe("500");
   await mock("mock.ask", { bot: "friren", kind: "interview" });
   await page.getByTestId("bot-friren").click();
   await expect(page.locator(".iv-chip").first()).toBeVisible();
   const interview = await style(".iv-chips .iv-chip:not(.on)");
   expect(clarify).toBe(interview);
   expect(clarify).toContain("| 400 |"); // outlined and regular, not filled and bold
+  expect(await title(".iv-chips .iv-chip:not(.on) .iv-title")).toBe("500");
 });
 
 test("text fields take one calm focus: a 1px edge in --muted, the sidebar search and the model search alike", async ({ page }) => {

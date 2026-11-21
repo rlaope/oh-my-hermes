@@ -71,9 +71,10 @@ jobs:
       - name: Unit tests (vitest)
         working-directory: apps/omher
         run: pnpm test
-      - name: Install Chromium for Playwright
+      # WebKit too on macOS: the macOS window is WebKit, and e2e/cards-webkit.spec.ts runs there
+      - name: Install Chromium (and WebKit on macOS) for Playwright
         working-directory: apps/omher
-        run: pnpm exec playwright install chromium
+        run: pnpm exec playwright install chromium ${{ runner.os == 'macOS' && 'webkit' || '' }}
       - name: End-to-end tests against the mock bridge
         working-directory: apps/omher
         run: pnpm exec playwright test --reporter=line
