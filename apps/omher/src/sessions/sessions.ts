@@ -25,7 +25,7 @@
 import { useSyncExternalStore } from "react";
 import type { ITerminalInitOnlyOptions, ITerminalOptions, Terminal } from "@xterm/xterm";
 import type { FitAddon } from "@xterm/addon-fit";
-import { afterOpen, bracketedPaste, CELLS_EVENT, feed, isParked, live, onVisible, PARKING_EVENT, type Remake } from "./term/engine";
+import { afterOpen, bracketedPaste, CELLS_EVENT, feed, gpuComing, isParked, live, onVisible, PARKING_EVENT, type Remake } from "./term/engine";
 import { onCwd, onProgress } from "./term/engine-marks";
 import { applyLook, termOptions } from "./term/look";
 import { termFontsReady } from "./term/fonts";
@@ -132,6 +132,9 @@ interface Term {
   undo: () => void;
   /** The size the program was last told (when it started, then each resize sent). */
   told: { cols: number; rows: number } | null;
+  /** xterm resized (and so reflowed or trimmed its screen) since the program was last told its size: set by every
+   *  resize, cleared by `tellSize`. A size that came back to `told` still needs the program to redraw. */
+  reflowed: boolean;
   /** A changed size waiting to be sent (`RESIZE_SETTLE_MS`). */
   settle: ReturnType<typeof setTimeout> | null;
   /** Where its program runs: the agent PTY host, or (a Shell row) the login-shell host of the bottom panel. */
@@ -1501,6 +1504,7 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
       owed = 0;
       // the program started at this size; one that changed while it started is sent now
       t.told = { cols, rows };
+      t.reflowed = false; // nothing was drawn by the program yet: no screen of its to redraw
       if (t.settle === null) tellSize(t);
       if (!ofChat) patchRec(id, { status: "running" });
       if (!ofChat && r.agent === "codex" && !rec(id)?.agentSession) findCodexId(id, t, run, hostId, CODEX_ID_FIRST_MS);
@@ -1521,9 +1525,24 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
     t.settle = null;
     if (t.hostId === null || t.closed) return;
     const { cols, rows } = t.term;
-    if (t.told?.cols === cols && t.told.rows === rows) return;
+    const same = t.told?.cols === cols && t.told.rows === rows;
+    const reflowed = t.reflowed;
+    t.reflowed = false;
+    if (same && !reflowed) return;
     t.told = { cols, rows };
-    void t.io.resize(t.hostId, cols, rows).catch(() => undefined);
+    const hostId = t.hostId;
+    // Back at the size the program knows after xterm changed it and back (a show re-fits in the DOM renderer's cells,
+    // then in the GPU's): xterm reflowed and trimmed its screen, the program saw no change and would never redraw it,
+    // and a pty resize to the size it has sends no SIGWINCH. One size off and then the real one does, in that order.
+    if (same) {
+      void t.io
+        .resize(hostId, cols + 1, rows)
+        .catch(() => undefined)
+        .then(() => t.io.resize(hostId, cols, rows))
+        .catch(() => undefined);
+      return;
+    }
+    void t.io.resize(hostId, cols, rows).catch(() => undefined);
   };
 
   const disposeTerm = (id: string) => {
@@ -1587,6 +1606,7 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
         closed: false,
         undo: () => undefined,
         told: null,
+        reflowed: false,
         settle: null,
         io: isShell(rec(id)?.agent) ? getShellHost() : host,
         run: 0,
@@ -1619,6 +1639,7 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
           if (rec(id)) termActs.patch(id, { oscTitle: v });
         });
         term.onResize(() => {
+          tt.reflowed = true;
           // the size it ends on is sent, once (a drag gives one size per frame)
           if (tt.settle !== null) clearTimeout(tt.settle);
           tt.settle = setTimeout(() => tellSize(tt), RESIZE_SETTLE_MS);
@@ -1666,19 +1687,23 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
     applyLook(tt.term, theme, settings);
     const refit = () => {
       if (!tt.el.isConnected || tt.el.clientWidth === 0) return;
+      // shown again with the GPU renderer on its way: fitted in the standard renderer's cells now, it is fitted again
+      // in the GPU's, and the screen is reflowed twice. The engine's CELLS_EVENT fits it once, when they are known.
+      if (!fresh && gpuComing(tt.raw)) return;
       try {
         tt.fit.fit();
       } catch {
         /* not measurable yet */
       }
     };
+    // shown first: the engine then knows a GPU renderer is coming (`gpuComing`) when the first fit is made, and the
+    // terminal is fitted again when its cells change size (CELLS_EVENT: the GPU renderer arrived, or went)
+    tt.el.addEventListener(CELLS_EVENT, refit);
+    onVisible(tt.term, true);
     refit();
     if (fresh) void ready().then(() => startTerm(id, tt));
     const ro = new ResizeObserver(refit);
     ro.observe(container);
-    // and when its cells change size (the GPU renderer arrived after this fit, or went)
-    tt.el.addEventListener(CELLS_EVENT, refit);
-    onVisible(tt.term, true);
     if (!quiet) tt.term.focus();
     return () => {
       ro.disconnect();

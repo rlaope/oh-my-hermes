@@ -370,7 +370,8 @@ RULES = (
     "It never starts, stops, restarts or signals a gateway, looks only for a bot it attached or tried to attach, and"
     " stops once that bot is attached again.",
     "While a Hermes update holds the install (its `.hermes-update-in-progress` marker in the profile or the Hermes root,"
-    " judged by Hermes' own `_update_fenced`, read only) the bridge does not look, as Hermes' own"
+    " judged by Hermes' own `_update_fenced`, which reads the markers and, only when a stale one is left, briefly tries a"
+    " shared lock; it writes nothing) the bridge does not look, as Hermes' own"
     " `ensure_gateway_runtime` does not.",
 )
 TAURI_CONF = ROOT / "apps" / "omher" / "src-tauri" / "tauri.conf.json"
