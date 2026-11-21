@@ -73,7 +73,22 @@ LOADER_NOT_OBSERVED = {
 SDK_SHIM = r"""
 export const PANES_AREA = 'panes'
 export const STATUSBAR_AREAS = { left: 'statusBar.left', right: 'statusBar.right' }
-export const Tip = ({ label, children }) => { globalThis.__omh.tips.push(label); return children }
+// A card's label may be a drawn node (tipCard), so the shim flattens it to the text the reader reads
+// and keeps the door's own fields beside it: the one card class and the delay the contract pins.
+const flatten = node =>
+  node === null || node === undefined || node === false || node === true
+    ? ''
+    : Array.isArray(node)
+      ? node.map(flatten).join('')
+      : typeof node === 'string'
+        ? node
+        : typeof node === 'object'
+          ? flatten(node.props && node.props.children)
+          : String(node)
+export const Tip = ({ label, children, className, delayDuration }) => {
+  globalThis.__omh.tips.push({ className, delayDuration, text: flatten(label) })
+  return children
+}
 export const Badge = ({ children, variant }) => { globalThis.__omh.badges.push({ text: children, variant }); return children }
 export const PanelEmpty = ({ title, description }) => [title, description]
 export const StatusDot = props => { globalThis.__omh.dots.push(props); return null }
@@ -196,7 +211,7 @@ const structures = (node, out = []) => {
   if (!node || typeof node !== 'object') return out
   if (Array.isArray(node)) { node.forEach(child => structures(child, out)); return out }
   const props = node.props || {}
-  if (props.className) out.push({ className: props.className, text: text(node).join(''), state: props['data-state'], done: props['data-done'], live: props['data-live'], style: props.style,
+  if (props.className) out.push({ className: props.className, text: text(node).join(''), state: props['data-state'], done: props['data-done'], live: props['data-live'], style: props.style, tab: props.tabIndex,
     cells: (Array.isArray(props.children) ? props.children : [props.children]).filter(child => child && child.props).map(child => ({ className: child.props.className, text: text(child).join('') })) })
   return structures(props.children, out)
 }
@@ -1102,6 +1117,13 @@ FORMATTER_CASES = {
         [{"output_tokens": 300}],
         [{"usage": {"input": 0, "cache_read": 0, "cache_write": 0, "output": 0, "cost_usd": 0}}],
     ],
+    "laneSpan": [
+        # A running lane with no end reaches the read; a settled state whose end was never recorded (a
+        # parked or stuck lane) draws no span; an ended lane keeps its recorded clock.
+        [{"elapsed": 30, "ended": None, "state": "running"}, 1000, 1400],
+        [{"elapsed": 30, "ended": None, "state": "done"}, 1000, 1400],
+        [{"elapsed": 30, "ended": 1300, "state": "done"}, 1000, 1400],
+    ],
     "sumCostText": [
         [{"lanes": 2, "priced": 2, "cost": 0.0184, "estimated": True, "partial": False}],
         [{"lanes": 2, "priced": 1, "cost": 0.0123, "estimated": False, "partial": False}],
@@ -1673,21 +1695,25 @@ class DesktopPluginNodeTests(unittest.TestCase):
         pane = self._pane("open_with_payload")
         sections = self._sections("open_with_payload")
         self.assertEqual(list(sections), ["head", *SECTION_LABELS])
-        self.assertEqual(sections["head"], ["OMH", "1 running", "this session", "2 tools · 4m 2s"])
-        # The usage board leads: the stream's counts (no recorded row here), its cost marked as unvouched.
-        self.assertEqual(sections["USAGE"][:4], ["9 calls", "stream", "Main", "+ subagents (0)"])
+        self.assertEqual(sections["head"], ["OMH", "1 running", "this session", "⚙ 2 · 4m 2s"])
+        # The usage board leads: the stream's counts (no recorded row here) as one big card,
+        # its cost marked as unvouched; TPS and TTFT are dashes where the stream carries none.
+        self.assertEqual(sections["USAGE"][:6], ["9 calls", "Main", "+ subagents (0)", "45.2k", "tokens", "0.0%"])
         self.assertEqual(sections["PLAN"], [
             "Desktop check", "1/3", "Research", "1/1", "✓", "Read the pane spec",
-            "Build", "0/2", "●", "Draw the structured pane", "○", "Screenshot the result", "waiting: needs the app",
+            "Build", "0/2", "●", "Draw the structured pane", "○", "Screenshot the result", "⏳ needs the app",
         ])
         self.assertEqual(sections["CATCHES"], ["Nothing caught in this session"])
         self.assertEqual(sections["DAG"], ["No DAG in this session", "A delegated workflow draws its graph here."])
-        self.assertEqual(sections["AGENTS"], ["2", "2 subagents · 1 running"])
-        # Structured blocks replace both the legacy lines and Desktop's native rows.
+        self.assertEqual(sections["AGENTS"], [
+            "2 subagents · ● 1", "2",
+            "⠋", "Implement the parser at …/utils/duration.py", "a1b2c3d4", "inherit(claude-opus-5:high)", "4m 2s",
+            "✓", "Write tests for parse_duration", "e5f6a7b8", "category:architect(claude-fable-5-1:xhigh)", "2h 01m",
+        ])
+        # Structured blocks replace the legacy lines; the row now carries the short id itself
+        # (glyph, title, id, route, state, time), so the ids are no longer hidden.
         for line in ESTABLISHED_PAYLOAD["display"]["widget_lines"] + ESTABLISHED_PAYLOAD["display"]["todo_lines"]:
             self.assertNotIn(line, pane)
-        self.assertNotIn("a1b2c3d4", pane)
-        self.assertNotIn("e5f6a7b8", pane)
 
     def test_every_scenario_draws_the_same_five_sections_in_one_order(self) -> None:
         """Mutation: drop a section that has nothing to say, or let a payload reorder them."""
@@ -1711,34 +1737,36 @@ class DesktopPluginNodeTests(unittest.TestCase):
 
     def test_agent_rows_keep_the_secondary_figures_in_the_tooltip(self) -> None:
         render = self._drive()["renders"]["open_with_payload"]
-        self.assertIn("2 subagents · 1 running", render["byId"]["hud"])
-        self.assertIn("Each subagent is listed in Hermes Desktop's Agents panel.", render["tips"])
+        self.assertIn("2 subagents · ● 1", render["byId"]["hud"])
         self.assertEqual(render["alternates"], [])
-        self.assertFalse(any("omh-agent-title" in node["className"] for node in render["structure"]))
-        # Native row details belong to Desktop; OMH's route rows retain their figures in a Tip.
+        # Native row details belong to Desktop; OMH's route rows keep name, id, route, state and time
+        # in the row and every figure in their hover card.
         route = self._drive()["renders"]["maestro_and_board"]
-        self.assertIn("Refactor the router · (codex/maestro gpt-5.6) · 0 tok · $0.0000 (included)", route["tips"])
+        card = next(text for text in self._tip_texts(route) if "Refactor the router" in text)
+        for figure in ("run-42 · (codex/maestro gpt-5.6)", "0 tok", "$0.0000 (included)"):
+            self.assertIn(figure, card)
         self.assertNotIn("$0.0000 (included)", route["byId"]["hud"])
 
     def test_the_pane_draws_maestro_board_dag_and_a_finished_plan(self) -> None:
         sections = self._sections("maestro_and_board")
         self.assertEqual(sections["head"], [
-            "OMH", "1 running", "1 blocked", "this session", "repeat x3 blocked", "board 2 queued, 1 running",
-            "board dispatcher not seen", "yolo on",
+            "OMH", "1 running", "1 blocked", "this session", "🔁 ×3 blocked", "board ○2 ●1",
+            "no board dispatcher", "yolo on",
         ])
-        self.assertEqual(sections["PLAN"], ["Ship the pane", "✓ 1/2 (1 skipped)", "✓", "Build it", "–", "Benchmark it", "skipped: no bench harness"])
+        self.assertEqual(sections["PLAN"], ["Ship the pane", "✓ 1/2 (1 skipped)", "✓", "Build it", "–", "Benchmark it", "↳ no bench harness"])
         self.assertEqual(sections["AGENTS"], [
-            "2", "⠋", "Refactor the router", "run-42", "(codex/maestro gpt-5.6)", "running", "30s",
+            "2", "⠋", "Refactor the router", "run-42", "(codex/maestro gpt-5.6)", "30s",
             "▲", "Triage the flaky suite", "kb-7", "kanban/unassigned(gpt-5.6:medium)", "review", "1m 1s", "+2 more",
         ])
         # A pane naming its chat never draws the home's runtime graph: it may be another session's.
         self.assertEqual(sections["DAG"], ["No DAG in this session", "A delegated workflow draws its graph here."])
         # Where no chat is named, the runtime graph is drawn as the same cards as a dag-ulw run, named for what it is.
+        # A settled state reads from its glyph alone; only a wait keeps its word beside it.
         dag = self._sections("maestro_unnamed")["DAG"]
-        self.assertEqual(dag[:3], ["1/3", "View", "runtime graph · 1 running · 1 waiting · 1 done"])
+        self.assertEqual(dag[:3], ["1/3", "View", "runtime graph · ● 1  ○ 1"])
         self.assertEqual(dag[dag.index("▾ layer 1"):], [
-            "▾ layer 1", "a", "—", "✓ done", "Start node", "b", "—", "● running", "Start node",
-            "▾ layer 2", "c", "—", "○ waiting", "← b",
+            "▾ layer 1", "a", "✓", "b", "●",
+            "▾ layer 2", "c", "○ waiting",
         ])
 
     def test_the_parallel_shot_chip_shows_only_a_count_of_two_or_more(self) -> None:
@@ -1756,7 +1784,7 @@ class DesktopPluginNodeTests(unittest.TestCase):
 
     def test_a_skipped_note_under_a_finished_item_is_not_struck_through(self) -> None:
         render = self._drive()["renders"]["maestro_and_board"]
-        self.assertIn("skipped: no bench harness", render["byId"]["hud"])
+        self.assertIn("↳ no bench harness", render["byId"]["hud"])
         # The note is a sibling of the struck label, never its descendant.
         self.assertEqual(render["strikeLeaks"], [])
 
@@ -1774,7 +1802,7 @@ class DesktopPluginNodeTests(unittest.TestCase):
 
     def test_a_plan_todo_list_holds_keeps_only_its_recorded_reason(self) -> None:
         self.assertEqual(self._sections("native_held_waiting")["PLAN"],
-                         ["in Hermes todos", "1 waiting", "○", "Screenshot the result", "waiting: needs the app"])
+                         ["in Hermes todos", "1 waiting", "○", "Screenshot the result", "⏳ needs the app"])
         self.assertNotIn("Draw the structured pane", self._pane("native_held_waiting"))
         self.assertIn("Draw the structured pane", self._pane("open_with_payload"))
         self.assertEqual(self._status("native_held_waiting"), ["OMH", "1 running"])
@@ -1783,7 +1811,7 @@ class DesktopPluginNodeTests(unittest.TestCase):
         pane = self._pane("native_held_quiet")
         self.assertEqual(self._sections("native_held_quiet")["PLAN"], ["in Hermes todos", "Steps are in the Hermes todos above the composer"])
         self.assertNotIn("Read the pane spec", pane)
-        self.assertIn("2 subagents · 1 running", pane)
+        self.assertIn("2 subagents · ● 1", pane)
         self.assertEqual(self._status("native_held_quiet"), ["OMH", "1 running"])
 
     def test_an_undeclared_todo_is_said_rather_than_invented(self) -> None:
@@ -1861,7 +1889,8 @@ class DesktopPluginNodeTests(unittest.TestCase):
                 self.assertEqual(renders[name]["dots"], [])
                 self.assertEqual(renders[name]["byId"]["hud"][:3], ["OMH", "idle", scope])
         self.assertEqual(renders["open_with_payload"]["dots"], [{"tone": "good"}])
-        self.assertIn("oh-my-hermes 2.0.5", renders["no_todo_declared"]["tips"])
+        # The brand and its version live in the header brand's card now.
+        self.assertTrue(any("oh-my-hermes" in tip and "2.0.5" in tip for tip in self._tip_texts(renders["no_todo_declared"])))
         self.assertNotIn("v2.0.5", renders["no_todo_declared"]["byId"]["hud"])
         self.assertEqual(self._drive()["formatters"]["scopeLabel"], ["this session", "all sessions"])
 
@@ -1897,8 +1926,8 @@ class DesktopPluginNodeTests(unittest.TestCase):
                 self.assertEqual(render["summary"], f"{running} running")
                 self.assertEqual(render["byId"]["hud"][:2], ["OMH", f"{running} running"])
                 self.assertEqual(render["byId"]["status"], ["OMH", f"{running} running", "plan 1/3"])
-        self.assertIn("1 subagent · 1 running", drawn["byId"]["hud"])
-        self.assertIn("2 subagents · 2 running · +2 more", plain["byId"]["hud"])
+        self.assertIn("1 subagent · ● 1", drawn["byId"]["hud"])
+        self.assertIn("2 subagents · ● 2 · +2 more", plain["byId"]["hud"])
         self.assertEqual(drawn["tally"]["hidden"], 0)
         self.assertEqual(plain["tally"]["hidden"], 2)
         self.assertEqual(self._drive()["formatters"]["agentTally"][0]["hidden"], 0)
@@ -1914,11 +1943,11 @@ class DesktopPluginNodeTests(unittest.TestCase):
         structure = report["renders"]["maestro_and_board"]["structure"]
         skipped = [node for node in structure if node.get("state") == "skipped"]
         self.assertEqual(len(skipped), 1)
-        self.assertEqual(skipped[0]["text"], "–Benchmark itskipped: no bench harness")
+        self.assertEqual(skipped[0]["text"], "–Benchmark it↳ no bench harness")
         bars = [node for node in structure if node["className"] == "omh-pane-bar-fill"]
         self.assertEqual([(node["style"], node["done"]) for node in bars], [({"width": "50%"}, "true")])
         css = report["style"]["css"]
-        self.assertIn(".omh-pane-bar-fill[data-done=true]{background:var(--omh-mark)}", css)
+        self.assertIn(".omh-pane-bar-fill[data-done=true]{background:var(--omh-ok)}", css)
         self.assertIn(".omh-pane-item[data-state=skipped] .omh-pane-item-label{color:var(--omh-text-readable)}", css)
         self.assertEqual(report["formatters"]["foldLabels"], [{"earlier": "✓ 3 done", "later": "… 1 later task"}])
 
@@ -1926,7 +1955,7 @@ class DesktopPluginNodeTests(unittest.TestCase):
         chips, findings = self._drive()["formatters"]["chipList"]
         self.assertFalse(any(chip["key"] == "yolo" for chip in chips))
         self.assertEqual(next(chip for chip in chips if chip["key"] == "tools"), {
-            "key": "tools", "text": "2 tools · 4m 2s", "variant": "muted",
+            "key": "tools", "text": "⚙ 2 · 4m 2s", "variant": "muted",
         })
         self.assertEqual(next(chip for chip in findings if chip["key"] == "yolo"), {
             "key": "yolo", "text": "yolo on", "variant": "destructive",
@@ -1934,24 +1963,32 @@ class DesktopPluginNodeTests(unittest.TestCase):
         self.assertEqual({chip["key"]: chip["variant"] for chip in findings}, {
             "repeat": "warn", "board": "muted", "dispatcher": "warn", "yolo": "destructive",
         })
-        self.assertIn({"text": "2 tools · 4m 2s", "variant": "muted"}, self._drive()["renders"]["open_with_payload"]["badges"])
+        self.assertIn({"text": "⚙ 2 · 4m 2s", "variant": "muted"}, self._drive()["renders"]["open_with_payload"]["badges"])
         self.assertNotIn("yolo off", self._pane("open_with_payload"))
 
     def test_catches_use_the_tui_sentences_and_precede_the_plan(self) -> None:
-        from omh.tui.panels import CATCH_EMOJI, _catch_sentence
-
+        # The pane words its history in its own sentences now; it keeps the TUI's emoji
+        # (`omh.tui.panels.CATCH_EMOJI`), and CATCHES still precedes PLAN in the one section order.
+        emoji = {"repeat_loop": "🔁", "truncated_read": "📖", "plan_continued": "📋", "unarmed_wait": "⏰"}
         report = self._drive()
-        expected = [_catch_sentence(entry) for entry in CATCHES]
-        self.assertEqual(expected[0], "stopped a loop of 3 identical calls")
+        expected = [
+            "loop stopped: same call ×3",
+            "loop stopped: 2 calls ×4",
+            "re-read → line 120",
+            "kept going: 1 open",
+            "kept going: 2 open",
+            "wait with nothing to wake it",
+        ]
         self.assertEqual(report["formatters"]["catchSentence"], [*expected, "", ""])
         self.assertEqual(report["formatters"]["catchRows"], [[
-            {"seq": entry["seq"], "emoji": CATCH_EMOJI[entry["kind"]], "text": sentence}
+            {"seq": entry["seq"], "emoji": emoji[entry["kind"]], "text": sentence,
+             "tone": {"repeat_loop": "warn", "unarmed_wait": "warn"}.get(entry["kind"], "accent")}
             for entry, sentence in zip(CATCHES, expected)
         ]])
         sections = self._sections("catches_and_lanes")
         self.assertEqual(list(sections)[1:], list(SECTION_LABELS))
-        # A history, so its header says so and counts what it keeps.
-        self.assertEqual(sections["CATCHES"][:2], ["earlier in this session", "6"])
+        # A history, so its header counts what it keeps; each row is the emoji and its sentence.
+        self.assertEqual(sections["CATCHES"][0], "6")
         for sentence in expected:
             self.assertIn(sentence, sections["CATCHES"])
         self.assertEqual(self._sections("open_with_payload")["CATCHES"], ["Nothing caught in this session"])
@@ -1960,16 +1997,16 @@ class DesktopPluginNodeTests(unittest.TestCase):
         views = self._drive()["formatters"]["delegationView"]
         self.assertEqual(views[:2], [None, None])
         self.assertTrue(views[2]["settled"])
-        # The section is labelled DAG already; its run line does not say it twice.
-        self.assertEqual(views[2]["summary"], "Pane refresh · done 1/2 · 1 failed")
+        # The line is the run's name and what did not finish, the states as their glyphs.
+        self.assertEqual(views[2]["summary"], "Pane refresh · ▲ 1")
         self.assertEqual(self._sections("inactive_lanes")["DAG"], ["No DAG in this session", "A delegated workflow draws its graph here."])
         settled = self._sections("settled_lanes")["DAG"]
-        self.assertEqual(settled[:3], ["1/2", "View", "Pane refresh · done 1/2 · 1 failed"])
+        self.assertEqual(settled[:3], ["1/2", "View", "Pane refresh · ▲ 1"])
         # Finished, the lanes stay inspectable rather than collapsing into the line.
         self.assertIn("Settled child", settled)
         self.assertIn("Failed child", settled)
         live = self._sections("catches_and_lanes")["DAG"]
-        self.assertIn("Pane refresh · 1 running", live)
+        self.assertIn("Pane refresh · ● 1", live)
         self.assertIn("Graph-drawn child", live)
 
     def test_every_graph_is_drawn_as_cards_and_never_as_text(self) -> None:
@@ -2026,25 +2063,36 @@ class DesktopPluginNodeTests(unittest.TestCase):
         css = self._drive()["style"]["css"]
         pane = css[css.index(".omh-pane{") : css.index("}", css.index(".omh-pane{"))]
         self.assertIn("font-family:var(--font-sans", pane)
+        # The OMH TUI's default spectrum, every colour a color-mix of the host's own tokens:
+        # a pink brand, peach section labels, violet rules and card edges, a pastel blue for
+        # what runs, softened red, amber and green for the states.
         for token in ("--omh-warn:color-mix(in srgb,var(--ui-yellow) 72%,var(--ui-text-primary))",
                       "--omh-edge:color-mix(in srgb,var(--ui-purple) 55%,var(--background))",
-                      "--omh-label:color-mix(in srgb,var(--ui-orange) 65%,var(--ui-text-primary))"):
+                      "--omh-brand:color-mix(in srgb,color-mix(in srgb,var(--ui-red) 60%,var(--ui-purple)) 85%,var(--ui-text-primary))",
+                      "--omh-label:color-mix(in srgb,var(--ui-orange) 65%,var(--ui-text-primary))",
+                      "--omh-run:color-mix(in srgb,var(--ui-blue) 60%,var(--ui-text-primary))",
+                      "--omh-ok:color-mix(in srgb,var(--ui-green) 75%,var(--ui-text-primary))"):
             self.assertIn(token, css)
-        self.assertIn(".omh-pane-warn{color:var(--omh-warn)}", css)
         self.assertIn(".omh-pane-muted{color:var(--omh-text-readable)}", css)
         pane_rules = css[: css.index(".omh-bar{")]
-        self.assertNotIn("color:var(--ui-text-quaternary)", pane_rules, "no pane word takes the faintest token")
-        self.assertNotRegex(css, r"box-shadow|text-shadow|filter:")
-        # The one gradient the pane has is a node card's: its wash, and the running border that flows (owner, 2026-11-09).
+        # The faintest token separates header segments and rings the plan glyphs; no pane word is set in it.
+        for rule in re.findall(r"([^{}]+)\{[^}]*--ui-text-quaternary[^}]*\}", pane_rules):
+            with self.subTest(rule=rule.strip()[:60]):
+                self.assertTrue(rule.strip().endswith("::before") or ".omh-pane-item-glyph" in rule, rule)
+        self.assertNotRegex(css, r"text-shadow|filter:")
+        # The pane keeps two flat-TUI exceptions, both drawn, not set on text: the plan item's
+        # ring (an inset box-shadow) and the DAG drawing's washes.
+        shadows = re.findall(r"([^{}]+)\{[^}]*box-shadow[^}]*\}", css)
+        self.assertTrue(all(".omh-pane-item-glyph" in rule or ".omh-pane-tip" in rule for rule in shadows), shadows)
         rules = [rule for rule in css.split("}") if "gradient" in rule]
         self.assertTrue(rules)
-        self.assertTrue(all(".omh-pane-dv-card" in rule for rule in rules), rules)
+        self.assertTrue(all(".omh-pane-dv-card" in rule or ".omh-pane-dv-tl-" in rule for rule in rules), rules)
 
     def test_route_and_state_are_separate_fixed_grid_cells(self) -> None:
         report = self._drive()
         subrows = [node for node in report["renders"]["maestro_and_board"]["structure"] if node["className"] == "omh-agent-sub"]
         self.assertEqual(len(subrows), 2)
-        for row, state in zip(subrows, ("running", "review")):
+        for row, state in zip(subrows, ("", "review")):
             self.assertEqual(len(row["cells"]), 3)
             self.assertIn("omh-agent-route", row["cells"][0]["className"])
             self.assertIn("omh-agent-state", row["cells"][1]["className"])
@@ -2052,23 +2100,24 @@ class DesktopPluginNodeTests(unittest.TestCase):
             self.assertIn("omh-agent-figure", row["cells"][2]["className"])
         self.assertIn("omh-pane-tertiary", subrows[1]["cells"][1]["className"])
         css = report["style"]["css"]
-        self.assertIn("grid-template-columns:minmax(0,1fr) 64px 52px", css)
+        self.assertIn("grid-template-columns:minmax(0,1fr) auto 52px", css)
         self.assertIn(".omh-agent-route{min-width:0;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}", css)
         self.assertIn(".omh-agent-state{overflow:hidden;white-space:nowrap;text-overflow:ellipsis}", css)
-        self.assertIn("kanban/unassigned(gpt-5.6:medium)", report["renders"]["maestro_and_board"]["tips"])
+        self.assertIn("kanban/unassigned(gpt-5.6:medium)", " ".join(self._tip_texts(report["renders"]["maestro_and_board"])))
 
     def test_edges_are_pluralized_and_dependency_waits_are_humanized(self) -> None:
         report = self._drive()
         self.assertEqual(report["formatters"]["humanState"], ["waiting", "done", "planned"])
         self.assertEqual(report["formatters"]["t"][:2], ["layer 1 · 1 node", "layer 1 · 2 nodes"])
-        # A card names what it waits on by the lane it follows, and never in the reader's state word.
-        self.assertIn("← b", self._sections("maestro_unnamed")["DAG"])
+        # A card names what it waits on by the lane it follows, and never in the reader's state word;
+        # the upstream line left the drawn card, so `← b` reads in the lane's hover card.
+        self.assertTrue(any("← b" in tip for tip in self._tip_texts(self._drive()["renders"]["maestro_unnamed"])))
         self.assertNotIn("blocked_by_dependency", " ".join(self._pane("maestro_unnamed")))
         self.assertEqual(report["formatters"]["wordTone"], ["accent", "warn", "error", "muted", "tertiary"])
         for token in ("--ui-cyan", "--ui-success"):
             self.assertNotIn(token, report["style"]["css"])
         # Green is kept for done DAG work alone: the card border and the folded layer's tally.
-        self.assertIn("--omh-ok:var(--ui-green)", report["style"]["css"])
+        self.assertIn("--omh-ok:color-mix(in srgb,var(--ui-green) 75%,var(--ui-text-primary))", report["style"]["css"])
         self.assertIn(".omh-pane-dv-card[data-tone=ok]{--dv-c:var(--omh-ok)}", report["style"]["css"])
 
     def test_a_live_run_with_nothing_counted_is_drawn_in_the_accent(self) -> None:
@@ -2123,7 +2172,7 @@ class DesktopPluginNodeTests(unittest.TestCase):
     def test_text_the_user_reads_is_darker_than_the_hint_role(self) -> None:
         css = self._drive()["style"]["css"]
         self.assertIn("--omh-text-readable:color-mix(in srgb,var(--ui-text-secondary),var(--ui-text-tertiary))", css)
-        for rule in (".omh-pane-scope{", ".omh-pane-item-note{", ".omh-pane-summary{", ".omh-pane-notice{", ".omh-pane-tertiary{"):
+        for rule in (".omh-pane-scope{", ".omh-pane-item-note{", ".omh-pane-notice{", ".omh-pane-tertiary{"):
             with self.subTest(rule=rule):
                 body = css[css.index(rule) : css.index("}", css.index(rule))]
                 self.assertIn("color:var(--omh-text-readable)", body)
@@ -2153,17 +2202,19 @@ class DesktopPluginNodeTests(unittest.TestCase):
         korean = self._drive()["korean"]
         lanes = " ".join(korean["catches_and_lanes"]["byId"]["hud"])
         self.assertIn("에이전트", lanes)
-        self.assertIn("Pane refresh · 1 실행 중", lanes)
+        self.assertIn("Pane refresh · ● 1", lanes)
         self.assertNotIn("1 running", lanes)
         board = korean["maestro_and_board"]["byId"]["hud"]
         for english in ("running", "review", "completed", "failed"):
             self.assertNotIn(english, board)
         self.assertIn("검토", board)
-        self.assertIn("실행 중", board)
-        self.assertIn("✓ 완료", korean["maestro_unnamed"]["byId"]["hud"])
-        self.assertIn("Pane refresh · 완료 1/2 · 1 실패", korean["settled_lanes"]["byId"]["hud"])
+        self.assertIn("1개 실행 중", board)
+        # A settled lane reads from its glyph; the wait keeps its Korean word beside it.
+        self.assertIn("✓", korean["maestro_unnamed"]["byId"]["hud"])
+        self.assertIn("○ 대기", korean["maestro_unnamed"]["byId"]["hud"])
+        self.assertIn("Pane refresh · ▲ 1", korean["settled_lanes"]["byId"]["hud"])
         self.assertEqual(korean["gateway_closed"]["byId"]["hud"][:2], ["OMH", "게이트웨이 연결 중"])
-        tips = " ".join(korean["maestro_and_board"]["tips"])
+        tips = " ".join(self._tip_texts(korean["maestro_and_board"]))
         self.assertIn("0 토큰", tips)
         self.assertIn("$0.0000 (포함)", tips)
         self.assertIn("kanban/미배정(gpt-5.6:medium)", tips)
@@ -2180,17 +2231,25 @@ class DesktopPluginNodeTests(unittest.TestCase):
         """The texts of one class above the DAG block: the usage board's."""
         return [node["text"] for node in _split_at_dag(render)[0] if name in node["className"].split()]
 
+    @staticmethod
+    def _tip_texts(report: dict) -> list[str]:
+        """The hover cards one render opened, each flattened to the text the reader reads."""
+        return [tip["text"] for tip in report["tips"]]
+
     def test_a_dag_ulw_run_is_drawn_as_cards_with_the_figures_the_backend_read(self) -> None:
         """Mutation: count the output in the hit rate, drop a lane's estimate mark, or draw the backend text instead."""
         render = self._drive()["renders"]["dag_cards"]
-        self.assertEqual(self._classed(render, "omh-pane-dv-kpi-label"), ["Tokens", "Cache hit", "Cost", "Node time"])
+        # The run head card: the total large, the hit rate beside it, cost and node time at the end.
+        self.assertEqual(self._classed(render, "omh-pane-tok-v"), ["12.6k"])
+        self.assertEqual(self._classed(render, "omh-pane-fig-v"), ["77.5%", "~$0.0184", "1m 18s"])
+        self.assertEqual(self._classed(render, "omh-pane-fig-l"), ["cache", "node time"])
+        # The run head keeps no pace row: that is the usage board's.
+        self.assertEqual(self._classed(render, "omh-pane-tok-pace"), [])
         # 1600 + 9300 + 1100 prompt + 630 out; 9300 / 12000 read; two priced lanes, one of them estimated; 47s + 31s.
-        self.assertEqual(self._classed(render, "omh-pane-dv-kpi-value"), ["12.6k", "77.5%", "~$0.0184", "1m 18s"])
-        self.assertEqual(
-            self._classed(render, "omh-pane-dv-kpi-sub"),
-            # Each share names the whole it is of: the run's four lanes, two of them priced and timed.
-            ["↓630 out · 12.0k in", "9.3k of 12.0k prompt", "2/4 nodes priced", "2/4 nodes timed"],
-        )
+        # The full detail is the head card's hover: the same shares naming the whole run.
+        tips = " ".join(self._tip_texts(render))
+        for sub in ("↑12.0k ↓630", "9.3k / 12.0k", "2/4 priced", "2/4 timed"):
+            self.assertIn(sub, tips)
         self.assertEqual(self._classed(render, "omh-pane-dv-title"), ["Write a.txt", "Write b.txt", "Sum", "Check"])
         self.assertEqual(self._classed(render, "omh-pane-dv-path-l"), ["Critical path", "Bottlenecks"])
         rows = [[cell["text"] for cell in node["cells"]] for node in render["structure"] if "omh-pane-dv-mrow" in node["className"].split()]
@@ -2203,7 +2262,7 @@ class DesktopPluginNodeTests(unittest.TestCase):
         render = self._drive()["renders"]["fanout_cards"]
         self.assertEqual(self._classed(render, "omh-pane-dv-title"), ["Write a.txt", "Write b.txt", "Sum", "Check"])
         self.assertEqual(self._classed(render, "omh-pane-dv-path-l"), [])
-        self.assertEqual(self._classed(render, "omh-pane-dv-kpi-label"), ["Tokens", "Cache hit", "Cost", "Node time"])
+        self.assertEqual(self._classed(render, "omh-pane-tok-v"), ["12.6k"])
         self.assertNotIn("omh-pane-dag", {node["className"] for node in render["structure"]})
 
     def test_an_outside_lane_draws_under_its_own_block_never_as_a_start_node(self) -> None:
@@ -2213,8 +2272,6 @@ class DesktopPluginNodeTests(unittest.TestCase):
         self.assertIn("Fix the typo", render["byId"]["hud"])
         classes = {name for node in render["structure"] for name in node["className"].split()}
         self.assertIn("omh-pane-dv-outside", classes)
-        # The run's two lanes still read Start node; the outside lane's card carries none.
-        self.assertEqual(" ".join(render["byId"]["hud"]).count("Start node"), 2)
         model = self._drive()["formatters"]["outsideLanes"][0]
         self.assertEqual(model["layers"], [["d:r:a", "d:r:b"]])
         self.assertEqual(model["lanes"], ["d:r:a", "d:r:b"])
@@ -2234,11 +2291,12 @@ class DesktopPluginNodeTests(unittest.TestCase):
         chips = self._classed(render, "omh-pane-dv-layer-name")
         self.assertEqual((len(chips), chips[0], chips[-1]), (14, "▸ layer 4 · 1 node", "▸ layer 17 · 1 node"))
         self.assertIn("+3 more", dag)
-        # Nothing counted yet: a dash and a short note, never `0 of 0 prompt` or `sum of 0 nodes`.
-        self.assertEqual(self._classed(render, "omh-pane-dv-kpi-value"), ["—", "—", "—", "—"])
-        self.assertEqual(self._classed(render, "omh-pane-dv-kpi-sub"), ["", "", "no usage yet", ""])
+        # Nothing counted and nothing timed: the run draws no line of dashes at all —
+        # never `0 of 0 prompt` or `sum of 0 nodes`.
+        self.assertEqual(self._classed(render, "omh-pane-tok-v"), [])
+        self.assertEqual(self._classed(render, "omh-pane-fig-v"), [])
         self.assertIn("Step 0 (blocks 16)", self._classed(render, "omh-pane-dv-chip-t"))
-        # The fold modes are buttons over the cards, not entries in the View menu.
+        # The fold modes are buttons in the graph's heading, not entries in the View menu.
         self.assertEqual(self._classed(render, "omh-pane-seg-b"), ["Auto", "Focus", "Unfold all", "Fold all"])
 
     def test_the_view_menu_is_drawn_opaque(self) -> None:
@@ -2282,6 +2340,26 @@ class DesktopPluginNodeTests(unittest.TestCase):
         (keys,) = self._drive()["formatters"]["sharedOpenKeys"]
         self.assertEqual(keys, [["status", ["omh", "hud", "s1", "", "1,2"]], ["hud", ["omh", "hud", "s1", "", "1,2"]]])
 
+    def test_the_timeline_times_the_run_and_the_cards_open_from_the_keyboard(self) -> None:
+        """Mutation: extrapolate a parked lane to now, span the whole DAG instead of the run, or draw cards no keyboard can open."""
+        # Only a running lane with no recorded end reaches the read; a done lane whose end was never
+        # recorded and a stuck lane draw no span; an ended lane keeps its recorded clock.
+        self.assertEqual(self._drive()["formatters"]["laneSpan"],
+                         [{"start": 970, "end": 1400, "open": True}, None, {"start": 1270, "end": 1300, "open": False}])
+        render = self._drive()["renders"]["dag_cards"]
+        tips = " ".join(self._tip_texts(render))
+        # The timeline is one of the run's blocks. A done lane without a recorded end leaves the run's
+        # coverage partial, so the card names the gap and drops the idle percentage.
+        timeline = [node for node in render["structure"] if "omh-pane-dv-tl" in node["className"].split()]
+        self.assertEqual(len(timeline), 1)
+        self.assertTrue(timeline[0]["text"].startswith("Timeline"), timeline[0]["text"][:40])
+        self.assertIn("Drawn from the timed nodes shown", tips)
+        # withTip adds the focus to the plain hosts it wraps, so the keyboard opens the same cards
+        # the pointer does: the big board's card and the run head's card.
+        toks = [node for node in render["structure"] if node["className"] == "omh-pane-tok"]
+        self.assertTrue(len(toks) >= 2)
+        self.assertTrue(all(node["tab"] == 0 for node in toks))
+
     def test_a_run_too_deep_to_send_reads_as_its_counts_not_as_no_dag(self) -> None:
         """Mutation: take a graph with no lanes as no graph, so an active 500-layer run reads `No DAG in this session`."""
         dag = self._sections("dag_counts_only")["DAG"]
@@ -2290,9 +2368,9 @@ class DesktopPluginNodeTests(unittest.TestCase):
         self.assertIn("500 nodes in 500 layers: too many to draw here", dag)
 
     def test_a_cut_runs_shares_name_the_whole_run(self) -> None:
-        """Mutation: divide by the lanes shown, so a 9-lane run with 3 drawn reads `2/3 nodes priced`."""
+        """Mutation: divide by the lanes shown, so a 9-lane run with 3 drawn reads `2/3 priced`."""
         render = self._drive()["renders"]["dag_cut_cards"]
-        self.assertIn("2/9 nodes priced", self._classed(render, "omh-pane-dv-kpi-sub"))
+        self.assertIn("2/9 priced", " ".join(self._tip_texts(render)))
 
     def test_a_folded_layer_takes_its_lanes_edges_once(self) -> None:
         first, middle, none = self._drive()["formatters"]["foldedEdges"]
@@ -2314,8 +2392,9 @@ class DesktopPluginNodeTests(unittest.TestCase):
         """Mutation: replace a finished run's cards by its summary line (the node summaries and figures are for debugging)."""
         structure = self._drive()["renders"]["dag_settled"]["structure"]
         lines = [node["text"] for node in structure if node["className"] == "omh-pane-run"]
-        self.assertEqual(lines, ["Write and sum · done 2/2"])
-        self.assertTrue({"omh-pane-dv-kpis", "omh-pane-dv-canvas", "omh-pane-dv-card"}
+        # The line is the run's name; the section header's count carries done/total.
+        self.assertEqual(lines, ["Write and sum"])
+        self.assertTrue({"omh-pane-dv-runhead", "omh-pane-dv-canvas", "omh-pane-dv-card"}
                         <= {name for node in structure for name in node["className"].split()})
         # The same line a running run carries: finishing changes the words, not the shape.
         self.assertEqual([node for node in structure if node["className"] == "omh-pane-dv-fold"], [])
@@ -2323,24 +2402,26 @@ class DesktopPluginNodeTests(unittest.TestCase):
     def test_a_settled_dag_ulw_run_keeps_its_figures_under_the_line(self) -> None:
         """#2684. Keep recorded figures, and keep uncounted nodes inspectable without inventing usage."""
         render = self._drive()["renders"]["dag_settled"]
-        run_kpis = [node for node in render["structure"]
-                    if "omh-pane-dv-kpis" in node["className"].split() and "omh-pane-ub-kpis" not in node["className"]]
-        self.assertEqual(len(run_kpis), 1)
-        labels = [node["text"] for node in render["structure"] if "omh-pane-dv-kpi-label" in node["className"].split()]
-        values = [node["text"] for node in render["structure"] if "omh-pane-dv-kpi-value" in node["className"].split()]
-        figures = dict(zip(labels[-4:], values[-4:]))
-        self.assertEqual(figures, {"Tokens": "7.7k", "Cache hit": "80.5%", "Cost": "$0.0123", "Node time": "59s"})
-        uncounted = self._drive()["renders"]["dag_settled_uncounted"]["structure"]
-        self.assertTrue([node for node in uncounted if node["className"] == "omh-pane-dv-card"])
-        uncounted_values = [node["text"] for node in uncounted if "omh-pane-dv-kpi-value" in node["className"].split()]
-        self.assertEqual(uncounted_values[-4:], ["—", "—", "—", "59s"])
+        run_heads = [node for node in render["structure"] if node["className"] == "omh-pane-dv-runhead"]
+        self.assertEqual(len(run_heads), 1)
+        self.assertEqual(self._classed(render, "omh-pane-tok-v"), ["7.7k"])
+        self.assertEqual(self._classed(render, "omh-pane-fig-v"), ["80.5%", "$0.0123", "59s"])
+        self.assertEqual(self._classed(render, "omh-pane-fig-l"), ["cache", "node time"])
+        tips = " ".join(self._tip_texts(render))
+        for sub in ("↑7.7k ↓0", "6.2k / 7.7k", "1/2 priced", "2/2 timed"):
+            self.assertIn(sub, tips)
+        uncounted = self._drive()["renders"]["dag_settled_uncounted"]
+        self.assertTrue([node for node in uncounted["structure"] if node["className"] == "omh-pane-dv-card"])
+        # No usage: the head keeps the timed total alone and invents no cache or cost.
+        self.assertEqual(self._classed(uncounted, "omh-pane-tok-v"), ["—"])
+        self.assertEqual(self._classed(uncounted, "omh-pane-fig-v"), ["59s"])
+        self.assertEqual(self._classed(uncounted, "omh-pane-fig-l"), ["node time"])
 
     def test_a_partly_priced_run_marks_its_cost_as_a_floor(self) -> None:
         """Mutation: show the priced lanes' sum as the run's cost, in the figures or in the by-model row."""
         render = self._drive()["renders"]["dag_partial_cost"]
-        costs = dict(zip(self._classed(render, "omh-pane-dv-kpi-label"), self._classed(render, "omh-pane-dv-kpi-value")))
-        self.assertEqual(costs["Cost"], "≥$0.0123")
-        self.assertIn("1/2 nodes priced", self._classed(render, "omh-pane-dv-kpi-sub"))
+        self.assertEqual(self._classed(render, "omh-pane-fig-v"), ["77.5%", "≥$0.0123"])
+        self.assertIn("1/2 priced", " ".join(self._tip_texts(render)))
         rows = [[cell["text"] for cell in node["cells"]] for node in render["structure"] if "omh-pane-dv-mrow" in node["className"].split()]
         self.assertEqual(rows[1:], [["claude-haiku-5-5", "2", "12.6k", "77.5%", "≥$0.0123"]])
         self.assertEqual(self._drive()["formatters"]["sumCostText"],
@@ -2358,7 +2439,7 @@ class DesktopPluginNodeTests(unittest.TestCase):
         self.assertEqual([(row["count"], row["share"]) for row in all_zero], [("0", "—")] * 3)
 
     def test_the_dag_block_is_named_dag_and_its_stats_come_before_the_dag(self) -> None:
-        """Mutation: label it `DELEGATION` again, or put the stats back under the cards."""
+        """Mutation: label it `DELEGATION` again, or put the run's blocks back under the cards."""
         renders = self._drive()["renders"]
         for name, drawn in (("dag_cards", "omh-pane-dv-canvas"), ("fanout_cards", "omh-pane-dv-canvas"), ("dag_beyond_cards", "omh-pane-dv-canvas")):
             with self.subTest(name=name):
@@ -2366,9 +2447,14 @@ class DesktopPluginNodeTests(unittest.TestCase):
                 self.assertIn("DAG", labels)
                 self.assertNotIn("DELEGATION", labels)
                 classes = [node["className"].split() for node in _split_at_dag(renders[name])[1]]
-                at = {key: next(index for index, names in enumerate(classes) if key in names) for key in ("omh-pane-dv-kpis", "omh-pane-dv-stats", drawn)}
-                self.assertLess(at["omh-pane-dv-kpis"], at["omh-pane-dv-stats"])
-                self.assertLess(at["omh-pane-dv-stats"], at[drawn])
+                head_at = next((index for index, names in enumerate(classes) if "omh-pane-dv-runhead" in names), None)
+                stats_at = next(index for index, names in enumerate(classes) if "omh-pane-dv-stats" in names)
+                drawn_at = next(index for index, names in enumerate(classes) if drawn in names)
+                # The run's head card and its stats block stand before the cards; a run with nothing
+                # to count draws no head at all, so the order holds on the two that remain.
+                if head_at is not None:
+                    self.assertLess(head_at, stats_at)
+                self.assertLess(stats_at, drawn_at)
         # A run with no topology is the same DAG block, not a delegation list beside it.
         labels = [node["text"] for node in renders["settled_lanes"]["structure"] if node["className"] == "omh-pane-section-label"]
         self.assertEqual(labels, list(SECTION_LABELS))
@@ -2379,24 +2465,25 @@ class DesktopPluginNodeTests(unittest.TestCase):
         self.assertEqual(self._board(render, "omh-pane-section-label")[0], "USAGE")
         self.assertEqual(self._board(render, "omh-pane-section-title")[0], "gpt-6-luna")
         self.assertEqual(self._board(render, "omh-pane-section-count")[0], "4 calls")
-        # The dial holds the tokens and the cache; the figures beside it are TPS, TTFT, cost and context.
-        self.assertEqual(self._board(render, "omh-pane-ub-total"), ["12.6k"])
-        # The dial's line is the hit rate whatever the source, so it never switches between a count and a share.
-        self.assertEqual(self._board(render, "omh-pane-ub-cache"), ["cache 77.5%"])
-        self.assertEqual(self._board(render, "omh-pane-ub-source"), ["recorded"])
-        self.assertEqual(self._board(render, "omh-pane-dv-kpi-label"), ["TPS", "TTFT", "Cost", "Context"])
-        # The recorded row: 1600 + 9300 + 1100 prompt + 630 out; 9300 / 12000 read; $0.5 priced. Then the stream's
-        # window (15.7k of 100.0k), its rolling speed, and the two waits this window timed (1850 ms, 410 ms).
-        self.assertEqual(self._board(render, "omh-pane-dv-kpi-value"), ["42 t/s", "410ms", "$0.5000", "16%"])
-        self.assertEqual(
-            self._board(render, "omh-pane-dv-kpi-sub"),
-            ["avg call 3.2s", "avg 1.1s · 2 turns", "", "15.7k of 100.0k"],
-        )
-        # The composition: what the prompt is made of, as shares of the window, and the free end of it (100.0k - 15.7k).
-        self.assertEqual(self._board(render, "omh-pane-dv-legend-k"), ["System prompt", "Tools", "Conversation", "Free window"])
-        self.assertEqual(self._board(render, "omh-pane-dv-legend-n"), ["3.0k", "6.0k", "6.7k", "84.3k"])
-        self.assertEqual(self._board(render, "omh-pane-dv-legend-p"), ["3.0%", "6.0%", "6.7%", "84.3%"])
-        self.assertEqual(self._board(render, "omh-pane-dv-stats-c"), ["~15.7k / 100.0k"])
+        # The big card leads: the total large, the hit rate beside it, the recorded cost at the end,
+        # the split under the bar in the bar's colours, and the pace row on the split's columns.
+        self.assertEqual(self._board(render, "omh-pane-tok-v"), ["12.6k"])
+        self.assertEqual(self._board(render, "omh-pane-fig-v"), ["77.5%", "$0.5000"])
+        self.assertEqual(self._board(render, "omh-pane-fig-l"), ["cache"])
+        self.assertEqual([text for text in self._board(render, "omh-pane-tok-k") if text][-2:], ["TPS", "TTFT"])
+        self.assertEqual([text for text in self._board(render, "omh-pane-tok-n") if text][-2:], ["42 t/s", "410ms"])
+        parts_k = [text for text in self._board(render, "omh-pane-tok-k") if text][:-2]
+        parts_n = [text for text in self._board(render, "omh-pane-tok-n") if text][:-2]
+        self.assertEqual(parts_k, ["Cache read", "Uncached input", "Cache write", "Output"])
+        self.assertEqual(parts_n, ["9.3k", "1.6k", "1.1k", "630"])
+        self.assertEqual(self._board(render, "omh-pane-tok-rule"), [""])
+        # The recorded row: 1600 + 9300 + 1100 prompt + 630 out; 9300 / 12000 read; $0.5 priced. The card
+        # carries where the figures came from, the window (15.7k of 100.0k), the rolling speed, and the
+        # two waits this window timed (1850 ms, 410 ms).
+        tips = " ".join(self._tip_texts(render))
+        for figure in ("recorded", "↑12.0k ↓630", "9.3k / 12.0k", "16%", "15.7k of 100.0k", "avg call 3.2s",
+                       "avg 1.1s · 2 turns", "~15.7k / 100.0k", "System prompt", "84.3k"):
+            self.assertIn(figure, tips)
         pane = " ".join(render["byId"]["hud"])
         self.assertLess(pane.index("USAGE"), pane.index("PLAN"))
 
@@ -2405,39 +2492,48 @@ class DesktopPluginNodeTests(unittest.TestCase):
         renders = self._drive()["renders"]
         for name in ("usage_board_switched", "usage_board_read_failed"):
             with self.subTest(name=name):
-                values = dict(zip(self._board(renders[name], "omh-pane-dv-kpi-label"),
-                                  self._board(renders[name], "omh-pane-dv-kpi-value")))
+                render = renders[name]
                 # The stream's 12000 prompt and 630 out; its hit rate; its cost unvouched (the row's $0.5000 is gone).
-                self.assertEqual((self._board(renders[name], "omh-pane-ub-total"), values["Cost"]), (["12.6k"], "—"))
-                self.assertEqual(self._board(renders[name], "omh-pane-ub-cache"), ["cache 77.0%"], "no row, so the rate")
+                self.assertEqual(self._board(render, "omh-pane-tok-v"), ["12.6k"])
+                self.assertEqual(self._board(render, "omh-pane-fig-v"), ["77.0%"])
+                tips = " ".join(self._tip_texts(render))
+                self.assertIn("stream", tips, "no row, so the card names the stream")
+                self.assertIn("unpriced", tips)
+                self.assertNotIn("$0.5000", tips)
+                self.assertNotIn("$0.5000", render["byId"]["hud"])
 
     def test_a_chat_with_only_a_stream_shows_what_it_carries_and_dashes_for_the_rest(self) -> None:
         render = self._drive()["renders"]["usage_board_stream_only"]
-        self.assertEqual(self._board(render, "omh-pane-ub-total"), ["4.3k"])
-        self.assertEqual(self._board(render, "omh-pane-ub-cache"), ["cache 50.0%"])
-        self.assertEqual(self._board(render, "omh-pane-dv-kpi-value"), ["—", "—", "—", "—"])
-        self.assertEqual(self._board(render, "omh-pane-dv-kpi-sub"), ["", "send → first token", "unpriced", ""])
-        self.assertEqual(self._board(render, "omh-pane-dv-legend-k"), [], "no breakdown yet, so no composition")
+        self.assertEqual(self._board(render, "omh-pane-tok-v"), ["4.3k"])
+        self.assertEqual(self._board(render, "omh-pane-fig-v"), ["50.0%"])
+        self.assertEqual([text for text in self._board(render, "omh-pane-tok-n") if text][-2:], ["—", "—"],
+                         "no speed and no turn timed: the pace row reads dashes")
+        tips = " ".join(self._tip_texts(render))
+        self.assertIn("unpriced", tips)
+        self.assertIn("after the next turn", tips, "no breakdown yet, so no composition")
 
     def test_a_chat_nothing_has_reported_on_keeps_its_board_and_says_so(self) -> None:
         """Mutation: drop the board when nothing has reported (the block that comes and goes)."""
         usage = self._sections("usage_board_unknown")["USAGE"]
-        self.assertEqual(usage[:3], ["Main", "+ subagents (0)", "—"])
-        self.assertIn("Nothing recorded for this chat yet", usage)
-        self.assertIn("Open a chat to see its usage", self._sections("reader_error")["USAGE"])
+        self.assertEqual(usage[:3], ["Main", "+ subagents (0)", "Nothing recorded for this chat yet"])
+        # A host naming no chat says where the usage would come from instead.
+        self.assertIn("Open a chat to see its usage", self._sections("global_idle")["USAGE"])
 
     def test_the_gateways_counters_fill_a_board_the_record_has_not_reached(self) -> None:
         """Mutation: read only Hermes' recorded row (a chat with no row showed nothing), or ask with no chat named."""
         renders = self._drive()["renders"]
         render = renders["usage_board_gateway"]
         self.assertEqual(render["stats"], {"enabled": True, "queryKey": ["omh", "stats", "rt-9", 0]})
-        self.assertEqual(self._board(render, "omh-pane-ub-source"), ["live"], "the gateway's counters, in the person's word")
         self.assertEqual(self._board(render, "omh-pane-section-title")[0], "claude-opus-5-5")
         self.assertEqual(self._board(render, "omh-pane-section-count")[0], "7 calls")
-        self.assertEqual(self._board(render, "omh-pane-ub-total"), ["42.0k"])
-        self.assertEqual(self._board(render, "omh-pane-ub-cache"), ["cache 90.0%"])
-        values = dict(zip(self._board(render, "omh-pane-dv-kpi-label"), self._board(render, "omh-pane-dv-kpi-value")))
-        self.assertEqual(values, {"TPS": "33 t/s", "TTFT": "—", "Cost": "—", "Context": "25%"})
+        self.assertEqual(self._board(render, "omh-pane-tok-v"), ["42.0k"])
+        self.assertEqual(self._board(render, "omh-pane-fig-v"), ["90.0%"])
+        # The counters' speed sits on the board's pace row; the rest of the figures are the card's.
+        self.assertEqual([text for text in self._board(render, "omh-pane-tok-n") if text][-2:], ["33 t/s", "—"])
+        tips = " ".join(self._tip_texts(render))
+        self.assertIn("live", tips, "the gateway's counters, in the person's word")
+        for figure in ("↑40.0k ↓2.0k", "36.0k / 40.0k", "unpriced", "25%", "50.0k of 200.0k", "avg call 2.5s"):
+            self.assertIn(figure, tips)
         self.assertFalse(renders["open_with_payload"]["stats"]["enabled"], "no chat named, so nothing is asked")
 
     def test_the_composition_is_asked_for_only_while_a_chat_is_idle_and_never_shown_under_another(self) -> None:
@@ -2490,18 +2586,18 @@ class DesktopPluginNodeTests(unittest.TestCase):
 
         self.assertEqual(
             cells(streamed),
-            {"Tokens": ("4.3k", "↓300 out · 4.0k in"), "Cache hit": ("50.0%", "2.0k of 4.0k prompt"), "Cost": ("~$0.0100", ""),
-             "Context": ("—", ""), "TPS": ("—", ""), "TTFT": ("—", "send → first token")},
+            {"Tokens": ("4.3k", "↑4.0k ↓300"), "Cache hit": ("50.0%", "2.0k / 4.0k"), "Cost": ("~$0.0100", ""),
+             "Context": ("—", ""), "TPS": ("—", ""), "TTFT": ("—", "")},
         )
+        # The pace row repeats the board's own two figures, whatever their source.
+        self.assertEqual(streamed["pace"], [{"label": "TPS", "value": "—"}, {"label": "TTFT", "value": "—"}])
         self.assertEqual(
-            cells(recorded)["Tokens"], ("12.6k", "↓630 out · 12.0k in"), "the recorded row, not the stream's one-token counts"
+            cells(recorded)["Tokens"], ("12.6k", "↑12.0k ↓630"), "the recorded row, not the stream's one-token counts"
         )
-        self.assertEqual((cells(recorded)["Cache hit"], cells(recorded)["Cost"]), (("77.5%", "9.3k of 12.0k prompt"), ("~$0.0184", "")))
-        self.assertEqual(
-            [cell["ring"] for cell in recorded["cells"] if cell.get("ring")],
-            [{"input": 1600, "read": 9300, "write": 1100, "output": 630}],
-        )
-        self.assertEqual(cells(zero_read)["Cache hit"], ("0.0%", "0 of 12.0k prompt"))
+        self.assertEqual((cells(recorded)["Cache hit"], cells(recorded)["Cost"]), (("77.5%", "9.3k / 12.0k"), ("~$0.0184", "")))
+        # The split the big card draws comes from the recorded row alone.
+        self.assertEqual(recorded["dial"]["split"], {"input": 1600, "read": 9300, "write": 1100, "output": 630})
+        self.assertEqual(cells(zero_read)["Cache hit"], ("0.0%", "0 / 12.0k"))
         self.assertEqual(cells(zero_read)["Cost"], ("—", "unpriced"))
         # Never null: a board with nothing known is a board of dashes that says so.
         self.assertTrue(empty["empty"])
@@ -2527,27 +2623,37 @@ class DesktopPluginNodeTests(unittest.TestCase):
         self.assertEqual(ragged["sum"], 600)
         # A row for another chat, for no named chat, or a failed read: the stream's figures, the row's left out.
         for model in (other_chat, unnamed, failed):
-            self.assertEqual((cells(model)["Tokens"], cells(model)["Cost"]), (("4.3k", "↓300 out · 4.0k in"), ("—", "unpriced")))
+            self.assertEqual((cells(model)["Tokens"], cells(model)["Cost"]), (("4.3k", "↑4.0k ↓300"), ("—", "unpriced")))
         self.assertEqual(cells(free)["Cost"], ("$0.0000", ""), "a provider-reported zero is a zero cost")
         self.assertEqual(cells(floor)["Cost"], ("≥$0.5210", ""), "an unpriced part makes the priced sum a floor, as in the DAG")
         # The gateway's counters ahead of the row take the tokens; the row's cost then covers less than is shown.
         self.assertEqual(gateway_ahead["source"], "gateway")
         self.assertEqual((gateway_ahead["model"], gateway_ahead["calls"]), ("claude-opus-5-5", 7))
-        self.assertEqual(cells(gateway_ahead)["Tokens"], ("42.0k", "↓2.0k out · 40.0k in"))
-        self.assertEqual(cells(gateway_ahead)["Cache hit"], ("90.0%", "36.0k of 40.0k prompt"))
+        self.assertEqual(cells(gateway_ahead)["Tokens"], ("42.0k", "↑40.0k ↓2.0k"))
+        self.assertEqual(cells(gateway_ahead)["Cache hit"], ("90.0%", "36.0k / 40.0k"))
         self.assertEqual(cells(gateway_ahead)["Cost"][0], "≥$0.5000")
         self.assertEqual(cells(gateway_ahead)["Context"], ("25%", "50.0k of 200.0k"))
         self.assertEqual(cells(gateway_ahead)["TPS"][0], "33 t/s")
+        self.assertEqual(gateway_ahead["pace"][0], {"label": "TPS", "value": "33 t/s"})
         # Behind the row, the row keeps the tokens and its cost; the window is still the gateway's.
         self.assertEqual((gateway_behind["source"], cells(gateway_behind)["Cost"][0]), ("recorded", "$0.5000"))
         self.assertEqual(cells(gateway_behind)["Context"][0], "25%")
         self.assertEqual((gateway_idle["source"], cells(gateway_idle)["Tokens"][0]), ("", "—"), "counters before a call count nothing")
 
     def test_a_korean_host_reads_the_usage_board_in_korean(self) -> None:
-        hud = " ".join(self._drive()["korean"]["usage_board"]["byId"]["hud"])
-        for word in ("사용량", "호출 4회", "캐시 77.5%", "기록", "비용", "컨텍스트", "100.0k 중 15.7k", "호출 평균 3.2s", "평균 1.1s · 2턴", "프롬프트 구성"):
+        report = self._drive()["korean"]["usage_board"]
+        hud = " ".join(report["byId"]["hud"])
+        # The big card leads in Korean: the count, the hit rate read before its word, the recorded cost,
+        # and the pace row's TPS figure and TTFT label on the board itself.
+        for word in ("사용량", "호출 4회", "77.5% 캐시", "$0.5000", "42 t/s", "TTFT", "410ms", "캐시 읽기"):
             with self.subTest(word=word):
                 self.assertIn(word, hud)
+        tips = " ".join(self._tip_texts(report))
+        # Every other figure is a hover away: where the tokens came from, the cost and context
+        # words, the window, the call average, the turns' average and the prompt's composition.
+        for word in ("기록", "비용", "컨텍스트", "100.0k 중 15.7k", "호출 평균 3.2s", "평균 1.1s · 2턴", "프롬프트 구성"):
+            with self.subTest(word=word):
+                self.assertIn(word, tips)
         for english in ("USAGE", "Context", "Prompt composition", "avg call"):
             self.assertNotIn(english, hud)
 
@@ -2594,10 +2700,17 @@ class DesktopPluginNodeTests(unittest.TestCase):
         self.assertIn("inset:-7px -5px", coarse)
 
     def test_a_korean_host_reads_the_dag_view_in_korean(self) -> None:
-        hud = self._drive()["korean"]["dag_cards"]["byId"]["hud"]
-        for word in ("토큰", "캐시 적중", "프롬프트 12.0k 중 9.3k", "노드 4개 중 2개 시간 기록", "통계", "병목", "Sum (후속 1개 대기)"):
+        report = self._drive()["korean"]["dag_cards"]
+        hud = report["byId"]["hud"]
+        # The run head's figures, its stats and timeline blocks, and the bottleneck link stay Korean;
+        # a settled lane's word is its glyph, so `토큰`, `캐시` and `노드 시간` label the figures.
+        for word in ("토큰", "캐시", "노드 시간", "통계 ⓘ", "타임라인", "병목", "Sum (후속 1개 대기)", "▾ 1층"):
             with self.subTest(word=word):
                 self.assertIn(word, hud)
+        tips = " ".join(self._tip_texts(report))
+        for word in ("↑12.0k ↓630", "9.3k / 12.0k", "2/4 과금", "2/4 기록", "표시되고 시간이 기록된 노드로만"):
+            with self.subTest(word=word):
+                self.assertIn(word, tips)
         for english in ("Tokens", "Cache hit", "Node time", "Bottlenecks", "sum of"):
             self.assertNotIn(english, " ".join(hud))
 
