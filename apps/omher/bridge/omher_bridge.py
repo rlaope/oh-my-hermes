@@ -5195,6 +5195,8 @@ def read_term_status(omher_home: Path, lid: str) -> dict | None:
     path = root / f"{lid}.json"
     if Path(omher_home).is_symlink() or root.is_symlink():
         return None
+    if not hasattr(os, "O_NOFOLLOW") and path.is_symlink():
+        return None  # Windows has no O_NOFOLLOW: refuse a link to the status file before opening it
     try:
         fd = os.open(path, os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0))
     except OSError:
