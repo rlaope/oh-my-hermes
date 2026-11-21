@@ -1,8 +1,15 @@
 // WebKit is the macOS webview's engine, and it does not focus a <button> on a mouse click (focus lands on the
 // card). The question card's digit keys must work after a click there too.
-import { expect, test } from "@playwright/test";
+import { existsSync } from "node:fs";
+import { expect, test, webkit } from "@playwright/test";
 
 test.use({ browserName: "webkit" });
+// Only the macOS window is WebKit (Windows' is WebView2, Chromium). CI's macOS job installs WebKit for this spec;
+// a local run on a Mac without it (`pnpm exec playwright install webkit`) skips it.
+test.skip(
+  process.platform !== "darwin" || (!process.env.CI && !existsSync(webkit.executablePath())),
+  "WebKit is the macOS webview only; install it with `pnpm exec playwright install webkit` to run this locally",
+);
 
 const MOCK = Number(process.env.OMHER_MOCK_PORT || 5308);
 
