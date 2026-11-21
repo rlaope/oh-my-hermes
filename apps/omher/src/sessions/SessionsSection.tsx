@@ -683,6 +683,11 @@ export function SessionList({ needle = "", query = "" }: { needle?: string; quer
   const current = s.ui.view === "session" ? s.ui.session : null;
   // the split the open session is in: its rows carry the split's shape
   const openSplit = current ? groupOf(sp.groups, current) : null;
+  // every row in a split shows its shape: the open split's rows plainly, a split not in view dimmed
+  const splitOf = (id: string) => {
+    const g = paneOf(id) === null ? null : groupOf(sp.groups, id);
+    return g ? g.layout : null;
+  };
   useEffect(() => {
     if (!refocus) return;
     // the row itself (its × shows only on hover, so it cannot hold focus)
@@ -809,7 +814,7 @@ export function SessionList({ needle = "", query = "" }: { needle?: string; quer
                 </button>
               </div>
             ) : (
-              <TermRow key={rec.id} rec={rec} agents={ss.agents} unseen={ss.unseen[rec.id]} active={current === rec.id} ticking={ticking} lang={s.ui.lang} onClose={ask} split={openSplit && paneOf(rec.id) !== null && groupSessions(openSplit).includes(rec.id) ? openSplit.layout : null} />
+              <TermRow key={rec.id} rec={rec} agents={ss.agents} unseen={ss.unseen[rec.id]} active={current === rec.id} ticking={ticking} lang={s.ui.lang} onClose={ask} split={splitOf(rec.id)} away={!openSplit || !groupSessions(openSplit).includes(rec.id)} />
             ),
           )}
         </div>
@@ -1240,7 +1245,7 @@ function ViewMark({ view }: { view: "chat" | "terminal" }) {
 /** A TERMINALS row. Memoised: it re-renders when its own record, unseen mark, selection or the language change, or
  *  when its terminal's output changes what it shows (useTermFace), never for another session's output. `lang` is
  *  only a key: the strings read the current language at render. */
-const TermRow = memo(function TermRow({ rec, agents, unseen, active, ticking, onClose, split }: { rec: SessionRec; agents: AgentInfo[] | null; unseen?: Unseen; active: boolean; ticking: boolean; lang: string; onClose: (rec: SessionRec) => void; split?: Layout | null }) {
+const TermRow = memo(function TermRow({ rec, agents, unseen, active, ticking, onClose, split, away }: { rec: SessionRec; agents: AgentInfo[] | null; unseen?: Unseen; active: boolean; ticking: boolean; lang: string; onClose: (rec: SessionRec) => void; split?: Layout | null; away?: boolean }) {
   countRender(`row:${rec.id}`);
   const [editing, setEditing] = useState(false);
   const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
@@ -1333,8 +1338,8 @@ const TermRow = memo(function TermRow({ rec, agents, unseen, active, ticking, on
   return (
     <div
       ref={wrap}
-      className={`ss-row tr${active ? " active" : ""}${running ? " run" : ""}${menu ? " menu-open" : ""}${split ? (active ? " split-focus" : " split") : ""}`}
-      data-split={split ? (active ? "focused" : "in") : undefined}
+      className={`ss-row tr${active ? " active" : ""}${running ? " run" : ""}${menu ? " menu-open" : ""}${split ? (active ? " split-focus" : away ? " split split-away" : " split") : ""}`}
+      data-split={split ? (active ? "focused" : away ? "away" : "in") : undefined}
       data-testid={`session-${rec.id}`}
       data-status={rec.status}
       data-term-status={status ?? "idle"}
@@ -1342,7 +1347,13 @@ const TermRow = memo(function TermRow({ rec, agents, unseen, active, ticking, on
       onPointerDown={(e) => {
         // a drag onto the open terminal puts this session in a pane there (a press that stays put is a click)
         if (editing || (e.target as Element).closest(".ss-x, [role=menu]")) return;
-        pressToSplit(e, rec.id, (d) => splitWith(d.at, rec.id, d.side));
+        // ...and one dropped on another row of its folder moves there
+        pressToSplit(
+          e,
+          rec.id,
+          (d) => splitWith(d.at, rec.id, d.side),
+          (r) => getSessions().moveRow(rec.id, r.at, r.after),
+        );
       }}
       onContextMenu={(e) => {
         if (editing) return;

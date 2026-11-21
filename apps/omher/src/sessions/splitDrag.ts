@@ -5,6 +5,9 @@
 // there; a full split (MAX_PANES) takes no new one and shows nothing; a session never drops on its own pane. Letting go
 // anywhere else, or Escape, does nothing. Pointer events only: HTML5 drag and drop fights the native file drop in
 // Tauri's webview (on Windows above all).
+//
+// A TERMINALS row dragged over another row of its own folder in the sidebar moves there instead: a line shows where it
+// goes (above the row under the pointer, or below it past its middle), and letting go puts it there (moveRow).
 import type { PointerEvent as ReactPointerEvent } from "react";
 import { MAX_PANES, panesOf } from "../terminal/layout";
 import { isTerminalRec } from "./agents";
@@ -50,6 +53,27 @@ export function dropTargetAt(x: number, y: number, drag: string): DropTarget | n
   return { at, side: sideAt(box, x, y), box };
 }
 
+export interface RowTarget {
+  /** the row the dragged one goes next to */
+  at: string;
+  /** below it (past its middle), else above */
+  after: boolean;
+  box: DOMRect;
+}
+
+/** Where row `drag` would move with the pointer at (x, y): next to another TERMINALS row of the same folder. */
+export function rowTargetAt(x: number, y: number, drag: string): RowTarget | null {
+  const el = document.elementFromPoint(x, y)?.closest<HTMLElement>('.ss-row.tr[data-testid^="session-"]');
+  const at = el?.getAttribute("data-testid")?.slice("session-".length);
+  if (!el || !at || at === drag) return null;
+  const list = getSessions().getState().list;
+  const from = list.find((r) => r.id === drag);
+  const to = list.find((r) => r.id === at);
+  if (!from || !to || from.cwd !== to.cwd) return null;
+  const box = el.getBoundingClientRect();
+  return { at, after: y > box.top + box.height / 2, box };
+}
+
 /** The half of the target pane the drop would fill. */
 function shadeRect({ box, side }: DropTarget): { left: number; top: number; width: number; height: number } {
   const { left, top, width, height } = box;
@@ -62,14 +86,40 @@ function shadeRect({ box, side }: DropTarget): { left: number; top: number; widt
 /** A press on a TERMINALS row or a pane's grip, followed: past SLOP it is a drag of session `drag`, and letting go on a
  *  pane that can take it calls `onDrop`. The click a drag ends with is swallowed (it opens or toggles nothing); a
  *  press that never moved stays an ordinary click. */
-export function pressToSplit(e: ReactPointerEvent<HTMLElement>, drag: string, onDrop: (t: DropTarget) => void): void {
-  if (e.button !== 0 || paneOf(drag) === null) return;
+export function pressToSplit(e: ReactPointerEvent<HTMLElement>, drag: string, onDrop: (t: DropTarget) => void, onRow?: (t: RowTarget) => void): void {
+  const canSplit = paneOf(drag) !== null;
+  if (e.button !== 0 || (!canSplit && !onRow)) return;
   const sx = e.clientX;
   const sy = e.clientY;
   let moving = false;
   let target: DropTarget | null = null;
+  let row: RowTarget | null = null;
   let shade: HTMLDivElement | null = null;
+  let line: HTMLDivElement | null = null;
+  const aim = (x: number, y: number) => {
+    target = canSplit ? dropTargetAt(x, y, drag) : null;
+    row = !target && onRow ? rowTargetAt(x, y, drag) : null;
+  };
+  const showLine = () => {
+    if (!row) {
+      line?.remove();
+      line = null;
+      return;
+    }
+    if (!line) {
+      line = document.createElement("div");
+      line.className = "row-drop";
+      line.setAttribute("data-testid", "row-drop");
+      line.setAttribute("aria-hidden", "true");
+      document.body.appendChild(line);
+    }
+    const b = row.box;
+    Object.assign(line.style, { left: `${b.left}px`, top: `${(row.after ? b.bottom : b.top) - 1}px`, width: `${b.width}px` });
+    line.setAttribute("data-session", row.at);
+    line.setAttribute("data-after", String(row.after));
+  };
   const show = () => {
+    showLine();
     if (!target) {
       shade?.remove();
       shade = null;
@@ -94,7 +144,7 @@ export function pressToSplit(e: ReactPointerEvent<HTMLElement>, drag: string, on
       document.body.classList.add("split-dragging");
       getSelection()?.removeAllRanges();
     }
-    target = dropTargetAt(ev.clientX, ev.clientY, drag);
+    aim(ev.clientX, ev.clientY);
     show();
   };
   const end = (ev: PointerEvent | null) => {
@@ -102,8 +152,15 @@ export function pressToSplit(e: ReactPointerEvent<HTMLElement>, drag: string, on
     removeEventListener("pointerup", up);
     removeEventListener("pointercancel", cancel);
     removeEventListener("keydown", key, true);
-    const drop = ev && moving ? dropTargetAt(ev.clientX, ev.clientY, drag) : null;
+    if (ev && moving) aim(ev.clientX, ev.clientY);
+    else {
+      target = null;
+      row = null;
+    }
+    const drop = target;
+    const moveTo = row;
     target = null;
+    row = null;
     show();
     document.body.classList.remove("split-dragging");
     if (!moving) return;
@@ -115,6 +172,7 @@ export function pressToSplit(e: ReactPointerEvent<HTMLElement>, drag: string, on
     addEventListener("click", stop, { capture: true, once: true });
     setTimeout(() => removeEventListener("click", stop, { capture: true }), 0);
     if (drop) onDrop(drop);
+    else if (moveTo) onRow?.(moveTo);
   };
   const up = (ev: PointerEvent) => end(ev);
   const cancel = () => end(null);
