@@ -359,6 +359,20 @@ RULES = (
     "`folder.open` and `folder.resume` are admitted one at a time per bot, so the cap of open folder chats holds for"
     " requests that overlap, and a `folder.resume` of a stored id already on its way gets that request's answer instead"
     " of a second `session.resume`: nothing is attached twice.",
+    # rule 39: a gateway that went away without omher restarting it is looked for, never started
+    "looks for that gateway again by itself while omher runs: first after 2 seconds, the wait doubling after each look"
+    " up to 30 seconds.",
+    "A look only asks Hermes' own `discover_gateway_endpoint` for that bot's profile, which sends `identify` on the"
+    " gateway's control socket",
+    "Only when it finds a ready gateway does the bridge attach again, through the same `connect_gateway` as rule 4 given"
+    " that gateway (`endpoint`), which dials it as it is and never starts one; on a Hermes whose `connect_gateway` takes"
+    " no `endpoint` the bridge does not look at all.",
+    "It never starts, stops, restarts or signals a gateway, looks only for a bot it attached or tried to attach, and"
+    " stops once that bot is attached again.",
+    "While a Hermes update holds the install (its `.hermes-update-in-progress` marker in the profile or the Hermes root,"
+    " judged by Hermes' own `_update_fenced`, which reads the markers and, only when a stale one is left, briefly tries a"
+    " shared lock; it writes nothing) the bridge does not look, as Hermes' own"
+    " `ensure_gateway_runtime` does not.",
 )
 TAURI_CONF = ROOT / "apps" / "omher" / "src-tauri" / "tauri.conf.json"
 CAPABILITIES = ROOT / "apps" / "omher" / "src-tauri" / "capabilities" / "default.json"
@@ -480,9 +494,11 @@ class DocPins(unittest.TestCase):
         # 11's card); 35: rule 35 (one free-space statistic of the home volume a minute, `disk-level`, deletes
         # nothing); 36: rule 36 (the window's close hides to the tray, quitting stays explicit); 37: rule 37 (keep
         # awake: one idle-sleep assertion while agents work); 38: rule 38 (a program's OSC 52 copy to the clipboard,
-        # copy only, never a read, off in Settings › Terminal). The rules stay numbered 1..n with no gap or repeat.
+        # copy only, never a read, off in Settings › Terminal); 39: rule 39 (a bot whose gateway went away without
+        # omher restarting it is looked for through Hermes' own discovery, which starts nothing, and attached again
+        # once ready). The rules stay numbered 1..n with no gap or repeat.
         rules = re.findall(r"^(\d+)\. ", DOC.read_text(encoding="utf-8"), re.M)
-        self.assertTrue(6 <= len(rules) <= 38, len(rules))
+        self.assertTrue(6 <= len(rules) <= 39, len(rules))
         self.assertEqual([int(n) for n in rules], list(range(1, len(rules) + 1)))
 
     def test_glossary_and_docs_index_name_omher(self) -> None:
@@ -828,6 +844,51 @@ class BridgeSubmitsOnlyToTheMainChat(unittest.TestCase):
         tag = fns["_watch_tag"]
         methods = set(re.findall(r"self\._call\(conn, '([a-z_.]+)'", tag))
         self.assertEqual(methods, {"session.history"})
+
+    def test_a_lost_gateway_is_only_looked_for_never_started(self) -> None:
+        """Rule 39: `_recover` asks the probe and attaches only after it said ready, through `_conn` (rule 4's
+        `connect_gateway`); the probe is Hermes' read-only discovery and nothing that starts a gateway."""
+        fns = {f.name: f for f in ast.walk(self.tree) if isinstance(f, (ast.FunctionDef, ast.AsyncFunctionDef))}
+
+        def code(name: str) -> str:  # the function's code, without its docstring, on one line
+            fn = fns[name]
+            body = fn.body[1:] if fn.body and isinstance(fn.body[0], ast.Expr) and isinstance(fn.body[0].value, ast.Constant) else fn.body
+            return " ".join(" ".join(ast.unparse(n) for n in body).split())
+
+        recover = code("_recover")
+        self.assertLess(recover.index("ready = await self.gateway_probe(bot['path'])"),
+                        recover.index("if not ready or name in self._reattaching: continue"))
+        # the only dial: the owner discovery found, after it said ready (`ready` is that owner, never None here)
+        self.assertEqual(re.findall(r"self\._conn\([^)]*\)", recover), ["self._conn(name, endpoint=ready)"])
+        self.assertLess(recover.index("if not ready or name in self._reattaching: continue"),
+                        recover.index("await self._conn(name, endpoint=ready)"))
+        self.assertIn("except RecoveryUnsupported as e: log.info", recover)  # an old Hermes: stop, never dial
+        for bad in ("gateway_factory", "connect_gateway", "ensure_gateway_runtime", "run_hermes_restart", "subprocess",
+                    "os.kill", "signal"):
+            self.assertNotIn(bad, recover)
+        # the probe is discovery only, and refuses a Hermes that cannot dial a discovered owner as-is
+        probe = code("_default_probe")
+        self.assertIn("from hermes_cli import gateway_runtime", probe)
+        # an update that still holds the install is checked first, with Hermes' own read-only judge
+        self.assertLess(probe.index("fenced = getattr(gateway_runtime, '_update_fenced', None)"),
+                        probe.index("gateway_runtime.discover_gateway_endpoint, home"))
+        self.assertIn("if fenced is not None and await asyncio.to_thread(fenced, {Path(home), self.home}): return None",
+                      probe)
+        self.assertIn("if 'endpoint' not in inspect.signature(connect_gateway).parameters: raise RecoveryUnsupported", probe)
+        for bad in ("connect_gateway(", "ensure_gateway_runtime", "subprocess", "os.kill", "signal"):
+            self.assertNotIn(bad, probe)
+        # an endpoint reaches the factory, and the default factory dials it with `endpoint=`: connect_gateway only
+        # calls ensure_gateway_runtime (which may start a gateway) when it is given none
+        self.assertIn("self.gateway_factory(stack, bot['path'], endpoint=endpoint)", code("_conn"))
+        self.assertIn("connect_gateway() if endpoint is None else connect_gateway(endpoint=endpoint)",
+                      code("_default_connect"))
+        self.assertIn("self.gateway_probe = gateway_probe or self._default_probe", self.source)
+        self.assertIn("self._reattaching.update(down or [name])", code("op_bots_restart"))
+        # the waits rule 39 states: 2 s first, doubling up to 30 s
+        consts = {t.id: ast.literal_eval(n.value) for n in self.tree.body if isinstance(n, ast.Assign)
+                  for t in n.targets if isinstance(t, ast.Name) and t.id == "RECOVER_POLL"}
+        self.assertEqual(consts, {"RECOVER_POLL": (2.0, 30.0)})
+        self.assertIn("wait = min(wait * 2, RECOVER_POLL[1])", recover)
 
     def test_profile_writes_are_only_name_and_picture(self) -> None:
         """Every Hermes profile method the bridge names is a read, except set_asset (the avatar)."""

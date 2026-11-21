@@ -47,8 +47,10 @@ class FakeClient:
     """The slice of ``GatewayClient`` the bridge uses: ``rpc`` and ``events``."""
 
     def __init__(self, name: str, *, bot_chat: bool = True, sessions=None, history=None, caps=None, lacks=(), ready=None,
-                 model_replies=None, resume_bumps=False, legacy=False):
+                 model_replies=None, resume_bumps=False, legacy=False, slow=(), keeps_created=False):
         self.name = name
+        self.slow = frozenset(slow)  # methods that answer after a short wait, so two requests overlap in them
+        self.keeps_created = keeps_created  # a main-chat session.create makes a Bot Chat the next session.list finds
         self.legacy = legacy  # True: the older tui gateway (session.title/archive/close, idempotency_key)
         # session.mutate "model" answers in order (Hermes' selection guard refusals); the echo once they run out
         self.model_replies = list(model_replies or [])
@@ -85,6 +87,8 @@ class FakeClient:
 
     async def rpc(self, method, *, _timeout=None, **params):
         self.calls.append((method, params))
+        if method in self.slow:
+            await asyncio.sleep(0.05)
         self.refuse(method, params)
         if method == "session.list":
             if params.get("title") == ob.BOT_CHAT_TITLE:
@@ -122,6 +126,8 @@ class FakeClient:
                 return {"session_id": f"rt-folder-{n}", "stored_session_id": f"stored-folder-{n}", "messages": [],
                         "subscription_id": f"sub-folder-{n}",
                         "info": {**self.model_info, "cwd": params["cwd"]}, "revision": 0, "execution_generation": 0}
+            if self.keeps_created:
+                self.bot_chat = True
             return {"session_id": MAIN_RUNTIME, "stored_session_id": MAIN_STORED, "messages": [],
                     "info": dict(self.model_info), "revision": 0, "execution_generation": 0}
         if method == "session.title":
@@ -193,13 +199,27 @@ class Env:
         self.client_kw = client_kw
         self.clients: dict[str, FakeClient] = {}
         self.connects: list[str] = []
+        # profiles whose gateway Hermes' discovery reads ready (none by default: nothing reattaches by itself)
+        self.ready: set[str] = set()
+        self.probes: list[str] = []
+        self.endpoints: list = []
+        self.on_probe = None
         # omher's own folder inside the temp home: folder.open records its chats there, never in the real ~/.omher
         self.bridge = ob.Bridge(token=TOKEN, hermes_home=self.home, gateway_factory=self.factory, poll_s=3600,
-                                omher_home=self.home / ".omher")
+                                omher_home=self.home / ".omher", gateway_probe=self.probe)
 
-    async def factory(self, stack, path: Path):
+    async def probe(self, path: Path) -> bool:
+        name = "default" if path == self.home else path.name
+        self.probes.append(name)
+        found = f"endpoint-{name}" if name in self.ready else None
+        if self.on_probe is not None:
+            self.on_probe(name)  # what happens while discovery answers
+        return found  # what Hermes' discovery found ready
+
+    async def factory(self, stack, path: Path, endpoint=None):
         name = "default" if path == self.home else path.name
         self.connects.append(name)
+        self.endpoints.append(endpoint)  # None: connect_gateway() may start a gateway; else dials that owner as-is
         if name in self.fail:
             raise OSError("gateway refused")
         c = self.clients[name] = FakeClient(name, **self.client_kw)
@@ -756,6 +776,283 @@ class EventMapping(BridgeCase):
             last = [e for e in s.events if e["event"] == "bot.status"][-1]
             self.assertEqual((last["status"], last["running"]), ("offline", False))
             self.assertEqual((await s.req("chat.send", bot="kami", text="x"))["error"]["code"], "bot_offline")
+
+
+class ExternalRestart(BridgeCase):
+    """A gateway that went away without omher restarting it (`hermes update` pausing it, a crash and relaunch, a
+    `hermes gateway restart` from a terminal): the bot comes back by itself and its open chats re-read
+    (`bot.restarted`), as after omher's own restart. Only Hermes' discovery is asked while it is away; nothing is
+    started (BOUNDARY rule 39)."""
+
+    @staticmethod
+    def restarted(s: Session, bot: str) -> list[dict]:
+        return [e for e in s.events if e["event"] == "bot.restarted" and e["bot"] == bot]
+
+    async def test_an_update_paused_gateway_reattaches_every_bot_once_it_is_ready_again(self):
+        with mock.patch.object(ob, "RECOVER_POLL", (0.01, 0.02)):
+            async with Env(("kami",)) as env:
+                s = await self.open(env)
+                await s.req("chat.open", bot="kami")
+                await s.req("chat.open", bot="default")  # the other row: never selected again after the update
+                for name in ("kami", "default"):
+                    env.clients[name].events.put_nowait(GatewayClientError("Gateway disconnected"))
+                await s.until(lambda ev: sum(e["event"] == "bot.status" and e["status"] == "offline" for e in ev) >= 2)
+                # draining for the update: discovery is asked, nothing is dialled or started
+                await s.until(lambda ev: env.probes.count("kami") >= 3 and env.probes.count("default") >= 3)
+                self.assertEqual((env.connects.count("kami"), env.connects.count("default")), (1, 1))
+                env.ready = {"kami", "default"}
+                await s.until(lambda ev: self.restarted(s, "kami") and self.restarted(s, "default"))
+                for name in ("kami", "default"):
+                    self.assertEqual([e["ok"] for e in self.restarted(s, name)], [True])
+                    last = [e for e in s.events if e["event"] == "bot.status" and e["bot"] == name][-1]
+                    self.assertEqual(last["status"], "online")
+                    self.assertEqual(env.connects.count(name), 2)
+                # the open chat reads its history again from the same Bot Chat
+                r = await s.req("chat.open", bot="kami")
+                self.assertEqual([m["text"] for m in r["result"]["messages"]], ["hi", "hello"])
+                await asyncio.sleep(0.1)
+                self.assertEqual(len(self.restarted(s, "kami")), 1)  # once back, it stops looking
+
+    async def test_a_chat_first_opened_while_draining_is_reread_when_the_bot_answers_again(self):
+        """The observed run: the chat was opened while the gateway drained for the update, then the person's next
+        message reconnected the bot. That reconnect says so, so the chat re-reads and drops its stale error."""
+        now = [1000.0]
+        async with Env(("kami",), fail=("kami",)) as env:
+            env.bridge.clock = lambda: now[0]
+            s = await self.open(env)
+            r = await s.req("chat.open", bot="kami")
+            self.assertEqual(r["error"]["code"], "bot_offline")
+            env.fail.clear()
+            now[0] += ob.OFFLINE_COOLDOWN + 1
+            self.assertTrue((await s.req("chat.send", bot="kami", text="after the update"))["ok"])
+            await s.until(lambda ev: self.restarted(s, "kami"))
+            self.assertEqual([e["ok"] for e in self.restarted(s, "kami")], [True])
+
+    async def test_a_bot_that_stays_away_is_only_looked_for(self):
+        with mock.patch.object(ob, "RECOVER_POLL", (0.01, 0.02)):
+            async with Env(("kami",), fail=("kami",)) as env:
+                s = await self.open(env)
+                self.assertEqual((await s.req("chat.open", bot="kami"))["error"]["code"], "bot_offline")
+                await s.until(lambda ev: env.probes.count("kami") >= 5)
+                self.assertEqual(env.connects.count("kami"), 1)  # only the person's own open dialled it
+                self.assertEqual(self.restarted(s, "kami"), [])
+
+    async def test_omhers_own_restart_is_announced_once(self):
+        with mock.patch.object(ob, "RECOVER_POLL", (0.01, 0.02)):
+            async with Env(("kami",)) as env:
+                env.ready = {"kami", "default"}
+                s = await self.open(env)
+                await s.req("chat.open", bot="kami")
+                env.clients["kami"].events.put_nowait(GatewayClientError("Gateway disconnected"))
+                await s.until(lambda ev: self.restarted(s, "kami"))
+                env.bridge._reattaching.add("kami")  # as `bots.restart` does before it runs Hermes' restart
+                env.clients["kami"].events.put_nowait(GatewayClientError("Gateway disconnected"))
+                await s.until(lambda ev: sum(e["event"] == "bot.status" and e["bot"] == "kami"
+                                             and e["status"] == "offline" for e in ev) >= 2)
+                await asyncio.sleep(0.1)
+                self.assertEqual(len(self.restarted(s, "kami")), 1)  # the restart's own reattach says it, not this
+                with mock.patch.object(ob, "RESTART_POLL", 0.01):
+                    await env.bridge._reattach(["kami"])
+                await s.until(lambda ev: len(self.restarted(s, "kami")) >= 2)
+                self.assertEqual([e["ok"] for e in self.restarted(s, "kami")], [True, True])
+                await asyncio.sleep(0.1)
+                self.assertEqual(len(self.restarted(s, "kami")), 2)
+
+
+class ExternalRestartReview(BridgeCase):
+    """Review of the first cut (#3055): the reattach must not make a second Bot Chat, must never dial in a way that
+    can start a gateway, and must not cut short omher's own Restart."""
+
+    @staticmethod
+    def restarted(s: Session, bot: str) -> list[dict]:
+        return [e for e in s.events if e["event"] == "bot.restarted" and e["bot"] == bot]
+
+    async def test_a_send_and_the_apps_reread_after_a_reconnect_make_one_bot_chat(self):
+        """The person's message reconnects a bot that has no Bot Chat yet, and the app answers the reconnect with
+        chat.open: both look for the Bot Chat at once. Only one may create it, and both use the same main id."""
+        now = [1000.0]
+        async with Env(("kami",), fail=("kami",), bot_chat=False, keeps_created=True,
+                       slow=("session.list", "session.create")) as env:
+            env.bridge.clock = lambda: now[0]
+            s = await self.open(env)
+            self.assertEqual((await s.req("chat.open", bot="kami"))["error"]["code"], "bot_offline")
+            env.fail.clear()
+            now[0] += ob.OFFLINE_COOLDOWN + 1
+            sent, opened = await asyncio.gather(s.req("chat.send", bot="kami", text="after the update"),
+                                                s.req("chat.open", bot="kami"))
+            self.assertTrue(sent["ok"], sent)
+            self.assertTrue(opened["ok"], opened)
+            c = env.clients["kami"]
+            mains = [p for p in c.find("session.create") if not p.get("cwd")]
+            self.assertEqual(len(mains), 1, "two Bot Chats were made")
+            submit = c.find("prompt.submit")
+            self.assertEqual([p["session_id"] for p in submit], [opened["result"]["session_id"]])
+            self.assertEqual(env.bridge.conns["kami"].main_ids, {MAIN_RUNTIME, MAIN_STORED})
+
+    async def test_recovery_dials_only_the_owner_discovery_found(self):
+        with mock.patch.object(ob, "RECOVER_POLL", (0.01, 0.02)):
+            async with Env(("kami",)) as env:
+                s = await self.open(env)
+                await s.req("chat.open", bot="kami")
+                env.clients["kami"].events.put_nowait(GatewayClientError("Gateway disconnected"))
+                await s.until(lambda ev: env.probes.count("kami") >= 2)
+                env.ready = {"kami"}
+                await s.until(lambda ev: self.restarted(s, "kami"))
+                # the person's open may start a gateway (None); the reattach only dials the discovered owner
+                self.assertEqual(env.endpoints, [None, "endpoint-kami"])
+
+    async def test_recovery_through_hermes_never_reaches_a_starting_dial(self):
+        """The real `_default_probe` and `_default_connect` against stand-ins for Hermes' modules: recovery dials
+        `connect_gateway(endpoint=<discovered>)`, which never starts a gateway; on a Hermes whose
+        connect_gateway takes no endpoint it stops looking instead of dialling the way that starts one; and while an
+        update holds the install (Hermes' `_update_fenced`) a ready gateway is not dialled."""
+        import contextlib as cl
+        for case in ("endpoint", "no endpoint", "update fence"):
+            with self.subTest(case=case):
+                has_endpoint = case != "no endpoint"
+                fence: list = []
+                dials: list = []
+                ensured: list = []
+
+                @cl.asynccontextmanager
+                async def with_endpoint(endpoint=None, subject=None):
+                    dials.append(endpoint)
+                    if endpoint is None:
+                        ensured.append(os.environ.get("HERMES_HOME"))  # ensure_gateway_runtime: may start one
+                    yield FakeClient("kami")
+
+                @cl.asynccontextmanager
+                async def without_endpoint():
+                    dials.append(None)
+                    ensured.append(os.environ.get("HERMES_HOME"))
+                    yield FakeClient("kami")
+
+                class Found:
+                    state, endpoint = "ready", "owner-endpoint"
+                client_mod = types.ModuleType("hermes_cli.gateway_client")
+                client_mod.connect_gateway = with_endpoint if has_endpoint else without_endpoint
+                runtime_mod = types.ModuleType("hermes_cli.gateway_runtime")
+                runtime_mod.discover_gateway_endpoint = lambda home, **kw: Found()
+                if case == "update fence":
+                    def update_fenced(homes):
+                        fence.append(sorted(str(h) for h in homes))
+                        return True
+                    runtime_mod._update_fenced = update_fenced
+                pkg = types.ModuleType("hermes_cli")
+                pkg.gateway_client, pkg.gateway_runtime = client_mod, runtime_mod
+                fakes = {"hermes_cli": pkg, "hermes_cli.gateway_client": client_mod,
+                         "hermes_cli.gateway_runtime": runtime_mod}
+                with mock.patch.dict(sys.modules, fakes), mock.patch.object(ob, "RECOVER_POLL", (0.01, 0.02)), \
+                        mock.patch.dict(os.environ, {}):
+                    env = Env(("kami",))
+                    env.bridge = ob.Bridge(token=TOKEN, hermes_home=env.home, poll_s=3600,
+                                           omher_home=env.home / ".omher")
+                    async with env:
+                        conn = env.bridge.conns["kami"] = ob.Conn(env.bridge._bot("kami"))
+                        env.bridge._lost(conn)  # its gateway went away
+                        for _ in range(50):
+                            await asyncio.sleep(0.01)
+                        if case == "endpoint":
+                            self.assertTrue(conn.connected)
+                            self.assertEqual(dials, ["owner-endpoint"])
+                        elif case == "update fence":
+                            self.assertFalse(conn.connected)
+                            self.assertEqual(dials, [])
+                            # the profile's own home and the Hermes root, where `hermes update` puts its marker
+                            self.assertEqual(fence[0], sorted([str(env.home / "profiles" / "kami"), str(env.home)]))
+                            self.assertIn("kami", env.bridge._recovering)  # it keeps looking until the update ends
+                        else:
+                            self.assertFalse(conn.connected)
+                            self.assertEqual(dials, [])
+                            self.assertNotIn("kami", env.bridge._recovering)  # it stopped looking
+                        self.assertEqual(ensured, [])
+
+    async def test_a_request_during_omhers_own_restart_does_not_say_restarted(self):
+        with mock.patch.object(ob, "RECOVER_POLL", (0.01, 0.02)), mock.patch.object(ob, "RESTART_POLL", 0.05):
+            async with Env(("kami",)) as env:
+                s = await self.open(env)
+                await s.req("chat.open", bot="kami")
+                env.bridge._reattaching.add("kami")  # as `bots.restart` does before it runs Hermes' restart
+                env.clients["kami"].events.put_nowait(GatewayClientError("Gateway disconnected"))
+                await s.until(lambda ev: any(e["event"] == "bot.status" and e["status"] == "offline" for e in ev))
+                env.bridge.conns["kami"].failed_at = 0.0  # past the cooldown
+                # a poll or a list read attaches the bot while Hermes' restart still runs
+                self.assertTrue((await s.req("models.options", bot="kami"))["ok"])
+                await asyncio.sleep(0.05)
+                self.assertEqual(self.restarted(s, "kami"), [])
+                await env.bridge._reattach(["kami"])
+                await s.until(lambda ev: self.restarted(s, "kami"))
+                await asyncio.sleep(0.1)
+                self.assertEqual([e["ok"] for e in self.restarted(s, "kami")], [True])
+
+    async def test_a_second_loss_is_looked_for_from_the_short_wait_again(self):
+        with mock.patch.object(ob, "RECOVER_POLL", (0.004, 60.0)):
+            async with Env(("kami",)) as env:
+                s = await self.open(env)
+                await s.req("chat.open", bot="kami")
+                env.clients["kami"].events.put_nowait(GatewayClientError("Gateway disconnected"))
+                # a long outage: after 9 looks the next wait is 0.004 * 2**9 s, about 2 s, and the one after that,
+                # which a look that went on after the bot came back would sleep first, is about 4 s
+                await s.until(lambda ev: env.probes.count("kami") >= 9, timeout=10.0)
+                env.ready = {"kami"}
+                await s.until(lambda ev: self.restarted(s, "kami"), timeout=10.0)
+                # back: the look ends at once (well inside the ~4 s it would otherwise sleep)
+                await s.until(lambda ev: "kami" not in env.bridge._recovering, timeout=2.0)
+                env.clients["kami"].events.put_nowait(GatewayClientError("Gateway disconnected"))
+                # the next loss is a new look from the short wait
+                await s.until(lambda ev: len(self.restarted(s, "kami")) >= 2, timeout=2.0)
+
+    async def test_a_restart_that_begins_while_discovery_answers_keeps_the_bot(self):
+        """`_recover` looks at `_reattaching` again once discovery has answered: a Restart pressed meanwhile attaches
+        the bot itself."""
+        with mock.patch.object(ob, "RECOVER_POLL", (0.01, 0.02)):
+            async with Env(("kami",)) as env:
+                s = await self.open(env)
+                await s.req("chat.open", bot="kami")
+                env.ready = {"kami"}
+                env.on_probe = lambda name: env.bridge._reattaching.add(name)
+                env.clients["kami"].events.put_nowait(GatewayClientError("Gateway disconnected"))
+                await s.until(lambda ev: env.probes.count("kami") >= 1)
+                await asyncio.sleep(0.2)
+                self.assertEqual(env.connects.count("kami"), 1)  # the look did not attach it
+                self.assertEqual(self.restarted(s, "kami"), [])
+
+    async def test_a_restart_that_does_not_say_ok_still_announces_a_bot_a_request_attached(self):
+        """Bot offline, its chat's open failed; the person presses Start; while Hermes' restart runs a request
+        attaches the bot (so `bot.restarted` waits for the restart); then the restart fails, is refused or raises, so
+        no `_reattach` runs. The bot is attached, so the chat must still hear it and re-read."""
+        for how in ("failed", "refused", "raises"):
+            with self.subTest(how=how):
+                async with Env(("kami",), fail=("kami",)) as env:
+                    s = await self.open(env)
+                    self.assertEqual((await s.req("chat.open", bot="kami"))["error"]["code"], "bot_offline")
+                    env.fail.clear()
+                    env.bridge.conns["kami"].failed_at = 0.0
+                    started = asyncio.Event()
+                    go = __import__("threading").Event()
+                    loop = asyncio.get_running_loop()
+
+                    def restart(*a, **kw):  # Hermes' restart, still running while the request below attaches
+                        loop.call_soon_threadsafe(started.set)
+                        go.wait(5)
+                        if how == "raises":
+                            raise RuntimeError("restart command broke")
+                        return {"outcome": how, "line": "Hermes said no", **({"work": []} if how == "refused" else {})}
+                    with mock.patch.object(ob, "run_hermes_restart", restart), \
+                            mock.patch.object(ob, "hermes_path", lambda *a, **k: "/stub/hermes"):
+                        pressed = asyncio.ensure_future(s.req("bots.restart", bot="kami"))
+                        await asyncio.wait_for(started.wait(), 5)
+                        self.assertTrue((await s.req("models.options", bot="kami"))["ok"])
+                        self.assertEqual(self.restarted(s, "kami"), [])  # the restart says it, not this request
+                        go.set()
+                        r = await pressed
+                    self.assertNotEqual((r.get("result") or {}).get("outcome"), "ok")
+                    await s.until(lambda ev: self.restarted(s, "kami"))
+                    await asyncio.sleep(0.05)
+                    self.assertEqual([e["ok"] for e in self.restarted(s, "kami")], [True])
+                    conn = env.bridge.conns["kami"]
+                    self.assertEqual((conn.connected, conn.lost), (True, False))
+                    self.assertEqual(env.bridge._reattaching, set())
 
 
 class NeedsYou(BridgeCase):

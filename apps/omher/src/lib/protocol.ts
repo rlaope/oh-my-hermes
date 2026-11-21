@@ -684,7 +684,8 @@ export type BridgeEvent =
   | (EventBase & { event: "bot.status"; status: BotStatus; running: boolean })
   | (EventBase & { event: "elsewhere.update" })
   | (EventBase & { event: "bots.update" })
-  /** After `bots.restart` said ok: the bot is attached again (`ok`), or did not come back in time. */
+  /** After `bots.restart` said ok: the bot is attached again (`ok`), or did not come back in time. Also `ok` when a
+   *  bot whose gateway went away without omher restarting it (an update, a relaunch) is attached again. */
   | (EventBase & { event: "bot.restarted"; ok: boolean })
   /** omher accounts changed (added, removed, made active); the Accounts views re-read accounts.list. */
   | (EventBase & { event: "accounts.update" })
