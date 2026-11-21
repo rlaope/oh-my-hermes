@@ -1,7 +1,7 @@
 // Independent acceptance neighbours, production module unchanged.
 #![cfg(unix)]
 #![allow(dead_code)]
-mod bridge { #[derive(Clone, Copy)] pub struct Os; impl Os { pub fn current() -> Self { Self } } }
+mod bridge { #[derive(Clone, Copy)] pub struct Os; impl Os { pub fn current() -> Self { Self } } pub(crate) fn no_console_window(_: &mut std::process::Command) {} }
 mod accounts {
  use std::path::{Path,PathBuf};
  pub fn search_dirs<E: Fn(&str)->Option<String>>(env: &E, _: crate::bridge::Os) -> Vec<PathBuf> { std::env::split_paths(&env("PATH").unwrap_or_default()).collect() }
