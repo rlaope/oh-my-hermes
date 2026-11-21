@@ -4,6 +4,21 @@ All notable changes will be documented here.
 
 ## Unreleased
 
+- **omher 1.1.1.** Terminal keys, menu and splits as in Orca and iTerm2, and copy and paste that work in Claude Code.
+  - **Paste and copy:** ⌘V and ⌘C work again in a Claude Code or Codex terminal. These programs turn on the Kitty
+    keyboard protocol, which sent ⌘V to them as a key code instead of pasting. On macOS every ⌘ key now stays the
+    app's. A pasted screenshot reaches Claude Code as `[Image #1]`. A program's own copy (tmux, Neovim, SSH via OSC
+    52) lands on the clipboard; Settings › Terminal › Programs may copy turns it off. (#3031, #3037, #3042)
+  - **Keys:** ⌘= / ⌘- / ⌘0 change the terminal font size. ⌘← / ⌘→ / ⌘⌫ / ⌘⌦ and ⌥← / ⌥→ edit the line. ⌘K clears the
+    terminal. ⌘Home / ⌘End scroll to the top and bottom of the scrollback. Off macOS, Ctrl+Shift+C/V copy and paste.
+    (#3031)
+  - **Splits:** ⌘D / ⌘⇧D split at once with a new Shell, without asking. Drag a TERMINALS row onto a terminal to put
+    it on that side. Each pane has a grip to drag it or open its menu. ⌘W closes a terminal that is not split, with
+    undo, instead of the window. (#3031)
+  - **Right-click menu:** Copy, Paste, Select all, Find, Clear, Reset and Split right / down. (#3031)
+  - **Fixes:** Korean input no longer flickers or hides the syllable being typed, and a 50–100 ms stall every 30 s is
+    gone. (#3031)
+
 - **omher on Windows no longer reads a terminal's status file through a link.** The bridge reads
   `<omher_home>/terminals/<id>.json` for the status a main-chat message's `omher://terminal/` link carries. It
   refused a link only through `O_NOFOLLOW`, which Windows lacks, so there a link planted in that folder was
