@@ -82,3 +82,15 @@ for (const theme of ["dark", "light"] as const) {
     await page.screenshot({ path: join(SHOTS, `clarify-interview-${theme}-${TAG}.png`), animations: "disabled" });
   });
 }
+
+test("shot: interview with a recommended row selected, light", async ({ page }) => {
+  await setup(page, (m) => {
+    if (!m.questions) return;
+    m.questions[0].question = "실패한 배포 건을 어떻게 처리할까요?";
+    m.questions[0].choices = LONG;
+  }, "interview", "light");
+  const card = page.getByTestId("card-interview");
+  await card.getByRole("radio").first().click();
+  await page.mouse.move(0, 0);
+  await page.screenshot({ path: join(SHOTS, `clarify-interview-light-selected-${TAG}.png`), animations: "disabled" });
+});

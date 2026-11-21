@@ -57,6 +57,9 @@ describe("choiceIndexForKey", () => {
   it("ignores keys with a modifier", () => {
     for (const m of ["metaKey", "ctrlKey", "altKey", "shiftKey"]) expect(choiceIndexForKey(key("1", { [m]: true }), 3)).toBe(-1);
   });
+  it("ignores auto-repeat, which would toggle a multi-select back and forth", () => {
+    expect(choiceIndexForKey(key("1", { repeat: true }), 3)).toBe(-1);
+  });
   it("does not fire while typing in a field", () => {
     for (const tagName of ["INPUT", "TEXTAREA", "SELECT"]) expect(choiceIndexForKey(key("1", { target: { tagName } }), 3)).toBe(-1);
     expect(choiceIndexForKey(key("1", { target: { tagName: "DIV", isContentEditable: true } }), 3)).toBe(-1);

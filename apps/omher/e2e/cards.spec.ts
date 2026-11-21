@@ -176,6 +176,7 @@ test("clarify: numbered rows, long text wraps inside the card, a digit picks, th
   await expect(rows.nth(3).locator(".iv-num")).toHaveText("4");
   await expect(rows.nth(0).locator(".iv-title")).toContainText("Slack 실패 스레드에 남기기");
   await expect(rows.nth(0).locator(".iv-title")).not.toContainText("(Recommended)");
+  await expect(rows.nth(0)).toHaveAccessibleName(/^Slack 실패 스레드에 남기기 Recommended 원인 요약/);
   await expect(rows.nth(0).locator(".iv-badge")).toHaveText("Recommended");
   await expect(rows.nth(0).locator(".iv-desc")).toContainText("원인 요약(11-19부터");
   // one row per line, nothing past the card's right edge
@@ -188,11 +189,15 @@ test("clarify: numbered rows, long text wraps inside the card, a digit picks, th
     prevBottom = b.y + b.height;
   }
   expect(await card.evaluate((el) => el.scrollWidth <= el.clientWidth + 1)).toBe(true);
-  // a digit while the card has focus picks that row; typing a digit in the composer does not
-  await page.getByTestId("composer").focus();
+  // a digit typed in the composer is text there and picks nothing
+  await page.getByTestId("composer").click();
   await page.keyboard.press("1");
+  await expect(page.getByTestId("composer")).toHaveValue("1");
   await expect(card).toBeVisible();
-  await card.focus();
+  expect(await calls("clarify.respond")).toEqual([]);
+  await page.getByTestId("composer").fill("");
+  // a click on the card (its title) gives it focus; then the digit picks that row
+  await card.locator(".card-title").click();
   await page.keyboard.press("1");
   await expect(page.getByTestId("card-line")).toContainText("Slack 실패 스레드에 남기기");
   expect(await calls("clarify.respond")).toEqual([
@@ -204,7 +209,7 @@ test("clarify: the last number opens Other…, digits typed in its field stay te
   await open(page);
   await send(page, "/clarify");
   const card = page.getByTestId("card-clarify");
-  await card.focus();
+  await card.locator(".card-title").click();
   await page.keyboard.press("3"); // staging, production, Other…
   const field = card.getByLabel("Other answer 1");
   await expect(field).toBeFocused();
@@ -228,15 +233,16 @@ test("interview: a digit picks within the focused question only", async ({ page 
   await expect(card.getByTestId("iv-count")).toHaveText(/^0 of 3/);
   const q1 = card.getByRole("radiogroup", { name: "Who is the release note for?" });
   const q2 = card.getByRole("group", { name: "Which sections should it have?" });
-  await q1.getByRole("radio", { name: "Users" }).focus();
+  // clicking a row (focus must follow the click in WebKit too), then a digit picks within that question
+  await q1.getByRole("radio", { name: "Users" }).click();
   await page.keyboard.press("2");
   await expect(q1.getByRole("radio", { name: "Developers" })).toHaveAttribute("aria-checked", "true");
-  await q2.getByRole("checkbox", { name: "Fixes" }).focus();
+  await q2.getByRole("checkbox", { name: "Fixes" }).click();
   await page.keyboard.press("1");
   await page.keyboard.press("4");
   await expect(q2.getByRole("checkbox", { name: "Highlights" })).toHaveAttribute("aria-checked", "true");
   await expect(q2.getByRole("checkbox", { name: "Thanks" })).toHaveAttribute("aria-checked", "true");
-  await expect(q2.getByRole("checkbox", { name: "Fixes" })).toHaveAttribute("aria-checked", "false");
+  await expect(q2.getByRole("checkbox", { name: "Fixes" })).toHaveAttribute("aria-checked", "true"); // the click
   await expect(q1.getByRole("radio", { name: "Developers" })).toHaveAttribute("aria-checked", "true");
 });
 

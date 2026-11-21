@@ -248,13 +248,17 @@ function QuestionInput({
             aria-checked={onPickOne && !multi ? undefined : on}
             aria-keyshortcuts={i < 9 ? String(i + 1) : undefined}
             disabled={disabled}
-            onClick={() => toggle(c)}
+            onClick={(e) => {
+              e.currentTarget.focus(); // WebKit (macOS) does not focus a button on click; the digit keys need it
+              toggle(c);
+            }}
           >
             <span className="iv-num" aria-hidden="true">{i + 1}</span>
             {multi && <span className="iv-box" aria-hidden="true">{on ? "✓" : ""}</span>}
             <span className="iv-body">
               <span className="iv-title">
                 {title}
+                {recommended && " "}
                 {recommended && <span className="iv-badge">{t("card.recommended")}</span>}
               </span>
               {desc && <span className="iv-desc">{desc}</span>}
@@ -268,7 +272,10 @@ function QuestionInput({
         aria-expanded={showOther}
         aria-keyshortcuts={choices.length < 9 ? String(choices.length + 1) : undefined}
         disabled={disabled}
-        onClick={() => setOtherOpen(true)}
+        onClick={(e) => {
+          e.currentTarget.focus();
+          setOtherOpen(true);
+        }}
       >
         <span className="iv-num" aria-hidden="true">{choices.length + 1}</span>
         {multi && <span className="iv-box" aria-hidden="true">{pick.other.trim() ? "✓" : ""}</span>}

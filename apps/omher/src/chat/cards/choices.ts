@@ -32,6 +32,7 @@ interface DigitKey {
   ctrlKey?: boolean;
   altKey?: boolean;
   shiftKey?: boolean;
+  repeat?: boolean;
   isComposing?: boolean;
   keyCode?: number;
   nativeEvent?: { isComposing?: boolean };
@@ -39,9 +40,9 @@ interface DigitKey {
 }
 
 /** The 0-based row a digit key picks among `count` numbered rows, or -1 when the key is not a pick: a modifier
- *  is down, an input method composes, the focus is in a text field, or the digit has no row. */
+ *  is down, the key auto-repeats, an input method composes, the focus is in a text field, or the digit has no row. */
 export function choiceIndexForKey(e: DigitKey, count: number): number {
-  if (e.metaKey || e.ctrlKey || e.altKey || e.shiftKey || composing(e)) return -1;
+  if (e.metaKey || e.ctrlKey || e.altKey || e.shiftKey || e.repeat || composing(e)) return -1;
   const el = e.target as { tagName?: string; isContentEditable?: boolean } | null | undefined;
   const tag = el?.tagName;
   if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || el?.isContentEditable) return -1;

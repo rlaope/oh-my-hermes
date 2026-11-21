@@ -333,6 +333,10 @@
   font-size: 11.5px;
   font-weight: 400;
 }
+.iv-chip.on .iv-badge {
+  background: transparent;
+  box-shadow: inset 0 0 0 1px var(--quiet);
+}
 .iv-badge {
   margin-left: 7px;
   padding: 0 5px;
