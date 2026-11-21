@@ -275,6 +275,14 @@ else
       case "$w" in [A-Za-z]:*|/*) [ -x "$w" ] && py="$w" ;; esac
     fi
   done
+  # a PM install may expose only the batch shim (`@echo off`, then `"<python>" -I -c "..."`): read its first
+  # command word the way the app reads it, quoted for a path with spaces or bare
+  for l in "$h/hermes-agent/.hermes/bin/hermes.cmd" "$h/bin/hermes.cmd"; do
+    if [ -z "$py" ] && [ -f "$l" ]; then
+      w=$(awk '{ sub(/^[[:space:]]+/, ""); sub(/[[:space:]]+$/, ""); if ($0 == "" || tolower($0) == "@echo off") next; if (match($0, /^"[^"]+"/)) print substr($0, 2, RLENGTH - 2); else { split($0, a, " "); print a[1] }; exit }' "$l")
+      case "$w" in [A-Za-z]:*|/*) [ -x "$w" ] && py="$w" ;; esac
+    fi
+  done
   x="Scripts/python.exe"
 fi
 for v in venv .venv; do
@@ -1157,6 +1165,10 @@ mod tests {
         assert_eq!(run(&user, &la), format!("OMHER_PEER_PYTHON {}", store.display()));
         // no launcher: venv/Scripts/python.exe
         std::fs::remove_file(home.join("bin/hermes.exe")).unwrap();
+        // a PM install that ships only the batch shim: its first command word names the interpreter
+        std::fs::write(home.join("bin/hermes.cmd"), format!("@echo off\r\n\"{}\" -I -c \"import os\" %*\r\n", store.display())).unwrap();
+        assert_eq!(run(&user, &la), format!("OMHER_PEER_PYTHON {}", store.display()));
+        std::fs::remove_file(home.join("bin/hermes.cmd")).unwrap();
         let venv = home.join("hermes-agent/venv/Scripts/python.exe");
         exe(&venv, "#!/bin/sh\necho 3.14.9\n");
         assert_eq!(run(&user, &la), format!("OMHER_PEER_PYTHON {}", venv.display()));
