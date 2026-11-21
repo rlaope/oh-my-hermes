@@ -11,6 +11,12 @@ All notable changes will be documented here.
   show as a row above the card, and a reopened chat (an app restart while the question waits, too) keeps that row
   once. By jundev0001 (#3028).
 
+- **omher: `/` in a bot chat lists the commands Hermes answers there.** Typing `/` opens a menu of Hermes' own slash
+  commands with a one-line description and the arguments each takes, read from Hermes' command registry, so it lists
+  what the gateway dispatches. A CLI-only command is listed only when its gateway gate is on in that bot's config. A
+  skill typed the Hermes way (`/plan`) still sends as typed on Enter even when the menu shows a command that mentions
+  it; `$` keeps the skill picker. An older Hermes without the registry shows no menu. By jundev0001 (#3029).
+
 - **A closed terminal no longer loses the OMH session: it comes back by itself, in any terminal and in omher.**
   Each OMH TUI now records how its session ended in `<omh_home>/tui/live-sessions.json`. `/exit`, Ctrl+D or moving
   to another session is *closed* and never reopens. A closed window, SIGHUP, a crash, a kill, a reboot or a lost
