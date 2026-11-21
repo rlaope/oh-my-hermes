@@ -176,6 +176,21 @@ pub fn terminal_args(id: &str, new_session: Option<&str>, resume: Option<&str>) 
     }
 }
 
+/// The one variable a TERMINALS session gets besides the terminal's own and the account's: an oh-my-hermes (`omh`)
+/// terminal is told its omher row's link id as `OMHER_TERMINAL_LINK=<link id>`, so the OMH TUI it runs can name this
+/// terminal and reopen the session it dropped here after omher restarts. No other agent gets it, and an id that is
+/// not 10 lowercase base32 characters is refused.
+pub fn terminal_env(id: &str, link: Option<&str>) -> Result<Vec<(String, String)>, String> {
+    let Some(link) = link else { return Ok(Vec::new()) };
+    if id != "omh" {
+        return Err(format!("{id} sessions are not given a terminal link"));
+    }
+    if !crate::term_link::is_link_id(link) {
+        return Err("not a terminal link id".into());
+    }
+    Ok(vec![("OMHER_TERMINAL_LINK".into(), link.into())])
+}
+
 /// `8-4-4-4-12` hex digits, nothing else.
 pub fn is_uuid(s: &str) -> bool {
     let parts: Vec<&str> = s.split('-').collect();
@@ -1017,13 +1032,15 @@ impl Sessions {
     /// Start allow-listed agent `agent` in `cwd`. Anything not in [`AGENTS`] is refused before a process
     /// exists. `account_env` is `accounts::session_env` for that agent: the chosen account's home variable,
     /// or nothing. `new_session` (Claude Code) names the new conversation, `resume` (Claude Code, Codex) continues
-    /// one in the agent's own terminal UI ([`terminal_args`]).
+    /// one in the agent's own terminal UI ([`terminal_args`]); `link` (oh-my-hermes only) is the row's link id,
+    /// passed as `OMHER_TERMINAL_LINK` ([`terminal_env`]).
     pub fn start_agent<F>(
         &self,
         agent_id: &str,
         cwd: &Path,
         new_session: Option<&str>,
         resume: Option<&str>,
+        link: Option<&str>,
         account_env: &[(String, String)],
         cols: u16,
         rows: u16,
@@ -1037,9 +1054,11 @@ impl Sessions {
             return Err("DeepSeek Harness has no terminal view here".into());
         }
         let extra = terminal_args(agent_id, new_session, resume)?;
+        let mut env = account_env.to_vec();
+        env.extend(terminal_env(agent_id, link)?);
         let (mut argv, path_env) = launch_for(agent_id)?;
         argv.extend(extra);
-        self.spawn(argv, cwd, Some(path_env), account_env, cols, rows, sink)
+        self.spawn(argv, cwd, Some(path_env), &env, cols, rows, sink)
     }
 
     /// The conversation the Codex in the foreground of session `id` holds open ([`crate::fg::codex_conversation`]), in
@@ -1820,7 +1839,7 @@ mod tests {
             assert!(resume_args(agent, id).is_err(), "{agent}");
         }
         let s = Sessions::default();
-        assert!(s.start_agent("claude", &std::env::temp_dir(), None, Some("--yolo"), &[], 80, 24, |_| {}).is_err());
+        assert!(s.start_agent("claude", &std::env::temp_dir(), None, Some("--yolo"), None, &[], 80, 24, |_| {}).is_err());
         assert_eq!(s.count(), 0);
     }
 
@@ -1877,7 +1896,7 @@ mod tests {
         assert_eq!(dsh_harness(&env, &dirs, fs_of(&[&bot, &shim]), same, Os::Windows), None);
         // and DeepSeek Harness never opens in a terminal session
         let s = Sessions::default();
-        assert!(s.start_agent("dsh", &std::env::temp_dir(), None, None, &[], 80, 24, |_| {}).is_err());
+        assert!(s.start_agent("dsh", &std::env::temp_dir(), None, None, None, &[], 80, 24, |_| {}).is_err());
         assert_eq!(s.count(), 0);
     }
 
@@ -1914,9 +1933,46 @@ mod tests {
             assert!(terminal_args("codex", None, Some(bad)).is_err(), "{bad:?}");
         }
         let s = Sessions::default();
-        assert!(s.start_agent("claude", &std::env::temp_dir(), Some("--dangerously-skip-permissions"), None, &[], 80, 24, |_| {}).is_err());
-        assert!(s.start_agent("codex", &std::env::temp_dir(), None, Some("--yolo"), &[], 80, 24, |_| {}).is_err());
+        assert!(s.start_agent("claude", &std::env::temp_dir(), Some("--dangerously-skip-permissions"), None, None, &[], 80, 24, |_| {}).is_err());
+        assert!(s.start_agent("codex", &std::env::temp_dir(), None, Some("--yolo"), None, &[], 80, 24, |_| {}).is_err());
         assert_eq!(s.count(), 0);
+    }
+
+    /// An oh-my-hermes terminal gets its row's link id as `OMHER_TERMINAL_LINK` (OMH reopens the session it dropped in
+    /// this terminal); no other agent gets it, and a link that is not 10 lowercase base32 characters is refused.
+    #[test]
+    fn terminal_env_gives_only_omh_its_checked_link_id() {
+        assert_eq!(terminal_env("omh", None).unwrap(), Vec::<(String, String)>::new());
+        assert_eq!(terminal_env("claude", None).unwrap(), Vec::<(String, String)>::new());
+        assert_eq!(terminal_env("omh", Some("abcdefgh23")).unwrap(), vec![("OMHER_TERMINAL_LINK".to_string(), "abcdefgh23".to_string())]);
+        for agent in ["claude", "codex", "omo", "dsh", "pi", "omp", "grok", "opencode", "gemini", "shell"] {
+            assert!(terminal_env(agent, Some("abcdefgh23")).is_err(), "{agent}");
+        }
+        for bad in ["", "abcdefgh2", "abcdefgh234", "ABCDEFGH23", "abcdefgh18", "abcdefgh2 ", "abc/efgh23", "abcdefgh2\n", "abcdéfgh23"] {
+            assert!(terminal_env("omh", Some(bad)).is_err(), "{bad:?}");
+        }
+        // refused before a program is looked up or a process exists
+        let s = Sessions::default();
+        let tmp = std::env::temp_dir();
+        assert_eq!(s.start_agent("claude", &tmp, None, None, Some("abcdefgh23"), &[], 80, 24, |_| {}).unwrap_err(), "claude sessions are not given a terminal link");
+        assert_eq!(s.start_agent("omh", &tmp, None, None, Some("NOT-A-LINK"), &[], 80, 24, |_| {}).unwrap_err(), "not a terminal link id");
+        assert_eq!(s.count(), 0);
+    }
+
+    /// The link variable is added beside the account's and the terminal's own, and nothing else changes.
+    #[test]
+    fn the_link_is_the_one_variable_an_omh_terminal_adds() {
+        let cwd = std::env::temp_dir();
+        let argv = || vec![OsString::from("/x/omh")];
+        let extra = |cmd: &CommandBuilder| -> Vec<(String, String)> {
+            cmd.iter_extra_env_as_str().map(|(k, v)| (k.to_string(), v.to_string())).collect()
+        };
+        let base = extra(&command_for(argv(), &cwd, None, &[]));
+        let cmd = command_for(argv(), &cwd, None, &terminal_env("omh", Some("q2w3e4r5t6")).unwrap());
+        let mut added: Vec<_> = extra(&cmd).into_iter().filter(|p| !base.contains(p)).collect();
+        added.sort();
+        assert_eq!(added, vec![("OMHER_TERMINAL_LINK".to_string(), "q2w3e4r5t6".to_string())]);
+        assert_eq!(cmd.get_argv(), &argv(), "the link changes no argument");
     }
 
     /// every allow-listed id except `dsh` (DeepSeek Harness ships no terminal profile). The folder is relative, so
@@ -1925,7 +1981,7 @@ mod tests {
     fn start_agent_accepts_every_allow_listed_agent_for_a_terminal_except_dsh() {
         let s = Sessions::default();
         for a in AGENTS.iter().chain(crate::acp_agents::ACP_LIST.iter().map(|e| &e.agent)) {
-            let err = s.start_agent(a.id, Path::new("relative/dir"), None, None, &[], 80, 24, |_| {}).unwrap_err();
+            let err = s.start_agent(a.id, Path::new("relative/dir"), None, None, None, &[], 80, 24, |_| {}).unwrap_err();
             if a.id == "dsh" {
                 assert!(err.contains("no terminal view"), "{err}");
             } else {
@@ -1941,7 +1997,7 @@ mod tests {
         let s = Sessions::default();
         let tmp = std::env::temp_dir();
         for bad in ["/bin/sh", "kilo"] {
-            let err = s.start_agent(bad, &tmp, None, None, &[], 80, 24, |_| {}).unwrap_err();
+            let err = s.start_agent(bad, &tmp, None, None, None, &[], 80, 24, |_| {}).unwrap_err();
             assert_eq!(err, format!("unknown agent \"{bad}\""));
         }
         assert_eq!(s.count(), 0);
@@ -3069,7 +3125,7 @@ mod tests {
         for bad in ["shell", "zsh", "/bin/zsh", "bash -l", "powershell.exe", "cmd"] {
             assert!(agent(bad).is_none(), "{bad}");
             assert!(launch_for(bad).is_err(), "{bad}");
-            assert!(s.start_agent(bad, &std::env::temp_dir(), None, None, &[], 80, 24, |_| {}).unwrap_err().contains("unknown agent"));
+            assert!(s.start_agent(bad, &std::env::temp_dir(), None, None, None, &[], 80, 24, |_| {}).unwrap_err().contains("unknown agent"));
         }
         assert_eq!(s.count(), 0);
     }

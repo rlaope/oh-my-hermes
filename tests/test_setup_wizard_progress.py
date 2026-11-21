@@ -62,6 +62,7 @@ _STEP_LABEL_KEYS = (
     "wizard_step_model_chains",
     "wizard_step_mcp_host",
     "wizard_step_update_check",
+    "wizard_step_auto_resume_shell",
     "wizard_step_model_onboarding",
 )
 
@@ -156,9 +157,10 @@ class WizardProgressTests(_WizardHarness, unittest.TestCase):
             self.assertEqual(
                 [label for _index, _total, label in headings],
                 # The harness's stdout is a StringIO, so the model-onboarding
-                # group (which needs a terminal on stdout) stays silent here;
-                # tests/test_setup_model_onboarding.py covers it.
-                [tr("en", key) for key in _STEP_LABEL_KEYS if key != "wizard_step_model_onboarding"],
+                # and auto-resume shell groups (both need a terminal on
+                # stdout) stay silent here; their own tests cover them.
+                [tr("en", key) for key in _STEP_LABEL_KEYS
+                 if key not in ("wizard_step_model_onboarding", "wizard_step_auto_resume_shell")],
             )
             # The count is the questions, not the groups that might have run:
             # each group stopped at its opening prompt, so one prompt is one
@@ -296,6 +298,95 @@ class WizardProgressTests(_WizardHarness, unittest.TestCase):
         )
         for question in setup_module._wizard_question_groups():
             self.assertIn(question.label_key, MESSAGES["en"])
+
+
+class AutoResumeShellQuestionTests(_WizardHarness, unittest.TestCase):
+    """The opt-in shell hook: asked on a terminal while the shell's rc exists without the block, default No."""
+
+    def setUp(self) -> None:
+        self._tmp = TemporaryDirectory()
+        self.addCleanup(self._tmp.cleanup)
+        self.root = Path(self._tmp.name)
+        self.home = self.root / "home"
+        self.home.mkdir()
+        self.rc = self.home / ".zshrc"
+        self.rc.write_bytes(b"export A=1\n")
+        environ = {"HOME": str(self.home), "USERPROFILE": str(self.home), "ZDOTDIR": str(self.home),
+                   "SHELL": "/bin/zsh"}
+        patcher = patch.dict(os.environ, environ)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+        self.paths = self._paths(self.root)
+        self._config(self.paths, _CONFIG)
+        write_update_check_policy(self.paths, mode="off")  # settles the only other question that could speak
+
+    def _wizard(self, answer: bool, *, terminal: bool = True, **flags):
+        prompts: list[tuple[str, bool, str]] = []
+
+        def yes_no(prompt, *, default, note="", **_kwargs):
+            prompts.append((prompt, default, note))
+            return answer
+
+        args = argparse.Namespace(profile=[], profile_pack=[], default_executor=None, with_mcp=False,
+                                  mcp_host="generic", **flags)
+        stream = io.StringIO()
+        with ExitStack() as stack:
+            stack.enter_context(patch.object(setup_module, "_detect_external_cli_profiles", return_value=_NONE_DETECTED))
+            stack.enter_context(patch.object(setup_module, "_stdin_is_tty", return_value=False))
+            stack.enter_context(patch.object(setup_module, "_provider_candidates", return_value=[]))
+            stack.enter_context(patch.object(setup_module, "_auto_resume_shell_terminal", return_value=terminal))
+            stack.enter_context(patch.object(setup_module, "_will_ask_model_onboarding", return_value=False))
+            stack.enter_context(patch.object(setup_module, "_ask_yes_no", side_effect=yes_no))
+            stack.enter_context(redirect_stdout(stream))
+            setup_module._run_setup_wizard(args, self.paths, "en")
+        return args, prompts, stream.getvalue()
+
+    def test_yes_installs_the_block_and_no_writes_nothing(self) -> None:
+        args, prompts, output = self._wizard(False)
+        self.assertEqual(len(prompts), 1)
+        prompt, default, note = prompts[0]
+        self.assertEqual(prompt, tr("en", "auto_resume_shell_prompt"))
+        self.assertIs(default, False)
+        self.assertIn(str(self.rc), note)
+        self.assertIn("omh auto-resume shell remove", note)
+        self.assertIn("[1/1] " + tr("en", "wizard_step_auto_resume_shell"), output)
+        self.assertIs(args._auto_resume_shell_choice, False)
+        self.assertEqual(self.rc.read_bytes(), b"export A=1\n")
+
+        args, prompts, output = self._wizard(True)
+        self.assertIs(args._auto_resume_shell_choice, True)
+        self.assertIn("auto-resume shell-start", self.rc.read_text(encoding="utf-8"))
+        self.assertIn(tr("en", "auto_resume_shell_installed", rc=str(self.rc)), output)
+
+        # Installed: not asked again.
+        args, prompts, output = self._wizard(True)
+        self.assertEqual(prompts, [])
+        self.assertIsNone(args._auto_resume_shell_choice)
+
+    def test_not_asked_without_a_terminal_an_rc_or_beside_yes(self) -> None:
+        for label, terminal, flags in (("no terminal", False, {}), ("--yes", True, {"yes": True}),
+                                       ("--no-interactive", True, {"no_interactive": True})):
+            with self.subTest(label):
+                args, prompts, _output = self._wizard(True, terminal=terminal, **flags)
+                self.assertEqual(prompts, [])
+                self.assertIsNone(args._auto_resume_shell_choice)
+        self.rc.unlink()
+        args, prompts, _output = self._wizard(True)
+        self.assertEqual(prompts, [])
+        self.assertFalse(self.rc.exists())
+
+    def test_it_sits_right_before_model_onboarding(self) -> None:
+        keys = [question.key for question in setup_module._wizard_question_groups()]
+        self.assertEqual(keys[-2:], ["auto_resume_shell", "model_onboarding"])
+
+    def test_strings_exist_in_every_language(self) -> None:
+        for code in LANGUAGE_CODES:
+            for key in ("wizard_step_auto_resume_shell", "auto_resume_shell_prompt", "auto_resume_shell_note",
+                        "auto_resume_shell_installed", "auto_resume_shell_failed"):
+                with self.subTest(language=code, key=key):
+                    self.assertTrue(MESSAGES[code][key].strip())
+            self.assertIn("{rc}", MESSAGES[code]["auto_resume_shell_note"])
+            self.assertIn("omh auto-resume shell remove", MESSAGES[code]["auto_resume_shell_note"])
 
 
 class UpdateCheckQuestionTests(_WizardHarness, unittest.TestCase):

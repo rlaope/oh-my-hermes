@@ -23,10 +23,20 @@ describe("TERMINALS splits", () => {
     expect(groupSessions(g[0])).toEqual(["s1", "s4", "s2", "s3"]);
     // a fifth does not fit
     expect(splitIn(g, "s3", "right", "s5")).toBe(g);
-    // a session already in the split is not added twice
-    expect(splitIn(g, "s1", "right", "s2")).toBe(g);
+    // a session already in the split is not added twice: it moves there (a full split still takes it)
+    expect(splitIn(g, "s1", "right", "s2")[0].layout).toEqual(row(col(row(P(1), P(2)), P(4)), P(3)));
+    // a pane dropped on itself stays
+    expect(splitIn(g, "s2", "left", "s2")).toBe(g);
     // bots and threads have no session number: never in a split
     expect(splitIn([], "s1", "right", "kami")).toEqual([]);
+  });
+
+  it("splits left and up too: the new pane goes first", () => {
+    expect(splitIn([], "s1", "left", "s2")).toEqual([{ layout: row(P(2), P(1)) }]);
+    expect(splitIn([], "s1", "up", "s2")).toEqual([{ layout: col(P(2), P(1)) }]);
+    // a pane of a two-pane split moved to the other side of its neighbour
+    expect(splitIn([{ layout: row(P(1), P(2)) }], "s1", "left", "s2")).toEqual([{ layout: row(P(2), P(1)) }]);
+    expect(splitIn([{ layout: row(P(1), P(2)) }], "s1", "down", "s2")).toEqual([{ layout: col(P(1), P(2)) }]);
   });
 
   it("a session moved into another split leaves its old one (which ends when one pane is left)", () => {

@@ -135,7 +135,7 @@ export function AgentIcon({
   const cls = `agent-ic${className ? ` ${className}` : ""}`;
   if (mark.kind === "img") {
     return (
-      <img src={mark.src} width={size} height={size} alt="" aria-hidden="true" className={cls}
+      <img src={mark.src} width={size} height={size} alt="" aria-hidden="true" className={cls} draggable={false}
         data-agent={mark.id} style={{ borderRadius: Math.round(size / 5), ...style }} />
     );
   }

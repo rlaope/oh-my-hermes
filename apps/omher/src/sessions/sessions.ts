@@ -36,14 +36,14 @@ import { termTheme } from "./term/themes";
 import { getShellHost, learnThisHost } from "../terminal/host";
 import { onSessionFg } from "./fg";
 import { termActs } from "./termActivity";
-import { LINK_COPIED_EVENT, newLinkId, termLinkUrl } from "./termLink";
+import { isLinkId, LINK_COPIED_EVENT, newLinkId, termLinkUrl } from "./termLink";
 import { acpRow, agentDef, agentLabel, continues, draftAgent, draftFolder, draftOpen, hermesOnly, installLine, isBuiltin, isGone, isShell, isTerminalRec, LAST_LINE_MAX, SHELL, termEnd, termMarkAgent, lastPrintedLine, OPEN_KEY, opensAs, parseOpens, parseRecent, pushRecent, RECENT_KEY, registerAcp, sessionMode, type AgentId, type AgentInfo, type OpenAs, type Unseen, type Opens, type Recent, type SessionRec } from "./agents";
 import { NAME_MAX, parseTitles, promptTitle, putTitle, TITLES_KEY } from "./titles";
 import { getDraft, setDraft as setUnsent } from "../app/drafts";
 import { getHost, type ChatEvent, type ChatInput, type PastChat, type SessionHost } from "./host";
 import { localBot } from "../peers/peerKey";
 import { folderKey, getStore, notifySessionEvent, notifySessionNote, onBridgeEvent, selectAsks, setChatRoute, setSessionKeyLookup, type OutFile, type SentFile, type Store } from "../state/store";
-import { blobType, bytesOf, inlinePicture, parseSentFiles, putSentFiles, SENT_FILES_KEY, shellQuote, wireText, type SavedFile, type SentFilesBook } from "./attach";
+import { blobType, bytesOf, inlinePicture, parseSentFiles, pathsTyped, putSentFiles, SENT_FILES_KEY, shellQuote, wireText, type SavedFile, type SentFilesBook } from "./attach";
 import type { AccountCli, AccountGroup, ApprovalChoice, BridgeEvent, ClarifyAnswers, Msg } from "../lib/protocol";
 import { continuesItself, type SavedSession } from "../app/resume";
 import { accountGroups } from "../settings/accounts/useAccounts";
@@ -171,6 +171,13 @@ export function newConversationId(): string {
 
 /** TERMINALS agents that continue their own conversation after omher restarts (`claude --resume`, `codex resume`). */
 const TERM_CONTINUES: readonly AgentId[] = ["claude", "codex"];
+/** TERMINALS agents that reopen their own dropped session after omher restarts with no id from omher: oh-my-hermes
+ *  (`omh`) is told its row's link (`OMHER_TERMINAL_LINK`, rule 11) and reopens the session it dropped under that
+ *  terminal by itself (OMH's auto-resume), so it needs no conversation id. */
+const TERM_REOPENS: readonly AgentId[] = ["omh"];
+/** Whether a TERMINALS session that was running when omher closed starts again by itself after the restart. */
+const termComesBack = (s: Pick<SavedSession, "agent" | "agentSession">): boolean =>
+  TERM_REOPENS.includes(s.agent) || (!!s.agentSession && TERM_CONTINUES.includes(s.agent));
 /** When a TERMINALS Codex session first asks for its conversation id, and how often after that until it has one. */
 const CODEX_ID_FIRST_MS = 5_000;
 const CODEX_ID_EVERY_MS = 15_000;
@@ -656,13 +663,60 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
       keys.set(id, folderKey(bot, res.session));
       registerRoute(id);
       openChat(id, res.model);
-      patchRec(id, { status: "running", model: res.model, agentSession: res.session });
+      // the row keeps Hermes' stored id (what `folder.resume` takes after a restart); the live bridge id is the proc's.
+      // A chat the bridge could not record (`recorded: false`) would be refused after a restart: the row keeps no id,
+      // so it comes back paused and Resume opens a new folder chat
+      patchRec(id, { status: "running", model: res.model, agentSession: (res.recorded !== false && res.stored) || undefined });
       void loadHermesModels(id, bot);
     } catch (e) {
       if (procs.get(id) === proc) procs.delete(id);
       const error = errText(e);
       patchRec(id, { status: "failed", error });
       tellEnd(id, "failed", { error });
+    }
+  };
+
+  /**
+   * Attach again the Hermes folder chat session `id` held before omher restarted (`folder.resume` with the stored id
+   * its row kept): the same conversation, its messages read back from Hermes, its waiting asks sent again. The bridge
+   * takes only a folder chat it made for this folder (rule 3). Null when it is attached, else why not.
+   */
+  const reattachFolder = async (id: string): Promise<string | null> => {
+    const r = rec(id);
+    const bot = r?.bot;
+    const stored = r?.agentSession;
+    if (!r || !bot || !stored) return tr("ss.noBot");
+    const proc: ChatProc = { kind: "folder", bot };
+    procs.set(id, proc);
+    try {
+      const res = await store().actions.folderResume(bot, r.cwd, stored);
+      proc.fid = res.session;
+      if (procs.get(id) !== proc) {
+        void store().actions.folderClose(bot, res.session).catch(() => undefined);
+        return null;
+      }
+      // the chat restored from the snapshot gives way to the one Hermes holds (no await before this: the asks the
+      // bridge sends after its reply find the chat open)
+      const old = keys.get(id);
+      const key = folderKey(bot, res.session);
+      if (old && old !== key) {
+        setChatRoute(old, null);
+        store().dispatch({ type: "chat.forget", bot: old });
+      }
+      keys.set(id, key);
+      registerRoute(id);
+      store().dispatch({
+        type: "chat.opened",
+        bot: key,
+        res: { session_id: key, messages: res.messages ?? [], running: !!res.running, model: res.model, provider: res.provider, reasoning: res.reasoning },
+        now: Date.now(),
+      });
+      patchRec(id, { status: "running", model: res.model, agentSession: res.stored || stored, paused: undefined, error: undefined, exitCode: null });
+      void loadHermesModels(id, bot);
+      return null;
+    } catch (e) {
+      if (procs.get(id) === proc) procs.delete(id);
+      return errText(e);
     }
   };
 
@@ -1315,6 +1369,9 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
     // a TERMINALS Claude Code or Codex session put back after a restart continues its own conversation (once);
     // Claude Code's terminal view of a chat continues the chat's conversation
     const again = !ofChat && termAgain.delete(id) && !!r.agentSession && TERM_CONTINUES.includes(r.agent);
+    // a TERMINALS oh-my-hermes terminal is told its row's link (OMHER_TERMINAL_LINK): `omh` reopens by itself the
+    // session it dropped in this terminal (after omher restarted, or on Restart), and no other program is told it
+    const link = !ofChat && r.agent === "omh" && isLinkId(r.linkId) ? r.linkId : undefined;
     const resume = again ? r.agentSession : r.agentSession && ofChat && r.agent === "claude" ? r.agentSession : undefined;
     // any other Claude Code terminal starts a new conversation under an id omher makes, kept so a restart continues it
     const sessionId = !ofChat && !resume && r.agent === "claude" ? newConversationId() : undefined;
@@ -1423,7 +1480,7 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
           feed(t.term, `\x1b[33m${tr("term.shellMissing", { shell: got.missing })}\x1b[0m\r\n`);
           patchRec(id, { shell: undefined });
         }
-      } else hostId = await host.start(r.agent, r.cwd, cols, rows, onData, onExit, resume, accountOf(r), sessionId);
+      } else hostId = await host.start(r.agent, r.cwd, cols, rows, onData, onExit, resume, accountOf(r), sessionId, link);
       if (t.run !== run) {
         // replaced while starting
         void io.close(hostId).catch(() => undefined);
@@ -1699,7 +1756,8 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
   };
 
   /** Files dropped or pasted on session `id`'s terminal: each saved under the session's own folder (the page
-   *  never sees a dropped file's own path), then the saved paths typed at the prompt, shell-quoted. */
+   *  never sees a dropped file's own path), then the saved paths typed at the prompt, shell-quoted (a paste when the
+   *  program turned bracketed paste on: attach.ts `pathsTyped`). */
   const dropOnTerminal = async (id: string, files: { name: string; read: () => Promise<Uint8Array> }[], windows: boolean) => {
     const t = terms.get(id);
     if (t?.held) return; // closed, waiting to be undone: nothing is saved or typed
@@ -1712,7 +1770,8 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
         return;
       }
     }
-    if (paths.length) await typeAt(id, `${paths.join(" ")} `);
+    const now = terms.get(id);
+    if (paths.length && now) await typeAt(id, pathsTyped(paths, bracketedPaste(now.raw)));
   };
 
   const stopChat = async (id: string) => {
@@ -1807,9 +1866,11 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
       patchRec(id, { paused: undefined, status: "starting", error: undefined, exitCode: null });
       return;
     }
-    // oh-my-hermes: a new Hermes chat in the folder; the saved one was only a picture of the old chat
-    const old = keys.get(id);
     patchRec(id, { paused: undefined, status: "starting", error: undefined, exitCode: null });
+    // oh-my-hermes: the same Hermes chat when the bridge still has it (`folder.resume`, by the stored id the row kept)
+    if (r.agentSession && r.bot && !(await reattachFolder(id))) return;
+    // else a new Hermes chat in the folder; the saved one was only a picture of the old chat
+    const old = keys.get(id);
     if (old) {
       keys.delete(id);
       setChatRoute(old, null);
@@ -1821,8 +1882,10 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
   /**
    * Put back the sessions saved before omher restarted (once per page load; a second call does nothing, so no
    * program starts twice). Each keeps its id, folder, account and chat. A chat that was running and continues a
-   * conversation (Claude Code, Codex, OmO) continues it; any other running one comes back paused; ended ones stay
-   * ended (with Restart).
+   * conversation (Claude Code, Codex, OmO) continues it; a TERMINALS Claude Code or Codex terminal continues its
+   * conversation and an oh-my-hermes terminal starts again (`omh` reopens the session it dropped there); an
+   * oh-my-hermes folder chat is attached again (`folder.resume`), paused with the reason when the bridge refuses; any
+   * other running one comes back paused; ended ones stay ended (with Restart).
    */
   const restore = (saved: SavedSession[]) => {
     if (restored || state.list.length > 0) return;
@@ -1838,6 +1901,12 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
     // generic ACP agents the shell has not described yet (it answers after this): whether they continue by themselves
     // is known once it has
     const later: string[] = [];
+    // oh-my-hermes terminals: started once the agents are known (an `omh` gone from this computer comes back paused)
+    const omhLater: string[] = [];
+    // oh-my-hermes folder chats to attach again once the bridge is up, each saved chat (bot and stored id) once: a
+    // second row holding the same one comes back paused, so one Hermes session is never attached for two rows
+    const folderAgain: string[] = [];
+    const folderTaken = new Set<string>();
     for (const s of saved) {
       if (isGone(s.agent) && s.draft) {
         // a New session never started on an agent omher no longer offers: a draft again, on the usual agent
@@ -1878,8 +1947,12 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
       // stay) but is not listed and never starts again
       const terminalOnly = !isTerminalRec(state.agents, { agent: s.agent, open: s.open, status: "exited" });
       const auto = !terminalOnly && s.running && mode === "chat" && continuesItself(s);
-      // a TERMINALS Claude Code or Codex session that was running continues its own conversation in a fresh terminal
-      const termAuto = !terminalOnly && s.running && mode === "terminal" && !!s.agentSession && TERM_CONTINUES.includes(s.agent);
+      // a TERMINALS Claude Code or Codex session that was running continues its own conversation in a fresh terminal;
+      // an oh-my-hermes one starts again, and `omh` reopens what it dropped there
+      const termAuto = !terminalOnly && s.running && mode === "terminal" && termComesBack(s);
+      // an oh-my-hermes folder chat that was running is attached again (rule 3: only one the bridge made)
+      const folderAuto = s.running && mode === "hermes" && !!s.agentSession && !!s.bot && !folderTaken.has(`${s.bot}\0${s.agentSession}`);
+      if (folderAuto) folderTaken.add(`${s.bot}\0${s.agentSession}`);
       const r: SessionRec = {
         id: s.id,
         agent: s.agent,
@@ -1888,7 +1961,7 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
         // a chat agent comes back as its chat (its terminal view would start the program on sight)
         view: mode === "terminal" ? "terminal" : "chat",
         ...(s.open === "terminal" ? { open: s.open } : {}),
-        status: auto || termAuto ? "starting" : s.failed ? "failed" : "exited",
+        status: auto || termAuto || folderAuto ? "starting" : s.failed ? "failed" : "exited",
         exitCode: s.running ? null : (s.exitCode ?? null),
         ...(s.error && !s.running ? { error: s.error } : {}),
         ...(s.agentSession ? { agentSession: s.agentSession } : {}),
@@ -1902,7 +1975,7 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
         ...(s.mode ? { mode: s.mode } : {}),
         ...(s.effort ? { effort: s.effort } : {}),
         ...(s.shell && isShell(s.agent) ? { shell: s.shell } : {}),
-        ...(s.running && !auto && !termAuto ? { paused: true } : {}),
+        ...(s.running && !auto && !termAuto && !folderAuto ? { paused: true } : {}),
       };
       list.push(r);
       fromBefore.add(s.id);
@@ -1916,6 +1989,8 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
       }
       if (auto) again.push({ id: s.id, resume: s.agentSession! });
       if (termAuto) termAgain.add(s.id);
+      if (termAuto && TERM_REOPENS.includes(s.agent)) omhLater.push(s.id);
+      if (folderAuto) folderAgain.push(s.id);
       if (!terminalOnly && mode === "terminal") histBack.add(s.id);
       else if (s.running && s.agentSession && !isBuiltin(s.agent) && !acpRow(s.agent) && !terminalOnly) later.push(s.id);
     }
@@ -1943,10 +2018,33 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
         const r = rec(id);
         if (r?.paused && continues(r.agent) && sessionMode(state.agents, r) === "chat") void resume(id);
       }
+      // an oh-my-hermes terminal whose `omh` is no longer here (only Hermes is) comes back paused, as it did before
+      const gone = omhLater.filter((id) => {
+        const r = rec(id);
+        return !!r && r.status === "starting" && !terms.has(id) && !opensAs(r.agent, state.agents).terminal;
+      });
+      for (const id of gone) {
+        termAgain.delete(id);
+        patchRec(id, { status: "exited", exitCode: null, paused: true });
+      }
+      const go = omhLater.filter((id) => termAgain.has(id));
+      if (go.length && typeof document !== "undefined") void loadXterm().then((m) => go.forEach((id) => startOffPage(m, id)));
     });
     if (again.length) void ready().then(() => Promise.all(again.map(({ id, resume: rid }) => (procs.has(id) ? undefined : startAgentChat(id, rid)))));
     // their terminals are made and started now, off the page (a view that opens one later takes it as it is)
-    if (termAgain.size && typeof document !== "undefined") void loadXterm().then((m) => [...termAgain].forEach((id) => startOffPage(m, id)));
+    const now = [...termAgain].filter((id) => !omhLater.includes(id));
+    if (now.length && typeof document !== "undefined") void loadXterm().then((m) => now.forEach((id) => startOffPage(m, id)));
+    // the folder chats once the bridge has put back the bots: refused or failed, a row is paused with the reason
+    if (folderAgain.length)
+      void store().resumed.then(() =>
+        Promise.all(
+          folderAgain.map(async (id) => {
+            if (procs.has(id) || rec(id)?.status !== "starting") return;
+            const why = await reattachFolder(id);
+            if (why !== null && rec(id)?.status === "starting" && !procs.has(id)) patchRec(id, { status: "exited", exitCode: null, paused: true, error: why });
+          }),
+        ),
+      );
   };
 
   /** Make session `id`'s terminal and start its program without showing it: measured in a box off the page, then
@@ -2176,8 +2274,13 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
       }
     }
   };
+  // Every session view calls this when it mounts and when the app theme changes: only a mode the terminals have not
+  // been given yet relooks them all (each mount used to re-apply the look and refit every open terminal)
+  let looked: "dark" | "light" | null = null;
   const setLook = (mode: "dark" | "light") => {
     look = mode;
+    if (mode === looked) return;
+    looked = mode;
     relook();
   };
   onTermSettings(relook);

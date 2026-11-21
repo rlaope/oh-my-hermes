@@ -24,6 +24,7 @@ import type {
   ClarifyQuestion,
   HelloResult,
   FolderOpenResult,
+  FolderResumeResult,
   ModelCurrent,
   ModelOptions,
   PeekMsg,
@@ -42,6 +43,7 @@ import type {
   AccountCli,
   AccountGroup,
   Skill,
+  SlashCommand,
   Automation,
   CatalogResult,
   InspectResult,
@@ -1922,6 +1924,8 @@ export interface Actions {
   openSession(id: string | null): void;
   /** A new Hermes chat for `bot` in folder `cwd` (SESSIONS > oh-my-hermes). */
   folderOpen(bot: string, cwd: string): Promise<FolderOpenResult>;
+  /** Attach again folder chat `stored` (Hermes' stored id `folderOpen` returned) after a restart. */
+  folderResume(bot: string, cwd: string, stored: string): Promise<FolderResumeResult>;
   folderClose(bot: string, session: string): Promise<void>;
   /** Change the model of folder chat `session`. */
   folderSetModel(bot: string, session: string, change: { model: string; provider?: string }): Promise<ModelCurrent>;
@@ -1937,6 +1941,9 @@ export interface Actions {
   /** The bot's skills for the composer's `$` picker, read once per bot (`fresh`: read again, e.g. right after an
    *  install); [] when the bridge cannot list them. */
   skills(bot: string, fresh?: boolean): Promise<Skill[]>;
+  /** The slash commands Hermes answers for this bot (its own registry), for the composer's `/` menu; read once
+   *  per bot, [] when the bridge cannot list them. */
+  slashCommands(bot: string, fresh?: boolean): Promise<SlashCommand[]>;
   /** Channel names for Slack / Discord link chips, read once per bot; empty when the bridge cannot say. */
   linkPlaces(bot: string): Promise<LinkPlaces>;
   avatarOf(bot: string): Promise<{ rev: number | null; data: string | null }>;
@@ -2085,6 +2092,8 @@ export function createStore(bridge: BridgeLike, opts: StoreOptions = {}): Store 
   // skills.list per bot: the promise (asked once) and the names, for hoisting tokens when a message is sent
   const skillLists = new Map<string, Promise<Skill[]>>();
   const skillNames = new Map<string, string[]>();
+  // commands.list per bot: the composer's `/` menu, asked once (empty rows mean: keep the hint, no menu)
+  const slashLists = new Map<string, Promise<SlashCommand[]>>();
   const tokenNames = (text: string, bot: string) => [...new Set(findTokens(text, skillNames.get(bot) ?? []).map((k) => k.name))];
 
   // Steer queue: what each held row sends (the wire text, a Reply there target, its files), kept out of the state
@@ -2808,6 +2817,7 @@ export function createStore(bridge: BridgeLike, opts: StoreOptions = {}): Store 
     },
     openSession: (id) => dispatch({ type: "ui.session", id }),
     folderOpen: (bot, cwd) => bridge.request("folder.open", { bot, cwd }),
+    folderResume: (bot, cwd, stored) => bridge.request("folder.resume", { bot, cwd, stored }),
     async folderClose(bot, session) {
       await bridge.request("folder.close", { bot, session });
     },
@@ -2852,6 +2862,21 @@ export function createStore(bridge: BridgeLike, opts: StoreOptions = {}): Store 
             return [];
           });
         skillLists.set(bot, list);
+      }
+      return list;
+    },
+    slashCommands(bot, fresh) {
+      if (fresh) slashLists.delete(bot);
+      let list = slashLists.get(bot);
+      if (!list) {
+        list = bridge
+          .request("commands.list", { bot })
+          .then((r) => r.commands)
+          .catch(() => {
+            slashLists.delete(bot); // an older bridge without the op, or a failed read: no menu, no toast
+            return [];
+          });
+        slashLists.set(bot, list);
       }
       return list;
     },

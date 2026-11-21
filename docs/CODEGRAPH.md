@@ -119,6 +119,13 @@ Before broad code exploration, agents should prefer CodeGraph for a first pass:
 CodeGraph can reduce exploration cost, but it does not replace source reads,
 tests, review, or CI.
 
+From `AGENTS.md` (Verification), verbatim:
+
+CodeGraph (`docs/CODEGRAPH.md`) is a navigation aid before broad exploration;
+its index under `.codegraph/` is machine-local, and only
+`.codegraph/.gitignore` is committed. Its output is prepared context, never
+execution, review, CI, merge-readiness, or merge evidence.
+
 ## OMH's own `omh codegraph` commands
 
 The repo's own `omh codegraph` index is stdlib-`ast` and Python-only; for multi-language structural queries the managed `omh-routing/references/structural-code-search.md` reference is the complement. Every subcommand accepts `--repo` (default `.`) and `--json`.

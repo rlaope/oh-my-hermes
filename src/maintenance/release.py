@@ -476,7 +476,10 @@ SKILL_INDEX_LINE_CHAR_LIMIT = 99
 # installs without omher never carry it. Measured by
 # per_turn_context.plugin_tool_schema_chars_by_tool() against c16924f2a, then
 # summed with main's carry_forward. No headroom.
-PLUGIN_TOOL_SCHEMA_CHAR_LIMIT = 63824
+# 63824 -> 63954: omh_dag node `review_focus` (+130): one optional string property
+# with its description, and the field named in the tool description. Measured by
+# per_turn_context.plugin_tool_schema_chars_by_tool() against c5a909c6b. No headroom.
+PLUGIN_TOOL_SCHEMA_CHAR_LIMIT = 63954
 # PRE_LLM_CALL_CONTEXT_CHAR_LIMIT, PRE_LLM_CALL_CONTEXT_FALLBACK_CHAR_LIMIT: moved with
 # their history to src/plugin_bundle/omh/turn_budget.py; imported at the top of this file.
 # 340000 -> 349637: three capability-skill sections were added by the domain
@@ -1111,7 +1114,10 @@ PLUGIN_TOOL_SCHEMA_CHAR_LIMIT = 63824
 # reproduces 545683. Measured from the producer.
 # 549541 -> 549528: model-compression's description says "smaller or cheaper via its weights" in place of
 # "smaller by changing its weights: cheaper through" (-13); measured from the producer. No headroom.
-FULL_CAPABILITY_SKILL_SECTION_CHAR_LIMIT = 549528
+# 549528 -> 549751 (2026-11-20): OpenAI's GPT-6.2 Codex guide lines: dag-ulw's node-prompt line briefs like a
+# colleague and names `review_focus` (+161), agent-instructions' infer-from-code rule enters its first-four
+# quality-bar slice (+62); only those two rows. Measured from the producer against main c5a909c6b. No headroom.
+FULL_CAPABILITY_SKILL_SECTION_CHAR_LIMIT = 549751
 FULL_CAPABILITY_SKILL_ITEM_CHAR_LIMIT = 9000
 # 100000 -> 102070: the same three domain workflows each add one standalone
 # capability row, again measured on the merged tree; warranted growth for three

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { findOptionKey, isFindKey } from "./engine-input";
+import { findOptionKey, fontKey, isClearKey, isFindKey, lineEditBytes, nextFontSize, scrollKey, clipboardKey } from "./engine-input";
 import { validPattern } from "./engine-find";
 
 const key = (o: Partial<{ key: string; code: string; metaKey: boolean; ctrlKey: boolean; altKey: boolean; shiftKey: boolean }>) => ({ key: "f", code: "KeyF", metaKey: false, ctrlKey: false, altKey: false, shiftKey: false, ...o });
@@ -55,5 +55,115 @@ describe("find options", () => {
   it("a pattern is valid when it compiles as the search add-on compiles it", () => {
     for (const ok of ["fo+", "foo", "^a.*b$", "\\d{2,}", "(a|b)", "[x-z]"]) expect(validPattern(ok), ok).toBe(true);
     for (const bad of ["(", "[", "a{2,1}", "*", "(?<", "\\"]) expect(validPattern(bad), bad).toBe(false);
+  });
+});
+
+describe("font size keys", () => {
+  const k = (o: Partial<{ key: string; code: string; metaKey: boolean; ctrlKey: boolean; altKey: boolean; shiftKey: boolean }>) => key(o);
+
+  it("macOS: Cmd+= and Cmd++ bigger, Cmd+- smaller, Cmd+0 default; Ctrl is the program's", () => {
+    expect(fontKey(k({ metaKey: true, key: "=", code: "Equal" }), true)).toBe("bigger");
+    expect(fontKey(k({ metaKey: true, shiftKey: true, key: "+", code: "Equal" }), true)).toBe("bigger");
+    expect(fontKey(k({ metaKey: true, key: "+", code: "NumpadAdd" }), true)).toBe("bigger");
+    expect(fontKey(k({ metaKey: true, key: "-", code: "Minus" }), true)).toBe("smaller");
+    expect(fontKey(k({ metaKey: true, key: "0", code: "Digit0" }), true)).toBe("reset");
+    expect(fontKey(k({ ctrlKey: true, key: "=", code: "Equal" }), true)).toBeNull();
+    expect(fontKey(k({ ctrlKey: true, key: "-", code: "Minus" }), true)).toBeNull();
+  });
+
+  it("macOS: Cmd+Ctrl+= stays the panes' even-out key, Option is never a font key", () => {
+    expect(fontKey(k({ metaKey: true, ctrlKey: true, key: "=", code: "Equal" }), true)).toBeNull();
+    expect(fontKey(k({ metaKey: true, altKey: true, key: "=", code: "Equal" }), true)).toBeNull();
+  });
+
+  it("Windows and Linux: Ctrl with the same keys; Ctrl+Alt+= (even out) and Ctrl+Shift+- (Ctrl+_, undo) are not taken", () => {
+    expect(fontKey(k({ ctrlKey: true, key: "=", code: "Equal" }), false)).toBe("bigger");
+    expect(fontKey(k({ ctrlKey: true, key: "-", code: "Minus" }), false)).toBe("smaller");
+    expect(fontKey(k({ ctrlKey: true, key: "0", code: "Digit0" }), false)).toBe("reset");
+    expect(fontKey(k({ ctrlKey: true, altKey: true, key: "=", code: "Equal" }), false)).toBeNull();
+    expect(fontKey(k({ ctrlKey: true, shiftKey: true, key: "_", code: "Minus" }), false)).toBeNull();
+    expect(fontKey(k({ metaKey: true, key: "=", code: "Equal" }), false)).toBeNull();
+  });
+
+  it("other layouts: German + and - stand elsewhere and still count; the 1 to 9 keys stay the bots'", () => {
+    expect(fontKey(k({ metaKey: true, key: "+", code: "BracketRight" }), true)).toBe("bigger");
+    expect(fontKey(k({ metaKey: true, key: "-", code: "Slash" }), true)).toBe("smaller");
+    expect(fontKey(k({ metaKey: true, key: "1", code: "Digit1" }), true)).toBeNull();
+    expect(fontKey(k({ key: "=", code: "Equal" }), true)).toBeNull();
+  });
+
+  it("one point a step, Cmd+0 back to the default", () => {
+    expect(nextFontSize(13, "bigger")).toBe(14);
+    expect(nextFontSize(13.5, "smaller")).toBe(13);
+    expect(nextFontSize(20, "reset")).toBe(13);
+  });
+});
+
+describe("macOS line editing keys", () => {
+  const k = (o: Partial<{ key: string; code: string; metaKey: boolean; ctrlKey: boolean; altKey: boolean; shiftKey: boolean }>) => key({ code: "", ...o });
+
+  it("Cmd+Left/Right go to the line's start/end, Cmd+Backspace/Delete delete to its start/end", () => {
+    expect(lineEditBytes(k({ metaKey: true, key: "ArrowLeft" }), true, false)).toBe("\x01");
+    expect(lineEditBytes(k({ metaKey: true, key: "ArrowRight" }), true, false)).toBe("\x05");
+    expect(lineEditBytes(k({ metaKey: true, key: "Backspace" }), true, false)).toBe("\x15");
+    expect(lineEditBytes(k({ metaKey: true, key: "Delete" }), true, false)).toBe("\x0b");
+  });
+
+  it("Option+Left/Right move a word as readline knows it, except for a program with Kitty keys on", () => {
+    expect(lineEditBytes(k({ altKey: true, key: "ArrowLeft" }), true, false)).toBe("\x1bb");
+    expect(lineEditBytes(k({ altKey: true, key: "ArrowRight" }), true, false)).toBe("\x1bf");
+    expect(lineEditBytes(k({ altKey: true, key: "ArrowLeft" }), true, true)).toBeNull();
+    // Cmd stays line editing with Kitty keys on: no program reads Cmd
+    expect(lineEditBytes(k({ metaKey: true, key: "ArrowLeft" }), true, true)).toBe("\x01");
+  });
+
+  it("leaves the other keys alone: Shift (selection), Cmd+Option (pane focus), Ctrl, Cmd+Up/Down (prompt jump), and Windows/Linux", () => {
+    expect(lineEditBytes(k({ metaKey: true, shiftKey: true, key: "ArrowLeft" }), true, false)).toBeNull();
+    expect(lineEditBytes(k({ metaKey: true, altKey: true, key: "ArrowLeft" }), true, false)).toBeNull();
+    expect(lineEditBytes(k({ ctrlKey: true, key: "ArrowLeft" }), true, false)).toBeNull();
+    expect(lineEditBytes(k({ metaKey: true, key: "ArrowUp" }), true, false)).toBeNull();
+    expect(lineEditBytes(k({ key: "ArrowLeft" }), true, false)).toBeNull();
+    expect(lineEditBytes(k({ ctrlKey: true, key: "ArrowLeft" }), false, false)).toBeNull();
+    expect(lineEditBytes(k({ altKey: true, key: "ArrowLeft" }), false, false)).toBeNull();
+  });
+
+  it("Cmd+K clears on macOS (by the K key's place on a Korean layout); Ctrl+K stays the program's everywhere", () => {
+    expect(isClearKey(k({ metaKey: true, key: "k", code: "KeyK" }), true)).toBe(true);
+    expect(isClearKey(k({ metaKey: true, key: "ㅏ", code: "KeyK" }), true)).toBe(true);
+    expect(isClearKey(k({ ctrlKey: true, key: "k", code: "KeyK" }), true)).toBe(false);
+    expect(isClearKey(k({ ctrlKey: true, key: "k", code: "KeyK" }), false)).toBe(false);
+    expect(isClearKey(k({ metaKey: true, shiftKey: true, key: "K", code: "KeyK" }), true)).toBe(false);
+  });
+});
+
+describe("scroll keys", () => {
+  const k = (o: Partial<{ key: string; code: string; metaKey: boolean; ctrlKey: boolean; altKey: boolean; shiftKey: boolean }>) => key({ code: "", ...o });
+  it("Cmd+Home/End on macOS, Ctrl+Home/End elsewhere; plain Home/End stay the program's", () => {
+    expect(scrollKey(k({ metaKey: true, key: "Home" }), true)).toBe("top");
+    expect(scrollKey(k({ metaKey: true, key: "End" }), true)).toBe("bottom");
+    expect(scrollKey(k({ ctrlKey: true, key: "Home" }), false)).toBe("top");
+    expect(scrollKey(k({ ctrlKey: true, key: "End" }), false)).toBe("bottom");
+    expect(scrollKey(k({ key: "Home" }), true)).toBeNull();
+    expect(scrollKey(k({ key: "End" }), false)).toBeNull();
+    expect(scrollKey(k({ ctrlKey: true, key: "Home" }), true)).toBeNull();
+    expect(scrollKey(k({ metaKey: true, shiftKey: true, key: "Home" }), true)).toBeNull();
+  });
+});
+
+describe("copy and paste keys off macOS", () => {
+  const k = (o: Partial<{ key: string; code: string; metaKey: boolean; ctrlKey: boolean; altKey: boolean; shiftKey: boolean }>) => key({ code: "", ...o });
+  it("Ctrl+Shift+C / Ctrl+Insert copy, Ctrl+Shift+V / Shift+Insert paste; plain Ctrl+C and Ctrl+V stay the program's", () => {
+    expect(clipboardKey(k({ ctrlKey: true, shiftKey: true, key: "C", code: "KeyC" }), false)).toBe("copy");
+    expect(clipboardKey(k({ ctrlKey: true, key: "Insert" }), false)).toBe("copy");
+    expect(clipboardKey(k({ ctrlKey: true, shiftKey: true, key: "V", code: "KeyV" }), false)).toBe("paste");
+    expect(clipboardKey(k({ shiftKey: true, key: "Insert" }), false)).toBe("paste");
+    expect(clipboardKey(k({ ctrlKey: true, key: "c", code: "KeyC" }), false)).toBeNull();
+    expect(clipboardKey(k({ ctrlKey: true, key: "v", code: "KeyV" }), false)).toBeNull();
+    // a Korean layout: the keys where C and V stand
+    expect(clipboardKey(k({ ctrlKey: true, shiftKey: true, key: "ㅊ", code: "KeyC" }), false)).toBe("copy");
+  });
+  it("macOS takes none of them (Cmd+C / Cmd+V are the Edit menu's)", () => {
+    expect(clipboardKey(k({ ctrlKey: true, shiftKey: true, key: "C", code: "KeyC" }), true)).toBeNull();
+    expect(clipboardKey(k({ shiftKey: true, key: "Insert" }), true)).toBeNull();
   });
 });

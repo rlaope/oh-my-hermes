@@ -23,6 +23,7 @@ SUBCOMMAND_REGISTRARS: dict[str, tuple[str, str]] = {
     "achievements": ("achievements", "_add_achievements_commands"),
     "adapter-quality": ("adapter_quality", "_add_adapter_quality_commands"),
     "apply": ("setup", "_add_top_level_commands"),
+    "auto-resume": ("auto_resume", "_add_auto_resume_commands"),
     "benchmark": ("cross_harness_benchmark", "_add_benchmark_commands"),
     "capabilities": ("capabilities", "_add_capabilities_commands"),
     "capability-policy": ("setup", "_add_top_level_commands"),
@@ -104,6 +105,9 @@ def _command_module(module: str):
         return loaded
     if module == "adapter_quality":
         from . import adapter_quality as loaded
+        return loaded
+    if module == "auto_resume":
+        from . import auto_resume as loaded
         return loaded
     if module == "capabilities":
         from . import capabilities as loaded

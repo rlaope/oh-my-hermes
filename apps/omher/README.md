@@ -250,6 +250,28 @@ tag `omher-v<version>`. `.github/workflows/omher-release.yml` builds the macOS (
 installers, writes `SHA256SUMS.txt` and attaches everything to a GitHub Release of that tag. No Apple Developer
 or Windows signing certificate is involved: macOS builds use an ad-hoc signature (`signingIdentity: "-"`).
 
+## Repository rules
+
+Moved verbatim from the repository's `CLAUDE.md`.
+
+omher has its own toolchain (Node + pnpm, Rust, Tauri 2) and its own CI
+(`.github/workflows/omher.yml` for macOS and Windows plus the bridge tests,
+`omher-ci.yml` for Linux), which run only when `apps/omher/**`, the boundary
+doc or its test changes. The dev and test commands are in
+`apps/omher/README.md` (Develop); the release steps are in its Release section
+(version in three files, then an `omher-v<version>` tag; `/releases/latest`
+is the OMH package release, not omher's).
+
+- A change that widens what the app sends, writes, reads or runs adds a
+  numbered rule to `docs/OMHER-BOUNDARY.md` and a test in
+  `tests/test_omher_boundary.py`, and raises that test's rule-count cap in the
+  same commit with a comment naming the rule.
+- Every feature must work on macOS, Windows and Linux: no macOS-only `open`,
+  POSIX-only paths or `/dev/urandom`. Releases are unsigned (ad-hoc on macOS);
+  never treat a certificate as a prerequisite.
+- The OMH gates above do not cover the app, and the app's checks do not cover
+  OMH: a PR touching both runs both.
+
 ## Credits
 
 Agent and CLI marks in `src/assets/agents/` are the projects' own marks, unedited:

@@ -33,6 +33,11 @@ SRC_ROOT = REPO_ROOT / "src"
 #                          core's context-budget sidecar lock
 #   domain_intelligence* - fails closed off POSIX by design, so a single
 #                          backend is the contract rather than a gap
+#   tui/live_sessions    - the TUI session record is written on the TUI's exit
+#                          path (SIGHUP, SIGTERM), which must give up after a
+#                          bounded ~2 s non-blocking retry and never raise;
+#                          local_store.file_lock waits 10 s and raises. It has
+#                          its own msvcrt LK_NBLCK/LK_UNLCK branch for Windows
 FCNTL_FLOCK_ALLOWED = {
     "src/system/local_store.py",
     "src/plugin_bundle/omh/awareness_delivery.py",
@@ -40,6 +45,7 @@ FCNTL_FLOCK_ALLOWED = {
     "src/plugin_bundle/omh/status_board_reader.py",
     "src/workflows/domain_intelligence_bound_store.py",
     "src/workflows/domain_intelligence_store_security.py",
+    "src/tui/live_sessions.py",
 }
 
 
@@ -129,6 +135,12 @@ class NoSingleBackendLockOnAppendPathsTests(unittest.TestCase):
         for rel in ("src/workflows/memory.py", "src/workflows/observation_journal.py"):
             source = (REPO_ROOT / rel).read_text(encoding="utf-8")
             self.assertNotIn("fcntl", source, f"{rel} should route locking through local_store")
+
+    def test_the_tui_session_record_carries_both_lock_backends(self) -> None:
+        # Allowed above only because it has its own Windows branch, bounded like the POSIX one.
+        source = (REPO_ROOT / "src/tui/live_sessions.py").read_text(encoding="utf-8")
+        for needle in ("import msvcrt", "LK_NBLCK", "LK_UNLCK", "LOCK_NB", "LOCK_WAIT_SECONDS"):
+            self.assertIn(needle, source)
 
     def test_the_vendored_bundle_carries_both_lock_backends(self) -> None:
         # It cannot import local_store, so it has to have its own msvcrt branch.

@@ -998,6 +998,54 @@ def with_codex_windows_sandbox(argv: list[str] | None, owner: str, backend: str)
     return [*argv[:-1], "--config", f"windows.sandbox={backend}", argv[-1]]
 
 
+_CODEX_SANDBOX_CHOICE_FLAGS = frozenset({
+    "-s", "--sandbox", "--full-auto", "--dangerously-bypass-approvals-and-sandbox", "--yolo",
+})
+
+
+def _codex_sandbox_chosen(options: Sequence[str]) -> bool:
+    previous = ""
+    for token in options:
+        if (
+            token in _CODEX_SANDBOX_CHOICE_FLAGS
+            or token.startswith("--sandbox=")
+            or (token.startswith("-s") and not token.startswith("--"))
+            or token.startswith("--config=sandbox_mode=")
+            or (previous in {"-c", "--config"} and token.startswith("sandbox_mode="))
+        ):
+            return True
+        previous = token
+    return False
+
+
+def with_codex_fenced_sandbox(
+    argv: list[str] | None, owner: str, confinement: FanoutFilesystemConfinement | None
+) -> list[str] | None:
+    """`argv` with `--sandbox danger-full-access` before the codex prompt when the fence is enforced.
+
+    `codex exec` defaults to a read-only session, and `workspace-write`
+    starts Codex's own sandbox, which cannot nest inside an enforced bwrap
+    or sandbox-exec fence ("read-only filesystem" on Linux,
+    `sandbox_apply: Operation not permitted` on macOS). Every write is then
+    refused. Inside the fence the dispatcher's confinement is the write
+    boundary, so Codex's own sandbox is turned off. No fence, an unenforced
+    or other backend, another owner, or an argv that already chooses a
+    sandbox: returned unchanged. The codex prompt is the last positional.
+    """
+    if (
+        owner != "codex"
+        or not argv
+        or len(argv) < 3
+        or argv[1] != "exec"
+        or confinement is None
+        or confinement.receipt.get("enforced") is not True
+        or confinement.selected not in {"bwrap", "sandbox-exec"}
+        or _codex_sandbox_chosen(argv[2:-1])
+    ):
+        return argv
+    return [*argv[:-1], "--sandbox", "danger-full-access", argv[-1]]
+
+
 def build_unit_prompt(
     unit: Mapping[str, Any],
     goal_text: str,
@@ -5076,6 +5124,8 @@ def _dispatch_unit(
             if runner is signal_safe_unit_runner
             else None
         )
+        # Codex's own sandbox cannot start inside the fence; the fence is the boundary.
+        argv = with_codex_fenced_sandbox(argv, owner, confinement)
         filesystem_confinement = confinement_receipt(confinement, worktree)
         if confinement is not None and isinstance(filesystem_confinement, dict):
             filesystem_confinement["git_roots_skip"] = git_roots_skip_reason(worktree.resolve())
@@ -5294,7 +5344,7 @@ def _dispatch_unit(
                     prompt = assembled.text
                     argv = dispatch_argv()
                     assert argv is not None  # Same previously admitted owner and route.
-                    argv = session_argv(argv)
+                    argv = with_codex_fenced_sandbox(session_argv(argv), owner, confinement)
                     if confinement is not None:
                         spawn_kwargs['confinement_command'] = confinement.command(argv)
                 if not getattr(runner, 'accepts_launch', False):

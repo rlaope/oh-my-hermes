@@ -182,6 +182,9 @@ SITES: dict[tuple[str, str], tuple[str, list[Case]]] = {
     ("src/coding/action_gate.py", "_stamp_age_seconds._parse"): (
         "omh.coding.action_gate", [lambda m: lambda s: m._stamp_age_seconds(s, "2020-01-03T00:00:00Z")]),
     ("src/tui/bot_board.py", "_record_time"): ("omh.tui.bot_board", [lambda m: m._record_time]),
+    ("src/tui/live_sessions.py", "_parsed"): ("omh.tui.live_sessions", [lambda m: m._parsed]),
+    ("src/maintenance/auto_resume_state.py", "_age_seconds"): (
+        "omh.maintenance.auto_resume_state", [lambda m: lambda s: m._age_seconds(s, NOON)]),
     ("src/maintenance/hermes_gateway.py", "_iso_epoch"): ("omh.maintenance.hermes_gateway", [lambda m: m._iso_epoch]),
     ("src/coding/executor_auth_signals.py", "_age_seconds"): (
         "omh.coding.executor_auth_signals", [lambda m: m._age_seconds]),

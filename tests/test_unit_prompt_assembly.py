@@ -28,13 +28,17 @@ from omh.coding.fanout_repair import (  # noqa: E402
     MAX_REPAIR_ATTEMPTS,
 )
 from omh.coding.executor_skill_discovery import ROLE_SEQUENCE_RECIPES  # noqa: E402
+from omh.coding.fanout import build_fanout_contract  # noqa: E402
+from omh.coding.fanout_contracts import MAX_UNIT_REVIEW_FOCUS_BYTES, MAX_UNIT_VERIFICATION_COMMAND_CHARS  # noqa: E402
 from omh.coding.unit_prompt_assembly import BLOCK_NAMES, AssembledPrompt, assemble_unit_prompt  # noqa: E402
 from omh.coding.unit_prompt_protocol import (  # noqa: E402
     DOMAIN_SKILL_GUIDANCE,
     HIGH_EFFORT_CALIBRATIONS,
     MODEL_HIGH_EFFORT_CALIBRATIONS,
     UNIT_PROMPT_APPEND_MAX_BYTES,
+    SHARED_MACHINE_PROTOCOL,
     UNIT_PROMPT_MAX_BYTES,
+    shared_unit_preamble_lines,
 )
 
 GOLDEN_FIXTURE = Path(__file__).resolve().parent / "fixtures" / "unit_prompt_golden_digests.json"
@@ -212,7 +216,7 @@ _HEAD = (
     "head.structural_search_discipline",
 )
 _FRAME = ("unit.title", "unit.scope", "unit.do_not_touch", "unit.branch")
-_CRITERIA = ("unit.criteria", "unit.commit_criterion", "unit.tool_batching")
+_CRITERIA = ("unit.criteria", "unit.commit_criterion", "unit.tool_batching", "unit.shared_machine")
 
 
 class BlockNameGoldenTests(unittest.TestCase):
@@ -388,6 +392,87 @@ class PromptCeilingTests(unittest.TestCase):
             sizes[worst], UNIT_PROMPT_MAX_BYTES, f"worst dispatch prompt {sizes[worst]} B ({worst})"
         )
 
+    def test_the_largest_allowed_review_focus_keeps_every_route_under_the_ceiling(self) -> None:
+        # A review_focus is bounded in UTF-8 bytes. The worst case is the full byte budget (ASCII, and a 3-byte
+        # script) on the live-shaped worst-case unit of every route, both as is and with the longest ASCII
+        # reproduction command the contract freezes into its checks (the g62 verifier's counterexample).
+        command = "echo " + "x" * (MAX_UNIT_VERIFICATION_COMMAND_CHARS - 5)
+        reproduction = build_fanout_contract(GOAL * 3, [{
+            "unit_id": "target", "title": "Show a test failure", "file_scope": ["src/target/"],
+            "kind": "reproduction", "reproduction_command": command,
+        }])["units"][0]
+        frozen = {key: reproduction[key] for key in ("kind", "reproduction_command", "integration_checks")}
+        for focus in ("x" * MAX_UNIT_REVIEW_FOCUS_BYTES, "가" * (MAX_UNIT_REVIEW_FOCUS_BYTES // 3)):
+            for shape, extra in (("fixture", {}), ("reproduction", frozen)):
+                for key, model, family in _worst_case_routes():
+                    unit = {**_worst_case_unit(model, family), **extra, "review_focus": focus}
+                    assembled = assemble_unit_prompt(
+                        unit, GOAL * 3, route=unit["handoff"]["model_route"],  # type: ignore[index]
+                        binding=_WORST_BINDING, discovery=_WORST_DISCOVERY,
+                    )
+                    with self.subTest(key=key, shape=shape, script="ascii" if focus.isascii() else "hangul"):
+                        self.assertIn("unit.review_focus", assembled.names())
+                        self.assertLessEqual(assembled.size_bytes, UNIT_PROMPT_MAX_BYTES)
+
+    def test_a_review_focus_never_tips_a_prompt_over_the_ceiling(self) -> None:
+        # The g62 re-verifier's counterexample: a 218-char ASCII reproduction command plus a one-range input budget
+        # renders 7,805 B with no focus, and a valid 150-byte focus took it to 8,001 B. The focus now yields to the
+        # bytes left, so the invariant is size(with) <= max(ceiling, size(without)) for every input, and a prompt
+        # already over the ceiling without a focus is exactly what it would be without one.
+        def render(command: str, focus: str | None, budget: bool) -> AssembledPrompt:
+            stated: dict[str, object] = {"unit_id": "target", "title": "Show a test failure",
+                                         "file_scope": ["src/target/"], "kind": "reproduction",
+                                         "reproduction_command": command}
+            if budget:
+                stated["input_budget"] = {"chars": 1000, "tokens": 250, "source_ranges": [
+                    {"source": "src/target/parser.py", "span": "public parser"}]}
+            frozen = build_fanout_contract(GOAL * 3, [stated])["units"][0]
+            unit = _worst_case_unit("deepseek-v4.1-flash", "deepseek")
+            unit.update({key: frozen[key] for key in
+                         ("kind", "reproduction_command", "integration_checks", "input_budget") if key in frozen})
+            if focus is not None:
+                unit["review_focus"] = focus
+            return assemble_unit_prompt(unit, GOAL * 3, route=unit["handoff"]["model_route"],  # type: ignore[index]
+                                        binding=_WORST_BINDING, discovery=_WORST_DISCOVERY)
+
+        tipped = cut = dropped = 0
+        for length in range(6, MAX_UNIT_VERIFICATION_COMMAND_CHARS + 1, 4):
+            for budget in (False, True):
+                command = "echo " + "x" * (length - 5)
+                without = render(command, None, budget)
+                for focus in ("x" * MAX_UNIT_REVIEW_FOCUS_BYTES, "가" * (MAX_UNIT_REVIEW_FOCUS_BYTES // 3), "short"):
+                    with_focus = render(command, focus, budget)
+                    with self.subTest(length=length, budget=budget, focus=focus[:3]):
+                        self.assertLessEqual(with_focus.size_bytes, max(UNIT_PROMPT_MAX_BYTES, without.size_bytes))
+                        if without.size_bytes > UNIT_PROMPT_MAX_BYTES:
+                            self.assertEqual(with_focus.text, without.text)
+                    if "unit.review_focus" not in with_focus.names():
+                        dropped += 1
+                    elif not with_focus.text.count(focus):
+                        cut += 1
+                    tipped += without.size_bytes <= UNIT_PROMPT_MAX_BYTES < with_focus.size_bytes
+        self.assertEqual(tipped, 0)
+        # The counterexample's shape: a prompt just under the ceiling without a focus, where the whole focus would
+        # cross it. The focus survives, cut to the bytes left, and ends in an ellipsis.
+        near = next(length for length in range(MAX_UNIT_VERIFICATION_COMMAND_CHARS, 5, -1)
+                    if render("echo " + "x" * (length - 5), None, True).size_bytes
+                    <= UNIT_PROMPT_MAX_BYTES - 60)
+        command = "echo " + "x" * (near - 5)
+        self.assertGreater(render(command, None, True).size_bytes + 46 + MAX_UNIT_REVIEW_FOCUS_BYTES,
+                           UNIT_PROMPT_MAX_BYTES)
+        fitted = render(command, "x" * MAX_UNIT_REVIEW_FOCUS_BYTES, True)
+        self.assertLessEqual(fitted.size_bytes, UNIT_PROMPT_MAX_BYTES)
+        block = next(block for block in fitted.blocks if block.base_name == "unit.review_focus")
+        self.assertTrue(block.text.endswith("\u2026"))
+        self.assertGreater(cut, 0)
+
+    def test_a_review_focus_that_fits_is_left_untouched(self) -> None:
+        unit = {**_worst_case_unit("deepseek-v4.1-flash", "deepseek"), "review_focus": "가나다 keeps its redirect"}
+        assembled = assemble_unit_prompt(unit, GOAL * 3, route=unit["handoff"]["model_route"],  # type: ignore[index]
+                                         binding=_WORST_BINDING, discovery=_WORST_DISCOVERY)
+        self.assertLessEqual(assembled.size_bytes, UNIT_PROMPT_MAX_BYTES)
+        self.assertIn("Review focus (what the reviewer will check): 가나다 keeps its redirect\n", assembled.text)
+
     def test_each_redispatch_section_stays_under_its_derived_ceiling(self) -> None:
         unit = _worst_case_unit("claude-fable-5-2", "claude")
         route = unit["handoff"]["model_route"]  # type: ignore[index]
@@ -465,6 +550,48 @@ class RepeatedSentenceTests(unittest.TestCase):
     def test_the_check_sees_a_planted_repeat(self) -> None:
         text = "Run the full suite once. Then stop.\nRun   the full suite ONCE."
         self.assertEqual(repeated_sentences(text), ["run the full suite once."])
+
+
+# Captured from origin/main c5a909c6 before `review_focus` and
+# `SHARED_MACHINE_PROTOCOL` existed: the bare claude-code dispatch prompt.
+_BASE_BARE_DIGEST = ("dispatch|claude-code|implementation|high|claude-fable-5-2|bare", 4594,
+                     "b6218d2ca1edd43a336582ec6ec37597fc2b5fe6689251a425f8f4b1baba0d59")
+_REVIEW_FOCUS = "The exporter flag defaults off and the CLI help names it; no other flag changes."
+
+
+class ReviewFocusAndSharedMachineTests(unittest.TestCase):
+    def _bare(self) -> tuple[dict[str, object], str, str]:
+        cases = {case[0]: case for case in golden_cases()}
+        _case, path, unit, variant = cases[_BASE_BARE_DIGEST[0]]
+        return dict(unit), path, variant
+
+    def test_unit_without_review_focus_matches_base_bytes_apart_from_the_etiquette_block(self) -> None:
+        unit, path, variant = self._bare()
+        self.assertNotIn("review_focus", unit)
+        route = unit["handoff"]["model_route"]  # type: ignore[index]
+        without = assemble_unit_prompt(unit, GOAL, route=route, omit=frozenset({"unit.shared_machine"}))
+        self.assertEqual(without.size_bytes, _BASE_BARE_DIGEST[1])
+        self.assertEqual(without.digest(), _BASE_BARE_DIGEST[2])
+        self.assertEqual(assemble(path, {**unit, "review_focus": ""}, variant).text, assemble(path, unit, variant).text)
+        self.assertNotIn("Review focus", assemble(path, unit, variant).text)
+
+    def test_declared_review_focus_renders_right_after_the_numbered_criteria(self) -> None:
+        unit, path, variant = self._bare()
+        assembled = assemble(path, {**unit, "review_focus": _REVIEW_FOCUS}, variant)
+        names = assembled.names()
+        self.assertEqual(names[names.index("unit.review_focus") - 1], "unit.commit_criterion")
+        block = next(block for block in assembled.blocks if block.name == "unit.review_focus")
+        self.assertEqual(block.text, f"Review focus (what the reviewer will check): {_REVIEW_FOCUS}")
+
+    def test_shared_machine_protocol_rides_the_unit_section_after_tool_batching_not_the_head(self) -> None:
+        for case_id, path, unit, variant in golden_cases():
+            assembled = assemble(path, unit, variant)
+            with self.subTest(case=case_id):
+                names = assembled.names()
+                self.assertEqual(names[names.index("unit.shared_machine") - 1], "unit.tool_batching")
+                block = next(block for block in assembled.blocks if block.name == "unit.shared_machine")
+                self.assertEqual((block.zone, block.text), ("unit", SHARED_MACHINE_PROTOCOL))
+        self.assertNotIn(SHARED_MACHINE_PROTOCOL, shared_unit_preamble_lines(GOAL))
 
 
 if __name__ == "__main__":

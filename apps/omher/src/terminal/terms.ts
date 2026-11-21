@@ -5,7 +5,7 @@
 // kept), takes a dropped file (saved, its path typed), and closes when its shell ends.
 import type { ITerminalInitOnlyOptions, ITerminalOptions, Terminal } from "@xterm/xterm";
 import type { FitAddon } from "@xterm/addon-fit";
-import { afterOpen, CELLS_EVENT, feed, isParked, live, onVisible, type Remake } from "../sessions/term/engine";
+import { afterOpen, bracketedPaste, CELLS_EVENT, feed, isParked, live, onVisible, type Remake } from "../sessions/term/engine";
 import { onCwd } from "../sessions/term/engine-marks";
 import { applyLook, termOptions } from "../sessions/term/look";
 import { termFontsReady } from "../sessions/term/fonts";
@@ -16,7 +16,7 @@ import { getShellHost } from "./host";
 import { closePane, ringPane, setPaneCwd, setPaneFg, setPaneSaid } from "./state";
 import { onSessionFg } from "../sessions/fg";
 import { getHost } from "../sessions/host";
-import { shellQuote } from "../sessions/attach";
+import { pathsTyped, shellQuote } from "../sessions/attach";
 import { termEnd } from "../sessions/agents";
 import { forgetHistory, restoredText, trackHistory } from "../sessions/term/history";
 
@@ -340,7 +340,8 @@ export function wireFileDrop(el: HTMLElement, onFiles: (files: DroppedFile[]) =>
 }
 
 /** Files dropped or pasted on pane `key`: each saved under its shell's own folder (the page never sees a dropped file's
- *  own path), then the saved paths typed at its prompt, shell-quoted, as TERMINALS does (sessions.ts dropOnTerminal). */
+ *  own path), then the saved paths typed at its prompt, shell-quoted (a paste when the program turned bracketed paste
+ *  on), as TERMINALS does (sessions.ts dropOnTerminal). */
 export async function dropOnPane(key: number, files: DroppedFile[], windows = isWindows()): Promise<void> {
   const p = terms.get(key);
   if (!p || p.id === null || p.ended) return;
@@ -357,6 +358,6 @@ export async function dropOnPane(key: number, files: DroppedFile[], windows = is
   }
   if (!paths.length || p.ended) return;
   p.typed = true;
-  await getShellHost().write(id, `${paths.join(" ")} `);
+  await getShellHost().write(id, pathsTyped(paths, bracketedPaste(p.raw)));
   p.term.focus();
 }

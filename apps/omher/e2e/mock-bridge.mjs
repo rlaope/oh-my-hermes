@@ -653,6 +653,14 @@ const SKILL_SEED = [
   { name: "research", description: "Find sources, read them and answer with citations." },
   { name: "review", description: "Review a diff for correctness, tests and risk, worst first." },
 ];
+// Hermes' slash commands for a bot chat's `/` menu (commands.list). `compress` names "research" in its description,
+// so `/research` (a skill) also matches it: Enter must still send the skill as typed.
+const COMMAND_SEED = [
+  { name: "compress", description: "Summarise the context so a long research run can go on", hint: "" },
+  { name: "help", description: "Show the commands", hint: "" },
+  { name: "model", description: "Switch the model for this chat", hint: "[model|reset] [--provider name]" },
+  { name: "new", description: "Start a new session", hint: "" },
+];
 // Skills that arrive later (mock.skills): an install that registers oh-my-hermes' skills, listed from the
 // `after`-th skills.list read on (0 = at once). Cleared by mock.reset.
 let skillsLater = { add: [], after: 0 };
@@ -1171,9 +1179,23 @@ const OPS = {
     const cwd = needStr(p, "cwd");
     if (!cwd.startsWith("/") && !/^[A-Za-z]:\\/.test(cwd)) throw new OpError("bad_request", "cwd must be an existing folder");
     const session = nextId("f");
-    folders.set(session, { bot: b.name, cwd, open: true });
+    const stored = nextId("stored-f");
+    folders.set(session, { bot: b.name, cwd, open: true, stored });
     const m = models[b.name];
-    return { session, cwd, model: m.model, provider: m.provider, reasoning: m.reasoning };
+    return { session, stored, cwd, model: m.model, provider: m.provider, reasoning: m.reasoning };
+  },
+  // a folder chat made before a restart, by the stored id folder.open returned (the real bridge also checks its saved
+  // title is `omher · <folder name>`); any other id is not_found
+  "folder.resume": (p) => {
+    const b = needBot(p);
+    if (b.host) throw remoteRefusal(b, "folder.resume");
+    const cwd = needStr(p, "cwd");
+    const stored = needStr(p, "stored");
+    const was = [...folders.entries()].find(([, f]) => !f.thread && f.stored === stored && f.bot === b.name && f.cwd === cwd);
+    if (!was) throw new OpError("not_found", "no such folder chat");
+    was[1].open = true;
+    const m = models[b.name];
+    return { session: was[0], stored, cwd, model: m.model, provider: m.provider, reasoning: m.reasoning, messages: [], running: false };
   },
   "thread.create": (p) => {
     const b = needBot(p);
@@ -1388,6 +1410,10 @@ const OPS = {
     if (noSkills.has(p.bot)) return { skills: [] };
     const late = skillsLater.after-- <= 0 ? skillsLater.add : [];
     return { skills: [...SKILL_SEED, ...late].sort((a, b) => a.name.localeCompare(b.name)).map((x) => ({ ...x })) };
+  },
+  "commands.list": (p) => {
+    needBot(p);
+    return { commands: COMMAND_SEED.map((x) => ({ ...x, kind: "command", prefix: "/" })) };
   },
   "tasks.linear": (p) => {
     const server = linearMcp.get(needBot(p).name);

@@ -11,7 +11,8 @@
 // check and "done" when it finished something the person has not opened yet. No dots: the row already has the live
 // dot. A session that no longer runs steps back.
 // Line 1 is the session's name (the person's, the agent's own title, a summary of the first message, else the
-// folder) and line 2 the folder and the agent. Double-click the name, or right-click › Rename, to name it.
+// folder) and line 2 the folder and the agent. Double-click the name, or right-click › Rename, to name it. A TERMINALS
+// row dragged onto the open terminal splits it there (splitDrag.ts).
 import { Fragment, memo, useCallback, useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore, type PointerEvent as ReactPointerEvent, type RefObject } from "react";
 import { getStore, useStore } from "../state/store";
 import { CloseIcon, LiveRing, PlusIcon, Popover, TypingDots } from "../ui";
@@ -21,7 +22,8 @@ import { composing } from "../lib/ime";
 import { AgentMark } from "./AgentMark";
 import { agentDef, agentLabel, draftFolder, folderChoices, folderName, hermesOnly, installLine, isTerminalRec, menuFocus, menuOrder, missingNote, parentPath, SHELL, splitPaneName, termActivity, termFallbackName, termGroups, terminalAgents, termMarkAgent, termStatus, tildePath, type AgentId, type AgentInfo, type RowMark, type SessionRec, type TermStatus, type Unseen } from "./agents";
 import { TermRowMark } from "./TermRowMark";
-import { SplitGlyph, useSplit, useSplitPrune } from "./SplitView";
+import { SplitGlyph, splitWith, useSplit, useSplitPrune } from "./SplitView";
+import { pressToSplit } from "./splitDrag";
 import { groupOf, groupSessions, paneOf } from "./splitState";
 import type { Layout } from "../terminal/layout";
 import { usePendingRequests } from "./termShare";
@@ -1337,6 +1339,11 @@ const TermRow = memo(function TermRow({ rec, agents, unseen, active, ticking, on
       data-status={rec.status}
       data-term-status={status ?? "idle"}
       data-fg={rec.fgAgent ?? undefined}
+      onPointerDown={(e) => {
+        // a drag onto the open terminal puts this session in a pane there (a press that stays put is a click)
+        if (editing || (e.target as Element).closest(".ss-x, [role=menu]")) return;
+        pressToSplit(e, rec.id, (d) => splitWith(d.at, rec.id, d.side));
+      }}
       onContextMenu={(e) => {
         if (editing) return;
         e.preventDefault();

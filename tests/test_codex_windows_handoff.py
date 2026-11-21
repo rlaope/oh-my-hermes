@@ -5,7 +5,9 @@ from __future__ import annotations
 import json
 import os
 import subprocess
+import sys
 from pathlib import Path
+from types import SimpleNamespace
 from tempfile import TemporaryDirectory
 import unittest
 from unittest import mock
@@ -15,7 +17,12 @@ from _local_package import load_local_package
 load_local_package()
 
 from omh.coding.codex_windows_sandbox import codex_windows_sandbox_signal  # noqa: E402
-from omh.coding.fanout_dispatch import build_dispatch_argv, dispatch_fanout, with_codex_windows_sandbox  # noqa: E402
+from omh.coding.fanout_dispatch import (  # noqa: E402
+    build_dispatch_argv,
+    dispatch_fanout,
+    with_codex_fenced_sandbox,
+    with_codex_windows_sandbox,
+)
 from omh.coding.fanout_output import FanoutOutput  # noqa: E402
 from omh.coding.fanout_settings import (  # noqa: E402
     FANOUT_SETTINGS_SCHEMA_VERSION,
@@ -301,6 +308,129 @@ class CodexSandboxArgvTests(unittest.TestCase):
         import inspect
         self.assertEqual(list(inspect.signature(build_dispatch_argv).parameters),
                          ["owner", "prompt", "model_route"])
+
+
+def _fence(selected: str, enforced: bool = True) -> SimpleNamespace:
+    return SimpleNamespace(selected=selected, receipt={"enforced": enforced})
+
+
+class CodexFencedSandboxArgvTests(unittest.TestCase):
+    # `codex exec` is read-only by default and `workspace-write` cannot start
+    # Codex's own sandbox inside bwrap or sandbox-exec, so a fenced codex
+    # unit could never write.
+    _FULL = ["codex", "exec", "--sandbox", "danger-full-access", "do it"]
+
+    def test_a_bwrap_fence_turns_off_the_codex_sandbox(self) -> None:
+        argv = build_dispatch_argv("codex", "do it")
+        self.assertEqual(with_codex_fenced_sandbox(argv, "codex", _fence("bwrap")), self._FULL)
+
+    def test_a_sandbox_exec_fence_turns_off_the_codex_sandbox(self) -> None:
+        argv = build_dispatch_argv("codex", "do it")
+        self.assertEqual(with_codex_fenced_sandbox(argv, "codex", _fence("sandbox-exec")), self._FULL)
+
+    def test_the_prompt_stays_last_after_session_and_model_options(self) -> None:
+        argv = ["/usr/bin/codex", "exec", "--json", "--model", "m", "do it"]
+        self.assertEqual(with_codex_fenced_sandbox(argv, "codex", _fence("bwrap")),
+                         ["/usr/bin/codex", "exec", "--json", "--model", "m",
+                          "--sandbox", "danger-full-access", "do it"])
+
+    def test_no_fence_or_an_unenforced_fence_changes_nothing(self) -> None:
+        argv = build_dispatch_argv("codex", "do it")
+        self.assertEqual(with_codex_fenced_sandbox(argv, "codex", None), ["codex", "exec", "do it"])
+        self.assertEqual(with_codex_fenced_sandbox(argv, "codex", _fence("bwrap", enforced=False)),
+                         ["codex", "exec", "do it"])
+
+    def test_other_backends_change_nothing(self) -> None:
+        argv = build_dispatch_argv("codex", "do it")
+        self.assertEqual(with_codex_fenced_sandbox(argv, "codex", _fence("windows")), ["codex", "exec", "do it"])
+
+    def test_an_explicit_sandbox_choice_is_kept(self) -> None:
+        for options in (["-s", "read-only"], ["--sandbox", "workspace-write"], ["--sandbox=read-only"],
+                        ["-sread-only"], ["--full-auto"], ["--dangerously-bypass-approvals-and-sandbox"],
+                        ["-c", "sandbox_mode=read-only"]):
+            argv = ["codex", "exec", *options, "do it"]
+            with self.subTest(options=options):
+                self.assertEqual(with_codex_fenced_sandbox(argv, "codex", _fence("bwrap")), argv)
+
+    def test_a_prompt_that_looks_like_a_flag_is_not_a_choice(self) -> None:
+        argv = ["codex", "exec", "--sandbox"]
+        self.assertEqual(with_codex_fenced_sandbox(argv, "codex", _fence("bwrap")),
+                         ["codex", "exec", "--sandbox", "danger-full-access", "--sandbox"])
+
+    def test_other_owners_are_unchanged(self) -> None:
+        argv = build_dispatch_argv("claude-code", "do it")
+        self.assertEqual(with_codex_fenced_sandbox(argv, "claude-code", _fence("bwrap")), argv)
+
+    def test_the_windows_backend_override_is_unchanged(self) -> None:
+        argv = with_codex_windows_sandbox(build_dispatch_argv("codex", "do it"), "codex", "mxc")
+        self.assertEqual(with_codex_fenced_sandbox(argv, "codex", None),
+                         ["codex", "exec", "--config", "windows.sandbox=mxc", "do it"])
+
+
+@unittest.skipUnless(sys.platform == "darwin", "sandbox-exec confinement is exercised on macOS")
+class CodexFencedSandboxDispatchTests(unittest.TestCase):
+    """Through a real `dispatch_fanout` and a real sandbox-exec fence: the argv the fenced codex runs."""
+
+    def _dispatch_through_the_fence(self, *, fail_first: bool = False, max_retries: int = 0) -> list[list[str]]:
+        from test_fanout_dispatch import _GOAL, _UNITS, _make_repo, _ready
+        from omh.coding.fanout import build_fanout_contract
+        from omh.coding.fanout_artifacts import write_fanout_contract
+
+        # Stands in for `codex`. It logs the unit's `exec` calls only, into the
+        # worktree's gitignored fence scratch (`.omh/confinement-tmp`): writable
+        # inside the fence, and a clean tree keeps a retry replay-safe. Readiness
+        # probes (`--version`, `exec --help`) log nothing. With `fail_first`, the
+        # first exec exits 1 with a retryable 503 so the dispatcher retries.
+        script = (
+            "import json, os, sys\n"
+            "a = sys.argv[1:]\n"
+            "if a[:1] == ['exec'] and a[1:2] != ['--help']:\n"
+            "    log = os.path.join('.omh', 'confinement-tmp', 'codex-argv.jsonl')\n"
+            "    first = not os.path.exists(log)\n"
+            "    open(log, 'a').write(json.dumps(a) + '\\n')\n"
+            f"    if first and {fail_first!r}:\n"
+            "        print('stream error: status 503 service unavailable', file=sys.stderr)\n"
+            "        sys.exit(1)\n"
+        )
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "codex_stub.py").write_text(script, encoding="utf-8")
+            stub = root / "codex-stub"
+            stub.write_text(f'#!/bin/sh\nexec /usr/bin/python3 "{root / "codex_stub.py"}" "$@"\n', encoding="utf-8")
+            stub.chmod(0o755)
+            paths = OmhPaths(omh_home=root / ".omh", hermes_home=root / ".hermes")
+            repo, sha = _make_repo(root)
+            contract = write_fanout_contract(paths, build_fanout_contract(_GOAL, _UNITS))
+            real_build = build_dispatch_argv
+
+            def stub_argv(owner, prompt, model_route=None):
+                argv = real_build(owner, prompt, model_route)
+                return [str(stub), *argv[1:]] if argv else argv
+
+            with mock.patch("omh.coding.fanout_dispatch.build_dispatch_argv", side_effect=stub_argv):
+                summary = dispatch_fanout(paths, contract, goal_text=_GOAL, repo_root=repo, base_sha=sha,
+                                          only_units=["core"], readiness=_ready, max_retries=max_retries,
+                                          sleep=lambda _seconds: None)
+
+            core = {entry["unit_id"]: entry for entry in summary["units"]}["core"]
+            self.assertTrue(core["filesystem_confinement"]["enforced"])
+            self.assertEqual(core["filesystem_confinement"]["backend"], "sandbox-exec")
+            log = Path(core["worktree_path"]) / ".omh" / "confinement-tmp" / "codex-argv.jsonl"
+            self.assertTrue(log.is_file(), "the stub never ran inside the unit worktree")
+            return [json.loads(line) for line in log.read_text(encoding="utf-8").splitlines()]
+
+    def test_the_fenced_codex_process_receives_the_full_access_flag(self) -> None:
+        exec_calls = self._dispatch_through_the_fence()
+        self.assertEqual(len(exec_calls), 1, exec_calls)
+        self.assertEqual(exec_calls[0][-3:-1], ["--sandbox", "danger-full-access"])
+
+    def test_a_retried_attempt_rebuilds_the_argv_with_the_flag(self) -> None:
+        # The first exec fails with a retryable 503, so the second runs from the
+        # argv the retry branch rebuilds; the flag must be applied there too.
+        exec_calls = self._dispatch_through_the_fence(fail_first=True, max_retries=1)
+        self.assertEqual(len(exec_calls), 2, exec_calls)
+        for argv in exec_calls:
+            self.assertEqual(argv[-3:-1], ["--sandbox", "danger-full-access"])
 
 
 class SandboxRefusalCaptureTests(unittest.TestCase):

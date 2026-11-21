@@ -162,11 +162,14 @@ findable only by knowing its filename.
 | Opt-in multi-unit work campaigns for the `ulw-work` engine | [Work Campaigns](WORK-CAMPAIGN.md) |
 | Bounded feedback rounds over a closed design-direction set | [Design Direction Iterations](DESIGN-DIRECTION-ITERATIONS.md) |
 | Deterministic comparison of submitted cross-harness machine facts | [Cross-Harness Benchmark](CROSS_HARNESS_BENCHMARK.md) |
+| What the vendors' own coding clients (Codex, Claude Code, Gemini CLI, Qwen Code, Kimi CLI, ZCode, DeepSeek Harness) say, and which of it OMH adopts | [Vendor Harness Review](VENDOR-HARNESS-REVIEW.md) |
 | Freshness identity behind `omh goal checkpoint` and quality-evidence assessment | [Working-Tree Fingerprint](WORKING-TREE-FINGERPRINT.md) |
 | Provider-neutral input fidelity and per-attempt sync receipts for an optional memory provider | [Memory Sync Fidelity](MEMORY-SYNC-FIDELITY.md) |
 | Bounded retry/replan/stop/escalate decisions for an observed error | [Failure Mender](failure-mender.md) |
 | What the OMH TUI and its gateway child send, answer, write, and may import | [OMH TUI Boundary](OMH-TUI-BOUNDARY.md) |
 | What the omher desktop app and its bridge send, write, and may import | [omher Boundary](OMHER-BOUNDARY.md) |
+| Full text of every scoped exception to core OMH's no-network rule (summarized in `AGENTS.md`) | [Implementation Boundaries](IMPLEMENTATION-BOUNDARIES.md) |
+| Long form of the engineering pitfalls `CLAUDE.md` lists one line each | [Engineering Pitfalls](ENGINEERING-PITFALLS.md) |
 | What fix commits that replaced another pull request's recent lines taught, and which of it became a review rule | [Lessons from re-fixed commits](LESSONS.md) |
 
 ## Documentation Checks

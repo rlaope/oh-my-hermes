@@ -75,6 +75,18 @@ export interface Skill {
   description: string;
 }
 
+/** One slash command a bot answers, from Hermes' own registry (`commands.list`): the composer's `/` menu. */
+export interface SlashCommand {
+  name: string;
+  description: string;
+  /** The arguments it takes (`<file>`, `[on|off]`), "" for none. */
+  hint?: string;
+  /** "command" or "skill"; omher lists commands only, the skills come from `skills.list`. */
+  kind?: string;
+  /** The sigil the person types before the name. */
+  prefix?: string;
+}
+
 /** One row of a bot's main chat. `ts` is seconds since epoch (float). */
 export interface Msg {
   id: string;
@@ -277,10 +289,22 @@ export interface ChatOpenResult {
 /** A Hermes chat the bridge created in a picked folder (SESSIONS > oh-my-hermes). */
 export interface FolderOpenResult {
   session: string;
+  /** Hermes' stored id of that session: what `folder.resume` takes after a restart (an older bridge sends none). */
+  stored?: string;
+  /** False when omher's folder chat record could not be written: `folder.resume` will refuse it after a restart,
+   *  so the row is not attached again by itself (an older bridge sends none). */
+  recorded?: boolean;
   cwd: string;
   model: string;
   provider: string;
   reasoning: string;
+}
+
+/** A folder chat `folder.open` made before a restart, attached again (`folder.resume`): its messages come back. */
+export interface FolderResumeResult extends FolderOpenResult {
+  stored: string;
+  messages: Msg[];
+  running: boolean;
 }
 
 /** op name -> { params, result }. `bot` is always the profile name. `session` (optional) names a folder chat
@@ -310,6 +334,8 @@ export interface OpMap {
   };
   "folder.open": { params: { bot: string; cwd: string }; result: FolderOpenResult };
   "folder.close": { params: { bot: string; session: string }; result: Record<string, never> };
+  /** Only a session the bridge made for that folder (its saved title `omher · <folder name>`); any other: not_found. */
+  "folder.resume": { params: { bot: string; cwd: string; stored: string }; result: FolderResumeResult };
   "elsewhere.list": { params: { bot: string }; result: { sessions: Away[] } };
   "elsewhere.peek": {
     params: { bot: string; session_id: string; limit?: number };
@@ -376,6 +402,8 @@ export interface OpMap {
   "bots.info": { params: { bot: string }; result: BotInfo };
   /** The bot's skills from its profile folder (read-only), sorted by name. */
   "skills.list": { params: { bot: string }; result: { skills: Skill[] } };
+  /** The slash commands Hermes answers for this bot, from Hermes' own registry (read-only). */
+  "commands.list": { params: { bot: string }; result: { commands: SlashCommand[] } };
   /** Channel names the bot already knows from its own Slack / Discord sessions, by channel id (read-only). */
   "links.places": { params: { bot: string }; result: { places: LinkPlaces } };
   /** Side panel, all read-only: the bot's latest terminal runs, the git worktrees it worked in, one diff. */

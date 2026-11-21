@@ -113,7 +113,8 @@ test("/ is a command, not a skill: /name anywhere, ./name and Hermes' own comman
   const typed = "rename ./plan to ./plan-steps, then run /review on /plan";
   await expect.poll(sends).toEqual([typed]);
   const mine = page.getByTestId("bubble-user").last();
-  await expect(mine).toHaveText(typed);
+  // the bubble's text only: the "Read · hh:mm" receipt joins the bubble once the turn starts
+  await expect(mine.locator(".b")).toHaveText(typed);
   await expect(mine.getByTestId("bubble-skill")).toHaveCount(0);
 
   // at the start: Hermes' own commands, a skill typed the Hermes way, and a path: one Enter each, as typed.
@@ -408,4 +409,24 @@ test("screenshots: the $ picker mid-message, a sent bubble, / as plain text and 
     await shoot(`skills-slash-hint-${theme}.png`);
     await box.fill(""); // drafts are kept across reloads: leave none for the other theme
   }
+});
+
+test("a bot chat's / lists the commands Hermes answers, with hints; a skill typed the Hermes way still sends as typed", async ({ page }) => {
+  await openFriren(page);
+  const box = page.getByTestId("composer");
+  await box.pressSequentially("/mo");
+  const picker = page.getByTestId("command-picker");
+  await expect(picker).toBeVisible();
+  await expect(picker.getByTestId("command-option").first()).toContainText("model");
+  await expect(picker.getByTestId("command-option").first()).toContainText("[model|reset]");
+  await page.keyboard.press("Enter");
+  await expect(box).toHaveValue("/model ");
+  await expect(picker).toHaveCount(0);
+
+  // `/research` is a skill; Hermes' `compress` mentions research, so the menu shows it, but Enter sends the skill
+  await mock("mock.manual", { bot: "friren", on: true });
+  await box.fill("/research");
+  await expect(picker).toBeVisible();
+  await page.keyboard.press("Enter");
+  await expect.poll(sends).toEqual(["/research"]);
 });

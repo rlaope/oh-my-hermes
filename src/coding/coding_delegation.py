@@ -26,7 +26,12 @@ from ..coding_contracts import (
     TASK_PROMPT_REQUIRED_SECTIONS,
 )
 from .action_gate import evaluate_action_gate, is_authority_shaped, split_handoff_safety_contract
-from .handoff_contract import HANDOFF_CONTRACT_KEY, build_handoff_contract, require_valid_handoff_contract
+from .handoff_contract import (
+    HANDOFF_CONTRACT_KEY,
+    build_handoff_contract,
+    independent_parts,
+    require_valid_handoff_contract,
+)
 from .prompting import build_executor_prompting_contract, render_executor_prompt_sections
 from ..executors import (
     EXTERNAL_CLI_PROFILES,
@@ -3096,6 +3101,27 @@ def _runtime_local_capability_prompt_block(profile: str, label: str) -> str:
     )
 
 
+# OpenAI's documented trigger phrase (learn.chatgpt.com, agent-configuration/
+# subagents; "Prompting GPT-6.2 in Codex", read 2026-11-20, official): naming
+# subagents gives Codex permission to decide when parallel work helps. Codex
+# template only, and only beside two or more declared independent parts.
+CODEX_SUBAGENT_RULE = "- Use subagents as needed: the parts listed above can move ahead independently."
+
+
+def _independent_parts_block(handoff_contract: Mapping[str, Any] | None) -> str:
+    """List the declared parts that depend on nothing, or '' for fewer than two.
+
+    The parallel-parts signal is structural: a `handoff_contract/v1` `parts[]`
+    entry with no `depends_on`. Acceptance criteria are never counted, because
+    two criteria can describe one indivisible change.
+    """
+    parts = independent_parts(handoff_contract)
+    if len(parts) < 2:
+        return ""
+    lines = "".join(f"- `{part['id']}`: {part['title']}\n" for part in parts)
+    return f"Parts that depend on no other part:\n{lines}\n"
+
+
 def _codex_prompt_template(
     delegation: CodingDelegation,
     *,
@@ -3110,6 +3136,7 @@ def _codex_prompt_template(
         "Executor-local workflow invocation is not observed available.\n"
         "Keep the dispatched task text generic.\n"
     )
+    independent_parts_block = _independent_parts_block(handoff_contract)
     return (
         "You are Codex, acting as the coding executor for a Hermes-orchestrated request.\n\n"
         "Executor target: codex\n"
@@ -3120,10 +3147,12 @@ def _codex_prompt_template(
         "Prepared status: `prepared_not_observed`\n\n"
         "{local_capability_prompt}"
         "{task_prompt_shape}"
+        "{independent_parts}"
         "Rules:\n"
         "- Implement only after inspecting the repository and confirming the scope.\n"
         "- Preserve unrelated behavior and user changes.\n"
         "- Run targeted verification and report exact evidence.\n"
+        "{subagent_rule}"
         "- Do not say Hermes performed the implementation; Hermes prepared this handoff.\n\n"
         "Report local executor capabilities only with evidence refs.\n\n"
         "{prompt_sections}"
@@ -3134,6 +3163,8 @@ def _codex_prompt_template(
         intent=delegation.intent,
         local_capability_prompt=_local_capability_prompt_block("codex", "Codex"),
         task_prompt_shape=_task_prompt_shape_block(),
+        independent_parts=independent_parts_block,
+        subagent_rule=CODEX_SUBAGENT_RULE + "\n" if independent_parts_block else "",
         prompt_sections=_executor_prompt_sections(delegation, prompting_contract, handoff_contract),
     )
 

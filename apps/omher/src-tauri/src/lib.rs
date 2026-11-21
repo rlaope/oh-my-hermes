@@ -329,9 +329,10 @@ async fn custom_agent_remove(id: String) -> Result<(), String> {
 /// Start allow-listed agent `agent` in folder `cwd` in a new pseudo-terminal (its own terminal UI). Only an
 /// agent id crosses from the UI: no program path, command line or argument; `session_id` is a new Claude Code
 /// conversation id the page made, `resume` a Claude Code or Codex conversation id to continue, each checked to be a
-/// UUID (`sessions::terminal_args`); `account` is the account a
-/// session restarted after an app restart ran with (checked by `accounts::session_env_for`). Terminal output goes
-/// to `on_data` as raw bytes, the exit code (null after a signal) once to `on_exit`.
+/// UUID (`sessions::terminal_args`); `link` is an oh-my-hermes row's link id, which that terminal gets as
+/// `OMHER_TERMINAL_LINK` (`sessions::terminal_env`: `omh` only, 10 lowercase base32 characters); `account` is the
+/// account a session restarted after an app restart ran with (checked by `accounts::session_env_for`). Terminal output
+/// goes to `on_data` as raw bytes, the exit code (null after a signal) once to `on_exit`.
 #[tauri::command]
 async fn session_start(
     app: AppHandle,
@@ -340,6 +341,7 @@ async fn session_start(
     cwd: String,
     session_id: Option<String>,
     resume: Option<String>,
+    link: Option<String>,
     account: Option<String>,
     cols: u16,
     rows: u16,
@@ -352,7 +354,7 @@ async fn session_start(
         // again after a restart, the one it ran with): its home variable, or nothing ("This computer").
         // chat_start passes the same.
         let account_env = user_home().map(|h| accounts::session_env_for(&h, &agent, account.as_deref())).unwrap_or_default();
-        sessions.start_agent(&agent, std::path::Path::new(&cwd), session_id.as_deref(), resume.as_deref(), &account_env, cols, rows, move |ev| match ev {
+        sessions.start_agent(&agent, std::path::Path::new(&cwd), session_id.as_deref(), resume.as_deref(), link.as_deref(), &account_env, cols, rows, move |ev| match ev {
             Output::Data(b) => {
                 let _ = on_data.send(InvokeResponseBody::Raw(b));
             }

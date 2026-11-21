@@ -13,6 +13,7 @@ describe("a panel tab's pane layout", () => {
     expect(panesOf(l)).toEqual([1, 2, 3]);
     expect(splitLayout(l, 9, "row", 4)).toBeNull(); // no such pane
     expect(splitLayout(l, 1, "row", 3)).toBeNull(); // id already used
+    expect(splitLayout({ pane: 1 }, 1, "col", 2, true)).toEqual({ dir: "col", ratio: 0.5, a: { pane: 2 }, b: { pane: 1 } }); // over it
   });
 
   it("holds at most four panes", () => {

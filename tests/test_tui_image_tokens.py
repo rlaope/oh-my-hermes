@@ -809,14 +809,13 @@ class KeptTokenTests(ImageTestCase):
         self.assertEqual([image.label for image in self.app.queued[-1].images], ["[Image #1]"])
 
 
-    def test_the_send_now_key_leaves_a_queued_prompt_with_images_for_the_turns_end(self) -> None:
+    def test_the_send_now_key_never_steers_a_queued_prompt_with_images_as_text(self) -> None:
         self.app.turn_pending = True
         data = self.paste_image()
         self.type("first")
         self.press(Key(ENTER))
         self.press(Key(ENTER, ctrl=True))  # the send-now key on an empty composer: a steer would drop the image
         self.assertEqual(self.methods("session.redirect"), [])
-        self.assertEqual(len(self.app.queued), 1)
         self.hermes.complete()
         self.hermes.admit()
         self.assertEqual(self.hermes.turns, [("[Image #1] first", [data])])
@@ -1072,3 +1071,61 @@ class CutInTests(ImageTestCase):
         self.hermes.pump()
         self.assertEqual(self.methods("session."), ["session.interrupt"])
         self.assertIsNotNone(self.app.cut_in)
+
+
+class QueuedImageSendNowTests(ImageTestCase):
+    """A prompt with images that Enter queued during a turn: its row offers the send-now key, as Claude Code's
+    `Queued · ctrl+enter to send now` does, and that key on an empty composer cuts it in (the turn stops, the prompt
+    goes with its images when the turn ends), never a text-only steer."""
+
+    def queue_image_prompt(self, text: str = "look") -> bytes:
+        self.app._on_event(Event("message.start", SID, {}))
+        self.hermes.pump()
+        data = self.paste_image()
+        self.type(text)
+        self.press(Key(ENTER))
+        return data
+
+    def test_the_queue_row_offers_the_send_now_key(self) -> None:
+        self.queue_image_prompt()
+        self.assertEqual([line.text for line in self.app.queued], ["[Image #1] look"])
+        self.assertIn("to send now", self.screen())
+
+    def test_the_send_now_key_cuts_it_in_with_its_image(self) -> None:
+        data = self.queue_image_prompt()
+        self.press(Key(ENTER, ctrl=True))
+        self.assertEqual(list(self.app.queued), [])
+        self.assertEqual(self.methods("session."), ["session.interrupt"])
+        self.assertEqual(self.methods("session.redirect"), [])
+        self.assertIsNotNone(self.app.cut_in)
+        self.assertNotIn("⧗", self.screen())
+        self.app._on_event(Event("message.complete", SID, {"text": "", "status": "interrupted"}))
+        self.hermes.pump()
+        self.hermes.admit()
+        self.assertEqual(self.hermes.turns, [("[Image #1] look", [data])])
+
+    def test_ctrl_j_does_the_same(self) -> None:
+        self.queue_image_prompt()
+        self.press(Key(CHAR, "j", ctrl=True))
+        self.assertEqual(self.methods("session."), ["session.interrupt"])
+
+    def test_a_queued_slash_command_with_an_image_is_not_offered(self) -> None:
+        self.app._on_event(Event("message.start", SID, {}))
+        self.hermes.pump()
+        self.type("/skill-a ")
+        self.paste_image()
+        self.press(Key(ENTER))
+        self.assertNotIn("to send now", self.screen())
+        self.press(Key(ENTER, ctrl=True))
+        self.assertEqual(self.methods("session.interrupt"), [])
+
+    def test_not_offered_while_a_cut_in_already_waits(self) -> None:
+        self.queue_image_prompt("first")
+        self.press(Key(ENTER, ctrl=True))  # cuts in
+        self.paste_image()
+        self.type("second")
+        self.press(Key(ENTER))  # queues behind
+        self.assertNotIn("to send now", self.screen())
+        self.press(Key(ENTER, ctrl=True))
+        self.assertEqual(self.methods("session.interrupt"), ["session.interrupt"])
+        self.assertEqual([line.text for line in self.app.queued], ["[Image #2] second"])
