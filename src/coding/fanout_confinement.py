@@ -65,6 +65,10 @@ _FANOUT_MACOS_PREFERENCE_MACH_SERVICES = ("com.apple.cfprefsd.daemon", "com.appl
 _FANOUT_MACOS_TLS_TRUST_MACH_SERVICES = ("com.apple.trustd.agent", "com.apple.trustd")
 _FANOUT_MACOS_PREFERENCE_SHM_READ_PREFIXES = ("apple.cfprefs.",)
 _FANOUT_TOOLCHAIN_TEMP_DIRECTORY = Path(".omh") / "confinement-tmp"
+# Runs `$1` with `$0` as its argv[0]. `--posix` keeps a non-interactive bash
+# from sourcing `$BASH_ENV`, which the fenced command inherits (#3014).
+_NAMED_LAUNCH_SHELL = "/bin/bash"
+_NAMED_LAUNCH_SCRIPT = 'exec -a "$0" "$1" "${@:2}"'
 
 
 @dataclass(frozen=True, slots=True)
@@ -262,7 +266,7 @@ class FanoutFilesystemConfinement:
     def _fenced(self, executable: str, argv: Sequence[str]) -> tuple[str, ...]:
         assert self.child is not None
         return sandbox_command(
-            (executable, *[str(argument) for argument in argv[1:]]),
+            named_launch_argv(str(argv[0]), executable, argv[1:]),
             self.selected,
             self.roots,
             self.child,
@@ -929,6 +933,22 @@ def _unconfined(
             reason_code=reason_code,
         ),
     )
+
+
+def named_launch_argv(name: str, executable: str, arguments: Sequence[object] = ()) -> tuple[str, ...]:
+    """Run the resolved `executable` under the `name` the command was written with (#3014).
+
+    The fence resolves each command to its real file, so the receipt names the
+    file that runs. A multi-call binary picks its tool from argv[0]: a mise
+    shim `codex` is a link to `mise`, and run as `mise` it is mise, not Codex.
+    When the resolved file has a different name, the launch keeps the file but
+    passes `name` as argv[0], the way a shell would have run it. Same name, or
+    no bash to set argv[0] with: the resolved file is run directly, as before.
+    """
+    rest = tuple(str(argument) for argument in arguments)
+    if Path(name).name == Path(executable).name or not os.path.isfile(_NAMED_LAUNCH_SHELL):
+        return (executable, *rest)
+    return (_NAMED_LAUNCH_SHELL, "--noprofile", "--norc", "--posix", "-c", _NAMED_LAUNCH_SCRIPT, name, executable, *rest)
 
 
 def _resolve_executables(

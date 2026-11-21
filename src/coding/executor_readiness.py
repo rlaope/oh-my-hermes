@@ -61,6 +61,25 @@ def observe_session_binary(binary: str, *, env: Mapping[str, str] | None = None)
         return None
 
 
+def session_launch_path(binary: str, identity: BinaryIdentity, *, env: Mapping[str, str] | None = None) -> str:
+    """The path to run the observed binary by: the one PATH found, when it is still that file (#3014).
+
+    `identity.resolved_path` is the real file, which is what gets hashed. A
+    multi-call binary such as a mise shim picks its tool from argv[0], so
+    running the real file (`mise`) loses the tool. Running the link PATH found
+    keeps the name, and is the same file as long as it still resolves to it;
+    otherwise the real file is run, as before.
+    """
+    located = binary if os.path.isabs(binary) else shutil.which(binary, path=(env or os.environ).get('PATH'))
+    if located is None:
+        return identity.resolved_path
+    try:
+        same = str(Path(located).resolve(strict=True)) == identity.resolved_path
+    except OSError:
+        same = False
+    return str(Path(located).absolute()) if same else identity.resolved_path
+
+
 def negotiate_session_capability(owner: str, binary: str, *, env: Mapping[str, str]) -> SessionCapability | None:
     """Help/version negotiation only; never a provider request or release-floor guess."""
     identity = observe_session_binary(binary, env=env)
@@ -69,7 +88,8 @@ def negotiate_session_capability(owner: str, binary: str, *, env: Mapping[str, s
     capability = SessionCapability(owner, None, identity, None)
     if owner not in ('codex', 'claude-code'):
         return capability
-    version_bytes, version_reason = bounded_session_probe([identity.resolved_path, '--version'], env=env)
+    launch = session_launch_path(binary, identity, env=env)
+    version_bytes, version_reason = bounded_session_probe([launch, '--version'], env=env)
     help_args = ['exec', '--help'] if owner == 'codex' else ['--help']
     # The help probe reads a document, so it gets a document-sized budget and
     # keeps what it read when even that was not enough: finding every flag in
@@ -77,7 +97,7 @@ def negotiate_session_capability(owner: str, binary: str, *, env: Mapping[str, s
     # from a truncated read is ambiguous. Before this, a help page that
     # outgrew the shared 16 KiB cap silently switched the whole lane off.
     help_bytes, help_reason = bounded_session_probe(
-        [identity.resolved_path, *help_args],
+        [launch, *help_args],
         env=env,
         limit_bytes=SESSION_HELP_PROBE_BYTES,
         keep_partial=True,
