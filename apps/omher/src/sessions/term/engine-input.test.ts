@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { findOptionKey, fontKey, isAppKey, isClearKey, isFindKey, lineEditBytes, nextFontSize, scrollKey, clipboardKey } from "./engine-input";
+import { findOptionKey, fontKey, isAppKey, isClearKey, isSelectAllKey, isFindKey, lineEditBytes, nextFontSize, scrollKey, clipboardKey } from "./engine-input";
 import { validPattern } from "./engine-find";
 
 const key = (o: Partial<{ key: string; code: string; metaKey: boolean; ctrlKey: boolean; altKey: boolean; shiftKey: boolean }>) => ({ key: "f", code: "KeyF", metaKey: false, ctrlKey: false, altKey: false, shiftKey: false, ...o });
@@ -186,5 +186,26 @@ describe("Cmd keys on macOS stay the app's", () => {
     expect(isAppKey(k("v"), true)).toBe(false);
     expect(isAppKey(k("v", { ctrlKey: true }), true)).toBe(false);
     expect(isAppKey(k("v", { metaKey: true }), false)).toBe(false);
+  });
+});
+
+describe("Cmd+A selects the terminal on macOS", () => {
+  const k = (key: string, code: string, mods: Partial<{ metaKey: boolean; ctrlKey: boolean; altKey: boolean; shiftKey: boolean }> = {}) => ({
+    key,
+    code,
+    metaKey: false,
+    ctrlKey: false,
+    altKey: false,
+    shiftKey: false,
+    ...mods,
+  });
+  it("is Cmd+A on macOS, on a Latin or Korean layout", () => {
+    expect(isSelectAllKey(k("a", "KeyA", { metaKey: true }), true)).toBe(true);
+    expect(isSelectAllKey(k("ㅁ", "KeyA", { metaKey: true }), true)).toBe(true);
+  });
+  it("is not Cmd+Shift+A, Ctrl+A, or anything off macOS", () => {
+    expect(isSelectAllKey(k("a", "KeyA", { metaKey: true, shiftKey: true }), true)).toBe(false);
+    expect(isSelectAllKey(k("a", "KeyA", { ctrlKey: true }), true)).toBe(false);
+    expect(isSelectAllKey(k("a", "KeyA", { metaKey: true }), false)).toBe(false);
   });
 });

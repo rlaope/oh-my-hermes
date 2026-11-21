@@ -128,6 +128,12 @@ export function isAppKey(e: KeyLike, mac: boolean): boolean {
   return mac && e.metaKey;
 }
 
+/** Cmd+A on macOS: select the terminal's whole buffer. xterm does this itself only for a key it is handed, and the
+ *  Edit menu's Select All would select the hidden input field instead, so the page does it. */
+export function isSelectAllKey(e: KeyLike, mac: boolean): boolean {
+  return mac && e.metaKey && !e.ctrlKey && !e.altKey && !e.shiftKey && isKey(e, "a");
+}
+
 /** Keyboard and mouse handling for one terminal; `onFind` runs when the person asks for find. Returns what undoes it. */
 export function attachInput(term: Terminal, host: HTMLElement, onFind: () => void): () => void {
   const mac = isMacPlatform();
@@ -191,6 +197,13 @@ export function attachInput(term: Terminal, host: HTMLElement, onFind: () => voi
           term.clear();
           historyChanged(term);
         }
+      }
+      return false;
+    }
+    if (isSelectAllKey(e, mac)) {
+      if (e.type === "keydown") {
+        e.preventDefault();
+        term.selectAll();
       }
       return false;
     }
