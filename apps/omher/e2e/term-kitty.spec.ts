@@ -152,7 +152,9 @@ test("Cmd+V and Cmd+C stay the Edit menu's with the Kitty protocol on: no CSI u 
   const before = await typed(page);
   for (const key of ["Meta+v", "Meta+c", "Meta+a", "Meta+x"]) await page.keyboard.press(key);
   await settle(page, 150);
-  expect(await typed(page)).toBe(before);
+  // no key reaches the program as a CSI u code (Cmd is modifier 8, so 9 here); what the native Paste types, if the
+  // clipboard holds text, is the person's paste
+  expect((await typed(page)).slice(before.length)).not.toMatch(/\x1b\[\d+;9u/);
   expect(await page.evaluate(() => (window as unknown as { __cancelled: string[] }).__cancelled)).toEqual([]);
   // keys without Cmd still use the protocol
   expect(await sends(page, "Shift+Enter")).toBe("\x1b[13;2u");
