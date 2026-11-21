@@ -108,6 +108,14 @@ All notable changes will be documented here.
   default) or is steered into it at once, the same as pressing its Steer; a message behind another waiting one
   still waits its turn. Contributed by @jundev0001 (#3017).
 
+- **omher's question card lists its choices one per row, numbered.** A choice used to be a chip in a flowing row, and
+  a long one ran past the card's edge. Each choice now takes a full-width row prefixed by its number, "Other…" is the
+  last number, and long text wraps inside the card. While the card has focus, pressing a number picks that row (in an
+  interview, within the focused question; never while you type in a field or an input method composes). A trailing
+  "(Recommended)" or "(권장)" shows as a small badge, and the text before the first " — " is the title with the rest
+  dimmer under it. Only the display changes: the answer sent back to Hermes is the choice as it was given. A
+  single-question card now offers "Other…" too.
+
 ## 4.0.9 - 2026-11-20
 
 - **Codex units can write inside the fanout fence on Linux and macOS.** `codex exec` is read-only by default, and

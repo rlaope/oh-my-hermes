@@ -276,30 +276,73 @@
   font-size: 11.5px;
   font-weight: 500;
 }
+/* one choice per row, numbered, full width; long text wraps inside the card */
 .iv-chips {
   display: flex;
-  flex-wrap: wrap;
-  gap: 5px;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 4px;
   padding-left: 22px;
+  min-width: 0;
 }
-/* text fields line up with the chip rows: same indent, same right edge */
+.iv-chips.flat {
+  padding-left: 0;
+}
+/* text fields line up with the rows: same indent, same right edge */
 .iv-q > .card-in {
   flex: none;
   margin-left: 22px;
   width: calc(100% - 22px);
 }
 .iv-chip {
-  height: 24px;
-  padding: 0 9px;
+  min-height: 26px;
+  padding: 4px 9px;
   border-radius: var(--r-sm);
   font-size: 12px;
+  line-height: 1.4;
+  text-align: left;
   color: var(--body);
   background: transparent;
   box-shadow: inset 0 0 0 1px var(--line-strong);
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
+  display: flex;
+  align-items: flex-start;
+  gap: 7px;
+  width: 100%;
+  min-width: 0;
+}
+.iv-num {
+  flex: none;
+  min-width: 10px;
+  color: var(--muted);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+}
+.iv-body {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.iv-title {
+  font-weight: 500;
+}
+.iv-desc {
+  color: var(--muted);
+  font-size: 11.5px;
+  font-weight: 400;
+}
+.iv-badge {
+  margin-left: 7px;
+  padding: 0 5px;
+  border-radius: 4px;
+  background: var(--raise2);
+  color: var(--muted);
+  font-size: 10.5px;
+  font-weight: 600;
   white-space: nowrap;
+  vertical-align: 1px;
 }
 .iv-chip:not(:disabled):hover {
   background: var(--hover);
@@ -317,6 +360,8 @@
   opacity: 0.55;
 }
 .iv-box {
+  flex: none;
+  margin-top: 2px;
   width: 11px;
   height: 11px;
   border-radius: 3px;
@@ -339,7 +384,7 @@
   margin-top: 2px;
 }
 .iv-chips > .iv-other {
-  flex: 1 0 100%;
+  flex: none;
   margin-top: 1px;
 }
 .iv-count {

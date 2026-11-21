@@ -822,6 +822,7 @@ export const en = {
   "card.otherN": "Other answer {n}",
   "card.questions": "{n} questions",
   "card.pickAny": "pick any",
+  "card.recommended": "Recommended",
   "card.pickOne": "pick one",
   "card.submit": "Submit",
   "card.answered": "{given} of {n} answered",

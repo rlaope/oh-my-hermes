@@ -820,6 +820,7 @@ export const ja: Record<Key, string> = {
   "card.otherN": "その他の回答 {n}",
   "card.questions": "質問 {n} 件",
   "card.pickAny": "複数選択可",
+  "card.recommended": "おすすめ",
   "card.pickOne": "1 つ選択",
   "card.submit": "送信",
   "card.answered": "{n} 件中 {given} 件回答済み",

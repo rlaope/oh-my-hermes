@@ -2,18 +2,20 @@
 // (or once its turn is over, or the gateway gave up on it) it collapses to one gray line.
 //
 // Keys, only while the card has focus (never global): on an approval 1 / 2 / 3 = Deny / Allow once / Allow for
-// session; on a question Enter picks the focused choice or sends the text. The sidebar's Needs-you strip and ⌘J
+// session; on a question the digit of a numbered choice picks it ("Other…" is the last number, never while typing
+// in a field or composing) and Enter picks the focused choice or sends the text. The sidebar's Needs-you strip and ⌘J
 // scroll a card into view and focus it.
 import "./cards.css";
-import { useEffect, useRef, useState, type KeyboardEvent, type RefObject } from "react";
+import { useEffect, useImperativeHandle, useRef, useState, type KeyboardEvent, type Ref, type RefObject } from "react";
 import type { SlotProps } from "../../features";
 import type { ApprovalChoice, AskSubagent, ClarifyAnswers, ClarifyQuestion } from "../../lib/protocol";
 import { askOpen, getStore, useStore, type ApprovalItem, type AskExpiry, type ClarifyItem } from "../../state/store";
 import { answerOf, EMPTY, type Pick } from "./answers";
+import { choiceIndexForKey, parseChoice } from "./choices";
 import { riskOf } from "./risk";
 import { t, type Key } from "../../i18n";
 import { Markdown } from "../parts/Markdown";
-import { holdImeEnter } from "../../lib/ime";
+import { composing, holdImeEnter } from "../../lib/ime";
 
 export const slot = "cards";
 
@@ -164,30 +166,60 @@ function Approval({ bot, item }: { bot: string; item: ApprovalItem }) {
 }
 
 
-/** One question's choices as chips (gray when selected) plus a free-text "Other", or just the text field. The
- *  "Other…" chip looks like its siblings and, once clicked, opens a text field as wide as the chip row (the same
- *  for single and multi select); emptied and left, it folds back into the chip. */
+/** What a card needs from its question: the digit-key handler, for a card whose own frame has the focus. */
+interface QuestionKeys {
+  key: (e: KeyboardEvent<HTMLElement>) => void;
+}
+
+/** One question's choices as numbered rows, one per line (gray when selected), plus a free-text "Other" as the
+ *  last number, or just the text field. A row shows the choice without a trailing "(Recommended)" / "(권장)" (a
+ *  badge instead) and splits a " — " into a title and a dimmer description; the answer is still the choice as
+ *  given. The "Other…" row looks like its siblings and, once clicked, opens a text field as wide as the rows;
+ *  emptied and left, it folds back into the row. `onPickOne` answers a single-select question at once. */
 function QuestionInput({
   q,
   pick,
   disabled,
   onChange,
   index,
+  onPickOne,
+  onSubmitOther,
+  flat,
+  keys,
 }: {
   q: ClarifyQuestion;
   pick: Pick;
   disabled: boolean;
   onChange: (p: Pick) => void;
   index: number;
+  onPickOne?: (c: string) => void;
+  onSubmitOther?: () => void;
+  flat?: boolean;
+  keys?: Ref<QuestionKeys>;
 }) {
   const choices = q.choices?.filter((c) => c.trim()) ?? [];
   const multi = !!q.multi_select && choices.length > 0;
   const [otherOpen, setOtherOpen] = useState(false);
+  const otherRef = useRef<HTMLInputElement>(null);
   const toggle = (c: string) => {
+    if (onPickOne && !multi) return onPickOne(c);
     const on = pick.chosen.includes(c);
     if (multi) onChange({ ...pick, chosen: on ? pick.chosen.filter((x) => x !== c) : [...pick.chosen, c] });
     else onChange({ chosen: on ? [] : [c], other: "" });
   };
+  const openOther = () => {
+    setOtherOpen(true);
+    otherRef.current?.focus();
+  };
+  const onKey = (e: KeyboardEvent<HTMLElement>) => {
+    if (disabled) return;
+    const i = choiceIndexForKey(e, choices.length + 1);
+    if (i < 0) return;
+    e.preventDefault();
+    if (i === choices.length) openOther();
+    else toggle(choices[i]);
+  };
+  useImperativeHandle(keys, () => ({ key: onKey }));
   if (!choices.length) {
     return (
       <input
@@ -202,22 +234,31 @@ function QuestionInput({
   }
   const showOther = otherOpen || !!pick.other;
   return (
-    <div className="iv-chips" role={multi ? "group" : "radiogroup"} aria-label={q.question}>
-      {/* the Other chip stays in the row (pressed while its field is open); the field takes the next line */}
-      {choices.map((c) => {
+    <div className={`iv-chips${flat ? " flat" : ""}`} role={multi || onPickOne ? "group" : "radiogroup"} aria-label={q.question} onKeyDown={flat ? undefined : onKey}>
+      {/* the Other row stays in the list (pressed while its field is open); the field takes the next line */}
+      {choices.map((c, i) => {
         const on = pick.chosen.includes(c);
+        const { title, desc, recommended } = parseChoice(c);
         return (
           <button
             key={c}
             type="button"
             className={`iv-chip${on ? " on" : ""}`}
-            role={multi ? "checkbox" : "radio"}
-            aria-checked={on}
+            role={onPickOne && !multi ? undefined : multi ? "checkbox" : "radio"}
+            aria-checked={onPickOne && !multi ? undefined : on}
+            aria-keyshortcuts={i < 9 ? String(i + 1) : undefined}
             disabled={disabled}
             onClick={() => toggle(c)}
           >
+            <span className="iv-num" aria-hidden="true">{i + 1}</span>
             {multi && <span className="iv-box" aria-hidden="true">{on ? "✓" : ""}</span>}
-            {c}
+            <span className="iv-body">
+              <span className="iv-title">
+                {title}
+                {recommended && <span className="iv-badge">{t("card.recommended")}</span>}
+              </span>
+              {desc && <span className="iv-desc">{desc}</span>}
+            </span>
           </button>
         );
       })}
@@ -225,14 +266,19 @@ function QuestionInput({
         type="button"
         className={`iv-chip iv-more${showOther ? " open" : ""}${pick.other.trim() ? " on" : ""}`}
         aria-expanded={showOther}
+        aria-keyshortcuts={choices.length < 9 ? String(choices.length + 1) : undefined}
         disabled={disabled}
         onClick={() => setOtherOpen(true)}
       >
+        <span className="iv-num" aria-hidden="true">{choices.length + 1}</span>
         {multi && <span className="iv-box" aria-hidden="true">{pick.other.trim() ? "✓" : ""}</span>}
-        {t("card.other")}
+        <span className="iv-body">
+          <span className="iv-title">{t("card.other")}</span>
+        </span>
       </button>
       {showOther && (
         <input
+          ref={otherRef}
           className="card-in iv-in iv-other"
           value={pick.other}
           disabled={disabled}
@@ -247,6 +293,10 @@ function QuestionInput({
             if (e.key === "Escape" && !pick.other) {
               e.stopPropagation();
               setOtherOpen(false);
+            }
+            if (e.key === "Enter" && onSubmitOther && !composing(e)) {
+              e.preventDefault();
+              onSubmitOther();
             }
           }}
         />
@@ -341,7 +391,8 @@ function Clarify({ bot, item }: { bot: string; item: ClarifyItem }) {
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [text, setText] = useState("");
-  const [chosen, setChosen] = useState<string[]>([]);
+  const [pick, setPick] = useState<Pick>(EMPTY);
+  const keys = useRef<QuestionKeys>(null);
   const ref = useRef<HTMLDivElement>(null);
   const formRef = useRef<HTMLFormElement>(null);
   const interview = (item.questions?.length ?? 0) > 1;
@@ -363,46 +414,41 @@ function Clarify({ bot, item }: { bot: string; item: ClarifyItem }) {
   };
   const choices = item.choices?.filter((c) => c.trim()) ?? [];
   const multi = !!item.multi && choices.length > 0;
+  const q: ClarifyQuestion = { qid: "q", question: item.question, choices, multi_select: multi };
+  const given = answerOf(pick, multi);
 
   return (
-    <div ref={ref} tabIndex={-1} className="card" data-testid="card-clarify" role="group" aria-label={t("card.question")}>
+    <div
+      ref={ref}
+      tabIndex={-1}
+      className="card"
+      data-testid="card-clarify"
+      role="group"
+      aria-label={t("card.question")}
+      onKeyDown={choices.length ? (e) => keys.current?.key(e) : undefined}
+    >
       <AskedBy who={item.subagent} />
       <div className="card-title">{item.question}</div>
+      {choices.length > 0 && (
+        <QuestionInput
+          q={q}
+          index={0}
+          pick={pick}
+          disabled={busy}
+          onChange={setPick}
+          onPickOne={(c) => void answer(c)}
+          onSubmitOther={() => void answer(multi ? given ?? "" : pick.other)}
+          flat
+          keys={keys}
+        />
+      )}
       <div className="card-acts">
-        {multi ? (
-          <>
-            {choices.map((c) => {
-              const on = chosen.includes(c);
-              return (
-                <button
-                  key={c}
-                  type="button"
-                  role="checkbox"
-                  aria-checked={on}
-                  className={`iv-chip${on ? " on" : ""}`}
-                  disabled={busy}
-                  onClick={() => setChosen((cur) => (on ? cur.filter((x) => x !== c) : [...cur, c]))}
-                >
-                  <span className="iv-box" aria-hidden="true">{on ? "✓" : ""}</span>
-                  {c}
-                </button>
-              );
-            })}
-            <button
-              type="button"
-              className="card-btn soft"
-              disabled={busy || !chosen.length}
-              onClick={() => void answer(JSON.stringify(chosen))}
-            >
+        {choices.length > 0 ? (
+          (multi || pick.other.trim()) && (
+            <button type="button" className="card-btn soft" disabled={busy || given === null} onClick={() => void answer(given ?? "")}>
               {t("card.answer")}
             </button>
-          </>
-        ) : choices.length > 0 ? (
-          choices.map((c) => (
-            <button key={c} type="button" className="iv-chip" disabled={busy} onClick={() => void answer(c)}>
-              {c}
-            </button>
-          ))
+          )
         ) : (
           <form
             className="card-ask"
