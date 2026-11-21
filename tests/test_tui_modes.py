@@ -43,8 +43,8 @@ from omh.tui import modes as modes_module
 from omh.tui import screen as screen_module
 from omh.tui import transcript as transcript_module
 from omh.tui.app import (
-    ATTACH_LEFT_NOTICE, OSC52_COPY, RESIZE_SETTLE_SECONDS, SLOT_ARM_SECONDS, STEER_FALLBACK_KEY, App, QueuedLine,
-    queue_lines,
+    ATTACH_LEFT_NOTICE, OSC52_COPY, QUEUE_EDIT_HINT, QUEUE_HELD_HINT, RESIZE_SETTLE_SECONDS, SEND_NOW_HINT,
+    SLOT_ARM_SECONDS, STEER_FALLBACK_KEY, App, QueuedLine, queue_lines,
 )
 from omh.tui.frame import MODE_ACCEPT, MODE_ACCEPT_PLAN, MODE_NORMAL, MODE_PLAN
 from omh.tui.gateway import Event, GatewayUnavailable, Response, ServerRequest
@@ -68,6 +68,7 @@ from omh.tui.transcript import (
     ThinkingBlock,
     UserBlock,
     block_rows,
+    queued_prompt_rows,
 )
 from omh.tui.width import line_width
 
@@ -445,10 +446,10 @@ class SteerTests(unittest.TestCase):
         self.assertNotIn("steer", info_row_of(drawn(app)))
         for event in app.decoder.feed(b"x\r"):  # a terminal that ignored the request: Ctrl+Enter comes as Enter
             app._on_input(event)
-        self.assertEqual(send_now_row(app), "  ctrl+j to send now · ↑ to edit")
+        self.assertEqual(send_now_row(app), "  ⎿  Queued · ctrl+j to send now · ↑ to edit")
         for event in app.decoder.feed(b"\x1b[108;5u"):  # Ctrl+L, as kitty reports it (Esc would interrupt the turn)
             app._on_input(event)
-        self.assertEqual(send_now_row(app), "  ctrl+enter to send now · ↑ to edit")
+        self.assertEqual(send_now_row(app), "  ⎿  Queued · ctrl+enter to send now · ↑ to edit")
 
     def test_a_kitty_flags_answer_names_ctrl_enter_before_any_key_and_types_nothing(self) -> None:
         for answer, key in ((b"\x1b[?1u", "ctrl+enter"), (b"\x1b[?0u", "ctrl+j")):
@@ -459,7 +460,7 @@ class SteerTests(unittest.TestCase):
                 type_text(app, "c")
                 self.assertEqual(app.composer.text, "abc")
                 app._on_input(Key(ENTER))  # queued behind the turn
-                self.assertEqual(send_now_row(app), f"  {key} to send now · ↑ to edit")
+                self.assertEqual(send_now_row(app), f"  ⎿  Queued · {key} to send now · ↑ to edit")
 
     def test_the_send_now_key_steers_with_the_oldest_queued_prompt_and_takes_it_off_the_queue(self) -> None:
         for data in (CTRL_ENTER_BYTES, b"\n", b"\x1b[27;5;13~"):  # Ctrl+Enter reported, Ctrl+J, modifyOtherKeys
@@ -1097,11 +1098,15 @@ class SteerTests(unittest.TestCase):
         app, _client = make_app()
         queue(app, "later")
         self.assertIsNone(send_now_row(app))
-        app.turn_pending, app.queue_held = True, True
-        self.assertIsNotNone(send_now_row(app))  # held or not, a running turn takes it now
+        self.assertIn("  ⎿  Queued · ↑ to edit", [row.rstrip() for row in drawn(app)])  # between turns: Up only
+        app.turn_pending = True
+        self.assertEqual(send_now_row(app), "  ⎿  Queued · ctrl+j to send now · ↑ to edit")
+        app.queue_held = True  # a stopped turn held it: the row says why it waits, not the send-now key
+        self.assertIsNone(send_now_row(app))
+        self.assertIn("  ⎿  Held · ↑ to edit", [row.rstrip() for row in drawn(app)])
         app.turn_pending = False
         self.assertIsNone(send_now_row(app))
-        self.assertIn("held · ↑ edit", "\n".join(drawn(app)))
+        self.assertIn("  ⎿  Held · ↑ to edit", [row.rstrip() for row in drawn(app)])
 
     def test_ctrl_j_with_text_adds_a_line_during_a_turn_and_ctrl_enter_steers_it(self) -> None:
         for data in (b"\n", b"\x1b[106;5u", b"\x1b[27;5;106~"):  # a line feed, or Ctrl+J as either report sends it
@@ -1190,7 +1195,7 @@ class BusyQueueTests(unittest.TestCase):
                 self.assertEqual(self.turn_calls(client), [])  # no interrupt, redirect, steer or submit
                 self.assertFalse(app.stop_asked)
                 self.assertEqual([line.text for line in app.queued], ["and the docs"])
-                self.assertEqual(send_now_row(app), "  ctrl+j to send now · ↑ to edit")
+                self.assertEqual(send_now_row(app), "  ⎿  Queued · ctrl+j to send now · ↑ to edit")
                 self.end_turn(app)
                 self.assertEqual(self.turn_calls(client),
                                  [("prompt.submit", {"session_id": SID, "text": "and the docs", "queued": True})])
@@ -2975,7 +2980,7 @@ class EffortTests(unittest.TestCase):
 
 
 def send_now_row(app: App) -> str | None:
-    """The row under the queued prompts that names the send-now key, as drawn; None when there is none."""
+    """The row under the oldest queued prompt that names the send-now key, as drawn; None when there is none."""
     return next((line.rstrip() for line in drawn(app) if "to send now" in line), None)
 
 
@@ -2996,107 +3001,157 @@ def queue(app: App, *prompts: str) -> None:
 
 
 class QueueLinesTests(unittest.TestCase):
-    def rows(self, prompts: list[str], width: int = 40, max_rows: int = 8) -> list[str]:
-        return [line_text(line) for line in queue_lines(prompts, width, max_rows, DEFAULT_THEME)]
+    """The queued prompts as the chat draws them above the working row (owner, 2026-11-21): a blank row, then each as a
+    prompt on its band, dim, its images under it; the hint under the oldest; three at most, then `+N more`."""
+
+    def rows(self, prompts: list[str], width: int = 40, hint: str = QUEUE_EDIT_HINT) -> list[str]:
+        return [line_text(line) for line in queue_lines([(text, (), ()) for text in prompts], width, DEFAULT_THEME, hint)]
 
     def test_nothing_queued_draws_nothing(self) -> None:
         self.assertEqual(self.rows([]), [])
-        self.assertEqual(self.rows(["a prompt"], max_rows=0), [])
+        self.assertEqual(self.rows(["a prompt"], hint=""), ["", "┃ ❯ a prompt"])  # no hint, no hint row
 
-    def test_each_prompt_is_one_row_and_the_last_ends_with_the_edit_key(self) -> None:
-        self.assertEqual(self.rows(["fix the failing test"]), ["⧗ fix the failing test" + " " * 12 + "↑ edit"])
+    def test_each_prompt_is_a_prompt_row_and_the_oldest_carries_the_hint(self) -> None:
+        self.assertEqual(self.rows(["fix the failing test"]), ["", "┃ ❯ fix the failing test", "  ⎿  Queued · ↑ to edit"])
         rows = self.rows(["fix the failing test", "then update the changelog"])
-        self.assertEqual(rows, ["⧗ fix the failing test", "⧗ then update the changelog" + " " * 7 + "↑ edit"])
+        self.assertEqual(rows, ["", "┃ ❯ fix the failing test", "  ⎿  Queued · ↑ to edit", "", "┃ ❯ then update the changelog"])
 
-    def test_the_glyph_is_muted_the_prompt_is_text_and_the_key_is_a_hint(self) -> None:
-        (line,) = queue_lines(["fix it"], 40, 8, DEFAULT_THEME)
-        self.assertEqual(
-            [(span.text.strip(), span.style) for span in line if span.text.strip()],
-            [("⧗", DEFAULT_THEME.muted), ("fix it", DEFAULT_THEME.text), ("↑ edit", DEFAULT_THEME.hint)],
-        )
+    def test_the_prompt_is_drawn_as_a_prompt_not_yet_taken_and_the_hint_is_a_hint(self) -> None:
+        blank, *prompt, hint = queue_lines([("fix it", (), ())], 40, DEFAULT_THEME)
+        self.assertEqual(blank, ())
+        self.assertEqual(prompt, queued_prompt_rows("fix it", 40, DEFAULT_THEME))
+        self.assertEqual(prompt, transcript_module._user_rows(UserBlock("fix it"), 40, DEFAULT_THEME, pending=True))
+        words = next(span for span in prompt[0] if span.text == "fix it")
+        self.assertEqual((words.style.fg, words.style.bg), (DEFAULT_THEME.dim.fg, DEFAULT_THEME.prompt_band.bg))
+        self.assertEqual([(span.text.strip(), span.style) for span in hint if span.text.strip()],
+                         [("⎿", DEFAULT_THEME.dim), ("Queued · ↑ to edit", DEFAULT_THEME.hint)])
 
     def test_more_than_three_are_counted_on_a_last_row(self) -> None:
         rows = self.rows(["one", "two", "three", "four", "five"])
-        self.assertEqual(rows[:3], ["⧗ one", "⧗ two", "⧗ three"])
-        self.assertEqual(rows[3], "+2 more" + " " * 27 + "↑ edit")
-        self.assertEqual(len(self.rows(["one", "two", "three"])), 3)  # exactly three need no count
+        self.assertEqual(rows, ["", "┃ ❯ one", "  ⎿  Queued · ↑ to edit", "", "┃ ❯ two", "", "┃ ❯ three", "  +2 more"])
+        self.assertEqual(len(self.rows(["one", "two", "three"])), 7)  # exactly three need no count
+        self.assertFalse(any("more" in row for row in self.rows(["one", "two", "three"])))
 
-    def test_only_the_first_line_of_a_prompt_is_named(self) -> None:
-        self.assertEqual(self.rows(["\nfirst line\nsecond line"], width=30), ["⧗ first line" + " " * 12 + "↑ edit"])
+    def test_a_prompt_shows_its_first_three_lines_then_an_ellipsis(self) -> None:
+        self.assertEqual(self.rows(["\nfirst line\nsecond line"], width=30),
+                         ["", "┃ ❯ first line", "┃   second line", "  ⎿  Queued · ↑ to edit"])
+        self.assertEqual(self.rows(["one\ntwo\nthree\nfour\nfive"], width=30),
+                         ["", "┃ ❯ one", "┃   two", "┃   three", "┃   …", "  ⎿  Queued · ↑ to edit"])
 
-    def test_a_short_slot_names_fewer_and_counts_the_rest(self) -> None:
-        prompts = ["one", "two", "three", "four"]
-        self.assertEqual([row.split("  ")[0] for row in self.rows(prompts, max_rows=3)], ["⧗ one", "⧗ two", "+2 more"])
-        self.assertEqual([row.split("  ")[0] for row in self.rows(prompts[:3], max_rows=2)], ["⧗ one", "+2 more"])
-        self.assertEqual([row.split("  ")[0] for row in self.rows(prompts[:2], max_rows=2)], ["⧗ one", "⧗ two"])
-        self.assertEqual([row.split("  ")[0] for row in self.rows(prompts, max_rows=1)], ["+4 more"])
+    def test_the_hint_names_what_the_oldest_offers_and_goes_under_it_alone(self) -> None:
+        prompts = ["one", "two", "three"]
+        self.assertEqual(self.rows(prompts, hint=QUEUE_HELD_HINT)[2], "  ⎿  Held · ↑ to edit")
+        rows = self.rows(prompts, width=60, hint=SEND_NOW_HINT.format(key="ctrl+enter"))
+        self.assertEqual(rows[2], "  ⎿  Queued · ctrl+enter to send now · ↑ to edit")
+        self.assertEqual([row for row in rows if "⎿" in row], [rows[2]])
 
-    def test_no_row_is_wider_than_the_terminal_and_the_key_survives_a_long_prompt(self) -> None:
+    def test_each_prompt_carries_its_image_labels_under_it(self) -> None:
+        lines = queue_lines([("look", ("[Image #1] a.png",), (None,)), ("and this", ("[Image #2] b.png",), (None,))],
+                            40, DEFAULT_THEME)
+        self.assertEqual(lines_text(lines), ["", "┃ ❯ look", "┃   ⎿  [Image #1] a.png", "  ⎿  Queued · ↑ to edit",
+                                             "", "┃ ❯ and this", "┃   ⎿  [Image #2] b.png"])
+
+    def test_no_row_is_wider_than_the_terminal_and_a_long_prompt_wraps_whole(self) -> None:
         prompts = ["a prompt that goes on for a good while longer than any terminal here is wide. " * 2] * 5
         for width in range(20, 121):
-            lines = queue_lines(prompts, width, 8, DEFAULT_THEME)
+            lines = queue_lines([(text, (), ()) for text in prompts], width, DEFAULT_THEME)
+            texts = lines_text(lines)
             with self.subTest(width=width):
                 self.assertTrue(all(line_width(line) <= width for line in lines))
-                self.assertEqual(line_width(lines[-1]), width)
-                self.assertTrue(line_text(lines[-1]).endswith("↑ edit"))
-                self.assertTrue(line_text(lines[0]).endswith("…"))
+                hint = next(index for index, text in enumerate(texts) if text.startswith("  ⎿"))
+                self.assertGreater(hint, 2)  # the oldest wrapped onto rows of its own, never cut to one
+                self.assertTrue(all(text.startswith("┃") for text in texts[1:hint]), texts)
+                self.assertFalse(any("…" in text for text in texts[1:hint]), texts)
+                self.assertTrue(texts[hint].startswith("  ⎿  Queued"), texts)  # under the oldest's last row
+                if width >= len("  ⎿  Queued · ↑ to edit"):
+                    self.assertEqual(texts[hint], "  ⎿  Queued · ↑ to edit")
+                self.assertEqual(texts[-1], "  +2 more")
 
     def test_text_hermes_built_cannot_carry_an_escape_onto_the_row(self) -> None:
-        (row,) = self.rows(["\x1b[31mred\x1b[0m \x07alert\ttab"], width=40)
-        self.assertTrue(row.startswith("⧗ red alert"))
-        self.assertNotIn("\x1b", row)
+        rows = self.rows(["\x1b[31mred\x1b[0m \x07alert\ttab"], width=40)
+        self.assertTrue(rows[1].startswith("┃ ❯ red alert"), rows)
+        self.assertFalse(any("\x1b" in row or "\x07" in row for row in rows), rows)
 
 
 class QueueTests(unittest.TestCase):
-    def test_queued_prompts_push_the_composer_down_by_their_rows_and_leave_no_blank_row(self) -> None:
+    def test_queued_prompts_sit_above_the_working_row_and_never_take_a_slot_row(self) -> None:
+        # Owner, 2026-11-21: the queue is drawn in the chat, above the working row, never in the slot over the
+        # composer's top rule; so the slot (the menu here) keeps every row it had and no blank row opens under it.
         for rows, cols in ((7, 40), (9, 40), (10, 80), (12, 80), (24, 80), (40, 120)):
             for menu in (False, True):
                 with self.subTest(rows=rows, cols=cols, menu=menu):
                     app, _client = make_app(busy=True, rows=rows, cols=cols)
-                    working = composer_index(drawn(app)) - 1  # where the top edge is, the working row right above it
                     for count in (1, 2, 3, 6):
                         app.queued.clear()
-                        queue(app, *(f"prompt {number}" for number in range(count)))
                         if menu:
                             app.composer.replace(0, len(app.composer.text), "/")
-                        screen = drawn(app)
-                        top = composer_index(screen)
-                        between = screen[working : top - 1]  # the slot: the menu, the queued prompts under it
+                        empty_slot = lines_text(app._slot_lines(cols, rows))
+                        queue(app, *(f"prompt {number}" for number in range(count)))
+                        self.assertEqual(lines_text(app._slot_lines(cols, rows)), empty_slot)
+                        screen = [row.rstrip() for row in drawn(app)]
+                        top = composer_index(screen) - 1
+                        working = [index for index, row in enumerate(screen[:top]) if "Working…" in row]
+                        if not working:  # a menu on a tiny terminal leaves the tail no row
+                            continue
+                        between = screen[working[0] + 1 : top]  # the tip, the menu: never a queued row
                         self.assertTrue(all(between), screen)
-                        if not menu and rows >= 10:
-                            # three named and "+N more", then the send-now row, within the slot's cap of a third of the rows
-                            self.assertEqual(len(between), min(count, 4, rows // 3 - 1) + 1, screen)
+                        self.assertFalse(any("prompt " in row or "Queued ·" in row or "more" in row for row in between))
+                        if menu and not working[0]:  # the menu leaves the tail only the working row (9 rows)
+                            continue
+                        last = next(row for row in reversed(screen[: working[0]]) if row)
+                        expected = {1: "  ⎿  Queued", 2: "┃ ❯ prompt 1", 3: "┃ ❯ prompt 2", 6: "  +3 more"}[count]
+                        self.assertTrue(last.startswith(expected), screen)
 
-    def test_the_rows_sit_right_above_the_composers_top_edge(self) -> None:
+    def test_the_rows_sit_right_above_the_working_row_not_over_the_composer(self) -> None:
         app, _client = make_app(busy=True)
         queue(app, "fix the failing test", "then update the changelog")
-        screen = drawn(app)
+        screen = [row.rstrip() for row in drawn(app)]
         top = composer_index(screen)
-        self.assertEqual(screen[top - 1], rule_edges(80)[0])
-        self.assertEqual(screen[top - 4].rstrip(), "⧗ fix the failing test")
-        self.assertEqual(screen[top - 3].rstrip(), "⧗ then update the changelog")
-        self.assertEqual(screen[top - 2].rstrip(), "  ctrl+j to send now · ↑ to edit")  # under them, muted
-        self.assertTrue(screen[top - 5].startswith("  ⎿  Tip: "), screen)
-        self.assertIn("esc to interrupt", screen[top - 6])  # the turn's activity row and its tip stay above them
+        working = next(index for index, row in enumerate(screen) if "esc to interrupt" in row)
+        self.assertEqual(screen[working - 5 : working], [
+            "┃ ❯ fix the failing test",
+            "  ⎿  Queued · ctrl+j to send now · ↑ to edit",  # under the oldest, the keys
+            "",
+            "┃ ❯ then update the changelog",
+            "",
+        ])
+        self.assertTrue(screen[working + 1].startswith("  ⎿  Tip: "), screen)  # the turn's tip stays under its row
+        self.assertEqual(screen[working + 2], rule_edges(80)[0].rstrip())  # then the composer's top edge, nothing between
+        self.assertEqual(working + 3, top)
 
-    def test_a_completion_menu_keeps_the_rows_left_and_stays_above_the_queue(self) -> None:
+    def test_a_completion_menu_keeps_every_slot_row_and_the_queue_stays_in_the_chat(self) -> None:
         app, _client = make_app(busy=True, rows=24)
         queue(app, "one", "two", "three", "four")
         type_text(app, "/")
         lines = [line_text(line) for line in app._slot_lines(80, 24)]
         self.assertEqual(len(lines), slot_cap(24, 80))
-        self.assertTrue(all(line.lstrip("❯ ").startswith("/") for line in lines[:3]), lines)
-        self.assertEqual(lines[3:], ["⧗ one", "⧗ two", "⧗ three", "+1 more", "  ctrl+j to send now · ↑ to edit"])
+        self.assertTrue(all(line.lstrip("❯ ").startswith("/") for line in lines), lines)  # the menu has the slot alone
+        screen = [row.rstrip() for row in drawn(app)]
+        working = next(index for index, row in enumerate(screen) if "Working…" in row)
+        self.assertEqual(screen[working - 8 : working], [
+            "┃ ❯ one", "  ⎿  Queued · ctrl+j to send now · ↑ to edit", "", "┃ ❯ two", "", "┃ ❯ three", "  +1 more", "",
+        ])
 
-    def test_a_question_or_the_session_picker_hides_the_rows(self) -> None:
+    def test_a_question_or_the_session_picker_leaves_the_rows_above_the_working_row(self) -> None:
+        # The rows are the chat's now, so a question or the picker does not hide them; Up still leaves them alone
+        # (`test_up_does_nothing_to_the_queue_while_something_else_has_the_keys`).
+        def placed(screen: list[str], row_words: str) -> None:
+            rows = [row.rstrip() for row in screen]
+            mark = next(index for index, row in enumerate(rows) if row_words in row)  # the working or waiting row
+            self.assertIn("┃ ❯ fix the failing test", rows[:mark], rows)
+            self.assertNotIn("┃ ❯ fix the failing test", rows[mark:], rows)
+            self.assertFalse(any("Queued ·" in row for row in rows[mark:]), rows)
+
         app, _client = make_app(busy=True)
         queue(app, "fix the failing test")
-        self.assertIn("⧗ fix the failing test", "\n".join(drawn(app)))
+        placed(drawn(app), "Working…")
         app._on_server_request(ServerRequest("srq-1", "approval", {"command": "rm -rf ./x"}))
-        self.assertNotIn("⧗", "\n".join(drawn(app)))
+        placed(drawn(app), "? waiting for your approval")
         app._answer(app.slot.decline())  # type: ignore[union-attr]
         app.picker = SessionPicker([SessionRow("stored-1", "a title", "", 0.0, 1)], current="")
-        self.assertNotIn("⧗", "\n".join(drawn(app)))
+        screen = drawn(app)
+        placed(screen, "Working…")
+        self.assertTrue(any("Resume session" in row for row in screen))
 
     def test_up_on_an_empty_composer_takes_every_queued_prompt_back(self) -> None:
         app, client = make_app(busy=True)
@@ -3204,9 +3259,11 @@ class QueueTests(unittest.TestCase):
         self.assertEqual(client.calls, [])  # both wait for the turn's end
         self.assertEqual([(line.text, line.shown) for line in app.queued],
                          [("fix the flaky test", "/plan fix the flaky test"), ("/learn the build", "/learn the build")])
-        rows = [line_text(line) for line in app._slot_lines(80, 24)]
-        self.assertEqual(rows[0], "⧗ /plan fix the flaky test")
-        self.assertTrue(rows[1].startswith("⧗ /learn the build"))
+        self.assertEqual(app._slot_lines(80, 24), [])  # the queue is drawn in the chat, not over the composer
+        rows = lines_text(app._queued_rows(80))
+        self.assertEqual(rows[1], "┃ ❯ /plan fix the flaky test")
+        self.assertTrue(rows[2].startswith("  ⎿  Queued"), rows)
+        self.assertEqual(rows[3:], ["", "┃ ❯ /learn the build"])
         app._on_input(Key(UP))
         self.assertEqual(app.composer.text, "fix the flaky test")
         app.composer.replace(0, len(app.composer.text), "")
@@ -3221,7 +3278,7 @@ class QueueTests(unittest.TestCase):
         answer(app, client, error={"code": contract.NOT_MINE, "message": "pending-input command"})
         answer(app, client, {"type": "skill", "message": "a long skill prompt", "display": "learn: the build"})
         self.assertEqual(list(app.queued), [QueuedLine("a long skill prompt", "learn: the build", "/learn the build")])
-        self.assertTrue(line_text(app._slot_lines(80, 24)[0]).startswith("⧗ learn: the build"))
+        self.assertEqual(lines_text(app._queued_rows(80))[1], "┃ ❯ learn: the build")
         app._on_input(Key(UP))
         self.assertEqual(app.composer.text, "/learn the build")
 
@@ -3362,7 +3419,7 @@ class BellReplayTests(AppTestCase):
 
 @unittest.skipIf(NO_TERMIOS, "the OMH TUI needs termios")
 class ModeReplayTests(AppTestCase):
-    def test_queued_prompts_show_above_the_box_and_up_takes_them_back_unsent(self) -> None:
+    def test_queued_prompts_show_above_the_working_row_and_up_takes_them_back_unsent(self) -> None:
         run = self.prepare(
             Scenario("session", spans("session", "startup", "create", "interrupted_turn"), answers=startup_answers())
         )
@@ -3375,8 +3432,10 @@ class ModeReplayTests(AppTestCase):
             # The replay holds this turn open until it sees session.interrupt.
             Step(TYPED_AHEAD + b"Write the numbers from 1 to 300, one per line, nothing else.\r"
                  b"second prompt\rthird prompt\r", when=terminal.idle, label="idle"),
-            Step(b"\x1b[A", when=terminal.shows("⧗ third prompt"), capture="queued", label="queued"),
-            Step(b"\x03", when=terminal.shows("❯ second prompt"), capture="recalled", label="recalled"),
+            Step(b"\x1b[A", when=terminal.shows("┃ ❯ third prompt"), capture="queued", label="queued"),
+            # The queued row reads `┃ ❯ second prompt` too: wait for the composer's own row.
+            Step(b"\x03", when=lambda: any(row.startswith("❯ second prompt") for row in terminal.screen.lines()),
+                 capture="recalled", label="recalled"),
             Step(b"\x03", when=lambda: not terminal.shows("third prompt")(), label="cleared"),
             Step(b"\x04", when=lambda: "Interrupted." in terminal.history() and terminal.idle(), label="end"),
         )
@@ -3384,12 +3443,16 @@ class ModeReplayTests(AppTestCase):
         self.assert_clean_run(run)  # a prompt.submit for either queued prompt would be a replay mismatch
         self.assertEqual(len(run.calls("prompt.submit")), 1)
         queued, recalled = (terminal.captures[name] for name in ("queued", "recalled"))
-        top = composer_index(queued)
-        self.assertEqual(queued[top - 4].rstrip(), "⧗ second prompt")
-        self.assertEqual(queued[top - 3].rstrip(), "⧗ third prompt")
-        self.assertEqual(queued[top - 2].rstrip(), "  ctrl+j to send now · ↑ to edit")  # the keys, under the rows
+        rows = [row.rstrip() for row in queued]
+        top = composer_index(rows)
+        working = next(index for index, row in enumerate(rows) if "esc to interrupt" in row)
+        second = rows.index("┃ ❯ second prompt")
+        self.assertEqual(rows[second + 1], "  ⎿  Queued · ctrl+j to send now · ↑ to edit")  # the keys, under the oldest
+        self.assertLess(second, rows.index("┃ ❯ third prompt"))
+        self.assertLess(rows.index("┃ ❯ third prompt"), working)  # in the chat, above the working row
+        self.assertFalse(any("prompt" in row for row in rows[working + 1 : top - 1]), rows)  # nothing over the composer
         self.assertNotIn("queued", info_row_of(queued))
-        self.assertNotIn("⧗", "\n".join(recalled))
+        self.assertFalse(any(row.startswith("┃ ❯ third prompt") or "Queued ·" in row for row in recalled), recalled)
         self.assertEqual(composer_text(recalled[composer_index(recalled) + 1]).strip(), "third prompt")
         self.assertNotIn("queued", info_row_of(recalled))
 

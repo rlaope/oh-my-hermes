@@ -468,15 +468,18 @@ class PromptRowTests(unittest.TestCase):
                     for span in words:
                         self.assertGreaterEqual(contrast_ratio(span.style.fg, theme.prompt_band.bg), TEXT_CONTRAST)
 
-    def test_a_prompt_the_queue_sent_says_so_in_the_same_dim(self) -> None:
+    def test_a_prompt_the_queue_sent_reads_as_any_prompt(self) -> None:
+        # The `⧗ from queue` tag is gone (owner, 2026-11-21): once sent, a queued prompt looks like a typed one.
         (row,) = block_rows(UserBlock("next one", from_queue=True), 40, THEME)
-        self.assertEqual(line_text(row), "┃ ❯ next one  ⧗ from queue")
-        self.assertEqual(row[-1].style, THEME.muted)
+        self.assertEqual(line_text(row).rstrip(), "┃ ❯ next one")
+        self.assertEqual(row, block_rows(UserBlock("next one"), 40, THEME)[0])
 
-    def test_the_queue_reads_apart_from_a_prompt(self) -> None:
-        prompt = line_text(block_rows(UserBlock("fix it"), 40, THEME)[0])
-        (queued,) = lines_text(queue_lines(["fix it"], 40, 3, THEME))
-        self.assertEqual([prompt[:4], queued[:2]], ["┃ ❯ ", "⧗ "])
+    def test_the_queue_reads_as_a_prompt_the_turn_has_not_taken(self) -> None:
+        sent = block_rows(UserBlock("fix it"), 40, THEME)[0]
+        _blank, queued, _hint = queue_lines([("fix it", (), ())], 40, THEME)
+        self.assertEqual([line_text(sent)[:4], line_text(queued)[:4]], ["┃ ❯ ", "┃ ❯ "])  # the same prompt row
+        words = [next(span for span in row if span.text == "fix it").style.fg for row in (sent, queued)]
+        self.assertEqual(words, [THEME.muted.fg, THEME.dim.fg])  # dim while it waits, as a steer not yet read
 
     def test_a_command_echoes_as_a_prompt_does_in_the_hint_colour(self) -> None:
         rows = block_rows(CommandBlock("/model", [("Current model: x", NOTICE_INFO)], done=True), 40, THEME)

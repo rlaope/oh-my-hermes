@@ -1129,7 +1129,9 @@ class RowTests(unittest.TestCase):
         self.assertEqual(self.client.named("prompt.submit"), [])
         self.assertIn("finished", self.shown())
 
-    def test_the_queue_keeps_the_slot_since_the_row_is_on_the_info_line(self) -> None:
+    def test_the_queue_takes_no_slot_row_and_the_background_row_stays_on_the_info_line(self) -> None:
+        # The queue is drawn in the chat above the working row (owner, 2026-11-21), so neither it nor the background
+        # row takes the slot over the composer, whatever its cap.
         self.app.turn_pending = True
         self.deliver(process())
         type_text(self.app, "next step")
@@ -1138,8 +1140,12 @@ class RowTests(unittest.TestCase):
         for cap in (1, 2, 4):
             with self.subTest(cap=cap), patch("omh.tui.app.slot_cap", return_value=cap):
                 shown = [line_text(line) for line in self.app._slot_lines(120, 30)]
-                self.assertTrue(shown[0].startswith("⧗"), shown)
+                self.assertFalse(any("next step" in line or "Queued" in line for line in shown), shown)
                 self.assertFalse(any("background" in line for line in shown), shown)
+                tail = [line_text(line) for line in self.app._tail(120)]
+                prompt = tail.index("┃ ❯ next step")
+                working = next(index for index, line in enumerate(tail) if line.startswith(WORKING_GLYPHS))
+                self.assertLess(prompt, working)
 
     def test_a_process_that_ends_during_a_turn_or_after_one_started_just_goes(self) -> None:
         self.deliver(process())

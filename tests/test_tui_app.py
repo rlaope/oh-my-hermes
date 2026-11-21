@@ -2399,7 +2399,8 @@ class LocalCommandTests(AppTestCase):
         listed = history.index("┃   ⎿  Queued (sent one at a time as each turn ends):")
         self.assertEqual(history[listed - 1], "┃ ❯ /queue")
         self.assertEqual(history[listed + 1], "┃      1. second prompt")
-        self.assertIn("┃ ❯ second prompt  ⧗ from queue", history[listed:])  # the queue sent it once the turn ended
+        self.assertIn("┃ ❯ second prompt", history[listed:])  # the queue sent it once the turn ended, as any prompt
+        self.assertFalse(any("from queue" in row for row in history), history)  # with no tag (owner, 2026-11-21)
         self.assertLess(history.index("┃ ❯ first prompt"), listed)
 
     def test_input_during_a_turn_queues_whatever_the_busy_mode(self) -> None:
@@ -2429,7 +2430,8 @@ class LocalCommandTests(AppTestCase):
                 self.assertEqual(first["params"], {"session_id": LIVE_ID, "text": "first prompt"})
                 # Held until the first turn ended, and sent as the queue's: Hermes applies no busy mode to it.
                 self.assertEqual(second["params"], {"session_id": LIVE_ID, "text": "second prompt", "queued": True})
-                self.assertIn("⧗ from queue", terminal.history())
+                self.assertIn("┃ ❯ second prompt", terminal.history())
+                self.assertNotIn("from queue", terminal.history())  # a prompt the queue sent carries no tag
                 self.assertEqual(run.calls("session.interrupt") + run.calls("session.redirect"), [])
 
 
@@ -2778,7 +2780,10 @@ class KeyTests(AppTestCase):
                 self.assert_clean_run(run)
                 queued = terminal.captures["queued"]
                 row = next(index for index, line in enumerate(queued) if said in line)
-                self.assertEqual(queued[row - 1].rstrip(), "⧗ then stop")  # under the queued prompt, its own row
+                self.assertEqual(queued[row - 1].rstrip(), "┃ ❯ then stop")  # under the queued prompt, its own row
+                self.assertEqual(queued[row].rstrip(), f"  ⎿  {said}")
+                working = next(index for index, line in enumerate(queued) if "esc to interrupt" in line)
+                self.assertLess(row, working)  # in the chat, above the working row
                 self.assertNotIn("steer", info_row_of(queued))  # the info line names no steer key
                 (submit,) = run.calls("prompt.submit")
                 self.assertEqual(submit["params"]["text"], prompt)  # the answer typed nothing

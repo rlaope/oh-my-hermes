@@ -122,13 +122,16 @@ class CompressTests(unittest.TestCase):
                 self.assertEqual(client.calls[-1], ("prompt.submit", {"session_id": SID, "text": "next please", "queued": True}))
                 self.assertEqual([line.text for line in app.queued], ["and then this"])  # after that turn, as usual
 
-    def test_the_queued_rows_show_above_the_composer_while_compressing(self) -> None:
+    def test_the_queued_rows_show_above_the_compacting_row_while_compressing(self) -> None:
         app, _client = make_app()
         send(app, "/compact")
         send(app, "queued while compacting")
-        slot = lines_text(app._slot_lines(80, 24))
-        self.assertTrue(any("queued while compacting" in row for row in slot))
-        self.assertFalse(any(row.startswith(RULE * 2) for row in lines_text(app._tail(80))[-1:]))
+        self.assertFalse(any("queued while compacting" in row for row in lines_text(app._slot_lines(80, 24))))
+        tail = lines_text(app._tail(80))
+        prompt = tail.index("┃ ❯ queued while compacting")
+        self.assertEqual(tail[prompt + 1], "  ⎿  Queued · ↑ to edit")  # no turn to send it into: Up only
+        self.assertLess(prompt, next(index for index, row in enumerate(tail) if f"{COMPRESSING_VERB}…" in row))
+        self.assertFalse(any(row.startswith(RULE * 2) for row in tail[-1:]))
 
     def test_a_compress_sent_during_a_turn_leaves_the_turn_its_own_working_row(self) -> None:
         app, _client = make_app(busy=True)
