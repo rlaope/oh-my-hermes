@@ -4,6 +4,8 @@ All notable changes will be documented here.
 
 ## Unreleased
 
+## 4.0.10 - 2026-11-21
+
 - **omher: no console window from the Tasks page, and a question keeps the words before it.** On Windows each
   GitHub or GitLab read in Tasks started `gh`/`glab` with a console of its own, so a window flashed and took the
   focus on every query; those reads now start hidden, like the bridge's. A bot's question card used to arrive alone,
