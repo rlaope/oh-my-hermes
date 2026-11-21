@@ -133,3 +133,27 @@ test("Option+drag selects text inside a program that reports the mouse, and send
   expect(selected).toContain("select-me");
   expect((await typed(page)).slice(before)).not.toMatch(/\x1b\[</);
 });
+
+test("Cmd+V and Cmd+C stay the Edit menu's with the Kitty protocol on: no CSI u is sent and the key is not cancelled", async ({ page }) => {
+  await openApp(page);
+  test.skip(!(await platformIsMac(page)), "Cmd keys are the app's on macOS");
+  await newTerminal(page);
+  await feed(page, "\x1b[>1u");
+  await expect.poll(() => flags(page)).toBe(1);
+  // the native Paste / Copy run only when the page lets the key through
+  await page.evaluate(() => {
+    const w = window as unknown as { __cancelled: string[] };
+    w.__cancelled = [];
+    addEventListener("keydown", (e) => {
+      if (e.metaKey && e.defaultPrevented) w.__cancelled.push(e.key);
+    });
+  });
+  await focus(page);
+  const before = await typed(page);
+  for (const key of ["Meta+v", "Meta+c", "Meta+a", "Meta+x"]) await page.keyboard.press(key);
+  await settle(page, 150);
+  expect(await typed(page)).toBe(before);
+  expect(await page.evaluate(() => (window as unknown as { __cancelled: string[] }).__cancelled)).toEqual([]);
+  // keys without Cmd still use the protocol
+  expect(await sends(page, "Shift+Enter")).toBe("\x1b[13;2u");
+});

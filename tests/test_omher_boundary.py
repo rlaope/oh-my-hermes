@@ -313,6 +313,8 @@ RULES = (
     "Kitty file and shared-memory transfers, where a program names a path for the terminal to read, are refused.",
     "The Kitty keyboard protocol changes only how keys are encoded for a program that asks for it (`CSI > flags u`)."
     " omher sends no keys of its own and reads nothing new from the program.",
+    "On macOS, Cmd with any key is the app's (Copy, Paste and the rest of the menu) and is never sent to the program,"
+    " with the Kitty keyboard protocol on or off, except the line-edit keys below.",
     "the desktop app writes it, only under omher's own folder, to `~/.omher/term-history/<key>.txt`,",
     "the file is the owner's only (0600), holds at most 2000 lines and 1 MB, is never written or read through a link,",
     "that file is not opened, and only its id (a UUID) is kept with the session so that a restart continues it.",
