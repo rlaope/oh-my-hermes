@@ -1,9 +1,9 @@
-"""Outcome bands, the queue's tag, and where a steer lands.
+"""Outcome bands, a prompt the queue sent, and where a steer lands.
 
 Your prompt sits on no band: a dim `>` and dim text, as Claude Code shows it.
 A band (an outcome's) fills to the right edge by an erase in its background
 rather than by spaces. A prompt the queue sent once the turn before it ended
-says `⧗ from queue`. A steer shows as a dim prompt row (`┃ ❯ <text>`) under
+reads as any prompt, with no tag. A steer shows as a dim prompt row (`┃ ❯ <text>`) under
 what is running until the turn takes it in, and is written into the
 transcript, as any prompt reads, at the next block boundary after that, so it
 never closes a running tool group (whose calls would read as cut off) or
@@ -232,14 +232,15 @@ class OutcomeBandTests(unittest.TestCase):
 
 
 class FromQueueTests(unittest.TestCase):
-    def test_a_prompt_the_queue_sent_says_so_and_a_typed_one_does_not(self) -> None:
+    def test_a_prompt_the_queue_sent_reads_as_a_typed_one(self) -> None:
         app, client = make_app(busy=True)
         type_text(app, "next one")
         app._on_input(Key(ENTER))
         app._on_event(ev("message.complete", text="done"))
         self.assertEqual(client.calls[-1], ("prompt.submit", {"session_id": SID, "text": "next one", "queued": True}))
         users = [block for block in app.transcript.blocks if isinstance(block, UserBlock)]
-        self.assertEqual([line_text(block_rows(block, 80, THEME)[0]) for block in users], ["┃ ❯ next one  ⧗ from queue"])
+        self.assertEqual([line_text(block_rows(block, 80, THEME)[0]).rstrip() for block in users], ["┃ ❯ next one"])
+        self.assertTrue(users[0].from_queue)  # the field stays; it draws nothing (owner, 2026-11-21)
         typed = block_rows(UserBlock("typed"), 80, THEME)[0]
         self.assertEqual(line_text(typed), "┃ ❯ typed")
 
@@ -247,14 +248,14 @@ class FromQueueTests(unittest.TestCase):
         row = block_rows(UserBlock("a long prompt that fills the row", from_queue=True), 36, THEME)[0]
         self.assertEqual(line_text(row), "┃ ❯ a long prompt that fills the row")  # the rail, then no room for the tag
 
-    def test_the_tag_reads_on_the_terminals_background(self) -> None:
+    def test_no_tag_on_any_palette_or_background(self) -> None:
         for skin in SKIN_THEMES:
             for background in (*LIGHT_BACKGROUNDS, *DARK_BACKGROUNDS):
                 theme = build_theme(skin, background)
-                row = block_rows(UserBlock("next", from_queue=True), 80, theme)[0]
-                (tag,) = [span for span in row if "from queue" in span.text]
+                rows = block_rows(UserBlock("next", from_queue=True), 80, theme)
                 with self.subTest(theme=skin.short_name, background=background):
-                    self.assertGreaterEqual(contrast(tag.style.fg, background), 4.5)
+                    self.assertFalse([span for row in rows for span in row if "from queue" in span.text or "⧗" in span.text])
+                    self.assertEqual(rows, block_rows(UserBlock("next"), 80, theme))
 
 
 class SteerPlacementTests(unittest.TestCase):

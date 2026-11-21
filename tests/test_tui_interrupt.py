@@ -214,8 +214,9 @@ class QueueAfterInterruptTests(unittest.TestCase):
         self.assertFalse(app.interrupting)
 
     def test_the_held_rows_say_why_they_wait(self) -> None:
-        rows = lines_text(queue_lines(["!ls"], 60, 3, DEFAULT_THEME, hint=QUEUE_HELD_HINT))
-        self.assertTrue(rows[0].endswith(QUEUE_HELD_HINT), rows)
+        rows = lines_text(queue_lines([("!ls", (), ())], 60, DEFAULT_THEME, hint=QUEUE_HELD_HINT))
+        self.assertEqual(rows, ["", "┃ ❯ !ls", f"  ⎿  {QUEUE_HELD_HINT}"])
+        self.assertEqual(QUEUE_HELD_HINT, "Held · ↑ to edit")
 
 
 if __name__ == "__main__":

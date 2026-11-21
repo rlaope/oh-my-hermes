@@ -383,6 +383,7 @@ from .transcript import (
     UserBlock,
     as_text,
     block_rows,
+    queued_prompt_rows,
     compact_count,
     review_line,
 )
@@ -808,15 +809,16 @@ WAITING_GLYPH = "? "  # in place of the spinner while a question waits on the pe
 WAITING_APPROVAL = "waiting for your approval"
 WAITING_ANSWER = "waiting for your answer"
 
-# The prompts waiting for the running turn, listed above the composer's top rule.
-QUEUE_GLYPH = "⧗ "
+# The prompts waiting for the running turn are drawn in the chat, where a sent prompt is, above the working row: each
+# on the prompt band, dim, its images under it, as Claude Code draws a queued message (owner, 2026-11-21: never as a
+# `⧗` row over the composer). At most QUEUE_ROWS are drawn and `+N more` counts the rest. The row under the oldest
+# says what the person can do with it: the key that sends it into the turn now (`session.redirect`, or a cut-in for
+# one with images), Ctrl+Enter where the terminal tells it from Enter, else Ctrl+J; and Up, which takes it back.
+QUEUE_GLYPH = "⧗ "  # only the width the rows under the composer line up with (`_image_wait_line`)
 QUEUE_ROWS = 3
-QUEUE_EDIT_HINT = "↑ edit"
-QUEUE_HELD_HINT = "held · ↑ edit"
-QUEUE_HINT_GAP = 2
-# While a turn runs, the row under the queued prompts says the key that sends the oldest into the turn now
-# (`session.redirect`), the way Claude Code says it: Ctrl+Enter where the terminal tells it from Enter, else Ctrl+J.
-SEND_NOW_HINT = "{key} to send now · ↑ to edit"
+QUEUE_EDIT_HINT = "Queued · ↑ to edit"
+QUEUE_HELD_HINT = "Held · ↑ to edit"
+SEND_NOW_HINT = "Queued · {key} to send now · ↑ to edit"
 # The Hermes commands whose reply may be a template that marks its values (`OUTPUT_MARKED`): /title answers from
 # `gateway/slash_commands_session.py::_handle_title_command` (Hermes bf0203a794, :976-996), whose lines
 # `transcript.TITLE_MARKS` names; only a line of such a shape is drawn marked. Every other reply (a quick command's
@@ -1788,33 +1790,31 @@ def first_line(text: str) -> str:
 
 
 def queue_lines(
-    prompts: Sequence[str], width: int, max_rows: int, theme: Theme, hint: str = QUEUE_EDIT_HINT, below: str = "",
+    prompts: Sequence[tuple[str, tuple[str, ...], tuple[Preview | None, ...]]], width: int, theme: Theme,
+    hint: str = QUEUE_EDIT_HINT,
 ) -> list[Line]:
-    """The queued prompts, next to be sent first: `⧗ <first line>` each, never more than `max_rows` rows.
-
-    At most `QUEUE_ROWS` prompts are named and `+N more` counts the rest;
-    `hint` (`↑ edit`, the key that takes them back into the composer) ends the last row. `below`, when given and
-    there are two rows or more, is a row of its own under them instead, under the prompts' text (while a turn runs:
-    the send-now key and Up, `SEND_NOW_HINT`).
+    """The queued prompts, oldest first, as the chat draws them above the working row: a blank row, then each as a
+    prompt on its band, dim (`transcript.queued_prompt_rows`), with its images' labels and previews under it (each
+    entry is its text, image captions and previews). `hint` goes under the oldest, `  ⎿  Queued · …`. At most
+    `QUEUE_ROWS` are drawn and a dim `+N more` row counts the rest.
     """
-    if not prompts or max_rows <= 0:
+    if not prompts:
         return []
-    if below and max_rows > 1:
-        rows = queue_lines(prompts, width, max_rows - 1, theme, "")
-        return [*rows, truncate_line((Span(" " * cell_width(QUEUE_GLYPH)), Span(below, theme.hint)), width)]
-    named = min(len(prompts), QUEUE_ROWS, max_rows)
-    if named < len(prompts):
-        named = min(named, max_rows - 1)  # the last row counts the rest
-    rows: list[Line] = [
-        (Span(QUEUE_GLYPH, theme.muted), Span(clean_text(first_line(text)), theme.text)) for text in prompts[:named]
-    ]
-    if named < len(prompts):
-        rows.append((Span(f"+{len(prompts) - named} more", theme.muted),))
-    if hint:
-        said: Line = (Span(hint, theme.hint),)
-        last = truncate_line(rows[-1], max(width - line_width(said) - QUEUE_HINT_GAP, 0))
-        rows[-1] = (*last, Span(" " * (width - line_width(last) - line_width(said))), *said)
-    return [truncate_line(row, width) for row in rows]
+    rows: list[Line] = []
+    for index, (text, images, previews) in enumerate(prompts[:QUEUE_ROWS]):
+        rows.append(())
+        rows.extend(queued_prompt_rows(first_lines(text), width, theme, images, previews))
+        if index == 0 and hint:
+            rows.append(truncate_line((Span(OUTPUT_INDENT), Span(OUTPUT_MARK, theme.dim), Span(hint, theme.hint)), width))
+    if len(prompts) > QUEUE_ROWS:
+        rows.append(truncate_line((Span(OUTPUT_INDENT), Span(f"+{len(prompts) - QUEUE_ROWS} more", theme.muted)), width))
+    return rows
+
+
+def first_lines(text: str, keep: int = 3) -> str:
+    """A queued prompt as the chat shows it while it waits: its first `keep` lines, `…` after them when it has more."""
+    lines = text.strip().split("\n")
+    return "\n".join(lines[:keep]) + ("\n…" if len(lines) > keep else "")
 
 
 def collision_notes(warning: str) -> tuple[str, ...]:
@@ -6986,7 +6986,7 @@ class App(ModesMixin, AgentViewMixin):
             # The turn a cut-in stopped is over: the prompt goes now, and the queue goes on behind it, as behind any
             # prompt the person sends. Steers the turn had not read go back to the queue's head first.
             self.interrupting = False
-            self._requeue_unread_steers()
+            self._fold_unread_into_cut_in()
             self._send_cut_in()
             self._check_default()
             return
@@ -7445,7 +7445,41 @@ class App(ModesMixin, AgentViewMixin):
         if not self._busy():  # nothing ran to stop after all (only a prompt not sent yet): it goes now
             self._submit(text, shown, chips, images=images)
             return
-        self.cut_in = CutIn(line, self.transcript.add_steer(shown or text))
+        self.cut_in = CutIn(line, self.transcript.add_steer(
+            shown or text, images=tuple(image_caption(image) for image in images),
+            previews=tuple(self.previews.get(image.label) for image in images)))
+
+    def _fold_unread_into_cut_in(self) -> None:
+        """The turn a cut-in stopped ended before reading what the person sent into it earlier: those steers were
+        sent before the cut-in, so they go with it, ahead of its text, in the order they were sent, as one prompt
+        with its images. Their rows leave the chat, the cut-in's row stands for them, and nothing is dropped or
+        put back in the queue (a cut-in never lands ahead of what was sent before it)."""
+        cut = self.cut_in
+        if cut is None:
+            return
+        held, self.hermes_queued = self.hermes_queued, []
+        sent, self.sent_now = self.sent_now, []
+        unread, self.unread_steers = self.unread_steers, []
+        texts: dict[int, str] = {}
+        for item in sent:
+            texts[id(item.block)] = item.line.typed or item.line.text
+        for block, line in held:
+            texts[id(block)] = (line.typed or line.text) if line is not None else block.text
+        for block in unread:
+            if block.state == STEER_QUEUED and not block.agent:
+                texts.setdefault(id(block), block.text)
+        ordered = [block for block in self.transcript.held_steers() if id(block) in texts]
+        if not ordered:
+            return
+        for block in ordered:
+            self.transcript.withdraw_steer(block)
+        earlier = [texts[id(block)] for block in ordered]
+        line = cut.line
+        text = "\n".join([*earlier, line.text])
+        shown = "\n".join([*earlier, line.shown or line.text])
+        self.transcript.withdraw_steer(cut.block)
+        self.cut_in = CutIn(line._replace(text=text, shown=shown), self.transcript.add_steer(
+            shown, images=cut.block.images, previews=cut.block.previews))
 
     def _send_cut_in(self) -> None:
         """The turn a cut-in stopped is over: its row leaves, and the prompt goes as Enter sends one, images too."""
@@ -7570,6 +7604,7 @@ class App(ModesMixin, AgentViewMixin):
         unread when it ended on its own Hermes took, read before a later model call or sent as the next prompt, which
         the answer says, as `_turn_ended` comes after the reply closes. A `redirected` one was never unread."""
         if self.interrupting:
+            self._fold_unread_into_cut_in()  # a cut-in takes what it stopped the turn before reading, ahead of it
             self._requeue_unread_steers()
             return False
         left_unread = bool(self.unread_steers)
@@ -10309,6 +10344,9 @@ class App(ModesMixin, AgentViewMixin):
                                            glint=self._aura_moves(), room=room)
         if not lines and self.transcript.taken_any:
             lines = [()]  # the spacer a block opens with, here between the transcript and the region under it
+        queued = self._queued_rows(cols)
+        if queued:
+            lines = [*(lines[:-1] if lines and not lines[-1] else lines), *queued]
         compressing = self._compressing_since()
         alert = self._pending_wait() if compressing is None else None
         ended = self._wait_end_shown() if compressing is None and alert is None else None
@@ -10382,6 +10420,21 @@ class App(ModesMixin, AgentViewMixin):
             glyph, words, _at = ended
             lines.append(truncate_line((Span(f"{glyph} {words}", self.theme.muted),), cols))
         return lines
+
+    def _queued_rows(self, cols: int) -> list[Line]:
+        """The queued prompts in the chat, above the working row (`queue_lines`), with what the oldest offers: the
+        send-now key while it can send it now, else Up; `Held` once a stopped turn held the queue."""
+        if not self.queued:
+            return []
+        if self.queue_held:
+            hint = QUEUE_HELD_HINT
+        elif self._steer_keys_live() and self._queue_head_sends_now():
+            hint = SEND_NOW_HINT.format(key=SEND_NOW_KEYS[self.keyboard_protocol])
+        else:
+            hint = QUEUE_EDIT_HINT
+        prompts = [(line.shown or line.text, tuple(image_caption(image) for image in line.images),
+                    tuple(self.previews.get(image.label) for image in line.images)) for line in self.queued]
+        return queue_lines(prompts, cols, self.theme, hint)
 
     def _wait_row(self, waits: tuple[Wait, ...], cols: int) -> Line:
         """What the session waits on: the working row's spinner, the longest wait's verb (`Waiting for CI…`, plain
@@ -10638,13 +10691,10 @@ class App(ModesMixin, AgentViewMixin):
             return self.model_picker.lines(cols, self.theme, cap)
         # Nothing has the keys, or the agent list under the info line has them (the slot keeps its rows then, so
         # nothing moves): the `waiting for the image…` row takes the slot's last row, right above the composer's top
-        # rule, while a submit is held for a paste, the queued prompts the rows above it, Hermes' notification the
-        # row above them, Hermes' standing goal the row above that, and the menu or the plan gets the rows left. A
-        # question or the picker hides them, since Up then does not edit the queue. The background-process row is on
-        # the info line under the composer (`_info_line`).
-        hint = QUEUE_HELD_HINT if self.queue_held else QUEUE_EDIT_HINT
-        send_now = self._steer_keys_live() and self._queue_head_sends_now()
-        below = SEND_NOW_HINT.format(key=SEND_NOW_KEYS[self.keyboard_protocol]) if send_now else ""
+        # rule, while a submit is held for a paste, Hermes' notification the row above it, Hermes' standing goal the
+        # row above that, and the menu or the plan gets the rows left. The queued prompts are in the chat, above the
+        # working row (`_queued_rows`). The background-process row is on the info line under the composer
+        # (`_info_line`).
         found = self._image_wait_line(cols)
         waiting = [found] if found is not None else []
         switching = self._switch_line(cols)
@@ -10654,9 +10704,7 @@ class App(ModesMixin, AgentViewMixin):
         if loading:  # `/resume`'s or `/rewind`'s list is on its way
             line = LIST_WAIT_LINES.get(loading, LIST_WAIT_LINE)
             waiting.append(truncate_line((Span(" " * cell_width(QUEUE_GLYPH)), Span(line, self.theme.muted)), cols))
-        queue = queue_lines([line.shown or line.text for line in self.queued], cols, cap - len(waiting), self.theme,
-                            hint, below)
-        taken = len(waiting) + len(queue)
+        taken = len(waiting)
         # What a copy just did, for COPY_NOTE_SECONDS, then Hermes' own notice: neither hides the other.
         said = [note for note in (self.copy_note, self.notification) if note is not None][: max(cap - taken, 0)]
         notice = [note.line(cols, self.theme) for note in said]
@@ -10667,7 +10715,7 @@ class App(ModesMixin, AgentViewMixin):
         if self.menu_below:  # the menu goes under the composer, and the panel stays away as it does for the menu
             self.menu_under, menu = menu, []
             self.panel_shown = False
-        return menu + goal + notice + queue + waiting
+        return menu + goal + notice + waiting
 
     def _menu_or_panel_lines(self, cols: int, cap: int) -> list[Line]:
         if cap <= 0:

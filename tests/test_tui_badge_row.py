@@ -210,7 +210,8 @@ class LongBranchTests(unittest.TestCase):
             queue(app, "then stop")
         screen = [row for row in drawn(app) if row]
         if scene == "busy-queue":
-            self.assertIn("  ctrl+j to send now · ↑ to edit", screen)  # the queue's own row keeps its key
+            hint = next(row for row in screen if row.startswith("  ⎿  Queued · "))  # the queue's own row keeps its key
+            self.assertIn("ctrl+j to send now", hint)
         return screen[-1]
 
     def test_every_scene_at_every_width(self) -> None:

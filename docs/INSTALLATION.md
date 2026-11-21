@@ -491,11 +491,7 @@ wake pipe on real Windows pipes.
   streaming (a prompt you sent, a steer included, stays in the transcript
   above it and scrolls off with it; scroll up to read it), one slot for the
   OMH plan (or a question Hermes asked, or the slash-command
-  menu when it does not open under the composer), the prompts queued behind
-  the running turn (`⧗`, up to three named and the rest counted; while the
-  turn runs, a muted row under them names the key that sends the oldest one
-  into the turn now, as Claude Code does: `ctrl+enter to send now · ↑ to
-  edit`, below), the
+  menu when it does not open under the composer), the
   composer between two full-width rules as Claude Code draws it (`───`,
   then `❯ …` rows, then `───`, with no side edges or corners),
   one dim info line under it, and, while there are subagents, the agent view
@@ -707,7 +703,7 @@ wake pipe on real Windows pipes.
   was.
 - A notice Hermes sends outside the transcript (the agent still starting, a
   credit warning, a provider that could not be reached) takes one row above
-  the queued prompts, in its level's colour with a glyph. The next one
+  the composer, in its level's colour with a glyph. The next one
   replaces it, Hermes withdraws it, a timed one leaves when its time is up,
   and switching sessions drops it. A call Hermes refuses is said in words:
   under a command's echo, Hermes' own reason (`/undo` on an empty session:
@@ -1304,9 +1300,15 @@ wake pipe on real Windows pipes.
   - The working row's glyph turns (`· ✢ ✳ ✶ ✻ ✽`) and a highlight sweeps
     across its verb, beside the elapsed time and the tokens written.
   - Your prompt reads as in Claude Code, the composer's dim `❯` and dim text with no
-    band behind it, on a grey rail; a prompt the queue sent says `⧗ from queue`. A command
+    band behind it, on a grey rail. A command
     you run is echoed the same way, on the same rail (`┃ ❯ /model`), so a
     bare `❯` on the left edge is only ever the composer.
+  - A prompt queued behind the running turn shows in the chat as Claude Code
+    shows one: right above the working row, on the prompt band, dim, with its
+    images' labels and previews under it, never as a row over the composer.
+    Under the oldest a dim `⎿ Queued · ctrl+enter to send now · ↑ to edit`
+    names the key that sends it now (or `Queued · ↑ to edit`, `Held · ↑ to
+    edit`); up to three are drawn and the rest counted.
   - A steer shows as the prompt it is, dim under what is running until the
     turn takes it in, then as any prompt you sent; a refused one is the amber
     refusal (see below).
@@ -1800,6 +1802,9 @@ lines are already queued, which queue as before. Ctrl+Enter on a prompt with
 images stops the turn instead (Hermes takes text alone into a running turn):
 the prompt shows above the working row as a dim prompt and goes, with its
 images, as soon as that turn ends; Esc again gives it back to the composer.
+Its images show under it there, as under any prompt. A steer you sent before
+it that the stopped turn had not read yet goes with it, ahead of its text, as
+one prompt, so nothing you sent is dropped or goes out of order.
 A prompt with images that Enter queued gets the same offer: its queue row
 names the send-now key, and that key on an empty composer stops the turn and
 sends it the same way.

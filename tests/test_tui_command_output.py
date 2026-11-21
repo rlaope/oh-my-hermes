@@ -341,7 +341,7 @@ class SkillCommandRowTests(unittest.TestCase):
         self.assertTrue(client.named("prompt.submit")[1]["queued"])  # the queue ran it: Hermes holds it as one
         first, drained = prompt_rows(app)
         self.assertEqual(first, f"┃ ❯ {SKILL_LINE}")
-        self.assertTrue(drained.startswith(f"┃ ❯ {SKILL_LINE}") and drained.endswith("from queue"), drained)
+        self.assertEqual(drained, f"┃ ❯ {SKILL_LINE}")  # the queue sent it: a prompt as any, with no tag
 
     def test_what_the_dispatch_says_goes_under_the_prompt_row_and_repeats_no_echo(self) -> None:
         notice = "⚡ Loading 2 stacked skills: dag-ulw, review"
@@ -376,7 +376,7 @@ class SkillCommandRowTests(unittest.TestCase):
         self.assertEqual((type(row), row.text, row.from_queue), (UserBlock, "/dag-ulw /review fix it", True))
         self.assertEqual((type(notice_block), notice_block.text), (NoticeBlock, notice))
         (shown,) = prompt_rows(app)
-        self.assertTrue(shown.startswith("┃ ❯ /dag-ulw /review fix it") and shown.endswith("from queue"), shown)
+        self.assertEqual(shown, "┃ ❯ /dag-ulw /review fix it")  # whole, and with no tag
 
     def test_two_skill_commands_sent_during_a_turn_run_one_after_the_other_as_two_rows(self) -> None:
         # Hermes runs slash.exec and command.dispatch on its RPC pool, so two sent at once can answer out of order;

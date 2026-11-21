@@ -53,6 +53,11 @@ All notable changes will be documented here.
   stop at a clarification and now go straight to `code-review`. Only a sentence that is wholly such a request counts:
   "review this PR and merge it", "review my essay" or "review the change to our refund policy" keep their old route,
   and "fix this bug" still goes to coding.
+- The OMH TUI draws a prompt queued behind the running turn in the chat, as Claude Code does: right above the working
+  row, on the prompt band, dim, with its images' labels and previews under it, and `⎿ Queued · ctrl+enter to send
+  now · ↑ to edit` under the oldest. The `⧗` rows over the composer and the `⧗ from queue` tag are gone. A prompt with
+  images that Ctrl+Enter sends now shows its images while it waits for the stopped turn, and a steer sent before it
+  that the stopped turn had not read goes with it, ahead of its text, instead of being dropped behind it.
 
 ## 4.0.9 - 2026-11-20
 
