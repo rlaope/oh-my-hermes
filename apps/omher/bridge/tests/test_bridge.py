@@ -4386,6 +4386,28 @@ class TermLinkStatus(BridgeCase):
         self.assertIsNone(ob.read_term_status(home, self.LID))
         self.assertIsNone(ob.read_term_status(home, "../../etc"))
 
+    @unittest.skipIf(os.name == "nt", "symlinks need privileges on Windows")
+    def test_a_linked_status_file_is_refused_where_os_has_no_o_nofollow(self):
+        """Windows has no O_NOFOLLOW, so the open alone would follow a link: the reader refuses it before opening."""
+        home = self._omher()
+        f = home / "terminals" / f"{self.LID}.json"
+        outside = home / "outside.json"
+        f.rename(outside)
+        os.symlink(outside, f)
+        saved = os.O_NOFOLLOW
+        del os.O_NOFOLLOW
+        try:
+            self.assertIsNone(ob.read_term_status(home, self.LID))
+        finally:
+            os.O_NOFOLLOW = saved
+        f.unlink()
+        outside.rename(f)
+        del os.O_NOFOLLOW
+        try:
+            self.assertEqual(ob.read_term_status(home, self.LID), self.STATUS)  # a plain file still reads
+        finally:
+            os.O_NOFOLLOW = saved
+
     async def test_the_block_rides_a_main_chat_turn_and_is_stripped_on_read(self):
         async with Env() as env:
             env.bridge.omher_home = self._omher()

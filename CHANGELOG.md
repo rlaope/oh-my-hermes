@@ -4,6 +4,11 @@ All notable changes will be documented here.
 
 ## Unreleased
 
+- **omher on Windows no longer reads a terminal's status file through a link.** The bridge reads
+  `<omher_home>/terminals/<id>.json` for the status a main-chat message's `omher://terminal/` link carries. It
+  refused a link only through `O_NOFOLLOW`, which Windows lacks, so there a link planted in that folder was
+  followed. It now checks for the link itself before opening, as the folder-chat record reader does.
+
 - **omher: no console window from the Tasks page, and a question keeps the words before it.** On Windows each
   GitHub or GitLab read in Tasks started `gh`/`glab` with a console of its own, so a window flashed and took the
   focus on every query; those reads now start hidden, like the bridge's. A bot's question card used to arrive alone,
