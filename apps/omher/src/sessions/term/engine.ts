@@ -143,6 +143,14 @@ function cellsChanged(s: State): void {
   if (!s.gone && s.shown) s.el.dispatchEvent(new Event(CELLS_EVENT));
 }
 
+/** A terminal just shown is waiting for the GPU renderer, which will tell its owner when its cells are known
+ *  (`CELLS_EVENT`): a fit made before that measures the standard renderer's cells, and the one after it undoes it, so
+ *  the program's screen is reflowed twice for nothing. */
+export function gpuComing(term: Terminal): boolean {
+  const s = states.get(term);
+  return !!s && s.shown && (s.loading || wants(s));
+}
+
 function repaint(s: State): void {
   if (s.gone) return;
   try {
@@ -158,7 +166,7 @@ function attach(s: State): void {
   void loadWebgl().then(
     (Ctor) => {
       s.loading = false;
-      if (!wants(s)) return; // hidden, switched off or closed while the chunk came
+      if (!wants(s)) return cellsChanged(s); // hidden, switched off or closed while the chunk came
       const addon = new Ctor(GPU_OPTIONS);
       const before = new Set(s.term.element?.querySelectorAll("canvas") ?? []);
       try {
@@ -184,12 +192,14 @@ function attach(s: State): void {
         } catch {
           /* never fully started */
         }
+        cellsChanged(s); // the owner held its fit for this renderer
         return;
       }
       repaint(s);
     },
     () => {
       s.loading = false; // the chunk would not load: standard renderer
+      cellsChanged(s);
     },
   );
 }
@@ -460,7 +470,11 @@ function park(s: State, Serialize: typeof import("@xterm/addon-serialize").Seria
   const ser = new Serialize();
   try {
     term.loadAddon(ser);
-    snapshot = ser.serialize() + extras(inner);
+    // The add-on parks the cursor with a move relative to the end of the last row, which is one column off when that
+    // row is full width (the end is a pending wrap, not a column): a full-width status bar on a vim or htop screen.
+    // An absolute move after it puts the cursor where the program had it (a pending wrap is not kept: nothing relies on one).
+    const at = term.buffer.active;
+    snapshot = ser.serialize() + `\x1b[${at.cursorY + 1};${Math.min(at.cursorX, term.cols - 1) + 1}H` + extras(inner);
   } catch {
     return;
   } finally {

@@ -134,10 +134,12 @@ test("a burst of resizes ends as one resize with the last size", async ({ page }
   await page.clock.runFor(1000);
   expect(await resizes(page)).toHaveLength(3);
 
-  // a size that comes back to the one the program already has is not sent again
+  // a size that comes back to the one the program already has, after xterm changed its screen on the way
   await width(full - 200);
   await page.clock.runFor(FRAME);
   await width(full - 400);
   await page.clock.runFor(1000);
-  expect(await resizes(page)).toHaveLength(3);
+  // xterm reflowed its screen on the way (at 200 less, 400 less), so the program is told even though it is back at the
+  // size it has: one column off and then the real size (a pty resize to the size it has sends no SIGWINCH)
+  expect(await resizes(page)).toEqual([...(await resizes(page)).slice(0, 3), { cols: narrow.cols! + 1, rows: narrow.rows }, narrow]);
 });
