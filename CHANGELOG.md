@@ -4,6 +4,8 @@ All notable changes will be documented here.
 
 ## Unreleased
 
+## 5.0.0 - 2026-11-21
+
 - **A mise-managed `codex` or `python3` runs again in `omh coding run`.** mise links every tool it manages to one
   `mise` binary and picks the tool from the name it was started by. The fanout fence, the dispatcher's own checks and
   the Codex/Claude session probe resolved each command to its real file and ran that, so argv[0] was `mise`, mise ran
