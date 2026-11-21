@@ -2552,7 +2552,7 @@ dependencies = [
 
 [[package]]
 name = "omher"
-version = "1.1.0"
+version = "1.1.1"
 dependencies = [
  "getrandom 0.3.4",
  "libc",
