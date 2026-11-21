@@ -104,6 +104,9 @@ export interface Turn {
   plan?: PlanItem[];
   /** What the agent thought, when it sends the text (SESSIONS agents); at most THINKING_MAX characters. */
   thinking?: string;
+  /** The words written between the last tool call and a `clarify` ask: the question's context, which the cut below
+   *  would otherwise drop. Held until the ask arrives, then kept as its own row above the card. */
+  askNote?: string;
 }
 
 /** One subagent of a fan-out, as its latest event left it. */
@@ -851,6 +854,12 @@ function applyOpened(chat: Chat, res: ChatOpenResult, now: number, bot: string, 
       if (twin && i.kind === "user" && i.readAt !== undefined && twin.readAt === undefined) twin.readAt = i.readAt;
       return false;
     }
+    // the words before a question, kept live above its card: the history now carries that row too (bridge
+    // `_ask_notes`), so the local copy goes once the server has it
+    if (i.kind === "assistant" && i.id.startsWith("clarify-note-")) {
+      const said = i.text.trim();
+      return !server.some((s) => s.kind === "assistant" && s.text.trim() === said);
+    }
     if (i.id.startsWith("local-")) {
       const sent = i.sent ?? i.text;
       const twin = server.find((s) => s.kind === "user" && s.text === sent && s.ts >= i.ts - 120);
@@ -1066,9 +1075,13 @@ function reduceEvent(state: AppState, ev: BridgeEvent, now: number): AppState {
       return touchChat(state, bot, (c0) => {
         // the note written before this call is the bot's first word on a steer it read
         const c = c0.steerAck && c0.turn ? ackSteer(c0, c0.turn.streaming.slice(c0.steerAck.from)) : c0;
+        // an ask is a tool call too, and the words just before it are what the person has to read to answer:
+        // keep them before the cut takes them (they show right above the card, see clarify.request)
+        const ask = ev.name === "clarify";
         return patchTurn(c, (t) => ({
           ...t,
           status: activityText(ev.name, ev.detail),
+          ...(ask ? { askNote: hideSplitBlocks(t.streaming.slice(t.cut ?? 0).trim()) } : {}),
           // what was written before this call was commentary on it, not the answer
           cut: t.streaming.length,
           steps: [
@@ -1140,7 +1153,11 @@ function reduceEvent(state: AppState, ev: BridgeEvent, now: number): AppState {
     case "clarify.request":
       return touchChat(state, bot, (c) => {
         if (c.items.some((i) => i.kind === "clarify" && i.request_id === ev.request_id)) return c;
-        const base = patchTurn(c, (t) => ({ ...t, status: tr("live.waitAnswer") }));
+        // The words written right before the question are its context. Hermes asks through a tool call, and the
+        // commentary beside a tool call is dropped (`cut`, see tool.start), so the card used to arrive alone with
+        // the explanation the person was supposed to read gone. Keep that commentary as a row above the card.
+        const note = c.turn?.askNote ?? "";
+        const asked = patchTurn(c, (t) => ({ ...t, status: tr("live.waitAnswer") }));
         const qs = (ev.questions ?? []).filter((q) => q && typeof q.question === "string" && q.question.trim());
         const item: ClarifyItem = {
           kind: "clarify",
@@ -1154,7 +1171,11 @@ function reduceEvent(state: AppState, ev: BridgeEvent, now: number): AppState {
           ...(ev.subagent?.id ? { subagent: ev.subagent } : {}),
           ...(c.turn || !bot.startsWith("agent:") ? {} : { outside: true }),
         };
-        return withItems(base, [...base.items, item]);
+        const noted: MessageItem = { kind: "assistant", id: `clarify-note-${ev.request_id}`, ts: now / 1000, text: note };
+        const withNote = note ? withItems(asked, [...asked.items, noted]) : asked;
+        const base = withItems(withNote, [...withNote.items, item]);
+        // the note now lives in its own row: it is not the answer still being written
+        return note ? patchTurn(base, (t) => ({ ...t, streaming: "", cut: undefined, askNote: undefined })) : base;
       });
     case "prompt.expired":
       return touchChat(state, bot, (c) =>

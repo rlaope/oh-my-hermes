@@ -4,6 +4,13 @@ All notable changes will be documented here.
 
 ## Unreleased
 
+- **omher: no console window from the Tasks page, and a question keeps the words before it.** On Windows each
+  GitHub or GitLab read in Tasks started `gh`/`glab` with a console of its own, so a window flashed and took the
+  focus on every query; those reads now start hidden, like the bridge's. A bot's question card used to arrive alone,
+  because the words written right before the ask were dropped with the other commentary beside tool calls; they now
+  show as a row above the card, and a reopened chat (an app restart while the question waits, too) keeps that row
+  once. By jundev0001 (#3028).
+
 - **omher: `/` in a bot chat lists the commands Hermes answers there.** Typing `/` opens a menu of Hermes' own slash
   commands with a one-line description and the arguments each takes, read from Hermes' command registry, so it lists
   what the gateway dispatches. A CLI-only command is listed only when its gateway gate is on in that bot's config. A

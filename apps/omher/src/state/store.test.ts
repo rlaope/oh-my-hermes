@@ -1075,3 +1075,53 @@ describe("subagent events: one fan-out per delegate_task, one row per subagent",
     ]);
   });
 });
+
+describe("clarify keeps the words written before the question", () => {
+  const bot = "default";
+  const asked = (): BridgeEvent[] => [
+    { event: "turn.start", bot },
+    { event: "delta", bot, text: "적용 전에 이렇게 바뀝니다.\n\n1) 별칭 6개 추가" },
+    { event: "tool.start", bot, tool_id: "t-ask", name: "clarify", detail: "적용할까요?" },
+    { event: "clarify.request", bot, request_id: "c-1", question: "적용할까요?" },
+  ];
+
+  it("shows that commentary as its own row above the card", () => {
+    const s = run(initialState(), asked());
+    expect(s.chats[bot].items.map((i) => i.kind)).toEqual(["activity", "assistant", "clarify"]);
+    const note = s.chats[bot].items[1];
+    expect(note.kind === "assistant" && note.text).toBe("적용 전에 이렇게 바뀝니다.\n\n1) 별칭 6개 추가");
+  });
+
+  it("keeps it out of the answer once the turn resumes and ends", () => {
+    const s = run(initialState(), [
+      ...asked(),
+      { event: "delta", bot, text: "고맙습니다." },
+      { event: "message", bot, id: "m-2", text: "고맙습니다." },
+      { event: "turn.end", bot, outcome: "done" },
+    ]);
+    const texts = s.chats[bot].items.flatMap((i) => (i.kind === "assistant" ? [i.text] : []));
+    expect(texts).toEqual(["적용 전에 이렇게 바뀝니다.\n\n1) 별칭 6개 추가", "고맙습니다."]);
+  });
+});
+
+describe("a reopened chat keeps the words before a question once", () => {
+  it("drops the live copy when the history carries the same row, and keeps it while the history lacks it", () => {
+    const note = "적용 전에 이렇게 바뀝니다.\n\n1) 별칭 6개 추가";
+    let s = reduce(initialState(), { type: "chat.opened", bot: "kami", res: opened(), now: T0 - 1000 });
+    s = run(s, [
+      { event: "turn.start", bot: "kami" },
+      { event: "delta", bot: "kami", text: note },
+      { event: "tool.start", bot: "kami", tool_id: "t-ask", name: "clarify", detail: "적용할까요?" },
+      { event: "clarify.request", bot: "kami", request_id: "c-1", question: "적용할까요?" },
+    ]);
+    const said = (x: AppState) => x.chats.kami.items.flatMap((i) => (i.kind === "assistant" ? [i.text] : []));
+    expect(said(s)).toEqual([note]);
+    // an older bridge: the history has no such row, the live copy stays
+    const old = reduce(s, { type: "chat.opened", bot: "kami", res: opened({ running: true }), now: T0 + 5000 });
+    expect(said(old)).toEqual([note]);
+    // this bridge: the history carries the row, shown once
+    const msgs = [...opened().messages, { id: "a1", role: "assistant" as const, text: note, ts: T0 / 1000 + 0.5 }];
+    const again = reduce(s, { type: "chat.opened", bot: "kami", res: opened({ running: true, messages: msgs }), now: T0 + 5000 });
+    expect(said(again)).toEqual([note]);
+  });
+});

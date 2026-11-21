@@ -4886,6 +4886,28 @@ def _turn_answers(rows, running: bool = False) -> set[int]:
     return keep
 
 
+def _ask_notes(rows) -> set[int]:
+    """The index of each assistant row written right before a `clarify` ask: the words the question needs, which the
+    live chat shows above the card (store.ts `askNote`). Hermes keeps them as a commentary row beside the call, which
+    `_turn_answers` hides, so a reopened chat (an app restart while the question waits, too) would show the card
+    alone again. A row counts when the tool rows right after it include one named clarify; Hermes' history read
+    carries the call's name on its tool row, not the assistant row's `tool_calls`."""
+    keep: set[int] = set()
+    items = list(rows or [])
+    for i, row in enumerate(items):
+        if not isinstance(row, dict) or row.get("role") != "assistant" or row.get("display_kind") == "hidden":
+            continue
+        if not _row_text(row):
+            continue
+        for nxt in items[i + 1:]:
+            if not isinstance(nxt, dict) or nxt.get("role") != "tool":
+                break
+            if nxt.get("name") == "clarify" or nxt.get("tool_name") == "clarify":
+                keep.add(i)
+                break
+    return keep
+
+
 STEER_REPLY_CHARS = 140
 
 
@@ -4917,7 +4939,7 @@ def chat_messages(rows, watch_names: set[str] | frozenset[str] = frozenset(), ru
     after it tagged `watch`. Any other automation's row stays a normal row. `running`: see `_turn_answers`. ``main``:
     the bot's main chat, whose answers may hold ```omher-thread``` blocks (shown without them)."""
     out = []
-    answers = _turn_answers(rows, running)
+    answers = _turn_answers(rows, running) | _ask_notes(rows)
     watch = None  # an automation's delivered result: its inbound row is not shown, the answer after it carries `watch`
     for i, row in enumerate(rows or []):
         if not isinstance(row, dict) or row.get("role") not in ("user", "assistant"):

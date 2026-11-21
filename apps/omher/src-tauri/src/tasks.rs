@@ -754,6 +754,9 @@ fn run(exe: &Path, argv: &[String], keep: bool) -> Result<Ran, String> {
         .env("GH_NO_UPDATE_NOTIFIER", "1")
         .env("GLAB_NO_PROMPT", "1")
         .env("NO_COLOR", "1");
+    // A release build has no console of its own, so each `gh`/`glab` read would flash a console window and take the
+    // focus from the app: the same reason the bridge hides python.exe (bridge.rs `no_console_window`).
+    crate::bridge::no_console_window(&mut cmd);
     crate::appimage::host_env(&mut cmd);
     let mut child = cmd.spawn().map_err(|e| format!("could not start {}: {e}", exe.display()))?;
     let so = child.stdout.take();
