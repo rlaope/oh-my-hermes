@@ -33,6 +33,13 @@ All notable changes will be documented here.
   code colours. Hermes' own terminal reads the same `omh` skin, so its code colours follow. The default `spectrum`
   launch look's accent, which paints a tool call's rail, the working row's spinner and the card's labels, moves from
   orange to a soft violet; the other looks keep theirs.
+- **Asking Hermes to review a diff or PR now runs the code-review discipline instead of a memory skill.** A review
+  task that said its files were "under context/" dispatched `memory-sync`, because the folder name counted as a memory
+  word; a word inside a file path no longer does. "review this diff for bugs", "can you review my PR?", "does this
+  change introduce a bug?", "check this patch for regressions", "이 diff 리뷰해줘" and "이 PR 버그 있는지 봐줘" used to
+  stop at a clarification and now go straight to `code-review`. Only a sentence that is wholly such a request counts:
+  "review this PR and merge it", "review my essay" or "review the change to our refund policy" keep their old route,
+  and "fix this bug" still goes to coding.
 
 ## 4.0.9 - 2026-11-20
 
