@@ -252,7 +252,11 @@ h="${HERMES_HOME:-}"
 if [ -z "$h" ]; then
   if [ -n "$wn" ] && [ -n "${LOCALAPPDATA:-}" ]; then h="$LOCALAPPDATA/hermes"; else h="$HOME/.hermes"; fi
 fi
-case "$h" in *[[:punct:]]profiles[[:punct:]]*) r="${h%profiles*}"; r="${r%?}"; [ -f "$r/config.yaml" ] && h="$r" ;; esac
+if [ -z "$wn" ]; then
+  case "$h" in */profiles/*) r="${h%/profiles/*}"; [ -f "$r/config.yaml" ] && h="$r" ;; esac
+else
+  case "$h" in *[[:punct:]]profiles[[:punct:]]*) r="${h%[[:punct:]]profiles[[:punct:]]*}"; [ -f "$r/config.yaml" ] && h="$r" ;; esac
+fi
 py=""
 if [ -n "${OMHER_HERMES_PYTHON:-}" ] && [ -x "$OMHER_HERMES_PYTHON" ]; then py="$OMHER_HERMES_PYTHON"; fi
 if [ -z "$wn" ]; then
@@ -269,7 +273,7 @@ if [ -z "$wn" ]; then
 else
   for l in "$h/hermes-agent/.hermes/bin/hermes.exe" "$h/bin/hermes.exe"; do
     if [ -z "$py" ] && [ -f "$l" ]; then
-      w=$(grep -a -o -E '#."?([A-Za-z]:|/)[[:print:]]+ -I' "$l" | head -n 1)
+      w=$(grep -a -o -E '#."?([A-Za-z]:|/)[^[:cntrl:]]+ -I' "$l" | head -n 1)
       w="${w#??}"; w="${w% -I}"
       case "$w" in '"'*) w="${w#?}"; w="${w%?}" ;; esac
       case "$w" in [A-Za-z]:*|/*) [ -x "$w" ] && py="$w" ;; esac
@@ -1095,6 +1099,13 @@ mod tests {
             run(&root.join("elsewhere"), &[("HERMES_HOME", prof.to_str().unwrap())]),
             format!("OMHER_PEER_PYTHON {}", old.join(".hermes/hermes-agent/venv/bin/python").display())
         );
+        // a profile whose own name ends in `profiles` is raised to the same root, not cut inside its name
+        let myp = old.join(".hermes/profiles/myprofiles");
+        std::fs::create_dir_all(&myp).unwrap();
+        assert_eq!(
+            run(&root.join("elsewhere"), &[("HERMES_HOME", myp.to_str().unwrap())]),
+            format!("OMHER_PEER_PYTHON {}", old.join(".hermes/hermes-agent/venv/bin/python").display())
+        );
         // the override wins
         let pinned = root.join("pinned/python");
         exe(&pinned);
@@ -1165,6 +1176,15 @@ mod tests {
         std::fs::create_dir_all(home.join("profiles/kami")).unwrap();
         let prof = home.join("profiles/kami");
         assert_eq!(run(&root.join("elsewhere"), &[("HERMES_HOME", prof.to_str().unwrap())]), format!("OMHER_PEER_PYTHON {}", venv.display()));
+        // ... written the Windows way, `<home>\profiles\kami`, as Hermes on Windows sets it
+        let win_prof = format!("{}\\profiles\\kami", home.display());
+        assert_eq!(run(&root.join("elsewhere"), &[("HERMES_HOME", &win_prof)]), format!("OMHER_PEER_PYTHON {}", venv.display()));
+        // a Windows account name outside ASCII (`C:\Users\김`): the launcher's line names its interpreter all the same
+        let kim = root.join("김/AppData/Local");
+        let kim_store = kim.join("hermes/tools/python-3.14.9/python.exe");
+        exe(&kim_store, "#!/bin/sh\necho 3.14.9\n");
+        launcher(&kim.join("hermes/hermes-agent/.hermes/bin/hermes.exe"), kim_store.to_str().unwrap());
+        assert_eq!(run(&user, &[("LOCALAPPDATA", kim.to_str().unwrap())]), format!("OMHER_PEER_PYTHON {}", kim_store.display()));
         // without LOCALAPPDATA the home stays ~/.hermes, as before
         assert!(run(&user, &[]).starts_with("OMHER_PEER_NO_HERMES "));
         let _ = std::fs::remove_dir_all(&root);

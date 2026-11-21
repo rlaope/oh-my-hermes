@@ -83,6 +83,18 @@ test("ArrowUp recalls the two sent prompts newest first; ArrowDown walks back to
   await expect(box).toHaveValue("list the three causes");
 });
 
+test("leaving the chat mid-walk keeps the unsent draft, not the prompt on show", async ({ page }) => {
+  await openFriren(page);
+  const box = page.getByTestId("composer");
+  await say(page, "an earlier prompt");
+  await box.fill("my unsent draft");
+  await box.press("ArrowUp");
+  await expect(box).toHaveValue("an earlier prompt");
+  await page.getByTestId("bot-kami").click();
+  await page.getByTestId("bot-friren").click();
+  await expect(page.getByTestId("composer")).toHaveValue("my unsent draft");
+});
+
 test("an open $ skill picker keeps ArrowUp/ArrowDown for its highlight", async ({ page }) => {
   await openFriren(page);
   const box = page.getByTestId("composer");

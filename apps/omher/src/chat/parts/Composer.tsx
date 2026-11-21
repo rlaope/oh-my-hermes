@@ -97,6 +97,8 @@ export function Composer({
   const store = useStore();
   // where an ArrowUp/ArrowDown walk through `history` stands (promptHistory.ts)
   const recall = useRef<Recall>(null);
+  // leaving this chat mid-walk keeps the text typed before the walk as the draft, not the prompt on show
+  useEffect(() => () => void (recall.current && setDraft(bot.name, recall.current.draft)), [bot.name]);
   /** Every text change but a recall (typing, a pick, a plugin, Edit / Ask in chat, a send) goes through here: the
    *  text is the person's own again, so the walk ends and a later ArrowUp keeps this text as the draft. */
   const edit = (next: string) => {

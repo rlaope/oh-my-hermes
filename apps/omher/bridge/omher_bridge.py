@@ -923,6 +923,9 @@ def mcp_server_names(path: Path) -> dict:
         stack: list[list] = []  # one per open collection: [is_map, kept key or None, awaiting a key, was a key]
         with path.open(encoding="utf-8") as f:
             events, yaml = _yaml_events(f)  # `yaml`: the module of the event classes
+            # the words for false: YAML 1.1 as Hermes' own `hermes_yaml` (ruamel) reads it also takes `n` and `N`
+            off = ("false", "False", "FALSE", "no", "No", "NO", "off", "Off", "OFF")
+            off += ("n", "N") if yaml.__name__.startswith("ruamel") else ()
             for ev in events:
                 if isinstance(ev, (yaml.MappingEndEvent, yaml.SequenceEndEvent)):
                     was_key = stack.pop()[3]
@@ -949,7 +952,7 @@ def mcp_server_names(path: Path) -> dict:
                     top[1] = None
                 elif (depth == 3 and servers and isinstance(ev, yaml.ScalarEvent) and top[0] and top[1] == "enabled"
                       and stack[1][1] is not None and ev.implicit[0]):
-                    out[stack[1][1]]["enabled"] = ev.value not in ("false", "False", "FALSE", "no", "No", "NO", "off", "Off", "OFF")
+                    out[stack[1][1]]["enabled"] = ev.value not in off
                 if isinstance(ev, (yaml.MappingStartEvent, yaml.SequenceStartEvent)):
                     stack.append([isinstance(ev, yaml.MappingStartEvent), None, True, as_key])
                 elif top and top[0]:

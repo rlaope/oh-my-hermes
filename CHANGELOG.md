@@ -47,6 +47,20 @@ All notable changes will be documented here.
   launch look's accent, which paints a tool call's rail, the working row's spinner and the card's labels, moves from
   orange to a soft violet; the other looks keep theirs.
 
+- **omher reaches a Hermes on a Windows computer over SSH, and the composer copies and recalls your prompts.** Remote
+  machines found Hermes only under `~/.hermes`, so a Windows computer whose OpenSSH login shell is Git Bash, MSYS2 or
+  Cygwin answered "no Hermes" although the Windows app had installed it under `%LOCALAPPDATA%\hermes`; the remote side
+  now looks there, reads the interpreter from the `hermes.exe` launcher (an account name outside ASCII included) and
+  falls back to `venv\Scripts\python.exe`. The bridge reads a bot's config with Hermes' own YAML reader when that
+  Hermes has one (0.22 and later ship without PyYAML, where every config read came back empty), and the Tasks page's
+  Linear check counts `enabled: n` as off the way that reader does. A message you sent now has the same quiet copy
+  button as an answer. In a bot's chat and its threads, Up on the first line of the box and Down on the last walk
+  that chat's earlier prompts, newest first, and back to the unsent draft, which also stays the draft when you
+  switch away mid-walk; Alt+Up and Alt+Down do it from any line, and an open picker keeps its arrows. Settings ›
+  General › While it answers chooses whether a message sent during an answer waits for the turn to end (the
+  default) or is steered into it at once, the same as pressing its Steer; a message behind another waiting one
+  still waits its turn. Contributed by @jundev0001 (#3017).
+
 ## 4.0.9 - 2026-11-20
 
 - **Codex units can write inside the fanout fence on Linux and macOS.** `codex exec` is read-only by default, and

@@ -4424,6 +4424,15 @@ class TasksLinear(unittest.TestCase):
         d = self._dir(f"mcp_servers:\n  work:\n    url: https://mcp.linear.app/sse?token={fake}\n    headers:\n      Authorization: {fake}\n")
         self.assertEqual(ob.read_linear_mcp(d), {"configured": False, "server": ""})
 
+    def test_enabled_reads_as_the_config_loader_reads_it(self):
+        # the event reader and the bridge's loader must agree on `enabled` for every plain word: under Hermes'
+        # own hermes_yaml (YAML 1.1 in ruamel) `n` and `N` are false too, under PyYAML they are strings (on)
+        for word in ("true", "false", "yes", "no", "on", "off", "y", "Y", "n", "N", "Off", "NO", "maybe", "0", "1"):
+            d = self._dir(f"mcp_servers:\n  linear:\n    enabled: {word}\n")
+            loaded = ob._load_yaml(d / "config.yaml")["mcp_servers"]["linear"]["enabled"]
+            ob._YAML_CACHE.clear()
+            self.assertEqual(ob.mcp_server_names(d / "config.yaml")["linear"].get("enabled"), loaded is not False, word)
+
     def test_reads_only_the_names_and_enabled(self):
         # the verifier's probe (V3 on PR #2908): every value read is recorded; only the Linear server's `enabled` may be
         touched = []
