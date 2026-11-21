@@ -193,9 +193,17 @@ class Env:
         self.client_kw = client_kw
         self.clients: dict[str, FakeClient] = {}
         self.connects: list[str] = []
+        # profiles whose gateway Hermes' discovery reads ready (none by default: nothing reattaches by itself)
+        self.ready: set[str] = set()
+        self.probes: list[str] = []
         # omher's own folder inside the temp home: folder.open records its chats there, never in the real ~/.omher
         self.bridge = ob.Bridge(token=TOKEN, hermes_home=self.home, gateway_factory=self.factory, poll_s=3600,
-                                omher_home=self.home / ".omher")
+                                omher_home=self.home / ".omher", gateway_probe=self.probe)
+
+    async def probe(self, path: Path) -> bool:
+        name = "default" if path == self.home else path.name
+        self.probes.append(name)
+        return name in self.ready
 
     async def factory(self, stack, path: Path):
         name = "default" if path == self.home else path.name
@@ -756,6 +764,87 @@ class EventMapping(BridgeCase):
             last = [e for e in s.events if e["event"] == "bot.status"][-1]
             self.assertEqual((last["status"], last["running"]), ("offline", False))
             self.assertEqual((await s.req("chat.send", bot="kami", text="x"))["error"]["code"], "bot_offline")
+
+
+class ExternalRestart(BridgeCase):
+    """A gateway that went away without omher restarting it (`hermes update` pausing it, a crash and relaunch, a
+    `hermes gateway restart` from a terminal): the bot comes back by itself and its open chats re-read
+    (`bot.restarted`), as after omher's own restart. Only Hermes' discovery is asked while it is away; nothing is
+    started (BOUNDARY rule 39)."""
+
+    @staticmethod
+    def restarted(s: Session, bot: str) -> list[dict]:
+        return [e for e in s.events if e["event"] == "bot.restarted" and e["bot"] == bot]
+
+    async def test_an_update_paused_gateway_reattaches_every_bot_once_it_is_ready_again(self):
+        with mock.patch.object(ob, "RECOVER_POLL", (0.01, 0.02)):
+            async with Env(("kami",)) as env:
+                s = await self.open(env)
+                await s.req("chat.open", bot="kami")
+                await s.req("chat.open", bot="default")  # the other row: never selected again after the update
+                for name in ("kami", "default"):
+                    env.clients[name].events.put_nowait(GatewayClientError("Gateway disconnected"))
+                await s.until(lambda ev: sum(e["event"] == "bot.status" and e["status"] == "offline" for e in ev) >= 2)
+                # draining for the update: discovery is asked, nothing is dialled or started
+                await s.until(lambda ev: env.probes.count("kami") >= 3 and env.probes.count("default") >= 3)
+                self.assertEqual((env.connects.count("kami"), env.connects.count("default")), (1, 1))
+                env.ready = {"kami", "default"}
+                await s.until(lambda ev: self.restarted(s, "kami") and self.restarted(s, "default"))
+                for name in ("kami", "default"):
+                    self.assertEqual([e["ok"] for e in self.restarted(s, name)], [True])
+                    last = [e for e in s.events if e["event"] == "bot.status" and e["bot"] == name][-1]
+                    self.assertEqual(last["status"], "online")
+                    self.assertEqual(env.connects.count(name), 2)
+                # the open chat reads its history again from the same Bot Chat
+                r = await s.req("chat.open", bot="kami")
+                self.assertEqual([m["text"] for m in r["result"]["messages"]], ["hi", "hello"])
+                await asyncio.sleep(0.1)
+                self.assertEqual(len(self.restarted(s, "kami")), 1)  # once back, it stops looking
+
+    async def test_a_chat_first_opened_while_draining_is_reread_when_the_bot_answers_again(self):
+        """The observed run: the chat was opened while the gateway drained for the update, then the person's next
+        message reconnected the bot. That reconnect says so, so the chat re-reads and drops its stale error."""
+        now = [1000.0]
+        async with Env(("kami",), fail=("kami",)) as env:
+            env.bridge.clock = lambda: now[0]
+            s = await self.open(env)
+            r = await s.req("chat.open", bot="kami")
+            self.assertEqual(r["error"]["code"], "bot_offline")
+            env.fail.clear()
+            now[0] += ob.OFFLINE_COOLDOWN + 1
+            self.assertTrue((await s.req("chat.send", bot="kami", text="after the update"))["ok"])
+            await s.until(lambda ev: self.restarted(s, "kami"))
+            self.assertEqual([e["ok"] for e in self.restarted(s, "kami")], [True])
+
+    async def test_a_bot_that_stays_away_is_only_looked_for(self):
+        with mock.patch.object(ob, "RECOVER_POLL", (0.01, 0.02)):
+            async with Env(("kami",), fail=("kami",)) as env:
+                s = await self.open(env)
+                self.assertEqual((await s.req("chat.open", bot="kami"))["error"]["code"], "bot_offline")
+                await s.until(lambda ev: env.probes.count("kami") >= 5)
+                self.assertEqual(env.connects.count("kami"), 1)  # only the person's own open dialled it
+                self.assertEqual(self.restarted(s, "kami"), [])
+
+    async def test_omhers_own_restart_is_announced_once(self):
+        with mock.patch.object(ob, "RECOVER_POLL", (0.01, 0.02)):
+            async with Env(("kami",)) as env:
+                env.ready = {"kami", "default"}
+                s = await self.open(env)
+                await s.req("chat.open", bot="kami")
+                env.clients["kami"].events.put_nowait(GatewayClientError("Gateway disconnected"))
+                await s.until(lambda ev: self.restarted(s, "kami"))
+                env.bridge._reattaching.add("kami")  # as `bots.restart` does before it runs Hermes' restart
+                env.clients["kami"].events.put_nowait(GatewayClientError("Gateway disconnected"))
+                await s.until(lambda ev: sum(e["event"] == "bot.status" and e["bot"] == "kami"
+                                             and e["status"] == "offline" for e in ev) >= 2)
+                await asyncio.sleep(0.1)
+                self.assertEqual(len(self.restarted(s, "kami")), 1)  # the restart's own reattach says it, not this
+                with mock.patch.object(ob, "RESTART_POLL", 0.01):
+                    await env.bridge._reattach(["kami"])
+                await s.until(lambda ev: len(self.restarted(s, "kami")) >= 2)
+                self.assertEqual([e["ok"] for e in self.restarted(s, "kami")], [True, True])
+                await asyncio.sleep(0.1)
+                self.assertEqual(len(self.restarted(s, "kami")), 2)
 
 
 class NeedsYou(BridgeCase):

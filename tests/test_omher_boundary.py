@@ -359,6 +359,11 @@ RULES = (
     "`folder.open` and `folder.resume` are admitted one at a time per bot, so the cap of open folder chats holds for"
     " requests that overlap, and a `folder.resume` of a stored id already on its way gets that request's answer instead"
     " of a second `session.resume`: nothing is attached twice.",
+    # rule 39: a gateway that went away without omher restarting it is looked for, never started
+    "A look only asks Hermes' own `discover_gateway_endpoint` for that bot's profile, which reads the gateway's control"
+    " socket and lock and starts nothing;",
+    "It never starts, stops, restarts or signals a gateway, looks only for a bot it attached or tried to attach, and"
+    " stops once that bot is attached again.",
 )
 TAURI_CONF = ROOT / "apps" / "omher" / "src-tauri" / "tauri.conf.json"
 CAPABILITIES = ROOT / "apps" / "omher" / "src-tauri" / "capabilities" / "default.json"
@@ -480,9 +485,11 @@ class DocPins(unittest.TestCase):
         # 11's card); 35: rule 35 (one free-space statistic of the home volume a minute, `disk-level`, deletes
         # nothing); 36: rule 36 (the window's close hides to the tray, quitting stays explicit); 37: rule 37 (keep
         # awake: one idle-sleep assertion while agents work); 38: rule 38 (a program's OSC 52 copy to the clipboard,
-        # copy only, never a read, off in Settings › Terminal). The rules stay numbered 1..n with no gap or repeat.
+        # copy only, never a read, off in Settings › Terminal); 39: rule 39 (a bot whose gateway went away without
+        # omher restarting it is looked for through Hermes' own discovery, which starts nothing, and attached again
+        # once ready). The rules stay numbered 1..n with no gap or repeat.
         rules = re.findall(r"^(\d+)\. ", DOC.read_text(encoding="utf-8"), re.M)
-        self.assertTrue(6 <= len(rules) <= 38, len(rules))
+        self.assertTrue(6 <= len(rules) <= 39, len(rules))
         self.assertEqual([int(n) for n in rules], list(range(1, len(rules) + 1)))
 
     def test_glossary_and_docs_index_name_omher(self) -> None:
@@ -828,6 +835,31 @@ class BridgeSubmitsOnlyToTheMainChat(unittest.TestCase):
         tag = fns["_watch_tag"]
         methods = set(re.findall(r"self\._call\(conn, '([a-z_.]+)'", tag))
         self.assertEqual(methods, {"session.history"})
+
+    def test_a_lost_gateway_is_only_looked_for_never_started(self) -> None:
+        """Rule 39: `_recover` asks the probe and attaches only after it said ready, through `_conn` (rule 4's
+        `connect_gateway`); the probe is Hermes' read-only discovery and nothing that starts a gateway."""
+        fns = {f.name: f for f in ast.walk(self.tree) if isinstance(f, (ast.FunctionDef, ast.AsyncFunctionDef))}
+
+        def code(name: str) -> str:  # the function's code, without its docstring, on one line
+            fn = fns[name]
+            body = fn.body[1:] if fn.body and isinstance(fn.body[0], ast.Expr) and isinstance(fn.body[0].value, ast.Constant) else fn.body
+            return " ".join(" ".join(ast.unparse(n) for n in body).split())
+
+        recover = code("_recover")
+        self.assertLess(recover.index("ready = await self.gateway_probe(bot['path'])"),
+                        recover.index("if not ready: continue"))
+        self.assertLess(recover.index("if not ready: continue"), recover.index("await self._conn(name)"))
+        self.assertIn("if name in self._reattaching: continue", recover)  # omher's own restart attaches its bots
+        for bad in ("gateway_factory", "connect_gateway", "ensure_gateway_runtime", "run_hermes_restart", "subprocess",
+                    "os.kill", "signal"):
+            self.assertNotIn(bad, recover)
+        probe = code("_default_probe")
+        self.assertIn("from hermes_cli.gateway_runtime import discover_gateway_endpoint", probe)
+        for bad in ("connect_gateway", "ensure_gateway_runtime", "subprocess", "os.kill", "signal"):
+            self.assertNotIn(bad, probe)
+        self.assertIn("self.gateway_probe = gateway_probe or self._default_probe", self.source)
+        self.assertIn("self._reattaching.update(down or [name])", code("op_bots_restart"))
 
     def test_profile_writes_are_only_name_and_picture(self) -> None:
         """Every Hermes profile method the bridge names is a read, except set_asset (the avatar)."""
