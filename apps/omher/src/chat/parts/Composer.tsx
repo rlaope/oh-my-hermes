@@ -9,7 +9,7 @@ import { CommandPicker, SkillPicker, mirrorText } from "./Skills";
 import { SIGIL, findTokens, fragmentAt, leadRow, matchSkills } from "./skillTokens";
 import { THREAD_CMD, threadCommand, threadFragment } from "./threadCommand";
 import { ThreadPicker } from "./ThreadPicker";
-import { commandQuery, matchCommands, pickText, type AgentCommand } from "./commands";
+import { commandQuery, matchCommands, parseCommands, pickText, type AgentCommand } from "./commands";
 import { getDraft, setDraft } from "../../app/drafts";
 import { t, tx } from "../../i18n";
 import { composing as imeComposing } from "../../lib/ime";
@@ -145,13 +145,28 @@ export function Composer({
   const at = active === null ? leadRow(items, frag?.query ?? "") : Math.min(active, items.length - 1);
   useEffect(() => setActive(null), [fragKey]);
 
+  // a bot chat has no agent command list of its own: ask the bridge for what Hermes answers here, the first time
+  // the box starts with `/` (a SESSIONS chat passes its own list instead, and keeps it)
+  const [slash, setSlash] = useState<AgentCommand[] | null>(null);
+  const wantSlashes = !commands && skillsOn && /^\/[\w:-]*$/.test(text);
+  const loadSlashes = store.slashCommands;
+  useEffect(() => {
+    if (!wantSlashes || slash) return;
+    let live = true;
+    void loadSlashes(bot.name).then((rows) => live && setSlash(parseCommands(rows)));
+    return () => {
+      live = false;
+    };
+  }, [wantSlashes, slash, loadSlashes, bot.name]);
+  const menu = commands ?? (slash?.length ? slash : undefined);
+
   // an agent's own commands: `/` or `$` at the start of the box opens them; typing narrows the list
-  const cq = commands?.length ? commandQuery(text) : null;
+  const cq = menu?.length ? commandQuery(text) : null;
   const cqKey = cq ? `${cq.prefix}${cq.query}` : null;
-  const cmd = useMemo(() => (cq && commands ? matchCommands(commands, cq.prefix, cq.query) : null), [commands, cqKey]); // eslint-disable-line react-hooks/exhaustive-deps
+  const cmd = useMemo(() => (cq && menu ? matchCommands(menu, cq.prefix, cq.query) : null), [menu, cqKey]); // eslint-disable-line react-hooks/exhaustive-deps
   const [cmdActive, setCmdActive] = useState(0);
   const [cmdDismissed, setCmdDismissed] = useState<string | null>(null);
-  const cmdOpen = !!cmd && focused && cqKey !== cmdDismissed;
+  const cmdOpen = !!cmd && cmd.total > 0 && focused && cqKey !== cmdDismissed;
   // no popup when no skill matches (`$20`, `$HOME` send on the first Enter); the agent's own menu wins
   const picking = !!frag && focused && fragKey !== dismissed && items.length > 0 && !cmdOpen;
   const cmdAt = cmd ? Math.min(cmdActive, Math.max(cmd.shown.length - 1, 0)) : 0;
@@ -294,8 +309,10 @@ export function Composer({
 
   // one line above the box while it holds a single `/word` or `$word`. "sigil": a bot chat's `/` is a command, a
   // skill is `$name`. "none": there is no list to pick from (a bot without skills, a bridge without skills.list),
-  // so the whole name goes at the start with a slash. A chat with its agent's own menu shows that instead.
-  const lead = commands ? undefined : /^([/$])[\w-]*$/.exec(text)?.[1];
+  // so the whole name goes at the start with a slash. A chat with its agent's own menu shows that instead; a bot
+  // chat's `/` menu (Hermes' commands) shows instead only while it is open, so `/pl` with no command left still
+  // says skills take `$`.
+  const lead = commands || cmdOpen ? undefined : /^([/$])[\w-]*$/.exec(text)?.[1];
   const hint: "sigil" | "none" | null = !lead
     ? null
     : !skillsOn
@@ -420,8 +437,10 @@ export function Composer({
                     pickCommand(cmd.shown[cmdAt]);
                     return;
                   }
-                  // Enter takes the highlighted command unless the text already names it exactly (then it is sent)
-                  if (e.key === "Enter" && !e.shiftKey && n && text !== `${cmd.shown[cmdAt].prefix}${cmd.shown[cmdAt].name}`) {
+                  // Enter takes the highlighted command unless the text already names it exactly, or (a bot chat, whose
+                  // menu lists Hermes' commands only) names one of the bot's skills the Hermes way: then it is sent
+                  const named = text === `${cmd.shown[cmdAt].prefix}${cmd.shown[cmdAt].name}` || (!commands && names.includes(text.slice(1)));
+                  if (e.key === "Enter" && !e.shiftKey && n && !named) {
                     e.preventDefault();
                     pickCommand(cmd.shown[cmdAt]);
                     return;
