@@ -34,6 +34,12 @@ SHORT_HINT = " · /whats-new lists it"
 EARLIER_TUI_STATE = ("tui/launch-skills.json",)
 
 WHATS_NEW: dict[str, tuple[str, ...]] = {
+    "5.0.0": (
+        "A closed terminal's session comes back by itself on the next omh",
+        "Code in the TUI reads in more than one colour; the accent is violet",
+        "Asking to review a diff or PR runs the code-review discipline",
+        "A mise-managed codex or python3 runs again in omh coding run",
+    ),
     "4.0.9": (
         "Code review drops findings it can't show and lists what it didn't check",
         "A benchmark counts review false alarms and real bugs, OMH on vs off",
