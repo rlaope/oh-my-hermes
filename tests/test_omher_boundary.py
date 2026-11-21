@@ -369,6 +369,9 @@ RULES = (
     " no `endpoint` the bridge does not look at all.",
     "It never starts, stops, restarts or signals a gateway, looks only for a bot it attached or tried to attach, and"
     " stops once that bot is attached again.",
+    "While a Hermes update holds the install (its `.hermes-update-in-progress` marker in the profile or the Hermes root,"
+    " judged by Hermes' own `_update_fenced`, read only) the bridge does not look, as Hermes' own"
+    " `ensure_gateway_runtime` does not.",
 )
 TAURI_CONF = ROOT / "apps" / "omher" / "src-tauri" / "tauri.conf.json"
 CAPABILITIES = ROOT / "apps" / "omher" / "src-tauri" / "capabilities" / "default.json"
@@ -864,7 +867,12 @@ class BridgeSubmitsOnlyToTheMainChat(unittest.TestCase):
             self.assertNotIn(bad, recover)
         # the probe is discovery only, and refuses a Hermes that cannot dial a discovered owner as-is
         probe = code("_default_probe")
-        self.assertIn("from hermes_cli.gateway_runtime import discover_gateway_endpoint", probe)
+        self.assertIn("from hermes_cli import gateway_runtime", probe)
+        # an update that still holds the install is checked first, with Hermes' own read-only judge
+        self.assertLess(probe.index("fenced = getattr(gateway_runtime, '_update_fenced', None)"),
+                        probe.index("gateway_runtime.discover_gateway_endpoint, home"))
+        self.assertIn("if fenced is not None and await asyncio.to_thread(fenced, {Path(home), self.home}): return None",
+                      probe)
         self.assertIn("if 'endpoint' not in inspect.signature(connect_gateway).parameters: raise RecoveryUnsupported", probe)
         for bad in ("connect_gateway(", "ensure_gateway_runtime", "subprocess", "os.kill", "signal"):
             self.assertNotIn(bad, probe)

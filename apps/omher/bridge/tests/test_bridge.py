@@ -203,6 +203,7 @@ class Env:
         self.ready: set[str] = set()
         self.probes: list[str] = []
         self.endpoints: list = []
+        self.on_probe = None
         # omher's own folder inside the temp home: folder.open records its chats there, never in the real ~/.omher
         self.bridge = ob.Bridge(token=TOKEN, hermes_home=self.home, gateway_factory=self.factory, poll_s=3600,
                                 omher_home=self.home / ".omher", gateway_probe=self.probe)
@@ -210,7 +211,10 @@ class Env:
     async def probe(self, path: Path) -> bool:
         name = "default" if path == self.home else path.name
         self.probes.append(name)
-        return f"endpoint-{name}" if name in self.ready else None  # what Hermes' discovery found ready
+        found = f"endpoint-{name}" if name in self.ready else None
+        if self.on_probe is not None:
+            self.on_probe(name)  # what happens while discovery answers
+        return found  # what Hermes' discovery found ready
 
     async def factory(self, stack, path: Path, endpoint=None):
         name = "default" if path == self.home else path.name
@@ -899,11 +903,14 @@ class ExternalRestartReview(BridgeCase):
 
     async def test_recovery_through_hermes_never_reaches_a_starting_dial(self):
         """The real `_default_probe` and `_default_connect` against stand-ins for Hermes' modules: recovery dials
-        `connect_gateway(endpoint=<discovered>)`, which never starts a gateway, and on a Hermes whose
-        connect_gateway takes no endpoint it stops looking instead of dialling the way that starts one."""
+        `connect_gateway(endpoint=<discovered>)`, which never starts a gateway; on a Hermes whose
+        connect_gateway takes no endpoint it stops looking instead of dialling the way that starts one; and while an
+        update holds the install (Hermes' `_update_fenced`) a ready gateway is not dialled."""
         import contextlib as cl
-        for has_endpoint in (True, False):
-            with self.subTest(has_endpoint=has_endpoint):
+        for case in ("endpoint", "no endpoint", "update fence"):
+            with self.subTest(case=case):
+                has_endpoint = case != "no endpoint"
+                fence: list = []
                 dials: list = []
                 ensured: list = []
 
@@ -926,7 +933,13 @@ class ExternalRestartReview(BridgeCase):
                 client_mod.connect_gateway = with_endpoint if has_endpoint else without_endpoint
                 runtime_mod = types.ModuleType("hermes_cli.gateway_runtime")
                 runtime_mod.discover_gateway_endpoint = lambda home, **kw: Found()
+                if case == "update fence":
+                    def update_fenced(homes):
+                        fence.append(sorted(str(h) for h in homes))
+                        return True
+                    runtime_mod._update_fenced = update_fenced
                 pkg = types.ModuleType("hermes_cli")
+                pkg.gateway_client, pkg.gateway_runtime = client_mod, runtime_mod
                 fakes = {"hermes_cli": pkg, "hermes_cli.gateway_client": client_mod,
                          "hermes_cli.gateway_runtime": runtime_mod}
                 with mock.patch.dict(sys.modules, fakes), mock.patch.object(ob, "RECOVER_POLL", (0.01, 0.02)), \
@@ -939,9 +952,15 @@ class ExternalRestartReview(BridgeCase):
                         env.bridge._lost(conn)  # its gateway went away
                         for _ in range(50):
                             await asyncio.sleep(0.01)
-                        if has_endpoint:
+                        if case == "endpoint":
                             self.assertTrue(conn.connected)
                             self.assertEqual(dials, ["owner-endpoint"])
+                        elif case == "update fence":
+                            self.assertFalse(conn.connected)
+                            self.assertEqual(dials, [])
+                            # the profile's own home and the Hermes root, where `hermes update` puts its marker
+                            self.assertEqual(fence[0], sorted([str(env.home / "profiles" / "kami"), str(env.home)]))
+                            self.assertIn("kami", env.bridge._recovering)  # it keeps looking until the update ends
                         else:
                             self.assertFalse(conn.connected)
                             self.assertEqual(dials, [])
@@ -967,17 +986,73 @@ class ExternalRestartReview(BridgeCase):
                 self.assertEqual([e["ok"] for e in self.restarted(s, "kami")], [True])
 
     async def test_a_second_loss_is_looked_for_from_the_short_wait_again(self):
-        with mock.patch.object(ob, "RECOVER_POLL", (0.002, 10.0)):
+        with mock.patch.object(ob, "RECOVER_POLL", (0.004, 60.0)):
             async with Env(("kami",)) as env:
                 s = await self.open(env)
                 await s.req("chat.open", bot="kami")
                 env.clients["kami"].events.put_nowait(GatewayClientError("Gateway disconnected"))
-                await s.until(lambda ev: env.probes.count("kami") >= 10)  # a long outage: the wait grew to ~1 s
+                # a long outage: after 9 looks the next wait is 0.004 * 2**9 s, about 2 s, and the one after that,
+                # which a look that went on after the bot came back would sleep first, is about 4 s
+                await s.until(lambda ev: env.probes.count("kami") >= 9, timeout=10.0)
                 env.ready = {"kami"}
-                await s.until(lambda ev: self.restarted(s, "kami"), timeout=8.0)
+                await s.until(lambda ev: self.restarted(s, "kami"), timeout=10.0)
+                # back: the look ends at once (well inside the ~4 s it would otherwise sleep)
+                await s.until(lambda ev: "kami" not in env.bridge._recovering, timeout=2.0)
                 env.clients["kami"].events.put_nowait(GatewayClientError("Gateway disconnected"))
-                # the next loss starts over at the short wait, not after the grown one
-                await s.until(lambda ev: len(self.restarted(s, "kami")) >= 2, timeout=0.5)
+                # the next loss is a new look from the short wait
+                await s.until(lambda ev: len(self.restarted(s, "kami")) >= 2, timeout=2.0)
+
+    async def test_a_restart_that_begins_while_discovery_answers_keeps_the_bot(self):
+        """`_recover` looks at `_reattaching` again once discovery has answered: a Restart pressed meanwhile attaches
+        the bot itself."""
+        with mock.patch.object(ob, "RECOVER_POLL", (0.01, 0.02)):
+            async with Env(("kami",)) as env:
+                s = await self.open(env)
+                await s.req("chat.open", bot="kami")
+                env.ready = {"kami"}
+                env.on_probe = lambda name: env.bridge._reattaching.add(name)
+                env.clients["kami"].events.put_nowait(GatewayClientError("Gateway disconnected"))
+                await s.until(lambda ev: env.probes.count("kami") >= 1)
+                await asyncio.sleep(0.2)
+                self.assertEqual(env.connects.count("kami"), 1)  # the look did not attach it
+                self.assertEqual(self.restarted(s, "kami"), [])
+
+    async def test_a_restart_that_does_not_say_ok_still_announces_a_bot_a_request_attached(self):
+        """Bot offline, its chat's open failed; the person presses Start; while Hermes' restart runs a request
+        attaches the bot (so `bot.restarted` waits for the restart); then the restart fails, is refused or raises, so
+        no `_reattach` runs. The bot is attached, so the chat must still hear it and re-read."""
+        for how in ("failed", "refused", "raises"):
+            with self.subTest(how=how):
+                async with Env(("kami",), fail=("kami",)) as env:
+                    s = await self.open(env)
+                    self.assertEqual((await s.req("chat.open", bot="kami"))["error"]["code"], "bot_offline")
+                    env.fail.clear()
+                    env.bridge.conns["kami"].failed_at = 0.0
+                    started = asyncio.Event()
+                    go = __import__("threading").Event()
+                    loop = asyncio.get_running_loop()
+
+                    def restart(*a, **kw):  # Hermes' restart, still running while the request below attaches
+                        loop.call_soon_threadsafe(started.set)
+                        go.wait(5)
+                        if how == "raises":
+                            raise RuntimeError("restart command broke")
+                        return {"outcome": how, "line": "Hermes said no", **({"work": []} if how == "refused" else {})}
+                    with mock.patch.object(ob, "run_hermes_restart", restart), \
+                            mock.patch.object(ob, "hermes_path", lambda *a, **k: "/stub/hermes"):
+                        pressed = asyncio.ensure_future(s.req("bots.restart", bot="kami"))
+                        await asyncio.wait_for(started.wait(), 5)
+                        self.assertTrue((await s.req("models.options", bot="kami"))["ok"])
+                        self.assertEqual(self.restarted(s, "kami"), [])  # the restart says it, not this request
+                        go.set()
+                        r = await pressed
+                    self.assertNotEqual((r.get("result") or {}).get("outcome"), "ok")
+                    await s.until(lambda ev: self.restarted(s, "kami"))
+                    await asyncio.sleep(0.05)
+                    self.assertEqual([e["ok"] for e in self.restarted(s, "kami")], [True])
+                    conn = env.bridge.conns["kami"]
+                    self.assertEqual((conn.connected, conn.lost), (True, False))
+                    self.assertEqual(env.bridge._reattaching, set())
 
 
 class NeedsYou(BridgeCase):

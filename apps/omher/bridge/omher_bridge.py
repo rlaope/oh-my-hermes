@@ -5913,13 +5913,19 @@ class Bridge:
 
     async def _default_probe(self, home: Path):
         """The ready owner of this profile's gateway that Hermes' own discovery finds, or None. Discovery asks the
-        control socket (`identify`) and starts nothing; draining for an update is not ready. Raises
-        RecoveryUnsupported on a Hermes whose `connect_gateway` cannot dial that owner as-is."""
+        control socket (`identify`) and starts nothing; draining for an update, or any gateway while an update still
+        holds the install, is not ready. Raises RecoveryUnsupported on a Hermes whose `connect_gateway` cannot dial
+        that owner as-is."""
+        from hermes_cli import gateway_runtime
         from hermes_cli.gateway_client import connect_gateway
-        from hermes_cli.gateway_runtime import discover_gateway_endpoint
         if "endpoint" not in inspect.signature(connect_gateway).parameters:
             raise RecoveryUnsupported("connect_gateway takes no endpoint")
-        found = await asyncio.to_thread(discover_gateway_endpoint, home)
+        # the same update fence `ensure_gateway_runtime` honours (the endpoint dial skips it): its marker in the
+        # profile or the Hermes root, read only. A Hermes without it judges no fence here.
+        fenced = getattr(gateway_runtime, "_update_fenced", None)
+        if fenced is not None and await asyncio.to_thread(fenced, {Path(home), self.home}):
+            return None
+        found = await asyncio.to_thread(gateway_runtime.discover_gateway_endpoint, home)
         return getattr(found, "endpoint", None) if getattr(found, "state", None) == "ready" else None
 
     def _bot(self, name) -> dict:
@@ -7300,6 +7306,9 @@ class Bridge:
         self._reattaching.update(down or [name])  # its bots come back through `_reattach`, not `_recover`
         try:
             out = await asyncio.to_thread(run_hermes_restart, hermes, gw, self.home, interrupt, RESTART_TIMEOUT, jobs)
+        except Exception:
+            await self._restart_not_ok(down or [name])
+            raise
         except BaseException:
             self._reattaching.difference_update(down or [name])
             raise
@@ -7309,11 +7318,21 @@ class Bridge:
         if out["outcome"] == "refused":
             self._refused[gw] = self.clock()
         if out["outcome"] != "ok":
-            self._reattaching.difference_update(down or [name])
+            await self._restart_not_ok(down or [name])
             return Reply(out)
         async def reattach() -> None:
             self._spawn(self._reattach(down or [name]))
         return Reply({**out, "bots": down}, after=reattach)
+
+    async def _restart_not_ok(self, names: list[str]) -> None:
+        """omher's restart did not answer ok, so no `_reattach` follows: its bots are lost bots again, and one that a
+        request attached while the restart ran (its `bot.restarted` held back for the restart) is announced now."""
+        self._reattaching.difference_update(names)
+        for n in names:
+            conn = self.conns.get(n)
+            if conn is not None and conn.connected and conn.lost:
+                conn.lost = False
+                await self.emit("bot.restarted", n, ok=True)
 
     async def _reattach(self, names: list[str]) -> None:
         """After a restart: drop the old connections (their gateway is gone or replaced) and attach again, so the
