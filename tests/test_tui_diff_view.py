@@ -107,12 +107,13 @@ class RowTests(unittest.TestCase):
                          ["     app.py", "   1  import os", "   2", '   3 -print("hello")', '   3 +print("hi")'])
 
     def test_rows_hang_under_the_tool_and_take_their_roles(self) -> None:
-        rows = diff_rows(parse_inline_diff(SAMPLE), 40, THEME)
+        # A file with no syntax table keeps the one-colour rows (syntax colour: test_tui_diff_syntax).
+        rows = diff_rows(parse_inline_diff(SAMPLE.replace("src/app.py", "src/app.txt")), 40, THEME)
         indent = Span("     ")
         self.assertEqual(
             rows,
             [
-                (indent, Span("src/app.py", THEME.label)),
+                (indent, Span("src/app.txt", THEME.label)),
                 # the hunk header is no row: its starts number the lines in the dim gutter
                 (Span("   1 ", THEME.muted), Span(" import os", THEME.code)),
                 (Span("   2 ", THEME.muted), Span("-print('hello')" + " " * 20, THEME.diff_remove)),

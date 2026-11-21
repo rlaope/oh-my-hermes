@@ -4705,6 +4705,14 @@ def _wizard_question_groups() -> tuple[_WizardQuestion, ...]:
             _will_ask_update_check,
             _ask_update_check_choice,
         ),
+        # The shell-rc hook for path B of auto-resume: the one answer that writes outside OMH's and Hermes' homes,
+        # so it defaults to No and sits after every answer about the install itself.
+        _WizardQuestion(
+            "auto_resume_shell",
+            "wizard_step_auto_resume_shell",
+            _will_ask_auto_resume_shell,
+            _ask_auto_resume_shell_choice,
+        ),
         # After every answer that configures the install: a Yes hands the
         # terminal to the OMH TUI once the apply phase and summary are done.
         _WizardQuestion(
@@ -4942,6 +4950,65 @@ def _ask_update_check_choice(args: argparse.Namespace, paths: OmhPaths, language
     args._update_check_mode = mode
     write_update_check_policy(paths, mode=mode)
     print(tr(language, "update_check_recorded", mode=mode))
+
+
+def _auto_resume_shell_offer() -> tuple[str, Path] | None:
+    """The shell and rc the auto-resume hook question would offer: the default shell's rc, when it exists and has
+    no block yet (`tui/shell_hook.offer`); None when there is nothing to offer."""
+    from ..tui.shell_hook import offer
+
+    return offer(os.environ)
+
+
+def _auto_resume_shell_terminal() -> bool:
+    """Both terminal ends, read here and not through `_stdin_is_tty`/`_stdout_is_tty`: a scripted wizard that opens
+    those seams must never reach a question whose Yes writes the person's real shell rc."""
+    try:
+        return stdin_is_tty() and bool(sys.stdout.isatty())
+    except (AttributeError, ValueError):
+        return False
+
+
+def _will_ask_auto_resume_shell(args: argparse.Namespace, paths: OmhPaths) -> bool:
+    """Whether `_ask_auto_resume_shell_choice` puts a question on screen: on a terminal, never beside `--yes` or
+    `--no-interactive`, and only while the default shell's rc exists without the block. Reads the rc, never an
+    earlier answer."""
+    if hasattr(args, "_auto_resume_shell_choice"):
+        return False
+    if getattr(args, "yes", False) or getattr(args, "no_interactive", False) or not _auto_resume_shell_terminal():
+        return False
+    return _auto_resume_shell_offer() is not None
+
+
+def _ask_auto_resume_shell_choice(args: argparse.Namespace, paths: OmhPaths, language: str) -> None:
+    """Ask, at most once and defaulting to No, whether to add the auto-resume block to the shell rc.
+
+    A Yes installs it at once through `tui.shell_hook.install` (the same path as `omh auto-resume shell install`);
+    a No writes nothing. Either way `omh auto-resume shell install|remove` changes it later.
+    """
+    offer = _auto_resume_shell_offer() if _will_ask_auto_resume_shell(args, paths) else None
+    if offer is None:
+        if not hasattr(args, "_auto_resume_shell_choice"):
+            args._auto_resume_shell_choice = None
+        return
+    shell, rc = offer
+    args._auto_resume_shell_choice = _ask_yes_no(
+        tr(language, "auto_resume_shell_prompt"),
+        default=False,
+        use_color=_use_color(),
+        note=tr(language, "auto_resume_shell_note", rc=str(rc)),
+        language=language,
+    )
+    if not args._auto_resume_shell_choice:
+        return
+    from ..tui.shell_hook import ShellHookError, install
+
+    try:
+        result = install(shell, paths.omh_home, os.environ)
+    except (ShellHookError, OSError) as error:
+        print(tr(language, "auto_resume_shell_failed", error=str(error)))
+        return
+    print(tr(language, "auto_resume_shell_installed", rc=str(result.rc)))
 
 
 def _ask_yes_no(

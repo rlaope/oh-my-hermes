@@ -24,6 +24,7 @@ import type {
   ClarifyQuestion,
   HelloResult,
   FolderOpenResult,
+  FolderResumeResult,
   ModelCurrent,
   ModelOptions,
   PeekMsg,
@@ -1928,6 +1929,8 @@ export interface Actions {
   openSession(id: string | null): void;
   /** A new Hermes chat for `bot` in folder `cwd` (SESSIONS > oh-my-hermes). */
   folderOpen(bot: string, cwd: string): Promise<FolderOpenResult>;
+  /** Attach again folder chat `stored` (Hermes' stored id `folderOpen` returned) after a restart. */
+  folderResume(bot: string, cwd: string, stored: string): Promise<FolderResumeResult>;
   folderClose(bot: string, session: string): Promise<void>;
   /** Change the model of folder chat `session`. */
   folderSetModel(bot: string, session: string, change: { model: string; provider?: string }): Promise<ModelCurrent>;
@@ -2810,6 +2813,7 @@ export function createStore(bridge: BridgeLike, opts: StoreOptions = {}): Store 
     },
     openSession: (id) => dispatch({ type: "ui.session", id }),
     folderOpen: (bot, cwd) => bridge.request("folder.open", { bot, cwd }),
+    folderResume: (bot, cwd, stored) => bridge.request("folder.resume", { bot, cwd, stored }),
     async folderClose(bot, session) {
       await bridge.request("folder.close", { bot, session });
     },

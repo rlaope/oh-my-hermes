@@ -11,6 +11,38 @@ All notable changes will be documented here.
   show as a row above the card, and a reopened chat (an app restart while the question waits, too) keeps that row
   once. By jundev0001 (#3028).
 
+- **A closed terminal no longer loses the OMH session: it comes back by itself, in any terminal and in omher.**
+  Each OMH TUI now records how its session ended in `<omh_home>/tui/live-sessions.json`. `/exit`, Ctrl+D or moving
+  to another session is *closed* and never reopens. A closed window, SIGHUP, a crash, a kill, a reboot or a lost
+  gateway is *dropped*. A bare `omh` in that terminal (else, outside omher, the same folder) reopens the dropped
+  session at once, as `omh --resume <id>` would, and says so in one line. `omh --new`, `OMH_AUTO_RESUME=0` and
+  `omh auto-resume set --mode off` open a new one. `omh auto-resume status` shows the mode, the hooks and what waits.
+  - A new terminal can reopen it with nothing typed, after an opt-in: `omh auto-resume shell install` (zsh, bash,
+    PowerShell) or a Yes to `omh setup`'s new question (default No). It adds one marked block to the shell rc that
+    starts no process while nothing waits. `omh auto-resume shell remove` gives the file back byte for byte. The
+    hook notices a TUI killed outright, also one an earlier OMH started, and on Linux a reboot.
+  - A launch claims only from a Hermes home it opens and reopens the session in the home it was recorded in. It
+    decides whether the TUI's own runtime home can open it without writing, so a launch that reopens a shared-gateway
+    session leaves that home's files alone. When the own home cannot open after all, a dropped shared session still
+    reopens.
+  - omher: an `omh` terminal that was running when omher closed starts again in its own session
+    (`OMHER_TERMINAL_LINK`, rule 11), and folder chats come back through the bridge's `folder.resume`. Only a chat
+    omher recorded when it opened it can be reattached (rule 3). Records stay under a lock every bridge shares, and a
+    chat reattached while another bot's record write waits keeps its record.
+
+- **Measured loops keep variants comparable, and paper searches pick the right corpus.** `loop` gains `references/experiment-tree.md`: every node runs one fixed command and environment, a node freezes once a run answers it, the options of one decision are siblings and the next round descends onto the winner, and each finished run ends in repair, refill, promote or stop. `source-finder` gains `references/literature-retrieval.md`: arXiv, OpenAlex, bioRxiv or PubMed chosen by topic, follow-up rounds scaled to a stated difficulty inside the existing search cap, cross-corpus dedupe by id, DOI and title, and no paper id that a host result did not return. Both adapt alphaXiv/OpenResearch practices (MIT) in OMH wording.
+
+- **Code in the OMH TUI reads in more than one colour, and the default accent is violet.** An edit's diff painted every code line in one turquoise, and
+  the default `omh` look gave fenced code only turquoise shades, so keywords, strings and comments blurred together.
+  Diff lines now take the same syntax colour as fenced code, chosen by the file's extension, over their green or red
+  band, and a colour that would not read on a band is brightened there. The default look's code colours become one
+  hue per kind: keywords pink, strings yellow-green, numbers orange, comments grey. The other looks keep their own
+  code colours. Hermes' own terminal reads the same `omh` skin, so its code colours follow. The default `spectrum`
+  launch look's accent, which paints a tool call's rail, the working row's spinner and the card's labels, moves from
+  orange to a soft violet; the other looks keep theirs.
+
+## 4.0.9 - 2026-11-20
+
 - **Codex units can write inside the fanout fence on Linux and macOS.** `codex exec` is read-only by default, and
   `workspace-write` cannot start Codex's own sandbox inside an enforced bwrap or sandbox-exec fence, so every write
   a codex unit tried was refused. When the fence is enforced with one of those backends, the codex argv now gets
@@ -89,10 +121,29 @@ All notable changes will be documented here.
   make the changes here, one after another, not as a dag-ulw graph. One bug's symptoms, one feature's fields, a list
   of questions, an errand list with a single code word, and work the request itself splits keep their routes.
 
+- **A dag-ulw node can say what the parent will look for in its work.** A node takes an optional `review_focus`, one
+  line of up to 400 characters such as "the 24px toolbar icon is still recognizable". The node's task shows it right
+  after the prompt, and a verify node's task lists each producer's focus so the verifier judges the same things. A
+  build node that writes code without one gets a `no_review_focus` lint, which is advice only. Every build node with a
+  write scope is also told that other agents share the machine: run only the builds and tests it needs at once, and
+  before it stops, stop the background jobs it started and remove the temporary files it created.
+
 - **A dag-ulw node that writes files is told to commit only its own paths.** Its task text now says to stage the
   paths in its SCOPE by name and never to run `git add -A`, `git add .`, `git commit -a` or `git stash`, so parallel
   nodes in one checkout stop committing each other's work. Verify, review and read-only nodes get no such line. This
   is guidance; the write-scope guard on file tools stays the enforcement.
+
+- **Coding handoffs and fanout units pick up four lines from OpenAI's GPT-6.2 Codex guide.** A fanout unit may declare
+  `review_focus` (one sentence, at most 150 UTF-8 bytes; it is cut to fit rather than ever push the prompt over its
+  byte ceiling), which its prompt
+  states right after the numbered criteria; when it is absent, the contract is byte-identical and no focus block is
+  added. A `handoff_contract/v1` may declare `parts[]` (`id`, `title`,
+  `depends_on`). With two or more parts that depend on nothing, the Codex prompt lists them and adds "Use subagents as
+  needed", the guide's trigger phrase; Claude Code and Hermes prompts never get that line. Every handoff with acceptance criteria
+  ends its Expected result with one line saying what counts as finished, with no keep-going wording. Every unit
+  prompt carries a new shared-machine line after tool batching (limit concurrent builds and tests; stop your own
+  background jobs and delete your own temp files). It stays out of the frozen shared head, so the unit prompt golden
+  digests move.
 
 - **The pi-family coding lane runs on the omp CLI too.** With only `omp` on PATH, a pi-family coding unit now runs
   `omp --print --no-session [--model <id>] [--thinking <level>] -- <prompt>`; when `pi` or its distribution host is
@@ -100,6 +151,14 @@ All notable changes will be documented here.
   applies) and writes stay fenced by the worktree and fan-out confinement as for every host. Model discovery also reads
   `~/.omp/agent/sessions`. omp keeps its sign-in in a SQLite store, so its login marker reads `absent`; that does not
   block dispatch.
+
+- **Five skills take guidance from OpenAI's "Prompting GPT-6.2 in Codex" guide.** `visual-qa` and `frontend` judge
+  a capture against the reference at the size people will see it (the real viewport, a 24 px toolbar icon), not only a
+  large render, and exercise an interactive result with the actions it supports before a verdict. `app-debugging` sizes
+  effort to the investigation: a quick survey at medium, one cause traced across systems at high (`deep`), several
+  interacting causes at xhigh (`forensics`), and says what counts as finished. `agent-instructions` keeps a line only
+  when an agent cannot infer it from the code, tests or docs, and leaves routine how-to out. `dag-ulw` briefs each
+  node like a colleague who knows the project and gives build nodes a `review_focus`.
 
 - **Hermes Bug Hunter: code review keeps only findings it can show, and every review says what it did not check.**
   `code-review`'s finding validation gains a drop gate: a candidate stays out of the findings when it cannot be traced
@@ -145,12 +204,28 @@ All notable changes will be documented here.
   job instead of passing. `tools/qa/identifier_guard.py --staged` runs the same check as a pre-commit hook, and
   `--hash "name"` prints the line to add (see CONTRIBUTING.md).
 
+- **AGENTS.md and CLAUDE.md are about half their size; the detail moved to docs.** Every agent session loads both
+  files. The full text of each scoped exception now lives in `docs/IMPLEMENTATION-BOUNDARIES.md`, the long pitfall
+  list and working style in `docs/ENGINEERING-PITFALLS.md`, omher's repository rules in `apps/omher/README.md`, the
+  TUI frame-language rule in `docs/OMH-TUI-BOUNDARY.md` and the CodeGraph evidence note in `docs/CODEGRAPH.md`, all
+  moved verbatim. The two instruction files keep what an agent cannot infer from the code: product boundaries,
+  delivery grain, PR report shape, commit trailers, the gates and the generated-artifact map, with one pointer line
+  per moved part.
 - **Four OMH tool descriptions are shorter, and the model still picks the same calls.** `omh_todo`, `omh_loop`,
   `omh_document_plan` and `omh_delegate_route` say the same rules in fewer words, so each costs fewer tokens the
   first time Hermes loads it (24,943 -> 23,718 characters together; the registered OMH schemas 63,324 -> 62,099).
   An A/B of the first tool call on 11 scenarios (Claude Haiku and Sonnet, 3 runs per arm) passed 33/33 on both the
   old and the new text. A first draft that also cut "a route set in an earlier turn runs on the previous model" and
   "OMH mirrors each todo_list write" lost passes and was restored.
+
+- **Seven vendor coding clients reviewed against OMH; model notes gain their catalog facts.** Codex CLI 0.169.1,
+  Claude Code 2.1.329, Gemini CLI 0.70.0, Qwen Code 0.28.0, Kimi CLI 1.52.0, ZCode 3.18.2 and DeepSeek Harness
+  (master 2e39e704) were each read at a pinned tag, commit or binary hash. The new `docs/VENDOR-HARNESS-REVIEW.md`
+  lists, per vendor, what OMH already does, what it adopts, and what it leaves out and why. Every client's
+  keep-going push stays out, because a measured +5,419 tokens per instance bought no extra passes. MODEL_OPTI.md
+  records each client's catalog where it adds a fact: GPT-6.2 Astra and Sol share one Codex prompt, Claude Code
+  aliases older ids on third-party clouds, and Gemini CLI has no Gemini 4 id yet. Five prompt gaps are listed as
+  follow-ups; this entry changes no prompt text.
 
 - **Gemini prices re-read ahead of Google's two increases.** Google's pricing page, re-read on 2026-11-18, still
   lists Gemini 4 Argon and Gemini 4 Carbon at $2 / $10 per million tokens through 2026-11-30 and $4 / $20 from
@@ -456,6 +531,26 @@ All notable changes will be documented here.
   rules out, a map written only before the server starts, a depth the settings loader bounds), and 4 controls whose
   bug also shows only with a file outside the hunk, so an over-cautious reviewer still loses hits. The corpus goes
   from 11 traps and 6 controls to 23 and 10.
+- **The OMH TUI's send-now key reaches a queued prompt with images.** A prompt with an image sent with Enter during a
+  turn queued (`⧗`) with no `ctrl+enter to send now` row under it, and Ctrl+Enter on the empty composer did nothing, so
+  the only way to send it before the turn ended was to retype it. Its queue row now names the send-now key, as Claude
+  Code's `Queued · ctrl+enter to send now` does, and the key (Ctrl+J too) stops the turn and sends the prompt with its
+  images as soon as it ends, the same cut-in Ctrl+Enter already made from the composer. It is never sent as a text-only
+  steer; a queued slash command or `!` line still waits its turn, and so does a second image prompt while one cut-in
+  waits.
+
+- **A parked dag node past its wake time stops spinning under the composer.** A node parked on a background process
+  or a CI run kept its spinner and `until 16:30` hours after 16:30, so a run whose wait was long over read as still
+  moving. Past its `wake_at` the node now reads `due`, with its time since it became due, and its detail row says
+  `due · waits for the parent · since 16:30` instead of the handle it no longer waits on. Its row stops turning, and
+  the layer row, the header and the box view count it `due`, not `parked`. Before its wake time nothing changes.
+
+- **The OMH TUI folds consecutive calls of one tool into one row.** Six `terminal` calls in a row used to take about
+  twenty rows: a rail, a command row and an output row each, two blank rows between them. They now read as one
+  `● terminal · 6 calls  3.1s` row with each call's command and time under it, so the commands stay readable while
+  what each printed waits for Ctrl+O, which unfolds the run into the calls' own rows. A call with an answer under it,
+  a diff or recalled records, or a failed or refused call keeps its own row; a call of another tool ends the run.
+  Resumed sessions fold the same way.
 
 ## 4.0.8 - 2026-11-15
 

@@ -53,6 +53,9 @@ export interface TermSettings {
   /** Pictures a program prints (sixel, iTerm2's OSC 1337, Kitty graphics) are drawn in the terminal. Off: they are
    *  dropped, as before. */
   images: boolean;
+  /** A program may put text on the clipboard (OSC 52: a tmux or Neovim yank, a copy over SSH). Copy only: no program
+   *  ever reads the clipboard. On by default, as in Ghostty, kitty and Windows Terminal. */
+  osc52: boolean;
   /** A paste with more than one line asks first, unless the program turned on bracketed paste (it then takes the
    *  text as one paste and runs none of it by itself). On by default, as in Otty. */
   confirmPaste: boolean;
@@ -121,6 +124,7 @@ export const TERM_DEFAULTS: TermSettings = {
   kittyKeys: true,
   images: true,
   confirmPaste: true,
+  osc52: true,
   keepHistory: true,
   dimUnfocused: 0.72,
   undoClose: 10,
@@ -184,6 +188,7 @@ export function parseTermSettings(raw: unknown): TermSettings {
     kittyKeys: bool(o.kittyKeys, d.kittyKeys),
     images: bool(o.images, d.images),
     confirmPaste: bool(o.confirmPaste, d.confirmPaste),
+    osc52: bool(o.osc52, d.osc52),
     keepHistory: bool(o.keepHistory, d.keepHistory),
     dimUnfocused: Math.round(num(o.dimUnfocused, TERM_DIM.min, TERM_DIM.max, d.dimUnfocused) * 100) / 100,
     undoClose: TERM_UNDO_CLOSE.includes(o.undoClose as number) ? (o.undoClose as number) : d.undoClose,

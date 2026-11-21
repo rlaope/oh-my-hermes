@@ -369,6 +369,15 @@ const SHORTCUTS: [string, Key][] = [
   [MOD === "⌘" ? "⌘⇧⌥ ←↑↓→" : "Ctrl+Alt+Shift+ ←↑↓→", "key.movePane"],
   [MOD === "⌘" ? "⌘⇧↩" : "Ctrl+Shift+Enter", "key.zoomPane"],
   [MOD === "⌘" ? "⌘⌃=" : "Ctrl+Alt+=", "key.equalizePanes"],
+  [MOD === "⌘" ? "⌘= · ⌘- · ⌘0" : "Ctrl+= · Ctrl+- · Ctrl+0", "key.termFont"],
+  ...(MOD === "⌘"
+    ? ([
+        ["⌘← · ⌘→ · ⌘⌫ · ⌘⌦", "key.termLine"],
+        ["⌥← · ⌥→", "key.termWord"],
+        ["⌘K", "key.termClear"],
+      ] as [string, Key][])
+    : ([["Ctrl+Shift+C · Ctrl+Shift+V · Ctrl+Insert · Shift+Insert", "key.termCopyPaste"]] as [string, Key][])),
+  [MOD === "⌘" ? "⌘Home · ⌘End" : "Ctrl+Home · Ctrl+End", "key.termScroll"],
   [MOD === "⌘" ? "⌘⇧C" : "Alt+Shift+C", "key.copyLink"],
   ["1 · 2 · 3", "key.cardKeys"],
   ["Esc", "key.stop"],

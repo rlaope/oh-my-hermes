@@ -83,6 +83,7 @@ Quality bar:
 - Load `references/hypothesis-and-race-method.md` for the hypothesis table, flaky-test tactics, and race patterns instead of improvising them.
 - Pick the next observation by cost and by how many hypotheses its result eliminates, and record the eliminations.
 - Keep reproduction, root cause, fix, and verification as separate observed states.
+- Size the effort to the depth and name it: a quick survey of one area runs at medium; tracing one suspected cause across several systems runs at high (category `deep`); several causes that may interact run at xhigh (category `forensics`). Finished means the reported symptom's root cause is shown by an observation and the fix passes the same reproduction; be exhaustive in the hypothesis table and its eliminations, not in reading code no hypothesis touches.
 - Count a fix as failed when an executed run of the same reproduction command still shows the original symptom or shows a new symptom the fix caused rather than unmasked; planned runs and other commands do not count. After the third failed fix, prepare no fourth; re-examine the architecture assumptions every fix shared, per the method reference, and offer the user the next step as a question.
 - Before the fix handoff names a regression test, read `../omh-verification-gate/references/test-authoring.md` for the seam, the shapes of tests that guard nothing, fakes only at system boundaries, and the no-correct-seam outcome.
 

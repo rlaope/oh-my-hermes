@@ -878,11 +878,19 @@ class ReasoningAndToolTests(LoopTestCase):
         self.step(ev("message.start"))
         self.step(ev("tool.start", tool_id="a", name="read_file", context="a.py"))
         self.step(ev("tool.complete", tool_id="a", name="read_file", duration_s=0.1, result={"content": ""}))
-        self.step(ev("tool.start", tool_id="b", name="read_file", context="b.py"))
-        self.step(ev("tool.complete", tool_id="b", name="read_file", duration_s=0.1, result={"content": ""}))
+        self.step(ev("tool.start", tool_id="b", name="search_files", context="b.py"))
+        self.step(ev("tool.complete", tool_id="b", name="search_files", duration_s=0.1, result={"content": ""}))
         flushed = self.step(ev("message.complete", text="", status="complete"))
-        self.assertEqual(flushed, ["┃ ● read_file(a.py)  0.1s", "┃   ⎿  Read 0 lines", "", "",
-                                   "┃ ● read_file(b.py)  0.1s", "┃   ⎿  Read 0 lines"])  # two blank rows between two calls
+        self.assertEqual(flushed[:4], ["┃ ● read_file(a.py)  0.1s", "┃   ⎿  Read 0 lines", "", ""])  # two blank rows
+        self.assertTrue(flushed[4].startswith("┃ ● search_files(b.py)  0.1s"), flushed)
+
+    def test_calls_of_one_tool_one_after_another_fold_into_one_row(self) -> None:
+        self.step(ev("message.start"))
+        for tool_id in ("a", "b"):
+            self.step(ev("tool.start", tool_id=tool_id, name="read_file", context=f"{tool_id}.py"))
+            self.step(ev("tool.complete", tool_id=tool_id, name="read_file", duration_s=0.1, result={"content": ""}))
+        flushed = self.step(ev("message.complete", text="", status="complete"))
+        self.assertEqual(flushed, ["┃ ● read_file · 2 calls  0.2s", "┃   ⎿  a.py  0.1s", "┃      b.py  0.1s"])
 
     def test_a_denied_approval_shows_as_denied(self) -> None:
         self.user("Use your terminal tool to run exactly this shell command: rm -rf ./omh-m0-probe-dir")
@@ -1331,7 +1339,10 @@ class InlineDiffTests(LoopTestCase):
                 "┃    2 +print('안녕 🌏')" + " " * 36,
             ],
         )
-        self.assertEqual([row[-1].style for row in diff], [THEME.label, THEME.code, THEME.diff_remove, THEME.diff_add])
+        # The file header in the label style; each code line's last span on its line's band (a `.py` line is
+        # syntax-coloured, so its last span is code, padding or a closing bracket, never another band).
+        self.assertEqual(diff[0][-1].style, THEME.label)
+        self.assertEqual([row[-1].style.bg for row in diff[1:]], [THEME.code.bg, THEME.diff_remove.bg, THEME.diff_add.bg])
         self.assertEqual([line_width(row) for row in diff[-2:]], [WIDTH, WIDTH])
         self.assertFalse(any(is_control(ch) for row in self.taken for span in row for ch in span.text))
         self.assertEqual(self.history(details=False), lines_text(self.taken))

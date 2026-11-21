@@ -94,6 +94,16 @@ def add_top_level_options(parser: argparse.ArgumentParser) -> None:
         metavar="NAME",
         help="Bare launch only: open a new session that starts with OMH's guided NAME conversation (model-setup).",
     )
+    # Not a Hermes flag either: it only stops this launch from reopening the session this terminal dropped
+    # (`_claim_dropped_session`). `store_const` so it is None when absent, as `run_command`'s refusal reads it.
+    parser.add_argument(
+        "--new",
+        dest="tui_new",
+        action="store_const",
+        const=True,
+        default=None,
+        help="Bare launch only: open a new session even when this terminal dropped one that would reopen by itself.",
+    )
 
 
 _TUI_PASSTHROUGH_OPTIONS: tuple[tuple[str, str], ...] = (
@@ -101,6 +111,7 @@ _TUI_PASSTHROUGH_OPTIONS: tuple[tuple[str, str], ...] = (
     ("tui_continue", "--continue"),
     ("tui_profile", "--profile"),
     ("tui_onboard", "--onboard"),
+    ("tui_new", "--new"),
 )
 
 
@@ -140,11 +151,19 @@ def run_bare_launch(args: argparse.Namespace) -> int:
     """Open the terminal for a bare launch; the welcome text when there is nothing to launch.
 
     `--onboard` opens a new session, so it is refused beside `--resume` or `--continue`, which open an old one.
+    `--new` only says not to reopen a dropped session, so it is refused beside any of the three.
     """
     if getattr(args, "tui_onboard", None) and (
         getattr(args, "tui_resume", None) is not None or getattr(args, "tui_continue", None) is not None
     ):
         print("omh: --onboard opens a new session and cannot be combined with --resume or --continue.", file=sys.stderr)
+        return 2
+    if getattr(args, "tui_new", None) and (
+        getattr(args, "tui_resume", None) is not None or getattr(args, "tui_continue", None) is not None
+        or getattr(args, "tui_onboard", None)
+    ):
+        print("omh: --new opens a new session and cannot be combined with --resume, --continue or --onboard.",
+              file=sys.stderr)
         return 2
     launched = _launch_hermes_tui(args)
     if launched is not None:
@@ -454,6 +473,8 @@ def _launch_hermes_tui(args: argparse.Namespace) -> int | None:
         return None
     _run_startup_update_check(args)
     paths = _paths(args)
+    if _auto_resume_applies(args, paths):
+        _claim_dropped_session(args, paths)
     tui_home = _own_runtime_home(args, paths)
     started_at = time.time()
     closed: list[tuple[str, str, tuple[str, ...]]] = []
@@ -476,6 +497,186 @@ def _launch_hermes_tui(args: argparse.Namespace) -> int | None:
     return returncode
 
 
+def _auto_resume_applies(args: argparse.Namespace, paths) -> bool:
+    """Whether this launch may reopen the session this terminal dropped (path A).
+
+    Only a bare launch that names no session of its own (no `--resume`, `--continue`, `--onboard` or `--new`),
+    with `auto_resume.mode` on and `OMH_AUTO_RESUME` not `0`. Both terminal ends are already settled by the caller.
+    """
+    if any(getattr(args, name, None) is not None for name in ("tui_resume", "tui_continue")):
+        return False
+    if getattr(args, "tui_onboard", None) or getattr(args, "tui_new", None):
+        return False
+    from ..maintenance.auto_resume_state import auto_resume_enabled
+
+    return auto_resume_enabled(_tui_omh_home(args, paths), os.environ)
+
+
+def _shared_launch_home(shared: Path, profile: str | None) -> Path | None:
+    """The Hermes home a launch on the shared gateway opens, picked as Hermes' own launcher picks it
+    (`hermes_cli/main.py:_apply_profile_override`, `hermes_cli/profiles.py:resolve_profile_env`): `-p default` is
+    the root, `-p NAME` is `<root>/profiles/<name>`; without `-p`, a profile-shaped home is itself, and a root opens
+    the profile its sticky `active_profile` names (`default` or none: the root). None for a name that cannot be a
+    directory (Hermes refuses it itself)."""
+    from ..maintenance.hermes_resume import hermes_profile_home
+    from ..tui.own_runtime import hermes_root
+
+    root = hermes_root(shared)
+    name = profile
+    if name is None:
+        if shared.parent.name == "profiles":
+            return shared
+        try:
+            name = (shared / "active_profile").read_text(encoding="utf-8-sig")
+        except (OSError, UnicodeDecodeError):
+            name = ""
+    name = name.strip()
+    if not name or name.casefold() == "default":
+        return root
+    return hermes_profile_home(root, name.lower())
+
+
+def _resume_homes(args: argparse.Namespace, paths) -> set[str]:
+    """The shared Hermes home this launch opens, as a set to claim a dropped session from: the one Hermes' launcher
+    picks (`_shared_launch_home`: the `-p` profile, else the sticky `active_profile`, else the resolved home). A home
+    it never reaches, such as the root while a sticky profile is set, is never searched: the entry would be used up
+    by a launch that opens somewhere else. The TUI's own runtime home joins per claim (`_claim_dropped_session`).
+    """
+    opened = _shared_launch_home(Path(paths.hermes_home), getattr(args, "tui_profile", None))
+    return {str(opened)} if opened is not None else set()
+
+
+def _own_claim_home(args: argparse.Namespace, paths) -> Path | None:
+    """The TUI's own runtime home when this launch could open a session there at all (no `-p`, no `--hermes-home`,
+    not Windows); None otherwise. Whether it may is settled only for a session of that home that would win
+    (`_own_home_allowed`)."""
+    if os.name == "nt" or getattr(args, "hermes_home", None) or getattr(args, "tui_profile", None):
+        return None
+    from ..tui.own_runtime import tui_home_path
+
+    return tui_home_path(Path(paths.hermes_home))
+
+
+_OWN_HOME_CHECKED = "_omh_own_home_checked"
+
+
+def _own_home_allowed(args: argparse.Namespace, paths) -> bool:
+    """Whether the TUI's own runtime home may open a claimed session, decided read-only before the claim
+    (`own_runtime.preflight_tui_home`: the root files readable as UTF-8, no messaging token under the root config's
+    `platforms:`); nothing is built or written. A refusal says why in one line and is kept as this launch's answer
+    for the home, so the launch opens on the shared gateway without saying it twice. The home is built only after a
+    claim picked it (`_own_runtime_home`)."""
+    prepared = getattr(args, _OWN_HOME_PREPARED, None)
+    if prepared is not None:
+        return prepared[0] is not None
+    checked = getattr(args, _OWN_HOME_CHECKED, None)
+    if checked is not None:
+        return checked
+    from ..tui.own_runtime import preflight_tui_home
+
+    try:
+        credentials = preflight_tui_home(Path(paths.hermes_home))
+    except (OSError, ValueError) as error:
+        _refuse_own_home(args, _own_home_failed_line(error))
+        return False
+    if credentials:
+        _refuse_own_home(args, _own_home_messaging_line(credentials))
+        return False
+    setattr(args, _OWN_HOME_CHECKED, True)
+    return True
+
+
+def _refuse_own_home(args: argparse.Namespace, line: str) -> None:
+    print(line, file=sys.stderr)
+    setattr(args, _OWN_HOME_PREPARED, (None,))
+
+
+def _own_home_failed_line(error: BaseException) -> str:
+    return f"omh: could not prepare the TUI's own runtime home ({error}); opening on the shared gateway."
+
+
+def _own_home_messaging_line(credentials: tuple[str, ...]) -> str:
+    return (f"omh: the root config.yaml connects a messaging platform ({', '.join(credentials)}), which the TUI's own "
+            "runtime must not poll beside the bots' gateway; opening on the shared gateway.")
+
+
+# A claimed session nothing was said in is skipped and the next one claimed; each claim marks its entry `resumed`,
+# so this only bounds the work, it never decides an outcome.
+_MAX_RESUME_CLAIMS = 16
+# The environment and strictness a launch claimed with, for the shared-only claim after an own-home build failure.
+_RESUME_CLAIM_CONTEXT = "_omh_resume_claim_context"
+
+
+def _claim_dropped_session(args: argparse.Namespace, paths, environ=None, *, strict_keys: bool = False) -> str:
+    """The id of the session this terminal (else this folder) dropped, claimed so no other reopen takes it; "".
+
+    Claimed through `tui.live_sessions.claim_resumable` under its lock, so the entry is `resumed` before Hermes
+    opens it: a resume Hermes refuses (the TUI exits 1 having said why) is never tried again. A session nothing was
+    said in has nothing to reopen (Hermes keeps no such session) and is skipped. A hit sets `args.tui_resume` and
+    `args.tui_resume_home`, the Hermes home it was claimed from, which `_own_runtime_home` opens; it prints one line
+    naming the session (its title, else its folder) and the way to a new one. `strict_keys` (the unattended shell
+    hook) refuses the folder fallback for a session another terminal's key holds.
+    """
+    from ..maintenance.hermes_resume import _session_card_row
+    from ..tui.live_sessions import claim_resumable, pending, resumable
+
+    environ = os.environ if environ is None else environ
+    # Kept for `_own_runtime_home`, which claims again among the shared homes when the own home fails to build.
+    setattr(args, _RESUME_CLAIM_CONTEXT, (environ, strict_keys))
+    omh_home = Path(_tui_omh_home(args, paths))
+    shared = _resume_homes(args, paths)
+    own = _own_claim_home(args, paths)
+    try:
+        cwd = os.getcwd()
+    except OSError:
+        cwd = ""
+    raced = False
+    for _ in range(_MAX_RESUME_CLAIMS):
+        homes = set(shared)
+        if own is not None:
+            # Read only: which entry would win were the own home searched too. Only an own-home winner is checked
+            # (read-only), and only an allowed one adds the home; the claim then selects again under the lock.
+            preview = resumable(omh_home, hermes_homes=shared | {str(own)}, cwd=cwd, environ=environ,
+                                strict_keys=strict_keys)
+            if preview is None:
+                pending(omh_home)  # sweep owners that died, so `live-pids` stops naming them; claims nothing
+                return ""
+            if _same_home(preview["hermes_home"], own):
+                if not _own_home_allowed(args, paths):
+                    own = None  # the own home's winner cannot open here: choose among the shared homes only
+                    continue
+                homes.add(str(own))
+        entry = claim_resumable(omh_home, hermes_homes=homes, cwd=cwd, environ=environ, strict_keys=strict_keys)
+        if entry is None:
+            if own is None or raced:
+                return ""
+            # Another launch may have claimed the previewed winner first: look once more, since a session of the
+            # own home the preview passed over may win now. Once only, so a store lock that keeps giving up (the
+            # claim's ~2 s bound) cannot hold the launch for many rounds.
+            raced = True
+            continue
+        session_id = str(entry["session_id"])
+        card = _session_card_row(Path(entry["hermes_home"]) / "state.db", session_id)
+        if card is None or (isinstance(card, tuple) and card[1] == 0):
+            continue  # nothing was said in it (Hermes stores the row with the first prompt)
+        title = card[0] if isinstance(card, tuple) and card[0].isprintable() else ""
+        named = title or str(entry.get("cwd") or "")
+        where = f"{session_id}, {named}" if named else session_id
+        print(f"omh: reopening the session this terminal left ({where}); run `omh --new` for a new one.",
+              file=sys.stderr)
+        args.tui_resume = session_id
+        args.tui_resume_home = str(entry["hermes_home"])
+        return session_id
+    return ""
+
+
+def _same_home(left: str | Path, right: str | Path) -> bool:
+    try:
+        return os.path.realpath(left) == os.path.realpath(right)
+    except (OSError, ValueError):
+        return False
+
+
 def _own_runtime_home(args: argparse.Namespace, paths) -> Path | None:
     """The TUI's own Hermes runtime home when this launch opens there, built or refreshed; None for the shared gateway.
 
@@ -496,16 +697,23 @@ def _own_runtime_home(args: argparse.Namespace, paths) -> Path | None:
     if os.name == "nt" or getattr(args, "hermes_home", None) or getattr(args, "tui_profile", None):
         return None
     from ..skin_pack import RUNTIME_OWN, effective_runtime
-    from ..tui.own_runtime import build_tui_home, tui_home_path
+    from ..tui.own_runtime import tui_home_path
 
     own = effective_runtime(paths.omh_home) == RUNTIME_OWN
     home = tui_home_path(Path(paths.hermes_home))
     resume = getattr(args, "tui_resume", None)
-    if resume and (home / "state.db").is_file():
+    claimed = getattr(args, "tui_resume_home", None)
+    located: tuple[bool, bool] | None = None  # (in the TUI's own home, in the shared one)
+    if resume and claimed:
+        # A reopened dropped session opens in the home it was claimed from, never where a lookup would guess.
+        located = (_same_home(claimed, home), not _same_home(claimed, home))
+    elif resume and (home / "state.db").is_file():
         from ..maintenance.hermes_resume import session_known
 
-        in_own = session_known(home / "state.db", resume)
-        in_shared = session_known(Path(paths.hermes_home) / "state.db", resume)
+        located = (session_known(home / "state.db", resume),
+                   session_known(Path(paths.hermes_home) / "state.db", resume))
+    if located is not None:
+        in_own, in_shared = located
         if own and in_shared and not in_own:
             print(f"omh: session {resume} lives on the shared Hermes gateway; opening it there.", file=sys.stderr)
             return None
@@ -514,20 +722,56 @@ def _own_runtime_home(args: argparse.Namespace, paths) -> Path | None:
             own = True
     if not own:
         return None
+    built = _prepared_own_home(args, paths)
+    if built is None and claimed and resume:
+        # Claimed from this home, which cannot be opened after all: give the claim back for a launch that can, and
+        # never send the id to a home that never held it. A session waiting in a shared home this launch opens
+        # still reopens (the own home now counts as refused, so the claim passes it over); else a new session.
+        from ..tui.live_sessions import release_claim
+
+        release_claim(Path(_tui_omh_home(args, paths)), resume)
+        args.tui_resume = None
+        args.tui_resume_home = None
+        context = getattr(args, _RESUME_CLAIM_CONTEXT, None)
+        again = ""
+        if context is not None:
+            environ, strict_keys = context
+            again = _claim_dropped_session(args, paths, environ, strict_keys=strict_keys)
+        if not again:
+            print(f"omh: session {resume} stays for a launch that can open the TUI's own runtime; "
+                  "opening a new session.", file=sys.stderr)
+        return None
+    return built
+
+
+_OWN_HOME_PREPARED = "_omh_own_home_prepared"
+
+
+def _prepared_own_home(args: argparse.Namespace, paths) -> Path | None:
+    """The TUI's own runtime home, built or refreshed, once per launch (the answer is kept on `args`, and a refusal
+    `_own_home_allowed` decided before the claim is that answer, so its line prints once); None when it cannot be
+    built or its root config names a messaging token under `platforms:` (the TUI runtime must never poll a bot's
+    token), having said why in one line."""
+    prepared = getattr(args, _OWN_HOME_PREPARED, None)
+    if prepared is not None:
+        return prepared[0]
+    from ..tui.own_runtime import build_tui_home
+
+    path: Path | None = None
     try:
         built = build_tui_home(paths.omh_home, Path(paths.hermes_home))
     except (OSError, ValueError) as error:
-        print(f"omh: could not prepare the TUI's own runtime home ({error}); opening on the shared gateway.",
-              file=sys.stderr)
-        return None
-    if built.config_platform_credentials:
-        print(f"omh: the root config.yaml connects a messaging platform ({', '.join(built.config_platform_credentials)}), "
-              "which the TUI's own runtime must not poll beside the bots' gateway; opening on the shared gateway.",
-              file=sys.stderr)
-        return None
-    for name in built.overwritten:
-        print(f"omh: {name} in the TUI's own runtime home had been changed; the root's copy replaced it.", file=sys.stderr)
-    return built.path
+        print(_own_home_failed_line(error), file=sys.stderr)
+    else:
+        if built.config_platform_credentials:
+            print(_own_home_messaging_line(built.config_platform_credentials), file=sys.stderr)
+        else:
+            for name in built.overwritten:
+                print(f"omh: {name} in the TUI's own runtime home had been changed; the root's copy replaced it.",
+                      file=sys.stderr)
+            path = built.path
+    setattr(args, _OWN_HOME_PREPARED, (path,))
+    return path
 
 
 def _installer_generation() -> Path | None:

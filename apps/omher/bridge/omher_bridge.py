@@ -14,8 +14,10 @@ Boundary rules the code keeps:
 * One gateway connection per profile, opened lazily (``--eager`` opens them all at start).
 * The only sessions this bridge ever resumes, creates, submits to, interrupts or answers are the
   bot's main chat (the session titled ``Bot Chat``) and the folder chats it created itself for an
-  oh-my-hermes SESSIONS entry (``folder.open``; closed with ``folder.close``). Every other session is
-  only listed or read (list / history), never attached.
+  oh-my-hermes SESSIONS entry (``folder.open``; closed with ``folder.close``; after a restart reattached with
+  ``folder.resume``, only a session ``folder.open`` recorded in omher's own ``folder-chats.json`` for that bot and
+  folder, whose saved title is still the one ``folder.open`` gave it). Every other session
+  is only listed or read (list / history), never attached.
   Files the person attaches go to the main chat only.
 """
 from __future__ import annotations
@@ -23,12 +25,14 @@ from __future__ import annotations
 import argparse
 import asyncio
 import contextlib
+import errno
 import hmac
 import json
 import logging
 import os
 import re
 import signal
+import stat
 import subprocess
 import sys
 import threading
@@ -40,6 +44,15 @@ from datetime import datetime
 from http import HTTPStatus
 from pathlib import Path
 from urllib.parse import parse_qs, urlsplit
+
+try:  # the folder chat record's lock (`folder-chats.lock`): fcntl on POSIX, msvcrt on Windows
+    import fcntl
+except ImportError:
+    fcntl = None
+try:
+    import msvcrt
+except ImportError:
+    msvcrt = None
 
 VERSION = "1.1.0"
 BOT_CHAT_TITLE = "Bot Chat"
@@ -4527,6 +4540,26 @@ def read_session_cwds(profile_dir: Path, ids: list[str]) -> dict[str, str]:
     return {str(sid): str(cwd) for sid, cwd in rows if isinstance(cwd, str) and cwd}
 
 
+def read_session_title(profile_dir: Path, session_id: str) -> tuple[str, str] | None:
+    """One session's saved title and folder (`sessions.title`, `sessions.cwd`) from the profile's state.db, opened
+    read-only; None when it has no such row (or no state.db). Nothing is written."""
+    import sqlite3
+    db = profile_dir / "state.db"
+    if not session_id or not db.is_file():
+        return None
+    try:
+        con = sqlite3.connect(ro_uri(db), uri=True, timeout=1.0)
+        try:
+            row = con.execute("SELECT title, cwd FROM sessions WHERE id = ?", (session_id,)).fetchone()
+        finally:
+            con.close()
+    except sqlite3.Error:
+        return None
+    if row is None:
+        return None
+    return (row[0] if isinstance(row[0], str) else "", row[1] if isinstance(row[1], str) else "")
+
+
 def read_session_facts(profile_dir: Path, ids: list[str]) -> dict[str, dict]:
     """Per session: its origin and the bot's last answer there (`last_reply`, `last_reply_at`), read in two
     queries from the profile's state.db, opened read-only. Nothing is written."""
@@ -4927,6 +4960,7 @@ PEER_FORWARD = frozenset({
 PEER_REFUSED = {
     "folder.open": "Folder chats run in a folder on this computer; {label}'s bots run on another one.",
     "folder.close": "Folder chats run in a folder on this computer; {label}'s bots run on another one.",
+    "folder.resume": "Folder chats run in a folder on this computer; {label}'s bots run on another one.",
     "bots.restart": "omher does not restart Hermes on another computer. Restart it on {label} itself.",
 }
 
@@ -5311,6 +5345,195 @@ def split_blocks(text: str) -> tuple[list[dict], dict | None, str]:
     return creates[:SPLIT_MAX], route, shown
 
 
+# ---------------------------------------------------------------- which saved sessions are folder chats
+# `folder.open` records each folder chat it makes in omher's own folder (`~/.omher/folder-chats.json`, owner-only,
+# replaced whole): the bot's profile name, the folder's real path, Hermes' stored session id and when, nothing else.
+# That record, not the session's editable title, is what lets `folder.resume` take a saved session back after a
+# restart, and what keeps a folder chat out of `thread.list` (threads carry the same title prefix). A session made
+# before the record existed has none and is never taken back by itself.
+#
+# Every bridge on this computer shares the file, so a write reads, changes and replaces it under
+# `folder-chats.lock` beside it (fcntl on POSIX, msvcrt on Windows), waited for at most
+# `FOLDER_CHATS_LOCK_WAIT` seconds; a write that cannot take it fails (OSError) and writes nothing.
+# Retention: a record whose chat is attached in this bridge, or made in the last `FOLDER_CHATS_KEEP_SECONDS`, is never
+# dropped. The writer asks the bridge which chats it holds under the lock, right before it publishes (not when the
+# write was queued), and a `folder.resume` counts as held from before its proof check until it is attached or refused
+# (`conn.resuming`); that check reads the record only while no write of this process is between its snapshot and its
+# publish, so a resume that races another bot's write either is seen by that write or reads the file it wrote.
+# Among the rest the newest `FOLDER_CHATS_MAX` stay, and then the oldest of the rest go until the document
+# fits `_FOLDER_CHATS_BYTES`, the reader's own limit (`_folder_chats_doc`, shared by both). When even the kept records
+# do not fit, the old file stays as it was and the write fails: the writer never publishes a file the reader refuses.
+
+FOLDER_CHATS_FILE = "folder-chats.json"
+FOLDER_CHATS_LOCK = "folder-chats.lock"
+FOLDER_CHATS_MAX = 512  # records kept beyond the protected ones (attached here, or made in the last 30 days)
+FOLDER_CHATS_KEEP_SECONDS = 30 * 86400
+FOLDER_CHATS_LOCK_WAIT = 2.0
+_FOLDER_CHATS_BYTES = 256 * 1024
+_FOLDER_CHATS_LOCK = threading.Lock()
+
+
+def _folder_chat_row(r) -> bool:
+    """The one shape a record has, for the reader and the writer alike."""
+    return isinstance(r, dict) and all(isinstance(r.get(k), str) and r.get(k) for k in ("profile", "cwd", "stored"))
+
+
+def _folder_chats_doc(rows: list[dict]) -> bytes | None:
+    """The file's bytes for these records, or None when the reader would refuse them (over `_FOLDER_CHATS_BYTES`)."""
+    data = (json.dumps({"version": 1, "chats": rows}) + "\n").encode("utf-8")
+    return data if len(data) <= _FOLDER_CHATS_BYTES else None
+
+
+def read_folder_chats(omher_home: Path) -> list[dict]:
+    """The folder chat records, oldest first; [] when there is no file, it is a link or not a plain file, too big or
+    not the shape this bridge writes."""
+    path = Path(omher_home) / FOLDER_CHATS_FILE
+    if Path(omher_home).is_symlink():
+        return []
+    if not hasattr(os, "O_NOFOLLOW") and path.is_symlink():
+        return []  # Windows has no O_NOFOLLOW: refuse a link to the record before opening it
+    try:
+        fd = os.open(path, os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_NONBLOCK", 0))
+    except OSError:
+        return []
+    try:
+        if not stat.S_ISREG(os.fstat(fd).st_mode):
+            return []
+        raw = b""
+        while len(raw) <= _FOLDER_CHATS_BYTES:
+            part = os.read(fd, _FOLDER_CHATS_BYTES + 1 - len(raw))
+            if not part:
+                break
+            raw += part
+    except OSError:
+        return []
+    finally:
+        os.close(fd)
+    if len(raw) > _FOLDER_CHATS_BYTES:
+        return []
+    try:
+        data = json.loads(raw.decode("utf-8"))
+    except (UnicodeDecodeError, ValueError):
+        return []
+    rows = data.get("chats") if isinstance(data, dict) else None
+    return [r for r in rows if _folder_chat_row(r)] if isinstance(rows, list) else []
+
+
+@contextlib.contextmanager
+def _folder_chats_locked(home: Path):
+    """Hold `FOLDER_CHATS_LOCK` (this process's threads, then every process) while the block runs. Raises OSError
+    when the lock name is not a plain file, there is no file lock on this platform, or it is not free within
+    `FOLDER_CHATS_LOCK_WAIT` seconds."""
+    deadline = time.monotonic() + FOLDER_CHATS_LOCK_WAIT
+    if not _FOLDER_CHATS_LOCK.acquire(timeout=FOLDER_CHATS_LOCK_WAIT):
+        raise TimeoutError("folder chat record is busy")
+    try:
+        if fcntl is None and msvcrt is None:
+            raise OSError("no file lock on this platform")
+        path = home / FOLDER_CHATS_LOCK
+        if os.path.lexists(path) and not stat.S_ISREG(os.lstat(path).st_mode):
+            raise OSError("folder chat lock is not a plain file")
+        fd = os.open(path, os.O_RDWR | os.O_CREAT | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_NONBLOCK", 0)
+                     | getattr(os, "O_CLOEXEC", 0), 0o600)
+        try:
+            if not stat.S_ISREG(os.fstat(fd).st_mode):
+                raise OSError("folder chat lock is not a plain file")
+            while True:
+                try:
+                    if fcntl is not None:
+                        fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                    else:
+                        os.lseek(fd, 0, os.SEEK_SET)
+                        msvcrt.locking(fd, msvcrt.LK_NBLCK, 1)
+                    break
+                except OSError as e:
+                    if e.errno not in (errno.EACCES, errno.EAGAIN, errno.EDEADLK):
+                        raise
+                    if time.monotonic() >= deadline:
+                        raise TimeoutError("folder chat record is locked by another omher") from None
+                    time.sleep(0.05)
+            try:
+                yield
+            finally:
+                with contextlib.suppress(OSError):
+                    if fcntl is not None:
+                        fcntl.flock(fd, fcntl.LOCK_UN)
+                    else:
+                        os.lseek(fd, 0, os.SEEK_SET)
+                        msvcrt.locking(fd, msvcrt.LK_UNLCK, 1)
+        finally:
+            os.close(fd)
+    finally:
+        _FOLDER_CHATS_LOCK.release()
+
+
+def _kept_folder_chats(rows: list[dict], attached, now: float) -> list[dict] | None:
+    """`rows` (oldest first) after retention, or None when even the protected ones do not fit the reader's limit."""
+    def protected(r: dict) -> bool:
+        made = r.get("created_at")
+        recent = isinstance(made, (int, float)) and not isinstance(made, bool) and now - made < FOLDER_CHATS_KEEP_SECONDS
+        return recent or (r["profile"], r["stored"]) in attached
+    rest = [i for i, r in enumerate(rows) if not protected(r)]
+    drop = set(rest[:max(0, len(rest) - FOLDER_CHATS_MAX)])
+    rest = rest[len(drop):]
+    while True:
+        kept = [r for i, r in enumerate(rows) if i not in drop]
+        if _folder_chats_doc(kept) is not None:
+            return kept
+        if not rest:
+            return None
+        drop.add(rest.pop(0))
+
+
+def record_folder_chat(omher_home: Path, profile: str, cwd: str, stored: str, *, attached=()) -> None:
+    """Add one folder chat record (profile, the folder's real path, stored id), atomically and under the shared lock:
+    a temp file made new with mode 600, then renamed over the record. ``attached`` holds the (profile, stored id) of
+    every folder chat held in this bridge, never dropped; a callable is asked under the lock, right before the
+    write, so a chat attached while this write waited is still kept. Raises OSError when it cannot be written (the
+    lock is busy, the bridge did not answer, the kept records do not fit), leaving the old file as it was."""
+    home = Path(omher_home)
+    row = {"profile": profile, "cwd": _norm(cwd), "stored": stored, "created_at": time.time()}
+    if not _folder_chat_row(row):
+        raise OSError("not a folder chat record")
+    home.mkdir(parents=True, exist_ok=True, mode=0o700)
+    if home.is_symlink():
+        raise OSError("omher's folder is a link")
+    with _folder_chats_locked(home):
+        rows = [r for r in read_folder_chats(home) if (r["profile"], r["stored"]) != (profile, stored)]
+        rows.append(row)
+        held = set(attached() if callable(attached) else attached)
+        kept = _kept_folder_chats(rows, held, row["created_at"])
+        data = _folder_chats_doc(kept) if kept is not None else None
+        if data is None:
+            raise OSError(f"folder chat records do not fit {_FOLDER_CHATS_BYTES} bytes; the record is unchanged")
+        tmp = home / f".{FOLDER_CHATS_FILE}.{uuid.uuid4().hex[:8]}.tmp"
+        try:
+            _write_new(tmp, data)
+            os.replace(tmp, home / FOLDER_CHATS_FILE)
+        finally:
+            with contextlib.suppress(OSError):
+                tmp.unlink()
+
+
+def is_folder_chat(omher_home: Path, profile: str, cwd: str, stored: str) -> bool:
+    """True only when `folder.open` recorded `stored` for this bot in this folder (real paths compared). Read under
+    this process's record lock, so never between a write's look at the held chats and its publish; raises OSError
+    when the lock is not free in time."""
+    where = _norm(cwd)
+    if not _FOLDER_CHATS_LOCK.acquire(timeout=3 * FOLDER_CHATS_LOCK_WAIT):
+        raise TimeoutError("folder chat record is busy")
+    try:
+        rows = read_folder_chats(omher_home)
+    finally:
+        _FOLDER_CHATS_LOCK.release()
+    return any(r["profile"] == profile and r["stored"] == stored and r["cwd"] == where for r in rows)
+
+
+def folder_chat_ids(omher_home: Path, profile: str) -> set[str]:
+    """The stored ids of every folder chat recorded for this bot."""
+    return {r["stored"] for r in read_folder_chats(omher_home) if r["profile"] == profile}
+
+
 # ---------------------------------------------------------------- one Hermes gateway connection
 
 class FolderChat:
@@ -5363,6 +5586,10 @@ class Conn:
         self.elsewhere_sig = None
         self.prompts: dict[str, int | None] = {}  # open prompt_id -> execution_generation
         self.folders: dict[str, FolderChat] = {}  # folder chats and threads this bridge created or listed, by id
+        # folder.open and folder.resume take this one at a time (the folder chat cap is checked and filled under it);
+        # a folder.resume of a stored id already on its way waits for that one's answer instead of resuming again
+        self.admit = asyncio.Lock()
+        self.resuming: dict[str, asyncio.Future] = {}
         self.threads: dict[str, dict] = {}  # threads `thread.list` found (stored id -> row): what `thread.open` takes
         self.threads_shown = False  # an app that shows threads read them: main-chat turns carry the threads note
         self.split_done: set[str] = set()  # answers whose thread blocks were acted on (never twice)
@@ -5426,6 +5653,7 @@ class Bridge:
             "bots.set_avatar": self.op_bots_set_avatar, "bots.info": self.op_bots_info,
             "skills.list": self.op_skills_list, "links.places": self.op_links_places, "tasks.linear": self.op_tasks_linear,
             "folder.open": self.op_folder_open, "folder.close": self.op_folder_close,
+            "folder.resume": self.op_folder_resume,
             "thread.create": self.op_thread_create, "thread.list": self.op_thread_list,
             "thread.open": self.op_thread_open, "thread.remove": self.op_thread_remove,
             "panel.terminal": self.op_panel_terminal, "panel.worktrees": self.op_panel_worktrees,
@@ -6207,27 +6435,158 @@ class Bridge:
     # ------------------------------------------------------------ folder chats (SESSIONS > oh-my-hermes)
 
     async def op_folder_open(self, p) -> dict:
-        """Create a new Hermes chat for the bot in folder ``cwd`` (an existing absolute folder)."""
+        """Create a new Hermes chat for the bot in folder ``cwd`` (an existing absolute folder), and record it in
+        omher's own folder (``record_folder_chat``) as the proof ``folder.resume`` asks for after a restart. Taken
+        one at a time with ``folder.resume`` (``conn.admit``), so the folder chat cap holds for calls that
+        overlap. When the record cannot be written (another omher holds its lock past the wait, the file cannot be
+        replaced) the chat still opens, the bridge log says so as an error, and the reply carries ``recorded:
+        false`` so the page does not attach it again by itself after a restart."""
         cwd = p.get("cwd")
         if not isinstance(cwd, str) or not cwd.strip() or not os.path.isabs(cwd) or not os.path.isdir(cwd):
             raise BridgeError("bad_request", "cwd must be an existing folder")
         conn = await self._conn(p.get("bot"))
-        if sum(1 for f in conn.folders.values() if f.kind == "folder") >= MAX_FOLDER_CHATS:
-            raise BridgeError("bad_request", f"at most {MAX_FOLDER_CHATS} folder chats per bot")
-        leaf = Path(cwd).name or cwd
-        snap = await self._call(conn, "session.create", title=FOLDER_CHAT_PREFIX + leaf, cwd=cwd, cwd_explicit=True,
-                                follow_profile_config=True)
-        fid = "f" + uuid.uuid4().hex[:10]
-        chat = FolderChat(fid, cwd, str(snap["session_id"]), str(snap.get("stored_session_id") or snap["session_id"]),
-                          str(snap.get("subscription_id") or ""))
-        if snap.get("execution_generation") is not None:
-            chat.generation = snap["execution_generation"]
-        self._keep_chat(conn, chat)
+        async with conn.admit:
+            if sum(1 for f in conn.folders.values() if f.kind == "folder") >= MAX_FOLDER_CHATS:
+                raise BridgeError("bad_request", f"at most {MAX_FOLDER_CHATS} folder chats per bot")
+            leaf = Path(cwd).name or cwd
+            snap = await self._call(conn, "session.create", title=FOLDER_CHAT_PREFIX + leaf, cwd=cwd,
+                                    cwd_explicit=True, follow_profile_config=True)
+            fid = "f" + uuid.uuid4().hex[:10]
+            chat = FolderChat(fid, cwd, str(snap["session_id"]), str(snap.get("stored_session_id") or snap["session_id"]),
+                              str(snap.get("subscription_id") or ""))
+            if snap.get("execution_generation") is not None:
+                chat.generation = snap["execution_generation"]
+            # every folder chat held in this bridge keeps its record, whatever its age; asked when the write publishes
+            loop = asyncio.get_running_loop()
+
+            def held() -> set[tuple[str, str]]:  # on the writer's thread, under the record lock
+                fut = None
+                try:
+                    fut = asyncio.run_coroutine_threadsafe(self._held_folder_chats(), loop)
+                    return fut.result(FOLDER_CHATS_LOCK_WAIT)
+                except Exception as e:  # the loop is gone or did not answer in time: write nothing
+                    if fut is not None:
+                        fut.cancel()
+                    raise OSError(f"the bridge did not say which folder chats it holds: {e!r}") from e
+
+            try:
+                await asyncio.to_thread(record_folder_chat, self.omher_home, conn.name, cwd, chat.stored_id,
+                                        attached=held)
+                recorded = True
+            except OSError as e:  # the chat works; it only cannot come back by itself after a restart
+                log.error("folder chat %s NOT recorded in %s (it will not be attached again after a restart): %s",
+                          chat.stored_id, self.omher_home / FOLDER_CHATS_FILE, e)
+                recorded = False
+            self._keep_chat(conn, chat)
         info = snap.get("info") if isinstance(snap.get("info"), dict) else {}
-        return {"session": fid, "cwd": str(info.get("cwd") or cwd),
+        return {"session": fid, "stored": chat.stored_id, "recorded": recorded, "cwd": str(info.get("cwd") or cwd),
                 "model": str(info.get("model") or conn.bot["model"]),
                 "provider": str(info.get("provider") or conn.bot["provider"]),
                 "reasoning": str(info.get("reasoning_effort") or conn.bot["reasoning"])}
+
+    async def _held_folder_chats(self) -> set[tuple[str, str]]:
+        """(profile, stored id) of every folder chat attached in this bridge, and of every ``folder.resume`` on its
+        way (``conn.resuming``: from before its record check until it is attached or refused). Runs on the loop."""
+        held = {(c.name, f.stored_id) for c in self.conns.values() for f in c.folders.values() if f.kind == "folder"}
+        held |= {(c.name, key.split("\0", 1)[1]) for c in self.conns.values() for key in c.resuming}
+        return held
+
+    async def op_folder_resume(self, p) -> Reply:
+        """Reattach a folder chat ``folder.open`` made before omher (or this bridge) restarted, by its stored id.
+
+        Only a session ``folder.open`` recorded for this bot and this folder in omher's own folder
+        (``is_folder_chat``) is taken; its saved title (the bot's state.db, read-only, before anything is attached)
+        must also still be exactly ``FOLDER_CHAT_PREFIX`` + the folder's name, and its saved folder, when it has one,
+        this folder. The main chat, a thread, a messenger session, a session made before the record existed or an
+        unknown id is ``not_found`` and nothing is attached. Admission is one at a time per bot (``conn.admit``, the
+        same lock ``folder.open`` takes, so ``MAX_FOLDER_CHATS`` holds), and a request for a stored id already on its
+        way gets that request's answer instead of a second resume. Then it is resumed through Hermes' own
+        ``session.resume``, kept as a folder chat, and its messages come back as ``thread.open``'s do; prompts still
+        waiting on the person are sent again after the reply."""
+        cwd, stored = p.get("cwd"), p.get("stored")
+        if not isinstance(cwd, str) or not cwd.strip() or not os.path.isabs(cwd) or not os.path.isdir(cwd):
+            raise BridgeError("bad_request", "cwd must be an existing folder")
+        if not isinstance(stored, str) or not stored or len(stored) > 200:
+            raise BridgeError("bad_request", "missing stored session")
+        conn = await self._conn(p.get("bot"))
+        if stored in conn.main_ids:
+            raise BridgeError("not_found", "no such folder chat")
+        key = f"{_norm(cwd)}\0{stored}"
+        pending = conn.resuming.get(key)
+        if pending is not None:  # the same chat is being attached: its answer, without sending its prompts twice
+            try:
+                return Reply(dict(await asyncio.shield(pending)))
+            except asyncio.CancelledError:
+                if not pending.cancelled():
+                    raise
+                raise BridgeError("unavailable", "the folder chat was not attached; try again") from None
+        fut = asyncio.get_running_loop().create_future()
+        conn.resuming[key] = fut
+        try:
+            async with conn.admit:
+                reply = await self._folder_resume(conn, cwd, stored)
+            fut.set_result(reply.result)
+            return reply
+        except asyncio.CancelledError:
+            fut.cancel()
+            raise
+        except Exception as e:
+            fut.set_exception(e)
+            fut.exception()  # read here: a request waiting on it re-raises it, none waiting is not an error
+            raise
+        finally:
+            if conn.resuming.get(key) is fut:
+                del conn.resuming[key]
+
+    async def _folder_resume(self, conn: Conn, cwd: str, stored: str) -> Reply:
+        """``folder.resume`` once admitted (``conn.admit`` held): the checks, the one ``session.resume``, the chat."""
+        chat = next((f for f in conn.folders.values() if stored in f.ids), None)
+        if chat is not None and chat.kind != "folder":
+            raise BridgeError("not_found", "no such folder chat")
+        try:
+            proof = await asyncio.to_thread(is_folder_chat, self.omher_home, conn.name, cwd, stored)
+        except OSError:
+            raise BridgeError("unavailable", "the folder chat record is busy; try again") from None
+        if not proof:
+            raise BridgeError("not_found", "no such folder chat")
+        saved = await asyncio.to_thread(read_session_title, conn.bot["path"], stored)
+        leaf = Path(cwd).name or cwd
+        if saved is None or saved[0] != FOLDER_CHAT_PREFIX + leaf or (saved[1] and saved[1] != cwd):
+            raise BridgeError("not_found", "no such folder chat")
+        if chat is None and sum(1 for f in conn.folders.values() if f.kind == "folder") >= MAX_FOLDER_CHATS:
+            raise BridgeError("bad_request", f"at most {MAX_FOLDER_CHATS} folder chats per bot")
+        snap = await self._call(conn, "session.resume", session_id=stored)
+        info = snap.get("info") if isinstance(snap.get("info"), dict) else {}
+        running = bool(snap.get("running") if snap.get("running") is not None else info.get("running"))
+        conn.threads.pop(stored, None)  # a folder chat, never a thread
+        if chat is None:
+            chat = FolderChat("f" + uuid.uuid4().hex[:10], cwd, str(snap["session_id"]), stored,
+                              str(snap.get("subscription_id") or ""))
+            self._keep_chat(conn, chat)
+        else:
+            chat.runtime_id = str(snap.get("session_id") or chat.runtime_id)
+        if snap.get("execution_generation") is not None:
+            chat.generation = snap["execution_generation"]
+        if type(snap.get("revision")) is int:
+            chat.revision = snap["revision"]
+        chat.in_turn = running
+        result = {"session": chat.id, "stored": stored, "cwd": str(info.get("cwd") or cwd),
+                  "model": str(info.get("model") or conn.bot["model"]),
+                  "provider": str(info.get("provider") or conn.bot["provider"]),
+                  "reasoning": str(info.get("reasoning_effort") or conn.bot["reasoning"]),
+                  "messages": chat_messages(snap.get("messages"), running=running), "running": running}
+        prompts = [x for x in (snap.get("prompts") or []) if isinstance(x, dict) and x.get("prompt_id")]
+        asks = [x for x in (snap.get("open_requests") or [])
+                if isinstance(x, dict) and x.get("method") == "clarify" and isinstance(x.get("id"), str)]
+
+        async def replay():
+            for x in prompts:
+                pid = str(x["prompt_id"])
+                chat.prompts[pid] = x.get("execution_generation")
+                await (self._emit_clarify if x.get("kind") == "clarify" else self._emit_approval)(conn, pid, x, chat)
+            for x in asks:
+                await self._batch_clarify(conn, x)
+        return Reply(result, replay if prompts or asks else None)
 
     async def op_folder_close(self, p) -> dict:
         """Close a folder chat this bridge created: Hermes stops its agent; the conversation stays saved.
@@ -6378,7 +6737,9 @@ class Bridge:
         conn.threads_shown = True  # this app shows the bot's threads: its main-chat turns carry the threads note
         rows = (await self._call(conn, "session.list", limit=200)).get("sessions") or []
         out: dict[str, dict] = {}
+        # folder chats share the prefix: the ones attached now and every one folder.open recorded are left out
         folder_ids = {f.stored_id for f in conn.folders.values() if f.kind == "folder"}
+        folder_ids |= await asyncio.to_thread(folder_chat_ids, self.omher_home, conn.name)
         for r in rows:
             if not isinstance(r, dict) or not isinstance(r.get("title"), str) or not r["title"].startswith(THREAD_PREFIX):
                 continue

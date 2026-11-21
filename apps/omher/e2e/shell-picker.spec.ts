@@ -133,10 +133,9 @@ test("Settings › Terminal › Default shell: kept, used by the plain Shell row
   expect(await shellStarts(page)).toEqual(["unix:/bin/bash"]);
   await expect(term(page, a).locator(".xterm-rows")).toContainText("bash login shell in");
 
-  // a split's "new Shell in this folder" runs the focused pane's shell
+  // ⌘D's new Shell in this folder runs the focused pane's shell
   await term(page, a).locator(".xterm-helper-textarea").focus();
   await page.keyboard.press(m ? "Meta+d" : "Control+Shift+D");
-  await page.getByTestId("split-new-shell").click();
   await expect(page.getByTestId("session-split")).toHaveAttribute("data-panes", "2");
   await expect.poll(() => shellStarts(page)).toEqual(["unix:/bin/bash", "unix:/bin/bash"]);
 
