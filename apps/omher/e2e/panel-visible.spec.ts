@@ -104,7 +104,7 @@ test("Korean: the tooltip and the empty Plans text read without a particle after
   await expect(page.getByTestId("panel-button")).toHaveAttribute("title", /^패널 \((⌘|Ctrl\+)\.\)$/);
   await page.getByTestId("panel-button").click();
   const empty = page.getByTestId("plans-empty");
-  await expect(empty).toContainText("아직 계획이 없습니다.");
+  await expect(empty).toContainText("아직 계획이 없어요.");
   await expect(empty).toContainText("서브에이전트");
   await expect(empty).toContainText("dag ulw");
   await expect(empty).not.toContainText("(가)");

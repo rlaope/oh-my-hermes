@@ -17,6 +17,13 @@ All notable changes will be documented here.
   - **Keys:** ⌘A selects the whole terminal, also in Claude Code and Codex. (#3050)
   - **Speed:** saving a long scrollback no longer stalls on trailing blank lines (98 ms to 0.1 ms on the same input).
     (#3050)
+
+- **omher reads more naturally in Korean.** A pass over the Korean UI copy: one register (해요체) on every screen
+  instead of 합니다체 in some hints and dialogs, `shell` instead of `셸`, and literal translations replaced with what
+  a Korean developer expects (`회원님의 메시지 N개에 답장` is `내 메시지 N개에 답장`, `붙는 것` is `추가되는 것`,
+  `owner/repo` stays as written). Labels that name a screen use its Korean name (`계획 탭`, `다시 시작`). Only string
+  values changed.
+
 - **omher shows "replied to you" only when an answer covers two or more of your messages.** A one-word message followed
   by a clarify card used to get a "Replying to you / di" header above the answer, which was noise. With exactly one
   message the header is now never shown, whatever sits between it and the answer; failed, dropped and held sends still
