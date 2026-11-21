@@ -820,6 +820,7 @@ export const ko: Record<Key, string> = {
   "card.otherN": "기타 답변 {n}",
   "card.questions": "질문 {n}개",
   "card.pickAny": "여러 개 선택",
+  "card.recommended": "권장",
   "card.pickOne": "하나 선택",
   "card.submit": "보내기",
   "card.answered": "{n}개 중 {given}개 답함",
