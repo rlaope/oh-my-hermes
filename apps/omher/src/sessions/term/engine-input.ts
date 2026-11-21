@@ -24,6 +24,11 @@
 // Copy and paste off macOS, as Windows Terminal and GNOME Terminal: Ctrl+Shift+C or Ctrl+Insert copies the selection
 // (never a Ctrl+C to the program, selection or not), Ctrl+Shift+V or Shift+Insert pastes through the page's own paste
 // (the multi-line confirm and a pasted picture's path included). macOS keeps Cmd+C / Cmd+V from the Edit menu.
+//
+// On macOS every other Cmd key is the app's (Copy, Paste, Select All and the rest of the menu, the app's shortcuts),
+// as in Terminal.app and iTerm2, and never reaches the program. Without this, a program that turned the Kitty
+// keyboard protocol on (Claude Code and Codex do) would get Cmd+V as CSI 118;9 u, and xterm would cancel the key, so
+// the Edit menu's Paste never ran.
 import type { Terminal } from "@xterm/xterm";
 import { isMacPlatform } from "./engine-links";
 import { readTermSettings, TERM_DEFAULTS, writeTermSettings } from "./settings";
@@ -118,6 +123,11 @@ export function clipboardKey(e: KeyLike, mac: boolean): "copy" | "paste" | null 
   return null;
 }
 
+/** A Cmd key on macOS that the app keeps (the menu's Copy, Paste and the rest): never sent to the program. */
+export function isAppKey(e: KeyLike, mac: boolean): boolean {
+  return mac && e.metaKey;
+}
+
 /** Keyboard and mouse handling for one terminal; `onFind` runs when the person asks for find. Returns what undoes it. */
 export function attachInput(term: Terminal, host: HTMLElement, onFind: () => void): () => void {
   const mac = isMacPlatform();
@@ -184,7 +194,7 @@ export function attachInput(term: Terminal, host: HTMLElement, onFind: () => voi
       }
       return false;
     }
-    if (!isFindKey(e, mac, term.buffer.active.type === "alternate")) return true;
+    if (!isFindKey(e, mac, term.buffer.active.type === "alternate")) return !isAppKey(e, mac);
     if (e.type === "keydown" && !e.repeat) {
       e.preventDefault();
       onFind();

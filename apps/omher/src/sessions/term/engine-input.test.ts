@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { findOptionKey, fontKey, isClearKey, isFindKey, lineEditBytes, nextFontSize, scrollKey, clipboardKey } from "./engine-input";
+import { findOptionKey, fontKey, isAppKey, isClearKey, isFindKey, lineEditBytes, nextFontSize, scrollKey, clipboardKey } from "./engine-input";
 import { validPattern } from "./engine-find";
 
 const key = (o: Partial<{ key: string; code: string; metaKey: boolean; ctrlKey: boolean; altKey: boolean; shiftKey: boolean }>) => ({ key: "f", code: "KeyF", metaKey: false, ctrlKey: false, altKey: false, shiftKey: false, ...o });
@@ -165,5 +165,26 @@ describe("copy and paste keys off macOS", () => {
   it("macOS takes none of them (Cmd+C / Cmd+V are the Edit menu's)", () => {
     expect(clipboardKey(k({ ctrlKey: true, shiftKey: true, key: "C", code: "KeyC" }), true)).toBeNull();
     expect(clipboardKey(k({ shiftKey: true, key: "Insert" }), true)).toBeNull();
+  });
+});
+
+describe("Cmd keys on macOS stay the app's", () => {
+  const k = (key: string, mods: Partial<{ metaKey: boolean; ctrlKey: boolean; altKey: boolean; shiftKey: boolean }> = {}) => ({
+    key,
+    code: `Key${key.toUpperCase()}`,
+    metaKey: false,
+    ctrlKey: false,
+    altKey: false,
+    shiftKey: false,
+    ...mods,
+  });
+  it("keeps Cmd+V, Cmd+C, Cmd+A and Cmd+Shift+anything on macOS", () => {
+    for (const key of ["v", "c", "a", "x", "z"]) expect(isAppKey(k(key, { metaKey: true }), true)).toBe(true);
+    expect(isAppKey(k("v", { metaKey: true, shiftKey: true }), true)).toBe(true);
+  });
+  it("leaves keys without Cmd, and every key off macOS, to the program", () => {
+    expect(isAppKey(k("v"), true)).toBe(false);
+    expect(isAppKey(k("v", { ctrlKey: true }), true)).toBe(false);
+    expect(isAppKey(k("v", { metaKey: true }), false)).toBe(false);
   });
 });
