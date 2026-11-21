@@ -139,6 +139,10 @@ and evidence obvious to a reviewer reading the PR without the chat history.
     Hermes' own gateway; read
     [`docs/OMH-TUI-BOUNDARY.md`](docs/OMH-TUI-BOUNDARY.md) before touching
     `src/tui/`.
+  - **Auto-resume shell hook** (`src/tui/shell_hook.py`): opt-in, default No;
+    the one place OMH writes outside its own and Hermes' homes, one marked
+    block in the shell rc that `omh auto-resume shell remove` takes back byte
+    for byte.
   - **omher** (`apps/omher/`): not core; every widening is a numbered rule in
     [docs/OMHER-BOUNDARY.md](docs/OMHER-BOUNDARY.md), pinned by
     `tests/test_omher_boundary.py`; read it before touching the app.

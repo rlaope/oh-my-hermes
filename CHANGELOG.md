@@ -46,6 +46,20 @@ All notable changes will be documented here.
   code colours. Hermes' own terminal reads the same `omh` skin, so its code colours follow. The default `spectrum`
   launch look's accent, which paints a tool call's rail, the working row's spinner and the card's labels, moves from
   orange to a soft violet; the other looks keep theirs.
+- **Asking Hermes to review a diff or PR now runs the code-review discipline instead of a memory skill.** A review
+  task that said its files were "under context/" dispatched `memory-sync`, because the folder name counted as a memory
+  word; a word inside a file path no longer does. "review this diff for bugs", "can you review my PR?", "does this
+  change introduce a bug?", "check this patch for regressions", "이 diff 리뷰해줘" and "이 PR 버그 있는지 봐줘" used to
+  stop at a clarification and now go straight to `code-review`. Only a sentence that is wholly such a request counts:
+  "review this PR and merge it", "review my essay" or "review the change to our refund policy" keep their old route,
+  and "fix this bug" still goes to coding.
+
+- **A delegation route is no longer refused for a Hermes config that opens with `%YAML 1.1` or lists a key's
+  items at column 0.** `omh_delegate_route` answered `config_unreadable` for a valid `config.yaml` that starts with a
+  `%YAML 1.1` line and `---`, or that writes a list such as `fallback_providers:` with its `- ` items at the left
+  edge, though Hermes' loader reads both. The route guard now reads those two shapes; a second directive, a
+  directive without `---`, `%YAML 1.2` or `%TAG`, a second document, and a column-0 list under `delegation`, `model`
+  or a root model key, or after a key that already has a value, are still refused. Reported by @mazzy89 in #2917.
 
 - **omher reaches a Hermes on a Windows computer over SSH, and the composer copies and recalls your prompts.** Remote
   machines found Hermes only under `~/.hermes`, so a Windows computer whose OpenSSH login shell is Git Bash, MSYS2 or
