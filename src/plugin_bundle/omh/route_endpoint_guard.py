@@ -43,7 +43,10 @@ line number without a revision is the same at main and v0.22.2.
 
 OMH reads YAML with line scans, not a parser, and Hermes' loader reads more
 shapes than these scans do. Any line this module does not model makes its
-section unreadable, and the route is refused. Reading a value as "unset" by
+section unreadable, and the route is refused. At the top level it models plain
+`key:` lines, one opening `---`, one opening `%YAML 1.1` directive with its
+`---`, and a block sequence at column 0 under an empty untracked root key
+(`scan_config`, #2917). Reading a value as "unset" by
 mistake is the unsafe answer here; refusing is the safe one. An alias, a
 `<<` or such a tag given as a value in `config.yaml`'s `model` or
 `delegation` section, or in a root key Hermes reads as a model key, refuses
@@ -106,6 +109,10 @@ _PLAIN_KEY_RE = re.compile(
     r"(?P<key>[A-Za-z0-9_][A-Za-z0-9_.-]*|'[A-Za-z0-9_.-]+'|\"[A-Za-z0-9_.-]+\")[ ]*:(?:[ ]+(?P<value>.*))?"
 )
 _COMMENT_RE = re.compile(r"(?:^|\s)#")
+# The one directive both loaders read the same way. `%YAML 1.2` and `%TAG` are
+# not modelled: a loader that honours them may resolve tags and plain scalars
+# differently, so a file opening with either stays unreadable.
+_YAML_1_1_DIRECTIVE_RE = re.compile(r"%YAML[ \t]+1\.1")
 _YAML_INDICATORS = frozenset("[]{}|>&*!%@`-?:,")
 _TRACKED_SECTIONS = ("delegation", "model")
 # Top-level keys Hermes reads as `model` keys (`_normalize_root_model_keys`).
@@ -140,6 +147,16 @@ def scan_config(text: str) -> Layer:
 
     A value is "" when Hermes reads it as unset, a string when it is set, and
     None when this scan cannot decide; the caller counts None as set.
+
+    Two shapes Hermes' loaders read at the top level beyond plain `key:` lines
+    (#2917): one `%YAML 1.1` directive opening the file, which must be followed
+    by the document start `---` (a second directive, a missing `---` or any
+    other directive stays unreadable), and a block sequence written at column 0
+    under an empty root key this scan does not track (`fallback_providers:` then
+    `- model: x`). That sequence's items are that key's value, never top-level
+    keys. Under `delegation`, `model` or a root model key, after a key that
+    already has a value, or after indented lines, a column-0 `-` stays
+    unreadable: the loaders read a sequence there, or fail.
     """
     layer = Layer()
     if text.startswith(BOM):
@@ -149,13 +166,29 @@ def scan_config(text: str) -> Layer:
     header_empty = False
     body: list[str] = []
     first_content = True
+    directive_open = False  # a `%YAML 1.1` line read, its `---` not yet
+    root_sequence = False  # the current key's value is a column-0 block sequence
     for line in text.splitlines():
         stripped = line.strip()
         if not stripped or stripped.startswith("#"):
             continue
         if not line[0].isspace():
+            if first_content and _YAML_1_1_DIRECTIVE_RE.fullmatch(_strip_comment(stripped)):
+                first_content, directive_open = False, True
+                continue
+            if directive_open:
+                directive_open = False
+                if _strip_comment(stripped) == "---":
+                    continue
+                layer.unreadable_top_level = True  # both loaders need `---` after a directive
+            if _indentless_item(stripped) and top_key is not None and header_empty \
+                    and top_key not in _TRACKED_SECTIONS and top_key not in _ROOT_MODEL_KEYS \
+                    and (root_sequence or not body):
+                root_sequence = True
+                body.append(line)
+                continue
             _close_section(layer, top_key, header_empty, body)
-            top_key, body = None, []
+            top_key, body, root_sequence = None, [], False
             if first_content and stripped == "---":
                 first_content = False
                 continue
@@ -182,8 +215,15 @@ def scan_config(text: str) -> Layer:
             layer.unreadable_top_level = True
             continue
         body.append(line)
+    if directive_open:
+        layer.unreadable_top_level = True
     _close_section(layer, top_key, header_empty, body)
     return layer
+
+
+def _indentless_item(stripped: str) -> bool:
+    """A line that opens a block sequence entry: `-` alone or followed by a space."""
+    return stripped == "-" or stripped.startswith("- ")
 
 
 def _read_header_value(layer: Layer, key: str, value: str) -> None:
