@@ -2215,6 +2215,20 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
 
   /** Name a session (Rename). Empty or null = back to the automatic name. Kept on this computer under the agent's
    *  own conversation id, so the name follows the conversation when it is resumed. */
+  /** Row `id` dragged in TERMINALS to just before (or after) row `to` of the same folder: the list keeps that order,
+   *  and so does the saved list (`omher.resume`). Rows of another folder, or the same place, change nothing. */
+  const moveRow = (id: string, to: string, after: boolean) => {
+    if (id === to) return;
+    const r = rec(id);
+    const at = rec(to);
+    if (!r || !at || r.cwd !== at.cwd) return;
+    const rest = state.list.filter((x) => x.id !== id);
+    const i = rest.findIndex((x) => x.id === to);
+    const list = [...rest.slice(0, after ? i + 1 : i), r, ...rest.slice(after ? i + 1 : i)];
+    if (list.every((x, k) => x === state.list[k])) return;
+    set({ list });
+  };
+
   const rename = (id: string, title: string | null) => {
     const r = rec(id);
     if (!r || r.status === "draft") return; // a draft is named once it starts
@@ -2335,6 +2349,7 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
     setMode,
     setEffort,
     rename,
+    moveRow,
     restart,
     resume,
     restore,

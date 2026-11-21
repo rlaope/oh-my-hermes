@@ -278,7 +278,7 @@ test("the menu's Close Window and the ⌘W key close the pane that holds the key
   expect(await page.evaluate(() => (window as unknown as { __omherWindowCloses?: number }).__omherWindowCloses ?? 0)).toBe(0);
 });
 
-test("rows in the open split carry a glyph (the focused one marked); Plans draws the split small and a click there focuses that pane", async ({ page }) => {
+test("rows in a split carry a glyph (the focused one marked, a split out of view dimmed); Plans draws the split small and a click there focuses that pane", async ({ page }) => {
   await openApp(page);
   const k = await keys(page);
   const [a, b, c] = await sessions(page, ["/w/a", "/w/b", "/w/c"]);
@@ -320,10 +320,13 @@ test("rows in the open split carry a glyph (the focused one marked); Plans draws
   await expect(boxA).toHaveAttribute("data-focused", "true");
   await expect(page.getByTestId(`session-${a}`)).toHaveAttribute("data-split", "focused");
   await expect.poll(() => focusedTerm(page)).toBe(a);
-  // a session alone has no map
+  // a session alone has no map; the split's rows keep their glyph, marked as a split not in view, and c has none
   await page.getByTestId(`session-${c}`).locator(".ss-open").click();
   await expect(page.getByTestId("split-map")).toHaveCount(0);
-  await expect(page.getByTestId(`session-${a}`).getByTestId("term-split-glyph")).toHaveCount(0);
+  await expect(page.getByTestId(`session-${a}`).getByTestId("term-split-glyph")).toBeVisible();
+  await expect(page.getByTestId(`session-${a}`)).toHaveAttribute("data-split", "away");
+  await expect(page.getByTestId(`session-${b}`)).toHaveAttribute("data-split", "away");
+  await expect(page.getByTestId(`session-${c}`).getByTestId("term-split-glyph")).toHaveCount(0);
 });
 
 test("bot chats never split: the keys do nothing there, and a TERMINALS row dragged onto one finds no drop zone", async ({ page }) => {
