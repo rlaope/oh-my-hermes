@@ -704,10 +704,16 @@ mod tests {
         let pid = child.id();
         assert_eq!(wait_for(|| Probe::default().agent(pid).map(String::from)).as_deref(), Some("claude"));
         let t0 = Instant::now();
+        // the cache is what is under test, not the OS: read the real argv once (retrying, as a loaded macOS runner's
+        // KERN_PROCARGS2 can fail for a moment) and hand those bytes to every read the cache asks for
+        let mut real = Vec::new();
+        assert!(wait_for(|| argv_bytes(pid, &mut real).then(String::new)).is_some(), "the real argv could not be read");
         let mut reads = 0;
-        let mut counted = |p: u32, out: &mut Vec<u8>| {
+        let mut counted = |_: u32, out: &mut Vec<u8>| {
             reads += 1;
-            argv_bytes(p, out)
+            out.clear();
+            out.extend_from_slice(&real);
+            true
         };
         let mut p = Probe::default();
         for i in 0..60 {

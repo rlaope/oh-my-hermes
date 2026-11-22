@@ -1189,8 +1189,9 @@ def _find_key(obj, key: str, depth: int = 0):
     return None
 
 
-def _claude_usage(user_home: Path, now: float, root: Path | None = None) -> dict | None:
-    root = root or user_home / ".claude" / "projects"
+def _claude_limit_hit(root: Path) -> tuple[float, dict] | None:
+    """The newest request that hit a limit in Claude Code's transcripts (`rate_limit_info`: a state and a reset
+    time, no %), as (event time, provider before `_finish`). Claude Code writes it only when a request was refused."""
     if not root.is_dir():
         return None
     best = None  # (event ts, mtime, rate_limit_info)
@@ -1209,20 +1210,68 @@ def _claude_usage(user_home: Path, now: float, root: Path | None = None) -> dict
             break
     if best is None:
         return None
-    _, mtime, info = best
+    ts, mtime, info = best
     kind = str(info.get("rateLimitType") or "")
-    window: dict = {"label": _CLAUDE_WINDOWS.get(kind) or (kind.replace("_", " ").capitalize() or "Limit")}
+    window: dict = {"label": _claude_label(kind)}
     if isinstance(info.get("resetsAt"), (int, float)):
         window["resets_at"] = float(info["resetsAt"])
     status = str(info.get("status"))
     state = "limited" if status == "rejected" else "near" if status == "allowed_warning" else "ok"
-    return _finish({"id": "claude", "windows": [window], "state": state, "source_mtime": mtime}, now)
+    return ts, {"id": "claude", "windows": [window], "state": state, "source_mtime": mtime}
+
+
+def _claude_label(kind: str) -> str:
+    return _CLAUDE_WINDOWS.get(kind) or (kind.replace("_", " ").capitalize() or "Limit")
+
+
+def omher_usage_root(user_home: Path) -> Path:
+    return user_home / ".omher" / "usage" / "claude"
+
+
+def _claude_record(user_home: Path, account: str) -> tuple[float, dict] | None:
+    """omher's own record of the usage Claude Code reported for `account` (`~/.omher/usage/claude/<account>.json`,
+    written by the desktop app from a chat's stream-json `rate_limit_event` or a TERMINALS status line's input;
+    `used_percent` 0..100), as (time, provider before `_finish`)."""
+    data = _read_json(omher_usage_root(user_home) / f"{account}.json")
+    raw = data.get("windows")
+    if not isinstance(raw, dict) or not isinstance(data.get("at"), (int, float)):
+        return None
+    order = list(_CLAUDE_WINDOWS)
+    windows = []
+    for kind in sorted(raw, key=lambda k: (order.index(k) if k in order else len(order), k)):
+        w = raw[kind]
+        if not isinstance(w, dict):
+            continue
+        out: dict = {"label": _claude_label(kind)}
+        if isinstance(w.get("used_percent"), (int, float)):
+            out["used_percent"] = float(w["used_percent"])
+        if isinstance(w.get("resets_at"), (int, float)):
+            out["resets_at"] = float(w["resets_at"])
+        if len(out) > 1:
+            windows.append(out)
+    if not windows:
+        return None
+    top = max((w.get("used_percent", 0.0) for w in windows), default=0.0)
+    status = data.get("status")
+    state = ("limited" if status == "rejected" or top >= 100 else
+             "near" if status == "allowed_warning" or top >= 70 else "ok")
+    return float(data["at"]), {"id": "claude", "windows": windows, "state": state, "source_mtime": float(data["at"])}
+
+
+def _claude_usage(user_home: Path, now: float, root: Path | None = None, account: str = "default") -> dict | None:
+    """The newer of omher's own record for `account` and the last limit hit in that login's transcripts."""
+    found = [r for r in (_claude_record(user_home, account),
+                         _claude_limit_hit(root or user_home / ".claude" / "projects")) if r]
+    if not found:
+        return None
+    return _finish(max(found, key=lambda r: r[0])[1], now)
 
 
 def read_usage(user_home: Path | None = None, *, now: float | None = None, which=None,
                with_accounts: bool = True) -> dict:
     """Subscription usage per CLI, from the CLIs' own local session files only (read-only, tail reads, no
-    network, no tokens). Codex gives percentages; Claude Code gives a state and a reset time, never a %.
+    network, no tokens). Codex gives percentages in its session files. Claude Code's percentages come from omher's own
+    record of what it reported live (`_claude_record`), or a state and a reset time from a refused request.
     A CLI with no usage record shows as `connected` when it is on PATH, and not at all otherwise.
     With two or more Claude logins (Claude Code's own, omher accounts, a local CLIProxyAPI's auth file names),
     the Claude meter also lists them, each with only its own usage record (see `claude_accounts`)."""
@@ -1250,7 +1299,8 @@ def read_usage(user_home: Path | None = None, *, now: float | None = None, which
 def claude_accounts(user_home: Path, now: float, default_usage: dict | None) -> list[dict]:
     """Every Claude login on this computer for the sidebar meter, in the Accounts page's order: Claude Code's own,
     the omher accounts, then a local CLIProxyAPI's other logins (from its auth file names). Each carries only its
-    own usage record (`state`, `resets_at`); a CLIProxyAPI-only login has none (`no_record`)."""
+    own usage record (`state`, and `resets_at` when limited, else the fullest window's `used_percent` and its
+    `resets_at`); a CLIProxyAPI-only login has none (`no_record`)."""
     rows = _with_cpa(_omher_rows("claude", user_home, now, default_usage, {}, lambda _: None), user_home)
     out = []
     for r in rows:
@@ -1259,9 +1309,16 @@ def claude_accounts(user_home: Path, now: float, default_usage: dict | None) -> 
         u = r.get("usage") or {}
         item = {"email": r["email"], "label": r["label"], "source": r.get("source") or ("cli" if r["id"] == "default" else "omher"),
                 "in_cpa": bool(r.get("in_cpa")), "state": u.get("state") or "no_record"}
-        resets = [w["resets_at"] for w in u.get("windows") or [] if "resets_at" in w and not w.get("stale")]
+        live = [w for w in u.get("windows") or [] if not w.get("stale")]
+        resets = [w["resets_at"] for w in live if "resets_at" in w]
+        pct = [w for w in live if "used_percent" in w]
         if item["state"] == "limited" and resets:
             item["resets_at"] = max(resets)
+        elif pct:
+            top = max(pct, key=lambda w: w["used_percent"])
+            item["used_percent"] = top["used_percent"]
+            if "resets_at" in top:
+                item["resets_at"] = top["resets_at"]
         out.append(item)
     return out
 
@@ -4349,7 +4406,7 @@ def _signed_in(cli: str, folder: Path) -> bool:
 
 def _account_usage(cli: str, folder: Path, user_home: Path, now: float) -> dict | None:
     if cli == "claude":
-        return _claude_usage(user_home, now, root=folder / "projects")
+        return _claude_usage(user_home, now, root=folder / "projects", account=folder.name)
     if cli == "codex":
         return _codex_usage(user_home, now, root=folder / "sessions")
     return None

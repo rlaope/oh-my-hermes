@@ -5,6 +5,7 @@ mod agent_chat;
 mod app_menu;
 mod appimage;
 mod bridge;
+mod claude_usage;
 mod custom_agents;
 mod disk;
 mod dsh_chat;
@@ -1011,6 +1012,15 @@ async fn bridge_retry(shell: State<'_, Shell>) -> Result<(), String> {
     Ok(())
 }
 
+/// `omher --statusline-relay <account>` (a TERMINALS Claude Code's status line, `claude_usage.rs`): records the usage
+/// Claude Code reports, runs the person's own status line and returns its exit code. No app start-up happens.
+pub fn statusline_relay(args: &[std::ffi::OsString]) -> Option<i32> {
+    if args.get(1)?.to_str()? != claude_usage::RELAY_FLAG {
+        return None;
+    }
+    Some(claude_usage::relay_main(args))
+}
+
 pub fn run() {
     let builder = tauri::Builder::default();
     // macOS: Close Window (⌘W) asks the page first, so a split pane closes instead of the window (app_menu.rs). Other
@@ -1221,6 +1231,14 @@ mod tests {
         assert_eq!(past_home_in(&home, "codex", None, &none), Ok(home.join(".codex")));
         assert!(past_home_in(&home, "grok", None, &none).is_err());
         let _ = std::fs::remove_dir_all(home);
+    }
+
+    #[test]
+    fn only_the_relay_flag_as_the_first_argument_skips_the_app() {
+        let args = |a: &[&str]| a.iter().map(std::ffi::OsString::from).collect::<Vec<_>>();
+        for other in [&["omher"][..], &["omher", "omher://terminal/abcdefgh23"], &["omher", "--statusline-relayx"], &["omher", "x", "--statusline-relay"]] {
+            assert_eq!(super::statusline_relay(&args(other)), None, "{other:?}");
+        }
     }
 
     #[test]
