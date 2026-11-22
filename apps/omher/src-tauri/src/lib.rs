@@ -578,7 +578,10 @@ async fn tasks_list(
     let (src, kind, filter) = (tasks::Source::parse(&source)?, tasks::Kind::parse(&kind)?, tasks::Filter::parse(&filter)?);
     let (t, m) = (Arc::clone(&tasks), Arc::clone(&me));
     tauri::async_runtime::spawn_blocking(move || match account.filter(|_| src == tasks::Source::Github) {
-        Some(acc) => t.list_with(src, kind, &repo, filter, page, &acc, |argv| m.run_as(&acc, argv, false).map_err(|e| e.line)),
+        Some(acc) => {
+            gh_me::repo_account_ok(&acc)?;
+            t.list_with(src, kind, &repo, filter, page, &acc, |argv| m.run_as(&acc, argv, false).map_err(|e| e.line))
+        }
         None => t.list(src, kind, &repo, filter, page),
     })
     .await
@@ -599,7 +602,10 @@ async fn tasks_view(
     let (src, kind) = (tasks::Source::parse(&source)?, tasks::Kind::parse(&kind)?);
     let (t, m) = (Arc::clone(&tasks), Arc::clone(&me));
     tauri::async_runtime::spawn_blocking(move || match account.filter(|_| src == tasks::Source::Github) {
-        Some(acc) => t.view_with(src, kind, &repo, number, |argv| m.run_as(&acc, argv, false).map_err(|e| e.line)),
+        Some(acc) => {
+            gh_me::repo_account_ok(&acc)?;
+            t.view_with(src, kind, &repo, number, |argv| m.run_as(&acc, argv, false).map_err(|e| e.line))
+        }
         None => t.view(src, kind, &repo, number),
     })
     .await

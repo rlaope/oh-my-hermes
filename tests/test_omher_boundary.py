@@ -204,22 +204,28 @@ RULES = (
     " through the person's own GitHub CLI (`gh`) and GitLab CLI (`glab`) under their own logins:",
     "The only argv are `auth status` (only its exit code is read; its output, which can name a token, goes nowhere:"
     " it is never piped to omher),",
-    "For gh's active account and for `glab` omher passes no token, asks for none and shows none.",
-    "The token exception, to rules 5, 10 and 18's \"omher reads no token\": for a chosen GitHub account that is not gh's"
-    " active one, omher reads that account's token with `gh auth token --hostname <host> --user <login>` only to pass"
+    "Without a chosen GitHub account (\"이 저장소\" read as gh's active account) and for `glab`, omher passes no token,"
+    " asks for none and shows none.",
+    "The token exception, to rules 5, 10 and 18's \"omher reads no token\": for a chosen GitHub account, whether or not gh"
+    " has it active (which one is active can change under omher at any time, from any shell), omher reads that account's"
+    " token with `gh auth token --hostname <host> --user <login>` only to pass"
     " it, with `GH_HOST`, as `GH_TOKEN` (`GH_ENTERPRISE_TOKEN` for a GitHub Enterprise Server host) in the environment"
     " of that one `gh` call; it reads it again for every call and never stores, caches, logs, shows or sends it, never"
     " puts it in an argv or an error line, and wipes the copy it keeps for the call when that call ends",
-    "Every call as a chosen account, and every `gh auth token`, also takes any `GH_TOKEN`, `GITHUB_TOKEN`,"
-    " `GH_ENTERPRISE_TOKEN` or `GITHUB_ENTERPRISE_TOKEN` omher inherited out of that child's environment,",
+    "(a few short-lived copies inside the runner and std's `Command` are freed without being wiped).",
+    "Every `gh` child of the \"나\" scope and Settings › Accounts (the account list, `gh auth token` and every call as an"
+    " account) takes any `GH_TOKEN`, `GITHUB_TOKEN`, `GH_ENTERPRISE_TOKEN` or `GITHUB_ENTERPRISE_TOKEN` omher inherited,"
+    " and `GH_DEBUG`, `DEBUG`, `GH_PAGER` and `PAGER`, out of its environment,",
+    "When gh's list shows an account changed (made active or not, failing, gone), what was read as it is dropped.",
+    "only a chosen account on the repository's host, github.com, is offered or used, which the shell checks again.",
     "omher never runs `gh auth switch`; only gh's own sign-in of rule 18, which the person runs and answers, makes the"
     " account it signs in gh's active one, as gh always does.",
     "omher never comments, closes, assigns, labels, merges or edits anything on GitHub, GitLab or Linear.",
     "The \"나\" scope adds only these gh argv: `auth status --json hosts` (of each account only its host, login, active,"
     " state and scopes are read; never `--show-token`),",
     "`api graphql -f query=<one fixed query>`, whose text is a constant in the shell (`STATUS_QUERY`:",
-    "it makes at most 27 searches a minute per account, under GitHub's 30, and a rate-limit answer shows \"try again"
-    " soon\", not a failure.",
+    "it makes at most 27 search requests a minute per account, under GitHub's 30 (a search of more than 100 rows counts"
+    " one per 100 it asks for), and a rate-limit answer shows \"try again soon\", not a failure.",
     "and for \"나\" only an account id, a section word (`review`, `authored`, `assigned`, `mentions`) and a page number;",
     "Settings › Accounts also has a GitHub section: the GitHub accounts the person's `gh` is signed in to,",
     "\"Add\" keeps an account in omher's own setting (`omher.tasks` on this computer: its host, login and a colour,"
@@ -2679,21 +2685,33 @@ class GithubMeReadOnly(unittest.TestCase):
         self.assertIn("Ok(Zeroizing::new(t.to_string()))", read)
         self.assertNotIn("format!", read.split("let t = out.trim();", 1)[1])
         call = self.prod.split("    fn call(&self", 1)[1].split("\n    }\n", 1)[0]
-        self.assertIn("let token = if a.active { None } else { Some(read_token(&exe, a)?) };", call)
-        self.assertIn("let env = account_env(&a.host, token.as_ref().map(|t| t.as_str()));", call)
-        self.assertIn("let ran = run_env(&exe, &argv, true, &env, &INHERITED_TOKENS);", call)
-        self.assertIn("let ran = run_env(exe, &argv, true, &[], &INHERITED_TOKENS)", read)
+        # every call is pinned to the account named, active or not
+        self.assertIn("let token = read_token(&exe, a)?;", call)
+        self.assertNotIn("a.active", call)
+        self.assertIn("let env = account_env(&a.host, token.as_str());", call)
+        self.assertIn("let ran = run_env(&exe, &argv, true, &env, &SCRUB);", call)
+        self.assertIn("let ran = run_env(exe, &argv, true, &[], &SCRUB)", read)
+        detect = self.prod.split("    fn detect(&self", 1)[1].split("\n    }\n", 1)[0]
+        self.assertIn("let ran = run_env(&exe, &status_argv(), true, &[], &SCRUB).ok()?;", detect)
+        self.assertIn("dedupe(parse_auth_status(&out).ok()?)", detect)
+        self.assertIn("self.forget(&changed);", detect)
         self.assertIn('pub const INHERITED_TOKENS: [&str; 4] = ["GH_TOKEN", "GITHUB_TOKEN", "GH_ENTERPRISE_TOKEN", "GITHUB_ENTERPRISE_TOKEN"];', self.prod)
+        self.assertIn('pub const SCRUB: [&str; 8] = ["GH_TOKEN", "GITHUB_TOKEN", "GH_ENTERPRISE_TOKEN", "GITHUB_ENTERPRISE_TOKEN", "GH_DEBUG", "DEBUG", "GH_PAGER", "PAGER"];', self.prod)
+        self.assertEqual(self.code.count("run_env("), 3)
+        self.assertEqual(self.code.count(", &SCRUB)"), 3)
         self.assertLess(call.index("drop(token);"), call.index("self.keep("))
         self.assertIn("self.keep(key, ran.out.clone());", call)
         env = self.prod.split("pub fn account_env<", 1)[1].split("\n}\n", 1)[0]
-        self.assertIn('let mut env = vec![("GH_HOST", host)];', env)
-        self.assertIn("env.push((token_var(host), t));", env)
+        self.assertIn('vec![("GH_HOST", host), (token_var(host), token)]', env)
         for bad in ("println!", "eprintln!", "dbg!", "log::", "tracing::"):
             self.assertNotIn(bad, self.code, bad)
-        # a non-active account must be the status query's viewer
+        # every account must be the status query's viewer
         run_as = self.prod.split("pub fn run_as(", 1)[1].split("\n    }\n", 1)[0]
         self.assertIn("let who = viewer_login(&self.call(&a, graphql_argv(), false)?);", run_as)
+        self.assertNotIn("a.active", run_as)
+        # the rate limiter counts one request per 100 rows a search asks for
+        self.assertIn("!self.search_slot(&a.id(), search_cost(&argv))", call)
+        self.assertIn("limit.max(1).div_ceil(100)", self.prod)
         # tasks.rs's runner adds the env to that one child only
         tasks = (SHELL / "tasks.rs").read_text(encoding="utf-8").split("#[cfg(test)]\nmod tests", 1)[0]
         runner = tasks.split("pub fn run_env(", 1)[1].split("\n}\n", 1)[0]
@@ -2721,7 +2739,12 @@ class GithubMeReadOnly(unittest.TestCase):
         self.assertIn("if !host_ok(h) {", login)
         sessions = (SHELL / "sessions.rs").read_text(encoding="utf-8")
         start = sessions.split("pub fn start_gh_login<", 1)[1].split("\n    }\n", 1)[0]
-        self.assertIn("self.spawn(argv, home, None, &[], cols, rows, sink)", start)
+        self.assertIn("self.spawn_cmd(gh_login_command(gh, args, home), home, &[], cols, rows, sink)", start)
+        built = sessions.split("pub fn gh_login_command(", 1)[1].split("\n}\n", 1)[0]
+        self.assertIn("for k in crate::gh_me::INHERITED_TOKENS {\n        cmd.env_remove(k);\n    }", built)
+        # "이 저장소" reads only as a github.com account
+        for fn in ("async fn tasks_list(", "async fn tasks_view("):
+            self.assertIn("gh_me::repo_account_ok(&acc)?;", self.lib.split(fn, 1)[1].split("\n}\n", 1)[0], fn)
         cmd = self.lib.split("async fn gh_login_start(", 1)[1].split("\n}\n", 1)[0]
         self.assertIn("let args = gh_me::login_argv(host.as_deref())?;", cmd)
         self.assertIn('let gh = tasks::find("gh").ok_or("gh is not installed")?;', cmd)

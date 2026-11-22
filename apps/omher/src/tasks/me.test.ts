@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from "vitest";
-import { attention, accountState, chipsFor, groupRows, pickRepoAccount, reviewBadge, shownAccounts, sortMe, type AccountLists, type MeRow } from "./me";
+import { accountsOnHost, attention, accountState, chipsFor, groupRows, pickRepoAccount, reviewBadge, shownAccounts, sortMe, type AccountLists, type MeRow } from "./me";
 import { ACCOUNT_COLORS, chooseAccount, cycleAccountColor, getTasks, removeAccount, resetTasks, setMeAccount, setRepoAccount, setScope } from "./state";
 import { accountId, accountIdOk, type MeItem } from "./types";
 
@@ -92,6 +92,11 @@ describe("accounts", () => {
     expect(pickRepoAccount(accounts, "octo@github.com", "work-org")).toBe("octo@github.com");
     expect(pickRepoAccount(accounts, "gone@github.com", "someone")).toBe(null);
     expect(pickRepoAccount([], null, "octo")).toBe(null);
+    // a GitHub Enterprise account never reads a github.com repository, picked or by its login
+    const ghe = [...accounts, { host: "ghe.example.com", login: "octo-corp", color: ACCOUNT_COLORS[2] }];
+    expect(pickRepoAccount(ghe, "octo-corp@ghe.example.com", "octo-corp")).toBe(null);
+    expect(pickRepoAccount(ghe, "octo-corp@ghe.example.com", "work-org")).toBe("Work-Org@github.com");
+    expect(accountsOnHost(ghe).map((a) => a.login)).toEqual(["octo", "Work-Org"]);
   });
 
   it("says when a chosen account must sign in again", () => {

@@ -978,11 +978,18 @@ impl Sessions {
     where
         F: FnMut(Output) + Send + 'static,
     {
+        self.spawn_cmd(command_for(argv, cwd, path_env, account_env), cwd, account_env, cols, rows, sink)
+    }
+
+    /// [`Sessions::spawn`] with the command already built (gh's sign-in: [`gh_login_command`]).
+    fn spawn_cmd<F>(&self, cmd: CommandBuilder, cwd: &Path, account_env: &[(String, String)], cols: u16, rows: u16, sink: F) -> Result<u32, String>
+    where
+        F: FnMut(Output) + Send + 'static,
+    {
         if !cwd.is_absolute() || !cwd.is_dir() {
             return Err(format!("not a folder: {}", cwd.display()));
         }
         let pair = native_pty_system().openpty(clamp_size(cols, rows)).map_err(|e| e.to_string())?;
-        let cmd = command_for(argv, cwd, path_env, account_env);
         let mut child = pair.slave.spawn_command(cmd).map_err(|e| e.to_string())?;
         drop(pair.slave); // only the child holds the terminal side, so its exit ends our reads
         let reader = pair.master.try_clone_reader().map_err(|e| e.to_string())?;
@@ -1098,9 +1105,7 @@ impl Sessions {
     where
         F: FnMut(Output) + Send + 'static,
     {
-        let mut argv: Vec<OsString> = vec![gh.as_os_str().to_os_string()];
-        argv.extend(args.into_iter().map(OsString::from));
-        self.spawn(argv, home, None, &[], cols, rows, sink)
+        self.spawn_cmd(gh_login_command(gh, args, home), home, &[], cols, rows, sink)
     }
 
     /// The shells a Shell terminal may run here ([`shells_available`] on this machine).
@@ -1290,6 +1295,19 @@ fn command_for(argv: Vec<OsString>, cwd: &Path, path_env: Option<OsString>, acco
         cmd.env(k, v);
     }
     crate::appimage::host_env(&mut cmd);
+    cmd
+}
+
+/// gh's sign-in as a terminal command: the `gh` found here, the fixed words, the home folder, and the terminal
+/// variables every session gets, with any `GH_TOKEN` / `GITHUB_TOKEN` / enterprise token omher inherited taken out
+/// (gh refuses to sign in while one is set: "The value of the GH_TOKEN environment variable is being used").
+pub fn gh_login_command(gh: &Path, args: Vec<String>, home: &Path) -> CommandBuilder {
+    let mut argv: Vec<OsString> = vec![gh.as_os_str().to_os_string()];
+    argv.extend(args.into_iter().map(OsString::from));
+    let mut cmd = command_for(argv, home, None, &[]);
+    for k in crate::gh_me::INHERITED_TOKENS {
+        cmd.env_remove(k);
+    }
     cmd
 }
 

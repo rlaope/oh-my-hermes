@@ -15,15 +15,17 @@ All notable changes will be documented here.
     "Add" for each and "Sign in to another account", which runs `gh auth login` (or `--hostname` for GitHub
     Enterprise) in a terminal tab; gh itself makes the account it signs in its active one. omher keeps only each chosen account's host, login and colour. Account chips in
     "나" filter to one account; an account whose login fails shows "다시 로그인" while the others keep working.
-  - **Per-account reads:** gh's active account is read as gh is. Another account's token is read with
-    `gh auth token --hostname <host> --user <login>` for each call and passed only as `GH_TOKEN` in that one `gh`
-    call's environment; it is never stored, shown, logged or sent, and is wiped when the call ends. omher never runs
-    `gh auth switch`, and drops a token it inherited from that call's environment. The status query must name that
-    account as its viewer, or the account shows "다시 로그인".
+  - **Per-account reads:** every call is pinned to the account it names, active or not, since gh's active account can
+    change under omher from any shell. The account's own token is read with `gh auth token --hostname <host> --user
+    <login>` for each call and passed only as `GH_TOKEN` in that one `gh` call's environment; it is never stored,
+    shown, logged or sent, and omher's copy is wiped when the call ends. omher never runs `gh auth switch`, and takes
+    inherited tokens and gh's debug and pager variables out of every gh child (and inherited tokens out of the sign-in
+    tab). The status query must name that account as its viewer, or the account shows "다시 로그인".
   - **Reads:** four fixed `gh search` argv and one fixed `gh api graphql` query (CI, review decision, mergeability),
     each answer kept 60 seconds per account, read again on window focus, on ⟳ and every 5 minutes; at most 27
-    searches a minute per account, and GitHub's rate limit shows "잠시 후 다시" instead of a failure. "이 저장소" on
-    GitHub reads as the chosen account whose login owns the repository, or the one picked on its chip.
+    search requests a minute per account (one per 100 rows asked for), and GitHub's rate limit shows "잠시 후 다시"
+    instead of a failure. "이 저장소" on GitHub reads as the github.com account whose login owns the repository, or
+    the github.com account picked on its chip.
     (apps/omher `src-tauri/src/gh_me.rs`, `src/tasks/MeView.tsx`, `src/settings/accounts/GithubAccounts.tsx`;
     `docs/OMHER-BOUNDARY.md` rules 11, 18 and 33)
 

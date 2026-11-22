@@ -87,11 +87,16 @@ export function reviewBadge(lists: Readonly<Record<string, AccountLists>>, ids: 
   return ids.reduce((n, id) => n + (lists[id]?.sections.review?.items.length ?? 0), 0);
 }
 
-/** "이 저장소": the chosen account to read `owner`'s repository as. The person's own pick when it is still chosen; else
- *  the chosen account whose login is the owner; else none (gh's active account). Organisations are not looked up. */
+/** The chosen accounts on the repository's host (a GitHub Enterprise account never reads a github.com repository). */
+export const accountsOnHost = (accounts: readonly ChosenAccount[], host = "github.com") => accounts.filter((a) => a.host === host);
+
+/** "이 저장소": the chosen account to read `owner`'s repository (on `host`) as. The person's own pick when it is still
+ *  chosen and on that host; else the chosen account on that host whose login is the owner; else none (gh's active
+ *  account). Organisations are not looked up. */
 export function pickRepoAccount(accounts: readonly ChosenAccount[], picked: string | null, owner: string, host = "github.com"): string | null {
-  if (picked && accounts.some((a) => accountId(a) === picked)) return picked;
-  const own = accounts.find((a) => a.host === host && a.login.toLowerCase() === owner.toLowerCase());
+  const here = accountsOnHost(accounts, host);
+  if (picked && here.some((a) => accountId(a) === picked)) return picked;
+  const own = here.find((a) => a.login.toLowerCase() === owner.toLowerCase());
   return own ? accountId(own) : null;
 }
 

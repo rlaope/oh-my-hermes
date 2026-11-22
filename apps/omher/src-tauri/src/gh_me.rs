@@ -7,19 +7,21 @@
 //! What crosses from the page is only an account id (`<login>@<host>`, checked and then looked up among the accounts
 //! `gh auth status --json hosts` lists), a section word and a page number. Every argv is built here from fixed words.
 //!
-//! The token exception (BOUNDARY rules 5, 10 and 18). gh signs in one account per host at a time (the active one).
-//! A call as the active account runs gh as it is, with no token. A call as another signed-in account first asks gh
-//! for that account's token (`gh auth token --hostname <host> --user <login>`) and passes it only as `GH_TOKEN`
-//! (`GH_ENTERPRISE_TOKEN` for a GitHub Enterprise Server host) in the environment of that one `gh` child. The token
-//! is read fresh for each call and never cached: the copy omher keeps for the call lives in a `Zeroizing` string that
-//! is wiped when the call ends, and it is never put in an argv, a log line, an error, the cache or anything the page
-//! gets. Two short-lived copies are freed without being wiped: the bytes the runner reads from `gh auth token`'s pipe
-//! (before they become that string) and std's `Command`'s own copy of the child's environment. A call as an account
-//! also drops any `GH_TOKEN` / `GITHUB_TOKEN` / `GH_ENTERPRISE_TOKEN` / `GITHUB_ENTERPRISE_TOKEN` omher inherited, so
-//! the account read is the account named. omher never runs `gh auth switch`; only gh's own sign-in (`gh auth login`,
-//! run by the person in a terminal tab) makes the account it signs in gh's active one, as gh always does.
+//! The token exception (BOUNDARY rules 5, 10 and 18). gh signs in one account per host at a time (the active one),
+//! and which one that is can change under omher at any moment (a `gh auth switch` or `gh auth login` in any shell).
+//! So every call as a chosen account, active or not, is pinned to that account: it first asks gh for that account's
+//! own token (`gh auth token --hostname <host> --user <login>`) and passes it only as `GH_TOKEN`
+//! (`GH_ENTERPRISE_TOKEN` for a GitHub Enterprise Server host) with `GH_HOST` in the environment of that one `gh`
+//! child, and the status query must then name that account as its viewer. The token is read fresh for each call and
+//! never cached: the copy omher keeps for the call lives in a `Zeroizing` string that is wiped when the call ends, and
+//! it is never put in an argv, a log line, an error, the cache or anything the page gets. A few short-lived copies
+//! inside the runner and std's `Command` (the pipe's bytes before they become that string, the child's environment)
+//! are freed without being wiped. Every child here also drops any `GH_TOKEN` / `GITHUB_TOKEN` / `GH_ENTERPRISE_TOKEN`
+//! / `GITHUB_ENTERPRISE_TOKEN` omher inherited (so `gh auth status` lists gh's own logins and a call reads the account
+//! named) and gh's debug and pager variables. omher never runs `gh auth switch`; only gh's own sign-in (`gh auth
+//! login`, run by the person in a terminal tab) makes the account it signs in gh's active one, as gh always does.
 use std::collections::{BTreeMap, HashMap};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 use std::time::{Duration, Instant};
 
@@ -171,13 +173,34 @@ pub fn token_var(host: &str) -> &'static str {
 /// the account named (gh prefers it to its own login).
 pub const INHERITED_TOKENS: [&str; 4] = ["GH_TOKEN", "GITHUB_TOKEN", "GH_ENTERPRISE_TOKEN", "GITHUB_ENTERPRISE_TOKEN"];
 
-/// The environment one call as an account adds: its host, and for a non-active account its token. Nothing else.
-pub fn account_env<'a>(host: &'a str, token: Option<&'a str>) -> Vec<(&'static str, &'a str)> {
-    let mut env = vec![("GH_HOST", host)];
-    if let Some(t) = token {
-        env.push((token_var(host), t));
+/// What every child here takes out of the environment omher inherited: the tokens above, and gh's debug output and
+/// pager (a debug log can print request headers; a pager would wait on a terminal there is none of).
+pub const SCRUB: [&str; 8] = ["GH_TOKEN", "GITHUB_TOKEN", "GH_ENTERPRISE_TOKEN", "GITHUB_ENTERPRISE_TOKEN", "GH_DEBUG", "DEBUG", "GH_PAGER", "PAGER"];
+
+/// The REST search requests one search argv costs: gh pages a search 100 rows at a time.
+pub fn search_cost(argv: &[String]) -> usize {
+    let limit = argv.iter().position(|a| a == "--limit").and_then(|i| argv.get(i + 1)).and_then(|n| n.parse::<usize>().ok()).unwrap_or(1);
+    limit.max(1).div_ceil(100)
+}
+
+/// An account list with each `<login>@<host>` once (the first gh lists).
+pub fn dedupe(accounts: Vec<GhAccount>) -> Vec<GhAccount> {
+    let mut seen = std::collections::HashSet::new();
+    accounts.into_iter().filter(|a| seen.insert(a.id().to_ascii_lowercase())).collect()
+}
+
+/// "이 저장소" reads a github.com repository (tasks.rs reads remotes on github.com only), so a chosen account it reads
+/// as must be a github.com one: a GitHub Enterprise account would read another host's repository of that name.
+pub fn repo_account_ok(id: &str) -> Result<(), String> {
+    match parse_account_id(id)? {
+        (_, host) if host == "github.com" => Ok(()),
+        _ => Err("this repository is on github.com; pick a github.com account".into()),
     }
-    env
+}
+
+/// The environment one call as an account adds: its host and that account's own token. Nothing else.
+pub fn account_env<'a>(host: &'a str, token: &'a str) -> Vec<(&'static str, &'a str)> {
+    vec![("GH_HOST", host), (token_var(host), token)]
 }
 
 // ---- the sections -------------------------------------------------------------------------------
@@ -474,6 +497,8 @@ pub struct Me {
     accounts: Mutex<Option<(Instant, GhAccounts)>>,
     cache: Mutex<HashMap<String, (Instant, String)>>,
     searches: Mutex<HashMap<String, Vec<Instant>>>,
+    /// tests: a stand-in `gh` (None: the one found on this computer)
+    gh: Option<PathBuf>,
 }
 
 fn now_secs() -> i64 {
@@ -484,7 +509,7 @@ fn now_secs() -> i64 {
 /// own (masked) line.
 fn read_token(exe: &Path, a: &GhAccount) -> Result<Zeroizing<String>, MeError> {
     let argv = token_argv(&a.host, &a.login).map_err(|e| MeError::new("other", e))?;
-    let ran = run_env(exe, &argv, true, &[], &INHERITED_TOKENS).map_err(|e| MeError::new("other", error_line(&e)))?;
+    let ran = run_env(exe, &argv, true, &[], &SCRUB).map_err(|e| MeError::new("other", error_line(&e)))?;
     let out = Zeroizing::new(ran.out);
     if ran.code != Some(0) {
         let mut e = classify(&error_line(&ran.err));
@@ -502,7 +527,11 @@ impl Me {
     /// The GitHub accounts gh is signed in to (kept 60 seconds; `fresh` asks again). gh missing: none, `installed`
     /// false.
     pub fn accounts(&self, fresh: bool) -> GhAccounts {
-        self.detect(fresh).unwrap_or_else(|| GhAccounts { installed: find("gh").is_some(), accounts: vec![] })
+        self.detect(fresh).unwrap_or_else(|| GhAccounts { installed: self.exe().is_some(), accounts: vec![] })
+    }
+
+    fn exe(&self) -> Option<PathBuf> {
+        self.gh.clone().or_else(|| find("gh"))
     }
 
     /// gh's accounts, or None when gh did not answer them (not installed: an empty list). A failed answer (a timeout,
@@ -515,15 +544,22 @@ impl Me {
                 }
             }
         }
-        let got = match find("gh") {
+        let got = match self.exe() {
             None => GhAccounts { installed: false, accounts: vec![] },
             Some(exe) => {
-                let ran = run_env(&exe, &status_argv(), true, &[], &[]).ok()?;
+                // an inherited token would make gh list its owner as active and gh's own logins as not
+                let ran = run_env(&exe, &status_argv(), true, &[], &SCRUB).ok()?;
                 let out = Zeroizing::new(ran.out);
-                GhAccounts { installed: true, accounts: parse_auth_status(&out).ok()? }
+                GhAccounts { installed: true, accounts: dedupe(parse_auth_status(&out).ok()?) }
             }
         };
         if let Ok(mut g) = self.accounts.lock() {
+            // an account that changed (became active or not, or failed) or went: drop what was read as it
+            let before = g.as_ref().map(|(_, a)| a.accounts.clone()).unwrap_or_default();
+            let changed: Vec<String> = before.iter().filter(|b| !got.accounts.contains(b)).map(GhAccount::id).collect();
+            if !changed.is_empty() {
+                self.forget(&changed);
+            }
             *g = Some((Instant::now(), got.clone()));
         }
         Some(got)
@@ -540,6 +576,13 @@ impl Me {
         Ok(a)
     }
 
+    /// Drop every answer read as these accounts.
+    fn forget(&self, ids: &[String]) {
+        if let Ok(mut c) = self.cache.lock() {
+            c.retain(|k, _| !ids.iter().any(|id| k.starts_with(&format!("{id}\0"))));
+        }
+    }
+
     fn cached(&self, key: &str, fresh: bool) -> Option<String> {
         let c = self.cache.lock().ok()?;
         let gap = if fresh { MIN_GAP } else { KEEP };
@@ -553,47 +596,46 @@ impl Me {
         }
     }
 
-    /// Count one search for `id`; false when the minute's searches are spent.
-    fn search_slot(&self, id: &str) -> bool {
+    /// Count `n` search requests for `id`; false when they would pass the minute's limit.
+    fn search_slot(&self, id: &str, n: usize) -> bool {
         let Ok(mut m) = self.searches.lock() else { return true };
         let list = m.entry(id.to_string()).or_default();
         list.retain(|t| t.elapsed() < Duration::from_secs(60));
-        if list.len() >= SEARCHES_PER_MINUTE {
+        if list.len() + n > SEARCHES_PER_MINUTE {
             return false;
         }
-        list.push(Instant::now());
+        list.extend(std::iter::repeat_n(Instant::now(), n));
         true
     }
 
-    /// Run `argv` (built by this module or tasks.rs, never by the page) as account `id`: the active account as gh is,
-    /// another one with its token in this one child's environment. The answer is kept 60 seconds per (account, argv).
-    /// For a non-active account the status query runs first (its answer kept the same minute) and must name that
-    /// account as its viewer: a token gh keeps for one login that signs in as another is refused ("sign in again"), so
-    /// one account's rows never show under another's name.
+    /// Run `argv` (built by this module or tasks.rs, never by the page) as account `id`, active or not, with its own
+    /// token in this one child's environment. The answer is kept 60 seconds per (account, argv). The status query
+    /// runs first (its answer kept the same minute) and must name that account as its viewer: a token gh keeps for
+    /// one login that signs in as another is refused ("sign in again"), so one account's rows never show under
+    /// another's name.
     pub fn run_as(&self, id: &str, argv: Vec<String>, fresh: bool) -> Result<String, MeError> {
         let a = self.account(id)?;
-        if !a.active {
-            let who = viewer_login(&self.call(&a, graphql_argv(), false)?);
-            if !who.is_some_and(|w| w.eq_ignore_ascii_case(&a.login)) {
-                return Err(MeError::new("auth", format!("gh's login for {} on {} signs in as another account", a.login, a.host)));
-            }
+        let who = viewer_login(&self.call(&a, graphql_argv(), false)?);
+        if !who.is_some_and(|w| w.eq_ignore_ascii_case(&a.login)) {
+            return Err(MeError::new("auth", format!("gh's login for {} on {} signs in as another account", a.login, a.host)));
         }
         self.call(&a, argv, fresh)
     }
 
-    /// One call as account `a` (cached, counted against the search limit, with its token for a non-active account).
+    /// One call as account `a` (cached, counted against the search limit, with that account's own token).
     fn call(&self, a: &GhAccount, argv: Vec<String>, fresh: bool) -> Result<String, MeError> {
         let key = format!("{}\0{}", a.id(), argv.join("\0"));
         if let Some(v) = self.cached(&key, fresh) {
             return Ok(v);
         }
-        if argv.first().map(String::as_str) == Some("search") && !self.search_slot(&a.id()) {
+        if argv.first().map(String::as_str) == Some("search") && !self.search_slot(&a.id(), search_cost(&argv)) {
             return Err(MeError::new("rate", "GitHub's search limit for this minute is used up"));
         }
-        let exe = find("gh").ok_or_else(|| MeError::new("other", "gh is not installed"))?;
-        let token = if a.active { None } else { Some(read_token(&exe, a)?) };
-        let env = account_env(&a.host, token.as_ref().map(|t| t.as_str()));
-        let ran = run_env(&exe, &argv, true, &env, &INHERITED_TOKENS);
+        let exe = self.exe().ok_or_else(|| MeError::new("other", "gh is not installed"))?;
+        // pinned to this account whichever one gh has active now
+        let token = read_token(&exe, a)?;
+        let env = account_env(&a.host, token.as_str());
+        let ran = run_env(&exe, &argv, true, &env, &SCRUB);
         drop(env);
         drop(token);
         let ran = ran.map_err(|e| MeError::new("other", error_line(&e)))?;
@@ -710,14 +752,12 @@ mod tests {
     }
 
     #[test]
-    fn a_non_active_account_gets_its_token_only_in_the_env() {
+    fn an_accounts_token_goes_only_into_the_env() {
         let fake = "gho_TESTTESTTESTTESTTESTTESTTESTTESTTEST";
-        let env = account_env("github.com", Some(fake));
+        let env = account_env("github.com", fake);
         assert_eq!(env, vec![("GH_HOST", "github.com"), ("GH_TOKEN", fake)]);
-        assert_eq!(account_env("ghe.example.com", Some(fake))[1].0, "GH_ENTERPRISE_TOKEN");
-        assert_eq!(account_env("acme.ghe.com", Some(fake))[1].0, "GH_TOKEN");
-        // the active account: its host and no token
-        assert_eq!(account_env("github.com", None), vec![("GH_HOST", "github.com")]);
+        assert_eq!(account_env("ghe.example.com", fake)[1].0, "GH_ENTERPRISE_TOKEN");
+        assert_eq!(account_env("acme.ghe.com", fake)[1].0, "GH_TOKEN");
         // no argv this module builds carries a token
         let now = 1_794_766_799;
         for s in [Section::Review, Section::Authored, Section::Assigned, Section::Mentions] {
@@ -804,6 +844,135 @@ mod tests {
         assert_eq!(order, vec![7, 6, 5, 4, 3, 2, 8, 1]);
         assert_eq!(attention(&v[0]), 0);
         assert_eq!(attention(&v[7]), 4);
+    }
+
+    #[test]
+    fn rate_cost_dedupe_and_the_repository_account() {
+        let now = 1_794_766_799;
+        assert_eq!(search_cost(&search_argv(Section::Review, 0, now).unwrap()), 1);
+        assert_eq!(search_cost(&search_argv(Section::Review, 2, now).unwrap()), 2); // --limit 150
+        assert_eq!(search_cost(&search_argv(Section::Authored, MAX_ME_PAGE, now).unwrap()), 2); // --limit 200
+        assert_eq!(search_cost(&search_argv(Section::Mentions, MAX_ME_PAGE, now).unwrap()), 2); // --limit 120
+        let me = Me::default();
+        assert!(me.search_slot("a@github.com", 26));
+        assert!(!me.search_slot("a@github.com", 2), "26 + 2 passes 27");
+        assert!(me.search_slot("a@github.com", 1));
+        assert!(me.search_slot("b@github.com", 2), "each account has its own minute");
+        let acc = |l: &str, active: bool| GhAccount { host: "github.com".into(), login: l.into(), active, state: "success".into(), scopes: vec![] };
+        assert_eq!(dedupe(vec![acc("octo", true), acc("Octo", false), acc("work", false)]).iter().map(|a| a.login.as_str()).collect::<Vec<_>>(), vec!["octo", "work"]);
+        assert!(repo_account_ok("octo@github.com").is_ok());
+        assert!(repo_account_ok("octo@ghe.example.com").is_err());
+        assert!(repo_account_ok("--x@github.com").is_err());
+    }
+
+    /// Tests that set this process's environment (an inherited `GH_TOKEN`) take turns.
+    static ENV: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+    /// A stand-in `gh` in a folder of its own: `auth status` answers `status.json` (or, when a token is in its
+    /// environment, `status-env.json`, as gh does: the token's owner active, gh's own logins not); `auth token
+    /// --user <l>` answers `tok-<l>`; a search or the status query answers as the token's owner, else as the login in
+    /// `active.txt` (gh's active account). Every call is logged with the variables it got.
+    #[cfg(unix)]
+    fn stub_gh(tag: &str) -> PathBuf {
+        use std::os::unix::fs::PermissionsExt;
+        let d = std::env::temp_dir().join(format!("omher-gh-stub-{tag}-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&d);
+        std::fs::create_dir_all(&d).unwrap();
+        let script = r#"#!/bin/sh
+dir="$(dirname "$0")"
+echo "token=$GH_TOKEN|host=$GH_HOST|debug=$GH_DEBUG|pager=$PAGER|$*" >> "$dir/calls.log"
+if [ -n "$GH_TOKEN" ]; then who="${GH_TOKEN#tok-}"; else who="$(cat "$dir/active.txt")"; fi
+case "$1 $2" in
+  "auth status") if [ -n "$GH_TOKEN" ]; then cat "$dir/status-env.json"; else cat "$dir/status.json"; fi ;;
+  "auth token") echo "tok-$6" ;;
+  "api graphql") printf '{"data":{"viewer":{"login":"%s","pullRequests":{"nodes":[]}},"search":{"nodes":[]}}}' "$who" ;;
+  "search prs"|"search issues") printf '[{"number":1,"title":"read as %s","url":"https://github.com/o/r/pull/1","repository":{"nameWithOwner":"o/r"},"isPullRequest":true,"state":"open"}]' "$who" ;;
+  *) echo "unexpected: $*" >&2; exit 1 ;;
+esac
+"#;
+        std::fs::write(d.join("gh"), script).unwrap();
+        std::fs::set_permissions(d.join("gh"), std::fs::Permissions::from_mode(0o755)).unwrap();
+        d
+    }
+
+    #[cfg(unix)]
+    fn status(active: &str) -> String {
+        let row = |l: &str| format!(r#"{{"host":"github.com","login":"{l}","active":{},"state":"success","scopes":"repo"}}"#, l == active);
+        format!(r#"{{"hosts":{{"github.com":[{},{}]}}}}"#, row("octo"), row("octo-work"))
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_call_reads_the_account_named_even_when_gh_switched_meanwhile() {
+        let _g = ENV.lock().unwrap_or_else(|e| e.into_inner());
+        let d = stub_gh("switch");
+        std::fs::write(d.join("status.json"), status("octo")).unwrap();
+        std::fs::write(d.join("active.txt"), "octo").unwrap();
+        let me = Me { gh: Some(d.join("gh")), ..Default::default() };
+        assert_eq!(me.accounts(true).accounts.iter().filter(|a| a.active).map(|a| a.login.as_str()).collect::<Vec<_>>(), vec!["octo"]);
+        // within the minute the account list is kept, someone runs `gh auth switch` in a shell
+        std::fs::write(d.join("active.txt"), "octo-work").unwrap();
+        let p = me.list("octo@github.com", Section::Review, 0, false).unwrap();
+        assert_eq!(p.items[0].title, "read as octo");
+        let p = me.list("octo-work@github.com", Section::Review, 0, false).unwrap();
+        assert_eq!(p.items[0].title, "read as octo-work");
+        // every search and status query carried the named account's own token and host
+        let log = std::fs::read_to_string(d.join("calls.log")).unwrap();
+        for l in log.lines().filter(|l| l.contains("|search ") || l.contains("|api graphql")) {
+            assert!(l.starts_with("token=tok-octo|host=github.com|") || l.starts_with("token=tok-octo-work|host=github.com|"), "{l}");
+        }
+        assert!(!log.contains("auth switch"));
+        // gh now lists octo-work as active: what was read as either account is read again
+        std::fs::write(d.join("status.json"), status("octo-work")).unwrap();
+        let searches = |log: &str| log.lines().filter(|l| l.contains("|search ")).count();
+        let before = searches(&std::fs::read_to_string(d.join("calls.log")).unwrap());
+        me.accounts(true);
+        me.list("octo@github.com", Section::Review, 0, false).unwrap();
+        assert_eq!(searches(&std::fs::read_to_string(d.join("calls.log")).unwrap()), before + 1);
+        let _ = std::fs::remove_dir_all(&d);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn an_inherited_token_is_taken_out_of_every_gh_child() {
+        let _g = ENV.lock().unwrap_or_else(|e| e.into_inner());
+        let d = stub_gh("inherit");
+        std::fs::write(d.join("status.json"), status("octo")).unwrap();
+        // what gh 2.97 lists with GH_TOKEN set: the token's owner active, gh's own logins not (one of them twice)
+        let row = |l: &str, a: bool| format!(r#"{{"host":"github.com","login":"{l}","active":{a},"state":"success"}}"#);
+        std::fs::write(d.join("status-env.json"), format!(r#"{{"hosts":{{"github.com":[{},{},{}]}}}}"#, row("intruder", true), row("octo", false), row("octo", false))).unwrap();
+        std::fs::write(d.join("active.txt"), "octo").unwrap();
+        std::env::set_var("GH_TOKEN", "tok-intruder");
+        std::env::set_var("GH_DEBUG", "api");
+        std::env::set_var("PAGER", "less");
+        let me = Me { gh: Some(d.join("gh")), ..Default::default() };
+        let got = me.accounts(true);
+        let gh_login = crate::sessions::gh_login_command(&d.join("gh"), login_argv(None).unwrap(), &d);
+        std::env::remove_var("GH_TOKEN");
+        std::env::remove_var("GH_DEBUG");
+        std::env::remove_var("PAGER");
+        assert_eq!(got.accounts.iter().map(|a| (a.login.as_str(), a.active)).collect::<Vec<_>>(), vec![("octo", true), ("octo-work", false)]);
+        // the doubled row of the token's view shows once
+        let env_view = dedupe(parse_auth_status(&std::fs::read_to_string(d.join("status-env.json")).unwrap()).unwrap());
+        assert_eq!(env_view.iter().map(|a| a.id()).collect::<Vec<_>>(), vec!["intruder@github.com", "octo@github.com"]);
+        // gh's sign-in tab gets no inherited token either (gh refuses to sign in while one is set)
+        assert!(gh_login.get_env("GH_TOKEN").is_none());
+        let log = std::fs::read_to_string(d.join("calls.log")).unwrap();
+        assert!(log.lines().all(|l| l.contains("debug=|pager=|") && !l.contains("intruder")), "{log}");
+        let _ = std::fs::remove_dir_all(&d);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn the_sign_in_tab_drops_an_inherited_token() {
+        let _g = ENV.lock().unwrap_or_else(|e| e.into_inner());
+        std::env::set_var("GITHUB_TOKEN", "tok-x");
+        let cmd = crate::sessions::gh_login_command(Path::new("/usr/local/bin/gh"), login_argv(Some("ghe.example.com")).unwrap(), &std::env::temp_dir());
+        std::env::remove_var("GITHUB_TOKEN");
+        for k in INHERITED_TOKENS {
+            assert!(cmd.get_env(k).is_none(), "{k}");
+        }
+        assert_eq!(cmd.get_argv().iter().skip(1).map(|a| a.to_string_lossy().into_owned()).collect::<Vec<_>>(), vec!["auth", "login", "--hostname", "ghe.example.com"]);
     }
 
     /// The real smoke on this computer: `cargo test gh_me::tests::real_accounts -- --ignored --nocapture`. Prints

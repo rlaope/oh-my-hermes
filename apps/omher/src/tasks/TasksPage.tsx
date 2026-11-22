@@ -18,7 +18,7 @@ import { openExternal } from "../lib/openExternal";
 import { addTerminalTab, getTermPanel, setTerminalCwd } from "../terminal/state";
 import { taskHost } from "./host";
 import { setFilter, setKind, setPage, setRepo, setRepoAccount, setScope, setSource, useTasks } from "./state";
-import { pickRepoAccount } from "./me";
+import { accountsOnHost, pickRepoAccount } from "./me";
 import { MeView, AccountDot } from "./MeView";
 import { SourceMark, IssueMark } from "./marks";
 import { firstMessage, threadTitle } from "./message";
@@ -261,7 +261,7 @@ export function TasksPage() {
           <div className="tk-main">
             <div className="tk-chrome">
               <RepoPicker source={cli} repo={repo} recent={tk.recent[cli]} onPick={(r) => setRepo(cli, r)} />
-              {cli === "github" && tk.accounts.length > 0 && <RepoAccountChip accounts={tk.accounts} using={account} picked={tk.repoAccount} />}
+              {cli === "github" && accountsOnHost(tk.accounts).length > 0 && <RepoAccountChip accounts={accountsOnHost(tk.accounts)} using={account} picked={tk.repoAccount} />}
               <div className="tk-seg" role="group" aria-label={t("tasks.kind")}>
                 {KINDS.map((k) => (
                   <button key={k} type="button" className={tk.kind === k ? "on" : undefined} aria-pressed={tk.kind === k} onClick={() => setKind(k)} data-testid={`tasks-kind-${k}`}>
