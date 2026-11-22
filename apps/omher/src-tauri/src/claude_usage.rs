@@ -756,7 +756,9 @@ mod tests {
             std::fs::write(config.join("settings.json"), json!({"statusLine": {"type": "command", "command": cmd}}).to_string()).unwrap();
             // what Claude Code itself would get from `sh -c <cmd>` with the same stdin
             let mut direct = Command::new("/bin/sh").arg("-c").arg(cmd).stdin(Stdio::piped()).stdout(Stdio::piped()).stderr(Stdio::null()).spawn().unwrap();
-            direct.stdin.take().unwrap().write_all(b"{}").unwrap();
+            // a command that exits without reading its stdin closes the pipe first (EPIPE on Linux); Claude Code and
+            // the relay both ignore that, so the reference run does too
+            let _ = direct.stdin.take().unwrap().write_all(b"{}");
             let d = direct.wait_with_output().unwrap();
             let (out, code) = relay(b"not json at all", &home, Some("default"), &config, Some(&root), None);
             assert_eq!(out, d.stdout, "{cmd}");
