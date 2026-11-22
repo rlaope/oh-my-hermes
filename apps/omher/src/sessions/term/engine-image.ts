@@ -8,6 +8,7 @@
 // prints are drawn.
 import type { IImageAddonOptions, ImageAddon } from "@xterm/addon-image";
 import type { Terminal } from "@xterm/xterm";
+import { attachPlaceholders, type Placeholders } from "./kitty-overlay";
 
 /** Decoded pictures one terminal keeps, in MB (Orca's figure); past it the oldest are dropped. */
 export const IMAGE_STORAGE_MB = 32;
@@ -47,7 +48,7 @@ export function resetImageLoad(): void {
 
 /** Each terminal's add-on, and its size-report switches as they were before the add-on turned them on (CSI 14 t /
  *  16 t / 18 t: a program asks the window and cell size in pixels to fit a picture). */
-const addons = new WeakMap<Terminal, { addon: ImageAddon; windowOptions: Terminal["options"]["windowOptions"] }>();
+const addons = new WeakMap<Terminal, { addon: ImageAddon; windowOptions: Terminal["options"]["windowOptions"]; virtual: Placeholders | null }>();
 
 /** Draws pictures in `term` from now on. False when the add-on would not start (the terminal keeps going without). */
 export function attachImages(term: Terminal, Ctor: ImageCtor): boolean {
@@ -60,7 +61,15 @@ export function attachImages(term: Terminal, Ctor: ImageCtor): boolean {
     term.options.windowOptions = { ...windowOptions };
     addon = new Ctor(imageOptions());
     term.loadAddon(addon);
-    addons.set(term, { addon, windowOptions });
+    // Kitty Unicode placeholders (virtual placements, U=1), which the add-on does not draw: registered after it, so
+    // its handler is asked first and passes every other Kitty command on to the add-on
+    let virtual: Placeholders | null = null;
+    try {
+      virtual = attachPlaceholders(term);
+    } catch {
+      /* pictures still drawn by the add-on */
+    }
+    addons.set(term, { addon, windowOptions, virtual });
     return true;
   } catch {
     try {
@@ -78,6 +87,7 @@ export function detachImages(term: Terminal): void {
   if (!a) return;
   addons.delete(term);
   try {
+    a.virtual?.dispose();
     a.addon.dispose();
     // the add-on leaves the size reports on when it goes: off again, as before it came
     term.options.windowOptions = a.windowOptions;
@@ -94,8 +104,11 @@ export function imageBytes(term: Terminal): number {
   const a = addons.get(term);
   if (!a) return 0;
   try {
-    return Math.max(0, Math.round(a.addon.storageUsage * 1_000_000));
+    return Math.max(0, Math.round(a.addon.storageUsage * 1_000_000)) + (a.virtual?.store.usage ?? 0);
   } catch {
     return 0;
   }
 }
+
+/** `term`'s Kitty virtual placements (Unicode placeholders), null with pictures off. e2e reads it. */
+export const virtualImages = (term: Terminal): Placeholders | null => addons.get(term)?.virtual ?? null;
