@@ -25,12 +25,15 @@ _PROMPT_PLACEHOLDERS: Final[frozenset[str]] = frozenset({"{prompt}", "{prompt_fi
 PRESET_IDS: Final[frozenset[str]] = frozenset(
     {"devin", "gemini", "qwen", "kimi", "cursor-agent", "amp", "droid", "aider", "goose"}
 )
-# Built-in and reserved names a custom entry may never take (core's `RESERVED_OWNER_IDS`, grammar-bearing part).
-# A preset name is not in this set: it is admitted only as its own preset (see `_admitted`).
+# Literal copy of core's `RESERVED_OWNER_IDS` (`src/coding/user_executors.py`); the bundle cannot import core.
+# `tests/test_plugin_dag_owner_executors.py` asserts the two are equal. A preset id is in this set too, so
+# `_admitted` checks presets first and admits one only as its own preset.
 RESERVED_IDS: Final[frozenset[str]] = frozenset(
     {
-        "codex", "claude-code", "omx-runtime", "pi-family-runtime", "omc-runtime", "generic", "hermes",
-        "choose", "unassigned", "maestro", "omo-runtime", "senpi", "omp",
+        "aider", "amp", "choose", "claude", "claude-code", "claude-code-cli", "claude_code", "codex",
+        "cursor-agent", "devin", "droid", "gemini", "generic", "goose", "hermes", "hermes-local", "hermes_local",
+        "kimi", "maestro", "omc-runtime", "omo-runtime", "omp", "omx-runtime", "opencode", "pi",
+        "pi-family-runtime", "pi_family_runtime", "qwen", "senpi", "unassigned",
     }
 )
 # Programs core refuses (shells, interpreters, wrappers): admission must not let these through either.
@@ -73,13 +76,13 @@ def configured_owner_ids(omh_home: str | Path) -> frozenset[str]:
 
 
 def _admitted(executor_id: object, entry: object) -> bool:
-    if not isinstance(executor_id, str) or _ID.fullmatch(executor_id) is None or executor_id in RESERVED_IDS:
+    if not isinstance(executor_id, str) or _ID.fullmatch(executor_id) is None:
         return False
     if not isinstance(entry, dict):
         return False
     if executor_id in PRESET_IDS:
         return entry.get("preset") == executor_id
-    if "preset" in entry:
+    if executor_id in RESERVED_IDS or "preset" in entry:
         return False
     argv = entry.get("argv")
     if not isinstance(argv, list) or not 1 <= len(argv) <= 64:

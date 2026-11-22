@@ -117,6 +117,33 @@ class ConfiguredOwnerTests(unittest.TestCase):
             exported = call(action="export", run="feat", owner="devin")
             self.assertEqual(exported.get("status"), "refused", exported)
 
+    def test_a_removed_chosen_owner_is_held_never_native(self) -> None:
+        with homes() as home:
+            slots_table(home)
+            write_executors(home, "schema_version = 1\n" + DEVIN)
+            choose_configured(home, "devin")
+            call(action="define", run="feat", nodes=[owned("api", "devin", scope=("api.py",))])
+            write_executors(home, "schema_version = 1\n")
+            status = call(action="status", run="feat")
+            ready = call(action="ready", run="feat")
+            self.assertEqual(ready.get("calls"), [], ready)
+            self.assertIn("owner_unavailable", json.dumps(status), status)
+            self.assertIn("owner_unavailable", json.dumps(ready), ready)
+            self.assertNotIn("did not name", json.dumps(status), status)
+            exported = call(action="export", run="feat", owner="devin")
+            self.assertEqual(exported.get("status"), "refused", exported)
+
+    def test_the_standalone_reserved_list_equals_core(self) -> None:
+        from omh.coding.user_executors import RESERVED_OWNER_IDS as CORE_RESERVED
+        from omh.plugin_bundle.omh.user_owner_ids import RESERVED_IDS
+
+        self.assertEqual(RESERVED_IDS, frozenset(CORE_RESERVED))
+
+    def test_an_opencode_entry_is_not_admitted_by_the_plugin(self) -> None:
+        with homes() as home:
+            write_executors(home, 'schema_version = 1\n[executors.opencode]\nargv = ["my-agent", "{prompt}"]\n')
+            self.assertNotIn("opencode", configured_owner_ids(home.omh))
+
     def test_a_boolean_schema_version_admits_no_owner(self) -> None:
         with homes() as home:
             write_executors(home, "schema_version = true\n" + DEVIN)

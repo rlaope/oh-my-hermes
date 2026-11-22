@@ -1033,6 +1033,8 @@ def _ready(
     offered = dag_run.offerable(record, derived, now, limits=limits)
     exports, owner_say = _owner_exports(record, derived, offered, configured_owner_ids(omh_home))
     coding = [node_id for entry in exports for node_id in entry["nodes"]]
+    # A held node (its chosen owner left the operator file) goes nowhere: not to its owner, not to delegate_task.
+    coding += list(_held_owner_nodes(record, derived, offered, configured_owner_ids(omh_home)))
     # A run on a Docker or SSH terminal pins where its handoff files live before its first node goes out, and with no
     # terminal up to ask, hands out nothing yet.
     pinned, waits = False, ""
@@ -1404,14 +1406,29 @@ def _admitted_owners(record: Mapping[str, Any]) -> tuple[str, ...]:
     return (*dag_run.EXTERNAL_OWNERS, *(record.get("registered_owners") or ()))
 
 
+def _held_owner_nodes(record: Mapping[str, Any], derived: Mapping[str, Mapping[str, Any]],
+                      offered: list[str], live: Collection[str]) -> dict[str, str]:
+    """Ready coding nodes whose owner the person chose but the operator file no longer declares: node id -> owner.
+
+    Such a node is held pending with the closed reason `owner_unavailable`; it is never a native call.
+    """
+    chosen = set(owner_choices(record))
+    nodes = {str(node["id"]): node for node in record["nodes"]}
+    return {node_id: str(nodes[node_id]["owner"]) for node_id in offered
+            if derived[node_id]["state"] == "ready" and dag_run.is_coding(nodes[node_id]) and "owner" in nodes[node_id]
+            and str(nodes[node_id]["owner"]) in chosen and str(nodes[node_id]["owner"]) not in dag_run.EXTERNAL_OWNERS
+            and str(nodes[node_id]["owner"]) not in live}
+
+
 def _owner_exports(record: Mapping[str, Any], derived: Mapping[str, Mapping[str, Any]],
                    offered: list[str], live: Collection[str]) -> tuple[list[dict[str, Any]], str]:
     """Split ready coding nodes by their chosen owner; an unchosen node owner stays on delegate_task.
 
     ``live`` is the operator file's configured ids now: an owner the file no longer declares is offered nowhere,
-    as `export` refuses it.
+    as `export` refuses it, and its chosen nodes are held (`_held_owner_nodes`), not handed to delegate_task.
     """
     choices = [owner for owner in owner_choices(record) if owner in dag_run.EXTERNAL_OWNERS or owner in live]
+    held = _held_owner_nodes(record, derived, offered, live)
     nodes = {str(node["id"]): node for node in record["nodes"]}
     batches: dict[str, list[str]] = {}
     native = []
@@ -1420,6 +1437,10 @@ def _owner_exports(record: Mapping[str, Any], derived: Mapping[str, Mapping[str,
         if derived[node_id]["state"] != "ready" or not dag_run.is_coding(node) or "owner" not in node:
             continue
         owner = str(node["owner"])
+        if node_id in held:
+            native.append(f"Node {node_id} names {owner}, which the operator file no longer declares: it is held "
+                          "(owner_unavailable) until the owner is configured again; no delegate_task call is made.")
+            continue
         if owner in choices:
             batches.setdefault(owner, []).append(node_id)
         else:
