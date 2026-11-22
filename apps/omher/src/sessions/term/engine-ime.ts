@@ -12,6 +12,7 @@
 // While a composition or a held syllable is open it shows at the cursor in xterm's composition view. Keys the input
 // method does not take go on to xterm as before (the program's own keys, shortcuts, Enter).
 import type { Terminal } from "@xterm/xterm";
+import { saidInto } from "./paste-guard";
 
 /** Hangul jamo, compatibility jamo, the extended jamo blocks and the syllables. */
 const HANGUL = /[\u1100-\u11ff\u3130-\u318f\ua960-\ua97f\uac00-\ud7a3\ud7b0-\ud7ff]/;
@@ -150,7 +151,14 @@ export function attachIme(term: Terminal, host: HTMLElement): () => void {
     v.style.textDecoration = "underline";
     v.classList.add("active");
   };
-  const ime = new ImeInput({ send: (d) => term.input(d, true), show });
+  // committed text is the person's input, as a key is (paste-guard.ts TERM_INPUT_EVENT)
+  const ime = new ImeInput({
+    send: (d) => {
+      saidInto(host);
+      term.input(d, true);
+    },
+    show,
+  });
   const textarea = () => term.textarea;
   const mine = (e: Event) => e.target === textarea();
   const stop = (e: Event) => {
@@ -162,7 +170,16 @@ export function attachIme(term: Terminal, host: HTMLElement): () => void {
     ["compositionupdate", (e) => mine(e) && ime.compositionUpdate((e as CompositionEvent).data ?? "") && stop(e)],
     ["compositionend", (e) => mine(e) && ime.compositionEnd((e as CompositionEvent).data ?? "") && stop(e)],
     ["beforeinput", (e) => mine(e) && ime.input((e as InputEvent).inputType, (e as InputEvent).data, true) && stop(e)],
-    ["input", (e) => mine(e) && ime.input((e as InputEvent).inputType, (e as InputEvent).data) && stop(e)],
+    [
+      "input",
+      (e) => {
+        if (!mine(e)) return;
+        const type = (e as InputEvent).inputType;
+        // text xterm takes itself (an emoji from the picker, text dragged onto the terminal) is input too
+        if (type.startsWith("insert") && type !== "insertCompositionText") saidInto(host);
+        if (ime.input(type, (e as InputEvent).data)) stop(e);
+      },
+    ],
     [
       "keydown",
       (e) => {

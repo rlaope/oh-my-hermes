@@ -48,6 +48,9 @@ export interface PastChat {
 }
 
 /** One message of such a conversation (what the person typed, or the agent's answer text). */
+/** Whether a conversation's file is where its CLI looks for it (`conversation_state`). */
+export type ConvState = "exists" | "absent" | "unknown";
+
 export interface PastMsg {
   role: "user" | "assistant";
   text: string;
@@ -112,6 +115,10 @@ export interface SessionHost extends HistoryHost {
   pastChats(agent: "claude" | "codex", cwds: string[]): Promise<PastChat[]>;
   /** The last messages of `agent`'s conversation `id` in `cwd`. */
   pastMessages(agent: "claude" | "codex", id: string, cwd: string): Promise<PastMsg[]>;
+  /** Whether the file of `agent`'s conversation `id` is where the CLI looks for it, in the home of `account` (none =
+   *  the account new sessions use): `unknown` when that could not be told (a folder that cannot be read, an account
+   *  whose folder is gone). Only names are looked at (rule 30). */
+  conversationState?(agent: "claude" | "codex", id: string, account?: string): Promise<ConvState>;
   /** The conversation the Codex in the foreground of terminal session `id` (its pty) holds open: the UUID of the
    *  rollout that process keeps open in its Codex home, or null while it holds none (rule 11; only the id comes back). */
   codexConversation?(id: number): Promise<string | null>;
@@ -257,6 +264,10 @@ export class TauriHost implements SessionHost {
   async pastMessages(agent: "claude" | "codex", id: string, cwd: string) {
     const { invoke } = await this.core();
     return invoke<PastMsg[]>("past_chat_messages", { agent, id, cwd });
+  }
+  async conversationState(agent: "claude" | "codex", id: string, account?: string) {
+    const { invoke } = await this.core();
+    return invoke<ConvState>("conversation_state", { agent, id, account: account ?? null });
   }
   async codexConversation(id: number) {
     const { invoke } = await this.core();
@@ -474,6 +485,22 @@ type MockGlobals = {
   __omherMockPrograms?: Record<string, string>;
   /** e2e: custom agents the mock treats as signed out (the others answer) */
   __omherMockCustomSignedOut?: AgentId[];
+  /** e2e: CLIs that are not on this computer: a terminal of one is refused, as the shell refuses it */
+  __omherMockMissing?: AgentId[];
+  /** e2e: conversations Claude Code and Codex cannot continue (the file, its account folder or the login is gone): a
+   *  terminal that continues one prints the CLI's refusal and ends with code 1 at once, as the real CLI does */
+  __omherMockGoneConversations?: string[];
+  /** e2e: what the shell's look for a conversation's file answers, by id, whatever the mock's CLIs wrote (a file the
+   *  look misses answers `absent` while the CLI still finds it); the read of its messages misses it too */
+  __omherMockConvStates?: Record<string, ConvState>;
+  /** e2e: Settings › Accounts accounts whose folder is gone: a conversation of one is `unknown`, and a CLI started
+   *  as one runs in another home, where it finds none of its conversations */
+  __omherMockGoneAccounts?: string[];
+  /** e2e: how long the mock's Codex takes to refuse a conversation it cannot continue, after it set up its screen
+   *  (30 ms unless told) */
+  __omherMockCodexRefuseMs?: number;
+  /** e2e: every look for a conversation's file */
+  __omherConvChecks?: { agent: string; id: string; account?: string }[];
 };
 
 /** The programs the mock host finds unless a test says otherwise. */
@@ -496,7 +523,24 @@ const MOCK_PAST_MSGS: Record<string, PastMsg[]> = {
 export class MockHost implements SessionHost {
   readonly kind = "mock" as const;
   private next = 0;
-  private live = new Map<number, { agent: string; line: string; out: (d: string) => void; exit: (c: number | null) => void }>();
+  private live = new Map<number, { agent: string; line: string; out: (d: string) => void; exit: (c: number | null) => void; conv?: string }>();
+  /** The Claude Code conversations the mock's terminals named (`--session-id`), by id: their folder, and the first
+   *  line typed in them once one was (Claude Code writes a conversation on its first message). In this page's storage,
+   *  so they outlive a reload as Claude Code's files outlive omher (`__omherMockClaudeConvs`). */
+  private convs(): Record<string, { cwd: string; text?: string }> {
+    try {
+      return JSON.parse(localStorage.getItem("__omherMockClaudeConvs") || "{}");
+    } catch {
+      return {};
+    }
+  }
+  private putConvs(c: Record<string, { cwd: string; text?: string }>) {
+    try {
+      localStorage.setItem("__omherMockClaudeConvs", JSON.stringify(c));
+    } catch {
+      /* no storage */
+    }
+  }
   constructor(private g: MockGlobals = globalThis as MockGlobals) {}
 
   private log(c: MockCall) {
@@ -619,16 +663,46 @@ export class MockHost implements SessionHost {
     if (link !== undefined && agent !== "omh") throw new Error(`${agent} sessions are not given a terminal link`);
     const id = nextMockPty();
     this.log({ op: "start", id, agent, cwd, cols, rows, ...(resume ? { resume } : {}), ...(sessionId ? { sessionId } : {}), ...(link ? { link } : {}), ...(account ? { account } : {}) });
+    if (this.g.__omherMockMissing?.includes(agent)) throw new Error(`${agentDef(agent).label} is not installed (no \`${agentDef(agent).program}\` found)`);
+    // as Claude Code: `--session-id` of a conversation it wrote is refused, `--resume` of one it never wrote too
+    const convs = agent === "claude" ? this.convs() : {};
+    const conv = agent === "claude" ? (resume ?? sessionId) : undefined;
+    // a CLI started as an account whose folder is gone runs in another home, where its conversations are not
+    const elsewhere = !!account && !!this.g.__omherMockGoneAccounts?.includes(account);
+    const cannot = !!resume && ((convs[resume] && convs[resume].text === undefined) || elsewhere || !!this.g.__omherMockGoneConversations?.includes(resume));
+    const refusal =
+      sessionId && convs[sessionId]?.text !== undefined
+        ? `Error: Session ID ${sessionId} is already in use.`
+        : !cannot
+          ? null
+          : agent === "codex"
+            ? `Error: No saved session found with ID ${resume}. Run \`codex resume\` without an ID to choose from existing sessions.`
+            : `No conversation found with session ID: ${resume}`;
+    if (sessionId && !convs[sessionId]) this.putConvs({ ...convs, [sessionId]: { cwd } });
     // a resumed Codex holds its own conversation's rollout open again
     if (agent === "codex" && resume) (this.g.__omherMockCodexOwn ??= {})[id] = resume;
     const out = (d: string) => {
       (this.g.__omherSessionFlow ??= []).push({ op: "feed", id, bytes: utf8.encode(d).length });
       onData(d);
     };
-    this.live.set(id, { agent, line: "", out, exit: onExit });
+    this.live.set(id, { agent, line: "", out, exit: onExit, ...(conv ? { conv } : {}) });
     mockPtyOut(id, out);
     setTimeout(() => {
-      out(`${banner(agent)}\r\n\x1b[2m  ${agentDef(agent).program} in ${cwd}\x1b[0m\r\n\r\n${PROMPT}`);
+      // a continued Claude Code shows the conversation so far (its first message) above the prompt
+      const before = agent === "claude" && resume && convs[resume]?.text ? `> ${convs[resume].text}\r\n\r\n` : "";
+      if (refusal === null) return out(`${banner(agent)}\r\n\x1b[2m  ${agentDef(agent).program} in ${cwd}\x1b[0m\r\n\r\n${before}${PROMPT}`);
+      if (this.live.get(id)?.out !== out) return;
+      // Codex sets up its screen first and looks for the conversation after that (about 1 s on a real one)
+      if (agent === "codex") out("\x1b[?1049h\x1b[?2004h");
+      setTimeout(
+        () => {
+          if (this.live.get(id)?.out !== out) return;
+          out(`${agent === "codex" ? "\x1b[?2004l\x1b[?1049l" : ""}${refusal}\r\n`);
+          this.live.delete(id);
+          onExit(1);
+        },
+        agent === "codex" ? (this.g.__omherMockCodexRefuseMs ?? 30) : 0,
+      );
     }, 30);
     return id;
   }
@@ -644,6 +718,11 @@ export class MockHost implements SessionHost {
       if (ch === "\r") {
         const line = s.line.trim();
         s.line = "";
+        // Claude Code writes its conversation on the first message
+        if (s.conv && line && line !== "/exit") {
+          const c = this.convs();
+          if (c[s.conv] && c[s.conv].text === undefined) this.putConvs({ ...c, [s.conv]: { ...c[s.conv], text: line } });
+        }
         // `exit`, or a CLI's own `/exit` command, ends the program
         if (line === "exit" || line === "/exit") {
           s.out("\r\n");
@@ -823,9 +902,26 @@ export class MockHost implements SessionHost {
   }
   async pastMessages(agent: "claude" | "codex", id: string, cwd: string) {
     (this.g.__omherPastReads ??= []).push({ op: "read", agent, id, cwd });
+    if (this.g.__omherMockConvStates?.[id] === "absent") throw new Error("no such conversation");
+    const mine = agent === "claude" ? this.convs()[id] : undefined;
+    if (mine) {
+      if (mine.text === undefined || mine.cwd !== cwd) throw new Error("no such conversation");
+      return [{ role: "user" as const, text: mine.text, ts: 0 }];
+    }
     const c = (this.g.__omherPastChats ?? MOCK_PAST).find((x) => x.agent === agent && x.id === id && x.cwd === cwd);
     if (!c) throw new Error("no such conversation");
     return MOCK_PAST_MSGS[id] ?? [{ role: "user" as const, text: c.title, ts: c.at }];
+  }
+  /** As the shell (`conversation_state`): a told answer first; an account whose folder is gone is `unknown`; a Claude
+   *  Code conversation the mock's terminals named is there once something was said in it; anything else `unknown`. */
+  async conversationState(agent: "claude" | "codex", id: string, account?: string): Promise<ConvState> {
+    (this.g.__omherConvChecks ??= []).push({ agent, id, ...(account ? { account } : {}) });
+    const told = this.g.__omherMockConvStates?.[id];
+    if (told) return told;
+    if (account && this.g.__omherMockGoneAccounts?.includes(account)) return "unknown";
+    const mine = agent === "claude" ? this.convs()[id] : undefined;
+    if (mine) return mine.text === undefined ? "absent" : "exists";
+    return "unknown";
   }
   /** As the shell: the conversation the Codex running in pty `id` holds open (`__omherMockCodexOwn[id]`, set by the
    *  test as that process's Codex writes its rollout), and nothing once that program ended or is not Codex. */
