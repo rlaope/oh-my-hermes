@@ -76,6 +76,7 @@ from ..hermes_delegation import effective_mixture_category_chains, load_model_pr
 from ..host_observation import host_session_id
 from ..host_process import process_alive
 from ..named_owner_choice import turn_owners
+from ..user_owner_ids import configured_owner_ids
 from ..sqlite_readonly import connect_readonly
 from .lsp_nav_tool import _workspace_root
 
@@ -214,7 +215,8 @@ OMH_DAG_SCHEMA = {
                         "depends_on": {"type": "array", "items": {"type": "string"}},
                         "write_scope": {"type": "array", "items": {"type": "string"}},
                         "role": {"type": "string", "enum": list(dag_run.ROLES)},
-                        "owner": {"type": "string", "enum": list(EXTERNAL_OWNERS)},
+                        "owner": {"type": "string", "pattern": "^[a-z][a-z0-9-]{1,31}$",
+                                  "description": "Coding owner: built-in or configured id."},
                         "local": {"type": "boolean"},
                         "read_only": {"type": "boolean"},
                         "identity": {"type": "string",
@@ -237,7 +239,7 @@ OMH_DAG_SCHEMA = {
                 "type": "boolean",
                 "description": "settle failed: the child died on a provider error (an HTTP 400, no model call).",
             },
-            "owner": {"type": "string", "enum": list(EXTERNAL_OWNERS),
+            "owner": {"type": "string", "pattern": "^[a-z][a-z0-9-]{1,31}$",
                       "description": "export: a coding owner named in the run's request."},
             "spawn_plan": {"type": "object"},
             "carry_forward": {"type": "string", "description": (
@@ -489,10 +491,16 @@ def _define(args: Mapping[str, object], omh_home: Path, hermes_home: Path, durab
     # Opt-in only: without carry_forward the record is what it always was.
     base = dag_run.valid_base(args["carry_forward"]) if args.get("carry_forward") is not None else None
     budget = oneshot_budget(hermes_home, segments)
+    admitted = (*dag_run.EXTERNAL_OWNERS, *sorted(configured_owner_ids(omh_home)))
     record = dag_run.new_record(durable, run, args.get("name"), args.get("goal"), args.get("nodes"), now,
                                 oneshot_limit=budget["limit"] if budget else None,
                                 oneshot_spent=budget["spent"] if budget else 0, named_roles=False,
-                                criteria=args.get("criteria"))
+                                criteria=args.get("criteria"), owners=admitted)
+    named_configured = sorted({str(node["owner"]) for node in record["nodes"] if "owner" in node}
+                              - set(dag_run.EXTERNAL_OWNERS))
+    if named_configured:
+        # The configured ids this run's nodes name, frozen now: a later edit to the operator file cannot retarget it.
+        record["registered_owners"] = named_configured
     if base is not None and not any(dag_run.is_verification(item) for item in record["nodes"]):
         # Carried work counts only once a verifier checks it here; without one the run would finish unchecked.
         raise dag_run.DagRefusal(
@@ -533,10 +541,14 @@ def _define(args: Mapping[str, object], omh_home: Path, hermes_home: Path, durab
         backend = terminal_backend()
         if backend:
             record["backend"] = backend  # where the children's handoff files land; `settle` reads them there
-        owners = sorted(owner for owner in set(chosen) if owner in EXTERNAL_OWNERS)
+        owners = sorted(owner for owner in set(chosen) if owner in admitted)
         if owners:
             # The coding owners this turn's request named: the run keeps them, and nothing else chooses one.
             record["owners"] = owners
+            configured = [owner for owner in owners if owner not in dag_run.EXTERNAL_OWNERS]
+            if configured:
+                # The configured ids the request named, frozen now: a later edit to the operator file cannot retarget it.
+                record["registered_owners"] = sorted({*record.get("registered_owners", []), *configured})
         workspace = _workspace_root(task)
         if workspace:
             # The root a node's write_scope is read against (`dag_scope_guard`), fixed here so a child's `cd` cannot
@@ -1375,11 +1387,15 @@ def usage_line(record: Mapping[str, Any], usage: Mapping[str, Any]) -> str:
 
 
 def owner_choices(record: Mapping[str, Any]) -> tuple[str, ...]:
-    """The external coding owners the request that defined this run named, sorted; () for any other run."""
+    """The coding owners the request that defined this run named, sorted; () for any other run.
+
+    A configured id counts only when the run's snapshot holds it, so a later edit to the operator file cannot add one.
+    """
     owners = record.get("owners")
     if not isinstance(owners, list):
         return ()
-    return tuple(sorted({owner for owner in owners if owner in EXTERNAL_OWNERS}))
+    snapshot = set(record.get("registered_owners") or ())
+    return tuple(sorted({owner for owner in owners if owner in EXTERNAL_OWNERS or owner in snapshot}))
 
 
 def _owner_exports(record: Mapping[str, Any], derived: Mapping[str, Mapping[str, Any]],
@@ -1489,8 +1505,10 @@ def _export(args: Mapping[str, object], record: dict[str, Any], path: Path,
             now: float, shown: set[str] | None, *, limits: dag_run.Limits = dag_run.DEFAULT_LIMITS,
             ignored: tuple[str, ...] = ()) -> str:
     owner = args.get("owner")
-    if owner not in EXTERNAL_OWNERS:
-        raise dag_run.DagRefusal("invalid_owner", f"Name the coding owner: {', '.join(EXTERNAL_OWNERS)}.")
+    if not isinstance(owner, str) or dag_run.OWNER_ID.fullmatch(owner) is None or owner not in (
+            *dag_run.EXTERNAL_OWNERS, *configured_owner_ids(omh_home)):
+        raise dag_run.DagRefusal("invalid_owner", "Name a coding owner: a built-in one or an executor id in your "
+                                                 "executors file.")
     if owner not in owner_choices(record):
         raise dag_run.DagRefusal(
             "owner_not_chosen",

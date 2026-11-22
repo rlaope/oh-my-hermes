@@ -55,6 +55,7 @@ from ..installed_skills import hermes_loadable_skill_names, routable_skill_names
 from ..kanban_board_reader import conversation_session_ids, kanban_db_path, read_kanban_lanes
 from ..native_todo import held_native_write_note
 from ..named_owner_choice import clear_turn_owners, note_turn_owners
+from ..user_owner_ids import configured_owner_ids
 from ..omh_roles import extract_role_marker, role_context_payload
 from ..plan_follow_on import DAG_ULW, acceptance_line, plan_turn_line
 from ..omh_identities import (
@@ -923,7 +924,7 @@ def _turn_context(**kwargs) -> dict[str, object] | None:
     # Only a person's main-session request names external owners, and only for this turn's dag-ulw run.
     # Host-written turns have no request here; a child cannot choose for its parent.
     if request_message and not delegated:
-        note_turn_owners(session_id, request_message)
+        note_turn_owners(session_id, request_message, configured_owner_ids(omh_home))
     # The skills this home installed and this Hermes can load by name. The
     # route hint and the candidate line rank the whole catalog, and a
     # `--core` home holds ten of its skills, so both are cut to this set

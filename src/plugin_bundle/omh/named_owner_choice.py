@@ -12,6 +12,7 @@ no request prose is kept.
 from __future__ import annotations
 
 from collections import OrderedDict
+from collections.abc import Iterable
 import re
 import sys
 import threading
@@ -48,10 +49,12 @@ _JA_NEGATIONS = (
 )
 
 
-def named_owners(text: str) -> tuple[str, ...]:
+def named_owners(text: str, configured: Iterable[str] = ()) -> tuple[str, ...]:
     """Return the external owners named as the doer, unnegated, in fixed order.
 
-    Bare advisor names are absent from the shared executor cues. A name counts
+    Built-in names come from `NAMED_OWNER_PHRASES`. ``configured`` are the operator's own executor ids for this
+    home (`user_owner_ids.configured_owner_ids`); each counts by the same doer cue and negation rules, under its
+    own id as the phrase. Bare advisor names are absent from the shared executor cues. A name counts
     only with an owner cue, read by the same `owner_named_as_doer` the router and
     the chat wrapper use: "/dag-ulw build it with codex", "codex로", "codexで".
     "/dag-ulw fix the codex adapter tests" names what the work is about and
@@ -61,9 +64,9 @@ def named_owners(text: str) -> tuple[str, ...]:
     folded = " ".join(unicodedata.normalize("NFKC", text).casefold().replace("’", "'").split())
     cue_text = normalized_phrase(text)
     found: set[str] = set()
-    for phrase, owner in NAMED_OWNER_PHRASES:
-        if phrase not in SUBSTRING_NAMED_CODING_AGENT_PHRASES:
-            continue
+    phrases = [(phrase, owner) for phrase, owner in NAMED_OWNER_PHRASES if phrase in SUBSTRING_NAMED_CODING_AGENT_PHRASES]
+    phrases += [(executor_id, executor_id) for executor_id in sorted(set(configured))]
+    for phrase, owner in phrases:
         if not owner_named_as_doer(cue_text, normalized_phrase(phrase)):
             continue
         name = rf"(?<![a-z0-9_-]){re.escape(phrase)}(?![a-z0-9_-])"
@@ -77,7 +80,7 @@ def named_owners(text: str) -> tuple[str, ...]:
             for match in re.finditer(name, folded)
         ):
             found.add(owner)
-    return tuple(owner for owner in _EXTERNAL_OWNERS if owner in found)
+    return tuple(owner for owner in (*_EXTERNAL_OWNERS, *sorted(set(configured))) if owner in found)
 
 
 # One process can hold two copies of this package (Hermes' memory-provider loader execs the bundle again), and the
@@ -95,12 +98,13 @@ def _shared_state() -> types.SimpleNamespace:
 _state = _shared_state()
 
 
-def note_turn_owners(session_id: object, request_text: str) -> tuple[str, ...]:
+def note_turn_owners(session_id: object, request_text: str, configured: Iterable[str] = ()) -> tuple[str, ...]:
     """Record the owners this turn's dag-ulw request names for the session, replacing the previous turn's.
 
-    Text that does not invoke dag-ulw, or names no unnegated owner, records none.
+    Text that does not invoke dag-ulw, or names no unnegated owner, records none. ``configured``: the operator's
+    executor ids for this home, which count as owners the same way the built-in names do.
     """
-    owners = named_owners(request_text) if request_text and invokes_dag_ulw(request_text) else ()
+    owners = named_owners(request_text, configured) if request_text and invokes_dag_ulw(request_text) else ()
     key = str(session_id or "").strip()
     if key:
         with _state.lock:
