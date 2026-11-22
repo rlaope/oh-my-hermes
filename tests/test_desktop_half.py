@@ -314,7 +314,8 @@ for (const [name, scenario] of Object.entries(scenarios)) {
     active: scenario.data && scenario.data.active,
     runtime: scenario.data && scenario.data.runtime,
     tally: scenario.data ? mod.agentTally(scenario.data) : null,
-    statusDetail: (mod.statusItem({ gateway: scenario.gateway, data: scenario.data, error: globalThis.__omh.query.error }) || {}).detail || ''
+    statusDetail: (mod.statusItem({ gateway: scenario.gateway, data: scenario.data, error: globalThis.__omh.query.error }) || {}).detail || '',
+    statusParts: (mod.statusItem({ gateway: scenario.gateway, data: scenario.data, error: globalThis.__omh.query.error }) || {}).parts || []
   }
 }
 const formatterCases = JSON.parse(readFileSync(formatterCasesPath, 'utf8'))
@@ -394,7 +395,10 @@ delete mod.KO.stateRunning
 const englishFallback = mod.t('stateRunning', { count: 2 }, 'ko')
 mod.KO.stateRunning = savedKo
 for (const dispose of disposers) dispose()
+// Each table's keys, and each string's placeholders, so a key added to one table alone fails a test.
+const tableShape = table => Object.fromEntries(Object.entries(table).map(([key, value]) => [key, typeof value === 'string' ? [...value.matchAll(/\{(\w+)\}/g)].map(hit => hit[1]).sort() : typeof value]))
 const report = {
+  tables: { en: tableShape(mod.EN), ko: tableShape(mod.KO), zh: tableShape(mod.ZH) },
   plugin: { id: plugin.id, name: plugin.name, description: plugin.description, defaultEnabled: plugin.defaultEnabled },
   contributions: contributions.map(c => ({ id: c.id, area: c.area, title: c.title, order: c.order, data: c.data })),
   renders,
@@ -1124,6 +1128,23 @@ FORMATTER_CASES = {
         [{"elapsed": 30, "ended": None, "state": "done"}, 1000, 1400],
         [{"elapsed": 30, "ended": 1300, "state": "done"}, 1000, 1400],
     ],
+    "upstreamGap": [
+        # Both parents timed: the wait runs from the later end.
+        [{"id": "c", "parents": ["a", "b"]}, {"a": {"start": 0, "end": 10, "open": False},
+                                              "b": {"start": 0, "end": 30, "open": False},
+                                              "c": {"start": 51, "end": 56, "open": False}}],
+        # A parent with no clock (done without `ended_at`, parked or stuck) may have ended later: no wait.
+        [{"id": "c", "parents": ["a", "b"]}, {"a": {"start": 0, "end": 10, "open": False}, "b": None,
+                                              "c": {"start": 51, "end": 56, "open": False}}],
+        # A parent still running: no wait either.
+        [{"id": "c", "parents": ["a", "b"]}, {"a": {"start": 0, "end": 10, "open": False},
+                                              "b": {"start": 0, "end": 60, "open": True},
+                                              "c": {"start": 51, "end": 56, "open": False}}],
+        # No parents, and a start within a second of the parent's end: no wait.
+        [{"id": "c", "parents": []}, {"c": {"start": 51, "end": 56, "open": False}}],
+        [{"id": "c", "parents": ["a"]}, {"a": {"start": 0, "end": 50.5, "open": False},
+                                         "c": {"start": 51, "end": 56, "open": False}}],
+    ],
     "sumCostText": [
         [{"lanes": 2, "priced": 2, "cost": 0.0184, "estimated": True, "partial": False}],
         [{"lanes": 2, "priced": 1, "cost": 0.0123, "estimated": False, "partial": False}],
@@ -1793,6 +1814,8 @@ class DesktopPluginNodeTests(unittest.TestCase):
         self.assertEqual(report["open_with_payload"]["byId"]["status"], ["OMH", "1 running", "plan 1/3"])
         self.assertEqual(report["open_with_payload"]["revealed"], ["omh:hud"])
         self.assertEqual(report["open_with_payload"]["statusDetail"], "OMH 2.0.5 · 1 running · 1 done · plan Desktop check 1/3")
+        # The card's lines come from the parts, not from splitting the joined detail: the counts stay one line.
+        self.assertEqual(report["open_with_payload"]["statusParts"], ["OMH 2.0.5", "1 running · 1 done", "plan Desktop check 1/3"])
         self.assertEqual(report["maestro_and_board"]["byId"]["status"], ["OMH", "1 running", "1 blocked"])
         self.assertEqual(report["no_todo_declared"]["byId"]["status"], ["OMH", "idle"])
         self.assertEqual(report["loading"]["byId"]["status"], [])
@@ -2360,6 +2383,34 @@ class DesktopPluginNodeTests(unittest.TestCase):
         self.assertTrue(len(toks) >= 2)
         self.assertTrue(all(node["tab"] == 0 for node in toks))
 
+    def test_a_wait_on_upstream_needs_every_parent_timed(self) -> None:
+        """Mutation: take the latest end among the timed parents only, so an untimed parent reads as a 41s wait."""
+        self.assertEqual(self._drive()["formatters"]["upstreamGap"],
+                         [{"from": 30, "seconds": 21}, None, None, None, None])
+
+    def test_the_timeline_strip_does_not_borrow_state_colours(self) -> None:
+        """Mutation: band the strip green/yellow/red, so a lone running lane reads done and a wide fan-out reads failed."""
+        render = self._drive()["renders"]["dag_cards"]
+        segments = [node for node in render["structure"] if "omh-pane-dv-tl-seg" in node["className"].split()]
+        self.assertTrue(segments)
+        for segment in segments:
+            classes = set(segment["className"].split())
+            self.assertFalse(classes & {"omh-pane-ok", "omh-pane-warn", "omh-pane-error"}, segment["className"])
+            self.assertTrue(classes & {"omh-pane-tl-one", "omh-pane-tl-few", "omh-pane-tl-many", "omh-pane-dv-tl-idle"},
+                            segment["className"])
+
+    def test_the_three_tables_hold_the_same_keys_and_placeholders(self) -> None:
+        """Mutation: add a key to EN alone, or drop a placeholder from one translation."""
+        tables = self._drive()["tables"]
+        english = tables["en"]
+        for language in ("ko", "zh"):
+            table = tables[language]
+            self.assertEqual(sorted(table), sorted(english), language)
+            # English builds its plurals with functions; where both sides are strings, the placeholders match.
+            for key, shape in table.items():
+                if isinstance(shape, list) and isinstance(english[key], list):
+                    self.assertEqual(shape, english[key], f"{language}.{key}")
+
     def test_a_run_too_deep_to_send_reads_as_its_counts_not_as_no_dag(self) -> None:
         """Mutation: take a graph with no lanes as no graph, so an active 500-layer run reads `No DAG in this session`."""
         dag = self._sections("dag_counts_only")["DAG"]
@@ -2484,6 +2535,9 @@ class DesktopPluginNodeTests(unittest.TestCase):
         for figure in ("recorded", "↑12.0k ↓630", "9.3k / 12.0k", "16%", "15.7k of 100.0k", "avg call 3.2s",
                        "avg 1.1s · 2 turns", "~15.7k / 100.0k", "System prompt", "84.3k"):
             self.assertIn(figure, tips)
+        # The card says what TTFT counts, what cost leaves out and what the source words mean.
+        for words in ("tool time before that token counts", "Cost counts only what Hermes priced", "recorded: what Hermes stored"):
+            self.assertIn(words, tips)
         pane = " ".join(render["byId"]["hud"])
         self.assertLess(pane.index("USAGE"), pane.index("PLAN"))
 

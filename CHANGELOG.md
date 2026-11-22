@@ -66,6 +66,14 @@ All notable changes will be documented here.
   whose chain ran out reads `chain exhausted` like its `chain head` and `fallback` siblings. Only string values
   changed.
 
+- **The OMH pane in Hermes Desktop is redrawn, with a run timeline and TPS/TTFT in view.** USAGE is one card: the
+  token total large, cache hit and cost beside it, the four-way split, and the speed (TPS) and the last turn's wait for
+  its first token (TTFT), which used to sit only in a tooltip. CATCHES and PLAN read as rows with marks; PLAN groups
+  its items by phase. DAG gains a timeline: folded, one strip shaded by how many nodes ran at once, its gaps the run's
+  idle time; open, a row per node with its wait on upstream. A subagent the run did not orchestrate is a row under
+  Outside DAG and in AGENTS, never a start node of the run. Detail moved into hover cards that the keyboard can open
+  too. The pane also reads in Chinese. Contributed by @yqm-307 (#3058).
+
 ## 5.0.0 - 2026-11-21
 
 - **A mise-managed `codex` or `python3` runs again in `omh coding run`.** mise links every tool it manages to one

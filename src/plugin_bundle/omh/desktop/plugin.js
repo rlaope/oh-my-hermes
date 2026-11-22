@@ -24,7 +24,8 @@
 // because nothing in Desktop draws the routes OMH chose.
 //
 // Each colour has one meaning, through theme tokens only: the accent for
-// what is running, yellow for waiting, blocked or a warning, red for failed
+// what is running (the timeline's strip shades it by how many run at
+// once), yellow for waiting, blocked or a warning, red for failed
 // (and for yolo, shown only while it is on), green for done DAG work (the
 // owner's call of 2026-11-10), and the text greys for other done words,
 // skipped and everything neutral. Monospace is kept for ids, model and route
@@ -60,7 +61,12 @@
 // focused chat's own figures from what the host already holds (its streamed
 // usage and its context breakdown), beside the chat's recorded row the
 // reader sends, and times the wait for a turn's first token from the gateway
-// events this window sees.
+// events this window sees. The DAG timeline is the second: from each lane's
+// elapsed time and end, it places the lanes on the clock and works out the
+// run's idle time, how many lanes ran at once and each lane's wait on its
+// upstream. A running lane's start is the pane's receive time less what the
+// reader counted, so it can sit a poll late. Where a figure would rest on a
+// lane with no clock or a cut graph, the pane says so or shows none.
 import {
   Badge,
   GlyphSpinner,
@@ -386,6 +392,7 @@ export const EN = {
   ubSourceGateway: 'live',
   ubSourceRecorded: 'recorded',
   ubSourceStream: 'stream',
+  ubNote: "TTFT runs from send to the last turn's first streamed token, as this window saw it; tool time before that token counts. Cost counts only what Hermes priced. live: the gateway's counters · recorded: what Hermes stored for this chat · stream: the status-bar feed.",
   ubEmpty: 'Nothing recorded for this chat yet',
   ubNoChat: 'Open a chat to see its usage',
   sectionAgents: 'AGENTS',
@@ -637,6 +644,7 @@ export const KO = {
   ubSourceGateway: '실시간',
   ubSourceRecorded: '기록',
   ubSourceStream: '스트림',
+  ubNote: 'TTFT는 전송부터 마지막 턴의 첫 스트리밍 토큰까지의 시간으로, 이 창에서 관측한 값입니다. 첫 토큰 전의 도구 시간도 포함됩니다. 비용은 Hermes가 과금한 것만 집계합니다. 실시간: 게이트웨이 카운터 · 기록: Hermes가 이 채팅에 저장한 값 · 스트림: 상태 표시줄 피드.',
   ubEmpty: '이 채팅에 기록된 사용량이 아직 없습니다',
   ubNoChat: '채팅을 열면 사용량이 표시됩니다',
   sectionAgents: '에이전트',
@@ -683,7 +691,7 @@ export const KO = {
   figNodes: '노드 {count}개',
 }
 
-const ZH = {
+export const ZH = {
   brand: "OMH",
   stateIdle: "空闲",
   stateActive: "活跃",
@@ -882,6 +890,7 @@ const ZH = {
   ubSourceGateway: "live",
   ubSourceRecorded: "recorded",
   ubSourceStream: "stream",
+  ubNote: "TTFT 是从发送到上一轮第一个流式 token 的时间，以本窗口所见为准；首个 token 之前的工具时间也算在内。成本只算 Hermes 定过价的部分。live：网关的计数器 · recorded：Hermes 为此对话保存的值 · stream：状态栏的数据流。",
   ubEmpty: "本对话还没有记录",
   ubNoChat: "打开一个对话查看用量",
   sectionAgents: "AGENTS",
@@ -2553,7 +2562,9 @@ export function statusSegments(payload) {
   return segments.slice(0, 2)
 }
 
-function statusDetail(payload) {
+// The status detail as its lines: the brand and version, the counts (one line), then the plan. Kept as a list so a
+// title or a count holding ` · ` is never split into two lines; `statusDetail` joins it for the one-line notice.
+function statusParts(payload) {
   const tally = agentTally(payload)
   const counts = [
     tally.running ? t('stateRunning', { count: tally.running }) : '',
@@ -2572,12 +2583,15 @@ function statusDetail(payload) {
   } else if (todo.status === 'all_done') {
     parts.push(t('detailPlanFinished', { title }))
   }
-  return parts.join(' · ')
+  return parts
+}
+
+function statusDetail(payload) {
+  return statusParts(payload).join(' · ')
 }
 
 // The status line's card: the brand and version as its head, the rest of the detail a line each.
-function statusCard(detail) {
-  const parts = detail.split(' · ')
+function statusCard(parts) {
   return {
     title: parts[0],
     body: exceeds(parts.length, 1)
@@ -2603,7 +2617,7 @@ export function statusItem({ gateway, data, error }) {
   if (!data) {
     return error ? { segments: [{ text: t('stateUnavailable'), tone: 'muted' }], detail: t('noticeBackend', { message: errorText(error) }) } : null
   }
-  return { segments: statusSegments(data), detail: statusDetail(data) }
+  return { segments: statusSegments(data), detail: statusDetail(data), parts: statusParts(data) }
 }
 
 // ---------------------------------------------------------------------------
@@ -3015,6 +3029,9 @@ button.omh-pane-section-toggle:focus-visible{outline:2px solid var(--omh-brand);
 .omh-pane-accent{color:var(--omh-run)}\n.omh-pane-ok{color:var(--omh-ok)}
 .omh-pane-warn{color:var(--omh-warn)}
 .omh-pane-error{color:var(--omh-bad)}
+.omh-pane-tl-one{color:color-mix(in srgb,var(--omh-run) 40%,var(--background))}
+.omh-pane-tl-few{color:color-mix(in srgb,var(--omh-run) 70%,var(--background))}
+.omh-pane-tl-many{color:var(--omh-run)}
 .omh-pane-muted{color:var(--omh-text-readable)}
 .omh-pane-tertiary{color:var(--omh-text-readable)}
 .omh-pane-secondary{color:var(--ui-text-secondary)}
@@ -3221,7 +3238,7 @@ function Header({ model }) {
     payload ? withTip({ title: t('brandName'), aside: paneVersion(payload) }, brand, 'brand') : brand,
     segments.length
       ? withTip(
-          payload ? statusCard(statusDetail(payload)) : '',
+          payload ? statusCard(statusParts(payload)) : '',
           node('div', { className: 'omh-pane-state', 'data-tone': tone }, [
           tone === 'tertiary' ? null : jsx(StatusDot, { tone: DOT_TONES[tone] || 'good' }),
           span(
@@ -4385,21 +4402,25 @@ export function laneSpan(lane, readAt, now) {
   return { start, end: Math.max(start, now), open: true }
 }
 
-// How long a lane sat after the last of its parents ended before it started: the scheduler's share of the run.
-function upstreamGap(lane, spans) {
+// How long a lane sat after the last of its parents ended before it started: the scheduler's share of the run. Null
+// unless every parent has a closed span: a parent with no clock, or still running, may have ended after the timed
+// ones, so no wait can be told. A parent the cut graph hid is not in `lane.parents` at all, so the caller asks only
+// where the graph is whole.
+export function upstreamGap(lane, spans) {
   const own = spans[lane.id]
-  const ends = lane.parents
-    .map(function (id) {
-      return spans[id]
-    })
-    .filter(function (span) {
-      return span && !span.open
-    })
-    .map(function (span) {
+  const parents = lane.parents.map(function (id) {
+    return spans[id]
+  })
+  const unknown = parents.some(function (span) {
+    return !span || span.open
+  })
+  if (!own || !parents.length || unknown) return null
+  const ready = Math.max.apply(
+    null,
+    parents.map(function (span) {
       return span.end
     })
-  if (!own || !ends.length) return null
-  const ready = Math.max.apply(null, ends)
+  )
   return exceeds(own.start - ready, 1) ? { from: ready, seconds: own.start - ready } : null
 }
 
@@ -4419,11 +4440,12 @@ function idleSeconds(spans) {
 
 // Drawn last where lanes share a line, so they stay on top: what runs, then a wait, then a failure.
 const TL_ON_TOP = ['accent', 'warn', 'error']
-// The folded strip's bands, by how many of the run's lanes ran at once: one, a few, many.
+// The folded strip's bands, by how many of the run's lanes ran at once: one, a few, many. Shades of the running
+// accent, lightest for one, so the strip never borrows done green, waiting yellow or failed red for a count.
 const TL_BANDS = [
-  { most: 1, tone: 'ok' },
-  { most: 5, tone: 'warn' },
-  { most: Infinity, tone: 'error' }
+  { most: 1, tone: 'tl-one' },
+  { most: 5, tone: 'tl-few' },
+  { most: Infinity, tone: 'tl-many' }
 ]
 const TL_TIP_LANES = 6
 // States in which a lane has not run yet, so an untimed one leaves no gap unexplained.
@@ -4549,7 +4571,8 @@ function DagTimeline({ dag, receivedAt, pick, onPick, open, onOpen }) {
     .map(function (group) {
       const items = group.lanes.map(function (lane) {
         const when = spans[lane.id]
-        return { lane, when, group: group.label, gap: when && !lane.outside ? upstreamGap(lane, spans) : null }
+        // Not in a cut graph: it has already dropped the edges to its hidden lanes, so a parent may be missing.
+        return { lane, when, group: group.label, gap: when && !lane.outside && !dag.hidden ? upstreamGap(lane, spans) : null }
       })
       const started = items
         .filter(function (item) {
@@ -5290,7 +5313,8 @@ function UsageBoard({ saved, stored, graph }) {
         board.parts.length ? legend : div('omh-pane-tip-note', t('ubPartsPending'), 'pending')
       ],
       'parts'
-    )
+    ),
+    note: t('ubNote')
   }
   const subCount = subs ? subs.lanes : 0
   const scope = jsx(UsageScope, { withSubs: withSubs && exceeds(subCount, 0), count: subCount, onPick: setWithSubs }, 'scope')
@@ -5344,7 +5368,7 @@ function StatusItem() {
     else if (typeof host.notify === 'function') host.notify({ kind: 'info', message: item.detail })
   }
   return withTip(
-    statusCard(item.detail),
+    statusCard(item.parts || [item.detail]),
     node('button', { type: 'button', className: 'omh-bar', onClick: reveal }, [
       span('omh-bar-brand', t('brand')),
       ...item.segments.map(function (segment) {
