@@ -1,7 +1,8 @@
 """Setup edits a Hermes config whose root keys hold column-0 lists, or that opens with `%YAML 1.1` (#3075).
 
 Reported by @chhxbchhxb: `omh setup --core` stopped at step 2 with "non-mapping or unsupported root YAML is
-user-owned" on a `config.yaml` Hermes' own writer produced. Hermes writes a root key's list at column 0:
+user-owned" on a `config.yaml` whose root key held a list at column 0. Older Hermes releases, hand edits and other
+YAML tools write that spelling; current `hermes_yaml` indents lists (`indent(sequence=4, offset=2)`):
 
     toolsets:
     - hermes-cli
@@ -21,11 +22,12 @@ Two more faults of the same writers, fixed with it:
 - A section key with a comment on its line (`memory: # mine`) was no section to `set_memory_provider`, which
   appended a second `memory:` Hermes refuses as a duplicate key; the plugin writer refused `plugins: # x`
   outright. Every writer and guard now finds a section through one test, `_block_header`, and edits it in place.
-- The skills writer read past a `%TAG`, `%YAML 1.2` or `...` envelope that `section_edit_guard` refuses, and the
-  plugin and memory writers then appended past the `...`. All three now take `_root_is_plain_block_mapping`'s
-  verdict.
+- The skills writer edited inside a `%YAML 1.2`, `%TAG` or `...` envelope while the plugin and memory writers
+  appended past the `...`. Every writer and remover now edits the body `_document_parts` splits off and puts the
+  envelope back (`_with_document_body`), so a registered install with any envelope updates without a write.
 
-Where Hermes is installed, each accepted shape and every written file is also loaded with Hermes' own reader.
+`HermesAgreesTest` loads each accepted shape and every written file with Hermes' own reader; it is skipped where
+Hermes is not installed, and `PINNED` holds a few of its answers so the readers are checked against them anyway.
 """
 
 from __future__ import annotations
@@ -88,13 +90,29 @@ REFUSED = {
     "second document start": MODEL + "---\nx: 1\n",
     "document end": MODEL + "...\n",
     "TAG directive": "%TAG ! tag:example.com,2000:\n---\n" + MODEL,
-    "YAML 1.2 directive": "%YAML 1.2\n---\n" + MODEL,  # may resolve scalars differently
+    "YAML 1.2 directive": "%YAML 1.2\n---\n" + MODEL,
     "two directives": "%YAML 1.1\n%YAML 1.1\n---\n" + MODEL,  # the loaders raise
     "directive without document start": "%YAML 1.1\n" + MODEL,  # the loaders raise
     "directive alone": "%YAML 1.1\n",
     "directive after a key": MODEL + "%YAML 1.1\n---\n",
     "flow sequence root": "[a, b]\n",
     "indented root under document start": "---\n  model: x\n",
+    "indented root": "  model: x\n",  # a section appended at column 0 beside it does not load
+    # Hermes reads `memory: # c` as part of the string, never as a key.
+    "quoted value across lines": 'note: "first line\nmemory: # c\n  still"\n' + MODEL,
+}
+# The guard refuses these whole; every writer edits their body instead (`_with_document_body`).
+EDITED_THROUGH_ENVELOPE = {"document end", "TAG directive", "YAML 1.2 directive"}
+
+# What Hermes' `hermes_yaml.safe_load` returned for a few shapes, so the readers are checked without Hermes too.
+PINNED = {
+    "column-0 list": {"model": {"provider": "custom"}, "toolsets": ["hermes-cli"],
+                      "skills": {"external_dirs": []}, "plugins": {"enabled": []}},
+    # YAML 1.1 reads a plain `y` as true.
+    "column-0 item with a nested list": {"fallback_providers": [{"model": "x", "args": ["a"]}, {"model": True}],
+                                         "skills": {"external_dirs": []}},
+    "directive and column-0 list": {"model": {"provider": "custom"}, "toolsets": ["hermes-cli"],
+                                    "skills": {"external_dirs": []}, "plugins": {"enabled": []}},
 }
 
 SECTIONS = ("skills", "plugins", "memory", "display", "auxiliary")
@@ -145,13 +163,27 @@ class GuardTest(unittest.TestCase):
                 lines = text.splitlines()
                 self.assertFalse(adapter._root_is_plain_block_mapping(lines), name)
                 self.assertNotEqual(adapter.section_edit_guard(lines, "plugins", "enabled"), "", name)
-                # Every step-2 writer refuses what the guard refuses, the skills writer included.
+                if name in EDITED_THROUGH_ENVELOPE:
+                    continue
                 with self.assertRaises(ValueError):
                     adapter.ensure_external_dir(text, "/o/skills")
                 with self.assertRaises(ValueError):
                     adapter.ensure_plugin_enabled(text, "omh")
                 memory = adapter.set_memory_provider(text, "omh")
                 self.assertFalse(memory.changed, memory.text)
+
+    def test_a_header_is_the_key_alone_or_with_a_comment(self) -> None:
+        for line in ("memory:", "memory:  ", "memory: # mine", "memory:\t# mine"):
+            self.assertTrue(adapter._block_header(line, "memory"), line)
+        for line in ("memory:#x", "memory: x", "memory: {}", " memory:", "memory_x:", "memory"):
+            self.assertFalse(adapter._block_header(line, "memory"), line)
+
+    def test_the_readers_agree_with_what_hermes_loaded(self) -> None:
+        for name, loaded in PINNED.items():
+            with self.subTest(shape=name):
+                text = READABLE[name]
+                self.assertEqual(adapter.external_dirs(text), loaded["skills"]["external_dirs"])
+                self.assertEqual(adapter.plugin_enablement(text)["enabled"], loaded.get("plugins", {}).get("enabled", []))
 
     def test_a_list_under_the_edited_section_stays_refused(self) -> None:
         for indent in ("", "  "):
@@ -309,12 +341,32 @@ class SetupCommandTest(unittest.TestCase):
         if hermes_reads("a: 1\n") is not None:
             self.assertEqual(hermes_load(written)["memory"], {"provider": "omh", "recall": True})
 
-    def test_setup_refuses_a_document_end_and_writes_nothing(self) -> None:
-        original = MODEL + "...\n"
-        status, _stdout, stderr, root = self.run_setup(original)
-        self.assertEqual(status, 2, stderr)
-        self.assertIn("multi-document", stderr)
-        self.assertEqual((root / ".hermes" / "config.yaml").read_text(encoding="utf-8"), original)
+    def test_setup_and_update_on_every_envelope(self) -> None:
+        """Setup writes inside the envelope, and update on that registered install writes nothing (#3075)."""
+        for name, (head, tail) in EnvelopeTest.ENVELOPES.items():
+            if name in EnvelopeTest.REFUSED_STREAMS:
+                continue
+            original = head + MODEL + "memory:\n  provider: honcho\n" + tail
+            with self.subTest(envelope=name):
+                status, _stdout, stderr, root = self.run_setup(original)
+                self.assertEqual(status, 0, stderr)
+                config = root / ".hermes" / "config.yaml"
+                written = config.read_text(encoding="utf-8")
+                self.assertTrue(written.startswith(head + MODEL + "memory:\n  provider: honcho\n"), written)
+                # Every write lands before the `...`.
+                self.assertTrue(written.endswith("\n" + tail if tail else "\n"), written)
+                self.assertEqual(written.count("..."), tail.count("..."), written)
+                if hermes_reads("a: 1\n") is not None:
+                    loaded = hermes_load(written)
+                    self.assertEqual(loaded["plugins"]["enabled"], ["omh"])
+                    self.assertEqual(len(loaded["skills"]["external_dirs"]), 1)
+                before = config.read_bytes()
+                status, _stdout, stderr = run_cli(
+                    ["--omh-home", str(root / ".omh"), "--hermes-home", str(root / ".hermes"), "update", "--json"],
+                    output_json=False,
+                )
+                self.assertEqual(status, 0, stderr)
+                self.assertEqual(config.read_bytes(), before)
 
 
 class CommentedHeaderTest(unittest.TestCase):
@@ -371,7 +423,7 @@ class CommentedHeaderTest(unittest.TestCase):
 
 
 class EnvelopeTest(unittest.TestCase):
-    """The skills writer refuses exactly the openings and endings `section_edit_guard` refuses."""
+    """Every writer and remover edits the document's body and keeps its envelope as written (#3075)."""
 
     ENVELOPES = {
         "document start": ("---\n", ""),
@@ -383,34 +435,72 @@ class EnvelopeTest(unittest.TestCase):
         "YAML 1.1 and TAG": ("%YAML 1.1\n%TAG !e! tag:example.com,2026:\n---\n", ""),
         "document end": ("", "...\n"),
         "document end with a comment after it": ("---\n", "... # end\n# after\n"),
+        "YAML 1.2 and document end": ("%YAML 1.2\n---\n", "...\n"),
         "second document": ("", "---\nx: 1\n"),
+        "content after document end": ("", "...\nx: 1\n"),
+        "two YAML directives": ("%YAML 1.1\n%YAML 1.2\n---\n", ""),
     }
+    REFUSED_STREAMS = {"second document", "content after document end", "two YAML directives"}
 
-    def test_the_skills_writer_and_the_guard_give_one_verdict(self) -> None:
+    def write_all(self, text: str) -> str:
+        text = adapter.set_memory_provider(setup_writes(text), "omh").text
+        return adapter.ensure_plugin_omh_home(text, "/o").text
+
+    def test_the_writers_write_inside_the_envelope_and_the_removers_take_it_back(self) -> None:
         for name, (head, tail) in self.ENVELOPES.items():
-            text = head + MODEL + SKILLS + tail
-            with self.subTest(envelope=name):
-                guard = adapter.section_edit_guard(text.splitlines(), "skills")
-                try:
-                    change = adapter.ensure_external_dir(text, "/o/skills")
-                except ValueError as exc:
-                    self.assertNotEqual(guard, "", f"{name}: the skills writer refused what the guard takes: {exc}")
-                    continue
-                self.assertEqual(guard, "", f"{name}: the skills writer edited what the guard refuses")
-                self.assertTrue(change.text.startswith(head), change.text)
-                self.assertEqual(adapter.external_dirs(change.text), ["/o/skills"])
-
-    def test_the_refused_envelopes_are_refused_by_every_step_2_writer(self) -> None:
-        for name in ("YAML 1.2", "TAG", "YAML 1.1 and TAG", "document end", "document end with a comment after it"):
-            head, tail = self.ENVELOPES[name]
+            if name in self.REFUSED_STREAMS:
+                continue
             text = head + MODEL + tail
             with self.subTest(envelope=name):
-                with self.assertRaisesRegex(ValueError, "non-mapping or multi-document"):
-                    adapter.ensure_external_dir(text, "/o/skills")
-                with self.assertRaisesRegex(ValueError, "non-mapping or multi-document"):
-                    adapter.ensure_plugin_enabled(text, "omh")
-                memory = adapter.set_memory_provider(text, "omh")
-                self.assertFalse(memory.changed, memory.text)
+                written = self.write_all(text)
+                self.assertTrue(written.startswith(head + MODEL), written)
+                self.assertTrue(written.endswith("memory:\n  provider: omh\n" + tail), written)
+                self.assertEqual(adapter.external_dirs(written), ["/o/skills"])
+                self.assertEqual(adapter.plugin_enablement(written)["enabled"], ["omh"])
+                self.assertEqual(adapter.memory_provider_selection(written), "omh")
+                self.assertEqual(adapter.plugin_omh_home_setting(written), "/o")
+                # A second pass writes nothing.
+                self.assertEqual(self.write_all(written), written)
+                removed = adapter.remove_external_dir(written, "/o/skills").text
+                removed = adapter.remove_plugin_enabled(removed, "omh").text
+                removed = adapter.remove_memory_provider(removed, "omh").text
+                removed = adapter.remove_plugin_omh_home(removed, "/o").text
+                self.assertEqual(adapter.external_dirs(removed), [])
+                self.assertEqual(adapter.plugin_enablement(removed)["enabled"], [])
+                self.assertEqual(adapter.memory_provider_selection(removed), "")
+                self.assertTrue(removed.startswith(head + MODEL), removed)
+                self.assertTrue(removed.endswith(tail), removed)
+
+    def test_a_stream_of_more_than_one_document_is_refused_only_when_there_is_something_to_write(self) -> None:
+        registered = "skills:\n  external_dirs:\n    - /o/skills\nplugins:\n  enabled:\n    - omh\n"
+        for name in sorted(self.REFUSED_STREAMS):
+            head, tail = self.ENVELOPES[name]
+            with self.subTest(envelope=name):
+                with self.assertRaises(ValueError):
+                    adapter.ensure_external_dir(head + MODEL + tail, "/o/skills")
+                with self.assertRaises(ValueError):
+                    adapter.ensure_plugin_enabled(head + MODEL + tail, "omh")
+                self.assertFalse(adapter.set_memory_provider(head + MODEL + tail, "omh").changed)
+                text = head + MODEL + registered + tail
+                self.assertFalse(adapter.ensure_external_dir(text, "/o/skills").changed)
+                self.assertFalse(adapter.ensure_plugin_enabled(text, "omh").changed)
+                self.assertFalse(adapter.remove_external_dir(head + MODEL + tail, "/o/skills").changed)
+                self.assertFalse(adapter.remove_plugin_enabled(head + MODEL + tail, "omh").changed)
+
+    def test_doctor_passes_an_enabled_install_whatever_its_envelope(self) -> None:
+        enabled = "plugins:\n  enabled:\n    - omh\n"
+        for name, (head, tail) in self.ENVELOPES.items():
+            with self.subTest(envelope=name):
+                self.assertEqual(adapter.plugins_enabled_extension_error(head + MODEL + enabled + tail, "omh"), "")
+        for name in sorted(self.REFUSED_STREAMS):
+            head, tail = self.ENVELOPES[name]
+            with self.subTest(refused=name):
+                message = adapter.plugins_enabled_extension_error(head + MODEL + tail, "omh")
+                self.assertIn("one YAML document", message)
+                self.assertIn("hermes plugins enable omh", message)
+        # A second `enabled:` key is still a fault, listed or not: Hermes refuses the file over it.
+        self.assertIn("duplicate plugins.enabled", adapter.plugins_enabled_extension_error(
+            "plugins:\n  enabled:\n    - omh\n  enabled: []\n", "omh"))
 
 
 @unittest.skipIf(hermes_reads("a: 1\n") is None, "Hermes is not installed here")
@@ -446,14 +536,24 @@ class HermesAgreesTest(unittest.TestCase):
         self.assertEqual(loaded["plugins"], {"enabled": ["omh"], "entries": {"omh": {"settings": {"omh_home": "/o"}}}})
         self.assertEqual(loaded["memory"], {"provider": "omh", "recall": True})
 
-    def test_every_envelope_the_skills_writer_takes_still_loads(self) -> None:
+    def test_every_envelope_the_writers_take_still_loads(self) -> None:
         for name, (head, tail) in EnvelopeTest.ENVELOPES.items():
-            text = head + MODEL + SKILLS + tail
-            if adapter.section_edit_guard(text.splitlines(), "skills"):
+            if name in EnvelopeTest.REFUSED_STREAMS:
                 continue
             with self.subTest(envelope=name):
-                written = adapter.ensure_external_dir(text, "/o/skills").text
-                self.assertEqual(hermes_load(written)["skills"], {"external_dirs": ["/o/skills"]})
+                written = EnvelopeTest().write_all(head + MODEL + tail)
+                loaded = hermes_load(written)
+                self.assertEqual(loaded["skills"], {"external_dirs": ["/o/skills"]})
+                self.assertEqual(loaded["plugins"]["enabled"], ["omh"])
+                self.assertEqual(loaded["memory"], {"provider": "omh"})
+
+    def test_the_pinned_results_are_what_hermes_loads(self) -> None:
+        for name, loaded in PINNED.items():
+            with self.subTest(shape=name):
+                self.assertEqual(hermes_load(READABLE[name]), loaded)
+
+    def test_a_quoted_value_across_lines_hides_no_key(self) -> None:
+        self.assertNotIn("memory", hermes_load(REFUSED["quoted value across lines"]))
 
     def test_both_spellings_of_the_issue_config_load_alike(self) -> None:
         self.assertEqual(hermes_load(ISSUE_COLUMN0), hermes_load(ISSUE_INDENTED))

@@ -17,7 +17,7 @@ dependency.
 
 from __future__ import annotations
 
-from .config_adapter import ConfigChange, section_edit_guard
+from .config_adapter import ConfigChange, _edits_document_body, section_edit_guard
 
 
 def _indent_of(line: str) -> int:
@@ -145,6 +145,7 @@ def compression_settings(config_text: str) -> dict[str, object]:
     }
 
 
+@_edits_document_body
 def ensure_compression_defaults(config_text: str) -> ConfigChange:
     """Add a compression fallback chain when the compressor is a single endpoint.
 
@@ -199,6 +200,7 @@ def compression_fallback_chain_lines(config_text: str) -> list[str]:
     return lines[start:end]
 
 
+@_edits_document_body
 def remove_compression_fallback_chain(config_text: str, expected: list[str]) -> ConfigChange:
     """Take back a compression fallback chain that still reads exactly `expected`.
 

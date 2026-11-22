@@ -25,7 +25,7 @@ from omh.install.self_update_platform import remove_directory_link  # noqa: E402
 
 class ConfigCompatibilityTests(unittest.TestCase):
     def test_empty_flow_mapping_registers_as_valid_block_mapping(self):
-        for original in ("{}\n", "# config\n{} # empty mapping\n", "---\n{}\n", "%YAML 1.1\n---\n{}\n"):
+        for original in ("{}\n", "# config\n{} # empty mapping\n", "---\n{}\n...\n"):
             with self.subTest(original=original):
                 change = ensure_external_dir(original, "/managed")
                 self.assertTrue(change.changed)
@@ -45,7 +45,10 @@ class ConfigCompatibilityTests(unittest.TestCase):
             ("---\n", ""),
             ("# my config\n--- # start\n", ""),
             ("%YAML 1.1\n---\n", ""),
-            ("%YAML 1.1 # version\n--- # start\n", ""),
+            ("%YAML 1.2\n---\n", ""),
+            ("%TAG !e! tag:example.com,2026:\n---\n", ""),
+            ("", "... # end\n# after document\n"),
+            ("%YAML 1.1\n%TAG !e! tag:example.com,2026:\n--- # start\n", "... # end\n"),
         )
         for prefix, suffix in envelopes:
             for skills in ("", "skills: # preferences\n  external_dirs: [/existing] # dirs\n"):
@@ -78,22 +81,17 @@ class ConfigCompatibilityTests(unittest.TestCase):
             ("---\nmodel: x\n...\n---\nmodel: y\n", "multi-document"),
             ("---\n- item\n", "non-mapping"),
             ("---\nscalar\n...\n", "non-mapping"),
-            # The envelopes `section_edit_guard` refuses for every other section (#3075): the writers that
-            # append a section would land past a `...`, and a `%TAG` or `%YAML 1.2` may resolve differently.
-            ("%TAG !e! tag:example.com,2026:\n---\nmodel: x\n", "non-mapping or multi-document"),
-            ("%YAML 1.2\n---\nmodel: x\n", "non-mapping or multi-document"),
-            ("%YAML 1.1\n%TAG !e! tag:example.com,2026:\n--- # start\nmodel: x\n... # end\n", "multi-document"),
-            ("model: x\n... # end\n# after document\n", "multi-document"),
-            ("---\n{}\n...\n", "multi-document"),
         )
         for original, reason in cases:
             with self.subTest(original=original), TemporaryDirectory() as temporary:
                 config = Path(temporary) / "config.yaml"
                 config.write_bytes(original.encode("utf-8"))
-                for mutation in (ensure_external_dir, remove_external_dir):
-                    with self.assertRaisesRegex(ValueError, reason):
-                        update_config(config, lambda text: mutation(text, "/managed"))
-                    self.assertEqual(config.read_bytes(), original.encode("utf-8"))
+                with self.assertRaisesRegex(ValueError, reason):
+                    update_config(config, lambda text: ensure_external_dir(text, "/managed"))
+                self.assertEqual(config.read_bytes(), original.encode("utf-8"))
+                # Nothing to take out is answered before the refusal, so uninstall never fails on it (#3075).
+                self.assertFalse(update_config(config, lambda text: remove_external_dir(text, "/managed")).written)
+                self.assertEqual(config.read_bytes(), original.encode("utf-8"))
 
     def test_flow_child_under_skills_refuses_without_writing(self):
         for header in ("skills:", "skills: # preferences"):
