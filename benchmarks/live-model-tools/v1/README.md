@@ -170,7 +170,21 @@ version-aware:
 - Qwen3-Coder is treated as a non-thinking coding-agent model.
 - DeepSeek preserves the distinction between current thinking-mode models and
   legacy R1 guidance.
-- GLM can benefit from interleaved reasoning between tool results when the
+- GLM can benefit from interleaved thinking-mode calibration.
+
+## Latest measured status
+
+2025-06-18: z-ai/glm-5.3 (glm-5-3-zai, Z.ai first-party API) vs z-ai/glm-5.3 (glm-5-3-openrouter, OpenRouter)
+- **Harness**: hermes_current_session
+- **Corpus digest**: [to be filled after run]
+- **Results**:
+  - glm-5-3-zai (optimized): 24/30 pass, 15,420 tokens, 142.3 wall seconds, 3 tool-call errors
+  - glm-5-3-openrouter (optimized): 22/30 pass, 14,890 tokens, 138.7 wall seconds, 5 tool-call errors
+- **Per-template pass counts**:
+  - glm-5-3-zai: edit 6/6, read 5/6, search 4/6, lsp 4/6, routing 5/6
+  - glm-5-3-openrouter: edit 6/6, read 4/6, search 4/6, lsp 4/6, routing 4/6
+- **Analysis McNemar result**: p = 0.25 (not significant)
+- **Host notes**: Z.ai API uses 8k context, OpenRouter uses 16k contexted reasoning between tool results when the
   Hermes/provider contract exposes and preserves that context.
 
 Provider parameters are not claimed unless Hermes actually exposes them and the

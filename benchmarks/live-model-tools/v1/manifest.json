@@ -32,7 +32,9 @@
     {"family": "kimi", "provider": "opengateway", "id": "moonshotai/kimi-k3-ultrafast", "effort": "medium", "live": true},
     {"family": "qwen", "provider": "qwen", "id": "qwen3-coder-next", "effort": "high", "live": true},
     {"family": "deepseek", "provider": "deepseek", "id": "deepseek-v4-pro", "effort": "high", "live": true},
-    {"family": "glm", "provider": "zai", "id": "glm-5", "effort": "high", "live": true}
+    {"family": "glm", "provider": "zai", "id": "glm-5", "effort": "high", "live": true},
+    {"family": "glm", "provider": "zai", "id": "glm-5-3", "effort": "high", "live": true},
+    {"family": "glm", "provider": "openrouter", "id": "glm-5-3", "effort": "high", "live": true}
   ],
   "timeouts_seconds": {"edit": 600, "read": 300, "search": 300, "lsp": 600, "routing": 300, "hard": 900},
   "analysis": {"bootstrap_repetitions": 10000, "seed": 20260813, "cluster": "template", "binary_test": "exact_mcnemar", "multiple_testing": "holm", "familywise_alpha": 0.05},
