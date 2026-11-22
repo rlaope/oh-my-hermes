@@ -318,6 +318,7 @@ def probe_executor_readiness(
     dry_run: bool = False,
     now: str = "",
     executor_spec: object | None = None,
+    executor_registry_home: Path | None = None,
     probe_environment: Mapping[str, str] | None = None,
     repo_root: Path | None = None,
     write_roots: tuple[Path, ...] = (),
@@ -332,7 +333,7 @@ def probe_executor_readiness(
     behind a subprocess run nobody asked for, which is the same surprise #837
     exists to remove --- only later in the handoff.
     """
-    user_spec = executor_spec if executor_spec is not None else _user_executor_spec(paths, profile)
+    user_spec = executor_spec if executor_spec is not None else _user_executor_spec(paths, profile, executor_registry_home)
     if user_spec is not None:
         # A user-declared executor is never cached under a static profile id:
         # its command line can change by editing one file, so the digest is
@@ -607,7 +608,7 @@ def _resolved_command(profile: str) -> tuple[str, tuple[str, ...]] | None:
 _VERSION_TOKEN = re.compile(r"(?<![0-9A-Za-z.])v?([0-9]+(?:\.[0-9]+){1,3}(?:[-+][0-9A-Za-z.-]{1,32})?)(?![0-9A-Za-z])")
 
 
-def _user_executor_spec(paths: OmhPaths, profile: str) -> object | None:
+def _user_executor_spec(paths: OmhPaths, profile: str, registry_home: Path | None) -> object | None:
     """The operator's loaded definition for `profile`, or None for a built-in id.
 
     Built-ins return before any read: this hook must not add a file read to a
@@ -623,7 +624,7 @@ def _user_executor_spec(paths: OmhPaths, profile: str) -> object | None:
         return None
     if not valid_executor_id(value):
         return None
-    registry = load_user_executors(operator_executor_home(paths.omh_home if paths.omh_home_named else None))
+    registry = load_user_executors(registry_home if registry_home is not None else operator_executor_home(paths=paths))
     return registry.entries.get(value)
 
 

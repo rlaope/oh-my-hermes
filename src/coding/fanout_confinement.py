@@ -108,12 +108,27 @@ def external_search_path(environment: Mapping[str, str], *, binary: str,
     repos = tuple(repo.resolve() for repo in repositories)
     roots = (*repos, *(root.resolve() for root in write_roots))
 
+    def identity(path: Path) -> tuple[int, int] | None:
+        try:
+            info = path.stat()
+        except FileNotFoundError:
+            return None  # A planned write root or an absent PATH candidate.
+        return info.st_dev, info.st_ino
+
+    try:
+        root_ids = {key for root in roots if (key := identity(root)) is not None}
+        lane_parents = [(identity(repo.parent), f"{repo.name}-fanout-".casefold()) for repo in repos]
+    except OSError:
+        return ""  # Cannot establish the exclusion boundary.
+
     def excluded(path: Path) -> bool:
-        if any(path.is_relative_to(root) for root in roots) or ".git" in path.parts:
+        # safe_chain visits every ancestor, including intermediate link hops.
+        # Filesystem identity survives case aliases that realpath can preserve.
+        if identity(path) in root_ids or any(path.is_relative_to(root) for root in roots):
             return True
-        # All sibling lanes, not only the unit whose readiness is being checked.
-        return any(part.name.startswith(f"{repo.name}-fanout-") and part.parent == repo.parent
-                   for repo in repos for part in (path, *path.parents))
+        name = path.name.casefold()
+        return name == ".git" or any(name.startswith(prefix) and parent == identity(path.parent)
+                                     for parent, prefix in lane_parents)
 
     def safe_chain(path: Path) -> bool:
         # realpath alone loses intermediate links: a trusted link can reach a

@@ -237,6 +237,23 @@ class EntryValidationTests(_HomeTestCase):
                 fields = {issue.field for issue in issues if issue.reason == "cloud_refused"}
                 self.assertEqual(fields, {field}, issues)
 
+    def test_all_cloud_spellings_use_the_same_fragment_rule(self) -> None:
+        for token in ("cloud", "--cloud", "--cloud=true"):
+            cases = {
+                "argv": {"argv": ["my-agent", token, "{prompt}"]},
+                "version": {"version": ["my-agent", token, "--version"]},
+                "model": {"model": [token, "{model}"]},
+                "effort": {"effort": [token, "{effort}"]},
+                "session.export": {"session": {"export": [token, "{session_file}"]}},
+                "session.resume": {"session": {"export": ["--export", "{session_file}"],
+                                               "resume": [token, "{session_id}"]}},
+            }
+            for field, entry in cases.items():
+                with self.subTest(token=token, field=field):
+                    spec, issues = validate_executor_entry("my-agent", {"argv": ["my-agent", "{prompt}"], **entry})
+                    self.assertEqual({(issue.field, issue.reason) for issue in issues}, {(field, "cloud_refused")})
+                    self.assertIsNone(spec)
+
     def test_insert_is_a_bounded_non_bool_int(self) -> None:
         cases = {
             0: "insert_out_of_range",

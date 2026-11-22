@@ -518,11 +518,19 @@ class SessionDispatchTests(unittest.TestCase):
 
     def test_committed_scratch_entry_fails_the_unit(self):
         with TemporaryDirectory() as tmp:
-            _, repo, _, summary = _dispatch(Path(tmp), mode="tracked")
+            paths, _, _, summary = _dispatch(Path(tmp), mode="tracked")
             unit = summary["units"][0]
             self.assertEqual(unit.get("reason_code"), "executor_scratch_committed")
             self.assertEqual(unit["status"], "failed")
             self.assertFalse(unit["integration_ready"])
+            self.assertEqual(unit.get("executor_session_status"), "observed")
+            receipt = unit["executor_session"]
+            self.assertEqual(receipt["state"], "observed")
+            self.assertEqual(receipt["reference"], SID)
+            self.assertEqual(receipt["attempt_id"], unit["attempt_id"])
+            observations = [json.loads(line) for line in paths.runtime_journal_events_path.read_text().splitlines()]
+            self.assertIn(receipt, [event["executor_session"] for event in observations
+                                    if event.get("event") == "executor_session_observed"])
 
     def test_file_prompt_repair_observes_export_and_resumes(self):
         with TemporaryDirectory() as tmp:

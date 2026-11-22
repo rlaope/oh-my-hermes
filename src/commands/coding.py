@@ -926,6 +926,7 @@ def cmd_coding_executor_readiness(args: argparse.Namespace) -> int:
             probe_executor_readiness(
                 _paths(args),
                 args.executor,
+                executor_registry_home=(_executor_registry_home(args) if args.executor not in EXECUTOR_PROFILES else None),
                 force=bool(args.force),
                 dry_run=bool(args.dry_run),
             )
@@ -958,10 +959,10 @@ def _loaded_executor_registry(args: argparse.Namespace) -> ExecutorRegistry:
     return load_user_executors(_executor_registry_home(args))
 
 
-def _admitted_owner_ids(args: argparse.Namespace) -> tuple[str, ...]:
+def _admitted_owner_ids(registry: ExecutorRegistry) -> tuple[str, ...]:
     from ..coding.fanout import admitted_unit_owner_ids
 
-    return admitted_unit_owner_ids(_loaded_executor_registry(args))
+    return admitted_unit_owner_ids(registry)
 
 
 def _refuse_remote_pr(args: argparse.Namespace) -> None:
@@ -2411,7 +2412,7 @@ def _brief_recovery(dispatched: dict) -> dict[str, object]:
     return brief
 
 
-def _brief_owner(owner_value: object, handoff: dict, args: argparse.Namespace) -> str:
+def _brief_owner(owner_value: object, handoff: dict, admitted: tuple[str, ...]) -> str:
     """The unit's owner, kept as recorded even after the definition is removed.
 
     A contract freezes `handoff.user_executor` when the definition exists, and
@@ -2428,7 +2429,7 @@ def _brief_owner(owner_value: object, handoff: dict, args: argparse.Namespace) -
     bound_id = binding.get("id") if isinstance(binding, dict) else None
     if isinstance(bound_id, str) and bound_id == owner and valid_executor_id(bound_id):
         return bound_id
-    return owner if owner and owner in _admitted_owner_ids(args) else "choose"
+    return owner if owner and owner in admitted else "choose"
 
 
 def _bounded_fanout_brief_scalar(value: object) -> str:
@@ -2505,6 +2506,7 @@ def cmd_coding_fanout_brief(args: argparse.Namespace) -> int:
     # units missing from the plan (defensive only) keep their contract order.
     order_index = {unit_id: index for index, unit_id in enumerate(merge_order)}
     contract_units.sort(key=lambda unit: order_index.get(str(unit.get("unit_id", "")), len(order_index)))
+    admitted = _admitted_owner_ids(_loaded_executor_registry(args))
     for unit in contract_units:
         unit_id = str(unit.get("unit_id", ""))
         handoff = unit.get("handoff", {}) if isinstance(unit.get("handoff"), dict) else {}
@@ -2553,7 +2555,7 @@ def cmd_coding_fanout_brief(args: argparse.Namespace) -> int:
         route_schema_version = model_route.get("schema_version", "")
         route_version = _bounded_fanout_brief_scalar(route_schema_version)
         owner_value = unit.get("owner")
-        owner = _brief_owner(owner_value, handoff, args)
+        owner = _brief_owner(owner_value, handoff, admitted)
         units.append(
             {
                 "unit_id": unit_id,
@@ -2945,7 +2947,7 @@ def _record_fanout_board_emission(paths, watched_runs: list[str], payload: dict,
         )
 
 
-def _failure_recovery_kwargs(args: argparse.Namespace) -> dict:
+def _failure_recovery_kwargs(args: argparse.Namespace, registry: ExecutorRegistry) -> dict:
     """Resolve the failure-recovery inputs the dispatch engine takes.
 
     The interview runs only when `--on-failure` is left at `report` AND stdin is
@@ -2961,7 +2963,7 @@ def _failure_recovery_kwargs(args: argparse.Namespace) -> dict:
 
     try:
         mode, target_owner = parse_on_failure(
-            getattr(args, "on_failure", "") or "", known_owners=_admitted_owner_ids(args)
+            getattr(args, "on_failure", "") or "", known_owners=_admitted_owner_ids(registry)
         )
     except OnFailureModeError as exc:
         raise OmhError(str(exc)) from exc
@@ -3080,7 +3082,8 @@ def cmd_coding_fanout_dispatch(
     from ..coding.parallelism_policy import read_parallelism_policy, resolve_fanout_concurrency
 
     paths = _paths(args)
-    recovery_kwargs = _failure_recovery_kwargs(args)
+    registry = _loaded_executor_registry(args)
+    recovery_kwargs = _failure_recovery_kwargs(args, registry)
     environment_policy = child_environment_policy_from_args(args)
     selected_diagnostic_engine = (
         (diagnostic_engine or build_local_diagnostic_engine(allow_unconfined=bool(args.allow_unconfined)))
@@ -3150,6 +3153,7 @@ def cmd_coding_fanout_dispatch(
             contract,
             only_units=args.unit,
             goal_text=goal_text,
+            executor_entries=registry.entries,
         )
     except ValueError as exc:
         raise OmhError(str(exc)) from exc
@@ -3157,6 +3161,7 @@ def cmd_coding_fanout_dispatch(
         summary = dispatch_fanout(
             paths,
             contract,
+            executor_entries=registry.entries,
             goal_text=goal_text,
             repo_root=repo_root,
             base_sha="",
@@ -3199,6 +3204,7 @@ def cmd_coding_fanout_dispatch(
         summary = dispatch_fanout(
             paths,
             contract,
+            executor_entries=registry.entries,
             goal_text=goal_text,
             repo_root=repo_root,
             base_sha=resolved.stdout.strip(),
@@ -3319,6 +3325,7 @@ def cmd_coding_run(args: argparse.Namespace) -> int:
     verification_commands = list(getattr(args, "verification_command", None) or [])
     if verification_commands:
         unit["verification_commands"] = verification_commands
+    registry = _loaded_executor_registry(args)
     needs_inventory = args.owner not in EXECUTOR_MODEL_OPTIONS
     try:
         capability_snapshots = {
@@ -3336,7 +3343,7 @@ def cmd_coding_run(args: argparse.Namespace) -> int:
             category_config=_operator_category_config(paths),
             identity_config=_operator_identity_config(paths),
             capability_snapshots=capability_snapshots,
-            registry=_loaded_executor_registry(args),
+            registry=registry,
         )
     except (FanoutContractError, ExecutorCapabilitySnapshotError) as exc:
         raise OmhError(str(exc)) from exc
@@ -3365,6 +3372,7 @@ def cmd_coding_run(args: argparse.Namespace) -> int:
         summary = dispatch_fanout(
             paths,
             contract,
+            executor_entries=registry.entries,
             goal_text=goal_text,
             repo_root=repo_root,
             base_sha=resolved.stdout.strip(),
@@ -3382,7 +3390,7 @@ def cmd_coding_run(args: argparse.Namespace) -> int:
             run_verification=bool(args.run_verification or verification_commands),
             allow_unconfined=bool(args.allow_unconfined),
             environment_policy=environment_policy,
-            **_failure_recovery_kwargs(args),
+            **_failure_recovery_kwargs(args, registry),
         )
     except ValueError as exc:
         raise OmhError(str(exc)) from exc

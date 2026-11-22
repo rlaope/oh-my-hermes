@@ -54,8 +54,8 @@ from .fanout_executor_sessions import (
 )
 from .executor_readiness import negotiate_session_capability, observe_session_binary, session_launch_path
 from .executors import EXECUTOR_PROFILES, canonical_executor_profile
-from .user_executors import ExecutorConfigError, ExecutorSpec
-from .fanout_remote_pr import REFUSAL_REMOTE_PR_NOT_AVAILABLE, rendered_cloud_argv
+from .user_executors import ExecutorConfigError, ExecutorSpec, declares_cloud
+from .fanout_remote_pr import REFUSAL_REMOTE_PR_NOT_AVAILABLE
 from .fanout_capacity import (
     AdmissionBinding, CapacityBlocked, CapacityTrip, CodexAdmissionObserver, CodexAdmissionSource, LaunchCallable,
     CODEX_ADMISSION_SUPPORT, CAPACITY_STATUSES, OwnerLaunchGate, capacity_fields,
@@ -1185,30 +1185,18 @@ def _remove_executor_scratch(scratch: _ExecutorScratch | None) -> None:
 
 
 def _external_history_refusal(runner: Callable[..., Any], worktree: Path, base: str) -> str:
-    """Check committed paths, even if a later worker commit removed the export."""
-    head = _git_text(runner, worktree, ["git", "rev-parse", "HEAD"])
-    if not head or not re.fullmatch(r"[0-9a-f]{40,64}", base):
+    """Verify descent and the endpoint tree delta for the same observed HEAD."""
+    head = (_git_text(runner, worktree, ["git", "rev-parse", "HEAD"]) or "").strip()
+    if not all(re.fullmatch(r"[0-9a-f]{40}(?:[0-9a-f]{24})?", oid) for oid in (base, head)):
         return "executor_history_unverified"
-    pending, seen = [head.strip()], {base}
-    while pending:
-        commit = pending.pop()
-        if commit in seen:
-            continue
-        if len(seen) > 128 or not re.fullmatch(r"[0-9a-f]{40,64}", commit):
-            return "executor_history_unverified"
-        seen.add(commit)
-        changed = _git_bytes(runner, worktree, ["git", "diff", "--name-only", "--no-renames", "-z",
-                             base, commit, "--", f":(top,glob){EXECUTOR_SCRATCH_PREFIX}*",
-                             f":(top,glob){EXECUTOR_SCRATCH_PREFIX}*/**"])
-        if changed is None:
-            return "executor_history_unverified"
-        if changed:
-            return "executor_scratch_committed"
-        parents = _git_text(runner, worktree, ["git", "rev-parse", "--revs-only", f"{commit}^@"])
-        if not parents or not parents.strip():  # History did not lead back to our frozen base.
-            return "executor_history_unverified"
-        pending.extend(parents.splitlines())
-    return ""
+    if _git_text(runner, worktree, ["git", "merge-base", "--is-ancestor", base, head]) is None:
+        return "executor_history_unverified"
+    changed = _git_bytes(runner, worktree, ["git", "diff", "--name-only", "--no-renames", "-z",
+                         base, head, "--", f":(top,glob){EXECUTOR_SCRATCH_PREFIX}*",
+                         f":(top,glob){EXECUTOR_SCRATCH_PREFIX}*/**"])
+    if changed is None:
+        return "executor_history_unverified"
+    return "executor_scratch_committed" if changed else ""
 
 
 def _dispatch_executor_entries(paths: OmhPaths, units: object, retarget: str = "") -> Mapping[str, ExecutorSpec]:
@@ -1220,7 +1208,7 @@ def _dispatch_executor_entries(paths: OmhPaths, units: object, retarget: str = "
         owners.update(str(unit.get("owner") or "choose") for unit in units if isinstance(unit, Mapping))
     if not owners.difference((*EXECUTOR_PROFILES, "", "choose")):
         return {}
-    return load_user_executors(operator_executor_home(paths.omh_home if paths.omh_home_named else None)).entries
+    return load_user_executors(operator_executor_home(paths=paths)).entries
 
 
 def with_codex_windows_sandbox(argv: list[str] | None, owner: str, backend: str) -> list[str] | None:
@@ -5324,7 +5312,7 @@ def _dispatch_unit(
                     ),
                     owner, codex_sandbox_backend,
                 )
-                if command and rendered_cloud_argv(command):
+                if command and declares_cloud(command[1:]):
                     raise ExecutorConfigError(REFUSAL_REMOTE_PR_NOT_AVAILABLE)
         except ExecutorConfigError as exc:
             # A selected model/effort/session the declaration cannot carry, or
@@ -6188,14 +6176,6 @@ def _dispatch_unit(
                             'executor_session': export_receipt.to_dict()})
                 raise
             stdout_text = capture.take_final_text()
-            if executor_spec is not None:
-                history_refusal = _external_history_refusal(unit_git_runner, worktree, base_sha)
-                if history_refusal:
-                    return {"unit_id": unit_id, "run_ref": run_ref, "owner": owner,
-                            "status": "failed", "failure_kind": FAILURE_KIND_CAPABILITY_GATE,
-                            "reason_code": history_refusal, "reason": history_refusal,
-                            "attempt_id": attempt_id, "worktree_path": str(worktree),
-                            **_dispatch_status_ladder()}
             session_fields = {}
             if decoder is not None and session_binding is not None:
                 # Only decoded stdout identity events can conflict with a UUID.
@@ -6230,12 +6210,22 @@ def _dispatch_unit(
                     resume_reason=("fresh_retry" if attempt > 1 else
                                    str(executor_resume.get("reason") or "not_a_repair")),
                 )
-                session_fields = {'executor_session': export_receipt.to_dict()}
+                session_fields = {'executor_session': export_receipt.to_dict(),
+                                  'executor_session_status': export_receipt.state}
                 append_journal_observation(paths, {
                     'target_type': 'run', 'target_id': run_ref, 'run_id': run_ref,
                     'event': 'executor_session_observed', 'status': 'observed',
                     'worker_ref': unit_id, 'runtime_profile': owner, 'attempt_id': attempt_id,
                     'worktree_ref': str(worktree), **session_fields})
+            # Export observation belongs to the attempt, even when its Git result is refused.
+            if executor_spec is not None:
+                history_refusal = _external_history_refusal(unit_git_runner, worktree, base_sha)
+                if history_refusal:
+                    return {"unit_id": unit_id, "run_ref": run_ref, "owner": owner,
+                            "status": "failed", "failure_kind": FAILURE_KIND_CAPABILITY_GATE,
+                            "reason_code": history_refusal, "reason": history_refusal,
+                            "attempt_id": attempt_id, "worktree_path": str(worktree),
+                            **session_fields, **_dispatch_status_ladder()}
             if failure_diagnostic is not None:
                 append_journal_observation(paths, {
                     'target_type': 'run', 'target_id': run_ref, 'run_id': run_ref,

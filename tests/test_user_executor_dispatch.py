@@ -504,12 +504,46 @@ class DispatchGuardTests(unittest.TestCase):
                 self.assertEqual(unit["status"], "user_executor_binding_refused")
                 probe.assert_not_called()
 
+    def test_version_cloud_subcommand_is_never_probed(self):
+        from _cli_harness import run_cli
+
+        self.config.write_text(self.config.read_text().replace('["my-agent", "--version"]',
+                                                               '["my-agent", "cloud", "--version"]'))
+        with mock.patch.dict(os.environ, self.env), mock.patch(
+                "omh.coding.executor_readiness.bounded_session_probe", return_value=(b"2.3.4", "observed")) as probe:
+            code, _, err = run_cli(["--omh-home", str(self.paths.omh_home), "coding", "executor-readiness",
+                                    "--executor", "my-agent"])
+        self.assertEqual(probe.call_count, 0)
+        self.assertNotEqual(code, 0)
+        self.assertIn("unsupported executor readiness profile", err)
+
     def test_dry_run_never_probes(self):
         with mock.patch("omh.coding.executor_readiness.bounded_session_probe",
                         return_value=(b"2.3.4", "observed")) as probe:
             result = self.dispatch(dry_run=True)
         self.assertEqual(probe.call_count, 0)
         self.assertEqual(result["status"], "dry_run_planned")
+
+    def test_clean_merge_from_before_the_frozen_base_is_accepted(self):
+        from omh.coding.fanout_dispatch import _external_history_refusal
+
+        def git(*args):
+            return _git(self.repo, "-c", "user.name=t", "-c", "user.email=t@t", *args)
+
+        git("branch", "topic")
+        git("commit", "--allow-empty", "-qm", "frozen base")
+        base = git("rev-parse", "HEAD")
+        branch = git("branch", "--show-current")
+        git("checkout", "-q", "topic")
+        (self.repo / "ordinary.txt").write_text("ordinary change\n")
+        git("add", "ordinary.txt")
+        git("commit", "-qm", "ordinary change")
+        self.assertEqual(_external_history_refusal(subprocess.run, self.repo, base), "executor_history_unverified")
+        git("checkout", "-q", branch)
+        git("merge", "--no-ff", "-qm", "merge old topic", "topic")
+        self.assertEqual(git("status", "--porcelain"), "")
+        self.assertEqual(git("diff", "--name-only", base, "HEAD"), "ordinary.txt")
+        self.assertEqual(_external_history_refusal(subprocess.run, self.repo, base), "")
 
     def test_version_probe_excludes_checkout_and_sibling_lane(self):
         lane = self.repo.parent / "repo-fanout-other"
@@ -529,6 +563,26 @@ class DispatchGuardTests(unittest.TestCase):
         self.assertFalse(Path(kwargs["cwd"]).is_relative_to(self.repo))
         self.assertNotIn("UNRELATED_SECRET", kwargs["env"])
         self.assertEqual(kwargs["env"]["PATH"], str(self.bin))
+
+    def _assert_path_alias_excluded(self, alias):
+        from omh.coding.fanout_confinement import external_search_path
+
+        (self.repo / "tools").mkdir()
+        entries = (alias, alias / "tools", self.bin)
+        trusted = external_search_path({"PATH": os.pathsep.join(map(str, entries))},
+                                       binary="my-agent", repositories=(self.repo,), write_roots=())
+        self.assertEqual(trusted.split(os.pathsep), [str(self.bin)])
+
+    def test_checkout_case_alias_excluded_by_identity(self):
+        alias = self.repo.with_name(self.repo.name.upper())
+        if not alias.exists() or not alias.samefile(self.repo):
+            self.skipTest("case-sensitive temp filesystem")
+        self._assert_path_alias_excluded(alias)
+
+    def test_checkout_symlink_alias_excluded_by_identity(self):
+        alias = self.root / "alias"
+        alias.symlink_to(self.repo, target_is_directory=True)
+        self._assert_path_alias_excluded(alias)
 
     def test_probe_ignores_a_link_routed_through_a_checkout(self):
         aliases = self.root / "aliases"
@@ -608,6 +662,27 @@ class DispatchGuardTests(unittest.TestCase):
                                    failed_owner=original["owner"], unit_dispatch_kwargs={"executor_entries": entries})
                 binding = dispatch.call_args.args[1]["handoff"].get("user_executor")
                 self.assertEqual(binding, external["handoff"]["user_executor"] if target == "my-agent" else None)
+
+    def test_cli_freeze_preflight_and_dispatch_use_one_registry_read(self):
+        from _cli_harness import run_cli
+
+        write_fanout_contract(self.paths, self.contract)
+        prefix = ["--omh-home", str(self.paths.omh_home), "coding"]
+        for surface, args in (
+            ("dispatch", ["fanout", "dispatch", self.contract["fanout_id"], "--goal-file", "-"]),
+            ("run", ["run", "--owner", "my-agent", "--goal-file", "-"]),
+        ):
+            with self.subTest(surface=surface), mock.patch.dict(os.environ, self.env), mock.patch(
+                    "omh.coding.user_executors.load_user_executors", wraps=load_user_executors) as load:
+                code, out, err = run_cli(prefix + args + ["--repo-root", str(self.repo), "--dry-run"],
+                                         stdin_text=_GOAL)
+                self.assertEqual(code, 0, err)
+                summary = json.loads(out)
+                if surface == "run":
+                    summary = summary["dispatch"]
+                self.assertEqual(summary["base_sha"], self.base)
+                self.assertEqual(summary["units"][0]["status"], "dry_run_planned")
+                self.assertEqual(load.call_count, 1)
 
     def test_one_registry_read_including_readiness(self):
         with mock.patch("omh.coding.user_executors.load_user_executors",

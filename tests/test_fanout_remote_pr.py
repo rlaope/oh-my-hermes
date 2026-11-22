@@ -493,11 +493,13 @@ class DispatchRefusalTests(unittest.TestCase):
         with TemporaryDirectory() as tmp:
             paths = _home(Path(tmp), _LOCAL_TOML + '\nmodel = ["--model", "{model}"]\n')
             contract, repo, sha = self._prepare(paths, "my-agent")
-            with mock.patch("omh.coding.fanout_dispatch._dispatch_model_preference", return_value="--cloud"):
-                unit = self._run(paths, contract, repo, sha, dry_run=True,
-                                 readiness=lambda *a, **k: {"status": "ready"})["units"][0]
-        self.assertEqual(unit.get("reason"), REFUSAL_REMOTE_PR_NOT_AVAILABLE)
-        self.assertNotIn("planned_argv", unit)
+            for token in ("--cloud", "--cloud=true"):
+                with self.subTest(token=token), mock.patch(
+                        "omh.coding.fanout_dispatch._dispatch_model_preference", return_value=token):
+                    unit = self._run(paths, contract, repo, sha, dry_run=True,
+                                     readiness=lambda *a, **k: {"status": "ready"})["units"][0]
+                    self.assertEqual(unit.get("reason"), REFUSAL_REMOTE_PR_NOT_AVAILABLE)
+                    self.assertNotIn("planned_argv", unit)
 
     def test_a_declared_remote_pr_unit_is_refused_before_any_child(self) -> None:
         with TemporaryDirectory() as tmp:

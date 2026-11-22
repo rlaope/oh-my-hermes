@@ -179,6 +179,31 @@ class ExecutorsCliTests(unittest.TestCase):
         self.assertEqual(contract["profile"], "my-agent")
         self.assertTrue(contract["user_executor"])
 
+    def test_explicit_hermes_home_selects_the_same_registry_on_all_surfaces(self) -> None:
+        from omh.coding.fanout_dispatch import _dispatch_executor_entries
+        from omh.system.paths import resolve_paths
+
+        self.write_config('schema_version = 1\n[executors.my-agent]\nargv = ["my-agent", "{prompt}"]\n')
+        profile = self.root / "alternate"
+        profile.mkdir()
+        (profile / "config.yaml").write_text(
+            f'plugins:\n  entries:\n    omh:\n      settings:\n        omh_home: {self.home}\n')
+        repo = self.checkout_with_registry("")
+        with self._project_scope(repo):
+            for scope in ("user", "project"):
+                prefix = ["--scope", scope, "--hermes-home", str(profile), "coding"]
+                with self.subTest(scope=scope, surface="list"):
+                    code, out, err = run_cli(prefix + ["executors", "list", "--json"])
+                    self.assertEqual(code, 0, err)
+                    self.assertEqual([e["id"] for e in json.loads(out)["enabled"]], ["my-agent"])
+                with self.subTest(scope=scope, surface="readiness"):
+                    code, out, err = run_cli(prefix + ["executor-readiness", "--executor", "my-agent", "--dry-run"])
+                    self.assertEqual(code, 0, err)
+                    self.assertEqual(json.loads(out)["profile"], "my-agent")
+                with self.subTest(scope=scope, surface="dispatch"):
+                    paths = resolve_paths(None, profile, scope=scope)
+                    self.assertIn("my-agent", _dispatch_executor_entries(paths, [_unit("my-agent")]))
+
     def test_allow_remote_pr_is_refused_until_the_lane_exists(self) -> None:
         status, _stdout, stderr = run_cli(
             ["--omh-home", str(self.home), "coding", "run", "--owner", "codex", "--goal", "noop", "--allow-remote-pr"]
