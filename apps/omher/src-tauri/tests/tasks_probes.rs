@@ -44,7 +44,7 @@ fn independent_500_items_paginate() {
  let mut seen=Vec::new();
  for page in 0..30 {
   let mut limit=0;
-  let result=t.list_with(Source::Github,Kind::Issues,"o/r",Filter::Open,page,|argv|{
+  let result=t.list_with(Source::Github,Kind::Issues,"o/r",Filter::Open,page,"",|argv|{
    limit=argv.iter().position(|a|a=="--limit").map(|i|argv[i+1].parse::<usize>().unwrap()).unwrap();
    let search=argv.iter().position(|a|a=="--search").map(|i|argv[i+1].clone()).unwrap();
    let bound=search.split(' ').find_map(|w|w.strip_prefix("created:<=")).map(epoch);

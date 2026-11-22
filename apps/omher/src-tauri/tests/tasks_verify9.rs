@@ -17,7 +17,7 @@ fn v8_1001_pagination() {
   let all: Vec<_>=(1..=1001).rev().map(|n:i64|serde_json::json!({"number":n,"title":format!("row {n}"),"createdAt":iso(1794766799-(1001-n)/7)})).collect();
   let t=Tasks::default(); let mut seen=Vec::new(); let mut max_limit=0;
   for page in 0..50 {
-   let result=t.list_with(Source::Github,kind,"o/r",Filter::Open,page,|argv| {
+   let result=t.list_with(Source::Github,kind,"o/r",Filter::Open,page,"",|argv| {
     let limit=argv[argv.iter().position(|a|a=="--limit").unwrap()+1].parse::<usize>().unwrap();
     max_limit=max_limit.max(limit);
     let search=&argv[argv.iter().position(|a|a=="--search").unwrap()+1];

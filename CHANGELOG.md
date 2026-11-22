@@ -17,6 +17,29 @@ All notable changes will be documented here.
   come from chats only. Before the first reading the meter says it shows after your next
   Claude turn in omher. Local only: nothing is sent and no token is read.
   (`docs/OMHER-BOUNDARY.md` rules 11, 17 and 18)
+- **omher Tasks shows my pull requests, reviews and issues across repositories and GitHub accounts.** The Tasks page
+  has a scope toggle, "이 저장소 | 나". "나" lists, across every repository, the open pull requests asking for my
+  review, my open pull requests, the open issues assigned to me and the last 7 days' mentions (folded until opened).
+  What needs action comes first: CI failed, changes requested, merge conflict, then review requests by how long they
+  waited. Each row shows the repository, number, title, the account's colour dot and chips for draft, CI, review and
+  conflict, and how long a review request has waited. j / k move, Enter opens the drawer, o opens the browser, t
+  starts a thread; the list groups by section or by repository. The sidebar's Tasks row counts the review requests.
+  - **GitHub accounts:** Settings › Accounts has a GitHub section listing the accounts your `gh` is signed in to, with
+    "Add" for each and "Sign in to another account", which runs `gh auth login` (or `--hostname` for GitHub
+    Enterprise) in a terminal tab; gh itself makes the account it signs in its active one. omher keeps only each chosen account's host, login and colour. Account chips in
+    "나" filter to one account; an account whose login fails shows "다시 로그인" while the others keep working.
+  - **Per-account reads:** every call is pinned to the account it names, active or not, since gh's active account can
+    change under omher from any shell. The account's own token is read with `gh auth token --hostname <host> --user
+    <login>` for each call and passed only as `GH_TOKEN` in that one `gh` call's environment; it is never stored,
+    shown, logged or sent, and omher's copy is wiped when the call ends. omher never runs `gh auth switch`, and takes
+    inherited tokens and gh's debug and pager variables out of every gh child and the sign-in tab. The status query must name that account as its viewer, or the account shows "다시 로그인".
+  - **Reads:** four fixed `gh search` argv and one fixed `gh api graphql` query (CI, review decision, mergeability),
+    each answer kept 60 seconds per account, read again on window focus, on ⟳ and every 5 minutes; at most 27
+    search requests a minute per account (one per 100 rows asked for), and GitHub's rate limit shows "잠시 후 다시"
+    instead of a failure. "이 저장소" on GitHub reads as the github.com account whose login owns the repository, or
+    the github.com account picked on its chip.
+    (apps/omher `src-tauri/src/gh_me.rs`, `src/tasks/MeView.tsx`, `src/settings/accounts/GithubAccounts.tsx`;
+    `docs/OMHER-BOUNDARY.md` rules 11, 18 and 33)
 - **OMH TUI: a `/` after a space opens skill completion, as in Claude Code.** Typing `asdf /dag` opens a menu of
   Hermes' skills filtered by `dag`; a bare `/` after a space lists them all. As in Claude Code, a `/skill` after
   other text names a skill for that message, while a built-in command (`/model`, `/compact`, `/help`, Hermes' own)

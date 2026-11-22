@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { BODY_BYTES, cutBytes, firstMessage, threadTitle } from "./message";
-import { MaskingTaskHost, type TaskHost } from "./host";
+import { MaskingTaskHost, MeFail, type TaskHost } from "./host";
 import { getTasks, resetTasks, setBar, setFilter, setPage, setRepo, setSource } from "./state";
 import { repoOk } from "./types";
 
@@ -70,6 +70,11 @@ describe("token-like text from a task never reaches the page or a thread", () =>
     list: async () => ({ items: [{ ...item, title: `leak ${fake}`, labels: [{ name: `sk-${"Z".repeat(20)}`, color: "" }] }], more: false }),
     view: async () => ({ item: { ...item, title: `leak ${fake}` }, body: `example credential ${fake}`, comments: [{ author: "p", body: `token=${fake}`, created: 0 }], checks: [] }),
     remote: async () => null,
+    ghAccounts: async () => ({ installed: true, accounts: [] }),
+    me: async () => ({
+      items: [{ repo: "o/r", number: 1, title: `leak ${fake}`, url: "", pr: true, draft: false, state: "open", author: "p", labels: [{ name: `sk-${"Z".repeat(20)}`, color: "" }], created: 0, updated: 0, asked: true, ci: "", review: "", conflict: false, requested: 0 }],
+      more: false,
+    }),
   };
 
   it("masks the list, the drawer and the error line through the one masker", async () => {
@@ -84,6 +89,19 @@ describe("token-like text from a task never reaches the page or a thread", () =>
     expect(d.comments[0].body).toBe("token=••••");
     const failing = new MaskingTaskHost({ ...leaky, list: async () => Promise.reject(new Error(`failure credential=${fake}`)) });
     await expect(failing.list("github", "o/r", "issues", "open", 0)).rejects.toThrow("failure credential=••••");
+  });
+
+  it("masks the 나 list and its error line, keeping why it failed", async () => {
+    const h = new MaskingTaskHost(leaky);
+    const p = await h.me("octo@github.com", "review", 0);
+    expect(JSON.stringify(p)).not.toContain(fake);
+    expect(p.items[0].title).toBe("leak ••••");
+    expect(p.items[0].labels[0].name).toBe("••••");
+    const failing = new MaskingTaskHost({ ...leaky, me: async () => Promise.reject({ kind: "auth", line: `HTTP 401: Bad credentials ${fake}` }) });
+    const err = await failing.me("octo@github.com", "review", 0).catch((e) => e);
+    expect(err).toBeInstanceOf(MeFail);
+    expect(err.kind).toBe("auth");
+    expect(err.message).toBe("HTTP 401: Bad credentials ••••");
   });
 
   it("masks Start in thread's title and first message", () => {

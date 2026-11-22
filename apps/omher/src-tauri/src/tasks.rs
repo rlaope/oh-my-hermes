@@ -371,7 +371,7 @@ pub fn mask_secrets(t: &str) -> String {
 }
 
 /// A text field of a CLI answer: control characters out, token-like strings masked.
-fn text(v: &Value, k: &str) -> String {
+pub(crate) fn text(v: &Value, k: &str) -> String {
     let t: String = v.get(k).and_then(Value::as_str).unwrap_or("").chars().filter(|c| !c.is_control() || *c == '\n' || *c == '\t').collect();
     mask_secrets(&t)
 }
@@ -388,7 +388,7 @@ fn clip(mut t: String, n: usize) -> String {
     t
 }
 
-fn one_line(t: String, n: usize) -> String {
+pub(crate) fn one_line(t: String, n: usize) -> String {
     clip(t.split_whitespace().collect::<Vec<_>>().join(" "), n)
 }
 
@@ -421,11 +421,11 @@ pub fn epoch(t: &str) -> i64 {
     days * 86_400 + h * 3600 + mi * 60 + sec - off
 }
 
-fn gh_author(v: &Value) -> String {
+pub(crate) fn gh_author(v: &Value) -> String {
     v.get("author").map(|a| text(a, "login")).unwrap_or_default()
 }
 
-fn gh_labels(v: &Value) -> Vec<Label> {
+pub(crate) fn gh_labels(v: &Value) -> Vec<Label> {
     v.get("labels")
         .and_then(Value::as_array)
         .map(|ls| ls.iter().take(12).map(|l| Label { name: one_line(text(l, "name"), 60), color: text(l, "color") }).filter(|l| !l.name.is_empty()).collect())
@@ -473,7 +473,7 @@ fn gh_checks(v: &Value) -> Option<(Checks, Vec<Check>)> {
 }
 
 /// `u` when it is an https address (anything else is dropped: the page opens only https links from here).
-fn web_url(u: &str) -> String {
+pub(crate) fn web_url(u: &str) -> String {
     if u.starts_with("https://") && !u.chars().any(|c| c.is_whitespace() || c.is_control()) { u.to_string() } else { String::new() }
 }
 
@@ -744,6 +744,19 @@ pub struct Ran {
 /// Run `exe argv` with no shell, nothing on stdin, at most `TIMEOUT`. The CLI's prompts and colours are off. With
 /// `keep` false its output goes nowhere (`auth status`, whose output can name a token): only the exit code is read.
 fn run(exe: &Path, argv: &[String], keep: bool) -> Result<Ran, String> {
+    run_env(exe, argv, keep, &[], &[])
+}
+
+/// `run`, with `env` added to this one child's environment only (gh_me.rs: `GH_HOST`, and a chosen GitHub account's
+/// token for that one call) and the variables named in `unset` taken out of it. Nothing in `env` is logged, kept or
+/// put in an error line here.
+pub fn run_env(exe: &Path, argv: &[String], keep: bool, env: &[(&str, &str)], unset: &[&str]) -> Result<Ran, String> {
+    run_full(exe, argv, keep, &[], env, unset)
+}
+
+/// `run_env`, with `inherited` set first as if omher itself had been started with it (gh_me.rs's tests: an inherited
+/// token without touching this process's environment), so `unset` takes it out as it would the real one.
+pub(crate) fn run_full(exe: &Path, argv: &[String], keep: bool, inherited: &[(&str, &str)], env: &[(&str, &str)], unset: &[&str]) -> Result<Ran, String> {
     let out = || if keep { Stdio::piped() } else { Stdio::null() };
     let mut cmd = Command::new(exe);
     cmd.args(argv)
@@ -754,6 +767,15 @@ fn run(exe: &Path, argv: &[String], keep: bool) -> Result<Ran, String> {
         .env("GH_NO_UPDATE_NOTIFIER", "1")
         .env("GLAB_NO_PROMPT", "1")
         .env("NO_COLOR", "1");
+    for (k, v) in inherited {
+        cmd.env(k, v);
+    }
+    for k in unset {
+        cmd.env_remove(k);
+    }
+    for (k, v) in env {
+        cmd.env(k, v);
+    }
     // A release build has no console of its own, so each `gh`/`glab` read would flash a console window and take the
     // focus from the app: the same reason the bridge hides python.exe (bridge.rs `no_console_window`).
     crate::bridge::no_console_window(&mut cmd);
@@ -857,12 +879,13 @@ impl Tasks {
     }
 
     pub fn list(&self, source: Source, kind: Kind, repo: &str, filter: Filter, page: u32) -> Result<Page, String> {
-        self.list_with(source, kind, repo, filter, page, |argv| self.answer(source, argv))
+        self.list_with(source, kind, repo, filter, page, "", |argv| self.answer(source, argv))
     }
 
-    /// `list`, with `ask` running the argv (tests answer from a recorded list).
-    pub fn list_with(&self, source: Source, kind: Kind, repo: &str, filter: Filter, page: u32, ask: impl FnOnce(Vec<String>) -> Result<String, String>) -> Result<Page, String> {
-        let key = format!("{kind:?}\0{repo}\0{filter:?}");
+    /// `list`, with `ask` running the argv (tests answer from a recorded list; a chosen GitHub account's calls go
+    /// through gh_me.rs). `who`: the account the pages are read as ("": the CLI's own), so each keeps its own starts.
+    pub fn list_with(&self, source: Source, kind: Kind, repo: &str, filter: Filter, page: u32, who: &str, ask: impl FnOnce(Vec<String>) -> Result<String, String>) -> Result<Page, String> {
+        let key = format!("{who}\0{kind:?}\0{repo}\0{filter:?}");
         let after = if source == Source::Github && page > 0 { self.starts.lock().ok().and_then(|m| m.get(&key).and_then(|p| p.get(&page)).cloned()) } else { None };
         let Some(argv) = list_argv(source, kind, repo, filter, page, after.as_ref())? else {
             return Ok(Page::default());
@@ -878,8 +901,13 @@ impl Tasks {
     }
 
     pub fn view(&self, source: Source, kind: Kind, repo: &str, number: u64) -> Result<Detail, String> {
+        self.view_with(source, kind, repo, number, |argv| self.answer(source, argv))
+    }
+
+    /// `view`, with `ask` running the argv (a chosen GitHub account's call goes through gh_me.rs).
+    pub fn view_with(&self, source: Source, kind: Kind, repo: &str, number: u64, ask: impl FnOnce(Vec<String>) -> Result<String, String>) -> Result<Detail, String> {
         let argv = view_argv(source, kind, repo, number)?;
-        parse_view(source, kind, &self.answer(source, argv)?)
+        parse_view(source, kind, &ask(argv)?)
     }
 }
 
@@ -1162,7 +1190,7 @@ mod tests {
             let mut biggest = 0;
             for page in 0..=MAX_PAGE {
                 let p = t
-                    .list_with(Source::Github, Kind::Issues, "o/r", Filter::Open, page, |argv| {
+                    .list_with(Source::Github, Kind::Issues, "o/r", Filter::Open, page, "", |argv| {
                         biggest = biggest.max(argv[argv.iter().position(|a| a == "--limit").unwrap() + 1].parse::<usize>().unwrap());
                         Ok(fake_gh(&rows, &argv))
                     })
