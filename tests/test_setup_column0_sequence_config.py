@@ -441,9 +441,9 @@ class SetupCommandTest(unittest.TestCase):
                 self.assertEqual(
                     written,
                     head + MODEL + "toolsets:\n- hermes-cli\n"
-                    + f"skills:\n  external_dirs:\n    - {omh / 'skills'}\n"
+                    + f"skills:\n  external_dirs:\n    - {(omh / 'skills').as_posix()}\n"
                     + "plugins:\n  enabled:\n    - omh\n"
-                    + f"  entries:\n    omh:\n      settings:\n        omh_home: '{omh}'\n"
+                    + f"  entries:\n    omh:\n      settings:\n        omh_home: '{omh.as_posix()}'\n"
                     + "memory:\n  provider: honcho\n" + PROVIDERS,
                 )
                 skills = sorted(path.parent.name for path in (omh / "skills").rglob("SKILL.md"))
@@ -452,7 +452,7 @@ class SetupCommandTest(unittest.TestCase):
                     loaded = hermes_load(written)
                     self.assertEqual(loaded["toolsets"], ["hermes-cli"])
                     self.assertEqual(loaded["fallback_providers"], [{"model": "example", "provider": "custom"}])
-                    self.assertEqual(loaded["skills"]["external_dirs"], [str(omh / "skills")])
+                    self.assertEqual(loaded["skills"]["external_dirs"], [(omh / "skills").as_posix()])
                     self.assertEqual(loaded["plugins"]["enabled"], ["omh"])
 
     def test_setup_still_refuses_a_sequence_document_and_writes_nothing(self) -> None:
