@@ -98,6 +98,14 @@ All notable changes will be documented here.
   bubble style with no bot bubble reads `본문처럼`, the terminal theme slot's label reads `적용 대상`, and a route
   whose chain ran out reads `chain exhausted` like its `chain head` and `fallback` siblings. Only string values
   changed.
+- **Inside a Hermes chat, a request to review a diff or PR now loads the code-review skill.** The router already
+  sent these to `code-review`, but the route hint OMH adds to each message still named visual QA (for the word
+  "diff"), feedback triage ("bug") or coding delivery ("review", "PR"), so the model never opened the skill and its
+  replies had no `Not checked` list. "review this diff for bugs", "can you review my PR?", "does this change
+  introduce a bug?", "이 diff 리뷰해줘" and "코드 리뷰 해줘" now get `code-review` first, with a line telling the
+  model to load the skill and follow it. The hint reads the same check as the router, so the two cannot drift; a
+  review asked together with a fix ("review this PR, then fix the bug in auth.py") and look-alikes such as a
+  screenshot diff, a customer bug report or "review my essay" keep their old hint.
 
 - **The OMH pane in Hermes Desktop is redrawn, with a run timeline and TPS/TTFT in view.** USAGE is one card: the
   token total large, cache hit and cost beside it, the four-way split, and the speed (TPS) and the last turn's wait for
