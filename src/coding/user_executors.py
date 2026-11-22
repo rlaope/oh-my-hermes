@@ -180,11 +180,27 @@ _REFUSED_SUFFIXES: Final[tuple[str, ...]] = (
 # owner namespace a fanout contract carries, so it must not collide with any of
 # them: `maestro` is an internal label, `choose`/`unassigned` are sentinels, and
 # the pi-family hosts are both PATH-program names and progress aliases.
+#
+# `_PROGRESS_ALIASES` mirrors the alias table in
+# `executor_progress.normalize_executor_profile`: each of those spellings is
+# already read back as one of the shipped lanes, so a configured executor named
+# the same would silently change what an existing record means.
+_PROGRESS_ALIASES: Final[frozenset[str]] = frozenset(
+    {
+        "claude",
+        "claude-code",
+        "claude-code-cli",
+        "hermes-local",
+        "opencode",
+        "pi",
+    }
+)
 RESERVED_OWNER_IDS: Final[frozenset[str]] = frozenset(
     {
         *EXECUTOR_PROFILES,
         *EXECUTOR_PROGRESS_PROFILES,
         *preset_ids(),
+        *_PROGRESS_ALIASES,
         "choose",
         "unassigned",
         "maestro",
@@ -254,6 +270,29 @@ class ExecutorRegistry:
 def user_executors_path(omh_home: Path) -> Path:
     """`<omh_home>/routing/executors.toml`; sibling of dispatch model prefs."""
     return Path(omh_home) / "routing" / "executors.toml"
+
+
+def operator_executor_home(
+    omh_home: str | Path | None = None,
+    hermes_home: str | Path | None = None,
+    *,
+    scope: str | None = None,
+) -> Path:
+    """The OMH home whose `routing/executors.toml` an invocation may use.
+
+    `--scope project` moves *artifacts* into the checkout, not this registry: a
+    repo-owned `executors.toml` would let a clone choose the argv OMH spawns,
+    so a project-scoped invocation still reads and writes the operator's own
+    home. A store the operator named (`--omh-home`) is the store the operator
+    meant, and still wins under either scope.
+    """
+    # Imported here: the resolver lives in `system.paths`, which imports the
+    # coding package this module belongs to, and this keeps that order free.
+    from ..system.paths import resolve_paths
+
+    if omh_home is None and str(scope or "user").strip().lower() == "project":
+        return Path(resolve_paths(None, hermes_home).omh_home)
+    return Path(resolve_paths(omh_home, hermes_home, scope=scope).omh_home)
 
 
 def valid_executor_id(value: object) -> bool:
@@ -364,16 +403,25 @@ def _version_problem(version: tuple[str, ...], program: str) -> str | None:
     return None
 
 
-def _declares_cloud(argv: tuple[str, ...]) -> bool:
+def _declares_cloud(tokens: tuple[str, ...]) -> bool:
     """True when a *local* vector asks for the cloud lane.
 
     Only the dedicated remote builder emits `--cloud`, after two independent
     opt-ins. A registry entry that spells it itself -- under any id, including
     one shaped like a preset -- is not a local executor and is refused here so
     it can never spend cloud quota through the ordinary local path.
+
+    Fragment vectors are checked with this same rule: a model, effort, session
+    or version fragment is spliced into the argv `render_user_argv` returns, so
+    a switch hidden there reaches the child exactly as if it were in `argv`.
     """
+    return "--cloud" in tokens
+
+
+def _declares_cloud_lane(argv: tuple[str, ...]) -> bool:
+    """`_declares_cloud` for the base vector, which may also carry the subcommand."""
     rest = argv[1:]
-    return "--cloud" in rest or rest[:1] == ("cloud",)
+    return _declares_cloud(rest) or rest[:1] == ("cloud",)
 
 
 def _definition_digest(
@@ -452,6 +500,17 @@ def _build_spec(
     resume_tokens, found = _parse_vector(resume, "session.resume", (SESSION_ID_PLACEHOLDER,))
     problems.extend(found)
 
+    # Every parsed fragment is part of the argv a dispatch renders, so the
+    # cloud switch is refused wherever it is spelled -- not only in `argv`.
+    for field, fragment in (
+        ("model", model_tokens),
+        ("effort", effort_tokens),
+        ("session.export", export_tokens),
+        ("session.resume", resume_tokens),
+    ):
+        if fragment is not None and _declares_cloud(fragment):
+            problems.append((field, "cloud_refused"))
+
     version_tokens: tuple[str, ...] | None = None
     if argv_tokens is not None:
         version_value = version
@@ -459,6 +518,11 @@ def _build_spec(
             version_value = [argv_tokens[0], "--version"]
         version_tokens, found = _parse_vector(version_value, "version", (), required=True)
         problems.extend(found)
+        if version_tokens is not None and _declares_cloud(version_tokens):
+            # Checked before the probe grammar, so the refusal names the real
+            # problem instead of calling `--cloud` a malformed version query.
+            problems.append(("version", "cloud_refused"))
+            version_tokens = None
         if version_tokens is not None:
             reason = _version_problem(version_tokens, argv_tokens[0])
             if reason is not None:
@@ -473,7 +537,7 @@ def _build_spec(
         reason = _program_problem(argv_tokens[0])
         if reason is not None:
             problems.append(("argv", reason))
-        if _declares_cloud(argv_tokens):
+        if _declares_cloud_lane(argv_tokens):
             problems.append(("argv", "cloud_refused"))
 
     if problems or argv_tokens is None or version_tokens is None:
@@ -685,7 +749,14 @@ def _read_document(
         problems.append(("path", "symlink_refused"))
         return None
     try:
-        fd = os.open(path, os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0))
+        # Non-blocking, so a writer-less FIFO at the path returns immediately
+        # instead of hanging list/dispatch in open(2); `O_NOFOLLOW` keeps the
+        # final component from being a link. `fstat` decides what it is before
+        # a single byte is read: only a regular file is a registry.
+        fd = os.open(
+            path,
+            os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_NONBLOCK", 0),
+        )
     except FileNotFoundError:
         return None
     except OSError:
@@ -1030,6 +1101,7 @@ __all__ = [
     "add_executor_preset",
     "fanout_owner_ids",
     "load_user_executors",
+    "operator_executor_home",
     "preset_ids",
     "remove_user_executor",
     "render_user_argv",

@@ -15,6 +15,7 @@ import tomllib
 import unittest
 from pathlib import Path
 from threading import Thread
+from unittest import mock
 
 from _local_package import load_local_package
 
@@ -167,6 +168,20 @@ class EntryValidationTests(_HomeTestCase):
                 self.assertIsNone(spec)
                 self.assertIn("shadowed_id", {issue.reason for issue in issues})
 
+    def test_reserved_progress_aliases_cannot_be_declared(self) -> None:
+        # `executor_progress.normalize_executor_profile` already maps these
+        # names onto shipped lanes when a stored record is read, so a custom
+        # executor spelled the same would silently change what that record
+        # means. They are aliases, not free ids.
+        for alias in ("claude", "claude-code-cli", "pi", "opencode", "hermes-local"):
+            with self.subTest(executor_id=alias):
+                self.assertIn(alias, RESERVED_OWNER_IDS)
+                spec, issues = validate_executor_entry(
+                    alias, {"argv": [alias, "-p", "{prompt}"]}
+                )
+                self.assertIsNone(spec)
+                self.assertIn("shadowed_id", {issue.reason for issue in issues})
+
     def test_shell_and_path_programs_are_refused(self) -> None:
         cases = {
             "sh": "shell_program",
@@ -195,6 +210,32 @@ class EntryValidationTests(_HomeTestCase):
                 spec, issues = validate_executor_entry("my-agent", {"argv": argv})
                 self.assertIsNone(spec)
                 self.assertEqual(issues[0].reason, "cloud_refused")
+
+    def test_cloud_switch_is_refused_in_every_fragment(self) -> None:
+        # Rendering splices a fragment into the final argv, so a fragment is
+        # just as good a way to spell the cloud lane as the base vector: the
+        # check has to read the whole effective command, not only argv.
+        argv = ["my-agent", "run", "--", "{prompt}"]
+        cases = {
+            "model": {"model": ["--cloud", "--model", "{model}"]},
+            "effort": {"effort": ["--cloud", "--effort", "{effort}"]},
+            "session.export": {
+                "session": {"export": ["--cloud", "--export", "{session_file}"]}
+            },
+            "session.resume": {
+                "session": {
+                    "export": ["--export", "{session_file}"],
+                    "resume": ["--cloud", "-r", "{session_id}"],
+                }
+            },
+            "version": {"version": ["my-agent", "--cloud", "--version"]},
+        }
+        for field, entry in cases.items():
+            with self.subTest(field=field):
+                spec, issues = validate_executor_entry("my-agent", {"argv": argv, **entry})
+                self.assertIsNone(spec)
+                fields = {issue.field for issue in issues if issue.reason == "cloud_refused"}
+                self.assertEqual(fields, {field}, issues)
 
     def test_insert_is_a_bounded_non_bool_int(self) -> None:
         cases = {
@@ -371,6 +412,24 @@ class FileTrustTests(_HomeTestCase):
         path.mkdir(parents=True)
 
         self.assertEqual(self.reasons(self.load()), {"not_regular_file"})
+
+    @unittest.skipUnless(hasattr(os, "mkfifo"), "FIFOs are a POSIX feature")
+    def test_a_fifo_registry_never_blocks_the_reader(self) -> None:
+        # A writer-less FIFO blocks in open(2) until somebody reads it. Listing
+        # or dispatching must not wait there: the reader opens non-blocking,
+        # fstats first and reports a non-regular file instead of reading.
+        path = user_executors_path(self.home)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        os.mkfifo(path)
+        loaded: list[ExecutorRegistry] = []
+        reader = Thread(target=lambda: loaded.append(self.load()), daemon=True)
+
+        reader.start()
+        reader.join(1.0)
+
+        self.assertFalse(reader.is_alive(), "load_user_executors blocked on a FIFO registry")
+        self.assertEqual(dict(loaded[0].entries), {})
+        self.assertIn("not_regular_file", self.reasons(loaded[0]))
 
     def test_root_schema_is_closed(self) -> None:
         cases = {
@@ -574,6 +633,37 @@ class MutationTests(_HomeTestCase):
 
         self.assertEqual(errors, [])
         self.assertEqual(set(self.load().entries), {"devin", "aider"})
+
+
+class OperatorHomeTests(unittest.TestCase):
+    def test_the_registry_home_is_the_operator_home_under_every_scope(self) -> None:
+        holder = make_test_tempdir(prefix="omh-user-executors-operator-")
+        self.addCleanup(holder.cleanup)
+        root = Path(holder.name)
+        operator_home = (root / "operator" / ".omh").resolve()
+        environment = {
+            "HOME": str(root / "home"),
+            "USERPROFILE": str(root / "home"),
+            "HERMES_HOME": str(root / "home" / ".hermes"),
+            "OMH_HOME": str(operator_home),
+        }
+        # Imported here, not at module scope, so a missing helper fails this
+        # test rather than every test in the file.
+        from omh.coding.user_executors import operator_executor_home
+
+        with mock.patch.dict(os.environ, environment):
+            self.assertEqual(
+                operator_executor_home(None, None, scope="project"), operator_home
+            )
+            self.assertEqual(
+                operator_executor_home(None, None, scope="user"), operator_home
+            )
+            # A store the operator named is the store the operator meant,
+            # whatever the artifact scope says.
+            named = (root / "named-home").resolve()
+            self.assertEqual(
+                operator_executor_home(named, None, scope="project"), named
+            )
 
 
 class PresetTests(unittest.TestCase):
