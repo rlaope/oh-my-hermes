@@ -78,6 +78,19 @@ FOLDED = {
         "agent:\n  prompt: 'a long one: still going and going and going and going on and on and\n"
         "    on.'\n"
     ),
+    # A plain value `safe_dump` wrapped onto a line that starts with a quote: still the plain value.
+    "wrapped plain value, nested, before a single quote": (
+        "agent:\n  system_prompt: Answer in plain text and keep every reply short and direct for the\n"
+        "    'quick mode of the tool, otherwise explain in detail\n"
+    ),
+    "wrapped plain value before a double quote": (
+        "system_prompt: Answer in plain text and keep every reply short and direct for the\n"
+        '  "quick mode of the tool, otherwise explain in detail\n'
+    ),
+    "wrapped plain list item before a single quote": (
+        "items:\n- Answer in plain text and keep every reply short and direct for the\n"
+        "  'quick mode of the tool, otherwise explain in detail\n"
+    ),
 }
 
 # Each is one block mapping: the guard takes it and Hermes' loader reads it to a mapping.
@@ -126,6 +139,8 @@ REFUSED = {
     "quoted value across lines": 'note: "first line\nmemory: # c\n  still"\n' + MODEL,
     "nested quoted value across lines": "agent:\n  note: 'first line\nmemory: x'\n" + MODEL,
     "unterminated quote": "note: 'never closed\n" + MODEL,  # the loaders raise
+    "quote after an anchor across lines": "note: &n 'first line\nmemory: y'\n" + MODEL,
+    "quote after a quoted key across lines": "'note': \"first line\nmemory: y\"\n" + MODEL,
 }
 # The guard refuses these whole; every writer edits their body instead (`_with_document_body`).
 EDITED_THROUGH_ENVELOPE = {"document end", "TAG directive", "YAML 1.2 directive"}
@@ -160,6 +175,62 @@ def hermes_load(text: str) -> object:
     )
     done = subprocess.run([str(HERMES_PYTHON), "-I", "-c", script, str(HERMES_ROOT)], input=text, text=True,
                           capture_output=True, timeout=60, check=True)
+    return json.loads(done.stdout)
+
+
+def hermes_load_many(texts: list[str]) -> list[object]:
+    """`hermes_load` for many texts in one Hermes process; None for a text it does not load."""
+    script = (
+        "import json, sys; sys.path.insert(0, sys.argv[1]); import hermes_yaml as h\n"
+        "out = []\n"
+        "for text in json.load(sys.stdin):\n"
+        "    try:\n        out.append(h.safe_load(text))\n    except Exception:\n        out.append(None)\n"
+        "print(json.dumps(out, default=str))\n"
+    )
+    done = subprocess.run([str(HERMES_PYTHON), "-I", "-c", script, str(HERMES_ROOT)], input=json.dumps(texts),
+                          text=True, capture_output=True, timeout=120, check=True)
+    return json.loads(done.stdout)
+
+
+# Generated in Hermes' venv from a fixed seed: PyYAML `safe_dump` of root and nested mappings whose long values
+# hold quotes, apostrophes, `#` and colons, at the default width and a narrow one, so values wrap.
+SAFE_DUMP_CORPUS_SCRIPT = """
+import json, random, sys
+sys.path.insert(0, sys.argv[1])
+import hermes_yaml, yaml
+rng = random.Random(3075)
+WORDS = ["plain", "text", "the", "quick", "mode", "and", "it's", "don't", "'quoted'", "'open", "close'",
+         '"double"', '"open', 'say "hi"', "#hash", "a#b", "key: value", "colon:", "x:y", "- dash", "{brace}",
+         "[bracket]", "%pct", "@at", "&amp", "*star", "!bang", "|pipe", ">gt", "? q", "\\back", "tab\there"]
+def value():
+    return " ".join(rng.choice(WORDS) for _ in range(rng.randint(1, 24)))
+def mapping(depth):
+    data = {}
+    for index in range(rng.randint(1, 4)):
+        key = rng.choice(["system_prompt", "note", "agent", "items", "model", "toolsets", "x"]) + str(index)
+        roll = rng.random()
+        if depth < 2 and roll < 0.3:
+            data[key] = mapping(depth + 1)
+        elif roll < 0.5:
+            data[key] = [value() for _ in range(rng.randint(1, 3))]
+        else:
+            data[key] = value()
+    return data
+corpus = []
+for _ in range(int(sys.argv[2])):
+    text = yaml.safe_dump(mapping(0), width=rng.choice([40, 80]), sort_keys=False)
+    try:
+        loaded = hermes_yaml.safe_load(text)
+    except Exception:
+        loaded = None
+    corpus.append({"text": text, "mapping": isinstance(loaded, dict)})
+print(json.dumps(corpus))
+"""
+
+
+def safe_dump_corpus(count: int) -> list[dict[str, object]]:
+    done = subprocess.run([str(HERMES_PYTHON), "-I", "-c", SAFE_DUMP_CORPUS_SCRIPT, str(HERMES_ROOT), str(count)],
+                          text=True, capture_output=True, timeout=120, check=True)
     return json.loads(done.stdout)
 
 
@@ -612,15 +683,36 @@ class HermesAgreesTest(unittest.TestCase):
 
     def test_a_quoted_value_across_lines_hides_no_key(self) -> None:
         self.assertNotIn("memory", hermes_load(REFUSED["quoted value across lines"]))
-        self.assertNotIn("memory", hermes_load(REFUSED["nested quoted value across lines"]))
+        for name in ("nested quoted value across lines", "quote after an anchor across lines",
+                     "quote after a quoted key across lines"):
+            self.assertNotIn("memory", hermes_load(REFUSED[name]), name)
 
     def test_the_folded_values_load_as_one_string(self) -> None:
         for name, value in FOLDED.items():
             with self.subTest(shape=name):
-                loaded = hermes_load(value)
-                text = loaded["agent"]["prompt"] if "agent" in loaded else next(iter(loaded.values()))
-                self.assertIsInstance(text, str)
-                self.assertNotIn("\n", text)
+                node = hermes_load(value)
+                while not isinstance(node, str):
+                    node = next(iter(node.values())) if isinstance(node, dict) else node[0]
+                self.assertNotIn("\n", node)
+                self.assertTrue(" 'quick " in f" {node} " or '"quick' in node or "quick" not in node, node)
+
+
+@unittest.skipIf(hermes_reads("a: 1\n") is None, "Hermes is not installed here")
+class SafeDumpPropertyTest(unittest.TestCase):
+    """Whatever PyYAML's `safe_dump` writes and Hermes loads as a mapping, the guard takes and setup edits (#3075)."""
+
+    def test_the_guard_takes_every_dump_hermes_loads(self) -> None:
+        corpus = safe_dump_corpus(400)
+        mappings = [case["text"] for case in corpus if case["mapping"]]
+        self.assertGreater(len(mappings), 350)
+        refused = [text for text in mappings if not adapter._root_is_plain_block_mapping(text.splitlines())]
+        self.assertEqual(refused, [])
+        written = [setup_writes(text) for text in mappings]
+        for text, before, after in zip(mappings, hermes_load_many(mappings), hermes_load_many(written)):
+            expected = dict(before)
+            expected["skills"] = {"external_dirs": ["/o/skills"]}
+            expected["plugins"] = {"enabled": ["omh"]}
+            self.assertEqual(after, expected, text)
 
     def test_both_spellings_of_the_issue_config_load_alike(self) -> None:
         self.assertEqual(hermes_load(ISSUE_COLUMN0), hermes_load(ISSUE_INDENTED))

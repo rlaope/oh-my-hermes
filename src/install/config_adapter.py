@@ -1429,31 +1429,23 @@ def _root_is_plain_block_mapping(lines: list[str]) -> bool:
     `safe_dump` folds a long value onto indented lines that way. A column-0
     line while a quote is still open is refused, since the loaders read it
     as more of the string while every line scan here would read a key
-    (#3075). Block scalar (`|`, `>`) content is skipped, so a quote inside
-    it opens nothing.
+    (#3075). The lines indented deeper than a key or item whose value is a
+    block scalar (`|`, `>`) or a plain scalar are that value's own: a block
+    scalar's content, or a plain value `safe_dump` wrapped onto the next
+    line. They are skipped, so a quote at their start opens nothing; YAML
+    allows no child node under either.
     """
-    quote = ""  # the quote of a scalar still open at the end of the last line
-    block_indent = -1  # the indent of the line that opened a block scalar, -1 outside one
+    inside, closed = _scalar_continuations(lines)
+    if not closed:
+        return False
     first_content = True
     directive_open = False  # a `%YAML 1.1` line read, its `---` not yet
     opened = False  # a `---` read, no root key yet
     key_open = False  # the last root key has no value yet, so a column-0 `-` is its body
     root_sequence = False  # the last root key's value is a column-0 block sequence
-    for line in lines:
+    for index, line in enumerate(lines):
         stripped = line.strip()
-        indent = len(line) - len(line.lstrip(" \t"))
-        if quote:
-            if not stripped:
-                continue
-            if not indent:
-                return False
-            quote = _quoted_scalar_end(stripped, quote)
-            continue
-        if block_indent >= 0:
-            if not stripped or indent > block_indent:
-                continue
-            block_indent = -1
-        if not stripped or stripped.startswith("#"):
+        if index in inside or not stripped or stripped.startswith("#"):
             continue
         if directive_open:
             directive_open = False
@@ -1467,8 +1459,6 @@ def _root_is_plain_block_mapping(lines: list[str]) -> bool:
                 # beside it is a file the loaders refuse.
                 return False
             key_open = root_sequence
-            quote, block = _value_opens(stripped)
-            block_indent = indent if block else -1
             continue
         code = _yaml_code(stripped).strip()
         if first_content and _YAML_1_1_DIRECTIVE_RE.fullmatch(code):
@@ -1480,31 +1470,78 @@ def _root_is_plain_block_mapping(lines: list[str]) -> bool:
         first_content = opened = False
         if stripped.startswith("-") and key_open and _indentless_item(stripped):
             root_sequence = True
-            quote, block = _value_opens(stripped)
-            block_indent = 0 if block else -1
             continue
         if stripped in {"---", "..."} or stripped.startswith(("%", "{", "[", "-")):
             return False
         if re.match(r"^[^:#][^:]*:(?:\s|$)", stripped) is None:
             return False
-        quote, block = _value_opens(stripped)
-        block_indent = 0 if block else -1
         key_open = not code.partition(":")[2].strip()
         root_sequence = False
-    return not directive_open and not quote
+    return not directive_open
 
 
-# Where a line's scalar value starts: past any `- ` item markers and a plain `key: `.
-_VALUE_START_RE = re.compile(r"(?:-[ \t]+)*(?:[^\s'\"#][^:]*:[ \t]+)?")
-_BLOCK_SCALAR_RE = re.compile(r"[|>][-+0-9]*[ \t]*(?:#.*)?")
+def _scalar_continuations(lines: list[str]) -> tuple[set[int], bool]:
+    """The indexes of the lines that continue a scalar, and whether every quote closes.
+
+    A line belongs to the scalar above it while a quote that scalar opened is
+    still open, and when it is indented deeper than a key or item whose value
+    is a block scalar or a plain (or flow) value that wrapped. Those lines are
+    text, not nodes: the line scans here skip them. `False` when a column-0
+    line arrives inside an open quote, or the file ends in one; the loaders
+    read the first as more of the string and refuse the second (#3075).
+    """
+    inside: set[int] = set()
+    quote = ""  # the quote of a scalar still open at the end of the last line
+    skip_indent = -1  # lines deeper than this continue a block or plain scalar; -1 outside one
+    for index, line in enumerate(lines):
+        stripped = line.strip()
+        indent = len(line) - len(line.lstrip(" \t"))
+        if quote:
+            if stripped and not indent:
+                return inside, False
+            inside.add(index)
+            if stripped:
+                quote = _quoted_scalar_end(stripped, quote)
+            continue
+        if skip_indent >= 0:
+            if not stripped or indent > skip_indent:
+                inside.add(index)
+                continue
+            skip_indent = -1
+        if not stripped or stripped.startswith(("#", "%")) or re.fullmatch(r"(?:---|\.\.\.)(?:[ \t].*)?", stripped):
+            continue  # a comment, a directive or a document marker carries no value
+        quote, skip, offset = _value_opens(stripped)
+        skip_indent = indent + offset if skip else -1
+    return inside, not quote
 
 
-def _value_opens(stripped: str) -> tuple[str, bool]:
-    """The quote a line's value leaves open at its end, and whether the value opens a block scalar."""
-    rest = stripped[_VALUE_START_RE.match(stripped).end():]  # type: ignore[union-attr]
+# Where a line's value starts: past any `- ` item markers, a plain or quoted
+# `key: `, and the node properties (`&anchor`, `!tag`) in front of the value.
+_VALUE_START_RE = re.compile(
+    r"(?P<items>(?:-[ \t]+)*)"
+    r"(?P<key>(?:'(?:[^']|'')*'|\"(?:[^\"\\]|\\.)*\"|[^\s'\"#][^:]*?)[ \t]*:(?:[ \t]+|$))?"
+    r"(?:[&!]\S*(?:[ \t]+|$))*"
+)
+
+
+def _value_opens(stripped: str) -> tuple[str, bool, int]:
+    """What a key or item line's value leaves for the lines below it.
+
+    The quote still open at the line's end; whether the lines deeper than
+    the value's parent are that value's own (a block scalar, or a plain or
+    flow value that may wrap); and how far past the line's indent that parent
+    sits: the key after any `- ` markers, or the last `-` itself. A value
+    that is absent, a comment or node properties alone leaves a child node
+    to come, so nothing is skipped.
+    """
+    match = _VALUE_START_RE.match(stripped)
+    assert match is not None  # every part of the pattern is optional
+    rest = stripped[match.end():]
+    items = match["items"]
+    offset = len(items) if match["key"] else len(items.rstrip(" \t")) - 1 if items else 0
     if rest[:1] in {"'", '"'}:
-        return _quoted_scalar_end(rest[1:], rest[0]), False
-    return "", _BLOCK_SCALAR_RE.fullmatch(rest) is not None
+        return _quoted_scalar_end(rest[1:], rest[0]), False, offset
+    return "", bool(rest) and not rest.startswith("#"), offset
 
 
 def _quoted_scalar_end(text: str, quote: str) -> str:
@@ -1565,8 +1602,13 @@ def _yaml_code(line: str) -> str:
 
 
 def _document_syntax_guard(lines: list[str]) -> str:
-    """Node syntax this hand-rolled editor cannot preserve if it rewrites a line."""
-    code = [_yaml_code(line) for line in lines]
+    """Node syntax this hand-rolled editor cannot preserve if it rewrites a line.
+
+    A line that continues a scalar is text, not a node: a wrapped value that
+    goes on with `'quick mode` or `&amp` names no quoted key and no anchor.
+    """
+    inside = _scalar_continuations(lines)[0]
+    code = [_yaml_code(line) for index, line in enumerate(lines) if index not in inside]
     if any(_contains_potential_quoted_mapping_key(line) for line in code):
         return "quoted YAML mapping keys are user-owned; leaving them alone"
     if any(_contains_unsupported_yaml_node_syntax(line) for line in code):
