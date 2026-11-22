@@ -1229,7 +1229,9 @@ other headless coding CLI can own fanout lanes too, once you declare it. A
 declared executor gets the same lane the built-ins get: a worktree per unit,
 the unit commits, `fanout_unit_result/v1`, postconditions judged from git, the
 confinement fence, and a HUD executor-progress row. Declaring one is opt-in;
-with no file, nothing changes.
+with no file, nothing changes. The external executor lane is supported only on
+macOS and Linux; Windows refuses it with
+`user_executor_platform_unsupported`.
 
 ### Where the file lives
 

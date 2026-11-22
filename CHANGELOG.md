@@ -19,6 +19,8 @@ All notable changes will be documented here.
   hash and its session id, never its contents), and one that declares `session.resume` can re-enter that session on
   a budgeted repair. The remote PR lane is not available yet: `remote_pr = true` and `--allow-remote-pr` are
   refused with `remote_pr_not_available`, and nothing is launched or fetched.
+  The external executor lane is supported only on macOS and Linux; Windows refuses it with
+  `user_executor_platform_unsupported`.
   (`src/coding/user_executors.py`, `src/coding/executor_presets.py`, `src/coding/fanout_remote_pr.py`,
   `src/commands/coding.py`; `docs/FANOUT.md` "Your own harness", `docs/FANOUT-EXECUTOR-EVIDENCE.md`)
 - **`omh setup` connects to a Hermes config whose root keys hold column-0 lists, or whose section keys carry a
