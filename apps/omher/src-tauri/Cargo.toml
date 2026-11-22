@@ -27,6 +27,9 @@ tauri-plugin-process = "2"
 tauri-plugin-deep-link = "2"
 # Settings › Terminal › Import from…: iTerm2 / Apple Terminal prefs (term_import.rs); already in the tree via tauri
 plist = "1"
+# Tasks › 나: a non-active GitHub account's token is wiped from memory when its one `gh` call ends (gh_me.rs); already in
+# the tree via tauri
+zeroize = "1"
 
 [target.'cfg(unix)'.dependencies]
 libc = "0.2"

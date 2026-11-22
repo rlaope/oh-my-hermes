@@ -342,3 +342,19 @@
   color: var(--body);
   font-size: 12px;
 }
+
+/* Settings › Accounts › GitHub */
+.acc-dotbtn {
+  width: 18px;
+  height: 18px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+}
+.acc-dotbtn:hover {
+  background: var(--hover);
+}
+.acc-ring .tk-dot {
+  width: 10px;
+  height: 10px;
+}

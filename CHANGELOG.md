@@ -4,6 +4,29 @@ All notable changes will be documented here.
 
 ## Unreleased
 
+- **omher Tasks shows my pull requests, reviews and issues across repositories and GitHub accounts.** The Tasks page
+  has a scope toggle, "이 저장소 | 나". "나" lists, across every repository, the open pull requests asking for my
+  review, my open pull requests, the open issues assigned to me and the last 7 days' mentions (folded until opened).
+  What needs action comes first: CI failed, changes requested, merge conflict, then review requests by how long they
+  waited. Each row shows the repository, number, title, the account's colour dot and chips for draft, CI, review and
+  conflict, and how long a review request has waited. j / k move, Enter opens the drawer, o opens the browser, t
+  starts a thread; the list groups by section or by repository. The sidebar's Tasks row counts the review requests.
+  - **GitHub accounts:** Settings › Accounts has a GitHub section listing the accounts your `gh` is signed in to, with
+    "Add" for each and "Sign in to another account", which runs `gh auth login` (or `--hostname` for GitHub
+    Enterprise) in a terminal tab; gh itself makes the account it signs in its active one. omher keeps only each chosen account's host, login and colour. Account chips in
+    "나" filter to one account; an account whose login fails shows "다시 로그인" while the others keep working.
+  - **Per-account reads:** gh's active account is read as gh is. Another account's token is read with
+    `gh auth token --hostname <host> --user <login>` for each call and passed only as `GH_TOKEN` in that one `gh`
+    call's environment; it is never stored, shown, logged or sent, and is wiped when the call ends. omher never runs
+    `gh auth switch`, and drops a token it inherited from that call's environment. The status query must name that
+    account as its viewer, or the account shows "다시 로그인".
+  - **Reads:** four fixed `gh search` argv and one fixed `gh api graphql` query (CI, review decision, mergeability),
+    each answer kept 60 seconds per account, read again on window focus, on ⟳ and every 5 minutes; at most 27
+    searches a minute per account, and GitHub's rate limit shows "잠시 후 다시" instead of a failure. "이 저장소" on
+    GitHub reads as the chosen account whose login owns the repository, or the one picked on its chip.
+    (apps/omher `src-tauri/src/gh_me.rs`, `src/tasks/MeView.tsx`, `src/settings/accounts/GithubAccounts.tsx`;
+    `docs/OMHER-BOUNDARY.md` rules 11, 18 and 33)
+
 - **omher: the Slack briefing opens with a greeting and what it is about.** A brief could open with what the bot did
   or could not do ("could not open the log...") with nothing saying which alert or thread it meant, so the person had
   to guess. The briefing prompt now asks for a short greeting ("안녕하세요." in Korean), then a first line naming the

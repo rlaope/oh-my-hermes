@@ -26,6 +26,9 @@ export interface TermPane {
   fg?: string | null;
   /** put back after omher restarted: what it showed before is written into it first */
   restored?: boolean;
+  /** runs gh's own sign-in (`gh auth login`, `--hostname <host>` when set) instead of a shell: Settings › Accounts ›
+   *  GitHub. Never kept across a restart. */
+  gh?: { host: string | null };
 }
 
 export interface TermTab {
@@ -104,7 +107,9 @@ function save(): void {
     if (!state.tabs.length) localStorage.removeItem(TABS_KEY);
     else {
       const front = state.tabs.find((t) => t.key === state.active)?.focus ?? null;
-      localStorage.setItem(TABS_KEY, JSON.stringify({ tabs: state.tabs.map((t) => ({ key: t.focus, cwd: t.cwd ?? t.want })), active: front }));
+      // a gh sign-in tab is not a shell to bring back
+      const kept = state.tabs.filter((t) => !t.panes.some((p) => p.gh));
+      localStorage.setItem(TABS_KEY, JSON.stringify({ tabs: kept.map((t) => ({ key: t.focus, cwd: t.cwd ?? t.want })), active: kept.some((t) => t.focus === front) ? front : (kept[0]?.focus ?? null) }));
     }
   } catch {
     /* no storage */
@@ -175,6 +180,17 @@ export function addTerminalTab(): void {
   const tab: TermTab = { key: ++nextKey, want: state.cwd, cwd: null, layout: { pane: pane.id }, panes: [pane], focus: pane.id };
   set({ tabs: [...state.tabs, tab], active: tab.key, open: true, mounted: true, focus: state.focus + 1 });
 }
+
+/** A new tab running gh's own sign-in for one more GitHub account (`gh auth login`, or `--hostname <host>`), in
+ *  front. The desktop shell builds that argv itself; nothing is typed into it. */
+export function addGhLoginTab(host: string | null): void {
+  const pane: TermPane = { id: ++nextPane, want: null, cwd: null, gh: { host: host || null } };
+  const tab: TermTab = { key: ++nextKey, want: null, cwd: null, layout: { pane: pane.id }, panes: [pane], focus: pane.id };
+  set({ tabs: [...state.tabs, tab], active: tab.key, open: true, mounted: true, focus: state.focus + 1 });
+}
+
+/** The page hears this when a gh sign-in tab's program ended (Settings › Accounts asks gh for its accounts again). */
+export const GH_LOGIN_ENDED = "omher:gh-login-ended";
 
 /** Close a tab: its shells are stopped. The last one closing hides the panel. */
 export function closeTerminalTab(key: number): void {

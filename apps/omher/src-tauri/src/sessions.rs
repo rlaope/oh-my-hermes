@@ -1090,6 +1090,19 @@ impl Sessions {
         Ok((self.spawn(argv, &at, None, &[], cols, rows, sink)?, at, missing))
     }
 
+    /// Settings › Accounts › GitHub "Sign in to another account": gh's own sign-in (`gh auth login`, or with
+    /// `--hostname <host>`: gh_me::login_argv) in a pseudo-terminal in `home`, shown in the terminal panel. The program
+    /// is the `gh` found on this computer, the arguments are those fixed words with at most a checked host, and
+    /// nothing is typed into it: the person answers gh's own questions, and gh stores the login itself.
+    pub fn start_gh_login<F>(&self, gh: &Path, args: Vec<String>, home: &Path, cols: u16, rows: u16, sink: F) -> Result<u32, String>
+    where
+        F: FnMut(Output) + Send + 'static,
+    {
+        let mut argv: Vec<OsString> = vec![gh.as_os_str().to_os_string()];
+        argv.extend(args.into_iter().map(OsString::from));
+        self.spawn(argv, home, None, &[], cols, rows, sink)
+    }
+
     /// The shells a Shell terminal may run here ([`shells_available`] on this machine).
     pub fn shells(&self) -> Vec<ShellEntry> {
         let etc_shells = std::fs::read_to_string("/etc/shells").unwrap_or_default();

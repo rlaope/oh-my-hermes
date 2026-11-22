@@ -1,0 +1,21 @@
+{
+  "data": {
+    "viewer": {
+      "login": "octo",
+      "pullRequests": {
+        "nodes": [
+          {"number": 11, "isDraft": false, "reviewDecision": null, "mergeable": "MERGEABLE", "repository": {"nameWithOwner": "octo/app"}, "commits": {"nodes": [{"commit": {"statusCheckRollup": {"state": "FAILURE"}}}]}},
+          {"number": 12, "isDraft": false, "reviewDecision": "CHANGES_REQUESTED", "mergeable": "MERGEABLE", "repository": {"nameWithOwner": "octo/app"}, "commits": {"nodes": [{"commit": {"statusCheckRollup": {"state": "SUCCESS"}}}]}},
+          {"number": 14, "isDraft": true, "reviewDecision": "REVIEW_REQUIRED", "mergeable": "UNKNOWN", "repository": {"nameWithOwner": "octo/app"}, "commits": {"nodes": [{"commit": {"statusCheckRollup": {"state": "PENDING"}}}]}}
+        ]
+      }
+    },
+    "search": {
+      "nodes": [
+        {"number": 13, "isDraft": false, "reviewDecision": "REVIEW_REQUIRED", "mergeable": "CONFLICTING", "repository": {"nameWithOwner": "other/lib"}, "commits": {"nodes": [{"commit": {"statusCheckRollup": null}}]},
+         "timelineItems": {"nodes": [{"createdAt": "2026-11-10T00:00:00Z", "requestedReviewer": {"login": "octo"}}, {"createdAt": "2026-11-12T00:00:00Z", "requestedReviewer": {}}]}},
+        {}
+      ]
+    }
+  }
+}

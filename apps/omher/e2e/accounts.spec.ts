@@ -85,8 +85,9 @@ test("the user row opens Accounts: one plain header line, CLIs on this computer 
   await expect(page.locator(".st-nav button").first()).toHaveText("Accounts");
   await expect(page.getByTestId("me")).toHaveClass(/\bon\b/);
   await expect(page.getByTestId("accounts-lead")).toHaveText("Logins omher uses when it runs Claude Code, Codex or pi for you. Bots are set up under Bots.");
-  await expect(page.locator(".acc-g")).toHaveCount(3);
-  await expect(page.locator(".acc-g .acc-gh b")).toHaveText(["Claude Code", "Codex", "pi"]);
+  // the coding CLIs found here, then the GitHub accounts Tasks › Me reads as (GithubAccounts.tsx)
+  await expect(page.locator(".acc-g")).toHaveCount(4);
+  await expect(page.locator(".acc-g .acc-gh b")).toHaveText(["Claude Code", "Codex", "pi", "GitHub"]);
   await expect(page.getByTestId("accounts-missing")).toHaveText("Not on this computer: oh-my-pi, Grok, Gemini CLI.");
   // "Bots" in the header line opens Settings › Bots
   await page.getByTestId("accounts-to-bots").click();

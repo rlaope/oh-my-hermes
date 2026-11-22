@@ -1,0 +1,11 @@
+{
+  "hosts": {
+    "github.com": [
+      {"state": "success", "active": true, "host": "github.com", "login": "octo", "tokenSource": "keyring", "scopes": "gist, read:org, repo, workflow", "gitProtocol": "https"},
+      {"state": "success", "active": false, "host": "github.com", "login": "octo-work", "tokenSource": "keyring", "token": "gho_FAKEFAKEFAKEFAKEFAKEFAKEFAKEFAKEFAKE", "scopes": "'repo', 'read:org'", "gitProtocol": "ssh"}
+    ],
+    "ghe.example.com": [
+      {"state": "error", "error": "HTTP 401: Bad credentials", "active": true, "host": "ghe.example.com", "login": "octo-corp", "tokenSource": "GH_ENTERPRISE_TOKEN", "token": "gho_FAKEFAKEFAKEFAKEFAKEFAKEFAKEFAKEFAKE"}
+    ]
+  }
+}

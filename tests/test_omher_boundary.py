@@ -204,8 +204,27 @@ RULES = (
     " through the person's own GitHub CLI (`gh`) and GitLab CLI (`glab`) under their own logins:",
     "The only argv are `auth status` (only its exit code is read; its output, which can name a token, goes nowhere:"
     " it is never piped to omher),",
-    "omher passes no token to them, asks for none and shows none, and never comments, closes, assigns, labels, merges"
-    " or edits anything on GitHub, GitLab or Linear.",
+    "For gh's active account and for `glab` omher passes no token, asks for none and shows none.",
+    "The token exception, to rules 5, 10 and 18's \"omher reads no token\": for a chosen GitHub account that is not gh's"
+    " active one, omher reads that account's token with `gh auth token --hostname <host> --user <login>` only to pass"
+    " it, with `GH_HOST`, as `GH_TOKEN` (`GH_ENTERPRISE_TOKEN` for a GitHub Enterprise Server host) in the environment"
+    " of that one `gh` call; it reads it again for every call and never stores, caches, logs, shows or sends it, never"
+    " puts it in an argv or an error line, and wipes the copy it keeps for the call when that call ends",
+    "Every call as a chosen account, and every `gh auth token`, also takes any `GH_TOKEN`, `GITHUB_TOKEN`,"
+    " `GH_ENTERPRISE_TOKEN` or `GITHUB_ENTERPRISE_TOKEN` omher inherited out of that child's environment,",
+    "omher never runs `gh auth switch`; only gh's own sign-in of rule 18, which the person runs and answers, makes the"
+    " account it signs in gh's active one, as gh always does.",
+    "omher never comments, closes, assigns, labels, merges or edits anything on GitHub, GitLab or Linear.",
+    "The \"나\" scope adds only these gh argv: `auth status --json hosts` (of each account only its host, login, active,"
+    " state and scopes are read; never `--show-token`),",
+    "`api graphql -f query=<one fixed query>`, whose text is a constant in the shell (`STATUS_QUERY`:",
+    "it makes at most 27 searches a minute per account, under GitHub's 30, and a rate-limit answer shows \"try again"
+    " soon\", not a failure.",
+    "and for \"나\" only an account id, a section word (`review`, `authored`, `assigned`, `mentions`) and a page number;",
+    "Settings › Accounts also has a GitHub section: the GitHub accounts the person's `gh` is signed in to,",
+    "\"Add\" keeps an account in omher's own setting (`omher.tasks` on this computer: its host, login and a colour,"
+    " nothing else), \"Remove\" takes it out of omher's list only, and omher never writes gh's config, its keyring or"
+    " its active account.",
     "A token-like string (also one broken over lines) inside an item's own text (title, label, description, comment,"
     " check name) or a CLI's error"
     " line is shown as `••••`, in the list, the drawer, the error line and the text \"Start in thread\" sends, by omher's"
@@ -220,7 +239,12 @@ RULES = (
     " has `linear` in it and"
     " whether it is turned on, so a server is Linear by its name alone; it never sends, logs, stores or displays any"
     " other value of the file,",
-    "Besides the TERMINALS agents and the GitHub and GitLab CLIs' read-only lists of rule 33,",
+    "Besides the TERMINALS agents, the GitHub and GitLab CLIs' read-only lists of rule 33 and gh's own sign-in of rule"
+    " 18 (in a panel tab, below),",
+    "A panel tab runs one other program: gh's own sign-in (`gh auth login`, or `gh auth login --hostname <host>`) when"
+    " the person asks for another GitHub account in Settings › Accounts (rule 18);",
+    "the page sends only that host, checked as a lowercase DNS name, and a size (`gh_login_start`), the program is the"
+    " `gh` found on this computer, it starts in the home folder, omher types nothing into it,",
     "This is the one exception to rules 5 and 10: the request is `gh`'s own, under its own login; omher passes no token,"
     " reads none and changes nothing on GitHub.",
     "An answer is kept 5 minutes, a call is stopped after 3 seconds,",
@@ -2544,11 +2568,14 @@ class TasksReadOnly(unittest.TestCase):
 
     def test_the_page_sends_only_words_and_numbers(self) -> None:
         for cmd, want in (("tasks_status", "source: String, fresh: Option<bool>"),
-                          ("tasks_list", "source: String, repo: String, kind: String, filter: String, page: u32"),
-                          ("tasks_view", "source: String, repo: String, kind: String, number: u64"),
-                          ("tasks_remote", "cwd: String")):
+                          ("tasks_list", "source: String, repo: String, kind: String, filter: String, page: u32, account: Option<String>,"),
+                          ("tasks_view", "source: String, repo: String, kind: String, number: u64, account: Option<String>,"),
+                          ("tasks_remote", "cwd: String"),
+                          ("gh_accounts", "fresh: Option<bool>"),
+                          ("tasks_me", "account: String, section: String, page: u32, fresh: Option<bool>"),
+                          ("gh_login_start", "host: Option<String>, cols: u16, rows: u16,")):
             sig = self.lib[self.lib.index(f"async fn {cmd}("):]
-            sig = sig[: sig.index(") ->")]
+            sig = _flat(sig[: sig.index(") ->")])
             self.assertIn(want, sig, cmd)
             self.assertNotRegex(sig, r"\b(argv|args|program|command|token)\b", cmd)
         # the repository is checked before any argv is built
@@ -2609,7 +2636,95 @@ class TasksReadOnly(unittest.TestCase):
         self.assertEqual(re.findall(r'(threadReq|bridge\.request)\("([a-z.]+)"', start), [("threadReq", "thread.create")])
         self.assertIn("await actions.threadSend(bot, row.thread, text);", start)
         host = (UI_SRC / "tasks" / "host.ts").read_text(encoding="utf-8")
-        self.assertEqual(sorted(set(re.findall(r'invoke<[^>]+>\("([a-z_]+)"', host))), ["tasks_list", "tasks_remote", "tasks_status", "tasks_view"])
+        self.assertEqual(sorted(set(re.findall(r'invoke<[^>]+>\("([a-z_]+)"', host))), ["gh_accounts", "tasks_list", "tasks_me", "tasks_remote", "tasks_status", "tasks_view"])
+
+
+class GithubMeReadOnly(unittest.TestCase):
+    """Rules 18 and 33: Tasks › 나 and Settings › Accounts › GitHub run only fixed gh reads through tasks.rs's one
+    runner; a non-active account's token goes only into that one call's environment; gh's active account never
+    changes."""
+
+    def setUp(self) -> None:
+        text = (SHELL / "gh_me.rs").read_text(encoding="utf-8")
+        self.prod = text.split("#[cfg(test)]\nmod tests", 1)[0]
+        self.code = "\n".join(l for l in self.prod.splitlines() if not l.lstrip().startswith("//"))
+        self.lib = (SHELL / "lib.rs").read_text(encoding="utf-8")
+
+    def test_no_spawn_of_its_own_and_only_fixed_reads(self) -> None:
+        for bad in ("Command::new", "spawn(", "/bin/sh", '"-c"', "std::fs::", "File::", "OpenOptions"):
+            self.assertNotIn(bad, self.code, bad)
+        # every call goes through tasks.rs's runner (no shell, nothing on stdin, 20 s)
+        # three calls: `auth status --json hosts`, `auth token` (read_token) and every other argv (call)
+        self.assertEqual(self.code.count("run_env("), 3)
+        # the argv words: reads only, never a sign-out, a switch, a write verb or the token flag
+        for bad in ("switch", "logout", "--show-token", "create", "edit", "comment", "merge", "close", "-X", "--method", "--input"):
+            self.assertNotIn(f'"{bad}"', self.code, bad)
+        self.assertNotIn("mutation", self.code)
+        for want in ("--review-requested=@me", "--author=@me", "--assignee=@me", "--mentions=@me", "--include-prs", "--state=open", "graphql", "hosts"):
+            self.assertIn(f'"{want}"', self.code, want)
+        self.assertIn('pub const STATUS_QUERY: &str = "query { viewer {', self.prod)
+        self.assertIn('vec!["api".into(), "graphql".into(), "-f".into(), format!("query={STATUS_QUERY}")]', self.prod)
+        self.assertIn('vec!["auth".into(), "status".into(), "--json".into(), "hosts".into()]', self.prod)
+        self.assertIn("const SEARCHES_PER_MINUTE: usize = 27;", self.prod)
+
+    def test_auth_status_reads_five_fields(self) -> None:
+        row = self.prod.split("struct StatusRow {", 1)[1].split("\n}\n", 1)[0]
+        self.assertEqual(re.findall(r"^\s+(\w+): ", row, re.M), ["host", "login", "active", "state", "scopes"])
+        self.assertNotIn("token", row)
+
+    def test_the_token_goes_only_into_one_calls_environment(self) -> None:
+        # read fresh for each call, wiped on drop, never cached, logged or put in an error
+        read = self.prod.split("fn read_token(", 1)[1].split("\n}\n", 1)[0]
+        self.assertIn("let out = Zeroizing::new(ran.out);", read)
+        self.assertIn("Ok(Zeroizing::new(t.to_string()))", read)
+        self.assertNotIn("format!", read.split("let t = out.trim();", 1)[1])
+        call = self.prod.split("    fn call(&self", 1)[1].split("\n    }\n", 1)[0]
+        self.assertIn("let token = if a.active { None } else { Some(read_token(&exe, a)?) };", call)
+        self.assertIn("let env = account_env(&a.host, token.as_ref().map(|t| t.as_str()));", call)
+        self.assertIn("let ran = run_env(&exe, &argv, true, &env, &INHERITED_TOKENS);", call)
+        self.assertIn("let ran = run_env(exe, &argv, true, &[], &INHERITED_TOKENS)", read)
+        self.assertIn('pub const INHERITED_TOKENS: [&str; 4] = ["GH_TOKEN", "GITHUB_TOKEN", "GH_ENTERPRISE_TOKEN", "GITHUB_ENTERPRISE_TOKEN"];', self.prod)
+        self.assertLess(call.index("drop(token);"), call.index("self.keep("))
+        self.assertIn("self.keep(key, ran.out.clone());", call)
+        env = self.prod.split("pub fn account_env<", 1)[1].split("\n}\n", 1)[0]
+        self.assertIn('let mut env = vec![("GH_HOST", host)];', env)
+        self.assertIn("env.push((token_var(host), t));", env)
+        for bad in ("println!", "eprintln!", "dbg!", "log::", "tracing::"):
+            self.assertNotIn(bad, self.code, bad)
+        # a non-active account must be the status query's viewer
+        run_as = self.prod.split("pub fn run_as(", 1)[1].split("\n    }\n", 1)[0]
+        self.assertIn("let who = viewer_login(&self.call(&a, graphql_argv(), false)?);", run_as)
+        # tasks.rs's runner adds the env to that one child only
+        tasks = (SHELL / "tasks.rs").read_text(encoding="utf-8").split("#[cfg(test)]\nmod tests", 1)[0]
+        runner = tasks.split("pub fn run_env(", 1)[1].split("\n}\n", 1)[0]
+        self.assertIn("for k in unset {\n        cmd.env_remove(k);\n    }\n    for (k, v) in env {\n        cmd.env(k, v);\n    }", runner)
+
+    def test_the_page_never_gets_a_token(self) -> None:
+        # what the page gets: accounts (host, login, active, state, scopes), items and errors; none has a token field
+        for shape, fields in (("pub struct GhAccount {", ["host", "login", "active", "state", "scopes"]), ("pub struct MeError {", ["kind", "line"]),
+                              ("pub struct MePage {", ["items", "more"])):
+            body = self.prod.split(shape, 1)[1].split("\n}\n", 1)[0]
+            self.assertEqual(re.findall(r"pub (\w+): ", body), fields, shape)
+        item = self.prod.split("pub struct MeItem {", 1)[1].split("\n}\n", 1)[0]
+        self.assertFalse([f for f in re.findall(r"pub (\w+): ", item) if "token" in f])
+        # omher's own setting keeps a chosen account's host, login and colour only
+        types = (UI_SRC / "tasks" / "types.ts").read_text(encoding="utf-8")
+        chosen = types.split("export interface ChosenAccount {", 1)[1].split("\n}\n", 1)[0]
+        self.assertEqual(re.findall(r"^\s+(\w+): ", chosen, re.M), ["host", "login", "color"])
+        state = (UI_SRC / "tasks" / "state.ts").read_text(encoding="utf-8")
+        self.assertIn("s.accounts.push({ host: a.host, login: a.login, color:", state)
+        self.assertIn("set({ accounts: [...state.accounts, { host: a.host, login: a.login, color }] });", state)
+
+    def test_the_sign_in_tab_runs_only_gh_auth_login(self) -> None:
+        login = self.prod.split("pub fn login_argv(", 1)[1].split("\n}\n", 1)[0]
+        self.assertIn('let mut a = vec!["auth".to_string(), "login".to_string()];', login)
+        self.assertIn("if !host_ok(h) {", login)
+        sessions = (SHELL / "sessions.rs").read_text(encoding="utf-8")
+        start = sessions.split("pub fn start_gh_login<", 1)[1].split("\n    }\n", 1)[0]
+        self.assertIn("self.spawn(argv, home, None, &[], cols, rows, sink)", start)
+        cmd = self.lib.split("async fn gh_login_start(", 1)[1].split("\n}\n", 1)[0]
+        self.assertIn("let args = gh_me::login_argv(host.as_deref())?;", cmd)
+        self.assertIn('let gh = tasks::find("gh").ok_or("gh is not installed")?;', cmd)
 
 
 class TerminalLinksAndBotRequests(unittest.TestCase):
