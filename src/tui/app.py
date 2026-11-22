@@ -385,6 +385,7 @@ from .transcript import (
     block_rows,
     queued_prompt_rows,
     compact_count,
+    may_become_interrupt_sentinel,
     review_line,
 )
 from . import proofread
@@ -8870,7 +8871,9 @@ class App(ModesMixin, AgentViewMixin):
             self.board_reader.stop()
 
     def _copy(self, arg: str) -> None:
-        last = next((block for block in reversed(self.transcript.blocks) if isinstance(block, AssistantBlock)), None)
+        # A reply held back as a possible cancellation sentinel is not on the screen, so not the one to copy.
+        last = next((block for block in reversed(self.transcript.blocks) if isinstance(block, AssistantBlock)
+                     and (block.done or not may_become_interrupt_sentinel(block.text))), None)
         if last is None or not last.text.strip():
             self.transcript.add_notice("No reply to copy yet.")
             return

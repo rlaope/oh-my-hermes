@@ -2425,8 +2425,10 @@ class Transcript:
     def _take_assistant(
         self, block: AssistantBlock, width: int, theme: Theme, final: bool = False, live_rows: int | None = None
     ) -> list[Line]:
-        if not (block.done or final) and may_become_interrupt_sentinel(block.text):
-            return []  # it may yet be Hermes' cancellation sentinel: nothing of it is taken until it diverges
+        if not block.done and may_become_interrupt_sentinel(block.text):
+            # It may yet be Hermes' cancellation sentinel: nothing of it is taken until it diverges, and the exit's
+            # final take drops it (a turn left before it ended on the sentinel prints no sentinel to the shell).
+            return []
         cap = max(live_rows // 2, 4) if live_rows else None
 
         def height(run: list[str]) -> int:

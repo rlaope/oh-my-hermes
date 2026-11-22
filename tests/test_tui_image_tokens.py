@@ -1187,6 +1187,50 @@ class QuietCutInTests(ImageTestCase):
         self.app._on_event(Event("message.complete", SID, {"text": SENTINEL, "status": "complete"}))
         self.assertIn(SENTINEL, self.screen())
 
+    def copied(self) -> list[str]:
+        """`/copy` typed and sent: the text of each OSC 52 it wrote."""
+        sent: list[str] = []
+        write = self.app.terminal.write
+
+        def watched(data: str) -> None:
+            sent.append(data)
+            write(data)
+
+        with patch.object(self.app.terminal, "write", watched):
+            self.type("/copy")
+            self.press(Key(ENTER))
+        return [base64.b64decode(text.rstrip("\x07")).decode("utf-8")
+                for data in sent for text in data.split("\x1b]52;c;")[1:]]
+
+    def test_copy_while_the_sentinel_is_held_takes_the_answer_before_it(self) -> None:
+        self.running()
+        self.app._on_event(Event("message.complete", SID, {"text": "the first answer", "status": "complete"}))
+        self.hermes.pump()
+        self.cut_in()
+        self.stream(SENTINEL)
+        self.assertEqual(self.copied(), ["the first answer"])
+
+    def test_copy_while_the_sentinel_is_held_with_no_answer_before_it_copies_nothing(self) -> None:
+        self.cut_in()
+        self.stream(SENTINEL)
+        self.assertEqual(self.copied(), [])
+        self.stopped()  # what /copy said is held under the live reply until the turn ends
+        self.assertIn("No reply to copy yet.", notices(self.app))
+
+    def test_exit_while_a_finished_sentinel_line_is_held_prints_no_sentinel(self) -> None:
+        self.cut_in()
+        self.stream(SENTINEL + "\n")
+        flushed: list[str] = []
+        flush = self.app.region.flush_above
+
+        def watched(rows, *size) -> None:
+            flushed.extend("".join(span.text for span in line) for line in rows)
+            flush(rows, *size)
+
+        with patch.object(self.app.region, "flush_above", watched):
+            self.app._shutdown()
+        self.assertFalse([row for row in flushed if "Operation" in row or "⚚ Hermes" in row], flushed)
+
     def test_the_sentinel_in_replayed_history_is_not_a_reply(self) -> None:
         self.app._draw_history([
             {"role": "user", "text": "look at this"},
