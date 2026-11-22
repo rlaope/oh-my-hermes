@@ -48,6 +48,13 @@ All notable changes will be documented here.
   at once no longer make two Bot Chats.
   BOUNDARY rule 39.
 
+- **omher's Korean names Watch "모니터링".** The feature that has a bot check a channel or page on a schedule read
+  `감시` (surveillance) in Korean; it is now `모니터링` on every screen (`새 모니터링`, `모니터링하는 곳`). Four short
+  labels left by the Korean copy pass read right too: a browser step reads `열림` (it read like a button, `열기`), the
+  bubble style with no bot bubble reads `본문처럼`, the terminal theme slot's label reads `적용 대상`, and a route
+  whose chain ran out reads `chain exhausted` like its `chain head` and `fallback` siblings. Only string values
+  changed.
+
 ## 5.0.0 - 2026-11-21
 
 - **A mise-managed `codex` or `python3` runs again in `omh coding run`.** mise links every tool it manages to one
