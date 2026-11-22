@@ -4,12 +4,16 @@ export type BridgeStatus = "connecting" | "open" | "closed";
 
 export const DEFAULT_BRIDGE_URL = "ws://127.0.0.1:5308/?token=dev";
 
-/** Tauri app -> `bridge_url` command; browser -> VITE_OMHER_BRIDGE; else the dev default. */
+/** Tauri app -> `bridge_url` command; e2e -> the page's `__OMHER_BRIDGE_URL__` stand-in for that command; browser ->
+ *  VITE_OMHER_BRIDGE; else the dev default. Asked again before every dial: a bridge that died and came back listens
+ *  on a new port with a new token. */
 export async function resolveBridgeUrl(): Promise<string> {
   if (typeof window !== "undefined" && "__TAURI_INTERNALS__" in window) {
     const { invoke } = await import("@tauri-apps/api/core");
     return invoke<string>("bridge_url");
   }
+  const standIn = typeof window !== "undefined" ? (window as { __OMHER_BRIDGE_URL__?: () => Promise<string> }).__OMHER_BRIDGE_URL__ : undefined;
+  if (standIn) return standIn();
   const fromEnv = import.meta.env?.VITE_OMHER_BRIDGE as string | undefined;
   return fromEnv || DEFAULT_BRIDGE_URL;
 }
@@ -18,7 +22,7 @@ type Pending = { resolve: (v: never) => void; reject: (e: BridgeError) => void }
 type Handler<K extends EventName> = (ev: EventOf<K>) => void;
 
 export interface BridgeOptions {
-  /** Override URL resolution (tests). */
+  /** Override URL resolution (tests). A function is asked again before every dial, as `resolveBridgeUrl` is. */
   url?: string | (() => Promise<string>);
   /** Override the WebSocket constructor (tests). */
   WebSocketImpl?: typeof WebSocket;

@@ -1,0 +1,412 @@
+{
+ "base_sha": "1399085efdae0b8a50d08bd10eef552697b64f50",
+ "note": "Route-hint workflows per hint (awareness_route_hint), measured on base_sha before the code-review hint. must_not_change was saved before the edit; fresh_negatives were written after it.",
+ "must_not_change": [
+  {
+   "message": "run visual QA on the checkout page screenshots",
+   "hints": [
+    "visual-qa",
+    "img-summary"
+   ]
+  },
+  {
+   "message": "compare these two screenshots and show me the pixel diff",
+   "hints": [
+    "visual-qa"
+   ]
+  },
+  {
+   "message": "screenshot diff of the landing page before and after",
+   "hints": [
+    "visual-qa"
+   ]
+  },
+  {
+   "message": "visual diff between staging and prod for the pricing page",
+   "hints": [
+    "visual-qa",
+    "img-summary"
+   ]
+  },
+  {
+   "message": "check the viewport on mobile for text clipping",
+   "hints": [
+    "visual-qa"
+   ]
+  },
+  {
+   "message": "the button overlaps the footer on mobile, check the screenshot",
+   "hints": [
+    "visual-qa"
+   ]
+  },
+  {
+   "message": "스크린샷 비교해서 화면 깨짐 확인해줘",
+   "hints": [
+    "visual-qa"
+   ]
+  },
+  {
+   "message": "모바일에서 글자 잘림 있는지 비주얼 QA 해줘",
+   "hints": [
+    "visual-qa"
+   ]
+  },
+  {
+   "message": "a customer reported a bug in checkout, triage it",
+   "hints": [
+    "feedback-triage"
+   ]
+  },
+  {
+   "message": "customers keep reporting payment failures, triage the feedback",
+   "hints": [
+    "feedback-triage"
+   ]
+  },
+  {
+   "message": "here is a bug report from a user: login fails on Safari",
+   "hints": [
+    "feedback-triage"
+   ]
+  },
+  {
+   "message": "sort this user feedback into themes",
+   "hints": [
+    "feedback-triage"
+   ]
+  },
+  {
+   "message": "고객 피드백 정리해서 버그랑 요청으로 나눠줘",
+   "hints": [
+    "feedback-triage"
+   ]
+  },
+  {
+   "message": "고객이 결제 버그를 신고했어 분류해줘",
+   "hints": [
+    "feedback-triage"
+   ]
+  },
+  {
+   "message": "fix this bug in the login handler",
+   "hints": [
+    "feedback-triage"
+   ]
+  },
+  {
+   "message": "fix the bug where the export button does nothing",
+   "hints": [
+    "feedback-triage"
+   ]
+  },
+  {
+   "message": "이 버그 고쳐줘",
+   "hints": [
+    "feedback-triage"
+   ]
+  },
+  {
+   "message": "로그인 버그 수정해줘",
+   "hints": [
+    "feedback-triage"
+   ]
+  },
+  {
+   "message": "implement the CSV export and open a PR",
+   "hints": [
+    "ulw-work"
+   ]
+  },
+  {
+   "message": "implement dark mode and open a pull request",
+   "hints": [
+    "ulw-work"
+   ]
+  },
+  {
+   "message": "add a retry to the uploader and open a PR when tests pass",
+   "hints": [
+    "ulw-work"
+   ]
+  },
+  {
+   "message": "codex로 이 기능 구현하고 PR 올려줘",
+   "hints": [
+    "ulw-work"
+   ]
+  },
+  {
+   "message": "CI failed on my PR, find out why",
+   "hints": [
+    "build-failure-triage",
+    "ulw-work"
+   ]
+  },
+  {
+   "message": "merge this PR once CI is green",
+   "hints": [
+    "verification-gate",
+    "ulw-work"
+   ]
+  },
+  {
+   "message": "review this contract for risky clauses",
+   "hints": [
+    "ulw-work"
+   ]
+  },
+  {
+   "message": "redline this NDA",
+   "hints": []
+  },
+  {
+   "message": "review the translation of the onboarding screens",
+   "hints": [
+    "ulw-work"
+   ]
+  },
+  {
+   "message": "이 계약서 검토해줘",
+   "hints": [
+    "legal-compliance-review"
+   ]
+  },
+  {
+   "message": "번역 검토해줘",
+   "hints": []
+  },
+  {
+   "message": "review my essay",
+   "hints": [
+    "ulw-work"
+   ]
+  },
+  {
+   "message": "review the change to our refund policy",
+   "hints": [
+    "ulw-work"
+   ]
+  },
+  {
+   "message": "who should review my PR?",
+   "hints": [
+    "ulw-work"
+   ]
+  },
+  {
+   "message": "how do I review a pull request well?",
+   "hints": [
+    "ulw-work"
+   ]
+  },
+  {
+   "message": "write the PR description for this change",
+   "hints": [
+    "ulw-work"
+   ]
+  },
+  {
+   "message": "write a commit message for this diff",
+   "hints": [
+    "visual-qa",
+    "commit-pr-authoring"
+   ]
+  },
+  {
+   "message": "이 diff로 커밋 메시지 써줘",
+   "hints": [
+    "visual-qa"
+   ]
+  },
+  {
+   "message": "PR 설명 써줘",
+   "hints": [
+    "ulw-work"
+   ]
+  },
+  {
+   "message": "review stale memories and ask me what to keep",
+   "hints": [
+    "ulw-work"
+   ]
+  },
+  {
+   "message": "is this a bug or expected behaviour in the scheduler?",
+   "hints": [
+    "feedback-triage"
+   ]
+  },
+  {
+   "message": "the dashboard shows a diff of 3 between totals, why?",
+   "hints": [
+    "visual-qa"
+   ]
+  },
+  {
+   "message": "코드 리뷰 일정 잡아줘",
+   "hints": [
+    "ulw-work"
+   ]
+  },
+  {
+   "message": "check this diff",
+   "hints": [
+    "visual-qa"
+   ]
+  },
+  {
+   "message": "버그 있는지 봐줘",
+   "hints": [
+    "feedback-triage"
+   ]
+  },
+  {
+   "message": "review the changes",
+   "hints": [
+    "ulw-work"
+   ]
+  }
+ ],
+ "fresh_negatives": [
+  {
+   "message": "review this diff of the two config files and tell me which one is newer",
+   "hints": [
+    "visual-qa",
+    "ulw-work"
+   ]
+  },
+  {
+   "message": "review the PR process doc and suggest improvements",
+   "hints": [
+    "ulw-work"
+   ]
+  },
+  {
+   "message": "can you review my PR template?",
+   "hints": [
+    "ulw-work"
+   ]
+  },
+  {
+   "message": "check this patch for typos in the release notes",
+   "hints": [
+    "content-operator"
+   ]
+  },
+  {
+   "message": "find bugs in the garden plan",
+   "hints": []
+  },
+  {
+   "message": "does this change introduce a delay for customers?",
+   "hints": []
+  },
+  {
+   "message": "review my commit message",
+   "hints": [
+    "commit-pr-authoring",
+    "ulw-work"
+   ]
+  },
+  {
+   "message": "이 PR 제목 리뷰해줘",
+   "hints": [
+    "ulw-work"
+   ]
+  },
+  {
+   "message": "이 코드 설명해줘",
+   "hints": []
+  },
+  {
+   "message": "코드 리뷰 체크리스트 만들어줘",
+   "hints": [
+    "ulw-work"
+   ]
+  },
+  {
+   "message": "이 diff 적용해줘",
+   "hints": [
+    "visual-qa"
+   ]
+  },
+  {
+   "message": "버그 리포트 템플릿 리뷰해줘",
+   "hints": [
+    "feedback-triage",
+    "ulw-work"
+   ]
+  },
+  {
+   "message": "review this patch notes draft",
+   "hints": [
+    "ulw-work"
+   ]
+  },
+  {
+   "message": "go over the changes to the onboarding schedule",
+   "hints": [
+    "automation-blueprint"
+   ]
+  },
+  {
+   "message": "look over my resume",
+   "hints": []
+  },
+  {
+   "message": "scan this screenshot diff for layout shifts",
+   "hints": [
+    "frontend",
+    "visual-qa"
+   ]
+  },
+  {
+   "message": "review our code review guidelines",
+   "hints": [
+    "ulw-work"
+   ]
+  },
+  {
+   "message": "this PR broke the build, find out why",
+   "hints": [
+    "ulw-work"
+   ]
+  },
+  {
+   "message": "merge my PR after review",
+   "hints": [
+    "ulw-work"
+   ]
+  },
+  {
+   "message": "커밋 히스토리 정리해줘",
+   "hints": []
+  },
+  {
+   "message": "이 PR 머지해줘",
+   "hints": [
+    "ulw-work"
+   ]
+  },
+  {
+   "message": "review the diff between the two contracts",
+   "hints": [
+    "visual-qa",
+    "ulw-work"
+   ]
+  },
+  {
+   "message": "did the change in pricing cause a drop in signups?",
+   "hints": []
+  },
+  {
+   "message": "audit the changes to our access policy",
+   "hints": []
+  },
+  {
+   "message": "이번 변경 사항 공지문 써줘",
+   "hints": []
+  }
+ ]
+}
