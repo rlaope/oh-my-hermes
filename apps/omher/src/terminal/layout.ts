@@ -149,7 +149,7 @@ export function parseLayout(v: unknown, depth = 0): Layout | null {
   return all.length <= MAX_PANES && new Set(all).size === all.length ? out : null;
 }
 
-type KeyLike = { key: string; code?: string; metaKey: boolean; ctrlKey: boolean; altKey: boolean; shiftKey: boolean };
+type KeyLike = { key: string; code?: string; metaKey: boolean; ctrlKey: boolean; altKey: boolean; shiftKey: boolean; getModifierState?: (k: string) => boolean };
 
 const isKey = (e: KeyLike, letter: string) => e.code === `Key${letter.toUpperCase()}` || e.key.toLowerCase() === letter;
 const ARROWS: Record<string, FocusDir> = { ArrowLeft: "left", ArrowRight: "right", ArrowUp: "up", ArrowDown: "down" };
@@ -169,7 +169,7 @@ export type PaneKey =
  *  ⌘⇧⌥arrows move the pane itself, ⌘] / ⌘[ the next / previous pane, ⌘⇧↩ zoom the pane (again: back), ⌘⌃= even
  *  them out. Elsewhere Ctrl+<key> in a terminal is the program's (Ctrl+D, Ctrl+W), so: Ctrl+Shift+D right,
  *  Alt+Shift+D down (Orca's), Ctrl+Shift+W close, Ctrl+Alt+arrows move between, Ctrl+Alt+Shift+arrows move the pane,
- *  Ctrl+Tab / Ctrl+Shift+Tab next / previous, Ctrl+Shift+Enter zoom, Ctrl+Alt+= even out. */
+ *  Ctrl+Tab / Ctrl+Shift+Tab next / previous, Ctrl+Shift+Enter zoom, Ctrl+Alt+= even out (not AltGr, which types a character there). */
 export function paneKey(e: KeyLike, mac: boolean): PaneKey | null {
   const dir = ARROWS[e.key];
   if (mac) {
@@ -187,7 +187,9 @@ export function paneKey(e: KeyLike, mac: boolean): PaneKey | null {
   }
   if (e.metaKey) return null;
   if (dir && e.ctrlKey && e.altKey) return { kind: e.shiftKey ? "move" : "focus", dir };
-  if (e.ctrlKey && e.altKey && !e.shiftKey && isEqual(e)) return { kind: "equalize" };
+  // AltGr reads as Ctrl+Alt: AltGr+= types } on French AZERTY (~ Swiss, | Danish), so only a key that still says = or
+  // + evens the panes out, and never with AltGr held
+  if (e.ctrlKey && e.altKey && !e.shiftKey && isEqual(e) && (e.key === "=" || e.key === "+") && !e.getModifierState?.("AltGraph")) return { kind: "equalize" };
   if (e.key === "Tab" && e.ctrlKey && !e.altKey) return { kind: "step", step: e.shiftKey ? -1 : 1 };
   if (!e.shiftKey) return null;
   if (e.key === "Enter" && e.ctrlKey && !e.altKey) return { kind: "zoom" };

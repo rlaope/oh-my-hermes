@@ -1,11 +1,9 @@
 // The OMH desktop half: the HUD the OMH TUI draws (src/tui/panels.py),
 // redrawn for Hermes Desktop as a right-hand pane and a status-bar item. It
-// is a Desktop pane with the TUI's mood, not a terminal in a window (the
-// owner's call of 2026-11-04): the app's sans for words, its components,
-// spacing and radii, and its theme tokens, with the TUI's calm hierarchy,
-// density and colour character brought over -- the default launch look
-// ('spectrum': a muted violet for frames, a rose brand, a warm label) mapped
-// onto Desktop's own colour tokens, so it holds in light and dark.
+// reads like the app's own right-hand panes (Files, Review): the app's sans,
+// row heights, hover rows and small section labels (the owner's call of
+// 2026-11-21). Its colours are the OMH TUI's default look (spectrum), mixed
+// from the app's theme tokens so it holds in light and dark (2026-11-22).
 //
 // The pane reads top to bottom: one line of state (`OMH  2 running`), the
 // scope it covers (`this session` or `all sessions`), the few findings worth
@@ -14,19 +12,20 @@
 // as the pane changing its mind). USAGE is the focused chat's own figures;
 // CATCHES what OMH caught earlier in the session, a history; PLAN the plan as
 // it stands now; DAG the session's one graph, whatever made it, drawn as
-// cards folded by layer; AGENTS the subagents and the routes OMH dispatched.
+// cards folded by layer, with a timeline of when each lane started and ended;
+// AGENTS the subagents the graph does not draw and the routes OMH dispatched.
 // A section with nothing to say draws its empty line; until this chat's poll
 // lands it reads as pending, and where the reader cannot answer it says that
 // instead of showing another chat's answer. Each section folds, and the
 // folds and the DAG view's options are kept in the app's local storage.
-// Hermes Desktop lists every delegate_task child in its own Agents panel and
-// in the composer's status stack, so a row per native subagent here was a
-// second copy of that list; AGENTS keeps one summary line for them and names
-// that panel in its tooltip. Maestro and Kanban rows stay, because nothing in
-// Desktop draws the routes OMH chose.
+// A subagent a drawn DAG run binds is a node of DAG; every other one is a row
+// of AGENTS (a few, then `+N more`), so a subagent the run did not orchestrate
+// is never drawn as if it were part of it. Maestro and Kanban rows follow,
+// because nothing in Desktop draws the routes OMH chose.
 //
 // Each colour has one meaning, through theme tokens only: the accent for
-// what is running, yellow for waiting, blocked or a warning, red for failed
+// what is running (the timeline's strip shades it by how many run at
+// once), yellow for waiting, blocked or a warning, red for failed
 // (and for yolo, shown only while it is on), green for done DAG work (the
 // owner's call of 2026-11-10), and the text greys for other done words,
 // skipped and everything neutral. Monospace is kept for ids, model and route
@@ -47,7 +46,7 @@
 // colour resolves through the app's theme tokens (var(--ui-*)), never a
 // literal.
 //
-// Visible words go through `t`: an English and a Korean table, registered
+// Visible words go through `t`: English, Korean and Chinese tables, registered
 // with the app's plugin i18n door when the host has one (so the app's own
 // language setting picks the table), and the English table otherwise.
 //
@@ -62,7 +61,12 @@
 // focused chat's own figures from what the host already holds (its streamed
 // usage and its context breakdown), beside the chat's recorded row the
 // reader sends, and times the wait for a turn's first token from the gateway
-// events this window sees.
+// events this window sees. The DAG timeline is the second: from each lane's
+// elapsed time and end, it places the lanes on the clock and works out the
+// run's idle time, how many lanes ran at once and each lane's wait on its
+// upstream. A running lane's start is the pane's receive time less what the
+// reader counted, so it can sit a poll late. Where a figure would rest on a
+// lane with no clock or a cut graph, the pane says so or shows none.
 import {
   Badge,
   GlyphSpinner,
@@ -177,14 +181,12 @@ export function plural(count, noun) {
 
 export const EN = {
   brand: 'OMH',
-  brandTip: 'oh-my-hermes {version}',
   stateIdle: 'idle',
   stateActive: 'active',
   stateRunning: '{count} running',
   stateBlocked: '{count} blocked',
   stateFailed: '{count} failed',
   stateDone: '{count} done',
-  stateQueued: '{count} queued',
   stateGateway: 'gateway {state}',
   gatewayConnecting: 'connecting',
   gatewayClosed: 'closed',
@@ -195,36 +197,32 @@ export const EN = {
   scopeSession: 'this session',
   scopeAll: 'all sessions',
   noticeBackend: 'OMH backend: {message}',
-  chipRepeat: 'repeat x{count}',
+  chipRepeat: '🔁 ×{count}',
   chipRepeatCycle: 'cycle-of-{period}',
   chipRepeatBlocked: 'blocked',
   chipRepeatApproval: 'approval',
   chipBoard: 'board {detail}',
   chipBoardIdle: 'board idle',
-  chipDispatcher: 'board dispatcher not seen',
-  chipTools: function (vars) {
-    return `${plural(vars.count, 'tool')} · ${vars.elapsed}`
-  },
+  chipDispatcher: 'no board dispatcher',
+  chipTools: '⚙ {count} · {elapsed}',
   chipYolo: 'yolo on',
   chipShot: 'parallel shot ×{count}',
   chipShotAgo: 'parallel shot ×{count} ({age} ago)',
   sectionCatches: 'CATCHES',
   sectionPlan: 'PLAN',
   sectionDag: 'DAG',
-  catchLoop: 'stopped a loop of {laps} identical calls',
-  catchCycle: 'stopped a loop of {period} calls repeated {laps} times',
-  catchReread: 'pointed the re-read at line {offset}',
-  catchPlan: function (vars) {
-    return `kept going, plan has ${plural(vars.count, 'open item')}`
-  },
-  catchWait: 'flagged a wait with nothing armed to wake it',
+  catchLoop: 'loop stopped: same call ×{laps}',
+  catchCycle: 'loop stopped: {period} calls ×{laps}',
+  catchReread: 're-read → line {offset}',
+  catchPlan: 'kept going: {count} open',
+  catchWait: 'wait with nothing to wake it',
   planEmptyTitle: 'No plan yet',
   planEmptyDescription: 'A workflow adds one when it starts.',
   planNativeTitle: 'in Hermes todos',
   planWaiting: '{count} waiting',
   planSkipped: '({count} skipped)',
-  planNoteSkipped: 'skipped: {reason}',
-  planNoteWaiting: 'waiting: {reason}',
+  planNoteSkipped: '↳ {reason}',
+  planNoteWaiting: '⏳ {reason}',
   planNoteUnchanged: 'unchanged {age}',
   planFoldDone: '✓ {count} done',
   planFoldEarlier: function (vars) {
@@ -235,10 +233,9 @@ export const EN = {
   },
   untitled: 'untitled',
   subagentsSummary: function (vars) {
-    return `${plural(vars.count, 'subagent')} · ${vars.running} running`
+    return plural(vars.count, 'subagent')
   },
   subagentsMore: '+{count} more',
-  subagentsTip: "Each subagent is listed in Hermes Desktop's Agents panel.",
   dagDefaultName: 'delegation',
   dagDone: 'done {done}/{total}',
   dagPickLabel: 'Show another DAG of this session',
@@ -317,26 +314,37 @@ export const EN = {
   costReportedByGateway: 'reported by gateway',
   routeUnassigned: 'unassigned',
   dgTokens: 'Tokens',
-  dgTokensSub: '↓{out} out · {prompt} in',
-  dgTokensTip: 'Nodes that reported usage: uncached input + cache read + cache write + output',
+  dgTokensSub: '↑{prompt} ↓{out}',
   dgCacheHit: 'Cache hit',
-  dgCacheHitSub: '{read} of {prompt} prompt',
-  dgCacheHitTip: 'cache read ÷ (uncached input + cache read + cache write)',
+  dgCacheHitSub: '{read} / {prompt}',
   dgCost: 'Cost',
-  dgCostSub: '{priced}/{total} nodes priced',
+  dgCostSub: '{priced}/{total} priced',
   dgCostNone: 'no usage yet',
-  dgCostTip: 'Only cost Hermes recorded; unpriced tokens are not converted',
   dgNodeTime: 'Node time',
-  dgNodeTimeSub: '{count}/{total} nodes timed',
-  dgNodeTimeTip: 'Sum of node run time; parallel lanes make it larger than the wall clock',
+  dgNodeTimeSub: '{count}/{total} timed',
   dgWaitsOn: function (vars) {
     return `Waits on ${plural(vars.count, 'lane')}`
   },
-  dgStart: 'Start node',
   dgAfter: '← {nodes}',
   dgClose: 'Close',
   dgLayer: 'layer {count}',
   dgOutsideDag: 'Outside DAG',
+  dgTimeline: 'Timeline',
+  dgGraph: 'Graph',
+  dgStartedAt: 'Started',
+  dgEndedAt: 'Ended',
+  dgNow: 'now',
+  dgLayerShort: 'L{count}',
+  dgOutsideShort: 'out',
+  dgAtOnce: '{count} at once',
+  dgAtOnceRange: '{low}–{high} at once',
+  dgAtOnceLegend: 'running at once',
+  dgIdleLabel: 'idle',
+  dgPeakLabel: 'peak',
+  dgGapLabel: 'no drawn node ran',
+  dgPartialTip: 'Drawn from the timed nodes shown: a hidden or untimed node may have run in a gap',
+  dgWaitLabel: 'waited on upstream',
+  dgMoreLanes: '+{count} more',
   dgNotStarted: 'model ? (not started)',
   dgNotStartedTip: 'No child has started this node; Hermes has recorded no model yet',
   dgModelTip: 'model recorded for the child session',
@@ -369,35 +377,26 @@ export const EN = {
   ubCalls: function (vars) {
     return plural(vars.count, 'call')
   },
-  ubTokensTip: 'This chat only: uncached input + cache read + cache write + output. Sub-agents are in the DAG block',
-  ubCacheTip: 'cache read ÷ (uncached input + cache read + cache write), this chat only',
-  ubCostTip: 'Only cost Hermes recorded for this chat; unpriced tokens are not converted',
   ubContext: 'Context',
   ubContextSub: '{used} of {max}',
-  ubContextTip: 'Context window in use now: measured by the provider after a call, estimated before one (~)',
   ubSpeed: 'TPS',
   ubSpeedSub: 'avg call {latency}',
-  ubSpeedTip: 'Output tokens per second, rolling over the last 10 calls',
   ubTtft: 'TTFT',
-  ubTtftSub: 'send → first token',
   ubTtftAvg: 'avg {avg} · {count} turns',
-  ubTtftTip: 'Time from send to the first streamed token of the last turn, as this window saw it; tool time before that token counts',
   ubFree: 'Free window',
-  ubCacheLine: 'cache {cache}',
   ubScope: 'Usage scope',
   ubMain: 'Main',
   ubWithSubs: '+ subagents ({count})',
   ubParts: 'Prompt composition',
-  ubPartsPending: 'Read between turns, once the chat has called the model',
+  ubPartsPending: 'after the next turn',
   ubSourceGateway: 'live',
   ubSourceRecorded: 'recorded',
   ubSourceStream: 'stream',
-  ubSourceTip: 'live: the gateway agent counters · recorded: what Hermes stored for this chat · stream: the status-bar feed',
+  ubNote: "TTFT runs from send to the last turn's first streamed token, as this window saw it; tool time before that token counts. Cost counts only what Hermes priced. live: the gateway's counters · recorded: what Hermes stored for this chat · stream: the status-bar feed.",
   ubEmpty: 'Nothing recorded for this chat yet',
   ubNoChat: 'Open a chat to see its usage',
   sectionAgents: 'AGENTS',
   agentsEmpty: 'No subagents or routes in this session',
-  catchesTitle: 'earlier in this session',
   catchesEmpty: 'Nothing caught in this session',
   planNativeHeld: 'Steps are in the Hermes todos above the composer',
   dagEmptyTitle: 'No DAG in this session',
@@ -428,19 +427,32 @@ export const EN = {
   dgShowFigures: 'Figures',
   dgShowStats: 'Stats',
   dgShowImplied: 'Implied edges',
-  dgShowCompact: 'Compact cards'
+  dgShowCompact: 'Compact cards',
+  brandName: 'oh-my-hermes',
+  tipBoard: 'Kanban board',
+  tipQueued: 'queued',
+  tipRunning: 'running',
+  tipBlocked: 'blocked',
+  tipTools: 'Tool calls',
+  tipOpenCalls: 'open',
+  tipOldest: 'oldest open',
+  tipState: 'state',
+  figTokens: 'tokens',
+  figCache: 'cache',
+  figNodeTime: 'node time',
+  figNodes: function (vars) {
+    return plural(vars.count, 'node')
+  },
 }
 
 export const KO = {
   brand: 'OMH',
-  brandTip: 'oh-my-hermes {version}',
   stateIdle: '유휴',
   stateActive: '활성',
   stateRunning: '{count}개 실행 중',
   stateBlocked: '{count}개 막힘',
   stateFailed: '{count}개 실패',
   stateDone: '{count}개 완료',
-  stateQueued: '{count}개 대기열',
   stateGateway: '게이트웨이 {state}',
   gatewayConnecting: '연결 중',
   gatewayClosed: '닫힘',
@@ -451,16 +463,14 @@ export const KO = {
   scopeSession: '이 세션',
   scopeAll: '모든 세션',
   noticeBackend: 'OMH 백엔드: {message}',
-  chipRepeat: '반복 x{count}',
+  chipRepeat: '🔁 ×{count}',
   chipRepeatCycle: '{period}개 주기',
   chipRepeatBlocked: '차단됨',
   chipRepeatApproval: '승인 필요',
   chipBoard: '보드 {detail}',
   chipBoardIdle: '보드 유휴',
   chipDispatcher: '보드 디스패처가 보이지 않음',
-  chipTools: function (vars) {
-    return `도구 ${vars.count}개 · ${vars.elapsed}`
-  },
+  chipTools: '⚙ {count} · {elapsed}',
   chipYolo: 'yolo 켜짐',
   chipShot: '병렬 호출 ×{count}',
   chipShotAgo: '병렬 호출 ×{count} ({age} 전)',
@@ -477,16 +487,15 @@ export const KO = {
   planNativeTitle: 'Hermes 할 일에 있음',
   planWaiting: '{count}개 대기',
   planSkipped: '({count}개 건너뜀)',
-  planNoteSkipped: '건너뜀: {reason}',
-  planNoteWaiting: '대기: {reason}',
+  planNoteSkipped: '↳ {reason}',
+  planNoteWaiting: '⏳ {reason}',
   planNoteUnchanged: '{age} 동안 변화 없음',
   planFoldDone: '✓ {count}개 완료',
   planFoldEarlier: '… 이전 작업 {count}개',
   planFoldLater: '… 이후 작업 {count}개',
   untitled: '제목 없음',
-  subagentsSummary: '하위 에이전트 {count}개 · {running}개 실행 중',
+  subagentsSummary: '하위 에이전트 {count}개',
   subagentsMore: '+{count}개 더',
-  subagentsTip: '각 하위 에이전트는 Hermes Desktop의 에이전트 패널에 표시됩니다.',
   dagDefaultName: '위임',
   dagDone: '완료 {done}/{total}',
   dagPickLabel: '이 세션의 다른 DAG 보기',
@@ -563,24 +572,35 @@ export const KO = {
   costReportedByGateway: '게이트웨이 보고',
   routeUnassigned: '미배정',
   dgTokens: '토큰',
-  dgTokensSub: '↓{out} 출력 · {prompt} 입력',
-  dgTokensTip: '사용량을 보고한 노드: 캐시 미사용 입력 + 캐시 읽기 + 캐시 쓰기 + 출력',
+  dgTokensSub: '↑{prompt} ↓{out}',
   dgCacheHit: '캐시 적중',
-  dgCacheHitSub: '프롬프트 {prompt} 중 {read}',
-  dgCacheHitTip: '캐시 읽기 ÷ (캐시 미사용 입력 + 캐시 읽기 + 캐시 쓰기)',
+  dgCacheHitSub: '{read} / {prompt}',
   dgCost: '비용',
-  dgCostSub: '노드 {total}개 중 {priced}개 과금',
+  dgCostSub: '{priced}/{total} 과금',
   dgCostNone: '아직 사용량 없음',
-  dgCostTip: 'Hermes가 기록한 비용만 표시하며, 과금되지 않은 토큰은 환산하지 않습니다',
   dgNodeTime: '노드 시간',
-  dgNodeTimeSub: '노드 {total}개 중 {count}개 시간 기록',
-  dgNodeTimeTip: '노드 실행 시간의 합계로, 병렬 레인 때문에 실제 경과 시간보다 클 수 있습니다',
+  dgNodeTimeSub: '{count}/{total} 기록',
   dgWaitsOn: '레인 {count}개 대기 중',
-  dgStart: '시작 노드',
   dgAfter: '← {nodes}',
   dgClose: '닫기',
   dgLayer: '{count}층',
   dgOutsideDag: 'DAG 외부',
+  dgTimeline: '타임라인',
+  dgGraph: '그래프',
+  dgStartedAt: '시작',
+  dgEndedAt: '종료',
+  dgNow: '지금',
+  dgLayerShort: 'L{count}',
+  dgOutsideShort: '외부',
+  dgAtOnce: '동시 {count}개',
+  dgAtOnceRange: '동시 {low}–{high}개',
+  dgAtOnceLegend: '동시 실행',
+  dgIdleLabel: '유휴',
+  dgPeakLabel: '최대',
+  dgGapLabel: '표시된 노드 실행 없음',
+  dgPartialTip: '표시되고 시간이 기록된 노드로만 그렸습니다. 숨겨졌거나 시간이 없는 노드가 빈 구간에 실행됐을 수 있습니다',
+  dgWaitLabel: '상위 대기',
+  dgMoreLanes: '외 {count}개',
   dgNotStarted: '모델 ? (시작 전)',
   dgNotStartedTip: '아직 이 노드를 시작한 자식이 없어 Hermes가 모델을 기록하지 않았습니다',
   dgModelTip: '자식 세션에 기록된 모델',
@@ -609,35 +629,26 @@ export const KO = {
   dgNote: '비용은 Hermes가 과금한 것만 집계하며, 과금되지 않은 토큰은 토큰으로 남습니다. 캐시 적중 = 캐시 읽기 ÷ 프롬프트 토큰.',
   sectionUsage: '사용량',
   ubCalls: '호출 {count}회',
-  ubTokensTip: '이 채팅만: 캐시 미사용 입력 + 캐시 읽기 + 캐시 쓰기 + 출력. 서브에이전트는 DAG 블록에 있습니다',
-  ubCacheTip: '캐시 읽기 ÷ (캐시 미사용 입력 + 캐시 읽기 + 캐시 쓰기), 이 채팅만',
-  ubCostTip: 'Hermes가 이 채팅에 기록한 비용만 표시하며, 과금되지 않은 토큰은 환산하지 않습니다',
   ubContext: '컨텍스트',
   ubContextSub: '{max} 중 {used}',
-  ubContextTip: '지금 사용 중인 컨텍스트 윈도우: 호출 이후에는 공급자가 측정한 값, 그 전에는 추정값(~)입니다',
   ubSpeed: 'TPS',
   ubSpeedSub: '호출 평균 {latency}',
-  ubSpeedTip: '최근 호출 10회 기준 초당 출력 토큰',
   ubTtft: 'TTFT',
-  ubTtftSub: '전송 → 첫 토큰',
   ubTtftAvg: '평균 {avg} · {count}턴',
-  ubTtftTip: '전송부터 마지막 턴의 첫 스트리밍 토큰까지의 시간으로, 이 창에서 관측한 값입니다. 첫 토큰 전의 도구 시간도 포함됩니다',
   ubFree: '남은 창',
-  ubCacheLine: '캐시 {cache}',
   ubScope: '집계 범위',
   ubMain: '메인',
   ubWithSubs: '+ 서브에이전트 ({count})',
   ubParts: '프롬프트 구성',
-  ubPartsPending: '채팅이 모델을 호출한 뒤, 턴 사이에 읽습니다',
+  ubPartsPending: '다음 턴 이후',
   ubSourceGateway: '실시간',
   ubSourceRecorded: '기록',
   ubSourceStream: '스트림',
-  ubSourceTip: '실시간: 게이트웨이 에이전트 카운터 · 기록: Hermes가 이 채팅에 저장한 값 · 스트림: 상태 표시줄 피드',
+  ubNote: 'TTFT는 전송부터 마지막 턴의 첫 스트리밍 토큰까지의 시간으로, 이 창에서 관측한 값입니다. 첫 토큰 전의 도구 시간도 포함됩니다. 비용은 Hermes가 과금한 것만 집계합니다. 실시간: 게이트웨이 카운터 · 기록: Hermes가 이 채팅에 저장한 값 · 스트림: 상태 표시줄 피드.',
   ubEmpty: '이 채팅에 기록된 사용량이 아직 없습니다',
   ubNoChat: '채팅을 열면 사용량이 표시됩니다',
   sectionAgents: '에이전트',
   agentsEmpty: '이 세션에 하위 에이전트나 경로가 없습니다',
-  catchesTitle: '이 세션의 이전 기록',
   catchesEmpty: '이 세션에서 잡아낸 실수가 없습니다',
   planNativeHeld: '단계는 입력창 위 Hermes 할 일에 있습니다',
   dagEmptyTitle: '이 세션에 DAG 없음',
@@ -664,10 +675,269 @@ export const KO = {
   dgShowFigures: '수치',
   dgShowStats: '통계',
   dgShowImplied: '생략 간선',
-  dgShowCompact: '간단한 카드'
+  dgShowCompact: '간단한 카드',
+  brandName: 'oh-my-hermes',
+  tipBoard: '칸반 보드',
+  tipQueued: '대기',
+  tipRunning: '실행 중',
+  tipBlocked: '막힘',
+  tipTools: '도구 호출',
+  tipOpenCalls: '진행 중',
+  tipOldest: '가장 오래된 호출',
+  tipState: '상태',
+  figTokens: '토큰',
+  figCache: '캐시',
+  figNodeTime: '노드 시간',
+  figNodes: '노드 {count}개',
 }
 
-const TABLES = { en: EN, ko: KO }
+export const ZH = {
+  brand: "OMH",
+  stateIdle: "空闲",
+  stateActive: "活跃",
+  stateRunning: "{count} 运行中",
+  stateBlocked: "{count} 阻塞",
+  stateFailed: "{count} 失败",
+  stateDone: "{count} 完成",
+  stateGateway: "gateway {state}",
+  gatewayConnecting: "连接中",
+  gatewayClosed: "已关闭",
+  gatewayError: "出错",
+  gatewayOffline: "离线",
+  stateReaderError: "reader 出错",
+  stateUnavailable: "不可用",
+  scopeSession: "本会话",
+  scopeAll: "全部会话",
+  noticeBackend: "OMH 后端：{message}",
+  chipRepeat: "🔁 ×{count}",
+  chipRepeatCycle: "cycle-of-{period}",
+  chipRepeatBlocked: "已拦截",
+  chipRepeatApproval: "待批准",
+  chipBoard: "board {detail}",
+  chipBoardIdle: "board 空闲",
+  chipDispatcher: "无 board dispatcher",
+  chipTools: "⚙ {count} · {elapsed}",
+  chipYolo: "yolo 已开",
+  chipShot: "parallel shot ×{count}",
+  chipShotAgo: "parallel shot ×{count}（{age}前）",
+  sectionCatches: "CATCHES",
+  sectionPlan: "PLAN",
+  sectionDag: "DAG",
+  catchLoop: "已拦循环：同一调用 ×{laps}",
+  catchCycle: "已拦循环：{period} 个调用 ×{laps}",
+  catchReread: "重读 → 第 {offset} 行",
+  catchPlan: "继续推进：剩 {count} 项",
+  catchWait: "等待未设唤醒",
+  planEmptyTitle: "还没有计划",
+  planEmptyDescription: "工作流启动时会添加计划。",
+  planNativeTitle: "在 Hermes todos 里",
+  planWaiting: "{count} 等待中",
+  planSkipped: "（跳过 {count}）",
+  planNoteSkipped: "↳ {reason}",
+  planNoteWaiting: "⏳ {reason}",
+  planNoteUnchanged: "{age}未更新",
+  planFoldDone: "✓ 已完成 {count} 项",
+  planFoldEarlier: "… 前面还有 {count} 项",
+  planFoldLater: "… 后面还有 {count} 项",
+  untitled: "未命名",
+  subagentsSummary: "{count} 个 subagent",
+  subagentsMore: "另有 {count} 个",
+  dagDefaultName: "delegation",
+  dagDone: "完成 {done}/{total}",
+  dagPickLabel: "查看本会话的其他 DAG",
+  dagPickOption: "{name} · {state} · {count} 个 node",
+  dagPickLatest: " · 最新",
+  dagStateCount: "{count} {state}",
+  dagUnchecked: "{count} 个 handoff 未核对",
+  graphRuntimeName: "runtime graph",
+  graphMore: "另有 {count} 个",
+  graphWaitingOn: "等待 {nodes}",
+  graphSinceOutput: "{age}没有新输出",
+  statusPlan: "plan {done}/{total}",
+  detailPlan: "plan {title} {done}/{total}",
+  detailPlanFinished: "plan {title} 已完成",
+  detailPlanNative: "plan 在 Hermes todos 里",
+  spinnerLabel: "运行中",
+  rowTools: "{count} 个工具",
+  rowTurn: "turn {count}",
+  rowTurnTools: "{turn}（{tools}）",
+  rowTokens: "{count} tok",
+  rowTokensPerSecond: "{count} tok/s",
+  rowCache: "cache {percent}%",
+  rowContext: "ctx {percent}%",
+  rowFallback: "fallback:{count}",
+  wordRunning: "运行中",
+  wordStuck: "卡住",
+  wordBlocked: "阻塞",
+  wordStale: "过期",
+  wordWaiting: "等待中",
+  wordInterrupted: "已中断",
+  wordFailed: "失败",
+  wordDone: "完成",
+  wordCompleted: "已完成",
+  wordArchived: "已归档",
+  wordSkipped: "已跳过",
+  wordPlanned: "已规划",
+  wordQueued: "排队中",
+  wordDispatched: "已派发",
+  wordUnknown: "未知",
+  wordReview: "待审",
+  wordTodo: "待办",
+  wordTriage: "待分诊",
+  wordScheduled: "已排期",
+  wordReady: "就绪",
+  wordPending: "待开始",
+  wordCapabilitySnapshotInvalid: "capability snapshot 无效",
+  wordOwnerProfileRenamed: "所属 profile 已改名",
+  wordRouteUnresolved: "route 未解析",
+  wordModalityUnknown: "模态未知",
+  wordModalityUnsupported: "模态不支持",
+  wordModalityTransformationUnobserved: "未观测到模态转换",
+  wordExecutorNotReady: "executor 未就绪",
+  wordUnsupportedForLocalDispatch: "不支持本地派发",
+  wordWorktreeFailed: "worktree 失败",
+  wordNotSelected: "未选择",
+  wordModelChoiceRequired: "需要选择模型",
+  wordPreparedNotObserved: "prepared not observed",
+  wordAwaitingInput: "等待输入",
+  wordPermissionBlocked: "权限受阻",
+  wordAccountLimit: "账户额度受限",
+  wordDataMissing: "缺少数据",
+  wordProgressStalled: "进度停滞",
+  reasonNoNewOutput: "没有新输出",
+  reasonPromptAtEnd: "停在 prompt",
+  reasonRepeatedError: "重复报错：{detail}",
+  reasonAccountLimit: "账户额度：{detail}",
+  reasonPermissionBlocked: "权限受阻：{detail}",
+  reasonDataMissing: "缺少数据：{detail}",
+  costActual: "实际",
+  costEstimated: "估算",
+  costIncluded: "套餐内",
+  costUnknown: "未知",
+  costEstimatedFromListPrice: "按标价估算",
+  costReportedByGateway: "gateway 上报",
+  routeUnassigned: "未分配",
+  dgTokens: "Tokens",
+  dgTokensSub: "↑{prompt} ↓{out}",
+  dgCacheHit: "Cache 命中",
+  dgCacheHitSub: "{read} / {prompt}",
+  dgCost: "成本",
+  dgCostSub: "{priced}/{total} 已定价",
+  dgCostNone: "还没有用量",
+  dgNodeTime: "Node 耗时",
+  dgNodeTimeSub: "{count}/{total} 已计时",
+  dgWaitsOn: "等待 {count} 个 node",
+  dgAfter: "← {nodes}",
+  dgClose: "关闭",
+  dgLayer: "layer {count}",
+  dgOutsideDag: "DAG 外",
+  dgTimeline: "时间轴",
+  dgGraph: "节点图",
+  dgStartedAt: "开始",
+  dgEndedAt: "结束",
+  dgNow: "现在",
+  dgLayerShort: "L{count}",
+  dgOutsideShort: "外",
+  dgAtOnce: "同时 {count} 个",
+  dgAtOnceRange: "同时 {low}–{high} 个",
+  dgAtOnceLegend: "同时在跑",
+  dgIdleLabel: "空闲",
+  dgPeakLabel: "峰值",
+  dgGapLabel: "无可见 node 运行",
+  dgPartialTip: "只按显示且有计时的 node 绘制：隐藏或未计时的 node 可能在空档里运行过",
+  dgWaitLabel: "等上游",
+  dgMoreLanes: "还有 {count} 个",
+  dgNotStarted: "model ?（未开始）",
+  dgNotStartedTip: "还没有子会话启动这个 node；Hermes 尚未记录 model",
+  dgModelTip: "子会话记录的 model",
+  dgElapsed: "耗时",
+  dgOutput: "输出",
+  dgUnpriced: "未定价",
+  dgCacheRead: "Cache 读取",
+  dgInput: "未缓存输入",
+  dgCacheWrite: "Cache 写入",
+  dgUsageTip: "百分比以 prompt token（未缓存输入 + cache 读取 + cache 写入）为分母；输出单列",
+  dgDependsOn: "依赖",
+  dgBlocks: "下游 · {count} 个",
+  dgRepair: "repair",
+  dgExtend: "extend",
+  dgSession: "session {tail}",
+  dgStats: "统计",
+  dgModels: "{count} 个 model",
+  dgByModel: "按 model",
+  dgNodes: "#",
+  dgModelRowTip: "点击在图中高亮这个 model 的 node",
+  dgCriticalPath: "关键路径",
+  dgBottlenecks: "瓶颈",
+  dgBlocksTitle: "{title}（阻塞 {count} 个）",
+  dgHighlight: "高亮",
+  dgClearHighlight: "取消高亮",
+  dgNote: "成本只算 Hermes 定过价的部分，未定价的 token 不折算。Cache 命中 = cache 读取 ÷ prompt token。",
+  sectionUsage: "USAGE",
+  ubCalls: "{count} 次调用",
+  ubContext: "Context",
+  ubContextSub: "{used} / {max}",
+  ubSpeed: "TPS",
+  ubSpeedSub: "平均调用 {latency}",
+  ubTtft: "TTFT",
+  ubTtftAvg: "平均 {avg} · {count} 轮",
+  ubFree: "剩余窗口",
+  ubScope: "用量范围",
+  ubMain: "Main",
+  ubWithSubs: "+ subagent（{count}）",
+  ubParts: "Prompt 构成",
+  ubPartsPending: "下一轮后显示",
+  ubSourceGateway: "live",
+  ubSourceRecorded: "recorded",
+  ubSourceStream: "stream",
+  ubNote: "TTFT 是从发送到上一轮第一个流式 token 的时间，以本窗口所见为准；首个 token 之前的工具时间也算在内。成本只算 Hermes 定过价的部分。live：网关的计数器 · recorded：Hermes 为此对话保存的值 · stream：状态栏的数据流。",
+  ubEmpty: "本对话还没有记录",
+  ubNoChat: "打开一个对话查看用量",
+  sectionAgents: "AGENTS",
+  agentsEmpty: "本会话没有 subagent 或 route",
+  catchesEmpty: "本会话没有拦截记录",
+  planNativeHeld: "步骤在输入框上方的 Hermes todos 里",
+  dagEmptyTitle: "本会话没有 DAG",
+  dagEmptyDescription: "委派工作流会在这里画出它的图。",
+  dagEmptyRuns: "更早的运行在菜单里。",
+  dagCountsOnly: "{total} 个 node，分 {layers} 个 layer：太多，这里画不下",
+  sectionPending: "读取中…",
+  sectionUnavailable: "不可用：OMH 后端没有响应",
+  foldToggle: "折叠或展开",
+  dgLayerFold: "layer {layer} · {count} 个 node",
+  dgLayerTip: "点击折叠或展开这个 layer",
+  dgView: "视图",
+  dgViewLabel: "DAG 视图选项",
+  dgFoldMode: "Layers",
+  dgFoldAuto: "自动",
+  dgFoldActive: "聚焦",
+  dgFoldOpen: "全部展开",
+  dgFoldClosed: "全部折叠",
+  dgFoldAutoTip: "折叠已完成和较远的 layer",
+  dgFoldActiveTip: "展开运行中的 layer 及其前后各一个",
+  dgFoldOpenTip: "展开所有 layer",
+  dgFoldClosedTip: "除运行中和已返回的工作外，折叠所有 layer",
+  dgShowLabel: "显示",
+  dgShowFigures: "数字",
+  dgShowStats: "统计",
+  dgShowImplied: "隐含边",
+  dgShowCompact: "紧凑卡片",
+  brandName: "oh-my-hermes",
+  tipBoard: "Kanban board",
+  tipQueued: "排队",
+  tipRunning: "运行中",
+  tipBlocked: "阻塞",
+  tipTools: "工具调用",
+  tipOpenCalls: "进行中",
+  tipOldest: "最久一个",
+  tipState: "状态",
+  figTokens: "token",
+  figCache: "cache",
+  figNodeTime: "node 耗时",
+  figNodes: "{count} 个 node",
+}
+
+const TABLES = { en: EN, ko: KO, zh: ZH }
 
 function fill(template, vars) {
   return String(template).replace(/\{(\w+)\}/g, function (whole, name) {
@@ -746,6 +1016,17 @@ export function tokenCountText(value) {
   const thousands = exceeds(999_950, value)
   const amount = thousands ? value / 1000 : value / 1_000_000
   return `${amount.toFixed(1)}${thousands ? 'k' : 'm'}`
+}
+
+// A moment on the local wall clock, `HH:MM:SS`; with `withDay`, `M/D HH:MM:SS` for a window that crosses midnight.
+function clockText(seconds, withDay) {
+  if (!Number.isFinite(seconds)) return ''
+  const at = new Date(seconds * 1000)
+  const pad = function (value) {
+    return String(value).padStart(2, '0')
+  }
+  const time = `${pad(at.getHours())}:${pad(at.getMinutes())}:${pad(at.getSeconds())}`
+  return withDay ? `${at.getMonth() + 1}/${at.getDate()} ${time}` : time
 }
 
 export function elapsedText(value) {
@@ -937,8 +1218,8 @@ export function routeFragments(text) {
 
 // The tag names what runs the row: `bot` is a board worker, `sub` a
 // delegate_task child of this session, `main` the Maestro binding row; a
-// dispatched executor row carries no tag, as in the TUI. A `sub` row is the
-// one Hermes Desktop's Agents panel lists, so the pane only counts it.
+// dispatched executor row carries no tag, as in the TUI. A `sub` row is a
+// subagent AGENTS lists unless the drawn graph holds it.
 export function kindTag(row, main) {
   if (main) return 'main'
   if (safeText(row.lane_backend) === 'kanban') return 'bot'
@@ -950,8 +1231,8 @@ function isRunningRow(row) {
 }
 
 // A row that is neither a Maestro dispatch nor a board lane: a subagent,
-// which Desktop's Agents panel lists, so the pane only counts it. ROUTES
-// keeps the rows OMH dispatched, the Maestro and Kanban lanes.
+// listed first in AGENTS. ROUTES keeps the rows OMH dispatched, the Maestro
+// and Kanban lanes.
 function isSubagentRow(row) {
   return kindTag(row, false) === 'sub'
 }
@@ -1055,12 +1336,13 @@ export function headerLabel(payload) {
   return stateSummary(payload)
 }
 
-// The native subagents as one line. The reader's `+N more` (rows it capped,
+// The native subagents counted in one line, AGENTS' title. The reader's `+N more` (rows it capped,
 // of any kind) closes ROUTES when there are routes, else this line.
 export function subagentSummary(payload) {
   const tally = agentTally(payload)
   const parts = []
-  if (tally.subagents.length) parts.push(t('subagentsSummary', { count: tally.subagents.length, running: tally.subagentsRunning }))
+  if (tally.subagents.length) parts.push(t('subagentsSummary', { count: tally.subagents.length }))
+  if (exceeds(tally.subagentsRunning, 0)) parts.push(`● ${tally.subagentsRunning}`)
   if (tally.hidden && !tally.routes.length) parts.push(t('subagentsMore', { count: tally.hidden }))
   return parts.join(' · ')
 }
@@ -1089,17 +1371,17 @@ export function chipList(payload) {
   const board = payload.kanban || {}
   if (exceeds(Number(board.rows_total) || 0, 0)) {
     const parts = [
-      ['stateQueued', board.queued],
-      ['stateRunning', board.running],
-      ['stateBlocked', board.blocked]
+      ['○', board.queued],
+      ['●', board.running],
+      ['▲', board.blocked]
     ]
       .filter(function (part) {
         return exceeds(Number(part[1]) || 0, 0)
       })
       .map(function (part) {
-        return t(part[0], { count: Number(part[1]) })
+        return `${part[0]}${Number(part[1])}`
       })
-    chips.push({ key: 'board', text: parts.length ? t('chipBoard', { detail: parts.join(', ') }) : t('chipBoardIdle'), variant: 'muted' })
+    chips.push({ key: 'board', text: parts.length ? t('chipBoard', { detail: parts.join(' ') }) : t('chipBoardIdle'), variant: 'muted' })
   }
   if (board.dispatcher_presence === 'not_observed') {
     chips.push({ key: 'dispatcher', text: t('chipDispatcher'), variant: 'warn' })
@@ -1138,6 +1420,8 @@ export function chipList(payload) {
 // ---------------------------------------------------------------------------
 
 export const CATCH_EMOJI = { repeat_loop: '🔁', truncated_read: '📖', plan_continued: '📋', unarmed_wait: '⏰' }
+// A catch that stopped or flagged something reads as a warning; one that steered the work on, as the accent.
+const CATCH_TONE = { repeat_loop: 'warn', unarmed_wait: 'warn' }
 
 function catchNumber(entry, name) {
   return Number.isInteger(entry[name]) ? entry[name] : 0
@@ -1168,7 +1452,7 @@ export function catchRows(payload) {
     const kind = String(entry.kind)
     const emoji = own(CATCH_EMOJI, kind) ? CATCH_EMOJI[kind] : ''
     const text = emoji ? catchSentence(entry) : ''
-    if (text) found.push({ seq, emoji, text })
+    if (text) found.push({ seq, emoji, text, tone: own(CATCH_TONE, kind) ? CATCH_TONE[kind] : 'accent' })
   }
   return found
 }
@@ -1294,8 +1578,16 @@ function lanesOf(graph) {
   })
 }
 
+// The run's own lanes: an `outside_dag` lane is drawn beside the run, never counted as one of its nodes (the TUI
+// header's `2 nodes · 2 done` leaves it out the same way).
+function runLanesOf(graph) {
+  return lanesOf(graph).filter(function (node) {
+    return node.outside_dag !== true
+  })
+}
+
 export function dagRunSummary(graph) {
-  const lanes = lanesOf(graph)
+  const lanes = runLanesOf(graph)
   const unsettled = lanes.some(function (node) {
     return !SETTLED_LANE_STATES.has(node.state)
   })
@@ -1332,26 +1624,33 @@ export function delegationView(payload) {
   const graph = payload && payload.delegation_graph
   if (!graph || graph.status !== 'active') return null
   if (graph.counts_only) return countsOnlyView(graph)
-  const lanes = lanesOf(graph)
+  const lanes = runLanesOf(graph)
   if (!lanes.length) return null
   const settled = dagRunSummary(graph)
-  const tally = LANE_STATE_ORDER.map(function (state) {
-    return [
-      state,
-      countOf(lanes, function (node) {
-        return node.state === state
-      })
-    ]
+  const tally = LANE_STATE_ORDER.filter(function (state) {
+    return state !== 'done'
   })
+    .map(function (state) {
+      return [
+        state,
+        countOf(lanes, function (node) {
+          return node.state === state
+        })
+      ]
+    })
     .filter(function (entry) {
       return entry[1]
     })
     .map(function (entry) {
-      return t('dagStateCount', { count: entry[1], state: stateWord(entry[0]) })
+      return `${LANE_GLYPHS[entry[0]]} ${entry[1]}`
     })
+  const unchecked = countOf(lanes, function (node) {
+    return node.handoff_checked === false
+  })
+  const tail = tally.join('  ')
   return {
-    // The section is already labelled DAG, so the line opens with the run's name.
-    summary: settled ? settled.replace(`${t('sectionDag')} · `, '') : [safeText(graph.name) || t('dagDefaultName')].concat(tally).join(' · '),
+    // The section is already labelled DAG and counts done/total, so the line is the run's name and what is not done.
+    summary: [safeText(graph.name) || t('dagDefaultName'), tail, unchecked ? t('dagUnchecked', { count: unchecked }) : ''].filter(Boolean).join(' · '),
     settled: !!settled,
     done: countOf(lanes, function (node) {
       return node.state === 'done'
@@ -1721,54 +2020,51 @@ export function usageBoard(input) {
   })
   const empty = !(exceeds(counted, 0) || exceeds(used, 0) || parts.length || turns.length || exceeds(tps, 0))
   const marked = guess ? '~' : ''
+  const speed = speedText(tps)
+  const ttft = last === null ? '—' : latencyText(last)
   return {
     empty,
+    // Speed and first-token wait stay on the board itself (owner, 2026-11-22); their averages are the card's.
+    pace: [{ label: t('ubSpeed'), value: speed }, { label: t('ubTtft'), value: ttft }],
     source,
     model: String(stats.model || live.model || saved.model || crumbs.model || ''),
     calls: Math.max(positive(stats.api_calls), positive(live.calls)),
     sum,
     parts,
     dial: { split: exceeds(counted, 0) ? split : null, total: counted, cache: hit === null ? null : percentText(hit) },
+    cost: costAll === null ? '' : costText(costAll, costGuess, costFloor),
     window: exceeds(max, sum) ? max : 0,
     free: exceeds(max, sum) ? max - sum : 0,
     cells: [
       {
         label: t('dgTokens'),
         value: tokensText(counted),
-        sub: exceeds(counted, 0) ? t('dgTokensSub', { out: tokenCountText(output), prompt: tokenCountText(prompt) }) : '',
-        tip: t('ubTokensTip')
+        sub: exceeds(counted, 0) ? t('dgTokensSub', { out: tokenCountText(output), prompt: tokenCountText(prompt) }) : ''
       },
       {
         label: t('dgCacheHit'),
         value: percentText(hit),
-        sub: exceeds(prompt, 0) ? t('dgCacheHitSub', { read: tokenCountText(split.read), prompt: tokenCountText(prompt) }) : '',
-        tip: t('ubCacheTip'),
-        ring: exceeds(prompt, 0) ? split : null
+        sub: exceeds(prompt, 0) ? t('dgCacheHitSub', { read: tokenCountText(split.read), prompt: tokenCountText(prompt) }) : ''
       },
       {
         label: t('dgCost'),
         value: costText(costAll, costGuess, costFloor),
-        sub: costAll === null ? (exceeds(counted, 0) ? t('dgUnpriced') : t('dgCostNone')) : '',
-        tip: t('ubCostTip')
+        sub: costAll === null ? (exceeds(counted, 0) ? t('dgUnpriced') : t('dgCostNone')) : ''
       },
       {
         label: t('ubContext'),
         value: percent === null ? (exceeds(used, 0) ? `${marked}${tokenCountText(used)}` : '—') : `${marked}${percent}%`,
-        sub: percent === null ? '' : t('ubContextSub', { used: tokenCountText(used), max: tokenCountText(max) }),
-        tip: t('ubContextTip'),
-        meter: percent
+        sub: percent === null ? '' : t('ubContextSub', { used: tokenCountText(used), max: tokenCountText(max) })
       },
       {
         label: t('ubSpeed'),
-        value: speedText(tps),
-        sub: exceeds(latency, 0) ? t('ubSpeedSub', { latency: latencyText(latency * 1000) }) : '',
-        tip: t('ubSpeedTip')
+        value: speed,
+        sub: exceeds(latency, 0) ? t('ubSpeedSub', { latency: latencyText(latency * 1000) }) : ''
       },
       {
         label: t('ubTtft'),
-        value: last === null ? '—' : latencyText(last),
-        sub: exceeds(turns.length, 1) ? t('ubTtftAvg', { avg: latencyText(mean), count: turns.length }) : t('ubTtftSub'),
-        tip: t('ubTtftTip')
+        value: ttft,
+        sub: exceeds(turns.length, 1) ? t('ubTtftAvg', { avg: latencyText(mean), count: turns.length }) : ''
       }
     ]
   }
@@ -1915,6 +2211,7 @@ export function dagModel(graph) {
       origin: origin === 'repair' || origin === 'extend' ? origin : '',
       waits: Number.isInteger(record.waits_on) ? record.waits_on : 0,
       elapsed: Number.isFinite(record.elapsed_seconds) ? record.elapsed_seconds : null,
+      ended: Number.isFinite(record.ended_at) ? record.ended_at : null,
       session: safeText(record.session_tail),
       summary: longText(record.summary),
       unchecked: record.handoff_checked === false,
@@ -1948,6 +2245,7 @@ export function dagModel(graph) {
       outside: true,
       waits: Number.isInteger(record.waits_on) ? record.waits_on : 0,
       elapsed: Number.isFinite(record.elapsed_seconds) ? record.elapsed_seconds : null,
+      ended: Number.isFinite(record.ended_at) ? record.ended_at : null,
       session: safeText(record.session_tail),
       summary: longText(record.summary),
       unchecked: record.handoff_checked === false,
@@ -2097,11 +2395,18 @@ export function sectionGraph(payload, named) {
 }
 
 // What the card line under a lane's route says: a waiting lane the lanes it waits on, any other its state, time and output.
+// Running and done read from the glyph and its colour; every other state keeps its word.
+const GLYPH_SAYS = new Set(['running', 'done', 'completed'])
+
+function quietWord(state, word) {
+  return GLYPH_SAYS.has(state) ? '' : word
+}
+
 export function laneStatus(lane) {
   if (lane.state === 'waiting' && exceeds(lane.waits, 0)) return `${lane.glyph} ${t('dgWaitsOn', { count: lane.waits })}`
-  const time = lane.elapsed === null ? '' : ` ${elapsedText(lane.elapsed)}`
-  const output = exceeds(lane.usage.output, 0) ? ` · ↓${tokensText(lane.usage.output)}` : ''
-  return `${lane.glyph} ${lane.word}${time}${output}`
+  const time = lane.elapsed === null ? '' : elapsedText(lane.elapsed)
+  const output = exceeds(lane.usage.output, 0) ? `↓${tokensText(lane.usage.output)}` : ''
+  return [[lane.glyph, quietWord(lane.state, lane.word), time].filter(Boolean).join(' '), output].filter(Boolean).join(' · ')
 }
 
 // ---------------------------------------------------------------------------
@@ -2257,7 +2562,9 @@ export function statusSegments(payload) {
   return segments.slice(0, 2)
 }
 
-function statusDetail(payload) {
+// The status detail as its lines: the brand and version, the counts (one line), then the plan. Kept as a list so a
+// title or a count holding ` · ` is never split into two lines; `statusDetail` joins it for the one-line notice.
+function statusParts(payload) {
   const tally = agentTally(payload)
   const counts = [
     tally.running ? t('stateRunning', { count: tally.running }) : '',
@@ -2276,7 +2583,27 @@ function statusDetail(payload) {
   } else if (todo.status === 'all_done') {
     parts.push(t('detailPlanFinished', { title }))
   }
-  return parts.join(' · ')
+  return parts
+}
+
+function statusDetail(payload) {
+  return statusParts(payload).join(' · ')
+}
+
+// The status line's card: the brand and version as its head, the rest of the detail a line each.
+function statusCard(parts) {
+  return {
+    title: parts[0],
+    body: exceeds(parts.length, 1)
+      ? div(
+          'omh-pane-tip-list',
+          parts.slice(1).map(function (part, index) {
+            return div('omh-pane-tip-line', part, `p${index}`)
+          }),
+          'parts'
+        )
+      : null
+  }
 }
 
 // The status-bar item: the brand and its segments; the detail rides the
@@ -2290,7 +2617,7 @@ export function statusItem({ gateway, data, error }) {
   if (!data) {
     return error ? { segments: [{ text: t('stateUnavailable'), tone: 'muted' }], detail: t('noticeBackend', { message: errorText(error) }) } : null
   }
-  return { segments: statusSegments(data), detail: statusDetail(data) }
+  return { segments: statusSegments(data), detail: statusDetail(data), parts: statusParts(data) }
 }
 
 // ---------------------------------------------------------------------------
@@ -2332,7 +2659,7 @@ export function rowFigures(row, extraSeconds) {
   const tools = Number.isFinite(row.tool_count) ? t('rowTools', { count: row.tool_count }) : ''
   const turnTools = turn && tools ? t('rowTurnTools', { turn, tools }) : turn || tools
   if (turnTools) extras.push(turnTools)
-  return { state: stateWord(state), stateTone: wordTone(state), elapsed, tokens: tokens ? t('rowTokens', { count: tokens }) : '', cost: costSegmentText(row), extras }
+  return { state: quietWord(humanState(state), stateWord(state)), stateTone: wordTone(state), elapsed, tokens: tokens ? t('rowTokens', { count: tokens }) : '', cost: costSegmentText(row), extras }
 }
 
 // The row's glyph follows its verdict: a spinner in the accent while it
@@ -2390,10 +2717,14 @@ export function graphNodeView(nodeRecord) {
 // and the drawing. One compact layout serves every pane width: a row's long
 // cell truncates with an ellipsis (its tooltip holds the whole text) and a
 // state word keeps its own fixed cell, so nothing wraps onto a line by
-// itself. The TUI's look arrives as three mixed tokens: `--omh-edge`, a
-// muted violet for frames and rules; `--omh-brand`, a rose for the brand;
-// `--omh-label`, a warm tone for section labels. Each is mixed from
-// Desktop's own colour tokens, so a theme change carries them. Marks in the
+// itself. The TUI's default look (spectrum) arrives as mixed tokens:
+// `--omh-edge`, a muted violet for frames, rules and the hover cards' edge;
+// `--omh-brand`, a pink for the brand and what is picked; `--omh-label`, a
+// peach for section labels and a card's labels; `--omh-run`, the pastel blue
+// of what runs; `--omh-bad` and `--omh-warn`, softened red and amber;
+// `--omh-lilac` and `--omh-lime` for parts of a whole. Each is mixed from
+// Desktop's own colour tokens toward its text colour, so a dark theme reads
+// pastel, a light one deeper, and a theme change carries them. Marks in the
 // drawing take one opaque grey, `--omh-mark`: a translucent one doubles where
 // two box-drawing cells meet and a border reads dotted.
 // ---------------------------------------------------------------------------
@@ -2402,69 +2733,156 @@ const MONO = "'JetBrains Mono',var(--font-mono,var(--dt-font-mono,monospace))"
 
 export const PANE_CSS = `
 .omh-pane{display:flex;flex-direction:column;height:100%;min-width:0;container-type:inline-size;font-family:var(--font-sans,var(--dt-font-sans,sans-serif));font-size:12px;line-height:1.4;color:var(--ui-text-primary)}
-.omh-pane,.omh-bar{--omh-text-readable:color-mix(in srgb,var(--ui-text-secondary),var(--ui-text-tertiary));--omh-warn:color-mix(in srgb,var(--ui-yellow) 72%,var(--ui-text-primary));--omh-edge:color-mix(in srgb,var(--ui-purple) 55%,var(--background));--omh-brand:color-mix(in srgb,color-mix(in srgb,var(--ui-red) 60%,var(--ui-purple)) 85%,var(--ui-text-primary));--omh-label:color-mix(in srgb,var(--ui-orange) 65%,var(--ui-text-primary));--omh-mark:color-mix(in srgb,var(--ui-base) 50%,var(--background));--omh-ok:var(--ui-green)}
+.omh-pane,.omh-bar,.omh-pane-tip{--omh-text-readable:color-mix(in srgb,var(--ui-text-secondary),var(--ui-text-tertiary));--omh-warn:color-mix(in srgb,var(--ui-yellow) 72%,var(--ui-text-primary));--omh-edge:color-mix(in srgb,var(--ui-purple) 55%,var(--background));--omh-brand:color-mix(in srgb,color-mix(in srgb,var(--ui-red) 60%,var(--ui-purple)) 85%,var(--ui-text-primary));--omh-label:color-mix(in srgb,var(--ui-orange) 65%,var(--ui-text-primary));--omh-run:color-mix(in srgb,var(--ui-blue) 60%,var(--ui-text-primary));--omh-bad:color-mix(in srgb,var(--ui-red) 80%,var(--ui-text-primary));--omh-lilac:color-mix(in srgb,var(--ui-purple) 60%,var(--ui-text-primary));--omh-lime:color-mix(in srgb,color-mix(in srgb,var(--ui-green) 50%,var(--ui-yellow)) 75%,var(--ui-text-primary));--omh-row-hover:var(--ui-row-hover-background,var(--chrome-action-hover));--omh-row-active:var(--ui-row-active-background,var(--chrome-action-hover));--omh-mark:color-mix(in srgb,var(--ui-base) 50%,var(--background));--omh-ok:color-mix(in srgb,var(--ui-green) 75%,var(--ui-text-primary))}
 .omh-pane-mono{font-family:${MONO};font-variant-numeric:tabular-nums}
-.omh-pane-head{display:flex;align-items:center;gap:8px;padding:12px 12px 0;min-width:0}
-.omh-pane-brand{font-weight:700;letter-spacing:.02em;white-space:nowrap;color:var(--omh-brand)}
-.omh-pane-state{display:flex;align-items:center;gap:5px;min-width:0;margin-left:auto;font-size:11px;color:var(--omh-text-readable);white-space:nowrap}
+.omh-pane-head{display:flex;align-items:center;gap:8px;height:28px;padding:4px 10px 0;min-width:0}
+.omh-pane-brand{font-size:13px;font-weight:600;white-space:nowrap;color:var(--omh-brand)}
+.omh-pane-state{display:flex;align-items:center;gap:5px;min-width:0;margin-left:auto;padding:1px 8px;border-radius:999px;font-size:10.5px;font-weight:500;color:var(--ui-text-secondary);background:color-mix(in srgb,var(--ui-text-primary) 8%,transparent);white-space:nowrap}
+.omh-pane-state[data-tone=accent]{color:var(--omh-run);background:color-mix(in srgb,var(--omh-run) 14%,transparent)}
+.omh-pane-state[data-tone=warn]{color:var(--omh-warn);background:color-mix(in srgb,var(--omh-warn) 14%,transparent)}
+.omh-pane-state[data-tone=error]{color:var(--omh-bad);background:color-mix(in srgb,var(--omh-bad) 12%,transparent)}
 .omh-pane-state-text{min-width:0;overflow:hidden;text-overflow:ellipsis}
 .omh-pane-state-seg+.omh-pane-state-seg::before{content:'·';margin:0 3px;color:var(--ui-text-quaternary)}
-.omh-pane-scope{padding:2px 12px 8px;font-size:11px;color:var(--omh-text-readable)}
-.omh-pane-chips{display:flex;flex-wrap:wrap;gap:4px;padding:0 12px 10px}
+.omh-pane-scope{padding:0 10px 6px;font-size:10.5px;color:var(--omh-text-readable)}
+.omh-pane-chips{display:flex;flex-wrap:wrap;gap:4px;padding:0 10px 8px}
 .omh-pane-rule{flex:none;border-top:1px solid var(--omh-edge)}
 .omh-pane-body{min-height:0;flex:1;overflow-y:auto;overscroll-behavior:contain;padding-bottom:12px}
-.omh-pane-section{display:flex;align-items:baseline;gap:8px;margin:18px 0 8px;padding:6px 12px 6px 9px;min-width:0;max-width:640px;box-sizing:border-box;background:color-mix(in srgb,var(--ui-text-primary) 6%,transparent);border-left:3px solid var(--omh-brand);border-bottom:1px solid var(--ui-stroke-tertiary)}
-.omh-pane-body .omh-pane-section:first-child{margin-top:6px}
-.omh-pane-section-label{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--omh-label);white-space:nowrap}
+.omh-pane-sec{padding:2px 0 8px;border-top:1px solid var(--omh-edge)}
+.omh-pane-sec:first-child{border-top:0}
+.omh-pane-section{display:flex;align-items:center;gap:8px;min-height:24px;margin:2px 4px;padding:0 6px;min-width:0;max-width:640px;box-sizing:border-box;border-radius:4px}
+.omh-pane-section:hover{background:var(--omh-row-hover)}
+.omh-pane-section-label{font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.08em;color:var(--omh-label);white-space:nowrap}
 .omh-pane-section-title{min-width:0;flex:1;color:var(--ui-text-secondary);overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
-.omh-pane-section-count{margin-left:auto;font-size:11px;color:var(--omh-text-readable);white-space:nowrap}
-.omh-pane-block{padding:0 12px;min-width:0;max-width:640px;box-sizing:border-box}
-.omh-pane-bar{height:2px;margin:2px 0 6px;border-radius:1px;background:var(--ui-stroke-tertiary);overflow:hidden}
-.omh-pane-bar-fill{height:100%;background:var(--ui-accent)}
-.omh-pane-bar-fill[data-done=true]{background:var(--omh-mark)}
-.omh-pane-phase{display:flex;align-items:baseline;gap:8px;margin-top:8px;font-weight:600;color:var(--omh-text-readable);min-width:0}
+.omh-pane-section-count{margin-left:auto;font-size:10px;color:var(--omh-text-readable);white-space:nowrap}
+.omh-pane-block{padding:0 10px;min-width:0;max-width:640px;box-sizing:border-box}
+.omh-pane-bar{height:4px;margin:4px 0 8px;border-radius:2px;background:var(--ui-stroke-tertiary);overflow:hidden}
+.omh-pane-bar-fill{height:100%;border-radius:2px;background:var(--omh-run);transition:width .3s}
+.omh-pane-bar-fill[data-done=true]{background:var(--omh-ok)}
+.omh-pane-phase{display:flex;align-items:center;gap:8px;margin:10px 0 3px;padding:0 2px;font-size:11px;font-weight:600;color:var(--omh-text-readable);min-width:0}
 .omh-pane-phase[data-current=true]{color:var(--ui-text-primary)}
 .omh-pane-phase-name{min-width:0;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
-.omh-pane-phase-count{margin-left:auto;font-size:11px;font-weight:400;color:var(--omh-text-readable)}
-.omh-pane-phase-items{margin:2px 0 0 6px;padding-left:8px;border-left:1px solid var(--omh-edge)}
-.omh-pane-plan-items{margin-top:2px}
-.omh-pane-item{display:grid;grid-template-columns:14px minmax(0,1fr);gap:0 4px;align-items:baseline;min-width:0;padding:1px 0}
-.omh-pane-item-glyph{text-align:center;color:var(--omh-text-readable)}
-.omh-pane-item-text{min-width:0;overflow-wrap:anywhere}
-.omh-pane-item-label{color:var(--ui-text-primary)}
-.omh-pane-item[data-state=done] .omh-pane-item-label{color:var(--omh-text-readable);text-decoration:line-through}
+.omh-pane-phase-count{margin-left:auto;padding:0 6px;border-radius:999px;font-size:10px;font-weight:500;line-height:16px;color:var(--ui-text-secondary);background:color-mix(in srgb,var(--ui-text-primary) 8%,transparent)}
+.omh-pane-phase[data-current=true] .omh-pane-phase-count{color:var(--omh-run);background:color-mix(in srgb,var(--omh-run) 14%,transparent)}
+.omh-pane-phase-items,.omh-pane-plan-items{margin:0 -4px}
+.omh-pane-item{position:relative;display:grid;grid-template-columns:14px minmax(0,1fr);gap:0 8px;align-items:start;min-width:0;padding:3px 6px;border-radius:6px;transition:background-color .15s}
+.omh-pane-item:hover{background:var(--omh-row-hover)}
+.omh-pane-item[data-state=active]{background:color-mix(in srgb,var(--omh-run) 6%,transparent)}
+.omh-pane-item:not(:last-child)::after{content:'';position:absolute;left:12.5px;top:19px;bottom:-5px;width:1px;background:var(--ui-stroke-secondary,var(--ui-stroke-tertiary))}
+.omh-pane-item .omh-pane-item-glyph{position:relative;z-index:1;display:grid;place-items:center;box-sizing:border-box;width:14px;height:14px;margin-top:2px;border-radius:50%;font-size:9px;font-weight:700;line-height:1;background:var(--background);box-shadow:inset 0 0 0 1.5px var(--ui-text-quaternary,var(--ui-text-tertiary))}
+.omh-pane-item[data-state=pending] .omh-pane-item-glyph{color:transparent}
+.omh-pane-item[data-state=done] .omh-pane-item-glyph{color:var(--background);background:var(--omh-ok);box-shadow:none}
+.omh-pane-item[data-state=active] .omh-pane-item-glyph{font-size:7px;box-shadow:inset 0 0 0 1.5px currentColor,0 0 0 2px color-mix(in srgb,currentColor 14%,transparent)}
+.omh-pane-item[data-state=skipped] .omh-pane-item-glyph{color:var(--omh-text-readable);box-shadow:none;border:1.5px dashed var(--ui-text-tertiary)}
+.omh-pane-item-text{min-width:0;font-size:12px;line-height:18px;overflow-wrap:anywhere}
+.omh-pane-item-label{color:var(--ui-text-secondary)}
+.omh-pane-item[data-state=active] .omh-pane-item-label{font-weight:600;color:var(--ui-text-primary)}
+.omh-pane-item[data-state=done] .omh-pane-item-label{color:var(--omh-text-readable);text-decoration:line-through;text-decoration-color:color-mix(in srgb,var(--omh-text-readable) 55%,transparent)}
 .omh-pane-item[data-state=skipped] .omh-pane-item-label{color:var(--omh-text-readable)}
-.omh-pane-item[data-state=active] .omh-pane-item-label{font-weight:600}
-.omh-pane-item-note{display:block;margin-top:1px;font-size:11px;color:var(--omh-text-readable);overflow-wrap:anywhere}
-.omh-pane-fold{padding:1px 0 1px 18px;font-size:11px;color:var(--omh-text-readable)}
-.omh-pane-catch{display:grid;grid-template-columns:20px minmax(0,1fr);gap:0 4px;align-items:baseline;padding:1px 0;color:var(--ui-text-secondary)}
+.omh-pane-item-note{display:block;width:fit-content;max-width:100%;box-sizing:border-box;margin:2px 0 1px;padding:0 6px;border-radius:4px;font-size:10.5px;line-height:17px;color:var(--omh-text-readable);background:color-mix(in srgb,var(--ui-text-primary) 6%,transparent);overflow-wrap:anywhere}
+.omh-pane-item-note.omh-pane-warn{background:color-mix(in srgb,var(--omh-warn) 13%,transparent)}
+.omh-pane-fold{margin:2px 0;padding:2px 0 2px 24px;font-size:11px;color:var(--omh-text-readable)}
+.omh-pane-catch{display:grid;grid-template-columns:22px minmax(0,1fr);gap:0 8px;align-items:center;margin:4px 0;padding:6px 8px;border-radius:8px;font-size:12px;line-height:1.4;color:var(--ui-text-primary);background:color-mix(in srgb,var(--ui-text-primary) 4%,transparent);border:1px solid var(--ui-stroke-tertiary)}
+.omh-pane-catch[data-tone=warn]{background:color-mix(in srgb,var(--omh-warn) 6%,transparent);border-color:color-mix(in srgb,var(--omh-warn) 24%,transparent)}
+.omh-pane-catch-icon{display:grid;place-items:center;width:22px;height:22px;border-radius:6px;font-size:12px;line-height:1;background:color-mix(in srgb,var(--omh-run) 14%,transparent)}
+.omh-pane-catch[data-tone=warn] .omh-pane-catch-icon{background:color-mix(in srgb,var(--omh-warn) 18%,transparent)}
 .omh-pane-catch-text{min-width:0;overflow-wrap:anywhere}
-.omh-pane-summary{display:block;padding:10px 0 0;color:var(--omh-text-readable);overflow-wrap:anywhere}
+.omh-pane-catch-text::first-letter{text-transform:uppercase}
 .omh-pane-pick{position:relative;display:inline-flex;align-items:center;min-width:0;max-width:100%;margin-left:auto;color:var(--omh-text-readable)}
 .omh-pane-dag-pick{position:relative;max-width:100%;margin:0;padding:2px 20px 2px 8px;font:inherit;font-size:11px;text-align:left;color:inherit;background:transparent;border:1px solid var(--omh-edge);border-radius:var(--radius-md,6px);cursor:pointer;text-overflow:ellipsis;overflow:hidden;white-space:nowrap}\n.omh-pane-dag-pick::after{content:'';position:absolute;right:7px;top:50%;width:4px;height:4px;margin-top:-4px;border:solid currentColor;border-width:0 1.2px 1.2px 0;transform:rotate(45deg)}\n.omh-pane-dag-pick:hover,.omh-pane-dag-pick:focus-visible,.omh-pane-dag-pick[aria-expanded=true]{color:var(--ui-text-primary);background:color-mix(in srgb,var(--ui-bg-card) 70%,transparent);outline:none}\n.omh-pane-pick{position:relative;display:inline-block}
-.omh-pane-pick-menu{position:absolute;z-index:50;right:0;top:100%;margin-top:4px;display:flex;flex-direction:column;min-width:100%;width:max-content;max-width:min(340px,calc(100cqw - 24px));max-height:240px;overflow-y:auto;padding:3px;background:var(--ui-bg-elevated,var(--background));border:1px solid var(--omh-edge);border-radius:var(--radius-md,6px);color:var(--ui-text-primary)}\n.omh-pane-pick-opt{display:block;width:100%;margin:0;padding:4px 8px;font:inherit;font-size:11px;text-align:left;color:var(--ui-text-secondary);background:none;border:0;border-radius:var(--radius-sm,4px);cursor:pointer;white-space:normal;overflow-wrap:anywhere}\n.omh-pane-pick-opt:hover,.omh-pane-pick-opt:focus-visible{color:var(--ui-text-primary);background:color-mix(in srgb,var(--ui-text-primary) 8%,transparent);outline:none}\n.omh-pane-pick-opt[data-on=true]{color:var(--ui-text-primary);background:color-mix(in srgb,var(--omh-brand) 18%,transparent)}
+.omh-pane-pick-menu{position:absolute;z-index:50;right:0;top:100%;margin-top:4px;display:flex;flex-direction:column;min-width:100%;width:max-content;max-width:min(340px,calc(100cqw - 24px));max-height:240px;overflow-y:auto;padding:3px;background:var(--ui-bg-elevated,var(--background));border:1px solid var(--omh-edge);border-radius:var(--radius-md,6px);color:var(--ui-text-primary)}\n.omh-pane-pick-opt{display:block;width:100%;margin:0;padding:4px 8px;font:inherit;font-size:11px;text-align:left;color:var(--ui-text-secondary);background:none;border:0;border-radius:var(--radius-sm,4px);cursor:pointer;white-space:normal;overflow-wrap:anywhere}\n.omh-pane-pick-opt:hover,.omh-pane-pick-opt:focus-visible{color:var(--ui-text-primary);background:color-mix(in srgb,var(--ui-text-primary) 8%,transparent);outline:none}\n.omh-pane-pick-opt[data-on=true]{color:var(--ui-text-primary);background:var(--omh-row-active)}
 .omh-pane-run{padding:0 0 3px;color:var(--ui-text-secondary);overflow-wrap:anywhere}
 .omh-pane-more{padding:2px 0 0 20px;font-size:11px;color:var(--omh-text-readable)}
 .omh-pane-dv-more{align-self:center;font-size:11px;color:var(--omh-text-readable)}
-.omh-agent{display:grid;grid-template-columns:14px minmax(0,1fr) auto;gap:2px 6px;align-items:baseline;min-width:0;margin:0 -6px;padding:5px 6px;border-radius:var(--radius-sm,4px);transition:background-color .15s}
-.omh-agent:hover{background:var(--chrome-action-hover)}
+.omh-agent{display:grid;grid-template-columns:14px minmax(0,1fr) auto;gap:2px 6px;align-items:baseline;min-width:0;margin:0 -6px;padding:4px 6px;border-radius:6px;transition:background-color .15s}
+.omh-agent:hover{background:var(--omh-row-hover)}
 .omh-agent-glyph{text-align:center}
 .omh-agent-title{min-width:0;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;color:var(--ui-text-primary)}
 .omh-agent-id{font-size:11px;color:var(--omh-text-readable);white-space:nowrap}
-.omh-agent-sub{grid-column:2/-1;display:grid;grid-template-columns:minmax(0,1fr) 64px 52px;gap:0 6px;align-items:baseline;min-width:0;font-size:11px;color:var(--omh-text-readable)}
+.omh-agent-sub{grid-column:2/-1;display:grid;grid-template-columns:minmax(0,1fr) auto 52px;gap:0 6px;align-items:baseline;min-width:0;font-size:11px;color:var(--omh-text-readable)}
 .omh-agent-route{min-width:0;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
 .omh-agent-state{overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
 .omh-agent-figure{white-space:nowrap;text-align:right}
+.omh-pane-dv-outside{margin-top:8px}
+.omh-pane-tip.tooltip-bubble{max-width:min(18rem,calc(100vw - 1.5rem));padding:8px 10px;border:1px solid var(--omh-edge);border-radius:8px;background:var(--ui-bg-elevated,var(--background));color:var(--ui-text-primary);font-size:11px;font-weight:400;line-height:1.45;box-shadow:0 8px 24px color-mix(in srgb,var(--background) 70%,transparent)}
+.omh-pane-tip.tooltip-bubble [data-slot=tooltip-arrow]{fill:var(--ui-bg-elevated,var(--background))}
+.omh-pane-tip-card{display:flex;flex-direction:column;gap:6px;min-width:13rem}
+.omh-pane-tip-head{display:flex;align-items:baseline;gap:6px;font-weight:600}
+.omh-pane-tip-mark{flex:none;font-size:10px}
+.omh-pane-tip-title{min-width:0;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;overflow-wrap:anywhere}
+.omh-pane-tip-aside{margin-left:auto;padding-left:8px;font-weight:400;color:var(--ui-text-secondary);white-space:nowrap}
+.omh-pane-tip-meta{margin-top:-3px;font-size:10px;color:var(--omh-text-readable)}
+.omh-pane-tip-rows{display:grid;grid-template-columns:auto 1fr;column-gap:12px;row-gap:2px}
+.omh-pane-tip-k{color:var(--omh-label)}
+.omh-pane-tip-v{text-align:right;white-space:nowrap}
+.omh-pane-tip-sub{display:block;font-size:10px;color:var(--omh-text-readable);white-space:normal}
+.omh-pane-tip-text{max-width:16rem;color:var(--ui-text-secondary);white-space:pre-line}
+.omh-pane-tip-note{padding-top:6px;border-top:1px solid color-mix(in srgb,var(--omh-edge) 70%,transparent);font-size:10px;line-height:1.45;color:var(--omh-text-readable)}
+.omh-pane-tip-line{color:var(--ui-text-secondary)}
+.omh-pane-tip-label{display:flex;justify-content:space-between;gap:8px;font-size:10px;color:var(--omh-text-readable)}
+.omh-pane-tip-after{font-size:10px;color:var(--omh-text-readable);overflow-wrap:anywhere}
+.omh-pane-tip-summary{display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;color:var(--ui-text-secondary);overflow-wrap:anywhere}
+.omh-pane-tip-rows + .omh-pane-tip-stack{padding-top:6px;border-top:1px solid color-mix(in srgb,var(--omh-edge) 70%,transparent)}
+.omh-pane-tip-stack .omh-pane-dv-stack{height:6px;margin:0;border-radius:2px}
+.omh-pane-tip-stack .omh-pane-dv-legend{flex:none;font-size:10px}
+.omh-pane-dv-runhead,.omh-pane-tok[data-size=big]{margin:2px 0 4px;padding:8px 10px;border:1px solid color-mix(in srgb,var(--omh-edge) 55%,transparent);border-radius:8px;background:color-mix(in srgb,var(--omh-brand) 5%,var(--ui-bg-card,transparent))}
+.omh-pane-dv-runhead .omh-pane-run{padding:0 0 5px;font-size:13px;font-weight:600;color:var(--ui-text-primary)}
+.omh-pane-tok{min-width:0;cursor:default}
+.omh-pane-tok-top{display:flex;flex-wrap:wrap;align-items:baseline;gap:2px 10px}
+.omh-pane-tok-v{font-size:17px;font-weight:650;line-height:1.15;color:var(--ui-text-primary)}
+.omh-pane-tok[data-size=big] .omh-pane-tok-v{font-size:24px}
+.omh-pane-tok-u{margin-left:-6px;font-size:11px;color:var(--omh-text-readable)}
+.omh-pane-tok-aside{display:inline-flex;gap:10px;margin-left:auto}
+.omh-pane-tok .omh-pane-dv-stack{height:5px;margin:7px 0 0;border-radius:2px}
+.omh-pane-tok[data-size=big] .omh-pane-dv-stack{height:7px}
+.omh-pane-tok-split{display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr) auto;gap:3px 10px;margin-top:7px;font-size:11px}
+.omh-pane-tok-k{display:inline-flex;align-items:center;gap:5px;min-width:0;overflow:hidden;white-space:nowrap;color:var(--ui-text-secondary)}
+.omh-pane-tok-n{text-align:right;color:var(--ui-text-primary)}
+.omh-pane-tok-rule{grid-column:1/-1;margin:3px 0 1px;border-top:1px solid color-mix(in srgb,var(--omh-edge) 45%,transparent)}
+.omh-pane-tok-pace{align-self:baseline}
+.omh-pane-tok-k.omh-pane-tok-pace{padding-left:12px}
+.omh-pane-tok-n.omh-pane-tok-pace{font-size:13px;font-weight:600}
+.omh-pane-fig{display:inline-flex;align-items:baseline;gap:4px;white-space:nowrap}
+.omh-pane-fig-v{font-size:13px;font-weight:600;color:var(--ui-text-primary)}
+.omh-pane-fig-l{font-size:11px;color:var(--omh-text-readable)}
+.omh-pane-chip-tip{display:inline-flex}
+.omh-pane-tip-list,.omh-pane-tip-layers{display:flex;flex-direction:column;gap:3px;padding-top:6px;border-top:1px solid color-mix(in srgb,var(--omh-edge) 70%,transparent)}
+.omh-pane-tip-li{display:grid;grid-template-columns:12px minmax(0,1fr) auto;column-gap:6px;align-items:baseline}
+.omh-pane-tip-name{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--ui-text-secondary)}
+.omh-pane-tip-more{color:var(--omh-text-readable)}
+.omh-pane-tip-stack{display:flex;flex-direction:column;gap:6px}
+.omh-pane-tip-legend{display:flex;align-items:center;gap:8px;font-size:10px;color:var(--omh-text-readable)}
+.omh-pane-tip-key{display:inline-flex;align-items:center;gap:3px}
+.omh-pane-tip-swatch{width:8px;height:8px;border-radius:2px;background:currentColor}
+.omh-pane-tip-layer{display:grid;grid-template-columns:22px minmax(0,1fr) auto;column-gap:6px;align-items:center;font-size:10px}
+.omh-pane-tip-track{position:relative;display:block;height:5px;border-radius:3px;background:color-mix(in srgb,var(--ui-text-primary) 8%,transparent)}
+.omh-pane-tip-bar{position:absolute;top:0;bottom:0;min-width:2px;border-radius:2px;background:var(--ui-text-secondary)}
+.omh-pane-dv-tl-strip{position:relative;flex:1 1 auto;min-width:48px;height:6px;align-self:center;overflow:hidden;border-radius:3px;background:color-mix(in srgb,var(--ui-text-primary) 8%,transparent)}
+.omh-pane-dv-tl-seg{position:absolute;top:0;bottom:0;min-width:1px;background:currentColor}
+.omh-pane-dv-tl-idle{background:none}
+.omh-pane-dv-tl-label{font-size:10px;color:var(--ui-text-secondary);white-space:nowrap;overflow:hidden}
+.omh-pane-dv-tl-track{position:relative;height:5px;background:linear-gradient(to right,color-mix(in srgb,var(--ui-text-primary) 9%,transparent) 1px,transparent 1px) 0 0/25% 100%}
+.omh-pane-dv-tl-bar{position:absolute;top:0;bottom:0;min-width:2px;border-radius:2px;background:currentColor}
+.omh-pane-dv-tl-bar[data-open=true]{background:linear-gradient(to right,currentColor 70%,color-mix(in srgb,currentColor 35%,transparent))}
+.omh-pane-dv-tl-wait{position:absolute;top:50%;height:0;border-top:1px dashed var(--omh-warn)}
+.omh-pane-dv-tl-fig{font-size:10px;text-align:right;color:var(--ui-text-secondary);white-space:nowrap}
+.omh-pane-dv-tl-body{display:flex;flex-direction:column;margin:2px 0 0 4px;padding:0 0 4px 10px;border-left:1px solid color-mix(in srgb,var(--omh-edge) 55%,transparent)}
+.omh-pane-dv-tl-group{display:flex;flex-direction:column;gap:1px;padding:3px 0;border-top:1px solid var(--omh-edge)}
+.omh-pane-dv-tl-group:first-child{border-top:0;padding-top:0}
+.omh-pane-dv-tl-lane{display:grid;grid-template-columns:22px 12px 7em minmax(0,1fr) 40px;column-gap:5px;align-items:center;width:100%;margin:0;padding:1px 0;border:0;border-radius:4px;background:none;font:inherit;font-size:11px;color:var(--ui-text-secondary);text-align:left;cursor:pointer}
+.omh-pane-dv-tl-lane:hover,.omh-pane-dv-tl-lane:focus-visible{background:var(--ui-row-hover-background)}
+.omh-pane-dv-tl-lane[aria-pressed=true]{background:var(--ui-row-active-background);color:var(--ui-text-primary)}
+.omh-pane-dv-tl-lane .omh-pane-dv-tl-track{height:6px}
+.omh-pane-dv-tl-glyph{font-size:10px;text-align:center}
+.omh-pane-dv-tl-name{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.omh-pane-dv-tl-axis{display:grid;grid-template-columns:22px 12px 7em minmax(0,1fr) 40px;column-gap:5px;padding-top:3px;font-size:10px;color:var(--omh-text-readable)}
+.omh-pane-dv-tl-ticks{grid-column:4;display:flex;justify-content:space-between}
+.omh-pane-dv-orow{width:calc(100% + 12px);border:0;background:none;font:inherit;color:inherit;text-align:left;cursor:pointer}
+.omh-pane-dv-orow:hover{background:var(--ui-row-hover-background)}
+.omh-pane-dv-orow[aria-pressed=true]{background:var(--ui-row-active-background)}
 .omh-pane-notice{margin:6px 12px 8px;border-radius:6px;background:var(--chrome-action-hover);padding:6px 8px;font-size:11px;color:var(--omh-text-readable);overflow-wrap:anywhere}
 .omh-pane-skeleton{height:10px;margin:6px 12px}
 .omh-pane-dv{min-width:0}
-.omh-pane-dv-kpis{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px;margin:6px 0 12px}
-@container (min-width:520px){.omh-pane-dv-kpis{grid-template-columns:repeat(4,minmax(0,1fr))}.omh-pane-dv-facts{grid-template-columns:repeat(5,minmax(0,1fr))}}
-.omh-pane-dv-kpi{position:relative;display:flex;flex-direction:column;gap:1px;min-width:0;padding:7px 9px;background:var(--ui-bg-card);border:1px solid var(--ui-stroke-tertiary);border-radius:var(--radius-sm,2px);cursor:help}
-.omh-pane-dv-kpi-label{font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:var(--omh-text-readable)}
-.omh-pane-dv-kpi-value{font-family:${MONO};font-size:15px;font-weight:600;line-height:1.25;color:var(--ui-text-primary);font-variant-numeric:tabular-nums}
-.omh-pane-dv-kpi-sub{font-family:${MONO};font-size:10.5px;line-height:1.3;color:var(--omh-text-readable);overflow-wrap:anywhere;text-wrap:balance}
-.omh-pane-dv-kpi-ring{position:absolute;right:8px;top:8px;display:flex}
+@container (min-width:520px){.omh-pane-dv-facts{grid-template-columns:repeat(5,minmax(0,1fr))}}
 .omh-pane-dv-canvas{position:relative;padding:4px 30px 4px 0}
 .omh-pane-dv-edges{position:absolute;left:0;top:0;z-index:0;overflow:visible;pointer-events:none}
 .omh-pane-dv-row{position:relative;z-index:1;display:flex;flex-wrap:wrap;justify-content:center;gap:44px 12px;margin-bottom:44px}
@@ -2476,9 +2894,9 @@ export const PANE_CSS = `
 .omh-pane-dv-card[data-state=running]::before,.omh-pane-dv-card[data-state=dispatched]::before{content:'';position:absolute;inset:0;border-radius:inherit;padding:1.5px;background:linear-gradient(90deg,color-mix(in srgb,var(--dv-c) 15%,var(--ui-bg-card)),var(--dv-c),color-mix(in srgb,var(--dv-c) 15%,var(--ui-bg-card)));background-size:300% 100%;animation:omh-dv-flow 2.4s ease-in-out infinite alternate;-webkit-mask:linear-gradient(rgb(0,0,0),rgb(0,0,0)) content-box,linear-gradient(rgb(0,0,0),rgb(0,0,0));-webkit-mask-composite:xor;mask:linear-gradient(rgb(0,0,0),rgb(0,0,0)) content-box,linear-gradient(rgb(0,0,0),rgb(0,0,0));mask-composite:exclude;pointer-events:none}
 @keyframes omh-dv-flow{from{background-position:0% 0}to{background-position:100% 0}}
 @media (prefers-reduced-motion:reduce){.omh-pane-dv-card[data-state=running]::before,.omh-pane-dv-card[data-state=dispatched]::before{animation:none;background-position:50% 0}}
-.omh-pane-dv-card[data-tone=accent]{--dv-c:var(--ui-accent)}\n.omh-pane-dv-card[data-tone=ok]{--dv-c:var(--omh-ok)}
+.omh-pane-dv-card[data-tone=accent]{--dv-c:var(--omh-run)}\n.omh-pane-dv-card[data-tone=ok]{--dv-c:var(--omh-ok)}
 .omh-pane-dv-card[data-tone=warn]{--dv-c:var(--omh-warn)}
-.omh-pane-dv-card[data-tone=error]{--dv-c:var(--ui-red)}
+.omh-pane-dv-card[data-tone=error]{--dv-c:var(--omh-bad)}
 .omh-pane-dv-picked{border-color:var(--omh-brand);outline:1px solid var(--omh-brand)}
 .omh-pane-dv-dim{opacity:.32}
 .omh-pane-dv-title{font-size:12px;font-weight:600;line-height:1.3;color:var(--ui-text-primary);display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;overflow-wrap:anywhere}
@@ -2486,7 +2904,7 @@ export const PANE_CSS = `
 .omh-pane-dv-wrap{white-space:normal;overflow:visible;overflow-wrap:anywhere;text-overflow:clip}
 .omh-pane-dv-cr{--dv-k:var(--omh-brand)}
 .omh-pane-dv-in{--dv-k:var(--omh-label)}
-.omh-pane-dv-cw{--dv-k:var(--ui-purple)}
+.omh-pane-dv-cw{--dv-k:var(--omh-lilac)}
 .omh-pane-dv-out{--dv-k:var(--omh-text-readable)}
 .omh-pane-dv-stack{display:flex;height:3px;margin-top:4px;border-radius:1px;background:var(--ui-stroke-tertiary);overflow:hidden}
 .omh-pane-dv-big{height:6px;margin:6px 0 8px;border-radius:2px}
@@ -2498,8 +2916,8 @@ export const PANE_CSS = `
 .omh-pane-dv-edge{fill:none}
 .omh-pane-dv-tip{fill:var(--dv-e);stroke-width:1}
 .omh-pane-dv-edge[data-tone=done],.omh-pane-dv-tip[data-tone=done]{--dv-e:var(--omh-text-readable)}
-.omh-pane-dv-edge[data-tone=accent],.omh-pane-dv-tip[data-tone=accent]{--dv-e:var(--ui-accent)}
-.omh-pane-dv-edge[data-tone=error],.omh-pane-dv-tip[data-tone=error]{--dv-e:var(--ui-red)}
+.omh-pane-dv-edge[data-tone=accent],.omh-pane-dv-tip[data-tone=accent]{--dv-e:var(--omh-run)}
+.omh-pane-dv-edge[data-tone=error],.omh-pane-dv-tip[data-tone=error]{--dv-e:var(--omh-bad)}
 .omh-pane-dv-edge[data-hot=true],.omh-pane-dv-tip[data-hot=true]{--dv-e:var(--omh-brand)}
 .omh-pane-dv-edge[data-hot=true]{stroke-width:1.6}
 .omh-pane-dv-edge[data-hollow=true]{stroke-dasharray:4 3}
@@ -2528,24 +2946,30 @@ export const PANE_CSS = `
 .omh-pane-dv-fact{display:flex;flex-direction:column;min-width:0}
 .omh-pane-dv-fact-l{font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:var(--omh-text-readable)}
 .omh-pane-dv-fact-v{font-family:${MONO};font-size:12px;color:var(--ui-text-primary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.omh-pane-dv-usage{display:flex;align-items:center;gap:12px;padding:8px 0;border-top:1px solid var(--ui-stroke-tertiary)}
+.omh-pane-dv-usage{display:flex;align-items:center;gap:12px;padding:8px 0;border-top:1px solid var(--omh-edge)}
 .omh-pane-dv-usage-ring{display:flex;flex:none}
 .omh-pane-dv-legend{flex:1;min-width:0;display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:2px 8px;align-items:baseline;font-family:${MONO};font-size:11px}
 .omh-pane-dv-legend-k{display:inline-flex;align-items:center;gap:5px;min-width:0;color:var(--ui-text-secondary);white-space:nowrap}
 .omh-pane-dv-swatch{display:inline-block;flex:none;width:7px;height:7px;border-radius:1px;background:var(--dv-k)}
 .omh-pane-dv-legend-n{text-align:right;color:var(--ui-text-primary)}
 .omh-pane-dv-legend-p{min-width:38px;text-align:right;color:var(--omh-text-readable)}
-.omh-pane-dv-sec{margin-top:8px;padding-top:8px;border-top:1px solid var(--ui-stroke-tertiary)}
+.omh-pane-dv-sec{margin-top:8px;padding-top:8px;border-top:1px solid var(--omh-edge)}
 .omh-pane-dv-sec-l{display:block;margin-bottom:4px;font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:var(--omh-text-readable)}
 .omh-pane-dv-links{display:flex;flex-wrap:wrap;gap:4px}
-.omh-pane-dv-stats{margin:12px 0;background:var(--ui-bg-card);border:1px solid var(--ui-stroke-tertiary);border-radius:var(--radius-md,4px)}
-.omh-pane-dv-stats-h{display:flex;align-items:baseline;gap:8px;padding:8px 10px;list-style:none;cursor:pointer;font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.08em;color:var(--omh-label)}
+.omh-pane-dv-stats{margin:8px 0 0}
+.omh-pane-dv-stats-h{display:flex;align-items:center;gap:6px;min-height:22px;padding:0;list-style:none;cursor:pointer;font-size:11.5px;font-weight:600;color:var(--ui-text-secondary)}
 .omh-pane-dv-stats-h::-webkit-details-marker{display:none}
-.omh-pane-dv-stats-h::before{content:'▸';color:var(--omh-text-readable)}
+.omh-pane-dv-stats-h::before{content:'▸';flex:none;width:10px;font-size:9px;color:var(--omh-text-readable)}
 .omh-pane-dv-stats[open] .omh-pane-dv-stats-h::before{content:'▾'}
 .omh-pane-dv-stats-c{margin-left:auto;font-size:11px;font-weight:400;text-transform:none;letter-spacing:0;color:var(--omh-text-readable)}
-.omh-pane-dv-stats-body{padding:0 10px 10px}
-.omh-pane-dv-fold-h.omh-pane-dv-stats-h{padding:0 0 6px;font-size:inherit;font-weight:400;text-transform:none;letter-spacing:0;color:var(--ui-text-secondary)}
+.omh-pane-dv-stats-body{margin:2px 0 0 4px;padding:0 0 4px 10px;border-left:1px solid color-mix(in srgb,var(--omh-edge) 55%,transparent)}
+.omh-pane-dv-sub{cursor:default}
+.omh-pane-dv-sub::before{content:''}
+.omh-pane-dv-graph{margin-top:8px}
+.omh-pane-dv-graph-body,.omh-pane-dv-outside-body{margin:2px 0 0 4px;padding:0 0 4px 10px;border-left:1px solid color-mix(in srgb,var(--omh-edge) 55%,transparent)}
+.omh-pane-dv-sub .omh-pane-seg.omh-pane-dv-modes{margin:0 0 0 auto}
+.omh-pane-dv-sub .omh-pane-dv-modes .omh-pane-seg-b{padding:1px 7px;font-size:10.5px;font-weight:400}
+.omh-pane-dv-mrow + .omh-pane-dv-path{margin-top:8px;padding-top:6px;border-top:1px dashed color-mix(in srgb,var(--omh-edge) 55%,transparent)}
 .omh-pane-dv-mrow{box-sizing:border-box;display:grid;grid-template-columns:minmax(0,1.5fr) 28px 54px minmax(60px,1fr) 56px;gap:0 8px;align-items:center;width:100%;margin:0;padding:4px 0;font-family:${MONO};font-size:11px;text-align:left;color:inherit;background:none;border:0;border-top:1px solid var(--ui-stroke-tertiary);transition:background-color .15s}
 button.omh-pane-dv-mrow{cursor:pointer}
 button.omh-pane-dv-mrow:hover{background:var(--chrome-action-hover)}
@@ -2560,36 +2984,19 @@ button.omh-pane-dv-mrow:hover{background:var(--chrome-action-hover)}
 .omh-pane-dv-path{display:flex;flex-wrap:wrap;align-items:center;gap:4px;margin-top:6px}
 .omh-pane-dv-path-l{margin-right:4px;font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:var(--omh-text-readable)}
 .omh-pane-dv-arrow{font-family:${MONO};color:var(--omh-text-readable)}
-.omh-pane-dv-hl{margin:0 0 0 auto;padding:0;font:inherit;font-size:11px;color:var(--ui-accent);background:none;border:0;cursor:pointer}
-.omh-pane-dv-note{margin-top:8px;font-size:10.5px;color:var(--omh-text-readable)}
-@media (pointer:coarse),(max-width:640px){.omh-pane-dv-x,.omh-pane-dv-link,.omh-pane-dv-hl{position:relative;height:32px;padding:0 12px;-webkit-tap-highlight-color:transparent}.omh-pane-dv-hl{padding:0 6px}.omh-pane-dv-x::after,.omh-pane-dv-link::after,.omh-pane-dv-hl::after{content:'';position:absolute;inset:-7px -5px}.omh-pane-dv-chips,.omh-pane-dv-links,.omh-pane-dv-path{gap:14px 8px}.omh-pane-dv-path{margin-top:14px}.omh-pane-dv-stats-h{padding:16px 10px}.omh-pane-dv-mrow{padding:16px 0}.omh-pane-dv-mh{padding:0 0 3px}.omh-pane-dv-card{padding:9px 10px 10px;-webkit-user-select:none;user-select:none;-webkit-tap-highlight-color:transparent}}
-@container (min-width:520px){.omh-pane-dv-kpis.omh-pane-ub-kpis{grid-template-columns:repeat(3,minmax(0,1fr))}}
-.omh-pane-ub-main{display:flex;flex-wrap:wrap;align-items:center;gap:8px 16px;margin:6px 0 10px}
-.omh-pane-ub-main .omh-pane-dv-kpis.omh-pane-ub-kpis{flex:1 1 150px;min-width:0;margin:0;grid-template-columns:minmax(0,1fr)}
-.omh-pane-ub-dial{position:relative;flex:none;width:96px;height:96px;cursor:help}
-.omh-pane-ub-center{position:absolute;left:0;top:0;right:0;bottom:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1px;text-align:center}
-.omh-pane-ub-total{font-family:${MONO};font-size:15px;font-weight:600;line-height:1.1;color:var(--ui-text-primary)}
-.omh-pane-ub-cache{font-family:${MONO};font-size:10px;color:var(--omh-text-readable)}
+.omh-pane-dv-hl{margin:0 0 0 auto;padding:0;font:inherit;font-size:11px;color:var(--omh-run);background:none;border:0;cursor:pointer}
+@media (pointer:coarse),(max-width:640px){.omh-pane-dv-x,.omh-pane-dv-link,.omh-pane-dv-hl{position:relative;height:32px;padding:0 12px;-webkit-tap-highlight-color:transparent}.omh-pane-dv-hl{padding:0 6px}.omh-pane-dv-x::after,.omh-pane-dv-link::after,.omh-pane-dv-hl::after{content:'';position:absolute;inset:-7px -5px}.omh-pane-dv-chips,.omh-pane-dv-links,.omh-pane-dv-path{gap:14px 8px}.omh-pane-dv-path{margin-top:14px}.omh-pane-dv-stats-h{padding:16px 0}.omh-pane-dv-sub{padding:4px 0}.omh-pane-dv-mrow{padding:16px 0}.omh-pane-dv-mh{padding:0 0 3px}.omh-pane-dv-card{padding:9px 10px 10px;-webkit-user-select:none;user-select:none;-webkit-tap-highlight-color:transparent}}
 .omh-pane-seg{display:inline-flex;margin-left:8px;border:1px solid var(--omh-edge);border-radius:var(--radius-md,6px);overflow:hidden}
 .omh-pane-seg-b{margin:0;padding:1px 8px;font:inherit;font-size:10.5px;text-transform:none;letter-spacing:0;color:var(--omh-text-readable);background:none;border:0;cursor:pointer}
-.omh-pane-seg-b[aria-pressed=true]{color:var(--ui-text-primary);background:color-mix(in srgb,var(--omh-brand) 22%,transparent)}
-.omh-pane-ub-kpis{gap:0 18px;margin:2px 0 10px}
-.omh-pane-ub-kpis .omh-pane-dv-kpi{flex-direction:row;align-items:baseline;gap:6px;padding:4px 0;background:none;border:0;border-bottom:1px solid var(--ui-stroke-tertiary);border-radius:0}
-.omh-pane-ub-kpis .omh-pane-dv-kpi-label{flex:none;min-width:58px}
-.omh-pane-ub-kpis .omh-pane-dv-kpi-value{flex:none;font-size:13px}
-.omh-pane-ub-kpis .omh-pane-dv-kpi-sub{flex:1;min-width:0;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;text-wrap:nowrap}
-.omh-pane-ub-kpis .omh-pane-dv-kpi-ring{position:static;align-self:center;margin-left:auto}
-.omh-pane-ub-parts .omh-pane-dv-stats-h{flex-wrap:wrap}
-.omh-pane-ub-parts .omh-pane-dv-stack{flex:1 0 100%;height:8px;margin:2px 0 0;border:1px solid var(--ui-stroke-tertiary);box-sizing:border-box}
+.omh-pane-seg-b[aria-pressed=true]{color:var(--ui-text-primary);background:var(--ui-control-active-background,color-mix(in srgb,var(--ui-text-primary) 10%,transparent))}
 .omh-pane-ub-c0{--dv-k:var(--omh-brand)}
-.omh-pane-ub-c1{--dv-k:var(--ui-accent)}
+.omh-pane-ub-c1{--dv-k:var(--omh-lilac)}
 .omh-pane-ub-c2{--dv-k:var(--omh-label)}
 .omh-pane-ub-c3{--dv-k:var(--omh-warn)}
-.omh-pane-ub-c4{--dv-k:var(--ui-blue)}
-.omh-pane-ub-c5{--dv-k:var(--ui-purple)}
+.omh-pane-ub-c4{--dv-k:var(--omh-run)}
+.omh-pane-ub-c5{--dv-k:var(--omh-lime)}
 .omh-pane-ub-c6{--dv-k:color-mix(in srgb,var(--ui-blue) 45%,var(--ui-text-primary))}
 .omh-pane-ub-c7{--dv-k:var(--omh-text-readable)}
-.omh-pane-ub-parts{margin:0}
 .omh-pane-ub-legend{margin-top:2px}
 .omh-bar{display:inline-flex;height:100%;align-items:center;gap:4px;border-radius:0;padding:0 6px;font-size:.6875rem;color:var(--ui-text-tertiary);font-variant-numeric:tabular-nums;white-space:nowrap;transition:background-color .15s,color .15s}
 .omh-bar:hover{background:var(--chrome-action-hover);color:var(--ui-text-primary)}
@@ -2598,22 +3005,19 @@ button.omh-pane-dv-mrow:hover{background:var(--chrome-action-hover)}
 .omh-pane-section-toggle{display:flex;align-items:baseline;gap:8px;flex:1;min-width:0;margin:0;padding:0;font:inherit;color:inherit;text-align:left;background:none;border:0}
 button.omh-pane-section-toggle{cursor:pointer}
 button.omh-pane-section-toggle:focus-visible{outline:2px solid var(--omh-brand);outline-offset:2px;border-radius:2px}
-.omh-pane-section-fold{flex:none;width:9px;font-size:9px;color:var(--omh-text-readable)}
-.omh-pane-sec[data-open=false] .omh-pane-section{margin-bottom:0}
+.omh-pane-section-fold{flex:none;width:9px;font-size:9px;color:var(--ui-text-tertiary)}
+.omh-pane-sec[data-open=false]{padding-bottom:2px}
 .omh-pane-controls{display:inline-flex;align-items:center;gap:6px;flex:none;min-width:0;max-width:62%}
 .omh-pane-controls .omh-pane-pick{margin-left:0}
-.omh-pane-empty{display:flex;flex-direction:column;gap:1px;padding:1px 0 2px 2px;font-size:11.5px;color:var(--omh-text-readable)}
+.omh-pane-empty{display:flex;flex-direction:column;gap:1px;margin:2px 0;padding:7px 10px;border-radius:8px;font-size:11.5px;color:var(--omh-text-readable);background:color-mix(in srgb,var(--ui-text-primary) 3%,transparent)}
 .omh-pane-empty-title{color:var(--ui-text-secondary)}
 .omh-pane-empty-quiet .omh-pane-empty-title{color:var(--omh-text-readable)}
 .omh-pane-menu-label{display:block;padding:6px 8px 2px;font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:var(--omh-text-readable)}
 .omh-pane-opt-mark{display:inline-block;width:14px;color:var(--omh-brand)}
-.omh-pane-ub-source{font-family:${MONO};font-size:10px;line-height:16px;padding:0 5px;border:1px solid var(--ui-stroke-tertiary);border-radius:3px;color:var(--omh-text-readable);white-space:nowrap;cursor:help}
 .omh-pane-seg-b:disabled{opacity:.45;cursor:default}
 .omh-pane-seg.omh-pane-dv-modes{display:flex;width:max-content;max-width:100%;margin:10px 0 4px}
 .omh-pane-dv-modes .omh-pane-seg-b{padding:2px 9px;font-size:11px}
 .omh-pane-dv-modes .omh-pane-seg-b+.omh-pane-seg-b{border-left:1px solid var(--omh-edge)}
-.omh-pane-ub-meter{flex:none;align-self:center;width:44px;height:4px;margin-left:auto;border-radius:2px;background:var(--ui-stroke-tertiary);overflow:hidden}
-.omh-pane-ub-meter i{display:block;height:100%;background:var(--ui-accent)}
 .omh-pane-dv-tagged{padding-top:20px}
 .omh-pane-dv-layer-tag{position:absolute;left:0;top:-19px;z-index:2;margin:0;padding:0 4px;font-family:${MONO};font-size:10px;line-height:16px;color:var(--omh-text-readable);background:color-mix(in srgb,var(--background) 85%,transparent);border:0;border-radius:3px;cursor:pointer}
 .omh-pane-dv-layer-tag:hover,.omh-pane-dv-layer-tag:focus-visible{color:var(--ui-text-primary);background:var(--chrome-action-hover);outline:none}
@@ -2622,9 +3026,12 @@ button.omh-pane-section-toggle:focus-visible{outline:2px solid var(--omh-brand);
 .omh-pane-dv-tallies{display:flex;flex-wrap:wrap;gap:2px 8px;margin-left:auto;font-family:${MONO};font-size:10.5px}
 .omh-pane-dv-tally{white-space:nowrap}
 /* Tone classes last: a tone on a cell wins over the cell's own resting colour. */
-.omh-pane-accent{color:var(--ui-accent)}\n.omh-pane-ok{color:var(--omh-ok)}
+.omh-pane-accent{color:var(--omh-run)}\n.omh-pane-ok{color:var(--omh-ok)}
 .omh-pane-warn{color:var(--omh-warn)}
-.omh-pane-error{color:var(--ui-red)}
+.omh-pane-error{color:var(--omh-bad)}
+.omh-pane-tl-one{color:color-mix(in srgb,var(--omh-run) 40%,var(--background))}
+.omh-pane-tl-few{color:color-mix(in srgb,var(--omh-run) 70%,var(--background))}
+.omh-pane-tl-many{color:var(--omh-run)}
 .omh-pane-muted{color:var(--omh-text-readable)}
 .omh-pane-tertiary{color:var(--omh-text-readable)}
 .omh-pane-secondary{color:var(--ui-text-secondary)}
@@ -2670,6 +3077,48 @@ function div(className, children, key) {
 }
 function toneClass(tone) {
   return tone ? `omh-pane-${tone}` : ''
+}
+
+// Every hover in the pane, and the status-bar item's, is one card in the app's tooltip layer: a line of text, or a
+// head (a mark, a name that may wrap, a figure aside), a mono meta line, label/value rows (a value may carry a muted
+// line under it), whatever is drawn under them, and a muted note last. The layer sits outside the pane, so
+// `.omh-pane-tip` carries the pane's tokens itself. Whatever hovers next goes through `withTip` too.
+function tipCard(card) {
+  if (typeof card === 'string') return div('omh-pane-tip-text', card)
+  const rows = (card.rows || []).filter(Boolean)
+  return div(
+    'omh-pane-tip-card',
+    [
+      card.title
+        ? div('omh-pane-tip-head', [card.mark ? span(`omh-pane-tip-mark ${toneClass(card.tone)}`, card.mark, 'mark') : null, span('omh-pane-tip-title', card.title, 'title'), card.aside ? span('omh-pane-tip-aside omh-pane-mono', card.aside, 'aside') : null], 'head')
+        : null,
+      card.meta ? div('omh-pane-tip-meta omh-pane-mono', card.meta, 'meta') : null,
+      rows.length
+        ? div(
+            'omh-pane-tip-rows',
+            rows.flatMap(function (row, index) {
+              return [span('omh-pane-tip-k', row[0], `k${index}`), span(`omh-pane-tip-v ${toneClass(row[2])}`, [span('omh-pane-mono', row[1], 'v'), row[3] ? span('omh-pane-tip-sub', row[3], 's') : null], `v${index}`)]
+            }),
+            'rows'
+          )
+        : null,
+      card.body || null,
+      card.note ? div('omh-pane-tip-note', card.note, 'note') : null
+    ],
+    'card'
+  )
+}
+
+// `card` is a card's fields, a line of text, or a drawn card; nothing hovers where it is empty.
+// How long a hover rests before its card opens: the pane is read by sweeping the pointer over it, and a card that
+// opens on every pass covers what the person was reading (owner, 2026-11-22). Moving on from an open card to the
+// next still opens it at once (the app's skip delay).
+const TIP_DELAY_MS = 750
+
+// A plain element that holds a card takes focus, so a keyboard reaches what only the card says; a button already does.
+function withTip(card, child, key) {
+  const plain = card && child && (child.type === 'div' || child.type === 'span') && child.props.tabIndex === undefined
+  return jsx(Tip, { label: !card ? '' : card.props ? card : tipCard(card), className: 'omh-pane-tip', delayDuration: TIP_DELAY_MS, children: plain ? jsx(child.type, { ...child.props, tabIndex: 0 }, child.key) : child }, key)
 }
 
 // The layers the DAG section holds open, for the session and dag run it drew them for. One record for the
@@ -2786,9 +3235,11 @@ function Header({ model }) {
   const tone = payload ? stateTone(payload) : 'tertiary'
   const brand = span('omh-pane-brand', t('brand'))
   return div('omh-pane-head', [
-    payload ? jsx(Tip, { label: t('brandTip', { version: paneVersion(payload) }), children: brand }) : brand,
+    payload ? withTip({ title: t('brandName'), aside: paneVersion(payload) }, brand, 'brand') : brand,
     segments.length
-      ? div('omh-pane-state', [
+      ? withTip(
+          payload ? statusCard(statusParts(payload)) : '',
+          node('div', { className: 'omh-pane-state', 'data-tone': tone }, [
           tone === 'tertiary' ? null : jsx(StatusDot, { tone: DOT_TONES[tone] || 'good' }),
           span(
             'omh-pane-state-text',
@@ -2796,9 +3247,37 @@ function Header({ model }) {
               return span(`omh-pane-state-seg ${toneClass(segment.tone)}`, segment.text, `seg-${index}`)
             })
           )
-        ])
+        ]),
+          'state'
+        )
       : null
   ])
+}
+
+// What a badge's symbols stand for, where it has any: the board's queue, the tool calls still open.
+function chipCard(key, payload) {
+  if (key === 'board') {
+    const board = payload.kanban || {}
+    return {
+      title: t('tipBoard'),
+      rows: [
+        ['○ ' + t('tipQueued'), `${Number(board.queued) || 0}`],
+        ['● ' + t('tipRunning'), `${Number(board.running) || 0}`, 'accent'],
+        ['▲ ' + t('tipBlocked'), `${Number(board.blocked) || 0}`, exceeds(Number(board.blocked) || 0, 0) ? 'warn' : '']
+      ]
+    }
+  }
+  if (key === 'tools') {
+    const activity = payload.activity || {}
+    return {
+      title: t('tipTools'),
+      rows: [
+        ['⚙ ' + t('tipOpenCalls'), `${Number(activity.open_call_count) || 0}`],
+        [t('tipOldest'), elapsedText(activity.oldest_open_elapsed_seconds) || '0s']
+      ]
+    }
+  }
+  return null
 }
 
 function Chips({ payload }) {
@@ -2807,7 +3286,9 @@ function Chips({ payload }) {
   return div(
     'omh-pane-chips',
     chips.map(function (chip) {
-      return jsx(Badge, { variant: chip.variant, size: 'xs', children: chip.text }, chip.key)
+      const card = chipCard(chip.key, payload)
+      const badge = jsx(Badge, { variant: chip.variant, size: 'xs', children: chip.text }, card ? undefined : chip.key)
+      return card ? withTip(card, node('span', { className: 'omh-pane-chip-tip' }, badge), chip.key) : badge
     })
   )
 }
@@ -2825,18 +3306,16 @@ function SectionHeader({ label, title, count, countClass, column, control, open,
   ]
   return node('div', { className: 'omh-pane-section', 'data-column': column || 'full', 'data-open': open === false ? 'false' : 'true' }, [
     fold
-      ? node(
-          'button',
-          {
+      ? withTip(
+          t('foldToggle'),
+          node('button', {
             type: 'button',
             className: 'omh-pane-section-toggle',
             'aria-expanded': open !== false,
-            title: t('foldToggle'),
             onClick: function () {
               onFold(open === false)
             }
-          },
-          head,
+          }, head),
           'toggle'
         )
       : node('span', { className: 'omh-pane-section-toggle' }, head, 'toggle'),
@@ -2902,13 +3381,12 @@ function CatchesSection({ payload, state }) {
   return jsx(Section, {
     id: 'catches',
     label: t('sectionCatches'),
-    title: found.length ? t('catchesTitle') : '',
     count: found.length ? `${found.length}` : '',
     countClass: 'omh-pane-mono',
     state,
     empty: found.length ? null : { title: t('catchesEmpty') },
     children: found.map(function (row) {
-      return node('div', { className: 'omh-pane-catch' }, [span('', row.emoji), span('omh-pane-catch-text', row.text)], `catch-${row.seq}`)
+      return node('div', { className: 'omh-pane-catch', 'data-tone': row.tone }, [span('omh-pane-catch-icon', row.emoji, 'icon'), span('omh-pane-catch-text', row.text, 'text')], `catch-${row.seq}`)
     })
   })
 }
@@ -3109,65 +3587,72 @@ function UsageStack({ usage, big }) {
   )
 }
 
-function DagKpis({ dag }) {
+const TOKEN_PARTS = USAGE_KEYS.concat([['output', 'out', 'dgOutput']])
+
+function figure(value, label, key) {
+  return span('omh-pane-fig', [span('omh-pane-fig-v omh-pane-mono', value, 'v'), label ? span('omh-pane-fig-l', label, 'l') : null], key)
+}
+
+// Token use, what the reader looks at first (owner, 2026-11-22): the total large, the cache hit beside it and the
+// caller's figures at the end, the split as one bar, and with `split` each part's count under it in the bar's colours;
+// `pace` is one more row of label and value under them. The rest is the hover card.
+function TokenFigures({ size, usage, total, cache, aside, split, pace, card }) {
+  const after = (aside || []).filter(Boolean)
+  const parts = usage && split
+    ? TOKEN_PARTS.flatMap(function (part) {
+        return [
+          node('span', { className: `omh-pane-tok-k omh-pane-dv-${part[1]}` }, [span('omh-pane-dv-swatch', '', 's'), span('', t(part[2]), 'l')], `k-${part[0]}`),
+          span('omh-pane-tok-n omh-pane-mono', tokenCountText(usage[part[0]]) || '0', `n-${part[0]}`)
+        ]
+      })
+    : []
+  // In the split's own grid, so its labels and figures stand in the split's columns.
+  const paced = (pace || []).flatMap(function (item, index) {
+    return [span('omh-pane-tok-k omh-pane-tok-pace', item.label, `pk${index}`), span('omh-pane-tok-n omh-pane-mono omh-pane-tok-pace', item.value, `pn${index}`)]
+  })
+  return withTip(
+    card,
+    node('div', { className: 'omh-pane-tok', 'data-size': size }, [
+      div('omh-pane-tok-top', [
+        span('omh-pane-tok-v omh-pane-mono', tokensText(total), 'v'),
+        span('omh-pane-tok-u', t('figTokens'), 'u'),
+        cache ? figure(cache, t('figCache'), 'cache') : null,
+        after.length ? span('omh-pane-tok-aside', after.map(function (item, index) { return figure(item.value, item.label, `a${index}`) }), 'aside') : null
+      ], 'top'),
+      usage ? jsx(UsageStack, { usage }, 'stack') : null,
+      parts.length || paced.length
+        ? div('omh-pane-tok-split', parts.concat(parts.length && paced.length ? [span('omh-pane-tok-rule', '', 'rule')] : [], paced), 'split')
+        : null
+    ])
+  )
+}
+
+function DagFigures({ dag }) {
   const total = dag.total
   // A share names the whole run, the lanes the reader cut included: `47/500 nodes priced`, not `47/47`.
   const lanes = dag.all.length + dag.hidden
   const prompt = promptTokens(total)
-  const cells = [
-    {
-      label: t('dgTokens'),
-      value: tokensText(allTokens(total)),
-      sub: total.lanes ? t('dgTokensSub', { out: tokenCountText(total.output), prompt: tokenCountText(prompt) }) : '',
-      tip: t('dgTokensTip')
-    },
-    {
-      label: t('dgCacheHit'),
-      value: percentText(cacheHit(total)),
-      sub: exceeds(prompt, 0) ? t('dgCacheHitSub', { read: tokenCountText(total.read), prompt: tokenCountText(prompt) }) : '',
-      tip: t('dgCacheHitTip'),
-      ring: total
-    },
-    {
-      label: t('dgCost'),
-      value: sumCostText(total),
-      sub: total.lanes ? t('dgCostSub', { priced: total.priced, total: lanes }) : t('dgCostNone'),
-      tip: t('dgCostTip')
-    },
-    {
-      label: t('dgNodeTime'),
-      value: dag.timed ? elapsedText(dag.seconds) : '—',
-      sub: dag.timed ? t('dgNodeTimeSub', { count: dag.timed, total: lanes }) : '',
-      tip: t('dgNodeTimeTip')
+  // Nothing counted and nothing timed: no line of dashes.
+  if (!exceeds(allTokens(total), 0) && !dag.timed) return null
+  return jsx(TokenFigures, {
+    size: 'mid',
+    usage: exceeds(allTokens(total), 0) ? total : null,
+    total: allTokens(total),
+    cache: exceeds(prompt, 0) ? percentText(cacheHit(total)) : '',
+    aside: [total.priced ? { value: sumCostText(total) } : null, dag.timed ? { value: elapsedText(dag.seconds), label: t('figNodeTime') } : null],
+    card: {
+      title: t('sectionDag'),
+      aside: t('figNodes', { count: lanes }),
+      rows: [
+        [t('dgTokens'), tokensText(allTokens(total)), null, total.lanes ? t('dgTokensSub', { out: tokenCountText(total.output), prompt: tokenCountText(prompt) }) : ''],
+        [t('dgCacheHit'), percentText(cacheHit(total)), null, exceeds(prompt, 0) ? t('dgCacheHitSub', { read: tokenCountText(total.read), prompt: tokenCountText(prompt) }) : ''],
+        [t('dgCost'), sumCostText(total), null, total.lanes ? t('dgCostSub', { priced: total.priced, total: lanes }) : t('dgCostNone')],
+        [t('dgNodeTime'), dag.timed ? elapsedText(dag.seconds) : '—', null, dag.timed ? t('dgNodeTimeSub', { count: dag.timed, total: lanes }) : '']
+      ],
+      body: exceeds(allTokens(total), 0) ? jsx(UsageStack, { usage: total }, 'stack') : null,
+      note: t('dgNote')
     }
-  ]
-  return jsx(KpiGrid, { cells })
-}
-
-// Figure cells in a grid: a label, a value, a line under it, and a ring where
-// `ring` carries the usage it draws. `wide` is the usage board's three columns.
-function KpiGrid({ cells, wide }) {
-  return node(
-    'div',
-    { className: wide ? 'omh-pane-dv-kpis omh-pane-ub-kpis' : 'omh-pane-dv-kpis' },
-    cells.map(function (cell) {
-      return node(
-        'div',
-        { className: 'omh-pane-dv-kpi', title: cell.tip },
-        [
-          span('omh-pane-dv-kpi-label', cell.label),
-          span('omh-pane-dv-kpi-value', cell.value),
-          span('omh-pane-dv-kpi-sub', cell.sub),
-          cell.ring ? span('omh-pane-dv-kpi-ring', jsx(UsageRing, { usage: cell.ring, size: wide ? 16 : 26 })) : null,
-          // A share of a whole (the context window) carries its own bar, empty where nothing measured it.
-          cell.meter !== undefined
-            ? node('span', { className: 'omh-pane-ub-meter', 'data-on': cell.meter === null ? 'false' : 'true' }, node('i', { style: { width: `${cell.meter || 0}%` } }), 'meter')
-            : null
-        ],
-        cell.label
-      )
-    })
-  )
+  })
 }
 
 function routeText(lane) {
@@ -3175,40 +3660,98 @@ function routeText(lane) {
   return [lane.category, model].filter(Boolean).join(' · ') || '—'
 }
 
-function LaneCard({ dag, lane, picked, dim, compact, onPick }) {
-  const after = lane.outside
-    ? ''
-    : lane.parents.length
-      ? t('dgAfter', {
-          nodes: lane.parents
-            .map(function (id) {
-              return dag.index[id].title
-            })
-            .join(', ')
-        })
-      : t('dgStart')
-  const named = lane.tone === 'accent' || lane.tone === 'error' ? toneClass(lane.tone) : lane.state === 'waiting' ? 'omh-pane-secondary' : ''
-  return node(
+// An outside lane as a row, in the AGENTS rows' shape: glyph, title, session; route, state, time.
+function OutsideRow({ dag, lane, picked, onPick }) {
+  const output = exceeds(lane.usage.output, 0) ? `↓${tokensText(lane.usage.output)}` : ''
+  return withTip(
+    laneTip(dag, lane),
+    node(
     'button',
     {
       type: 'button',
-      className: `omh-pane-dv-card${picked ? ' omh-pane-dv-picked' : ''}${dim ? ' omh-pane-dv-dim' : ''}`,
+      className: 'omh-agent omh-pane-dv-orow',
       'data-lane': lane.id,
-      'data-tone': lane.border,
-      'data-state': lane.state,
       'aria-pressed': picked,
       onClick: function () {
         onPick(picked ? '' : lane.id)
       }
     },
     [
-      span(`omh-pane-dv-title ${named}`, lane.title),
-      compact ? null : span('omh-pane-dv-line omh-pane-dv-wrap', routeText(lane)),
-      span(`omh-pane-dv-line omh-pane-dv-wrap ${toneClass(lane.tone)}`, laneStatus(lane)),
-      compact ? null : span('omh-pane-dv-line omh-pane-dv-wrap', after),
-      compact ? null : jsx(UsageStack, { usage: lane.usage })
+      span(`omh-agent-glyph ${toneClass(lane.tone)}`, lane.glyph),
+      span('omh-agent-title', lane.title),
+      span('omh-agent-id omh-pane-mono', output),
+      node('div', { className: 'omh-agent-sub' }, [
+        span('omh-agent-route omh-pane-mono', routeText(lane)),
+        span(`omh-agent-state ${toneClass(lane.tone)}`, quietWord(lane.state, lane.word)),
+        span('omh-agent-figure omh-pane-mono', lane.elapsed === null ? '' : elapsedText(lane.elapsed))
+      ])
     ]
   )
+  )
+}
+
+function LaneCard({ dag, lane, picked, dim, compact, onPick }) {
+  const named = lane.tone === 'accent' || lane.tone === 'error' ? toneClass(lane.tone) : lane.state === 'waiting' ? 'omh-pane-secondary' : ''
+  // The card keeps the name, the state and the usage bar; route, upstream and figures are in its hover card.
+  return withTip(
+    laneTip(dag, lane),
+    node(
+      'button',
+      {
+        type: 'button',
+        className: `omh-pane-dv-card${picked ? ' omh-pane-dv-picked' : ''}${dim ? ' omh-pane-dv-dim' : ''}`,
+        'data-lane': lane.id,
+        'data-tone': lane.border,
+        'data-state': lane.state,
+        'aria-pressed': picked,
+        onClick: function () {
+          onPick(picked ? '' : lane.id)
+        }
+      },
+      [
+        span(`omh-pane-dv-title ${named}`, lane.title),
+        span(`omh-pane-dv-line omh-pane-dv-wrap ${toneClass(lane.tone)}`, laneStatus(lane)),
+        compact ? null : jsx(UsageStack, { usage: lane.usage })
+      ]
+    )
+  )
+}
+
+// A lane's card, wherever the lane is drawn: its state, layer and route, its clocks where the timeline knows them,
+// its tokens, cache and cost, what it waited on, and the first lines of what it returned.
+function laneTip(dag, lane, clocks) {
+  const usage = lane.usage
+  const prompt = promptTokens(usage)
+  const when = clocks ? clocks.when : null
+  const effort = lane.effort && lane.effort !== '?' ? lane.effort : ''
+  const layer = Number.isInteger(lane.layer) && !lane.outside ? t('dgLayerShort', { count: lane.layer + 1 }) : t('dgOutsideShort')
+  const after = lane.outside
+    ? []
+    : lane.parents.map(function (id) {
+        return dag.index[id] ? dag.index[id].title : id
+      })
+  const drawn = [
+    clocks && clocks.track ? clocks.track : null,
+    after.length ? div('omh-pane-tip-after', t('dgAfter', { nodes: after.join(', ') }), 'after') : null,
+    exceeds(allTokens(usage), 0) ? jsx(UsageStack, { usage }, 'stack') : null,
+    lane.summary ? div('omh-pane-tip-summary', lane.summary, 'summary') : null
+  ].filter(Boolean)
+  return {
+    mark: lane.glyph,
+    tone: lane.tone,
+    title: lane.title,
+    aside: when ? elapsedText(when.end - when.start) : lane.elapsed === null ? lane.word : elapsedText(lane.elapsed),
+    meta: [layer, lane.category, lane.model ? (effort ? `${lane.model}:${effort}` : lane.model) : ''].filter(Boolean).join(' · '),
+    rows: [
+      when ? [t('dgStartedAt'), clockText(when.start, clocks.withDay)] : null,
+      when ? [t('dgEndedAt'), when.open ? t('dgNow') : clockText(when.end, clocks.withDay)] : null,
+      clocks && clocks.gap ? [t('dgWaitLabel'), elapsedText(clocks.gap.seconds), 'warn'] : null,
+      usage.reported ? [t('dgTokens'), tokensText(allTokens(usage)), null, t('dgTokensSub', { out: tokenCountText(usage.output), prompt: tokenCountText(prompt) })] : null,
+      exceeds(prompt, 0) ? [t('dgCacheHit'), percentText(cacheHit(usage))] : null,
+      usage.cost !== null ? [t('dgCost'), costText(usage.cost, usage.estimated, usage.partial)] : usage.seen ? [t('dgCost'), t('dgUnpriced'), 'muted'] : null
+    ],
+    body: drawn.length ? div('omh-pane-tip-stack', drawn, 'drawn') : null
+  }
 }
 
 // Where each edge runs, measured from the cards as laid out: out of a card's
@@ -3486,13 +4029,19 @@ export function foldedView(dag, folded, edges, lit) {
 }
 
 // A folded layer: one card-wide chip naming the layer, its size and its lanes by state.
-function LayerChip({ summary, dim, onLayer }) {
-  const counts = LAYER_STATE_ORDER.filter(function (word) {
+function layerTallies(summary) {
+  return LAYER_STATE_ORDER.filter(function (word) {
     return own(summary.states, word)
   }).map(function (word) {
     return span(`omh-pane-dv-tally ${toneClass(laneMark(word).tone)}`, `${laneMark(word).glyph} ${summary.states[word]}`, word)
   })
-  return node(
+}
+
+function LayerChip({ summary, dim, onLayer }) {
+  const counts = layerTallies(summary)
+  return withTip(
+    t('dgLayerTip'),
+    node(
     'button',
     {
       type: 'button',
@@ -3500,12 +4049,12 @@ function LayerChip({ summary, dim, onLayer }) {
       'data-lane': `layer:${summary.layer}`,
       'data-tone': segmentTone(`node:${summary.state}`),
       'aria-expanded': false,
-      title: t('dgLayerTip'),
       onClick: function () {
         onLayer(summary.layer, true)
       }
     },
     [span('omh-pane-dv-layer-name', `▸ ${t('dgLayerFold', { layer: summary.layer + 1, count: summary.count })}`, 'name'), span('omh-pane-dv-tallies', counts, 'tallies')]
+  )
   )
 }
 
@@ -3586,18 +4135,19 @@ function DagCanvas({ dag, pick, lit, reduce, folded, compact, onPick, onLayer })
         { className: 'omh-pane-dv-row' },
         [
           tagged
-            ? node(
+            ? withTip(
+                t('dgLayerTip'),
+                node(
                 'button',
                 {
                   type: 'button',
                   className: 'omh-pane-dv-layer-tag',
                   'aria-expanded': true,
-                  title: t('dgLayerTip'),
                   onClick: function () {
                     onLayer(at, false)
                   }
                 },
-                `▾ ${t('dgLayer', { count: at + 1 })}`,
+                `▾ ${t('dgLayer', { count: at + 1 })}`),
                 'tag'
               )
             : null,
@@ -3619,28 +4169,25 @@ function DagCanvas({ dag, pick, lit, reduce, folded, compact, onPick, onLayer })
 
 // `key` is the chip's place in its row, so two chips that read alike stay two.
 function chip(key, text, title, tone) {
-  return node(
-    'span',
-    { className: `omh-pane-dv-chip${tone ? ` omh-pane-dv-chip-${tone}` : ''}`, title: title || undefined },
-    [span('omh-pane-dv-chip-t', text)],
-    key
-  )
+  return withTip(title, node('span', { className: `omh-pane-dv-chip${tone ? ` omh-pane-dv-chip-${tone}` : ''}` }, [span('omh-pane-dv-chip-t', text)]), key)
 }
 
 // A chip that opens another lane.
 function laneLink(dag, id, onPick, label) {
   const lane = dag.index[id]
-  return node(
-    'button',
-    {
-      type: 'button',
-      className: 'omh-pane-dv-chip omh-pane-dv-link',
-      title: lane.title,
-      onClick: function () {
-        onPick(id)
-      }
-    },
-    [span('omh-pane-dv-chip-t', label || lane.title)],
+  return withTip(
+    laneTip(dag, lane),
+    node(
+      'button',
+      {
+        type: 'button',
+        className: 'omh-pane-dv-chip omh-pane-dv-link',
+        onClick: function () {
+          onPick(id)
+        }
+      },
+      [span('omh-pane-dv-chip-t', label || lane.title)]
+    ),
     `${id}-${label || ''}`
   )
 }
@@ -3660,10 +4207,14 @@ export function usageLegend(usage) {
   })
 }
 
-function LaneDetail({ dag, lane, onPick, seat }) {
+function LaneDetail({ dag, lane, onPick, seat, receivedAt }) {
   const usage = lane.usage
+  const now = Date.now() / 1000
+  const when = laneSpan(lane, receivedAt ? receivedAt / 1000 : now, now)
   const facts = [
     [t('dgElapsed'), lane.elapsed === null ? '—' : elapsedText(lane.elapsed)],
+    [t('dgStartedAt'), when ? clockText(when.start, true) : '—'],
+    [t('dgEndedAt'), when ? (when.open ? t('dgNow') : clockText(when.end, true)) : '—'],
     [t('dgTokens'), tokensText(allTokens(usage))],
     [t('dgCacheHit'), percentText(cacheHit(usage))],
     [t('dgCost'), usage.cost !== null ? costText(usage.cost, usage.estimated, usage.partial) : usage.seen ? t('dgUnpriced') : '—'],
@@ -3673,17 +4224,20 @@ function LaneDetail({ dag, lane, onPick, seat }) {
     node('div', { className: 'omh-pane-dv-head' }, [
       span(`omh-pane-dv-badge ${toneClass(lane.tone)}`, `${lane.glyph} ${lane.word}`),
       span('omh-pane-dv-name', lane.title),
-      node(
-        'button',
-        {
-          type: 'button',
-          className: 'omh-pane-dv-x',
-          title: 'Esc',
-          onClick: function () {
-            onPick('')
-          }
-        },
-        t('dgClose')
+      withTip(
+        'Esc',
+        node(
+          'button',
+          {
+            type: 'button',
+            className: 'omh-pane-dv-x',
+            onClick: function () {
+              onPick('')
+            }
+          },
+          t('dgClose')
+        ),
+        'close'
       )
     ]),
     node('div', { className: 'omh-pane-dv-chips' }, [
@@ -3705,7 +4259,7 @@ function LaneDetail({ dag, lane, onPick, seat }) {
         return node('div', { className: 'omh-pane-dv-fact' }, [span('omh-pane-dv-fact-l', fact[0]), span('omh-pane-dv-fact-v', fact[1])], fact[0])
       })
     ),
-    node('div', { className: 'omh-pane-dv-usage', title: t('dgUsageTip') }, [
+    withTip(t('dgUsageTip'), node('div', { className: 'omh-pane-dv-usage' }, [
       span('omh-pane-dv-usage-ring', jsx(UsageRing, { usage, size: 44 })),
       node(
         'div',
@@ -3718,7 +4272,7 @@ function LaneDetail({ dag, lane, onPick, seat }) {
           ]
         })
       )
-    ]),
+    ]), 'usage'),
     jsx(UsageStack, { usage, big: true }),
     lane.parents.length
       ? node('div', { className: 'omh-pane-dv-sec' }, [
@@ -3760,13 +4314,12 @@ function DagStats({ dag, mark, onMark, onPick, open, onOpen }) {
   ])
   const table = dag.models.map(function (entry) {
     const hit = cacheHit(entry.total)
-    return node(
+    return withTip({ title: entry.model, note: t('dgModelRowTip') }, node(
       'button',
       {
         type: 'button',
         className: 'omh-pane-dv-mrow',
         'data-on': on('model', entry.model),
-        title: `${entry.model} · ${t('dgModelRowTip')}`,
         onClick: function () {
           onMark({ kind: 'model', value: entry.model })
         }
@@ -3788,9 +4341,8 @@ function DagStats({ dag, mark, onMark, onPick, open, onOpen }) {
           entry.total.priced ? sumCostText(entry.total) : entry.total.lanes ? t('dgUnpriced') : '—',
           'p'
         )
-      ],
-      entry.model
-    )
+      ]
+    ), entry.model)
   })
   const path = dag.path.length
     ? node('div', { className: 'omh-pane-dv-path' }, [
@@ -3830,8 +4382,396 @@ function DagStats({ dag, mark, onMark, onPick, open, onOpen }) {
       }
     },
     [
-      node('summary', { className: 'omh-pane-dv-stats-h' }, [span('', t('dgStats'), 'label'), span('omh-pane-dv-stats-c', t('dgModels', { count: dag.models.length }), 'count')], 'head'),
-      node('div', { className: 'omh-pane-dv-stats-body' }, [dag.models.length ? head : null, ...table, path, blockers, div('omh-pane-dv-note', t('dgNote'), 'note')], 'body')
+      node('summary', { className: 'omh-pane-dv-stats-h' }, [withTip(t('dgNote'), span('', `${t('dgStats')} ⓘ`), 'label'), span('omh-pane-dv-stats-c', t('dgModels', { count: dag.models.length }), 'count')], 'head'),
+      node('div', { className: 'omh-pane-dv-stats-body' }, [dag.models.length ? head : null, ...table, path, blockers], 'body')
+    ]
+  )
+}
+
+// When each lane ran, on the wall clock: a lane's start is its end less its elapsed time, a running lane's is the
+// read less what the reader had counted, and its end is now. Null for a lane with no place on the clock: no time yet
+// (dispatched, no news), a finished lane the reader sent no end for, or a parked or stuck lane, whose elapsed time
+// counts its wait, not its run.
+// ponytail: a running lane's start is measured from when the pane received the read, not when the reader took it, so
+// it can sit a poll late; a `started_at` on each node would make it exact.
+export function laneSpan(lane, readAt, now) {
+  if (lane.elapsed === null) return null
+  if (lane.ended !== null) return { start: lane.ended - lane.elapsed, end: lane.ended, open: false }
+  if (lane.state !== 'running') return null
+  const start = readAt - lane.elapsed
+  return { start, end: Math.max(start, now), open: true }
+}
+
+// How long a lane sat after the last of its parents ended before it started: the scheduler's share of the run. Null
+// unless every parent has a closed span: a parent with no clock, or still running, may have ended after the timed
+// ones, so no wait can be told. A parent the cut graph hid is not in `lane.parents` at all, so the caller asks only
+// where the graph is whole.
+export function upstreamGap(lane, spans) {
+  const own = spans[lane.id]
+  const parents = lane.parents.map(function (id) {
+    return spans[id]
+  })
+  const unknown = parents.some(function (span) {
+    return !span || span.open
+  })
+  if (!own || !parents.length || unknown) return null
+  const ready = Math.max.apply(
+    null,
+    parents.map(function (span) {
+      return span.end
+    })
+  )
+  return exceeds(own.start - ready, 1) ? { from: ready, seconds: own.start - ready } : null
+}
+
+// The time no lane of the run ran, between its first start and its last end: what the run spent waiting on itself.
+function idleSeconds(spans) {
+  const sorted = spans.slice().sort(function (a, b) {
+    return a.start - b.start
+  })
+  let idle = 0
+  let reach = sorted.length ? sorted[0].end : 0
+  sorted.forEach(function (when) {
+    if (exceeds(when.start, reach)) idle += when.start - reach
+    reach = Math.max(reach, when.end)
+  })
+  return idle
+}
+
+// Drawn last where lanes share a line, so they stay on top: what runs, then a wait, then a failure.
+const TL_ON_TOP = ['accent', 'warn', 'error']
+// The folded strip's bands, by how many of the run's lanes ran at once: one, a few, many. Shades of the running
+// accent, lightest for one, so the strip never borrows done green, waiting yellow or failed red for a count.
+const TL_BANDS = [
+  { most: 1, tone: 'tl-one' },
+  { most: 5, tone: 'tl-few' },
+  { most: Infinity, tone: 'tl-many' }
+]
+const TL_TIP_LANES = 6
+// States in which a lane has not run yet, so an untimed one leaves no gap unexplained.
+const NOT_RUN = ['waiting', 'planned', 'pending', 'ready']
+
+// The run cut wherever the count of its lanes running changes, each piece banded by that count and merged into the
+// piece before it when the band is the same; a piece no lane ran in is idle, band -1.
+function concurrencyPieces(items) {
+  const cuts = Array.from(
+    new Set(
+      [].concat.apply(
+        [],
+        items.map(function (item) {
+          return [item.when.start, item.when.end]
+        })
+      )
+    )
+  ).sort(function (a, b) {
+    return a - b
+  })
+  const pieces = []
+  cuts.slice(1).forEach(function (to, index) {
+    const from = cuts[index]
+    const active = items.filter(function (item) {
+      return reaches(from, item.when.start) && exceeds(item.when.end, from)
+    })
+    const count = active.length
+    const band = count
+      ? TL_BANDS.findIndex(function (entry) {
+          return reaches(entry.most, count)
+        })
+      : -1
+    const last = pieces[pieces.length - 1]
+    if (last && last.band === band) {
+      last.end = to
+      last.low = Math.min(last.low, count)
+      last.high = Math.max(last.high, count)
+      active.forEach(function (item) {
+        if (!last.items.includes(item)) last.items.push(item)
+      })
+    } else pieces.push({ start: from, end: to, band, low: count, high: count, items: active.slice() })
+  })
+  return pieces
+}
+
+// The run on one time axis. Folded, one strip in the head beside the run's span and idle time, coloured by how many
+// lanes ran at once, each piece's lanes a hover away. Open, a line a lane under its layer, named, with its own time,
+// a click opening it. Hover cards carry the rest: a lane's model, clocks and wait, the run's layers and peak.
+function DagTimeline({ dag, receivedAt, pick, onPick, open, onOpen }) {
+  const live = dag.all.some(function (lane) {
+    return lane.state === 'running' && lane.ended === null && lane.elapsed !== null
+  })
+  const now = useClock(live) / 1000
+  const readAt = receivedAt ? receivedAt / 1000 : now
+  const spans = {}
+  dag.all.forEach(function (lane) {
+    spans[lane.id] = laneSpan(lane, readAt, now)
+  })
+  const timed = Object.values(spans).filter(Boolean)
+  if (!timed.length) return null
+  const edge = function (list, pickEnd) {
+    return Math[pickEnd ? 'max' : 'min'].apply(
+      null,
+      list.map(function (when) {
+        return pickEnd ? when.end : when.start
+      })
+    )
+  }
+  // The stretch a list of spans covers, open while any of them runs.
+  const reach = function (list) {
+    return list.length
+      ? {
+          start: edge(list, false),
+          end: edge(list, true),
+          open: list.some(function (when) {
+            return when.open
+          })
+        }
+      : null
+  }
+  const first = edge(timed, false)
+  const last = edge(timed, true)
+  // Only a scale: a span of no length still needs a width to draw on.
+  const width = Math.max(1, last - first)
+  const withDay = new Date(first * 1000).toDateString() !== new Date((first + width) * 1000).toDateString()
+  const scaleOf = function (from, size) {
+    return {
+      at: function (seconds) {
+        return `${(((seconds - from) / size) * 100).toFixed(2)}%`
+      },
+      length: function (seconds) {
+        return `${((seconds / size) * 100).toFixed(2)}%`
+      }
+    }
+  }
+  const full = scaleOf(first, width)
+  const range = function (when) {
+    return `${clockText(when.start, withDay)}–${when.open ? t('dgNow') : clockText(when.end, withDay)}`
+  }
+  const run = dag.lanes
+    .map(function (lane) {
+      return spans[lane.id]
+    })
+    .filter(Boolean)
+  const runReach = reach(run)
+  const runWidth = runReach ? runReach.end - runReach.start : 0
+  const idle = idleSeconds(run)
+  // A gap is the run's idle time only where the graph shows every lane and every lane that ran is timed; otherwise it
+  // is only time no drawn lane ran.
+  const whole = !dag.hidden && dag.lanes.every(function (lane) {
+    return spans[lane.id] || NOT_RUN.includes(lane.state)
+  })
+  const groups = dag.layers
+    .map(function (ids, layer) {
+      const lanes = ids
+        .map(function (id) {
+          return dag.index[id]
+        })
+        .filter(Boolean)
+      return { key: `layer-${layer}`, label: t('dgLayerShort', { count: layer + 1 }), name: t('dgLayer', { count: layer + 1 }), lanes }
+    })
+    .concat(dag.outside.length ? [{ key: 'outside', label: t('dgOutsideShort'), name: t('dgOutsideDag'), lanes: dag.outside }] : [])
+    .map(function (group) {
+      const items = group.lanes.map(function (lane) {
+        const when = spans[lane.id]
+        // Not in a cut graph: it has already dropped the edges to its hidden lanes, so a parent may be missing.
+        return { lane, when, group: group.label, gap: when && !lane.outside && !dag.hidden ? upstreamGap(lane, spans) : null }
+      })
+      const started = items
+        .filter(function (item) {
+          return item.when
+        })
+        .map(function (item) {
+          return item.when
+        })
+      const pending = items.length - started.length
+      const covered = reach(started)
+      return { ...group, items, reach: covered, figure: covered ? elapsedText(covered.end - covered.start) : pending ? `○ ${pending}` : '—' }
+    })
+  const marks = function (items, place) {
+    const drawn = items.filter(function (item) {
+      return item.when
+    })
+    const waits = drawn
+      .filter(function (item) {
+        return item.gap
+      })
+      .map(function (item) {
+        return node('span', { className: 'omh-pane-dv-tl-wait', style: { left: place.at(item.gap.from), width: place.length(item.gap.seconds) } }, [], `wait-${item.lane.id}`)
+      })
+    const bars = drawn
+      .slice()
+      .sort(function (a, b) {
+        return TL_ON_TOP.indexOf(a.lane.tone) - TL_ON_TOP.indexOf(b.lane.tone)
+      })
+      .map(function (item) {
+        return node(
+          'span',
+          { className: `omh-pane-dv-tl-bar ${toneClass(item.lane.tone)}`, 'data-open': item.when.open ? 'true' : 'false', style: { left: place.at(item.when.start), width: place.length(item.when.end - item.when.start) } },
+          [],
+          `bar-${item.lane.id}`
+        )
+      })
+    return waits.concat(bars)
+  }
+  const runItems = [].concat.apply(
+    [],
+    groups
+      .filter(function (group) {
+        return group.key !== 'outside'
+      })
+      .map(function (group) {
+        return group.items.filter(function (item) {
+          return item.when
+        })
+      })
+  )
+  const pieces = concurrencyPieces(runItems)
+  const peak = pieces.reduce(function (most, piece) {
+    return Math.max(most, piece.high)
+  }, 0)
+  const runScale = runReach ? scaleOf(runReach.start, Math.max(1, runWidth)) : full
+  const runFigure = runReach ? elapsedText(runWidth) : '—'
+  const laneLine = function (item) {
+    return div(
+      'omh-pane-tip-li',
+      [span(`omh-pane-tip-mark ${toneClass(item.lane.tone)}`, item.lane.glyph, 'glyph'), span('omh-pane-tip-name', item.lane.title, 'name'), span('omh-pane-tip-aside omh-pane-mono', item.group, 'layer')],
+      item.lane.id
+    )
+  }
+  const pieceCard = function (piece) {
+    if (piece.band === -1) return { mark: '○', tone: 'muted', title: t(whole ? 'dgIdleLabel' : 'dgGapLabel'), aside: elapsedText(piece.end - piece.start), meta: range(piece) }
+    const lanes = piece.items.slice().sort(function (a, b) {
+      return a.when.start - b.when.start
+    })
+    const more = lanes.length - TL_TIP_LANES
+    return {
+      mark: '■',
+      tone: TL_BANDS[piece.band].tone,
+      title: piece.low === piece.high ? t('dgAtOnce', { count: piece.high }) : t('dgAtOnceRange', { low: piece.low, high: piece.high }),
+      aside: elapsedText(piece.end - piece.start),
+      meta: range({
+        start: piece.start,
+        end: piece.end,
+        open: piece.items.some(function (item) {
+          return item.when.open && item.when.end === piece.end
+        })
+      }),
+      body: div('omh-pane-tip-list', lanes.slice(0, TL_TIP_LANES).map(laneLine).concat(exceeds(more, 0) ? [div('omh-pane-tip-more', t('dgMoreLanes', { count: more }), 'more')] : []), 'list')
+    }
+  }
+  const strip = node(
+    'span',
+    { className: 'omh-pane-dv-tl-strip' },
+    pieces.map(function (piece, index) {
+      return withTip(
+        pieceCard(piece),
+        node('span', { className: `omh-pane-dv-tl-seg ${piece.band === -1 ? 'omh-pane-dv-tl-idle' : toneClass(TL_BANDS[piece.band].tone)}`, style: { left: runScale.at(piece.start), width: runScale.length(piece.end - piece.start) } }),
+        `seg-${index}`
+      )
+    }),
+    'strip'
+  )
+  const legend = div(
+    'omh-pane-tip-legend',
+    [span('', t('dgAtOnceLegend'), 'label')].concat(
+      TL_BANDS.map(function (entry, index) {
+        const low = index ? TL_BANDS[index - 1].most + 1 : 1
+        const words = entry.most === Infinity ? `${low}+` : entry.most === low ? `${low}` : `${low}–${entry.most}`
+        return span('omh-pane-tip-key', [span(`omh-pane-tip-swatch ${toneClass(entry.tone)}`, '', 'swatch'), words], `band-${index}`)
+      })
+    ),
+    'legend'
+  )
+  const layerChart = div(
+    'omh-pane-tip-layers',
+    groups.map(function (group) {
+      const count = function (tone) {
+        return group.items.filter(function (item) {
+          return item.lane.tone === tone
+        }).length
+      }
+      const failed = count('error')
+      const running = count('accent')
+      return div(
+        'omh-pane-tip-layer',
+        [
+          span('omh-pane-tip-k', group.label, 'label'),
+          span('omh-pane-tip-track', group.reach ? node('span', { className: 'omh-pane-tip-bar', style: { left: full.at(group.reach.start), width: full.length(group.reach.end - group.reach.start) } }) : [], 'track'),
+          span('omh-pane-tip-v omh-pane-mono', [group.figure, failed ? span('omh-pane-error', ` ▲${failed}`, 'failed') : null, running ? span('omh-pane-accent', ` ●${running}`, 'running') : null], 'figure')
+        ],
+        group.key
+      )
+    }),
+    'layers'
+  )
+  const overview = {
+    title: t('dgTimeline'),
+    aside: runFigure,
+    meta: runReach ? range(runReach) : null,
+    rows: [
+      exceeds(idle, 1) ? (whole ? [t('dgIdleLabel'), `${elapsedText(idle)} · ${Math.round((idle / Math.max(1, runWidth)) * 100)}%`] : [t('dgGapLabel'), elapsedText(idle)]) : null,
+      peak ? [t('dgPeakLabel'), t('dgAtOnce', { count: peak })] : null
+    ],
+    body: div('omh-pane-tip-stack', [runReach ? legend : null, layerChart, whole ? null : div('omh-pane-tip-note', t('dgPartialTip'), 'partial')], 'body')
+  }
+  const laneCard = function (item) {
+    return laneTip(dag, item.lane, { when: item.when, gap: item.gap, withDay, track: item.when ? span('omh-pane-tip-track', marks([item], full), 'where') : null })
+  }
+  const laneRow = function (group) {
+    return function (item, index) {
+      const lane = item.lane
+      const when = item.when
+      return withTip(
+        laneCard(item),
+        node(
+          'button',
+          {
+            type: 'button',
+            className: 'omh-pane-dv-tl-lane',
+            'data-lane': lane.id,
+            'aria-pressed': lane.id === pick,
+            onClick: function () {
+              onPick(lane.id === pick ? '' : lane.id)
+            }
+          },
+          [
+            span('omh-pane-dv-tl-label', index ? '' : group.label, 'label'),
+            span(`omh-pane-dv-tl-glyph ${toneClass(lane.tone)}`, lane.glyph, 'glyph'),
+            span('omh-pane-dv-tl-name', lane.title, 'name'),
+            span('omh-pane-dv-tl-track', marks([item], full), 'track'),
+            span('omh-pane-dv-tl-fig omh-pane-mono', when ? elapsedText(when.end - when.start) : '—', 'figure')
+          ]
+        ),
+        lane.id
+      )
+    }
+  }
+  return node(
+    'details',
+    {
+      className: 'omh-pane-dv-stats omh-pane-dv-tl',
+      open,
+      onToggle: function (event) {
+        onOpen(event.currentTarget.open)
+      }
+    },
+    [
+      node('summary', { className: 'omh-pane-dv-stats-h' }, [span('', t('dgTimeline'), 'label'), open || !runReach ? null : strip, withTip(overview, span('omh-pane-dv-stats-c omh-pane-mono', runFigure), 'count')], 'head'),
+      open
+        ? node(
+            'div',
+            { className: 'omh-pane-dv-tl-body' },
+            [
+              ...groups.map(function (group) {
+                return div('omh-pane-dv-tl-group', group.items.map(laneRow(group)), group.key)
+              }),
+              div(
+                'omh-pane-dv-tl-axis omh-pane-mono',
+                node('span', { className: 'omh-pane-dv-tl-ticks' }, [span('', clockText(first, withDay), 'start'), span('', live ? t('dgNow') : clockText(last, withDay), 'end')], 'ticks'),
+                'axis'
+              )
+            ],
+            'body'
+          )
+        : null
     ]
   )
 }
@@ -3851,25 +4791,27 @@ export function dagViewOptions(stored) {
 
 const FOLD_WORDS = { auto: 'dgFoldAuto', active: 'dgFoldActive', open: 'dgFoldOpen', closed: 'dgFoldClosed' }
 
-// The fold modes as buttons over the cards, one press away; pressing one, even the one in force, drops the
+// The fold modes as buttons in the graph's heading, one press away; pressing one, even the one in force, drops the
 // layers folded or opened by hand.
 function DagFoldBar({ fold, onFold }) {
   return node(
     'div',
     { className: 'omh-pane-seg omh-pane-dv-modes', role: 'group', 'aria-label': t('dgFoldMode') },
     FOLD_MODES.map(function (mode) {
-      return node(
-        'button',
-        {
-          type: 'button',
-          className: 'omh-pane-seg-b',
-          'aria-pressed': fold === mode,
-          title: t(`${FOLD_WORDS[mode]}Tip`),
-          onClick: function () {
-            onFold(mode)
-          }
-        },
-        t(FOLD_WORDS[mode]),
+      return withTip(
+        t(`${FOLD_WORDS[mode]}Tip`),
+        node(
+          'button',
+          {
+            type: 'button',
+            className: 'omh-pane-seg-b',
+            'aria-pressed': fold === mode,
+            onClick: function () {
+              onFold(mode)
+            }
+          },
+          t(FOLD_WORDS[mode])
+        ),
         mode
       )
     }),
@@ -3959,10 +4901,11 @@ function DagOptions({ options, onChange }) {
   )
 }
 
-function DagView({ dag, options, onOptions, onOpen }) {
+function DagView({ dag, summary, options, onOptions, onOpen, receivedAt }) {
   const [pick, setPick] = useState('')
   const [mark, setMark] = useState(null)
   const [statsOpen, setStatsOpen] = useState(true)
+  const [timelineOpen, setTimelineOpen] = useState(false)
   // The layers the person folded or opened by hand, for this run under this mode; a new mode starts over.
   const [overrides, setOverrides] = useState({ key: '', layers: {} })
   const [seat, setSeat] = useState(null)
@@ -4008,7 +4951,6 @@ function DagView({ dag, options, onOptions, onOpen }) {
     if (mode !== options.fold) onOptions({ fold: mode })
   }
   const lane = dag.index[pick] || null
-  const lit = markedLanes(dag, mark)
   const toggle = function (next) {
     setMark(function (now) {
       return now && now.kind === next.kind && now.value === next.value ? null : next
@@ -4023,25 +4965,31 @@ function DagView({ dag, options, onOptions, onOpen }) {
       }
     },
     [
-      options.figures ? jsx(DagKpis, { dag }, 'kpis') : null,
+      // Four levels, each drawn its own way (owner, 2026-11-22): the section; the run's head card, its name and
+      // figures; its blocks (stats, timeline, graph, outside lanes) under one kind of heading, each body on a rail;
+      // the layers and cards inside the graph.
+      div('omh-pane-dv-runhead', [div('omh-pane-run', summary, 'run'), options.figures ? jsx(DagFigures, { dag }, 'figures') : null], 'head'),
       options.stats ? jsx(DagStats, { dag, mark, onMark: toggle, onPick: setPick, open: statsOpen, onOpen: setStatsOpen }, 'stats') : null,
-      jsx(DagFoldBar, { fold: options.fold, onFold }, 'fold'),
-      jsx(DagCanvas, { dag, pick, lit, reduce: !options.implied, folded, compact: options.compact, onPick: setPick, onLayer }, 'canvas'),
-      // The lanes no node of the run owns, below the layers and out of its edges: their own small block.
+      jsx(DagTimeline, { dag, receivedAt, pick, onPick: setPick, open: timelineOpen, onOpen: setTimelineOpen }, 'timeline'),
+      div('omh-pane-dv-graph', [
+        // The fold modes sit in the graph's heading: they fold its layers and nothing else.
+        div('omh-pane-dv-stats-h omh-pane-dv-sub', [span('', t('dgGraph'), 'label'), jsx(DagFoldBar, { fold: options.fold, onFold }, 'fold')], 'head'),
+        div('omh-pane-dv-graph-body', [
+          jsx(DagCanvas, { dag, pick, lit: markedLanes(dag, mark), reduce: !options.implied, folded, compact: options.compact, onPick: setPick, onLayer }, 'canvas'),
+          exceeds(dag.hidden, 0) ? div('omh-pane-more', t('graphMore', { count: dag.hidden }), 'hidden') : null
+        ], 'body')
+      ], 'graph'),
+      // The lanes no node of the run owns, the way the TUI's `outside DAG` group draws them: after the run, out of its
+      // layers and edges, one row a lane.
       dag.outside.length
         ? div('omh-pane-dv-outside', [
-            div('omh-pane-dv-more omh-pane-dv-outside-label', t('dgOutsideDag'), 'label'),
-            ...dag.outside.map(function (lane) {
-              return jsx(
-                LaneCard,
-                { dag, lane, picked: lane.id === pick, dim: !!lit && lit.indexOf(lane.id) === -1, compact: options.compact, onPick: setPick },
-                lane.id
-              )
-            })
+            div('omh-pane-dv-stats-h omh-pane-dv-sub', [span('', t('dgOutsideDag'), 'label'), span('omh-pane-dv-stats-c omh-pane-mono', `${dag.outside.length}`, 'count')], 'head'),
+            div('omh-pane-dv-outside-body', dag.outside.map(function (lane) {
+              return jsx(OutsideRow, { dag, lane, picked: lane.id === pick, onPick: setPick }, lane.id)
+            }), 'body')
           ], 'outside')
         : null,
-      exceeds(dag.hidden, 0) ? div('omh-pane-more', t('graphMore', { count: dag.hidden }), 'hidden') : null,
-      lane ? jsx(LaneDetail, { dag, lane, onPick: setPick, seat: setSeat }, 'detail') : null
+      lane ? jsx(LaneDetail, { dag, lane, onPick: setPick, seat: setSeat, receivedAt }, 'detail') : null
     ]
   )
 }
@@ -4126,7 +5074,7 @@ function DagRunPicker({ choices, onPick }) {
 // a fanout, the native delegation tree, the runtime graph -- it is the same
 // view: the run's line, then its cards, folded by layer as the view options
 // say. With no graph it says so, and still offers the session's earlier runs.
-function DagSection({ payload, state, named, picked, onPick, onOpen }) {
+function DagSection({ payload, state, named, picked, onPick, onOpen, receivedAt }) {
   const [options, setOptionsState] = useState(function () {
     return dagViewOptions(readStore(DAG_VIEW_STORE))
   })
@@ -4154,7 +5102,7 @@ function DagSection({ payload, state, named, picked, onPick, onOpen }) {
     state,
     empty: dag || (view && view.note) ? null : { title: t('dagEmptyTitle'), description: choices ? t('dagEmptyRuns') : t('dagEmptyDescription') },
     children: dag
-      ? [div('omh-pane-run', view.summary, 'run'), jsx(DagView, { dag, options, onOptions: setOptions, onOpen }, `dag-${run}|${dag.name}`)]
+      ? [jsx(DagView, { dag, summary: view.summary, options, onOptions: setOptions, onOpen, receivedAt }, `dag-${run}|${dag.name}`)]
       : view && view.note
         ? [div('omh-pane-run', view.summary, 'run'), div('omh-pane-more', view.note, 'counts')]
         : null
@@ -4169,38 +5117,66 @@ function RouteRow({ row, extraSeconds }) {
   const route = routeIdentity(row)
   const figures = rowFigures(row, extraSeconds)
   const mark = rowMark(row)
-  const tip = [title, route.text, figures.tokens, figures.cost, ...figures.extras].filter(Boolean).join(' · ')
-  return node('div', { className: 'omh-agent', 'data-lane': route.kind }, [
-    span(`omh-agent-glyph ${toneClass(mark.tone)}`, mark.spinning ? jsx(GlyphSpinner, { spinner: 'braille', ariaLabel: t('spinnerLabel') }) : mark.glyph),
-    jsx(Tip, { label: tip, children: span('omh-agent-title', collapsePaths(title)) }),
-    span('omh-agent-id omh-pane-mono', id),
-    node('div', { className: 'omh-agent-sub' }, [
-      route.text ? jsx(Tip, { label: route.text, children: span(`omh-agent-route omh-pane-mono ${toneClass(ROUTE_TONE[route.kind])}`, route.text) }) : span('omh-agent-route', ''),
-      span(`omh-agent-state ${toneClass(figures.stateTone)}`, figures.state),
-      span('omh-agent-figure omh-pane-mono', figures.elapsed)
+  // The row keeps what tells rows apart; its card has the whole title, the full route and every figure.
+  const card = {
+    mark: mark.glyph || '●',
+    tone: mark.tone,
+    title,
+    aside: figures.elapsed,
+    meta: [id, route.text].filter(Boolean).join(' · '),
+    rows: [figures.state ? [t('tipState'), figures.state, figures.stateTone] : null],
+    body: [figures.tokens, figures.cost].concat(figures.extras).filter(Boolean).length
+      ? div(
+          'omh-pane-tip-list',
+          [figures.tokens, figures.cost].concat(figures.extras).filter(Boolean).map(function (extra, index) {
+            return div('omh-pane-tip-line', extra, `x${index}`)
+          }),
+          'extras'
+        )
+      : null
+  }
+  return withTip(
+    card,
+    node('div', { className: 'omh-agent', 'data-lane': route.kind }, [
+      span(`omh-agent-glyph ${toneClass(mark.tone)}`, mark.spinning ? jsx(GlyphSpinner, { spinner: 'braille', ariaLabel: t('spinnerLabel') }) : mark.glyph),
+      span('omh-agent-title', collapsePaths(title)),
+      span('omh-agent-id omh-pane-mono', id),
+      node('div', { className: 'omh-agent-sub' }, [
+        span(`omh-agent-route omh-pane-mono ${toneClass(ROUTE_TONE[route.kind])}`, route.text),
+        span(`omh-agent-state ${toneClass(figures.stateTone)}`, figures.state),
+        span('omh-agent-figure omh-pane-mono', figures.elapsed)
+      ])
     ])
-  ])
+  )
 }
 
-// Who works for this session: the native subagents as one line (Desktop's
-// Agents panel lists each), then the routes OMH dispatched, Maestro and Kanban.
+const AGENT_ROWS = 6
+
+// Who works for this session outside the DAG: each subagent a row (a node a run binds is drawn in DAG, not here),
+// then the routes OMH dispatched, Maestro and Kanban.
 function AgentsSection({ payload, state, receivedAt }) {
   const tally = agentTally(payload)
   const routes = tally.routes
-  const now = useClock(routes.some(isRunningRow))
+  const subagents = tally.subagents.slice(0, AGENT_ROWS)
+  const past = tally.subagents.length - subagents.length
+  const now = useClock(routes.concat(subagents).some(isRunningRow))
   const extraSeconds = receivedAt ? Math.max(0, (now - receivedAt) / 1000) : 0
   const summary = payload ? subagentSummary(payload) : ''
-  const tip = tally.subagents.length ? t('subagentsTip') : ''
   const count = tally.subagents.length + routes.length
   return jsx(Section, {
     id: 'agents',
     label: t('sectionAgents'),
+    title: summary,
     count: count ? `${count}` : '',
     countClass: 'omh-pane-mono',
     state,
-    empty: summary || routes.length ? null : { title: t('agentsEmpty') },
+    // Only rows the reader capped: the title's `+N more` is all there is to say.
+    empty: subagents.length || routes.length ? null : { title: summary || t('agentsEmpty') },
     children: [
-      summary ? (tip ? jsx(Tip, { label: tip, children: span('omh-pane-summary', summary) }, 'summary') : span('omh-pane-summary', summary, 'summary')) : null,
+      ...subagents.map(function (row, index) {
+        return jsx(RouteRow, { row, extraSeconds }, `sub-${safeText(row.task_id)}-${index}`)
+      }),
+      exceeds(past, 0) ? div('omh-pane-more', t('subagentsMore', { count: past }), 'subs-past') : null,
       ...routes.map(function (row, index) {
         return jsx(RouteRow, { row, extraSeconds }, `${safeText(row.task_id)}-${index}`)
       }),
@@ -4236,55 +5212,6 @@ function useTurns(sessionId) {
   return turns
 }
 
-// The chat's tokens as a ring (cache read, uncached input, cache write, output), the total and the cache in its middle.
-function UsageDial({ dial, title }) {
-  const size = 96
-  const stroke = 9
-  const radius = (size - stroke) / 2
-  const circumference = 2 * Math.PI * radius
-  const mid = size / 2
-  const whole = dial.split ? allTokens(dial.split) : 0
-  let offset = 0
-  const arcs = []
-  USAGE_KEYS.map(function (key) {
-    return [key[0], key[1]]
-  })
-    .concat([['output', 'out']])
-    .forEach(function (key) {
-      const count = dial.split ? dial.split[key[0]] : 0
-      if (!exceeds(count, 0) || !exceeds(whole, 0)) return
-      const length = (count / whole) * circumference
-      arcs.push(
-        node(
-          'circle',
-          {
-            className: `omh-pane-dv-arc omh-pane-dv-${key[1]}`,
-            cx: mid,
-            cy: mid,
-            r: radius,
-            strokeWidth: stroke,
-            strokeDasharray: `${length.toFixed(2)} ${(circumference - length).toFixed(2)}`,
-            strokeDashoffset: (-offset).toFixed(2),
-            transform: `rotate(-90 ${mid} ${mid})`
-          },
-          [],
-          key[1]
-        )
-      )
-      offset += length
-    })
-  return node('div', { className: 'omh-pane-ub-dial', title }, [
-    node('svg', { className: 'omh-pane-dv-ring', width: size, height: size, viewBox: `0 0 ${size} ${size}`, 'aria-hidden': 'true' }, [
-      node('circle', { className: 'omh-pane-dv-track', cx: mid, cy: mid, r: radius, strokeWidth: stroke }, [], 'track'),
-      ...arcs
-    ], 'ring'),
-    node('div', { className: 'omh-pane-ub-center' }, [
-      span('omh-pane-ub-total', tokensText(dial.total), 'total'),
-      dial.cache === null ? null : span('omh-pane-ub-cache', t('ubCacheLine', { cache: dial.cache }), 'cache')
-    ], 'center')
-  ])
-}
-
 // Which tokens the board counts: the chat's own, or with its subagents' lanes.
 function UsageScope({ withSubs, count, onPick }) {
   return node('span', { className: 'omh-pane-seg', role: 'group', 'aria-label': t('ubScope') }, [
@@ -4306,7 +5233,6 @@ function UsageBoard({ saved, stored, graph }) {
   const streamRead = useValue(host.state.focusedUsage || host.state.gateway)
   const runtimeRead = useValue(host.state.focusedSessionId || host.state.gateway)
   const busyRead = useValue(host.state.busy || host.state.gateway)
-  const [partsOpen, setPartsOpen] = useState(true)
   const [withSubs, setWithSubs] = useState(false)
   const live = host.state.focusedUsage && streamRead && typeof streamRead === 'object' ? streamRead : null
   const runtime = host.state.focusedSessionId && typeof runtimeRead === 'string' ? runtimeRead : ''
@@ -4339,7 +5265,7 @@ function UsageBoard({ saved, stored, graph }) {
   })
   const subs = graph && typeof graph === 'object' && graph.status === 'active' ? sumUsage(lanesOf(graph).map(laneUsage)) : null
   const board = usageBoard({ live, stats: counters.data, saved, stored, breakdown: composition.data, turns, subs, withSubs })
-  // The bar sits in the summary, so it shows folded too; what the prompt leaves of the window is the empty end.
+  // The prompt's parts as one bar in the card; what the prompt leaves of the window is the empty end.
   const bar = node(
     'div',
     { className: 'omh-pane-dv-stack' },
@@ -4370,55 +5296,39 @@ function UsageBoard({ saved, stored, graph }) {
           : []
       )
   )
-  // The composition is always there to open; until the host has measured one it says when it will.
-  const composed = node(
-    'details',
-    {
-      className: 'omh-pane-dv-stats omh-pane-ub-parts',
-      open: partsOpen,
-      onToggle: function (event) {
-        setPartsOpen(event.currentTarget.open)
-      }
-    },
-    [
-      node(
-        'summary',
-        { className: 'omh-pane-dv-stats-h' },
-        [
-          span('', t('ubParts'), 'label'),
-          span('omh-pane-dv-stats-c', board.parts.length ? (board.window ? `~${tokenCountText(board.sum)} / ${tokenCountText(board.window)}` : `~${tokenCountText(board.sum)}`) : '—', 'count'),
-          board.parts.length ? bar : null
-        ],
-        'head'
-      ),
-      node('div', { className: 'omh-pane-dv-stats-body' }, [board.parts.length ? legend : div('omh-pane-fold', t('ubPartsPending'), 'pending')], 'body')
-    ],
-    'parts'
-  )
-  // The dial speaks for tokens and cache; the figures beside it are TPS, TTFT, cost and context, in that order.
-  const side = [4, 5, 2, 3].map(function (at) {
-    return board.cells[at]
-  })
-  const dialTip = board.cells
-    .slice(0, 2)
-    .map(function (cell) {
-      return [cell.label, cell.value, cell.sub].filter(Boolean).join(' · ')
-    })
-    .join('\n')
+  // The board keeps the tokens, their split, the cache hit, the cost, the speed and the first-token wait; the card has every other figure, where they
+  // came from and what the prompt is made of.
+  const card = {
+    title: board.model || t('sectionUsage'),
+    aside: board.calls ? t('ubCalls', { count: board.calls }) : '',
+    meta: board.source ? t(SOURCE_WORDS[board.source]) : '',
+    rows: board.cells.map(function (cell) {
+      return cell.value === '—' && !cell.sub ? null : [cell.label, cell.value, null, cell.sub]
+    }),
+    body: div(
+      'omh-pane-tip-stack',
+      [
+        div('omh-pane-tip-label', [span('', t('ubParts'), 'l'), span('omh-pane-mono', board.parts.length ? (board.window ? `~${tokenCountText(board.sum)} / ${tokenCountText(board.window)}` : `~${tokenCountText(board.sum)}`) : '—', 'n')], 'head'),
+        board.parts.length ? bar : null,
+        board.parts.length ? legend : div('omh-pane-tip-note', t('ubPartsPending'), 'pending')
+      ],
+      'parts'
+    ),
+    note: t('ubNote')
+  }
   const subCount = subs ? subs.lanes : 0
-  const source = board.source ? span('omh-pane-ub-source', t(SOURCE_WORDS[board.source]), 'source') : null
   const scope = jsx(UsageScope, { withSubs: withSubs && exceeds(subCount, 0), count: subCount, onPick: setWithSubs }, 'scope')
   return jsx(Section, {
     id: 'usage',
     label: t('sectionUsage'),
     title: board.model,
     count: board.calls ? t('ubCalls', { count: board.calls }) : '',
-    control: node('span', { className: 'omh-pane-controls', title: t('ubSourceTip') }, [source, scope]),
+    control: node('span', { className: 'omh-pane-controls' }, [scope]),
     children: [
       node('div', { className: 'omh-pane-dv' }, [
-        node('div', { className: 'omh-pane-ub-main' }, [jsx(UsageDial, { dial: board.dial, title: dialTip }, 'dial'), jsx(KpiGrid, { cells: side, wide: true }, 'kpis')], 'main'),
-        board.empty ? div('omh-pane-fold', stored || runtime ? t('ubEmpty') : t('ubNoChat'), 'empty') : null,
-        composed
+        board.empty
+          ? div('omh-pane-fold', stored || runtime ? t('ubEmpty') : t('ubNoChat'), 'empty')
+          : jsx(TokenFigures, { size: 'big', usage: board.dial.split, total: board.dial.total, cache: board.dial.cache || '', aside: [board.cost ? { value: board.cost } : null], split: true, pace: board.pace, card }, 'line')
       ])
     ]
   })
@@ -4436,7 +5346,7 @@ function HudPane() {
     jsx(UsageBoard, { saved: payload ? payload.session_usage : null, stored: hud.sessionId, graph: payload ? payload.delegation_graph : null }, 'usage'),
     jsx(CatchesSection, { payload, state }, 'catches'),
     jsx(PlanSection, { payload, state }, 'plan'),
-    jsx(DagSection, { payload, state, named: !!hud.sessionId, picked: hud.dagRun, onPick: hud.pickDagRun, onOpen: hud.openDagLayers }, 'dag'),
+    jsx(DagSection, { payload, state, named: !!hud.sessionId, picked: hud.dagRun, onPick: hud.pickDagRun, onOpen: hud.openDagLayers, receivedAt: hud.receivedAt }, 'dag'),
     jsx(AgentsSection, { payload, state, receivedAt: hud.receivedAt }, 'agents')
   ]
   return div('omh-pane', [
@@ -4457,15 +5367,15 @@ function StatusItem() {
     if (typeof host.revealPane === 'function') host.revealPane(`${PLUGIN_ID}:${PANE_ID}`)
     else if (typeof host.notify === 'function') host.notify({ kind: 'info', message: item.detail })
   }
-  return jsx(Tip, {
-    label: item.detail,
-    children: node('button', { type: 'button', className: 'omh-bar', onClick: reveal }, [
+  return withTip(
+    statusCard(item.parts || [item.detail]),
+    node('button', { type: 'button', className: 'omh-bar', onClick: reveal }, [
       span('omh-bar-brand', t('brand')),
       ...item.segments.map(function (segment) {
         return span(`omh-bar-seg ${toneClass(segment.tone)}`, segment.text, segment.text)
       })
     ])
-  })
+  )
 }
 
 export default {
@@ -4479,7 +5389,7 @@ export default {
     // locale bundles, `t` answers in the app's language. Older hosts lack
     // it, and the English table answers there.
     if (ctx.i18n && typeof ctx.i18n.register === 'function' && typeof ctx.i18n.t === 'function') {
-      ctx.i18n.register({ en: EN, ko: KO })
+      ctx.i18n.register({ en: EN, ko: KO, zh: ZH })
       pluginI18n = ctx.i18n
     }
     const removeStyle = injectStyle()

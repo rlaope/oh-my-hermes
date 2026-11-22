@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { findOptionKey, fontKey, isAppKey, isClearKey, isSelectAllKey, isFindKey, lineEditBytes, nextFontSize, scrollKey, clipboardKey } from "./engine-input";
+import { findOptionKey, fontKey, isAppKey, isClearKey, isSelectAllKey, optionTyped, isFindKey, lineEditBytes, nextFontSize, scrollKey, clipboardKey } from "./engine-input";
 import { validPattern } from "./engine-find";
 
 const key = (o: Partial<{ key: string; code: string; metaKey: boolean; ctrlKey: boolean; altKey: boolean; shiftKey: boolean }>) => ({ key: "f", code: "KeyF", metaKey: false, ctrlKey: false, altKey: false, shiftKey: false, ...o });
@@ -207,5 +207,20 @@ describe("Cmd+A selects the terminal on macOS", () => {
     expect(isSelectAllKey(k("a", "KeyA", { metaKey: true, shiftKey: true }), true)).toBe(false);
     expect(isSelectAllKey(k("a", "KeyA", { ctrlKey: true }), true)).toBe(false);
     expect(isSelectAllKey(k("a", "KeyA", { metaKey: true }), false)).toBe(false);
+  });
+
+  it("Option types the ASCII sign a European Mac layout puts there; on a US layout it stays Meta", () => {
+    const opt = { altKey: true };
+    // German: Option+L @, Option+5/6 [ ], Option+8/9 { }, Option+7 |, Shift+Option+7 \; French: Option+Shift+L |
+    for (const [key, code] of [["@", "KeyL"], ["[", "Digit5"], ["]", "Digit6"], ["{", "Digit8"], ["}", "Digit9"], ["|", "Digit7"], ["~", "KeyN"]] as const)
+      expect(optionTyped(k(key, code, opt), true)).toBe(key);
+    expect(optionTyped(k("\\", "Digit7", { altKey: true, shiftKey: true }), true)).toBe("\\");
+    // US: Option types ∫ ƒ ≠, or a dead key; Option+letter on a layout where Option changes nothing is Meta
+    for (const [key, code] of [["∫", "KeyB"], ["ƒ", "KeyF"], ["≠", "Equal"], ["Dead", "KeyE"], ["b", "KeyB"], ["5", "Digit5"], ["ArrowLeft", "ArrowLeft"]] as const)
+      expect(optionTyped(k(key, code, opt), true)).toBeNull();
+    expect(optionTyped(k("@", "KeyL", { altKey: true, metaKey: true }), true)).toBeNull();
+    expect(optionTyped(k("@", "KeyL", { altKey: true, ctrlKey: true }), true)).toBeNull();
+    expect(optionTyped(k("@", "KeyL", {}), true)).toBeNull();
+    expect(optionTyped(k("@", "KeyQ", opt), false)).toBeNull();
   });
 });

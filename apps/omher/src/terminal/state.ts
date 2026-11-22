@@ -117,9 +117,17 @@ let nextKey = saved0.tabs.reduce((m, t) => Math.max(m, t.key), 0);
 let nextPane = nextKey;
 const listeners = new Set<() => void>();
 
+/** Where the keyboard was when the panel last opened: it goes back there when the panel hides (Panel.tsx). */
+let focusBefore: HTMLElement | null = null;
+export const focusBeforePanel = (): HTMLElement | null => focusBefore;
+
 function set(patch: Partial<TermPanelState>): void {
   const before = state.tabs;
   const was = state.active;
+  if (patch.open && !state.open && typeof document !== "undefined") {
+    const a = document.activeElement;
+    focusBefore = a instanceof HTMLElement && a !== document.body && !a.closest('[data-testid="termpanel"]') ? a : null;
+  }
   state = { ...state, ...patch };
   if (state.tabs !== before || state.active !== was) save();
   for (const fn of listeners) fn();

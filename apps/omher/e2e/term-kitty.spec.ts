@@ -188,3 +188,42 @@ test("Cmd+A selects the whole terminal (macOS), with the Kitty protocol on or of
     });
   }
 });
+
+test("Option types the sign a European Mac layout puts there (@ [ ] { } | \\ ~), with Option as Meta and Kitty on or off; a US Option+B stays Meta", async ({ page }) => {
+  test.skip(!(await platformIsMac(page)), "Option is the macOS layout's third level");
+  await openApp(page);
+  await newTerminal(page);
+  // a German layout: what WebKit reports for Option+L, Option+5 ... (the key is the sign, the code is the key's place)
+  const press = (key: string, code: string, shiftKey = false) =>
+    page.evaluate(
+      ([key, code, shiftKey]) => {
+        const box = document.querySelector('[data-testid="terminal"] .xterm-helper-textarea') as HTMLTextAreaElement;
+        box.focus();
+        // xterm reads Meta keys by keyCode, which a KeyboardEvent made in the page does not carry
+        const keyCode = code.startsWith("Key") || code.startsWith("Digit") ? code.slice(-1).charCodeAt(0) : 0;
+        for (const type of ["keydown", "keyup"]) {
+          const e = new KeyboardEvent(type, { key, code, altKey: true, shiftKey, bubbles: true, cancelable: true });
+          Object.defineProperty(e, "keyCode", { get: () => keyCode });
+          box.dispatchEvent(e);
+        }
+      },
+      [key, code, shiftKey] as const,
+    );
+  const sent = async (key: string, code: string, shiftKey = false) => {
+    const before = (await typed(page)).length;
+    await press(key, code, shiftKey);
+    await expect.poll(async () => (await typed(page)).length).toBeGreaterThan(before);
+    await settle(page, 100);
+    return (await typed(page)).slice(before);
+  };
+  for (const kitty of [false, true]) {
+    await feed(page, kitty ? "\x1b[>1u" : "\x1b[<u");
+    await expect.poll(() => flags(page)).toBe(kitty ? 1 : 0);
+    for (const [key, code] of [["@", "KeyL"], ["[", "Digit5"], ["]", "Digit6"], ["{", "Digit8"], ["}", "Digit9"], ["|", "Digit7"], ["~", "KeyN"]] as const)
+      expect(await sent(key, code), `${key} kitty=${kitty}`).toBe(key);
+    expect(await sent("\\", "Digit7", true)).toBe("\\");
+  }
+  // US: Option+B types ∫, which with Option as Meta (the default) is Esc b, the word-back key of a shell
+  await feed(page, "\x1b[<u");
+  expect(await sent("∫", "KeyB")).toBe("\x1bb");
+});

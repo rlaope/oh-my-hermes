@@ -4,6 +4,41 @@ All notable changes will be documented here.
 
 ## Unreleased
 
+- **omher: make a TERMINALS folder from the right-click menu, and see sharp pictures in its terminals.**
+  - **New folder…:** right-clicking empty TERMINALS space (or a folder header) offers New folder… under New
+    session. It opens the system folder dialog, where you can make a new folder or pick one; the folder shows as a
+    group at once, even with no terminal in it, and stays after a restart. A folder you added has Remove from list in
+    its header menu (nothing on disk is touched). One folder is one group however its path is spelled (a trailing
+    `/` no longer makes a second group), and a terminal started in a folder that is gone is listed where it really
+    runs, with "This folder no longer exists" on the old group. ⌘⇧[ ] steps through terminals in the same order.
+  - **Sharp pictures:** omher's terminals now draw kitty Unicode-placeholder images (the form Hermes' TUI and the OMH
+    TUI use for pasted pictures), so a pasted screenshot shows as the picture itself instead of a coarse block
+    mosaic. The layer stays above the GPU renderer, keeps one canvas per terminal, and shares the 32 MB per-terminal
+    picture budget with the other image kinds; Settings › Terminal › Show images turns it off.
+- **OMH TUI: kitty previews inside omher, and a quiet Ctrl+Enter.** Under `TERM_PROGRAM=omher` the OMH TUI asks for
+  kitty previews (tmux and screen keep half-blocks). Ctrl+Enter on a prompt with images during a turn now stops the
+  turn and sends the prompt without an `Interrupted.` notice, like Claude Code's send-now; Hermes' "Operation
+  interrupted: waiting for model response (…)" line never shows as the reply, while it streams, at the end, or in a
+  resumed conversation. Esc and `/stop` still say `Interrupted.`.
+
+- **omher: the Slack briefing opens with a greeting and what it is about.** A brief could open with what the bot did
+  or could not do ("could not open the log...") with nothing saying which alert or thread it meant, so the person had
+  to guess. The briefing prompt now asks for a short greeting ("안녕하세요." in Korean), then a first line naming the
+  channel or thread, what happened and whether they need to do anything. The automation-blueprint reference quotes
+  the same prompt, and a bridge test keeps the two identical. Applies to briefings omher sets up from now on; an
+  existing `omher-brief` job keeps its prompt until it is edited.
+
+- **omher keeps every TERMINALS row over a restart, types European Option signs, and gives the keyboard back.**
+  - **Restart:** every TERMINALS row comes back, however many there are. Before, only the newest 20 were saved and the
+    next start deleted the older rows' history and files, even for a running Claude. Only the newest 20 keep their
+    chat's last messages in the snapshot, which is what takes room. (apps/omher `app/resume.ts`)
+  - **Option on a European Mac layout:** Option+L, Option+5 and the rest type @ [ ] { } | \ ~ again, with Option as
+    Meta on (the default) or off and in Claude Code or Codex. They used to send Esc and the key's letter. On a US
+    layout Option is still Meta. (apps/omher `sessions/term/engine-input.ts`)
+  - **AltGr on Windows:** AltGr+= types } on French AZERTY (~ Swiss, | Danish) instead of evening out the panes. The
+    bottom panel with one pane leaves the pane keys to the program. (apps/omher `terminal/layout.ts`, `Panel.tsx`)
+  - **Bottom panel:** hiding it with Ctrl+` or closing its last tab gives the keyboard back to the terminal or chat
+    you were typing in, instead of leaving it nowhere. (apps/omher `terminal/Panel.tsx`)
 - **omher 1.1.2.** Terminals keep their screen when you switch back, and splits and rows behave as expected.
   - **Switching back:** a TUI shown again (omh, Codex, OmO, vim, htop) no longer shows a doubled line, a blank band or
     a misplaced cursor. Showing a terminal now fits it once instead of twice, and when xterm had to reflow it the
@@ -47,6 +82,21 @@ All notable changes will be documented here.
   next message reconnects, or that a request attached during a Restart that then failed, says so too. Two requests
   at once no longer make two Bot Chats.
   BOUNDARY rule 39.
+
+- **omher's Korean names Watch "모니터링".** The feature that has a bot check a channel or page on a schedule read
+  `감시` (surveillance) in Korean; it is now `모니터링` on every screen (`새 모니터링`, `모니터링하는 곳`). Four short
+  labels left by the Korean copy pass read right too: a browser step reads `열림` (it read like a button, `열기`), the
+  bubble style with no bot bubble reads `본문처럼`, the terminal theme slot's label reads `적용 대상`, and a route
+  whose chain ran out reads `chain exhausted` like its `chain head` and `fallback` siblings. Only string values
+  changed.
+
+- **The OMH pane in Hermes Desktop is redrawn, with a run timeline and TPS/TTFT in view.** USAGE is one card: the
+  token total large, cache hit and cost beside it, the four-way split, and the speed (TPS) and the last turn's wait for
+  its first token (TTFT), which used to sit only in a tooltip. CATCHES and PLAN read as rows with marks; PLAN groups
+  its items by phase. DAG gains a timeline: folded, one strip shaded by how many nodes ran at once, its gaps the run's
+  idle time; open, a row per node with its wait on upstream. A subagent the run did not orchestrate is a row under
+  Outside DAG and in AGENTS, never a start node of the run. Detail moved into hover cards that the keyboard can open
+  too. The pane also reads in Chinese. Contributed by @yqm-307 (#3058).
 
 ## 5.0.0 - 2026-11-21
 
