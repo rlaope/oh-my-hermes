@@ -9,10 +9,12 @@ All notable changes will be documented here.
   omher now keeps its own record per login (`~/.omher/usage/claude/<account>.json`), from the `rate_limit_event` in a
   chat's stream-json and from the status line input of the TERMINALS Claude Code sessions it starts. The meter shows
   each window's % and reset time the way the Codex meter does, per login, from the newer of that record and a refused
-  request. A TERMINALS Claude Code now starts with `--settings` whose `statusLine` runs omher as a relay: it records the
+  request; readings are merged per window, so an older one never lowers the meter. On macOS and on Linux outside an
+  AppImage, a TERMINALS Claude Code now starts with `--settings` whose `statusLine` runs omher as a relay: it records the
   usage, then runs your own status line command with the same input and prints its output unchanged (nothing when you
-  have none). Your hooks, permissions and other settings stay as they are. Before the first reading the meter says it
-  shows after your next Claude turn in omher. Local only: nothing is sent and no token is read.
+  have none). Your hooks, permissions and other settings stay as they are. On Windows and inside an AppImage omher adds
+  no relay, and the percentages come from chats only. Before the first reading the meter says it shows after your next
+  Claude turn in omher. Local only: nothing is sent and no token is read.
   (`docs/OMHER-BOUNDARY.md` rules 11, 17 and 18)
 - **omher: the Slack briefing opens with a greeting and what it is about.** A brief could open with what the bot did
   or could not do ("could not open the log...") with nothing saying which alert or thread it meant, so the person had

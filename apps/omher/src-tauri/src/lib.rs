@@ -1095,6 +1095,14 @@ mod tests {
     use super::{allowed_external, media_target};
 
     #[test]
+    fn only_the_relay_flag_as_the_first_argument_skips_the_app() {
+        let args = |a: &[&str]| a.iter().map(std::ffi::OsString::from).collect::<Vec<_>>();
+        for other in [&["omher"][..], &["omher", "omher://terminal/abcdefgh23"], &["omher", "--statusline-relayx"], &["omher", "x", "--statusline-relay"]] {
+            assert_eq!(super::statusline_relay(&args(other)), None, "{other:?}");
+        }
+    }
+
+    #[test]
     fn opens_thread_links_and_a_lookalike_only_as_a_web_page() {
         assert!(allowed_external("slack://channel?team=T1&id=C1&thread_ts=1.2"));
         assert!(allowed_external("https://discord.com/channels/1/2"));
