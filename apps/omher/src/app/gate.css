@@ -8,6 +8,40 @@
   color: var(--body, #dcd6de);
   font-size: 13px;
 }
+/* the bridge gave up after the app was up: one bar at the top, over nothing but its own width; the app stays usable */
+.gate-bar {
+  position: fixed;
+  top: 10px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 200;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  max-width: min(720px, calc(100vw - 32px));
+  padding: 6px 8px 6px 12px;
+  border: 1px solid var(--line, #29252c);
+  border-radius: var(--r-sm, 4px);
+  background: var(--raise, #17141a);
+  color: var(--body, #dcd6de);
+  font-size: 12px;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.35);
+}
+.gate-bar-title {
+  flex: none;
+  font-weight: 600;
+  color: var(--ink, #f3eff4);
+}
+.gate-bar-error {
+  min-width: 0;
+  color: var(--muted, #9a929d);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.gate-bar .gate-retry {
+  flex: none;
+}
 .gate-box {
   display: flex;
   flex-direction: column;

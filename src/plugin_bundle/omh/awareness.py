@@ -45,6 +45,9 @@ from .installed_skills import skill_not_installed
 from .native_tools import NATIVE_TODO_TOOL, OMH_TODO_HELD_PLANS, native_tool_presence_clause
 from .spend_signals import SPEND_GATE_PHRASES, spend_request_phrases
 from .show_reel_cues import SHOW_REEL_PHRASES, show_reel_request_admitted, show_reel_request_phrases
+from .code_review_cues import code_review_request_guard_applies, request_sentences
+from .command_verb import DIRECT_CODING_EDIT_VERBS, command_words, commanded_words, leads_with_code_edit
+from .text_fold import normalized_phrase as _fold_phrase
 from .reference_regions import executable_routing_text, reference_regions
 from .domain_signals import canonical_domain_tokens, domain_tokens_are_locally_negated
 from .degradation import (
@@ -5896,6 +5899,11 @@ def _awareness_route_hint_cached(
             isinstance(hint, dict) and hint.get("workflow") == direct_hint.get("workflow") for hint in hints
         ):
             hints.append(direct_hint)
+        code_review_request = _code_review_request_hint_applies(routing_text)
+        if len(hints) < hint_limit and code_review_request and not direct_hint:
+            # The router's code-review guard read this request (`code_review_cues`): one whole sentence asks to
+            # review a code change. The hint names code-review first, as the router dispatches it.
+            hints.append(_code_review_request_hint())
         if len(hints) < hint_limit and (
             diagnostic_learning_first
             or (
@@ -5949,6 +5957,8 @@ def _awareness_route_hint_cached(
             if _rule_suppressed_by_named_coding_agent_delivery(rule, named_coding_agent_delivery):
                 continue
             if jit_learn_match and rule["id"] == "coding_delivery":
+                continue
+            if code_review_request and rule["id"] in _CODE_REVIEW_REQUEST_STANDS_DOWN:
                 continue
             if _rule_suppressed_by_reference_intent(rule, intent):
                 continue
@@ -6705,6 +6715,8 @@ def awareness_route_hint_context_from_payload(payload: dict[str, object]) -> str
                     first_response_shape = _DAG_ULW_CANCEL_OR_RUN_RESPONSE
                 else:
                     first_response_shape = _DAG_ULW_CONTROL_RESPONSE
+            if hint.get("id") == _CODE_REVIEW_REQUEST_HINT_ID:
+                first_response_shape = _CODE_REVIEW_REQUEST_RESPONSE
             if first_response_shape:
                 lines.append(f"  first_response_shape={first_response_shape}")
         if workflow_declares_plan_todo(str(hint.get("workflow", ""))) and hint.get("id") not in {
@@ -7988,6 +8000,60 @@ def _dag_ulw_offer_hint() -> dict[str, object]:
         "adjacent_workflows": [],
         "workflow_context_card": context_card,
         "not_evidence_yet": [],
+    }
+
+
+_CODE_REVIEW_REQUEST_HINT_ID = "code_review_request"
+# The rules a review request reached on one word it shares with them: "diff" (visual-qa's pixel or screenshot
+# diff), "bug" (feedback-triage's customer bug reports) and "review" or "PR" (coding delivery). On a request the
+# code-review guard reads, none of them is the work asked for.
+_CODE_REVIEW_REQUEST_STANDS_DOWN = frozenset({"visual_qa_gate", "customer_signal", "coding_delivery"})
+_CODE_REVIEW_REQUEST_REASON = (
+    "The user asks for a review of a code change (a diff, patch, PR or commit) or whether it introduces a bug, "
+    "which is code-review's bug-first review, not visual QA, feedback triage or coding delivery."
+)
+_CODE_REVIEW_REQUEST_RESPONSE = (
+    f"Load the code-review skill first with skill_view(name='{_loadable_skill_label('code-review')}') and follow "
+    "it: findings shown step by step with path and line, then its Not checked list. A reply format the request "
+    "sets, such as a required last line, still comes last."
+)
+
+
+def _code_review_request_hint_applies(routing_text: str) -> bool:
+    """The router's code-review guard on this request, and no code edit asked beside it.
+
+    The guard is `code_review_cues`, which the router imports, so both read one
+    function. The router gates it on its direct code-edit guard ("review this
+    PR, then fix the bug in auth.py" stays a fix); a host without the router
+    stands it down when any sentence commands a code edit instead ("then fix
+    ...", "로그인 버그 고쳐줘").
+    """
+    query = _fold_phrase(routing_text)
+    if not code_review_request_guard_applies(query):
+        return False
+    direct_coding = _router_guard("_direct_coding_task_guard_applies")
+    if direct_coding is not None and _routing_tokens is not None:
+        return not direct_coding(query, _routing_tokens(query))
+    return not any(
+        leads_with_code_edit(sentence) or DIRECT_CODING_EDIT_VERBS & commanded_words(command_words(sentence))
+        for sentence in request_sentences(query)
+    )
+
+
+def _code_review_request_hint() -> dict[str, object]:
+    rule = {"adjacent_workflows": ("ultrawork", "verification-gate")}
+    context_card = workflow_context_card_for_workflow("code-review")
+    return {
+        "id": _CODE_REVIEW_REQUEST_HINT_ID,
+        "workflow": "code-review",
+        "lane": str(context_card.get("id") or "coding_handoff"),
+        "next_action": _DIRECT_WORKFLOW_NEXT_ACTIONS["code-review"],
+        "reason": _CODE_REVIEW_REQUEST_REASON,
+        "fallback_action": "prepare_review_scope_and_verification_commands",
+        "matched_cues": ["guard:code_review_request"],
+        "adjacent_workflows": list(rule["adjacent_workflows"]),
+        "workflow_context_card": context_card,
+        "not_evidence_yet": _workflow_not_evidence_yet("code-review", context_card) if isinstance(context_card, dict) else [],
     }
 
 

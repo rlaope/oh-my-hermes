@@ -1111,6 +1111,7 @@ export const zh: Record<Key, string> = {
   "gate.starting": "正在启动 omher…",
   "gate.noBridge": "本地桥接没有启动。",
   "gate.retry": "重试",
+  "gate.reviving": "正在重新启动桥接…",
   "ss.starting": "正在启动…",
   "ss.running": "运行中",
   "ss.ended": "已结束",

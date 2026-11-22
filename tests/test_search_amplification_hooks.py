@@ -31,9 +31,11 @@ class SearchHookTests(unittest.TestCase):
         # bundle's own workflow-intent classifier copies, deleted when awareness
         # began importing the shared `workflow_intent` (which carries the
         # router's cue tables); no literal was added.
-        self.assertEqual(len(rows), 1296)
+        # 1296 -> 1297: the code-review hint helper's docstring quotes one Korean
+        # fix request as an example; no cue word was added.
+        self.assertEqual(len(rows), 1297)
         digest = hashlib.sha256(json.dumps(rows, ensure_ascii=False, separators=(",", ":")).encode()).hexdigest()
-        self.assertEqual(digest, "574f700009cc1f96cb754e6502f1993b632c5604b76da4a052941af8ef1254f7")
+        self.assertEqual(digest, "4ed830415a38240546f1976108d42ade7786b6954f76c3c441d2b861fcaa71eb")
 
     def test_disabled_awareness_uninstalled_research_and_ambiguous_requests_add_nothing(self):
         from omh.plugin_bundle.omh.hooks import llm_hooks

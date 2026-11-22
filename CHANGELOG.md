@@ -27,14 +27,25 @@ All notable changes will be documented here.
     the github.com account picked on its chip.
     (apps/omher `src-tauri/src/gh_me.rs`, `src/tasks/MeView.tsx`, `src/settings/accounts/GithubAccounts.tsx`;
     `docs/OMHER-BOUNDARY.md` rules 11, 18 and 33)
-
+- **omher: the bridge comes back after it dies.** If the Python bridge stopped after it was ready, nothing started it
+  again: Hermes bots and folder chats stayed on "Connecting to Hermes…" until omher was restarted, because the shell
+  kept handing the page the dead bridge's port. The shell now notices the exit (the bridge's output closes, or a check
+  when the page asks for the URL) and starts it again on a new port with a new token after 0.5 s, then 1 s, 2 s, 4 s
+  and 8 s for each quick death in a row. The page asks for the URL again on each reconnect, so open chats resume by
+  themselves. A sixth quick death in a row (after five restarts) shows the error in a bar at the top with Retry; the
+  bar covers nothing else, so the app and its terminals stay visible and usable. A bridge omher stopped itself (quit,
+  Retry) is not started again, and one that stops while the installer runs waits for it to end. TERMINALS were never
+  affected. (apps/omher `src-tauri/src/bridge.rs`, `src/app/BridgeGate.tsx`)
+  themselves. After five quick deaths in a row the error shows over the app (which stays open underneath, terminals
+  included) with Retry. A bridge omher stopped itself (quit, Retry) is not started again, and one that stops while
+  the installer runs waits for it to end. TERMINALS were never affected. (apps/omher `src-tauri/src/bridge.rs`,
+  `src/app/BridgeGate.tsx`)
 - **omher: the Slack briefing opens with a greeting and what it is about.** A brief could open with what the bot did
   or could not do ("could not open the log...") with nothing saying which alert or thread it meant, so the person had
   to guess. The briefing prompt now asks for a short greeting ("안녕하세요." in Korean), then a first line naming the
   channel or thread, what happened and whether they need to do anything. The automation-blueprint reference quotes
   the same prompt, and a bridge test keeps the two identical. Applies to briefings omher sets up from now on; an
   existing `omher-brief` job keeps its prompt until it is edited.
-
 - **omher keeps every TERMINALS row over a restart, types European Option signs, and gives the keyboard back.**
   - **Restart:** every TERMINALS row comes back, however many there are. Before, only the newest 20 were saved and the
     next start deleted the older rows' history and files, even for a running Claude. Only the newest 20 keep their
@@ -110,6 +121,14 @@ All notable changes will be documented here.
   bubble style with no bot bubble reads `본문처럼`, the terminal theme slot's label reads `적용 대상`, and a route
   whose chain ran out reads `chain exhausted` like its `chain head` and `fallback` siblings. Only string values
   changed.
+- **Inside a Hermes chat, a request to review a diff or PR now loads the code-review skill.** The router already
+  sent these to `code-review`, but the route hint OMH adds to each message still named visual QA (for the word
+  "diff"), feedback triage ("bug") or coding delivery ("review", "PR"), so the model never opened the skill and its
+  replies had no `Not checked` list. "review this diff for bugs", "can you review my PR?", "does this change
+  introduce a bug?", "이 diff 리뷰해줘" and "코드 리뷰 해줘" now get `code-review` first, with a line telling the
+  model to load the skill and follow it. The hint reads the same check as the router, so the two cannot drift; a
+  review asked together with a fix ("review this PR, then fix the bug in auth.py") and look-alikes such as a
+  screenshot diff, a customer bug report or "review my essay" keep their old hint.
 
 - **The OMH pane in Hermes Desktop is redrawn, with a run timeline and TPS/TTFT in view.** USAGE is one card: the
   token total large, cache hit and cost beside it, the four-way split, and the speed (TPS) and the last turn's wait for
