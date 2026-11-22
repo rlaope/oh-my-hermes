@@ -50,6 +50,7 @@ from omh.coding.fanout_confinement import (  # noqa: E402
 )
 from omh.coding.fanout_dispatch import (  # noqa: E402
     build_dispatch_argv,
+    build_user_executor_argv,
     dispatch_fanout,
 )
 from omh.coding.user_executors import (  # noqa: E402
@@ -248,9 +249,11 @@ class BuiltinArgvPinsTests(unittest.TestCase):
             paths = _home(Path(tmp), {"my-agent": ("my-agent", "")})
             registry = load_user_executors(paths.omh_home)
         with mock.patch("omh.coding.fanout_dispatch.pi_family_host", return_value="pi"):
-            argv = build_dispatch_argv("codex", "P", spec=next(iter(registry.entries.values())))
-        # The spec's id is not "codex", so it is ignored and the template wins.
+            argv = build_dispatch_argv("codex", "P")
+            foreign = build_user_executor_argv("codex", "P", spec=next(iter(registry.entries.values())))
+        # The built-in template is the only authority; a spec never renders codex.
         self.assertEqual(argv, ["codex", "exec", "P"])
+        self.assertIsNone(foreign)
 
 
 class UserExecutorArgvTests(unittest.TestCase):
@@ -259,7 +262,7 @@ class UserExecutorArgvTests(unittest.TestCase):
         with TemporaryDirectory() as tmp:
             paths = _home(Path(tmp), {"my-agent": ("my-agent", "")})
             spec = load_user_executors(paths.omh_home).entries["my-agent"]
-        argv = build_dispatch_argv("my-agent", prompt, spec=spec)
+        argv = build_user_executor_argv("my-agent", prompt, spec=spec)
         self.assertEqual(argv, ["my-agent", "run", "--", prompt])
         self.assertEqual(argv.count(prompt), 1)
 
@@ -272,7 +275,7 @@ class UserExecutorArgvTests(unittest.TestCase):
             paths = _home(Path(tmp), {"my-agent": ("my-agent", "")})
             spec = load_user_executors(paths.omh_home).entries["my-agent"]
         with self.assertRaises(Exception) as caught:
-            build_dispatch_argv(
+            build_user_executor_argv(
                 "my-agent", "P", {"selected_model": "m"}, spec=spec
             )
         self.assertEqual(str(caught.exception), "model_unsupported")
@@ -855,7 +858,7 @@ class ShellFreeLaunchTests(unittest.TestCase):
         with TemporaryDirectory() as tmp:
             paths = _home(Path(tmp), {"my-agent": ("my-agent", "")})
             spec = load_user_executors(paths.omh_home).entries["my-agent"]
-            argv = build_dispatch_argv("my-agent", "do the thing", spec=spec)
+            argv = build_user_executor_argv("my-agent", "do the thing", spec=spec)
         assert argv is not None
         self.assertEqual(argv[0], "my-agent")
         # No shell launcher and no `-c` anywhere the worker could read as one.

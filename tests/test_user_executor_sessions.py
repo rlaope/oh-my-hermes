@@ -37,7 +37,7 @@ load_local_package()
 from omh.coding import fanout_executor_sessions as sessions  # noqa: E402
 from omh.coding.fanout import build_fanout_contract  # noqa: E402
 from omh.coding.fanout_artifacts import write_fanout_contract  # noqa: E402
-from omh.coding.fanout_dispatch import build_dispatch_argv, dispatch_fanout  # noqa: E402
+from omh.coding.fanout_dispatch import build_dispatch_argv, build_user_executor_argv, dispatch_fanout  # noqa: E402
 from omh.coding.user_executors import load_user_executors  # noqa: E402
 from omh.system.paths import OmhPaths  # noqa: E402
 
@@ -433,18 +433,20 @@ class BuiltinSessionPins(unittest.TestCase):
     PROMPT = "P"
 
     def test_builtin_argv_is_unchanged_when_session_arguments_are_supplied(self):
+        # The built-in builder takes no session arguments at all, and the
+        # user-executor builder never renders a built-in owner.
+        self.assertIsNone(build_user_executor_argv(
+            "codex", self.PROMPT, session_file=Path("/tmp/session.json"), session_id=SID, spec=None,
+        ))
         codex = build_dispatch_argv(
             "codex", self.PROMPT,
             {"selected_model": "gpt-5.1-codex", "selected_reasoning_effort": "high"},
-            session_file=Path("/tmp/session.json"), session_id=SID,
         )
         self.assertEqual(codex, [
             "codex", "exec", "--model", "gpt-5.1-codex",
             "--config", "model_reasoning_effort=high", self.PROMPT,
         ])
-        claude = build_dispatch_argv(
-            "claude-code", self.PROMPT, session_file=Path("/tmp/session.json"), session_id=SID,
-        )
+        claude = build_dispatch_argv("claude-code", self.PROMPT)
         self.assertEqual(claude, [
             "claude", "-p", self.PROMPT, "--permission-mode", "acceptEdits",
             "--allowedTools", "Bash(git add:*),Bash(git commit:*)",

@@ -968,23 +968,16 @@ def build_dispatch_argv(
     owner: str,
     prompt: str,
     model_route: Mapping[str, Any] | None = None,
-    *,
-    spec: object | None = None,
-    prompt_file: Path | None = None,
-    session_file: Path | None = None,
-    session_id: str | None = None,
 ) -> list[str] | None:
     """Return the spawn argv for one owner, or None when the owner has no template.
 
     Without a model route the argv is byte-identical to the base template; a
     routed model/effort inserts the per-owner option fragments only.
 
-    A built-in owner never reads `spec`: the shipped tables are the only
-    authority for codex, claude-code and the pi family, so their argv stays
-    byte-identical. `spec` is the loaded `ExecutorSpec` for a user-declared or
-    preset executor, and it answers only on the branch where no built-in
-    template exists. `{prompt}` is one argv element whatever it contains;
-    `{prompt_file}` names the dispatcher-written file the caller prepared.
+    The shipped tables are the only authority here, so codex, claude-code and
+    the pi family stay byte-identical. The signature stays (owner, prompt,
+    model_route): fixtures across the suite substitute this function. A
+    user-declared or preset executor renders through `build_user_executor_argv`.
     """
     if owner == "pi-family-runtime":
         host = pi_family_host()
@@ -1001,10 +994,7 @@ def build_dispatch_argv(
         effort_template = DISPATCH_REASONING_OPTION_TEMPLATES.get(owner, ())
         insert_index = _DISPATCH_OPTION_INSERT_INDEX.get(owner)
     if template is None:
-        return _build_user_executor_argv(
-            owner, prompt, model_route, spec=spec,
-            prompt_file=prompt_file, session_file=session_file, session_id=session_id,
-        )
+        return None
     argv = [part.replace("{prompt}", prompt) for part in template]
     route = model_route or {}
     options: list[str] = []
@@ -1022,17 +1012,21 @@ def build_dispatch_argv(
     return argv[:insert_at] + options + argv[insert_at:]
 
 
-def _build_user_executor_argv(
+def build_user_executor_argv(
     owner: str,
     prompt: str,
-    model_route: Mapping[str, Any] | None,
+    model_route: Mapping[str, Any] | None = None,
     *,
     spec: object | None,
-    prompt_file: Path | None,
-    session_file: Path | None,
-    session_id: str | None,
+    prompt_file: Path | None = None,
+    session_file: Path | None = None,
+    session_id: str | None = None,
 ) -> list[str] | None:
-    """The registry branch of `build_dispatch_argv`: no built-in template exists.
+    """The spawn argv for a user-declared or preset executor.
+
+    `{prompt}` is one argv element whatever it contains; `{prompt_file}` names
+    the dispatcher-written file the caller prepared. A built-in owner never
+    renders here, so its argv cannot depend on the registry.
 
     `None` still means unspawnable: a built-in owner with no template (hermes,
     the runtimes, generic) and an owner with no loaded definition both keep
@@ -1458,8 +1452,10 @@ def _unit_capability_precheck(
     unit: Mapping[str, Any],
     *,
     contract_schema_version: str,
-    executor_entries: Mapping[str, ExecutorSpec],
+    executor_entries: Mapping[str, ExecutorSpec] | None = None,
 ) -> tuple[str, dict[str, Any] | None, list[str]]:
+    # No snapshot means no configured executor: a unit bound to one is refused.
+    executor_entries = executor_entries or {}
     declared_owner = str(unit.get("owner") or "choose")
     current_owner = canonical_executor_profile(declared_owner)
     if current_owner != declared_owner:
@@ -5332,7 +5328,7 @@ def _dispatch_unit(
                 )
             else:
                 command = with_codex_windows_sandbox(
-                    build_dispatch_argv(
+                    build_user_executor_argv(
                         owner, render_prompt, effective_model_route,
                         spec=render_spec,
                         prompt_file=prompt_file if isinstance(prompt_file, Path) else None,
