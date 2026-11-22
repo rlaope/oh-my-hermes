@@ -106,6 +106,37 @@ RULES = (
     "omher writes to a Hermes profile only its display name (`profile.yaml` `display_name`) and its picture",
     "Outside Hermes, omher reads only the usage records coding CLIs write about themselves",
     "it never reads their auth files or tokens, writes nothing there and sends nothing anywhere.",
+    # Claude Code's own usage report, kept by omher (2026-11-22, the Claude meter; relay on macOS and Linux only)
+    "from the end of their newest session files, and, for the status line relay below, the `statusLine` key of Claude"
+    " Code's settings files;",
+    "so omher also keeps its own record of the usage Claude Code reports: the `rate_limit_event` in a chat session's"
+    " stream-json, on every system, and the `rate_limits` in the status line input of the TERMINALS Claude Code sessions"
+    " omher starts, on macOS and on Linux outside an AppImage only, and only for a person who has a status line of their"
+    " own.",
+    "Each reading is laid over `~/.omher/usage/claude/<account>.json` (the omher account's id, or `default` for Claude"
+    " Code's own login) window by window, and the file is replaced through a temporary file that is then renamed:",
+    "an older reading changes nothing,",
+    "on macOS and on Linux outside an AppImage, a TERMINALS Claude Code whose person already has a status line of their"
+    " own when it starts (resolved exactly as the relay resolves it, below) starts with `--settings` holding only a"
+    " `statusLine` whose command is omher's own binary as a relay (`omher --statusline-relay <account>`),",
+    "A person with no status line of their own gets no `--settings` and no relay, because Claude Code keeps a row for any"
+    " configured status line, even an empty one, and nothing on screen may change; their percentages come from chats"
+    " only.",
+    "(a non-negative integer, a number of at least 1, a boolean; anything else is dropped).",
+    "On Windows and inside an AppImage omher adds no `--settings` and no relay,",
+    "The relay records the input's `rate_limits` (nothing for an account name omher does not give, never under another"
+    " name), then runs the person's own status line command with the same input, through the shell Claude Code uses for"
+    " it (`/bin/sh -c`, behind `CLAUDE_CODE_SHELL_PREFIX` when that is set, joined as Claude Code joins it), and prints"
+    " its output and exit code unchanged, or prints nothing when they have none;",
+    "that command is read only from the `statusLine` key of the project's `.claude/settings.local.json`, then"
+    " `.claude/settings.json`, then `~/.claude/settings.json` (`$CLAUDE_CONFIG_DIR/settings.json` for an omher account),",
+    "managed (policy) settings, which win over `--settings`, so a `statusLine` set there runs instead of the relay and"
+    " omher records nothing from it.",
+    "A chat (`claude -p`) session has no status line and gets no relay. The relay starts none of the app, sends nothing"
+    " anywhere and reads no token.",
+    "On macOS and on Linux outside an AppImage, a TERMINALS Claude Code whose person has a status line of their own also"
+    " gets `--settings <json>` holding one key, a `statusLine` that runs omher's status line relay (rule 17);",
+    "Without a status line of their own, and on Windows and inside an AppImage, it gets no `--settings`.",
     "Accounts (Settings › Accounts) are the one exception to rules 4, 10 and 17.",
     "a local CLIProxyAPI's Claude logins are listed, read-only, from its auth file names alone",
     "omher never opens those files, never calls CLIProxyAPI or its management API, and never starts a session with, switches to or removes such a login.",
@@ -248,8 +279,8 @@ RULES = (
     " has `linear` in it and"
     " whether it is turned on, so a server is Linear by its name alone; it never sends, logs, stores or displays any"
     " other value of the file,",
-    "Besides the TERMINALS agents, the GitHub and GitLab CLIs' read-only lists of rule 33 and gh's own sign-in of rule"
-    " 18 (in a panel tab, below),",
+    "Besides the TERMINALS agents, the status line command a TERMINALS Claude Code runs through omher's relay (rule 17),"
+    " the GitHub and GitLab CLIs' read-only lists of rule 33 and gh's own sign-in of rule 18 (in a panel tab, below),",
     "A panel tab runs one other program: gh's own sign-in (`gh auth login`, or `gh auth login --hostname <host>`) when"
     " the person asks for another GitHub account in Settings › Accounts (rule 18);",
     "the page sends only that host, checked as a lowercase DNS name, and a size (`gh_login_start`), the program is the"
@@ -637,9 +668,10 @@ class TheOneInstaller(unittest.TestCase):
         # `hermes auth add <id> --type api-key` (rule 23); dsh_chat.rs runs a DSH chat's message through DeepSeek
         # Harness's headless profile (rule 11); folder_open.rs opens the person's own system terminal in a session's
         # folder with no command (rule 30); peers.rs starts the person's own `ssh` with a fixed argv (rule 31); tasks.rs
-        # runs the person's own `gh` / `glab` with a fixed read-only argv (rule 33).
+        # runs the person's own `gh` / `glab` with a fixed read-only argv (rule 33); claude_usage.rs is the status line
+        # relay, which runs the person's own Claude Code status line command as Claude Code would (rule 17).
         # Terminal sessions start theirs through the PTY's `spawn_command`, not `Command::new`.
-        self.assertEqual(spawns, {"accounts.rs": 2, "agent_chat.rs": 1, "bridge.rs": 1, "dsh_chat.rs": 1, "folder_open.rs": 1, "hermes_auth.rs": 1, "peers.rs": 1, "setup.rs": 1, "tasks.rs": 1})
+        self.assertEqual(spawns, {"accounts.rs": 2, "agent_chat.rs": 1, "bridge.rs": 1, "claude_usage.rs": 1, "dsh_chat.rs": 1, "folder_open.rs": 1, "hermes_auth.rs": 1, "peers.rs": 1, "setup.rs": 1, "tasks.rs": 1})
 
     def test_the_install_command_takes_nothing_from_the_page(self) -> None:
         lib = (SHELL_SRC / "lib.rs").read_text(encoding="utf-8")
@@ -1310,6 +1342,32 @@ class AccountsNeverCarryAToken(unittest.TestCase):
         self.assertNotIn("keyring", lib + src)
         self.assertNotIn("cpa_send", lib)
 
+    def test_every_rust_spawn_site_takes_the_host_environment(self) -> None:
+        # inside a Linux AppImage AppRun's library and Python paths would break a host program: every file that starts
+        # one with `Command::new` also applies `crate::appimage::host_env` (appimage.rs), the status line relay included
+        for path in sorted((ROOT / "apps" / "omher" / "src-tauri" / "src").glob("*.rs")):
+            text = path.read_text(encoding="utf-8")
+            prod = text[: text.index("#[cfg(test)]")] if "#[cfg(test)]" in text else text
+            if "Command::new(" in prod:
+                self.assertIn("crate::appimage::host_env", prod, path.name)
+        relay = (ROOT / "apps" / "omher" / "src-tauri" / "src" / "claude_usage.rs").read_text(encoding="utf-8")
+        run_user = relay.split("pub fn run_user", 1)[1].split("\n}\n", 1)[0]
+        self.assertIn("crate::appimage::host_env(&mut cmd);", run_user)
+
+    def test_the_relay_is_added_only_for_claude_on_macos_and_linux_outside_an_appimage(self) -> None:
+        # rule 11 / 17: start_agent asks claude_usage for the relay's argument with this host; it adds nothing for any
+        # other agent, without the person's own status line, on Windows or inside an AppImage (the Rust tests pin each case)
+        src = ROOT / "apps" / "omher" / "src-tauri" / "src"
+        sessions = (src / "sessions.rs").read_text(encoding="utf-8")
+        start = sessions.split("pub fn start_agent", 1)[1].split("\n    }\n", 1)[0]
+        self.assertEqual(start.count("crate::claude_usage::terminal_args(agent_id, cwd, account_env, &crate::claude_usage::RelayHost::current())"), 1)
+        relay = (src / "claude_usage.rs").read_text(encoding="utf-8")
+        args = relay.split("pub fn terminal_args", 1)[1].split("\n}\n", 1)[0]
+        self.assertIn('if agent_id != "claude" || !host.enabled() {', args)
+        # only for a person with a status line of their own (rule 17): none means no --settings at all
+        self.assertIn("let Some(user) = user_status_line(Some(cwd), &config_dir(home, account_env, host.claude_config.as_deref())) else {", args)
+        self.assertIn("!self.windows && !self.appimage", relay)
+
     def test_rust_spawns_only_in_bridge_and_accounts(self) -> None:
         spawns = {}
         for path in sorted((ROOT / "apps" / "omher" / "src-tauri" / "src").glob("*.rs")):
@@ -1322,8 +1380,9 @@ class AccountsNeverCarryAToken(unittest.TestCase):
         # agent_chat.rs starts an allow-listed agent in its structured mode (rule 11); hermes_auth.rs opens the
         # system terminal for `hermes auth add` (rule 23); dsh_chat.rs runs DeepSeek Harness's headless profile (rule 11);
         # folder_open.rs opens the system terminal in a session's folder with no command (rule 30); peers.rs starts the
-        # person's own `ssh` with a fixed argv (rule 31); tasks.rs runs `gh` / `glab` read-only (rule 33).
-        self.assertEqual(spawns, {"accounts.rs": 2, "agent_chat.rs": 1, "bridge.rs": 1, "dsh_chat.rs": 1, "folder_open.rs": 1, "hermes_auth.rs": 1, "peers.rs": 1, "setup.rs": 1, "tasks.rs": 1})
+        # person's own `ssh` with a fixed argv (rule 31); tasks.rs runs `gh` / `glab` read-only (rule 33);
+        # claude_usage.rs runs the person's own Claude Code status line command through the relay (rule 17).
+        self.assertEqual(spawns, {"accounts.rs": 2, "agent_chat.rs": 1, "bridge.rs": 1, "claude_usage.rs": 1, "dsh_chat.rs": 1, "folder_open.rs": 1, "hermes_auth.rs": 1, "peers.rs": 1, "setup.rs": 1, "tasks.rs": 1})
 
 
 
@@ -1698,12 +1757,13 @@ class SessionsStartOnlyAllowListedAgents(unittest.TestCase):
         """`Command::new` only in bridge.rs (Hermes' Python), setup.rs (the one fixed installer,
         rule 12), once in agent_chat.rs (the chat spawner), in accounts.rs (rule 18's fixed status /
         sign-in argv), in hermes_auth.rs (rule 23's terminal), in folder_open.rs (rule 30's terminal in a session's
-        folder), in peers.rs (rule 31's `ssh`) and in tasks.rs (rule 33's read-only `gh` / `glab`); `spawn_command` only
+        folder), in peers.rs (rule 31's `ssh`), in tasks.rs (rule 33's read-only `gh` / `glab`) and in claude_usage.rs
+        (rule 17's status line relay running the person's own status line command); `spawn_command` only
         in sessions.rs."""
         for path in sorted(SHELL.glob("*.rs")):
             text = path.read_text(encoding="utf-8")
             prod = text.split("#[cfg(test)]", 1)[0]
-            if path.name not in ("bridge.rs", "setup.rs", "agent_chat.rs", "dsh_chat.rs", "accounts.rs", "hermes_auth.rs", "folder_open.rs", "peers.rs", "tasks.rs"):
+            if path.name not in ("bridge.rs", "setup.rs", "agent_chat.rs", "dsh_chat.rs", "accounts.rs", "hermes_auth.rs", "folder_open.rs", "peers.rs", "tasks.rs", "claude_usage.rs"):
                 self.assertNotIn("Command::new", prod, path.name)
             if path.name != "sessions.rs":
                 self.assertNotIn("spawn_command", text, path.name)
