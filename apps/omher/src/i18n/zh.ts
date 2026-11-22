@@ -1549,6 +1549,8 @@ export const zh: Record<Key, string> = {
   "term.newFolder": "新建文件夹…",
   "term.folderRemove": "从列表中移除",
   "term.folderEmpty": "暂无终端 · 右键新建",
+  "term.folderGone": "此文件夹已不存在",
+  "term.folderGoneRan": "{folder} 已不存在，已在 {at} 中打开",
   // spacing: the BOTS | TERMINALS divider
   "side.split": "调整机器人和终端的高度",
   "side.splitTip": "拖动为机器人或终端留出更多空间。双击恢复自动。",

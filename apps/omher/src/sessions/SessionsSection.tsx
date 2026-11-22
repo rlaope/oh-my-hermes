@@ -28,7 +28,7 @@ import { groupOf, groupSessions, paneOf } from "./splitState";
 import type { Layout } from "../terminal/layout";
 import { usePendingRequests } from "./termShare";
 import { countRender, useAnyFlowing, useTermFace } from "./termActivity";
-import { addFolder, addedFolders, allCollapsed, collapseOthers, folderGroups, pathKey, folderSummary, isCollapsed, isTildePath, getFolderPrefs, moveFolder, orderFolders, removeFolder, revealFolder as openFolder, setAllFolders, setFolderPrefs, toggleFolder, useFolderPrefs, withAdded } from "./folders";
+import { addFolder, addedFolders, allCollapsed, collapseOthers, folderGroups, pathKey, folderSummary, isCollapsed, isTildePath, getFolderPrefs, moveFolder, orderFolders, removeFolder, revealFolder as openFolder, setAllFolders, setFolderGone, setFolderPrefs, toggleFolder, useFolderPrefs, useGoneFolders, withAdded } from "./folders";
 import { ChevronDown, ChevronRight } from "../ui/icons";
 import { CUE_PX, useEdgeFade } from "../sidebar/edgeFade";
 import { getHost, type PastChat } from "./host";
@@ -74,6 +74,8 @@ export async function addTermFolder(): Promise<void> {
   const now = sx.getState();
   const listed = folderGroups(now.list.filter((r) => isTerminalRec(now.agents, r))).map((g) => g.cwd);
   const prefs = getFolderPrefs();
+  // picked in the dialog just now, so it is on disk (again)
+  setFolderGone(got, false);
   setFolderPrefs(addFolder(prefs, got, [...listed, ...addedFolders(prefs)]));
   // the group comes into view (a long list may hold it below the fold)
   requestAnimationFrame(() => [...document.querySelectorAll<HTMLElement>('[data-testid="term-group"]')].find((g) => g.dataset.cwd === got)?.scrollIntoView({ block: "nearest" }));
@@ -944,6 +946,8 @@ function FolderHead({ cwd, home, shut, index, all, added, summary: base, flowIds
     };
   }, [cwd]);
   const name = folderName(cwd);
+  // a shell asked to start here ran in another folder: this one is no longer on disk (Remove from list still works)
+  const gone = useGoneFolders().includes(cwd);
   const toggle = () => setFolderPrefs(toggleFolder(getFolderPrefs(), cwd));
   return (
     <div
@@ -989,11 +993,19 @@ function FolderHead({ cwd, home, shut, index, all, added, summary: base, flowIds
           </span>
         )}
       </button>
-      {/* an added folder no session runs in: one quiet line, inside the header so a right-click on it is the folder's */}
-      {!shut && summary.count === 0 && (
-        <div className="tg-empty" title={t("term.folderEmpty")} data-testid="term-group-empty">
-          {t("term.folderEmpty")}
+      {/* an added folder no session runs in: one quiet line, inside the header so a right-click on it is the folder's.
+          A folder found gone says that instead, with or without sessions listed under it. */}
+      {!shut && gone ? (
+        <div className="tg-empty gone" title={t("term.folderGone")} data-testid="term-group-gone">
+          {t("term.folderGone")}
         </div>
+      ) : (
+        !shut &&
+        summary.count === 0 && (
+          <div className="tg-empty" title={t("term.folderEmpty")} data-testid="term-group-empty">
+            {t("term.folderEmpty")}
+          </div>
+        )
       )}
       {menu && <FolderMenu at={menu} cwd={cwd} all={all} added={added} onDismiss={() => setMenu(null)} />}
     </div>
@@ -1018,7 +1030,7 @@ function FolderMenu({ at, cwd, all, added, onDismiss }: { at: { x: number; y: nu
     ["term-folder-others", t("term.collapseOthers"), () => setFolderPrefs(collapseOthers(getFolderPrefs(), all, cwd))],
     ["term-folder-reveal", revealWord(), () => void getHost().reveal(cwd).catch(() => undefined)],
     ["term-folder-add", t("term.newFolder"), () => void addTermFolder()],
-    ...(added ? ([["term-folder-remove", t("term.folderRemove"), () => setFolderPrefs(removeFolder(getFolderPrefs(), cwd))]] as [string, string, () => void][]) : []),
+    ...(added ? ([["term-folder-remove", t("term.folderRemove"), () => (setFolderGone(cwd, false), setFolderPrefs(removeFolder(getFolderPrefs(), cwd)))]] as [string, string, () => void][]) : []),
   ];
   return (
     <div

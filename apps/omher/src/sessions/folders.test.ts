@@ -2,7 +2,7 @@
 // "New folder…" are parsed defensively, listed once, put at the top of the saved order, and removed without
 // touching the rest.
 import { describe, expect, it } from "vitest";
-import { addFolder, addedFolders, allCollapsed, collapseOthers, folderGroups, pathKey, isCollapsed, moveFolder, orderFolders, parseFolderPrefs, removeFolder, setAllFolders, toggleFolder, withAdded, type FolderPrefs } from "./folders";
+import { addFolder, addedFolders, allCollapsed, goneFolders, isFolderGone, ranElsewhere, setFolderGone, collapseOthers, folderGroups, pathKey, isCollapsed, moveFolder, orderFolders, parseFolderPrefs, removeFolder, setAllFolders, toggleFolder, withAdded, type FolderPrefs } from "./folders";
 
 const NONE: FolderPrefs = { collapsed: [], order: [] };
 const shown = (p: FolderPrefs, sessions: string[]) => orderFolders(withAdded(sessions.map((cwd) => ({ cwd, rows: [cwd] })), addedFolders(p)), p.order).map((g) => g.cwd);
@@ -220,5 +220,38 @@ describe("one group per folder, however its path is spelled", () => {
     expect(collapseOthers(p, [WEB, "/b"], `${WEB}/`).collapsed).toEqual(["/b"]);
     expect(moveFolder([WEB, "/b", "/c"], `${WEB}/`, 2)).toEqual(["/b", "/c", WEB]);
     expect(removeFolder(p, `${WEB}/`)).toEqual({ collapsed: [], order: [] });
+  });
+});
+
+// A listed folder that is no longer on disk (review round 1, BLOCKING 7): the host starts the shell in home and says
+// so (`ShellStarted.cwd`); the page must notice, not list the row under the dead folder.
+describe("a folder found gone", () => {
+  it("ranElsewhere is the folder the shell runs in only when that is not the one asked for", () => {
+    expect(ranElsewhere("/home/you/gone", "/home/you")).toBe("/home/you");
+    expect(ranElsewhere("/home/you/app", "/home/you/app")).toBeNull();
+    // another spelling of the folder asked for is that folder
+    expect(ranElsewhere("/home/you/app/", "/home/you/app")).toBeNull();
+    expect(ranElsewhere("C:/Users/you/app/", "C:\\Users\\you\\app")).toBeNull();
+    // asked for no folder (home): nothing is gone
+    expect(ranElsewhere("", "/home/you")).toBeNull();
+    expect(ranElsewhere(null, "/home/you")).toBeNull();
+    expect(ranElsewhere("/home/you/gone", "")).toBeNull();
+  });
+
+  it("is remembered by its one spelling until a shell starts there or the list forgets it, and is never saved", () => {
+    expect(goneFolders()).toEqual([]);
+    setFolderGone("/home/you/gone/", true);
+    setFolderGone("/home/you/gone", true);
+    expect(goneFolders()).toEqual(["/home/you/gone"]);
+    expect(isFolderGone("/home/you/gone//")).toBe(true);
+    expect(isFolderGone("/home/you")).toBe(false);
+    const same = goneFolders();
+    setFolderGone("/home/you/gone", true);
+    // nothing changed: the same list, so nothing re-renders
+    expect(goneFolders()).toBe(same);
+    setFolderGone("/home/you/gone/", false);
+    expect(goneFolders()).toEqual([]);
+    setFolderGone("", true);
+    expect(goneFolders()).toEqual([]);
   });
 });

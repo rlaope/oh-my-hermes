@@ -1630,6 +1630,10 @@ body.split-dragging .xterm {
   overflow: hidden;
   text-overflow: ellipsis;
 }
+/* the folder is no longer on disk: the same line, in the colour of a row that waits on the person */
+.tg-empty.gone {
+  color: var(--needs);
+}
 /* the first row of a group scrolls into view with its folder header */
 .tg > .tg-h + .ss-row {
   scroll-margin-top: 56px;

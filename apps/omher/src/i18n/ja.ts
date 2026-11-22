@@ -1549,6 +1549,8 @@ export const ja: Record<Key, string> = {
   "term.newFolder": "新しいフォルダ…",
   "term.folderRemove": "リストから外す",
   "term.folderEmpty": "ターミナルなし · 右クリックで追加",
+  "term.folderGone": "このフォルダはもうありません",
+  "term.folderGoneRan": "{folder} はもうないため、{at} で開きました",
   // spacing: the BOTS | TERMINALS divider
   "side.split": "ボットとターミナルの高さを変える",
   "side.splitTip": "ドラッグでボットかターミナルを広げます。ダブルクリックで自動に戻ります。",

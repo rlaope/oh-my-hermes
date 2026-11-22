@@ -9,6 +9,9 @@
 //    listed.
 // 6. one group per folder however its path is spelled: `/a/b/` and `/a/b` are the same group, in a record saved
 //    before, in a session's own folder and in what the dialog answers.
+// 7. a saved folder that is no longer on disk: New terminal here never lists the row under the dead folder's header.
+//    The shell runs where the host says (home), the row is listed there, the terminal and the folder's group say the
+//    folder no longer exists, and Remove from list still forgets it.
 // Shots: e2e/__shots__/ (git-ignored), or OMHER_SHOTS=<dir>: folder-create-menu-{en,ko}.png, folder-create-group.png,
 // folder-create-header-menu.png.
 import { expect, test, type Page } from "@playwright/test";
@@ -284,6 +287,92 @@ test("a folder listed under another spelling of its path is that one group: pick
   await expect(group(page, WEB)).toHaveAttribute("data-collapsed", "true");
   await expect(group(page, WEB).locator(".ss-row.tr")).toHaveCount(0);
 });
+
+const GONE_WORDS: Record<string, { group: string; term: string }> = {
+  en: { group: "This folder no longer exists", term: "/home/you/gone no longer exists, opened /home/you instead" },
+  ko: { group: "이 폴더가 더 이상 없어요", term: "/home/you/gone 폴더가 더 이상 없어서 /home/you에서 열었어요" },
+  ja: { group: "このフォルダはもうありません", term: "/home/you/gone はもうないため、/home/you で開きました" },
+  zh: { group: "此文件夹已不存在", term: "/home/you/gone 已不存在，已在 /home/you 中打开" },
+};
+
+for (const [lang, words] of Object.entries(GONE_WORDS)) {
+  test(`New terminal here on a saved folder that is gone runs in home, lists the row there and says so (${lang})`, async ({ page }) => {
+    const HOME = "/home/you";
+    const GONE = "/home/you/gone";
+    // this computer has home and new-app only: `gone` was deleted after it was added to the list
+    await page.addInitScript(([folders]) => ((window as unknown as Record<string, unknown>).__omherShellFolders = folders), [[HOME, NEW]] as const);
+    await open(page, lang, { collapsed: [], order: [GONE, NEW], added: [GONE, NEW] });
+    expect(await groups(page)).toEqual([GONE, NEW]);
+    // nothing is looked up before the person asks: the group is listed as any empty added folder
+    await expect(group(page, GONE).getByTestId("term-group-empty")).toBeVisible();
+    await expect(page.getByTestId("term-group-gone")).toHaveCount(0);
+
+    await group(page, GONE).getByTestId("term-group-head").click({ button: "right" });
+    await page.getByTestId("term-folder-new").click();
+    // the shell was asked for the folder and ran in home (the host's own answer)
+    await expect
+      .poll(() => page.evaluate(() => ((window as unknown as { __omherShellCalls?: { op: string; cwd?: string | null; at?: string }[] }).__omherShellCalls ?? []).filter((c) => c.op === "start").map(({ cwd, at }) => ({ cwd, at }))))
+      .toEqual([{ cwd: GONE, at: HOME }]);
+    // the row is listed under the folder it runs in, never under the dead folder's header
+    await expect(group(page, HOME).locator(".ss-row.tr")).toHaveCount(1);
+    await expect(group(page, GONE).locator(".ss-row.tr")).toHaveCount(0);
+    // (home is not in the saved order, so its group follows the two that are)
+    expect(await groups(page)).toEqual([GONE, NEW, HOME]);
+    // both places say why: the terminal once, the folder's group for as long as it is listed
+    await expect(page.getByTestId("terminal").locator(".xterm-rows")).toContainText(words.term);
+    const note = group(page, GONE).getByTestId("term-group-gone");
+    await expect(note).toHaveText(words.group);
+    await expect(group(page, GONE).getByTestId("term-group-empty")).toHaveCount(0);
+    const fit = await note.evaluate((el) => ({ h: el.getBoundingClientRect().height, scroll: el.scrollWidth, client: el.clientWidth }));
+    expect(fit.h).toBeLessThanOrEqual(18);
+    expect(fit.scroll).toBeLessThanOrEqual(fit.client);
+    await expect(group(page, HOME).getByTestId("term-group-gone")).toHaveCount(0);
+    if (lang === "en") await shot(page, "folder-gone-group");
+
+    if (lang !== "en") return;
+    // a folder that is there starts its shell in it, with no notice
+    await group(page, NEW).getByTestId("term-group-head").click({ button: "right" });
+    await page.getByTestId("term-folder-new").click();
+    await expect(group(page, NEW).locator(".ss-row.tr")).toHaveCount(1);
+    await expect(page.getByTestId("term-group-gone")).toHaveCount(1);
+    await expect(page.getByTestId("terminal").locator(".xterm-rows")).not.toContainText("no longer exists");
+
+    // collapsed, the dead folder opens when it is found gone again, so its notice shows
+    await group(page, GONE).getByTestId("term-group-toggle").click();
+    await expect(group(page, GONE)).toHaveAttribute("data-collapsed", "true");
+    await group(page, GONE).getByTestId("term-group-head").click({ button: "right" });
+    await page.getByTestId("term-folder-new").click();
+    await expect(group(page, HOME).locator(".ss-row.tr")).toHaveCount(2);
+    await expect(group(page, GONE)).not.toHaveAttribute("data-collapsed", "true");
+    await expect(note).toBeVisible();
+
+    // the folder is made again on disk: the next terminal starts in it and the notice goes
+    await page.evaluate((f) => (window as unknown as { __omherShellFolders: string[] }).__omherShellFolders.push(f), GONE);
+    await group(page, GONE).getByTestId("term-group-head").click({ button: "right" });
+    await page.getByTestId("term-folder-new").click();
+    await expect(group(page, GONE).locator(".ss-row.tr")).toHaveCount(1);
+    await expect(page.getByTestId("term-group-gone")).toHaveCount(0);
+    await page.evaluate((f) => {
+      const w = window as unknown as { __omherShellFolders: string[] };
+      w.__omherShellFolders = w.__omherShellFolders.filter((x) => x !== f);
+    }, GONE);
+    await group(page, GONE).getByTestId("term-group-head").click({ button: "right" });
+    await page.getByTestId("term-folder-new").click();
+    await expect(group(page, HOME).locator(".ss-row.tr")).toHaveCount(3);
+    await expect(note).toBeVisible();
+
+    // Remove from list still forgets the dead folder; the terminals that ran elsewhere go on. Its own earlier
+    // session keeps the group (sessions make their own), now without Remove
+    await group(page, GONE).getByTestId("term-group-head").click({ button: "right" });
+    await expect(page.getByTestId("term-folder-menu").getByRole("menuitem")).toHaveText(["New terminal here", "Collapse others", /^Show in /, "New folder…", "Remove from list"]);
+    await page.getByTestId("term-folder-remove").click();
+    expect((await saved(page)).added).toEqual([NEW]);
+    expect(await groups(page)).toEqual([GONE, NEW, HOME]);
+    await expect(group(page, GONE).locator(".ss-row.tr")).toHaveCount(1);
+    await expect(page.getByTestId("term-group-gone")).toHaveCount(0);
+    await expect(group(page, HOME).locator(".ss-row.tr")).toHaveCount(3);
+  });
+}
 
 const WORDS: Record<string, { menu: string[]; remove: string; empty: string }> = {
   ko: { menu: ["새 세션", "새 폴더…"], remove: "목록에서 빼기", empty: "터미널이 없어요 · 우클릭해서 열어요" },

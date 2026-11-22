@@ -53,7 +53,7 @@ import { t as tr } from "../i18n";
 import { windowWatched, type SessionNote } from "../lib/notify";
 import { createCloseGrace, graceMs, restoreSplitIn, type SplitWas } from "./closeGrace";
 import { getSplit, groupOf, leaveIn, setSplit } from "./splitState";
-import { folderGroups, getFolderPrefs, orderFolders, pathKey } from "./folders";
+import { folderGroups, getFolderPrefs, orderFolders, pathKey, ranElsewhere, revealFolder as openFolderGroup, setFolderGone } from "./folders";
 
 /** The Accounts CLI a session of `agent` signs in as (mirrors `session_cli` in src-tauri/src/accounts.rs). */
 const ACCOUNT_CLI: Partial<Record<AgentId, AccountCli>> = { claude: "claude", codex: "codex", grok: "grok" };
@@ -1483,6 +1483,19 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
           // the shell it was made with is gone from this computer: the default one runs, and the row says so once
           feed(t.term, `\x1b[33m${tr("term.shellMissing", { shell: got.missing })}\x1b[0m\r\n`);
           patchRec(id, { shell: undefined });
+        }
+        // the folder it was asked to start in is gone (the host starts it in home, `shell_cwd`): the row is listed
+        // under the folder it runs in, never under the dead folder's header, and both the terminal and that header
+        // say so
+        const at = ranElsewhere(r.cwd, got.cwd);
+        if (t.run === run && rec(id)) {
+          if (at) {
+            feed(t.term, `\x1b[33m${tr("term.folderGoneRan", { folder: r.cwd, at })}\x1b[0m\r\n`);
+            patchRec(id, { cwd: at });
+          }
+          if (r.cwd) setFolderGone(r.cwd, !!at);
+          // a collapsed group would hide its notice
+          if (at) openFolderGroup(r.cwd);
         }
       } else hostId = await host.start(r.agent, r.cwd, cols, rows, onData, onExit, resume, accountOf(r), sessionId, link);
       if (t.run !== run) {

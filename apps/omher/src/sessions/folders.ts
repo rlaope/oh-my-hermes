@@ -194,6 +194,31 @@ export function revealFolder(cwd: string): void {
   if (isCollapsed(load(), cwd)) setFolderPrefs(toggleFolder(prefs, cwd, false));
 }
 
+// ---- folders found gone ---------------------------------------------------------------------------------------------
+// A listed folder can be deleted on disk while omher keeps its group (an added folder is kept with no session in it).
+// omher looks nothing up on disk for the list: it learns a folder is gone only when a shell asked to start there
+// reports another folder (the host starts it in home). Kept for this run of the app only, never saved.
+
+/** The folder a shell runs in when that is not the folder it was asked to start in (`wanted`): the host's own
+ *  answer, `got`. Null when it runs where it was asked, or was asked for no folder. */
+export function ranElsewhere(wanted: string | null | undefined, got: string | null | undefined): string | null {
+  if (!wanted || !got) return null;
+  return pathKey(wanted) === pathKey(got) ? null : got;
+}
+
+let gone: readonly string[] = [];
+
+/** Folder `cwd` was found gone (`on`), or a shell started in it after all (`on` false). */
+export function setFolderGone(cwd: string, on: boolean): void {
+  const key = pathKey(cwd);
+  if (!key || gone.includes(key) === on) return;
+  gone = on ? [...gone, key] : gone.filter((c) => c !== key);
+  for (const fn of listeners) fn();
+}
+
+export const goneFolders = (): readonly string[] => gone;
+export const isFolderGone = (cwd: string): boolean => gone.includes(pathKey(cwd));
+
 const subscribe = (fn: () => void) => {
   listeners.add(fn);
   return () => {
@@ -203,4 +228,9 @@ const subscribe = (fn: () => void) => {
 
 export function useFolderPrefs(): FolderPrefs {
   return useSyncExternalStore(subscribe, getFolderPrefs, getFolderPrefs);
+}
+
+/** The folders found gone in this run of the app (their group says so). */
+export function useGoneFolders(): readonly string[] {
+  return useSyncExternalStore(subscribe, goneFolders, goneFolders);
 }
