@@ -1,7 +1,9 @@
 // The Tasks page: open issues and pull / merge requests of one repository, from GitHub or GitLab through the person's
 // own CLI (the desktop shell's tasks_* commands), read-only; Linear through the bot (connect screen). A row opens a
 // read-only drawer; "Start in thread" hands the item to a bot, "Open terminal here" opens a TERMINALS shell in the
-// repository's folder. omher writes nothing to GitHub, GitLab or Linear (BOUNDARY rule 33).
+// repository's folder. omher writes nothing to GitHub, GitLab or Linear (BOUNDARY rule 33). The scope toggle at the top
+// switches to "나" (Me, MeView.tsx): my pull requests, reviews, issues and mentions across repositories and the GitHub
+// accounts chosen in Settings › Accounts.
 //
 // After Orca's task page (stablyai/orca, MIT License, Copyright (c) 2026 Lovecast Inc.: task-page/TaskPage.tsx,
 // SourceBar.tsx, ProviderFilters.tsx, ListChrome.tsx, PaginationBar.tsx); the layout is ported, the code is omher's.
@@ -15,11 +17,13 @@ import { CopyButton } from "../chat/parts/Copy";
 import { openExternal } from "../lib/openExternal";
 import { addTerminalTab, getTermPanel, setTerminalCwd } from "../terminal/state";
 import { taskHost } from "./host";
-import { setFilter, setKind, setPage, setRepo, setSource, useTasks } from "./state";
+import { setFilter, setKind, setPage, setRepo, setRepoAccount, setScope, setSource, useTasks } from "./state";
+import { accountsOnHost, pickRepoAccount } from "./me";
+import { MeView, AccountDot } from "./MeView";
 import { SourceMark, IssueMark } from "./marks";
 import { firstMessage, threadTitle } from "./message";
 import { SOURCE_NAME } from "./TasksBar";
-import { FILTERS, KINDS, SOURCES, repoOk, type CliSource, type CliStatus, type TaskDetail, type TaskItem, type TaskPage as TPage } from "./types";
+import { FILTERS, KINDS, SOURCES, accountId, repoOk, type ChosenAccount, type CliSource, type CliStatus, type TaskDetail, type TaskItem, type TaskPage as TPage } from "./types";
 import "./tasks.css";
 
 const FILTER_KEY: Record<string, Key> = { open: "tasks.f.open", assigned: "tasks.f.assigned", created: "tasks.f.created", mentioned: "tasks.f.mentioned" };
@@ -62,7 +66,7 @@ function ChecksPill({ item }: { item: TaskItem }) {
   );
 }
 
-function StateMark({ item, kind }: { item: TaskItem; kind: "issues" | "prs" }) {
+export function StateMark({ item, kind }: { item: TaskItem; kind: "issues" | "prs" }) {
   return kind === "prs" ? <PrIcon state={item.state === "closed" || item.state === "merged" || item.state === "draft" ? item.state : "open"} size={13} /> : <IssueMark state={item.state} />;
 }
 
@@ -127,7 +131,37 @@ function RepoPicker({ source, repo, recent, onPick }: { source: CliSource; repo:
   );
 }
 
-function openShellAt(folder: string | null) {
+/** "이 저장소" on GitHub with accounts chosen: which one the list is read as (the automatic pick, or the person's). */
+function RepoAccountChip({ accounts, using, picked }: { accounts: ChosenAccount[]; using: string | null; picked: string | null }) {
+  const [open, setOpen] = useState(false);
+  const cur = accounts.find((a) => accountId(a) === using);
+  const pick = (id: string | null) => {
+    setRepoAccount(id);
+    setOpen(false);
+  };
+  return (
+    <span className="pg-chipwrap">
+      <button type="button" className="tk-repo tk-acct" aria-haspopup="listbox" aria-expanded={open} title={t("tasks.me.readAs")} onClick={() => setOpen((o) => !o)} data-testid="tasks-repo-account">
+        {cur ? <AccountDot color={cur.color} /> : null}
+        <span>{cur ? cur.login : t("tasks.me.ghActive")}</span>
+      </button>
+      <Popover open={open} onClose={() => setOpen(false)} align="left" width={240} label={t("tasks.me.readAs")}>
+        <div className="tk-repo-list" role="listbox">
+          <button type="button" role="option" aria-selected={!picked} className={!picked ? "on" : undefined} onClick={() => pick(null)} data-testid="tasks-repo-account-auto">
+            {t("tasks.me.ghActive")}
+          </button>
+          {accounts.map((a) => (
+            <button key={accountId(a)} type="button" role="option" aria-selected={picked === accountId(a)} className={picked === accountId(a) ? "on" : undefined} onClick={() => pick(accountId(a))} data-testid={`tasks-repo-account-${a.login}`}>
+              <AccountDot color={a.color} /> {a.login} · {a.host}
+            </button>
+          ))}
+        </div>
+      </Popover>
+    </span>
+  );
+}
+
+export function openShellAt(folder: string | null) {
   setTerminalCwd(folder);
   addTerminalTab();
 }
@@ -139,6 +173,8 @@ export function TasksPage() {
   const ctx = useContextFolder();
   const cli: CliSource | null = tk.source === "linear" ? null : tk.source;
   const repo = cli ? tk.repo[cli] : "";
+  // GitHub, read as a chosen account: the person's pick, else the one whose login owns the repository, else gh's own
+  const account = cli === "github" && repo ? pickRepoAccount(tk.accounts, tk.repoAccount, repo.split("/")[0]) : null;
   const [status, setStatus] = useState<Partial<Record<CliSource, CliStatus>>>({});
   const [page, setPageData] = useState<TPage | null>(null);
   const [loading, setLoading] = useState(false);
@@ -171,14 +207,14 @@ export function TasksPage() {
     setLoading(true);
     setErr(null);
     try {
-      setPageData(await host.list(cli, repo, tk.kind, tk.filter, tk.page));
+      setPageData(await host.list(cli, repo, tk.kind, tk.filter, tk.page, account ?? undefined));
     } catch (e) {
       setPageData(null);
       setErr(e instanceof Error ? e.message : String(e));
     } finally {
       setLoading(false);
     }
-  }, [cli, repo, tk.kind, tk.filter, tk.page, host]);
+  }, [cli, repo, tk.kind, tk.filter, tk.page, host, account]);
   useEffect(() => {
     if (ready) void load();
     else setPageData(null);
@@ -197,25 +233,35 @@ export function TasksPage() {
     <div className="pg tk" data-testid="tasks-page">
       <header className="head pg-head tk-head" data-testid="header">
         <span className="head-title">{t("tasks.title")}</span>
-        <nav className="tk-src" aria-label={t("tasks.sources")}>
+        <div className="tk-seg tk-scope" role="group" aria-label={t("tasks.scope")}>
+          {(["repo", "me"] as const).map((sc) => (
+            <button key={sc} type="button" className={tk.scope === sc ? "on" : undefined} aria-pressed={tk.scope === sc} onClick={() => setScope(sc)} data-testid={`tasks-scope-${sc}`}>
+              {sc === "repo" ? t("tasks.scope.repo") : t("tasks.scope.me")}
+            </button>
+          ))}
+        </div>
+        {tk.scope === "repo" && <nav className="tk-src" aria-label={t("tasks.sources")}>
           {SOURCES.map((src) => (
             <button key={src} type="button" className={`tk-src-b${tk.source === src ? " on" : ""}`} aria-pressed={tk.source === src} onClick={() => setSource(src)} data-testid={`tasks-src-${src}`}>
               <SourceMark source={src} size={12} />
               {SOURCE_NAME[src]}
             </button>
           ))}
-        </nav>
+        </nav>}
         <div className="head-right">
           <IconButton label={t("tasks.close")} onClick={() => s.closeSettings()}>
             <CloseIcon />
           </IconButton>
         </div>
       </header>
-      {cli ? (
+      {tk.scope === "me" ? (
+        <MeView />
+      ) : cli ? (
         <div className={`tk-body${sel ? " has-detail" : ""}`}>
           <div className="tk-main">
             <div className="tk-chrome">
               <RepoPicker source={cli} repo={repo} recent={tk.recent[cli]} onPick={(r) => setRepo(cli, r)} />
+              {cli === "github" && accountsOnHost(tk.accounts).length > 0 && <RepoAccountChip accounts={accountsOnHost(tk.accounts)} using={account} picked={tk.repoAccount} />}
               <div className="tk-seg" role="group" aria-label={t("tasks.kind")}>
                 {KINDS.map((k) => (
                   <button key={k} type="button" className={tk.kind === k ? "on" : undefined} aria-pressed={tk.kind === k} onClick={() => setKind(k)} data-testid={`tasks-kind-${k}`}>
@@ -312,7 +358,7 @@ export function TasksPage() {
               </nav>
             )}
           </div>
-          {sel && <Drawer source={cli} repo={repo} kind={tk.kind} item={sel} folder={folder ?? (ctx && tk.folders[`${cli}:${repo}`] ? ctx : null)} onClose={() => setSel(null)} />}
+          {sel && <Drawer source={cli} repo={repo} kind={tk.kind} item={sel} account={account ?? undefined} folder={folder ?? (ctx && tk.folders[`${cli}:${repo}`] ? ctx : null)} onClose={() => setSel(null)} />}
         </div>
       ) : (
         <LinearPane />
@@ -321,7 +367,8 @@ export function TasksPage() {
   );
 }
 
-function Drawer({ source, repo, kind, item, folder, onClose }: { source: CliSource; repo: string; kind: "issues" | "prs"; item: TaskItem; folder: string | null; onClose: () => void }) {
+/** The read-only drawer of one item (also the "나" scope's, read as that row's `account`). */
+export function Drawer({ source, repo, kind, item, folder, account, onClose }: { source: CliSource; repo: string; kind: "issues" | "prs"; item: TaskItem; folder: string | null; account?: string; onClose: () => void }) {
   const s = useStore();
   const host = taskHost();
   const [d, setD] = useState<TaskDetail | null>(null);
@@ -332,14 +379,14 @@ function Drawer({ source, repo, kind, item, folder, onClose }: { source: CliSour
     let live = true;
     setD(null);
     setErr(null);
-    host.view(source, repo, kind, item.number).then(
+    host.view(source, repo, kind, item.number, account).then(
       (v) => live && setD(v),
       (e) => live && setErr(e instanceof Error ? e.message : String(e)),
     );
     return () => {
       live = false;
     };
-  }, [source, repo, kind, item.number, host]);
+  }, [source, repo, kind, item.number, host, account]);
   const local = s.bots.filter((b) => !b.host && b.status !== "offline");
   const to = local.find((b) => b.name === bot) ?? local.find((b) => b.name === s.selectedBot) ?? local[0];
   const start = async () => {

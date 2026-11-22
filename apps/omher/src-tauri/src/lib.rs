@@ -10,6 +10,7 @@ mod disk;
 mod dsh_chat;
 mod fg;
 mod folder_open;
+mod gh_me;
 mod git_branch;
 mod hermes_auth;
 mod past_chats;
@@ -568,19 +569,96 @@ async fn tasks_status(tasks: State<'_, Arc<tasks::Tasks>>, source: String, fresh
 
 /// Tasks: one page of open issues or pull / merge requests of `repo`, through the person's own CLI with a fixed,
 /// read-only argv (rule 33). The page sends only these words and numbers.
+/// `account` (GitHub only): a GitHub account chosen in omher (`<login>@<host>`, a github.com one: `Me::repo_list`),
+/// read as through gh_me.rs; none: gh's own active account.
 #[tauri::command]
-async fn tasks_list(tasks: State<'_, Arc<tasks::Tasks>>, source: String, repo: String, kind: String, filter: String, page: u32) -> Result<tasks::Page, String> {
+async fn tasks_list(
+    tasks: State<'_, Arc<tasks::Tasks>>,
+    me: State<'_, Arc<gh_me::Me>>,
+    source: String,
+    repo: String,
+    kind: String,
+    filter: String,
+    page: u32,
+    account: Option<String>,
+) -> Result<tasks::Page, String> {
     let (src, kind, filter) = (tasks::Source::parse(&source)?, tasks::Kind::parse(&kind)?, tasks::Filter::parse(&filter)?);
-    let t = Arc::clone(&tasks);
-    tauri::async_runtime::spawn_blocking(move || t.list(src, kind, &repo, filter, page)).await.map_err(|e| e.to_string())?
+    let (t, m) = (Arc::clone(&tasks), Arc::clone(&me));
+    tauri::async_runtime::spawn_blocking(move || match account.filter(|_| src == tasks::Source::Github) {
+        Some(acc) => m.repo_list(&t, kind, &repo, filter, page, &acc),
+        None => t.list(src, kind, &repo, filter, page),
+    })
+    .await
+    .map_err(|e| e.to_string())?
 }
 
-/// Tasks: one item's description, comments and checks, read-only (rule 33).
+/// Tasks: one item's description, comments and checks, read-only (rule 33). `account`: a chosen account, on any
+/// host it is on (a "나" row read as a GitHub Enterprise account is read there: `Me::view`).
 #[tauri::command]
-async fn tasks_view(tasks: State<'_, Arc<tasks::Tasks>>, source: String, repo: String, kind: String, number: u64) -> Result<tasks::Detail, String> {
+async fn tasks_view(
+    tasks: State<'_, Arc<tasks::Tasks>>,
+    me: State<'_, Arc<gh_me::Me>>,
+    source: String,
+    repo: String,
+    kind: String,
+    number: u64,
+    account: Option<String>,
+) -> Result<tasks::Detail, String> {
     let (src, kind) = (tasks::Source::parse(&source)?, tasks::Kind::parse(&kind)?);
-    let t = Arc::clone(&tasks);
-    tauri::async_runtime::spawn_blocking(move || t.view(src, kind, &repo, number)).await.map_err(|e| e.to_string())?
+    let (t, m) = (Arc::clone(&tasks), Arc::clone(&me));
+    tauri::async_runtime::spawn_blocking(move || match account.filter(|_| src == tasks::Source::Github) {
+        Some(acc) => m.view(&t, kind, &repo, number, &acc),
+        None => t.view(src, kind, &repo, number),
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
+/// Settings › Accounts › GitHub and Tasks › 나: the GitHub accounts gh is signed in to, from `gh auth status --json
+/// hosts` (host, login, active, state and scopes only; rules 18 and 33). `fresh` asks again.
+#[tauri::command]
+async fn gh_accounts(me: State<'_, Arc<gh_me::Me>>, fresh: Option<bool>) -> Result<gh_me::GhAccounts, String> {
+    let m = Arc::clone(&me);
+    tauri::async_runtime::spawn_blocking(move || m.accounts(fresh.unwrap_or(false))).await.map_err(|e| e.to_string())
+}
+
+/// Tasks › 나: one page of `section` (`review`, `authored`, `assigned`, `mentions`) across every repository, as GitHub
+/// account `account` (rule 33). The page sends only these words and the page number; the argv is gh_me.rs's own.
+#[tauri::command]
+async fn tasks_me(me: State<'_, Arc<gh_me::Me>>, account: String, section: String, page: u32, fresh: Option<bool>) -> Result<gh_me::MePage, gh_me::MeError> {
+    let sec = gh_me::Section::parse(&section).map_err(|e| gh_me::MeError::new("other", e))?;
+    let m = Arc::clone(&me);
+    tauri::async_runtime::spawn_blocking(move || m.list(&account, sec, page, fresh.unwrap_or(false))).await.map_err(|e| gh_me::MeError::new("other", e.to_string()))?
+}
+
+/// Settings › Accounts › GitHub: gh's own sign-in for one more account in a terminal-panel tab (`gh auth login`, or
+/// `--hostname <host>` for GitHub Enterprise; rule 18). The page sends only the host (checked) and a size.
+#[tauri::command]
+async fn gh_login_start(
+    shell: State<'_, Shell>,
+    host: Option<String>,
+    cols: u16,
+    rows: u16,
+    on_data: Channel<InvokeResponseBody>,
+    on_exit: Channel<Option<u32>>,
+) -> Result<ShellStarted, String> {
+    let sessions = shell.sessions.clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        let home = user_home()?;
+        let args = gh_me::login_argv(host.as_deref())?;
+        let gh = tasks::find("gh").ok_or("gh is not installed")?;
+        let id = sessions.start_gh_login(&gh, args, &home, cols, rows, move |ev| match ev {
+            Output::Data(b) => {
+                let _ = on_data.send(InvokeResponseBody::Raw(b));
+            }
+            Output::Exit(code) => {
+                let _ = on_exit.send(code);
+            }
+        })?;
+        Ok(ShellStarted { id, cwd: home.to_string_lossy().into_owned(), missing: None })
+    })
+    .await
+    .map_err(|e| e.to_string())?
 }
 
 /// Tasks: the GitHub / GitLab repository folder `cwd` is in, from its `.git/config` (no program runs); null when none.
@@ -1034,6 +1112,9 @@ pub fn run() {
             tasks_list,
             tasks_view,
             tasks_remote,
+            gh_accounts,
+            tasks_me,
+            gh_login_start,
             window_close,
             power_busy,
             window_prefs,
@@ -1051,6 +1132,7 @@ pub fn run() {
             }
             peers.start_all();
             app.manage(Arc::new(tasks::Tasks::default()));
+            app.manage(Arc::new(gh_me::Me::default()));
             // free space on the home folder's volume, read once a minute (disk.rs)
             app.manage(disk::Disk::start(app.handle().clone(), user_home().ok()));
             // close = hide to the tray / menu bar, and the keep-awake assertion's worker (tray.rs, power.rs)

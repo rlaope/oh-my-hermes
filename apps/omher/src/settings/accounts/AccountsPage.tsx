@@ -1,7 +1,8 @@
 // Settings › Accounts: the coding-CLI subscriptions on this computer that SESSIONS start with. One group per CLI
 // found here: the CLI's own login first ("This computer"), then the ones added in omher. "+ Add account" runs the
 // CLI's own sign-in with a new home folder; the browser part happens in the CLI, and omher never asks for or sees
-// a token or key. Bots are not here: they are set up under Bots.
+// a token or key. Bots are not here: they are set up under Bots. Below them, the GitHub accounts Tasks › 나 reads as
+// (GithubAccounts.tsx).
 import { useEffect, useRef, useState } from "react";
 import "./accounts.css";
 import type { AccountGroup } from "../../lib/protocol";
@@ -29,6 +30,7 @@ import {
 import { reloadAccounts, useAccounts } from "./useAccounts";
 import { t, tx } from "../../i18n";
 import { holdImeEnter } from "../../lib/ime";
+import { GithubAccounts } from "./GithubAccounts";
 
 const errText = (e: unknown) => (typeof e === "object" && e && "message" in e ? String((e as { message: unknown }).message) : String(e));
 const NOTE_MS = 8000;
@@ -70,6 +72,7 @@ export function AccountsPage() {
           {t("acc.missing", { list: split.missing.join(t("list.sep")) })}
         </p>
       )}
+      <GithubAccounts />
     </div>
   );
 }
