@@ -63,7 +63,8 @@ def configured_owner_ids(omh_home: str | Path) -> frozenset[str]:
         document = tomllib.loads(raw.decode("utf-8"))
     except (UnicodeDecodeError, tomllib.TOMLDecodeError):
         return frozenset()
-    if set(document) - _ROOT_KEYS or document.get("schema_version") != 1:
+    schema_version = document.get("schema_version")
+    if set(document) - _ROOT_KEYS or type(schema_version) is not int or schema_version != 1:
         return frozenset()
     executors = document.get("executors", {})
     if not isinstance(executors, dict):

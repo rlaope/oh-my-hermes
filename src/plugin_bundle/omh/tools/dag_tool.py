@@ -44,7 +44,7 @@ from __future__ import annotations
 
 import base64
 import binascii
-from collections.abc import Mapping
+from collections.abc import Collection, Mapping
 import hashlib
 import json
 import os
@@ -300,7 +300,7 @@ def omh_dag_handler(args: Mapping[str, object], **kwargs: object) -> str:
             if action == "status":
                 # As `ready` would split them: a coding node the chosen owner takes is no delegate_task call.
                 offered = dag_run.offerable(record, derived, now, limits=limits)
-                exports, owner_say = _owner_exports(record, derived, offered)
+                exports, owner_say = _owner_exports(record, derived, offered, configured_owner_ids(omh_home))
                 coding = [node_id for entry in exports for node_id in entry["nodes"]]
                 say = WORKTREE_ISOLATION_HELD if _isolation_holds(record, offered, coding, hermes_home) else ""
                 say = " ".join(part for part in (say, _export_say(exports), owner_say) if part)
@@ -371,7 +371,8 @@ def omh_dag_handler(args: Mapping[str, object], **kwargs: object) -> str:
             if action == "repair":
                 node = dag_run.valid_id(args.get("node"), "invalid_node_id", "Name the failed node to repair.")
                 added = dag_run.repair(record, derived, node, args.get("nodes"), now,
-                                       oneshot_remaining=_wave_budget(record, derived, budget, now, limits=limits))
+                                       oneshot_remaining=_wave_budget(record, derived, budget, now, limits=limits),
+                                       owners=_admitted_owners(record))
                 dag_run.write_run(path, record)
                 derived = dag_run.derive(record, children, now)
                 group_node = next(item for item in record["nodes"] if item["id"] == added[0])
@@ -384,7 +385,7 @@ def omh_dag_handler(args: Mapping[str, object], **kwargs: object) -> str:
             if action == "extend":
                 added = dag_run.extend(record, derived, args.get("nodes"), args.get("node"), now,
                                        oneshot_remaining=_wave_budget(record, derived, budget, now, limits=limits),
-                                       criteria=args.get("criteria"))
+                                       criteria=args.get("criteria"), owners=_admitted_owners(record))
                 dag_run.write_run(path, record)
                 derived = dag_run.derive(record, children, now)
                 return _ready(action, record, path, derived, children, omh_home, hermes_home, now, shown, task=task,
@@ -1030,7 +1031,7 @@ def _ready(
     nodes = {str(node["id"]): node for node in record["nodes"]}
     # Each ready coding node goes to its chosen owner's fanout, never to delegate_task; checks and readers stay native.
     offered = dag_run.offerable(record, derived, now, limits=limits)
-    exports, owner_say = _owner_exports(record, derived, offered)
+    exports, owner_say = _owner_exports(record, derived, offered, configured_owner_ids(omh_home))
     coding = [node_id for entry in exports for node_id in entry["nodes"]]
     # A run on a Docker or SSH terminal pins where its handoff files live before its first node goes out, and with no
     # terminal up to ask, hands out nothing yet.
@@ -1398,10 +1399,19 @@ def owner_choices(record: Mapping[str, Any]) -> tuple[str, ...]:
     return tuple(sorted({owner for owner in owners if owner in EXTERNAL_OWNERS or owner in snapshot}))
 
 
+def _admitted_owners(record: Mapping[str, Any]) -> tuple[str, ...]:
+    """The owners this run admitted at define: the built-ins and its frozen configured snapshot."""
+    return (*dag_run.EXTERNAL_OWNERS, *(record.get("registered_owners") or ()))
+
+
 def _owner_exports(record: Mapping[str, Any], derived: Mapping[str, Mapping[str, Any]],
-                   offered: list[str]) -> tuple[list[dict[str, Any]], str]:
-    """Split ready coding nodes by their chosen owner; an unchosen node owner stays on delegate_task."""
-    choices = owner_choices(record)
+                   offered: list[str], live: Collection[str]) -> tuple[list[dict[str, Any]], str]:
+    """Split ready coding nodes by their chosen owner; an unchosen node owner stays on delegate_task.
+
+    ``live`` is the operator file's configured ids now: an owner the file no longer declares is offered nowhere,
+    as `export` refuses it.
+    """
+    choices = [owner for owner in owner_choices(record) if owner in dag_run.EXTERNAL_OWNERS or owner in live]
     nodes = {str(node["id"]): node for node in record["nodes"]}
     batches: dict[str, list[str]] = {}
     native = []
@@ -1541,7 +1551,7 @@ def _export(args: Mapping[str, object], record: dict[str, Any], path: Path,
     dag_run.write_run(path, record)
     derived = dag_run.derive(record, children, now)
     offered = dag_run.offerable(record, derived, now, limits=limits)
-    exports, owner_say = _owner_exports(record, derived, offered)
+    exports, owner_say = _owner_exports(record, derived, offered, configured_owner_ids(omh_home))
     say = " ".join(part for part in (
         f"These nodes go to {owner} through the fanout bridge; run the commands it returns, then settle each node "
         "from the fanout result.", _export_say(exports), owner_say) if part)
