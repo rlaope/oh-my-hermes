@@ -217,5 +217,28 @@ class BriefSetup(unittest.TestCase):
         self.assertEqual(ob.read_brief_optout(self.omher), {"kami"})
 
 
+class BriefPrompt(unittest.TestCase):
+    """What the briefing says first (khope, 2026-11-22: a brief that opened with what the bot did or could not do left
+    him guessing what it was about)."""
+
+    def test_it_opens_with_a_greeting_and_what_it_is_about(self) -> None:
+        p = ob.BRIEF_PROMPT
+        self.assertIn("open with a short greeting", p)
+        self.assertIn("안녕하세요.", p)
+        self.assertIn("which channel or thread it is about, what happened and whether they need to do anything", p)
+        self.assertIn("never open with what you did or could not do", p)
+
+    def test_the_skill_reference_shows_the_same_prompt(self) -> None:
+        # the automation-blueprint reference quotes the prompt omher installs; the two must not drift apart
+        root = HERE.parents[3]
+        flat = lambda s: " ".join(s.split())  # noqa: E731
+        for rel in ("src/skills/render.py", "skills/omh-automation-blueprint/references/channel-watch.md"):
+            text = (root / rel).read_text(encoding="utf-8")
+            start = text.index("```text\nYou brief the person this bot works for.") + len("```text\n")
+            quoted = text[start:text.index("\n```", start)]
+            with self.subTest(rel=rel):
+                self.assertEqual(flat(quoted), flat(ob.BRIEF_PROMPT))
+
+
 if __name__ == "__main__":
     unittest.main()

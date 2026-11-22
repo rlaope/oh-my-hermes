@@ -4,6 +4,13 @@ All notable changes will be documented here.
 
 ## Unreleased
 
+- **omher: the Slack briefing opens with a greeting and what it is about.** A brief could open with what the bot did
+  or could not do ("could not open the log...") with nothing saying which alert or thread it meant, so the person had
+  to guess. The briefing prompt now asks for a short greeting ("안녕하세요." in Korean), then a first line naming the
+  channel or thread, what happened and whether they need to do anything. The automation-blueprint reference quotes
+  the same prompt, and a bridge test keeps the two identical. Applies to briefings omher sets up from now on; an
+  existing `omher-brief` job keeps its prompt until it is edited.
+
 - **omher keeps every TERMINALS row over a restart, types European Option signs, and gives the keyboard back.**
   - **Restart:** every TERMINALS row comes back, however many there are. Before, only the newest 20 were saved and the
     next start deleted the older rows' history and files, even for a running Claude. Only the newest 20 keep their
@@ -72,6 +79,13 @@ All notable changes will be documented here.
   Hermes' `attach_gateway`, which needs Hermes 0.23.1 or later. An older Hermes gets a one-line "cannot attach on
   Windows" verdict and the fallback, and a control pipe that is not answering yet is waited for, as on macOS and
   Linux. macOS and Linux are unchanged. Contributed by @Gudals0320 (#3060).
+- **The OMH pane in Hermes Desktop is redrawn, with a run timeline and TPS/TTFT in view.** USAGE is one card: the
+  token total large, cache hit and cost beside it, the four-way split, and the speed (TPS) and the last turn's wait for
+  its first token (TTFT), which used to sit only in a tooltip. CATCHES and PLAN read as rows with marks; PLAN groups
+  its items by phase. DAG gains a timeline: folded, one strip shaded by how many nodes ran at once, its gaps the run's
+  idle time; open, a row per node with its wait on upstream. A subagent the run did not orchestrate is a row under
+  Outside DAG and in AGENTS, never a start node of the run. Detail moved into hover cards that the keyboard can open
+  too. The pane also reads in Chinese. Contributed by @yqm-307 (#3058).
 
 ## 5.0.0 - 2026-11-21
 
