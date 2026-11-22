@@ -103,6 +103,21 @@ export function appendLine(lines: string[], text: string, max = MAX_LINES): stri
   return next.length > max ? next.slice(next.length - max) : next;
 }
 
+/** Where the gate stands: `boot` (the app has not been up yet: the screen alone), `up` (the app shows; a bridge that
+ *  died is being started again and the chats say they are reconnecting), `down` (the shell gave up after the app was up:
+ *  a bar says so and offers Retry, and the app stays usable under it, terminals included, until the bridge is ready). */
+export type GateMode = "boot" | "up" | "down";
+
+export function gateMode(prev: GateMode, state: BridgeState["state"] | undefined): GateMode {
+  if (state === "ready") return "up";
+  if (prev === "up" && state === "failed") return "down";
+  return prev;
+}
+
+/** How often the gate asks the shell: often while the bridge is not up, then every couple of seconds so a bridge that
+ *  dies later (and a shell that gives up on starting it again) is seen without a restart. */
+export const pollMs = (ready: boolean) => (ready ? 2000 : 500);
+
 export function BridgeGate({ children }: { children: ReactNode }) {
   const [status, setStatus] = useState<BridgeState | null>(hasShell() ? null : { state: "ready" });
   const [retrying, setRetrying] = useState(false);
@@ -126,24 +141,31 @@ export function BridgeGate({ children }: { children: ReactNode }) {
   }, []);
 
   const running = install === "running";
+  const ready = status?.state === "ready";
   useEffect(() => {
-    if (!hasShell() || status?.state === "ready" || running) return;
+    if (!hasShell() || running) return;
     let alive = true;
     const poll = async () => {
       try {
         const s = await (await shell()).status();
-        if (alive) setStatus(s);
+        // the same answer keeps the same object: a steady "ready" every 2 s re-renders nothing
+        if (alive) setStatus((prev) => (prev && prev.state === s.state && prev.error === s.error && prev.missing === s.missing ? prev : s));
       } catch (e) {
-        if (alive) setStatus({ state: "failed", error: String(e) });
+        // once the bridge is up, one refused ask (a webview reload, say) is not a failure: the shell answers the next one
+        if (alive) setStatus((prev) => (prev?.state === "ready" ? prev : { state: "failed", error: String(e) }));
       }
     };
-    void poll();
-    const h = setInterval(poll, 500);
+    if (!ready) void poll();
+    const h = setInterval(poll, pollMs(ready));
     return () => {
       alive = false;
       clearInterval(h);
     };
-  }, [status?.state === "ready", running, shell]);
+  }, [ready, running, shell]);
+
+  const [mode, setMode] = useState<GateMode>("boot");
+  const nextMode = gateMode(mode, status?.state);
+  if (nextMode !== mode) setMode(nextMode);
 
   const needsHermes = status?.state === "failed" && status.missing === "hermes";
 
@@ -201,7 +223,29 @@ export function BridgeGate({ children }: { children: ReactNode }) {
     }
   }, [shell]);
 
-  if (status?.state === "ready") return <>{children}</>;
+  if (nextMode === "up") return <>{children}</>;
+  // after the app was up, nothing hides it: terminals need no bridge, and a hidden one could still take keystrokes
+  if (nextMode === "down") {
+    const failed = status?.state === "failed";
+    return (
+      <>
+        {children}
+        <div className="gate-bar" role={failed ? "alert" : "status"} data-testid="bridge-bar" data-state={status?.state ?? "starting"}>
+          <span className="gate-bar-title">{failed ? t("gate.unreachable") : t("gate.reviving")}</span>
+          {failed && (
+            <>
+              <span className="gate-bar-error" data-testid="bridge-error" title={status?.error}>
+                {status?.error || t("gate.noBridge")}
+              </span>
+              <button type="button" className="gate-retry" data-testid="bridge-retry" disabled={retrying} onClick={retry}>
+                {t("gate.retry")}
+              </button>
+            </>
+          )}
+        </div>
+      </>
+    );
+  }
 
   if (needsHermes || install !== "idle") {
     return (

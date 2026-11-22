@@ -50,10 +50,12 @@ struct Shell {
     chats: Arc<ChatSessions>,
 }
 
-/// `ws://127.0.0.1:<port>/?token=<token>` once the bridge is ready.
+/// `ws://127.0.0.1:<port>/?token=<token>` once the bridge is ready. The wait for a starting bridge blocks, so it runs
+/// on the blocking pool: every client re-dials while a bridge comes back, and none may park an async worker.
 #[tauri::command]
 async fn bridge_url(shell: State<'_, Shell>) -> Result<String, String> {
-    shell.bridge.url(Duration::from_secs(2))
+    let bridge = Arc::clone(&shell.bridge);
+    tauri::async_runtime::spawn_blocking(move || bridge.url(Duration::from_secs(2))).await.map_err(|e| e.to_string())?
 }
 
 /// `{state: "ready" | "starting" | "failed", error?}`.
@@ -179,6 +181,8 @@ async fn install_engine(shell: State<'_, Shell>, on_event: Channel<InstallEvent>
         return Err("the installer is already running".into());
     }
     let installing = Arc::clone(&shell.installing);
+    // the installer may replace Hermes under a running bridge: one that stops meanwhile waits for it to end
+    shell.bridge.hold();
     let result = tauri::async_runtime::spawn_blocking(move || {
         setup::run_install(setup::install_command(Os::current()), |e| {
             let _ = on_event.send(e);
@@ -187,15 +191,18 @@ async fn install_engine(shell: State<'_, Shell>, on_event: Channel<InstallEvent>
     .await
     .map_err(|e| e.to_string());
     installing.store(false, Ordering::SeqCst);
-    let code = result??;
-    // An installer can exit 0 without leaving Hermes where omher looks; say so instead of showing the
-    // setup screen again as if nothing had run.
-    let found = code != Some(0) || bridge::discover_python(|k| std::env::var(k).ok(), |p| p.is_file()).is_ok();
-    let code = setup::check_installed(code, found)?;
-    if code == Some(0) {
+    let outcome = result.and_then(|r| r).and_then(|code| {
+        // An installer can exit 0 without leaving Hermes where omher looks; say so instead of showing the
+        // setup screen again as if nothing had run.
+        let found = code != Some(0) || bridge::discover_python(|k| std::env::var(k).ok(), |p| p.is_file()).is_ok();
+        setup::check_installed(code, found)
+    });
+    if outcome == Ok(Some(0)) {
         shell.bridge.start(shell.resource_dir.clone());
+    } else {
+        shell.bridge.release();
     }
-    Ok(code)
+    outcome
 }
 
 fn user_home() -> Result<PathBuf, String> {

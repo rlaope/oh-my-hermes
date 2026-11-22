@@ -1113,6 +1113,7 @@ export const en = {
   "gate.starting": "Starting omher…",
   "gate.noBridge": "The local bridge did not start.",
   "gate.retry": "Retry",
+  "gate.reviving": "Starting the bridge again…",
   "ss.starting": "Starting…",
   "ss.running": "Running",
   "ss.ended": "Ended",
