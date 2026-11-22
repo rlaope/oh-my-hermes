@@ -7,6 +7,8 @@
 // 5. the group's header menu: New terminal here starts the Shell there, New folder… is the same action, Remove from
 //    list is offered only for an added folder, takes it out of the list, and leaves a folder with a running session
 //    listed.
+// 6. one group per folder however its path is spelled: `/a/b/` and `/a/b` are the same group, in a record saved
+//    before, in a session's own folder and in what the dialog answers.
 // Shots: e2e/__shots__/ (git-ignored), or OMHER_SHOTS=<dir>: folder-create-menu-{en,ko}.png, folder-create-group.png,
 // folder-create-header-menu.png.
 import { expect, test, type Page } from "@playwright/test";
@@ -40,19 +42,21 @@ async function shot(page: Page, name: string) {
 
 /** The app as a returning person sees it, with no terminal session and no folder kept. A reload keeps what the page
  *  saved (the init script clears storage on the first load only). */
-async function open(page: Page, lang = "en") {
+async function open(page: Page, lang = "en", folders: { collapsed: string[]; order: string[]; added?: string[] } | null = null) {
   await page.addInitScript(
-    ([lang, folder]) => {
+    ([lang, folder, folders]) => {
       if (!sessionStorage.getItem("__kept")) {
         for (const k of ["omher.sessions.recent", "omher.sessions.open", "omher.resume", "omher.term.folders", "omher.side.split"]) localStorage.removeItem(k);
         localStorage.setItem("omher.lang", lang);
+        // a record this computer already holds (`folders`), as an earlier build saved it
+        if (folders) localStorage.setItem("omher.term.folders", folders);
         sessionStorage.setItem("__kept", "1");
       }
       const w = window as unknown as Record<string, unknown>;
       w.__omherPickFolder = folder;
       w.__omherBranches = { "/home/you/code/new-app": "feature/checkout-flow" };
     },
-    [lang, NEW] as const,
+    [lang, NEW, folders ? JSON.stringify(folders) : null] as const,
   );
   await page.goto("/");
   await expect(page.getByTestId("bot-kami")).toBeVisible();
@@ -227,6 +231,58 @@ test("the background menu makes a folder group that survives a reload; the heade
   await page.getByTestId("sessions-new-folder").click();
   expect(await groups(page)).toEqual([NEW]);
   expect("added" in (await saved(page))).toBe(false);
+});
+
+test("a folder listed under another spelling of its path is that one group: picking it opens it, never a second", async ({ page }) => {
+  const WEB = "/home/you/code/web-app";
+  // saved by an earlier build with a trailing separator, collapsed and second in the order
+  await open(page, "en", { collapsed: [`${WEB}/`], order: [NOTES, `${WEB}/`], added: [`${WEB}/`, NOTES] });
+  expect(await groups(page)).toEqual([NOTES, WEB]);
+  await expect(group(page, WEB)).toHaveAttribute("data-collapsed", "true");
+
+  // the dialog answers the plain spelling: the same header opens, in its place
+  await pick(page, WEB);
+  await background(page);
+  await page.getByTestId("sessions-new-folder").click();
+  await expect(group(page, WEB)).not.toHaveAttribute("data-collapsed", "true");
+  expect(await groups(page)).toEqual([NOTES, WEB]);
+  await expect(page.getByTestId("term-group-head")).toHaveCount(2);
+  expect(await saved(page)).toEqual({ collapsed: [], order: [NOTES, WEB], added: [WEB, NOTES] });
+
+  // ...and the other way round: listed plainly, picked with separators to spare
+  await group(page, WEB).getByTestId("term-group-toggle").click();
+  await expect(group(page, WEB)).toHaveAttribute("data-collapsed", "true");
+  await pick(page, `${WEB}//`);
+  await background(page);
+  await page.getByTestId("sessions-new-folder").click();
+  await expect(group(page, WEB)).not.toHaveAttribute("data-collapsed", "true");
+  expect(await groups(page)).toEqual([NOTES, WEB]);
+  expect((await saved(page)).added).toEqual([WEB, NOTES]);
+
+  // a terminal whose own folder is spelled with the separator lists under the same header
+  await page.getByTestId("session-new").click();
+  await page.getByTestId("session-folder").click();
+  await pick(page, `${WEB}/`);
+  await page.getByTestId("session-choose").click();
+  await page.getByTestId("session-agent-shell").click();
+  await expect(group(page, WEB).locator(".ss-row.tr")).toHaveCount(1);
+  await expect(group(page, WEB).getByTestId("term-group-empty")).toHaveCount(0);
+  expect(await groups(page)).toEqual([NOTES, WEB]);
+  await expect.poll(async () => (await starts(page)).map((c) => (c as { cwd?: string }).cwd)).toEqual([`${WEB}/`]);
+
+  // the list forgets the added folder; its session keeps the one group, and picking the plain path adds none
+  await group(page, WEB).getByTestId("term-group-head").click({ button: "right" });
+  await page.getByTestId("term-folder-remove").click();
+  expect((await saved(page)).added).toEqual([NOTES]);
+  await pick(page, WEB);
+  await background(page);
+  await page.getByTestId("sessions-new-folder").click();
+  expect(await groups(page)).toEqual([NOTES, WEB]);
+  expect((await saved(page)).added).toEqual([NOTES]);
+  // collapsing it from its header hides the row of the session spelled the other way
+  await group(page, WEB).getByTestId("term-group-toggle").click();
+  await expect(group(page, WEB)).toHaveAttribute("data-collapsed", "true");
+  await expect(group(page, WEB).locator(".ss-row.tr")).toHaveCount(0);
 });
 
 const WORDS: Record<string, { menu: string[]; remove: string; empty: string }> = {

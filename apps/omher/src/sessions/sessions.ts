@@ -37,7 +37,7 @@ import { getShellHost, learnThisHost } from "../terminal/host";
 import { onSessionFg } from "./fg";
 import { termActs } from "./termActivity";
 import { isLinkId, LINK_COPIED_EVENT, newLinkId, termLinkUrl } from "./termLink";
-import { acpRow, agentDef, agentLabel, continues, draftAgent, draftFolder, draftOpen, hermesOnly, installLine, isBuiltin, isGone, isShell, isTerminalRec, LAST_LINE_MAX, SHELL, termEnd, termMarkAgent, lastPrintedLine, OPEN_KEY, opensAs, parseOpens, parseRecent, pushRecent, RECENT_KEY, registerAcp, sessionMode, termGroups, type AgentId, type AgentInfo, type OpenAs, type Unseen, type Opens, type Recent, type SessionRec } from "./agents";
+import { acpRow, agentDef, agentLabel, continues, draftAgent, draftFolder, draftOpen, hermesOnly, installLine, isBuiltin, isGone, isShell, isTerminalRec, LAST_LINE_MAX, SHELL, termEnd, termMarkAgent, lastPrintedLine, OPEN_KEY, opensAs, parseOpens, parseRecent, pushRecent, RECENT_KEY, registerAcp, sessionMode, type AgentId, type AgentInfo, type OpenAs, type Unseen, type Opens, type Recent, type SessionRec } from "./agents";
 import { NAME_MAX, parseTitles, promptTitle, putTitle, TITLES_KEY } from "./titles";
 import { getDraft, setDraft as setUnsent } from "../app/drafts";
 import { getHost, type ChatEvent, type ChatInput, type PastChat, type SessionHost } from "./host";
@@ -53,7 +53,7 @@ import { t as tr } from "../i18n";
 import { windowWatched, type SessionNote } from "../lib/notify";
 import { createCloseGrace, graceMs, restoreSplitIn, type SplitWas } from "./closeGrace";
 import { getSplit, groupOf, leaveIn, setSplit } from "./splitState";
-import { getFolderPrefs, orderFolders } from "./folders";
+import { folderGroups, getFolderPrefs, orderFolders, pathKey } from "./folders";
 
 /** The Accounts CLI a session of `agent` signs in as (mirrors `session_cli` in src-tauri/src/accounts.rs). */
 const ACCOUNT_CLI: Partial<Record<AgentId, AccountCli>> = { claude: "claude", codex: "codex", grok: "grok" };
@@ -2125,7 +2125,7 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
     const left = new Set(list.map((s) => s.id));
     const heir = leaveIn(getSplit().groups, id).heir;
     if (heir && left.has(heir)) return heir;
-    const order = orderFolders(termGroups(was.filter((r) => isTerminalRec(state.agents, r))), getFolderPrefs().order).flatMap((g) => g.rows.map((r) => r.id));
+    const order = orderFolders(folderGroups(was.filter((r) => isTerminalRec(state.agents, r))), getFolderPrefs().order).flatMap((g) => g.rows.map((r) => r.id));
     const at = order.indexOf(id);
     const near = at < 0 ? undefined : [...order.slice(at + 1), ...order.slice(0, at).reverse()].find((x) => left.has(x));
     if (near) return near;
@@ -2246,7 +2246,7 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
     if (id === to) return;
     const r = rec(id);
     const at = rec(to);
-    if (!r || !at || r.cwd !== at.cwd) return;
+    if (!r || !at || pathKey(r.cwd) !== pathKey(at.cwd)) return;
     const rest = state.list.filter((x) => x.id !== id);
     const i = rest.findIndex((x) => x.id === to);
     const list = [...rest.slice(0, after ? i + 1 : i), r, ...rest.slice(after ? i + 1 : i)];

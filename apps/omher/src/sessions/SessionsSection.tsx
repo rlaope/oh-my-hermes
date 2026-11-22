@@ -20,7 +20,7 @@ import { busyFor, shortTime } from "../app/time";
 import { t } from "../i18n";
 import { composing } from "../lib/ime";
 import { AgentMark } from "./AgentMark";
-import { agentDef, agentLabel, draftFolder, folderChoices, folderName, hermesOnly, installLine, isTerminalRec, menuFocus, menuOrder, missingNote, parentPath, SHELL, splitPaneName, termActivity, termFallbackName, termGroups, terminalAgents, termMarkAgent, termStatus, tildePath, type AgentId, type AgentInfo, type RowMark, type SessionRec, type TermStatus, type Unseen } from "./agents";
+import { agentDef, agentLabel, draftFolder, folderChoices, folderName, hermesOnly, installLine, isTerminalRec, menuFocus, menuOrder, missingNote, parentPath, SHELL, splitPaneName, termActivity, termFallbackName, terminalAgents, termMarkAgent, termStatus, tildePath, type AgentId, type AgentInfo, type RowMark, type SessionRec, type TermStatus, type Unseen } from "./agents";
 import { TermRowMark } from "./TermRowMark";
 import { SplitGlyph, splitWith, useSplit, useSplitPrune } from "./SplitView";
 import { pressToSplit } from "./splitDrag";
@@ -28,7 +28,7 @@ import { groupOf, groupSessions, paneOf } from "./splitState";
 import type { Layout } from "../terminal/layout";
 import { usePendingRequests } from "./termShare";
 import { countRender, useAnyFlowing, useTermFace } from "./termActivity";
-import { addFolder, addedFolders, allCollapsed, collapseOthers, folderSummary, getFolderPrefs, moveFolder, orderFolders, removeFolder, revealFolder as openFolder, setAllFolders, setFolderPrefs, toggleFolder, useFolderPrefs, withAdded } from "./folders";
+import { addFolder, addedFolders, allCollapsed, collapseOthers, folderGroups, pathKey, folderSummary, isCollapsed, isTildePath, getFolderPrefs, moveFolder, orderFolders, removeFolder, revealFolder as openFolder, setAllFolders, setFolderPrefs, toggleFolder, useFolderPrefs, withAdded } from "./folders";
 import { ChevronDown, ChevronRight } from "../ui/icons";
 import { CUE_PX, useEdgeFade } from "../sidebar/edgeFade";
 import { getHost, type PastChat } from "./host";
@@ -67,10 +67,12 @@ export { openNewSessionMenu } from "./newMenu";
 export async function addTermFolder(): Promise<void> {
   const sx = getSessions();
   const before = sx.getState();
-  const got = await sx.pickFolder(draftFolder(before.recent, before.home));
-  if (!got) return;
+  const picked = await sx.pickFolder(draftFolder(before.recent, before.home));
+  if (!picked || isTildePath(picked)) return;
+  // the folder as the list names it: another spelling of a listed folder (`…/web-app/`) is that folder
+  const got = pathKey(picked);
   const now = sx.getState();
-  const listed = [...new Set(now.list.filter((r) => isTerminalRec(now.agents, r)).map((r) => r.cwd))];
+  const listed = folderGroups(now.list.filter((r) => isTerminalRec(now.agents, r))).map((g) => g.cwd);
   const prefs = getFolderPrefs();
   setFolderPrefs(addFolder(prefs, got, [...listed, ...addedFolders(prefs)]));
   // the group comes into view (a long list may hold it below the fold)
@@ -777,7 +779,7 @@ export function SessionList({ needle = "", query = "" }: { needle?: string; quer
   if (terms.length === 0 && added.length === 0) return <SessionStart />;
   const shown = terms.filter((r) => sessionMatches(r, needle));
   // an added folder with no session is a group too; a search keeps it only when its path matches
-  const groups = orderFolders(withAdded(termGroups(shown), needle ? added.filter((c) => c.toLowerCase().includes(needle)) : added), folders.order);
+  const groups = orderFolders(withAdded(folderGroups(shown), needle ? added.filter((c) => c.toLowerCase().includes(needle)) : added), folders.order);
   return (
     <nav ref={navRef} className="bot-list ss-list" aria-label={t("nav.terminals")} data-testid="session-list">
       {needle && groups.length === 0 && (
@@ -787,7 +789,7 @@ export function SessionList({ needle = "", query = "" }: { needle?: string; quer
       )}
       {groups.map((g, gi, all) => {
         // a search shows every match, collapsed or not
-        const shut = !needle && folders.collapsed.includes(g.cwd);
+        const shut = !needle && isCollapsed(folders, g.cwd);
         return (
         <div key={g.cwd} className={`tg${shut ? " shut" : ""}`} role="group" aria-label={folderName(g.cwd)} data-testid="term-group" data-cwd={g.cwd} data-collapsed={shut ? "true" : undefined}>
           <FolderHead
@@ -857,7 +859,7 @@ function FolderGlyph() {
 function CollapseAllButton() {
   const ss = useSessions();
   const prefs = useFolderPrefs();
-  const all = [...new Set([...ss.list.filter((r) => isTerminalRec(ss.agents, r)).map((r) => r.cwd), ...addedFolders(prefs)])];
+  const all = [...new Set([...folderGroups(ss.list.filter((r) => isTerminalRec(ss.agents, r))).map((g) => g.cwd), ...addedFolders(prefs)])];
   if (all.length < 2) return null;
   const shut = allCollapsed(prefs, all);
   const label = shut ? t("term.expandAll") : t("term.collapseAll");

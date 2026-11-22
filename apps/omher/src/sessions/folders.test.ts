@@ -2,7 +2,7 @@
 // "New folder…" are parsed defensively, listed once, put at the top of the saved order, and removed without
 // touching the rest.
 import { describe, expect, it } from "vitest";
-import { addFolder, addedFolders, orderFolders, parseFolderPrefs, removeFolder, withAdded, type FolderPrefs } from "./folders";
+import { addFolder, addedFolders, allCollapsed, collapseOthers, folderGroups, pathKey, isCollapsed, moveFolder, orderFolders, parseFolderPrefs, removeFolder, setAllFolders, toggleFolder, withAdded, type FolderPrefs } from "./folders";
 
 const NONE: FolderPrefs = { collapsed: [], order: [] };
 const shown = (p: FolderPrefs, sessions: string[]) => orderFolders(withAdded(sessions.map((cwd) => ({ cwd, rows: [cwd] })), addedFolders(p)), p.order).map((g) => g.cwd);
@@ -127,5 +127,98 @@ describe("withAdded", () => {
       { cwd: "/new", rows: [] },
     ]);
     expect(withAdded(groups, [])).toEqual(groups);
+  });
+});
+
+// One identity per folder (review round 1, BLOCKING 6): `/a/b` and `/a/b/` are one group, in what is picked, in a
+// session's folder and in a record saved before the paths were normalised.
+describe("pathKey", () => {
+  it("drops a trailing separator and repeated ones, and keeps a root", () => {
+    expect(pathKey("/home/you/code/web-app/")).toBe("/home/you/code/web-app");
+    expect(pathKey("/home/you//code///web-app//")).toBe("/home/you/code/web-app");
+    expect(pathKey("/home/you/code/web-app")).toBe("/home/you/code/web-app");
+    expect(pathKey("/")).toBe("/");
+    expect(pathKey("//")).toBe("/");
+    expect(pathKey("")).toBe("");
+  });
+
+  it("spells a Windows path with backslashes, keeping the drive root and a share's two leading ones", () => {
+    expect(pathKey("C:\\")).toBe("C:\\");
+    expect(pathKey("C:/")).toBe("C:\\");
+    expect(pathKey("C:\\\\")).toBe("C:\\");
+    expect(pathKey("C:\\Users\\you\\app\\")).toBe("C:\\Users\\you\\app");
+    expect(pathKey("C:/Users//you/app/")).toBe("C:\\Users\\you\\app");
+    expect(pathKey("\\\\server\\share\\app\\")).toBe("\\\\server\\share\\app");
+    // a backslash in a Unix folder's name is part of the name
+    expect(pathKey("/home/you/odd\\name/")).toBe("/home/you/odd\\name");
+  });
+
+  it("never expands `~`, and is the same again when applied twice", () => {
+    expect(pathKey("~/code/")).toBe("~/code");
+    expect(pathKey("~")).toBe("~");
+    for (const p of ["/a/b/", "C:/x//y/", "\\\\s\\t\\", "/", "C:\\", "~/x/"]) expect(pathKey(pathKey(p))).toBe(pathKey(p));
+  });
+});
+
+describe("one group per folder, however its path is spelled", () => {
+  const WEB = "/home/you/code/web-app";
+
+  it("a record saved with the other spelling reads as that folder, once (collapsed, order and added)", () => {
+    const p = parseFolderPrefs(JSON.stringify({ collapsed: [`${WEB}/`, WEB], order: [`${WEB}/`, "/b//", WEB, "/b"], added: [`${WEB}/`, WEB, "/c/"] }));
+    expect(p).toEqual({ collapsed: [WEB], order: [WEB, "/b"], added: [WEB, "/c"] });
+  });
+
+  it("a saved `~` folder is not kept as an added folder, and picking one adds nothing", () => {
+    expect(parseFolderPrefs(JSON.stringify({ collapsed: [], order: [], added: ["~/code", "~", "/ok"] })).added).toEqual(["/ok"]);
+    expect(addFolder(NONE, "~/code", [])).toBe(NONE);
+    expect(addFolder(NONE, "~", [])).toBe(NONE);
+  });
+
+  it("sessions whose folder is spelled both ways are one group, named without the trailing separator", () => {
+    const g = folderGroups([{ cwd: `${WEB}/`, id: 1 }, { cwd: "/b", id: 2 }, { cwd: WEB, id: 3 }]);
+    expect(g.map((x) => x.cwd)).toEqual([WEB, "/b"]);
+    expect(g[0].rows.map((r) => r.id)).toEqual([1, 3]);
+    // the rows are the same objects, their own `cwd` as it was
+    expect(g[0].rows[0].cwd).toBe(`${WEB}/`);
+  });
+
+  it("picking an alias of an added folder adds no second one, keeps its place and opens it", () => {
+    for (const [have, picked] of [[WEB, `${WEB}/`], [`${WEB}/`, WEB]] as const) {
+      const base = parseFolderPrefs(JSON.stringify({ collapsed: [have], order: ["/s1", have], added: [have] }));
+      const p = addFolder(base, picked, ["/s1", ...addedFolders(base)]);
+      expect(p.added).toEqual([WEB]);
+      expect(p.order).toEqual(["/s1", WEB]);
+      expect(p.collapsed).toEqual([]);
+      expect(shown(p, ["/s1"])).toEqual(["/s1", WEB]);
+    }
+  });
+
+  it("picking an alias of a folder a session lists only opens that group", () => {
+    const base: FolderPrefs = { collapsed: [WEB], order: [] };
+    const listed = folderGroups([{ cwd: `${WEB}/` }]).map((g) => g.cwd);
+    const p = addFolder(base, `${WEB}//`, listed);
+    expect(p).toEqual({ collapsed: [], order: [] });
+    expect(shown(p, listed)).toEqual([WEB]);
+  });
+
+  it("an added folder and a session in its alias make one group; the saved order and collapse find it", () => {
+    const p = parseFolderPrefs(JSON.stringify({ collapsed: [`${WEB}/`], order: ["/b", `${WEB}/`], added: [`${WEB}/`] }));
+    const groups = orderFolders(withAdded(folderGroups([{ cwd: WEB }, { cwd: "/b" }]), addedFolders(p)), p.order);
+    expect(groups.map((g) => g.cwd)).toEqual(["/b", WEB]);
+    expect(isCollapsed(p, WEB)).toBe(true);
+    expect(isCollapsed(p, `${WEB}/`)).toBe(true);
+    expect(allCollapsed(p, [`${WEB}/`])).toBe(true);
+    // an order named in the other spelling by a caller still places the group
+    expect(orderFolders([{ cwd: "/b" }, { cwd: WEB }], [`${WEB}/`, "/b"]).map((g) => g.cwd)).toEqual([WEB, "/b"]);
+  });
+
+  it("collapse, collapse all, collapse others, move and remove act on the one folder whichever spelling names it", () => {
+    const p: FolderPrefs = { collapsed: [], order: [], added: [WEB] };
+    expect(toggleFolder(p, `${WEB}/`).collapsed).toEqual([WEB]);
+    expect(toggleFolder(toggleFolder(p, `${WEB}/`), WEB).collapsed).toEqual([]);
+    expect(setAllFolders(p, [`${WEB}/`, "/b"], true).collapsed).toEqual([WEB, "/b"]);
+    expect(collapseOthers(p, [WEB, "/b"], `${WEB}/`).collapsed).toEqual(["/b"]);
+    expect(moveFolder([WEB, "/b", "/c"], `${WEB}/`, 2)).toEqual(["/b", "/c", WEB]);
+    expect(removeFolder(p, `${WEB}/`)).toEqual({ collapsed: [], order: [] });
   });
 });
