@@ -40,6 +40,7 @@ from .fanout_output import FanoutOutput
 from .fanout_executor_sessions import SessionBinding, SessionDecoder, bound_session_fields, observe_session_workspace, read_session_receipt
 from .executor_readiness import negotiate_session_capability, observe_session_binary, session_launch_path
 from .executors import canonical_executor_profile
+from .user_executors import ExecutorConfigError
 from .fanout_capacity import (
     AdmissionBinding, CapacityBlocked, CapacityTrip, CodexAdmissionObserver, CodexAdmissionSource, LaunchCallable,
     CODEX_ADMISSION_SUPPORT, CAPACITY_STATUSES, OwnerLaunchGate, capacity_fields,
@@ -944,11 +945,23 @@ def build_dispatch_argv(
     owner: str,
     prompt: str,
     model_route: Mapping[str, Any] | None = None,
+    *,
+    spec: object | None = None,
+    prompt_file: Path | None = None,
+    session_file: Path | None = None,
+    session_id: str | None = None,
 ) -> list[str] | None:
     """Return the spawn argv for one owner, or None when the owner has no template.
 
     Without a model route the argv is byte-identical to the base template; a
     routed model/effort inserts the per-owner option fragments only.
+
+    A built-in owner never reads `spec`: the shipped tables are the only
+    authority for codex, claude-code and the pi family, so their argv stays
+    byte-identical. `spec` is the loaded `ExecutorSpec` for a user-declared or
+    preset executor, and it answers only on the branch where no built-in
+    template exists. `{prompt}` is one argv element whatever it contains;
+    `{prompt_file}` names the dispatcher-written file the caller prepared.
     """
     if owner == "pi-family-runtime":
         host = pi_family_host()
@@ -965,7 +978,10 @@ def build_dispatch_argv(
         effort_template = DISPATCH_REASONING_OPTION_TEMPLATES.get(owner, ())
         insert_index = _DISPATCH_OPTION_INSERT_INDEX.get(owner)
     if template is None:
-        return None
+        return _build_user_executor_argv(
+            owner, prompt, model_route, spec=spec,
+            prompt_file=prompt_file, session_file=session_file, session_id=session_id,
+        )
     argv = [part.replace("{prompt}", prompt) for part in template]
     route = model_route or {}
     options: list[str] = []
@@ -981,6 +997,127 @@ def build_dispatch_argv(
     if insert_at is None:
         return argv + options
     return argv[:insert_at] + options + argv[insert_at:]
+
+
+def _build_user_executor_argv(
+    owner: str,
+    prompt: str,
+    model_route: Mapping[str, Any] | None,
+    *,
+    spec: object | None,
+    prompt_file: Path | None,
+    session_file: Path | None,
+    session_id: str | None,
+) -> list[str] | None:
+    """The registry branch of `build_dispatch_argv`: no built-in template exists.
+
+    `None` still means unspawnable: a built-in owner with no template (hermes,
+    the runtimes, generic) and an owner with no loaded definition both keep
+    their prepared-prompt fallback. A spec answers only for its own id, so a
+    caller cannot hand one owner's definition to another.
+    """
+    if spec is None or str(getattr(spec, "id", "")) != owner:
+        return None
+    from .executors import EXECUTOR_PROFILES
+    from .user_executors import render_user_argv
+
+    if owner in EXECUTOR_PROFILES:
+        return None
+    route = model_route or {}
+    return render_user_argv(
+        spec,  # type: ignore[arg-type]
+        prompt=prompt,
+        prompt_file=prompt_file,
+        model=str(route.get("selected_model", "") or ""),
+        effort=str(route.get("selected_reasoning_effort", "") or ""),
+        session_file=session_file,
+        session_id=session_id,
+    )
+
+
+EXECUTOR_SCRATCH_PREFIX = ".omh-executor-tmp-"
+
+
+def _prepare_executor_scratch(worktree: Path, attempt_id: str, prompt: str) -> Path | None:
+    """Create this attempt's private scratch inside the unit's fenced worktree.
+
+    Fixed name, dispatcher-assigned: `.omh-executor-tmp-<attempt id>/`, mode
+    0700, self-ignoring with a `.gitignore` of `*` so a `git add -A` in the
+    unit cannot journal it, holding `prompt.txt` (0600) for a `{prompt_file}`
+    declaration. This is the raw-exchange area — never the general
+    `.omh/confinement-tmp`, which would put prompt text under `.omh`. None
+    when the platform or filesystem cannot give those guarantees, in which
+    case file transport is refused rather than downgraded.
+    """
+    if getattr(os, "O_NOFOLLOW", 0) == 0:
+        return None
+    directory = worktree / f"{EXECUTOR_SCRATCH_PREFIX}{attempt_id}"
+    try:
+        directory.mkdir(mode=0o700)
+        ignore = directory / ".gitignore"
+        ignore.write_text("*\n", encoding="utf-8")
+        os.chmod(ignore, 0o600)
+        fd = os.open(
+            directory / "prompt.txt",
+            os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW,
+            0o600,
+        )
+        with os.fdopen(fd, "wb") as stream:
+            stream.write(prompt.encode("utf-8"))
+    except OSError:
+        _remove_executor_scratch(directory)
+        return None
+    return directory
+
+
+def _remove_executor_scratch(directory: object) -> None:
+    """Best-effort removal of one attempt's scratch; never raises into a dispatch."""
+    if not isinstance(directory, Path):
+        return
+    for name in ("prompt.txt", ".gitignore"):
+        try:
+            (directory / name).unlink()
+        except OSError:
+            pass
+    try:
+        directory.rmdir()
+    except OSError:
+        pass
+
+
+def load_executor_registry(omh_home: Path) -> object:
+    """Read `<omh_home>/routing/executors.toml` once for one invocation.
+
+    Deliberately uncached: two homes resolved in one process must not see each
+    other's entries, and a registry a dispatch loaded must not be reused by a
+    later dispatch after the operator edited the file. Loading spawns nothing.
+    """
+    from .user_executors import load_user_executors
+
+    return load_user_executors(Path(omh_home))
+
+
+def resolve_user_executor(omh_home: Path, owner: str) -> object | None:
+    """The loaded `ExecutorSpec` for `owner`, or None.
+
+    None for every built-in id (the shipped tables own those), for the sentinel
+    owners, and for an id the operator has not declared or that failed
+    validation. Never raises on a broken registry: a bad entry degrades to the
+    prepared-prompt fallback the owner already had.
+    """
+    from .executors import EXECUTOR_PROFILES
+
+    if not owner or owner in EXECUTOR_PROFILES or owner == "choose":
+        return None
+    from .user_executors import valid_executor_id
+
+    if not valid_executor_id(owner):
+        return None
+    registry = load_executor_registry(omh_home)
+    entries = getattr(registry, "entries", None)
+    if not isinstance(entries, Mapping):
+        return None
+    return entries.get(owner)
 
 
 def with_codex_windows_sandbox(argv: list[str] | None, owner: str, backend: str) -> list[str] | None:
@@ -1216,6 +1353,13 @@ def _unit_capability_precheck(
     if handoff_owner != declared_owner:
         return declared_owner, None, ["unit owner does not match the handoff owner"]
     if declared_owner == "choose":
+        return declared_owner, {}, []
+    if resolve_user_executor(paths.omh_home, declared_owner) is not None:
+        # A user-declared executor is admitted by its argv spec, not by a
+        # shipped capability snapshot: extension ids get no implicit native
+        # skills, capabilities or model catalog (design §2/§4). Its argv and
+        # declared version probe are checked when the unit launches, and the
+        # result is still judged from git heads, never the CLI's own output.
         return declared_owner, {}, []
     if (
         contract_schema_version == FANOUT_CONTRACT_SCHEMA_VERSION
@@ -4096,6 +4240,7 @@ def _open_fanout_progress_binding(
     routed_model: str,
     routed_effort: str,
     title: str,
+    external: bool = False,
 ) -> dict[str, Any] | None:
     """Best-effort: open and report the initial live row for one dispatched unit.
 
@@ -4103,9 +4248,16 @@ def _open_fanout_progress_binding(
     caller's later pid/close calls become no-ops rather than every dispatch
     growing a try/except of its own -- observability must never fail a
     dispatch, the same rule `_write_inflight` already holds for markers.
+
+    `external` maps a user-declared executor to its tagged progress dialect
+    (`external.<id>`, design §2). The tag is written by the dispatcher only;
+    a history reader accepts the tagged grammar without loading executable
+    config, and no external owner is given a native usage decoder.
     """
     try:
-        profile = normalize_executor_profile(owner)
+        profile = normalize_executor_profile(
+            f"external.{owner}" if external else owner
+        )
     except ExecutorProgressError:
         return None
     try:
@@ -4587,6 +4739,36 @@ def _with_repair_record(
     return result
 
 
+def _user_executor_binding_refusal(unit: Mapping[str, Any], spec: object | None) -> str:
+    """Why this unit's frozen user-executor binding no longer admits a spawn, or "".
+
+    The contract froze the id and the definition digest. This invocation read
+    the registry once; a changed, renamed or removed definition is refused
+    before any probe or child, with re-freeze as the only recovery -- never a
+    silent fall-back to a prompt, a different entry, or a mid-wave reload.
+    """
+    handoff = unit.get("handoff")
+    binding = handoff.get("user_executor") if isinstance(handoff, Mapping) else None
+    if binding is None:
+        return ""
+    if not isinstance(binding, Mapping):
+        return "the frozen user executor binding is malformed"
+    owner = str(unit.get("owner") or "")
+    if str(binding.get("id", "")) != owner:
+        return (
+            f"the frozen user executor binding names {binding.get('id')!r}, not {owner!r}; "
+            "re-freeze the contract"
+        )
+    if spec is None:
+        return f"user executor {owner!r} is not configured in this OMH home; re-freeze or re-add it"
+    if str(binding.get("definition_sha256", "")) != str(getattr(spec, "definition_sha256", "")):
+        return (
+            f"user executor {owner!r} changed since the contract was frozen; "
+            "re-freeze the units to record the current definition"
+        )
+    return ""
+
+
 def _dispatch_unit(
     paths: OmhPaths,
     unit: Mapping[str, Any],
@@ -4655,6 +4837,20 @@ def _dispatch_unit(
     unit_id = str(unit["unit_id"])
     run_ref = str(unit.get("run_ref", unit_id))
     owner, capability_snapshot, capability_errors = capability_precheck
+    # One registry read per dispatch invocation of this unit, and only for an id
+    # the shipped tables do not own: a built-in resolves to None without I/O.
+    executor_spec = resolve_user_executor(paths.omh_home, owner)
+    binding_refusal = _user_executor_binding_refusal(unit, executor_spec)
+    if binding_refusal:
+        return {
+            "unit_id": unit_id,
+            "run_ref": run_ref,
+            "owner": owner,
+            "status": "user_executor_binding_refused",
+            **_dispatch_status_ladder(),
+            "reason": binding_refusal,
+            "failure_kind": FAILURE_KIND_CAPABILITY_GATE,
+        }
     launch_gate = launch_gate or OwnerLaunchGate()
     blocked = launch_gate.rejection(owner)
     if blocked is not None and not dry_run:
@@ -4691,7 +4887,7 @@ def _dispatch_unit(
                 "declared model or resolvable role, then re-dispatch"
             ),
         }
-    if DISPATCH_COMMAND_TEMPLATES.get(owner) is None:
+    if DISPATCH_COMMAND_TEMPLATES.get(owner) is None and executor_spec is None:
         return {
             "unit_id": unit_id,
             "run_ref": run_ref,
@@ -4813,10 +5009,46 @@ def _dispatch_unit(
     # without it native-Windows Codex runs read-only (#2471).
     codex_sandbox_backend = stored_codex_windows_sandbox(paths.omh_home) if owner == "codex" else ""
 
+    # Dispatcher-owned scratch for an external executor's file transport, and
+    # the closed reason when its declaration cannot be rendered. Both are
+    # per-attempt: the scratch directory is created after this attempt's
+    # worktree exists and removed before any result or cleanliness check.
+    executor_prompt_file: dict[str, object] = {"path": None}
+    executor_scratch: dict[str, object] = {"dir": None}
+    executor_refusal: dict[str, str] = {}
+
     def dispatch_argv() -> list[str] | None:
-        command = with_codex_windows_sandbox(
-            build_dispatch_argv(owner, prompt, effective_model_route), owner, codex_sandbox_backend
-        )
+        prompt_file = executor_prompt_file.get("path")
+        if (executor_spec is not None and "{prompt_file}" in tuple(getattr(executor_spec, "argv", ()))
+                and not isinstance(prompt_file, Path)):
+            # Not a refusal: a `{prompt_file}` declaration cannot render until
+            # this attempt's worktree exists. The caller writes it there and
+            # renders again.
+            return None
+        try:
+            if executor_spec is None:
+                # The three-argument shape stays exactly as it was: test
+                # fixtures and wrappers substitute this function, and a
+                # built-in owner's argv must not depend on the registry.
+                command = with_codex_windows_sandbox(
+                    build_dispatch_argv(owner, prompt, effective_model_route),
+                    owner, codex_sandbox_backend,
+                )
+            else:
+                command = with_codex_windows_sandbox(
+                    build_dispatch_argv(
+                        owner, prompt, effective_model_route,
+                        spec=executor_spec,
+                        prompt_file=prompt_file if isinstance(prompt_file, Path) else None,
+                    ),
+                    owner, codex_sandbox_backend,
+                )
+        except ExecutorConfigError as exc:
+            # A selected model/effort/session the declaration cannot carry, or
+            # a `{prompt_file}` vector whose file is not written yet. Both are
+            # refusals before any spawn, reported by their closed reason.
+            executor_refusal["reason"] = str(exc)
+            return None
         # acceptEdits covers the cwd, not the dispatcher-owned intake directory.
         # Only the real Claude template receives CLI flags, never patched script
         # fixtures. Apply before session_argv resolves the template executable.
@@ -5070,6 +5302,33 @@ def _dispatch_unit(
     exit_code = 1
     try:
         worktree = Path(str(worktree_record["worktree_path"]))
+        if executor_spec is not None and argv is None and not executor_refusal:
+            # A `{prompt_file}` declaration cannot render until this attempt's
+            # worktree exists: the file lives in dispatcher-owned scratch
+            # inside it, written after allocation and before the fenced launch.
+            scratch = _prepare_executor_scratch(worktree, attempt_id, prompt)
+            if scratch is None:
+                return {
+                    "unit_id": unit_id,
+                    "run_ref": run_ref,
+                    "owner": owner,
+                    "status": "executor_file_transport_unavailable",
+                    **_dispatch_status_ladder(),
+                    "reason": "this platform cannot give the executor prompt file a private, no-follow path",
+                }
+            executor_scratch["dir"] = scratch
+            executor_prompt_file["path"] = scratch / "prompt.txt"
+            argv = dispatch_argv()
+        if executor_refusal:
+            return {
+                "unit_id": unit_id,
+                "run_ref": run_ref,
+                "owner": owner,
+                "status": "executor_declaration_refused",
+                **_dispatch_status_ladder(),
+                "reason": executor_refusal.get("reason", ""),
+                "failure_kind": FAILURE_KIND_CAPABILITY_GATE,
+            }
         # The isolation now exists; whether the work can be DONE in it is a
         # separate question, and the 2026-09-11 incident is what happens when only
         # the first one is asked. A readiness probe says the executor binary runs.
@@ -5093,7 +5352,8 @@ def _dispatch_unit(
             if not workspace_preflight["ok"]:
                 return _workspace_preflight_refusal(unit_id, run_ref, owner, attempt_id, workspace_preflight)
         session_capability = (negotiate_session_capability(owner, argv[0], env=child_env)
-                              if argv and getattr(runner, 'accepts_output_capture', False) else None)
+                              if argv and executor_spec is None
+                              and getattr(runner, 'accepts_output_capture', False) else None)
         if session_capability is not None:
             worktree = worktree.resolve()
         def session_argv(command: list[str]) -> list[str]:
@@ -5122,6 +5382,11 @@ def _dispatch_unit(
                 unit_branch=str(unit.get("branch_suggestion", f"agent/{unit_id}")),
                 repo_root=repo_root,
                 allow_unconfined=allow_unconfined,
+                # A user-declared executor is argv data, so its launch takes
+                # the shell-free named-path branch below. Built-ins pass no
+                # extra keyword at all and keep the byte-identical `exec -a`
+                # shim (and any substituted fence a test supplies).
+                **({"external_worker": True} if executor_spec is not None else {}),
             )
             if runner is signal_safe_unit_runner
             else None
@@ -5131,10 +5396,31 @@ def _dispatch_unit(
         filesystem_confinement = confinement_receipt(confinement, worktree)
         if confinement is not None and isinstance(filesystem_confinement, dict):
             filesystem_confinement["git_roots_skip"] = git_roots_skip_reason(worktree.resolve())
+        def owner_command(command: list[str]) -> tuple[str, ...] | None:
+            """The fenced argv for this unit's owner, or None when no fence proves it."""
+            if confinement is None:
+                return None
+            return (
+                confinement.external_command(command) if executor_spec is not None
+                else confinement.command(command)
+            )
+
+        def refresh_executor_scratch() -> None:
+            """Rotate a user executor's file transport for a new attempt."""
+            _remove_executor_scratch(executor_scratch.get("dir"))
+            executor_scratch["dir"] = None
+            executor_prompt_file["path"] = None
+            if "{prompt_file}" not in tuple(getattr(executor_spec, "argv", ())):
+                return
+            scratch = _prepare_executor_scratch(worktree, attempt_id, prompt)
+            if scratch is not None:
+                executor_scratch["dir"] = scratch
+                executor_prompt_file["path"] = scratch / "prompt.txt"
+
         if (
             confinement is not None
             and argv is not None
-            and confinement.command(argv) is None
+            and owner_command(argv) is None
             and not confinement.unconfined_allowed
         ):
             # No proven fence, so the spawn below would run the owner CLI with the
@@ -5283,6 +5569,7 @@ def _dispatch_unit(
             routed_model=routed_model,
             routed_effort=routed_effort,
             title=unit_title,
+            external=executor_spec is not None,
         )
         if getattr(runner, "accepts_on_spawn", False):
             # The signal-safe runner hands back the live process so the marker
@@ -5328,7 +5615,7 @@ def _dispatch_unit(
                 telemetry_reporter(stdout_snapshot)
 
             spawn_kwargs["on_output"] = _observe_snapshot
-        confinement_command = confinement.command(argv) if confinement is not None else None
+        confinement_command = owner_command(argv) if confinement is not None and argv is not None else None
         if confinement_command is not None:
             spawn_kwargs["confinement_command"] = confinement_command
         while True:
@@ -5344,11 +5631,21 @@ def _dispatch_unit(
                 if previous_path is not None and sidecar_path is not None:
                     assembled = _assemble_prompt(sidecar_path, clarification)
                     prompt = assembled.text
+                if executor_spec is not None:
+                    # A retry gets a fresh private scratch and prompt file; an
+                    # earlier attempt's is never reused or inherited.
+                    refresh_executor_scratch()
                     argv = dispatch_argv()
                     assert argv is not None  # Same previously admitted owner and route.
                     argv = with_codex_fenced_sandbox(session_argv(argv), owner, confinement)
                     if confinement is not None:
-                        spawn_kwargs['confinement_command'] = confinement.command(argv)
+                        spawn_kwargs['confinement_command'] = owner_command(argv)
+                elif previous_path is not None and sidecar_path is not None:
+                    argv = dispatch_argv()
+                    assert argv is not None  # Same previously admitted owner and route.
+                    argv = with_codex_fenced_sandbox(session_argv(argv), owner, confinement)
+                    if confinement is not None:
+                        spawn_kwargs['confinement_command'] = owner_command(argv)
                 if not getattr(runner, 'accepts_launch', False):
                     dispatch_observed()
             launch_workspace = (observe_session_workspace(str(worktree), confinement=confinement)
@@ -5550,6 +5847,7 @@ def _dispatch_unit(
                 break
             sleep(float(decision["delay_seconds"]))
     finally:
+        _remove_executor_scratch(executor_scratch.get("dir"))
         _clear_inflight(paths, fanout_id, unit_id)
         _close_fanout_progress_binding(
             paths,
@@ -5782,6 +6080,18 @@ def _dispatch_unit(
     # The ladder's own two rungs, read once so the envelope and the unit state
     # below it cannot disagree about what was observed.
     result_schema_valid = bool(unit_result.get("result_schema_valid"))
+    # An external executor's completion is judged from git, never from what its
+    # stdout claimed: exit 0 with no clean descendant commit means the unit
+    # edited nothing, however confident the output was. Built-in owners keep
+    # the existing ladder untouched.
+    external_no_commit = ""
+    if executor_spec is not None and exit_code == 0 and not input_required:
+        observed_head = _observed_clean_producer_head(unit_git_runner, worktree)
+        if not observed_head or observed_head == base_sha:
+            external_no_commit = (
+                "the executor exited 0 but left no clean descendant commit in the unit worktree; "
+                "its stdout is not evidence of an edit"
+            )
     # The journal event is sticky for the run, so an earlier attempt's pass
     # would otherwise outlive a check that failed in this one.
     verification_failed_now = verification.get("verification_status") == "failed"
@@ -5823,7 +6133,14 @@ def _dispatch_unit(
         "owner": owner,
         "model": routed_model,
         "reasoning_effort": routed_effort,
-        "status": "input_required" if input_required else "completed" if exit_code == 0 else "failed",
+        "status": (
+            "input_required" if input_required
+            else "failed" if (exit_code != 0 or external_no_commit)
+            else "completed"
+        ),
+        **((
+            {"reason": external_no_commit, "failure_kind": FAILURE_KIND_CRASH}
+        ) if external_no_commit else {}),
         **readiness_observation,
         "exit_code": exit_code,
         "unit_state": unit_state,
@@ -5848,7 +6165,7 @@ def _dispatch_unit(
         "verification_environment_policy": verification_environment.receipt,
         "shared_artifacts": shared_artifacts,
         **_dispatch_status_ladder(
-            process_succeeded=exit_code == 0 and not input_required,
+            process_succeeded=exit_code == 0 and not input_required and not external_no_commit,
             result_schema_valid=result_schema_valid,
             unit_verification_observed=verification_observed,
         ),

@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import json
 import math
+import re
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
@@ -150,7 +151,33 @@ class ExecutorProgressError(ValueError):
     pass
 
 
+# A user-declared executor's progress dialect is one tagged id,
+# `external.<executor id>` (design §2). The tag is written by the dispatcher
+# when it opens the binding; the owner id alone is never a profile, so a
+# built-in and a user executor that share a spelling cannot collide. Readers
+# accept this exact grammar and load no executable config to interpret it.
+EXTERNAL_PROGRESS_PROFILE_PREFIX = "external."
+_EXTERNAL_PROGRESS_PROFILE = re.compile(r"external\.[a-z][a-z0-9-]{1,31}", re.ASCII)
+
+
+def is_external_progress_profile(profile: object) -> bool:
+    """True for an exact `external.<id>` tag; no case folding, no aliases."""
+    return bool(_EXTERNAL_PROGRESS_PROFILE.fullmatch(str(profile or "")))
+
+
+def progress_profile_allowed(profile: object) -> bool:
+    """The closed built-in vocabulary, or one exact tagged external id."""
+    value = str(profile or "")
+    return value in ALLOWED_EXECUTOR_PROFILES or is_external_progress_profile(value)
+
+
 def normalize_executor_profile(value: str, *, observed_hermes_execution: bool = False) -> str:
+    if value.startswith(EXTERNAL_PROGRESS_PROFILE_PREFIX):
+        # No `casefold()` for a tagged id: the tag is exact and an owner id
+        # that differs in case is a different (invalid) id, not an alias.
+        if is_external_progress_profile(value):
+            return value
+        raise ExecutorProgressError(f"unsupported executor profile for progress: {value}")
     normalized = value.strip().casefold().replace("_", "-")
     aliases = {
         "codex": "codex",
@@ -1346,7 +1373,7 @@ def validate_progress_binding(record: dict[str, Any]) -> list[str]:
     elif any(separator in target_id for separator in ("/", "\\", "\x00")) or target_id in {".", ".."}:
         errors.append("target_id must be one safe path segment")
     profile = str(record.get("executor_profile") or record.get("executor") or "")
-    if profile not in ALLOWED_EXECUTOR_PROFILES:
+    if not progress_profile_allowed(profile):
         errors.append(_unsupported_profile_error())
     if str(record.get("binding_id", "")) != binding_id_for(target_type, target_id, profile):
         errors.append("binding_id must be target_type:target_id:executor_profile")
@@ -1369,7 +1396,7 @@ def validate_progress_event(record: dict[str, Any]) -> list[str]:
         errors.append("schema_version must be omh_progress_event/v1")
     if str(record.get("event_type", "")) not in PROGRESS_EVENT_TYPES:
         errors.append("event_type is unsupported")
-    if str(record.get("executor_profile", "")) not in ALLOWED_EXECUTOR_PROFILES:
+    if not progress_profile_allowed(record.get("executor_profile")):
         errors.append(_unsupported_profile_error())
     if not str(record.get("binding_id", "")):
         errors.append("binding_id is required")
@@ -1388,7 +1415,7 @@ def validate_progress_report(record: dict[str, Any]) -> list[str]:
     errors = _raw_or_hidden_errors(record)
     if record.get("schema_version") != EXECUTOR_PROGRESS_REPORT_SCHEMA_VERSION:
         errors.append("schema_version must be omh_progress_report/v1")
-    if str(record.get("executor_profile", "")) not in ALLOWED_EXECUTOR_PROFILES:
+    if not progress_profile_allowed(record.get("executor_profile")):
         errors.append(_unsupported_profile_error())
     if not str(record.get("binding_id", "")):
         errors.append("binding_id is required")

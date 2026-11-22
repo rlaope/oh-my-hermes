@@ -327,6 +327,12 @@ def probe_executor_readiness(
     behind a subprocess run nobody asked for, which is the same surprise #837
     exists to remove --- only later in the handoff.
     """
+    user_spec = _user_executor_spec(paths, profile)
+    if user_spec is not None:
+        # A user-declared executor is never cached under a static profile id:
+        # its command line can change by editing one file, so the digest is
+        # part of any observation and this call observes it fresh.
+        return _user_executor_readiness(user_spec, dry_run=dry_run)
     normalized = _normalize_profile(profile)
     if normalized == "choose":
         return executor_readiness_contract("choose")
@@ -593,6 +599,141 @@ def _resolved_command(profile: str) -> tuple[str, tuple[str, ...]] | None:
 # Only the version token is kept from a version line, never the rest of what
 # the binary printed.
 _VERSION_TOKEN = re.compile(r"(?<![0-9A-Za-z.])v?([0-9]+(?:\.[0-9]+){1,3}(?:[-+][0-9A-Za-z.-]{1,32})?)(?![0-9A-Za-z])")
+
+
+def _user_executor_spec(paths: OmhPaths, profile: str) -> object | None:
+    """The operator's loaded definition for `profile`, or None for a built-in id.
+
+    Built-ins return before any read: this hook must not add a file read to a
+    codex or claude probe. A configured id resolves from the one registry file
+    under the resolved home; an absent or invalid one returns None, and the
+    caller falls through to the built-in profile table exactly as before.
+    """
+    from .executors import EXECUTOR_PROFILES
+    from .user_executors import load_user_executors, valid_executor_id
+
+    value = str(profile or "").strip()
+    if not value or value in EXECUTOR_PROFILES or value == "choose":
+        return None
+    if not valid_executor_id(value):
+        return None
+    registry = load_user_executors(Path(paths.omh_home))
+    return registry.entries.get(value)
+
+
+def _user_executor_readiness(spec: object, *, dry_run: bool) -> dict[str, object]:
+    """One bounded version probe of a user-declared executor's version argv.
+
+    The argv is the operator's declaration (`[program, ...]`), the program is
+    resolved by its PATH name and launched by that name (#3014) so a multi-call
+    shim still picks its tool, and only a version token is kept. `--version` is
+    not authentication, authorization or provider validation, and nothing here
+    is dispatch evidence.
+    """
+    version = tuple(getattr(spec, "version", ()) or ())
+    contract: dict[str, object] = {
+        "schema_version": EXECUTOR_READINESS_SCHEMA_VERSION,
+        "profile": str(getattr(spec, "id", "")),
+        "label": str(getattr(spec, "label", "")),
+        "status": "not_observed",
+        "first_use_only": True,
+        "cache_key": f"executor_readiness:{getattr(spec, 'id', '')}",
+        "definition_sha256": str(getattr(spec, "definition_sha256", "")),
+        "user_executor": True,
+        "probe": {
+            "kind": "local_command",
+            "command": version[0] if version else "",
+            "args": list(version[1:]),
+            "timeout_seconds": _PROBE_TIMEOUT_SECONDS if version else 0,
+            "captures": ["available", "exit_code", "summary"],
+        },
+        "ready_action": "send_to_executor",
+        "fallback_policy": {
+            "when_missing": "ask_user_to_choose_executor_or_configure_one",
+            "retry_after_state_change": True,
+            "retry_limit": 1,
+            "suggested_actions": ["choose_executor", "continue_in_hermes"],
+        },
+        "not_evidence": [
+            "executor dispatch",
+            "executor result",
+            "execution",
+            "implementation",
+            "verification",
+            "review",
+            "CI",
+            "merge",
+        ],
+        "claim_boundary": READINESS_BINARY_ONLY_CLAIM_BOUNDARY,
+    }
+    if dry_run:
+        contract.update({"status": "not_observed", "cache_status": "would_probe", "first_use_skipped": False})
+        return contract
+    if not version:
+        contract.update({
+            "status": "not_applicable",
+            "available": False,
+            "observed_once": True,
+            "reason": "no_version_probe",
+            "summary": "This executor declares no version probe.",
+            "next_action": "configure_version_probe",
+        })
+        return contract
+    binary, args = version[0], list(version[1:])
+    identity = observe_session_binary(binary)
+    if identity is None:
+        contract.update({
+            "status": "missing",
+            "available": False,
+            "reason": "not_installed",
+            "observed": READINESS_OBSERVED_BINARY_VERSION_ONLY,
+            "observed_once": True,
+            "summary": f"`{binary}` was not found on PATH.",
+            "next_action": "choose_executor_or_configure_path",
+        })
+        return contract
+    launch = session_launch_path(binary, identity)
+    output, probe_reason = bounded_session_probe([launch, *args])
+    if output is None:
+        contract.update({
+            "status": "blocked",
+            "available": False,
+            "observed": READINESS_OBSERVED_BINARY_VERSION_ONLY,
+            "observed_once": True,
+            "reason": probe_reason,
+            "summary": f"`{binary}` version probe did not complete ({probe_reason}).",
+            "next_action": "choose_executor_or_configure_path",
+        })
+        return contract
+    try:
+        text = output.decode("utf-8").strip()
+    except UnicodeError:
+        contract.update({
+            "status": "blocked",
+            "available": False,
+            "observed": READINESS_OBSERVED_BINARY_VERSION_ONLY,
+            "observed_once": True,
+            "reason": "probe_output_not_utf8",
+            "summary": f"`{binary}` version probe output was not UTF-8.",
+            "next_action": "choose_executor_or_configure_path",
+        })
+        return contract
+    first_line = text.splitlines()[0] if text else ""
+    match = _VERSION_TOKEN.search(first_line)
+    contract.update({
+        "status": "ready",
+        "available": True,
+        "observed": READINESS_OBSERVED_BINARY_VERSION_ONLY,
+        "observed_once": True,
+        "exit_code": 0,
+        "binary_identity": identity.resolved_path,
+        "command_path": launch,
+        "version": match.group(1) if match else "",
+        "version_policy": EXECUTOR_VERSION_POLICY,
+        "summary": f"{first_line[:200]} {READINESS_WORKSPACE_PROBE_NOTE}"[:600],
+        "next_action": "send_to_executor",
+    })
+    return contract
 
 
 def version_probed_agent_clis() -> frozenset[str]:
