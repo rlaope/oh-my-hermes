@@ -274,7 +274,7 @@ def inline_graphics(environ: Mapping[str, str]) -> str:
     The order is Hermes' own TUI's (ui-tui `lib/terminalGraphics.ts`), plus Otty (`TERM_PROGRAM=otty`), which paints
     kitty virtual placements (docs.otty.sh, Images: "Unicode placeholders (U+10EEEE virtual placement)") but sets
     `TERM=xterm-256color` and no kitty variable, so it would otherwise get half-blocks, and omher's terminals
-    (`TERM_PROGRAM=omher`, set by `apps/omher/src-tauri/src/sessions.rs`), which paint kitty Unicode placeholders
+    (`TERM_PROGRAM=omher`, which the omher desktop app sets in its terminal sessions), which paint kitty Unicode placeholders
     too and carry the same xterm TERM. The tmux/screen, VS Code and WezTerm guards stay ahead of both."""
     term = environ.get("TERM", "").lower()
     program = environ.get("TERM_PROGRAM", "").lower()
