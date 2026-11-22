@@ -71,7 +71,7 @@ function addonTransmitted(addon: ImageAddon, id: number): Transmitted | undefine
 }
 
 /** Draws pictures in `term` from now on. False when the add-on would not start (the terminal keeps going without). */
-export function attachImages(term: Terminal, Ctor: ImageCtor): boolean {
+export function attachImages(term: Terminal, Ctor: ImageCtor, placeholdersSeen = false): boolean {
   if (addons.has(term)) return true;
   let addon: ImageAddon | null = null;
   const windowOptions = { ...term.options.windowOptions };
@@ -87,7 +87,7 @@ export function attachImages(term: Terminal, Ctor: ImageCtor): boolean {
     let virtual: Placeholders | null = null;
     try {
       const a = addon;
-      virtual = attachPlaceholders(term, undefined, { used: () => addonBytes(a), transmitted: (id) => addonTransmitted(a, id) });
+      virtual = attachPlaceholders(term, undefined, { used: () => addonBytes(a), transmitted: (id) => addonTransmitted(a, id) }, placeholdersSeen);
       const v = virtual;
       v.subs.push(a.onImageAdded(() => v.store.fit()));
     } catch {

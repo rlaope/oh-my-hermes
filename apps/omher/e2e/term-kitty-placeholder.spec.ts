@@ -134,3 +134,206 @@ test("with Show images off, a virtual transmit keeps nothing and paints nothing"
   expect(p.virtual).toBe(-1);
   expect(p.layer).toBe(false);
 });
+
+// ---- review round 1 (fix-overlay): lifecycle, stacking, first frame, gone pictures, shared budget, two-command form
+
+/** `window.__shown()`: the shown terminal's xterm; `window.__eng`: engine-image's exports. */
+async function hooks(page: Page) {
+  await page.evaluate(async () => {
+    const w = window as unknown as Record<string, unknown> & { __omherTerms: Set<{ element?: HTMLElement }> };
+    w.__shown = () => [...w.__omherTerms].find((x) => x.element === document.querySelector('[data-testid="terminal"] .xterm'));
+    w.__eng = await import("/src/sessions/term/engine-image.ts" as string);
+  });
+}
+
+/** The overlay's own pixel at the middle of cell (col, screen row) of the shown terminal, null without an overlay. */
+const overlayPixel = (page: Page, col: number, row: number) =>
+  page.evaluate(
+    ([c, r]) => {
+      const w = window as unknown as { __shown(): { element: HTMLElement; dimensions: { css: { cell: { width: number; height: number } } } } };
+      const t = w.__shown();
+      const cv = t.element.querySelector("canvas.xterm-kitty-placeholder-layer") as HTMLCanvasElement | null;
+      if (!cv) return null;
+      const k = cv.width / cv.clientWidth;
+      const { width, height } = t.dimensions.css.cell;
+      return [...cv.getContext("2d")!.getImageData(Math.floor((c + 0.5) * width * k), Math.floor((r + 0.5) * height * k), 1, 1).data];
+    },
+    [col, row] as const,
+  );
+
+/** The pixel the page shows (composited: every layer, the GPU renderer's included) at the middle of a cell. */
+async function screenPixel(page: Page, col: number, row: number): Promise<number[]> {
+  const at = await page.evaluate(
+    ([c, r]) => {
+      const w = window as unknown as { __shown(): { element: HTMLElement; dimensions: { css: { cell: { width: number; height: number } } } } };
+      const t = w.__shown();
+      const b = t.element.querySelector(".xterm-screen")!.getBoundingClientRect();
+      const { width, height } = t.dimensions.css.cell;
+      return { x: Math.floor(b.left + (c + 0.5) * width), y: Math.floor(b.top + (r + 0.5) * height) };
+    },
+    [col, row] as const,
+  );
+  const shot = (await page.screenshot({ clip: { x: at.x, y: at.y, width: 1, height: 1 } })).toString("base64");
+  return page.evaluate(async (b64) => {
+    const img = await createImageBitmap(new Blob([Uint8Array.from(atob(b64), (x) => x.charCodeAt(0))], { type: "image/png" }));
+    const g = new OffscreenCanvas(1, 1).getContext("2d")!;
+    g.drawImage(img, 0, 0);
+    return [...g.getImageData(0, 0, 1, 1).data];
+  }, shot);
+}
+
+/** Puts the quarter picture as a 2×2 virtual placement at the top-left of the screen (cells 0..1 × 0..1). */
+async function quarterAtTop(page: Page) {
+  const png = await quarterPng(page);
+  await feed(page, "\x1b[2J\x1b[H" + kittyApc(`a=T,U=1,i=${ID},c=2,r=2,f=100,q=2`, png));
+  await expect.poll(async () => (await probe(page, null)).virtual).toBe(1);
+  await feed(page, "\x1b[H" + placeholderRows(ID, 2, 2) + "\r\n");
+  await expect.poll(async () => (await overlayPixel(page, 1, 1)) ?? []).toEqual(expect.arrayContaining([255]));
+}
+
+const bgRgb = (page: Page) =>
+  page.evaluate(() => {
+    const t = (window as unknown as { __shown(): { options: { theme?: { background?: string } } } }).__shown();
+    const c = document.createElement("canvas").getContext("2d")!;
+    c.fillStyle = t.options.theme?.background ?? "#000";
+    c.fillRect(0, 0, 1, 1);
+    return [...c.getImageData(0, 0, 1, 1).data];
+  });
+
+test("B1: the GPU renderer attached after a picture shows does not cover it (the page's composited pixel)", async ({ page }) => {
+  await openApp(page, { term: { gpu: "off" } });
+  await newTerminal(page);
+  await hooks(page);
+  await quarterAtTop(page);
+  expect(near(await screenPixel(page, 1, 1), COLOURS.br)).toBe(true);
+  await page.evaluate(async () => ((await import("/src/sessions/term/settings.ts" as string)) as { writeTermSettings(p: object): void }).writeTermSettings({ gpu: "on" }));
+  await expect.poll(() => page.evaluate(async () => (await import("/src/sessions/term/engine.ts" as string)).rendererInUse())).toBe("gpu");
+  // the overlay is the last canvas of the screen, above the GPU's
+  const order = await page.evaluate(() => [...document.querySelectorAll('[data-testid="terminal"] .xterm-screen canvas')].map((c) => c.className));
+  expect(order[order.length - 1]).toBe("xterm-kitty-placeholder-layer");
+  await expect.poll(async () => near(await screenPixel(page, 1, 1), COLOURS.br)).toBe(true);
+  expect(near(await screenPixel(page, 0, 0), COLOURS.tl)).toBe(true);
+});
+
+test("B2: a hidden terminal that gets pictures keeps one overlay canvas, repaints once shown, and has none with pictures off", async ({ page }) => {
+  await openApp(page);
+  const a = await newTerminal(page);
+  await hooks(page);
+  await quarterAtTop(page);
+  const pa = await page.evaluate((sid) => (window as unknown as { __omherSessions: { ptyOf(id: string): number } }).__omherSessions.ptyOf(sid), a);
+  const host = await page.evaluate(() => {
+    const t = (window as unknown as { __shown(): { element: HTMLElement } }).__shown();
+    (window as unknown as { __hidden: HTMLElement }).__hidden = t.element;
+    return true;
+  });
+  expect(host).toBe(true);
+  await newTerminal(page); // the first leaves the page; its program keeps printing
+  const layers = () => page.evaluate(() => (window as unknown as { __hidden: HTMLElement }).__hidden.querySelectorAll("canvas.xterm-kitty-placeholder-layer").length);
+  expect(await page.evaluate(() => (window as unknown as { __hidden: HTMLElement }).__hidden.isConnected)).toBe(false);
+  const png = await quarterPng(page);
+  for (const id of [11, 12, 13]) {
+    await page.evaluate(([p, d]) => (window as unknown as { __omherMockOut(p: number, d: string): boolean }).__omherMockOut(p as number, d as string), [pa, kittyApc(`a=T,U=1,i=${id},c=1,r=1,f=100,q=2`, png)] as const);
+    await page.waitForTimeout(150);
+    expect(await layers()).toBe(1);
+  }
+  // an empty alternate screen printed while hidden: nothing of the old picture shows when it is back
+  await page.evaluate(([p]) => (window as unknown as { __omherMockOut(p: number, d: string): boolean }).__omherMockOut(p as number, "\x1b[?1049h"), [pa] as const);
+  await page.getByTestId(`session-${a}`).locator(".ss-open").click();
+  await expect(page.getByTestId("terminal")).toHaveAttribute("data-session", a);
+  await expect.poll(() => layers()).toBe(1);
+  await expect.poll(async () => (await overlayPixel(page, 1, 1))?.[3]).toBe(0);
+  await page.evaluate(async () => ((await import("/src/sessions/term/settings.ts" as string)) as { writeTermSettings(p: object): void }).writeTermSettings({ images: false }));
+  await expect.poll(() => page.locator("canvas.xterm-kitty-placeholder-layer").count()).toBe(0);
+  expect(await layers()).toBe(0);
+});
+
+test("NB1: the overlay is right in the first frame xterm draws after a buffer switch", async ({ page }) => {
+  await openApp(page);
+  await newTerminal(page);
+  await hooks(page);
+  await quarterAtTop(page);
+  const frames = await page.evaluate(async () => {
+    type T = { element: HTMLElement; buffer: { active: { type: string } }; onRender(f: () => void): { dispose(): void }; write(d: string, cb: () => void): void; dimensions: { css: { cell: { width: number; height: number } } } };
+    const t = (window as unknown as { __shown(): T }).__shown();
+    const px = () => {
+      const cv = t.element.querySelector("canvas.xterm-kitty-placeholder-layer") as HTMLCanvasElement;
+      const k = cv.width / cv.clientWidth;
+      return [...cv.getContext("2d")!.getImageData(Math.floor(1.5 * t.dimensions.css.cell.width * k), Math.floor(1.5 * t.dimensions.css.cell.height * k), 1, 1).data];
+    };
+    const first = (type: string) =>
+      new Promise<number[]>((res) => {
+        const sub = t.onRender(() => {
+          if (t.buffer.active.type !== type) return;
+          sub.dispose();
+          res(px());
+        });
+      });
+    const alt = first("alternate");
+    t.write("\x1b[?1049h", () => undefined);
+    const a = await alt;
+    const normal = first("normal");
+    t.write("\x1b[?1049l", () => undefined);
+    return { alt: a, main: await normal };
+  });
+  expect(frames.alt[3]).toBe(0);
+  expect(near(frames.main, COLOURS.br)).toBe(true);
+});
+
+test("NB2: placeholder cells whose picture is gone (deleted, or the terminal parked and made again) paint blank background", async ({ page }) => {
+  await openApp(page);
+  const a = await newTerminal(page);
+  await hooks(page);
+  await quarterAtTop(page);
+  const bg = await bgRgb(page);
+  await feed(page, "\x1b_Ga=d,d=A,q=2\x1b\\");
+  await expect.poll(async () => (await probe(page, null)).virtual).toBe(0);
+  await expect.poll(async () => await overlayPixel(page, 1, 1)).toEqual(bg);
+  // parked (its pictures dropped) and made again from the snapshot: the cells are still blank, not the glyph
+  await quarterAtTop(page);
+  await newTerminal(page);
+  await page.evaluate(() => (window as unknown as { __omherPark: { set(l: object): void } }).__omherPark.set({ hiddenMs: 200, idleMs: 200, sweepMs: 100 }));
+  await expect.poll(() => page.evaluate(() => (window as unknown as { __omherPark: { parked(): number } }).__omherPark.parked())).toBe(1);
+  await page.evaluate(() => (window as unknown as { __omherPark: { set(l: object): void } }).__omherPark.set({ hiddenMs: 999_999, idleMs: 999_999, sweepMs: 1000 }));
+  await page.getByTestId(`session-${a}`).locator(".ss-open").click();
+  await expect(page.getByTestId("terminal")).toHaveAttribute("data-session", a);
+  await expect.poll(async () => (await probe(page, null)).virtual).toBe(0);
+  await expect.poll(async () => await overlayPixel(page, 1, 1)).toEqual(bg);
+  await expect.poll(async () => await screenPixel(page, 1, 1)).toEqual(bg);
+});
+
+test("B4: ordinary and virtual pictures share one 32 MB per terminal", async ({ page }) => {
+  test.setTimeout(60_000);
+  await openApp(page);
+  await newTerminal(page);
+  await hooks(page);
+  const big = await page.evaluate(async () => {
+    const cv = new OffscreenCanvas(2000, 2250);
+    const g = cv.getContext("2d")!;
+    g.fillStyle = "#f00";
+    g.fillRect(0, 0, 2000, 2250);
+    const bytes = new Uint8Array(await (await cv.convertToBlob({ type: "image/png" })).arrayBuffer());
+    let s = "";
+    for (let i = 0; i < bytes.length; i += 8192) s += String.fromCharCode(...bytes.subarray(i, i + 8192));
+    return btoa(s);
+  });
+  const used = () => page.evaluate(() => (window as unknown as { __eng: { imageBytes(t: unknown): number }; __shown(): unknown }).__eng.imageBytes((window as unknown as { __shown(): unknown }).__shown()));
+  await feed(page, "\r\n" + kittyApc("a=T,f=100,q=2", big) + "\r\n");
+  await expect.poll(used).toBe(18_000_000);
+  await feed(page, kittyApc("a=T,U=1,i=8,c=1,r=1,f=100,q=2", big));
+  await page.waitForTimeout(500);
+  expect(await used()).toBeLessThanOrEqual(32_000_000);
+  expect((await probe(page, null)).virtual).toBe(0); // 18 MB more does not fit what the add-on left
+});
+
+test("NB3: kitty's two-command form (a=t, then a=p,U=1) paints the add-on's transmitted picture in the placeholders", async ({ page }) => {
+  await openApp(page);
+  await newTerminal(page);
+  await hooks(page);
+  await expect.poll(async () => (await probe(page, null)).virtual).toBe(0);
+  const png = await quarterPng(page);
+  await feed(page, "\x1b[2J\x1b[H" + kittyApc(`a=t,f=100,i=${ID},q=2`, png) + `\x1b_Ga=p,U=1,i=${ID},c=2,r=2,q=2\x1b\\`);
+  await expect.poll(async () => (await probe(page, null)).virtual).toBe(1);
+  await feed(page, "\x1b[H" + placeholderRows(ID, 2, 2) + "\r\n");
+  await expect.poll(async () => near((await overlayPixel(page, 0, 0)) ?? [], COLOURS.tl) && near((await overlayPixel(page, 1, 1)) ?? [], COLOURS.br)).toBe(true);
+  expect((await probe(page, null)).addon).toBe(0); // no ordinary placement at the cursor
+});
