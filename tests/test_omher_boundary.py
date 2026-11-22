@@ -301,7 +301,26 @@ RULES = (
     "When the app starts, the page asks the shell once for this computer's name (`host_name`, read from the system, no"
     " program run), which it uses only to accept OSC 7 folders from this computer in any terminal (below); it is not"
     " kept or sent anywhere.",
-    "a new Claude Code terminal gets `--session-id <id>`, a random UUID omher makes and keeps with the session,",
+    "a new Claude Code terminal gets `--session-id <id>`, a random UUID omher makes and keeps with the session once its"
+    " CLI started,",
+    "Restart on a TERMINALS Claude Code or Codex session that has ended and has its conversation id continues it the"
+    " same way.",
+    "A Claude Code conversation with no file that nobody used (no key was pressed in it and it has no title of its own;"
+    " Claude Code writes the file on the first message) is not continued: its terminal starts again with `--session-id`"
+    " and the same id, and when Claude Code refuses that id as one it already has (`Session ID <id> is already in use`),"
+    " the terminal continues it with `--resume` instead, once.",
+    "A used Claude Code conversation with no file (deleted) and a Codex conversation with no rollout are not started: the"
+    " row ends as below. When the look cannot tell (a folder it cannot read, an account whose folder is gone), the"
+    " conversation is continued.",
+    "A CLI started with the conversation id its row kept that prints its refusal of that id (Claude Code's `No"
+    " conversation found with session ID: <id>`, Codex's `No saved session found with ID <id>`) and ends with an error,"
+    " that ends with an error before the person pressed a key or pasted in its output, or that ends cleanly before such"
+    " a key and either before it set up its screen (the alternate screen, bracketed paste, focus reports or Kitty"
+    " keyboard flags turned on, or 2 KB of output) or within 1.8 seconds of being started (a fallback for a refusal"
+    " omher does not know), or that cannot start, could not continue it: its row keeps its agent and that id and shows it ended or failed instead of going on as the login shell, and an ended"
+    " one also offers Start a new conversation, which forgets the id and starts the agent as a new terminal does.",
+    "A continued CLI that ends any other way, one that waited for input (a login) and was left later included, goes on"
+    " as the login shell without its id, as a new one does.",
     "The page sends only the id; the shell (`sessions::terminal_args`) checks it is a UUID, gives `--session-id` to"
     " Claude Code only, never sends both, and refuses every other agent or shape.",
     "omher also listens for three escapes a shell or CLI sends by itself, and puts no hook, script or variable into the"
@@ -2231,7 +2250,7 @@ class PastConversationsAreOnlyRead(unittest.TestCase):
         for banned in ("auth.json", ".credentials", "credentials.json", "config.toml", "settings.json", ".claude.json", "oauth", "token"):
             self.assertNotIn(banned, code.lower(), banned)
         # only these names under the CLI's home
-        self.assertEqual(sorted(set(re.findall(r'\.join\("([a-z_.]+)"\)', code))), ["projects", "session_index.jsonl", "sessions"])
+        self.assertEqual(sorted(set(re.findall(r'\.join\("([a-z_.]+)"\)', code))), ["archived_sessions", "projects", "session_index.jsonl", "sessions"])
 
     def test_links_and_paths_outside_the_home_are_refused_and_reads_are_bounded(self) -> None:
         inside = self.past.split("pub fn inside(", 1)[1].split("\n}\n", 1)[0]
@@ -2252,11 +2271,29 @@ class PastConversationsAreOnlyRead(unittest.TestCase):
             body = self.past.split(fn, 1)[1].split("\n}\n", 1)[0]
             self.assertIn("if !is_uuid(id) {", body, fn)
         text = _flat(DOC.read_text(encoding="utf-8"))
-        self.assertIn("It refuses a symlink anywhere under those folders and any file that is not inside that home once its links are resolved", text)
+        self.assertIn("It refuses a symlink anywhere under those folders (except `conversation_state` below, which only stats names and"
+                      " follows links as the CLI does) and any file that is not inside that home once its links are resolved", text)
         self.assertIn("never opens a credential, token or config file of either CLI", text)
+
+    def test_a_conversation_is_looked_for_by_name_only_before_a_terminal_continues_it(self) -> None:
+        text = _flat(DOC.read_text(encoding="utf-8"))
+        self.assertIn(
+            "Before a TERMINALS Claude Code or Codex session continues its own conversation (rule 11), the shell looks for"
+            " that conversation's file by name only (`conversation_state`): `<claude config>/projects/*/<uuid>.jsonl`, or a"
+            " rollout named `rollout-*-<uuid>.jsonl` under `<codex home>/sessions` or `<codex home>/archived_sessions`,"
+            " following links as the CLI does and opening no file, in the home of the account that session runs with. The"
+            " page sends only the agent, the id (a UUID) and the account, and the answer is only `exists`, `absent` or"
+            " `unknown` (an account whose folder is gone, or a folder it cannot read).",
+            text,
+        )
+        look = self.past.split("pub fn conversation_state(", 1)[1].split("\n}\n", 1)[0]
+        self.assertIn("if !is_uuid(id) {", look)
+        for banned in ("File::open", "read_to_string", "fs::read(", "last_part", "head("):
+            self.assertNotIn(banned, look, banned)
 
     def test_the_commands_take_only_an_agent_folders_and_an_id(self) -> None:
         for cmd, params in (("past_chats_list", "agent: String, cwds: Vec<String>"), ("past_chat_messages", "agent: String, id: String, cwd: String"),
+                            ("conversation_state", "agent: String, id: String, account: Option<String>"),
                             ("codex_conversation", "shell: State<'_, Shell>, id: u32"),
                             ("session_reveal", "cwd: String"), ("session_open_terminal", "cwd: String"),
                             ("asks_badge", "window: tauri::WebviewWindow, count: u32")):

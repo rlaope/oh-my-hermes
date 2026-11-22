@@ -526,6 +526,117 @@ pub fn list(root: &Path, agent: &str, cwds: &[String]) -> Result<Vec<PastChat>, 
     }
 }
 
+/// Whether `agent`'s conversation `id` has its file in `root` where the CLI looks for it when asked to continue it:
+/// `exists`, `absent`, or `unknown` when a folder could not be read. Only names are looked at, links followed as
+/// the CLI follows them, and no file is opened. Claude Code: `<root>/projects/*/<id>.jsonl` (any project folder, so
+/// a folder name Claude Code shortened or a cwd reached through a link still counts). Codex: a rollout named
+/// `rollout-*-<id>.jsonl` under `<root>/sessions` (`YYYY/MM/DD`) or `<root>/archived_sessions`.
+pub fn conversation_state(root: &Path, agent: &str, id: &str) -> Result<&'static str, String> {
+    if !is_uuid(id) {
+        return Err("not a conversation id".into());
+    }
+    let (found, unknown) = match agent {
+        "claude" => {
+            // each project folder is asked for that one name, as Claude Code does
+            let name = format!("{id}.jsonl");
+            let mut unknown = false;
+            let mut found = false;
+            match std::fs::read_dir(root.join("projects")) {
+                Err(e) => unknown = !not_found(&e),
+                Ok(rd) => {
+                    for e in rd {
+                        let Ok(e) = e else {
+                            unknown = true;
+                            continue;
+                        };
+                        match std::fs::metadata(e.path().join(&name)) {
+                            Ok(m) if m.is_file() => {
+                                found = true;
+                                break;
+                            }
+                            Ok(_) => {}
+                            // a file beside the project folders (.DS_Store) has no name under it
+                            Err(err) => unknown |= !not_found(&err) && std::fs::metadata(e.path()).map(|m| m.is_dir()).unwrap_or(true),
+                        }
+                    }
+                }
+            }
+            (found, unknown)
+        }
+        "codex" => {
+            let suffix = format!("-{id}.jsonl");
+            let named = |p: &Path| p.file_name().and_then(|x| x.to_str()).is_some_and(|x| x.starts_with("rollout-") && x.ends_with(&suffix));
+            let (a, ua) = seek(&root.join("sessions"), 3, &named);
+            if a {
+                (true, ua)
+            } else {
+                let (b, ub) = seek(&root.join("archived_sessions"), 3, &named);
+                (b, ua || ub)
+            }
+        }
+        _ => return Err(format!("{agent} conversations are not listed")),
+    };
+    Ok(if found {
+        "exists"
+    } else if unknown {
+        "unknown"
+    } else {
+        "absent"
+    })
+}
+
+fn not_found(e: &std::io::Error) -> bool {
+    e.kind() == std::io::ErrorKind::NotFound
+}
+
+/// A file `want` takes (by name) in `dir` or in folders up to `depth` levels under it, links followed: whether one
+/// was found, and whether any folder or entry could not be read (every error but NotFound). Only a link is asked what
+/// it points to; any other entry's type comes with the folder's listing.
+fn seek(dir: &Path, depth: u32, want: &dyn Fn(&Path) -> bool) -> (bool, bool) {
+    let rd = match std::fs::read_dir(dir) {
+        Ok(rd) => rd,
+        Err(e) => return (false, !not_found(&e)),
+    };
+    let mut unknown = false;
+    for e in rd {
+        let Ok(e) = e else {
+            unknown = true;
+            continue;
+        };
+        let p = e.path();
+        let named = want(&p);
+        if !named && depth == 0 {
+            continue;
+        }
+        let Ok(kind) = e.file_type() else {
+            unknown = true;
+            continue;
+        };
+        let (file, folder) = if kind.is_symlink() {
+            match std::fs::metadata(&p) {
+                Ok(m) => (m.is_file(), m.is_dir()),
+                Err(err) => {
+                    unknown |= !not_found(&err);
+                    continue;
+                }
+            }
+        } else {
+            (kind.is_file(), kind.is_dir())
+        };
+        if named && file {
+            return (true, unknown);
+        }
+        if folder && depth > 0 {
+            let (f, u) = seek(&p, depth - 1, want);
+            if f {
+                return (true, unknown || u);
+            }
+            unknown |= u;
+        }
+    }
+    (false, unknown)
+}
+
 /// The last messages of `agent`'s conversation `id` in `cwd`.
 pub fn messages(root: &Path, agent: &str, id: &str, cwd: &str) -> Result<Vec<PastMsg>, String> {
     if !absolute(cwd) {
@@ -542,6 +653,74 @@ pub fn messages(root: &Path, agent: &str, id: &str, cwd: &str) -> Result<Vec<Pas
 mod tests {
     use super::*;
     use std::io::Write;
+
+    #[test]
+    fn a_conversation_is_found_by_name_in_any_project_folder_or_rollout_day() {
+        let root = tmp("state");
+        let n = |agent: &str, id: &str| conversation_state(&root, agent, id).unwrap();
+        // no projects or sessions folder yet: nothing was written
+        assert_eq!(n("claude", C1), "absent");
+        assert_eq!(n("codex", X1), "absent");
+        // a folder name Claude Code shortened (200 characters and a hash) is still a project folder
+        let long = format!("-{}-1a2b3c", "x".repeat(200));
+        std::fs::create_dir_all(root.join("projects").join(&long)).unwrap();
+        std::fs::write(root.join("projects").join(&long).join(format!("{C1}.jsonl")), "{}\n").unwrap();
+        std::fs::write(root.join("projects").join(".DS_Store"), "").unwrap();
+        assert_eq!(n("claude", C1), "exists");
+        assert_eq!(n("claude", C2), "absent");
+        // a project folder that is a link to the real one: followed, as Claude Code follows it
+        #[cfg(unix)]
+        {
+            let real = tmp("state-real");
+            std::fs::write(real.join(format!("{C2}.jsonl")), "{}\n").unwrap();
+            std::os::unix::fs::symlink(&real, root.join("projects").join("-linked")).unwrap();
+            assert_eq!(n("claude", C2), "exists");
+            let _ = std::fs::remove_dir_all(real);
+        }
+        // Codex: a rollout of that id on any day, or archived
+        let day = root.join("sessions").join("2026").join("11").join("22");
+        std::fs::create_dir_all(&day).unwrap();
+        std::fs::write(day.join(format!("rollout-2026-11-22T10-00-00-{X1}.jsonl")), "{}\n").unwrap();
+        assert_eq!(n("codex", X1), "exists");
+        assert_eq!(n("codex", X2), "absent");
+        std::fs::create_dir_all(root.join("archived_sessions")).unwrap();
+        std::fs::write(root.join("archived_sessions").join(format!("rollout-2026-11-01T10-00-00-{X2}.jsonl")), "{}\n").unwrap();
+        assert_eq!(n("codex", X2), "exists");
+        // a rollout that is a link to the real file counts; a broken link does not
+        #[cfg(unix)]
+        {
+            let x3 = "01a1d060-6967-74c3-8b7c-33c05229878c";
+            let real = tmp("state-rollout");
+            std::fs::write(real.join("r.jsonl"), "{}\n").unwrap();
+            std::os::unix::fs::symlink(real.join("r.jsonl"), day.join(format!("rollout-2026-11-22T11-00-00-{x3}.jsonl"))).unwrap();
+            assert_eq!(n("codex", x3), "exists");
+            std::fs::remove_file(real.join("r.jsonl")).unwrap();
+            assert_eq!(n("codex", x3), "absent");
+            let _ = std::fs::remove_dir_all(real);
+        }
+        // not a UUID, or an agent whose conversations are not looked at
+        assert!(conversation_state(&root, "claude", "../x").is_err());
+        assert!(conversation_state(&root, "grok", C1).is_err());
+        let _ = std::fs::remove_dir_all(root);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_folder_that_cannot_be_read_makes_it_unknown_not_absent() {
+        use std::os::unix::fs::PermissionsExt;
+        let root = tmp("state-perm");
+        let shut = root.join("projects").join("-shut");
+        std::fs::create_dir_all(&shut).unwrap();
+        std::fs::set_permissions(&shut, std::fs::Permissions::from_mode(0o000)).unwrap();
+        // root can read anything: the check means nothing there
+        let readable = std::fs::read_dir(&shut).is_ok();
+        if !readable {
+            assert_eq!(conversation_state(&root, "claude", C1).unwrap(), "unknown");
+        }
+        std::fs::set_permissions(&shut, std::fs::Permissions::from_mode(0o755)).unwrap();
+        assert_eq!(conversation_state(&root, "claude", C1).unwrap(), "absent");
+        let _ = std::fs::remove_dir_all(root);
+    }
 
     const C1: &str = "11111111-2222-4333-8444-555555555555";
     const C2: &str = "22222222-2222-4333-8444-555555555555";

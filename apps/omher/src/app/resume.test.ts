@@ -108,6 +108,14 @@ describe("resume snapshot", () => {
     expect(parseResume(JSON.stringify({ ...raw, session: "s2" }))).toMatchObject({ view: "chat", session: null });
   });
 
+  it("keeps that an ended session's CLI could not continue its conversation, and only for an ended one", () => {
+    const good = buildResume(input(), T);
+    const raw = (resumeFailed: unknown, running: boolean) => JSON.stringify({ ...good, sessions: [{ ...good.sessions[2], running, resumeFailed }] });
+    expect(parseResume(raw(true, false))!.sessions[0].resumeFailed).toBe(true);
+    expect(parseResume(raw(true, true))!.sessions[0].resumeFailed).toBeUndefined();
+    expect(parseResume(raw("yes", false))!.sessions[0].resumeFailed).toBeUndefined();
+  });
+
   it("an unknown bot takes its panel, Plans view and draft with it", () => {
     const snap = parseResume(JSON.stringify(buildResume(input(), T)))!;
     expect(forBots(snap, ["kami", "friren"])).toEqual(snap);
