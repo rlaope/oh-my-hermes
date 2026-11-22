@@ -191,6 +191,9 @@ NOT_READY_OS_ERRORS = (ConnectionError, TimeoutError, FileNotFoundError)
 GOING_AWAY = 1001  # the WebSocket close code of a server going down (RFC 6455): a gateway that restarts
 NOT_READY_STATES = frozenset({"starting", "draining"})
 NOT_READY_REASONS = frozenset({"control_timeout", "runtime_exited"})
+# Hermes' gateway control endpoint is a Unix-domain socket only off Windows. On Windows the grant takes the attach
+# Hermes' own Ink bootstrap takes (`ui-tui/scripts/gateway_bootstrap.py`), which mints the ticket its own way.
+WINDOWS = os.name == "nt"
 OPEN_TIMEOUT_SECONDS = 10
 STDIN_READ_BYTES = 64 * 1024
 # After the TUI closes its input: how long the answers to calls already sent (the last session's detach) may take.
@@ -1590,12 +1593,17 @@ def attach_api() -> AttachApi | None:
     def grant() -> tuple[str, list[str]]:
         """`gateway_bootstrap.bootstrap(start=True)`: ensure the owner, mint a session ticket, name the socket."""
         home = get_hermes_home().resolve()
+        if WINDOWS:
+            from hermes_cli.gateway_runtime_attach import attach_gateway
+
+            attached = attach_gateway(home, start=True, timeout=ENSURE_TIMEOUT_SECONDS)
+            if attached.ticket is None:
+                raise not_attachable(attached.receipt)
+            url, protocols = gateway_ws_target(attached.receipt.endpoint, attached.ticket)
+            return url, list(protocols)
         receipt = ensure_gateway_runtime(home, timeout=ENSURE_TIMEOUT_SECONDS, idle_exit=True)
         if not attachable(receipt):
-            if (getattr(receipt, "state", None) in NOT_READY_STATES
-                    or getattr(receipt, "reason_code", None) in NOT_READY_REASONS):
-                raise GatewayNotReady(failure_message(receipt))
-            raise RuntimeError(failure_message(receipt))
+            raise not_attachable(receipt)
         endpoint = receipt.endpoint
         request = json.dumps({"protocol": 1, "id": 1, "verb": "session-ticket", "params": {
             "profile_id": endpoint.profile_id, "instance_id": endpoint.instance_id,
@@ -1622,6 +1630,14 @@ def attach_api() -> AttachApi | None:
 
 class GatewayNotReady(RuntimeError):
     """Hermes says the gateway is starting or draining, or cannot be asked yet: worth waiting for."""
+
+
+def not_attachable(receipt: object) -> RuntimeError:
+    """The error for a receipt with no owner to attach: `GatewayNotReady` when it is worth waiting for."""
+    if (getattr(receipt, "state", None) in NOT_READY_STATES
+            or getattr(receipt, "reason_code", None) in NOT_READY_REASONS):
+        return GatewayNotReady(failure_message(receipt))
+    return RuntimeError(failure_message(receipt))
 
 
 def failure_message(receipt: object) -> str:
