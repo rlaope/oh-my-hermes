@@ -171,6 +171,55 @@ class CompletionTests(unittest.TestCase):
         self.assertEqual(len(slash.catalog_pairs(self.CATALOG)), 4)
 
 
+class SlashTokenAtTests(unittest.TestCase):
+    """The `/name` the menu completes: at the input's start or after whitespace, from its `/` to the caret."""
+
+    def test_a_slash_at_the_start_or_after_whitespace_is_a_token_typed_up_to_the_caret(self) -> None:
+        for text, caret, token in (
+            ("/as", 3, (0, 3, "as")),
+            ("asdf /", 6, (5, 6, "")),
+            ("asdf /as", 8, (5, 8, "as")),
+            ("asdf /as tail", 8, (5, 8, "as")),
+            ("asdf /asx tail", 8, (5, 9, "as")),  # typed up to the caret; the pick replaces the whole word
+            ("one\n/re", 7, (4, 7, "re")),
+            ("one\ttwo /", 9, (8, 9, "")),
+        ):
+            with self.subTest(text=text, caret=caret):
+                self.assertEqual(slash.slash_token_at(text, caret), token)
+
+    def test_a_path_like_or_doubled_slash_is_no_token(self) -> None:
+        for text in ("./", "x ./foo", "../x", "~/", "say ~/x", "a/b", "see http://", "//", "x //", "/usr/bin",
+                     "x /usr/", "asdf", "asdf /as "):
+            with self.subTest(text=text):
+                self.assertIsNone(slash.slash_token_at(text, len(text)))
+
+    def test_whitespace_between_the_slash_and_the_caret_ends_the_token(self) -> None:
+        self.assertIsNone(slash.slash_token_at("asdf /as more", 13))
+        self.assertIsNone(slash.slash_token_at("/as more", 8))
+
+
+class SkillCompletionTests(unittest.TestCase):
+    CATALOG = {
+        "pairs": [["/config", "Config"], ["/omh-codebase-uml", "UML"], ["/ulw-review", "Review"], ["/new", "Skill"]],
+        "categories": [{"name": "Configuration", "pairs": [["/config", "Config"]]}],
+    }
+
+    def test_the_skills_are_the_pairs_no_category_lists(self) -> None:
+        self.assertEqual(slash.catalog_skill_names(self.CATALOG), {"omh-codebase-uml", "ulw-review", "new"})
+        self.assertEqual(slash.catalog_skill_names({}), frozenset())
+
+    def test_only_skills_by_prefix_then_substring_and_never_a_tui_command_name(self) -> None:
+        pairs, skills = slash.catalog_pairs(self.CATALOG), slash.catalog_skill_names(self.CATALOG)
+
+        def names(prefix: str) -> list[str]:
+            return [completion.name for completion in slash.skill_completions(prefix, pairs, skills)]
+
+        self.assertEqual(names(""), ["omh-codebase-uml", "ulw-review"])  # /new is the TUI's own command
+        self.assertEqual(names("u"), ["ulw-review", "omh-codebase-uml"])
+        self.assertEqual(names("CON"), [])
+        self.assertEqual(names("urv"), [])  # u..r..v in order, but no scattered match
+
+
 class CatalogReaderTests(unittest.TestCase):
     def test_categories_drop_what_the_tui_runs_routes_or_drops_and_then_empty_categories(self) -> None:
         catalog = {

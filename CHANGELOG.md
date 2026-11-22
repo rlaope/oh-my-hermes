@@ -4,6 +4,31 @@ All notable changes will be documented here.
 
 ## Unreleased
 
+- **OMH TUI: a `/` after a space opens skill completion, as in Claude Code.** Typing `asdf /dag` opens a menu of
+  Hermes' skills filtered by `dag`; a bare `/` after a space lists them all. As in Claude Code, a `/skill` after
+  other text names a skill for that message, while a built-in command (`/model`, `/compact`, `/help`, Hermes' own)
+  means something only at the line's start, so only skills are offered there, by name prefix or substring:
+  `path /opt` offers nothing unless a skill's name holds `opt`. The leading `/` menu is unchanged. The token runs
+  from its `/` to the caret, so moving the caret onto a `/name` mid-line opens it too, in multi-line input as well;
+  taking a row replaces only that `/name` and keeps the text on both sides. A path-like slash (`./x`, `../x`, `~/x`,
+  `a/b`, `http://`, `//`) opens nothing. The menu never takes a key the line needs: Enter sends the line as typed
+  and Up stays history and caret movement until Down moves into the menu; Tab always takes the highlighted row. Text
+  from history recall, a paste or a loaded draft opens no mid-line menu until the next typed key. A line that does
+  not start with `/` still goes as a prompt with the `/skill` text in it. (`src/tui/slash.py` `slash_token_at`,
+  `skill_completions`, `src/tui/app.py`)
+- **OMH TUI: a `/` after a space opens slash completion, as in Claude Code.** Typing `asdf /as` opens the command
+  and skill menu filtered by `as`; a bare `/` after a space opens the whole list. The token runs from its `/` to the
+  caret, so moving the caret onto a `/name` in the middle of a line opens it too, in multi-line input as well. Taking
+  a row replaces only that `/name` and keeps the text on both sides. A path-like slash (`./x`, `../x`, `~/x`, `a/b`,
+  `http://`, `//`) opens nothing, and a mid-line word matches by prefix or substring only, so `/opt` or `/tmp`
+  offers nothing. The menu never takes a key the line needs: Enter still sends the line as typed (`path /opt`
+  stays `path /opt`), and Up stays history and caret movement until Down moves into the menu; Tab always takes the
+  highlighted row. Text from history recall, a paste or a loaded draft opens no mid-line menu until the next typed
+  key. A line that does not start with `/` still goes as a prompt with the `/skill` text in it, as Claude Code sends
+  a skill named after plain text. (`src/tui/slash.py` `slash_token_at`, `src/tui/app.py`)
+  `http://`, `//`) opens nothing. Enter is unchanged: a line that does not start with `/` still goes as a prompt,
+  with the `/skill` text in it, as Claude Code sends a skill named after plain text. (`src/tui/slash.py`
+  `slash_token_at`, `src/tui/app.py`)
 - **omher: the bridge comes back after it dies.** If the Python bridge stopped after it was ready, nothing started it
   again: Hermes bots and folder chats stayed on "Connecting to Hermes…" until omher was restarted, because the shell
   kept handing the page the dead bridge's port. The shell now notices the exit (the bridge's output closes, or a check
