@@ -565,7 +565,7 @@ export const ko: Record<Key, string> = {
   "term.scrollback": "Scrollback",
   "term.scrollbackHint": "화면 위로 보관하는 줄 수",
   "term.optionMeta": "Option을 Meta로",
-  "term.optionMetaHint": "Option이 프로그램에 Meta로 전달돼서 Option+B, Option+F로 단어 단위로 움직여요. 끄면 그 키의 문자가 입력돼요.",
+  "term.optionMetaHint": "Option이 프로그램에 Meta로 전달돼서 Option+B, Option+F로 단어 단위로 움직여요. 끄면 그 키의 문자가 입력돼요. 유럽 자판의 @ [ ] { } | 같은 기호는 항상 입력돼요.",
   "term.gpu": "GPU renderer",
   "term.gpuHint": "자동은 하드웨어가 지원하면 GPU로 그려서 CLI 그림과 테두리가 틈 없이 이어지고, 지원하지 않으면 알아서 기본 방식으로 돌아가요. 끔은 늘 기본 방식으로 그려요.",
   "term.usingGpu": "지금 사용 중: GPU",

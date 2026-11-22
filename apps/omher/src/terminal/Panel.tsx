@@ -14,7 +14,7 @@ import { CloseIcon, PlusIcon, ChevronDown } from "../ui";
 import { t } from "../i18n";
 import { FindBar } from "../sessions/term/find-bar";
 import { FIND_EVENT, type FindRequest } from "../sessions/term/engine-find";
-import { addTerminalTab, closePane, closeTerminalTab, equalizePanes, focusPane, getTermPanel, leafName, movePane, movePaneFocus, pickTerminalTab, seenTerminalTab, setPaneRatio, splitPane, stepPaneFocus, toggleTerminal, useTermPanel, zoomPane, type TermPane, type TermTab } from "./state";
+import { addTerminalTab, closePane, closeTerminalTab, equalizePanes, focusBeforePanel, focusPane, getTermPanel, leafName, movePane, movePaneFocus, pickTerminalTab, seenTerminalTab, setPaneRatio, splitPane, stepPaneFocus, toggleTerminal, useTermPanel, zoomPane, type TermPane, type TermTab } from "./state";
 import { attachTerm, disposeTerm, dropOnPane, focusTerm, relookTerms, showTerm, wireFileDrop } from "./terms";
 import { clampRatio, isPane, MAX_PANES, paneKey, panesOf, PANE_MIN_ROWS, PANE_MIN_W, type Layout } from "./layout";
 import { readTermSettings } from "../sessions/term/settings";
@@ -197,17 +197,28 @@ function TabBody({ tab, active, open, mode, focus }: { tab: TermTab; active: boo
   );
 }
 
+const shown = (el: HTMLElement) => el.isConnected && el.getClientRects().length > 0;
+
+/** Focus `last` if it is still on screen, else the terminal in view, else the chat composer. */
+function giveBackFocus(last: HTMLElement | null): void {
+  const to =
+    (last && shown(last) ? last : null) ??
+    [...document.querySelectorAll<HTMLElement>('[data-testid="terminal"] .xterm-helper-textarea, [data-testid="composer"]')].find((el) => !el.closest('[data-testid="termpanel"]') && shown(el.closest(".xterm") ?? el));
+  to?.focus({ preventScroll: true });
+}
+
 /** The pane keys, taken on the way down inside the panel (before xterm, which would send ⌘D/Ctrl+Shift+D on). */
 function onPaneKey(e: globalThis.KeyboardEvent): void {
   if (composing(e)) return;
   const k = paneKey(e, isMac());
   if (!k) return;
+  const s = getTermPanel();
+  const tab = s.tabs.find((x) => x.key === s.active);
+  // one pane: only splitting and closing mean anything; the other keys stay the program's
+  if (!tab || (tab.panes.length < 2 && k.kind !== "split" && k.kind !== "close")) return;
   e.preventDefault();
   e.stopPropagation();
   if (e.repeat) return;
-  const s = getTermPanel();
-  const tab = s.tabs.find((x) => x.key === s.active);
-  if (!tab) return;
   if (k.kind === "split") splitPane(k.dir);
   else if (k.kind === "close") {
     markPaneClosed();
@@ -260,6 +271,24 @@ export function TerminalPanel() {
     el.addEventListener("keydown", onPaneKey, true);
     return () => el.removeEventListener("keydown", onPaneKey, true);
   }, []);
+  // the keyboard goes back where it was when the panel hides (Ctrl+`, or its last tab closing): where it was when the
+  // panel opened, else the terminal or chat composer in view. Never taken from a place clicked meanwhile.
+  const wasOpen = useRef(p.open);
+  useEffect(() => {
+    const closed = wasOpen.current && !p.open;
+    wasOpen.current = p.open;
+    if (!closed) return;
+    const lost = () => {
+      const a = document.activeElement;
+      return !a || a === document.body || !!section.current?.contains(a);
+    };
+    if (lost()) giveBackFocus(focusBeforePanel());
+    // a hidden panel drops the focus it held only at the next layout
+    const r = requestAnimationFrame(() => {
+      if (lost()) giveBackFocus(focusBeforePanel());
+    });
+    return () => cancelAnimationFrame(r);
+  }, [p.open]);
   // the tab in front is seen when the window comes back to it
   useEffect(() => {
     const see = () => {

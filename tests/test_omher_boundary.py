@@ -315,6 +315,8 @@ RULES = (
     " omher sends no keys of its own and reads nothing new from the program.",
     "On macOS, Cmd with any key is the app's (Copy, Paste and the rest of the menu) and is never sent to the program,"
     " with the Kitty keyboard protocol on or off, except the line-edit keys below.",
+    "On macOS, Option with a key that types a plain ASCII sign on the person's layout (@ [ ] { } | \\ ~ on a European"
+    " layout) types that sign, with Option as Meta on or off.",
     "A TERMINALS row dragged onto another row of its folder moves there; that order is kept with the rows in"
     " `omher.resume` and starts nothing.",
     "the desktop app writes it, only under omher's own folder, to `~/.omher/term-history/<key>.txt`,",
