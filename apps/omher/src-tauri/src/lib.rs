@@ -5,6 +5,7 @@ mod agent_chat;
 mod app_menu;
 mod appimage;
 mod bridge;
+mod claude_usage;
 mod custom_agents;
 mod disk;
 mod dsh_chat;
@@ -895,6 +896,15 @@ async fn peers_retry(shell: State<'_, Shell>, id: String) -> Result<(), String> 
 async fn bridge_retry(shell: State<'_, Shell>) -> Result<(), String> {
     shell.bridge.start(shell.resource_dir.clone());
     Ok(())
+}
+
+/// `omher --statusline-relay <account>` (a TERMINALS Claude Code's status line, `claude_usage.rs`): records the usage
+/// Claude Code reports, runs the person's own status line and returns its exit code. No app start-up happens.
+pub fn statusline_relay(args: &[std::ffi::OsString]) -> Option<i32> {
+    if args.get(1)?.to_str()? != claude_usage::RELAY_FLAG {
+        return None;
+    }
+    Some(claude_usage::relay_main(args))
 }
 
 pub fn run() {

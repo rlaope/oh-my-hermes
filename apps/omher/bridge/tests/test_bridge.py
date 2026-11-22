@@ -3967,6 +3967,76 @@ class Usage(unittest.TestCase):
         self.assertIn('"used_percent":15.0', lines[0])
         self.assertEqual(ob._tail_lines(h / "missing.jsonl", "x"), [])
 
+    def record(self, h: Path, account: str, at: float, windows: dict, status=None, source="terminal") -> None:
+        """omher's own record of what Claude Code reported (the desktop app writes it, claude_usage.rs)."""
+        f = h / ".omher/usage/claude" / f"{account}.json"
+        f.parent.mkdir(parents=True, exist_ok=True)
+        f.write_text(json.dumps({"at": at, "windows": windows, "status": status, "source": source}), encoding="utf-8")
+
+    def test_claude_percentages_and_reset_times_from_omher_s_record(self):
+        h = self.home()
+        self.record(h, "default", 1794199000.0, {"seven_day": {"used_percent": 6.0, "resets_at": 1794600000},
+                                                "five_hour": {"used_percent": 12.4, "resets_at": 1794210000}})
+        p = ob.read_usage(h, now=1794200000.0, which=lambda _: None)["providers"][0]
+        self.assertEqual(p, {"id": "claude", "state": "ok", "source_mtime": 1794199000.0, "windows": [
+            {"label": "5 hours", "used_percent": 12.4, "resets_at": 1794210000.0},
+            {"label": "Weekly", "used_percent": 6.0, "resets_at": 1794600000.0}]})
+        # near at 70 %, limited at 100 % or when Claude Code said the request was rejected
+        self.record(h, "default", 1794199000.0, {"five_hour": {"used_percent": 73.0, "resets_at": 1794210000}})
+        self.assertEqual(ob._claude_usage(h, 1794200000.0)["state"], "near")
+        self.record(h, "default", 1794199000.0, {"five_hour": {"used_percent": 40.0, "resets_at": 1794210000}},
+                    status="rejected", source="chat")
+        self.assertEqual(ob._claude_usage(h, 1794200000.0)["state"], "limited")
+        self.record(h, "default", 1794199000.0, {"spend_limit": {"used_percent": 101.0, "resets_at": 1794210000}})
+        p = ob._claude_usage(h, 1794200000.0)
+        self.assertEqual((p["state"], p["windows"][0]["label"]), ("limited", "Spend limit"))
+
+    def test_claude_newest_of_omher_s_record_and_the_transcript_limit_hit(self):
+        h = self.home()
+        self.write(h / ".claude/projects/-w-repo/s1.jsonl", '{"type":"user"}', CLAUDE_LINE)  # 2026-11-09T04:06:43Z
+        hit = 1794197203.709
+        self.record(h, "default", hit - 60, {"seven_day": {"used_percent": 99.0, "resets_at": 1794211200}})
+        p = ob._claude_usage(h, 1794200000.0)
+        self.assertEqual((p["state"], p["windows"]), ("limited", [{"label": "Weekly", "resets_at": 1794211200.0}]))
+        self.record(h, "default", hit + 60, {"seven_day": {"used_percent": 3.0, "resets_at": 1794800000}})
+        p = ob._claude_usage(h, 1794200000.0)
+        self.assertEqual((p["state"], p["windows"]), ("ok", [{"label": "Weekly", "used_percent": 3.0, "resets_at": 1794800000.0}]))
+
+    def test_claude_record_past_its_reset_is_stale_and_a_broken_record_is_none(self):
+        h = self.home()
+        self.record(h, "default", 1794100000.0, {"seven_day": {"used_percent": 60.0, "resets_at": 1794150000}})
+        p = ob._claude_usage(h, 1794200000.0)
+        self.assertEqual((p["state"], p["windows"]), ("stale", [{"label": "Weekly", "resets_at": 1794150000.0, "stale": True}]))
+        (h / ".omher/usage/claude/default.json").write_text("{not json", encoding="utf-8")
+        self.assertIsNone(ob._claude_usage(h, 1794200000.0))
+        self.record(h, "default", 1794100000.0, {})
+        self.assertIsNone(ob._claude_usage(h, 1794200000.0))
+
+    def test_each_claude_login_shows_its_own_record_with_its_percent(self):
+        h = self.home()
+        (h / ".claude.json").write_text(json.dumps({"oauthAccount": {"emailAddress": "me@example.com"}}), encoding="utf-8")
+        ob.add_account("claude", "Work", h)
+        (h / ".omher/accounts/claude/work/.claude.json").write_text(
+            json.dumps({"oauthAccount": {"emailAddress": "work@example.com"}}), encoding="utf-8")
+        self.record(h, "default", 1794199000.0, {"seven_day": {"used_percent": 6.0, "resets_at": 1794600000}})
+        self.record(h, "work", 1794199500.0, {"five_hour": {"used_percent": 81.0, "resets_at": 1794210000},
+                                             "seven_day": {"used_percent": 30.0, "resets_at": 1794600000}})
+        p = ob.read_usage(h, now=1794200000.0, which=lambda _: None)["providers"][0]
+        self.assertEqual(p["windows"], [{"label": "Weekly", "used_percent": 6.0, "resets_at": 1794600000.0}])
+        self.assertEqual(p["accounts"], [
+            {"email": "me@example.com", "label": "", "source": "cli", "in_cpa": False, "state": "ok",
+             "used_percent": 6.0, "resets_at": 1794600000.0},
+            {"email": "work@example.com", "label": "Work", "source": "omher", "in_cpa": False, "state": "near",
+             "used_percent": 81.0, "resets_at": 1794210000.0}])
+        # Settings › Accounts: the same windows per row
+        rows = {a["id"]: a for a in ob.read_accounts(h, now=1794200000.0, which=lambda _: None)["groups"][0]["accounts"]}
+        self.assertEqual([w.get("used_percent") for w in rows["work"]["usage"]["windows"]], [81.0, 30.0])
+        # a login whose record is gone has none: no number from the other login
+        (h / ".omher/usage/claude/work.json").unlink()
+        acc = ob.read_usage(h, now=1794200000.0, which=lambda _: None)["providers"][0]["accounts"]
+        self.assertEqual(acc[1]["state"], "no_record")
+        self.assertNotIn("used_percent", acc[1])
+
     def test_usage_read_op_is_read_only_and_names_no_token(self):
         src = (HERE.parent / "omher_bridge.py").read_text(encoding="utf-8")
         body = src[src.index("# ---------------------------------------------------------------- usage meters"):

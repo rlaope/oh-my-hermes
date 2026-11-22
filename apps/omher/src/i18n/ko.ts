@@ -744,6 +744,7 @@ export const ko: Record<Key, string> = {
   "use.near": "한도에 가까움",
   "use.ok": "정상",
   "use.noRecord": "기록 없음",
+  "use.claudeNext": "omher에서 다음 Claude 응답 뒤에 보여요",
   "use.cpaLogin": "CLIProxyAPI 로그인",
   "use.meter": "{name} 사용량: {value}",
   "use.card": "{name} 사용량",

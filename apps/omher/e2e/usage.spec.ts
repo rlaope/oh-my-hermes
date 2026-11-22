@@ -1,4 +1,5 @@
-// Sidebar usage meters (usage.read) and the agent marks. Read-only: the meters only read the CLIs' own files.
+// Sidebar usage meters (usage.read) and the agent marks. Read-only: the meters only read the CLIs' own files and
+// omher's own record of the usage Claude Code reported.
 import { mkdirSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -80,7 +81,7 @@ test("Claude with five logins: the card lists each with only its own record, nev
   await expect(rows.first().locator(".uc-state")).toHaveText(/^Limited until (\w{3} )?\d\d:\d\d$/);
   await expect(rows.nth(1).locator(".uc-state")).toHaveText("No record");
   await expect(card.getByTestId("usage-accounts")).not.toContainText("%");
-  // the meter itself is unchanged: one Claude mark, no ring (Claude Code gives no %)
+  // the meter itself is unchanged: one Claude mark, no ring (a refused request's record gives no %)
   await expect(page.getByTestId("usage-claude")).toHaveCount(1);
   await expect(page.getByTestId("usage-claude").locator(".usage-ring")).toHaveCount(0);
   // Codex has one login: no list
@@ -136,7 +137,7 @@ test("hover shows the card: plan, then each window with % and reset", async ({ p
   await expect(page.getByTestId("usage-card")).toHaveCount(0);
 });
 
-test("Claude shows Limited until … and never a %", async ({ page }) => {
+test("Claude from a refused request alone shows Limited until … and no %", async ({ page }) => {
   await open(page);
   await page.getByTestId("usage-claude").hover();
   const card = page.getByTestId("usage-card");
@@ -150,6 +151,35 @@ test("Claude shows Limited until … and never a %", async ({ page }) => {
   await expect(page.getByTestId("usage-card").locator(".uc-head [data-testid=usage-empty]")).toHaveCount(1);
   await expect(page.getByTestId("usage-card").locator(".uc-bar")).toHaveCount(0);
   await expect(page.getByTestId("usage-card")).not.toContainText("%");
+});
+
+test("Claude shows the % Claude Code reported, per login, and says when a login has none yet", async ({ page }) => {
+  await mock("mock.usage", { fixture: "claude" });
+  await open(page);
+  const mark = page.getByTestId("usage-claude");
+  await expect(mark).toHaveAttribute("aria-label", "Claude Code usage: 12%");
+  await expect(mark.getByTestId("usage-fill")).toHaveClass(/lv-gray/);
+  await expect(mark.locator(".usage-dot")).toHaveCount(0);
+  await mark.hover();
+  const card = page.getByTestId("usage-card");
+  const rows = card.getByTestId("usage-window");
+  await expect(rows).toHaveCount(2);
+  await expect(rows.nth(0)).toHaveText(/^5-hour limit\s*12% used\s*Resets in 1h 4[67]m$/);
+  await expect(rows.nth(1)).toHaveText(/^Weekly limit\s*6% used\s*Resets in 4d 2[23]h$/);
+  await expect(rows.nth(0).locator(".uc-bar > i")).toHaveClass(/lv-gray/);
+  const accts = card.getByTestId("usage-account");
+  await expect(accts).toHaveCount(3);
+  await expect(accts.locator(".uc-state")).toHaveText([
+    /^12% used · Resets in 1h 4[67]m$/,
+    /^81% used · Resets in (2h 59m|3h)$/,
+    "Shows after your next Claude turn in omher",
+  ]);
+  await mock("mock.usage", { fixture: "claudeNone" });
+  await page.reload();
+  await expect(page.getByTestId("usage-claude")).toHaveAttribute("aria-label", "Claude Code usage: Shows after your next Claude turn in omher");
+  await page.getByTestId("usage-claude").hover();
+  await expect(page.getByTestId("usage-card").getByTestId("usage-empty")).toHaveText("Shows after your next Claude turn in omher");
+  await expect(page.getByTestId("usage-claude").locator(".usage-ring")).toHaveCount(0);
 });
 
 test("a record past its reset time says No recent record, with no number and no ring", async ({ page }) => {

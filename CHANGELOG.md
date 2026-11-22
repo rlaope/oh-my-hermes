@@ -4,6 +4,16 @@ All notable changes will be documented here.
 
 ## Unreleased
 
+- **omher's Claude Code usage meter shows what Claude Code reports.** The meter used to say "No usage yet" / "No
+  record" for every Claude login, because Claude Code writes its usage to a file only when a request hits a limit.
+  omher now keeps its own record per login (`~/.omher/usage/claude/<account>.json`), from the `rate_limit_event` in a
+  chat's stream-json and from the status line input of the TERMINALS Claude Code sessions it starts. The meter shows
+  each window's % and reset time the way the Codex meter does, per login, from the newer of that record and a refused
+  request. A TERMINALS Claude Code now starts with `--settings` whose `statusLine` runs omher as a relay: it records the
+  usage, then runs your own status line command with the same input and prints its output unchanged (nothing when you
+  have none). Your hooks, permissions and other settings stay as they are. Before the first reading the meter says it
+  shows after your next Claude turn in omher. Local only: nothing is sent and no token is read.
+  (`docs/OMHER-BOUNDARY.md` rules 11, 17 and 18)
 - **omher: the Slack briefing opens with a greeting and what it is about.** A brief could open with what the bot did
   or could not do ("could not open the log...") with nothing saying which alert or thread it meant, so the person had
   to guess. The briefing prompt now asks for a short greeting ("안녕하세요." in Korean), then a first line naming the

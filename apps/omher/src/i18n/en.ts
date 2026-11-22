@@ -746,6 +746,7 @@ export const en = {
   "use.near": "Near the limit",
   "use.ok": "OK",
   "use.noRecord": "No record",
+  "use.claudeNext": "Shows after your next Claude turn in omher",
   "use.cpaLogin": "CLIProxyAPI login",
   "use.meter": "{name} usage: {value}",
   "use.card": "{name} usage",

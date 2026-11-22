@@ -508,7 +508,7 @@ export type UsageState = "ok" | "near" | "limited" | "stale" | "connected";
 export interface UsageWindow {
   /** "5 hours", "Weekly", "2d"… */
   label: string;
-  /** Only when the source gave one (Codex does, Claude Code never does). */
+  /** Only when the source gave one (Codex's session files, omher's own record of what Claude Code reported). */
   used_percent?: number;
   /** Seconds since epoch. */
   resets_at?: number;
@@ -535,7 +535,10 @@ export interface UsageAccount {
   in_cpa: boolean;
   /** "no_record": nothing on this computer says how much of this login is used. */
   state: UsageState | "no_record";
+  /** Limited: when the limit lifts. Otherwise the reset of the fullest window, beside its `used_percent`. */
   resets_at?: number;
+  /** The fullest live window's %, only when this login's own record gave one. */
+  used_percent?: number;
 }
 
 export interface TerminalRun {

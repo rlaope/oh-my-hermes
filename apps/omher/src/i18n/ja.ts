@@ -744,6 +744,7 @@ export const ja: Record<Key, string> = {
   "use.near": "上限間近",
   "use.ok": "正常",
   "use.noRecord": "記録なし",
+  "use.claudeNext": "omher で次に Claude が応答すると表示されます",
   "use.cpaLogin": "CLIProxyAPI ログイン",
   "use.meter": "{name} の使用量: {value}",
   "use.card": "{name} の使用量",

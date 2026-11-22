@@ -665,8 +665,10 @@ const COMMAND_SEED = [
 // `after`-th skills.list read on (0 = at once). Cleared by mock.reset.
 let skillsLater = { add: [], after: 0 };
 
-// Subscription usage (usage.read). "default": Codex 73 % / 60 %, Claude limited (no %), Grok on PATH only.
-// "stale": the same Codex record after both reset times passed (no numbers). Switch with mock.usage {fixture}.
+// Subscription usage (usage.read). "default": Codex 73 % / 60 %, Claude limited (a refused request: no %), Grok on
+// PATH only. "stale": the same Codex record after both reset times passed (no numbers). "claude": Claude Code's
+// percentages from omher's own record of what it reported (12 % / 6 %), with an omher login at 81 % and one with no
+// record yet. "claudeNone": Claude Code on PATH with no record yet. Switch with mock.usage {fixture}.
 let usageFixture = "default";
 const USAGE = {
   default: () => [
@@ -685,6 +687,19 @@ const USAGE = {
       ] },
     { id: "grok", state: "connected", source_mtime: null, windows: [] },
   ],
+  claude: () => [
+    { id: "claude", state: "ok", source_mtime: now() - 30,
+      windows: [
+        { label: "5 hours", used_percent: 12.4, resets_at: now() + 107 * MIN },
+        { label: "Weekly", used_percent: 6, resets_at: now() + (4 * 24 + 23) * 3600 },
+      ],
+      accounts: [
+        { email: "owner@example.com", label: "", source: "cli", in_cpa: false, state: "ok", used_percent: 12.4, resets_at: now() + 107 * MIN },
+        { email: "work@example.com", label: "Work", source: "omher", in_cpa: false, state: "near", used_percent: 81, resets_at: now() + 3 * 3600 },
+        { email: "new@example.com", label: "", source: "omher", in_cpa: false, state: "no_record" },
+      ] },
+  ],
+  claudeNone: () => [{ id: "claude", state: "connected", source_mtime: null, windows: [] }],
   stale: () => [
     { id: "codex", plan: "pro", state: "stale", source_mtime: now() - 9 * 24 * 3600,
       windows: [

@@ -314,6 +314,46 @@ impl Adapter for Unrecognized {
     }
 }
 
+/// A Claude Code chat's adapter that also keeps omher's usage record for the account the session runs under: each
+/// stream-json `rate_limit_event` replaces `~/.omher/usage/claude/<account>.json` (`claude_usage.rs`). The adapter
+/// sees every line unchanged.
+struct UsageTap {
+    inner: Box<dyn Adapter>,
+    home: PathBuf,
+    account: String,
+}
+
+impl UsageTap {
+    fn wrap(inner: Box<dyn Adapter>, home: PathBuf, account: String) -> Box<dyn Adapter> {
+        Box::new(UsageTap { inner, home, account })
+    }
+}
+
+impl Adapter for UsageTap {
+    fn start(&mut self) -> Step {
+        self.inner.start()
+    }
+    fn on_line(&mut self, line: &str) -> Step {
+        crate::claude_usage::record_chat_line(&self.home, &self.account, line);
+        self.inner.on_line(line)
+    }
+    fn on_input(&mut self, input: Input) -> Result<Step, String> {
+        self.inner.on_input(input)
+    }
+    fn in_turn(&self) -> bool {
+        self.inner.in_turn()
+    }
+    fn name(&self) -> &str {
+        self.inner.name()
+    }
+    fn unrecognized(&self) -> bool {
+        self.inner.unrecognized()
+    }
+    fn explain(&self, err: &str) -> String {
+        self.inner.explain(err)
+    }
+}
+
 // ---------------------------------------------------------------------------------------------
 // Shared helpers
 // ---------------------------------------------------------------------------------------------
@@ -3492,6 +3532,12 @@ impl ChatSessions {
         let program = argv.clone();
         if let Some(path) = unrecognized_program(agent_id) {
             adapter = Unrecognized::wrap(adapter, agent_id, &path);
+        }
+        if agent_id == "claude" {
+            let home = std::env::var_os(if cfg!(windows) { "USERPROFILE" } else { "HOME" }).filter(|h| !h.is_empty());
+            if let (Some(home), Some(account)) = (home, crate::claude_usage::account_of(account_env)) {
+                adapter = UsageTap::wrap(adapter, PathBuf::from(home), account);
+            }
         }
         argv.extend(args.iter().map(OsString::from));
         if let Some(r) = resume.filter(|_| thread.is_none()) {
@@ -7298,5 +7344,23 @@ mod tests {
         let st = run(&mut p, &[r#"{"type":"agent_end","aborted":true}"#.into()]);
         assert_eq!(names(&st.events)[..2], ["message.dropped", "turn.end"]);
         assert_eq!(st.events[0]["id"], "b");
+    }
+
+    #[test]
+    fn a_claude_chat_keeps_the_usage_record_of_its_account_and_sees_every_line() {
+        let home = std::env::temp_dir().join(format!("omher-usage-tap-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&home);
+        let event = r#"{"type":"rate_limit_event","rate_limit_info":{"status":"allowed","resetsAt":1795420800,"rateLimitType":"seven_day","overageStatus":"rejected","unifiedWindows":{"seven_day":{"utilization":0.06,"resetsAt":1795420800,"status":"allowed"}}}}"#;
+        let init = r#"{"type":"system","subtype":"init","session_id":"s1","model":"claude-opus-4-1"}"#;
+        let mut plain = Claude::new("/w/proj");
+        let mut tapped = UsageTap::wrap(Box::new(Claude::new("/w/proj")), home.clone(), "work".into());
+        for line in [init, event] {
+            assert_eq!(tapped.on_line(line).events, plain.on_line(line).events, "{line}");
+        }
+        let rec: Value = serde_json::from_str(&std::fs::read_to_string(home.join(".omher/usage/claude/work.json")).unwrap()).unwrap();
+        assert_eq!(rec["windows"]["seven_day"], json!({"used_percent": 6.0, "resets_at": 1795420800.0}));
+        assert_eq!((rec["status"].clone(), rec["source"].clone()), (json!("allowed"), json!("chat")));
+        assert_eq!(tapped.name(), plain.name());
+        let _ = std::fs::remove_dir_all(&home);
     }
 }
