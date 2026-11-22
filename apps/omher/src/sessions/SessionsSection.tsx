@@ -20,7 +20,7 @@ import { busyFor, shortTime } from "../app/time";
 import { t } from "../i18n";
 import { composing } from "../lib/ime";
 import { AgentMark } from "./AgentMark";
-import { agentDef, agentLabel, draftFolder, folderChoices, folderName, hermesOnly, installLine, isTerminalRec, menuFocus, menuOrder, missingNote, parentPath, SHELL, splitPaneName, termActivity, termFallbackName, termGroups, terminalAgents, termMarkAgent, termStatus, tildePath, type AgentId, type AgentInfo, type RowMark, type SessionRec, type TermStatus, type Unseen } from "./agents";
+import { agentDef, agentLabel, draftFolder, folderChoices, folderName, hermesOnly, installLine, isTerminalRec, menuFocus, menuOrder, missingNote, parentPath, SHELL, splitPaneName, termActivity, termFallbackName, terminalAgents, termMarkAgent, termStatus, tildePath, type AgentId, type AgentInfo, type RowMark, type SessionRec, type TermStatus, type Unseen } from "./agents";
 import { TermRowMark } from "./TermRowMark";
 import { SplitGlyph, splitWith, useSplit, useSplitPrune } from "./SplitView";
 import { pressToSplit } from "./splitDrag";
@@ -28,7 +28,7 @@ import { groupOf, groupSessions, paneOf } from "./splitState";
 import type { Layout } from "../terminal/layout";
 import { usePendingRequests } from "./termShare";
 import { countRender, useAnyFlowing, useTermFace } from "./termActivity";
-import { allCollapsed, collapseOthers, folderSummary, getFolderPrefs, moveFolder, orderFolders, revealFolder as openFolder, setAllFolders, setFolderPrefs, toggleFolder, useFolderPrefs } from "./folders";
+import { addFolder, addedFolders, allCollapsed, collapseOthers, folderGroups, pathKey, folderSummary, isCollapsed, isTildePath, getFolderPrefs, moveFolder, orderFolders, removeFolder, revealFolder as openFolder, setAllFolders, setFolderGone, setFolderPrefs, toggleFolder, useFolderPrefs, useGoneFolders, withAdded } from "./folders";
 import { ChevronDown, ChevronRight } from "../ui/icons";
 import { CUE_PX, useEdgeFade } from "../sidebar/edgeFade";
 import { getHost, type PastChat } from "./host";
@@ -60,6 +60,26 @@ export function sessionAccountSuffix(groups: AccountGroup[] | null, agent: Agent
 }
 
 export { openNewSessionMenu } from "./newMenu";
+
+/** "New folder…" (the TERMINALS background menu and a folder header's menu): the native folder dialog, opened at the
+ *  last folder used, else home. Its own New Folder button makes a new one; omher makes none. The folder picked is
+ *  listed as a group at once, with or without a session; one already listed only opens. Cancel changes nothing. */
+export async function addTermFolder(): Promise<void> {
+  const sx = getSessions();
+  const before = sx.getState();
+  const picked = await sx.pickFolder(draftFolder(before.recent, before.home));
+  if (!picked || isTildePath(picked)) return;
+  // the folder as the list names it: another spelling of a listed folder (`…/web-app/`) is that folder
+  const got = pathKey(picked);
+  const now = sx.getState();
+  const listed = folderGroups(now.list.filter((r) => isTerminalRec(now.agents, r))).map((g) => g.cwd);
+  const prefs = getFolderPrefs();
+  // picked in the dialog just now, so it is on disk (again)
+  setFolderGone(got, false);
+  setFolderPrefs(addFolder(prefs, got, [...listed, ...addedFolders(prefs)]));
+  // the group comes into view (a long list may hold it below the fold)
+  requestAnimationFrame(() => [...document.querySelectorAll<HTMLElement>('[data-testid="term-group"]')].find((g) => g.dataset.cwd === got)?.scrollIntoView({ block: "nearest" }));
+}
 
 export function SessionsHeader() {
   const [open, setOpen] = useState(false);
@@ -757,18 +777,21 @@ export function SessionList({ needle = "", query = "" }: { needle?: string; quer
   // (termActivity.ts): output never re-renders this list
   // the ages tick while any terminal runs (as one list-wide clock did before)
   const ticking = terms.some((r) => r.status === "running" || r.status === "starting");
-  if (terms.length === 0) return <SessionStart />;
+  const added = addedFolders(folders);
+  if (terms.length === 0 && added.length === 0) return <SessionStart />;
   const shown = terms.filter((r) => sessionMatches(r, needle));
+  // an added folder with no session is a group too; a search keeps it only when its path matches
+  const groups = orderFolders(withAdded(folderGroups(shown), needle ? added.filter((c) => c.toLowerCase().includes(needle)) : added), folders.order);
   return (
     <nav ref={navRef} className="bot-list ss-list" aria-label={t("nav.terminals")} data-testid="session-list">
-      {needle && shown.length === 0 && (
+      {needle && groups.length === 0 && (
         <div className="bot-empty" data-testid="session-none-match">
           {t("side.noSession", { q: query })}
         </div>
       )}
-      {orderFolders(termGroups(shown), folders.order).map((g, gi, all) => {
+      {groups.map((g, gi, all) => {
         // a search shows every match, collapsed or not
-        const shut = !needle && folders.collapsed.includes(g.cwd);
+        const shut = !needle && isCollapsed(folders, g.cwd);
         return (
         <div key={g.cwd} className={`tg${shut ? " shut" : ""}`} role="group" aria-label={folderName(g.cwd)} data-testid="term-group" data-cwd={g.cwd} data-collapsed={shut ? "true" : undefined}>
           <FolderHead
@@ -777,6 +800,7 @@ export function SessionList({ needle = "", query = "" }: { needle?: string; quer
             shut={shut}
             index={gi}
             all={all.map((x) => x.cwd)}
+            added={added.includes(g.cwd)}
             summary={{ ...folderSummary(g.rows.map((r) => termStatus(r, ss.unseen[r.id], 0))), running: g.rows.filter((r) => (r.status === "running" || r.status === "starting") && termMarkAgent(r) !== null).length }}
             flowIds={shut ? g.rows.filter((r) => (r.status === "running" || r.status === "starting") && ss.unseen[r.id] !== "bell").map((r) => r.id) : NO_IDS}
           />
@@ -837,7 +861,7 @@ function FolderGlyph() {
 function CollapseAllButton() {
   const ss = useSessions();
   const prefs = useFolderPrefs();
-  const all = [...new Set(ss.list.filter((r) => isTerminalRec(ss.agents, r)).map((r) => r.cwd))];
+  const all = [...new Set([...folderGroups(ss.list.filter((r) => isTerminalRec(ss.agents, r))).map((g) => g.cwd), ...addedFolders(prefs)])];
   if (all.length < 2) return null;
   const shut = allCollapsed(prefs, all);
   const label = shut ? t("term.expandAll") : t("term.collapseAll");
@@ -900,8 +924,9 @@ const NO_IDS: readonly string[] = [];
 /** A TERMINALS group's header, Orca-style: a chevron that collapses its sessions (kept on this computer), the
  *  folder's name (semibold) and its git branch in small grey; collapsed, it shows how many sessions it holds and
  *  their live summary (the spinner while one prints, the amber dot while one waits for you, a red dot when one
- *  failed). Right-click: New terminal here, Collapse others, Show in Finder. Drag to reorder. */
-function FolderHead({ cwd, home, shut, index, all, summary: base, flowIds }: { cwd: string; home: string | null; shut: boolean; index: number; all: string[]; summary: ReturnType<typeof folderSummary> & { running: number }; flowIds: readonly string[] }) {
+ *  failed). Right-click: New terminal here, Collapse others, Show in Finder, New folder…, and for a folder the person
+ *  added (`added`) Remove from list. Drag to reorder. */
+function FolderHead({ cwd, home, shut, index, all, added, summary: base, flowIds }: { cwd: string; home: string | null; shut: boolean; index: number; all: string[]; added: boolean; summary: ReturnType<typeof folderSummary> & { running: number }; flowIds: readonly string[] }) {
   // the spinner: output flows in one of its running sessions that is not waiting for the person (termStatus's
   // "busy"), followed here and not through the list
   const busy = useAnyFlowing(flowIds);
@@ -921,6 +946,8 @@ function FolderHead({ cwd, home, shut, index, all, summary: base, flowIds }: { c
     };
   }, [cwd]);
   const name = folderName(cwd);
+  // a shell asked to start here ran in another folder: this one is no longer on disk (Remove from list still works)
+  const gone = useGoneFolders().includes(cwd);
   const toggle = () => setFolderPrefs(toggleFolder(getFolderPrefs(), cwd));
   return (
     <div
@@ -932,7 +959,7 @@ function FolderHead({ cwd, home, shut, index, all, summary: base, flowIds }: { c
         e.preventDefault();
         const side = e.currentTarget.closest(".side")?.getBoundingClientRect();
         const right = (side?.right ?? innerWidth) - 6;
-        setMenu({ x: Math.max(6, Math.min(e.clientX, right - MENU_W_PX)), y: Math.max(6, Math.min(e.clientY, innerHeight - menuHeight(3) - 6)) });
+        setMenu({ x: Math.max(6, Math.min(e.clientX, right - MENU_W_PX)), y: Math.max(6, Math.min(e.clientY, innerHeight - menuHeight(added ? 5 : 4) - 6)) });
       }}
     >
       <button type="button" className="tg-open" aria-expanded={!shut} aria-label={t(shut ? "term.folderOpen" : "term.folderClose", { name })} onClick={toggle} data-testid="term-group-toggle">
@@ -966,14 +993,29 @@ function FolderHead({ cwd, home, shut, index, all, summary: base, flowIds }: { c
           </span>
         )}
       </button>
-      {menu && <FolderMenu at={menu} cwd={cwd} all={all} onDismiss={() => setMenu(null)} />}
+      {/* an added folder no session runs in: one quiet line, inside the header so a right-click on it is the folder's.
+          A folder found gone says that instead, with or without sessions listed under it. */}
+      {!shut && gone ? (
+        <div className="tg-empty gone" title={t("term.folderGone")} data-testid="term-group-gone">
+          {t("term.folderGone")}
+        </div>
+      ) : (
+        !shut &&
+        summary.count === 0 && (
+          <div className="tg-empty" title={t("term.folderEmpty")} data-testid="term-group-empty">
+            {t("term.folderEmpty")}
+          </div>
+        )
+      )}
+      {menu && <FolderMenu at={menu} cwd={cwd} all={all} added={added} onDismiss={() => setMenu(null)} />}
     </div>
   );
 }
 
 /** A folder header's right-click menu: New terminal here (the + menu's Shell in that folder), Collapse others,
- *  Show in Finder. */
-function FolderMenu({ at, cwd, all, onDismiss }: { at: { x: number; y: number }; cwd: string; all: string[]; onDismiss: () => void }) {
+ *  Show in Finder, New folder… (as the background menu's) and, only for a folder the person added, Remove from list
+ *  (the list forgets it; nothing on disk changes and its sessions go on). */
+function FolderMenu({ at, cwd, all, added, onDismiss }: { at: { x: number; y: number }; cwd: string; all: string[]; added: boolean; onDismiss: () => void }) {
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => {
     ref.current?.querySelector<HTMLButtonElement>("button")?.focus();
@@ -987,6 +1029,8 @@ function FolderMenu({ at, cwd, all, onDismiss }: { at: { x: number; y: number };
     ["term-folder-new", t("term.here"), () => void getSessions().startTerminal(SHELL, cwd)],
     ["term-folder-others", t("term.collapseOthers"), () => setFolderPrefs(collapseOthers(getFolderPrefs(), all, cwd))],
     ["term-folder-reveal", revealWord(), () => void getHost().reveal(cwd).catch(() => undefined)],
+    ["term-folder-add", t("term.newFolder"), () => void addTermFolder()],
+    ...(added ? ([["term-folder-remove", t("term.folderRemove"), () => (setFolderGone(cwd, false), setFolderPrefs(removeFolder(getFolderPrefs(), cwd)))]] as [string, string, () => void][]) : []),
   ];
   return (
     <div

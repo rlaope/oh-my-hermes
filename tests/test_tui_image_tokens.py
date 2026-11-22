@@ -41,7 +41,7 @@ from omh.tui.app import (
 from omh.tui.gateway import Event, Response
 from omh.tui.keys import BACKSPACE, CHAR, DOWN, ENTER, ESCAPE, LEFT, UP, Key, KeyDecoder, Paste
 from omh.tui.theme import DEFAULT_THEME
-from omh.tui.transcript import NOTICE_WARN, UserBlock, block_rows
+from omh.tui.transcript import INTERRUPTED_NOTICE, NOTICE_WARN, AssistantBlock, UserBlock, block_rows
 
 CTRL_V = Key(CHAR, "v", ctrl=True)
 PNG = b"\x89PNG\r\n\x1a\n"
@@ -1071,6 +1071,186 @@ class CutInTests(ImageTestCase):
         self.hermes.pump()
         self.assertEqual(self.methods("session."), ["session.interrupt"])
         self.assertIsNotNone(self.app.cut_in)
+
+
+SENTINEL = "Operation interrupted: waiting for model response (0.6s elapsed)."
+
+
+class QuietCutInTests(ImageTestCase):
+    """A cut-in ends the turn it stopped quietly, as Claude Code's send-now does: no `Interrupted.` notice, no warn
+    row, the partial answer kept; Esc keeps the notice. Hermes' cancellation sentinel never shows as the reply of an
+    interrupted turn, whichever path brings it, and stays inside a longer answer."""
+
+    running = CutInTests.running
+    cut_in = CutInTests.cut_in
+    stopped = CutInTests.stopped
+
+    def replies(self) -> list[str]:
+        return [block.text for block in self.app.transcript.blocks if isinstance(block, AssistantBlock)]
+
+    def test_a_cut_in_ends_the_stopped_turn_with_no_interrupted_notice(self) -> None:
+        self.cut_in()
+        self.stopped()
+        self.assertNotIn(INTERRUPTED_NOTICE, notices(self.app))
+        self.assertEqual(notices(self.app, NOTICE_WARN), [])
+        self.assertEqual(self.methods("prompt.submit"), ["prompt.submit"])  # the cut-in still goes
+
+    def test_a_cut_in_keeps_the_partial_answer_as_streamed(self) -> None:
+        self.cut_in()
+        self.app._on_event(Event("message.delta", SID, {"text": "half an answer"}))
+        self.app._on_event(Event("message.complete", SID, {"text": "half an answer", "status": "interrupted"}))
+        self.hermes.pump()
+        self.assertEqual(self.replies(), ["half an answer"])
+        self.assertNotIn(INTERRUPTED_NOTICE, notices(self.app))
+
+    def test_a_cut_in_whose_turn_ends_on_the_sentinel_shows_no_reply(self) -> None:
+        self.cut_in()
+        self.app._on_event(Event("message.complete", SID, {"text": SENTINEL, "status": "interrupted"}))
+        self.hermes.pump()
+        self.assertEqual(self.replies(), [])
+        self.assertNotIn(SENTINEL, self.screen())
+        self.assertEqual(notices(self.app, NOTICE_WARN), [])
+
+    def test_esc_still_says_interrupted(self) -> None:
+        self.running()
+        self.app._interrupt()
+        self.stopped()
+        self.assertIn(INTERRUPTED_NOTICE, notices(self.app))
+
+    def test_the_sentinel_as_the_final_text_of_a_stopped_turn_is_not_a_reply(self) -> None:
+        self.running()
+        self.app._interrupt()
+        self.app._on_event(Event("message.complete", SID, {"text": SENTINEL, "status": "interrupted"}))
+        self.assertEqual(self.replies(), [])
+        self.assertIn(INTERRUPTED_NOTICE, notices(self.app))
+
+    def test_the_sentinel_streamed_as_the_whole_reply_of_a_stopped_turn_is_taken_back(self) -> None:
+        self.running()
+        self.app._interrupt()
+        self.app._on_event(Event("message.delta", SID, {"text": SENTINEL}))
+        self.app._on_event(Event("message.complete", SID, {"text": "", "status": "interrupted"}))
+        self.assertEqual(self.replies(), [])
+        self.assertNotIn(SENTINEL, self.screen())
+
+    def stream(self, *chunks: str) -> list[str]:
+        """Each chunk as a `message.delta`, the screen rendered after each one."""
+        screens = []
+        for chunk in chunks:
+            self.app._on_event(Event("message.delta", SID, {"text": chunk}))
+            screens.append(self.screen())
+        return screens
+
+    def test_the_sentinel_streaming_is_never_painted_between_deltas(self) -> None:
+        self.cut_in()
+        for screen in self.stream(SENTINEL):
+            self.assertNotIn("Operation", screen)
+            self.assertNotIn("⚚ Hermes", screen)
+        self.app._on_event(Event("message.complete", SID, {"text": "", "status": "interrupted"}))
+        self.hermes.pump()
+        self.assertNotIn("Operation", self.screen())
+        self.assertEqual(self.replies(), [])
+
+    def test_the_sentinel_split_into_chunks_is_never_painted(self) -> None:
+        self.running()
+        self.app._interrupt()
+        chunks = ["Operation inter", "rupted: wait", "ing for model response (", "0", ".6", "s elap", "sed).", ""]
+        for screen in self.stream(*chunks):
+            self.assertNotIn("Operation", screen)
+        self.app._on_event(Event("message.complete", SID, {"text": "", "status": "interrupted"}))
+        self.assertNotIn("Operation", self.screen())
+        self.assertIn(INTERRUPTED_NOTICE, notices(self.app))
+
+    def test_a_reply_that_starts_like_the_sentinel_shows_once_it_diverges(self) -> None:
+        self.running()
+        screens = self.stream("Operation inter", "rupted: waiting for model response (", "the deploy timed out", " twice)")
+        self.assertNotIn("Operation", screens[0])
+        self.assertNotIn("Operation", screens[1])
+        self.assertIn("Operation interrupted: waiting for model response (the deploy timed out", screens[2])
+        self.assertIn("timed out twice)", screens[3])
+
+    def test_a_reply_with_the_sentinel_and_more_shows_once_it_goes_past_it(self) -> None:
+        self.running()
+        screens = self.stream(SENTINEL, " It said.")
+        self.assertNotIn("Operation", screens[0])
+        self.assertIn(f"{SENTINEL} It said.", screens[1])
+
+    def test_a_short_operation_reply_that_completes_is_shown_at_completion(self) -> None:
+        self.running()
+        self.assertNotIn("Operation", self.stream("Operation")[0])
+        self.app._on_event(Event("message.complete", SID, {"text": "Operation", "status": "complete"}))
+        self.assertIn("Operation", self.screen())
+        self.assertEqual(self.replies(), ["Operation"])
+
+    def test_the_whole_sentinel_on_a_completed_turn_is_shown_at_completion(self) -> None:
+        self.running()
+        self.assertNotIn("Operation", self.stream(SENTINEL)[0])
+        self.app._on_event(Event("message.complete", SID, {"text": SENTINEL, "status": "complete"}))
+        self.assertIn(SENTINEL, self.screen())
+
+    def copied(self) -> list[str]:
+        """`/copy` typed and sent: the text of each OSC 52 it wrote."""
+        sent: list[str] = []
+        write = self.app.terminal.write
+
+        def watched(data: str) -> None:
+            sent.append(data)
+            write(data)
+
+        with patch.object(self.app.terminal, "write", watched):
+            self.type("/copy")
+            self.press(Key(ENTER))
+        return [base64.b64decode(text.rstrip("\x07")).decode("utf-8")
+                for data in sent for text in data.split("\x1b]52;c;")[1:]]
+
+    def test_copy_while_the_sentinel_is_held_takes_the_answer_before_it(self) -> None:
+        self.running()
+        self.app._on_event(Event("message.complete", SID, {"text": "the first answer", "status": "complete"}))
+        self.hermes.pump()
+        self.cut_in()
+        self.stream(SENTINEL)
+        self.assertEqual(self.copied(), ["the first answer"])
+
+    def test_copy_while_the_sentinel_is_held_with_no_answer_before_it_copies_nothing(self) -> None:
+        self.cut_in()
+        self.stream(SENTINEL)
+        self.assertEqual(self.copied(), [])
+        self.stopped()  # what /copy said is held under the live reply until the turn ends
+        self.assertIn("No reply to copy yet.", notices(self.app))
+
+    def test_exit_while_a_finished_sentinel_line_is_held_prints_no_sentinel(self) -> None:
+        self.cut_in()
+        self.stream(SENTINEL + "\n")
+        flushed: list[str] = []
+        flush = self.app.region.flush_above
+
+        def watched(rows, *size) -> None:
+            flushed.extend("".join(span.text for span in line) for line in rows)
+            flush(rows, *size)
+
+        with patch.object(self.app.region, "flush_above", watched):
+            self.app._shutdown()
+        self.assertFalse([row for row in flushed if "Operation" in row or "⚚ Hermes" in row], flushed)
+
+    def test_the_sentinel_in_replayed_history_is_not_a_reply(self) -> None:
+        self.app._draw_history([
+            {"role": "user", "text": "look at this"},
+            {"role": "assistant", "text": SENTINEL},
+            {"role": "user", "text": "and this"},
+            {"role": "assistant", "text": f"It said: {SENTINEL} and then I went on."},
+        ])
+        self.assertEqual(self.replies(), [f"It said: {SENTINEL} and then I went on."])
+
+    def test_the_sentinel_inside_a_longer_answer_of_a_stopped_turn_stays(self) -> None:
+        self.running()
+        self.app._interrupt()
+        said = f"Hermes printed `{SENTINEL}` when you stopped it."
+        self.app._on_event(Event("message.complete", SID, {"text": said, "status": "interrupted"}))
+        self.assertEqual(self.replies(), [said])
+
+    def test_the_sentinel_as_the_reply_of_a_turn_that_completed_stays(self) -> None:
+        self.running()
+        self.app._on_event(Event("message.complete", SID, {"text": SENTINEL, "status": "complete"}))
+        self.assertEqual(self.replies(), [SENTINEL])
 
 
 class QueuedImageSendNowTests(ImageTestCase):

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { UsageProvider } from "../lib/protocol";
-import { accountRow, duration, limitName, meterDot, meterLabel, ringLevel, topPercent, windowRow } from "./usageFormat";
+import { accountRow, duration, limitName, meterDot, meterLabel, ringLevel, stateText, topPercent, windowRow } from "./usageFormat";
 
 const NOW = 1_794_200_000;
 const codex: UsageProvider = {
@@ -46,6 +46,29 @@ describe("usage format", () => {
   });
 });
 
+describe("Claude Code's % from omher's own record of what it reported", () => {
+  const recorded: UsageProvider = {
+    id: "claude", state: "ok", source_mtime: NOW - 30,
+    windows: [
+      { label: "5 hours", used_percent: 12.4, resets_at: NOW + 107 * 60 },
+      { label: "Weekly", used_percent: 6, resets_at: NOW + (4 * 24 + 23) * 3600 },
+    ],
+  };
+  it("rings, card rows and the meter's name read like Codex's", () => {
+    expect(topPercent(recorded)).toBe(12.4);
+    expect(windowRow(recorded, recorded.windows[0], NOW)).toEqual(["5-hour limit", "12% used", "Resets in 1h 47m"]);
+    expect(windowRow(recorded, recorded.windows[1], NOW)).toEqual(["Weekly limit", "6% used", "Resets in 4d 23h"]);
+    expect(meterLabel(recorded)).toBe("Claude Code usage: 12%");
+    expect(meterDot(recorded)).toBeNull();
+  });
+  it("before any record, Claude says the reading comes after its next turn in omher; other CLIs keep theirs", () => {
+    const empty: UsageProvider = { id: "claude", state: "connected", source_mtime: null, windows: [] };
+    expect(stateText(empty)).toBe("Shows after your next Claude turn in omher");
+    expect(meterLabel(empty)).toBe("Claude Code usage: Shows after your next Claude turn in omher");
+    expect(stateText({ ...empty, id: "codex" })).toBe("No usage yet");
+  });
+});
+
 describe("one line per Claude login", () => {
   const now = new Date(2026, 10, 9, 12, 0, 0).getTime() / 1000;
   const at17 = new Date(2026, 10, 9, 17, 0, 0).getTime() / 1000;
@@ -58,6 +81,17 @@ describe("one line per Claude login", () => {
       "a@example.com",
       "No record",
     ]);
+    // a login omher runs: no record yet, until its next turn in omher
+    expect(accountRow({ email: "w@example.com", label: "", source: "omher", in_cpa: false, state: "no_record" }, now)).toEqual([
+      "w@example.com",
+      "Shows after your next Claude turn in omher",
+    ]);
+    // a login whose own record gave a %: the fullest window's %, and when it resets
+    expect(accountRow({ email: "o@example.com", label: "", source: "cli", in_cpa: false, state: "near", used_percent: 81.4, resets_at: at17 }, now)).toEqual([
+      "o@example.com",
+      "81% used · Resets in 5h",
+    ]);
+    expect(accountRow({ email: "o@example.com", label: "", source: "cli", in_cpa: false, state: "ok", used_percent: 6 }, now)).toEqual(["o@example.com", "6% used"]);
     expect(accountRow({ email: "w@example.com", label: "Work", source: "omher", in_cpa: false, state: "ok" }, now)).toEqual(["Work", "OK"]);
     expect(accountRow({ email: "", label: "", source: "cpa", in_cpa: false, state: "limited", resets_at: now - 5 }, now)).toEqual([
       "CLIProxyAPI login",

@@ -8012,10 +8012,16 @@ _CODE_REVIEW_REQUEST_REASON = (
     "The user asks for a review of a code change (a diff, patch, PR or commit) or whether it introduces a bug, "
     "which is code-review's bug-first review, not visual QA, feedback triage or coding delivery."
 )
+# The code-review drop gate and Not checked bar themselves, not only a pointer to the skill: measured live, the
+# model reviewing a diff never called skill_view, so the rules reach a review only when they ride in the hint.
+# Each phrase is drawn from `review_methods` (Drop gate, Evidence threshold) and `_NOT_CHECKED_BAR`;
+# `tests/test_code_review_route_hint.py` checks the key phrases still appear in both sources.
 _CODE_REVIEW_REQUEST_RESPONSE = (
-    f"Load the code-review skill first with skill_view(name='{_loadable_skill_label('code-review')}') and follow "
-    "it: findings shown step by step with path and line, then its Not checked list. A reply format the request "
-    "sets, such as a required last line, still comes last."
+    "Report a bug only with a step-by-step trace: concrete input or state -> path:line -> wrong output or state. "
+    "First read the callers and tests the diff relies on; drop a finding that is guarded, intended or documented "
+    "there, or theoretical only. End the review body with a `Not checked:` line naming what you did not read or "
+    "run. A reply format the request sets, such as a required last line, still comes last. Full method "
+    f"(optional): skill_view(name='{_loadable_skill_label('code-review')}')."
 )
 
 

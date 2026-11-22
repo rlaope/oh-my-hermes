@@ -13,13 +13,13 @@
 //          terminal sees it, so it works with the keyboard inside a terminal (it is omher's, not the program's)
 // An approval card's own 1/2/3 keys live on the card (src/chat/cards), never here.
 // None of these fire while an input method is composing (a Korean, Japanese or Chinese word not yet committed).
-import { getFolderPrefs, orderFolders } from "../sessions/folders";
+import { folderGroups, getFolderPrefs, orderFolders } from "../sessions/folders";
 import { useEffect } from "react";
 import { getStore, selectAsks, selectSidebarBots, type Ask, type FocusAsk } from "../state/store";
 import { getSessions } from "../sessions/sessions";
 import { openNewSessionMenu } from "../sessions/newMenu";
 import { SESSIONS_ENTRY } from "../sessions/entry";
-import { isTerminalRec, termGroups } from "../sessions/agents";
+import { isTerminalRec } from "../sessions/agents";
 import { composing } from "../lib/ime";
 import { getTermPanel, toggleTerminal } from "../terminal/state";
 import { listenMenuClose } from "./menuClose";
@@ -74,12 +74,18 @@ export function nextAsk(asks: Ask[], last: FocusAsk | null): Ask | null {
 
 const inTerminal = (t: EventTarget | null) => !!(t as HTMLElement | null)?.closest?.(".xterm");
 
+/** Terminal session ids in TERMINALS order: one group per folder however its path is spelled (`folderGroups`, as the
+ *  sidebar groups them), the groups in the saved order. */
+export function terminalOrder(rows: readonly { id: string; cwd: string }[], order: readonly string[]): string[] {
+  return orderFolders(folderGroups(rows), order).flatMap((g) => g.rows.map((r) => r.id));
+}
+
 /** Open the next (1) or previous (-1) terminal session in TERMINALS order: the folder groups as the sidebar shows them. */
 function stepTerminal(step: 1 | -1) {
   const store = getStore();
   const s = store.getState();
   const ss = getSessions().getState();
-  const ids = orderFolders(termGroups(ss.list.filter((r) => isTerminalRec(ss.agents, r))), getFolderPrefs().order).flatMap((g) => g.rows.map((r) => r.id));
+  const ids = terminalOrder(ss.list.filter((r) => isTerminalRec(ss.agents, r)), getFolderPrefs().order);
   const to = stepSession(ids, s.ui.view === "session" ? s.ui.session : null, step);
   if (to) store.actions.openSession(to);
 }

@@ -1,5 +1,6 @@
 // Text and colour rules for the sidebar usage meters. Pure, so vitest pins them: a % appears only when the
-// source gave one, and a window whose reset time has passed says "stale" instead of a number.
+// source gave one (Codex's session files; for Claude Code, omher's own record of what the CLI reported in a chat or a
+// TERMINALS status line), and a window whose reset time has passed says "stale" instead of a number.
 import type { UsageAccount, UsageProvider, UsageWindow } from "../lib/protocol";
 import { locale, t } from "../i18n";
 
@@ -39,8 +40,9 @@ export function clock(ts: number, now: number): string {
 
 /** What a window past its reset time says (no number: the record is old). */
 export const stale = () => t("use.stale");
-/** What a CLI that is here but has written no usage record says. */
-export const noUsage = () => t("use.none");
+/** What a CLI that is here but has written no usage record says. Claude Code's reading is omher's own record, made
+ *  on its next turn in omher (a chat, or a TERMINALS Claude Code's status line), so that is what it says. */
+export const noUsage = (id?: string) => (id === "claude" ? t("use.claudeNext") : t("use.none"));
 
 /** A window's name as a limit: "5 hours" -> "5-hour limit", "Weekly" -> "Weekly limit" (Settings › Accounts says the same). */
 export function limitName(label: string): string {
@@ -69,7 +71,7 @@ export function stateText(p: UsageProvider): string {
     case "stale":
       return stale();
     case "connected":
-      return noUsage();
+      return noUsage(p.id);
     default:
       return t("use.ok");
   }
@@ -93,12 +95,17 @@ export function meterLabel(p: UsageProvider): string {
 }
 
 /** One login under the Claude card: [who, what its own record says]. The email (or the person's name for it), then
- *  "Limited until 17:00" / "OK" / "No recent record" from that login's own usage file, or "No record" when
- *  nothing on this computer records it (a CLIProxyAPI login). Never a number the record did not give. */
+ *  "Limited until 17:00" / "6% used · Resets in 4d 23h" / "OK" / "No recent record" from that login's own record,
+ *  "Shows after your next Claude turn in omher" before it has one, or "No record" when nothing on this computer can
+ *  record it (a CLIProxyAPI login). Never a number the record did not give. */
 export function accountRow(a: UsageAccount, now: number): [string, string] {
   const who = a.label || a.email || (a.source === "cpa" ? t("use.cpaLogin") : t("acc.thisComputer"));
-  if (a.state === "no_record") return [who, t("use.noRecord")];
+  if (a.state === "no_record") return [who, a.source === "cpa" ? t("use.noRecord") : noUsage("claude")];
   if (a.state === "limited") return [who, typeof a.resets_at === "number" && a.resets_at > now ? t("acc.limitedUntil", { when: clock(a.resets_at, now) }) : t("acc.limited")];
-  if (a.state === "connected") return [who, noUsage()];
+  if (a.state === "connected") return [who, noUsage("claude")];
+  if (typeof a.used_percent === "number" && a.state !== "stale") {
+    const pct = t("acc.pctUsed", { n: Math.round(a.used_percent) });
+    return [who, typeof a.resets_at === "number" && a.resets_at > now ? `${pct} · ${t("use.resetsIn", { t: duration(a.resets_at - now) })}` : pct];
+  }
   return [who, stateText({ id: "claude", windows: [], state: a.state, source_mtime: null })];
 }

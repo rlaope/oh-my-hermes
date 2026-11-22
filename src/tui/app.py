@@ -388,6 +388,7 @@ from .transcript import (
     block_rows,
     queued_prompt_rows,
     compact_count,
+    may_become_interrupt_sentinel,
     review_line,
 )
 from . import proofread
@@ -4478,6 +4479,7 @@ class App(ModesMixin, AgentViewMixin):
                 steer_next = self._settle_steers_at_turn_end() and not self.stop_asked and status != "interrupted"
                 # A stop the person asked for in no way (Esc, `/stop`) is Hermes' own.
                 self.transcript.hermes_interrupted = not (self.interrupting or self.stop_asked)  # `_turn_ended` spends it
+                self.transcript.cut_in_stop = self.cut_in is not None  # a cut-in's stop ends the turn quietly
                 self._note_turn(self._turn_end(payload))
                 self.transcript.hermes_resuming = self._arm_auto_continue(payload)
             self.transcript.apply(event)
@@ -8927,7 +8929,9 @@ class App(ModesMixin, AgentViewMixin):
             self.board_reader.stop()
 
     def _copy(self, arg: str) -> None:
-        last = next((block for block in reversed(self.transcript.blocks) if isinstance(block, AssistantBlock)), None)
+        # A reply held back as a possible cancellation sentinel is not on the screen, so not the one to copy.
+        last = next((block for block in reversed(self.transcript.blocks) if isinstance(block, AssistantBlock)
+                     and (block.done or not may_become_interrupt_sentinel(block.text))), None)
         if last is None or not last.text.strip():
             self.transcript.add_notice("No reply to copy yet.")
             return

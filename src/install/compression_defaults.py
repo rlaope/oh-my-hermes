@@ -17,7 +17,7 @@ dependency.
 
 from __future__ import annotations
 
-from .config_adapter import ConfigChange, section_edit_guard
+from .config_adapter import ConfigChange, _edits_document_body, section_edit_guard
 
 
 def _indent_of(line: str) -> int:
@@ -145,6 +145,7 @@ def compression_settings(config_text: str) -> dict[str, object]:
     }
 
 
+@_edits_document_body
 def ensure_compression_defaults(config_text: str) -> ConfigChange:
     """Add a compression fallback chain when the compressor is a single endpoint.
 
@@ -199,6 +200,7 @@ def compression_fallback_chain_lines(config_text: str) -> list[str]:
     return lines[start:end]
 
 
+@_edits_document_body
 def remove_compression_fallback_chain(config_text: str, expected: list[str]) -> ConfigChange:
     """Take back a compression fallback chain that still reads exactly `expected`.
 
@@ -213,9 +215,6 @@ def remove_compression_fallback_chain(config_text: str, expected: list[str]) -> 
     # compare below is already strict, but it says nothing about the rest of
     # the document: deleting lines out of a file whose root is a sequence, or
     # whose keys carry anchors, changes what a node elsewhere resolves to.
-    guard = section_edit_guard(config_text.splitlines(), "auxiliary", "compression")
-    if guard:
-        return ConfigChange(False, guard, config_text)
     current = compression_fallback_chain_lines(config_text)
     if not current:
         return ConfigChange(False, "auxiliary.compression.fallback_chain is not set", config_text)
@@ -225,6 +224,9 @@ def remove_compression_fallback_chain(config_text: str, expected: list[str]) -> 
             "auxiliary.compression.fallback_chain no longer matches the one OMH wrote; leaving it alone",
             config_text,
         )
+    guard = section_edit_guard(config_text.splitlines(), "auxiliary", "compression")
+    if guard:
+        return ConfigChange(False, guard, config_text)
     lines = config_text.splitlines()
     settings = compression_settings(config_text)
     start = _find_mapping_key(

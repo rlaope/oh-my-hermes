@@ -20,7 +20,7 @@ import { attachIme } from "./engine-ime";
 import { attachMarks } from "./engine-marks";
 import { attachOsc52 } from "./engine-osc52";
 import { FIND_EVENT, makeFinder, type FindRequest } from "./engine-find";
-import { attachImages, detachImages, loadImages } from "./engine-image";
+import { attachImages, detachImages, loadImages, virtualImages } from "./engine-image";
 import { GPU_OPTIONS } from "./look";
 
 /** The add-on's chunk loads the first time a terminal wants it, never with the app and never while `gpu` is off. */
@@ -98,6 +98,8 @@ interface Parked {
   /** the program had turned on bracketed paste (DECSET 2004) when it was parked; the snapshot turns it on again. Its
    *  output makes the terminal again before it is read, so the mode cannot change while parked */
   paste: boolean;
+  /** it showed Kitty placeholders: their pictures are dropped with it, and the one made again blanks their cells */
+  placeholders: boolean;
 }
 const parked = new Map<Terminal, Parked>();
 /** a parked terminal that was made again: the one that replaced it */
@@ -224,12 +226,12 @@ function lost(s: State, addon: WebglAddon): void {
 
 /** Pictures on or off for one terminal: the add-on's chunk loads the first time one wants it. Off drops the pictures
  *  it kept; output that comes while the chunk loads is drawn as before (a picture in it is skipped). */
-function images(s: State, on: boolean): void {
+function images(s: State, on: boolean, placeholdersSeen = false): void {
   s.images = on;
   if (!on) return detachImages(s.term);
   void loadImages().then(
     (Ctor) => {
-      if (!s.gone && s.images) attachImages(s.term, Ctor);
+      if (!s.gone && s.images) attachImages(s.term, Ctor, placeholdersSeen);
     },
     () => undefined, // the chunk would not load: no pictures
   );
@@ -334,7 +336,7 @@ export function afterOpen(term: Terminal, el: HTMLElement, settings: TermSetting
   stopSettings ??= onTermSettings(reconsider);
   if (!s.shown) hideRows(term);
   attach(s);
-  if (settings.images) images(s, true);
+  if (settings.images) images(s, true, c?.placeholders ?? false);
   s.undo = () => {
     if (s.gone) return;
     fonts?.removeEventListener?.("loadingdone", fontsLoaded);
@@ -482,7 +484,7 @@ function park(s: State, Serialize: typeof import("@xterm/addon-serialize").Seria
   }
   const title = (term as unknown as { _core?: { _inputHandler?: { _windowTitle?: unknown } } })._core?._inputHandler?._windowTitle;
   if (typeof title === "string" && title) snapshot += `\x1b]2;${title}\x07`;
-  parked.set(term, { snapshot: utf8.encode(snapshot), carried, cols: term.cols, rows: term.rows, remake: s.remake!, hiddenAt: s.hiddenAt, lastOut: s.lastOut, gpuLast: s.gpuLast, gaveUp: s.gaveUp, losses: s.losses, paste: inner.modes.bracketedPasteMode });
+  parked.set(term, { snapshot: utf8.encode(snapshot), carried, cols: term.cols, rows: term.rows, remake: s.remake!, hiddenAt: s.hiddenAt, lastOut: s.lastOut, gpuLast: s.gpuLast, gaveUp: s.gaveUp, losses: s.losses, paste: inner.modes.bracketedPasteMode, placeholders: virtualImages(term)?.seen ?? false });
   // a find bar left open on it (the bottom panel keeps one while hidden) closes: its terminal is going
   s.el.dispatchEvent(new CustomEvent(FIND_EVENT, { bubbles: true, detail: null }));
   s.undo();

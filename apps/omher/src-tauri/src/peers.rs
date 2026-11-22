@@ -244,7 +244,8 @@ OMHER_BRIDGE_TOKEN={token} exec "$py" "$f" --port {remote_port} --exit-on-stdin-
 /// word, unquoted or in single quotes) and the venv Python `bin/python`. On Windows, which an OpenSSH server reaches
 /// through a POSIX login shell (Git Bash, MSYS2 or Cygwin as `DefaultShell`; `uname -s` says MINGW, MSYS or CYGWIN),
 /// it is the home the Windows app uses, `%LOCALAPPDATA%\hermes`: the launcher is the distlib `hermes.exe` in
-/// `hermes-agent/.hermes/bin` or `bin`, whose `#!<python.exe> -I` line names the interpreter, and the venv Python is
+/// `hermes-agent/.hermes/bin` or `bin`, whose `#!<python.exe> -I` line names the interpreter, or the batch shim
+/// `hermes.cmd` beside it, whose first command word is that interpreter; the venv Python is
 /// `Scripts/python.exe`. The script holds no backslash and no `!`, so `#.` and `[[:punct:]]` stand in for them.
 pub const DISCOVER_PYTHON: &str = r#"wn=""
 case "$(uname -s 2>/dev/null)" in MINGW*|MSYS*|CYGWIN*) wn=1 ;; esac
@@ -271,11 +272,20 @@ if [ -z "$wn" ]; then
   fi
   x="bin/python"
 else
-  for l in "$h/hermes-agent/.hermes/bin/hermes.exe" "$h/bin/hermes.exe"; do
+  # each bin as the local bridge reads it (`bridge::discover_python_in`): the agent's bin before the user bin, and in
+  # each the distlib `hermes.exe` (its shebang names the interpreter) before the batch shim `hermes.cmd`, whose first
+  # command word, quoted for a path with spaces or bare, is the interpreter (a leading UTF-8 BOM and each CR dropped)
+  for b in "$h/hermes-agent/.hermes/bin" "$h/bin"; do
+    l="$b/hermes.exe"
     if [ -z "$py" ] && [ -f "$l" ]; then
       w=$(grep -a -o -E '#."?([A-Za-z]:|/)[^[:cntrl:]]+ -I' "$l" | head -n 1)
       w="${w#??}"; w="${w% -I}"
       case "$w" in '"'*) w="${w#?}"; w="${w%?}" ;; esac
+      case "$w" in [A-Za-z]:*|/*) [ -x "$w" ] && py="$w" ;; esac
+    fi
+    l="$b/hermes.cmd"
+    if [ -z "$py" ] && [ -f "$l" ]; then
+      w=$(awk '{ if (NR == 1) sub(/^[^ -~]+/, ""); sub(/^[[:space:]]+/, ""); sub(/[[:space:]]+$/, ""); if ($0 == "" || tolower($0) == "@echo off") next; if (match($0, /^"[^"]+"/)) print substr($0, 2, RLENGTH - 2); else { split($0, a, " "); print a[1] }; exit }' "$l")
       case "$w" in [A-Za-z]:*|/*) [ -x "$w" ] && py="$w" ;; esac
     fi
   done
@@ -1119,8 +1129,9 @@ mod tests {
 
     /// The same discovery on a Windows OpenSSH host, whose login shell is Git Bash / MSYS2 / Cygwin: a fake `uname`
     /// says MINGW64. The home is `$LOCALAPPDATA/hermes` (never the `~/.hermes` a Windows home may also hold), the
-    /// interpreter is the one the distlib `hermes.exe` launcher's `#!<python.exe> -I` line names, plain or quoted,
-    /// in `hermes-agent/.hermes/bin` or `bin`, and the venv fallback is `Scripts/python.exe`.
+    /// interpreter is the one the distlib `hermes.exe` launcher's `#!<python.exe> -I` line names, plain or quoted, or
+    /// the first command word of the `hermes.cmd` shim, in `hermes-agent/.hermes/bin` then `bin` (each bin's `.exe`
+    /// before its `.cmd`), and the venv fallback is `Scripts/python.exe`.
     #[cfg(unix)]
     #[test]
     fn remote_python_discovery_reads_a_windows_hermes_home() {
@@ -1166,8 +1177,38 @@ mod tests {
         std::fs::remove_file(home.join("hermes-agent/.hermes/bin/hermes.exe")).unwrap();
         launcher(&home.join("bin/hermes.exe"), &format!("\"{}\"", store.display()));
         assert_eq!(run(&user, &la), format!("OMHER_PEER_PYTHON {}", store.display()));
-        // no launcher: venv/Scripts/python.exe
+        // no .exe launcher any more: only the batch shim, then the venv
         std::fs::remove_file(home.join("bin/hermes.exe")).unwrap();
+        // a PM or source install that ships only the batch shim: its first command word names the interpreter,
+        // and a Windows shim ends every line with CR
+        std::fs::write(
+            home.join("bin/hermes.cmd"),
+            format!("@echo off\r\n\"{}\" -I -c \"import os\" %*\r\n", store.display()),
+        )
+        .unwrap();
+        assert_eq!(run(&user, &la), format!("OMHER_PEER_PYTHON {}", store.display()));
+        // ... saved with a UTF-8 BOM, as a Windows editor may write it
+        std::fs::write(
+            home.join("bin/hermes.cmd"),
+            format!("\u{feff}@echo off\r\n\"{}\" -I -c \"import os\" %*\r\n", store.display()),
+        )
+        .unwrap();
+        assert_eq!(run(&user, &la), format!("OMHER_PEER_PYTHON {}", store.display()));
+        // each bin is read whole before the next, as the local bridge does: the agent's shim wins over a stale
+        // user-bin `hermes.exe` left by an older install
+        std::fs::write(
+            home.join("hermes-agent/.hermes/bin/hermes.cmd"),
+            format!("@echo off\r\n{} -I -c \"import os\" %*\r\n", store.display()),
+        )
+        .unwrap();
+        let stale = home.join("old/python.exe");
+        exe(&stale, "#!/bin/sh\necho 3.11.0\n");
+        launcher(&home.join("bin/hermes.exe"), stale.to_str().unwrap());
+        assert_eq!(run(&user, &la), format!("OMHER_PEER_PYTHON {}", store.display()));
+        for f in ["hermes-agent/.hermes/bin/hermes.cmd", "bin/hermes.cmd", "bin/hermes.exe"] {
+            std::fs::remove_file(home.join(f)).unwrap();
+        }
+        // no launcher at all: venv/Scripts/python.exe
         let venv = home.join("hermes-agent/venv/Scripts/python.exe");
         exe(&venv, "#!/bin/sh\necho 3.14.9\n");
         assert_eq!(run(&user, &la), format!("OMHER_PEER_PYTHON {}", venv.display()));

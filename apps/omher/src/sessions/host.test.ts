@@ -1,8 +1,16 @@
 // TauriHost.ack: what the terminal has drawn reaches the shell as one `session_ack` per session per task, and a
 // call that fails loses no credit (its bytes ride on the next acknowledgement). The shell's command bridge is stood
 // in for by overriding `core()`; nothing here needs a Tauri window.
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { TauriHost } from "./host";
+
+const dialog = vi.hoisted(() => ({ calls: [] as Record<string, unknown>[], answer: null as string | string[] | null }));
+vi.mock("@tauri-apps/plugin-dialog", () => ({
+  open: async (options: Record<string, unknown>) => {
+    dialog.calls.push(options);
+    return dialog.answer;
+  },
+}));
 
 type Sent = { id: number; bytes: number };
 
@@ -115,5 +123,24 @@ describe("TauriHost.ack", () => {
     for (const id of acked.keys()) h.ack(id, 0);
     await task();
     for (const [id, n] of acked) expect(total(h.sent, id), `session ${id}`).toBe(n);
+  });
+});
+
+// TauriHost.pickFolder: the native folder dialog, one folder, with its own "New Folder" button on, so the person can
+// make a new directory there (omher makes none). Cancel is null.
+describe("TauriHost.pickFolder", () => {
+  it("opens a folder dialog at the given folder that can create directories, and returns the folder picked", async () => {
+    dialog.calls.length = 0;
+    dialog.answer = "/home/you/code/new-app";
+    expect(await new TauriHost().pickFolder("/home/you")).toBe("/home/you/code/new-app");
+    expect(dialog.calls).toHaveLength(1);
+    expect(dialog.calls[0]).toMatchObject({ directory: true, multiple: false, canCreateDirectories: true, defaultPath: "/home/you" });
+  });
+
+  it("answers null when the person cancels", async () => {
+    dialog.calls.length = 0;
+    dialog.answer = null;
+    expect(await new TauriHost().pickFolder("/home/you")).toBeNull();
+    expect(dialog.calls[0]).toMatchObject({ canCreateDirectories: true });
   });
 });
