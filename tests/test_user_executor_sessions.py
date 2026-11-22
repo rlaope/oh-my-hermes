@@ -88,6 +88,11 @@ if MODE == "tracked" and export is not None:
     note = export.parent / "fixture.note"
     note.write_text("ordinary test data", encoding="utf-8")
     subprocess.run(["git", "add", "-f", str(note)], check=True)
+if MODE == "untracked-again":
+    subprocess.run(["git", "add", "-f", str(export)], check=True)
+    subprocess.run(["git", "-c", "user.name=fake-agent", "-c", "user.email=fake@example.test",
+                    "commit", "-qm", "intermediate export"], check=True)
+    subprocess.run(["git", "rm", "--cached", str(export)], check=True)
 marker = "resumed" if resumed else "first"
 # One file per attempt, numbered from what earlier attempts already committed,
 # so the test can read every attempt's argv out of the worktree history.
@@ -516,9 +521,15 @@ class SessionDispatchTests(unittest.TestCase):
             self.assertEqual(summary["units"][0]["status"], "completed")
             self.assertEqual(list(_worktree(repo).glob(".omh-executor-tmp-*")), [])
 
+    def test_intermediate_scratch_commit_fails_the_unit(self):
+        self.check_scratch_refusal("untracked-again")
+
     def test_committed_scratch_entry_fails_the_unit(self):
+        self.check_scratch_refusal("tracked")
+
+    def check_scratch_refusal(self, mode):
         with TemporaryDirectory() as tmp:
-            paths, _, _, summary = _dispatch(Path(tmp), mode="tracked")
+            paths, _, _, summary = _dispatch(Path(tmp), mode=mode)
             unit = summary["units"][0]
             self.assertEqual(unit.get("reason_code"), "executor_scratch_committed")
             self.assertEqual(unit["status"], "failed")

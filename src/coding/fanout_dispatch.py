@@ -6,7 +6,7 @@ from concurrent.futures import ThreadPoolExecutor
 from concurrent.futures import TimeoutError as FuturesTimeoutError
 from concurrent.futures import wait as futures_wait
 from dataclasses import dataclass, replace
-from hashlib import sha256
+from hashlib import sha1, sha256
 import json
 import os
 from pathlib import Path
@@ -1185,18 +1185,47 @@ def _remove_executor_scratch(scratch: _ExecutorScratch | None) -> None:
 
 
 def _external_history_refusal(runner: Callable[..., Any], worktree: Path, base: str) -> str:
-    """Verify descent and the endpoint tree delta for the same observed HEAD."""
-    head = (_git_text(runner, worktree, ["git", "rev-parse", "HEAD"]) or "").strip()
-    if not all(re.fullmatch(r"[0-9a-f]{40}(?:[0-9a-f]{24})?", oid) for oid in (base, head)):
+    """Inspect each base..HEAD commit against all its parents, including merge parents."""
+    head = (_git_text(runner, worktree, ["git", "--no-lazy-fetch", "rev-parse", "HEAD"]) or "").strip()
+    oid = re.compile(r"[0-9a-f]{40}(?:[0-9a-f]{24})?")
+    if not all(oid.fullmatch(value) for value in (base, head)):
         return "executor_history_unverified"
-    if _git_text(runner, worktree, ["git", "merge-base", "--is-ancestor", base, head]) is None:
+    if _git_text(runner, worktree, ["git", "--no-lazy-fetch", "merge-base", "--is-ancestor", base, head]) is None:
         return "executor_history_unverified"
-    changed = _git_bytes(runner, worktree, ["git", "diff", "--name-only", "--no-renames", "-z",
-                         base, head, "--", f":(top,glob){EXECUTOR_SCRATCH_PREFIX}*",
-                         f":(top,glob){EXECUTOR_SCRATCH_PREFIX}*/**"])
-    if changed is None:
-        return "executor_history_unverified"
-    return "executor_scratch_committed" if changed else ""
+
+    pending, seen = [head], {base}
+    while pending:
+        commit = pending.pop()
+        if commit in seen:
+            continue
+        seen.add(commit)
+        # Stop at every ancestor of base, not just base itself: a merged
+        # branch can fork from older history. --independent returns only
+        # base exactly when the commit is already reachable from it.
+        tips = _git_text(runner, worktree, ["git", "--no-lazy-fetch", "merge-base", "--independent", base, commit])
+        if not tips:
+            return "executor_history_unverified"
+        if tips.strip() == base:
+            continue
+        parent_ids = _git_text(runner, worktree, ["git", "--no-lazy-fetch", "rev-parse", "--revs-only", f"{commit}^@"])
+        if parent_ids is None:
+            return "executor_history_unverified"
+        parents = parent_ids.splitlines()
+        if not all(oid.fullmatch(parent) for parent in parents):
+            return "executor_history_unverified"
+        pending.extend(parents)
+        if not parents:
+            # A merged, unrelated root adds its paths relative to Git's empty tree.
+            parents = [(sha1 if len(commit) == 40 else sha256)(b"tree 0\0", usedforsecurity=False).hexdigest()]
+        for parent in parents:
+            changed = _git_bytes(runner, worktree, ["git", "--no-lazy-fetch", "diff", "--name-only", "--no-renames",
+                                 "-z", parent, commit, "--", f":(top,glob)**/{EXECUTOR_SCRATCH_PREFIX}*",
+                                 f":(top,glob)**/{EXECUTOR_SCRATCH_PREFIX}*/**"])
+            if changed is None:
+                return "executor_history_unverified"
+            if changed:
+                return "executor_scratch_committed"
+    return ""
 
 
 def _dispatch_executor_entries(paths: OmhPaths, units: object, retarget: str = "") -> Mapping[str, ExecutorSpec]:
