@@ -106,7 +106,9 @@ UI (React in a Tauri window)  ⇄  bridge (Python, loopback WebSocket)  ⇄  the
 - **Shell** (`src-tauri/`): starts the bridge with Hermes' own Python, reads its `OMHER_BRIDGE_READY` line,
   hands the UI a `ws://127.0.0.1:<port>/?token=<random>` URL, and stops the bridge when the app exits. If the
   bridge cannot start, the UI shows the error with a Retry button; if the reason is that Hermes is missing, it
-  shows the first-run Install screen instead (`src-tauri/src/setup.rs` holds its one fixed command).
+  shows the first-run Install screen instead (`src-tauri/src/setup.rs` holds its one fixed command). A bridge that
+  dies after it was ready is started again on a new port (waits of 0.5 s, 1 s, 2 s, 4 s, 8 s; after five quick
+  deaths in a row the error shows over the app with Retry), and the UI asks for the new URL when it reconnects.
 - **Bridge** (`bridge/omher_bridge.py`): uses Hermes' `connect_gateway`, one connection per profile. It binds
   127.0.0.1 only and refuses any connection without the launch token.
 - **Mock bridge** (`e2e/mock-bridge.mjs`): the same protocol, scripted, for the Playwright tests.

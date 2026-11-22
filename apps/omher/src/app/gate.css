@@ -8,6 +8,10 @@
   color: var(--body, #dcd6de);
   font-size: 13px;
 }
+/* the bridge gave up after the app was up: the screen covers the app (still mounted) above its own layers */
+.gate--over {
+  z-index: 200;
+}
 .gate-box {
   display: flex;
   flex-direction: column;

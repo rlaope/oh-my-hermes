@@ -4,13 +4,21 @@ All notable changes will be documented here.
 
 ## Unreleased
 
+- **omher: the bridge comes back after it dies.** If the Python bridge stopped after it was ready, nothing started it
+  again: Hermes bots and folder chats stayed on "Connecting to Hermes…" until omher was restarted, because the shell
+  kept handing the page the dead bridge's port. The shell now notices the exit (the bridge's output closes, or a check
+  when the page asks for the URL) and starts it again on a new port with a new token after 0.5 s, then 1 s, 2 s, 4 s
+  and 8 s for each quick death in a row. The page asks for the URL again on each reconnect, so open chats resume by
+  themselves. After five quick deaths in a row the error shows over the app (which stays open underneath, terminals
+  included) with Retry. A bridge omher stopped itself (quit, Retry) is not started again, and one that stops while
+  the installer runs waits for it to end. TERMINALS were never affected. (apps/omher `src-tauri/src/bridge.rs`,
+  `src/app/BridgeGate.tsx`)
 - **omher: the Slack briefing opens with a greeting and what it is about.** A brief could open with what the bot did
   or could not do ("could not open the log...") with nothing saying which alert or thread it meant, so the person had
   to guess. The briefing prompt now asks for a short greeting ("안녕하세요." in Korean), then a first line naming the
   channel or thread, what happened and whether they need to do anything. The automation-blueprint reference quotes
   the same prompt, and a bridge test keeps the two identical. Applies to briefings omher sets up from now on; an
   existing `omher-brief` job keeps its prompt until it is edited.
-
 - **omher keeps every TERMINALS row over a restart, types European Option signs, and gives the keyboard back.**
   - **Restart:** every TERMINALS row comes back, however many there are. Before, only the newest 20 were saved and the
     next start deleted the older rows' history and files, even for a running Claude. Only the newest 20 keep their

@@ -4,6 +4,10 @@
 //! and hands the UI a loopback `ws://` URL carrying a per-launch random token. The child's stdin stays
 //! open for the life of the app: the bridge runs with `--exit-on-stdin-eof`, so it also stops if this
 //! process dies without cleaning up. The app makes no model or network call of its own.
+//!
+//! A bridge that stops on its own after it was ready is started again, on a new port with a new token, after a
+//! short wait that doubles with each quick death in a row ([`revive_plan`]); after too many in a row the failure
+//! shows instead. A bridge the app stopped (quit, Retry, an install in progress) is never started again here.
 
 use std::collections::HashSet;
 use std::io::{BufRead, BufReader};
@@ -24,6 +28,12 @@ const MEDIA_REMEMBERED: usize = 2000;
 pub const READY_TIMEOUT: Duration = Duration::from_secs(20);
 pub const HERMES_NOT_FOUND: &str = "Hermes not found: install Hermes Agent first";
 const STDERR_TAIL_LINES: usize = 6;
+/// A bridge that ran this long after it was ready did not die quickly: its death starts a new count.
+pub const STEADY_LIFE: Duration = Duration::from_secs(30);
+/// Quick deaths in a row omher revives; the next one is shown as a failure.
+pub const MAX_QUICK_DEATHS: u32 = 5;
+const REVIVE_FIRST: Duration = Duration::from_millis(500);
+const REVIVE_CAP: Duration = Duration::from_secs(8);
 
 // ---------------------------------------------------------------------------------------------
 // Pure helpers (unit tested)
@@ -50,6 +60,19 @@ pub fn parse_media_line(line: &str) -> Option<String> {
         return None;
     }
     Some(path.to_string())
+}
+
+/// What to do after the bridge stopped on its own. `streak` is the quick deaths in a row before this one, `lived`
+/// how long this bridge ran after it was ready (zero when it never got ready). Returns the new streak and the wait
+/// before starting the bridge again (0.5 s, 1 s, 2 s, ... capped at 8 s), or `None` once more than
+/// [`MAX_QUICK_DEATHS`] came in a row: then the person sees the failure and Retry starts it.
+pub fn revive_plan(streak: u32, lived: Duration) -> (u32, Option<Duration>) {
+    let streak = if lived >= STEADY_LIFE { 1 } else { streak.saturating_add(1) };
+    if streak > MAX_QUICK_DEATHS {
+        return (streak, None);
+    }
+    let delay = REVIVE_FIRST.saturating_mul(1 << (streak - 1).min(16)).min(REVIVE_CAP);
+    (streak, Some(delay))
 }
 
 /// Lower-case hex of `bytes`.
@@ -357,6 +380,16 @@ struct Inner {
     /// Held open so the child sees EOF only when this process goes away.
     stdin: Option<ChildStdin>,
     generation: u64,
+    /// Where the bundled bridge script is, kept from the last `start` so a revive finds it again.
+    resource_dir: Option<PathBuf>,
+    /// When the running bridge became ready.
+    ready_at: Option<Instant>,
+    /// Quick deaths in a row since the app last started the bridge itself (see [`revive_plan`]).
+    streak: u32,
+    /// The installer is running: a bridge that stops meanwhile waits for it (`release` or `start`).
+    held: bool,
+    /// A bridge stopped while `held`.
+    died_while_held: bool,
 }
 
 /// `{state: "ready"|"starting"|"failed", error?, missing?}`, the shape the UI reads. `missing:
@@ -396,30 +429,153 @@ impl Bridge {
                 child: None,
                 stdin: None,
                 generation: 0,
+                resource_dir: None,
+                ready_at: None,
+                streak: 0,
+                held: false,
+                died_while_held: false,
             }),
             changed: Condvar::new(),
             served: Mutex::new(HashSet::new()),
         })
     }
 
-    /// (Re)start the bridge in the background. Any earlier child is stopped first.
+    /// (Re)start the bridge in the background. Any earlier child is stopped first. This is the app's own start
+    /// (boot, Retry, after an install): the count of quick deaths starts again and an install's hold ends.
     pub fn start(self: &Arc<Self>, resource_dir: Option<PathBuf>) {
         let generation = {
             let mut g = self.inner.lock().unwrap();
             stop_locked(&mut g);
             g.generation += 1;
             g.phase = Phase::Starting;
+            g.resource_dir = resource_dir;
+            g.streak = 0;
+            g.held = false;
+            g.died_while_held = false;
             g.generation
         };
         self.changed.notify_all();
+        self.spawn_launch(generation, Duration::ZERO);
+    }
+
+    /// Launch `generation` after `delay` on its own thread, unless the app stopped or started the bridge meanwhile.
+    /// An installer that began during the wait holds it until it ends (`release` or `start`).
+    fn spawn_launch(self: &Arc<Self>, generation: u64, delay: Duration) {
         let me = Arc::clone(self);
         thread::spawn(move || {
-            let result = me.launch(generation, resource_dir.as_deref());
-            if let Err(e) = result {
+            thread::sleep(delay);
+            let resource_dir = {
+                let mut g = me.inner.lock().unwrap();
+                if g.generation != generation {
+                    return;
+                }
+                if g.held {
+                    g.died_while_held = true;
+                    return;
+                }
+                g.resource_dir.clone()
+            };
+            if let Err(e) = me.launch(generation, resource_dir.as_deref()) {
                 eprintln!("omher: bridge failed: {e}");
-                me.finish(generation, Phase::Failed(e));
+                me.launch_failed(generation, e);
             }
         });
+    }
+
+    /// A launch failed. The app's own start shows the failure; a revive counts it as one more quick death.
+    fn launch_failed(self: &Arc<Self>, generation: u64, error: String) {
+        {
+            let mut g = self.inner.lock().unwrap();
+            if g.generation != generation {
+                return;
+            }
+            stop_locked(&mut g);
+            if g.streak == 0 {
+                g.phase = Phase::Failed(error);
+            } else {
+                self.revive_locked(&mut g, Duration::ZERO, error, true);
+            }
+        }
+        self.changed.notify_all();
+    }
+
+    /// The bridge of `generation` stopped on its own (its stdout closed, or `try_wait` saw it exit). Ignored unless
+    /// that bridge is the current one and was ready: the app's own stop or start already moved on.
+    fn died(self: &Arc<Self>, generation: u64) {
+        let changed = {
+            let mut g = self.inner.lock().unwrap();
+            g.generation == generation && self.died_locked(&mut g)
+        };
+        if changed {
+            self.changed.notify_all();
+        }
+    }
+
+    /// The ready bridge's exit, if it exited, handled; true when the phase changed. Caller notifies `changed`.
+    fn died_locked(self: &Arc<Self>, g: &mut Inner) -> bool {
+        if !matches!(g.phase, Phase::Ready { .. }) {
+            return false;
+        }
+        let code = match g.child.as_mut().map(|c| c.try_wait()) {
+            Some(Ok(None)) => {
+                // stdout closed but the process lingers: it can no longer say anything, so it goes
+                let c = g.child.as_mut().expect("child checked above");
+                let _ = c.kill();
+                c.wait().ok()
+            }
+            Some(Ok(Some(code))) => Some(code),
+            Some(Err(_)) | None => None,
+        };
+        let why = code.map_or_else(|| "the bridge stopped unexpectedly".to_string(), |c| format!("the bridge stopped unexpectedly ({c})"));
+        eprintln!("omher: {why}");
+        stop_locked(g);
+        let lived = g.ready_at.map_or(Duration::ZERO, |t| t.elapsed());
+        self.revive_locked(g, lived, why, false);
+        true
+    }
+
+    /// Start the bridge again after [`revive_plan`]'s wait, or show `why` once it gives up. An install in progress
+    /// holds the revive until it ends. `launch_error` keeps a failed launch's own message (so a Hermes that went
+    /// missing still offers the install screen).
+    fn revive_locked(self: &Arc<Self>, g: &mut Inner, lived: Duration, why: String, launch_error: bool) {
+        g.ready_at = None;
+        g.generation += 1;
+        if g.held {
+            eprintln!("omher: {why}; the installer is running, so the bridge starts again when it ends");
+            g.died_while_held = true;
+            g.phase = Phase::Starting;
+            return;
+        }
+        let (streak, delay) = revive_plan(g.streak, lived);
+        g.streak = streak;
+        match delay {
+            Some(delay) => {
+                eprintln!("omher: starting the bridge again in {} ms ({streak} in a row)", delay.as_millis());
+                g.phase = Phase::Starting;
+                self.spawn_launch(g.generation, delay);
+            }
+            None if launch_error => g.phase = Phase::Failed(why),
+            None => g.phase = Phase::Failed(format!("{why}; it stopped {streak} times in a row, so omher stopped starting it")),
+        }
+    }
+
+    /// The installer is about to run: a bridge that stops while it runs is not started again until it ends.
+    pub fn hold(&self) {
+        self.inner.lock().unwrap().held = true;
+    }
+
+    /// The installer ended without starting the bridge: one that stopped meanwhile is started again now.
+    pub fn release(self: &Arc<Self>) {
+        let generation = {
+            let mut g = self.inner.lock().unwrap();
+            g.held = false;
+            if !std::mem::take(&mut g.died_while_held) {
+                return;
+            }
+            g.streak = 0;
+            g.generation
+        };
+        self.spawn_launch(generation, Duration::ZERO);
     }
 
     fn launch(self: &Arc<Self>, generation: u64, resource_dir: Option<&Path>) -> Result<(), String> {
@@ -485,7 +641,9 @@ impl Bridge {
                     me.remember_media(path);
                 }
             }
-            if !sent {
+            if sent {
+                me.died(generation);
+            } else {
                 let _ = tx.send(Err(()));
             }
         });
@@ -521,6 +679,7 @@ impl Bridge {
             if matches!(phase, Phase::Failed(_)) {
                 stop_locked(&mut g);
             }
+            g.ready_at = matches!(phase, Phase::Ready { .. }).then(Instant::now);
             g.phase = phase;
         }
         self.changed.notify_all();
@@ -558,30 +717,31 @@ impl Bridge {
         self.served.lock().unwrap().contains(path)
     }
 
-    pub fn status(&self) -> BridgeStatus {
+    pub fn status(self: &Arc<Self>) -> BridgeStatus {
         let mut g = self.inner.lock().unwrap();
-        // A bridge that died after it was ready is a failure the person should see.
-        if matches!(g.phase, Phase::Ready { .. }) {
-            if let Some(child) = g.child.as_mut() {
-                if let Ok(Some(code)) = child.try_wait() {
-                    g.phase = Phase::Failed(format!("the bridge stopped unexpectedly ({code})"));
-                    g.child = None;
-                    g.stdin = None;
-                }
-            }
-        }
-        match &g.phase {
+        // A bridge that died after it was ready is started again (or, after too many quick deaths, shown).
+        let changed = self.check_alive_locked(&mut g);
+        let status = match &g.phase {
             Phase::Starting => BridgeStatus::of("starting", None),
             Phase::Ready { .. } => BridgeStatus::of("ready", None),
             Phase::Failed(e) => BridgeStatus::of("failed", Some(e.clone())),
+        };
+        drop(g);
+        if changed {
+            self.changed.notify_all();
         }
+        status
     }
 
-    /// The loopback URL once ready; waits (bounded) while the bridge is still starting.
-    pub fn url(&self, wait: Duration) -> Result<String, String> {
+    /// The loopback URL once ready; waits (bounded) while the bridge is still starting. Never the port of a bridge
+    /// that already exited: that one is started again and the URL waits for it.
+    pub fn url(self: &Arc<Self>, wait: Duration) -> Result<String, String> {
         let deadline = Instant::now() + wait;
         let mut g = self.inner.lock().unwrap();
         loop {
+            if self.check_alive_locked(&mut g) {
+                self.changed.notify_all();
+            }
             match &g.phase {
                 Phase::Ready { port } => return Ok(bridge_ws_url(*port, &g.token)),
                 Phase::Failed(e) => return Err(e.clone()),
@@ -596,11 +756,30 @@ impl Bridge {
         }
     }
 
+    /// A ready bridge whose child has exited is handled as a death now, before its stdout reader notices.
+    fn check_alive_locked(self: &Arc<Self>, g: &mut Inner) -> bool {
+        let exited = matches!(g.phase, Phase::Ready { .. }) && g.child.as_mut().is_some_and(|c| matches!(c.try_wait(), Ok(Some(_))));
+        exited && self.died_locked(g)
+    }
+
     #[cfg(test)]
     fn set_ready_for_test(&self, port: u16, token: &str) {
         let mut g = self.inner.lock().unwrap();
         g.phase = Phase::Ready { port };
         g.token = token.into();
+    }
+
+    /// Ready on `port` with `child` as the bridge, after `streak` quick deaths; returns its generation.
+    #[cfg(test)]
+    fn set_child_for_test(&self, port: u16, child: Child, streak: u32) -> u64 {
+        let mut g = self.inner.lock().unwrap();
+        g.generation += 1;
+        g.phase = Phase::Ready { port };
+        g.token = "tok".into();
+        g.child = Some(child);
+        g.ready_at = Some(Instant::now());
+        g.streak = streak;
+        g.generation
     }
 }
 
@@ -1029,5 +1208,177 @@ mod tests {
         assert_eq!(b.url(Duration::from_millis(20)).unwrap(), "ws://127.0.0.1:9/?token=tok");
         b.stop();
         assert_eq!(b.status().state, "failed");
+    }
+
+    /// A child that has already exited with code 3 (reaped, so `try_wait` reports it at once).
+    fn exited_child() -> Child {
+        let mut cmd = if cfg!(windows) { Command::new("cmd") } else { Command::new("sh") };
+        cmd.args(if cfg!(windows) { ["/C", "exit 3"] } else { ["-c", "exit 3"] });
+        let mut child = cmd.stdin(Stdio::null()).stdout(Stdio::null()).stderr(Stdio::null()).spawn().unwrap();
+        child.wait().unwrap();
+        child
+    }
+
+    /// A child that keeps running until it is killed.
+    fn live_child() -> Child {
+        let mut cmd = if cfg!(windows) { Command::new("cmd") } else { Command::new("sh") };
+        cmd.args(if cfg!(windows) { ["/C", "ping -n 30 127.0.0.1 >NUL"] } else { ["-c", "sleep 30"] });
+        cmd.stdin(Stdio::null()).stdout(Stdio::null()).stderr(Stdio::null()).spawn().unwrap()
+    }
+
+    #[test]
+    fn revive_waits_double_each_quick_death_and_gives_up_after_five() {
+        let quick = Duration::from_secs(1);
+        let mut streak = 0;
+        let mut waits = Vec::new();
+        loop {
+            let (next, wait) = revive_plan(streak, quick);
+            streak = next;
+            match wait {
+                Some(w) => waits.push(w.as_millis()),
+                None => break,
+            }
+        }
+        assert_eq!(waits, [500, 1000, 2000, 4000, 8000]);
+        assert_eq!(streak, MAX_QUICK_DEATHS + 1);
+    }
+
+    #[test]
+    fn a_long_life_starts_the_quick_death_count_again() {
+        assert_eq!(revive_plan(3, Duration::ZERO), (4, Some(Duration::from_secs(4))));
+        assert_eq!(revive_plan(u32::MAX - 1, Duration::ZERO).1, None);
+        // a bridge that ran a while before dying is revived at the first wait, however many died before it
+        assert_eq!(revive_plan(MAX_QUICK_DEATHS, STEADY_LIFE), (1, Some(Duration::from_millis(500))));
+        assert_eq!(revive_plan(MAX_QUICK_DEATHS, STEADY_LIFE * 10), (1, Some(Duration::from_millis(500))));
+        assert_eq!(revive_plan(MAX_QUICK_DEATHS, STEADY_LIFE - Duration::from_millis(1)).1, None);
+    }
+
+    #[test]
+    fn url_never_hands_out_the_port_of_a_bridge_that_exited() {
+        let b = Bridge::new();
+        let gen = b.set_child_for_test(9, exited_child(), 0);
+        // the dead bridge is noticed on use: the URL waits for the revive instead of naming port 9
+        assert_eq!(b.url(Duration::from_millis(20)), Err("the bridge is still starting".to_string()));
+        assert_eq!(b.status(), BridgeStatus::of("starting", None));
+        {
+            let g = b.inner.lock().unwrap();
+            assert!(g.child.is_none(), "the dead child is reaped");
+            assert_eq!(g.streak, 1);
+            assert!(g.generation > gen, "the revive runs as a new generation");
+        }
+        // the app quits before the revive's 500 ms wait ends: nothing starts
+        b.stop();
+        assert_eq!(b.status().state, "failed");
+    }
+
+    #[test]
+    fn a_crash_loop_ends_in_the_failure_the_gate_shows() {
+        let b = Bridge::new();
+        b.set_child_for_test(9, exited_child(), MAX_QUICK_DEATHS);
+        let status = b.status();
+        assert_eq!(status.state, "failed");
+        let error = status.error.unwrap();
+        assert!(error.starts_with("the bridge stopped unexpectedly ("), "{error}");
+        assert!(error.ends_with("it stopped 6 times in a row, so omher stopped starting it"), "{error}");
+        assert_eq!(b.url(Duration::from_millis(20)), Err(error));
+    }
+
+    #[test]
+    fn a_live_bridge_keeps_its_url() {
+        let b = Bridge::new();
+        b.set_child_for_test(9, live_child(), 0);
+        assert_eq!(b.url(Duration::from_millis(20)).unwrap(), "ws://127.0.0.1:9/?token=tok");
+        assert_eq!(b.status().state, "ready");
+        b.stop();
+    }
+
+    #[test]
+    fn a_bridge_the_app_stopped_is_not_started_again() {
+        let b = Bridge::new();
+        let gen = b.set_child_for_test(9, live_child(), 0);
+        b.stop();
+        // the stopped child's stdout reader reports its end afterwards: it belongs to a generation the app ended
+        b.died(gen);
+        assert_eq!(b.status(), BridgeStatus::of("failed", Some("the bridge was stopped".into())));
+        assert_eq!(b.inner.lock().unwrap().streak, 0);
+    }
+
+    #[test]
+    fn a_bridge_that_dies_while_the_installer_runs_waits_for_it() {
+        let b = Bridge::new();
+        b.set_child_for_test(9, exited_child(), 0);
+        b.hold();
+        assert_eq!(b.status().state, "starting", "no failure shows while the installer runs");
+        let g = b.inner.lock().unwrap();
+        assert!(g.died_while_held);
+        assert_eq!(g.streak, 0, "no revive was planned");
+        assert!(g.child.is_none());
+    }
+
+    #[test]
+    fn a_revive_due_after_the_installer_started_waits_for_it() {
+        let b = Bridge::new();
+        b.set_child_for_test(9, exited_child(), 0);
+        assert_eq!(b.status().state, "starting", "the revive is planned for 500 ms from now");
+        b.hold();
+        thread::sleep(Duration::from_millis(900));
+        {
+            let g = b.inner.lock().unwrap();
+            assert!(g.died_while_held, "the planned revive left the bridge to the installer's end");
+            assert!(g.child.is_none(), "nothing started while the installer runs");
+        }
+        b.stop();
+    }
+
+    /// The whole loop on a stand-in for Hermes' Python (a sh script, so Unix only): the first bridge is ready on
+    /// port 40001 and exits; omher notices through its stdout, starts it again, and hands out 40002.
+    #[cfg(unix)]
+    #[test]
+    fn a_bridge_that_exits_after_ready_comes_back_on_a_new_port() {
+        use std::os::unix::fs::PermissionsExt;
+        let dir = std::env::temp_dir().join(format!("omher-bridge-revive-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let py = dir.join("python");
+        let script = r#"#!/bin/sh
+d=$(dirname "$0")
+n=$(cat "$d/count" 2>/dev/null || echo 0); n=$((n+1)); echo $n > "$d/count"
+echo "OMHER_BRIDGE_READY {\"port\": $((40000+n))}"
+if [ $n -eq 1 ]; then sleep 0.3; exit 7; fi
+cat >/dev/null
+"#;
+        std::fs::write(&py, script).unwrap();
+        std::fs::set_permissions(&py, std::fs::Permissions::from_mode(0o755)).unwrap();
+        // the only test that reads the real environment's OMHER_HERMES_PYTHON; the others inject theirs
+        std::env::set_var("OMHER_HERMES_PYTHON", &py);
+        let b = Bridge::new();
+        b.start(None);
+        let first = b.url(Duration::from_secs(5)).unwrap();
+        assert!(first.starts_with("ws://127.0.0.1:40001/?token="), "{first}");
+        let deadline = Instant::now() + Duration::from_secs(10);
+        let second = loop {
+            match b.url(Duration::from_secs(2)) {
+                Ok(u) if u.starts_with("ws://127.0.0.1:40002/") => break u,
+                _ if Instant::now() > deadline => panic!("the bridge did not come back: {:?}", b.status()),
+                _ => thread::sleep(Duration::from_millis(50)),
+            }
+        };
+        assert_ne!(first.split("token=").nth(1), second.split("token=").nth(1), "a new token with the new port");
+        assert_eq!(b.status().state, "ready");
+        assert_eq!(b.inner.lock().unwrap().streak, 1);
+        b.stop();
+        std::env::remove_var("OMHER_HERMES_PYTHON");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn the_stdout_reader_reports_a_death_once() {
+        let b = Bridge::new();
+        let gen = b.set_child_for_test(9, exited_child(), 0);
+        b.died(gen);
+        let after = b.inner.lock().unwrap().generation;
+        b.died(gen); // the second report (or a stale one) changes nothing
+        assert_eq!(b.inner.lock().unwrap().generation, after);
+        assert_eq!(b.inner.lock().unwrap().streak, 1);
+        b.stop();
     }
 }

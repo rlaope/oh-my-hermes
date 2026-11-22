@@ -103,6 +103,21 @@ export function appendLine(lines: string[], text: string, max = MAX_LINES): stri
   return next.length > max ? next.slice(next.length - max) : next;
 }
 
+/** Where the gate stands: `boot` (the app has not been up yet: the screen alone), `up` (the app shows; a bridge that
+ *  died is being started again and the chats say they are reconnecting), `down` (the shell gave up after the app was up:
+ *  the screen covers the app, which stays mounted with its terminals, until the bridge is ready again). */
+export type GateMode = "boot" | "up" | "down";
+
+export function gateMode(prev: GateMode, state: BridgeState["state"] | undefined): GateMode {
+  if (state === "ready") return "up";
+  if (prev === "up" && state === "failed") return "down";
+  return prev;
+}
+
+/** How often the gate asks the shell: often while the bridge is not up, then every couple of seconds so a bridge that
+ *  dies later (and a shell that gives up on starting it again) is seen without a restart. */
+export const pollMs = (ready: boolean) => (ready ? 2000 : 500);
+
 export function BridgeGate({ children }: { children: ReactNode }) {
   const [status, setStatus] = useState<BridgeState | null>(hasShell() ? null : { state: "ready" });
   const [retrying, setRetrying] = useState(false);
@@ -126,24 +141,30 @@ export function BridgeGate({ children }: { children: ReactNode }) {
   }, []);
 
   const running = install === "running";
+  const ready = status?.state === "ready";
   useEffect(() => {
-    if (!hasShell() || status?.state === "ready" || running) return;
+    if (!hasShell() || running) return;
     let alive = true;
     const poll = async () => {
       try {
         const s = await (await shell()).status();
-        if (alive) setStatus(s);
+        // the same answer keeps the same object: a steady "ready" every 2 s re-renders nothing
+        if (alive) setStatus((prev) => (prev && prev.state === s.state && prev.error === s.error && prev.missing === s.missing ? prev : s));
       } catch (e) {
         if (alive) setStatus({ state: "failed", error: String(e) });
       }
     };
-    void poll();
-    const h = setInterval(poll, 500);
+    if (!ready) void poll();
+    const h = setInterval(poll, pollMs(ready));
     return () => {
       alive = false;
       clearInterval(h);
     };
-  }, [status?.state === "ready", running, shell]);
+  }, [ready, running, shell]);
+
+  const [mode, setMode] = useState<GateMode>("boot");
+  const nextMode = gateMode(mode, status?.state);
+  if (nextMode !== mode) setMode(nextMode);
 
   const needsHermes = status?.state === "failed" && status.missing === "hermes";
 
@@ -201,11 +222,23 @@ export function BridgeGate({ children }: { children: ReactNode }) {
     }
   }, [shell]);
 
-  if (status?.state === "ready") return <>{children}</>;
+  if (nextMode === "up") return <>{children}</>;
+  // after the app was up, the screen covers it instead of replacing it: open chats and terminals stay mounted
+  const over = nextMode === "down";
+  const cover = (screen: ReactNode) =>
+    over ? (
+      <>
+        {children}
+        {screen}
+      </>
+    ) : (
+      screen
+    );
+  const gateClass = over ? "gate gate--over" : "gate";
 
   if (needsHermes || install !== "idle") {
-    return (
-      <div className="gate" data-testid="bridge-gate" data-state="setup">
+    return cover(
+      <div className={gateClass} data-testid="bridge-gate" data-state="setup">
         <div className="gate-box gate-setup" data-testid="setup-screen">
           <img className="gate-mark" src={mark} alt="" width={44} height={44} />
           <div className="gate-head" data-testid="setup-head">
@@ -284,13 +317,13 @@ export function BridgeGate({ children }: { children: ReactNode }) {
             </p>
           )}
         </div>
-      </div>
+      </div>,
     );
   }
 
   const failed = status?.state === "failed";
-  return (
-    <div className="gate" data-testid="bridge-gate" data-state={status?.state ?? "starting"}>
+  return cover(
+    <div className={gateClass} data-testid="bridge-gate" data-state={status?.state ?? "starting"}>
       <div className="gate-box">
         <div className="gate-title">{failed ? t("gate.unreachable") : t("gate.starting")}</div>
         {failed && (
@@ -304,6 +337,6 @@ export function BridgeGate({ children }: { children: ReactNode }) {
           </>
         )}
       </div>
-    </div>
+    </div>,
   );
 }
