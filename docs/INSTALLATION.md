@@ -1373,8 +1373,9 @@ wake pipe on real Windows pipes.
   The prompt keeps the `[Image #N]` labels in its text so the model can name
   them, and the transcript lists under it each image Hermes accepted for it
   (`⎿  [Image #1]`), with a small preview under each: real pixels on kitty,
-  Ghostty and Otty at truecolor, coloured half-blocks elsewhere (tmux, Terminal.app,
-  iTerm2, WezTerm, VS Code), even where Hermes' config names kitty, none under
+  Ghostty, Otty and omher's terminals at truecolor, coloured half-blocks
+  elsewhere (tmux, Terminal.app, iTerm2, WezTerm, VS Code), even where Hermes'
+  config names kitty, none under
   `NO_COLOR`; `display.inline_images: off` in Hermes' config turns it off. The
   prompt waits up to 2 seconds for its previews before it is printed, and
   prints with only the image names when they do not come in time. `/history`
