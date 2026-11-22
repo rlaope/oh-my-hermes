@@ -1234,9 +1234,15 @@ with no file, nothing changes.
 ### Where the file lives
 
 `<omh_home>/routing/executors.toml`, next to `dispatch-models.json` (the
-default home is `~/.omh`; the top-level `--omh-home` flag moves it). OMH reads
-this one path and nothing else: never the repository, its parents or the
-working directory, so a checked-in file cannot become an executor. The file may
+default home is `~/.omh`; the top-level `--omh-home` flag moves it). Without
+`--omh-home`, an explicit top-level `--hermes-home <dir>` selects the OMH store
+that profile's own `config.yaml` names, and `omh coding executors list`,
+`executor-readiness` and dispatch all read that same store, under `--scope user`
+and `--scope project` alike. `--scope project` moves artifacts into the checkout,
+not this file. OMH reads this one path and nothing else: never the repository,
+its parents or the working directory, so a checked-in file cannot become an
+executor, and a `.hermes` directory implied by the checkout is not adopted as the
+Hermes home. The file may
 not be a symlink or resolve outside the home, must be UTF-8, and is read only up
 to 256 KiB.
 
@@ -1353,8 +1359,13 @@ shows what was rejected.
 - **Ids** match `[a-z][a-z0-9-]{1,31}` exactly, with no case folding or aliases. An
   id may not shadow a built-in owner (`codex`, `claude-code`, `hermes`, ...), a
   preset name, `choose`, `unassigned`, `maestro`, `omo-runtime`, `senpi` or `omp`.
-- **No cloud argv.** A local vector that contains `--cloud` or a `cloud`
-  subcommand is refused under any id.
+- **No cloud argv.** `--cloud`, `--cloud=...` or `cloud` as the first argument
+  after the program is refused under any id, in `argv` and in every other
+  fragment: `model`, `effort`, `session.export`, `session.resume` and `version`.
+  The entry is left out of the registry with `cloud_refused`, and a `version`
+  vector that declares cloud is never probed. The argv rendered for the worker is
+  checked the same way and refused as `remote_pr_not_available` before any child
+  starts.
 - **A model or effort the entry cannot carry is refused**, never dropped, so a
   run is never reported as using a model that nothing passed to the CLI.
 
@@ -1377,7 +1388,14 @@ config nor the probe is dispatch evidence.
 An entry that declares `session.export` gets a session receipt per attempt. The
 dispatcher passes the CLI a fresh export path inside that attempt's private
 scratch directory, hashes the file afterwards, and records a bounded
-`fanout_executor_session/v2` receipt. The record format and what it never
+`fanout_executor_session/v2` receipt. The receipt is journaled before the
+post-run Git gates, so a unit those gates then refuse
+(`executor_history_unverified`, `executor_scratch_committed`) still carries
+`executor_session` and `executor_session_status`; the refusal is not hidden by
+the receipt, and the receipt does not make the unit succeed. Those gates require
+that `HEAD` descends from the frozen base (`git merge-base --is-ancestor`) and
+that no scratch path changed between the base and `HEAD`, so a clean merge of
+history from before the base is accepted. The record format and what it never
 holds are in [`FANOUT-EXECUTOR-EVIDENCE.md`](FANOUT-EXECUTOR-EVIDENCE.md#executor-sessions-for-user-executors).
 
 An entry that also declares `session.resume` can continue one session on a

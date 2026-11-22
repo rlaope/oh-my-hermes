@@ -113,7 +113,11 @@ supply nothing.
 | No usable file | `state: not_observed`, no `reference`, no `export_sha256`, and a closed `reason`: `export_missing`, `export_unsafe`, `export_unreadable`, `export_not_object`, `export_duplicate_keys`, `export_oversized`, `export_invalid_utf8`, `export_invalid_json`, `export_too_deep`, `export_changing` or `export_invalid_id` (a `session_id` of any other shape voids the whole file) |
 
 A receipt is written for failed and timed-out attempts too, so a missing export
-shows as `not_observed` instead of as nothing. It carries the same lineage and
+shows as `not_observed` instead of as nothing. It is also recorded before the
+post-run Git gates return: a unit refused with `executor_history_unverified` or
+`executor_scratch_committed` still carries `executor_session` and
+`executor_session_status` and the same receipt is in the journal. The receipt
+describes the export file only; the refusal still fails the unit. It carries the same lineage and
 workspace fields as v1 (executor, `fanout_id`, `unit_id`, `run_ref`,
 `attempt_id`, `predecessor_attempt_id`, `contract_digest`, `worktree_path`,
 `worktree_incarnation`, `base_sha`, `launch_head`, `end_head`,
@@ -126,8 +130,13 @@ workspace fields as v1 (executor, `fanout_id`, `unit_id`, `run_ref`,
 | `resume_reason` | Why this attempt did or did not continue a session (below). |
 
 There is no `event_ref` in v2. The `export_ref` is a historical name, not a
-promise the file is still readable: the scratch directory and the export file are
-removed when the attempt ends.
+promise the file is still readable: when the attempt ends the dispatcher empties
+the scratch directory and removes it. Cleanup works through the directory handle
+opened when the scratch was created, never through the absolute path. If the
+directory was renamed, the original directory is still emptied but stays under its
+new name; if a different entry (such as a symlink) now sits at the original path,
+it is neither followed nor removed. A tool that moved the scratch directory can
+therefore leave an empty directory or its own replacement behind.
 
 ### What is never stored
 
