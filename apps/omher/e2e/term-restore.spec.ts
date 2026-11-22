@@ -1,8 +1,8 @@
 // TERMINALS restore (mock host): a Claude Code terminal starts under an id omher made (`--session-id`), and after
 // omher restarts (a reload with the same storage; the mock host starts empty, as the shell does) it continues that
-// conversation (`--resume <same id>`) in the same folder, once; a Codex terminal asks the shell which conversation its
-// own Codex holds open (5 s after it starts, then every 15 s) and continues it (`codex resume <id>`) the same way; no
-// other terminal's conversation ever comes to it, whatever order Codex writes in or rows close or exit; an agent without its own conversation comes back
+// conversation (`--resume <same id>`) in the same folder, once (one nobody typed in: e2e/term-resume-fail.spec.ts);
+// a Codex terminal asks the shell which conversation its own Codex holds open (5 s after it starts, then every 15 s)
+// and continues it (`codex resume <id>`) the same way; no other terminal's conversation ever comes to it, whatever order Codex writes in or rows close or exit; an agent without its own conversation comes back
 // paused as before. Each terminal's scrollback is kept by the shell (`history.*` calls; the mock keeps it in this
 // page's storage) and written back, dimmed, under a "--- restored <time> ---" line before the new output; closing
 // removes it; Settings > Terminal turns it off. The bottom panel's tabs come back with their folders and scrollback.
@@ -69,6 +69,11 @@ test("a Claude Code terminal starts under an id omher made and continues it afte
   expect(first[0].resume).toBeUndefined();
   const conv = first[0].sessionId!;
   expect(conv).toMatch(UUID4);
+  // the person says something, so Claude Code writes the conversation (it writes nothing before the first message)
+  await page.locator("[data-testid=terminal] .xterm-helper-textarea").last().focus();
+  await page.keyboard.type("hello");
+  await page.keyboard.press("Enter");
+  await expect(page.locator(".xterm-rows").last()).toContainText("you said");
   // the id is kept with the session, and it was running
   await expect.poll(async () => (await saved(page))?.sessions?.find((s: { id: string }) => s.id === id)).toMatchObject({ agent: "claude", agentSession: conv, running: true });
 

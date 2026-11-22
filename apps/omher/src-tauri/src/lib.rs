@@ -749,21 +749,27 @@ async fn session_open_terminal(cwd: String) -> Result<(), String> {
     tauri::async_runtime::spawn_blocking(move || folder_open::open_terminal(&cwd)).await.map_err(|e| e.to_string())?
 }
 
-/// The home a new session of `agent` reads its conversations from: the account picked for new sessions, else the
-/// CLI's own (rule 30).
-fn past_home(agent: &str) -> Result<PathBuf, String> {
+/// The home a session of `agent` reads its conversations from: the account it ran with (`account`), else the account
+/// picked for new sessions, else the CLI's own (rule 30). An `account` whose folder is gone is an error, not another
+/// home: its conversation is not known to be missing, only out of reach.
+fn past_home(agent: &str, account: Option<&str>) -> Result<PathBuf, String> {
     if !past_chats::lists(agent) {
         return Err(format!("{agent} conversations are not listed"));
     }
     let home = user_home()?;
-    let env = accounts::session_env(&home, agent);
+    if let (Some(id), Some(cli)) = (account.filter(|a| *a != "default"), accounts::session_cli(agent)) {
+        if !accounts::account_dir(&home, cli, id).map(|d| d.is_dir() && !d.is_symlink()).unwrap_or(false) {
+            return Err("its account folder is gone".into());
+        }
+    }
+    let env = accounts::session_env_for(&home, agent, account);
     past_chats::cli_home(&home, agent, &env, &|k| std::env::var(k).ok()).ok_or_else(|| "no home".to_string())
 }
 
 /// The recent conversations Claude Code or Codex keeps for `cwds` (the + menu's folders), read-only (rule 30).
 #[tauri::command]
 async fn past_chats_list(agent: String, cwds: Vec<String>) -> Result<Vec<past_chats::PastChat>, String> {
-    tauri::async_runtime::spawn_blocking(move || past_chats::list(&past_home(&agent)?, &agent, &cwds)).await.map_err(|e| e.to_string())?
+    tauri::async_runtime::spawn_blocking(move || past_chats::list(&past_home(&agent, None)?, &agent, &cwds)).await.map_err(|e| e.to_string())?
 }
 
 /// The conversation the Codex in the foreground of TERMINALS session `id` holds open, for the session to continue
@@ -777,10 +783,14 @@ async fn codex_conversation(shell: State<'_, Shell>, id: u32) -> Result<Option<S
         .map_err(|e| e.to_string())?
 }
 
-/// The last messages of one of those conversations, shown before the agent continues it (rule 30).
+/// The last messages of one of those conversations, shown before the agent continues it, or asked before a TERMINALS
+/// Claude Code session continues its own to learn whether Claude Code wrote it, in the home of the account that
+/// session ran with (`account`; rule 30).
 #[tauri::command]
-async fn past_chat_messages(agent: String, id: String, cwd: String) -> Result<Vec<past_chats::PastMsg>, String> {
-    tauri::async_runtime::spawn_blocking(move || past_chats::messages(&past_home(&agent)?, &agent, &id, &cwd)).await.map_err(|e| e.to_string())?
+async fn past_chat_messages(agent: String, id: String, cwd: String, account: Option<String>) -> Result<Vec<past_chats::PastMsg>, String> {
+    tauri::async_runtime::spawn_blocking(move || past_chats::messages(&past_home(&agent, account.as_deref())?, &agent, &id, &cwd))
+        .await
+        .map_err(|e| e.to_string())?
 }
 
 /// How many asks wait on the person, on the Dock icon (macOS) or the launcher entry (Linux desktops that show

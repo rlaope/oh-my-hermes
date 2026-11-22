@@ -26,6 +26,7 @@ import { useSyncExternalStore } from "react";
 import type { ITerminalInitOnlyOptions, ITerminalOptions, Terminal } from "@xterm/xterm";
 import type { FitAddon } from "@xterm/addon-fit";
 import { afterOpen, bracketedPaste, CELLS_EVENT, feed, gpuComing, isParked, live, onVisible, PARKING_EVENT, type Remake } from "./term/engine";
+import { TERM_INPUT_EVENT } from "./term/paste-guard";
 import { onCwd, onProgress } from "./term/engine-marks";
 import { applyLook, termOptions } from "./term/look";
 import { termFontsReady } from "./term/fonts";
@@ -37,7 +38,7 @@ import { getShellHost, learnThisHost } from "../terminal/host";
 import { onSessionFg } from "./fg";
 import { termActs } from "./termActivity";
 import { isLinkId, LINK_COPIED_EVENT, newLinkId, termLinkUrl } from "./termLink";
-import { acpRow, agentDef, agentLabel, continues, draftAgent, draftFolder, draftOpen, hermesOnly, installLine, isBuiltin, isGone, isShell, isTerminalRec, LAST_LINE_MAX, SHELL, termEnd, termMarkAgent, lastPrintedLine, OPEN_KEY, opensAs, parseOpens, parseRecent, pushRecent, RECENT_KEY, registerAcp, sessionMode, termGroups, type AgentId, type AgentInfo, type OpenAs, type Unseen, type Opens, type Recent, type SessionRec } from "./agents";
+import { acpRow, agentDef, agentLabel, continues, draftAgent, draftFolder, draftOpen, hermesOnly, installLine, isBuiltin, isGone, isShell, isTerminalRec, LAST_LINE_MAX, SHELL, termEnd, termMarkAgent, lastPrintedLine, OPEN_KEY, setsUpScreen, UI_BYTES, opensAs, parseOpens, parseRecent, pushRecent, RECENT_KEY, registerAcp, sessionMode, termGroups, type AgentId, type AgentInfo, type OpenAs, type Unseen, type Opens, type Recent, type SessionRec } from "./agents";
 import { NAME_MAX, parseTitles, promptTitle, putTitle, TITLES_KEY } from "./titles";
 import { getDraft, setDraft as setUnsent } from "../app/drafts";
 import { getHost, type ChatEvent, type ChatInput, type PastChat, type SessionHost } from "./host";
@@ -142,8 +143,10 @@ interface Term {
   /** Which program run in this terminal it is (a CLI row goes on as the login shell when its CLI ends): output
    *  drawn after its program was replaced is not acknowledged to the next one. */
   run: number;
-  /** The person typed into the current program: a shell that ends before that, with an error, failed at start. */
-  typed: boolean;
+  /** The person pressed a key or pasted in the current program (not the terminal's own replies to its queries): a
+   *  shell that ends before that, with an error, failed at start; a CLI continuing its conversation that ends before
+   *  that could not continue it (termEnd). */
+  keyed: boolean;
   /** Its row was closed and waits out the undo window (closeGrace.ts): its program runs on, hidden, and takes no
    *  input (keys, bot prompts, dropped files) until Undo puts the row back. */
   held?: boolean;
@@ -1350,6 +1353,20 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
     );
   };
 
+  /** Whether TERMINALS Claude Code session `r`'s conversation was never written. Claude Code writes a conversation on
+   *  its first message, so one started under omher's id (`--session-id`) that nobody typed in has nothing to continue:
+   *  `--resume` would only refuse it. The shell reads that conversation (rule 30) in the home the session runs with
+   *  (its account, as `start` passes it); any answer but "no such conversation" counts as written. */
+  const unwritten = async (r: SessionRec): Promise<boolean> => {
+    if (!r.agentSession) return false;
+    try {
+      await host.pastMessages("claude", r.agentSession, r.cwd, accountOf(r));
+      return false;
+    } catch (e) {
+      return errText(e).includes("no such conversation");
+    }
+  };
+
   /**
    * Start session `id`'s program in its terminal `t`. A Shell row runs the person's login shell; a CLI row runs its
    * CLI and, when that ends, goes on as the login shell in the same terminal (same scrollback, size and folder), so
@@ -1366,7 +1383,7 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
     t.io = io;
     t.hostId = null;
     t.closed = false;
-    t.typed = false;
+    t.keyed = false;
     t.told = null;
     // the terminal view of a chat session does not decide the session's status; the chat does
     const ofChat = sessionMode(state.agents, r) !== "terminal";
@@ -1377,10 +1394,16 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
     // a TERMINALS oh-my-hermes terminal is told its row's link (OMHER_TERMINAL_LINK): `omh` reopens by itself the
     // session it dropped in this terminal (after omher restarted, or on Restart), and no other program is told it
     const link = !ofChat && r.agent === "omh" && isLinkId(r.linkId) ? r.linkId : undefined;
-    const resume = again ? r.agentSession : r.agentSession && ofChat && r.agent === "claude" ? r.agentSession : undefined;
+    let resume = again ? r.agentSession : r.agentSession && ofChat && r.agent === "claude" ? r.agentSession : undefined;
     // any other Claude Code terminal starts a new conversation under an id omher makes, kept (once it started) so a
     // restart continues it
-    const sessionId = !ofChat && !resume && r.agent === "claude" ? newConversationId() : undefined;
+    let sessionId = !ofChat && !resume && r.agent === "claude" ? newConversationId() : undefined;
+    // a Claude Code conversation nobody typed in was never written: it starts again under the same id
+    if (again && r.agent === "claude" && (await unwritten(r))) {
+      if (t.run !== run) return;
+      resume = undefined;
+      sessionId = r.agentSession;
+    }
     // what this terminal showed before omher restarted comes first, dimmed, under a divider (once)
     if (!ofChat && histBack.delete(id)) {
       const back = await restoredText(host, id);
@@ -1419,10 +1442,21 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
       readLine();
     };
     t.el.addEventListener(PARKING_EVENT, lineBeforePark);
+    // a CLI continuing its conversation: whether it set up its screen (termEnd), from its output's start
+    let drew = false;
+    let drawn = 0;
+    let drawTail = "";
+    const drawText = new TextDecoder();
     const onData = (d: Uint8Array | string) => {
       // every message is acknowledged once the terminal has taken it, in order: the shell reads the program
       // no further ahead of the page than its credit allows (to this program only: a replaced one is gone)
       const bytes = typeof d === "string" ? utf8.encode(d).length : d.byteLength;
+      if (resume && !drew) {
+        drawn += bytes;
+        const s = drawTail + (typeof d === "string" ? d : drawText.decode(d, { stream: true }));
+        drew = drawn > UI_BYTES || setsUpScreen(s);
+        drawTail = s.slice(-16); // a sequence split between two messages
+      }
       feed(t.term, d, () => {
         if (t.run !== run) return;
         if (pty === null) owed += bytes;
@@ -1457,7 +1491,7 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
         }
         const label = agentDef(r.agent).label;
         // a CLI that could not continue its conversation keeps it, ended, for Restart (termEnd)
-        const end = termEnd({ ofChat, shell, typed: t.typed, code, resumed: !!resume, ms: Date.now() - began });
+        const end = termEnd({ ofChat, shell, keyed: t.keyed, code, resumed: !!resume, drew, ms: Date.now() - began });
         if (end === "shell") {
           // the CLI ended: the same terminal goes on as the person's login shell in that folder
           feed(t.term, `\r\n\x1b[2m${code ? tr("ss.backToShellExit", { agent: label, code }) : tr("ss.backToShell", { agent: label })}\x1b[0m\r\n`);
@@ -1471,7 +1505,7 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
           return;
         }
         if (!ofChat) {
-          patchRec(id, { status: "exited", exitCode: code });
+          patchRec(id, { status: "exited", exitCode: code, ...(resume && !shell ? { resumeFailed: true } : {}) });
           tellEnd(id, "ended", { code });
         }
         feed(t.term, `\r\n\x1b[2m[${code ? tr("ss.termEndedExit", { agent: label, code }) : tr("ss.termEnded", { agent: label })}]\x1b[0m\r\n`);
@@ -1615,10 +1649,13 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
         settle: null,
         io: isShell(rec(id)?.agent) ? getShellHost() : host,
         run: 0,
-        typed: false,
+        keyed: false,
       };
       terms.set(id, t);
       const tt = t;
+      // the person's own keys or paste reached the program (engine-input.ts, paste-guard.ts); the terminal's replies to
+      // a program's queries also go out through onData and are not input
+      el.addEventListener(TERM_INPUT_EVENT, () => (tt.keyed = true));
       // a parked terminal made again: the same options and handlers, at the size it had, where it was
       tt.remake = ({ cols, rows }) => {
         const s = readTermSettings();
@@ -1635,7 +1672,6 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
       const wire = (term: Terminal) => {
         term.onData((d) => {
           if (tt.hostId === null || tt.closed || tt.held) return;
-          tt.typed = true;
           void tt.io.write(tt.hostId, d).catch(() => undefined);
         });
         // the title the program sets (OSC 0/2): the TERMINALS card's second line until it prints a line
@@ -1765,7 +1801,7 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
   const typeAt = async (id: string, text: string) => {
     const t = terms.get(id);
     if (!t || t.hostId === null || t.closed || t.held) return;
-    t.typed = true;
+    t.keyed = true;
     await t.io.write(t.hostId, text);
     t.term.focus();
   };
@@ -1871,7 +1907,7 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
       if (t && !t.closed) return;
       disposeTerm(id);
       termRuns.set(id, (termRuns.get(id) ?? 0) + 1);
-      patchRec(id, { status: "starting", error: undefined, exitCode: null, view: "terminal", paused: undefined });
+      patchRec(id, { status: "starting", error: undefined, exitCode: null, view: "terminal", paused: undefined, resumeFailed: undefined });
       return;
     }
     if (procs.has(id) || sessionMode(state.agents, r) !== "chat") return;
@@ -1880,6 +1916,15 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
     patchLive(id, { signin: undefined });
     note(id, null);
     await startAgentChat(id, resume);
+  };
+
+  /** Start an ended TERMINALS session whose CLI could not continue its conversation (the conversation or its account
+   *  folder is gone) as a new conversation, in the same folder and account: the old id and the agent's title for it
+   *  go first. */
+  const startFresh = async (id: string) => {
+    if (!rec(id)?.resumeFailed) return;
+    patchRec(id, { agentSession: undefined, agentTitle: undefined, resumeFailed: undefined });
+    await restart(id);
   };
 
   /**
@@ -2381,6 +2426,7 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
     rename,
     moveRow,
     restart,
+    startFresh,
     resume,
     restore,
     send,

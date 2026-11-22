@@ -32,9 +32,13 @@ All notable changes will be documented here.
 - **omher: a terminal that cannot continue its conversation keeps it.** A Claude Code or Codex terminal continues its
   conversation after omher restarts. When that CLI ended at once (the conversation, its account folder or the login
   was gone) the row turned into a Shell and dropped the conversation id, and when the CLI was missing, Restart started
-  a new conversation over the old id. Now the row stays Claude Code or Codex, ended or failed, with the same id, and
-  Restart continues that conversation. A new Claude Code terminal keeps its id only once its CLI started. A continued
-  CLI you used and then exited still goes on as the login shell. (apps/omher `sessions/sessions.ts`, `termEnd`)
+  a new conversation over the old id. Now a continued CLI that ends at once (before you press a key, and before it
+  draws its screen or within 1.8 s) leaves the row Claude Code or Codex, ended or failed, with the same id: Restart
+  continues that conversation, and "Start a new conversation" is the way out when it is gone for good. A Claude Code
+  terminal nobody typed in has no conversation on disk, so after a restart it starts again under the same id instead
+  of failing. A new Claude Code terminal keeps its id only once its CLI started. Only a CLI that ends at once is kept: a continued CLI you used and
+  then exited goes on as the login shell without its id, and so does one that waited for input (a login) and was left
+  later. (apps/omher `sessions/sessions.ts`, `termEnd`)
 
 - **omher reads more naturally in Korean.** A pass over the Korean UI copy: one register (해요체) on every screen
   instead of 합니다체 in some hints and dialogs, `shell` instead of `셸`, and literal translations replaced with what

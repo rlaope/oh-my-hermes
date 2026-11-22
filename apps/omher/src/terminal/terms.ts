@@ -178,7 +178,7 @@ async function start(key: number, p: PanelTerm, want: string | null, restored: b
         setPaneFg(key, null);
         // as a TERMINALS shell: one that ends (exit, Ctrl+D, any code once the person typed) closes its pane and the
         // pane beside it takes the room; one that ended with an error before any typing stays, saying so
-        if (termEnd({ ofChat: false, shell: true, typed: p.typed, code }) === "close") closePane(key);
+        if (termEnd({ ofChat: false, shell: true, keyed: p.typed, code }) === "close") closePane(key);
         else feed(p.term, `\r\n\x1b[2m[${code ? t("termpanel.endedCode", { code }) : t("termpanel.ended")}]\x1b[0m\r\n`);
       },
     )

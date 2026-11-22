@@ -110,8 +110,9 @@ export interface SessionHost extends HistoryHost {
   openTerminal(cwd: string): Promise<void>;
   /** The recent conversations `agent` keeps for `cwds`, newest first (read-only). */
   pastChats(agent: "claude" | "codex", cwds: string[]): Promise<PastChat[]>;
-  /** The last messages of `agent`'s conversation `id` in `cwd`. */
-  pastMessages(agent: "claude" | "codex", id: string, cwd: string): Promise<PastMsg[]>;
+  /** The last messages of `agent`'s conversation `id` in `cwd`, in the home of `account` (a session's saved account,
+   *  while its folder exists; none = the account new sessions use). */
+  pastMessages(agent: "claude" | "codex", id: string, cwd: string, account?: string): Promise<PastMsg[]>;
   /** The conversation the Codex in the foreground of terminal session `id` (its pty) holds open: the UUID of the
    *  rollout that process keeps open in its Codex home, or null while it holds none (rule 11; only the id comes back). */
   codexConversation?(id: number): Promise<string | null>;
@@ -254,9 +255,9 @@ export class TauriHost implements SessionHost {
     const { invoke } = await this.core();
     return invoke<PastChat[]>("past_chats_list", { agent, cwds });
   }
-  async pastMessages(agent: "claude" | "codex", id: string, cwd: string) {
+  async pastMessages(agent: "claude" | "codex", id: string, cwd: string, account?: string) {
     const { invoke } = await this.core();
-    return invoke<PastMsg[]>("past_chat_messages", { agent, id, cwd });
+    return invoke<PastMsg[]>("past_chat_messages", { agent, id, cwd, account: account ?? null });
   }
   async codexConversation(id: number) {
     const { invoke } = await this.core();
@@ -501,7 +502,24 @@ const MOCK_PAST_MSGS: Record<string, PastMsg[]> = {
 export class MockHost implements SessionHost {
   readonly kind = "mock" as const;
   private next = 0;
-  private live = new Map<number, { agent: string; line: string; out: (d: string) => void; exit: (c: number | null) => void }>();
+  private live = new Map<number, { agent: string; line: string; out: (d: string) => void; exit: (c: number | null) => void; conv?: string }>();
+  /** The Claude Code conversations the mock's terminals named (`--session-id`), by id: their folder, and the first
+   *  line typed in them once one was (Claude Code writes a conversation on its first message). In this page's storage,
+   *  so they outlive a reload as Claude Code's files outlive omher (`__omherMockClaudeConvs`). */
+  private convs(): Record<string, { cwd: string; text?: string }> {
+    try {
+      return JSON.parse(localStorage.getItem("__omherMockClaudeConvs") || "{}");
+    } catch {
+      return {};
+    }
+  }
+  private putConvs(c: Record<string, { cwd: string; text?: string }>) {
+    try {
+      localStorage.setItem("__omherMockClaudeConvs", JSON.stringify(c));
+    } catch {
+      /* no storage */
+    }
+  }
   constructor(private g: MockGlobals = globalThis as MockGlobals) {}
 
   private log(c: MockCall) {
@@ -625,19 +643,28 @@ export class MockHost implements SessionHost {
     const id = nextMockPty();
     this.log({ op: "start", id, agent, cwd, cols, rows, ...(resume ? { resume } : {}), ...(sessionId ? { sessionId } : {}), ...(link ? { link } : {}), ...(account ? { account } : {}) });
     if (this.g.__omherMockMissing?.includes(agent)) throw new Error(`${agentDef(agent).label} is not installed (no \`${agentDef(agent).program}\` found)`);
-    const gone = !!resume && !!this.g.__omherMockGoneConversations?.includes(resume);
+    // as Claude Code: `--session-id` of a conversation it wrote is refused, `--resume` of one it never wrote too
+    const convs = agent === "claude" ? this.convs() : {};
+    const conv = agent === "claude" ? (resume ?? sessionId) : undefined;
+    const refusal =
+      sessionId && convs[sessionId]?.text !== undefined
+        ? `Error: Session ID ${sessionId} is already in use.`
+        : (resume && convs[resume] && convs[resume].text === undefined) || (resume && this.g.__omherMockGoneConversations?.includes(resume))
+          ? `No conversation found with session ID: ${resume}`
+          : null;
+    if (sessionId && !convs[sessionId]) this.putConvs({ ...convs, [sessionId]: { cwd } });
     // a resumed Codex holds its own conversation's rollout open again
     if (agent === "codex" && resume) (this.g.__omherMockCodexOwn ??= {})[id] = resume;
     const out = (d: string) => {
       (this.g.__omherSessionFlow ??= []).push({ op: "feed", id, bytes: utf8.encode(d).length });
       onData(d);
     };
-    this.live.set(id, { agent, line: "", out, exit: onExit });
+    this.live.set(id, { agent, line: "", out, exit: onExit, ...(conv ? { conv } : {}) });
     mockPtyOut(id, out);
     setTimeout(() => {
-      if (!gone) return out(`${banner(agent)}\r\n\x1b[2m  ${agentDef(agent).program} in ${cwd}\x1b[0m\r\n\r\n${PROMPT}`);
+      if (refusal === null) return out(`${banner(agent)}\r\n\x1b[2m  ${agentDef(agent).program} in ${cwd}\x1b[0m\r\n\r\n${PROMPT}`);
       if (this.live.get(id)?.out !== out) return;
-      out(`No conversation found with session ID: ${resume}\r\n`);
+      out(`${refusal}\r\n`);
       this.live.delete(id);
       onExit(1);
     }, 30);
@@ -655,6 +682,11 @@ export class MockHost implements SessionHost {
       if (ch === "\r") {
         const line = s.line.trim();
         s.line = "";
+        // Claude Code writes its conversation on the first message
+        if (s.conv && line && line !== "/exit") {
+          const c = this.convs();
+          if (c[s.conv] && c[s.conv].text === undefined) this.putConvs({ ...c, [s.conv]: { ...c[s.conv], text: line } });
+        }
         // `exit`, or a CLI's own `/exit` command, ends the program
         if (line === "exit" || line === "/exit") {
           s.out("\r\n");
@@ -834,6 +866,11 @@ export class MockHost implements SessionHost {
   }
   async pastMessages(agent: "claude" | "codex", id: string, cwd: string) {
     (this.g.__omherPastReads ??= []).push({ op: "read", agent, id, cwd });
+    const mine = agent === "claude" ? this.convs()[id] : undefined;
+    if (mine) {
+      if (mine.text === undefined || mine.cwd !== cwd) throw new Error("no such conversation");
+      return [{ role: "user" as const, text: mine.text, ts: 0 }];
+    }
     const c = (this.g.__omherPastChats ?? MOCK_PAST).find((x) => x.agent === agent && x.id === id && x.cwd === cwd);
     if (!c) throw new Error("no such conversation");
     return MOCK_PAST_MSGS[id] ?? [{ role: "user" as const, text: c.title, ts: c.at }];

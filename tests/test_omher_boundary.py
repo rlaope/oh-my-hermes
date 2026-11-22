@@ -303,9 +303,17 @@ RULES = (
     " kept or sent anywhere.",
     "a new Claude Code terminal gets `--session-id <id>`, a random UUID omher makes and keeps with the session once its"
     " CLI started,",
-    "Restart on such a session that has ended continues it the same way. A CLI started to continue its conversation that"
-    " ends before anything was typed or within 10 seconds, or cannot start, could not continue it: its row keeps its"
-    " agent and that id and shows it ended or failed, instead of going on as the login shell.",
+    "Restart on a TERMINALS Claude Code or Codex session that has ended and has its conversation id continues it the"
+    " same way.",
+    "A Claude Code conversation that Claude Code never wrote (it writes one on the first message, so nobody typed in it;"
+    " rule 30's read finds no file for it) is not continued: its terminal starts again with `--session-id` and the same id.",
+    "A CLI started to continue its conversation that ends at once, before the person pressed a key or pasted and either"
+    " before it set up its screen (the alternate screen, bracketed paste, focus reports or Kitty keyboard flags turned"
+    " on, or 2 KB of output) or within 1.8 seconds of being started, or that cannot start, could not continue it: its"
+    " row keeps its agent and that id and shows it ended or failed instead of going on as the login shell, and an ended"
+    " one also offers Start a new conversation, which forgets the id and starts the agent as a new terminal does.",
+    "A continued CLI that ends any other way, one that waited for input (a login) and was left later included, goes on"
+    " as the login shell without its id, as a new one does.",
     "The page sends only the id; the shell (`sessions::terminal_args`) checks it is a UUID, gives `--session-id` to"
     " Claude Code only, never sends both, and refuses every other agent or shape.",
     "omher also listens for three escapes a shell or CLI sends by itself, and puts no hook, script or variable into the"
@@ -2260,7 +2268,7 @@ class PastConversationsAreOnlyRead(unittest.TestCase):
         self.assertIn("never opens a credential, token or config file of either CLI", text)
 
     def test_the_commands_take_only_an_agent_folders_and_an_id(self) -> None:
-        for cmd, params in (("past_chats_list", "agent: String, cwds: Vec<String>"), ("past_chat_messages", "agent: String, id: String, cwd: String"),
+        for cmd, params in (("past_chats_list", "agent: String, cwds: Vec<String>"), ("past_chat_messages", "agent: String, id: String, cwd: String, account: Option<String>"),
                             ("codex_conversation", "shell: State<'_, Shell>, id: u32"),
                             ("session_reveal", "cwd: String"), ("session_open_terminal", "cwd: String"),
                             ("asks_badge", "window: tauri::WebviewWindow, count: u32")):

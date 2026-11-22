@@ -1123,6 +1123,7 @@ export const ja: Record<Key, string> = {
   "ss.restartContinue": "この会話を続けて {agent} を再起動",
   "ss.restartFolder": "このフォルダで新しい会話として {agent} を再起動",
   "ss.restart": "再起動",
+  "ss.freshConversation": "新しい会話を始める",
   "ss.agentEnded": "{agent} は終了しました",
   "ss.model": "モデル",
   "ss.notRunning": "停止中",

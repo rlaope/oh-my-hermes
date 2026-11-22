@@ -1123,6 +1123,7 @@ export const zh: Record<Key, string> = {
   "ss.restartContinue": "重新启动 {agent} 并继续这段对话",
   "ss.restartFolder": "在此文件夹中以新对话重新启动 {agent}",
   "ss.restart": "重新启动",
+  "ss.freshConversation": "开始新对话",
   "ss.agentEnded": "{agent} 已结束",
   "ss.model": "模型",
   "ss.notRunning": "未运行",
