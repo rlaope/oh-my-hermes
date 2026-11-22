@@ -96,8 +96,9 @@ test("tokens typed by hand at the start, middle and end are recognised; prices, 
   await box.press("End");
   await expect(page.getByTestId("skill-picker")).toHaveCount(0); // $nope matches no skill: no popup
   await page.keyboard.press("Enter");
-  await expect.poll(async () => (await sends()).length).toBe(2);
-  expect((await sends())[1]).toBe(plain);
+  // typed while the first answer may still run: sent, or steered into that turn
+  await expect.poll(async () => (await said()).length).toBe(2);
+  expect((await said())[1]).toBe(plain);
   await expect(page.getByTestId("bubble-user").last().getByTestId("bubble-skill")).toHaveCount(0);
 });
 

@@ -50,8 +50,9 @@ test("a sent prompt has a copy control that puts exactly that text on the clipbo
   await expect(user.locator(".b")).toHaveText(PROMPT);
   const copy = user.getByTestId("copy-prompt");
   await expect(copy).toHaveCount(1);
-  // quiet at rest, shown on hover of the message, like the answer's
-  expect(await copy.evaluate((el) => getComputedStyle(el).opacity)).toBe("0");
+  // quiet at rest, shown on hover of the message, like the answer's. Polled: once the bot has it, the read mark
+  // arrives and the button moves beside the bubble, so a read in that instant sees the old, detached element
+  await expect.poll(() => copy.evaluate((el) => getComputedStyle(el).opacity)).toBe("0");
   await user.hover();
   await expect.poll(() => copy.evaluate((el) => getComputedStyle(el).opacity)).toBe("1");
 
