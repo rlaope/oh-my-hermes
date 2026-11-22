@@ -41,7 +41,7 @@ from omh.tui.app import (
 from omh.tui.gateway import Event, Response
 from omh.tui.keys import BACKSPACE, CHAR, DOWN, ENTER, ESCAPE, LEFT, UP, Key, KeyDecoder, Paste
 from omh.tui.theme import DEFAULT_THEME
-from omh.tui.transcript import NOTICE_WARN, UserBlock, block_rows
+from omh.tui.transcript import INTERRUPTED_NOTICE, NOTICE_WARN, AssistantBlock, UserBlock, block_rows
 
 CTRL_V = Key(CHAR, "v", ctrl=True)
 PNG = b"\x89PNG\r\n\x1a\n"
@@ -1071,6 +1071,87 @@ class CutInTests(ImageTestCase):
         self.hermes.pump()
         self.assertEqual(self.methods("session."), ["session.interrupt"])
         self.assertIsNotNone(self.app.cut_in)
+
+
+SENTINEL = "Operation interrupted: waiting for model response (0.6s elapsed)."
+
+
+class QuietCutInTests(ImageTestCase):
+    """A cut-in ends the turn it stopped quietly, as Claude Code's send-now does: no `Interrupted.` notice, no warn
+    row, the partial answer kept; Esc keeps the notice. Hermes' cancellation sentinel never shows as the reply of an
+    interrupted turn, whichever path brings it, and stays inside a longer answer."""
+
+    running = CutInTests.running
+    cut_in = CutInTests.cut_in
+    stopped = CutInTests.stopped
+
+    def replies(self) -> list[str]:
+        return [block.text for block in self.app.transcript.blocks if isinstance(block, AssistantBlock)]
+
+    def test_a_cut_in_ends_the_stopped_turn_with_no_interrupted_notice(self) -> None:
+        self.cut_in()
+        self.stopped()
+        self.assertNotIn(INTERRUPTED_NOTICE, notices(self.app))
+        self.assertEqual(notices(self.app, NOTICE_WARN), [])
+        self.assertEqual(self.methods("prompt.submit"), ["prompt.submit"])  # the cut-in still goes
+
+    def test_a_cut_in_keeps_the_partial_answer_as_streamed(self) -> None:
+        self.cut_in()
+        self.app._on_event(Event("message.delta", SID, {"text": "half an answer"}))
+        self.app._on_event(Event("message.complete", SID, {"text": "half an answer", "status": "interrupted"}))
+        self.hermes.pump()
+        self.assertEqual(self.replies(), ["half an answer"])
+        self.assertNotIn(INTERRUPTED_NOTICE, notices(self.app))
+
+    def test_a_cut_in_whose_turn_ends_on_the_sentinel_shows_no_reply(self) -> None:
+        self.cut_in()
+        self.app._on_event(Event("message.complete", SID, {"text": SENTINEL, "status": "interrupted"}))
+        self.hermes.pump()
+        self.assertEqual(self.replies(), [])
+        self.assertNotIn(SENTINEL, self.screen())
+        self.assertEqual(notices(self.app, NOTICE_WARN), [])
+
+    def test_esc_still_says_interrupted(self) -> None:
+        self.running()
+        self.app._interrupt()
+        self.stopped()
+        self.assertIn(INTERRUPTED_NOTICE, notices(self.app))
+
+    def test_the_sentinel_as_the_final_text_of_a_stopped_turn_is_not_a_reply(self) -> None:
+        self.running()
+        self.app._interrupt()
+        self.app._on_event(Event("message.complete", SID, {"text": SENTINEL, "status": "interrupted"}))
+        self.assertEqual(self.replies(), [])
+        self.assertIn(INTERRUPTED_NOTICE, notices(self.app))
+
+    def test_the_sentinel_streamed_as_the_whole_reply_of_a_stopped_turn_is_taken_back(self) -> None:
+        self.running()
+        self.app._interrupt()
+        self.app._on_event(Event("message.delta", SID, {"text": SENTINEL}))
+        self.app._on_event(Event("message.complete", SID, {"text": "", "status": "interrupted"}))
+        self.assertEqual(self.replies(), [])
+        self.assertNotIn(SENTINEL, self.screen())
+
+    def test_the_sentinel_in_replayed_history_is_not_a_reply(self) -> None:
+        self.app._draw_history([
+            {"role": "user", "text": "look at this"},
+            {"role": "assistant", "text": SENTINEL},
+            {"role": "user", "text": "and this"},
+            {"role": "assistant", "text": f"It said: {SENTINEL} and then I went on."},
+        ])
+        self.assertEqual(self.replies(), [f"It said: {SENTINEL} and then I went on."])
+
+    def test_the_sentinel_inside_a_longer_answer_of_a_stopped_turn_stays(self) -> None:
+        self.running()
+        self.app._interrupt()
+        said = f"Hermes printed `{SENTINEL}` when you stopped it."
+        self.app._on_event(Event("message.complete", SID, {"text": said, "status": "interrupted"}))
+        self.assertEqual(self.replies(), [said])
+
+    def test_the_sentinel_as_the_reply_of_a_turn_that_completed_stays(self) -> None:
+        self.running()
+        self.app._on_event(Event("message.complete", SID, {"text": SENTINEL, "status": "complete"}))
+        self.assertEqual(self.replies(), [SENTINEL])
 
 
 class QueuedImageSendNowTests(ImageTestCase):

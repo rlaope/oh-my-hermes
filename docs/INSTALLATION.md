@@ -1803,7 +1803,9 @@ lines are already queued, which queue as before. Ctrl+Enter on a prompt with
 images stops the turn instead (Hermes takes text alone into a running turn):
 the prompt shows above the working row as a dim prompt and goes, with its
 images, as soon as that turn ends; Esc again gives it back to the composer.
-Its images show under it there, as under any prompt. A steer you sent before
+The stopped turn ends quietly, with no `Interrupted.` notice, as Claude
+Code's send-now does (Esc and `/stop` still say it), and its partial answer
+stays as it streamed. Its images show under it there, as under any prompt. A steer you sent before
 it that the stopped turn had not read yet goes with it, ahead of its text, as
 one prompt, so nothing you sent is dropped or goes out of order.
 A prompt with images that Enter queued gets the same offer: its queue row

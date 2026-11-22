@@ -4467,6 +4467,7 @@ class App(ModesMixin, AgentViewMixin):
                 steer_next = self._settle_steers_at_turn_end() and not self.stop_asked and status != "interrupted"
                 # A stop the person asked for in no way (Esc, `/stop`) is Hermes' own.
                 self.transcript.hermes_interrupted = not (self.interrupting or self.stop_asked)  # `_turn_ended` spends it
+                self.transcript.cut_in_stop = self.cut_in is not None  # a cut-in's stop ends the turn quietly
                 self._note_turn(self._turn_end(payload))
                 self.transcript.hermes_resuming = self._arm_auto_continue(payload)
             self.transcript.apply(event)
