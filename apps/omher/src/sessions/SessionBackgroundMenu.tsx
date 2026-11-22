@@ -1,8 +1,10 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { t } from "../i18n";
 import { openNewSessionMenu } from "./newMenu";
+import { addTermFolder } from "./SessionsSection";
 
-/** A background-only entry to the existing + chooser. Opening the menu starts nothing. */
+/** The TERMINALS background menu: New session (the existing + chooser) and New folder… (the native folder dialog;
+ *  the folder picked becomes a group). Opening the menu starts nothing. */
 export function SessionBackgroundMenu({ at, onClose }: { at: { x: number; y: number; focus: HTMLElement }; onClose: () => void }) {
   const ref = useRef<HTMLDivElement>(null);
   const [position, setPosition] = useState({ x: at.x, y: at.y });
@@ -62,6 +64,18 @@ export function SessionBackgroundMenu({ at, onClose }: { at: { x: number; y: num
         }}
       >
         {t("sessions.new")}
+      </button>
+      <button
+        type="button"
+        role="menuitem"
+        className="row-mi"
+        data-testid="sessions-new-folder"
+        onClick={() => {
+          onClose();
+          void addTermFolder();
+        }}
+      >
+        {t("term.newFolder")}
       </button>
     </div>
   );

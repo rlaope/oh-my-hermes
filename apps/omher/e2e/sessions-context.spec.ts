@@ -34,7 +34,10 @@ test("empty session background opens a pointer menu, reuses the chooser and neve
   await page.getByTestId("bot-search").focus();
   const at = await background(page);
   const menu = page.getByTestId("sessions-context-menu");
+  // the menu's two items: New session, then New folder… (session-folder-create.spec.ts runs the same walk unskipped)
+  await expect(menu.getByRole("menuitem")).toHaveText(["New session", "New folder…"]);
   const item = menu.getByRole("menuitem", { name: "New session", exact: true });
+  const folder = menu.getByRole("menuitem", { name: "New folder…", exact: true });
   await expect(item).toBeFocused();
   const box = (await menu.boundingBox())!;
   expect(Math.abs(box.x - at.x)).toBeLessThanOrEqual(168);
@@ -42,9 +45,15 @@ test("empty session background opens a pointer menu, reuses the chooser and neve
   expect(box.x).toBeGreaterThanOrEqual(6);
   expect(box.x + box.width).toBeLessThanOrEqual(1280 - 6);
   await page.keyboard.press("ArrowDown");
+  await expect(folder).toBeFocused();
   await page.keyboard.press("End");
+  await expect(folder).toBeFocused();
   await page.keyboard.press("Home");
+  await expect(item).toBeFocused();
+  // from the first item, up wraps to the last
   await page.keyboard.press("ArrowUp");
+  await expect(folder).toBeFocused();
+  await page.keyboard.press("ArrowDown");
   await expect(item).toBeFocused();
   expect(await starts(page)).toEqual([]);
   await page.keyboard.press("Escape");
@@ -134,7 +143,7 @@ test("row, rename input, buttons and chooser keep their own context; filter-empt
   await page.getByTestId("bot-search").fill("no-matching-session");
   await expect(page.getByTestId("session-none-match")).toBeVisible();
   await background(page);
-  await expect(page.getByTestId("sessions-context-menu").getByRole("menuitem")).toHaveText("New session");
+  await expect(page.getByTestId("sessions-context-menu").getByRole("menuitem")).toHaveText(["New session", "New folder…"]);
 });
 
 test("background context menu fits a narrow viewport, follows resize and dismisses on Tab", async ({ page }) => {

@@ -1373,8 +1373,9 @@ wake pipe on real Windows pipes.
   The prompt keeps the `[Image #N]` labels in its text so the model can name
   them, and the transcript lists under it each image Hermes accepted for it
   (`⎿  [Image #1]`), with a small preview under each: real pixels on kitty,
-  Ghostty and Otty at truecolor, coloured half-blocks elsewhere (tmux, Terminal.app,
-  iTerm2, WezTerm, VS Code), even where Hermes' config names kitty, none under
+  Ghostty, Otty and omher's terminals at truecolor, coloured half-blocks
+  elsewhere (tmux, Terminal.app, iTerm2, WezTerm, VS Code), even where Hermes'
+  config names kitty, none under
   `NO_COLOR`; `display.inline_images: off` in Hermes' config turns it off. The
   prompt waits up to 2 seconds for its previews before it is printed, and
   prints with only the image names when they do not come in time. `/history`
@@ -1802,7 +1803,9 @@ lines are already queued, which queue as before. Ctrl+Enter on a prompt with
 images stops the turn instead (Hermes takes text alone into a running turn):
 the prompt shows above the working row as a dim prompt and goes, with its
 images, as soon as that turn ends; Esc again gives it back to the composer.
-Its images show under it there, as under any prompt. A steer you sent before
+The stopped turn ends quietly, with no `Interrupted.` notice, as Claude
+Code's send-now does (Esc and `/stop` still say it), and its partial answer
+stays as it streamed. Its images show under it there, as under any prompt. A steer you sent before
 it that the stopped turn had not read yet goes with it, ahead of its text, as
 one prompt, so nothing you sent is dropped or goes out of order.
 A prompt with images that Enter queued gets the same offer: its queue row

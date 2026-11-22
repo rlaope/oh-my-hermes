@@ -1619,6 +1619,21 @@ body.split-dragging .xterm {
   overflow: hidden;
   text-overflow: ellipsis;
 }
+/* an added folder with no session yet: one quiet line where its rows will be, under the folder's name */
+.tg-empty {
+  /* under the folder's name and branch: the header's inset, then its chevron and glyph columns with their gaps */
+  padding: 1px 8px 1px calc(var(--side-x) + 30px);
+  font-size: 11px;
+  line-height: 16px;
+  color: var(--quiet);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+/* the folder is no longer on disk: the same line, in the colour of a row that waits on the person */
+.tg-empty.gone {
+  color: var(--needs);
+}
 /* the first row of a group scrolls into view with its folder header */
 .tg > .tg-h + .ss-row {
   scroll-margin-top: 56px;

@@ -1543,6 +1543,11 @@ export const ko: Record<Key, string> = {
   "term.folderRunning": "{n}개 실행 중",
   "term.folderCount1": "세션 1개",
   "term.folderCountN": "세션 {n}개",
+  "term.newFolder": "새 폴더…",
+  "term.folderRemove": "목록에서 빼기",
+  "term.folderEmpty": "터미널이 없어요 · 우클릭해서 열어요",
+  "term.folderGone": "이 폴더가 더 이상 없어요",
+  "term.folderGoneRan": "{folder} 폴더가 더 이상 없어서 {at}에서 열었어요",
   // spacing: the BOTS | TERMINALS divider
   "side.split": "봇과 터미널 높이 조절",
   "side.splitTip": "끌어서 봇이나 터미널 영역을 넓혀요. 더블클릭하면 자동 크기로 돌아가요.",

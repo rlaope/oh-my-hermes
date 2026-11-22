@@ -64,6 +64,19 @@ class InlineGraphicsTests(unittest.TestCase):
     def test_otty_inside_tmux_is_unicode(self) -> None:
         self.assertEqual(inline_graphics({"TERM_PROGRAM": "otty", "TMUX": "x"}), INLINE_UNICODE)
 
+    def test_omher_is_kitty(self) -> None:
+        # omher's terminal pane: TERM_PROGRAM=omher over an xterm TERM, no kitty variable.
+        self.assertEqual(inline_graphics({"TERM_PROGRAM": "omher", "TERM": "xterm-256color", "COLORTERM": "truecolor"}),
+                         INLINE_KITTY)
+        self.assertEqual(inline_graphics({"TERM_PROGRAM": "OMHER"}), INLINE_KITTY)
+
+    def test_omher_inside_tmux_or_screen_is_unicode(self) -> None:
+        self.assertEqual(inline_graphics({"TERM_PROGRAM": "omher", "TMUX": "x"}), INLINE_UNICODE)
+        self.assertEqual(inline_graphics({"TERM_PROGRAM": "omher", "STY": "x"}), INLINE_UNICODE)
+
+    def test_a_program_named_like_omher_is_not_omher(self) -> None:
+        self.assertEqual(inline_graphics({"TERM_PROGRAM": "omher-dev"}), INLINE_UNICODE)
+
     def test_a_program_named_like_otty_is_not_otty(self) -> None:
         self.assertEqual(inline_graphics({"TERM_PROGRAM": "cotty"}), INLINE_UNICODE)
         self.assertEqual(inline_graphics({"TERM_PROGRAM": "otty-preview"}), INLINE_UNICODE)

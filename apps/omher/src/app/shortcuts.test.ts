@@ -43,3 +43,16 @@ describe("Ctrl+` opens the terminal panel", () => {
     expect(shortcutFor(k("j", "KeyJ", { ctrlKey: true }), false)).toEqual({ kind: "next-ask" });
   });
 });
+
+describe("⌘⇧[ ] step order", () => {
+  it("follows the sidebar: one folder spelled with and without a trailing slash is one group", async () => {
+    const { terminalOrder } = await import("./shortcuts");
+    const rows = [
+      { id: "a", cwd: "/w/app/" },
+      { id: "b", cwd: "/w/other" },
+      { id: "c", cwd: "/w/app" },
+    ];
+    expect(terminalOrder(rows, [])).toEqual(["a", "c", "b"]);
+    expect(terminalOrder(rows, ["/w/other"])).toEqual(["b", "a", "c"]);
+  });
+});

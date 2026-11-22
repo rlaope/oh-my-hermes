@@ -79,6 +79,23 @@ All notable changes will be documented here.
   included) with Retry. A bridge omher stopped itself (quit, Retry) is not started again, and one that stops while
   the installer runs waits for it to end. TERMINALS were never affected. (apps/omher `src-tauri/src/bridge.rs`,
   `src/app/BridgeGate.tsx`)
+- **omher: make a TERMINALS folder from the right-click menu, and see sharp pictures in its terminals.**
+  - **New folder…:** right-clicking empty TERMINALS space (or a folder header) offers New folder… under New
+    session. It opens the system folder dialog, where you can make a new folder or pick one; the folder shows as a
+    group at once, even with no terminal in it, and stays after a restart. A folder you added has Remove from list in
+    its header menu (nothing on disk is touched). One folder is one group however its path is spelled (a trailing
+    `/` no longer makes a second group), and a terminal started in a folder that is gone is listed where it really
+    runs, with "This folder no longer exists" on the old group. ⌘⇧[ ] steps through terminals in the same order.
+  - **Sharp pictures:** omher's terminals now draw kitty Unicode-placeholder images (the form Hermes' TUI and the OMH
+    TUI use for pasted pictures), so a pasted screenshot shows as the picture itself instead of a coarse block
+    mosaic. The layer stays above the GPU renderer, keeps one canvas per terminal, and shares the 32 MB per-terminal
+    picture budget with the other image kinds; Settings › Terminal › Show images turns it off.
+- **OMH TUI: kitty previews inside omher, and a quiet Ctrl+Enter.** Under `TERM_PROGRAM=omher` the OMH TUI asks for
+  kitty previews (tmux and screen keep half-blocks). Ctrl+Enter on a prompt with images during a turn now stops the
+  turn and sends the prompt without an `Interrupted.` notice, like Claude Code's send-now; Hermes' "Operation
+  interrupted: waiting for model response (…)" line never shows as the reply, while it streams, at the end, or in a
+  resumed conversation. Esc and `/stop` still say `Interrupted.`.
+
 - **omher: the Slack briefing opens with a greeting and what it is about.** A brief could open with what the bot did
   or could not do ("could not open the log...") with nothing saying which alert or thread it meant, so the person had
   to guess. The briefing prompt now asks for a short greeting ("안녕하세요." in Korean), then a first line naming the
