@@ -21,7 +21,7 @@ import time
 from tempfile import TemporaryDirectory
 from uuid import uuid4
 from contextlib import ExitStack, nullcontext
-from typing import Any, BinaryIO, Callable, Iterable, Mapping, Sequence
+from typing import Any, BinaryIO, Callable, Collection, Iterable, Mapping, Sequence
 
 from ..runtime.artifacts import append_journal_observation, create_run, show_run
 from ..system.approval_tier import TIER_AUTO_ALLOWED, resolve_approval_tier
@@ -2448,6 +2448,11 @@ def dispatch_fanout(
     # The operator's explicit consent to run a unit, and its checks, with no
     # proven write fence. Off, such a unit is refused before it spawns (#1982).
     allow_unconfined: bool = False,
+    # The invocation half of the remote PR lane's double opt-in. It is plumbed
+    # now and refused immediately: the lane needs a dispatcher network git
+    # fetch that no approved policy covers, so every non-local combination
+    # stops here with `remote_pr_not_available` instead of a local fallback.
+    allow_remote_pr: bool = False,
 ) -> dict[str, Any]:
     # The spawn guard runs before every other check, including the two
     # boundary re-checks below: it is the only one whose whole job is that no
@@ -2497,6 +2502,21 @@ def dispatch_fanout(
     units = preflight["units"]
     order = preflight["order"]
     selected = preflight["selected"]
+    # Before the catalog digest, discovery, readiness or any worktree: a unit
+    # that asked for the remote lane is refused rather than quietly turned
+    # into a local one. `None` leaves every ordinary dispatch untouched.
+    remote_pr_refusal = _remote_pr_lane_refusal(
+        paths,
+        contract,
+        units,
+        order,
+        selected,
+        allow_remote_pr=allow_remote_pr,
+        dry_run=dry_run,
+        base_sha=base_sha,
+    )
+    if remote_pr_refusal is not None:
+        return remote_pr_refusal
     capability_prechecks = preflight["capability_prechecks"]
     invalid_units = preflight["invalid_selected"]
     selected_capability_invalid = bool(invalid_units)
@@ -3885,6 +3905,102 @@ def _commit_recovery_edits(
         "head_sha": head.strip(),
         "paths": shown(committed),
         "left_uncommitted": shown(outside),
+    }
+
+
+def _remote_pr_lane_refusal(
+    paths: OmhPaths,
+    contract: Mapping[str, Any],
+    units: Mapping[str, Mapping[str, Any]],
+    order: Sequence[str],
+    selected: Collection[str],
+    *,
+    allow_remote_pr: bool,
+    dry_run: bool,
+    base_sha: str,
+) -> dict[str, Any] | None:
+    """The refusal for a selected batch that asked for the remote PR lane.
+
+    The lane is not implemented: importing a PR head needs a dispatcher network
+    `git fetch`, and INVARIANT 3 has no approved exception for one. So a unit
+    whose owner entry declares `remote_pr`, and any invocation that passed
+    `--allow-remote-pr`, is refused here -- before discovery, readiness, a
+    worktree or a child -- with the closed reason the module names. Local lanes
+    are untouched: `None` means every selected unit runs exactly as before.
+
+    The registry is read at most once and only when it can matter: a batch of
+    built-ins with no flag cannot opt in, so an ordinary dispatch reads no
+    operator config at all. Reading it spawns and probes nothing.
+    """
+    from .executors import EXECUTOR_PROFILES
+    from .fanout_remote_pr import plan_remote_pr_dispatch
+
+    selected_ids = [unit_id for unit_id in order if unit_id in selected]
+    owners = {
+        unit_id: str(units[unit_id].get("owner") or "choose")
+        for unit_id in selected_ids
+    }
+    could_declare = allow_remote_pr or any(
+        owner not in EXECUTOR_PROFILES and owner != "choose"
+        for owner in owners.values()
+    )
+    if not could_declare:
+        return None
+    entries = getattr(load_executor_registry(paths.omh_home), "entries", None)
+    table = entries if isinstance(entries, Mapping) else {}
+    declared = {
+        unit_id: getattr(table.get(owner), "remote_pr", False) is True
+        for unit_id, owner in owners.items()
+    }
+    refusal = plan_remote_pr_dispatch(
+        entry_remote_pr_by_unit=declared, allow_remote_pr=allow_remote_pr
+    )
+    if refusal is None:
+        return None
+    return _remote_pr_refusal_summary(
+        contract, refusal=refusal, dry_run=dry_run, base_sha=base_sha
+    )
+
+
+def _remote_pr_refusal_summary(
+    contract: Mapping[str, Any],
+    *,
+    refusal: Any,
+    dry_run: bool,
+    base_sha: str,
+) -> dict[str, Any]:
+    """A refused dispatch summary: the same shape, an empty `units` list.
+
+    Shaped like `_depth_refusal_summary` so a wrapper parses one schema either
+    way, with the closed `refusal_reason` and the unit ids that asked. Never
+    persisted for the same reason: nothing ran, and a blank summary would erase
+    the parent run's observed telemetry.
+    """
+    return {
+        "schema_version": FANOUT_DISPATCH_SCHEMA_VERSION,
+        "fanout_id": contract.get("fanout_id", ""),
+        "dry_run": dry_run,
+        "observed_at": utc_now(),
+        "merge_order": [],
+        "units": [],
+        "integration_ready_units": [],
+        "recovery_available_units": [],
+        "auto_merge": False,
+        "refused": True,
+        "refusal_reason": refusal.reason,
+        "remote_pr": {
+            "allow_remote_pr": bool(refusal.allow_remote_pr),
+            "declared_unit_ids": list(refusal.remote_pr_declared_unit_ids),
+            "refused_unit_ids": list(refusal.refused_unit_ids),
+            "claim_boundary": refusal.claim_boundary,
+        },
+        "reason": (
+            "dispatch refused: the opt-in remote PR lane is not implemented "
+            "pending a policy decision, so no cloud executor was launched and "
+            "no unit ran locally in its place"
+        ),
+        "base_sha": base_sha,
+        "claim_boundary": f"{DISPATCH_CLAIM_BOUNDARY} {FANOUT_CLAIM_BOUNDARY}",
     }
 
 
