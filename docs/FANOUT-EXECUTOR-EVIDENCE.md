@@ -114,7 +114,9 @@ supply nothing.
 
 A receipt is written for failed and timed-out attempts too, so a missing export
 shows as `not_observed` instead of as nothing. It is also recorded before the
-post-run Git gates return: a unit refused with `executor_history_unverified` or
+post-run Git gates return. Those gates require that `HEAD` descends from the
+frozen base and that no commit between the base and `HEAD` touches a scratch
+path, even if a later commit removes it. A unit refused with `executor_history_unverified` or
 `executor_scratch_committed` still carries `executor_session` and
 `executor_session_status` and the same receipt is in the journal. The receipt
 describes the export file only; the refusal still fails the unit. It carries the same lineage and

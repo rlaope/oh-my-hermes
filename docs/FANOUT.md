@@ -1394,8 +1394,9 @@ post-run Git gates, so a unit those gates then refuse
 `executor_session` and `executor_session_status`; the refusal is not hidden by
 the receipt, and the receipt does not make the unit succeed. Those gates require
 that `HEAD` descends from the frozen base (`git merge-base --is-ancestor`) and
-that no scratch path changed between the base and `HEAD`, so a clean merge of
-history from before the base is accepted. The record format and what it never
+that no commit between the base and `HEAD` touches a scratch path, even if a
+later commit removes it. A branch that forked before the base can still merge
+cleanly when it changes only ordinary files. The record format and what it never
 holds are in [`FANOUT-EXECUTOR-EVIDENCE.md`](FANOUT-EXECUTOR-EVIDENCE.md#executor-sessions-for-user-executors).
 
 An entry that also declares `session.resume` can continue one session on a
