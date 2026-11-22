@@ -747,10 +747,16 @@ fn run(exe: &Path, argv: &[String], keep: bool) -> Result<Ran, String> {
     run_env(exe, argv, keep, &[], &[])
 }
 
-/// `run`, with `env` added to this one child's environment only (gh_me.rs: `GH_HOST`, and a non-active GitHub
-/// account's token for that one call) and the variables named in `unset` taken out of it. Nothing in `env` is
-/// logged, kept or put in an error line here.
+/// `run`, with `env` added to this one child's environment only (gh_me.rs: `GH_HOST`, and a chosen GitHub account's
+/// token for that one call) and the variables named in `unset` taken out of it. Nothing in `env` is logged, kept or
+/// put in an error line here.
 pub fn run_env(exe: &Path, argv: &[String], keep: bool, env: &[(&str, &str)], unset: &[&str]) -> Result<Ran, String> {
+    run_full(exe, argv, keep, &[], env, unset)
+}
+
+/// `run_env`, with `inherited` set first as if omher itself had been started with it (gh_me.rs's tests: an inherited
+/// token without touching this process's environment), so `unset` takes it out as it would the real one.
+pub(crate) fn run_full(exe: &Path, argv: &[String], keep: bool, inherited: &[(&str, &str)], env: &[(&str, &str)], unset: &[&str]) -> Result<Ran, String> {
     let out = || if keep { Stdio::piped() } else { Stdio::null() };
     let mut cmd = Command::new(exe);
     cmd.args(argv)
@@ -761,6 +767,9 @@ pub fn run_env(exe: &Path, argv: &[String], keep: bool, env: &[(&str, &str)], un
         .env("GH_NO_UPDATE_NOTIFIER", "1")
         .env("GLAB_NO_PROMPT", "1")
         .env("NO_COLOR", "1");
+    for (k, v) in inherited {
+        cmd.env(k, v);
+    }
     for k in unset {
         cmd.env_remove(k);
     }

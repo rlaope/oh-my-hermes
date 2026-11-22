@@ -1300,15 +1300,22 @@ fn command_for(argv: Vec<OsString>, cwd: &Path, path_env: Option<OsString>, acco
 
 /// gh's sign-in as a terminal command: the `gh` found here, the fixed words, the home folder, and the terminal
 /// variables every session gets, with any `GH_TOKEN` / `GITHUB_TOKEN` / enterprise token omher inherited taken out
-/// (gh refuses to sign in while one is set: "The value of the GH_TOKEN environment variable is being used").
+/// (gh refuses to sign in while one is set: "The value of the GH_TOKEN environment variable is being used"), and
+/// gh's debug and pager variables with them.
 pub fn gh_login_command(gh: &Path, args: Vec<String>, home: &Path) -> CommandBuilder {
     let mut argv: Vec<OsString> = vec![gh.as_os_str().to_os_string()];
     argv.extend(args.into_iter().map(OsString::from));
     let mut cmd = command_for(argv, home, None, &[]);
-    for k in crate::gh_me::INHERITED_TOKENS {
+    scrub_gh_env(&mut cmd);
+    cmd
+}
+
+/// Take what gh_me.rs's children never get (`gh_me::SCRUB`: inherited tokens, gh's debug output and pager) out of a
+/// terminal command's environment.
+pub fn scrub_gh_env(cmd: &mut CommandBuilder) {
+    for k in crate::gh_me::SCRUB {
         cmd.env_remove(k);
     }
-    cmd
 }
 
 /// Bytes every session's reader has taken from its PTY, for the bench (`pty_bench.rs`): read minus what the page

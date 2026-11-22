@@ -19,8 +19,7 @@ All notable changes will be documented here.
     change under omher from any shell. The account's own token is read with `gh auth token --hostname <host> --user
     <login>` for each call and passed only as `GH_TOKEN` in that one `gh` call's environment; it is never stored,
     shown, logged or sent, and omher's copy is wiped when the call ends. omher never runs `gh auth switch`, and takes
-    inherited tokens and gh's debug and pager variables out of every gh child (and inherited tokens out of the sign-in
-    tab). The status query must name that account as its viewer, or the account shows "다시 로그인".
+    inherited tokens and gh's debug and pager variables out of every gh child and the sign-in tab. The status query must name that account as its viewer, or the account shows "다시 로그인".
   - **Reads:** four fixed `gh search` argv and one fixed `gh api graphql` query (CI, review decision, mergeability),
     each answer kept 60 seconds per account, read again on window focus, on ⟳ and every 5 minutes; at most 27
     search requests a minute per account (one per 100 rows asked for), and GitHub's rate limit shows "잠시 후 다시"

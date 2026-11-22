@@ -217,7 +217,8 @@ RULES = (
     " account) takes any `GH_TOKEN`, `GITHUB_TOKEN`, `GH_ENTERPRISE_TOKEN` or `GITHUB_ENTERPRISE_TOKEN` omher inherited,"
     " and `GH_DEBUG`, `DEBUG`, `GH_PAGER` and `PAGER`, out of its environment,",
     "When gh's list shows an account changed (made active or not, failing, gone), what was read as it is dropped.",
-    "only a chosen account on the repository's host, github.com, is offered or used, which the shell checks again.",
+    "only a chosen account on the repository's host, github.com, is offered or used for \"이 저장소\", which the shell"
+    " checks again; a \"나\" row's drawer is read as that row's account on that account's own host.",
     "omher never runs `gh auth switch`; only gh's own sign-in of rule 18, which the person runs and answers, makes the"
     " account it signs in gh's active one, as gh always does.",
     "omher never comments, closes, assigns, labels, merges or edits anything on GitHub, GitLab or Linear.",
@@ -2660,8 +2661,12 @@ class GithubMeReadOnly(unittest.TestCase):
         for bad in ("Command::new", "spawn(", "/bin/sh", '"-c"', "std::fs::", "File::", "OpenOptions"):
             self.assertNotIn(bad, self.code, bad)
         # every call goes through tasks.rs's runner (no shell, nothing on stdin, 20 s)
-        # three calls: `auth status --json hosts`, `auth token` (read_token) and every other argv (call)
-        self.assertEqual(self.code.count("run_env("), 3)
+        # one runner call (Me::run, every child without SCRUB) for three uses: `auth status --json hosts`, `auth token`
+        # (read_token) and every other argv (call)
+        self.assertEqual(self.code.count("run_full("), 1)
+        self.assertIn("run_full(exe, argv, true, &inherited, env, &SCRUB)", self.code)
+        self.assertEqual(self.code.count("self.run(&exe") + self.code.count("self.run(exe"), 3)
+        self.assertNotIn("run_env(", self.code)
         # the argv words: reads only, never a sign-out, a switch, a write verb or the token flag
         for bad in ("switch", "logout", "--show-token", "create", "edit", "comment", "merge", "close", "-X", "--method", "--input"):
             self.assertNotIn(f'"{bad}"', self.code, bad)
@@ -2680,25 +2685,23 @@ class GithubMeReadOnly(unittest.TestCase):
 
     def test_the_token_goes_only_into_one_calls_environment(self) -> None:
         # read fresh for each call, wiped on drop, never cached, logged or put in an error
-        read = self.prod.split("fn read_token(", 1)[1].split("\n}\n", 1)[0]
+        read = self.prod.split("fn read_token(", 1)[1].split("\n    }\n", 1)[0]
         self.assertIn("let out = Zeroizing::new(ran.out);", read)
         self.assertIn("Ok(Zeroizing::new(t.to_string()))", read)
         self.assertNotIn("format!", read.split("let t = out.trim();", 1)[1])
         call = self.prod.split("    fn call(&self", 1)[1].split("\n    }\n", 1)[0]
         # every call is pinned to the account named, active or not
-        self.assertIn("let token = read_token(&exe, a)?;", call)
+        self.assertIn("let token = self.read_token(&exe, a)?;", call)
         self.assertNotIn("a.active", call)
         self.assertIn("let env = account_env(&a.host, token.as_str());", call)
-        self.assertIn("let ran = run_env(&exe, &argv, true, &env, &SCRUB);", call)
-        self.assertIn("let ran = run_env(exe, &argv, true, &[], &SCRUB)", read)
+        self.assertIn("let ran = self.run(&exe, &argv, &env);", call)
+        self.assertIn("let ran = self.run(exe, &argv, &[])", read)
         detect = self.prod.split("    fn detect(&self", 1)[1].split("\n    }\n", 1)[0]
-        self.assertIn("let ran = run_env(&exe, &status_argv(), true, &[], &SCRUB).ok()?;", detect)
+        self.assertIn("let ran = self.run(&exe, &status_argv(), &[]).ok()?;", detect)
         self.assertIn("dedupe(parse_auth_status(&out).ok()?)", detect)
         self.assertIn("self.forget(&changed);", detect)
-        self.assertIn('pub const INHERITED_TOKENS: [&str; 4] = ["GH_TOKEN", "GITHUB_TOKEN", "GH_ENTERPRISE_TOKEN", "GITHUB_ENTERPRISE_TOKEN"];', self.prod)
         self.assertIn('pub const SCRUB: [&str; 8] = ["GH_TOKEN", "GITHUB_TOKEN", "GH_ENTERPRISE_TOKEN", "GITHUB_ENTERPRISE_TOKEN", "GH_DEBUG", "DEBUG", "GH_PAGER", "PAGER"];', self.prod)
-        self.assertEqual(self.code.count("run_env("), 3)
-        self.assertEqual(self.code.count(", &SCRUB)"), 3)
+        self.assertEqual(self.code.count("&SCRUB)"), 1)
         self.assertLess(call.index("drop(token);"), call.index("self.keep("))
         self.assertIn("self.keep(key, ran.out.clone());", call)
         env = self.prod.split("pub fn account_env<", 1)[1].split("\n}\n", 1)[0]
@@ -2714,8 +2717,10 @@ class GithubMeReadOnly(unittest.TestCase):
         self.assertIn("limit.max(1).div_ceil(100)", self.prod)
         # tasks.rs's runner adds the env to that one child only
         tasks = (SHELL / "tasks.rs").read_text(encoding="utf-8").split("#[cfg(test)]\nmod tests", 1)[0]
-        runner = tasks.split("pub fn run_env(", 1)[1].split("\n}\n", 1)[0]
-        self.assertIn("for k in unset {\n        cmd.env_remove(k);\n    }\n    for (k, v) in env {\n        cmd.env(k, v);\n    }", runner)
+        self.assertIn("run_full(exe, argv, keep, &[], env, unset)", tasks.split("pub fn run_env(", 1)[1].split("\n}\n", 1)[0])
+        runner = tasks.split("pub(crate) fn run_full(", 1)[1].split("\n}\n", 1)[0]
+        # what omher inherited (a test's injected stand-in first), then the scrub, then the call's own variables
+        self.assertIn("for (k, v) in inherited {\n        cmd.env(k, v);\n    }\n    for k in unset {\n        cmd.env_remove(k);\n    }\n    for (k, v) in env {\n        cmd.env(k, v);\n    }", runner)
 
     def test_the_page_never_gets_a_token(self) -> None:
         # what the page gets: accounts (host, login, active, state, scopes), items and errors; none has a token field
@@ -2741,10 +2746,17 @@ class GithubMeReadOnly(unittest.TestCase):
         start = sessions.split("pub fn start_gh_login<", 1)[1].split("\n    }\n", 1)[0]
         self.assertIn("self.spawn_cmd(gh_login_command(gh, args, home), home, &[], cols, rows, sink)", start)
         built = sessions.split("pub fn gh_login_command(", 1)[1].split("\n}\n", 1)[0]
-        self.assertIn("for k in crate::gh_me::INHERITED_TOKENS {\n        cmd.env_remove(k);\n    }", built)
-        # "이 저장소" reads only as a github.com account
-        for fn in ("async fn tasks_list(", "async fn tasks_view("):
-            self.assertIn("gh_me::repo_account_ok(&acc)?;", self.lib.split(fn, 1)[1].split("\n}\n", 1)[0], fn)
+        self.assertIn("scrub_gh_env(&mut cmd);", built)
+        scrub = sessions.split("pub fn scrub_gh_env(", 1)[1].split("\n}\n", 1)[0]
+        self.assertIn("for k in crate::gh_me::SCRUB {\n        cmd.env_remove(k);\n    }", scrub)
+        # "이 저장소" lists only as a github.com account; a "나" row's drawer reads on its own account's host
+        self.assertIn("Some(acc) => m.repo_list(&t, kind, &repo, filter, page, &acc),", self.lib.split("async fn tasks_list(", 1)[1].split("\n}\n", 1)[0])
+        view = self.lib.split("async fn tasks_view(", 1)[1].split("\n}\n", 1)[0]
+        self.assertIn("Some(acc) => m.view(&t, kind, &repo, number, &acc),", view)
+        self.assertNotIn("repo_account_ok", view)
+        repo_list = self.prod.split("pub fn repo_list(", 1)[1].split("\n    }\n", 1)[0]
+        self.assertIn("repo_account_ok(id)?;", repo_list)
+        self.assertNotIn("repo_account_ok", self.prod.split("    pub fn view(", 1)[1].split("\n    }\n", 1)[0])
         cmd = self.lib.split("async fn gh_login_start(", 1)[1].split("\n}\n", 1)[0]
         self.assertIn("let args = gh_me::login_argv(host.as_deref())?;", cmd)
         self.assertIn('let gh = tasks::find("gh").ok_or("gh is not installed")?;', cmd)

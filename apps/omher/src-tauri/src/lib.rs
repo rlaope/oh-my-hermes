@@ -562,8 +562,8 @@ async fn tasks_status(tasks: State<'_, Arc<tasks::Tasks>>, source: String, fresh
 
 /// Tasks: one page of open issues or pull / merge requests of `repo`, through the person's own CLI with a fixed,
 /// read-only argv (rule 33). The page sends only these words and numbers.
-/// `account` (GitHub only): a GitHub account chosen in omher (`<login>@<host>`), read as through gh_me.rs; none: gh's
-/// own active account.
+/// `account` (GitHub only): a GitHub account chosen in omher (`<login>@<host>`, a github.com one: `Me::repo_list`),
+/// read as through gh_me.rs; none: gh's own active account.
 #[tauri::command]
 async fn tasks_list(
     tasks: State<'_, Arc<tasks::Tasks>>,
@@ -578,17 +578,15 @@ async fn tasks_list(
     let (src, kind, filter) = (tasks::Source::parse(&source)?, tasks::Kind::parse(&kind)?, tasks::Filter::parse(&filter)?);
     let (t, m) = (Arc::clone(&tasks), Arc::clone(&me));
     tauri::async_runtime::spawn_blocking(move || match account.filter(|_| src == tasks::Source::Github) {
-        Some(acc) => {
-            gh_me::repo_account_ok(&acc)?;
-            t.list_with(src, kind, &repo, filter, page, &acc, |argv| m.run_as(&acc, argv, false).map_err(|e| e.line))
-        }
+        Some(acc) => m.repo_list(&t, kind, &repo, filter, page, &acc),
         None => t.list(src, kind, &repo, filter, page),
     })
     .await
     .map_err(|e| e.to_string())?
 }
 
-/// Tasks: one item's description, comments and checks, read-only (rule 33). `account` as for `tasks_list`.
+/// Tasks: one item's description, comments and checks, read-only (rule 33). `account`: a chosen account, on any
+/// host it is on (a "나" row read as a GitHub Enterprise account is read there: `Me::view`).
 #[tauri::command]
 async fn tasks_view(
     tasks: State<'_, Arc<tasks::Tasks>>,
@@ -602,10 +600,7 @@ async fn tasks_view(
     let (src, kind) = (tasks::Source::parse(&source)?, tasks::Kind::parse(&kind)?);
     let (t, m) = (Arc::clone(&tasks), Arc::clone(&me));
     tauri::async_runtime::spawn_blocking(move || match account.filter(|_| src == tasks::Source::Github) {
-        Some(acc) => {
-            gh_me::repo_account_ok(&acc)?;
-            t.view_with(src, kind, &repo, number, |argv| m.run_as(&acc, argv, false).map_err(|e| e.line))
-        }
+        Some(acc) => m.view(&t, kind, &repo, number, &acc),
         None => t.view(src, kind, &repo, number),
     })
     .await

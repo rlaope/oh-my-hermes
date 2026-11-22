@@ -29,7 +29,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use zeroize::Zeroizing;
 
-use crate::tasks::{check_repo, epoch, error_line, find, gh_author, gh_labels, iso, one_line, run_env, text, web_url, Label, Source, KEEP};
+use crate::tasks::{check_repo, epoch, error_line, find, gh_author, gh_labels, iso, one_line, run_full, text, web_url, Detail, Filter, Kind, Label, Page, Ran, Source, Tasks, KEEP};
 
 /// The last page of a section (gh search has no page flag: page `n` asks for `(n + 1) * base` rows).
 pub const MAX_ME_PAGE: u32 = 3;
@@ -168,10 +168,6 @@ pub fn token_var(host: &str) -> &'static str {
         "GH_ENTERPRISE_TOKEN"
     }
 }
-
-/// The variables a call as an account takes out of the environment omher inherited: a token there would stand in for
-/// the account named (gh prefers it to its own login).
-pub const INHERITED_TOKENS: [&str; 4] = ["GH_TOKEN", "GITHUB_TOKEN", "GH_ENTERPRISE_TOKEN", "GITHUB_ENTERPRISE_TOKEN"];
 
 /// What every child here takes out of the environment omher inherited: the tokens above, and gh's debug output and
 /// pager (a debug log can print request headers; a pager would wait on a terminal there is none of).
@@ -499,31 +495,39 @@ pub struct Me {
     searches: Mutex<HashMap<String, Vec<Instant>>>,
     /// tests: a stand-in `gh` (None: the one found on this computer)
     gh: Option<PathBuf>,
+    /// tests: variables standing for ones omher itself was started with (none: only the real environment)
+    inherited: Vec<(String, String)>,
 }
 
 fn now_secs() -> i64 {
     std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs() as i64).unwrap_or(0)
 }
 
-/// Account `a`'s token, read from gh for one call. Wiped when dropped. Never in an error: a failure names only gh's
-/// own (masked) line.
-fn read_token(exe: &Path, a: &GhAccount) -> Result<Zeroizing<String>, MeError> {
-    let argv = token_argv(&a.host, &a.login).map_err(|e| MeError::new("other", e))?;
-    let ran = run_env(exe, &argv, true, &[], &SCRUB).map_err(|e| MeError::new("other", error_line(&e)))?;
-    let out = Zeroizing::new(ran.out);
-    if ran.code != Some(0) {
-        let mut e = classify(&error_line(&ran.err));
-        e.kind = "auth";
-        return Err(e);
-    }
-    let t = out.trim();
-    if t.is_empty() || t.chars().any(|c| c.is_whitespace() || c.is_control()) {
-        return Err(MeError::new("auth", "gh has no login for this account"));
-    }
-    Ok(Zeroizing::new(t.to_string()))
-}
-
 impl Me {
+    /// Run one gh child (tasks.rs's runner: no shell, nothing on stdin, at most 20 seconds), every one without `SCRUB`.
+    fn run(&self, exe: &Path, argv: &[String], env: &[(&str, &str)]) -> Result<Ran, String> {
+        let inherited: Vec<(&str, &str)> = self.inherited.iter().map(|(k, v)| (k.as_str(), v.as_str())).collect();
+        run_full(exe, argv, true, &inherited, env, &SCRUB)
+    }
+
+    /// Account `a`'s token, read from gh for one call. Wiped when dropped. Never in an error: a failure names only
+    /// gh's own (masked) line.
+    fn read_token(&self, exe: &Path, a: &GhAccount) -> Result<Zeroizing<String>, MeError> {
+        let argv = token_argv(&a.host, &a.login).map_err(|e| MeError::new("other", e))?;
+        let ran = self.run(exe, &argv, &[]).map_err(|e| MeError::new("other", error_line(&e)))?;
+        let out = Zeroizing::new(ran.out);
+        if ran.code != Some(0) {
+            let mut e = classify(&error_line(&ran.err));
+            e.kind = "auth";
+            return Err(e);
+        }
+        let t = out.trim();
+        if t.is_empty() || t.chars().any(|c| c.is_whitespace() || c.is_control()) {
+            return Err(MeError::new("auth", "gh has no login for this account"));
+        }
+        Ok(Zeroizing::new(t.to_string()))
+    }
+
     /// The GitHub accounts gh is signed in to (kept 60 seconds; `fresh` asks again). gh missing: none, `installed`
     /// false.
     pub fn accounts(&self, fresh: bool) -> GhAccounts {
@@ -548,7 +552,7 @@ impl Me {
             None => GhAccounts { installed: false, accounts: vec![] },
             Some(exe) => {
                 // an inherited token would make gh list its owner as active and gh's own logins as not
-                let ran = run_env(&exe, &status_argv(), true, &[], &SCRUB).ok()?;
+                let ran = self.run(&exe, &status_argv(), &[]).ok()?;
                 let out = Zeroizing::new(ran.out);
                 GhAccounts { installed: true, accounts: dedupe(parse_auth_status(&out).ok()?) }
             }
@@ -633,9 +637,9 @@ impl Me {
         }
         let exe = self.exe().ok_or_else(|| MeError::new("other", "gh is not installed"))?;
         // pinned to this account whichever one gh has active now
-        let token = read_token(&exe, a)?;
+        let token = self.read_token(&exe, a)?;
         let env = account_env(&a.host, token.as_str());
-        let ran = run_env(&exe, &argv, true, &env, &SCRUB);
+        let ran = self.run(&exe, &argv, &env);
         drop(env);
         drop(token);
         let ran = ran.map_err(|e| MeError::new("other", error_line(&e)))?;
@@ -646,6 +650,19 @@ impl Me {
         }
         self.keep(key, ran.out.clone());
         Ok(ran.out)
+    }
+
+    /// "이 저장소": one page of `repo` (on github.com, where tasks.rs reads remotes) as chosen account `id`, which must
+    /// be a github.com account: a GitHub Enterprise account would read another host's repository of that name.
+    pub fn repo_list(&self, t: &Tasks, kind: Kind, repo: &str, filter: Filter, page: u32, id: &str) -> Result<Page, String> {
+        repo_account_ok(id)?;
+        t.list_with(Source::Github, kind, repo, filter, page, id, |argv| self.run_as(id, argv, false).map_err(|e| e.line))
+    }
+
+    /// The drawer of one item read as chosen account `id`: "이 저장소"'s (a github.com account, as its list) or a "나"
+    /// row's, which lives on whichever host that account is on (a GitHub Enterprise row is read on its own host).
+    pub fn view(&self, t: &Tasks, kind: Kind, repo: &str, number: u64, id: &str) -> Result<Detail, String> {
+        t.view_with(Source::Github, kind, repo, number, |argv| self.run_as(id, argv, false).map_err(|e| e.line))
     }
 
     /// One page of `section` for account `id`, the pull requests with their CI, review and conflict state, sorted by
@@ -865,8 +882,6 @@ mod tests {
         assert!(repo_account_ok("--x@github.com").is_err());
     }
 
-    /// Tests that set this process's environment (an inherited `GH_TOKEN`) take turns.
-    static ENV: std::sync::Mutex<()> = std::sync::Mutex::new(());
 
     /// A stand-in `gh` in a folder of its own: `auth status` answers `status.json` (or, when a token is in its
     /// environment, `status-env.json`, as gh does: the token's owner active, gh's own logins not); `auth token
@@ -880,12 +895,15 @@ mod tests {
         std::fs::create_dir_all(&d).unwrap();
         let script = r#"#!/bin/sh
 dir="$(dirname "$0")"
-echo "token=$GH_TOKEN|host=$GH_HOST|debug=$GH_DEBUG|pager=$PAGER|$*" >> "$dir/calls.log"
-if [ -n "$GH_TOKEN" ]; then who="${GH_TOKEN#tok-}"; else who="$(cat "$dir/active.txt")"; fi
+tok="${GH_TOKEN:-$GH_ENTERPRISE_TOKEN}"
+echo "token=$tok|host=$GH_HOST|debug=$GH_DEBUG|pager=$PAGER|$*" >> "$dir/calls.log"
+if [ -n "$tok" ]; then who="${tok#tok-}"; else who="$(cat "$dir/active.txt")"; fi
 case "$1 $2" in
   "auth status") if [ -n "$GH_TOKEN" ]; then cat "$dir/status-env.json"; else cat "$dir/status.json"; fi ;;
   "auth token") echo "tok-$6" ;;
   "api graphql") printf '{"data":{"viewer":{"login":"%s","pullRequests":{"nodes":[]}},"search":{"nodes":[]}}}' "$who" ;;
+  "pr list"|"issue list") echo "[]" ;;
+  "pr view"|"issue view") printf '{"number":%s,"title":"t","state":"OPEN","url":"https://%s/x/y/pull/%s","body":"read as %s","comments":[]}' "$3" "$GH_HOST" "$3" "$who" ;;
   "search prs"|"search issues") printf '[{"number":1,"title":"read as %s","url":"https://github.com/o/r/pull/1","repository":{"nameWithOwner":"o/r"},"isPullRequest":true,"state":"open"}]' "$who" ;;
   *) echo "unexpected: $*" >&2; exit 1 ;;
 esac
@@ -904,7 +922,6 @@ esac
     #[cfg(unix)]
     #[test]
     fn a_call_reads_the_account_named_even_when_gh_switched_meanwhile() {
-        let _g = ENV.lock().unwrap_or_else(|e| e.into_inner());
         let d = stub_gh("switch");
         std::fs::write(d.join("status.json"), status("octo")).unwrap();
         std::fs::write(d.join("active.txt"), "octo").unwrap();
@@ -935,41 +952,67 @@ esac
     #[cfg(unix)]
     #[test]
     fn an_inherited_token_is_taken_out_of_every_gh_child() {
-        let _g = ENV.lock().unwrap_or_else(|e| e.into_inner());
         let d = stub_gh("inherit");
         std::fs::write(d.join("status.json"), status("octo")).unwrap();
         // what gh 2.97 lists with GH_TOKEN set: the token's owner active, gh's own logins not (one of them twice)
         let row = |l: &str, a: bool| format!(r#"{{"host":"github.com","login":"{l}","active":{a},"state":"success"}}"#);
         std::fs::write(d.join("status-env.json"), format!(r#"{{"hosts":{{"github.com":[{},{},{}]}}}}"#, row("intruder", true), row("octo", false), row("octo", false))).unwrap();
         std::fs::write(d.join("active.txt"), "octo").unwrap();
-        std::env::set_var("GH_TOKEN", "tok-intruder");
-        std::env::set_var("GH_DEBUG", "api");
-        std::env::set_var("PAGER", "less");
-        let me = Me { gh: Some(d.join("gh")), ..Default::default() };
+        // omher as if started from a shell that set these (injected: this process's environment is left alone)
+        let inherited = [("GH_TOKEN", "tok-intruder"), ("GITHUB_TOKEN", "tok-intruder"), ("GH_DEBUG", "api"), ("DEBUG", "1"), ("PAGER", "less"), ("GH_PAGER", "less")];
+        let me = Me { gh: Some(d.join("gh")), inherited: inherited.iter().map(|(k, v)| (k.to_string(), v.to_string())).collect(), ..Default::default() };
         let got = me.accounts(true);
-        let gh_login = crate::sessions::gh_login_command(&d.join("gh"), login_argv(None).unwrap(), &d);
-        std::env::remove_var("GH_TOKEN");
-        std::env::remove_var("GH_DEBUG");
-        std::env::remove_var("PAGER");
         assert_eq!(got.accounts.iter().map(|a| (a.login.as_str(), a.active)).collect::<Vec<_>>(), vec![("octo", true), ("octo-work", false)]);
+        let p = me.list("octo@github.com", Section::Review, 0, false).unwrap();
+        assert_eq!(p.items[0].title, "read as octo");
         // the doubled row of the token's view shows once
         let env_view = dedupe(parse_auth_status(&std::fs::read_to_string(d.join("status-env.json")).unwrap()).unwrap());
         assert_eq!(env_view.iter().map(|a| a.id()).collect::<Vec<_>>(), vec!["intruder@github.com", "octo@github.com"]);
-        // gh's sign-in tab gets no inherited token either (gh refuses to sign in while one is set)
-        assert!(gh_login.get_env("GH_TOKEN").is_none());
         let log = std::fs::read_to_string(d.join("calls.log")).unwrap();
+        assert!(log.lines().count() >= 4, "{log}");
         assert!(log.lines().all(|l| l.contains("debug=|pager=|") && !l.contains("intruder")), "{log}");
+        // the seam is real: without the scrub the stub would have seen the injected token
+        let raw = run_full(&d.join("gh"), &status_argv(), true, &[("GH_TOKEN", "tok-intruder")], &[], &[]).unwrap();
+        assert!(raw.out.contains("intruder"));
         let _ = std::fs::remove_dir_all(&d);
     }
 
     #[cfg(unix)]
     #[test]
-    fn the_sign_in_tab_drops_an_inherited_token() {
-        let _g = ENV.lock().unwrap_or_else(|e| e.into_inner());
-        std::env::set_var("GITHUB_TOKEN", "tok-x");
+    fn a_rows_drawer_reads_on_its_accounts_own_host_and_this_repository_only_on_github_com() {
+        let d = stub_gh("ghe");
+        let row = |h: &str, l: &str| format!(r#"{{"host":"{h}","login":"{l}","active":true,"state":"success"}}"#);
+        std::fs::write(d.join("status.json"), format!(r#"{{"hosts":{{"github.com":[{}],"ghe.example.com":[{}]}}}}"#, row("github.com", "octo"), row("ghe.example.com", "octo-corp"))).unwrap();
+        std::fs::write(d.join("active.txt"), "octo").unwrap();
+        let me = Me { gh: Some(d.join("gh")), ..Default::default() };
+        let t = Tasks::default();
+        // a "나" row read as the GitHub Enterprise account opens its drawer, on that host, with its own token
+        let det = me.view(&t, Kind::Changes, "corp/app", 7, "octo-corp@ghe.example.com").unwrap();
+        assert_eq!(det.item.number, 7);
+        assert_eq!(det.body, "read as octo-corp");
+        let log = std::fs::read_to_string(d.join("calls.log")).unwrap();
+        assert!(log.lines().any(|l| l.starts_with("token=tok-octo-corp|host=ghe.example.com|") && l.contains("|pr view 7 --repo corp/app")), "{log}");
+        // "이 저장소" (a github.com repository) never reads as it, and reads as a github.com account
+        assert!(me.repo_list(&t, Kind::Issues, "corp/app", Filter::Open, 0, "octo-corp@ghe.example.com").unwrap_err().contains("github.com"));
+        assert!(me.repo_list(&t, Kind::Issues, "o/r", Filter::Open, 0, "octo@github.com").is_ok());
+        let _ = std::fs::remove_dir_all(&d);
+    }
+
+    #[test]
+    fn the_sign_in_tab_drops_an_inherited_token_and_gh_debug() {
+        // scrub_gh_env is what gh_login_command runs on the command it builds (injected: no process env touched)
+        let mut cmd = portable_pty::CommandBuilder::new("gh");
+        for k in SCRUB {
+            cmd.env(k, "x");
+        }
+        cmd.env("HOME", "/home/you");
+        crate::sessions::scrub_gh_env(&mut cmd);
+        for k in SCRUB {
+            assert!(cmd.get_env(k).is_none(), "{k}");
+        }
+        assert!(cmd.get_env("HOME").is_some());
         let cmd = crate::sessions::gh_login_command(Path::new("/usr/local/bin/gh"), login_argv(Some("ghe.example.com")).unwrap(), &std::env::temp_dir());
-        std::env::remove_var("GITHUB_TOKEN");
-        for k in INHERITED_TOKENS {
+        for k in SCRUB {
             assert!(cmd.get_env(k).is_none(), "{k}");
         }
         assert_eq!(cmd.get_argv().iter().skip(1).map(|a| a.to_string_lossy().into_owned()).collect::<Vec<_>>(), vec!["auth", "login", "--hostname", "ghe.example.com"]);
