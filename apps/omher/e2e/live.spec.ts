@@ -418,7 +418,7 @@ for (const theme of ["dark", "light"] as const) {
 }
 });
 
-test("chat: a message sent while the answer is written goes under that answer, which stays where it was", async ({ page }) => {
+test("chat: a message sent while the answer is written joins that turn: it stays last in send order, the answer comes under it", async ({ page }) => {
   await open(page);
   const tl = page.getByTestId("timeline");
   await mock("mock.manual", { bot: "kami" });
@@ -432,13 +432,15 @@ test("chat: a message sent while the answer is written goes under that answer, w
   await page.keyboard.press("Enter");
   const sent = tl.getByTestId("bubble-user").filter({ hasText: "sent mid-answer" });
   await expect(sent).toBeVisible();
-  // the answer being written is still above the new message, and did not jump
-  expect((await sent.boundingBox())!.y).toBeGreaterThan((await writing.boundingBox())!.y);
+  // steered into the running turn (messenger style): the bot's live answer now reads under it
   const kinds = () => tl.locator(":scope > .row").evaluateAll((rs) => rs.slice(-2).map((r) => r.getAttribute("data-kind")));
-  await expect.poll(kinds).toEqual(["streaming", "user"]);
+  await expect.poll(kinds).toEqual(["user", "streaming"]);
+  expect((await sent.boundingBox())!.y).toBeLessThan((await writing.boundingBox())!.y);
   await emit(ev("kami", "message", { id: "mid-a1", text: "Line one.\nline two." }), ev("kami", "turn.end", { outcome: "done" }));
   await expect(tl.getByTestId("bubble-streaming")).toHaveCount(0);
-  await expect.poll(kinds).toEqual(["assistant", "user"]);
+  // the message, then the turn's work line, then its answer
+  const last3 = () => tl.locator(":scope > .row").evaluateAll((rs) => rs.slice(-3).map((r) => r.getAttribute("data-kind")));
+  await expect.poll(last3).toEqual(["user", "activity", "assistant"]);
   await expect(tl.getByTestId("bubble-bot").last()).toContainText("line two.");
   void before;
 });
@@ -450,16 +452,15 @@ test("chat: an answer to several messages quotes each one's first line; a click 
   await emit(ev("kami", "message", { id: "q-a0", text: "Will do." }));
   await expect(tl.getByTestId("bubble-bot").last()).toContainText("Will do.");
   await mock("mock.manual", { bot: "kami" });
-  // the first message starts a turn; the second, typed while it runs, waits (steer queue) and is steered into that
-  // same turn, so one answer replies to both
+  // the first message starts a turn; the second, typed while it runs, is steered into that same turn at once, so one
+  // answer replies to both
   await page.getByTestId("composer").fill("the spinner looks stuck\nalso count seconds");
   await page.keyboard.press("Enter");
   await expect(page.getByTestId("stop")).toBeVisible();
   await page.getByTestId("composer").fill("and too many bubbles per answer");
   await page.keyboard.press("Enter");
-  const waiting = tl.getByTestId("bubble-user").filter({ hasText: "and too many bubbles per answer" });
-  await waiting.getByTestId("queue-mark").click();
-  await expect(waiting.getByTestId("bubble-read")).toBeVisible();
+  const steered = tl.getByTestId("bubble-user").filter({ hasText: "and too many bubbles per answer" });
+  await expect(steered.getByTestId("bubble-read")).toBeVisible();
   await emit(ev("kami", "message", { id: "q-a1", text: "Fixed both." }), ev("kami", "turn.end", { outcome: "done" }));
   const quote = tl.getByTestId("bubble-quote");
   await expect(quote).toHaveCount(1);

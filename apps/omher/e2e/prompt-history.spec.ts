@@ -25,6 +25,7 @@ async function mock(op: string, params: Record<string, unknown> = {}): Promise<a
   return out.result;
 }
 const sent = async () => ((await mock("mock.calls")).calls as { op: string; params: any }[]).filter((c) => c.op === "chat.send").map((c) => c.params.text as string);
+const steered = async () => ((await mock("mock.calls")).calls as { op: string; params: any }[]).filter((c) => c.op === "chat.steer").map((c) => c.params.text as string);
 
 test.beforeEach(async () => {
   await mock("mock.reset");
@@ -42,7 +43,8 @@ async function say(page: Page, text: string) {
   await page.getByTestId("composer").press("Enter");
   const row = page.getByTestId("bubble-user").filter({ hasText: text }).last();
   await expect(row).toBeVisible();
-  // typed while the last answer still runs, it waits in omher's queue and is history only once it goes out
+  // typed while the last answer still runs, it is steered in (or, refused, waits in omher's queue) and is history
+  // only once the bot has it
   await expect(row).not.toHaveAttribute("data-held", /.*/, { timeout: 15000 });
 }
 const caret = (page: Page) => page.getByTestId("composer").evaluate((el: HTMLTextAreaElement) => [el.selectionStart, el.selectionEnd]);
@@ -75,8 +77,11 @@ test("ArrowUp recalls the two sent prompts newest first; ArrowDown walks back to
   await box.press("End");
   await box.pressSequentially(" again");
   await box.press("Enter");
-  await expect(page.getByTestId("bubble-user").last()).toContainText("list the three causes again"); // plus its Read receipt
-  await expect.poll(sent, { timeout: 15000 }).toContain("list the three causes again");
+  const again = page.getByTestId("bubble-user").filter({ hasText: "list the three causes again" });
+  await expect(again).toBeVisible();
+  // sent, or steered into the turn still running (a message typed mid-answer joins it): the bot has it
+  await expect(again).not.toHaveAttribute("data-held", /.*/, { timeout: 15000 });
+  await expect.poll(async () => [...(await sent()), ...(await steered())], { timeout: 15000 }).toContain("list the three causes again");
   await box.press("ArrowUp");
   await expect(box).toHaveValue("list the three causes again");
   await box.press("ArrowUp");
@@ -147,6 +152,8 @@ test("Alt+ArrowUp/Down recall from any line of a multi-line draft", async ({ pag
 
 test("a held prompt is not recalled until it is sent; text the app puts in the box ends the walk", async ({ page }) => {
   await mock("mock.manual", { bot: "kami" });
+  // Hermes refuses the steer: what is typed mid-answer waits in omher's queue
+  await mock("mock.steerMode", { bot: "kami", mode: "reject" });
   await page.goto("/");
   await expect(page.getByTestId("bot-kami")).toHaveAttribute("aria-current", "true");
   const box = page.getByTestId("composer");

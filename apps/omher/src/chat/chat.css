@@ -328,7 +328,7 @@
   font-size: 11px;
   color: var(--quiet);
 }
-/* a steer's reply: the bot's first words after it read it, one line under the Read line; long ones end in an
+/* a steer's reply: the bot's first words after it read it, one line under its bubble; long ones end in an
    ellipsis inside the bubble's width instead of wrapping */
 .msg-steer-reply {
   margin-top: 1px;
@@ -352,6 +352,27 @@
   /* the row's full width, so the bubble's max-width resolves as it does without the mark */
   width: 100%;
   min-width: 0;
+}
+/* the read mark beside the person's last bubble, at its bottom-left corner (KakaoTalk style): small, muted, outside
+   the bubble; the copy button sits before it on hover and takes no room */
+.msg-line-read {
+  align-items: flex-end;
+}
+.msg-side {
+  position: relative;
+  flex: none;
+  display: inline-flex;
+  align-items: flex-end;
+}
+.msg-side > .msg-prompt {
+  bottom: -3px;
+}
+.msg-read {
+  font-size: 11px;
+  line-height: 1;
+  color: var(--quiet);
+  white-space: nowrap;
+  margin-bottom: 2px;
 }
 /* muted, but its text keeps 4.5:1 in both themes (measured in e2e/steer-queue.spec.ts shots) */
 .msg.u.held .b {

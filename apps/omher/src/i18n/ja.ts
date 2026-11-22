@@ -125,10 +125,6 @@ export const ja: Record<Key, string> = {
   "sounds.on": "オン",
   "sounds.off": "オフ",
   // while it answers (Settings › General)
-  "busySend.title": "回答中に送ると",
-  "busySend.hint": "ボットの回答中に送ったメッセージを、終わるまで待たせるか、すぐ今の回答に steer します",
-  "busySend.queue": "待つ",
-  "busySend.steer": "Steer",
   // update (the sidebar's Update button and its confirm) and resume after a restart
   "update.title": "{version} にアップデートしますか？",
   "update.body": "omher が再起動します。チャット、パネル、セッションは中断したところから続きます。",
@@ -1150,7 +1146,6 @@ export const ja: Record<Key, string> = {
   "ctl.context": "{used} / {max} · {pct}%",
   "ctl.contextTip": "{agent} が数えた使用中のコンテキスト",
   "ctl.branch": "Git ブランチ",
-  "ctl.queued": "待機中",
   "ctl.queuedTip": "{agent} が受け取れるときに渡します",
   "ctl.dropped": "未送信 · エージェントが読む前に停止しました",
   "ctl.commands": "コマンド",
@@ -1365,8 +1360,6 @@ export const ja: Record<Key, string> = {
   "sq.editTip": "入力欄に戻します",
   "sq.delete": "削除",
   "sq.deleteTip": "送信しません",
-  "sq.steering": "steer 中…",
-  "sq.steered": "{bot} に送信 · 進行中の回答に加わるか、すぐ後に始まります",
   "bub.read": "既読",
   "bub.readAt": "既読 · {time}",
   "sq.unknown": "すでに回答に入っているかもしれません",

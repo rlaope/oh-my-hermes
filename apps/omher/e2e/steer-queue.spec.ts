@@ -1,6 +1,7 @@
-// Steer queue in a bot's main chat: a message typed while the bot answers waits in omher as a bubble with a ↵ mark;
-// the mark's menu sends it now (one interrupt, then this one first), steers it into the running answer (chat.steer,
-// a refused steer is sent normally after), edits or deletes it; untouched, it goes out after the turn, in order.
+// A message typed in a bot's main chat while the bot answers is steered into the running answer at once (chat.steer,
+// no interrupt), messenger style: a plain sent bubble at the bottom with its read mark, the live dots under it.
+// Where Hermes refuses the steer (mock.steerMode reject) it waits in omher with the ↵ ↓ × buttons and no text line:
+// ↵ steers it again (or sends it now), ↓ edits, × deletes; untouched, it goes out after the turn, in order.
 // Shots (dark/light, en/ko, 900x600): OMHER_SHOTS=<dir>.
 import { expect, test, type Page } from "@playwright/test";
 import { mkdirSync } from "node:fs";
@@ -48,15 +49,53 @@ async function say(page: Page, text: string) {
 }
 const held = (page: Page, text: string) => page.locator("[data-testid=bubble-user][data-held]", { hasText: text });
 const endTurn = (outcome = "done") => mock("mock.endTurn", { bot: "kami", outcome });
+/** Hermes refuses steers: what is typed mid-answer waits (the fallback), with its ↵ ↓ × buttons. */
+const refuse = () => mock("mock.steerMode", { bot: "kami", mode: "reject" });
+const accept = () => mock("mock.steerMode", { bot: "kami", mode: "accept" });
 
-test("a message sent while the bot answers waits with a ↵ mark and a Waiting line; nothing goes to Hermes", async ({ page }) => {
+test("default: typed mid-answer it is steered at once (no interrupt), a plain sent bubble at the bottom with Read, the dots under it", async ({ page }) => {
+  await running(page);
+  expect(await page.evaluate(() => localStorage.getItem("omher.busySend"))).toBeNull();
+  await say(page, "keep the old timeout too");
+  await expect.poll(async () => (await calls("chat.steer")).map((c) => c.params)).toEqual([{ bot: "kami", text: "keep the old timeout too" }]);
+  const row = page.locator("[data-testid=bubble-user]", { hasText: "keep the old timeout too" });
+  await expect(row).toHaveAttribute("data-steered", "true");
+  await expect(row.getByTestId("bubble-read")).toHaveText(/^Read · \d\d:\d\d$/);
+  // no ↵ mark, no waiting / steering / sent line
+  await expect(row.getByTestId("queue-acts")).toHaveCount(0);
+  await expect(row.locator(".msg-wait")).toHaveCount(0);
+  await expect(page.locator("[data-testid=bubble-user][data-held]")).toHaveCount(0);
+  // only the last bubble carries Read, beside its bottom-left corner (outside the bubble, on its bottom edge)
+  await expect(page.getByTestId("bubble-read")).toHaveCount(1);
+  const [r, b] = await Promise.all([row.getByTestId("bubble-read").boundingBox(), row.locator(".b").boundingBox()]);
+  expect(r!.x + r!.width).toBeLessThanOrEqual(b!.x);
+  expect(Math.abs(r!.y + r!.height - (b!.y + b!.height))).toBeLessThanOrEqual(4);
+  // send order: it is the last row of the person's, and the typing dots sit under it
+  const [bub, dots] = await Promise.all([row.boundingBox(), page.getByTestId("typing").boundingBox()]);
+  expect(dots!.y).toBeGreaterThan(bub!.y + bub!.height - 1);
+  await endTurn();
+  await page.waitForTimeout(400);
+  expect(await sent()).toEqual(["Refactor the gateway retry code"]);
+  expect((await calls("chat.interrupt")).length).toBe(0);
+});
+
+test("there is no setting for it: Settings › General has no While it answers choice", async ({ page }) => {
+  await page.goto("/");
+  await page.getByTestId("nav-settings").click();
+  await expect(page.getByTestId("set-disk-warn")).toBeVisible();
+  await expect(page.getByTestId("busy-send-seg")).toHaveCount(0);
+});
+
+test("steer refused: it waits with the ↵ ↓ × buttons and no text line under it; nothing else goes to Hermes", async ({ page }) => {
+  await refuse();
   await running(page);
   await say(page, "and add a test for it");
   const b = held(page, "and add a test for it");
   await expect(b).toBeVisible();
   await expect(b.getByTestId("queue-mark")).toBeVisible();
   await expect(b.getByTestId("queue-mark")).toHaveText("↵");
-  await expect(b.getByTestId("bubble-held")).toHaveText("Waiting");
+  await expect(b.locator(".msg-wait")).toHaveCount(0);
+  await expect(b.getByTestId("bubble-read")).toHaveCount(0);
   // the mark sits before the bubble, on its line
   const mark = (await b.getByTestId("queue-mark").boundingBox())!;
   const bub = (await b.locator(".b").boundingBox())!;
@@ -79,6 +118,7 @@ test("a message sent while the bot answers waits with a ↵ mark and a Waiting l
 });
 
 test("auto-send: untouched messages go out after the turn ends, one per turn, in order", async ({ page }) => {
+  await refuse();
   await running(page);
   await say(page, "first after");
   await say(page, "second after");
@@ -94,18 +134,24 @@ test("auto-send: untouched messages go out after the turn ends, one per turn, in
   await expect(page.locator("[data-testid=bubble-user][data-held]")).toHaveCount(0);
 });
 
-test("↵ steers in one click: one chat.steer, a Steered line, never sent again, no interrupt", async ({ page }) => {
+test("↵ steers a waiting one in one click: one more chat.steer, Read, never sent again, no interrupt", async ({ page }) => {
+  await refuse();
   await running(page);
   await say(page, "also keep the old timeout");
   const b = held(page, "also keep the old timeout");
+  await expect.poll(async () => (await calls("chat.steer")).length).toBe(1);
+  await accept();
   await b.getByTestId("queue-mark").click();
   const row = page.locator("[data-testid=bubble-user][data-steered]", { hasText: "also keep the old timeout" });
   // Hermes queued it: the bot has it, read right away (messenger style), with the time
   await expect(row.getByTestId("bubble-read")).toHaveText(/^Read · \d\d:\d\d$/);
-  await expect(row.getByTestId("bubble-steered")).toHaveCount(0);
+  await expect(row.locator(".msg-wait")).toHaveCount(0);
   await expect(row.getByTestId("queue-mark")).toHaveCount(0);
   const steer = await calls("chat.steer");
-  expect(steer.map((c) => c.params)).toEqual([{ bot: "kami", text: "also keep the old timeout" }]);
+  expect(steer.map((c) => c.params)).toEqual([
+    { bot: "kami", text: "also keep the old timeout" },
+    { bot: "kami", text: "also keep the old timeout" },
+  ]);
   expect((await mock("mock.steers")).steers).toEqual([{ bot: "kami", text: "also keep the old timeout" }]);
   await endTurn();
   await page.waitForTimeout(400);
@@ -118,10 +164,11 @@ test("Steer refused: the message stays waiting and is sent normally after the tu
   await running(page);
   await say(page, "a");
   await say(page, "b goes first");
+  await expect.poll(async () => (await calls("chat.steer")).length).toBe(1); // "a", refused as it was typed
   await held(page, "b goes first").getByTestId("queue-mark").click();
-  await expect.poll(async () => (await calls("chat.steer")).length).toBe(1);
+  await expect.poll(async () => (await calls("chat.steer")).length).toBe(2);
   await expect(held(page, "b goes first")).toBeVisible();
-  await expect(page.getByTestId("bubble-steered")).toHaveCount(0);
+  await expect(page.locator("[data-testid=bubble-user] .msg-wait")).toHaveCount(0);
   // refused: the bot does not have it, so no read mark on it
   await expect(held(page, "b goes first").getByTestId("bubble-read")).toHaveCount(0);
   await endTurn();
@@ -130,9 +177,8 @@ test("Steer refused: the message stays waiting and is sent normally after the tu
   await expect.poll(sent).toEqual(["Refactor the gateway retry code", "b goes first", "a"]);
 });
 
-test("While it answers › Steer: a message sent mid-answer is steered at once; one behind a waiting message waits", async ({ page }) => {
-  await page.addInitScript(() => localStorage.setItem("omher.busySend", "steer"));
-  await mock("mock.steerMode", { bot: "kami", mode: "reject" });
+test("refused at once: it waits and goes out after the turn; one behind a waiting message is not steered ahead of it", async ({ page }) => {
+  await refuse();
   await running(page);
   // refused, like the button's steer: it waits and goes out after the turn
   await say(page, "first, steered for me");
@@ -150,28 +196,8 @@ test("While it answers › Steer: a message sent mid-answer is steered at once; 
   expect((await calls("chat.interrupt")).length).toBe(0);
 });
 
-test("While it answers › Steer: taken by Hermes, it shows the Steered line and is never sent again", async ({ page }) => {
-  await page.goto("/");
-  await page.evaluate(() => localStorage.removeItem("omher.busySend"));
-  // the setting lives in Settings › General and defaults to Wait
-  await page.getByTestId("nav-settings").click();
-  const seg = page.getByTestId("busy-send-seg");
-  await expect(seg.getByRole("radio", { checked: true })).toHaveText("Wait");
-  await seg.getByRole("radio", { name: "Steer" }).click();
-  expect(await page.evaluate(() => localStorage.getItem("omher.busySend"))).toBe("steer");
-  await running(page);
-  await say(page, "keep the old timeout too");
-  // Hermes queued it: the bot has it, so the row is marked steered and reads Read, never sent again
-  const row = page.locator("[data-testid=bubble-user][data-steered]", { hasText: "keep the old timeout too" });
-  await expect(row.getByTestId("bubble-read")).toHaveText(/^Read · \d\d:\d\d$/);
-  await expect(row.getByTestId("bubble-steered")).toHaveCount(0);
-  expect((await calls("chat.steer")).map((c) => c.params)).toEqual([{ bot: "kami", text: "keep the old timeout too" }]);
-  await endTurn();
-  await page.waitForTimeout(400);
-  expect(await sent()).toEqual(["Refactor the gateway retry code"]);
-});
-
 test("↓ puts the text back in the box; × drops it; neither is sent", async ({ page }) => {
+  await refuse();
   await running(page);
   await say(page, "fix teh typo");
   await say(page, "never mind this");
@@ -189,6 +215,7 @@ test("↓ puts the text back in the box; × drops it; neither is sent", async ({
 });
 
 test("Stop keeps the waiting messages; they go out after the stopped turn", async ({ page }) => {
+  await refuse();
   await running(page);
   await say(page, "still wanted");
   await page.getByTestId("composer").fill("");
@@ -198,6 +225,7 @@ test("Stop keeps the waiting messages; they go out after the stopped turn", asyn
 });
 
 test("keyboard: ↵, ↓ and × are buttons in tab order; Enter on × drops it without touching the answer", async ({ page }) => {
+  await refuse();
   await running(page);
   await say(page, "keyboard one");
   const b = held(page, "keyboard one");
@@ -214,10 +242,11 @@ test("keyboard: ↵, ↓ and × are buttons in tab order; Enter on × drops it w
   await page.keyboard.press("Enter");
   await expect(page.getByTestId("bubble-user").filter({ hasText: "keyboard one" })).toHaveCount(0);
   expect((await calls("chat.interrupt")).length).toBe(0);
-  expect((await calls("chat.steer")).length).toBe(0);
+  expect((await calls("chat.steer")).length).toBe(1); // the one refused as it was typed
 });
 
 test("read receipt: the last message the bot has says Read; a held one does not until it goes out", async ({ page }) => {
+  await refuse();
   await running(page);
   const first = page.locator("[data-testid=bubble-user]", { hasText: "Refactor the gateway retry code" });
   await expect(first.getByTestId("bubble-read")).toHaveText(/^Read · \d\d:\d\d$/);
@@ -235,7 +264,6 @@ test("read receipt: the last message the bot has says Read; a held one does not 
 test("steer reply: the bot's first words after it took the steer show under it, one line, the rest stays hidden", async ({ page }) => {
   await running(page);
   await say(page, "keep the old timeout");
-  await held(page, "keep the old timeout").getByTestId("queue-mark").click();
   const row = page.locator("[data-testid=bubble-user][data-steered]", { hasText: "keep the old timeout" });
   await expect(row.getByTestId("bubble-read")).toBeVisible();
   await expect(row.getByTestId("bubble-steer-reply")).toHaveCount(0);
@@ -285,8 +313,8 @@ test("shots: a waiting bubble and its menu, dark/light, en/ko, 900x600", async (
       await running(page);
       const steer = lang === "ko" ? "기존 타임아웃 값은 그대로 둬" : "keep the old timeout as it is";
       await say(page, steer);
-      await held(page, steer).getByTestId("queue-mark").click();
       await expect(page.getByTestId("bubble-read")).toBeVisible();
+      await refuse();
       await say(page, lang === "ko" ? "끝나면 테스트도 돌려줘" : "run the tests when you are done");
       await say(page, lang === "ko" ? "그리고 PR 설명도 써줘" : "and write the PR description");
       // the last waiting message hovered: its three buttons, none over a bubble of the person's
@@ -314,8 +342,7 @@ test("shots: a waiting bubble and its menu, dark/light, en/ko, 900x600", async (
         const bubOn = mix(bub, bg0, (bub[3] ?? 1));
         const drawnBg = mix(bubOn, bg0, op);
         const drawnFg = mix(mix(rgb(cs.color), bubOn, 1), bg0, op);
-        const w = getComputedStyle(document.querySelector("[data-testid=bubble-held]")!);
-        return { text: ratio(drawnFg, drawnBg), waiting: ratio(rgb(w.color), bg0) };
+        return { text: ratio(drawnFg, drawnBg) };
       })));
       await page.screenshot({ path: join(SHOTS, `steer-queue-${lang}-${theme}.png`), animations: "disabled" });
     }
@@ -342,7 +369,6 @@ test.describe("steer ack shots", () => {
       await say(page, "게이트웨이 재시도 코드 리팩터링해줘");
       await expect(page.getByTestId("stop")).toBeVisible();
       await say(page, "기존 타임아웃 값은 그대로 둬");
-      await held(page, "기존 타임아웃 값은 그대로 둬").getByTestId("queue-mark").click();
       const ev = (event: string, extra: Record<string, unknown> = {}) => ({ event, bot: "kami", ...extra });
       await mock("mock.emit", { events: [
         ev("tool.start", { tool_id: "sh1", name: "read_file", detail: "gateway/retry.py" }),

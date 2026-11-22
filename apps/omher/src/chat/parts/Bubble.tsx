@@ -33,12 +33,11 @@ export const Bubble = memo(function Bubble({
   onQueue,
   queueBusy,
   queueOff,
-  steeredTo,
   last,
   quote,
   onQuote,
 }: {
-  item: Pick<MessageItem, "kind" | "text" | "error" | "reply" | "files" | "skills" | "wait" | "held" | "steered" | "readAt" | "steerReply" | "steerUnknown" | "steerUnused">;
+  item: Pick<MessageItem, "kind" | "text" | "error" | "reply" | "files" | "skills" | "wait" | "held" | "steered" | "readAt" | "steerReply" | "steerUnknown" | "steerUnused" | "autoSteer">;
   streaming?: boolean;
   /** The bot whose face sits beside its bubble; `face` false keeps the indent without repeating it. */
   bot?: string;
@@ -58,8 +57,6 @@ export const Bubble = memo(function Bubble({
   onQueue?: (c: QueueChoice) => void;
   /** Its steer is on the way: the mark waits. */
   queueBusy?: boolean;
-  /** The bot's name a steered message went to, for its line. */
-  steeredTo?: string;
   /** The person's last message in the chat: it carries the "Read" mark. */
   last?: boolean;
   /** Menu items that are off, with their reasons (a SESSIONS chat's agent). */
@@ -70,13 +67,21 @@ export const Bubble = memo(function Bubble({
   onQuote?: (id: string) => void;
 }) {
   if (item.kind === "user") {
-    const held = !!item.held;
+    // one being steered into the running answer reads as a plain sent message (messenger style), not a held one
+    const held = !!item.held && !item.autoSteer;
     // a SESSIONS chat's waiting message carries the mark too (held by omher, or already with the agent)
     const marked = (held || item.wait === "queued" || !!item.steerUnknown) && !!onQueue;
     // copy the prompt, as typed (on hover; it takes no room). Not a held one: it is not sent yet, and its ↓ puts it
     // back in the box; one whose steer never answered may have reached the bot, so it has it (promptHistory.ts)
     const copy = item.text.trim() && !(held && !item.steerUnknown) && (
       <CopyButton className="msg-prompt" text={() => item.text} testId="copy-prompt" />
+    );
+    // messenger-style receipt: the bot has it (sent, its turn started, or the steer was queued). Under the last
+    // message only, small and muted beside the bubble's bottom-left corner, as KakaoTalk shows time and read state
+    const read = item.readAt !== undefined && last && (
+      <span className="msg-read" data-testid="bubble-read">
+        {item.readAt ? t("bub.readAt", { time: hhmm(new Date(item.readAt)) }) : t("bub.read")}
+      </span>
     );
     return (
       <div
@@ -101,6 +106,17 @@ export const Bubble = memo(function Bubble({
                 <SkillText text={item.text} skills={item.skills} />
               </div>
             </div>
+          ) : read ? (
+            // the read mark beside the bubble's bottom edge; the copy button before it, so the two never overlap
+            <div className="msg-line msg-line-read">
+              <span className="msg-side">
+                {copy}
+                {read}
+              </span>
+              <div className="b">
+                <SkillText text={item.text} skills={item.skills} />
+              </div>
+            </div>
           ) : (
             <div className="b">
               <SkillText text={item.text} skills={item.skills} />
@@ -113,29 +129,8 @@ export const Bubble = memo(function Bubble({
             {t("bub.replyTarget")} <SourceIcon source={item.reply.source} size={11} /> {item.reply.label}
           </div>
         )}
-        {item.wait === "queued" && !item.steered && (
-          <div className="msg-wait" data-testid="bubble-queued">
-            {t("ctl.queued")}
-          </div>
-        )}
-        {held && item.wait !== "queued" && (
-          <div className="msg-wait" data-testid="bubble-held">
-            {queueBusy ? t("sq.steering") : t("ctl.queued")}
-          </div>
-        )}
-        {/* steered, before the bot has it (a reopened row with nothing after it): where it went */}
-        {item.steered && item.readAt === undefined && (
-          <div className="msg-wait msg-steered" data-testid="bubble-steered">
-            {t("sq.steered", { bot: steeredTo ?? "" })}
-          </div>
-        )}
-        {/* messenger-style receipt: the bot has it (sent, its turn started, or the steer was queued); under the last
-            message only, and under every steered one, so a steer shows it reached the running answer */}
-        {item.readAt !== undefined && (last || item.steered) && (
-          <div className="msg-wait msg-read" data-testid="bubble-read">
-            {item.readAt ? t("bub.readAt", { time: hhmm(new Date(item.readAt)) }) : t("bub.read")}
-          </div>
-        )}
+        {/* files only: the read mark goes under them */}
+        {!(item.text || !item.files?.length) && read}
         {item.steered && item.steerReply && (
           <div className="msg-wait msg-steer-reply" data-testid="bubble-steer-reply">
             <span className="msg-steer-arrow" aria-hidden>

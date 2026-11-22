@@ -5,17 +5,7 @@ import { useEffect, useState } from "react";
 import "./settings.css";
 import type { SlotProps } from "../features";
 import type { Bot, ModelOptions } from "../lib/protocol";
-import {
-  busySend,
-  getStore,
-  notifyEnabled,
-  notifyErrorsEnabled,
-  setBusySend,
-  setNotifyEnabled,
-  setNotifyErrorsEnabled,
-  useStore,
-  type BusySend,
-} from "../state/store";
+import { getStore, notifyEnabled, notifyErrorsEnabled, setNotifyEnabled, setNotifyErrorsEnabled, useStore } from "../state/store";
 import { addToList } from "../addbot/bots";
 import { appSounds, setSoundsEnabled, soundsEnabled } from "../lib/sounds";
 import { LANG_NAMES, LANGS, t, type Key, type Lang } from "../i18n";
@@ -476,26 +466,6 @@ function DiskWarnSeg() {
   );
 }
 
-function BusySendSeg() {
-  const [mode, setMode] = useState(busySend());
-  return (
-    <Seg
-      small
-      label={t("busySend.title")}
-      value={mode}
-      options={[
-        { value: "queue", label: t("busySend.queue") },
-        { value: "steer", label: t("busySend.steer") },
-      ]}
-      onChange={(v) => {
-        setBusySend(v as BusySend);
-        setMode(v as BusySend);
-      }}
-      testId="busy-send-seg"
-    />
-  );
-}
-
 function TasksBarToggle() {
   const tk = useTasks();
   return <Toggle on={tk.bar} label={t("tasks.barSetting")} onChange={setBar} testId="set-tasks-bar" />;
@@ -567,11 +537,6 @@ function GeneralPage() {
         </Row>
         <Row title={t("disk.setting")} hint={t("disk.settingHint")}>
           <DiskWarnSeg />
-        </Row>
-      </div>
-      <div className="st-grp">
-        <Row title={t("busySend.title")} hint={t("busySend.hint")}>
-          <BusySendSeg />
         </Row>
       </div>
       <div className="st-grp">

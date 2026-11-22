@@ -125,10 +125,6 @@ export const zh: Record<Key, string> = {
   "sounds.on": "开",
   "sounds.off": "关",
   // while it answers (Settings › General)
-  "busySend.title": "回答时发送",
-  "busySend.hint": "机器人回答时发送的消息，等回答结束再发，或立即并入当前回答。",
-  "busySend.queue": "等待",
-  "busySend.steer": "立即并入",
   // update (the sidebar's Update button and its confirm) and resume after a restart
   "update.title": "更新到 {version}？",
   "update.body": "omher 将重新启动。聊天、面板和会话会从中断处继续。",
@@ -1150,7 +1146,6 @@ export const zh: Record<Key, string> = {
   "ctl.context": "{used} / {max} · {pct}%",
   "ctl.contextTip": "{agent} 统计的已用上下文",
   "ctl.branch": "Git 分支",
-  "ctl.queued": "等待中",
   "ctl.queuedTip": "{agent} 空闲时会接收",
   "ctl.dropped": "未发送 · 代理读取前已停止",
   "ctl.commands": "命令",
@@ -1365,8 +1360,6 @@ export const zh: Record<Key, string> = {
   "sq.editTip": "放回输入框",
   "sq.delete": "删除",
   "sq.deleteTip": "不发送",
-  "sq.steering": "steer 中…",
-  "sq.steered": "已发给 {bot} · 并入进行中的回答,或紧接着开始",
   "bub.read": "已读",
   "bub.readAt": "已读 · {time}",
   "sq.unknown": "可能已经在回答里了",

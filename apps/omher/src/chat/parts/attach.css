@@ -307,6 +307,7 @@
   --media-edge: end;
   align-items: flex-end;
 }
-.msg.u > .b + .att-sent {
+.msg.u > .b + .att-sent,
+.msg.u > .msg-line + .att-sent {
   margin-top: 6px;
 }

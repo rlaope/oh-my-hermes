@@ -125,10 +125,6 @@ export const ko: Record<Key, string> = {
   "sounds.on": "켬",
   "sounds.off": "끔",
   // while it answers (Settings › General)
-  "busySend.title": "답하는 중에 보내면",
-  "busySend.hint": "봇이 답하는 중에 보낸 메시지를 답이 끝난 뒤에 보내거나, 진행 중인 답에 바로 steer해요",
-  "busySend.queue": "대기",
-  "busySend.steer": "Steer",
   // update (the sidebar's Update button and its confirm) and resume after a restart
   "update.title": "{version}(으)로 업데이트할까요?",
   "update.body": "omher가 다시 시작돼요. 채팅, 패널, 세션은 하던 곳에서 이어져요.",
@@ -1150,7 +1146,6 @@ export const ko: Record<Key, string> = {
   "ctl.context": "{used} / {max} · {pct}%",
   "ctl.contextTip": "사용 중인 컨텍스트 ({agent} 기준)",
   "ctl.branch": "Git 브랜치",
-  "ctl.queued": "대기 중",
   "ctl.queuedTip": "{agent}가 받을 수 있을 때 가져가요",
   "ctl.dropped": "보내지 않음 · 에이전트가 읽기 전에 멈췄어요",
   "ctl.commands": "명령",
@@ -1365,8 +1360,6 @@ export const ko: Record<Key, string> = {
   "sq.editTip": "입력창으로 되돌려요",
   "sq.delete": "삭제",
   "sq.deleteTip": "보내지 않아요",
-  "sq.steering": "steer 중…",
-  "sq.steered": "{bot}에게 보냄 · 진행 중인 답에 합쳐지거나 바로 이어서 시작해요",
   "bub.read": "읽음",
   "bub.readAt": "읽음 · {time}",
   "sq.unknown": "이미 답에 들어갔을 수 있어요",

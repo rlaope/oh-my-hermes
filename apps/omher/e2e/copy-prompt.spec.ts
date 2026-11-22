@@ -99,10 +99,12 @@ test("a thread's prompt carries the same control", async ({ page, context }) => 
 test("a held prompt has no copy control; one whose steer never answered has it, before its marks", async ({ page, context }) => {
   await context.grantPermissions(["clipboard-read", "clipboard-write"]);
   await mock("mock.manual", { bot: "kami" });
-  // Hermes answers the steer with "uncertain": the row stays marked (↵ Send, × Delete) and may have reached the bot
+  // Hermes refuses the steer made as it is typed (it waits, held), then answers the ↵ one with "uncertain": the row
+  // stays marked (↵ Send, × Delete) and may have reached the bot
   await page.routeWebSocket(/127\.0\.0\.1/, (ws) => {
     const server = ws.connectToServer();
     const ops = new Map<string, string>();
+    let steers = 0;
     ws.onMessage((raw) => {
       const msg = JSON.parse(String(raw));
       ops.set(msg.id, msg.op);
@@ -110,7 +112,7 @@ test("a held prompt has no copy control; one whose steer never answered has it, 
     });
     server.onMessage((raw) => {
       const msg = JSON.parse(String(raw));
-      if (ops.get(msg.id) === "chat.steer" && msg.ok) return ws.send(JSON.stringify({ ...msg, result: { status: "uncertain" } }));
+      if (ops.get(msg.id) === "chat.steer" && msg.ok) return ws.send(JSON.stringify({ ...msg, result: { status: ++steers === 1 ? "rejected" : "uncertain" } }));
       ws.send(raw);
     });
   });
