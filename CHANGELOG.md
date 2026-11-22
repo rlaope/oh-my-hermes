@@ -45,6 +45,19 @@ All notable changes will be documented here.
   bridge is coming back, or the message is a `/` command or carries files or a Reply there target) the message waits with its ↵ ↓ × buttons
   and no text line, and goes out as the next message right after the turn, so nothing is lost. SESSIONS agent chats
   are unchanged. (apps/omher `state/store.ts`, `chat/parts/Bubble.tsx`)
+- **omher: a terminal that cannot continue its conversation keeps it.** A Claude Code or Codex terminal continues its
+  conversation after omher restarts. When that CLI ended at once (the conversation, its account folder or the login
+  was gone) the row turned into a Shell and dropped the conversation id, and when the CLI was missing, Restart started
+  a new conversation over the old id. Now omher first looks for the conversation's file (by name only). A Claude Code
+  terminal nobody typed in has none, so it starts again under the same id instead of failing; a conversation you used
+  whose file was deleted, and a Codex conversation with no rollout, are not started at all. A continued CLI that
+  prints its refusal of that id, ends with an error before you press a key, or ends cleanly before a key and before it
+  draws its screen (or within 1.8 s) leaves the row Claude Code or Codex, ended or failed, with the same id: Restart
+  continues that conversation, and "Start a new conversation" (kept across restarts) is the way out when it is gone
+  for good. When Claude Code says it already has an id the look missed, the terminal continues it. A new Claude Code
+  terminal keeps its id only once its CLI started. A continued CLI you pressed a key in and then left goes on as the
+  login shell without its id, unless it printed its refusal; so does one that waited for input (a login) and was left
+  later. (apps/omher `sessions/sessions.ts`, `termEnd`, `conversation_state`)
 
 - **omher reads more naturally in Korean.** A pass over the Korean UI copy: one register (해요체) on every screen
   instead of 합니다체 in some hints and dialogs, `shell` instead of `셸`, and literal translations replaced with what
@@ -82,6 +95,14 @@ All notable changes will be documented here.
   bubble style with no bot bubble reads `본문처럼`, the terminal theme slot's label reads `적용 대상`, and a route
   whose chain ran out reads `chain exhausted` like its `chain head` and `fallback` siblings. Only string values
   changed.
+
+- **The OMH pane in Hermes Desktop is redrawn, with a run timeline and TPS/TTFT in view.** USAGE is one card: the
+  token total large, cache hit and cost beside it, the four-way split, and the speed (TPS) and the last turn's wait for
+  its first token (TTFT), which used to sit only in a tooltip. CATCHES and PLAN read as rows with marks; PLAN groups
+  its items by phase. DAG gains a timeline: folded, one strip shaded by how many nodes ran at once, its gaps the run's
+  idle time; open, a row per node with its wait on upstream. A subagent the run did not orchestrate is a row under
+  Outside DAG and in AGENTS, never a start node of the run. Detail moved into hover cards that the keyboard can open
+  too. The pane also reads in Chinese. Contributed by @yqm-307 (#3058).
 
 ## 5.0.0 - 2026-11-21
 

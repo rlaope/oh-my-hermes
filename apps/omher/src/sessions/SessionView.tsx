@@ -534,7 +534,7 @@ function againTip(rec: SessionRec): string {
 }
 
 /** An ended session (chat or terminal): one quiet line, and Restart, which starts its agent again in the same folder
- *  and account. A session of an agent omher no longer offers (Kilo Code) says only that, with no Restart. */
+ *  and account (and, when its CLI could not continue its conversation, a new conversation instead). A session of an agent omher no longer offers (Kilo Code) says only that, with no Restart. */
 function Ended({ rec }: { rec: SessionRec }) {
   if (isGone(rec.agent))
     return (
@@ -562,6 +562,18 @@ function Ended({ rec }: { rec: SessionRec }) {
       <button type="button" className="ss-restart" onClick={() => void getSessions().restart(rec.id)} title={againTip(rec)} data-testid="session-restart">
         {tr("ss.restart")}
       </button>
+      {/* its CLI could not continue the conversation: a way out when the conversation itself is gone */}
+      {rec.resumeFailed && (
+        <button
+          type="button"
+          className="ss-restart"
+          onClick={() => void getSessions().startFresh(rec.id)}
+          title={tr("ss.restartFolder", { agent: agentDef(rec.agent).label })}
+          data-testid="session-fresh"
+        >
+          {tr("ss.freshConversation")}
+        </button>
+      )}
     </div>
   );
 }
