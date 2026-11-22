@@ -1111,6 +1111,7 @@ export const ja: Record<Key, string> = {
   "gate.starting": "omher を起動中…",
   "gate.noBridge": "ローカルブリッジが起動しませんでした。",
   "gate.retry": "再試行",
+  "gate.reviving": "ブリッジを再起動しています…",
   "ss.starting": "起動中…",
   "ss.running": "実行中",
   "ss.ended": "終了",

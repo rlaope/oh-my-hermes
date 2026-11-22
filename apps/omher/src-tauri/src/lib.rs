@@ -50,10 +50,12 @@ struct Shell {
     chats: Arc<ChatSessions>,
 }
 
-/// `ws://127.0.0.1:<port>/?token=<token>` once the bridge is ready.
+/// `ws://127.0.0.1:<port>/?token=<token>` once the bridge is ready. The wait for a starting bridge blocks, so it runs
+/// on the blocking pool: every client re-dials while a bridge comes back, and none may park an async worker.
 #[tauri::command]
 async fn bridge_url(shell: State<'_, Shell>) -> Result<String, String> {
-    shell.bridge.url(Duration::from_secs(2))
+    let bridge = Arc::clone(&shell.bridge);
+    tauri::async_runtime::spawn_blocking(move || bridge.url(Duration::from_secs(2))).await.map_err(|e| e.to_string())?
 }
 
 /// `{state: "ready" | "starting" | "failed", error?}`.

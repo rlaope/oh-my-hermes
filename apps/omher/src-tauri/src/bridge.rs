@@ -390,6 +390,9 @@ struct Inner {
     held: bool,
     /// A bridge stopped while `held`.
     died_while_held: bool,
+    /// A test's stand-in for Hermes' Python; never set outside tests. Without one, a test's launch fails before it runs
+    /// anything.
+    python: Option<PathBuf>,
 }
 
 /// `{state: "ready"|"starting"|"failed", error?, missing?}`, the shape the UI reads. `missing:
@@ -434,6 +437,7 @@ impl Bridge {
                 streak: 0,
                 held: false,
                 died_while_held: false,
+                python: None,
             }),
             changed: Condvar::new(),
             served: Mutex::new(HashSet::new()),
@@ -518,10 +522,13 @@ impl Bridge {
         }
         let code = match g.child.as_mut().map(|c| c.try_wait()) {
             Some(Ok(None)) => {
-                // stdout closed but the process lingers: it can no longer say anything, so it goes
-                let c = g.child.as_mut().expect("child checked above");
+                // stdout closed but the process lingers: it can no longer say anything, so it goes, reaped off the lock
+                let mut c = g.child.take().expect("child checked above");
                 let _ = c.kill();
-                c.wait().ok()
+                thread::spawn(move || {
+                    let _ = c.wait();
+                });
+                None
             }
             Some(Ok(Some(code))) => Some(code),
             Some(Err(_)) | None => None,
@@ -569,17 +576,26 @@ impl Bridge {
         let generation = {
             let mut g = self.inner.lock().unwrap();
             g.held = false;
-            if !std::mem::take(&mut g.died_while_held) {
+            // a quit (or any stop) during the install already ended it: nothing to start
+            if !std::mem::take(&mut g.died_while_held) || matches!(g.phase, Phase::Failed(_)) {
                 return;
             }
             g.streak = 0;
+            g.generation += 1;
+            g.phase = Phase::Starting;
             g.generation
         };
+        self.changed.notify_all();
         self.spawn_launch(generation, Duration::ZERO);
     }
 
     fn launch(self: &Arc<Self>, generation: u64, resource_dir: Option<&Path>) -> Result<(), String> {
-        let python = discover_python(|k| std::env::var(k).ok(), |p| p.is_file())?;
+        let pinned = self.inner.lock().unwrap().python.clone();
+        let python = match pinned {
+            Some(p) => p,
+            None if cfg!(test) => return Err("a test launches only the interpreter it set".into()),
+            None => discover_python(|k| std::env::var(k).ok(), |p| p.is_file())?,
+        };
         let manifest = if cfg!(debug_assertions) { Some(Path::new(env!("CARGO_MANIFEST_DIR"))) } else { None };
         let script = resolve_script(resource_dir, manifest, |p| p.is_file())?;
         let token = new_token().map_err(|e| format!("could not make a bridge token: {e}"))?;
@@ -696,6 +712,8 @@ impl Bridge {
     pub fn stop(&self) {
         let mut g = self.inner.lock().unwrap();
         g.generation += 1;
+        g.held = false;
+        g.died_while_held = false;
         stop_locked(&mut g);
         if g.phase == Phase::Starting || matches!(g.phase, Phase::Ready { .. }) {
             g.phase = Phase::Failed("the bridge was stopped".into());
@@ -1330,6 +1348,40 @@ mod tests {
         b.stop();
     }
 
+    #[test]
+    fn a_quit_during_the_install_starts_nothing_when_the_installer_ends() {
+        let b = Bridge::new();
+        b.set_child_for_test(9, exited_child(), 0);
+        b.hold();
+        assert_eq!(b.status().state, "starting");
+        b.stop();
+        {
+            let g = b.inner.lock().unwrap();
+            assert!(!g.held && !g.died_while_held, "the quit ended the hold");
+        }
+        let gen = b.inner.lock().unwrap().generation;
+        b.release();
+        assert_eq!(b.inner.lock().unwrap().generation, gen, "release started nothing");
+        assert_eq!(b.status(), BridgeStatus::of("failed", Some("the bridge was stopped".into())));
+    }
+
+    #[test]
+    fn the_installer_ending_starts_a_bridge_that_died_meanwhile_as_a_new_generation() {
+        let b = Bridge::new();
+        b.set_child_for_test(9, exited_child(), 0);
+        b.hold();
+        assert_eq!(b.status().state, "starting");
+        let gen = b.inner.lock().unwrap().generation;
+        b.release();
+        assert!(b.inner.lock().unwrap().generation > gen, "a fresh generation, so no launch of the old one can run too");
+        // the launch ran: here it fails at once, as a test has no interpreter of its own, and that failure shows
+        let deadline = Instant::now() + Duration::from_secs(5);
+        while b.status().state == "starting" && Instant::now() < deadline {
+            thread::sleep(Duration::from_millis(20));
+        }
+        assert_eq!(b.status(), BridgeStatus::of("failed", Some("a test launches only the interpreter it set".into())));
+    }
+
     /// The whole loop on a stand-in for Hermes' Python (a sh script, so Unix only): the first bridge is ready on
     /// port 40001 and exits; omher notices through its stdout, starts it again, and hands out 40002.
     #[cfg(unix)]
@@ -1348,9 +1400,8 @@ cat >/dev/null
 "#;
         std::fs::write(&py, script).unwrap();
         std::fs::set_permissions(&py, std::fs::Permissions::from_mode(0o755)).unwrap();
-        // the only test that reads the real environment's OMHER_HERMES_PYTHON; the others inject theirs
-        std::env::set_var("OMHER_HERMES_PYTHON", &py);
         let b = Bridge::new();
+        b.inner.lock().unwrap().python = Some(py.clone());
         b.start(None);
         let first = b.url(Duration::from_secs(5)).unwrap();
         assert!(first.starts_with("ws://127.0.0.1:40001/?token="), "{first}");
@@ -1366,7 +1417,6 @@ cat >/dev/null
         assert_eq!(b.status().state, "ready");
         assert_eq!(b.inner.lock().unwrap().streak, 1);
         b.stop();
-        std::env::remove_var("OMHER_HERMES_PYTHON");
         let _ = std::fs::remove_dir_all(&dir);
     }
 

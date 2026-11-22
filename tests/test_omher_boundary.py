@@ -101,7 +101,7 @@ RULES = (
     "The bridge listens on 127.0.0.1 only and refuses any connection that lacks the random token",
     "The app starts the bridge as a child process and stops it when the app exits.",
     "A bridge that stops on its own after it was ready is started again, on a new port with a new token,",
-    "A bridge the app stopped (quit, Retry, an install still running) is never started again that way.",
+    "A bridge the app stopped (quit, Retry) is never started again that way; one that stops while the installer runs is started when the installer ends.",
     "The Python `omh` package never imports omher, and nothing under `src/` refers to `apps/omher`.",
     "omher writes to a Hermes profile only its display name (`profile.yaml` `display_name`) and its picture",
     "Outside Hermes, omher reads only the usage records coding CLIs write about themselves",

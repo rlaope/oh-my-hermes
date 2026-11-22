@@ -1111,6 +1111,7 @@ export const ko: Record<Key, string> = {
   "gate.starting": "omher 시작하는 중…",
   "gate.noBridge": "로컬 브리지가 시작되지 않았어요.",
   "gate.retry": "다시 시도",
+  "gate.reviving": "브리지를 다시 시작하는 중…",
   "ss.starting": "시작하는 중…",
   "ss.running": "실행 중",
   "ss.ended": "끝남",

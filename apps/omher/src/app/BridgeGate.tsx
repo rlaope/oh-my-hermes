@@ -105,7 +105,7 @@ export function appendLine(lines: string[], text: string, max = MAX_LINES): stri
 
 /** Where the gate stands: `boot` (the app has not been up yet: the screen alone), `up` (the app shows; a bridge that
  *  died is being started again and the chats say they are reconnecting), `down` (the shell gave up after the app was up:
- *  the screen covers the app, which stays mounted with its terminals, until the bridge is ready again). */
+ *  a bar says so and offers Retry, and the app stays usable under it, terminals included, until the bridge is ready). */
 export type GateMode = "boot" | "up" | "down";
 
 export function gateMode(prev: GateMode, state: BridgeState["state"] | undefined): GateMode {
@@ -151,7 +151,8 @@ export function BridgeGate({ children }: { children: ReactNode }) {
         // the same answer keeps the same object: a steady "ready" every 2 s re-renders nothing
         if (alive) setStatus((prev) => (prev && prev.state === s.state && prev.error === s.error && prev.missing === s.missing ? prev : s));
       } catch (e) {
-        if (alive) setStatus({ state: "failed", error: String(e) });
+        // once the bridge is up, one refused ask (a webview reload, say) is not a failure: the shell answers the next one
+        if (alive) setStatus((prev) => (prev?.state === "ready" ? prev : { state: "failed", error: String(e) }));
       }
     };
     if (!ready) void poll();
@@ -223,22 +224,32 @@ export function BridgeGate({ children }: { children: ReactNode }) {
   }, [shell]);
 
   if (nextMode === "up") return <>{children}</>;
-  // after the app was up, the screen covers it instead of replacing it: open chats and terminals stay mounted
-  const over = nextMode === "down";
-  const cover = (screen: ReactNode) =>
-    over ? (
+  // after the app was up, nothing hides it: terminals need no bridge, and a hidden one could still take keystrokes
+  if (nextMode === "down") {
+    const failed = status?.state === "failed";
+    return (
       <>
         {children}
-        {screen}
+        <div className="gate-bar" role={failed ? "alert" : "status"} data-testid="bridge-bar" data-state={status?.state ?? "starting"}>
+          <span className="gate-bar-title">{failed ? t("gate.unreachable") : t("gate.reviving")}</span>
+          {failed && (
+            <>
+              <span className="gate-bar-error" data-testid="bridge-error" title={status?.error}>
+                {status?.error || t("gate.noBridge")}
+              </span>
+              <button type="button" className="gate-retry" data-testid="bridge-retry" disabled={retrying} onClick={retry}>
+                {t("gate.retry")}
+              </button>
+            </>
+          )}
+        </div>
       </>
-    ) : (
-      screen
     );
-  const gateClass = over ? "gate gate--over" : "gate";
+  }
 
   if (needsHermes || install !== "idle") {
-    return cover(
-      <div className={gateClass} data-testid="bridge-gate" data-state="setup">
+    return (
+      <div className="gate" data-testid="bridge-gate" data-state="setup">
         <div className="gate-box gate-setup" data-testid="setup-screen">
           <img className="gate-mark" src={mark} alt="" width={44} height={44} />
           <div className="gate-head" data-testid="setup-head">
@@ -317,13 +328,13 @@ export function BridgeGate({ children }: { children: ReactNode }) {
             </p>
           )}
         </div>
-      </div>,
+      </div>
     );
   }
 
   const failed = status?.state === "failed";
-  return cover(
-    <div className={gateClass} data-testid="bridge-gate" data-state={status?.state ?? "starting"}>
+  return (
+    <div className="gate" data-testid="bridge-gate" data-state={status?.state ?? "starting"}>
       <div className="gate-box">
         <div className="gate-title">{failed ? t("gate.unreachable") : t("gate.starting")}</div>
         {failed && (
@@ -337,6 +348,6 @@ export function BridgeGate({ children }: { children: ReactNode }) {
           </>
         )}
       </div>
-    </div>,
+    </div>
   );
 }

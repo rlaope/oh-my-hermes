@@ -9,6 +9,10 @@ All notable changes will be documented here.
   kept handing the page the dead bridge's port. The shell now notices the exit (the bridge's output closes, or a check
   when the page asks for the URL) and starts it again on a new port with a new token after 0.5 s, then 1 s, 2 s, 4 s
   and 8 s for each quick death in a row. The page asks for the URL again on each reconnect, so open chats resume by
+  themselves. A sixth quick death in a row (after five restarts) shows the error in a bar at the top with Retry; the
+  bar covers nothing else, so the app and its terminals stay visible and usable. A bridge omher stopped itself (quit,
+  Retry) is not started again, and one that stops while the installer runs waits for it to end. TERMINALS were never
+  affected. (apps/omher `src-tauri/src/bridge.rs`, `src/app/BridgeGate.tsx`)
   themselves. After five quick deaths in a row the error shows over the app (which stays open underneath, terminals
   included) with Retry. A bridge omher stopped itself (quit, Retry) is not started again, and one that stops while
   the installer runs waits for it to end. TERMINALS were never affected. (apps/omher `src-tauri/src/bridge.rs`,
