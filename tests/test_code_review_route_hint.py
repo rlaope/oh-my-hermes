@@ -121,13 +121,52 @@ class CodeReviewRouteHintTests(unittest.TestCase):
         self.assertIs(policy.code_review_request_guard_applies, code_review_cues.code_review_request_guard_applies)
         self.assertIs(policy.code_review_request_sentence, code_review_cues.code_review_request_sentence)
 
-    def test_the_rendered_hint_tells_the_model_to_load_the_skill(self) -> None:
+    def test_the_rendered_hint_carries_the_review_rules(self) -> None:
+        # Measured live, the model never called skill_view on this task, so the rules ride in the hint itself.
         text = awareness_route_hint_context(BENCHMARK_TASK)
         self.assertIn("selected=code-review", text)
-        self.assertIn("skill_view(name='omh-code-review')", text)
-        self.assertIn("Not checked", text)
         first = next(line for line in text.splitlines() if line.strip().startswith("first_response_shape="))
-        self.assertIn("Load the code-review skill first", first)
+        for phrase in (
+            "step-by-step trace",
+            "concrete input or state",
+            "path:line",
+            "wrong output or state",
+            "read the callers and tests the diff relies on",
+            "drop a finding",
+            "guarded, intended or documented",
+            "theoretical only",
+            "End the review body with a `Not checked:` line",
+            "required last line, still comes last",
+        ):
+            with self.subTest(phrase=phrase):
+                self.assertIn(phrase, first)
+        # The skill stays one optional clause at the end, not a precondition the rules depend on.
+        self.assertTrue(first.rstrip().endswith("skill_view(name='omh-code-review')."), first)
+        self.assertNotIn("Load the code-review skill first", first)
+
+    def test_the_hint_rules_come_from_the_review_method_sources(self) -> None:
+        # One copy of the rules: each key phrase of the hint must still read in the drop gate and evidence
+        # threshold (`review_methods`) or the shared Not checked bar, so an edit there shows up here.
+        from omh.skills import catalog_definitions, review_methods
+
+        method = " ".join(review_methods._FINDING_VALIDATION.split()).lower()
+        hint = awareness._CODE_REVIEW_REQUEST_RESPONSE.lower()
+        for phrase in (
+            "step-by-step trace",
+            "concrete input or state",
+            "wrong output or state",
+            "callers",
+            "tests",
+            "guard",
+            "intended",
+            "documented",
+            "theoretical only",
+        ):
+            with self.subTest(phrase=phrase):
+                self.assertIn(phrase, hint)
+                self.assertIn(phrase, method)
+        self.assertIn("Not checked", awareness._CODE_REVIEW_REQUEST_RESPONSE)
+        self.assertIn("`Not checked`", catalog_definitions._NOT_CHECKED_BAR)
 
     def test_a_review_beside_a_code_edit_keeps_its_hints(self) -> None:
         for message in REVIEW_AND_FIX:

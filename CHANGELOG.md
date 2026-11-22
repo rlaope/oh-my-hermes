@@ -177,6 +177,13 @@ All notable changes will be documented here.
   idle time; open, a row per node with its wait on upstream. A subagent the run did not orchestrate is a row under
   Outside DAG and in AGENTS, never a start node of the run. Detail moved into hover cards that the keyboard can open
   too. The pane also reads in Chinese. Contributed by @yqm-307 (#3058).
+- **A diff review inside Hermes gets the code-review rules even when the skill is never opened.** The hint OMH adds
+  to a review request only told the model to load the code-review skill, and in live runs it never did, so no reply
+  ended with a "Not checked" list. The hint now states the rules itself: report a bug only with a step-by-step trace
+  (input or state, `path:line`, wrong result); read the callers and tests the diff relies on first and drop what is
+  guarded, intended or only theoretical; end with a `Not checked:` line. A reply format the request sets still comes
+  last, and loading the skill stays an optional last clause. The hint grows by 225 characters, only on review
+  requests.
 
 ## 5.0.0 - 2026-11-21
 
