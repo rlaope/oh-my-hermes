@@ -158,6 +158,25 @@ PINNED = {
 
 SECTIONS = ("skills", "plugins", "memory", "display", "auxiliary")
 
+# Strings whose text looks like node syntax: a tag, an anchor, an alias, a quoted key.
+QUOTED_TEXT = (
+    'note: "say: !bang, then &amp and *star"\n'
+    "title: 'a: &b'\n"
+    "alias_like: '*not an alias'\n"
+    "apostrophe: 'it''s # not a comment: !x'\n"
+    "items:\n- \"x: !t\"\n- 'k, \"v\": &a'\n"
+)
+# Real node properties and a quoted key, outside any string: each stays refused.
+NODE_SYNTAX = {
+    "anchor": "base: &a\n  x: 1\n",
+    "tag": "x: !custom v\n",
+    "alias": "x: *a\n",
+    "alias as a list item": "items:\n- *a\n",
+    "anchor on a list item": "items:\n- &a v\n",
+    "alias in a flow mapping": "x: {a: *b}\n",
+    "quoted key": '"x": v\n',
+}
+
 # Every section key with a comment on its line: one section each, edited in place.
 COMMENTED_HEADERS = (
     "model:\n  provider: custom\n"
@@ -438,6 +457,20 @@ class SetupCommandTest(unittest.TestCase):
         if hermes_reads("a: 1\n") is not None:
             self.assertEqual(hermes_load(written)["memory"], {"provider": "omh", "recall": True})
 
+    def test_setup_binds_the_store_beside_strings_that_look_like_node_syntax(self) -> None:
+        original = MODEL + QUOTED_TEXT
+        status, _stdout, stderr, root = self.run_setup(original)
+        self.assertEqual(status, 0, stderr)
+        written = (root / ".hermes" / "config.yaml").read_text(encoding="utf-8")
+        self.assertTrue(written.startswith(original), written)
+        self.assertEqual(adapter.plugin_omh_home_setting(written), (root / ".omh").resolve().as_posix())
+        if hermes_reads("a: 1\n") is not None:
+            loaded = hermes_load(written)
+            for key, value in hermes_load(original).items():
+                self.assertEqual(loaded[key], value)
+            self.assertEqual(loaded["plugins"]["entries"]["omh"]["settings"]["omh_home"],
+                             (root / ".omh").resolve().as_posix())
+
     def test_setup_and_update_keep_long_quoted_values(self) -> None:
         """A value PyYAML folded onto indented lines is the string's, not a refusal (#3075)."""
         for name, value in FOLDED.items():
@@ -487,6 +520,32 @@ class SetupCommandTest(unittest.TestCase):
                 )
                 self.assertEqual(status, 0, stderr)
                 self.assertEqual(config.read_bytes(), before)
+
+
+class QuotedTextTest(unittest.TestCase):
+    """A quoted string's text is never node syntax to the guards (#3075)."""
+
+    def test_the_text_of_a_string_is_blanked_and_a_comment_still_found(self) -> None:
+        self.assertEqual(adapter._yaml_code("k: 'it''s # not a comment' # one", blank_quoted=True), "k: '                     ' ")
+        self.assertEqual(adapter._yaml_code('k: "a \\" # b" # c'), 'k: "a \\" # b" ')
+        self.assertEqual(adapter._yaml_code("k: 'open: &x", blank_quoted=True), "k: '        ")
+
+    def test_strings_that_look_like_node_syntax_are_edited_around(self) -> None:
+        text = MODEL + QUOTED_TEXT
+        for section in SECTIONS:
+            self.assertEqual(adapter.section_edit_guard(text.splitlines(), section), "", section)
+        home = adapter.ensure_plugin_omh_home(setup_writes(text), "/o")
+        self.assertTrue(home.changed, home.message)
+        self.assertEqual(adapter.plugin_omh_home_setting(home.text), "/o")
+        self.assertTrue(home.text.startswith(text), home.text)
+
+    def test_real_node_syntax_stays_refused(self) -> None:
+        for name, shape in NODE_SYNTAX.items():
+            text = MODEL + shape
+            with self.subTest(shape=name):
+                self.assertNotEqual(adapter.section_edit_guard(text.splitlines(), "plugins", "entries"), "")
+                home = adapter.ensure_plugin_omh_home(text, "/o")
+                self.assertFalse(home.changed, home.text)
 
 
 class CommentedHeaderTest(unittest.TestCase):
@@ -687,6 +746,12 @@ class HermesAgreesTest(unittest.TestCase):
                      "quote after a quoted key across lines"):
             self.assertNotIn("memory", hermes_load(REFUSED[name]), name)
 
+    def test_the_quoted_text_loads_as_strings(self) -> None:
+        loaded = hermes_load(MODEL + QUOTED_TEXT)
+        self.assertEqual(loaded["note"], "say: !bang, then &amp and *star")
+        self.assertEqual(loaded["apostrophe"], "it's # not a comment: !x")
+        self.assertEqual(loaded["items"], ["x: !t", 'k, "v": &a'])
+
     def test_the_folded_values_load_as_one_string(self) -> None:
         for name, value in FOLDED.items():
             with self.subTest(shape=name):
@@ -707,6 +772,10 @@ class SafeDumpPropertyTest(unittest.TestCase):
         self.assertGreater(len(mappings), 350)
         refused = [text for text in mappings if not adapter._root_is_plain_block_mapping(text.splitlines())]
         self.assertEqual(refused, [])
+        # Nor does any section writer refuse one: a string's text is never node syntax.
+        guarded = [(section, text) for text in mappings for section in SECTIONS
+                   if adapter.section_edit_guard(text.splitlines(), section)]
+        self.assertEqual(guarded, [])
         written = [setup_writes(text) for text in mappings]
         for text, before, after in zip(mappings, hermes_load_many(mappings), hermes_load_many(written)):
             expected = dict(before)

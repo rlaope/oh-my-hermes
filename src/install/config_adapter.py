@@ -1360,7 +1360,7 @@ def _contains_potential_quoted_mapping_key(line: str) -> bool:
 def _contains_unsupported_yaml_node_syntax(line: str) -> bool:
     return (
         re.match(r"^\s*\?", line) is not None
-        or re.match(r"^\s*[&*!]", line) is not None
+        or re.match(r"^\s*(?:-\s+)*[&*!]", line) is not None  # a block sequence item's properties too
         or re.search(r"(?:^|[,{])\s*[&*!]", line) is not None
         or re.search(r":\s*[&*!]", line) is not None
     )
@@ -1545,10 +1545,16 @@ def _value_opens(stripped: str) -> tuple[str, bool, int]:
 
 
 def _quoted_scalar_end(text: str, quote: str) -> str:
-    """`quote` when the scalar it opened is still open after `text`, else "".
+    """`quote` when the scalar it opened is still open after `text`, else ""."""
+    return "" if _quoted_scalar_close(text, quote) >= 0 else quote
 
-    Inside single quotes `''` is a quote; inside double quotes a backslash
-    escapes the next character, and one ending the line continues it.
+
+def _quoted_scalar_close(text: str, quote: str) -> int:
+    """Where in `text` the scalar `quote` opened before it closes, or -1 when it does not.
+
+    The one quote reader of this module. Inside single quotes `''` is a
+    quote; inside double quotes a backslash escapes the next character, and
+    one ending the line continues it.
     """
     index = 0
     while index < len(text):
@@ -1560,9 +1566,9 @@ def _quoted_scalar_end(text: str, quote: str) -> str:
             if quote == "'" and text[index + 1 : index + 2] == "'":
                 index += 2
                 continue
-            return ""
+            return index
         index += 1
-    return quote
+    return -1
 
 
 def _document_edit_guard(lines: list[str]) -> str:
@@ -1574,31 +1580,36 @@ def _document_edit_guard(lines: list[str]) -> str:
     return ""
 
 
-def _yaml_code(line: str) -> str:
-    """`line` without its YAML comment.
+def _yaml_code(line: str, *, blank_quoted: bool = False) -> str:
+    """`line` without its YAML comment, and with `blank_quoted` its quoted text blanked.
 
     A comment starts at a `#` that opens the line or follows whitespace, and
     is outside a quoted scalar (a quote opens one only where a token starts).
     The syntax guards below read only this part: Hermes' own config template
     carries comments such as `# order: ["anthropic", "google"]`, and reading
     those as quoted mapping keys refused every edit on a fresh install.
+
+    `blank_quoted` keeps the quotes and turns what is between them into
+    spaces, so a guard looking for node syntax never reads a string's text:
+    `"say: !bang"` holds no tag and `'a: &b'` no anchor (#3075). A quote
+    left open at the line's end blanks the rest of the line.
     """
-    quote = ""
+    parts: list[str] = []
     index = 0
     while index < len(line):
         char = line[index]
-        if quote:
-            if quote == '"' and char == "\\":
-                index += 2
-                continue
-            if char == quote:
-                quote = ""
-        elif char in "\"'" and (index == 0 or line[index - 1] in " \t,[{:-?"):
-            quote = char
-        elif char == "#" and (index == 0 or line[index - 1] in " \t"):
-            return line[:index]
+        if char in "\"'" and (index == 0 or line[index - 1] in " \t,[{:-?"):
+            close = _quoted_scalar_close(line[index + 1 :], char)
+            end = len(line) if close < 0 else index + 1 + close
+            inner = line[index + 1 : end]
+            parts += [char, " " * len(inner) if blank_quoted else inner, "" if close < 0 else char]
+            index = end + 1
+            continue
+        if char == "#" and (index == 0 or line[index - 1] in " \t"):
+            break
+        parts.append(char)
         index += 1
-    return line
+    return "".join(parts)
 
 
 def _document_syntax_guard(lines: list[str]) -> str:
@@ -1608,7 +1619,7 @@ def _document_syntax_guard(lines: list[str]) -> str:
     goes on with `'quick mode` or `&amp` names no quoted key and no anchor.
     """
     inside = _scalar_continuations(lines)[0]
-    code = [_yaml_code(line) for index, line in enumerate(lines) if index not in inside]
+    code = [_yaml_code(line, blank_quoted=True) for index, line in enumerate(lines) if index not in inside]
     if any(_contains_potential_quoted_mapping_key(line) for line in code):
         return "quoted YAML mapping keys are user-owned; leaving them alone"
     if any(_contains_unsupported_yaml_node_syntax(line) for line in code):
