@@ -102,6 +102,66 @@ def external_launch_argv(link_path: str, arguments: Sequence[object] = ()) -> tu
     return (str(link_path), *(str(argument) for argument in arguments))
 
 
+def external_search_path(environment: Mapping[str, str], *, binary: str,
+                         repositories: Sequence[Path], write_roots: Sequence[Path]) -> str:
+    """Exclude mutable directory entries AND their executable link targets."""
+    repos = tuple(repo.resolve() for repo in repositories)
+    roots = (*repos, *(root.resolve() for root in write_roots))
+
+    def excluded(path: Path) -> bool:
+        if any(path.is_relative_to(root) for root in roots) or ".git" in path.parts:
+            return True
+        # All sibling lanes, not only the unit whose readiness is being checked.
+        return any(part.name.startswith(f"{repo.name}-fanout-") and part.parent == repo.parent
+                   for repo in repos for part in (path, *path.parents))
+
+    def safe_chain(path: Path) -> bool:
+        # realpath alone loses intermediate links: a trusted link can reach a
+        # trusted binary *through* an alias a lane is allowed to replace.
+        pending = list(reversed(path.parts[1:]))
+        current = Path(path.anchor)
+        links = 0
+        while pending:
+            part = pending.pop()
+            current = current.parent if part == ".." else current / part
+            if excluded(current):
+                return False
+            if current.is_symlink():
+                links += 1
+                if links > 40:
+                    return False
+                target = current.readlink()
+                if target.is_absolute():
+                    current = Path(target.anchor)
+                    pending.extend(reversed(target.parts[1:]))
+                else:
+                    current = current.parent
+                    pending.extend(reversed(target.parts))
+        return True
+
+    trusted = []
+    for token in environment.get("PATH", "").split(os.pathsep):
+        entry = Path(token)
+        if not entry.is_absolute():
+            continue
+        try:
+            if not all(safe_chain(entry / name) for name in _external_program_names(binary)):
+                continue
+        except (OSError, RuntimeError):
+            continue
+        trusted.append(token)
+    return os.pathsep.join(trusted)
+
+
+def _external_program_names(binary: str) -> tuple[str, ...]:
+    if os.name != "nt":
+        return (binary,)
+    # Never let PATHEXT turn a declaration into a batch/shell launcher.
+    if Path(binary).suffix:
+        return (binary,) if Path(binary).suffix.lower() in {".exe", ".com"} else ()
+    return (binary + ".exe", binary + ".com")
+
+
 def observe_named_launch(
     name: str, environment: Mapping[str, str]
 ) -> NamedLaunchIdentity | None:
@@ -119,8 +179,9 @@ def observe_named_launch(
     for entry in search.split(os.pathsep):
         if not entry or not os.path.isabs(entry):
             continue
-        candidate = Path(entry) / name
-        if not candidate.is_file():
+        candidates = (Path(entry) / suffix for suffix in _external_program_names(name))
+        candidate = next((path for path in candidates if path.is_file() and os.access(path, os.X_OK)), None)
+        if candidate is None:
             continue
         try:
             target = candidate.resolve(strict=True)
@@ -324,7 +385,8 @@ class FanoutFilesystemConfinement:
         identity = observe_named_launch(str(argv[0]), self.environment)
         if identity is None:
             return None
-        if self._within_write_roots(identity.link_path) or self._within_write_roots(identity.target_path):
+        if (self._within_write_roots(str(Path(identity.link_path).parent))
+                or self._within_write_roots(identity.target_path)):
             return None
         if not named_launch_identity_holds(identity):
             return None

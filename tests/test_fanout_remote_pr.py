@@ -478,6 +478,27 @@ class DispatchRefusalTests(unittest.TestCase):
             **kwargs,
         )
 
+    def test_unit_gate_independent_of_batch_selection(self):
+        # Recovery reaches unit dispatch without repeating the batch gate.
+        with TemporaryDirectory() as tmp:
+            paths = _home(Path(tmp), _DEVIN_REMOTE_TOML)
+            contract, repo, sha = self._prepare(paths, "devin")
+            readiness = mock.Mock(return_value={"status": "blocked"})
+            with mock.patch("omh.coding.fanout_dispatch._remote_pr_lane_refusal", return_value=None):
+                unit = self._run(paths, contract, repo, sha, readiness=readiness)["units"][0]
+        self.assertEqual(unit["reason"], REFUSAL_REMOTE_PR_NOT_AVAILABLE)
+        readiness.assert_not_called()
+
+    def test_rendered_model_switch_refused_without_a_worker(self):
+        with TemporaryDirectory() as tmp:
+            paths = _home(Path(tmp), _LOCAL_TOML + '\nmodel = ["--model", "{model}"]\n')
+            contract, repo, sha = self._prepare(paths, "my-agent")
+            with mock.patch("omh.coding.fanout_dispatch._dispatch_model_preference", return_value="--cloud"):
+                unit = self._run(paths, contract, repo, sha, dry_run=True,
+                                 readiness=lambda *a, **k: {"status": "ready"})["units"][0]
+        self.assertEqual(unit.get("reason"), REFUSAL_REMOTE_PR_NOT_AVAILABLE)
+        self.assertNotIn("planned_argv", unit)
+
     def test_a_declared_remote_pr_unit_is_refused_before_any_child(self) -> None:
         with TemporaryDirectory() as tmp:
             root = Path(tmp)

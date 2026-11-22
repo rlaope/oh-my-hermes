@@ -22,6 +22,8 @@ temporary PATH.
 from __future__ import annotations
 
 import os
+import json
+from contextlib import chdir
 from pathlib import Path
 
 import subprocess
@@ -451,6 +453,169 @@ class LaunchPathTests(unittest.TestCase):
             _bin_dir(Path(tmp), "my-agent", "commit")
             self.assertIsNone(observe_named_launch("my-agent", {"PATH": "."}))
             self.assertIsNone(observe_named_launch("my-agent", {"PATH": os.pathsep}))
+
+
+class DispatchGuardTests(unittest.TestCase):
+    def setUp(self):
+        temp = TemporaryDirectory()
+        self.addCleanup(temp.cleanup)
+        self.root = Path(temp.name)
+        self.paths = _home(self.root, {"my-agent": ("my-agent", "")})
+        self.repo, self.base = _make_repo(self.root)
+        self.bin = _bin_dir(self.root, "my-agent", "prose")
+        self.env = {**os.environ, "PATH": f"{self.bin}{os.pathsep}{os.environ['PATH']}"}
+        self.config = self.paths.omh_home / "routing" / "executors.toml"
+        self.freeze()
+
+    def freeze(self):
+        registry = load_user_executors(self.paths.omh_home)
+        self.contract = build_fanout_contract(_GOAL, [_unit("my-agent")], registry=registry)
+
+    def dispatch(self, **kwargs):
+        with mock.patch.dict(os.environ, self.env):
+            return dispatch_fanout(self.paths, self.contract, goal_text=_GOAL,
+                                   repo_root=self.repo, base_sha=self.base,
+                                   env=self.env, **kwargs)["units"][0]
+
+    def test_project_scope_checkout_registry_cannot_admit_dispatch_or_readiness(self):
+        from _cli_harness import run_cli
+        from omh.system.paths import resolve_paths
+
+        # One repo-owned definition and a matching historical contract. The
+        # operator has no entry, so the matching digest grants no authority.
+        routing = self.repo / ".omh" / "routing"
+        routing.mkdir(parents=True)
+        (routing / "executors.toml").write_bytes(self.config.read_bytes())
+        operator = self.root / "empty-operator-home"
+        prefix = ["--scope", "project", "coding"]
+        with chdir(self.repo), mock.patch.dict(os.environ, {**self.env, "OMH_HOME": str(operator)}):
+            paths = resolve_paths(scope="project")
+            self.assertEqual(paths.omh_home.resolve(), routing.parent.resolve())
+            write_fanout_contract(paths, self.contract)
+            with self.subTest(surface="readiness"):
+                code, _, err = run_cli(prefix + ["executor-readiness", "--executor", "my-agent", "--dry-run"])
+                self.assertNotEqual(code, 0)
+                self.assertIn("unsupported executor readiness profile", err)
+            with self.subTest(surface="dispatch"), mock.patch(
+                    "omh.coding.executor_readiness.bounded_session_probe", return_value=(b"2.3.4", "observed")) as probe:
+                _, stdout, _ = run_cli(prefix + ["fanout", "dispatch", self.contract["fanout_id"],
+                                                  "--goal-file", "-", "--dry-run"], stdin_text=_GOAL)
+                unit = json.loads(stdout)["units"][0]
+                self.assertEqual(unit["status"], "user_executor_binding_refused")
+                probe.assert_not_called()
+
+    def test_dry_run_never_probes(self):
+        with mock.patch("omh.coding.executor_readiness.bounded_session_probe",
+                        return_value=(b"2.3.4", "observed")) as probe:
+            result = self.dispatch(dry_run=True)
+        self.assertEqual(probe.call_count, 0)
+        self.assertEqual(result["status"], "dry_run_planned")
+
+    def test_version_probe_excludes_checkout_and_sibling_lane(self):
+        lane = self.repo.parent / "repo-fanout-other"
+        lane.mkdir()
+        for untrusted in (self.repo, lane):
+            # Inert files; the mock intercepts every attempted probe on old code.
+            decoy = untrusted / "my-agent"
+            decoy.touch(mode=0o700)
+        self.env["PATH"] = os.pathsep.join(map(str, (self.repo, lane, self.bin)))
+        self.env["UNRELATED_SECRET"] = "not for a version query"
+        with mock.patch("omh.coding.executor_readiness.bounded_session_probe",
+                        return_value=(None, "probe_failed")) as probe:
+            self.dispatch()
+        args, kwargs = probe.call_args
+        self.assertEqual(args[0][0], str(self.bin / "my-agent"))
+        self.assertIsNotNone(kwargs.get("cwd"))
+        self.assertFalse(Path(kwargs["cwd"]).is_relative_to(self.repo))
+        self.assertNotIn("UNRELATED_SECRET", kwargs["env"])
+        self.assertEqual(kwargs["env"]["PATH"], str(self.bin))
+
+    def test_probe_ignores_a_link_routed_through_a_checkout(self):
+        aliases = self.root / "aliases"
+        aliases.mkdir()
+        (self.repo / "alias").symlink_to(self.bin / "my-agent")
+        (aliases / "my-agent").symlink_to(self.repo / "alias")
+        self.env["PATH"] = os.pathsep.join(map(str, (aliases, self.bin)))
+        with mock.patch("omh.coding.executor_readiness.bounded_session_probe",
+                        return_value=(None, "probe_failed")) as probe:
+            self.dispatch()
+        self.assertEqual(probe.call_args.args[0][0], str(self.bin / "my-agent"))
+
+    def test_file_prompt_dry_run_plans_path_without_allocation(self):
+        self.config.write_text(self.config.read_text().replace("{prompt}", "{prompt_file}"))
+        self.freeze()
+        result = self.dispatch(dry_run=True)
+        self.assertEqual(result["planned_argv"][-1], "<prompt file>")
+        self.assertFalse(Path(result["worktree_path"]).exists())
+
+    def _check_lost_fence(self, lose_after, *, retry=False):
+        # The worker is a recording stub: no unconfined command is ever run,
+        # including when exercising old code. Git runs only in the fixture.
+        from omh.coding.fanout_dispatch import signal_safe_unit_runner as real_runner
+
+        calls = []
+        def runner(command, **kwargs):
+            if Path(command[0]).name == "my-agent":
+                calls.append(kwargs.get("confinement_command"))
+                return subprocess.CompletedProcess(command, 1, "", "")
+            return real_runner(command, **kwargs)
+
+        fence = mock.Mock(unconfined_allowed=False, receipt={"enforced": True})
+        validations = []
+        def checked(command):
+            validations.append(True)
+            return ("fixture-proof",) if (len(validations) <= lose_after and not (retry and calls)) else None
+        fence.external_command.side_effect = checked
+        def prepare(_worktree, environment, *args, **kwargs):
+            fence.command_environment.return_value = environment
+            return None if lose_after == 0 else fence
+        fence.dispatcher_git_command.side_effect = lambda argv, env: (argv, self.env)
+        with mock.patch("omh.coding.fanout_dispatch.signal_safe_unit_runner", runner), mock.patch(
+                "omh.coding.fanout_dispatch.prepare_fanout_filesystem_confinement",
+                side_effect=prepare), mock.patch(
+                "omh.coding.fanout_dispatch._consider_unit_retry",
+                side_effect=lambda *a, **k: {"retry": retry and k["attempt"] == 1, "delay_seconds": 0}):
+            result = self.dispatch(runner=runner, max_retries=1)
+        self.assertEqual(calls, [("fixture-proof",)] if retry else [])
+        self.assertEqual(result.get("reason_code"), "filesystem_confinement_unavailable")
+
+    def test_absent_fence_cannot_launch(self):
+        self._check_lost_fence(0)
+
+    def test_lost_initial_fence_cannot_launch(self):
+        self._check_lost_fence(1)
+
+    def test_lost_retry_fence_cannot_launch(self):
+        self._check_lost_fence(100, retry=True)
+
+    def test_binding_required_before_readiness(self):
+        del self.contract["units"][0]["handoff"]["user_executor"]
+        readiness = mock.Mock(return_value={"status": "blocked"})
+        result = self.dispatch(readiness=readiness)
+        self.assertEqual(result["status"], "user_executor_binding_refused")
+        readiness.assert_not_called()
+
+    def test_retarget_rebinds_only_the_new_external_owner(self):
+        from omh.coding.fanout_dispatch import _retarget_dispatch
+
+        external = self.contract["units"][0]
+        builtin = build_fanout_contract(_GOAL, [_unit("codex")])["units"][0]
+        entries = load_user_executors(self.paths.omh_home).entries
+        for original, target in ((builtin, "my-agent"), (external, "codex")):
+            with self.subTest(target=target), mock.patch(
+                    "omh.coding.fanout_dispatch._dispatch_unit", return_value={}) as dispatch:
+                _retarget_dispatch(self.paths, unit=original, new_owner=target,
+                                   failed_owner=original["owner"], unit_dispatch_kwargs={"executor_entries": entries})
+                binding = dispatch.call_args.args[1]["handoff"].get("user_executor")
+                self.assertEqual(binding, external["handoff"]["user_executor"] if target == "my-agent" else None)
+
+    def test_one_registry_read_including_readiness(self):
+        with mock.patch("omh.coding.user_executors.load_user_executors",
+                        wraps=load_user_executors) as load, mock.patch(
+                "omh.coding.executor_readiness.bounded_session_probe",
+                return_value=(None, "probe_failed")):
+            self.dispatch()
+        self.assertEqual(load.call_count, 1)
 
 
 class ExternalDispatchTests(unittest.TestCase):

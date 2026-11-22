@@ -126,6 +126,11 @@ class RemotePrRefusal:
     allow_remote_pr: bool
 
 
+def rendered_cloud_argv(argv: list[str]) -> bool:
+    """A rendered fragment or substituted option cannot opt a local lane into cloud."""
+    return "--cloud" in argv[1:] or argv[1:2] == ["cloud"]
+
+
 def decide_lane_kind(*, entry_remote_pr: object, allow_remote_pr: object) -> LaneDecision:
     """The closed decision over the two opt-ins, for one unit.
 

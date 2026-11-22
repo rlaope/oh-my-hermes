@@ -82,6 +82,12 @@ if export is not None:
         pass
     else:
         export.write_text(json.dumps(TRANSCRIPT), encoding="utf-8")
+if MODE == "backup" and export is not None:
+    export.with_suffix(".json.bak").write_text("fixture backup", encoding="utf-8")
+if MODE == "tracked" and export is not None:
+    note = export.parent / "fixture.note"
+    note.write_text("ordinary test data", encoding="utf-8")
+    subprocess.run(["git", "add", "-f", str(note)], check=True)
 marker = "resumed" if resumed else "first"
 # One file per attempt, numbered from what earlier attempts already committed,
 # so the test can read every attempt's argv out of the worktree history.
@@ -102,6 +108,8 @@ subprocess.run(
     check=True,
 )
 fanout, unit = os.environ["OMH_FANOUT_LINEAGE"].rsplit("/", 1)[-1].split(":")
+if prompt.endswith("/prompt.txt"):
+    prompt = pathlib.Path(prompt).read_text(encoding="utf-8")
 base = re.search(r"base_sha=([0-9a-f]{{40,64}})", prompt).group(1)
 head = subprocess.run(["git", "rev-parse", "HEAD"], capture_output=True, text=True,
                       check=True).stdout.strip()
@@ -191,9 +199,13 @@ def _unit(owner: str = "my-agent", *, repair: bool = False,
 def _dispatch(
     root: Path, *, mode: str, repair: bool = False, resume: bool = True,
     dry_run: bool = False, repair_budget: int = 1, environment: dict[str, str] | None = None,
+    file_prompt: bool = False,
 ):
     binaries = _bin_dir(root, "my-agent", mode)
     paths = _home(root, resume=resume)
+    if file_prompt:
+        config = paths.omh_home / "routing" / "executors.toml"
+        config.write_text(config.read_text().replace("{prompt}", "{prompt_file}"))
     repo, sha = _make_repo(root)
     registry = load_user_executors(paths.omh_home)
     contract = write_fanout_contract(
@@ -319,6 +331,34 @@ class FileExportReceiptTests(unittest.TestCase):
                 self.skipTest("no symlinks here")
             os.symlink(target, link)
             self.assertEqual(sessions.observe_session_export(link).reason, "export_unsafe")
+
+    def test_cleanup_uses_the_original_directory_handle_after_rename(self):
+        from omh.coding.fanout_dispatch import _prepare_executor_scratch, _remove_executor_scratch
+
+        with TemporaryDirectory() as tmp:
+            work = Path(tmp)
+            handle = _prepare_executor_scratch(work, ATTEMPT, "test prompt")
+            self.assertIsNotNone(handle)
+            directory = work / f".omh-executor-tmp-{ATTEMPT}"
+            old = work / "original"
+            empty = work / "empty"
+            empty.mkdir()
+            directory.rename(old)
+            directory.symlink_to(empty, target_is_directory=True)
+            _remove_executor_scratch(handle)
+            self.assertEqual(list(old.iterdir()), [])
+            self.assertTrue(directory.is_symlink())
+            self.assertEqual(list(empty.iterdir()), [])
+
+    def test_export_refuses_a_linked_scratch_directory_without_opening_its_files(self):
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            empty = root / "empty"
+            empty.mkdir()
+            directory = root / "scratch"
+            directory.symlink_to(empty, target_is_directory=True)
+            observed = sessions.observe_session_export(directory / sessions.FILE_EXPORT_REF)
+            self.assertEqual((observed.state, observed.reason), ("not_observed", "export_unsafe"))
 
     def test_a_file_export_receipt_is_repair_only_and_renders_no_command(self):
         receipt, _digest = self.receipt({"session_id": SID}, resume_reason="same_session")
@@ -469,6 +509,30 @@ class SessionDispatchTests(unittest.TestCase):
         self.assertEqual(receipt["reference_kind"], "export_file")
         self.assertIsNone(receipt["reference"])
         self.assertEqual(len(receipt["export_sha256"]), 64)
+
+    def test_cleanup_removes_unanticipated_backup(self):
+        with TemporaryDirectory() as tmp:
+            _, repo, _, summary = _dispatch(Path(tmp), mode="backup")
+            self.assertEqual(summary["units"][0]["status"], "completed")
+            self.assertEqual(list(_worktree(repo).glob(".omh-executor-tmp-*")), [])
+
+    def test_committed_scratch_entry_fails_the_unit(self):
+        with TemporaryDirectory() as tmp:
+            _, repo, _, summary = _dispatch(Path(tmp), mode="tracked")
+            unit = summary["units"][0]
+            self.assertEqual(unit.get("reason_code"), "executor_scratch_committed")
+            self.assertEqual(unit["status"], "failed")
+            self.assertFalse(unit["integration_ready"])
+
+    def test_file_prompt_repair_observes_export_and_resumes(self):
+        with TemporaryDirectory() as tmp:
+            _paths, repo, _sha, summary = _dispatch(Path(tmp), mode="repair", repair=True, file_prompt=True)
+            unit = summary["units"][0]
+            self.assertEqual(unit.get("executor_session", {}).get("state"), "observed")
+            self.assertEqual(unit["executor_session"]["resume_reason"], "same_session")
+            argv = _attempt_argv(_worktree(repo), 2)
+            self.assertEqual(argv[argv.index("-r") + 1], SID)
+            self.assertEqual(unit["status"], "completed")
 
     def test_a_repair_resumes_the_observed_id_in_the_same_worktree(self):
         with TemporaryDirectory() as tmp:

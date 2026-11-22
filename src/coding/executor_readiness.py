@@ -12,6 +12,7 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Any
 
+from .fanout_confinement import external_search_path, named_launch_identity_holds, observe_named_launch
 from .fanout_executor_sessions import (
     SESSION_HELP_PROBE_BYTES,
     BinaryIdentity,
@@ -316,6 +317,10 @@ def probe_executor_readiness(
     force: bool = False,
     dry_run: bool = False,
     now: str = "",
+    executor_spec: object | None = None,
+    probe_environment: Mapping[str, str] | None = None,
+    repo_root: Path | None = None,
+    write_roots: tuple[Path, ...] = (),
 ) -> dict[str, object]:
     """Readiness for one profile, rechecked against the machine it was observed on.
 
@@ -327,12 +332,13 @@ def probe_executor_readiness(
     behind a subprocess run nobody asked for, which is the same surprise #837
     exists to remove --- only later in the handoff.
     """
-    user_spec = _user_executor_spec(paths, profile)
+    user_spec = executor_spec if executor_spec is not None else _user_executor_spec(paths, profile)
     if user_spec is not None:
         # A user-declared executor is never cached under a static profile id:
         # its command line can change by editing one file, so the digest is
         # part of any observation and this call observes it fresh.
-        return _user_executor_readiness(user_spec, dry_run=dry_run)
+        return _user_executor_readiness(user_spec, dry_run=dry_run, environment=probe_environment,
+                                        repo_root=repo_root, write_roots=write_roots)
     normalized = _normalize_profile(profile)
     if normalized == "choose":
         return executor_readiness_contract("choose")
@@ -610,18 +616,19 @@ def _user_executor_spec(paths: OmhPaths, profile: str) -> object | None:
     caller falls through to the built-in profile table exactly as before.
     """
     from .executors import EXECUTOR_PROFILES
-    from .user_executors import load_user_executors, valid_executor_id
+    from .user_executors import load_user_executors, operator_executor_home, valid_executor_id
 
     value = str(profile or "").strip()
     if not value or value in EXECUTOR_PROFILES or value == "choose":
         return None
     if not valid_executor_id(value):
         return None
-    registry = load_user_executors(Path(paths.omh_home))
+    registry = load_user_executors(operator_executor_home(paths.omh_home if paths.omh_home_named else None))
     return registry.entries.get(value)
 
 
-def _user_executor_readiness(spec: object, *, dry_run: bool) -> dict[str, object]:
+def _user_executor_readiness(spec: object, *, dry_run: bool, environment: Mapping[str, str] | None,
+                             repo_root: Path | None, write_roots: tuple[Path, ...]) -> dict[str, object]:
     """One bounded version probe of a user-declared executor's version argv.
 
     The argv is the operator's declaration (`[program, ...]`), the program is
@@ -680,8 +687,15 @@ def _user_executor_readiness(spec: object, *, dry_run: bool) -> dict[str, object
         })
         return contract
     binary, args = version[0], list(version[1:])
-    identity = observe_session_binary(binary)
-    if identity is None:
+    source = os.environ if environment is None else environment
+    repositories = tuple(root for root in (repo_root, find_project_root(Path.cwd())) if root is not None)
+    env = {"PATH": external_search_path(source, binary=binary, repositories=repositories, write_roots=write_roots)}
+    if os.name == "nt" and "SystemRoot" in source:
+        env["SystemRoot"] = source["SystemRoot"]
+    named = observe_named_launch(binary, env)
+    identity = observe_session_binary(named.link_path, env=env) if named else None
+    if (named is None or identity is None or not named_launch_identity_holds(named)
+            or external_search_path(env, binary=binary, repositories=repositories, write_roots=write_roots) != env["PATH"]):
         contract.update({
             "status": "missing",
             "available": False,
@@ -692,8 +706,10 @@ def _user_executor_readiness(spec: object, *, dry_run: bool) -> dict[str, object
             "next_action": "choose_executor_or_configure_path",
         })
         return contract
-    launch = session_launch_path(binary, identity)
-    output, probe_reason = bounded_session_probe([launch, *args])
+    launch = named.link_path
+    # The filesystem root is fixed and outside the checkout and lane (not a
+    # caller-controlled TMPDIR, HOME or project-scoped artifact directory).
+    output, probe_reason = bounded_session_probe([launch, *args], cwd=Path(launch).anchor, env=env)
     if output is None:
         contract.update({
             "status": "blocked",
@@ -730,7 +746,7 @@ def _user_executor_readiness(spec: object, *, dry_run: bool) -> dict[str, object
         "command_path": launch,
         "version": match.group(1) if match else "",
         "version_policy": EXECUTOR_VERSION_POLICY,
-        "summary": f"{first_line[:200]} {READINESS_WORKSPACE_PROBE_NOTE}"[:600],
+        "summary": f"Version query succeeded. {READINESS_WORKSPACE_PROBE_NOTE}",
         "next_action": "send_to_executor",
     })
     return contract

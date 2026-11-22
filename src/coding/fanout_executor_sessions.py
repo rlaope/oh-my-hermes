@@ -331,7 +331,8 @@ def _exceeds_depth(document: str) -> bool:
     return False
 
 
-def observe_session_export(path: Path, *, export_ref: str = FILE_EXPORT_REF) -> SessionExportObservation:
+def observe_session_export(path: Path, *, export_ref: str = FILE_EXPORT_REF,
+                           scratch_fd: int | None = None) -> SessionExportObservation:
     """Digest one attempt's export file; never decode its transcript body.
 
     Only a regular, single-link, size-stable file no larger than 1 MiB, opened
@@ -343,16 +344,21 @@ def observe_session_export(path: Path, *, export_ref: str = FILE_EXPORT_REF) -> 
         return SessionExportObservation('not_observed', reason, export_ref, None, None)
 
     no_follow = getattr(os, 'O_NOFOLLOW', 0)
-    if not no_follow:
-        # Without it the file could be replaced by a link between checks.
+    if not no_follow or not getattr(os, 'O_DIRECTORY', 0) or os.open not in os.supports_dir_fd:
         return failed('export_unsafe')
     try:
-        descriptor = os.open(path, os.O_RDONLY | no_follow | getattr(os, 'O_NONBLOCK', 0))
+        directory = os.open(path.parent, os.O_RDONLY | os.O_DIRECTORY | no_follow)
+        try:
+            if scratch_fd is not None and not os.path.samestat(os.fstat(scratch_fd), os.fstat(directory)):
+                return failed('export_unsafe')
+            descriptor = os.open(path.name, os.O_RDONLY | no_follow | getattr(os, 'O_NONBLOCK', 0),
+                                 dir_fd=directory)
+        finally:
+            os.close(directory)
     except FileNotFoundError:
         return failed('export_missing')
     except OSError as exc:
-        # A no-follow open of a link reports ELOOP: that IS the unsafe case.
-        return failed('export_unsafe' if exc.errno == errno.ELOOP else 'export_unreadable')
+        return failed('export_unsafe' if exc.errno in (errno.ELOOP, errno.ENOTDIR) else 'export_unreadable')
     try:
         with os.fdopen(descriptor, 'rb') as stream:
             before = os.fstat(stream.fileno())
