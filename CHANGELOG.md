@@ -4,6 +4,19 @@ All notable changes will be documented here.
 
 ## Unreleased
 
+- **omher's Claude Code usage meter shows what Claude Code reports.** The meter used to say "No usage yet" / "No
+  record" for every Claude login, because Claude Code writes its usage to a file only when a request hits a limit.
+  omher now keeps its own record per login (`~/.omher/usage/claude/<account>.json`), from the `rate_limit_event` in a
+  chat's stream-json and from the status line input of the TERMINALS Claude Code sessions it starts. The meter shows
+  each window's % and reset time the way the Codex meter does, per login, from the newer of that record and a refused
+  request; readings are merged per window, so an older one never lowers the meter. On macOS and on Linux outside an
+  AppImage, a TERMINALS Claude Code started while you have a status line of your own now gets `--settings` whose
+  `statusLine` runs omher as a relay: it records the usage, then runs your status line command with the same input and
+  prints its output unchanged. Your hooks, permissions and other settings stay as they are. Without a status line of
+  your own, and on Windows and inside an AppImage, omher adds nothing, nothing on screen changes, and the percentages
+  come from chats only. Before the first reading the meter says it shows after your next
+  Claude turn in omher. Local only: nothing is sent and no token is read.
+  (`docs/OMHER-BOUNDARY.md` rules 11, 17 and 18)
 - **omher Tasks shows my pull requests, reviews and issues across repositories and GitHub accounts.** The Tasks page
   has a scope toggle, "이 저장소 | 나". "나" lists, across every repository, the open pull requests asking for my
   review, my open pull requests, the open issues assigned to me and the last 7 days' mentions (folded until opened).
@@ -177,6 +190,13 @@ All notable changes will be documented here.
   idle time; open, a row per node with its wait on upstream. A subagent the run did not orchestrate is a row under
   Outside DAG and in AGENTS, never a start node of the run. Detail moved into hover cards that the keyboard can open
   too. The pane also reads in Chinese. Contributed by @yqm-307 (#3058).
+- **A diff review inside Hermes gets the code-review rules even when the skill is never opened.** The hint OMH adds
+  to a review request only told the model to load the code-review skill, and in live runs it never did, so no reply
+  ended with a "Not checked" list. The hint now states the rules itself: report a bug only with a step-by-step trace
+  (input or state, `path:line`, wrong result); read the callers and tests the diff relies on first and drop what is
+  guarded, intended or only theoretical; end with a `Not checked:` line. A reply format the request sets still comes
+  last, and loading the skill stays an optional last clause. The hint grows by 225 characters, only on review
+  requests.
 - omher connects over SSH to a Windows computer whose Hermes has only the `hermes.cmd` shim and no venv: the remote discovery now reads the shim's interpreter too (a UTF-8 BOM included), in the same order the local app reads launchers (the agent's bin before the user bin, `.exe` before `.cmd` in each), so a stale launcher from an older install is never picked over the current one. Reported and first fixed by @jundev0001 in #3077.
 
 ## 5.0.0 - 2026-11-21
