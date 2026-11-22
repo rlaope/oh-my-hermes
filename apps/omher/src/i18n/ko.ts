@@ -1124,6 +1124,7 @@ export const ko: Record<Key, string> = {
   "ss.restartFolder": "이 폴더에서 새 대화로 {agent} 다시 시작",
   "ss.restart": "다시 시작",
   "ss.freshConversation": "새 대화 시작",
+  "ss.convGone": "{agent}에서 이 대화를 찾지 못했어요",
   "ss.agentEnded": "{agent} 끝남",
   "ss.model": "모델",
   "ss.notRunning": "실행 안 함",

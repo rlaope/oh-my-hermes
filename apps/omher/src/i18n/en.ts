@@ -1126,6 +1126,7 @@ export const en = {
   "ss.restartFolder": "Start {agent} again in this folder, as a new conversation",
   "ss.restart": "Restart",
   "ss.freshConversation": "Start a new conversation",
+  "ss.convGone": "{agent} could not find this conversation",
   "ss.agentEnded": "{agent} ended",
   "ss.model": "Model",
   "ss.notRunning": "Not running",

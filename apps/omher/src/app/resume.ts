@@ -43,6 +43,8 @@ export interface SavedSession {
   draft?: boolean;
   /** Ended ones: how. */
   failed?: boolean;
+  /** Its CLI could not continue its conversation: it also offers a new one (SessionRec `resumeFailed`). */
+  resumeFailed?: boolean;
   exitCode?: number | null;
   error?: string;
   /** The agent's own conversation id (Claude Code session, Codex thread). */
@@ -109,6 +111,7 @@ function parseSession(v: unknown): SavedSession | null {
   if (isLinkId(v.linkId)) out.linkId = v.linkId;
   if (v.open === "chat" || v.open === "terminal") out.open = v.open;
   if (v.failed === true) out.failed = true;
+  if (v.resumeFailed === true && v.running !== true) out.resumeFailed = true;
   if (v.draft === true) {
     out.draft = true;
     out.running = false;

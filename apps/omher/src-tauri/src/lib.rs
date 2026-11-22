@@ -753,17 +753,21 @@ async fn session_open_terminal(cwd: String) -> Result<(), String> {
 /// picked for new sessions, else the CLI's own (rule 30). An `account` whose folder is gone is an error, not another
 /// home: its conversation is not known to be missing, only out of reach.
 fn past_home(agent: &str, account: Option<&str>) -> Result<PathBuf, String> {
+    past_home_in(&user_home()?, agent, account, &|k| std::env::var(k).ok())
+}
+
+/// [`past_home`] for the user's home `home` and environment `var`.
+fn past_home_in(home: &std::path::Path, agent: &str, account: Option<&str>, var: &dyn Fn(&str) -> Option<String>) -> Result<PathBuf, String> {
     if !past_chats::lists(agent) {
         return Err(format!("{agent} conversations are not listed"));
     }
-    let home = user_home()?;
     if let (Some(id), Some(cli)) = (account.filter(|a| *a != "default"), accounts::session_cli(agent)) {
-        if !accounts::account_dir(&home, cli, id).map(|d| d.is_dir() && !d.is_symlink()).unwrap_or(false) {
+        if !accounts::account_dir(home, cli, id).map(|d| d.is_dir() && !d.is_symlink()).unwrap_or(false) {
             return Err("its account folder is gone".into());
         }
     }
-    let env = accounts::session_env_for(&home, agent, account);
-    past_chats::cli_home(&home, agent, &env, &|k| std::env::var(k).ok()).ok_or_else(|| "no home".to_string())
+    let env = accounts::session_env_for(home, agent, account);
+    past_chats::cli_home(home, agent, &env, var).ok_or_else(|| "no home".to_string())
 }
 
 /// The recent conversations Claude Code or Codex keeps for `cwds` (the + menu's folders), read-only (rule 30).
@@ -783,14 +787,29 @@ async fn codex_conversation(shell: State<'_, Shell>, id: u32) -> Result<Option<S
         .map_err(|e| e.to_string())?
 }
 
-/// The last messages of one of those conversations, shown before the agent continues it, or asked before a TERMINALS
-/// Claude Code session continues its own to learn whether Claude Code wrote it, in the home of the account that
-/// session ran with (`account`; rule 30).
+/// The last messages of one of those conversations, shown before the agent continues it (rule 30).
 #[tauri::command]
-async fn past_chat_messages(agent: String, id: String, cwd: String, account: Option<String>) -> Result<Vec<past_chats::PastMsg>, String> {
-    tauri::async_runtime::spawn_blocking(move || past_chats::messages(&past_home(&agent, account.as_deref())?, &agent, &id, &cwd))
-        .await
-        .map_err(|e| e.to_string())?
+async fn past_chat_messages(agent: String, id: String, cwd: String) -> Result<Vec<past_chats::PastMsg>, String> {
+    tauri::async_runtime::spawn_blocking(move || past_chats::messages(&past_home(&agent, None)?, &agent, &id, &cwd)).await.map_err(|e| e.to_string())?
+}
+
+/// Whether the file of a TERMINALS Claude Code or Codex session's own conversation `id` exists, asked before the
+/// session continues it (rule 30): `exists`, `absent`, or `unknown`, in the home of the account it runs with
+/// (`account`). Only names are looked at. An account whose folder is gone, or a home that cannot be read, is
+/// `unknown`: the conversation is out of reach, not known to be missing.
+#[tauri::command]
+async fn conversation_state(agent: String, id: String, account: Option<String>) -> Result<String, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        if !past_chats::lists(&agent) {
+            return Err(format!("{agent} conversations are not listed"));
+        }
+        match past_home(&agent, account.as_deref()) {
+            Ok(home) => past_chats::conversation_state(&home, &agent, &id).map(str::to_string),
+            Err(_) => Ok("unknown".to_string()),
+        }
+    })
+    .await
+    .map_err(|e| e.to_string())?
 }
 
 /// How many asks wait on the person, on the Dock icon (macOS) or the launcher entry (Linux desktops that show
@@ -992,6 +1011,7 @@ pub fn run() {
             session_open_terminal,
             past_chats_list,
             past_chat_messages,
+            conversation_state,
             codex_conversation,
             host_name,
             asks_badge,
@@ -1092,7 +1112,27 @@ pub fn run() {
 
 #[cfg(test)]
 mod tests {
-    use super::{allowed_external, media_target};
+    use super::{allowed_external, media_target, past_home_in};
+
+    #[test]
+    fn a_session_account_whose_folder_is_gone_is_not_read_elsewhere() {
+        let home = std::env::temp_dir().join(format!("omher-past-home-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&home);
+        let work = home.join(".omher").join("accounts").join("claude").join("work");
+        std::fs::create_dir_all(&work).unwrap();
+        let none = |_: &str| None;
+        // the account it ran with, while its folder is there
+        assert_eq!(past_home_in(&home, "claude", Some("work"), &none), Ok(work.clone()));
+        // gone: an error, not the home new sessions use
+        assert_eq!(past_home_in(&home, "claude", Some("gone"), &none), Err("its account folder is gone".to_string()));
+        std::fs::remove_dir_all(&work).unwrap();
+        assert_eq!(past_home_in(&home, "claude", Some("work"), &none), Err("its account folder is gone".to_string()));
+        // "This computer", or none saved: the CLI's own home
+        assert_eq!(past_home_in(&home, "claude", Some("default"), &none), Ok(home.join(".claude")));
+        assert_eq!(past_home_in(&home, "codex", None, &none), Ok(home.join(".codex")));
+        assert!(past_home_in(&home, "grok", None, &none).is_err());
+        let _ = std::fs::remove_dir_all(home);
+    }
 
     #[test]
     fn opens_thread_links_and_a_lookalike_only_as_a_web_page() {

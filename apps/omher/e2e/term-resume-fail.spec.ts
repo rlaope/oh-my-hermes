@@ -27,8 +27,12 @@ async function mock(op: string): Promise<void> {
   ws.close();
 }
 
-type Call = { op: string; agent?: string; cwd?: string; resume?: string; sessionId?: string };
-type Saved = { id: string; agent: string; agentSession?: string; running?: boolean; failed?: boolean };
+type Call = { op: string; agent?: string; cwd?: string; resume?: string; sessionId?: string; account?: string };
+type Saved = { id: string; agent: string; agentSession?: string; running?: boolean; failed?: boolean; resumeFailed?: boolean; account?: string };
+/** What the next loads find: CLIs that are not installed, conversations they cannot continue, what the look for a
+ *  conversation's file answers by id, Accounts folders that are gone, how long Codex takes to refuse, and an account
+ *  written into the saved Claude Code rows before the page reads them (as a row made under that account has). */
+type World = { missing?: string[]; gone?: string[]; states?: Record<string, string>; goneAccounts?: string[]; codexRefuseMs?: number; account?: string };
 const starts = (page: Page) =>
   page.evaluate(() => ((window as unknown as { __omherSessionCalls?: Call[] }).__omherSessionCalls ?? []).filter((c) => c.op === "start"));
 const shellStarts = (page: Page) =>
@@ -38,14 +42,17 @@ const savedOf = (page: Page, id: string): Promise<Saved | undefined> =>
 const screen = (page: Page) => page.locator("[data-testid=terminal] .xterm-rows").last();
 
 /** What the next loads of the page find: CLIs that are not installed, conversations that cannot be continued. */
-const nextLoads = (page: Page, o: { missing?: string[]; gone?: string[] }) =>
+const nextLoads = (page: Page, o: World) =>
   page.evaluate((v) => sessionStorage.setItem("__mockWorld", JSON.stringify(v)), o);
 /** The same, for this load from now on (Restart). */
-const fromNow = (page: Page, o: { missing?: string[]; gone?: string[] }) =>
+const fromNow = (page: Page, o: World) =>
   page.evaluate((v) => {
     const w = window as unknown as Record<string, unknown>;
     w.__omherMockMissing = v.missing ?? [];
     w.__omherMockGoneConversations = v.gone ?? [];
+    w.__omherMockConvStates = v.states ?? {};
+    w.__omherMockGoneAccounts = v.goneAccounts ?? [];
+    w.__omherMockCodexRefuseMs = v.codexRefuseMs;
     sessionStorage.setItem("__mockWorld", JSON.stringify(v));
   }, o);
 
@@ -59,9 +66,17 @@ async function open(page: Page) {
     const w = window as unknown as Record<string, unknown>;
     w.__omherPickFolder = folder;
     w.__omherMockAgents = ["claude", "codex", "grok", "omh", "pi"];
-    const world = JSON.parse(sessionStorage.getItem("__mockWorld") || "{}") as { missing?: string[]; gone?: string[] };
+    const world = JSON.parse(sessionStorage.getItem("__mockWorld") || "{}") as World;
     w.__omherMockMissing = world.missing ?? [];
     w.__omherMockGoneConversations = world.gone ?? [];
+    w.__omherMockConvStates = world.states ?? {};
+    w.__omherMockGoneAccounts = world.goneAccounts ?? [];
+    w.__omherMockCodexRefuseMs = world.codexRefuseMs;
+    if (world.account) {
+      const saved = JSON.parse(localStorage.getItem("omher.resume") || "null") as { sessions?: { agent: string; account?: string }[] } | null;
+      for (const r of saved?.sessions ?? []) if (r.agent === "claude") r.account = world.account;
+      if (saved) localStorage.setItem("omher.resume", JSON.stringify(saved));
+    }
   }, FOLDER);
   await page.goto("/");
   await expect(page.getByTestId("bot-kami")).toBeVisible();
@@ -286,4 +301,100 @@ test("a continued Claude Code the person used and then left goes on as the login
   await expect.poll(() => savedOf(page, id)).toMatchObject({ agent: "shell" });
   expect((await savedOf(page, id))?.agentSession).toBeUndefined();
   await expect.poll(async () => (await shellStarts(page)).length).toBe(1);
+});
+
+/** A Codex terminal in FOLDER whose Codex holds conversation `conv` open (the page learns it 5 s after the start). */
+async function codex(page: Page, conv: string): Promise<string> {
+  const id = await pick(page, "codex");
+  await expect(screen(page)).toContainText("(mock)");
+  const pty = await page.evaluate((i) => (window as unknown as { __omherSessions: { ptyOf(id: string): number | null } }).__omherSessions.ptyOf(i), id);
+  await page.evaluate(([p, c]) => void (((window as unknown as { __omherMockCodexOwn?: Record<number, string> }).__omherMockCodexOwn ??= {})[p as number] = c as string), [pty, conv] as const);
+  await expect.poll(async () => (await savedOf(page, id))?.agentSession, { timeout: 15_000 }).toBe(conv);
+  return id;
+}
+
+test("a written conversation the look misses: Claude Code refuses the id as new, and the row continues it instead", async ({ page }) => {
+  await open(page);
+  const { id, conv } = await claude(page);
+
+  // the look for its file answers absent (a folder name Claude Code shortened, a link), but Claude Code has it
+  await nextLoads(page, { states: { [conv]: "absent" } });
+  await page.reload();
+  await expect.poll(async () => (await starts(page)).length).toBe(2);
+  const [first, second] = await starts(page);
+  expect(first).toMatchObject({ agent: "claude", sessionId: conv });
+  expect(first.resume).toBeUndefined();
+  // "Session ID … is already in use": continued once, with the same id
+  expect(second).toMatchObject({ agent: "claude", cwd: FOLDER, resume: conv });
+  expect(second.sessionId).toBeUndefined();
+  await page.getByTestId(`session-${id}`).locator(".ss-open").click();
+  await expect(screen(page)).toContainText("(mock)");
+  await expect(page.getByTestId("session-ended")).toHaveCount(0);
+  await expect.poll(() => savedOf(page, id)).toMatchObject({ agent: "claude", agentSession: conv, running: true });
+  expect(await shellStarts(page)).toEqual([]);
+});
+
+test("a Codex that refuses its conversation after it set up its screen and past the first seconds still keeps it", async ({ page }) => {
+  await open(page);
+  const A = "01a1f29c-c5b1-7301-a199-2dd07ff4b0ab";
+  const id = await codex(page, A);
+
+  // a cold Codex: its screen at once, the refusal 2.5 s later (past RESUME_FAILS_MS)
+  await nextLoads(page, { gone: [A], codexRefuseMs: 2_500 });
+  await page.reload();
+  await expect.poll(() => starts(page)).toEqual([expect.objectContaining({ agent: "codex", resume: A })]);
+  await expect.poll(() => savedOf(page, id), { timeout: 10_000 }).toMatchObject({ agent: "codex", agentSession: A, running: false });
+  await openRow(page, id);
+  await expect(screen(page)).toContainText("No saved session found with ID");
+  await expect(page.getByTestId("session-fresh")).toBeVisible();
+  expect(await shellStarts(page)).toEqual([]);
+});
+
+test("a Codex conversation with no rollout is not started to refuse it: the row ends with it, and a new one starts", async ({ page }) => {
+  await open(page);
+  const A = "01a1f29c-c5b1-7301-a199-2dd07ff4b0ac";
+  const id = await codex(page, A);
+
+  await nextLoads(page, { states: { [A]: "absent" } });
+  await page.reload();
+  await expect.poll(() => savedOf(page, id)).toMatchObject({ agent: "codex", agentSession: A, running: false, resumeFailed: true });
+  expect(await starts(page)).toEqual([]);
+  await openRow(page, id);
+  await expect(screen(page)).toContainText("Codex could not find this conversation");
+  await expect(page.getByTestId(`session-${id}`).getByTestId("term-row-mark")).toHaveAttribute("data-agent", "codex");
+
+  // the way out stays after another restart
+  await page.reload();
+  await openRow(page, id);
+  expect(await starts(page)).toEqual([]);
+  await page.getByTestId("session-fresh").click();
+  await expect.poll(async () => (await starts(page)).length).toBe(1);
+  expect((await starts(page))[0].resume).toBeUndefined();
+  await expect(screen(page)).toContainText("(mock)");
+  await expect.poll(() => savedOf(page, id)).toMatchObject({ agent: "codex", running: true });
+  expect((await savedOf(page, id))?.agentSession).toBeUndefined();
+});
+
+test("a Claude Code terminal whose account folder is gone keeps its conversation, and Restart continues it once the folder is back", async ({ page }) => {
+  await open(page);
+  const { id, conv } = await claude(page);
+
+  // it ran as the account "work", whose folder is gone now: its file is out of reach (unknown), not missing
+  await nextLoads(page, { account: "work", goneAccounts: ["work"] });
+  await page.reload();
+  await expect.poll(() => starts(page)).toEqual([expect.objectContaining({ agent: "claude", resume: conv, account: "work" })]);
+  expect((await starts(page))[0].sessionId).toBeUndefined();
+  const checks = await page.evaluate(() => (window as unknown as { __omherConvChecks?: unknown[] }).__omherConvChecks ?? []);
+  expect(checks).toEqual([{ agent: "claude", id: conv, account: "work" }]);
+  await expect.poll(() => savedOf(page, id)).toMatchObject({ agent: "claude", agentSession: conv, account: "work", running: false, resumeFailed: true });
+  await openRow(page, id);
+  expect(await shellStarts(page)).toEqual([]);
+
+  // the folder is back: Restart continues the same conversation as that account
+  await fromNow(page, {});
+  await page.getByTestId("session-restart").click();
+  await expect.poll(async () => (await starts(page)).length).toBe(2);
+  expect((await starts(page))[1]).toMatchObject({ agent: "claude", resume: conv, account: "work" });
+  await expect(screen(page)).toContainText("(mock)");
+  await expect.poll(() => savedOf(page, id)).toMatchObject({ agent: "claude", agentSession: conv, running: true });
 });

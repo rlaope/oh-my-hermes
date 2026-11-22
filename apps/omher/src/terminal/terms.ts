@@ -6,6 +6,7 @@
 import type { ITerminalInitOnlyOptions, ITerminalOptions, Terminal } from "@xterm/xterm";
 import type { FitAddon } from "@xterm/addon-fit";
 import { afterOpen, bracketedPaste, CELLS_EVENT, feed, isParked, live, onVisible, type Remake } from "../sessions/term/engine";
+import { TERM_INPUT_EVENT } from "../sessions/term/paste-guard";
 import { onCwd } from "../sessions/term/engine-marks";
 import { applyLook, termOptions } from "../sessions/term/look";
 import { termFontsReady } from "../sessions/term/fonts";
@@ -43,7 +44,8 @@ interface PanelTerm {
   /** output drawn before the id came back, acknowledged once it does */
   owed: number;
   ended: boolean;
-  /** the person typed into it (a shell that ends after that closes its pane) */
+  /** the person pressed a key or pasted in it once its shell ran, not the terminal's own replies to the shell's
+   *  queries (a shell that ends after that closes its pane) */
   typed: boolean;
   /** files dropped on it were saved (removed with the pane) */
   saved: boolean;
@@ -85,7 +87,6 @@ function create([{ Terminal }, { FitAddon }]: Xterm, key: number, want: string |
   const wire = (term: Terminal) => {
     term.onData((d) => {
       if (p.id === null || p.ended) return;
-      p.typed = true;
       void host.write(p.id, d).catch(() => undefined);
     });
     term.onResize(({ cols, rows }) => {
@@ -141,6 +142,10 @@ function create([{ Terminal }, { FitAddon }]: Xterm, key: number, want: string |
   };
   terms.set(key, p);
   wire(first.term);
+  // the person's own keys or paste (engine-input.ts, engine-ime.ts, paste-guard.ts)
+  el.addEventListener(TERM_INPUT_EVENT, () => {
+    if (p.id !== null && !p.ended) p.typed = true;
+  });
   // the folder its shell reports (OSC 7) names the pane, and so the tab while it is the focused one; the element
   // outlives a parked terminal made again
   p.cwdOff = onCwd(el, (path) => setPaneSaid(key, path));

@@ -305,11 +305,16 @@ RULES = (
     " CLI started,",
     "Restart on a TERMINALS Claude Code or Codex session that has ended and has its conversation id continues it the"
     " same way.",
-    "A Claude Code conversation that Claude Code never wrote (it writes one on the first message, so nobody typed in it;"
-    " rule 30's read finds no file for it) is not continued: its terminal starts again with `--session-id` and the same id.",
-    "A CLI started to continue its conversation that ends at once, before the person pressed a key or pasted and either"
-    " before it set up its screen (the alternate screen, bracketed paste, focus reports or Kitty keyboard flags turned"
-    " on, or 2 KB of output) or within 1.8 seconds of being started, or that cannot start, could not continue it: its"
+    "A Claude Code conversation with no file (Claude Code writes one on the first message, so nobody typed in it) is not"
+    " continued: its terminal starts again with `--session-id` and the same id, and when Claude Code refuses that id as"
+    " one it already has (`is already in use`), the terminal continues it with `--resume` instead, once.",
+    "A Codex conversation with no rollout is not started: its row ends as below. When the look cannot tell (a folder it"
+    " cannot read, an account whose folder is gone), the conversation is continued.",
+    "A CLI started with the conversation id its row kept that ends with an error after printing its refusal (Claude"
+    " Code's `No conversation found with session ID`, Codex's `No saved session found with ID`), or that ends before the"
+    " person pressed a key or pasted in its output and either before it set up its screen (the alternate screen,"
+    " bracketed paste, focus reports or Kitty keyboard flags turned on, or 2 KB of output) or within 1.8 seconds of"
+    " being started (a fallback for a refusal omher does not know), or that cannot start, could not continue it: its"
     " row keeps its agent and that id and shows it ended or failed instead of going on as the login shell, and an ended"
     " one also offers Start a new conversation, which forgets the id and starts the agent as a new terminal does.",
     "A continued CLI that ends any other way, one that waited for input (a login) and was left later included, goes on"
@@ -2243,7 +2248,7 @@ class PastConversationsAreOnlyRead(unittest.TestCase):
         for banned in ("auth.json", ".credentials", "credentials.json", "config.toml", "settings.json", ".claude.json", "oauth", "token"):
             self.assertNotIn(banned, code.lower(), banned)
         # only these names under the CLI's home
-        self.assertEqual(sorted(set(re.findall(r'\.join\("([a-z_.]+)"\)', code))), ["projects", "session_index.jsonl", "sessions"])
+        self.assertEqual(sorted(set(re.findall(r'\.join\("([a-z_.]+)"\)', code))), ["archived_sessions", "projects", "session_index.jsonl", "sessions"])
 
     def test_links_and_paths_outside_the_home_are_refused_and_reads_are_bounded(self) -> None:
         inside = self.past.split("pub fn inside(", 1)[1].split("\n}\n", 1)[0]
@@ -2267,8 +2272,25 @@ class PastConversationsAreOnlyRead(unittest.TestCase):
         self.assertIn("It refuses a symlink anywhere under those folders and any file that is not inside that home once its links are resolved", text)
         self.assertIn("never opens a credential, token or config file of either CLI", text)
 
+    def test_a_conversation_is_looked_for_by_name_only_before_a_terminal_continues_it(self) -> None:
+        text = _flat(DOC.read_text(encoding="utf-8"))
+        self.assertIn(
+            "Before a TERMINALS Claude Code or Codex session continues its own conversation (rule 11), the shell looks for"
+            " that conversation's file by name only (`conversation_state`): `<claude config>/projects/*/<uuid>.jsonl`, or a"
+            " rollout named `rollout-*-<uuid>.jsonl` under `<codex home>/sessions` or `<codex home>/archived_sessions`,"
+            " following links as the CLI does and opening no file, in the home of the account that session runs with. The"
+            " page sends only the agent, the id (a UUID) and the account, and the answer is only `exists`, `absent` or"
+            " `unknown` (an account whose folder is gone, or a folder it cannot read).",
+            text,
+        )
+        look = self.past.split("pub fn conversation_state(", 1)[1].split("\n}\n", 1)[0]
+        self.assertIn("if !is_uuid(id) {", look)
+        for banned in ("File::open", "read_to_string", "fs::read(", "last_part", "head("):
+            self.assertNotIn(banned, look, banned)
+
     def test_the_commands_take_only_an_agent_folders_and_an_id(self) -> None:
-        for cmd, params in (("past_chats_list", "agent: String, cwds: Vec<String>"), ("past_chat_messages", "agent: String, id: String, cwd: String, account: Option<String>"),
+        for cmd, params in (("past_chats_list", "agent: String, cwds: Vec<String>"), ("past_chat_messages", "agent: String, id: String, cwd: String"),
+                            ("conversation_state", "agent: String, id: String, account: Option<String>"),
                             ("codex_conversation", "shell: State<'_, Shell>, id: u32"),
                             ("session_reveal", "cwd: String"), ("session_open_terminal", "cwd: String"),
                             ("asks_badge", "window: tauri::WebviewWindow, count: u32")):
