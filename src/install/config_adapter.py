@@ -1353,12 +1353,15 @@ def references_top_level_section(line: str, section: str) -> bool:
 def _contains_potential_quoted_mapping_key(line: str) -> bool:
     """Whether `line` uses a quoted scalar as a mapping key.
 
-    One is a key when a `:` follows its closing quote, outside the quotes, as
-    in `'k': v`, `- 'k': v` or `x: {"k": v}`; an explicit `? 'k'` is one too.
-    A quoted value or a flow sequence's quoted item (`['a', "b: c"]`), which
-    a `,`, `]` or the line's end follows, is not (#3075). A quoted scalar
-    after a `,` outside any flow collection is not YAML this editor reads,
-    and stays refused as main refused it. Quoted scalars are found with
+    The places main looked stay the places looked: a quote opening the line,
+    or following `{` or `,`. There it is a key when a `:` follows its closing
+    quote, outside the quotes (`'k': v`, `x: {"k": v}`), and an explicit
+    `? 'k'` is one too. A flow sequence's quoted item (`['a', "b: c"]`),
+    which a `,`, `]` or the line's end follows, is not (#3075); a quoted
+    scalar after a `,` outside any flow collection is not YAML this editor
+    reads and stays refused. A list item's quoted key (`- 'on': x`, which
+    YAML 1.1 writers quote) is left alone, as main left it: it names no
+    section this module edits. Quoted scalars are found with
     `_quoted_scalar_close`, the module's one quote reader.
     """
     if re.match(r"""^\s*\?\s*["']""", line):
@@ -1368,13 +1371,14 @@ def _contains_potential_quoted_mapping_key(line: str) -> bool:
     while index < len(line):
         char = line[index]
         if char in "\"'" and (index == 0 or line[index - 1] in " \t,[{:-?"):
-            if not depth and line[:index].rstrip(" \t").endswith(","):
+            before = line[:index].rstrip(" \t")
+            if not depth and before.endswith(","):
                 return True
             close = _quoted_scalar_close(line[index + 1 :], char)
             if close < 0:
                 return False  # a string running onto the next line: an implicit key never does
             index += close + 2
-            if line[index:].lstrip(" \t").startswith(":"):
+            if (not before or before.endswith(("{", ","))) and line[index:].lstrip(" \t").startswith(":"):
                 return True
             continue
         if char in "[{":
@@ -1386,12 +1390,25 @@ def _contains_potential_quoted_mapping_key(line: str) -> bool:
 
 
 def _contains_unsupported_yaml_node_syntax(line: str) -> bool:
-    return (
-        re.match(r"^\s*\?", line) is not None
-        or re.match(r"^\s*(?:-\s+)*[&*!]", line) is not None  # a block sequence item's properties too
-        or re.search(r"(?:^|[,{])\s*[&*!]", line) is not None
-        or re.search(r":\s*[&*!]", line) is not None
-    )
+    """Whether `line` gives a node properties (`&anchor`, `!tag`) or an alias (`*a`), or an explicit `? key`.
+
+    The places main looked: a line's start, after `: `, and after `{` or a
+    `,` inside a flow collection. A `,` in a plain value outside one
+    (`note: a, *b`) is text (#3075). A list item's properties (`- &id001`,
+    `- *id001`, which `safe_dump` writes for a shared item) are left alone,
+    as main left them.
+    """
+    if re.match(r"^\s*(?:\?|[&*!])", line) or re.search(r":\s*[&*!]", line):
+        return True
+    depth = 0  # open `[` / `{`; the caller has blanked quoted text
+    for index, char in enumerate(line):
+        if char in "[{":
+            depth += 1
+        elif char in "]}" and depth:
+            depth -= 1
+        if (char == "{" or (char == "," and depth)) and re.match(r"\s*[&*!]", line[index + 1 :]):
+            return True
+    return False
 
 
 def _section_node_is_sequence(lines: list[str], section: str) -> bool:
@@ -1705,7 +1722,7 @@ def section_edit_guard(lines: list[str], section: str, key: str = "") -> str:
         return guard
     if _section_node_is_sequence(lines, section):
         return f"sequence {section} configuration is user-owned; leaving it alone"
-    guard = _document_syntax_guard(lines)
+    guard = _document_syntax_guard(lines) or _section_item_syntax_guard(lines, section)
     if guard:
         return guard
     guard = _section_shape_guard(lines, section)
@@ -1713,6 +1730,31 @@ def section_edit_guard(lines: list[str], section: str, key: str = "") -> str:
         return guard
     if key and any(_references_mapping_key(line, f"{section}.{key}") for line in lines):
         return f"dotted {section}.{key} is user-owned; leaving it alone"
+    return ""
+
+
+def _section_item_syntax_guard(lines: list[str], section: str) -> str:
+    """List items inside `section` that carry node properties or a quoted key.
+
+    The document-wide guard leaves a list item's `&anchor`, `*alias` and
+    quoted key alone, as main did: `safe_dump` writes `- &id001` for a shared
+    item and YAML 1.1 writers quote `- 'on': x`, in sections this module
+    never edits (#3075). Inside the edited section they stay refused, since
+    an item there may be one a writer removes or another node aliases.
+    """
+    inside = _scalar_continuations(lines)[0]
+    in_section = False
+    for index, line in enumerate(lines):
+        if _ends_top_level_node(line):
+            in_section = _block_header(line, section)
+            continue
+        if not in_section or index in inside:
+            continue
+        code = _yaml_code(line, blank_quoted=True)
+        if re.match(r"^\s*(?:-\s+)+[&*!]", code):
+            return "YAML node properties are user-owned; leaving them alone"
+        if re.match(r"""^\s*(?:-\s+)+["'][^"']*["']\s*:""", code):
+            return "quoted YAML mapping keys are user-owned; leaving them alone"
     return ""
 
 

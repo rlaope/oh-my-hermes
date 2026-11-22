@@ -171,14 +171,22 @@ NODE_SYNTAX = {
     "anchor": "base: &a\n  x: 1\n",
     "tag": "x: !custom v\n",
     "alias": "x: *a\n",
-    "alias as a list item": "items:\n- *a\n",
-    "anchor on a list item": "items:\n- &a v\n",
+    "alias as a list item of the edited section": "plugins:\n  entries:\n  - *a\n",
+    "anchor on a list item of the edited section": "plugins:\n  entries:\n  - &a v\n",
     "alias in a flow mapping": "x: {a: *b}\n",
     "quoted key": '"x": v\n',
     "nested quoted key": "x:\n  'k': v\n",
     "quoted key in a flow mapping": "x: {'k': v}\n",
     "JSON-style key in a flow mapping": 'x: {"k":v}\n',
-    "quoted key of a list item": "items:\n- 'k': v\n",
+    "quoted key of a list item of the edited section": "plugins:\n  entries:\n  - 'k': v\n",
+    "alias in a flow sequence": "x: [a, *b]\n",
+}
+# What PyYAML and YAML 1.1 writers put in sections setup never edits: a shared list item, a quoted
+# `'on'` key, and plain text holding `, *word`. Each is left as main left it (#3075).
+OTHER_SECTION_SYNTAX = {
+    "shared list item": "base:\n  - &a x\nmore:\n  - *a\n",
+    "quoted YAML 1.1 key in a list item": "providers:\n  - 'on': x\n",
+    "comma before an asterisk in plain text": "note: one, *two, three\n",
 }
 # A flow sequence of quoted strings: none of them is a key.
 FLOW_QUOTED = ("x: ['a', 'b']\n", 'x: ["a", "b: c"]\n', "x: ['it''s', \"q\\\"x\"]\n")
@@ -463,6 +471,31 @@ class SetupCommandTest(unittest.TestCase):
         if hermes_reads("a: 1\n") is not None:
             self.assertEqual(hermes_load(written)["memory"], {"provider": "omh", "recall": True})
 
+    def test_setup_and_uninstall_beside_list_items_with_node_syntax(self) -> None:
+        """Setup binds the store and uninstall takes every write back beside `- &a` / `- *a` / `- 'on':` (#3075)."""
+        for name, shape in OTHER_SECTION_SYNTAX.items():
+            original = MODEL + shape
+            with self.subTest(shape=name):
+                status, _stdout, stderr, root = self.run_setup(original)
+                self.assertEqual(status, 0, stderr)
+                config = root / ".hermes" / "config.yaml"
+                written = config.read_text(encoding="utf-8")
+                self.assertEqual(adapter.plugin_omh_home_setting(written), (root / ".omh").resolve().as_posix())
+                self.assertEqual(adapter.plugin_enablement(written)["enabled"], ["omh"])
+                self.assertEqual(adapter.memory_provider_selection(written), "omh")
+                status, _stdout, stderr = run_cli(
+                    ["--omh-home", str(root / ".omh"), "--hermes-home", str(root / ".hermes"),
+                     "uninstall", "--all", "--keep-command", "--json"],
+                    output_json=False,
+                )
+                self.assertEqual(status, 0, stderr)
+                after = config.read_text(encoding="utf-8")
+                self.assertEqual(adapter.external_dirs(after), [])
+                self.assertEqual(adapter.plugin_enablement(after)["enabled"], [])
+                self.assertEqual(adapter.memory_provider_selection(after), "")
+                self.assertEqual(adapter.plugin_omh_home_setting(after), "")
+                self.assertEqual(after.rstrip("\n"), original.rstrip("\n"))
+
     def test_setup_binds_the_store_beside_strings_that_look_like_node_syntax(self) -> None:
         original = MODEL + QUOTED_TEXT
         status, _stdout, stderr, root = self.run_setup(original)
@@ -554,6 +587,15 @@ class QuotedTextTest(unittest.TestCase):
                 home = adapter.ensure_plugin_omh_home(setup_writes(text), "/o")
                 self.assertTrue(home.changed, home.message)
                 self.assertTrue(home.text.startswith(text), home.text)
+
+    def test_node_syntax_in_sections_setup_does_not_edit_is_left_alone(self) -> None:
+        for name, shape in OTHER_SECTION_SYNTAX.items():
+            text = MODEL + shape
+            with self.subTest(shape=name):
+                for section in SECTIONS:
+                    self.assertEqual(adapter.section_edit_guard(text.splitlines(), section), "", section)
+                home = adapter.ensure_plugin_omh_home(setup_writes(text), "/o")
+                self.assertTrue(home.changed, home.message)
 
     def test_real_node_syntax_stays_refused(self) -> None:
         for name, shape in NODE_SYNTAX.items():
