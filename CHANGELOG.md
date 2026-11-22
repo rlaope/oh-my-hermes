@@ -4,6 +4,13 @@ All notable changes will be documented here.
 
 ## Unreleased
 
+- **omher: the Slack briefing opens with a greeting and what it is about.** A brief could open with what the bot did
+  or could not do ("could not open the log...") with nothing saying which alert or thread it meant, so the person had
+  to guess. The briefing prompt now asks for a short greeting ("안녕하세요." in Korean), then a first line naming the
+  channel or thread, what happened and whether they need to do anything. The automation-blueprint reference quotes
+  the same prompt, and a bridge test keeps the two identical. Applies to briefings omher sets up from now on; an
+  existing `omher-brief` job keeps its prompt until it is edited.
+
 - **omher 1.1.2.** Terminals keep their screen when you switch back, and splits and rows behave as expected.
   - **Switching back:** a TUI shown again (omh, Codex, OmO, vim, htop) no longer shows a doubled line, a blank band or
     a misplaced cursor. Showing a terminal now fits it once instead of twice, and when xterm had to reflow it the
