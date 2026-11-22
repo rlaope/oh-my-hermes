@@ -25,8 +25,9 @@ describe("promptsOf", () => {
       { kind: "user", text: "maybe steered", held: true, steerUnknown: true },
       { kind: "user", text: "queued, sent", wait: "queued" },
       { kind: "user", text: "held", held: true },
+      { kind: "user", text: "steering in", held: true, autoSteer: true },
     ];
-    expect(promptsOf(items)).toEqual(["sent", "failed", "maybe steered", "queued, sent"]);
+    expect(promptsOf(items)).toEqual(["sent", "failed", "maybe steered", "queued, sent", "steering in"]);
   });
 
   it("skips files-only sends and an absent chat", () => {

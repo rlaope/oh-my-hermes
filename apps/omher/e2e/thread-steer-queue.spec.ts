@@ -45,13 +45,14 @@ async function say(page: Page, text: string) {
   await page.getByTestId("composer").press("Enter");
 }
 
-test("a follow-up typed during a thread's turn is held with ↵ and goes out after turn.end, never an error", async ({ page }) => {
-  const id = await runningThread(page);
+test("a follow-up whose steer the thread refuses is held with ↵ and goes out after turn.end, never an error", async ({ page }) => {
+  const id = await runningThread(page); // resets the mock: refuse steers after it
+  await mock("mock.steerMode", { bot: "kami", mode: "reject" });
   await say(page, "keep the old timeout");
   const b = page.locator("[data-testid=bubble-user][data-held]", { hasText: "keep the old timeout" });
   await expect(b).toBeVisible();
   await expect(b.getByTestId("queue-mark")).toHaveText("↵");
-  await expect(b.getByTestId("bubble-held")).toHaveText("Waiting");
+  await expect(b.locator(".msg-wait")).toHaveCount(0);
   await expect(b.locator(".msg-err")).toHaveCount(0);
   // held in omher: only the first message went to the thread
   expect((await calls("chat.send")).map((c) => c.params.text)).toEqual(["first running task"]);
@@ -63,19 +64,18 @@ test("a follow-up typed during a thread's turn is held with ↵ and goes out aft
   const row = page.getByTestId("bubble-user").filter({ hasText: "keep the old timeout" });
   await expect(row).not.toHaveAttribute("data-held", /.*/);
   await expect(row.locator(".msg-err")).toHaveCount(0);
-  expect(await calls("chat.steer")).toEqual([]);
+  expect((await calls("chat.steer")).map((c) => c.params)).toEqual([{ bot: "kami", session: id, text: "keep the old timeout" }]);
 });
 
-test("Steer in a thread goes to that thread's running turn (chat.steer with its session)", async ({ page }) => {
+test("typed during a thread's turn it is steered into that turn at once (chat.steer with its session)", async ({ page }) => {
   const id = await runningThread(page);
   await say(page, "also check the retry policy");
-  const b = page.locator("[data-testid=bubble-user][data-held]", { hasText: "also check the retry policy" });
-  await b.getByTestId("queue-mark").click();
   await expect.poll(async () => (await calls("chat.steer")).map((c) => c.params)).toEqual([{ bot: "kami", session: id, text: "also check the retry policy" }]);
   expect((await mock("mock.steers")).steers).toEqual([{ bot: "kami", session: id, text: "also check the retry policy" }]);
   const row = page.getByTestId("bubble-user").filter({ hasText: "also check the retry policy" });
   await expect(row.getByTestId("queue-mark")).toHaveCount(0);
   await expect(row.locator(".msg-err")).toHaveCount(0);
+  await expect(row.getByTestId("bubble-read")).toBeVisible();
   // steered in, never sent again as a message after the turn
   await mock("mock.emit", { events: [{ event: "turn.end", bot: "kami", session: id, outcome: "done" }] });
   await page.waitForTimeout(400);
@@ -87,8 +87,12 @@ test("a Steer the thread's bot refuses: the message waits and goes out after tha
   await mock("mock.steerMode", { bot: "kami", mode: "reject" });
   await say(page, "b goes first");
   const b = page.locator("[data-testid=bubble-user][data-held]", { hasText: "b goes first" });
+  await expect.poll(async () => (await calls("chat.steer")).length).toBe(1);
   await b.getByTestId("queue-mark").click();
-  await expect.poll(async () => (await calls("chat.steer")).map((c) => c.params)).toEqual([{ bot: "kami", session: id, text: "b goes first" }]);
+  await expect.poll(async () => (await calls("chat.steer")).map((c) => c.params)).toEqual([
+    { bot: "kami", session: id, text: "b goes first" },
+    { bot: "kami", session: id, text: "b goes first" },
+  ]);
   await expect(b).toBeVisible();
   await mock("mock.emit", { events: [{ event: "turn.end", bot: "kami", session: id, outcome: "done" }] });
   await expect.poll(async () => (await calls("chat.send")).map((c) => c.params.text)).toEqual(["first running task", "b goes first"]);
@@ -112,6 +116,8 @@ test("removing a thread that holds messages never sends them; the main chat and 
     ],
   });
   const [a, b] = threads as string[];
+  // held messages: Hermes refuses the steers, so each waits for its turn to end
+  await mock("mock.steerMode", { bot: "kami", mode: "reject" });
   await page.reload();
   const open = async (id: string) => {
     await page.getByTestId(`thread-row-${id}`).getByTestId("thread-open").click();

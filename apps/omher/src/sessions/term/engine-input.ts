@@ -35,7 +35,7 @@ import { readTermSettings, TERM_DEFAULTS, writeTermSettings } from "./settings";
 import { kittyKeysOn } from "./park";
 import { TERM_MENU_EVENT, type TermMenuRequest } from "./menu-event";
 import { historyChanged } from "./history";
-import { attachPasteGuard, guardedPaste } from "./paste-guard";
+import { attachPasteGuard, guardedPaste, saidInto } from "./paste-guard";
 import type { FindOptions } from "./engine-find";
 
 type KeyLike = { key: string; code?: string; metaKey: boolean; ctrlKey: boolean; altKey: boolean; shiftKey: boolean };
@@ -142,6 +142,8 @@ export function optionTyped(e: KeyLike, mac: boolean): string | null {
   return e.key.length === 1 && e.key >= "!" && e.key <= "~" && !/^[a-z0-9]$/i.test(e.key) ? e.key : null;
 }
 
+const MODIFIERS = ["Shift", "Control", "Alt", "Meta", "CapsLock"];
+
 /** Keyboard and mouse handling for one terminal; `onFind` runs when the person asks for find. Returns what undoes it. */
 export function attachInput(term: Terminal, host: HTMLElement, onFind: () => void): () => void {
   const mac = isMacPlatform();
@@ -160,6 +162,7 @@ export function attachInput(term: Terminal, host: HTMLElement, onFind: () => voi
     if (bytes !== null) {
       if (e.type === "keydown") {
         e.preventDefault();
+        saidInto(host);
         term.input(bytes, true);
       }
       return false;
@@ -168,6 +171,7 @@ export function attachInput(term: Terminal, host: HTMLElement, onFind: () => voi
     if (typed !== null) {
       if (e.type === "keydown") {
         e.preventDefault();
+        saidInto(host);
         term.input(typed, true);
       }
       return false;
@@ -223,7 +227,12 @@ export function attachInput(term: Terminal, host: HTMLElement, onFind: () => voi
       }
       return false;
     }
-    if (!isFindKey(e, mac, term.buffer.active.type === "alternate")) return !isAppKey(e, mac);
+    if (!isFindKey(e, mac, term.buffer.active.type === "alternate")) {
+      if (isAppKey(e, mac)) return false;
+      // a key xterm sends to the program (a modifier alone sends nothing)
+      if (e.type === "keydown" && !MODIFIERS.includes(e.key)) saidInto(host);
+      return true;
+    }
     if (e.type === "keydown" && !e.repeat) {
       e.preventDefault();
       onFind();

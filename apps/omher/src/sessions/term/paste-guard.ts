@@ -50,6 +50,11 @@ interface Guard {
 }
 const guards = new WeakMap<Terminal, Guard>();
 
+/** Sent on a terminal's element (bubbling) when the person's own keys or paste reach its program: not the terminal's
+ *  replies to a program's queries, which also leave through xterm's onData (sessions.ts `keyed`). */
+export const TERM_INPUT_EVENT = "omher-term-input";
+export const saidInto = (host: HTMLElement | undefined): void => void host?.dispatchEvent(new Event(TERM_INPUT_EVENT, { bubbles: true }));
+
 function ask(term: Terminal, g: Guard, text: string): void {
   // a second paste while one is waiting replaces it
   g.open?.close();
@@ -98,7 +103,9 @@ function ask(term: Terminal, g: Guard, text: string): void {
     close();
     term.focus();
     // xterm brackets it if the program turned bracketed paste on meanwhile, and makes every line break a CR
-    if (send) term.paste(text);
+    if (!send) return;
+    saidInto(g.host);
+    term.paste(text);
   };
   ok.addEventListener("click", () => done(true));
   cancel.addEventListener("click", () => done(false));
@@ -126,6 +133,7 @@ export function guardedPaste(term: Terminal, text: string): void {
   if (!text) return;
   const g = guards.get(term);
   if (!g || !needsConfirm(text, bracketedOn(term), readTermSettings().confirmPaste)) {
+    saidInto(g?.host);
     term.paste(text);
     return;
   }
@@ -141,6 +149,7 @@ export function attachPasteGuard(term: Terminal, host: HTMLElement): () => void 
     // files (a picture) are the session view's; xterm takes text only
     if (!dt || dt.files.length) return;
     const text = dt.getData("text/plain");
+    if (text && !needsConfirm(text, bracketedOn(term), readTermSettings().confirmPaste)) saidInto(host);
     if (!text || !needsConfirm(text, bracketedOn(term), readTermSettings().confirmPaste)) return;
     e.preventDefault();
     e.stopPropagation();

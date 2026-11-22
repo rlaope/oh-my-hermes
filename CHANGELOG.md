@@ -4,6 +4,67 @@ All notable changes will be documented here.
 
 ## Unreleased
 
+- **omher Tasks shows my pull requests, reviews and issues across repositories and GitHub accounts.** The Tasks page
+  has a scope toggle, "이 저장소 | 나". "나" lists, across every repository, the open pull requests asking for my
+  review, my open pull requests, the open issues assigned to me and the last 7 days' mentions (folded until opened).
+  What needs action comes first: CI failed, changes requested, merge conflict, then review requests by how long they
+  waited. Each row shows the repository, number, title, the account's colour dot and chips for draft, CI, review and
+  conflict, and how long a review request has waited. j / k move, Enter opens the drawer, o opens the browser, t
+  starts a thread; the list groups by section or by repository. The sidebar's Tasks row counts the review requests.
+  - **GitHub accounts:** Settings › Accounts has a GitHub section listing the accounts your `gh` is signed in to, with
+    "Add" for each and "Sign in to another account", which runs `gh auth login` (or `--hostname` for GitHub
+    Enterprise) in a terminal tab; gh itself makes the account it signs in its active one. omher keeps only each chosen account's host, login and colour. Account chips in
+    "나" filter to one account; an account whose login fails shows "다시 로그인" while the others keep working.
+  - **Per-account reads:** every call is pinned to the account it names, active or not, since gh's active account can
+    change under omher from any shell. The account's own token is read with `gh auth token --hostname <host> --user
+    <login>` for each call and passed only as `GH_TOKEN` in that one `gh` call's environment; it is never stored,
+    shown, logged or sent, and omher's copy is wiped when the call ends. omher never runs `gh auth switch`, and takes
+    inherited tokens and gh's debug and pager variables out of every gh child and the sign-in tab. The status query must name that account as its viewer, or the account shows "다시 로그인".
+  - **Reads:** four fixed `gh search` argv and one fixed `gh api graphql` query (CI, review decision, mergeability),
+    each answer kept 60 seconds per account, read again on window focus, on ⟳ and every 5 minutes; at most 27
+    search requests a minute per account (one per 100 rows asked for), and GitHub's rate limit shows "잠시 후 다시"
+    instead of a failure. "이 저장소" on GitHub reads as the github.com account whose login owns the repository, or
+    the github.com account picked on its chip.
+    (apps/omher `src-tauri/src/gh_me.rs`, `src/tasks/MeView.tsx`, `src/settings/accounts/GithubAccounts.tsx`;
+    `docs/OMHER-BOUNDARY.md` rules 11, 18 and 33)
+- **OMH TUI: a `/` after a space opens skill completion, as in Claude Code.** Typing `asdf /dag` opens a menu of
+  Hermes' skills filtered by `dag`; a bare `/` after a space lists them all. As in Claude Code, a `/skill` after
+  other text names a skill for that message, while a built-in command (`/model`, `/compact`, `/help`, Hermes' own)
+  means something only at the line's start, so only skills are offered there, by name prefix or substring:
+  `path /opt` offers nothing unless a skill's name holds `opt`. The leading `/` menu is unchanged. The token runs
+  from its `/` to the caret, so moving the caret onto a `/name` mid-line opens it too, in multi-line input as well;
+  taking a row replaces only that `/name` and keeps the text on both sides. A path-like slash (`./x`, `../x`, `~/x`,
+  `a/b`, `http://`, `//`) opens nothing. The menu never takes a key the line needs: Enter sends the line as typed
+  and Up stays history and caret movement until Down moves into the menu; Tab always takes the highlighted row. Text
+  from history recall, a paste or a loaded draft opens no mid-line menu until the next typed key. A line that does
+  not start with `/` still goes as a prompt with the `/skill` text in it. (`src/tui/slash.py` `slash_token_at`,
+  `skill_completions`, `src/tui/app.py`)
+- **OMH TUI: a `/` after a space opens slash completion, as in Claude Code.** Typing `asdf /as` opens the command
+  and skill menu filtered by `as`; a bare `/` after a space opens the whole list. The token runs from its `/` to the
+  caret, so moving the caret onto a `/name` in the middle of a line opens it too, in multi-line input as well. Taking
+  a row replaces only that `/name` and keeps the text on both sides. A path-like slash (`./x`, `../x`, `~/x`, `a/b`,
+  `http://`, `//`) opens nothing, and a mid-line word matches by prefix or substring only, so `/opt` or `/tmp`
+  offers nothing. The menu never takes a key the line needs: Enter still sends the line as typed (`path /opt`
+  stays `path /opt`), and Up stays history and caret movement until Down moves into the menu; Tab always takes the
+  highlighted row. Text from history recall, a paste or a loaded draft opens no mid-line menu until the next typed
+  key. A line that does not start with `/` still goes as a prompt with the `/skill` text in it, as Claude Code sends
+  a skill named after plain text. (`src/tui/slash.py` `slash_token_at`, `src/tui/app.py`)
+  `http://`, `//`) opens nothing. Enter is unchanged: a line that does not start with `/` still goes as a prompt,
+  with the `/skill` text in it, as Claude Code sends a skill named after plain text. (`src/tui/slash.py`
+  `slash_token_at`, `src/tui/app.py`)
+- **omher: the bridge comes back after it dies.** If the Python bridge stopped after it was ready, nothing started it
+  again: Hermes bots and folder chats stayed on "Connecting to Hermes…" until omher was restarted, because the shell
+  kept handing the page the dead bridge's port. The shell now notices the exit (the bridge's output closes, or a check
+  when the page asks for the URL) and starts it again on a new port with a new token after 0.5 s, then 1 s, 2 s, 4 s
+  and 8 s for each quick death in a row. The page asks for the URL again on each reconnect, so open chats resume by
+  themselves. A sixth quick death in a row (after five restarts) shows the error in a bar at the top with Retry; the
+  bar covers nothing else, so the app and its terminals stay visible and usable. A bridge omher stopped itself (quit,
+  Retry) is not started again, and one that stops while the installer runs waits for it to end. TERMINALS were never
+  affected. (apps/omher `src-tauri/src/bridge.rs`, `src/app/BridgeGate.tsx`)
+  themselves. After five quick deaths in a row the error shows over the app (which stays open underneath, terminals
+  included) with Retry. A bridge omher stopped itself (quit, Retry) is not started again, and one that stops while
+  the installer runs waits for it to end. TERMINALS were never affected. (apps/omher `src-tauri/src/bridge.rs`,
+  `src/app/BridgeGate.tsx`)
 - **omher: make a TERMINALS folder from the right-click menu, and see sharp pictures in its terminals.**
   - **New folder…:** right-clicking empty TERMINALS space (or a folder header) offers New folder… under New
     session. It opens the system folder dialog, where you can make a new folder or pick one; the folder shows as a
@@ -27,7 +88,6 @@ All notable changes will be documented here.
   channel or thread, what happened and whether they need to do anything. The automation-blueprint reference quotes
   the same prompt, and a bridge test keeps the two identical. Applies to briefings omher sets up from now on; an
   existing `omher-brief` job keeps its prompt until it is edited.
-
 - **omher keeps every TERMINALS row over a restart, types European Option signs, and gives the keyboard back.**
   - **Restart:** every TERMINALS row comes back, however many there are. Before, only the newest 20 were saved and the
     next start deleted the older rows' history and files, even for a running Claude. Only the newest 20 keep their
@@ -52,6 +112,29 @@ All notable changes will be documented here.
   - **Keys:** ⌘A selects the whole terminal, also in Claude Code and Codex. (#3050)
   - **Speed:** saving a long scrollback no longer stalls on trailing blank lines (98 ms to 0.1 ms on the same input).
     (#3050)
+
+- **omher: a message you send while a bot is answering goes out at once, as in a messenger.** The bot does not stop:
+  it keeps working and takes the new message into account (Hermes' steer joins the running turn, no interrupt). The
+  bubble stays at the bottom in the order you sent it, with a small muted "Read · 14:02" beside its bottom-left corner,
+  and the typing dots and activity line move under it. The ↵ mark and the "Waiting", "Steering…" and "Sent to … ·
+  joins the running answer" lines are gone. The Settings › General "While it answers" choice (Wait / Steer) is gone
+  too: steering is always the behaviour. Where a steer cannot happen (Hermes refuses it, the turn already ended, the
+  bridge is coming back, or the message is a `/` command or carries files or a Reply there target) the message waits with its ↵ ↓ × buttons
+  and no text line, and goes out as the next message right after the turn, so nothing is lost. SESSIONS agent chats
+  are unchanged. (apps/omher `state/store.ts`, `chat/parts/Bubble.tsx`)
+- **omher: a terminal that cannot continue its conversation keeps it.** A Claude Code or Codex terminal continues its
+  conversation after omher restarts. When that CLI ended at once (the conversation, its account folder or the login
+  was gone) the row turned into a Shell and dropped the conversation id, and when the CLI was missing, Restart started
+  a new conversation over the old id. Now omher first looks for the conversation's file (by name only). A Claude Code
+  terminal nobody typed in has none, so it starts again under the same id instead of failing; a conversation you used
+  whose file was deleted, and a Codex conversation with no rollout, are not started at all. A continued CLI that
+  prints its refusal of that id, ends with an error before you press a key, or ends cleanly before a key and before it
+  draws its screen (or within 1.8 s) leaves the row Claude Code or Codex, ended or failed, with the same id: Restart
+  continues that conversation, and "Start a new conversation" (kept across restarts) is the way out when it is gone
+  for good. When Claude Code says it already has an id the look missed, the terminal continues it. A new Claude Code
+  terminal keeps its id only once its CLI started. A continued CLI you pressed a key in and then left goes on as the
+  login shell without its id, unless it printed its refusal; so does one that waited for input (a login) and was left
+  later. (apps/omher `sessions/sessions.ts`, `termEnd`, `conversation_state`)
 
 - **omher reads more naturally in Korean.** A pass over the Korean UI copy: one register (해요체) on every screen
   instead of 합니다체 in some hints and dialogs, `shell` instead of `셸`, and literal translations replaced with what
@@ -89,7 +172,21 @@ All notable changes will be documented here.
   bubble style with no bot bubble reads `본문처럼`, the terminal theme slot's label reads `적용 대상`, and a route
   whose chain ran out reads `chain exhausted` like its `chain head` and `fallback` siblings. Only string values
   changed.
+- **Inside a Hermes chat, a request to review a diff or PR now loads the code-review skill.** The router already
+  sent these to `code-review`, but the route hint OMH adds to each message still named visual QA (for the word
+  "diff"), feedback triage ("bug") or coding delivery ("review", "PR"), so the model never opened the skill and its
+  replies had no `Not checked` list. "review this diff for bugs", "can you review my PR?", "does this change
+  introduce a bug?", "이 diff 리뷰해줘" and "코드 리뷰 해줘" now get `code-review` first, with a line telling the
+  model to load the skill and follow it. The hint reads the same check as the router, so the two cannot drift; a
+  review asked together with a fix ("review this PR, then fix the bug in auth.py") and look-alikes such as a
+  screenshot diff, a customer bug report or "review my essay" keep their old hint.
 
+- **Bare `omh` opens the OMH TUI on native Windows.** Since the TUI started on Windows (#3009), its gateway child
+  always failed to mint a session ticket, because it asked Hermes' POSIX control socket (`os.getuid`), so `omh` fell
+  back to Hermes' own TUI every time. On Windows the child now attaches the way Hermes' Ink bootstrap does, through
+  Hermes' `attach_gateway`, which needs Hermes 0.23.1 or later. An older Hermes gets a one-line "cannot attach on
+  Windows" verdict and the fallback, and a control pipe that is not answering yet is waited for, as on macOS and
+  Linux. macOS and Linux are unchanged. Contributed by @Gudals0320 (#3060).
 - **The OMH pane in Hermes Desktop is redrawn, with a run timeline and TPS/TTFT in view.** USAGE is one card: the
   token total large, cache hit and cost beside it, the four-way split, and the speed (TPS) and the last turn's wait for
   its first token (TTFT), which used to sit only in a tooltip. CATCHES and PLAN read as rows with marks; PLAN groups

@@ -978,11 +978,18 @@ impl Sessions {
     where
         F: FnMut(Output) + Send + 'static,
     {
+        self.spawn_cmd(command_for(argv, cwd, path_env, account_env), cwd, account_env, cols, rows, sink)
+    }
+
+    /// [`Sessions::spawn`] with the command already built (gh's sign-in: [`gh_login_command`]).
+    fn spawn_cmd<F>(&self, cmd: CommandBuilder, cwd: &Path, account_env: &[(String, String)], cols: u16, rows: u16, sink: F) -> Result<u32, String>
+    where
+        F: FnMut(Output) + Send + 'static,
+    {
         if !cwd.is_absolute() || !cwd.is_dir() {
             return Err(format!("not a folder: {}", cwd.display()));
         }
         let pair = native_pty_system().openpty(clamp_size(cols, rows)).map_err(|e| e.to_string())?;
-        let cmd = command_for(argv, cwd, path_env, account_env);
         let mut child = pair.slave.spawn_command(cmd).map_err(|e| e.to_string())?;
         drop(pair.slave); // only the child holds the terminal side, so its exit ends our reads
         let reader = pair.master.try_clone_reader().map_err(|e| e.to_string())?;
@@ -1088,6 +1095,17 @@ impl Sessions {
         let (argv, missing) = shell_argv_for(shell, &host_env, &etc_shells, is_program_file, Os::current())?;
         let at = shell_cwd(cwd, home);
         Ok((self.spawn(argv, &at, None, &[], cols, rows, sink)?, at, missing))
+    }
+
+    /// Settings › Accounts › GitHub "Sign in to another account": gh's own sign-in (`gh auth login`, or with
+    /// `--hostname <host>`: gh_me::login_argv) in a pseudo-terminal in `home`, shown in the terminal panel. The program
+    /// is the `gh` found on this computer, the arguments are those fixed words with at most a checked host, and
+    /// nothing is typed into it: the person answers gh's own questions, and gh stores the login itself.
+    pub fn start_gh_login<F>(&self, gh: &Path, args: Vec<String>, home: &Path, cols: u16, rows: u16, sink: F) -> Result<u32, String>
+    where
+        F: FnMut(Output) + Send + 'static,
+    {
+        self.spawn_cmd(gh_login_command(gh, args, home), home, &[], cols, rows, sink)
     }
 
     /// The shells a Shell terminal may run here ([`shells_available`] on this machine).
@@ -1278,6 +1296,26 @@ fn command_for(argv: Vec<OsString>, cwd: &Path, path_env: Option<OsString>, acco
     }
     crate::appimage::host_env(&mut cmd);
     cmd
+}
+
+/// gh's sign-in as a terminal command: the `gh` found here, the fixed words, the home folder, and the terminal
+/// variables every session gets, with any `GH_TOKEN` / `GITHUB_TOKEN` / enterprise token omher inherited taken out
+/// (gh refuses to sign in while one is set: "The value of the GH_TOKEN environment variable is being used"), and
+/// gh's debug and pager variables with them.
+pub fn gh_login_command(gh: &Path, args: Vec<String>, home: &Path) -> CommandBuilder {
+    let mut argv: Vec<OsString> = vec![gh.as_os_str().to_os_string()];
+    argv.extend(args.into_iter().map(OsString::from));
+    let mut cmd = command_for(argv, home, None, &[]);
+    scrub_gh_env(&mut cmd);
+    cmd
+}
+
+/// Take what gh_me.rs's children never get (`gh_me::SCRUB`: inherited tokens, gh's debug output and pager) out of a
+/// terminal command's environment.
+pub fn scrub_gh_env(cmd: &mut CommandBuilder) {
+    for k in crate::gh_me::SCRUB {
+        cmd.env_remove(k);
+    }
 }
 
 /// Bytes every session's reader has taken from its PTY, for the bench (`pty_bench.rs`): read minus what the page

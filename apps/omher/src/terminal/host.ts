@@ -51,6 +51,9 @@ export interface ShellHost {
   /** Start a shell in `cwd` (null: home): `shell`, an id from `shells()`, else the login shell. Only a folder, a size
    *  and that id go to the shell: never a program. */
   start(cwd: string | null, cols: number, rows: number, onData: (d: Uint8Array | string) => void, onExit: (code: number | null) => void, shell?: string): Promise<ShellStarted>;
+  /** gh's own sign-in for one more GitHub account (`gh auth login`, `--hostname <host>` when set) in a pseudo-terminal
+   *  in the home folder: Settings › Accounts › GitHub. Only the host and a size go to the shell. */
+  startGhLogin(host: string | null, cols: number, rows: number, onData: (d: Uint8Array | string) => void, onExit: (code: number | null) => void): Promise<ShellStarted>;
   /** The shells this computer offers for a Shell terminal, the default first. */
   shells(): Promise<ShellInfo[]>;
   write(id: number, data: string): Promise<void>;
@@ -74,6 +77,14 @@ class TauriShellHost implements ShellHost {
     exit.onmessage = (c) => onExit(c);
     await learnThisHost();
     return invoke<ShellStarted>("shell_start", { cwd, shellId: shell || null, cols, rows, onData: data, onExit: exit });
+  }
+  async startGhLogin(host: string | null, cols: number, rows: number, onData: (d: Uint8Array) => void, onExit: (c: number | null) => void) {
+    const { invoke, Channel } = await this.core();
+    const data = new Channel<ArrayBuffer>();
+    data.onmessage = (b) => onData(new Uint8Array(b));
+    const exit = new Channel<number | null>();
+    exit.onmessage = (c) => onExit(c);
+    return invoke<ShellStarted>("gh_login_start", { host, cols, rows, onData: data, onExit: exit });
   }
   async shells() {
     const { invoke } = await this.core();
@@ -115,6 +126,7 @@ class TauriShellHost implements ShellHost {
 
 export type MockShellCall =
   | { op: "start"; id: number; cwd: string | null; at: string; cols: number; rows: number; shell?: string }
+  | { op: "gh-login"; id: number; host: string | null }
   | { op: "write"; id: number; data: string }
   | { op: "resize"; id: number; cols: number; rows: number }
   | { op: "close"; id: number };
@@ -157,7 +169,7 @@ const TEST_RUN = [
 
 export class MockShellHost implements ShellHost {
   readonly kind = "mock" as const;
-  private live = new Map<number, { line: string; cwd: string; out: (d: string) => void; exit: (c: number | null) => void }>();
+  private live = new Map<number, { line: string; cwd: string; out: (d: string) => void; exit: (c: number | null) => void; gh?: boolean }>();
   constructor(private g: MockGlobals = globalThis as MockGlobals) {}
   private log(c: MockShellCall) {
     (this.g.__omherShellCalls ??= []).push(c);
@@ -168,6 +180,15 @@ export class MockShellHost implements ShellHost {
   }
   async shells() {
     return (this.g.__omherMockShells ?? MOCK_SHELLS).map((s) => ({ ...s }));
+  }
+  /** As gh's sign-in: one question; Enter answers it and the program ends (exit 0). */
+  async startGhLogin(host: string | null, _cols: number, _rows: number, onData: (d: string) => void, onExit: (c: number | null) => void) {
+    const id = nextMockPty();
+    const home = this.g.__omherShellHome ?? MOCK_HOME;
+    this.log({ op: "gh-login", id, host });
+    this.live.set(id, { line: "", cwd: home, out: onData, exit: onExit, gh: true });
+    setTimeout(() => onData(`\x1b[2m(mock) gh auth login${host ? ` --hostname ${host}` : ""}\x1b[0m\r\n? Where do you use GitHub? `), 20);
+    return { id, cwd: home };
   }
   async start(cwd: string | null, cols: number, rows: number, onData: (d: string) => void, onExit: (c: number | null) => void, shell?: string) {
     await learnThisHost();
@@ -204,6 +225,12 @@ export class MockShellHost implements ShellHost {
     const s = this.live.get(id);
     if (!s) throw new Error("no such session");
     for (const ch of data) {
+      if (ch === "\r" && s.gh) {
+        s.out("\r\n✓ Logged in\r\n");
+        this.live.delete(id);
+        setTimeout(() => s.exit(0), 10);
+        return;
+      }
       if (ch === "\r") {
         const line = s.line.trim();
         s.line = "";

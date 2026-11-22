@@ -106,7 +106,10 @@ UI (React in a Tauri window)  ⇄  bridge (Python, loopback WebSocket)  ⇄  the
 - **Shell** (`src-tauri/`): starts the bridge with Hermes' own Python, reads its `OMHER_BRIDGE_READY` line,
   hands the UI a `ws://127.0.0.1:<port>/?token=<random>` URL, and stops the bridge when the app exits. If the
   bridge cannot start, the UI shows the error with a Retry button; if the reason is that Hermes is missing, it
-  shows the first-run Install screen instead (`src-tauri/src/setup.rs` holds its one fixed command).
+  shows the first-run Install screen instead (`src-tauri/src/setup.rs` holds its one fixed command). A bridge that
+  dies after it was ready is started again on a new port, up to five times in a row after quick deaths (waits of
+  0.5 s, 1 s, 2 s, 4 s, 8 s); a sixth quick death in a row shows the error in a bar with Retry, over nothing else,
+  so the app and its terminals stay usable. The UI asks for the new URL when it reconnects.
 - **Bridge** (`bridge/omher_bridge.py`): uses Hermes' `connect_gateway`, one connection per profile. It binds
   127.0.0.1 only and refuses any connection without the launch token.
 - **Mock bridge** (`e2e/mock-bridge.mjs`): the same protocol, scripted, for the Playwright tests.
@@ -159,6 +162,11 @@ UI (React in a Tauri window)  ⇄  bridge (Python, loopback WebSocket)  ⇄  the
   requests of the repository, read-only through your own `gh` or `glab` (`BOUNDARY.md` rule 33), with a drawer for
   one item and Start in thread, which opens a thread under the bot you pick with the issue as its first message.
   Linear shows a connect screen naming the `hermes -p <bot> mcp install linear` command; omher keeps no Linear key.
+  The page's "나" (Me) scope (`src/tasks/MeView.tsx`, `src-tauri/src/gh_me.rs`) lists, across every repository, the
+  open pull requests asking for your review, your open pull requests, the open issues assigned to you and the last
+  week's mentions, for the GitHub accounts you add in Settings › Accounts › GitHub (the ones your `gh` is signed in
+  to), with what needs action first; the sidebar's Tasks row counts the review requests. A non-active `gh` account is
+  read with its token passed only to that one `gh` call (`BOUNDARY.md` rules 18 and 33).
 - **ACP agents** (`src-tauri/src/acp_chat.rs`): one adapter for agents that speak the Agent Client Protocol
   (JSON-RPC on stdio), one table row per agent. OpenCode (`opencode acp`) is the first. omher turns off the
   protocol's file and terminal capabilities, so the agent uses its own tools; its permission requests become

@@ -10,6 +10,7 @@ mod disk;
 mod dsh_chat;
 mod fg;
 mod folder_open;
+mod gh_me;
 mod git_branch;
 mod hermes_auth;
 mod past_chats;
@@ -50,10 +51,12 @@ struct Shell {
     chats: Arc<ChatSessions>,
 }
 
-/// `ws://127.0.0.1:<port>/?token=<token>` once the bridge is ready.
+/// `ws://127.0.0.1:<port>/?token=<token>` once the bridge is ready. The wait for a starting bridge blocks, so it runs
+/// on the blocking pool: every client re-dials while a bridge comes back, and none may park an async worker.
 #[tauri::command]
 async fn bridge_url(shell: State<'_, Shell>) -> Result<String, String> {
-    shell.bridge.url(Duration::from_secs(2))
+    let bridge = Arc::clone(&shell.bridge);
+    tauri::async_runtime::spawn_blocking(move || bridge.url(Duration::from_secs(2))).await.map_err(|e| e.to_string())?
 }
 
 /// `{state: "ready" | "starting" | "failed", error?}`.
@@ -179,6 +182,8 @@ async fn install_engine(shell: State<'_, Shell>, on_event: Channel<InstallEvent>
         return Err("the installer is already running".into());
     }
     let installing = Arc::clone(&shell.installing);
+    // the installer may replace Hermes under a running bridge: one that stops meanwhile waits for it to end
+    shell.bridge.hold();
     let result = tauri::async_runtime::spawn_blocking(move || {
         setup::run_install(setup::install_command(Os::current()), |e| {
             let _ = on_event.send(e);
@@ -187,15 +192,18 @@ async fn install_engine(shell: State<'_, Shell>, on_event: Channel<InstallEvent>
     .await
     .map_err(|e| e.to_string());
     installing.store(false, Ordering::SeqCst);
-    let code = result??;
-    // An installer can exit 0 without leaving Hermes where omher looks; say so instead of showing the
-    // setup screen again as if nothing had run.
-    let found = code != Some(0) || bridge::discover_python(|k| std::env::var(k).ok(), |p| p.is_file()).is_ok();
-    let code = setup::check_installed(code, found)?;
-    if code == Some(0) {
+    let outcome = result.and_then(|r| r).and_then(|code| {
+        // An installer can exit 0 without leaving Hermes where omher looks; say so instead of showing the
+        // setup screen again as if nothing had run.
+        let found = code != Some(0) || bridge::discover_python(|k| std::env::var(k).ok(), |p| p.is_file()).is_ok();
+        setup::check_installed(code, found)
+    });
+    if outcome == Ok(Some(0)) {
         shell.bridge.start(shell.resource_dir.clone());
+    } else {
+        shell.bridge.release();
     }
-    Ok(code)
+    outcome
 }
 
 fn user_home() -> Result<PathBuf, String> {
@@ -561,19 +569,96 @@ async fn tasks_status(tasks: State<'_, Arc<tasks::Tasks>>, source: String, fresh
 
 /// Tasks: one page of open issues or pull / merge requests of `repo`, through the person's own CLI with a fixed,
 /// read-only argv (rule 33). The page sends only these words and numbers.
+/// `account` (GitHub only): a GitHub account chosen in omher (`<login>@<host>`, a github.com one: `Me::repo_list`),
+/// read as through gh_me.rs; none: gh's own active account.
 #[tauri::command]
-async fn tasks_list(tasks: State<'_, Arc<tasks::Tasks>>, source: String, repo: String, kind: String, filter: String, page: u32) -> Result<tasks::Page, String> {
+async fn tasks_list(
+    tasks: State<'_, Arc<tasks::Tasks>>,
+    me: State<'_, Arc<gh_me::Me>>,
+    source: String,
+    repo: String,
+    kind: String,
+    filter: String,
+    page: u32,
+    account: Option<String>,
+) -> Result<tasks::Page, String> {
     let (src, kind, filter) = (tasks::Source::parse(&source)?, tasks::Kind::parse(&kind)?, tasks::Filter::parse(&filter)?);
-    let t = Arc::clone(&tasks);
-    tauri::async_runtime::spawn_blocking(move || t.list(src, kind, &repo, filter, page)).await.map_err(|e| e.to_string())?
+    let (t, m) = (Arc::clone(&tasks), Arc::clone(&me));
+    tauri::async_runtime::spawn_blocking(move || match account.filter(|_| src == tasks::Source::Github) {
+        Some(acc) => m.repo_list(&t, kind, &repo, filter, page, &acc),
+        None => t.list(src, kind, &repo, filter, page),
+    })
+    .await
+    .map_err(|e| e.to_string())?
 }
 
-/// Tasks: one item's description, comments and checks, read-only (rule 33).
+/// Tasks: one item's description, comments and checks, read-only (rule 33). `account`: a chosen account, on any
+/// host it is on (a "나" row read as a GitHub Enterprise account is read there: `Me::view`).
 #[tauri::command]
-async fn tasks_view(tasks: State<'_, Arc<tasks::Tasks>>, source: String, repo: String, kind: String, number: u64) -> Result<tasks::Detail, String> {
+async fn tasks_view(
+    tasks: State<'_, Arc<tasks::Tasks>>,
+    me: State<'_, Arc<gh_me::Me>>,
+    source: String,
+    repo: String,
+    kind: String,
+    number: u64,
+    account: Option<String>,
+) -> Result<tasks::Detail, String> {
     let (src, kind) = (tasks::Source::parse(&source)?, tasks::Kind::parse(&kind)?);
-    let t = Arc::clone(&tasks);
-    tauri::async_runtime::spawn_blocking(move || t.view(src, kind, &repo, number)).await.map_err(|e| e.to_string())?
+    let (t, m) = (Arc::clone(&tasks), Arc::clone(&me));
+    tauri::async_runtime::spawn_blocking(move || match account.filter(|_| src == tasks::Source::Github) {
+        Some(acc) => m.view(&t, kind, &repo, number, &acc),
+        None => t.view(src, kind, &repo, number),
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
+/// Settings › Accounts › GitHub and Tasks › 나: the GitHub accounts gh is signed in to, from `gh auth status --json
+/// hosts` (host, login, active, state and scopes only; rules 18 and 33). `fresh` asks again.
+#[tauri::command]
+async fn gh_accounts(me: State<'_, Arc<gh_me::Me>>, fresh: Option<bool>) -> Result<gh_me::GhAccounts, String> {
+    let m = Arc::clone(&me);
+    tauri::async_runtime::spawn_blocking(move || m.accounts(fresh.unwrap_or(false))).await.map_err(|e| e.to_string())
+}
+
+/// Tasks › 나: one page of `section` (`review`, `authored`, `assigned`, `mentions`) across every repository, as GitHub
+/// account `account` (rule 33). The page sends only these words and the page number; the argv is gh_me.rs's own.
+#[tauri::command]
+async fn tasks_me(me: State<'_, Arc<gh_me::Me>>, account: String, section: String, page: u32, fresh: Option<bool>) -> Result<gh_me::MePage, gh_me::MeError> {
+    let sec = gh_me::Section::parse(&section).map_err(|e| gh_me::MeError::new("other", e))?;
+    let m = Arc::clone(&me);
+    tauri::async_runtime::spawn_blocking(move || m.list(&account, sec, page, fresh.unwrap_or(false))).await.map_err(|e| gh_me::MeError::new("other", e.to_string()))?
+}
+
+/// Settings › Accounts › GitHub: gh's own sign-in for one more account in a terminal-panel tab (`gh auth login`, or
+/// `--hostname <host>` for GitHub Enterprise; rule 18). The page sends only the host (checked) and a size.
+#[tauri::command]
+async fn gh_login_start(
+    shell: State<'_, Shell>,
+    host: Option<String>,
+    cols: u16,
+    rows: u16,
+    on_data: Channel<InvokeResponseBody>,
+    on_exit: Channel<Option<u32>>,
+) -> Result<ShellStarted, String> {
+    let sessions = shell.sessions.clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        let home = user_home()?;
+        let args = gh_me::login_argv(host.as_deref())?;
+        let gh = tasks::find("gh").ok_or("gh is not installed")?;
+        let id = sessions.start_gh_login(&gh, args, &home, cols, rows, move |ev| match ev {
+            Output::Data(b) => {
+                let _ = on_data.send(InvokeResponseBody::Raw(b));
+            }
+            Output::Exit(code) => {
+                let _ = on_exit.send(code);
+            }
+        })?;
+        Ok(ShellStarted { id, cwd: home.to_string_lossy().into_owned(), missing: None })
+    })
+    .await
+    .map_err(|e| e.to_string())?
 }
 
 /// Tasks: the GitHub / GitLab repository folder `cwd` is in, from its `.git/config` (no program runs); null when none.
@@ -749,21 +834,31 @@ async fn session_open_terminal(cwd: String) -> Result<(), String> {
     tauri::async_runtime::spawn_blocking(move || folder_open::open_terminal(&cwd)).await.map_err(|e| e.to_string())?
 }
 
-/// The home a new session of `agent` reads its conversations from: the account picked for new sessions, else the
-/// CLI's own (rule 30).
-fn past_home(agent: &str) -> Result<PathBuf, String> {
+/// The home a session of `agent` reads its conversations from: the account it ran with (`account`), else the account
+/// picked for new sessions, else the CLI's own (rule 30). An `account` whose folder is gone is an error, not another
+/// home: its conversation is not known to be missing, only out of reach.
+fn past_home(agent: &str, account: Option<&str>) -> Result<PathBuf, String> {
+    past_home_in(&user_home()?, agent, account, &|k| std::env::var(k).ok())
+}
+
+/// [`past_home`] for the user's home `home` and environment `var`.
+fn past_home_in(home: &std::path::Path, agent: &str, account: Option<&str>, var: &dyn Fn(&str) -> Option<String>) -> Result<PathBuf, String> {
     if !past_chats::lists(agent) {
         return Err(format!("{agent} conversations are not listed"));
     }
-    let home = user_home()?;
-    let env = accounts::session_env(&home, agent);
-    past_chats::cli_home(&home, agent, &env, &|k| std::env::var(k).ok()).ok_or_else(|| "no home".to_string())
+    if let (Some(id), Some(cli)) = (account.filter(|a| *a != "default"), accounts::session_cli(agent)) {
+        if !accounts::account_dir(home, cli, id).map(|d| d.is_dir() && !d.is_symlink()).unwrap_or(false) {
+            return Err("its account folder is gone".into());
+        }
+    }
+    let env = accounts::session_env_for(home, agent, account);
+    past_chats::cli_home(home, agent, &env, var).ok_or_else(|| "no home".to_string())
 }
 
 /// The recent conversations Claude Code or Codex keeps for `cwds` (the + menu's folders), read-only (rule 30).
 #[tauri::command]
 async fn past_chats_list(agent: String, cwds: Vec<String>) -> Result<Vec<past_chats::PastChat>, String> {
-    tauri::async_runtime::spawn_blocking(move || past_chats::list(&past_home(&agent)?, &agent, &cwds)).await.map_err(|e| e.to_string())?
+    tauri::async_runtime::spawn_blocking(move || past_chats::list(&past_home(&agent, None)?, &agent, &cwds)).await.map_err(|e| e.to_string())?
 }
 
 /// The conversation the Codex in the foreground of TERMINALS session `id` holds open, for the session to continue
@@ -780,7 +875,26 @@ async fn codex_conversation(shell: State<'_, Shell>, id: u32) -> Result<Option<S
 /// The last messages of one of those conversations, shown before the agent continues it (rule 30).
 #[tauri::command]
 async fn past_chat_messages(agent: String, id: String, cwd: String) -> Result<Vec<past_chats::PastMsg>, String> {
-    tauri::async_runtime::spawn_blocking(move || past_chats::messages(&past_home(&agent)?, &agent, &id, &cwd)).await.map_err(|e| e.to_string())?
+    tauri::async_runtime::spawn_blocking(move || past_chats::messages(&past_home(&agent, None)?, &agent, &id, &cwd)).await.map_err(|e| e.to_string())?
+}
+
+/// Whether the file of a TERMINALS Claude Code or Codex session's own conversation `id` exists, asked before the
+/// session continues it (rule 30): `exists`, `absent`, or `unknown`, in the home of the account it runs with
+/// (`account`). Only names are looked at. An account whose folder is gone, or a home that cannot be read, is
+/// `unknown`: the conversation is out of reach, not known to be missing.
+#[tauri::command]
+async fn conversation_state(agent: String, id: String, account: Option<String>) -> Result<String, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        if !past_chats::lists(&agent) {
+            return Err(format!("{agent} conversations are not listed"));
+        }
+        match past_home(&agent, account.as_deref()) {
+            Ok(home) => past_chats::conversation_state(&home, &agent, &id).map(str::to_string),
+            Err(_) => Ok("unknown".to_string()),
+        }
+    })
+    .await
+    .map_err(|e| e.to_string())?
 }
 
 /// How many asks wait on the person, on the Dock icon (macOS) or the launcher entry (Linux desktops that show
@@ -982,6 +1096,7 @@ pub fn run() {
             session_open_terminal,
             past_chats_list,
             past_chat_messages,
+            conversation_state,
             codex_conversation,
             host_name,
             asks_badge,
@@ -997,6 +1112,9 @@ pub fn run() {
             tasks_list,
             tasks_view,
             tasks_remote,
+            gh_accounts,
+            tasks_me,
+            gh_login_start,
             window_close,
             power_busy,
             window_prefs,
@@ -1014,6 +1132,7 @@ pub fn run() {
             }
             peers.start_all();
             app.manage(Arc::new(tasks::Tasks::default()));
+            app.manage(Arc::new(gh_me::Me::default()));
             // free space on the home folder's volume, read once a minute (disk.rs)
             app.manage(disk::Disk::start(app.handle().clone(), user_home().ok()));
             // close = hide to the tray / menu bar, and the keep-awake assertion's worker (tray.rs, power.rs)
@@ -1082,7 +1201,27 @@ pub fn run() {
 
 #[cfg(test)]
 mod tests {
-    use super::{allowed_external, media_target};
+    use super::{allowed_external, media_target, past_home_in};
+
+    #[test]
+    fn a_session_account_whose_folder_is_gone_is_not_read_elsewhere() {
+        let home = std::env::temp_dir().join(format!("omher-past-home-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&home);
+        let work = home.join(".omher").join("accounts").join("claude").join("work");
+        std::fs::create_dir_all(&work).unwrap();
+        let none = |_: &str| None;
+        // the account it ran with, while its folder is there
+        assert_eq!(past_home_in(&home, "claude", Some("work"), &none), Ok(work.clone()));
+        // gone: an error, not the home new sessions use
+        assert_eq!(past_home_in(&home, "claude", Some("gone"), &none), Err("its account folder is gone".to_string()));
+        std::fs::remove_dir_all(&work).unwrap();
+        assert_eq!(past_home_in(&home, "claude", Some("work"), &none), Err("its account folder is gone".to_string()));
+        // "This computer", or none saved: the CLI's own home
+        assert_eq!(past_home_in(&home, "claude", Some("default"), &none), Ok(home.join(".claude")));
+        assert_eq!(past_home_in(&home, "codex", None, &none), Ok(home.join(".codex")));
+        assert!(past_home_in(&home, "grok", None, &none).is_err());
+        let _ = std::fs::remove_dir_all(home);
+    }
 
     #[test]
     fn opens_thread_links_and_a_lookalike_only_as_a_web_page() {

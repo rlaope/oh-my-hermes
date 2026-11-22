@@ -1,6 +1,7 @@
-// Steer queue (a bot's main chat): a message typed while a turn runs is held in omher and goes out with chat.send
-// when the turn ends, in order, exactly once; its ↵ menu sends it now (one interrupt), steers it (chat.steer, a
-// refusal falls back to a normal send), edits or deletes it. Holds across a reconnect, a bot switch and Stop.
+// Steer queue (a bot's main chat): a message typed while a turn runs is steered into it at once (chat.steer, no
+// interrupt). Where Hermes refuses the steer it is held in omher and goes out with chat.send when the turn ends, in
+// order, exactly once; its ↵ buttons send it now (one interrupt), steer it again, edit or delete it. Holds across a
+// reconnect, a bot switch and Stop.
 import { describe, expect, it } from "vitest";
 import { answerSlot, createStore, heldDrafts, initialState, reduce, reduceQueue, type AppState, type BridgeLike, type Chat } from "./store";
 import type { BridgeEvent } from "../lib/protocol";
@@ -64,9 +65,10 @@ function fake() {
   };
 }
 
-/** A store on kami with a turn running. */
+/** A store on kami with a turn running, whose steers Hermes refuses: what is typed waits (the fallback). */
 async function busy() {
   const f = fake();
+  f.setSteer("rejected");
   // a clock that moves: a chat.open asked after a turn ended is newer than that end (applyOpened's `since`)
   let clock = T0;
   const store = createStore(f.bridge, { now: () => (clock += 10) });
@@ -85,6 +87,94 @@ const start = async (f: ReturnType<typeof fake>) => {
   f.emit({ event: "turn.start", bot: "kami" });
   await tick();
 };
+
+describe("typed during a turn: steered in at once (messenger style)", () => {
+  /** A store on kami with a turn running that takes steers (Hermes' default). */
+  const steering = async () => {
+    const b = await busy();
+    b.f.setSteer("queued");
+    return b;
+  };
+  it("one chat.steer right away, no interrupt, never sent again; the row reads as a plain sent message", async () => {
+    const { f, a, chat } = await steering();
+    await a.send("keep the old timeout too");
+    expect(f.calls.filter((c) => c.op === "chat.steer").map((c) => c.params)).toEqual([{ bot: "kami", text: "keep the old timeout too" }]);
+    const row = chat().items.find((i) => i.kind === "user" && i.text === "keep the old timeout too")!;
+    expect(row).toMatchObject({ steered: true, readAt: expect.any(Number) });
+    expect(row).not.toHaveProperty("held");
+    expect(row).not.toHaveProperty("autoSteer");
+    expect(chat().queue).toEqual([]);
+    await turn(f);
+    expect(f.sends()).toEqual([]);
+    expect(f.count("chat.interrupt")).toBe(0);
+  });
+  it("while it is steering it never shows as waiting, and the answer is not kept above it", async () => {
+    const f = fake();
+    let release: (v: unknown) => void = () => {};
+    const plain = f.bridge.request;
+    f.bridge.request = (async (op: string, p: Record<string, unknown>) =>
+      op === "chat.steer" ? (f.calls.push({ op, params: p }), new Promise<unknown>((r) => (release = r))) : (plain as (o: string, p: Record<string, unknown>) => Promise<unknown>)(op, p)) as BridgeLike["request"];
+    const store = createStore(f.bridge, { now: () => T0 });
+    await store.actions.init();
+    f.emit({ event: "turn.start", bot: "kami" });
+    void store.actions.send("and the docs");
+    await tick();
+    const c = store.getState().chats.kami;
+    const row = c.items.find((i) => i.kind === "user" && i.text === "and the docs")!;
+    expect(row).toMatchObject({ held: true, autoSteer: true });
+    expect(c.turn?.before).toBeUndefined();
+    // the live line (dots, activity) sits under it
+    expect(c.items[c.items.length - 1]).toMatchObject({ kind: "activity" });
+    release({ status: "queued" });
+    await tick();
+    expect(store.getState().chats.kami.items.find((i) => i.kind === "user" && i.text === "and the docs")).toMatchObject({ steered: true });
+  });
+  it("a second message typed while the first is steering is steered next, in order", async () => {
+    const f = fake();
+    const plain = f.bridge.request;
+    const pending: ((v: unknown) => void)[] = [];
+    f.bridge.request = (async (op: string, p: Record<string, unknown>) =>
+      op === "chat.steer" ? (f.calls.push({ op, params: p }), new Promise<unknown>((r) => pending.push(r))) : (plain as (o: string, p: Record<string, unknown>) => Promise<unknown>)(op, p)) as BridgeLike["request"];
+    const store = createStore(f.bridge, { now: () => T0 });
+    await store.actions.init();
+    f.emit({ event: "turn.start", bot: "kami" });
+    void store.actions.send("one");
+    void store.actions.send("two");
+    await tick();
+    expect(f.calls.filter((c) => c.op === "chat.steer").map((c) => c.params.text)).toEqual(["one"]);
+    pending.shift()!({ status: "queued" });
+    await tick();
+    expect(f.calls.filter((c) => c.op === "chat.steer").map((c) => c.params.text)).toEqual(["one", "two"]);
+    pending.shift()!({ status: "queued" });
+    await tick();
+    expect(store.getState().chats.kami.items.filter((i) => i.kind === "user" && i.steered).map((i) => i.kind === "user" && i.text)).toEqual(["one", "two"]);
+    expect(f.sends()).toEqual([]);
+  });
+  it("refused: it and the one behind it wait (↵ ↓ ×) and go out after the turn, in order; nothing is lost", async () => {
+    const { f, a, chat } = await busy();
+    await a.send("refused");
+    await a.send("behind");
+    expect(heldIds(chat())).toHaveLength(2);
+    expect(chat().items.some((i) => i.kind === "user" && i.autoSteer)).toBe(false);
+    expect(chat().turn?.before).toBe(heldIds(chat())[0]);
+    await turn(f);
+    expect(f.sends()).toEqual(["refused"]);
+    await start(f);
+    await turn(f);
+    expect(f.sends()).toEqual(["refused", "behind"]);
+  });
+  it("while the bridge comes back (no turn to steer) it waits, and goes out once after the chat is read again", async () => {
+    const { f, a, chat } = await steering();
+    f.status("closed");
+    await tick();
+    await a.send("typed while away");
+    expect(heldIds(chat())).toHaveLength(1);
+    expect(f.count("chat.steer")).toBe(0);
+    f.status("open");
+    for (let i = 0; i < 6; i++) await tick();
+    expect(f.sends()).toEqual(["typed while away"]);
+  });
+});
 
 describe("steer queue: FIFO", () => {
   it("holds messages typed during a turn and sends them one per turn end, in order", async () => {
@@ -146,10 +236,14 @@ describe("steer queue: the ↵ menu", () => {
 
   it("Steer: one chat.steer; taken, the row leaves the queue as Steered and is never sent", async () => {
     const { f, a, chat } = await busy();
-    await a.send("also check the logs");
+    await a.send("also check the logs"); // refused at once: it waits
     const [id] = heldIds(chat());
+    f.setSteer("queued");
     await a.queueSteer(id);
-    expect(f.calls.filter((c) => c.op === "chat.steer").map((c) => c.params)).toEqual([{ bot: "kami", text: "also check the logs" }]);
+    expect(f.calls.filter((c) => c.op === "chat.steer").map((c) => c.params)).toEqual([
+      { bot: "kami", text: "also check the logs" },
+      { bot: "kami", text: "also check the logs" },
+    ]);
     const row = chat().items.find((i) => i.id === id)!;
     expect(row).toMatchObject({ kind: "user", steered: true });
     expect("held" in row && row.held).toBeFalsy();
@@ -162,11 +256,12 @@ describe("steer queue: the ↵ menu", () => {
     for (const mode of ["rejected", "throw"] as const) {
       const { f, a, chat } = await busy();
       f.setSteer(mode);
-      await a.send("x");
+      await a.send("x"); // refused at once: it waits, and "y" waits behind it without a steer of its own
       await a.send("y");
+      expect(f.count("chat.steer")).toBe(1);
       const [, y] = heldIds(chat());
       await a.queueSteer(y);
-      expect(f.count("chat.steer")).toBe(1);
+      expect(f.count("chat.steer")).toBe(2);
       expect(f.sends()).toEqual([]);
       expect(chat().items.find((i) => i.id === y)).toMatchObject({ held: true });
       expect(chat().queue![0]).toBe(y);
@@ -181,8 +276,9 @@ describe("steer queue: the ↵ menu", () => {
     await a.send("later");
     await turn(f); // "late" goes out; "later" waits for its turn
     const [later] = heldIds(chat());
+    expect(f.count("chat.steer")).toBe(1); // "late", refused when it was typed
     await a.queueSteer(later);
-    expect(f.count("chat.steer")).toBe(0);
+    expect(f.count("chat.steer")).toBe(1);
     await start(f);
     await turn(f);
     expect(f.sends()).toEqual(["late", "later"]);
@@ -369,12 +465,12 @@ describe("steer queue: review fixes", () => {
   it("R2: a steer with no answer (disconnect, bot offline, timeout, internal) or an uncertain one is never sent again on its own", async () => {
     for (const mode of ["disconnected", "bot_offline", "timeout", "internal", "uncertain"] as const) {
       const { f, a, chat } = await busy();
-      f.setSteer(mode);
       await a.send("also check the docs");
       await a.send("next");
+      f.setSteer(mode);
       const [id] = heldIds(chat());
       await a.queueSteer(id);
-      expect(f.count("chat.steer"), mode).toBe(1);
+      expect(f.count("chat.steer"), mode).toBe(2);
       const row = chat().items.find((i) => i.id === id)!;
       expect(row, mode).toMatchObject({ steerUnknown: true });
       expect(chat().queue, mode).not.toContain(id);
@@ -388,9 +484,9 @@ describe("steer queue: review fixes", () => {
 
   it("an unknown steer: Send puts it out next as a normal message; Delete drops it", async () => {
     const { f, a, chat } = await busy();
-    f.setSteer("disconnected");
     await a.send("maybe");
     await a.send("gone");
+    f.setSteer("disconnected");
     const [m, g] = heldIds(chat());
     await a.queueSteer(m);
     f.setSteer("timeout");
@@ -404,13 +500,11 @@ describe("steer queue: review fixes", () => {
     expect(f.sends()).toEqual(["maybe"]);
   });
 
-  it("M2: a held message goes out queued, and the steered line does not claim it joined the running answer", async () => {
+  it("M2: a held message goes out queued", async () => {
     const { f, a, chat } = await busy();
     await a.send("one");
     await turn(f);
     expect(f.calls.filter((c) => c.op === "chat.send").map((c) => c.params.queued)).toEqual([true]);
-    const { en } = await import("../i18n/en");
-    expect(en["sq.steered"]).toBe("Sent to {bot} · joins the running answer or starts right after");
     expect(chat().queue).toEqual([]);
   });
 
@@ -420,6 +514,7 @@ describe("steer queue: review fixes", () => {
       await a.send("A");
       await a.send("B");
       const [A, B] = heldIds(chat());
+      f.setSteer("queued");
       await a.queueSteer(A);
       expect(chat().items.find((i) => i.id === A)).toMatchObject({ steered: true });
       if (how === "now") await a.queueSendNow(B);
@@ -441,6 +536,7 @@ describe("steer queue: review fixes", () => {
     const { f, a, chat } = await busy();
     await a.send("A");
     const [A] = heldIds(chat());
+    f.setSteer("queued");
     await a.queueSteer(A);
     f.emit({ event: "tool.start", bot: "kami", tool_id: "t1", name: "read", detail: "" } as BridgeEvent);
     f.emit({ event: "tool.end", bot: "kami", tool_id: "t1", ok: true } as BridgeEvent);

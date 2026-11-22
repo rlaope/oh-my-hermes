@@ -26,6 +26,7 @@ import { useSyncExternalStore } from "react";
 import type { ITerminalInitOnlyOptions, ITerminalOptions, Terminal } from "@xterm/xterm";
 import type { FitAddon } from "@xterm/addon-fit";
 import { afterOpen, bracketedPaste, CELLS_EVENT, feed, gpuComing, isParked, live, onVisible, PARKING_EVENT, type Remake } from "./term/engine";
+import { TERM_INPUT_EVENT } from "./term/paste-guard";
 import { onCwd, onProgress } from "./term/engine-marks";
 import { applyLook, termOptions } from "./term/look";
 import { termFontsReady } from "./term/fonts";
@@ -37,10 +38,10 @@ import { getShellHost, learnThisHost } from "../terminal/host";
 import { onSessionFg } from "./fg";
 import { termActs } from "./termActivity";
 import { isLinkId, LINK_COPIED_EVENT, newLinkId, termLinkUrl } from "./termLink";
-import { acpRow, agentDef, agentLabel, continues, draftAgent, draftFolder, draftOpen, hermesOnly, installLine, isBuiltin, isGone, isShell, isTerminalRec, LAST_LINE_MAX, SHELL, termEnd, termMarkAgent, lastPrintedLine, OPEN_KEY, opensAs, parseOpens, parseRecent, pushRecent, RECENT_KEY, registerAcp, sessionMode, type AgentId, type AgentInfo, type OpenAs, type Unseen, type Opens, type Recent, type SessionRec } from "./agents";
+import { acpRow, agentDef, agentLabel, continues, draftAgent, draftFolder, draftOpen, hermesOnly, idInUse, installLine, isBuiltin, isGone, isShell, isTerminalRec, LAST_LINE_MAX, refusedResume, SHELL, termEnd, termMarkAgent, lastPrintedLine, OPEN_KEY, setsUpScreen, UI_BYTES, opensAs, parseOpens, parseRecent, pushRecent, RECENT_KEY, registerAcp, sessionMode, termGroups, type AgentId, type AgentInfo, type OpenAs, type Unseen, type Opens, type Recent, type SessionRec } from "./agents";
 import { NAME_MAX, parseTitles, promptTitle, putTitle, TITLES_KEY } from "./titles";
 import { getDraft, setDraft as setUnsent } from "../app/drafts";
-import { getHost, type ChatEvent, type ChatInput, type PastChat, type SessionHost } from "./host";
+import { getHost, type ChatEvent, type ChatInput, type ConvState, type PastChat, type SessionHost } from "./host";
 import { localBot } from "../peers/peerKey";
 import { folderKey, getStore, notifySessionEvent, notifySessionNote, onBridgeEvent, selectAsks, setChatRoute, setSessionKeyLookup, type OutFile, type SentFile, type Store } from "../state/store";
 import { blobType, bytesOf, inlinePicture, parseSentFiles, pathsTyped, putSentFiles, SENT_FILES_KEY, shellQuote, wireText, type SavedFile, type SentFilesBook } from "./attach";
@@ -142,8 +143,16 @@ interface Term {
   /** Which program run in this terminal it is (a CLI row goes on as the login shell when its CLI ends): output
    *  drawn after its program was replaced is not acknowledged to the next one. */
   run: number;
-  /** The person typed into the current program: a shell that ends before that, with an error, failed at start. */
-  typed: boolean;
+  /** The person pressed a key or pasted in the current program once it ran (not the terminal's own replies to its
+   *  queries): a shell that ends before that, with an error, failed at start (termEnd). */
+  keyed: boolean;
+  /** The current program printed something; `keyedHeard`: the person pressed a key or pasted after that. A CLI
+   *  continuing its conversation that ends before such a key could not continue it (termEnd). */
+  heard: boolean;
+  keyedHeard: boolean;
+  /** The next start continues the row's conversation without looking for its file first: Claude Code refused that
+   *  id as a new conversation because it has it (once). */
+  resumeOnce?: boolean;
   /** Its row was closed and waits out the undo window (closeGrace.ts): its program runs on, hidden, and takes no
    *  input (keys, bot prompts, dropped files) until Undo puts the row back. */
   held?: boolean;
@@ -151,6 +160,9 @@ interface Term {
 
 /** The PTY calls a terminal makes once its program runs. */
 type TermIo = Pick<SessionHost, "write" | "ack" | "resize" | "close">;
+
+/** How much of the end of a CLI's output is kept while it may still be refusing its conversation. */
+const SAID_MAX = 2_048;
 
 /** The row's last-output time is written at most this often (a flood would otherwise re-render the sidebar). */
 const OUT_MARK_MS = 500;
@@ -286,10 +298,10 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
   let localSeq = 0;
   let resetDone: Promise<void> | null = null;
   let restored = false;
-  /** Sessions put back after a restart: when started again they name the account they ran with (a new session
-   *  sends no account; the shell uses the one picked for new sessions). */
-  const fromBefore = new Set<string>();
-  const accountOf = (r: SessionRec) => (fromBefore.has(r.id) ? r.account : undefined);
+  /** The account a session starts with and its conversation is looked for in: the one it was made with or ran with
+   *  (none = unknown: the shell uses the one picked for new sessions), so switching the account for new sessions
+   *  does not start a kept conversation id in another account's home. */
+  const accountOf = (r: SessionRec) => r.account;
   /** TERMINALS sessions put back after a restart whose agent continues its own conversation: their next start (once)
    *  continues it (`--resume`, `codex resume`) instead of starting a new one. */
   const termAgain = new Set<string>();
@@ -1350,6 +1362,14 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
     );
   };
 
+  /** Whether the file of TERMINALS session `r`'s own conversation is where its CLI looks for it (rule 30, names
+   *  only, in the home of the account it runs with); `unknown` when that could not be told. */
+  const convState = async (r: SessionRec): Promise<ConvState> => {
+    const agent = r.agent === "claude" || r.agent === "codex" ? r.agent : null;
+    if (!host.conversationState || !r.agentSession || !agent) return "unknown";
+    return host.conversationState(agent as "claude" | "codex", r.agentSession, accountOf(r)).catch(() => "unknown" as const);
+  };
+
   /**
    * Start session `id`'s program in its terminal `t`. A Shell row runs the person's login shell; a CLI row runs its
    * CLI and, when that ends, goes on as the login shell in the same terminal (same scrollback, size and folder), so
@@ -1366,20 +1386,39 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
     t.io = io;
     t.hostId = null;
     t.closed = false;
-    t.typed = false;
+    t.keyed = false;
+    t.heard = false;
+    t.keyedHeard = false;
     t.told = null;
     // the terminal view of a chat session does not decide the session's status; the chat does
     const ofChat = sessionMode(state.agents, r) !== "terminal";
-    // a TERMINALS Claude Code or Codex session put back after a restart continues its own conversation (once);
-    // Claude Code's terminal view of a chat continues the chat's conversation
-    const again = !ofChat && termAgain.delete(id) && !!r.agentSession && TERM_CONTINUES.includes(r.agent);
+    // a TERMINALS Claude Code or Codex session that has its own conversation continues it: put back after a restart
+    // (by itself, once) and on Restart; Claude Code's terminal view of a chat continues the chat's conversation
+    if (!ofChat) termAgain.delete(id);
+    const again = !ofChat && !!r.agentSession && TERM_CONTINUES.includes(r.agent);
     // a TERMINALS oh-my-hermes terminal is told its row's link (OMHER_TERMINAL_LINK): `omh` reopens by itself the
     // session it dropped in this terminal (after omher restarted, or on Restart), and no other program is told it
     const link = !ofChat && r.agent === "omh" && isLinkId(r.linkId) ? r.linkId : undefined;
-    const resume = again ? r.agentSession : r.agentSession && ofChat && r.agent === "claude" ? r.agentSession : undefined;
-    // any other Claude Code terminal starts a new conversation under an id omher makes, kept so a restart continues it
-    const sessionId = !ofChat && !resume && r.agent === "claude" ? newConversationId() : undefined;
-    if (sessionId) patchRec(id, { agentSession: sessionId });
+    let resume = again ? r.agentSession : r.agentSession && ofChat && r.agent === "claude" ? r.agentSession : undefined;
+    // any other Claude Code terminal starts a new conversation under an id omher makes, kept (once it started) so a
+    // restart continues it
+    let sessionId = !ofChat && !resume && r.agent === "claude" ? newConversationId() : undefined;
+    // its conversation's file is looked for first (not after Claude Code refused that id as a new one). Absent: a
+    // Claude Code conversation nobody used (no key pressed in it, no title of its own) was never written (Claude Code
+    // writes it on the first message), so it starts again under the same id; a used one was deleted, and Codex has
+    // nothing to continue: neither is started to refuse it
+    const forced = !!t.resumeOnce;
+    t.resumeOnce = false;
+    let gone = false;
+    if (again && !forced && (await convState(r)) === "absent") {
+      if (t.run !== run) return;
+      const used = !!(rec(id)?.used || rec(id)?.agentTitle);
+      if (r.agent === "claude" && !used) {
+        resume = undefined;
+        sessionId = r.agentSession;
+      } else gone = true;
+    }
+    if (t.run !== run) return;
     // what this terminal showed before omher restarted comes first, dimmed, under a divider (once)
     if (!ofChat && histBack.delete(id)) {
       const back = await restoredText(host, id);
@@ -1391,6 +1430,14 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
       const flush = () => h.flush();
       t.el.addEventListener(PARKING_EVENT, flush);
       histOf.set(id, { ...h, stop: () => (t.el.removeEventListener(PARKING_EVENT, flush), h.stop()) });
+    }
+    if (gone) {
+      // ended as a CLI that could not continue it ends (termEnd), keeping its conversation for Restart
+      t.closed = true;
+      feed(t.term, `\x1b[2m[${tr("ss.convGone", { agent: agentDef(r.agent).label })}]\x1b[0m\r\n`);
+      patchRec(id, { status: "exited", exitCode: null, resumeFailed: true });
+      tellEnd(id, "ended", { code: null });
+      return;
     }
     const { cols, rows } = t.term;
     let marked = 0;
@@ -1418,10 +1465,26 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
       readLine();
     };
     t.el.addEventListener(PARKING_EVENT, lineBeforePark);
+    // a CLI started with the row's conversation id: whether it set up its screen before the person pressed a key in
+    // it, and the last of what it printed (a refusal), read when it ends (termEnd)
+    let drew = false;
+    let drawn = 0;
+    let said = "";
+    const sayText = new TextDecoder();
     const onData = (d: Uint8Array | string) => {
       // every message is acknowledged once the terminal has taken it, in order: the shell reads the program
       // no further ahead of the page than its credit allows (to this program only: a replaced one is gone)
       const bytes = typeof d === "string" ? utf8.encode(d).length : d.byteLength;
+      if (t.run === run) t.heard = true;
+      if (again) {
+        // only the end of a large message can be the end of the output
+        const text = typeof d === "string" ? d.slice(-SAID_MAX) : sayText.decode(d.byteLength > SAID_MAX ? d.subarray(d.byteLength - SAID_MAX) : d, { stream: true });
+        if (!drew && !t.keyedHeard) {
+          drawn += bytes;
+          drew = drawn > UI_BYTES || setsUpScreen(said.slice(-16) + text); // a sequence split between two messages
+        }
+        said = (said + text).slice(-SAID_MAX);
+      }
       feed(t.term, d, () => {
         if (t.run !== run) return;
         if (pty === null) owed += bytes;
@@ -1436,6 +1499,8 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
       }
       if (!ofChat && lineTimer === null) lineTimer = setTimeout(readLine, OUT_MARK_MS);
     };
+    // when this program was asked for: a CLI continuing its conversation that ends soon after could not continue it
+    const began = Date.now();
     try {
       const onExit = (code: number | null) => {
         // a program omher stopped (the row closed, Restart) or one already replaced says nothing more
@@ -1453,11 +1518,19 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
           return;
         }
         const label = agentDef(r.agent).label;
-        const end = termEnd({ ofChat, shell, typed: t.typed, code });
+        // the look missed a conversation Claude Code has (it refused the id as a new one): continue it, once
+        if (again && sessionId && !t.keyedHeard && idInUse(said, sessionId)) {
+          t.resumeOnce = true;
+          patchRec(id, { status: "starting", exitCode: null });
+          void startTerm(id, t);
+          return;
+        }
+        // a CLI that could not continue its conversation keeps it, ended, for Restart (termEnd)
+        const end = termEnd({ ofChat, shell, keyed: shell ? t.keyed : t.keyedHeard, code, resumed: again, drew, refused: again && !!r.agentSession && refusedResume(said, r.agentSession), ms: Date.now() - began });
         if (end === "shell") {
           // the CLI ended: the same terminal goes on as the person's login shell in that folder
           feed(t.term, `\r\n\x1b[2m${code ? tr("ss.backToShellExit", { agent: label, code }) : tr("ss.backToShell", { agent: label })}\x1b[0m\r\n`);
-          patchRec(id, { agent: SHELL, open: undefined, account: undefined, agentSession: undefined, agentTitle: undefined, startedAs: undefined, fgAgent: null, status: "starting", exitCode: null, error: undefined });
+          patchRec(id, { agent: SHELL, open: undefined, account: undefined, agentSession: undefined, agentTitle: undefined, used: undefined, startedAs: undefined, fgAgent: null, status: "starting", exitCode: null, error: undefined });
           void startTerm(id, t);
           return;
         }
@@ -1467,7 +1540,7 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
           return;
         }
         if (!ofChat) {
-          patchRec(id, { status: "exited", exitCode: code });
+          patchRec(id, { status: "exited", exitCode: code, ...(again ? { resumeFailed: true } : {}) });
           tellEnd(id, "ended", { code });
         }
         feed(t.term, `\r\n\x1b[2m[${code ? tr("ss.termEndedExit", { agent: label, code }) : tr("ss.termEnded", { agent: label })}]\x1b[0m\r\n`);
@@ -1513,6 +1586,7 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
         void io.close(hostId);
         return;
       }
+      if (sessionId) patchRec(id, { agentSession: sessionId });
       if (owed) io.ack(hostId, owed);
       owed = 0;
       // the program started at this size; one that changed while it started is sent now
@@ -1531,6 +1605,16 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
       }
       feed(t.term, `\x1b[31m${error}\x1b[0m\r\n`);
     }
+  };
+
+  /** The person pressed a key or pasted in session `id`'s running program `t`. Once that is after its first output, a
+   *  Claude Code or Codex row's conversation counts as used (kept with the row). */
+  const pressed = (id: string, t: Term) => {
+    t.keyed = true;
+    if (!t.heard || t.keyedHeard) return;
+    t.keyedHeard = true;
+    const r = rec(id);
+    if (r && !r.used && TERM_CONTINUES.includes(r.agent)) patchRec(id, { used: true });
   };
 
   /** Tell the program its terminal's size, if it is not the one it was last told. */
@@ -1623,10 +1707,19 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
         settle: null,
         io: isShell(rec(id)?.agent) ? getShellHost() : host,
         run: 0,
-        typed: false,
+        keyed: false,
+        heard: false,
+        keyedHeard: false,
       };
       terms.set(id, t);
       const tt = t;
+      // the person's own keys or paste reached the program (engine-input.ts, paste-guard.ts); the terminal's replies to
+      // a program's queries also go out through onData and are not input
+      // (keys while nothing runs there, or while its row waits to be undone, reach no program and do not count)
+      el.addEventListener(TERM_INPUT_EVENT, () => {
+        if (tt.hostId === null || tt.closed || tt.held) return;
+        pressed(id, tt);
+      });
       // a parked terminal made again: the same options and handlers, at the size it had, where it was
       tt.remake = ({ cols, rows }) => {
         const s = readTermSettings();
@@ -1643,7 +1736,6 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
       const wire = (term: Terminal) => {
         term.onData((d) => {
           if (tt.hostId === null || tt.closed || tt.held) return;
-          tt.typed = true;
           void tt.io.write(tt.hostId, d).catch(() => undefined);
         });
         // the title the program sets (OSC 0/2): the TERMINALS card's second line until it prints a line
@@ -1773,7 +1865,7 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
   const typeAt = async (id: string, text: string) => {
     const t = terms.get(id);
     if (!t || t.hostId === null || t.closed || t.held) return;
-    t.typed = true;
+    pressed(id, t);
     await t.io.write(t.hostId, text);
     t.term.focus();
   };
@@ -1879,7 +1971,7 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
       if (t && !t.closed) return;
       disposeTerm(id);
       termRuns.set(id, (termRuns.get(id) ?? 0) + 1);
-      patchRec(id, { status: "starting", error: undefined, exitCode: null, view: "terminal", paused: undefined });
+      patchRec(id, { status: "starting", error: undefined, exitCode: null, view: "terminal", paused: undefined, resumeFailed: undefined });
       return;
     }
     if (procs.has(id) || sessionMode(state.agents, r) !== "chat") return;
@@ -1888,6 +1980,15 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
     patchLive(id, { signin: undefined });
     note(id, null);
     await startAgentChat(id, resume);
+  };
+
+  /** Start an ended TERMINALS session whose CLI could not continue its conversation (the conversation or its account
+   *  folder is gone) as a new conversation, in the same folder and account: the old id and the agent's title for it
+   *  go first. */
+  const startFresh = async (id: string) => {
+    if (!rec(id)?.resumeFailed) return;
+    patchRec(id, { agentSession: undefined, agentTitle: undefined, resumeFailed: undefined, used: undefined });
+    await restart(id);
   };
 
   /**
@@ -1958,7 +2059,6 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
         // an agent omher no longer offers (Kilo Code): ended, with its chat as it was, one plain line and no Restart
         // (SessionView's Ended); nothing is started, now or on Resume
         list.push({ id: s.id, agent: s.agent, cwd: s.cwd, startedAt: s.startedAt, view: "chat", status: "exited", exitCode: null, ...(s.title ? { title: s.title } : {}), ...(s.agentTitle ? { agentTitle: s.agentTitle } : {}), ...(s.promptTitle ? { promptTitle: s.promptTitle } : {}) });
-        fromBefore.add(s.id);
         seq = Math.max(seq, Number(s.id.slice(1)) || 0);
         keys.set(s.id, `agent:${s.id}`);
         openChat(s.id, s.model ?? "", (s.messages ?? []).map((m) => ({ id: `r-${m.id}`, role: m.role, text: m.text, ts: m.ts })));
@@ -1976,7 +2076,6 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
         // omher 0.2.4's DSH ran deepseek-bot's terminal (its id is a deepseek-bot conversation): it comes back ended
         // with a plain line and never starts deepseek-bot; Restart starts DeepSeek Harness in the folder
         list.push({ id: s.id, agent: s.agent, cwd: s.cwd, startedAt: s.startedAt, view: "chat", status: "exited", exitCode: null, error: tr("ss.dshOld"), ...(s.title ? { title: s.title } : {}) });
-        fromBefore.add(s.id);
         seq = Math.max(seq, Number(s.id.slice(1)) || 0);
         keys.set(s.id, `agent:${s.id}`);
         openChat(s.id);
@@ -2004,6 +2103,8 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
         exitCode: s.running ? null : (s.exitCode ?? null),
         ...(s.error && !s.running ? { error: s.error } : {}),
         ...(s.agentSession ? { agentSession: s.agentSession } : {}),
+        ...(s.resumeFailed && s.agentSession && !s.running ? { resumeFailed: true } : {}),
+        ...(s.used && s.agentSession ? { used: true } : {}),
         ...(s.account ? { account: s.account } : {}),
         ...(s.bot ? { bot: s.bot } : {}),
         ...(s.model ? { model: s.model } : {}),
@@ -2017,7 +2118,6 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
         ...(s.running && !auto && !termAuto && !folderAuto ? { paused: true } : {}),
       };
       list.push(r);
-      fromBefore.add(s.id);
       seq = Math.max(seq, Number(s.id.slice(1)) || 0);
       if (mode !== "terminal") {
         keys.set(s.id, `agent:${s.id}`);
@@ -2389,6 +2489,7 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
     rename,
     moveRow,
     restart,
+    startFresh,
     resume,
     restore,
     send,

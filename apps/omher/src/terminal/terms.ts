@@ -6,6 +6,7 @@
 import type { ITerminalInitOnlyOptions, ITerminalOptions, Terminal } from "@xterm/xterm";
 import type { FitAddon } from "@xterm/addon-fit";
 import { afterOpen, bracketedPaste, CELLS_EVENT, feed, isParked, live, onVisible, type Remake } from "../sessions/term/engine";
+import { TERM_INPUT_EVENT } from "../sessions/term/paste-guard";
 import { onCwd } from "../sessions/term/engine-marks";
 import { applyLook, termOptions } from "../sessions/term/look";
 import { termFontsReady } from "../sessions/term/fonts";
@@ -13,7 +14,7 @@ import { onTermSettings, readTermSettings } from "../sessions/term/settings";
 import { termTheme } from "../sessions/term/themes";
 import { t } from "../i18n";
 import { getShellHost } from "./host";
-import { closePane, ringPane, setPaneCwd, setPaneFg, setPaneSaid } from "./state";
+import { GH_LOGIN_ENDED, closePane, ringPane, setPaneCwd, setPaneFg, setPaneSaid } from "./state";
 import { onSessionFg } from "../sessions/fg";
 import { getHost } from "../sessions/host";
 import { pathsTyped, shellQuote } from "../sessions/attach";
@@ -43,7 +44,8 @@ interface PanelTerm {
   /** output drawn before the id came back, acknowledged once it does */
   owed: number;
   ended: boolean;
-  /** the person typed into it (a shell that ends after that closes its pane) */
+  /** the person pressed a key or pasted in it once its shell ran, not the terminal's own replies to the shell's
+   *  queries (a shell that ends after that closes its pane) */
   typed: boolean;
   /** files dropped on it were saved (removed with the pane) */
   saved: boolean;
@@ -85,7 +87,6 @@ function create([{ Terminal }, { FitAddon }]: Xterm, key: number, want: string |
   const wire = (term: Terminal) => {
     term.onData((d) => {
       if (p.id === null || p.ended) return;
-      p.typed = true;
       void host.write(p.id, d).catch(() => undefined);
     });
     term.onResize(({ cols, rows }) => {
@@ -141,6 +142,10 @@ function create([{ Terminal }, { FitAddon }]: Xterm, key: number, want: string |
   };
   terms.set(key, p);
   wire(first.term);
+  // the person's own keys or paste (engine-input.ts, engine-ime.ts, paste-guard.ts)
+  el.addEventListener(TERM_INPUT_EVENT, () => {
+    if (p.id !== null && !p.ended) p.typed = true;
+  });
   // the folder its shell reports (OSC 7) names the pane, and so the tab while it is the focused one; the element
   // outlives a parked terminal made again
   p.cwdOff = onCwd(el, (path) => setPaneSaid(key, path));
@@ -150,7 +155,7 @@ function create([{ Terminal }, { FitAddon }]: Xterm, key: number, want: string |
 /** The history key of pane `key`. */
 const histKey = (key: number) => `panel-${key}`;
 
-async function start(key: number, p: PanelTerm, want: string | null, restored: boolean): Promise<void> {
+async function start(key: number, p: PanelTerm, want: string | null, restored: boolean, gh?: { host: string | null }): Promise<void> {
   const host = getShellHost();
   // a tab put back after a restart shows what it showed before first, dimmed, under a divider
   if (restored) {
@@ -159,11 +164,9 @@ async function start(key: number, p: PanelTerm, want: string | null, restored: b
     if (back) feed(p.term, back);
   }
   p.hist = trackHistory(getHost(), histKey(key), () => (terms.get(key) === p && !isParked(p.raw) ? p.term : null));
-  void host
-    .start(
-      want,
-      p.term.cols,
-      p.term.rows,
+  const begin = (onData: (d: Uint8Array | string) => void, onExit: (code: number | null) => void) =>
+    gh ? host.startGhLogin(gh.host, p.term.cols, p.term.rows, onData, onExit) : host.start(want, p.term.cols, p.term.rows, onData, onExit);
+  void begin(
       (d) => {
         // acknowledged once drawn, in order: the shell reads no further ahead of the page than its credit
         const bytes = typeof d === "string" ? utf8.encode(d).length : d.byteLength;
@@ -176,9 +179,10 @@ async function start(key: number, p: PanelTerm, want: string | null, restored: b
       (code) => {
         p.ended = true;
         setPaneFg(key, null);
+        if (gh && typeof window !== "undefined") window.dispatchEvent(new CustomEvent(GH_LOGIN_ENDED));
         // as a TERMINALS shell: one that ends (exit, Ctrl+D, any code once the person typed) closes its pane and the
         // pane beside it takes the room; one that ended with an error before any typing stays, saying so
-        if (termEnd({ ofChat: false, shell: true, typed: p.typed, code }) === "close") closePane(key);
+        if (termEnd({ ofChat: false, shell: true, keyed: p.typed, code }) === "close") closePane(key);
         else feed(p.term, `\r\n\x1b[2m[${code ? t("termpanel.endedCode", { code }) : t("termpanel.ended")}]\x1b[0m\r\n`);
       },
     )
@@ -204,7 +208,7 @@ async function start(key: number, p: PanelTerm, want: string | null, restored: b
 }
 
 /** Put pane `key`'s terminal into `box` (made and its shell started the first time). Returns what takes it out. */
-export function attachTerm(key: number, want: string | null, box: HTMLElement, mode: "dark" | "light", restored = false): () => void {
+export function attachTerm(key: number, want: string | null, box: HTMLElement, mode: "dark" | "light", restored = false, gh?: { host: string | null }): () => void {
   look = mode;
   let gone = false;
   let detach: (() => void) | null = null;
@@ -220,7 +224,7 @@ export function attachTerm(key: number, want: string | null, box: HTMLElement, m
     }
     applyLook(pt.term, termTheme(look, readTermSettings()), readTermSettings());
     refit(pt);
-    if (fresh) void start(key, pt, want, restored);
+    if (fresh) void start(key, pt, want, restored, gh);
     const ro = new ResizeObserver(() => refit(pt));
     ro.observe(box);
     // and when its cells change size (the GPU renderer arrived after this fit, or went)
