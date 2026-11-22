@@ -177,6 +177,7 @@ All notable changes will be documented here.
   idle time; open, a row per node with its wait on upstream. A subagent the run did not orchestrate is a row under
   Outside DAG and in AGENTS, never a start node of the run. Detail moved into hover cards that the keyboard can open
   too. The pane also reads in Chinese. Contributed by @yqm-307 (#3058).
+- omher connects over SSH to a Windows computer whose Hermes has only the `hermes.cmd` shim and no venv: the remote discovery now reads the shim's interpreter too (a UTF-8 BOM included), in the same order the local app reads launchers (the agent's bin before the user bin, `.exe` before `.cmd` in each), so a stale launcher from an older install is never picked over the current one. Reported and first fixed by @jundev0001 in #3077.
 
 ## 5.0.0 - 2026-11-21
 

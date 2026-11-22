@@ -2452,6 +2452,19 @@ class SshPeersOnlyOverTheOwnSsh(unittest.TestCase):
         self.assertIn('mv -f "$t" "$f"', script)
         self.assertIn("--exit-on-stdin-eof", script)
 
+    def test_a_windows_peer_reads_its_launchers_per_bin_as_the_local_bridge(self) -> None:
+        # rule 31: on a Windows peer the interpreter comes from `hermes.exe`'s shebang or `hermes.cmd`'s first command
+        # word, the agent's bin before the user bin and each bin's `.exe` before its `.cmd`, as bridge.rs reads them
+        discover = self.peers.split("pub const DISCOVER_PYTHON: &str = ", 1)[1].split('"#;', 1)[0]
+        windows = discover.split("\nelse\n", 1)[1].split('  x="Scripts/python.exe"', 1)[0]
+        self.assertIn('for b in "$h/hermes-agent/.hermes/bin" "$h/bin"; do', windows)
+        self.assertLess(windows.index('l="$b/hermes.exe"'), windows.index('l="$b/hermes.cmd"'))
+        self.assertEqual(re.findall(r"^  for (\w+) in ", windows, re.M), ["b"])  # one loop over bins, not one per launcher kind
+        self.assertIn('bins.iter().flat_map(|bin| ["hermes.exe", "hermes.cmd"]', (SHELL / "bridge.rs").read_text(encoding="utf-8"))
+        rule = self.doc.split("\n31. ", 1)[1].split("\n32. ", 1)[0]
+        self.assertIn("`hermes.cmd` shim", rule)
+        self.assertIn("each bin's `.exe` before its `.cmd`", rule)
+
     def test_only_connect_writes_the_peer_list(self) -> None:
         self.assertEqual(self.peers.count("write_peers(&self.home"), 2)  # add (Connect) and remove (Remove)
         add = self.peers.split("pub fn add(self: &Arc<Self>", 1)[1].split("\n    }\n", 1)[0]
