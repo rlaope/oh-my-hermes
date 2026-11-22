@@ -12,6 +12,7 @@ import traceback
 from pathlib import Path
 
 from ..coding.executors import canonical_executor_profile
+from ..coding.user_executors import ExecutorRegistry
 from ..plugin_bundle.omh.run_records import FANOUT_CONTRACT_FILE, RUN_FILE
 from ..coding_delegation import CODING_EXECUTOR_TARGETS, build_coding_delegation_payload, coding_delegation_record_payload
 from ..coding.media_handoff_capabilities import input_representations_from_attachments, merged_input_representation
@@ -932,6 +933,165 @@ def cmd_coding_executor_readiness(args: argparse.Namespace) -> int:
     except ValueError as exc:
         raise OmhError(str(exc)) from exc
     return 0
+
+
+def _loaded_executor_registry(paths) -> ExecutorRegistry:
+    """This invocation's registry for the resolved OMH home. Never probes."""
+    from ..coding.user_executors import load_user_executors
+
+    return load_user_executors(Path(paths.omh_home))
+
+
+def _admitted_owner_ids(paths) -> tuple[str, ...]:
+    from ..coding.fanout import admitted_unit_owner_ids
+
+    return admitted_unit_owner_ids(_loaded_executor_registry(paths))
+
+
+def _refuse_remote_pr(args: argparse.Namespace) -> None:
+    # Plumbing only: the flag defaults false and the remote lane is not built yet.
+    if bool(getattr(args, "allow_remote_pr", False)):
+        raise OmhError("remote_pr lane not available")
+
+
+def _executor_config_error(exc: Exception) -> OmhError:
+    reason = getattr(exc, "reason", str(exc))
+    return OmhError(f"executor config refused: {reason}")
+
+
+def cmd_coding_executors_list(args: argparse.Namespace) -> int:
+    from ..coding.executor_presets import get_preset, preset_ids
+    from ..coding.executors import EXECUTOR_PROFILES
+
+    paths = _paths(args)
+    registry = _loaded_executor_registry(paths)
+    enabled = []
+    for executor_id in sorted(registry.entries):
+        spec = registry.entries[executor_id]
+        enabled.append(
+            {
+                "id": spec.id,
+                "label": spec.label,
+                "source": "preset" if spec.preset_id else "custom",
+                "preset": spec.preset_id,
+                "validated": bool(spec.validated),
+                "remote_pr": bool(spec.remote_pr),
+                "definition_sha256": spec.definition_sha256,
+            }
+        )
+    configured = set(registry.entries)
+    available = []
+    for preset in preset_ids():
+        if preset in configured:
+            continue
+        info = get_preset(preset)
+        if info is None:
+            continue
+        available.append({"id": preset, "label": info.label, "source_url": info.source_url, "validated": False})
+    rejected = [
+        {"id": issue.executor_id, "field": issue.field, "reason": issue.reason}
+        for issue in registry.issues
+    ]
+    payload = {
+        "schema_version": "coding_executors/v1",
+        "path": str(Path(paths.omh_home) / "routing" / "executors.toml"),
+        "builtin": list(EXECUTOR_PROFILES),
+        "enabled": enabled,
+        "available_presets": available,
+        "rejected": rejected,
+        "probed": False,
+    }
+    if bool(getattr(args, "json", False)):
+        _print_json(payload)
+        return 0
+    print(f"Built-in executors: {', '.join(payload['builtin'])}")
+    print("Enabled user executors:" if enabled else "Enabled user executors: none")
+    for entry in enabled:
+        source = f"preset {entry['preset']}" if entry["preset"] else "custom"
+        state = "validated" if entry["validated"] else "unvalidated"
+        print(f"  {entry['id']}  {entry['label']}  [{source}, {state}]")
+    print("Available presets (not enabled):" if available else "Available presets (not enabled): none")
+    for entry in available:
+        print(f"  {entry['id']}  {entry['label']}  [unvalidated]  {entry['source_url']}")
+    if rejected:
+        print("Rejected entries:")
+        for entry in rejected:
+            print(f"  {entry['id'] or '(file)'}  {entry['field']}: {entry['reason']}")
+    print("No executor was probed; run `omh coding executors check` to probe enabled entries.")
+    return 0
+
+
+def cmd_coding_executors_add(args: argparse.Namespace) -> int:
+    from ..coding.user_executors import ExecutorConfigError, add_executor_preset
+
+    paths = _paths(args)
+    try:
+        spec = add_executor_preset(Path(paths.omh_home), args.preset, force=bool(args.force))
+    except ExecutorConfigError as exc:
+        raise _executor_config_error(exc) from exc
+    _print_json(
+        {
+            "schema_version": "coding_executors_add/v1",
+            "id": spec.id,
+            "preset": spec.preset_id,
+            "validated": bool(spec.validated),
+            "claim_boundary": "Writes an opt-in reference only; nothing was installed, probed or dispatched.",
+        }
+    )
+    return 0
+
+
+def cmd_coding_executors_remove(args: argparse.Namespace) -> int:
+    from ..coding.user_executors import ExecutorConfigError, remove_user_executor
+
+    paths = _paths(args)
+    try:
+        remove_user_executor(Path(paths.omh_home), args.executor_id)
+    except ExecutorConfigError as exc:
+        raise _executor_config_error(exc) from exc
+    _print_json({"schema_version": "coding_executors_remove/v1", "id": args.executor_id, "removed": True})
+    return 0
+
+
+def cmd_coding_executors_check(args: argparse.Namespace) -> int:
+    paths = _paths(args)
+    registry = _loaded_executor_registry(paths)
+    requested = getattr(args, "executor_id", None)
+    if requested:
+        if requested not in registry.entries:
+            rejected = [issue.reason for issue in registry.issues if issue.executor_id == requested]
+            if rejected:
+                raise OmhError(f"executor {requested!r} is configured but rejected: {rejected[0]}")
+            raise OmhError(f"executor {requested!r} is not configured; run `omh coding executors list`")
+        ids = [requested]
+    else:
+        ids = sorted(registry.entries)
+    results = []
+    for executor_id in ids:
+        readiness = probe_executor_readiness(paths, executor_id, force=True)
+        results.append(
+            {
+                "id": executor_id,
+                "status": readiness.get("status", ""),
+                "reason": readiness.get("reason", ""),
+                "available": bool(readiness.get("available", False)),
+                "validated": False,
+            }
+        )
+    rejected_ids = sorted({issue.executor_id for issue in registry.issues if issue.executor_id})
+    # Nonzero when any checked entry is not ready, or when a broad check
+    # finds a rejected entry the operator should repair.
+    ok = all(item["status"] == "ready" for item in results) and not (requested is None and registry.issues)
+    _print_json(
+        {
+            "schema_version": "coding_executors_check/v1",
+            "ok": ok,
+            "checked": results,
+            "rejected_ids": rejected_ids,
+            "claim_boundary": "A version probe is not authentication, a provider check, or dispatch evidence.",
+        }
+    )
+    return 0 if ok else 1
 
 
 def cmd_coding_executor_skills(args: argparse.Namespace) -> int:
@@ -1987,6 +2147,7 @@ def cmd_coding_fanout_prepare(args: argparse.Namespace) -> int:
             identity_config=_operator_identity_config(paths),
             capability_snapshots=capability_snapshots,
             spawn_plan=spawn_plan,
+            registry=_loaded_executor_registry(paths),
         )
     except (FanoutContractError, ExecutorCapabilitySnapshotError) as exc:
         raise OmhError(str(exc)) from exc
@@ -2018,7 +2179,7 @@ def cmd_coding_fanout_validate(args: argparse.Namespace) -> int:
         # an empty stdout, and a wrapper following this command's documented
         # contract parsed that empty string as JSON.
         units = [_normalized_unit(unit, index) for index, unit in enumerate(raw_units)]
-        validate_fanout_units(units)
+        validate_fanout_units(units, registry=_loaded_executor_registry(_paths(args)))
         # Same checks `prepare` runs, in the same order, so `validate` cannot
         # report a split that `prepare` will then refuse to freeze — including
         # the spawn-plan gate running last, after the structural ones.
@@ -2266,7 +2427,7 @@ def _fanout_summary_diagnostic(
 def cmd_coding_fanout_brief(args: argparse.Namespace) -> int:
     from ..coding.fanout_artifacts import fanout_dispatch_summary_path, read_fanout_contract
     from ..coding.fanout_capacity import read_capacity_fields
-    from ..coding.fanout_contracts import FANOUT_UNIT_OWNERS, PREPARED_NOT_OBSERVED
+    from ..coding.fanout_contracts import PREPARED_NOT_OBSERVED
     from ..coding.status_board import model_label_for
     from ..workflows.observation_journal import failure_diagnostic_text
     from ..system.local_store import read_json_object_result
@@ -2351,7 +2512,7 @@ def cmd_coding_fanout_brief(args: argparse.Namespace) -> int:
         owner_value = unit.get("owner")
         owner = (
             owner_value
-            if isinstance(owner_value, str) and owner_value in FANOUT_UNIT_OWNERS
+            if isinstance(owner_value, str) and owner_value in _admitted_owner_ids(paths)
             else "choose"
         )
         units.append(
@@ -2758,11 +2919,10 @@ def _failure_recovery_kwargs(args: argparse.Namespace) -> dict:
         OnFailureModeError,
         parse_on_failure,
     )
-    from ..executors import EXECUTOR_PROFILES
 
     try:
         mode, target_owner = parse_on_failure(
-            getattr(args, "on_failure", "") or "", known_owners=EXECUTOR_PROFILES
+            getattr(args, "on_failure", "") or "", known_owners=_admitted_owner_ids(_paths(args))
         )
     except OnFailureModeError as exc:
         raise OmhError(str(exc)) from exc
@@ -2869,6 +3029,8 @@ def cmd_coding_fanout_dispatch(
     final_review_engine: FinalReviewWaveEngine | None = None,
 ) -> int:
     import subprocess as _subprocess
+
+    _refuse_remote_pr(args)
 
     from ..coding.fanout_artifacts import (
         read_fanout_contract,
@@ -3058,6 +3220,8 @@ def cmd_coding_run(args: argparse.Namespace) -> int:
     separate propose/freeze step to expose to a caller that already knows
     what it wants run.
     """
+    _refuse_remote_pr(args)
+
     import subprocess as _subprocess
 
     from ..coding.executor_capability_snapshots import (
@@ -3133,6 +3297,7 @@ def cmd_coding_run(args: argparse.Namespace) -> int:
             category_config=_operator_category_config(paths),
             identity_config=_operator_identity_config(paths),
             capability_snapshots=capability_snapshots,
+            registry=_loaded_executor_registry(paths),
         )
     except (FanoutContractError, ExecutorCapabilitySnapshotError) as exc:
         raise OmhError(str(exc)) from exc
@@ -3484,6 +3649,40 @@ def _add_failure_recovery_arguments(parser) -> None:
     parser.add_argument("--hermes-reasoning", default="", help="Hermes reasoning alias for recovery or final-review lanes.")
 
 
+def _add_executors_commands(coding_sub) -> None:
+    executors = coding_sub.add_parser(
+        "executors",
+        help="List, opt in to, remove, and check user-declared or preset coding harness executors.",
+    )
+    executors_sub = executors.add_subparsers(dest="executors_command", required=True)
+
+    listing = executors_sub.add_parser(
+        "list",
+        help="Built-ins, enabled entries, available presets and rejected entries with reasons. Never probes.",
+    )
+    listing.add_argument("--json", action="store_true", help="Print the coding_executors/v1 payload.")
+    listing.set_defaults(func=cmd_coding_executors_list)
+
+    add = executors_sub.add_parser(
+        "add",
+        help="Opt in to one shipped preset by writing a reference into the OMH home. Installs nothing.",
+    )
+    add.add_argument("preset", help="Preset id (see `omh coding executors list`).")
+    add.add_argument("--force", action="store_true", help="Re-write an existing reference to the same preset.")
+    add.set_defaults(func=cmd_coding_executors_add)
+
+    remove = executors_sub.add_parser("remove", help="Remove one configured executor entry from the OMH home.")
+    remove.add_argument("executor_id", help="Configured executor id to remove.")
+    remove.set_defaults(func=cmd_coding_executors_remove)
+
+    check = executors_sub.add_parser(
+        "check",
+        help="Validate and version-probe one configured executor (or all enabled ones). Probes local binaries only.",
+    )
+    check.add_argument("executor_id", nargs="?", default=None, help="Configured executor id; omit to check all.")
+    check.set_defaults(func=cmd_coding_executors_check)
+
+
 def _add_coding_commands(sub) -> None:
     from .paired_run import add_coding_paired_run_command
     from .work_campaign import add_work_campaign_command
@@ -3492,6 +3691,7 @@ def _add_coding_commands(sub) -> None:
     coding_sub = coding.add_subparsers(dest="coding_command", required=True)
     add_coding_paired_run_command(coding_sub)
     add_work_campaign_command(coding_sub)
+    _add_executors_commands(coding_sub)
 
     fanout = coding_sub.add_parser(
         "fanout",
@@ -3584,6 +3784,12 @@ def _add_coding_commands(sub) -> None:
         ),
     )
     fanout_dispatch.add_argument("--timeout", type=int, default=1800, help="Per-unit subprocess timeout in seconds.")
+    fanout_dispatch.add_argument(
+        "--allow-remote-pr",
+        action="store_true",
+        default=False,
+        help="Reserved for the remote PR lane; refused until that lane is available.",
+    )
     fanout_dispatch.add_argument("--unit", action="append", default=None, help="Dispatch only these unit ids (repeatable).")
     fanout_dispatch.add_argument("--dry-run", action="store_true", help="Resolve readiness, argv, and worktree paths; spawn nothing.")
     fanout_dispatch.add_argument(
@@ -3773,9 +3979,8 @@ def _add_coding_commands(sub) -> None:
     run_cmd.add_argument(
         "--owner",
         type=canonical_executor_profile,
-        choices=EXECUTOR_PROFILES,
         required=True,
-        help="The coding owner explicitly chosen for this run.",
+        help="The coding owner explicitly chosen for this run: a built-in or a configured executor id.",
     )
     run_goal = run_cmd.add_mutually_exclusive_group(required=True)
     run_goal.add_argument("--goal", nargs="+", help="Task/prompt text for this run.")
@@ -3791,6 +3996,12 @@ def _add_coding_commands(sub) -> None:
     run_cmd.add_argument("--repo-root", default=".", help="Repository the unit worktree branches from.")
     run_cmd.add_argument("--base-ref", default="HEAD", help="Ref resolved once to a SHA the unit branch starts from.")
     run_cmd.add_argument("--timeout", type=int, default=1800, help="Subprocess timeout in seconds.")
+    run_cmd.add_argument(
+        "--allow-remote-pr",
+        action="store_true",
+        default=False,
+        help="Reserved for the remote PR lane; refused until that lane is available.",
+    )
     run_cmd.add_argument("--dry-run", action="store_true", help="Resolve readiness, argv, and worktree paths; spawn nothing.")
     run_cmd.add_argument(
         "--run-verification",
@@ -4352,7 +4563,7 @@ def _add_coding_commands(sub) -> None:
         "executor-readiness",
         help="Probe or preview first-use coding agent readiness for wrapper fallback decisions.",
     )
-    readiness.add_argument("--executor", type=canonical_executor_profile, choices=EXECUTOR_READINESS_PROFILES, required=True)
+    readiness.add_argument("--executor", type=canonical_executor_profile, required=True, help="A built-in profile or a configured executor id.")
     readiness.add_argument("--force", action="store_true", help="Run the probe even if a first-use result is already cached.")
     readiness.add_argument("--dry-run", action="store_true", help="Return the probe contract without running or caching it.")
     readiness.set_defaults(func=cmd_coding_executor_readiness)
