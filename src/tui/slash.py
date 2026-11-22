@@ -370,6 +370,29 @@ def completions(prefix: str, catalog_pairs: Iterable[tuple[str, str]] = ()) -> l
 _SLASH_TOKEN = re.compile(r"(?<!\S)/([A-Za-z0-9][\w.:-]*)(?!\S)")
 
 
+def slash_token_at(text: str, caret: int) -> tuple[int, int, str] | None:
+    """(start, end, typed) of the `/name` being typed at `caret`, the one the `/` menu completes, or None.
+
+    Its `/` is at the input's start or right after whitespace (a newline too), and nothing between it and the caret
+    is whitespace or another `/`: `asdf /as` types `as`, a bare `/` after a space types "", and `./x`, `a/b`,
+    `~/x`, `http://x`, `//` and `/usr/bin` are no token. `typed` runs from the `/` to the caret, as Claude Code
+    filters; `end` is where the word under the caret ends, so a pick replaces the whole token and keeps the text on
+    both sides.
+    """
+    start = caret
+    while start > 0 and not text[start - 1].isspace():
+        start -= 1
+    word = text[start:caret]
+    if not word.startswith("/") or "/" in word[1:]:
+        return None
+    end = caret
+    while end < len(text) and not text[end].isspace():
+        end += 1
+    if "/" in text[caret:end]:
+        return None
+    return start, end, word[1:]
+
+
 def known_names(catalog_pairs: Iterable[tuple[str, str]] = ()) -> frozenset[str]:
     """Every name a typed `/name` resolves to here: what completion offers, the TUI's commands (their aliases too)
     and the catalog's.

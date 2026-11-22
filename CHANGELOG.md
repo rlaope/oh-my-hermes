@@ -4,6 +4,13 @@ All notable changes will be documented here.
 
 ## Unreleased
 
+- **OMH TUI: a `/` after a space opens slash completion, as in Claude Code.** Typing `asdf /as` opens the command
+  and skill menu filtered by `as`; a bare `/` after a space opens the whole list. The token runs from its `/` to the
+  caret, so moving the caret onto a `/name` in the middle of a line opens it too, in multi-line input as well. Taking
+  a row replaces only that `/name` and keeps the text on both sides. A path-like slash (`./x`, `../x`, `~/x`, `a/b`,
+  `http://`, `//`) opens nothing. Enter is unchanged: a line that does not start with `/` still goes as a prompt,
+  with the `/skill` text in it, as Claude Code sends a skill named after plain text. (`src/tui/slash.py`
+  `slash_token_at`, `src/tui/app.py`)
 - **omher: the bridge comes back after it dies.** If the Python bridge stopped after it was ready, nothing started it
   again: Hermes bots and folder chats stayed on "Connecting to Hermes…" until omher was restarted, because the shell
   kept handing the page the dead bridge's port. The shell now notices the exit (the bridge's output closes, or a check

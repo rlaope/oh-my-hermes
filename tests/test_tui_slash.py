@@ -171,6 +171,33 @@ class CompletionTests(unittest.TestCase):
         self.assertEqual(len(slash.catalog_pairs(self.CATALOG)), 4)
 
 
+class SlashTokenAtTests(unittest.TestCase):
+    """The `/name` the menu completes: at the input's start or after whitespace, from its `/` to the caret."""
+
+    def test_a_slash_at_the_start_or_after_whitespace_is_a_token_typed_up_to_the_caret(self) -> None:
+        for text, caret, token in (
+            ("/as", 3, (0, 3, "as")),
+            ("asdf /", 6, (5, 6, "")),
+            ("asdf /as", 8, (5, 8, "as")),
+            ("asdf /as tail", 8, (5, 8, "as")),
+            ("asdf /asx tail", 8, (5, 9, "as")),  # typed up to the caret; the pick replaces the whole word
+            ("one\n/re", 7, (4, 7, "re")),
+            ("one\ttwo /", 9, (8, 9, "")),
+        ):
+            with self.subTest(text=text, caret=caret):
+                self.assertEqual(slash.slash_token_at(text, caret), token)
+
+    def test_a_path_like_or_doubled_slash_is_no_token(self) -> None:
+        for text in ("./", "x ./foo", "../x", "~/", "say ~/x", "a/b", "see http://", "//", "x //", "/usr/bin",
+                     "x /usr/", "asdf", "asdf /as "):
+            with self.subTest(text=text):
+                self.assertIsNone(slash.slash_token_at(text, len(text)))
+
+    def test_whitespace_between_the_slash_and_the_caret_ends_the_token(self) -> None:
+        self.assertIsNone(slash.slash_token_at("asdf /as more", 13))
+        self.assertIsNone(slash.slash_token_at("/as more", 8))
+
+
 class CatalogReaderTests(unittest.TestCase):
     def test_categories_drop_what_the_tui_runs_routes_or_drops_and_then_empty_categories(self) -> None:
         catalog = {

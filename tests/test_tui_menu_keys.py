@@ -14,7 +14,7 @@ import unittest
 from test_tui_catalog import CATALOG, catalog_app
 from test_tui_modes import SID, make_app, notices, type_text
 from omh.tui.app import App, PathItem
-from omh.tui.keys import DOWN, ENTER, ESCAPE, UP, Key
+from omh.tui.keys import DOWN, ENTER, ESCAPE, LEFT, TAB, UP, Key
 
 PATHS = [PathItem("@src/foo.py", "foo.py", ""), PathItem("@src/fold/", "fold/", "dir")]
 
@@ -153,6 +153,91 @@ class EscOnTheSlashMenuTests(unittest.TestCase):
         app._on_input(Key(ESCAPE))
         self.assertEqual(app._menu_rows(), [])
         self.assertIsNone(app.escape_armed)
+
+
+class MidLineSlashMenuTests(unittest.TestCase):
+    """A `/` after whitespace opens the menu for the token at the caret, as Claude Code's does; a path does not."""
+
+    def test_a_slash_after_a_space_opens_the_menu_filtered_by_what_follows_it(self) -> None:
+        for typed, first in (("asdf /", None), ("asdf /mo", "/model"), ("/mo", "/model"), ("asdf /con", "/config"),
+                             ("one\n/mo", "/model")):
+            with self.subTest(typed=typed):
+                app, _client = catalog_app()
+                if "\n" in typed:
+                    head, tail = typed.split("\n")
+                    type_text(app, head)
+                    app._on_input(Key(ENTER, alt=True))
+                    type_text(app, tail)
+                else:
+                    type_text(app, typed)
+                self.assertEqual(app.composer.text, typed)
+                rows = [label for label, _summary in app._menu_rows()]
+                self.assertTrue(rows)
+                if first is not None:
+                    self.assertEqual(rows[0], first)
+
+    def test_a_bare_slash_after_a_space_offers_what_a_bare_leading_slash_does(self) -> None:
+        mid, _client = catalog_app()
+        type_text(mid, "asdf /")
+        lead, _client = catalog_app()
+        type_text(lead, "/")
+        self.assertEqual(mid._menu_rows(), lead._menu_rows())
+
+    def test_a_path_like_slash_opens_no_menu(self) -> None:
+        for typed in ("./", "see ./x", "../", "~/", "go ~/x", "a/b", "see http://", "//", "x //", "x /usr/"):
+            with self.subTest(typed=typed):
+                app, _client = catalog_app()
+                type_text(app, typed)
+                self.assertEqual(app._menu_rows(), [])
+
+    def test_the_caret_inside_the_line_opens_the_menu_for_the_token_under_it(self) -> None:
+        app, _client = catalog_app()
+        type_text(app, "fix /mo then more")
+        self.assertEqual(app._menu_rows(), [])
+        for _ in range(len(" then more")):
+            app._on_input(Key(LEFT))
+        self.assertEqual(app._menu_rows()[0][0], "/model")
+        app._on_input(Key(TAB))
+        self.assertEqual(app.composer.text, "fix /model then more")
+        self.assertEqual(app.composer.caret, len("fix /model "))
+
+    def test_taking_a_row_mid_line_replaces_only_the_token(self) -> None:
+        app, client = catalog_app()
+        type_text(app, "please /con")
+        app._on_input(Key(ENTER))
+        self.assertEqual(app.composer.text, "please /config ")
+        self.assertEqual(client.calls, [])
+        app, _client = catalog_app()
+        type_text(app, "one")
+        app._on_input(Key(ENTER, alt=True))
+        type_text(app, "two /ulw")
+        app._on_input(Key(TAB))
+        self.assertEqual(app.composer.text, "one\ntwo /ulw-review ")
+
+    def test_a_line_not_starting_with_a_slash_still_goes_as_a_prompt(self) -> None:
+        app, client = catalog_app()
+        type_text(app, "please /con")
+        app._on_input(Key(ENTER))  # takes /config
+        type_text(app, "now")
+        self.assertEqual(app._menu_rows(), [])
+        app._on_input(Key(ENTER))
+        self.assertEqual(client.named("prompt.submit"), [{"session_id": SID, "text": "please /config now"}])
+        self.assertEqual([call for call in client.calls if call[0] == "slash.exec"], [])
+
+    def test_a_whole_name_mid_line_sends_the_line_on_the_first_enter(self) -> None:
+        app, client = catalog_app()
+        type_text(app, "please /config")
+        self.assertTrue(app._menu_rows())
+        app._on_input(Key(ENTER))
+        self.assertEqual(client.named("prompt.submit"), [{"session_id": SID, "text": "please /config"}])
+
+    def test_esc_closes_the_mid_line_menu_until_the_text_changes(self) -> None:
+        app, _client = catalog_app()
+        type_text(app, "asdf /mo")
+        app._on_input(Key(ESCAPE))
+        self.assertEqual(app._menu_rows(), [])
+        type_text(app, "d")
+        self.assertEqual(app._menu_rows()[0][0], "/model")
 
 
 class MenuEndsTests(unittest.TestCase):

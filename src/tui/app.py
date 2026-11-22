@@ -319,6 +319,7 @@ from .slash import (
     parse_slash,
     plan_invocation,
     runs_during_turn,
+    slash_token_at,
 )
 from .style import CSI, NO_COLOR, TRUECOLOR, Line, Span, Style, color_depth
 from .subagents import Hit, Roster
@@ -6416,22 +6417,31 @@ class App(ModesMixin, AgentViewMixin):
         self.dirty = True
 
     def _menu_entries(self) -> list[Completion]:
-        """Completions while the composer holds a leading `/word` and nothing else, unless Esc closed them over it;
-        none in vim mode's NORMAL."""
+        """Completions for what the `/` menu completes (`_menu_token`), unless Esc closed them over this text; none in
+        vim mode's NORMAL."""
         text = self.composer.text
-        if self.slot is not None or self.composer.normal or not text.startswith("/") or text == self.menu_closed:
+        token = None if self.slot is not None or self.composer.normal or text == self.menu_closed else self._menu_token()
+        if token is None:
             return []
-        command, space, typed = text[1:].partition(" ")
-        if space and command.lower() == "theme" and not any(ch.isspace() for ch in typed):
+        command, space, typed = token[2].partition(" ")
+        if space:
             # `/theme <look>`: the launch looks, by what is typed of one
             return [Completion(f"theme {name}", LAUNCH_SUMMARIES[name]) for name in LAUNCH_PRESETS
                     if name.startswith(typed.lower()) and name != typed.lower()]
-        if any(ch.isspace() for ch in text):
-            return []
-        prefix = text[1:]
-        if "/" in prefix:
-            return []
-        return completions(prefix, self.catalog)
+        return [] if "/" in command else completions(command, self.catalog)
+
+    def _menu_token(self) -> tuple[int, int, str] | None:
+        """(start, end, typed) of what the `/` menu completes, `typed` without its slash: the whole input when it is
+        a leading `/word` and nothing else, or `/theme ` and part of one word; else the `/name` at the caret, typed at
+        the input's start or after whitespace (`slash_token_at`), as Claude Code opens its menu mid-line."""
+        text = self.composer.text
+        if text.startswith("/"):
+            command, space, typed = text[1:].partition(" ")
+            if not any(ch.isspace() for ch in text) or (
+                space and command.lower() == "theme" and not any(ch.isspace() for ch in typed)
+            ):
+                return 0, len(text), text[1:]
+        return slash_token_at(text, self.composer.caret)
 
     def _menu_rows(self) -> list[tuple[str, str]]:
         """The open completion menu as `(label, summary)` rows: slash commands, else `@` paths."""
@@ -6465,9 +6475,10 @@ class App(ModesMixin, AgentViewMixin):
         """
         if key.name != ENTER or key.alt or key.shift or not self._menu_rows():
             return False
-        entries = self._menu_entries()
-        if entries:
-            typed, invocation = self.composer.text[1:], parse_slash(self.composer.text)
+        entries, token = self._menu_entries(), self._menu_token()
+        if entries and token is not None:
+            typed = token[2]
+            invocation = parse_slash(f"/{typed}")
             name = entries[min(self.menu_index, len(entries) - 1)].name
             whole = typed.lower() in {entry.name.lower() for entry in entries}  # a name in any case, as it resolves
             whole = whole or (invocation is not None and invocation.command is not None)
@@ -6481,9 +6492,14 @@ class App(ModesMixin, AgentViewMixin):
         return True
 
     def _accept_completion(self) -> None:
-        entries = self._menu_entries()
-        if entries:
-            self._set_composer(f"/{entries[min(self.menu_index, len(entries) - 1)].name} ")
+        entries, token = self._menu_entries(), self._menu_token()
+        if entries and token is not None:
+            # Only the token is replaced; the text on both sides stays. A space already after it is the one the
+            # pick adds, so a mid-line pick never doubles it.
+            start, end, _typed = token
+            if self.composer.text[end : end + 1] == " ":
+                end += 1
+            self.composer.replace(start, end, f"/{entries[min(self.menu_index, len(entries) - 1)].name} ")
             return
         start, word = at_token(self.composer.text, self.composer.caret)
         if not self.path_items or not word or self.composer.normal:
