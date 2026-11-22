@@ -48,6 +48,15 @@ All notable changes will be documented here.
   - **Speed:** saving a long scrollback no longer stalls on trailing blank lines (98 ms to 0.1 ms on the same input).
     (#3050)
 
+- **omher: a message you send while a bot is answering goes out at once, as in a messenger.** The bot does not stop:
+  it keeps working and takes the new message into account (Hermes' steer joins the running turn, no interrupt). The
+  bubble stays at the bottom in the order you sent it, with a small muted "Read · 14:02" beside its bottom-left corner,
+  and the typing dots and activity line move under it. The ↵ mark and the "Waiting", "Steering…" and "Sent to … ·
+  joins the running answer" lines are gone. The Settings › General "While it answers" choice (Wait / Steer) is gone
+  too: steering is always the behaviour. Where a steer cannot happen (Hermes refuses it, the turn already ended, the
+  bridge is coming back, or the message is a `/` command or carries files or a Reply there target) the message waits with its ↵ ↓ × buttons
+  and no text line, and goes out as the next message right after the turn, so nothing is lost. SESSIONS agent chats
+  are unchanged. (apps/omher `state/store.ts`, `chat/parts/Bubble.tsx`)
 - **omher: a terminal that cannot continue its conversation keeps it.** A Claude Code or Codex terminal continues its
   conversation after omher restarts. When that CLI ended at once (the conversation, its account folder or the login
   was gone) the row turned into a Shell and dropped the conversation id, and when the CLI was missing, Restart started
