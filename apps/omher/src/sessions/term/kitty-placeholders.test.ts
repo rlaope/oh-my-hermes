@@ -200,6 +200,31 @@ describe("PlaceholderStore lifecycle: a decode still on its way when the store c
 });
 
 describe("PlaceholderStore budget: one 32 MB per terminal with the add-on, refused before decoding", () => {
+  it("a newer same-id transmit that fits alone replaces one still decoding even when both together would not fit", async () => {
+    const d = deferredDecode();
+    const s = new PlaceholderStore(d.decode, undefined, 3000); // one 16×32 picture (2048 bytes) fits, two do not
+    s.handle(`a=T,U=1,i=41,f=100;${png()}`);
+    await flush(); // the first is decoding and holds its reservation
+    s.handle(`a=T,U=1,i=41,f=100;${png()}`);
+    await flush();
+    expect(d.calls()).toBe(2); // the stale first one's reservation does not refuse the newer one
+    d.waiting[0](d.picture(16, 32));
+    d.waiting[1](d.picture(16, 32));
+    await flush();
+    expect(s.images.has(41)).toBe(true);
+    expect(s.usage).toBe(2048);
+    expect(d.closed()).toBe(1); // the stale first one
+  });
+
+  it("a refused file transmit for an id leaves its virtual picture as it was", async () => {
+    const { decode } = fakeDecode();
+    const s = new PlaceholderStore(decode);
+    s.handle(`a=T,U=1,i=41,f=100;${png()}`);
+    await flush();
+    expect(s.handle("a=t,i=41,t=f;L3RtcC94")).toBe(false); // the add-on answers EINVAL and reads nothing
+    expect(s.images.has(41)).toBe(true);
+  });
+
   it("the add-on's pictures come out of the same budget: a virtual one that does not fit what is left is never decoded", async () => {
     const { calls, decode } = fakeDecode([16, 32]);
     let addon = 0;

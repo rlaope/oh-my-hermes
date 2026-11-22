@@ -167,12 +167,21 @@ export class PlaceholderStore {
   readonly images = new Map<number, VirtualImage>();
   private upload: Upload | null = null;
   private used = 0;
-  /** declared bytes of the decodes in flight: they count against the budget until they are kept or fail */
-  private pending = 0;
+  /** declared bytes each decode in flight reserved (by ticket): they count against the budget until the decode is kept
+   *  or fails, or a newer transmit of its id makes it stale (`pending`) */
+  private readonly reserved = new Map<number, { id: number; bytes: number }>();
   /** the newest decode in flight per id: a later transmit, a delete, clear or dispose takes it away */
   private readonly inFlight = new Map<number, number>();
   private ticket = 0;
   private disposed = false;
+
+  /** The bytes reserved by decodes still current for their id. A decode a newer transmit of the same id (or a delete)
+   *  made stale keeps nothing, so its reservation does not stand in the newer one's way. */
+  private get pending(): number {
+    let n = 0;
+    for (const [ticket, r] of this.reserved) if (this.inFlight.get(r.id) === ticket) n += r.bytes;
+    return n;
+  }
 
   constructor(
     private readonly decode: Decode,
@@ -220,9 +229,10 @@ export class PlaceholderStore {
     if (a === "p" && ctrl.get("U") === "1") return this.place(ctrl);
     if (a !== "T" && a !== "t") return false;
     if (ctrl.get("U") !== "1") {
-      // the add-on's transmit for an id: newer bytes for it than ours, which a later a=p,U=1 must not show
+      // the add-on's transmit for an id: newer bytes for it than ours, which a later a=p,U=1 must not show. Only a
+      // direct transmit (`t=d`, the default) can be: the add-on refuses a file, temp-file or shared-memory one unread.
       const id = num(ctrl, "i");
-      if (id && (this.images.has(id) || this.inFlight.has(id))) {
+      if (id && (ctrl.get("t") ?? "d") === "d" && (this.images.has(id) || this.inFlight.has(id))) {
         this.inFlight.delete(id);
         this.drop(id);
         this.changed();
@@ -286,19 +296,14 @@ export class PlaceholderStore {
     this.inFlight.set(id, ticket);
     const current = () => !this.disposed && this.inFlight.get(id) === ticket;
     let picture: Picture | null = null;
-    let reserved = 0;
-    /** Whether a w×h picture fits beside the add-on's and the other decodes in flight; when it does, its bytes are
-     *  reserved until it is kept or fails. */
+    /** Whether a w×h picture fits beside the add-on's and the other current decodes; when it does, its bytes are
+     *  reserved until it is kept, fails or goes stale. */
     const reserve = (w: number, h: number): boolean => {
       if (!(w > 0 && h > 0 && w * h <= PIXEL_LIMIT && w * h * 4 <= this.room() - this.pending)) return false;
-      reserved = w * h * 4;
-      this.pending += reserved;
+      this.reserved.set(ticket, { id, bytes: w * h * 4 });
       return true;
     };
-    const release = () => {
-      this.pending -= reserved;
-      reserved = 0;
-    };
+    const release = () => void this.reserved.delete(ticket);
     try {
       let bytes: Uint8Array | null = await read();
       const raw = o.f !== 100;
