@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 import unittest
 from pathlib import Path
 from unittest import mock
@@ -182,7 +183,8 @@ class PluginsNodeCorpusTests(unittest.TestCase):
         # its last value, so the person's own list was dropped silently.
         for text in [entry for entry, _ in READABLE_PLUGINS_NODES] + list(UNREADABLE_PLUGINS_NODES):
             listed = plugin_enablement(text)
-            if text.splitlines()[0].strip() == "plugins:":
+            if re.fullmatch(r"plugins:[ \t]*(?:#.*)?", text.splitlines()[0]):
+                # The plain block, with or without a comment on its key line (#3075).
                 continue
             if PLUGIN_NAME in listed["enabled"] or PLUGIN_NAME in listed["disabled"]:
                 # No write is needed, so there is nothing to refuse; those

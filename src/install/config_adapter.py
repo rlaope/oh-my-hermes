@@ -10,6 +10,7 @@ from pathlib import Path
 import random
 import re
 import time
+from functools import wraps
 from typing import Callable
 
 from ..core.errors import OmhError
@@ -40,6 +41,10 @@ _EMPTY_QUOTED_FLOW_SEQUENCES = {"'[]'", '"[]"'}
 _UNSUPPORTED_EXTERNAL_DIRS_SHAPE = "unsupported skills.external_dirs shape; use a YAML block list or inline list"
 _DUPLICATE_EXTERNAL_DIRS_SHAPE = "duplicate skills.external_dirs entries are unsupported; keep one YAML block list or inline list"
 _DUPLICATE_ENABLED_SHAPE = "duplicate plugins.enabled keys are unsupported; keep one YAML block list or inline list"
+# The one directive Hermes' loaders and `route_endpoint_guard.scan_config` read
+# the same way (#2917). `%YAML 1.2` and `%TAG` may resolve tags and plain
+# scalars differently, so a document opening with either stays user-owned.
+_YAML_1_1_DIRECTIVE_RE = re.compile(r"%YAML[ \t]+1\.1")
 
 
 def _ends_top_level_node(line: str) -> bool:
@@ -319,16 +324,40 @@ def _external_dirs_block_line(line: str) -> bool:
     return re.fullmatch(r"  external_dirs:\s*(?:#.*)?", line) is not None
 
 
+def _block_header(line: str, key: str) -> bool:
+    """Whether `line` is `key:` opening a block node, with or without a trailing comment.
+
+    Every writer here locates a top-level section by this one test. A writer
+    that matched only the exact text `memory:` read `memory: # mine` as no
+    section at all and appended a second `memory:`, a duplicate key Hermes
+    refuses the whole file over (#3075).
+    """
+    return re.fullmatch(rf"{re.escape(key)}:(?:[ \t]+#.*|[ \t]*)", line) is not None
+
+
 def _skills_block_line(line: str) -> bool:
     """A plain skills block may carry a trailing YAML comment."""
-    return re.fullmatch(r"skills:\s*(?:#.*)?", line) is not None
+    return _block_header(line, "skills")
 
 
-def _skills_document_parts(config_text: str) -> tuple[str, str, str]:
-    """Keep a single document's envelope outside the skills-only editor."""
+def _document_parts(config_text: str) -> tuple[str, str, str]:
+    """Split one YAML document into its envelope and its body.
+
+    The prefix is everything up to and including the document start `---`:
+    leading comments and the `%YAML` / `%TAG` directives before it. The
+    suffix is a `...` document end and the comments after it. The writers in
+    this module edit only the body (`_with_document_body`), so a section they
+    append lands before the `...`, and the directives stay as written. OMH
+    writes only untagged plain scalars, which read the same under YAML 1.1
+    and 1.2 and under any `%TAG` handle, so neither directive is refused.
+
+    Raises for a stream this module does not edit: a second document,
+    content after `...`, a directive after content or without its `---`,
+    and a second `%YAML`, which the loaders refuse.
+    """
     lines = config_text.splitlines(keepends=True)
     body_start, body_end = 0, len(lines)
-    started = content = ended = directives = False
+    started = content = ended = directives = version = False
     for index, line in enumerate(lines):
         stripped = line.strip()
         if not stripped or stripped.startswith("#"):
@@ -351,12 +380,58 @@ def _skills_document_parts(config_text: str) -> tuple[str, str, str]:
         if line.startswith("%"):
             if started or content or not re.match(r"%(?:YAML|TAG)[ \t]", line):
                 raise ValueError("unsupported YAML directive placement; leaving it alone")
+            if line.startswith("%YAML"):
+                if version:
+                    raise ValueError("a second %YAML directive is user-owned; leaving it alone")
+                version = True
             directives = True
             continue
         content = True
     if directives and not started:
         raise ValueError("YAML directives require a document start; leaving it alone")
     return "".join(lines[:body_start]), "".join(lines[body_start:body_end]), "".join(lines[body_end:])
+
+
+def config_stream_error(config_text: str) -> str:
+    """Why this module edits no part of `config_text` as one YAML document, or ""."""
+    try:
+        _document_parts(config_text)
+    except ValueError as exc:
+        return str(exc)
+    return ""
+
+
+def _with_document_body(
+    config_text: str, edit: Callable[[str], ConfigChange], *, strict: bool = False
+) -> ConfigChange:
+    """Run `edit` on the document's body and put its envelope back around the result.
+
+    A stream `_document_parts` does not split goes to `edit` whole when not
+    `strict`, so the writer's own guard refuses it the way it did before the
+    split existed; `strict` raises the split's refusal instead.
+    """
+    try:
+        prefix, body, suffix = _document_parts(config_text)
+    except ValueError:
+        if strict:
+            raise
+        return edit(config_text)
+    if not (prefix or suffix):
+        return edit(config_text)
+    change = edit(body)
+    if not change.changed:
+        return ConfigChange(False, change.message, config_text)
+    return ConfigChange(True, change.message, prefix + change.text + suffix)
+
+
+def _edits_document_body(writer: Callable[..., ConfigChange]) -> Callable[..., ConfigChange]:
+    """`writer(config_text, ...)` through `_with_document_body` (#3075)."""
+
+    @wraps(writer)
+    def edit(config_text: str, *args: object, **kwargs: object) -> ConfigChange:
+        return _with_document_body(config_text, lambda body: writer(body, *args, **kwargs))
+
+    return edit
 
 
 def _empty_mapping_root_index(lines: list[str]) -> int | None:
@@ -370,15 +445,34 @@ def _empty_mapping_root_index(lines: list[str]) -> int | None:
 
 
 def _validate_external_dirs_mutation_shape(config_text: str) -> None:
+    _validate_external_dirs_entries(config_text)
+    _validate_external_dirs_document(config_text)
+
+
+def _validate_external_dirs_document(config_text: str) -> None:
+    """The document-shape refusals, which the skills writers take only once there is something to write.
+
+    The caller has already separated a single document's envelope. A home
+    registered under a shape this editor would not write into keeps working:
+    `omh update` answers "already present" before this runs (#3075).
+    """
     lines = config_text.splitlines()
-    # The skills caller has already separated a single document's envelope.
-    # Other section writers retain their stricter whole-document guard.
-    normalized = ["skills:" if _skills_block_line(line) else line for line in lines]
     guard = ("non-mapping or unsupported root YAML is user-owned; leaving it alone"
              if not _root_is_plain_block_mapping(lines) and _empty_mapping_root_index(lines) is None else "")
-    guard = guard or _section_shape_guard(normalized, "skills")
-    if not guard and _section_node_is_sequence(normalized, "skills"):
+    if not guard and _section_node_is_sequence(lines, "skills"):
         guard = "sequence skills configuration is user-owned; leaving it alone"
+    if guard:
+        raise ValueError(guard)
+
+
+def _validate_external_dirs_entries(config_text: str) -> None:
+    """The refusals under which `external_dirs` reads one way here and another in Hermes.
+
+    Two `skills:` sections or two `external_dirs:` keys, an unsupported
+    inline value, a flow or tagged node: the reader may report an entry
+    Hermes does not see, so these run before "already present".
+    """
+    guard = _section_shape_guard(config_text.splitlines(), "skills")
     if guard:
         raise ValueError(guard)
     in_skills = False
@@ -645,12 +739,17 @@ def _plugins_node_extension_error(config_text: str, name: str) -> str:
     reported as a fault.
     """
     for line in config_text.splitlines():
-        if _plugins_node_line_shape(line) is None or line.strip() == "plugins:":
+        if _plugins_node_line_shape(line) is None or _block_header(line, "plugins"):
             continue
         listed = plugin_enablement(config_text)
         if name in listed["enabled"] or name in listed["disabled"]:
             return ""
         return _unextendable_plugins_node_message(line.strip(), name)
+    # A list under `plugins:`, at column 0 or indented, is not the mapping an
+    # `enabled:` key goes into; inserting one above it wrote a file Hermes
+    # cannot load (#3075).
+    if _section_node_is_sequence(config_text.splitlines(), "plugins"):
+        return f"sequence plugins configuration is user-owned; leaving it alone. Run `hermes plugins enable {name}`"
     return ""
 
 
@@ -663,7 +762,7 @@ def _plugins_block_index(lines: list[str]) -> int | None:
     `plugins` key at all.
     """
     for index, line in enumerate(lines):
-        if line.strip() == "plugins:" and not line.startswith(" "):
+        if _block_header(line, "plugins"):
             return index
     return None
 
@@ -675,7 +774,44 @@ def plugins_enabled_extension_error(config_text: str, name: str) -> str:
     where setup already refused: setup stops before it installs the bundle,
     and the plugin checks only run once a bundle exists, so without this the
     diagnostic named side effects and never the cause (#1825).
+
+    A name already listed needs no write, so nothing about the file's shape is
+    a fault for it: a working install whose config opens with `%YAML` or ends
+    with `...` reported this check failing (#3075). Only a second `enabled:`
+    key still is, since Hermes refuses the whole file over it.
     """
+    listed = plugin_enablement(config_text)
+    if name in listed["enabled"] or name in listed["disabled"]:
+        return _DUPLICATE_ENABLED_SHAPE if _plugins_enabled_key_count(config_text) > 1 else ""
+    try:
+        body = _document_parts(config_text)[1]
+    except ValueError as exc:
+        return (
+            f"{exc}. Setup edits a config.yaml that holds one YAML document; keep one document, "
+            f"or run `hermes plugins enable {name}`"
+        )
+    return _plugins_enabled_shape_error(body, name)
+
+
+def _plugins_enabled_key_count(config_text: str) -> int:
+    """How many `enabled:` keys the plain `plugins:` block holds."""
+    in_plugins = False
+    count = 0
+    for line in config_text.splitlines():
+        if _ends_top_level_node(line):
+            node = _plugins_node_line_shape(line)
+            in_plugins = node is not None and node[0] == _PLUGINS_NODE_BLOCK
+            continue
+        if in_plugins and line.startswith("  ") and not line.startswith("    "):
+            if line.strip().partition(":")[0].strip() == "enabled":
+                count += 1
+    return count
+
+
+def _plugins_enabled_shape_error(config_text: str, name: str) -> str:
+    """`plugins_enabled_extension_error` for a document body, whatever it already lists."""
+    if not _root_is_plain_block_mapping(config_text.splitlines()):
+        return f"non-mapping or multi-document YAML is user-owned; leaving it alone. Run `hermes plugins enable {name}`"
     shape_error = plugin_enablement_shape_error(config_text)
     if shape_error:
         return shape_error
@@ -717,7 +853,7 @@ def _plugin_enable_read_back_error(before: str, after: str, name: str) -> str:
     other than one list holding every earlier name plus `name` is refused
     with the file left as it was.
     """
-    if plugins_enabled_extension_error(after, name):
+    if _plugins_enabled_shape_error(after, name):
         verdict = "it would hold two plugins.enabled keys or a list Hermes cannot read"
     else:
         expected = {*plugin_enablement(before)["enabled"], name}
@@ -730,6 +866,7 @@ def _plugin_enable_read_back_error(before: str, after: str, name: str) -> str:
     )
 
 
+@_edits_document_body
 def ensure_plugin_enabled(config_text: str, name: str) -> ConfigChange:
     """Add `name` to `plugins.enabled` so Hermes will actually load the bridge.
 
@@ -900,6 +1037,7 @@ def plugin_omh_home_setting(config_text: str) -> str:
     return (value or "") if found else ""
 
 
+@_edits_document_body
 def ensure_plugin_omh_home(config_text: str, omh_home: str | Path) -> ConfigChange:
     """Name `omh_home` as the store the plugin loaded from this home binds (#1960).
 
@@ -941,6 +1079,7 @@ def ensure_plugin_omh_home(config_text: str, omh_home: str | Path) -> ConfigChan
     return ConfigChange(True, "recorded plugins.entries.omh.settings.omh_home", text)
 
 
+@_edits_document_body
 def set_plugin_setting(config_text: str, name: str, value: str) -> ConfigChange:
     """Set `plugins.entries.omh.settings.<name>` to one plain word, adding or replacing the leaf.
 
@@ -1090,6 +1229,7 @@ def _block_key_chain(lines: list[str], key_path: tuple[str, ...]) -> list[int] |
     return chain
 
 
+@_edits_document_body
 def remove_plugin_omh_home(config_text: str, expected: str) -> ConfigChange:
     """Take back the `omh_home` `ensure_plugin_omh_home` wrote, if it still says `expected`.
 
@@ -1211,29 +1351,85 @@ def references_top_level_section(line: str, section: str) -> bool:
 
 
 def _contains_potential_quoted_mapping_key(line: str) -> bool:
-    return (
-        re.match(r"""^\s*(?:\?\s*)?["']""", line) is not None
-        or re.search(r"""(?:^|[,{])\s*["']""", line) is not None
-    )
+    """Whether `line` uses a quoted scalar as a mapping key.
+
+    The places main looked stay the places looked: a quote opening the line,
+    or following `{` or `,`. There it is a key when a `:` follows its closing
+    quote, outside the quotes (`'k': v`, `x: {"k": v}`), and an explicit
+    `? 'k'` is one too. A flow sequence's quoted item (`['a', "b: c"]`),
+    which a `,`, `]` or the line's end follows, is not (#3075); a quoted
+    scalar after a `,` outside any flow collection is not YAML this editor
+    reads and stays refused. A list item's quoted key (`- 'on': x`, which
+    YAML 1.1 writers quote) is left alone, as main left it: it names no
+    section this module edits. Quoted scalars are found with
+    `_quoted_scalar_close`, the module's one quote reader.
+    """
+    if re.match(r"""^\s*\?\s*["']""", line):
+        return True
+    depth = 0  # open `[` / `{` outside quotes
+    index = 0
+    while index < len(line):
+        char = line[index]
+        if char in "\"'" and (index == 0 or line[index - 1] in " \t,[{:-?"):
+            before = line[:index].rstrip(" \t")
+            if not depth and before.endswith(","):
+                return True
+            close = _quoted_scalar_close(line[index + 1 :], char)
+            if close < 0:
+                return False  # a string running onto the next line: an implicit key never does
+            index += close + 2
+            if (not before or before.endswith(("{", ","))) and line[index:].lstrip(" \t").startswith(":"):
+                return True
+            continue
+        if char in "[{":
+            depth += 1
+        elif char in "]}" and depth:
+            depth -= 1
+        index += 1
+    return False
 
 
 def _contains_unsupported_yaml_node_syntax(line: str) -> bool:
-    return (
-        re.match(r"^\s*\?", line) is not None
-        or re.match(r"^\s*[&*!]", line) is not None
-        or re.search(r"(?:^|[,{])\s*[&*!]", line) is not None
-        or re.search(r":\s*[&*!]", line) is not None
-    )
+    """Whether `line` gives a node properties (`&anchor`, `!tag`) or an alias (`*a`), or an explicit `? key`.
+
+    The places main looked: a line's start, after `: `, and after `{` or a
+    `,` inside a flow collection. A `,` in a plain value outside one
+    (`note: a, *b`) is text (#3075). A list item's properties (`- &id001`,
+    `- *id001`, which `safe_dump` writes for a shared item) are left alone,
+    as main left them.
+    """
+    if re.match(r"^\s*(?:\?|[&*!])", line) or re.search(r":\s*[&*!]", line):
+        return True
+    depth = 0  # open `[` / `{`; the caller has blanked quoted text
+    for index, char in enumerate(line):
+        if char in "[{":
+            depth += 1
+        elif char in "]}" and depth:
+            depth -= 1
+        if (char == "{" or (char == "," and depth)) and re.match(r"\s*[&*!]", line[index + 1 :]):
+            return True
+    return False
 
 
 def _section_node_is_sequence(lines: list[str], section: str) -> bool:
+    """Whether the document, or `section`'s own node, is a block sequence.
+
+    The document is one when its first column-0 content line, past an opening
+    `%YAML 1.1` and `---`, is a `-` line. A column-0 `-` line further down is
+    another root key's indentless list (`toolsets:` then `- hermes-cli`), which
+    `_root_is_plain_block_mapping` has already placed (#3075). Directly under
+    `section:` it is `section`'s own list, at column 0 or indented.
+    """
     for line in lines:
         stripped = line.strip()
-        if not stripped or stripped.startswith("#"):
+        if not stripped or stripped.startswith("#") or line.startswith(" "):
             continue
-        if not line.startswith(" ") and stripped.startswith("-"):
+        if _YAML_1_1_DIRECTIVE_RE.fullmatch(_yaml_code(stripped).strip()) or _document_start(stripped):
+            continue
+        if stripped.startswith("-"):
             return True
-    section_indices = [index for index, line in enumerate(lines) if line == f"{section}:"]
+        break
+    section_indices = [index for index, line in enumerate(lines) if _block_header(line, section)]
     if len(section_indices) != 1:
         return False
     for line in lines[section_indices[0] + 1 :]:
@@ -1241,23 +1437,183 @@ def _section_node_is_sequence(lines: list[str], section: str) -> bool:
         if not stripped or stripped.startswith("#"):
             continue
         if not line.startswith(" "):
-            break
+            return _indentless_item(stripped)
         return stripped.startswith("-")
     return False
 
 
+def _document_start(stripped: str) -> bool:
+    return _yaml_code(stripped).strip() == "---"
+
+
+def _indentless_item(stripped: str) -> bool:
+    """A line that opens a block sequence entry: `-` alone or followed by a space."""
+    return stripped == "-" or stripped.startswith("- ")
+
+
 def _root_is_plain_block_mapping(lines: list[str]) -> bool:
-    for line in lines:
+    """Whether the document is one block mapping whose root keys sit at column 0.
+
+    Beyond plain `key:` lines it reads the two top-level shapes Hermes' own
+    writer and loaders produce, the same ones `route_endpoint_guard.scan_config`
+    reads (#2917, #3075):
+
+    - one opening `---`, optionally after one `%YAML 1.1` directive, which then
+      needs that `---`. Any other directive, a second `---`, a `...` and an
+      indented line before the first root key stay refused. The writers never
+      see an envelope here: they edit the body `_document_parts` splits off,
+      which also keeps `%YAML 1.2`, `%TAG` and a final `...`;
+    - a block sequence at column 0 under a root key with no value of its own
+      (`toolsets:` then `- hermes-cli`). Those `-` lines, and the indented
+      lines inside their items, are that key's value. A `-` line opening the
+      document, after a key that has a value, or after indented lines is not:
+      the document is a sequence there, or the loaders raise.
+
+    A quoted scalar that runs onto the next lines is followed to its closing
+    quote, at any depth: those lines are the string's, and PyYAML's own
+    `safe_dump` folds a long value onto indented lines that way. A column-0
+    line while a quote is still open is refused, since the loaders read it
+    as more of the string while every line scan here would read a key
+    (#3075). The lines indented deeper than a key or item whose value is a
+    block scalar (`|`, `>`) or a plain scalar are that value's own: a block
+    scalar's content, or a plain value `safe_dump` wrapped onto the next
+    line. They are skipped, so a quote at their start opens nothing; YAML
+    allows no child node under either.
+    """
+    inside, closed = _scalar_continuations(lines)
+    if not closed:
+        return False
+    first_content = True
+    directive_open = False  # a `%YAML 1.1` line read, its `---` not yet
+    opened = False  # a `---` read, no root key yet
+    key_open = False  # the last root key has no value yet, so a column-0 `-` is its body
+    root_sequence = False  # the last root key's value is a column-0 block sequence
+    for index, line in enumerate(lines):
         stripped = line.strip()
-        if not stripped or stripped.startswith("#") or line.startswith(" "):
+        if index in inside or not stripped or stripped.startswith("#"):
             continue
-        if stripped in {"---", "..."} or stripped.startswith("%"):
-            return False
-        if stripped.startswith(("{", "[", "-")):
+        if directive_open:
+            directive_open = False
+            if line.startswith(" ") or not _document_start(stripped):
+                return False
+            opened = True
+            continue
+        if line.startswith(" "):
+            if opened or first_content:
+                # An indented root mapping: a section appended at column 0
+                # beside it is a file the loaders refuse.
+                return False
+            key_open = root_sequence
+            continue
+        code = _yaml_code(stripped).strip()
+        if first_content and _YAML_1_1_DIRECTIVE_RE.fullmatch(code):
+            first_content, directive_open = False, True
+            continue
+        if first_content and _document_start(stripped):
+            first_content, opened = False, True
+            continue
+        first_content = opened = False
+        if stripped.startswith("-") and key_open and _indentless_item(stripped):
+            root_sequence = True
+            continue
+        if stripped in {"---", "..."} or stripped.startswith(("%", "{", "[", "-")):
             return False
         if re.match(r"^[^:#][^:]*:(?:\s|$)", stripped) is None:
             return False
-    return True
+        key_open = not code.partition(":")[2].strip()
+        root_sequence = False
+    return not directive_open
+
+
+def _scalar_continuations(lines: list[str]) -> tuple[set[int], bool]:
+    """The indexes of the lines that continue a scalar, and whether every quote closes.
+
+    A line belongs to the scalar above it while a quote that scalar opened is
+    still open, and when it is indented deeper than a key or item whose value
+    is a block scalar or a plain (or flow) value that wrapped. Those lines are
+    text, not nodes: the line scans here skip them. `False` when a column-0
+    line arrives inside an open quote, or the file ends in one; the loaders
+    read the first as more of the string and refuse the second (#3075).
+    """
+    inside: set[int] = set()
+    quote = ""  # the quote of a scalar still open at the end of the last line
+    skip_indent = -1  # lines deeper than this continue a block or plain scalar; -1 outside one
+    for index, line in enumerate(lines):
+        stripped = line.strip()
+        indent = len(line) - len(line.lstrip(" \t"))
+        if quote:
+            if stripped and not indent:
+                return inside, False
+            inside.add(index)
+            if stripped:
+                quote = _quoted_scalar_end(stripped, quote)
+            continue
+        if skip_indent >= 0:
+            if not stripped or indent > skip_indent:
+                inside.add(index)
+                continue
+            skip_indent = -1
+        if not stripped or stripped.startswith(("#", "%")) or re.fullmatch(r"(?:---|\.\.\.)(?:[ \t].*)?", stripped):
+            continue  # a comment, a directive or a document marker carries no value
+        quote, skip, offset = _value_opens(stripped)
+        skip_indent = indent + offset if skip else -1
+    return inside, not quote
+
+
+# Where a line's value starts: past any `- ` item markers, a plain or quoted
+# `key: `, and the node properties (`&anchor`, `!tag`) in front of the value.
+_VALUE_START_RE = re.compile(
+    r"(?P<items>(?:-[ \t]+)*)"
+    r"(?P<key>(?:'(?:[^']|'')*'|\"(?:[^\"\\]|\\.)*\"|[^\s'\"#][^:]*?)[ \t]*:(?:[ \t]+|$))?"
+    r"(?:[&!]\S*(?:[ \t]+|$))*"
+)
+
+
+def _value_opens(stripped: str) -> tuple[str, bool, int]:
+    """What a key or item line's value leaves for the lines below it.
+
+    The quote still open at the line's end; whether the lines deeper than
+    the value's parent are that value's own (a block scalar, or a plain or
+    flow value that may wrap); and how far past the line's indent that parent
+    sits: the key after any `- ` markers, or the last `-` itself. A value
+    that is absent, a comment or node properties alone leaves a child node
+    to come, so nothing is skipped.
+    """
+    match = _VALUE_START_RE.match(stripped)
+    assert match is not None  # every part of the pattern is optional
+    rest = stripped[match.end():]
+    items = match["items"]
+    offset = len(items) if match["key"] else len(items.rstrip(" \t")) - 1 if items else 0
+    if rest[:1] in {"'", '"'}:
+        return _quoted_scalar_end(rest[1:], rest[0]), False, offset
+    return "", bool(rest) and not rest.startswith("#"), offset
+
+
+def _quoted_scalar_end(text: str, quote: str) -> str:
+    """`quote` when the scalar it opened is still open after `text`, else ""."""
+    return "" if _quoted_scalar_close(text, quote) >= 0 else quote
+
+
+def _quoted_scalar_close(text: str, quote: str) -> int:
+    """Where in `text` the scalar `quote` opened before it closes, or -1 when it does not.
+
+    The one quote reader of this module. Inside single quotes `''` is a
+    quote; inside double quotes a backslash escapes the next character, and
+    one ending the line continues it.
+    """
+    index = 0
+    while index < len(text):
+        char = text[index]
+        if quote == '"' and char == "\\":
+            index += 2
+            continue
+        if char == quote:
+            if quote == "'" and text[index + 1 : index + 2] == "'":
+                index += 2
+                continue
+            return index
+        index += 1
+    return -1
 
 
 def _document_edit_guard(lines: list[str]) -> str:
@@ -1269,36 +1625,46 @@ def _document_edit_guard(lines: list[str]) -> str:
     return ""
 
 
-def _yaml_code(line: str) -> str:
-    """`line` without its YAML comment.
+def _yaml_code(line: str, *, blank_quoted: bool = False) -> str:
+    """`line` without its YAML comment, and with `blank_quoted` its quoted text blanked.
 
     A comment starts at a `#` that opens the line or follows whitespace, and
     is outside a quoted scalar (a quote opens one only where a token starts).
     The syntax guards below read only this part: Hermes' own config template
     carries comments such as `# order: ["anthropic", "google"]`, and reading
     those as quoted mapping keys refused every edit on a fresh install.
+
+    `blank_quoted` keeps the quotes and turns what is between them into
+    spaces, so a guard looking for node syntax never reads a string's text:
+    `"say: !bang"` holds no tag and `'a: &b'` no anchor (#3075). A quote
+    left open at the line's end blanks the rest of the line.
     """
-    quote = ""
+    parts: list[str] = []
     index = 0
     while index < len(line):
         char = line[index]
-        if quote:
-            if quote == '"' and char == "\\":
-                index += 2
-                continue
-            if char == quote:
-                quote = ""
-        elif char in "\"'" and (index == 0 or line[index - 1] in " \t,[{:-?"):
-            quote = char
-        elif char == "#" and (index == 0 or line[index - 1] in " \t"):
-            return line[:index]
+        if char in "\"'" and (index == 0 or line[index - 1] in " \t,[{:-?"):
+            close = _quoted_scalar_close(line[index + 1 :], char)
+            end = len(line) if close < 0 else index + 1 + close
+            inner = line[index + 1 : end]
+            parts += [char, " " * len(inner) if blank_quoted else inner, "" if close < 0 else char]
+            index = end + 1
+            continue
+        if char == "#" and (index == 0 or line[index - 1] in " \t"):
+            break
+        parts.append(char)
         index += 1
-    return line
+    return "".join(parts)
 
 
 def _document_syntax_guard(lines: list[str]) -> str:
-    """Node syntax this hand-rolled editor cannot preserve if it rewrites a line."""
-    code = [_yaml_code(line) for line in lines]
+    """Node syntax this hand-rolled editor cannot preserve if it rewrites a line.
+
+    A line that continues a scalar is text, not a node: a wrapped value that
+    goes on with `'quick mode` or `&amp` names no quoted key and no anchor.
+    """
+    inside = _scalar_continuations(lines)[0]
+    code = [_yaml_code(line, blank_quoted=True) for index, line in enumerate(lines) if index not in inside]
     if any(_contains_potential_quoted_mapping_key(line) for line in code):
         return "quoted YAML mapping keys are user-owned; leaving them alone"
     if any(_contains_unsupported_yaml_node_syntax(line) for line in code):
@@ -1321,7 +1687,7 @@ def _section_shape_guard(lines: list[str], section: str) -> str:
     carrying one still gets its first block.
     """
     top_level = [line for line in lines if references_top_level_section(line, section)]
-    section_indices = [index for index, line in enumerate(lines) if line == f"{section}:"]
+    section_indices = [index for index, line in enumerate(lines) if _block_header(line, section)]
     if len(top_level) > 1:
         return f"duplicate {section} sections are ambiguous; leaving them alone"
     if top_level and not section_indices:
@@ -1356,7 +1722,7 @@ def section_edit_guard(lines: list[str], section: str, key: str = "") -> str:
         return guard
     if _section_node_is_sequence(lines, section):
         return f"sequence {section} configuration is user-owned; leaving it alone"
-    guard = _document_syntax_guard(lines)
+    guard = _document_syntax_guard(lines) or _section_item_syntax_guard(lines, section)
     if guard:
         return guard
     guard = _section_shape_guard(lines, section)
@@ -1364,6 +1730,31 @@ def section_edit_guard(lines: list[str], section: str, key: str = "") -> str:
         return guard
     if key and any(_references_mapping_key(line, f"{section}.{key}") for line in lines):
         return f"dotted {section}.{key} is user-owned; leaving it alone"
+    return ""
+
+
+def _section_item_syntax_guard(lines: list[str], section: str) -> str:
+    """List items inside `section` that carry node properties or a quoted key.
+
+    The document-wide guard leaves a list item's `&anchor`, `*alias` and
+    quoted key alone, as main did: `safe_dump` writes `- &id001` for a shared
+    item and YAML 1.1 writers quote `- 'on': x`, in sections this module
+    never edits (#3075). Inside the edited section they stay refused, since
+    an item there may be one a writer removes or another node aliases.
+    """
+    inside = _scalar_continuations(lines)[0]
+    in_section = False
+    for index, line in enumerate(lines):
+        if _ends_top_level_node(line):
+            in_section = _block_header(line, section)
+            continue
+        if not in_section or index in inside:
+            continue
+        code = _yaml_code(line, blank_quoted=True)
+        if re.match(r"^\s*(?:-\s+)+[&*!]", code):
+            return "YAML node properties are user-owned; leaving them alone"
+        if re.match(r"""^\s*(?:-\s+)+["'][^"']*["']\s*:""", code):
+            return "quoted YAML mapping keys are user-owned; leaving them alone"
     return ""
 
 
@@ -1399,7 +1790,7 @@ def _canonical_display_sections(
     is a string rather than an exception because every caller reports it as a
     `ConfigChange` that changed nothing.
     """
-    display_indices = [index for index, line in enumerate(lines) if line == "display:"]
+    display_indices = [index for index, line in enumerate(lines) if _block_header(line, "display")]
     if not display_indices:
         return None
     if len(display_indices) > 1:
@@ -1468,7 +1859,7 @@ def model_scalar_selection(config_text: str, key: str) -> str:
 def display_interface_selection(config_text: str) -> str:
     """The unambiguous scalar `display.interface`, or "" for other shapes."""
     lines = config_text.splitlines()
-    display_indices = [index for index, line in enumerate(lines) if line == "display:"]
+    display_indices = [index for index, line in enumerate(lines) if _block_header(line, "display")]
     if len(display_indices) != 1:
         return ""
     entries: list[str] = []
@@ -1498,6 +1889,7 @@ def maybe_set_memory_provider(config_text: str, name: str, mode: str) -> ConfigC
     return set_memory_provider(config_text, name)
 
 
+@_edits_document_body
 def set_memory_provider(config_text: str, name: str) -> ConfigChange:
     """Point `memory.provider` at `name`, unless another product already holds it.
 
@@ -1518,10 +1910,16 @@ def set_memory_provider(config_text: str, name: str) -> ConfigChange:
         )
 
     lines = config_text.splitlines()
-    memory_index = next(
-        (idx for idx, line in enumerate(lines) if line.strip() == "memory:" and not line.startswith(" ")),
-        None,
-    )
+    # `memory:` as a flow node, a scalar, twice, or over a list is not a slot
+    # this editor can fill: appending a block beside it wrote a duplicate key,
+    # and inserting `provider:` above a list a file Hermes cannot load (#3075).
+    guard = "" if _root_is_plain_block_mapping(lines) else "non-mapping or multi-document YAML is user-owned; leaving it alone"
+    guard = guard or _section_shape_guard(lines, "memory")
+    if not guard and _section_node_is_sequence(lines, "memory"):
+        guard = "sequence memory configuration is user-owned; leaving it alone"
+    if guard:
+        return ConfigChange(False, guard, config_text)
+    memory_index = next((idx for idx, line in enumerate(lines) if _block_header(line, "memory")), None)
     if memory_index is None:
         text = (config_text.rstrip() + f"\n\nmemory:\n  provider: {name}\n").lstrip("\n")
         return ConfigChange(True, "appended memory.provider", text)
@@ -1540,6 +1938,7 @@ def set_memory_provider(config_text: str, name: str) -> ConfigChange:
     return ConfigChange(True, "inserted memory.provider", "\n".join(lines) + "\n")
 
 
+@_edits_document_body
 def clear_memory_provider(config_text: str, name: str) -> ConfigChange:
     """Hand the slot back, but only when `name` is the one holding it."""
     current = memory_provider_selection(config_text)
@@ -1559,6 +1958,7 @@ def clear_memory_provider(config_text: str, name: str) -> ConfigChange:
     return ConfigChange(False, "memory.provider line not found", config_text)
 
 
+@_edits_document_body
 def remove_memory_provider(config_text: str, name: str) -> ConfigChange:
     """Drop the `memory.provider` line, but only when `name` still holds the slot.
 
@@ -1567,15 +1967,15 @@ def remove_memory_provider(config_text: str, name: str) -> ConfigChange:
     that says "no external provider, and I chose that". Uninstall means the
     key OMH inserted is gone again, so the line goes rather than emptying.
     """
-    lines = config_text.splitlines()
-    guard = section_edit_guard(lines, "memory", "provider")
-    if guard:
-        return ConfigChange(False, guard, config_text)
     current = memory_provider_selection(config_text)
     if not current:
         return ConfigChange(False, "memory.provider is already unset", config_text)
     if current != name:
         return ConfigChange(False, f"memory.provider is {current}, not {name}; leaving it alone", config_text)
+    lines = config_text.splitlines()
+    guard = section_edit_guard(lines, "memory", "provider")
+    if guard:
+        return ConfigChange(False, guard, config_text)
 
     for idx, line in enumerate(lines):
         if not line.startswith("  ") or line.startswith("    "):
@@ -1587,6 +1987,7 @@ def remove_memory_provider(config_text: str, name: str) -> ConfigChange:
     return ConfigChange(False, "memory.provider line not found", config_text)
 
 
+@_edits_document_body
 def remove_plugin_enabled(config_text: str, name: str) -> ConfigChange:
     """Take `name` back out of `plugins.enabled`; the inverse of `ensure_plugin_enabled`.
 
@@ -1594,17 +1995,14 @@ def remove_plugin_enabled(config_text: str, name: str) -> ConfigChange:
     `plugins.disabled` is the person's own opt-out, which setup never wrote
     and uninstall must not clean up.
     """
+    listed = plugin_enablement(config_text)
+    if name not in listed["enabled"]:
+        return ConfigChange(False, f"{name} is not in plugins.enabled", config_text)
     lines = config_text.splitlines()
     guard = section_edit_guard(lines, "plugins", "enabled")
     if guard:
         return ConfigChange(False, guard, config_text)
-    listed = plugin_enablement(config_text)
-    if name not in listed["enabled"]:
-        return ConfigChange(False, f"{name} is not in plugins.enabled", config_text)
-    plugins_index = next(
-        (idx for idx, line in enumerate(lines) if line.strip() == "plugins:" and not line.startswith(" ")),
-        None,
-    )
+    plugins_index = _plugins_block_index(lines)
     if plugins_index is None:
         return ConfigChange(False, "plugins section not found", config_text)
 
@@ -1682,7 +2080,7 @@ def _locate_display_block_scalar(lines: list[str], key: str) -> tuple[int, str] 
     """`_locate_display_scalar` without the guards on the document and on the `display` section's own shape."""
     if any(_references_mapping_key(line, f"display.{key}") for line in lines):
         return f"dotted display.{key} is user-owned; leaving it alone"
-    display_indices = [index for index, line in enumerate(lines) if line == "display:"]
+    display_indices = [index for index, line in enumerate(lines) if _block_header(line, "display")]
     if not display_indices:
         return None
     display_index = display_indices[0]
@@ -1708,6 +2106,7 @@ def _locate_display_block_scalar(lines: list[str], key: str) -> tuple[int, str] 
     return (index, raw)
 
 
+@_edits_document_body
 def revert_display_scalar(config_text: str, key: str, expected: str, previous: str = "") -> ConfigChange:
     """Put one canonical `display.<key>` back, but only while it reads `expected`.
 
@@ -1785,6 +2184,7 @@ def display_read_refusal(config_text: str, key: str) -> str:
     return located if isinstance(located, str) else ""
 
 
+@_edits_document_body
 def remove_display_sections(config_text: str, keys: list[str], expected: str) -> ConfigChange:
     """Drop the named `display.sections` children that still read `expected`.
 
@@ -1837,7 +2237,7 @@ def config_container_paths(config_text: str) -> set[str]:
         if not stripped or stripped.startswith("#"):
             continue
         if not line.startswith(" "):
-            key, separator, rest = stripped.partition(":")
+            key, separator, rest = _yaml_code(stripped).partition(":")
             key = key.strip()
             section = ""
             if separator and not rest.strip() and key and "." not in key:
@@ -1845,7 +2245,7 @@ def config_container_paths(config_text: str) -> set[str]:
                 paths.add(section)
             continue
         if section and line.startswith("  ") and not line.startswith("    "):
-            key, separator, rest = stripped.partition(":")
+            key, separator, rest = _yaml_code(stripped).partition(":")
             key = key.strip()
             if separator and not rest.strip() and key and not key.startswith("-") and "." not in key:
                 paths.add(f"{section}.{key}")
@@ -1856,7 +2256,7 @@ def _container_line_index(lines: list[str], path: str) -> int | None:
     parts = path.split(".")
     if len(parts) == 1:
         for index, line in enumerate(lines):
-            if not line.startswith(" ") and line.strip() == f"{parts[0]}:":
+            if _block_header(line, parts[0]):
                 return index
         return None
     if len(parts) != 2:
@@ -1869,9 +2269,9 @@ def _container_line_index(lines: list[str], path: str) -> int | None:
     for index, line in enumerate(lines):
         stripped = line.strip()
         if _ends_top_level_node(line):
-            in_section = stripped == f"{section}:"
+            in_section = _block_header(line, section)
             continue
-        if in_section and line.startswith("  ") and not line.startswith("    ") and stripped == f"{key}:":
+        if in_section and line.startswith("  ") and not line.startswith("    ") and _block_header(stripped, key):
             return index
     return None
 
@@ -1903,6 +2303,7 @@ def _has_child_lines(lines: list[str], index: int) -> bool:
     return False
 
 
+@_edits_document_body
 def remove_childless_containers(config_text: str, paths: list[str]) -> ConfigChange:
     """Drop each listed container key that reversal left with no children.
 
@@ -1967,7 +2368,8 @@ def _enclosing_section(lines: list[str], index: int) -> str:
     for cursor in range(index - 1, -1, -1):
         line = lines[cursor]
         if _ends_top_level_node(line):
-            return line.strip().rstrip(":")
+            # `memory: # mine` encloses `memory`'s keys like `memory:` does.
+            return _yaml_code(line).strip().rstrip(":")
     return ""
 
 
@@ -2097,21 +2499,35 @@ def ensure_external_dir(
     entry names to Hermes in that home (`_names_directory`), so the pointer
     spelled with backslashes on Windows, through `${VAR}` or `~`, or relative
     to the home is not added a second time.
+
+    The file's envelope is edited around, never into (`_with_document_body`).
+    A stream it does not split is refused only when there is something to
+    write, so `omh update` on a home it already registered writes nothing and
+    refuses nothing (#3075). The body's own shape guard still runs first: a
+    second `external_dirs:` key reads as registered here while Hermes keeps
+    the other one.
     """
+    target = _normalize(skill_dir)
     # A stream BOM is not part of the first key; carry it outside the editor.
     if config_text.startswith("\ufeff"):
         change = ensure_external_dir(config_text[1:], skill_dir, hermes_home=hermes_home)
         return ConfigChange(change.changed, change.message, "\ufeff" + change.text)
-    prefix, body, suffix = _skills_document_parts(config_text)
+    try:
+        prefix, _body, suffix = _document_parts(config_text)
+    except ValueError:
+        present = external_dirs(config_text)
+        if target in present or (hermes_home is not None and _names_directory(present, skill_dir, hermes_home)):
+            return ConfigChange(False, "external dir already present", config_text)
+        raise
     if prefix or suffix:
-        change = ensure_external_dir(body, skill_dir, hermes_home=hermes_home)
-        text = prefix + change.text + suffix if change.changed else config_text
-        return ConfigChange(change.changed, change.message, text)
-    _validate_external_dirs_mutation_shape(config_text)
-    target = _normalize(skill_dir)
+        return _with_document_body(
+            config_text, lambda body: ensure_external_dir(body, skill_dir, hermes_home=hermes_home), strict=True
+        )
+    _validate_external_dirs_entries(config_text)
     present = external_dirs(config_text)
     if target in present or (hermes_home is not None and _names_directory(present, skill_dir, hermes_home)):
         return ConfigChange(False, "external dir already present", config_text)
+    _validate_external_dirs_document(config_text)
 
     lines = config_text.splitlines()
     empty_root = _empty_mapping_root_index(lines)
@@ -2192,12 +2608,22 @@ def _remove_external_dir_items(config_text: str, should_remove: Callable[[str], 
     if config_text.startswith("\ufeff"):
         change = _remove_external_dir_items(config_text[1:], should_remove)
         return ConfigChange(change.changed, change.message, "\ufeff" + change.text)
-    prefix, body, suffix = _skills_document_parts(config_text)
+    try:
+        prefix, _body, suffix = _document_parts(config_text)
+    except ValueError:
+        # A stream this editor does not split is refused only when there is
+        # something to take out of it (#3075).
+        if not any(should_remove(value) for value in external_dirs(config_text)):
+            return ConfigChange(False, "external dir absent", config_text)
+        raise
     if prefix or suffix:
-        change = _remove_external_dir_items(body, should_remove)
-        text = prefix + change.text + suffix if change.changed else config_text
-        return ConfigChange(change.changed, change.message, text)
-    _validate_external_dirs_mutation_shape(config_text)
+        return _with_document_body(
+            config_text, lambda body: _remove_external_dir_items(body, should_remove), strict=True
+        )
+    _validate_external_dirs_entries(config_text)
+    if not any(should_remove(value) for value in external_dirs(config_text)):
+        return ConfigChange(False, "external dir absent", config_text)
+    _validate_external_dirs_document(config_text)
     lines = config_text.splitlines()
     changed = False
     output: list[str] = []
