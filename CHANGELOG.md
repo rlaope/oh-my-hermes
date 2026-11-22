@@ -107,6 +107,12 @@ All notable changes will be documented here.
   review asked together with a fix ("review this PR, then fix the bug in auth.py") and look-alikes such as a
   screenshot diff, a customer bug report or "review my essay" keep their old hint.
 
+- **Bare `omh` opens the OMH TUI on native Windows.** Since the TUI started on Windows (#3009), its gateway child
+  always failed to mint a session ticket, because it asked Hermes' POSIX control socket (`os.getuid`), so `omh` fell
+  back to Hermes' own TUI every time. On Windows the child now attaches the way Hermes' Ink bootstrap does, through
+  Hermes' `attach_gateway`, which needs Hermes 0.23.1 or later. An older Hermes gets a one-line "cannot attach on
+  Windows" verdict and the fallback, and a control pipe that is not answering yet is waited for, as on macOS and
+  Linux. macOS and Linux are unchanged. Contributed by @Gudals0320 (#3060).
 - **The OMH pane in Hermes Desktop is redrawn, with a run timeline and TPS/TTFT in view.** USAGE is one card: the
   token total large, cache hit and cost beside it, the four-way split, and the speed (TPS) and the last turn's wait for
   its first token (TTFT), which used to sit only in a tooltip. CATCHES and PLAN read as rows with marks; PLAN groups

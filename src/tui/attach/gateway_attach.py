@@ -14,7 +14,10 @@ has, never by what an error said:
   ships) is attached to as Ink attaches (`ui-tui/scripts/gateway_bootstrap.py`,
   `gatewayClient.ts`): the profile's gateway is ensured (started with idle
   exit when none runs) or found, a session ticket is minted over its private
-  control socket, and its loopback WebSocket is dialled with that ticket.
+  control socket (on Windows, where that endpoint is a named pipe, Hermes'
+  own `attach_gateway` ensures the gateway and mints the ticket, as Ink's
+  bootstrap does; Hermes 0.23.1 and later ship it), and its loopback
+  WebSocket is dialled with that ticket.
   Since Hermes 9595c3f345 the stdio entry refuses a home a running gateway
   owns, so on such a Hermes this is the way in, gateway running or not, as it
   is for Ink.
@@ -191,6 +194,16 @@ NOT_READY_OS_ERRORS = (ConnectionError, TimeoutError, FileNotFoundError)
 GOING_AWAY = 1001  # the WebSocket close code of a server going down (RFC 6455): a gateway that restarts
 NOT_READY_STATES = frozenset({"starting", "draining"})
 NOT_READY_REASONS = frozenset({"control_timeout", "runtime_exited"})
+# Windows: Hermes' `mint_ticket` reports a failed control-pipe exchange as `TicketUnavailable(type(exc).__name__)`.
+# These are the names of `NOT_READY_OS_ERRORS` and their subclasses (an absent pipe, a deadline, a pipe that closed),
+# so a gateway coming up there is waited for as it is on POSIX.
+NOT_READY_TICKET_REASONS = frozenset({
+    "BrokenPipeError", "ConnectionAbortedError", "ConnectionError", "ConnectionRefusedError", "ConnectionResetError",
+    "FileNotFoundError", "TimeoutError",
+})
+# Hermes' gateway control endpoint is a Unix-domain socket only off Windows. On Windows the grant takes the attach
+# Hermes' own Ink bootstrap takes (`ui-tui/scripts/gateway_bootstrap.py`), which mints the ticket its own way.
+WINDOWS = os.name == "nt"
 OPEN_TIMEOUT_SECONDS = 10
 STDIN_READ_BYTES = 64 * 1024
 # After the TUI closes its input: how long the answers to calls already sent (the last session's detach) may take.
@@ -1590,12 +1603,24 @@ def attach_api() -> AttachApi | None:
     def grant() -> tuple[str, list[str]]:
         """`gateway_bootstrap.bootstrap(start=True)`: ensure the owner, mint a session ticket, name the socket."""
         home = get_hermes_home().resolve()
+        if WINDOWS:
+            try:
+                from hermes_cli.gateway_runtime_attach import TicketUnavailable, attach_gateway
+            except ImportError as error:  # Hermes 0.22.x: the attach API, but not Hermes' own attach (0.23.1)
+                raise RuntimeError(f"this Hermes cannot attach on Windows: {error}") from error
+            try:
+                attached = attach_gateway(home, start=True, timeout=ENSURE_TIMEOUT_SECONDS)
+            except TicketUnavailable as error:  # attachable, then no ticket: a pipe not answering yet is waited for
+                if error.reason in NOT_READY_TICKET_REASONS:
+                    raise GatewayNotReady(f"Hermes' gateway did not answer its control pipe yet ({error})") from error
+                raise
+            if attached.ticket is None:
+                raise not_attachable(attached.receipt)
+            url, protocols = gateway_ws_target(attached.receipt.endpoint, attached.ticket)
+            return url, list(protocols)
         receipt = ensure_gateway_runtime(home, timeout=ENSURE_TIMEOUT_SECONDS, idle_exit=True)
         if not attachable(receipt):
-            if (getattr(receipt, "state", None) in NOT_READY_STATES
-                    or getattr(receipt, "reason_code", None) in NOT_READY_REASONS):
-                raise GatewayNotReady(failure_message(receipt))
-            raise RuntimeError(failure_message(receipt))
+            raise not_attachable(receipt)
         endpoint = receipt.endpoint
         request = json.dumps({"protocol": 1, "id": 1, "verb": "session-ticket", "params": {
             "profile_id": endpoint.profile_id, "instance_id": endpoint.instance_id,
@@ -1622,6 +1647,14 @@ def attach_api() -> AttachApi | None:
 
 class GatewayNotReady(RuntimeError):
     """Hermes says the gateway is starting or draining, or cannot be asked yet: worth waiting for."""
+
+
+def not_attachable(receipt: object) -> RuntimeError:
+    """The error for a receipt with no owner to attach: `GatewayNotReady` when it is worth waiting for."""
+    if (getattr(receipt, "state", None) in NOT_READY_STATES
+            or getattr(receipt, "reason_code", None) in NOT_READY_REASONS):
+        return GatewayNotReady(failure_message(receipt))
+    return RuntimeError(failure_message(receipt))
 
 
 def failure_message(receipt: object) -> str:
