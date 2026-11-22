@@ -216,6 +216,42 @@ describe("PlaceholderStore budget: one 32 MB per terminal with the add-on, refus
     expect(s.usage + addon).toBeLessThanOrEqual(s.budget);
   });
 
+  it("a decode that starts reserves its declared size: a second that does not fit beside it never starts", async () => {
+    const d = deferredDecode();
+    const s = new PlaceholderStore(d.decode);
+    // 2000×2250×4 = 18 MB each: one fits the 32 MB, two do not
+    s.handle(`a=T,U=1,i=1,f=100,q=2;${png(2000, 2250)}`);
+    s.handle(`a=T,U=1,i=2,f=100,q=2;${png(2000, 2250)}`);
+    await flush();
+    await flush();
+    expect(d.calls()).toBe(1);
+    // the reservation goes when the decode ends (kept, or failed): the next one starts
+    d.waiting[0](d.picture(2000, 2250));
+    await flush();
+    expect(s.usage).toBe(18_000_000);
+    s.handle("a=d,d=i,i=1");
+    s.handle(`a=T,U=1,i=2,f=100,q=2;${png(2000, 2250)}`);
+    await flush();
+    await flush();
+    expect(d.calls()).toBe(2);
+  });
+
+  it("a failed decode gives its reservation back", async () => {
+    let n = 0;
+    const s = new PlaceholderStore(async () => {
+      if (n++ === 0) throw new Error("not a picture");
+      return { width: 2000, height: 2250 } as unknown as Picture;
+    });
+    s.handle(`a=T,U=1,i=1,f=100,q=2;${png(2000, 2250)}`);
+    await flush();
+    await flush();
+    s.handle(`a=T,U=1,i=2,f=100,q=2;${png(2000, 2250)}`);
+    await flush();
+    await flush();
+    expect(n).toBe(2);
+    expect(s.usage).toBe(18_000_000);
+  });
+
   it("when the add-on adds a picture, the oldest virtual ones go until both fit", () => {
     let addon = 0;
     const closed: number[] = [];

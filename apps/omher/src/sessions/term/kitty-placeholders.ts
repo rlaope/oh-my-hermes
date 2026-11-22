@@ -11,7 +11,10 @@
 // pictures (the oldest virtual ones go first); nothing is written to disk or sent anywhere, and nothing is replied.
 // A picture is refused before it is decoded when its declared size (raw `s`×`v`, or the PNG header's width×height)
 // is over the add-on's pixel limit or what the add-on leaves of the budget; `o=z` is inflated as a stream that stops
-// at the byte limit.
+// at the byte limit. A decode counts its declared size against the budget from the moment it starts until it is kept or
+// fails, so two decodes that do not fit together never both start. The add-on also grows its store when it rescales its
+// pictures for a new font size or pixel ratio: `fit` runs again then (engine-image.ts), dropping the oldest virtual
+// pictures until both fit.
 //
 // Supported subset: the combined form `a=T,U=1` (or `a=t,U=1`), and kitty's two-command form `a=t,i=<id>` (taken by
 // the add-on) then `a=p,U=1,i=<id>`, which reads the bytes the add-on kept for that id (through its internals,
@@ -163,6 +166,8 @@ export class PlaceholderStore {
   readonly images = new Map<number, VirtualImage>();
   private upload: Upload | null = null;
   private used = 0;
+  /** declared bytes of the decodes in flight: they count against the budget until they are kept or fail */
+  private pending = 0;
   /** the newest decode in flight per id: a later transmit, a delete, clear or dispose takes it away */
   private readonly inFlight = new Map<number, number>();
   private ticket = 0;
@@ -270,26 +275,40 @@ export class PlaceholderStore {
     this.inFlight.set(id, ticket);
     const current = () => !this.disposed && this.inFlight.get(id) === ticket;
     let picture: Picture | null = null;
+    let reserved = 0;
+    /** Whether a w×h picture fits beside the add-on's and the other decodes in flight; when it does, its bytes are
+     *  reserved until it is kept or fails. */
+    const reserve = (w: number, h: number): boolean => {
+      if (!(w > 0 && h > 0 && w * h <= PIXEL_LIMIT && w * h * 4 <= this.room() - this.pending)) return false;
+      reserved = w * h * 4;
+      this.pending += reserved;
+      return true;
+    };
+    const release = () => {
+      this.pending -= reserved;
+      reserved = 0;
+    };
     try {
       let bytes: Uint8Array | null = await read();
       const raw = o.f !== 100;
-      const fits = (w: number, h: number) => w > 0 && h > 0 && w * h <= PIXEL_LIMIT && w * h * 4 <= this.room();
-      if (raw && !fits(o.w, o.h)) return;
+      if (raw && !reserve(o.w, o.h)) return;
       if (o.z && current()) bytes = await inflate(bytes, raw ? o.w * o.h * (o.f / 8) : IMAGE_SEQUENCE_BYTES);
       if (!bytes || !current()) return;
       if (raw && bytes.length < o.w * o.h * (o.f / 8)) return;
       if (!raw) {
         const size = pngSize(bytes);
-        if (!size || !fits(size[0], size[1])) return;
+        if (!size || !reserve(size[0], size[1])) return;
       }
       picture = await this.decode(bytes, o.f, o.w, o.h);
       if (!current()) return;
       const kept = picture;
       picture = null;
+      release();
       this.put({ id, picture: kept, bytes: kept.width * kept.height * 4, cols: o.cols, rows: o.rows });
     } catch {
       /* not a picture: nothing drawn */
     } finally {
+      release();
       picture?.close?.();
       if (this.inFlight.get(id) === ticket) this.inFlight.delete(id);
     }
@@ -309,7 +328,8 @@ export class PlaceholderStore {
     this.changed();
   }
 
-  /** Drops the oldest virtual pictures until they and the add-on's fit the budget (the add-on added one). */
+  /** Drops the oldest virtual pictures until they and the add-on's fit the budget (the add-on added a picture, or
+   *  rescaled its pictures for a new cell size). */
   fit(): void {
     const room = this.room();
     let dropped = false;

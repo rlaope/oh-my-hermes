@@ -325,6 +325,59 @@ test("B4: ordinary and virtual pictures share one 32 MB per terminal", async ({ 
   expect((await probe(page, null)).virtual).toBe(0); // 18 MB more does not fit what the add-on left
 });
 
+// ---- review round 2 (fix-budget): the budget after the add-on rescales
+
+/** A solid `w`×`h` PNG made by the page's canvas, as base64. */
+const solidPng = (page: Page, w: number, h: number, colour: string) =>
+  page.evaluate(
+    async ([w, h, colour]) => {
+      const cv = new OffscreenCanvas(w, h);
+      const g = cv.getContext("2d")!;
+      g.fillStyle = colour;
+      g.fillRect(0, 0, w, h);
+      const bytes = new Uint8Array(await (await cv.convertToBlob({ type: "image/png" })).arrayBuffer());
+      let s = "";
+      for (let i = 0; i < bytes.length; i += 8192) s += String.fromCharCode(...bytes.subarray(i, i + 8192));
+      return btoa(s);
+    },
+    [w, h, colour] as const,
+  );
+
+test("B4 after rescale: a larger font keeps ordinary and virtual pictures within one 32 MB (both stores read)", async ({ page }) => {
+  test.setTimeout(60_000);
+  await openApp(page);
+  await newTerminal(page);
+  await hooks(page);
+  const stores = () =>
+    page.evaluate(() => {
+      const w = window as unknown as { __shown(): unknown; __eng: { virtualImages(t: unknown): { store: { usage: number; images: Map<number, unknown> } } | null } };
+      const t = w.__shown() as { _addonManager: { _addons: { instance: { _storage?: unknown; storageUsage: number } }[] } };
+      const addon = t._addonManager._addons.find((a) => a.instance._storage)!.instance;
+      const v = w.__eng.virtualImages(t)!.store;
+      return { addon: Math.round(addon.storageUsage * 1_000_000), virtual: v.usage, images: v.images.size };
+    });
+  const small = await solidPng(page, 1500, 1500, "#f00");
+  const large = await solidPng(page, 2000, 2250, "#00f");
+  await feed(page, "\x1b[2J\x1b[H" + kittyApc("a=T,i=1,f=100,q=2,C=1", small));
+  await expect.poll(async () => (await stores()).addon).toBe(9_000_000);
+  await feed(page, kittyApc("a=T,U=1,i=8,c=1,r=1,f=100,q=2", large));
+  await expect.poll(async () => (await stores()).images).toBe(1);
+  expect(await stores()).toMatchObject({ addon: 9_000_000, virtual: 18_000_000 });
+  // the add-on keeps a rescaled copy beside its picture at the new cell size, with no new picture added
+  const size = await page.evaluate(() => {
+    const t = (window as unknown as { __shown(): { options: { fontSize: number }; refresh(a: number, b: number): void; rows: number } }).__shown();
+    t.options.fontSize = t.options.fontSize + 4;
+    t.refresh(0, t.rows - 1);
+    return t.options.fontSize;
+  });
+  expect(size).toBeGreaterThan(0);
+  await expect.poll(async () => (await stores()).addon).toBeGreaterThan(9_000_000);
+  await page.waitForTimeout(300);
+  const after = await stores();
+  expect(after.addon + after.virtual).toBeLessThanOrEqual(32_000_000);
+  expect(after.images).toBe(0); // the virtual picture went, the oldest first
+});
+
 test("NB3: kitty's two-command form (a=t, then a=p,U=1) paints the add-on's transmitted picture in the placeholders", async ({ page }) => {
   await openApp(page);
   await newTerminal(page);

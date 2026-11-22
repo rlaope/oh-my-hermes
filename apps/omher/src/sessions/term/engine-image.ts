@@ -90,6 +90,17 @@ export function attachImages(term: Terminal, Ctor: ImageCtor, placeholdersSeen =
       virtual = attachPlaceholders(term, undefined, { used: () => addonBytes(a), transmitted: (id) => addonTransmitted(a, id) }, placeholdersSeen);
       const v = virtual;
       v.subs.push(a.onImageAdded(() => v.store.fit()));
+      // the add-on also grows its store without adding a picture: it keeps a rescaled copy beside each picture it
+      // draws at a new cell size (font size, pixel ratio). Its render listener runs before these (it was registered
+      // first), so the usage read here is the rescaled one; the store is fitted again only when it changed
+      let seen = addonBytes(a);
+      const recheck = () => {
+        const now = addonBytes(a);
+        if (now === seen) return;
+        seen = now;
+        v.store.fit();
+      };
+      v.subs.push(term.onRender(recheck), term.onResize(recheck));
     } catch {
       /* pictures still drawn by the add-on */
     }
