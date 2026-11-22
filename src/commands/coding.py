@@ -935,17 +935,33 @@ def cmd_coding_executor_readiness(args: argparse.Namespace) -> int:
     return 0
 
 
-def _loaded_executor_registry(paths) -> ExecutorRegistry:
-    """This invocation's registry for the resolved OMH home. Never probes."""
+def _executor_registry_home(args: argparse.Namespace) -> Path:
+    """The operator's registry home, whatever the artifact scope says.
+
+    `--scope project` puts artifacts in the checkout; the harness registry stays
+    in the operator's home, because a repo-owned `executors.toml` would let a
+    clone choose the argv OMH spawns.
+    """
+    from ..coding.user_executors import operator_executor_home
+
+    return operator_executor_home(
+        getattr(args, "omh_home", None),
+        getattr(args, "hermes_home", None),
+        scope=getattr(args, "scope", None),
+    )
+
+
+def _loaded_executor_registry(args: argparse.Namespace) -> ExecutorRegistry:
+    """This invocation's registry for the operator home. Never probes."""
     from ..coding.user_executors import load_user_executors
 
-    return load_user_executors(Path(paths.omh_home))
+    return load_user_executors(_executor_registry_home(args))
 
 
-def _admitted_owner_ids(paths) -> tuple[str, ...]:
+def _admitted_owner_ids(args: argparse.Namespace) -> tuple[str, ...]:
     from ..coding.fanout import admitted_unit_owner_ids
 
-    return admitted_unit_owner_ids(_loaded_executor_registry(paths))
+    return admitted_unit_owner_ids(_loaded_executor_registry(args))
 
 
 def _refuse_remote_pr(args: argparse.Namespace) -> None:
@@ -962,9 +978,10 @@ def _executor_config_error(exc: Exception) -> OmhError:
 def cmd_coding_executors_list(args: argparse.Namespace) -> int:
     from ..coding.executor_presets import get_preset, preset_ids
     from ..coding.executors import EXECUTOR_PROFILES
+    from ..coding.user_executors import load_user_executors
 
-    paths = _paths(args)
-    registry = _loaded_executor_registry(paths)
+    registry_home = _executor_registry_home(args)
+    registry = load_user_executors(registry_home)
     enabled = []
     for executor_id in sorted(registry.entries):
         spec = registry.entries[executor_id]
@@ -994,7 +1011,7 @@ def cmd_coding_executors_list(args: argparse.Namespace) -> int:
     ]
     payload = {
         "schema_version": "coding_executors/v1",
-        "path": str(Path(paths.omh_home) / "routing" / "executors.toml"),
+        "path": str(Path(registry_home) / "routing" / "executors.toml"),
         "builtin": list(EXECUTOR_PROFILES),
         "enabled": enabled,
         "available_presets": available,
@@ -1024,9 +1041,8 @@ def cmd_coding_executors_list(args: argparse.Namespace) -> int:
 def cmd_coding_executors_add(args: argparse.Namespace) -> int:
     from ..coding.user_executors import ExecutorConfigError, add_executor_preset
 
-    paths = _paths(args)
     try:
-        spec = add_executor_preset(Path(paths.omh_home), args.preset, force=bool(args.force))
+        spec = add_executor_preset(_executor_registry_home(args), args.preset, force=bool(args.force))
     except ExecutorConfigError as exc:
         raise _executor_config_error(exc) from exc
     _print_json(
@@ -1044,9 +1060,8 @@ def cmd_coding_executors_add(args: argparse.Namespace) -> int:
 def cmd_coding_executors_remove(args: argparse.Namespace) -> int:
     from ..coding.user_executors import ExecutorConfigError, remove_user_executor
 
-    paths = _paths(args)
     try:
-        remove_user_executor(Path(paths.omh_home), args.executor_id)
+        remove_user_executor(_executor_registry_home(args), args.executor_id)
     except ExecutorConfigError as exc:
         raise _executor_config_error(exc) from exc
     _print_json({"schema_version": "coding_executors_remove/v1", "id": args.executor_id, "removed": True})
@@ -1055,7 +1070,7 @@ def cmd_coding_executors_remove(args: argparse.Namespace) -> int:
 
 def cmd_coding_executors_check(args: argparse.Namespace) -> int:
     paths = _paths(args)
-    registry = _loaded_executor_registry(paths)
+    registry = _loaded_executor_registry(args)
     requested = getattr(args, "executor_id", None)
     if requested:
         if requested not in registry.entries:
@@ -1068,7 +1083,15 @@ def cmd_coding_executors_check(args: argparse.Namespace) -> int:
         ids = sorted(registry.entries)
     results = []
     for executor_id in ids:
-        readiness = probe_executor_readiness(paths, executor_id, force=True)
+        # Hand the already-loaded spec in: readiness otherwise re-reads
+        # `paths.omh_home`, which under `--scope project` is the checkout, not
+        # the operator home this registry came from.
+        readiness = probe_executor_readiness(
+            paths,
+            executor_id,
+            force=True,
+            executor_spec=registry.entries.get(executor_id),
+        )
         results.append(
             {
                 "id": executor_id,
@@ -2147,7 +2170,7 @@ def cmd_coding_fanout_prepare(args: argparse.Namespace) -> int:
             identity_config=_operator_identity_config(paths),
             capability_snapshots=capability_snapshots,
             spawn_plan=spawn_plan,
-            registry=_loaded_executor_registry(paths),
+            registry=_loaded_executor_registry(args),
         )
     except (FanoutContractError, ExecutorCapabilitySnapshotError) as exc:
         raise OmhError(str(exc)) from exc
@@ -2179,7 +2202,7 @@ def cmd_coding_fanout_validate(args: argparse.Namespace) -> int:
         # an empty stdout, and a wrapper following this command's documented
         # contract parsed that empty string as JSON.
         units = [_normalized_unit(unit, index) for index, unit in enumerate(raw_units)]
-        validate_fanout_units(units, registry=_loaded_executor_registry(_paths(args)))
+        validate_fanout_units(units, registry=_loaded_executor_registry(args))
         # Same checks `prepare` runs, in the same order, so `validate` cannot
         # report a split that `prepare` will then refuse to freeze — including
         # the spawn-plan gate running last, after the structural ones.
@@ -2388,6 +2411,26 @@ def _brief_recovery(dispatched: dict) -> dict[str, object]:
     return brief
 
 
+def _brief_owner(owner_value: object, handoff: dict, args: argparse.Namespace) -> str:
+    """The unit's owner, kept as recorded even after the definition is removed.
+
+    A contract freezes `handoff.user_executor` when the definition exists, and
+    dispatch refuses a binding that no longer matches. Reading only the live
+    registry here would rewrite history -- an uninstalled executor would make
+    every briefed unit claim `choose`, the one answer that says nobody was
+    ever assigned. The frozen id wins when it is a well-formed id that also
+    matches the unit's own `owner`; otherwise the live admission rule applies.
+    """
+    from ..coding.user_executors import valid_executor_id
+
+    owner = owner_value if isinstance(owner_value, str) else ""
+    binding = handoff.get("user_executor") if isinstance(handoff, dict) else None
+    bound_id = binding.get("id") if isinstance(binding, dict) else None
+    if isinstance(bound_id, str) and bound_id == owner and valid_executor_id(bound_id):
+        return bound_id
+    return owner if owner and owner in _admitted_owner_ids(args) else "choose"
+
+
 def _bounded_fanout_brief_scalar(value: object) -> str:
     from ..system.metadata_safety import redact_metadata_text
 
@@ -2510,11 +2553,7 @@ def cmd_coding_fanout_brief(args: argparse.Namespace) -> int:
         route_schema_version = model_route.get("schema_version", "")
         route_version = _bounded_fanout_brief_scalar(route_schema_version)
         owner_value = unit.get("owner")
-        owner = (
-            owner_value
-            if isinstance(owner_value, str) and owner_value in _admitted_owner_ids(paths)
-            else "choose"
-        )
+        owner = _brief_owner(owner_value, handoff, args)
         units.append(
             {
                 "unit_id": unit_id,
@@ -2922,7 +2961,7 @@ def _failure_recovery_kwargs(args: argparse.Namespace) -> dict:
 
     try:
         mode, target_owner = parse_on_failure(
-            getattr(args, "on_failure", "") or "", known_owners=_admitted_owner_ids(_paths(args))
+            getattr(args, "on_failure", "") or "", known_owners=_admitted_owner_ids(args)
         )
     except OnFailureModeError as exc:
         raise OmhError(str(exc)) from exc
@@ -3297,7 +3336,7 @@ def cmd_coding_run(args: argparse.Namespace) -> int:
             category_config=_operator_category_config(paths),
             identity_config=_operator_identity_config(paths),
             capability_snapshots=capability_snapshots,
-            registry=_loaded_executor_registry(paths),
+            registry=_loaded_executor_registry(args),
         )
     except (FanoutContractError, ExecutorCapabilitySnapshotError) as exc:
         raise OmhError(str(exc)) from exc
