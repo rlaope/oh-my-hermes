@@ -1548,6 +1548,9 @@ export const en = {
   "term.folderRunning": "{n} running",
   "term.folderCount1": "1 session",
   "term.folderCountN": "{n} sessions",
+  "term.newFolder": "New folder…",
+  "term.folderRemove": "Remove from list",
+  "term.folderEmpty": "No terminals · right-click to add",
   // spacing: the BOTS | TERMINALS divider
   "side.split": "Resize bots and terminals",
   "side.splitTip": "Drag to give bots or terminals more room. Double-click: back to automatic.",

@@ -167,7 +167,8 @@ export class TauriHost implements SessionHost {
   }
   async pickFolder(defaultPath: string) {
     const { open } = await import("@tauri-apps/plugin-dialog");
-    const r = await open({ directory: true, multiple: false, defaultPath, title: t("ss.pickFolder") });
+    // canCreateDirectories: the dialog's own "New Folder" button (macOS); omher itself makes no folder
+    const r = await open({ directory: true, multiple: false, canCreateDirectories: true, defaultPath, title: t("ss.pickFolder") });
     return typeof r === "string" ? r : null;
   }
   async start(agent: AgentId, cwd: string, cols: number, rows: number, onData: (d: Uint8Array) => void, onExit: (c: number | null) => void, resume?: string, account?: string, sessionId?: string, link?: string) {

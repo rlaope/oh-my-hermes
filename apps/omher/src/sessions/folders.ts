@@ -1,7 +1,8 @@
 // TERMINALS folder groups, Orca-style (owner, 2026-11-16 "사이드바 세션 쪽에 폴더 orca마냥"): each folder header
 // collapses and expands its sessions, the whole list collapses or expands at once, headers reorder by drag, and a
-// session opened inside a collapsed folder opens that folder (reveal). Kept on this computer (localStorage
-// `omher.term.folders`), never in Hermes. The pure helpers below carry the rules; `useTermFolders` is the store.
+// session opened inside a collapsed folder opens that folder (reveal). A folder the person added from the right-click
+// menu ("New folder…") is a group of its own even with no session in it. Kept on this computer (localStorage
+// `omher.term.folders`), never in Hermes; omher makes and deletes no folder on disk for it. The pure helpers below carry the rules; `useTermFolders` is the store.
 import { useSyncExternalStore } from "react";
 
 export const FOLDERS_KEY = "omher.term.folders";
@@ -11,16 +12,31 @@ export interface FolderPrefs {
   collapsed: string[];
   /** folders in the order the person dragged them into; folders not named here follow in their own order */
   order: string[];
+  /** folders the person added from the menu: each is listed as a group even while no session runs in it. Absent
+   *  while there is none, so a record saved before this field, and one of a person who never adds a folder, read and
+   *  save as they always did. Read it through `addedFolders`. */
+  added?: string[];
 }
 
 const EMPTY: FolderPrefs = { collapsed: [], order: [] };
+const NO_ADDED: readonly string[] = [];
+
+/** The folders the person added, newest first (none: the same empty list every time). */
+export const addedFolders = (p: FolderPrefs): readonly string[] => p.added ?? NO_ADDED;
+
+/** `p` with `added` as its added folders (no field when there is none). */
+function setAdded(p: FolderPrefs, added: string[]): FolderPrefs {
+  const { added: _was, ...rest } = p;
+  return added.length ? { ...rest, added } : rest;
+}
 const MAX = 200;
 
 export function parseFolderPrefs(raw: string | null): FolderPrefs {
   try {
     const v = JSON.parse(raw ?? "null") as Partial<FolderPrefs> | null;
     const list = (x: unknown) => (Array.isArray(x) ? [...new Set(x.filter((s): s is string => typeof s === "string"))].slice(0, MAX) : []);
-    return { collapsed: list(v?.collapsed), order: list(v?.order) };
+    // `added` is newer than the other two: a record saved before it reads as none added
+    return setAdded({ collapsed: list(v?.collapsed), order: list(v?.order) }, list(v?.added).filter((c) => c !== ""));
   } catch {
     return EMPTY;
   }
@@ -56,6 +72,30 @@ export function setAllFolders(p: FolderPrefs, all: readonly string[], collapsed:
 /** Every folder of `all` but `keep` collapsed, `keep` open. */
 export function collapseOthers(p: FolderPrefs, all: readonly string[], keep: string): FolderPrefs {
   return toggleFolder(setAllFolders(p, all.filter((c) => c !== keep), true), keep, false);
+}
+
+/** The person picked folder `cwd` in "New folder…". A folder already in the list (`listed`: the groups shown now, by
+ *  a session or added before) only opens; a new one is added, open, at the top of the saved order. */
+export function addFolder(p: FolderPrefs, cwd: string, listed: readonly string[] = []): FolderPrefs {
+  if (!cwd) return p;
+  const open = p.collapsed.includes(cwd) ? toggleFolder(p, cwd, false) : p;
+  if (addedFolders(p).includes(cwd) || listed.includes(cwd)) return open;
+  // the folders shown now keep their places under it, named or not
+  const order = [...new Set([cwd, ...orderFolders(listed.map((c) => ({ cwd: c })), p.order).map((g) => g.cwd), ...p.order])].slice(0, MAX);
+  return setAdded({ ...open, order }, [cwd, ...addedFolders(p)].slice(0, MAX));
+}
+
+/** "Remove from list": `cwd` is no longer an added folder. Nothing on disk changes, and while a session runs there
+ *  its group stays (sessions make their own group). */
+export function removeFolder(p: FolderPrefs, cwd: string): FolderPrefs {
+  if (!addedFolders(p).includes(cwd)) return p;
+  return setAdded(p, addedFolders(p).filter((c) => c !== cwd));
+}
+
+/** `groups` (the folders sessions run in) and, after them, an empty group for each added folder none runs in. */
+export function withAdded<T>(groups: readonly { cwd: string; rows: T[] }[], added: readonly string[]): { cwd: string; rows: T[] }[] {
+  const have = new Set(groups.map((g) => g.cwd));
+  return [...groups, ...added.filter((c) => !have.has(c)).map((cwd) => ({ cwd, rows: [] as T[] }))];
 }
 
 export const allCollapsed = (p: FolderPrefs, all: readonly string[]): boolean => all.length > 0 && all.every((c) => p.collapsed.includes(c));

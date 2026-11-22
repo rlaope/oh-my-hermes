@@ -30,7 +30,7 @@ import { useAutoSplit } from "./autoSplit";
 import { TasksBar } from "../tasks/TasksBar";
 import { DiskChip } from "./DiskChip";
 
-const sessionBackground = (target: EventTarget) => target instanceof Element && !target.closest(".ss-row, button, input, textarea, select, a, [contenteditable], [role=menu], [role=menuitem]");
+const sessionBackground = (target: EventTarget) => target instanceof Element && !target.closest(".ss-row, .tg-h, button, input, textarea, select, a, [contenteditable], [role=menu], [role=menuitem]");
 
 /** The open bot or thread row scrolls into view inside BOTS (never moving TERMINALS). */
 function useRevealBot(bot: string | null, thread: string | null, inChat: boolean) {
