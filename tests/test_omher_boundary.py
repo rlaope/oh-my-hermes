@@ -301,7 +301,11 @@ RULES = (
     "When the app starts, the page asks the shell once for this computer's name (`host_name`, read from the system, no"
     " program run), which it uses only to accept OSC 7 folders from this computer in any terminal (below); it is not"
     " kept or sent anywhere.",
-    "a new Claude Code terminal gets `--session-id <id>`, a random UUID omher makes and keeps with the session,",
+    "a new Claude Code terminal gets `--session-id <id>`, a random UUID omher makes and keeps with the session once its"
+    " CLI started,",
+    "Restart on such a session that has ended continues it the same way. A CLI started to continue its conversation that"
+    " ends before anything was typed or within 10 seconds, or cannot start, could not continue it: its row keeps its"
+    " agent and that id and shows it ended or failed, instead of going on as the login shell.",
     "The page sends only the id; the shell (`sessions::terminal_args`) checks it is a UUID, gives `--session-id` to"
     " Claude Code only, never sends both, and refuses every other agent or shape.",
     "omher also listens for three escapes a shell or CLI sends by itself, and puts no hook, script or variable into the"

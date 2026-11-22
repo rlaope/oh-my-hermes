@@ -474,6 +474,11 @@ type MockGlobals = {
   __omherMockPrograms?: Record<string, string>;
   /** e2e: custom agents the mock treats as signed out (the others answer) */
   __omherMockCustomSignedOut?: AgentId[];
+  /** e2e: CLIs that are not on this computer: a terminal of one is refused, as the shell refuses it */
+  __omherMockMissing?: AgentId[];
+  /** e2e: conversations Claude Code and Codex cannot continue (the file, its account folder or the login is gone): a
+   *  terminal that continues one prints the CLI's refusal and ends with code 1 at once, as the real CLI does */
+  __omherMockGoneConversations?: string[];
 };
 
 /** The programs the mock host finds unless a test says otherwise. */
@@ -619,6 +624,8 @@ export class MockHost implements SessionHost {
     if (link !== undefined && agent !== "omh") throw new Error(`${agent} sessions are not given a terminal link`);
     const id = nextMockPty();
     this.log({ op: "start", id, agent, cwd, cols, rows, ...(resume ? { resume } : {}), ...(sessionId ? { sessionId } : {}), ...(link ? { link } : {}), ...(account ? { account } : {}) });
+    if (this.g.__omherMockMissing?.includes(agent)) throw new Error(`${agentDef(agent).label} is not installed (no \`${agentDef(agent).program}\` found)`);
+    const gone = !!resume && !!this.g.__omherMockGoneConversations?.includes(resume);
     // a resumed Codex holds its own conversation's rollout open again
     if (agent === "codex" && resume) (this.g.__omherMockCodexOwn ??= {})[id] = resume;
     const out = (d: string) => {
@@ -628,7 +635,11 @@ export class MockHost implements SessionHost {
     this.live.set(id, { agent, line: "", out, exit: onExit });
     mockPtyOut(id, out);
     setTimeout(() => {
-      out(`${banner(agent)}\r\n\x1b[2m  ${agentDef(agent).program} in ${cwd}\x1b[0m\r\n\r\n${PROMPT}`);
+      if (!gone) return out(`${banner(agent)}\r\n\x1b[2m  ${agentDef(agent).program} in ${cwd}\x1b[0m\r\n\r\n${PROMPT}`);
+      if (this.live.get(id)?.out !== out) return;
+      out(`No conversation found with session ID: ${resume}\r\n`);
+      this.live.delete(id);
+      onExit(1);
     }, 30);
     return id;
   }

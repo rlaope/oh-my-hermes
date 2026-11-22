@@ -412,13 +412,19 @@ export function termStatus(rec: Pick<SessionRec, "status" | "exitCode" | "lastOu
   return null;
 }
 
+/** A CLI started to continue its conversation that ends within this long of starting could not continue it. */
+export const RESUME_FAILS_MS = 10_000;
+
 /** What a terminal does when its program ends. A TERMINALS row: its CLI ended, so it goes on as the login `shell` in
  *  the same terminal; its shell ended (exit, Ctrl+D, any code once the person typed), so the row `close`s as its x
  *  does; a shell that ended with an error before anything was typed (it could not start properly) stays `ended`,
- *  showing why. The terminal view of a chat session only says it `ended` (the chat decides the session). */
-export function termEnd(o: { ofChat: boolean; shell: boolean; typed: boolean; code: number | null }): "shell" | "close" | "ended" {
+ *  showing why. A CLI started to continue its conversation (`resumed`: `--resume <id>`, `codex resume <id>`) that
+ *  ended before anything was typed or within RESUME_FAILS_MS (`ms` after it started) could not continue it (the
+ *  conversation, its account or its login is gone): it stays `ended` too, keeping its agent and conversation for
+ *  Restart. The terminal view of a chat session only says it `ended` (the chat decides the session). */
+export function termEnd(o: { ofChat: boolean; shell: boolean; typed: boolean; code: number | null; resumed?: boolean; ms?: number }): "shell" | "close" | "ended" {
   if (o.ofChat) return "ended";
-  if (!o.shell) return "shell";
+  if (!o.shell) return o.resumed && (!o.typed || (o.ms ?? Infinity) < RESUME_FAILS_MS) ? "ended" : "shell";
   return o.typed || o.code === 0 ? "close" : "ended";
 }
 

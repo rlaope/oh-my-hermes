@@ -1370,16 +1370,17 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
     t.told = null;
     // the terminal view of a chat session does not decide the session's status; the chat does
     const ofChat = sessionMode(state.agents, r) !== "terminal";
-    // a TERMINALS Claude Code or Codex session put back after a restart continues its own conversation (once);
-    // Claude Code's terminal view of a chat continues the chat's conversation
-    const again = !ofChat && termAgain.delete(id) && !!r.agentSession && TERM_CONTINUES.includes(r.agent);
+    // a TERMINALS Claude Code or Codex session that has its own conversation continues it: put back after a restart
+    // (by itself, once) and on Restart; Claude Code's terminal view of a chat continues the chat's conversation
+    if (!ofChat) termAgain.delete(id);
+    const again = !ofChat && !!r.agentSession && TERM_CONTINUES.includes(r.agent);
     // a TERMINALS oh-my-hermes terminal is told its row's link (OMHER_TERMINAL_LINK): `omh` reopens by itself the
     // session it dropped in this terminal (after omher restarted, or on Restart), and no other program is told it
     const link = !ofChat && r.agent === "omh" && isLinkId(r.linkId) ? r.linkId : undefined;
     const resume = again ? r.agentSession : r.agentSession && ofChat && r.agent === "claude" ? r.agentSession : undefined;
-    // any other Claude Code terminal starts a new conversation under an id omher makes, kept so a restart continues it
+    // any other Claude Code terminal starts a new conversation under an id omher makes, kept (once it started) so a
+    // restart continues it
     const sessionId = !ofChat && !resume && r.agent === "claude" ? newConversationId() : undefined;
-    if (sessionId) patchRec(id, { agentSession: sessionId });
     // what this terminal showed before omher restarted comes first, dimmed, under a divider (once)
     if (!ofChat && histBack.delete(id)) {
       const back = await restoredText(host, id);
@@ -1436,6 +1437,8 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
       }
       if (!ofChat && lineTimer === null) lineTimer = setTimeout(readLine, OUT_MARK_MS);
     };
+    // when this program was asked for: a CLI continuing its conversation that ends soon after could not continue it
+    const began = Date.now();
     try {
       const onExit = (code: number | null) => {
         // a program omher stopped (the row closed, Restart) or one already replaced says nothing more
@@ -1453,7 +1456,8 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
           return;
         }
         const label = agentDef(r.agent).label;
-        const end = termEnd({ ofChat, shell, typed: t.typed, code });
+        // a CLI that could not continue its conversation keeps it, ended, for Restart (termEnd)
+        const end = termEnd({ ofChat, shell, typed: t.typed, code, resumed: !!resume, ms: Date.now() - began });
         if (end === "shell") {
           // the CLI ended: the same terminal goes on as the person's login shell in that folder
           feed(t.term, `\r\n\x1b[2m${code ? tr("ss.backToShellExit", { agent: label, code }) : tr("ss.backToShell", { agent: label })}\x1b[0m\r\n`);
@@ -1500,6 +1504,7 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
         void io.close(hostId);
         return;
       }
+      if (sessionId) patchRec(id, { agentSession: sessionId });
       if (owed) io.ack(hostId, owed);
       owed = 0;
       // the program started at this size; one that changed while it started is sent now

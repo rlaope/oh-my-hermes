@@ -29,6 +29,13 @@ All notable changes will be documented here.
   - **Speed:** saving a long scrollback no longer stalls on trailing blank lines (98 ms to 0.1 ms on the same input).
     (#3050)
 
+- **omher: a terminal that cannot continue its conversation keeps it.** A Claude Code or Codex terminal continues its
+  conversation after omher restarts. When that CLI ended at once (the conversation, its account folder or the login
+  was gone) the row turned into a Shell and dropped the conversation id, and when the CLI was missing, Restart started
+  a new conversation over the old id. Now the row stays Claude Code or Codex, ended or failed, with the same id, and
+  Restart continues that conversation. A new Claude Code terminal keeps its id only once its CLI started. A continued
+  CLI you used and then exited still goes on as the login shell. (apps/omher `sessions/sessions.ts`, `termEnd`)
+
 - **omher reads more naturally in Korean.** A pass over the Korean UI copy: one register (해요체) on every screen
   instead of 합니다체 in some hints and dialogs, `shell` instead of `셸`, and literal translations replaced with what
   a Korean developer expects (`회원님의 메시지 N개에 답장` is `내 메시지 N개에 답장`, `붙는 것` is `추가되는 것`,
