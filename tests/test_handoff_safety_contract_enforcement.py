@@ -1041,7 +1041,7 @@ HERMES_INTERPRETER_SCRIPTS: dict[str, HermesScriptPolicy] = {
             "hermes_cli.gateway_client": frozenset({"GATEWAY_WS_PROTOCOL", "gateway_ws_target"}),
             "hermes_cli.gateway_runtime": frozenset({"attachable", "control_home_for", "ensure_gateway_runtime"}),
             "hermes_cli.gateway_runtime_discovery": frozenset({"connect_private"}),
-            "hermes_cli.gateway_runtime_attach": frozenset({"attach_gateway"}),
+            "hermes_cli.gateway_runtime_attach": frozenset({"TicketUnavailable", "attach_gateway"}),
             "hermes_cli.cli_terminal_input": frozenset({"_resolve_attachment_path", "_split_path_input"}),
             "hermes_cli.clipboard": frozenset({"save_clipboard_image"}),
             "gateway.platforms.base": frozenset({"get_image_cache_dir"}),

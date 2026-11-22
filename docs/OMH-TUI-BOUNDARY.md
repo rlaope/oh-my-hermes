@@ -72,7 +72,9 @@ entry beside a running gateway) it reaches the profile's gateway as Hermes' own
 Ink TUI does, whether or not one was running: Hermes' `ensure_gateway_runtime`
 finds it or starts it (an unmanaged gateway daemon with idle exit, or the
 gateway service the person installed, which Hermes starts through launchctl or
-systemd), a session ticket comes from the home's private control socket, and
+systemd), a session ticket comes from the home's private control socket (on
+Windows, where that endpoint is a named pipe, Hermes' own `attach_gateway`
+ensures the gateway and mints the ticket, as Ink's bootstrap does), and
 `websockets.asyncio.client.connect` dials the loopback socket Hermes names. It
 translates between the stdio wire and the gateway's canonical one only where
 they differ (the launch policy riding `session.create`, a detach for a close, a

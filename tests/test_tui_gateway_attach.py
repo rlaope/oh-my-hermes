@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import asyncio
 import base64
+import builtins
 import json
 import os
 from pathlib import Path
@@ -1295,6 +1296,10 @@ from types import SimpleNamespace
 from hermes_cli.gateway_runtime import attachable, ensure_gateway_runtime
 
 
+class TicketUnavailable(RuntimeError):
+    pass
+
+
 def attach_gateway(home, *, start, timeout):
     receipt = ensure_gateway_runtime(home, timeout=timeout, idle_exit=True)
     return SimpleNamespace(receipt=receipt, ticket="t0k" if attachable(receipt) else None)
@@ -1543,6 +1548,13 @@ class ScriptTests(unittest.TestCase):
 class GrantTests(unittest.TestCase):
     """`attach_api().grant()` with Hermes stubbed: the POSIX control-socket mint, and Windows' `attach_gateway`."""
 
+    class TicketUnavailable(RuntimeError):
+        """Hermes' own: attachable, then no ticket; `reason` is bounded (`hermes_cli/gateway_runtime_attach.py`)."""
+
+        def __init__(self, reason: str) -> None:
+            super().__init__(f"ticket_unavailable: {reason}")
+            self.reason = reason
+
     def _hermes(self, calls: list[str], *, receipt: object, attached: object) -> dict[str, types.ModuleType]:
         def module(name: str, **attributes: object) -> types.ModuleType:
             made = types.ModuleType(name)
@@ -1555,6 +1567,8 @@ class GrantTests(unittest.TestCase):
 
         def attach_gateway(home: Path, *, start: bool, timeout: float) -> object:
             calls.append(f"attach_gateway start={start} timeout={timeout:g}")
+            if isinstance(attached, BaseException):
+                raise attached
             return attached
 
         def ensure_gateway_runtime(*_args: object, **_kwargs: object) -> object:
@@ -1573,7 +1587,8 @@ class GrantTests(unittest.TestCase):
             "hermes_cli.gateway_runtime_discovery": module(
                 "hermes_cli.gateway_runtime_discovery", connect_private=connect_private),
             "hermes_cli.gateway_runtime_attach": module(
-                "hermes_cli.gateway_runtime_attach", attach_gateway=attach_gateway),
+                "hermes_cli.gateway_runtime_attach", TicketUnavailable=self.TicketUnavailable,
+                attach_gateway=attach_gateway),
             "hermes_constants": module("hermes_constants", get_hermes_home=lambda: Path("hermes-home")),
             "websockets": module("websockets", __path__=[]),
             "websockets.asyncio": module("websockets.asyncio", __path__=[]),
@@ -1581,10 +1596,13 @@ class GrantTests(unittest.TestCase):
             "websockets.exceptions": module("websockets.exceptions", WebSocketException=type("E", (Exception,), {})),
         }
 
-    def _grant(self, *, windows: bool, receipt: object = None, attached: object = None) -> tuple[list[str], object]:
+    def _grant(self, *, windows: bool, receipt: object = None, attached: object = None,
+               hermes_attach: bool = True) -> tuple[list[str], object]:
         calls: list[str] = []
-        with patch_modules(self._hermes(calls, receipt=receipt, attached=attached)), \
-                patch.object(attach, "WINDOWS", windows):
+        modules = self._hermes(calls, receipt=receipt, attached=attached)
+        if not hermes_attach:  # Hermes 0.22.x: the attach API, but no `gateway_runtime_attach` (it ships in 0.23.1)
+            modules["hermes_cli.gateway_runtime_attach"] = None
+        with patch_modules(modules), patch.object(attach, "WINDOWS", windows):
             api = attach.attach_api()
             assert api is not None
             try:
@@ -1607,6 +1625,33 @@ class GrantTests(unittest.TestCase):
         _calls, error = self._grant(windows=True, attached=types.SimpleNamespace(receipt=refused, ticket=None))
         self.assertIs(type(error), RuntimeError)
         self.assertEqual(str(error), "gateway inaccessible: ticket_unavailable")
+
+    def test_windows_hermes_without_its_own_attach_gives_a_verdict_not_a_traceback(self) -> None:
+        # `main()` reports RuntimeError as one line and exits 1; a ModuleNotFoundError escaped it as a traceback.
+        calls, error = self._grant(windows=True, hermes_attach=False)
+        self.assertIs(type(error), RuntimeError)
+        self.assertIn("this Hermes cannot attach on Windows", str(error))
+        self.assertEqual(calls, [])
+
+    def test_windows_waits_for_a_control_pipe_that_is_not_answering_yet(self) -> None:
+        for reason in sorted(attach.NOT_READY_TICKET_REASONS):
+            with self.subTest(reason=reason):
+                _calls, error = self._grant(windows=True, attached=self.TicketUnavailable(reason))
+                self.assertIsInstance(error, attach.GatewayNotReady)
+                self.assertIn(f"ticket_unavailable: {reason}", str(error))
+
+    def test_windows_does_not_wait_for_a_refused_or_garbled_grant(self) -> None:
+        for reason in ("PermissionError", "invalid_control_response", "GatewayClientError"):
+            with self.subTest(reason=reason):
+                _calls, error = self._grant(windows=True, attached=self.TicketUnavailable(reason))
+                self.assertIs(type(error), self.TicketUnavailable)
+                self.assertNotIsInstance(error, attach.GatewayNotReady)
+
+    def test_the_not_ready_ticket_reasons_are_the_not_ready_socket_errors(self) -> None:
+        # Hermes names the OSError class it caught; every one `NOT_READY_OS_ERRORS` catches on POSIX is waited for.
+        names = {name for name, kind in vars(builtins).items()
+                 if isinstance(kind, type) and issubclass(kind, attach.NOT_READY_OS_ERRORS)}
+        self.assertEqual(attach.NOT_READY_TICKET_REASONS, names)
 
     def test_posix_still_mints_over_the_control_socket(self) -> None:
         endpoint = types.SimpleNamespace(host="127.0.0.1:9", profile_id="default", instance_id="i1")
