@@ -565,7 +565,7 @@ export const ja: Record<Key, string> = {
   "term.scrollback": "Scrollback",
   "term.scrollbackHint": "画面より上に残す行数",
   "term.optionMeta": "Option を Meta として使う",
-  "term.optionMetaHint": "Option がプログラムに Meta として送られ、Option+B と Option+F で単語単位に移動できます。オフにすると、そのキーの文字が入力されます。",
+  "term.optionMetaHint": "Option がプログラムに Meta として送られ、Option+B と Option+F で単語単位に移動できます。オフにすると、そのキーの文字が入力されます。ヨーロッパ系配列の @ [ ] { } | などの記号は常に入力されます。",
   "term.gpu": "GPU renderer",
   "term.gpuHint": "自動はハードウェアが対応していれば GPU で描画するので、CLI のアートや枠が隙間なくつながります。使えない場合は自動で標準に戻ります。オフは常に標準の描画です。",
   "term.usingGpu": "現在使用中: GPU",

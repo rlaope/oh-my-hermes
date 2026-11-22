@@ -4,6 +4,17 @@ All notable changes will be documented here.
 
 ## Unreleased
 
+- **omher keeps every TERMINALS row over a restart, types European Option signs, and gives the keyboard back.**
+  - **Restart:** every TERMINALS row comes back, however many there are. Before, only the newest 20 were saved and the
+    next start deleted the older rows' history and files, even for a running Claude. Only the newest 20 keep their
+    chat's last messages in the snapshot, which is what takes room. (apps/omher `app/resume.ts`)
+  - **Option on a European Mac layout:** Option+L, Option+5 and the rest type @ [ ] { } | \ ~ again, with Option as
+    Meta on (the default) or off and in Claude Code or Codex. They used to send Esc and the key's letter. On a US
+    layout Option is still Meta. (apps/omher `sessions/term/engine-input.ts`)
+  - **AltGr on Windows:** AltGr+= types } on French AZERTY (~ Swiss, | Danish) instead of evening out the panes. The
+    bottom panel with one pane leaves the pane keys to the program. (apps/omher `terminal/layout.ts`, `Panel.tsx`)
+  - **Bottom panel:** hiding it with Ctrl+` or closing its last tab gives the keyboard back to the terminal or chat
+    you were typing in, instead of leaving it nowhere. (apps/omher `terminal/Panel.tsx`)
 - **omher 1.1.2.** Terminals keep their screen when you switch back, and splits and rows behave as expected.
   - **Switching back:** a TUI shown again (omh, Codex, OmO, vim, htop) no longer shows a doubled line, a blank band or
     a misplaced cursor. Showing a terminal now fits it once instead of twice, and when xterm had to reflow it the
@@ -47,6 +58,13 @@ All notable changes will be documented here.
   next message reconnects, or that a request attached during a Restart that then failed, says so too. Two requests
   at once no longer make two Bot Chats.
   BOUNDARY rule 39.
+
+- **omher's Korean names Watch "모니터링".** The feature that has a bot check a channel or page on a schedule read
+  `감시` (surveillance) in Korean; it is now `모니터링` on every screen (`새 모니터링`, `모니터링하는 곳`). Four short
+  labels left by the Korean copy pass read right too: a browser step reads `열림` (it read like a button, `열기`), the
+  bubble style with no bot bubble reads `본문처럼`, the terminal theme slot's label reads `적용 대상`, and a route
+  whose chain ran out reads `chain exhausted` like its `chain head` and `fallback` siblings. Only string values
+  changed.
 
 ## 5.0.0 - 2026-11-21
 

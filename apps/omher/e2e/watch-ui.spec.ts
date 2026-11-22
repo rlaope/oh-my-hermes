@@ -165,7 +165,7 @@ test("Not useful on a watch result sends one message naming the watch and quotin
 
 for (const [lang, unreadable, tag, note] of [
   ["en", "Can't read this channel", "Watch", "every 15 minutes"],
-  ["ko", "이 채널을 읽을 수 없어요", "감시", "15분마다"],
+  ["ko", "이 채널을 읽을 수 없어요", "모니터링", "15분마다"],
   ["ja", "このチャンネルを読めません", "ウォッチ", "15 分ごと"],
   ["zh", "无法读取此频道", "监视", "每 15 分钟"],
 ] as const) {

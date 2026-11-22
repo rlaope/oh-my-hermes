@@ -102,6 +102,20 @@ describe("a panel tab's pane layout", () => {
     expect(paneKey(key({ key: "]", code: "BracketRight", ctrlKey: true }), false)).toBeNull(); // Ctrl+] is the program's
   });
 
+  it("AltGr (read as Ctrl+Alt off macOS) types its character: } on French AZERTY, ~ Swiss, | Danish, never equalize", () => {
+    const altGr = (k: string, code: string) => ({ ...key({ key: k, code, ctrlKey: true, altKey: true }), getModifierState: (m: string) => m === "AltGraph" });
+    expect(paneKey(altGr("}", "Equal"), false)).toBeNull();
+    expect(paneKey(altGr("~", "Equal"), false)).toBeNull();
+    expect(paneKey(altGr("|", "Equal"), false)).toBeNull();
+    // the layout's Ctrl+Alt on that key still types a character (no AltGraph state reported): not equalize either
+    expect(paneKey(key({ key: "}", code: "Equal", ctrlKey: true, altKey: true }), false)).toBeNull();
+    // AltGr itself on a key that says =: still the layout's
+    expect(paneKey(altGr("=", "Equal"), false)).toBeNull();
+    // a US layout's Ctrl+Alt+= (or +) evens them out as before
+    expect(paneKey(key({ key: "=", code: "Equal", ctrlKey: true, altKey: true }), false)).toEqual({ kind: "equalize" });
+    expect(paneKey({ ...key({ key: "+", code: "Equal", ctrlKey: true, altKey: true }), getModifierState: () => false }, false)).toEqual({ kind: "equalize" });
+  });
+
   it("swaps two panes, steps through them in reading order, and reads a saved layout back checked", () => {
     const l: Layout = { dir: "row", ratio: 0.3, a: { pane: 1 }, b: { dir: "col", ratio: 0.5, a: { pane: 2 }, b: { pane: 3 } } };
     expect(panesOf(swapPanes(l, 1, 3))).toEqual([3, 2, 1]);
