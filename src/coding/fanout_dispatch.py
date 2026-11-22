@@ -37,7 +37,20 @@ from ..system.local_store import (
 from ..system.security_posture import resolve_security_posture
 from ..system.metadata_safety import redact_metadata_text
 from .fanout_output import FanoutOutput
-from .fanout_executor_sessions import SessionBinding, SessionDecoder, bound_session_fields, observe_session_workspace, read_session_receipt
+from .fanout_executor_sessions import (
+    FILE_EXPORT_PROTOCOL,
+    FILE_EXPORT_REF,
+    SessionBinding,
+    SessionCapability,
+    SessionDecoder,
+    SessionReceipt,
+    WorkspaceSnapshot,
+    bound_session_fields,
+    build_file_export_receipt,
+    observe_session_export,
+    observe_session_workspace,
+    read_session_receipt,
+)
 from .executor_readiness import negotiate_session_capability, observe_session_binary, session_launch_path
 from .executors import canonical_executor_profile
 from .user_executors import ExecutorConfigError
@@ -1038,6 +1051,66 @@ def _build_user_executor_argv(
 EXECUTOR_SCRATCH_PREFIX = ".omh-executor-tmp-"
 
 
+def _declared_session_export(spec: object | None) -> tuple[str, ...]:
+    """The `session.export` fragment an executor declared, or an empty tuple."""
+    return tuple(str(part) for part in (getattr(spec, "export", ()) or ()))
+
+
+def _declared_session_resume(spec: object | None) -> tuple[str, ...]:
+    """The `session.resume` fragment an executor declared, or an empty tuple."""
+    return tuple(str(part) for part in (getattr(spec, "resume", ()) or ()))
+
+
+def _plan_executor_resume(
+    *, owner: str, spec: object | None, repair: Mapping[str, Any] | None,
+    receipt: SessionReceipt | None, recovery_snapshot: str | None,
+    workspace: WorkspaceSnapshot | None, capability: SessionCapability | None,
+    fanout_id: str, unit_id: str, run_ref: str, contract_digest: str, base_sha: str,
+    foreign_references: frozenset[str],
+) -> tuple[str | None, str]:
+    """The id a budgeted repair may re-enter one session with, and the reason.
+
+    Only an explicit budgeted repair qualifies, and only against the receipt the
+    immediately preceding attempt recorded: same owner and frozen contract,
+    same fanout/unit/run/base, the same worktree incarnation at the very head
+    that receipt ended on, the same binary bytes, and a recovery state that the
+    dispatcher re-observed rather than assumed. An id another unit also claims
+    is ambiguous and is never reused. Anything short of that starts a FRESH
+    repair and says which check it failed, so a later reader is never told a
+    session continued when it did not.
+    """
+    if not _declared_session_resume(spec):
+        return None, "no_resume_declared"
+    if repair is None:
+        return None, "not_a_repair"
+    if receipt is None:
+        return None, "no_prior_receipt"
+    if receipt.capability.protocol != FILE_EXPORT_PROTOCOL:
+        return None, "not_user_export"
+    binding = receipt.binding
+    if (receipt.capability.executor != owner or binding.fanout_id != fanout_id
+            or binding.unit_id != unit_id or binding.run_ref != run_ref
+            or binding.contract_digest != contract_digest or binding.base_sha != base_sha):
+        return None, "binding_changed"
+    if receipt.reference is None:
+        return None, "no_id"
+    if receipt.reference in foreign_references:
+        return None, "duplicate_reference"
+    if receipt.end_head is None:
+        return None, "end_revision_not_observed"
+    if (workspace is None or workspace.path != binding.worktree_path
+            or workspace.incarnation != binding.worktree_incarnation
+            or workspace.head != receipt.end_head):
+        return None, "stale_workspace"
+    if (workspace.dirty or recovery_snapshot is not None) and (
+        recovery_snapshot is None or workspace.recovery_snapshot != recovery_snapshot
+    ):
+        return None, "recovery_snapshot_mismatch"
+    if capability is None or capability.binary_identity != receipt.capability.binary_identity:
+        return None, "binary_changed"
+    return receipt.reference, "same_session"
+
+
 def _prepare_executor_scratch(worktree: Path, attempt_id: str, prompt: str) -> Path | None:
     """Create this attempt's private scratch inside the unit's fenced worktree.
 
@@ -1071,10 +1144,16 @@ def _prepare_executor_scratch(worktree: Path, attempt_id: str, prompt: str) -> P
 
 
 def _remove_executor_scratch(directory: object) -> None:
-    """Best-effort removal of one attempt's scratch; never raises into a dispatch."""
+    """Best-effort removal of one attempt's scratch; never raises into a dispatch.
+
+    The executor's own export file lives here too (`session.json`), so it is
+    unlinked before the directory. A file an executor left under a different
+    name keeps the directory alive; the rmdir then fails quietly rather than
+    deleting something the dispatcher did not create.
+    """
     if not isinstance(directory, Path):
         return
-    for name in ("prompt.txt", ".gitignore"):
+    for name in ("prompt.txt", FILE_EXPORT_REF, ".gitignore"):
         try:
             (directory / name).unlink()
         except OSError:
@@ -5014,11 +5093,25 @@ def _dispatch_unit(
     # per-attempt: the scratch directory is created after this attempt's
     # worktree exists and removed before any result or cleanliness check.
     executor_prompt_file: dict[str, object] = {"path": None}
+    # A declared `session.export` fragment names a file in the same scratch
+    # dir. `executor_resume` holds the id ONE repair attempt may re-enter, the
+    # closed reason it does or does not have one, and whether it was spent.
+    executor_session_file: dict[str, object] = {"path": None}
+    executor_resume: dict[str, object] = {"id": None, "reason": "", "used": False}
     executor_scratch: dict[str, object] = {"dir": None}
     executor_refusal: dict[str, str] = {}
 
     def dispatch_argv() -> list[str] | None:
         prompt_file = executor_prompt_file.get("path")
+        session_file = executor_session_file.get("path")
+        if (not isinstance(session_file, Path) and dry_run
+                and executor_spec is not None and _declared_session_export(executor_spec)):
+            # The plan names the flag with an inert path: the real file lives in
+            # this attempt's dispatcher-owned scratch, assigned at launch.
+            session_file = Path("<session export>")
+        resume_id = executor_resume.get("id")
+        session_id = (resume_id if isinstance(resume_id, str)
+                      and not executor_resume.get("used") else None)
         if (executor_spec is not None and "{prompt_file}" in tuple(getattr(executor_spec, "argv", ()))
                 and not isinstance(prompt_file, Path)):
             # Not a refusal: a `{prompt_file}` declaration cannot render until
@@ -5040,6 +5133,8 @@ def _dispatch_unit(
                         owner, prompt, effective_model_route,
                         spec=executor_spec,
                         prompt_file=prompt_file if isinstance(prompt_file, Path) else None,
+                        session_file=session_file if isinstance(session_file, Path) else None,
+                        session_id=session_id,
                     ),
                     owner, codex_sandbox_backend,
                 )
@@ -5245,6 +5340,47 @@ def _dispatch_unit(
         and not probe_fence.unconfined_allowed
     ):
         return _unfenced_unit_refusal(unit_id, run_ref, owner, attempt_id, worktree, probe_fence.receipt)
+    # A declared `session.export` makes this attempt's session evidence a FILE,
+    # not a decoded native stream. The binary identity is observed from the
+    # same resolved program the launch will use, so a receipt can name the
+    # bytes that produced it.
+    file_export_capability: SessionCapability | None = None
+    if executor_spec is not None and _declared_session_export(executor_spec):
+        export_identity = observe_session_binary(str(argv[0]), env=child_env) if argv else None
+        if export_identity is not None:
+            file_export_capability = SessionCapability(
+                owner, FILE_EXPORT_PROTOCOL, export_identity, None)
+    if repair is not None and file_export_capability is not None:
+        # An id another UNIT also claims is ambiguous; repeated attempts of
+        # this unit sharing one id are the permitted predecessor chain. This
+        # reads the journal across units once, on a repair only.
+        foreign_references: set[str] = set()
+        for event in read_observation_events(paths):
+            if (event.get("event") != "executor_session_observed"
+                    or str(event.get("run_id", "")) == run_ref):
+                continue
+            other = read_session_receipt(event.get("executor_session")).receipt
+            if other is not None and other.reference is not None:
+                foreign_references.add(other.reference)
+        resume_id, resume_reason = _plan_executor_resume(
+            owner=owner, spec=executor_spec, repair=repair, receipt=previous_receipt,
+            recovery_snapshot=(str(prior["session_recovery_snapshot"])
+                               if isinstance(prior.get("session_recovery_snapshot"), str) else None),
+            # A reused worktree was written by the unit, so its git runs inside
+            # this attempt's fence or the workspace is not observed at all.
+            workspace=(observe_session_workspace(str(worktree), confinement=probe_fence)
+                       if probe_fence is not None else None),
+            capability=file_export_capability,
+            fanout_id=fanout_id, unit_id=unit_id, run_ref=run_ref,
+            contract_digest=session_contract_digest, base_sha=base_sha,
+            foreign_references=frozenset(foreign_references),
+        )
+    elif executor_spec is not None and _declared_session_export(executor_spec):
+        resume_id, resume_reason = None, (
+            "no_resume_declared" if not _declared_session_resume(executor_spec) else "not_a_repair")
+    else:
+        resume_id, resume_reason = None, ""
+    executor_resume["id"], executor_resume["reason"] = resume_id, resume_reason
     if clarification is not None:
         clarification = claim_answered_worktree(paths, fanout_id, {
             "unit_id": unit_id, "run_ref": run_ref, "base_sha": base_sha,
@@ -5302,10 +5438,14 @@ def _dispatch_unit(
     exit_code = 1
     try:
         worktree = Path(str(worktree_record["worktree_path"]))
-        if executor_spec is not None and argv is None and not executor_refusal:
-            # A `{prompt_file}` declaration cannot render until this attempt's
-            # worktree exists: the file lives in dispatcher-owned scratch
-            # inside it, written after allocation and before the fenced launch.
+        needs_export_file = (executor_spec is not None
+                             and bool(_declared_session_export(executor_spec))
+                             and not isinstance(executor_session_file.get("path"), Path))
+        if executor_spec is not None and not executor_refusal and (argv is None or needs_export_file):
+            # A `{prompt_file}` or `session.export` declaration cannot render
+            # until this attempt's worktree exists: both files live in
+            # dispatcher-owned scratch inside it, written after allocation and
+            # before the fenced launch.
             scratch = _prepare_executor_scratch(worktree, attempt_id, prompt)
             if scratch is None:
                 return {
@@ -5317,7 +5457,10 @@ def _dispatch_unit(
                     "reason": "this platform cannot give the executor prompt file a private, no-follow path",
                 }
             executor_scratch["dir"] = scratch
-            executor_prompt_file["path"] = scratch / "prompt.txt"
+            if "{prompt_file}" in tuple(getattr(executor_spec, "argv", ())):
+                executor_prompt_file["path"] = scratch / "prompt.txt"
+            if _declared_session_export(executor_spec):
+                executor_session_file["path"] = scratch / FILE_EXPORT_REF
             argv = dispatch_argv()
         if executor_refusal:
             return {
@@ -5354,7 +5497,9 @@ def _dispatch_unit(
         session_capability = (negotiate_session_capability(owner, argv[0], env=child_env)
                               if argv and executor_spec is None
                               and getattr(runner, 'accepts_output_capture', False) else None)
-        if session_capability is not None:
+        if session_capability is not None or file_export_capability is not None:
+            # One canonical path for the receipt and for every journal
+            # `worktree_ref`, so a later reader can bind the two.
             worktree = worktree.resolve()
         def session_argv(command: list[str]) -> list[str]:
             if session_capability is None or session_capability.protocol is None:
@@ -5410,12 +5555,18 @@ def _dispatch_unit(
             _remove_executor_scratch(executor_scratch.get("dir"))
             executor_scratch["dir"] = None
             executor_prompt_file["path"] = None
-            if "{prompt_file}" not in tuple(getattr(executor_spec, "argv", ())):
+            executor_session_file["path"] = None
+            needs_prompt = "{prompt_file}" in tuple(getattr(executor_spec, "argv", ()))
+            needs_export = bool(_declared_session_export(executor_spec))
+            if not needs_prompt and not needs_export:
                 return
             scratch = _prepare_executor_scratch(worktree, attempt_id, prompt)
             if scratch is not None:
                 executor_scratch["dir"] = scratch
-                executor_prompt_file["path"] = scratch / "prompt.txt"
+                if needs_prompt:
+                    executor_prompt_file["path"] = scratch / "prompt.txt"
+                if needs_export:
+                    executor_session_file["path"] = scratch / FILE_EXPORT_REF
 
         if (
             confinement is not None
@@ -5649,7 +5800,8 @@ def _dispatch_unit(
                 if not getattr(runner, 'accepts_launch', False):
                     dispatch_observed()
             launch_workspace = (observe_session_workspace(str(worktree), confinement=confinement)
-                                if session_capability is not None else None)
+                                if session_capability is not None or file_export_capability is not None
+                                else None)
             decoder = SessionDecoder(session_capability) if session_capability is not None else None
             admission_observer = CodexAdmissionObserver()
             admission_binding = AdmissionBinding(owner, fanout_id, unit_id, run_ref, attempt,
@@ -5695,6 +5847,11 @@ def _dispatch_unit(
                 spawn_stagger.reserve()
             if health_events is not None and attempt > 1:
                 health_events.started(unit_id, retry=attempt - 1)
+            # The declared resume fragment is spent by THIS attempt's launch. A
+            # transient retry inside the same repair therefore starts fresh
+            # instead of forking the same conversation a second time.
+            if isinstance(executor_resume.get("id"), str):
+                executor_resume["used"] = True
             try:
                 completed = runner(
                     argv,
@@ -5780,6 +5937,28 @@ def _dispatch_unit(
                         'worker_ref': unit_id, 'runtime_profile': owner, 'attempt_id': attempt_id,
                         'worktree_ref': str(worktree),
                         'executor_session': decoder.receipt(session_binding).to_dict()})
+                export_path = executor_session_file.get("path")
+                if (file_export_capability is not None and session_binding is not None
+                        and isinstance(export_path, Path)):
+                    # A file this attempt already wrote is still historical; no
+                    # end revision means no resume instruction. Only the
+                    # builder's own validation refusal is absorbed, because the
+                    # observer fault below is the error worth reporting.
+                    try:
+                        export_receipt = build_file_export_receipt(
+                            capability=file_export_capability, binding=session_binding,
+                            observation=observe_session_export(export_path), end_head=None,
+                            resume_reason=("fresh_retry" if attempt > 1 else
+                                           str(executor_resume.get("reason") or "not_a_repair")))
+                    except ValueError:
+                        export_receipt = None
+                    if export_receipt is not None:
+                        append_journal_observation(paths, {
+                            'target_type': 'run', 'target_id': run_ref, 'run_id': run_ref,
+                            'event': 'executor_session_observed', 'status': 'observed',
+                            'worker_ref': unit_id, 'runtime_profile': owner, 'attempt_id': attempt_id,
+                            'worktree_ref': str(worktree),
+                            'executor_session': export_receipt.to_dict()})
                 raise
             stdout_text = capture.take_final_text()
             session_fields = {}
@@ -5796,6 +5975,27 @@ def _dispatch_unit(
                 session_fields = {'executor_session': receipt.to_dict()}
                 if end_workspace is not None and end_workspace.recovery_snapshot is not None:
                     session_fields['session_recovery_snapshot'] = end_workspace.recovery_snapshot
+                append_journal_observation(paths, {
+                    'target_type': 'run', 'target_id': run_ref, 'run_id': run_ref,
+                    'event': 'executor_session_observed', 'status': 'observed',
+                    'worker_ref': unit_id, 'runtime_profile': owner, 'attempt_id': attempt_id,
+                    'worktree_ref': str(worktree), **session_fields})
+            export_path = executor_session_file.get("path")
+            if (file_export_capability is not None and session_binding is not None
+                    and isinstance(export_path, Path)):
+                # This executor's only session evidence is the file it wrote.
+                # Digest it here, before the scratch dir is removed; the body
+                # is hashed, never read into the record or kept under `.omh`.
+                export_workspace = observe_session_workspace(str(worktree), confinement=confinement)
+                export_receipt = build_file_export_receipt(
+                    capability=file_export_capability,
+                    binding=session_binding,
+                    observation=observe_session_export(export_path),
+                    end_head=export_workspace.head if export_workspace is not None else None,
+                    resume_reason=("fresh_retry" if attempt > 1 else
+                                   str(executor_resume.get("reason") or "not_a_repair")),
+                )
+                session_fields = {'executor_session': export_receipt.to_dict()}
                 append_journal_observation(paths, {
                     'target_type': 'run', 'target_id': run_ref, 'run_id': run_ref,
                     'event': 'executor_session_observed', 'status': 'observed',
@@ -6151,11 +6351,14 @@ def _dispatch_unit(
         # counts and no session id were obtainable for the whole unit -- an
         # absence with a cause, rather than an empty token column that reads
         # like a unit which spent nothing.
-        "session_protocol": ("codex" if owner == "codex" else "claude")
-        if session_capability is not None and session_capability.protocol is not None
-        else "plain",
+        "session_protocol": (
+            ("codex" if owner == "codex" else "claude")
+            if session_capability is not None and session_capability.protocol is not None
+            else (FILE_EXPORT_PROTOCOL if file_export_capability is not None else "plain")
+        ),
         "session_protocol_reason": (
-            "" if session_capability is not None and session_capability.protocol is not None
+            "" if (session_capability is not None and session_capability.protocol is not None)
+            or file_export_capability is not None
             else (session_capability.reason if session_capability is not None
                   else "no_session_capability_negotiated")
         ),
