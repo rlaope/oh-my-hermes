@@ -567,7 +567,7 @@ export const en = {
   "term.scrollback": "Scrollback",
   "term.scrollbackHint": "Rows kept above the screen",
   "term.optionMeta": "Option as Meta",
-  "term.optionMetaHint": "Option sends Meta to the program, so Option+B and Option+F move by word. Off types the key’s own character.",
+  "term.optionMetaHint": "Option sends Meta to the program, so Option+B and Option+F move by word. Off types the key’s own character. Signs such as @ [ ] { } | on a European layout are always typed.",
   "term.gpu": "GPU renderer",
   "term.gpuHint": "Auto draws with the GPU where the hardware allows it, so CLI art and frames join without seams, and falls back by itself. Off keeps the standard renderer.",
   "term.usingGpu": "In use now: GPU",
