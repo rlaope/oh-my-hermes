@@ -12,6 +12,7 @@ import traceback
 from pathlib import Path
 
 from ..coding.executors import canonical_executor_profile
+from ..coding import user_executors
 from ..coding.user_executors import ExecutorRegistry
 from ..plugin_bundle.omh.run_records import FANOUT_CONTRACT_FILE, RUN_FILE
 from ..coding_delegation import CODING_EXECUTOR_TARGETS, build_coding_delegation_payload, coding_delegation_record_payload
@@ -3326,6 +3327,8 @@ def cmd_coding_run(args: argparse.Namespace) -> int:
     if verification_commands:
         unit["verification_commands"] = verification_commands
     registry = _loaded_executor_registry(args)
+    if args.owner in registry.entries and not user_executors.USER_EXECUTOR_LAUNCH_SUPPORTED:
+        raise OmhError(user_executors.USER_EXECUTOR_PLATFORM_UNSUPPORTED)
     needs_inventory = args.owner not in EXECUTOR_MODEL_OPTIONS
     try:
         capability_snapshots = {

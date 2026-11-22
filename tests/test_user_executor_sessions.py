@@ -253,7 +253,7 @@ class FileExportReceiptTests(unittest.TestCase):
             sessions.WorktreeIncarnation(OTHER, "/repo/.git", "refs/heads/agent/a", 1, 200),
             SHA, SHA)
 
-    def receipt(self, document: dict[str, object], *, resume_reason: str = "not_a_repair"):
+    def receipt(self, document: dict[str, object]):
         with TemporaryDirectory() as tmp:
             path = Path(tmp) / sessions.FILE_EXPORT_REF
             path.write_text(json.dumps(document), encoding="utf-8")
@@ -261,9 +261,10 @@ class FileExportReceiptTests(unittest.TestCase):
             expected = sessions.sha256(path.read_bytes()).hexdigest()
         return sessions.build_file_export_receipt(
             capability=self.capability(), binding=self.binding(), observation=observation,
-            end_head=SHA, resume_reason=resume_reason,
+            end_head=SHA, resume_reason="not_a_repair",
         ), expected
 
+    @unittest.skipUnless(os.name == "posix", "external executor lane is POSIX only")
     def test_a_canonical_id_round_trips_with_its_digest_and_no_body(self):
         receipt, digest = self.receipt({"session_id": SID, "transcript": SENTINEL})
         record = receipt.to_dict()
@@ -281,6 +282,7 @@ class FileExportReceiptTests(unittest.TestCase):
         self.assertIsNotNone(read.receipt, read.reason)
         self.assertEqual(read.receipt.to_dict(), record)
 
+    @unittest.skipUnless(os.name == "posix", "external executor lane is POSIX only")
     def test_a_valid_file_without_an_id_is_file_only_evidence(self):
         receipt, digest = self.receipt({"transcript": SENTINEL})
         record = receipt.to_dict()
@@ -289,6 +291,7 @@ class FileExportReceiptTests(unittest.TestCase):
         self.assertIsNone(record["reference"])
         self.assertEqual(record["export_sha256"], digest)
 
+    @unittest.skipUnless(os.name == "posix", "external executor lane is POSIX only")
     def test_the_devin_id_shape_is_accepted_and_an_uppercase_uuid_is_not(self):
         receipt, _digest = self.receipt({"session_id": DEVIN_SID})
         self.assertEqual(receipt.to_dict()["reference"], DEVIN_SID)
@@ -301,6 +304,7 @@ class FileExportReceiptTests(unittest.TestCase):
         self.assertIsNone(observation.reference)
         self.assertIsNone(observation.export_sha256)
 
+    @unittest.skipUnless(os.name == "posix", "external executor lane is POSIX only")
     def test_broken_exports_are_not_observed_with_closed_reasons(self):
         cases = {
             "export_missing": None,
@@ -323,6 +327,7 @@ class FileExportReceiptTests(unittest.TestCase):
                 self.assertIsNone(observation.reference)
                 self.assertIsNone(observation.export_sha256)
 
+    @unittest.skipUnless(os.name == "posix", "external executor lane is POSIX only")
     def test_an_oversized_or_symlinked_file_is_not_a_session(self):
         with TemporaryDirectory() as tmp:
             directory = Path(tmp)
@@ -337,6 +342,7 @@ class FileExportReceiptTests(unittest.TestCase):
             os.symlink(target, link)
             self.assertEqual(sessions.observe_session_export(link).reason, "export_unsafe")
 
+    @unittest.skipUnless(os.name == "posix", "external executor lane is POSIX only")
     def test_cleanup_uses_the_original_directory_handle_after_rename(self):
         from omh.coding.fanout_dispatch import _prepare_executor_scratch, _remove_executor_scratch
 
@@ -355,6 +361,7 @@ class FileExportReceiptTests(unittest.TestCase):
             self.assertTrue(directory.is_symlink())
             self.assertEqual(list(empty.iterdir()), [])
 
+    @unittest.skipUnless(os.name == "posix", "external executor lane is POSIX only")
     def test_export_refuses_a_linked_scratch_directory_without_opening_its_files(self):
         with TemporaryDirectory() as tmp:
             root = Path(tmp)
@@ -365,8 +372,15 @@ class FileExportReceiptTests(unittest.TestCase):
             observed = sessions.observe_session_export(directory / sessions.FILE_EXPORT_REF)
             self.assertEqual((observed.state, observed.reason), ("not_observed", "export_unsafe"))
 
+    def observed_receipt(self):
+        # Projection and decoding only need the observation, not a POSIX file reader.
+        observation = sessions.SessionExportObservation(
+            "observed", sessions.FILE_EXPORT_OBSERVED_REASON, sessions.FILE_EXPORT_REF, "a" * 64, SID)
+        return sessions.build_file_export_receipt(capability=self.capability(), binding=self.binding(),
+                                                 observation=observation, end_head=SHA, resume_reason="same_session")
+
     def test_a_file_export_receipt_is_repair_only_and_renders_no_command(self):
-        receipt, _digest = self.receipt({"session_id": SID}, resume_reason="same_session")
+        receipt = self.observed_receipt()
         projection = sessions.project_session_resume(
             receipt.to_dict(), binding=receipt.binding,
             workspace=sessions.WorkspaceSnapshot(
@@ -392,8 +406,7 @@ class FileExportReceiptTests(unittest.TestCase):
         self.assertIsNotNone(sessions.read_session_receipt(record).receipt)
 
     def test_a_malformed_v2_record_is_rejected_rather_than_upgraded(self):
-        receipt, _digest = self.receipt({"session_id": SID})
-        record = receipt.to_dict()
+        record = self.observed_receipt().to_dict()
         for broken in (
             {**record, "reference": OTHER, "reference_kind": "export_file"},
             {**record, "resume_reason": "made-up"},
@@ -457,6 +470,7 @@ class BuiltinSessionPins(unittest.TestCase):
         ])
 
 
+@unittest.skipUnless(os.name == "posix", "external executor lane is POSIX only")
 class SessionDispatchTests(unittest.TestCase):
     """Real spawns of a fake CLI that writes its export file."""
 
@@ -625,6 +639,9 @@ class SessionDispatchTests(unittest.TestCase):
         self.assertEqual(unit["executor_session"]["resume_reason"], "no_resume_declared")
         self.assertEqual(unit["executor_session"]["reference"], SID)
 
+
+class SessionPlanTests(unittest.TestCase):
+    @mock.patch("omh.coding.user_executors.USER_EXECUTOR_LAUNCH_SUPPORTED", True)
     def test_a_dry_run_plans_the_export_flag_and_launches_nothing(self):
         with TemporaryDirectory() as tmp:
             root = Path(tmp)

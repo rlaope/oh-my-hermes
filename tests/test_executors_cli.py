@@ -136,6 +136,7 @@ class ExecutorsCliTests(unittest.TestCase):
         rejected = {(entry["id"], entry["field"]): entry["reason"] for entry in listing["rejected"]}
         self.assertTrue(any(key[0] == "broken" for key in rejected), rejected)
 
+    @mock.patch("omh.coding.user_executors.USER_EXECUTOR_LAUNCH_SUPPORTED", True)
     def test_check_reports_not_installed_when_binary_absent(self) -> None:
         self.write_config(
             'schema_version = 1\n'
@@ -258,6 +259,7 @@ class ExecutorsCliTests(unittest.TestCase):
         }
         self.assertIn(("my-agent", "model", "cloud_refused"), rejected)
 
+    @mock.patch("omh.coding.user_executors.USER_EXECUTOR_LAUNCH_SUPPORTED", True)
     def test_project_scope_check_reads_the_operator_registry(self) -> None:
         # `check` must probe the same registry `list` showed, not the
         # checkout's: otherwise a project-scoped invocation reports a valid

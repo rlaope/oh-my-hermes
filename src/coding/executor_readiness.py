@@ -12,6 +12,7 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Any
 
+from . import user_executors
 from .fanout_confinement import external_search_path, named_launch_identity_holds, observe_named_launch
 from .fanout_executor_sessions import (
     SESSION_HELP_PROBE_BYTES,
@@ -674,6 +675,11 @@ def _user_executor_readiness(spec: object, *, dry_run: bool, environment: Mappin
         ],
         "claim_boundary": READINESS_BINARY_ONLY_CLAIM_BOUNDARY,
     }
+    if not user_executors.USER_EXECUTOR_LAUNCH_SUPPORTED:
+        contract.update({"status": "blocked", "available": False, "observed_once": False,
+                         "reason": user_executors.USER_EXECUTOR_PLATFORM_UNSUPPORTED,
+                         "summary": "External executors require macOS or Linux.", "next_action": "choose_executor"})
+        return contract
     if dry_run:
         contract.update({"status": "not_observed", "cache_status": "would_probe", "first_use_skipped": False})
         return contract
@@ -691,8 +697,6 @@ def _user_executor_readiness(spec: object, *, dry_run: bool, environment: Mappin
     source = os.environ if environment is None else environment
     repositories = tuple(root for root in (repo_root, find_project_root(Path.cwd())) if root is not None)
     env = {"PATH": external_search_path(source, binary=binary, repositories=repositories, write_roots=write_roots)}
-    if os.name == "nt" and "SystemRoot" in source:
-        env["SystemRoot"] = source["SystemRoot"]
     named = observe_named_launch(binary, env)
     identity = observe_session_binary(named.link_path, env=env) if named else None
     if (named is None or identity is None or not named_launch_identity_holds(named)

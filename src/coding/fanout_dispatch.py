@@ -54,6 +54,7 @@ from .fanout_executor_sessions import (
 )
 from .executor_readiness import negotiate_session_capability, observe_session_binary, session_launch_path
 from .executors import EXECUTOR_PROFILES, canonical_executor_profile
+from . import user_executors
 from .user_executors import ExecutorConfigError, ExecutorSpec, declares_cloud
 from .fanout_remote_pr import REFUSAL_REMOTE_PR_NOT_AVAILABLE
 from .fanout_capacity import (
@@ -1475,6 +1476,8 @@ def _unit_capability_precheck(
     if refusal:
         return declared_owner, None, [f"user_executor_binding_refused: {refusal}"]
     if declared_owner in executor_entries:
+        if not user_executors.USER_EXECUTOR_LAUNCH_SUPPORTED:
+            return declared_owner, None, [user_executors.USER_EXECUTOR_PLATFORM_UNSUPPORTED]
         # A user-declared executor is admitted by its argv spec, not by a
         # shipped capability snapshot: extension ids get no implicit native
         # skills, capabilities or model catalog (design §2/§4). Its argv and
@@ -2551,6 +2554,12 @@ def dispatch_fanout(
     units = preflight["units"]
     order = preflight["order"]
     selected = preflight["selected"]
+    capability_prechecks = preflight["capability_prechecks"]
+    invalid_units = preflight["invalid_selected"]
+    platform_reason = user_executors.USER_EXECUTOR_PLATFORM_UNSUPPORTED
+    if any(platform_reason in capability_prechecks[uid][2] for uid in invalid_units):
+        return _refused_dispatch_summary(contract, dry_run, base_sha, platform_reason,
+                                        "External executors require macOS or Linux.")
     # Before the catalog digest, discovery, readiness or any worktree: a unit
     # that asked for the remote lane is refused rather than quietly turned
     # into a local one. `None` leaves every ordinary dispatch untouched.
@@ -2566,8 +2575,6 @@ def dispatch_fanout(
     )
     if remote_pr_refusal is not None:
         return remote_pr_refusal
-    capability_prechecks = preflight["capability_prechecks"]
-    invalid_units = preflight["invalid_selected"]
     selected_capability_invalid = bool(invalid_units)
     capability_valid_units = [
         unit
@@ -4020,6 +4027,22 @@ def _remote_pr_refusal_summary(
     the parent run's observed telemetry.
     """
     return {
+        **_refused_dispatch_summary(contract, dry_run, base_sha, refusal.reason,
+                                   "dispatch refused: the opt-in remote PR lane is not implemented "
+                                   "pending a policy decision, so no cloud executor was launched and "
+                                   "no unit ran locally in its place"),
+        "remote_pr": {
+            "allow_remote_pr": bool(refusal.allow_remote_pr),
+            "declared_unit_ids": list(refusal.remote_pr_declared_unit_ids),
+            "refused_unit_ids": list(refusal.refused_unit_ids),
+            "claim_boundary": refusal.claim_boundary,
+        },
+    }
+
+
+def _refused_dispatch_summary(contract: Mapping[str, Any], dry_run: bool, base_sha: str,
+                             code: str, reason: str) -> dict[str, Any]:
+    return {
         "schema_version": FANOUT_DISPATCH_SCHEMA_VERSION,
         "fanout_id": contract.get("fanout_id", ""),
         "dry_run": dry_run,
@@ -4030,18 +4053,8 @@ def _remote_pr_refusal_summary(
         "recovery_available_units": [],
         "auto_merge": False,
         "refused": True,
-        "refusal_reason": refusal.reason,
-        "remote_pr": {
-            "allow_remote_pr": bool(refusal.allow_remote_pr),
-            "declared_unit_ids": list(refusal.remote_pr_declared_unit_ids),
-            "refused_unit_ids": list(refusal.refused_unit_ids),
-            "claim_boundary": refusal.claim_boundary,
-        },
-        "reason": (
-            "dispatch refused: the opt-in remote PR lane is not implemented "
-            "pending a policy decision, so no cloud executor was launched and "
-            "no unit ran locally in its place"
-        ),
+        "refusal_reason": code,
+        "reason": reason,
         "base_sha": base_sha,
         "claim_boundary": f"{DISPATCH_CLAIM_BOUNDARY} {FANOUT_CLAIM_BOUNDARY}",
     }
@@ -5097,6 +5110,9 @@ def _dispatch_unit(
             "reason": binding_refusal,
             "failure_kind": FAILURE_KIND_CAPABILITY_GATE,
         }
+    # Recovery can reach a unit without repeating the batch preflight.
+    if executor_spec is not None and not user_executors.USER_EXECUTOR_LAUNCH_SUPPORTED:
+        return _external_declaration_refusal(unit_id, run_ref, owner, user_executors.USER_EXECUTOR_PLATFORM_UNSUPPORTED)
     if executor_spec is not None and executor_spec.remote_pr:
         return _external_declaration_refusal(unit_id, run_ref, owner, REFUSAL_REMOTE_PR_NOT_AVAILABLE)
     launch_gate = launch_gate or OwnerLaunchGate()

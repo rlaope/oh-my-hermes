@@ -10,11 +10,16 @@ refuses anything this admission lets through that core would not run.
 
 from __future__ import annotations
 
+import os
 import re
 import stat
 import tomllib
 from pathlib import Path
 from typing import Final
+
+# Standalone mirror of the core launch gate; registry admission remains portable.
+USER_EXECUTOR_LAUNCH_SUPPORTED: Final = os.name == "posix"
+USER_EXECUTOR_PLATFORM_UNSUPPORTED: Final = "user_executor_platform_unsupported"
 
 EXECUTORS_FILE_PARTS: Final[tuple[str, str]] = ("routing", "executors.toml")
 USER_EXECUTORS_MAX_BYTES: Final[int] = 256 * 1024  # the same bound core reads with

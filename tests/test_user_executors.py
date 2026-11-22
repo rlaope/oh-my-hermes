@@ -430,7 +430,7 @@ class FileTrustTests(_HomeTestCase):
 
         self.assertEqual(self.reasons(self.load()), {"not_regular_file"})
 
-    @unittest.skipUnless(hasattr(os, "mkfifo"), "FIFOs are a POSIX feature")
+    @unittest.skipUnless(os.name == "posix", "external executor lane is POSIX only")
     def test_a_fifo_registry_never_blocks_the_reader(self) -> None:
         # A writer-less FIFO blocks in open(2) until somebody reads it. Listing
         # or dispatching must not wait there: the reader opens non-blocking,
@@ -836,7 +836,7 @@ class RenderUserArgvTests(unittest.TestCase):
                 "--model",
                 "swe-1.5",
                 "--export",
-                "/tmp/unit/session.json",
+                str(Path("/tmp/unit/session.json")),
                 "-r",
                 "devin-0123456789abcdef0123456789abcdef",
                 "--",

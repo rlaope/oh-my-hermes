@@ -35,6 +35,7 @@ def choose_configured(home, *owners: str) -> tuple[str, ...]:
 
 
 class ConfiguredOwnerTests(unittest.TestCase):
+    @mock.patch("omh.plugin_bundle.omh.user_owner_ids.USER_EXECUTOR_LAUNCH_SUPPORTED", True)
     def test_define_accepts_a_configured_owner_and_export_lists_its_nodes(self) -> None:
         with homes() as home:
             slots_table(home)
@@ -48,6 +49,27 @@ class ConfiguredOwnerTests(unittest.TestCase):
             exported = call(action="export", run="feat", owner="devin")
             self.assertEqual(exported["status"], "ok", exported)
             self.assertIn("api", json.dumps(exported), exported)
+
+    def test_platform_gate_matches_core_and_holds_chosen_nodes_without_export(self) -> None:
+        from omh.coding import user_executors
+        from omh.plugin_bundle.omh import user_owner_ids
+
+        self.assertEqual(user_owner_ids.USER_EXECUTOR_LAUNCH_SUPPORTED, user_executors.USER_EXECUTOR_LAUNCH_SUPPORTED)
+        with homes() as home, mock.patch.object(user_owner_ids, "USER_EXECUTOR_LAUNCH_SUPPORTED", False):
+            slots_table(home)
+            write_executors(home, "schema_version = 1\n" + DEVIN)
+            choose_configured(home, "devin", "codex")
+            defined = call(action="define", run="feat", nodes=[owned("api", "devin", scope=("api.py",)),
+                                                               owned("ui", "codex", scope=("ui.py",))])
+            self.assertEqual(defined["status"], "ok", defined)
+            refused = call(action="export", run="feat", owner="devin")
+            self.assertEqual(refused.get("reason"), "user_executor_platform_unsupported", refused)
+            ready = call(action="ready", run="feat")
+            self.assertEqual(ready["calls"], [])
+            self.assertEqual(next(n for n in ready["nodes"] if n["id"] == "api")["reason"],
+                             "user_executor_platform_unsupported")
+            self.assertEqual([row["owner"] for row in ready["exports"]], ["codex"])
+            self.assertEqual(call(action="export", run="feat", owner="codex")["status"], "ok")
 
     def test_an_unknown_owner_is_refused(self) -> None:
         with homes() as home:
@@ -134,6 +156,7 @@ class ConfiguredOwnerTests(unittest.TestCase):
             exported = call(action="export", run="feat", owner="devin")
             self.assertEqual(exported.get("status"), "refused", exported)
 
+    @mock.patch("omh.plugin_bundle.omh.user_owner_ids.USER_EXECUTOR_LAUNCH_SUPPORTED", True)
     def test_owner_restore_applies_only_to_the_next_tool_call(self) -> None:
         for action in ("ready", "status"):
             with self.subTest(action=action), homes() as home:

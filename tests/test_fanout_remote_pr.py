@@ -148,7 +148,7 @@ def _no_process() -> ExitStack:
     is an assertion rather than a stub.
     """
     def forbidden(*_args, **_kwargs):
-        raise AssertionError("a refused remote PR lane must not start a process")
+        raise AssertionError("a refused executor lane must not start a process")
 
     stack = ExitStack()
     targets = [
@@ -471,6 +471,8 @@ class DispatchRefusalTests(unittest.TestCase):
         repo, sha = _make_repo(root)
         return contract, repo, sha
 
+    # Exercise the remote-policy refusal even on a host that would stop at the platform gate.
+    @mock.patch("omh.coding.user_executors.USER_EXECUTOR_LAUNCH_SUPPORTED", True)
     def _run(
         self, paths: OmhPaths, contract: dict, repo: Path, sha: str, **kwargs
     ) -> dict:
@@ -564,6 +566,7 @@ class DispatchRefusalTests(unittest.TestCase):
         self.assertTrue(summary["dry_run"])
         self.assertEqual(summary["units"], [])
 
+    @unittest.skipUnless(os.name == "posix", "external executor lane is POSIX only")
     def test_an_unselected_remote_unit_does_not_refuse_the_batch(self) -> None:
         # The selection is the invocation's own scope: a unit that asked for
         # the lane but is not selected keeps the ordinary local path.
@@ -609,6 +612,7 @@ class DispatchRefusalTests(unittest.TestCase):
         self.assertEqual(units["core"]["status"], "completed", units["core"])
         self.assertEqual(units["cloud"]["status"], "not_selected", units["cloud"])
 
+    @unittest.skipUnless(os.name == "posix", "external executor lane is POSIX only")
     def test_a_local_batch_with_both_opt_ins_off_runs_as_before(self) -> None:
         with TemporaryDirectory() as tmp:
             root = Path(tmp)

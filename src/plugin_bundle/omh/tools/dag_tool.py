@@ -76,6 +76,7 @@ from ..hermes_delegation import effective_mixture_category_chains, load_model_pr
 from ..host_observation import host_session_id
 from ..host_process import process_alive
 from ..named_owner_choice import turn_owners
+from .. import user_owner_ids
 from ..user_owner_ids import configured_owner_ids
 from ..sqlite_readonly import connect_readonly
 from .lsp_nav_tool import _workspace_root
@@ -1260,8 +1261,9 @@ def dag_limits(hermes_home: Path) -> tuple[dag_run.Limits, tuple[str, ...]]:
 
 def _result(action: str, record: Mapping[str, Any], derived: Mapping[str, Mapping[str, Any]],
             shown: set[str] | None, *, say: str = "", extra: Mapping[str, Any] | None = None,
-            now: float | None = None, limits: dag_run.Limits = dag_run.DEFAULT_LIMITS, unavailable: Collection[str] = (),
-            ignored: tuple[str, ...] = (), spent: tuple[Path, list[dict[str, Any]]] | None = None) -> str:
+            now: float | None = None, limits: dag_run.Limits = dag_run.DEFAULT_LIMITS,
+            unavailable: Mapping[str, str] | None = None, ignored: tuple[str, ...] = (),
+            spent: tuple[Path, list[dict[str, Any]]] | None = None) -> str:
     """``spent`` is the Hermes home and the ledger children: with it, a finished run carries what its children
     used (`closing_usage`)."""
     now = time.time() if now is None else now
@@ -1282,8 +1284,8 @@ def _result(action: str, record: Mapping[str, Any], derived: Mapping[str, Mappin
         "claim_boundary": dag_run.DAG_CLAIM_BOUNDARY,
     }
     for row in payload["nodes"]:
-        if row["id"] in unavailable:
-            row["reason"] = "owner_unavailable"
+        if unavailable and row["id"] in unavailable:
+            row["reason"] = unavailable[row["id"]]
     criteria = dag_run.criteria_view(record, derived)
     if criteria is not None:
         payload["criteria"] = criteria
@@ -1412,12 +1414,12 @@ def _admitted_owners(record: Mapping[str, Any]) -> tuple[str, ...]:
 
 
 def _owner_exports(record: Mapping[str, Any], derived: Mapping[str, Mapping[str, Any]],
-                   offered: list[str], live: Collection[str]) -> tuple[list[dict[str, Any]], list[str], str]:
+                   offered: list[str], live: Collection[str]) -> tuple[list[dict[str, Any]], dict[str, str], str]:
     """Classify each offer once against this call's registry. Only unchosen owners may fall back to native."""
     chosen = owner_choices(record)
     nodes = {str(node["id"]): node for node in record["nodes"]}
     batches: dict[str, list[str]] = {}
-    unavailable = []
+    unavailable: dict[str, str] = {}
     notes = []
     for node_id in offered:
         node = nodes[node_id]
@@ -1425,9 +1427,12 @@ def _owner_exports(record: Mapping[str, Any], derived: Mapping[str, Mapping[str,
             continue
         owner = str(node["owner"])
         if owner in chosen and owner not in dag_run.EXTERNAL_OWNERS and owner not in live:
-            unavailable.append(node_id)
+            unavailable[node_id] = "owner_unavailable"
             notes.append(f"Node {node_id} names {owner}, which the operator file no longer declares: it is held "
                          "(owner_unavailable) until the owner is configured again; no delegate_task call is made.")
+        elif owner in chosen and owner in live and not user_owner_ids.USER_EXECUTOR_LAUNCH_SUPPORTED:
+            unavailable[node_id] = user_owner_ids.USER_EXECUTOR_PLATFORM_UNSUPPORTED
+            notes.append(f"Node {node_id} is held: external executor {owner} requires macOS or Linux.")
         elif derived[node_id]["state"] == "ready":
             if owner in chosen:
                 batches.setdefault(owner, []).append(node_id)
@@ -1528,6 +1533,9 @@ def _export(args: Mapping[str, object], record: dict[str, Any], path: Path,
             *dag_run.EXTERNAL_OWNERS, *live):
         raise dag_run.DagRefusal("invalid_owner", "Name a coding owner: a built-in one or an executor id in your "
                                                  "executors file.")
+    if owner in live and not user_owner_ids.USER_EXECUTOR_LAUNCH_SUPPORTED:
+        raise dag_run.DagRefusal(user_owner_ids.USER_EXECUTOR_PLATFORM_UNSUPPORTED,
+                                 "External executors require macOS or Linux.")
     if owner not in owner_choices(record):
         raise dag_run.DagRefusal(
             "owner_not_chosen",

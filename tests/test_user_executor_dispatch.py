@@ -381,6 +381,7 @@ class ReadinessTests(unittest.TestCase):
         )
         self.assertEqual(validate_progress_binding(binding), [])
 
+    @mock.patch("omh.coding.user_executors.USER_EXECUTOR_LAUNCH_SUPPORTED", True)
     def test_a_program_that_is_not_on_path_is_not_ready(self) -> None:
         with TemporaryDirectory() as tmp:
             paths = _home(Path(tmp), {"my-agent": ("my-agent", "")})
@@ -392,6 +393,7 @@ class ReadinessTests(unittest.TestCase):
         self.assertEqual(result["reason"], "not_installed")
         self.assertFalse(result["available"])
 
+    @unittest.skipUnless(os.name == "posix", "external executor lane is POSIX only")
     def test_the_declared_version_argv_is_probed_through_the_shim_path(self) -> None:
         with TemporaryDirectory() as tmp:
             root = Path(tmp)
@@ -408,6 +410,7 @@ class ReadinessTests(unittest.TestCase):
         self.assertIsNotNone(identity)
         self.assertEqual(identity.link_path, str(binaries / "my-agent"))
 
+    @unittest.skipUnless(os.name == "posix", "external executor lane is POSIX only")
     def test_a_failing_version_probe_is_blocked(self) -> None:
         with TemporaryDirectory() as tmp:
             root = Path(tmp)
@@ -456,6 +459,51 @@ class LaunchPathTests(unittest.TestCase):
             _bin_dir(Path(tmp), "my-agent", "commit")
             self.assertIsNone(observe_named_launch("my-agent", {"PATH": "."}))
             self.assertIsNone(observe_named_launch("my-agent", {"PATH": os.pathsep}))
+
+
+class PlatformGateTests(unittest.TestCase):
+    def test_external_dispatch_readiness_and_check_refuse_without_a_process(self):
+        from _cli_harness import run_cli
+        from test_fanout_remote_pr import _no_process
+        from omh.coding import user_executors
+        from omh.coding.fanout_dispatch import fanout_dispatch_preflight
+
+        reason = "user_executor_platform_unsupported"
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            paths = _home(root, {"my-agent": ("my-agent", "")})
+            user_executors.add_executor_preset(paths.omh_home, "devin")
+            registry = load_user_executors(paths.omh_home)
+            prefix = ["--omh-home", str(paths.omh_home), "coding"]
+            with mock.patch.object(user_executors, "USER_EXECUTOR_LAUNCH_SUPPORTED", False), _no_process():
+                for owner in ("my-agent", "devin"):
+                    with self.subTest(owner=owner):
+                        contract = build_fanout_contract(_GOAL, [_unit(owner)], registry=registry)
+                        dispatch = dispatch_fanout(paths, contract, goal_text=_GOAL, repo_root=root, base_sha="")
+                        self.assertTrue(dispatch["refused"])
+                        self.assertEqual(dispatch["refusal_reason"], reason)
+                        self.assertFalse((root.parent / f"{root.name}-fanout-core").exists())
+                        write_fanout_contract(paths, contract)
+                        code, out, err = run_cli(prefix + ["fanout", "dispatch", contract["fanout_id"],
+                                                           "--goal-file", "-"], stdin_text=_GOAL)
+                        self.assertNotEqual(code, 0, err)
+                        self.assertEqual(json.loads(out)["refusal_reason"], reason)
+                        readiness = probe_executor_readiness(paths, owner, force=True)
+                        self.assertEqual((readiness["status"], readiness["reason"]), ("blocked", reason))
+                        self.assertFalse(readiness["observed_once"])
+                        code, out, _ = run_cli(prefix + ["executors", "check", owner])
+                        self.assertNotEqual(code, 0)
+                        self.assertEqual(json.loads(out)["checked"][0]["reason"], reason)
+                        code, _, err = run_cli(prefix + ["run", "--owner", owner, "--goal", _GOAL])
+                        self.assertNotEqual(code, 0)
+                        self.assertIn(reason, err)
+                # Built-in owners still get their normal plan, not the external-lane refusal.
+                for owner in ("codex", "claude-code", "pi-family-runtime"):
+                    with self.subTest(owner=owner):
+                        contract = build_fanout_contract(_GOAL, [_unit(owner)])
+                        plan = fanout_dispatch_preflight(paths, contract)
+                        self.assertEqual(plan["invalid_selected"], [])
+                        self.assertEqual(plan["capability_prechecks"]["core"][0], owner)
 
 
 class DispatchGuardTests(unittest.TestCase):
@@ -520,6 +568,7 @@ class DispatchGuardTests(unittest.TestCase):
         self.assertNotEqual(code, 0)
         self.assertIn("unsupported executor readiness profile", err)
 
+    @mock.patch("omh.coding.user_executors.USER_EXECUTOR_LAUNCH_SUPPORTED", True)
     def test_dry_run_never_probes(self):
         with mock.patch("omh.coding.executor_readiness.bounded_session_probe",
                         return_value=(b"2.3.4", "observed")) as probe:
@@ -548,6 +597,7 @@ class DispatchGuardTests(unittest.TestCase):
         self.assertEqual(git("diff", "--name-only", base, "HEAD"), "ordinary.txt")
         self.assertEqual(_external_history_refusal(subprocess.run, self.repo, base), "")
 
+    @unittest.skipUnless(os.name == "posix", "external executor lane is POSIX only")
     def test_version_probe_excludes_checkout_and_sibling_lane(self):
         lane = self.repo.parent / "repo-fanout-other"
         lane.mkdir()
@@ -587,6 +637,7 @@ class DispatchGuardTests(unittest.TestCase):
         alias.symlink_to(self.repo, target_is_directory=True)
         self._assert_path_alias_excluded(alias)
 
+    @unittest.skipUnless(os.name == "posix", "external executor lane is POSIX only")
     def test_probe_ignores_a_link_routed_through_a_checkout(self):
         aliases = self.root / "aliases"
         aliases.mkdir()
@@ -598,6 +649,7 @@ class DispatchGuardTests(unittest.TestCase):
             self.dispatch()
         self.assertEqual(probe.call_args.args[0][0], str(self.bin / "my-agent"))
 
+    @mock.patch("omh.coding.user_executors.USER_EXECUTOR_LAUNCH_SUPPORTED", True)
     def test_file_prompt_dry_run_plans_path_without_allocation(self):
         self.config.write_text(self.config.read_text().replace("{prompt}", "{prompt_file}"))
         self.freeze()
@@ -636,12 +688,15 @@ class DispatchGuardTests(unittest.TestCase):
         self.assertEqual(calls, [("fixture-proof",)] if retry else [])
         self.assertEqual(result.get("reason_code"), "filesystem_confinement_unavailable")
 
+    @unittest.skipUnless(os.name == "posix", "external executor lane is POSIX only")
     def test_absent_fence_cannot_launch(self):
         self._check_lost_fence(0)
 
+    @unittest.skipUnless(os.name == "posix", "external executor lane is POSIX only")
     def test_lost_initial_fence_cannot_launch(self):
         self._check_lost_fence(1)
 
+    @unittest.skipUnless(os.name == "posix", "external executor lane is POSIX only")
     def test_lost_retry_fence_cannot_launch(self):
         self._check_lost_fence(100, retry=True)
 
@@ -666,6 +721,7 @@ class DispatchGuardTests(unittest.TestCase):
                 binding = dispatch.call_args.args[1]["handoff"].get("user_executor")
                 self.assertEqual(binding, external["handoff"]["user_executor"] if target == "my-agent" else None)
 
+    @mock.patch("omh.coding.user_executors.USER_EXECUTOR_LAUNCH_SUPPORTED", True)
     def test_cli_freeze_preflight_and_dispatch_use_one_registry_read(self):
         from _cli_harness import run_cli
 
@@ -687,6 +743,7 @@ class DispatchGuardTests(unittest.TestCase):
                 self.assertEqual(summary["units"][0]["status"], "dry_run_planned")
                 self.assertEqual(load.call_count, 1)
 
+    @unittest.skipUnless(os.name == "posix", "external executor lane is POSIX only")
     def test_one_registry_read_including_readiness(self):
         with mock.patch("omh.coding.user_executors.load_user_executors",
                         wraps=load_user_executors) as load, mock.patch(
@@ -727,6 +784,7 @@ class ExternalDispatchTests(unittest.TestCase):
     def _worktree(self, repo: Path) -> Path:
         return repo.parent / "repo-fanout-core"
 
+    @unittest.skipUnless(os.name == "posix", "external executor lane is POSIX only")
     def test_a_fake_cli_that_commits_completes_the_unit(self) -> None:
         with TemporaryDirectory() as tmp:
             paths, repo, sha, unit, _summary = self._dispatch(
@@ -741,6 +799,7 @@ class ExternalDispatchTests(unittest.TestCase):
             # The private scratch the dispatcher wrote is gone.
             self.assertEqual(list(worktree.glob(".omh-executor-tmp-*")), [])
 
+    @unittest.skipUnless(os.name == "posix", "external executor lane is POSIX only")
     def test_a_nonzero_exit_is_failed_even_with_confident_output(self) -> None:
         with TemporaryDirectory() as tmp:
             _paths, _repo, _sha, unit, _summary = self._dispatch(
@@ -750,6 +809,7 @@ class ExternalDispatchTests(unittest.TestCase):
         self.assertEqual(unit["exit_code"], 1)
         self.assertFalse(unit["process_succeeded"])
 
+    @unittest.skipUnless(os.name == "posix", "external executor lane is POSIX only")
     def test_exit_zero_without_a_commit_is_not_a_completed_edit(self) -> None:
         with TemporaryDirectory() as tmp:
             paths, repo, sha, unit, _summary = self._dispatch(
@@ -763,6 +823,7 @@ class ExternalDispatchTests(unittest.TestCase):
         self.assertFalse(unit["process_succeeded"])
         self.assertIn("no clean descendant commit", unit["reason"])
 
+    @unittest.skipUnless(os.name == "posix", "external executor lane is POSIX only")
     def test_a_prompt_file_declaration_receives_the_exact_prompt_privately(self) -> None:
         with TemporaryDirectory() as tmp:
             root = Path(tmp)

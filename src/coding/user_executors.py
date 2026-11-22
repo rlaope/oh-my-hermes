@@ -76,6 +76,9 @@ if TYPE_CHECKING:
     from ..system.paths import OmhPaths
 
 
+USER_EXECUTOR_LAUNCH_SUPPORTED: Final = os.name == "posix"
+USER_EXECUTOR_PLATFORM_UNSUPPORTED: Final = "user_executor_platform_unsupported"
+
 EXECUTORS_CONFIG_SCHEMA_VERSION: Final[int] = 1
 # Bounded read: a registry is a short list of argv vectors, so 256 KiB is
 # already far past any honest file, and a larger one is refused unread.
@@ -747,10 +750,14 @@ def _read_document(
     if _escapes_home(path, home):
         problems.append(("path", "path_escape"))
         return None
-    if path.is_symlink():
-        problems.append(("path", "symlink_refused"))
-        return None
     try:
+        before = os.lstat(path)
+        if stat.S_ISLNK(before.st_mode):
+            problems.append(("path", "symlink_refused"))
+            return None
+        if not stat.S_ISREG(before.st_mode):
+            problems.append(("path", "not_regular_file"))
+            return None
         # Non-blocking, so a writer-less FIFO at the path returns immediately
         # instead of hanging list/dispatch in open(2); `O_NOFOLLOW` keeps the
         # final component from being a link. `fstat` decides what it is before
@@ -766,7 +773,8 @@ def _read_document(
         return None
     try:
         info = os.fstat(fd)
-        if not stat.S_ISREG(info.st_mode):
+        # Without O_NOFOLLOW, only read the regular file identified by lstat.
+        if not stat.S_ISREG(info.st_mode) or not os.path.samestat(before, info):
             problems.append(("path", "not_regular_file"))
             return None
         if info.st_size > USER_EXECUTORS_MAX_BYTES:
