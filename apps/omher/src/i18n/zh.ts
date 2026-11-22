@@ -565,7 +565,7 @@ export const zh: Record<Key, string> = {
   "term.scrollback": "Scrollback",
   "term.scrollbackHint": "屏幕上方保留的行数。",
   "term.optionMeta": "Option 作为 Meta",
-  "term.optionMetaHint": "Option 会作为 Meta 发送给程序，可用 Option+B 和 Option+F 按单词移动。关闭后则输入该键对应的字符。",
+  "term.optionMetaHint": "Option 会作为 Meta 发送给程序，可用 Option+B 和 Option+F 按单词移动。关闭后则输入该键对应的字符。欧洲键盘布局上的 @ [ ] { } | 等符号始终会输入。",
   "term.gpu": "GPU renderer",
   "term.gpuHint": "“自动”在硬件支持时用 GPU 绘制，CLI 图案和边框不会出现缝隙，不可用时自行回退到标准方式。“关”始终使用标准方式。",
   "term.usingGpu": "当前使用：GPU",
