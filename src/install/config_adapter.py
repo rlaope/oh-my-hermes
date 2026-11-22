@@ -1351,10 +1351,38 @@ def references_top_level_section(line: str, section: str) -> bool:
 
 
 def _contains_potential_quoted_mapping_key(line: str) -> bool:
-    return (
-        re.match(r"""^\s*(?:\?\s*)?["']""", line) is not None
-        or re.search(r"""(?:^|[,{])\s*["']""", line) is not None
-    )
+    """Whether `line` uses a quoted scalar as a mapping key.
+
+    One is a key when a `:` follows its closing quote, outside the quotes, as
+    in `'k': v`, `- 'k': v` or `x: {"k": v}`; an explicit `? 'k'` is one too.
+    A quoted value or a flow sequence's quoted item (`['a', "b: c"]`), which
+    a `,`, `]` or the line's end follows, is not (#3075). A quoted scalar
+    after a `,` outside any flow collection is not YAML this editor reads,
+    and stays refused as main refused it. Quoted scalars are found with
+    `_quoted_scalar_close`, the module's one quote reader.
+    """
+    if re.match(r"""^\s*\?\s*["']""", line):
+        return True
+    depth = 0  # open `[` / `{` outside quotes
+    index = 0
+    while index < len(line):
+        char = line[index]
+        if char in "\"'" and (index == 0 or line[index - 1] in " \t,[{:-?"):
+            if not depth and line[:index].rstrip(" \t").endswith(","):
+                return True
+            close = _quoted_scalar_close(line[index + 1 :], char)
+            if close < 0:
+                return False  # a string running onto the next line: an implicit key never does
+            index += close + 2
+            if line[index:].lstrip(" \t").startswith(":"):
+                return True
+            continue
+        if char in "[{":
+            depth += 1
+        elif char in "]}" and depth:
+            depth -= 1
+        index += 1
+    return False
 
 
 def _contains_unsupported_yaml_node_syntax(line: str) -> bool:

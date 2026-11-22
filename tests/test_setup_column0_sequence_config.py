@@ -175,7 +175,13 @@ NODE_SYNTAX = {
     "anchor on a list item": "items:\n- &a v\n",
     "alias in a flow mapping": "x: {a: *b}\n",
     "quoted key": '"x": v\n',
+    "nested quoted key": "x:\n  'k': v\n",
+    "quoted key in a flow mapping": "x: {'k': v}\n",
+    "JSON-style key in a flow mapping": 'x: {"k":v}\n',
+    "quoted key of a list item": "items:\n- 'k': v\n",
 }
+# A flow sequence of quoted strings: none of them is a key.
+FLOW_QUOTED = ("x: ['a', 'b']\n", 'x: ["a", "b: c"]\n', "x: ['it''s', \"q\\\"x\"]\n")
 
 # Every section key with a comment on its line: one section each, edited in place.
 COMMENTED_HEADERS = (
@@ -539,6 +545,16 @@ class QuotedTextTest(unittest.TestCase):
         self.assertEqual(adapter.plugin_omh_home_setting(home.text), "/o")
         self.assertTrue(home.text.startswith(text), home.text)
 
+    def test_a_flow_sequence_of_quoted_strings_holds_no_key(self) -> None:
+        for shape in FLOW_QUOTED:
+            text = MODEL + shape
+            with self.subTest(shape=shape):
+                for section in SECTIONS:
+                    self.assertEqual(adapter.section_edit_guard(text.splitlines(), section), "", section)
+                home = adapter.ensure_plugin_omh_home(setup_writes(text), "/o")
+                self.assertTrue(home.changed, home.message)
+                self.assertTrue(home.text.startswith(text), home.text)
+
     def test_real_node_syntax_stays_refused(self) -> None:
         for name, shape in NODE_SYNTAX.items():
             text = MODEL + shape
@@ -745,6 +761,13 @@ class HermesAgreesTest(unittest.TestCase):
         for name in ("nested quoted value across lines", "quote after an anchor across lines",
                      "quote after a quoted key across lines"):
             self.assertNotIn("memory", hermes_load(REFUSED[name]), name)
+
+    def test_a_flow_sequence_of_quoted_strings_loads_as_a_list(self) -> None:
+        self.assertEqual([hermes_load(shape)["x"] for shape in FLOW_QUOTED],
+                         [["a", "b"], ["a", "b: c"], ["it's", 'q"x']])
+        for shape in FLOW_QUOTED:
+            written = adapter.ensure_plugin_omh_home(setup_writes(MODEL + shape), "/o").text
+            self.assertEqual(hermes_load(written)["plugins"]["entries"]["omh"]["settings"]["omh_home"], "/o")
 
     def test_the_quoted_text_loads_as_strings(self) -> None:
         loaded = hermes_load(MODEL + QUOTED_TEXT)

@@ -22,6 +22,10 @@ All notable changes will be documented here.
   would not write into, is refused only when there is something to write, so `omh update` on a registered install
   writes nothing, and `omh doctor` no longer fails the plugin check on an enabled install because of its envelope, and
   names a second document as such. A quoted string whose text looks like a tag, an anchor or an alias (`"say: !x"`,
+  `'a: &b'`) no longer keeps setup from recording `omh_home` or a compression chain; nor does a flow sequence of
+  quoted strings (`['a', 'b']`); a real one, a list item's included, and a quoted key still do. Reported by
+  @chhxbchhxb in #3075. (`src/install/config_adapter.py` `_root_is_plain_block_mapping`, `_section_node_is_sequence`,
+  `_block_header`, `_document_parts`, `_with_document_body`, `_scalar_continuations`, `_yaml_code`)
   `'a: &b'`) no longer keeps setup from recording `omh_home` or a compression chain; a real one, a list item's
   included, still does. Reported by @chhxbchhxb in #3075. (`src/install/config_adapter.py`
   `_root_is_plain_block_mapping`, `_section_node_is_sequence`, `_block_header`, `_document_parts`,
