@@ -4,25 +4,27 @@
 // with the terminal's background (so the U+10EEEE glyph never shows as tofu), then its slice of the picture, at the
 // screen's device pixels (sharp on a Retina display).
 import type { IBufferCell, IDisposable, Terminal } from "@xterm/xterm";
-import { PLACEHOLDER, PlaceholderStore, autoBox, decodeInPage, idFromColour, resolveRow, slice, type Decode } from "./kitty-placeholders";
+import { PLACEHOLDER, PlaceholderStore, autoBox, decodeInPage, idFromColour, resolveRow, slice, type AddonView, type Decode } from "./kitty-placeholders";
 
 export const LAYER_CLASS = "xterm-kitty-placeholder-layer";
 const MARK = String.fromCodePoint(PLACEHOLDER);
 
 export interface Placeholders {
   store: PlaceholderStore;
+  /** what goes with it (engine-image adds the add-on's eviction listener here) */
+  subs: IDisposable[];
   dispose(): void;
 }
 
 /** Starts taking virtual placements in `term` and painting their placeholders. Register AFTER the image add-on, so
  *  this handler is asked first (xterm asks the newest first) and the add-on still gets every other Kitty command. */
-export function attachPlaceholders(term: Terminal, decode: Decode = decodeInPage): Placeholders {
+export function attachPlaceholders(term: Terminal, decode: Decode = decodeInPage, addon?: AddonView): Placeholders {
   let frame = 0;
   let canvas: HTMLCanvasElement | null = null;
   const schedule = () => {
     if (!frame) frame = requestAnimationFrame(draw);
   };
-  const store = new PlaceholderStore(decode, schedule);
+  const store = new PlaceholderStore(decode, schedule, undefined, addon);
   const cell = (): IBufferCell | undefined => term.buffer.active.getNullCell();
 
   function layer(): CanvasRenderingContext2D | null {
@@ -99,11 +101,13 @@ export function attachPlaceholders(term: Terminal, decode: Decode = decodeInPage
   ];
   return {
     store,
+    subs,
     dispose() {
       for (const s of subs) s.dispose();
+      subs.length = 0;
       if (frame) cancelAnimationFrame(frame);
       frame = 0;
-      store.clear();
+      store.dispose();
       canvas?.remove();
       canvas = null;
     },

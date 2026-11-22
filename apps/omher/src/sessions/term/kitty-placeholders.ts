@@ -7,9 +7,17 @@
 // The APC `G` handler here takes ONLY transmissions with U=1 (and their `m=1` continuation chunks); every other
 // Kitty command falls through to the add-on (registered before this one, so this one runs first). Like the add-on it
 // refuses file, temp-file and shared-memory transfers (`t=f/t/s`): only bytes the program prints are drawn. Kept:
-// the decoded pictures, in this terminal's memory, within the same 32 MB budget per terminal (the oldest go first);
-// nothing is written to disk or sent anywhere, and nothing is replied to the program.
-import { IMAGE_SEQUENCE_BYTES, IMAGE_STORAGE_MB } from "./engine-image";
+// the decoded pictures, in this terminal's memory, within ONE 32 MB budget per terminal shared with the add-on's
+// pictures (the oldest virtual ones go first); nothing is written to disk or sent anywhere, and nothing is replied.
+// A picture is refused before it is decoded when its declared size (raw `s`×`v`, or the PNG header's width×height)
+// is over the add-on's pixel limit or what the add-on leaves of the budget; `o=z` is inflated as a stream that stops
+// at the byte limit.
+//
+// Supported subset: the combined form `a=T,U=1` (or `a=t,U=1`), and kitty's two-command form `a=t,i=<id>` (taken by
+// the add-on) then `a=p,U=1,i=<id>`, which reads the bytes the add-on kept for that id (through its internals,
+// checked for shape; where they are not there the placement goes to the add-on as before). Placement ids (`p=`) and
+// relative placements (`P=`/`Q=`) are not tracked: one placement per image id.
+import { IMAGE_SEQUENCE_BYTES, IMAGE_STORAGE_MB, PIXEL_LIMIT } from "./engine-image";
 
 /** The placeholder character. */
 export const PLACEHOLDER = 0x10eeee;
@@ -80,9 +88,36 @@ function b64(s: string): Uint8Array | null {
   }
 }
 
-async function inflate(bytes: Uint8Array): Promise<Uint8Array> {
-  const stream = new Blob([bytes as BlobPart]).stream().pipeThrough(new DecompressionStream("deflate"));
-  return new Uint8Array(await new Response(stream).arrayBuffer());
+/** zlib (`o=z`) inflated as a stream; null (and the stream cancelled) once the output passes `cap` bytes. */
+export async function inflate(bytes: Uint8Array, cap: number): Promise<Uint8Array | null> {
+  const reader = new Blob([bytes as BlobPart]).stream().pipeThrough(new DecompressionStream("deflate")).getReader();
+  const parts: Uint8Array[] = [];
+  let size = 0;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    size += value.length;
+    if (size > cap) {
+      void reader.cancel().catch(() => undefined);
+      return null;
+    }
+    parts.push(value);
+  }
+  const out = new Uint8Array(size);
+  let at = 0;
+  for (const p of parts) {
+    out.set(p, at);
+    at += p.length;
+  }
+  return out;
+}
+
+/** A PNG's width and height from its IHDR chunk, null when the bytes are not a PNG. */
+export function pngSize(b: Uint8Array): [number, number] | null {
+  const sig = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a];
+  if (b.length < 24 || sig.some((v, i) => b[i] !== v) || String.fromCharCode(b[12], b[13], b[14], b[15]) !== "IHDR") return null;
+  const v = new DataView(b.buffer, b.byteOffset, b.byteLength);
+  return [v.getUint32(16), v.getUint32(20)];
 }
 
 /** The browser's decoder: PNG through `createImageBitmap`, raw pixels through ImageData. */
@@ -106,17 +141,50 @@ interface Upload {
   refused: boolean;
 }
 
+/** What the image add-on kept for a Kitty id (`a=t` without U=1), as its own store holds it. */
+export interface Transmitted {
+  data: Blob;
+  width: number;
+  height: number;
+  format: 24 | 32 | 100;
+  compression?: string;
+}
+
+/** The store's view of the image add-on in the same terminal. */
+export interface AddonView {
+  /** bytes the add-on's decoded pictures take now: they come out of the same budget */
+  used(): number;
+  /** the bytes the add-on kept for a Kitty image id, or undefined (none, or its store is not readable) */
+  transmitted?(id: number): Transmitted | undefined;
+}
+
 /** One terminal's virtual images and the APC `G` handler that fills them. */
 export class PlaceholderStore {
   readonly images = new Map<number, VirtualImage>();
   private upload: Upload | null = null;
   private used = 0;
+  /** the newest decode in flight per id: a later transmit, a delete, clear or dispose takes it away */
+  private readonly inFlight = new Map<number, number>();
+  private ticket = 0;
+  private disposed = false;
 
   constructor(
     private readonly decode: Decode,
     private readonly changed: () => void = () => undefined,
     readonly budget = IMAGE_STORAGE_MB * 1_000_000,
+    private readonly addon: AddonView = { used: () => 0 },
   ) {}
+
+  /** What the add-on leaves of the budget for virtual pictures. */
+  private room(): number {
+    let other = 0;
+    try {
+      other = Math.max(0, this.addon.used());
+    } catch {
+      /* the add-on went first */
+    }
+    return this.budget - other;
+  }
 
   /** Bytes the decoded pictures take now (4 a pixel). */
   get usage(): number {
@@ -137,11 +205,13 @@ export class PlaceholderStore {
       }
       this.upload = null;
     }
+    if (this.disposed) return false;
     const a = ctrl.get("a") ?? "t";
     if (a === "d") {
       this.forget(ctrl);
       return false; // the add-on deletes its own as well
     }
+    if (a === "p" && ctrl.get("U") === "1") return this.place(ctrl);
     if (ctrl.get("U") !== "1" || (a !== "T" && a !== "t")) return false;
     const t = ctrl.get("t") ?? "d";
     const f = Number(ctrl.get("f") ?? 32);
@@ -160,40 +230,95 @@ export class PlaceholderStore {
     }
     if (more) return;
     this.upload = null;
-    if (!u.refused) void this.finish(u.ctrl, u.data.join(""));
+    if (u.refused) return;
+    const bytes = b64(u.data.join(""));
+    if (!bytes) return;
+    const f = Number(u.ctrl.get("f") ?? 32) as 24 | 32 | 100;
+    void this.finish(num(u.ctrl, "i"), () => Promise.resolve(bytes), { f, w: num(u.ctrl, "s"), h: num(u.ctrl, "v"), z: u.ctrl.get("o") === "z", cols: num(u.ctrl, "c"), rows: num(u.ctrl, "r") });
   }
 
-  private async finish(ctrl: Map<string, string>, data: string): Promise<void> {
+  /** `a=p,U=1,i=<id>`: a virtual placement of a picture sent before, ours (a new box) or the add-on's (`a=t`). False
+   *  when neither has it: the add-on answers as it always did. */
+  private place(ctrl: Map<string, string>): boolean {
     const id = num(ctrl, "i");
-    const f = Number(ctrl.get("f") ?? 32) as 24 | 32 | 100;
-    let bytes = b64(data);
-    if (!bytes) return;
+    if (!id) return false;
+    const cols = num(ctrl, "c");
+    const rows = num(ctrl, "r");
+    const mine = this.images.get(id);
+    if (mine) {
+      mine.cols = cols;
+      mine.rows = rows;
+      this.changed();
+      return true;
+    }
+    let t: Transmitted | undefined;
     try {
-      if (ctrl.get("o") === "z") bytes = await inflate(bytes);
-      const w = num(ctrl, "s");
-      const h = num(ctrl, "v");
-      if (f !== 100 && (!w || !h || bytes.length < w * h * (f / 8))) return;
-      const picture = await this.decode(bytes, f, w, h);
-      this.put({ id, picture, bytes: picture.width * picture.height * 4, cols: num(ctrl, "c"), rows: num(ctrl, "r") });
+      t = this.addon.transmitted?.(id);
+    } catch {
+      t = undefined;
+    }
+    if (!t || !(t.data instanceof Blob)) return false;
+    const data = t.data;
+    void this.finish(id, async () => new Uint8Array(await data.arrayBuffer()), { f: t.format, w: t.width, h: t.height, z: t.compression === "z", cols, rows });
+    return true;
+  }
+
+  /** Decodes one picture (refused before decoding when its declared size does not fit) and keeps it, unless a later
+   *  transmit, a delete, `clear` or `dispose` came while it was on its way: then it is closed and nothing is kept. */
+  private async finish(id: number, read: () => Promise<Uint8Array>, o: { f: 24 | 32 | 100; w: number; h: number; z: boolean; cols: number; rows: number }): Promise<void> {
+    const ticket = ++this.ticket;
+    this.inFlight.set(id, ticket);
+    const current = () => !this.disposed && this.inFlight.get(id) === ticket;
+    let picture: Picture | null = null;
+    try {
+      let bytes: Uint8Array | null = await read();
+      const raw = o.f !== 100;
+      const fits = (w: number, h: number) => w > 0 && h > 0 && w * h <= PIXEL_LIMIT && w * h * 4 <= this.room();
+      if (raw && !fits(o.w, o.h)) return;
+      if (o.z && current()) bytes = await inflate(bytes, raw ? o.w * o.h * (o.f / 8) : IMAGE_SEQUENCE_BYTES);
+      if (!bytes || !current()) return;
+      if (raw && bytes.length < o.w * o.h * (o.f / 8)) return;
+      if (!raw) {
+        const size = pngSize(bytes);
+        if (!size || !fits(size[0], size[1])) return;
+      }
+      picture = await this.decode(bytes, o.f, o.w, o.h);
+      if (!current()) return;
+      const kept = picture;
+      picture = null;
+      this.put({ id, picture: kept, bytes: kept.width * kept.height * 4, cols: o.cols, rows: o.rows });
     } catch {
       /* not a picture: nothing drawn */
+    } finally {
+      picture?.close?.();
+      if (this.inFlight.get(id) === ticket) this.inFlight.delete(id);
     }
   }
 
-  /** Keeps `img` (replacing the same id), dropping the oldest past the budget; one larger than it is refused. */
+  /** Keeps `img` (replacing the same id), dropping the oldest past the budget left by the add-on; one larger than
+   *  that is refused. */
   put(img: VirtualImage): void {
-    if (img.bytes > this.budget) {
+    if (this.disposed || img.bytes > this.room()) {
       img.picture.close?.();
       return;
     }
     this.drop(img.id);
     this.images.set(img.id, img);
     this.used += img.bytes;
-    for (const old of this.images.values()) {
-      if (this.used <= this.budget) break;
-      this.drop(old.id);
-    }
+    this.fit();
     this.changed();
+  }
+
+  /** Drops the oldest virtual pictures until they and the add-on's fit the budget (the add-on added one). */
+  fit(): void {
+    const room = this.room();
+    let dropped = false;
+    for (const old of [...this.images.values()]) {
+      if (this.used <= room) break;
+      this.drop(old.id);
+      dropped = true;
+    }
+    if (dropped) this.changed();
   }
 
   private drop(id: number): void {
@@ -207,16 +332,27 @@ export class PlaceholderStore {
   /** `a=d`: all (`d=a/A`, or none given) or one id (`d=i/I`). */
   private forget(ctrl: Map<string, string>): void {
     const d = (ctrl.get("d") ?? "a").toLowerCase();
-    if (d === "a") for (const id of [...this.images.keys()]) this.drop(id);
-    else if (d === "i") this.drop(num(ctrl, "i"));
-    else return;
+    if (d === "a") {
+      for (const id of [...this.images.keys()]) this.drop(id);
+      this.inFlight.clear();
+    } else if (d === "i") {
+      this.drop(num(ctrl, "i"));
+      this.inFlight.delete(num(ctrl, "i"));
+    } else return;
     this.changed();
   }
 
   /** Drops every picture (the terminal closes, or Show images goes off). */
   clear(): void {
     for (const id of [...this.images.keys()]) this.drop(id);
+    this.inFlight.clear();
     this.upload = null;
+  }
+
+  /** The terminal or its pictures went: everything is dropped, and a decode still on its way keeps nothing. */
+  dispose(): void {
+    this.disposed = true;
+    this.clear();
   }
 }
 
