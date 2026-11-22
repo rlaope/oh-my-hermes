@@ -5,7 +5,8 @@ from concurrent.futures import CancelledError as FuturesCancelledError
 from concurrent.futures import ThreadPoolExecutor
 from concurrent.futures import TimeoutError as FuturesTimeoutError
 from concurrent.futures import wait as futures_wait
-from hashlib import sha256
+from dataclasses import dataclass, replace
+from hashlib import sha1, sha256
 import json
 import os
 from pathlib import Path
@@ -21,7 +22,7 @@ import time
 from tempfile import TemporaryDirectory
 from uuid import uuid4
 from contextlib import ExitStack, nullcontext
-from typing import Any, BinaryIO, Callable, Iterable, Mapping, Sequence
+from typing import Any, BinaryIO, Callable, Collection, Iterable, Mapping, Sequence
 
 from ..runtime.artifacts import append_journal_observation, create_run, show_run
 from ..system.approval_tier import TIER_AUTO_ALLOWED, resolve_approval_tier
@@ -37,9 +38,25 @@ from ..system.local_store import (
 from ..system.security_posture import resolve_security_posture
 from ..system.metadata_safety import redact_metadata_text
 from .fanout_output import FanoutOutput
-from .fanout_executor_sessions import SessionBinding, SessionDecoder, bound_session_fields, observe_session_workspace, read_session_receipt
+from .fanout_executor_sessions import (
+    FILE_EXPORT_PROTOCOL,
+    FILE_EXPORT_REF,
+    SessionBinding,
+    SessionCapability,
+    SessionDecoder,
+    SessionReceipt,
+    WorkspaceSnapshot,
+    bound_session_fields,
+    build_file_export_receipt,
+    observe_session_export,
+    observe_session_workspace,
+    read_session_receipt,
+)
 from .executor_readiness import negotiate_session_capability, observe_session_binary, session_launch_path
-from .executors import canonical_executor_profile
+from .executors import EXECUTOR_PROFILES, canonical_executor_profile
+from . import user_executors
+from .user_executors import ExecutorConfigError, ExecutorSpec, declares_cloud
+from .fanout_remote_pr import REFUSAL_REMOTE_PR_NOT_AVAILABLE
 from .fanout_capacity import (
     AdmissionBinding, CapacityBlocked, CapacityTrip, CodexAdmissionObserver, CodexAdmissionSource, LaunchCallable,
     CODEX_ADMISSION_SUPPORT, CAPACITY_STATUSES, OwnerLaunchGate, capacity_fields,
@@ -49,7 +66,7 @@ from .fanout_artifacts import fanout_contract_digest
 from ..workflows.observation_journal import project_run_executor_session, read_observation_events
 from .fanout_failure_diagnostics import build_failure_diagnostic
 from ..workflows.observation_journal import project_run_failure_diagnostic
-from ..system.paths import OmhPaths
+from ..system.paths import OmhPaths, find_project_root
 from ._hermes_child_process import terminate_process_group
 from .action_gate import recheck_safety_profile_revision
 from .cause_recovery import attempt_conditions, limit_reset_text, plan_summary_line, recovery_plan
@@ -112,6 +129,9 @@ from .fanout_health_events import (
 )
 from .fanout_confinement import (
     FanoutFilesystemConfinement,
+    external_search_path,
+    observe_named_launch,
+    named_launch_identity_holds,
     confinement_receipt,
     dispatcher_git_environment,
     owner_state_directories,
@@ -330,6 +350,10 @@ def terminate_live_unit_groups(*, grace: float = UNIT_TERMINATE_GRACE_SECONDS) -
     return terminated
 
 
+class _ExternalFenceLost(Exception):
+    """A previously admitted external command no longer has its launch proof."""
+
+
 def signal_safe_unit_runner(
     argv: Sequence[str],
     *,
@@ -343,6 +367,7 @@ def signal_safe_unit_runner(
     on_spawn: Callable[[subprocess.Popen[bytes] | subprocess.Popen[str]], None] | None = None,
     on_output: Callable[[str], None] | None = None,
     confinement_command: Sequence[str] | None = None,
+    checked_command: Callable[[], Sequence[str]] | None = None,
     output_capture: FanoutOutput | None = None,
     launch: LaunchCallable | None = None,
 ) -> subprocess.CompletedProcess[bytes] | subprocess.CompletedProcess[str]:
@@ -372,7 +397,7 @@ def signal_safe_unit_runner(
     pipe = subprocess.PIPE if capture_output else None
     def spawn():
         return subprocess.Popen(
-            list(confinement_command or argv),
+            list(checked_command() if checked_command is not None else (confinement_command or argv)),
             cwd=cwd,
             env=dict(env) if env is not None else None,
             text=False if output_capture is not None else text,
@@ -949,6 +974,11 @@ def build_dispatch_argv(
 
     Without a model route the argv is byte-identical to the base template; a
     routed model/effort inserts the per-owner option fragments only.
+
+    The shipped tables are the only authority here, so codex, claude-code and
+    the pi family stay byte-identical. The signature stays (owner, prompt,
+    model_route): fixtures across the suite substitute this function. A
+    user-declared or preset executor renders through `build_user_executor_argv`.
     """
     if owner == "pi-family-runtime":
         host = pi_family_host()
@@ -981,6 +1011,228 @@ def build_dispatch_argv(
     if insert_at is None:
         return argv + options
     return argv[:insert_at] + options + argv[insert_at:]
+
+
+def build_user_executor_argv(
+    owner: str,
+    prompt: str,
+    model_route: Mapping[str, Any] | None = None,
+    *,
+    spec: object | None,
+    prompt_file: Path | None = None,
+    session_file: Path | None = None,
+    session_id: str | None = None,
+) -> list[str] | None:
+    """The spawn argv for a user-declared or preset executor.
+
+    `{prompt}` is one argv element whatever it contains; `{prompt_file}` names
+    the dispatcher-written file the caller prepared. A built-in owner never
+    renders here, so its argv cannot depend on the registry.
+
+    `None` still means unspawnable: a built-in owner with no template (hermes,
+    the runtimes, generic) and an owner with no loaded definition both keep
+    their prepared-prompt fallback. A spec answers only for its own id, so a
+    caller cannot hand one owner's definition to another.
+    """
+    if spec is None or str(getattr(spec, "id", "")) != owner:
+        return None
+    from .executors import EXECUTOR_PROFILES
+    from .user_executors import render_user_argv
+
+    if owner in EXECUTOR_PROFILES:
+        return None
+    route = model_route or {}
+    return render_user_argv(
+        spec,  # type: ignore[arg-type]
+        prompt=prompt,
+        prompt_file=prompt_file,
+        model=str(route.get("selected_model", "") or ""),
+        effort=str(route.get("selected_reasoning_effort", "") or ""),
+        session_file=session_file,
+        session_id=session_id,
+    )
+
+
+EXECUTOR_SCRATCH_PREFIX = ".omh-executor-tmp-"
+
+
+def _declared_session_export(spec: object | None) -> tuple[str, ...]:
+    """The `session.export` fragment an executor declared, or an empty tuple."""
+    return tuple(str(part) for part in (getattr(spec, "export", ()) or ()))
+
+
+def _declared_session_resume(spec: object | None) -> tuple[str, ...]:
+    """The `session.resume` fragment an executor declared, or an empty tuple."""
+    return tuple(str(part) for part in (getattr(spec, "resume", ()) or ()))
+
+
+def _plan_executor_resume(
+    *, owner: str, spec: object | None, repair: Mapping[str, Any] | None,
+    receipt: SessionReceipt | None, recovery_snapshot: str | None,
+    workspace: WorkspaceSnapshot | None, capability: SessionCapability | None,
+    fanout_id: str, unit_id: str, run_ref: str, contract_digest: str, base_sha: str,
+    foreign_references: frozenset[str],
+) -> tuple[str | None, str]:
+    """The id a budgeted repair may re-enter one session with, and the reason.
+
+    Only an explicit budgeted repair qualifies, and only against the receipt the
+    immediately preceding attempt recorded: same owner and frozen contract,
+    same fanout/unit/run/base, the same worktree incarnation at the very head
+    that receipt ended on, the same binary bytes, and a recovery state that the
+    dispatcher re-observed rather than assumed. An id another unit also claims
+    is ambiguous and is never reused. Anything short of that starts a FRESH
+    repair and says which check it failed, so a later reader is never told a
+    session continued when it did not.
+    """
+    if not _declared_session_resume(spec):
+        return None, "no_resume_declared"
+    if repair is None:
+        return None, "not_a_repair"
+    if receipt is None:
+        return None, "no_prior_receipt"
+    if receipt.capability.protocol != FILE_EXPORT_PROTOCOL:
+        return None, "not_user_export"
+    binding = receipt.binding
+    if (receipt.capability.executor != owner or binding.fanout_id != fanout_id
+            or binding.unit_id != unit_id or binding.run_ref != run_ref
+            or binding.contract_digest != contract_digest or binding.base_sha != base_sha):
+        return None, "binding_changed"
+    if receipt.reference is None:
+        return None, "no_id"
+    if receipt.reference in foreign_references:
+        return None, "duplicate_reference"
+    if receipt.end_head is None:
+        return None, "end_revision_not_observed"
+    if (workspace is None or workspace.path != binding.worktree_path
+            or workspace.incarnation != binding.worktree_incarnation
+            or workspace.head != receipt.end_head):
+        return None, "stale_workspace"
+    if (workspace.dirty or recovery_snapshot is not None) and (
+        recovery_snapshot is None or workspace.recovery_snapshot != recovery_snapshot
+    ):
+        return None, "recovery_snapshot_mismatch"
+    if capability is None or capability.binary_identity != receipt.capability.binary_identity:
+        return None, "binary_changed"
+    return receipt.reference, "same_session"
+
+
+@dataclass(frozen=True)
+class _ExecutorScratch:
+    path: Path
+    parent_fd: int
+    fd: int
+
+    def still_named(self) -> bool:
+        return os.path.samestat(os.fstat(self.fd), os.stat(
+            self.path.name, dir_fd=self.parent_fd, follow_symlinks=False))
+
+
+def _prepare_executor_scratch(worktree: Path, attempt_id: str, prompt: str) -> _ExecutorScratch | None:
+    """Exclusively allocate and pin the private exchange directory for this attempt."""
+    if not (getattr(os, "O_NOFOLLOW", 0) and getattr(os, "O_DIRECTORY", 0)
+            and os.open in os.supports_dir_fd and os.listdir in os.supports_fd
+            and shutil.rmtree.avoids_symlink_attacks):
+        return None
+    path = worktree / f"{EXECUTOR_SCRATCH_PREFIX}{attempt_id}"
+    flags = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW
+    try:
+        parent_fd = os.open(worktree, flags)
+    except OSError:
+        return None
+    try:
+        os.mkdir(path.name, mode=0o700, dir_fd=parent_fd)
+        fd = os.open(path.name, flags, dir_fd=parent_fd)
+    except OSError:
+        os.close(parent_fd)
+        return None  # Never clean a preexisting or substituted directory.
+    scratch = _ExecutorScratch(path, parent_fd, fd)
+    try:
+        for name, data in ((".gitignore", "*\n"), ("prompt.txt", prompt)):
+            file_fd = os.open(name, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600, dir_fd=fd)
+            with os.fdopen(file_fd, "wb") as stream:
+                stream.write(data.encode("utf-8"))
+    except OSError:
+        _remove_executor_scratch(scratch)
+        return None
+    return scratch
+
+
+def _remove_executor_scratch(scratch: _ExecutorScratch | None) -> None:
+    """Clean all entries through the original descriptor, never a replacement."""
+    if scratch is None:
+        return
+    try:
+        # Even after a rename, our original handle (not the new pathname)
+        # still owns the raw exchange and any backup copies in it.
+        os.fchmod(scratch.fd, 0o700)
+        for name in os.listdir(scratch.fd):
+            try:
+                os.unlink(name, dir_fd=scratch.fd)  # Links are unlinked, not followed.
+            except (IsADirectoryError, PermissionError):
+                shutil.rmtree(name, dir_fd=scratch.fd)  # fd-safe implementation required above.
+        if scratch.still_named():
+            os.rmdir(scratch.path.name, dir_fd=scratch.parent_fd)
+    except OSError:
+        pass  # May have disappeared; never try again by absolute pathname.
+    finally:
+        os.close(scratch.fd)
+        os.close(scratch.parent_fd)
+
+
+def _external_history_refusal(runner: Callable[..., Any], worktree: Path, base: str) -> str:
+    """Inspect each base..HEAD commit against all its parents, including merge parents."""
+    head = (_git_text(runner, worktree, ["git", "--no-lazy-fetch", "rev-parse", "HEAD"]) or "").strip()
+    oid = re.compile(r"[0-9a-f]{40}(?:[0-9a-f]{24})?")
+    if not all(oid.fullmatch(value) for value in (base, head)):
+        return "executor_history_unverified"
+    if _git_text(runner, worktree, ["git", "--no-lazy-fetch", "merge-base", "--is-ancestor", base, head]) is None:
+        return "executor_history_unverified"
+
+    pending, seen = [head], {base}
+    while pending:
+        commit = pending.pop()
+        if commit in seen:
+            continue
+        seen.add(commit)
+        # Stop at every ancestor of base, not just base itself: a merged
+        # branch can fork from older history. --independent returns only
+        # base exactly when the commit is already reachable from it.
+        tips = _git_text(runner, worktree, ["git", "--no-lazy-fetch", "merge-base", "--independent", base, commit])
+        if not tips:
+            return "executor_history_unverified"
+        if tips.strip() == base:
+            continue
+        parent_ids = _git_text(runner, worktree, ["git", "--no-lazy-fetch", "rev-parse", "--revs-only", f"{commit}^@"])
+        if parent_ids is None:
+            return "executor_history_unverified"
+        parents = parent_ids.splitlines()
+        if not all(oid.fullmatch(parent) for parent in parents):
+            return "executor_history_unverified"
+        pending.extend(parents)
+        if not parents:
+            # A merged, unrelated root adds its paths relative to Git's empty tree.
+            parents = [(sha1 if len(commit) == 40 else sha256)(b"tree 0\0", usedforsecurity=False).hexdigest()]
+        for parent in parents:
+            changed = _git_bytes(runner, worktree, ["git", "--no-lazy-fetch", "diff", "--name-only", "--no-renames",
+                                 "-z", parent, commit, "--", f":(top,glob)**/{EXECUTOR_SCRATCH_PREFIX}*",
+                                 f":(top,glob)**/{EXECUTOR_SCRATCH_PREFIX}*/**"])
+            if changed is None:
+                return "executor_history_unverified"
+            if changed:
+                return "executor_scratch_committed"
+    return ""
+
+
+def _dispatch_executor_entries(paths: OmhPaths, units: object, retarget: str = "") -> Mapping[str, ExecutorSpec]:
+    """One immutable snapshot across admission, recovery, readiness and launch."""
+    from .user_executors import load_user_executors, operator_executor_home
+
+    owners = {retarget}
+    if isinstance(units, list):
+        owners.update(str(unit.get("owner") or "choose") for unit in units if isinstance(unit, Mapping))
+    if not owners.difference((*EXECUTOR_PROFILES, "", "choose")):
+        return {}
+    return load_user_executors(operator_executor_home(paths=paths)).entries
 
 
 def with_codex_windows_sandbox(argv: list[str] | None, owner: str, backend: str) -> list[str] | None:
@@ -1201,7 +1453,10 @@ def _unit_capability_precheck(
     unit: Mapping[str, Any],
     *,
     contract_schema_version: str,
+    executor_entries: Mapping[str, ExecutorSpec] | None = None,
 ) -> tuple[str, dict[str, Any] | None, list[str]]:
+    # No snapshot means no configured executor: a unit bound to one is refused.
+    executor_entries = executor_entries or {}
     declared_owner = str(unit.get("owner") or "choose")
     current_owner = canonical_executor_profile(declared_owner)
     if current_owner != declared_owner:
@@ -1216,6 +1471,18 @@ def _unit_capability_precheck(
     if handoff_owner != declared_owner:
         return declared_owner, None, ["unit owner does not match the handoff owner"]
     if declared_owner == "choose":
+        return declared_owner, {}, []
+    refusal = _user_executor_binding_refusal(unit, executor_entries.get(declared_owner))
+    if refusal:
+        return declared_owner, None, [f"user_executor_binding_refused: {refusal}"]
+    if declared_owner in executor_entries:
+        if not user_executors.USER_EXECUTOR_LAUNCH_SUPPORTED:
+            return declared_owner, None, [user_executors.USER_EXECUTOR_PLATFORM_UNSUPPORTED]
+        # A user-declared executor is admitted by its argv spec, not by a
+        # shipped capability snapshot: extension ids get no implicit native
+        # skills, capabilities or model catalog (design §2/§4). Its argv and
+        # declared version probe are checked when the unit launches, and the
+        # result is still judged from git heads, never the CLI's own output.
         return declared_owner, {}, []
     if (
         contract_schema_version == FANOUT_CONTRACT_SCHEMA_VERSION
@@ -1261,6 +1528,7 @@ def fanout_dispatch_preflight(
     *,
     only_units: Sequence[str] | None = None,
     goal_text: str | None = None,
+    executor_entries: Mapping[str, ExecutorSpec] | None = None,
     live_safety_profile_revision: str | None = None,
 ) -> dict[str, Any]:
     """Validate persisted dispatch identity before any local tool activity."""
@@ -1305,11 +1573,14 @@ def fanout_dispatch_preflight(
             "selected fanout units are not in the contract: "
             + ", ".join(unknown_selected)
         )
+    if executor_entries is None:
+        executor_entries = _dispatch_executor_entries(paths, raw_units)
     capability_prechecks = {
         unit_id: _unit_capability_precheck(
             paths,
             unit,
             contract_schema_version=schema_version,
+            executor_entries=executor_entries,
         )
         for unit_id, unit in units.items()
     }
@@ -2225,6 +2496,12 @@ def dispatch_fanout(
     # The operator's explicit consent to run a unit, and its checks, with no
     # proven write fence. Off, such a unit is refused before it spawns (#1982).
     allow_unconfined: bool = False,
+    # The invocation half of the remote PR lane's double opt-in. It is plumbed
+    # now and refused immediately: the lane needs a dispatcher network git
+    # fetch that no approved policy covers, so every non-local combination
+    # stops here with `remote_pr_not_available` instead of a local fallback.
+    allow_remote_pr: bool = False,
+    executor_entries: Mapping[str, ExecutorSpec] | None = None,
 ) -> dict[str, Any]:
     # The spawn guard runs before every other check, including the two
     # boundary re-checks below: it is the only one whose whole job is that no
@@ -2264,10 +2541,13 @@ def dispatch_fanout(
     # contract whose goal or safety profile no longer matches the live state.
     verify_goal_matches_contract(contract, goal_text)
     verify_safety_profile_matches_contract(contract, live_safety_profile_revision)
+    if executor_entries is None:
+        executor_entries = _dispatch_executor_entries(paths, contract.get("units"), retarget_owner)
     preflight = fanout_dispatch_preflight(
         paths,
         contract,
         only_units=only_units,
+        executor_entries=executor_entries,
         goal_text=goal_text,
         live_safety_profile_revision=live_safety_profile_revision,
     )
@@ -2276,6 +2556,25 @@ def dispatch_fanout(
     selected = preflight["selected"]
     capability_prechecks = preflight["capability_prechecks"]
     invalid_units = preflight["invalid_selected"]
+    platform_reason = user_executors.USER_EXECUTOR_PLATFORM_UNSUPPORTED
+    if any(platform_reason in capability_prechecks[uid][2] for uid in invalid_units):
+        return _refused_dispatch_summary(contract, dry_run, base_sha, platform_reason,
+                                        "External executors require macOS or Linux.")
+    # Before the catalog digest, discovery, readiness or any worktree: a unit
+    # that asked for the remote lane is refused rather than quietly turned
+    # into a local one. `None` leaves every ordinary dispatch untouched.
+    remote_pr_refusal = _remote_pr_lane_refusal(
+        executor_entries,
+        contract,
+        units,
+        order,
+        selected,
+        allow_remote_pr=allow_remote_pr,
+        dry_run=dry_run,
+        base_sha=base_sha,
+    )
+    if remote_pr_refusal is not None:
+        return remote_pr_refusal
     selected_capability_invalid = bool(invalid_units)
     capability_valid_units = [
         unit
@@ -2490,6 +2789,7 @@ def dispatch_fanout(
     # through exactly the arguments the pool used, rather than a second
     # hand-maintained copy of them that would drift on the next new parameter.
     unit_dispatch_kwargs: dict[str, Any] = {
+        "executor_entries": executor_entries,
         "goal_text": goal_text,
         "repo_root": repo_root,
         "base_sha": base_sha,
@@ -3184,7 +3484,7 @@ def _report_recovery_options(
 
 
 def _capability_refusal_status(errors: Sequence[str]) -> str:
-    for status in (*FAIL_CLOSED_VERDICTS, OWNER_PROFILE_RENAMED):
+    for status in (*FAIL_CLOSED_VERDICTS, OWNER_PROFILE_RENAMED, "user_executor_binding_refused"):
         if any(str(error).startswith(f"{status}:") for error in errors):
             return status
     return "capability_snapshot_invalid"
@@ -3256,6 +3556,10 @@ def _retarget_dispatch(
             "reason": str(exc),
         }
     handoff = dict(unit.get("handoff") or {})
+    handoff.pop("user_executor", None)
+    entry = unit_dispatch_kwargs.get("executor_entries", {}).get(new_owner)
+    if entry is not None:
+        handoff["user_executor"] = {"id": entry.id, "definition_sha256": entry.definition_sha256}
     handoff["executor_target"] = new_owner
     handoff["executor_capability_snapshot"] = snapshot
     handoff["executor_capability_snapshot_policy"] = "frozen_required"
@@ -3662,6 +3966,97 @@ def _commit_recovery_edits(
         "head_sha": head.strip(),
         "paths": shown(committed),
         "left_uncommitted": shown(outside),
+    }
+
+
+def _remote_pr_lane_refusal(
+    executor_entries: Mapping[str, ExecutorSpec],
+    contract: Mapping[str, Any],
+    units: Mapping[str, Mapping[str, Any]],
+    order: Sequence[str],
+    selected: Collection[str],
+    *,
+    allow_remote_pr: bool,
+    dry_run: bool,
+    base_sha: str,
+) -> dict[str, Any] | None:
+    """The refusal for a selected batch that asked for the remote PR lane.
+
+    The lane is not implemented: importing a PR head needs a dispatcher network
+    `git fetch`, and INVARIANT 3 has no approved exception for one. So a unit
+    whose owner entry declares `remote_pr`, and any invocation that passed
+    `--allow-remote-pr`, is refused here -- before discovery, readiness, a
+    worktree or a child -- with the closed reason the module names. Local lanes
+    are untouched: `None` means every selected unit runs exactly as before.
+
+    The registry is read at most once and only when it can matter: a batch of
+    built-ins with no flag cannot opt in, so an ordinary dispatch reads no
+    operator config at all. Reading it spawns and probes nothing.
+    """
+    from .fanout_remote_pr import plan_remote_pr_dispatch
+
+    selected_ids = [unit_id for unit_id in order if unit_id in selected]
+    owners = {
+        unit_id: str(units[unit_id].get("owner") or "choose")
+        for unit_id in selected_ids
+    }
+    declared = {unit_id: bool(owner in executor_entries and executor_entries[owner].remote_pr)
+                for unit_id, owner in owners.items()}
+    refusal = plan_remote_pr_dispatch(
+        entry_remote_pr_by_unit=declared, allow_remote_pr=allow_remote_pr
+    )
+    if refusal is None:
+        return None
+    return _remote_pr_refusal_summary(
+        contract, refusal=refusal, dry_run=dry_run, base_sha=base_sha
+    )
+
+
+def _remote_pr_refusal_summary(
+    contract: Mapping[str, Any],
+    *,
+    refusal: Any,
+    dry_run: bool,
+    base_sha: str,
+) -> dict[str, Any]:
+    """A refused dispatch summary: the same shape, an empty `units` list.
+
+    Shaped like `_depth_refusal_summary` so a wrapper parses one schema either
+    way, with the closed `refusal_reason` and the unit ids that asked. Never
+    persisted for the same reason: nothing ran, and a blank summary would erase
+    the parent run's observed telemetry.
+    """
+    return {
+        **_refused_dispatch_summary(contract, dry_run, base_sha, refusal.reason,
+                                   "dispatch refused: the opt-in remote PR lane is not implemented "
+                                   "pending a policy decision, so no cloud executor was launched and "
+                                   "no unit ran locally in its place"),
+        "remote_pr": {
+            "allow_remote_pr": bool(refusal.allow_remote_pr),
+            "declared_unit_ids": list(refusal.remote_pr_declared_unit_ids),
+            "refused_unit_ids": list(refusal.refused_unit_ids),
+            "claim_boundary": refusal.claim_boundary,
+        },
+    }
+
+
+def _refused_dispatch_summary(contract: Mapping[str, Any], dry_run: bool, base_sha: str,
+                             code: str, reason: str) -> dict[str, Any]:
+    return {
+        "schema_version": FANOUT_DISPATCH_SCHEMA_VERSION,
+        "fanout_id": contract.get("fanout_id", ""),
+        "dry_run": dry_run,
+        "observed_at": utc_now(),
+        "merge_order": [],
+        "units": [],
+        "integration_ready_units": [],
+        "recovery_available_units": [],
+        "auto_merge": False,
+        "refused": True,
+        "refusal_reason": code,
+        "reason": reason,
+        "base_sha": base_sha,
+        "claim_boundary": f"{DISPATCH_CLAIM_BOUNDARY} {FANOUT_CLAIM_BOUNDARY}",
     }
 
 
@@ -4096,6 +4491,7 @@ def _open_fanout_progress_binding(
     routed_model: str,
     routed_effort: str,
     title: str,
+    external: bool = False,
 ) -> dict[str, Any] | None:
     """Best-effort: open and report the initial live row for one dispatched unit.
 
@@ -4103,9 +4499,16 @@ def _open_fanout_progress_binding(
     caller's later pid/close calls become no-ops rather than every dispatch
     growing a try/except of its own -- observability must never fail a
     dispatch, the same rule `_write_inflight` already holds for markers.
+
+    `external` maps a user-declared executor to its tagged progress dialect
+    (`external.<id>`, design §2). The tag is written by the dispatcher only;
+    a history reader accepts the tagged grammar without loading executable
+    config, and no external owner is given a native usage decoder.
     """
     try:
-        profile = normalize_executor_profile(owner)
+        profile = normalize_executor_profile(
+            f"external.{owner}" if external else owner
+        )
     except ExecutorProgressError:
         return None
     try:
@@ -4587,6 +4990,43 @@ def _with_repair_record(
     return result
 
 
+def _external_declaration_refusal(unit_id: str, run_ref: str, owner: str, reason: str) -> dict[str, Any]:
+    return {"unit_id": unit_id, "run_ref": run_ref, "owner": owner,
+            "status": "executor_declaration_refused", "reason": reason,
+            "failure_kind": FAILURE_KIND_CAPABILITY_GATE, **_dispatch_status_ladder()}
+
+
+def _user_executor_binding_refusal(unit: Mapping[str, Any], spec: object | None) -> str:
+    """Why this unit's frozen user-executor binding no longer admits a spawn, or "".
+
+    The contract froze the id and the definition digest. This invocation read
+    the registry once; a changed, renamed or removed definition is refused
+    before any probe or child, with re-freeze as the only recovery -- never a
+    silent fall-back to a prompt, a different entry, or a mid-wave reload.
+    """
+    handoff = unit.get("handoff")
+    binding = handoff.get("user_executor") if isinstance(handoff, Mapping) else None
+    if binding is None:
+        return ("missing frozen user executor binding; re-freeze the contract"
+                if unit.get("owner") not in (*EXECUTOR_PROFILES, "choose", None) else "")
+    if not isinstance(binding, Mapping):
+        return "the frozen user executor binding is malformed"
+    owner = str(unit.get("owner") or "")
+    if str(binding.get("id", "")) != owner:
+        return (
+            f"the frozen user executor binding names {binding.get('id')!r}, not {owner!r}; "
+            "re-freeze the contract"
+        )
+    if spec is None:
+        return f"user executor {owner!r} is not configured in this OMH home; re-freeze or re-add it"
+    if str(binding.get("definition_sha256", "")) != str(getattr(spec, "definition_sha256", "")):
+        return (
+            f"user executor {owner!r} changed since the contract was frozen; "
+            "re-freeze the units to record the current definition"
+        )
+    return ""
+
+
 def _dispatch_unit(
     paths: OmhPaths,
     unit: Mapping[str, Any],
@@ -4626,6 +5066,7 @@ def _dispatch_unit(
     capacity_sources: Sequence[CodexAdmissionSource] | None = None,
     capacity_resume_rows: Mapping[str, Mapping[str, object]] | None = None,
     repair: Mapping[str, Any] | None = None,
+    executor_entries: Mapping[str, ExecutorSpec] | None = None,
 ) -> dict[str, Any]:
     if intake_root is None:
         # One owner for all return inputs, including exceptions and refusals.
@@ -4649,12 +5090,31 @@ def _dispatch_unit(
                 invocation_id=invocation_id or str(uuid4()), intake_root=Path(directory),
                 session_contract_digest=session_contract_digest,
                 launch_gate=launch_gate, capacity_sources=capacity_sources,
-                capacity_resume_rows=capacity_resume_rows, repair=repair)
+                capacity_resume_rows=capacity_resume_rows, repair=repair, executor_entries=executor_entries)
     from .model_inventory import catalog_fingerprint_note
 
     unit_id = str(unit["unit_id"])
     run_ref = str(unit.get("run_ref", unit_id))
     owner, capability_snapshot, capability_errors = capability_precheck
+    if executor_entries is None:  # A standalone repair invocation, not a batch worker.
+        executor_entries = _dispatch_executor_entries(paths, [unit])
+    executor_spec = executor_entries.get(owner)
+    binding_refusal = _user_executor_binding_refusal(unit, executor_spec)
+    if binding_refusal:
+        return {
+            "unit_id": unit_id,
+            "run_ref": run_ref,
+            "owner": owner,
+            "status": "user_executor_binding_refused",
+            **_dispatch_status_ladder(),
+            "reason": binding_refusal,
+            "failure_kind": FAILURE_KIND_CAPABILITY_GATE,
+        }
+    # Recovery can reach a unit without repeating the batch preflight.
+    if executor_spec is not None and not user_executors.USER_EXECUTOR_LAUNCH_SUPPORTED:
+        return _external_declaration_refusal(unit_id, run_ref, owner, user_executors.USER_EXECUTOR_PLATFORM_UNSUPPORTED)
+    if executor_spec is not None and executor_spec.remote_pr:
+        return _external_declaration_refusal(unit_id, run_ref, owner, REFUSAL_REMOTE_PR_NOT_AVAILABLE)
     launch_gate = launch_gate or OwnerLaunchGate()
     blocked = launch_gate.rejection(owner)
     if blocked is not None and not dry_run:
@@ -4691,7 +5151,7 @@ def _dispatch_unit(
                 "declared model or resolvable role, then re-dispatch"
             ),
         }
-    if DISPATCH_COMMAND_TEMPLATES.get(owner) is None:
+    if DISPATCH_COMMAND_TEMPLATES.get(owner) is None and executor_spec is None:
         return {
             "unit_id": unit_id,
             "run_ref": run_ref,
@@ -4725,50 +5185,73 @@ def _dispatch_unit(
                 },
                 "repair_card": cooldown["repair_card"],
             }
-    probe = readiness(paths, owner)
+    launch_identity = None
+    if executor_spec is not None and not dry_run:
+        source_env = os.environ if base_env is None else base_env
+        repos = tuple(root for root in (repo_root, find_project_root(Path.cwd())) if root is not None)
+        write_roots = (intake_root, *(
+            root for profile in DISPATCH_COMMAND_TEMPLATES
+            for root in owner_state_directories(profile, source_env)))
+        base_env = {**source_env, "PATH": external_search_path(
+            source_env, binary=executor_spec.argv[0], repositories=repos, write_roots=write_roots)}
+        launch_identity = observe_named_launch(executor_spec.argv[0], base_env)
     readiness_observation: dict[str, str] = {}
-    pre_handoff = probe.get("pre_handoff_readiness")
-    if (probe.get("status") == "stale" and isinstance(pre_handoff, Mapping)
-            and pre_handoff.get("changed_axes") == ["workspace"]):
-        # The cached observation is binary_version_only: it never vouched for
-        # a workspace. Dispatch runs workspace_preflight in the unit's own
-        # isolation before spawning, so reobserve only this moved-workspace
-        # decision once; every other invalidation still needs its repair card.
-        probe = readiness(paths, owner, force=True)
-        readiness_observation["readiness_reobserved"] = "workspace"
-    if str(probe.get("status", "")) != "ready":
-        # The pre-handoff recheck (#837) can turn a once-ready owner into
-        # `stale` right here. Carrying its repair card through means the unit
-        # result names the prerequisite that moved and the command that
-        # confirms it, instead of only reporting that the owner was not ready.
-        not_ready: dict[str, Any] = {
-            "unit_id": unit_id,
-            "run_ref": run_ref,
-            "owner": owner,
-            "status": "executor_not_ready",
-            "readiness_status": str(probe.get("status", "unknown")),
-            **readiness_observation,
-            **_dispatch_status_ladder(),
-        }
-        # The unit never spawned, so a live dispatch carries the failure
-        # signal the exit mapper reads (#2029); a dry run keeps its exit code.
-        # An owner CLI that is absent is the binary_missing kind; any other
-        # readiness status has no process to classify, and its repair card
-        # (below) names the prerequisite that actually moved.
-        if not dry_run:
-            not_ready["failure_kind"] = (
-                FAILURE_KIND_BINARY_MISSING if str(probe.get("status", "")) == "missing" else FAILURE_KIND_CRASH
-            )
-        repair_card = probe.get("repair_card")
-        if isinstance(repair_card, Mapping):
-            not_ready["repair_card"] = dict(repair_card)
-        if dry_run:
-            not_ready["filesystem_confinement"] = planned_fanout_filesystem_confinement(
-                _worktree_path(repo_root, unit_id),
-                owner=owner,
-                environment=os.environ if base_env is None else base_env,
-            )
-        return not_ready
+
+    def readiness_refusal() -> dict[str, Any] | None:
+        if executor_spec is not None:
+            # A plan makes no observation at all, even through an injected probe.
+            if dry_run:
+                return None
+            probe = readiness(paths, owner, executor_spec=executor_spec, probe_environment=base_env,
+                              repo_root=repo_root, write_roots=(intake_root,))
+        else:
+            probe = readiness(paths, owner)
+        pre_handoff = probe.get("pre_handoff_readiness")
+        if (executor_spec is None and probe.get("status") == "stale" and isinstance(pre_handoff, Mapping)
+                and pre_handoff.get("changed_axes") == ["workspace"]):
+            # The cached observation is binary_version_only: it never vouched for
+            # a workspace. Dispatch runs workspace_preflight in the unit's own
+            # isolation before spawning, so reobserve only this moved-workspace
+            # decision once; every other invalidation still needs its repair card.
+            probe = readiness(paths, owner, force=True)
+            readiness_observation["readiness_reobserved"] = "workspace"
+        if str(probe.get("status", "")) != "ready":
+            # The pre-handoff recheck (#837) can turn a once-ready owner into
+            # `stale` right here. Carrying its repair card through means the unit
+            # result names the prerequisite that moved and the command that
+            # confirms it, instead of only reporting that the owner was not ready.
+            not_ready: dict[str, Any] = {
+                "unit_id": unit_id,
+                "run_ref": run_ref,
+                "owner": owner,
+                "status": "executor_not_ready",
+                "readiness_status": str(probe.get("status", "unknown")),
+                **readiness_observation,
+                **_dispatch_status_ladder(),
+            }
+            # The unit never spawned, so a live dispatch carries the failure
+            # signal the exit mapper reads (#2029); a dry run keeps its exit code.
+            # An owner CLI that is absent is the binary_missing kind; any other
+            # readiness status has no process to classify, and its repair card
+            # (below) names the prerequisite that actually moved.
+            if not dry_run:
+                not_ready["failure_kind"] = (
+                    FAILURE_KIND_BINARY_MISSING if str(probe.get("status", "")) == "missing" else FAILURE_KIND_CRASH
+                )
+            repair_card = probe.get("repair_card")
+            if isinstance(repair_card, Mapping):
+                not_ready["repair_card"] = dict(repair_card)
+            if dry_run:
+                not_ready["filesystem_confinement"] = planned_fanout_filesystem_confinement(
+                    _worktree_path(repo_root, unit_id),
+                    owner=owner,
+                    environment=os.environ if base_env is None else base_env,
+                )
+            return not_ready
+        return None
+
+    if executor_spec is None and (refusal := readiness_refusal()) is not None:
+        return refusal
     discovery = (discoveries or {}).get(owner)
     attempt_id = str(uuid4())
     sidecar_path = intake_root / f"{attempt_id}.json" if fanout_id else None
@@ -4813,10 +5296,71 @@ def _dispatch_unit(
     # without it native-Windows Codex runs read-only (#2471).
     codex_sandbox_backend = stored_codex_windows_sandbox(paths.omh_home) if owner == "codex" else ""
 
-    def dispatch_argv() -> list[str] | None:
-        command = with_codex_windows_sandbox(
-            build_dispatch_argv(owner, prompt, effective_model_route), owner, codex_sandbox_backend
-        )
+    # Dispatcher-owned scratch for an external executor's file transport, and
+    # the closed reason when its declaration cannot be rendered. Both are
+    # per-attempt: the scratch directory is created after this attempt's
+    # worktree exists and removed before any result or cleanliness check.
+    executor_prompt_file: dict[str, object] = {"path": None}
+    # A declared `session.export` fragment names a file in the same scratch
+    # dir. `executor_resume` holds the id ONE repair attempt may re-enter, the
+    # closed reason it does or does not have one, and whether it was spent.
+    executor_session_file: dict[str, object] = {"path": None}
+    executor_resume: dict[str, object] = {"id": None, "reason": "", "used": False}
+    executor_scratch: _ExecutorScratch | None = None
+    executor_refusal: dict[str, str] = {}
+
+    def dispatch_argv(*, plan_files: bool = False) -> list[str] | None:
+        prompt_file = executor_prompt_file.get("path")
+        session_file = executor_session_file.get("path")
+        render_spec, render_prompt = executor_spec, prompt
+        if plan_files and executor_spec is not None and "{prompt_file}" in executor_spec.argv:
+            # The live renderer checks file existence. Plan the same single
+            # token as inert data; never touch the filesystem for a plan.
+            render_spec = replace(executor_spec, argv=tuple(
+                "{prompt}" if arg == "{prompt_file}" else arg for arg in executor_spec.argv))
+            render_prompt = "<prompt file>"
+        if (not isinstance(session_file, Path) and plan_files
+                and executor_spec is not None and _declared_session_export(executor_spec)):
+            # The plan names the flag with an inert path: the real file lives in
+            # this attempt's dispatcher-owned scratch, assigned at launch.
+            session_file = Path("<session export>")
+        resume_id = executor_resume.get("id")
+        session_id = (resume_id if isinstance(resume_id, str)
+                      and not executor_resume.get("used") else None)
+        if (render_spec is not None and "{prompt_file}" in render_spec.argv
+                and not isinstance(prompt_file, Path)):
+            # Not a refusal: a `{prompt_file}` declaration cannot render until
+            # this attempt's worktree exists. The caller writes it there and
+            # renders again.
+            return None
+        try:
+            if executor_spec is None:
+                # The three-argument shape stays exactly as it was: test
+                # fixtures and wrappers substitute this function, and a
+                # built-in owner's argv must not depend on the registry.
+                command = with_codex_windows_sandbox(
+                    build_dispatch_argv(owner, prompt, effective_model_route),
+                    owner, codex_sandbox_backend,
+                )
+            else:
+                command = with_codex_windows_sandbox(
+                    build_user_executor_argv(
+                        owner, render_prompt, effective_model_route,
+                        spec=render_spec,
+                        prompt_file=prompt_file if isinstance(prompt_file, Path) else None,
+                        session_file=session_file if isinstance(session_file, Path) else None,
+                        session_id=session_id,
+                    ),
+                    owner, codex_sandbox_backend,
+                )
+                if command and declares_cloud(command[1:]):
+                    raise ExecutorConfigError(REFUSAL_REMOTE_PR_NOT_AVAILABLE)
+        except ExecutorConfigError as exc:
+            # A selected model/effort/session the declaration cannot carry, or
+            # a `{prompt_file}` vector whose file is not written yet. Both are
+            # refusals before any spawn, reported by their closed reason.
+            executor_refusal["reason"] = str(exc)
+            return None
         # acceptEdits covers the cwd, not the dispatcher-owned intake directory.
         # Only the real Claude template receives CLI flags, never patched script
         # fixtures. Apply before session_argv resolves the template executable.
@@ -4825,7 +5369,16 @@ def _dispatch_unit(
             command = [*command, "--add-dir", str(sidecar_path.parent)]
         return command
 
-    argv = dispatch_argv()
+    argv = dispatch_argv(plan_files=dry_run)
+    if executor_spec is not None:
+        # Check the complete layout before the version child, including any
+        # fragments which will only acquire real file paths after allocation.
+        if not dry_run:
+            dispatch_argv(plan_files=True)
+        if executor_refusal:
+            return _external_declaration_refusal(unit_id, run_ref, owner, executor_refusal["reason"])
+        if (refusal := readiness_refusal()) is not None:
+            return refusal
     child_environment = fanout_child_environment(
         os.environ if base_env is None else base_env,
         depth=dispatch_depth,
@@ -5013,6 +5566,47 @@ def _dispatch_unit(
         and not probe_fence.unconfined_allowed
     ):
         return _unfenced_unit_refusal(unit_id, run_ref, owner, attempt_id, worktree, probe_fence.receipt)
+    # A declared `session.export` makes this attempt's session evidence a FILE,
+    # not a decoded native stream. The binary identity is observed from the
+    # same resolved program the launch will use, so a receipt can name the
+    # bytes that produced it.
+    file_export_capability: SessionCapability | None = None
+    if executor_spec is not None and _declared_session_export(executor_spec):
+        export_identity = observe_session_binary(executor_spec.argv[0], env=child_env)
+        if export_identity is not None:
+            file_export_capability = SessionCapability(
+                owner, FILE_EXPORT_PROTOCOL, export_identity, None)
+    if repair is not None and file_export_capability is not None:
+        # An id another UNIT also claims is ambiguous; repeated attempts of
+        # this unit sharing one id are the permitted predecessor chain. This
+        # reads the journal across units once, on a repair only.
+        foreign_references: set[str] = set()
+        for event in read_observation_events(paths):
+            if (event.get("event") != "executor_session_observed"
+                    or str(event.get("run_id", "")) == run_ref):
+                continue
+            other = read_session_receipt(event.get("executor_session")).receipt
+            if other is not None and other.reference is not None:
+                foreign_references.add(other.reference)
+        resume_id, resume_reason = _plan_executor_resume(
+            owner=owner, spec=executor_spec, repair=repair, receipt=previous_receipt,
+            recovery_snapshot=(str(prior["session_recovery_snapshot"])
+                               if isinstance(prior.get("session_recovery_snapshot"), str) else None),
+            # A reused worktree was written by the unit, so its git runs inside
+            # this attempt's fence or the workspace is not observed at all.
+            workspace=(observe_session_workspace(str(worktree), confinement=probe_fence)
+                       if probe_fence is not None else None),
+            capability=file_export_capability,
+            fanout_id=fanout_id, unit_id=unit_id, run_ref=run_ref,
+            contract_digest=session_contract_digest, base_sha=base_sha,
+            foreign_references=frozenset(foreign_references),
+        )
+    elif executor_spec is not None and _declared_session_export(executor_spec):
+        resume_id, resume_reason = None, (
+            "no_resume_declared" if not _declared_session_resume(executor_spec) else "not_a_repair")
+    else:
+        resume_id, resume_reason = None, ""
+    executor_resume["id"], executor_resume["reason"] = resume_id, resume_reason
     if clarification is not None:
         clarification = claim_answered_worktree(paths, fanout_id, {
             "unit_id": unit_id, "run_ref": run_ref, "base_sha": base_sha,
@@ -5070,6 +5664,40 @@ def _dispatch_unit(
     exit_code = 1
     try:
         worktree = Path(str(worktree_record["worktree_path"]))
+        needs_export_file = (executor_spec is not None
+                             and bool(_declared_session_export(executor_spec))
+                             and not isinstance(executor_session_file.get("path"), Path))
+        if executor_spec is not None and not executor_refusal and (argv is None or needs_export_file):
+            # A `{prompt_file}` or `session.export` declaration cannot render
+            # until this attempt's worktree exists: both files live in
+            # dispatcher-owned scratch inside it, written after allocation and
+            # before the fenced launch.
+            scratch = _prepare_executor_scratch(worktree, attempt_id, prompt)
+            if scratch is None:
+                return {
+                    "unit_id": unit_id,
+                    "run_ref": run_ref,
+                    "owner": owner,
+                    "status": "executor_file_transport_unavailable",
+                    **_dispatch_status_ladder(),
+                    "reason": "this platform cannot give the executor prompt file a private, no-follow path",
+                }
+            executor_scratch = scratch
+            if "{prompt_file}" in tuple(getattr(executor_spec, "argv", ())):
+                executor_prompt_file["path"] = scratch.path / "prompt.txt"
+            if _declared_session_export(executor_spec):
+                executor_session_file["path"] = scratch.path / FILE_EXPORT_REF
+            argv = dispatch_argv()
+        if executor_refusal:
+            return {
+                "unit_id": unit_id,
+                "run_ref": run_ref,
+                "owner": owner,
+                "status": "executor_declaration_refused",
+                **_dispatch_status_ladder(),
+                "reason": executor_refusal.get("reason", ""),
+                "failure_kind": FAILURE_KIND_CAPABILITY_GATE,
+            }
         # The isolation now exists; whether the work can be DONE in it is a
         # separate question, and the 2026-09-11 incident is what happens when only
         # the first one is asked. A readiness probe says the executor binary runs.
@@ -5093,8 +5721,11 @@ def _dispatch_unit(
             if not workspace_preflight["ok"]:
                 return _workspace_preflight_refusal(unit_id, run_ref, owner, attempt_id, workspace_preflight)
         session_capability = (negotiate_session_capability(owner, argv[0], env=child_env)
-                              if argv and getattr(runner, 'accepts_output_capture', False) else None)
-        if session_capability is not None:
+                              if argv and executor_spec is None
+                              and getattr(runner, 'accepts_output_capture', False) else None)
+        if session_capability is not None or file_export_capability is not None:
+            # One canonical path for the receipt and for every journal
+            # `worktree_ref`, so a later reader can bind the two.
             worktree = worktree.resolve()
         def session_argv(command: list[str]) -> list[str]:
             if session_capability is None or session_capability.protocol is None:
@@ -5122,6 +5753,11 @@ def _dispatch_unit(
                 unit_branch=str(unit.get("branch_suggestion", f"agent/{unit_id}")),
                 repo_root=repo_root,
                 allow_unconfined=allow_unconfined,
+                # A user-declared executor is argv data, so its launch takes
+                # the shell-free named-path branch below. Built-ins pass no
+                # extra keyword at all and keep the byte-identical `exec -a`
+                # shim (and any substituted fence a test supplies).
+                **({"external_worker": True} if executor_spec is not None else {}),
             )
             if runner is signal_safe_unit_runner
             else None
@@ -5131,10 +5767,60 @@ def _dispatch_unit(
         filesystem_confinement = confinement_receipt(confinement, worktree)
         if confinement is not None and isinstance(filesystem_confinement, dict):
             filesystem_confinement["git_roots_skip"] = git_roots_skip_reason(worktree.resolve())
+        def owner_command(command: list[str]) -> tuple[str, ...] | None:
+            """The fenced argv for this unit's owner, or None when no fence proves it."""
+            if confinement is None:
+                return None
+            return (
+                confinement.external_command(command) if executor_spec is not None
+                else confinement.command(command)
+            )
+
+        def checked_external_command() -> tuple[str, ...]:
+            if (not argv or launch_identity is None
+                    or external_search_path(child_env, binary=argv[0], repositories=repos, write_roots=write_roots)
+                    != child_env.get("PATH") or not named_launch_identity_holds(launch_identity)
+                    or observe_named_launch(argv[0], child_env) != launch_identity):
+                raise _ExternalFenceLost
+            command = owner_command(argv)
+            if not named_launch_identity_holds(launch_identity):
+                raise _ExternalFenceLost
+            if command:
+                return command
+            if allow_unconfined and (confinement is None or confinement.unconfined_allowed):
+                # Explicit host opt-in still pins the trusted absolute shim.
+                return (launch_identity.link_path, *argv[1:])
+            raise _ExternalFenceLost
+
+        def refresh_executor_scratch() -> bool:
+            """Rotate a user executor's file transport for a new attempt."""
+            nonlocal executor_scratch
+            _remove_executor_scratch(executor_scratch)
+            executor_scratch = None
+            executor_prompt_file["path"] = None
+            executor_session_file["path"] = None
+            needs_prompt = "{prompt_file}" in tuple(getattr(executor_spec, "argv", ()))
+            needs_export = bool(_declared_session_export(executor_spec))
+            if not needs_prompt and not needs_export:
+                return True
+            scratch = _prepare_executor_scratch(worktree, attempt_id, prompt)
+            if scratch is not None:
+                executor_scratch = scratch
+                if needs_prompt:
+                    executor_prompt_file["path"] = scratch.path / "prompt.txt"
+                if needs_export:
+                    executor_session_file["path"] = scratch.path / FILE_EXPORT_REF
+            return scratch is not None
+
+        if executor_spec is not None:
+            try:
+                checked_external_command()
+            except _ExternalFenceLost:
+                return _unfenced_unit_refusal(unit_id, run_ref, owner, attempt_id, worktree, filesystem_confinement)
         if (
-            confinement is not None
+            executor_spec is None and confinement is not None
             and argv is not None
-            and confinement.command(argv) is None
+            and owner_command(argv) is None
             and not confinement.unconfined_allowed
         ):
             # No proven fence, so the spawn below would run the owner CLI with the
@@ -5283,6 +5969,7 @@ def _dispatch_unit(
             routed_model=routed_model,
             routed_effort=routed_effort,
             title=unit_title,
+            external=executor_spec is not None,
         )
         if getattr(runner, "accepts_on_spawn", False):
             # The signal-safe runner hands back the live process so the marker
@@ -5328,7 +6015,7 @@ def _dispatch_unit(
                 telemetry_reporter(stdout_snapshot)
 
             spawn_kwargs["on_output"] = _observe_snapshot
-        confinement_command = confinement.command(argv) if confinement is not None else None
+        confinement_command = owner_command(argv) if executor_spec is None and confinement is not None and argv else None
         if confinement_command is not None:
             spawn_kwargs["confinement_command"] = confinement_command
         while True:
@@ -5344,15 +6031,26 @@ def _dispatch_unit(
                 if previous_path is not None and sidecar_path is not None:
                     assembled = _assemble_prompt(sidecar_path, clarification)
                     prompt = assembled.text
+                if executor_spec is not None:
+                    # A retry gets a fresh private scratch and prompt file; an
+                    # earlier attempt's is never reused or inherited.
+                    if not refresh_executor_scratch():
+                        return _external_declaration_refusal(unit_id, run_ref, owner, "executor_file_transport_unavailable")
+                    argv = dispatch_argv()
+                    if argv is None:
+                        return _external_declaration_refusal(unit_id, run_ref, owner,
+                            executor_refusal.get("reason", "executor_file_transport_unavailable"))
+                elif previous_path is not None and sidecar_path is not None:
                     argv = dispatch_argv()
                     assert argv is not None  # Same previously admitted owner and route.
                     argv = with_codex_fenced_sandbox(session_argv(argv), owner, confinement)
                     if confinement is not None:
-                        spawn_kwargs['confinement_command'] = confinement.command(argv)
+                        spawn_kwargs['confinement_command'] = owner_command(argv)
                 if not getattr(runner, 'accepts_launch', False):
                     dispatch_observed()
             launch_workspace = (observe_session_workspace(str(worktree), confinement=confinement)
-                                if session_capability is not None else None)
+                                if session_capability is not None or file_export_capability is not None
+                                else None)
             decoder = SessionDecoder(session_capability) if session_capability is not None else None
             admission_observer = CodexAdmissionObserver()
             admission_binding = AdmissionBinding(owner, fanout_id, unit_id, run_ref, attempt,
@@ -5398,7 +6096,17 @@ def _dispatch_unit(
                 spawn_stagger.reserve()
             if health_events is not None and attempt > 1:
                 health_events.started(unit_id, retry=attempt - 1)
+            # The declared resume fragment is spent by THIS attempt's launch. A
+            # transient retry inside the same repair therefore starts fresh
+            # instead of forking the same conversation a second time.
+            if isinstance(executor_resume.get("id"), str):
+                executor_resume["used"] = True
             try:
+                if executor_spec is not None:
+                    spawn_kwargs["confinement_command"] = checked_external_command()
+                    if getattr(runner, "accepts_launch", False):
+                        # Recheck after the admission lock, immediately at Popen.
+                        spawn_kwargs["checked_command"] = checked_external_command
                 completed = runner(
                     argv,
                     cwd=str(worktree),
@@ -5438,6 +6146,8 @@ def _dispatch_unit(
                 if exit_code != 0:
                     failure_diagnostic = diagnostic(
                         'worker', capture.sandbox_refusal() or 'nonzero', exit_code, 'process')
+            except _ExternalFenceLost:
+                return _unfenced_unit_refusal(unit_id, run_ref, owner, attempt_id, worktree, filesystem_confinement)
             except CapacityBlocked as exc:
                 entry = _capacity_entry(paths, unit, admission_binding, exc.trip,
                                         worktree_created=True, contract_digest=session_contract_digest,
@@ -5483,6 +6193,28 @@ def _dispatch_unit(
                         'worker_ref': unit_id, 'runtime_profile': owner, 'attempt_id': attempt_id,
                         'worktree_ref': str(worktree),
                         'executor_session': decoder.receipt(session_binding).to_dict()})
+                export_path = executor_session_file.get("path")
+                if (file_export_capability is not None and session_binding is not None
+                        and isinstance(export_path, Path) and executor_scratch is not None):
+                    # A file this attempt already wrote is still historical; no
+                    # end revision means no resume instruction. Only the
+                    # builder's own validation refusal is absorbed, because the
+                    # observer fault below is the error worth reporting.
+                    try:
+                        export_receipt = build_file_export_receipt(
+                            capability=file_export_capability, binding=session_binding,
+                            observation=observe_session_export(export_path, scratch_fd=executor_scratch.fd), end_head=None,
+                            resume_reason=("fresh_retry" if attempt > 1 else
+                                           str(executor_resume.get("reason") or "not_a_repair")))
+                    except ValueError:
+                        export_receipt = None
+                    if export_receipt is not None:
+                        append_journal_observation(paths, {
+                            'target_type': 'run', 'target_id': run_ref, 'run_id': run_ref,
+                            'event': 'executor_session_observed', 'status': 'observed',
+                            'worker_ref': unit_id, 'runtime_profile': owner, 'attempt_id': attempt_id,
+                            'worktree_ref': str(worktree),
+                            'executor_session': export_receipt.to_dict()})
                 raise
             stdout_text = capture.take_final_text()
             session_fields = {}
@@ -5504,6 +6236,37 @@ def _dispatch_unit(
                     'event': 'executor_session_observed', 'status': 'observed',
                     'worker_ref': unit_id, 'runtime_profile': owner, 'attempt_id': attempt_id,
                     'worktree_ref': str(worktree), **session_fields})
+            export_path = executor_session_file.get("path")
+            if (file_export_capability is not None and session_binding is not None
+                    and isinstance(export_path, Path) and executor_scratch is not None):
+                # This executor's only session evidence is the file it wrote.
+                # Digest it here, before the scratch dir is removed; the body
+                # is hashed, never read into the record or kept under `.omh`.
+                export_workspace = observe_session_workspace(str(worktree), confinement=confinement)
+                export_receipt = build_file_export_receipt(
+                    capability=file_export_capability,
+                    binding=session_binding,
+                    observation=observe_session_export(export_path, scratch_fd=executor_scratch.fd),
+                    end_head=export_workspace.head if export_workspace is not None else None,
+                    resume_reason=("fresh_retry" if attempt > 1 else
+                                   str(executor_resume.get("reason") or "not_a_repair")),
+                )
+                session_fields = {'executor_session': export_receipt.to_dict(),
+                                  'executor_session_status': export_receipt.state}
+                append_journal_observation(paths, {
+                    'target_type': 'run', 'target_id': run_ref, 'run_id': run_ref,
+                    'event': 'executor_session_observed', 'status': 'observed',
+                    'worker_ref': unit_id, 'runtime_profile': owner, 'attempt_id': attempt_id,
+                    'worktree_ref': str(worktree), **session_fields})
+            # Export observation belongs to the attempt, even when its Git result is refused.
+            if executor_spec is not None:
+                history_refusal = _external_history_refusal(unit_git_runner, worktree, base_sha)
+                if history_refusal:
+                    return {"unit_id": unit_id, "run_ref": run_ref, "owner": owner,
+                            "status": "failed", "failure_kind": FAILURE_KIND_CAPABILITY_GATE,
+                            "reason_code": history_refusal, "reason": history_refusal,
+                            "attempt_id": attempt_id, "worktree_path": str(worktree),
+                            **session_fields, **_dispatch_status_ladder()}
             if failure_diagnostic is not None:
                 append_journal_observation(paths, {
                     'target_type': 'run', 'target_id': run_ref, 'run_id': run_ref,
@@ -5550,6 +6313,7 @@ def _dispatch_unit(
                 break
             sleep(float(decision["delay_seconds"]))
     finally:
+        _remove_executor_scratch(executor_scratch)
         _clear_inflight(paths, fanout_id, unit_id)
         _close_fanout_progress_binding(
             paths,
@@ -5782,6 +6546,18 @@ def _dispatch_unit(
     # The ladder's own two rungs, read once so the envelope and the unit state
     # below it cannot disagree about what was observed.
     result_schema_valid = bool(unit_result.get("result_schema_valid"))
+    # An external executor's completion is judged from git, never from what its
+    # stdout claimed: exit 0 with no clean descendant commit means the unit
+    # edited nothing, however confident the output was. Built-in owners keep
+    # the existing ladder untouched.
+    external_no_commit = ""
+    if executor_spec is not None and exit_code == 0 and not input_required:
+        observed_head = _observed_clean_producer_head(unit_git_runner, worktree)
+        if not observed_head or observed_head == base_sha:
+            external_no_commit = (
+                "the executor exited 0 but left no clean descendant commit in the unit worktree; "
+                "its stdout is not evidence of an edit"
+            )
     # The journal event is sticky for the run, so an earlier attempt's pass
     # would otherwise outlive a check that failed in this one.
     verification_failed_now = verification.get("verification_status") == "failed"
@@ -5823,7 +6599,14 @@ def _dispatch_unit(
         "owner": owner,
         "model": routed_model,
         "reasoning_effort": routed_effort,
-        "status": "input_required" if input_required else "completed" if exit_code == 0 else "failed",
+        "status": (
+            "input_required" if input_required
+            else "failed" if (exit_code != 0 or external_no_commit)
+            else "completed"
+        ),
+        **((
+            {"reason": external_no_commit, "failure_kind": FAILURE_KIND_CRASH}
+        ) if external_no_commit else {}),
         **readiness_observation,
         "exit_code": exit_code,
         "unit_state": unit_state,
@@ -5834,11 +6617,14 @@ def _dispatch_unit(
         # counts and no session id were obtainable for the whole unit -- an
         # absence with a cause, rather than an empty token column that reads
         # like a unit which spent nothing.
-        "session_protocol": ("codex" if owner == "codex" else "claude")
-        if session_capability is not None and session_capability.protocol is not None
-        else "plain",
+        "session_protocol": (
+            ("codex" if owner == "codex" else "claude")
+            if session_capability is not None and session_capability.protocol is not None
+            else (FILE_EXPORT_PROTOCOL if file_export_capability is not None else "plain")
+        ),
         "session_protocol_reason": (
-            "" if session_capability is not None and session_capability.protocol is not None
+            "" if (session_capability is not None and session_capability.protocol is not None)
+            or file_export_capability is not None
             else (session_capability.reason if session_capability is not None
                   else "no_session_capability_negotiated")
         ),
@@ -5848,7 +6634,7 @@ def _dispatch_unit(
         "verification_environment_policy": verification_environment.receipt,
         "shared_artifacts": shared_artifacts,
         **_dispatch_status_ladder(
-            process_succeeded=exit_code == 0 and not input_required,
+            process_succeeded=exit_code == 0 and not input_required and not external_no_commit,
             result_schema_valid=result_schema_valid,
             unit_verification_observed=verification_observed,
         ),

@@ -100,9 +100,11 @@ class NodeOwnerTests(unittest.TestCase):
             self.assertEqual({item["id"]: item.get("owner") for item in stored["nodes"]},
                              {"api": None, "fix": "claude-code", "extra": "codex"})
 
-    def test_schema_exposes_closed_optional_node_owner(self) -> None:
+    def test_schema_exposes_open_optional_node_owner(self) -> None:
         schema = dag_tool.OMH_DAG_SCHEMA["parameters"]["properties"]["nodes"]["items"]
-        self.assertEqual(schema["properties"]["owner"]["enum"], list(dag_tool.EXTERNAL_OWNERS))
+        self.assertEqual(schema["properties"]["owner"]["pattern"], "^[a-z][a-z0-9-]{1,31}$")
+        self.assertEqual(schema["properties"]["owner"]["description"], "Coding owner: built-in or configured id.")
+        self.assertNotIn("enum", schema["properties"]["owner"])
         self.assertNotIn("owner", schema["required"])
 
 

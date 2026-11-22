@@ -44,7 +44,7 @@ from __future__ import annotations
 
 import base64
 import binascii
-from collections.abc import Mapping
+from collections.abc import Collection, Mapping
 import hashlib
 import json
 import os
@@ -76,6 +76,8 @@ from ..hermes_delegation import effective_mixture_category_chains, load_model_pr
 from ..host_observation import host_session_id
 from ..host_process import process_alive
 from ..named_owner_choice import turn_owners
+from .. import user_owner_ids
+from ..user_owner_ids import configured_owner_ids
 from ..sqlite_readonly import connect_readonly
 from .lsp_nav_tool import _workspace_root
 
@@ -214,7 +216,8 @@ OMH_DAG_SCHEMA = {
                         "depends_on": {"type": "array", "items": {"type": "string"}},
                         "write_scope": {"type": "array", "items": {"type": "string"}},
                         "role": {"type": "string", "enum": list(dag_run.ROLES)},
-                        "owner": {"type": "string", "enum": list(EXTERNAL_OWNERS)},
+                        "owner": {"type": "string", "pattern": "^[a-z][a-z0-9-]{1,31}$",
+                                  "description": "Coding owner: built-in or configured id."},
                         "local": {"type": "boolean"},
                         "read_only": {"type": "boolean"},
                         "identity": {"type": "string",
@@ -237,7 +240,7 @@ OMH_DAG_SCHEMA = {
                 "type": "boolean",
                 "description": "settle failed: the child died on a provider error (an HTTP 400, no model call).",
             },
-            "owner": {"type": "string", "enum": list(EXTERNAL_OWNERS),
+            "owner": {"type": "string", "pattern": "^[a-z][a-z0-9-]{1,31}$",
                       "description": "export: a coding owner named in the run's request."},
             "spawn_plan": {"type": "object"},
             "carry_forward": {"type": "string", "description": (
@@ -280,9 +283,10 @@ def omh_dag_handler(args: Mapping[str, object], **kwargs: object) -> str:
         shown = shown_lanes(omh_home, segments)
         # The parent's own task id, whose terminal environment its children share (`backend_root`).
         task = str(kwargs.get("task_id") or "default")
+        live = configured_owner_ids(omh_home) if action != "cancel" else frozenset()
         if action == "define":
             return _define(args, omh_home, hermes_home, durable, segments, now, shown, task, limits=limits,
-                           ignored=ignored, chosen=turn_owners(session))
+                           ignored=ignored, chosen=turn_owners(session), live=live)
         found = _find(omh_home, segments, args.get("run"))
         if found is None and not args.get("run"):
             return _refused(action, "run_not_found", NO_RUN_YET_SAY)
@@ -298,11 +302,12 @@ def omh_dag_handler(args: Mapping[str, object], **kwargs: object) -> str:
             if action == "status":
                 # As `ready` would split them: a coding node the chosen owner takes is no delegate_task call.
                 offered = dag_run.offerable(record, derived, now, limits=limits)
-                exports, owner_say = _owner_exports(record, derived, offered)
+                exports, unavailable, owner_say = _owner_exports(record, derived, offered, live)
                 coding = [node_id for entry in exports for node_id in entry["nodes"]]
+                coding.extend(unavailable)
                 say = WORKTREE_ISOLATION_HELD if _isolation_holds(record, offered, coding, hermes_home) else ""
                 say = " ".join(part for part in (say, _export_say(exports), owner_say) if part)
-                return _result(action, record, derived, shown, say=say, extra=_export_fields(exports),
+                return _result(action, record, derived, shown, say=say, extra=_export_fields(exports), unavailable=unavailable,
                                now=now, limits=limits, ignored=ignored, spent=(hermes_home, children))
             if action == "cancel":
                 # Derive reports a cancelled run's running nodes as `cancelled`, so the live children are
@@ -328,7 +333,7 @@ def omh_dag_handler(args: Mapping[str, object], **kwargs: object) -> str:
                                extra={"still_running": live} if live else None,
                                now=now, limits=limits, ignored=ignored, spent=(hermes_home, children))
             if action == "ready":
-                return _ready(action, record, path, derived, children, omh_home, hermes_home, now, shown, task=task,
+                return _ready(action, record, path, derived, children, omh_home, hermes_home, now, shown, task=task, live=live,
                               budget=budget, limits=limits, ignored=ignored)
             if action == "settle":
                 node = dag_run.valid_id(args.get("node"), "invalid_node_id", "Name the node to settle.")
@@ -364,31 +369,32 @@ def omh_dag_handler(args: Mapping[str, object], **kwargs: object) -> str:
                     say = (f"Node {node} is accepted, but its handoff was not checked: OMH could not read the {backend} "
                            f"terminal the child wrote it in ({unread}). The nodes after it read that file; if it is "
                            "not there, they stop and say so.")
-                return _ready(action, record, path, derived, children, omh_home, hermes_home, now, shown, task=task,
+                return _ready(action, record, path, derived, children, omh_home, hermes_home, now, shown, task=task, live=live,
                               say=say, settled={"node": node, "outcome": happened}, budget=budget, limits=limits, ignored=ignored)
             if action == "repair":
                 node = dag_run.valid_id(args.get("node"), "invalid_node_id", "Name the failed node to repair.")
                 added = dag_run.repair(record, derived, node, args.get("nodes"), now,
-                                       oneshot_remaining=_wave_budget(record, derived, budget, now, limits=limits))
+                                       oneshot_remaining=_wave_budget(record, derived, budget, now, limits=limits),
+                                       owners=_admitted_owners(record))
                 dag_run.write_run(path, record)
                 derived = dag_run.derive(record, children, now)
                 group_node = next(item for item in record["nodes"] if item["id"] == added[0])
                 replan = (f"This is {group_node['repairs']}'s last repair cycle; its nodes are briefed to re-plan "
                           "from the earlier failures."
                           if group_node["cycle"] == dag_run.REPLAN_CYCLE else "")
-                return _ready(action, record, path, derived, children, omh_home, hermes_home, now, shown, task=task,
+                return _ready(action, record, path, derived, children, omh_home, hermes_home, now, shown, task=task, live=live,
                               settled={"node": node, "repair_nodes": added}, budget=budget, limits=limits,
                               ignored=ignored, note=replan)
             if action == "extend":
                 added = dag_run.extend(record, derived, args.get("nodes"), args.get("node"), now,
                                        oneshot_remaining=_wave_budget(record, derived, budget, now, limits=limits),
-                                       criteria=args.get("criteria"))
+                                       criteria=args.get("criteria"), owners=_admitted_owners(record))
                 dag_run.write_run(path, record)
                 derived = dag_run.derive(record, children, now)
-                return _ready(action, record, path, derived, children, omh_home, hermes_home, now, shown, task=task,
+                return _ready(action, record, path, derived, children, omh_home, hermes_home, now, shown, task=task, live=live,
                               settled={"extend_round": len(record["extends"]), "extend_nodes": added,
                                        "found_by": record["nodes"][-1]["found_by"]}, budget=budget, limits=limits, ignored=ignored)
-            return _export(args, record, path, derived, children, omh_home, now, shown, limits=limits, ignored=ignored)
+            return _export(args, record, path, derived, children, omh_home, now, shown, live=live, limits=limits, ignored=ignored)
     except dag_run.DagRefusal as refusal:
         return _refused(action, refusal.reason, refusal.say)
     except (runtime_paths.RuntimeBindingError, OSError, ValueError):
@@ -482,17 +488,23 @@ def _wave_budget(record: Mapping[str, Any], derived: Mapping[str, Mapping[str, A
 
 def _define(args: Mapping[str, object], omh_home: Path, hermes_home: Path, durable: str, segments: list[str],
             now: float, shown: set[str] | None, task: str, *, limits: dag_run.Limits = dag_run.DEFAULT_LIMITS,
-            ignored: tuple[str, ...] = (), chosen: tuple[str, ...] = ()) -> str:
+            ignored: tuple[str, ...] = (), chosen: tuple[str, ...] = (), live: Collection[str]) -> str:
     if worktree_isolation_on(hermes_home, terminal_backend()):
         raise dag_run.DagRefusal("worktree_isolation_on", WORKTREE_ISOLATION_REFUSED)
     run = dag_run.valid_id(args.get("run"), "invalid_run_id", "Give the run a short lowercase id (a-z, 0-9, -).")
     # Opt-in only: without carry_forward the record is what it always was.
     base = dag_run.valid_base(args["carry_forward"]) if args.get("carry_forward") is not None else None
     budget = oneshot_budget(hermes_home, segments)
+    admitted = (*dag_run.EXTERNAL_OWNERS, *sorted(live))
     record = dag_run.new_record(durable, run, args.get("name"), args.get("goal"), args.get("nodes"), now,
                                 oneshot_limit=budget["limit"] if budget else None,
                                 oneshot_spent=budget["spent"] if budget else 0, named_roles=False,
-                                criteria=args.get("criteria"))
+                                criteria=args.get("criteria"), owners=admitted)
+    named_configured = sorted({str(node["owner"]) for node in record["nodes"] if "owner" in node}
+                              - set(dag_run.EXTERNAL_OWNERS))
+    if named_configured:
+        # The configured ids this run's nodes name, frozen now: a later edit to the operator file cannot retarget it.
+        record["registered_owners"] = named_configured
     if base is not None and not any(dag_run.is_verification(item) for item in record["nodes"]):
         # Carried work counts only once a verifier checks it here; without one the run would finish unchecked.
         raise dag_run.DagRefusal(
@@ -533,10 +545,14 @@ def _define(args: Mapping[str, object], omh_home: Path, hermes_home: Path, durab
         backend = terminal_backend()
         if backend:
             record["backend"] = backend  # where the children's handoff files land; `settle` reads them there
-        owners = sorted(owner for owner in set(chosen) if owner in EXTERNAL_OWNERS)
+        owners = sorted(owner for owner in set(chosen) if owner in admitted)
         if owners:
             # The coding owners this turn's request named: the run keeps them, and nothing else chooses one.
             record["owners"] = owners
+            configured = [owner for owner in owners if owner not in dag_run.EXTERNAL_OWNERS]
+            if configured:
+                # The configured ids the request named, frozen now: a later edit to the operator file cannot retarget it.
+                record["registered_owners"] = sorted({*record.get("registered_owners", []), *configured})
         workspace = _workspace_root(task)
         if workspace:
             # The root a node's write_scope is read against (`dag_scope_guard`), fixed here so a child's `cd` cannot
@@ -551,7 +567,7 @@ def _define(args: Mapping[str, object], omh_home: Path, hermes_home: Path, durab
                 handoff_of=lambda prior, node: _prior_handoff(omh_home, prior, node), now=now, remote=bool(backend))
         dag_run.write_run(path, record)
         derived = dag_run.derive(record, [], now)
-        return _ready("define", record, path, derived, [], omh_home, hermes_home, now, shown, task=task, budget=budget,
+        return _ready("define", record, path, derived, [], omh_home, hermes_home, now, shown, task=task, live=live, budget=budget,
                       limits=limits, ignored=ignored, carry=carry)
 
 
@@ -1005,7 +1021,7 @@ def _backend_lines(task_id: str, command: str, *, whole: bool = False) -> tuple[
 def _ready(
     action: str, record: dict[str, Any], path: Path, derived: Mapping[str, Mapping[str, Any]],
     children: list[dict[str, Any]], omh_home: Path, hermes_home: Path, now: float, shown: set[str] | None, *,
-    task: str, say: str = "", settled: Mapping[str, Any] | None = None, budget: Mapping[str, int] | None = None,
+    task: str, live: Collection[str], say: str = "", settled: Mapping[str, Any] | None = None, budget: Mapping[str, int] | None = None,
     limits: dag_run.Limits = dag_run.DEFAULT_LIMITS, ignored: tuple[str, ...] = (), note: str = "",
     carry: Mapping[str, Any] | None = None,
 ) -> str:
@@ -1018,8 +1034,10 @@ def _ready(
     nodes = {str(node["id"]): node for node in record["nodes"]}
     # Each ready coding node goes to its chosen owner's fanout, never to delegate_task; checks and readers stay native.
     offered = dag_run.offerable(record, derived, now, limits=limits)
-    exports, owner_say = _owner_exports(record, derived, offered)
+    exports, unavailable, owner_say = _owner_exports(record, derived, offered, live)
     coding = [node_id for entry in exports for node_id in entry["nodes"]]
+    # A held node (its chosen owner left the operator file) goes nowhere: not to its owner, not to delegate_task.
+    coding.extend(unavailable)
     # A run on a Docker or SSH terminal pins where its handoff files live before its first node goes out, and with no
     # terminal up to ask, hands out nothing yet.
     pinned, waits = False, ""
@@ -1114,7 +1132,7 @@ def _ready(
         say = " ".join(part for part in (say, WORKTREE_ISOLATION_HELD) if part)
     say = " ".join(part for part in (say, note) if part)
     return _result(action, record, derived, shown, say=say, extra=extra, now=now, limits=limits, ignored=ignored,
-                   spent=(hermes_home, children))
+                   unavailable=unavailable, spent=(hermes_home, children))
 
 
 def _isolation_holds(record: Mapping[str, Any], offered: list[str], coding: list[str], hermes_home: Path) -> bool:
@@ -1244,7 +1262,8 @@ def dag_limits(hermes_home: Path) -> tuple[dag_run.Limits, tuple[str, ...]]:
 def _result(action: str, record: Mapping[str, Any], derived: Mapping[str, Mapping[str, Any]],
             shown: set[str] | None, *, say: str = "", extra: Mapping[str, Any] | None = None,
             now: float | None = None, limits: dag_run.Limits = dag_run.DEFAULT_LIMITS,
-            ignored: tuple[str, ...] = (), spent: tuple[Path, list[dict[str, Any]]] | None = None) -> str:
+            unavailable: Mapping[str, str] | None = None, ignored: tuple[str, ...] = (),
+            spent: tuple[Path, list[dict[str, Any]]] | None = None) -> str:
     """``spent`` is the Hermes home and the ledger children: with it, a finished run carries what its children
     used (`closing_usage`)."""
     now = time.time() if now is None else now
@@ -1264,6 +1283,9 @@ def _result(action: str, record: Mapping[str, Any], derived: Mapping[str, Mappin
         "exports": [],
         "claim_boundary": dag_run.DAG_CLAIM_BOUNDARY,
     }
+    for row in payload["nodes"]:
+        if unavailable and row["id"] in unavailable:
+            row["reason"] = unavailable[row["id"]]
     criteria = dag_run.criteria_view(record, derived)
     if criteria is not None:
         payload["criteria"] = criteria
@@ -1375,33 +1397,51 @@ def usage_line(record: Mapping[str, Any], usage: Mapping[str, Any]) -> str:
 
 
 def owner_choices(record: Mapping[str, Any]) -> tuple[str, ...]:
-    """The external coding owners the request that defined this run named, sorted; () for any other run."""
+    """The coding owners the request that defined this run named, sorted; () for any other run.
+
+    A configured id counts only when the run's snapshot holds it, so a later edit to the operator file cannot add one.
+    """
     owners = record.get("owners")
     if not isinstance(owners, list):
         return ()
-    return tuple(sorted({owner for owner in owners if owner in EXTERNAL_OWNERS}))
+    snapshot = set(record.get("registered_owners") or ())
+    return tuple(sorted({owner for owner in owners if owner in EXTERNAL_OWNERS or owner in snapshot}))
+
+
+def _admitted_owners(record: Mapping[str, Any]) -> tuple[str, ...]:
+    """The owners this run admitted at define: the built-ins and its frozen configured snapshot."""
+    return (*dag_run.EXTERNAL_OWNERS, *(record.get("registered_owners") or ()))
 
 
 def _owner_exports(record: Mapping[str, Any], derived: Mapping[str, Mapping[str, Any]],
-                   offered: list[str]) -> tuple[list[dict[str, Any]], str]:
-    """Split ready coding nodes by their chosen owner; an unchosen node owner stays on delegate_task."""
-    choices = owner_choices(record)
+                   offered: list[str], live: Collection[str]) -> tuple[list[dict[str, Any]], dict[str, str], str]:
+    """Classify each offer once against this call's registry. Only unchosen owners may fall back to native."""
+    chosen = owner_choices(record)
     nodes = {str(node["id"]): node for node in record["nodes"]}
     batches: dict[str, list[str]] = {}
-    native = []
+    unavailable: dict[str, str] = {}
+    notes = []
     for node_id in offered:
         node = nodes[node_id]
-        if derived[node_id]["state"] != "ready" or not dag_run.is_coding(node) or "owner" not in node:
+        if not dag_run.is_coding(node) or "owner" not in node:
             continue
         owner = str(node["owner"])
-        if owner in choices:
-            batches.setdefault(owner, []).append(node_id)
-        else:
-            native.append(f"Node {node_id} names {owner}, which the request that defined this run did not name; "
-                          "it runs on delegate_task.")
+        if owner in chosen and owner not in dag_run.EXTERNAL_OWNERS and owner not in live:
+            unavailable[node_id] = "owner_unavailable"
+            notes.append(f"Node {node_id} names {owner}, which the operator file no longer declares: it is held "
+                         "(owner_unavailable) until the owner is configured again; no delegate_task call is made.")
+        elif owner in chosen and owner in live and not user_owner_ids.USER_EXECUTOR_LAUNCH_SUPPORTED:
+            unavailable[node_id] = user_owner_ids.USER_EXECUTOR_PLATFORM_UNSUPPORTED
+            notes.append(f"Node {node_id} is held: external executor {owner} requires macOS or Linux.")
+        elif derived[node_id]["state"] == "ready":
+            if owner in chosen:
+                batches.setdefault(owner, []).append(node_id)
+            else:
+                notes.append(f"Node {node_id} names {owner}, which the request that defined this run did not name; "
+                             "it runs on delegate_task.")
     return ([{"owner": owner, "nodes": batches[owner],
               "next": {"tool": "omh_dag", "action": "export", "owner": owner}} for owner in sorted(batches)],
-            " ".join(native))
+            unavailable, " ".join(notes))
 
 
 def _export_fields(exports: list[dict[str, Any]]) -> dict[str, Any]:
@@ -1486,11 +1526,16 @@ def export_goal(record: Mapping[str, Any], units: list[dict[str, Any]]) -> str:
 
 def _export(args: Mapping[str, object], record: dict[str, Any], path: Path,
             derived: Mapping[str, Mapping[str, Any]], children: list[dict[str, Any]], omh_home: Path,
-            now: float, shown: set[str] | None, *, limits: dag_run.Limits = dag_run.DEFAULT_LIMITS,
+            now: float, shown: set[str] | None, *, live: Collection[str], limits: dag_run.Limits = dag_run.DEFAULT_LIMITS,
             ignored: tuple[str, ...] = ()) -> str:
     owner = args.get("owner")
-    if owner not in EXTERNAL_OWNERS:
-        raise dag_run.DagRefusal("invalid_owner", f"Name the coding owner: {', '.join(EXTERNAL_OWNERS)}.")
+    if not isinstance(owner, str) or dag_run.OWNER_ID.fullmatch(owner) is None or owner not in (
+            *dag_run.EXTERNAL_OWNERS, *live):
+        raise dag_run.DagRefusal("invalid_owner", "Name a coding owner: a built-in one or an executor id in your "
+                                                 "executors file.")
+    if owner in live and not user_owner_ids.USER_EXECUTOR_LAUNCH_SUPPORTED:
+        raise dag_run.DagRefusal(user_owner_ids.USER_EXECUTOR_PLATFORM_UNSUPPORTED,
+                                 "External executors require macOS or Linux.")
     if owner not in owner_choices(record):
         raise dag_run.DagRefusal(
             "owner_not_chosen",
@@ -1523,11 +1568,11 @@ def _export(args: Mapping[str, object], record: dict[str, Any], path: Path,
     dag_run.write_run(path, record)
     derived = dag_run.derive(record, children, now)
     offered = dag_run.offerable(record, derived, now, limits=limits)
-    exports, owner_say = _owner_exports(record, derived, offered)
+    exports, unavailable, owner_say = _owner_exports(record, derived, offered, live)
     say = " ".join(part for part in (
         f"These nodes go to {owner} through the fanout bridge; run the commands it returns, then settle each node "
         "from the fanout result.", _export_say(exports), owner_say) if part)
-    return _result("export", record, derived, shown, say=say, extra={
+    return _result("export", record, derived, shown, say=say, unavailable=unavailable, extra={
         **_export_fields(exports),
         "fanout": {
             "owner": owner, "fanout_id": fanout_id, "units_file": str(units_file), "goal_file": str(goal_file),

@@ -694,6 +694,15 @@ class PluginToolSchemaProducerTests(unittest.TestCase):
         # removing an existing safeguard cannot finance parked growth.
         schema = per_turn_context.registered_tool_schemas()["omh_dag"]
         legacy = copy.deepcopy(schema)
+        # The export `owner` was an approved enum; its pattern form is funded by its own PLUGIN_TOOL_SCHEMA_CHAR_LIMIT
+        # entry (+3), so the approved schema compared below keeps the enum and the change is counted separately.
+        export_owner = legacy["parameters"]["properties"]["owner"]
+        self.assertEqual(export_owner["description"], "export: a coding owner named in the run's request.")
+        legacy["parameters"]["properties"]["owner"] = {"type": "string", "enum": ["claude-code", "codex"],
+                                                       "description": export_owner["description"]}
+        # The node `owner` was the approved enum; its pattern form is funded below (+62), so restore the enum here too.
+        legacy["parameters"]["properties"]["nodes"]["items"]["properties"]["owner"] = {
+            "type": "string", "enum": ["claude-code", "codex"]}
         parked_note = (
             "A still-running wait may settle parked with "
             "handle and wake_at (future UTC ISO-8601 or epoch, within 24h); ready reoffers it then, at most three parks. "
@@ -760,13 +769,23 @@ class PluginToolSchemaProducerTests(unittest.TestCase):
                 "write_scope, role, owner, local)", "write_scope, role, owner)", 1)
             return before - len(json.dumps(target, sort_keys=True, ensure_ascii=False))
 
-        # The node `owner` field (+70, its own PLUGIN_TOOL_SCHEMA_CHAR_LIMIT entry) is stripped next, the same way.
+        # The node `owner` field (+62, its own PLUGIN_TOOL_SCHEMA_CHAR_LIMIT entry: the closed enum became a pattern
+        # with the description "Coding owner: built-in or configured id.") is stripped next, the same way.
         def without_owner(target: dict) -> int:
             before = len(json.dumps(target, sort_keys=True, ensure_ascii=False))
             owner = target["parameters"]["properties"]["nodes"]["items"]["properties"].pop("owner")
-            self.assertEqual(owner, {"type": "string", "enum": ["claude-code", "codex"]})
+            self.assertEqual(owner, {"type": "string", "pattern": "^[a-z][a-z0-9-]{1,31}$",
+                                     "description": "Coding owner: built-in or configured id."})
             self.assertEqual(target["description"].count("write_scope, role, owner)"), 1)
             target["description"] = target["description"].replace("write_scope, role, owner)", "write_scope, role)", 1)
+            return before - len(json.dumps(target, sort_keys=True, ensure_ascii=False))
+
+        def without_export_owner(target: dict) -> int:
+            before = len(json.dumps(target, sort_keys=True, ensure_ascii=False))
+            export_owner = target["parameters"]["properties"]["owner"]
+            self.assertEqual(export_owner["pattern"], "^[a-z][a-z0-9-]{1,31}$")
+            target["parameters"]["properties"]["owner"] = {
+                "type": "string", "enum": ["claude-code", "codex"], "description": export_owner["description"]}
             return before - len(json.dumps(target, sort_keys=True, ensure_ascii=False))
 
         def without_role(target: dict) -> int:
@@ -823,7 +842,12 @@ class PluginToolSchemaProducerTests(unittest.TestCase):
         self.assertEqual(without_identity(legacy), 122)
         self.assertEqual(without_read_only(legacy), 45)
         self.assertEqual(without_local(legacy), 37)
-        self.assertEqual(without_owner(legacy), 70)
+        # The approved (pre-change) node owner enum and its description clause are stripped as before; this is the
+        # approved baseline the hash pins, so its size is not a funded delta.
+        approved_owner = legacy["parameters"]["properties"]["nodes"]["items"]["properties"].pop("owner")
+        self.assertEqual(approved_owner, {"type": "string", "enum": ["claude-code", "codex"]})
+        self.assertEqual(legacy["description"].count("write_scope, role, owner)"), 1)
+        legacy["description"] = legacy["description"].replace("write_scope, role, owner)", "write_scope, role)", 1)
         self.assertEqual(without_role(legacy), 85)
         encoded = json.dumps(legacy, sort_keys=True, ensure_ascii=False)
         self.assertEqual(len(encoded), 2479)
@@ -845,12 +869,15 @@ class PluginToolSchemaProducerTests(unittest.TestCase):
         self.assertEqual(without_identity(live), 122)
         self.assertEqual(without_read_only(live), 45)
         self.assertEqual(without_local(live), 37)
-        self.assertEqual(without_owner(live), 70)
+        # The node `owner` field, with its clause, is 132 characters now (114 for the pattern field, 18 for the clause);
+        # the approved enum form was 70, so the funded growth is 62.
+        self.assertEqual(without_owner(live), 132)
+        self.assertEqual(without_export_owner(live), 3)
         self.assertEqual(without_role(live), 85)
         delta = len(json.dumps(live, sort_keys=True, ensure_ascii=False)) - len(encoded)
         self.assertEqual(
             per_turn_context.plugin_tool_schema_chars_by_tool()["omh_dag"] - len(encoded) - delta,
-            75 + 85 + 70 + 37 + 226 + 95 + 8 + 45 + 122 + 224 + 188 + 130,
+            75 + 85 + 70 + 62 + 3 + 37 + 226 + 95 + 8 + 45 + 122 + 224 + 188 + 130,
         )
         self.assertGreater(delta, 0)
         self.assertLessEqual(delta, 429)  # Measured feature cap, not general headroom.

@@ -75,12 +75,13 @@ def build_fanout_contract(
     identity_config: Mapping[str, object] | None = None,
     capability_snapshots: Mapping[str, Mapping[str, object]] | None = None,
     spawn_plan: Mapping[str, object] | None = None,
+    registry: object | None = None,
 ) -> dict[str, object]:
     normalized_goal = " ".join(goal.split())
     if not normalized_goal:
         raise FanoutContractError("fanout goal is required")
     normalized_units = [_normalized_unit(unit, index) for index, unit in enumerate(units)]
-    validate_fanout_units(normalized_units)
+    validate_fanout_units(normalized_units, registry=registry)
     for unit in normalized_units:
         require_known_identity(str(unit.get("identity", "") or ""), identity_config, where=f"unit {unit['unit_id']}")
     validated_capability_snapshots = _validated_capability_snapshots(
@@ -108,6 +109,7 @@ def build_fanout_contract(
             category_config=category_config,
             identity_config=identity_config,
             capability_snapshots=validated_capability_snapshots,
+            registry=registry,
         )
         for unit in normalized_units
     ]
@@ -248,11 +250,30 @@ def require_known_identity(
     )
 
 
-def validate_fanout_units(units: Sequence[Mapping[str, object]]) -> None:
+def admitted_unit_owner_ids(registry: object | None = None) -> tuple[str, ...]:
+    """The owner ids this freeze admits: built-ins, plus configured ids if given.
+
+    `registry` is the caller's already-loaded `ExecutorRegistry` for the
+    resolved home. Absent means built-ins only -- never "guess the home",
+    because a freeze must not read ambient operator config to admit a name.
+    """
+    if registry is None:
+        return tuple(FANOUT_UNIT_OWNERS)
+    from .user_executors import fanout_owner_ids
+
+    return fanout_owner_ids(registry)
+
+
+def validate_fanout_units(
+    units: Sequence[Mapping[str, object]],
+    *,
+    registry: object | None = None,
+) -> None:
     if len(units) < 1:
         raise FanoutContractError("fanout requires at least one unit")
     seen: set[str] = set()
     known = {str(unit.get("unit_id", "")) for unit in units}
+    admitted = admitted_unit_owner_ids(registry)
     for unit in units:
         unit_id = str(unit.get("unit_id", ""))
         if not _UNIT_ID_RE.match(unit_id):
@@ -261,9 +282,13 @@ def validate_fanout_units(units: Sequence[Mapping[str, object]]) -> None:
             raise FanoutContractError(f"duplicate unit_id: {unit_id}")
         seen.add(unit_id)
         owner = unit.get("owner")
-        if owner is not None and str(owner) not in FANOUT_UNIT_OWNERS:
+        if owner is not None and not isinstance(owner, str):
             raise FanoutContractError(
-                f"unit {unit_id} owner {owner!r} is not one of {', '.join(FANOUT_UNIT_OWNERS)} (or null for unassigned)"
+                f"unit {unit_id} owner must be a string id or null, not {type(owner).__name__}"
+            )
+        if owner is not None and str(owner) not in admitted:
+            raise FanoutContractError(
+                f"unit {unit_id} owner {owner!r} is not one of {', '.join(admitted)} (or null for unassigned)"
             )
         file_scope = unit.get("file_scope", [])
         if not isinstance(file_scope, (list, tuple)) or not [str(path) for path in file_scope if str(path).strip()]:
@@ -479,6 +504,11 @@ def _normalized_unit(unit: Mapping[str, object], index: int) -> dict[str, object
     file_scope = [str(path).strip() for path in unit.get("file_scope", []) or [] if str(path).strip()]
     depends_on = [str(dependency).strip() for dependency in unit.get("depends_on", []) or [] if str(dependency).strip()]
     owner = unit.get("owner")
+    if owner is not None and not isinstance(owner, str):
+        # A frozen owner is an exact plain id. Stringifying a mapping or a list
+        # would freeze a name no dispatcher admits, hiding the mistake inside a
+        # prepared contract.
+        raise FanoutContractError(f"unit at index {index} owner must be a string id or null")
     raw_role = str(unit.get("role", "") or "").strip()
     review_role = normalized_review_role(raw_role)
     checks = _normalized_verification_checks(unit.get("verification_checks"), index)
@@ -914,6 +944,7 @@ def _contract_unit(
     category_config: Mapping[str, object] | None = None,
     identity_config: Mapping[str, object] | None = None,
     capability_snapshots: Mapping[str, Mapping[str, object]] | None = None,
+    registry: object | None = None,
 ) -> dict[str, object]:
     unit_id = str(unit["unit_id"])
     own_scope = set(str(path) for path in unit.get("file_scope", []))
@@ -942,6 +973,21 @@ def _contract_unit(
         handoff["executor_capability_snapshot_policy"] = _FROZEN_CAPABILITY_SNAPSHOT_POLICY
     if isinstance(capability_snapshot, Mapping):
         handoff["executor_capability_snapshot"] = deepcopy(dict(capability_snapshot))
+    # A user-declared owner alone carries its frozen binding. The digest names
+    # the exact definition this freeze was prepared against, so a later
+    # dispatch compares it with the one registry read it loaded and refuses
+    # before any probe or child when the entry changed or was removed. Built-in
+    # owners keep their existing snapshot marker and gain nothing here.
+    external_spec = (
+        (getattr(registry, "entries", None) or {}).get(executor_target)
+        if registry is not None and executor_target != "choose"
+        else None
+    )
+    if external_spec is not None:
+        handoff["user_executor"] = {
+            "id": str(getattr(external_spec, "id", "")),
+            "definition_sha256": str(getattr(external_spec, "definition_sha256", "")),
+        }
     representations = unit.get("input_representation", [])
     handoff["input_representation"] = deepcopy(representations)
     handoff["executor_modality_decision"] = build_executor_modality_decision(

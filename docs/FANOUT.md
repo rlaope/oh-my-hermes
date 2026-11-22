@@ -389,10 +389,15 @@ of review.
   its default approval mode applies) and puts the prompt after `--`. The
   pi-family surface was validated in a live bridge dispatch; the
   opencode template is prepared from its verified flags and validates on first
-  live dispatch (claude-template precedent). Profiles without a template
-  (hermes, omx/omc runtimes, generic, unassigned) are reported
-  `unsupported_for_local_dispatch` with the unit handoff as a prepared-prompt
-  fallback — no profile is privileged.
+  live dispatch (claude-template precedent). Beyond that table, spawnability
+  is also operator data: an executor declared in
+  `<omh_home>/routing/executors.toml`, or one of the nine presets opted in with
+  `omh coding executors add`, is spawned from its declared argv with the same
+  lane guarantees (see **Your own harness**). The presets are marked
+  unvalidated until a live dispatch. Built-in profiles without a template
+  (hermes, omx/omc runtimes, generic, unassigned) and any owner with no
+  declared executor are reported `unsupported_for_local_dispatch` with the unit
+  handoff as a prepared-prompt fallback — no profile is privileged.
 - **Bridge dispatch is a separate axis from chat prompt-handoff.** Chat
   surfaces keep their prompt-only semantics for prompt-only profiles (a
   `coding_prompt_handoff/v1` record stays `dispatchable: false` no matter
@@ -1217,6 +1222,215 @@ of review.
   work that cannot resolve an executor becomes an explicit user choice, not
   retained Hermes implementation).
 
+## Your own harness
+
+OMH spawns codex, claude-code and the pi family from fixed argv templates. Any
+other headless coding CLI can own fanout lanes too, once you declare it. A
+declared executor gets the same lane the built-ins get: a worktree per unit,
+the unit commits, `fanout_unit_result/v1`, postconditions judged from git, the
+confinement fence, and a HUD executor-progress row. Declaring one is opt-in;
+with no file, nothing changes. The external executor lane is supported only on
+macOS and Linux; Windows refuses it with
+`user_executor_platform_unsupported`.
+
+### Where the file lives
+
+`<omh_home>/routing/executors.toml`, next to `dispatch-models.json` (the
+default home is `~/.omh`; the top-level `--omh-home` flag moves it). Without
+`--omh-home`, an explicit top-level `--hermes-home <dir>` selects the OMH store
+that profile's own `config.yaml` names, and `omh coding executors list`,
+`executor-readiness` and dispatch all read that same store, under `--scope user`
+and `--scope project` alike. `--scope project` moves artifacts into the checkout,
+not this file. OMH reads this one path and nothing else: never the repository,
+its parents or the working directory, so a checked-in file cannot become an
+executor, and a `.hermes` directory implied by the checkout is not adopted as the
+Hermes home. The file may
+not be a symlink or resolve outside the home, must be UTF-8, and is read only up
+to 256 KiB.
+
+```toml
+schema_version = 1
+
+[executors.my-agent]
+label = "My Agent"
+argv = ["my-agent", "run", "--", "{prompt}"]
+model = ["--model", "{model}"]          # optional; spliced in only when a model is routed
+effort = ["--effort", "{effort}"]       # optional
+insert = 2                              # optional; where model/effort/session tokens go in argv
+version = ["my-agent", "--version"]     # optional; defaults to [argv[0], "--version"]
+
+[executors.my-agent.session]            # optional
+export = ["--export", "{session_file}"] # required when a session table exists
+resume = ["--resume", "{session_id}"]   # optional
+
+[executors.devin]
+preset = "devin"                        # opts in to a shipped preset
+```
+
+A preset entry holds only `preset` (and `remote_pr`, below) and its table name
+must equal the preset id. A custom entry needs `argv`; every other key is
+optional. Unknown keys are refused.
+
+### Adding a preset
+
+```sh
+omh coding executors list [--json]       # built-ins, enabled entries, available presets, rejected entries
+omh coding executors add <preset> [--force]
+omh coding executors remove <id>
+omh coding executors check [<id>]        # version probe of one or all enabled entries
+```
+
+`add` writes `[executors.<preset>] preset = "<preset>"` and nothing else. It
+installs no software, runs no probe, sends no prompt and starts no dispatch.
+`add` on an id that already exists is refused with `already_exists`; `--force`
+re-writes an existing reference to the same preset and cannot overwrite a custom
+entry. `add` and `remove` write one atomic mode-0600 replacement under a lock and
+may reformat the TOML and drop its comments. They refuse a file that does not load
+in full (`invalid_file`) rather than rewrite it lossily, so fix or delete a
+rejected entry by hand first. `list` never probes. `check` runs only the declared
+version argv, exits nonzero when any checked entry is not ready, and a check with
+no id also exits nonzero while the file has rejected entries.
+
+A configured id is then accepted wherever a built-in owner is: `--owner <id>` on
+`omh coding run` and `omh coding fanout prepare`, the `owner` field of a unit in
+the `--units` JSON (checked by `fanout prepare` and `fanout validate`),
+`--on-failure=retarget:<id>`, and `omh coding executor-readiness --executor <id>`.
+A dag-ulw node's `owner` may name a configured id too, but only when the request
+names that executor as the one to do the work; an executor's presence in the file
+is not consent, and the ids a run was defined with are frozen with it.
+
+### Presets
+
+All nine are opt-in and **not validated**. Each row is the vendor's documented
+headless invocation, and a test with a fake process proves the argv shape and
+nothing else: no account, no permission policy, no real committed run. A
+preset's first live dispatch is its validation, the same precedent as the
+opencode template. `omh coding executors list` prints every preset as
+unvalidated. If an installed CLI refuses to write or commit by its own policy,
+the unit fails and says so; OMH does not retry in a looser permission mode.
+
+| id | CLI | argv (prompt is one element) | `--model` fragment | validated |
+| --- | --- | --- | --- | --- |
+| `devin` | `devin` | `devin -p --permission-mode accept-edits --respect-workspace-trust false -- {prompt}` | `--model {model}` | no |
+| `gemini` | `gemini` | `gemini -p {prompt} --approval-mode auto_edit` | `-m {model}` | no |
+| `qwen` | `qwen` | `qwen -p {prompt} --approval-mode auto-edit` | `-m {model}` | no |
+| `kimi` | `kimi` | `kimi --print -c {prompt}` | `--model {model}` | no |
+| `cursor-agent` | `cursor-agent` | `cursor-agent -p --force {prompt}` | `--model {model}` | no |
+| `amp` | `amp` | `amp -x {prompt}` | `--model {model}` | no |
+| `droid` | `droid` | `droid exec --auto low {prompt}` | `--model {model}` | no |
+| `aider` | `aider` | `aider --yes-always --message {prompt}` | `--model {model}` | no |
+| `goose` | `goose` | `goose run -t {prompt}` | `--model {model}` | no |
+
+- Devin runs the Devin CLI **locally** (`devin -p ...`). The preset never emits
+  `--cloud`.
+- Devin alone declares a session export (`--export {session_file}`) and resume
+  (`-r {session_id}`); see **Sessions and resume** below.
+- `cursor-agent --force` broadens the CLI's tool approvals. The preset requires
+  the `cursor-agent` name on PATH and never substitutes an unrelated `agent`.
+- `droid --auto low` is the edit level; `medium` also grants git and remote
+  operations, so it is not used to obtain a commit.
+- Each row's vendor page is its `source_url` in
+  `src/coding/executor_presets.py`; flags were read on 2026-11-22.
+
+### Validation rules
+
+Each entry is checked when the file loads. A bad entry is left out with a closed
+reason and the valid entries beside it still load; a bad file gives an empty
+registry plus a reason. Nothing crashes dispatch, and `omh coding executors list`
+shows what was rejected.
+
+- **argv is data, not a shell.** `argv` is a list of 1 to 64 non-empty strings,
+  each at most 4096 UTF-8 bytes with no control characters. A string command is
+  refused. There is no `sh -c` anywhere.
+- **Exactly one prompt placeholder.** `argv` holds exactly one whole element that
+  is `{prompt}` or `{prompt_file}`, and no other braces. `{prompt}` is replaced by
+  the prompt as a single argv element, whatever it contains. `{prompt_file}` is
+  replaced by the path of a private file the dispatcher writes for that attempt.
+  `model`, `effort`, `session.export` and `session.resume` each hold exactly one
+  matching whole-element placeholder (`{model}`, `{effort}`, `{session_file}`,
+  `{session_id}`).
+- **The program is a bare PATH name.** Not a path, not a shell, interpreter or
+  launcher (`sh`, `bash`, `env`, `python`, `node`, `sudo`, `xargs`, `busybox`, and
+  similar), and not a script or batch file (`.sh`, `.py`, `.bat`, `.cmd`, `.ps1`,
+  and similar). This checks the declaration's shape. OMH cannot sandbox what a
+  binary you installed does once it runs.
+- **`version` is a version query.** It starts with the same program as `argv`
+  and ends in `--version`, `-V` or `version`, with no placeholders.
+- **`insert`** is an integer from 1 to the length of `argv` (default 1). Model,
+  effort, export and resume tokens are spliced in at that index in that order.
+- **Ids** match `[a-z][a-z0-9-]{1,31}` exactly, with no case folding or aliases. An
+  id may not shadow a built-in owner (`codex`, `claude-code`, `hermes`, ...), a
+  preset name, `choose`, `unassigned`, `maestro`, `omo-runtime`, `senpi` or `omp`.
+- **No cloud argv.** `--cloud`, `--cloud=...` or `cloud` as the first argument
+  after the program is refused under any id, in `argv` and in every other
+  fragment: `model`, `effort`, `session.export`, `session.resume` and `version`.
+  The entry is left out of the registry with `cloud_refused`, and a `version`
+  vector that declares cloud is never probed. The argv rendered for the worker is
+  checked the same way and refused as `remote_pr_not_available` before any child
+  starts.
+- **A model or effort the entry cannot carry is refused**, never dropped, so a
+  run is never reported as using a model that nothing passed to the CLI.
+
+### How a lane runs
+
+The lane is the built-in lane with a different argv. The contract freezes the
+owner's id and a digest of its definition; if the entry changes or disappears
+before dispatch, the unit comes back `user_executor_binding_refused` before any
+probe or child, and the contracts must be re-frozen. The CLI runs inside the
+unit's worktree, fenced, by the name you declared. The unit is complete only when
+the CLI exits 0 **and** left a clean commit descending from the base; prose on
+stdout, a claimed commit or exit 0 with no commit does not count, and a nonzero
+exit fails the unit. Readiness is the declared version probe, which proves the
+binary runs, not that you are logged in or allowed to use a provider
+(`omh coding executors check` says the same in its `claim_boundary`). Neither the
+config nor the probe is dispatch evidence.
+
+### Sessions and resume
+
+An entry that declares `session.export` gets a session receipt per attempt. The
+dispatcher passes the CLI a fresh export path inside that attempt's private
+scratch directory, hashes the file afterwards, and records a bounded
+`fanout_executor_session/v2` receipt. The receipt is journaled before the
+post-run Git gates, so a unit those gates then refuse
+(`executor_history_unverified`, `executor_scratch_committed`) still carries
+`executor_session` and `executor_session_status`; the refusal is not hidden by
+the receipt, and the receipt does not make the unit succeed. Those gates require
+that `HEAD` descends from the frozen base (`git merge-base --is-ancestor`) and
+that no commit between the base and `HEAD` touches a scratch path, even if a
+later commit removes it. A branch that forked before the base can still merge
+cleanly when it changes only ordinary files. The record format and what it never
+holds are in [`FANOUT-EXECUTOR-EVIDENCE.md`](FANOUT-EXECUTOR-EVIDENCE.md#executor-sessions-for-user-executors).
+
+An entry that also declares `session.resume` can continue one session on a
+budgeted repair. The repair re-enters the same session with the declared tokens
+only when the previous attempt's receipt carried a session id, still describes the
+same unit, owner, contract, base, worktree and head, the same CLI binary, and no
+other unit claims that id. Otherwise the repair starts fresh and its receipt says
+which check it failed. Resume is never automatic outside the repair budget, and
+`fanout status` never launches a resume.
+
+### Remote PR lane: not available yet
+
+A cloud lane, where a harness such as Devin Cloud returns a pull request instead
+of a local commit, **has not shipped**. It is refused as a closed
+`remote_pr_not_available` while a policy decision is pending on whether the
+dispatcher may run a network `git fetch` to import a PR head. It has two opt-ins,
+and both are refused today:
+
+- `remote_pr = true` on the executor entry. It loads only on a preset that names a
+  cloud adapter (`devin`), never on a custom entry. `fanout dispatch` then refuses
+  the whole batch with `remote_pr_not_available` before any probe, worktree or
+  child.
+- `--allow-remote-pr` on `omh coding run` or `omh coding fanout dispatch`
+  (default off). The command exits with `remote_pr lane not available`. At the
+  dispatcher the flag alone is refused the same way.
+
+Neither opt-in falls back to a local run. When refused, nothing is launched,
+nothing is fetched, no session or PR is created, no commit is imported, and no
+socket is opened. OMH opens no network connection of its own; any network use
+would stay inside a CLI you installed. Do not read the config key or the flag as
+a working cloud lane.
+
 ## Workspace preflight
 
 `git worktree add` creating the isolation, and an executor readiness probe
@@ -1539,7 +1753,7 @@ flags described in prose on this page are `--allow-unconfined`,
 #   {"units": [...], "spawn_plan": {...}}   <- spawn_plan required above 4 units
 omh coding fanout prepare --goal <words...> --units units.json [--record] [--source discord]
 omh coding fanout prepare --from-document-plan plan.json [--goal <words...>] \
-  [--report-dir <dir>] [--owner <profile>] [--record]   # one unit per document range
+  [--report-dir <dir>] [--owner <profile-or-configured-id>] [--record]   # one unit per document range
 omh coding fanout validate --units units.json   # also reports spawn_plan_required
 omh coding fanout show <fanout-id> [--limit 20] [--full]
 omh coding fanout brief [<fanout-id>] [--json]
@@ -1560,6 +1774,11 @@ omh coding run --owner <profile> (--goal <words...> | --goal-file goal.txt) \
   [--source discord] [--model <id>] [--effort <level>] [--category <category>]
   # single-invocation: builds and dispatches a one-unit fanout_contract/v2 through
   # the same engine as `fanout dispatch`; see "Single-run entry" above
+omh coding executors list [--json]            # see "Your own harness"
+omh coding executors add <preset> [--force]
+omh coding executors remove <id>
+omh coding executors check [<id>]
+omh coding executor-readiness --executor <profile-or-configured-id> [--force] [--dry-run]
 omh coding fanout reap <fanout-id> [--pid N ...]  # terminate marker-named
   # unit process groups (verify the dispatcher is dead first); refuses any
   # pid the inflight markers do not name — never kills by process name

@@ -3860,6 +3860,15 @@ def _compact_progress_report(report: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+_EXTERNAL_PROGRESS_PROFILE_PATTERN = re.compile(r"external\.[a-z][a-z0-9-]{1,31}", re.ASCII)
+
+
+def _progress_profile_allowed(profile: object) -> bool:
+    """The built-in progress profiles, or one exact `external.<id>` tag (core `executor_progress.progress_profile_allowed`)."""
+    value = str(profile or "")
+    return value in EXECUTOR_PROGRESS_PROFILES or _EXTERNAL_PROGRESS_PROFILE_PATTERN.fullmatch(value) is not None
+
+
 def _valid_progress_binding(binding: dict[str, Any], expected_target_type: str) -> bool:
     if not isinstance(binding, dict) or _has_raw_or_hidden_content(binding):
         return False
@@ -3880,7 +3889,7 @@ def _valid_progress_binding(binding: dict[str, Any], expected_target_type: str) 
         or "\x00" in target_id
     ):
         return False
-    if profile not in EXECUTOR_PROGRESS_PROFILES:
+    if not _progress_profile_allowed(profile):
         return False
     if str(binding.get("binding_id", "")) != f"{target_type}:{target_id}:{profile}":
         return False
@@ -3904,7 +3913,7 @@ def _valid_progress_event(event: dict[str, Any], binding_id: str, instance_id: s
         return False
     if str(event.get("event_type", "")) not in EXECUTOR_PROGRESS_EVENT_TYPES:
         return False
-    if str(event.get("executor_profile", "")) not in EXECUTOR_PROGRESS_PROFILES:
+    if not _progress_profile_allowed(event.get("executor_profile", "")):
         return False
     summary = str(event.get("summary", "")).strip()
     if not summary or len(summary) > 360:
@@ -3923,7 +3932,7 @@ def _valid_progress_report(report: dict[str, Any], binding_id: str, instance_id:
         return False
     if str(report.get("instance_id", "")) != instance_id:
         return False
-    if str(report.get("executor_profile", "")) not in EXECUTOR_PROGRESS_PROFILES:
+    if not _progress_profile_allowed(report.get("executor_profile", "")):
         return False
     summary = str(report.get("summary", "")).strip()
     if not summary or len(summary) > 360:

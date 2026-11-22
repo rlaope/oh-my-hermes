@@ -4,6 +4,25 @@ All notable changes will be documented here.
 
 ## Unreleased
 
+- **Fanout hands coding units to a harness CLI you declare, or to one of nine presets.** Put an executor in
+  `<omh_home>/routing/executors.toml` (never read from a repository or the working directory) as an `argv` list
+  with exactly one `{prompt}` or `{prompt_file}` element, or opt in to a preset with `omh coding executors add
+  <preset>` (`list`, `remove` and `check` come with it). A configured id is then accepted wherever a built-in owner is:
+  `--owner` on `omh coding run` and `fanout prepare`, a unit's `owner` in the `--units` JSON,
+  `executor-readiness --executor`, and a dag-ulw node when the request names it. The lane is the built-in lane: a
+  worktree per unit, a unit that must commit, `fanout_unit_result/v1`,
+  postconditions judged from git and never from the CLI's output, the confinement fence and a HUD row. Entries
+  with a shell, an interpreter, a path, a second prompt placeholder or a built-in's id are left out with a reason,
+  and the entries beside them still load. The presets are Devin CLI (run locally as `devin -p ...`), gemini, qwen,
+  kimi, cursor-agent, amp, droid, aider and goose; all are marked unvalidated until their first live dispatch. An
+  entry that declares `session.export` records a bounded `fanout_executor_session/v2` receipt (the export file's
+  hash and its session id, never its contents), and one that declares `session.resume` can re-enter that session on
+  a budgeted repair. The remote PR lane is not available yet: `remote_pr = true` and `--allow-remote-pr` are
+  refused with `remote_pr_not_available`, and nothing is launched or fetched.
+  The external executor lane is supported only on macOS and Linux; Windows refuses it with
+  `user_executor_platform_unsupported`.
+  (`src/coding/user_executors.py`, `src/coding/executor_presets.py`, `src/coding/fanout_remote_pr.py`,
+  `src/commands/coding.py`; `docs/FANOUT.md` "Your own harness", `docs/FANOUT-EXECUTOR-EVIDENCE.md`)
 - **`omh setup` connects to a Hermes config whose root keys hold column-0 lists, or whose section keys carry a
   comment.** Step 2 stopped with "non-mapping or unsupported root YAML is user-owned" on a `config.yaml` that writes a
   root key's list items at the left edge (`toolsets:` then `- hermes-cli`), the spelling older Hermes releases, hand

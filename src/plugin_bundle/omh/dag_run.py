@@ -65,7 +65,7 @@ again runs again too.
 
 from __future__ import annotations
 
-from collections.abc import Callable, Iterable, Mapping, Sequence
+from collections.abc import Callable, Collection, Iterable, Mapping, Sequence
 from contextlib import AbstractContextManager
 from dataclasses import dataclass
 import hashlib
@@ -166,6 +166,9 @@ CHILD_FAILURE_STOPS: Final = frozenset({"failed", "error", "timeout", "interrupt
 # What every view says for a node accepted while its handoff could not be read where the child wrote it.
 HANDOFF_NOT_CHECKED: Final = "handoff not checked"
 EXTERNAL_OWNERS: Final = ("claude-code", "codex")
+# A node owner is a built-in owner or an executor id the operator declared (`user_owner_ids`); the set a node may
+# name is passed in per home, never read here. Same grammar as the executor registry.
+OWNER_ID: Final = re.compile(r"[a-z][a-z0-9-]{1,31}")
 # The line a builder gets for its `review_focus` (native task and external export alike).
 REVIEW_FOCUS_PREFIX: Final = "Review focus (what the parent will check when it reads your work): "
 # Every native build node with a write scope gets this (OpenAI's Codex guide, read 2026-11-20); an exported unit gets
@@ -313,7 +316,12 @@ def _record_shape_ok(raw: object) -> bool:
         return False
     # The coding owners the defining request named (`dag_tool._define`); only `define` writes them.
     owners = raw.get("owners", [])
-    if not isinstance(owners, list) or not all(isinstance(owner, str) and owner in EXTERNAL_OWNERS for owner in owners):
+    # Built-in owners always; a configured id only as a snapshot taken at define/extend (`registered_owners`).
+    snapshot = raw.get("registered_owners", [])
+    if not isinstance(snapshot, list) or not all(isinstance(owner, str) and OWNER_ID.fullmatch(owner) for owner in snapshot):
+        return False
+    admitted = {*EXTERNAL_OWNERS, *snapshot}
+    if not isinstance(owners, list) or not all(isinstance(owner, str) and owner in admitted for owner in owners):
         return False
     # The goal criteria (`_validated_criteria`); a run defined without them has no key.
     criteria = raw.get("criteria", [])
@@ -333,7 +341,7 @@ def _record_shape_ok(raw: object) -> bool:
             return False
         if "role" in node and node["role"] not in ROLES:
             return False
-        if "owner" in node and (node["owner"] not in EXTERNAL_OWNERS or not is_coding(node)):
+        if "owner" in node and (node["owner"] not in admitted or not is_coding(node)):
             return False
     if dag_core.layers(ids, {node["id"]: node["depends_on"] for node in nodes}) is None:
         return False
@@ -436,7 +444,7 @@ def valid_id(value: object, reason: str, say: str) -> str:
     return value
 
 
-def _validated_node(raw: object) -> dict[str, Any]:
+def _validated_node(raw: object, owners: Collection[str] = EXTERNAL_OWNERS) -> dict[str, Any]:
     if not isinstance(raw, Mapping) or set(raw) - NODE_FIELDS:
         raise DagRefusal("invalid_node",
                          "Each node takes only id, label, category, prompt, depends_on, write_scope, role, owner, "
@@ -501,9 +509,10 @@ def _validated_node(raw: object) -> dict[str, Any]:
         # guess keeps it native (`is_coding`). Not in the digest (`NODE_FIELDS`).
         validated["role_guess"] = guess
     if "owner" in raw:
-        if raw["owner"] not in EXTERNAL_OWNERS or not is_coding(validated):
+        if raw["owner"] not in owners or not is_coding(validated):
             raise DagRefusal("invalid_owner",
-                             f"Node {node_id}: owner is one of {', '.join(EXTERNAL_OWNERS)} and only a coding node may name it.")
+                             f"Node {node_id}: owner is a built-in owner or a configured executor id, "
+                             "and only a coding node may name one.")
         validated["owner"] = raw["owner"]
     if "local" in raw:
         # A node whose material must not leave the machine: only a local model_map option runs it (`local_options`).
@@ -980,7 +989,8 @@ def definition_digest(nodes: Sequence[Mapping[str, Any]], criteria: Sequence[Map
 
 def new_record(session_id: str, run: str, name: object, goal: object, raw_nodes: object, now: float, *,
                oneshot_limit: int | None = None, oneshot_spent: int = 0,
-               named_roles: bool = True, criteria: object = None) -> dict[str, Any]:
+               named_roles: bool = True, criteria: object = None,
+               owners: Collection[str] = EXTERNAL_OWNERS) -> dict[str, Any]:
     """A validated run record. ``oneshot_limit`` and ``oneshot_spent``: the one-shot child budget and the children
     this process already started against it; a graph over what is left is refused. ``named_roles=False`` leaves
     `require_named_roles` to the caller: `dag_tool` first checks whether the run already exists (a run stored
@@ -1002,7 +1012,7 @@ def new_record(session_id: str, run: str, name: object, goal: object, raw_nodes:
             f"graph has {len(raw_nodes)}.{used} A one-shot run has no later session: {cut}, or "
             "run the work interactively.",
         )
-    nodes = [_validated_node(raw) for raw in raw_nodes]
+    nodes = [_validated_node(raw, owners) for raw in raw_nodes]
     if named_roles:
         require_named_roles(raw_nodes)
     require_prompt_markers(nodes)
@@ -2114,7 +2124,7 @@ def _require_oneshot_room(added: Sequence[Mapping[str, Any]], remaining: int | N
 
 def repair(
     record: dict[str, Any], derived: Mapping[str, Mapping[str, Any]], node_id: str, raw_nodes: object, now: float,
-    *, oneshot_remaining: int | None = None,
+    *, oneshot_remaining: int | None = None, owners: Collection[str] = EXTERNAL_OWNERS,
 ) -> list[str]:
     """Add a group of repair nodes for a failed or blocked node. Returns the new ids.
 
@@ -2136,7 +2146,7 @@ def repair(
         )
     if not isinstance(raw_nodes, list) or not raw_nodes:
         raise DagRefusal("empty_graph", "A repair needs at least one node.")
-    added = [_validated_node(raw) for raw in raw_nodes]
+    added = [_validated_node(raw, owners) for raw in raw_nodes]
     require_named_roles(raw_nodes)
     require_prompt_markers(added)
     if len(nodes) + len(added) > MAX_NODES:
@@ -2174,7 +2184,7 @@ def extend_rounds_left(record: Mapping[str, Any]) -> int:
 
 def extend(
     record: dict[str, Any], derived: Mapping[str, Mapping[str, Any]], raw_nodes: object, found_by: object, now: float,
-    *, oneshot_remaining: int | None = None, criteria: object = None,
+    *, oneshot_remaining: int | None = None, criteria: object = None, owners: Collection[str] = EXTERNAL_OWNERS,
 ) -> list[str]:
     """Add a round of nodes to a run whose every node passed but whose goal check found work missing.
 
@@ -2215,7 +2225,7 @@ def extend(
         origin = checks[-1] if checks else ""
     if not isinstance(raw_nodes, list) or not raw_nodes:
         raise DagRefusal("empty_graph", "An extend round needs at least one node.")
-    added = [_validated_node(raw) for raw in raw_nodes]
+    added = [_validated_node(raw, owners) for raw in raw_nodes]
     require_named_roles(raw_nodes)
     require_prompt_markers(added)
     if len(nodes) + len(added) > MAX_NODES:

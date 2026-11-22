@@ -6,12 +6,23 @@ attempt lineage, and freshly observed workspace/recovery state. Decoding and
 projection are pure; explicit local probe helpers observe bounded metadata only.
 No helper scans native session stores or launches continuation.
 An observed ID proves neither successful work nor durable native session storage.
+
+A user-declared executor does not print a native event stream. When its entry
+declares a `session.export` fragment, the CLI writes one bounded JSON file into
+this attempt's dispatcher-owned scratch directory and the dispatcher records
+`fanout_executor_session/v2` (`user_export_json`): the expected filename, the
+SHA-256 of the bytes it read, and the root `session_id` only when that is a
+canonical id. The transcript body is never read into a record and is never
+stored under `.omh`. v2 is evidence for a budgeted same-session repair, not a
+status-time continuation: no status read launches anything.
 """
 from __future__ import annotations
 
 from collections.abc import Collection, Iterable, Mapping
 from typing import Final
 from dataclasses import dataclass
+import errno
+import json
 import os
 from pathlib import Path, PurePosixPath, PureWindowsPath
 from hashlib import sha256
@@ -29,12 +40,41 @@ if TYPE_CHECKING:
     from .fanout_confinement import FanoutFilesystemConfinement
 
 SCHEMA_VERSION = 'fanout_executor_session/v1'
+# v2 is the file-export dialect. It is a separate closed schema, branched in
+# the reader and the serializer, so a v1 receipt keeps its exact bytes.
+FILE_EXPORT_SCHEMA_VERSION = 'fanout_executor_session/v2'
+FILE_EXPORT_PROTOCOL = 'user_export_json'
+# The one basename the dispatcher assigns inside the attempt's scratch dir.
+# A receipt records the basename, never the absolute path or the body.
+FILE_EXPORT_REF = 'session.json'
+MAX_EXPORT_BYTES = 1024 * 1024
+MAX_EXPORT_DEPTH = 32
 MAX_EVENTS = 65536
 _PROTOCOLS = {'codex': 'codex_exec_json', 'claude-code': 'claude_stream_json'}
 _UUID = re.compile(r'[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}')
 _SHA = re.compile(r'(?:[0-9a-f]{40}|[0-9a-f]{64})')
 _DIGEST = re.compile(r'[0-9a-f]{64}')
 _TOKEN = re.compile(r'[A-Za-z0-9_.:/-]{1,256}')
+# A file export may name a root `session_id`. Only these two shapes are ids;
+# anything else is a malformed export, not a reference to resume from.
+_EXPORT_ID = re.compile(r'(?:[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}|devin-[0-9a-f]{32})')
+_EXPORT_REF = re.compile(r'[A-Za-z0-9][A-Za-z0-9._-]{0,63}')
+# Closed reasons for a v2 receipt. `export_digest_observed` is the only
+# observed reason; the rest name why no digest became evidence.
+FILE_EXPORT_FAILURE_REASONS: Final[frozenset[str]] = frozenset({
+    'export_missing', 'export_unsafe', 'export_unreadable', 'export_not_object',
+    'export_duplicate_keys', 'export_oversized', 'export_invalid_utf8',
+    'export_invalid_json', 'export_too_deep', 'export_changing', 'export_invalid_id',
+})
+FILE_EXPORT_OBSERVED_REASON: Final[str] = 'export_digest_observed'
+# Why a v2 receipt does or does not carry a resumable id. Recorded on every
+# v2 receipt: a repair that started fresh says which check it failed.
+FILE_EXPORT_RESUME_REASONS: Final[frozenset[str]] = frozenset({
+    'not_a_repair', 'no_resume_declared', 'no_prior_receipt', 'not_user_export',
+    'binding_changed', 'no_id', 'duplicate_reference', 'end_revision_not_observed',
+    'stale_workspace', 'recovery_snapshot_mismatch', 'binary_changed',
+    'same_session', 'fresh_retry',
+})
 State = Literal['observed', 'not_observed', 'not_available']
 
 
@@ -102,14 +142,30 @@ class SessionReceipt:
     reference: str | None
     event_ref: str | None
     end_head: str | None
+    # v2 file-export fields. All three keep their defaults on a native receipt,
+    # and `to_dict` emits them only in the v2 branch, so v1 bytes are unchanged.
+    export_ref: str | None = None
+    export_sha256: str | None = None
+    resume_reason: str = ''
+
+    @property
+    def reference_kind(self) -> str | None:
+        """The kind of reference this receipt actually observed, or None."""
+        if self.state != 'observed':
+            return None
+        if self.capability.protocol == FILE_EXPORT_PROTOCOL:
+            # A file with no canonical id is still a file observation; it just
+            # cannot be resumed from.
+            return 'session_id' if self.reference is not None else 'export_file'
+        return _reference_kind(self.capability)
 
     def to_dict(self) -> dict[str, object]:
         binding, capability = self.binding, self.capability
         incarnation = binding.worktree_incarnation
-        return {
+        record: dict[str, object] = {
             'schema_version': SCHEMA_VERSION, 'state': self.state, 'reason': self.reason,
             'executor': capability.executor, 'protocol': capability.protocol,
-            'reference_kind': _reference_kind(capability) if self.state == 'observed' else None,
+            'reference_kind': self.reference_kind,
             'reference': self.reference, 'event_ref': self.event_ref,
             'fanout_id': binding.fanout_id, 'unit_id': binding.unit_id, 'run_ref': binding.run_ref,
             'attempt_id': binding.attempt_id, 'contract_digest': binding.contract_digest,
@@ -122,6 +178,15 @@ class SessionReceipt:
                                 'sha256': capability.binary_identity.sha256},
             'version': capability.version, 'predecessor_attempt_id': binding.predecessor_attempt_id,
         }
+        if capability.protocol == FILE_EXPORT_PROTOCOL:
+            record['schema_version'] = FILE_EXPORT_SCHEMA_VERSION
+            # No decoded frame identity in a file export; the digest and the id
+            # are the whole observation.
+            record.pop('event_ref')
+            record['export_ref'] = self.export_ref
+            record['export_sha256'] = self.export_sha256
+            record['resume_reason'] = self.resume_reason
+        return record
 
 
 @dataclass(frozen=True, slots=True)
@@ -213,6 +278,154 @@ class SessionDecoder:
         return receipt
 
 
+@dataclass(frozen=True, slots=True)
+class SessionExportObservation:
+    """What one bounded read of an executor's export file established.
+
+    `reference` is the root `session_id` only when it is a canonical id. A
+    valid file with no id is still an observation: `export_sha256` says which
+    bytes were seen, `reference` stays None, and nothing can be resumed from it.
+    """
+
+    state: State
+    reason: str
+    export_ref: str
+    export_sha256: str | None
+    reference: str | None
+
+
+class _DuplicateExportKey(ValueError):
+    """A JSON object repeated a key; the export is ambiguous, not just wrong."""
+
+
+def _reject_duplicate_keys(pairs: list[tuple[str, object]]) -> dict[str, object]:
+    result: dict[str, object] = {}
+    for key, value in pairs:
+        if key in result:
+            raise _DuplicateExportKey(key)
+        result[key] = value
+    return result
+
+
+def _exceeds_depth(document: str) -> bool:
+    """Bound nesting before the parser allocates: a deep file is not evidence."""
+    depth = 0
+    in_string = False
+    escaped = False
+    for character in document:
+        if in_string:
+            if escaped:
+                escaped = False
+            elif character == '\\':
+                escaped = True
+            elif character == '"':
+                in_string = False
+        elif character == '"':
+            in_string = True
+        elif character in '{[':
+            depth += 1
+            if depth > MAX_EXPORT_DEPTH:
+                return True
+        elif character in '}]':
+            depth -= 1
+    return False
+
+
+def observe_session_export(path: Path, *, export_ref: str = FILE_EXPORT_REF,
+                           scratch_fd: int | None = None) -> SessionExportObservation:
+    """Digest one attempt's export file; never decode its transcript body.
+
+    Only a regular, single-link, size-stable file no larger than 1 MiB, opened
+    without following a link and read through that same descriptor, is
+    observed. Anything else returns `not_observed` with a closed reason and no
+    hash: a substituted, oversized or still-changing path is not a session.
+    """
+    def failed(reason: str) -> SessionExportObservation:
+        return SessionExportObservation('not_observed', reason, export_ref, None, None)
+
+    no_follow = getattr(os, 'O_NOFOLLOW', 0)
+    if not no_follow or not getattr(os, 'O_DIRECTORY', 0) or os.open not in os.supports_dir_fd:
+        return failed('export_unsafe')
+    try:
+        directory = os.open(path.parent, os.O_RDONLY | os.O_DIRECTORY | no_follow)
+        try:
+            if scratch_fd is not None and not os.path.samestat(os.fstat(scratch_fd), os.fstat(directory)):
+                return failed('export_unsafe')
+            descriptor = os.open(path.name, os.O_RDONLY | no_follow | getattr(os, 'O_NONBLOCK', 0),
+                                 dir_fd=directory)
+        finally:
+            os.close(directory)
+    except FileNotFoundError:
+        return failed('export_missing')
+    except OSError as exc:
+        return failed('export_unsafe' if exc.errno in (errno.ELOOP, errno.ENOTDIR) else 'export_unreadable')
+    try:
+        with os.fdopen(descriptor, 'rb') as stream:
+            before = os.fstat(stream.fileno())
+            if not stat.S_ISREG(before.st_mode) or before.st_nlink != 1:
+                return failed('export_unsafe')
+            if before.st_size > MAX_EXPORT_BYTES:
+                return failed('export_oversized')
+            data = stream.read(MAX_EXPORT_BYTES + 1)
+            after = os.fstat(stream.fileno())
+            if len(data) > MAX_EXPORT_BYTES:
+                return failed('export_oversized')
+            if (after.st_dev, after.st_ino, after.st_size, after.st_mtime_ns, after.st_ctime_ns) != (
+                    before.st_dev, before.st_ino, before.st_size, before.st_mtime_ns, before.st_ctime_ns):
+                return failed('export_changing')
+            if len(data) != before.st_size:
+                return failed('export_changing')
+    except OSError:
+        return failed('export_unreadable')
+    try:
+        document = data.decode('utf-8')
+    except UnicodeDecodeError:
+        return failed('export_invalid_utf8')
+    if _exceeds_depth(document):
+        return failed('export_too_deep')
+    try:
+        parsed = json.loads(document, object_pairs_hook=_reject_duplicate_keys)
+    except _DuplicateExportKey:
+        return failed('export_duplicate_keys')
+    except ValueError:
+        return failed('export_invalid_json')
+    if not isinstance(parsed, dict):
+        return failed('export_not_object')
+    digest = sha256(data).hexdigest()
+    reference = parsed.get('session_id')
+    if reference is None:
+        return SessionExportObservation('observed', FILE_EXPORT_OBSERVED_REASON, export_ref, digest, None)
+    if not isinstance(reference, str) or not _EXPORT_ID.fullmatch(reference):
+        # An unparseable or non-canonical id invalidates the whole file: a
+        # clipped id is not a session someone can resume, and guessing is worse.
+        return failed('export_invalid_id')
+    return SessionExportObservation('observed', FILE_EXPORT_OBSERVED_REASON, export_ref, digest, reference)
+
+
+def build_file_export_receipt(
+    *, capability: SessionCapability, binding: SessionBinding,
+    observation: SessionExportObservation, end_head: str | None, resume_reason: str,
+) -> SessionReceipt:
+    """The v2 receipt for one attempt, bound to this attempt's lineage.
+
+    Raises ValueError when the record would not read back; the caller only
+    supplies dispatcher-owned values, so that is a programming error, not
+    something an executor can trigger.
+    """
+    if capability.protocol != FILE_EXPORT_PROTOCOL:
+        raise ValueError('not_a_file_export_capability')
+    if resume_reason not in FILE_EXPORT_RESUME_REASONS:
+        raise ValueError('invalid_resume_reason')
+    if not _EXPORT_REF.fullmatch(observation.export_ref):
+        raise ValueError('invalid_export_ref')
+    receipt = SessionReceipt(
+        observation.state, observation.reason, capability, binding, observation.reference,
+        None, end_head, observation.export_ref, observation.export_sha256, resume_reason)
+    if read_session_receipt(receipt.to_dict()).receipt is None:
+        raise ValueError('invalid_dispatcher_session_binding')
+    return receipt
+
+
 def _text(value: object, *, limit: int = 256) -> str:
     if not isinstance(value, str) or not 0 < len(value) <= limit or not value.isprintable():
         raise ValueError('invalid_text')
@@ -261,17 +474,86 @@ _FIELDS = (
 )
 
 
+_FILE_EXPORT_FIELDS = (
+    'schema_version', 'state', 'reason', 'executor', 'protocol', 'reference_kind', 'reference',
+    'fanout_id', 'unit_id', 'run_ref', 'attempt_id', 'contract_digest',
+    'worktree_path', 'worktree_incarnation', 'base_sha', 'launch_head', 'end_head',
+    'binary_identity', 'version', 'predecessor_attempt_id',
+    'export_ref', 'export_sha256', 'resume_reason',
+)
+
+
+def _read_file_export_receipt(value: Mapping[object, object]) -> SessionRead:
+    """Validate one v2 file-export record; same lineage fields, plus the file."""
+    try:
+        record = _object(value, _FILE_EXPORT_FIELDS)
+        binary = _object(record['binary_identity'], ('resolved_path', 'sha256'))
+        capability = SessionCapability(
+            _match(record['executor'], _TOKEN), _match(record['protocol'], _TOKEN),
+            BinaryIdentity(_path(binary['resolved_path']), _match(binary['sha256'], _DIGEST)),
+            None if record['version'] is None else _text(record['version']))
+        if capability.protocol != FILE_EXPORT_PROTOCOL:
+            raise ValueError('invalid_protocol')
+        incarnation = _object(record['worktree_incarnation'],
+                              ('incarnation_id', 'common_dir', 'branch', 'device', 'inode'))
+        binding = SessionBinding(
+            _match(record['fanout_id'], _TOKEN), _match(record['unit_id'], _TOKEN),
+            _match(record['run_ref'], _TOKEN), _match(record['attempt_id'], _UUID),
+            _match(record['contract_digest'], _DIGEST), _path(record['worktree_path']),
+            WorktreeIncarnation(_match(incarnation['incarnation_id'], _UUID),
+                                _path(incarnation['common_dir']), _text(incarnation['branch']),
+                                _integer(incarnation['device']), _integer(incarnation['inode'])),
+            _match(record['base_sha'], _SHA), _match(record['launch_head'], _SHA),
+            _optional_match(record['predecessor_attempt_id'], _UUID))
+        if binding.predecessor_attempt_id == binding.attempt_id:
+            raise ValueError('self_predecessor')
+        end_head = _optional_match(record['end_head'], _SHA)
+        export_ref = _match(record['export_ref'], _EXPORT_REF)
+        export_sha256 = _optional_match(record['export_sha256'], _DIGEST)
+        resume_reason = _text(record['resume_reason'])
+        if resume_reason not in FILE_EXPORT_RESUME_REASONS:
+            raise ValueError('invalid_resume_reason')
+        # Only the two canonical id shapes are references; the reader never
+        # scans nested fields or transcript text for one.
+        reference = _optional_match(record['reference'], _EXPORT_ID)
+        reason = _text(record['reason'])
+        state: State
+        if record['state'] == 'observed':
+            state = 'observed'
+            expected_kind = 'session_id' if reference is not None else 'export_file'
+            if (export_sha256 is None or record['reference_kind'] != expected_kind
+                    or reason != FILE_EXPORT_OBSERVED_REASON):
+                raise ValueError('invalid_observation')
+        elif record['state'] == 'not_observed':
+            state = 'not_observed'
+            if (reference is not None or export_sha256 is not None
+                    or record['reference_kind'] is not None or reason not in FILE_EXPORT_FAILURE_REASONS):
+                raise ValueError('invalid_not_observed')
+        else:
+            raise ValueError('invalid_state')
+        return SessionRead(SessionReceipt(state, reason, capability, binding, reference,
+                                          None, end_head, export_ref, export_sha256, resume_reason),
+                           reason)
+    except ValueError:
+        # Malformed optional metadata disables this capability, not the unit result.
+        return SessionRead(None, 'invalid_receipt')
+
+
 def read_session_receipt(value: object) -> SessionRead:
     """Validate one optional decoded record without altering old result evidence.
 
     Closed fixed-depth fields bound retained data; the caller bounds JSON reads.
     Missing legacy or unknown-version records never synthesize an observation.
+    The v1 native decoder is untouched; a v2 record takes its own branch.
     """
     if value is None:
         return SessionRead(None, 'legacy_missing')
     if not _is_mapping(value):
         return SessionRead(None, 'invalid_receipt')
-    if value.get('schema_version') != SCHEMA_VERSION:
+    version = value.get('schema_version')
+    if version == FILE_EXPORT_SCHEMA_VERSION:
+        return _read_file_export_receipt(value)
+    if version != SCHEMA_VERSION:
         return SessionRead(None, 'unknown_schema')
     try:
         record = _object(value, _FIELDS)
@@ -546,6 +828,13 @@ def project_session_resume(
     }
     receipt = read.receipt
     if receipt is None or receipt.state != 'observed':
+        return result
+    if receipt.capability.protocol == FILE_EXPORT_PROTOCOL:
+        # A file export is repair-only evidence. A budgeted repair inside the
+        # dispatcher may re-enter the same session; a status read never renders
+        # a vendor command and never launches one, so the answer is the same
+        # whether or not this workspace is still the one that receipt ended on.
+        result['reason'] = 'repair_only'
         return result
     if receipt.binding != binding:
         result['reason'] = 'binding_mismatch'

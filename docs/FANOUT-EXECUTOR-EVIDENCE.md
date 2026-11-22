@@ -81,6 +81,110 @@ matches the current one. Otherwise `reason` names the gap:
 always `not_tested`: OMH has not verified that the native session store still
 holds that conversation, and repeated status reads launch nothing.
 
+## Executor sessions for user executors
+
+Session receipts for these executors use `fanout_executor_session/v2`. An
+executor declared in `<omh_home>/routing/executors.toml`, or a preset, that
+declares `session.export` (see [**Your own harness** in `FANOUT.md`](FANOUT.md#your-own-harness))
+cannot be decoded frame by frame, so its session evidence is a file receipt.
+Only Devin's preset declares an export today, and it is unvalidated until a live
+dispatch: the shipped tests use a fake CLI that writes a small JSON object with a
+root `session_id`, not a real Devin export. Built-in codex and Claude Code
+receipts stay `fanout_executor_session/v1`, byte for byte.
+
+### What is observed
+
+For each attempt the dispatcher creates a private scratch directory inside the
+unit's worktree (`.omh-executor-tmp-<attempt id>/`, mode 0700, self-ignoring),
+passes the CLI the path of `session.json` in it through the declared export
+fragment, and after the process exits observes that one file. The file counts only
+if it is a regular, single-link file of at most 1 MiB, opened without following a
+link, whose size and timestamps did not change while it was read. It must be
+UTF-8 JSON with an object at the root, no duplicate keys, and nesting no deeper
+than 32. The dispatcher hashes the bytes and reads one thing from the object: a
+root `session_id`, accepted only as a canonical lowercase UUID or `devin-` plus 32
+lowercase hex digits. Stderr, stdout, nested fields and earlier attempts' exports
+supply nothing.
+
+| Outcome | Receipt |
+| --- | --- |
+| Valid file with an accepted `session_id` | `state: observed`, `reason: export_digest_observed`, `reference_kind: session_id`, `reference` is the id, `export_sha256` is the file hash |
+| Valid file with no `session_id` | `observed`, `reference_kind: export_file`, no `reference`. A hash only, so nothing can be resumed from it |
+| No usable file | `state: not_observed`, no `reference`, no `export_sha256`, and a closed `reason`: `export_missing`, `export_unsafe`, `export_unreadable`, `export_not_object`, `export_duplicate_keys`, `export_oversized`, `export_invalid_utf8`, `export_invalid_json`, `export_too_deep`, `export_changing` or `export_invalid_id` (a `session_id` of any other shape voids the whole file) |
+
+A receipt is written for failed and timed-out attempts too, so a missing export
+shows as `not_observed` instead of as nothing. It is also recorded before the
+post-run Git gates return. Those gates require that `HEAD` descends from the
+frozen base and that no commit between the base and `HEAD` touches a scratch
+path, even if a later commit removes it. A unit refused with `executor_history_unverified` or
+`executor_scratch_committed` still carries `executor_session` and
+`executor_session_status` and the same receipt is in the journal. The receipt
+describes the export file only; the refusal still fails the unit. It carries the same lineage and
+workspace fields as v1 (executor, `fanout_id`, `unit_id`, `run_ref`,
+`attempt_id`, `predecessor_attempt_id`, `contract_digest`, `worktree_path`,
+`worktree_incarnation`, `base_sha`, `launch_head`, `end_head`,
+`binary_identity`, `version`), `protocol: user_export_json`, and these:
+
+| Field | Meaning |
+| --- | --- |
+| `export_ref` | The export's base name, `session.json`. Never the absolute path. |
+| `export_sha256` | SHA-256 of the export file's bytes, or null when `not_observed`. |
+| `resume_reason` | Why this attempt did or did not continue a session (below). |
+
+There is no `event_ref` in v2. The `export_ref` is a historical name, not a
+promise the file is still readable: when the attempt ends the dispatcher empties
+the scratch directory and removes it. Cleanup works through the directory handle
+opened when the scratch was created, never through the absolute path. If the
+directory was renamed, the original directory is still emptied but stays under its
+new name; if a different entry (such as a symlink) now sits at the original path,
+it is neither followed nor removed. A tool that moved the scratch directory can
+therefore leave an empty directory or its own replacement behind.
+
+### What is never stored
+
+- The export file's contents. Only its hash and its `session_id` are kept. A
+  transcript sentinel written into a fixture export is absent from every file
+  under the OMH home after a dispatch (`tests/test_user_executor_sessions.py`).
+- The export file itself, the absolute path to it, or the prompt. The prompt file
+  is removed with the scratch directory too.
+- Any argv fragment. A receipt holds no `--export` or `-r` token, and a stored
+  receipt is never turned back into argv.
+- Account, login or provider identity. The export is read for one id field and
+  nothing else.
+
+### Resume is repair-only
+
+The `resume` block for a v2 receipt is always `available: false`, `reason:
+repair_only`, with no `argv` and no `shell_command`. `fanout status` renders no
+vendor command and launches nothing, whether or not the workspace still matches.
+
+The one place a session is re-entered is a budgeted repair, inside the
+dispatcher, for an executor that declares `session.resume`. The repair passes
+the declared resume tokens with the id only if the immediately preceding attempt's
+receipt is a v2 `observed` receipt with an id, and still matches this unit's
+owner, frozen contract, fanout, unit, run and base, the same worktree incarnation
+at the head the receipt ended on, the same CLI binary bytes, and a recovery state
+the dispatcher re-observed, and no other unit claims the same id. The repair gets
+a new attempt id and a new export file; it inherits no observation. Otherwise it
+starts a fresh session and its receipt's `resume_reason` says why. The id is
+spent at the first launch of a repair, so a transient retry starts fresh.
+
+| `resume_reason` | Meaning |
+| --- | --- |
+| `same_session` | The repair re-entered the preceding attempt's session. |
+| `not_a_repair` | An ordinary first attempt. |
+| `no_resume_declared` | The entry declares no `session.resume`. |
+| `no_prior_receipt`, `not_user_export` | There was no v2 receipt to continue. |
+| `no_id` | The previous export had no usable `session_id`. |
+| `binding_changed`, `binary_changed` | The unit, contract, base or CLI binary no longer matches. |
+| `stale_workspace`, `recovery_snapshot_mismatch`, `end_revision_not_observed` | The worktree is not the one the receipt ended on. |
+| `duplicate_reference` | Another unit claims the same id. |
+| `fresh_retry` | A transient retry after the id was spent. |
+
+A session id in a receipt is the CLI's own claim about its own export. It does not
+show the CLI was logged in, that the session still exists on the vendor side, or
+that the work passed; the git result and the unit's postconditions decide that.
+
 ## Failure diagnostics (`fanout_failure_diagnostic/v1`)
 
 ### What is captured

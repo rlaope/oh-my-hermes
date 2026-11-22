@@ -72,6 +72,180 @@ _NAMED_LAUNCH_SCRIPT = 'exec -a "$0" "$1" "${@:2}"'
 
 
 @dataclass(frozen=True, slots=True)
+class NamedLaunchIdentity:
+    """The PATH link name a worker is launched by, and the file it resolved to.
+
+    A multi-call binary (a mise shim, say) picks its tool from argv[0], so the
+    name on PATH is part of the command's identity, not a display detail. Both
+    halves are recorded: the link name is what runs, the resolved target is
+    what the fence hashed and what must still be behind that name at launch.
+    """
+
+    name: str
+    link_path: str
+    target_path: str
+    device: int
+    inode: int
+    size: int
+    mtime_ns: int
+
+
+def external_launch_argv(link_path: str, arguments: Sequence[object] = ()) -> tuple[str, ...]:
+    """Run a user-declared executor by its absolute PATH link name.
+
+    Deliberately not `named_launch_argv`: that helper preserves argv[0] by
+    running `/bin/bash -c 'exec -a ...'`, which is fine for a constant script
+    but is still a shell in the worker's launch path. An external executor is
+    declared as argv data, so it needs no shell at all -- the link PATH found
+    already carries the name the binary expects in argv[0].
+    """
+    return (str(link_path), *(str(argument) for argument in arguments))
+
+
+def external_search_path(environment: Mapping[str, str], *, binary: str,
+                         repositories: Sequence[Path], write_roots: Sequence[Path]) -> str:
+    """Exclude mutable directory entries AND their executable link targets."""
+    repos = tuple(repo.resolve() for repo in repositories)
+    roots = (*repos, *(root.resolve() for root in write_roots))
+
+    def identity(path: Path) -> tuple[int, int] | None:
+        try:
+            info = path.stat()
+        except FileNotFoundError:
+            return None  # A planned write root or an absent PATH candidate.
+        return info.st_dev, info.st_ino
+
+    try:
+        root_ids = {key for root in roots if (key := identity(root)) is not None}
+        lane_parents = [(identity(repo.parent), f"{repo.name}-fanout-".casefold()) for repo in repos]
+    except OSError:
+        return ""  # Cannot establish the exclusion boundary.
+
+    def excluded(path: Path) -> bool:
+        # safe_chain visits every ancestor, including intermediate link hops.
+        # Filesystem identity survives case aliases that realpath can preserve.
+        if identity(path) in root_ids or any(path.is_relative_to(root) for root in roots):
+            return True
+        name = path.name.casefold()
+        return name == ".git" or any(name.startswith(prefix) and parent == identity(path.parent)
+                                     for parent, prefix in lane_parents)
+
+    def safe_chain(path: Path) -> bool:
+        # realpath alone loses intermediate links: a trusted link can reach a
+        # trusted binary *through* an alias a lane is allowed to replace.
+        pending = list(reversed(path.parts[1:]))
+        current = Path(path.anchor)
+        links = 0
+        while pending:
+            part = pending.pop()
+            current = current.parent if part == ".." else current / part
+            if excluded(current):
+                return False
+            if current.is_symlink():
+                links += 1
+                if links > 40:
+                    return False
+                target = current.readlink()
+                if target.is_absolute():
+                    current = Path(target.anchor)
+                    pending.extend(reversed(target.parts[1:]))
+                else:
+                    current = current.parent
+                    pending.extend(reversed(target.parts))
+        return True
+
+    trusted = []
+    for token in environment.get("PATH", "").split(os.pathsep):
+        entry = Path(token)
+        if not entry.is_absolute():
+            continue
+        try:
+            if not all(safe_chain(entry / name) for name in _external_program_names(binary)):
+                continue
+        except (OSError, RuntimeError):
+            continue
+        trusted.append(token)
+    return os.pathsep.join(trusted)
+
+
+def _external_program_names(binary: str) -> tuple[str, ...]:
+    if os.name != "nt":
+        return (binary,)
+    # Never let PATHEXT turn a declaration into a batch/shell launcher.
+    if Path(binary).suffix:
+        return (binary,) if Path(binary).suffix.lower() in {".exe", ".com"} else ()
+    return (binary + ".exe", binary + ".com")
+
+
+def observe_named_launch(
+    name: str, environment: Mapping[str, str]
+) -> NamedLaunchIdentity | None:
+    """Resolve a bare program name on the trusted PATH and record both identities.
+
+    Only absolute PATH entries are searched: a relative entry, an empty entry
+    (which some shells read as the cwd) or the cwd itself is not a trusted
+    place to find a worker we are about to run inside a fence. None when the
+    name cannot be established this way, which a caller must refuse rather
+    than replace with the resolved target.
+    """
+    if not name or os.sep in name or (os.altsep is not None and os.altsep in name):
+        return None
+    search = environment.get("PATH", "")
+    for entry in search.split(os.pathsep):
+        if not entry or not os.path.isabs(entry):
+            continue
+        candidates = (Path(entry) / suffix for suffix in _external_program_names(name))
+        candidate = next((path for path in candidates if path.is_file() and os.access(path, os.X_OK)), None)
+        if candidate is None:
+            continue
+        try:
+            target = candidate.resolve(strict=True)
+            target_stat = target.stat()
+        except OSError:
+            return None
+        if not stat.S_ISREG(target_stat.st_mode):
+            return None
+        return NamedLaunchIdentity(
+            name=name,
+            link_path=str(candidate.absolute()),
+            target_path=str(target),
+            device=target_stat.st_dev,
+            inode=target_stat.st_ino,
+            size=target_stat.st_size,
+            mtime_ns=target_stat.st_mtime_ns,
+        )
+    return None
+
+
+def named_launch_identity_holds(identity: NamedLaunchIdentity) -> bool:
+    """Re-read the link and its target; False when either moved since observation.
+
+    This is the launch-time half of the guarantee: the fence proof and the
+    command that runs must describe the same file. A link retargeted to
+    another binary, a replaced target, or an unreadable path all refuse.
+    Nothing here falls back to the resolved multicall name.
+    """
+    try:
+        link = Path(identity.link_path)
+        target = Path(identity.target_path)
+        link_stat = link.lstat()
+        if not stat.S_ISLNK(link_stat.st_mode) and not stat.S_ISREG(link_stat.st_mode):
+            return False
+        if str(link.resolve(strict=True)) != identity.target_path:
+            return False
+        current = target.stat()
+    except OSError:
+        return False
+    return (
+        current.st_dev == identity.device
+        and current.st_ino == identity.inode
+        and current.st_size == identity.size
+        and current.st_mtime_ns == identity.mtime_ns
+        and stat.S_ISREG(current.st_mode)
+    )
+
+
+@dataclass(frozen=True, slots=True)
 class _OwnerStatePath:
     environment_variable: str | None
     default: Path
@@ -192,6 +366,11 @@ class FanoutFilesystemConfinement:
     # Off for fences whose commands only read local state: dispatcher git
     # (#2035) and a diagnostics analyzer (#2036).
     allow_network: bool = True
+    # Set only for a fence prepared for a user-declared executor. Such a worker
+    # is declared argv data, so its launch takes the direct named-path branch
+    # (`external_command`) instead of the built-in `exec -a` shim. Default off:
+    # every built-in owner and every check keeps the byte-identical launch.
+    external_worker: bool = False
 
     def command(self, argv: Sequence[str]) -> tuple[str, ...] | None:
         """Return the same-root sandbox command, or None when no receipt proved it."""
@@ -201,6 +380,35 @@ class FanoutFilesystemConfinement:
         if not executable:
             return None
         return self._fenced(executable, argv)
+
+    def external_command(self, argv: Sequence[str]) -> tuple[str, ...] | None:
+        """Fence a user-declared executor's own argv, launched by its PATH link name.
+
+        Never `/bin/bash -c`: the link PATH found carries the argv[0] a
+        multi-call binary picks its tool from, so the name is preserved without
+        a shell in the launch path. The link and its resolved target are
+        recorded first and re-checked after the command is built, so the fence
+        proof and the command name the same file. A link inside a write root
+        (the worker could retarget it) or one that moved refuses: no fallback
+        to the resolved multicall name, no shell. None when this fence was not
+        prepared for an external worker.
+        """
+        if not self.external_worker:
+            return None
+        if self.receipt.get("enforced") is not True or not argv or self.child is None:
+            return None
+        identity = observe_named_launch(str(argv[0]), self.environment)
+        if identity is None:
+            return None
+        if (self._within_write_roots(str(Path(identity.link_path).parent))
+                or self._within_write_roots(identity.target_path)):
+            return None
+        if not named_launch_identity_holds(identity):
+            return None
+        command = self._fenced_launch(external_launch_argv(identity.link_path, argv[1:]))
+        if not named_launch_identity_holds(identity):
+            return None
+        return command
 
     def dispatcher_command(self, argv: Sequence[str], *, path: str | None = None) -> tuple[str, ...] | None:
         """Fence a command the DISPATCHER runs in this unit's worktree.
@@ -264,9 +472,13 @@ class FanoutFilesystemConfinement:
         return None if located is None else str(Path(located).resolve())
 
     def _fenced(self, executable: str, argv: Sequence[str]) -> tuple[str, ...]:
+        return self._fenced_launch(named_launch_argv(str(argv[0]), executable, argv[1:]))
+
+    def _fenced_launch(self, launch: tuple[str, ...]) -> tuple[str, ...]:
+        """Wrap one already-built launch argv in this fence's sandbox command."""
         assert self.child is not None
         return sandbox_command(
-            named_launch_argv(str(argv[0]), executable, argv[1:]),
+            launch,
             self.selected,
             self.roots,
             self.child,
@@ -689,6 +901,7 @@ def prepare_fanout_filesystem_confinement(
     unit_branch: str = "",
     repo_root: Path | None = None,
     allow_unconfined: bool = False,
+    external_worker: bool = False,
 ) -> FanoutFilesystemConfinement:
     """Probe one unit's backend before allowing its owner or checks to use it.
 
@@ -700,6 +913,10 @@ def prepare_fanout_filesystem_confinement(
     The opt-in answers "this host cannot fence", never "the fenced tree broke
     the fence": it is honoured only for a reason `UNCONFINED_REASON_SOURCES`
     names a host capability (#2036).
+
+    `external_worker` marks the fence the dispatcher prepared for a
+    user-declared executor, whose launch takes `FanoutFilesystemConfinement.
+    external_command`: the same fence, a shell-free named-path command.
     """
     confinement = _prepare_fanout_filesystem_confinement(
         worktree, environment, commands,
@@ -714,6 +931,7 @@ def prepare_fanout_filesystem_confinement(
         confinement,
         receipt={**confinement.receipt, "unconfined_opt_in": opted_in},
         unconfined_allowed=opted_in,
+        external_worker=external_worker,
     )
 
 
