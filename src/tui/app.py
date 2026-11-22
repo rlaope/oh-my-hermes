@@ -2494,6 +2494,12 @@ class App(ModesMixin, AgentViewMixin):
         self.held_input: list[Key | Paste | Mouse] = []
         self.menu_index = 0
         self.menu_closed: str | None = None  # the composer text Esc closed the `/` menu on; it stays closed over that text
+        # The composer text the person's own typing left (a printable key or Backspace), else None: a mid-line `/name`
+        # opens the menu only over it, so a recalled, pasted or loaded text opens none until the next typed key.
+        self.menu_typed: str | None = None
+        # (text, token start) of the mid-line menu Down moved into; until then Up and Down are the composer's and
+        # Enter sends the line (`_menu_moves`, `_menu_enter`).
+        self.menu_engaged: tuple[str, int] | None = None
         # Where the open completion menu is drawn: under the composer (True) or in the slot above it (False); None
         # while no menu is open. Decided as it opens and kept while it stays open (`_place_menu`).
         self.menu_below: bool | None = None
@@ -5297,6 +5303,11 @@ class App(ModesMixin, AgentViewMixin):
         if composer.text != before:
             self.menu_index = 0
             self.menu_closed = None
+            if composer is self.composer:
+                typed = isinstance(event, Key) and (
+                    event.name == BACKSPACE or (event.name == CHAR and not event.ctrl and not event.alt)
+                )
+                self.menu_typed = composer.text if typed else None
             self.escape_armed = None  # an edit takes back what a second Esc would have done
         elif composer.normal != editing:
             self.escape_armed = None  # so does a change of vim mode's editing mode (`i` between two Escs)
@@ -6418,30 +6429,43 @@ class App(ModesMixin, AgentViewMixin):
 
     def _menu_entries(self) -> list[Completion]:
         """Completions for what the `/` menu completes (`_menu_token`), unless Esc closed them over this text; none in
-        vim mode's NORMAL."""
+        vim mode's NORMAL. A mid-line `/name` matches by prefix and substring only: the scattered matches a leading
+        `/` adds would make a path word like `/opt` or `/tmp` offer commands."""
         text = self.composer.text
         token = None if self.slot is not None or self.composer.normal or text == self.menu_closed else self._menu_token()
         if token is None:
             return []
-        command, space, typed = token[2].partition(" ")
-        if space:
+        _start, _end, typed, leading = token
+        command, space, look = typed.partition(" ")
+        if leading and space and command.lower() == "theme":
             # `/theme <look>`: the launch looks, by what is typed of one
             return [Completion(f"theme {name}", LAUNCH_SUMMARIES[name]) for name in LAUNCH_PRESETS
-                    if name.startswith(typed.lower()) and name != typed.lower()]
-        return [] if "/" in command else completions(command, self.catalog)
+                    if name.startswith(look.lower()) and name != look.lower()]
+        if space or "/" in command:
+            return []
+        return completions(command, self.catalog, scattered=leading)
 
-    def _menu_token(self) -> tuple[int, int, str] | None:
-        """(start, end, typed) of what the `/` menu completes, `typed` without its slash: the whole input when it is
-        a leading `/word` and nothing else, or `/theme ` and part of one word; else the `/name` at the caret, typed at
-        the input's start or after whitespace (`slash_token_at`), as Claude Code opens its menu mid-line."""
+    def _menu_token(self) -> tuple[int, int, str, bool] | None:
+        """(start, end, typed, leading) of what the `/` menu completes, `typed` without its slash.
+
+        `leading` is the whole input when it is a `/word` and nothing else, or `/theme ` and part of one word, as
+        before. Otherwise it is the `/name` at the caret, typed at the input's start or after whitespace
+        (`slash_token_at`), as Claude Code opens its menu mid-line, and only over text the person's own typing left
+        (`menu_typed`): history recall, a paste or a loaded draft opens none until the next typed key.
+        """
         text = self.composer.text
         if text.startswith("/"):
             command, space, typed = text[1:].partition(" ")
             if not any(ch.isspace() for ch in text) or (
                 space and command.lower() == "theme" and not any(ch.isspace() for ch in typed)
             ):
-                return 0, len(text), text[1:]
-        return slash_token_at(text, self.composer.caret)
+                return 0, len(text), text[1:], True
+        token = slash_token_at(text, self.composer.caret) if text == self.menu_typed else None
+        return None if token is None else (*token, False)
+
+    def _menu_engaged(self, token: tuple[int, int, str, bool]) -> bool:
+        """Whether Down moved into this mid-line menu; a leading `/` menu has the keys from the start."""
+        return token[3] or self.menu_engaged == (self.composer.text, token[0])
 
     def _menu_rows(self) -> list[tuple[str, str]]:
         """The open completion menu as `(label, summary)` rows: slash commands, else `@` paths."""
@@ -6461,6 +6485,12 @@ class App(ModesMixin, AgentViewMixin):
         if not rows:
             return False
         delta = step if step != 0 else (-1 if key.name == UP else 1)
+        token = self._menu_token() if self._menu_entries() else None
+        if token is not None and not self._menu_engaged(token):
+            # A mid-line menu leaves Up to history and the caret; Down moves into it, and from then on it has both.
+            if delta < 0:
+                return False
+            self.menu_engaged = (self.composer.text, token[0])
         self.menu_index = min(max(self.menu_index + delta, 0), len(rows) - 1)
         return True
 
@@ -6470,13 +6500,17 @@ class App(ModesMixin, AgentViewMixin):
         Ink's rule (`completionToApplyOnSubmit`): the line is sent instead when
         the row would only add the space after a command typed in full, and
         when the typed word is a command's whole name (an alias included)
-        while the highlight is still on the first row. Alt+Enter and
+        while the highlight is still on the first row. A mid-line menu takes
+        the row only once Down moved into it; until then Enter sends the line
+        as typed, so a prompt holding `/opt` is never rewritten. Alt+Enter and
         Shift+Enter add a line, menu or not.
         """
         if key.name != ENTER or key.alt or key.shift or not self._menu_rows():
             return False
         entries, token = self._menu_entries(), self._menu_token()
         if entries and token is not None:
+            if not self._menu_engaged(token):
+                return False
             typed = token[2]
             invocation = parse_slash(f"/{typed}")
             name = entries[min(self.menu_index, len(entries) - 1)].name
@@ -6495,11 +6529,13 @@ class App(ModesMixin, AgentViewMixin):
         entries, token = self._menu_entries(), self._menu_token()
         if entries and token is not None:
             # Only the token is replaced; the text on both sides stays. A space already after it is the one the
-            # pick adds, so a mid-line pick never doubles it.
-            start, end, _typed = token
-            if self.composer.text[end : end + 1] == " ":
+            # pick adds; a newline or tab already ends the word, so none is added before it.
+            start, end, _typed, _leading = token
+            following = self.composer.text[end : end + 1]
+            if following == " ":
                 end += 1
-            self.composer.replace(start, end, f"/{entries[min(self.menu_index, len(entries) - 1)].name} ")
+            trail = "" if following.isspace() and following != " " else " "
+            self.composer.replace(start, end, f"/{entries[min(self.menu_index, len(entries) - 1)].name}{trail}")
             return
         start, word = at_token(self.composer.text, self.composer.caret)
         if not self.path_items or not word or self.composer.normal:

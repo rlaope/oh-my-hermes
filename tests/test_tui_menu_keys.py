@@ -14,7 +14,7 @@ import unittest
 from test_tui_catalog import CATALOG, catalog_app
 from test_tui_modes import SID, make_app, notices, type_text
 from omh.tui.app import App, PathItem
-from omh.tui.keys import DOWN, ENTER, ESCAPE, LEFT, TAB, UP, Key
+from omh.tui.keys import BACKSPACE, DOWN, ENTER, ESCAPE, LEFT, TAB, UP, Key, Paste
 
 PATHS = [PathItem("@src/foo.py", "foo.py", ""), PathItem("@src/fold/", "fold/", "dir")]
 
@@ -156,20 +156,22 @@ class EscOnTheSlashMenuTests(unittest.TestCase):
 
 
 class MidLineSlashMenuTests(unittest.TestCase):
-    """A `/` after whitespace opens the menu for the token at the caret, as Claude Code's does; a path does not."""
+    """A `/` after whitespace opens the menu for the token at the caret, as Claude Code's does; a path does not.
+
+    A mid-line menu never takes a key the line needs: Enter sends the line and Up stays history and the caret until
+    Down moves into the menu; Tab always takes the highlighted row. It opens only over the person's own typing.
+    """
 
     def test_a_slash_after_a_space_opens_the_menu_filtered_by_what_follows_it(self) -> None:
         for typed, first in (("asdf /", None), ("asdf /mo", "/model"), ("/mo", "/model"), ("asdf /con", "/config"),
                              ("one\n/mo", "/model")):
             with self.subTest(typed=typed):
                 app, _client = catalog_app()
-                if "\n" in typed:
-                    head, tail = typed.split("\n")
-                    type_text(app, head)
+                head, newline, tail = typed.partition("\n")
+                type_text(app, head)
+                if newline:
                     app._on_input(Key(ENTER, alt=True))
                     type_text(app, tail)
-                else:
-                    type_text(app, typed)
                 self.assertEqual(app.composer.text, typed)
                 rows = [label for label, _summary in app._menu_rows()]
                 self.assertTrue(rows)
@@ -190,6 +192,95 @@ class MidLineSlashMenuTests(unittest.TestCase):
                 type_text(app, typed)
                 self.assertEqual(app._menu_rows(), [])
 
+    def test_a_mid_line_word_matches_by_prefix_or_substring_never_by_scattered_letters(self) -> None:
+        # `/opt` holds o..p..t in order in names the leading `/` menu offers; mid-line, a path word offers nothing.
+        lead, _client = catalog_app()
+        type_text(lead, "/opt")
+        self.assertTrue(lead._menu_rows())
+        for typed in ("path /opt", "cd /tmp", "see /usr", "in /etc"):
+            with self.subTest(typed=typed):
+                app, _client = catalog_app()
+                type_text(app, typed)
+                self.assertEqual(app._menu_rows(), [])
+        app, _client = catalog_app()
+        type_text(app, "try /uml")
+        self.assertEqual(app._menu_rows()[0][0], "/omh-codebase-uml")  # a substring still finds it
+
+    def test_enter_sends_a_mid_line_line_unchanged(self) -> None:
+        for typed in ("path /opt", "fix /a", "a /", "please /con"):
+            with self.subTest(typed=typed):
+                app, client = catalog_app()
+                type_text(app, typed)
+                app._on_input(Key(ENTER))
+                self.assertEqual(client.named("prompt.submit"), [{"session_id": SID, "text": typed}])
+                self.assertEqual([call for call in client.calls if call[0] == "slash.exec"], [])
+
+    def test_down_then_enter_takes_the_row_it_moved_to(self) -> None:
+        app, client = catalog_app()
+        type_text(app, "please /t")
+        rows = [label for label, _summary in app._menu_rows()]
+        app._on_input(Key(DOWN))
+        self.assertEqual(app.menu_index, 1)
+        app._on_input(Key(ENTER))
+        self.assertEqual(app.composer.text, f"please {rows[1]} ")
+        self.assertEqual(client.calls, [])
+        app._on_input(Key(UP))  # the pick closed the menu: Up is the composer's again
+        self.assertEqual(client.calls, [])
+
+    def test_up_on_an_engaged_menu_moves_its_highlight(self) -> None:
+        app, _client = catalog_app()
+        type_text(app, "please /t")
+        app._on_input(Key(DOWN))
+        app._on_input(Key(DOWN))
+        app._on_input(Key(UP))
+        self.assertEqual(app.menu_index, 1)
+
+    def test_tab_takes_the_highlighted_row_without_moving_into_the_menu(self) -> None:
+        app, _client = catalog_app()
+        type_text(app, "please /con")
+        app._on_input(Key(TAB))
+        self.assertEqual(app.composer.text, "please /config ")
+
+    def test_up_walks_history_whose_entries_end_in_a_slash_word(self) -> None:
+        app, _client = catalog_app()
+        app.composer.history = ["old one", "earlier /con", "newest /con"]
+        seen = []
+        for _ in range(3):
+            app._on_input(Key(UP))
+            seen.append(app.composer.text)
+            self.assertEqual(app._menu_rows(), [])  # recalled text opens no menu
+        self.assertEqual(seen, ["newest /con", "earlier /con", "old one"])
+
+    def test_up_moves_the_caret_over_a_typed_mid_line_menu(self) -> None:
+        app, _client = catalog_app()
+        type_text(app, "first")
+        app._on_input(Key(ENTER, alt=True))
+        type_text(app, "fix /con")
+        self.assertTrue(app._menu_rows())
+        app._on_input(Key(UP))
+        self.assertLess(app.composer.caret, len("first\n"))
+        self.assertEqual(app.menu_index, 0)
+
+    def test_a_paste_ending_in_a_slash_word_opens_no_menu_and_enter_sends_it(self) -> None:
+        app, client = catalog_app()
+        app._on_input(Paste("say hi /mo"))
+        self.assertEqual(app._menu_rows(), [])
+        app._on_input(Key(ENTER))
+        self.assertEqual(client.named("prompt.submit"), [{"session_id": SID, "text": "say hi /mo"}])
+
+    def test_the_next_typed_key_after_a_paste_opens_it(self) -> None:
+        app, _client = catalog_app()
+        app._on_input(Paste("say hi /m"))
+        type_text(app, "o")
+        self.assertEqual(app._menu_rows()[0][0], "/model")
+
+    def test_backspace_after_a_paste_opens_it_too(self) -> None:
+        app, _client = catalog_app()
+        app._on_input(Paste("say hi /mox"))
+        self.assertEqual(app._menu_rows(), [])
+        app._on_input(Key(BACKSPACE))
+        self.assertEqual(app._menu_rows()[0][0], "/model")
+
     def test_the_caret_inside_the_line_opens_the_menu_for_the_token_under_it(self) -> None:
         app, _client = catalog_app()
         type_text(app, "fix /mo then more")
@@ -201,35 +292,15 @@ class MidLineSlashMenuTests(unittest.TestCase):
         self.assertEqual(app.composer.text, "fix /model then more")
         self.assertEqual(app.composer.caret, len("fix /model "))
 
-    def test_taking_a_row_mid_line_replaces_only_the_token(self) -> None:
-        app, client = catalog_app()
-        type_text(app, "please /con")
-        app._on_input(Key(ENTER))
-        self.assertEqual(app.composer.text, "please /config ")
-        self.assertEqual(client.calls, [])
+    def test_a_pick_before_a_newline_adds_no_space(self) -> None:
         app, _client = catalog_app()
-        type_text(app, "one")
-        app._on_input(Key(ENTER, alt=True))
         type_text(app, "two /ulw")
+        app._on_input(Key(ENTER, alt=True))
+        type_text(app, "next")
+        for _ in range(len("next") + 1):
+            app._on_input(Key(LEFT))
         app._on_input(Key(TAB))
-        self.assertEqual(app.composer.text, "one\ntwo /ulw-review ")
-
-    def test_a_line_not_starting_with_a_slash_still_goes_as_a_prompt(self) -> None:
-        app, client = catalog_app()
-        type_text(app, "please /con")
-        app._on_input(Key(ENTER))  # takes /config
-        type_text(app, "now")
-        self.assertEqual(app._menu_rows(), [])
-        app._on_input(Key(ENTER))
-        self.assertEqual(client.named("prompt.submit"), [{"session_id": SID, "text": "please /config now"}])
-        self.assertEqual([call for call in client.calls if call[0] == "slash.exec"], [])
-
-    def test_a_whole_name_mid_line_sends_the_line_on_the_first_enter(self) -> None:
-        app, client = catalog_app()
-        type_text(app, "please /config")
-        self.assertTrue(app._menu_rows())
-        app._on_input(Key(ENTER))
-        self.assertEqual(client.named("prompt.submit"), [{"session_id": SID, "text": "please /config"}])
+        self.assertEqual(app.composer.text, "two /ulw-review\nnext")
 
     def test_esc_closes_the_mid_line_menu_until_the_text_changes(self) -> None:
         app, _client = catalog_app()
@@ -238,6 +309,39 @@ class MidLineSlashMenuTests(unittest.TestCase):
         self.assertEqual(app._menu_rows(), [])
         type_text(app, "d")
         self.assertEqual(app._menu_rows()[0][0], "/model")
+
+
+class LeadingSlashMenuUnchangedTests(unittest.TestCase):
+    """The leading `/` menu behaves as before the mid-line menu came."""
+
+    def test_enter_takes_a_partial_name_and_runs_a_whole_one(self) -> None:
+        app, client = catalog_app()
+        type_text(app, "/mo")
+        app._on_input(Key(ENTER))
+        self.assertEqual((app.composer.text, client.calls), ("/model ", []))
+        app, client = catalog_app()
+        type_text(app, "/config")
+        app._on_input(Key(ENTER))
+        self.assertEqual(client.calls, [("slash.exec", {"command": "config", "session_id": SID})])
+
+    def test_theme_lists_the_launch_looks(self) -> None:
+        app, _client = catalog_app()
+        type_text(app, "/theme ")
+        looks = [label for label, _summary in app._menu_rows()]
+        self.assertTrue(looks)
+        self.assertTrue(all(label.startswith("/theme ") for label in looks))
+        typed = looks[0].removeprefix("/theme ")[:2]
+        type_text(app, typed)
+        self.assertTrue(all(label.startswith(f"/theme {typed}") for label, _summary in app._menu_rows()))
+
+    def test_up_moves_the_leading_menu_at_once(self) -> None:
+        app, _client = catalog_app()
+        type_text(app, "/t")
+        app._on_input(Key(DOWN))
+        app._on_input(Key(UP))
+        self.assertEqual(app.menu_index, 0)
+        app._on_input(Key(DOWN))
+        self.assertEqual(app.menu_index, 1)
 
 
 class MenuEndsTests(unittest.TestCase):

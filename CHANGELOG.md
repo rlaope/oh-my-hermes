@@ -8,6 +8,12 @@ All notable changes will be documented here.
   and skill menu filtered by `as`; a bare `/` after a space opens the whole list. The token runs from its `/` to the
   caret, so moving the caret onto a `/name` in the middle of a line opens it too, in multi-line input as well. Taking
   a row replaces only that `/name` and keeps the text on both sides. A path-like slash (`./x`, `../x`, `~/x`, `a/b`,
+  `http://`, `//`) opens nothing, and a mid-line word matches by prefix or substring only, so `/opt` or `/tmp`
+  offers nothing. The menu never takes a key the line needs: Enter still sends the line as typed (`path /opt`
+  stays `path /opt`), and Up stays history and caret movement until Down moves into the menu; Tab always takes the
+  highlighted row. Text from history recall, a paste or a loaded draft opens no mid-line menu until the next typed
+  key. A line that does not start with `/` still goes as a prompt with the `/skill` text in it, as Claude Code sends
+  a skill named after plain text. (`src/tui/slash.py` `slash_token_at`, `src/tui/app.py`)
   `http://`, `//`) opens nothing. Enter is unchanged: a line that does not start with `/` still goes as a prompt,
   with the `/skill` text in it, as Claude Code sends a skill named after plain text. (`src/tui/slash.py`
   `slash_token_at`, `src/tui/app.py`)

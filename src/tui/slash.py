@@ -325,8 +325,11 @@ def _offered_name(command: SlashCommand, key: str) -> str:
     return next((alias for alias in command.menu_aliases if alias.startswith(key)), command.name)
 
 
-def completions(prefix: str, catalog_pairs: Iterable[tuple[str, str]] = ()) -> list[Completion]:
-    """Commands starting with `prefix` (no slash), then the ones that only contain it.
+def completions(
+    prefix: str, catalog_pairs: Iterable[tuple[str, str]] = (), scattered: bool = True
+) -> list[Completion]:
+    """Commands starting with `prefix` (no slash), then the ones that only contain it, then (with `scattered`) the
+    ones that only hold its letters in order (`subsequence_score`).
 
     In each group the TUI's own come first, then the gateway catalog, so
     `/uml` still finds `omh-codebase-uml` after every name that starts with
@@ -356,14 +359,16 @@ def completions(prefix: str, catalog_pairs: Iterable[tuple[str, str]] = ()) -> l
     inner = [
         completion for completion in offered if key in completion.name.lower() and not completion.name.lower().startswith(key)
     ]
+    if not scattered:
+        return leading + inner
     near = {completion.name for completion in leading + inner}
-    scattered = [
+    spread = [
         (score, completion)
         for completion in offered
         if completion.name not in near and (score := subsequence_score(key, completion.name)) is not None
     ]
-    scattered.sort(key=lambda item: (-item[0], item[1].name))
-    return leading + inner + [completion for _, completion in scattered]
+    spread.sort(key=lambda item: (-item[0], item[1].name))
+    return leading + inner + [completion for _, completion in spread]
 
 
 # A `/name` token: whitespace or the line's edge on both sides, so a path (`/Users/x`) or `a/b` is none.
