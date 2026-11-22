@@ -215,6 +215,7 @@ All notable changes will be documented here.
   guarded, intended or only theoretical; end with a `Not checked:` line. A reply format the request sets still comes
   last, and loading the skill stays an optional last clause. The hint grows by 225 characters, only on review
   requests.
+- omher connects over SSH to a Windows computer whose Hermes has only the `hermes.cmd` shim and no venv: the remote discovery now reads the shim's interpreter too (a UTF-8 BOM included), in the same order the local app reads launchers (the agent's bin before the user bin, `.exe` before `.cmd` in each), so a stale launcher from an older install is never picked over the current one. Reported and first fixed by @jundev0001 in #3077.
 
 ## 5.0.0 - 2026-11-21
 
