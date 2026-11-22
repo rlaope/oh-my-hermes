@@ -589,13 +589,13 @@ fn not_found(e: &std::io::Error) -> bool {
     e.kind() == std::io::ErrorKind::NotFound
 }
 
-/// A file `want` takes in `dir` or in folders up to `depth` levels under it (links followed): whether one was found,
-/// and whether any folder or entry could not be read (every error but NotFound).
+/// A file `want` takes (by name) in `dir` or in folders up to `depth` levels under it, links followed: whether one
+/// was found, and whether any folder or entry could not be read (every error but NotFound). Only a link is asked what
+/// it points to; any other entry's type comes with the folder's listing.
 fn seek(dir: &Path, depth: u32, want: &dyn Fn(&Path) -> bool) -> (bool, bool) {
-    let gone = not_found;
     let rd = match std::fs::read_dir(dir) {
         Ok(rd) => rd,
-        Err(e) => return (false, !gone(&e)),
+        Err(e) => return (false, !not_found(&e)),
     };
     let mut unknown = false;
     for e in rd {
@@ -604,17 +604,34 @@ fn seek(dir: &Path, depth: u32, want: &dyn Fn(&Path) -> bool) -> (bool, bool) {
             continue;
         };
         let p = e.path();
-        match std::fs::metadata(&p) {
-            Ok(m) if m.is_file() && want(&p) => return (true, unknown),
-            Ok(m) if m.is_dir() && depth > 0 => {
-                let (f, u) = seek(&p, depth - 1, want);
-                if f {
-                    return (true, unknown || u);
+        let named = want(&p);
+        if !named && depth == 0 {
+            continue;
+        }
+        let Ok(kind) = e.file_type() else {
+            unknown = true;
+            continue;
+        };
+        let (file, folder) = if kind.is_symlink() {
+            match std::fs::metadata(&p) {
+                Ok(m) => (m.is_file(), m.is_dir()),
+                Err(err) => {
+                    unknown |= !not_found(&err);
+                    continue;
                 }
-                unknown |= u;
             }
-            Ok(_) => {}
-            Err(err) => unknown |= !gone(&err),
+        } else {
+            (kind.is_file(), kind.is_dir())
+        };
+        if named && file {
+            return (true, unknown);
+        }
+        if folder && depth > 0 {
+            let (f, u) = seek(&p, depth - 1, want);
+            if f {
+                return (true, unknown || u);
+            }
+            unknown |= u;
         }
     }
     (false, unknown)
@@ -669,6 +686,18 @@ mod tests {
         std::fs::create_dir_all(root.join("archived_sessions")).unwrap();
         std::fs::write(root.join("archived_sessions").join(format!("rollout-2026-11-01T10-00-00-{X2}.jsonl")), "{}\n").unwrap();
         assert_eq!(n("codex", X2), "exists");
+        // a rollout that is a link to the real file counts; a broken link does not
+        #[cfg(unix)]
+        {
+            let x3 = "01a1d060-6967-74c3-8b7c-33c05229878c";
+            let real = tmp("state-rollout");
+            std::fs::write(real.join("r.jsonl"), "{}\n").unwrap();
+            std::os::unix::fs::symlink(real.join("r.jsonl"), day.join(format!("rollout-2026-11-22T11-00-00-{x3}.jsonl"))).unwrap();
+            assert_eq!(n("codex", x3), "exists");
+            std::fs::remove_file(real.join("r.jsonl")).unwrap();
+            assert_eq!(n("codex", x3), "absent");
+            let _ = std::fs::remove_dir_all(real);
+        }
         // not a UUID, or an agent whose conversations are not looked at
         assert!(conversation_state(&root, "claude", "../x").is_err());
         assert!(conversation_state(&root, "grok", C1).is_err());

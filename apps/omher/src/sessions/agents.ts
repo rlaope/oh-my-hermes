@@ -324,6 +324,9 @@ export interface SessionRec {
   account?: string;
   /** Its CLI could not continue its conversation (termEnd): its ended view also offers a new conversation. */
   resumeFailed?: boolean;
+  /** The person pressed a key in its CLI while it held this conversation: the conversation was used, so a file of it
+   *  that is gone was deleted, not never written. */
+  used?: boolean;
   /** omher restarted while it ran and it does not continue by itself: it starts again on Resume. */
   paused?: boolean;
   /** The name the person gave it (Rename); none = the automatic one. */
@@ -432,23 +435,25 @@ export function setsUpScreen(out: string): boolean {
   return /\x1b\[[>=]\d+(?:;\d+)?u/.test(out);
 }
 
-/** What a CLI prints when it will not continue a conversation: Claude Code's `--resume` of one it cannot find and its
- *  `--session-id` of one it already has, and Codex's `resume` of one it cannot find. */
-const REFUSALS = ["No conversation found with session ID", "is already in use", "No saved session found with ID"];
-/** Whether output `out` holds one of those refusals. */
-export const refusedResume = (out: string): boolean => REFUSALS.some((r) => out.includes(r));
+/** Whether output `out` holds a CLI's refusal of conversation `id`: Claude Code's `--resume` of one it cannot find
+ *  and its `--session-id` of one it already has, and Codex's `resume` of one it cannot find. Only with that id, so a
+ *  transcript that says "is already in use" of something else is not one. */
+export const refusedResume = (out: string, id: string): boolean =>
+  [`No conversation found with session ID: ${id}`, idInUseText(id), `No saved session found with ID ${id}`].some((r) => out.includes(r));
+const idInUseText = (id: string) => `Session ID ${id} is already in use`;
 /** Claude Code refused `--session-id <id>` because it already has that conversation. */
-export const idInUse = (out: string): boolean => out.includes("is already in use");
+export const idInUse = (out: string, id: string): boolean => out.includes(idInUseText(id));
 
 /** What a terminal does when its program ends. A TERMINALS row: its CLI ended, so it goes on as the login `shell` in
  *  the same terminal; its shell ended (exit, Ctrl+D, any code once the person pressed a key or pasted), so the row
  *  `close`s as its x does; a shell that ended with an error before that (it could not start properly) stays `ended`,
  *  showing why. A CLI started with a conversation id the row kept (`resumed`: `--resume <id>`, `codex resume <id>`,
  *  or `--session-id <id>` again) could not continue it (the conversation, its account folder or its login is gone)
- *  when it ended with an error after printing the CLI's refusal (`refused`), or before the person pressed a key in
- *  its output (`keyed`) and either never set up its screen (`drew`: setsUpScreen, or more than UI_BYTES of output)
- *  or ended within RESUME_FAILS_MS (`ms` after it was started, a fallback for a refusal not known): it stays `ended`
- *  too, keeping its agent and conversation for Restart. The terminal view of a chat session only says it `ended`
+ *  when it ended with an error after printing the CLI's refusal of that id (`refused`), ended with an error before
+ *  the person pressed a key in its output (`keyed`), or ended cleanly before such a key and either never set up its
+ *  screen (`drew`: setsUpScreen, or more than UI_BYTES of output) or ended within RESUME_FAILS_MS (`ms` after it was
+ *  started, a fallback for a refusal not known): it stays `ended` too, keeping its agent and conversation for
+ *  Restart. The terminal view of a chat session only says it `ended`
  *  (the chat decides the session). */
 export function termEnd(o: {
   ofChat: boolean;
@@ -464,7 +469,9 @@ export function termEnd(o: {
   if (!o.shell) {
     if (!o.resumed) return "shell";
     if (o.refused && o.code !== 0) return "ended";
-    return !o.keyed && (!o.drew || (o.ms ?? Infinity) < RESUME_FAILS_MS) ? "ended" : "shell";
+    if (o.keyed) return "shell";
+    if (o.code !== 0) return "ended";
+    return !o.drew || (o.ms ?? Infinity) < RESUME_FAILS_MS ? "ended" : "shell";
   }
   return o.keyed || o.code === 0 ? "close" : "ended";
 }

@@ -305,17 +305,19 @@ RULES = (
     " CLI started,",
     "Restart on a TERMINALS Claude Code or Codex session that has ended and has its conversation id continues it the"
     " same way.",
-    "A Claude Code conversation with no file (Claude Code writes one on the first message, so nobody typed in it) is not"
-    " continued: its terminal starts again with `--session-id` and the same id, and when Claude Code refuses that id as"
-    " one it already has (`is already in use`), the terminal continues it with `--resume` instead, once.",
-    "A Codex conversation with no rollout is not started: its row ends as below. When the look cannot tell (a folder it"
-    " cannot read, an account whose folder is gone), the conversation is continued.",
-    "A CLI started with the conversation id its row kept that ends with an error after printing its refusal (Claude"
-    " Code's `No conversation found with session ID`, Codex's `No saved session found with ID`), or that ends before the"
-    " person pressed a key or pasted in its output and either before it set up its screen (the alternate screen,"
-    " bracketed paste, focus reports or Kitty keyboard flags turned on, or 2 KB of output) or within 1.8 seconds of"
-    " being started (a fallback for a refusal omher does not know), or that cannot start, could not continue it: its"
-    " row keeps its agent and that id and shows it ended or failed instead of going on as the login shell, and an ended"
+    "A Claude Code conversation with no file that nobody used (no key was pressed in it and it has no title of its own;"
+    " Claude Code writes the file on the first message) is not continued: its terminal starts again with `--session-id`"
+    " and the same id, and when Claude Code refuses that id as one it already has (`Session ID <id> is already in use`),"
+    " the terminal continues it with `--resume` instead, once.",
+    "A used Claude Code conversation with no file (deleted) and a Codex conversation with no rollout are not started: the"
+    " row ends as below. When the look cannot tell (a folder it cannot read, an account whose folder is gone), the"
+    " conversation is continued.",
+    "A CLI started with the conversation id its row kept that prints its refusal of that id (Claude Code's `No"
+    " conversation found with session ID: <id>`, Codex's `No saved session found with ID <id>`) and ends with an error,"
+    " that ends with an error before the person pressed a key or pasted in its output, or that ends cleanly before such"
+    " a key and either before it set up its screen (the alternate screen, bracketed paste, focus reports or Kitty"
+    " keyboard flags turned on, or 2 KB of output) or within 1.8 seconds of being started (a fallback for a refusal"
+    " omher does not know), or that cannot start, could not continue it: its row keeps its agent and that id and shows it ended or failed instead of going on as the login shell, and an ended"
     " one also offers Start a new conversation, which forgets the id and starts the agent as a new terminal does.",
     "A continued CLI that ends any other way, one that waited for input (a login) and was left later included, goes on"
     " as the login shell without its id, as a new one does.",
@@ -2269,7 +2271,8 @@ class PastConversationsAreOnlyRead(unittest.TestCase):
             body = self.past.split(fn, 1)[1].split("\n}\n", 1)[0]
             self.assertIn("if !is_uuid(id) {", body, fn)
         text = _flat(DOC.read_text(encoding="utf-8"))
-        self.assertIn("It refuses a symlink anywhere under those folders and any file that is not inside that home once its links are resolved", text)
+        self.assertIn("It refuses a symlink anywhere under those folders (except `conversation_state` below, which only stats names and"
+                      " follows links as the CLI does) and any file that is not inside that home once its links are resolved", text)
         self.assertIn("never opens a credential, token or config file of either CLI", text)
 
     def test_a_conversation_is_looked_for_by_name_only_before_a_terminal_continues_it(self) -> None:

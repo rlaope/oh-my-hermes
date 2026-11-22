@@ -28,7 +28,7 @@ async function mock(op: string): Promise<void> {
 }
 
 type Call = { op: string; agent?: string; cwd?: string; resume?: string; sessionId?: string; account?: string };
-type Saved = { id: string; agent: string; agentSession?: string; running?: boolean; failed?: boolean; resumeFailed?: boolean; account?: string };
+type Saved = { id: string; agent: string; agentSession?: string; running?: boolean; failed?: boolean; resumeFailed?: boolean; used?: boolean; account?: string };
 /** What the next loads find: CLIs that are not installed, conversations they cannot continue, what the look for a
  *  conversation's file answers by id, Accounts folders that are gone, how long Codex takes to refuse, and an account
  *  written into the saved Claude Code rows before the page reads them (as a row made under that account has). */
@@ -315,7 +315,14 @@ async function codex(page: Page, conv: string): Promise<string> {
 
 test("a written conversation the look misses: Claude Code refuses the id as new, and the row continues it instead", async ({ page }) => {
   await open(page);
-  const { id, conv } = await claude(page);
+  // nobody pressed a key in it here: Claude Code wrote it from elsewhere (`claude --resume <id>` in another terminal)
+  const { id, conv } = await claude(page, false);
+  await page.evaluate((c) => {
+    const v = JSON.parse(localStorage.getItem("__omherMockClaudeConvs") || "{}");
+    v[c] = { ...v[c], text: "written elsewhere" };
+    localStorage.setItem("__omherMockClaudeConvs", JSON.stringify(v));
+  }, conv);
+  expect((await savedOf(page, id))?.used).toBeUndefined();
 
   // the look for its file answers absent (a folder name Claude Code shortened, a link), but Claude Code has it
   await nextLoads(page, { states: { [conv]: "absent" } });
@@ -397,4 +404,63 @@ test("a Claude Code terminal whose account folder is gone keeps its conversation
   expect((await starts(page))[1]).toMatchObject({ agent: "claude", resume: conv, account: "work" });
   await expect(screen(page)).toContainText("(mock)");
   await expect.poll(() => savedOf(page, id)).toMatchObject({ agent: "claude", agentSession: conv, running: true });
+});
+
+test("a used Claude Code conversation whose file was deleted is not started blank: the row ends with it", async ({ page }) => {
+  await open(page);
+  const { id, conv } = await claude(page);
+  await expect.poll(async () => (await savedOf(page, id))?.used).toBe(true);
+
+  // Claude Code removed its file (cleanupPeriodDays), or the person did
+  await nextLoads(page, { states: { [conv]: "absent" } });
+  await page.reload();
+  await expect.poll(() => savedOf(page, id)).toMatchObject({ agent: "claude", agentSession: conv, running: false, resumeFailed: true, used: true });
+  expect(await starts(page)).toEqual([]);
+  await openRow(page, id);
+  await expect(screen(page)).toContainText("Claude Code could not find this conversation");
+  await expect(page.getByTestId("session-fresh")).toBeVisible();
+
+  // a new conversation forgets the old id and that it was used
+  await page.getByTestId("session-fresh").click();
+  await expect.poll(async () => (await starts(page)).length).toBe(1);
+  const fresh = (await starts(page))[0];
+  expect(fresh.resume).toBeUndefined();
+  expect(fresh.sessionId).not.toBe(conv);
+  await expect.poll(() => savedOf(page, id)).toMatchObject({ agent: "claude", agentSession: fresh.sessionId, running: true });
+  expect((await savedOf(page, id))?.used).toBeUndefined();
+});
+
+test("keys pressed while Codex looks for its conversation do not hide its refusal", async ({ page }) => {
+  await open(page);
+  const A = "01a1f29c-c5b1-7301-a199-2dd07ff4b0ad";
+  const id = await codex(page, A);
+
+  await nextLoads(page, { gone: [A], codexRefuseMs: 2_500 });
+  await page.reload();
+  await expect.poll(() => starts(page)).toEqual([expect.objectContaining({ agent: "codex", resume: A })]);
+  await page.getByTestId(`session-${id}`).locator(".ss-open").click();
+  // Codex has set up its screen; the person types before it says it found nothing (2.5 s after the start)
+  await say(page, "hello");
+  expect((await savedOf(page, id))?.running).toBe(true);
+  await expect.poll(() => savedOf(page, id), { timeout: 10_000 }).toMatchObject({ agent: "codex", agentSession: A, running: false, resumeFailed: true });
+  await expect(screen(page)).toContainText("No saved session found with ID");
+  expect(await shellStarts(page)).toEqual([]);
+});
+
+test("a continued conversation whose transcript says \"is already in use\" and then ends with an error goes on as the shell", async ({ page }) => {
+  await open(page);
+  const { id, conv } = await claude(page, false);
+  // the conversation talks of a port in use
+  await say(page, "Error: Port 8080 is already in use");
+  await expect(screen(page)).toContainText("you said");
+  await page.reload();
+  await expect.poll(() => starts(page)).toEqual([expect.objectContaining({ agent: "claude", resume: conv })]);
+  await page.getByTestId(`session-${id}`).locator(".ss-open").click();
+  // continued, Claude Code shows it again before the person presses a key
+  await expect(screen(page)).toContainText("> Error: Port 8080 is already in use");
+  // the person uses it, and later the CLI ends with an error
+  await say(page, "after 10 exit 3");
+  await expect.poll(() => savedOf(page, id)).toMatchObject({ agent: "shell" });
+  expect((await savedOf(page, id))?.agentSession).toBeUndefined();
+  await expect.poll(async () => (await shellStarts(page)).length).toBe(1);
 });

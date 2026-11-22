@@ -12,9 +12,13 @@ describe("termEnd", () => {
     for (const code of [0, 1, null]) for (const ms of [50, 60_000]) expect(termEnd({ ofChat: false, shell: false, keyed: false, code, resumed: true, drew: false, ms })).toBe("ended");
   });
 
-  it("one that set up its screen first stays only when it ended at once (Codex looks for the conversation after that)", () => {
-    expect(termEnd({ ofChat: false, shell: false, keyed: false, code: 1, resumed: true, drew: true, ms: RESUME_FAILS_MS - 1 })).toBe("ended");
-    expect(termEnd({ ofChat: false, shell: false, keyed: false, code: 1, resumed: true, drew: true, ms: RESUME_FAILS_MS })).toBe("shell");
+  it("one that ends with an error before any key stays, however late and whatever it drew", () => {
+    for (const code of [1, 2, null]) for (const ms of [50, RESUME_FAILS_MS, 60_000]) expect(termEnd({ ofChat: false, shell: false, keyed: false, code, resumed: true, drew: true, ms })).toBe("ended");
+  });
+
+  it("one that set up its screen and ends cleanly before any key stays only when it ended at once", () => {
+    expect(termEnd({ ofChat: false, shell: false, keyed: false, code: 0, resumed: true, drew: true, ms: RESUME_FAILS_MS - 1 })).toBe("ended");
+    expect(termEnd({ ofChat: false, shell: false, keyed: false, code: 0, resumed: true, drew: true, ms: RESUME_FAILS_MS })).toBe("shell");
   });
 
   it("one that printed its CLI's refusal and ended with an error stays, however late and whatever it drew", () => {
@@ -28,8 +32,8 @@ describe("termEnd", () => {
     expect(termEnd({ ofChat: false, shell: false, keyed: false, code: 1, resumed: false, drew: false, refused: true, ms: 50 })).toBe("shell");
   });
 
-  it("a continued CLI the person pressed keys in goes on as the login shell, however soon it ended", () => {
-    for (const drew of [true, false]) for (const ms of [200, 60_000]) expect(termEnd({ ofChat: false, shell: false, keyed: true, code: 0, resumed: true, drew, ms })).toBe("shell");
+  it("a continued CLI the person pressed keys in goes on as the login shell, however soon and however it ended", () => {
+    for (const code of [0, 3]) for (const drew of [true, false]) for (const ms of [200, 60_000]) expect(termEnd({ ofChat: false, shell: false, keyed: true, code, resumed: true, drew, ms })).toBe("shell");
     // a new conversation that ends at once is not kept: there is nothing of it to continue
     expect(termEnd({ ofChat: false, shell: false, keyed: false, code: 1, resumed: false, drew: false, ms: 50 })).toBe("shell");
   });
@@ -68,12 +72,19 @@ describe("setsUpScreen", () => {
 });
 
 describe("refusedResume", () => {
-  it("knows Claude Code's and Codex's refusals, and nothing else", () => {
-    expect(refusedResume("\x1b[38;2;255;107;128mNo conversation found with session ID: 22222222-2222-4333-8444-555555555555\x1b[39m")).toBe(true);
-    expect(refusedResume("Error: Session ID 22222222-2222-4333-8444-555555555555 is already in use.")).toBe(true);
-    expect(refusedResume("Error: No saved session found with ID 01a1f29c-c5b1-7301-a199-2dd07ff4b0aa. Run `codex resume` without an ID")).toBe(true);
-    for (const s of ["", "Welcome back", "No conversation", "session found"]) expect(refusedResume(s), s).toBe(false);
-    expect(idInUse("Error: Session ID x is already in use.")).toBe(true);
-    expect(idInUse("No conversation found with session ID: x")).toBe(false);
+  const C = "22222222-2222-4333-8444-555555555555";
+  const X = "01a1f29c-c5b1-7301-a199-2dd07ff4b0aa";
+  it("knows Claude Code's and Codex's refusals of that id", () => {
+    expect(refusedResume(`\x1b[38;2;255;107;128mNo conversation found with session ID: ${C}\x1b[39m`, C)).toBe(true);
+    expect(refusedResume(`Error: Session ID ${C} is already in use.`, C)).toBe(true);
+    expect(refusedResume(`Error: No saved session found with ID ${X}. Run \`codex resume\` without an ID`, X)).toBe(true);
+    expect(idInUse(`Error: Session ID ${C} is already in use.`, C)).toBe(true);
+  });
+
+  it("does not take the same words about something else for one", () => {
+    for (const s of ["", "Welcome back", "No conversation", "session found", "Error: Port 8080 is already in use", `No conversation found with session ID: ${X}`])
+      expect(refusedResume(s, C), s).toBe(false);
+    expect(idInUse("Error: Port 8080 is already in use", C)).toBe(false);
+    expect(idInUse(`No conversation found with session ID: ${C}`, C)).toBe(false);
   });
 });

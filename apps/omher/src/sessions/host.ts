@@ -688,7 +688,9 @@ export class MockHost implements SessionHost {
     this.live.set(id, { agent, line: "", out, exit: onExit, ...(conv ? { conv } : {}) });
     mockPtyOut(id, out);
     setTimeout(() => {
-      if (refusal === null) return out(`${banner(agent)}\r\n\x1b[2m  ${agentDef(agent).program} in ${cwd}\x1b[0m\r\n\r\n${PROMPT}`);
+      // a continued Claude Code shows the conversation so far (its first message) above the prompt
+      const before = agent === "claude" && resume && convs[resume]?.text ? `> ${convs[resume].text}\r\n\r\n` : "";
+      if (refusal === null) return out(`${banner(agent)}\r\n\x1b[2m  ${agentDef(agent).program} in ${cwd}\x1b[0m\r\n\r\n${before}${PROMPT}`);
       if (this.live.get(id)?.out !== out) return;
       // Codex sets up its screen first and looks for the conversation after that (about 1 s on a real one)
       if (agent === "codex") out("\x1b[?1049h\x1b[?2004h");

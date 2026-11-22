@@ -52,6 +52,7 @@ function snapshot(): ResumeSnap {
         ...(r.status === "draft" ? { draft: true } : {}),
         ...(r.status === "failed" ? { failed: true } : {}),
         ...(r.resumeFailed && r.status === "exited" ? { resumeFailed: true } : {}),
+        ...(r.used ? { used: true } : {}),
         ...(r.exitCode !== undefined ? { exitCode: r.exitCode } : {}),
         ...(r.error ? { error: r.error } : {}),
         ...(r.agentSession ? { agentSession: r.agentSession } : {}),

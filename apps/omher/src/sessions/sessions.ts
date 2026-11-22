@@ -1404,14 +1404,16 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
     // restart continues it
     let sessionId = !ofChat && !resume && r.agent === "claude" ? newConversationId() : undefined;
     // its conversation's file is looked for first (not after Claude Code refused that id as a new one). Absent: a
-    // Claude Code conversation nobody typed in was never written (Claude Code writes it on the first message), so it
-    // starts again under the same id; Codex has nothing to continue, so it is not started to refuse it
+    // Claude Code conversation nobody used (no key pressed in it, no title of its own) was never written (Claude Code
+    // writes it on the first message), so it starts again under the same id; a used one was deleted, and Codex has
+    // nothing to continue: neither is started to refuse it
     const forced = !!t.resumeOnce;
     t.resumeOnce = false;
     let gone = false;
     if (again && !forced && (await convState(r)) === "absent") {
       if (t.run !== run) return;
-      if (r.agent === "claude") {
+      const used = !!(rec(id)?.used || rec(id)?.agentTitle);
+      if (r.agent === "claude" && !used) {
         resume = undefined;
         sessionId = r.agentSession;
       } else gone = true;
@@ -1463,8 +1465,8 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
       readLine();
     };
     t.el.addEventListener(PARKING_EVENT, lineBeforePark);
-    // a CLI started with the row's conversation id: whether it set up its screen, and the last of what it printed
-    // (a refusal), until the person pressed a key in it (termEnd)
+    // a CLI started with the row's conversation id: whether it set up its screen before the person pressed a key in
+    // it, and the last of what it printed (a refusal), read when it ends (termEnd)
     let drew = false;
     let drawn = 0;
     let said = "";
@@ -1474,9 +1476,10 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
       // no further ahead of the page than its credit allows (to this program only: a replaced one is gone)
       const bytes = typeof d === "string" ? utf8.encode(d).length : d.byteLength;
       if (t.run === run) t.heard = true;
-      if (again && !t.keyedHeard) {
-        const text = typeof d === "string" ? d : sayText.decode(d, { stream: true });
-        if (!drew) {
+      if (again) {
+        // only the end of a large message can be the end of the output
+        const text = typeof d === "string" ? d.slice(-SAID_MAX) : sayText.decode(d.byteLength > SAID_MAX ? d.subarray(d.byteLength - SAID_MAX) : d, { stream: true });
+        if (!drew && !t.keyedHeard) {
           drawn += bytes;
           drew = drawn > UI_BYTES || setsUpScreen(said.slice(-16) + text); // a sequence split between two messages
         }
@@ -1516,18 +1519,18 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
         }
         const label = agentDef(r.agent).label;
         // the look missed a conversation Claude Code has (it refused the id as a new one): continue it, once
-        if (again && sessionId && !t.keyedHeard && idInUse(said)) {
+        if (again && sessionId && !t.keyedHeard && idInUse(said, sessionId)) {
           t.resumeOnce = true;
           patchRec(id, { status: "starting", exitCode: null });
           void startTerm(id, t);
           return;
         }
         // a CLI that could not continue its conversation keeps it, ended, for Restart (termEnd)
-        const end = termEnd({ ofChat, shell, keyed: shell ? t.keyed : t.keyedHeard, code, resumed: again, drew, refused: again && refusedResume(said), ms: Date.now() - began });
+        const end = termEnd({ ofChat, shell, keyed: shell ? t.keyed : t.keyedHeard, code, resumed: again, drew, refused: again && !!r.agentSession && refusedResume(said, r.agentSession), ms: Date.now() - began });
         if (end === "shell") {
           // the CLI ended: the same terminal goes on as the person's login shell in that folder
           feed(t.term, `\r\n\x1b[2m${code ? tr("ss.backToShellExit", { agent: label, code }) : tr("ss.backToShell", { agent: label })}\x1b[0m\r\n`);
-          patchRec(id, { agent: SHELL, open: undefined, account: undefined, agentSession: undefined, agentTitle: undefined, startedAs: undefined, fgAgent: null, status: "starting", exitCode: null, error: undefined });
+          patchRec(id, { agent: SHELL, open: undefined, account: undefined, agentSession: undefined, agentTitle: undefined, used: undefined, startedAs: undefined, fgAgent: null, status: "starting", exitCode: null, error: undefined });
           void startTerm(id, t);
           return;
         }
@@ -1589,6 +1592,16 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
       }
       feed(t.term, `\x1b[31m${error}\x1b[0m\r\n`);
     }
+  };
+
+  /** The person pressed a key or pasted in session `id`'s running program `t`. Once that is after its first output, a
+   *  Claude Code or Codex row's conversation counts as used (kept with the row). */
+  const pressed = (id: string, t: Term) => {
+    t.keyed = true;
+    if (!t.heard || t.keyedHeard) return;
+    t.keyedHeard = true;
+    const r = rec(id);
+    if (r && !r.used && TERM_CONTINUES.includes(r.agent)) patchRec(id, { used: true });
   };
 
   /** Tell the program its terminal's size, if it is not the one it was last told. */
@@ -1692,8 +1705,7 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
       // (keys while nothing runs there, or while its row waits to be undone, reach no program and do not count)
       el.addEventListener(TERM_INPUT_EVENT, () => {
         if (tt.hostId === null || tt.closed || tt.held) return;
-        tt.keyed = true;
-        if (tt.heard) tt.keyedHeard = true;
+        pressed(id, tt);
       });
       // a parked terminal made again: the same options and handlers, at the size it had, where it was
       tt.remake = ({ cols, rows }) => {
@@ -1840,8 +1852,7 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
   const typeAt = async (id: string, text: string) => {
     const t = terms.get(id);
     if (!t || t.hostId === null || t.closed || t.held) return;
-    t.keyed = true;
-    if (t.heard) t.keyedHeard = true;
+    pressed(id, t);
     await t.io.write(t.hostId, text);
     t.term.focus();
   };
@@ -1963,7 +1974,7 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
    *  go first. */
   const startFresh = async (id: string) => {
     if (!rec(id)?.resumeFailed) return;
-    patchRec(id, { agentSession: undefined, agentTitle: undefined, resumeFailed: undefined });
+    patchRec(id, { agentSession: undefined, agentTitle: undefined, resumeFailed: undefined, used: undefined });
     await restart(id);
   };
 
@@ -2080,6 +2091,7 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
         ...(s.error && !s.running ? { error: s.error } : {}),
         ...(s.agentSession ? { agentSession: s.agentSession } : {}),
         ...(s.resumeFailed && s.agentSession && !s.running ? { resumeFailed: true } : {}),
+        ...(s.used && s.agentSession ? { used: true } : {}),
         ...(s.account ? { account: s.account } : {}),
         ...(s.bot ? { bot: s.bot } : {}),
         ...(s.model ? { model: s.model } : {}),
