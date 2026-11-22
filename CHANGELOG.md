@@ -12,6 +12,14 @@ All notable changes will be documented here.
   `skills.external_dirs` and `plugins.enabled` are registered and every line around them stays as written. A
   document that opens with a list, a second document, `%TAG`, `%YAML 1.2` and the column-0 lists Hermes' loader
   refuses are still left alone. A list directly under `plugins:` or `memory:` is refused too, rather than having an
+  `enabled:` or `provider:` key written above it, which Hermes could not load. Two faults of the same writers are
+  fixed with it. A section key with a comment on its line (`memory: # mine`, `plugins:  # third-party`) is now that
+  section: setup used to append a second `memory:`, which Hermes refuses as a duplicate key, and refused the
+  commented `plugins:` outright; it now writes under the key, and a `memory:` it cannot fill (`{}`, a scalar, an
+  anchor, twice) is left alone. And the skills writer now refuses what every other writer refuses: it used to edit
+  past `%TAG`, `%YAML 1.2` and a `...` document end, after which the plugin and memory writers appended past the
+  `...`. Reported by @chhxbchhxb in #3075. (`src/install/config_adapter.py` `_root_is_plain_block_mapping`,
+  `_section_node_is_sequence`, `_block_header`, `_skills_document_parts`)
   `enabled:` or `provider:` key written above it, which Hermes could not load. Reported by @chhxbchhxb in #3075.
   (`src/install/config_adapter.py` `_root_is_plain_block_mapping`, `_section_node_is_sequence`)
 - **omher 1.1.3.** GitHub across your repositories and accounts, a Claude usage meter that shows numbers, and terminals

@@ -323,44 +323,49 @@ def _external_dirs_block_line(line: str) -> bool:
     return re.fullmatch(r"  external_dirs:\s*(?:#.*)?", line) is not None
 
 
+def _block_header(line: str, key: str) -> bool:
+    """Whether `line` is `key:` opening a block node, with or without a trailing comment.
+
+    Every writer here locates a top-level section by this one test. A writer
+    that matched only the exact text `memory:` read `memory: # mine` as no
+    section at all and appended a second `memory:`, a duplicate key Hermes
+    refuses the whole file over (#3075).
+    """
+    return re.fullmatch(rf"{re.escape(key)}:[ \t]*(?:#.*)?", line) is not None
+
+
 def _skills_block_line(line: str) -> bool:
     """A plain skills block may carry a trailing YAML comment."""
-    return re.fullmatch(r"skills:\s*(?:#.*)?", line) is not None
+    return _block_header(line, "skills")
 
 
 def _skills_document_parts(config_text: str) -> tuple[str, str, str]:
-    """Keep a single document's envelope outside the skills-only editor."""
+    """Keep a single document's opening `%YAML 1.1` and `---` outside the skills-only editor.
+
+    Which openings are editable is `_root_is_plain_block_mapping`'s call, the
+    one `section_edit_guard` makes for every other section, so the skills
+    writer refuses exactly what the other writers refuse: `%TAG`, `%YAML 1.2`,
+    a second document, and a `...` document end, after which the writers that
+    append a section would write content Hermes refuses (#3075). The empty
+    root `{}` stays the one body this writer takes that the guard does not;
+    `ensure_external_dir` rewrites it into a block mapping.
+    """
     lines = config_text.splitlines(keepends=True)
-    body_start, body_end = 0, len(lines)
-    started = content = ended = directives = False
+    body_start = 0
     for index, line in enumerate(lines):
         stripped = line.strip()
         if not stripped or stripped.startswith("#"):
             continue
-        marker = re.fullmatch(r"(---|\.\.\.)[ \t]*(?:#.*)?", line.rstrip("\r\n"))
-        if marker and marker[1] == "---":
-            if started or content or ended:
-                raise ValueError("multi-document YAML is user-owned; leaving it alone")
-            started = True
-            body_start = index + 1
-            continue
-        if marker and marker[1] == "...":
-            if ended:
-                raise ValueError("multiple YAML document ends are user-owned; leaving them alone")
-            ended = True
-            body_end = index
-            continue
-        if ended:
-            raise ValueError("content after YAML document end is user-owned; leaving it alone")
-        if line.startswith("%"):
-            if started or content or not re.match(r"%(?:YAML|TAG)[ \t]", line):
-                raise ValueError("unsupported YAML directive placement; leaving it alone")
-            directives = True
-            continue
-        content = True
-    if directives and not started:
-        raise ValueError("YAML directives require a document start; leaving it alone")
-    return "".join(lines[:body_start]), "".join(lines[body_start:body_end]), "".join(lines[body_end:])
+        if not line.startswith("%") and not _document_start(stripped):
+            break
+        body_start = index + 1
+    head = [line.rstrip("\r\n") for line in lines[:body_start]]
+    body = [line.rstrip("\r\n") for line in lines[body_start:]]
+    if not _root_is_plain_block_mapping(head + body) and not (
+        _root_is_plain_block_mapping(head) and _empty_mapping_root_index(body) is not None
+    ):
+        raise ValueError("non-mapping or multi-document YAML is user-owned; leaving it alone")
+    return "".join(lines[:body_start]), "".join(lines[body_start:]), ""
 
 
 def _empty_mapping_root_index(lines: list[str]) -> int | None:
@@ -649,7 +654,7 @@ def _plugins_node_extension_error(config_text: str, name: str) -> str:
     reported as a fault.
     """
     for line in config_text.splitlines():
-        if _plugins_node_line_shape(line) is None or line.strip() == "plugins:":
+        if _plugins_node_line_shape(line) is None or _block_header(line, "plugins"):
             continue
         listed = plugin_enablement(config_text)
         if name in listed["enabled"] or name in listed["disabled"]:
@@ -658,7 +663,7 @@ def _plugins_node_extension_error(config_text: str, name: str) -> str:
     # A list under `plugins:`, at column 0 or indented, is not the mapping an
     # `enabled:` key goes into; inserting one above it wrote a file Hermes
     # cannot load (#3075).
-    if _section_node_is_sequence([line.rstrip() for line in config_text.splitlines()], "plugins"):
+    if _section_node_is_sequence(config_text.splitlines(), "plugins"):
         return f"sequence plugins configuration is user-owned; leaving it alone. Run `hermes plugins enable {name}`"
     return ""
 
@@ -672,7 +677,7 @@ def _plugins_block_index(lines: list[str]) -> int | None:
     `plugins` key at all.
     """
     for index, line in enumerate(lines):
-        if line.strip() == "plugins:" and not line.startswith(" "):
+        if _block_header(line, "plugins"):
             return index
     return None
 
@@ -685,6 +690,10 @@ def plugins_enabled_extension_error(config_text: str, name: str) -> str:
     and the plugin checks only run once a bundle exists, so without this the
     diagnostic named side effects and never the cause (#1825).
     """
+    if not _root_is_plain_block_mapping(config_text.splitlines()):
+        # Past a `...` or under `%TAG` an appended `plugins:` is not a key of
+        # the document Hermes reads (#3075).
+        return f"non-mapping or multi-document YAML is user-owned; leaving it alone. Run `hermes plugins enable {name}`"
     shape_error = plugin_enablement_shape_error(config_text)
     if shape_error:
         return shape_error
@@ -1253,7 +1262,7 @@ def _section_node_is_sequence(lines: list[str], section: str) -> bool:
         if stripped.startswith("-"):
             return True
         break
-    section_indices = [index for index, line in enumerate(lines) if line == f"{section}:"]
+    section_indices = [index for index, line in enumerate(lines) if _block_header(line, section)]
     if len(section_indices) != 1:
         return False
     for line in lines[section_indices[0] + 1 :]:
@@ -1393,7 +1402,7 @@ def _section_shape_guard(lines: list[str], section: str) -> str:
     carrying one still gets its first block.
     """
     top_level = [line for line in lines if references_top_level_section(line, section)]
-    section_indices = [index for index, line in enumerate(lines) if line == f"{section}:"]
+    section_indices = [index for index, line in enumerate(lines) if _block_header(line, section)]
     if len(top_level) > 1:
         return f"duplicate {section} sections are ambiguous; leaving them alone"
     if top_level and not section_indices:
@@ -1471,7 +1480,7 @@ def _canonical_display_sections(
     is a string rather than an exception because every caller reports it as a
     `ConfigChange` that changed nothing.
     """
-    display_indices = [index for index, line in enumerate(lines) if line == "display:"]
+    display_indices = [index for index, line in enumerate(lines) if _block_header(line, "display")]
     if not display_indices:
         return None
     if len(display_indices) > 1:
@@ -1540,7 +1549,7 @@ def model_scalar_selection(config_text: str, key: str) -> str:
 def display_interface_selection(config_text: str) -> str:
     """The unambiguous scalar `display.interface`, or "" for other shapes."""
     lines = config_text.splitlines()
-    display_indices = [index for index, line in enumerate(lines) if line == "display:"]
+    display_indices = [index for index, line in enumerate(lines) if _block_header(line, "display")]
     if len(display_indices) != 1:
         return ""
     entries: list[str] = []
@@ -1590,14 +1599,16 @@ def set_memory_provider(config_text: str, name: str) -> ConfigChange:
         )
 
     lines = config_text.splitlines()
-    # A list under `memory:` is not a slot; inserting `provider:` above it
-    # wrote a file Hermes cannot load (#3075).
-    if _section_node_is_sequence([line.rstrip() for line in lines], "memory"):
-        return ConfigChange(False, "sequence memory configuration is user-owned; leaving it alone", config_text)
-    memory_index = next(
-        (idx for idx, line in enumerate(lines) if line.strip() == "memory:" and not line.startswith(" ")),
-        None,
-    )
+    # `memory:` as a flow node, a scalar, twice, or over a list is not a slot
+    # this editor can fill: appending a block beside it wrote a duplicate key,
+    # and inserting `provider:` above a list a file Hermes cannot load (#3075).
+    guard = "" if _root_is_plain_block_mapping(lines) else "non-mapping or multi-document YAML is user-owned; leaving it alone"
+    guard = guard or _section_shape_guard(lines, "memory")
+    if not guard and _section_node_is_sequence(lines, "memory"):
+        guard = "sequence memory configuration is user-owned; leaving it alone"
+    if guard:
+        return ConfigChange(False, guard, config_text)
+    memory_index = next((idx for idx, line in enumerate(lines) if _block_header(line, "memory")), None)
     if memory_index is None:
         text = (config_text.rstrip() + f"\n\nmemory:\n  provider: {name}\n").lstrip("\n")
         return ConfigChange(True, "appended memory.provider", text)
@@ -1677,10 +1688,7 @@ def remove_plugin_enabled(config_text: str, name: str) -> ConfigChange:
     listed = plugin_enablement(config_text)
     if name not in listed["enabled"]:
         return ConfigChange(False, f"{name} is not in plugins.enabled", config_text)
-    plugins_index = next(
-        (idx for idx, line in enumerate(lines) if line.strip() == "plugins:" and not line.startswith(" ")),
-        None,
-    )
+    plugins_index = _plugins_block_index(lines)
     if plugins_index is None:
         return ConfigChange(False, "plugins section not found", config_text)
 
@@ -1758,7 +1766,7 @@ def _locate_display_block_scalar(lines: list[str], key: str) -> tuple[int, str] 
     """`_locate_display_scalar` without the guards on the document and on the `display` section's own shape."""
     if any(_references_mapping_key(line, f"display.{key}") for line in lines):
         return f"dotted display.{key} is user-owned; leaving it alone"
-    display_indices = [index for index, line in enumerate(lines) if line == "display:"]
+    display_indices = [index for index, line in enumerate(lines) if _block_header(line, "display")]
     if not display_indices:
         return None
     display_index = display_indices[0]
@@ -1913,7 +1921,7 @@ def config_container_paths(config_text: str) -> set[str]:
         if not stripped or stripped.startswith("#"):
             continue
         if not line.startswith(" "):
-            key, separator, rest = stripped.partition(":")
+            key, separator, rest = _yaml_code(stripped).partition(":")
             key = key.strip()
             section = ""
             if separator and not rest.strip() and key and "." not in key:
@@ -1921,7 +1929,7 @@ def config_container_paths(config_text: str) -> set[str]:
                 paths.add(section)
             continue
         if section and line.startswith("  ") and not line.startswith("    "):
-            key, separator, rest = stripped.partition(":")
+            key, separator, rest = _yaml_code(stripped).partition(":")
             key = key.strip()
             if separator and not rest.strip() and key and not key.startswith("-") and "." not in key:
                 paths.add(f"{section}.{key}")
@@ -1932,7 +1940,7 @@ def _container_line_index(lines: list[str], path: str) -> int | None:
     parts = path.split(".")
     if len(parts) == 1:
         for index, line in enumerate(lines):
-            if not line.startswith(" ") and line.strip() == f"{parts[0]}:":
+            if _block_header(line, parts[0]):
                 return index
         return None
     if len(parts) != 2:
@@ -1945,9 +1953,9 @@ def _container_line_index(lines: list[str], path: str) -> int | None:
     for index, line in enumerate(lines):
         stripped = line.strip()
         if _ends_top_level_node(line):
-            in_section = stripped == f"{section}:"
+            in_section = _block_header(line, section)
             continue
-        if in_section and line.startswith("  ") and not line.startswith("    ") and stripped == f"{key}:":
+        if in_section and line.startswith("  ") and not line.startswith("    ") and _block_header(stripped, key):
             return index
     return None
 
@@ -2043,7 +2051,8 @@ def _enclosing_section(lines: list[str], index: int) -> str:
     for cursor in range(index - 1, -1, -1):
         line = lines[cursor]
         if _ends_top_level_node(line):
-            return line.strip().rstrip(":")
+            # `memory: # mine` encloses `memory`'s keys like `memory:` does.
+            return _yaml_code(line).strip().rstrip(":")
     return ""
 
 

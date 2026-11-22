@@ -14,8 +14,18 @@ sequence, a second document, `%TAG`, `%YAML 1.2` and the column-0 lists the load
 
 Letting those files through reached two writers that inserted a mapping key above a list under their own section
 (`plugins:` or `memory:` then `- x`) and wrote a file Hermes cannot load. Both now refuse a list there, the way
-`section_edit_guard` refuses it for every other section. Where Hermes is installed, each accepted shape and every
-written file is also loaded with Hermes' own reader.
+`section_edit_guard` refuses it for every other section.
+
+Two more faults of the same writers, fixed with it:
+
+- A section key with a comment on its line (`memory: # mine`) was no section to `set_memory_provider`, which
+  appended a second `memory:` Hermes refuses as a duplicate key; the plugin writer refused `plugins: # x`
+  outright. Every writer and guard now finds a section through one test, `_block_header`, and edits it in place.
+- The skills writer read past a `%TAG`, `%YAML 1.2` or `...` envelope that `section_edit_guard` refuses, and the
+  plugin and memory writers then appended past the `...`. All three now take `_root_is_plain_block_mapping`'s
+  verdict.
+
+Where Hermes is installed, each accepted shape and every written file is also loaded with Hermes' own reader.
 """
 
 from __future__ import annotations
@@ -88,9 +98,14 @@ REFUSED = {
 }
 
 SECTIONS = ("skills", "plugins", "memory", "display", "auxiliary")
-# Refused by the shared guard, while the skills writer reads past their envelope, as it did before #3075.
-ENVELOPE_ONLY = {"document end", "TAG directive", "YAML 1.2 directive", "two directives",
-                 "indented root under document start"}
+
+# Every section key with a comment on its line: one section each, edited in place.
+COMMENTED_HEADERS = (
+    "model:\n  provider: custom\n"
+    "skills: # where my skills live\n  external_dirs: []\n"
+    "plugins:  # third-party\n  enabled: []\n"
+    "memory: # mine\n  recall: true\n"
+)
 
 
 def hermes_load(text: str) -> object:
@@ -130,11 +145,13 @@ class GuardTest(unittest.TestCase):
                 lines = text.splitlines()
                 self.assertFalse(adapter._root_is_plain_block_mapping(lines), name)
                 self.assertNotEqual(adapter.section_edit_guard(lines, "plugins", "enabled"), "", name)
-                # The skills writer peels one document's directives, `---` and `...` off first and edits the
-                # body (`_skills_document_parts`); a body that is not a mapping is still refused there.
-                if name not in ENVELOPE_ONLY:
-                    with self.assertRaises(ValueError):
-                        setup_writes(text)
+                # Every step-2 writer refuses what the guard refuses, the skills writer included.
+                with self.assertRaises(ValueError):
+                    adapter.ensure_external_dir(text, "/o/skills")
+                with self.assertRaises(ValueError):
+                    adapter.ensure_plugin_enabled(text, "omh")
+                memory = adapter.set_memory_provider(text, "omh")
+                self.assertFalse(memory.changed, memory.text)
 
     def test_a_list_under_the_edited_section_stays_refused(self) -> None:
         for indent in ("", "  "):
@@ -282,6 +299,119 @@ class SetupCommandTest(unittest.TestCase):
         self.assertIn("non-mapping", stderr)
         self.assertEqual((root / ".hermes" / "config.yaml").read_bytes(), b"- item\n")
 
+    def test_setup_claims_the_memory_slot_under_a_commented_header(self) -> None:
+        original = MODEL + "memory: # mine\n  recall: true\n"
+        status, _stdout, stderr, root = self.run_setup(original)
+        self.assertEqual(status, 0, stderr)
+        written = (root / ".hermes" / "config.yaml").read_text(encoding="utf-8")
+        self.assertEqual(written.count("memory"), 1, written)
+        self.assertIn("memory: # mine\n  provider: omh\n  recall: true\n", written)
+        if hermes_reads("a: 1\n") is not None:
+            self.assertEqual(hermes_load(written)["memory"], {"provider": "omh", "recall": True})
+
+    def test_setup_refuses_a_document_end_and_writes_nothing(self) -> None:
+        original = MODEL + "...\n"
+        status, _stdout, stderr, root = self.run_setup(original)
+        self.assertEqual(status, 2, stderr)
+        self.assertIn("multi-document", stderr)
+        self.assertEqual((root / ".hermes" / "config.yaml").read_text(encoding="utf-8"), original)
+
+
+class CommentedHeaderTest(unittest.TestCase):
+    """A section key with a trailing comment is that section's header: edited in place, never duplicated."""
+
+    def root_keys(self, text: str) -> list[str]:
+        return [line.split(":")[0] for line in text.splitlines() if adapter._ends_top_level_node(line)]
+
+    def test_setup_writes_go_under_the_commented_headers(self) -> None:
+        text = adapter.set_memory_provider(setup_writes(COMMENTED_HEADERS), "omh").text
+        text = adapter.ensure_plugin_omh_home(text, "/o").text
+        self.assertEqual(
+            text,
+            "model:\n  provider: custom\n"
+            "skills: # where my skills live\n  external_dirs:\n    - /o/skills\n"
+            "plugins:  # third-party\n  enabled:\n    - omh\n  entries:\n    omh:\n      settings:\n"
+            "        omh_home: '/o'\n"
+            "memory: # mine\n  provider: omh\n  recall: true\n",
+        )
+        self.assertEqual(self.root_keys(text), ["model", "skills", "plugins", "memory"])
+
+    def test_the_readers_see_through_the_comment(self) -> None:
+        self.assertEqual(adapter.memory_provider_selection("memory: # mine\n  provider: honcho\n"), "honcho")
+        self.assertEqual(adapter.display_skin_selection("display: # look\n  skin: mono\n"), "mono")
+        self.assertIn("memory", adapter.config_container_paths(COMMENTED_HEADERS))
+
+    def test_a_provider_under_a_commented_header_is_kept(self) -> None:
+        text = "memory: # mine\n  provider: honcho\n"
+        change = adapter.set_memory_provider(text, "omh")
+        self.assertFalse(change.changed)
+        self.assertEqual(change.text, text)
+        self.assertIn("memory.provider is honcho", change.message)
+
+    def test_a_memory_node_this_writer_cannot_fill_is_refused_never_duplicated(self) -> None:
+        for text in ("memory: {}\n", "memory: null\n", "memory: honcho\n", "memory: &m\n  recall: true\n",
+                     "memory:\n  recall: true\nmemory: # again\n  x: 1\n"):
+            with self.subTest(text=text):
+                change = adapter.set_memory_provider(text, "omh")
+                self.assertFalse(change.changed, change.text)
+                self.assertEqual(change.text, text)
+
+    def test_the_removers_take_the_writes_back_under_the_commented_headers(self) -> None:
+        written = adapter.set_memory_provider(setup_writes(COMMENTED_HEADERS), "omh").text
+        text = adapter.remove_external_dir(written, "/o/skills").text
+        text = adapter.remove_plugin_enabled(text, "omh").text
+        text = adapter.remove_memory_provider(text, "omh").text
+        self.assertEqual(adapter.external_dirs(text), [])
+        self.assertEqual(adapter.plugin_enablement(text)["enabled"], [])
+        self.assertEqual(adapter.memory_provider_selection(text), "")
+        for header in ("skills: # where my skills live", "plugins:  # third-party", "memory: # mine"):
+            self.assertEqual(text.count(header), 1, text)
+        self.assertEqual(self.root_keys(text), ["model", "skills", "plugins", "memory"])
+        self.assertIn("memory: # mine\n  recall: true\n", text)
+
+
+class EnvelopeTest(unittest.TestCase):
+    """The skills writer refuses exactly the openings and endings `section_edit_guard` refuses."""
+
+    ENVELOPES = {
+        "document start": ("---\n", ""),
+        "document start with a comment": ("# mine\n--- # doc\n", ""),
+        "YAML 1.1": (DIRECTIVE, ""),
+        "YAML 1.1 with comments": ("%YAML 1.1 # v\n--- # doc\n", ""),
+        "YAML 1.2": ("%YAML 1.2\n---\n", ""),
+        "TAG": ("%TAG !e! tag:example.com,2026:\n---\n", ""),
+        "YAML 1.1 and TAG": ("%YAML 1.1\n%TAG !e! tag:example.com,2026:\n---\n", ""),
+        "document end": ("", "...\n"),
+        "document end with a comment after it": ("---\n", "... # end\n# after\n"),
+        "second document": ("", "---\nx: 1\n"),
+    }
+
+    def test_the_skills_writer_and_the_guard_give_one_verdict(self) -> None:
+        for name, (head, tail) in self.ENVELOPES.items():
+            text = head + MODEL + SKILLS + tail
+            with self.subTest(envelope=name):
+                guard = adapter.section_edit_guard(text.splitlines(), "skills")
+                try:
+                    change = adapter.ensure_external_dir(text, "/o/skills")
+                except ValueError as exc:
+                    self.assertNotEqual(guard, "", f"{name}: the skills writer refused what the guard takes: {exc}")
+                    continue
+                self.assertEqual(guard, "", f"{name}: the skills writer edited what the guard refuses")
+                self.assertTrue(change.text.startswith(head), change.text)
+                self.assertEqual(adapter.external_dirs(change.text), ["/o/skills"])
+
+    def test_the_refused_envelopes_are_refused_by_every_step_2_writer(self) -> None:
+        for name in ("YAML 1.2", "TAG", "YAML 1.1 and TAG", "document end", "document end with a comment after it"):
+            head, tail = self.ENVELOPES[name]
+            text = head + MODEL + tail
+            with self.subTest(envelope=name):
+                with self.assertRaisesRegex(ValueError, "non-mapping or multi-document"):
+                    adapter.ensure_external_dir(text, "/o/skills")
+                with self.assertRaisesRegex(ValueError, "non-mapping or multi-document"):
+                    adapter.ensure_plugin_enabled(text, "omh")
+                memory = adapter.set_memory_provider(text, "omh")
+                self.assertFalse(memory.changed, memory.text)
+
 
 @unittest.skipIf(hermes_reads("a: 1\n") is None, "Hermes is not installed here")
 class HermesAgreesTest(unittest.TestCase):
@@ -306,6 +436,24 @@ class HermesAgreesTest(unittest.TestCase):
                 expected.setdefault("skills", {})["external_dirs"] = ["/o/skills"]
                 expected.setdefault("plugins", {})["enabled"] = ["omh"]
                 self.assertEqual(hermes_load(setup_writes(text)), expected)
+
+    def test_the_commented_header_writes_load_without_a_duplicate_key(self) -> None:
+        self.assertTrue(hermes_reads(COMMENTED_HEADERS))
+        written = adapter.set_memory_provider(setup_writes(COMMENTED_HEADERS), "omh").text
+        written = adapter.ensure_plugin_omh_home(written, "/o").text
+        loaded = hermes_load(written)
+        self.assertEqual(loaded["skills"], {"external_dirs": ["/o/skills"]})
+        self.assertEqual(loaded["plugins"], {"enabled": ["omh"], "entries": {"omh": {"settings": {"omh_home": "/o"}}}})
+        self.assertEqual(loaded["memory"], {"provider": "omh", "recall": True})
+
+    def test_every_envelope_the_skills_writer_takes_still_loads(self) -> None:
+        for name, (head, tail) in EnvelopeTest.ENVELOPES.items():
+            text = head + MODEL + SKILLS + tail
+            if adapter.section_edit_guard(text.splitlines(), "skills"):
+                continue
+            with self.subTest(envelope=name):
+                written = adapter.ensure_external_dir(text, "/o/skills").text
+                self.assertEqual(hermes_load(written)["skills"], {"external_dirs": ["/o/skills"]})
 
     def test_both_spellings_of_the_issue_config_load_alike(self) -> None:
         self.assertEqual(hermes_load(ISSUE_COLUMN0), hermes_load(ISSUE_INDENTED))
