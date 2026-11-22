@@ -74,7 +74,7 @@ export function Timeline({
   // taking it back rewinds the conversation only: when its turn changed files, the Edit control says they stay
   const lastUserAt = lastUser ? items.indexOf(lastUser) : -1;
   // the person's last message that went out: it carries the messenger-style "Read" mark
-  const lastSent = [...items].reverse().find((i) => i.kind === "user" && !i.held && !i.error && !i.steerUnknown)?.id;
+  const lastSent = [...items].reverse().find((i) => i.kind === "user" && (!i.held || i.autoSteer) && !i.error && !i.steerUnknown)?.id;
   // the way back: the Jump to bottom pill and the pinned own message (TimelineJump.tsx)
   const nav = useTimelineNav(ref, items, bot.name, pinned);
   const keptFiles =
@@ -123,7 +123,7 @@ export function Timeline({
   const render = (it: TimelineItem, prev?: TimelineItem, at = -1): ReactNode => {
     switch (it.kind) {
       case "user": {
-        const off = queue ? queue.off(it) : it.held || it.steerUnknown ? {} : null;
+        const off = queue ? queue.off(it) : (it.held && !it.autoSteer) || it.steerUnknown ? {} : null;
         return (
           <Bubble
             item={it}
@@ -132,7 +132,6 @@ export function Timeline({
             onQueue={off ? (queue ? (c: QueueChoice) => queue.pick(it.id, c) : queuePick(it.id)) : undefined}
             queueBusy={it.held && chat?.steering === it.id}
             queueOff={off ?? undefined}
-            steeredTo={bot.display_name}
             last={it.id === lastSent}
           />
         );

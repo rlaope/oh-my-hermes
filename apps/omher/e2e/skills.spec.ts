@@ -30,6 +30,8 @@ async function mock(op: string, params: Record<string, unknown> = {}): Promise<a
 
 const calls = async () => (await mock("mock.calls")).result.calls as { op: string; params: any }[];
 const sends = async () => (await calls()).filter((c) => c.op === "chat.send").map((c) => c.params.text);
+/** What reached the bot, in order: sent, or steered into a turn still running (typed mid-answer, it joins it). */
+const said = async () => (await calls()).filter((c) => c.op === "chat.send" || c.op === "chat.steer").map((c) => c.params.text);
 const lists = async () => (await calls()).filter((c) => c.op === "skills.list").length;
 const options = (page: Page) => page.getByTestId("skill-option");
 
@@ -94,8 +96,9 @@ test("tokens typed by hand at the start, middle and end are recognised; prices, 
   await box.press("End");
   await expect(page.getByTestId("skill-picker")).toHaveCount(0); // $nope matches no skill: no popup
   await page.keyboard.press("Enter");
-  await expect.poll(async () => (await sends()).length).toBe(2);
-  expect((await sends())[1]).toBe(plain);
+  // typed while the first answer may still run: sent, or steered into that turn
+  await expect.poll(async () => (await said()).length).toBe(2);
+  expect((await said())[1]).toBe(plain);
   await expect(page.getByTestId("bubble-user").last().getByTestId("bubble-skill")).toHaveCount(0);
 });
 
@@ -177,11 +180,11 @@ test("Esc closes until the fragment changes; with no match there is no popup and
   await expect(page.getByTestId("skill-picker")).toHaveCount(0);
   await expect(page.getByTestId("skill-none")).toHaveCount(0);
   await page.keyboard.press("Enter");
-  await expect.poll(sends).toEqual(["pay $20"]);
+  await expect.poll(said).toEqual(["pay $20"]);
   await box.pressSequentially("echo $HOME");
   await expect(page.getByTestId("skill-picker")).toHaveCount(0);
   await page.keyboard.press("Enter");
-  await expect.poll(sends).toEqual(["pay $20", "echo $HOME"]);
+  await expect.poll(said).toEqual(["pay $20", "echo $HOME"]);
   expect(await lists()).toBe(1); // still the one read
 });
 
@@ -194,7 +197,7 @@ test("a name that only contains what is typed, or matches in other letter case, 
   expect(await options(page).evaluateAll((els) => els.map((e) => e.getAttribute("data-name")))).toEqual(["explain-code"]);
   await expect(chosen).toHaveCount(0);
   await page.keyboard.press("Enter");
-  await expect.poll(sends).toEqual(["$code"]); // one Enter, as typed
+  await expect.poll(said).toEqual(["$code"]); // one Enter, as typed
   await expect(box).toHaveValue("");
 
   // an arrow chooses a row, and then Enter puts it in
@@ -204,7 +207,7 @@ test("a name that only contains what is typed, or matches in other letter case, 
   await expect(options(page).first()).toHaveAttribute("aria-selected", "true");
   await page.keyboard.press("Enter");
   await expect(box).toHaveValue("run $explain-code ");
-  expect(await sends()).toEqual(["$code"]);
+  expect(await said()).toEqual(["$code"]);
 
   // Tab completes to the first row without an arrow; ArrowUp from no row goes to the last
   await box.fill("");
@@ -223,7 +226,7 @@ test("a name that only contains what is typed, or matches in other letter case, 
   expect(await options(page).evaluateAll((els) => els.map((e) => e.getAttribute("data-name")))).toEqual(["plan"]);
   await expect(chosen).toHaveCount(0);
   await page.keyboard.press("Enter");
-  await expect.poll(sends).toEqual(["$code", "$PLAN"]);
+  await expect.poll(said).toEqual(["$code", "$PLAN"]);
   await expect(page.getByTestId("bubble-user").last().getByTestId("bubble-skill")).toHaveCount(0);
 
   // what begins a name still opens on its row

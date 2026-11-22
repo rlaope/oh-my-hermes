@@ -1021,7 +1021,8 @@ HERMES_INTERPRETER_SCRIPTS: dict[str, HermesScriptPolicy] = {
             }),
             "base64": frozenset({"b64encode"}),
             "json": frozenset({"dumps", "loads"}),
-            "os": frozenset({"environ", "getcwd", "read"}),  # read: the TUI's stdin by descriptor (#2327)
+            # read: the TUI's stdin by descriptor (#2327); name: Windows takes Hermes' `attach_gateway` (#3059)
+            "os": frozenset({"environ", "getcwd", "name", "read"}),
             "signal": frozenset({"SIGTERM"}),
             "sys": frozenset({"exit", "stderr", "stdin", "stdout"}),
             "threading": frozenset({"Thread"}),
@@ -1040,6 +1041,7 @@ HERMES_INTERPRETER_SCRIPTS: dict[str, HermesScriptPolicy] = {
             "hermes_cli.gateway_client": frozenset({"GATEWAY_WS_PROTOCOL", "gateway_ws_target"}),
             "hermes_cli.gateway_runtime": frozenset({"attachable", "control_home_for", "ensure_gateway_runtime"}),
             "hermes_cli.gateway_runtime_discovery": frozenset({"connect_private"}),
+            "hermes_cli.gateway_runtime_attach": frozenset({"TicketUnavailable", "attach_gateway"}),
             "hermes_cli.cli_terminal_input": frozenset({"_resolve_attachment_path", "_split_path_input"}),
             "hermes_cli.clipboard": frozenset({"save_clipboard_image"}),
             "gateway.platforms.base": frozenset({"get_image_cache_dir"}),
@@ -1069,7 +1071,8 @@ HERMES_INTERPRETER_SCRIPTS: dict[str, HermesScriptPolicy] = {
             "the OMH TUI's gateway child (docs/OMH-TUI-BOUNDARY.md; AGENTS.md, the OMH TUI bullet). On a Hermes that has the shared-gateway "
             "attach API it does what Hermes' own Ink TUI does: Hermes' `ensure_gateway_runtime` finds the "
             "profile's gateway or starts one, Hermes' `connect_private` mints a session ticket over the home's "
-            "private control socket, and `websockets.asyncio.client.connect` dials the WebSocket URL "
+            "private control socket (on Windows, where that socket is not a Unix-domain one, Hermes' `attach_gateway` "
+            "does both, as Hermes' own Ink bootstrap does), and `websockets.asyncio.client.connect` dials the WebSocket URL "
             "`gateway_ws_target` builds from that grant. It relays what the TUI sends and what the gateway sends back."
         ),
     ),

@@ -7,7 +7,7 @@ export type Recall = { at: number; draft: string } | null;
 export type Step = { recall: Recall; text: string };
 
 /** The fields of a chat row `promptsOf` reads (store `MessageItem`). */
-type Row = { kind: string; text?: string; held?: boolean; steerUnknown?: boolean; wait?: string };
+type Row = { kind: string; text?: string; held?: boolean; autoSteer?: boolean; steerUnknown?: boolean; wait?: string };
 
 /** The person's prompts of a chat, oldest first, as the bubble shows them (typed text, not the hoisted `/skill`
  *  wire form); a prompt sent twice in a row is one entry, as in a shell. */
@@ -17,8 +17,9 @@ export function promptsOf(items: readonly Row[] | undefined): string[] {
     if (i.kind !== "user" || !i.text?.trim()) continue; // a files-only send has no words to recall
     // only what was sent: a held row still waits in omher's queue (edited there), a dropped one never reached the
     // agent. A failed send and a steer whose answer never came stay: the person typed them and may send them again,
-    // as a shell keeps a command that failed.
-    if ((i.held && !i.steerUnknown) || i.wait === "dropped") continue;
+    // as a shell keeps a command that failed. One being steered into the running turn reads as sent, so it is
+    // history at once; refused, it waits like any held row and leaves the history again.
+    if ((i.held && !i.autoSteer && !i.steerUnknown) || i.wait === "dropped") continue;
     if (out[out.length - 1] !== i.text) out.push(i.text);
   }
   return out;
