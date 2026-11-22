@@ -244,7 +244,8 @@ OMHER_BRIDGE_TOKEN={token} exec "$py" "$f" --port {remote_port} --exit-on-stdin-
 /// word, unquoted or in single quotes) and the venv Python `bin/python`. On Windows, which an OpenSSH server reaches
 /// through a POSIX login shell (Git Bash, MSYS2 or Cygwin as `DefaultShell`; `uname -s` says MINGW, MSYS or CYGWIN),
 /// it is the home the Windows app uses, `%LOCALAPPDATA%\hermes`: the launcher is the distlib `hermes.exe` in
-/// `hermes-agent/.hermes/bin` or `bin`, whose `#!<python.exe> -I` line names the interpreter, and the venv Python is
+/// `hermes-agent/.hermes/bin` or `bin`, whose `#!<python.exe> -I` line names the interpreter, or the batch shim
+/// `hermes.cmd` beside it, whose first command word is that interpreter; the venv Python is
 /// `Scripts/python.exe`. The script holds no backslash and no `!`, so `#.` and `[[:punct:]]` stand in for them.
 pub const DISCOVER_PYTHON: &str = r#"wn=""
 case "$(uname -s 2>/dev/null)" in MINGW*|MSYS*|CYGWIN*) wn=1 ;; esac
@@ -276,6 +277,14 @@ else
       w=$(grep -a -o -E '#."?([A-Za-z]:|/)[^[:cntrl:]]+ -I' "$l" | head -n 1)
       w="${w#??}"; w="${w% -I}"
       case "$w" in '"'*) w="${w#?}"; w="${w%?}" ;; esac
+      case "$w" in [A-Za-z]:*|/*) [ -x "$w" ] && py="$w" ;; esac
+    fi
+  done
+  # a PM or source install may expose only the batch shim (`@echo off`, then `"<python>" -I -c "..."`): take its
+  # first command word, quoted for a path with spaces or bare, trimming the CR a Windows shim ends its lines with
+  for l in "$h/hermes-agent/.hermes/bin/hermes.cmd" "$h/bin/hermes.cmd"; do
+    if [ -z "$py" ] && [ -f "$l" ]; then
+      w=$(awk '{ sub(/^[[:space:]]+/, ""); sub(/[[:space:]]+$/, ""); if ($0 == "" || tolower($0) == "@echo off") next; if (match($0, /^"[^"]+"/)) print substr($0, 2, RLENGTH - 2); else { split($0, a, " "); print a[1] }; exit }' "$l")
       case "$w" in [A-Za-z]:*|/*) [ -x "$w" ] && py="$w" ;; esac
     fi
   done
@@ -1166,8 +1175,18 @@ mod tests {
         std::fs::remove_file(home.join("hermes-agent/.hermes/bin/hermes.exe")).unwrap();
         launcher(&home.join("bin/hermes.exe"), &format!("\"{}\"", store.display()));
         assert_eq!(run(&user, &la), format!("OMHER_PEER_PYTHON {}", store.display()));
-        // no launcher: venv/Scripts/python.exe
+        // no .exe launcher any more: only the batch shim, then the venv
         std::fs::remove_file(home.join("bin/hermes.exe")).unwrap();
+        // a PM or source install that ships only the batch shim: its first command word names the interpreter,
+        // and a Windows shim ends every line with CR
+        std::fs::write(
+            home.join("bin/hermes.cmd"),
+            format!("@echo off\r\n\"{}\" -I -c \"import os\" %*\r\n", store.display()),
+        )
+        .unwrap();
+        assert_eq!(run(&user, &la), format!("OMHER_PEER_PYTHON {}", store.display()));
+        std::fs::remove_file(home.join("bin/hermes.cmd")).unwrap();
+        // no launcher at all: venv/Scripts/python.exe
         let venv = home.join("hermes-agent/venv/Scripts/python.exe");
         exe(&venv, "#!/bin/sh\necho 3.14.9\n");
         assert_eq!(run(&user, &la), format!("OMHER_PEER_PYTHON {}", venv.display()));
