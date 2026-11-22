@@ -151,16 +151,22 @@ def _no_process() -> ExitStack:
         raise AssertionError("a refused remote PR lane must not start a process")
 
     stack = ExitStack()
-    for target in (
+    targets = [
         "subprocess.Popen",
         "subprocess.run",
         "subprocess.call",
         "subprocess.check_call",
         "subprocess.check_output",
-        "os.posix_spawn",
-        "os.fork",
-    ):
-        stack.enter_context(mock.patch(target, side_effect=forbidden))
+    ]
+    # Windows has neither; patching an absent attribute raises mid-loop and
+    # leaked every patch entered before it into the rest of the shard.
+    targets.extend(f"os.{name}" for name in ("posix_spawn", "fork") if hasattr(os, name))
+    try:
+        for target in targets:
+            stack.enter_context(mock.patch(target, side_effect=forbidden))
+    except BaseException:
+        stack.close()
+        raise
     return stack
 
 
