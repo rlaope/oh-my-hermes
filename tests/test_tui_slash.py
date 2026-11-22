@@ -198,6 +198,28 @@ class SlashTokenAtTests(unittest.TestCase):
         self.assertIsNone(slash.slash_token_at("/as more", 8))
 
 
+class SkillCompletionTests(unittest.TestCase):
+    CATALOG = {
+        "pairs": [["/config", "Config"], ["/omh-codebase-uml", "UML"], ["/ulw-review", "Review"], ["/new", "Skill"]],
+        "categories": [{"name": "Configuration", "pairs": [["/config", "Config"]]}],
+    }
+
+    def test_the_skills_are_the_pairs_no_category_lists(self) -> None:
+        self.assertEqual(slash.catalog_skill_names(self.CATALOG), {"omh-codebase-uml", "ulw-review", "new"})
+        self.assertEqual(slash.catalog_skill_names({}), frozenset())
+
+    def test_only_skills_by_prefix_then_substring_and_never_a_tui_command_name(self) -> None:
+        pairs, skills = slash.catalog_pairs(self.CATALOG), slash.catalog_skill_names(self.CATALOG)
+
+        def names(prefix: str) -> list[str]:
+            return [completion.name for completion in slash.skill_completions(prefix, pairs, skills)]
+
+        self.assertEqual(names(""), ["omh-codebase-uml", "ulw-review"])  # /new is the TUI's own command
+        self.assertEqual(names("u"), ["ulw-review", "omh-codebase-uml"])
+        self.assertEqual(names("CON"), [])
+        self.assertEqual(names("urv"), [])  # u..r..v in order, but no scattered match
+
+
 class CatalogReaderTests(unittest.TestCase):
     def test_categories_drop_what_the_tui_runs_routes_or_drops_and_then_empty_categories(self) -> None:
         catalog = {

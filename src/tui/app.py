@@ -312,6 +312,7 @@ from .slash import (
     catalog_categories,
     catalog_pairs,
     catalog_skill_count,
+    catalog_skill_names,
     completions,
     dropped_notice,
     known_names,
@@ -319,6 +320,7 @@ from .slash import (
     parse_slash,
     plan_invocation,
     runs_during_turn,
+    skill_completions,
     slash_token_at,
 )
 from .style import CSI, NO_COLOR, TRUECOLOR, Line, Span, Style, color_depth
@@ -2420,6 +2422,7 @@ class App(ModesMixin, AgentViewMixin):
         self.effort_asked = ""  # the newest effort still waiting for Hermes' answer; the next Ctrl+T steps on from it
         # What `commands.catalog` last said, bound to the live session: completion and `/help` read it.
         self.catalog: list[tuple[str, str]] = []
+        self.catalog_skills: frozenset[str] = frozenset()  # which catalog names are skills (`catalog_skill_names`)
         # Every name a typed `/name` resolves to (`slash.known_names`): drawn bold in its colour in the composer,
         # and your prompt's row. The TUI's own commands until the catalog arrives.
         self.known_slash = known_names()
@@ -2961,6 +2964,7 @@ class App(ModesMixin, AgentViewMixin):
         own bundled skills collide in, so they are kept for `/help` instead.
         """
         self.catalog = catalog_pairs(result)
+        self.catalog_skills = catalog_skill_names(result)
         self.known_slash = known_names(self.catalog)
         if self.transcript.resolve_recorded_prompts(self.known_slash, self.size[0], self.theme, REDRAW_TAIL_ROWS):
             self._full_redraw()  # a resumed prompt printed before the catalog answered draws its `/skill` now
@@ -6429,8 +6433,8 @@ class App(ModesMixin, AgentViewMixin):
 
     def _menu_entries(self) -> list[Completion]:
         """Completions for what the `/` menu completes (`_menu_token`), unless Esc closed them over this text; none in
-        vim mode's NORMAL. A mid-line `/name` matches by prefix and substring only: the scattered matches a leading
-        `/` adds would make a path word like `/opt` or `/tmp` offer commands."""
+        vim mode's NORMAL. A leading `/` offers every command and skill; a mid-line `/name` only the skills, by prefix
+        and substring (`skill_completions`), since a built-in command means something only at the line's start."""
         text = self.composer.text
         token = None if self.slot is not None or self.composer.normal or text == self.menu_closed else self._menu_token()
         if token is None:
@@ -6443,7 +6447,9 @@ class App(ModesMixin, AgentViewMixin):
                     if name.startswith(look.lower()) and name != look.lower()]
         if space or "/" in command:
             return []
-        return completions(command, self.catalog, scattered=leading)
+        if leading:
+            return completions(command, self.catalog)
+        return skill_completions(command, self.catalog, self.catalog_skills)
 
     def _menu_token(self) -> tuple[int, int, str, bool] | None:
         """(start, end, typed, leading) of what the `/` menu completes, `typed` without its slash.
