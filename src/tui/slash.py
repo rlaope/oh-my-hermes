@@ -366,8 +366,51 @@ def completions(prefix: str, catalog_pairs: Iterable[tuple[str, str]] = ()) -> l
     return leading + inner + [completion for _, completion in scattered]
 
 
+def skill_completions(prefix: str, catalog_pairs: Iterable[tuple[str, str]], skills: frozenset[str]) -> list[Completion]:
+    """The catalog's skills (`skills`, `catalog_skill_names`) whose name starts with `prefix`, then the ones that
+    only contain it; what a mid-line `/name` offers.
+
+    A `/skill` after other text names a skill for that message, as in Claude
+    Code; a built-in command means something only at the line's start, so
+    none is offered here, the TUI's own or Hermes'. No scattered matches:
+    a path word like `/opt` offers nothing unless a skill's name holds it.
+    """
+    key = prefix.lower()
+    offered = [
+        Completion(name.lstrip("/"), summary)
+        for name, summary in catalog_pairs
+        if name.lstrip("/").lower() in skills and name.lstrip("/").lower() not in _BY_NAME
+    ]
+    leading = [completion for completion in offered if completion.name.lower().startswith(key)]
+    inner = [completion for completion in offered if key in completion.name.lower() and completion not in leading]
+    return leading + inner
+
+
 # A `/name` token: whitespace or the line's edge on both sides, so a path (`/Users/x`) or `a/b` is none.
 _SLASH_TOKEN = re.compile(r"(?<!\S)/([A-Za-z0-9][\w.:-]*)(?!\S)")
+
+
+def slash_token_at(text: str, caret: int) -> tuple[int, int, str] | None:
+    """(start, end, typed) of the `/name` being typed at `caret`, the one the `/` menu completes, or None.
+
+    Its `/` is at the input's start or right after whitespace (a newline too), and nothing between it and the caret
+    is whitespace or another `/`: `asdf /as` types `as`, a bare `/` after a space types "", and `./x`, `a/b`,
+    `~/x`, `http://x`, `//` and `/usr/bin` are no token. `typed` runs from the `/` to the caret, as Claude Code
+    filters; `end` is where the word under the caret ends, so a pick replaces the whole token and keeps the text on
+    both sides.
+    """
+    start = caret
+    while start > 0 and not text[start - 1].isspace():
+        start -= 1
+    word = text[start:caret]
+    if not word.startswith("/") or "/" in word[1:]:
+        return None
+    end = caret
+    while end < len(text) and not text[end].isspace():
+        end += 1
+    if "/" in text[caret:end]:
+        return None
+    return start, end, word[1:]
 
 
 def known_names(catalog_pairs: Iterable[tuple[str, str]] = ()) -> frozenset[str]:
@@ -411,6 +454,24 @@ def catalog_pairs(catalog: Mapping[str, object]) -> list[tuple[str, str]]:
         for pair in pairs
         if isinstance(pair, (list, tuple)) and len(pair) == 2 and all(isinstance(part, str) for part in pair)
     ]
+
+
+def catalog_skill_names(catalog: Mapping[str, object]) -> frozenset[str]:
+    """The lowercased names of the skills in a `commands.catalog` result: the pairs no category lists.
+
+    Hermes adds a skill to `pairs` alone and every command, quick command
+    and plugin command to a category too (`tui_gateway/command_discovery.py`),
+    so a name outside every category is a skill.
+    """
+    categories = catalog.get("categories")
+    listed = {
+        name.lstrip("/").lower()
+        for category in (categories if isinstance(categories, list) else [])
+        if isinstance(category, dict)
+        for name, _summary in catalog_pairs(category)
+    }
+    names = {name.lstrip("/").lower() for name, _summary in catalog_pairs(catalog)}
+    return frozenset(names - listed)
 
 
 def catalog_categories(catalog: Mapping[str, object]) -> list[tuple[str, list[str]]]:

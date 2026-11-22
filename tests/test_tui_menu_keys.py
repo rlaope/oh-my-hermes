@@ -14,7 +14,7 @@ import unittest
 from test_tui_catalog import CATALOG, catalog_app
 from test_tui_modes import SID, make_app, notices, type_text
 from omh.tui.app import App, PathItem
-from omh.tui.keys import DOWN, ENTER, ESCAPE, UP, Key
+from omh.tui.keys import BACKSPACE, DOWN, ENTER, ESCAPE, LEFT, TAB, UP, Key, Paste
 
 PATHS = [PathItem("@src/foo.py", "foo.py", ""), PathItem("@src/fold/", "fold/", "dir")]
 
@@ -153,6 +153,202 @@ class EscOnTheSlashMenuTests(unittest.TestCase):
         app._on_input(Key(ESCAPE))
         self.assertEqual(app._menu_rows(), [])
         self.assertIsNone(app.escape_armed)
+
+
+class MidLineSlashMenuTests(unittest.TestCase):
+    """A `/` after whitespace opens a menu of the catalog's skills for the token at the caret, as Claude Code names a
+    skill after other text; a built-in command means something only at the line's start, and a path opens nothing.
+
+    A mid-line menu never takes a key the line needs: Enter sends the line and Up stays history and the caret until
+    Down moves into the menu; Tab always takes the highlighted row. It opens only over the person's own typing.
+    """
+
+    SKILLS = ["/omh-codebase-uml", "/ulw-review"]  # the test catalog's skills: the pairs no category lists
+
+    def test_a_slash_after_a_space_lists_the_skills_filtered_by_what_follows_it(self) -> None:
+        skills = self.SKILLS
+        for typed, rows in (("asdf /", skills), ("asdf /ul", ["/ulw-review"]), ("asdf /uml", ["/omh-codebase-uml"]),
+                            ("one\n/ulw", ["/ulw-review"]), ("asdf /U", ["/ulw-review", "/omh-codebase-uml"])):
+            with self.subTest(typed=typed):
+                app, _client = catalog_app()
+                head, newline, tail = typed.partition("\n")
+                type_text(app, head)
+                if newline:
+                    app._on_input(Key(ENTER, alt=True))
+                    type_text(app, tail)
+                self.assertEqual(app.composer.text, typed)
+                self.assertEqual([label for label, _summary in app._menu_rows()], rows)
+
+    def test_no_built_in_command_is_offered_mid_line(self) -> None:
+        # The TUI's own (/model, /compact, /help, /theme, /whats-new) and Hermes' (/config, /tools) alike.
+        for typed in ("asdf /mo", "asdf /comp", "asdf /he", "asdf /theme", "asdf /wh", "asdf /con", "asdf /too"):
+            with self.subTest(typed=typed):
+                app, _client = catalog_app()
+                type_text(app, typed)
+                self.assertEqual(app._menu_rows(), [])
+        app, _client = catalog_app()
+        type_text(app, "asdf /")
+        self.assertTrue(all(label in self.SKILLS for label, _summary in app._menu_rows()))
+
+    def test_a_path_like_slash_opens_no_menu(self) -> None:
+        for typed in ("./", "see ./x", "../", "~/", "go ~/x", "a/b", "see http://", "//", "x //", "x /usr/"):
+            with self.subTest(typed=typed):
+                app, _client = catalog_app()
+                type_text(app, typed)
+                self.assertEqual(app._menu_rows(), [])
+
+    def test_a_mid_line_word_matches_by_prefix_or_substring_never_by_scattered_letters(self) -> None:
+        # `/opt` holds o..p..t in order in names the leading `/` menu offers; mid-line, a path word offers nothing.
+        lead, _client = catalog_app()
+        type_text(lead, "/opt")
+        self.assertTrue(lead._menu_rows())
+        for typed in ("path /opt", "cd /tmp", "see /usr", "in /etc", "fix /urv"):
+            with self.subTest(typed=typed):
+                app, _client = catalog_app()
+                type_text(app, typed)
+                self.assertEqual(app._menu_rows(), [])
+
+    def test_enter_sends_a_mid_line_line_unchanged(self) -> None:
+        for typed in ("path /opt", "fix /a", "a /", "please /ul"):
+            with self.subTest(typed=typed):
+                app, client = catalog_app()
+                type_text(app, typed)
+                app._on_input(Key(ENTER))
+                self.assertEqual(client.named("prompt.submit"), [{"session_id": SID, "text": typed}])
+                self.assertEqual([call for call in client.calls if call[0] == "slash.exec"], [])
+
+    def test_down_then_enter_takes_the_row_it_moved_to(self) -> None:
+        app, client = catalog_app()
+        type_text(app, "please /")
+        app._on_input(Key(DOWN))
+        self.assertEqual(app.menu_index, 1)
+        app._on_input(Key(ENTER))
+        self.assertEqual(app.composer.text, "please /ulw-review ")
+        self.assertEqual(client.calls, [])
+
+    def test_up_on_an_engaged_menu_moves_its_highlight(self) -> None:
+        app, _client = catalog_app()
+        type_text(app, "please /")
+        app._on_input(Key(DOWN))
+        app._on_input(Key(UP))
+        self.assertEqual(app.menu_index, 0)
+        self.assertEqual(app.composer.text, "please /")
+
+    def test_tab_takes_the_highlighted_row_without_moving_into_the_menu(self) -> None:
+        app, _client = catalog_app()
+        type_text(app, "please /ul")
+        app._on_input(Key(TAB))
+        self.assertEqual(app.composer.text, "please /ulw-review ")
+
+    def test_up_walks_history_whose_entries_end_in_a_slash_word(self) -> None:
+        app, _client = catalog_app()
+        app.composer.history = ["old one", "earlier /ulw", "newest /ulw"]
+        seen = []
+        for _ in range(3):
+            app._on_input(Key(UP))
+            seen.append(app.composer.text)
+            self.assertEqual(app._menu_rows(), [])  # recalled text opens no menu
+        self.assertEqual(seen, ["newest /ulw", "earlier /ulw", "old one"])
+
+    def test_up_moves_the_caret_over_a_typed_mid_line_menu(self) -> None:
+        app, _client = catalog_app()
+        type_text(app, "first")
+        app._on_input(Key(ENTER, alt=True))
+        type_text(app, "fix /ulw")
+        self.assertTrue(app._menu_rows())
+        app._on_input(Key(UP))
+        self.assertLess(app.composer.caret, len("first\n"))
+        self.assertEqual(app.menu_index, 0)
+
+    def test_a_paste_ending_in_a_slash_word_opens_no_menu_and_enter_sends_it(self) -> None:
+        app, client = catalog_app()
+        app._on_input(Paste("say hi /ulw"))
+        self.assertEqual(app._menu_rows(), [])
+        app._on_input(Key(ENTER))
+        self.assertEqual(client.named("prompt.submit"), [{"session_id": SID, "text": "say hi /ulw"}])
+
+    def test_the_next_typed_key_after_a_paste_opens_it(self) -> None:
+        app, _client = catalog_app()
+        app._on_input(Paste("say hi /u"))
+        type_text(app, "l")
+        self.assertEqual(app._menu_rows()[0][0], "/ulw-review")
+
+    def test_backspace_after_a_paste_opens_it_too(self) -> None:
+        app, _client = catalog_app()
+        app._on_input(Paste("say hi /ulx"))
+        self.assertEqual(app._menu_rows(), [])
+        app._on_input(Key(BACKSPACE))
+        self.assertEqual(app._menu_rows()[0][0], "/ulw-review")
+
+    def test_the_caret_inside_the_line_opens_the_menu_for_the_token_under_it(self) -> None:
+        app, _client = catalog_app()
+        type_text(app, "fix /ul then more")
+        self.assertEqual(app._menu_rows(), [])
+        for _ in range(len(" then more")):
+            app._on_input(Key(LEFT))
+        self.assertEqual(app._menu_rows()[0][0], "/ulw-review")
+        app._on_input(Key(TAB))
+        self.assertEqual(app.composer.text, "fix /ulw-review then more")
+        self.assertEqual(app.composer.caret, len("fix /ulw-review "))
+
+    def test_a_pick_before_a_newline_adds_no_space(self) -> None:
+        app, _client = catalog_app()
+        type_text(app, "two /ulw")
+        app._on_input(Key(ENTER, alt=True))
+        type_text(app, "next")
+        for _ in range(len("next") + 1):
+            app._on_input(Key(LEFT))
+        app._on_input(Key(TAB))
+        self.assertEqual(app.composer.text, "two /ulw-review\nnext")
+
+    def test_esc_closes_the_mid_line_menu_until_the_text_changes(self) -> None:
+        app, _client = catalog_app()
+        type_text(app, "asdf /ul")
+        app._on_input(Key(ESCAPE))
+        self.assertEqual(app._menu_rows(), [])
+        type_text(app, "w")
+        self.assertEqual(app._menu_rows()[0][0], "/ulw-review")
+
+
+class LeadingSlashMenuUnchangedTests(unittest.TestCase):
+    """The leading `/` menu behaves as before the mid-line menu came."""
+
+    def test_a_leading_slash_still_offers_the_built_in_commands(self) -> None:
+        app, _client = catalog_app()
+        type_text(app, "/mo")
+        self.assertEqual(app._menu_rows()[0][0], "/model")
+        app, _client = catalog_app()
+        type_text(app, "/comp")
+        self.assertIn("/compact", [label for label, _summary in app._menu_rows()])
+
+    def test_enter_takes_a_partial_name_and_runs_a_whole_one(self) -> None:
+        app, client = catalog_app()
+        type_text(app, "/mo")
+        app._on_input(Key(ENTER))
+        self.assertEqual((app.composer.text, client.calls), ("/model ", []))
+        app, client = catalog_app()
+        type_text(app, "/config")
+        app._on_input(Key(ENTER))
+        self.assertEqual(client.calls, [("slash.exec", {"command": "config", "session_id": SID})])
+
+    def test_theme_lists_the_launch_looks(self) -> None:
+        app, _client = catalog_app()
+        type_text(app, "/theme ")
+        looks = [label for label, _summary in app._menu_rows()]
+        self.assertTrue(looks)
+        self.assertTrue(all(label.startswith("/theme ") for label in looks))
+        typed = looks[0].removeprefix("/theme ")[:2]
+        type_text(app, typed)
+        self.assertTrue(all(label.startswith(f"/theme {typed}") for label, _summary in app._menu_rows()))
+
+    def test_up_moves_the_leading_menu_at_once(self) -> None:
+        app, _client = catalog_app()
+        type_text(app, "/t")
+        app._on_input(Key(DOWN))
+        app._on_input(Key(UP))
+        self.assertEqual(app.menu_index, 0)
+        app._on_input(Key(DOWN))
+        self.assertEqual(app.menu_index, 1)
 
 
 class MenuEndsTests(unittest.TestCase):

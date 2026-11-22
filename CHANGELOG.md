@@ -17,6 +17,31 @@ All notable changes will be documented here.
   come from chats only. Before the first reading the meter says it shows after your next
   Claude turn in omher. Local only: nothing is sent and no token is read.
   (`docs/OMHER-BOUNDARY.md` rules 11, 17 and 18)
+- **OMH TUI: a `/` after a space opens skill completion, as in Claude Code.** Typing `asdf /dag` opens a menu of
+  Hermes' skills filtered by `dag`; a bare `/` after a space lists them all. As in Claude Code, a `/skill` after
+  other text names a skill for that message, while a built-in command (`/model`, `/compact`, `/help`, Hermes' own)
+  means something only at the line's start, so only skills are offered there, by name prefix or substring:
+  `path /opt` offers nothing unless a skill's name holds `opt`. The leading `/` menu is unchanged. The token runs
+  from its `/` to the caret, so moving the caret onto a `/name` mid-line opens it too, in multi-line input as well;
+  taking a row replaces only that `/name` and keeps the text on both sides. A path-like slash (`./x`, `../x`, `~/x`,
+  `a/b`, `http://`, `//`) opens nothing. The menu never takes a key the line needs: Enter sends the line as typed
+  and Up stays history and caret movement until Down moves into the menu; Tab always takes the highlighted row. Text
+  from history recall, a paste or a loaded draft opens no mid-line menu until the next typed key. A line that does
+  not start with `/` still goes as a prompt with the `/skill` text in it. (`src/tui/slash.py` `slash_token_at`,
+  `skill_completions`, `src/tui/app.py`)
+- **OMH TUI: a `/` after a space opens slash completion, as in Claude Code.** Typing `asdf /as` opens the command
+  and skill menu filtered by `as`; a bare `/` after a space opens the whole list. The token runs from its `/` to the
+  caret, so moving the caret onto a `/name` in the middle of a line opens it too, in multi-line input as well. Taking
+  a row replaces only that `/name` and keeps the text on both sides. A path-like slash (`./x`, `../x`, `~/x`, `a/b`,
+  `http://`, `//`) opens nothing, and a mid-line word matches by prefix or substring only, so `/opt` or `/tmp`
+  offers nothing. The menu never takes a key the line needs: Enter still sends the line as typed (`path /opt`
+  stays `path /opt`), and Up stays history and caret movement until Down moves into the menu; Tab always takes the
+  highlighted row. Text from history recall, a paste or a loaded draft opens no mid-line menu until the next typed
+  key. A line that does not start with `/` still goes as a prompt with the `/skill` text in it, as Claude Code sends
+  a skill named after plain text. (`src/tui/slash.py` `slash_token_at`, `src/tui/app.py`)
+  `http://`, `//`) opens nothing. Enter is unchanged: a line that does not start with `/` still goes as a prompt,
+  with the `/skill` text in it, as Claude Code sends a skill named after plain text. (`src/tui/slash.py`
+  `slash_token_at`, `src/tui/app.py`)
 - **omher: the bridge comes back after it dies.** If the Python bridge stopped after it was ready, nothing started it
   again: Hermes bots and folder chats stayed on "Connecting to Hermes…" until omher was restarted, because the shell
   kept handing the page the dead bridge's port. The shell now notices the exit (the bridge's output closes, or a check
@@ -61,6 +86,15 @@ All notable changes will be documented here.
   - **Speed:** saving a long scrollback no longer stalls on trailing blank lines (98 ms to 0.1 ms on the same input).
     (#3050)
 
+- **omher: a message you send while a bot is answering goes out at once, as in a messenger.** The bot does not stop:
+  it keeps working and takes the new message into account (Hermes' steer joins the running turn, no interrupt). The
+  bubble stays at the bottom in the order you sent it, with a small muted "Read · 14:02" beside its bottom-left corner,
+  and the typing dots and activity line move under it. The ↵ mark and the "Waiting", "Steering…" and "Sent to … ·
+  joins the running answer" lines are gone. The Settings › General "While it answers" choice (Wait / Steer) is gone
+  too: steering is always the behaviour. Where a steer cannot happen (Hermes refuses it, the turn already ended, the
+  bridge is coming back, or the message is a `/` command or carries files or a Reply there target) the message waits with its ↵ ↓ × buttons
+  and no text line, and goes out as the next message right after the turn, so nothing is lost. SESSIONS agent chats
+  are unchanged. (apps/omher `state/store.ts`, `chat/parts/Bubble.tsx`)
 - **omher: a terminal that cannot continue its conversation keeps it.** A Claude Code or Codex terminal continues its
   conversation after omher restarts. When that CLI ended at once (the conversation, its account folder or the login
   was gone) the row turned into a Shell and dropped the conversation id, and when the CLI was missing, Restart started
@@ -120,6 +154,12 @@ All notable changes will be documented here.
   review asked together with a fix ("review this PR, then fix the bug in auth.py") and look-alikes such as a
   screenshot diff, a customer bug report or "review my essay" keep their old hint.
 
+- **Bare `omh` opens the OMH TUI on native Windows.** Since the TUI started on Windows (#3009), its gateway child
+  always failed to mint a session ticket, because it asked Hermes' POSIX control socket (`os.getuid`), so `omh` fell
+  back to Hermes' own TUI every time. On Windows the child now attaches the way Hermes' Ink bootstrap does, through
+  Hermes' `attach_gateway`, which needs Hermes 0.23.1 or later. An older Hermes gets a one-line "cannot attach on
+  Windows" verdict and the fallback, and a control pipe that is not answering yet is waited for, as on macOS and
+  Linux. macOS and Linux are unchanged. Contributed by @Gudals0320 (#3060).
 - **The OMH pane in Hermes Desktop is redrawn, with a run timeline and TPS/TTFT in view.** USAGE is one card: the
   token total large, cache hit and cost beside it, the four-way split, and the speed (TPS) and the last turn's wait for
   its first token (TTFT), which used to sit only in a tooltip. CATCHES and PLAN read as rows with marks; PLAN groups

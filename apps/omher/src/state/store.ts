@@ -160,6 +160,10 @@ export type MessageItem = {
   /** user rows only (a bot's main chat): typed while a turn ran, so omher holds it and sends it when the turn ends
    *  (steer queue). Not sent to Hermes yet: it can still be sent now, steered in, edited or deleted. */
   held?: boolean;
+  /** user rows only, with `held`: typed while a turn runs and being steered into it (messenger style: the bot keeps
+   *  working and takes it in). It reads as a plain sent message; a refused or unanswered steer drops this and the
+   *  row waits with its ↵ ↓ × buttons, sent after the turn. */
+  autoSteer?: boolean;
   /** user rows only: steered into the running turn (Hermes' `session.steer`) instead of sent as a new turn. */
   steered?: boolean;
   /** user rows only: the bot has it (chat.send went through, its turn started, or Hermes queued the steer), at this
@@ -913,6 +917,8 @@ export type Action =
       skills?: string[];
       /** Typed while a turn ran: held in the steer queue, not sent yet. */
       held?: boolean;
+      /** Held, and steered into the running turn at once: it joins that turn, so the answer is not kept above it. */
+      steer?: boolean;
     }
   | { type: "reply.set"; bot: string; chip: ReplyChip | null }
   | QueueAction
@@ -1393,8 +1399,9 @@ export function reduce(state: AppState, a: Action): AppState {
     case "local.user":
       return touchChat(state, a.bot, (c0) => {
         // the running turn's answer stays above this message (answerSlot) when it is held (it goes out after the
-        // turn, so the answer never covers it) or typed once the answer already shows
-        const c = c0.turn && !c0.turn.before && (a.held || answerSoFar(c0.turn)) ? patchTurn(c0, (t) => ({ ...t, before: a.id })) : c0;
+        // turn, so the answer never covers it) or typed once the answer already shows; one steered in joins the
+        // turn, so the answer and the live dots come under it, as in a messenger
+        const c = c0.turn && !c0.turn.before && !a.steer && (a.held || answerSoFar(c0.turn)) ? patchTurn(c0, (t) => ({ ...t, before: a.id })) : c0;
         const next = withItems(c, [
           ...c.items,
           {
@@ -1407,9 +1414,11 @@ export function reduce(state: AppState, a: Action): AppState {
             ...(a.sent !== undefined && a.sent !== a.text ? { sent: a.sent } : {}),
             ...(a.skills?.length ? { skills: a.skills } : {}),
             ...(a.held ? { held: true } : {}),
+            ...(a.held && a.steer ? { autoSteer: true } : {}),
           },
         ]);
-        return a.held ? { ...next, queue: [...(c.queue ?? []), a.id] } : next;
+        const queued = a.held ? { ...next, queue: [...(c.queue ?? []), a.id] } : next;
+        return a.held && a.steer ? liveBeside(queued, a.id, 1) : queued;
       });
     case "reply.set":
       return { ...state, replyTo: { ...state.replyTo, [a.bot]: a.chip } };
@@ -1604,6 +1613,20 @@ const toEnd = (c: Chat, id: string, patch: (m: MessageItem) => MessageItem): Cha
   return row ? withItems(c, [...c.items.filter((i) => i !== row), patch(row)]) : c;
 };
 
+/** The running turn's live line (its activity row, where the typing dots and the answer being written sit) moved
+ *  right before (`side` 0) or right after (`side` 1) user row `id`: a message steered in reads above the work it
+ *  joined, a message left waiting reads under it. */
+function liveBeside(c: Chat, id: string, side: 0 | 1): Chat {
+  if (!c.turn) return c;
+  const live = c.items.find((i) => i.kind === "activity" && i.id === c.turn!.id);
+  if (!live) return c;
+  const items = c.items.filter((i) => i !== live);
+  const at = items.findIndex((i) => i.kind === "user" && i.id === id);
+  if (at < 0) return c;
+  items.splice(at + side, 0, live);
+  return withItems(c, items);
+}
+
 /** Rows steered in that the stopped turn never read: no longer Steered, marked not used (Send / Delete). Never sent
  *  again on their own: after a Stop the person decides. */
 function unsteer(c: Chat, ids: string[]): Chat {
@@ -1666,7 +1689,7 @@ export function reduceQueue(c: Chat, a: QueueAction): Chat {
   switch (a.type) {
     case "queue.take": {
       if (!queue.includes(a.id)) return c;
-      const moved = toEnd(c, a.id, ({ held: _h, ...m }) => ({ ...m, ts: a.now / 1000 }));
+      const moved = toEnd(c, a.id, ({ held: _h, autoSteer: _a, ...m }) => ({ ...m, ts: a.now / 1000 }));
       return { ...moved, queue: without, pendingTurn: a.id };
     }
     case "queue.front":
@@ -1688,19 +1711,26 @@ export function reduceQueue(c: Chat, a: QueueAction): Chat {
       return { ...c, steering: a.id };
     case "queue.steered": {
       if (!queue.includes(a.id)) return { ...c, steering: null };
-      if (!a.ok && a.unknown) {
-        const marked = withItems(c, c.items.map((i) => (i.kind === "user" && i.id === a.id ? { ...i, steerUnknown: true } : i)));
-        return { ...marked, queue: without, steering: null };
+      if (!a.ok) {
+        // refused or unanswered: this row and every one behind it stop steering on their own and wait (↵ ↓ ×), so
+        // none goes ahead of it; the running answer stays above them, as for any held message
+        const waiting = withItems(c, c.items.map((i) => (i.kind === "user" && queue.includes(i.id) && i.autoSteer ? (({ autoSteer: _a, ...m }) => m)(i) : i)));
+        if (a.unknown) {
+          const marked = withItems(waiting, waiting.items.map((i) => (i.kind === "user" && i.id === a.id ? { ...i, steerUnknown: true } : i)));
+          return { ...marked, queue: without, steering: null };
+        }
+        const kept = waiting.turn && !waiting.turn.before ? patchTurn(liveBeside(waiting, a.id, 0), (t) => ({ ...t, before: a.id })) : waiting;
+        return { ...kept, queue: [a.id, ...without], steering: null };
       }
-      if (!a.ok) return { ...c, queue: [a.id, ...without], steering: null };
       // Hermes queued it: the bot has it
-      const moved = toEnd(c, a.id, ({ held: _h, ...m }) => ({ ...m, steered: true, ts: a.now / 1000, readAt: a.now }));
+      const moved = toEnd(c, a.id, ({ held: _h, autoSteer: _a, ...m }) => ({ ...m, steered: true, ts: a.now / 1000, readAt: a.now }));
       // it joined the running turn: it sits before the messages still waiting (they go out after this turn), and
       // the turn's answer lands after it, still above those waiting ones
       const items = [...moved.items];
       const next = without.length ? items.findIndex((i) => i.kind === "user" && i.id === without[0]) : -1;
       if (next >= 0) items.splice(next, 0, items.pop()!);
-      const placed = withItems(moved, items);
+      // the running turn's live line (dots, activity) stays under the message it now works on, as in a messenger
+      const placed = liveBeside(withItems(moved, items), a.id, 1);
       const joined = placed.turn?.before === a.id ? patchTurn(placed, (t) => ({ ...t, before: without[0] })) : placed;
       return { ...joined, queue: without, steering: null, steeredUnread: [...(c.steeredUnread ?? []), a.id] };
     }
@@ -2181,17 +2211,28 @@ export function createStore(bridge: BridgeLike, opts: StoreOptions = {}): Store 
   /** A row of `bot` whose steer got no answer (it waits for Send or Delete): the text it carries, or null. */
   const unknownRow = (bot: string, id: string) =>
     state.chats[bot]?.items.some((i) => i.kind === "user" && i.id === id && i.steerUnknown) ? (held.get(id) ?? null) : null;
-  /** Typed in chat `key` (a bot's main chat or a thread) while its turn runs: held (steer queue, the ↵ mark) and sent
-   *  when the turn ends, instead of now. False when nothing runs there: send it now. */
+  /** Typed in chat `key` (a bot's main chat or a thread) while its turn runs: steered into that turn at once
+   *  (messenger style: the bot keeps working and takes it in, no interrupt). Where it cannot be steered (files, a
+   *  Reply there target, a `/` command Hermes runs itself, no turn yet, the bridge coming back, a refused steer ahead
+   *  of it) it is held (steer queue, the ↵ ↓ × buttons) and sent when the turn ends. False when nothing runs there:
+   *  send it now. */
   const holdIfBusy = (key: string, id: string, p: { text: string; wire: string; reply_to?: string; files?: OutFile[] }, row: Extract<Action, { type: "local.user" }>) => {
     if (!mustHold(state, key)) return false;
     held.set(id, { bot: key, ...p });
-    dispatch({ ...row, held: true });
-    // "steer" in Settings presses this row's Steer: only when it is the one row waiting and a turn runs, so it never
-    // goes ahead of a message held before it; a refused steer still goes out after the turn, as from the button
     const c = state.chats[key];
-    if (busySend() === "steer" && c?.turn && !c.steering && c.queue?.length === 1 && c.queue[0] === id) void actions.queueSteer(id, key);
+    // only behind rows that are themselves being steered in: never ahead of one that waits
+    const ahead = (c?.queue ?? []).every((q) => c?.items.some((i) => i.kind === "user" && i.id === q && i.autoSteer));
+    const steer = !!c?.turn && !c.stale && !p.files?.length && !p.reply_to && !p.wire.trimStart().startsWith("/") && ahead;
+    dispatch({ ...row, held: true, ...(steer ? { steer } : {}) });
+    steerNext(key);
     return true;
+  };
+  /** The queue head of `key`, when it is a message being steered in and nothing is steering: steer it now. */
+  const steerNext = (key: string) => {
+    const c = state.chats[key];
+    const head = c?.queue?.[0];
+    if (!head || !c.turn || c.steering) return;
+    if (c.items.some((i) => i.kind === "user" && i.id === head && i.autoSteer)) void actions.queueSteer(head, key);
   };
   const fail = (e: unknown) => dispatch({ type: "error", message: errText(e) });
   const botArg = (bot?: string) => bot ?? state.selectedBot;
@@ -2623,6 +2664,8 @@ export function createStore(bridge: BridgeLike, opts: StoreOptions = {}): Store 
         unknown = !STEER_REFUSED.has((e as { code?: string } | null)?.code ?? "");
       }
       dispatch({ type: "queue.steered", bot, id, ok, now: now(), ...(unknown ? { unknown } : {}) });
+      // a message typed while this one was steering: steered next, in order
+      if (ok) steerNext(bot);
     },
     queueResend(id, which) {
       const bot = botArg(which);
@@ -3061,26 +3104,6 @@ export function notifyErrorsEnabled(): boolean {
 export function setNotifyErrorsEnabled(on: boolean): void {
   try {
     localStorage.setItem("omher.notifyErrors", on ? "on" : "off");
-  } catch {
-    /* no storage */
-  }
-}
-
-/** "While it answers" (Settings › General): what a message typed during a turn does. "queue" (the default) holds it
- *  until the turn ends; "steer" presses the held row's Steer for the person. Saved on this computer. */
-export type BusySend = "queue" | "steer";
-
-export function busySend(): BusySend {
-  try {
-    return typeof localStorage !== "undefined" && localStorage.getItem("omher.busySend") === "steer" ? "steer" : "queue";
-  } catch {
-    return "queue";
-  }
-}
-
-export function setBusySend(mode: BusySend): void {
-  try {
-    localStorage.setItem("omher.busySend", mode);
   } catch {
     /* no storage */
   }

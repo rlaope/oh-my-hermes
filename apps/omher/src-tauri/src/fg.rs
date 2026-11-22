@@ -712,7 +712,10 @@ mod tests {
         let mut p = Probe::default();
         for i in 0..60 {
             let got = p.agent_at(pid, t0 + Duration::from_secs(i), &mut counted);
-            assert_eq!(got, Probe::default().agent(pid), "probe {i}");
+            // the uncached reference reads the argv afresh, and on a loaded macOS runner that read can fail for a
+            // moment (KERN_PROCARGS2), answering None once; retry it so the comparison is about the cache
+            let fresh = wait_for(|| Probe::default().agent(pid).map(String::from));
+            assert_eq!(got, fresh.as_deref(), "probe {i}");
             assert_eq!(got, Some("claude"));
         }
         let _ = child.kill();

@@ -4511,20 +4511,25 @@ class RouterContentTests(unittest.TestCase):
         )
         self.assertIn("omh setup", hero)
         # Every image the landing page loads ships inside site/assets. Two
-        # three <video>s: the omher app film in the top block's window slot,
-        # the faces loop in the band under it, and the real /dag-ulw TUI
-        # recording transcoded from assets/omh-dag-ulw-tui.gif.
+        # four <video>s: the omher app film in the top block's window slot,
+        # the faces loop in the band under it with the terminals film
+        # standing in front of it, and the real /dag-ulw TUI recording
+        # transcoded from assets/omh-dag-ulw-tui.gif.
         for src in re.findall(r'<img[^>]*\ssrc="([^"]+)"', site):
             with self.subTest(img=src):
                 self.assertTrue(src.startswith("assets/"), src)
                 self.assertTrue((Path("site") / src).is_file(), src)
         self.assertEqual(site.count('src="assets/sponsors/opengateway.svg"'), 1)
-        self.assertEqual(site.count("<video"), 3)
+        self.assertEqual(site.count("<video"), 4)
         self.assertEqual(site.count('src="assets/omher-app.webm"'), 1)
         self.assertEqual(site.count('src="assets/omher-app.mp4"'), 1)
         self.assertEqual(site.count('src="assets/omher-faces.webm"'), 1)
         self.assertEqual(site.count('src="assets/omher-faces.mp4"'), 1)
         self.assertEqual(site.count('poster="assets/omher-faces.webp"'), 1)
+        self.assertEqual(site.count('src="assets/omher-terminals.mp4"'), 1)
+        self.assertEqual(site.count('poster="assets/omher-terminals.webp"'), 1)
+        self.assertTrue(Path("site/assets/omher-terminals.mp4").is_file())
+        self.assertTrue(Path("site/assets/omher-terminals.webp").is_file())
         # The faces band sits between the omher block and the OMH hero, its
         # copy is translated, and its one link is a real download link that
         # the page's own script points at the visitor's build.

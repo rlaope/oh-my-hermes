@@ -32,8 +32,10 @@ SHORTCUTS: tuple[tuple[str, str], ...] = (
                            "steer, or, with images, stop the turn and send it with them as soon as it ends; the row "
                            "under the queue names the key (Ctrl+J where the terminal has not shown it tells Ctrl+Enter "
                            "from Enter). A queued ! line, slash command, skill prompt or plan prompt waits its turn"),
-    ("Tab", "Completes a slash command, or the @ reference being typed; on an open menu, Enter takes the "
-             "highlighted row too, and sends a command already typed in full"),
+    ("Tab", "Completes the slash command or skill at the start of the input, a skill typed as /name after a "
+             "space, or the @ reference being typed; on an open menu, Enter takes the highlighted row too, and sends "
+             "a command already typed in full; a menu opened after a space leaves Enter and ↑ to the line until ↓ "
+             "moves into it"),
     ("Shift+Tab", "Cycles the input mode: normal, accept all (Hermes asks no approvals in this session), plan "
                   "(prompts go as /plan); while Hermes itself has approvals off, turns plan on and off"),
     ("Ctrl+T", "Steps the reasoning effort: low, medium, high, xhigh, max; the info line shows it as effort medium"),
