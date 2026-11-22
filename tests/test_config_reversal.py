@@ -348,7 +348,9 @@ class GuardParityTests(unittest.TestCase):
 
     SHAPES = (
         ("BOM", "\ufeffmemory:\n  provider: omh\nplugins:\n  enabled:\n    - omh\n"),
-        ("multi-document", "---\nmemory:\n  provider: omh\nplugins:\n  enabled:\n    - omh\n"),
+        # One opening `---` is a single document Hermes reads, and the guard
+        # takes it (#3075); a second one is the stream it refuses.
+        ("multi-document", "---\nmemory:\n  provider: omh\nplugins:\n  enabled:\n    - omh\n---\nx: 1\n"),
         ("root sequence", "- memory\n"),
         ("quoted mapping key", 'memory:\n  provider: omh\n"plugins":\n  enabled:\n    - omh\n'),
         ("anchor", "memory: &m\n  provider: omh\nplugins:\n  enabled: &p\n    - omh\n"),

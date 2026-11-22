@@ -40,6 +40,10 @@ _EMPTY_QUOTED_FLOW_SEQUENCES = {"'[]'", '"[]"'}
 _UNSUPPORTED_EXTERNAL_DIRS_SHAPE = "unsupported skills.external_dirs shape; use a YAML block list or inline list"
 _DUPLICATE_EXTERNAL_DIRS_SHAPE = "duplicate skills.external_dirs entries are unsupported; keep one YAML block list or inline list"
 _DUPLICATE_ENABLED_SHAPE = "duplicate plugins.enabled keys are unsupported; keep one YAML block list or inline list"
+# The one directive Hermes' loaders and `route_endpoint_guard.scan_config` read
+# the same way (#2917). `%YAML 1.2` and `%TAG` may resolve tags and plain
+# scalars differently, so a document opening with either stays user-owned.
+_YAML_1_1_DIRECTIVE_RE = re.compile(r"%YAML[ \t]+1\.1")
 
 
 def _ends_top_level_node(line: str) -> bool:
@@ -651,6 +655,11 @@ def _plugins_node_extension_error(config_text: str, name: str) -> str:
         if name in listed["enabled"] or name in listed["disabled"]:
             return ""
         return _unextendable_plugins_node_message(line.strip(), name)
+    # A list under `plugins:`, at column 0 or indented, is not the mapping an
+    # `enabled:` key goes into; inserting one above it wrote a file Hermes
+    # cannot load (#3075).
+    if _section_node_is_sequence([line.rstrip() for line in config_text.splitlines()], "plugins"):
+        return f"sequence plugins configuration is user-owned; leaving it alone. Run `hermes plugins enable {name}`"
     return ""
 
 
@@ -1227,12 +1236,23 @@ def _contains_unsupported_yaml_node_syntax(line: str) -> bool:
 
 
 def _section_node_is_sequence(lines: list[str], section: str) -> bool:
+    """Whether the document, or `section`'s own node, is a block sequence.
+
+    The document is one when its first column-0 content line, past an opening
+    `%YAML 1.1` and `---`, is a `-` line. A column-0 `-` line further down is
+    another root key's indentless list (`toolsets:` then `- hermes-cli`), which
+    `_root_is_plain_block_mapping` has already placed (#3075). Directly under
+    `section:` it is `section`'s own list, at column 0 or indented.
+    """
     for line in lines:
         stripped = line.strip()
-        if not stripped or stripped.startswith("#"):
+        if not stripped or stripped.startswith("#") or line.startswith(" "):
             continue
-        if not line.startswith(" ") and stripped.startswith("-"):
+        if _YAML_1_1_DIRECTIVE_RE.fullmatch(_yaml_code(stripped).strip()) or _document_start(stripped):
+            continue
+        if stripped.startswith("-"):
             return True
+        break
     section_indices = [index for index, line in enumerate(lines) if line == f"{section}:"]
     if len(section_indices) != 1:
         return False
@@ -1241,23 +1261,75 @@ def _section_node_is_sequence(lines: list[str], section: str) -> bool:
         if not stripped or stripped.startswith("#"):
             continue
         if not line.startswith(" "):
-            break
+            return _indentless_item(stripped)
         return stripped.startswith("-")
     return False
 
 
+def _document_start(stripped: str) -> bool:
+    return _yaml_code(stripped).strip() == "---"
+
+
+def _indentless_item(stripped: str) -> bool:
+    """A line that opens a block sequence entry: `-` alone or followed by a space."""
+    return stripped == "-" or stripped.startswith("- ")
+
+
 def _root_is_plain_block_mapping(lines: list[str]) -> bool:
+    """Whether the document is one block mapping whose root keys sit at column 0.
+
+    Beyond plain `key:` lines it reads the two top-level shapes Hermes' own
+    writer and loaders produce, the same ones `route_endpoint_guard.scan_config`
+    reads (#2917, #3075):
+
+    - one opening `---`, optionally after one `%YAML 1.1` directive, which then
+      needs that `---`. Any other directive, a second `---`, a `...` and an
+      indented line before the first root key stay refused;
+    - a block sequence at column 0 under a root key with no value of its own
+      (`toolsets:` then `- hermes-cli`). Those `-` lines, and the indented
+      lines inside their items, are that key's value. A `-` line opening the
+      document, after a key that has a value, or after indented lines is not:
+      the document is a sequence there, or the loaders raise.
+    """
+    first_content = True
+    directive_open = False  # a `%YAML 1.1` line read, its `---` not yet
+    opened = False  # a `---` read, no root key yet
+    key_open = False  # the last root key has no value yet, so a column-0 `-` is its body
+    root_sequence = False  # the last root key's value is a column-0 block sequence
     for line in lines:
         stripped = line.strip()
-        if not stripped or stripped.startswith("#") or line.startswith(" "):
+        if not stripped or stripped.startswith("#"):
             continue
-        if stripped in {"---", "..."} or stripped.startswith("%"):
-            return False
-        if stripped.startswith(("{", "[", "-")):
+        if directive_open:
+            directive_open = False
+            if line.startswith(" ") or not _document_start(stripped):
+                return False
+            opened = True
+            continue
+        if line.startswith(" "):
+            if opened:
+                return False
+            first_content = False
+            key_open = root_sequence
+            continue
+        code = _yaml_code(stripped).strip()
+        if first_content and _YAML_1_1_DIRECTIVE_RE.fullmatch(code):
+            first_content, directive_open = False, True
+            continue
+        if first_content and _document_start(stripped):
+            first_content, opened = False, True
+            continue
+        first_content = opened = False
+        if stripped.startswith("-") and key_open and _indentless_item(stripped):
+            root_sequence = True
+            continue
+        if stripped in {"---", "..."} or stripped.startswith(("%", "{", "[", "-")):
             return False
         if re.match(r"^[^:#][^:]*:(?:\s|$)", stripped) is None:
             return False
-    return True
+        key_open = not code.partition(":")[2].strip()
+        root_sequence = False
+    return not directive_open
 
 
 def _document_edit_guard(lines: list[str]) -> str:
@@ -1518,6 +1590,10 @@ def set_memory_provider(config_text: str, name: str) -> ConfigChange:
         )
 
     lines = config_text.splitlines()
+    # A list under `memory:` is not a slot; inserting `provider:` above it
+    # wrote a file Hermes cannot load (#3075).
+    if _section_node_is_sequence([line.rstrip() for line in lines], "memory"):
+        return ConfigChange(False, "sequence memory configuration is user-owned; leaving it alone", config_text)
     memory_index = next(
         (idx for idx, line in enumerate(lines) if line.strip() == "memory:" and not line.startswith(" ")),
         None,

@@ -4,6 +4,16 @@ All notable changes will be documented here.
 
 ## Unreleased
 
+- **`omh setup` connects to a Hermes config whose root keys hold column-0 lists, or that opens with `%YAML 1.1`.**
+  Step 2 stopped with "non-mapping or unsupported root YAML is user-owned" on a `config.yaml` Hermes' own writer
+  produced, because it writes a root key's list items at the left edge (`toolsets:` then `- hermes-cli`), and the
+  config editor took every such line for a document that is itself a list. It now reads that list as the key's
+  value, and one opening `---`, after one `%YAML 1.1` line or alone, the way the route guard has since #2917, so
+  `skills.external_dirs` and `plugins.enabled` are registered and every line around them stays as written. A
+  document that opens with a list, a second document, `%TAG`, `%YAML 1.2` and the column-0 lists Hermes' loader
+  refuses are still left alone. A list directly under `plugins:` or `memory:` is refused too, rather than having an
+  `enabled:` or `provider:` key written above it, which Hermes could not load. Reported by @chhxbchhxb in #3075.
+  (`src/install/config_adapter.py` `_root_is_plain_block_mapping`, `_section_node_is_sequence`)
 - **omher 1.1.3.** GitHub across your repositories and accounts, a Claude usage meter that shows numbers, and terminals
   and bridges that recover by themselves.
   - **GitHub:** Tasks gains a "나" scope: your review requests, your pull requests, issues assigned to you and mentions,
