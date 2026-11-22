@@ -215,9 +215,6 @@ def remove_compression_fallback_chain(config_text: str, expected: list[str]) -> 
     # compare below is already strict, but it says nothing about the rest of
     # the document: deleting lines out of a file whose root is a sequence, or
     # whose keys carry anchors, changes what a node elsewhere resolves to.
-    guard = section_edit_guard(config_text.splitlines(), "auxiliary", "compression")
-    if guard:
-        return ConfigChange(False, guard, config_text)
     current = compression_fallback_chain_lines(config_text)
     if not current:
         return ConfigChange(False, "auxiliary.compression.fallback_chain is not set", config_text)
@@ -227,6 +224,9 @@ def remove_compression_fallback_chain(config_text: str, expected: list[str]) -> 
             "auxiliary.compression.fallback_chain no longer matches the one OMH wrote; leaving it alone",
             config_text,
         )
+    guard = section_edit_guard(config_text.splitlines(), "auxiliary", "compression")
+    if guard:
+        return ConfigChange(False, guard, config_text)
     lines = config_text.splitlines()
     settings = compression_settings(config_text)
     start = _find_mapping_key(

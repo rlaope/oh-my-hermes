@@ -10,17 +10,18 @@ All notable changes will be documented here.
   hand edits and other YAML tools produce (current Hermes indents lists). The config editor took every such line for
   a document that is itself a list; it now reads the list as the key's value, the way the route guard has since
   #2917, so `skills.external_dirs` and `plugins.enabled` are registered and every line around them stays as
-  written. A document that opens with a list, the column-0 lists Hermes' loader refuses, an indented root mapping,
-  and a root value whose quoted string runs onto the next lines are left alone; so is a list directly under
+  written, long quoted values PyYAML folded onto indented lines included. A document that opens with a list, the
+  column-0 lists Hermes' loader refuses, an indented root mapping, and a quoted string that continues at column 0
+  (where every line scan would read a key) are left alone; so is a list directly under
   `plugins:` or `memory:`, rather than having an `enabled:` or `provider:` key written above it, which Hermes could
   not load. A section key with a comment on its line (`memory: # mine`, `plugins:  # third-party`) is now that
   section: setup used to append a second `memory:`, a duplicate key Hermes refuses the file over, and refused the
   commented `plugins:` outright; it now writes under the key, and a `memory:` it cannot fill (`{}`, a scalar, an
   anchor, twice) is left alone. Every setup writer and uninstall remover now edits the document inside its
   `%YAML` / `%TAG` / `---` opening and before a closing `...`, where the plugin and memory writers used to append
-  past the `...`; a file with a second document is refused only when there is something to write, so `omh update`
-  on a registered install writes nothing, and `omh doctor` no longer fails the plugin check on an enabled install
-  because of its envelope. Reported by @chhxbchhxb in #3075. (`src/install/config_adapter.py`
+  past the `...`; a file with a second document, or a shape setup would not write into, is refused only when there
+  is something to write, so `omh update` on a registered install writes nothing, and `omh doctor` no longer fails
+  the plugin check on an enabled install because of its envelope, and names a second document as such. Reported by @chhxbchhxb in #3075. (`src/install/config_adapter.py`
   `_root_is_plain_block_mapping`, `_section_node_is_sequence`, `_block_header`, `_document_parts`,
   `_with_document_body`)
   anchor, twice) is left alone. And the skills writer now refuses what every other writer refuses: it used to edit

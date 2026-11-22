@@ -392,6 +392,15 @@ def _document_parts(config_text: str) -> tuple[str, str, str]:
     return "".join(lines[:body_start]), "".join(lines[body_start:body_end]), "".join(lines[body_end:])
 
 
+def config_stream_error(config_text: str) -> str:
+    """Why this module edits no part of `config_text` as one YAML document, or ""."""
+    try:
+        _document_parts(config_text)
+    except ValueError as exc:
+        return str(exc)
+    return ""
+
+
 def _with_document_body(
     config_text: str, edit: Callable[[str], ConfigChange], *, strict: bool = False
 ) -> ConfigChange:
@@ -436,15 +445,34 @@ def _empty_mapping_root_index(lines: list[str]) -> int | None:
 
 
 def _validate_external_dirs_mutation_shape(config_text: str) -> None:
+    _validate_external_dirs_entries(config_text)
+    _validate_external_dirs_document(config_text)
+
+
+def _validate_external_dirs_document(config_text: str) -> None:
+    """The document-shape refusals, which the skills writers take only once there is something to write.
+
+    The caller has already separated a single document's envelope. A home
+    registered under a shape this editor would not write into keeps working:
+    `omh update` answers "already present" before this runs (#3075).
+    """
     lines = config_text.splitlines()
-    # The skills caller has already separated a single document's envelope.
-    # Other section writers retain their stricter whole-document guard.
-    normalized = ["skills:" if _skills_block_line(line) else line for line in lines]
     guard = ("non-mapping or unsupported root YAML is user-owned; leaving it alone"
              if not _root_is_plain_block_mapping(lines) and _empty_mapping_root_index(lines) is None else "")
-    guard = guard or _section_shape_guard(normalized, "skills")
-    if not guard and _section_node_is_sequence(normalized, "skills"):
+    if not guard and _section_node_is_sequence(lines, "skills"):
         guard = "sequence skills configuration is user-owned; leaving it alone"
+    if guard:
+        raise ValueError(guard)
+
+
+def _validate_external_dirs_entries(config_text: str) -> None:
+    """The refusals under which `external_dirs` reads one way here and another in Hermes.
+
+    Two `skills:` sections or two `external_dirs:` keys, an unsupported
+    inline value, a flow or tagged node: the reader may report an entry
+    Hermes does not see, so these run before "already present".
+    """
+    guard = _section_shape_guard(config_text.splitlines(), "skills")
     if guard:
         raise ValueError(guard)
     in_skills = False
@@ -1396,9 +1424,16 @@ def _root_is_plain_block_mapping(lines: list[str]) -> bool:
       document, after a key that has a value, or after indented lines is not:
       the document is a sequence there, or the loaders raise.
 
-    A root value that opens a quote it does not close on its line is refused:
-    the scalar's continuation lines may sit at column 0 and read like keys.
+    A quoted scalar that runs onto the next lines is followed to its closing
+    quote, at any depth: those lines are the string's, and PyYAML's own
+    `safe_dump` folds a long value onto indented lines that way. A column-0
+    line while a quote is still open is refused, since the loaders read it
+    as more of the string while every line scan here would read a key
+    (#3075). Block scalar (`|`, `>`) content is skipped, so a quote inside
+    it opens nothing.
     """
+    quote = ""  # the quote of a scalar still open at the end of the last line
+    block_indent = -1  # the indent of the line that opened a block scalar, -1 outside one
     first_content = True
     directive_open = False  # a `%YAML 1.1` line read, its `---` not yet
     opened = False  # a `---` read, no root key yet
@@ -1406,6 +1441,18 @@ def _root_is_plain_block_mapping(lines: list[str]) -> bool:
     root_sequence = False  # the last root key's value is a column-0 block sequence
     for line in lines:
         stripped = line.strip()
+        indent = len(line) - len(line.lstrip(" \t"))
+        if quote:
+            if not stripped:
+                continue
+            if not indent:
+                return False
+            quote = _quoted_scalar_end(stripped, quote)
+            continue
+        if block_indent >= 0:
+            if not stripped or indent > block_indent:
+                continue
+            block_indent = -1
         if not stripped or stripped.startswith("#"):
             continue
         if directive_open:
@@ -1420,6 +1467,8 @@ def _root_is_plain_block_mapping(lines: list[str]) -> bool:
                 # beside it is a file the loaders refuse.
                 return False
             key_open = root_sequence
+            quote, block = _value_opens(stripped)
+            block_indent = indent if block else -1
             continue
         code = _yaml_code(stripped).strip()
         if first_content and _YAML_1_1_DIRECTIVE_RE.fullmatch(code):
@@ -1431,17 +1480,52 @@ def _root_is_plain_block_mapping(lines: list[str]) -> bool:
         first_content = opened = False
         if stripped.startswith("-") and key_open and _indentless_item(stripped):
             root_sequence = True
+            quote, block = _value_opens(stripped)
+            block_indent = 0 if block else -1
             continue
         if stripped in {"---", "..."} or stripped.startswith(("%", "{", "[", "-")):
             return False
         if re.match(r"^[^:#][^:]*:(?:\s|$)", stripped) is None:
             return False
-        if _opens_unclosed_quote(stripped.partition(":")[2]):
-            # Its continuation lines may sit at column 0 and read like keys.
-            return False
+        quote, block = _value_opens(stripped)
+        block_indent = 0 if block else -1
         key_open = not code.partition(":")[2].strip()
         root_sequence = False
-    return not directive_open
+    return not directive_open and not quote
+
+
+# Where a line's scalar value starts: past any `- ` item markers and a plain `key: `.
+_VALUE_START_RE = re.compile(r"(?:-[ \t]+)*(?:[^\s'\"#][^:]*:[ \t]+)?")
+_BLOCK_SCALAR_RE = re.compile(r"[|>][-+0-9]*[ \t]*(?:#.*)?")
+
+
+def _value_opens(stripped: str) -> tuple[str, bool]:
+    """The quote a line's value leaves open at its end, and whether the value opens a block scalar."""
+    rest = stripped[_VALUE_START_RE.match(stripped).end():]  # type: ignore[union-attr]
+    if rest[:1] in {"'", '"'}:
+        return _quoted_scalar_end(rest[1:], rest[0]), False
+    return "", _BLOCK_SCALAR_RE.fullmatch(rest) is not None
+
+
+def _quoted_scalar_end(text: str, quote: str) -> str:
+    """`quote` when the scalar it opened is still open after `text`, else "".
+
+    Inside single quotes `''` is a quote; inside double quotes a backslash
+    escapes the next character, and one ending the line continues it.
+    """
+    index = 0
+    while index < len(text):
+        char = text[index]
+        if quote == '"' and char == "\\":
+            index += 2
+            continue
+        if char == quote:
+            if quote == "'" and text[index + 1 : index + 2] == "'":
+                index += 2
+                continue
+            return ""
+        index += 1
+    return quote
 
 
 def _document_edit_guard(lines: list[str]) -> str:
@@ -2316,10 +2400,11 @@ def ensure_external_dir(
         return _with_document_body(
             config_text, lambda body: ensure_external_dir(body, skill_dir, hermes_home=hermes_home), strict=True
         )
-    _validate_external_dirs_mutation_shape(config_text)
+    _validate_external_dirs_entries(config_text)
     present = external_dirs(config_text)
     if target in present or (hermes_home is not None and _names_directory(present, skill_dir, hermes_home)):
         return ConfigChange(False, "external dir already present", config_text)
+    _validate_external_dirs_document(config_text)
 
     lines = config_text.splitlines()
     empty_root = _empty_mapping_root_index(lines)
@@ -2412,12 +2497,10 @@ def _remove_external_dir_items(config_text: str, should_remove: Callable[[str], 
         return _with_document_body(
             config_text, lambda body: _remove_external_dir_items(body, should_remove), strict=True
         )
-    lines = config_text.splitlines()
-    if not _root_is_plain_block_mapping(lines) and _empty_mapping_root_index(lines) is None \
-            and not any(should_remove(value) for value in external_dirs(config_text)):
-        # The same answer for a document this editor does not edit.
+    _validate_external_dirs_entries(config_text)
+    if not any(should_remove(value) for value in external_dirs(config_text)):
         return ConfigChange(False, "external dir absent", config_text)
-    _validate_external_dirs_mutation_shape(config_text)
+    _validate_external_dirs_document(config_text)
     lines = config_text.splitlines()
     changed = False
     output: list[str] = []

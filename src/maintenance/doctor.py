@@ -24,6 +24,7 @@ from ..config_adapter import (
     plugin_is_enabled,
     plugin_load_timeout_setting,
     plugins_enabled_extension_error,
+    config_stream_error,
     read_config,
 )
 from ..hashutil import sha256_file, sha256_text
@@ -3102,6 +3103,21 @@ def _plugins_enabled_extension_check(paths: OmhPaths, config_text: str, config_p
             "hermes_config_plugins_enabled",
             True,
             f"plugins.enabled in {config_path} is a list setup can extend",
+        )
+    if config_stream_error(config_text):
+        # Not a `plugins.enabled` shape: the file is more than one YAML document (#3075).
+        return Check(
+            "hermes_config_plugins_enabled",
+            False,
+            f"{config_path}: {error}",
+            remediation=(
+                f"Keep one YAML document in {config_path}: remove the second `---` document, "
+                "the content after `...`, or the misplaced `%` directive."
+            ),
+            next_action=(
+                f"Keep one YAML document in {config_path}, then rerun `omh setup` and `omh doctor`, "
+                f"or run `hermes plugins enable {PLUGIN_NAME}`."
+            ),
         )
     return Check(
         "hermes_config_plugins_enabled",

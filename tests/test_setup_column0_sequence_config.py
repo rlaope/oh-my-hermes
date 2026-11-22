@@ -38,6 +38,7 @@ import subprocess
 import unittest
 from pathlib import Path
 from tempfile import TemporaryDirectory
+from types import SimpleNamespace
 
 from _cli_harness import run_cli
 from _local_package import load_local_package
@@ -45,6 +46,7 @@ from _local_package import load_local_package
 load_local_package()
 from omh.install import config_adapter as adapter  # noqa: E402
 from omh.install.compression_defaults import ensure_compression_defaults  # noqa: E402
+from omh.maintenance.doctor import _plugins_enabled_extension_check  # noqa: E402
 from test_route_guard_yaml_directive import HERMES_PYTHON, HERMES_ROOT, hermes_reads  # noqa: E402
 
 DIRECTIVE = "%YAML 1.1\n---\n"
@@ -57,6 +59,26 @@ PLUGINS = "plugins:\n  enabled: []\n"
 # The issue's minimal config, column-0 and indented.
 ISSUE_COLUMN0 = MODEL + "toolsets:\n- hermes-cli\n" + SKILLS + PLUGINS
 ISSUE_INDENTED = MODEL + "toolsets:\n  - hermes-cli\n" + SKILLS + PLUGINS
+
+# Long quoted values as PyYAML's `safe_dump` folds them onto indented lines (Hermes loads each).
+FOLDED = {
+    "single-quoted folded": (
+        "system_prompt: 'You are a helpful assistant: answer carefully, cite sources, and never\n"
+        "  invent facts.'\n"
+    ),
+    "single-quoted with an escaped quote": (
+        "system_prompt: 'It''s a long value: keep going, and it''s still one string that wraps\n"
+        "  around here.'\n"
+    ),
+    "double-quoted with a backslash continuation": (
+        'greeting: "A long value: keep going \\xE9 with a tab\\there and say \\"hi\\" and \\\\ more\\\n'
+        '  \\ so it wraps."\n'
+    ),
+    "nested folded": (
+        "agent:\n  prompt: 'a long one: still going and going and going and going on and on and\n"
+        "    on.'\n"
+    ),
+}
 
 # Each is one block mapping: the guard takes it and Hermes' loader reads it to a mapping.
 READABLE = {
@@ -76,6 +98,8 @@ READABLE = {
     "directive with comments": "%YAML 1.1   # the version\n--- # doc\n" + MODEL + SKILLS,
     "directive after a comment line": "# my config\n" + DIRECTIVE + MODEL + SKILLS,
     "directive and column-0 list": DIRECTIVE + ISSUE_COLUMN0,
+    **{name: value + TOOLSETS + SKILLS for name, value in FOLDED.items()},
+    "block scalar holding a quote": "notes: |\n  say: 'not a quote\n  memory: not a key\n" + SKILLS,
 }
 
 # Each must stay refused; the comment names why.
@@ -100,6 +124,8 @@ REFUSED = {
     "indented root": "  model: x\n",  # a section appended at column 0 beside it does not load
     # Hermes reads `memory: # c` as part of the string, never as a key.
     "quoted value across lines": 'note: "first line\nmemory: # c\n  still"\n' + MODEL,
+    "nested quoted value across lines": "agent:\n  note: 'first line\nmemory: x'\n" + MODEL,
+    "unterminated quote": "note: 'never closed\n" + MODEL,  # the loaders raise
 }
 # The guard refuses these whole; every writer edits their body instead (`_with_document_body`).
 EDITED_THROUGH_ENVELOPE = {"document end", "TAG directive", "YAML 1.2 directive"}
@@ -341,6 +367,29 @@ class SetupCommandTest(unittest.TestCase):
         if hermes_reads("a: 1\n") is not None:
             self.assertEqual(hermes_load(written)["memory"], {"provider": "omh", "recall": True})
 
+    def test_setup_and_update_keep_long_quoted_values(self) -> None:
+        """A value PyYAML folded onto indented lines is the string's, not a refusal (#3075)."""
+        for name, value in FOLDED.items():
+            original = value + MODEL + "memory:\n  provider: honcho\n"
+            with self.subTest(shape=name):
+                status, _stdout, stderr, root = self.run_setup(original)
+                self.assertEqual(status, 0, stderr)
+                config = root / ".hermes" / "config.yaml"
+                written = config.read_text(encoding="utf-8")
+                self.assertTrue(written.startswith(original), written)
+                if hermes_reads("a: 1\n") is not None:
+                    loaded, before_setup = hermes_load(written), hermes_load(original)
+                    for key, data in before_setup.items():
+                        self.assertEqual(loaded[key], data)
+                    self.assertEqual(loaded["plugins"]["enabled"], ["omh"])
+                before = config.read_bytes()
+                status, _stdout, stderr = run_cli(
+                    ["--omh-home", str(root / ".omh"), "--hermes-home", str(root / ".hermes"), "update", "--json"],
+                    output_json=False,
+                )
+                self.assertEqual(status, 0, stderr)
+                self.assertEqual(config.read_bytes(), before)
+
     def test_setup_and_update_on_every_envelope(self) -> None:
         """Setup writes inside the envelope, and update on that registered install writes nothing (#3075)."""
         for name, (head, tail) in EnvelopeTest.ENVELOPES.items():
@@ -498,6 +547,15 @@ class EnvelopeTest(unittest.TestCase):
                 message = adapter.plugins_enabled_extension_error(head + MODEL + tail, "omh")
                 self.assertIn("one YAML document", message)
                 self.assertIn("hermes plugins enable omh", message)
+        # Doctor's remediation names the stream, not `plugins.enabled`'s shape.
+        paths = SimpleNamespace(hermes_config_path=Path("/h/config.yaml"))
+        head, tail = self.ENVELOPES["second document"]
+        check = _plugins_enabled_extension_check(paths, head + MODEL + tail, True)
+        self.assertFalse(check.ok)
+        self.assertIn("Keep one YAML document", check.remediation)
+        self.assertNotIn("block list", check.remediation + check.next_action)
+        check = _plugins_enabled_extension_check(paths, MODEL + "plugins:\n  enabled: omh\n", True)
+        self.assertIn("block list", check.remediation)
         # A second `enabled:` key is still a fault, listed or not: Hermes refuses the file over it.
         self.assertIn("duplicate plugins.enabled", adapter.plugins_enabled_extension_error(
             "plugins:\n  enabled:\n    - omh\n  enabled: []\n", "omh"))
@@ -554,6 +612,15 @@ class HermesAgreesTest(unittest.TestCase):
 
     def test_a_quoted_value_across_lines_hides_no_key(self) -> None:
         self.assertNotIn("memory", hermes_load(REFUSED["quoted value across lines"]))
+        self.assertNotIn("memory", hermes_load(REFUSED["nested quoted value across lines"]))
+
+    def test_the_folded_values_load_as_one_string(self) -> None:
+        for name, value in FOLDED.items():
+            with self.subTest(shape=name):
+                loaded = hermes_load(value)
+                text = loaded["agent"]["prompt"] if "agent" in loaded else next(iter(loaded.values()))
+                self.assertIsInstance(text, str)
+                self.assertNotIn("\n", text)
 
     def test_both_spellings_of_the_issue_config_load_alike(self) -> None:
         self.assertEqual(hermes_load(ISSUE_COLUMN0), hermes_load(ISSUE_INDENTED))
