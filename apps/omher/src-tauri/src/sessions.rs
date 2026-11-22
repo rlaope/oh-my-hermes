@@ -1059,7 +1059,8 @@ impl Sessions {
         let (mut argv, path_env) = launch_for(agent_id)?;
         argv.extend(extra);
         // Claude Code's status line runs omher's relay, which records the usage it reports and runs the person's own
-        // status line unchanged (`claude_usage.rs`; macOS and Linux outside an AppImage, Claude Code only)
+        // status line unchanged (`claude_usage.rs`; Claude Code with the person's own status line, on macOS and Linux
+        // outside an AppImage)
         argv.extend(crate::claude_usage::terminal_args(agent_id, cwd, account_env, &crate::claude_usage::RelayHost::current()));
         self.spawn(argv, cwd, Some(path_env), &env, cols, rows, sink)
     }

@@ -109,12 +109,17 @@ RULES = (
     " Code's settings files;",
     "so omher also keeps its own record of the usage Claude Code reports: the `rate_limit_event` in a chat session's"
     " stream-json, on every system, and the `rate_limits` in the status line input of the TERMINALS Claude Code sessions"
-    " omher starts, on macOS and on Linux outside an AppImage only.",
+    " omher starts, on macOS and on Linux outside an AppImage only, and only for a person who has a status line of their"
+    " own.",
     "Each reading is laid over `~/.omher/usage/claude/<account>.json` (the omher account's id, or `default` for Claude"
     " Code's own login) window by window, and the file is replaced through a temporary file that is then renamed:",
     "an older reading changes nothing,",
-    "on macOS and on Linux outside an AppImage, a TERMINALS Claude Code starts with `--settings` holding only a"
+    "on macOS and on Linux outside an AppImage, a TERMINALS Claude Code whose person already has a status line of their"
+    " own when it starts (resolved exactly as the relay resolves it, below) starts with `--settings` holding only a"
     " `statusLine` whose command is omher's own binary as a relay (`omher --statusline-relay <account>`),",
+    "A person with no status line of their own gets no `--settings` and no relay, because Claude Code keeps a row for any"
+    " configured status line, even an empty one, and nothing on screen may change; their percentages come from chats"
+    " only.",
     "(a non-negative integer, a number of at least 1, a boolean; anything else is dropped).",
     "On Windows and inside an AppImage omher adds no `--settings` and no relay,",
     "The relay records the input's `rate_limits` (nothing for an account name omher does not give, never under another"
@@ -127,9 +132,9 @@ RULES = (
     " omher records nothing from it.",
     "A chat (`claude -p`) session has no status line and gets no relay. The relay starts none of the app, sends nothing"
     " anywhere and reads no token.",
-    "On macOS and on Linux outside an AppImage, a TERMINALS Claude Code also gets `--settings <json>` holding one key, a"
-    " `statusLine` that runs omher's status line relay (rule 17);",
-    "On Windows and inside an AppImage it gets no `--settings`.",
+    "On macOS and on Linux outside an AppImage, a TERMINALS Claude Code whose person has a status line of their own also"
+    " gets `--settings <json>` holding one key, a `statusLine` that runs omher's status line relay (rule 17);",
+    "Without a status line of their own, and on Windows and inside an AppImage, it gets no `--settings`.",
     "Accounts (Settings › Accounts) are the one exception to rules 4, 10 and 17.",
     "a local CLIProxyAPI's Claude logins are listed, read-only, from its auth file names alone",
     "omher never opens those files, never calls CLIProxyAPI or its management API, and never starts a session with, switches to or removes such a login.",
@@ -1299,7 +1304,7 @@ class AccountsNeverCarryAToken(unittest.TestCase):
 
     def test_the_relay_is_added_only_for_claude_on_macos_and_linux_outside_an_appimage(self) -> None:
         # rule 11 / 17: start_agent asks claude_usage for the relay's argument with this host; it adds nothing for any
-        # other agent, on Windows or inside an AppImage (the Rust tests pin each case)
+        # other agent, without the person's own status line, on Windows or inside an AppImage (the Rust tests pin each case)
         src = ROOT / "apps" / "omher" / "src-tauri" / "src"
         sessions = (src / "sessions.rs").read_text(encoding="utf-8")
         start = sessions.split("pub fn start_agent", 1)[1].split("\n    }\n", 1)[0]
@@ -1307,6 +1312,8 @@ class AccountsNeverCarryAToken(unittest.TestCase):
         relay = (src / "claude_usage.rs").read_text(encoding="utf-8")
         args = relay.split("pub fn terminal_args", 1)[1].split("\n}\n", 1)[0]
         self.assertIn('if agent_id != "claude" || !host.enabled() {', args)
+        # only for a person with a status line of their own (rule 17): none means no --settings at all
+        self.assertIn("let Some(user) = user_status_line(Some(cwd), &config_dir(home, account_env, host.claude_config.as_deref())) else {", args)
         self.assertIn("!self.windows && !self.appimage", relay)
 
     def test_rust_spawns_only_in_bridge_and_accounts(self) -> None:

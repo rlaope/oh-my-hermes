@@ -5,11 +5,12 @@
 //! * a chat session's stream-json `rate_limit_event` (`rate_limit_info.unifiedWindows.<window>.utilization`, 0..1),
 //!   read by the chat spawner ([`UsageTap`] in agent_chat.rs), on every system;
 //! * the JSON a TERMINALS Claude Code hands its status line command on stdin (`rate_limits.<window>.used_percentage`,
-//!   0..100), on macOS and on Linux outside an AppImage only ([`RelayHost::enabled`]). There omher starts an
-//!   interactive Claude Code with `--settings` whose `statusLine` runs this binary as a relay
+//!   0..100), on macOS and on Linux outside an AppImage only ([`RelayHost::enabled`]), and only for a person who has
+//!   a status line of their own ([`terminal_args`]). There omher starts an interactive Claude Code with `--settings`
+//!   whose `statusLine` runs this binary as a relay
 //!   (`omher --statusline-relay <account>`, [`relay_main`]): it records the `rate_limits` part, then runs the person's
 //!   own `statusLine` command (resolved as Claude Code resolves it) with the same stdin and prints its output
-//!   unchanged, or prints nothing when they have none. On Windows and inside an AppImage no `--settings` is added.
+//!   unchanged. Without a status line of their own, on Windows and inside an AppImage, no `--settings` is added.
 //!
 //! The record is `~/.omher/usage/claude/<account id or "default">.json`, replaced whole through a temporary file:
 //! `{at, windows: {<window>: {used_percent, resets_at}}, status, source: "chat" | "terminal"}`, merged window by
@@ -310,6 +311,8 @@ fn home_dir() -> Option<PathBuf> {
 pub struct RelayHost {
     pub home: Option<PathBuf>,
     pub exe: Option<PathBuf>,
+    /// omher's own `CLAUDE_CONFIG_DIR`, which a session without an omher account inherits.
+    pub claude_config: Option<PathBuf>,
     pub windows: bool,
     pub appimage: bool,
 }
@@ -319,6 +322,7 @@ impl RelayHost {
         RelayHost {
             home: home_dir(),
             exe: std::env::current_exe().ok(),
+            claude_config: std::env::var_os("CLAUDE_CONFIG_DIR").filter(|v| !v.is_empty()).map(PathBuf::from),
             windows: cfg!(windows),
             appimage: cfg!(target_os = "linux") && std::env::var_os("APPIMAGE").is_some_and(|a| !a.is_empty()),
         }
@@ -331,19 +335,22 @@ impl RelayHost {
     }
 }
 
-/// Claude Code's config folder for a session with `account_env`: its `CLAUDE_CONFIG_DIR`, else omher's own one,
-/// else `~/.claude`.
-fn config_dir(home: &Path, account_env: &[(String, String)]) -> PathBuf {
+/// Claude Code's config folder for a session with `account_env`: its `CLAUDE_CONFIG_DIR`, else omher's own one
+/// (`inherited`), else `~/.claude`.
+fn config_dir(home: &Path, account_env: &[(String, String)], inherited: Option<&Path>) -> PathBuf {
     account_env
         .iter()
         .find(|(k, _)| k == "CLAUDE_CONFIG_DIR")
         .map(|(_, v)| PathBuf::from(v))
-        .or_else(|| std::env::var_os("CLAUDE_CONFIG_DIR").filter(|v| !v.is_empty()).map(PathBuf::from))
+        .or_else(|| inherited.map(Path::to_path_buf))
         .unwrap_or_else(|| home.join(".claude"))
 }
 
-/// The arguments a TERMINALS session of `agent_id` in `cwd` with `account_env` gets for the relay: for Claude Code on
-/// a system where the relay runs, `--settings <json>` (two arguments); otherwise none.
+/// The arguments a TERMINALS session of `agent_id` in `cwd` with `account_env` gets for the relay: `--settings <json>`
+/// (the flag, then the JSON as one argument) only for Claude Code, on a system where the relay runs, when the person
+/// already has a status line of their own, resolved as the relay resolves it ([`user_status_line`]). Without one
+/// nothing is added, so nothing on screen changes (Claude Code keeps a row for any configured status line, even an
+/// empty one), and that session's usage is recorded from chats only.
 pub fn terminal_args(agent_id: &str, cwd: &Path, account_env: &[(String, String)], host: &RelayHost) -> Vec<OsString> {
     if agent_id != "claude" || !host.enabled() {
         return Vec::new();
@@ -351,8 +358,10 @@ pub fn terminal_args(agent_id: &str, cwd: &Path, account_env: &[(String, String)
     let (Some(home), Some(exe), Some(account)) = (host.home.as_deref(), host.exe.as_deref(), account_of(account_env)) else {
         return Vec::new();
     };
-    let user = user_status_line(Some(cwd), &config_dir(home, account_env));
-    match terminal_settings(exe, &account, user.as_ref()) {
+    let Some(user) = user_status_line(Some(cwd), &config_dir(home, account_env, host.claude_config.as_deref())) else {
+        return Vec::new();
+    };
+    match terminal_settings(exe, &account, Some(&user)) {
         Some(json) => vec!["--settings".into(), json.into()],
         None => Vec::new(),
     }
@@ -451,8 +460,8 @@ mod tests {
         serde_json::from_str(&std::fs::read_to_string(record_path(home, account).unwrap()).unwrap()).unwrap()
     }
 
-    fn host(windows: bool, appimage: bool) -> RelayHost {
-        RelayHost { home: Some(PathBuf::from("/nonexistent-home")), exe: Some(PathBuf::from("/Applications/omher.app/Contents/MacOS/omher")), windows, appimage }
+    fn host(home: &Path, windows: bool, appimage: bool) -> RelayHost {
+        RelayHost { home: Some(home.to_path_buf()), exe: Some(PathBuf::from("/Applications/omher.app/Contents/MacOS/omher")), claude_config: None, windows, appimage }
     }
 
     /// The `rate_limit_event` a `claude -p --output-format stream-json --verbose` turn printed (Claude Code 2.1.330,
@@ -638,23 +647,53 @@ mod tests {
     }
 
     #[test]
-    fn only_claude_on_macos_or_linux_outside_an_appimage_gets_settings_as_one_argument() {
-        let cwd = std::env::temp_dir();
-        let args = terminal_args("claude", &cwd, &[], &host(false, false));
+    fn only_claude_with_its_own_status_line_on_macos_or_linux_outside_an_appimage_gets_settings_as_one_argument() {
+        let root = tmp("args");
+        let (home, cwd) = (root.join("home"), root.join("project"));
+        std::fs::create_dir_all(home.join(".claude")).unwrap();
+        std::fs::create_dir_all(cwd.join(".claude")).unwrap();
+        let on = host(&home, false, false);
+        let line = |cmd: &str| json!({"statusLine": {"type": "command", "command": cmd, "padding": 1}}).to_string();
+        // no status line of their own anywhere: nothing added, so nothing on screen changes
+        assert!(terminal_args("claude", &cwd, &[], &on).is_empty());
+        // only lines Claude Code would refuse, or omher's own relay: still nothing
+        std::fs::write(cwd.join(".claude/settings.local.json"), json!({"statusLine": "echo hi"}).to_string()).unwrap();
+        std::fs::write(cwd.join(".claude/settings.json"), json!({"statusLine": {"type": "command"}}).to_string()).unwrap();
+        std::fs::write(home.join(".claude/settings.json"), line("'/x/omher' --statusline-relay default")).unwrap();
+        assert!(terminal_args("claude", &cwd, &[], &on).is_empty());
+        // their own line in the user's settings: `--settings`, then the JSON as one argument
+        std::fs::write(home.join(".claude/settings.json"), line("~/.claude/statusline.sh")).unwrap();
+        let args = terminal_args("claude", &cwd, &[], &on);
         assert_eq!(args.len(), 2);
         assert_eq!(args[0], "--settings");
         let s: Value = serde_json::from_str(args[1].to_str().unwrap()).unwrap();
-        assert_eq!(s["statusLine"]["command"], json!("/Applications/omher.app/Contents/MacOS/omher --statusline-relay default"));
-        let work = [("CLAUDE_CONFIG_DIR".to_string(), "/h/.omher/accounts/claude/work".to_string())];
-        assert!(terminal_args("claude", &cwd, &work, &host(false, false))[1].to_str().unwrap().contains("--statusline-relay work"));
-        // Windows and an AppImage: no --settings, no relay
-        assert!(terminal_args("claude", &cwd, &[], &host(true, false)).is_empty());
-        assert!(terminal_args("claude", &cwd, &[], &host(false, true)).is_empty());
+        assert_eq!(s, json!({"statusLine": {"type": "command", "command": "/Applications/omher.app/Contents/MacOS/omher --statusline-relay default", "padding": 1}}));
+        // or only in the project (local first): the same
+        std::fs::remove_file(home.join(".claude/settings.json")).unwrap();
+        std::fs::write(cwd.join(".claude/settings.local.json"), line("echo local")).unwrap();
+        assert_eq!(terminal_args("claude", &cwd, &[], &on).len(), 2);
+        std::fs::remove_file(cwd.join(".claude/settings.local.json")).unwrap();
+        assert!(terminal_args("claude", &cwd, &[], &on).is_empty());
+        // an omher account: its own config folder decides, not ~/.claude
+        let work_dir = root.join(".omher/accounts/claude/work");
+        std::fs::create_dir_all(&work_dir).unwrap();
+        let work = [("CLAUDE_CONFIG_DIR".to_string(), work_dir.to_string_lossy().into_owned())];
+        assert!(terminal_args("claude", &cwd, &work, &on).is_empty());
+        std::fs::write(work_dir.join("settings.json"), line("echo work")).unwrap();
+        assert!(terminal_args("claude", &cwd, &work, &on)[1].to_str().unwrap().contains("--statusline-relay work"));
+        // omher's own CLAUDE_CONFIG_DIR, inherited by a session without an account
+        let inherited = RelayHost { claude_config: Some(work_dir.clone()), ..host(&home, false, false) };
+        assert_eq!(terminal_args("claude", &cwd, &[], &inherited).len(), 2);
+        std::fs::write(home.join(".claude/settings.json"), line("echo mine")).unwrap();
+        // Windows and an AppImage: no --settings, no relay, even with a line of their own
+        assert!(terminal_args("claude", &cwd, &[], &host(&home, true, false)).is_empty());
+        assert!(terminal_args("claude", &cwd, &[], &host(&home, false, true)).is_empty());
         // every other agent, and a folder that is not an omher account: nothing
         for agent in ["codex", "omo", "dsh", "omh", "pi", "omp", "grok", "opencode", "gemini", "shell", "claude -p", ""] {
-            assert!(terminal_args(agent, &cwd, &[], &host(false, false)).is_empty(), "{agent}");
+            assert!(terminal_args(agent, &cwd, &[], &on).is_empty(), "{agent}");
         }
-        assert!(terminal_args("claude", &cwd, &[("CLAUDE_CONFIG_DIR".into(), "/x/Not An Account".into())], &host(false, false)).is_empty());
+        assert!(terminal_args("claude", &cwd, &[("CLAUDE_CONFIG_DIR".into(), root.join("Not An Account").to_string_lossy().into_owned())], &on).is_empty());
+        assert_eq!(terminal_args("claude", &cwd, &[], &on).len(), 2);
     }
 
     #[test]

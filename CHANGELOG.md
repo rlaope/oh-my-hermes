@@ -10,10 +10,11 @@ All notable changes will be documented here.
   chat's stream-json and from the status line input of the TERMINALS Claude Code sessions it starts. The meter shows
   each window's % and reset time the way the Codex meter does, per login, from the newer of that record and a refused
   request; readings are merged per window, so an older one never lowers the meter. On macOS and on Linux outside an
-  AppImage, a TERMINALS Claude Code now starts with `--settings` whose `statusLine` runs omher as a relay: it records the
-  usage, then runs your own status line command with the same input and prints its output unchanged (nothing when you
-  have none). Your hooks, permissions and other settings stay as they are. On Windows and inside an AppImage omher adds
-  no relay, and the percentages come from chats only. Before the first reading the meter says it shows after your next
+  AppImage, a TERMINALS Claude Code started while you have a status line of your own now gets `--settings` whose
+  `statusLine` runs omher as a relay: it records the usage, then runs your status line command with the same input and
+  prints its output unchanged. Your hooks, permissions and other settings stay as they are. Without a status line of
+  your own, and on Windows and inside an AppImage, omher adds nothing, nothing on screen changes, and the percentages
+  come from chats only. Before the first reading the meter says it shows after your next
   Claude turn in omher. Local only: nothing is sent and no token is read.
   (`docs/OMHER-BOUNDARY.md` rules 11, 17 and 18)
 - **omher: the Slack briefing opens with a greeting and what it is about.** A brief could open with what the bot did
