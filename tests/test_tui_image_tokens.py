@@ -1132,6 +1132,61 @@ class QuietCutInTests(ImageTestCase):
         self.assertEqual(self.replies(), [])
         self.assertNotIn(SENTINEL, self.screen())
 
+    def stream(self, *chunks: str) -> list[str]:
+        """Each chunk as a `message.delta`, the screen rendered after each one."""
+        screens = []
+        for chunk in chunks:
+            self.app._on_event(Event("message.delta", SID, {"text": chunk}))
+            screens.append(self.screen())
+        return screens
+
+    def test_the_sentinel_streaming_is_never_painted_between_deltas(self) -> None:
+        self.cut_in()
+        for screen in self.stream(SENTINEL):
+            self.assertNotIn("Operation", screen)
+            self.assertNotIn("⚚ Hermes", screen)
+        self.app._on_event(Event("message.complete", SID, {"text": "", "status": "interrupted"}))
+        self.hermes.pump()
+        self.assertNotIn("Operation", self.screen())
+        self.assertEqual(self.replies(), [])
+
+    def test_the_sentinel_split_into_chunks_is_never_painted(self) -> None:
+        self.running()
+        self.app._interrupt()
+        chunks = ["Operation inter", "rupted: wait", "ing for model response (", "0", ".6", "s elap", "sed).", ""]
+        for screen in self.stream(*chunks):
+            self.assertNotIn("Operation", screen)
+        self.app._on_event(Event("message.complete", SID, {"text": "", "status": "interrupted"}))
+        self.assertNotIn("Operation", self.screen())
+        self.assertIn(INTERRUPTED_NOTICE, notices(self.app))
+
+    def test_a_reply_that_starts_like_the_sentinel_shows_once_it_diverges(self) -> None:
+        self.running()
+        screens = self.stream("Operation inter", "rupted: waiting for model response (", "the deploy timed out", " twice)")
+        self.assertNotIn("Operation", screens[0])
+        self.assertNotIn("Operation", screens[1])
+        self.assertIn("Operation interrupted: waiting for model response (the deploy timed out", screens[2])
+        self.assertIn("timed out twice)", screens[3])
+
+    def test_a_reply_with_the_sentinel_and_more_shows_once_it_goes_past_it(self) -> None:
+        self.running()
+        screens = self.stream(SENTINEL, " It said.")
+        self.assertNotIn("Operation", screens[0])
+        self.assertIn(f"{SENTINEL} It said.", screens[1])
+
+    def test_a_short_operation_reply_that_completes_is_shown_at_completion(self) -> None:
+        self.running()
+        self.assertNotIn("Operation", self.stream("Operation")[0])
+        self.app._on_event(Event("message.complete", SID, {"text": "Operation", "status": "complete"}))
+        self.assertIn("Operation", self.screen())
+        self.assertEqual(self.replies(), ["Operation"])
+
+    def test_the_whole_sentinel_on_a_completed_turn_is_shown_at_completion(self) -> None:
+        self.running()
+        self.assertNotIn("Operation", self.stream(SENTINEL)[0])
+        self.app._on_event(Event("message.complete", SID, {"text": SENTINEL, "status": "complete"}))
+        self.assertIn(SENTINEL, self.screen())
+
     def test_the_sentinel_in_replayed_history_is_not_a_reply(self) -> None:
         self.app._draw_history([
             {"role": "user", "text": "look at this"},

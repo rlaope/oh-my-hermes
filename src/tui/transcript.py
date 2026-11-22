@@ -195,6 +195,26 @@ def is_interrupt_sentinel(text: str) -> bool:
     return INTERRUPT_SENTINEL.fullmatch(text.strip()) is not None
 
 
+INTERRUPT_SENTINEL_FIXED = "Operation interrupted: waiting for model response ("
+INTERRUPT_SENTINEL_TAIL = "s elapsed)."
+
+
+def may_become_interrupt_sentinel(text: str) -> bool:
+    """`text`, a reply still streaming, is so far the start of `INTERRUPT_SENTINEL` and nothing else: it may yet
+    turn out to be the sentinel, so its live block draws nothing until it diverges or the turn ends."""
+    said = text.strip()
+    if len(said) <= len(INTERRUPT_SENTINEL_FIXED):
+        return INTERRUPT_SENTINEL_FIXED.startswith(said)
+    if not said.startswith(INTERRUPT_SENTINEL_FIXED):
+        return False
+    elapsed = said[len(INTERRUPT_SENTINEL_FIXED) :]
+    seconds = re.match(r"\d+(?:\.\d*)?", elapsed)
+    if seconds is None:
+        return False
+    tail = elapsed[seconds.end() :]
+    return not tail or not seconds.group().endswith(".") and INTERRUPT_SENTINEL_TAIL.startswith(tail)
+
+
 # An interrupted turn the person did not stop (`Transcript.hermes_interrupted`): Hermes ended it itself, as when the
 # session's lease was lost (Hermes #142161), and the person may want it to go on.
 HERMES_INTERRUPTED_NOTICE = "Hermes interrupted this turn; send `continue` to go on."
@@ -1255,6 +1275,8 @@ def _reply_width(width: int) -> int:
 
 
 def _assistant_rows(block: AssistantBlock, width: int, theme: Theme) -> list[Line]:
+    if not block.done and may_become_interrupt_sentinel(block.text):
+        return []  # it may yet be Hermes' cancellation sentinel, never painted as prose
     rows = render_lines(_display_lines(block.text), MarkdownState(), _reply_width(width), theme)[0]
     return _marked(rows, True, theme, width, block.model)
 
@@ -2403,6 +2425,8 @@ class Transcript:
     def _take_assistant(
         self, block: AssistantBlock, width: int, theme: Theme, final: bool = False, live_rows: int | None = None
     ) -> list[Line]:
+        if not (block.done or final) and may_become_interrupt_sentinel(block.text):
+            return []  # it may yet be Hermes' cancellation sentinel: nothing of it is taken until it diverges
         cap = max(live_rows // 2, 4) if live_rows else None
 
         def height(run: list[str]) -> int:
@@ -2594,6 +2618,8 @@ class Transcript:
         cursor took the start of continues one)."""
         block = self.blocks[index]
         if index == self._cursor and isinstance(block, AssistantBlock):
+            if not block.done and may_become_interrupt_sentinel(block.text):
+                return True, []  # it may yet be Hermes' cancellation sentinel: drawn once it diverges
             rest = _display_lines(block.text)[self._cursor_lines :]
             opens_block = self._cursor_lines == 0
             reply_rows = self._growing_rows(rest, _reply_width(width), theme)
