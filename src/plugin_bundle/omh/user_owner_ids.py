@@ -75,13 +75,22 @@ def configured_owner_ids(omh_home: str | Path) -> frozenset[str]:
     return frozenset(name for name, entry in executors.items() if _admitted(name, entry))
 
 
+def _local_fragment(value: object, *, has_program: bool = False) -> bool:
+    """Mirror core's declares_cloud: check arguments, never the program name."""
+    if not isinstance(value, list) or not all(isinstance(arg, str) for arg in value):
+        return False
+    arguments = value[1:] if has_program else value
+    return arguments[:1] != ["cloud"] and not any(arg == "--cloud" or arg.startswith("--cloud=") for arg in arguments)
+
+
 def _admitted(executor_id: object, entry: object) -> bool:
     if not isinstance(executor_id, str) or _ID.fullmatch(executor_id) is None:
         return False
     if not isinstance(entry, dict):
         return False
     if executor_id in PRESET_IDS:
-        return entry.get("preset") == executor_id
+        # Core permits no argv fragment overrides on a preset.
+        return entry.get("preset") == executor_id and not (entry.keys() - {"preset", "remote_pr"})
     if executor_id in RESERVED_IDS or "preset" in entry:
         return False
     argv = entry.get("argv")
@@ -94,4 +103,11 @@ def _admitted(executor_id: object, entry: object) -> bool:
         return False
     if program.lower() in _REFUSED_PROGRAMS or program.lower().endswith(_REFUSED_SUFFIXES):
         return False
-    return sum(token in _PROMPT_PLACEHOLDERS for token in argv) == 1
+    session = entry.get("session", {})
+    if not isinstance(session, dict):
+        return False
+    return (sum(token in _PROMPT_PLACEHOLDERS for token in argv) == 1
+            and _local_fragment(argv, has_program=True)
+            and _local_fragment(entry.get("version", []), has_program=True)
+            and all(_local_fragment(entry.get(field, [])) for field in ("model", "effort"))
+            and all(_local_fragment(session.get(field, [])) for field in ("export", "resume")))

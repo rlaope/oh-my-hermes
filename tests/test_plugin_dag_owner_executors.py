@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import json
 import unittest
+from unittest import mock
 
 from test_dag_tool import PARENT, call, child_started, choose, handoff, homes, node, slots_table
 from omh.plugin_bundle.omh.named_owner_choice import note_turn_owners
@@ -132,6 +133,57 @@ class ConfiguredOwnerTests(unittest.TestCase):
             self.assertNotIn("did not name", json.dumps(status), status)
             exported = call(action="export", run="feat", owner="devin")
             self.assertEqual(exported.get("status"), "refused", exported)
+
+    def test_owner_restore_applies_only_to_the_next_tool_call(self) -> None:
+        for action in ("ready", "status"):
+            with self.subTest(action=action), homes() as home:
+                slots_table(home)
+                enabled = "schema_version = 1\n" + DEVIN
+                write_executors(home, enabled)
+                choose_configured(home, "devin")
+                call(action="define", run="feat", nodes=[owned("api", "devin", scope=("api.py",))])
+                write_executors(home, "schema_version = 1\n")
+
+                def read_then_restore(path):
+                    snapshot = configured_owner_ids(path)
+                    write_executors(home, enabled)
+                    return snapshot
+
+                with mock.patch.object(dag_tool, "configured_owner_ids", side_effect=read_then_restore) as read:
+                    result = call(action=action, run="feat")
+                self.assertEqual(result.get("calls", []), [])
+                self.assertEqual(result["exports"], [])
+                self.assertEqual(result["nodes"][0].get("reason"), "owner_unavailable")
+                self.assertEqual(result["nodes"][0]["attempts"], 0)
+                self.assertIn("owner_unavailable", result["say"])
+                read.assert_called_once()
+                restored = call(action=action, run="feat")
+                self.assertEqual(restored["exports"][0]["nodes"], ["api"])
+                self.assertNotIn("reason", restored["nodes"][0])
+
+    def test_cloud_fragment_admission_matches_core(self) -> None:
+        from omh.coding.user_executors import load_user_executors
+
+        local = {"argv": ["my-agent", "run", "{prompt}"], "model": ["--model", "{model}"],
+                 "effort": ["--effort", "{effort}"], "session.export": ["--export", "{session_file}"],
+                 "session.resume": ["--resume", "{session_id}"], "version": ["my-agent", "info", "--version"]}
+        cases = [("valid", local, True)]
+        for field, vector in local.items():
+            start = int(field in ("argv", "version"))  # skip the program, not the first token of a fragment
+            for token in ("cloud", "--cloud", "--cloud=off"):
+                pos = start if token == "cloud" else len(vector) - 1
+                cases.append((f"{field}: {token}", {**local, field: [*vector[:pos], token, *vector[pos:]]}, False))
+        # A program named cloud is not the cloud subcommand. Neither is an option value or a similar flag.
+        cases.append(("lookalikes", {**local, "argv": ["cloud", "--cloudy", "cloud", "{prompt}"],
+                                     "version": ["cloud", "--version"]}, True))
+        with homes() as home:
+            for label, entry, expected in cases:
+                with self.subTest(case=label):
+                    body = "\n".join(f"{key} = {json.dumps(value)}" for key, value in entry.items())
+                    write_executors(home, f"schema_version = 1\n[executors.my-agent]\n{body}\n")
+                    core = "my-agent" in load_user_executors(home.omh).entries
+                    self.assertEqual(core, expected)
+                    self.assertEqual("my-agent" in configured_owner_ids(home.omh), core)
 
     def test_the_standalone_reserved_list_equals_core(self) -> None:
         from omh.coding.user_executors import RESERVED_OWNER_IDS as CORE_RESERVED
