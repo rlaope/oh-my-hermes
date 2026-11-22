@@ -14,7 +14,8 @@
 // at the byte limit. A decode counts its declared size against the budget from the moment it starts until it is kept or
 // fails, so two decodes that do not fit together never both start. The add-on also grows its store when it rescales its
 // pictures for a new font size or pixel ratio: `fit` runs again then (engine-image.ts), dropping the oldest virtual
-// pictures until both fit.
+// pictures until both fit. A new transmit for an id without U=1 (the add-on's) drops our picture of that id, so the
+// two-command form's next `a=p,U=1` reads the new bytes.
 //
 // Supported subset: the combined form `a=T,U=1` (or `a=t,U=1`), and kitty's two-command form `a=t,i=<id>` (taken by
 // the add-on) then `a=p,U=1,i=<id>`, which reads the bytes the add-on kept for that id (through its internals,
@@ -217,7 +218,17 @@ export class PlaceholderStore {
       return false; // the add-on deletes its own as well
     }
     if (a === "p" && ctrl.get("U") === "1") return this.place(ctrl);
-    if (ctrl.get("U") !== "1" || (a !== "T" && a !== "t")) return false;
+    if (a !== "T" && a !== "t") return false;
+    if (ctrl.get("U") !== "1") {
+      // the add-on's transmit for an id: newer bytes for it than ours, which a later a=p,U=1 must not show
+      const id = num(ctrl, "i");
+      if (id && (this.images.has(id) || this.inFlight.has(id))) {
+        this.inFlight.delete(id);
+        this.drop(id);
+        this.changed();
+      }
+      return false;
+    }
     const t = ctrl.get("t") ?? "d";
     const f = Number(ctrl.get("f") ?? 32);
     const refused = t !== "d" || !num(ctrl, "i") || (f !== 100 && f !== 24 && f !== 32) || (ctrl.has("o") && ctrl.get("o") !== "z");

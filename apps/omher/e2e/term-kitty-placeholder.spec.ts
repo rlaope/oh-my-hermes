@@ -325,7 +325,7 @@ test("B4: ordinary and virtual pictures share one 32 MB per terminal", async ({ 
   expect((await probe(page, null)).virtual).toBe(0); // 18 MB more does not fit what the add-on left
 });
 
-// ---- review round 2 (fix-budget): the budget after the add-on rescales
+// ---- review round 2 (fix-budget): the budget after the add-on rescales, and a reused id in the two-command form
 
 /** A solid `w`×`h` PNG made by the page's canvas, as base64. */
 const solidPng = (page: Page, w: number, h: number, colour: string) =>
@@ -376,6 +376,20 @@ test("B4 after rescale: a larger font keeps ordinary and virtual pictures within
   const after = await stores();
   expect(after.addon + after.virtual).toBeLessThanOrEqual(32_000_000);
   expect(after.images).toBe(0); // the virtual picture went, the oldest first
+});
+
+test("reused id: a new a=t for an id with a virtual picture, then a=p,U=1, paints the new picture (blue, not red)", async ({ page }) => {
+  await openApp(page);
+  await newTerminal(page);
+  await hooks(page);
+  const red = await solidPng(page, 8, 8, "#f00");
+  const blue = await solidPng(page, 8, 8, "#00f");
+  await feed(page, "\x1b[2J\x1b[H" + kittyApc(`a=T,U=1,i=${ID},c=1,r=1,f=100,q=2`, red));
+  await expect.poll(async () => (await probe(page, null)).virtual).toBe(1);
+  await feed(page, "\x1b[H" + placeholderRows(ID, 1, 1) + "\r\n");
+  await expect.poll(async () => await overlayPixel(page, 0, 0)).toEqual([255, 0, 0, 255]);
+  await feed(page, kittyApc(`a=t,f=100,i=${ID},q=2`, blue) + `\x1b_Ga=p,U=1,i=${ID},c=1,r=1,q=2\x1b\\` + "\x1b[H" + placeholderRows(ID, 1, 1) + "\r\n");
+  await expect.poll(async () => await overlayPixel(page, 0, 0)).toEqual([0, 0, 255, 255]);
 });
 
 test("NB3: kitty's two-command form (a=t, then a=p,U=1) paints the add-on's transmitted picture in the placeholders", async ({ page }) => {

@@ -330,6 +330,28 @@ describe("PlaceholderStore: kitty's two-command form (a=t, then a=p,U=1)", () =>
     expect(s.handle("a=p,i=5")).toBe(false);
   });
 
+  it("a new a=t for an id we hold (a reused id) drops ours, so the next a=p,U=1 reads the add-on's new bytes", async () => {
+    const d = deferredDecode();
+    let kept: { data: Blob; width: number; height: number; format: 100 } | undefined;
+    const s = new PlaceholderStore(d.decode, undefined, undefined, { used: () => 0, transmitted: () => kept });
+    s.handle(`a=T,U=1,i=41,c=1,r=1,f=100;${png(8, 8)}`); // red, ours
+    await flush();
+    d.waiting[0](d.picture(1, 1));
+    await flush();
+    expect(s.images.get(41)?.picture.width).toBe(1);
+    kept = { data: new Blob([pngHead(2, 2) as BlobPart]), width: 0, height: 0, format: 100 }; // blue, the add-on's
+    expect(s.handle("a=t,f=100,i=41,q=2;AAAA")).toBe(false); // still the add-on's transmit
+    expect(s.images.has(41)).toBe(false);
+    expect(d.closed()).toBe(1);
+    expect(s.handle("a=p,U=1,i=41,c=1,r=1,q=2")).toBe(true);
+    await flush();
+    await flush();
+    expect(d.calls()).toBe(2);
+    d.waiting[1](d.picture(2, 2));
+    await flush();
+    expect(s.images.get(41)?.picture.width).toBe(2);
+  });
+
   it("a=p,U=1 for one of ours gives it the new box", async () => {
     const s = new PlaceholderStore(fakeDecode().decode);
     s.handle(`a=T,U=1,i=3,c=1,r=1,f=100;${png()}`);
